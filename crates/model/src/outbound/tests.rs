@@ -36,3 +36,49 @@ fn byte_budget_includes_in_flight_write_and_returns_its_permits() {
     queue.send(&large).unwrap();
     assert!(queue.send(&message(MAX_QUEUE_BYTES)).is_err());
 }
+
+#[tokio::test]
+async fn fair_lanes_share_the_physical_budget_and_round_robin() {
+    let (lanes, mut receiver) = Outbound::fair();
+    for index in 0..4 {
+        lanes[2]
+            .respond(format!("file-{index}"), Ok(serde_json::json!({})))
+            .unwrap();
+    }
+    lanes[1]
+        .respond("terminal".to_owned(), Ok(serde_json::json!({})))
+        .unwrap();
+    lanes[0]
+        .respond("ping".to_owned(), Ok(serde_json::json!({})))
+        .unwrap();
+    let mut ids = Vec::new();
+    for _ in 0..3 {
+        let queued = receiver.recv().await.unwrap();
+        let Frame::Text(text) = &queued.message else {
+            panic!("expected JSON")
+        };
+        ids.push(serde_json::from_str::<serde_json::Value>(text).unwrap()["request_id"].clone());
+    }
+    assert_eq!(
+        ids,
+        vec![
+            serde_json::json!("ping"),
+            serde_json::json!("terminal"),
+            serde_json::json!("file-0")
+        ]
+    );
+    while receiver.try_recv().is_ok() {}
+    let held = lanes[0]
+        .bytes
+        .clone()
+        .acquire_many_owned(u32::try_from(MAX_QUEUE_BYTES).unwrap())
+        .await
+        .unwrap();
+    assert!(
+        lanes[3]
+            .respond("over-budget".to_owned(), Ok(serde_json::json!({})))
+            .is_err()
+    );
+    assert!(lanes[1].failure().is_cancelled());
+    drop(held);
+}

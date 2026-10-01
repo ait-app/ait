@@ -16,6 +16,7 @@ import {
   type AppUpdateCheckIntent,
 } from "../features/auto-updater.js";
 import { RustDaemonManager, resolveDesktopDaemonHome } from "./rust-daemon.js";
+import { createAccountIpc, stopAccountForExit } from "./account-ipc.js";
 
 import {
   closeLocalTransportSession,
@@ -190,6 +191,7 @@ export async function stopDesktopDaemon(
   _reason: DesktopDaemonStopReason = DEFAULT_DESKTOP_DAEMON_STOP_REASON,
   confirmedInstance?: { pid: number; startedAt: string },
 ): Promise<DesktopDaemonStatus> {
+  if (_reason === "quit" || _reason === "app_update") await stopAccountForExit();
   return getRustDaemon().stop(confirmedInstance);
 }
 
@@ -318,12 +320,16 @@ export function createDaemonCommandHandlers(): Record<string, DesktopCommandHand
   };
 }
 
-export function registerDaemonManager(): void {
+export function registerDaemonManager(
+  isAccountAppWindow: (contents: Electron.WebContents) => boolean,
+): void {
   const handlers = createDaemonCommandHandlers();
+  const account = createAccountIpc(getRustDaemon, isAccountAppWindow);
 
   ipcMain.handle(
     "paseo:invoke",
     async (_event, command: string, args?: Record<string, unknown>) => {
+      if (command.startsWith("account_")) return account(_event, command, args);
       const handler = handlers[command];
       if (!handler) {
         throw new Error(`Unknown desktop command: ${command}`);

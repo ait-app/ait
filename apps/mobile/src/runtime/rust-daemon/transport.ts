@@ -32,6 +32,10 @@ interface Pending {
 export function createRustDaemonTransportFactory(baseFactory: TransportFactory): TransportFactory {
   return ({ url, headers }) => {
     const parsed = new URL(url);
+    const single = parsed.protocol === "ait+desktop:" && parsed.hostname === "account-relay";
+    const capabilityGroups = single
+      ? [[...new Set(CHANNEL_CAPABILITIES.flat())]]
+      : CHANNEL_CAPABILITIES;
     // SSH uses the desktop IPC URL; the main process validates its target and
     // opens only the Rust /v1/ws endpoint inside the authenticated tunnel.
     const ssh =
@@ -39,8 +43,8 @@ export function createRustDaemonTransportFactory(baseFactory: TransportFactory):
       parsed.hostname === "ssh" &&
       (parsed.pathname === "" || parsed.pathname === "/");
     if (
-      (!ssh && !/^(ws|wss):$/.test(parsed.protocol)) ||
-      (!ssh && parsed.pathname !== "/v1/ws") ||
+      (!ssh && !single && !/^(ws|wss):$/.test(parsed.protocol)) ||
+      (!ssh && !single && parsed.pathname !== "/v1/ws") ||
       parsed.username ||
       parsed.password ||
       (!ssh && parsed.search) ||
@@ -63,7 +67,10 @@ export function createRustDaemonTransportFactory(baseFactory: TransportFactory):
     let helloSent = false;
     let info: Payload | null = null;
     let implemented = new Set<string>();
-    const setupTimer = setTimeout(() => fail(new Error("Rust daemon handshake timed out")), 10_000);
+    const setupTimer = setTimeout(
+      () => fail(new Error("Rust daemon handshake timed out")),
+      single ? 45_000 : 10_000,
+    );
 
     function emit(value: Payload): void {
       if (!disposed) for (const handler of messageHandlers) handler(JSON.stringify(value), false);
@@ -143,7 +150,7 @@ export function createRustDaemonTransportFactory(baseFactory: TransportFactory):
         info = nextInfo;
         implemented = new Set(strings(nextInfo.implemented_capabilities));
         negotiated.set(channel, new Set(strings(message.negotiated_capabilities)));
-        if (negotiated.size === CHANNEL_CAPABILITIES.length) {
+        if (negotiated.size === capabilityGroups.length) {
           ready = true;
           clearTimeout(setupTimer);
           emit(serverInfo(info, implemented));
@@ -239,8 +246,10 @@ export function createRustDaemonTransportFactory(baseFactory: TransportFactory):
           : typeof message.requestId === "string"
             ? message.requestId
             : crypto.randomUUID();
-      const channel =
-        spec.method === "subscription.release.request" && typeof message.subscriptionId === "string"
+      const channel = single
+        ? 0
+        : spec.method === "subscription.release.request" &&
+            typeof message.subscriptionId === "string"
           ? (subscriptions.get(message.subscriptionId) ?? spec.channel)
           : spec.channel;
       if (!negotiated.get(channel)?.has(spec.method) || !implemented.has(spec.method)) {
@@ -310,14 +319,14 @@ export function createRustDaemonTransportFactory(baseFactory: TransportFactory):
     }
 
     try {
-      for (let index = 0; index < CHANNEL_CAPABILITIES.length; index += 1) {
+      for (let index = 0; index < capabilityGroups.length; index += 1) {
         // Electron/native uses Bearer headers; browsers exchange them for one-use tickets.
         const channel = baseFactory({ url, headers });
         channels.push(channel);
         cleanup.push(
           channel.onOpen(() => {
             opened.add(index);
-            if (opened.size === CHANNEL_CAPABILITIES.length && !disposed) {
+            if (opened.size === capabilityGroups.length && !disposed) {
               for (const handler of openHandlers) handler();
             }
           }),
@@ -355,12 +364,12 @@ export function createRustDaemonTransportFactory(baseFactory: TransportFactory):
           const bytes = data instanceof ArrayBuffer ? new Uint8Array(data) : data;
           if (!bytes.length) throw new Error("Empty Rust binary frame");
           // Rust preserves Paseo's binary opcode families: terminal < 0x10, files >= 0x10.
-          channels[bytes[0] < 0x10 ? 1 : 2].send(data);
+          channels[single ? 0 : bytes[0] < 0x10 ? 1 : 2].send(data);
           return;
         }
         const message = object(JSON.parse(data));
         if (message.type === "hello") {
-          if (helloSent || opened.size !== CHANNEL_CAPABILITIES.length)
+          if (helloSent || opened.size !== capabilityGroups.length)
             throw new Error("Unexpected client hello");
           if (typeof message.clientId !== "string") throw new Error("Client ID is required");
           helloSent = true;
@@ -374,8 +383,8 @@ export function createRustDaemonTransportFactory(baseFactory: TransportFactory):
                   min_minor: 0,
                   max_minor: 0,
                 },
-                capabilities: CHANNEL_CAPABILITIES[index],
-                required_capabilities: [],
+                capabilities: capabilityGroups[index],
+                required_capabilities: single ? ["connection.single.v1"] : [],
               }),
             );
           }

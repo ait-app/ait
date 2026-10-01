@@ -1,5 +1,6 @@
 import { AgentProfilesSection } from "@/agent-profiles";
 import { AgentSkillsSection } from "@/agent-skills";
+import { AccountHostPanel } from "@/components/account-host-panel";
 import { AdaptiveModalSheet, type SheetHeader } from "@/components/adaptive-modal-sheet";
 import { getProviderIcon } from "@/components/provider-icons";
 import { SettingsTextAreaCard } from "@/components/settings-textarea";
@@ -111,6 +112,7 @@ function formatHostConnectionLabel(connection: HostConnection, t: TFunction): st
   if (connection.type === "remoteSsh") {
     return `${t("settings.host.badges.remoteSsh")} (${connection.host})`;
   }
+  if (connection.type === "accountRelay") return "账号中继";
   return `TCP (${connection.endpoint})`;
 }
 
@@ -362,6 +364,8 @@ export function HostSettingsPage({
       </View>
 
       <HostStatusBadges serverId={serverId} />
+
+      {getIsElectron() ? <AccountHostPanel /> : null}
 
       <HostAppearanceSection host={host} />
 

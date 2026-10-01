@@ -5,6 +5,7 @@ edition.workspace = true
 publish.workspace = true
 
 [dependencies]
+server-relay = { version = "0.0.14", path = "../server-relay" }
 schedule = { version = "0.0.14", path = "../../crates/schedule" }
 browser = { version = "0.0.14", path = "../../crates/browser" }
 voice = { version = "0.0.14", path = "../voice" }

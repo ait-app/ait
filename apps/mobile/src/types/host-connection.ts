@@ -39,6 +39,7 @@ export interface RemoteSshHostConnection {
 }
 
 export type HostConnection =
+  | { id: string; type: "accountRelay"; hostId: string }
   | DirectTcpHostConnection
   | DirectSocketHostConnection
   | DirectPipeHostConnection
@@ -112,6 +113,8 @@ function hostConnectionEquals(left: HostConnection, right: HostConnection): bool
   if (left.type !== right.type || left.id !== right.id) {
     return false;
   }
+  if (left.type === "accountRelay" && right.type === "accountRelay")
+    return left.hostId === right.hostId;
 
   if (left.type === "directTcp" && right.type === "directTcp") {
     return (

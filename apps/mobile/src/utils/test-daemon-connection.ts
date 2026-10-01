@@ -3,7 +3,11 @@ import {
   buildDesktopDaemonTransportUrl,
   createDesktopDaemonTransportFactory,
 } from "@/desktop/daemon/desktop-daemon-transport";
-import { buildRustClientConfig, buildRustSshClientConfig } from "@/runtime/rust-daemon/connection";
+import {
+  buildAccountRelayClientConfig,
+  buildRustClientConfig,
+  buildRustSshClientConfig,
+} from "@/runtime/rust-daemon/connection";
 import type { HostConnection } from "@/types/host-connection";
 import type { DaemonClientConfig } from "@ait/client/internal/daemon-client";
 import { DaemonClient } from "@ait/client/internal/daemon-client";
@@ -138,6 +142,8 @@ export async function buildClientConfig(
     };
   }
 
+  if (connection.type === "accountRelay")
+    return { ...base, ...buildAccountRelayClientConfig(connection) };
   if (connection.type === "directTcp") {
     return {
       ...base,
@@ -226,6 +232,7 @@ interface ProbeOptions {
 
 function resolveTimeout(connection: HostConnection, options?: ProbeOptions): number {
   if (options?.timeoutMs) return options.timeoutMs;
+  if (connection.type === "accountRelay") return 45_000;
   if (connection.type === "remoteSsh") return 15_000;
   return 6_000;
 }

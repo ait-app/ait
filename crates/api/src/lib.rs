@@ -72,6 +72,7 @@ pub enum ConfigError {
 
 #[derive(Debug)]
 struct Shared {
+    relay: server_relay::Connector,
     runtime: Arc<Runtime>,
     token: SecretString,
     browser_auth: browser_auth::BrowserAuth,
@@ -151,6 +152,7 @@ pub use metadata::rpc::daemon::LifecycleIntent;
 
 impl Shared {
     fn start_draining(&self) {
+        self.relay.begin_shutdown();
         if let Some(schedules) = &self.schedule.schedules {
             schedules.stop();
         }
@@ -168,6 +170,28 @@ impl Shared {
 #[derive(Debug, Clone)]
 pub struct Api {
     shared: Arc<Shared>,
+}
+
+fn runtime_info(
+    address: SocketAddr,
+    server_id: String,
+    instance_id: String,
+    services: &Services,
+) -> Arc<Runtime> {
+    let implemented_capabilities = installed_capabilities(services);
+    let capabilities = registered_capabilities(&implemented_capabilities);
+    Arc::new(Runtime::new(ServerInfo {
+        server_id,
+        version: Some(env!("CARGO_PKG_VERSION").to_owned()),
+        instance_id,
+        listen: address.to_string(),
+        lifecycle: Lifecycle::Ready,
+        protocol: VERSION,
+        capabilities,
+        features: capabilities::features(services),
+        implemented_capabilities,
+        limits: Limits::default(),
+    }))
 }
 
 impl Api {
@@ -191,26 +215,19 @@ impl Api {
             return Err(ConfigError::InvalidAddress);
         }
         validate_token(token.expose_secret())?;
-        let implemented_capabilities = installed_capabilities(&services);
-        let capabilities = registered_capabilities(&implemented_capabilities);
         let session_events = services
             .agent_execution
             .as_ref()
             .map(AgentExecution::events)
             .unwrap_or_default();
         let creations = creation_receipts(&services);
-        let runtime = Arc::new(Runtime::new(ServerInfo {
-            server_id,
-            version: Some(env!("CARGO_PKG_VERSION").to_owned()),
-            instance_id,
-            listen: address.to_string(),
-            lifecycle: Lifecycle::Ready,
-            protocol: VERSION,
-            capabilities,
-            features: capabilities::features(&services),
-            implemented_capabilities,
-            limits: Limits::default(),
-        }));
+        let relay = server_relay::Connector::new(
+            address,
+            token.clone(),
+            server_id.clone(),
+            instance_id.clone(),
+        );
+        let runtime = runtime_info(address, server_id, instance_id, &services);
         let worktrees = services.worktrees;
         let (directory, has_git_fetch) = compose_directory(
             services.directory,
@@ -260,6 +277,7 @@ impl Api {
         );
         let api = Self {
             shared: Arc::new(Shared {
+                relay,
                 schedule: schedule::dispatch::State {
                     schedules: services.schedules,
                 },
@@ -314,6 +332,10 @@ impl Api {
             .route("/readyz", get(ready))
             .route("/v1/server/info", get(info))
             .route("/v1/ws", get(upgrade))
+            .route(
+                "/api/relay/control",
+                get(relay_status).put(relay_start).delete(relay_stop),
+            )
             .route(browser_auth::TICKET_PATH, post(browser_ticket))
             .route("/api/files/download", get(files::download))
             .route(terminal_activity::PATH, post(terminal_activity::report))
@@ -352,6 +374,7 @@ impl Api {
     /// Wait for all admitted upgrades and connections after calling `begin_shutdown`.
     /// The process host must bound this wait with its shutdown deadline.
     pub async fn wait_closed(&self) {
+        self.shared.relay.stop().await;
         self.shared.tasks.wait().await;
         if let Some(names) = &self.shared.workspace_names {
             names.wait_closed().await;
@@ -388,6 +411,7 @@ impl Api {
 
 fn registered_capabilities(implemented: &[String]) -> Vec<String> {
     let mut capabilities = implemented.to_vec();
+    capabilities.push("connection.single.v1".to_owned());
     for method in protocol::methods::PASEO_METHODS {
         if !capabilities
             .iter()
@@ -483,6 +507,30 @@ async fn health() -> Result<Response, ApiError> {
     Ok(Json(serde_json::json!({"status":"alive"})).into_response())
 }
 
+async fn relay_status(State(state): State<Arc<Shared>>) -> Json<server_relay::Status> {
+    Json(state.relay.status().await)
+}
+
+async fn relay_start(
+    State(state): State<Arc<Shared>>,
+    Json(grant): Json<server_relay::ControlGrant>,
+) -> Result<StatusCode, ApiError> {
+    if state.cancellation.is_cancelled() {
+        return Err(ApiError(StatusCode::SERVICE_UNAVAILABLE));
+    }
+    state
+        .relay
+        .start(grant)
+        .await
+        .map_err(|_| ApiError(StatusCode::BAD_REQUEST))?;
+    Ok(StatusCode::ACCEPTED)
+}
+
+async fn relay_stop(State(state): State<Arc<Shared>>) -> StatusCode {
+    state.relay.stop().await;
+    StatusCode::NO_CONTENT
+}
+
 async fn ready(State(state): State<Arc<Shared>>) -> Result<Response, ApiError> {
     if state.cancellation.is_cancelled() {
         return Err(ApiError(StatusCode::SERVICE_UNAVAILABLE));
@@ -525,7 +573,7 @@ async fn upgrade(
         .max_write_buffer_size(protocol::MAX_QUEUE_BYTES)
         .on_upgrade(move |socket| async move {
             let (_tracking, _permit) = (tracking, permit);
-            connection::serve(socket, state).await;
+            Box::pin(connection::serve(socket, state)).await;
         }))
 }
 

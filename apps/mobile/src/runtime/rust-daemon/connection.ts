@@ -7,6 +7,15 @@ import { createAppWebSocketFactory } from "../websocket-factory";
 import { createRustDaemonTransportFactory } from "./transport";
 import { createBrowserRustTransportFactory } from "./browser-transport";
 import type { TransportFactory } from "./types";
+import { createAccountRelayTransportFactory } from "./account-transport";
+
+export function buildAccountRelayClientConfig(connection: { hostId: string }) {
+  return {
+    url: `ait+desktop://account-relay/${connection.hostId}`,
+    connectTimeoutMs: 45_000,
+    transportFactory: createRustDaemonTransportFactory(createAccountRelayTransportFactory),
+  };
+}
 
 /** Shared by the host probe and the long-lived runtime; password is the Rust Bearer token. */
 export function buildRustClientConfig(

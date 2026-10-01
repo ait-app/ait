@@ -663,6 +663,20 @@ function getWorkAreasPrimaryFirst(): Electron.Rectangle[] {
   return [primary, ...others].map((display) => display.workArea);
 }
 
+const accountAppWindows = new Set<number>();
+
+function isAccountAppWindow(contents: Electron.WebContents): boolean {
+  if (!accountAppWindows.has(contents.id) || contents.isDestroyed()) return false;
+  try {
+    const url = new URL(contents.getURL());
+    return app.isPackaged
+      ? url.protocol === `${APP_SCHEME}:` && url.host === "app"
+      : url.origin === new URL(DEV_SERVER_URL).origin;
+  } catch {
+    return false;
+  }
+}
+
 async function createWindow(
   options: {
     initialRoute?: string | null;
@@ -708,6 +722,7 @@ async function createWindow(
   applyDesktopWindowChromeMode({ win: mainWindow, mode: DESKTOP_WINDOW_CHROME_MODE });
 
   const webContentsId = mainWindow.webContents.id;
+  accountAppWindows.add(webContentsId);
   options.onCreated?.(webContentsId);
   mainWindow.webContents.on("did-start-navigation", (_event, _url, isSameDocument, isMainFrame) => {
     if (isMainFrame && !isSameDocument) {
@@ -726,6 +741,7 @@ async function createWindow(
     log.warn("[desktop-window] renderer unresponsive", { webContentsId });
   });
   mainWindow.on("closed", () => {
+    accountAppWindows.delete(webContentsId);
     options.onClosed?.(webContentsId);
     agentNavigationInbox.removeWindow(webContentsId);
     unregisterPaseoBrowserHost(webContentsId);
@@ -957,7 +973,7 @@ async function bootstrap(): Promise<void> {
     },
   });
   ensureNotificationCenterRegistration();
-  registerDaemonManager();
+  registerDaemonManager(isAccountAppWindow);
   registerWindowManager({ mode: DESKTOP_WINDOW_CHROME_MODE });
   registerDialogHandlers();
   registerNotificationHandlers();

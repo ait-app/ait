@@ -4,6 +4,7 @@ mod browser_auth;
 mod paseo;
 mod server_info;
 mod session;
+mod single;
 mod voice;
 
 use futures_util::{SinkExt, StreamExt};

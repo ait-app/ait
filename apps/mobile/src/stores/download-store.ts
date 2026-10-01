@@ -1,4 +1,5 @@
 import { create } from "zustand";
+import { getDesktopHost } from "@/desktop/host";
 import { File as FSFile, Paths } from "expo-file-system";
 import * as LegacyFileSystem from "expo-file-system/legacy";
 import * as Sharing from "expo-sharing";
@@ -87,6 +88,43 @@ export const useDownloadStore = create<DownloadState>()((set, get) => ({
       const tokenResponse = await requestFileDownloadToken(path);
       if (tokenResponse.error || !tokenResponse.token) {
         throw new Error(tokenResponse.error ?? i18n.t("downloads.requestTokenFailed"));
+      }
+
+      const relay = daemonProfile?.connections.find(
+        (connection) => connection.type === "accountRelay",
+      );
+      if (relay?.type === "accountRelay") {
+        const desktop = getDesktopHost();
+        if (!desktop?.invoke) throw new Error("账号中继下载需要桌面客户端。");
+        const startedAt = Date.now();
+        const remove = await desktop.events?.on?.("account-download-progress", (raw) => {
+          const event = raw as { id: string; bytesWritten: number; totalBytes: number };
+          if (event.id !== id) return;
+          const elapsed = (Date.now() - startedAt) / 1000;
+          const speed = elapsed > 0 ? event.bytesWritten / elapsed : 0;
+          get().updateProgress(id, {
+            bytesWritten: event.bytesWritten,
+            totalBytes: event.totalBytes,
+            percent: event.totalBytes > 0 ? event.bytesWritten / event.totalBytes : 0,
+            speed,
+            eta:
+              speed > 0 && event.totalBytes > 0
+                ? (event.totalBytes - event.bytesWritten) / speed
+                : 0,
+          });
+        });
+        try {
+          await desktop.invoke("account_download", {
+            hostId: relay.hostId,
+            token: tokenResponse.token,
+            fileName: tokenResponse.fileName ?? fileName,
+            downloadId: id,
+          });
+          get().completeDownload(id);
+        } finally {
+          remove?.();
+        }
+        return;
       }
 
       const downloadTarget = resolveDaemonDownloadTarget(daemonProfile);

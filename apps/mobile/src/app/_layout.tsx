@@ -1,3 +1,4 @@
+import { AccountRelayLifecycle } from "@/runtime/account-state";
 import { legacyFavoriteProfileMigration } from "@/agent-profiles/migration";
 import { LegacyAgentSkillsMigration } from "@/agent-skills/legacy-migration";
 import { AppearanceProvider } from "@/appearance/provider";
@@ -891,6 +892,7 @@ function AppShell() {
 function RuntimeProviders({ children }: { children: ReactNode }) {
   return (
     <HostRuntimeBootstrapProvider>
+      <AccountRelayLifecycle />
       <PushNotificationRouter />
       <SidebarCalloutProvider>
         <ProvidersWrapper>{children}</ProvidersWrapper>

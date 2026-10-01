@@ -5,7 +5,7 @@ use std::time::Duration;
 use axum::extract::ws::{CloseFrame, Message, WebSocket, close_code};
 use futures_util::{SinkExt, StreamExt, stream::SplitStream};
 use protocol::methods::InboundKind;
-use protocol::{ClientMessage, ErrorCode, ServerMessage, valid_id};
+use protocol::{ClientMessage, ErrorCode, Hello, ServerMessage, valid_id};
 use tokio::time::timeout;
 
 use crate::Shared;
@@ -15,6 +15,7 @@ use model::{Context, Request};
 mod creation_receipts;
 mod dispatch;
 mod routing;
+mod single;
 mod workspace_archive;
 mod workspace_creation;
 
@@ -60,8 +61,34 @@ fn websocket_frame(frame: Frame) -> Message {
 }
 
 pub(super) async fn serve(socket: WebSocket, state: Arc<Shared>) {
-    let (mut sink, stream) = socket.split();
-    let (outbound, mut receiver) = Outbound::new();
+    let (mut sink, mut stream) = socket.split();
+    let hello = tokio::select! {
+        () = state.cancellation.cancelled() => return,
+        result = timeout(HELLO_TIMEOUT, receive(&mut stream)) => if let Ok(Some(Ok(Incoming::Text(ClientMessage::Hello(hello))))) = result {
+            hello
+        } else {
+                let error = serde_json::json!({"type":"error","request_id":null,"code":"invalid_message",
+                    "message":"Expected client hello","retryable":false});
+                let _ = timeout(WRITE_TIMEOUT,sink.send(Message::Text(error.to_string().into()))).await;
+                let _ = timeout(CLOSE_TIMEOUT,sink.close()).await;
+                return;
+        },
+    };
+    let (lanes, mut receiver) = if hello
+        .required_capabilities
+        .iter()
+        .any(|name| name == "connection.single.v1")
+    {
+        let (lanes, receiver) = Outbound::fair();
+        (lanes, Receiver::Fair(receiver))
+    } else {
+        let (outbound, receiver) = Outbound::new();
+        (
+            std::array::from_fn(|_| outbound.clone()),
+            Receiver::Legacy(receiver),
+        )
+    };
+    let outbound = &lanes[0];
     let outbound_failure = outbound.failure();
     let stopped = tokio_util::sync::CancellationToken::new();
     let writer = async {
@@ -96,7 +123,7 @@ pub(super) async fn serve(socket: WebSocket, state: Arc<Shared>) {
         tokio::select! {
             () = stopped.cancelled() => {},
             () = outbound_failure.cancelled() => {},
-            _ = read(stream, &state, &outbound) => {},
+            _ = read(stream, &state, &lanes, hello) => {},
         }
         stopped.cancel();
     };
@@ -106,18 +133,35 @@ pub(super) async fn serve(socket: WebSocket, state: Arc<Shared>) {
     outbound_failure.cancel();
 }
 
+enum Receiver {
+    Legacy(tokio::sync::mpsc::Receiver<model::outbound::Queued>),
+    Fair(model::outbound::FairReceiver),
+}
+
+impl Receiver {
+    async fn recv(&mut self) -> Option<model::outbound::Queued> {
+        match self {
+            Self::Legacy(receiver) => receiver.recv().await,
+            Self::Fair(receiver) => receiver.recv().await,
+        }
+    }
+    fn try_recv(
+        &mut self,
+    ) -> Result<model::outbound::Queued, tokio::sync::mpsc::error::TryRecvError> {
+        match self {
+            Self::Legacy(receiver) => receiver.try_recv(),
+            Self::Fair(receiver) => receiver.try_recv(),
+        }
+    }
+}
+
 async fn read(
     mut stream: SplitStream<WebSocket>,
     state: &Shared,
-    outbound: &Outbound,
+    lanes: &[Outbound; 4],
+    hello: Hello,
 ) -> Result<(), QueueError> {
-    let hello = tokio::select! {
-        () = state.cancellation.cancelled() => return Ok(()),
-        result = timeout(HELLO_TIMEOUT, receive(&mut stream)) => match result {
-            Ok(Some(Ok(Incoming::Text(ClientMessage::Hello(hello))))) => hello,
-            _ => return error(outbound, None, ErrorCode::InvalidMessage),
-        },
-    };
+    let outbound = &lanes[0];
     let capabilities = match hello.negotiate_available(&state.info.capabilities) {
         Ok(capabilities) => capabilities,
         Err(code) => return error(outbound, None, code),
@@ -133,6 +177,20 @@ async fn read(
         provider: provider::connection::Connection::new(&hello.client_id),
         ..Default::default()
     };
+    if hello
+        .required_capabilities
+        .iter()
+        .any(|name| name == "connection.single.v1")
+    {
+        return Box::pin(single::read(
+            stream,
+            state,
+            lanes,
+            &capabilities,
+            subscriptions,
+        ))
+        .await;
+    }
     let mut terminal_poll = tokio::time::interval(Duration::from_millis(40));
     terminal_poll.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Skip);
     let mut upload_expiry = tokio::time::interval(Duration::from_secs(30));

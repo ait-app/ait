@@ -56,9 +56,23 @@ impl Hello {
     /// # Errors
     /// Rejects malformed offers, incompatible versions, and missing required capabilities.
     pub fn negotiate_available(&self, available: &[String]) -> Result<Vec<String>, ErrorCode> {
+        let single = self
+            .required_capabilities
+            .iter()
+            .any(|name| name == "connection.single.v1")
+            && available.iter().any(|name| name == "connection.single.v1");
+        let limit = if single { 256 } else { 64 };
         if !valid_id(&self.client_id)
-            || self.capabilities.len() > 64
-            || self.required_capabilities.len() > 64
+            || self.capabilities.len() > limit
+            || self.required_capabilities.len() > limit
+            || (single
+                && self
+                    .capabilities
+                    .iter()
+                    .chain(&self.required_capabilities)
+                    .collect::<std::collections::BTreeSet<_>>()
+                    .len()
+                    > 256)
             || self
                 .capabilities
                 .iter()

@@ -18,6 +18,8 @@ export function resolveDesktopDaemonHome(env: NodeJS.ProcessEnv): string {
 
 export interface RustDaemonStatus {
   serverId: string;
+  instanceId?: string;
+  features?: string[];
   status: "starting" | "running" | "stopped" | "errored";
   listen: string | null;
   connectAddress: string | null;
@@ -69,6 +71,43 @@ export class RustDaemonManager {
 
   status(): RustDaemonStatus {
     return { ...this.state };
+  }
+
+  /** Restricted local relay API; the renderer never receives the local Bearer token. */
+  async relayRequest(method: "GET" | "PUT" | "DELETE", body?: unknown): Promise<unknown> {
+    if (this.state.status !== "running" || !this.state.connectAddress || !this.token)
+      throw new Error("本机运行时尚未就绪。");
+    if (method === "GET") {
+      const info = await fetch(`http://${this.state.connectAddress}/v1/server/info`, {
+        headers: { Authorization: `Bearer ${this.token}` },
+        redirect: "error",
+        signal: AbortSignal.timeout(5000),
+      });
+      if (!info.ok) throw new Error("本机运行时暂时不可用。");
+      const identity = (await info.json()) as {
+        server_id: string;
+        instance_id: string;
+        features: string[];
+      };
+      if (identity.server_id !== this.state.serverId) throw new Error("本机运行时身份发生变化。");
+      if (identity.instance_id !== this.state.instanceId) {
+        this.state = {
+          ...this.state,
+          instanceId: identity.instance_id,
+          features: identity.features,
+        };
+        throw new Error("本机运行时已重启，正在重新注册。");
+      }
+    }
+    const response = await fetch(`http://${this.state.connectAddress}/api/relay/control`, {
+      method,
+      redirect: "error",
+      signal: AbortSignal.timeout(5000),
+      headers: { Authorization: `Bearer ${this.token}`, "Content-Type": "application/json" },
+      ...(body === undefined ? {} : { body: JSON.stringify(body) }),
+    });
+    if (!response.ok) throw new Error("本机中继接口不可用，请检查运行时版本。");
+    return response.status === 204 || response.status === 202 ? null : response.json();
   }
 
   authorization(url: string): string | undefined {
@@ -267,14 +306,14 @@ function probeRustDaemon(
   listen: string,
   token: string,
   timeout: number,
-): Promise<Pick<RustDaemonStatus, "serverId" | "version">> {
+): Promise<Pick<RustDaemonStatus, "serverId" | "version" | "instanceId" | "features">> {
   return new Promise((resolve, reject) => {
     const ws = new WebSocket(`ws://${listen}/v1/ws`, {
       headers: { Authorization: `Bearer ${token}` },
     });
     const timer = setTimeout(() => finish(new Error("Rust daemon handshake timed out.")), timeout);
     let settled = false;
-    const finish = (error?: Error, info?: Pick<RustDaemonStatus, "serverId" | "version">) => {
+    const finish = (error?: Error, info?: Pick<RustDaemonStatus, "serverId" | "version" | "instanceId" | "features">) => {
       if (settled) return;
       settled = true;
       clearTimeout(timer);
@@ -302,6 +341,8 @@ function probeRustDaemon(
           finish(undefined, {
             serverId: message.info.server_id,
             version: typeof message.info.version === "string" ? message.info.version : null,
+            instanceId: message.info.instance_id ?? "",
+            features: message.info.features ?? [],
           });
         else finish(new Error("Unexpected Rust daemon readiness response."));
       } catch {

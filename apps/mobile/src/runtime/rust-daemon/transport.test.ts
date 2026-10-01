@@ -988,3 +988,25 @@ describe("Rust admission retries", () => {
     }
   });
 });
+
+it("account relay negotiates and routes every capability through one business socket", () => {
+  const h = harness(undefined, "ait+desktop://account-relay/00000000-0000-4000-8000-000000000001");
+  expect(h.sockets).toHaveLength(1);
+  h.sockets[0].open();
+  expect(h.last(0).required_capabilities).toEqual(["connection.single.v1"]);
+  expect(h.last(0).capabilities.length).toBeGreaterThan(64);
+  h.sockets[0].message({
+    type: "server_info",
+    info: {
+      server_id: "server",
+      instance_id: "instance",
+      protocol: { major: 1, minor: 0 },
+      implemented_capabilities: Object.values(METHODS).map((spec) => spec.method),
+    },
+    negotiated_capabilities: CHANNEL_CAPABILITIES.flat(),
+  });
+  h.transport.send(new Uint8Array([1, 2, 3]));
+  h.transport.send(new Uint8Array([0x10, 2, 3]));
+  expect(h.sockets[0].send).toHaveBeenLastCalledWith(new Uint8Array([0x10, 2, 3]));
+  h.transport.close();
+});
