@@ -27,7 +27,7 @@ async fn production_installs_every_in_scope_method_without_placeholders() {
         .implemented_capabilities
         .into_iter()
         .collect::<BTreeSet<_>>();
-    assert_eq!(published.len(), 175);
+    assert_eq!(published.len(), 176);
     assert_eq!(implemented.len(), 175);
     assert!(implemented.is_subset(&published));
     assert!(!published.iter().any(|name| {
@@ -55,5 +55,11 @@ async fn production_installs_every_in_scope_method_without_placeholders() {
         .filter(|(method, _)| !implemented.contains(*method))
         .collect::<Vec<_>>();
     assert_eq!(placeholders.len(), 0);
-    assert_eq!(published, implemented);
+    assert_eq!(
+        published
+            .difference(&implemented)
+            .map(String::as_str)
+            .collect::<Vec<_>>(),
+        ["connection.single.v1"]
+    );
 }

@@ -41,8 +41,17 @@ fn hierarchy_routes_every_implemented_method_to_exactly_one_handler() {
             .map(|method| (*method).to_owned())
             .collect::<Vec<_>>(),
     );
-    assert_eq!(advertised.len(), 175);
-    for method in &advertised {
+    assert_eq!(advertised.len(), 176);
+    assert!(
+        advertised
+            .iter()
+            .any(|capability| capability == "connection.single.v1")
+    );
+    assert!(routes().find("connection.single.v1").is_none());
+    for method in advertised
+        .iter()
+        .filter(|capability| capability.as_str() != "connection.single.v1")
+    {
         let route = routes().find(method).expect("advertised route must exist");
         assert_eq!(
             route.handler.is_some(),

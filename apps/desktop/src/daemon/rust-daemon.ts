@@ -76,27 +76,28 @@ export class RustDaemonManager {
   /** Restricted local relay API; the renderer never receives the local Bearer token. */
   async relayRequest(method: "GET" | "PUT" | "DELETE", body?: unknown): Promise<unknown> {
     if (this.state.status !== "running" || !this.state.connectAddress || !this.token)
-      throw new Error("本机运行时尚未就绪。");
+      throw new Error("The local runtime is not ready.");
     if (method === "GET") {
       const info = await fetch(`http://${this.state.connectAddress}/v1/server/info`, {
         headers: { Authorization: `Bearer ${this.token}` },
         redirect: "error",
         signal: AbortSignal.timeout(5000),
       });
-      if (!info.ok) throw new Error("本机运行时暂时不可用。");
+      if (!info.ok) throw new Error("The local runtime is temporarily unavailable.");
       const identity = (await info.json()) as {
         server_id: string;
         instance_id: string;
         features: string[];
       };
-      if (identity.server_id !== this.state.serverId) throw new Error("本机运行时身份发生变化。");
+      if (identity.server_id !== this.state.serverId)
+        throw new Error("The local runtime identity has changed.");
       if (identity.instance_id !== this.state.instanceId) {
         this.state = {
           ...this.state,
           instanceId: identity.instance_id,
           features: identity.features,
         };
-        throw new Error("本机运行时已重启，正在重新注册。");
+        throw new Error("The local runtime has restarted. Registering it again.");
       }
     }
     const response = await fetch(`http://${this.state.connectAddress}/api/relay/control`, {
@@ -106,7 +107,8 @@ export class RustDaemonManager {
       headers: { Authorization: `Bearer ${this.token}`, "Content-Type": "application/json" },
       ...(body === undefined ? {} : { body: JSON.stringify(body) }),
     });
-    if (!response.ok) throw new Error("本机中继接口不可用，请检查运行时版本。");
+    if (!response.ok)
+      throw new Error("The local relay API is unavailable. Check the runtime version.");
     return response.status === 204 || response.status === 202 ? null : response.json();
   }
 

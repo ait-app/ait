@@ -13,7 +13,7 @@
 
 ## 架构决策
 
-- [ADR-067：账号自动发现与按需反向中继](decisions/adr-067-account-host-relay.md)：邮箱密码登录后注册、单控制 WSS、独立数据 WSS 与单业务连接调度。
+- [ADR-072: Account discovery and on-demand reverse relay](decisions/adr-072-account-host-relay.md): Email/password sign-in, host registration, independent control and data WebSockets, and single-connection scheduling; [validation and coverage](reports/account-host-relay-validation.md).
 
 [ADR 分类索引](decisions/README.md)按 daemon、工作区、Provider、客户端和品牌整理。
 决策文档说明具体行为及其修订关系；当前目录与依赖图以当前架构和 ADR-072 为准。

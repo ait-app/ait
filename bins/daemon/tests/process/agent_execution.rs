@@ -90,7 +90,7 @@ async fn websocket_executes_native_turns_waits_concurrently_and_resumes_after_re
             .iter()
             .any(|result| result["request_id"] == "wait" && result["result"]["status"] == "idle")
     );
-    client = assert_wait_budget(client, &address, &id).await;
+    client = Box::pin(assert_wait_budget(client, &address, &id)).await;
     // Drain a still-running turn, then recover precisely the same provider handle and Agent ID.
     request(
         &mut client,

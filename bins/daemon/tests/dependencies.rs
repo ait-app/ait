@@ -28,6 +28,7 @@ fn violations(packages: &[Value]) -> Vec<String> {
                 "domain",
             ],
             "api" => &[
+                "server-relay",
                 "voice",
                 "schedule",
                 "browser",
@@ -41,7 +42,7 @@ fn violations(packages: &[Value]) -> Vec<String> {
             "provider" => &["domain", "metadata", "model"],
             "protocol" | "metadata" | "voice" | "schedule" | "browser" => &["model"],
             "filesystem" | "terminal" => &["metadata", "model"],
-            "domain" | "model" => &[],
+            "domain" | "model" | "server-relay" => &[],
             _ => {
                 violations.push(format!("unregistered workspace package: {name}"));
                 continue;
@@ -294,4 +295,27 @@ fn voice_keeps_speech_io_but_cannot_depend_on_transport_or_agent_implementation(
         json!({"id":"voice", "name":"voice", "dependencies":[{"name":"model","path":"../model"},{"name":"reqwest"},{"name":"tokio"}]}),
     ];
     assert!(violations(&packages).is_empty());
+}
+
+#[test]
+fn relay_is_a_leaf_transport_owned_by_the_api() {
+    let packages = [
+        json!({"id":"api", "name":"api", "dependencies":[{"name":"server-relay", "path":"../server-relay"}]}),
+        json!({"id":"server-relay", "name":"server-relay", "dependencies":[{"name":"tokio"}, {"name":"reqwest"}]}),
+    ];
+    assert!(violations(&packages).is_empty());
+    for dependency in [
+        "api",
+        "model",
+        "provider",
+        "protocol",
+    ] {
+        let packages = [
+            json!({"id":"server-relay", "name":"server-relay", "dependencies":[{"name":dependency, "path":"../dependency"}]}),
+        ];
+        assert_eq!(
+            violations(&packages),
+            [format!("server-relay -> {dependency}")]
+        );
+    }
 }

@@ -112,7 +112,7 @@ function formatHostConnectionLabel(connection: HostConnection, t: TFunction): st
   if (connection.type === "remoteSsh") {
     return `${t("settings.host.badges.remoteSsh")} (${connection.host})`;
   }
-  if (connection.type === "accountRelay") return "账号中继";
+  if (connection.type === "accountRelay") return "Account relay";
   return `TCP (${connection.endpoint})`;
 }
 

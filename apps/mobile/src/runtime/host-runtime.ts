@@ -224,7 +224,7 @@ function toActiveConnection(connection: HostConnection): ActiveConnection {
     };
   }
   if (connection.type === "accountRelay") {
-    return { type: "accountRelay", endpoint: connection.hostId, display: "账号中继" };
+    return { type: "accountRelay", endpoint: connection.hostId, display: "Account relay" };
   }
   if (connection.type === "directTcp") {
     return {
@@ -2491,7 +2491,7 @@ export function useHostRuntimeConnectionStatuses(
   return useMemo(() => {
     // The aggregate version is the reactivity trigger; re-read snapshots on every host tick.
     void version;
-    const entries: Array<[string, HostRuntimeConnectionStatus]> = serverIds.map((serverId) => [
+    const entries: [string, HostRuntimeConnectionStatus][] = serverIds.map((serverId) => [
       serverId,
       store.getSnapshot(serverId)?.connectionStatus ?? "connecting",
     ]);

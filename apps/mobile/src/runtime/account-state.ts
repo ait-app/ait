@@ -39,7 +39,7 @@ export async function accountCommand(
   args?: Record<string, unknown>,
 ): Promise<AccountState> {
   const invoke = getDesktopHost()?.invoke;
-  if (!invoke) throw new Error("账号中继需要桌面客户端。");
+  if (!invoke) throw new Error("Account relay requires the desktop app.");
   const snapshot = (await invoke(command, args)) as AccountState;
   useAccountState.setState(snapshot);
   return snapshot;

@@ -95,7 +95,7 @@ export const useDownloadStore = create<DownloadState>()((set, get) => ({
       );
       if (relay?.type === "accountRelay") {
         const desktop = getDesktopHost();
-        if (!desktop?.invoke) throw new Error("账号中继下载需要桌面客户端。");
+        if (!desktop?.invoke) throw new Error("Account relay downloads require the desktop app.");
         const startedAt = Date.now();
         const remove = await desktop.events?.on?.("account-download-progress", (raw) => {
           const event = raw as { id: string; bytesWritten: number; totalBytes: number };

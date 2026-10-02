@@ -138,6 +138,10 @@ async fn control_opens_independent_reverse_data_and_keeps_local_token_private() 
     ));
 }
 
+#[expect(
+    clippy::result_large_err,
+    reason = "Tungstenite requires an unboxed ErrorResponse from the handshake callback"
+)]
 async fn mock_local(local: tokio::net::TcpListener) {
     use tokio_tungstenite::accept_hdr_async;
     use tokio_tungstenite::tungstenite::handshake::server::{Request, Response};

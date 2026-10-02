@@ -3,7 +3,7 @@ import { Pressable, Text, TextInput, View } from "react-native";
 import { useRouter } from "expo-router";
 import { StyleSheet } from "react-native-unistyles";
 import { Button } from "./ui/button";
-import { accountCommand, useAccountState } from "@/runtime/account-state";
+import { accountCommand, useAccountState, type AccountHost } from "@/runtime/account-state";
 
 export function AccountHostPanel({ onConnected }: { onConnected?: () => void }) {
   const account = useAccountState();
@@ -16,38 +16,51 @@ export function AccountHostPanel({ onConnected }: { onConnected?: () => void }) 
   const [password, setPassword] = useState("");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const run = async (work: () => Promise<unknown>) => {
+  const runAccountAction = async (work: () => Promise<unknown>) => {
     if (busy) return;
     setBusy(true);
     setError(null);
     try {
       await work();
     } catch (error) {
-      setError(error instanceof Error ? error.message : "请求失败");
+      setError(error instanceof Error ? error.message : "Request failed.");
     } finally {
       setBusy(false);
     }
   };
+  const loginDisabled = busy || !email.trim() || !password;
+
   const login = () => {
-    if (busy || !email.trim() || !password) return;
+    if (loginDisabled) return;
     const secret = password;
     setPassword("");
-    void run(() => accountCommand("account_login", { center, email, password: secret }));
+    void runAccountAction(() =>
+      accountCommand("account_login", { center, email, password: secret }),
+    );
   };
+  const selectHost = (host: AccountHost) => {
+    void runAccountAction(async () => {
+      await accountCommand("account_select", { hostId: host.host_id });
+      onConnected?.();
+      router.push(`/h/${host.server_id}`);
+    });
+  };
+
   return (
     <View style={styles.panel} testID="account-host-panel">
-      <Text style={styles.title}>账号与在线 Host</Text>
+      <Text style={styles.title}>Account and online hosts</Text>
       {account.status === "logged_out" ? (
         <>
           <Text style={styles.hint}>
-            登录后，本机自动上线。选择同账号的在线 Host 即可继续工作。
+            Sign in to bring this host online, then select another host on your account to continue
+            working.
           </Text>
           <TextInput
             style={styles.input}
             value={email}
             onChangeText={setEmail}
-            placeholder="邮箱"
-            accessibilityLabel="邮箱"
+            placeholder="Email"
+            accessibilityLabel="Email"
             inputMode="email"
             keyboardType="email-address"
             autoComplete="email"
@@ -62,19 +75,15 @@ export function AccountHostPanel({ onConnected }: { onConnected?: () => void }) 
             style={styles.input}
             value={password}
             onChangeText={setPassword}
-            placeholder="密码"
-            accessibilityLabel="密码"
+            placeholder="Password"
+            accessibilityLabel="Password"
             secureTextEntry
             editable={!busy}
             onSubmitEditing={login}
             testID="account-password"
           />
-          <Button
-            disabled={busy || !email.trim() || !password}
-            onPress={login}
-            testID="account-login"
-          >
-            {busy ? "正在登录…" : "登录"}
+          <Button disabled={loginDisabled} onPress={login} testID="account-login">
+            {busy ? "Signing in..." : "Sign in"}
           </Button>
           <Pressable
             accessibilityRole="button"
@@ -82,17 +91,19 @@ export function AccountHostPanel({ onConnected }: { onConnected?: () => void }) 
             onPress={() => setShowServiceSettings((shown) => !shown)}
             testID="account-service-settings"
           >
-            <Text style={styles.hint}>{showServiceSettings ? "收起服务设置" : "服务设置"}</Text>
+            <Text style={styles.hint}>
+              {showServiceSettings ? "Hide service settings" : "Service settings"}
+            </Text>
           </Pressable>
           {showServiceSettings ? (
             <>
-              <Text style={styles.hint}>服务地址（留空使用默认服务）</Text>
+              <Text style={styles.hint}>Service URL (leave blank to use the default)</Text>
               <TextInput
                 style={styles.input}
                 value={center}
                 onChangeText={setCenterOverride}
                 placeholder="https://your-server.example/api"
-                accessibilityLabel="服务地址"
+                accessibilityLabel="Service URL"
                 autoCapitalize="none"
                 autoCorrect={false}
                 editable={!busy}
@@ -104,24 +115,27 @@ export function AccountHostPanel({ onConnected }: { onConnected?: () => void }) 
       ) : (
         <>
           <Text style={styles.hint}>
-            {account.name} · {account.hostOnline ? "本机已上线" : "本机等待上线"}
+            {account.name} ·{" "}
+            {account.hostOnline ? "This host is online" : "Waiting for this host to come online"}
           </Text>
           <View style={styles.actions}>
             <Button
               disabled={busy}
-              onPress={() => void run(() => accountCommand("account_refresh"))}
+              onPress={() => void runAccountAction(() => accountCommand("account_refresh"))}
             >
-              刷新
+              Refresh
             </Button>
             <Button
               disabled={busy}
-              onPress={() => void run(() => accountCommand("account_logout"))}
+              onPress={() => void runAccountAction(() => accountCommand("account_logout"))}
             >
-              退出登录
+              Sign out
             </Button>
           </View>
           <Text style={styles.hint}>
-            {account.stale ? "列表待更新" : `${account.hosts.length} 台其他 Host 在线`}
+            {account.stale
+              ? "Host list is out of date"
+              : `${account.hosts.length} other ${account.hosts.length === 1 ? "host" : "hosts"} online`}
           </Text>
           {account.hosts.map((host) => (
             <Pressable
@@ -130,34 +144,29 @@ export function AccountHostPanel({ onConnected }: { onConnected?: () => void }) 
               style={styles.host}
               accessibilityRole="button"
               testID={`account-host-${host.host_id}`}
-              onPress={() =>
-                void run(async () => {
-                  await accountCommand("account_select", {
-                    hostId: host.host_id,
-                  });
-                  onConnected?.();
-                  router.push(`/h/${host.server_id}`);
-                })
-              }
+              onPress={() => selectHost(host)}
             >
               <Text style={styles.title}>
                 {host.name}
-                {account.selected?.host_id === host.host_id ? " · 已选择" : ""}
+                {account.selected?.host_id === host.host_id ? " · Selected" : ""}
               </Text>
               <Text style={styles.hint}>{host.platform}</Text>
             </Pressable>
           ))}
           {!account.stale && !account.hosts.length ? (
             <Text style={styles.hint}>
-              在另一台机器打开 AIT 并登录同一账号，它会自动出现在这里。
+              Open Ait on another machine and sign in with the same account. It will appear here
+              automatically.
             </Text>
           ) : null}
           {account.selected ? (
             <Button
               disabled={busy}
-              onPress={() => void run(() => accountCommand("account_select", { hostId: null }))}
+              onPress={() =>
+                void runAccountAction(() => accountCommand("account_select", { hostId: null }))
+              }
             >
-              断开远程 Host
+              Disconnect remote host
             </Button>
           ) : null}
         </>

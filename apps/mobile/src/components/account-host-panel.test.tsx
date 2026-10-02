@@ -22,8 +22,8 @@ afterEach(() => {
 describe("AccountHostPanel email login", () => {
   it("submits email credentials through IPC and clears the password field", async () => {
     const view = render(<AccountHostPanel />);
-    const email = view.getByLabelText("邮箱") as HTMLInputElement;
-    const password = view.getByLabelText("密码") as HTMLInputElement;
+    const email = view.getByLabelText("Email") as HTMLInputElement;
+    const password = view.getByLabelText("Password") as HTMLInputElement;
     expect(email.getAttribute("inputmode")).toBe("email");
     fireEvent.change(email, { target: { value: "owl@example.com" } });
     fireEvent.change(password, { target: { value: "  private password  " } });

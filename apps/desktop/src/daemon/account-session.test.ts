@@ -96,7 +96,9 @@ describe("account activation", () => {
 
   it("rejects blank emails before sending credentials or clearing the session", async () => {
     const { manager, http, deps } = fixture();
-    await expect(manager.login("", "  ", "password")).rejects.toThrow("请输入邮箱和密码。");
+    await expect(manager.login("", "  ", "password")).rejects.toThrow(
+      "Enter your email and password.",
+    );
     expect(http).not.toHaveBeenCalled();
     expect(deps.save).not.toHaveBeenCalled();
   });

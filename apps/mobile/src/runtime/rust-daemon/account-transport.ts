@@ -4,7 +4,8 @@ import type { TransportFactory } from "./types";
 /** Account authority and one-use relay tickets stay in the Electron main process. */
 export const createAccountRelayTransportFactory: TransportFactory = ({ url }) => {
   const desktop = getDesktopHost();
-  if (!desktop?.invoke || !desktop.events?.on) throw new Error("账号中继需要桌面客户端。");
+  if (!desktop?.invoke || !desktop.events?.on)
+    throw new Error("Account relay requires the desktop app.");
   const parsed = new URL(url);
   if (
     parsed.protocol !== "ait+desktop:" ||

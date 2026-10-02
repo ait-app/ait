@@ -1,4 +1,4 @@
-# ADR-067: Account discovery and on-demand reverse relay
+# ADR-072: Account discovery and on-demand reverse relay
 
 Status: implemented for the desktop client, 2026-10-01.
 
@@ -14,14 +14,15 @@ the same HTTPS base. No credentials are bundled. The Host settings page and add-
 dialog expose email/password login, with an optional service override under
 service settings. Account IPC accepts `email` and `password`; the main process trims
 and lowercases the email before sending `{ email, password }` to `/v1/auth/login`,
-while preserving the password exactly. Restored accounts keep their saved service address rather than
-being migrated to the default. Valid saved credentials automatically restore the
-node activation when OS secret storage is available.
+while preserving the password exactly. Restored accounts keep their saved service
+address rather than being migrated to the default. Valid saved credentials automatically
+restore the node activation when OS secret storage is available.
 
 The desktop main process owns the user JWT and renews node authorization. The new
 `server-relay` crate receives one-use control grants through authenticated local API
-routes. It knows only the actual local runtime address/token, and creates an independent
-reverse data WSS per access. It never accepts an arbitrary local destination from the
+routes. Only `server-api` depends on `server-relay`; the relay crate has no workspace
+dependencies and the dependency guard enforces this boundary. It knows only the actual
+local runtime address/token, and creates an independent reverse data WSS per access. It never accepts an arbitrary local destination from the
 center. Control loss cancels visits targeting that control epoch; logout and node lease
 expiry cancel all incoming and outgoing visits for that node.
 
@@ -48,6 +49,10 @@ Host switching and logout cancel their transfers. Saved JWTs require OS secret s
 
 Design and API owner: `ait-server/docs/architecture.md` in the sibling repository.
 
-Test coverage: not measured during local implementation. Focused transport, protocol,
-relay and two-real-runtime terminal/download tests passed; workspace coverage is deferred until
-commit preparation.
+## Test coverage
+
+The Linux workspace validation passed 1,564 tests with 3 existing real-provider tests
+ignored. Measured line coverage is 91.72% (44,527 / 48,545); the relay adapter itself
+is 60.83% (278 / 457), with download coverage still missing from the automated suite.
+See the [validation report](../reports/account-host-relay-validation.md) for commands,
+source identification, the shared coverage artifact, and remaining gaps.

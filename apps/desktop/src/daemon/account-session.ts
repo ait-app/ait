@@ -52,7 +52,11 @@ export interface AccountDependencies {
 }
 
 export class AccountError extends Error {
-  constructor(message: string, readonly status: number, readonly code: string) {
+  constructor(
+    message: string,
+    readonly status: number,
+    readonly code: string,
+  ) {
     super(message);
   }
 }
@@ -67,9 +71,13 @@ export function normalizeCenter(value: string): string {
     url.search ||
     url.hash
   ) {
-    throw new Error("中心地址需要 HTTPS；本机开发可使用 HTTP。");
+    throw new Error("The service URL must use HTTPS. HTTP is allowed only for local development.");
   }
   return url.toString().replace(/\/+$/, "");
+}
+
+function retryDelay(failures: number): number {
+  return Math.min(30_000, 1000 * 2 ** Math.min(failures, 5)) * (0.8 + Math.random() * 0.4);
 }
 
 /** User authorization stays in main; runtime connectors receive short-lived tickets only. */
@@ -115,7 +123,7 @@ export class AccountSessionManager {
     center = normalizeCenter(center);
     email = email.trim().toLowerCase();
     if (!email || email.length > 320 || !password || password.length > 512)
-      throw new Error("请输入邮箱和密码。");
+      throw new Error("Enter your email and password.");
     await this.logout();
     const generation = this.generation;
     const result = await this.http<{
@@ -123,7 +131,7 @@ export class AccountSessionManager {
       expires_in: number;
       user: { display_name?: string; email: string };
     }>(center, null, "/v1/auth/login", "POST", { email, password });
-    if (generation !== this.generation) throw new Error("登录已取消。");
+    if (generation !== this.generation) throw new Error("Sign-in cancelled.");
     this.account = {
       center,
       token: result.access_token,
@@ -201,9 +209,10 @@ export class AccountSessionManager {
       this.update({ selected: null });
       return this.snapshot();
     }
-    if (!this.account || !this.node) throw new Error("请先登录并等待节点注册。");
+    if (!this.account || !this.node)
+      throw new Error("Sign in and wait for this device to register.");
     const host = this.state.hosts.find((host) => host.host_id === hostId);
-    if (!host) throw new Error("目标 Host 当前不在线，请刷新列表。");
+    if (!host) throw new Error("The target host is offline. Refresh the host list.");
     if (this.state.selected?.host_id !== hostId) {
       this.deps.closeTransports();
       this.update({ selected: host });
@@ -236,7 +245,7 @@ export class AccountSessionManager {
     url: string;
   }> {
     if (!this.account || !this.node || this.state.selected?.host_id !== hostId) {
-      throw new Error("该 Host 未被选中，或账号已退出。");
+      throw new Error("The host is not selected or you have signed out.");
     }
     const generation = this.generation;
     const center = this.account.center;
@@ -257,7 +266,7 @@ export class AccountSessionManager {
     );
     if (generation !== this.generation || this.state.selected?.host_id !== hostId) {
       await this.closeVisit(result.relay_session_id);
-      throw new Error("连接已取消。");
+      throw new Error("Connection cancelled.");
     }
     const url = new URL(`${center}/v1/relay/sessions/${result.relay_session_id}/client`);
     url.protocol = url.protocol === "https:" ? "wss:" : "ws:";
@@ -290,7 +299,7 @@ export class AccountSessionManager {
     const generation = this.generation;
     try {
       if (this.account.expiresAt <= Date.now())
-        throw new AccountError("登录已过期，请重新登录。", 401, "unauthorized");
+        throw new AccountError("Your session has expired. Sign in again.", 401, "unauthorized");
       const runtime = this.deps.runtime();
       const ready =
         runtime.status === "running" &&
@@ -340,13 +349,10 @@ export class AccountSessionManager {
       if (this.node.control_required && instance && Date.now() >= this.nextControl) {
         await this.maintainControl(generation).catch((error: unknown) => {
           if (error instanceof AccountError && error.status === 401) throw error;
-          this.nextControl =
-            Date.now() +
-            Math.min(30_000, 1000 * 2 ** Math.min(this.controlFailures++, 5)) *
-              (0.8 + Math.random() * 0.4);
+          this.nextControl = Date.now() + retryDelay(this.controlFailures++);
           this.update({
             hostOnline: false,
-            error: error instanceof Error ? error.message : "Host 上线失败",
+            error: error instanceof Error ? error.message : "Failed to bring this host online.",
           });
         });
       }
@@ -391,14 +397,10 @@ export class AccountSessionManager {
           void this.logout();
         });
       }
-      if (!this.node)
-        this.nextRegistration =
-          Date.now() +
-          Math.min(30_000, 1000 * 2 ** Math.min(this.registrationFailures++, 5)) *
-            (0.8 + Math.random() * 0.4);
+      if (!this.node) this.nextRegistration = Date.now() + retryDelay(this.registrationFailures++);
       this.update({
         status: "error",
-        error: error instanceof Error ? error.message : "中心连接失败",
+        error: error instanceof Error ? error.message : "Failed to connect to the account service.",
         stale: true,
       });
     }
@@ -423,14 +425,11 @@ export class AccountSessionManager {
       control_ticket: grant.control_ticket,
       node_session_id: this.node.node_session_id,
     });
-    this.nextControl =
-      Date.now() +
-      Math.min(30_000, 1000 * 2 ** Math.min(this.controlFailures++, 5)) *
-        (0.8 + Math.random() * 0.4);
+    this.nextControl = Date.now() + retryDelay(this.controlFailures++);
   }
 
   private api<T = unknown>(path: string, method = "GET", body?: unknown): Promise<T> {
-    if (!this.account) return Promise.reject(new Error("请先登录。"));
+    if (!this.account) return Promise.reject(new Error("Sign in first."));
     return this.http(this.account.center, this.account.token, path, method, body);
   }
 
@@ -461,7 +460,7 @@ export class AccountSessionManager {
       };
       if (!response.ok)
         throw new AccountError(
-          value.error?.message ?? "中心请求失败",
+          value.error?.message ?? "Account service request failed.",
           response.status,
           value.error?.code ?? "request_failed",
         );

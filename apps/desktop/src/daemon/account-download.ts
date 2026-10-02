@@ -17,7 +17,7 @@ export class AccountDownloadManager {
     owner: WebContents,
     input: { hostId: string; token: string; fileName: string; downloadId: string },
   ): Promise<void> {
-    if (this.active.size >= 4) throw new Error("同时下载数量已达上限。");
+    if (this.active.size >= 4) throw new Error("Too many concurrent downloads.");
     let aborted = false;
     let cancelTransfer: () => void = () => undefined;
     const reservation = () => {
@@ -58,22 +58,23 @@ export class AccountDownloadManager {
     setCancel: (cancel: () => void) => void,
   ): Promise<void> {
     const window = BrowserWindow.fromWebContents(owner);
-    if (!window) throw new Error("下载窗口已关闭。");
+    if (!window) throw new Error("The download window has closed.");
     const selected = this.account.snapshot().selected?.host_id;
-    if (selected !== input.hostId) throw new Error("请先连接目标 Host。");
+    if (selected !== input.hostId) throw new Error("Connect to the target host first.");
     const fileName =
       path
         .basename(input.fileName)
+        // eslint-disable-next-line no-control-regex -- Filenames must exclude ASCII control characters.
         .replace(/[\\/:*?"<>|\x00-\x1f]/g, "_")
         .slice(0, 200) || "download";
     const destination = await dialog.showSaveDialog(window, { defaultPath: fileName });
     if (isAborted() || owner.isDestroyed() || destination.canceled || !destination.filePath)
-      throw new Error("下载已取消。");
+      throw new Error("Download cancelled.");
     const grant = await this.account.openDownload(input.hostId, input.token);
     const temporary = `${destination.filePath}.ait-${randomUUID()}.part`;
     if (isAborted()) {
       await this.account.closeVisit(grant.relay_session_id);
-      throw new Error("下载已取消。");
+      throw new Error("Download cancelled.");
     }
     const file = await open(temporary, "wx", 0o600).catch(async (error) => {
       await this.account.closeVisit(grant.relay_session_id);
@@ -82,7 +83,7 @@ export class AccountDownloadManager {
     let completed = false;
     let cancel: () => void = () => undefined;
     try {
-      if (isAborted()) throw new Error("下载已取消。");
+      if (isAborted()) throw new Error("Download cancelled.");
       await new Promise<void>((resolve, reject) => {
         const socket = new WebSocket(grant.url, {
           headers: { Authorization: `Bearer ${grant.client_ticket}` },
@@ -98,7 +99,7 @@ export class AccountDownloadManager {
         let pendingMessages = 0;
         let lastProgress = 0;
         let work = Promise.resolve();
-        let timer = setTimeout(() => finish(new Error("下载连接超时。")), 30_000);
+        let timer = setTimeout(() => finish(new Error("Download connection timed out.")), 30_000);
         const finish = (error?: Error) => {
           if (settled) return;
           settled = true;
@@ -113,12 +114,12 @@ export class AccountDownloadManager {
               else resolve();
             });
         };
-        cancel = () => finish(new Error("下载已取消。"));
+        cancel = () => finish(new Error("Download cancelled."));
         setCancel(cancel);
         owner.once("destroyed", cancel);
-        socket.on("error", () => finish(new Error("下载连接失败。")));
+        socket.on("error", () => finish(new Error("Download connection failed.")));
         socket.on("close", () => {
-          if (stage !== "done") finish(new Error("下载中断。"));
+          if (stage !== "done") finish(new Error("Download interrupted."));
         });
         socket.on("message", (raw, binary) => {
           if (settled) return;
@@ -131,24 +132,24 @@ export class AccountDownloadManager {
           pendingMessages += 1;
           socket.pause();
           if (pendingBytes > 4 * 1024 * 1024 || pendingMessages > 16) {
-            finish(new Error("下载缓冲区已满。"));
+            finish(new Error("Download buffer is full."));
             return;
           }
           clearTimeout(timer);
-          timer = setTimeout(() => finish(new Error("下载停滞。")), 30_000);
+          timer = setTimeout(() => finish(new Error("Download stalled.")), 30_000);
           work = work
             .then(async () => {
               if (settled) return;
               if (binary) {
-                if (stage !== "body") throw new Error("下载协议错误。");
+                if (stage !== "body") throw new Error("Invalid download protocol.");
                 let offset = 0;
                 while (offset < chunk.length) {
                   const result = await file.write(chunk, offset, chunk.length - offset);
-                  if (!result.bytesWritten) throw new Error("文件写入失败。");
+                  if (!result.bytesWritten) throw new Error("Failed to write the file.");
                   offset += result.bytesWritten;
                 }
                 bytes += chunk.length;
-                if (total !== null && bytes > total) throw new Error("文件长度不匹配。");
+                if (total !== null && bytes > total) throw new Error("File size mismatch.");
                 if (Date.now() - lastProgress > 200 && !owner.isDestroyed()) {
                   lastProgress = Date.now();
                   owner.send("paseo:event:account-download-progress", {
@@ -183,7 +184,7 @@ export class AccountDownloadManager {
                   message.content_length !== null &&
                   (!Number.isSafeInteger(message.content_length) || message.content_length! < 0)
                 )
-                  throw new Error("文件大小无效。");
+                  throw new Error("Invalid file size.");
                 total = message.content_length ?? null;
                 stage = "body";
                 return;
@@ -204,11 +205,11 @@ export class AccountDownloadManager {
                 queueMicrotask(() => finish());
                 return;
               }
-              throw new Error("下载响应无效或不完整。");
+              throw new Error("Invalid or incomplete download response.");
             })
             .catch((error) => {
               queueMicrotask(() =>
-                finish(error instanceof Error ? error : new Error("下载失败。")),
+                finish(error instanceof Error ? error : new Error("Download failed.")),
               );
             })
             .finally(() => {

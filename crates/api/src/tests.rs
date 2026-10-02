@@ -164,6 +164,35 @@ fn rejects_bad_config_and_redacts_debug() {
     );
 }
 
+fn assert_default_capabilities(info: &protocol::ServerInfo) {
+    let expected: Vec<_> = CAPABILITIES
+        .iter()
+        .copied()
+        .chain([
+            "editor.available.list.request",
+            "editor.open.request",
+            "session.heartbeat",
+            "session.events.set_subscription.request",
+            "creation.subscribe.request",
+        ])
+        .collect();
+    assert_eq!(info.implemented_capabilities, expected);
+    assert_eq!(info.capabilities.len(), 171);
+    assert!(
+        info.capabilities
+            .contains(&"connection.single.v1".to_owned())
+    );
+    assert!(
+        !info
+            .implemented_capabilities
+            .contains(&"connection.single.v1".to_owned())
+    );
+    assert!(
+        info.capabilities
+            .contains(&"schedule.list.request".to_owned())
+    );
+}
+
 #[tokio::test]
 async fn http_authentication_origins_and_readiness() {
     let fixture = Fixture::start().await;
@@ -226,23 +255,7 @@ async fn http_authentication_origins_and_readiness() {
         .unwrap();
     assert_eq!(info.server_id, "stable");
     assert_eq!(info.lifecycle, Lifecycle::Ready);
-    let expected: Vec<_> = CAPABILITIES
-        .iter()
-        .copied()
-        .chain([
-            "editor.available.list.request",
-            "editor.open.request",
-            "session.heartbeat",
-            "session.events.set_subscription.request",
-            "creation.subscribe.request",
-        ])
-        .collect();
-    assert_eq!(info.implemented_capabilities, expected);
-    assert_eq!(info.capabilities.len(), 170);
-    assert!(
-        info.capabilities
-            .contains(&"schedule.list.request".to_owned())
-    );
+    assert_default_capabilities(&info);
     assert_eq!(
         client
             .get(fixture.url("/missing"))

@@ -4,7 +4,7 @@ use super::*;
 
 #[test]
 fn empty_host_keeps_only_builtin_metadata_methods() {
-    assert!(features(&Services::default()).is_empty());
+    assert_eq!(features(&Services::default()), ["ait-rust-single-v1"]);
     let methods = installed_capabilities(&Services::default());
     assert_eq!(
         methods,
@@ -21,7 +21,7 @@ fn empty_host_keeps_only_builtin_metadata_methods() {
         ]
     );
     let registered = crate::registered_capabilities(&methods);
-    assert_eq!(registered.len(), 170);
+    assert_eq!(registered.len(), 171);
     assert!(registered.iter().any(|method| method == "terminal.input"));
     assert!(!methods.iter().any(|method| method == "terminal.input"));
 }
@@ -38,7 +38,7 @@ fn merged_groups_have_one_owner_per_method_and_keep_placeholders_separate() {
     assert!(!unique.contains("server.status.unsubscribe"));
     let registered =
         crate::registered_capabilities(&methods.into_iter().map(str::to_owned).collect::<Vec<_>>());
-    assert_eq!(registered.len(), 175);
+    assert_eq!(registered.len(), 176);
 }
 
 #[test]
