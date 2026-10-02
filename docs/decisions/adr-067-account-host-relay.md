@@ -7,12 +7,14 @@ runtime opens one outbound control WSS. Discovery polls the center independently
 HostRuntime; only explicitly selected hosts become remote work connections.
 
 The desktop main process owns the default account API base,
-`https://ait.h.stdin.in:8443/api`. An omitted or blank login center resolves to this
+`https://dash.ait-app.com:8443/api`. An omitted or blank login center resolves to this
 base, and the account snapshot supplies it to the renderer. Login, discovery,
 control and data URLs all preserve the `/api` prefix and port; WSS is derived from
 the same HTTPS base. No credentials are bundled. The Host settings page and add-Host
-dialog expose username/password login, with an optional service override under
-service settings. Restored accounts keep their saved service address rather than
+dialog expose email/password login, with an optional service override under
+service settings. Account IPC accepts `email` and `password`; the main process trims
+and lowercases the email before sending `{ email, password }` to `/v1/auth/login`,
+while preserving the password exactly. Restored accounts keep their saved service address rather than
 being migrated to the default. Valid saved credentials automatically restore the
 node activation when OS secret storage is available.
 

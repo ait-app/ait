@@ -2,7 +2,7 @@ import { randomUUID } from "node:crypto";
 import { hostname } from "node:os";
 
 /** API base includes the management gateway prefix; all relay URLs derive from it. */
-export const DEFAULT_ACCOUNT_CENTER = "https://ait.h.stdin.in:8443/api";
+export const DEFAULT_ACCOUNT_CENTER = "https://dash.ait-app.com:8443/api";
 
 export interface AccountHost {
   host_id: string;
@@ -52,11 +52,7 @@ export interface AccountDependencies {
 }
 
 export class AccountError extends Error {
-  constructor(
-    message: string,
-    readonly status: number,
-    readonly code: string,
-  ) {
+  constructor(message: string, readonly status: number, readonly code: string) {
     super(message);
   }
 }
@@ -115,17 +111,18 @@ export class AccountSessionManager {
     this.deps.notify(this.snapshot());
   }
 
-  async login(center: string, username: string, password: string): Promise<AccountSnapshot> {
+  async login(center: string, email: string, password: string): Promise<AccountSnapshot> {
     center = normalizeCenter(center);
-    if (!username.trim() || !password || password.length > 512)
-      throw new Error("请输入用户名和密码。");
+    email = email.trim().toLowerCase();
+    if (!email || email.length > 320 || !password || password.length > 512)
+      throw new Error("请输入邮箱和密码。");
     await this.logout();
     const generation = this.generation;
     const result = await this.http<{
       access_token: string;
       expires_in: number;
       user: { display_name?: string; email: string };
-    }>(center, null, "/v1/auth/login", "POST", { username, password });
+    }>(center, null, "/v1/auth/login", "POST", { email, password });
     if (generation !== this.generation) throw new Error("登录已取消。");
     this.account = {
       center,
@@ -459,7 +456,9 @@ export class AccountSessionManager {
         ...(body === undefined ? {} : { body: JSON.stringify(body) }),
       });
       if (response.status === 204) return undefined as T;
-      const value = (await response.json()) as { error?: { message?: string; code?: string } };
+      const value = (await response.json()) as {
+        error?: { message?: string; code?: string };
+      };
       if (!response.ok)
         throw new AccountError(
           value.error?.message ?? "中心请求失败",

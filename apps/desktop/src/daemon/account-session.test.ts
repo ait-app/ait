@@ -78,15 +78,38 @@ function fixture() {
 }
 
 describe("account activation", () => {
+  it("logs in with normalized email and preserves the password exactly", async () => {
+    const { manager, http, deps } = fixture();
+    const password = "  a case-sensitive Password  ";
+    await manager.login("", "  Alice@Example.COM  ", password);
+    const [url, request] = http.mock.calls[0]!;
+    expect(url).toBe("https://dash.ait-app.com:8443/api/v1/auth/login");
+    expect(request?.method).toBe("POST");
+    expect(JSON.parse(String(request?.body))).toEqual({
+      email: "alice@example.com",
+      password,
+    });
+    expect(JSON.stringify(vi.mocked(deps.save).mock.calls)).not.toContain(password);
+    expect(JSON.stringify(manager.snapshot())).not.toContain(password);
+    await manager.logout();
+  });
+
+  it("rejects blank emails before sending credentials or clearing the session", async () => {
+    const { manager, http, deps } = fixture();
+    await expect(manager.login("", "  ", "password")).rejects.toThrow("请输入邮箱和密码。");
+    expect(http).not.toHaveBeenCalled();
+    expect(deps.save).not.toHaveBeenCalled();
+  });
+
   it("uses the default HTTPS gateway for login, registration, control and data", async () => {
     const { manager, http, deps } = fixture();
     expect(manager.snapshot().center).toBe(DEFAULT_ACCOUNT_CENTER);
-    await manager.login("", "alice", "password");
+    await manager.login("", "alice@example.com", "password");
     await vi.advanceTimersByTimeAsync(1);
-    expect(http.mock.calls[0]?.[0]).toBe("https://ait.h.stdin.in:8443/api/v1/auth/login");
+    expect(http.mock.calls[0]?.[0]).toBe("https://dash.ait-app.com:8443/api/v1/auth/login");
     expect(http.mock.calls.some(([url]) => String(url).endsWith("/relay-sessions"))).toBe(false);
     expect(deps.local).toHaveBeenCalledWith("PUT", {
-      center_url: "https://ait.h.stdin.in:8443/api",
+      center_url: "https://dash.ait-app.com:8443/api",
       control_ticket: "short-lived-control-ticket",
       node_session_id: "activation",
     });
@@ -95,10 +118,10 @@ describe("account activation", () => {
     );
     await manager.select("remote");
     expect((await manager.openVisit("remote")).url).toBe(
-      "wss://ait.h.stdin.in:8443/api/v1/relay/sessions/visit/client",
+      "wss://dash.ait-app.com:8443/api/v1/relay/sessions/visit/client",
     );
     expect((await manager.openDownload("remote", "download-token")).url).toBe(
-      "wss://ait.h.stdin.in:8443/api/v1/relay/sessions/visit/client",
+      "wss://dash.ait-app.com:8443/api/v1/relay/sessions/visit/client",
     );
     expect(
       http.mock.calls.every(([url]) => String(url).startsWith(`${DEFAULT_ACCOUNT_CENTER}/v1/`)),
@@ -134,7 +157,7 @@ describe("account activation", () => {
 
   it("auto-registers and discovers without opening a remote business session", async () => {
     const { manager, http, deps } = fixture();
-    await manager.login("http://127.0.0.1:3000", "alice", "password");
+    await manager.login("http://127.0.0.1:3000", "alice@example.com", "password");
     await vi.advanceTimersByTimeAsync(1);
     expect(manager.snapshot().hosts).toHaveLength(1);
     expect(http.mock.calls.some(([url]) => String(url).includes("exclude_node_id=node"))).toBe(
@@ -153,7 +176,7 @@ describe("account activation", () => {
 
   it("requires explicit selection and clears connection intent on logout", async () => {
     const { manager, http, deps } = fixture();
-    await manager.login("https://center.example/api", "alice", "password");
+    await manager.login("https://center.example/api", "alice@example.com", "password");
     await vi.advanceTimersByTimeAsync(1);
     await expect(manager.openVisit("remote")).rejects.toThrow();
     await manager.select("remote");
@@ -171,7 +194,7 @@ describe("account activation", () => {
 
   it("keeps the last online list and selected host when discovery fails", async () => {
     const { manager, failDiscovery } = fixture();
-    await manager.login("https://center.example", "alice", "password");
+    await manager.login("https://center.example", "alice@example.com", "password");
     await vi.advanceTimersByTimeAsync(1);
     await manager.select("remote");
     failDiscovery();
@@ -200,7 +223,7 @@ describe("account activation", () => {
       }
       return normal(url);
     });
-    await manager.login("https://center.example", "alice", "password");
+    await manager.login("https://center.example", "alice@example.com", "password");
     await vi.advanceTimersByTimeAsync(6000);
     expect(registrations).toHaveLength(2);
     expect(registrations[0]).not.toBe(registrations[1]);

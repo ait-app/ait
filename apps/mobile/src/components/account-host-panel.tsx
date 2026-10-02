@@ -1,4 +1,4 @@
-import { useState } from "react";
+import React, { useState } from "react";
 import { Pressable, Text, TextInput, View } from "react-native";
 import { useRouter } from "expo-router";
 import { StyleSheet } from "react-native-unistyles";
@@ -12,7 +12,7 @@ export function AccountHostPanel({ onConnected }: { onConnected?: () => void }) 
   const [centerOverride, setCenterOverride] = useState<string | null>(null);
   const center = centerOverride ?? account.center;
   const [showServiceSettings, setShowServiceSettings] = useState(false);
-  const [username, setUsername] = useState("");
+  const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -29,10 +29,10 @@ export function AccountHostPanel({ onConnected }: { onConnected?: () => void }) 
     }
   };
   const login = () => {
-    if (busy || !username.trim() || !password) return;
+    if (busy || !email.trim() || !password) return;
     const secret = password;
     setPassword("");
-    void run(() => accountCommand("account_login", { center, username, password: secret }));
+    void run(() => accountCommand("account_login", { center, email, password: secret }));
   };
   return (
     <View style={styles.panel} testID="account-host-panel">
@@ -44,14 +44,19 @@ export function AccountHostPanel({ onConnected }: { onConnected?: () => void }) 
           </Text>
           <TextInput
             style={styles.input}
-            value={username}
-            onChangeText={setUsername}
-            placeholder="用户名"
-            accessibilityLabel="用户名"
+            value={email}
+            onChangeText={setEmail}
+            placeholder="邮箱"
+            accessibilityLabel="邮箱"
+            inputMode="email"
+            keyboardType="email-address"
+            autoComplete="email"
+            textContentType="emailAddress"
+            maxLength={320}
             autoCapitalize="none"
             autoCorrect={false}
             editable={!busy}
-            testID="account-username"
+            testID="account-email"
           />
           <TextInput
             style={styles.input}
@@ -65,7 +70,7 @@ export function AccountHostPanel({ onConnected }: { onConnected?: () => void }) 
             testID="account-password"
           />
           <Button
-            disabled={busy || !username.trim() || !password}
+            disabled={busy || !email.trim() || !password}
             onPress={login}
             testID="account-login"
           >
@@ -127,7 +132,9 @@ export function AccountHostPanel({ onConnected }: { onConnected?: () => void }) 
               testID={`account-host-${host.host_id}`}
               onPress={() =>
                 void run(async () => {
-                  await accountCommand("account_select", { hostId: host.host_id });
+                  await accountCommand("account_select", {
+                    hostId: host.host_id,
+                  });
                   onConnected?.();
                   router.push(`/h/${host.server_id}`);
                 })

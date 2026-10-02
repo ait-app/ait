@@ -99,11 +99,11 @@ export function createAccountIpc(
         case "account_login": {
           if (
             (args.center !== undefined && typeof args.center !== "string") ||
-            typeof args.username !== "string" ||
+            typeof args.email !== "string" ||
             typeof args.password !== "string"
           )
             throw new Error("Invalid login");
-          return manager.login(args.center ?? "", args.username, args.password);
+          return manager.login(args.center ?? "", args.email, args.password);
         }
         case "account_logout":
           await manager.logout();
