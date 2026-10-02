@@ -387,6 +387,9 @@ test("keeps the shared Find controls usable in a compact dark browser", async ({
   await page.goto(buildTerminalWorkspaceUrl(harness.workspaceId, terminal.id));
   await expect(page.getByTestId("terminal-surface")).toBeVisible();
   await page.getByTestId("terminal-surface").click();
+  // Finish initial font refits before clicking compact controls; a refit can
+  // otherwise reset the match between pointer down and pointer up.
+  await page.waitForTimeout(2600);
   await openFind(page, "needle");
   await expect(status(page)).toHaveText("2 of 2");
   await page.getByRole("button", { name: "Previous match" }).click();

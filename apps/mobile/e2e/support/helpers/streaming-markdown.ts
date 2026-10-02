@@ -1,4 +1,3 @@
-import { holdAssistantStream } from "./agent-timeline-gate";
 import { expect, type Page, type TestInfo } from "@playwright/test";
 import { openAgentRoute, type MockAgentWorkspace } from "./mock-agent";
 import { seedOfflineAgentWorkspace } from "./offline-agent";
@@ -6,7 +5,7 @@ import { writeFile } from "node:fs/promises";
 import path from "node:path";
 
 interface StreamingMarkdownAgent extends MockAgentWorkspace {
-  stream: Awaited<ReturnType<typeof holdAssistantStream>>;
+  advance(stage: number): Promise<void>;
 }
 
 export async function withStreamingMarkdown(
@@ -23,26 +22,24 @@ export async function withStreamingMarkdown(
     path.join(agent.cwd, "e2e-markdown-response.txt"),
     "**Bold text stays bold** and [Paseo docs](https://example.com/documentation). Done.",
   );
-  const stream = await holdAssistantStream(page, agent.agentId);
+  const advance = (stage: number) =>
+    writeFile(path.join(agent.cwd, `e2e-markdown-stage-${stage}`), "ready");
   try {
     await openAgentRoute(page, agent);
-    await stream.waitForInitialTimeline();
-    await run({ ...agent, stream });
+    await expect(page.getByTestId("message-input-root").filter({ visible: true })).toBeVisible();
+    await run({ ...agent, advance });
   } finally {
-    stream.release();
+    await advance(1);
+    await advance(2);
     await agent.cleanup();
   }
 }
 
 export async function requestStreamingMarkdown(agent: StreamingMarkdownAgent): Promise<void> {
   await agent.client.sendAgentMessage(agent.agentId, "e2e-markdown-stream");
-  // Exercise late assertions: the producer finishes before the browser consumes its frames.
-  await agent.client.waitForFinish(agent.agentId, 30_000);
-  // The offline fixture splits "**Bold" into two frames. Whether they land in one store
-  // commit or two is up to the browser's task scheduling, and word pacing only
-  // releases a word once the whitespace after it has arrived, so stop after
-  // that whitespace: every batching then reveals "Bold" and nothing past "text".
-  await agent.stream.showThrough("**Bold text");
+  // The offline producer pauses at actual unfinished Markdown boundaries. This
+  // prevents history catch-up from racing a completed producer and makes the
+  // browser consume genuine live deltas, not synthetic response snapshots.
 }
 
 export async function expectUnfinishedBold(page: Page): Promise<void> {
@@ -60,7 +57,7 @@ export async function expectUnfinishedLink(
   testInfo: TestInfo,
 ): Promise<void> {
   const message = page.getByTestId("assistant-message").last();
-  await agent.stream.showThrough("**Bold text stays bold** and [Paseo docs");
+  await agent.advance(1);
   await expect(message).toContainText("Paseo docs");
   await expect(message.getByRole("link", { name: "Paseo docs" })).toHaveCount(0);
   await expect(message).not.toContainText("[");
@@ -73,7 +70,7 @@ export async function expectFinishedMarkdown(
   agent: StreamingMarkdownAgent,
   testInfo: TestInfo,
 ): Promise<void> {
-  agent.stream.release();
+  await agent.advance(2);
   await agent.client.waitForFinish(agent.agentId, 30_000);
   await expectCompletedMarkdown(page);
   await captureMarkdown(page, testInfo, "completed-markdown");

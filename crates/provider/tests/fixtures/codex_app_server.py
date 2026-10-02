@@ -309,9 +309,16 @@ for line in sys.stdin:
             complete(pending, text)
         elif text == "e2e-markdown-stream" and (root / "e2e-markdown-response.txt").exists():
             response = (root / "e2e-markdown-response.txt").read_text()
-            for char in response:
+            stages = {len("**Bold text"): 1, len("**Bold text stays bold** and [Paseo docs"): 2}
+            for index, char in enumerate(response, 1):
                 emit({"method":"item/agentMessage/delta", "params": {
                     "threadId":thread_id,"turnId":pending,"itemId":pending+"-assistant","delta":char}})
+                if index in stages:
+                    deadline = time.monotonic() + 60
+                    while not (root / f"e2e-markdown-stage-{stages[index]}").exists():
+                        if time.monotonic() > deadline:
+                            raise RuntimeError("offline Markdown stage was not released")
+                        time.sleep(0.01)
             item = {"type":"agentMessage","id":pending+"-assistant","text":response}
             stream_items.append(item)
             save_turn(pending, None, "completed")

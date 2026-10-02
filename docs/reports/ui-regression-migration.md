@@ -17,3 +17,7 @@ macOS, Chromium, latest-baseline Rust server: the complete focused plus core lif
 Related terminal/runtime tests: 65 passed, one existing skip. Capability mapping unit tests after the final fix: 23 passed. App and desktop type checks, changed-file ESLint and package-link verification passed. No Rust source changed; the server builds successfully and CI runs full Rust checks because its Python Provider fixture changed.
 
 Other inherited E2E scenarios still need individual migration; these results do not claim the entire inherited suite or native mobile UI passes. The PR remains subject to remote CI and review before merge.
+
+## CI follow-up
+
+The first Linux run passed Rust/UI checks and 22 browser scenarios, but exposed a streamed Markdown fixture race and one compact Find retry. The fixture now pauses its real native deltas at unfinished Markdown boundaries until assertions release each stage, preventing completed-history catch-up from bypassing a browser-only gate. Compact Find settles initial font refits before navigation. The focused local rerun passed six scenarios with the Linux-only shortcut skipped. Final remote CI must run on the follow-up commit before ticket closure.

@@ -46,7 +46,8 @@ not the availability or quality of any paid model.
 Creation helpers wait for the offline model discovery to finish before submitting.
 Wire gates decode Rust request/response correlation through the production adapter aliases;
 they do not send historical session envelopes to Rust. The Markdown fixture emits native
-Codex deltas and persists the completed message for reload assertions.
+Codex deltas, pauses at unfinished bold/link boundaries until assertions release each
+stage, and persists the completed message for reload assertions.
 
 Terminal bootstrap is bounded to 12,000 total cells. Find assertions first check that both
 needles are actually retained and let initial font refits finish before checking viewport
