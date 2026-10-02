@@ -1,14 +1,11 @@
+import { connectDaemonClient } from "./daemon-client-loader";
 import { execSync } from "node:child_process";
 import path from "node:path";
 import type { Page } from "@playwright/test";
 import { waitForTabBar } from "./launcher";
 import { selectWorkspaceInSidebar } from "./sidebar";
 import { createTempGitRepo, resolveTempRoot } from "./workspace";
-import {
-  connectWorkspaceSetupClient,
-  openHomeWithProject,
-  type WorkspaceSetupDaemonClient,
-} from "./workspace-setup";
+import { openHomeWithProject, type WorkspaceSetupDaemonClient } from "./workspace-setup";
 
 export interface CreatedWorkspace {
   workspaceId: string;
@@ -35,13 +32,15 @@ export interface WithWorkspaceHandle {
 
 export function createWithWorkspace(page: Page): WithWorkspaceHandle {
   let client: WorkspaceSetupDaemonClient | null = null;
-  const repos: Array<{ cleanup: () => Promise<void> }> = [];
+  const repos: { cleanup: () => Promise<void> }[] = [];
   const worktrees: WorktreeRecord[] = [];
   const projectIds = new Set<string>();
 
   const withWorkspace: WithWorkspace = async (options) => {
     if (!client) {
-      client = await connectWorkspaceSetupClient();
+      client = await connectDaemonClient<WorkspaceSetupDaemonClient>({
+        clientIdPrefix: "workspace-fixture",
+      });
     }
     const prefix = options?.prefix ?? (options?.worktree ? "wt-" : "ws-");
     const repo = await createTempGitRepo(prefix);

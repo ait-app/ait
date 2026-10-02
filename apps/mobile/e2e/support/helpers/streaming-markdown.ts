@@ -1,6 +1,9 @@
 import { holdAssistantStream } from "./agent-timeline-gate";
 import { expect, type Page, type TestInfo } from "@playwright/test";
-import { openAgentRoute, seedMockAgentWorkspace, type MockAgentWorkspace } from "./mock-agent";
+import { openAgentRoute, type MockAgentWorkspace } from "./mock-agent";
+import { seedOfflineAgentWorkspace } from "./offline-agent";
+import { writeFile } from "node:fs/promises";
+import path from "node:path";
 
 interface StreamingMarkdownAgent extends MockAgentWorkspace {
   stream: Awaited<ReturnType<typeof holdAssistantStream>>;
@@ -12,15 +15,14 @@ export async function withStreamingMarkdown(
   run: (agent: StreamingMarkdownAgent) => Promise<void>,
 ): Promise<void> {
   testInfo.setTimeout(120_000);
-  const agent = await seedMockAgentWorkspace({
+  const agent = await seedOfflineAgentWorkspace({
     repoPrefix: "streaming-markdown-",
     title: "Streaming Markdown",
-    featureValues: {
-      mockStreamingAssistantResponse:
-        "**Bold text stays bold** and [Paseo docs](https://example.com/documentation). Done.",
-      mockStreamingAssistantIntervalMs: 400,
-    },
   });
+  await writeFile(
+    path.join(agent.cwd, "e2e-markdown-response.txt"),
+    "**Bold text stays bold** and [Paseo docs](https://example.com/documentation). Done.",
+  );
   const stream = await holdAssistantStream(page, agent.agentId);
   try {
     await openAgentRoute(page, agent);
@@ -33,10 +35,10 @@ export async function withStreamingMarkdown(
 }
 
 export async function requestStreamingMarkdown(agent: StreamingMarkdownAgent): Promise<void> {
-  await agent.client.sendAgentMessage(agent.agentId, "Show the formatted streaming response.");
+  await agent.client.sendAgentMessage(agent.agentId, "e2e-markdown-stream");
   // Exercise late assertions: the producer finishes before the browser consumes its frames.
   await agent.client.waitForFinish(agent.agentId, 30_000);
-  // The mock splits "**Bold" into two frames. Whether they land in one store
+  // The offline fixture splits "**Bold" into two frames. Whether they land in one store
   // commit or two is up to the browser's task scheduling, and word pacing only
   // releases a word once the whitespace after it has arrived, so stop after
   // that whitespace: every batching then reveals "Bold" and nothing past "text".

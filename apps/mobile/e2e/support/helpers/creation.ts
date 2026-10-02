@@ -92,7 +92,7 @@ export async function observeCreationRequests(page: Page) {
 export async function retryNextAgentCreation(page: Page) {
   const frames = await loadSessionMessageReaders();
   const retryIds = new Set<string>();
-  const results: Array<{ status: string; agentId?: string }> = [];
+  const results: { status: string; agentId?: string }[] = [];
   let repeated = false;
   await page.routeWebSocket(daemonWsRoutePattern(), (browser) => {
     const server = browser.connectToServer();
@@ -104,7 +104,10 @@ export async function retryNextAgentCreation(page: Page) {
           const requestId = attempt === 1 ? request.requestId : `${request.requestId}-${attempt}`;
           retryIds.add(requestId);
           // Keep the app's operation key and payload; only RPC correlation changes.
-          server.send(JSON.stringify({ type: "session", message: { ...request, requestId } }));
+          const envelope = JSON.parse(typeof frame === "string" ? frame : frame.toString("utf8"));
+          const retryFrame = JSON.stringify({ ...envelope, request_id: requestId });
+          frames.client(retryFrame);
+          server.send(retryFrame);
         }
         return;
       }
@@ -148,13 +151,28 @@ export async function createCreationScenario(page: Page) {
       await waitForSidebarHydration(page);
       await openNewWorkspaceComposer(page, project);
       await selectWorkspaceIsolation(page, isolation);
+      await expect(
+        page
+          .getByRole("button", { name: "Select model (Offline model)", exact: true })
+          .filter({ visible: true }),
+      ).toBeVisible({ timeout: 30000 });
     },
     async openAgentDraft() {
       await gotoWorkspace(page, project.workspaceId);
       await createAgentTabFromMenu(page);
+      await expect(
+        page
+          .getByRole("button", { name: "Select model (Offline model)", exact: true })
+          .filter({ visible: true }),
+      ).toBeVisible({ timeout: 30000 });
     },
     async startAnotherDraft() {
       await createAgentTabFromMenu(page);
+      await expect(
+        page
+          .getByRole("button", { name: "Select model (Offline model)", exact: true })
+          .filter({ visible: true }),
+      ).toBeVisible({ timeout: 30000 });
     },
     async submitPrompt(prompt: string, button = "Send message") {
       await fillComposerDraft(page, prompt);

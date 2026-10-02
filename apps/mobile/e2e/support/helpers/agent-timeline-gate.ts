@@ -36,14 +36,14 @@ export interface RewindCompletionGate {
 }
 
 export interface PromptJumpRequestTracker {
-  requests(): Array<{ cursorSeq: number | null; limit: number | null; mergeWindow: boolean }>;
+  requests(): { cursorSeq: number | null; limit: number | null; mergeWindow: boolean }[];
 }
 
 export async function trackPromptJumpRequests(
   page: Page,
   agentId: string,
 ): Promise<PromptJumpRequestTracker> {
-  const seen: Array<{ cursorSeq: number | null; limit: number | null; mergeWindow: boolean }> = [];
+  const seen: { cursorSeq: number | null; limit: number | null; mergeWindow: boolean }[] = [];
   await page.routeWebSocket(daemonWsRoutePattern(), (ws) => {
     const server = ws.connectToServer();
     ws.onMessage((message) => {
@@ -163,7 +163,7 @@ function recordRepeatedTimelineEntries(
 
 export async function holdDaemonHydration(page: Page): Promise<DaemonHydrationGate> {
   let released = false;
-  const delayedForwards: Array<() => void> = [];
+  const delayedForwards: (() => void)[] = [];
 
   await page.routeWebSocket(daemonWsRoutePattern(), (ws) => {
     const server = ws.connectToServer();
@@ -193,7 +193,7 @@ export async function holdRewindCompletion(
 ): Promise<RewindCompletionGate> {
   let released = false;
   let timelineStreamCount = 0;
-  const delayedForwards: Array<() => void> = [];
+  const delayedForwards: (() => void)[] = [];
   let resolveDelayedResponse: (() => void) | null = null;
   const delayedResponse = new Promise<void>((resolve) => {
     resolveDelayedResponse = resolve;
@@ -253,7 +253,7 @@ export async function delayCreatedAgentInitialTailResponse(
   let createdAgentId: string | null = null;
   let releaseRequested = false;
   let delayedResponseSeen = false;
-  const delayedForwards: Array<() => void> = [];
+  const delayedForwards: (() => void)[] = [];
   let resolveCreatedAgent: ((agentId: string) => void) | null = null;
   let resolveDelayedResponse: (() => void) | null = null;
   let resolveForwardedResponse: (() => void) | null = null;
@@ -349,8 +349,8 @@ export async function holdAgentOlderTimelinePages(
   const entryKeys = new Set<string>();
   const ownedEntries = new Map<string, string>();
   const releasedPages = new Set<number>();
-  const delayedForwards = new Map<number, Array<() => void>>();
-  const requestWaiters = new Map<number, Array<() => void>>();
+  const delayedForwards = new Map<number, (() => void)[]>();
+  const requestWaiters = new Map<number, (() => void)[]>();
 
   const resolveRequestWaiters = () => {
     for (const [count, resolvers] of requestWaiters) {
@@ -434,8 +434,8 @@ export async function delayAgentBootstrapTailResponse(
 ): Promise<BootstrapTimelineGate> {
   let tailReleased = false;
   let catchUpReleased = false;
-  const delayedTailForwards: Array<() => void> = [];
-  const delayedCatchUpForwards: Array<() => void> = [];
+  const delayedTailForwards: (() => void)[] = [];
+  const delayedCatchUpForwards: (() => void)[] = [];
   let resolveDelayedTail: (() => void) | null = null;
   let resolveDelayedCatchUp: (() => void) | null = null;
   const delayedTail = new Promise<void>((resolve) => {
@@ -490,7 +490,7 @@ async function delayAgentTimelineResponse(
 ): Promise<AgentTimelineResponseGate> {
   let releaseRequested = false;
   let delayedResponseSeen = false;
-  const delayedForwards: Array<() => void> = [];
+  const delayedForwards: (() => void)[] = [];
   let resolveDelayedResponse: (() => void) | null = null;
   const delayedResponse = new Promise<void>((resolve) => {
     resolveDelayedResponse = resolve;
@@ -536,7 +536,8 @@ async function delayAgentTimelineResponse(
 
 /** Holds real incoming frames so intermediate rendering assertions do not race the producer. */
 export async function holdAssistantStream(page: Page, agentId: string) {
-  const pending: Array<{ forward(): void; text: string }> = [];
+  const readers = await loadSessionMessageReaders();
+  const pending: { forward(): void; text: string }[] = [];
   let holding = false;
   let released = false;
   let forwardedText = "";
@@ -548,9 +549,12 @@ export async function holdAssistantStream(page: Page, agentId: string) {
 
   await page.routeWebSocket(daemonWsRoutePattern(), (ws) => {
     const server = ws.connectToServer();
-    ws.onMessage((message) => server.send(message));
+    ws.onMessage((message) => {
+      readers.client(message);
+      server.send(message);
+    });
     server.onMessage((message) => {
-      const session = getSessionMessage(message);
+      const session = readers.server(message);
       const payload = session ? getPayload(session) : null;
       if (session?.type === "fetch_agent_timeline_response" && payload?.agentId === agentId) {
         notifyInitialTimeline();

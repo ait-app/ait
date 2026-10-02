@@ -34,3 +34,23 @@ The focused command above is the Ait harness regression, not a claim that every 
 UI scenario is supported by the server.
 
 Migration details and focused results: [validation report](../../../docs/reports/clients/ait-e2e-migration.md).
+
+## Migrated UI contracts
+
+The CI `ui-e2e` job runs the offline Codex creation/idempotency/reconnect, streaming
+Markdown, delayed File transitions, retained Terminal Find, supported committed-file
+Diff, origin-base sidebar statistics and max/ultra reasoning flows. The thinking options
+in these tests are fixture-advertised; this validates UI/server configuration propagation,
+not the availability or quality of any paid model.
+
+Creation helpers wait for the offline model discovery to finish before submitting.
+Wire gates decode Rust request/response correlation through the production adapter aliases;
+they do not send historical session envelopes to Rust. The Markdown fixture emits native
+Codex deltas and persists the completed message for reload assertions.
+
+Terminal bootstrap is bounded to 12,000 total cells. Find assertions first check that both
+needles are actually retained and let initial font refits finish before checking viewport
+stability. Control+F tests honor the runner's platform. Commit history enables its list and
+base-classification capabilities when Rust advertises the list method; its empty state,
+dates, shared layout preferences, reopening and committed-file Diff are covered. Other inherited scenarios outside
+this focused set still require individual migration; a skipped feature is not a UI pass.

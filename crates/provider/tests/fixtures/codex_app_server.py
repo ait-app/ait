@@ -163,7 +163,7 @@ for line in sys.stdin:
             sessions.sort(key=lambda entry: entry["updatedAt"], reverse=True)
             result = {"data": sessions, "nextCursor": None}
     elif method == "model/list":
-        result = {"data": [{"id": "offline-model", "model": "offline-model", "displayName": "Offline model", "isDefault": True, "hidden": False, "description": "Offline fixture", "supportedReasoningEfforts": [{"reasoningEffort": "high", "description": "High effort"}], "defaultReasoningEffort": "high", "serviceTiers": [] if mode == "no-fast" else [{"id": "fast"}]}], "nextCursor": None}
+        result = {"data": [{"id": "offline-model", "model": "offline-model", "displayName": "Offline model", "isDefault": True, "hidden": False, "description": "Offline fixture", "supportedReasoningEfforts": [{"reasoningEffort": effort, "description": effort} for effort in (json.loads((root / "e2e-reasoning-options.json").read_text()) if (root / "e2e-reasoning-options.json").exists() else ["high"])], "defaultReasoningEffort": "high", "serviceTiers": [] if mode == "no-fast" else [{"id": "fast"}]}], "nextCursor": None}
     elif method == "turn/start":
         if mode == "delayed-voice-admission":
             while not (root / "release-voice-admission").exists():
@@ -307,6 +307,17 @@ for line in sys.stdin:
             stream_items.append(tool)
             emit({"method": "item/completed", "params": {"threadId": thread_id, "turnId": pending, "item": tool}})
             complete(pending, text)
+        elif text == "e2e-markdown-stream" and (root / "e2e-markdown-response.txt").exists():
+            response = (root / "e2e-markdown-response.txt").read_text()
+            for char in response:
+                emit({"method":"item/agentMessage/delta", "params": {
+                    "threadId":thread_id,"turnId":pending,"itemId":pending+"-assistant","delta":char}})
+            item = {"type":"agentMessage","id":pending+"-assistant","text":response}
+            stream_items.append(item)
+            save_turn(pending, None, "completed")
+            emit({"method":"item/completed","params":{"threadId":thread_id,"turnId":pending,"item":item}})
+            emit({"method":"turn/completed","params":{"threadId":thread_id,"turn":{"id":pending,"status":"completed"}}})
+            pending = None
         elif text != "hang":
             timer = threading.Timer(0.05, complete, args=(pending, text))
             timer.daemon = True

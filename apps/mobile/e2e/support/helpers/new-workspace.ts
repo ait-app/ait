@@ -1,8 +1,9 @@
+import { createSessionMessageReaders } from "./rust-wire";
 import { decodeWorkspaceIdFromPathSegment } from "@/utils/host-routes";
 import type { DaemonClient as InternalDaemonClient } from "@ait/client/internal/daemon-client";
 import type { CreateAgentRequestMessage, SessionInboundMessage } from "@ait/protocol/messages";
 import { expect, type BrowserContext, type Page } from "@playwright/test";
-import { connectDaemonClient, loadProtocolSchemas } from "./daemon-client-loader";
+import { connectDaemonClient } from "./daemon-client-loader";
 import { daemonWsRoutePattern } from "./daemon-port";
 import { withProjectOwnership } from "./project-ownership";
 import { projectEquivalenceViewKey } from "./project-view-key";
@@ -523,30 +524,8 @@ export async function assertNewWorkspaceSidebarAndHeader(
   };
 }
 
-type WebSocketMessage = string | Buffer;
-
-function parseWebSocketJson(message: WebSocketMessage): unknown {
-  const rawMessage = typeof message === "string" ? message : message.toString("utf8");
-  try {
-    return JSON.parse(rawMessage);
-  } catch {
-    return null;
-  }
-}
-
 export async function loadSessionMessageReaders() {
-  // Use the same ESM module instance as the dynamically loaded daemon client.
-  const { WSInboundMessageSchema, WSOutboundMessageSchema } = await loadProtocolSchemas();
-  return {
-    client(message: WebSocketMessage) {
-      const parsed = WSInboundMessageSchema.safeParse(parseWebSocketJson(message));
-      return parsed.success && parsed.data.type === "session" ? parsed.data.message : null;
-    },
-    server(message: WebSocketMessage) {
-      const parsed = WSOutboundMessageSchema.safeParse(parseWebSocketJson(message));
-      return parsed.success && parsed.data.type === "session" ? parsed.data.message : null;
-    },
-  };
+  return createSessionMessageReaders();
 }
 
 export interface AgentCreatedDelayControl {
@@ -563,7 +542,7 @@ export async function delayBrowserAgentCreatedStatus(
   const daemonPortPattern = daemonWsRoutePattern();
   const createRequestIds = new Set<string>();
   const creationRequests: SessionInboundMessage[] = [];
-  const delayedForwards: Array<() => void> = [];
+  const delayedForwards: (() => void)[] = [];
   let releaseRequested = false;
   let resolveCreateRequest: (() => void) | null = null;
   let resolveDelayedCreatedStatus: (() => void) | null = null;
@@ -660,7 +639,7 @@ export async function delayBrowserWorkspaceCreatedResponse(
   const agentRequests: AgentCreationIntent[] = [];
   const creationKeys = new Set<string>();
   const createRequestIds = new Set<string>();
-  const delayedForwards: Array<() => void> = [];
+  const delayedForwards: (() => void)[] = [];
   let releaseRequested = false;
   let resolveCreateRequest: (() => void) | null = null;
   const createRequestSeen = new Promise<void>((resolve) => {

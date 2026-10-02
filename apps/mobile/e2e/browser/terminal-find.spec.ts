@@ -233,6 +233,10 @@ test.describe("macOS terminal shortcuts", () => {
 });
 
 test("opens Find with Control+f on Linux without sending ^F to cat", async ({ page }) => {
+  test.skip(
+    process.platform === "darwin",
+    "macOS sends Control+f to the shell; covered separately",
+  );
   await openControlCharacterTerminal(page);
   await pressTerminalShortcut(page, "Control+f");
   await expect(query(page)).toBeFocused();
@@ -254,7 +258,7 @@ test("searches retained output without sending Find input to the shell", async (
   const received = path.join(harness.tempRepo.path, "received.txt");
   const trigger = path.join(harness.tempRepo.path, "output.trigger");
   const bottomTrigger = path.join(harness.tempRepo.path, "bottom.trigger");
-  const script = `stty -echo; printf 'first a.b\\n'; for i in $(seq 1 90); do printf 'line %s\\n' "$i"; done; printf 'last A.B\\nREADY\\n'; (while [ ! -f output.trigger ]; do sleep 0.05; done; printf 'new output\\n'; while [ ! -f bottom.trigger ]; do sleep 0.05; done; for i in $(seq 1 30); do printf 'bottom output %s\\n' "$i"; done) & while IFS= read -r line; do printf '%s\\n' "$line" >> received.txt; done`;
+  const script = `stty -echo; printf 'first a.b\\n'; for i in $(seq 1 45); do printf 'line %s\\n' "$i"; done; printf 'last A.B\\nREADY\\n'; (while [ ! -f output.trigger ]; do sleep 0.05; done; printf 'new output\\n'; while [ ! -f bottom.trigger ]; do sleep 0.05; done; for i in $(seq 1 30); do printf 'bottom output %s\\n' "$i"; done) & while IFS= read -r line; do printf '%s\\n' "$line" >> received.txt; done`;
   await writeFile(received, "");
   const terminal = await harness.createTerminal({
     name: "Find fixture",
@@ -263,6 +267,13 @@ test("searches retained output without sending Find input to the shell", async (
   });
   await harness.openTerminal(page, { terminalId: terminal.id });
   await expect.poll(() => getTerminalBufferText(page)).toContain("READY");
+  // Rust bootstrap is bounded to 12,000 cells. Assert both needles were retained
+  // before making any claim about the search count (the old 90-line fixture lost first).
+  await expect.poll(() => getTerminalBufferText(page)).toContain("first a.b");
+  await expect.poll(() => getTerminalBufferText(page)).toContain("last A.B");
+  // Initial font measurement schedules refits through 2 seconds; finish those
+  // before measuring whether incoming output preserves an inspected viewport.
+  await page.waitForTimeout(2600);
   await openFind(page, "a.b");
   await expect(status(page)).toHaveText("2 of 2");
   await query(page).press("Shift+Enter");

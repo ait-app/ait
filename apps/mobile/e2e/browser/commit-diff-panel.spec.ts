@@ -3,6 +3,7 @@ import { writeFile } from "node:fs/promises";
 import path from "node:path";
 import type { Locator } from "@playwright/test";
 import { test, expect } from "../support/fixtures";
+import { connectDaemonClient } from "../support/helpers/daemon-client-loader";
 import { openChangesTreePanel } from "../support/helpers/workspace-tabs";
 
 const COMMIT_SUBJECT = "Show commit timestamps";
@@ -11,6 +12,12 @@ test("commit history explains when the workspace has no commits ahead of its bas
   page,
   withWorkspace,
 }) => {
+  const client = await connectDaemonClient<any>({ clientIdPrefix: "commit-history-capability" });
+  const supported =
+    client.getLastServerInfoMessage()?.features?.commitsList === true &&
+    client.getLastServerInfoMessage()?.features?.commitBaseClassification === true;
+  await client.close();
+  test.skip(!supported, "Current browser adapter does not enable standalone commit history");
   const workspace = await withWorkspace({ prefix: "commit-history-empty-workspace-" });
   execFileSync("git", ["checkout", "-b", "feature"], { cwd: workspace.repoPath, stdio: "ignore" });
   await workspace.navigateTo();
@@ -30,6 +37,12 @@ test("commit history shows dates and shares diff layout preferences", async ({
   page,
   withWorkspace,
 }) => {
+  const client = await connectDaemonClient<any>({ clientIdPrefix: "commit-history-capability" });
+  const supported =
+    client.getLastServerInfoMessage()?.features?.commitsList === true &&
+    client.getLastServerInfoMessage()?.features?.commitBaseClassification === true;
+  await client.close();
+  test.skip(!supported, "Current browser adapter does not enable standalone commit history");
   const workspace = await withWorkspace({ prefix: "commit-diff-panel-" });
   await createFeatureCommit(workspace.repoPath);
   await page.setViewportSize({ width: 1400, height: 900 });
@@ -115,3 +128,25 @@ async function expectCommitDiffHeaderGeometry(panel: Locator): Promise<void> {
   expect(header!.y).toBeCloseTo(canvas!.y, 0);
   await expect(panel.getByTestId("diff-file-0")).toHaveAccessibleName("feature.txt, +2, -0");
 }
+
+test("supported committed-file diff displays added content and restores after reload", async ({
+  page,
+  withWorkspace,
+}, info) => {
+  const workspace = await withWorkspace({ prefix: "committed-file-diff-" });
+  await createFeatureCommit(workspace.repoPath);
+  await workspace.navigateTo();
+  await openChangesTreePanel(page);
+  await page
+    .locator('[data-testid^="diff-tree-file-"][data-testid$="-toggle"]')
+    .filter({ visible: true })
+    .first()
+    .click();
+  await expect(page.getByTestId("working-diff-panel").filter({ visible: true })).toBeVisible();
+  await expect(page.getByTestId("git-diff-canvas").filter({ visible: true })).toBeVisible();
+  await page.screenshot({ path: info.outputPath("committed-file-diff.png") });
+  await page.reload();
+  await expect(page.getByTestId("git-diff-canvas").filter({ visible: true })).toBeVisible({
+    timeout: 30000,
+  });
+});

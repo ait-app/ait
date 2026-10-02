@@ -102,3 +102,38 @@ jobs:
       - run: npm run typecheck --workspace=@ait/desktop --workspace=@ait/mobile
       - run: npm test --workspace=@ait/desktop
       - run: npm run test --workspace=@ait/mobile -- src/i18n/resources.test.ts src/runtime/rust-daemon maestro/support native-release-version.test.ts
+
+  ui-e2e:
+    needs: changes
+    if: needs.changes.outputs.ui == 'true'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+          cache-dependency-path: package-lock.json
+      - uses: dtolnay/rust-toolchain@1.98.1
+      - run: npm ci
+      - run: npx playwright install --with-deps chromium
+      - run: cargo build -p daemon --bin daemon
+      - name: Offline Ait UI contracts
+        env:
+          E2E_AIT_SERVER_BIN: ${{ github.workspace }}/target/debug/daemon
+          E2E_WORKERS: '1'
+        run: >-
+          npm run test:e2e --workspace=@ait/mobile --
+          e2e/browser/terminal-find.spec.ts
+          e2e/browser/creation-idempotency.spec.ts
+          e2e/browser/file-transition.spec.ts
+          e2e/browser/streaming-markdown.spec.ts
+          e2e/browser/commit-diff-panel.spec.ts
+          e2e/browser/ait-ui-contracts.spec.ts
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: ui-e2e-screenshots
+          path: apps/mobile/test-results/**/*.png
+          if-no-files-found: ignore
