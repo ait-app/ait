@@ -58,8 +58,12 @@ Android 和 iOS 都使用 Expo EAS 云构建。Android 直接使用现有 `produ
 iOS 继续使用 `ait`。`eas.json` 中的继承关系、Node 版本、Gradle 命令和原生配置保持原样；
 工作流按 iOS 的方式从 `build.ait.env` 加载 Ait 项目身份。
 
+当前 EAS 项目 ID 为 `379ada50-82c0-4d4a-bac9-cb8c113cf38d`。`app.config.js` 也从
+`build.ait.env` 读取默认的 owner、slug 和 project ID，因此本地 CLI 与云端 APK 构建使用
+同一项目；显式设置的同名环境变量仍可覆盖这些公开标识。
+
 在仓库 Settings → Secrets and variables → Actions 配置 `EXPO_TOKEN`，令牌对应的 Expo
-账号须有 `sd542927172/ait-dev` 项目的构建权限。正式发布和测试发布都将此 Secret 传入
+账号须有 `sd542927172s-team/ait` 项目的构建权限。正式发布和测试发布都将此 Secret 传入
 Android 可复用工作流。若原来的令牌只放在 `ios-testflight` Environment 中，还需要配置
 仓库级 Secret。原 `production-apk` 使用 `large` 资源，需要支持该资源的 Expo 套餐。
 

@@ -9,9 +9,9 @@
       "distribution": "store",
       "node": "22.23.3",
       "env": {
-        "EXPO_OWNER": "sd542927172",
-        "EXPO_SLUG": "ait-dev",
-        "EAS_PROJECT_ID": "ee25dc95-d132-4136-9abb-dcf783c33320",
+        "EXPO_OWNER": "sd542927172s-team",
+        "EXPO_SLUG": "ait",
+        "EAS_PROJECT_ID": "379ada50-82c0-4d4a-bac9-cb8c113cf38d",
         "IOS_BUNDLE_IDENTIFIER": "com.necokeine.ait",
         "APPLE_TEAM_ID": "SVS7GV79T9"
       }

@@ -22,7 +22,7 @@ test("internal submit profile cannot change the production release path", () => 
     bundleIdentifier: "com.necokeine.ait",
   });
   assert.equal(easConfig.build.ait.extends, "production");
-  assert.equal(easConfig.build.ait.env.EAS_PROJECT_ID, "ee25dc95-d132-4136-9abb-dcf783c33320");
+  assert.equal(easConfig.build.ait.env.EAS_PROJECT_ID, "379ada50-82c0-4d4a-bac9-cb8c113cf38d");
 
   const workflow = yaml.parse(fs.readFileSync(workflowPath, "utf8"));
   const triggers = workflow.on ?? workflow[true];

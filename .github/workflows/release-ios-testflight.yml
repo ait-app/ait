@@ -187,6 +187,6 @@ jobs:
             echo "- App version: $APP_VERSION"
             echo "- Build number: $BUILD_NUMBER"
             echo "- EAS build: $BUILD_ID"
-            echo "- Build details: https://expo.dev/accounts/sd542927172/projects/ait-dev/builds/$BUILD_ID"
+            echo "- Build details: https://expo.dev/accounts/$EXPO_OWNER/projects/$EXPO_SLUG/builds/$BUILD_ID"
             echo "- App Store review: not submitted (manual in App Store Connect)"
           } >> "$GITHUB_STEP_SUMMARY"
