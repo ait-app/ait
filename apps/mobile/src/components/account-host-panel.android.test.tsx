@@ -42,7 +42,14 @@ describe("Android account panel", () => {
     await waitFor(() =>
       expect(state.command).toHaveBeenCalledWith("account_select", { hostId: "host" }),
     );
-    expect(connected).toHaveBeenCalledOnce();
+    expect(connected).toHaveBeenCalledExactlyOnceWith("server");
+    expect(state.push).not.toHaveBeenCalled();
+  });
+
+  it("navigates directly when the panel is outside a sheet", async () => {
+    const view = render(<AccountHostPanel />);
+    fireEvent.click(view.getByTestId("account-host-host"));
+    await waitFor(() => expect(state.push).toHaveBeenCalledWith("/h/server"));
     expect(state.push).toHaveBeenCalledWith("/h/server");
   });
 });

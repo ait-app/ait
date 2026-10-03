@@ -11,7 +11,14 @@ import { buildOpenProjectRoute } from "@/utils/host-routes";
 import { openExternalUrl } from "@/utils/open-external-url";
 import { useRouter } from "expo-router";
 import { Cloud, ExternalLink, Link2, QrCode, Settings, Terminal } from "lucide-react-native";
-import React, { useCallback, useEffect, useMemo, useState, useSyncExternalStore } from "react";
+import React, {
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+  useSyncExternalStore,
+} from "react";
 import { useTranslation } from "react-i18next";
 import { Pressable, ScrollView, Text, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
@@ -170,6 +177,9 @@ export function WelcomeScreen({ onHostAdded }: WelcomeScreenProps) {
   const [isDirectOpen, setIsDirectOpen] = useState(false);
   const [isRemoteSshOpen, setIsRemoteSshOpen] = useState(false);
   const [isAccountOpen, setIsAccountOpen] = useState(false);
+  const [isAccountPresented, setIsAccountPresented] = useState(false);
+  const pendingAccountServerId = useRef<string | null>(null);
+  const hasNavigated = useRef(false);
   const accountAvailable = supportsAccountRelay();
   const accountHeader = useMemo<SheetHeader>(
     () => ({ title: t("onboarding.actions.account") }),
@@ -179,11 +189,14 @@ export function WelcomeScreen({ onHostAdded }: WelcomeScreenProps) {
   const anyOnlineServerId = useAnyHostOnline(hosts.map((h) => h.serverId));
 
   useEffect(() => {
-    if (!anyOnlineServerId) return;
+    if (!anyOnlineServerId || isAccountPresented || hasNavigated.current) return;
+    hasNavigated.current = true;
     router.replace(buildOpenProjectRoute());
-  }, [anyOnlineServerId, router]);
+  }, [anyOnlineServerId, isAccountPresented, router]);
 
   const finishOnboarding = useCallback(() => {
+    if (hasNavigated.current) return;
+    hasNavigated.current = true;
     router.replace(buildOpenProjectRoute());
   }, [router]);
 
@@ -199,8 +212,23 @@ export function WelcomeScreen({ onHostAdded }: WelcomeScreenProps) {
   const handleCloseDirect = useCallback(() => setIsDirectOpen(false), []);
   const handleOpenRemoteSsh = useCallback(() => setIsRemoteSshOpen(true), []);
   const handleCloseRemoteSsh = useCallback(() => setIsRemoteSshOpen(false), []);
-  const handleOpenAccount = useCallback(() => setIsAccountOpen(true), []);
+  const handleOpenAccount = useCallback(() => {
+    setIsAccountPresented(true);
+    setIsAccountOpen(true);
+  }, []);
   const handleCloseAccount = useCallback(() => setIsAccountOpen(false), []);
+  const handleAccountConnected = useCallback((serverId: string) => {
+    pendingAccountServerId.current = serverId;
+    setIsAccountOpen(false);
+  }, []);
+  const handleAccountDismissed = useCallback(() => {
+    setIsAccountPresented(false);
+    const serverId = pendingAccountServerId.current;
+    pendingAccountServerId.current = null;
+    if (!serverId || hasNavigated.current) return;
+    hasNavigated.current = true;
+    router.replace(`/h/${serverId}`);
+  }, [router]);
 
   const handleHostSaved = useCallback(
     ({ profile }: { profile: HostProfile; serverId: string }) => {
@@ -305,9 +333,10 @@ export function WelcomeScreen({ onHostAdded }: WelcomeScreenProps) {
           header={accountHeader}
           visible={isAccountOpen}
           onClose={handleCloseAccount}
+          onDismiss={handleAccountDismissed}
           testID="welcome-account-sheet"
         >
-          <AccountHostPanel onConnected={handleCloseAccount} />
+          <AccountHostPanel onConnected={handleAccountConnected} />
         </AdaptiveModalSheet>
       ) : null}
     </View>

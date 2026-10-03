@@ -1,6 +1,6 @@
 /** @vitest-environment jsdom */
 import React from "react";
-import { cleanup, fireEvent, render, waitFor } from "@testing-library/react";
+import { act, cleanup, fireEvent, render, waitFor } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { Platform } from "react-native";
 import { WelcomeScreen } from "./welcome-screen";
@@ -10,7 +10,10 @@ const mocks = vi.hoisted(() => ({
   push: vi.fn(),
   replace: vi.fn(),
   desktop: false,
-  runtime: { subscribeAll: () => () => {}, getSnapshot: () => undefined },
+  online: false,
+  accountStatus: "logged_out",
+  dismiss: () => {},
+  runtime: { subscribeAll: () => () => {}, getSnapshot: () => ({ lastOnlineAt: "2026-10-03" }) },
 }));
 vi.mock("react-native", async (original) => {
   const actual = await original<typeof import("react-native")>();
@@ -21,14 +24,15 @@ vi.mock("@/desktop/host", () => ({
   getDesktopHost: () => (mocks.desktop ? { invoke: vi.fn() } : undefined),
 }));
 vi.mock("@/runtime/host-runtime", () => ({
-  useHosts: () => [],
+  useHosts: () => (mocks.online ? [{ serverId: "server" }] : []),
   getHostRuntimeStore: () => mocks.runtime,
-  isHostRuntimeConnected: () => false,
+  isHostRuntimeConnected: () => mocks.online,
 }));
 vi.mock("@/runtime/account-state", async (original) => ({
   ...(await original<typeof import("@/runtime/account-state")>()),
   useAccountState: () => ({
-    status: "logged_out",
+    status: mocks.accountStatus,
+    hosts: [{ host_id: "host", server_id: "server", name: "My computer", platform: "linux" }],
     center: "https://dash.ait-app.com:8443/api",
     error: null,
   }),
@@ -48,18 +52,48 @@ vi.mock("./add-host-modal", () => ({
 }));
 vi.mock("./add-remote-ssh-host-modal", () => ({ AddRemoteSshHostModal: () => null }));
 vi.mock("./adaptive-modal-sheet", () => ({
-  AdaptiveModalSheet: ({ visible, children }: { visible: boolean; children: React.ReactNode }) =>
-    visible ? <div>{children}</div> : null,
+  AdaptiveModalSheet: ({
+    visible,
+    children,
+    onDismiss,
+  }: {
+    visible: boolean;
+    children: React.ReactNode;
+    onDismiss: () => void;
+  }) => {
+    mocks.dismiss = onDismiss;
+    return visible ? <div>{children}</div> : null;
+  },
 }));
 
 beforeEach(() => {
   Platform.OS = "android";
   mocks.desktop = false;
+  mocks.online = false;
+  mocks.accountStatus = "logged_out";
   vi.clearAllMocks();
 });
 afterEach(cleanup);
 
 describe("welcome account entry", () => {
+  it("waits for dismissal and navigates once when the selected host also comes online", async () => {
+    mocks.accountStatus = "online";
+    const view = render(<WelcomeScreen />);
+    fireEvent.click(view.getByTestId("welcome-account-relay"));
+    mocks.online = true;
+    view.rerender(<WelcomeScreen />);
+    expect(mocks.replace).not.toHaveBeenCalled();
+    fireEvent.click(view.getByTestId("account-host-host"));
+    await waitFor(() => expect(view.queryByTestId("account-host-panel")).toBeNull());
+    expect(mocks.push).not.toHaveBeenCalled();
+    expect(mocks.replace).not.toHaveBeenCalled();
+    act(() => mocks.dismiss());
+    expect(mocks.replace).toHaveBeenCalledExactlyOnceWith("/h/server");
+    act(() => mocks.dismiss());
+    view.rerender(<WelcomeScreen />);
+    expect(mocks.replace).toHaveBeenCalledTimes(1);
+  });
+
   it("lets an Android user with no hosts reach and submit the login form directly from welcome", async () => {
     const view = render(<WelcomeScreen />);
     expect(view.queryByTestId("account-email")).toBeNull();

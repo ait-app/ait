@@ -1,11 +1,11 @@
-import React, { useState } from "react";
-import { Platform, Pressable, Text, TextInput, View } from "react-native";
+import React, { useRef, useState } from "react";
+import { Keyboard, Platform, Pressable, Text, TextInput, View } from "react-native";
 import { useRouter } from "expo-router";
 import { StyleSheet } from "react-native-unistyles";
 import { Button } from "./ui/button";
 import { accountCommand, useAccountState, type AccountHost } from "@/runtime/account-state";
 
-export function AccountHostPanel({ onConnected }: { onConnected?: () => void }) {
+export function AccountHostPanel({ onConnected }: { onConnected?: (serverId: string) => void }) {
   const account = useAccountState();
   const router = useRouter();
   const isAndroidClient = Platform.OS === "android";
@@ -16,9 +16,11 @@ export function AccountHostPanel({ onConnected }: { onConnected?: () => void }) 
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [busy, setBusy] = useState(false);
+  const busyRef = useRef(false);
   const [error, setError] = useState<string | null>(null);
   const runAccountAction = async (work: () => Promise<unknown>) => {
-    if (busy) return;
+    if (busyRef.current) return;
+    busyRef.current = true;
     setBusy(true);
     setError(null);
     try {
@@ -26,6 +28,7 @@ export function AccountHostPanel({ onConnected }: { onConnected?: () => void }) 
     } catch (error) {
       setError(error instanceof Error ? error.message : "Request failed.");
     } finally {
+      busyRef.current = false;
       setBusy(false);
     }
   };
@@ -34,6 +37,7 @@ export function AccountHostPanel({ onConnected }: { onConnected?: () => void }) 
   const login = () => {
     if (loginDisabled) return;
     const secret = password;
+    Keyboard.dismiss();
     setPassword("");
     void runAccountAction(() =>
       accountCommand("account_login", { center, email, password: secret }),
@@ -42,8 +46,11 @@ export function AccountHostPanel({ onConnected }: { onConnected?: () => void }) 
   const selectHost = (host: AccountHost) => {
     void runAccountAction(async () => {
       await accountCommand("account_select", { hostId: host.host_id });
-      onConnected?.();
-      router.push(`/h/${host.server_id}`);
+      Keyboard.dismiss();
+      // A sheet owns dismissal and navigation. Its native subtree must be removed
+      // before the navigator starts mounting the selected host's screen.
+      if (onConnected) onConnected(host.server_id);
+      else router.push(`/h/${host.server_id}`);
     });
   };
 
