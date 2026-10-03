@@ -18,7 +18,7 @@ permissions:
 jobs:
   build:
     name: Build Android APKs
-    runs-on: ubuntu-24.04
+    runs-on: [self-hosted, linux, x64, android-release]
     timeout-minutes: 90
     env:
       RELEASE_TAG: ${{ inputs.tag }}
@@ -68,6 +68,8 @@ jobs:
         run: sdkmanager "platforms;android-36" "build-tools;$ANDROID_BUILD_TOOLS_VERSION" "ndk;27.1.12297006" "cmake;3.22.1"
 
       - uses: gradle/actions/setup-gradle@v5
+        with:
+          cache-disabled: true
 
       - name: Build shared UI dependencies
         run: npm run build:ui-deps
@@ -100,30 +102,7 @@ jobs:
       - name: Assemble release APKs
         working-directory: apps/mobile/android
         run: |
-          node <<'NODE' &
-          const { execFileSync } = require('node:child_process');
-          function reportResources() {
-            console.log(`Android build resources (PID ${process.pid}): ${new Date().toISOString()}`);
-            for (const [command, args] of [
-              ['free', ['-m']],
-              ['df', ['-h', '.']],
-              ['ps', ['-eo', 'pid,ppid,comm,rss', '--sort=-rss']],
-            ]) {
-              try {
-                const output = execFileSync(command, args, { encoding: 'utf8', timeout: 5000 });
-                console.log(command === 'ps' ? output.split('\n').slice(0, 11).join('\n') : output);
-              } catch (error) {
-                console.warn(`Resource sampling failed (${command}): ${error.message}`);
-              }
-            }
-          }
-          reportResources();
-          setInterval(reportResources, 30000);
-          NODE
-          monitor_pid=$!
-          trap 'kill "$monitor_pid" 2>/dev/null || true; wait "$monitor_pid" 2>/dev/null || true' EXIT
-
-          ./gradlew :app:assembleRelease --no-daemon --no-parallel --max-workers=2 \
+          ./gradlew :app:assembleRelease --no-daemon \
             -PreactNativeArchitectures=arm64-v8a,armeabi-v7a
 
       # Keep a second workspace copy out of Metro's module scan during the build.

@@ -64,12 +64,24 @@ sha256sum --check SHA256SUMS
 
 ## 构建与重试
 
+Android 构建使用带有 `self-hosted`、`linux`、`x64`、`android-release` 全部标签的自托管
+runner，正式发布和手动测试 APK 共用该机器。准备 Ubuntu 24.04 x86_64，至少 32 GB 内存，
+建议 64 GB 内存及至少 100 GB 可用磁盘空间，以容纳 Hermes 编译、Gradle 和原生构建。
+
+在仓库 Settings → Actions → Runners → New self-hosted runner 中选择 Linux x64，按页面
+命令注册机器，注册时添加自定义标签 `android-release`，其余三个标签由 GitHub 自动提供。
+如果注册为组织 runner，需要允许本仓库使用。启动 runner 服务后，确认其状态为 Online。
+具体步骤参见 GitHub 的[自托管 runner 注册说明](https://docs.github.com/en/actions/how-tos/manage-runners/self-hosted-runners/add-runners)。
+没有匹配标签且在线的机器时，Android 任务会排队等待；解析版本和发布附件的轻量任务继续
+使用 GitHub 托管 runner。
+
+runner 运行用户需要具备工作目录和工具目录的写权限，并预装 Git、Bash、curl、tar、unzip
+及 Python 3。工作流安装 Node.js 24、Temurin Java 17 和所需 Android SDK/NDK/CMake。
+自托管机器保留本地 Gradle 缓存，`setup-gradle` 不再上传或下载 GitHub Actions 缓存。
+构建保留 Hermes 默认 `-O` 优化，Gradle 使用项目默认的并行和 worker 配置。
+
 runner 安装 Android SDK 后，构建共享依赖和终端 WebView，通过 Expo prebuild 生成原生项目，
 为两种 ARM ABI 配置独立 APK，再执行 Gradle release 构建。生成的 Android 项目只用于本次构建。
-
-CI 使用 `--no-parallel --max-workers=2` 降低 Gradle 构建的并发资源占用。构建日志每 30 秒
-记录内存、swap、磁盘余量及占用内存最多的进程，便于排查 runner 中途关闭；采样任务会随
-构建结束退出，并保留 Gradle 原始退出码。runner 关闭的具体原因需要结合采样记录判断。
 
 两个 APK 均通过签名、16 KB 原生库对齐、包信息与架构检查后，以 `ait-android-apk` artifact
 保存 7 天。主发布任务等待桌面和 Android 构建全部成功，再合并附件、验证完整性、生成校验和，
