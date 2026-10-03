@@ -55,7 +55,6 @@ jobs:
               - '.github/workflows/release.yml'
               - '.github/workflows/release-ios-testflight.yml'
               - '.github/workflows/release-android.yml'
-              - '.github/workflows/release-android-test.yml'
 
   docs:
     runs-on: ubuntu-latest

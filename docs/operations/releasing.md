@@ -4,8 +4,8 @@
 Rust `daemon`。发布边界见 [ADR-053](../decisions/clients/adr-053-paseo-desktop-release.md)，
 旧桌面源码的移除见 [当前架构](../architecture/README.md)。
 
-从 0.0.15 起，手动运行 GitHub Release 时可勾选 Android APK，默认关闭。当前通过 EAS 生成通用 APK。
-推送标签只自动构建桌面；选中 Android 后才等待全部选定平台成功并统一发布。
+推送标签只自动构建桌面。Android APK 通过独立的手动工作流使用 EAS 构建，
+可在桌面 Release 完成后加入同一版本，也可从当前分支创建测试预发布版本。
 APK 的签名方式、安装要求与手动测试入口见 [Android APK 发布](android-releases.md)。
 
 `apps/mobile` 的 Google Play Android Internal Testing 发布流程见下方
@@ -22,7 +22,7 @@ APK 的签名方式、安装要求与手动测试入口见 [Android APK 发布](
 | Linux           | x86_64                  | `Ait-VERSION-linux-x64.tar.gz`                           |
 | macOS           | Apple Silicon arm64     | `Ait-VERSION-macos-arm64.dmg`                            |
 | macOS           | Apple Silicon arm64     | `Ait-VERSION-macos-arm64.zip`                            |
-| Android（可选） | 通用（含 ARM64、ARMv7） | `Ait-VERSION-android.apk`                                |
+| Android（独立发布） | 通用（含 ARM64、ARMv7） | `Ait-VERSION-android.apk`                                |
 | 自动更新        | 各平台                  | `latest-linux.yml`、`latest-mac.yml`、生成的 `.blockmap` |
 | 校验            | 全部资产                | `SHA256SUMS`                                             |
 
@@ -57,22 +57,21 @@ git tag -a v0.0.15 -m "Ait v0.0.15"
 git push origin v0.0.15
 ```
 
-`.github/workflows/release.yml` 在 Linux x86_64 和 macOS arm64 原生 runner 上构建桌面，
-仅在手动选择 `build_android` 时调用 Android 工作流通过原有 `production-apk` profile 构建通用 APK：
+`.github/workflows/release.yml` 在 Linux x86_64 和 macOS arm64 原生 runner 上构建桌面：
 
 1. 校验标签和全部活跃版本，安装根 npm workspace，验证发布脚本。
 2. 用锁定依赖只构建 `daemon` 的 `daemon`。
 3. 导出界面、编译 Electron 主进程，验证 daemon 版本并暂存单个可执行文件。
 4. 检查打包内容；macOS 签名、公证；隔离启动成品应用并验证真实 daemon 生命周期。
-5. 收集桌面安装包和自动更新资产，核对更新摘要；选择 Android 时独立校验 APK 签名、版本和架构。
-6. 选定平台都成功后汇总资产并生成 SHA256SUMS，再创建或修复 GitHub Release。
+5. 收集桌面安装包和自动更新资产，核对更新摘要。
+6. 桌面构建成功后汇总资产并生成 SHA256SUMS，再创建或修复 GitHub Release。
 
 macOS 需要 GitHub Secrets：`MAC_CSC_LINK`、`MAC_CSC_KEY_PASSWORD`、`APPLE_ID`、
 `APPLE_BUILD_APP_SECRET`、`APPLE_TEAM_ID`。缺失签名、公证凭据会阻止发布；不会降级为未签名包。
 Release Note 由 `.github/release.yml` 根据合并 PR 分组生成。
 
 手动重跑：Actions → Release Ait → Run workflow，输入已存在的标签。工作流不会创建标签。
-`build_android` 默认关闭，勾选后才构建 Android；CLI 添加 `-f build_android=true`。
+Android APK 的正式和测试发布由独立的 [Android APK 发布](android-releases.md)流程处理。
 已有 Release 保留说明，覆盖同名资产；不要移动已经公开使用的标签。
 
 默认应用源码从输入的发布标签检出；资产收集、校验和相关测试从工作流自身的提交检出到

@@ -1,48 +1,97 @@
 name: Release Android APK
 
 on:
-  workflow_call:
+  workflow_dispatch:
     inputs:
-      tag:
-        description: Stable release tag (vX.Y.Z)
+      mode:
+        description: Publish a test prerelease or add an APK to an existing stable release
         required: true
-        type: string
-      source_commit:
-        description: Optional full commit SHA for an explicitly requested same-version rebuild
+        default: test
+        type: choice
+        options: [test, release]
+      tag:
+        description: Existing stable tag (vX.Y.Z); required for release mode
         required: false
         type: string
-    secrets:
-      EXPO_TOKEN:
-        required: true
 
 permissions:
   contents: read
 
+concurrency:
+  group: release-android-${{ inputs.mode }}-${{ inputs.tag || github.sha }}
+  cancel-in-progress: false
+
 jobs:
+  prepare:
+    name: Resolve Android release source
+    runs-on: ubuntu-24.04
+    outputs:
+      tag: ${{ steps.plan.outputs.tag }}
+      source_commit: ${{ steps.plan.outputs.source_commit }}
+      release_tag: ${{ steps.plan.outputs.release_tag }}
+    env:
+      MODE: ${{ inputs.mode }}
+      TAG: ${{ inputs.tag }}
+    steps:
+      - name: Validate release request
+        run: |
+          case "$MODE" in
+            test) test -z "$TAG" ;;
+            release)
+              test "$GITHUB_REF" = refs/heads/main
+              [[ "$TAG" =~ ^v(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)$ ]]
+              ;;
+            *) exit 1 ;;
+          esac
+
+      - name: Check out release source
+        uses: actions/checkout@v5
+        with:
+          ref: ${{ inputs.mode == 'release' && format('refs/tags/{0}', inputs.tag) || github.sha }}
+          persist-credentials: false
+
+      - name: Plan Android release
+        id: plan
+        run: |
+          export SOURCE_COMMIT=$(git rev-parse HEAD)
+          node --input-type=module <<'NODE'
+          import { appendFileSync, readFileSync } from 'node:fs';
+          import { planAndroidRelease } from './scripts/android-release.mjs';
+          const { version } = JSON.parse(readFileSync('apps/mobile/package.json', 'utf8'));
+          const tag = process.env.MODE === 'release' ? process.env.TAG : `v${version}`;
+          planAndroidRelease(tag, version);
+          const sourceCommit = process.env.SOURCE_COMMIT;
+          const releaseTag = process.env.MODE === 'test'
+            ? `android-test-${tag}-${sourceCommit.slice(0, 12)}` : tag;
+          appendFileSync(process.env.GITHUB_OUTPUT,
+            `tag=${tag}\nsource_commit=${sourceCommit}\nrelease_tag=${releaseTag}\n`);
+          NODE
+
+      - name: Require published stable release
+        if: inputs.mode == 'release'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          release=$(gh release view "$TAG" --repo "$GITHUB_REPOSITORY" --json isDraft,isPrerelease)
+          test "$(node -e 'const release = JSON.parse(process.argv[1]); process.stdout.write(String(!release.isDraft && !release.isPrerelease))' "$release")" = true
+
   build:
     name: Build Android APK with Expo EAS
+    needs: prepare
     runs-on: ubuntu-24.04
     timeout-minutes: 150
     env:
-      RELEASE_TAG: ${{ inputs.tag }}
-      SOURCE_COMMIT: ${{ inputs.source_commit }}
+      RELEASE_TAG: ${{ needs.prepare.outputs.tag }}
+      SOURCE_COMMIT: ${{ needs.prepare.outputs.source_commit }}
       APP_VARIANT: production
       ANDROID_BUILD_TOOLS_VERSION: 36.0.0
       EXPO_NO_TELEMETRY: "1"
       CI: "1"
     steps:
-      - name: Validate release inputs
-        shell: bash
-        run: |
-          [[ "$RELEASE_TAG" =~ ^v(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)$ ]] || exit 1
-          if [ -n "$SOURCE_COMMIT" ]; then
-            [[ "$SOURCE_COMMIT" =~ ^[0-9a-f]{40}$ ]] || exit 1
-          fi
-
       - name: Check out release source
         uses: actions/checkout@v5
         with:
-          ref: ${{ inputs.source_commit || format('refs/tags/{0}', inputs.tag) }}
+          ref: ${{ needs.prepare.outputs.source_commit }}
           persist-credentials: false
 
       - uses: actions/setup-node@v5
@@ -151,3 +200,106 @@ jobs:
               echo "- Build details: https://expo.dev/accounts/$EXPO_OWNER/projects/$EXPO_SLUG/builds/$BUILD_ID"
             fi
           } >> "$GITHUB_STEP_SUMMARY"
+
+  publish:
+    name: Publish Android APK
+    needs: [prepare, build]
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: write
+    env:
+      MODE: ${{ inputs.mode }}
+      VERSION_TAG: ${{ needs.prepare.outputs.tag }}
+      SOURCE_COMMIT: ${{ needs.prepare.outputs.source_commit }}
+      RELEASE_TAG: ${{ needs.prepare.outputs.release_tag }}
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          ref: ${{ needs.prepare.outputs.source_commit }}
+          persist-credentials: false
+      - name: Check out release tooling
+        uses: actions/checkout@v5
+        with:
+          ref: ${{ github.workflow_sha }}
+          path: .tmp/release-tools
+          persist-credentials: false
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 24
+      - uses: actions/download-artifact@v7
+        with:
+          name: ait-android-apk
+          path: release-assets
+
+      - name: Verify assets and record test build
+        if: env.MODE == 'test'
+        run: |
+          node --input-type=module <<'NODE'
+          import assert from 'node:assert/strict';
+          import { readdirSync, statSync, writeFileSync } from 'node:fs';
+          import { releaseAssetNames } from './.tmp/release-tools/scripts/release-assets.mjs';
+          const version = process.env.VERSION_TAG.slice(1);
+          const names = releaseAssetNames('android', version);
+          assert.deepEqual(readdirSync('release-assets').sort(), [...names].sort());
+          for (const name of names) {
+            const file = statSync(`release-assets/${name}`);
+            assert(file.isFile() && file.size > 0, `Empty or invalid APK: ${name}`);
+          }
+          const info = {
+            version,
+            releaseTag: process.env.RELEASE_TAG,
+            sourceCommit: process.env.SOURCE_COMMIT,
+            workflowCommit: process.env.GITHUB_WORKFLOW_SHA,
+            workflowRunUrl: `${process.env.GITHUB_SERVER_URL}/${process.env.GITHUB_REPOSITORY}/actions/runs/${process.env.GITHUB_RUN_ID}`,
+            signing: 'eas-managed',
+          };
+          writeFileSync('release-assets/BUILD-INFO.json', JSON.stringify(info, null, 2) + '\n');
+          NODE
+
+      - name: Write test APK checksums
+        if: env.MODE == 'test'
+        working-directory: release-assets
+        run: sha256sum ./*.apk BUILD-INFO.json > SHA256SUMS
+
+      - name: Create or update test prerelease
+        if: env.MODE == 'test'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          if gh release view "$RELEASE_TAG" --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
+            test "$(gh release view "$RELEASE_TAG" --repo "$GITHUB_REPOSITORY" \
+              --json isDraft,isPrerelease --jq '(.isDraft == false) and (.isPrerelease == true)')" = true
+            test "$(gh api "repos/$GITHUB_REPOSITORY/commits/$RELEASE_TAG" --jq .sha)" = "$SOURCE_COMMIT"
+            gh release upload "$RELEASE_TAG" release-assets/* --clobber --repo "$GITHUB_REPOSITORY"
+          else
+            gh release create "$RELEASE_TAG" release-assets/* \
+              --target "$SOURCE_COMMIT" \
+              --title "Ait Android test $VERSION_TAG (${SOURCE_COMMIT:0:12})" \
+              --notes "Test APK built from $SOURCE_COMMIT with the existing EAS production-apk profile." \
+              --prerelease --latest=false \
+              --repo "$GITHUB_REPOSITORY"
+          fi
+          echo "Test APK: $GITHUB_SERVER_URL/$GITHUB_REPOSITORY/releases/tag/$RELEASE_TAG" >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Download and verify stable release assets
+        if: env.MODE == 'release'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          mkdir -p stable-assets
+          gh release download "$RELEASE_TAG" --dir stable-assets --repo "$GITHUB_REPOSITORY"
+          (cd stable-assets && sha256sum --check SHA256SUMS)
+          test -f "release-assets/Ait-${VERSION_TAG#v}-android.apk"
+          cp "release-assets/Ait-${VERSION_TAG#v}-android.apk" stable-assets/
+          node .tmp/release-tools/scripts/release-assets.mjs verify \
+            "${VERSION_TAG#v}" stable-assets --android
+
+      - name: Add APK to stable release
+        if: env.MODE == 'release'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release upload "$RELEASE_TAG" \
+            "stable-assets/Ait-${VERSION_TAG#v}-android.apk" stable-assets/SHA256SUMS \
+            --clobber --repo "$GITHUB_REPOSITORY"
+          echo "Stable APK: $GITHUB_SERVER_URL/$GITHUB_REPOSITORY/releases/tag/$RELEASE_TAG" >> "$GITHUB_STEP_SUMMARY"

@@ -49,6 +49,7 @@
 
 ## 客户端、连接与品牌
 
+- [ADR-080：Android APK 独立手动发布](clients/adr-080-standalone-android-release.md)
 - [ADR-079：移动端统一使用 Expo EAS 构建](clients/adr-079-mobile-eas-builds.md)
 - [ADR-078：Android 发布改为手动可选](clients/adr-078-optional-android-release.md)
 - [ADR-077：Android APK 的 GitHub Release 发布](clients/adr-077-android-apk-release.md)

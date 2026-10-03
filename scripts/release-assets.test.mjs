@@ -156,7 +156,7 @@ test("rejects incomplete releases and unintended platform assets", async (t) => 
   await assert.rejects(verifyReleaseAssets(options), /Unexpected release asset/);
 });
 
-test("release workflow passes the selected platforms to the asset verifier", async (t) => {
+test("desktop release verifies published desktop assets and any retained Android APK", async (t) => {
   const linux = await fixture(t, "linux");
   const mac = await fixture(t, "mac");
   await collectReleaseAssets(linux);
@@ -176,17 +176,65 @@ test("release workflow passes the selected platforms to the asset verifier", asy
   const step = workflow.jobs.release.steps.find(
     (item) => item.name === "Verify assets and write checksums",
   );
-  const run = (selected) =>
+  const run = () =>
     spawnSync("bash", ["-e", "-o", "pipefail", "-c", step.run], {
       cwd: root,
-      env: { ...process.env, RELEASE_TAG: "v0.0.7", BUILD_ANDROID: selected },
+      env: { ...process.env, RELEASE_TAG: "v0.0.7" },
       encoding: "utf8",
     });
-  assert.equal(run("false").status, 0);
-  assert.notEqual(run("true").status, 0);
+  assert.equal(run().status, 0);
   await addAndroidAssets(assets);
-  assert.equal(run("true").status, 0);
-  assert.notEqual(run("false").status, 0);
+  assert.equal(run().status, 0);
+  assert.match(await readFile(path.join(assets, "SHA256SUMS"), "utf8"), /Ait-0\.0\.7-android\.apk/);
+});
+
+test("desktop reruns preserve a checksum-verified Android APK", async (t) => {
+  const root = await mkdtemp(path.join(tmpdir(), "ait-retain-android-"));
+  t.after(() => rm(root, { recursive: true, force: true }));
+  for (const directory of ["bin", "published", "release-assets"])
+    await mkdir(path.join(root, directory));
+  const apk = "Ait-0.0.7-android.apk";
+  const original = "previously published APK";
+  await writeFile(path.join(root, "published", apk), original);
+  const hash = createHash("sha256").update(original).digest("hex");
+  await writeFile(path.join(root, "published/SHA256SUMS"), `${hash}  ${apk}\n`);
+  await writeFile(
+    path.join(root, "bin/gh"),
+    `#!/usr/bin/env node
+const fs = require('node:fs');
+const path = require('node:path');
+const args = process.argv.slice(2);
+if (args[0] === 'release' && args[1] === 'download') {
+  const destination = args[args.indexOf('--dir') + 1];
+  for (const name of fs.readdirSync(process.env.PUBLISHED_ASSETS)) {
+    fs.copyFileSync(path.join(process.env.PUBLISHED_ASSETS, name), path.join(destination, name));
+  }
+}
+`,
+    { mode: 0o700 },
+  );
+  const workflow = parse(
+    await readFile(new URL("../.github/workflows/release.yml", import.meta.url), "utf8"),
+  );
+  const step = workflow.jobs.release.steps.find(
+    (item) => item.name === "Preserve previously published Android APK",
+  );
+  const run = () =>
+    spawnSync("bash", ["-e", "-o", "pipefail", "-c", step.run], {
+      cwd: root,
+      env: {
+        ...process.env,
+        PATH: `${root}/bin:${process.env.PATH}`,
+        PUBLISHED_ASSETS: path.join(root, "published"),
+        RELEASE_TAG: "v0.0.7",
+        GITHUB_REPOSITORY: "example/ait",
+      },
+      encoding: "utf8",
+    });
+  assert.equal(run().status, 0);
+  assert.equal(await readFile(path.join(root, "release-assets", apk), "utf8"), original);
+  await writeFile(path.join(root, "published", apk), "tampered");
+  assert.notEqual(run().status, 0);
 });
 
 test("release workflow builds only the daemon and packages the resolved desktop workspace", async () => {

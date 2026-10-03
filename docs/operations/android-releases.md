@@ -1,28 +1,29 @@
 # Android APK 发布
 
-[Release Ait](../../.github/workflows/release.yml) 默认只发布 Linux、macOS。手动选择 Android 后，
-才调用 [Android APK 构建工作流](../../.github/workflows/release-android.yml)，与桌面并行构建，
-全部成功后一起上传到 GitHub Release。可选发布边界见
-[ADR-078](../decisions/clients/adr-078-optional-android-release.md)，EAS 构建方式见
-[ADR-079](../decisions/clients/adr-079-mobile-eas-builds.md)。
+[Release Android APK](../../.github/workflows/release-android.yml) 是独立的手动发布入口，
+与桌面 [Release Ait](../../.github/workflows/release.yml) 分开运行。测试和正式模式共用 EAS
+构建、APK 验证。发布边界见 [ADR-080](../decisions/clients/adr-080-standalone-android-release.md)，
+EAS 构建方式见 [ADR-079](../decisions/clients/adr-079-mobile-eas-builds.md)。
 
 ## 触发发布
 
-按[发布指南](releasing.md#创建-release)推送稳定标签 `vX.Y.Z`，只会自动发布桌面。
-需要 Android APK 时，手动运行 **Release Ait**，填写已有标签并勾选
-**Also build and publish Android APKs**；该选项默认关闭。CLI 等价命令：
+先按[发布指南](releasing.md#创建-release)推送稳定标签 `vX.Y.Z`，等待桌面 GitHub Release
+发布完成。再在 `main` 手动运行 **Release Android APK**，选择 `release` 并填写同一标签。
+工作流要求已有非草稿、非预发布的 Release，下载并核对原有附件的 `SHA256SUMS`，
+加入 APK 后重新校验完整资产并上传 APK 与更新后的校验和。CLI 等价命令：
 
 ```bash
-gh workflow run release.yml --repo OWNER/REPO --ref main -f tag=vX.Y.Z -f build_android=true
+gh workflow run release-android.yml --repo OWNER/REPO --ref main -f mode=release -f tag=vX.Y.Z
 ```
 
-`source_commit` 继续使用主发布流程的语义：仅在明确需要同版本重构建时指定完整的 40 位
-小写提交 SHA，源码版本必须与标签一致；所有平台使用同一个源码选择。
+正式 Android 构建固定使用标签对应的提交。重跑同一标签会重新构建 APK，并覆盖该 Release
+中同名的 APK 与校验和；桌面附件和原有 `BUILD-INFO.json` 保持不变。之后若重跑桌面发布，
+工作流会核对并保留已发布的 APK，重新生成包含它的校验和。
 
 ## 手动发布当前 commit 的测试 APK
 
-工作流合入默认分支后，打开 Actions → **Release Android Test APK** → **Run workflow**，
-选择要测试的分支直接运行，不需要填写版本标签。工作流固定使用触发时所选分支的 commit。
+打开 Actions → **Release Android APK** → **Run workflow**，选择要测试的分支，保留默认
+`test` 模式和空标签。工作流固定使用触发时所选分支的 commit。
 
 构建完成后自动创建 GitHub 预发布版本，标签为
 `android-test-v版本-12位commit`，例如 `android-test-v0.0.15-124bc2e1c6f9`。
@@ -30,7 +31,7 @@ gh workflow run release.yml --repo OWNER/REPO --ref main -f tag=vX.Y.Z -f build_
 不会成为最新正式 Release。同一 commit 重跑会更新同一预发布版本的附件。
 
 ```bash
-gh workflow run release-android-test.yml --repo OWNER/REPO --ref BRANCH
+gh workflow run release-android.yml --repo OWNER/REPO --ref BRANCH -f mode=test
 ```
 
 ## APK 与签名
@@ -53,8 +54,9 @@ eas credentials:configure-build --platform android --profile production-apk
 
 团队新项目使用新建的 Android keystore，由 EAS 托管并供后续构建复用。密钥不进入仓库。
 
-Android APK 与桌面附件共用 Release 中的 `SHA256SUMS` 和 `BUILD-INFO.json`。
-前者包含 APK 的 SHA-256，后者记录版本、实际源码 SHA、工作流 SHA 和运行链接。
+正式 Android APK 加入已有桌面 Release，并更新覆盖全部附件的 `SHA256SUMS`；原有
+`BUILD-INFO.json` 记录桌面构建来源。测试预发布单独包含 APK、`SHA256SUMS` 和记录
+Android 构建来源的 `BUILD-INFO.json`。
 下载全部附件到同一目录后可运行：
 
 ```bash
@@ -72,8 +74,8 @@ iOS 继续使用 `ait`。保留 `eas.json` 中的继承关系、Node 版本和 G
 同一项目；显式设置的同名环境变量仍可覆盖这些公开标识。
 
 在仓库 Settings → Secrets and variables → Actions 配置 `EXPO_TOKEN`，令牌对应的 Expo
-账号须有 `sd542927172s-team/ait` 项目的构建权限。正式发布和测试发布都将此 Secret 传入
-Android 可复用工作流。若原来的令牌只放在 `ios-testflight` Environment 中，还需要配置
+账号须有 `sd542927172s-team/ait` 项目的构建权限。正式和测试模式都使用此 Secret。
+若原来的令牌只放在 `ios-testflight` Environment 中，还需要配置
 仓库级 Secret。`production-apk` 显式使用 `medium` 构建资源，适配团队当前的 Free 套餐；
 APK 类型和 Gradle 命令保持原样。
 
@@ -90,8 +92,7 @@ GitHub 托管 Ubuntu runner 触发 EAS、等待结果并下载 APK，仅安装 A
 [EAS 配置说明](https://docs.expo.dev/eas/json/)。
 
 APK 通过签名、16 KB 对齐、包信息和架构检查后，以 `ait-android-apk` artifact 保存 7 天。
-选中 Android 的主发布任务等待桌面和 Android 全部成功，再校验附件并创建或更新 Release。
-未选中时只校验桌面附件。
+测试模式创建或更新独立的预发布版本；正式模式仅更新指定的既有桌面 Release。
 
 Android 工作流等待 EAS 最多 120 分钟；超时或取消 GitHub 任务后，可在 Expo 控制台查看和
 取消仍在进行的构建。失败时可重跑失败任务，重跑会创建新的 EAS 构建。

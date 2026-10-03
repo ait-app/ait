@@ -114,82 +114,56 @@ test("collects the EAS universal APK without modifying its signed bytes", async 
   );
 });
 
-test("workflow input guard accepts stable releases and fails closed on malformed refs", () => {
-  const guard = workflow.jobs.build.steps.find(
-    (step) => step.name === "Validate release inputs",
+test("manual modes reject invalid requests before checking out source", () => {
+  const guard = workflow.jobs.prepare.steps.find(
+    (step) => step.name === "Validate release request",
   ).run;
-  for (const [tag, source, accepted] of [
-    ["v1.2.3", "", true],
-    ["v1.2.3", "a".repeat(40), true],
-    ["v1.2.3-beta.1", "", false],
-    ["v01.2.3", "", false],
-    ["v1.2.3\n", "", false],
-    ["v1.2.3", "main", false],
-    ["v1.2.3", "a".repeat(39), false],
-    ["v1.2.3; exit 0", "", false],
+  for (const [mode, tag, ref, accepted] of [
+    ["test", "", "refs/heads/feature", true],
+    ["test", "v1.2.3", "refs/heads/feature", false],
+    ["release", "v1.2.3", "refs/heads/main", true],
+    ["release", "v1.2.3", "refs/heads/feature", false],
+    ["release", "", "refs/heads/main", false],
+    ["release", "v01.2.3", "refs/heads/main", false],
+    ["release", "v1.2.3; exit 0", "refs/heads/main", false],
+    ["other", "", "refs/heads/main", false],
   ]) {
     const result = spawnSync(
       "bash",
       ["--noprofile", "--norc", "-e", "-o", "pipefail", "-c", guard],
-      {
-        env: { ...process.env, RELEASE_TAG: tag, SOURCE_COMMIT: source },
-      },
+      { env: { ...process.env, MODE: mode, TAG: tag, GITHUB_REF: ref } },
     );
-    assert.equal(result.status === 0, accepted, JSON.stringify({ tag, source }));
+    assert.equal(result.status === 0, accepted, JSON.stringify({ mode, tag, ref }));
   }
 });
 
-test("the normal release builds Android only when explicitly selected", async () => {
+test("desktop and Android releases have independent manual entry points", async () => {
   const release = yaml.parse(
     await readFile(new URL("../.github/workflows/release.yml", import.meta.url), "utf8"),
   );
   assert.deepEqual(release.on.push.tags, ["v*"]);
   assert(release.on.workflow_dispatch);
-  assert.equal(release.on.workflow_dispatch.inputs.build_android.type, "boolean");
-  assert.equal(release.on.workflow_dispatch.inputs.build_android.default, false);
-  for (const [event, selected, expected] of [
-    ["push", undefined, false],
-    ["push", true, false],
-    ["workflow_dispatch", undefined, false],
-    ["workflow_dispatch", false, false],
-    ["workflow_dispatch", true, true],
-  ]) {
-    const enabled = runInNewContext(release.jobs.android.if, {
-      github: { event_name: event },
-      inputs: { build_android: selected },
-    });
-    assert.equal(enabled, expected, `${event}, Android=${selected}`);
-  }
-  assert.equal(release.jobs.android.uses, "./.github/workflows/release-android.yml");
-  assert.deepEqual(release.jobs.android.with, {
-    tag: "${{ inputs.tag || github.ref_name }}",
-    source_commit: "${{ inputs.source_commit || '' }}",
-  });
-  assert.deepEqual(release.jobs.release.needs, ["build", "android"]);
-  for (const [selected, desktop, android, cancelled, expected] of [
-    [undefined, "success", "skipped", false, true],
-    [false, "success", "skipped", false, true],
-    [true, "success", "success", false, true],
-    [true, "success", "failure", false, false],
-    [true, "success", "skipped", false, false],
-    [true, "success", "cancelled", false, false],
-    [false, "failure", "skipped", false, false],
-    [false, "skipped", "skipped", false, false],
-    [false, "success", "skipped", true, false],
+  assert.equal(release.on.workflow_dispatch.inputs.build_android, undefined);
+  assert.equal(release.jobs.android, undefined);
+  assert.equal(release.jobs.release.needs, "build");
+  for (const [desktop, cancelled, expected] of [
+    ["success", false, true],
+    ["failure", false, false],
+    ["skipped", false, false],
+    ["success", true, false],
   ]) {
     const publish = runInNewContext(release.jobs.release.if.slice(3, -2), {
-      inputs: { build_android: selected },
-      needs: { build: { result: desktop }, android: { result: android } },
+      needs: { build: { result: desktop } },
       cancelled: () => cancelled,
     });
-    assert.equal(publish, expected, `${selected}, ${desktop}, ${android}, cancelled=${cancelled}`);
+    assert.equal(publish, expected, `${desktop}, cancelled=${cancelled}`);
   }
-  assert.equal(release.jobs.release.env.BUILD_ANDROID, "${{ inputs.build_android || false }}");
-  assert.deepEqual(Object.keys(workflow.on), ["workflow_call"]);
+  assert.deepEqual(Object.keys(workflow.on), ["workflow_dispatch"]);
+  assert.equal(workflow.on.workflow_dispatch.inputs.mode.default, "test");
+  assert.deepEqual(workflow.on.workflow_dispatch.inputs.mode.options, ["test", "release"]);
   assert.equal(workflow.permissions.contents, "read");
-  assert.deepEqual(workflow.on.workflow_call.secrets, { EXPO_TOKEN: { required: true } });
-  assert.equal(workflow.jobs.publish, undefined);
-  assert.deepEqual(release.jobs.android.secrets, { EXPO_TOKEN: "${{ secrets.EXPO_TOKEN }}" });
+  assert.deepEqual(workflow.jobs.publish.needs, ["prepare", "build"]);
+  assert.equal(workflow.jobs.publish.permissions.contents, "write");
   const upload = workflow.jobs.build.steps.find((step) =>
     step.uses?.startsWith("actions/upload-artifact@"),
   );
@@ -199,11 +173,16 @@ test("the normal release builds Android only when explicitly selected", async ()
   );
   assert.equal(download.with.pattern, "ait-*");
   assert.equal(download.with["merge-multiple"], true);
+  const verify = release.jobs.release.steps.find(
+    (step) => step.name === "Verify assets and write checksums",
+  ).run;
+  assert.match(verify, /if test -f "release-assets\/Ait-\$\{RELEASE_TAG#v\}-android\.apk"/);
+  assert.match(verify, /args\+=\(--android\)/);
   for (const step of workflow.jobs.build.steps) {
     if (!step.run) continue;
     assert.doesNotMatch(step.run, /\$\{\{\s*(?:inputs|secrets)\./);
     assert.doesNotMatch(step.run, /gh release|apksigner sign|ANDROID_KEYSTORE/);
-    const result = spawnSync("bash", ["-n"], { input: step.run, encoding: "utf8" });
+    const result = spawnSync("bash", ["-n", "-c", step.run], { encoding: "utf8" });
     assert.equal(result.status, 0, `${step.name}: ${result.stderr}`);
   }
 });
