@@ -2,7 +2,6 @@ name: Release Android Test APK
 
 on:
   workflow_dispatch:
-  workflow_call:
 
 permissions:
   contents: read

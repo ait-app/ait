@@ -42,7 +42,7 @@ async function fixture(t) {
 }
 
 test("test release is manual, builds the captured commit, and publishes only after APK validation", () => {
-  assert.deepEqual(Object.keys(workflow.on), ["workflow_dispatch", "workflow_call"]);
+  assert.deepEqual(Object.keys(workflow.on), ["workflow_dispatch"]);
   assert.equal(workflow.permissions.contents, "read");
   assert.equal(workflow.jobs.prepare.steps[0].with.ref, "${{ github.sha }}");
   assert.equal(workflow.jobs.apk.uses, "./.github/workflows/release-android.yml");
@@ -57,26 +57,6 @@ test("test release is manual, builds the captured commit, and publishes only aft
       assert.equal(result.status, 0, `${step.name}: ${result.stderr}`);
     }
   }
-});
-
-test("the Release button can run Android tests while skipping every full-release job", async () => {
-  const release = yaml.parse(
-    await readFile(new URL("../.github/workflows/release.yml", import.meta.url), "utf8"),
-  );
-  assert.deepEqual(release.on.workflow_dispatch.inputs.release_type.options, [
-    "full",
-    "android-test",
-  ]);
-  assert.equal(release.on.workflow_dispatch.inputs.release_type.default, "full");
-  assert.equal(release.on.workflow_dispatch.inputs.tag.required, false);
-  assert.equal(release.jobs["android-test"].uses, "./.github/workflows/release-android-test.yml");
-  assert.equal(release.jobs["android-test"].permissions.contents, "write");
-  assert.equal(
-    release.jobs["android-test"].if,
-    "github.event_name == 'workflow_dispatch' && inputs.release_type == 'android-test'",
-  );
-  for (const job of ["android", "build", "release"])
-    assert.equal(release.jobs[job].if, "inputs.release_type != 'android-test'", job);
 });
 
 test("release plan uses the triggering commit and separates test tags from stable tags", async (t) => {
