@@ -1,9 +1,20 @@
 import assert from "node:assert/strict";
+import { spawnSync } from "node:child_process";
 import { createHash } from "node:crypto";
-import { mkdtemp, mkdir, readdir, readFile, rm, writeFile } from "node:fs/promises";
+import {
+  copyFile,
+  mkdtemp,
+  mkdir,
+  readdir,
+  readFile,
+  rename,
+  rm,
+  writeFile,
+} from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import test from "node:test";
+import { fileURLToPath } from "node:url";
 import { Arch, getArtifactArchName } from "builder-util";
 import { expandMacro } from "app-builder-lib/out/util/macroExpander.js";
 import { stringify, parse } from "yaml";
@@ -67,7 +78,11 @@ test("checksums desktop and Android installers, updater metadata and blockmaps",
   await collectReleaseAssets(linux);
   await collectReleaseAssets({ ...mac, destination: linux.destination });
   await addAndroidAssets(linux.destination);
-  const names = await verifyReleaseAssets({ version: linux.version, directory: linux.destination });
+  const names = await verifyReleaseAssets({
+    version: linux.version,
+    directory: linux.destination,
+    includeAndroid: true,
+  });
   assert.equal(names.length, 9);
   assert(names.includes(blockmap));
   const lines = (await readFile(path.join(linux.destination, "SHA256SUMS"), "utf8"))
@@ -91,6 +106,32 @@ test("rejects stale updater checksums and missing installers", async (t) => {
   await assert.rejects(collectReleaseAssets(input), /ENOENT/);
 });
 
+test("desktop-only verification is the default and Android requires an explicit option", async (t) => {
+  const linux = await fixture(t, "linux");
+  const mac = await fixture(t, "mac");
+  await collectReleaseAssets(linux);
+  await collectReleaseAssets({ ...mac, destination: linux.destination });
+  const script = fileURLToPath(new URL("./release-assets.mjs", import.meta.url));
+  const verify = (...options) =>
+    spawnSync(process.execPath, [script, "verify", linux.version, linux.destination, ...options], {
+      encoding: "utf8",
+    });
+  assert.equal(verify().status, 0);
+  assert.equal(
+    (await readFile(path.join(linux.destination, "SHA256SUMS"), "utf8")).trim().split("\n").length,
+    6,
+  );
+  assert.notEqual(verify("--android").status, 0);
+  await addAndroidAssets(linux.destination);
+  assert.notEqual(verify().status, 0, "unrequested Android artifacts must not be published");
+  assert.equal(verify("--android").status, 0);
+  assert.equal(
+    (await readFile(path.join(linux.destination, "SHA256SUMS"), "utf8")).trim().split("\n").length,
+    8,
+  );
+  assert.notEqual(verify("--andriod").status, 0, "unknown options must fail closed");
+});
+
 test("rejects incomplete releases and unintended platform assets", async (t) => {
   const input = await fixture(t, "linux");
   await collectReleaseAssets(input);
@@ -100,22 +141,53 @@ test("rejects incomplete releases and unintended platform assets", async (t) => 
   );
   const mac = await fixture(t, "mac");
   await collectReleaseAssets({ ...mac, destination: input.destination });
+  const options = { version: input.version, directory: input.destination, includeAndroid: true };
   await assert.rejects(
-    verifyReleaseAssets({ version: input.version, directory: input.destination }),
+    verifyReleaseAssets(options),
     /Missing release asset: Ait-0.0.7-android-arm64.apk/,
   );
   await addAndroidAssets(input.destination);
   await rm(path.join(input.destination, "Ait-0.0.7-android-armv7.apk"));
   await assert.rejects(
-    verifyReleaseAssets({ version: input.version, directory: input.destination }),
+    verifyReleaseAssets(options),
     /Missing release asset: Ait-0.0.7-android-armv7.apk/,
   );
   await addAndroidAssets(input.destination);
   await writeFile(path.join(input.destination, "Ait-Setup.exe"), "unexpected");
-  await assert.rejects(
-    verifyReleaseAssets({ version: input.version, directory: input.destination }),
-    /Unexpected release asset/,
+  await assert.rejects(verifyReleaseAssets(options), /Unexpected release asset/);
+});
+
+test("release workflow passes the selected platforms to the asset verifier", async (t) => {
+  const linux = await fixture(t, "linux");
+  const mac = await fixture(t, "mac");
+  await collectReleaseAssets(linux);
+  await collectReleaseAssets({ ...mac, destination: linux.destination });
+  const root = path.dirname(linux.destination);
+  const assets = path.join(root, "release-assets");
+  await rename(linux.destination, assets);
+  const tooling = path.join(root, ".tmp/release-tools/scripts");
+  await mkdir(tooling, { recursive: true });
+  await copyFile(
+    new URL("./release-assets.mjs", import.meta.url),
+    path.join(tooling, "release-assets.mjs"),
   );
+  const workflow = parse(
+    await readFile(new URL("../.github/workflows/release.yml", import.meta.url), "utf8"),
+  );
+  const step = workflow.jobs.release.steps.find(
+    (item) => item.name === "Verify assets and write checksums",
+  );
+  const run = (selected) =>
+    spawnSync("bash", ["-e", "-o", "pipefail", "-c", step.run], {
+      cwd: root,
+      env: { ...process.env, RELEASE_TAG: "v0.0.7", BUILD_ANDROID: selected },
+      encoding: "utf8",
+    });
+  assert.equal(run("false").status, 0);
+  assert.notEqual(run("true").status, 0);
+  await addAndroidAssets(assets);
+  assert.equal(run("true").status, 0);
+  assert.notEqual(run("false").status, 0);
 });
 
 test("release workflow builds only the daemon and packages the resolved desktop workspace", async () => {
@@ -151,7 +223,6 @@ test("checksums build provenance and rejects a mismatched source version", async
   const mac = await fixture(t, "mac");
   await collectReleaseAssets(linux);
   await collectReleaseAssets({ ...mac, destination: linux.destination });
-  await addAndroidAssets(linux.destination);
   const info = {
     version: "0.0.7",
     releaseTag: "v0.0.7",

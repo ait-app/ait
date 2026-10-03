@@ -1,18 +1,19 @@
 # Android APK 发布
 
-[Release Ait](../../.github/workflows/release.yml) 自动调用
-[Android APK 构建工作流](../../.github/workflows/release-android.yml)，与 Linux、macOS 并行构建，
-全部成功后一起上传到 GitHub Release。发布职责见
+[Release Ait](../../.github/workflows/release.yml) 默认只发布 Linux、macOS。手动选择 Android 后，
+才调用 [Android APK 构建工作流](../../.github/workflows/release-android.yml)，与桌面并行构建，
+全部成功后一起上传到 GitHub Release。可选发布边界见
+[ADR-078](../decisions/clients/adr-078-optional-android-release.md)，APK 构建职责沿用
 [ADR-077](../decisions/clients/adr-077-android-apk-release.md)。
 
 ## 触发发布
 
-将工作流合入发布源码后，按[发布指南](releasing.md#创建-release)推送稳定标签 `vX.Y.Z`，
-即会自动构建 Android APK，无需再单独运行 Android Action，也不要求事先创建 GitHub Release。
-现有 **Release Ait** 的手动发布入口同样包含 Android：
+按[发布指南](releasing.md#创建-release)推送稳定标签 `vX.Y.Z`，只会自动发布桌面。
+需要 Android APK 时，手动运行 **Release Ait**，填写已有标签并勾选
+**Also build and publish Android APKs**；该选项默认关闭。CLI 等价命令：
 
 ```bash
-gh workflow run release.yml --repo OWNER/REPO --ref main -f tag=vX.Y.Z
+gh workflow run release.yml --repo OWNER/REPO --ref main -f tag=vX.Y.Z -f build_android=true
 ```
 
 `source_commit` 继续使用主发布流程的语义：仅在明确需要同版本重构建时指定完整的 40 位
@@ -35,12 +36,12 @@ gh workflow run release-android-test.yml --repo OWNER/REPO --ref BRANCH
 
 ## APK 与命名
 
-APK 沿用现有安装包的 `Ait-版本-平台-架构.扩展名` 格式。例如 `v0.0.14` 发布包含：
+勾选 Android 时，APK 沿用 `Ait-版本-平台-架构.扩展名` 格式。例如 `v0.0.15`：
 
 | 附件                           | 适用架构                                |
 | ------------------------------ | --------------------------------------- |
-| `Ait-0.0.14-android-arm64.apk` | ARM64，Android ABI 为 `arm64-v8a`       |
-| `Ait-0.0.14-android-armv7.apk` | 32 位 ARM，Android ABI 为 `armeabi-v7a` |
+| `Ait-0.0.15-android-arm64.apk` | ARM64，Android ABI 为 `arm64-v8a`       |
+| `Ait-0.0.15-android-armv7.apk` | 32 位 ARM，Android ABI 为 `armeabi-v7a` |
 
 两个文件都是可独立安装的完整 APK，按设备架构选择一个即可。生产包名为 `dev.ait.mobile`，
 最低系统版本随 `apps/mobile/app.config.js` 配置，当前为 Android 10。
@@ -84,7 +85,8 @@ runner 安装 Android SDK 后，构建共享依赖和终端 WebView，通过 Exp
 为两种 ARM ABI 配置独立 APK，再执行 Gradle release 构建。生成的 Android 项目只用于本次构建。
 
 两个 APK 均通过签名、16 KB 原生库对齐、包信息与架构检查后，以 `ait-android-apk` artifact
-保存 7 天。主发布任务等待桌面和 Android 构建全部成功，再合并附件、验证完整性、生成校验和，
-最后创建或更新 GitHub Release。失败时可在该次 **Release Ait** 运行中重跑失败任务。
+保存 7 天。选中 Android 的主发布任务等待桌面和 Android 构建全部成功，再合并附件、验证
+完整性、生成校验和，最后创建或更新 GitHub Release。未选中时，Android job 跳过，
+桌面发布仅校验桌面附件。失败时可在该次 **Release Ait** 运行中重跑失败任务。
 
 ABI 分包机制参见 Android 官方的[多 APK 构建说明](https://developer.android.com/build/configure-apk-splits)。

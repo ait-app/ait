@@ -106,6 +106,7 @@
 
 ## 发布验证
 
+- [Ait 0.0.15 发布说明](releases/release-0.0.15.md)
 - [Ait 0.0.10 发布说明](releases/release-0.0.10.md)
 - [Ait 0.0.11 发布说明](releases/release-0.0.11.md)
 - [Ait 0.0.12 发布说明](releases/release-0.0.12.md)

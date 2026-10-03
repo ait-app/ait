@@ -5,15 +5,15 @@ edition.workspace = true
 publish.workspace = true
 
 [dependencies]
-relay = { version = "0.0.14", path = "../relay" }
-schedule = { version = "0.0.14", path = "../../crates/schedule" }
-browser = { version = "0.0.14", path = "../../crates/browser" }
-voice = { version = "0.0.14", path = "../voice" }
-model = { version = "0.0.14", path = "../model" }
-terminal = { version = "0.0.14", path = "../terminal" }
-provider = { version = "0.0.14", path = "../provider" }
-filesystem = { version = "0.0.14", path = "../filesystem" }
-metadata = { version = "0.0.14", path = "../metadata" }
+relay = { version = "0.0.15", path = "../relay" }
+schedule = { version = "0.0.15", path = "../../crates/schedule" }
+browser = { version = "0.0.15", path = "../../crates/browser" }
+voice = { version = "0.0.15", path = "../voice" }
+model = { version = "0.0.15", path = "../model" }
+terminal = { version = "0.0.15", path = "../terminal" }
+provider = { version = "0.0.15", path = "../provider" }
+filesystem = { version = "0.0.15", path = "../filesystem" }
+metadata = { version = "0.0.15", path = "../metadata" }
 axum = { version = "0.8.9", features = ["ws"] }
 futures-util = "0.3.34"
 secrecy = "0.10.3"

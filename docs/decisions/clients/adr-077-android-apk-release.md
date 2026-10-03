@@ -2,6 +2,9 @@
 
 状态：Accepted（2026-10-03）
 
+自动触发和必需附件的决策已由 [ADR-078](adr-078-optional-android-release.md) 修订：
+Android 默认关闭，仅手动选中时构建；其余 APK 构建、命名及签名职责继续适用。
+
 ## 背景
 
 现有 Release 工作流提供 Linux 和 macOS 安装包，需要在同一次发布中自动提供可安装的

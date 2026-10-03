@@ -71,9 +71,9 @@ export async function collectReleaseAssets({ platform, version, source, destinat
   return [...names, ...blockmaps];
 }
 
-export async function verifyReleaseAssets({ version, directory }) {
+export async function verifyReleaseAssets({ version, directory, includeAndroid = false }) {
   const desktop = [...releaseAssetNames("linux", version), ...releaseAssetNames("mac", version)];
-  const required = [...desktop, ...releaseAssetNames("android", version)];
+  const required = [...desktop, ...(includeAndroid ? releaseAssetNames("android", version) : [])];
   const allowed = new Set([
     ...required,
     "BUILD-INFO.json",
@@ -109,12 +109,17 @@ async function main() {
   if (command === "collect" && args.length === 4) {
     const [platform, version, source, destination] = args;
     console.log(await collectReleaseAssets({ platform, version, source, destination }));
-  } else if (command === "verify" && args.length === 2) {
+  } else if (
+    command === "verify" &&
+    (args.length === 2 || (args.length === 3 && args[2] === "--android"))
+  ) {
     const [version, directory] = args;
-    console.log(await verifyReleaseAssets({ version, directory }));
+    console.log(
+      await verifyReleaseAssets({ version, directory, includeAndroid: args.length === 3 }),
+    );
   } else {
     throw new Error(
-      "Usage: release-assets.mjs collect linux|mac VERSION SOURCE DEST | verify VERSION DIRECTORY",
+      "Usage: release-assets.mjs collect linux|mac VERSION SOURCE DEST | verify VERSION DIRECTORY [--android]",
     );
   }
 }

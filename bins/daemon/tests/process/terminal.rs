@@ -328,13 +328,21 @@ async fn terminal_reconnect_archive_batch_close_and_shutdown_cleanup_are_observa
         .await;
     assert!(opened["result"]["error"].is_null());
     let pid_file = temp.path().join("terminal.pid");
-    let created = client.request("terminal.create.request", json!({"cwd":cwd,"command":"/bin/sh","args":["-c",format!("echo $$ > '{}'; sleep 60",pid_file.display())]})).await;
+    let command = format!(
+        "echo $$ > '{}' && printf 'PID_READY\\n'; sleep 60",
+        pid_file.display()
+    );
+    let created = client
+        .request(
+            "terminal.create.request",
+            json!({"cwd":cwd,"command":"/bin/sh","args":["-c",command]}),
+        )
+        .await;
     assert!(created["result"]["error"].is_null(), "{created}");
-    let deadline = tokio::time::Instant::now() + Duration::from_secs(10);
-    while !pid_file.exists() {
-        assert!(tokio::time::Instant::now() < deadline);
-        tokio::time::sleep(Duration::from_millis(20)).await;
-    }
+    // Redirection creates the file before echo writes the PID; wait for the completed write.
+    client
+        .capture(&created["result"]["terminal"]["id"], "PID_READY")
+        .await;
     let pid = std::fs::read_to_string(pid_file)
         .unwrap()
         .trim()

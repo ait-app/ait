@@ -95,7 +95,7 @@ checksum = "330a5ed07fa54e4702c9d6c4174f74427fc0ef6e214bbd677ae50a5099946470"
 
 [[package]]
 name = "api"
-version = "0.0.14"
+version = "0.0.15"
 dependencies = [
  "axum",
  "browser",
@@ -270,7 +270,7 @@ dependencies = [
 
 [[package]]
 name = "browser"
-version = "0.0.14"
+version = "0.0.15"
 dependencies = [
  "futures-util",
  "model",
@@ -530,7 +530,7 @@ dependencies = [
 
 [[package]]
 name = "daemon"
-version = "0.0.14"
+version = "0.0.15"
 dependencies = [
  "anyhow",
  "api",
@@ -614,7 +614,7 @@ dependencies = [
 
 [[package]]
 name = "domain"
-version = "0.0.14"
+version = "0.0.15"
 dependencies = [
  "serde",
  "serde_json",
@@ -686,7 +686,7 @@ dependencies = [
 
 [[package]]
 name = "filesystem"
-version = "0.0.14"
+version = "0.0.15"
 dependencies = [
  "base64",
  "chrono",
@@ -1335,7 +1335,7 @@ checksum = "cf8baf1c55e62ffcace7a9f06f4bd9cd3f0c4beb022d3b367256b91b87513d98"
 
 [[package]]
 name = "metadata"
-version = "0.0.14"
+version = "0.0.15"
 dependencies = [
  "base64",
  "chrono",
@@ -1393,7 +1393,7 @@ dependencies = [
 
 [[package]]
 name = "model"
-version = "0.0.14"
+version = "0.0.15"
 dependencies = [
  "base64",
  "icu_collator",
@@ -1569,7 +1569,7 @@ dependencies = [
 
 [[package]]
 name = "protocol"
-version = "0.0.14"
+version = "0.0.15"
 dependencies = [
  "model",
  "serde",
@@ -1578,7 +1578,7 @@ dependencies = [
 
 [[package]]
 name = "provider"
-version = "0.0.14"
+version = "0.0.15"
 dependencies = [
  "async-trait",
  "axum",
@@ -1779,7 +1779,7 @@ checksum = "d6f6ff9a378485b298a5286656da665ba74413d36db0979633275d2e708145d4"
 
 [[package]]
 name = "relay"
-version = "0.0.14"
+version = "0.0.15"
 dependencies = [
  "futures-util",
  "reqwest",
@@ -1942,7 +1942,7 @@ dependencies = [
 
 [[package]]
 name = "schedule"
-version = "0.0.14"
+version = "0.0.15"
 dependencies = [
  "chrono",
  "chrono-tz",
@@ -2276,7 +2276,7 @@ dependencies = [
 
 [[package]]
 name = "terminal"
-version = "0.0.14"
+version = "0.0.15"
 dependencies = [
  "chrono",
  "metadata",
@@ -2765,7 +2765,7 @@ checksum = "0b928f33d975fc6ad9f86c8f283853ad26bdd5b10b7f1542aa2fa15e2289105a"
 
 [[package]]
 name = "voice"
-version = "0.0.14"
+version = "0.0.15"
 dependencies = [
  "axum",
  "base64",

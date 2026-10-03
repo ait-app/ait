@@ -1,9 +1,10 @@
 const assert = require("node:assert/strict");
+const { execFileSync } = require("node:child_process");
 const fs = require("node:fs");
 const os = require("node:os");
 const path = require("node:path");
 const test = require("node:test");
-const { createPackage, uncache } = require("@electron/asar");
+const { uncache } = require("@electron/asar");
 const {
   verifyPackagedResources,
   verifyDaemonDirectory,
@@ -38,7 +39,7 @@ test("packaging rejects a missing or non-executable daemon", (t) => {
   assert.throws(() => verifyDaemonDirectory(root), /only daemon/);
 });
 
-test("packaging requires Ait's independent identity instead of the Paseo workspace name", async (t) => {
+test("packaging requires Ait's independent identity instead of the Paseo workspace name", (t) => {
   const root = resources(t);
   const appOutDir = path.join(root, "packaged");
   const destination = path.join(appOutDir, "resources");
@@ -49,7 +50,13 @@ test("packaging requires Ait's independent identity instead of the Paseo workspa
   fs.mkdirSync(source);
   for (const name of ["@ait/desktop", "@getpaseo/desktop"]) {
     fs.writeFileSync(path.join(source, "package.json"), JSON.stringify({ name, version: "0.0.7" }));
-    await createPackage(source, path.join(destination, "app.asar"));
+    // Wait for the CLI to flush the ASAR; the v3 library promise can resolve before file writes.
+    execFileSync(process.execPath, [
+      require.resolve("@electron/asar/bin/asar.js"),
+      "pack",
+      source,
+      path.join(destination, "app.asar"),
+    ]);
     uncache(path.join(destination, "app.asar"));
     const verify = () =>
       verifyPackagedResources({ appOutDir, platform: "linux", version: "0.0.7" });

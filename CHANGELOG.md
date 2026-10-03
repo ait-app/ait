@@ -1,5 +1,15 @@
 # Ait changelog
 
+## 0.0.15 - 2026-10-03
+
+- Add native OpenCode sessions with model discovery, streaming, tool approvals, cancellation, and conversation restore.
+- Add account sign-in, account host discovery, and reverse-relay connections on desktop and Android.
+- Add optional Android APK publishing for ARM64 and ARMv7; tag releases build only Linux and macOS by default.
+- Keep Hosts connected when diffs or directory listings exceed response limits, and improve large-diff loading.
+- Show model-specific Codex reasoning options, including max and ultra when supported.
+- Harden desktop navigation and connection retries; fix stale workspace notifications, literal Git paths, directory symlinks, and schedule updates.
+- Handle empty repository history, oversized setup output, and offline speech capacity errors correctly.
+
 ## 0.0.14 - 2026-10-03
 
 - Add theme-aware syntax highlighting to workspace, base, and commit diffs, including multi-line syntax and renamed files.

@@ -12,7 +12,6 @@ import {
 import { createRequire } from "node:module";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { createPackage } from "@electron/asar";
 import { afterEach, beforeEach, expect, test, vi } from "vitest";
 
 // The launcher reads Linux /proc state as well as POSIX command interfaces.
@@ -25,7 +24,7 @@ const { version } = require("../../package.json");
 beforeEach(() => vi.stubEnv("AIT_DESKTOP_SMOKE", "0"));
 afterEach(() => vi.unstubAllEnvs());
 
-async function createPackagedApp(root: string) {
+function createPackagedApp(root: string) {
   const app = join(root, "app with spaces");
   const resources = join(app, "resources");
   const source = join(root, "asar-source");
@@ -33,7 +32,13 @@ async function createPackagedApp(root: string) {
   mkdirSync(join(resources, "app-dist"));
   mkdirSync(source);
   writeFileSync(join(source, "package.json"), JSON.stringify({ name: "@ait/desktop", version }));
-  await createPackage(source, join(resources, "app.asar"));
+  // The ASAR 3 API resolves before its output stream finishes; CLI exit waits for pending writes.
+  const archive = spawnSync(
+    process.execPath,
+    [require.resolve("@electron/asar/bin/asar.js"), "pack", source, join(resources, "app.asar")],
+    { encoding: "utf8" },
+  );
+  expect(archive.status, archive.stderr).toBe(0);
   writeFileSync(join(resources, "app-dist", "index.html"), "<!doctype html><title>Ait</title>");
   writeFileSync(join(resources, "bin", "daemon"), "#!/bin/sh\nexit 0\n", { mode: 0o755 });
   writeFileSync(
@@ -53,7 +58,7 @@ async function createPackagedApp(root: string) {
 test("validates Linux package resources before installing the launcher on any host", async () => {
   const root = mkdtempSync(join(tmpdir(), "ait-linux-after-pack-"));
   try {
-    const context = await createPackagedApp(root);
+    const context = createPackagedApp(root);
     const executable = join(context.appOutDir, "Ait");
     const original = readFileSync(executable);
     const legacyBin = join(context.appOutDir, "resources", "bin", "ait-worker");
@@ -84,7 +89,7 @@ async function launch(
 ) {
   const root = mkdtempSync(join(tmpdir(), "paseo-launcher-"));
   try {
-    const context = await createPackagedApp(root);
+    const context = createPackagedApp(root);
     const app = context.appOutDir;
     const commands = join(root, "commands");
     mkdirSync(commands);

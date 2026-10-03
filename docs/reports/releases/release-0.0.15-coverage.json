@@ -1,0 +1,114 @@
+{
+  "date": "2026-10-03",
+  "base_revision": "0e8142ac0340257bf5900386b6f7efbf9a1f0a9f",
+  "measurement": "Base revision plus release 0.0.15 metadata and terminal PID readiness test fix; exact input fingerprint below.",
+  "scope": "All 13 Cargo workspace crates; macOS arm64; Rust 1.98.1; cargo-llvm-cov 0.8.4; default features/filtering; no custom exclusions; doctests are not instrumented.",
+  "commands": [
+    "SHERPA_ONNX_LIB_DIR=/private/tmp/ait-workspace-sidebar-cov-target/sherpa-onnx-prebuilt/sherpa-onnx-v1.13.8-osx-arm64-static-lib/lib CARGO_TARGET_DIR=/private/tmp/ait-workspace-sidebar-cov-target cargo llvm-cov --locked --offline --workspace --html",
+    "CARGO_TARGET_DIR=/private/tmp/ait-workspace-sidebar-cov-target cargo llvm-cov report --json --summary-only --output-path /private/tmp/ait-release-0.0.15-coverage-summary.json"
+  ],
+  "workspace_lines": {
+    "count": 51397,
+    "covered": 48587,
+    "percent": 94.53275483004845
+  },
+  "crate_lines": {
+    "api": {
+      "covered": 1861,
+      "count": 2015,
+      "percent": 92.35732009925559
+    },
+    "browser": {
+      "covered": 706,
+      "count": 725,
+      "percent": 97.37931034482759
+    },
+    "daemon": {
+      "covered": 892,
+      "count": 936,
+      "percent": 95.2991452991453
+    },
+    "domain": {
+      "covered": 121,
+      "count": 121,
+      "percent": 100.0
+    },
+    "filesystem": {
+      "covered": 11130,
+      "count": 11720,
+      "percent": 94.96587030716724
+    },
+    "metadata": {
+      "covered": 7360,
+      "count": 7740,
+      "percent": 95.09043927648578
+    },
+    "model": {
+      "covered": 697,
+      "count": 734,
+      "percent": 94.95912806539509
+    },
+    "protocol": {
+      "covered": 75,
+      "count": 75,
+      "percent": 100.0
+    },
+    "provider": {
+      "covered": 21218,
+      "count": 22592,
+      "percent": 93.91820113314448
+    },
+    "relay": {
+      "covered": 419,
+      "count": 464,
+      "percent": 90.30172413793103
+    },
+    "schedule": {
+      "covered": 805,
+      "count": 823,
+      "percent": 97.81287970838396
+    },
+    "terminal": {
+      "covered": 1453,
+      "count": 1508,
+      "percent": 96.35278514588859
+    },
+    "voice": {
+      "covered": 1850,
+      "count": 1944,
+      "percent": 95.16460905349794
+    }
+  },
+  "tests": {
+    "rust-test": {
+      "passed": 1751,
+      "failed": 0,
+      "ignored": 3
+    },
+    "coverage": {
+      "passed": 1751,
+      "failed": 0,
+      "ignored": 3
+    }
+  },
+  "source_fingerprint": "8c48e4e319fb82db3f7cbb85d1ac2fb760b5b5ade8119c7903ae01b8645313a3",
+  "fingerprint_algorithm": "SHA-256 of compact sorted JSON mapping tracked bins/crates Rust sources, Cargo manifests/lockfile and rust-toolchain.toml to file SHA-256 digests.",
+  "changed_test_sha256": "d54e7aaaba0cb62ce4288786e658765844ab0c0692015c5698617ea7a7949dc5",
+  "raw_summary_sha256": "c4b75b4f0fb4f0f18b9fc54e4af2e733956d6bb2d3848c88b0f3954a6789f6df",
+  "baseline": {
+    "artifact": "../daemon/crate-coverage-rebase.json",
+    "revision": "c95ac040bdc391ee7cf51da9c0b13e119bdfea37",
+    "workspace_lines": {
+      "covered": 48595,
+      "count": 51397,
+      "percent": 94.54831994085258
+    },
+    "percent_point_change": -0.015565110804132587,
+    "note": "Historical same-platform/default-feature measurement, not remeasured; release metadata and test-only change do not change production Rust."
+  },
+  "limitations": [
+    "Three existing real-provider tests ignored; no credentials or external model calls.",
+    "Linux verification is performed by PR/main CI; local coverage is macOS only.",
+    "Native speech model execution, real OpenCode inference and mobile device end-to-end behavior remain outside this measurement."
+  ]
+}

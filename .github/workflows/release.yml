@@ -14,6 +14,11 @@ on:
         description: Optional full commit SHA for an explicitly requested same-version rebuild
         required: false
         type: string
+      build_android:
+        description: Also build and publish Android APKs
+        required: false
+        default: false
+        type: boolean
 
 permissions:
   contents: read
@@ -25,6 +30,7 @@ concurrency:
 jobs:
   android:
     name: Build Android
+    if: github.event_name == 'workflow_dispatch' && inputs.build_android == true
     uses: ./.github/workflows/release-android.yml
     with:
       tag: ${{ inputs.tag || github.ref_name }}
@@ -155,12 +161,14 @@ jobs:
   release:
     name: Publish GitHub Release
     needs: [build, android]
+    if: ${{ !cancelled() && needs.build.result == 'success' && (!inputs.build_android || needs.android.result == 'success') }}
     runs-on: ubuntu-24.04
     permissions:
       contents: write
     env:
       GH_TOKEN: ${{ github.token }}
       RELEASE_TAG: ${{ inputs.tag || github.ref_name }}
+      BUILD_ANDROID: ${{ inputs.build_android || false }}
     steps:
       - name: Check out release source
         uses: actions/checkout@v5
@@ -196,7 +204,12 @@ jobs:
           NODE
 
       - name: Verify assets and write checksums
-        run: node .tmp/release-tools/scripts/release-assets.mjs verify "${RELEASE_TAG#v}" release-assets
+        run: |
+          args=()
+          if [ "$BUILD_ANDROID" = "true" ]; then
+            args+=(--android)
+          fi
+          node .tmp/release-tools/scripts/release-assets.mjs verify "${RELEASE_TAG#v}" release-assets "${args[@]}"
 
       - name: Create or repair GitHub Release
         shell: bash

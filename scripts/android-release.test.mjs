@@ -4,6 +4,7 @@ import { mkdtemp, readFile, readdir, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import test from "node:test";
+import { runInNewContext } from "node:vm";
 import yaml from "yaml";
 import {
   collectAndroidRelease,
@@ -119,18 +120,52 @@ test("workflow input guard accepts stable releases and fails closed on malformed
   }
 });
 
-test("the normal release automatically builds Android and publishes all platforms together", async () => {
+test("the normal release builds Android only when explicitly selected", async () => {
   const release = yaml.parse(
     await readFile(new URL("../.github/workflows/release.yml", import.meta.url), "utf8"),
   );
   assert.deepEqual(release.on.push.tags, ["v*"]);
   assert(release.on.workflow_dispatch);
+  assert.equal(release.on.workflow_dispatch.inputs.build_android.type, "boolean");
+  assert.equal(release.on.workflow_dispatch.inputs.build_android.default, false);
+  for (const [event, selected, expected] of [
+    ["push", undefined, false],
+    ["push", true, false],
+    ["workflow_dispatch", undefined, false],
+    ["workflow_dispatch", false, false],
+    ["workflow_dispatch", true, true],
+  ]) {
+    const enabled = runInNewContext(release.jobs.android.if, {
+      github: { event_name: event },
+      inputs: { build_android: selected },
+    });
+    assert.equal(enabled, expected, `${event}, Android=${selected}`);
+  }
   assert.equal(release.jobs.android.uses, "./.github/workflows/release-android.yml");
   assert.deepEqual(release.jobs.android.with, {
     tag: "${{ inputs.tag || github.ref_name }}",
     source_commit: "${{ inputs.source_commit || '' }}",
   });
   assert.deepEqual(release.jobs.release.needs, ["build", "android"]);
+  for (const [selected, desktop, android, cancelled, expected] of [
+    [undefined, "success", "skipped", false, true],
+    [false, "success", "skipped", false, true],
+    [true, "success", "success", false, true],
+    [true, "success", "failure", false, false],
+    [true, "success", "skipped", false, false],
+    [true, "success", "cancelled", false, false],
+    [false, "failure", "skipped", false, false],
+    [false, "skipped", "skipped", false, false],
+    [false, "success", "skipped", true, false],
+  ]) {
+    const publish = runInNewContext(release.jobs.release.if.slice(3, -2), {
+      inputs: { build_android: selected },
+      needs: { build: { result: desktop }, android: { result: android } },
+      cancelled: () => cancelled,
+    });
+    assert.equal(publish, expected, `${selected}, ${desktop}, ${android}, cancelled=${cancelled}`);
+  }
+  assert.equal(release.jobs.release.env.BUILD_ANDROID, "${{ inputs.build_android || false }}");
   assert.deepEqual(Object.keys(workflow.on), ["workflow_call"]);
   assert.equal(workflow.permissions.contents, "read");
   assert.equal(workflow.on.workflow_call.secrets, undefined);
