@@ -14,6 +14,42 @@ fn hello() -> Hello {
 }
 
 #[test]
+fn single_connection_requires_explicit_selection_and_has_a_unique_capability_budget() {
+    assert_eq!(single::CAPABILITY, "connection.single.v1");
+    assert_eq!(single::FEATURE, "ait-rust-single-v1");
+    let mut offer = hello();
+    offer.capabilities.push(single::CAPABILITY.to_owned());
+    assert!(!offer.requires_single_connection());
+    offer.required_capabilities = vec![single::CAPABILITY.to_owned()];
+    assert!(offer.requires_single_connection());
+    assert_eq!(offer.negotiate(), Err(ErrorCode::UnsupportedCapability));
+
+    offer.capabilities = (0..255).map(|id| format!("cap.{id}")).collect();
+    let mut available = offer.capabilities.clone();
+    available.push(single::CAPABILITY.to_owned());
+    assert_eq!(offer.negotiate_available(&available).unwrap().len(), 256);
+    // A capability present in both lists counts once, but both lists are individually bounded.
+    offer.capabilities.push(single::CAPABILITY.to_owned());
+    assert!(offer.negotiate_available(&available).is_ok());
+    offer.capabilities[255] = "cap.255".to_owned();
+    assert_eq!(
+        offer.negotiate_available(&available),
+        Err(ErrorCode::InvalidMessage)
+    );
+    offer.capabilities = vec!["cap.0".to_owned(); 257];
+    assert_eq!(
+        offer.negotiate_available(&available),
+        Err(ErrorCode::InvalidMessage)
+    );
+    offer.capabilities.clear();
+    offer.required_capabilities = vec![single::CAPABILITY.to_owned(); 257];
+    assert_eq!(
+        offer.negotiate_available(&available),
+        Err(ErrorCode::InvalidMessage)
+    );
+}
+
+#[test]
 fn negotiates_supported_intersection_and_rejects_required_unknown() {
     let mut offer = hello();
     assert_eq!(

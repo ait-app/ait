@@ -1,55 +1,27 @@
 //! Outbound control and reverse data transport. Local destinations are fixed at construction.
 mod bridge;
 mod download;
+mod protocol;
+mod transport;
 
 use std::collections::HashMap;
 use std::net::SocketAddr;
 use std::sync::Arc;
 use std::time::Duration;
 
-use futures_util::{SinkExt, StreamExt};
+use futures_util::StreamExt;
 use secrecy::SecretString;
-use serde::{Deserialize, Serialize};
-use serde_json::json;
-use tokio::net::TcpStream;
 use tokio::sync::Mutex;
 use tokio::task::JoinSet;
 use tokio::time::timeout;
-use tokio_tungstenite::tungstenite::{
-    Message, client::IntoClientRequest, protocol::WebSocketConfig,
-};
-use tokio_tungstenite::{MaybeTlsStream, WebSocketStream, connect_async_with_config};
+use tokio_tungstenite::tungstenite::Message;
 use tokio_util::sync::CancellationToken;
 use url::Url;
 use uuid::Uuid;
 
-type Socket = WebSocketStream<MaybeTlsStream<TcpStream>>;
-const MAX_MESSAGE: usize = 1024 * 1024;
-
-/// A short-lived credential handed over by the trusted desktop account manager.
-#[derive(Deserialize)]
-#[serde(deny_unknown_fields)]
-pub struct ControlGrant {
-    /// HTTPS center base URL; HTTP is accepted only for loopback development.
-    pub center_url: String,
-    /// One-use control ticket, never a user JWT.
-    pub control_ticket: String,
-    /// Node activation associated with this ticket.
-    pub node_session_id: Uuid,
-}
-
-/// Non-secret connector state exposed to the account manager.
-#[derive(Clone, Debug, Default, Serialize)]
-pub struct Status {
-    /// Whether a control attempt is still in progress.
-    pub connecting: bool,
-    /// Whether the center accepted this Host's control hello.
-    pub online: bool,
-    /// Last accepted routing generation, used only to replace the same instance.
-    pub epoch: Option<Uuid>,
-    /// Non-secret machine-readable failure category.
-    pub error: Option<String>,
-}
+use protocol::{ControlCommand, ControlHello, ControlWelcome, DataMode};
+pub use protocol::{ControlGrant, Status};
+use transport::{Socket, connect, receive, send};
 
 #[derive(Debug)]
 struct State {
@@ -204,24 +176,20 @@ impl Connector {
         send(
             &mut control,
             Message::Text(
-                json!({"type":"control.hello","version":1,
-            "node_session_id":grant.node_session_id,"server_id":self.local.server_id,
-            "instance_id":self.local.instance_id,"resume_epoch":resume})
-                .to_string()
+                protocol::encode(&ControlHello::new(
+                    grant.node_session_id,
+                    &self.local.server_id,
+                    &self.local.instance_id,
+                    resume,
+                ))?
                 .into(),
             ),
         )
         .await?;
-        let welcome = timeout(Duration::from_secs(5), text(&mut control))
-            .await
-            .map_err(|_| Error::Transport)??;
-        if welcome["type"] != "control.welcome" {
-            return Err(Error::Protocol);
-        }
-        let epoch = welcome["epoch"]
-            .as_str()
-            .and_then(|s| Uuid::parse_str(s).ok())
-            .ok_or(Error::Protocol)?;
+        let ControlWelcome::Welcome { epoch } =
+            timeout(Duration::from_secs(5), receive(&mut control))
+                .await
+                .map_err(|_| Error::Transport)??;
         {
             let mut state = self.state.lock().await;
             if state.generation != generation {
@@ -252,63 +220,43 @@ impl Connector {
                     continue;
                 },
                 message = timeout(Duration::from_secs(65), control.next()) => match message {
-                    Ok(Some(Ok(Message::Text(value)))) => serde_json::from_str::<serde_json::Value>(&value).map_err(|_| Error::Protocol)?,
+                    Ok(Some(Ok(Message::Text(value)))) => protocol::decode::<ControlCommand>(&value)?,
                     Ok(Some(Ok(Message::Ping(value)))) => { send(control, Message::Pong(value)).await?; continue; },
                     Ok(Some(Ok(Message::Pong(_)))) => continue,
                     _ => return Err(Error::Transport),
                 },
             };
-            let id = message["relay_session_id"]
-                .as_str()
-                .and_then(|s| Uuid::parse_str(s).ok())
-                .ok_or(Error::Protocol)?;
-            match message["type"].as_str() {
-                Some("open_data") => {
-                    if message["epoch"] != epoch.to_string()
-                        || !matches!(
-                            message["mode"].as_str(),
-                            Some("ait-rust-single-v1" | "ait-download-v1")
-                        )
-                        || active.contains_key(&id)
-                        || active.len() >= 16
-                    {
+            match message {
+                ControlCommand::OpenData(grant) => {
+                    let id = grant.relay_session_id;
+                    if grant.epoch != epoch || active.contains_key(&id) || active.len() >= 16 {
                         return Err(Error::Protocol);
                     }
-                    let ticket = message["daemon_ticket"]
-                        .as_str()
-                        .ok_or(Error::Protocol)?
-                        .to_owned();
                     let url = endpoint(center, &format!("v1/relay/sessions/{id}/daemon"));
                     let local = self.local.clone();
-                    let download_token = if message["mode"] == "ait-download-v1" {
-                        Some(
-                            message["download_token"]
-                                .as_str()
-                                .ok_or(Error::Protocol)?
-                                .to_owned(),
-                        )
-                    } else {
-                        None
-                    };
                     let cancel = CancellationToken::new();
                     active.insert(id, cancel.clone());
                     tasks.spawn(async move {
                         tokio::select! {
                             () = cancel.cancelled() => {},
                             _ = async {
-                                if let Some(token) = download_token { download::run(url,ticket,token,local).await }
-                                else { bridge::data(url,ticket,local).await }
+                                match grant.mode {
+                                    DataMode::Download { download_token } =>
+                                        download::run(url, grant.daemon_ticket, download_token, local, id).await,
+                                    DataMode::RustSingle => bridge::data(url, grant.daemon_ticket, local, id).await,
+                                }
                             } => {},
                         }
                         id
                     });
                 }
-                Some("cancel_session") => {
+                ControlCommand::CancelSession {
+                    relay_session_id: id,
+                } => {
                     if let Some(cancel) = active.remove(&id) {
                         cancel.cancel();
                     }
                 }
-                _ => return Err(Error::Protocol),
             }
         }
     }
@@ -341,47 +289,6 @@ fn endpoint(center: &Url, path: &str) -> String {
     };
     let _ = url.set_scheme(scheme);
     url.to_string()
-}
-
-async fn connect(url: &str, ticket: &str, max: usize) -> Result<Socket, Error> {
-    let mut request = url.into_client_request().map_err(|_| Error::InvalidGrant)?;
-    request.headers_mut().insert(
-        "authorization",
-        format!("Bearer {ticket}")
-            .parse()
-            .map_err(|_| Error::InvalidGrant)?,
-    );
-    let config = WebSocketConfig::default()
-        .max_message_size(Some(max))
-        .max_frame_size(Some(max));
-    timeout(
-        Duration::from_secs(5),
-        connect_async_with_config(request, Some(config), false),
-    )
-    .await
-    .map_err(|_| Error::Transport)?
-    .map(|(socket, _)| socket)
-    .map_err(|_| Error::Transport)
-}
-
-async fn send(socket: &mut Socket, message: Message) -> Result<(), Error> {
-    timeout(Duration::from_secs(5), socket.send(message))
-        .await
-        .map_err(|_| Error::Transport)?
-        .map_err(|_| Error::Transport)
-}
-
-async fn text(socket: &mut Socket) -> Result<serde_json::Value, Error> {
-    loop {
-        match socket.next().await {
-            Some(Ok(Message::Text(text))) => {
-                return serde_json::from_str(&text).map_err(|_| Error::Protocol);
-            }
-            Some(Ok(Message::Ping(bytes))) => send(socket, Message::Pong(bytes)).await?,
-            Some(Ok(Message::Pong(_))) => {}
-            _ => return Err(Error::Transport),
-        }
-    }
 }
 
 #[cfg(test)]

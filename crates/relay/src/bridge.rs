@@ -2,32 +2,40 @@ use std::sync::Arc;
 use std::time::Duration;
 
 use futures_util::{SinkExt, StreamExt};
-use secrecy::ExposeSecret;
+use secrecy::{ExposeSecret, SecretString};
 use tokio::sync::mpsc;
 use tokio::time::timeout;
 use tokio_tungstenite::tungstenite::Message;
 use tokio_util::sync::CancellationToken;
+use uuid::Uuid;
 
-use crate::{Error, Local, MAX_MESSAGE, Socket, connect, send, text};
+use crate::protocol::{ClientHello, Pairing};
+use crate::transport::{MAX_MESSAGE, Socket, connect, receive, send, text};
+use crate::{Error, Local, protocol};
 
-pub(super) async fn data(url: String, ticket: String, local: Arc<Local>) -> Result<(), Error> {
-    let mut remote = connect(&url, &ticket, MAX_MESSAGE).await?;
-    let ready = timeout(Duration::from_secs(30), text(&mut remote))
+/// Pair `session` at `url` using `ticket`, then forward frames to the fixed local daemon.
+///
+/// # Errors
+/// Returns protocol errors for invalid pairing or hello, and transport errors for setup failures.
+pub(super) async fn data(
+    url: String,
+    ticket: SecretString,
+    local: Arc<Local>,
+    session: Uuid,
+) -> Result<(), Error> {
+    let mut remote = connect(&url, ticket.expose_secret(), MAX_MESSAGE).await?;
+    let ready: Pairing = timeout(Duration::from_secs(30), receive(&mut remote))
         .await
         .map_err(|_| Error::Transport)??;
-    if ready["type"] != "relay.ready" {
-        return Err(Error::Protocol);
-    }
+    ready.verify(session)?;
     // The local server's 10-second hello clock starts only after the remote
     // client has supplied its hello, never while waiting for Internet pairing.
     let hello = timeout(Duration::from_secs(10), text(&mut remote))
         .await
         .map_err(|_| Error::Transport)??;
-    if hello["type"] != "hello" {
-        return Err(Error::Protocol);
-    }
+    let _: ClientHello = protocol::decode(&hello)?;
     let mut host = connect(&local.url, local.token.expose_secret(), MAX_MESSAGE).await?;
-    send(&mut host, Message::Text(hello.to_string().into())).await?;
+    send(&mut host, Message::Text(hello)).await?;
     let cancel = CancellationToken::new();
     let (to_host, from_remote) = mpsc::channel(2);
     let (to_remote, from_host) = mpsc::channel(2);

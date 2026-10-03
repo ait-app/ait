@@ -1,0 +1,355 @@
+{
+  "measurement_date": "2026-10-03",
+  "base_revision": "204f94ac22772f9d98fa3e4371abade3f6d914d1",
+  "revision_note": "The commit containing this report includes the measured Rust sources, identified independently of documentation edits by the source fingerprint and changed-source hashes.",
+  "source_fingerprint": "74577f2005254955808f8b29a5a07b6bbc501b409699e916a8434d9c0e014c31",
+  "source_fingerprint_method": "SHA-256 of sorted tracked Cargo.lock, Cargo.toml, bins/** and crates/** path/hash records, serialized as compact JSON with sorted keys.",
+  "source_file_count": 794,
+  "changed_rust_sources": [
+    {
+      "path": "Cargo.lock",
+      "sha256": "dd861ea8d3ab0583182212ea26e8fe8f4fa4a8a0f038d6f417c21a80363549e0"
+    },
+    {
+      "path": "crates/api/src/capabilities.rs",
+      "sha256": "cb952f37e65e715c4d482a86108fff58763f7598525241caab9769aeaf05881e"
+    },
+    {
+      "path": "crates/api/src/connection.rs",
+      "sha256": "5deac0d17a9748bbbc334287bc2bb811c0021891d1aa8823ce073d7719120d1c"
+    },
+    {
+      "path": "crates/api/src/lib.rs",
+      "sha256": "9e96ca4eed7417e44a506239ac9ef33fc16555e9f738f6d6a97bbfd9e52e1e3c"
+    },
+    {
+      "path": "crates/protocol/src/lib.rs",
+      "sha256": "5ea25d7a762b6a023077acf3a1ca186330c82f6acc96d59c34288c629c786af5"
+    },
+    {
+      "path": "crates/protocol/src/single.rs",
+      "sha256": "13b80512f9240bf56cb7d8b4e3ea727fd37f7a0e2d630e5da83be6863f538ebd"
+    },
+    {
+      "path": "crates/protocol/src/tests.rs",
+      "sha256": "e19c72081d2f0994ffebe7428d19b6aa765a73cb5c4f0914a10caf3ee897b1a3"
+    },
+    {
+      "path": "crates/relay/Cargo.toml",
+      "sha256": "ccd186a2fbf42bb72a7f29d46ba590a9eaa4e6244bff5495d40b844ac7e043b7"
+    },
+    {
+      "path": "crates/relay/src/bridge.rs",
+      "sha256": "359641f9ddd5de9248d47ad249ff226fc478a8310b845c0c9652a49c801362f2"
+    },
+    {
+      "path": "crates/relay/src/download.rs",
+      "sha256": "ec0979e43ae1b912bc5dce04ab53e2d71ca1ce0fc8316ed9ea4c0cc2c8009c60"
+    },
+    {
+      "path": "crates/relay/src/download/tests.rs",
+      "sha256": "4f766a40785f36e5e466fff5aa36236a29d47a3886192cf031685fc6c1c77752"
+    },
+    {
+      "path": "crates/relay/src/lib.rs",
+      "sha256": "439bdb1db7de80931794ba7359a8703f91a7d3f903c6d6b13f318742459a9c81"
+    },
+    {
+      "path": "crates/relay/src/protocol.rs",
+      "sha256": "fd64ec6118c55a177b9e817ee8e420d0acadce54e1fbdd2a26fc24aa91111cd1"
+    },
+    {
+      "path": "crates/relay/src/protocol/tests.rs",
+      "sha256": "55b914ecc18baeffb92b1c4eed043d611d8e07461ff90a9e7999be3f68c2f515"
+    },
+    {
+      "path": "crates/relay/src/tests.rs",
+      "sha256": "0ed1b9e1e91a742d432a7c40be8fd61d876f0e32ef9227665f94b6f2c947b001"
+    },
+    {
+      "path": "crates/relay/src/transport.rs",
+      "sha256": "226bc440ad2e16169ee8a50680c5e518526a6a1d4beb0f7d5a82eaf1f832b8c3"
+    },
+    {
+      "path": "crates/relay/src/transport/tests.rs",
+      "sha256": "51ef681b28ca748afe3e7dffb4f0e8d7b81c0d4bac967b65f790b87f4fc52518"
+    }
+  ],
+  "scope": "Cargo workspace, default features, Linux x86_64, Rust 1.98.1, cargo-llvm-cov 0.9.1; default source filtering, no additional exclusions; doctests not instrumented; three existing real-provider tests ignored; final coverage run uses eight test threads.",
+  "commands": [
+    "cargo test --workspace",
+    "cargo build --workspace",
+    "cargo clippy --workspace --all-targets -- -D warnings",
+    "cargo fmt --all --check",
+    "npm run check:docs",
+    "CARGO_LLVM_COV_TARGET_DIR=/tmp/ait-relay-protocol-cov-target cargo llvm-cov --workspace --html -- --test-threads=8",
+    "CARGO_LLVM_COV_TARGET_DIR=/tmp/ait-relay-protocol-cov-target cargo llvm-cov report --json --summary-only --output-path /tmp/ait-relay-commit-summary.json",
+    "CARGO_LLVM_COV_TARGET_DIR=/tmp/ait-relay-protocol-cov-target cargo llvm-cov report --lcov --output-path /tmp/ait-relay-commit.lcov"
+  ],
+  "workspace_lines": {
+    "count": 48520,
+    "covered": 44649,
+    "percent": 92.02184666117064
+  },
+  "crate_lines": {
+    "api": {
+      "covered": 1861,
+      "count": 2015,
+      "percent": 92.35732009925557
+    },
+    "browser": {
+      "covered": 706,
+      "count": 725,
+      "percent": 97.37931034482759
+    },
+    "daemon": {
+      "covered": 879,
+      "count": 932,
+      "percent": 94.31330472103005
+    },
+    "domain": {
+      "covered": 121,
+      "count": 121,
+      "percent": 100.0
+    },
+    "filesystem": {
+      "covered": 10565,
+      "count": 11710,
+      "percent": 90.22203245089668
+    },
+    "metadata": {
+      "covered": 7019,
+      "count": 7732,
+      "percent": 90.77858251422658
+    },
+    "model": {
+      "covered": 696,
+      "count": 734,
+      "percent": 94.82288828337875
+    },
+    "protocol": {
+      "covered": 75,
+      "count": 75,
+      "percent": 100.0
+    },
+    "provider": {
+      "covered": 18298,
+      "count": 19590,
+      "percent": 93.40479836651353
+    },
+    "relay": {
+      "covered": 419,
+      "count": 464,
+      "percent": 90.30172413793103
+    },
+    "schedule": {
+      "covered": 806,
+      "count": 823,
+      "percent": 97.93438639125152
+    },
+    "terminal": {
+      "covered": 1549,
+      "count": 1701,
+      "percent": 91.06407995296884
+    },
+    "voice": {
+      "covered": 1655,
+      "count": 1898,
+      "percent": 87.19704952581665
+    }
+  },
+  "changed_production_files": {
+    "crates/api/src/capabilities.rs": {
+      "lines": {
+        "count": 105,
+        "covered": 105,
+        "percent": 100.0
+      },
+      "uncovered_lines": []
+    },
+    "crates/api/src/connection.rs": {
+      "lines": {
+        "count": 378,
+        "covered": 350,
+        "percent": 92.5925925925926
+      },
+      "uncovered_lines": [
+        78,
+        103,
+        107,
+        207,
+        273,
+        302,
+        303,
+        378,
+        381,
+        382,
+        385,
+        388,
+        397
+      ]
+    },
+    "crates/api/src/lib.rs": {
+      "lines": {
+        "count": 404,
+        "covered": 369,
+        "percent": 91.33663366336634
+      },
+      "uncovered_lines": [
+        324,
+        325,
+        326,
+        385,
+        396,
+        402,
+        510,
+        511,
+        512,
+        514,
+        515,
+        516,
+        517,
+        518,
+        519,
+        520,
+        521,
+        522,
+        523,
+        524,
+        525,
+        526,
+        527,
+        529,
+        530,
+        531,
+        532,
+        555,
+        595,
+        600
+      ]
+    },
+    "crates/protocol/src/lib.rs": {
+      "lines": {
+        "count": 63,
+        "covered": 63,
+        "percent": 100.0
+      },
+      "uncovered_lines": []
+    },
+    "crates/relay/src/bridge.rs": {
+      "lines": {
+        "count": 68,
+        "covered": 56,
+        "percent": 82.35294117647058
+      },
+      "uncovered_lines": [
+        46,
+        47,
+        65,
+        69,
+        72,
+        73,
+        74,
+        75,
+        77,
+        78,
+        91,
+        95
+      ]
+    },
+    "crates/relay/src/download.rs": {
+      "lines": {
+        "count": 125,
+        "covered": 116,
+        "percent": 92.80000000000001
+      },
+      "uncovered_lines": [
+        42,
+        62,
+        63,
+        139,
+        140,
+        141,
+        142,
+        144,
+        152
+      ]
+    },
+    "crates/relay/src/lib.rs": {
+      "lines": {
+        "count": 195,
+        "covered": 171,
+        "percent": 87.6923076923077
+      },
+      "uncovered_lines": [
+        108,
+        137,
+        138,
+        139,
+        196,
+        206,
+        219,
+        220,
+        224,
+        225,
+        226,
+        233,
+        244,
+        245,
+        248,
+        250,
+        251,
+        254,
+        256,
+        257,
+        258,
+        262
+      ]
+    },
+    "crates/relay/src/protocol.rs": {
+      "lines": {
+        "count": 38,
+        "covered": 38,
+        "percent": 100.0
+      },
+      "uncovered_lines": []
+    },
+    "crates/relay/src/transport.rs": {
+      "lines": {
+        "count": 38,
+        "covered": 38,
+        "percent": 100.0
+      },
+      "uncovered_lines": []
+    }
+  },
+  "tests": {
+    "ordinary": {
+      "passed": 1587,
+      "failed": 0,
+      "ignored": 3
+    },
+    "coverage_final": {
+      "passed": 1587,
+      "failed": 0,
+      "ignored": 3
+    }
+  },
+  "coverage_retry": {
+    "initial_command": "CARGO_LLVM_COV_TARGET_DIR=/tmp/ait-relay-protocol-cov-target cargo llvm-cov --workspace --html",
+    "failed_test": "filesystem::local::github_projects::tests::paseo::authentication_failure_during_protocol_lookup_is_not_hidden_by_https_fallback",
+    "failure": "Returned SearchFailed instead of Unauthenticated. Passed in the ordinary workspace run, an isolated instrumented rerun, and the final workspace coverage run. Cause not established; no filesystem source changed.",
+    "isolated_command": "CARGO_LLVM_COV_TARGET_DIR=/tmp/ait-relay-protocol-cov-target cargo llvm-cov test -p filesystem authentication_failure_during_protocol_lookup_is_not_hidden_by_https_fallback --no-report"
+  },
+  "baseline": {
+    "revision": "a0ff647be14be76d6d35da84f7342a572b97fdb1",
+    "artifact": "account-host-relay-coverage.json",
+    "workspace_lines": {
+      "count": 48513,
+      "covered": 44517,
+      "percent": 91.7630325892029
+    },
+    "delta_percentage_points": 0.2588140719677483,
+    "note": "Same workspace scope, tool versions and default feature/source filtering; final run limits test concurrency to eight. This is the observed delta, not a causal estimate for this refactor alone."
+  }
+}

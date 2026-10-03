@@ -4,6 +4,7 @@ use serde::{Deserialize, Serialize};
 use serde_json::Value;
 
 pub mod methods;
+pub mod single;
 pub mod subscription;
 
 pub use model::server::{
@@ -38,6 +39,16 @@ pub struct Hello {
 }
 
 impl Hello {
+    /// Whether the client requires the single-connection workers.
+    ///
+    /// This selects a requested mode only; `negotiate_available` must still accept the offer.
+    #[must_use]
+    pub fn requires_single_connection(&self) -> bool {
+        self.required_capabilities
+            .iter()
+            .any(|name| name == single::CAPABILITY)
+    }
+
     /// Validate the offer and return negotiated capabilities.
     ///
     /// # Errors
@@ -56,12 +67,9 @@ impl Hello {
     /// # Errors
     /// Rejects malformed offers, incompatible versions, and missing required capabilities.
     pub fn negotiate_available(&self, available: &[String]) -> Result<Vec<String>, ErrorCode> {
-        let single = self
-            .required_capabilities
-            .iter()
-            .any(|name| name == "connection.single.v1")
-            && available.iter().any(|name| name == "connection.single.v1");
-        let limit = if single { 256 } else { 64 };
+        let single = self.requires_single_connection()
+            && available.iter().any(|name| name == single::CAPABILITY);
+        let limit = if single { single::MAX_CAPABILITIES } else { 64 };
         if !valid_id(&self.client_id)
             || self.capabilities.len() > limit
             || self.required_capabilities.len() > limit
@@ -72,7 +80,7 @@ impl Hello {
                     .chain(&self.required_capabilities)
                     .collect::<std::collections::BTreeSet<_>>()
                     .len()
-                    > 256)
+                    > single::MAX_CAPABILITIES)
             || self
                 .capabilities
                 .iter()

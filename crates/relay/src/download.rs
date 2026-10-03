@@ -2,39 +2,44 @@ use std::sync::Arc;
 use std::time::Duration;
 
 use futures_util::{SinkExt, StreamExt};
+use secrecy::{ExposeSecret, SecretString};
 use tokio::sync::{mpsc, oneshot};
 use tokio::time::timeout;
 use tokio_tungstenite::tungstenite::Message;
 use tokio_util::sync::CancellationToken;
 use url::Url;
+use uuid::Uuid;
 
-use crate::{Error, Local, MAX_MESSAGE, connect, text};
+use crate::protocol::{DownloadAck, DownloadMessage, Pairing};
+use crate::transport::{MAX_MESSAGE, Socket, connect, receive};
+use crate::{Error, Local, protocol};
 
+/// Pair `session` using its relay ticket and stream the local file authorized by `token`.
+///
+/// # Errors
+/// Rejects invalid grants or HTTP responses, failed I/O, and a missing destination acknowledgement.
 pub(super) async fn run(
     url: String,
-    ticket: String,
-    token: String,
+    ticket: SecretString,
+    token: SecretString,
     local: Arc<Local>,
+    session: Uuid,
 ) -> Result<(), Error> {
-    if token.is_empty()
-        || token.len() > 128
-        || !token
-            .bytes()
-            .all(|byte| byte.is_ascii_alphanumeric() || byte == b'-')
-    {
-        return Err(Error::Protocol);
-    }
-    let mut socket = connect(&url, &ticket, MAX_MESSAGE).await?;
-    let ready = timeout(Duration::from_secs(30), text(&mut socket))
+    protocol::validate_download_token(token.expose_secret())?;
+    let mut socket = connect(&url, ticket.expose_secret(), MAX_MESSAGE).await?;
+    let ready: Pairing = timeout(Duration::from_secs(30), receive(&mut socket))
         .await
         .map_err(|_| Error::Transport)??;
-    if ready["type"] != "relay.ready" {
-        return Err(Error::Protocol);
-    }
-    let response = local_response(&local, &token).await?;
-    let headers = serde_json::json!({"type":"download.headers","status":response.status().as_u16(),
-        "content_length":response.content_length(),
-        "content_type":response.headers().get("content-type").and_then(|h| h.to_str().ok())});
+    ready.verify(session)?;
+    let response = local_response(&local, token.expose_secret()).await?;
+    let headers = protocol::encode(&DownloadMessage::Headers {
+        status: response.status().as_u16(),
+        content_length: response.content_length(),
+        content_type: response
+            .headers()
+            .get("content-type")
+            .and_then(|h| h.to_str().ok()),
+    })?;
     let (mut sink, incoming) = socket.split();
     let (pong_tx, mut pong_rx) = mpsc::channel(1);
     let (complete_tx, complete_rx) = oneshot::channel();
@@ -43,7 +48,7 @@ pub(super) async fn run(
     let writer = async {
         timeout(
             Duration::from_secs(5),
-            sink.send(Message::Text(headers.to_string().into())),
+            sink.send(Message::Text(headers.into())),
         )
         .await
         .map_err(|_| Error::Transport)?
@@ -75,9 +80,7 @@ pub(super) async fn run(
         timeout(
             Duration::from_secs(5),
             sink.send(Message::Text(
-                serde_json::json!({"type":"download.end","bytes":written})
-                    .to_string()
-                    .into(),
+                protocol::encode(&DownloadMessage::End { bytes: written })?.into(),
             )),
         )
         .await
@@ -122,7 +125,7 @@ async fn local_response(local: &Local, token: &str) -> Result<reqwest::Response,
 }
 
 async fn read_ack(
-    mut incoming: futures_util::stream::SplitStream<crate::Socket>,
+    mut incoming: futures_util::stream::SplitStream<Socket>,
     pong_tx: mpsc::Sender<Message>,
     complete_tx: oneshot::Sender<()>,
     cancel: &CancellationToken,
@@ -140,9 +143,7 @@ async fn read_ack(
             }
             Some(Ok(Message::Pong(_))) => {}
             Some(Ok(Message::Text(value))) => {
-                if serde_json::from_str::<serde_json::Value>(&value)
-                    .is_ok_and(|v| v["type"] == "download.complete")
-                {
+                if protocol::decode::<DownloadAck>(&value).is_ok() {
                     let _ = complete_tx.send(());
                     return;
                 }
@@ -153,3 +154,6 @@ async fn read_ack(
     }
     cancel.cancel();
 }
+
+#[cfg(test)]
+mod tests;

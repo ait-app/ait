@@ -411,7 +411,7 @@ impl Api {
 
 fn registered_capabilities(implemented: &[String]) -> Vec<String> {
     let mut capabilities = implemented.to_vec();
-    capabilities.push("connection.single.v1".to_owned());
+    capabilities.push(protocol::single::CAPABILITY.to_owned());
     for method in protocol::methods::PASEO_METHODS {
         if !capabilities
             .iter()

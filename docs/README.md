@@ -13,6 +13,7 @@
 
 ## 架构决策
 
+- [ADR-075：Relay 协议定义与连接执行分离](decisions/clients/adr-075-relay-protocol-modules.md)：当前 relay PR 的类型化消息、WebSocket 收发边界与单连接协商标识。
 - [ADR-074: Account discovery and on-demand reverse relay](decisions/clients/adr-074-account-host-relay.md): Email/password sign-in, host registration, independent control and data WebSockets, and single-connection scheduling; [validation and coverage](reports/clients/account-host-relay-validation.md).
 
 [ADR 分类索引](decisions/README.md)按 daemon、工作区、Provider、客户端和品牌整理。

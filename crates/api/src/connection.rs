@@ -67,18 +67,20 @@ pub(super) async fn serve(socket: WebSocket, state: Arc<Shared>) {
         result = timeout(HELLO_TIMEOUT, receive(&mut stream)) => if let Ok(Some(Ok(Incoming::Text(ClientMessage::Hello(hello))))) = result {
             hello
         } else {
-                let error = serde_json::json!({"type":"error","request_id":null,"code":"invalid_message",
-                    "message":"Expected client hello","retryable":false});
-                let _ = timeout(WRITE_TIMEOUT,sink.send(Message::Text(error.to_string().into()))).await;
+                let error = ServerMessage::Error {
+                    request_id: None,
+                    code: ErrorCode::InvalidMessage,
+                    message: "Expected client hello".to_owned(),
+                    retryable: false,
+                };
+                if let Ok(text) = serde_json::to_string(&error) {
+                    let _ = timeout(WRITE_TIMEOUT,sink.send(Message::Text(text.into()))).await;
+                }
                 let _ = timeout(CLOSE_TIMEOUT,sink.close()).await;
                 return;
         },
     };
-    let (lanes, mut receiver) = if hello
-        .required_capabilities
-        .iter()
-        .any(|name| name == "connection.single.v1")
-    {
+    let (lanes, mut receiver) = if hello.requires_single_connection() {
         let (lanes, receiver) = Outbound::fair();
         (lanes, Receiver::Fair(receiver))
     } else {
@@ -177,11 +179,7 @@ async fn read(
         provider: provider::connection::Connection::new(&hello.client_id),
         ..Default::default()
     };
-    if hello
-        .required_capabilities
-        .iter()
-        .any(|name| name == "connection.single.v1")
-    {
+    if hello.requires_single_connection() {
         return Box::pin(single::read(
             stream,
             state,

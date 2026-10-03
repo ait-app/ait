@@ -53,3 +53,7 @@ Project/Workspace 和 Agent runtime 目录、配置、时间线由当前文件�
 The desktop account manager owns user credentials and passes one-use grants to `api`.
 The `api` crate owns `relay`, which receives a fixed local destination and has no
 workspace dependencies. See [ADR-074](../decisions/clients/adr-074-account-host-relay.md).
+
+Relay 的类型化消息集中在 `crates/relay/src/protocol.rs`，WebSocket 收发集中在
+`transport.rs`；单连接协商标识由 `crates/protocol/src/single.rs` 定义。
+模块职责见 [ADR-075](../decisions/clients/adr-075-relay-protocol-modules.md)。

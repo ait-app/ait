@@ -1,5 +1,10 @@
 use super::*;
 
+const CLIENT_HELLO: &str =
+    r#"{ "type": "hello", "client_id": "test", "future": {"extension": true} }"#;
+use futures_util::SinkExt;
+use serde_json::json;
+
 #[test]
 fn center_urls_require_tls_and_preserve_proxy_prefix() {
     assert!(center_url("http://example.com").is_err());
@@ -102,13 +107,7 @@ async fn control_opens_independent_reverse_data_and_keeps_local_token_private() 
     ))
     .await
     .unwrap();
-    data.send(Message::Text(
-        json!({"type":"hello","client_id":"test"})
-            .to_string()
-            .into(),
-    ))
-    .await
-    .unwrap();
+    data.send(Message::Text(CLIENT_HELLO.into())).await.unwrap();
     assert_eq!(
         timeout(Duration::from_secs(3), data.next())
             .await
@@ -157,10 +156,7 @@ async fn mock_local(local: tokio::net::TcpListener) {
     .await
     .unwrap();
     let hello = socket.next().await.unwrap().unwrap();
-    assert_eq!(
-        serde_json::from_str::<serde_json::Value>(hello.to_text().unwrap()).unwrap()["type"],
-        "hello"
-    );
+    assert_eq!(hello.to_text().unwrap(), CLIENT_HELLO);
     socket
         .send(Message::Text("native server info".into()))
         .await

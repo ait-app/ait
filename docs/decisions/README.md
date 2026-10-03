@@ -47,6 +47,7 @@
 
 ## 客户端、连接与品牌
 
+- [ADR-075：Relay 协议定义与连接执行分离](clients/adr-075-relay-protocol-modules.md)
 - [ADR-074: Account discovery and on-demand reverse relay](clients/adr-074-account-host-relay.md)
 
 - [ADR-044：Paseo 前端适配 Rust server 协议](clients/adr-044-paseo-client-rust-transport.md)
