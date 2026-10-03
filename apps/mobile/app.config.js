@@ -4,6 +4,7 @@ const pkg = require("./package.json");
 const easProjectIdentity = require("./eas.json").build.ait.env;
 const { colors: brandColors } = require("./src/branding/ait-mark.json");
 const withAndroidAsyncStorageSize = require("./plugins/with-android-async-storage-size");
+const withAndroidHermesO0 = require("./plugins/with-android-hermes-o0");
 const withAndroidProfileable = require("./plugins/with-android-profileable");
 const withAccountRelayWebSocket = require("./plugins/with-account-relay-websocket");
 const withFdroidAutolinking = require("./plugins/with-fdroid-autolinking");
@@ -138,6 +139,7 @@ export default {
       withAccountRelayWebSocket,
       "expo-secure-store",
       [withAndroidAsyncStorageSize, 64],
+      ...(process.env.AIT_ANDROID_HERMES_O0 === "1" ? [withAndroidHermesO0] : []),
       [
         "expo-splash-screen",
         {

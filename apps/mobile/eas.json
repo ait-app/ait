@@ -39,6 +39,9 @@
       "distribution": "internal",
       "android": {
         "resourceClass": "medium",
+        "env": {
+          "AIT_ANDROID_HERMES_O0": "1"
+        },
         "buildType": "apk",
         "gradleCommand": ":app:assembleRelease -x lint -x lintVitalAnalyzeRelease -x lintVitalRelease -x generateReleaseLintModel -x generateReleaseLintVitalModel"
       }

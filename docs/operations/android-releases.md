@@ -64,7 +64,7 @@ sha256sum --check SHA256SUMS
 ## 构建与重试
 
 Android 和 iOS 都使用 Expo EAS 云构建。Android 直接使用现有 `production-apk` profile，
-iOS 继续使用 `ait`。`eas.json` 中的继承关系、Node 版本、Gradle 命令和原生配置保持原样；
+iOS 继续使用 `ait`。保留 `eas.json` 中的继承关系、Node 版本和 Gradle 命令；
 工作流按 iOS 的方式从 `build.ait.env` 加载 Ait 项目身份。
 
 当前 EAS 项目 ID 为 `379ada50-82c0-4d4a-bac9-cb8c113cf38d`。`app.config.js` 也从
@@ -76,6 +76,13 @@ iOS 继续使用 `ait`。`eas.json` 中的继承关系、Node 版本、Gradle �
 Android 可复用工作流。若原来的令牌只放在 `ios-testflight` Environment 中，还需要配置
 仓库级 Secret。`production-apk` 显式使用 `medium` 构建资源，适配团队当前的 Free 套餐；
 APK 类型和 Gradle 命令保持原样。
+
+`production-apk.android.env` 设置 `AIT_ANDROID_HERMES_O0=1`，Expo prebuild 通过
+`with-android-hermes-o0` 插件写入 `hermesFlags = ["-O0", "-output-source-map"]`。
+这会关闭 Hermes 编译优化，尝试降低生成协议校验代码的内存开销，保留 source map。
+其他 profile 和 iOS 不启用此开关。删除该环境变量后，新的干净 prebuild 将恢复默认 `-O`；
+本地复现时也需使用同一环境变量。构建成功后需验证启动与交互性能，不能仅以 APK 生成
+判断该优化等级适合长期发布。
 
 GitHub 托管 Ubuntu runner 触发 EAS、等待结果并下载 APK，仅安装 Android Build Tools
 用于验证。EAS 执行依赖安装、共享 UI 和终端 WebView 构建、Expo prebuild 与 Gradle 编译。
