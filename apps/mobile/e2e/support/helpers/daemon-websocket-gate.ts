@@ -1,3 +1,4 @@
+import { createSessionMessageReaders } from "./rust-wire";
 import type { Page, WebSocketRoute } from "@playwright/test";
 import { daemonWsRoutePattern } from "./daemon-port";
 
@@ -48,7 +49,7 @@ interface HeldServerMessage {
   browser: WebSocketRoute;
   message: string | Buffer;
   key: string;
-  agentStreamFollowers: Array<string | Buffer>;
+  agentStreamFollowers: (string | Buffer)[];
   blockedAgentId?: string;
 }
 
@@ -295,6 +296,7 @@ function recordClientRequest(
 }
 
 export async function installDaemonWebSocketGate(page: Page) {
+  const readers = createSessionMessageReaders();
   let acceptingConnections = true;
   let reconnectWithFreshClient = false;
   let suppressAgentStream = false;
@@ -304,7 +306,7 @@ export async function installDaemonWebSocketGate(page: Page) {
   let shellToolCommandOverride: string | null = null;
   let failingTimelineAgentId: string | null = null;
   let holdingTimelineAgentId: string | null = null;
-  const heldTimelineResponses: Array<() => void> = [];
+  const heldTimelineResponses: (() => void)[] = [];
   const heldTimelineResponseWaiters = new Set<() => void>();
   let heldClientRequestType: string | null = null;
   let heldClientRequest: { server: WebSocketRoute; message: string | Buffer } | null = null;
@@ -337,7 +339,7 @@ export async function installDaemonWebSocketGate(page: Page) {
   const observedFileUpdates = new Set<string>();
   const fileUpdateWaiters = new Map<string, () => void>();
   let fileReadPathToHold: string | null = null;
-  let heldFileReads: Array<() => void> = [];
+  let heldFileReads: (() => void)[] = [];
   let resolveHeldFileRead: (() => void) | null = null;
   let heldFileReadPromise = Promise.resolve();
   let readyFileUpdatePathToHold: string | null = null;
@@ -470,7 +472,7 @@ export async function installDaemonWebSocketGate(page: Page) {
           return;
         }
       }
-      const request = readClientRequest(message);
+      const request = readers.client(message);
       recordClientRequest(request, clientRequestCounts, timelineRequestCounts, directoryStarts);
       if (typeof request?.type === "string") {
         const requests = clientRequests.get(request.type) ?? [];
@@ -501,7 +503,7 @@ export async function installDaemonWebSocketGate(page: Page) {
 
     server.onMessage((message) => {
       if (!acceptingConnections) return;
-      const serverMessage = readSessionMessage(message);
+      const serverMessage = readers.server(message);
       const fileMessage = serverMessage as ServerMessage | null;
       observeFileMessage(fileMessage);
       let outboundMessage = stripAssistantMessageId(
@@ -788,7 +790,7 @@ export async function installDaemonWebSocketGate(page: Page) {
           (entry as { item?: { type?: unknown } }).item?.type === itemType,
       );
       if (index < 0) throw new Error(`Timeline response has no ${itemType} item`);
-      const retained = entries.slice(0, index + 1) as Array<{ seqEnd?: unknown }>;
+      const retained = entries.slice(0, index + 1) as { seqEnd?: unknown }[];
       const lastSeq = retained.at(-1)?.seqEnd;
       if (typeof lastSeq !== "number") throw new Error("Timeline entry has no sequence end");
       payload.entries = retained;
@@ -846,7 +848,7 @@ export async function installDaemonWebSocketGate(page: Page) {
     getClientRequestCount(type: string): number {
       return clientRequestCounts.get(type) ?? 0;
     },
-    getClientRequests(type: string): ReadonlyArray<ClientRequest> {
+    getClientRequests(type: string): readonly ClientRequest[] {
       return [...(clientRequests.get(type) ?? [])];
     },
     getTimelineRequestCount(direction: "tail" | "before" | "after", agentId?: string): number {

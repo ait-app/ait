@@ -115,3 +115,25 @@ async function expectCommitDiffHeaderGeometry(panel: Locator): Promise<void> {
   expect(header!.y).toBeCloseTo(canvas!.y, 0);
   await expect(panel.getByTestId("diff-file-0")).toHaveAccessibleName("feature.txt, +2, -0");
 }
+
+test("supported committed-file diff displays added content and restores after reload", async ({
+  page,
+  withWorkspace,
+}, info) => {
+  const workspace = await withWorkspace({ prefix: "committed-file-diff-" });
+  await createFeatureCommit(workspace.repoPath);
+  await workspace.navigateTo();
+  await openChangesTreePanel(page);
+  await page
+    .locator('[data-testid^="diff-tree-file-"][data-testid$="-toggle"]')
+    .filter({ visible: true })
+    .first()
+    .click();
+  await expect(page.getByTestId("working-diff-panel").filter({ visible: true })).toBeVisible();
+  await expect(page.getByTestId("git-diff-canvas").filter({ visible: true })).toBeVisible();
+  await page.screenshot({ path: info.outputPath("committed-file-diff.png") });
+  await page.reload();
+  await expect(page.getByTestId("git-diff-canvas").filter({ visible: true })).toBeVisible({
+    timeout: 30000,
+  });
+});

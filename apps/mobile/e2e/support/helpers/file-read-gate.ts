@@ -6,11 +6,18 @@ type WebSocketMessage = string | Buffer;
 function fileReadRequest(message: WebSocketMessage, path: string): boolean {
   const raw = typeof message === "string" ? message : message.toString("utf8");
   try {
-    const envelope = JSON.parse(raw) as { type?: unknown; message?: unknown };
+    const envelope = JSON.parse(raw) as {
+      type?: unknown;
+      method?: unknown;
+      params?: any;
+      message?: any;
+    };
     const session =
-      envelope.type === "session" && envelope.message && typeof envelope.message === "object"
-        ? (envelope.message as { type?: unknown; mode?: unknown; path?: unknown })
-        : (envelope as { type?: unknown; mode?: unknown; path?: unknown });
+      envelope.type === "request" && envelope.method === "fs.explorer.request"
+        ? { type: "file_explorer_request", ...envelope.params }
+        : envelope.type === "session"
+          ? envelope.message
+          : envelope;
     return (
       session.type === "file_explorer_request" && session.mode === "file" && session.path === path
     );

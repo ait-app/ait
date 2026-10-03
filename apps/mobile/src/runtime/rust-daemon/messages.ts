@@ -78,6 +78,9 @@ export function serverInfo(info: Payload, implemented: Set<string>): Payload {
       forgeCheckDetails: has("checkout.forge.get_check_details.request"),
       checkoutForgeSetAutoMerge: has("checkout.forge.set_auto_merge.request"),
       checkoutRefresh: has("checkout.refresh.request"),
+      commitsList: has("checkout.commits.list.request"),
+      // Rust list responses always include the required isOnBase classification.
+      commitBaseClassification: has("checkout.commits.list.request"),
       providerUsageList: has("provider.usage.list.request"),
       agentHistorySearch: has("agent.history.get.request"),
       agentForkContext: has("agent.fork_context.request"),

@@ -67,6 +67,11 @@ it("preserves Rust timeline search counts in the SDK response envelope", () => {
 });
 
 describe("Ait host capabilities", () => {
+  it("enables classified commit history only when Rust advertises its list method", () => {
+    expect(info([])?.features).toMatchObject({ commitsList: false, commitBaseClassification: false });
+    expect(info(["checkout.commits.list.request"])?.features).toMatchObject({ commitsList: true, commitBaseClassification: true });
+  });
+
   it("advertises checkout status events only with the Git producer and checkout method", () => {
     const read = (features: string[], methods: string[]) =>
       parseServerInfoStatusPayload(
