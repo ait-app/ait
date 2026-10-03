@@ -196,6 +196,14 @@ fn worker_with_creations(
     fixture: &Fixture,
     creations: metadata::service::creation::Creations,
 ) -> (AgentExecution, FileBackedAgentRuntimeRegistry) {
+    worker_with_client(fixture, creations, Box::new(fixture.client()))
+}
+
+fn worker_with_client(
+    fixture: &Fixture,
+    creations: metadata::service::creation::Creations,
+    client: Box<dyn crate::ports::agent_session::AgentClient>,
+) -> (AgentExecution, FileBackedAgentRuntimeRegistry) {
     let registry = FileBackedAgentRuntimeRegistry::new(fixture.root.path().join("agents.json"));
     registry.initialize().unwrap();
     let projects = FileBackedProjectRegistry::new(fixture.root.path().join("projects.json"));
@@ -223,7 +231,7 @@ fn worker_with_creations(
             crate::storage::timeline::Timeline::open(&fixture.root.path().join("timeline.sqlite"))
                 .unwrap(),
         );
-    manager.register_client(Box::new(fixture.client())).unwrap();
+    manager.register_client(client).unwrap();
     let worker = AgentExecution::spawn(ExecutionDependencies {
         workspace_automation: None,
         manager,

@@ -284,3 +284,47 @@ async fn limits_concurrency_across_repositories_without_using_foreground_permits
     harness.stop().await;
     assert_eq!(harness.calls(), 2);
 }
+
+#[tokio::test(start_paused = true)]
+async fn repeated_fetch_failures_keep_runtime_ready_and_foreground_jobs_available() {
+    let harness = Harness::new();
+    harness.add("feature", "shared");
+    harness.backend.failures.store(3, Ordering::SeqCst);
+    let _observation = harness.observe(&["feature"]);
+    for attempt in 1..=3 {
+        if attempt > 1 {
+            tokio::time::advance(FETCH_INTERVAL).await;
+        }
+        wait_for(|| {
+            harness.calls() == attempt
+                && harness.backend.failures.load(Ordering::SeqCst) == 3 - attempt
+        })
+        .await;
+        assert_eq!(harness.runtime.info().lifecycle, Lifecycle::Ready);
+        assert!(!harness.runtime.cancellation.is_cancelled());
+        assert_eq!(
+            harness
+                .runtime
+                .run(
+                    Some(Arc::new(Mutex::new(()))),
+                    model::ErrorCode::RegistryIo,
+                    |()| Ok(())
+                )
+                .await,
+            Ok(())
+        );
+    }
+    harness.backend.behind.store(1, Ordering::SeqCst);
+    tokio::time::advance(FETCH_INTERVAL).await;
+    wait_for(|| {
+        harness.calls() == 4
+            && harness
+                .updates
+                .lock()
+                .unwrap()
+                .last()
+                .is_some_and(|update| update["behindOfOrigin"] == 1)
+    })
+    .await;
+    harness.stop().await;
+}

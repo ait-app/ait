@@ -1,0 +1,60 @@
+# Agent 创建时的任务预算竞争
+
+日期：2026-10-03。源码基线：`cbc85078`，验证对象为该提交加本工作树修改。
+平台：macOS arm64；Cargo 默认 features，离线 ACP fixture，不使用真实模型 API。
+
+## 现场与判断
+
+用户在 `wizardly-giraffe` 创建 DeepSeek Harness Agent 时遇到
+`Resource budget exhausted requestType=agent.create.request code=resource_exhausted`。
+桌面日志在本地时间 20:32:59 和 20:35:33 记录相同错误，中间另有连接断开记录。
+只读检查时该工作树有 97 条 Git status 记录；已跟踪文件的未提交 Diff 为 187,937 字节，
+未跟踪文件共 34 个、381,969 字节。与本地 `origin/main` 的已提交分支 Diff 为空。
+这些数据没有显示工作树内容接近既有 4 MiB Diff 输出上限。
+
+客户端的创建生命周期请求默认携带 `subscribe: true`。
+Provider 连接在启动原生进程前，通过 `Runtime::run` 安装创建进度观察器。
+该调用使用 server 范围内只有一个 permit 的 `jobs`，与前台 Checkout Diff 请求共享。
+其他工作区的 Diff 或元数据任务持有 permit 时，创建观察器立即返回 `resource_exhausted`。
+这条路径适用于所有 Provider，并非 Harness 返回的模型或上下文预算错误。
+
+通过实际 DSH adapter 加离线 ACP 子进程复现：占用共享 permit 后，原实现的创建请求
+立即完成并报错，子进程尚未启动。新增回归用例在修复前失败，修复后通过。
+现场日志没有记录耗尽的是哪种资源，因此该复现证明了一个可产生相同错误的缺陷，
+尚不能排除现场同时触发连接的订阅数量或 capability 请求队列上限。
+
+后台 Git fetch 使用独立并发预算；失败路径记录 WARN 后等待下一轮重试，
+不会请求 daemon 关闭。现场 daemon 日志没有 panic 或 fatal 退出记录；检查时桌面 daemon
+仍在监听。已有断连记录不足以证明进程退出，更不能据此认定 fetch 是退出原因。
+
+## 修复
+
+创建进度观察器改用既有 `Runtime::run_queued`，等待临时占用的任务 permit 释放。
+API 的有界请求队列、订阅数量限制、进程关闭取消以及持久化幂等键继续生效。
+没有变更能力归属、依赖边界、协议或资源预算值。
+
+新增五项 DSH 创建回归：共享任务占用时等待且不提前启动子进程、关闭取消等待、
+真实订阅容量耗尽时拒绝、无订阅创建无需共享 permit、原生初始化失败返回 `agent_io`
+且 runtime 保持 Ready。另新增后台 fetch 连续三次失败后前台请求仍成功、下一轮成功恢复的测试。
+
+修改只位于当前源码工作树，未替换桌面应用内的 daemon，未重启用户正在运行的服务。
+创建仍可能等待慢任务结束；本修复没有优化大型 Diff 的计算耗时，
+也没有取消真正耗尽的请求队列或订阅容量限制。
+
+## 验证
+
+所有 Cargo 命令使用 `CARGO_TARGET_DIR=/private/tmp/ait-git-fetch-target`。
+
+- `cargo test --locked --offline -p provider service::agent_execution::tests::subscriptions`：14 passed。
+- `cargo test --locked --offline -p provider local::deepseek_harness::tests`：6 passed。
+- `cargo test --locked --offline -p filesystem service::git_fetch::tests`：7 passed。
+- `cargo clippy --locked --offline -p provider -p filesystem --all-targets -- -D warnings`：通过。
+- `cargo fmt --all --check`、`git diff --check`、`npm run check:docs`：通过。
+
+## Test coverage
+
+**Not measured**：本次为本地定向修复，未执行完整 workspace 测试或覆盖率测量。
+测试通过数量与行覆盖率分开报告，没有复用历史百分比，没有可提供的本次覆盖率 artifact。
+下一步在准备包含 Rust 修改的提交时，按 Rust style guide 运行完整测试和
+`cargo llvm-cov --workspace --html`，记录行计数、百分比与可审阅证据。
+本次没有真实认证 Harness 回合、Electron 重打包或 Linux/Windows 平台验证。

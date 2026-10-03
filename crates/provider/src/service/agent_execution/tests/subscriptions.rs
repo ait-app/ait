@@ -9,6 +9,8 @@ use crate::dispatch::State;
 
 use super::*;
 
+mod creation;
+
 struct Peer {
     connection: Connection,
     outbound: Outbound,

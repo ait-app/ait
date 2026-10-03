@@ -89,9 +89,10 @@ impl Connection {
             };
             let creations = execution.creations();
             let outbound = context.outbound.clone();
+            // This request is already admitted; a Diff read may temporarily hold the job permit.
             let result = context
                 .runtime
-                .run(
+                .run_queued(
                     Some(std::sync::Arc::new(std::sync::Mutex::new(creations))),
                     ErrorCode::RegistryIo,
                     move |creations| {
