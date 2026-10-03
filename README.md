@@ -25,22 +25,19 @@ cargo run -p daemon --bin daemon -- --listen 127.0.0.1:7316
 配置、认证、数据目录和协议见 [daemon 手册](docs/operations/daemon.md)。
 已有 `AIT_SERVER_*` 配置保持兼容，桌面安装包携带 `resources/bin/daemon`。
 
-## Connect to other hosts with your account
+## 通过账户连接其他主机
 
-The desktop app uses `https://dash.ait-app.com:8443/api` as its default account service.
-Open **Settings → Host → Account and online hosts** (or **Add Host**) and sign in with
-your email and password. Sign in to the same account on another machine to bring both
-hosts online. The host list refreshes every 10 seconds and excludes the current machine.
-Select a host to access its workspaces, agents, terminals, and files through the relay.
+桌面应用的默认账户服务地址为 `https://dash.ait-app.com:8443/api`。
+打开 **Settings → Host → Account and online hosts**（或 **Add Host**），使用邮箱和密码登录。
+在另一台机器上登录同一账户后，两台主机即可上线。主机列表每 10 秒刷新一次，不显示当前机器。
+选择一台主机，即可通过中继访问它的工作区、Agent、终端和文件。
 
-Credentials are saved using the operating system's secure storage and restored while
-valid. If secure storage is unavailable, sign in again after restarting the app.
-For a self-hosted service, enter its API base URL under **Service settings**; leave it
-blank to use the default. Saved accounts retain their configured service URL.
-The management page at `/hosts` is not an API base URL.
+登录凭据使用操作系统的安全存储保存，有效期内可自动恢复登录。
+如果安全存储不可用，重启应用后需要重新登录。
+使用自建服务时，在 **Service settings** 中填写 API 基础地址；留空则使用默认服务。
+已保存的账户会继续使用原先配置的服务地址。`/hosts` 是管理页面，不是 API 基础地址。
 
-Account relay is currently available in the desktop app. Browser and mobile clients
-do not yet provide account sign-in.
+目前账户中继功能仅支持桌面应用，浏览器和移动端尚未提供账户登录。
 
 ## Workspace
 

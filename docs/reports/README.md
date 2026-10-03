@@ -73,7 +73,7 @@
 
 ## 客户端、连接与品牌
 
-- [Account host relay validation and coverage](clients/account-host-relay-validation.md)
+- [账户主机中继验证与覆盖率](clients/account-host-relay-validation.md)
 
 - [桌面 daemon 版本状态修复](clients/desktop-daemon-version.md)
 - [AIT 飞鸟 Logo 落地报告](clients/ait-brand-rollout.md)

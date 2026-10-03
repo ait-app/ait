@@ -18,7 +18,7 @@ Electron 位于 `apps/desktop`；`apps/mobile` 提供桌面、浏览器与移动
 | `voice`      | 语音、听写和离线推理                       | `model`                                |
 | `schedule`   | 定时任务服务与协议                         | `model`                                |
 | `browser`    | 浏览器自动化请求与回传                     | `model`                                |
-| `relay` | Outbound control and reverse data transport | None |
+| `relay`      | 主动建立控制连接与反向数据通道             | 无                                     |
 | `api`        | HTTP/WebSocket 鉴权、连接与跨能力协调      | 上述能力包、`protocol`、`model`        |
 | `daemon`     | 配置、进程锁、服务组装和停机               | API、领域及能力包；测试使用 `protocol` |
 
@@ -50,9 +50,9 @@ Project/Workspace 和 Agent runtime 目录、配置、时间线由当前文件�
 从文档树移除，历史可从 Git 查阅。当前语义依据 [ADR 分类索引](../decisions/README.md)，
 启动与连接依据 [daemon 手册](../operations/daemon.md)。
 
-The desktop account manager owns user credentials and passes one-use grants to `api`.
-The `api` crate owns `relay`, which receives a fixed local destination and has no
-workspace dependencies. See [ADR-074](../decisions/clients/adr-074-account-host-relay.md).
+桌面账户管理器持有用户凭据，并向 `api` 传递一次性授权。
+`api` 持有 `relay`；`relay` 使用固定的本地目标地址，不依赖其他 workspace crate。
+详见 [ADR-074](../decisions/clients/adr-074-account-host-relay.md)。
 
 Relay 的类型化消息集中在 `crates/relay/src/protocol.rs`，WebSocket 收发集中在
 `transport.rs`；单连接协商标识由 `crates/protocol/src/single.rs` 定义。
