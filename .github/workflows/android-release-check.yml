@@ -1,0 +1,54 @@
+name: Android Release Check
+
+on:
+  pull_request:
+    paths:
+      - .github/workflows/android-release-check.yml
+      - .github/workflows/release-android.yml
+      - .github/workflows/release.yml
+      - apps/mobile/**
+      - packages/**
+      - scripts/**
+      - patches/**
+      - package.json
+      - package-lock.json
+      - .npmrc
+
+permissions:
+  contents: read
+
+concurrency:
+  group: android-release-check-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
+
+jobs:
+  prepare:
+    name: Resolve APK version
+    runs-on: ubuntu-24.04
+    outputs:
+      tag: ${{ steps.version.outputs.tag }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+      - id: version
+        run: |
+          node <<'NODE'
+          const { appendFileSync } = require('node:fs');
+          const { version } = require('./apps/mobile/package.json');
+          if (!/^(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)$/.test(version) || version.trim() !== version) {
+            throw new Error('Expected a stable Android release version');
+          }
+          appendFileSync(process.env.GITHUB_OUTPUT, `tag=v${version}\n`);
+          NODE
+
+  apk:
+    name: Dry run Android release
+    needs: prepare
+    uses: ./.github/workflows/release-android.yml
+    with:
+      tag: ${{ needs.prepare.outputs.tag }}
+      source_commit: ${{ github.sha }}

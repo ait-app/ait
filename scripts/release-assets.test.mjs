@@ -45,6 +45,11 @@ async function fixture(t, platform) {
   return { platform, version, source, destination };
 }
 
+async function addAndroidAssets(directory) {
+  for (const arch of ["arm64", "armv7"])
+    await writeFile(path.join(directory, `Ait-0.0.7-android-${arch}.apk`), `APK for ${arch}`);
+}
+
 test("release assets match electron-builder's target-specific architecture names", async () => {
   for (const platform of ["linux", "mac"]) {
     assert.deepEqual(
@@ -54,15 +59,16 @@ test("release assets match electron-builder's target-specific architecture names
   }
 });
 
-test("collects both platforms, updater metadata and blockmaps, then checksums every asset", async (t) => {
+test("checksums desktop and Android installers, updater metadata and blockmaps", async (t) => {
   const linux = await fixture(t, "linux");
   const mac = await fixture(t, "mac");
   const blockmap = "Ait-0.0.7-macos-arm64.zip.blockmap";
   await writeFile(path.join(mac.source, blockmap), "blockmap");
   await collectReleaseAssets(linux);
   await collectReleaseAssets({ ...mac, destination: linux.destination });
+  await addAndroidAssets(linux.destination);
   const names = await verifyReleaseAssets({ version: linux.version, directory: linux.destination });
-  assert.equal(names.length, 7);
+  assert.equal(names.length, 9);
   assert(names.includes(blockmap));
   const lines = (await readFile(path.join(linux.destination, "SHA256SUMS"), "utf8"))
     .trim()
@@ -94,6 +100,17 @@ test("rejects incomplete releases and unintended platform assets", async (t) => 
   );
   const mac = await fixture(t, "mac");
   await collectReleaseAssets({ ...mac, destination: input.destination });
+  await assert.rejects(
+    verifyReleaseAssets({ version: input.version, directory: input.destination }),
+    /Missing release asset: Ait-0.0.7-android-arm64.apk/,
+  );
+  await addAndroidAssets(input.destination);
+  await rm(path.join(input.destination, "Ait-0.0.7-android-armv7.apk"));
+  await assert.rejects(
+    verifyReleaseAssets({ version: input.version, directory: input.destination }),
+    /Missing release asset: Ait-0.0.7-android-armv7.apk/,
+  );
+  await addAndroidAssets(input.destination);
   await writeFile(path.join(input.destination, "Ait-Setup.exe"), "unexpected");
   await assert.rejects(
     verifyReleaseAssets({ version: input.version, directory: input.destination }),
@@ -134,6 +151,7 @@ test("checksums build provenance and rejects a mismatched source version", async
   const mac = await fixture(t, "mac");
   await collectReleaseAssets(linux);
   await collectReleaseAssets({ ...mac, destination: linux.destination });
+  await addAndroidAssets(linux.destination);
   const info = {
     version: "0.0.7",
     releaseTag: "v0.0.7",

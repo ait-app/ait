@@ -14,6 +14,8 @@ export function releaseAssetNames(platform, version) {
     return [`Ait-linux-x86_64.AppImage`, `Ait-${version}-linux-x64.tar.gz`, "latest-linux.yml"];
   if (platform === "mac")
     return [`Ait-${version}-macos-arm64.dmg`, `Ait-${version}-macos-arm64.zip`, "latest-mac.yml"];
+  if (platform === "android")
+    return [`Ait-${version}-android-arm64.apk`, `Ait-${version}-android-armv7.apk`];
   throw new Error(`Unsupported release platform: ${platform}`);
 }
 
@@ -70,11 +72,12 @@ export async function collectReleaseAssets({ platform, version, source, destinat
 }
 
 export async function verifyReleaseAssets({ version, directory }) {
-  const required = [...releaseAssetNames("linux", version), ...releaseAssetNames("mac", version)];
+  const desktop = [...releaseAssetNames("linux", version), ...releaseAssetNames("mac", version)];
+  const required = [...desktop, ...releaseAssetNames("android", version)];
   const allowed = new Set([
     ...required,
     "BUILD-INFO.json",
-    ...required.filter((name) => !name.endsWith(".yml")).map((name) => `${name}.blockmap`),
+    ...desktop.filter((name) => !name.endsWith(".yml")).map((name) => `${name}.blockmap`),
   ]);
   const names = (await readdir(directory)).filter((name) => name !== "SHA256SUMS").sort();
   if (names.includes("BUILD-INFO.json")) {

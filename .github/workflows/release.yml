@@ -23,6 +23,13 @@ concurrency:
   cancel-in-progress: false
 
 jobs:
+  android:
+    name: Build Android
+    uses: ./.github/workflows/release-android.yml
+    with:
+      tag: ${{ inputs.tag || github.ref_name }}
+      source_commit: ${{ inputs.source_commit || '' }}
+
   build:
     name: Build ${{ matrix.label }}
     runs-on: ${{ matrix.runner }}
@@ -147,7 +154,7 @@ jobs:
 
   release:
     name: Publish GitHub Release
-    needs: build
+    needs: [build, android]
     runs-on: ubuntu-24.04
     permissions:
       contents: write
