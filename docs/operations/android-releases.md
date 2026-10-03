@@ -20,8 +20,16 @@ gh workflow run release.yml --repo OWNER/REPO --ref main -f tag=vX.Y.Z
 
 ## 手动发布当前 commit 的测试 APK
 
+打开 Actions → **Release Ait** → **Run workflow**，选择要测试的分支，并将 `release_type`
+选择为 `android-test`，留空 `tag` 和 `source_commit`，即可只发布当前 commit 的 Android 测试 APK。
+该入口复用下面的测试发布工作流，Linux/macOS 构建与正式 Release 上传任务会跳过。
+
+```bash
+gh workflow run release.yml --repo OWNER/REPO --ref BRANCH -f release_type=android-test
+```
+
 工作流合入默认分支后，打开 Actions → **Release Android Test APK** → **Run workflow**，
-选择要测试的分支即可，不需要填写版本标签。工作流固定使用触发时所选分支的 commit；
+也可以选择要测试的分支直接运行，不需要填写版本标签。工作流固定使用触发时所选分支的 commit；
 随后分支有新提交也不会改变本次构建源码。
 
 构建完成后自动创建 GitHub 预发布版本，标签为

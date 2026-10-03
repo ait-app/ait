@@ -6,9 +6,17 @@ on:
       - "v*"
   workflow_dispatch:
     inputs:
-      tag:
-        description: Existing semantic version tag to release (for example v0.0.7)
+      release_type:
+        description: Full release or Android test APKs from the selected branch's current commit
         required: true
+        type: choice
+        default: full
+        options:
+          - full
+          - android-test
+      tag:
+        description: Required for full releases (for example v0.0.14); leave empty for Android tests
+        required: false
         type: string
       source_commit:
         description: Optional full commit SHA for an explicitly requested same-version rebuild
@@ -23,8 +31,16 @@ concurrency:
   cancel-in-progress: false
 
 jobs:
+  android-test:
+    name: Release Android test APKs
+    if: github.event_name == 'workflow_dispatch' && inputs.release_type == 'android-test'
+    permissions:
+      contents: write
+    uses: ./.github/workflows/release-android-test.yml
+
   android:
     name: Build Android
+    if: inputs.release_type != 'android-test'
     uses: ./.github/workflows/release-android.yml
     with:
       tag: ${{ inputs.tag || github.ref_name }}
@@ -32,6 +48,7 @@ jobs:
 
   build:
     name: Build ${{ matrix.label }}
+    if: inputs.release_type != 'android-test'
     runs-on: ${{ matrix.runner }}
     strategy:
       fail-fast: false
@@ -154,6 +171,7 @@ jobs:
 
   release:
     name: Publish GitHub Release
+    if: inputs.release_type != 'android-test'
     needs: [build, android]
     runs-on: ubuntu-24.04
     permissions:

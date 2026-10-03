@@ -22,6 +22,8 @@ Android APK，并沿用安装包命名、源码选择和校验和规则。当前
 - `release-android-test.yml` 提供手动测试发布入口，固定构建触发时所选分支的 commit。
   它复用 Android 构建工作流，并以版本和 commit 组成独立标签发布 GitHub prerelease，
   不设为最新正式版本。同一 commit 重跑更新同一测试版本，PR 不自动构建 APK。
+- 现有 Release Ait 手动按钮通过 `release_type=android-test` 调用测试发布工作流；
+  该模式跳过所有正式发布任务，默认 `full` 模式及版本标签推送继续发布全平台安装包。
 
 ## 后果
 
