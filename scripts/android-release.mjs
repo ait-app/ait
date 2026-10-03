@@ -16,14 +16,29 @@ export function planAndroidRelease(tag, version) {
     version: appVersion,
     versionCode: androidVersionCode,
     packageId: "dev.ait.mobile",
-    apks: releaseAssetNames("android", version).map((name, index) => ({
-      name,
-      abi: ["arm64-v8a", "armeabi-v7a"][index],
-    })),
+    apkName: releaseAssetNames("android", version)[0],
   };
 }
 
-export function validateAndroidApk(badging, certificates, plan, abi) {
+export function androidBuildArtifact(builds, plan) {
+  assert(Array.isArray(builds) && builds.length === 1, "Expected exactly one EAS build");
+  const build = builds[0];
+  assert.equal(build.status, "FINISHED", "EAS Android build did not finish successfully");
+  assert.equal(build.platform, "ANDROID", "Expected an Android EAS build");
+  assert.equal(build.buildProfile, "production-apk", "Unexpected EAS build profile");
+  assert.equal(build.appVersion, plan.version, "EAS app version differs from release");
+  assert.equal(
+    String(build.appBuildVersion),
+    String(plan.versionCode),
+    "EAS versionCode differs from release",
+  );
+  assert.match(build.id ?? "", /^[a-f0-9-]{36}$/i, "Invalid EAS build ID");
+  const url = new URL(build.artifacts?.buildUrl);
+  assert.equal(url.protocol, "https:", "EAS artifact must use HTTPS");
+  return { id: build.id, url: url.href };
+}
+
+export function validateAndroidApk(badging, certificates, plan) {
   const packageLine = badging.split("\n").find((line) => line.startsWith("package:"));
   assert(packageLine, "APK package metadata is missing");
   const attributes = Object.fromEntries(
@@ -39,7 +54,10 @@ export function validateAndroidApk(badging, certificates, plan, abi) {
   assert(!/^application-debuggable\b/m.test(badging), "Debuggable APK cannot be released");
   const nativeCode = badging.split("\n").find((line) => line.startsWith("native-code:")) ?? "";
   const architectures = [...nativeCode.matchAll(/'([^']+)'/g)].map((match) => match[1]);
-  assert.deepEqual(architectures, [abi], "APK architecture differs from release asset");
+  assert(
+    ["arm64-v8a", "armeabi-v7a"].every((abi) => architectures.includes(abi)),
+    "Universal APK is missing a required ARM architecture",
+  );
   const signers = [
     ...certificates.matchAll(/^Signer #\d+ certificate SHA-256 digest: ([\da-f]{64})\s*$/gim),
   ];
@@ -54,24 +72,13 @@ export async function collectAndroidRelease({ tag, version, sourceDir, buildTool
       encoding: "utf8",
       stdio: ["ignore", "pipe", "pipe"],
     });
-  const assets = [];
-  for (const { name, abi } of plan.apks) {
-    const apk = path.join(sourceDir, `app-${abi}-release.apk`);
-    // Verify installability without replacing the generated project's test signature.
-    const certificates = run("apksigner", ["verify", "--print-certs", apk]);
-    run("zipalign", ["-c", "-P", "16", "4", apk]);
-    const verified = validateAndroidApk(
-      run("aapt", ["dump", "badging", apk]),
-      certificates,
-      plan,
-      abi,
-    );
-    assets.push({ name, apk, ...verified });
-  }
-  // Validate every architecture before exposing any release assets.
+  const apk = path.join(sourceDir, "app-release.apk");
+  const certificates = run("apksigner", ["verify", "--print-certs", apk]);
+  run("zipalign", ["-c", "-P", "16", "4", apk]);
+  const verified = validateAndroidApk(run("aapt", ["dump", "badging", apk]), certificates, plan);
   await mkdir(outputDir, { recursive: true });
-  for (const { name, apk } of assets) await copyFile(apk, path.join(outputDir, name));
-  return assets;
+  await copyFile(apk, path.join(outputDir, plan.apkName));
+  return [{ name: plan.apkName, apk, ...verified }];
 }
 
 async function main() {

@@ -36,8 +36,7 @@ async function fixture(t) {
     path.join(root, "apps/mobile/package.json"),
     JSON.stringify({ version: "0.0.14" }),
   );
-  for (const arch of ["arm64", "armv7"])
-    await writeFile(path.join(root, `release-assets/Ait-0.0.14-android-${arch}.apk`), arch);
+  await writeFile(path.join(root, "release-assets/Ait-0.0.14-android.apk"), "universal APK");
   return root;
 }
 
@@ -46,6 +45,7 @@ test("test release is manual, builds the captured commit, and publishes only aft
   assert.equal(workflow.permissions.contents, "read");
   assert.equal(workflow.jobs.prepare.steps[0].with.ref, "${{ github.sha }}");
   assert.equal(workflow.jobs.apk.uses, "./.github/workflows/release-android.yml");
+  assert.deepEqual(workflow.jobs.apk.secrets, { EXPO_TOKEN: "${{ secrets.EXPO_TOKEN }}" });
   assert.equal(workflow.jobs.apk.with.source_commit, "${{ needs.prepare.outputs.source_commit }}");
   assert.deepEqual(workflow.jobs.publish.needs, ["prepare", "apk"]);
   assert.equal(workflow.jobs.publish.permissions.contents, "write");
@@ -71,7 +71,7 @@ test("release plan uses the triggering commit and separates test tags from stabl
   assert.notEqual(run(planStep.run, root, { GITHUB_SHA: "main", GITHUB_OUTPUT: output }).status, 0);
 });
 
-test("test release metadata and checksums cover both APKs and reject incomplete artifacts", async (t) => {
+test("test release metadata and checksums cover the universal APK and reject incomplete artifacts", async (t) => {
   const root = await fixture(t);
   const assets = path.join(root, "release-assets");
   const record = publishSteps.find((step) => step.name === "Verify assets and record test build");
@@ -89,15 +89,15 @@ test("test release metadata and checksums cover both APKs and reject incomplete 
   const info = JSON.parse(await readFile(path.join(assets, "BUILD-INFO.json"), "utf8"));
   assert.equal(info.sourceCommit, commit);
   assert.equal(info.releaseTag, env.TEST_TAG);
-  assert.equal(info.signing, "debug");
+  assert.equal(info.signing, "eas-managed");
   const checksum = publishSteps.find((step) => step.name === "Write APK checksums");
   assert.equal(run(checksum.run, assets, env).status, 0);
   assert.equal(run("sha256sum --check SHA256SUMS", assets, env).status, 0);
-  await writeFile(path.join(assets, "Ait-0.0.14-android-armv7.apk"), "tampered");
+  await writeFile(path.join(assets, "Ait-0.0.14-android.apk"), "tampered");
   assert.notEqual(run("sha256sum --check SHA256SUMS", assets, env).status, 0);
   await rm(path.join(assets, "BUILD-INFO.json"));
   await rm(path.join(assets, "SHA256SUMS"));
-  await rm(path.join(assets, "Ait-0.0.14-android-armv7.apk"));
+  await rm(path.join(assets, "Ait-0.0.14-android.apk"));
   assert.notEqual(run(record.run, root, env).status, 0);
 });
 

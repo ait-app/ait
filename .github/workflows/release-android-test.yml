@@ -41,9 +41,11 @@ jobs:
           NODE
 
   apk:
-    name: Build test APKs
+    name: Build test APK
     needs: prepare
     uses: ./.github/workflows/release-android.yml
+    secrets:
+      EXPO_TOKEN: ${{ secrets.EXPO_TOKEN }}
     with:
       tag: ${{ needs.prepare.outputs.tag }}
       source_commit: ${{ needs.prepare.outputs.source_commit }}
@@ -90,7 +92,7 @@ jobs:
             sourceCommit: process.env.SOURCE_COMMIT,
             workflowCommit: process.env.GITHUB_WORKFLOW_SHA,
             workflowRunUrl: `${process.env.GITHUB_SERVER_URL}/${process.env.GITHUB_REPOSITORY}/actions/runs/${process.env.GITHUB_RUN_ID}`,
-            signing: 'debug',
+            signing: 'eas-managed',
           };
           writeFileSync('release-assets/BUILD-INFO.json', JSON.stringify(info, null, 2) + '\n');
           NODE
@@ -112,8 +114,8 @@ jobs:
             gh release create "$TEST_TAG" release-assets/* \
               --target "$SOURCE_COMMIT" \
               --title "Ait Android test $VERSION_TAG (${SOURCE_COMMIT:0:12})" \
-              --notes "Test APKs built from $SOURCE_COMMIT using the default test signing key." \
+              --notes "Test APK built from $SOURCE_COMMIT with the existing EAS production-apk profile." \
               --prerelease --latest=false \
               --repo "$GITHUB_REPOSITORY"
           fi
-          echo "Test APKs: $GITHUB_SERVER_URL/$GITHUB_REPOSITORY/releases/tag/$TEST_TAG" >> "$GITHUB_STEP_SUMMARY"
+          echo "Test APK: $GITHUB_SERVER_URL/$GITHUB_REPOSITORY/releases/tag/$TEST_TAG" >> "$GITHUB_STEP_SUMMARY"

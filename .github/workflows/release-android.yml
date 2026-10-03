@@ -11,15 +11,18 @@ on:
         description: Optional full commit SHA for an explicitly requested same-version rebuild
         required: false
         type: string
+    secrets:
+      EXPO_TOKEN:
+        required: true
 
 permissions:
   contents: read
 
 jobs:
   build:
-    name: Build Android APKs
-    runs-on: [self-hosted, linux, x64, android-release]
-    timeout-minutes: 90
+    name: Build Android APK with Expo EAS
+    runs-on: ubuntu-24.04
+    timeout-minutes: 150
     env:
       RELEASE_TAG: ${{ inputs.tag }}
       SOURCE_COMMIT: ${{ inputs.source_commit }}
@@ -54,6 +57,58 @@ jobs:
       - name: Install workspace dependencies
         run: npm ci
 
+      - name: Load Ait EAS project identity
+        run: |
+          node <<'NODE'
+          const { readFileSync, appendFileSync } = require('node:fs');
+          const config = JSON.parse(readFileSync('apps/mobile/eas.json', 'utf8'));
+          const publicIdentity = config.build.ait.env;
+          for (const key of ['EXPO_OWNER', 'EXPO_SLUG', 'EAS_PROJECT_ID']) {
+            const value = publicIdentity[key];
+            if (typeof value !== 'string' || !/^[A-Za-z0-9._-]+$/.test(value)) {
+              throw new Error(`Invalid public Ait EAS identity: ${key}`);
+            }
+            appendFileSync(process.env.GITHUB_ENV, `${key}=${value}\n`);
+          }
+          NODE
+
+      - name: Build APK with EAS
+        working-directory: apps/mobile
+        timeout-minutes: 120
+        env:
+          EXPO_TOKEN: ${{ secrets.EXPO_TOKEN }}
+        run: |
+          npx --no-install eas build --platform android --profile production-apk \
+            --non-interactive --freeze-credentials --wait --json > "$RUNNER_TEMP/android-build.json"
+
+      # Keep release tooling outside the source archive uploaded to EAS.
+      - name: Check out release tooling
+        uses: actions/checkout@v5
+        with:
+          ref: ${{ github.workflow_sha }}
+          path: .tmp/release-tools
+          persist-credentials: false
+
+      - name: Validate EAS build
+        id: build
+        run: |
+          node --input-type=module <<'NODE'
+          import { readFileSync, appendFileSync } from 'node:fs';
+          import { planAndroidRelease, androidBuildArtifact } from './.tmp/release-tools/scripts/android-release.mjs';
+          const pkg = JSON.parse(readFileSync('apps/mobile/package.json', 'utf8'));
+          const builds = JSON.parse(readFileSync(`${process.env.RUNNER_TEMP}/android-build.json`, 'utf8'));
+          const { id, url } = androidBuildArtifact(builds, planAndroidRelease(process.env.RELEASE_TAG, pkg.version));
+          appendFileSync(process.env.GITHUB_OUTPUT, `build_id=${id}\nartifact_url=${url}\n`);
+          NODE
+
+      - name: Download APK
+        env:
+          ARTIFACT_URL: ${{ steps.build.outputs.artifact_url }}
+        run: |
+          mkdir -p "$RUNNER_TEMP/android-apks"
+          curl --fail --location --retry 3 --proto '=https' --proto-redir '=https' \
+            "$ARTIFACT_URL" --output "$RUNNER_TEMP/android-apks/app-release.apk"
+
       - uses: actions/setup-java@v5
         with:
           distribution: temurin
@@ -64,60 +119,14 @@ jobs:
           packages: platform-tools
           log-accepted-android-sdk-licenses: false
 
-      - name: Install Android SDK packages
-        run: sdkmanager "platforms;android-36" "build-tools;$ANDROID_BUILD_TOOLS_VERSION" "ndk;27.1.12297006" "cmake;3.22.1"
+      - name: Install APK verification tools
+        run: sdkmanager "build-tools;$ANDROID_BUILD_TOOLS_VERSION"
 
-      - uses: gradle/actions/setup-gradle@v5
-        with:
-          cache-disabled: true
-
-      - name: Build shared UI dependencies
-        run: npm run build:ui-deps
-
-      - name: Build terminal WebView bundle
-        run: npm run build:terminal-webview --workspace=@ait/mobile
-
-      - name: Generate production Android project
-        working-directory: apps/mobile
-        run: npx --no-install expo prebuild --platform android --clean --no-install
-
-      - name: Configure APK architectures
-        working-directory: apps/mobile/android
-        run: |
-          cat >> app/build.gradle <<'GRADLE'
-
-          android {
-              splits {
-                  abi {
-                      enable true
-                      reset()
-                      include 'arm64-v8a', 'armeabi-v7a'
-                      universalApk false
-                  }
-              }
-          }
-          GRADLE
-
-      # Temporarily retain the generated project's debug keystore; no release signing secrets.
-      - name: Assemble release APKs
-        working-directory: apps/mobile/android
-        run: |
-          ./gradlew :app:assembleRelease --no-daemon \
-            -PreactNativeArchitectures=arm64-v8a,armeabi-v7a
-
-      # Keep a second workspace copy out of Metro's module scan during the build.
-      - name: Check out release tooling
-        uses: actions/checkout@v5
-        with:
-          ref: ${{ github.workflow_sha }}
-          path: .tmp/release-tools
-          persist-credentials: false
-
-      - name: Verify and collect APKs
+      - name: Verify and collect APK
         run: |
           node .tmp/release-tools/scripts/android-release.mjs \
             --tag "$RELEASE_TAG" --package-json apps/mobile/package.json \
-            --source-dir apps/mobile/android/app/build/outputs/apk/release \
+            --source-dir "$RUNNER_TEMP/android-apks" \
             --build-tools "$ANDROID_HOME/build-tools/$ANDROID_BUILD_TOOLS_VERSION" \
             --output-dir release-assets
 
@@ -127,3 +136,18 @@ jobs:
           path: release-assets/*
           if-no-files-found: error
           retention-days: 7
+
+      - name: Write build summary
+        if: always()
+        env:
+          BUILD_ID: ${{ steps.build.outputs.build_id }}
+        run: |
+          {
+            echo "## Ait Android APK"
+            echo "- Tag: $RELEASE_TAG"
+            echo "- EAS profile: production-apk"
+            echo "- EAS build: $BUILD_ID"
+            if [ -n "$BUILD_ID" ]; then
+              echo "- Build details: https://expo.dev/accounts/$EXPO_OWNER/projects/$EXPO_SLUG/builds/$BUILD_ID"
+            fi
+          } >> "$GITHUB_STEP_SUMMARY"

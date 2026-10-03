@@ -14,8 +14,7 @@ export function releaseAssetNames(platform, version) {
     return [`Ait-linux-x86_64.AppImage`, `Ait-${version}-linux-x64.tar.gz`, "latest-linux.yml"];
   if (platform === "mac")
     return [`Ait-${version}-macos-arm64.dmg`, `Ait-${version}-macos-arm64.zip`, "latest-mac.yml"];
-  if (platform === "android")
-    return [`Ait-${version}-android-arm64.apk`, `Ait-${version}-android-armv7.apk`];
+  if (platform === "android") return [`Ait-${version}-android.apk`];
   throw new Error(`Unsupported release platform: ${platform}`);
 }
 

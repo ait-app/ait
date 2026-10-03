@@ -32,6 +32,8 @@ jobs:
     name: Build Android
     if: github.event_name == 'workflow_dispatch' && inputs.build_android == true
     uses: ./.github/workflows/release-android.yml
+    secrets:
+      EXPO_TOKEN: ${{ secrets.EXPO_TOKEN }}
     with:
       tag: ${{ inputs.tag || github.ref_name }}
       source_commit: ${{ inputs.source_commit || '' }}

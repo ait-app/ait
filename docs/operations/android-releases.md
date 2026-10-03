@@ -3,8 +3,8 @@
 [Release Ait](../../.github/workflows/release.yml) 默认只发布 Linux、macOS。手动选择 Android 后，
 才调用 [Android APK 构建工作流](../../.github/workflows/release-android.yml)，与桌面并行构建，
 全部成功后一起上传到 GitHub Release。可选发布边界见
-[ADR-078](../decisions/clients/adr-078-optional-android-release.md)，APK 构建职责沿用
-[ADR-077](../decisions/clients/adr-077-android-apk-release.md)。
+[ADR-078](../decisions/clients/adr-078-optional-android-release.md)，EAS 构建方式见
+[ADR-079](../decisions/clients/adr-079-mobile-eas-builds.md)。
 
 ## 触发发布
 
@@ -22,71 +22,55 @@ gh workflow run release.yml --repo OWNER/REPO --ref main -f tag=vX.Y.Z -f build_
 ## 手动发布当前 commit 的测试 APK
 
 工作流合入默认分支后，打开 Actions → **Release Android Test APK** → **Run workflow**，
-选择要测试的分支直接运行，不需要填写版本标签。工作流固定使用触发时所选分支的 commit；
-随后分支有新提交也不会改变本次构建源码。
+选择要测试的分支直接运行，不需要填写版本标签。工作流固定使用触发时所选分支的 commit。
 
 构建完成后自动创建 GitHub 预发布版本，标签为
-`android-test-v版本-12位commit`，例如 `android-test-v0.0.14-124bc2e1c6f9`。
-该版本包含两个标准文件名的 APK、`SHA256SUMS` 和记录实际 commit 的 `BUILD-INFO.json`，
+`android-test-v版本-12位commit`，例如 `android-test-v0.0.15-124bc2e1c6f9`。
+该版本包含通用 APK、`SHA256SUMS` 和记录实际 commit 的 `BUILD-INFO.json`，
 不会成为最新正式 Release。同一 commit 重跑会更新同一预发布版本的附件。
 
 ```bash
 gh workflow run release-android-test.yml --repo OWNER/REPO --ref BRANCH
 ```
 
-## APK 与命名
+## APK 与签名
 
-勾选 Android 时，APK 沿用 `Ait-版本-平台-架构.扩展名` 格式。例如 `v0.0.15`：
-
-| 附件                           | 适用架构                                |
-| ------------------------------ | --------------------------------------- |
-| `Ait-0.0.15-android-arm64.apk` | ARM64，Android ABI 为 `arm64-v8a`       |
-| `Ait-0.0.15-android-armv7.apk` | 32 位 ARM，Android ABI 为 `armeabi-v7a` |
-
-两个文件都是可独立安装的完整 APK，按设备架构选择一个即可。生产包名为 `dev.ait.mobile`，
+沿用原有 `production-apk` EAS profile，产物为一个通用 APK。例如 `v0.0.15` 发布为
+`Ait-0.0.15-android.apk`，同时支持 ARM64 和 ARMv7。生产包名为 `dev.ait.mobile`，
 最低系统版本随 `apps/mobile/app.config.js` 配置，当前为 Android 10。
 
+APK 使用原 profile 默认的 EAS 托管签名。首次 CI 构建前须在 EAS 配置 Android keystore；
+工作流冻结凭据，不创建或更换密钥，也不重新签名下载的 APK。
+原测试签名安装包不能直接被不同证书签名的同包名 APK 覆盖。
+本流程提供 GitHub APK 下载，Google Play 内测仍按原有发布指南执行。
+
 Android APK 与桌面附件共用 Release 中的 `SHA256SUMS` 和 `BUILD-INFO.json`。
-前者包含每个 APK 的 SHA-256，后者记录所有平台的版本、实际源码 SHA、工作流 SHA 和运行链接。
+前者包含 APK 的 SHA-256，后者记录版本、实际源码 SHA、工作流 SHA 和运行链接。
 下载全部附件到同一目录后可运行：
 
 ```bash
 sha256sum --check SHA256SUMS
 ```
 
-## 当前签名方式
-
-暂时跳过正式签名配置，保留 Expo 生成项目中 `assembleRelease` 使用的测试 keystore，
-无需配置 Android 签名 Secrets。这仍是内置 JavaScript bundle、不可调试的 release 构建；
-测试签名使 APK 可以安装。工作流验证现有签名、包名、版本和各 APK 的架构，不进行重新签名。
-
-后续切换正式密钥时，原测试签名安装包不能直接被不同证书签名的同包名 APK 覆盖。
-本流程提供 GitHub APK 下载，Google Play 内测仍按原有发布指南执行。
-
 ## 构建与重试
 
-Android 构建使用带有 `self-hosted`、`linux`、`x64`、`android-release` 全部标签的自托管
-runner，正式发布和手动测试 APK 共用该机器。准备 Ubuntu 24.04 x86_64，至少 32 GB 内存，
-建议 64 GB 内存及至少 100 GB 可用磁盘空间，以容纳 Hermes 编译、Gradle 和原生构建。
+Android 和 iOS 都使用 Expo EAS 云构建。Android 直接使用现有 `production-apk` profile，
+iOS 继续使用 `ait`。`eas.json` 中的继承关系、Node 版本、Gradle 命令和原生配置保持原样；
+工作流按 iOS 的方式从 `build.ait.env` 加载 Ait 项目身份。
 
-在仓库 Settings → Actions → Runners → New self-hosted runner 中选择 Linux x64，按页面
-命令注册机器，注册时添加自定义标签 `android-release`，其余三个标签由 GitHub 自动提供。
-如果注册为组织 runner，需要允许本仓库使用。启动 runner 服务后，确认其状态为 Online。
-具体步骤参见 GitHub 的[自托管 runner 注册说明](https://docs.github.com/en/actions/how-tos/manage-runners/self-hosted-runners/add-runners)。
-没有匹配标签且在线的机器时，Android 任务会排队等待；解析版本和发布附件的轻量任务继续
-使用 GitHub 托管 runner。
+在仓库 Settings → Secrets and variables → Actions 配置 `EXPO_TOKEN`，令牌对应的 Expo
+账号须有 `sd542927172/ait-dev` 项目的构建权限。正式发布和测试发布都将此 Secret 传入
+Android 可复用工作流。若原来的令牌只放在 `ios-testflight` Environment 中，还需要配置
+仓库级 Secret。原 `production-apk` 使用 `large` 资源，需要支持该资源的 Expo 套餐。
 
-runner 运行用户需要具备工作目录和工具目录的写权限，并预装 Git、Bash、curl、tar、unzip
-及 Python 3。工作流安装 Node.js 24、Temurin Java 17 和所需 Android SDK/NDK/CMake。
-自托管机器保留本地 Gradle 缓存，`setup-gradle` 不再上传或下载 GitHub Actions 缓存。
-构建保留 Hermes 默认 `-O` 优化，Gradle 使用项目默认的并行和 worker 配置。
+GitHub 托管 Ubuntu runner 触发 EAS、等待结果并下载 APK，仅安装 Android Build Tools
+用于验证。EAS 执行依赖安装、共享 UI 和终端 WebView 构建、Expo prebuild 与 Gradle 编译。
+无需自托管 runner。参考 Expo 的 [CI 构建说明](https://docs.expo.dev/build/building-on-ci/)和
+[EAS 配置说明](https://docs.expo.dev/eas/json/)。
 
-runner 安装 Android SDK 后，构建共享依赖和终端 WebView，通过 Expo prebuild 生成原生项目，
-为两种 ARM ABI 配置独立 APK，再执行 Gradle release 构建。生成的 Android 项目只用于本次构建。
+APK 通过签名、16 KB 对齐、包信息和架构检查后，以 `ait-android-apk` artifact 保存 7 天。
+选中 Android 的主发布任务等待桌面和 Android 全部成功，再校验附件并创建或更新 Release。
+未选中时只校验桌面附件。
 
-两个 APK 均通过签名、16 KB 原生库对齐、包信息与架构检查后，以 `ait-android-apk` artifact
-保存 7 天。选中 Android 的主发布任务等待桌面和 Android 构建全部成功，再合并附件、验证
-完整性、生成校验和，最后创建或更新 GitHub Release。未选中时，Android job 跳过，
-桌面发布仅校验桌面附件。失败时可在该次 **Release Ait** 运行中重跑失败任务。
-
-ABI 分包机制参见 Android 官方的[多 APK 构建说明](https://developer.android.com/build/configure-apk-splits)。
+Android 工作流等待 EAS 最多 120 分钟；超时或取消 GitHub 任务后，可在 Expo 控制台查看和
+取消仍在进行的构建。失败时可重跑失败任务，重跑会创建新的 EAS 构建。

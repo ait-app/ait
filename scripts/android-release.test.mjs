@@ -7,6 +7,7 @@ import test from "node:test";
 import { runInNewContext } from "node:vm";
 import yaml from "yaml";
 import {
+  androidBuildArtifact,
   collectAndroidRelease,
   planAndroidRelease,
   validateAndroidApk,
@@ -20,18 +21,14 @@ Signer #1 public key SHA-256 digest: ${"cd".repeat(32)}
 `;
 const badging = `package: name='dev.ait.mobile' versionCode='1002003' versionName='1.2.3'
 sdkVersion:'29'
-native-code: 'arm64-v8a'
+native-code: 'arm64-v8a' 'armeabi-v7a' 'x86' 'x86_64'
 `;
 const workflow = yaml.parse(
   await readFile(new URL("../.github/workflows/release-android.yml", import.meta.url), "utf8"),
 );
-
 test("plans APK names using the shared release naming rules", () => {
   assert.equal(plan.versionCode, 1002003);
-  assert.deepEqual(plan.apks, [
-    { name: "Ait-1.2.3-android-arm64.apk", abi: "arm64-v8a" },
-    { name: "Ait-1.2.3-android-armv7.apk", abi: "armeabi-v7a" },
-  ]);
+  assert.equal(plan.apkName, "Ait-1.2.3-android.apk");
 });
 
 test("rejects non-stable tags, mismatched versions, and invalid native version codes", () => {
@@ -42,18 +39,11 @@ test("rejects non-stable tags, mismatched versions, and invalid native version c
   assert.throws(() => planAndroidRelease("v0.0.0", "0.0.0"), /out of range/);
 });
 
-test("accepts each release architecture and preserves the generated debug certificate", () => {
-  for (const abi of ["arm64-v8a", "armeabi-v7a"]) {
-    assert.deepEqual(
-      validateAndroidApk(
-        badging.replace("arm64-v8a", abi),
-        certificates.replace("Ait Release", "Android Debug"),
-        plan,
-        abi,
-      ),
-      { certificateSha256: digest, architectures: [abi] },
-    );
-  }
+test("accepts a universal APK and preserves the EAS signing certificate", () => {
+  assert.deepEqual(validateAndroidApk(badging, certificates, plan), {
+    certificateSha256: digest,
+    architectures: ["arm64-v8a", "armeabi-v7a", "x86", "x86_64"],
+  });
 });
 
 test("rejects wrong package identity, version, debug builds, and missing device architectures", () => {
@@ -63,16 +53,15 @@ test("rejects wrong package identity, version, debug builds, and missing device 
     [badging.replace("1.2.3", "1.2.4"), /versionName differs/],
     [badging.replace("1002003", "1002004"), /versionCode differs/],
     [badging + "application-debuggable\n", /Debuggable/],
-    [badging.replace("'arm64-v8a'", ""), /architecture differs/],
-    [badging.replace("'arm64-v8a'", "'armeabi-v7a'"), /architecture differs/],
-    [badging.replace("'arm64-v8a'", "'arm64-v8a' 'armeabi-v7a'"), /architecture differs/],
+    [badging.replace("'arm64-v8a'", ""), /missing a required ARM architecture/],
+    [badging.replace("'armeabi-v7a'", ""), /missing a required ARM architecture/],
   ])
-    assert.throws(() => validateAndroidApk(metadata, certificates, plan, "arm64-v8a"), expected);
+    assert.throws(() => validateAndroidApk(metadata, certificates, plan), expected);
 });
 
 test("rejects absent or ambiguous signing certificates", () => {
   for (const value of ["", certificates.replace(digest, "invalid"), certificates + certificates])
-    assert.throws(() => validateAndroidApk(badging, value, plan, "arm64-v8a"), /one verified/);
+    assert.throws(() => validateAndroidApk(badging, value, plan), /one verified/);
 });
 
 test("failed APK verification produces no release assets and needs no signing secrets", async () => {
@@ -93,6 +82,36 @@ test("failed APK verification produces no release assets and needs no signing se
   } finally {
     await rm(directory, { recursive: true, force: true });
   }
+});
+
+test("collects the EAS universal APK without modifying its signed bytes", async (t) => {
+  const directory = await mkdtemp(path.join(tmpdir(), "ait-android-universal-"));
+  t.after(() => rm(directory, { recursive: true, force: true }));
+  const apkBytes = Buffer.from("signed universal APK");
+  await writeFile(path.join(directory, "app-release.apk"), apkBytes);
+  for (const [tool, output] of [
+    ["apksigner", certificates],
+    ["aapt", badging],
+    ["zipalign", ""],
+  ]) {
+    await writeFile(path.join(directory, tool), `#!/bin/sh\ncat <<'OUTPUT'\n${output}\nOUTPUT\n`, {
+      mode: 0o700,
+    });
+  }
+  const assets = await collectAndroidRelease({
+    tag: "v1.2.3",
+    version: "1.2.3",
+    sourceDir: directory,
+    buildTools: directory,
+    outputDir: path.join(directory, "assets"),
+  });
+  assert.equal(assets.length, 1);
+  assert.equal(assets[0].certificateSha256, digest);
+  assert.deepEqual(await readdir(path.join(directory, "assets")), ["Ait-1.2.3-android.apk"]);
+  assert.deepEqual(
+    await readFile(path.join(directory, "assets", "Ait-1.2.3-android.apk")),
+    apkBytes,
+  );
 });
 
 test("workflow input guard accepts stable releases and fails closed on malformed refs", () => {
@@ -168,9 +187,9 @@ test("the normal release builds Android only when explicitly selected", async ()
   assert.equal(release.jobs.release.env.BUILD_ANDROID, "${{ inputs.build_android || false }}");
   assert.deepEqual(Object.keys(workflow.on), ["workflow_call"]);
   assert.equal(workflow.permissions.contents, "read");
-  assert.equal(workflow.on.workflow_call.secrets, undefined);
+  assert.deepEqual(workflow.on.workflow_call.secrets, { EXPO_TOKEN: { required: true } });
   assert.equal(workflow.jobs.publish, undefined);
-  assert.equal(release.jobs.android.secrets, undefined);
+  assert.deepEqual(release.jobs.android.secrets, { EXPO_TOKEN: "${{ secrets.EXPO_TOKEN }}" });
   const upload = workflow.jobs.build.steps.find((step) =>
     step.uses?.startsWith("actions/upload-artifact@"),
   );
@@ -189,11 +208,47 @@ test("the normal release builds Android only when explicitly selected", async ()
   }
 });
 
-test("release tooling is checked out after Metro finishes to avoid duplicate workspace packages", () => {
+test("EAS builds the release source before checking out release tooling", () => {
   const steps = workflow.jobs.build.steps;
-  const build = steps.findIndex((step) => step.name === "Assemble release APKs");
+  const build = steps.findIndex((step) => step.name === "Build APK with EAS");
   const tooling = steps.findIndex((step) => step.name === "Check out release tooling");
-  const collection = steps.findIndex((step) => step.name === "Verify and collect APKs");
+  const collection = steps.findIndex((step) => step.name === "Verify and collect APK");
   assert(build >= 0 && tooling > build && collection > tooling);
   assert.equal(steps[tooling].with.ref, "${{ github.workflow_sha }}");
+  assert.equal(workflow.jobs.build["runs-on"], "ubuntu-24.04");
+  assert.match(steps[build].run, /eas build --platform android --profile production-apk/);
+  assert.match(steps[build].run, /--non-interactive --freeze-credentials --wait --json/);
+  assert.equal(steps[build].env.EXPO_TOKEN, "${{ secrets.EXPO_TOKEN }}");
+  assert.doesNotMatch(JSON.stringify(steps), /setup-gradle|expo prebuild|\.\/gradlew|ndk;|cmake;/);
+});
+
+test("only a finished EAS APK build matching the release can supply artifacts", () => {
+  const build = {
+    id: "01234567-89ab-cdef-0123-456789abcdef",
+    status: "FINISHED",
+    platform: "ANDROID",
+    buildProfile: "production-apk",
+    appVersion: "1.2.3",
+    appBuildVersion: "1002003",
+    artifacts: { buildUrl: "https://expo.dev/artifacts/eas/test.apk" },
+  };
+  assert.deepEqual(androidBuildArtifact([build], plan), {
+    id: build.id,
+    url: build.artifacts.buildUrl,
+  });
+  for (const builds of [[], [build, build], {}, null]) {
+    assert.throws(() => androidBuildArtifact(builds, plan), /exactly one/);
+  }
+  for (const override of [
+    { status: "ERRORED" },
+    { status: "IN_PROGRESS" },
+    { platform: "IOS" },
+    { buildProfile: "ait" },
+    { appVersion: "1.2.4" },
+    { appBuildVersion: "1002004" },
+    { id: "bad\nartifact_url=other" },
+    { artifacts: {} },
+    { artifacts: { buildUrl: "http://expo.dev/test.apk" } },
+  ])
+    assert.throws(() => androidBuildArtifact([{ ...build, ...override }], plan));
 });

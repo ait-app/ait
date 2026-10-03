@@ -4,7 +4,7 @@
 Rust `daemon`。发布边界见 [ADR-053](../decisions/clients/adr-053-paseo-desktop-release.md)，
 旧桌面源码的移除见 [当前架构](../architecture/README.md)。
 
-从 0.0.15 起，手动运行 GitHub Release 时可勾选 Android ARM64、ARMv7 APK，默认关闭。
+从 0.0.15 起，手动运行 GitHub Release 时可勾选 Android APK，默认关闭。当前通过 EAS 生成通用 APK。
 推送标签只自动构建桌面；选中 Android 后才等待全部选定平台成功并统一发布。
 APK 的签名方式、安装要求与手动测试入口见 [Android APK 发布](android-releases.md)。
 
@@ -16,16 +16,15 @@ APK 的签名方式、安装要求与手动测试入口见 [Android APK 发布](
 
 ## 发布产物
 
-| 平台            | 架构                | 文件                                                     |
-| --------------- | ------------------- | -------------------------------------------------------- |
-| Linux           | x86_64              | `Ait-linux-x86_64.AppImage`                              |
-| Linux           | x86_64              | `Ait-VERSION-linux-x64.tar.gz`                           |
-| macOS           | Apple Silicon arm64 | `Ait-VERSION-macos-arm64.dmg`                            |
-| macOS           | Apple Silicon arm64 | `Ait-VERSION-macos-arm64.zip`                            |
-| Android（可选） | arm64               | `Ait-VERSION-android-arm64.apk`                          |
-| Android（可选） | armv7               | `Ait-VERSION-android-armv7.apk`                          |
-| 自动更新        | 各平台              | `latest-linux.yml`、`latest-mac.yml`、生成的 `.blockmap` |
-| 校验            | 全部资产            | `SHA256SUMS`                                             |
+| 平台            | 架构                    | 文件                                                     |
+| --------------- | ----------------------- | -------------------------------------------------------- |
+| Linux           | x86_64                  | `Ait-linux-x86_64.AppImage`                              |
+| Linux           | x86_64                  | `Ait-VERSION-linux-x64.tar.gz`                           |
+| macOS           | Apple Silicon arm64     | `Ait-VERSION-macos-arm64.dmg`                            |
+| macOS           | Apple Silicon arm64     | `Ait-VERSION-macos-arm64.zip`                            |
+| Android（可选） | 通用（含 ARM64、ARMv7） | `Ait-VERSION-android.apk`                                |
+| 自动更新        | 各平台                  | `latest-linux.yml`、`latest-mac.yml`、生成的 `.blockmap` |
+| 校验            | 全部资产                | `SHA256SUMS`                                             |
 
 AppImage 文件名保持稳定，版本体现在 Release 标签和应用内部。Windows、deb/rpm、其他架构
 和独立 CLI 不属于本次发布。安装包 `resources/bin/` 中只有 `daemon`；Electron 主程序与
@@ -59,7 +58,7 @@ git push origin v0.0.15
 ```
 
 `.github/workflows/release.yml` 在 Linux x86_64 和 macOS arm64 原生 runner 上构建桌面，
-仅在手动选择 `build_android` 时调用 Android 工作流构建两个 APK：
+仅在手动选择 `build_android` 时调用 Android 工作流通过原有 `production-apk` profile 构建通用 APK：
 
 1. 校验标签和全部活跃版本，安装根 npm workspace，验证发布脚本。
 2. 用锁定依赖只构建 `daemon` 的 `daemon`。

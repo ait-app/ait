@@ -57,8 +57,7 @@ async function fixture(t, platform) {
 }
 
 async function addAndroidAssets(directory) {
-  for (const arch of ["arm64", "armv7"])
-    await writeFile(path.join(directory, `Ait-0.0.7-android-${arch}.apk`), `APK for ${arch}`);
+  await writeFile(path.join(directory, "Ait-0.0.7-android.apk"), "universal APK");
 }
 
 test("release assets match electron-builder's target-specific architecture names", async () => {
@@ -83,7 +82,7 @@ test("checksums desktop and Android installers, updater metadata and blockmaps",
     directory: linux.destination,
     includeAndroid: true,
   });
-  assert.equal(names.length, 9);
+  assert.equal(names.length, 8);
   assert(names.includes(blockmap));
   const lines = (await readFile(path.join(linux.destination, "SHA256SUMS"), "utf8"))
     .trim()
@@ -127,7 +126,7 @@ test("desktop-only verification is the default and Android requires an explicit 
   assert.equal(verify("--android").status, 0);
   assert.equal(
     (await readFile(path.join(linux.destination, "SHA256SUMS"), "utf8")).trim().split("\n").length,
-    8,
+    7,
   );
   assert.notEqual(verify("--andriod").status, 0, "unknown options must fail closed");
 });
@@ -144,13 +143,13 @@ test("rejects incomplete releases and unintended platform assets", async (t) => 
   const options = { version: input.version, directory: input.destination, includeAndroid: true };
   await assert.rejects(
     verifyReleaseAssets(options),
-    /Missing release asset: Ait-0.0.7-android-arm64.apk/,
+    /Missing release asset: Ait-0.0.7-android.apk/,
   );
   await addAndroidAssets(input.destination);
-  await rm(path.join(input.destination, "Ait-0.0.7-android-armv7.apk"));
+  await rm(path.join(input.destination, "Ait-0.0.7-android.apk"));
   await assert.rejects(
     verifyReleaseAssets(options),
-    /Missing release asset: Ait-0.0.7-android-armv7.apk/,
+    /Missing release asset: Ait-0.0.7-android.apk/,
   );
   await addAndroidAssets(input.destination);
   await writeFile(path.join(input.destination, "Ait-Setup.exe"), "unexpected");
