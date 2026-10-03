@@ -1293,6 +1293,70 @@ it("fills every cached workspace beneath live updates received during the SQLite
   database.close();
 });
 
+describe("directory event capabilities", () => {
+  it.each([
+    { advertised: ["status.server_info"], expected: [] },
+    { advertised: [], expected: [] },
+    { advertised: ["project.update"], expected: ["project.update"] },
+    { advertised: undefined, expected: ["project.update", "script_status_update"] },
+  ])("subscribes only to supported topics: $advertised", async ({ advertised, expected }) => {
+    const serverId = "directory-event-capabilities";
+    const { client, directory } = createDirectory(serverId);
+    const info = {
+      status: "server_info" as const,
+      serverId,
+      sessionEventTypes: advertised,
+      features: { directorySubscriptions: true, projectList: true, workspaceMultiplicity: true },
+    };
+    Object.assign(client, { getLastServerInfoMessage: () => info });
+    useSessionStore.getState().initializeSession(serverId, client as unknown as DaemonClient, 1);
+    useSessionStore
+      .getState()
+      .updateSessionServerInfo(serverId, { ...info, hostname: null, version: "test" });
+    const observeEvents = vi.spyOn(client, "observeEvents");
+    const observeAgents = vi.spyOn(client, "observeAgents");
+    const observeWorkspaces = vi.spyOn(client, "observeWorkspaces");
+    try {
+      directory.setDemand({}, true);
+      await directory.refreshDemand();
+      if (expected.length) expect(observeEvents).toHaveBeenCalledExactlyOnceWith(expected);
+      else expect(observeEvents).not.toHaveBeenCalled();
+      expect(observeAgents).toHaveBeenCalledOnce();
+      expect(observeWorkspaces).toHaveBeenCalledOnce();
+      expect(useSessionStore.getState().sessions[serverId]?.projects.size).toBe(1);
+
+      // The workspace stream continues delivering updates even with no legacy topics.
+      client.emit({
+        type: "workspace_update",
+        payload: {
+          kind: "upsert",
+          workspace: {
+            id: "workspace-live",
+            projectId: "project-1",
+            projectDisplayName: "acme/app",
+            projectRootPath: "/repo/app",
+            workspaceDirectory: "/repo/app",
+            projectKind: "git",
+            workspaceKind: "local_checkout",
+            name: "Live workspace",
+            status: "done",
+            statusEnteredAt: null,
+            activityAt: null,
+            archivingAt: null,
+            diffStat: null,
+            scripts: [],
+          },
+        },
+      });
+      expect(
+        useSessionStore.getState().sessions[serverId]?.workspaces.get("workspace-live")?.name,
+      ).toBe("Live workspace");
+    } finally {
+      directory.dispose();
+    }
+  });
+});
+
 describe("snapshot-only host directories", () => {
   it("loads and polls snapshots without unsupported subscriptions, then stops without demand", async () => {
     vi.useFakeTimers();

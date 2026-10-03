@@ -273,7 +273,16 @@ export class DirectorySync {
   private observeDirectoryEvents(): void {
     if (this.eventSubscription || !this.supportsDirectorySubscriptions()) return;
     const { client, source } = this.requireOnline();
-    this.eventSubscription = client.observeEvents(["project.update", "script_status_update"]);
+    const available = client.getLastServerInfoMessage()?.sessionEventTypes;
+    const requested: Parameters<DaemonClient["observeEvents"]>[0] = [
+      "project.update",
+      "script_status_update",
+    ];
+    // Rust carries directory updates on the owned workspace/agent subscriptions.
+    // Requesting unsupported legacy topics rejects the entire event subscription.
+    const events = available ? requested.filter((event) => available.includes(event)) : requested;
+    if (events.length === 0) return;
+    this.eventSubscription = client.observeEvents(events);
     this.eventSubscription.subscribe({
       snapshot: () => {},
       update: (message) => {
