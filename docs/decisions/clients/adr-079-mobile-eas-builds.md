@@ -9,7 +9,8 @@ iOS 已通过 EAS 云构建并提交 TestFlight，Android APK 则在自托管 ru
 
 ## 决策
 
-- 保留现有 `eas.json`、Expo 原生配置和 npm 构建命令。Android 使用 `production-apk`，
+- 保留现有 Expo 原生配置和 npm 构建命令。Android 使用 `production-apk`，
+  仅将该 profile 的 Android 构建资源设为 `medium`，适配团队的 Free 套餐。
   iOS 继续使用 `ait`，工作流按 iOS 的方式加载 Ait EAS 项目身份。
 - Android 工作流使用 GitHub 托管 Ubuntu runner 发起 EAS 构建并等待结果。编译、架构和
   签名遵循现有 EAS profile，不额外注入 Gradle 参数或分包插件。
@@ -22,6 +23,6 @@ iOS 已通过 EAS 云构建并提交 TestFlight，Android APK 则在自托管 ru
 
 ## 后果
 
-不再需要 Android 自托管 runner。EAS 项目需要配置构建凭据，并具备原 profile 要求的
-`large` 构建资源。切换签名证书会影响旧测试签名应用的覆盖安装。
+不再需要 Android 自托管 runner。团队新项目使用 EAS 托管的新 Android keystore，
+在本地 CLI 完成一次配置后，CI 冻结并复用该凭据。切换签名证书会影响旧签名应用的覆盖安装。
 实际云端编译以工作流运行结果为准，操作步骤见 [Android APK 发布](../../operations/android-releases.md)。

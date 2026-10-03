@@ -44,6 +44,15 @@ APK 使用原 profile 默认的 EAS 托管签名。首次 CI 构建前须在 EAS
 原测试签名安装包不能直接被不同证书签名的同包名 APK 覆盖。
 本流程提供 GitHub APK 下载，Google Play 内测仍按原有发布指南执行。
 
+首次配置签名时，在已登录 Expo 的本地终端执行：
+
+```bash
+cd apps/mobile
+eas credentials:configure-build --platform android --profile production-apk
+```
+
+团队新项目使用新建的 Android keystore，由 EAS 托管并供后续构建复用。密钥不进入仓库。
+
 Android APK 与桌面附件共用 Release 中的 `SHA256SUMS` 和 `BUILD-INFO.json`。
 前者包含 APK 的 SHA-256，后者记录版本、实际源码 SHA、工作流 SHA 和运行链接。
 下载全部附件到同一目录后可运行：
@@ -65,7 +74,8 @@ iOS 继续使用 `ait`。`eas.json` 中的继承关系、Node 版本、Gradle �
 在仓库 Settings → Secrets and variables → Actions 配置 `EXPO_TOKEN`，令牌对应的 Expo
 账号须有 `sd542927172s-team/ait` 项目的构建权限。正式发布和测试发布都将此 Secret 传入
 Android 可复用工作流。若原来的令牌只放在 `ios-testflight` Environment 中，还需要配置
-仓库级 Secret。原 `production-apk` 使用 `large` 资源，需要支持该资源的 Expo 套餐。
+仓库级 Secret。`production-apk` 显式使用 `medium` 构建资源，适配团队当前的 Free 套餐；
+APK 类型和 Gradle 命令保持原样。
 
 GitHub 托管 Ubuntu runner 触发 EAS、等待结果并下载 APK，仅安装 Android Build Tools
 用于验证。EAS 执行依赖安装、共享 UI 和终端 WebView 构建、Expo prebuild 与 Gradle 编译。
