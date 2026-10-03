@@ -1,107 +1,119 @@
-# ADR-052：原生 Provider 能力补齐
+# ADR-052: Native provider capability completion
 
-- 状态：已接受，已实现
-- 日期：2026-09-26
-- 修订：[ADR-041](adr-041-agent-controls-provider-inspection.md) 中基于普通生成 schema 得出的 Codex plan mode 限制。
-- 验证：[能力矩阵与交付报告](../../reports/providers/provider-parity.md) 记录实现范围、测量源码和未完成的环境验证。
+Status: Accepted; implementation tracked in [the parity checklist](../../plans/provider-parity.md).
 
-## 背景
+## Context
 
-Rust daemon 通过 Codex app-server 和 Claude Code stream-json 执行原生会话。
-最初的纯文本接入未暴露导入的 Paseo 客户端所需的全部能力。
-本次比较基准为 Paseo `2c8e8a826810337492cc5a38bb0bbd705b6fb632`。
+The independent Rust server already delegates native session execution to Codex app-server
+and Claude Code stream-json. Its initial text-only port did not expose several capabilities
+used by the imported Paseo client. The comparison baseline is Paseo
+`2c8e8a826810337492cc5a38bb0bbd705b6fb632`.
 
-## 决策
+## Decisions
 
-### 原生所有权、配置与权限
+- Keep native tools, credentials, provider history and permission-rule persistence in their
+  respective CLI. The host validates intent, coordinates native sessions and projects UI facts.
+  This does not change ADR-001 v4's Message tree or introduce provider dependencies into domain.
+- Validate provider options and MCP definitions before launching native processes. Map the
+  common MCP and exact tool policy contracts into each CLI's own configuration. Unknown
+  fields and ambiguous wildcard preapprovals are rejected. Configuration changes take effect
+  at the next turn by resuming the same identity in a new process when required.
+- Permission responses distinguish one-call approval, session approval and explicitly selected
+  native persistent rules. Native suggested amendments are retained exactly; a generic Allow
+  action cannot acquire the authority of a persistent amendment. Claude's explicit SDK rule
+  updates retain their destination. Credentials and MCP configuration are not public snapshots.
+- Primitive MCP forms use the existing question UI and return typed, validated values. Unsupported
+  nested schemas and URL elicitation are declined without terminating an otherwise usable CLI.
+- Usage events contain provider facts, not billing estimates. Store the latest complete usage
+  snapshot under runtime-info `extra.lastUsage`, expose `lastUsage` in public snapshots and
+  publish `usage_updated` after persistence. Repeated observations replace values rather than
+  incrementing totals. Context occupancy comes from the current request or native compaction,
+  never cumulative session token usage. Preserve usage across native resume and runtime refresh.
+- Negotiate Codex planning with `collaborationMode/list`; check native version for auto-review
+  and goal support. The installed CLI's **experimental** schema contains `collaborationMode`.
+  ADR-041's conclusion based on the ordinary generated schema is superseded on this point.
+  Clearing a previously enabled plan mode sends an explicit default collaboration mode.
+- Retain existing bounded frame, event and history processing. New rich-input and scheduling
+  capabilities must validate complete intent before native admission, preserve voice turn
+  ownership, and never automatically replay uncertain native submissions.
+- Rich prompts preserve context/text/image/attachment ordering. Decode native image results into
+  private content-addressed files under `agents/provider-images`; live output and historical
+  projection use the same directory and source identity. Store markdown references in timelines,
+  not the image base64. Structured tool previews retain bounded commands, results and file diffs.
+- Claude steering writes `priority: next` into the active SDK input stream with user replay enabled.
+  Admission means a completed stdin write, not an inference acknowledgement. Native echoes or
+  command lifecycle observations drain unread steers before terminal completion; cancellation
+  closes the query so unread inputs cannot resume an interrupted turn. Native permission withdrawal
+  resolves the corresponding public card and clears permission attention only when no requests remain.
+- Timeline schema v4 adds independent input receipts with payload/policy fingerprints and a FIFO
+  of unsubmitted rich prompts. Commit a claim before native submission, then its outcome. A crash
+  after claim leaves an uncertain receipt that is never replayed; only unclaimed queued work can
+  resume. Ordinary send defaults to interrupt-and-deliver, and definite steer rejection can use
+  that fallback. Explicit cancel withdraws queued inputs. Voice admission remains exclusive.
+- Session-scoped Codex asynchronous questions survive turn completion and restart in opaque native
+  resume metadata. Answers use separate immediate-admission receipts: a definitive refusal can be
+  retried, but it never interrupts the current task or enters the fallback queue. An uncertain write
+  remains fenced. Resolutions are separate immutable display items; ordinary native tool approvals
+  still expire with their transport.
+- Native subagent ports carry verified ancestry and independent child progress. Timeline schema v5
+  retains child display descriptors; child timelines use a separate scope and publish updates to
+  observers of their registered parent. Native discovery and live announcements supply identity;
+  arbitrary foreign-thread output cannot enroll a child. Claude task aliases retain the first tool
+  call identity, and explicit background tasks may continue after the parent foreground turn ends.
+  Read-only discovery can ignore an unfinished final JSONL fragment from an actively written child;
+  complete malformed records and oversized frames remain errors.
+- Codex `/compact` and `/goal` use native control RPCs with immediate-admission receipts and do
+  not interrupt foreground input. Enable native goals only after the CLI version probe succeeds.
+  Provider-originated `turn/started` events establish autonomous foreground turn ownership in the
+  host. Bounded control-result notes persist in opaque resume metadata and replay alongside native
+  history. Native custom prompt expansion reads the CLI's prompt directory and substitutes quoted
+  positional/named arguments without evaluating a shell.
+- Codex plan proposals produce durable review requests. Explicit approval disables plan mode and
+  admits one implementation prompt through the same immediate receipt mechanism as asynchronous
+  answers. Rejecting or replacing a proposal records an immutable resolution; it does not submit
+  implementation work. A native accepted goal/compaction that has not yet announced its turn is
+  pending work for finish-wait and message admission.
+- Claude CLI model aliases inherit capabilities only from the native `resolvedModel` field.
+  Runtime initialization can update the actual model without dropping persisted usage. Arbitrary
+  host client message IDs are mapped to native UUIDs in bounded opaque metadata, and both live
+  projections and replay preserve the original correlation ID.
+- Native task tools become immutable todo snapshots, including Claude TaskCreate/TaskUpdate/
+  TaskList and Codex plan progress. Claude restores task and usage observations before new input.
+  Native root output after a completed turn establishes a distinct autonomous turn; child output
+  remains in its own scope. Direct stream-JSON transport has no JavaScript SDK iterator to recover
+  after an interrupt exception; canceled queries are closed, and queued unsubmitted input resumes
+  through a new query against the same native history. Uncertain submitted input is never replayed.
+- Child recovery reads provider-verified ancestry. Claude restores native task/tool aliases and
+  outstanding tool observations; Codex buffers bounded early child events until native spawn
+  provenance arrives. Workflow summaries require an original Workflow tool-result/run link and
+  use bounded regular-file readers for summaries/results and recursively discover bounded Workflow transcripts. Nonterminal persisted Workflow runs
+  are failed on replay, not resurrected as running. Closed/lost processes retire cached running
+  child descriptors. Child inspection never registers a new host Agent.
+- Claude diagnostics use `auth status --json` and project only authentication state/method.
+  Quota reads existing OAuth credentials from the selected credential file or the default macOS
+  keychain, performs a bounded HTTPS GET with redirects disabled, and never refreshes or writes
+  credentials. Native model/surface quota identities, zero usage and unknown usage stay distinct.
+- Existing receipts are checked before new voice-ownership restrictions: an already admitted
+  retry is acknowledged without taking another turn. A queued admission failure is persisted for
+  its own Agent and does not prevent independent Agents from draining their queues. Rewind and
+  cancellation withdraw unsubmitted inputs before changing the native conversation.
+- Claude final structured output absent from native JSONL is retained in bounded opaque result notes,
+  so history reconciliation does not discard an acknowledged result. Repeated Workflow results are
+  content-deduplicated while changed results remain visible.
+- A provider's history inspection may return opaque resume metadata for intentional empty branches.
+  This avoids treating an arbitrary missing native transcript as an empty successful rewind.
+- Conversation rewinds must retain immutable host history generations. Native file checkpoint
+  rewind remains a provider capability; Codex has no file rewind in the reference implementation
+  and must not advertise it or emulate a whole-workspace restore.
+- Claude conversation rewind follows the SDK fork format: write a new private transcript with
+  remapped transcript UUIDs and parent links, preserving original history. Native file checkpoints
+  are restored through `rewind_files`; forks start without the source's undo history. Rewinding
+  both restores files before changing the conversation, so a later fork failure cannot promise that
+  file restoration was rolled back. Reference: [official SDK fork transform](https://github.com/anthropics/claude-agent-sdk-python/blob/main/src/claude_agent_sdk/_internal/session_mutations.py).
 
-- 原生工具、凭据、Provider 历史和持久权限规则由各自 CLI 持有；宿主校验用户意图、协调
-  原生会话并投影界面所需事实，不向 domain 引入 Provider 依赖。
-- 启动原生进程前校验 Provider options 与 MCP 定义，将公共 MCP 和精确工具策略映射到
-  各 CLI 的配置。拒绝未知字段及含糊的通配符预授权。配置修改在下一轮生效；必要时用
-  新进程恢复同一原生身份。
-- 审批响应区分单次批准、会话批准和用户明确选择的原生持久规则。原生建议的规则修改
-  原样保留，普通 Allow 操作不能获得持久授权。Claude SDK 的显式规则更新保留目标范围。
-  凭据和 MCP 配置不进入公开快照。
-- 基础类型的 MCP 表单复用现有提问界面，返回经过类型校验的值。不支持的嵌套 schema
-  和 URL 交互明确拒绝，不因此终止仍可用的 CLI。
-- Codex 通过 `collaborationMode/list` 协商 plan mode，并检查原生版本是否支持 auto-review
-  和 goal。已安装 CLI 的实验性 schema 包含 `collaborationMode`，据此修订 ADR-041 的
-  对应结论。关闭先前启用的 plan mode 时，显式发送默认协作模式。
-- 保持帧、事件和历史处理的资源上限。丰富输入与调度功能必须在原生准入前校验完整意图，
-  保留语音轮次所有权，不自动重放结果不确定的原生提交。
+## Consequences
 
-### 用量、输入与持久回执
-
-- 用量事件记录 Provider 事实，不估算费用。将最近一次完整快照存入运行时信息的
-  `extra.lastUsage`，在公开快照中暴露 `lastUsage`，持久化后发布 `usage_updated`。
-  重复观测替换数值，不累加。上下文占用来自当前请求或原生压缩，不使用会话累计 token
-  用量；原生恢复和运行时刷新保留已记录用量。
-- 丰富提示保留上下文、文本、图片和附件的顺序。原生图片结果解码到
-  `agents/provider-images` 下按内容寻址的私有文件，实时输出和历史投影使用相同目录
-  与来源身份。时间线保存 Markdown 引用，不保存图片 base64；工具预览保留有界命令、
-  结果和文件 diff。
-- Claude steering 向活动 SDK 输入流写入 `priority: next` 并启用用户消息回放。
-  准入以 stdin 写入完成为准，不等于推理已确认。原生回显或命令生命周期观测在终态前
-  消化未读追加输入；取消时关闭 query，避免未读输入恢复被中断的轮次。
-  原生权限撤回会解决相应公开卡片，只有不存在其他待处理请求时才清除权限提醒。
-- 时间线 schema v4 增加带 payload/policy 指纹的独立输入回执，以及尚未提交的丰富提示
-  FIFO。原生提交前先持久化认领，再记录结果；认领后崩溃留下不确定回执，不能重放。
-  只有尚未认领的排队任务可以恢复。普通发送默认中断后投递；steer 被明确拒绝时可以
-  使用同一回退方式。显式取消撤回排队输入，语音准入保持独占。
-- 会话级 Codex 异步问题保存在不透明的原生恢复元数据中，可跨轮次完成和重启恢复。
-  回答使用独立的即时准入回执：明确拒绝后可重试，但不打断当前任务，也不进入回退队列。
-  不确定写入仍受隔离。解决结果作为独立、不可变的显示项记录；普通原生工具审批仍随
-  对应传输失效。
-- Codex `/compact` 和 `/goal` 使用原生控制 RPC 与即时准入回执，不打断前台输入。
-  原生版本探测成功后才启用 goal。Provider 发起的 `turn/started` 在宿主建立自主前台
-  轮次所有权。有界控制结果保存在不透明恢复元数据中，并随原生历史回放。
-  自定义提示从 CLI 提示目录读取，替换带引号的位置参数和命名参数，不执行 shell。
-- Codex 计划提案产生持久审阅请求。明确批准后关闭 plan mode，并通过与异步回答相同的
-  即时回执机制接纳一条实施提示。拒绝或替换提案只记录不可变的解决结果，不提交实施任务。
-  原生已接受但尚未宣布轮次的 goal/compaction，在完成等待和消息准入中视为待处理工作。
-- Claude 模型别名只从原生 `resolvedModel` 字段继承能力。运行时初始化可以更新实际模型，
-  同时保留已持久化用量。任意宿主消息 ID 通过有界不透明元数据映射为原生 UUID；
-  实时投影与回放保留原始关联 ID。
-- 幂等重试先检查已有回执，再应用新的语音所有权限制；已准入的重试直接确认，不再占用
-  一轮。排队准入失败持久化到所属 Agent，不阻止其他 Agent 排空各自队列。
-  回退和取消在改变原生会话前撤回尚未提交的输入。
-
-### 子任务、历史与恢复
-
-- 原生子 Agent port 携带已验证的父子关系与独立进度。时间线 schema v5 保留子任务显示
-  描述；子时间线使用独立范围，并向已登记父任务的观察者发布更新。原生发现与实时通知
-  提供身份，任意外部线程输出不能注册为子任务。Claude 任务别名保留首次工具调用身份，
-  显式后台任务可在父前台轮次结束后继续。
-- 只读发现可忽略正在写入的子任务 JSONL 最后一段未完成记录；完整但格式错误的记录和
-  超大帧仍报错。
-- 原生任务工具投影为不可变 todo 快照，包括 Claude TaskCreate/TaskUpdate/TaskList 和
-  Codex 计划进度。Claude 在新输入前恢复任务与用量观测。已完成轮次后的原生根输出建立
-  新的自主轮次，子输出保留在独立范围。直接 stream-json 传输没有可在中断异常后恢复的
-  JavaScript SDK 迭代器：取消 query 后将其关闭，通过同一原生历史的新 query 处理尚未
-  提交的队列输入；不确定的已提交输入不重放。
-- 子任务恢复读取 Provider 验证过的父子关系。Claude 恢复任务、工具别名和未完成工具
-  观测；Codex 在原生 spawn 来源到达前有界缓存早到的子事件。Workflow 摘要必须有
-  原始 Workflow 工具结果与运行记录的关联，使用有界普通文件读取器获取摘要、结果及
-  递归发现的记录。持久化的非终态 Workflow 在回放时标为失败，不恢复为运行中。
-  进程关闭或丢失时清除缓存的运行态子任务；检查子任务不注册新的宿主 Agent。
-- Claude 通过 `auth status --json` 诊断，仅投影认证状态和方式。额度查询只读指定凭据
-  文件或默认 macOS 钥匙串中的 OAuth 凭据，使用有界 HTTPS GET 并禁止重定向，不刷新
-  或写回凭据。模型/接口额度身份、零用量与未知用量分别表示。
-- Claude 原生 JSONL 未包含的最终结构化输出保存在有界不透明结果记录中，避免历史核对
-  丢失已确认结果。重复 Workflow 结果按内容去重，变化后的结果继续显示。
-- Provider 历史检查可为有意创建的空分支返回不透明恢复元数据；不能把任意缺失的原生
-  记录当作成功回退后的空历史。
-- 会话回退保留不可变的宿主历史代次。文件检查点回退仍是 Provider 能力；参考实现中的
-  Codex 不支持文件回退，不能声明该能力或用整个工作区恢复来模拟。
-- Claude 会话回退遵循 SDK fork 格式：写入新的私有记录，重映射记录 UUID 与父链接，
-  保留原始历史。原生文件检查点通过 `rewind_files` 恢复，新分支不继承来源的撤销历史。
-  同时回退时先恢复文件，再切换会话；后续创建分支失败不能承诺文件恢复已撤销。
-  参考：[官方 SDK fork 转换](https://github.com/anthropics/claude-agent-sdk-python/blob/main/src/claude_agent_sdk/_internal/session_mutations.py)。
-
-## 后果与验证
-
-能力声明来自已实现且原生支持的行为。离线原生模拟端验证请求参数与事件顺序，
-已安装 CLI 检查和真实推理验证分别记录。
-已完成的实施清单不再单独维护；实现范围、历史覆盖率和剩余平台或在线验证限制统一见
-[能力矩阵与交付报告](../../reports/providers/provider-parity.md)。
+Capabilities are projected from implemented/native-supported behavior. Offline native peers
+verify request parameters and event sequences; installed-CLI checks and inference checks are
+reported separately. The checklist and final coverage report are the authority for implementation
+and validation status; this ADR does not assert completion of unchecked work.

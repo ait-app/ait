@@ -38,7 +38,7 @@ Paseo catalog 继续由 protocol 维护，已有方法的消息方向来自 cata
 
 protocol 对 metadata 基础协议的既有导出保持不变。能力包不引用 api 或
 protocol；不新增 crate 依赖。分组声明不转移执行、响应发送、订阅激活、任务跟踪、
-取消或 drain 的所有权，也不改变领域边界。
+取消或 drain 的所有权，也不修改 ADR-001 v4 的领域边界。
 
 ## 验证
 

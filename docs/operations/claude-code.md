@@ -57,6 +57,6 @@ export AIT_SERVER_CLAUDE_BIN=/absolute/path/to/claude
 子 Agent、后台任务和 Workflow 使用独立时间线，父轮次完成后仍可接收子任务输出。
 子任务由原生父子关系确认身份，关闭或丢失进程后不会继续显示为运行中。
 
-完整边界见 [ADR-052](../decisions/providers/adr-052-native-provider-capabilities.md)，实现范围和历史验证结果见
-[能力矩阵与验证报告](../reports/providers/provider-parity.md)。
+完整边界见 [ADR-052](../decisions/providers/adr-052-native-provider-capabilities.md)，当前验证状态见
+[能力补齐清单](../plans/provider-parity.md)和[验证报告](../reports/providers/provider-parity.md)。
 [初版报告](../reports/providers/claude-code-provider.md)保留初次接入时的历史数据。

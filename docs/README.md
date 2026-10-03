@@ -13,13 +13,14 @@
 
 ## 架构决策
 
+- [ADR-076：Android 账户与中继客户端](decisions/clients/adr-076-android-account-relay.md)：共享账户会话、Android 安全存储、原生认证连接与下载。
+- [ADR-075：Relay 协议定义与连接执行分离](decisions/clients/adr-075-relay-protocol-modules.md)：中继类型化消息、WebSocket 收发边界与单连接协商标识。
+- [ADR-074：账户发现与按需反向中继](decisions/clients/adr-074-account-host-relay.md)：邮箱密码登录、主机注册、独立的控制与数据 WebSocket，以及单连接调度；[初版验证与覆盖率报告](reports/clients/account-host-relay-validation.md)。
+
 [ADR 分类索引](decisions/README.md)按 daemon、工作区、Provider、客户端和品牌整理。
-决策文档说明具体行为及其修订关系；当前目录与依赖图见[架构说明](architecture/README.md)。
+决策文档说明具体行为及其修订关系；当前目录与依赖图以当前架构和 ADR-072 为准。
 
 - [桌面主窗口导航边界](decisions/clients/adr-073-desktop-renderer-navigation.md)：应用 preload 的来源限制。
-- [账户发现与按需反向中继](decisions/clients/adr-074-account-host-relay.md)：登录、主机发现、反向连接与单连接调度。
-- [中继协议模块](decisions/clients/adr-075-relay-protocol-modules.md)：类型化消息、WebSocket 收发边界与协商标识。
-- [Android 账户客户端](decisions/clients/adr-076-android-account-relay.md)：共享账户会话、安全存储、认证连接与下载。
 
 ## 运维与发布
 
@@ -34,7 +35,7 @@
 
 - [Rust style guide](policy/rust.md)：Rust 代码、测试、lint 与覆盖率规范。
 - [文档规范](policy/documentation.md)：分类、维护和历史资料清理规则。
-- [Provider 能力矩阵与验证](reports/providers/provider-parity.md)：已实现能力、历史测量与平台验证限制。
+- [Provider 能力清单](plans/provider-parity.md)：当前能力与后续工作。
 - [大 Diff 加载与超限降级](reports/workspace/large-diff-loading.md)：输出预算、连接保持与验证结果。
 - [验证报告分类索引](reports/README.md)：实现、兼容性、发布及覆盖率记录。
 - [2026-10-03 仓库审计](reports/daemon/repository-audit-2026-10-03.md)：审计范围、已修复问题与验证限制。

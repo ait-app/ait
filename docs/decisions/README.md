@@ -41,11 +41,15 @@
 - [ADR-041：Agent 原生控制与 Provider 诊断、用量](providers/adr-041-agent-controls-provider-inspection.md)
 - [ADR-046：Codex 增量显示历史与运行中追加输入](providers/adr-046-codex-streaming-and-steering.md)
 - [ADR-050：独立 server 的 Claude Code Provider](providers/adr-050-claude-code-provider.md)
-- [ADR-052：原生 Provider 能力补齐](providers/adr-052-native-provider-capabilities.md)
+- [ADR-052: Native provider capability completion](providers/adr-052-native-provider-capabilities.md)
 - [ADR-058：Server 的有界 metadata generation](providers/adr-058-daemon-metadata-generation.md)
 - [ADR-067：DeepSeek Harness ACP Provider](providers/adr-067-deepseek-harness-acp.md)
 
-## 客户端、连接与发布
+## 客户端、连接与品牌
+
+- [ADR-076：Android 账户与中继客户端](clients/adr-076-android-account-relay.md)
+- [ADR-075：Relay 协议定义与连接执行分离](clients/adr-075-relay-protocol-modules.md)
+- [ADR-074：账户发现与按需反向中继](clients/adr-074-account-host-relay.md)
 
 - [ADR-044：Paseo 前端适配 Rust server 协议](clients/adr-044-paseo-client-rust-transport.md)
 - [ADR-048：Paseo workspace 与 Rust 桌面服务启动](clients/adr-048-paseo-desktop-rust-launcher.md)
@@ -59,9 +63,6 @@
 - [ADR-063：Ait 本地 UI 包与原生测试连接](clients/adr-063-ait-local-ui-packages.md)
 - [ADR-070：Ait iOS TestFlight 手动发布工作流](clients/adr-070-ios-testflight-release.md)
 - [ADR-073：桌面主窗口的导航信任边界](clients/adr-073-desktop-renderer-navigation.md)
-- [ADR-074：账户发现与按需反向中继](clients/adr-074-account-host-relay.md)
-- [ADR-075：Relay 协议定义与连接执行分离](clients/adr-075-relay-protocol-modules.md)
-- [ADR-076：Android 账户与中继客户端](clients/adr-076-android-account-relay.md)
 
 ## 品牌与视觉
 

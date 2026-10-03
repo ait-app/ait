@@ -40,7 +40,15 @@ Project/Workspace 和 Agent runtime 目录、配置、时间线由当前文件�
 浏览器用一次性 WebSocket 票据连接；桌面、Web 和移动端使用同一个 Rust transport adapter。
 连接关闭释放所属订阅，daemon 负责已接纳任务与原生进程的生命周期。
 
-## 账户与中继
+## 名称与兼容
+
+源码、构建产物和运行日志使用 daemon 名称。WebSocket `server_info`、`server.*` 方法、
+`/v1/server/info`、稳定身份文件、`AIT_SERVER_*` 配置与已有数据目录保持兼容。
+当前客户端 API 使用这些字段；目录重命名不迁移或删除用户数据。
+
+旧 CLI、旧独立 worker 及其 Project SQLite 架构已不在当前 workspace 中。旧实现的资料
+从文档树移除，历史可从 Git 查阅。当前语义依据 [ADR 分类索引](../decisions/README.md)，
+启动与连接依据 [daemon 手册](../operations/daemon.md)。
 
 桌面账户管理器持有用户凭据，并向 `api` 传递一次性授权。
 `api` 持有 `relay`；`relay` 使用固定的本地目标地址，不依赖其他 workspace crate。
@@ -56,13 +64,3 @@ Electron 主进程提供桌面适配；Android 的原生适配使用 SecureStore
 Relay 的类型化消息集中在 `crates/relay/src/protocol.rs`，WebSocket 收发集中在
 `transport.rs`；单连接协商标识由 `crates/protocol/src/single.rs` 定义。
 模块职责见 [ADR-075](../decisions/clients/adr-075-relay-protocol-modules.md)。
-
-## 名称与兼容
-
-源码、构建产物和运行日志使用 daemon 名称。WebSocket `server_info`、`server.*` 方法、
-`/v1/server/info`、稳定身份文件、`AIT_SERVER_*` 配置与已有数据目录保持兼容。
-当前客户端 API 使用这些字段；目录重命名不迁移或删除用户数据。
-
-旧 CLI、旧独立 worker 及其 Project SQLite 架构已不在当前 workspace 中。旧实现的资料
-从文档树移除，历史可从 Git 查阅。当前语义依据 [ADR 分类索引](../decisions/README.md)，
-启动与连接依据 [daemon 手册](../operations/daemon.md)。

@@ -1,7 +1,7 @@
 # Codex / Claude Code provider 能力补齐
 
 比较基准是 Paseo `2c8e8a826810337492cc5a38bb0bbd705b6fb632`；范围是 `bins/daemon` 与
-`crates/provider` 构成的独立 Rust daemon，保持 domain 与 Provider adapter 的依赖边界。
+`crates/provider` 构成的独立 Rust server。此次不更改 ADR-001 v4 的 domain 边界。
 此报告替代初版 Claude 接入报告中的能力缺口说明；初版测量仍保留为历史记录。
 
 以下测试与覆盖率记录来自整合提交前的完整工作区快照，revision 和源码指纹见下文。

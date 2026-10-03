@@ -6,7 +6,8 @@
 
 - [2026-10-03 仓库审计与修复](daemon/repository-audit-2026-10-03.md)
 - [Workspace 重命名与文档整理](daemon/workspace-rename.md)
-- [本地 0.0.7 订阅与活动会话兼容性](daemon/local-subscription-failure.md)
+
+- [Local 0.0.7 subscription and live-session compatibility](daemon/local-subscription-failure.md)
 - [main CI 进程与文件订阅修复](daemon/main-ci-process-subscriptions.md)
 - [公共 Context 与具体 crate 分发](daemon/model-context.md)
 - [Server 与本地 Paseo API 对照](daemon/paseo-api-audit-2026-09-29.md)
@@ -15,6 +16,9 @@
 - [Paseo server 定向覆盖率证据](daemon/paseo-server-coverage-2026-09-29/README.md)
 - [Paseo Server PR 提交前验证](daemon/paseo-server-pr-validation-2026-09-29.md)
 - [Paseo WebSocket 接口移植：第一阶段](daemon/paseo-websocket-surface-phase-1.md)
+- [Paseo WebSocket 接口移植：第十阶段](daemon/paseo-websocket-surface-phase-10.md)
+- [Paseo WebSocket 接口移植：第十一阶段](daemon/paseo-websocket-surface-phase-11.md)
+- [Paseo WebSocket 接口移植：第十二阶段](daemon/paseo-websocket-surface-phase-12.md)
 - [Paseo WebSocket 接口移植：第二阶段](daemon/paseo-websocket-surface-phase-2.md)
 - [Paseo WebSocket 接口移植：第三阶段](daemon/paseo-websocket-surface-phase-3.md)
 - [Paseo WebSocket 接口移植：第四阶段](daemon/paseo-websocket-surface-phase-4.md)
@@ -23,9 +27,6 @@
 - [Paseo WebSocket 接口移植：第七阶段](daemon/paseo-websocket-surface-phase-7.md)
 - [Paseo WebSocket 接口移植：第八阶段](daemon/paseo-websocket-surface-phase-8.md)
 - [Paseo WebSocket 接口移植：第九阶段](daemon/paseo-websocket-surface-phase-9.md)
-- [Paseo WebSocket 接口移植：第十阶段](daemon/paseo-websocket-surface-phase-10.md)
-- [Paseo WebSocket 接口移植：第十一阶段](daemon/paseo-websocket-surface-phase-11.md)
-- [Paseo WebSocket 接口移植：第十二阶段](daemon/paseo-websocket-surface-phase-12.md)
 - [protocol 依赖清理](daemon/protocol-dependencies.md)
 - [Plugin 删除与 Schedule / Browser 实施报告](daemon/schedule-browser.md)
 - [独立 server：crate 自有能力分组与安装统计](daemon/server-capability-groups.md)
@@ -74,6 +75,7 @@
 
 - [账户主机中继初版验证](clients/account-host-relay-validation.md)
 - [Relay 协议重构验证](clients/relay-protocol-refactor-validation.md)
+
 - [桌面 daemon 版本状态修复](clients/desktop-daemon-version.md)
 - [AIT 飞鸟 Logo 落地报告](clients/ait-brand-rollout.md)
 - [Ait E2E 迁移：提交准备覆盖率报告](clients/ait-e2e-coverage.md)
@@ -96,12 +98,12 @@
 
 ## 发布验证
 
-- [Ait 0.0.7 发布准备](releases/release-0.0.7.md)
-- [Ait 0.0.7 同版本重建发布](releases/release-0.0.7-rebuild-2026-09-28.md)
-- [Ait 0.0.8 发布准备](releases/release-0.0.8.md)
-- [Ait 0.0.9 发布说明](releases/release-0.0.9.md)
 - [Ait 0.0.10 发布说明](releases/release-0.0.10.md)
 - [Ait 0.0.11 发布说明](releases/release-0.0.11.md)
 - [Ait 0.0.12 发布说明](releases/release-0.0.12.md)
 - [Ait 0.0.13 发布说明](releases/release-0.0.13.md)
 - [Ait 0.0.14 发布说明](releases/release-0.0.14.md)
+- [Ait 0.0.7 同版本重建发布](releases/release-0.0.7-rebuild-2026-09-28.md)
+- [Ait 0.0.7 发布准备](releases/release-0.0.7.md)
+- [Ait 0.0.8 发布准备](releases/release-0.0.8.md)
+- [Ait 0.0.9 发布说明](releases/release-0.0.9.md)

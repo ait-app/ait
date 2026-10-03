@@ -29,8 +29,8 @@ WebSocket header 认证；普通浏览器先向 `POST /v1/auth/ws-ticket` 发送
 
 ## 边界
 
-本次不改变领域模型、Provider 执行或 RPC 能力。Origin/票据属于 api transport，
-不下沉至 domain 或应用服务。
+本次不改变领域模型、Provider 执行或 RPC 能力。ADR-001 v4 的 Message/Session/Run 约束
+继续成立。Origin/票据属于 api transport，不下沉至 domain 或应用服务。
 
 远端监听、HTTPS 部署、移动设备公网访问、SSH/relay/IPC 的 Rust 化不在此决策范围。
 原生 App 继续使用直接 TCP Bearer 通道；Android 可用 `adb reverse` 访问本机 server。

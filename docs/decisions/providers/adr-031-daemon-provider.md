@@ -25,8 +25,8 @@
 
 `domain` 继续拥有纯 Agent 身份、配置和持久化值类型，不依赖 provider、Tokio、SQL 或传输。
 provider 的服务通过端口调用，storage 实现端口；不将 SQLite 或具体 Provider session 引入 domain。
-Provider 名称表示能力包的部署边界，原生 session 的资源所有权与恢复、关闭语义继续遵循
-[ADR-027](adr-027-independent-agent-session-manager.md)。
+Provider 名称表示能力包的部署边界，不改变 ADR-001 v4 的领域语义，也不把原生 session 当作
+Message 树或宿主 Run。ADR-027 的资源所有权与恢复/关闭语义保持不变。
 
 版本化 preset 和 Paseo runtime snapshot 继续是两种不同记录，不在此次重构中合并。
 `catalog.sqlite3`、`agents/agents.json`、schema、回执去重和升级备份保持兼容。

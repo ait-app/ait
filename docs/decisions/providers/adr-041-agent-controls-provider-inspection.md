@@ -11,7 +11,7 @@
 剩余七个 Agent 方法和两个 Provider 方法由 provider 纵向实现：协议 DTO、Provider
 端口、Codex stdio 适配、串行协调、配置和展示持久化均归该 crate。api 继续只合并
 能力并分流；metadata 保留 Workspace placement 和 Session attention 事件所有权。
-不增加 crate 依赖，保持现有领域与能力包边界。
+不增加 crate 依赖，不修改 ADR-001 v4 的领域 Message、Session 或 Run 语义。
 
 ## 模式、feature 与命令
 

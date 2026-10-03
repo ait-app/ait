@@ -13,7 +13,7 @@
 ## 背景
 
 以下背景描述首次建立生命周期边界时的状态；当前执行能力见后续决策与
-[Provider 能力矩阵](../../reports/providers/provider-parity.md)。
+[Provider 能力清单](../../plans/provider-parity.md)。
 
 ADR-026 第六阶段只建立 Paseo Agent 的 durable snapshot、目录和元数据操作。它没有管理原生
 Provider session：`agent.create/resume/send/cancel` 仍是 WebSocket 占位方法。目录记录与运行中的

@@ -2,7 +2,7 @@
 
 - 状态：Accepted
 - 日期：2026-09-25
-- 延续：ADR-037、ADR-044、ADR-045
+- 延续：ADR-037、ADR-044、ADR-045；遵循 ADR-001 v4
 - 用户范围：删除 Plugin；补齐 Schedule 和 Browser，独立于旧 daemon/Ait 能力
 
 ## 决策
