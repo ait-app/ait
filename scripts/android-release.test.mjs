@@ -136,12 +136,12 @@ test("the normal release automatically builds Android and publishes all platform
   assert.equal(workflow.on.workflow_call.secrets, undefined);
   assert.equal(workflow.jobs.publish, undefined);
   assert.equal(release.jobs.android.secrets, undefined);
-  const upload = workflow.jobs.build.steps.find(
-    (step) => step.uses === "actions/upload-artifact@v4",
+  const upload = workflow.jobs.build.steps.find((step) =>
+    step.uses?.startsWith("actions/upload-artifact@"),
   );
   assert.equal(upload.with.name, "ait-android-apk");
-  const download = release.jobs.release.steps.find(
-    (step) => step.uses === "actions/download-artifact@v4",
+  const download = release.jobs.release.steps.find((step) =>
+    step.uses?.startsWith("actions/download-artifact@"),
   );
   assert.equal(download.with.pattern, "ait-*");
   assert.equal(download.with["merge-multiple"], true);
@@ -161,24 +161,4 @@ test("release tooling is checked out after Metro finishes to avoid duplicate wor
   const collection = steps.findIndex((step) => step.name === "Verify and collect APKs");
   assert(build >= 0 && tooling > build && collection > tooling);
   assert.equal(steps[tooling].with.ref, "${{ github.workflow_sha }}");
-});
-
-test("PR dry runs build the merge commit with read-only permissions and no publication job", async () => {
-  const check = yaml.parse(
-    await readFile(
-      new URL("../.github/workflows/android-release-check.yml", import.meta.url),
-      "utf8",
-    ),
-  );
-  assert.deepEqual(Object.keys(check.on), ["pull_request"]);
-  assert.equal(check.permissions.contents, "read");
-  assert.deepEqual(Object.keys(check.jobs), ["prepare", "apk"]);
-  assert.equal(check.jobs.apk.uses, "./.github/workflows/release-android.yml");
-  assert.equal(check.jobs.apk.with.source_commit, "${{ github.sha }}");
-  assert.equal(check.jobs.apk.secrets, undefined);
-  assert.equal(check.concurrency["cancel-in-progress"], true);
-  assert.equal(workflow.concurrency, undefined, "Caller workflows own concurrency isolation");
-  const step = check.jobs.prepare.steps.find((value) => value.id === "version");
-  const result = spawnSync("bash", ["-n"], { input: step.run, encoding: "utf8" });
-  assert.equal(result.status, 0, result.stderr);
 });

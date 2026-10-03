@@ -18,7 +18,7 @@ jobs:
       rust: ${{ steps.filter.outputs.rust }}
       ui: ${{ steps.filter.outputs.ui }}
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
         if: github.event_name == 'push'
         with:
           fetch-depth: 2
@@ -55,13 +55,13 @@ jobs:
               - '.github/workflows/release.yml'
               - '.github/workflows/release-ios-testflight.yml'
               - '.github/workflows/release-android.yml'
-              - '.github/workflows/android-release-check.yml'
+              - '.github/workflows/release-android-test.yml'
 
   docs:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
+      - uses: actions/checkout@v5
+      - uses: actions/setup-node@v5
         with:
           node-version: 24
       # Source moves can break documentation links even without Markdown edits.
@@ -74,7 +74,7 @@ jobs:
     if: needs.changes.outputs.rust == 'true'
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
       # Match rust-toolchain.toml so new stable lints cannot silently break this job.
       - uses: dtolnay/rust-toolchain@1.98.1
         with:
@@ -88,8 +88,8 @@ jobs:
     if: needs.changes.outputs.ui == 'true'
     runs-on: ubuntu-24.04
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
+      - uses: actions/checkout@v5
+      - uses: actions/setup-node@v5
         with:
           node-version: 24
           cache: npm

@@ -65,12 +65,12 @@ jobs:
           fi
 
       - name: Check out release source
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
         with:
           ref: ${{ inputs.source_commit || inputs.tag || github.ref }}
 
       - name: Check out release tooling
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
         with:
           ref: ${{ github.workflow_sha }}
           path: .tmp/release-tools
@@ -79,7 +79,7 @@ jobs:
         with:
           targets: ${{ matrix.rust_target }}
 
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@v5
         with:
           node-version: 24
           cache: npm
@@ -145,7 +145,7 @@ jobs:
       - name: Collect installers and updater assets
         run: node .tmp/release-tools/scripts/release-assets.mjs collect "${{ matrix.platform }}" "${RELEASE_TAG#v}" "${{ steps.layout.outputs.desktop }}/release" release-assets
 
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v6
         with:
           name: ${{ matrix.artifact }}
           path: release-assets/*
@@ -163,18 +163,18 @@ jobs:
       RELEASE_TAG: ${{ inputs.tag || github.ref_name }}
     steps:
       - name: Check out release source
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
         with:
           ref: ${{ inputs.source_commit || inputs.tag || github.ref }}
       - name: Check out release tooling
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
         with:
           ref: ${{ github.workflow_sha }}
           path: .tmp/release-tools
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@v5
         with:
           node-version: 24
-      - uses: actions/download-artifact@v4
+      - uses: actions/download-artifact@v7
         with:
           pattern: ait-*
           path: release-assets

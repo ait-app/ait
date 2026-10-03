@@ -19,8 +19,9 @@ Android APK，并沿用安装包命名、源码选择和校验和规则。当前
   `Ait-版本-平台-架构.扩展名`，架构名为 `arm64` 和 `armv7`。
 - Android 构建任务只拥有仓库读权限。现有主发布任务等待全部平台成功，合并构建产物，
   将两个 APK 作为必需附件校验，使用统一的 `SHA256SUMS` 和 `BUILD-INFO.json`，再执行发布。
-- PR 通过 `android-release-check.yml` 复用同一构建工作流，以合并提交执行 dry run，只保存
-  Actions artifact。正式发布和 PR 检查各自管理并发，PR 检查不取得 Release 写权限。
+- `release-android-test.yml` 提供手动测试发布入口，固定构建触发时所选分支的 commit。
+  它复用 Android 构建工作流，并以版本和 commit 组成独立标签发布 GitHub prerelease，
+  不设为最新正式版本。同一 commit 重跑更新同一测试版本，PR 不自动构建 APK。
 
 ## 后果
 

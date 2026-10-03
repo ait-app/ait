@@ -18,6 +18,21 @@ gh workflow run release.yml --repo OWNER/REPO --ref main -f tag=vX.Y.Z
 `source_commit` 继续使用主发布流程的语义：仅在明确需要同版本重构建时指定完整的 40 位
 小写提交 SHA，源码版本必须与标签一致；所有平台使用同一个源码选择。
 
+## 手动发布当前 commit 的测试 APK
+
+工作流合入默认分支后，打开 Actions → **Release Android Test APK** → **Run workflow**，
+选择要测试的分支即可，不需要填写版本标签。工作流固定使用触发时所选分支的 commit；
+随后分支有新提交也不会改变本次构建源码。
+
+构建完成后自动创建 GitHub 预发布版本，标签为
+`android-test-v版本-12位commit`，例如 `android-test-v0.0.14-124bc2e1c6f9`。
+该版本包含两个标准文件名的 APK、`SHA256SUMS` 和记录实际 commit 的 `BUILD-INFO.json`，
+不会成为最新正式 Release。同一 commit 重跑会更新同一预发布版本的附件。
+
+```bash
+gh workflow run release-android-test.yml --repo OWNER/REPO --ref BRANCH
+```
+
 ## APK 与命名
 
 APK 沿用现有安装包的 `Ait-版本-平台-架构.扩展名` 格式。例如 `v0.0.14` 发布包含：
@@ -48,11 +63,6 @@ sha256sum --check SHA256SUMS
 本流程提供 GitHub APK 下载，Google Play 内测仍按原有发布指南执行。
 
 ## 构建与重试
-
-涉及 Android、共享包或发布脚本的 PR 会运行 **Android Release Check**。它使用 PR 合并提交，
-调用正式发布同一份 Android 构建工作流，完成两种架构 APK 的构建和校验后上传 Actions artifact。
-该 dry run 仅有仓库读权限，不创建标签、不创建或更新 GitHub Release。产物可在运行页面的
-`ait-android-apk` artifact 中下载，保留 7 天。
 
 runner 安装 Android SDK 后，构建共享依赖和终端 WebView，通过 Expo prebuild 生成原生项目，
 为两种 ARM ABI 配置独立 APK，再执行 Gradle release 构建。生成的 Android 项目只用于本次构建。
