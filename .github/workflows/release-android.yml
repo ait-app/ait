@@ -99,7 +99,32 @@ jobs:
       # Temporarily retain the generated project's debug keystore; no release signing secrets.
       - name: Assemble release APKs
         working-directory: apps/mobile/android
-        run: ./gradlew :app:assembleRelease --no-daemon --max-workers=2 -PreactNativeArchitectures=arm64-v8a,armeabi-v7a
+        run: |
+          node <<'NODE' &
+          const { execFileSync } = require('node:child_process');
+          function reportResources() {
+            console.log(`Android build resources (PID ${process.pid}): ${new Date().toISOString()}`);
+            for (const [command, args] of [
+              ['free', ['-m']],
+              ['df', ['-h', '.']],
+              ['ps', ['-eo', 'pid,ppid,comm,rss', '--sort=-rss']],
+            ]) {
+              try {
+                const output = execFileSync(command, args, { encoding: 'utf8', timeout: 5000 });
+                console.log(command === 'ps' ? output.split('\n').slice(0, 11).join('\n') : output);
+              } catch (error) {
+                console.warn(`Resource sampling failed (${command}): ${error.message}`);
+              }
+            }
+          }
+          reportResources();
+          setInterval(reportResources, 30000);
+          NODE
+          monitor_pid=$!
+          trap 'kill "$monitor_pid" 2>/dev/null || true; wait "$monitor_pid" 2>/dev/null || true' EXIT
+
+          ./gradlew :app:assembleRelease --no-daemon --no-parallel --max-workers=2 \
+            -PreactNativeArchitectures=arm64-v8a,armeabi-v7a
 
       # Keep a second workspace copy out of Metro's module scan during the build.
       - name: Check out release tooling

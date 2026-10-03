@@ -67,6 +67,10 @@ sha256sum --check SHA256SUMS
 runner 安装 Android SDK 后，构建共享依赖和终端 WebView，通过 Expo prebuild 生成原生项目，
 为两种 ARM ABI 配置独立 APK，再执行 Gradle release 构建。生成的 Android 项目只用于本次构建。
 
+CI 使用 `--no-parallel --max-workers=2` 降低 Gradle 构建的并发资源占用。构建日志每 30 秒
+记录内存、swap、磁盘余量及占用内存最多的进程，便于排查 runner 中途关闭；采样任务会随
+构建结束退出，并保留 Gradle 原始退出码。runner 关闭的具体原因需要结合采样记录判断。
+
 两个 APK 均通过签名、16 KB 原生库对齐、包信息与架构检查后，以 `ait-android-apk` artifact
 保存 7 天。主发布任务等待桌面和 Android 构建全部成功，再合并附件、验证完整性、生成校验和，
 最后创建或更新 GitHub Release。失败时可在该次 **Release Ait** 运行中重跑失败任务。
