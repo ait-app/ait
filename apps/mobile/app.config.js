@@ -4,6 +4,7 @@ const pkg = require("./package.json");
 const { colors: brandColors } = require("./src/branding/ait-mark.json");
 const withAndroidAsyncStorageSize = require("./plugins/with-android-async-storage-size");
 const withAndroidProfileable = require("./plugins/with-android-profileable");
+const withAccountRelayWebSocket = require("./plugins/with-account-relay-websocket");
 const withFdroidAutolinking = require("./plugins/with-fdroid-autolinking");
 const withPasteInput = require("./plugins/with-paste-input");
 const withAndroidScroll = require("./modules/paseo-scroll/app.plugin");
@@ -133,6 +134,8 @@ export default {
       "expo-router",
       withPasteInput,
       withAndroidScroll,
+      withAccountRelayWebSocket,
+      "expo-secure-store",
       [withAndroidAsyncStorageSize, 64],
       [
         "expo-splash-screen",

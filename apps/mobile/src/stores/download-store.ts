@@ -8,6 +8,8 @@ import { buildDaemonWebSocketUrl } from "@/utils/daemon-endpoints";
 import { openExternalUrl } from "@/utils/open-external-url";
 import { isWeb } from "@/constants/platform";
 import { i18n } from "@/i18n/i18next";
+import { Platform } from "react-native";
+import { streamNativeAccountDownload } from "@/runtime/rust-daemon/native-account-download";
 
 interface DownloadProgress {
   percent: number;
@@ -89,6 +91,55 @@ export const useDownloadStore = create<DownloadState>()((set, get) => ({
         (connection) => connection.type === "accountRelay",
       );
       if (relay?.type === "accountRelay") {
+        if (Platform.OS === "android") {
+          const tokenResponse = await requestFileDownloadToken(path);
+          if (tokenResponse.error || !tokenResponse.token) {
+            throw new Error(tokenResponse.error ?? i18n.t("downloads.requestTokenFailed"));
+          }
+          const target = resolveDownloadTargetFile(tokenResponse.fileName ?? fileName);
+          const temporary = new FSFile(`${target.uri}.${id}.part`);
+          let complete = false;
+          try {
+            temporary.create();
+            const handle = temporary.open();
+            try {
+              const started = Date.now();
+              await streamNativeAccountDownload({
+                hostId: relay.hostId,
+                token: tokenResponse.token,
+                write: (bytes) => handle.writeBytes(bytes),
+                progress: (bytesWritten, totalBytes) => {
+                  const speed = bytesWritten / Math.max((Date.now() - started) / 1000, 0.001);
+                  get().updateProgress(id, {
+                    bytesWritten,
+                    totalBytes,
+                    percent: totalBytes > 0 ? bytesWritten / totalBytes : 0,
+                    speed,
+                    eta: speed > 0 ? Math.max(0, totalBytes - bytesWritten) / speed : 0,
+                  });
+                },
+              });
+            } finally {
+              handle.close();
+            }
+            temporary.move(target);
+            complete = true;
+          } finally {
+            if (!complete) {
+              if (temporary.exists) temporary.delete();
+            }
+          }
+          get().completeDownload(id);
+          if (await Sharing.isAvailableAsync()) {
+            await Sharing.shareAsync(target.uri, {
+              mimeType: tokenResponse.mimeType ?? undefined,
+              dialogTitle: i18n.t("downloads.shareFileNamed", {
+                fileName: tokenResponse.fileName ?? fileName,
+              }),
+            });
+          }
+          return;
+        }
         const desktop = getDesktopHost();
         if (!desktop?.invoke) throw new Error("Account relay downloads require the desktop app.");
         const preparationId = await desktop.invoke("account_download_prepare", {

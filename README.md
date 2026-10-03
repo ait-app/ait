@@ -27,9 +27,10 @@ cargo run -p daemon --bin daemon -- --listen 127.0.0.1:7316
 
 ## 通过账户连接其他主机
 
-桌面应用的默认账户服务地址为 `https://dash.ait-app.com:8443/api`。
+桌面和 Android 应用的默认账户服务地址为 `https://dash.ait-app.com:8443/api`。
 打开 **Settings → Host → Account and online hosts**（或 **Add Host**），使用邮箱和密码登录。
-在另一台机器上登录同一账户后，两台主机即可上线。主机列表每 10 秒刷新一次，不显示当前机器。
+首次启动时也可直接点击欢迎页的 **Account / Relay（账号登录 / Relay）**。
+在电脑的桌面应用中登录同一账户后，该电脑即可上线。主机列表每 10 秒刷新一次，不显示当前机器。
 选择一台主机，即可通过中继访问它的工作区、Agent、终端和文件。
 
 登录凭据使用操作系统的安全存储保存，有效期内可自动恢复登录。
@@ -37,7 +38,9 @@ cargo run -p daemon --bin daemon -- --listen 127.0.0.1:7316
 使用自建服务时，在 **Service settings** 中填写 API 基础地址；留空则使用默认服务。
 已保存的账户会继续使用原先配置的服务地址。`/hosts` 是管理页面，不是 API 基础地址。
 
-目前账户中继功能仅支持桌面应用，浏览器和移动端尚未提供账户登录。
+Android 作为客户端连接在线电脑，不发布手机为工作主机。退到后台时暂停连接，回到前台后恢复。
+浏览器和 iOS 尚未提供账户登录；Android 接入边界见
+[ADR-076](docs/decisions/clients/adr-076-android-account-relay.md)。
 
 ## Workspace
 

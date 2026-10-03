@@ -4,22 +4,25 @@ import { isNative } from "@/constants/platform";
 import { isElectronRuntime } from "@/desktop/host";
 import { formatVersionWithPrefix } from "@/desktop/updates/desktop-updates";
 import { getHostRuntimeStore, isHostRuntimeConnected, useHosts } from "@/runtime/host-runtime";
+import { supportsAccountRelay } from "@/runtime/account-state";
 import type { HostProfile } from "@/types/host-connection";
 import { resolveAppVersion } from "@/utils/app-version";
 import { buildOpenProjectRoute } from "@/utils/host-routes";
 import { openExternalUrl } from "@/utils/open-external-url";
 import { useRouter } from "expo-router";
-import { ExternalLink, Link2, QrCode, Settings, Terminal } from "lucide-react-native";
-import { useCallback, useEffect, useMemo, useState, useSyncExternalStore } from "react";
+import { Cloud, ExternalLink, Link2, QrCode, Settings, Terminal } from "lucide-react-native";
+import React, { useCallback, useEffect, useMemo, useState, useSyncExternalStore } from "react";
 import { useTranslation } from "react-i18next";
 import { Pressable, ScrollView, Text, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { StyleSheet, useUnistyles } from "react-native-unistyles";
 import { AddHostModal } from "./add-host-modal";
 import { AddRemoteSshHostModal } from "./add-remote-ssh-host-modal";
+import { AccountHostPanel } from "./account-host-panel";
+import { AdaptiveModalSheet, type SheetHeader } from "./adaptive-modal-sheet";
 
 interface WelcomeAction {
-  key: "direct-connection" | "remote-ssh";
+  key: "account-relay" | "direct-connection" | "remote-ssh";
   label: string;
   testID: string;
   primary: boolean;
@@ -166,6 +169,12 @@ export function WelcomeScreen({ onHostAdded }: WelcomeScreenProps) {
   const appVersionText = formatVersionWithPrefix(appVersion);
   const [isDirectOpen, setIsDirectOpen] = useState(false);
   const [isRemoteSshOpen, setIsRemoteSshOpen] = useState(false);
+  const [isAccountOpen, setIsAccountOpen] = useState(false);
+  const accountAvailable = supportsAccountRelay();
+  const accountHeader = useMemo<SheetHeader>(
+    () => ({ title: t("onboarding.actions.account") }),
+    [t],
+  );
   const hosts = useHosts();
   const anyOnlineServerId = useAnyHostOnline(hosts.map((h) => h.serverId));
 
@@ -190,6 +199,8 @@ export function WelcomeScreen({ onHostAdded }: WelcomeScreenProps) {
   const handleCloseDirect = useCallback(() => setIsDirectOpen(false), []);
   const handleOpenRemoteSsh = useCallback(() => setIsRemoteSshOpen(true), []);
   const handleCloseRemoteSsh = useCallback(() => setIsRemoteSshOpen(false), []);
+  const handleOpenAccount = useCallback(() => setIsAccountOpen(true), []);
+  const handleCloseAccount = useCallback(() => setIsAccountOpen(false), []);
 
   const handleHostSaved = useCallback(
     ({ profile }: { profile: HostProfile; serverId: string }) => {
@@ -204,7 +215,7 @@ export function WelcomeScreen({ onHostAdded }: WelcomeScreenProps) {
       key: "direct-connection",
       label: t("pairing.connectionMethods.direct.title"),
       testID: "welcome-direct-connection",
-      primary: true,
+      primary: !accountAvailable,
       icon: Link2,
       onPress: handleOpenDirect,
     },
@@ -218,6 +229,17 @@ export function WelcomeScreen({ onHostAdded }: WelcomeScreenProps) {
       primary: false,
       icon: Terminal,
       onPress: handleOpenRemoteSsh,
+    });
+  }
+
+  if (accountAvailable) {
+    actions.unshift({
+      key: "account-relay",
+      label: t("onboarding.actions.account"),
+      testID: "welcome-account-relay",
+      primary: true,
+      icon: Cloud,
+      onPress: handleOpenAccount,
     });
   }
 
@@ -278,6 +300,16 @@ export function WelcomeScreen({ onHostAdded }: WelcomeScreenProps) {
           onSaved={handleHostSaved}
         />
       </ScrollView>
+      {accountAvailable ? (
+        <AdaptiveModalSheet
+          header={accountHeader}
+          visible={isAccountOpen}
+          onClose={handleCloseAccount}
+          testID="welcome-account-sheet"
+        >
+          <AccountHostPanel onConnected={handleCloseAccount} />
+        </AdaptiveModalSheet>
+      ) : null}
     </View>
   );
 }
@@ -298,7 +330,13 @@ function WelcomeActionButton({ action }: WelcomeActionButtonProps) {
     [action.primary],
   );
   return (
-    <Pressable style={buttonStyle} onPress={action.onPress} testID={action.testID}>
+    <Pressable
+      style={buttonStyle}
+      onPress={action.onPress}
+      testID={action.testID}
+      accessibilityRole="button"
+      accessibilityLabel={action.label}
+    >
       <Icon
         size={18}
         color={action.primary ? theme.colors.accentForeground : theme.colors.foreground}

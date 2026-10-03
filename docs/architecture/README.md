@@ -54,6 +54,13 @@ Project/Workspace 和 Agent runtime 目录、配置、时间线由当前文件�
 `api` 持有 `relay`；`relay` 使用固定的本地目标地址，不依赖其他 workspace crate。
 详见 [ADR-074](../decisions/clients/adr-074-account-host-relay.md)。
 
+账户会话状态机位于 `packages/client`，通过依赖注入获取平台身份、存储、HTTP 和运行时操作。
+Electron 主进程提供桌面适配；Android 的原生适配使用 SecureStore 保存账户令牌，注册无本地
+运行时的客户端节点。Android 通过带认证头的原生 WebSocket 建立中继连接与下载，只有选中的
+远程主机进入 HostRuntime。浏览器和 iOS 未启用账户入口。
+前后台生命周期、配对校验与凭据边界见
+[ADR-076](../decisions/clients/adr-076-android-account-relay.md)。
+
 Relay 的类型化消息集中在 `crates/relay/src/protocol.rs`，WebSocket 收发集中在
 `transport.rs`；单连接协商标识由 `crates/protocol/src/single.rs` 定义。
 模块职责见 [ADR-075](../decisions/clients/adr-075-relay-protocol-modules.md)。

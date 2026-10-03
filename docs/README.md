@@ -13,6 +13,7 @@
 
 ## 架构决策
 
+- [ADR-076：Android 账户与中继客户端](decisions/clients/adr-076-android-account-relay.md)：共享账户会话、Android 安全存储、原生认证连接与下载。
 - [ADR-075：Relay 协议定义与连接执行分离](decisions/clients/adr-075-relay-protocol-modules.md)：当前 relay PR 的类型化消息、WebSocket 收发边界与单连接协商标识。
 - [ADR-074：账户发现与按需反向中继](decisions/clients/adr-074-account-host-relay.md)：邮箱密码登录、主机注册、独立的控制与数据 WebSocket，以及单连接调度；[验证与覆盖率报告](reports/clients/account-host-relay-validation.md)。
 

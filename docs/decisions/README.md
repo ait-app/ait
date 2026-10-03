@@ -47,6 +47,7 @@
 
 ## 客户端、连接与品牌
 
+- [ADR-076：Android 账户与中继客户端](clients/adr-076-android-account-relay.md)
 - [ADR-075：Relay 协议定义与连接执行分离](clients/adr-075-relay-protocol-modules.md)
 - [ADR-074：账户发现与按需反向中继](clients/adr-074-account-host-relay.md)
 

@@ -25,6 +25,10 @@
     "./internal/daemon-client-websocket-transport": {
       "types": "./dist/daemon-client-websocket-transport.d.ts",
       "default": "./dist/daemon-client-websocket-transport.js"
+    },
+    "./internal/account-session": {
+      "types": "./dist/account-session.d.ts",
+      "default": "./dist/account-session.js"
     }
   },
   "scripts": {

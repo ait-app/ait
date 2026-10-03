@@ -1,5 +1,6 @@
 import { isElectronRuntime } from "@/desktop/host";
 import { AccountHostPanel } from "./account-host-panel";
+import { supportsAccountRelay } from "@/runtime/account-state";
 import type { Theme } from "@/styles/theme";
 import { Link2, Terminal } from "lucide-react-native";
 import { useCallback, useMemo } from "react";
@@ -69,7 +70,7 @@ export function AddHostMethodModal({
       onClose={onClose}
       testID="add-host-method-modal"
     >
-      {isElectronRuntime() ? <AccountHostPanel onConnected={onClose} /> : null}
+      {supportsAccountRelay() ? <AccountHostPanel onConnected={onClose} /> : null}
       <Pressable
         style={styles.option}
         onPress={handleDirect}

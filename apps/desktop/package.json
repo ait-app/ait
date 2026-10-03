@@ -33,6 +33,7 @@
     "package:mac": "node scripts/package-release.mjs mac"
   },
   "dependencies": {
+    "@ait/client": "file:../../packages/client",
     "@ait/protocol": "file:../../packages/protocol",
     "electron-log": "^5.4.3",
     "electron-updater": "^6.6.2",

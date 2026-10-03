@@ -1,6 +1,7 @@
 import { AgentProfilesSection } from "@/agent-profiles";
 import { AgentSkillsSection } from "@/agent-skills";
 import { AccountHostPanel } from "@/components/account-host-panel";
+import { supportsAccountRelay } from "@/runtime/account-state";
 import { AdaptiveModalSheet, type SheetHeader } from "@/components/adaptive-modal-sheet";
 import { getProviderIcon } from "@/components/provider-icons";
 import { SettingsTextAreaCard } from "@/components/settings-textarea";
@@ -365,7 +366,7 @@ export function HostSettingsPage({
 
       <HostStatusBadges serverId={serverId} />
 
-      {getIsElectron() ? <AccountHostPanel /> : null}
+      {supportsAccountRelay() ? <AccountHostPanel /> : null}
 
       <HostAppearanceSection host={host} />
 

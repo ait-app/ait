@@ -46,7 +46,21 @@ npm run web:expo --workspace=@ait/mobile -- --localhost --port 8081
 `npm run ios --workspace=@ait/mobile` / `npm run android --workspace=@ait/mobile` 构建
 共享依赖后启动对应原生工程。后端仍需单独启动。iOS simulator 可直接访问宿主 loopback；
 Android emulator/device 可先运行 `adb reverse tcp:7316 tcp:7316`，再连接 `127.0.0.1:7316`。
-当前没有加入 LAN、公网或 Rust relay 接入，也未在实体设备上验证。
+Android 支持账户登录与中继：首次启动点击欢迎页的 **Account / Relay（账号登录 / Relay）**；
+也可打开 **Settings → Host → Account and online hosts** 或 **Add Host**。
+使用与电脑桌面应用相同的账户登录，再选择在线电脑。工作区、Agent、终端和文件
+复用 Rust 单连接协议；下载写入手机缓存文件，完成后打开系统分享面板。
+登录凭据保存在 Android 安全存储中，退到后台暂停连接，回到前台重新验证账户节点。
+手机不运行 daemon，也不作为工作主机出现在列表里。iOS 和浏览器仍使用直接连接。
+已在实体 Android 设备验证欢迎页账户入口与邮箱/密码登录表单；真实账户到远程电脑的完整
+中继流程尚未完成真机验收。
+
+新增原生依赖或更新账户 WebSocket 插件后，需要重新生成原生工程再构建 APK：
+
+```sh
+cd apps/mobile
+APP_VARIANT=production npx expo prebuild --platform android --no-install
+```
 
 Electron 使用 `npm run dev:desktop`，由主进程负责 Rust 服务启动及 Bearer 注入。
 
@@ -67,5 +81,6 @@ APP_BROWSER_UI=1 node scripts/validate-app-rust-browser.mjs
 可用 `AIT_SERVER_BIN` 指定 binary。测试使用临时数据目录，覆盖实际浏览器鉴权、SDK RPC、
 重连、错误令牌、页面连接及刷新恢复，结束后清理。
 
-详细边界见 [ADR-049](../../docs/decisions/clients/adr-049-app-rust-browser-transport.md) 和
+Android 账户边界见 [ADR-076](../../docs/decisions/clients/adr-076-android-account-relay.md)。
+直接连接边界见 [ADR-049](../../docs/decisions/clients/adr-049-app-rust-browser-transport.md) 和
 [实施报告](../../docs/reports/clients/app-rust-daemon.md)。

@@ -1,5 +1,5 @@
 import React, { useState } from "react";
-import { Pressable, Text, TextInput, View } from "react-native";
+import { Platform, Pressable, Text, TextInput, View } from "react-native";
 import { useRouter } from "expo-router";
 import { StyleSheet } from "react-native-unistyles";
 import { Button } from "./ui/button";
@@ -8,7 +8,8 @@ import { accountCommand, useAccountState, type AccountHost } from "@/runtime/acc
 export function AccountHostPanel({ onConnected }: { onConnected?: () => void }) {
   const account = useAccountState();
   const router = useRouter();
-  // Follow the main process snapshot until the user edits the optional override.
+  const isAndroidClient = Platform.OS === "android";
+  // Follow the account snapshot until the user edits the optional override.
   const [centerOverride, setCenterOverride] = useState<string | null>(null);
   const center = centerOverride ?? account.center;
   const [showServiceSettings, setShowServiceSettings] = useState(false);
@@ -52,8 +53,9 @@ export function AccountHostPanel({ onConnected }: { onConnected?: () => void }) 
       {account.status === "logged_out" ? (
         <>
           <Text style={styles.hint}>
-            Sign in to bring this host online, then select another host on your account to continue
-            working.
+            {isAndroidClient
+              ? "Sign in to connect to your online computers and continue working."
+              : "Sign in to bring this host online, then select another host on your account to continue working."}
           </Text>
           <TextInput
             style={styles.input}
@@ -116,7 +118,13 @@ export function AccountHostPanel({ onConnected }: { onConnected?: () => void }) 
         <>
           <Text style={styles.hint}>
             {account.name} ·{" "}
-            {account.hostOnline ? "This host is online" : "Waiting for this host to come online"}
+            {isAndroidClient
+              ? account.status === "online"
+                ? "Connected to account"
+                : "Connecting to account..."
+              : account.hostOnline
+                ? "This host is online"
+                : "Waiting for this host to come online"}
           </Text>
           <View style={styles.actions}>
             <Button
