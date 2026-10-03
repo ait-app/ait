@@ -2,7 +2,7 @@
 
 - 状态：Accepted
 - 日期：2026-09-25
-- 延续：ADR-039、ADR-040、ADR-041；遵循 ADR-001 v4
+- 延续：ADR-039、ADR-040、ADR-041
 - 范围：独立 server 的 `provider`，不连接旧 daemon 的领域 Run/Message
 
 ## 决策

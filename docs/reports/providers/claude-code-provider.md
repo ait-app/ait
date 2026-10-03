@@ -1,6 +1,6 @@
 # Claude Code Provider
 
-这是初次接入的历史报告。后续 provider 能力补齐以[当前清单](../../plans/provider-parity.md)和
+这是初次接入的历史报告。后续 provider 能力补齐以[能力矩阵](provider-parity.md)和
 [ADR-052](../../decisions/providers/adr-052-native-provider-capabilities.md)为准；本文覆盖率不是当前代码的测量结果。
 
 日期：2026-09-26。基于 `5e9fc8a759c886fb78e3212ec681391ed97318e7` 与已有工作区修改。

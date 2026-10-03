@@ -1,11 +1,14 @@
 # Relay 协议重构验证
 
 日期：2026-10-03。范围：[ADR-075](../../decisions/clients/adr-075-relay-protocol-modules.md)
-所述的当前 relay PR 新增 Rust 协议代码。
+所述的 Rust 中继协议与传输模块、daemon 单连接协商标识。
 
-源码基于 `204f94ac22772f9d98fa3e4371abade3f6d914d1` 加包含本报告的提交；
+测量源码为 `6d0aee65`，基于 `204f94ac22772f9d98fa3e4371abade3f6d914d1`；
 [覆盖率摘要](relay-protocol-refactor-coverage.json) 记录变更文件 SHA-256 和完整 Rust 源码
 指纹，标识实际测量源码。验证平台为 Linux x86_64，Rust 1.98.1，使用默认 Cargo features。
+
+本报告与[初版账户中继报告](account-host-relay-validation.md) 分别保留各自版本的测量结果，
+不代表后续 Android 适配或界面修改已完成同等范围的验证。
 
 ## 测试结果
 
@@ -34,14 +37,14 @@ npm run check:docs
 
 Workspace 行覆盖率：**92.02%（44,649 / 48,520）**。
 
-| 范围 | 覆盖行 / 总行 | 行覆盖率 |
-| --- | --- | --- |
-| Rust workspace | 44,649 / 48,520 | 92.02% |
-| `api` | 1,861 / 2,015 | 92.36% |
-| `relay` | 419 / 464 | 90.30% |
-| `protocol` | 75 / 75 | 100.00% |
-| 新增 `relay/src/protocol.rs` | 38 / 38 | 100.00% |
-| 新增 `relay/src/transport.rs` | 38 / 38 | 100.00% |
+| 范围                          | 覆盖行 / 总行   | 行覆盖率 |
+| ----------------------------- | --------------- | -------- |
+| Rust workspace                | 44,649 / 48,520 | 92.02%   |
+| `api`                         | 1,861 / 2,015   | 92.36%   |
+| `relay`                       | 419 / 464       | 90.30%   |
+| `protocol`                    | 75 / 75         | 100.00%  |
+| 新增 `relay/src/protocol.rs`  | 38 / 38         | 100.00%  |
+| 新增 `relay/src/transport.rs` | 38 / 38         | 100.00%  |
 
 使用 `cargo-llvm-cov 0.9.1`，采用默认源码过滤，未额外排除生产文件；测试模块和 doctest
 不计入覆盖率，纯常量文件没有可执行覆盖行。macOS/Windows 未运行。

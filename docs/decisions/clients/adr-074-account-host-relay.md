@@ -1,58 +1,68 @@
-# ADR-074: Account discovery and on-demand reverse relay
+# ADR-074：账户发现与按需反向中继
 
-Status: implemented for the desktop client, 2026-10-01.
+- 状态：已实现
+- 日期：2026-10-01
+- 修订：[ADR-061](adr-061-app-ait-e2e-remove-relay-plugin.md) 中不再提供中继连接的产品范围；旧公钥中继协议及配对格式继续停用。
+- 后续：[ADR-075](adr-075-relay-protocol-modules.md) 明确协议模块职责；[ADR-076](adr-076-android-account-relay.md) 将账户会话移入共享 SDK 并扩展 Android 客户端。
 
-AIT nodes register automatically after account login. A node backed by the local Rust
-runtime opens one outbound control WSS. Discovery polls the center independently of
-HostRuntime; only explicitly selected hosts become remote work connections.
+## 背景
 
-The desktop main process owns the default account API base,
-`https://dash.ait-app.com:8443/api`. An omitted or blank login center resolves to this
-base, and the account snapshot supplies it to the renderer. Login, discovery,
-control and data URLs all preserve the `/api` prefix and port; WSS is derived from
-the same HTTPS base. No credentials are bundled. The Host settings page and add-Host
-dialog expose email/password login, with an optional service override under
-service settings. Account IPC accepts `email` and `password`; the main process trims
-and lowercases the email before sending `{ email, password }` to `/v1/auth/login`,
-while preserving the password exactly. Restored accounts keep their saved service
-address rather than being migrated to the default. Valid saved credentials automatically
-restore the node activation when OS secret storage is available.
+远程访问需要在账户登录后发现在线电脑，并在用户选择目标时建立连接。
+主机可能位于无法接受入站连接的网络中，因此通过账户中心协调主动发起的控制连接和反向数据连接。
+主机发现独立于 HostRuntime；只有用户明确选择的主机才成为远程工作连接。
 
-The desktop main process owns the user JWT and renews node authorization. The new
-`relay` crate receives one-use control grants through authenticated local API
-routes. Only `api` depends on `relay`; the relay crate has no workspace
-dependencies and the dependency guard enforces this boundary. It knows only the actual
-local runtime address/token, and creates an independent reverse data WSS per access. It never accepts an arbitrary local destination from the
-center. Control loss cancels visits targeting that control epoch; logout and node lease
-expiry cancel all incoming and outgoing visits for that node.
+## 决策
 
-The `connection.single.v1` required capability selects a single physical business WS.
-The capability offer remains bounded (256 unique entries). Four internal capability
-workers preserve operation order within metadata/browser/schedule, terminal/voice,
-filesystem and provider groups. Each worker retains the existing 16-subscription
-budget, so a logical single connection has at most 64 subscriptions. This grouping
-keeps a slow Git operation off the terminal and ping path. A release is acknowledged
-after all workers have processed it; observers remain owned by the physical connection.
-Inbound workers have two queue slots each; outbound byte and message budgets remain
-shared, including the active write. The physical writer rotates across the four
-lanes. Admission rejects requests before execution, and event/binary overflow closes
-the connection rather than dropping user input. No network reconnect replays writes.
+### 账户、凭据与发现
 
-The center is trusted, uses HTTPS/WSS, and authorizes both sides by same-account node
-sessions. This supersedes ADR-061's removal of the older public-key relay protocol;
-the historical relay URL and pairing-key format are not reused.
+桌面主进程提供默认账户 API 地址 `https://dash.ait-app.com:8443/api`。
+登录时省略地址或传入空白地址会使用默认值，账户快照将该地址提供给界面。
+登录、发现、控制和数据连接都保留 `/api` 前缀及端口，WSS 地址从同一 HTTPS 基址派生。
+应用不内置凭据；恢复账户时沿用已保存的服务地址，不自动迁移到默认地址。
 
-Independent download sessions stream from the fixed local token-based HTTP endpoint
-to a desktop-owned temporary file. The main process owns user and relay credentials;
-only trusted application windows can invoke account IPC. Navigation, window closure,
-Host switching and logout cancel their transfers. Saved JWTs require OS secret storage.
+Host 设置页和添加主机对话框提供邮箱、密码登录，服务设置允许覆盖中心地址。
+账户 IPC 接收 `email` 和 `password`；邮箱去除首尾空白并转为小写后，连同原样保留的密码
+发送到 `/v1/auth/login`。桌面主进程持有用户 JWT 并续租节点授权。
+JWT 持久化依赖操作系统安全存储；安全存储可用且已保存凭据有效时，自动恢复节点激活。
+账户会话状态机的共享与平台注入方式由 ADR-076 补充。
 
-Design and API owner: `ait-server/docs/architecture.md` in the sibling repository.
+### 控制连接与反向数据通道
 
-## Test coverage
+账户登录后自动注册节点。具有本地 Rust 运行时的节点建立一条出站控制 WSS，
+并为每次访问建立独立的反向数据 WSS。中心使用 HTTPS/WSS，按同一账户下的节点会话
+授权连接双方；该设计以账户中心可信为前提。
 
-The Linux workspace validation passed 1,578 tests with 3 existing real-provider tests
-ignored. Measured line coverage is 91.76% (44,517 / 48,513); the relay adapter itself
-is 60.83% (278 / 457), with download coverage still missing from the automated suite.
-See the [validation report](../../reports/clients/account-host-relay-validation.md) for commands,
-source identification, the shared coverage artifact, and remaining gaps.
+`relay` crate 通过经过认证的本地 API 接收一次性控制授权。只有 `api` 依赖 `relay`；
+`relay` 不依赖其他 workspace crate，依赖守卫检查这一约束。它只使用实际本地运行时的
+地址和令牌，不接受中心指定的任意本地目标。
+控制连接断开时，取消属于该控制代次的访问；退出账户或节点租约到期时，取消该节点的
+全部入站和出站访问。旧中继 URL、公钥配对格式不复用。
+
+### 单连接调度
+
+必需能力 `connection.single.v1` 选择单条物理业务 WebSocket，能力提议最多包含
+256 个不重复条目。连接内部按 metadata/browser/schedule、terminal/voice、filesystem、
+provider 分为四个执行组，保持各组内操作顺序，避免慢 Git 操作阻塞终端和 ping。
+
+每组保留 16 个订阅的预算，单条逻辑连接最多持有 64 个订阅。所有执行组处理完释放请求后
+才确认释放，观察者仍由物理连接持有。每组入站队列有两个槽位；出站字节和消息预算由
+整条连接共享，并计入正在写出的消息。物理连接的写入器轮流处理四组输出。
+请求在执行前进行准入检查；事件或二进制输出溢出时关闭连接，不丢弃用户输入。
+网络重连不重放写操作。
+
+### 独立下载与窗口边界
+
+下载使用独立会话，从固定的本地令牌认证 HTTP 端点流式写入桌面主进程持有的临时文件。
+用户凭据和中继凭据均由主进程持有，只有可信应用窗口能够调用账户 IPC。
+导航、关闭窗口、切换 Host 和退出账户都会取消对应传输。
+
+## 后果与验证
+
+桌面客户端可以通过账户发现在线电脑，主机无需开放入站端口。
+账户中心承担发现和授权职责，本地 daemon 仍校验业务握手与请求。
+中继故障和账户失效具有明确的取消范围，客户端不会因自动重连而重复提交业务写入。
+
+中心端设计与 API 由同级仓库 `ait-server` 的 `docs/architecture.md` 维护。
+本仓库的初版测量见[账户主机中继验证](../../reports/clients/account-host-relay-validation.md)，
+协议模块整理后的测量见[协议重构验证](../../reports/clients/relay-protocol-refactor-validation.md)。
+各报告中的测试与覆盖率仅对应注明的源码版本。

@@ -2,7 +2,7 @@
 
 - 状态：Accepted；能力扩展及下述初版限制由 [ADR-052](adr-052-native-provider-capabilities.md) 更新。
 - 日期：2026-09-26
-- 前置：ADR-001 v4、ADR-027、ADR-032、ADR-039、ADR-040、ADR-041
+- 前置：ADR-027、ADR-032、ADR-039、ADR-040、ADR-041
 
 ## 初版决策
 

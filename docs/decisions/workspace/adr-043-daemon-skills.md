@@ -5,7 +5,7 @@
 - 上游基线：Paseo `2c8e8a826810337492cc5a38bb0bbd705b6fb632`
 - 后续修订：[ADR-056](../clients/adr-056-paseo-coexistence.md) 定义 Ait 技能目录、所有权标记与事务命名空间。
 
-Skills 的五个 `agent.skills.*` 接口由既有独立 `filesystem` 能力包拥有。协议、服务、存储端口和本地文件适配器分层；`api` 仅组装和分发，`daemon` 决定目录。复用独立 server 的公共阻塞任务预算与串行服务锁，不引入旧 Ait domain/application/provider 组件，不改变 ADR-001 v4 的 Message、Session 或 Run 边界。
+Skills 的五个 `agent.skills.*` 接口由既有独立 `filesystem` 能力包拥有。协议、服务、存储端口和本地文件适配器分层；`api` 仅组装和分发，`daemon` 决定目录。复用独立 server 的公共阻塞任务预算与串行服务锁，不引入旧 Ait domain/application/provider 组件。
 
 源目录由 `AIT_SERVER_SKILLS_BUNDLE` 指定，默认 `<data-dir>/skills-bundle`；目标固定为 `AIT_SERVER_SKILLS_HOME`（默认 HOME）下的 `.agents/skills`、`.claude/skills`、`.codex/skills`。WS 参数不能指定路径。目录规范化后拒绝根目录重叠，运行时拒绝符号链接及越界路径。
 

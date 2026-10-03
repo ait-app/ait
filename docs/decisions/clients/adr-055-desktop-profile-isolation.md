@@ -2,7 +2,7 @@
 
 - 状态：Accepted
 - 日期：2026-09-27
-- 关联：ADR-001 v4、ADR-048、ADR-053
+- 关联：ADR-048、ADR-053
 - 替代：ADR-053 中继续使用 `paseo` 链接协议的决定
 - 后续补齐：[ADR-056](adr-056-paseo-coexistence.md) 覆盖共享资源、环境变量、SSH 和移动应用 ID。
 

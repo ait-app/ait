@@ -44,9 +44,10 @@ release 返回所属连接。Voice/听写固定在同一连接；Terminal 和文
 ## 边界与后续
 
 本次不改变 Rust API、鉴权策略、领域边界或服务端实现。前端与 server 的协议转换归
-前端 adapter；领域 Session/Message/Run 语义仍遵循 ADR-001 v4。桌面内置 daemon 的进程
-管理与完整 npm workspace 构建不在这次接口适配内，仍需整合。
+前端 adapter。桌面内置 daemon 的进程管理与完整 npm workspace 构建由后续
+[ADR-048](adr-048-paseo-desktop-rust-launcher.md) 完成整合。
 
-四连接方案增加每个主机的连接开销；未来若 Rust 支持更大的能力集合或动态协商，可以
+账户中继使用的单连接调度已由 [ADR-074](adr-074-account-host-relay.md) 扩展；
+下述四连接方案保留为原有适配方式。四连接方案增加每个主机的连接开销；未来若 Rust 支持更大的能力集合或动态协商，可以
 收敛连接数，但必须保留订阅与音频的物理连接所有权。Rust 剩余行为缺口和验收范围见
 [实施报告](../../reports/clients/paseo-client-rust-adapter.md)。
