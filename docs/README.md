@@ -13,7 +13,7 @@
 
 ## 架构决策
 
-- [ADR-072: Account discovery and on-demand reverse relay](decisions/adr-072-account-host-relay.md): Email/password sign-in, host registration, independent control and data WebSockets, and single-connection scheduling; [validation and coverage](reports/account-host-relay-validation.md).
+- [ADR-074: Account discovery and on-demand reverse relay](decisions/clients/adr-074-account-host-relay.md): Email/password sign-in, host registration, independent control and data WebSockets, and single-connection scheduling; [validation and coverage](reports/clients/account-host-relay-validation.md).
 
 [ADR 分类索引](decisions/README.md)按 daemon、工作区、Provider、客户端和品牌整理。
 决策文档说明具体行为及其修订关系；当前目录与依赖图以当前架构和 ADR-072 为准。

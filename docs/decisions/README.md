@@ -47,6 +47,8 @@
 
 ## 客户端、连接与品牌
 
+- [ADR-074: Account discovery and on-demand reverse relay](clients/adr-074-account-host-relay.md)
+
 - [ADR-044：Paseo 前端适配 Rust server 协议](clients/adr-044-paseo-client-rust-transport.md)
 - [ADR-048：Paseo workspace 与 Rust 桌面服务启动](clients/adr-048-paseo-desktop-rust-launcher.md)
 - [ADR-049：独立 App 的 Rust server 浏览器连接](clients/adr-049-app-rust-browser-transport.md)

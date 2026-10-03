@@ -315,7 +315,10 @@ function probeRustDaemon(
     });
     const timer = setTimeout(() => finish(new Error("Rust daemon handshake timed out.")), timeout);
     let settled = false;
-    const finish = (error?: Error, info?: Pick<RustDaemonStatus, "serverId" | "version" | "instanceId" | "features">) => {
+    const finish = (
+      error?: Error,
+      info?: Pick<RustDaemonStatus, "serverId" | "version" | "instanceId" | "features">,
+    ) => {
       if (settled) return;
       settled = true;
       clearTimeout(timer);

@@ -72,7 +72,7 @@ pub enum ConfigError {
 
 #[derive(Debug)]
 struct Shared {
-    relay: server_relay::Connector,
+    relay: relay::Connector,
     runtime: Arc<Runtime>,
     token: SecretString,
     browser_auth: browser_auth::BrowserAuth,
@@ -221,7 +221,7 @@ impl Api {
             .map(AgentExecution::events)
             .unwrap_or_default();
         let creations = creation_receipts(&services);
-        let relay = server_relay::Connector::new(
+        let relay = relay::Connector::new(
             address,
             token.clone(),
             server_id.clone(),
@@ -507,13 +507,13 @@ async fn health() -> Result<Response, ApiError> {
     Ok(Json(serde_json::json!({"status":"alive"})).into_response())
 }
 
-async fn relay_status(State(state): State<Arc<Shared>>) -> Json<server_relay::Status> {
+async fn relay_status(State(state): State<Arc<Shared>>) -> Json<relay::Status> {
     Json(state.relay.status().await)
 }
 
 async fn relay_start(
     State(state): State<Arc<Shared>>,
-    Json(grant): Json<server_relay::ControlGrant>,
+    Json(grant): Json<relay::ControlGrant>,
 ) -> Result<StatusCode, ApiError> {
     if state.cancellation.is_cancelled() {
         return Err(ApiError(StatusCode::SERVICE_UNAVAILABLE));

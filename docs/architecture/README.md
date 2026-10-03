@@ -18,6 +18,7 @@ Electron 位于 `apps/desktop`；`apps/mobile` 提供桌面、浏览器与移动
 | `voice`      | 语音、听写和离线推理                       | `model`                                |
 | `schedule`   | 定时任务服务与协议                         | `model`                                |
 | `browser`    | 浏览器自动化请求与回传                     | `model`                                |
+| `relay` | Outbound control and reverse data transport | None |
 | `api`        | HTTP/WebSocket 鉴权、连接与跨能力协调      | 上述能力包、`protocol`、`model`        |
 | `daemon`     | 配置、进程锁、服务组装和停机               | API、领域及能力包；测试使用 `protocol` |
 
@@ -48,3 +49,7 @@ Project/Workspace 和 Agent runtime 目录、配置、时间线由当前文件�
 旧 CLI、旧独立 worker 及其 Project SQLite 架构已不在当前 workspace 中。旧实现的资料
 从文档树移除，历史可从 Git 查阅。当前语义依据 [ADR 分类索引](../decisions/README.md)，
 启动与连接依据 [daemon 手册](../operations/daemon.md)。
+
+The desktop account manager owns user credentials and passes one-use grants to `api`.
+The `api` crate owns `relay`, which receives a fixed local destination and has no
+workspace dependencies. See [ADR-074](../decisions/clients/adr-074-account-host-relay.md).
