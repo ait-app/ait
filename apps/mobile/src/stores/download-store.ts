@@ -85,46 +85,58 @@ export const useDownloadStore = create<DownloadState>()((set, get) => ({
     }));
 
     try {
-      const tokenResponse = await requestFileDownloadToken(path);
-      if (tokenResponse.error || !tokenResponse.token) {
-        throw new Error(tokenResponse.error ?? i18n.t("downloads.requestTokenFailed"));
-      }
-
       const relay = daemonProfile?.connections.find(
         (connection) => connection.type === "accountRelay",
       );
       if (relay?.type === "accountRelay") {
         const desktop = getDesktopHost();
         if (!desktop?.invoke) throw new Error("Account relay downloads require the desktop app.");
-        const startedAt = Date.now();
-        const remove = await desktop.events?.on?.("account-download-progress", (raw) => {
-          const event = raw as { id: string; bytesWritten: number; totalBytes: number };
-          if (event.id !== id) return;
-          const elapsed = (Date.now() - startedAt) / 1000;
-          const speed = elapsed > 0 ? event.bytesWritten / elapsed : 0;
-          get().updateProgress(id, {
-            bytesWritten: event.bytesWritten,
-            totalBytes: event.totalBytes,
-            percent: event.totalBytes > 0 ? event.bytesWritten / event.totalBytes : 0,
-            speed,
-            eta:
-              speed > 0 && event.totalBytes > 0
-                ? (event.totalBytes - event.bytesWritten) / speed
-                : 0,
-          });
+        const preparationId = await desktop.invoke("account_download_prepare", {
+          hostId: relay.hostId,
+          fileName,
+          downloadId: id,
         });
+        if (typeof preparationId !== "string") throw new Error("Invalid download preparation.");
         try {
-          await desktop.invoke("account_download", {
-            hostId: relay.hostId,
-            token: tokenResponse.token,
-            fileName: tokenResponse.fileName ?? fileName,
-            downloadId: id,
+          const tokenResponse = await requestFileDownloadToken(path);
+          if (tokenResponse.error || !tokenResponse.token) {
+            throw new Error(tokenResponse.error ?? i18n.t("downloads.requestTokenFailed"));
+          }
+          const startedAt = Date.now();
+          const remove = await desktop.events?.on?.("account-download-progress", (raw) => {
+            const event = raw as { id: string; bytesWritten: number; totalBytes: number };
+            if (event.id !== id) return;
+            const elapsed = (Date.now() - startedAt) / 1000;
+            const speed = elapsed > 0 ? event.bytesWritten / elapsed : 0;
+            get().updateProgress(id, {
+              bytesWritten: event.bytesWritten,
+              totalBytes: event.totalBytes,
+              percent: event.totalBytes > 0 ? event.bytesWritten / event.totalBytes : 0,
+              speed,
+              eta:
+                speed > 0 && event.totalBytes > 0
+                  ? (event.totalBytes - event.bytesWritten) / speed
+                  : 0,
+            });
           });
-          get().completeDownload(id);
+          try {
+            await desktop.invoke("account_download", {
+              preparationId,
+              token: tokenResponse.token,
+            });
+            get().completeDownload(id);
+          } finally {
+            remove?.();
+          }
         } finally {
-          remove?.();
+          await desktop.invoke("account_download_cancel", { preparationId }).catch(() => undefined);
         }
         return;
+      }
+
+      const tokenResponse = await requestFileDownloadToken(path);
+      if (tokenResponse.error || !tokenResponse.token) {
+        throw new Error(tokenResponse.error ?? i18n.t("downloads.requestTokenFailed"));
       }
 
       const downloadTarget = resolveDaemonDownloadTarget(daemonProfile);

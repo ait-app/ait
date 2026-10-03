@@ -130,20 +130,31 @@ export function createAccountIpc(
         case "account_transport_close":
           transports.close(event.sender, id);
           return;
-        case "account_download": {
+        case "account_download_prepare": {
           if (
             typeof args.hostId !== "string" ||
-            typeof args.token !== "string" ||
             typeof args.fileName !== "string" ||
             typeof args.downloadId !== "string"
           )
             throw new Error("Invalid download request");
-          return downloads.download(event.sender, {
+          return downloads.prepare(event.sender, {
             hostId: args.hostId,
-            token: args.token,
             fileName: args.fileName,
             downloadId: args.downloadId,
           });
+        }
+        case "account_download": {
+          if (typeof args.preparationId !== "string" || typeof args.token !== "string")
+            throw new Error("Invalid download request");
+          return downloads.download(event.sender, {
+            preparationId: args.preparationId,
+            token: args.token,
+          });
+        }
+        case "account_download_cancel": {
+          if (typeof args.preparationId !== "string") throw new Error("Invalid download request");
+          downloads.cancel(event.sender, args.preparationId);
+          return;
         }
         default:
           throw new Error("Unknown account command");

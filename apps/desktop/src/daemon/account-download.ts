@@ -5,24 +5,56 @@ import path from "node:path";
 import { WebSocket } from "ws";
 import type { AccountSessionManager } from "./account-session.js";
 
+interface PreparedDownload {
+  owner: WebContents;
+  hostId: string;
+  downloadId: string;
+  destination: string | null;
+  started: boolean;
+  aborted: boolean;
+  cancelTransfer: () => void;
+  cancel: () => void;
+  dispose: () => void;
+  timer?: ReturnType<typeof setTimeout>;
+}
+
 /** Streams each independent download to a user-selected file with bounded memory. */
 export class AccountDownloadManager {
-  private active = new Set<() => void>();
+  private active = new Map<string, PreparedDownload>();
   constructor(private readonly account: AccountSessionManager) {}
   closeAll(): void {
-    for (const cancel of this.active) cancel();
+    for (const download of this.active.values()) download.cancel();
   }
 
-  async download(
+  async prepare(
     owner: WebContents,
-    input: { hostId: string; token: string; fileName: string; downloadId: string },
-  ): Promise<void> {
+    input: { hostId: string; fileName: string; downloadId: string },
+  ): Promise<string> {
     if (this.active.size >= 4) throw new Error("Too many concurrent downloads.");
-    let aborted = false;
-    let cancelTransfer: () => void = () => undefined;
-    const reservation = () => {
-      aborted = true;
-      cancelTransfer();
+    const window = BrowserWindow.fromWebContents(owner);
+    if (!window) throw new Error("The download window has closed.");
+    if (this.account.snapshot().selected?.host_id !== input.hostId)
+      throw new Error("Connect to the target host first.");
+    const id = randomUUID();
+    const download: PreparedDownload = {
+      owner,
+      hostId: input.hostId,
+      downloadId: input.downloadId,
+      destination: null,
+      started: false,
+      aborted: false,
+      cancelTransfer: () => undefined,
+      cancel: () => {
+        download.aborted = true;
+        download.cancelTransfer();
+        if (!download.started) download.dispose();
+      },
+      dispose: () => {
+        clearTimeout(download.timer);
+        this.active.delete(id);
+        owner.removeListener("did-start-navigation", navigated);
+        owner.removeListener("destroyed", download.cancel);
+      },
     };
     const navigated = (
       _event: unknown,
@@ -30,48 +62,72 @@ export class AccountDownloadManager {
       sameDocument: boolean,
       mainFrame: boolean,
     ) => {
-      if (mainFrame && !sameDocument) reservation();
+      if (mainFrame && !sameDocument) download.cancel();
     };
-    this.active.add(reservation);
+    this.active.set(id, download);
     owner.on("did-start-navigation", navigated);
-    owner.once("destroyed", reservation);
-    try {
-      await this.transfer(
-        owner,
-        input,
-        () => aborted,
-        (value) => {
-          cancelTransfer = value;
-        },
-      );
-    } finally {
-      this.active.delete(reservation);
-      owner.removeListener("did-start-navigation", navigated);
-      owner.removeListener("destroyed", reservation);
-    }
-  }
-
-  private async transfer(
-    owner: WebContents,
-    input: { hostId: string; token: string; fileName: string; downloadId: string },
-    isAborted: () => boolean,
-    setCancel: (cancel: () => void) => void,
-  ): Promise<void> {
-    const window = BrowserWindow.fromWebContents(owner);
-    if (!window) throw new Error("The download window has closed.");
-    const selected = this.account.snapshot().selected?.host_id;
-    if (selected !== input.hostId) throw new Error("Connect to the target host first.");
+    owner.once("destroyed", download.cancel);
     const fileName =
       path
         .basename(input.fileName)
         // eslint-disable-next-line no-control-regex -- Filenames must exclude ASCII control characters.
         .replace(/[\\/:*?"<>|\x00-\x1f]/g, "_")
         .slice(0, 200) || "download";
-    const destination = await dialog.showSaveDialog(window, { defaultPath: fileName });
-    if (isAborted() || owner.isDestroyed() || destination.canceled || !destination.filePath)
-      throw new Error("Download cancelled.");
+    try {
+      const destination = await dialog.showSaveDialog(window, { defaultPath: fileName });
+      if (download.aborted || owner.isDestroyed() || destination.canceled || !destination.filePath)
+        throw new Error("Download cancelled.");
+      download.destination = destination.filePath;
+      // Bound abandoned preparations; time spent in the save dialog does not count.
+      download.timer = setTimeout(download.cancel, 300_000);
+      return id;
+    } catch (error) {
+      download.dispose();
+      throw error;
+    }
+  }
+
+  cancel(owner: WebContents, preparationId: string): void {
+    const download = this.active.get(preparationId);
+    if (download?.owner === owner) download.cancel();
+  }
+
+  async download(
+    owner: WebContents,
+    input: { preparationId: string; token: string },
+  ): Promise<void> {
+    const download = this.active.get(input.preparationId);
+    if (!download || download.owner !== owner || download.started || !download.destination)
+      throw new Error("Invalid download preparation.");
+    download.started = true;
+    clearTimeout(download.timer);
+    try {
+      await this.transfer(
+        owner,
+        { hostId: download.hostId, token: input.token, downloadId: download.downloadId },
+        download.destination,
+        () => download.aborted,
+        (value) => {
+          download.cancelTransfer = value;
+        },
+      );
+    } finally {
+      download.dispose();
+    }
+  }
+
+  private async transfer(
+    owner: WebContents,
+    input: { hostId: string; token: string; downloadId: string },
+    destination: string,
+    isAborted: () => boolean,
+    setCancel: (cancel: () => void) => void,
+  ): Promise<void> {
+    if (isAborted() || owner.isDestroyed()) throw new Error("Download cancelled.");
+    const selected = this.account.snapshot().selected?.host_id;
+    if (selected !== input.hostId) throw new Error("Connect to the target host first.");
     const grant = await this.account.openDownload(input.hostId, input.token);
-    const temporary = `${destination.filePath}.ait-${randomUUID()}.part`;
+    const temporary = `${destination}.ait-${randomUUID()}.part`;
     if (isAborted()) {
       await this.account.closeVisit(grant.relay_session_id);
       throw new Error("Download cancelled.");
@@ -220,7 +276,7 @@ export class AccountDownloadManager {
         });
       });
       await file.close();
-      await rename(temporary, destination.filePath);
+      await rename(temporary, destination);
       completed = true;
     } finally {
       setCancel(() => undefined);
