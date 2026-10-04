@@ -9,6 +9,8 @@ publish.workspace = true
 async-trait = "0.1.89"
 # Consume bounded OpenCode HTTP and SSE response streams.
 futures-util = "0.3.31"
+# Authenticated DSH Host logical streams on an owned loopback WebSocket.
+tokio-tungstenite = "0.29.0"
 # Validate image payloads before native prompt admission and decode provider image artifacts.
 base64 = "0.22.1"
 # Read-only Claude OAuth quota inspection; credentials never enter public snapshots.
@@ -37,7 +39,7 @@ workspace = true
 
 [dev-dependencies]
 # Offline native HTTP fixtures, without provider credentials or a model API.
-axum = "0.8.8"
+axum = { version = "0.8.8", features = ["ws"] }
 tokio-stream = "0.1.17"
 
 [target.'cfg(target_os = "macos")'.dependencies]

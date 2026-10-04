@@ -458,13 +458,15 @@ fn compose_provider(
     manager.register_client(Box::new(provider::local::opencode::OpenCodeClient::new(
         std::env::var_os("AIT_SERVER_OPENCODE_BIN").map_or_else(|| "opencode".into(), Into::into),
     )))?;
-    manager.register_client(Box::new(
-        provider::local::deepseek_harness::DeepSeekHarnessClient::new(
-            std::env::var_os("AIT_SERVER_DEEPSEEK_HARNESS_BIN")
-                .map_or_else(|| "dsh".into(), Into::into),
-        )
-        .with_image_directory(data_dir.join("agents/provider-images")),
-    ))?;
+    let mut harness = provider::local::deepseek_harness::DeepSeekHarnessClient::new(
+        std::env::var_os("AIT_SERVER_DEEPSEEK_HARNESS_BIN")
+            .map_or_else(|| "dsh".into(), Into::into),
+    )
+    .with_image_directory(data_dir.join("agents/provider-images"));
+    if std::env::var("AIT_SERVER_DEEPSEEK_HARNESS_TRANSPORT").as_deref() == Ok("acp") {
+        harness = harness.with_acp_profile();
+    }
+    manager.register_client(Box::new(harness))?;
     AgentExecution::spawn(ExecutionDependencies {
         manager,
         directory: AgentRuntimeDirectory::new(

@@ -152,7 +152,14 @@ async fn discover(client: &dyn AgentClient, cwd: &str) -> Entry {
         "models":details.models,"modes":details.modes,"fetchedAt":Utc::now().to_rfc3339()});
     if client.provider() == "deepseek-harness" {
         value["label"] = json!("DeepSeek Harness");
-        value["description"] = json!("DeepSeek Harness via Agent Client Protocol");
+        value["description"] = json!(if client
+            .settings(&domain::agent_runtime::StoredAgentConfig::default())["capabilities"]["supportsDynamicModes"]
+            == true
+        {
+            "DeepSeek Harness native interactive Host"
+        } else {
+            "DeepSeek Harness via Agent Client Protocol"
+        });
         value["defaultModeId"] = Value::Null;
     }
     if let Some(error) = error {

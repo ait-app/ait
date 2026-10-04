@@ -35,9 +35,10 @@
 - [Ait 0.0.14 发布说明](reports/releases/release-0.0.14.md)：Diff 语法高亮、侧边栏统计与 Codex 推理等级。
 - [Apple 本机构建](operations/apple-builds.md)：DMG、模拟器和 IPA。
 - [Claude Code](operations/claude-code.md)：认证、原生会话与审批。
-- [DeepSeek Harness](operations/deepseek-harness.md)：ACP 运行与模型配置。
+- [DeepSeek Harness](operations/deepseek-harness.md)：原生 Host、权限模式、question 与 ACP 兼容配置。
 - [语音与听写](operations/speech.md)：离线模型、后端配置和限制。
 
+- [DSH 原生交互 Host](decisions/providers/adr-082-deepseek-harness-native-host.md)：权限切换、结构化问题与原生会话恢复。
 - [OpenCode 原生 Provider](decisions/providers/adr-074-opencode-native-provider.md)：接入范围、审批与会话恢复。
 
 ## 工程规范与验证

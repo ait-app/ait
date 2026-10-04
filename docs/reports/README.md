@@ -117,3 +117,5 @@
 - [Ait 0.0.7 发布准备](releases/release-0.0.7.md)
 - [Ait 0.0.8 发布准备](releases/release-0.0.8.md)
 - [Ait 0.0.9 发布说明](releases/release-0.0.9.md)
+
+- [DeepSeek Harness 原生 Host 验证](providers/deepseek-harness-native-host.md)：权限模式、question、原生会话与复测清单。
