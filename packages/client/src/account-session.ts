@@ -310,6 +310,10 @@ export class AccountSessionManager {
           instance_id: runtime.instanceId,
           relay_modes: ["ait-rust-single-v1"],
         },
+      }).catch((error: unknown) => {
+        if (error instanceof AccountError && error.code === "registration_expired")
+          entry.registrationId = this.deps.randomUUID();
+        throw error;
       });
       if (this.publications.get(runtime.serverId) !== entry)
         throw new Error("Host synchronization cancelled.");
@@ -350,7 +354,9 @@ export class AccountSessionManager {
       requests: new Set(),
       runtime: { ...runtime },
       registrationId: this.deps.randomUUID(),
-      installationId: this.deps.randomUUID(),
+      // The center binds each host to one node, including after its lease is closed.
+      // A daemon's stable UUID lets every publication reuse that node across clients/restarts.
+      installationId: runtime.serverId,
       node: null,
       nextRenew: 0,
     };

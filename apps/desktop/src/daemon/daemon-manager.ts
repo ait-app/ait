@@ -326,15 +326,12 @@ export function registerDaemonManager(
   const handlers = createDaemonCommandHandlers();
   const account = createAccountIpc(getRustDaemon, isAccountAppWindow);
 
-  ipcMain.handle(
-    "paseo:invoke",
-    async (_event, command: string, args?: Record<string, unknown>) => {
-      if (command.startsWith("account_")) return account(_event, command, args);
-      const handler = handlers[command];
-      if (!handler) {
-        throw new Error(`Unknown desktop command: ${command}`);
-      }
-      return await handler(args);
-    },
-  );
+  ipcMain.handle("ait:invoke", async (_event, command: string, args?: Record<string, unknown>) => {
+    if (command.startsWith("account_")) return account(_event, command, args);
+    const handler = handlers[command];
+    if (!handler) {
+      throw new Error(`Unknown desktop command: ${command}`);
+    }
+    return await handler(args);
+  });
 }

@@ -1,10 +1,11 @@
 import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
+import { ipcMain } from "electron";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { DEFAULT_DESKTOP_SETTINGS } from "../settings/desktop-settings";
-import { createDaemonCommandHandlers } from "./daemon-manager";
+import { createDaemonCommandHandlers, registerDaemonManager } from "./daemon-manager";
 
 const mocks = vi.hoisted(() => ({
   paseoHome: "",
@@ -31,6 +32,7 @@ const mocks = vi.hoisted(() => ({
   logError: vi.fn(),
   appLogPath: "",
   getElectronLogFile: vi.fn(),
+  accountCommand: vi.fn(),
 }));
 
 vi.mock("electron", () => ({
@@ -71,6 +73,10 @@ vi.mock("./local-transport.js", () => ({
   closeLocalTransportSession: vi.fn(),
 }));
 
+vi.mock("./account-ipc.js", () => ({
+  createAccountIpc: () => mocks.accountCommand,
+}));
+
 vi.mock("../settings/desktop-settings-electron.js", () => ({
   getDesktopSettingsStore: () => ({
     get: async () => mocks.settings,
@@ -106,10 +112,27 @@ describe("daemon-manager commands", () => {
     mocks.logError.mockReset();
     mocks.getElectronLogFile.mockReset();
     mocks.getElectronLogFile.mockReturnValue({ path: mocks.appLogPath });
+    mocks.accountCommand.mockReset();
+    vi.mocked(ipcMain.handle).mockReset();
   });
 
   afterEach(() => {
     rmSync(fixtureRoot, { recursive: true, force: true });
+  });
+
+  it("routes host synchronization from the Ait bridge to the account authority", async () => {
+    registerDaemonManager(() => true);
+    const registration = vi
+      .mocked(ipcMain.handle)
+      .mock.calls.find(([channel]) => channel === "ait:invoke");
+    expect(registration).toBeDefined();
+    const event = {} as Electron.IpcMainInvokeEvent;
+    const args = { serverId: "host", instanceId: "instance" };
+    mocks.accountCommand.mockResolvedValue({ node_session_id: "lease" });
+    await expect(registration![1](event, "account_host_sync", args)).resolves.toEqual({
+      node_session_id: "lease",
+    });
+    expect(mocks.accountCommand).toHaveBeenCalledExactlyOnceWith(event, "account_host_sync", args);
   });
 
   it("starts the Rust owner and injects managed credentials only in the main process", async () => {
