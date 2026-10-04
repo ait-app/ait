@@ -2,6 +2,20 @@
 
 use std::process::Command;
 
+// Cargo passes the complete package dependency set to this integration test.
+use anyhow as _;
+use api as _;
+use browser as _;
+use clap as _;
+use model as _;
+use schedule as _;
+use secrecy as _;
+use serde as _;
+use tokio_util as _;
+use toml as _;
+use tracing as _;
+use tracing_subscriber as _;
+
 #[test]
 fn help_and_missing_credentials_do_not_create_state() {
     let directory = tempfile::tempdir().unwrap();

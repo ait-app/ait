@@ -1,8 +1,10 @@
 //! DSH's native interactive Host, isolated from the automation-only ACP adapter.
 mod config;
 mod content;
+pub(super) mod history;
 mod http;
 mod interactions;
+mod projection;
 mod runtime;
 mod session;
 mod usage;

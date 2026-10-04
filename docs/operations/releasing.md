@@ -16,15 +16,15 @@ APK 的签名方式、安装要求与手动测试入口见 [Android APK 发布](
 
 ## 发布产物
 
-| 平台            | 架构                    | 文件                                                     |
-| --------------- | ----------------------- | -------------------------------------------------------- |
-| Linux           | x86_64                  | `Ait-linux-x86_64.AppImage`                              |
-| Linux           | x86_64                  | `Ait-VERSION-linux-x64.tar.gz`                           |
-| macOS           | Apple Silicon arm64     | `Ait-VERSION-macos-arm64.dmg`                            |
-| macOS           | Apple Silicon arm64     | `Ait-VERSION-macos-arm64.zip`                            |
+| 平台                | 架构                    | 文件                                                     |
+| ------------------- | ----------------------- | -------------------------------------------------------- |
+| Linux               | x86_64                  | `Ait-linux-x86_64.AppImage`                              |
+| Linux               | x86_64                  | `Ait-VERSION-linux-x64.tar.gz`                           |
+| macOS               | Apple Silicon arm64     | `Ait-VERSION-macos-arm64.dmg`                            |
+| macOS               | Apple Silicon arm64     | `Ait-VERSION-macos-arm64.zip`                            |
 | Android（独立发布） | 通用（含 ARM64、ARMv7） | `Ait-VERSION-android.apk`                                |
-| 自动更新        | 各平台                  | `latest-linux.yml`、`latest-mac.yml`、生成的 `.blockmap` |
-| 校验            | 全部资产                | `SHA256SUMS`                                             |
+| 自动更新            | 各平台                  | `latest-linux.yml`、`latest-mac.yml`、生成的 `.blockmap` |
+| 校验                | 全部资产                | `SHA256SUMS`                                             |
 
 AppImage 文件名保持稳定，版本体现在 Release 标签和应用内部。Windows、deb/rpm、其他架构
 和独立 CLI 不属于本次发布。安装包 `resources/bin/` 中只有 `daemon`；Electron 主程序与
@@ -32,12 +32,12 @@ Helper 是必需运行时。GitHub 仍自动提供标签对应的源码归档。
 
 ## 准备版本
 
-同步根 `Cargo.toml` 的 `workspace.package.version`、带版本约束的本地 Cargo path 依赖、
-Cargo.lock、根 package.json、所有活跃 npm workspace 及其 lockfile。然后运行：
+同步根 `Cargo.toml` 的 `workspace.package.version`、Cargo.lock、根 package.json、
+所有活跃 npm workspace 及其 lockfile。然后运行：
 
 ```bash
 npm ci
-npm run verify:release -- v0.0.15
+npm run verify:release -- v0.0.16
 npm run test:release
 npm run test:mobile-release
 npm run build:desktop-main
@@ -52,9 +52,9 @@ npm run typecheck --workspace=@ait/desktop --workspace=@ait/mobile
 ```bash
 git switch main
 git pull --ff-only
-npm run verify:release -- v0.0.15
-git tag -a v0.0.15 -m "Ait v0.0.15"
-git push origin v0.0.15
+npm run verify:release -- v0.0.16
+git tag -a v0.0.16 -m "Ait v0.0.16"
+git push origin v0.0.16
 ```
 
 `.github/workflows/release.yml` 在 Linux x86_64 和 macOS arm64 原生 runner 上构建桌面：

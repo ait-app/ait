@@ -88,7 +88,7 @@ async fn busy_question_answer_steers_without_interrupt_and_rejection_leaves_it_p
         )
         .await
         .unwrap();
-    let request = tokio::time::timeout(std::time::Duration::from_secs(3), async {
+    let request = tokio::time::timeout(Duration::from_secs(3), async {
         loop {
             let snapshot = execution
                 .execute("agent.get.request", json!({"agentId":id}))
@@ -97,7 +97,7 @@ async fn busy_question_answer_steers_without_interrupt_and_rejection_leaves_it_p
             if let Some(request) = snapshot["agent"]["pendingPermissions"][0]["id"].as_str() {
                 break request.to_owned();
             }
-            tokio::time::sleep(std::time::Duration::from_millis(5)).await;
+            tokio::time::sleep(Duration::from_millis(5)).await;
         }
     })
     .await

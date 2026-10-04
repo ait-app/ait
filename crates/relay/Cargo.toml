@@ -5,17 +5,21 @@ edition.workspace = true
 publish.workspace = true
 
 [dependencies]
-futures-util = "0.3.34"
-reqwest = { version = "0.12", default-features = false, features = ["rustls-tls", "stream"] }
-secrecy = { version = "0.10.3", features = ["serde"] }
-serde = { version = "1.0.229", features = ["derive"] }
-serde_json = "1.0.151"
-thiserror = "2.0.20"
-tokio = { version = "1.53.1", features = ["macros", "net", "rt-multi-thread", "sync", "time"] }
-tokio-tungstenite = { version = "0.29", features = ["rustls-tls-webpki-roots"] }
-tokio-util = { version = "0.7.19", features = ["rt"] }
-url = "2.5"
-uuid = { version = "1.26.0", features = ["v4", "serde"] }
+futures-util.workspace = true
+reqwest.workspace = true
+reqwest.features = ["rustls-tls", "stream"]
+secrecy.workspace = true
+secrecy.features = ["serde"]
+serde.workspace = true
+serde_json.workspace = true
+thiserror.workspace = true
+tokio.workspace = true
+tokio-tungstenite.workspace = true
+tokio-tungstenite.features = ["rustls-tls-webpki-roots"]
+tokio-util.workspace = true
+url.workspace = true
+uuid.workspace = true
+uuid.features = ["serde"]
 
 [lints]
 workspace = true

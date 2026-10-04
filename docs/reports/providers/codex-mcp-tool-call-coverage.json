@@ -1,0 +1,87 @@
+{
+  "date": "2026-10-04",
+  "base_revision": "29ea6f2f5761f43c4c674830420b8183977d9b90",
+  "measurement_revision": "Rebased release branch with the modified Rust sources identified below; only coverage documentation changed after measurement.",
+  "source_fingerprint": "45004a7aa84b98510acc2a47603f8b3d057360e15b70811cac23e988b1a04653",
+  "fingerprint_algorithm": "SHA-256 of sorted relative Rust source path + NUL + content SHA-256 + newline for every .rs file under bins/ and crates/.",
+  "rust_source_files": 805,
+  "modified_rust_source_sha256": {
+    "crates/provider/src/local/codex/discovery.rs": "7214b72350a1518070583d09bfff25e5c1f75e0e8c9b66fac7e193ced3d75a85",
+    "crates/provider/src/local/codex/discovery/tests.rs": "2038ddc14174cd48345c0229d517f1c3551c5d8fd2f5d7f4b50e07d1ce02d0b4",
+    "crates/provider/src/local/tool_detail.rs": "69addd9c92494f0019d32d5623d9c5de4e8fd633e257d2615ece4d9d7195d225",
+    "crates/provider/src/local/tool_detail/tests.rs": "9cd690968bdf69e6f5afb464901bf0175be684ba88ceff63028f710f318752b6"
+  },
+  "platform": "aarch64-apple-darwin",
+  "rustc": "rustc 1.98.1 (48a229cea 2026-09-01)",
+  "cargo_llvm_cov": "0.8.4",
+  "features": "default workspace features",
+  "excluded_files": "cargo-llvm-cov defaults; no additional filters",
+  "doctest_instrumentation": false,
+  "commands": {
+    "clean_artifacts": "cargo llvm-cov clean --workspace --offline",
+    "coverage": "RUST_TEST_THREADS=1 CARGO_INCREMENTAL=0 cargo llvm-cov --workspace --html --locked --offline --no-fail-fast -j2",
+    "summary": "CARGO_INCREMENTAL=0 cargo llvm-cov report --json --summary-only --output-path /private/tmp/ait-mcp-coverage-rebased-clean-summary.json"
+  },
+  "test_execution": {
+    "workspace": {
+      "passed": 1771,
+      "failed": 0,
+      "ignored": 3
+    },
+    "ignored_tests": [
+      {
+        "test": "local::claude::tests::process::installed_claude_control_protocol_discovers_models_without_inference",
+        "reason": "requires a locally installed Claude Code CLI; sends no model request"
+      },
+      {
+        "test": "local::claude::tests::process::parity::installed_claude_completes_a_native_turn_and_reopens_history",
+        "reason": "requires installed Claude authentication and makes one small model request"
+      },
+      {
+        "test": "local::codex::tests::installed::installed_codex_completes_a_native_turn_and_reopens_history",
+        "reason": "requires installed Codex authentication and makes one small model request"
+      }
+    ]
+  },
+  "scope_line_coverage": {
+    "workspace": {
+      "covered": 49049,
+      "count": 51905,
+      "percent": 94.49763991908294
+    },
+    "provider": {
+      "covered": 21325,
+      "count": 22701,
+      "percent": 93.93859301352363
+    }
+  },
+  "comparable_baseline": {
+    "artifact": "docs/reports/daemon/cargo-workspace-pr-coverage-2026-10-04.json",
+    "source_revision": "7c1f6eba4eeab2adb32193de765b55a34d89b0a9",
+    "workspace": {
+      "covered": 49024,
+      "count": 51879,
+      "percent": 94.49680988453902
+    },
+    "workspace_change_percentage_points": 0.0008300345439238299,
+    "provider": {
+      "covered": 21301,
+      "count": 22675,
+      "percent": 93.94046306504961
+    },
+    "provider_change_percentage_points": -0.0018700515259837402,
+    "note": "The baseline Rust sources match origin/main at 29ea6f2f; this report covers the rebased release branch and Codex MCP mapping fix."
+  },
+  "reviewable_artifacts": {
+    "summary": "this committed JSON file",
+    "local_html": "target/llvm-cov/html/index.html"
+  },
+  "validation_notes": [
+    "The first post-rebase run cleared only raw profiles and included stale instrumented artifacts, inflating the uncovered line count in three unchanged files. Its coverage was discarded.",
+    "A full cargo-llvm-cov workspace clean preceded the final serial run. Only the clean run is reported here."
+  ],
+  "uncovered_behavior": [
+    "Authenticated end-to-end Codex MCP calls and the external GitHub connector were not exercised; the new mapping is covered by offline native-item tests.",
+    "Linux and Windows were not run."
+  ]
+}

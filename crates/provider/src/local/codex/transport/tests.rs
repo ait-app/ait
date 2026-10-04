@@ -19,7 +19,7 @@ impl Fixture {
         );
         std::fs::write(script, source).unwrap();
         let transport = Transport::spawn(
-            std::path::Path::new("python3"),
+            Path::new("python3"),
             root.path().to_str().unwrap(),
             Duration::from_secs(3),
         )

@@ -26,6 +26,7 @@ struct Host {
     cwd: String,
     requests: Arc<Mutex<Vec<Value>>>,
     frames: broadcast::Sender<Value>,
+    records: Arc<Mutex<Vec<Value>>>,
 }
 
 pub(super) struct Fixture {
@@ -43,6 +44,9 @@ impl Fixture {
         let host = Host {
             cwd: cwd.clone(),
             requests: Arc::default(),
+            records: Arc::new(Mutex::new(vec![
+                json!({"type":"event","event":{"seq":0,"type":"permission/preset","time":1_700_000_000_000_i64,"data":{"preset":"workspace-write"}}}),
+            ])),
             frames: broadcast::channel(128).0,
         };
         let app = Router::new()
@@ -72,8 +76,13 @@ impl Fixture {
     }
 
     pub(super) fn history(&self, seq: u64, kind: &str, data: Value) {
-        let mut frame = json!({"type":"item","streamId":"history","value":{"type":"event","event":{"seq":seq,"type":kind}}});
+        let mut frame = json!({"type":"item","streamId":"history","value":{"type":"event","event":{"seq":seq,"type":kind,"time":1_700_000_000_000_u64+seq}}});
         frame["value"]["event"]["data"] = data;
+        self.host
+            .records
+            .lock()
+            .unwrap()
+            .push(frame["value"].clone());
         self.send(frame);
     }
     pub(super) fn interaction(&self, frame: Value) {
@@ -127,7 +136,7 @@ async fn stream(socket: WebSocket, host: Host) {
                 let request:Value=serde_json::from_str(&text).unwrap();
                 let value=match request["endpoint"].as_str() {
                     Some("$events")=>json!({"type":"ready","clientId":"client"}),
-                    Some("session/follow")=>json!({"type":"snapshot","header":{"id":"session","cwd":host.cwd},"cursor":0,"records":[],"projections":{"values":{"permissions":{"options":[{"value":"read-only","name":"Read only"},{"value":"workspace-write","name":"Workspace write"},{"value":"danger-full-access","name":"Full access"}],"currentValue":"workspace-write"},"modelSelection":{"next":null}}}}),
+                    Some("session/follow")=>snapshot(&host),
                     Some("session/control")=>json!({"type":"baseline","value":{"projections":{}}}),
                     _=>break,
                 };
@@ -152,6 +161,12 @@ async fn rpc(State(host): State<Host>, headers: HeaderMap, Json(request): Json<V
     let value = match request["method"].as_str() {
         Some("session/modelCatalog") => {
             json!({"default":{"provider":"local","model":"test"},"groups":[{"id":"local","name":"Local","models":[{"id":"test","name":"Test","reasoning":{"defaultEffort":"low","efforts":[{"id":"low","name":"Low"},{"id":"high","name":"High"}]}}]}]})
+        }
+        Some("session/page") => {
+            let before = request["payload"]["args"]["request"]["beforeSeq"]
+                .as_u64()
+                .unwrap();
+            page(&host, before)
         }
         Some("session/create") => json!({"sessionId":"session"}),
         Some("session/selectModel") => {
@@ -181,4 +196,24 @@ pub(super) async fn next(session: &mut dyn AgentSession) -> AgentTurnEvent {
     })
     .await
     .expect("native event should arrive")
+}
+
+fn page(host: &Host, before: u64) -> Value {
+    let records = host.records.lock().unwrap();
+    let end = records
+        .iter()
+        .position(|r| r["event"]["seq"].as_u64().unwrap() >= before)
+        .unwrap_or(records.len());
+    let start = end.saturating_sub(2);
+    json!({"records":records[start..end],"hasMore":start>0})
+}
+fn snapshot(host: &Host) -> Value {
+    let cut = host
+        .records
+        .lock()
+        .unwrap()
+        .last()
+        .map_or(0, |r| r["event"]["seq"].as_u64().unwrap());
+    let page = page(host, cut + 1);
+    json!({"type":"snapshot","header":{"id":"session","cwd":host.cwd},"cursor":cut,"records":page["records"],"hasMore":page["hasMore"],"projections":{"values":{"permissions":{"options":[{"value":"read-only","name":"Read only"},{"value":"workspace-write","name":"Workspace write"},{"value":"danger-full-access","name":"Full access"}],"currentValue":"workspace-write"},"modelSelection":{"next":null}}}})
 }

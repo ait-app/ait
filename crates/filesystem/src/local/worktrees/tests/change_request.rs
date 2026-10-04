@@ -13,7 +13,7 @@ fn fixture(cross: bool) -> (Fixture, LocalManagedWorktrees, PathBuf) {
     let fixture = Fixture::new();
     run(&fixture.repository, &["checkout", "-b", "topic"]);
     std::fs::write(fixture.repository.join("change.txt"), "PR content").unwrap();
-    super::paseo::commit(&fixture.repository, "PR head");
+    paseo::commit(&fixture.repository, "PR head");
     let remote = fixture.root.path().join("remote.git");
     run(
         fixture.root.path(),

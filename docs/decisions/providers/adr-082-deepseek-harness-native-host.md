@@ -31,13 +31,20 @@ DSH 官方 ACP 是 automation-only profile，不提供权限模式和 user quest
   其他 agent 或未知 waterfall 委派给原生下一处理器。重复、过期和篡改答案拒绝。
 - 共享 question 表单新增显式 `answerFormat: "array"` 和 `answerKey`，DSH 使用此格式保留含逗号选项。
   原有 provider 的字符串回答路径不变。
-- `session/follow` 按连续 durable seq 投影消息和工具；只消费本次运行已接纳回合的新事件。
+- `session/follow` 按从 0 开始的连续 durable seq 投影用户消息、助手消息和工具。
+  用户消息保留原生 message ID；prompt request ID 关联客户端乐观消息，排队输入同样持久化。
   图片通过原生 attachment RPC 读取后进入现有私有内容寻址存储，并保持历史顺序。
   contextPressure 经 `session/control` 更新上下文占用，不把累计 token 数当作当前上下文。
 - 取消调用原生 session/cancel，等待 turn/end。通信失败不重发不确定是否已接纳的输入。
   close 优先终止 owned Host 并等待持久化清理，超时再回收进程组。
-- 保留 Ait 已保存的展示时间线，不导入其他前端历史。恢复原生 session ID/cwd；
+- 原生模式为 Ait 已登记的 handle 实现 `AgentClient::history`：只读订阅取得固定 cursor，
+  用 `session/page` 向前读取完整 journal，并复用实时投影逻辑。原生 ID 和事件 seq 形成稳定展示键，
+  既有 timeline reconcile 原子修复旧版本漏掉的用户消息；再次读取不重复追加或改变 epoch。
+  历史有缺口或无法完整读取时返回错误，保留现有展示历史；恢复不调用 create/prompt、不重发输入。
+  验证原生 session ID/cwd 后才接纳历史；不枚举或导入未登记会话。
   已安装 CLI 的隔离测试确认可接续旧 ACP handle。默认模式不自动回退 ACP。
+- 工具参数遵循原生 agent loop：精确空字符串转 `{}`，合法 JSON 保留其类型，非法 JSON 原样保留字符串。
+  工具自身负责后续校验，adapter 不把工具参数错误升级成整轮传输失败。
 
 ## 兼容与边界
 
@@ -46,7 +53,7 @@ DSH 官方 ACP 是 automation-only profile，不提供权限模式和 user quest
 原生 Host 使用 DSH 自己配置的 MCP；当前没有等价的每会话 MCP override RPC，Ait 显式拒绝该配置。
 这不影响 DSH web profile 自带 MCP。原先保存 override 的会话需继续使用 ACP 或改在 DSH 配置 MCP。
 
-暂不提供原生会话导入、其他客户端历史同步、rewind、steer、slash command 列表和结构化输出约束。
+暂不提供原生会话导入、其他客户端的实时历史同步、rewind、steer、slash command 列表和结构化输出约束。
 展示使用已落盘的 assistant/message，与旧 ACP 一样不声明逐 token 延迟保证。
 原生模型选择可能依照 DSH 自身行为更新其默认模型。模型发现会创建 probe session，保留策略归 DSH。
 

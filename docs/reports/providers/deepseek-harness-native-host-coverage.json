@@ -1,7 +1,10 @@
 {
   "date": "2026-10-04",
   "revision": "Parent plus source_sha256 below; report and artifact updates only follow the final Rust measurement.",
-  "parent": "151ce454867d915b5f80823463d9b8eafd0283ae",
+  "parents": [
+    "32d94dc2f092baa53f0bcf80c16faf340725cfbf",
+    "2b55e3908b3421678271a9136d35ae20b4941fde"
+  ],
   "scope": {
     "workspace": true,
     "platform": "aarch64-apple-darwin",
@@ -14,18 +17,18 @@
   },
   "commands": [
     "CARGO_TARGET_DIR=/Users/lonnetkirisame/Documents/Developer/ait/target nix develop --command cargo llvm-cov --workspace --locked --offline --html -- --test-threads=1",
-    "CARGO_TARGET_DIR=/Users/lonnetkirisame/Documents/Developer/ait/target nix develop --command cargo llvm-cov report --json --summary-only --output-path /private/tmp/ait-dsh-native-coverage.json"
+    "CARGO_TARGET_DIR=/Users/lonnetkirisame/Documents/Developer/ait/target nix develop --command cargo llvm-cov report --json --summary-only --output-path /private/tmp/ait-dsh-fixes-coverage.json"
   ],
   "workspace": {
-    "covered": 50110,
-    "total": 53107,
-    "percent": 94.36
+    "covered": 50385,
+    "total": 53391,
+    "percent": 94.37
   },
   "crates": {
     "api": {
-      "covered": 1946,
-      "total": 2102,
-      "percent": 92.58
+      "covered": 1945,
+      "total": 2101,
+      "percent": 92.57
     },
     "browser": {
       "covered": 706,
@@ -38,9 +41,9 @@
       "percent": 100.0
     },
     "filesystem": {
-      "covered": 11144,
+      "covered": 11142,
       "total": 11735,
-      "percent": 94.96
+      "percent": 94.95
     },
     "metadata": {
       "covered": 7523,
@@ -58,9 +61,9 @@
       "percent": 100.0
     },
     "provider": {
-      "covered": 22382,
-      "total": 23900,
-      "percent": 93.65
+      "covered": 22658,
+      "total": 24185,
+      "percent": 93.69
     },
     "relay": {
       "covered": 419,
@@ -73,9 +76,9 @@
       "percent": 97.81
     },
     "terminal": {
-      "covered": 1481,
+      "covered": 1483,
       "total": 1538,
-      "percent": 96.29
+      "percent": 96.42
     },
     "voice": {
       "covered": 1850,
@@ -89,23 +92,28 @@
     }
   },
   "dsh": {
-    "covered": 2051,
-    "total": 2247,
-    "percent": 91.28
+    "covered": 2302,
+    "total": 2506,
+    "percent": 91.86
   },
   "native_host": {
-    "covered": 1055,
-    "total": 1186,
-    "percent": 88.95
+    "covered": 1293,
+    "total": 1432,
+    "percent": 90.29
   },
   "native_host_production": {
-    "covered": 1055,
-    "total": 1186,
-    "percent": 88.95
+    "covered": 1293,
+    "total": 1432,
+    "percent": 90.29
   },
   "baseline": {
-    "comparable": false,
-    "note": "New native Host transport has no like-for-like baseline. Prior ACP report measures different transport and workspace source; do not infer a percentage-point delta."
+    "revision": "32d94dc2f092baa53f0bcf80c16faf340725cfbf",
+    "native_host": {
+      "covered": 1055,
+      "total": 1186,
+      "percent": 88.95
+    },
+    "note": "Native Host scope is comparable with the same toolchain/platform/default features. Workspace/provider source also incorporates upstream PRs 170 and 167."
   },
   "files": {
     "bins/daemon/src/config.rs": {
@@ -199,9 +207,9 @@
       "percent": 91.66666666666666
     },
     "crates/api/src/lib.rs": {
-      "count": 491,
-      "covered": 454,
-      "percent": 92.4643584521385
+      "count": 490,
+      "covered": 453,
+      "percent": 92.44897959183673
     },
     "crates/api/src/listener.rs": {
       "count": 31,
@@ -295,8 +303,8 @@
     },
     "crates/filesystem/src/local/checkout.rs": {
       "count": 1490,
-      "covered": 1400,
-      "percent": 93.95973154362416
+      "covered": 1399,
+      "percent": 93.89261744966443
     },
     "crates/filesystem/src/local/checkout/highlight.rs": {
       "count": 314,
@@ -310,8 +318,8 @@
     },
     "crates/filesystem/src/local/checkout/summary.rs": {
       "count": 118,
-      "covered": 111,
-      "percent": 94.0677966101695
+      "covered": 110,
+      "percent": 93.22033898305084
     },
     "crates/filesystem/src/local/files.rs": {
       "count": 528,
@@ -1139,9 +1147,9 @@
       "percent": 96.0
     },
     "crates/provider/src/local/deepseek_harness.rs": {
-      "count": 139,
-      "covered": 125,
-      "percent": 89.92805755395683
+      "count": 152,
+      "covered": 138,
+      "percent": 90.78947368421053
     },
     "crates/provider/src/local/deepseek_harness/config.rs": {
       "count": 216,
@@ -1159,9 +1167,14 @@
       "percent": 94.04761904761905
     },
     "crates/provider/src/local/deepseek_harness/native/content.rs": {
-      "count": 78,
-      "covered": 69,
-      "percent": 88.46153846153845
+      "count": 87,
+      "covered": 78,
+      "percent": 89.65517241379311
+    },
+    "crates/provider/src/local/deepseek_harness/native/history.rs": {
+      "count": 149,
+      "covered": 135,
+      "percent": 90.60402684563758
     },
     "crates/provider/src/local/deepseek_harness/native/http.rs": {
       "count": 104,
@@ -1173,15 +1186,20 @@
       "covered": 190,
       "percent": 95.95959595959596
     },
+    "crates/provider/src/local/deepseek_harness/native/projection.rs": {
+      "count": 116,
+      "covered": 110,
+      "percent": 94.82758620689656
+    },
     "crates/provider/src/local/deepseek_harness/native/runtime.rs": {
       "count": 186,
       "covered": 162,
       "percent": 87.09677419354838
     },
     "crates/provider/src/local/deepseek_harness/native/session.rs": {
-      "count": 430,
-      "covered": 363,
-      "percent": 84.41860465116278
+      "count": 402,
+      "covered": 347,
+      "percent": 86.31840796019901
     },
     "crates/provider/src/local/deepseek_harness/native/usage.rs": {
       "count": 16,
@@ -1294,9 +1312,9 @@
       "percent": 33.33333333333333
     },
     "crates/provider/src/local/tool_detail.rs": {
-      "count": 148,
-      "covered": 139,
-      "percent": 93.9189189189189
+      "count": 174,
+      "covered": 163,
+      "percent": 93.67816091954022
     },
     "crates/provider/src/local/tool_detail/command_actions.rs": {
       "count": 42,
@@ -1490,8 +1508,8 @@
     },
     "crates/provider/src/service/agent_manager/generated_titles.rs": {
       "count": 99,
-      "covered": 91,
-      "percent": 91.91919191919192
+      "covered": 92,
+      "percent": 92.92929292929293
     },
     "crates/provider/src/service/agent_manager/native_sessions.rs": {
       "count": 297,
@@ -1690,8 +1708,8 @@
     },
     "crates/terminal/src/connection.rs": {
       "count": 383,
-      "covered": 355,
-      "percent": 92.68929503916449
+      "covered": 357,
+      "percent": 93.21148825065274
     },
     "crates/terminal/src/dispatch.rs": {
       "count": 78,
@@ -1830,21 +1848,21 @@
     }
   },
   "source_sha256": {
-    "Cargo.lock": "6f69f59f0ef72c88eab121ab21a879abac76fa313aad67845e1a9970c53a6265",
-    "Cargo.toml": "2a44f0757a6f15a67f8f53183f132d1746a6db121572b70129b0fcb9f3cb6de6",
-    "bins/daemon/Cargo.toml": "3e25d140523b88e5c1cb0fb7ab7b4cb111eea98d4b27c3ef87393928ee45d615",
+    "Cargo.lock": "066350afc8ce761621f857835dfeb7b5761c007c213fc9d8dd4896053e2d3e50",
+    "Cargo.toml": "e99aea74cfca176f4b3e08d011217c270f322eeca01d6c724f86374ca69f4c88",
+    "bins/daemon/Cargo.toml": "7b4e797b378b263af2ad94383d9c88f4b724766a35ad6abdd96905b92345a765",
     "bins/daemon/src/config.rs": "baa579f276232b511f5b02a545ea971f0d812f2974724cdefb97451d944ed417",
     "bins/daemon/src/config/tests.rs": "71fc6a98c3a66df5855c00acaab2b338ab8c6410ade27948ac5a4717508e9d3a",
-    "bins/daemon/src/host.rs": "e0ca3a79619186562ef2bc51624331471aca0e4fac121ab8df8c1e3d0e5e6aca",
+    "bins/daemon/src/host.rs": "8890c777ff82746c9414471ee77d886517c2eb3ffcee5d7e2e20d293a6537916",
     "bins/daemon/src/host/catalog.rs": "6fbe0fa510e0afb125bc4390c976721951f9091dd17471c63a2b3db8a7eaea46",
     "bins/daemon/src/host/schedule.rs": "451cd18298d64a6e9d77577b14af50a25ad9a6f42e7552eb9229e029cf2dc143",
     "bins/daemon/src/host/tests.rs": "c922934f93ff21eb84a605121110131872757f356d4e2275e41207bd7fec9982",
     "bins/daemon/src/host/voice.rs": "954997c45cd6d5b485990528c384e7d5be1c151a8137caac2e0b40bd8da76ef6",
     "bins/daemon/src/instance.rs": "a1176aef37e2bc59443aa83b48fe45759bd415e508339b1fca09fa31f5195630",
     "bins/daemon/src/instance/tests.rs": "80a58ea7eff47635fdacf4d37d5becf1245f3741e84523a1ecb9cdc514c56888",
-    "bins/daemon/src/main.rs": "22746a0bda163371a00de5ad112d46132a1c78a303ac66e21ac6c0ed6de13aab",
-    "bins/daemon/tests/dependencies.rs": "278137d96296a6d64f04309e009d07ed3a6b1b08e009ff3e97e75bf02ec71dfc",
-    "bins/daemon/tests/process.rs": "47a67a26f4b2f1591426309e09cd0ee99bbe998b04ec7c7cedf24f44688e76d7",
+    "bins/daemon/src/main.rs": "2a6e15b9633b8c260d4b819969c90a3e720a0974e6ee2c1fd6bb364cc84aa38b",
+    "bins/daemon/tests/dependencies.rs": "6d4c3feb67bb227c0660675e2adef7e1933acd9c5a2aea155086f2ee6edc8865",
+    "bins/daemon/tests/process.rs": "a757b0aebe33299d3ea2571701528b30bc2a875d7c4b1eaa70f61515b66b520c",
     "bins/daemon/tests/process/agent_controls.rs": "4bacfe48618fff4e3d9e0367cfb9d8ff0a4e79c4aa31803cba539ada058e13f5",
     "bins/daemon/tests/process/agent_controls/session_events.rs": "3721b21845651a138371783ff0feceda3c0acdb915223f810064d8b43184cc27",
     "bins/daemon/tests/process/agent_execution.rs": "ac9bda421d1cb137b6fa59c52d40312f9b79e61d002e4c48aa4fd82ff6f84984",
@@ -1899,7 +1917,7 @@
     "bins/daemon/tests/process/workspace_state.rs": "5d08503da91ace2f809f45aa4cdd421b3e0126f83eb5901794ab7a49ba6adfb3",
     "bins/daemon/tests/process/worktrees.rs": "9d9ff6dc51d9de47c7a6d1b1291d93bb44b3b55b56d52894aa50d59a5644dbbf",
     "bins/daemon/tests/process/worktrees/creation.rs": "61acaf811e64918c550acbe4a940f5adca9aeeedc27f9f2eb8b44fe3b4f803ce",
-    "crates/api/Cargo.toml": "c99110030254b43503d1df997647dcbe4f6c273603e86820308723ef97d37d0e",
+    "crates/api/Cargo.toml": "bf294d88b024385348d3a2794fb2ad5bf4be4d78c14aa0ab9fd043b219b21cee",
     "crates/api/src/auth.rs": "4ff691589bdd7d106dad78ef1c7085e880a50aa39c5e1afaf3079517ac7ea1b4",
     "crates/api/src/auth/tests.rs": "4d32aca7fbb299b0ce34ab9afd320269727782464cd796d31142d3355101e3ac",
     "crates/api/src/browser_auth.rs": "5aaba84bcd13616666717c2857b1f64801e3a986788ba4ccf3edc35d933af1bc",
@@ -1915,15 +1933,15 @@
     "crates/api/src/connection/workspace_archive.rs": "14c5feb827e7e1e4adaac47fb0f136c656672fcfabaf60c14ec42cc15559bccc",
     "crates/api/src/connection/workspace_creation.rs": "b637999119951da6b2dbf36b7db5838e875320fa92c757099443542f87ce4587",
     "crates/api/src/files.rs": "ed9b658f494138763b3d5b454e67f80f9d66d8d2006e38ec82720e1dfc675eea",
-    "crates/api/src/lib.rs": "3f60825e331f403a0f7603fd6285613429a9f37a8604d5673bcfeac24a7e8f7b",
+    "crates/api/src/lib.rs": "400a0e2e807995c98ede28c05576d8d0cb75e1ca55ce3a9592a38d5705125ec7",
     "crates/api/src/listener.rs": "1fa5a6228f97ebf11b6e8842a7b1c494be621e63be652fd736b7fd9a78973be4",
     "crates/api/src/listener/tests.rs": "99336eb6e512cb1a2fe6abf96633b73df876b2893f7610a287cbf4f58b99bf3e",
     "crates/api/src/outbound.rs": "89d151e7eb3785f8bc136f5b82a455113dc76c5360dc9b41bb2659987fbe3633",
     "crates/api/src/terminal_activity.rs": "65261a2b0eeb5918aef0c9d459f8f258e03958bda158e4b363cf0d4b97212a30",
     "crates/api/src/terminal_activity/tests.rs": "40aef2eb96c073d746c874ae5f1afa8e44c21b774f16dfc3fc41a3181fea9e04",
-    "crates/api/src/tests.rs": "f673bac197036fd156692c11431fe6a99dcfda06b9ae652f3debf8400fb78239",
+    "crates/api/src/tests.rs": "0b9f76ada0fbadb8d093ffd16ab65c1de678aa1c875aa99227e5c6226dc441e2",
     "crates/api/src/tests/browser.rs": "bdbb125b11ed5e958943bf01553ebf500d30b03e7f0c7e3bbf47985d510f5db5",
-    "crates/api/src/tests/browser_auth.rs": "9abb1c12f967a321c35a31906545866fdebd6689ec5daea0d4c4facb0656fb9e",
+    "crates/api/src/tests/browser_auth.rs": "5ca87ab957beaa22310db726bae0f91dd7167a6372e6d2134f70a819be3e3907",
     "crates/api/src/tests/paseo.rs": "e5af5b5ea1145311cdd4830ea75c1250b4d2a1a43fa6830f8da89fc1a526f1ff",
     "crates/api/src/tests/paseo/transport.rs": "f01906e667bcc63fd6624bcf34fc4237dea67af669d1dbb5fa095166b43fa72a",
     "crates/api/src/tests/placeholders.rs": "d362548605611c57b73c20e31ff48a3d375d8f747782b367f58fca6e1ace98d9",
@@ -1932,8 +1950,8 @@
     "crates/api/src/tests/single.rs": "0deb395ee6cfc61a626c035c220ff82a3d385df06cf58f1caefeb049fdb15779",
     "crates/api/src/tests/voice.rs": "7388c135772f428bb6acac21920e6967cb6605cbf7512090c07f01a222baca93",
     "crates/api/src/workspace_cleanup.rs": "400aaf1bd5bf57281a451a17ec442cf83ba671b5e73103f3eeb498f175dc35bf",
-    "crates/api/tests/fragmentation.rs": "8ca718cdc12c522547be060a32d40ed41ec0a04508b2edac5241b6f61168fc38",
-    "crates/browser/Cargo.toml": "c7e993f9329975607f4670f4aeeb5388fdbfe18ebb87fdc38a96ca3ea171db79",
+    "crates/api/tests/fragmentation.rs": "4e0e2a5c7224216a96b9ddaf230d65ab390ec9a54aafde14cbe4c0cd1d763850",
+    "crates/browser/Cargo.toml": "ead6adea61a752aa300f501c4a263e600b98b1f0ed9d0ebd33ab52f8916ce39e",
     "crates/browser/src/broker.rs": "731e7603e0ea82a46ed7cff930180b182ad9bf0e0500174cbfb9fd9dca8ca740",
     "crates/browser/src/broker/tests.rs": "73283fbe33cc5eb389bd8a181c89b244b14c8da6fd0b440575cb29d7766bd0d2",
     "crates/browser/src/broker/tests/limits.rs": "c2a5594beabc2b050ef7c137f8809a2d0e9db25302c74c5e83487cd6bd78213a",
@@ -1946,14 +1964,14 @@
     "crates/browser/src/protocol/tests.rs": "3c05b7542a39938a1f128391253f3aeadd8693fe129b680adf09d32edf8df28f",
     "crates/browser/src/protocol/tests/commands.rs": "1fe28d34582702612422b7b8d209422c4549043813765b2f52fa839f7dcbc379",
     "crates/browser/src/protocol/tests/results.rs": "28cd3cde7bc17a72ac85d5c694e95cc041d355c18895d1066a60950ad2fbcd3e",
-    "crates/domain/Cargo.toml": "42918fdba2bb71e025be2e16968d352b1552b0a9b4cb431af801c059272029fa",
+    "crates/domain/Cargo.toml": "8cb08a1505c38790d1eae454d2ebf827a5f953c49b11ca10eec40ae16a672526",
     "crates/domain/src/agent.rs": "bf653cf3d7ff41a84380c41cb321fdc828d4ea7e32d84d21804b65d5be3c2adf",
     "crates/domain/src/agent/tests.rs": "e98da2ebd33284f894d935f2c1f0957a9c861d152c579abc7a6a550233d30b8a",
     "crates/domain/src/agent_runtime.rs": "92f6b921aaeee79f41ba034966f36daac45890ad571855303ff64fff77377a62",
     "crates/domain/src/agent_runtime/tests.rs": "1bd47a105961c3fc8daa2edc722289e2e35de5aaa7661bdcaf2e01750e41c934",
     "crates/domain/src/lib.rs": "95da0ea4bdea2d5db76f077e10d1d5fc175477acafacdbbbf765eee7313778d6",
     "crates/domain/src/tests.rs": "1b1fa0c0e9c576619037278d3911575e336fed7874d5c1e358eae9b0e0730f97",
-    "crates/filesystem/Cargo.toml": "ebc85b2a3423a80b5e7cbc9f9fac00eb41666cef1f5732be9e0f495eca7b3456",
+    "crates/filesystem/Cargo.toml": "af09aba620226045678a8bd0b6eb6a752dfc9ae2243a446ceb6911f34889b3eb",
     "crates/filesystem/src/capabilities.rs": "ddcd5f50e71188f016b922ca321a1602ee81a195f560243163b38f28a8a4ee17",
     "crates/filesystem/src/capabilities/tests.rs": "37c62fa51953c33a924bf555016eb4b88b1e3783523601d042cc11079da9f4ef",
     "crates/filesystem/src/connection.rs": "1040d3bf96d5eb033a675e6f78ad8dd4a393bd357afbf33c4bf6ffa0d22a3bae",
@@ -2014,7 +2032,7 @@
     "crates/filesystem/src/local/provisioning.rs": "bc95f25cd92d210cd13a9d0a66e541b65a87081b634a3f07ef064e0477332233",
     "crates/filesystem/src/local/provisioning/tests.rs": "8b957423b1b2c6495b58396dfe7939e49ef09dc692630389e70a5f45b43b485b",
     "crates/filesystem/src/local/skills.rs": "7dcea101aa4c9a695aceded94886877c3c78cada27c9582b3fbede7a9c5a4e5d",
-    "crates/filesystem/src/local/skills/tests.rs": "2847bef4860efcd0bb8302abdf28acccb0cf58a211d07f50772359b83409cb75",
+    "crates/filesystem/src/local/skills/tests.rs": "b67438d03f5ee845315d202a7c5856d104658f67526d78cb43ddd21f18353e6c",
     "crates/filesystem/src/local/skills/tests/paseo.rs": "b46801b569a6ecdc60fab78fb9435cb13e3561ac527165c3e50e9168a3142d4d",
     "crates/filesystem/src/local/skills/transaction.rs": "6177989faf912d985bee1332a8b62f466b51af25254546fc31cd12859d45d8d8",
     "crates/filesystem/src/local/skills/transaction/tests.rs": "193e7f3b05cd267925bffb4a12294516409edbb5df2a135c5c0c8b5e9c0d8a99",
@@ -2029,7 +2047,7 @@
     "crates/filesystem/src/local/worktrees/change_request.rs": "e713b12c9457eaa47135edb4623aac44b2e557f9e960ed6cbb076c3980bf5a4c",
     "crates/filesystem/src/local/worktrees/directory.rs": "dc3e7086489e040b1402c8006c61f2d6a72376c97ee31a36f939e119854a2a23",
     "crates/filesystem/src/local/worktrees/tests.rs": "e35b850c064ac15eb7c812c131f4d7d5df2f51ff29252df4bbf7e3ee17f326e4",
-    "crates/filesystem/src/local/worktrees/tests/change_request.rs": "b79c3e85f9776f4c3564435ade41be7228bf9ac8f1c62f0c917f54651fee14ab",
+    "crates/filesystem/src/local/worktrees/tests/change_request.rs": "7dcf525c99c0f030a653b82f19c1f49fbc9c0264376af3ae6a5a67089e7bf63d",
     "crates/filesystem/src/local/worktrees/tests/change_request/gitlab.rs": "6d6d1348d3a11a28eb7cbfa16f3f433f09beb1a2022db3f9b9b67c3d1e86c4fd",
     "crates/filesystem/src/local/worktrees/tests/directory.rs": "85b5636deae053cce6c19a403a8507a4fd6f95089b718873d01e18f740c1fb0e",
     "crates/filesystem/src/local/worktrees/tests/failures.rs": "dd1d821cfc435f53af436d744b487d1f1b4e9618ee6edfd539ef03e9b581e419",
@@ -2037,7 +2055,7 @@
     "crates/filesystem/src/ports.rs": "28c3a62d6eaf40a615a65e56c3f42d3397a47e4763057cffc37ae1338a793214",
     "crates/filesystem/src/ports/checkout.rs": "5f1ee44f27f525bf5c4cc332e0c08fa872bac02a9f6b90527475c7688da057be",
     "crates/filesystem/src/ports/files.rs": "0b7cd3afa502e9623ce6564c9b537868ef1a21c6f129c051f7a169c6c98a9b2a",
-    "crates/filesystem/src/ports/forge.rs": "389dcbd5eda9725fa9d70111fae11b947660236038a40979cbca4cb79a0b4a90",
+    "crates/filesystem/src/ports/forge.rs": "b8ef33f79077b014738521be1e1ec0c8c8df04ec272e016703c57db4cca8423d",
     "crates/filesystem/src/ports/git_fetch.rs": "7ae4131afe51eee064f0208eb7de0f69b3982bf946eb5ae5912518b44c4af040",
     "crates/filesystem/src/ports/github_projects.rs": "2cae8afd8093469dfee61fa4d6195b50c50457469d578f363ff80b3c33789563",
     "crates/filesystem/src/ports/skills.rs": "0c836a350c67445397dbb8c6a91e94a07beeeb17993e6add84e2912a4437f090",
@@ -2059,7 +2077,7 @@
     "crates/filesystem/src/protocol/workspace_recovery/tests.rs": "bc02e87074aa483591f274a63b3f6a6ca22f79b418e9b1e6208b65b8f484cd33",
     "crates/filesystem/src/protocol/worktrees.rs": "31e72a6fb8ed6eb8d2b92b1c4be5cf8e681c3da5a96ec1f46e1ab123719cd1cb",
     "crates/filesystem/src/protocol/worktrees/tests.rs": "7c3b92307c372cfd611fbdea6cc8345637bc394e406aa54eb0bc48421b8782b8",
-    "crates/filesystem/src/rpc.rs": "168d07581b01a34ce43a7e8b0c41479198ff304cf0267bd6177e38c205dbabf1",
+    "crates/filesystem/src/rpc.rs": "c1bbc008a515592556316ddfe73d6889e393a13e4f968cba8a6e049a3c7dec46",
     "crates/filesystem/src/rpc/budget.rs": "7c554f7b9c5a1f9392d76f56ed167c1b1e6503f28f7ff8dd89bef958a6b0ba0f",
     "crates/filesystem/src/rpc/checkout.rs": "cf128a8ba2bfa94766000eb05108d3cf69d9c9e995674d57f6dd2816ad526de5",
     "crates/filesystem/src/rpc/checkout/tests.rs": "eabd7bd7e6ac77120c2fe857598a220d4585d90c454f63f49de2142022366493",
@@ -2070,7 +2088,7 @@
     "crates/filesystem/src/rpc/forge/tests/failures.rs": "edf961cb2d51d4c3aa53567842bb40da045337a69a1ff7342ad4a7b58dc2f1cf",
     "crates/filesystem/src/rpc/github_projects.rs": "53835e1762151a02f6a641723573645aef878c4e04600f9e047058280bb86c4b",
     "crates/filesystem/src/rpc/workspace_recovery.rs": "7e388c311cb9e106c0507352a10318a5d8927b732dfb0519c91ad5dad27757f3",
-    "crates/filesystem/src/rpc/workspace_recovery/tests.rs": "c01d32fbe15008173388af6943fdd28fd4dcb6679cb1cf2d6ea86accbe08b797",
+    "crates/filesystem/src/rpc/workspace_recovery/tests.rs": "6cd800980424e55b13649f5457977e4f030624a5fa3d863201d8073d1ca78925",
     "crates/filesystem/src/rpc/worktrees.rs": "138282c5bda1cf75384f54bdfefde4f1dffe5278ca0d9ee280e6d78c70e2c863",
     "crates/filesystem/src/rpc/worktrees/tests.rs": "e33b79bbe46b3227180c5f68be9f8662bc945723984461697c1947aceb18d4a2",
     "crates/filesystem/src/service.rs": "e8df86c274cd6240269ac4dbe43c81f2540319a01e1ad45051c21be4dd2daf4e",
@@ -2095,10 +2113,10 @@
     "crates/filesystem/src/service/worktrees.rs": "215da3bbfce9e8f6dcca18ca7592740bfa017a0a4320bfbccd643cf25c35bf40",
     "crates/filesystem/src/service/worktrees/provisioning.rs": "0e508441074a5dd25af443682cf79749d0d2a70af73f9366c4e0a4ab1a6c36ac",
     "crates/filesystem/src/service/worktrees/tests.rs": "4d1f365f80c1990f6f173abcc922a6b0d7e3d0a456f1c1d6e351575cd581e114",
-    "crates/filesystem/src/service/worktrees/tests/archive.rs": "7b7eea7a9f6d68d2f10bb261cef79d9df4bb60a01683691b4d9134302c441791",
+    "crates/filesystem/src/service/worktrees/tests/archive.rs": "bcc7086b82433561fc67c66f35b1bfab929196a387adea40902229eb6b392921",
     "crates/filesystem/src/service/worktrees/tests/provisioning.rs": "1942d220a2dba3e8a0ed2a518cb75429a04cb2b9a81713770fba4b726c698063",
     "crates/filesystem/tests/fixtures/gh_checkout.py": "28cc25185278877ab15e2c155a4c8bb02d12df31b7b7651467b11e6e5069d246",
-    "crates/metadata/Cargo.toml": "5c8138461f1c457799c1699d6e3ab592acd7b9cd77894b7da4881490e8164d2d",
+    "crates/metadata/Cargo.toml": "4d1cf6a1b98b428a92ecc9f917f988471919f3127b7ae96abc74dc56df3aea17",
     "crates/metadata/src/capabilities.rs": "56d9cb9b12a65665c6cb4401156ac211ef2f44c0f57473566fd785438d553adb",
     "crates/metadata/src/capabilities/tests.rs": "60852a0c39e6e0a86cab4752ebf149acfb3cb88f9deedb1d92db14f98a6d5944",
     "crates/metadata/src/connection.rs": "3d81d1d47d2fd2e6fae7643c4c510acd2802f2ad5f1f57e61a18161afbf65026",
@@ -2161,7 +2179,7 @@
     "crates/metadata/src/protocol/workspace_state/tests.rs": "10320e8435cfa185253fe884c8a4b90be9b72ff3a2081fa8a2dc4d45a84302f6",
     "crates/metadata/src/protocol/worktree_source.rs": "945aeaed581fb3af066517ab1a0f194f59bfe9df0b0eb88e5830af6cb2c8d9a4",
     "crates/metadata/src/protocol/worktree_source/tests.rs": "b9e3d5f3b7e2d734b47dadd7efd96f5e2be893482fac2acea190529ff2dfa433",
-    "crates/metadata/src/rpc.rs": "ed69ddec289925bfc8df538db47df28f52ac9e7c1b5b1acefd396ca7952f6d37",
+    "crates/metadata/src/rpc.rs": "ce0154a0100b8dad85af9f839780174773d5eb30c7f10aacfc302ecce82967de",
     "crates/metadata/src/rpc/daemon.rs": "71cd448ea2f11d58b500e8de86f6cfb4996d727d0c08c7a544661e579fe570b8",
     "crates/metadata/src/rpc/daemon/tests.rs": "3945578d39d23535af76152c406838a3d53fac9db8af6bbf3a2ba76c7cca8a3f",
     "crates/metadata/src/rpc/directory.rs": "80de443df23e66e87c357245f21f4e677e8686288f71c3f7299cb54e713ade82",
@@ -2185,7 +2203,7 @@
     "crates/metadata/src/service/creation/tests.rs": "5aaf608fa63fbccb9fe4cbc6abb4b8f8e0f76934d75b6f1751ed1028070fb7b2",
     "crates/metadata/src/service/daemon.rs": "3974a509762fd084769b28ebc98745fe5c88ec5c45a3d93fa877c7c7d1d5a1b0",
     "crates/metadata/src/service/daemon/tests.rs": "f0c09bc2ec7b2f67cf254014ad845c9f0c0e39d57bca019bba376ea4e639667b",
-    "crates/metadata/src/service/directory.rs": "611b87316aa9b887b7d98dfc9a452c249a6bad07bb7dd10597a73065c6e57d03",
+    "crates/metadata/src/service/directory.rs": "3ecc065ca9763f1d21f5f53b25fcbff84360d0d3844d0bcd7c98698cd39e1c67",
     "crates/metadata/src/service/directory/activity.rs": "58eb35f77db98afd76690a2ef6cc5132a0229e3ba2a70912b2a9b3de7836e0de",
     "crates/metadata/src/service/directory/tests.rs": "a139a9fe907f57f989c46c1f395b06eca50608f23b2ad50eeda984da651adc34",
     "crates/metadata/src/service/directory/tests/git_observation.rs": "8d904e5e3a55d9071a31a41c37cff3c87276306ebc7d23e91c9e9268d63ef9b4",
@@ -2222,7 +2240,7 @@
     "crates/metadata/src/storage/registry/listeners.rs": "1611bc4dcfe433b1f5798e72467aeaa677ecb301f2b5e0c5da94b8da50c78c95",
     "crates/metadata/src/storage/registry/paths.rs": "3b1a4430932a923cee560ccce5d84911fc210bed4d9461eacc76e355b89d45c9",
     "crates/metadata/src/storage/registry/projects.rs": "a685f2e3f8194f1f82412573e00519a72780c91e101d2c1cd1d0d105ae98b4f5",
-    "crates/metadata/src/storage/registry/tests.rs": "851365c82028dd113cc28bb193d7fdd5d30bf5832eef571f9bf0b9e8a6d8a35e",
+    "crates/metadata/src/storage/registry/tests.rs": "b3fdbce8284593e94e38100a1a1a2dc38c67ced5b104565915be1b78e802cadc",
     "crates/metadata/src/storage/registry/tests/failures.rs": "e53b5ee7ec73529953da3662ccce7808fbb56ec9e1f628a5711e6a8b437cdb20",
     "crates/metadata/src/storage/registry/tests/fixtures.rs": "0f3dbdca31f42405f3b9363f008d04c591ce65ec222c5f4e5ce34478aad9bb5e",
     "crates/metadata/src/storage/registry/tests/labels.rs": "92971f80c2fa3c54bd4c3fa55b26286a04930301b106f48cd2efe74655d6c1f1",
@@ -2236,7 +2254,7 @@
     "crates/metadata/src/storage/workspace_labels/tests/paseo.rs": "967850c544a9af8a76e98011a38ba3329dc72ceb23dab29997bbb55393b25bee",
     "crates/metadata/tests/fixtures/paseo-registry.json": "fa7ce8e011672afa6f687d6900f54ac0e866de504ec36c6aa4902ed95189d24a",
     "crates/metadata/tests/fixtures/paseo-workspace.json": "58842628ed75835c5b98702c4202253f4eeaf2e1e14d207b64f7b9031883af44",
-    "crates/model/Cargo.toml": "d909db095ea27e96eea9f843816401e87052e84ccb3163acd810721d3ff237bb",
+    "crates/model/Cargo.toml": "21e361f72b9bb8089567ea51472aab00fdb9aeca008c774ed7c860397486e679",
     "crates/model/src/changes.rs": "d27f7d37fdd4821514024b82ef95715762ab0c2b7f0aca2d3a68f514abd8d0a2",
     "crates/model/src/changes/tests.rs": "aee4d7e138ceefc9407d67b80fc1d89a3ddf1a02e90d34272912f419296c9685",
     "crates/model/src/context.rs": "27b4912afa976eb7ea9bdcdcc9797c1ab1c0a85b1a83bf21e462f226571535a6",
@@ -2264,7 +2282,7 @@
     "crates/model/src/subscription.rs": "368092f0589fc85112fd3592bb79edfcf27192e29367ce4c2cf77f30a4c104d9",
     "crates/model/src/tests.rs": "ea48a9e3a8e4d818459a0c84e38c5e48737d4a61556606cdbe74158d4347bb01",
     "crates/model/tests/fixtures/paseo-collation.json": "b5783f4beb803b52044291ef5f70b0a636ad53aea0e85484429e2be504c1c72e",
-    "crates/protocol/Cargo.toml": "859c71389ab7be4fe773d57fec4d74a64c4c46f1eb1c60110251aa037a07971d",
+    "crates/protocol/Cargo.toml": "6fcf26ff5d23bb7fbc20062f5cfd1b87f7e9d9ba75541fbbfb5f58e25a2ad83a",
     "crates/protocol/src/lib.rs": "5ea25d7a762b6a023077acf3a1ca186330c82f6acc96d59c34288c629c786af5",
     "crates/protocol/src/methods.rs": "be11c857a001cc39db0e3555b179392645977f3ee7b14c4e43e87649c41f15a1",
     "crates/protocol/src/methods/fixtures/excluded-inbound.txt": "e8f63fb77e0d714f4a1cba2b3a197d65679bd708d9d920446ce176ddc675c7cd",
@@ -2274,7 +2292,7 @@
     "crates/protocol/src/single.rs": "13b80512f9240bf56cb7d8b4e3ea727fd37f7a0e2d630e5da83be6863f538ebd",
     "crates/protocol/src/subscription.rs": "f92a0dbce4c4f98bceb92dff6272f7cd57d377a2e6f463384023074e3e35c5e5",
     "crates/protocol/src/tests.rs": "e19c72081d2f0994ffebe7428d19b6aa765a73cb5c4f0914a10caf3ee897b1a3",
-    "crates/provider/Cargo.toml": "d523a530b14a706ebe90979db8998d967233ef22aac6d1c888648dce746e6ec6",
+    "crates/provider/Cargo.toml": "93031042eb7872b36eb6685663f0274593731ac477ed4b50ef933e1a6d86cc2b",
     "crates/provider/src/capabilities.rs": "c14fc754b118374e388399f7ff94e0f02a4122e5e25cbe48845f849be4b135e9",
     "crates/provider/src/capabilities/tests.rs": "2a8ebaa8c2c4507f9a809da519e2b487c22c4759a7dcc1a69444b6e5d795308e",
     "crates/provider/src/connection.rs": "f5dc09ed2a88a4b7561445c985c32bad58c178d87a96dc8d3e10efdc365fb921",
@@ -2318,7 +2336,7 @@
     "crates/provider/src/local/claude/tests/permissions.rs": "9d79f5d6be6e583ab2ca9a064dde32646994c0cb8a4bc85236f2fa0ebef1f409",
     "crates/provider/src/local/claude/tests/process.rs": "2ddb4e729a978aef94e56dffb71c519f29fdb5f81944c6bda78c9d422feabc11",
     "crates/provider/src/local/claude/tests/process/environment.rs": "7608780f907f9aea702ce5e11c0fa3edc75b2b7461c4b128b57255bbc6addc0a",
-    "crates/provider/src/local/claude/tests/process/parity.rs": "b34b3b824610b5ea642f35654957bc99af015c417c80fc4aea7df9b033ef658a",
+    "crates/provider/src/local/claude/tests/process/parity.rs": "d95b988637ad518d47ebd8aedeef3606dbbcf022ad7c1fecc8935962b405135c",
     "crates/provider/src/local/claude/tests/streaming.rs": "4b91bcf9d54807db284f19b5e9951d21f82b1cf29e723340a24a6937f999249f",
     "crates/provider/src/local/claude/transport.rs": "8b302029c77fe33bf91bae71c349948982475424894450e317472ce469ab1142",
     "crates/provider/src/local/codex.rs": "841ae6181566418645435bcbcd57d0846ba0979ce5680dc5a82fb4cef405a6ca",
@@ -2329,8 +2347,8 @@
     "crates/provider/src/local/codex/controls.rs": "ac64dd0b8569d5d25582ba3905eaf3d64a3f78e523691970277fd9626f332e9a",
     "crates/provider/src/local/codex/controls/tests.rs": "52ef0a4481705b7d8b3e2a70fb696346cf8ae65531370355c763ff586aed64a8",
     "crates/provider/src/local/codex/controls/tests/paseo.rs": "6b0c274ec37918c1af3c6ca619e837167909e5852e5ad9674d7ed21616931f31",
-    "crates/provider/src/local/codex/discovery.rs": "3b92c7231b73a114c7a5f4bb5ebc2a3385546813155ffe02e231cc27c3b25152",
-    "crates/provider/src/local/codex/discovery/tests.rs": "2a7414bc04071a4017e8a754dfff930cbec75c1122cad347ef28f2ac487946b1",
+    "crates/provider/src/local/codex/discovery.rs": "7214b72350a1518070583d09bfff25e5c1f75e0e8c9b66fac7e193ced3d75a85",
+    "crates/provider/src/local/codex/discovery/tests.rs": "2038ddc14174cd48345c0229d517f1c3551c5d8fd2f5d7f4b50e07d1ce02d0b4",
     "crates/provider/src/local/codex/discovery/tests/command_actions.rs": "6f6483dc2f0cbf8c81a88a70a933cb8d7623ec3b9ff0fda94fdd4d364f05aa70",
     "crates/provider/src/local/codex/inspection.rs": "12c66c29a2a562a489e31eb9a4631b13310daec9a0983298f425d62fe1573070",
     "crates/provider/src/local/codex/inspection/tests.rs": "2fab6a3fb36507eeb59fed0b39f4f9dcc5f1e54f2046776a301e9c75a3e62c7e",
@@ -2362,25 +2380,28 @@
     "crates/provider/src/local/codex/tests/progress.rs": "0b836f923227f3d4f433156236def60ad13b56f7d864c3975cd3272681a96987",
     "crates/provider/src/local/codex/tests/progress/command_actions.rs": "48a98f80cd999e3c34c0c442ab56dde42fca0fac541a89f3814cf697a5878bfb",
     "crates/provider/src/local/codex/transport.rs": "49152da5e1c78afa858d41e96f18a5fb04f1baaee704c430b04c5c18b379cf25",
-    "crates/provider/src/local/codex/transport/tests.rs": "c5fea2ce52e8f2d7323f3f573a5314e77a4ca844e8cecd29ca7f2ec61051723a",
+    "crates/provider/src/local/codex/transport/tests.rs": "3b51b9ab65bb5c282a005211f43d1f9b1e52e6374c7ecdc37bdb2264e76a752a",
     "crates/provider/src/local/codex/workflows.rs": "74972e04fb0bbe5a3f4beca2515eed3c20df2fe109a80f6ea69d7e642c0d91ae",
     "crates/provider/src/local/codex/workflows/tests.rs": "e01fcc1a5d837e3ddfd2f19fccbb9013e93cb77f3cb17fa2cae329e42870cac3",
     "crates/provider/src/local/configuration.rs": "f333bb397c9918bc988d924ef667e5165dbc9a714921052aa81d2fa49a1baa29",
     "crates/provider/src/local/configuration/options.rs": "6473448412e1bcd3a0b50b619c4136175de2d9c2f0976886ba4ce344b70f938e",
     "crates/provider/src/local/configuration/tests.rs": "ca7502bd618546b4adf38eacefc9e7d131008312260546e77923c251e0cf2193",
-    "crates/provider/src/local/deepseek_harness.rs": "c0597f5c8e096f190022b397bf5b49b64212fddffdb3807bef9632171e5d57c1",
+    "crates/provider/src/local/deepseek_harness.rs": "b1c647f6d4aaf1a9ddc0aee5416d96aadcf7e8bfd3e8cb87de2a19fe234a915e",
     "crates/provider/src/local/deepseek_harness/config.rs": "8e12913d848dbc1f78c41542df4232a4eef65568ea254a3ae1c0f0034464d812",
     "crates/provider/src/local/deepseek_harness/config/tests.rs": "39733b82cfa4c9f27696e27b348feef5a1b81dd6d2b7a9d421a0c3af207bb182",
-    "crates/provider/src/local/deepseek_harness/native.rs": "208ecd2d27993c411fb831979216e5d502907d0f0be9c3f9d03d3767377f0698",
+    "crates/provider/src/local/deepseek_harness/native.rs": "56960c55cdfb77eca8b9bffa54026769af7fe4efb9b9ce612cdd9b5442136909",
     "crates/provider/src/local/deepseek_harness/native/config.rs": "a6a678c5e889a1ff45b09ee03f0c633430ab4fedb3a564c201bafc39f2477f23",
-    "crates/provider/src/local/deepseek_harness/native/content.rs": "2cf4f37ad839574798c9a9c7cdf1773dc413170272274e79f5413531487df991",
+    "crates/provider/src/local/deepseek_harness/native/content.rs": "0dc2c8970c1eeaffedf79f7d4a0fb57d1f8c1a299cb7620184f094c790f8123b",
+    "crates/provider/src/local/deepseek_harness/native/history.rs": "ebe08e4071c997df6ed9f76b8fc49cea57f0502764e767cd4a1dbad86c38c555",
     "crates/provider/src/local/deepseek_harness/native/http.rs": "6ba081e4f91476962da6bb2bf53c6738ac09a8945b4a3ac5558d82cc6918f57b",
     "crates/provider/src/local/deepseek_harness/native/interactions.rs": "47d0f851e0ed1dd93eca0e4571ebd2b6c5e7294d73f36e10e6737b7fc6072c8e",
+    "crates/provider/src/local/deepseek_harness/native/projection.rs": "8ff893837243185394cf98a783402a593fe68a160496aaeeb2b3e6327ef9f7a1",
     "crates/provider/src/local/deepseek_harness/native/runtime.rs": "ecee4fb8d350ce2982c1921ac9ddab9e56925ebb1c6f0647baab618090455fca",
-    "crates/provider/src/local/deepseek_harness/native/session.rs": "8f6a2edd70ed4d22ddd177066366d142a5351d1bc367bc81a27a44564e24688b",
-    "crates/provider/src/local/deepseek_harness/native/tests.rs": "cdc876f0399b00c3d65c643bbee093b15a9b8613763f7d727c82b82bac1a0e98",
-    "crates/provider/src/local/deepseek_harness/native/tests/fixture.rs": "a3276f896cd41ed4622a3eb32d99e5f1e90809ec65ed97e4aa0e898bebf540b9",
+    "crates/provider/src/local/deepseek_harness/native/session.rs": "94616446c06d756318096cfc8e9b37ff412a80ff735f15631ff1eaebb63da90f",
+    "crates/provider/src/local/deepseek_harness/native/tests.rs": "504b29aad9c4f6f989377a211f0f87af9ebe9fcdc47a6031b1e46b4c1a03e032",
+    "crates/provider/src/local/deepseek_harness/native/tests/fixture.rs": "e7ff6f9b995a860d8db9895e047c7561ac6010b617466694e6a2e5962432f510",
     "crates/provider/src/local/deepseek_harness/native/tests/interactions.rs": "69e46b687f8678f9129e148b76b4f4c6ff9d2448d3a56d597c46ac3613b29fb3",
+    "crates/provider/src/local/deepseek_harness/native/tests/recovery.rs": "bbcbb132ee44973fbdc67280a8995d8bd3f33c8ca3b37537ff801634bdb57c4e",
     "crates/provider/src/local/deepseek_harness/native/tests/session.rs": "fa9a105a6d0a1f778f4d1a80f5a34b1c434b852fae81c362f2f16ef7d4befa14",
     "crates/provider/src/local/deepseek_harness/native/tests/validation.rs": "77b6079a636289187da085198f3b64086e7f41e42741940a660e6eaf1fe15316",
     "crates/provider/src/local/deepseek_harness/native/usage.rs": "d9fceae3f6a00cf7a6af69bb2b6e2e7b5572b6f89e890ae125ba195cfd2137af",
@@ -2424,9 +2445,9 @@
     "crates/provider/src/local/opencode/tests.rs": "c5816a6e2be2b147c5cf7ede6e279fd466ec45de2c3dc97b92df75220dce490f",
     "crates/provider/src/local/opencode/tests/fixture.rs": "c5964dc30472ea408807b7f471d69af1736772c0729b97e22049b2e659a4ed92",
     "crates/provider/src/local/opencode/types.rs": "381a1e6959a32a967283d021b5a6ac71451de6128a4683c18c8691154be85358",
-    "crates/provider/src/local/tool_detail.rs": "92c4959fe2326f4d22629f515f4139edd7e07028bddb29cc3a967011268225d0",
+    "crates/provider/src/local/tool_detail.rs": "69addd9c92494f0019d32d5623d9c5de4e8fd633e257d2615ece4d9d7195d225",
     "crates/provider/src/local/tool_detail/command_actions.rs": "9a2201687c5299e5fc5c72b01b59cb2250c11e3c77c5b9f9167ffe787e88ff53",
-    "crates/provider/src/local/tool_detail/tests.rs": "dbfa7955dcba7cbe4317cdf44b1063f0552ee67a9cbb7b436d4faf894ea5603e",
+    "crates/provider/src/local/tool_detail/tests.rs": "9cd690968bdf69e6f5afb464901bf0175be684ba88ceff63028f710f318752b6",
     "crates/provider/src/local/usage.rs": "29f273d3f8e8e76c679180a556fbf4efa0ad6e4acf84ff660ac3e52176c56065",
     "crates/provider/src/local/usage/tests.rs": "bb02d75414967a4df537c0b555663f2dd6eff7c2e80fd05fe4c63499ad91788e",
     "crates/provider/src/ports.rs": "0bb36dfe71d1339b16238f954bfdf097dba2adcf018d2d859b2df278032c5fb0",
@@ -2456,7 +2477,7 @@
     "crates/provider/src/protocol/timeline.rs": "4bbbc0f5fdfc2c7c40e67f69d128084b4a6225d820d12bdb0cdece81600cfb3e",
     "crates/provider/src/protocol/usage.rs": "a0b85d2350901c5381a51973ab47268ef73a9ff23cdb358e11131c172e6e21d6",
     "crates/provider/src/protocol/usage/tests.rs": "98730ecf92b59fcefa997c026d708b4b9ca75c9594193543b5f9f345bf50fa27",
-    "crates/provider/src/rpc.rs": "5cfe522714f99f22ef79389d25dd987cc044f4a4d9654b33036c42297e5041a7",
+    "crates/provider/src/rpc.rs": "e48d88a03a5e58d93c54808115673aa5aa86265727ee964c311157781b249a07",
     "crates/provider/src/rpc/agent_execution.rs": "022e527fd76f73c9a58604c989b98db880f400673bd7477bc22c80c21b7fb467",
     "crates/provider/src/rpc/agent_execution/controls.rs": "413c9474f10573ad31a8a0053f583fb656228ed084baac38d4184db80c37f2e7",
     "crates/provider/src/rpc/agent_execution/native_sessions.rs": "8048af67ad8de527d428cf9cbd19395b78c07ef7fc2a5e27e4a93c5ae4d25c10",
@@ -2491,7 +2512,7 @@
     "crates/provider/src/service.rs": "fa6ed386e6b1921d828aad1019f88498079cd36dc20749e7e6c7dfc145be393a",
     "crates/provider/src/service/agent_execution.rs": "1b7a5cf90a5802325aded7876477a6bd105ef23a70c62102fc094cdd41a109e3",
     "crates/provider/src/service/agent_execution/tests.rs": "d51b4584b4147ab7117d6f91b808a4930cdaf400b7e2969edd9f3ee7a667c8ef",
-    "crates/provider/src/service/agent_execution/tests/async_questions.rs": "3561fc6a9efe2d0a1f3bbe490a3735abbd8003a6ac960304ef171c43d5baad38",
+    "crates/provider/src/service/agent_execution/tests/async_questions.rs": "4aeb1b45dc57e469e8a68b2ce8c9830505b62bdd524e58d10d5a322f0c982aef",
     "crates/provider/src/service/agent_execution/tests/async_questions/plans.rs": "41648452e7c8083290a15ee0facbf55098143e6d8285e4dab250b68990c38ebe",
     "crates/provider/src/service/agent_execution/tests/auto_archive.rs": "9b77e6a56556add42fbca08b7b4e49844c0f3be594f9865e347c2d0fd724280d",
     "crates/provider/src/service/agent_execution/tests/controls.rs": "9fb24517984e445f142fab75f90a968b5f54515a43e11369a948461244e4d22d",
@@ -2502,7 +2523,7 @@
     "crates/provider/src/service/agent_execution/tests/reasoning.rs": "6752939a097d72813351f9a06939d0f02e53cc730464589fbd0e25a3f6eb6f12",
     "crates/provider/src/service/agent_execution/tests/resume.rs": "af6cdef79820187d3164059cec33d97d48919a21b85da4dde74c98fcb47aaa78",
     "crates/provider/src/service/agent_execution/tests/rich_input.rs": "750d9d97d77a3879ce1a1a0f6897fe726464cd6459f7de5d90bab9d454ccf141",
-    "crates/provider/src/service/agent_execution/tests/streaming.rs": "863ce8b8aade4bec9244d906b594469601c598aecbfb1fc191e1517a5b085478",
+    "crates/provider/src/service/agent_execution/tests/streaming.rs": "3970c3b4e822ea072bfe70ae3032305c5bfba7adef288b86d1fc9b6d95422cc7",
     "crates/provider/src/service/agent_execution/tests/subscriptions.rs": "7c89eb1f31d134135ebf977c1e0006cca66d9fa7bec6990aada68ac45b2be487",
     "crates/provider/src/service/agent_execution/tests/subscriptions/creation.rs": "dcdf7965953f6976e07b8759b74174f96bbf40c508c531d90bee4e7d559ec8b9",
     "crates/provider/src/service/agent_execution/tests/titles.rs": "34746038f25cbe006388e479f4f95a199fbbc76b6ce6f5d3e4526763c3fe9356",
@@ -2551,7 +2572,7 @@
     "crates/provider/src/service/provider_catalog/scope.rs": "e230048852b1cee1ef358893d0422d7e480e9c2664fa7c06822087646ccb7e27",
     "crates/provider/src/service/provider_catalog/tests.rs": "f0f5d528b4a2370c072c0e51bb13847090718db54919b0c7bc06b48c5113ac8a",
     "crates/provider/src/service/provider_catalog/tests/paseo.rs": "c22647df32f90c018145f79e4e4ee8c5c90df812eacb969ef3bacf1e050e9e43",
-    "crates/provider/src/service/provider_catalog/tests/paseo/current.rs": "99b8c152e5ad6048c8ba1350e17c08c8be972183dd41e9fa0c3d01a239c1a0fa",
+    "crates/provider/src/service/provider_catalog/tests/paseo/current.rs": "331088d18e278c3cb3cc274c2742c60dd16ebdd01b76a0cb42edd29d4d6cd16c",
     "crates/provider/src/service/workspace_attention.rs": "1c9849568369d12ee9fc80dfc54f53e23a751c744cd8349ff819da5510feef56",
     "crates/provider/src/service/workspace_attention/tests.rs": "bad57beeee98d8d43806536708b759039711c19c7af7e84e6f72a4b84f04983a",
     "crates/provider/src/service/workspace_attention/tests/activity.rs": "22016c9197eabc1d390b8fe6366b679139a0a458f7aea39ae1b9661f9f4e3869",
@@ -2581,7 +2602,7 @@
     "crates/provider/tests/fixtures/paseo-fork-context.json": "e422d377cdb883fc2a9c6720cb52cee87bf5745664287cb649f8e84695af5256",
     "crates/provider/tests/fixtures/paseo-history-search.json": "dd05f88ba74ec94f09d0393460be08b7f3e9d253d4c4919b58dbd7fecaac0771",
     "crates/provider/tests/fixtures/paseo-timeline-projection.json": "afdc5d59523efc1c5aa1e26ac2f77ea70ffe79c139b3e89ddf6ec4a4c6e64be7",
-    "crates/relay/Cargo.toml": "ccd186a2fbf42bb72a7f29d46ba590a9eaa4e6244bff5495d40b844ac7e043b7",
+    "crates/relay/Cargo.toml": "cf7993614988fc71d4b058d3e67a542fd016df3436110e22b2b1e257f8a66b55",
     "crates/relay/src/bridge.rs": "359641f9ddd5de9248d47ad249ff226fc478a8310b845c0c9652a49c801362f2",
     "crates/relay/src/download.rs": "ec0979e43ae1b912bc5dce04ab53e2d71ca1ce0fc8316ed9ea4c0cc2c8009c60",
     "crates/relay/src/download/tests.rs": "4f766a40785f36e5e466fff5aa36236a29d47a3886192cf031685fc6c1c77752",
@@ -2591,7 +2612,7 @@
     "crates/relay/src/tests.rs": "0ed1b9e1e91a742d432a7c40be8fd61d876f0e32ef9227665f94b6f2c947b001",
     "crates/relay/src/transport.rs": "226bc440ad2e16169ee8a50680c5e518526a6a1d4beb0f7d5a82eaf1f832b8c3",
     "crates/relay/src/transport/tests.rs": "51ef681b28ca748afe3e7dffb4f0e8d7b81c0d4bac967b65f790b87f4fc52518",
-    "crates/schedule/Cargo.toml": "64f494bc4dad43801b844a0e7fa1ed7da8d3a9686d363b5b058574caafc3a68f",
+    "crates/schedule/Cargo.toml": "c08a45b8d3a05d49ec33c79e69042f9f9e7f9d9e4a70200227551d3188342e6c",
     "crates/schedule/src/cadence.rs": "4312aaf4a8920a4e72d512dda66c6ff8e078398537cfb901ec93e00a86311a6b",
     "crates/schedule/src/cadence/tests.rs": "ca26362bc3dc0c19bc5c9de394cf91c0bd68ab9f11bfc7247b4c7f42e9c7b455",
     "crates/schedule/src/cadence/tests/calendar_model.rs": "ee775c1fb068a03db4e33351917686f6e16e426490f01f2379a921df7b22d836",
@@ -2613,7 +2634,7 @@
     "crates/schedule/src/storage.rs": "7c8689a8dfd24145fcb48130e287f714f726bae1051ee5aa1bfa832024a2ec6b",
     "crates/schedule/src/storage/tests.rs": "898d7b42545746a1608ce1fa08e15c8cbb8dacfe4f9bb4e4d4735bafe552ef64",
     "crates/schedule/src/storage/tests/records.rs": "af6c022ea965c0dd3670d65e689c13f88a99a5ccc76b1e6d9695f3f1c58768d6",
-    "crates/terminal/Cargo.toml": "146de802c7f9727756561b0c40d7bfc72159a2c8a0e2b56a1a64545ca08b3a0f",
+    "crates/terminal/Cargo.toml": "00b84f28658f80ad397c7ae886b9d82959966e6b72c78453731ef8d191f9daba",
     "crates/terminal/src/activity.rs": "ab700301f503f23847c4f411bf09f738996b1c17666a5562f2839bb4001d52e2",
     "crates/terminal/src/activity/tests.rs": "84ce6f783bfcd6f7a28c2c96880f2de300997b54bed85dd89dc40351900d858a",
     "crates/terminal/src/capabilities.rs": "5979ed1aad10e61ddbce2208a074efeebf180212220d06a737c57297622f68f6",
@@ -2623,12 +2644,12 @@
     "crates/terminal/src/connection/tests/delivery.rs": "1fce0af5a0d4beaea6a7c23201c4c62b762c7db0e75884f50e095f3a98d18465",
     "crates/terminal/src/connection/tests/ownership.rs": "46efb4e49f6ec7c814558f78d3ec33abb05238ac75b0977cab5e22b0881d9a9c",
     "crates/terminal/src/dispatch.rs": "2744c94f63b220f94fccb65dd431e12e06c9e280806dd365f5d998e320205377",
-    "crates/terminal/src/lib.rs": "5f96fa6bcb5f3adc32a98719ccdd17beab24fe864ed26d5080e777d40e81b1d7",
+    "crates/terminal/src/lib.rs": "0bf1ce8ac54d36d4239c56dbf125d433b632ac53fc96dba4a0b9ebefe2c5cb48",
     "crates/terminal/src/local.rs": "414ca6b1ce0d694aa4016532a551b1e9b4a24615f90c6be6ecf60598c2048045",
     "crates/terminal/src/local/tests.rs": "387fc1bdaad4be0ead5f4db4a991123fcf44c4754853599b8eaf3a42f79a132e",
     "crates/terminal/src/local/tests/io.rs": "eaa3e54714523ac21963296c0b4b5e2f2d0bd3d69f78aef9cf1f4d066c766af4",
     "crates/terminal/src/local/tests/paseo.rs": "403fe90e29173dbdd1103ba5a07298c2808f4d608422f0cfabf4ccf944fd6190",
-    "crates/terminal/src/ports.rs": "7b7d2ca9facc0bcf8f2ac89b4fc53457acd44a57c3e1327ef9fb88d0710888b1",
+    "crates/terminal/src/ports.rs": "d4ad72ee29d60b03864e51367d7c8f5143b24bd0a522155430ceafa19e3bc58d",
     "crates/terminal/src/protocol.rs": "4ed6c2da58afabd54180924ddbc907a2e96da5e5ba7bcd5a8cb1644b58dc72ed",
     "crates/terminal/src/protocol/tests.rs": "441e5546a8665298cfe7f52deb879f29dd175d6aebca74e7130f647b0c1bf80c",
     "crates/terminal/src/rpc.rs": "763ba29385d3d74d0ada633a80568791d2be5cc095a6d1e4d783af712aaf690e",
@@ -2643,7 +2664,7 @@
     "crates/terminal/src/service/tests/paseo.rs": "bca53774ac7e56c74c7deea336ccf5e1fbf0d73dcbb74f564d2e0502cac6e02d",
     "crates/terminal/src/tests.rs": "d57c5c7d91eb77e923c6a21f83042ac93edd6e5b94bc518c7a6da5c7c822dc57",
     "crates/terminal/src/tests/support.rs": "fc4d1d72d2419375d54fa456f83d572e4efafa7c0de60b81b25e1c2e062ad5f9",
-    "crates/voice/Cargo.toml": "333acf59e774eadaaa035431f1b4b274dcea46711a544d0709b09805ec1c8c4d",
+    "crates/voice/Cargo.toml": "1153584e9471087061a9ac5c583d92914d03a055168a67f51de9dfc9b232b67c",
     "crates/voice/src/audio.rs": "d9827067d8b11a38e475af28717579e7e699592aeabc275b948883c6d29e4085",
     "crates/voice/src/audio/tests.rs": "e5081d0a1a563fc671fff419388dfa756aa89b473ca79d8dbdcb89f7ee0c3e52",
     "crates/voice/src/capabilities.rs": "085e23a1696f1853066f1d9c8f3620b979e57f2dd35a6262cc571cd7924a6ccb",
@@ -2671,7 +2692,7 @@
     "crates/voice/src/offline/tests.rs": "937511820b06d0d83e17397911470fac27642f509d6270cb9d3664f1b43175e8",
     "crates/voice/src/offline/tests/process.rs": "69d3cd6ec26ee71fa0e538901338d6fa6883fc6a6f8d01c66bbd08a72fea6931",
     "crates/voice/src/offline/tests/worker.py": "fda515f9ac002acf1d6568265676e07ad88241bf26a6d09daeca69893aaee908",
-    "crates/voice/src/offline/worker.rs": "6d3471279303242f2a8bed7ef496bcf9f2bc795b0df80aa4eccfc17d494cdd9b",
+    "crates/voice/src/offline/worker.rs": "203a4736d67fbd37349da7a633eac760511e692051c6f5d7bf2eea0dea9fb31a",
     "crates/voice/src/offline/worker/tests.rs": "5d152dc02ddc034a16f27aaa88dc4a379e59bd69fee775e28d0ce96d4c11cb22",
     "crates/voice/src/openai.rs": "6abb075adbc92bb53648d842061db899fcbdd595ffe06b46846774dc54afdd85",
     "crates/voice/src/openai/tests.rs": "d6c28ddad6f8f23e5aa2e46d47870bb4f3643784beb6337a597accaa8991a4cd",
@@ -2686,39 +2707,35 @@
     "rust-toolchain.toml": "9252881b77e54d1d9abc7d7ce32c9be83f547602c0712190a323c7e8fbfa715b"
   },
   "logs": {
-    "installed_smoke": {
-      "passed": 1,
-      "failed": 0,
-      "ignored": 0
-    },
     "workspace": {
-      "sha256": "ff768506313e8422040eb4600c245a0489b4148453723ff2f19216724b4cd922",
+      "sha256": "c982686cfa850720ec398d6b8924de1f009c461824aa0d72d1db979b5dd07f77",
       "tests": {
-        "passed": 1781,
+        "passed": 1786,
         "failed": 0,
         "ignored": 4
       }
     },
     "coverage": {
-      "sha256": "c4324870a53715074c9d1f86ede192f092e96aea98c4625ffa098e3441ae563e",
+      "sha256": "9eadbdba13d95f17ca25aa07a903544292ec6ec8572b73e93258323224655d77",
       "tests": {
-        "passed": 1781,
+        "passed": 1786,
         "failed": 0,
         "ignored": 4
       }
+    },
+    "installed_smoke": {
+      "sha256": "5d355ac9782907afe567ef145dad5dd0aa9e0c79c70bf8f435457be28ccd8d0a",
+      "tests": {
+        "passed": 1,
+        "failed": 0,
+        "ignored": 0
+      }
     }
   },
-  "raw_llvm_summary_sha256": "827f1f9b463c739db2540ac709dbdec3c0640ca4b977c9d345d0bd54bd51d437",
+  "raw_llvm_summary_sha256": "475ce8dca4c79952b336cd2ecee604ddb44d6b66478750f2a16a59633d07f73b",
   "html_report": "/Users/lonnetkirisame/Documents/Developer/ait/target/llvm-cov/html/index.html",
-  "first_attempt": {
-    "result": "failed",
-    "test": "unix::agent_execution::directory_sync::websocket_directory_streams_keep_sequences_ownership_and_reconnect_checkpoints",
-    "error": "existing receive timeout at process/transport.rs:33",
-    "test_threads": 4,
-    "log_sha256": "fe549d47190d69be74a61c857da3ceff66515b742c29b657c535670b2717bf54"
-  },
   "unverified": [
-    "Electron UI and real model inference",
+    "Electron UI and real model inference on this fixed revision; prior revision was tested externally",
     "Debian amd64 and Windows runtime",
     "Native mobile builds",
     "Native Host through production daemon process; existing daemon DSH fixture explicitly exercises legacy ACP"

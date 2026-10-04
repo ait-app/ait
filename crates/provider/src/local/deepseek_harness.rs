@@ -86,7 +86,20 @@ impl AgentClient for DeepSeekHarnessClient {
     }
 
     fn supports_history_replay(&self) -> bool {
-        false
+        self.interactive
+    }
+
+    fn history<'a>(
+        &'a self,
+        handle: &'a AgentPersistenceHandle,
+        cwd: &'a str,
+    ) -> AgentSessionFuture<'a, Vec<crate::protocol::timeline::NativeItem>> {
+        Box::pin(async move {
+            if !self.interactive {
+                return Err(AgentSessionError::Unavailable);
+            }
+            native::history::read(self, handle, cwd).await
+        })
     }
 
     fn validate_config(&self, config: &StoredAgentConfig) -> Result<(), AgentSessionError> {

@@ -10,6 +10,7 @@ use std::collections::BTreeMap;
 
 mod fixture;
 mod interactions;
+mod recovery;
 mod session;
 mod validation;
 
@@ -40,6 +41,7 @@ async fn installed_host_discovers_switches_permissions_and_adopts_legacy_session
     );
     let handle = session.persistence().unwrap();
     session.close().await.unwrap();
+    assert!(client.history(&handle, &spec.cwd).await.unwrap().is_empty());
     let mut resumed = client
         .resume_session(&handle, &spec, AgentResumePurpose::Interactive)
         .await

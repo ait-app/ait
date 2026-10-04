@@ -4,6 +4,7 @@
 
 ## Daemon 与协议
 
+- [Cargo workspace 依赖整理与警告清理：PR 验证](daemon/cargo-workspace-pr-validation-2026-10-04.md)
 - [Daemon 测试分支 rebase 验证](daemon/crate-coverage-rebase.md)
 - [Daemon 每 crate 95% 行覆盖率（历史测量）](daemon/crate-coverage-95.md)
 - [2026-10-03 仓库审计与修复](daemon/repository-audit-2026-10-03.md)
@@ -107,6 +108,7 @@
 
 ## 发布验证
 
+- [Ait 0.0.16 发布说明](releases/release-0.0.16.md)
 - [Ait 0.0.15 发布说明](releases/release-0.0.15.md)
 - [Ait 0.0.10 发布说明](releases/release-0.0.10.md)
 - [Ait 0.0.11 发布说明](releases/release-0.0.11.md)

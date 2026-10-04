@@ -160,11 +160,12 @@ impl Session {
             .apply(&self.runtime.api, &self.id, config)
             .await?;
         let turn = uuid::Uuid::new_v4().to_string();
+        let request_id = prompt.client_message_id.as_deref().unwrap_or(&turn);
         self.stream.begin(turn.clone());
         self.tools.clear();
         self.native_turn = None;
         self.active = Some(turn.clone());
-        let result=self.runtime.api.call("session/prompt",json!({"request":{"sessionId":self.id,"requestId":turn,"mode":"queue","content":content}})).await;
+        let result=self.runtime.api.call("session/prompt",json!({"request":{"sessionId":self.id,"requestId":request_id,"mode":"queue","content":content}})).await;
         if result.as_ref().is_err() || result.as_ref().is_ok_and(|value| value["accepted"] != true)
         {
             // Admission may have succeeded before transport failure. Never resend this input.
@@ -212,7 +213,7 @@ impl Session {
                     return Err(AgentSessionError::Failed);
                 }
                 self.cursor = seq;
-                if self.active.is_some() {
+                if self.active.is_some() || event["type"] == "user/message" {
                     self.history(event)?;
                 }
                 Ok(())
@@ -291,6 +292,7 @@ impl Session {
     }
 
     fn history(&mut self, event: &Value) -> Result<(), AgentSessionError> {
+        super::projection::apply(&mut self.stream, &mut self.tools, event, &self.id)?;
         let data = &event["data"];
         match event["type"].as_str() {
             Some("turn/start") => {
@@ -299,37 +301,8 @@ impl Session {
                 }
                 self.native_turn = Some(data["turn"].as_u64().ok_or(AgentSessionError::Failed)?);
             }
-            Some("assistant/message") => {
-                let message = &data["message"];
-                for block in message["content"]
-                    .as_array()
-                    .ok_or(AgentSessionError::Failed)?
-                {
-                    match block["type"].as_str(){
-                        Some("text"|"reasoning")=>self.stream.update(&json!({"sessionUpdate":if block["type"]=="text"{"agent_message_chunk"}else{"agent_thought_chunk"},"messageId":message["id"],"content":{"type":"text","text":block["text"]}}))?,
-                        Some("tool-call")=>{},
-                        _=>return Err(AgentSessionError::Failed),
-                    }
-                }
-                self.stream.flush();
-            }
             Some("tool/call") => {
                 let id = text(data, "callId")?;
-                let input: Value = serde_json::from_str(
-                    data["arguments"]
-                        .as_str()
-                        .ok_or(AgentSessionError::Failed)?,
-                )
-                .map_err(|_| AgentSessionError::Failed)?;
-                if self.tools.len() >= 4096
-                    || self
-                        .tools
-                        .insert(id.into(), json!({"name":text(data,"name")?,"input":input}))
-                        .is_some()
-                {
-                    return Err(AgentSessionError::Failed);
-                }
-                self.stream.update(&json!({"sessionUpdate":"tool_call","toolCallId":id,"title":data["name"],"status":"in_progress","rawInput":input}))?;
                 let ready: Vec<_> = self
                     .waiting_approvals
                     .iter()
@@ -341,14 +314,6 @@ impl Session {
                         self.interaction(&frame)?;
                     }
                 }
-            }
-            Some("tool/result") => {
-                let block = &data["message"]["content"][0];
-                let id = text(block, "toolCallId")?;
-                if !self.tools.contains_key(id) {
-                    return Err(AgentSessionError::Failed);
-                }
-                self.stream.update(&json!({"sessionUpdate":"tool_call_update","toolCallId":id,"status":if block["isError"]==true{"failed"}else{"completed"},"rawOutput":block["content"]}))?;
             }
             Some("turn/end") => {
                 if data["turn"].as_u64() != self.native_turn || self.native_turn.is_none() {

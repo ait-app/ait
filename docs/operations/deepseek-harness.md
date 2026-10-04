@@ -31,7 +31,10 @@ export AIT_SERVER_DEEPSEEK_HARNESS_BIN=/absolute/path/to/dsh
 权限菜单支持 Read only、Workspace write 和 Full access，原生权限配置在下一次输入前应用。
 工具审批保留一次性允许或拒绝，question 支持单选、多选与自由文本，回答会完成原生待决请求。通过现有
 `agent.permission.resolve.request` 回答；`agent.cancel.request` 取消当前工作。
-服务重启后 `agent.resume.request` 恢复已登记 handle，保留 Ait 保存的消息和工具时间线。
+服务重启后 `agent.resume.request` 恢复已登记 handle。原生模式读取展示历史时，从 DSH 的完整记录
+恢复用户消息、助手消息和工具时间线；旧版本遗漏的用户气泡会在 daemon 重启后的首次历史加载时修复。
+此过程只读，不重新发送用户输入。记录不完整时保留 Ait 现有历史并报告读取失败。
+工具参数的空字符串按 DSH 原生规则转为空对象；非法 JSON 原样交给工具校验。
 
 目前支持文本、附件、受 native capability 约束的图片输入、图片输出、工具生命周期、
 上下文用量、DSH profile 配置的 MCP、审批、question、权限模式、取消和会话恢复。
@@ -48,7 +51,7 @@ export AIT_SERVER_DEEPSEEK_HARNESS_TRANSPORT=acp
 ```
 
 ACP 没有权限模式和 question。默认不会因原生 Host 出错而悄悄回退 ACP；
-原生 Host 创建的 handle 不能交给 ACP 恢复。旧 ACP handle 可由原生 Host 接续，Ait 保存的历史保留。
+原生 Host 创建的 handle 不能交给 ACP 恢复。旧 ACP handle 可由原生 Host 接续，并从原生记录恢复展示历史；显式 ACP 模式仍保留原有本地展示历史。
 
 实现边界见 [ADR-082](../decisions/providers/adr-082-deepseek-harness-native-host.md)，
 测试范围见[原生 Host 验证报告](../reports/providers/deepseek-harness-native-host.md)。

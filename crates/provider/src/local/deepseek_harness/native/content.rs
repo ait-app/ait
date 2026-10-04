@@ -25,7 +25,7 @@ pub(super) fn has_images(frame: &Value) -> bool {
 
 fn blocks(frame: &Value) -> Option<&Vec<Value>> {
     (frame["streamId"] == "history" && frame["value"]["type"] == "event")
-        .then(|| frame["value"]["event"]["data"]["message"]["content"].as_array())
+        .then(|| message(&frame["value"]["event"])["content"].as_array())
         .flatten()
 }
 
@@ -35,7 +35,13 @@ pub(super) async fn hydrate(
     session: &str,
     images: &crate::local::images::ImageStore,
 ) -> Result<Value, AgentSessionError> {
-    if let Some(blocks) = frame["value"]["event"]["data"]["message"]["content"].as_array_mut() {
+    let event = &mut frame["value"]["event"];
+    let message = if event["type"] == "user/message" {
+        &mut event["data"]
+    } else {
+        &mut event["data"]["message"]
+    };
+    if let Some(blocks) = message["content"].as_array_mut() {
         for block in blocks {
             if block["type"] == "tool-result" {
                 if let Some(content) = block["content"].as_array_mut() {
@@ -77,4 +83,12 @@ async fn hydrate_image(
     let text = images.render(&json!({"mimeType":attachment["mediaType"],"data":result["data"]}))?;
     *block = json!({"type":"text","text":text});
     Ok(())
+}
+
+fn message(event: &Value) -> &Value {
+    if event["type"] == "user/message" {
+        &event["data"]
+    } else {
+        &event["data"]["message"]
+    }
 }
