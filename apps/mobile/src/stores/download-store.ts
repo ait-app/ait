@@ -91,7 +91,7 @@ export const useDownloadStore = create<DownloadState>()((set, get) => ({
         (connection) => connection.type === "accountRelay",
       );
       if (relay?.type === "accountRelay") {
-        if (Platform.OS === "android") {
+        if (Platform.OS === "android" || Platform.OS === "ios") {
           const tokenResponse = await requestFileDownloadToken(path);
           if (tokenResponse.error || !tokenResponse.token) {
             throw new Error(tokenResponse.error ?? i18n.t("downloads.requestTokenFailed"));

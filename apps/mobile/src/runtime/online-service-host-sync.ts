@@ -31,8 +31,8 @@ async function hostCommand(
 ): Promise<RelayControlGrant | null> {
   const desktop = getDesktopHost();
   if (desktop?.invoke) return desktop.invoke(command, args) as Promise<RelayControlGrant | null>;
-  if (Platform.OS !== "android")
-    throw new Error("Online service synchronization requires the desktop or Android app.");
+  if (Platform.OS !== "android" && Platform.OS !== "ios")
+    throw new Error("Online service synchronization requires the desktop or native mobile app.");
   return serializeNativeAccountCommand(async () => {
     const manager = await getNativeAccount();
     if (command === "account_host_disconnect") {

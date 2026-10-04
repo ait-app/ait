@@ -1,4 +1,4 @@
-import { AppState } from "react-native";
+import { AppState, Platform } from "react-native";
 import * as Crypto from "expo-crypto";
 import { fetch as nativeFetch } from "expo/fetch";
 import * as SecureStore from "expo-secure-store";
@@ -18,6 +18,7 @@ const transports = new Set<() => void>();
 let ready: Promise<AccountSessionManager> | undefined;
 
 async function createAccount(): Promise<AccountSessionManager> {
+  const platform = Platform.OS === "ios" ? "ios" : "android";
   let installationId = await AsyncStorage.getItem(INSTALLATION_KEY);
   if (!installationId || !/^[0-9a-f-]{36}$/i.test(installationId)) {
     installationId = Crypto.randomUUID();
@@ -25,8 +26,8 @@ async function createAccount(): Promise<AccountSessionManager> {
   }
   const manager = new AccountSessionManager({
     installationId,
-    deviceName: "Ait Android",
-    platform: "android",
+    deviceName: platform === "ios" ? "Ait iOS" : "Ait Android",
+    platform,
     randomUUID: Crypto.randomUUID,
     fetch: nativeFetch as typeof fetch,
     appVersion: resolveAppVersion() ?? "unknown",

@@ -12,13 +12,31 @@ const mocks = vi.hoisted(() => ({
   connect: vi.fn(),
   disconnect: vi.fn(),
   accountStatus: "online",
+  desktop: true,
+  platform: "ios",
+  publishHost: vi.fn(),
+  unpublishHost: vi.fn(),
 }));
-vi.mock("@/desktop/host", () => ({ getDesktopHost: () => ({ invoke: mocks.invoke }) }));
+vi.mock("react-native", () => ({
+  Platform: {
+    get OS() {
+      return mocks.platform;
+    },
+  },
+}));
+vi.mock("@/desktop/host", () => ({
+  getDesktopHost: () => (mocks.desktop ? { invoke: mocks.invoke } : undefined),
+}));
 vi.mock("./account-state", () => ({
   serializeNativeAccountCommand: (work: () => Promise<unknown>) => work(),
   useAccountState: Object.assign(vi.fn(), { getState: () => ({ status: mocks.accountStatus }) }),
 }));
-vi.mock("./native-account", () => ({ getNativeAccount: vi.fn() }));
+vi.mock("./native-account", () => ({
+  getNativeAccount: async () => ({
+    publishHost: mocks.publishHost,
+    unpublishHost: mocks.unpublishHost,
+  }),
+}));
 vi.mock("./host-runtime", () => ({
   getHostRuntimeStore: () => ({
     getClient: () => ({
@@ -44,6 +62,7 @@ const grant = {
 beforeEach(() => {
   vi.resetAllMocks();
   mocks.accountStatus = "online";
+  mocks.desktop = true;
   useOnlineServiceHostSync.setState({ hosts: {} });
   mocks.status.mockResolvedValue(status());
   mocks.invoke.mockResolvedValue(grant);
@@ -52,9 +71,23 @@ beforeEach(() => {
     status: { ...status().status, connecting: true },
   });
   mocks.disconnect.mockResolvedValue(status());
+  mocks.publishHost.mockResolvedValue(grant);
 });
 
 describe("host online service synchronization", () => {
+  it("uses the iOS native account authority to synchronize and disconnect a host", async () => {
+    mocks.desktop = false;
+    await synchronizeOnlineServiceHost("first", "First", true);
+    expect(mocks.publishHost).toHaveBeenCalledWith(
+      { serverId: "first", instanceId: "instance-1", platform: "linux", name: "First" },
+      true,
+    );
+    expect(mocks.connect).toHaveBeenCalledWith(grant);
+    await disconnectOnlineServiceHost("first");
+    expect(mocks.unpublishHost).toHaveBeenCalledWith("first");
+    expect(mocks.disconnect).toHaveBeenCalledOnce();
+  });
+
   it("reads status without publishing, then sends a grant only to the explicitly selected daemon", async () => {
     await synchronizeOnlineServiceHost("first", "First");
     expect(mocks.invoke).not.toHaveBeenCalled();

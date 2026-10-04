@@ -53,6 +53,7 @@
 
 ## 客户端、连接与品牌
 
+- [ADR-084：iOS 在线服务账户与主机中继](clients/adr-084-ios-account-relay.md)
 - [ADR-080：Android APK 独立手动发布](clients/adr-080-standalone-android-release.md)
 - [ADR-079：移动端统一使用 Expo EAS 构建](clients/adr-079-mobile-eas-builds.md)
 - [ADR-078：Android 发布改为手动可选](clients/adr-078-optional-android-release.md)

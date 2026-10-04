@@ -39,7 +39,7 @@ export const useAccountState = create<AccountState>(() => ({
 }));
 
 export function supportsAccountRelay(): boolean {
-  return Platform.OS === "android" || Boolean(getDesktopHost()?.invoke);
+  return Platform.OS === "android" || Platform.OS === "ios" || Boolean(getDesktopHost()?.invoke);
 }
 
 let commandTail = Promise.resolve<unknown>(undefined);
@@ -65,7 +65,7 @@ export async function accountCommand(
   args?: Record<string, unknown>,
 ): Promise<AccountState> {
   const invoke = getDesktopHost()?.invoke;
-  if (!invoke && Platform.OS === "android") {
+  if (!invoke && (Platform.OS === "android" || Platform.OS === "ios")) {
     return serializeNativeAccountCommand(async () => {
       const manager = await getNativeAccount();
       switch (command) {
@@ -97,7 +97,7 @@ export async function accountCommand(
       return snapshot;
     });
   }
-  if (!invoke) throw new Error("Account login is available in the Android and desktop apps.");
+  if (!invoke) throw new Error("Account login is available in the native mobile and desktop apps.");
   const snapshot = (await invoke(command, args)) as AccountState;
   useAccountState.setState(snapshot);
   return snapshot;
@@ -106,7 +106,7 @@ export async function accountCommand(
 /** Mount once next to HostRuntime bootstrap; discovery remains separate from runtime hosts. */
 export function AccountRelayLifecycle() {
   useEffect(() => {
-    if (Platform.OS === "android") {
+    if (Platform.OS === "android" || Platform.OS === "ios") {
       let disposed = false;
       const receive = (snapshot: AccountState) => {
         if (!disposed)

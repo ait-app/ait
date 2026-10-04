@@ -9,8 +9,15 @@ const mocks = vi.hoisted(() => ({
   share: vi.fn(),
   stream: vi.fn(),
   failOpen: false,
+  platform: "android",
 }));
-vi.mock("react-native", () => ({ Platform: { OS: "android" } }));
+vi.mock("react-native", () => ({
+  Platform: {
+    get OS() {
+      return mocks.platform;
+    },
+  },
+}));
 vi.mock("@/desktop/host", () => ({ getDesktopHost: () => undefined }));
 vi.mock("@/constants/platform", () => ({ isWeb: false }));
 vi.mock("@/i18n/i18next", () => ({ i18n: { t: (key: string) => key } }));
@@ -53,6 +60,7 @@ beforeEach(() => {
   vi.resetAllMocks();
   mocks.files.clear();
   mocks.failOpen = false;
+  mocks.platform = "android";
   useDownloadStore.setState({ downloads: new Map(), activeDownloadId: null });
 });
 
@@ -75,25 +83,30 @@ async function download() {
   return [...useDownloadStore.getState().downloads.values()][0]!;
 }
 
-describe("Android relay download files", () => {
-  it("writes chunks, closes the file and only shares the complete download", async () => {
-    mocks.stream.mockImplementation(async ({ write, progress }) => {
-      write(new Uint8Array([1, 2, 3]));
-      progress(3, 3);
-    });
-    expect(await download()).toMatchObject({
-      status: "complete",
-      progress: { bytesWritten: 3, percent: 1 },
-    });
-    expect(mocks.close).toHaveBeenCalledOnce();
-    expect(mocks.files).toEqual(new Set(["file:///cache/report.txt"]));
-    expect(mocks.share).toHaveBeenCalledWith(
-      "file:///cache/report.txt",
-      expect.objectContaining({ mimeType: "text/plain" }),
-    );
-  });
+describe("native mobile relay download files", () => {
+  it.each(["android", "ios"])(
+    "writes %s chunks and only shares the complete download",
+    async (platform) => {
+      mocks.platform = platform;
+      mocks.stream.mockImplementation(async ({ write, progress }) => {
+        write(new Uint8Array([1, 2, 3]));
+        progress(3, 3);
+      });
+      expect(await download()).toMatchObject({
+        status: "complete",
+        progress: { bytesWritten: 3, percent: 1 },
+      });
+      expect(mocks.close).toHaveBeenCalledOnce();
+      expect(mocks.files).toEqual(new Set(["file:///cache/report.txt"]));
+      expect(mocks.share).toHaveBeenCalledWith(
+        "file:///cache/report.txt",
+        expect.objectContaining({ mimeType: "text/plain" }),
+      );
+    },
+  );
 
   it.each(["interrupted", "open-failure"])("removes partial files after %s", async (failure) => {
+    mocks.platform = "ios";
     mocks.failOpen = failure === "open-failure";
     mocks.stream.mockRejectedValue(new Error("Download interrupted"));
     expect(await download()).toMatchObject({ status: "error" });
