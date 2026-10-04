@@ -78,7 +78,7 @@ pub struct WorkspaceSetupDetail {
     /// Per-command snapshots.
     pub commands: Vec<WorkspaceSetupCommand>,
     /// Present only when output was truncated.
-    #[serde(skip_serializing_if = "is_false")]
+    #[serde(skip_serializing_if = "std::ops::Not::not")]
     pub truncated: bool,
 }
 
@@ -237,11 +237,6 @@ pub struct WorkspaceScriptMutationResult {
     pub script: Option<WorkspaceScript>,
     /// Safe failure text.
     pub error: Option<String>,
-}
-
-#[allow(clippy::trivially_copy_pass_by_ref)]
-const fn is_false(value: &bool) -> bool {
-    !*value
 }
 
 #[cfg(test)]

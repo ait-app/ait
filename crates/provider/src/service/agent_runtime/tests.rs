@@ -308,6 +308,43 @@ fn list_filters_sorts_and_pages_placed_public_agents() {
 }
 
 #[test]
+fn thinking_filter_distinguishes_provider_default_from_selected_option() {
+    let (service, agents) = service();
+    let mut selected = agent("agent-a", "wks-one", "Alpha", false);
+    selected.config = Some(domain::agent_runtime::StoredAgentConfig {
+        thinking_option_id: Some("high".to_owned()),
+        ..Default::default()
+    });
+    agents.upsert(&selected).expect("fixture update");
+
+    let selected = service
+        .list(&AgentDirectoryQuery {
+            thinking_option_id: Some(ThinkingOptionFilter::Selected("high".to_owned())),
+            ..default_query()
+        })
+        .expect("selected list");
+    assert_eq!(selected.entries[0].agent.id, "agent-a");
+    assert_eq!(selected.entries.len(), 1);
+
+    let default = service
+        .list(&AgentDirectoryQuery {
+            thinking_option_id: Some(ThinkingOptionFilter::ProviderDefault),
+            ..default_query()
+        })
+        .expect("default list");
+    assert_eq!(default.entries[0].agent.id, "agent-b");
+    assert_eq!(default.entries.len(), 1);
+    assert_eq!(
+        service
+            .list(&default_query())
+            .expect("unfiltered list")
+            .entries
+            .len(),
+        2
+    );
+}
+
+#[test]
 fn history_searches_placement_and_includes_archived_by_request() {
     let (service, agents) = service();
     agents

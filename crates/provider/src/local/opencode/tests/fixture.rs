@@ -1,4 +1,3 @@
-#![allow(clippy::too_many_lines, clippy::struct_excessive_bools)]
 use std::{
     convert::Infallible,
     path::PathBuf,
@@ -21,6 +20,10 @@ use tokio_util::task::AbortOnDropHandle;
 
 use super::super::http::Version;
 
+#[expect(
+    clippy::struct_excessive_bools,
+    reason = "Each flag independently selects a fixture behavior"
+)]
 pub(in crate::local::opencode) struct StateData {
     version: Version,
     cwd: PathBuf,
@@ -171,7 +174,25 @@ async fn handle(State(state): State<Arc<Mutex<StateData>>>, request: Request) ->
         };
         return ([("content-type", "text/event-stream")], body).into_response();
     }
-    let response = match (method.as_str(), path.as_str()) {
+    let response = match fixture_json(&mut state, method.as_str(), &path, body) {
+        Ok(response) => response,
+        Err(status) => return status.into_response(),
+    };
+    if v2 && !response.is_null() && response.get("data").is_none() {
+        Json(json!({"data":response})).into_response()
+    } else {
+        Json(response).into_response()
+    }
+}
+
+fn fixture_json(
+    state: &mut StateData,
+    method: &str,
+    path: &str,
+    body: Value,
+) -> Result<Value, StatusCode> {
+    let v2 = state.version == Version::V2;
+    let response = match (method, path) {
         ("GET", "/global/health" | "/api/info") => json!({"healthy":true}),
         ("GET", "/provider") => {
             json!({"connected":["local"],"all":[{"id":"local","models":{"test-model":{"name":"Test model","variants":{"high":{}}}}}]})
@@ -195,7 +216,7 @@ async fn handle(State(state): State<Arc<Mutex<StateData>>>, request: Request) ->
         ("POST", "/session" | "/api/session") => {
             state.permission = body[if v2 { "permissions" } else { "permission" }].clone();
             state.model = body["model"].clone();
-            session_info(&state)
+            session_info(state)
         }
         ("PATCH", "/session/ses_one" | "/api/session/ses_one") => {
             state.permission_updates += 1;
@@ -209,17 +230,13 @@ async fn handle(State(state): State<Arc<Mutex<StateData>>>, request: Request) ->
                     .unwrap()
                     .extend(body["permission"].as_array().unwrap().iter().cloned());
             }
-            if v2 {
-                Value::Null
-            } else {
-                session_info(&state)
-            }
+            if v2 { Value::Null } else { session_info(state) }
         }
         ("POST", "/api/session/ses_one/model") => {
             state.model = body["model"].clone();
             Value::Null
         }
-        ("GET", "/session/ses_one" | "/api/session/ses_one") => session_info(&state),
+        ("GET", "/session/ses_one" | "/api/session/ses_one") => session_info(state),
         ("GET", "/session/ses_one/message" | "/api/session/ses_one/message") => {
             let mut history = state.history.clone();
             if state.omit_input_history {
@@ -251,7 +268,7 @@ async fn handle(State(state): State<Arc<Mutex<StateData>>>, request: Request) ->
             }
         }
         ("POST", "/permission/perm1/reply" | "/api/session/ses_one/permission/perm1/reply") => {
-            state.replies.push(body.clone());
+            state.replies.push(body);
             state.pending_permissions.clear();
             state.busy = false;
             Value::Null
@@ -262,31 +279,31 @@ async fn handle(State(state): State<Arc<Mutex<StateData>>>, request: Request) ->
             Value::Null
         }
         ("POST", "/session/ses_one/prompt_async" | "/api/session/ses_one/prompt") => {
-            state.submissions += 1;
-            state.busy |= !state.pending_permissions.is_empty();
-            let number = state.submissions;
-            if v2 {
-                state.history.extend([json!({"id":format!("user{number}"),"type":"user","text":body["text"],"metadata":body["metadata"],"time":{"created":10}}),
-                    json!({"id":format!("answer{number}"),"type":"assistant","time":{"created":11,"completed":12},"content":[{"type":"text","text":"answer"}]})]);
-            } else {
-                state.history.extend([json!({"info":{"id":body["messageID"],"sessionID":"ses_one","role":"user","time":{"created":10}},"parts":[{"id":"pu","sessionID":"ses_one","messageID":body["messageID"],"type":"text","text":body["parts"][0]["text"]}]}),
-                    json!({"info":{"id":format!("msg_0123456789abABCDEFGHIJKLM{number}"),"sessionID":"ses_one","role":"assistant","time":{"created":11,"completed":12}},"parts":[{"id":format!("prt_0123456789abABCDEFGHIJKLM{number}"),"sessionID":"ses_one","messageID":format!("msg_0123456789abABCDEFGHIJKLM{number}"),"type":"text","text":"answer"}]})]);
-            }
-            if state.early_failure {
-                state.history.pop();
-            }
-            if state.reject_ack {
-                return StatusCode::BAD_GATEWAY.into_response();
-            }
-            Value::Null
+            return record_prompt(state, &body);
         }
-        _ => return StatusCode::NOT_FOUND.into_response(),
+        _ => return Err(StatusCode::NOT_FOUND),
     };
-    if v2 && !response.is_null() && response.get("data").is_none() {
-        Json(json!({"data":response})).into_response()
+    Ok(response)
+}
+
+fn record_prompt(state: &mut StateData, body: &Value) -> Result<Value, StatusCode> {
+    state.submissions += 1;
+    state.busy |= !state.pending_permissions.is_empty();
+    let number = state.submissions;
+    if state.version == Version::V2 {
+        state.history.extend([json!({"id":format!("user{number}"),"type":"user","text":body["text"],"metadata":body["metadata"],"time":{"created":10}}),
+            json!({"id":format!("answer{number}"),"type":"assistant","time":{"created":11,"completed":12},"content":[{"type":"text","text":"answer"}]})]);
     } else {
-        Json(response).into_response()
+        state.history.extend([json!({"info":{"id":body["messageID"],"sessionID":"ses_one","role":"user","time":{"created":10}},"parts":[{"id":"pu","sessionID":"ses_one","messageID":body["messageID"],"type":"text","text":body["parts"][0]["text"]}]}),
+            json!({"info":{"id":format!("msg_0123456789abABCDEFGHIJKLM{number}"),"sessionID":"ses_one","role":"assistant","time":{"created":11,"completed":12}},"parts":[{"id":format!("prt_0123456789abABCDEFGHIJKLM{number}"),"sessionID":"ses_one","messageID":format!("msg_0123456789abABCDEFGHIJKLM{number}"),"type":"text","text":"answer"}]})]);
     }
+    if state.early_failure {
+        state.history.pop();
+    }
+    if state.reject_ack {
+        return Err(StatusCode::BAD_GATEWAY);
+    }
+    Ok(Value::Null)
 }
 
 fn session_info(state: &StateData) -> Value {

@@ -12,38 +12,36 @@ pub(super) fn apply(
     descriptor: &mut WorkspaceDescriptorPayload,
     snapshot: &WorkspaceRuntimeSnapshot,
 ) {
-    descriptor.diff_stat = Some(snapshot.git.as_ref().and_then(|git| {
+    descriptor.diff_stat = snapshot.git.as_ref().and_then(|git| {
         git.diff_stat.map(|stat| DiffStat {
             additions: stat.additions.into(),
             deletions: stat.deletions.into(),
         })
-    }));
-    descriptor.git_runtime = Some(snapshot.git.as_ref().map(|git| WorkspaceGitRuntimePayload {
-        current_branch: Some(git.current_branch.clone()),
-        remote_url: Some(git.remote_url.clone()),
+    });
+    descriptor.git_runtime = snapshot.git.as_ref().map(|git| WorkspaceGitRuntimePayload {
+        current_branch: git.current_branch.clone(),
+        remote_url: git.remote_url.clone(),
         is_paseo_owned_worktree: Some(git.is_managed_worktree),
-        is_dirty: Some(git.is_dirty),
-        ahead_behind: Some(git.ahead_behind.map(|(ahead, behind)| AheadBehind {
+        is_dirty: git.is_dirty,
+        ahead_behind: git.ahead_behind.map(|(ahead, behind)| AheadBehind {
             ahead: ahead.into(),
             behind: behind.into(),
-        })),
-        ahead_of_origin: Some(git.ahead_of_origin.map(Into::into)),
-        behind_of_origin: Some(git.behind_of_origin.map(Into::into)),
-    }));
+        }),
+        ahead_of_origin: git.ahead_of_origin.map(Into::into),
+        behind_of_origin: git.behind_of_origin.map(Into::into),
+    });
     descriptor.github_runtime =
-        Some(
-            snapshot
-                .forge
-                .as_ref()
-                .map(|forge| WorkspaceGitHubRuntimePayload {
-                    features_enabled: Some(forge.features_enabled),
-                    pull_request: Some(forge.pull_request.as_ref().map(pull_request)),
-                    error: Some(forge.error.as_ref().map(|message| WorkspaceRuntimeError {
-                        message: message.clone(),
-                    })),
-                    refreshed_at: None,
+        snapshot
+            .forge
+            .as_ref()
+            .map(|forge| WorkspaceGitHubRuntimePayload {
+                features_enabled: Some(forge.features_enabled),
+                pull_request: forge.pull_request.as_ref().map(pull_request),
+                error: forge.error.as_ref().map(|message| WorkspaceRuntimeError {
+                    message: message.clone(),
                 }),
-        );
+                refreshed_at: None,
+            });
     descriptor.forge = snapshot
         .forge
         .as_ref()
@@ -90,15 +88,14 @@ fn pull_request(pr: &WorkspacePullRequestSnapshot) -> WorkspacePullRequest {
             "pending" => ChecksStatus::Pending,
             _ => ChecksStatus::None,
         }),
-        review_decision: Some(
-            pr.review_decision
-                .as_deref()
-                .map(|decision| match decision {
-                    "approved" => ReviewDecision::Approved,
-                    "changes_requested" => ReviewDecision::ChangesRequested,
-                    _ => ReviewDecision::Pending,
-                }),
-        ),
+        review_decision: pr
+            .review_decision
+            .as_deref()
+            .map(|decision| match decision {
+                "approved" => ReviewDecision::Approved,
+                "changes_requested" => ReviewDecision::ChangesRequested,
+                _ => ReviewDecision::Pending,
+            }),
         repo_owner: pr.repo_owner.clone(),
         repo_name: pr.repo_name.clone(),
         github: pr.github.clone(),

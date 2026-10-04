@@ -1,5 +1,7 @@
 use serde_json::json;
 
+use crate::protocol::agent_config::NullableSetting;
+
 use super::{AgentAttentionClearRequest, AgentHistoryRequest, AgentIdSelection, AgentListRequest};
 
 #[test]
@@ -21,7 +23,7 @@ fn decodes_paseo_directory_filters_and_explicit_null_thinking() {
             .filter
             .expect("filter should exist")
             .thinking_option_id,
-        Some(None)
+        NullableSetting::Clear
     );
 }
 
@@ -29,9 +31,24 @@ fn decodes_paseo_directory_filters_and_explicit_null_thinking() {
 fn history_omits_thinking_filter_when_absent() {
     let request: AgentHistoryRequest =
         serde_json::from_value(json!({})).expect("empty history request should decode");
+    assert_eq!(request.filter.map(|filter| filter.thinking_option_id), None);
+    let request: AgentHistoryRequest =
+        serde_json::from_value(json!({"filter": {}})).expect("empty filter should decode");
     assert_eq!(
-        request.filter.and_then(|filter| filter.thinking_option_id),
-        None
+        request.filter.expect("filter").thinking_option_id,
+        NullableSetting::Unchanged
+    );
+}
+
+#[test]
+fn selected_thinking_filter_keeps_its_identifier() {
+    let request: AgentListRequest = serde_json::from_value(json!({
+        "filter": {"thinkingOptionId": "high"}
+    }))
+    .expect("selected thinking filter");
+    assert_eq!(
+        request.filter.expect("filter").thinking_option_id,
+        NullableSetting::Set("high".to_owned())
     );
 }
 

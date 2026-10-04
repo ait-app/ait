@@ -73,9 +73,9 @@ pub(crate) async fn subscribe(
         }
     };
     let subscription = if let Some(changes) = changes {
-        model::polling::Subscription::spawn_on_changes(runtime.clone(), outbound, changes, read)
+        model::polling::Subscription::spawn_on_changes(runtime, outbound, changes, read)
     } else {
-        model::polling::Subscription::spawn(runtime.clone(), outbound, read)
+        model::polling::Subscription::spawn(runtime, outbound, read)
     };
     connection.directories.insert(id, subscription);
     Ok(())

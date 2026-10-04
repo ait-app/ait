@@ -365,7 +365,7 @@ fn search_filters_and_exact_retrieval_bypasses_discovery_filters() {
         fs::write(Path::new(&cwd).join(file), "content").unwrap();
     }
     let mut request = FileSearch {
-        cwd: Some(cwd.clone()),
+        cwd: Some(cwd),
         query: "lib".to_owned(),
         include_files: true,
         include_directories: true,

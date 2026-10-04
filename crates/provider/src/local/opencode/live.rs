@@ -157,7 +157,7 @@ impl Session {
                 return Err(client::error(error));
             }
         };
-        let mut connection = self.connection.take().ok_or(AgentSessionError::Failed)?;
+        let connection = self.connection.take().ok_or(AgentSessionError::Failed)?;
         let (sender, finished) = oneshot::channel();
         let progress = bridge.clone();
         self.task = Some(AbortOnDropHandle::new(tokio::spawn(async move {

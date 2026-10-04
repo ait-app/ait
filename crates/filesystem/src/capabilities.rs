@@ -40,8 +40,10 @@ pub const IMPLEMENTED_GROUPS: &[(Group, &[&str])] = &[
 
 /// Presence of independently composed services, supplied by the host.
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
-// Services are independently optional; every combination is meaningful.
-#[allow(clippy::struct_excessive_bools)]
+#[expect(
+    clippy::struct_excessive_bools,
+    reason = "The host installs these independent services in every meaningful combination"
+)]
 pub struct InstalledServices {
     /// Skill installation service.
     pub skills: bool,

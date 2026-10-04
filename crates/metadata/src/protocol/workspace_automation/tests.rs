@@ -36,7 +36,7 @@ fn requests_use_paseo_camel_case_fields_and_strip_unknown_fields() {
 
 #[test]
 fn setup_snapshot_matches_paseo_worktree_detail_shape() {
-    let value = serde_json::to_value(WorkspaceSetupSnapshot {
+    let mut snapshot = WorkspaceSetupSnapshot {
         status: WorkspaceSetupStatus::Completed,
         detail: WorkspaceSetupDetail {
             kind: "worktree_setup".to_owned(),
@@ -56,11 +56,15 @@ fn setup_snapshot_matches_paseo_worktree_detail_shape() {
         },
         error: None,
         blocked_source: None,
-    })
-    .expect("snapshot");
+    };
+    let value = serde_json::to_value(&snapshot).expect("snapshot");
     assert_eq!(value["status"], "completed");
     assert_eq!(value["detail"]["type"], "worktree_setup");
     assert!(value["detail"].get("truncated").is_none());
+
+    snapshot.detail.truncated = true;
+    let truncated = serde_json::to_value(&snapshot).expect("truncated snapshot");
+    assert_eq!(truncated["detail"]["truncated"], true);
 }
 
 #[test]

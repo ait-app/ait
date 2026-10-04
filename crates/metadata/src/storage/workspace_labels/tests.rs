@@ -57,7 +57,7 @@ fn compound_catalog_and_assignment_survive_reopen() {
             WorkspaceMutationContext::default(),
         )
         .unwrap();
-    let store = FileWorkspaceLabelStore::new(temp.path(), registry.clone());
+    let store = FileWorkspaceLabelStore::new(temp.path(), registry);
     let initial = store.snapshot().unwrap();
     store
         .commit(&WorkspaceLabelStoreMutation {

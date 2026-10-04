@@ -121,7 +121,7 @@ impl session::Connection {
     async fn start(&mut self, progress: Arc<dyn ProgressSink>) -> Result<Snapshot, ProtocolError> {
         self.execute(progress).await
     }
-    async fn read(&mut self) -> Result<Snapshot, ProtocolError> {
+    async fn read(&self) -> Result<Snapshot, ProtocolError> {
         session::snapshot(&self.runtime.api, &self.prepared.id, &self.invocation).await
     }
     async fn close(&mut self) {

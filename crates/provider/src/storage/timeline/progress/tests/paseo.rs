@@ -95,7 +95,7 @@ fn tool_snapshots_keep_source_updates_and_the_final_native_output() {
     timeline
         .progress("a", "codex", "2", &assistant("answer", "Answer"))
         .unwrap();
-    let mut complete = running.clone();
+    let mut complete = running;
     complete.item["status"] = json!("completed");
     complete.item["detail"]["output"] = json!("complete output, including tail");
     timeline.append("a", "codex", &[complete.clone()]).unwrap();

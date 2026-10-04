@@ -67,7 +67,7 @@ fn response_checks_command_nested_logs_dialogs_and_optional_fields() {
             .extend(patch.as_object().unwrap().clone());
         assert!(!response(&bad, "logs"));
     }
-    let mut bad = good.clone();
+    let mut bad = good;
     bad["dialogs"] = json!([{}]);
     assert!(!response(&bad, "logs"));
     let mut failure = json!({"ok":false,"error":{"code":"browser_denied","message":"denied"}});
