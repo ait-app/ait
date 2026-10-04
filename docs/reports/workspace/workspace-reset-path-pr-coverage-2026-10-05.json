@@ -1,0 +1,144 @@
+{
+  "source_revision": "bfd87a1618accc501346cb44d0ced4984ddb20bb",
+  "base_revision": "3b10f32612977b373ac76f28c09f56a7fe8b1758",
+  "measurement_date": "2026-10-05",
+  "scope": "Rust Cargo workspace, default features, macOS arm64, rustc 1.98.1, cargo-llvm-cov 0.8.4; tool default file filtering, no additional exclusions",
+  "commands": [
+    "SHERPA_ONNX_LIB_DIR=/Users/necokeine/Documents/ait/target/sherpa-onnx-prebuilt/sherpa-onnx-v1.13.8-osx-arm64-static-lib/lib cargo llvm-cov --workspace --html --offline",
+    "SHERPA_ONNX_LIB_DIR=/Users/necokeine/Documents/ait/target/sherpa-onnx-prebuilt/sherpa-onnx-v1.13.8-osx-arm64-static-lib/lib cargo llvm-cov report --json --summary-only --output-path /private/tmp/ait-workspace-reset-pr-coverage-raw.json --offline"
+  ],
+  "test_execution": {
+    "result": "passed",
+    "targets": 16,
+    "passed": 1800,
+    "failed": 0,
+    "ignored": 3,
+    "source": "workspace coverage run"
+  },
+  "ignored_tests": [
+    "local::claude::tests::process::installed_claude_control_protocol_discovers_models_without_inference ... ignored, requires a locally installed Claude Code CLI; sends no model request",
+    "local::claude::tests::process::parity::installed_claude_completes_a_native_turn_and_reopens_history ... ignored, requires installed Claude authentication and makes one small model request",
+    "local::codex::tests::installed::installed_codex_completes_a_native_turn_and_reopens_history ... ignored, requires installed Codex authentication and makes one small model request"
+  ],
+  "unavailable_platforms": ["Linux", "Windows"],
+  "workspace_lines": {
+    "count": 52321,
+    "covered": 49431,
+    "percent": 94.4764
+  },
+  "crate_lines": {
+    "bins/daemon": {
+      "count": 967,
+      "covered": 922,
+      "files": 7,
+      "percent": 95.3464
+    },
+    "crates/api": {
+      "count": 2134,
+      "covered": 1975,
+      "files": 16,
+      "percent": 92.5492
+    },
+    "crates/browser": {
+      "count": 725,
+      "covered": 706,
+      "files": 5,
+      "percent": 97.3793
+    },
+    "crates/domain": {
+      "count": 121,
+      "covered": 121,
+      "files": 2,
+      "percent": 100.0
+    },
+    "crates/filesystem": {
+      "count": 11959,
+      "covered": 11341,
+      "files": 64,
+      "percent": 94.8323
+    },
+    "crates/metadata": {
+      "count": 7955,
+      "covered": 7541,
+      "files": 57,
+      "percent": 94.7957
+    },
+    "crates/model": {
+      "count": 777,
+      "covered": 737,
+      "files": 12,
+      "percent": 94.852
+    },
+    "crates/protocol": {
+      "count": 75,
+      "covered": 75,
+      "files": 2,
+      "percent": 100.0
+    },
+    "crates/provider": {
+      "count": 22834,
+      "covered": 21450,
+      "files": 131,
+      "percent": 93.9389
+    },
+    "crates/relay": {
+      "count": 464,
+      "covered": 422,
+      "files": 5,
+      "percent": 90.9483
+    },
+    "crates/schedule": {
+      "count": 823,
+      "covered": 805,
+      "files": 7,
+      "percent": 97.8129
+    },
+    "crates/terminal": {
+      "count": 1543,
+      "covered": 1486,
+      "files": 11,
+      "percent": 96.3059
+    },
+    "crates/voice": {
+      "count": 1944,
+      "covered": 1850,
+      "files": 19,
+      "percent": 95.1646
+    }
+  },
+  "changed_source_lines": {
+    "crates/filesystem/src/service/checkout.rs": {
+      "count": 169,
+      "covered": 158,
+      "percent": 93.49112426035504
+    }
+  },
+  "changed_line_execution": {
+    "crates/filesystem/src/service/checkout.rs": {
+      "192": 10,
+      "207": 5
+    }
+  },
+  "baseline": {
+    "artifact": "docs/reports/workspace/workspace-git-actions-pr-coverage-2026-10-05.json",
+    "source_revision": "98bb2970dadf6df2894a465338e8f21a5fb91a60",
+    "comparison": "Same Rust source before this fix, same platform and toolchain; workspace package version changed from 0.0.17 to 0.0.18. Line totals are unchanged. Workspace results can also vary with runtime test scheduling.",
+    "workspace_lines": {
+      "count": 52321,
+      "covered": 49427,
+      "percent": 94.4688
+    },
+    "filesystem_lines": {
+      "count": 11959,
+      "covered": 11338,
+      "files": 64,
+      "percent": 94.8073
+    },
+    "workspace_delta_percentage_points": 0.0076,
+    "filesystem_delta_percentage_points": 0.025
+  },
+  "uncovered_behavior": [
+    "Existing workspace record changes during reset and registry storage errors remain uncovered; follow up with a mock registry that changes or fails between validation and update.",
+    "Live authenticated provider tests remain explicitly ignored; run separately on an authenticated host."
+  ]
+}
