@@ -802,6 +802,12 @@ export const ru: TranslationResources = {
           success: "Изменения получены и отправлены",
         },
         viewPr: "Посмотреть PR",
+        branchStatus: {
+          behind: "Ветка отстаёт от удалённой",
+          diverged: "История ветки разошлась",
+          conflicts: "Разрешите конфликты",
+          unknown: "Статус Git недоступен",
+        },
         createPr: {
           label: "Создать PR",
           pending: "Создание PR...",
@@ -815,10 +821,14 @@ export const ru: TranslationResources = {
           pending: "Слияние...",
           success: "Слияние выполнено",
         },
-        mergeFromBase: {
-          label: "Обновить из {{baseRef}}",
-          pending: "Обновление...",
-          success: "Обновлено",
+        resetWorkspace: {
+          label: "Сбросить рабочую область",
+          pending: "Сброс...",
+          success: "Рабочая область сброшена",
+          confirmTitle: "Сбросить рабочую область?",
+          confirmMessage:
+            "Получить последнюю версию ветки по умолчанию из origin, вернуть имя ветки {{branch}} и удалить изменения отслеживаемых файлов и локальные коммиты.",
+          confirm: "Сбросить",
         },
         archive: {
           label: "Архивировать рабочее пространство",
@@ -848,6 +858,8 @@ export const ru: TranslationResources = {
           disabled: "Автослияние отключено",
         },
         unavailable: {
+          resetNoInitialBranch: "Сброс недоступен: исходное имя ветки неизвестно",
+          resetNoRemote: "Сброс недоступен: origin не настроен",
           viewPrNoForge: "Просмотр {{noun}} сейчас недоступен: {{brand}} не подключён.",
           pullNoRemote:
             "Получение изменений недоступно: эта ветка ещё не связана с удалённым репозиторием.",
@@ -904,7 +916,7 @@ export const ru: TranslationResources = {
           failedDisableAutoMerge: "Не удалось отключить автослияние",
           baseRefUnavailable: "Базовая ветка недоступна",
           failedMerge: "Не удалось выполнить слияние",
-          failedMergeFromBase: "Не удалось выполнить слияние с базовой веткой",
+          failedResetWorkspace: "Не удалось сбросить рабочую область",
         },
         archiveWarning: {
           title: "Архивировать «{{workspaceName}}»?",

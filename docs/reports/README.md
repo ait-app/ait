@@ -45,6 +45,7 @@
 
 ## 工作区、文件与 Git
 
+- [工作区重置与 Git 主操作：PR 验证](workspace/workspace-git-actions-pr-validation-2026-10-05.md)
 - [活跃工作区后台 Git fetch 实施报告](workspace/background-git-fetch.md)
 - [Diff 修复 PR 验证](workspace/diff-pr-validation.md)
 - [大 Diff 加载与超限降级](workspace/large-diff-loading.md)

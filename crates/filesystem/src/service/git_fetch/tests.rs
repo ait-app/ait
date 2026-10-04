@@ -55,6 +55,7 @@ impl GitFetchRuntime for Backend {
             main_repo_root: None,
             current_branch: Some("feature".to_owned()),
             is_dirty: Some(false),
+            branch_status: None,
             base_ref: Some("main".to_owned()),
             ahead_behind: None,
             upstream_ref: Some("origin/feature".to_owned()),

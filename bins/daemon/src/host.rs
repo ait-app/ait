@@ -224,7 +224,7 @@ fn compose_services(
     )?;
     let github_projects =
         GithubProjects::new(directory.clone(), Box::new(LocalGithubProjects::new()));
-    let (checkout, git_fetch) = compose_git(&config.data_dir);
+    let (checkout, git_fetch) = compose_git(&config.data_dir, &workspace_registry);
     Ok(Services {
         metadata_generator: Some(metadata_generator),
         workspace_names: Some(workspace_names),
@@ -277,9 +277,13 @@ fn compose_terminals(
     terminals
 }
 
-fn compose_git(data_dir: &std::path::Path) -> (Checkout, filesystem::service::git_fetch::GitFetch) {
+fn compose_git(
+    data_dir: &std::path::Path,
+    workspace_registry: &FileBackedWorkspaceRegistry,
+) -> (Checkout, filesystem::service::git_fetch::GitFetch) {
     let root = data_dir.join("worktrees");
-    let checkout = Checkout::new(Box::new(LocalCheckout::new(root.clone())));
+    let checkout = Checkout::new(Box::new(LocalCheckout::new(root.clone())))
+        .with_workspace_registry(Arc::new(workspace_registry.clone()));
     let fetch = filesystem::service::git_fetch::GitFetch::new(Arc::new(
         filesystem::local::git_fetch::LocalGitFetch::new(root),
     ));

@@ -755,6 +755,9 @@ pub fn workspace_descriptor(
             .and_then(|root| Path::new(root).file_name())
             .and_then(|name| name.to_str())
             .map(str::to_owned),
+        initial_branch: workspace
+            .is_paseo_owned_worktree
+            .then(|| workspace.display_name.clone()),
         project_kind: project.map_or_else(
             || match workspace.kind {
                 PersistedWorkspaceKind::Directory => ProjectKind::NonGit,
@@ -962,3 +965,6 @@ fn encode(value: impl Serialize) -> Result<Value, ErrorCode> {
 fn directory_error(_error: DirectoryError) -> ErrorCode {
     ErrorCode::RegistryIo
 }
+
+#[cfg(test)]
+mod tests;

@@ -1,5 +1,6 @@
 //! Bounded local Git reads for checkout status, diff, and commit history.
 
+mod branch_status;
 mod highlight;
 mod naming;
 pub(crate) mod summary;
@@ -28,6 +29,12 @@ const COMMIT_OUTPUT_LIMIT: u64 = 4 * 1024 * 1024;
 const BASE_COMMIT_LIMIT: usize = 10;
 const COMMIT_FIELD_SEPARATOR: char = '\0';
 const COMMIT_RECORD_SEPARATOR: char = '\x1e';
+
+#[derive(Debug, Clone, Copy)]
+struct GitRunOptions {
+    timeout: Duration,
+    noninteractive: bool,
+}
 
 /// Bounded Git adapter with a syntax cache and server-owned managed worktree root.
 #[derive(Debug, Clone)]
@@ -68,12 +75,12 @@ impl LocalCheckout {
                 .as_ref()
                 .is_some_and(|main| main != &repo_root);
         let current_branch = git_optional(&cwd, &["symbolic-ref", "--quiet", "--short", "HEAD"])?;
-        let dirty = !git_required(
+        let working_status = git_required(
             &cwd,
             &["status", "--porcelain=v1", "--untracked-files=normal"],
             SMALL_OUTPUT_LIMIT,
-        )?
-        .is_empty();
+        )?;
+        let dirty = !working_status.is_empty();
         let remotes = lines(&git_required(&cwd, &["remote"], SMALL_OUTPUT_LIMIT)?);
         let preferred_remote = remotes
             .iter()
@@ -83,6 +90,12 @@ impl LocalCheckout {
             .map(|remote| git_optional(&cwd, &["remote", "get-url", remote]))
             .transpose()?
             .flatten();
+        let branch_status = branch_status::read(
+            &cwd,
+            current_branch.as_deref(),
+            preferred_remote.map(String::as_str),
+            &working_status,
+        )?;
         let base_ref = resolve_default_branch(&cwd, current_branch.as_deref())?;
         let ahead_behind = match (&base_ref, &current_branch) {
             (Some(base), Some(_)) => compare_refs(&cwd, &comparison_base(&cwd, base)?, "HEAD")?,
@@ -91,6 +104,9 @@ impl LocalCheckout {
         let upstream_ref =
             git_optional(&cwd, &["rev-parse", "--symbolic-full-name", "@{upstream}"])?;
         let upstream_counts = match &upstream_ref {
+            Some(upstream) if branch_status.remote_ref.as_ref() == Some(upstream) => {
+                branch_status.ahead_behind
+            }
             Some(upstream) => compare_refs(&cwd, upstream, "HEAD")?,
             None => None,
         };
@@ -110,6 +126,7 @@ impl LocalCheckout {
             main_repo_root,
             current_branch,
             is_dirty: Some(dirty),
+            branch_status: Some(branch_status),
             base_ref,
             ahead_behind,
             upstream_ref,
@@ -489,6 +506,39 @@ impl CheckoutRuntime for LocalCheckout {
         abort_merge_on_conflict(&cwd, outcome)
     }
 
+    fn reset_workspace(&self, cwd: &str, initial_branch: &str) -> Result<(), CheckoutRuntimeError> {
+        let cwd = require_git_directory(cwd)?;
+        if !self
+            .inspect(cwd.to_str().ok_or_else(|| {
+                checkout_error(CheckoutFailureKind::NotAllowed, "Invalid checkout path")
+            })?)?
+            .is_managed_worktree
+        {
+            return Err(checkout_error(
+                CheckoutFailureKind::NotAllowed,
+                "Only managed workspaces can be reset",
+            ));
+        }
+        let initial_branch = validate_branch_name(initial_branch)?;
+        git_required(
+            &cwd,
+            &["check-ref-format", "--branch", &initial_branch],
+            SMALL_OUTPUT_LIMIT,
+        )?;
+        let current = current_branch(&cwd, "reset")?;
+        require_origin(&cwd)?;
+        let default_branch = origin_default_branch(&cwd)?;
+        let remote_ref = format!("refs/remotes/origin/{default_branch}");
+        let fetch_refspec = format!("+refs/heads/{default_branch}:{remote_ref}");
+        git_write_noninteractive(&cwd, &["fetch", "--no-tags", "origin", &fetch_refspec])?;
+        verify_commit(&cwd, &remote_ref)?;
+        if current != initial_branch {
+            git_write(&cwd, &["branch", "-m", "--", &initial_branch])?;
+        }
+        git_write(&cwd, &["reset", "--hard", &remote_ref])?;
+        Ok(())
+    }
+
     fn pull(&self, cwd: &str) -> Result<(), CheckoutRuntimeError> {
         let cwd = require_git_directory(cwd)?;
         current_branch(&cwd, "pull")?;
@@ -598,6 +648,7 @@ fn non_git_status() -> CheckoutStatus {
         main_repo_root: None,
         current_branch: None,
         is_dirty: None,
+        branch_status: None,
         base_ref: None,
         ahead_behind: None,
         upstream_ref: None,
@@ -734,6 +785,25 @@ fn run_git_with_timeout(
     output_limit: u64,
     timeout: Duration,
 ) -> Result<CommandOutput, CheckoutRuntimeError> {
+    run_git_with_interaction(
+        cwd,
+        arguments,
+        accepted_exit_codes,
+        output_limit,
+        GitRunOptions {
+            timeout,
+            noninteractive: false,
+        },
+    )
+}
+
+fn run_git_with_interaction(
+    cwd: &Path,
+    arguments: &[&str],
+    accepted_exit_codes: &[i32],
+    output_limit: u64,
+    options: GitRunOptions,
+) -> Result<CommandOutput, CheckoutRuntimeError> {
     let mut stdout = tempfile::tempfile().map_err(|error| io_error(&error))?;
     let mut stderr = tempfile::tempfile().map_err(|error| io_error(&error))?;
     let mut command = Command::new("git");
@@ -754,8 +824,13 @@ fn run_git_with_timeout(
             command.env_remove(name);
         }
     }
+    if options.noninteractive {
+        command
+            .env("GIT_TERMINAL_PROMPT", "0")
+            .env("GCM_INTERACTIVE", "never");
+    }
     let mut child = command.spawn().map_err(|error| io_error(&error))?;
-    let deadline = Instant::now() + timeout;
+    let deadline = Instant::now() + options.timeout;
     let status = loop {
         match child.try_wait() {
             Ok(Some(status)) => break status,
@@ -813,6 +888,23 @@ fn run_git_with_timeout(
 fn git_write(cwd: &Path, arguments: &[&str]) -> Result<String, CheckoutRuntimeError> {
     run_git_with_timeout(cwd, arguments, &[0], COMMIT_OUTPUT_LIMIT, WRITE_TIMEOUT)
         .map(|output| output.stdout.trim_end().to_owned())
+}
+
+fn git_write_noninteractive(
+    cwd: &Path,
+    arguments: &[&str],
+) -> Result<String, CheckoutRuntimeError> {
+    run_git_with_interaction(
+        cwd,
+        arguments,
+        &[0],
+        COMMIT_OUTPUT_LIMIT,
+        GitRunOptions {
+            timeout: WRITE_TIMEOUT,
+            noninteractive: true,
+        },
+    )
+    .map(|output| output.stdout.trim_end().to_owned())
 }
 
 fn read_bounded(file: &mut File, limit: u64) -> Result<String, CheckoutRuntimeError> {
@@ -1281,6 +1373,29 @@ fn require_origin(cwd: &Path) -> Result<(), CheckoutRuntimeError> {
             "Remote 'origin' is not configured.",
         ))
     }
+}
+
+fn origin_default_branch(cwd: &Path) -> Result<String, CheckoutRuntimeError> {
+    let output = git_write_noninteractive(cwd, &["ls-remote", "--symref", "origin", "HEAD"])?;
+    let branch = output
+        .lines()
+        .find_map(|line| {
+            line.strip_prefix("ref: refs/heads/")
+                .and_then(|name| name.strip_suffix("\tHEAD"))
+        })
+        .ok_or_else(|| {
+            checkout_error(
+                CheckoutFailureKind::Unknown,
+                "Unable to resolve origin's default branch",
+            )
+        })?;
+    let branch = validate_branch_name(branch)?;
+    git_required(
+        cwd,
+        &["check-ref-format", "--branch", &branch],
+        SMALL_OUTPUT_LIMIT,
+    )?;
+    Ok(branch)
 }
 
 fn abort_pull_state(cwd: &Path) {

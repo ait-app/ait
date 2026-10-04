@@ -345,6 +345,7 @@ fn protocol_status(status: port::PullRequestStatus) -> protocol::PullRequestStat
         state: status.state,
         base_ref_name: status.base_ref_name,
         head_ref_name: status.head_ref_name,
+        head_sha: status.head_sha,
         is_merged: status.is_merged,
         is_draft: status.is_draft,
         mergeable: match status.mergeable {

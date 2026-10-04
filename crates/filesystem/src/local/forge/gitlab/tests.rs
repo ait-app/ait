@@ -73,6 +73,16 @@ fn status_preserves_merge_facts_and_pipeline_aggregate() {
 }
 
 #[test]
+fn merged_status_preserves_source_commit_identity() {
+    let mut value = mr();
+    value["sha"] = json!("abc123");
+    value["state"] = json!("merged");
+    let result = status::parse(&value, &context(), None, None).unwrap();
+    assert_eq!(result.head_sha.as_deref(), Some("abc123"));
+    assert!(result.is_merged);
+}
+
+#[test]
 fn old_gitlab_merge_signals_drafts_and_conflicts_are_respected() {
     let mut value = mr();
     value

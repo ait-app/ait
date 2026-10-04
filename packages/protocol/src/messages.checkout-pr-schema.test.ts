@@ -13,6 +13,20 @@ import {
 } from "./messages.js";
 
 describe("checkout PR schemas", () => {
+  test("preserves the recorded source commit for merged pull requests", () => {
+    expect(
+      CheckoutPrStatusSchema.parse({
+        url: "https://github.com/example/repo/pull/1",
+        title: "Change",
+        state: "merged",
+        baseRefName: "main",
+        headRefName: "feature",
+        isMerged: true,
+        headSha: "a".repeat(40),
+      }),
+    ).toMatchObject({ headSha: "a".repeat(40), isMerged: true });
+  });
+
   test("defaults missing forge identity for old daemon payloads", () => {
     const parsed = CheckoutPrStatusSchema.parse({
       url: "https://github.com/getpaseo/paseo/pull/42",

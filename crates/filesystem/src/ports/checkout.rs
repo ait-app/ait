@@ -32,6 +32,19 @@ pub struct AheadBehind {
     pub behind: u64,
 }
 
+/// Facts for the workspace action button, independent of the configured upstream.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct CheckoutBranchStatus {
+    /// Current checkout commit, absent before the first commit.
+    pub head_sha: Option<String>,
+    /// Whether the index contains unresolved merge conflicts.
+    pub has_conflicts: bool,
+    /// Same-named branch on the preferred remote, absent if it does not exist locally.
+    pub remote_ref: Option<String>,
+    /// Counts against the same-named remote branch, absent without that branch.
+    pub ahead_behind: Option<AheadBehind>,
+}
+
 /// Git/non-Git checkout status.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct CheckoutStatus {
@@ -45,6 +58,8 @@ pub struct CheckoutStatus {
     pub current_branch: Option<String>,
     /// Working tree dirtiness.
     pub is_dirty: Option<bool>,
+    /// Workspace action facts, absent outside Git or from older adapters.
+    pub branch_status: Option<CheckoutBranchStatus>,
     /// Display comparison base.
     pub base_ref: Option<String>,
     /// Counts against the comparison base.
@@ -398,6 +413,12 @@ pub trait CheckoutRuntime: std::fmt::Debug + Send + Sync {
         base_ref: Option<&str>,
         require_clean_target: bool,
     ) -> Result<(), CheckoutRuntimeError>;
+
+    /// Fetch origin's default branch, restore the workspace's initial branch name, and reset HEAD.
+    ///
+    /// # Errors
+    /// Returns categorized validation, remote, Git, timeout, or output failures.
+    fn reset_workspace(&self, cwd: &str, initial_branch: &str) -> Result<(), CheckoutRuntimeError>;
 
     /// Pull the current branch.
     ///

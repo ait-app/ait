@@ -111,6 +111,7 @@ impl ForgeRuntime for FakeForge {
                 state: "open".to_owned(),
                 base_ref_name: "main".to_owned(),
                 head_ref_name: "fix".to_owned(),
+                head_sha: None,
                 is_merged: false,
                 is_draft: false,
                 mergeable: PullRequestMergeable::Mergeable,

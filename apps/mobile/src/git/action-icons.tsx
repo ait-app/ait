@@ -26,6 +26,6 @@ export const GIT_ACTION_ICONS = {
   push: <ThemedUpload size={16} uniProps={mutedColorMapping} />,
   pullAndPush: <ThemedArrowDownUp size={16} uniProps={mutedColorMapping} />,
   merge: <ThemedGitMerge size={16} uniProps={mutedColorMapping} />,
-  mergeFromBase: <ThemedRefreshCcw size={16} uniProps={mutedColorMapping} />,
+  resetWorkspace: <ThemedRefreshCcw size={16} uniProps={mutedColorMapping} />,
   archive: <ThemedArchive size={16} uniProps={mutedColorMapping} />,
 };

@@ -49,6 +49,7 @@ import type {
   CheckoutCommitResponse,
   CheckoutMergeResponse,
   CheckoutMergeFromBaseResponse,
+  CheckoutResetWorkspaceResponse,
   CheckoutPullResponse,
   CheckoutPushResponse,
   CheckoutRefreshResponse,
@@ -429,6 +430,7 @@ type CheckoutDiffPayload = Omit<SubscribeCheckoutDiffPayload, "subscriptionId">;
 type CheckoutCommitPayload = CheckoutCommitResponse["payload"];
 type CheckoutMergePayload = CheckoutMergeResponse["payload"];
 type CheckoutMergeFromBasePayload = CheckoutMergeFromBaseResponse["payload"];
+type CheckoutResetWorkspacePayload = CheckoutResetWorkspaceResponse["payload"];
 type CheckoutPullPayload = CheckoutPullResponse["payload"];
 type CheckoutPushPayload = CheckoutPushResponse["payload"];
 type CheckoutRefreshPayload = CheckoutRefreshResponse["payload"];
@@ -4072,6 +4074,19 @@ export class DaemonClient {
     });
   }
 
+  async checkoutResetWorkspace(
+    cwd: string,
+    workspaceId: string,
+    initialBranch: string,
+    requestId?: string,
+  ): Promise<CheckoutResetWorkspacePayload> {
+    return this.sendCorrelatedSessionRequest({
+      requestId,
+      message: { type: "checkout_reset_workspace_request", cwd, workspaceId, initialBranch },
+      responseType: "checkout_reset_workspace_response",
+    });
+  }
+
   async checkoutPull(cwd: string, requestId?: string): Promise<CheckoutPullPayload> {
     return this.sendCorrelatedSessionRequest({
       requestId,
@@ -4086,10 +4101,7 @@ export class DaemonClient {
   async checkoutPush(cwd: string, requestId?: string): Promise<CheckoutPushPayload> {
     return this.sendCorrelatedSessionRequest({
       requestId,
-      message: {
-        type: "checkout_push_request",
-        cwd,
-      },
+      message: { type: "checkout_push_request", cwd },
       responseType: "checkout_push_response",
     });
   }

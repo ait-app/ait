@@ -24,7 +24,7 @@ export type CheckoutGitAsyncActionId =
   | "enable-pr-auto-merge-rebase"
   | "disable-pr-auto-merge"
   | "merge-branch"
-  | "merge-from-base"
+  | "reset-workspace"
   | "discard-changes";
 
 type CheckoutKey = string;
@@ -120,7 +120,12 @@ interface CheckoutGitActionsStoreState {
   }) => Promise<void>;
   disablePrAutoMerge: (params: { serverId: string; cwd: string }) => Promise<void>;
   mergeBranch: (params: { serverId: string; cwd: string; baseRef: string }) => Promise<void>;
-  mergeFromBase: (params: { serverId: string; cwd: string; baseRef: string }) => Promise<void>;
+  resetWorkspace: (params: {
+    serverId: string;
+    cwd: string;
+    workspaceId: string;
+    initialBranch: string;
+  }) => Promise<void>;
   discardChanges: (params: { serverId: string; cwd: string; paths: string[] }) => Promise<void>;
 }
 
@@ -354,17 +359,14 @@ export const useCheckoutGitActionsStore = create<CheckoutGitActionsStoreState>()
     });
   },
 
-  mergeFromBase: async ({ serverId, cwd, baseRef }) => {
+  resetWorkspace: async ({ serverId, cwd, workspaceId, initialBranch }) => {
     await runCheckoutAction({
       serverId,
       cwd,
-      actionId: "merge-from-base",
+      actionId: "reset-workspace",
       run: async () => {
         const client = resolveClient(serverId);
-        const payload = await client.checkoutMergeFromBase(cwd, {
-          baseRef,
-          requireCleanTarget: true,
-        });
+        const payload = await client.checkoutResetWorkspace(cwd, workspaceId, initialBranch);
         if (payload.error) {
           throw new Error(payload.error.message);
         }

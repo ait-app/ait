@@ -33,7 +33,7 @@ fn hierarchy_routes_every_implemented_method_to_exactly_one_handler() {
             assert_eq!(route.handler, Some(expected), "{method}");
         }
     }
-    assert_eq!(implemented.len(), 178);
+    assert_eq!(implemented.len(), 179);
 
     let advertised = crate::registered_capabilities(
         &implemented
@@ -41,7 +41,7 @@ fn hierarchy_routes_every_implemented_method_to_exactly_one_handler() {
             .map(|method| (*method).to_owned())
             .collect::<Vec<_>>(),
     );
-    assert_eq!(advertised.len(), 179);
+    assert_eq!(advertised.len(), 180);
     assert!(
         advertised
             .iter()
@@ -91,6 +91,10 @@ fn prefix_nodes_can_be_methods_and_have_children_with_different_owners() {
     );
     assert_eq!(
         handler("checkout.diff.get.request"),
+        Some(Handler::Filesystem(Filesystem::Checkout))
+    );
+    assert_eq!(
+        handler("checkout.reset_workspace.request"),
         Some(Handler::Filesystem(Filesystem::Checkout))
     );
     assert_eq!(

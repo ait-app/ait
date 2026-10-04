@@ -439,6 +439,9 @@ pub struct WorkspaceDescriptorPayload {
         skip_serializing_if = "Option::is_none"
     )]
     pub worktree_slug: Option<String>,
+    /// Branch name recorded when this worktree was created.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub initial_branch: Option<String>,
     /// Paseo `projectKind` field; see the pinned source schema.
     pub project_kind: ProjectKind,
     /// Paseo `workspaceKind` field; see the pinned source schema.
@@ -525,6 +528,9 @@ struct WorkspaceDescriptorInput {
         skip_serializing_if = "Option::is_none"
     )]
     pub worktree_slug: Option<String>,
+    /// Branch name recorded when this worktree was created.
+    #[serde(default)]
+    pub initial_branch: Option<String>,
     /// Paseo `projectKind` field; see the pinned source schema.
     pub project_kind: ProjectKind,
     /// Paseo `workspaceKind` field; see the pinned source schema.
@@ -597,6 +603,7 @@ impl From<WorkspaceDescriptorInput> for WorkspaceDescriptorPayload {
                 .workspace_directory
                 .unwrap_or_else(|| input.project_root_path.clone()),
             worktree_slug: input.worktree_slug,
+            initial_branch: input.initial_branch,
             project_kind: input.project_kind,
             workspace_kind: input.workspace_kind,
             name: input.name,

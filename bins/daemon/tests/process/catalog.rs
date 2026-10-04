@@ -27,8 +27,8 @@ async fn production_installs_every_in_scope_method_without_placeholders() {
         .implemented_capabilities
         .into_iter()
         .collect::<BTreeSet<_>>();
-    assert_eq!(published.len(), 179);
-    assert_eq!(implemented.len(), 178);
+    assert_eq!(published.len(), 180);
+    assert_eq!(implemented.len(), 179);
     assert!(implemented.is_subset(&published));
     assert!(!published.iter().any(|name| {
         ["hub.", "chat.", "loop.", "plugin."]

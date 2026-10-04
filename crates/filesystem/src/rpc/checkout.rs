@@ -26,6 +26,7 @@ pub fn execute(checkout: &Checkout, method: &str, params: Value) -> Result<Value
         "checkout.commit.request" => commit(checkout, decode(params)?),
         "checkout.merge.request" => merge_to_base(checkout, &decode(params)?),
         "checkout.merge_from_base.request" => merge_from_base(checkout, &decode(params)?),
+        "checkout.reset_workspace.request" => reset_workspace(checkout, &decode(params)?),
         "checkout.pull.request" => mutate_path(checkout, &decode(params)?, Checkout::pull),
         "checkout.push.request" => mutate_path(checkout, &decode(params)?, Checkout::push),
         "checkout.discard_changes.request" => discard_changes(checkout, &decode(params)?),
@@ -256,6 +257,16 @@ fn merge_from_base(
     )
 }
 
+fn reset_workspace(
+    checkout: &Checkout,
+    request: &protocol::CheckoutResetWorkspaceRequest,
+) -> Result<Value, ErrorCode> {
+    mutation(
+        request.cwd.clone(),
+        checkout.reset_workspace(&request.cwd, &request.workspace_id, &request.initial_branch),
+    )
+}
+
 fn mutate_path(
     checkout: &Checkout,
     request: &protocol::CheckoutPathRequest,
@@ -360,6 +371,17 @@ pub(crate) fn protocol_status(
             main_repo_root: status.main_repo_root,
             current_branch: status.current_branch,
             is_dirty: status.is_dirty,
+            branch_status: status
+                .branch_status
+                .map(|branch| protocol::CheckoutBranchStatus {
+                    head_sha: branch.head_sha,
+                    has_conflicts: branch.has_conflicts,
+                    remote_ref: branch.remote_ref,
+                    ahead_behind: branch.ahead_behind.map(|counts| protocol::AheadBehind {
+                        ahead: counts.ahead,
+                        behind: counts.behind,
+                    }),
+                }),
             base_ref: status.base_ref,
             ahead_behind: status.ahead_behind.map(|counts| protocol::AheadBehind {
                 ahead: counts.ahead,
@@ -380,6 +402,7 @@ pub(crate) fn protocol_status(
             main_repo_root: None,
             current_branch: None,
             is_dirty: None,
+            branch_status: None,
             base_ref: None,
             ahead_behind: None,
             upstream_ref: None,

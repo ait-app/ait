@@ -4,6 +4,8 @@
 - 日期：2026-10-02
 - 关联：ADR-030、ADR-037、ADR-065
 
+“从 main 更新”的合并行为已由 [ADR-083](adr-083-reset-workspace-to-origin-default.md) 中的工作区重置取代。
+
 ## 背景
 
 Git 菜单与 Paseo 一致，但 Ait 的 Rust 服务没有刷新远端引用的后台任务。

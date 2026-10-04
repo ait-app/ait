@@ -1,5 +1,9 @@
 //! Checkout status, diff, refresh, and history use cases.
 
+use std::sync::Arc;
+
+use metadata::ports::registry::WorkspaceRegistry;
+
 pub use crate::ports::checkout::{
     AheadBehind, CheckoutBranchResolution, CheckoutBranchSource, CheckoutBranchSuggestion,
     CheckoutCommit, CheckoutCommitFile, CheckoutCommitFileStatus, CheckoutCommits, CheckoutDiff,
@@ -12,13 +16,24 @@ pub use crate::ports::checkout::{
 #[derive(Debug)]
 pub struct Checkout {
     runtime: Box<dyn CheckoutRuntime>,
+    workspace_registry: Option<Arc<dyn WorkspaceRegistry>>,
 }
 
 impl Checkout {
     /// Compose checkout use cases.
     #[must_use]
     pub fn new(runtime: Box<dyn CheckoutRuntime>) -> Self {
-        Self { runtime }
+        Self {
+            runtime,
+            workspace_registry: None,
+        }
+    }
+
+    /// Attach the durable workspace registry used to validate and record resets.
+    #[must_use]
+    pub fn with_workspace_registry(mut self, registry: Arc<dyn WorkspaceRegistry>) -> Self {
+        self.workspace_registry = Some(registry);
+        self
     }
 
     /// Inspect checkout status.
@@ -157,6 +172,58 @@ impl Checkout {
             .merge_from_base(cwd, base_ref, require_clean_target)
     }
 
+    /// Reset a managed workspace to origin's latest default branch on its initial branch.
+    ///
+    /// # Errors
+    /// Returns categorized local Git and remote failures.
+    pub fn reset_workspace(
+        &self,
+        cwd: &str,
+        workspace_id: &str,
+        initial_branch: &str,
+    ) -> Result<(), CheckoutRuntimeError> {
+        if let Some(registry) = &self.workspace_registry {
+            let workspace = registry
+                .get(workspace_id)
+                .map_err(registry_reset_error)?
+                .ok_or_else(|| invalid_reset_workspace("Workspace not found"))?;
+            if workspace.cwd != cwd
+                || workspace.archived_at.is_some()
+                || !workspace.is_paseo_owned_worktree
+                || workspace.display_name != initial_branch
+            {
+                return Err(invalid_reset_workspace(
+                    "Workspace identity or initial branch mismatch",
+                ));
+            }
+        }
+        self.runtime.reset_workspace(cwd, initial_branch)?;
+        if let Some(registry) = &self.workspace_registry {
+            let updated = registry
+                .update(workspace_id, &|workspace| {
+                    let mut updated = workspace.clone();
+                    if updated.cwd == cwd
+                        && updated.archived_at.is_none()
+                        && updated.is_paseo_owned_worktree
+                        && updated.display_name == initial_branch
+                    {
+                        updated.branch = Some(initial_branch.to_owned());
+                        updated.updated_at =
+                            chrono::Utc::now().to_rfc3339_opts(chrono::SecondsFormat::Millis, true);
+                    }
+                    updated
+                })
+                .map_err(registry_reset_error)?
+                .ok_or_else(|| invalid_reset_workspace("Workspace record disappeared"))?;
+            if updated.branch.as_deref() != Some(initial_branch) {
+                return Err(invalid_reset_workspace(
+                    "Workspace record changed during reset",
+                ));
+            }
+        }
+        Ok(())
+    }
+
     /// Pull the current branch.
     ///
     /// # Errors
@@ -209,3 +276,20 @@ impl Checkout {
         self.runtime.stashes(cwd, paseo_only)
     }
 }
+
+fn invalid_reset_workspace(message: &str) -> CheckoutRuntimeError {
+    CheckoutRuntimeError {
+        kind: CheckoutFailureKind::NotAllowed,
+        message: message.to_owned(),
+    }
+}
+
+fn registry_reset_error(_error: metadata::ports::registry::RegistryError) -> CheckoutRuntimeError {
+    CheckoutRuntimeError {
+        kind: CheckoutFailureKind::Unknown,
+        message: "Unable to update workspace record".to_owned(),
+    }
+}
+
+#[cfg(test)]
+mod tests;

@@ -812,9 +812,9 @@ export const zhCN: TranslationResources = {
         moreOptions: "更多选项",
         moreActions: "更多操作",
         commit: {
-          label: "Commit",
-          pending: "正在 commit...",
-          success: "已 commit",
+          label: "提交工作区",
+          pending: "正在提交...",
+          success: "已提交",
         },
         pull: {
           label: "Pull",
@@ -822,9 +822,9 @@ export const zhCN: TranslationResources = {
           success: "已 pull",
         },
         push: {
-          label: "Push",
-          pending: "正在 push...",
-          success: "已 push",
+          label: "推送",
+          pending: "正在推送...",
+          success: "已推送",
         },
         pullAndPush: {
           label: "Pull 并 push",
@@ -832,6 +832,12 @@ export const zhCN: TranslationResources = {
           success: "已 pull 并 push",
         },
         viewPr: "查看 PR",
+        branchStatus: {
+          behind: "分支落后于远端",
+          diverged: "分支已分叉",
+          conflicts: "存在冲突",
+          unknown: "Git 状态未知",
+        },
         createPr: {
           label: "创建 PR",
           pending: "正在创建 PR...",
@@ -845,10 +851,14 @@ export const zhCN: TranslationResources = {
           pending: "正在 merge...",
           success: "已 merge",
         },
-        mergeFromBase: {
-          label: "从 {{baseRef}} 更新",
-          pending: "正在更新...",
-          success: "已更新",
+        resetWorkspace: {
+          label: "重置工作区",
+          pending: "正在重置...",
+          success: "工作区已重置",
+          confirmTitle: "重置工作区？",
+          confirmMessage:
+            "将获取 origin 的最新默认分支，把分支恢复为 {{branch}}，并丢弃此工作区的已跟踪文件改动和本地提交。",
+          confirm: "重置工作区",
         },
         archive: {
           label: "归档工作区",
@@ -878,6 +888,8 @@ export const zhCN: TranslationResources = {
           disabled: "Auto-merge 已禁用",
         },
         unavailable: {
+          resetNoInitialBranch: "无法重置：未知工作区最初的分支名",
+          resetNoRemote: "无法重置：未配置 origin",
           viewPrNoForge: "当前无法查看 {{noun}}，因为 {{brand}} 未连接",
           pullNoRemote: "此处无法 pull，因为此分支尚未连接到 remote",
           pullDirty: "有本地变更时无法 pull，请先 commit 或 stash",
@@ -921,7 +933,7 @@ export const zhCN: TranslationResources = {
           failedDisableAutoMerge: "禁用 auto-merge 失败",
           baseRefUnavailable: "Base ref 不可用",
           failedMerge: "Merge 失败",
-          failedMergeFromBase: "从 base merge 失败",
+          failedResetWorkspace: "重置工作区失败",
         },
         archiveWarning: {
           title: "归档「{{workspaceName}}」？",
