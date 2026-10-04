@@ -2,6 +2,7 @@
   "name": "ait-workspace",
   "version": "0.0.17",
   "private": true,
+  "license": "Apache-2.0",
   "workspaces": [
     "apps/mobile",
     "apps/desktop",

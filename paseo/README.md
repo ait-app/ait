@@ -12,7 +12,9 @@
 [import-manifest.json](import-manifest.json)保存初始来源摘要与本地改动归属；摘要对应导入时的
 上游内容，不表示当前源码未修改。目录重命名不改变这些来源摘要。
 
-上游许可证保存在 [LICENSE](LICENSE)和 [桌面 LICENSE](../apps/desktop/LICENSE)，
+Ait 自有代码采用根目录的 [Apache License 2.0](../LICENSE)，与 Paseo 一致。
+上游 Apache-2.0 许可证保存在 [third-party/paseo/LICENSE](../third-party/paseo/LICENSE)，
+[客户端 LICENSE](LICENSE) 和 [桌面 LICENSE](../apps/desktop/LICENSE) 同样采用 Apache-2.0，并保留上游署名。
 Rust 移植的署名与范围见 [NOTICE](../third-party/paseo/NOTICE)。项目内第三方许可证随原文件保留。
 
 ## 当前维护入口

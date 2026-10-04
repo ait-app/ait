@@ -88,3 +88,8 @@ npm run typecheck --workspace=@ait/desktop --workspace=@ait/mobile
 详见 [Rust 规范](docs/policy/rust.md)。
 GitHub Release 支持 Linux x86_64 和 Apple Silicon；构建、签名与移动发布见
 [发布指南](docs/operations/releasing.md)。更多资料见 [文档索引](docs/README.md)。
+
+## 许可证
+
+Ait 以 [Apache License 2.0](LICENSE) 开源，与 Paseo 一致。第三方代码保留其原有许可证和版权声明，
+Paseo 来源与许可证见 [paseo](paseo/README.md)。
