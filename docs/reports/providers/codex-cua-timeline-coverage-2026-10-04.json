@@ -1,0 +1,171 @@
+{
+  "source_revision": "cd3fa928de4676e23fe21d791b680034a3adfba5",
+  "measurement_date": "2026-10-04",
+  "scope": "Rust Cargo workspace; default features; macOS arm64; cargo-llvm-cov 0.8.4; tool default filtering; no additional exclusions",
+  "command": "cargo llvm-cov --workspace --html --locked --offline -- --test-threads=1",
+  "summary_command": "cargo llvm-cov report --json --summary-only --output-path /private/tmp/ait-codex-cua-coverage-summary.json",
+  "coverage_test_execution": {
+    "passed": 1782,
+    "failed": 0,
+    "ignored": 3
+  },
+  "workspace_lines": {
+    "count": 52057,
+    "covered": 49182,
+    "percent": 94.4772
+  },
+  "crate_lines": {
+    "bins/daemon": {
+      "count": 963,
+      "covered": 918,
+      "files": 7,
+      "percent": 95.3271
+    },
+    "crates/api": {
+      "count": 2101,
+      "covered": 1945,
+      "files": 15,
+      "percent": 92.575
+    },
+    "crates/browser": {
+      "count": 725,
+      "covered": 706,
+      "files": 5,
+      "percent": 97.3793
+    },
+    "crates/domain": {
+      "count": 121,
+      "covered": 121,
+      "files": 2,
+      "percent": 100.0
+    },
+    "crates/filesystem": {
+      "count": 11737,
+      "covered": 11145,
+      "files": 63,
+      "percent": 94.9561
+    },
+    "crates/metadata": {
+      "count": 7950,
+      "covered": 7526,
+      "files": 57,
+      "percent": 94.6667
+    },
+    "crates/model": {
+      "count": 777,
+      "covered": 737,
+      "files": 12,
+      "percent": 94.852
+    },
+    "crates/protocol": {
+      "count": 75,
+      "covered": 75,
+      "files": 2,
+      "percent": 100.0
+    },
+    "crates/provider": {
+      "count": 22834,
+      "covered": 21449,
+      "files": 131,
+      "percent": 93.9345
+    },
+    "crates/relay": {
+      "count": 464,
+      "covered": 419,
+      "files": 5,
+      "percent": 90.3017
+    },
+    "crates/schedule": {
+      "count": 823,
+      "covered": 805,
+      "files": 7,
+      "percent": 97.8129
+    },
+    "crates/terminal": {
+      "count": 1543,
+      "covered": 1486,
+      "files": 11,
+      "percent": 96.3059
+    },
+    "crates/voice": {
+      "count": 1944,
+      "covered": 1850,
+      "files": 19,
+      "percent": 95.1646
+    }
+  },
+  "changed_source_sha256": {
+    "crates/provider/src/local/codex/discovery/tests.rs": "e1f917002f78f902b431722e8bf18567e0bf3f2e14ba7c2425456694dcb01ff9",
+    "crates/provider/src/local/codex/streaming.rs": "e92b6cbda1f349c8e5048f9097a85d3ab9d394bbb2d62d818ee895f52de68eea",
+    "crates/provider/src/local/codex/transport.rs": "705055549335596df68bea6aa2ac8969dd7e8c08f0a8e3b000dd3c170b66e710",
+    "crates/provider/src/local/images.rs": "89a098f35a54b822866f1d975c514a186a5618cbf776e92a254f6c2f984fde1b",
+    "crates/provider/src/storage/timeline.rs": "e78c85f31721274f9153dc3e3ca431e4572af16606d2e3fca7734ad1f60de2db",
+    "crates/provider/src/storage/timeline/progress.rs": "a825e128b0a4d7792b4d3dbf66346d305026d787da5d3d1fbf6f238a724e8931"
+  },
+  "coverage_files": [
+    {
+      "path": "crates/provider/src/local/codex/discovery.rs",
+      "lines": {
+        "count": 245,
+        "covered": 232,
+        "percent": 94.6939
+      }
+    },
+    {
+      "path": "crates/provider/src/local/codex/streaming.rs",
+      "lines": {
+        "count": 234,
+        "covered": 228,
+        "percent": 97.4359
+      }
+    },
+    {
+      "path": "crates/provider/src/local/codex/transport.rs",
+      "lines": {
+        "count": 270,
+        "covered": 248,
+        "percent": 91.8519
+      }
+    },
+    {
+      "path": "crates/provider/src/local/images.rs",
+      "lines": {
+        "count": 165,
+        "covered": 153,
+        "percent": 92.7273
+      }
+    },
+    {
+      "path": "crates/provider/src/storage/timeline.rs",
+      "lines": {
+        "count": 297,
+        "covered": 292,
+        "percent": 98.3165
+      }
+    },
+    {
+      "path": "crates/provider/src/storage/timeline/progress.rs",
+      "lines": {
+        "count": 173,
+        "covered": 164,
+        "percent": 94.7977
+      }
+    }
+  ],
+  "baseline": {
+    "source_revision": "7c1f6eba4eeab2adb32193de765b55a34d89b0a9",
+    "artifact": "docs/reports/daemon/cargo-workspace-pr-coverage-2026-10-04.json",
+    "workspace_lines": {
+      "count": 51879,
+      "covered": 49024,
+      "percent": 94.4968
+    },
+    "provider_lines": {
+      "count": 22675,
+      "covered": 21301,
+      "percent": 93.9405
+    },
+    "note": "Baseline predates other source changes; deltas cannot be attributed to this fix alone."
+  },
+  "coverage_file_scope": "Files in the changed Codex screenshot and timeline paths; workspace and crate totals include all 336 instrumented source files."
+}
