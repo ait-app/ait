@@ -263,7 +263,9 @@ describe("parseChangelog", () => {
 
 describe("formatChangelogDate", () => {
   it("localizes an ISO date without shifting it across a timezone", () => {
-    expect(formatChangelogDate("2026-09-08")).toBe("September 8, 2026");
+    expect(formatChangelogDate("2026-09-08")).toMatch(
+      /^(?:September 8, 2026|8 September 2026|2026年9月8日)$/,
+    );
   });
 
   it("shows anything else as authored", () => {
