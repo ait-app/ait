@@ -59,6 +59,8 @@
 
 ## Provider、Agent 与会话
 
+- [首次输入重试测试的 CI 会话隔离](daemon/initial-prompt-ci-validation.md)
+
 - [Agent 创建任务预算竞争与 DSH 回归](providers/agent-creation-resource-contention.md)
 - [OpenCode 上游 PR 验证](providers/opencode-upstream-pr.md)
 - [OpenCode 时间线顺序与工具历史](providers/opencode-history-order-and-tools.md)
