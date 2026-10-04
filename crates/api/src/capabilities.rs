@@ -11,6 +11,8 @@ use crate::Services;
 /// Crate-owned group whose transport handler is selected by the API.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(super) enum Group {
+    /// Online service control owned by the transport connector.
+    Relay,
     Schedule(schedule::Group),
     Browser(browser::Group),
     Metadata(metadata::Group),
@@ -55,6 +57,7 @@ pub(super) fn implemented_groups() -> impl Iterator<Item = (Group, &'static [&'s
                 .iter()
                 .map(|&(group, methods)| (Group::Terminal(group), methods)),
         )
+        .chain(std::iter::once((Group::Relay, crate::relay_rpc::METHODS)))
 }
 
 /// Supply service presence to each owner and collect its installed method names.
@@ -95,6 +98,7 @@ pub(super) fn installed_capabilities(services: &Services) -> Vec<String> {
         services.schedules.is_some(),
     ))
     .chain(browser::installed_capabilities(services.browser.is_some()))
+    .chain(crate::relay_rpc::METHODS.iter().copied())
     .map(str::to_owned)
     .collect()
 }

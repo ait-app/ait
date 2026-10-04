@@ -99,11 +99,12 @@ describe("welcome account entry", () => {
     expect(view.queryByTestId("account-email")).toBeNull();
     const account = view.getByTestId("welcome-account-relay");
     const direct = view.getByTestId("welcome-direct-connection");
-    expect(account.compareDocumentPosition(direct) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    expect(direct.compareDocumentPosition(account) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    expect(account.textContent).toBe("onlineService.title");
     fireEvent.click(account);
     expect(view.getByTestId("account-host-panel")).toBeTruthy();
-    fireEvent.change(view.getByLabelText("Email"), { target: { value: "me@example.test" } });
-    fireEvent.change(view.getByLabelText("Password"), { target: { value: "test-password" } });
+    fireEvent.change(view.getByTestId("account-email"), { target: { value: "me@example.test" } });
+    fireEvent.change(view.getByTestId("account-password"), { target: { value: "test-password" } });
     fireEvent.click(view.getByTestId("account-login"));
     await waitFor(() =>
       expect(mocks.command).toHaveBeenCalledWith("account_login", {
@@ -138,5 +139,11 @@ describe("welcome account entry", () => {
     const view = render(<WelcomeScreen />);
     expect(view.getByTestId("welcome-account-relay")).toBeTruthy();
     expect(view.getByTestId("welcome-remote-ssh")).toBeTruthy();
+    expect(
+      view
+        .getAllByRole("button")
+        .slice(0, 3)
+        .map((button) => button.getAttribute("data-testid")),
+    ).toEqual(["welcome-direct-connection", "welcome-account-relay", "welcome-remote-ssh"]);
   });
 });

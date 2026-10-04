@@ -10,7 +10,7 @@ import { resolveAppVersion } from "@/utils/app-version";
 import { buildOpenProjectRoute } from "@/utils/host-routes";
 import { openExternalUrl } from "@/utils/open-external-url";
 import { useRouter } from "expo-router";
-import { Cloud, ExternalLink, Link2, QrCode, Settings, Terminal } from "lucide-react-native";
+import { Globe, ExternalLink, Link2, QrCode, Settings, Terminal } from "lucide-react-native";
 import React, {
   useCallback,
   useEffect,
@@ -181,10 +181,7 @@ export function WelcomeScreen({ onHostAdded }: WelcomeScreenProps) {
   const pendingAccountServerId = useRef<string | null>(null);
   const hasNavigated = useRef(false);
   const accountAvailable = supportsAccountRelay();
-  const accountHeader = useMemo<SheetHeader>(
-    () => ({ title: t("onboarding.actions.account") }),
-    [t],
-  );
+  const accountHeader = useMemo<SheetHeader>(() => ({ title: t("onlineService.title") }), [t]);
   const hosts = useHosts();
   const anyOnlineServerId = useAnyHostOnline(hosts.map((h) => h.serverId));
 
@@ -261,12 +258,12 @@ export function WelcomeScreen({ onHostAdded }: WelcomeScreenProps) {
   }
 
   if (accountAvailable) {
-    actions.unshift({
+    actions.splice(1, 0, {
       key: "account-relay",
-      label: t("onboarding.actions.account"),
+      label: t("onlineService.title"),
       testID: "welcome-account-relay",
       primary: true,
-      icon: Cloud,
+      icon: Globe,
       onPress: handleOpenAccount,
     });
   }

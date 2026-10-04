@@ -35,6 +35,8 @@ export interface AccountSnapshot {
   stale: boolean;
   error: string | null;
   selected: AccountHost | null;
+  /** Independently maintained daemon leases; contains no credentials. */
+  synchronizedHosts?: string[];
 }
 
 export interface AccountDependencies {
@@ -49,6 +51,31 @@ export interface AccountDependencies {
   notify(snapshot: AccountSnapshot): void;
   closeTransports(): void;
   fetch?: typeof fetch;
+  /** Desktop can keep login independent of explicitly publishing individual daemons. */
+  publishRuntime?: boolean;
+}
+
+export interface AccountRuntime {
+  serverId: string;
+  instanceId: string;
+  name: string;
+  platform: string;
+}
+
+export interface HostControlGrant {
+  center_url: string;
+  control_ticket: string;
+  node_session_id: string;
+}
+
+interface HostPublication {
+  authority: SavedAccount;
+  requests: Set<AbortController>;
+  runtime: AccountRuntime;
+  registrationId: string;
+  installationId: string;
+  node: NodeSession | null;
+  nextRenew: number;
 }
 
 export class AccountError extends Error {
@@ -98,6 +125,8 @@ export class AccountSessionManager {
   private nextControl = 0;
   private nextRegistration = 0;
   private registrationFailures = 0;
+  private publications = new Map<string, HostPublication>();
+  private closing = false;
   private state: AccountSnapshot = {
     status: "logged_out",
     center: DEFAULT_ACCOUNT_CENTER,
@@ -122,6 +151,7 @@ export class AccountSessionManager {
       ...this.state,
       hosts: this.state.hosts.map(cloneHost),
       selected: this.state.selected ? cloneHost(this.state.selected) : null,
+      synchronizedHosts: [...this.publications.keys()],
     };
   }
 
@@ -177,6 +207,7 @@ export class AccountSessionManager {
     this.deps.closeTransports();
     const account = this.account;
     const node = this.node;
+    const bindingServerId = this.deps.runtime().serverId;
     this.account = null;
     this.node = null;
     this.registrationId = this.deps.randomUUID();
@@ -193,6 +224,13 @@ export class AccountSessionManager {
         "DELETE",
       ).catch(() => undefined);
     }
+    // Client logout releases only its binding daemon, never other host leases.
+    await this.unpublishHost(bindingServerId).catch(() => undefined);
+    const binding = this.publications.get(bindingServerId);
+    if (binding) {
+      for (const request of binding.requests) request.abort();
+      this.publications.delete(bindingServerId);
+    }
     await this.deps.save(null);
     this.update({
       status: "logged_out",
@@ -203,11 +241,15 @@ export class AccountSessionManager {
       error: null,
       selected: null,
     });
+    this.schedule(0);
   }
 
   async shutdown(): Promise<void> {
+    this.closing = true;
     const saved = this.account ? { ...this.account } : null;
     await this.logout();
+    for (const entry of this.publications.values())
+      for (const request of entry.requests) request.abort();
     if (saved) {
       delete saved.nodeSessionId;
       await this.deps.save(saved);
@@ -234,6 +276,129 @@ export class AccountSessionManager {
   refresh(): void {
     this.nextDiscovery = 0;
     this.schedule(0);
+  }
+
+  /** Register an explicitly chosen daemon; return only its one-use control grant. */
+  async publishHost(runtime: AccountRuntime, needsGrant = true): Promise<HostControlGrant | null> {
+    for (const value of [runtime.serverId, runtime.instanceId, runtime.name, runtime.platform]) {
+      if (typeof value !== "string" || !value.trim() || value.length > 320)
+        throw new Error("Invalid host identity.");
+    }
+    let entry = this.publications.get(runtime.serverId);
+    if (this.closing || (!entry && (!this.account || this.suspended)))
+      throw new Error("Sign in first.");
+    if (entry && entry.runtime.instanceId !== runtime.instanceId) {
+      const authority = entry.authority;
+      await this.unpublishHost(runtime.serverId);
+      entry = this.createPublication(runtime, authority);
+    }
+    if (!entry) {
+      if (this.publications.size >= 16)
+        throw new Error("Too many hosts synchronized with the service.");
+      if (!this.account) throw new Error("Sign in first.");
+      entry = this.createPublication(runtime, this.account);
+    }
+    if (!entry.node) {
+      const node = await this.publicationApi<NodeSession>(entry, "/v1/nodes/register", "POST", {
+        registration_id: entry.registrationId,
+        installation_id: entry.installationId,
+        display_name: runtime.name,
+        platform: runtime.platform,
+        app_version: this.deps.appVersion,
+        runtime: {
+          server_id: runtime.serverId,
+          instance_id: runtime.instanceId,
+          relay_modes: ["ait-rust-single-v1"],
+        },
+      });
+      if (this.publications.get(runtime.serverId) !== entry)
+        throw new Error("Host synchronization cancelled.");
+      entry.node = node;
+      entry.nextRenew = Date.now() + 20_000;
+      this.schedule(0);
+    }
+    if (!needsGrant) return null;
+    const nodeSessionId = entry.node.node_session_id;
+    const grant = await this.publicationApi<{ control_ticket: string }>(
+      entry,
+      `/v1/node-sessions/${nodeSessionId}/control-tickets`,
+      "POST",
+    );
+    if (
+      this.publications.get(runtime.serverId) !== entry ||
+      entry.node?.node_session_id !== nodeSessionId
+    )
+      throw new Error("Host synchronization cancelled.");
+    return {
+      center_url: entry.authority.center,
+      control_ticket: grant.control_ticket,
+      node_session_id: nodeSessionId,
+    };
+  }
+
+  /** Release one daemon's lease without signing out or affecting other hosts. */
+  async unpublishHost(serverId: string): Promise<void> {
+    const entry = this.publications.get(serverId);
+    if (entry?.node)
+      await this.publicationApi(entry, `/v1/node-sessions/${entry.node.node_session_id}`, "DELETE");
+    if (this.publications.get(serverId) === entry) this.publications.delete(serverId);
+  }
+
+  private createPublication(runtime: AccountRuntime, authority: SavedAccount): HostPublication {
+    const entry: HostPublication = {
+      authority: { ...authority },
+      requests: new Set(),
+      runtime: { ...runtime },
+      registrationId: this.deps.randomUUID(),
+      installationId: this.deps.randomUUID(),
+      node: null,
+      nextRenew: 0,
+    };
+    this.publications.set(runtime.serverId, entry);
+    return entry;
+  }
+
+  private publicationApi<T = unknown>(
+    entry: HostPublication,
+    path: string,
+    method: string,
+    body?: unknown,
+  ): Promise<T> {
+    return this.http(
+      entry.authority.center,
+      entry.authority.token,
+      path,
+      method,
+      body,
+      entry.requests,
+    );
+  }
+
+  private async renewPublications(): Promise<void> {
+    const renewals = [...this.publications.values()].map(async (entry) => {
+      if (!entry.node || Date.now() < entry.nextRenew) return;
+      try {
+        await this.publicationApi(
+          entry,
+          `/v1/node-sessions/${entry.node.node_session_id}/renew`,
+          "POST",
+        );
+        entry.nextRenew = Date.now() + 20_000;
+      } catch (error) {
+        if (this.publications.get(entry.runtime.serverId) !== entry) return;
+        if (
+          error instanceof AccountError &&
+          ["node_session_expired", "registration_expired"].includes(error.code)
+        ) {
+          entry.node = null;
+          entry.registrationId = this.deps.randomUUID();
+        } else {
+          entry.nextRenew =
+            Date.now() + (error instanceof AccountError && error.status === 401 ? 30_000 : 2000);
+        }
+      }
+    });
+    await Promise.all(renewals);
   }
 
   openVisit(hostId: string) {
@@ -296,6 +461,7 @@ export class AccountSessionManager {
     this.timer = null;
     for (const request of this.requests) request.abort();
     this.deps.closeTransports();
+    this.schedule(0);
   }
 
   /** Revalidate the node lease and discover hosts when the app becomes active. */
@@ -306,7 +472,7 @@ export class AccountSessionManager {
   }
 
   private schedule(delay: number): void {
-    if (!this.account || this.suspended) return;
+    if (this.closing || ((!this.account || this.suspended) && !this.publications.size)) return;
     if (this.timer) clearTimeout(this.timer);
     this.timer = setTimeout(() => {
       this.timer = null;
@@ -323,13 +489,16 @@ export class AccountSessionManager {
   }
 
   private async tick(): Promise<void> {
-    if (!this.account) return;
+    // Host lease authority survives client sign-out and client-node failures.
+    await this.renewPublications();
+    if (!this.account || this.suspended || this.closing) return;
     const generation = this.generation;
     try {
       if (this.account.expiresAt <= Date.now())
         throw new AccountError("Your session has expired. Sign in again.", 401, "unauthorized");
       const runtime = this.deps.runtime();
       const ready =
+        this.deps.publishRuntime !== false &&
         runtime.status === "running" &&
         runtime.instanceId &&
         runtime.features?.includes("ait-rust-single-v1");
@@ -467,9 +636,10 @@ export class AccountSessionManager {
     path: string,
     method: string,
     body?: unknown,
+    requests = this.requests,
   ): Promise<T> {
     const abort = new AbortController();
-    this.requests.add(abort);
+    requests.add(abort);
     const timer = setTimeout(() => abort.abort(), 5000);
     try {
       const response = await (this.deps.fetch ?? fetch)(`${center}${path}`, {
@@ -495,7 +665,7 @@ export class AccountSessionManager {
       return value as T;
     } finally {
       clearTimeout(timer);
-      this.requests.delete(abort);
+      requests.delete(abort);
     }
   }
 }

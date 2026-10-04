@@ -261,6 +261,8 @@ fn lane(message: &Incoming) -> usize {
         Some(Group::Terminal(_) | Group::Voice(_)) => 1,
         Some(Group::Filesystem(_)) => 2,
         Some(Group::Provider(_)) => 3,
-        Some(Group::Metadata(_) | Group::Schedule(_) | Group::Browser(_)) | None => 0,
+        Some(Group::Relay | Group::Metadata(_) | Group::Schedule(_) | Group::Browser(_)) | None => {
+            0
+        }
     }
 }

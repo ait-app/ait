@@ -54,6 +54,11 @@ Project/Workspace 和 Agent runtime 目录、配置、时间线由当前文件�
 `api` 持有 `relay`；`relay` 使用固定的本地目标地址，不依赖其他 workspace crate。
 详见 [ADR-074](../decisions/clients/adr-074-account-host-relay.md)。
 
+应用在线服务登录与主机发布分离。平台账户管理器维护显式选中 daemon 的独立租约，
+客户端通过该主机的鉴权业务连接发送一次性控制票据，`api` 管理 `relay` 的状态、启动与停止。
+客户端退出只释放自身节点及绑定 daemon，其他 daemon 保留各自原账户授权，由运行中的平台账户管理器继续续租；主动停止同步只撤销单台租约。
+本机、TCP 和 SSH 主机使用相同入口，详见 [ADR-083](../decisions/clients/adr-083-online-service-host-sync.md)。
+
 账户会话状态机位于 `packages/client`，通过依赖注入获取平台身份、存储、HTTP 和运行时操作。
 Electron 主进程提供桌面适配；Android 的原生适配使用 SecureStore 保存账户令牌，注册无本地
 运行时的客户端节点。Android 通过带认证头的原生 WebSocket 建立中继连接与下载，只有选中的

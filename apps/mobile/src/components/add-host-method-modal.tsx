@@ -2,8 +2,8 @@ import { isElectronRuntime } from "@/desktop/host";
 import { AccountHostPanel } from "./account-host-panel";
 import { supportsAccountRelay } from "@/runtime/account-state";
 import type { Theme } from "@/styles/theme";
-import { Link2, Terminal } from "lucide-react-native";
-import { useCallback, useMemo, useRef } from "react";
+import { Globe, Link2, Terminal } from "lucide-react-native";
+import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "expo-router";
 import { useTranslation } from "react-i18next";
 import { Pressable, Text, View } from "react-native";
@@ -12,6 +12,7 @@ import { AdaptiveModalSheet, type SheetHeader } from "./adaptive-modal-sheet";
 
 const ThemedLink2 = withUnistyles(Link2);
 const ThemedTerminal = withUnistyles(Terminal);
+const ThemedGlobe = withUnistyles(Globe);
 const foregroundIconMapping = (theme: Theme) => ({ color: theme.colors.foreground });
 
 const styles = StyleSheet.create((theme) => ({
@@ -55,6 +56,10 @@ export function AddHostMethodModal({
 }: AddHostMethodModalProps) {
   const { t } = useTranslation();
   const router = useRouter();
+  const [showOnlineService, setShowOnlineService] = useState(false);
+  useEffect(() => {
+    if (!visible) setShowOnlineService(false);
+  }, [visible]);
   const pendingAccountServerId = useRef<string | null>(null);
   const handleAccountConnected = useCallback(
     (serverId: string) => {
@@ -68,7 +73,19 @@ export function AddHostMethodModal({
     pendingAccountServerId.current = null;
     if (serverId) router.push(`/h/${serverId}`);
   }, [router]);
-  const header = useMemo<SheetHeader>(() => ({ title: t("pairing.connectionMethods.title") }), [t]);
+  const header = useMemo<SheetHeader>(
+    () =>
+      showOnlineService
+        ? {
+            title: t("onlineService.title"),
+            back: {
+              onPress: () => setShowOnlineService(false),
+              accessibilityLabel: t("common.back"),
+            },
+          }
+        : { title: t("pairing.connectionMethods.title") },
+    [showOnlineService, t],
+  );
 
   const handleDirect = useCallback(() => {
     onDirectConnection();
@@ -86,40 +103,63 @@ export function AddHostMethodModal({
       onDismiss={handleDismiss}
       testID="add-host-method-modal"
     >
-      {supportsAccountRelay() ? <AccountHostPanel onConnected={handleAccountConnected} /> : null}
-      <Pressable
-        style={styles.option}
-        onPress={handleDirect}
-        accessibilityRole="button"
-        accessibilityLabel={t("pairing.connectionMethods.direct.title")}
-        testID="add-host-method-direct"
-      >
-        <ThemedLink2 size={18} uniProps={foregroundIconMapping} />
-        <View style={styles.optionBody}>
-          <Text style={styles.optionText}>{t("pairing.connectionMethods.direct.title")}</Text>
-          <Text style={styles.optionSubtext}>
-            {t("pairing.connectionMethods.direct.description")}
-          </Text>
-        </View>
-      </Pressable>
+      {showOnlineService ? (
+        <AccountHostPanel onConnected={handleAccountConnected} />
+      ) : (
+        <>
+          <Pressable
+            style={styles.option}
+            onPress={handleDirect}
+            accessibilityRole="button"
+            accessibilityLabel={t("pairing.connectionMethods.direct.title")}
+            testID="add-host-method-direct"
+          >
+            <ThemedLink2 size={18} uniProps={foregroundIconMapping} />
+            <View style={styles.optionBody}>
+              <Text style={styles.optionText}>{t("pairing.connectionMethods.direct.title")}</Text>
+              <Text style={styles.optionSubtext}>
+                {t("pairing.connectionMethods.direct.description")}
+              </Text>
+            </View>
+          </Pressable>
 
-      {isElectronRuntime() ? (
-        <Pressable
-          style={styles.option}
-          onPress={handleRemoteSsh}
-          accessibilityRole="button"
-          accessibilityLabel={t("pairing.connectionMethods.remoteSsh.title")}
-          testID="add-host-method-remote-ssh"
-        >
-          <ThemedTerminal size={18} uniProps={foregroundIconMapping} />
-          <View style={styles.optionBody}>
-            <Text style={styles.optionText}>{t("pairing.connectionMethods.remoteSsh.title")}</Text>
-            <Text style={styles.optionSubtext}>
-              {t("pairing.connectionMethods.remoteSsh.description")}
-            </Text>
-          </View>
-        </Pressable>
-      ) : null}
+          {supportsAccountRelay() ? (
+            <Pressable
+              style={styles.option}
+              onPress={() => setShowOnlineService(true)}
+              accessibilityRole="button"
+              accessibilityLabel={t("onlineService.title")}
+              testID="add-host-method-online-service"
+            >
+              <ThemedGlobe size={18} uniProps={foregroundIconMapping} />
+              <View style={styles.optionBody}>
+                <Text style={styles.optionText}>{t("onlineService.title")}</Text>
+                <Text style={styles.optionSubtext}>{t("onlineService.connectionDescription")}</Text>
+              </View>
+            </Pressable>
+          ) : null}
+
+          {isElectronRuntime() ? (
+            <Pressable
+              style={styles.option}
+              onPress={handleRemoteSsh}
+              accessibilityRole="button"
+              accessibilityLabel={t("pairing.connectionMethods.remoteSsh.title")}
+              testID="add-host-method-remote-ssh"
+            >
+              <ThemedTerminal size={18} uniProps={foregroundIconMapping} />
+              <View style={styles.optionBody}>
+                <Text style={styles.optionText}>
+                  {t("pairing.connectionMethods.remoteSsh.title")}
+                </Text>
+                <Text style={styles.optionSubtext}>
+                  {t("pairing.connectionMethods.remoteSsh.description")}
+                </Text>
+              </View>
+            </Pressable>
+          ) : null}
+        </>
+      )}
     </AdaptiveModalSheet>
   );
 }

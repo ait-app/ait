@@ -1,5 +1,6 @@
 /** @vitest-environment jsdom */
 import React from "react";
+import "@/i18n/i18next";
 import { cleanup, fireEvent, render, waitFor } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { AccountHostPanel } from "./account-host-panel";

@@ -46,12 +46,15 @@ npm run web:expo --workspace=@ait/mobile -- --localhost --port 8081
 `npm run ios --workspace=@ait/mobile` / `npm run android --workspace=@ait/mobile` 构建
 共享依赖后启动对应原生工程。后端仍需单独启动。iOS simulator 可直接访问宿主 loopback；
 Android emulator/device 可先运行 `adb reverse tcp:7316 tcp:7316`，再连接 `127.0.0.1:7316`。
-Android 支持账户登录与中继：首次启动点击欢迎页的 **Account / Relay（账号登录 / Relay）**；
-也可打开 **Settings → Host → Account and online hosts** 或 **Add Host**。
+Android 支持账户登录与中继：首次启动点击欢迎页的 **Online Service（在线服务）**；
+也可打开 **Settings → App → Online Service（应用 → 在线服务）**，或在 **Add Host → Online Service** 二级页面登录。
 使用与电脑桌面应用相同的账户登录，再选择在线电脑。工作区、Agent、终端和文件
 复用 Rust 单连接协议；下载写入手机缓存文件，完成后打开系统分享面板。
 登录凭据保存在 Android 安全存储中，退到后台暂停连接，回到前台重新验证账户节点。
 手机不运行 daemon，也不作为工作主机出现在列表里。iOS 和浏览器仍使用直接连接。
+要让电脑上线，在其 **Host → Connections → Sync with online service（主机 → 连接 → 与在线服务同步）** 点击连接。
+停止同步只影响当前主机。客户端退出账户只释放自身节点与绑定 daemon 的租约，其他 daemon 保留原账户授权并继续续租，退出登录后仍可在对应主机中主动停止。
+应用运行期间负责这些主机的续租；关闭应用不主动撤销远程租约，但进程停止或授权失效后无法续租。重新启动应用后需再次启用同步；旧 daemon 需更新后才能使用此入口。
 已在实体 Android 设备验证欢迎页账户入口与邮箱/密码登录表单；真实账户到远程电脑的完整
 中继流程尚未完成真机验收。
 
