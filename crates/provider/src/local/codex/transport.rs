@@ -214,6 +214,11 @@ impl Transport {
                         .ok_or(AgentSessionError::Failed);
                 }
                 if self.events.len() >= MAX_EVENTS {
+                    tracing::warn!(
+                        queued_events = self.events.len(),
+                        limit_events = MAX_EVENTS,
+                        "Codex app-server pending event limit reached"
+                    );
                     return Err(AgentSessionError::Failed);
                 }
                 self.events.push_back(message);
@@ -305,6 +310,11 @@ impl Drop for Transport {
 async fn write(input: &Mutex<ChildStdin>, value: &Value) -> Result<(), AgentSessionError> {
     let mut bytes = serde_json::to_vec(value).map_err(|_| AgentSessionError::Failed)?;
     if bytes.len() >= MAX_OUTBOUND_FRAME {
+        tracing::warn!(
+            size_bytes = bytes.len(),
+            limit_bytes = MAX_OUTBOUND_FRAME,
+            "Codex app-server outbound frame exceeds size limit"
+        );
         return Err(AgentSessionError::Failed);
     }
     bytes.push(b'\n');

@@ -153,7 +153,18 @@ impl ImageStore {
     }
 
     pub(super) fn split(&self, content: &Value) -> Result<(Value, Vec<String>), AgentSessionError> {
-        let mut output = content.clone();
+        // MCP result metadata can contain opaque screenshot data. It is not display output,
+        // so do not copy it into the bounded timeline projection.
+        let mut output = match content {
+            Value::Object(fields) => Value::Object(
+                fields
+                    .iter()
+                    .filter(|(key, _)| key.as_str() != "_meta")
+                    .map(|(key, value)| (key.clone(), value.clone()))
+                    .collect(),
+            ),
+            _ => content.clone(),
+        };
         let mut images = Vec::new();
         let blocks = if output.is_array() {
             output.as_array_mut()

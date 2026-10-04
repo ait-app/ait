@@ -341,6 +341,14 @@ fn append_rows(
         }
         let bytes = serde_json::to_string(entry).map_err(io)?;
         if bytes.len() > 256 * 1024 {
+            tracing::warn!(
+                agent_id = agent,
+                provider,
+                item_type = entry.item["type"].as_str().unwrap_or("unknown"),
+                size_bytes = bytes.len(),
+                limit_bytes = 256 * 1024,
+                "Timeline item exceeds size limit"
+            );
             return Err(ErrorCode::ResourceExhausted);
         }
         let projected = progress::completion(transaction, agent, entry)?;
