@@ -133,6 +133,10 @@ for line in sys.stdin:
         if prompt == "unknown-control":
             emit({"type":"control_request", "request_id":"unknown", "request":{"subtype":"unsupported"}})
             continue
+        if prompt == "stray-control-response":
+            # Only the echo of an answer just given is tolerated; anything else is a protocol error.
+            emit({"type":"control_response", "response":{"subtype":"success", "request_id":"never-asked", "response":{}}})
+            continue
         if prompt in ("permission", "question", "withdraw-permission"):
             tool = "AskUserQuestion" if prompt == "question" else "Bash"
             tool_input = {"questions":[{"question":"Which color?", "header":"Color", "options":[{"label":"Blue", "description":"Blue"}], "multiSelect":False}]} if prompt == "question" else {"command":"echo fixture"}
@@ -152,6 +156,8 @@ for line in sys.stdin:
             continue
         finish("Claude: " + prompt, prompt == "usage")
     elif message["type"] == "control_response" and pending:
+        # Claude Code 2.1.x echoes each permission answer back on stdout.
+        emit(message)
         call, prompt = pending
         pending = None
         response = message["response"]["response"]

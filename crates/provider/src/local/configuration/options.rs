@@ -67,6 +67,7 @@ pub(super) fn validate(
 }
 
 const CODEX: &[(&str, Rule)] = &[
+    ("strictMcp", Rule::Boolean),
     (
         "approval_policy",
         Rule::Either(
@@ -176,6 +177,7 @@ const CLAUDE_SANDBOX: &[(&str, Rule)] = &[
 ];
 
 const CLAUDE: &[(&str, Rule)] = &[
+    ("strictMcp", Rule::Boolean),
     ("allowedTools", Rule::Strings),
     ("disallowedTools", Rule::Strings),
     ("additionalDirectories", Rule::Strings),

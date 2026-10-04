@@ -144,6 +144,8 @@ pub(super) fn codex(config: &StoredAgentConfig) -> Result<Value, AgentSessionErr
         .unwrap_or_default()
         .into_iter()
         .collect();
+    // Applied by the session from the effective configuration (`codex_strict`), not a native key.
+    result.remove("strictMcp");
     let mut servers = Map::new();
     if let Some(approval) = result.get_mut("approval_policy") {
         complete_codex_approval(approval);
@@ -183,6 +185,51 @@ pub(super) fn codex(config: &StoredAgentConfig) -> Result<Value, AgentSessionErr
         result.insert("model_reasoning_effort".to_owned(), json!(effort));
     }
     Ok(Value::Object(result))
+}
+
+/// Whether the session asked for only its own MCP servers (`providerOptions.strictMcp`).
+pub(super) fn strict_mcp(config: &StoredAgentConfig) -> bool {
+    config
+        .provider_options
+        .as_ref()
+        .and_then(|options| options.get("strictMcp"))
+        .and_then(Value::as_bool)
+        == Some(true)
+}
+
+/// Disable, for one Codex thread, every MCP server and plugin the user's effective configuration
+/// (`config/read`) contributes, keeping only the session's own servers. Codex merges thread
+/// overrides into the user's configuration, so servers can only be switched off by name.
+///
+/// # Errors
+///
+/// Returns [`AgentSessionError::Rejected`] when the user's configuration already has a server
+/// named like one of the session's: Codex would merge its keys (headers, tokens, a command)
+/// into the session's server, and a merge cannot remove them.
+pub(super) fn codex_strict(
+    native: &mut Value,
+    effective: &Value,
+    config: &StoredAgentConfig,
+) -> Result<(), AgentSessionError> {
+    let own = config.mcp_servers.as_ref();
+    let inherited = effective["config"]["mcp_servers"].as_object();
+    for name in inherited.into_iter().flat_map(Map::keys) {
+        if own.is_some_and(|own| own.contains_key(name)) {
+            return Err(AgentSessionError::Rejected);
+        }
+        native["mcp_servers"][name] = json!({"enabled": false});
+    }
+    let plugins = effective["config"]["plugins"].as_object();
+    for (plugin, state) in plugins.into_iter().flatten() {
+        if state["enabled"] != false {
+            native["plugins"][plugin] = json!({"enabled": false});
+        }
+    }
+    // ChatGPT apps reach the thread through Codex's built-in `codex_apps` server; plugins
+    // that `config/read` does not list are switched off as a whole.
+    native["features"]["apps"] = json!(false);
+    native["features"]["plugins"] = json!(false);
+    Ok(())
 }
 
 /// Native JSON-RPC requires all three granular switches, unlike the optional config schema.
@@ -272,6 +319,10 @@ pub(super) fn claude(config: &StoredAgentConfig) -> Result<Vec<String>, AgentSes
         .filter(|servers| !servers.is_empty())
     {
         args.push(format!("--mcp-config={}", json!({"mcpServers":servers})));
+    }
+    if strict_mcp(config) {
+        // Only this session's servers: no user, project, plugin or claude.ai connector servers.
+        args.push("--strict-mcp-config".to_owned());
     }
     Ok(args)
 }
