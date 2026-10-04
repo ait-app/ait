@@ -94,27 +94,35 @@ describe("welcome account entry", () => {
     expect(mocks.replace).toHaveBeenCalledTimes(1);
   });
 
-  it("lets an Android user with no hosts reach and submit the login form directly from welcome", async () => {
-    const view = render(<WelcomeScreen />);
-    expect(view.queryByTestId("account-email")).toBeNull();
-    const account = view.getByTestId("welcome-account-relay");
-    const direct = view.getByTestId("welcome-direct-connection");
-    expect(direct.compareDocumentPosition(account) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
-    expect(account.textContent).toBe("onlineService.title");
-    fireEvent.click(account);
-    expect(view.getByTestId("account-host-panel")).toBeTruthy();
-    fireEvent.change(view.getByTestId("account-email"), { target: { value: "me@example.test" } });
-    fireEvent.change(view.getByTestId("account-password"), { target: { value: "test-password" } });
-    fireEvent.click(view.getByTestId("account-login"));
-    await waitFor(() =>
-      expect(mocks.command).toHaveBeenCalledWith("account_login", {
-        center: "https://dash.ait-app.com:8443/api",
-        email: "me@example.test",
-        password: "test-password",
-      }),
-    );
-    expect(mocks.push).not.toHaveBeenCalled();
-  });
+  it.each(["android", "ios"] as const)(
+    "lets a %s user with no hosts submit the login form",
+    async (platform) => {
+      Platform.OS = platform;
+      const view = render(<WelcomeScreen />);
+      expect(view.queryByTestId("account-email")).toBeNull();
+      const account = view.getByTestId("welcome-account-relay");
+      const direct = view.getByTestId("welcome-direct-connection");
+      expect(
+        direct.compareDocumentPosition(account) & Node.DOCUMENT_POSITION_FOLLOWING,
+      ).toBeTruthy();
+      expect(account.textContent).toBe("onlineService.title");
+      fireEvent.click(account);
+      expect(view.getByTestId("account-host-panel")).toBeTruthy();
+      fireEvent.change(view.getByTestId("account-email"), { target: { value: "me@example.test" } });
+      fireEvent.change(view.getByTestId("account-password"), {
+        target: { value: "test-password" },
+      });
+      fireEvent.click(view.getByTestId("account-login"));
+      await waitFor(() =>
+        expect(mocks.command).toHaveBeenCalledWith("account_login", {
+          center: "https://dash.ait-app.com:8443/api",
+          email: "me@example.test",
+          password: "test-password",
+        }),
+      );
+      expect(mocks.push).not.toHaveBeenCalled();
+    },
+  );
 
   it("keeps the direct connection entry usable", () => {
     const view = render(<WelcomeScreen />);
@@ -123,15 +131,12 @@ describe("welcome account entry", () => {
     expect(view.queryByTestId("account-host-panel")).toBeNull();
   });
 
-  it.each(["ios", "web"] as const)(
-    "does not advertise account relay on unsupported %s",
-    (platform) => {
-      Platform.OS = platform;
-      const view = render(<WelcomeScreen />);
-      expect(view.queryByTestId("welcome-account-relay")).toBeNull();
-      expect(view.getByTestId("welcome-direct-connection")).toBeTruthy();
-    },
-  );
+  it.each(["web"] as const)("does not advertise account relay on unsupported %s", (platform) => {
+    Platform.OS = platform;
+    const view = render(<WelcomeScreen />);
+    expect(view.queryByTestId("welcome-account-relay")).toBeNull();
+    expect(view.getByTestId("welcome-direct-connection")).toBeTruthy();
+  });
 
   it("also exposes the account entry in Electron", () => {
     Platform.OS = "web";

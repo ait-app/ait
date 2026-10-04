@@ -5,10 +5,11 @@ import type { TransportFactory } from "./types";
 
 /** Each platform owns its account authority and one-use relay tickets. */
 export const createAccountRelayTransportFactory: TransportFactory = ({ url }) => {
-  if (Platform.OS === "android") return createNativeAccountRelayTransportFactory()({ url });
+  if (Platform.OS === "android" || Platform.OS === "ios")
+    return createNativeAccountRelayTransportFactory()({ url });
   const desktop = getDesktopHost();
   if (!desktop?.invoke || !desktop.events?.on)
-    throw new Error("Account relay requires the Android or desktop app.");
+    throw new Error("Account relay requires the native mobile or desktop app.");
   const parsed = new URL(url);
   if (
     parsed.protocol !== "ait+desktop:" ||

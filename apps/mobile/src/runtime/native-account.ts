@@ -1,8 +1,8 @@
 import type { AccountSessionManager, AccountSnapshot } from "@ait/client/internal/account-session";
 
-/** Android supplies an implementation using its encrypted system credential storage. */
+/** Native mobile platforms supply an implementation using secure system credential storage. */
 export async function getNativeAccount(): Promise<AccountSessionManager> {
-  throw new Error("Account login is available in the Android and desktop apps.");
+  throw new Error("Account login is available in the native mobile and desktop apps.");
 }
 
 export function subscribeNativeAccount(_listener: (state: AccountSnapshot) => void): () => void {
