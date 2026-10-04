@@ -11,11 +11,12 @@ mod command_actions;
 ///
 /// `native` is a Codex thread item with a validated ID; `status` is its canonical
 /// running, completed, or failed state. Returns stable call IDs paired with timeline
-/// items, falling back to one raw tool row when no usable command actions exist.
+/// items, falling back to one generic detail row when no usable command actions exist.
 pub(super) fn codex_tools(native: &Value, status: &str) -> Vec<(String, Value)> {
     let details = command_actions::details(native).unwrap_or_else(|| vec![codex(native)]);
     let multiple = details.len() > 1;
     let native_id = native["id"].as_str().unwrap_or_default();
+    let name = codex_name(native);
     details
         .into_iter()
         .enumerate()
@@ -25,12 +26,45 @@ pub(super) fn codex_tools(native: &Value, status: &str) -> Vec<(String, Value)> 
             } else {
                 native_id.to_owned()
             };
-            let error = (status == "failed").then_some("Native tool failed");
-            let item = json!({"type":"tool_call","callId":id,"name":native["type"],
+            let error = codex_error(native, status == "failed");
+            let item = json!({"type":"tool_call","callId":id,"name":name,
                 "status":status,"error":error,"detail":detail});
             (id, item)
         })
         .collect()
+}
+
+/// Return the display name for `native`, including its MCP server when present.
+///
+/// Borrows the native type or tool name where possible; allocates only for `server.tool`.
+pub(super) fn codex_name(native: &Value) -> Cow<'_, str> {
+    if native["type"] == "mcpToolCall"
+        && let Some(tool) = native["tool"]
+            .as_str()
+            .map(str::trim)
+            .filter(|tool| !tool.is_empty())
+    {
+        let server = native["server"].as_str().map(str::trim).unwrap_or_default();
+        return if server.is_empty() {
+            Cow::Borrowed(tool)
+        } else {
+            Cow::Owned(format!("{server}.{tool}"))
+        };
+    }
+    Cow::Borrowed(native["type"].as_str().unwrap_or_default())
+}
+
+/// Return the error for `native` when `failed`, or null for a successful tool.
+///
+/// MCP failures retain their native error; other failures use a generic message.
+pub(super) fn codex_error(native: &Value, failed: bool) -> Value {
+    if !failed {
+        return Value::Null;
+    }
+    if native["type"] == "mcpToolCall" && !native["error"].is_null() {
+        return native["error"].clone();
+    }
+    json!("Native tool failed")
 }
 
 pub(super) fn claude(name: &str, input: &Value) -> Value {
@@ -120,6 +154,9 @@ pub(super) fn codex(native: &Value) -> Value {
                 detail["childSessionId"] = json!(id);
             }
             detail
+        }
+        Some("mcpToolCall") => {
+            json!({"type":"unknown","input":native["arguments"],"output":native["result"]})
         }
         Some("imageView" | "imageGeneration") => {
             json!({"type":"plain_text","label":"Image","text":native["path"].as_str().unwrap_or("")})

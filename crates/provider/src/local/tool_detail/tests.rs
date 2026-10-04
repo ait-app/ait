@@ -35,6 +35,30 @@ fn native_shell_file_web_and_delegation_tools_get_typed_details() {
 }
 
 #[test]
+fn codex_mcp_tool_projects_arguments_and_result_without_native_envelope() {
+    let native = json!({"id":"call","type":"mcpToolCall","server":"cua_repl","tool":"js",
+        "status":"inProgress","arguments":{"code":"await tab.goto('https://example.com')"},
+        "result":null,"pluginId":"unified-computer-use@openai-bundled","readOnlyHint":true});
+    let running = codex_tools(&native, "running");
+    assert_eq!(running.len(), 1);
+    assert_eq!(running[0].0, "call");
+    assert_eq!(running[0].1["name"], "cua_repl.js");
+    assert_eq!(
+        running[0].1["detail"],
+        json!({"type":"unknown",
+        "input":{"code":"await tab.goto('https://example.com')"},"output":null})
+    );
+    assert_eq!(codex_name(&json!({"type":"mcpToolCall","tool":"js"})), "js");
+    assert_eq!(codex_name(&json!({"type":"mcpToolCall"})), "mcpToolCall");
+    let failed = json!({"type":"mcpToolCall","error":{"message":"Access denied"}});
+    assert_eq!(
+        codex_error(&failed, true),
+        json!({"message":"Access denied"})
+    );
+    assert_eq!(codex_error(&failed, false), Value::Null);
+}
+
+#[test]
 fn claude_results_populate_typed_cards_and_unknown_tools_preserve_structured_results() {
     for (name, input, kind, field) in [
         ("Bash", json!({"command":"pwd"}), "shell", "output"),
