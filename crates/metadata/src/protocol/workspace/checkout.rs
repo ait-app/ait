@@ -24,6 +24,10 @@ pub struct ProjectCheckoutLitePayload {
 
 #[derive(Deserialize)]
 #[serde(rename_all = "camelCase")]
+#[expect(
+    clippy::option_option,
+    reason = "Checkout validation distinguishes an omitted root from an explicit null"
+)]
 struct CheckoutInput {
     cwd: String,
     is_git: bool,

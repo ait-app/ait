@@ -160,7 +160,7 @@ fn refresh_preserves_prefix_cursors_and_retires_rewritten_history_atomically() {
     timeline.append("agent", "codex", &[plugin]).unwrap();
     assert_eq!(
         timeline
-            .reconcile("agent", "codex", &[first, second.clone()])
+            .reconcile("agent", "codex", &[first, second])
             .unwrap(),
         epoch
     );

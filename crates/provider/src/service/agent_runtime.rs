@@ -67,8 +67,8 @@ pub struct AgentDirectoryQuery {
     pub statuses: Option<BTreeSet<AgentRuntimeStatus>>,
     /// Required attention value.
     pub requires_attention: Option<bool>,
-    /// Configured thinking option filter; the outer option means filter presence.
-    pub thinking_option_id: Option<Option<String>>,
+    /// Configured thinking option filter, when one was requested.
+    pub thinking_option_id: Option<ThinkingOptionFilter>,
     /// Case-insensitive history search.
     pub search: Option<String>,
     /// Ordered sort fields.
@@ -77,6 +77,15 @@ pub struct AgentDirectoryQuery {
     pub cursor: Option<String>,
     /// Requested page size.
     pub limit: usize,
+}
+
+/// Requested thinking option for one Agent directory search.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum ThinkingOptionFilter {
+    /// Match the provider's default option.
+    ProviderDefault,
+    /// Match a specific option identifier.
+    Selected(String),
 }
 
 /// Placement facts required by the Paseo Agent directory.
@@ -555,11 +564,13 @@ fn matches_query(
         return false;
     }
     let thinking = effective_thinking_option_id(agent);
-    if query
-        .thinking_option_id
-        .as_ref()
-        .is_some_and(|required| normalize_thinking_option_id(required.as_deref()) != thinking)
-    {
+    if query.thinking_option_id.as_ref().is_some_and(|required| {
+        let required = match required {
+            ThinkingOptionFilter::ProviderDefault => None,
+            ThinkingOptionFilter::Selected(id) => Some(id.as_str()),
+        };
+        normalize_thinking_option_id(required) != thinking
+    }) {
         return false;
     }
     search.matches([

@@ -136,10 +136,7 @@ fn higher_priority_activity_masks_lower_buckets_and_unmasking_uses_now() {
     assert_eq!(first["wks_a"].bucket, WorkspaceStateBucket::NeedsInput);
     assert_eq!(first["wks_a"].entered_at, moment);
     activity.0.lock().unwrap().pop();
-    let second = directory
-        .clone()
-        .workspace_statuses(&records, "unmasked")
-        .unwrap();
+    let second = directory.workspace_statuses(&records, "unmasked").unwrap();
     assert_eq!(second["wks_a"].bucket, WorkspaceStateBucket::Failed);
     assert_eq!(second["wks_a"].entered_at, "unmasked");
     let stable = directory.workspace_statuses(&records, "later").unwrap();

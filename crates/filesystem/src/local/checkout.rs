@@ -99,14 +99,15 @@ impl LocalCheckout {
             .map(|path| path_text(&path))
             .transpose()?;
         let repo_root = path_text(&repo_root)?;
+        let main_repo_root = if managed {
+            Some(linked_main.unwrap_or_else(|| repo_root.clone()))
+        } else {
+            linked_main
+        };
         Ok(CheckoutStatus {
             is_git: true,
-            repo_root: Some(repo_root.clone()),
-            main_repo_root: if managed {
-                Some(linked_main.clone().unwrap_or(repo_root))
-            } else {
-                linked_main
-            },
+            repo_root: Some(repo_root),
+            main_repo_root,
             current_branch,
             is_dirty: Some(dirty),
             base_ref,

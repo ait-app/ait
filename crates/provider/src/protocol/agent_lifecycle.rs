@@ -3,8 +3,10 @@
 use std::collections::BTreeMap;
 
 use metadata::protocol::workspace::ProjectPlacementPayload;
-use serde::{Deserialize, Deserializer, Serialize};
+use serde::{Deserialize, Serialize};
 use serde_json::Value;
+
+use super::agent_config::NullableSetting;
 
 /// Agent runtime methods backed by the durable runtime registry.
 pub const CAPABILITIES: &[&str] = &[
@@ -178,8 +180,8 @@ pub struct AgentDirectoryFilter {
     #[serde(default)]
     pub requires_attention: Option<bool>,
     /// Restrict configured thinking option; explicit null means provider default.
-    #[serde(default, deserialize_with = "present")]
-    pub thinking_option_id: Option<Option<String>>,
+    #[serde(default)]
+    pub thinking_option_id: NullableSetting,
 }
 
 /// Sortable Agent directory fields.
@@ -427,14 +429,6 @@ pub struct AgentItemsCloseResult {
     pub agents: Vec<ClosedAgentResult>,
     /// Terminal results. This phase accepts only an empty terminal request.
     pub terminals: Vec<Value>,
-}
-
-fn present<'de, D, T>(deserializer: D) -> Result<Option<T>, D::Error>
-where
-    D: Deserializer<'de>,
-    T: Deserialize<'de>,
-{
-    T::deserialize(deserializer).map(Some)
 }
 
 #[cfg(test)]

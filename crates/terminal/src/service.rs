@@ -167,22 +167,7 @@ impl Terminals {
         if !Path::new(&cwd).starts_with(root) {
             return Err(Error::Invalid);
         }
-        // Bound both running processes and recently completed screen retention.
-        if self.entries.len() >= MAX_TERMINALS {
-            let mut expired = Vec::new();
-            for (id, entry) in &mut self.entries {
-                if entry.closed || entry.process.exited()? {
-                    expired.push(id.clone());
-                }
-            }
-            for id in expired {
-                self.entries.remove(&id);
-                self.activities.remove(&id);
-            }
-        }
-        if self.entries.len() >= MAX_TERMINALS {
-            return Err(Error::Exhausted);
-        }
+        self.ensure_capacity()?;
         let id = Uuid::new_v4().to_string();
         let activity_token = format!("{}{}", Uuid::new_v4().simple(), Uuid::new_v4().simple());
         let mut launch = Launch {
@@ -207,17 +192,18 @@ impl Terminals {
                 .insert("PASEO_TERMINAL_ACTIVITY_URL".to_owned(), url.clone());
         }
         let process = self.runtime.spawn(&launch)?;
-        let default_name = format!(
-            "Terminal {}",
-            self.entries
-                .values()
-                .filter(|entry| entry.info.cwd == cwd)
-                .count()
-                + 1
-        );
         let info = TerminalInfo {
             id: id.clone(),
-            name: request.name.clone().unwrap_or(default_name),
+            name: request.name.clone().unwrap_or_else(|| {
+                format!(
+                    "Terminal {}",
+                    self.entries
+                        .values()
+                        .filter(|entry| entry.info.cwd == cwd)
+                        .count()
+                        + 1
+                )
+            }),
             cwd,
             workspace_id: workspace.workspace_id.clone(),
             title: process.title(),
@@ -237,6 +223,25 @@ impl Terminals {
             },
         );
         Ok(info)
+    }
+
+    fn ensure_capacity(&mut self) -> Result<(), Error> {
+        if self.entries.len() >= MAX_TERMINALS {
+            let mut expired = Vec::new();
+            for (id, entry) in &mut self.entries {
+                if entry.closed || entry.process.exited()? {
+                    expired.push(id.clone());
+                }
+            }
+            for id in expired {
+                self.entries.remove(&id);
+                self.activities.remove(&id);
+            }
+        }
+        if self.entries.len() >= MAX_TERMINALS {
+            return Err(Error::Exhausted);
+        }
+        Ok(())
     }
 
     /// List running terminals, preserving workspace identities and deepest-root filtering.

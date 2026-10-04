@@ -5,7 +5,7 @@ use domain::agent_runtime::{AgentRuntimeStatus, PersistedAgentRuntimeRecord};
 use serde_json::json;
 
 use super::{QueryScope, project, query, snapshot};
-use crate::service::agent_runtime::AgentPlacement;
+use crate::service::agent_runtime::{AgentPlacement, ThinkingOptionFilter};
 
 #[test]
 fn history_defaults_to_archived_while_active_list_does_not() {
@@ -41,6 +41,33 @@ fn history_defaults_to_archived_while_active_list_does_not() {
     .expect("empty filters should be no-ops");
     assert!(empty_query.project_keys.is_none());
     assert!(empty_query.statuses.is_none());
+}
+
+#[test]
+fn thinking_filter_mapping_preserves_missing_null_and_selected_values() {
+    for (filter, expected) in [
+        (json!({}), None),
+        (
+            json!({"thinkingOptionId": null}),
+            Some(ThinkingOptionFilter::ProviderDefault),
+        ),
+        (
+            json!({"thinkingOptionId": "high"}),
+            Some(ThinkingOptionFilter::Selected("high".to_owned())),
+        ),
+    ] {
+        let request: AgentListRequest =
+            serde_json::from_value(json!({"filter": filter})).expect("filter request");
+        let actual = query(
+            request.filter,
+            request.sort,
+            request.page,
+            QueryScope::All,
+            None,
+        )
+        .expect("directory query");
+        assert_eq!(actual.thinking_option_id, expected);
+    }
 }
 
 #[test]
@@ -156,7 +183,7 @@ fn placement_projection_preserves_managed_worktree_identity() {
         main_repo_root: Some("/repo".to_owned()),
     });
 
-    assert_eq!(projected.workspace_name, Some(Some("Feature".to_owned())));
+    assert_eq!(projected.workspace_name, Some("Feature".to_owned()));
     assert!(projected.checkout.is_paseo_owned_worktree);
     assert_eq!(projected.checkout.main_repo_root.as_deref(), Some("/repo"));
 }

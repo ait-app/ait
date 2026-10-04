@@ -121,7 +121,7 @@ fn symlinked_parent_cannot_redirect_schedule_reads_or_writes() {
     let actual = canonical.join("actual");
     fs::create_dir(&actual).unwrap();
     let file = actual.join("data.json");
-    let mut original = FileStore::new(file.clone());
+    let mut original = FileStore::new(file);
     original.save(&[]).unwrap();
     std::os::unix::fs::symlink(&actual, canonical.join("linked")).unwrap();
     let mut redirected = FileStore::new(canonical.join("linked/data.json"));

@@ -150,7 +150,7 @@ fn inline_comments_are_deduplicated_without_losing_review_and_location_identity(
     let comment = json!({"id":"comment","body":"inline","createdAt":"2026-01-01T00:00:00Z",
         "pullRequestReview":{"id":"review"},"author":{"login":"author"}});
     let result = timeline(
-        json!({"comments":{"nodes":[comment.clone()]},"reviewThreads":{"nodes":[
+        json!({"comments":{"nodes":[comment]},"reviewThreads":{"nodes":[
             {"id":"thread","path":"src/lib.rs","line":24,"startLine":20,"isResolved":true,
             "isOutdated":false,"comments":{"nodes":[comment]}}
         ]}}),

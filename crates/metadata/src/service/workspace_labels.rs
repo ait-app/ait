@@ -354,7 +354,7 @@ impl WorkspaceLabels {
             });
         }
         let definition = WorkspaceLabelDefinition {
-            name: new_name.clone().unwrap_or_else(|| existing.name.clone()),
+            name: new_name.unwrap_or_else(|| existing.name.clone()),
             color: color.unwrap_or(existing.color),
         };
         let workspace_updates = if name_changed {

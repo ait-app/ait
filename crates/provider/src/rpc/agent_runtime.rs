@@ -11,6 +11,7 @@ use domain::agent_runtime::{
 use metadata::protocol::workspace::{ProjectCheckoutLitePayload, ProjectPlacementPayload};
 use serde_json::Value;
 
+use crate::protocol::agent_config::NullableSetting;
 use crate::protocol::agent_lifecycle::{
     AgentActionResult, AgentArchiveResult, AgentAttentionClearRequest, AgentAttentionClearResult,
     AgentCapabilityFlags, AgentDeleteResult, AgentDirectoryEntry, AgentDirectoryFilter,
@@ -24,7 +25,8 @@ use crate::service::agent_runtime::{
     AgentDirectoryEntry as ApplicationEntry, AgentDirectoryPage as ApplicationPage,
     AgentDirectoryQuery, AgentPlacement, AgentRuntimeDirectory, AgentRuntimeError,
     AgentSort as ApplicationSort, AgentSortKey as ApplicationSortKey, ResolvedAgent,
-    SortDirection as ApplicationSortDirection, effective_thinking_option_id, resolved_updated_at,
+    SortDirection as ApplicationSortDirection, ThinkingOptionFilter, effective_thinking_option_id,
+    resolved_updated_at,
 };
 
 /// Decode and execute a business request.
@@ -315,7 +317,11 @@ fn query(
             (!statuses.is_empty()).then_some(statuses)
         }),
         requires_attention: filter.requires_attention,
-        thinking_option_id: filter.thinking_option_id,
+        thinking_option_id: match filter.thinking_option_id {
+            NullableSetting::Unchanged => None,
+            NullableSetting::Clear => Some(ThinkingOptionFilter::ProviderDefault),
+            NullableSetting::Set(id) => Some(ThinkingOptionFilter::Selected(id)),
+        },
         search,
         sort: sort
             .unwrap_or_default()
@@ -417,7 +423,7 @@ fn project(placement: &AgentPlacement) -> ProjectPlacementPayload {
     ProjectPlacementPayload {
         project_key: placement.project_key.clone(),
         project_name: placement.project_name.clone(),
-        workspace_name: Some(Some(placement.workspace_name.clone())),
+        workspace_name: Some(placement.workspace_name.clone()),
         checkout: ProjectCheckoutLitePayload {
             cwd: placement.cwd.clone(),
             is_git: placement.is_git,

@@ -39,13 +39,11 @@ pub(super) fn records(
         if record.tool_result.is_some() || record.role == Role::System {
             continue;
         }
-        if record.role == Role::User {
-            turn = record.input_id.clone().or_else(|| Some(record.id.clone()));
-        }
         let timestamp = chrono::DateTime::from_timestamp_millis(record.created_at)
             .ok_or(AgentSessionError::Failed)?
             .to_rfc3339();
         if record.role == Role::User {
+            turn = Some(record.input_id.clone().unwrap_or_else(|| record.id.clone()));
             let texts = record
                 .sub_messages
                 .iter()
@@ -67,17 +65,13 @@ pub(super) fn records(
             continue;
         }
         for (index, part) in record.sub_messages.iter().enumerate() {
-            let key = if record.role == Role::User {
-                record.id.clone()
-            } else {
-                record.metadata["part_ids"][index]
-                    .as_str()
-                    .map_or_else(|| format!("{}:{index}", record.id), str::to_owned)
-            };
-            let (key, mut item) = match part {
+            let key = record.metadata["part_ids"][index]
+                .as_str()
+                .map_or_else(|| format!("{}:{index}", record.id), str::to_owned);
+            let (key, item) = match part {
                 Content::Text { text } => (
                     key.clone(),
-                    json!({"type":if record.role == Role::User {"user_message"} else {"assistant_message"},"messageId":key,"text":text}),
+                    json!({"type":"assistant_message","messageId":key,"text":text}),
                 ),
                 Content::ToolCall(call) => {
                     let result = results
@@ -106,11 +100,6 @@ pub(super) fn records(
                 ),
                 Content::NativeContent(_) | Content::StructuredData { .. } => continue,
             };
-            if record.role == Role::User
-                && let Some(client) = record.input_id.as_ref().and_then(|id| clients.get(id))
-            {
-                item["clientMessageId"] = json!(client);
-            }
             entries.push(NativeItem {
                 key: self::key(&key),
                 turn_id: turn.clone(),

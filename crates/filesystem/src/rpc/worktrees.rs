@@ -118,7 +118,7 @@ fn create(worktrees: &Worktrees, request: WorktreeCreateRequest) -> Result<Dispa
             );
             let event = serde_json::json!({
                 "kind": "upsert",
-                "workspace": descriptor.clone(),
+                "workspace": descriptor,
             });
             dispatched(
                 WorktreeCreateResult {

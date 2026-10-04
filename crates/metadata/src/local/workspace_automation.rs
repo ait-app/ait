@@ -714,9 +714,9 @@ fn run_setup_command(
             "Workspace setup was cancelled".to_owned(),
         ));
     }
-    let mut capture = tempfile::tempfile().map_err(setup_io)?;
-    let stdout = capture.try_clone().map_err(setup_io)?;
-    let stderr = capture.try_clone().map_err(setup_io)?;
+    let mut capture = tempfile::tempfile().map_err(|error| setup_io(&error))?;
+    let stdout = capture.try_clone().map_err(|error| setup_io(&error))?;
+    let stderr = capture.try_clone().map_err(|error| setup_io(&error))?;
     let mut command = shell_command(script);
     configure_command(&mut command, workspace, port);
     command
@@ -724,10 +724,10 @@ fn run_setup_command(
         .stdout(Stdio::from(stdout))
         .stderr(Stdio::from(stderr));
     configure_process_group(&mut command);
-    let mut child = command.spawn().map_err(setup_io)?;
+    let mut child = command.spawn().map_err(|error| setup_io(&error))?;
     let started = Instant::now();
     let status = loop {
-        if let Some(status) = child.try_wait().map_err(setup_io)? {
+        if let Some(status) = child.try_wait().map_err(|error| setup_io(&error))? {
             break status;
         }
         if retirement::cancelled(inner, &workspace.workspace_id) {
@@ -736,7 +736,8 @@ fn run_setup_command(
                 "Workspace setup was cancelled".to_owned(),
             ));
         }
-        let capture_too_large = capture.metadata().map_err(setup_io)?.len() > CAPTURE_BYTES;
+        let capture_too_large =
+            capture.metadata().map_err(|error| setup_io(&error))?.len() > CAPTURE_BYTES;
         if started.elapsed() >= SETUP_TIMEOUT || capture_too_large {
             retirement::terminate_setup(inner, &workspace.workspace_id, child)?;
             let reason = if capture_too_large {
@@ -748,12 +749,14 @@ fn run_setup_command(
         }
         thread::sleep(POLL_INTERVAL);
     };
-    capture.seek(SeekFrom::Start(0)).map_err(setup_io)?;
+    capture
+        .seek(SeekFrom::Start(0))
+        .map_err(|error| setup_io(&error))?;
     let mut output = Vec::new();
     capture
         .take(CAPTURE_BYTES + 1)
         .read_to_end(&mut output)
-        .map_err(setup_io)?;
+        .map_err(|error| setup_io(&error))?;
     if output.len() as u64 > CAPTURE_BYTES {
         return Err(WorkspaceAutomationError::Io(
             "Setup command output exceeded 8 MiB".to_owned(),
@@ -777,8 +780,7 @@ fn bound_output(output: &[u8]) -> (String, bool) {
     (String::from_utf8_lossy(&bounded).into_owned(), true)
 }
 
-#[allow(clippy::needless_pass_by_value)]
-fn setup_io(error: std::io::Error) -> WorkspaceAutomationError {
+fn setup_io(error: &std::io::Error) -> WorkspaceAutomationError {
     WorkspaceAutomationError::Io(format!("Workspace setup process failed: {error}"))
 }
 

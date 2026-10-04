@@ -24,7 +24,7 @@ fn close_until(
             if selected.contains(workspace.as_str())
                 && let Some(child) = process.child.as_mut()
             {
-                let status = terminate_child(child).map_err(setup_io)?;
+                let status = terminate_child(child).map_err(|error| setup_io(&error))?;
                 process.exit_code = status.code();
                 process.child = None;
             }
@@ -34,7 +34,7 @@ fn close_until(
         let mut state = lock(&inner.state);
         for id in ids {
             if let Some(child) = state.setup_cleanup.get_mut(id) {
-                terminate_child(child).map_err(setup_io)?;
+                terminate_child(child).map_err(|error| setup_io(&error))?;
                 state.setup_cleanup.remove(id);
             }
         }
@@ -76,7 +76,7 @@ pub(super) fn terminate_setup(
                     .setup_cleanup
                     .insert(id.to_owned(), child);
             }
-            Err(setup_io(error))
+            Err(setup_io(&error))
         }
     }
 }

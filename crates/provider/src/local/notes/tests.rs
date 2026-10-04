@@ -11,7 +11,7 @@ fn notes_deduplicate_replay_and_retain_only_anchors_remaining_after_rewind() {
         item: json!({"type":"notification","level":"info","message":"Goal paused"}),
     };
     notes.push(entry.clone()).unwrap();
-    notes.push(entry.clone()).unwrap();
+    notes.push(entry).unwrap();
     let mut notes = Notes::restore(notes.saved().as_ref()).unwrap();
     let mut entries = Vec::new();
     notes.history(&mut entries);

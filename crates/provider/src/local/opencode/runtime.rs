@@ -4,7 +4,7 @@ use std::{path::Path, process::Stdio, time::Duration};
 use crate::local::opencode::types::{Fault, ProtocolError};
 use reqwest::{Method, Url};
 use tokio::{
-    io::{AsyncBufReadExt, AsyncReadExt, BufReader},
+    io::{AsyncBufRead, AsyncBufReadExt, AsyncReadExt, BufReader},
     process::{Child, Command},
 };
 use tokio_util::{sync::CancellationToken, task::AbortOnDropHandle};
@@ -21,8 +21,6 @@ pub(super) struct Runtime {
 }
 
 impl Runtime {
-    // Keep the child, startup pipes and cleanup in one ownership scope.
-    #[allow(clippy::too_many_lines)]
     pub(super) async fn spawn(
         binary: &Path,
         cwd: &Path,
@@ -67,31 +65,9 @@ impl Runtime {
             .take()
             .ok_or_else(|| failure(Fault::ProviderFailed, "OpenCode stdout pipe unavailable"))?;
         let mut stdout = BufReader::new(stdout.take(32_768));
-        let startup = async {
-            loop {
-                let mut line = String::new();
-                if stdout.read_line(&mut line).await.map_err(|_| {
-                    failure(Fault::ProviderFailed, "OpenCode startup output interrupted")
-                })? == 0
-                {
-                    return Err(failure(
-                        Fault::ProviderFailed,
-                        "OpenCode exited before readiness",
-                    ));
-                }
-                if let Some((_, address)) = line.split_once("server listening on ") {
-                    return Url::parse(address.trim()).map_err(|_| {
-                        failure(
-                            Fault::ProviderFailed,
-                            "OpenCode returned invalid server address",
-                        )
-                    });
-                }
-            }
-        };
         let result = tokio::select! {
             () = cancellation.cancelled() => Err(failure(Fault::RunCancelled, "OpenCode startup cancelled")),
-            result = tokio::time::timeout(Duration::from_secs(30), startup) =>
+            result = tokio::time::timeout(Duration::from_secs(30), startup_address(&mut stdout)) =>
                 result.unwrap_or_else(|_| Err(failure(Fault::ProviderFailed, "OpenCode startup timed out"))),
         };
         let api = match result
@@ -131,6 +107,32 @@ impl Runtime {
         let result = stop(&mut self.child).await;
         self.drain.abort();
         result
+    }
+}
+
+async fn startup_address(stdout: &mut (impl AsyncBufRead + Unpin)) -> Result<Url, ProtocolError> {
+    let mut line = String::new();
+    loop {
+        line.clear();
+        if stdout
+            .read_line(&mut line)
+            .await
+            .map_err(|_| failure(Fault::ProviderFailed, "OpenCode startup output interrupted"))?
+            == 0
+        {
+            return Err(failure(
+                Fault::ProviderFailed,
+                "OpenCode exited before readiness",
+            ));
+        }
+        if let Some((_, address)) = line.split_once("server listening on ") {
+            return Url::parse(address.trim()).map_err(|_| {
+                failure(
+                    Fault::ProviderFailed,
+                    "OpenCode returned invalid server address",
+                )
+            });
+        }
     }
 }
 

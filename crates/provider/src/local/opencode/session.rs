@@ -419,7 +419,7 @@ impl Connection {
     }
 
     pub(super) async fn observe(
-        &mut self,
+        &self,
         events: Events,
         progress: Arc<dyn ProgressSink>,
     ) -> Result<Snapshot, ProtocolError> {
@@ -494,7 +494,7 @@ impl Connection {
     }
 
     async fn observe_inner(
-        &mut self,
+        &self,
         mut events: Events,
         progress: Arc<dyn ProgressSink>,
     ) -> Result<Snapshot, ProtocolError> {
