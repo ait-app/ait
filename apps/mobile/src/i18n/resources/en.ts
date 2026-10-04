@@ -789,6 +789,12 @@ export const en = {
         },
         viewPr: "View PR",
         viewPr_mr: "View MR",
+        branchStatus: {
+          behind: "Branch behind remote",
+          diverged: "Branch diverged",
+          conflicts: "Resolve conflicts",
+          unknown: "Git status unavailable",
+        },
         createPr: {
           label: "Create PR",
           pending: "Creating PR...",

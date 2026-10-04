@@ -138,7 +138,7 @@ export function GitActionsSplitButton({
     [gitActions.menu, gitActions.primary, gitActions.secondary],
   );
 
-  if (menuOnly) {
+  if (menuOnly || !gitActions.primary) {
     if (menuOnlyActions.length === 0) {
       return null;
     }

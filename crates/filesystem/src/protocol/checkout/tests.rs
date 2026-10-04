@@ -118,6 +118,7 @@ fn checkout_status_preserves_null_non_git_shape_and_uppercase_errors() {
         main_repo_root: None,
         current_branch: None,
         is_dirty: None,
+        branch_status: None,
         base_ref: None,
         ahead_behind: None,
         upstream_ref: None,
@@ -144,6 +145,7 @@ fn checkout_status_preserves_null_non_git_shape_and_uppercase_errors() {
         main_repo_root: None,
         current_branch: Some("main".to_owned()),
         is_dirty: Some(false),
+        branch_status: None,
         base_ref: None,
         ahead_behind: None,
         upstream_ref: None,
@@ -157,6 +159,25 @@ fn checkout_status_preserves_null_non_git_shape_and_uppercase_errors() {
     .unwrap();
     assert!(value.get("mainRepoRoot").is_some());
     assert!(value["mainRepoRoot"].is_null());
+}
+
+#[test]
+fn branch_status_serializes_source_identity_conflicts_and_same_named_remote_counts() {
+    let value = serde_json::to_value(CheckoutBranchStatus {
+        head_sha: Some("abc123".to_owned()),
+        has_conflicts: true,
+        remote_ref: Some("refs/remotes/origin/feature".to_owned()),
+        ahead_behind: Some(AheadBehind {
+            ahead: 2,
+            behind: 1,
+        }),
+    })
+    .unwrap();
+    assert_eq!(
+        value,
+        json!({"headSha":"abc123", "hasConflicts":true,
+        "remoteRef":"refs/remotes/origin/feature", "aheadBehind":{"ahead":2,"behind":1}})
+    );
 }
 
 #[test]

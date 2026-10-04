@@ -371,6 +371,17 @@ pub(crate) fn protocol_status(
             main_repo_root: status.main_repo_root,
             current_branch: status.current_branch,
             is_dirty: status.is_dirty,
+            branch_status: status
+                .branch_status
+                .map(|branch| protocol::CheckoutBranchStatus {
+                    head_sha: branch.head_sha,
+                    has_conflicts: branch.has_conflicts,
+                    remote_ref: branch.remote_ref,
+                    ahead_behind: branch.ahead_behind.map(|counts| protocol::AheadBehind {
+                        ahead: counts.ahead,
+                        behind: counts.behind,
+                    }),
+                }),
             base_ref: status.base_ref,
             ahead_behind: status.ahead_behind.map(|counts| protocol::AheadBehind {
                 ahead: counts.ahead,
@@ -391,6 +402,7 @@ pub(crate) fn protocol_status(
             main_repo_root: None,
             current_branch: None,
             is_dirty: None,
+            branch_status: None,
             base_ref: None,
             ahead_behind: None,
             upstream_ref: None,

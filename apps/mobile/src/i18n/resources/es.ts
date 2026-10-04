@@ -801,6 +801,12 @@ export const es: TranslationResources = {
           success: "Tirado y empujado",
         },
         viewPr: "VerPR",
+        branchStatus: {
+          behind: "Rama atrasada respecto al remoto",
+          diverged: "La rama ha divergido",
+          conflicts: "Resuelve los conflictos",
+          unknown: "Estado de Git no disponible",
+        },
         createPr: {
           label: "CrearPR",
           pending: "CreandoPR...",

@@ -394,6 +394,7 @@ impl CheckoutRuntime for FakeCheckout {
             main_repo_root: Some("/main".to_owned()),
             current_branch: Some("feature".to_owned()),
             is_dirty: Some(true),
+            branch_status: None,
             base_ref: Some("main".to_owned()),
             ahead_behind: Some(AheadBehind {
                 ahead: 2,

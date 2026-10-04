@@ -33,7 +33,7 @@ const STDERR_LIMIT: u64 = 64 * 1024;
 const CHECK_ANNOTATION_LIMIT: usize = 20;
 const CHECK_JOB_LIMIT: usize = 100;
 const FAILED_JOB_LIMIT: usize = 5;
-const STATUS_FIELDS: &str = "number,url,title,state,isDraft,baseRefName,headRefName,mergedAt,reviewDecision,mergeable,statusCheckRollup";
+const STATUS_FIELDS: &str = "number,url,title,state,isDraft,baseRefName,headRefName,headRefOid,mergedAt,reviewDecision,mergeable,statusCheckRollup";
 
 const TIMELINE_QUERY: &str = r"
 query PullRequestTimeline($owner: String!, $name: String!, $number: Int!) {
@@ -958,6 +958,7 @@ fn parse_status(
         base_ref_name: optional_string(&value, "baseRefName").unwrap_or_default(),
         head_ref_name: optional_string(&value, "headRefName")
             .unwrap_or_else(|| fallback_head.to_owned()),
+        head_sha: optional_string(&value, "headRefOid"),
         is_merged: merged,
         is_draft: value
             .get("isDraft")

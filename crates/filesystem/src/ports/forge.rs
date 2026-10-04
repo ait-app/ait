@@ -172,6 +172,8 @@ pub struct PullRequestStatus {
     pub base_ref_name: String,
     /// Head branch.
     pub head_ref_name: String,
+    /// Source commit recorded by this pull request, including after closure.
+    pub head_sha: Option<String>,
     /// Merged state.
     pub is_merged: bool,
     /// Draft state.

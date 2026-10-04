@@ -1,5 +1,6 @@
 //! Bounded local Git reads for checkout status, diff, and commit history.
 
+mod branch_status;
 mod highlight;
 mod naming;
 pub(crate) mod summary;
@@ -74,12 +75,12 @@ impl LocalCheckout {
                 .as_ref()
                 .is_some_and(|main| main != &repo_root);
         let current_branch = git_optional(&cwd, &["symbolic-ref", "--quiet", "--short", "HEAD"])?;
-        let dirty = !git_required(
+        let working_status = git_required(
             &cwd,
             &["status", "--porcelain=v1", "--untracked-files=normal"],
             SMALL_OUTPUT_LIMIT,
-        )?
-        .is_empty();
+        )?;
+        let dirty = !working_status.is_empty();
         let remotes = lines(&git_required(&cwd, &["remote"], SMALL_OUTPUT_LIMIT)?);
         let preferred_remote = remotes
             .iter()
@@ -89,6 +90,12 @@ impl LocalCheckout {
             .map(|remote| git_optional(&cwd, &["remote", "get-url", remote]))
             .transpose()?
             .flatten();
+        let branch_status = branch_status::read(
+            &cwd,
+            current_branch.as_deref(),
+            preferred_remote.map(String::as_str),
+            &working_status,
+        )?;
         let base_ref = resolve_default_branch(&cwd, current_branch.as_deref())?;
         let ahead_behind = match (&base_ref, &current_branch) {
             (Some(base), Some(_)) => compare_refs(&cwd, &comparison_base(&cwd, base)?, "HEAD")?,
@@ -97,6 +104,9 @@ impl LocalCheckout {
         let upstream_ref =
             git_optional(&cwd, &["rev-parse", "--symbolic-full-name", "@{upstream}"])?;
         let upstream_counts = match &upstream_ref {
+            Some(upstream) if branch_status.remote_ref.as_ref() == Some(upstream) => {
+                branch_status.ahead_behind
+            }
             Some(upstream) => compare_refs(&cwd, upstream, "HEAD")?,
             None => None,
         };
@@ -116,6 +126,7 @@ impl LocalCheckout {
             main_repo_root,
             current_branch,
             is_dirty: Some(dirty),
+            branch_status: Some(branch_status),
             base_ref,
             ahead_behind,
             upstream_ref,
@@ -637,6 +648,7 @@ fn non_git_status() -> CheckoutStatus {
         main_repo_root: None,
         current_branch: None,
         is_dirty: None,
+        branch_status: None,
         base_ref: None,
         ahead_behind: None,
         upstream_ref: None,

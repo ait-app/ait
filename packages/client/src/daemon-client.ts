@@ -4101,10 +4101,7 @@ export class DaemonClient {
   async checkoutPush(cwd: string, requestId?: string): Promise<CheckoutPushPayload> {
     return this.sendCorrelatedSessionRequest({
       requestId,
-      message: {
-        type: "checkout_push_request",
-        cwd,
-      },
+      message: { type: "checkout_push_request", cwd },
       responseType: "checkout_push_response",
     });
   }

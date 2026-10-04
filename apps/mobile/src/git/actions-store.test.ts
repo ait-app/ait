@@ -73,6 +73,40 @@ describe("checkout-git-actions-store", () => {
     expect(store.getStatus({ serverId, cwd, actionId: "commit" })).toBe("idle");
   });
 
+  it("uses the ordinary push request for an open PR", async () => {
+    const client = { checkoutPush: vi.fn(async () => ({ error: null })) };
+    useSessionStore.setState((state) => ({
+      ...state,
+      sessions: {
+        [serverId]: { client } as unknown as (typeof state.sessions)[string],
+      },
+    }));
+
+    await useCheckoutGitActionsStore.getState().push({ serverId, cwd });
+
+    expect(client.checkoutPush).toHaveBeenCalledWith(cwd);
+    expect(
+      useCheckoutGitActionsStore.getState().getStatus({ serverId, cwd, actionId: "push" }),
+    ).toBe("success");
+  });
+
+  it("reports failed PR pushes without leaving push marked successful", async () => {
+    const client = { checkoutPush: vi.fn(async () => ({ error: { message: "push rejected" } })) };
+    useSessionStore.setState((state) => ({
+      ...state,
+      sessions: {
+        [serverId]: { client } as unknown as (typeof state.sessions)[string],
+      },
+    }));
+
+    await expect(useCheckoutGitActionsStore.getState().push({ serverId, cwd })).rejects.toThrow(
+      "push rejected",
+    );
+    expect(
+      useCheckoutGitActionsStore.getState().getStatus({ serverId, cwd, actionId: "push" }),
+    ).toBe("idle");
+  });
+
   it("runs pull then push sequentially for pull-and-push", async () => {
     const order: string[] = [];
     const client = {

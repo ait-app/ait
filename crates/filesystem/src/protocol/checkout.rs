@@ -66,6 +66,20 @@ pub struct AheadBehind {
     pub behind: u64,
 }
 
+/// Workspace action facts compared with the same-named remote branch.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct CheckoutBranchStatus {
+    /// Current commit, absent before the first commit.
+    pub head_sha: Option<String>,
+    /// Whether merge conflicts remain unresolved.
+    pub has_conflicts: bool,
+    /// Same-named remote-tracking ref, absent when not present.
+    pub remote_ref: Option<String>,
+    /// Counts against that ref, absent without a remote branch.
+    pub ahead_behind: Option<AheadBehind>,
+}
+
 /// Checkout status response, including the non-Git null projection.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct CheckoutStatusResult {
@@ -81,6 +95,8 @@ pub struct CheckoutStatusResult {
     pub current_branch: Option<String>,
     /// Working tree dirtiness, or null outside Git.
     pub is_dirty: Option<bool>,
+    /// Additional facts for workspace actions.
+    pub branch_status: Option<CheckoutBranchStatus>,
     /// Comparison base display name.
     pub base_ref: Option<String>,
     /// Counts against the comparison base.
@@ -108,7 +124,7 @@ impl Serialize for CheckoutStatusResult {
     {
         use serde::ser::SerializeMap;
 
-        let mut map = serializer.serialize_map(Some(if self.is_git { 15 } else { 14 }))?;
+        let mut map = serializer.serialize_map(Some(if self.is_git { 16 } else { 15 }))?;
         map.serialize_entry("cwd", &self.cwd)?;
         map.serialize_entry("isGit", &self.is_git)?;
         map.serialize_entry("repoRoot", &self.repo_root)?;
@@ -117,6 +133,7 @@ impl Serialize for CheckoutStatusResult {
         }
         map.serialize_entry("currentBranch", &self.current_branch)?;
         map.serialize_entry("isDirty", &self.is_dirty)?;
+        map.serialize_entry("branchStatus", &self.branch_status)?;
         map.serialize_entry("baseRef", &self.base_ref)?;
         map.serialize_entry("aheadBehind", &self.ahead_behind)?;
         map.serialize_entry("upstreamRef", &self.upstream_ref)?;

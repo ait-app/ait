@@ -793,6 +793,12 @@ export const ar: TranslationResources = {
           success: "سحبت ودفعت",
         },
         viewPr: "عرض PR",
+        branchStatus: {
+          behind: "الفرع متأخر عن الفرع البعيد",
+          diverged: "تباعدت الفروع",
+          conflicts: "يجب حل التعارضات",
+          unknown: "حالة Git غير متاحة",
+        },
         createPr: {
           label: "إنشاء PR",
           pending: "إنشاء PR...",

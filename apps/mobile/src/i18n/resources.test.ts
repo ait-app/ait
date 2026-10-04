@@ -309,6 +309,12 @@ describe("translation resources", () => {
     expect(en.workspace.header.actions.copyPath).toBe("Copy workspace path");
     expect(en.workspace.scripts.actions.run).toBe("Run");
     expect(en.workspace.git.actions.commit.label).toBe("Commit");
+    expect(zhCN.workspace.git.actions.commit).toEqual({
+      label: "提交工作区",
+      pending: "正在提交...",
+      success: "已提交",
+    });
+    expect(zhCN.workspace.git.actions.push.label).toBe("推送");
     expect(en.workspace.git.diff.binaryFile).toBe("Binary file");
     expect(en.workspace.git.pr.sections.checks).toBe("Checks");
     expect(en.workspace.git.pr.sections.pipeline).toBe("Pipeline");

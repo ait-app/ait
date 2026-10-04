@@ -317,6 +317,9 @@ pub struct PullRequestStatus {
     pub base_ref_name: String,
     /// Head branch.
     pub head_ref_name: String,
+    /// Source commit recorded by this request; absent for older forge adapters.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub head_sha: Option<String>,
     /// Whether the request is merged.
     pub is_merged: bool,
     /// Whether it is a draft.

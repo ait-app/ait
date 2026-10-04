@@ -769,9 +769,9 @@ export const zhCN: TranslationResources = {
         moreOptions: "更多选项",
         moreActions: "更多操作",
         commit: {
-          label: "Commit",
-          pending: "正在 commit...",
-          success: "已 commit",
+          label: "提交工作区",
+          pending: "正在提交...",
+          success: "已提交",
         },
         pull: {
           label: "Pull",
@@ -779,9 +779,9 @@ export const zhCN: TranslationResources = {
           success: "已 pull",
         },
         push: {
-          label: "Push",
-          pending: "正在 push...",
-          success: "已 push",
+          label: "推送",
+          pending: "正在推送...",
+          success: "已推送",
         },
         pullAndPush: {
           label: "Pull 并 push",
@@ -789,6 +789,12 @@ export const zhCN: TranslationResources = {
           success: "已 pull 并 push",
         },
         viewPr: "查看 PR",
+        branchStatus: {
+          behind: "分支落后于远端",
+          diverged: "分支已分叉",
+          conflicts: "存在冲突",
+          unknown: "Git 状态未知",
+        },
         createPr: {
           label: "创建 PR",
           pending: "正在创建 PR...",

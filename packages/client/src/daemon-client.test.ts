@@ -769,6 +769,32 @@ function useHeartbeatClock(): void {
   });
 }
 
+test("sends checkout push without a target override", async () => {
+  const mock = createMockTransport();
+  const client = new DaemonClient({
+    url: "ws://test",
+    clientId: "pr-push",
+    logger: createMockLogger(),
+    reconnect: { enabled: false },
+    transportFactory: () => mock.transport,
+  });
+  clients.push(client);
+  const connection = client.connect();
+  mock.triggerOpen();
+  await connection;
+
+  const response = client.checkoutPush("/repo");
+  const request = parseSentFrame(mock.sent.at(-1));
+  expect(request).toMatchObject({ type: "checkout_push_request", cwd: "/repo" });
+  mock.triggerMessage(
+    wrapSessionMessage({
+      type: "checkout_push_response",
+      payload: { cwd: "/repo", success: true, error: null, requestId: request.requestId },
+    }),
+  );
+  await response;
+});
+
 test("dedupes in-flight checkout status requests per agentId", async () => {
   const logger = createMockLogger();
   const mock = createMockTransport();

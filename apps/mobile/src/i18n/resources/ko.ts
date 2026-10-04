@@ -794,6 +794,12 @@ export const ko: TranslationResources = {
         },
         viewPr: "PR 보기",
         viewPr_mr: "MR 보기",
+        branchStatus: {
+          behind: "원격보다 뒤처진 브랜치",
+          diverged: "브랜치가 분기됨",
+          conflicts: "충돌 해결 필요",
+          unknown: "Git 상태를 확인할 수 없음",
+        },
         createPr: {
           label: "PR 생성",
           pending: "PR 생성 중...",

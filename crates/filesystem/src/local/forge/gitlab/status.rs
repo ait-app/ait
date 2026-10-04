@@ -65,6 +65,7 @@ pub(super) fn parse(
         },
         base_ref_name: string(mr, "target_branch")?,
         head_ref_name: string(mr, "source_branch")?,
+        head_sha: optional_string(mr, "sha"),
         is_merged: state == "merged" || optional_string(mr, "merged_at").is_some(),
         is_draft: mr
             .get("draft")

@@ -797,6 +797,12 @@ export const ja: TranslationResources = {
           success: "プルしてプッシュしました",
         },
         viewPr: "PRを表示",
+        branchStatus: {
+          behind: "リモートより遅れています",
+          diverged: "ブランチが分岐しています",
+          conflicts: "競合を解決してください",
+          unknown: "Git の状態を取得できません",
+        },
         createPr: {
           label: "PRを作成",
           pending: "PRを作成中...",

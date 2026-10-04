@@ -801,6 +801,12 @@ export const ru: TranslationResources = {
           success: "Изменения получены и отправлены",
         },
         viewPr: "Посмотреть PR",
+        branchStatus: {
+          behind: "Ветка отстаёт от удалённой",
+          diverged: "История ветки разошлась",
+          conflicts: "Разрешите конфликты",
+          unknown: "Статус Git недоступен",
+        },
         createPr: {
           label: "Создать PR",
           pending: "Создание PR...",

@@ -5191,6 +5191,16 @@ const CheckoutStatusCommonSchema = z.object({
   cwd: z.string(),
   error: CheckoutErrorSchema.nullable(),
   requestId: z.string(),
+  // Separate from upstreamRef: the workspace CTA compares the same-named branch.
+  branchStatus: z
+    .object({
+      headSha: z.string().nullable(),
+      hasConflicts: z.boolean(),
+      remoteRef: z.string().nullable(),
+      aheadBehind: AheadBehindSchema.nullable(),
+    })
+    .nullable()
+    .optional(),
   // The full ref currentBranch tracks, as git resolves `<branch>@{upstream}`:
   // "refs/remotes/origin/main", "refs/remotes/upstream/main" on a fork, or a
   // "refs/heads/..." ref for a branch tracking a local branch. Null when there is no
@@ -5317,6 +5327,7 @@ export const CheckoutPrStatusSchema = z.object({
   state: z.string(),
   baseRefName: z.string(),
   headRefName: z.string(),
+  headSha: z.string().nullable().optional(),
   isMerged: z.boolean(),
   isDraft: z.boolean().optional().default(false),
   mergeable: z

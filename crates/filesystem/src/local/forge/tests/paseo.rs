@@ -95,6 +95,15 @@ fn enterprise_status_uses_pull_url_identity_and_preserves_checkout_head_fallback
 }
 
 #[test]
+fn status_preserves_pull_request_source_commit_after_merge() {
+    let result = status(json!({"headRefOid":"abc123", "mergedAt":"2026-10-05T00:00:00Z"}));
+    assert_eq!(result.head_sha.as_deref(), Some("abc123"));
+    assert!(result.is_merged);
+    assert_eq!(result.state, "merged");
+    assert!(status(json!({})).head_sha.is_none());
+}
+
+#[test]
 fn check_rollup_failure_dominates_pending_and_supports_graphql_context_nodes() {
     let cases = [
         ("FAILURE", "failure"),

@@ -797,6 +797,12 @@ export const ptBR: TranslationResources = {
           success: "Pull e push concluídos",
         },
         viewPr: "Ver PR",
+        branchStatus: {
+          behind: "Branch atrás do remoto",
+          diverged: "Branch divergente",
+          conflicts: "Resolva os conflitos",
+          unknown: "Status do Git indisponível",
+        },
         createPr: {
           label: "Criar PR",
           pending: "Criando PR...",

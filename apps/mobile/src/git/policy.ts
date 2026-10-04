@@ -7,6 +7,7 @@ import type { CheckoutPrMergeMethod, PullRequestMergeable } from "@ait/protocol/
 import type { MergeCapability } from "./merge-capability";
 
 export type GitActionId =
+  | "branch-status"
   | "commit"
   | "pull"
   | "push"
@@ -77,8 +78,14 @@ export interface BuildGitActionsInput {
   aheadOfOrigin: number | null;
   behindOfOrigin: number | null;
   shouldPromoteArchive: boolean;
-  shipDefault: "merge" | "pr";
-  runtime: Record<GitActionId, GitActionRuntimeState>;
+  branchStatusAvailable: boolean;
+  hasConflicts: boolean;
+  hasActiveAgents: boolean;
+  hasNewWork: boolean;
+  needsPushForOpenPr: boolean;
+  remoteAheadCount: number | null;
+  remoteBehindCount: number | null;
+  runtime: Record<Exclude<GitActionId, "branch-status">, GitActionRuntimeState>;
 }
 
 type PullRequestActionId = Extract<
@@ -195,6 +202,20 @@ export function buildGitActions(input: BuildGitActionsInput): GitActions {
   }
 
   const allActions = new Map<GitActionId, GitAction>();
+  const blockedReason = getPrimaryBlockedReason(input);
+  if (blockedReason) {
+    const label = i18n.t(`workspace.git.actions.branchStatus.${blockedReason}`);
+    allActions.set("branch-status", {
+      id: "branch-status",
+      label,
+      pendingLabel: label,
+      successLabel: label,
+      disabled: true,
+      status: "idle",
+      startsGroup: false,
+      handler: () => undefined,
+    });
+  }
 
   allActions.set("commit", {
     id: "commit",
@@ -310,50 +331,53 @@ export function buildGitActions(input: BuildGitActionsInput): GitActions {
   return {
     primary,
     secondary: secondaryIds
-      .filter((id) => id !== "archive-workspace" || primaryActionId !== "archive-workspace")
+      .filter((id) => id !== primaryActionId || (id !== "archive-workspace" && id !== "push"))
       .map((id) => allActions.get(id)!),
     menu: [],
   };
 }
 
-function getPrimaryActionId(input: BuildGitActionsInput): GitActionId | null {
-  if (input.shouldPromoteArchive) {
-    return "archive-workspace";
+function getPrimaryBlockedReason(input: BuildGitActionsInput) {
+  if (
+    input.hasConflicts ||
+    (hasOpenPullRequest(input) &&
+      !input.needsPushForOpenPr &&
+      input.pullRequestMergeable === "CONFLICTING")
+  ) {
+    return "conflicts";
   }
+  if ((input.remoteBehindCount ?? 0) > 0) {
+    return (input.remoteAheadCount ?? 0) > 0 ? "diverged" : "behind";
+  }
+  if (!input.hasUncommittedChanges && !input.branchStatusAvailable) return "unknown";
+  return null;
+}
+
+function hasOpenPullRequest(input: BuildGitActionsInput): boolean {
+  return input.hasPullRequest && input.pullRequestState === "open" && !input.pullRequestIsMerged;
+}
+
+function getPrimaryActionId(input: BuildGitActionsInput): GitActionId | null {
+  if (getPrimaryBlockedReason(input)) return "branch-status";
   if (input.hasUncommittedChanges) {
     return "commit";
   }
-  if (canPull(input)) {
-    return "pull";
+  if (hasOpenPullRequest(input) && input.pullRequestUrl) {
+    return input.needsPushForOpenPr ? "push" : "pr";
   }
-  if (canPush(input)) {
-    return "push";
-  }
-  if (canMergePr(input)) {
-    return getDefaultDirectPullRequestMergeActionId(input);
-  }
-  if (canEnablePrAutoMerge(input)) {
-    return getDefaultEnablePullRequestAutoMergeActionId(input);
-  }
-  if (hasEnabledPrAutoMerge(input)) {
+  if (!input.isOnBaseBranch && input.hasNewWork && input.githubFeaturesEnabled) {
     return "pr";
   }
-  if (input.shipDefault === "pr" && canUsePullRequestActionAsShipDefault(input)) {
-    return "pr";
-  }
-  if (!input.isOnBaseBranch && input.aheadCount > 0) {
-    return "merge-branch";
-  }
-  if (input.githubFeaturesEnabled && input.hasPullRequest && input.pullRequestUrl) {
-    return "pr";
-  }
-
-  // Only Paseo-owned worktrees get Archive as a fallback primary action.
-  // Regular Git checkouts should not show the destructive archive CTA by default.
-  if (input.isPaseoOwnedWorktree) {
+  if (input.isOnBaseBranch && canPush(input)) return "push";
+  if (
+    input.shouldPromoteArchive &&
+    !input.hasActiveAgents &&
+    !input.hasNewWork &&
+    (input.remoteAheadCount ?? 0) === 0 &&
+    (input.remoteBehindCount ?? 0) === 0
+  ) {
     return "archive-workspace";
   }
-
   return null;
 }
 
@@ -373,26 +397,8 @@ function getFeatureActionIds(input: BuildGitActionsInput): GitActionId[] {
   ];
 }
 
-function getDefaultDirectPullRequestMergeActionId(
-  input: BuildGitActionsInput,
-): PullRequestDirectMergeActionId {
-  return (
-    getPreferredDirectPullRequestMergeActionModel(input)?.id ??
-    PULL_REQUEST_DIRECT_MERGE_ACTION_MODELS[0].id
-  );
-}
-
-function getDefaultEnablePullRequestAutoMergeActionId(
-  input: BuildGitActionsInput,
-): PullRequestAutoMergeEnableActionId {
-  return (
-    getPreferredEnablePullRequestAutoMergeActionModel(input)?.id ??
-    PULL_REQUEST_AUTO_MERGE_ENABLE_ACTION_MODELS[0].id
-  );
-}
-
 function buildPrAction(input: BuildGitActionsInput): GitAction {
-  if (input.hasPullRequest && input.pullRequestUrl) {
+  if (hasOpenPullRequest(input) && input.pullRequestUrl) {
     return {
       id: "pr",
       label: i18n.t("workspace.git.actions.viewPr"),
@@ -509,10 +515,6 @@ function getEnablePullRequestAutoMergeActionLabel(id: PullRequestAutoMergeEnable
   }
 }
 
-function canPull(input: BuildGitActionsInput): boolean {
-  return input.hasRemote && !input.hasUncommittedChanges && (input.behindOfOrigin ?? 0) > 0;
-}
-
 function canPush(input: BuildGitActionsInput): boolean {
   return input.hasRemote && hasPushableCommits(input) && (input.behindOfOrigin ?? 0) === 0;
 }
@@ -533,16 +535,6 @@ function hasBaseUpdates(input: BuildGitActionsInput): boolean {
     !input.hasUncommittedChanges &&
     input.behindBaseCount > 0
   );
-}
-
-function canUsePullRequestActionAsShipDefault(input: BuildGitActionsInput): boolean {
-  if (input.isOnBaseBranch || !input.githubFeaturesEnabled) {
-    return false;
-  }
-  if (input.hasPullRequest) {
-    return input.pullRequestUrl !== null;
-  }
-  return input.aheadCount > 0;
 }
 
 function canMergePr(input: BuildGitActionsInput): boolean {
@@ -593,15 +585,6 @@ function canEnablePrAutoMerge(input: BuildGitActionsInput): boolean {
     capability.canEnableAutoMerge &&
     !capability.mergeBlockedByQueue &&
     getAllowedAutoMergeEnableActionModels(input).length > 0
-  );
-}
-
-function hasEnabledPrAutoMerge(input: BuildGitActionsInput): boolean {
-  return (
-    input.githubFeaturesEnabled &&
-    input.hasPullRequest &&
-    input.pullRequestUrl !== null &&
-    input.mergeCapability?.autoMergeEnabled === true
   );
 }
 
@@ -663,7 +646,7 @@ function getCreatePrUnavailableMessage(input: BuildGitActionsInput): string | un
       noun: input.forgeChangeRequestNoun,
     });
   }
-  if (input.aheadCount === 0) {
+  if (!input.hasNewWork) {
     return i18n.t("workspace.git.actions.unavailable.createPrNoCommits");
   }
   return undefined;
@@ -741,7 +724,11 @@ function shouldShowPullRequestAction(
     return true;
   }
   if (id === "disable-pr-auto-merge") {
-    return input.githubAutoMergeActionsEnabled && input.mergeCapability?.autoMergeEnabled === true;
+    return (
+      hasOpenPullRequest(input) &&
+      input.githubAutoMergeActionsEnabled &&
+      input.mergeCapability?.autoMergeEnabled === true
+    );
   }
   if (isDirectPullRequestMergeActionId(id)) {
     return canMergePr(input) && getAllowedDirectPullRequestMergeActionIds(input).includes(id);
@@ -790,22 +777,6 @@ function getAllowedAutoMergeEnableActionModels(
   return PULL_REQUEST_AUTO_MERGE_ENABLE_ACTION_MODELS.filter((model) =>
     isPullRequestMergeMethodAllowed(input, model.method),
   );
-}
-
-function getPreferredDirectPullRequestMergeActionModel(
-  input: BuildGitActionsInput,
-): PullRequestDirectMergeActionModel | null {
-  const allowed = getAllowedDirectPullRequestMergeActionModels(input);
-  const preferred = input.mergeCapability?.preferredMethod ?? null;
-  return allowed.find((model) => model.method === preferred) ?? allowed[0] ?? null;
-}
-
-function getPreferredEnablePullRequestAutoMergeActionModel(
-  input: BuildGitActionsInput,
-): PullRequestAutoMergeEnableActionModel | null {
-  const allowed = getAllowedAutoMergeEnableActionModels(input);
-  const preferred = input.mergeCapability?.preferredMethod ?? null;
-  return allowed.find((model) => model.method === preferred) ?? allowed[0] ?? null;
 }
 
 function isPullRequestMergeMethodAllowed(
