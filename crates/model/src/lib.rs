@@ -8,6 +8,7 @@ mod message;
 pub mod outbound;
 pub mod pagination;
 pub mod polling;
+pub mod process;
 pub mod runtime;
 pub mod server;
 pub mod subscription;

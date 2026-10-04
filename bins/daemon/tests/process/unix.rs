@@ -20,6 +20,15 @@ fn start(directory: &Path, log: &Path) -> Process {
 }
 
 fn start_with_path(directory: &Path, log: &Path, path: Option<&std::ffi::OsStr>) -> Process {
+    start_with_environment(directory, log, path, &[])
+}
+
+fn start_with_environment(
+    directory: &Path,
+    log: &Path,
+    path: Option<&std::ffi::OsStr>,
+    extra: &[(&str, &str)],
+) -> Process {
     let mut command = Command::new(env!("CARGO_BIN_EXE_daemon"));
     command
         .args([
@@ -62,6 +71,7 @@ fn start_with_path(directory: &Path, log: &Path, path: Option<&std::ffi::OsStr>)
         command.current_dir(directory.parent().unwrap());
         command.env("PATH", path);
     }
+    command.envs(extra.iter().copied());
     Process(command.spawn().unwrap())
 }
 
@@ -79,6 +89,9 @@ mod agent_execution;
 
 #[path = "claude.rs"]
 mod claude;
+
+#[path = "child_environment.rs"]
+mod child_environment;
 
 #[path = "opencode.rs"]
 mod opencode;

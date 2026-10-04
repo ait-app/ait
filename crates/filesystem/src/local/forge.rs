@@ -680,6 +680,10 @@ fn run_command_with_codes(
 ) -> Result<CommandOutput, ForgeRuntimeError> {
     let mut stdout = tempfile::tempfile().map_err(|error| io_error(&error))?;
     let mut stderr = tempfile::tempfile().map_err(|error| io_error(&error))?;
+    // Forge CLIs, ssh and git (with repository hooks) must not inherit server credentials.
+    for name in model::process::private_environment() {
+        command.env_remove(name);
+    }
     command
         .stdin(Stdio::null())
         .stdout(stdout.try_clone().map_err(|error| io_error(&error))?)

@@ -831,6 +831,10 @@ fn git(
             command.env_remove(name);
         }
     }
+    // Git runs repository hooks; they must not inherit server credentials.
+    for name in model::process::private_environment() {
+        command.env_remove(name);
+    }
     command
         .env("GIT_TERMINAL_PROMPT", "0")
         .env("GIT_SSH_COMMAND", "ssh -oBatchMode=yes");

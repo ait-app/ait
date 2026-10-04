@@ -32,6 +32,9 @@ impl Transport {
         cwd: &str,
     ) -> Result<Self, AgentSessionError> {
         let mut command = Command::new(&client.program);
+        for name in model::process::private_environment() {
+            command.env_remove(name);
+        }
         command
             .args(["--profile", "acp"])
             .current_dir(cwd)

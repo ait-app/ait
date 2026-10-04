@@ -144,6 +144,9 @@ async fn run(
     if cancel.is_cancelled() {
         return Err(Error::Cancelled);
     }
+    for name in model::process::private_environment() {
+        command.env_remove(name);
+    }
     command
         .kill_on_drop(true)
         .stdin(if input.is_some() {

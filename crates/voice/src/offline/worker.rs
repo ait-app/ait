@@ -41,7 +41,11 @@ pub(super) struct Worker {
 
 impl Worker {
     pub(super) fn spawn(program: &Path) -> Result<Self, Error> {
-        let mut child = Command::new(program)
+        let mut command = Command::new(program);
+        for name in model::process::private_environment() {
+            command.env_remove(name);
+        }
+        let mut child = command
             .arg("--speech-worker")
             .stdin(Stdio::piped())
             .stdout(Stdio::piped())
