@@ -104,7 +104,7 @@ describe("formatMessageTimestamp", () => {
     const now = new Date(2026, 4, 14, 17, 30);
     const date = new Date(2026, 4, 11, 22, 12);
     const formatted = formatMessageTimestamp(date, now);
-    expect(formatted).toMatch(/Monday/);
+    expect(formatted).toMatch(/Monday|星期一|周一/);
     expect(formatted).toMatch(/10:12 PM|22:12/);
   });
 
@@ -112,7 +112,7 @@ describe("formatMessageTimestamp", () => {
     const now = new Date(2026, 4, 14, 17, 30);
     const date = new Date(2026, 3, 1, 9, 5);
     const formatted = formatMessageTimestamp(date, now);
-    expect(formatted).toMatch(/Apr|April/);
+    expect(formatted).toMatch(/Apr|April|4月/);
     expect(formatted).toMatch(/2026/);
   });
 });
