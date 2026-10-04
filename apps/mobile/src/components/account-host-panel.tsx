@@ -1,14 +1,21 @@
 import React, { useRef, useState } from "react";
-import { Keyboard, Platform, Pressable, Text, TextInput, View } from "react-native";
+import { Keyboard, Pressable, Text, TextInput, View } from "react-native";
 import { useRouter } from "expo-router";
 import { StyleSheet } from "react-native-unistyles";
+import { useTranslation } from "react-i18next";
 import { Button } from "./ui/button";
 import { accountCommand, useAccountState, type AccountHost } from "@/runtime/account-state";
 
-export function AccountHostPanel({ onConnected }: { onConnected?: (serverId: string) => void }) {
+export function AccountHostPanel({
+  onConnected,
+  showHosts = true,
+}: {
+  onConnected?: (serverId: string) => void;
+  showHosts?: boolean;
+}) {
+  const { t } = useTranslation();
   const account = useAccountState();
   const router = useRouter();
-  const isAndroidClient = Platform.OS === "android";
   // Follow the account snapshot until the user edits the optional override.
   const [centerOverride, setCenterOverride] = useState<string | null>(null);
   const center = centerOverride ?? account.center;
@@ -26,7 +33,7 @@ export function AccountHostPanel({ onConnected }: { onConnected?: (serverId: str
     try {
       await work();
     } catch (error) {
-      setError(error instanceof Error ? error.message : "Request failed.");
+      setError(error instanceof Error ? error.message : t("onlineService.requestFailed"));
     } finally {
       busyRef.current = false;
       setBusy(false);
@@ -56,20 +63,15 @@ export function AccountHostPanel({ onConnected }: { onConnected?: (serverId: str
 
   return (
     <View style={styles.panel} testID="account-host-panel">
-      <Text style={styles.title}>Account and online hosts</Text>
       {account.status === "logged_out" ? (
         <>
-          <Text style={styles.hint}>
-            {isAndroidClient
-              ? "Sign in to connect to your online computers and continue working."
-              : "Sign in to bring this host online, then select another host on your account to continue working."}
-          </Text>
+          <Text style={styles.hint}>{t("onlineService.loginDescription")}</Text>
           <TextInput
             style={styles.input}
             value={email}
             onChangeText={setEmail}
-            placeholder="Email"
-            accessibilityLabel="Email"
+            placeholder={t("onlineService.email")}
+            accessibilityLabel={t("onlineService.email")}
             inputMode="email"
             keyboardType="email-address"
             autoComplete="email"
@@ -84,15 +86,18 @@ export function AccountHostPanel({ onConnected }: { onConnected?: (serverId: str
             style={styles.input}
             value={password}
             onChangeText={setPassword}
-            placeholder="Password"
-            accessibilityLabel="Password"
+            placeholder={t("onlineService.password")}
+            accessibilityLabel={t("onlineService.password")}
             secureTextEntry
+            autoComplete="current-password"
+            textContentType="password"
+            maxLength={512}
             editable={!busy}
             onSubmitEditing={login}
             testID="account-password"
           />
           <Button disabled={loginDisabled} onPress={login} testID="account-login">
-            {busy ? "Signing in..." : "Sign in"}
+            {t(busy ? "onlineService.signingIn" : "onlineService.signIn")}
           </Button>
           <Pressable
             accessibilityRole="button"
@@ -101,18 +106,22 @@ export function AccountHostPanel({ onConnected }: { onConnected?: (serverId: str
             testID="account-service-settings"
           >
             <Text style={styles.hint}>
-              {showServiceSettings ? "Hide service settings" : "Service settings"}
+              {t(
+                showServiceSettings
+                  ? "onlineService.hideServiceSettings"
+                  : "onlineService.serviceSettings",
+              )}
             </Text>
           </Pressable>
           {showServiceSettings ? (
             <>
-              <Text style={styles.hint}>Service URL (leave blank to use the default)</Text>
+              <Text style={styles.hint}>{t("onlineService.serviceUrlHint")}</Text>
               <TextInput
                 style={styles.input}
                 value={center}
                 onChangeText={setCenterOverride}
                 placeholder="https://your-server.example/api"
-                accessibilityLabel="Service URL"
+                accessibilityLabel={t("onlineService.serviceUrl")}
                 autoCapitalize="none"
                 autoCorrect={false}
                 editable={!busy}
@@ -125,65 +134,69 @@ export function AccountHostPanel({ onConnected }: { onConnected?: (serverId: str
         <>
           <Text style={styles.hint}>
             {account.name} ·{" "}
-            {isAndroidClient
-              ? account.status === "online"
-                ? "Connected to account"
-                : "Connecting to account..."
-              : account.hostOnline
-                ? "This host is online"
-                : "Waiting for this host to come online"}
+            {t(
+              account.status === "online" ? "onlineService.connected" : "onlineService.connecting",
+            )}
           </Text>
+          <Text style={styles.hint}>{account.center}</Text>
           <View style={styles.actions}>
             <Button
               disabled={busy}
               onPress={() => void runAccountAction(() => accountCommand("account_refresh"))}
             >
-              Refresh
+              {t("onlineService.refresh")}
             </Button>
             <Button
               disabled={busy}
               onPress={() => void runAccountAction(() => accountCommand("account_logout"))}
             >
-              Sign out
+              {t("onlineService.signOut")}
             </Button>
           </View>
-          <Text style={styles.hint}>
-            {account.stale
-              ? "Host list is out of date"
-              : `${account.hosts.length} other ${account.hosts.length === 1 ? "host" : "hosts"} online`}
-          </Text>
-          {account.hosts.map((host) => (
-            <Pressable
-              key={host.host_id}
-              disabled={busy}
-              style={styles.host}
-              accessibilityRole="button"
-              testID={`account-host-${host.host_id}`}
-              onPress={() => selectHost(host)}
-            >
-              <Text style={styles.title}>
-                {host.name}
-                {account.selected?.host_id === host.host_id ? " · Selected" : ""}
+          <Text style={styles.hint}>{t("onlineService.signOutHint")}</Text>
+          {showHosts ? (
+            <>
+              <Text style={styles.title}>{t("onlineService.onlineHosts")}</Text>
+              <Text style={styles.hint}>
+                {account.stale
+                  ? t("onlineService.staleHosts")
+                  : t("onlineService.hostCount", { count: account.hosts.length })}
               </Text>
-              <Text style={styles.hint}>{host.platform}</Text>
-            </Pressable>
-          ))}
-          {!account.stale && !account.hosts.length ? (
-            <Text style={styles.hint}>
-              Open Ait on another machine and sign in with the same account. It will appear here
-              automatically.
-            </Text>
-          ) : null}
-          {account.selected ? (
-            <Button
-              disabled={busy}
-              onPress={() =>
-                void runAccountAction(() => accountCommand("account_select", { hostId: null }))
-              }
-            >
-              Disconnect remote host
-            </Button>
-          ) : null}
+              {account.hosts.map((host) => (
+                <Pressable
+                  key={host.host_id}
+                  disabled={busy}
+                  style={styles.host}
+                  accessibilityRole="button"
+                  testID={`account-host-${host.host_id}`}
+                  onPress={() => selectHost(host)}
+                >
+                  <Text style={styles.title}>
+                    {host.name}
+                    {account.selected?.host_id === host.host_id
+                      ? ` · ${t("onlineService.selected")}`
+                      : ""}
+                  </Text>
+                  <Text style={styles.hint}>{host.platform}</Text>
+                </Pressable>
+              ))}
+              {!account.stale && !account.hosts.length ? (
+                <Text style={styles.hint}>{t("onlineService.emptyHosts")}</Text>
+              ) : null}
+              {account.selected ? (
+                <Button
+                  disabled={busy}
+                  onPress={() =>
+                    void runAccountAction(() => accountCommand("account_select", { hostId: null }))
+                  }
+                >
+                  {t("onlineService.disconnectRemoteHost")}
+                </Button>
+              ) : null}
+            </>
+          ) : (
+            <Text style={styles.hint}>{t("onlineService.hostSettingsHint")}</Text>
+          )}
         </>
       )}
       {error || account.error ? <Text style={styles.error}>{error ?? account.error}</Text> : null}

@@ -33,6 +33,7 @@ async fn dispatch_group(
 ) -> Result<(), QueueError> {
     let outbound = context.outbound;
     match group {
+        Group::Relay => crate::relay_rpc::request(context, state).await,
         Group::Schedule(group) => {
             schedule::dispatch::dispatch(group, context, &state.schedule).await
         }

@@ -53,6 +53,8 @@ import {
 } from "@/i18n/locales";
 import { returnFromSettings, type SettingsView } from "@/navigation/settings-navigation";
 import { useHostRuntimeIsConnected, useHosts } from "@/runtime/host-runtime";
+import { supportsAccountRelay } from "@/runtime/account-state";
+import { OnlineServiceSection } from "@/screens/settings/online-service-section";
 import ProjectSettingsScreen from "@/screens/project-settings-screen";
 import ProjectsScreen from "@/screens/projects-screen";
 import { AppearanceSection } from "@/screens/settings/appearance/appearance-section";
@@ -101,6 +103,7 @@ import {
   Code2,
   FolderGit2,
   Gauge,
+  Globe,
   Info,
   Keyboard,
   Network,
@@ -139,10 +142,12 @@ interface SidebarSectionItem {
   icon: ComponentType<{ size: number; color: string }>;
   desktopOnly?: boolean;
   webOnly?: boolean;
+  accountOnly?: boolean;
 }
 
 const SIDEBAR_SECTION_ITEMS: SidebarSectionItem[] = [
   { id: "general", labelKey: "settings.sections.general", icon: Settings },
+  { id: "online-service", labelKey: "onlineService.title", icon: Globe, accountOnly: true },
   { id: "appearance", labelKey: "settings.sections.appearance", icon: Palette },
   {
     id: "layout",
@@ -1066,7 +1071,10 @@ function SettingsSidebar({
   const enableBuiltInDaemonOption = useEnableBuiltInDaemonOption();
   const isDesktopApp = isElectronRuntime();
   const items = SIDEBAR_SECTION_ITEMS.filter(
-    (item) => (!item.desktopOnly || isDesktopApp) && (!item.webOnly || isWeb),
+    (item) =>
+      (!item.desktopOnly || isDesktopApp) &&
+      (!item.webOnly || isWeb) &&
+      (!item.accountOnly || supportsAccountRelay()),
   );
   const insets = useSafeAreaInsets();
   const isDesktop = layout === "desktop";
@@ -1482,6 +1490,8 @@ export default function SettingsScreen({ view, openAddHostIntent = null }: Setti
             );
           case "appearance":
             return <AppearanceSection />;
+          case "online-service":
+            return supportsAccountRelay() ? <OnlineServiceSection /> : null;
           case "editor":
             return isWeb ? <EditorSection /> : null;
           case "shortcuts":

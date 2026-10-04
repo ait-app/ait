@@ -7,6 +7,7 @@ mod connection;
 mod files;
 mod listener;
 mod outbound;
+mod relay_rpc;
 mod terminal_activity;
 mod workspace_cleanup;
 

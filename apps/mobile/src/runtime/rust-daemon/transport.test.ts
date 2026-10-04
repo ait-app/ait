@@ -117,6 +117,73 @@ function harness(
 }
 
 describe("Rust protocol adapter", () => {
+  it("carries typed online service control through the SDK without replaying a grant", async () => {
+    const h = harness();
+    h.stopHello();
+    const client = new DaemonClient({
+      url: "ws://127.0.0.1:7316/v1/ws",
+      clientId: "online-service-test",
+      transportFactory: () => h.transport,
+      reconnect: { enabled: false },
+    });
+    const result = {
+      serverId: "server",
+      instanceId: "instance",
+      platform: "linux",
+      status: { online: false, connecting: false, epoch: null, error: null },
+    };
+    try {
+      const connected = client.connect();
+      h.ready();
+      await connected;
+      expect(client.getLastServerInfoMessage()?.features?.onlineServiceSync).toBe(true);
+      const status = client.getOnlineServiceStatus();
+      const statusRequest = h.last(1);
+      expect(statusRequest.method).toBe("relay.status.request");
+      h.sockets[1].message({
+        type: "response",
+        request_id: statusRequest.request_id,
+        method: statusRequest.method,
+        result,
+      });
+      expect(await status).toMatchObject(result);
+      const grant = {
+        center_url: "https://example.test/api",
+        control_ticket: "a".repeat(64),
+        node_session_id: "00000000-0000-4000-8000-000000000001",
+      };
+      const start = client.connectOnlineService(grant);
+      const startRequest = h.last(1);
+      expect(startRequest).toMatchObject({ method: "relay.start.request", params: grant });
+      h.sockets[1].message({
+        type: "response",
+        request_id: startRequest.request_id,
+        method: startRequest.method,
+        result: { ...result, status: { ...result.status, connecting: true } },
+      });
+      expect((await start).status.connecting).toBe(true);
+      const stop = client.disconnectOnlineService();
+      const stopRequest = h.last(1);
+      expect(stopRequest.method).toBe("relay.stop.request");
+      h.sockets[1].message({
+        type: "response",
+        request_id: stopRequest.request_id,
+        method: stopRequest.method,
+        result,
+      });
+      expect((await stop).status.online).toBe(false);
+      await client.close();
+      await expect(client.connectOnlineService(grant)).rejects.toThrow();
+      expect(
+        h.sockets[1].send.mock.calls.filter(
+          ([message]) => JSON.parse(message).method === "relay.start.request",
+        ),
+      ).toHaveLength(1);
+    } finally {
+      await client.close();
+    }
+  });
+
   it("passes the connected server's software version to the SDK", async () => {
     const h = harness();
     h.stopHello();
@@ -349,8 +416,8 @@ describe("Rust protocol adapter", () => {
   });
 
   it("maps the scoped pinned surface and stays within Rust's per-connection limits", () => {
-    expect(Object.keys(METHODS)).toHaveLength(171);
-    expect(new Set(Object.values(METHODS).map((spec) => spec.method)).size).toBe(168);
+    expect(Object.keys(METHODS)).toHaveLength(174);
+    expect(new Set(Object.values(METHODS).map((spec) => spec.method)).size).toBe(171);
     for (const capabilities of CHANNEL_CAPABILITIES) {
       expect(capabilities.length).toBeLessThanOrEqual(64);
       expect(capabilities.some((name) => /^(hub|chat|loop|plugin)[./]/.test(name))).toBe(false);

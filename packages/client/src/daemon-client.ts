@@ -4993,6 +4993,24 @@ export class DaemonClient {
     });
   }
 
+  async getOnlineServiceStatus() {
+    return this.sendNamespacedCorrelatedSessionRequest<"relay.status.response">({
+      message: { type: "relay.status.request" },
+    });
+  }
+
+  async connectOnlineService(grant: import("@ait/protocol/relay").RelayControlGrant) {
+    return this.sendNamespacedCorrelatedSessionRequest<"relay.start.response">({
+      message: { type: "relay.start.request", ...grant },
+    });
+  }
+
+  async disconnectOnlineService() {
+    return this.sendNamespacedCorrelatedSessionRequest<"relay.stop.response">({
+      message: { type: "relay.stop.request" },
+    });
+  }
+
   async reloadDaemonConfig(requestId?: string): Promise<DaemonConfigReloadResponse["payload"]> {
     this.requireDaemonConfigReloadSupport();
     return this.sendNamespacedCorrelatedSessionRequest({

@@ -2,6 +2,7 @@ import { en, type TranslationResources } from "./en";
 import { pluginSettings } from "./plugin-settings";
 
 export const ru: TranslationResources = {
+  onlineService: en.onlineService,
   paneFind: {
     searchFailed:
       "Не удалось выполнить поиск в чате. Проверьте подключение к хосту и повторите попытку.",

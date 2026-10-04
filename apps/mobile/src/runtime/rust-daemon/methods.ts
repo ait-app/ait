@@ -1,5 +1,6 @@
 // Generated from crates/protocol/src/methods.rs; pinned Paseo 2c8e8a8.
 // Verify with scripts/check-paseo-client-methods.py; response aliases are adapter-owned.
+import { RELAY_METHODS } from "./relay-methods";
 export interface MethodSpec {
   method: string;
   kind: "request" | "event" | "response";
@@ -8,6 +9,7 @@ export interface MethodSpec {
 }
 
 export const METHODS: Readonly<Record<string, MethodSpec>> = {
+  ...RELAY_METHODS,
   "daemon.get_status.request": {
     method: "daemon.get_status.request",
     kind: "request",

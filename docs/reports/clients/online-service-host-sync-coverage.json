@@ -1,0 +1,208 @@
+{
+  "base_revision": "3a13d02bea2c63592f61727e382678f76566a40c",
+  "source_fingerprint": "799e2c556b95f46c69d8c23f2687a430ffed1050246eb825d23092c2bbcddafd",
+  "source_file_count": 845,
+  "changed_rust_sources": [
+    {
+      "path": "bins/daemon/tests/process/catalog.rs",
+      "sha256": "c94e567955eecdd184d96bac0fe7e62e7e32fc0c093be8255e42452f3d147596"
+    },
+    {
+      "path": "crates/api/src/capabilities.rs",
+      "sha256": "04bc2e687a313f9e8e42f1b521619d836a95ecb8d37979336803d5c07939de50"
+    },
+    {
+      "path": "crates/api/src/capabilities/tests.rs",
+      "sha256": "4f4739bf6af6cce55b141b3848f3017dedc58d7a1e3440930a7160e65746d593"
+    },
+    {
+      "path": "crates/api/src/connection/dispatch.rs",
+      "sha256": "0607f680eb9c94eb30b4a356baa5b2d68eddf182ba43d2414dd95ea0017872bc"
+    },
+    {
+      "path": "crates/api/src/connection/routing/tests.rs",
+      "sha256": "a14284c972a1b7dcb4e8bd3698f3991706a296a0d1a077359c000132d79a8cbe"
+    },
+    {
+      "path": "crates/api/src/connection/single.rs",
+      "sha256": "19c886cfc4cb545c331d686aff9d24d9df12c95404f14b0dc4159bd5b9526224"
+    },
+    {
+      "path": "crates/api/src/lib.rs",
+      "sha256": "9c832d039c4419d023a51f4fb5c86782e6829bbae828a4be82f7f8a9992df60f"
+    },
+    {
+      "path": "crates/api/src/relay_rpc.rs",
+      "sha256": "dc002f401db24d242e43a6518ec7080cade1df6f43433eb54d34650d62c8d2ec"
+    },
+    {
+      "path": "crates/api/src/tests.rs",
+      "sha256": "eeb55046282e590d9855ce73f3ec44d578a0974cb85dd133f0f7b747e1b7687c"
+    },
+    {
+      "path": "crates/api/src/tests/relay_rpc.rs",
+      "sha256": "f6669c10d71f6378cb3bfd2f3936464f5bc9f74c60f25e03e571785bc3e98c97"
+    }
+  ],
+  "measurement_date": "2026-10-05",
+  "revision_note": "The commit containing this report includes the measured Rust sources. The source fingerprint and changed-source hashes identify the measured worktree independently of documentation edits.",
+  "source_fingerprint_method": "SHA-256 of sorted tracked and non-ignored untracked Cargo.lock, Cargo.toml, bins/** and crates/** path/SHA-256 records, serialized as compact JSON with sorted keys.",
+  "scope": "Cargo workspace, default features, macOS aarch64, rustc 1.98.1, cargo-llvm-cov 0.8.4, default source filtering, no additional production-file exclusions, no instrumented doctests or build scripts, serial tests; Linux, Windows, Android and iOS not measured.",
+  "environment": {
+    "CARGO_LLVM_COV_TARGET_DIR": "$PWD/.tmp/online-service-pr/llvm-cov-target (fresh independent build directory)",
+    "SHERPA_ONNX_LIB_DIR": "Installed sherpa-onnx-v1.13.8-osx-arm64-static-lib/lib; reused without network download"
+  },
+  "commands": [
+    "cargo test --workspace --locked --offline -- --test-threads=1",
+    "cargo build --workspace --locked --offline",
+    "cargo clippy --workspace --all-targets --locked --offline -- -D warnings",
+    "cargo fmt --all --check",
+    "cargo llvm-cov --workspace --html --locked --offline -- --test-threads=1",
+    "cargo llvm-cov report --json --summary-only --locked --offline --output-path .tmp/online-service-pr/coverage-summary.json",
+    "cargo llvm-cov report --lcov --locked --offline --output-path .tmp/online-service-pr/coverage.lcov"
+  ],
+  "workspace_lines": {
+    "count": 52090,
+    "covered": 49214,
+    "percent": 94.47878671530044
+  },
+  "crate_lines": {
+    "api": {
+      "covered": 1975,
+      "count": 2134,
+      "percent": 92.54920337394564
+    },
+    "browser": {
+      "covered": 706,
+      "count": 725,
+      "percent": 97.37931034482759
+    },
+    "daemon": {
+      "covered": 918,
+      "count": 963,
+      "percent": 95.32710280373831
+    },
+    "domain": {
+      "covered": 121,
+      "count": 121,
+      "percent": 100.0
+    },
+    "filesystem": {
+      "covered": 11144,
+      "count": 11737,
+      "percent": 94.94760160177218
+    },
+    "metadata": {
+      "covered": 7526,
+      "count": 7950,
+      "percent": 94.66666666666667
+    },
+    "model": {
+      "covered": 737,
+      "count": 777,
+      "percent": 94.85199485199485
+    },
+    "protocol": {
+      "covered": 75,
+      "count": 75,
+      "percent": 100.0
+    },
+    "provider": {
+      "covered": 21449,
+      "count": 22834,
+      "percent": 93.93448366471051
+    },
+    "relay": {
+      "covered": 422,
+      "count": 464,
+      "percent": 90.94827586206897
+    },
+    "schedule": {
+      "covered": 805,
+      "count": 823,
+      "percent": 97.81287970838396
+    },
+    "terminal": {
+      "covered": 1486,
+      "count": 1543,
+      "percent": 96.30589760207388
+    },
+    "voice": {
+      "covered": 1850,
+      "count": 1944,
+      "percent": 95.16460905349794
+    }
+  },
+  "changed_production_files": {
+    "crates/api/src/capabilities.rs": {
+      "lines": {
+        "count": 107,
+        "covered": 107,
+        "percent": 100.0
+      },
+      "uncovered_lines": []
+    },
+    "crates/api/src/connection/dispatch.rs": {
+      "lines": {
+        "count": 110,
+        "covered": 106,
+        "percent": 96.36363636363636
+      },
+      "uncovered_lines": [136]
+    },
+    "crates/api/src/connection/single.rs": {
+      "lines": {
+        "count": 205,
+        "covered": 150,
+        "percent": 73.17073170731707
+      },
+      "uncovered_lines": [
+        69, 93, 94, 95, 96, 97, 114, 115, 136, 137, 147, 150, 151, 158, 165, 166, 167, 168, 169,
+        170, 173, 174, 175, 176, 177, 178, 181, 182, 183, 184, 185, 186, 191, 192, 193, 194, 195,
+        196, 217, 229, 230, 232, 235, 245, 246, 248, 249, 250, 252, 255, 258, 261, 262, 263
+      ]
+    },
+    "crates/api/src/lib.rs": {
+      "lines": {
+        "count": 490,
+        "covered": 453,
+        "percent": 92.44897959183673
+      },
+      "uncovered_lines": [
+        329, 330, 331, 390, 401, 407, 514, 515, 516, 518, 519, 520, 521, 522, 523, 524, 525, 526,
+        527, 528, 529, 530, 531, 533, 534, 535, 536, 559, 629, 652, 657, 662
+      ]
+    },
+    "crates/api/src/relay_rpc.rs": {
+      "lines": {
+        "count": 30,
+        "covered": 28,
+        "percent": 93.33333333333333
+      },
+      "uncovered_lines": [37, 42]
+    }
+  },
+  "ordinary_workspace_tests": {
+    "passed": 1784,
+    "failed": 0,
+    "ignored": 3
+  },
+  "instrumented_workspace_tests": {
+    "passed": 1784,
+    "failed": 0,
+    "ignored": 3
+  },
+  "ignored_tests": [
+    "local::claude::tests::process::installed_claude_control_protocol_discovers_models_without_inference",
+    "local::claude::tests::process::parity::installed_claude_completes_a_native_turn_and_reopens_history",
+    "local::codex::tests::installed::installed_codex_completes_a_native_turn_and_reopens_history"
+  ],
+  "baseline": null,
+  "baseline_note": "No comparable same-platform, same-tool baseline is available. Historical committed reports used Linux x86_64 and a different cargo-llvm-cov version; no percentage delta is claimed.",
+  "important_uncovered_behavior": [
+    "Actual online center TLS interoperability and Android device end-to-end synchronization were not exercised.",
+    "The new authenticated relay RPC was tested for negotiation, invalid grants, status, local startup and stop; unavailable center, outbound queue closure and all asynchronous cancellation races are not exhaustively covered.",
+    "Coverage measures Rust executable lines only, not TypeScript UI/account state coverage or independent daemon renewal after the application exits."
+  ],
+  "uncovered_lines_note": "uncovered_lines lists LCOV DA records with zero hits. These source line locations need not equal LLVM summary line-count differences for files with instantiated functions."
+}

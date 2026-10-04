@@ -1,4 +1,5 @@
 import { AccountRelayLifecycle } from "@/runtime/account-state";
+import { OnlineServiceHostSyncLifecycle } from "@/runtime/online-service-host-sync";
 import { legacyFavoriteProfileMigration } from "@/agent-profiles/migration";
 import { LegacyAgentSkillsMigration } from "@/agent-skills/legacy-migration";
 import { AppearanceProvider } from "@/appearance/provider";
@@ -893,6 +894,7 @@ function RuntimeProviders({ children }: { children: ReactNode }) {
   return (
     <HostRuntimeBootstrapProvider>
       <AccountRelayLifecycle />
+      <OnlineServiceHostSyncLifecycle />
       <PushNotificationRouter />
       <SidebarCalloutProvider>
         <ProvidersWrapper>{children}</ProvidersWrapper>

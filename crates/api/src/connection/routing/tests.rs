@@ -33,7 +33,7 @@ fn hierarchy_routes_every_implemented_method_to_exactly_one_handler() {
             assert_eq!(route.handler, Some(expected), "{method}");
         }
     }
-    assert_eq!(implemented.len(), 176);
+    assert_eq!(implemented.len(), 179);
 
     let advertised = crate::registered_capabilities(
         &implemented
@@ -41,7 +41,7 @@ fn hierarchy_routes_every_implemented_method_to_exactly_one_handler() {
             .map(|method| (*method).to_owned())
             .collect::<Vec<_>>(),
     );
-    assert_eq!(advertised.len(), 177);
+    assert_eq!(advertised.len(), 180);
     assert!(
         advertised
             .iter()
