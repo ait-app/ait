@@ -171,7 +171,7 @@ impl ApprovalSink for DenyApprovals {
 
 #[derive(Debug)]
 pub(super) enum ProgressEvent {
-    UserMessage(Box<crate::protocol::timeline::NativeItem>),
+    Timeline(Box<crate::protocol::timeline::NativeItem>),
     TextDelta { id: String, delta: String },
 }
 

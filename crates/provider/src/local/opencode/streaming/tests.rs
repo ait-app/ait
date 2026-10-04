@@ -26,7 +26,7 @@ fn texts(stream: &mut Stream, event: &Value) -> Vec<String> {
         .into_iter()
         .map(|event| match event {
             ProgressEvent::TextDelta { delta, .. } => delta,
-            ProgressEvent::UserMessage(_) => panic!("text materialization does not emit inputs"),
+            ProgressEvent::Timeline(_) => panic!("text materialization does not emit history"),
         })
         .collect()
 }

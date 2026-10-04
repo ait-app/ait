@@ -48,6 +48,7 @@
 - [Provider 能力清单](plans/provider-parity.md)：当前能力与后续工作。
 - [大 Diff 加载与超限降级](reports/workspace/large-diff-loading.md)：输出预算、连接保持与验证结果。
 - [Agent 创建任务预算竞争](reports/providers/agent-creation-resource-contention.md)：DSH 创建报错复现与后台 fetch 失败隔离验证。
+- [OpenCode 工具与结论顺序修复](reports/providers/opencode-tool-order.md)：流式前序条目发布与旧历史修复。
 - [OpenCode 上游 PR 验证](reports/providers/opencode-upstream-pr.md)：上游整合、冲突处理与测试范围。
 - [验证报告分类索引](reports/README.md)：实现、兼容性、发布及覆盖率记录。
 - [2026-10-03 仓库审计](reports/daemon/repository-audit-2026-10-03.md)：审计范围、已修复问题与验证限制。
