@@ -1,5 +1,13 @@
 # Ait changelog
 
+## 0.0.16 - 2026-10-04
+
+- Push workspace and agent directory changes to connected clients, so Hosts and running sessions update promptly.
+- Preserve terminal selections when a resize claims the same terminal dimensions.
+- Show Codex model discovery and capacity errors while keeping hidden models excluded.
+- Stabilize agent creation under task-budget contention and isolate background Git fetch failures.
+- Move Android APK publishing to a standalone manual workflow; version tags continue to publish desktop builds only.
+
 ## 0.0.15 - 2026-10-03
 
 - Add native OpenCode sessions with model discovery, streaming, tool approvals, cancellation, and conversation restore.
