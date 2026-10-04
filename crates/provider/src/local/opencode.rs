@@ -8,6 +8,7 @@ mod history;
 mod http;
 mod live;
 mod projection;
+mod publication;
 mod runtime;
 mod session;
 mod streaming;

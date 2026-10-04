@@ -27,7 +27,7 @@ pub(in crate::local::opencode) struct StateData {
     pub(in crate::local::opencode) permission: Value,
     pub(in crate::local::opencode) permission_updates: usize,
     model: Value,
-    history: Vec<Value>,
+    pub(in crate::local::opencode) history: Vec<Value>,
     pub(in crate::local::opencode) submissions: usize,
     pub(in crate::local::opencode) reject_ack: bool,
     pub(in crate::local::opencode) busy: bool,
@@ -36,6 +36,7 @@ pub(in crate::local::opencode) struct StateData {
     pub(in crate::local::opencode) pending_permissions: Vec<Value>,
     pub(in crate::local::opencode) replies: Vec<Value>,
     pub(in crate::local::opencode) stream_text: bool,
+    pub(in crate::local::opencode) stream_after_permission: bool,
     pub(in crate::local::opencode) unfinished_while_busy: bool,
     pub(in crate::local::opencode) omit_input_history: bool,
     pub(in crate::local::opencode) stream_events: Vec<Value>,
@@ -84,6 +85,7 @@ impl Fixture {
             pending_permissions: Vec::new(),
             replies: Vec::new(),
             stream_text: false,
+            stream_after_permission: false,
             unfinished_while_busy: false,
             omit_input_history: false,
             stream_events: Vec::new(),
@@ -120,18 +122,17 @@ async fn handle(State(state): State<Arc<Mutex<StateData>>>, request: Request) ->
             .json_data(json!({"type":"server.connected"}))
             .unwrap();
         let mut events = vec![Ok::<_, Infallible>(event)];
-        let state = state.lock().unwrap();
+        let data = state.lock().unwrap();
         events.extend(
-            state
-                .stream_events
+            data.stream_events
                 .iter()
                 .map(|value| Ok(Event::default().json_data(value).unwrap())),
         );
-        if state.stream_text {
-            if state.version == Version::V1 {
+        if data.stream_text {
+            if data.version == Version::V1 {
                 events.push(Ok(Event::default().json_data(json!({"type":"message.updated","properties":{"info":{"id":"msg_0123456789abABCDEFGHIJKLM1","sessionID":"ses_one","role":"assistant"}}})).unwrap()));
             }
-            let value = match state.version {
+            let value = match data.version {
                 Version::V1 => {
                     json!({"type":"message.part.updated","properties":{"part":{"id":"prt_0123456789abABCDEFGHIJKLM1","messageID":"msg_0123456789abABCDEFGHIJKLM1","sessionID":"ses_one","type":"text","text":"ans"}}})
                 }
@@ -141,7 +142,21 @@ async fn handle(State(state): State<Arc<Mutex<StateData>>>, request: Request) ->
             };
             events.push(Ok(Event::default().json_data(value).unwrap()));
         }
-        return Sse::new(tokio_stream::iter(events).chain(tokio_stream::pending())).into_response();
+        let wait = data.stream_after_permission;
+        drop(data);
+        let stream =
+            tokio_stream::iter(events.into_iter().enumerate()).then(move |(index, event)| {
+                let state = state.clone();
+                async move {
+                    if wait && index > 0 {
+                        while state.lock().unwrap().replies.is_empty() {
+                            tokio::time::sleep(std::time::Duration::from_millis(5)).await;
+                        }
+                    }
+                    event
+                }
+            });
+        return Sse::new(stream.chain(tokio_stream::pending())).into_response();
     }
     let body = axum::body::to_bytes(request.into_body(), 2 * 1024 * 1024)
         .await
@@ -253,7 +268,7 @@ async fn handle(State(state): State<Arc<Mutex<StateData>>>, request: Request) ->
         ("POST", "/permission/perm1/reply" | "/api/session/ses_one/permission/perm1/reply") => {
             state.replies.push(body.clone());
             state.pending_permissions.clear();
-            state.busy = false;
+            state.busy = state.stream_after_permission;
             Value::Null
         }
         ("POST", "/session/ses_one/abort" | "/api/session/ses_one/interrupt") => {

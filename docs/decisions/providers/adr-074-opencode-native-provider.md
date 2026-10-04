@@ -25,7 +25,9 @@ AgentManager 的输入接纳和 timeline 持久化。Claude Code 已通过 ADR-0
    HTTP 限定 `127.0.0.1`，禁用代理与重定向。Unix 独立进程组由 Session 回收；
    observer 由取消令牌与 AbortOnDrop 管理，关闭有时限。认证仍由本机 OpenCode 管理。
 3. start 先等待 SSE 就绪，再提交一次新输入；丢失响应只能核对历史，不重发。
-   后台 observer 把有界进度与审批事件交给 daemon actor；完成后发布原生 timeline。
+   后台 observer 把有界进度与审批事件交给 daemon actor；每个文本项首次增量前，
+   按原生历史发布其已完成的前序条目（用户、说明文字、工具与推理），完成后核对完整 timeline。
+   前序条目尚未写全时，该回合余下输出等最终历史确认；不重发输入。
    v2 在全分页历史前后核对持久执行日志及 idle，未排空/不完整历史不能完成。
 4. 原生记录转换为 Paseo display items。原生消息 ID、客户端消息 ID 映射与 persistence
    handle 支持连续对话和重启恢复；历史读取不修改 permissions/model，也不提交输入。
