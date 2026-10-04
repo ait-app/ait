@@ -269,6 +269,28 @@ dependencies = [
 ]
 
 [[package]]
+name = "bonsai"
+version = "0.0.17"
+dependencies = [
+ "futures-util",
+ "model",
+ "rusqlite",
+ "rustls",
+ "secrecy",
+ "serde",
+ "serde_json",
+ "sha2",
+ "tempfile",
+ "thiserror 2.0.20",
+ "tokio",
+ "tokio-tungstenite",
+ "tokio-util",
+ "tracing",
+ "url",
+ "uuid",
+]
+
+[[package]]
 name = "browser"
 version = "0.0.17"
 dependencies = [
@@ -535,6 +557,7 @@ dependencies = [
  "anyhow",
  "api",
  "axum",
+ "bonsai",
  "browser",
  "chrono",
  "clap",

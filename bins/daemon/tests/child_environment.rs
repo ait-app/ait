@@ -12,6 +12,7 @@ use std::path::{Path, PathBuf};
 use anyhow as _;
 use api as _;
 use axum as _;
+use bonsai as _;
 use browser as _;
 use chrono as _;
 use clap as _;
@@ -44,6 +45,11 @@ const STRIP: &str = "model::process::private_environment()";
 /// the credentials for those constructors. Constructors that only signal a process (`/bin/kill`,
 /// `taskkill`) run no foreign code and are counted with the file that owns them.
 const SPAWN_SITES: &[(&str, usize, &str)] = &[
+    (
+        "crates/bonsai/src/hello.rs",
+        1,
+        "crates/bonsai/src/hello.rs",
+    ),
     (
         "crates/filesystem/src/local/checkout.rs",
         1,

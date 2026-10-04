@@ -29,7 +29,23 @@ fn start_with_environment(
     path: Option<&std::ffi::OsStr>,
     extra: &[(&str, &str)],
 ) -> Process {
+    start_logged(directory, log, path, extra, "info")
+}
+
+fn start_logged(
+    directory: &Path,
+    log: &Path,
+    path: Option<&std::ffi::OsStr>,
+    extra: &[(&str, &str)],
+    level: &str,
+) -> Process {
     let mut command = Command::new(env!("CARGO_BIN_EXE_daemon"));
+    // A developer shell may export real Bonsai runtime credentials; test servers never connect.
+    for (name, _) in std::env::vars_os() {
+        if name.to_string_lossy().starts_with("BONSAI_RUNTIME_") {
+            command.env_remove(name);
+        }
+    }
     command
         .args([
             "--data-dir",
@@ -37,7 +53,7 @@ fn start_with_environment(
             "--listen",
             "127.0.0.1:0",
             "--log-level",
-            "info",
+            level,
         ])
         .env("AIT_SERVER_TOKEN", TOKEN)
         .env("AIT_SPEECH_PROVIDER", "disabled")
@@ -98,6 +114,9 @@ mod opencode;
 
 #[path = "deepseek_harness.rs"]
 mod deepseek_harness;
+
+#[path = "bonsai_runtime.rs"]
+mod bonsai_runtime;
 
 #[path = "native.rs"]
 mod native;
@@ -219,6 +238,9 @@ async fn signal_shutdown_releases_process_lock_and_preserves_identity() {
         .await
         .unwrap();
     let second = Command::new(env!("CARGO_BIN_EXE_daemon"))
+        .env_remove("BONSAI_RUNTIME_URL")
+        .env_remove("BONSAI_RUNTIME_ID")
+        .env_remove("BONSAI_RUNTIME_TOKEN")
         .args([
             "--data-dir",
             directory.to_str().unwrap(),

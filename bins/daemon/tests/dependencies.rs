@@ -7,6 +7,7 @@ use std::process::Command;
 use anyhow as _;
 use api as _;
 use axum as _;
+use bonsai as _;
 use browser as _;
 use chrono as _;
 use clap as _;
@@ -46,6 +47,7 @@ fn violations(packages: &[Value]) -> Vec<String> {
             "daemon" => &[
                 "voice",
                 "schedule",
+                "bonsai",
                 "browser",
                 "model",
                 "metadata",
@@ -69,7 +71,7 @@ fn violations(packages: &[Value]) -> Vec<String> {
                 "filesystem",
             ],
             "provider" => &["domain", "metadata", "model"],
-            "protocol" | "metadata" | "voice" | "schedule" | "browser" => &["model"],
+            "protocol" | "metadata" | "voice" | "schedule" | "browser" | "bonsai" => &["model"],
             "filesystem" | "terminal" => &["metadata", "model"],
             "domain" | "model" | "relay" => &[],
             _ => {
@@ -339,4 +341,30 @@ fn relay_is_a_leaf_transport_owned_by_the_api() {
         ];
         assert_eq!(violations(&packages), [format!("relay -> {dependency}")]);
     }
+}
+
+#[test]
+fn bonsai_runtime_depends_only_on_model() {
+    for dependency in [
+        "api",
+        "protocol",
+        "provider",
+        "metadata",
+        "filesystem",
+        "terminal",
+        "domain",
+        "schedule",
+        "relay",
+        "ait-domain",
+    ] {
+        let packages = [
+            json!({"id":"bonsai", "name":"bonsai", "dependencies":[{"name":dependency, "path":"../dependency"}]}),
+        ];
+        assert_eq!(violations(&packages), [format!("bonsai -> {dependency}")]);
+    }
+    let packages = [json!({"id":"bonsai", "name":"bonsai", "dependencies":[
+        {"name":"model", "path":"../model"},
+        {"name":"tokio"}, {"name":"tokio-tungstenite"}, {"name":"rusqlite"}
+    ]})];
+    assert!(violations(&packages).is_empty());
 }
