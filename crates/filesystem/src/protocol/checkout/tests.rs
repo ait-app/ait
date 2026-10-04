@@ -21,6 +21,7 @@ fn capabilities_use_only_canonical_checkout_names() {
             "checkout.commit.request",
             "checkout.merge.request",
             "checkout.merge_from_base.request",
+            "checkout.reset_workspace.request",
             "checkout.pull.request",
             "checkout.push.request",
             "checkout.discard_changes.request",

@@ -806,10 +806,14 @@ export const ar: TranslationResources = {
           pending: "جار الدمج...",
           success: "تم الدمج",
         },
-        mergeFromBase: {
-          label: "التحديث من{{baseRef}}",
-          pending: "جارٍ التحديث...",
-          success: "تم التحديث",
+        resetWorkspace: {
+          label: "إعادة ضبط مساحة العمل",
+          pending: "جارٍ إعادة الضبط...",
+          success: "تمت إعادة ضبط مساحة العمل",
+          confirmTitle: "إعادة ضبط مساحة العمل؟",
+          confirmMessage:
+            "جلب أحدث فرع افتراضي من origin، واستعادة اسم الفرع {{branch}}، وحذف تغييرات الملفات المتتبعة والالتزامات المحلية.",
+          confirm: "إعادة الضبط",
         },
         archive: {
           label: "أرشفة مساحة العمل",
@@ -839,6 +843,8 @@ export const ar: TranslationResources = {
           disabled: "تم تعطيل الدمج التلقائي",
         },
         unavailable: {
+          resetNoInitialBranch: "تعذرت إعادة الضبط: اسم الفرع الأصلي غير معروف",
+          resetNoRemote: "تعذرت إعادة الضبط: لم يُضبط origin",
           viewPrNoForge: "عرض {{noun}} غير متاح الآن لأن {{brand}} غير متصل",
           pullNoRemote: "السحب غير متاح هنا لأن هذا الفرع غير متصل بجهاز التحكم عن بعد بعد",
           pullDirty: "السحب غير متاح أثناء وجود تغييرات محلية، لذا قم بتنفيذها أو تخزينها أولاً",
@@ -885,7 +891,7 @@ export const ar: TranslationResources = {
           failedDisableAutoMerge: "فشل في تعطيل الدمج التلقائي",
           baseRefUnavailable: "المرجع الأساسي غير متاح",
           failedMerge: "فشل الدمج",
-          failedMergeFromBase: "فشل الدمج من القاعدة",
+          failedResetWorkspace: "فشلت إعادة ضبط مساحة العمل",
         },
         archiveWarning: {
           title: 'الأرشيف "{{workspaceName}}"؟',

@@ -360,6 +360,32 @@ describe("Rust protocol adapter", () => {
     );
   });
 
+  it("routes the local workspace reset method on the Git channel", () => {
+    const method = "checkout.reset_workspace.request";
+    const h = harness([...Object.values(METHODS).map((spec) => spec.method), method]);
+    try {
+      h.ready();
+      expect(CHANNEL_CAPABILITIES[2]).toContain(method);
+      h.send({
+        type: "checkout_reset_workspace_request",
+        requestId: "reset-1",
+        cwd: "/workspace",
+        workspaceId: "workspace-1",
+        initialBranch: "initial-workspace",
+      });
+      expect(h.last(2)).toMatchObject({
+        method,
+        params: {
+          cwd: "/workspace",
+          workspaceId: "workspace-1",
+          initialBranch: "initial-workspace",
+        },
+      });
+    } finally {
+      h.transport.close();
+    }
+  });
+
   it("waits for every handshake and keeps credentials out of subprotocols and URLs", () => {
     const h = harness();
     try {

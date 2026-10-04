@@ -810,10 +810,14 @@ export const ja: TranslationResources = {
           pending: "マージ中...",
           success: "マージしました",
         },
-        mergeFromBase: {
-          label: "{{baseRef}}から更新",
-          pending: "更新中...",
-          success: "更新しました",
+        resetWorkspace: {
+          label: "ワークスペースをリセット",
+          pending: "リセット中...",
+          success: "リセット完了",
+          confirmTitle: "ワークスペースをリセットしますか？",
+          confirmMessage:
+            "origin の最新のデフォルトブランチを取得し、ブランチを {{branch}} に戻して、追跡済みファイルの変更とローカルコミットを破棄します。",
+          confirm: "リセット",
         },
         archive: {
           label: "ワークスペースをアーカイブ",
@@ -843,6 +847,8 @@ export const ja: TranslationResources = {
           disabled: "自動マージが無効になりました",
         },
         unavailable: {
+          resetNoInitialBranch: "元のブランチ名が不明なためリセットできません",
+          resetNoRemote: "origin が設定されていないためリセットできません",
           viewPrNoForge: "{{brand}}が接続されていないため、{{noun}}の表示は現在利用できません",
           pullNoRemote:
             "このブランチはまだリモートに接続されていないため、プルはここでは利用できません",
@@ -899,7 +905,7 @@ export const ja: TranslationResources = {
           failedDisableAutoMerge: "自動マージの無効化に失敗しました",
           baseRefUnavailable: "ベースRefが利用できません",
           failedMerge: "マージに失敗しました",
-          failedMergeFromBase: "ベースからのマージに失敗しました",
+          failedResetWorkspace: "ワークスペースのリセットに失敗しました",
         },
         archiveWarning: {
           title: '"{{workspaceName}}"をアーカイブしますか？',

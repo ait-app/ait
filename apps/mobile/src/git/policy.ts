@@ -20,7 +20,7 @@ export type GitActionId =
   | "enable-pr-auto-merge-rebase"
   | "disable-pr-auto-merge"
   | "merge-branch"
-  | "merge-from-base"
+  | "reset-workspace"
   | "archive-workspace";
 
 export interface GitAction {
@@ -67,6 +67,7 @@ export interface BuildGitActionsInput {
   mergeCapability: MergeCapability | null;
   hasRemote: boolean;
   isPaseoOwnedWorktree: boolean;
+  initialBranchAvailable: boolean;
   isOnBaseBranch: boolean;
   hasUncommittedChanges: boolean;
   baseRefAvailable: boolean;
@@ -267,19 +268,19 @@ export function buildGitActions(input: BuildGitActionsInput): GitActions {
     handler: input.runtime["merge-branch"].handler,
   });
 
-  allActions.set("merge-from-base", {
-    id: "merge-from-base",
-    label: i18n.t("workspace.git.actions.mergeFromBase.label", { baseRef: input.baseRefLabel }),
-    pendingLabel: i18n.t("workspace.git.actions.mergeFromBase.pending"),
-    successLabel: i18n.t("workspace.git.actions.mergeFromBase.success"),
-    disabled: input.runtime["merge-from-base"].disabled,
-    status: input.runtime["merge-from-base"].status,
-    unavailableMessage: input.runtime["merge-from-base"].disabled
+  allActions.set("reset-workspace", {
+    id: "reset-workspace",
+    label: i18n.t("workspace.git.actions.resetWorkspace.label"),
+    pendingLabel: i18n.t("workspace.git.actions.resetWorkspace.pending"),
+    successLabel: i18n.t("workspace.git.actions.resetWorkspace.success"),
+    disabled: input.runtime["reset-workspace"].disabled,
+    status: input.runtime["reset-workspace"].status,
+    unavailableMessage: input.runtime["reset-workspace"].disabled
       ? undefined
-      : getMergeFromBaseUnavailableMessage(input),
-    icon: input.runtime["merge-from-base"].icon,
+      : getResetWorkspaceUnavailableMessage(input),
+    icon: input.runtime["reset-workspace"].icon,
     startsGroup: true,
-    handler: input.runtime["merge-from-base"].handler,
+    handler: input.runtime["reset-workspace"].handler,
   });
 
   allActions.set("archive-workspace", {
@@ -298,6 +299,9 @@ export function buildGitActions(input: BuildGitActionsInput): GitActions {
   const primary = primaryActionId ? (allActions.get(primaryActionId) ?? null) : null;
 
   const secondaryIds = [...REMOTE_ACTION_IDS];
+  if (input.isPaseoOwnedWorktree) {
+    secondaryIds.push("reset-workspace");
+  }
   if (!input.isOnBaseBranch) {
     secondaryIds.push(...getFeatureActionIds(input));
   }
@@ -340,9 +344,6 @@ function getPrimaryActionId(input: BuildGitActionsInput): GitActionId | null {
   if (!input.isOnBaseBranch && input.aheadCount > 0) {
     return "merge-branch";
   }
-  if (!input.isOnBaseBranch && canMergeFromBase(input)) {
-    return "merge-from-base";
-  }
   if (input.githubFeaturesEnabled && input.hasPullRequest && input.pullRequestUrl) {
     return "pr";
   }
@@ -367,7 +368,6 @@ function getPullRequestActionIds(filter: {
 
 function getFeatureActionIds(input: BuildGitActionsInput): GitActionId[] {
   return [
-    "merge-from-base",
     "merge-branch",
     ...getPullRequestActionIds({ roles: ["status", "direct", "auto"], input }),
   ];
@@ -526,7 +526,7 @@ function hasPushableCommits(input: BuildGitActionsInput): boolean {
   return input.isPaseoOwnedWorktree && input.aheadOfOrigin === null && input.aheadCount > 0;
 }
 
-function canMergeFromBase(input: BuildGitActionsInput): boolean {
+function hasBaseUpdates(input: BuildGitActionsInput): boolean {
   return (
     !input.isOnBaseBranch &&
     input.baseRefAvailable &&
@@ -566,7 +566,7 @@ function canMergePr(input: BuildGitActionsInput): boolean {
       input.pullRequestMergeable === "MERGEABLE" &&
       input.behindOfOrigin === 0 &&
       input.aheadOfOrigin === 0 &&
-      !canMergeFromBase(input)
+      !hasBaseUpdates(input)
     );
   }
 
@@ -682,17 +682,12 @@ function getMergeBranchUnavailableMessage(input: BuildGitActionsInput): string |
   return undefined;
 }
 
-function getMergeFromBaseUnavailableMessage(input: BuildGitActionsInput): string | undefined {
-  if (!input.baseRefAvailable) {
-    return i18n.t("workspace.git.actions.unavailable.updateNoBase");
+function getResetWorkspaceUnavailableMessage(input: BuildGitActionsInput): string | undefined {
+  if (!input.initialBranchAvailable) {
+    return i18n.t("workspace.git.actions.unavailable.resetNoInitialBranch");
   }
-  if (input.hasUncommittedChanges) {
-    return i18n.t("workspace.git.actions.unavailable.updateDirty");
-  }
-  if (input.behindBaseCount === 0) {
-    return i18n.t("workspace.git.actions.unavailable.updateCurrent", {
-      baseRef: input.baseRefLabel,
-    });
+  if (!input.hasRemote) {
+    return i18n.t("workspace.git.actions.unavailable.resetNoRemote");
   }
   return undefined;
 }

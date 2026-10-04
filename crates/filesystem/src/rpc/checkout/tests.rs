@@ -334,6 +334,10 @@ fn mutation_defaults_and_inline_errors_match_paseo() {
         ),
         ("checkout.merge.request", json!({"cwd":"/repo"})),
         ("checkout.merge_from_base.request", json!({"cwd":"/repo"})),
+        (
+            "checkout.reset_workspace.request",
+            json!({"cwd":"/repo","workspaceId":"workspace-1","initialBranch":"feature"}),
+        ),
         ("checkout.pull.request", json!({"cwd":"/repo"})),
         ("checkout.push.request", json!({"cwd":"/repo"})),
         (
@@ -516,6 +520,14 @@ impl CheckoutRuntime for FakeCheckout {
         cwd: &str,
         _base_ref: Option<&str>,
         _require_clean_target: bool,
+    ) -> Result<(), CheckoutRuntimeError> {
+        fail(cwd)
+    }
+
+    fn reset_workspace(
+        &self,
+        cwd: &str,
+        _initial_branch: &str,
     ) -> Result<(), CheckoutRuntimeError> {
         fail(cwd)
     }

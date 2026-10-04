@@ -4286,6 +4286,54 @@ test("requests checkout merge from base via RPC", async () => {
   });
 });
 
+test("requests a workspace reset with its initial branch", async () => {
+  const logger = createMockLogger();
+  const mock = createMockTransport();
+  const client = new DaemonClient({
+    url: "ws://test",
+    clientId: "clsk_unit_test",
+    logger,
+    reconnect: { enabled: false },
+    transportFactory: () => mock.transport,
+  });
+  clients.push(client);
+
+  const connectPromise = client.connect();
+  mock.triggerOpen();
+  await connectPromise;
+
+  const promise = client.checkoutResetWorkspace(
+    "/tmp/project",
+    "workspace-1",
+    "initial-workspace",
+    "req-reset-workspace",
+  );
+  const request = parseSentFrame(mock.sent[0]);
+  expect(request).toMatchObject({
+    type: "checkout_reset_workspace_request",
+    cwd: "/tmp/project",
+    workspaceId: "workspace-1",
+    initialBranch: "initial-workspace",
+    requestId: "req-reset-workspace",
+  });
+
+  mock.triggerMessage(
+    JSON.stringify({
+      type: "session",
+      message: {
+        type: "checkout_reset_workspace_response",
+        payload: {
+          cwd: "/tmp/project",
+          requestId: "req-reset-workspace",
+          success: true,
+          error: null,
+        },
+      },
+    }),
+  );
+  await expect(promise).resolves.toMatchObject({ success: true, cwd: "/tmp/project" });
+});
+
 test("requests GitHub auto-merge enable via namespaced RPC", async () => {
   const logger = createMockLogger();
   const mock = createMockTransport();

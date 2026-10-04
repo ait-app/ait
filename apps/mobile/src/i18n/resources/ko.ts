@@ -807,10 +807,14 @@ export const ko: TranslationResources = {
           pending: "병합하는 중...",
           success: "병합됨",
         },
-        mergeFromBase: {
-          label: "{{baseRef}}에서 업데이트",
-          pending: "업데이트하는 중...",
-          success: "업데이트됨",
+        resetWorkspace: {
+          label: "워크스페이스 초기화",
+          pending: "초기화 중...",
+          success: "초기화됨",
+          confirmTitle: "워크스페이스를 초기화할까요?",
+          confirmMessage:
+            "origin의 최신 기본 브랜치를 가져오고 브랜치를 {{branch}}로 복원한 뒤 추적 파일 변경 사항과 로컬 커밋을 삭제합니다.",
+          confirm: "초기화",
         },
         archive: {
           label: "워크스페이스 보관",
@@ -839,6 +843,8 @@ export const ko: TranslationResources = {
           disabled: "자동 병합 해제됨",
         },
         unavailable: {
+          resetNoInitialBranch: "원래 브랜치 이름을 알 수 없어 초기화할 수 없습니다",
+          resetNoRemote: "origin이 설정되지 않아 초기화할 수 없습니다",
           viewPrNoForge: "{{brand}}가 연결되지 않아 지금은 {{noun}} 보기를 사용할 수 없습니다.",
           pullNoRemote: "이 브랜치가 아직 원격에 연결되어 있지 않아 여기서 풀을 사용할 수 없습니다",
           pullDirty: "로컬 변경 사항이 있어 풀을 사용할 수 없습니다. 먼저 커밋하거나 스태시하세요",
@@ -893,7 +899,7 @@ export const ko: TranslationResources = {
           failedDisableAutoMerge: "자동 병합을 해제하지 못했습니다",
           baseRefUnavailable: "기준 ref를 사용할 수 없습니다",
           failedMerge: "병합하지 못했습니다",
-          failedMergeFromBase: "기준에서 병합하지 못했습니다",
+          failedResetWorkspace: "워크스페이스 초기화 실패",
         },
         archiveWarning: {
           title: '"{{workspaceName}}"를 보관하시겠습니까?',

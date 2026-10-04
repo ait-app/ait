@@ -65,6 +65,142 @@ fn status_marks_only_linked_worktrees_in_the_managed_layout_as_owned() {
 }
 
 #[test]
+fn reset_workspace_uses_origin_default_branch_and_restores_initial_branch() {
+    for default_branch in ["main", "master"] {
+        reset_workspace_from_default_branch(default_branch);
+    }
+}
+
+fn reset_workspace_from_default_branch(default_branch: &str) {
+    let fixture = Fixture::new();
+    let remote = fixture.temp.path().join("remote.git");
+    git(
+        fixture.temp.path(),
+        &[
+            "init",
+            "--bare",
+            "-b",
+            default_branch,
+            remote.to_str().unwrap(),
+        ],
+    );
+    git(
+        &fixture.repo,
+        &["remote", "add", "origin", remote.to_str().unwrap()],
+    );
+    git(
+        &fixture.repo,
+        &["push", "-u", "origin", &format!("main:{default_branch}")],
+    );
+
+    let managed = fixture.temp.path().join("managed");
+    let linked = managed.join("repository-hash").join("initial-workspace");
+    std::fs::create_dir_all(linked.parent().unwrap()).unwrap();
+    git(
+        &fixture.repo,
+        &[
+            "worktree",
+            "add",
+            "-b",
+            "initial-workspace",
+            linked.to_str().unwrap(),
+        ],
+    );
+    git(&linked, &["branch", "-m", "renamed-workspace"]);
+    std::fs::write(linked.join("tracked.txt"), "local commit\n").unwrap();
+    git(&linked, &["add", "tracked.txt"]);
+    git(&linked, &["commit", "-m", "local work"]);
+    std::fs::write(linked.join("tracked.txt"), "dirty changes\n").unwrap();
+    std::fs::write(linked.join("untracked.txt"), "keep\n").unwrap();
+
+    let writer = fixture.temp.path().join("writer");
+    git(
+        fixture.temp.path(),
+        &["clone", remote.to_str().unwrap(), writer.to_str().unwrap()],
+    );
+    git(&writer, &["config", "user.name", "Server Test"]);
+    git(&writer, &["config", "user.email", "server@example.invalid"]);
+    std::fs::write(writer.join("tracked.txt"), "latest default\n").unwrap();
+    git(&writer, &["add", "tracked.txt"]);
+    git(&writer, &["commit", "-m", "new default"]);
+    git(&writer, &["push", "origin", default_branch]);
+    let latest = git_output(&writer, &["rev-parse", "HEAD"]);
+    let remote_ref = format!("origin/{default_branch}");
+    assert_ne!(git_output(&linked, &["rev-parse", &remote_ref]), latest);
+
+    let runtime = LocalCheckout::new(managed);
+    runtime
+        .reset_workspace(linked.to_str().unwrap(), "initial-workspace")
+        .unwrap();
+
+    assert_eq!(
+        git_output(&linked, &["branch", "--show-current"]),
+        "initial-workspace"
+    );
+    assert_eq!(git_output(&linked, &["rev-parse", "HEAD"]), latest);
+    assert_eq!(git_output(&linked, &["rev-parse", &remote_ref]), latest);
+    assert_eq!(
+        std::fs::read_to_string(linked.join("tracked.txt")).unwrap(),
+        "latest default\n"
+    );
+    assert_eq!(
+        std::fs::read_to_string(linked.join("untracked.txt")).unwrap(),
+        "keep\n"
+    );
+}
+
+#[test]
+fn reset_workspace_rejects_unmanaged_checkout_without_moving_head() {
+    let fixture = Fixture::new();
+    let before = git_output(&fixture.repo, &["rev-parse", "HEAD"]);
+    let runtime = LocalCheckout::new(fixture.temp.path().join("managed"));
+
+    let error = runtime
+        .reset_workspace(fixture.repo.to_str().unwrap(), "initial-workspace")
+        .unwrap_err();
+
+    assert_eq!(error.kind, CheckoutFailureKind::NotAllowed);
+    assert_eq!(git_output(&fixture.repo, &["rev-parse", "HEAD"]), before);
+}
+
+#[test]
+fn reset_workspace_preserves_branch_and_head_when_remote_lookup_fails() {
+    let fixture = Fixture::new();
+    let managed = fixture.temp.path().join("managed");
+    let linked = managed.join("repository-hash").join("initial-workspace");
+    std::fs::create_dir_all(linked.parent().unwrap()).unwrap();
+    git(
+        &fixture.repo,
+        &[
+            "worktree",
+            "add",
+            "-b",
+            "initial-workspace",
+            linked.to_str().unwrap(),
+        ],
+    );
+    git(&linked, &["branch", "-m", "renamed-workspace"]);
+    git(
+        &fixture.repo,
+        &["remote", "add", "origin", "/missing/repository.git"],
+    );
+    let before = git_output(&linked, &["rev-parse", "HEAD"]);
+
+    let runtime = LocalCheckout::new(managed);
+    assert!(
+        runtime
+            .reset_workspace(linked.to_str().unwrap(), "initial-workspace")
+            .is_err()
+    );
+
+    assert_eq!(
+        git_output(&linked, &["branch", "--show-current"]),
+        "renamed-workspace"
+    );
+    assert_eq!(git_output(&linked, &["rev-parse", "HEAD"]), before);
+}
+
+#[test]
 fn status_diff_and_refresh_cover_git_and_non_git_directories() {
     let fixture = Fixture::new();
     let runtime = LocalCheckout::new(fixture.temp.path().join("managed"));

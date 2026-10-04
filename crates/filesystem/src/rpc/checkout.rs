@@ -26,6 +26,7 @@ pub fn execute(checkout: &Checkout, method: &str, params: Value) -> Result<Value
         "checkout.commit.request" => commit(checkout, decode(params)?),
         "checkout.merge.request" => merge_to_base(checkout, &decode(params)?),
         "checkout.merge_from_base.request" => merge_from_base(checkout, &decode(params)?),
+        "checkout.reset_workspace.request" => reset_workspace(checkout, &decode(params)?),
         "checkout.pull.request" => mutate_path(checkout, &decode(params)?, Checkout::pull),
         "checkout.push.request" => mutate_path(checkout, &decode(params)?, Checkout::push),
         "checkout.discard_changes.request" => discard_changes(checkout, &decode(params)?),
@@ -253,6 +254,16 @@ fn merge_from_base(
             request.base_ref.as_deref(),
             request.require_clean_target.unwrap_or(true),
         ),
+    )
+}
+
+fn reset_workspace(
+    checkout: &Checkout,
+    request: &protocol::CheckoutResetWorkspaceRequest,
+) -> Result<Value, ErrorCode> {
+    mutation(
+        request.cwd.clone(),
+        checkout.reset_workspace(&request.cwd, &request.workspace_id, &request.initial_branch),
     )
 }
 

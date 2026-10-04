@@ -33,12 +33,12 @@ fn merged_groups_have_one_owner_per_method_and_keep_placeholders_separate() {
         .collect();
     let unique: BTreeSet<_> = methods.iter().copied().collect();
     assert_eq!(methods.len(), unique.len());
-    assert_eq!(methods.len(), 175);
+    assert_eq!(methods.len(), 176);
     assert!(unique.contains("schedule.list.request"));
     assert!(!unique.contains("server.status.unsubscribe"));
     let registered =
         crate::registered_capabilities(&methods.into_iter().map(str::to_owned).collect::<Vec<_>>());
-    assert_eq!(registered.len(), 176);
+    assert_eq!(registered.len(), 177);
 }
 
 #[test]

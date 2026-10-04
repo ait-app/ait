@@ -71,6 +71,7 @@ function createInput(
     mergeCapability: deriveMergeCapability(pullRequestGithub),
     hasRemote: false,
     isPaseoOwnedWorktree: false,
+    initialBranchAvailable: false,
     isOnBaseBranch: true,
     hasUncommittedChanges: false,
     baseRefAvailable: true,
@@ -147,7 +148,7 @@ function createInput(
         status: "idle",
         handler: () => undefined,
       },
-      "merge-from-base": {
+      "reset-workspace": {
         disabled: false,
         status: "idle",
         handler: () => undefined,
@@ -245,18 +246,19 @@ describe("git-actions-policy", () => {
     expect(actions.primary).toMatchObject({ id: "push", label: "Push" });
   });
 
-  it("shows update-from-base only on feature branches that are behind the base branch", () => {
+  it("offers reset for a managed workspace even with local changes", () => {
     const actions = buildGitActions(
       createInput({
         hasRemote: true,
-        isOnBaseBranch: false,
-        behindBaseCount: 3,
+        isPaseoOwnedWorktree: true,
+        initialBranchAvailable: true,
+        hasUncommittedChanges: true,
       }),
     );
-    const updateAction = actions.secondary.find((action) => action.id === "merge-from-base");
+    const resetAction = actions.secondary.find((action) => action.id === "reset-workspace");
 
-    expect(updateAction).toMatchObject({
-      label: "Update from main",
+    expect(resetAction).toMatchObject({
+      label: "Reset workspace",
       disabled: false,
       unavailableMessage: undefined,
     });
@@ -272,7 +274,7 @@ describe("git-actions-policy", () => {
     });
   });
 
-  it("keeps update-from-base off the base branch entirely", () => {
+  it("keeps reset off regular checkouts", () => {
     const actions = buildGitActions(
       createInput({
         hasRemote: true,
@@ -280,7 +282,7 @@ describe("git-actions-policy", () => {
       }),
     );
 
-    expect(actions.secondary.some((action) => action.id === "merge-from-base")).toBe(false);
+    expect(actions.secondary.some((action) => action.id === "reset-workspace")).toBe(false);
   });
 
   it("keeps feature branch actions available off the base branch", () => {
@@ -302,7 +304,6 @@ describe("git-actions-policy", () => {
       "pull",
       "push",
       "pull-and-push",
-      "merge-from-base",
       "merge-branch",
       "pr",
       "merge-pr-squash",
@@ -653,7 +654,6 @@ describe("git-actions-policy", () => {
       "pull",
       "push",
       "pull-and-push",
-      "merge-from-base",
       "merge-branch",
       "pr",
       "merge-pr-squash",
@@ -830,7 +830,6 @@ describe("git-actions-policy", () => {
       "pull",
       "push",
       "pull-and-push",
-      "merge-from-base",
       "merge-branch",
       "pr",
       "merge-pr-squash",
@@ -873,7 +872,6 @@ describe("git-actions-policy", () => {
       "pull",
       "push",
       "pull-and-push",
-      "merge-from-base",
       "merge-branch",
       "pr",
       "enable-pr-auto-merge-squash",
@@ -1016,7 +1014,6 @@ describe("git-actions-policy", () => {
       "pull",
       "push",
       "pull-and-push",
-      "merge-from-base",
       "merge-branch",
       "pr",
       "merge-pr-merge",
@@ -1074,7 +1071,7 @@ describe("git-actions-policy", () => {
       .filter((action) => !action.startsGroup)
       .map((action) => action.id);
 
-    expect(groupStarters).toEqual(["merge-from-base", "merge-pr-squash", "archive-workspace"]);
+    expect(groupStarters).toEqual(["reset-workspace", "merge-pr-squash", "archive-workspace"]);
     expect(nonGroupStarters).toEqual([
       "pull",
       "push",

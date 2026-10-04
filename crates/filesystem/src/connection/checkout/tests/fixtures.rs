@@ -229,6 +229,14 @@ impl CheckoutRuntime for GatedCheckout {
         unreachable!("these observation tests only read diffs")
     }
 
+    fn reset_workspace(
+        &self,
+        _cwd: &str,
+        _initial_branch: &str,
+    ) -> Result<(), CheckoutRuntimeError> {
+        unreachable!("these observation tests only read diffs")
+    }
+
     fn pull(&self, _cwd: &str) -> Result<(), CheckoutRuntimeError> {
         unreachable!("these observation tests only read diffs")
     }

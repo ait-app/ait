@@ -31,6 +31,7 @@ import { type WorktreeArchiveWarningLabels } from "@/git/worktree-archive-warnin
 import { useWorkspaceArchive } from "@/workspace/use-workspace-archive";
 import { resolveWorkspaceMapKeyByIdentity } from "@/utils/workspace-identity";
 import { readValidatedString } from "@/storage/validated-storage";
+import { confirmDialog } from "@/utils/confirm-dialog";
 
 export type { GitActionId, GitAction, GitActions } from "@/git/policy";
 
@@ -196,7 +197,7 @@ interface UseGitActionsInput {
     push: ReactElement;
     pullAndPush: ReactElement;
     merge: ReactElement;
-    mergeFromBase: ReactElement;
+    resetWorkspace: ReactElement;
     archive: ReactElement;
   };
 }
@@ -316,6 +317,18 @@ export function useGitActions({ serverId, cwd, icons }: UseGitActionsInput): Use
   const { t } = useTranslation();
   const toast = useToast();
   const activeWorkspaceSelection = useActiveWorkspaceSelection();
+  const sessionWorkspaces = useSessionStore((state) => state.sessions[serverId]?.workspaces);
+  const resetWorkspaceDescriptor = useMemo(
+    () =>
+      resolveArchiveWorkspaceDescriptor({
+        workspaces: sessionWorkspaces,
+        activeWorkspaceSelection,
+        workspaceDirectory: cwd,
+      }),
+    [activeWorkspaceSelection, cwd, sessionWorkspaces],
+  );
+  const initialBranch = resetWorkspaceDescriptor?.initialBranch ?? null;
+  const resetWorkspaceId = resetWorkspaceDescriptor?.id ?? null;
   const [postShipArchiveSuggested, setPostShipArchiveSuggested] = useState(false);
   const [shipDefault, setShipDefault] = useState<"merge" | "pr">("pr");
 
@@ -439,8 +452,8 @@ export function useGitActions({ serverId, cwd, icons }: UseGitActionsInput): Use
   const mergeStatus = useCheckoutGitActionsStore((s) =>
     s.getStatus({ serverId, cwd, actionId: "merge-branch" }),
   );
-  const mergeFromBaseStatus = useCheckoutGitActionsStore((s) =>
-    s.getStatus({ serverId, cwd, actionId: "merge-from-base" }),
+  const resetWorkspaceStatus = useCheckoutGitActionsStore((s) =>
+    s.getStatus({ serverId, cwd, actionId: "reset-workspace" }),
   );
 
   const runCommit = useCheckoutGitActionsStore((s) => s.commit);
@@ -452,7 +465,7 @@ export function useGitActions({ serverId, cwd, icons }: UseGitActionsInput): Use
   const runEnablePrAutoMerge = useCheckoutGitActionsStore((s) => s.enablePrAutoMerge);
   const runDisablePrAutoMerge = useCheckoutGitActionsStore((s) => s.disablePrAutoMerge);
   const runMergeBranch = useCheckoutGitActionsStore((s) => s.mergeBranch);
-  const runMergeFromBase = useCheckoutGitActionsStore((s) => s.mergeFromBase);
+  const runResetWorkspace = useCheckoutGitActionsStore((s) => s.resetWorkspace);
   const githubAutoMergeActionsEnabled = useSessionStore(
     (s) =>
       s.sessions[serverId]?.serverInfo?.features?.checkoutForgeSetAutoMerge === true ||
@@ -617,20 +630,37 @@ export function useGitActions({ serverId, cwd, icons }: UseGitActionsInput): Use
     toastActionSuccess,
   ]);
 
-  const handleMergeFromBase = useCallback(() => {
-    if (!baseRef) {
-      toast.error(t("workspace.git.actions.toasts.baseRefUnavailable"));
+  const handleResetWorkspace = useCallback(() => {
+    if (!initialBranch || !resetWorkspaceId) {
+      toast.error(t("workspace.git.actions.unavailable.resetNoInitialBranch"));
       return;
     }
-    void runMergeFromBase({ serverId, cwd, baseRef })
-      .then(() => {
-        toastActionSuccess(t("workspace.git.actions.mergeFromBase.success"));
-        return;
+    void confirmDialog({
+      title: t("workspace.git.actions.resetWorkspace.confirmTitle"),
+      message: t("workspace.git.actions.resetWorkspace.confirmMessage", { branch: initialBranch }),
+      confirmLabel: t("workspace.git.actions.resetWorkspace.confirm"),
+      cancelLabel: t("common.actions.cancel"),
+      destructive: true,
+    })
+      .then(async (confirmed) => {
+        if (!confirmed) return;
+        await runResetWorkspace({ serverId, cwd, workspaceId: resetWorkspaceId, initialBranch });
+        toastActionSuccess(t("workspace.git.actions.resetWorkspace.success"));
       })
       .catch((err) => {
-        toastActionError(err, t("workspace.git.actions.toasts.failedMergeFromBase"));
+        toastActionError(err, t("workspace.git.actions.toasts.failedResetWorkspace"));
       });
-  }, [baseRef, cwd, runMergeFromBase, serverId, t, toast, toastActionError, toastActionSuccess]);
+  }, [
+    cwd,
+    initialBranch,
+    resetWorkspaceId,
+    runResetWorkspace,
+    serverId,
+    t,
+    toast,
+    toastActionError,
+    toastActionSuccess,
+  ]);
 
   const archiveController = useWorkspaceScreenArchiveController({
     serverId,
@@ -694,6 +724,7 @@ export function useGitActions({ serverId, cwd, icons }: UseGitActionsInput): Use
       mergeCapability: deriveMergeCapability(prStatus?.forgeSpecific, prStatus?.github),
       hasRemote,
       isPaseoOwnedWorktree,
+      initialBranchAvailable: Boolean(initialBranch),
       isOnBaseBranch,
       hasUncommittedChanges,
       baseRefAvailable: Boolean(baseRef),
@@ -783,11 +814,11 @@ export function useGitActions({ serverId, cwd, icons }: UseGitActionsInput): Use
           icon: icons.merge,
           handler: handleMergeBranch,
         },
-        "merge-from-base": {
-          disabled: isActionDisabled(actionsDisabled, mergeFromBaseStatus),
-          status: mergeFromBaseStatus,
-          icon: icons.mergeFromBase,
-          handler: handleMergeFromBase,
+        "reset-workspace": {
+          disabled: isActionDisabled(actionsDisabled, resetWorkspaceStatus),
+          status: resetWorkspaceStatus,
+          icon: icons.resetWorkspace,
+          handler: handleResetWorkspace,
         },
         "archive-workspace": {
           disabled: !archiveController.canArchive || archiveController.isArchiving,
@@ -811,6 +842,7 @@ export function useGitActions({ serverId, cwd, icons }: UseGitActionsInput): Use
     aheadCount,
     behindBaseCount,
     isPaseoOwnedWorktree,
+    initialBranch,
     isOnBaseBranch,
     githubFeaturesEnabled,
     forge,
@@ -835,7 +867,7 @@ export function useGitActions({ serverId, cwd, icons }: UseGitActionsInput): Use
     enablePrAutoMergeStatuses.rebase,
     disablePrAutoMergeStatus,
     mergeStatus,
-    mergeFromBaseStatus,
+    resetWorkspaceStatus,
     archiveController.canArchive,
     archiveController.isArchiving,
     handleCommit,
@@ -847,7 +879,7 @@ export function useGitActions({ serverId, cwd, icons }: UseGitActionsInput): Use
     handleEnablePrAutoMerge,
     handleDisablePrAutoMerge,
     handleMergeBranch,
-    handleMergeFromBase,
+    handleResetWorkspace,
     handleArchiveWorkspace,
     icons,
     prIcon,
@@ -898,7 +930,7 @@ function translateGitAction(
     t: (key: string, options?: Record<string, unknown>) => string;
   },
 ): GitAction {
-  const labels = getTranslatedGitActionLabels(action, { baseRefLabel, hasPullRequest, forge, t });
+  const labels = getTranslatedGitActionLabels(action, { hasPullRequest, forge, t });
   return {
     ...action,
     ...labels,
@@ -912,12 +944,10 @@ function translateGitAction(
 function getTranslatedGitActionLabels(
   action: GitAction,
   {
-    baseRefLabel,
     hasPullRequest,
     forge,
     t,
   }: {
-    baseRefLabel: string;
     hasPullRequest: boolean;
     forge: Forge;
     t: (key: string, options?: Record<string, unknown>) => string;
@@ -1008,11 +1038,11 @@ function getTranslatedGitActionLabels(
         pendingLabel: t("workspace.git.actions.mergeBranch.pending"),
         successLabel: t("workspace.git.actions.mergeBranch.success"),
       };
-    case "merge-from-base":
+    case "reset-workspace":
       return {
-        label: t("workspace.git.actions.mergeFromBase.label", { baseRef: baseRefLabel }),
-        pendingLabel: t("workspace.git.actions.mergeFromBase.pending"),
-        successLabel: t("workspace.git.actions.mergeFromBase.success"),
+        label: t("workspace.git.actions.resetWorkspace.label"),
+        pendingLabel: t("workspace.git.actions.resetWorkspace.pending"),
+        successLabel: t("workspace.git.actions.resetWorkspace.success"),
       };
     case "archive-workspace":
       return {
@@ -1061,10 +1091,10 @@ function translateGitActionUnavailableMessage(
       "workspace.git.actions.unavailable.mergeDirty",
     "Merge isn't available because this branch doesn't have anything new to merge yet":
       "workspace.git.actions.unavailable.mergeNothing",
-    "Update isn't available because we couldn't determine the base branch":
-      "workspace.git.actions.unavailable.updateNoBase",
-    "Update isn't available while you have local changes so commit or stash them first":
-      "workspace.git.actions.unavailable.updateDirty",
+    "Reset isn't available because the initial branch name is unknown":
+      "workspace.git.actions.unavailable.resetNoInitialBranch",
+    "Reset isn't available because origin is not configured":
+      "workspace.git.actions.unavailable.resetNoRemote",
     "Merge PR isn't available right now because GitHub isn't connected":
       "workspace.git.actions.unavailable.mergePrNoGithub",
     "Archive isn't available here because this workspace was not created as a Paseo worktree":

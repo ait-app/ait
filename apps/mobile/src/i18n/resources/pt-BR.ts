@@ -810,10 +810,14 @@ export const ptBR: TranslationResources = {
           pending: "Fazendo merge...",
           success: "Mergeada",
         },
-        mergeFromBase: {
-          label: "Atualizar a partir de {{baseRef}}",
-          pending: "Atualizando...",
-          success: "Atualizado",
+        resetWorkspace: {
+          label: "Redefinir workspace",
+          pending: "Redefinindo...",
+          success: "Workspace redefinido",
+          confirmTitle: "Redefinir workspace?",
+          confirmMessage:
+            "Buscar a versão mais recente da branch padrão de origin, restaurar a branch {{branch}} e descartar alterações rastreadas e commits locais.",
+          confirm: "Redefinir",
         },
         archive: {
           label: "Arquivar workspace",
@@ -843,6 +847,8 @@ export const ptBR: TranslationResources = {
           disabled: "Merge automático desativado",
         },
         unavailable: {
+          resetNoInitialBranch: "Não é possível redefinir: branch inicial desconhecida",
+          resetNoRemote: "Não é possível redefinir: origin não configurado",
           viewPrNoForge:
             "Ver {{noun}} não está disponível agora porque o {{brand}} não está conectado",
           pullNoRemote:
@@ -909,7 +915,7 @@ export const ptBR: TranslationResources = {
           failedDisableAutoMerge: "Falha ao desativar merge automático",
           baseRefUnavailable: "Ref base indisponível",
           failedMerge: "Falha ao fazer merge",
-          failedMergeFromBase: "Falha ao fazer merge da base",
+          failedResetWorkspace: "Falha ao redefinir workspace",
         },
         archiveWarning: {
           title: 'Arquivar "{{workspaceName}}"?',

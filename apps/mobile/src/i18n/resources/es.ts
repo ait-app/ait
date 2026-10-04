@@ -814,10 +814,14 @@ export const es: TranslationResources = {
           pending: "Fusionando...",
           success: "Fusionado",
         },
-        mergeFromBase: {
-          label: "Actualización desde{{baseRef}}",
-          pending: "Actualizando...",
-          success: "Actualizado",
+        resetWorkspace: {
+          label: "Restablecer espacio de trabajo",
+          pending: "Restableciendo...",
+          success: "Espacio de trabajo restablecido",
+          confirmTitle: "¿Restablecer el espacio de trabajo?",
+          confirmMessage:
+            "Obtener la última versión de la rama predeterminada de origin, restaurar la rama {{branch}} y descartar los cambios rastreados y los commits locales.",
+          confirm: "Restablecer",
         },
         archive: {
           label: "Archivar espacio de trabajo",
@@ -847,6 +851,8 @@ export const es: TranslationResources = {
           disabled: "Fusión automática deshabilitada",
         },
         unavailable: {
+          resetNoInitialBranch: "No se puede restablecer: se desconoce la rama inicial",
+          resetNoRemote: "No se puede restablecer: origin no está configurado",
           viewPrNoForge:
             "Ver {{noun}} no está disponible en este momento porque {{brand}} no está conectado",
           pullNoRemote:
@@ -919,7 +925,7 @@ export const es: TranslationResources = {
           failedDisableAutoMerge: "No se pudo deshabilitar la combinación automática",
           baseRefUnavailable: "Referencia base no disponible",
           failedMerge: "No se pudo fusionar",
-          failedMergeFromBase: "No se pudo fusionar desde la base",
+          failedResetWorkspace: "Error al restablecer el espacio de trabajo",
         },
         archiveWarning: {
           title: '¿Archivo "{{workspaceName}}"?',

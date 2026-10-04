@@ -814,10 +814,14 @@ export const fr: TranslationResources = {
           pending: "Fusion...",
           success: "Fusionné",
         },
-        mergeFromBase: {
-          label: "Mise à jour de{{baseRef}}",
-          pending: "Mise à jour...",
-          success: "Mis à jour",
+        resetWorkspace: {
+          label: "Réinitialiser l’espace de travail",
+          pending: "Réinitialisation...",
+          success: "Espace de travail réinitialisé",
+          confirmTitle: "Réinitialiser l’espace de travail ?",
+          confirmMessage:
+            "Récupérer la dernière version de la branche par défaut de origin, restaurer la branche {{branch}} et supprimer les modifications suivies et les commits locaux.",
+          confirm: "Réinitialiser",
         },
         archive: {
           label: "Archiver l’espace de travail",
@@ -847,6 +851,8 @@ export const fr: TranslationResources = {
           disabled: "Fusion automatique désactivée",
         },
         unavailable: {
+          resetNoInitialBranch: "Réinitialisation impossible : branche initiale inconnue",
+          resetNoRemote: "Réinitialisation impossible : origin non configuré",
           viewPrNoForge:
             "Voir {{noun}} n'est pas disponible pour le moment car {{brand}} n'est pas connecté",
           pullNoRemote:
@@ -918,7 +924,7 @@ export const fr: TranslationResources = {
           failedDisableAutoMerge: "Échec de la désactivation de la fusion automatique",
           baseRefUnavailable: "Réf de base indisponible",
           failedMerge: "Échec de la fusion",
-          failedMergeFromBase: "Échec de la fusion à partir de la base",
+          failedResetWorkspace: "Échec de la réinitialisation",
         },
         archiveWarning: {
           title: "Archiver «{{workspaceName}}»?",

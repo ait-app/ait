@@ -18,6 +18,7 @@ pub const CAPABILITIES: &[&str] = &[
     "checkout.commit.request",
     "checkout.merge.request",
     "checkout.merge_from_base.request",
+    "checkout.reset_workspace.request",
     "checkout.pull.request",
     "checkout.push.request",
     "checkout.discard_changes.request",
@@ -587,6 +588,18 @@ pub struct CheckoutMergeFromBaseRequest {
     /// Require a clean current checkout. Defaults to true.
     #[serde(default)]
     pub require_clean_target: Option<bool>,
+}
+
+/// Managed-workspace reset request.
+#[derive(Debug, Clone, PartialEq, Eq, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct CheckoutResetWorkspaceRequest {
+    /// Directory inside the managed worktree.
+    pub cwd: String,
+    /// Durable workspace identity.
+    pub workspace_id: String,
+    /// Branch name saved when the workspace was created.
+    pub initial_branch: String,
 }
 
 /// Path-scoped discard request.

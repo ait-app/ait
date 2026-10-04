@@ -399,6 +399,12 @@ pub trait CheckoutRuntime: std::fmt::Debug + Send + Sync {
         require_clean_target: bool,
     ) -> Result<(), CheckoutRuntimeError>;
 
+    /// Fetch origin's default branch, restore the workspace's initial branch name, and reset HEAD.
+    ///
+    /// # Errors
+    /// Returns categorized validation, remote, Git, timeout, or output failures.
+    fn reset_workspace(&self, cwd: &str, initial_branch: &str) -> Result<(), CheckoutRuntimeError>;
+
     /// Pull the current branch.
     ///
     /// # Errors

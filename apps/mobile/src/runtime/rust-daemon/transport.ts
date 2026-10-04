@@ -7,11 +7,21 @@ import {
   FileTransferOpcode,
 } from "@ait/protocol/binary-frames/index";
 
+const RUNTIME_METHODS: Readonly<Record<string, MethodSpec>> = {
+  ...METHODS,
+  checkout_reset_workspace_request: {
+    method: "checkout.reset_workspace.request",
+    kind: "request",
+    channel: 2,
+    response: "checkout_reset_workspace_response",
+  },
+};
+
 export const CHANNEL_CAPABILITIES = Array.from({ length: 4 }, (_, channel) => [
   ...new Set([
     "connection.ping",
     "subscription.release.request",
-    ...Object.values(METHODS)
+    ...Object.values(RUNTIME_METHODS)
       .filter((spec) => spec.channel === channel)
       .map((spec) => spec.method),
   ]),
@@ -237,7 +247,7 @@ export function createRustDaemonTransportFactory(baseFactory: TransportFactory):
 
     function request(message: Payload, rawPing = false): void {
       const name = String(message.type);
-      const spec = METHODS[name];
+      const spec = RUNTIME_METHODS[name];
       if (!spec) throw new Error(`No Rust daemon method mapping for ${name}`);
       const callback = spec.kind === "response" ? object(message.payload) : undefined;
       const id =

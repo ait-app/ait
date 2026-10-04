@@ -2216,6 +2216,14 @@ export const CheckoutMergeFromBaseRequestSchema = z.object({
   requestId: z.string(),
 });
 
+export const CheckoutResetWorkspaceRequestSchema = z.object({
+  type: z.literal("checkout_reset_workspace_request"),
+  cwd: z.string(),
+  workspaceId: z.string(),
+  initialBranch: z.string(),
+  requestId: z.string(),
+});
+
 export const CheckoutPullRequestSchema = z.object({
   type: z.literal("checkout_pull_request"),
   cwd: z.string(),
@@ -3282,6 +3290,7 @@ export const SessionInboundMessageSchema = z.discriminatedUnion("type", [
   CheckoutCommitRequestSchema,
   CheckoutMergeRequestSchema,
   CheckoutMergeFromBaseRequestSchema,
+  CheckoutResetWorkspaceRequestSchema,
   CheckoutPullRequestSchema,
   CheckoutPushRequestSchema,
   CheckoutRefreshRequestSchema,
@@ -4011,6 +4020,7 @@ export const WorkspaceDescriptorPayloadSchema = z
     // COMPAT(worktreeSlug): added in v0.2.6, remove optional after 2027-01-31.
     // Present only for Paseo-owned worktrees; this is the basename of their root directory.
     worktreeSlug: z.string().optional(),
+    initialBranch: z.string().optional(),
     projectKind: z.enum(["git", "non_git", "directory"]),
     // COMPAT(workspaces): keep legacy directory workspace kind parseable.
     workspaceKind: z.enum(["directory", "local_checkout", "checkout", "worktree"]),
@@ -5435,6 +5445,16 @@ export const CheckoutMergeResponseSchema = z.object({
 
 export const CheckoutMergeFromBaseResponseSchema = z.object({
   type: z.literal("checkout_merge_from_base_response"),
+  payload: z.object({
+    cwd: z.string(),
+    success: z.boolean(),
+    error: CheckoutErrorSchema.nullable(),
+    requestId: z.string(),
+  }),
+});
+
+export const CheckoutResetWorkspaceResponseSchema = z.object({
+  type: z.literal("checkout_reset_workspace_response"),
   payload: z.object({
     cwd: z.string(),
     success: z.boolean(),
@@ -6892,6 +6912,7 @@ export const SessionOutboundMessageSchema = z.discriminatedUnion("type", [
   CheckoutCommitResponseSchema,
   CheckoutMergeResponseSchema,
   CheckoutMergeFromBaseResponseSchema,
+  CheckoutResetWorkspaceResponseSchema,
   CheckoutPullResponseSchema,
   CheckoutPushResponseSchema,
   CheckoutRefreshResponseSchema,
@@ -7247,6 +7268,7 @@ export type CheckoutMergeRequest = z.infer<typeof CheckoutMergeRequestSchema>;
 export type CheckoutMergeResponse = z.infer<typeof CheckoutMergeResponseSchema>;
 export type CheckoutMergeFromBaseRequest = z.infer<typeof CheckoutMergeFromBaseRequestSchema>;
 export type CheckoutMergeFromBaseResponse = z.infer<typeof CheckoutMergeFromBaseResponseSchema>;
+export type CheckoutResetWorkspaceResponse = z.infer<typeof CheckoutResetWorkspaceResponseSchema>;
 export type CheckoutPullRequest = z.infer<typeof CheckoutPullRequestSchema>;
 export type CheckoutPullResponse = z.infer<typeof CheckoutPullResponseSchema>;
 export type CheckoutPushRequest = z.infer<typeof CheckoutPushRequestSchema>;
