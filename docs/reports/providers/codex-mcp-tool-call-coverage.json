@@ -1,0 +1,87 @@
+{
+  "date": "2026-10-04",
+  "base_revision": "ec2ca85995bddcb15f9812489cb28a940ec56356",
+  "measurement_revision": "Base revision plus the modified Rust sources identified below; release documentation changed after measurement.",
+  "source_fingerprint": "bfe12ac1f12fba3ec3f72475c0f0b152232c4aae07dfccb6bf1f20c97b926fcc",
+  "fingerprint_algorithm": "SHA-256 of sorted relative Rust source path + NUL + content SHA-256 + newline for every .rs file under bins/ and crates/.",
+  "rust_source_files": 805,
+  "modified_rust_source_sha256": {
+    "crates/provider/src/local/codex/discovery.rs": "7214b72350a1518070583d09bfff25e5c1f75e0e8c9b66fac7e193ced3d75a85",
+    "crates/provider/src/local/codex/discovery/tests.rs": "2038ddc14174cd48345c0229d517f1c3551c5d8fd2f5d7f4b50e07d1ce02d0b4",
+    "crates/provider/src/local/tool_detail.rs": "69addd9c92494f0019d32d5623d9c5de4e8fd633e257d2615ece4d9d7195d225",
+    "crates/provider/src/local/tool_detail/tests.rs": "9cd690968bdf69e6f5afb464901bf0175be684ba88ceff63028f710f318752b6"
+  },
+  "platform": "aarch64-apple-darwin",
+  "rustc": "rustc 1.98.1 (48a229cea 2026-09-01)",
+  "cargo_llvm_cov": "0.8.4",
+  "features": "default workspace features",
+  "excluded_files": "cargo-llvm-cov defaults; no additional filters",
+  "doctest_instrumentation": false,
+  "commands": {
+    "clean_profiles": "cargo llvm-cov clean --profraw-only --offline",
+    "coverage": "RUST_TEST_THREADS=1 CARGO_INCREMENTAL=0 cargo llvm-cov --workspace --html --no-clean --offline --no-fail-fast -j2",
+    "summary": "CARGO_INCREMENTAL=0 cargo llvm-cov report --json --summary-only --output-path /private/tmp/ait-mcp-coverage-serial-summary.json"
+  },
+  "test_execution": {
+    "workspace": {
+      "passed": 1771,
+      "failed": 0,
+      "ignored": 3
+    },
+    "ignored_tests": [
+      {
+        "test": "local::claude::tests::process::installed_claude_control_protocol_discovers_models_without_inference",
+        "reason": "requires a locally installed Claude Code CLI; sends no model request"
+      },
+      {
+        "test": "local::claude::tests::process::parity::installed_claude_completes_a_native_turn_and_reopens_history",
+        "reason": "requires installed Claude authentication and makes one small model request"
+      },
+      {
+        "test": "local::codex::tests::installed::installed_codex_completes_a_native_turn_and_reopens_history",
+        "reason": "requires installed Codex authentication and makes one small model request"
+      }
+    ]
+  },
+  "scope_line_coverage": {
+    "workspace": {
+      "covered": 49050,
+      "count": 51906,
+      "percent": 94.49774592532656
+    },
+    "provider": {
+      "covered": 21325,
+      "count": 22701,
+      "percent": 93.93859301352363
+    }
+  },
+  "comparable_baseline": {
+    "artifact": "docs/reports/workspace/workspace-change-push-coverage.json",
+    "workspace": {
+      "covered": 49001,
+      "count": 51854,
+      "percent": 94.49801365372007
+    },
+    "workspace_change_percentage_points": -0.00026772839350996946,
+    "provider": {
+      "covered": 21276,
+      "count": 22649,
+      "percent": 93.93792220407082
+    },
+    "provider_change_percentage_points": 0.0006708094528136144,
+    "note": "Same macOS arm64 toolchain and default workspace scope; the intervening source changes prevent attributing the entire delta to this patch."
+  },
+  "reviewable_artifacts": {
+    "summary": "this committed JSON file",
+    "local_html": "target/llvm-cov/html/index.html"
+  },
+  "validation_notes": [
+    "An initial sandboxed run could not bind test listeners; it was interrupted.",
+    "Parallel instrumented runs timed out in one unrelated daemon directory-stream test; that test passed alone and in the final serial workspace run.",
+    "Raw profiles were cleared before the final serial coverage run, so this report includes only the passing run."
+  ],
+  "uncovered_behavior": [
+    "Authenticated end-to-end Codex MCP calls and the external GitHub connector were not exercised; the new mapping is covered by offline native-item tests.",
+    "Linux and Windows were not run."
+  ]
+}
