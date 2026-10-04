@@ -1,5 +1,6 @@
 //! Checkout status, diff, refresh, and history use cases.
 
+use std::path::Path;
 use std::sync::Arc;
 
 use metadata::ports::registry::WorkspaceRegistry;
@@ -187,7 +188,8 @@ impl Checkout {
                 .get(workspace_id)
                 .map_err(registry_reset_error)?
                 .ok_or_else(|| invalid_reset_workspace("Workspace not found"))?;
-            if workspace.cwd != cwd
+            // Clients normalize trailing separators in registered workspace paths.
+            if Path::new(&workspace.cwd) != Path::new(cwd)
                 || workspace.archived_at.is_some()
                 || !workspace.is_paseo_owned_worktree
                 || workspace.display_name != initial_branch
@@ -202,7 +204,7 @@ impl Checkout {
             let updated = registry
                 .update(workspace_id, &|workspace| {
                     let mut updated = workspace.clone();
-                    if updated.cwd == cwd
+                    if Path::new(&updated.cwd) == Path::new(cwd)
                         && updated.archived_at.is_none()
                         && updated.is_paseo_owned_worktree
                         && updated.display_name == initial_branch
