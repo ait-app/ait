@@ -1,5 +1,10 @@
 # Ait changelog
 
+## 0.0.17 - 2026-10-04
+
+- Normalize nullable workspace and project fields to `null` in daemon responses, so directory updates clear stale client state consistently.
+- Simplify Agent thinking filters, OpenCode event projection, and terminal service code; remove redundant clones and unreachable branches.
+
 ## 0.0.16 - 2026-10-04
 
 - Push workspace and agent directory changes to connected clients, so Hosts and running sessions update promptly.
