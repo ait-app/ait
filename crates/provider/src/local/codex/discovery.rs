@@ -248,8 +248,8 @@ pub(super) fn timeline_item(
                 return Ok(None);
             }
             let failed = native["status"] == "failed" || native["status"] == "declined";
-            let error = failed.then_some("Native tool failed");
-            json!({"type":"tool_call","callId":id,"name":kind,"status":if failed {"failed"} else {"completed"},
+            let error = crate::local::tool_detail::codex_error(native, failed);
+            json!({"type":"tool_call","callId":id,"name":crate::local::tool_detail::codex_name(native),"status":if failed {"failed"} else {"completed"},
                 "error":error,"detail":crate::local::tool_detail::codex(native)})
         }
     };
