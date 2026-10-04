@@ -1,5 +1,13 @@
 # Ait changelog
 
+## 0.0.18 - 2026-10-05
+
+- Keep Codex computer-use screenshots and embedded image metadata from exhausting timeline rows and hiding subsequent replies.
+- Separate online-service sign-in from per-host synchronization, with independent host controls and relay leases.
+- Add iOS account sign-in, online host discovery, relay connections, secure credential storage, and native downloads.
+- Add workspace reset to the latest origin default branch and guide Git actions through commit, push, pull-request, and archive states.
+- License Ait under Apache-2.0 and align branded copy and localized date tests.
+
 ## 0.0.17 - 2026-10-04
 
 - Show OpenCode tool cards before streamed conclusions and rebuild previously misordered session history on refresh.
