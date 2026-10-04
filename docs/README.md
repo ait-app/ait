@@ -32,6 +32,8 @@
 
 - [Android APK 发布](operations/android-releases.md)：独立手动构建测试或正式通用 APK。
 - [发布指南](operations/releasing.md)：桌面 Release、Android Internal Testing、iOS TestFlight。
+- [Ait 0.0.17 发布说明](reports/releases/release-0.0.17.md)：OpenCode 工具顺序、Workspace 可空字段与 Rust 清理。
+- [Ait 0.0.16 发布说明](reports/releases/release-0.0.16.md)：目录推送、终端与 Codex 修复，以及桌面发布。
 - [Ait 0.0.15 发布说明](reports/releases/release-0.0.15.md)：OpenCode、账户主机中继、Android APK 与稳定性修复。
 - [Ait 0.0.14 发布说明](reports/releases/release-0.0.14.md)：Diff 语法高亮、侧边栏统计与 Codex 推理等级。
 - [Apple 本机构建](operations/apple-builds.md)：DMG、模拟器和 IPA。
@@ -49,6 +51,7 @@
 - [Provider 能力清单](plans/provider-parity.md)：当前能力与后续工作。
 - [大 Diff 加载与超限降级](reports/workspace/large-diff-loading.md)：输出预算、连接保持与验证结果。
 - [Agent 创建任务预算竞争](reports/providers/agent-creation-resource-contention.md)：DSH 创建报错复现与后台 fetch 失败隔离验证。
+- [OpenCode 工具与结论顺序修复](reports/providers/opencode-tool-order.md)：流式前序条目发布与旧历史修复。
 - [OpenCode 上游 PR 验证](reports/providers/opencode-upstream-pr.md)：上游整合、冲突处理与测试范围。
 - [验证报告分类索引](reports/README.md)：实现、兼容性、发布及覆盖率记录。
 - [2026-10-03 仓库审计](reports/daemon/repository-audit-2026-10-03.md)：审计范围、已修复问题与验证限制。

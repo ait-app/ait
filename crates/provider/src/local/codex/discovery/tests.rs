@@ -24,6 +24,65 @@ fn generated_images_and_mcp_images_have_stable_sanitized_history() {
 }
 
 #[test]
+fn mcp_screenshot_metadata_does_not_exhaust_the_timeline() {
+    let native = json!({"id":"call","type":"mcpToolCall","server":"cua_repl","tool":"js",
+        "status":"completed","arguments":{"code":"await tab.screenshot()"},
+        "result":{"content":[{"type":"text","text":"Done"}],"isError":false,
+            "_meta":{"codex/toolSurface":{"screenshot":{"url":"x".repeat(320 * 1024)}}}}});
+    let items = timeline_items(
+        &native,
+        "turn",
+        "time",
+        &crate::local::images::ImageStore::default(),
+    )
+    .unwrap();
+    assert_eq!(items.len(), 1);
+    assert!(items[0].item["detail"]["output"].get("_meta").is_none());
+    assert_eq!(
+        items[0].item["detail"]["output"]["content"][0]["text"],
+        "Done"
+    );
+
+    let timeline = crate::storage::timeline::Timeline::memory().unwrap();
+    timeline.append("agent", "codex", &items).unwrap();
+}
+
+#[test]
+fn completed_mcp_tool_uses_the_same_name_and_input_as_its_running_card() {
+    let native = json!({"id":"call","type":"mcpToolCall","server":"cua_repl","tool":"js",
+        "status":"completed","arguments":{"code":"await tab.goto('https://example.com')"},
+        "result":{"content":[{"type":"text","text":"Done"}]}});
+    let items = timeline_items(
+        &native,
+        "turn",
+        "time",
+        &crate::local::images::ImageStore::default(),
+    )
+    .unwrap();
+    assert_eq!(items.len(), 1);
+    assert_eq!(items[0].item["callId"], "call");
+    assert_eq!(items[0].item["name"], "cua_repl.js");
+    assert_eq!(
+        items[0].item["detail"],
+        json!({"type":"unknown",
+        "input":{"code":"await tab.goto('https://example.com')"},
+        "output":{"content":[{"type":"text","text":"Done"}]}})
+    );
+    let mut failed = native;
+    failed["status"] = json!("failed");
+    failed["error"] = json!({"message":"Access denied"});
+    let failure = timeline_items(
+        &failed,
+        "turn",
+        "time",
+        &crate::local::images::ImageStore::default(),
+    )
+    .unwrap();
+    assert_eq!(failure[0].item["status"], "failed");
+    assert_eq!(failure[0].item["error"], json!({"message":"Access denied"}));
+}
+
+#[test]
 fn native_items_keep_stable_source_identity_and_supported_display_shapes() {
     for (native, expected) in [
         (

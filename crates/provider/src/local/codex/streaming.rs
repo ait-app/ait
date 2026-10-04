@@ -81,6 +81,10 @@ impl Stream {
             return Ok(false);
         }
         if self.completed.len() >= MAX_ITEMS {
+            tracing::warn!(
+                limit_items = MAX_ITEMS,
+                "Codex completed item limit reached"
+            );
             return Err(AgentSessionError::Failed);
         }
         self.text_bytes.remove(id);
@@ -132,6 +136,10 @@ impl Stream {
             return Ok(None);
         }
         if self.text_bytes.len() >= MAX_ITEMS && !self.text_bytes.contains_key(id) {
+            tracing::warn!(
+                limit_items = MAX_ITEMS,
+                "Codex streaming text item limit reached"
+            );
             return Err(AgentSessionError::Failed);
         }
         let reasoning = method == "item/reasoning/summaryTextDelta";
@@ -152,6 +160,11 @@ impl Stream {
         let bytes = self.text_bytes.entry(id.to_owned()).or_default();
         *bytes = bytes.saturating_add(delta.len() + prefix.len());
         if *bytes > MAX_TEXT {
+            tracing::warn!(
+                size_bytes = *bytes,
+                limit_bytes = MAX_TEXT,
+                "Codex streaming text exceeds size limit"
+            );
             return Err(AgentSessionError::Failed);
         }
         let mut item = json!({"type":if reasoning {"reasoning"} else {"assistant_message"},
@@ -184,11 +197,21 @@ impl Stream {
             return Ok(None);
         }
         if self.tool_rows >= MAX_ITEMS {
+            tracing::warn!(
+                limit_items = MAX_ITEMS,
+                "Codex running tool item limit reached"
+            );
             return Err(AgentSessionError::Failed);
         }
         let turn = text(params, "turnId")?;
         let items = crate::local::tool_detail::codex_tools(native, "running");
         if items.len() > MAX_ITEMS - self.tool_rows {
+            tracing::warn!(
+                running_items = self.tool_rows,
+                new_items = items.len(),
+                limit_items = MAX_ITEMS,
+                "Codex running tool item limit reached"
+            );
             return Err(AgentSessionError::Failed);
         }
         self.tool_rows += items.len();

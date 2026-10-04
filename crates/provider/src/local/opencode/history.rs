@@ -17,10 +17,19 @@ pub(super) fn normalize(
     session: &str,
     messages: &[Value],
 ) -> Result<Vec<Record>, ProtocolError> {
+    normalize_messages(version, session, messages, false)
+}
+
+fn normalize_messages(
+    version: Version,
+    session: &str,
+    messages: &[Value],
+    partial_last: bool,
+) -> Result<Vec<Record>, ProtocolError> {
     let mut output = Vec::with_capacity(messages.len());
     let mut ids = HashSet::with_capacity(messages.len());
     let mut calls = HashSet::new();
-    for message in messages {
+    for (index, message) in messages.iter().enumerate() {
         let info = match version {
             Version::V1 => message.get("info").unwrap_or(&Value::Null),
             Version::V2 => message,
@@ -35,7 +44,12 @@ pub(super) fn normalize(
                 "OpenCode history identity mismatch",
             ));
         }
-        let mut record = new_record(version, session, info)?;
+        let mut record = new_record(
+            version,
+            session,
+            info,
+            partial_last && index + 1 == messages.len(),
+        )?;
         let kind = required_string(
             info,
             if version == Version::V1 {
@@ -273,7 +287,12 @@ fn safe_value(value: &Value, depth: usize) -> Value {
     }
 }
 
-fn new_record(version: Version, session: &str, info: &Value) -> Result<Record, ProtocolError> {
+fn new_record(
+    version: Version,
+    session: &str,
+    info: &Value,
+    partial: bool,
+) -> Result<Record, ProtocolError> {
     let id = required_string(info, "id")?;
     let kind = required_string(
         info,
@@ -295,6 +314,7 @@ fn new_record(version: Version, session: &str, info: &Value) -> Result<Record, P
         }
     };
     if kind == "assistant"
+        && !partial
         && info
             .pointer("/time/completed")
             .and_then(Value::as_i64)
@@ -330,3 +350,6 @@ fn new_record(version: Version, session: &str, info: &Value) -> Result<Record, P
                 "protocol_version": if version == Version::V1 {1} else {2}, "native_type":kind}),
     })
 }
+
+mod prefix;
+pub(super) use prefix::before_text;

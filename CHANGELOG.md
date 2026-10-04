@@ -1,5 +1,20 @@
 # Ait changelog
 
+## 0.0.17 - 2026-10-04
+
+- Show OpenCode tool cards before streamed conclusions and rebuild previously misordered session history on refresh.
+- Normalize nullable workspace and project fields to `null` in daemon responses, so directory updates clear stale client state consistently.
+- Simplify Agent thinking filters, OpenCode event projection, and terminal service code; remove redundant clones and unreachable branches.
+
+## 0.0.16 - 2026-10-04
+
+- Push workspace and agent directory changes to connected clients, so Hosts and running sessions update promptly.
+- Preserve terminal selections when a resize claims the same terminal dimensions.
+- Show Codex model discovery and capacity errors while keeping hidden models excluded.
+- Show Codex MCP tool names, arguments, results, and native errors without dumping the full event envelope.
+- Stabilize agent creation under task-budget contention and isolate background Git fetch failures.
+- Move Android APK publishing to a standalone manual workflow; version tags continue to publish desktop builds only.
+
 ## 0.0.15 - 2026-10-03
 
 - Add native OpenCode sessions with model discovery, streaming, tool approvals, cancellation, and conversation restore.

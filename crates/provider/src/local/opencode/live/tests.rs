@@ -4,6 +4,7 @@ use crate::ports::agent_session::{AgentClient, AgentResumePurpose, AgentSessionS
 
 mod ordering;
 mod streaming;
+mod tool_ordering;
 
 fn spec(fixture: &Fixture) -> AgentSessionSpec {
     AgentSessionSpec {

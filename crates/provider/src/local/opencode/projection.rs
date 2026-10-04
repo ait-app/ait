@@ -8,7 +8,7 @@ use serde_json::{Value, json};
 /// Return the versioned Ait display key for a native identity.
 /// Existing `OpenCode` projections rebuild once; native IDs and other providers are unaffected.
 pub(super) fn key(id: &str) -> String {
-    format!("native:opencode:projection-v2:{id}")
+    format!("native:opencode:projection-v3:{id}")
 }
 
 pub(super) fn entries(
