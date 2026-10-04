@@ -112,6 +112,7 @@
 
 ## 发布验证
 
+- [Ait 0.0.18 发布说明](releases/release-0.0.18.md)
 - [Ait 0.0.16 发布说明](releases/release-0.0.16.md)
 - [Ait 0.0.15 发布说明](releases/release-0.0.15.md)
 - [Ait 0.0.10 发布说明](releases/release-0.0.10.md)
