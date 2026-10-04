@@ -5,41 +5,44 @@ edition.workspace = true
 publish.workspace = true
 
 [dependencies]
+model.workspace = true
+domain.workspace = true
+metadata.workspace = true
+
 # Internal OpenCode approval and progress sinks over the owned HTTP runtime.
-async-trait = "0.1.89"
+async-trait.workspace = true
 # Consume bounded OpenCode HTTP and SSE response streams.
-futures-util = "0.3.31"
+futures-util.workspace = true
 # Validate image payloads before native prompt admission and decode provider image artifacts.
-base64 = "0.22.1"
+base64.workspace = true
 # Read-only Claude OAuth quota inspection; credentials never enter public snapshots.
-reqwest = { version = "0.12.28", default-features = false, features = ["rustls-tls", "json", "stream"] }
-secrecy = "0.10.3"
-model = { version = "0.0.15", path = "../model" }
-domain = { version = "0.0.15", path = "../domain" }
-metadata = { version = "0.0.15", path = "../metadata" }
-chrono = { version = "0.4.45", default-features = false, features = ["clock", "std"] }
-rusqlite = { version = "0.37", features = ["bundled", "backup"] }
-serde = { version = "1.0.229", features = ["derive"] }
-serde_json = "1.0.151"
-sha2 = "0.10.9"
-tempfile = "3.27.0"
-thiserror = "2.0.20"
-tokio = { version = "1.53.1", features = ["rt", "process", "io-util", "sync", "time", "macros"] }
-tokio-util = { version = "0.7.19", features = ["rt"] }
-uuid = { version = "1.26.0", features = ["v4"] }
+reqwest.workspace = true
+reqwest.features = ["rustls-tls", "json", "stream"]
+secrecy.workspace = true
+chrono.workspace = true
+rusqlite.workspace = true
+rusqlite.features = ["bundled", "backup"]
+serde.workspace = true
+serde_json.workspace = true
+sha2.workspace = true
+tempfile.workspace = true
+thiserror.workspace = true
+tokio.workspace = true
+tokio-util.workspace = true
+uuid.workspace = true
 # Estimate chat search hits from rendered Markdown blocks without an HTML renderer.
-pulldown-cmark = { version = "0.13.4", default-features = false }
+pulldown-cmark.workspace = true
 # Match literal queries with Unicode case folding and flexible whitespace.
-regex = "1.13.1"
+regex.workspace = true
 
 [lints]
 workspace = true
 
 [dev-dependencies]
 # Offline native HTTP fixtures, without provider credentials or a model API.
-axum = "0.8.8"
-tokio-stream = "0.1.17"
+axum.workspace = true
+tokio-stream.workspace = true
 
 [target.'cfg(target_os = "macos")'.dependencies]
 # Match Claude Agent SDK's NFC normalization of native session directory names.
-unicode-normalization = "0.1.24"
+unicode-normalization.workspace = true

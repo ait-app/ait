@@ -7,9 +7,88 @@ version = "0.0.15"
 edition = "2024"
 publish = false
 
+[workspace.dependencies]
+api = { path = "crates/api" }
+browser = { path = "crates/browser" }
+domain = { path = "crates/domain" }
+filesystem = { path = "crates/filesystem" }
+metadata = { path = "crates/metadata" }
+model = { path = "crates/model" }
+protocol = { path = "crates/protocol" }
+provider = { path = "crates/provider" }
+relay = { path = "crates/relay" }
+schedule = { path = "crates/schedule" }
+terminal = { path = "crates/terminal" }
+voice = { path = "crates/voice" }
+
+anyhow = "1.0.104"
+async-trait = "0.1.89"
+axum = { version = "0.8.9", features = ["ws"] }
+base64 = "0.22.1"
+bzip2 = "0.6"
+chrono = { version = "0.4.45", default-features = false, features = ["clock", "std"] }
+chrono-tz = "0.10.4"
+clap = { version = "4.6.6", features = ["derive"] }
+futures-util = "0.3.34"
+getrandom = "0.4.3"
+icu_collator = "2.3.0"
+icu_locale_core = "2.3.0"
+indexmap = "2.14.2"
+libc = "0.2"
+memchr = "2.8.3"
+nix = "0.31.3"
+portable-pty = "0.9.0"
+pulldown-cmark = { version = "0.13.4", default-features = false }
+regex = "1.13.1"
+reqwest = { version = "0.12.28", default-features = false }
+rusqlite = "0.37"
+secrecy = "0.10.3"
+serde = { version = "1.0.229", features = ["derive"] }
+serde_json = "1.0.151"
+sha2 = "0.10.9"
+sherpa-onnx = "=1.13.8"
+subtle = "2.6.1"
+tar = "0.4"
+tempfile = "3.27.0"
+thiserror = "2.0.20"
+tokio = { version = "1.53.1", features = ["macros", "rt", "sync", "time", "net", "rt-multi-thread", "signal", "process", "io-util", "fs"] }
+tokio-stream = "0.1.17"
+tokio-tungstenite = "0.29"
+tokio-util = { version = "0.7.19", features = ["rt"] }
+toml = "1.1.6"
+tower-http = "0.6"
+tracing = "0.1.44"
+tracing-subscriber = "0.3.23"
+two-face = { version = "0.5.2", features = ["syntect-fancy"] }
+unicode-normalization = "0.1.24"
+url = "2.5.8"
+uuid = { version = "1.26.0", features = ["v4"] }
+vt100 = "0.16.2"
+
 [workspace.lints.rust]
 missing_docs = "warn"
-unsafe_code = "forbid"
+# 1. 内存安全与规范
+unsafe_code = "deny"                # 禁止或严格限制 unsafe 代码块
+
+# 2. 质量与规范
+unused_imports = "warn"             # 未使用的导入
+unused_variables = "warn"           # 未使用的变量
+dead_code = "warn"                  # 未使用的函数/结构体（可设为 allow，适合开发中）
+unreachable_code = "warn"           # 无法到达的代码
+unused_crate_dependencies = "warn"
+unused_lifetimes = "warn"
+unused_macro_rules = "warn"
+
+# 3. 命名与风格
+non_snake_case = "warn"             # 变量/函数名非蛇形命名
+non_camel_case_types = "warn"       # 类型名非驼峰命名
+non_upper_case_globals = "warn"     # 全局常量非全大写
+
+# 4. 严谨性（推荐在大型项目开启）
+unused_qualifications = "warn"      # 不必要的完全限定路径
+unused_results = "allow"
+unused_import_braces = "warn"
+unused_extern_crates = "warn"
 
 [workspace.lints.clippy]
 all = "warn"
