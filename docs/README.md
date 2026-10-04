@@ -13,6 +13,7 @@
 
 ## 架构决策
 
+- [ADR-083：在线服务登录与逐主机同步分离](decisions/clients/adr-083-online-service-host-sync.md)：二级登录入口、应用账户设置及每台 daemon 的独立同步与租约。
 - [ADR-080：Android APK 独立手动发布](decisions/clients/adr-080-standalone-android-release.md)：统一测试与正式入口，桌面发布不再调用 Android。
 - [ADR-079：移动端统一使用 Expo EAS 构建](decisions/clients/adr-079-mobile-eas-builds.md)：沿用原有 profile，Android 发布通用 APK，iOS 提交 TestFlight。
 - [ADR-078：Android 发布改为手动可选](decisions/clients/adr-078-optional-android-release.md)：标签发布只构建桌面，Android 默认关闭。

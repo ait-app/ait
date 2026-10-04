@@ -23,13 +23,16 @@ function fixture() {
         expires_in: 3600,
         user: { email: "me@example.test" },
       });
-    if (path.endsWith("/nodes/register"))
+    if (path.endsWith("/nodes/register")) {
+      const runtime = JSON.parse(String(_options?.body)).runtime;
       return Response.json({
         node_id: "client",
-        node_session_id: "lease",
-        host_id: null,
-        control_required: false,
+        node_session_id: runtime ? `lease-${runtime.server_id}` : "lease",
+        host_id: runtime ? `host-${runtime.server_id}` : null,
+        control_required: Boolean(runtime),
       });
+    }
+    if (path.endsWith("/control-tickets")) return Response.json({ control_ticket: "a".repeat(64) });
     if (path.includes("/hosts/online")) return Response.json({ hosts: [host] });
     if (path.endsWith("/renew") && leaseExpired) {
       leaseExpired = false;
@@ -151,5 +154,245 @@ describe("client-only account lifecycle", () => {
     await vi.advanceTimersByTimeAsync(1);
     expect(manager.snapshot().status).toBe("online");
     await manager.logout();
+  });
+});
+
+describe("explicit daemon publication", () => {
+  const first = {
+    serverId: "first",
+    instanceId: "instance-1",
+    name: "First host",
+    platform: "linux",
+  };
+  const second = {
+    serverId: "second",
+    instanceId: "instance-2",
+    name: "Second host",
+    platform: "darwin",
+  };
+
+  it("keeps desktop login independent from daemon publication and binds grants to each host", async () => {
+    const { manager, deps, http, login } = fixture();
+    deps.publishRuntime = false;
+    deps.runtime = () => ({
+      status: "running",
+      serverId: "local",
+      instanceId: "local-instance",
+      features: ["ait-rust-single-v1"],
+    });
+    await login();
+    expect(JSON.parse(String(http.mock.calls[1][1]?.body)).runtime).toBeNull();
+    const grant = await manager.publishHost(first);
+    expect(grant).toEqual({
+      center_url: "https://dash.ait-app.com:8443/api",
+      control_ticket: "a".repeat(64),
+      node_session_id: "lease-first",
+    });
+    await manager.publishHost(second);
+    await manager.publishHost(first, false);
+    const registrations = http.mock.calls.filter(([url]) =>
+      String(url).endsWith("/nodes/register"),
+    );
+    expect(registrations).toHaveLength(3);
+    expect(JSON.parse(String(registrations[1][1]?.body))).toMatchObject({
+      display_name: "First host",
+      runtime: { server_id: "first", instance_id: "instance-1" },
+    });
+    expect(JSON.parse(String(registrations[2][1]?.body))).toMatchObject({
+      runtime: { server_id: "second", instance_id: "instance-2" },
+    });
+    expect(JSON.stringify(grant)).not.toContain("private-jwt");
+    expect(deps.local).not.toHaveBeenCalledWith("PUT", expect.anything());
+    await vi.advanceTimersByTimeAsync(22_000);
+    for (const id of ["first", "second"])
+      expect(
+        http.mock.calls.some(([url]) => String(url).endsWith(`/node-sessions/lease-${id}/renew`)),
+      ).toBe(true);
+    await manager.unpublishHost("first");
+    const before = http.mock.calls.length;
+    await vi.advanceTimersByTimeAsync(22_000);
+    expect(
+      http.mock.calls.slice(before).some(([url]) => String(url).endsWith("/lease-first/renew")),
+    ).toBe(false);
+    await manager.logout();
+    expect(http.mock.calls).not.toContainEqual([
+      expect.stringContaining("/node-sessions/lease-second"),
+      expect.objectContaining({ method: "DELETE" }),
+    ]);
+    expect(manager.snapshot()).toMatchObject({
+      status: "logged_out",
+      synchronizedHosts: ["second"],
+    });
+    const afterLogout = http.mock.calls.length;
+    await vi.advanceTimersByTimeAsync(22_000);
+    expect(http.mock.calls.slice(afterLogout)).toContainEqual([
+      expect.stringContaining("/node-sessions/lease-second/renew"),
+      expect.objectContaining({ method: "POST" }),
+    ]);
+    expect(
+      http.mock.calls.slice(afterLogout).some(([url]) => String(url).includes("/hosts/online")),
+    ).toBe(false);
+    await manager.unpublishHost("second");
+  });
+
+  it("replaces a restarted daemon's lease and requires a signed-in account", async () => {
+    const { manager, http, login } = fixture();
+    await expect(manager.publishHost(first)).rejects.toThrow("Sign in first");
+    await login();
+    await expect(manager.publishHost({ ...first, instanceId: "" })).rejects.toThrow(
+      "Invalid host identity",
+    );
+    await manager.publishHost(first);
+    await manager.publishHost({ ...first, instanceId: "restarted" });
+    expect(http.mock.calls).toContainEqual([
+      expect.stringContaining("/node-sessions/lease-first"),
+      expect.objectContaining({ method: "DELETE" }),
+    ]);
+    expect(http.mock.calls.filter(([url]) => String(url).endsWith("/nodes/register"))).toHaveLength(
+      3,
+    );
+    await manager.logout();
+  });
+
+  it("releases only the binding daemon on logout and lets remote daemons reconnect and stop while signed out", async () => {
+    const { manager, deps, http, login } = fixture();
+    deps.publishRuntime = false;
+    deps.runtime = () => ({ status: "running", serverId: "first", instanceId: first.instanceId });
+    await login();
+    await manager.publishHost(first);
+    await manager.publishHost(second);
+    await manager.logout();
+    expect(manager.snapshot()).toMatchObject({
+      status: "logged_out",
+      synchronizedHosts: ["second"],
+    });
+    const deleted = http.mock.calls
+      .filter(([, options]) => options?.method === "DELETE")
+      .map(([url]) => String(url));
+    expect(deleted).toContainEqual(expect.stringContaining("/node-sessions/lease"));
+    expect(deleted).toContainEqual(expect.stringContaining("/node-sessions/lease-first"));
+    expect(deleted).not.toContainEqual(expect.stringContaining("/node-sessions/lease-second"));
+    await expect(manager.publishHost(first)).rejects.toThrow("Sign in first");
+    expect(await manager.publishHost(second)).toMatchObject({ node_session_id: "lease-second" });
+    const before = http.mock.calls.length;
+    await vi.advanceTimersByTimeAsync(22_000);
+    const renewals = http.mock.calls
+      .slice(before)
+      .filter(([url]) => String(url).endsWith("/renew"));
+    expect(renewals).toHaveLength(1);
+    expect(String(renewals[0][0])).toContain("lease-second/renew");
+    await manager.unpublishHost("second");
+    const stopped = http.mock.calls.length;
+    await vi.advanceTimersByTimeAsync(22_000);
+    expect(http).toHaveBeenCalledTimes(stopped);
+    expect(JSON.stringify(manager.snapshot())).not.toContain("private-jwt");
+  });
+
+  it("keeps a daemon's original account authority when the client signs into another service", async () => {
+    const { manager, http, login } = fixture();
+    await login();
+    await manager.publishHost(second);
+    await manager.login("https://other.test/api", "other@example.test", "other secret");
+    await vi.advanceTimersByTimeAsync(22_000);
+    expect(http.mock.calls).toContainEqual([
+      "https://dash.ait-app.com:8443/api/v1/node-sessions/lease-second/renew",
+      expect.objectContaining({ method: "POST" }),
+    ]);
+    expect(await manager.publishHost(second)).toMatchObject({
+      center_url: "https://dash.ait-app.com:8443/api",
+    });
+    await manager.unpublishHost("second");
+    await manager.logout();
+  });
+
+  it("does not revoke remote leases when the app shuts down", async () => {
+    const { manager, http, login } = fixture();
+    await login();
+    await manager.publishHost(second);
+    await manager.shutdown();
+    expect(http.mock.calls).not.toContainEqual([
+      expect.stringContaining("/node-sessions/lease-second"),
+      expect.objectContaining({ method: "DELETE" }),
+    ]);
+    const before = http.mock.calls.length;
+    await vi.advanceTimersByTimeAsync(22_000);
+    expect(http).toHaveBeenCalledTimes(before);
+  });
+
+  it("does not abort a remote registration in flight when the client signs out", async () => {
+    const { manager, http, login } = fixture();
+    await login();
+    let complete: (response: Response) => void = () => {};
+    http.mockImplementationOnce(
+      () =>
+        new Promise<Response>((resolve) => {
+          complete = resolve;
+        }),
+    );
+    const publishing = manager.publishHost(second);
+    const signal = http.mock.calls.at(-1)?.[1]?.signal;
+    await manager.logout();
+    expect(signal?.aborted).toBe(false);
+    complete(
+      Response.json({
+        node_id: "second",
+        node_session_id: "lease-second",
+        host_id: "second",
+        control_required: true,
+      }),
+    );
+    expect(await publishing).toMatchObject({ node_session_id: "lease-second" });
+    await manager.unpublishHost("second");
+  });
+
+  it("isolates a daemon authorization failure from the client and other daemon renewals", async () => {
+    const { manager, http, login } = fixture();
+    const original = http.getMockImplementation()!;
+    http.mockImplementation((url, options) =>
+      String(url).endsWith("/lease-first/renew")
+        ? Promise.resolve(Response.json({ error: { code: "unauthorized" } }, { status: 401 }))
+        : original(url, options),
+    );
+    await login();
+    await manager.publishHost(first);
+    await manager.publishHost(second);
+    await vi.advanceTimersByTimeAsync(44_000);
+    expect(manager.snapshot()).toMatchObject({
+      status: "online",
+      synchronizedHosts: ["first", "second"],
+    });
+    expect(
+      http.mock.calls.filter(([url]) => String(url).endsWith("/lease-second/renew")),
+    ).toHaveLength(2);
+    expect(http.mock.calls.some(([, options]) => options?.method === "DELETE")).toBe(false);
+    await manager.unpublishHost("first");
+    await manager.unpublishHost("second");
+    await manager.logout();
+  });
+
+  it("stops renewing the binding daemon even if its logout revocation cannot reach the service", async () => {
+    const { manager, deps, http, login } = fixture();
+    const original = http.getMockImplementation()!;
+    http.mockImplementation((url, options) =>
+      String(url).endsWith("/lease-first") && options?.method === "DELETE"
+        ? Promise.resolve(Response.json({ error: { code: "unavailable" } }, { status: 503 }))
+        : original(url, options),
+    );
+    deps.publishRuntime = false;
+    deps.runtime = () => ({ status: "running", serverId: first.serverId });
+    await login();
+    await manager.publishHost(first);
+    await manager.publishHost(second);
+    await manager.logout();
+    expect(manager.snapshot().synchronizedHosts).toEqual(["second"]);
+    const before = http.mock.calls.length;
+    await vi.advanceTimersByTimeAsync(22_000);
+    expect(
+      http.mock.calls.slice(before).some(([url]) => String(url).endsWith("/lease-first/renew")),
+    ).toBe(false);
+    expect(
+      http.mock.calls.slice(before).some(([url]) => String(url).endsWith("/lease-second/renew")),
+    ).toBe(true);
+    await manager.unpublishHost("second");
   });
 });

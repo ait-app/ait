@@ -1,6 +1,6 @@
 import { AgentProfilesSection } from "@/agent-profiles";
 import { AgentSkillsSection } from "@/agent-skills";
-import { AccountHostPanel } from "@/components/account-host-panel";
+import { OnlineServiceHostSection } from "./online-service-host-section";
 import { supportsAccountRelay } from "@/runtime/account-state";
 import { AdaptiveModalSheet, type SheetHeader } from "@/components/adaptive-modal-sheet";
 import { getProviderIcon } from "@/components/provider-icons";
@@ -237,6 +237,7 @@ export function HostConnectionsPage({ serverId }: { serverId: string }) {
     <View>
       <HostConnectionError serverId={serverId} />
       <ConnectionsSection host={host} />
+      {supportsAccountRelay() ? <OnlineServiceHostSection host={host} /> : null}
     </View>
   );
 }
@@ -365,8 +366,6 @@ export function HostSettingsPage({
       </View>
 
       <HostStatusBadges serverId={serverId} />
-
-      {supportsAccountRelay() ? <AccountHostPanel /> : null}
 
       <HostAppearanceSection host={host} />
 

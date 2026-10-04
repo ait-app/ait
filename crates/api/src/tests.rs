@@ -2,6 +2,7 @@ use super::*;
 
 mod browser_auth;
 mod paseo;
+mod relay_rpc;
 mod server_info;
 mod session;
 mod single;
@@ -175,9 +176,10 @@ fn assert_default_capabilities(info: &ServerInfo) {
             "session.events.set_subscription.request",
             "creation.subscribe.request",
         ])
+        .chain(crate::relay_rpc::METHODS.iter().copied())
         .collect();
     assert_eq!(info.implemented_capabilities, expected);
-    assert_eq!(info.capabilities.len(), 171);
+    assert_eq!(info.capabilities.len(), 174);
     assert!(
         info.capabilities
             .contains(&"connection.single.v1".to_owned())

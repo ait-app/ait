@@ -64,6 +64,7 @@ export function createAccountIpc(
   const manager = new AccountSessionManager({
     installationId,
     appVersion: app.getVersion(),
+    publishRuntime: false,
     runtime: () => getRuntime().status(),
     local: (method, body) => getRuntime().relayRequest(method, body),
     save,
@@ -113,6 +114,20 @@ export function createAccountIpc(
           return manager.snapshot();
         case "account_select":
           return manager.select(typeof args.hostId === "string" ? args.hostId : null);
+        case "account_host_sync":
+          return manager.publishHost(
+            {
+              serverId: args.serverId as string,
+              instanceId: args.instanceId as string,
+              name: args.name as string,
+              platform: args.platform as string,
+            },
+            args.needsGrant !== false,
+          );
+        case "account_host_disconnect":
+          if (typeof args.serverId !== "string") throw new Error("Invalid host identity");
+          await manager.unpublishHost(args.serverId);
+          return;
         case "account_transport_open":
           return transports.open(
             event.sender,
@@ -161,7 +176,15 @@ export function createAccountIpc(
       }
     };
     // Serialize account changes; data frames and status reads remain independent.
-    if (["account_login", "account_logout", "account_select"].includes(command)) {
+    if (
+      [
+        "account_login",
+        "account_logout",
+        "account_select",
+        "account_host_sync",
+        "account_host_disconnect",
+      ].includes(command)
+    ) {
       const next = accountOperation.then(operation);
       accountOperation = next.catch(() => undefined);
       return next;

@@ -24,6 +24,7 @@ export interface AccountState {
   stale: boolean;
   error: string | null;
   selected: AccountHost | null;
+  synchronizedHosts?: string[];
 }
 
 export const useAccountState = create<AccountState>(() => ({
@@ -44,6 +45,13 @@ export function supportsAccountRelay(): boolean {
 let commandTail = Promise.resolve<unknown>(undefined);
 let snapshotSequence = 0;
 
+/** Account and host publication changes share one native authority queue. */
+export function serializeNativeAccountCommand<T>(work: () => Promise<T>): Promise<T> {
+  const operation = commandTail.then(work);
+  commandTail = operation.catch(() => undefined);
+  return operation;
+}
+
 async function receiveAccountSnapshot(snapshot: AccountState): Promise<void> {
   useAccountState.setState(snapshot);
   const sequence = ++snapshotSequence;
@@ -58,7 +66,7 @@ export async function accountCommand(
 ): Promise<AccountState> {
   const invoke = getDesktopHost()?.invoke;
   if (!invoke && Platform.OS === "android") {
-    const operation = commandTail.then(async () => {
+    return serializeNativeAccountCommand(async () => {
       const manager = await getNativeAccount();
       switch (command) {
         case "account_login":
@@ -88,8 +96,6 @@ export async function accountCommand(
       await receiveAccountSnapshot(snapshot);
       return snapshot;
     });
-    commandTail = operation.catch(() => undefined);
-    return operation;
   }
   if (!invoke) throw new Error("Account login is available in the Android and desktop apps.");
   const snapshot = (await invoke(command, args)) as AccountState;
