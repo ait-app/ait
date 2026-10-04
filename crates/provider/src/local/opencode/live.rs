@@ -336,6 +336,17 @@ impl AgentSession for Session {
     }
     fn poll_turn(&mut self) -> Result<Option<AgentTurnEvent>, AgentSessionError> {
         if let Ok(event) = self.events.try_recv() {
+            if let AgentTurnEvent::Timeline(entry) = &event {
+                if self
+                    .known
+                    .get(&entry.key)
+                    .is_some_and(|previous| previous != entry)
+                {
+                    self.failed = true;
+                    return Err(AgentSessionError::Failed);
+                }
+                self.known.insert(entry.key.clone(), entry.clone());
+            }
             return Ok(Some(event));
         }
         if let Some(receiver) = &mut self.finished {

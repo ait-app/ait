@@ -77,7 +77,7 @@ fn legacy_null_tool_fields_are_replaced_on_history_refresh() {
         let mut legacy = entries[0].clone();
         legacy.key = legacy
             .key
-            .replace("native:opencode:projection-v2:", "native:opencode:");
+            .replace("native:opencode:projection-v3:", "native:opencode:");
         legacy.item["detail"]["cwd"] = Value::Null;
         legacy.item["detail"]["output"] = Value::Null;
         let timeline = Timeline::memory().unwrap();

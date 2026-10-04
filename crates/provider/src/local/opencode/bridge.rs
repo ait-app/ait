@@ -172,8 +172,10 @@ impl ApprovalSink for Bridge {
 impl ProgressSink for Bridge {
     async fn report(&self, event: ProgressEvent) {
         let (id, delta) = match event {
-            ProgressEvent::UserMessage(mut entry) => {
-                if let Some(client) = &self.client_message_id {
+            ProgressEvent::Timeline(mut entry) => {
+                if entry.item["type"] == "user_message"
+                    && let Some(client) = &self.client_message_id
+                {
                     entry.item["clientMessageId"] = json!(client);
                 }
                 let _ = self.events.send(AgentTurnEvent::Timeline(*entry)).await;

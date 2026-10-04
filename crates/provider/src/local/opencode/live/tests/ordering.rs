@@ -176,7 +176,7 @@ async fn legacy_opencode_projection_rebuilds_once_from_native_history() {
             .map(|mut entry| {
                 entry.key = entry
                     .key
-                    .replace("native:opencode:projection-v2:", "native:opencode:");
+                    .replace("native:opencode:projection-v3:", "native:opencode:");
                 entry
             })
             .collect::<Vec<_>>();
