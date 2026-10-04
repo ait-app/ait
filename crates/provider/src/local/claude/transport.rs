@@ -288,6 +288,10 @@ fn launch_command(
     if let Some(path) = &client.config_dir {
         command.env("CLAUDE_CONFIG_DIR", path);
     }
+    // Server credentials never reach child processes; explicit settings below still apply.
+    for name in model::process::private_environment() {
+        command.env_remove(name);
+    }
     command
         .envs(client.environment.entries())
         .env_remove("CLAUDECODE")

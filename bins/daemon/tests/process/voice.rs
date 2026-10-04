@@ -52,6 +52,9 @@ fn start_server(
 ) -> (Process, std::path::PathBuf) {
     let log = root.join("server.log");
     let child = Command::new(env!("CARGO_BIN_EXE_daemon"))
+        .env_remove("BONSAI_RUNTIME_URL")
+        .env_remove("BONSAI_RUNTIME_ID")
+        .env_remove("BONSAI_RUNTIME_TOKEN")
         .arg("--data-dir")
         .arg(root.join("state"))
         .args(["--listen", "127.0.0.1:0"])

@@ -10,6 +10,7 @@ path = "src/main.rs"
 
 [dependencies]
 schedule.workspace = true
+bonsai.workspace = true
 browser.workspace = true
 voice.workspace = true
 terminal.workspace = true

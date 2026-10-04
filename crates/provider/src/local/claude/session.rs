@@ -23,6 +23,8 @@ struct ClaudeSession {
     active: Option<String>,
     info: StoredAgentRuntimeInfo,
     permissions: BTreeMap<String, permissions::Pending>,
+    // Native requests just answered; Claude Code echoes each answer once on stdout.
+    answered: std::collections::BTreeSet<String>,
     stream: streaming::Stream,
     usage: crate::local::usage::ClaudeUsage,
     output_schema: Option<Value>,
@@ -63,6 +65,7 @@ pub(super) async fn open(
         transport: None,
         active: None,
         permissions: BTreeMap::new(),
+        answered: std::collections::BTreeSet::new(),
         stream: streaming::Stream::new(client.images.clone()),
         usage: crate::local::usage::ClaudeUsage::default(),
         output_schema: None,
@@ -108,6 +111,14 @@ pub(super) async fn open(
 }
 
 impl ClaudeSession {
+    /// Claude Code 2.1.x echoes each permission answer once on stdout; anything else on
+    /// `control_response` is still a protocol error.
+    fn echo_of_answer(&mut self, message: &Value) -> bool {
+        message["response"]["request_id"]
+            .as_str()
+            .is_some_and(|id| self.answered.remove(id))
+    }
+
     fn restore_observations(&mut self) -> Result<(), AgentSessionError> {
         let path =
             history::project_dir(&self.client, &self.spec.cwd)?.join(format!("{}.jsonl", self.id));
@@ -282,6 +293,7 @@ impl ClaudeSession {
                 };
                 self.stream.events.push_back(result);
             }
+            Some("control_response") if self.echo_of_answer(message) => {}
             Some("control_response") => return Err(AgentSessionError::Failed),
             _ if self.active.is_some()
                 || matches!(
@@ -464,11 +476,13 @@ impl AgentSession for ClaudeSession {
                 .get(id)
                 .ok_or(AgentSessionError::Rejected)?;
             let reply = permissions::resolve(pending, response)?;
+            let native = pending.native_id.clone();
             self.transport
                 .as_mut()
                 .ok_or(AgentSessionError::Failed)?
                 .send(&reply)
                 .await?;
+            self.answered.insert(native);
             self.permissions.remove(id);
             Ok(())
         })

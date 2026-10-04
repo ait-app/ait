@@ -3,6 +3,7 @@ use std::sync::{Arc, Mutex};
 use std::time::Duration;
 
 use anyhow::Context;
+mod bonsai_runtime;
 mod catalog;
 mod schedule;
 mod voice;
@@ -51,6 +52,8 @@ use crate::instance::InstanceLease;
 pub(super) struct Server {
     listener: TcpListener,
     api: Api,
+    // The Bonsai runtime stops before the provider worker it executes through.
+    bonsai: Option<bonsai::Service>,
     // Own the directory lock until all accepted connections have stopped.
     instance: Arc<InstanceLease>,
 }
@@ -65,10 +68,11 @@ impl Server {
         let address = listener
             .local_addr()
             .context("read server listener address")?;
-        let (instance, services) = tokio::task::spawn_blocking(move || {
+        let (instance, (services, bonsai)) = tokio::task::spawn_blocking(move || {
             let instance = Arc::new(InstanceLease::acquire(&config.data_dir)?);
             let services = compose_services(&config, address, &instance)?;
-            Ok::<_, anyhow::Error>((instance, services))
+            let bonsai = bonsai_runtime::compose(&config, &services)?;
+            Ok::<_, anyhow::Error>((instance, (services, bonsai)))
         })
         .await
         .context("join server initialization")??;
@@ -83,6 +87,7 @@ impl Server {
         Ok(Self {
             listener,
             api,
+            bonsai,
             instance,
         })
     }
@@ -100,6 +105,7 @@ impl Server {
         let Self {
             listener,
             api,
+            bonsai,
             instance,
         } = self;
         let result: anyhow::Result<()> = async {
@@ -130,6 +136,9 @@ impl Server {
                     Some(result) => result,
                     None => server.await,
                 };
+                if let Some(bonsai) = &bonsai {
+                    bonsai.shutdown().await;
+                }
                 api.wait_closed().await;
                 result.context("serve HTTP")
             })
@@ -140,6 +149,7 @@ impl Server {
         .await;
         let lifecycle_intent = api.lifecycle_intent();
         // Drop routers and application storage before the data-directory instance lease.
+        drop(bonsai);
         drop(api);
         drop(instance);
         result?;

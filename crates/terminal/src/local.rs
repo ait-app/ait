@@ -42,11 +42,9 @@ impl Runtime for LocalRuntime {
         command.cwd(&launch.cwd);
         command.env("TERM", "xterm-256color");
         command.env("COLORTERM", "truecolor");
-        // A terminal must never inherit the server's authentication token.
-        for (key, _) in std::env::vars_os() {
-            if key.to_string_lossy().starts_with("AIT_SERVER_") {
-                command.env_remove(key);
-            }
+        // A terminal must never inherit the server's or the Bonsai runtime's credentials.
+        for name in model::process::private_environment() {
+            command.env_remove(name);
         }
         for (key, value) in &launch.env {
             command.env(key, value);

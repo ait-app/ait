@@ -5,6 +5,7 @@ use std::process::Command;
 // Cargo passes the complete package dependency set to this integration test.
 use anyhow as _;
 use api as _;
+use bonsai as _;
 use browser as _;
 use clap as _;
 use model as _;

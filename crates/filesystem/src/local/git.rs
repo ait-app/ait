@@ -26,6 +26,10 @@ pub(super) fn run(root: &Path, arguments: &[&str]) -> Result<String, GitError> {
             command.env_remove(name);
         }
     }
+    // Git runs repository hooks; they must not inherit server credentials.
+    for name in model::process::private_environment() {
+        command.env_remove(name);
+    }
     let mut child = command.spawn().map_err(|_| GitError::Io)?;
     let deadline = Instant::now() + Duration::from_secs(3);
     let status = loop {

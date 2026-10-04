@@ -29,6 +29,9 @@ impl Runtime {
         let version = probe(binary, cwd, cancellation).await?;
         let password = uuid::Uuid::new_v4().simple().to_string();
         let mut command = Command::new(binary);
+        for name in model::process::private_environment() {
+            command.env_remove(name);
+        }
         command
             .args(["serve", "--hostname", "127.0.0.1", "--port", "0"])
             .current_dir(cwd)
@@ -156,6 +159,9 @@ pub(super) async fn probe(
     cancel: &CancellationToken,
 ) -> Result<Version, ProtocolError> {
     let mut command = Command::new(binary);
+    for name in model::process::private_environment() {
+        command.env_remove(name);
+    }
     command
         .arg("--version")
         .current_dir(cwd)

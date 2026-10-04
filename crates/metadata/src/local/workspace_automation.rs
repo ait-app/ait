@@ -533,6 +533,10 @@ fn shell_command(script: &str) -> Command {
 }
 
 fn configure_command(command: &mut Command, workspace: &WorkspacePlacement, port: u16) {
+    // Repository scripts must not inherit server credentials.
+    for name in model::process::private_environment() {
+        command.env_remove(name);
+    }
     command
         .current_dir(&workspace.cwd)
         .env("PASEO_SOURCE_CHECKOUT_PATH", &workspace.repo_root)

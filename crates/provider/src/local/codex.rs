@@ -28,6 +28,24 @@ use crate::ports::agent_session::{
 };
 use transport::Transport;
 
+/// A thread's native config. A strict session reads the effective config first (with `cwd`, so
+/// a repository's `.codex/config.toml` layers count) and turns off every MCP server, plugin and
+/// app it did not bring itself.
+async fn native_config(
+    transport: &mut Transport,
+    config: &StoredAgentConfig,
+    cwd: &str,
+) -> Result<Value, AgentSessionError> {
+    let mut native = crate::local::configuration::codex(config)?;
+    if crate::local::configuration::strict_mcp(config) {
+        let effective = transport
+            .request("config/read", json!({"cwd": cwd}))
+            .await?;
+        crate::local::configuration::codex_strict(&mut native, &effective, config)?;
+    }
+    Ok(native)
+}
+
 /// A native Codex executable. Authentication remains in Codex's own environment and storage.
 #[derive(Debug, Clone)]
 pub struct CodexClient {
@@ -131,7 +149,7 @@ impl CodexClient {
                 if let Some(prompt) = &spec.config.system_prompt {
                     params["developerInstructions"] = json!(prompt);
                 }
-                params["config"] = crate::local::configuration::codex(&spec.config)?;
+                params["config"] = native_config(&mut transport, &spec.config, &spec.cwd).await?;
             }
             let response = transport.request(method, params).await?;
             let id = response
@@ -566,12 +584,13 @@ impl CodexSession {
         let result = async {
             transport.initialize().await?;
             let (approval, sandbox, _) = controls::policy(config);
+            let native = native_config(&mut transport, config, &self.cwd).await?;
             let response = transport
                 .request(
                     "thread/resume",
                     json!({"threadId":self.id,
                 "cwd":self.cwd,"model":config.model,"approvalPolicy":approval,"sandbox":sandbox,
-                "config":crate::local::configuration::codex(config)?,
+                "config":native,
                 "approvalsReviewer":workflows::reviewer(config),
                 "developerInstructions":config.system_prompt}),
                 )

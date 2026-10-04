@@ -754,6 +754,10 @@ fn run_git_with_timeout(
             command.env_remove(name);
         }
     }
+    // Git runs repository hooks; they must not inherit server credentials.
+    for name in model::process::private_environment() {
+        command.env_remove(name);
+    }
     let mut child = command.spawn().map_err(|error| io_error(&error))?;
     let deadline = Instant::now() + timeout;
     let status = loop {

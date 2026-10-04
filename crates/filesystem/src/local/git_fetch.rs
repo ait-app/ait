@@ -76,6 +76,9 @@ fn fetch_command(cwd: &str) -> Command {
             command.env_remove(name);
         }
     }
+    for name in model::process::private_environment() {
+        command.env_remove(name);
+    }
     command
         .env("GIT_TERMINAL_PROMPT", "0")
         .env("GCM_INTERACTIVE", "never");

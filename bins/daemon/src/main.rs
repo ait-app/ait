@@ -45,12 +45,19 @@ async fn main() -> ExitCode {
 async fn run(cli: config::Cli) -> anyhow::Result<()> {
     let config = config::Config::load(cli, |name| std::env::var_os(name))
         .context("load daemon configuration")?;
-    tracing_subscriber::fmt()
-        .with_ansi(false)
-        .with_max_level(config.log_level)
-        .with_writer(std::io::stderr)
-        .try_init()
-        .map_err(|error| anyhow::anyhow!("initialize logging: {error}"))?;
+    {
+        use tracing_subscriber::layer::SubscriberExt;
+        use tracing_subscriber::util::SubscriberInitExt;
+        tracing_subscriber::registry()
+            .with(
+                tracing_subscriber::fmt::layer()
+                    .with_ansi(false)
+                    .with_writer(std::io::stderr),
+            )
+            .with(config.log_filter())
+            .try_init()
+            .map_err(|error| anyhow::anyhow!("initialize logging: {error}"))?;
+    }
     loop {
         let server = host::Server::bind(config.clone()).await?;
         tracing::info!(listen = %server.address(), "daemon ready");

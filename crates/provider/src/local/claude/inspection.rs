@@ -166,6 +166,9 @@ async fn output(
     mut command: tokio::process::Command,
     deadline: Duration,
 ) -> Result<SecretString, AgentSessionError> {
+    for name in model::process::private_environment() {
+        command.env_remove(name);
+    }
     command
         .stdin(Stdio::null())
         .stdout(Stdio::piped())

@@ -149,3 +149,62 @@ fn empty_and_inherited_configuration_does_not_add_cli_arguments() {
             .is_empty()
     );
 }
+
+#[test]
+fn claude_strict_mcp_limits_the_session_to_its_own_servers() {
+    let strict = config(json!({"providerOptions":{"strictMcp":true},
+        "mcpServers":{"bonsai_run":{"type":"http","url":"http://localhost:8860/mcp"}}}));
+    let args = claude(&strict).unwrap();
+    assert!(args.contains(&"--strict-mcp-config".to_owned()));
+    assert!(args.iter().any(|arg| arg.starts_with("--mcp-config=")));
+    let alone = claude(&config(json!({"providerOptions":{"strictMcp":true}}))).unwrap();
+    assert_eq!(alone, ["--strict-mcp-config"]);
+    let default = claude(&config(json!({"providerOptions":{"strictMcp":false}}))).unwrap();
+    assert!(!default.contains(&"--strict-mcp-config".to_owned()));
+    assert!(claude(&config(json!({"providerOptions":{"strictMcp":"yes"}}))).is_err());
+}
+
+#[test]
+fn codex_strict_mcp_disables_inherited_servers_and_plugins_only() {
+    assert!(!strict_mcp(&config(json!({}))));
+    let config = config(json!({"providerOptions":{"strictMcp":true},
+        "mcpServers":{"bonsai_run":{"type":"http","url":"http://localhost:8860/mcp"}}}));
+    assert!(strict_mcp(&config));
+    let mut native = codex(&config).unwrap();
+    assert!(native.get("strictMcp").is_none(), "not a native Codex key");
+    let effective = json!({"config":{
+        "mcp_servers":{"bonsai_staging":{"url":"https://example.invalid/mcp","enabled":true},
+                       "off":{"enabled":false}},
+        "plugins":{"browser@openai-bundled":{"enabled":true},"idle@x":{"enabled":false}}}});
+    codex_strict(&mut native, &effective, &config).unwrap();
+    assert_eq!(
+        native["mcp_servers"]["bonsai_staging"],
+        json!({"enabled":false})
+    );
+    assert_eq!(native["mcp_servers"]["off"], json!({"enabled":false}));
+    assert_eq!(
+        native["mcp_servers"]["bonsai_run"]["url"],
+        "http://localhost:8860/mcp"
+    );
+    assert_eq!(
+        native["plugins"]["browser@openai-bundled"],
+        json!({"enabled":false})
+    );
+    assert!(native["plugins"].get("idle@x").is_none());
+    assert_eq!(native["features"]["apps"], false);
+    assert_eq!(native["features"]["plugins"], false);
+}
+
+#[test]
+fn codex_strict_mcp_refuses_a_user_server_named_like_the_sessions_own() {
+    // Codex would merge the user's headers or command into the session's server.
+    let config = config(json!({"providerOptions":{"strictMcp":true},
+        "mcpServers":{"bonsai_run":{"type":"http","url":"http://localhost:8860/mcp"}}}));
+    let mut native = codex(&config).unwrap();
+    let effective = json!({"config":{"mcp_servers":{"bonsai_run":{
+        "url":"https://example.invalid/mcp","bearer_token_env_var":"USER_TOKEN"}}}});
+    assert_eq!(
+        codex_strict(&mut native, &effective, &config),
+        Err(AgentSessionError::Rejected)
+    );
+}

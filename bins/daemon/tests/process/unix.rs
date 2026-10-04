@@ -20,7 +20,32 @@ fn start(directory: &Path, log: &Path) -> Process {
 }
 
 fn start_with_path(directory: &Path, log: &Path, path: Option<&std::ffi::OsStr>) -> Process {
+    start_with_environment(directory, log, path, &[])
+}
+
+fn start_with_environment(
+    directory: &Path,
+    log: &Path,
+    path: Option<&std::ffi::OsStr>,
+    extra: &[(&str, &str)],
+) -> Process {
+    start_logged(directory, log, path, extra, "info")
+}
+
+fn start_logged(
+    directory: &Path,
+    log: &Path,
+    path: Option<&std::ffi::OsStr>,
+    extra: &[(&str, &str)],
+    level: &str,
+) -> Process {
     let mut command = Command::new(env!("CARGO_BIN_EXE_daemon"));
+    // A developer shell may export real Bonsai runtime credentials; test servers never connect.
+    for (name, _) in std::env::vars_os() {
+        if name.to_string_lossy().starts_with("BONSAI_RUNTIME_") {
+            command.env_remove(name);
+        }
+    }
     command
         .args([
             "--data-dir",
@@ -28,7 +53,7 @@ fn start_with_path(directory: &Path, log: &Path, path: Option<&std::ffi::OsStr>)
             "--listen",
             "127.0.0.1:0",
             "--log-level",
-            "info",
+            level,
         ])
         .env("AIT_SERVER_TOKEN", TOKEN)
         .env("AIT_SPEECH_PROVIDER", "disabled")
@@ -62,6 +87,7 @@ fn start_with_path(directory: &Path, log: &Path, path: Option<&std::ffi::OsStr>)
         command.current_dir(directory.parent().unwrap());
         command.env("PATH", path);
     }
+    command.envs(extra.iter().copied());
     Process(command.spawn().unwrap())
 }
 
@@ -80,11 +106,17 @@ mod agent_execution;
 #[path = "claude.rs"]
 mod claude;
 
+#[path = "child_environment.rs"]
+mod child_environment;
+
 #[path = "opencode.rs"]
 mod opencode;
 
 #[path = "deepseek_harness.rs"]
 mod deepseek_harness;
+
+#[path = "bonsai_runtime.rs"]
+mod bonsai_runtime;
 
 #[path = "native.rs"]
 mod native;
@@ -206,6 +238,9 @@ async fn signal_shutdown_releases_process_lock_and_preserves_identity() {
         .await
         .unwrap();
     let second = Command::new(env!("CARGO_BIN_EXE_daemon"))
+        .env_remove("BONSAI_RUNTIME_URL")
+        .env_remove("BONSAI_RUNTIME_ID")
+        .env_remove("BONSAI_RUNTIME_TOKEN")
         .args([
             "--data-dir",
             directory.to_str().unwrap(),

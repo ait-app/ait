@@ -42,6 +42,8 @@ pub(super) struct Config {
     pub token: SecretString,
     pub log_level: tracing::level_filters::LevelFilter,
     pub web_origins: Vec<String>,
+    /// Bonsai runtime connection, present only when all `BONSAI_RUNTIME_*` variables are set.
+    pub bonsai: Option<bonsai::Config>,
 }
 
 impl Config {
@@ -53,6 +55,7 @@ impl Config {
             .map_err(|_| anyhow::anyhow!("AIT_SERVER_TOKEN must be UTF-8"))?;
         api::validate_token(&token)?;
         let token = SecretString::from(token);
+        let bonsai = bonsai::Config::from_env(&env).context("read Bonsai runtime configuration")?;
         let data_dir = cli
             .data_dir
             .or_else(|| env("AIT_SERVER_DATA_DIR").map(PathBuf::from))
@@ -110,7 +113,20 @@ impl Config {
             token,
             log_level,
             web_origins,
+            bonsai,
         })
+    }
+
+    /// Log filter for the configured level, except that the WebSocket library never logs
+    /// below debug: at trace it prints the raw handshake request, including the Bonsai
+    /// runtime's `Authorization` header.
+    pub fn log_filter(&self) -> tracing_subscriber::filter::Targets {
+        use tracing::level_filters::LevelFilter;
+        let quiet = self.log_level.min(LevelFilter::DEBUG);
+        tracing_subscriber::filter::Targets::new()
+            .with_default(self.log_level)
+            .with_target("tungstenite", quiet)
+            .with_target("tokio_tungstenite", quiet)
     }
 }
 

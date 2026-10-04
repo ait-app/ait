@@ -174,3 +174,64 @@ fn supports_explicit_network_listeners_without_changing_loopback_default() {
         assert_eq!(config.listen, listen.parse().unwrap());
     }
 }
+
+const BONSAI_ID: &str = "rt_0123456789abcdef0123456789abcdef";
+const BONSAI_TOKEN: &str = "fedcba9876543210fedcba9876543210";
+
+fn with_bonsai(name: &str) -> Option<OsString> {
+    match name {
+        "BONSAI_RUNTIME_URL" => Some("http://localhost:8860".into()),
+        "BONSAI_RUNTIME_ID" => Some(BONSAI_ID.into()),
+        "BONSAI_RUNTIME_TOKEN" => Some(BONSAI_TOKEN.into()),
+        other => environment(other),
+    }
+}
+
+#[test]
+fn bonsai_runtime_is_off_unless_configured_and_never_printed() {
+    let config = Config::load(Cli::parse_from(["server"]), environment).unwrap();
+    assert!(config.bonsai.is_none());
+    let config = Config::load(Cli::parse_from(["server"]), with_bonsai).unwrap();
+    let bonsai = config.bonsai.as_ref().expect("enabled");
+    assert_eq!(bonsai.endpoint().as_str(), "ws://localhost:8860/runtime");
+    assert!(!format!("{config:?}").contains(BONSAI_TOKEN));
+}
+
+#[test]
+fn partial_bonsai_runtime_configuration_stops_startup_before_disk() {
+    let directory = tempfile::tempdir().unwrap();
+    let state = directory.path().join("state");
+    let partial = |name: &str| match name {
+        "BONSAI_RUNTIME_URL" => Some("https://bonsai.example.com".into()),
+        other => environment(other),
+    };
+    let args = ["server", "--data-dir", state.to_str().unwrap()];
+    let error = Config::load(Cli::parse_from(args), partial).unwrap_err();
+    assert!(format!("{error:#}").contains("BONSAI_RUNTIME_TOKEN"));
+    assert!(!state.exists());
+    let insecure = |name: &str| match name {
+        "BONSAI_RUNTIME_URL" => Some("http://bonsai.example.com".into()),
+        other => with_bonsai(other),
+    };
+    assert!(Config::load(Cli::parse_from(["server"]), insecure).is_err());
+}
+
+#[test]
+fn the_websocket_library_never_logs_its_handshake_at_trace() {
+    use tracing::Level;
+    let mut config = Config::load(Cli::parse_from(["server"]), environment).expect("config");
+    config.log_level = tracing::level_filters::LevelFilter::TRACE;
+
+    let filter = config.log_filter();
+
+    assert!(!filter.would_enable("tungstenite::handshake::client", &Level::TRACE));
+    assert!(!filter.would_enable("tokio_tungstenite", &Level::TRACE));
+    assert!(filter.would_enable("tungstenite::handshake::client", &Level::DEBUG));
+    assert!(filter.would_enable("bonsai::link", &Level::TRACE));
+    config.log_level = tracing::level_filters::LevelFilter::INFO;
+    assert!(
+        !config
+            .log_filter()
+            .would_enable("tungstenite", &Level::DEBUG)
+    );
+}

@@ -400,6 +400,7 @@ async fn malformed_output_exit_and_unknown_interactions_fail_closed() {
         "exit",
         "malformed",
         "unknown-control",
+        "stray-control-response",
         "oversized",
         "wrong-session",
     ] {

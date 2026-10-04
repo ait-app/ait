@@ -60,6 +60,10 @@ impl Transport {
         environment: &crate::ports::environment::AgentEnvironment,
     ) -> Result<Self, AgentSessionError> {
         let mut command = Command::new(program);
+        // Server credentials never reach child processes; explicit settings below still apply.
+        for name in model::process::private_environment() {
+            command.env_remove(name);
+        }
         command.envs(environment.entries());
         if goals {
             command.args(["--enable", "goals"]);

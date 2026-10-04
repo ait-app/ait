@@ -1,0 +1,36 @@
+[package]
+name = "bonsai"
+version.workspace = true
+edition.workspace = true
+publish.workspace = true
+
+[dependencies]
+# Shared daemon envelopes only; Agent execution, timelines and projects come through ports.
+model.workspace = true
+futures-util.workspace = true
+futures-util.features = ["sink"]
+rusqlite.workspace = true
+rusqlite.features = ["bundled"]
+# Pins the WebSocket TLS backend to ring when the crate is built on its own.
+rustls.workspace = true
+rustls.features = ["ring", "std", "tls12"]
+secrecy.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+sha2.workspace = true
+thiserror.workspace = true
+tokio.workspace = true
+tokio-tungstenite.workspace = true
+tokio-tungstenite.features = ["rustls-tls-webpki-roots"]
+tokio-util.workspace = true
+tracing.workspace = true
+url.workspace = true
+uuid.workspace = true
+
+[lints]
+workspace = true
+
+[dev-dependencies]
+tempfile.workspace = true
+tokio.workspace = true
+tokio.features = ["test-util"]
