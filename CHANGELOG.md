@@ -2,6 +2,7 @@
 
 ## 0.0.17 - 2026-10-04
 
+- Show OpenCode tool cards before streamed conclusions and rebuild previously misordered session history on refresh.
 - Normalize nullable workspace and project fields to `null` in daemon responses, so directory updates clear stale client state consistently.
 - Simplify Agent thinking filters, OpenCode event projection, and terminal service code; remove redundant clones and unreachable branches.
 
