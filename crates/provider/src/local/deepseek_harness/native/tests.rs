@@ -12,6 +12,7 @@ mod fixture;
 mod interactions;
 mod recovery;
 mod session;
+mod sources;
 mod validation;
 
 #[tokio::test]

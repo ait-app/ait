@@ -16,6 +16,11 @@ pub(super) fn arguments(raw: &str) -> Value {
     }
 }
 
+/// Whether a native event represents human input rather than injected runtime context.
+pub(super) fn is_user_message(event: &Value) -> bool {
+    event["type"] == "user/message" && event["data"]["source"]["kind"] == "user"
+}
+
 /// Project one ordered native journal event into the supplied stream and tool state.
 /// Session identity scopes stable keys. Malformed event envelopes return an error;
 /// malformed tool arguments remain native tool input rather than transport failures.
@@ -33,7 +38,7 @@ pub(super) fn apply(
             stream.begin(format!("dsh:{session}:{turn}"));
             tools.clear();
         }
-        Some("user/message") => stream
+        Some("user/message") if is_user_message(event) => stream
             .events
             .push_back(AgentTurnEvent::Timeline(user(event, session)?)),
         Some("assistant/message") => {

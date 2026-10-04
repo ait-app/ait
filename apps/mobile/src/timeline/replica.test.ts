@@ -20,7 +20,11 @@ import {
 const SERVER_ID = "timeline-replica-host";
 const AGENT_ID = "agent-1";
 
-function item(id: string, text: string, seq: number): StreamItem {
+function item(
+  id: string,
+  text: string,
+  seq: number,
+): Extract<StreamItem, { kind: "assistant_message" }> {
   return {
     kind: "assistant_message",
     id,
@@ -230,6 +234,80 @@ describe("viewed timeline persistence", () => {
         ],
       });
     reopened.dispose();
+  });
+
+  it("replaces display-only cached replies on repeated refresh and restart", async () => {
+    const answer = {
+      ...item("dsh-answer", "Local answer 1 complete", 2),
+      messageId: "native:dsh:answer",
+    };
+    let durable: CachedTimeline = {
+      agentId: AGENT_ID,
+      items: [answer],
+      range: null,
+      hasOlder: false,
+    };
+    const storage: TimelineReplicaStorage = {
+      readTimeline: async () => durable,
+      commitTimeline: (_serverId, _agentId, timeline) => {
+        durable = timeline;
+      },
+    };
+    for (let restart = 0; restart < 3; restart++) {
+      useSessionStore.getState().initializeSession(SERVER_ID, null);
+      const owner = createOwner(storage);
+      owner.replaceVisibleAgentIds("test", [AGENT_ID]);
+      await expect
+        .poll(
+          () =>
+            selectAgentTimelineState(useSessionStore.getState().sessions[SERVER_ID], AGENT_ID)
+              .status,
+        )
+        .toBe("painted");
+      for (let refresh = 0; refresh < 2; refresh++) {
+        owner.applyTimelineResponse({
+          requestId: `refresh-${restart}-${refresh}`,
+          agentId: AGENT_ID,
+          agent: null,
+          direction: "tail",
+          projection: "projected",
+          reset: false,
+          epoch: "epoch-1",
+          window: { minSeq: 1, maxSeq: 2, nextSeq: 3 },
+          startCursor: { epoch: "epoch-1", seq: 1 },
+          endCursor: { epoch: "epoch-1", seq: 2 },
+          entries: [
+            {
+              provider: "deepseek-harness",
+              item: {
+                type: "assistant_message",
+                text: answer.text,
+                messageId: answer.messageId,
+              },
+              timestamp: answer.timestamp.toISOString(),
+              seqStart: 1,
+              seqEnd: 2,
+              sourceSeqRanges: [{ startSeq: 1, endSeq: 2 }],
+              collapsed: ["assistant_merge"],
+            },
+          ],
+          error: null,
+          hasNewer: false,
+          hasOlder: false,
+          staleCursor: false,
+          gap: false,
+        });
+        const session = useSessionStore.getState().sessions[SERVER_ID];
+        expect([
+          ...(session?.agentStreamTail.get(AGENT_ID) ?? []),
+          ...(session?.agentStreamHead.get(AGENT_ID) ?? []),
+        ]).toMatchObject([
+          { kind: "assistant_message", text: answer.text, messageId: answer.messageId },
+        ]);
+      }
+      owner.dispose();
+      useSessionStore.getState().clearSession(SERVER_ID);
+    }
   });
 
   it("does not let a late cache read overwrite newer network state", async () => {

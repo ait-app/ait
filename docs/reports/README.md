@@ -59,6 +59,8 @@
 
 ## Provider、Agent 与会话
 
+- [DSH 内部上下文与缓存重复修复](providers/deepseek-harness-display-recovery.md)
+
 - [首次输入重试测试的 CI 会话隔离](daemon/initial-prompt-ci-validation.md)
 
 - [Agent 创建任务预算竞争与 DSH 回归](providers/agent-creation-resource-contention.md)

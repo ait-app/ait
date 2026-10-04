@@ -24,8 +24,12 @@ pub(super) fn has_images(frame: &Value) -> bool {
 }
 
 fn blocks(frame: &Value) -> Option<&Vec<Value>> {
+    let event = &frame["value"]["event"];
+    if event["type"] == "user/message" && !super::projection::is_user_message(event) {
+        return None;
+    }
     (frame["streamId"] == "history" && frame["value"]["type"] == "event")
-        .then(|| message(&frame["value"]["event"])["content"].as_array())
+        .then(|| message(event)["content"].as_array())
         .flatten()
 }
 

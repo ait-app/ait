@@ -1,5 +1,8 @@
 # DeepSeek Harness 原生 Host 验证
 
+后续 `aa438db5` 桌面复测及新增展示修复见[展示恢复报告](deepseek-harness-display-recovery.md)。
+以下数字保留为本阶段的历史测量。
+
 日期：2026-10-04。对应 PR #169 的 `feat/dsh-native-host`。
 本轮在 `32d94dc2f092baa53f0bcf80c16faf340725cfbf` 上修复验收缺陷，并合入上游
 `2b55e3908b3421678271a9136d35ae20b4941fde`（含 PR #170 与 0.0.16 发布整合 #167）。覆盖率附件记录两个父提交和实际源码 SHA-256。

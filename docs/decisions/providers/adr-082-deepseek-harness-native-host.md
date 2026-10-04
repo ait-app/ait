@@ -32,6 +32,8 @@ DSH 官方 ACP 是 automation-only profile，不提供权限模式和 user quest
 - 共享 question 表单新增显式 `answerFormat: "array"` 和 `answerKey`，DSH 使用此格式保留含逗号选项。
   原有 provider 的字符串回答路径不变。
 - `session/follow` 按从 0 开始的连续 durable seq 投影用户消息、助手消息和工具。
+  仅将 `source.kind == "user"` 的 `user/message` 投影为用户气泡；DSH 使用同一事件承载
+  插件注入的运行上下文，不能仅按事件名或文本前缀判断。其他来源不读取展示附件。
   用户消息保留原生 message ID；prompt request ID 关联客户端乐观消息，排队输入同样持久化。
   图片通过原生 attachment RPC 读取后进入现有私有内容寻址存储，并保持历史顺序。
   contextPressure 经 `session/control` 更新上下文占用，不把累计 token 数当作当前上下文。
@@ -39,7 +41,8 @@ DSH 官方 ACP 是 automation-only profile，不提供权限模式和 user quest
   close 优先终止 owned Host 并等待持久化清理，超时再回收进程组。
 - 原生模式为 Ait 已登记的 handle 实现 `AgentClient::history`：只读订阅取得固定 cursor，
   用 `session/page` 向前读取完整 journal，并复用实时投影逻辑。原生 ID 和事件 seq 形成稳定展示键，
-  既有 timeline reconcile 原子修复旧版本漏掉的用户消息；再次读取不重复追加或改变 epoch。
+  既有 timeline reconcile 原子修复旧版本漏掉的用户消息及误投影的内部上下文；
+  再次读取不重复追加或改变 epoch。
   历史有缺口或无法完整读取时返回错误，保留现有展示历史；恢复不调用 create/prompt、不重发输入。
   验证原生 session ID/cwd 后才接纳历史；不枚举或导入未登记会话。
   已安装 CLI 的隔离测试确认可接续旧 ACP handle。默认模式不自动回退 ACP。
@@ -61,3 +64,6 @@ DSH 官方 ACP 是 automation-only profile，不提供权限模式和 user quest
 
 [验证报告](../../reports/providers/deepseek-harness-native-host.md)区分离线 HTTP/WebSocket 集成、
 真实 CLI 无推理烟雾测试、覆盖率和待执行桌面场景。未把模拟 Host 当作真实模型或桌面测试。
+
+[展示修复与复测交接](../../reports/providers/deepseek-harness-display-recovery.md)记录来源过滤、
+客户端无游标缓存替换和旧展示缓存失效的验证；客户端修复不改变 provider 执行协议。

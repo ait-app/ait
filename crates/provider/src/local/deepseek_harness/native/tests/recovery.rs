@@ -32,7 +32,7 @@ async fn native_argument_validation_failures_do_not_fail_the_adapter_or_lose_use
             fixture.requests("session/prompt")[index]["request"]["requestId"],
             format!("client-{index}")
         );
-        fixture.history(seq+1,"user/message",json!({"id":format!("user-{index}"),"content":[{"type":"text","text":prompt.text}],"source":{"rpcId":format!("client-{index}")}}));
+        fixture.history(seq+1,"user/message",json!({"id":format!("user-{index}"),"content":[{"type":"text","text":prompt.text}],"source":{"kind":"user","rpcId":format!("client-{index}")}}));
         let AgentTurnEvent::Timeline(user) = next(session.as_mut()).await else {
             panic!("user must be durable before assistant")
         };
@@ -151,7 +151,7 @@ async fn incomplete_native_history_cannot_replace_existing_display_history() {
     fixture.history(
         2,
         "user/message",
-        json!({"id":"gap","content":[{"type":"text","text":"missing event one"}]}),
+        json!({"id":"gap","source":{"kind":"user"},"content":[{"type":"text","text":"missing event one"}]}),
     );
     session.close().await.unwrap();
     assert!(
@@ -171,6 +171,7 @@ async fn queued_user_images_and_files_survive_recovery_without_resubmitting_inpu
     let handle = session.persistence().unwrap();
     fixture.history(1, "user/message", json!({
         "id": "queued-user",
+        "source": {"kind": "user"},
         "content": [
             {"type": "text", "text": "explain these attachments"},
             {"type": "image", "attachment": {"attachmentId": "image", "mediaType": "image/png"}},
