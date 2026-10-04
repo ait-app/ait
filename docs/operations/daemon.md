@@ -125,3 +125,20 @@ npm run dev:mobile
 
 原生 Provider 凭据由对应程序保存。Ait 连接 token 与 Provider 凭据用途不同。
 更多行为边界见 [分类 ADR](../decisions/README.md)，验证范围见 [报告索引](../reports/README.md)。
+
+## Bonsai 执行端
+
+在 Bonsai 的账号页配对一台执行端、挂到空间，拿到三样值后启动 daemon：
+
+```sh
+export BONSAI_RUNTIME_URL=https://<你的 Bonsai>      # origin，不是 /runtime 地址
+export BONSAI_RUNTIME_ID=rt_<32 位十六进制>
+export BONSAI_RUNTIME_TOKEN=<32 位十六进制>
+cargo run -p daemon --bin daemon
+```
+
+三样都不设就不组装；只设一部分时启动失败，报错只点名变量。token 只在环境变量里，
+不写进 `config.toml`；不要在 shell 的 rc 文件里 export 它：workspace 脚本经 `sh -lc` 起，
+会读 rc 文件，子进程的剥离管不到。Bonsai 在本机（回环地址）时，会话里只有注入的
+`bonsai_run` MCP 服务器；远端 Bonsai 时会话里没有 Bonsai 工具。行为边界见
+[ADR-083](../decisions/daemon/adr-083-bonsai-runtime-adapter.md)。

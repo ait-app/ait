@@ -1,0 +1,1332 @@
+{
+  "measured_at_utc": "2026-10-04T18:03:21+00:00",
+  "base_revision": "3a13d02b",
+  "revision": "eb12b645 (feat/bonsai-runtime; only documentation is committed after it)",
+  "protocol_reference_revision": "Bonsai server runtime branch 43ced8e",
+  "toolchain": "rustc 1.98.1 (rust-toolchain.toml)",
+  "coverage_tool": "cargo-llvm-cov 0.9.1",
+  "scope": {
+    "workspace": true,
+    "features": "default",
+    "platform": "aarch64-apple-darwin",
+    "file_filter": "cargo-llvm-cov defaults",
+    "explicit_file_exclusions": [],
+    "doctest_coverage": false,
+    "environment": "CARGO_INCREMENTAL=0 CARGO_PROFILE_DEV_DEBUG=0 CARGO_PROFILE_TEST_DEBUG=0 (disk space only)"
+  },
+  "commands": [
+    "cargo fmt --all --check",
+    "cargo clippy --workspace --all-targets -- -D warnings",
+    "cargo test --workspace --no-fail-fast",
+    "cargo llvm-cov --workspace --html",
+    "cargo llvm-cov report --json --summary-only --output-path <scratch>/cov-summary.json",
+    "cargo llvm-cov report --lcov --output-path <scratch>/cov.lcov"
+  ],
+  "test_execution": {
+    "passed": 2176,
+    "failed": 0,
+    "ignored": 3
+  },
+  "coverage_test_execution": {
+    "passed": 2175,
+    "failed": 0,
+    "ignored": 3,
+    "log_sha256": "2a1824e464a9415de832da874d8f185e111b77de1b419d3dc480d7c26cefcb97"
+  },
+  "workspace": {
+    "covered": 54855,
+    "total": 58130,
+    "percent": 94.37
+  },
+  "crate_totals": {
+    "bins/daemon": {
+      "covered": 1079,
+      "total": 1138,
+      "percent": 94.82
+    },
+    "crates/api": {
+      "covered": 1945,
+      "total": 2101,
+      "percent": 92.57
+    },
+    "crates/bonsai": {
+      "covered": 5434,
+      "total": 5772,
+      "percent": 94.14
+    },
+    "crates/browser": {
+      "covered": 706,
+      "total": 725,
+      "percent": 97.38
+    },
+    "crates/domain": {
+      "covered": 121,
+      "total": 121,
+      "percent": 100.0
+    },
+    "crates/filesystem": {
+      "covered": 11156,
+      "total": 11752,
+      "percent": 94.93
+    },
+    "crates/metadata": {
+      "covered": 7529,
+      "total": 7953,
+      "percent": 94.67
+    },
+    "crates/model": {
+      "covered": 758,
+      "total": 798,
+      "percent": 94.99
+    },
+    "crates/protocol": {
+      "covered": 75,
+      "total": 75,
+      "percent": 100.0
+    },
+    "crates/provider": {
+      "covered": 21490,
+      "total": 22915,
+      "percent": 93.78
+    },
+    "crates/relay": {
+      "covered": 419,
+      "total": 464,
+      "percent": 90.3
+    },
+    "crates/schedule": {
+      "covered": 805,
+      "total": 823,
+      "percent": 97.81
+    },
+    "crates/terminal": {
+      "covered": 1485,
+      "total": 1542,
+      "percent": 96.3
+    },
+    "crates/voice": {
+      "covered": 1853,
+      "total": 1951,
+      "percent": 94.98
+    }
+  },
+  "bonsai_production": {
+    "covered": 5231,
+    "total": 5569,
+    "percent": 93.93
+  },
+  "baseline": {
+    "artifact": "cargo-workspace-pr-coverage-2026-10-04.json",
+    "workspace": {
+      "covered": 49024,
+      "total": 51879,
+      "percent": 94.5
+    },
+    "percentage_point_change": -0.13,
+    "note": "Same-platform historical measurement of an earlier main (7c1f6eba, with --test-threads=1); main has moved since and 3a13d02b itself was not measured, so the difference is not an isolated effect of this change."
+  },
+  "source_sha256": {
+    "Cargo.lock": "5969321bce765d2f6e98f94d48edd81e1c43420b53506654b38b626a675dbcd0",
+    "Cargo.toml": "9ad46278098625a1665b3d383823b520406a479aa600c0ab7a61732de8c2768f",
+    "bins/daemon/Cargo.toml": "38efcfc48025d82493cd5ddbb8f067dc6fb7122ae935024a39ee87265745a3dc",
+    "bins/daemon/src/config.rs": "f12030b3749c1f5f68eb89c2140deeb35da992bae6988bb77e57b7dc5b1a5a40",
+    "bins/daemon/src/config/tests.rs": "8a23b7e106d72d946bc2b181b9cdeca0537bdfaeed3492a5946b3f2e5e52ad90",
+    "bins/daemon/src/host.rs": "358fe362a6845c03da00e09e0a95e3989f6be78a31f12f12f6140f361ee9f9f4",
+    "bins/daemon/src/host/bonsai_runtime.rs": "91fb4b6c153a45fdf3d6bc36cad5ac97a72c3a7313404538a3ce3465eb7b69cd",
+    "bins/daemon/src/host/bonsai_runtime/tests.rs": "48c0bebb414ddd36039b5273b6ff03c921caf2cb47612dd39a939879e612a0d5",
+    "bins/daemon/src/main.rs": "e9a0f1e75cff578c9e3741f512e3536edeb358922716137504fc936407a40d90",
+    "bins/daemon/tests/child_environment.rs": "ef5b5fd72f0a76a0aefafe2131ed59b5c7f84b255fc0cc50e4f75c18cc0b6955",
+    "bins/daemon/tests/dependencies.rs": "74d83228a9e066360c8d752a22308726017de0dbf5ad0cb1cbe17f3a114a21b9",
+    "bins/daemon/tests/process.rs": "4f1348cf3c4433386166b32cf6c7ecc32b05fd4fcf69c1b23782b4cafa0617de",
+    "bins/daemon/tests/process/bonsai_runtime.rs": "ebf196d302d447b50039dc5c331ab3697e30d9abcb39ac8dd7aea700493f520e",
+    "bins/daemon/tests/process/child_environment.rs": "3cf3c736e3634634dd0321b874c739c5fd92709f34d892b66109c120460e20c3",
+    "bins/daemon/tests/process/unix.rs": "f063973f7fc8723acd49e5ae76d493804d29b0f9a8335fcd411a1e69db52c3d3",
+    "bins/daemon/tests/process/voice.rs": "a9d01c864f14cf5a2fdba307059425f0d1b5fa1bbc6866489a7a728ee591d876",
+    "crates/bonsai/Cargo.toml": "bf395fdc3998bdd8dee7252b7f679cf3af87c8f5e9c906b531f195e25fc1f4c6",
+    "crates/bonsai/src/config.rs": "98445f75eacf474174a9d18302e3d7b3e9e7b848686e5b7c446437465926adff",
+    "crates/bonsai/src/config/tests.rs": "6cd68d633b92127a4f28f80e79af68bcf4b7b8e679746a93098371cb59c7587e",
+    "crates/bonsai/src/event.rs": "62d15a23b588ab502d69b7193e15c326803b9eefd047c458662b91ea35c9d910",
+    "crates/bonsai/src/event/tests.rs": "36d86a5eb3160035312d0e5627986371f269bc1b49ef40b1c33d8f17c0ed7e7d",
+    "crates/bonsai/src/hello.rs": "15f8fc0b65965810232d460c78ab3f6d10e08454ba5402b882b0a802d8b05ae7",
+    "crates/bonsai/src/hello/tests.rs": "d4e5ec69aabad529e238fc7346ade7c01eb55e68352fc1d92a73d7a3a4853967",
+    "crates/bonsai/src/lib.rs": "7a321c9256374eeb6c0463022a12588e525c60883803af1b2ab84564966e867b",
+    "crates/bonsai/src/link.rs": "0aa9faf4d31fb136e4dccd066f9d6cbd02f3532f2e6af2c3b070c305404473f0",
+    "crates/bonsai/src/link/tests.rs": "9de057c3fa2ce159ad8cbffda961516e4a205414bdcd7f56891348552b4109d1",
+    "crates/bonsai/src/outbox.rs": "b1f582c7fba59536de231328798e1d281bead904e404ad6fdb74d6c9ce45bb9e",
+    "crates/bonsai/src/outbox/tests.rs": "371b5c781caf458cbca9f0f00b02df374c08c2d4fe2ffe41256a40313ca39751",
+    "crates/bonsai/src/ports.rs": "898e3b98e0a77095cd784498826e38420e3863804126bb73aaba163cd4871f48",
+    "crates/bonsai/src/ports/tests.rs": "bafc1279ba385f866304e017db154c5e3941ef4a85b1a1999556a715afe14038",
+    "crates/bonsai/src/prompt.rs": "007b1b4237328bb6d81b989e7ff78631e4a1c69d61a7d53910b1c9d902c728e7",
+    "crates/bonsai/src/prompt/tests.rs": "1dd2d67f03301c9c7840cabba7e104dc97bdbbbed218bac7c7c70ed3f28d0de1",
+    "crates/bonsai/src/runs.rs": "16f5bedbd590b8db5beeb2bd12b20a9e5ab276ef14ea4af1ffa7424f4afeb49c",
+    "crates/bonsai/src/runs/tests.rs": "0cafb2bf156e6c486d1452fec2ff23f1cfc9283e83629fe8ac3669b4dbc0e65d",
+    "crates/bonsai/src/service.rs": "53968cb0f2d61ebaaa12ce910349294dcda085c479b077342edde2e79b20da0c",
+    "crates/bonsai/src/service/tests.rs": "9ed24f90fbd14ba1d4971a896f3906a83cfc60715c13f4452da0447e392a8023",
+    "crates/bonsai/src/session.rs": "1a5076138039936cf6834d92193d5baa3b7380797a531ec72160a6b8530bab48",
+    "crates/bonsai/src/session/buffer.rs": "2b51926f804983493e6b1d3ef4476abf78234049f10a608344d0b60bd47ce01b",
+    "crates/bonsai/src/session/buffer/tests.rs": "3e94752ad010ba6e44c40f0351111e93a380760b05dc944732044d7528f6320c",
+    "crates/bonsai/src/session/recover.rs": "1bce449b3d9c69aac9df13ccc19f50ca2a2a6a3aad7dc32874807666607162a8",
+    "crates/bonsai/src/session/recover/tests.rs": "8f395f8f4a7b4dcbd8da78a610c6c54fb697005343ef16aba1ebbf37781b9f7f",
+    "crates/bonsai/src/session/tests.rs": "c8d6c172c2c3495cdcb43d6c15899219e442cf5fe1dad648f05225a4a84fc39b",
+    "crates/bonsai/src/settings.rs": "a7f85f96ec4e96ad37638843d67cfa83aa74342bde4b69b7c7c3c91708719752",
+    "crates/bonsai/src/settings/tests.rs": "bcef83b20d672eaf8791b555001ee519678ca05c45557cdbdba252e9b5b81a54",
+    "crates/bonsai/src/store.rs": "a309a06c2ba80dd730af450b0b7f6c010ef638c83b367ee6ec828844dda03898",
+    "crates/bonsai/src/store/tests.rs": "561ac20a42ea08772b749fa03a35f8c5d2b7eedd2e5896961bd391f52034acd8",
+    "crates/bonsai/src/testing.rs": "64ae65ca84db750a31d1f9efebdd4efe4b3edad9fd72f5478a90e4f895687ec3",
+    "crates/bonsai/src/translate.rs": "f9cc43971877bacc5850ac211ec28e7d729587d74b750e5c97e9cc39540a8378",
+    "crates/bonsai/src/translate/tests.rs": "321a605b7e86dc2c08483063ab116e6e3dce5e03407f47541887ccccb848bc94",
+    "crates/bonsai/src/wire.rs": "213953c931461f020fcb0af33ba1438b4b20d8ab8de47b793cdc19ec0718e088",
+    "crates/bonsai/src/wire/tests.rs": "be7a4422e507dd44a8c61927e5817def00ff1eaddea9bd0ace2708150c60fa75",
+    "crates/filesystem/src/local/checkout.rs": "129a4af81a412b9ff4cec0789a3601933d3e7c02cdeba715ecb056d08c007c92",
+    "crates/filesystem/src/local/forge.rs": "e76f11a983c59fc952ada7f8626799d75bba53ff1b82989ccdbf3c1bad244934",
+    "crates/filesystem/src/local/git.rs": "edc36bbba622def27acae07405c6169876ab7658ebb393e8242ca09300bd511c",
+    "crates/filesystem/src/local/git_fetch.rs": "e9642453426446389548d3594b0e4dfd5e37ee9e2498c33cce754387872627a8",
+    "crates/filesystem/src/local/worktrees.rs": "470f6b08ea7af5ece39e739b53c36c65945157c8d190cf217dc0daadb85df4a0",
+    "crates/metadata/src/local/workspace_automation.rs": "9ef8b41088d93892b171b4ef35ed5b7f8d3eda6dc5fc1696d268c69a3be41345",
+    "crates/model/src/lib.rs": "c12381456708e73a6b2d7f576a4e1d60b9f7b40ca71e0fd858003f8bbf8356fe",
+    "crates/model/src/process.rs": "cc4cef2a3d050ba4b7b2824f9dc0cd2c35ea9426a988764c3dbcd84fcddb3b79",
+    "crates/model/src/process/tests.rs": "5b155719074a18df7a1169ed22f09e0b813696e330f6b96bceb1439d933f92fd",
+    "crates/provider/src/local/claude/inspection.rs": "d0224613a3fad14db3a44e88a6267a1f7b5524bde65ba43452c1f66454e65f28",
+    "crates/provider/src/local/claude/session.rs": "ac37301f170e9ebce38d3e309c292155ecf334a46da52716f1fa448762deb60a",
+    "crates/provider/src/local/claude/tests/process.rs": "eb14004740f0e9c863327612e26b383c6c096f7a17b800f50228e22ee4efc342",
+    "crates/provider/src/local/claude/transport.rs": "6f2b021649bac340891643260b65e85a2541ad73b0be054ad1148d394e63d446",
+    "crates/provider/src/local/codex.rs": "188c08280fe676d062745ff12549e63d7ba6bde8dd16fc932d5ae14fb7ca6349",
+    "crates/provider/src/local/codex/transport.rs": "eb3e308a239fd7c63ec2280266b23a256816ff0fbbd0b9ae43077c2d0279d95c",
+    "crates/provider/src/local/configuration.rs": "1571a9233b3c358feb5b65d618de6a7994452b58f01d89f541ac9617549817d0",
+    "crates/provider/src/local/configuration/options.rs": "d39e20a1727d7af3d05e44a8e6839a469db609f154a714ba60ee404b17569ade",
+    "crates/provider/src/local/configuration/tests.rs": "b2ce15aee0409965e176811596984c4a98beeabd9c3caf0a8a652eade48d0db9",
+    "crates/provider/src/local/deepseek_harness/transport.rs": "085ba6e59201fe4c797938ef80217964b1ceb4e188b93766d02d210acf122ade",
+    "crates/provider/src/local/opencode/runtime.rs": "4b96ad0dcd8a3fb5b8a4a6a82e3e4f0b38f62b517facf5162337ad0484031730",
+    "crates/provider/tests/fixtures/claude_code.py": "e5b930fdac0ec7150dc7e97af6db8d3d2f683a065af1887437c51dece1636e5c",
+    "crates/terminal/src/local.rs": "e28c46c5121eb553da09d250bc490f86e2b06da17d121449e965dac5a4190563",
+    "crates/voice/src/local.rs": "a522247c2bfe653964b3d37a2cd7890570a895b094a9f71f447d2f81c353e986",
+    "crates/voice/src/offline/worker.rs": "6d5767aa7760e8b3b1ffa308ef03c1e7e63c2605b06b47b88bde04d2103c85ab"
+  },
+  "changed_production_files": {
+    "bins/daemon/src/config.rs": {
+      "lines": {
+        "covered": 68,
+        "total": 75,
+        "percent": 90.67
+      },
+      "uncovered_lcov_lines": []
+    },
+    "bins/daemon/src/host.rs": {
+      "lines": {
+        "covered": 425,
+        "total": 437,
+        "percent": 97.25
+      },
+      "uncovered_lcov_lines": [
+        85,
+        209,
+        228,
+        234,
+        470,
+        477
+      ]
+    },
+    "bins/daemon/src/host/bonsai_runtime.rs": {
+      "lines": {
+        "covered": 143,
+        "total": 157,
+        "percent": 91.08
+      },
+      "uncovered_lcov_lines": [
+        47,
+        119,
+        132,
+        133,
+        134,
+        135,
+        136,
+        137,
+        138,
+        139,
+        140,
+        220
+      ]
+    },
+    "bins/daemon/src/main.rs": {
+      "lines": {
+        "covered": 58,
+        "total": 61,
+        "percent": 95.08
+      },
+      "uncovered_lcov_lines": [
+        27,
+        81
+      ]
+    },
+    "crates/bonsai/src/config.rs": {
+      "lines": {
+        "covered": 92,
+        "total": 93,
+        "percent": 98.92
+      },
+      "uncovered_lcov_lines": [
+        177
+      ]
+    },
+    "crates/bonsai/src/event.rs": {
+      "lines": {
+        "covered": 103,
+        "total": 122,
+        "percent": 84.43
+      },
+      "uncovered_lcov_lines": [
+        439,
+        440,
+        441,
+        442,
+        443,
+        446,
+        447,
+        450,
+        476,
+        477,
+        480,
+        481,
+        482,
+        483,
+        485,
+        487,
+        488,
+        489
+      ]
+    },
+    "crates/bonsai/src/hello.rs": {
+      "lines": {
+        "covered": 361,
+        "total": 374,
+        "percent": 96.52
+      },
+      "uncovered_lcov_lines": [
+        133,
+        134,
+        135,
+        136,
+        137,
+        138,
+        139,
+        140,
+        364,
+        485
+      ]
+    },
+    "crates/bonsai/src/link.rs": {
+      "lines": {
+        "covered": 349,
+        "total": 383,
+        "percent": 91.12
+      },
+      "uncovered_lcov_lines": [
+        217,
+        223,
+        228,
+        242,
+        250,
+        251,
+        252,
+        253,
+        254,
+        255,
+        279,
+        280,
+        283,
+        293,
+        294,
+        295,
+        296,
+        306,
+        307,
+        308,
+        309,
+        336,
+        341,
+        343,
+        344,
+        345,
+        346,
+        411,
+        412,
+        441,
+        453,
+        454,
+        516,
+        520
+      ]
+    },
+    "crates/bonsai/src/outbox.rs": {
+      "lines": {
+        "covered": 290,
+        "total": 327,
+        "percent": 88.69
+      },
+      "uncovered_lcov_lines": [
+        330,
+        349,
+        354,
+        367,
+        374,
+        375,
+        395,
+        416,
+        417,
+        418,
+        419,
+        420,
+        428,
+        429,
+        439,
+        440,
+        464,
+        466,
+        471,
+        491,
+        492,
+        495,
+        499,
+        510,
+        514,
+        519,
+        539
+      ]
+    },
+    "crates/bonsai/src/ports.rs": {
+      "lines": {
+        "covered": 30,
+        "total": 30,
+        "percent": 100.0
+      },
+      "uncovered_lcov_lines": []
+    },
+    "crates/bonsai/src/prompt.rs": {
+      "lines": {
+        "covered": 78,
+        "total": 78,
+        "percent": 100.0
+      },
+      "uncovered_lcov_lines": []
+    },
+    "crates/bonsai/src/runs.rs": {
+      "lines": {
+        "covered": 529,
+        "total": 567,
+        "percent": 93.3
+      },
+      "uncovered_lcov_lines": [
+        146,
+        242,
+        243,
+        266,
+        267,
+        268,
+        269,
+        274,
+        298,
+        299,
+        301,
+        302,
+        303,
+        316,
+        317,
+        318,
+        319,
+        320,
+        321,
+        322,
+        324,
+        335,
+        405,
+        406,
+        475,
+        476,
+        477,
+        478,
+        479,
+        480,
+        482,
+        521,
+        600,
+        608,
+        609,
+        610,
+        675,
+        703
+      ]
+    },
+    "crates/bonsai/src/service.rs": {
+      "lines": {
+        "covered": 83,
+        "total": 84,
+        "percent": 98.81
+      },
+      "uncovered_lcov_lines": []
+    },
+    "crates/bonsai/src/session.rs": {
+      "lines": {
+        "covered": 1204,
+        "total": 1320,
+        "percent": 91.21
+      },
+      "uncovered_lcov_lines": [
+        266,
+        267,
+        276,
+        308,
+        309,
+        350,
+        351,
+        352,
+        353,
+        354,
+        355,
+        356,
+        357,
+        358,
+        359,
+        361,
+        377,
+        435,
+        438,
+        441,
+        520,
+        549,
+        567,
+        601,
+        615,
+        628,
+        629,
+        630,
+        631,
+        632,
+        641,
+        662,
+        692,
+        693,
+        694,
+        717,
+        718,
+        719,
+        720,
+        721,
+        722,
+        724,
+        725,
+        726,
+        728,
+        756,
+        770,
+        777,
+        778,
+        798,
+        799,
+        800,
+        801,
+        802,
+        803,
+        831,
+        864,
+        869,
+        870,
+        889,
+        909,
+        912,
+        931,
+        954,
+        955,
+        956,
+        964,
+        1024,
+        1025,
+        1026,
+        1141,
+        1166,
+        1175,
+        1237,
+        1261,
+        1273,
+        1274,
+        1275,
+        1289,
+        1310,
+        1311,
+        1337,
+        1343,
+        1344,
+        1366,
+        1367,
+        1368,
+        1370,
+        1371,
+        1372,
+        1373,
+        1374,
+        1375,
+        1376,
+        1377,
+        1378,
+        1380,
+        1383,
+        1384,
+        1385,
+        1397,
+        1473,
+        1489,
+        1490,
+        1495,
+        1503,
+        1518,
+        1559,
+        1574,
+        1575,
+        1576,
+        1610,
+        1611
+      ]
+    },
+    "crates/bonsai/src/session/buffer.rs": {
+      "lines": {
+        "covered": 83,
+        "total": 85,
+        "percent": 97.65
+      },
+      "uncovered_lcov_lines": [
+        64,
+        106
+      ]
+    },
+    "crates/bonsai/src/session/recover.rs": {
+      "lines": {
+        "covered": 164,
+        "total": 179,
+        "percent": 91.62
+      },
+      "uncovered_lcov_lines": [
+        85,
+        86,
+        87,
+        88,
+        89,
+        90,
+        92,
+        98,
+        100,
+        101,
+        102,
+        103,
+        104,
+        125,
+        185
+      ]
+    },
+    "crates/bonsai/src/settings.rs": {
+      "lines": {
+        "covered": 428,
+        "total": 429,
+        "percent": 99.77
+      },
+      "uncovered_lcov_lines": [
+        420
+      ]
+    },
+    "crates/bonsai/src/store.rs": {
+      "lines": {
+        "covered": 384,
+        "total": 394,
+        "percent": 97.46
+      },
+      "uncovered_lcov_lines": [
+        190,
+        221,
+        504,
+        508,
+        552,
+        576,
+        595
+      ]
+    },
+    "crates/bonsai/src/translate.rs": {
+      "lines": {
+        "covered": 835,
+        "total": 884,
+        "percent": 94.46
+      },
+      "uncovered_lcov_lines": [
+        214,
+        336,
+        337,
+        349,
+        408,
+        448,
+        477,
+        478,
+        479,
+        507,
+        523,
+        602,
+        642,
+        643,
+        644,
+        645,
+        646,
+        647,
+        648,
+        649,
+        651,
+        652,
+        653,
+        699,
+        735,
+        736,
+        819,
+        824,
+        848,
+        905,
+        920,
+        1004,
+        1005,
+        1006,
+        1017,
+        1034
+      ]
+    },
+    "crates/bonsai/src/wire.rs": {
+      "lines": {
+        "covered": 218,
+        "total": 220,
+        "percent": 99.09
+      },
+      "uncovered_lcov_lines": [
+        354,
+        401
+      ]
+    },
+    "crates/filesystem/src/local/checkout.rs": {
+      "lines": {
+        "covered": 1404,
+        "total": 1495,
+        "percent": 93.91
+      },
+      "uncovered_lcov_lines": [
+        59,
+        75,
+        164,
+        165,
+        168,
+        189,
+        198,
+        216,
+        273,
+        283,
+        332,
+        378,
+        448,
+        481,
+        518,
+        520,
+        521,
+        573,
+        615,
+        616,
+        619,
+        624,
+        625,
+        628,
+        658,
+        659,
+        660,
+        662,
+        670,
+        683,
+        684,
+        687,
+        845,
+        847,
+        849,
+        878,
+        916,
+        1055,
+        1059,
+        1062,
+        1065,
+        1068,
+        1135,
+        1165,
+        1167,
+        1169,
+        1170,
+        1173,
+        1203,
+        1219,
+        1231,
+        1302,
+        1308,
+        1311,
+        1325,
+        1327,
+        1328,
+        1329,
+        1330,
+        1331,
+        1332,
+        1334,
+        1335,
+        1356,
+        1680
+      ]
+    },
+    "crates/filesystem/src/local/forge.rs": {
+      "lines": {
+        "covered": 1124,
+        "total": 1180,
+        "percent": 95.25
+      },
+      "uncovered_lcov_lines": [
+        75,
+        76,
+        77,
+        138,
+        193,
+        261,
+        284,
+        337,
+        364,
+        384,
+        385,
+        388,
+        490,
+        501,
+        518,
+        579,
+        580,
+        583,
+        588,
+        589,
+        592,
+        624,
+        695,
+        716,
+        849,
+        858,
+        1318,
+        1319,
+        1320,
+        1322,
+        1384,
+        1385,
+        1386
+      ]
+    },
+    "crates/filesystem/src/local/git.rs": {
+      "lines": {
+        "covered": 44,
+        "total": 48,
+        "percent": 91.67
+      },
+      "uncovered_lcov_lines": [
+        47,
+        48,
+        49,
+        63
+      ]
+    },
+    "crates/filesystem/src/local/git_fetch.rs": {
+      "lines": {
+        "covered": 90,
+        "total": 94,
+        "percent": 95.74
+      },
+      "uncovered_lcov_lines": [
+        42,
+        125,
+        126
+      ]
+    },
+    "crates/filesystem/src/local/worktrees.rs": {
+      "lines": {
+        "covered": 721,
+        "total": 781,
+        "percent": 92.32
+      },
+      "uncovered_lcov_lines": [
+        51,
+        58,
+        64,
+        65,
+        127,
+        158,
+        216,
+        219,
+        243,
+        246,
+        247,
+        248,
+        249,
+        293,
+        294,
+        295,
+        296,
+        328,
+        330,
+        331,
+        448,
+        449,
+        450,
+        454,
+        481,
+        596,
+        620,
+        631,
+        683,
+        726,
+        770,
+        785,
+        860,
+        861,
+        862,
+        906,
+        907,
+        908,
+        913
+      ]
+    },
+    "crates/metadata/src/local/workspace_automation.rs": {
+      "lines": {
+        "covered": 579,
+        "total": 670,
+        "percent": 86.42
+      },
+      "uncovered_lcov_lines": [
+        45,
+        46,
+        47,
+        95,
+        96,
+        183,
+        184,
+        204,
+        226,
+        227,
+        250,
+        251,
+        252,
+        260,
+        261,
+        262,
+        263,
+        264,
+        266,
+        267,
+        268,
+        284,
+        285,
+        286,
+        287,
+        288,
+        289,
+        291,
+        292,
+        293,
+        339,
+        451,
+        452,
+        469,
+        476,
+        479,
+        486,
+        493,
+        513,
+        514,
+        746,
+        747,
+        748,
+        750,
+        752,
+        778,
+        779,
+        780,
+        781,
+        782,
+        783,
+        784,
+        814,
+        815,
+        816,
+        817,
+        818,
+        819,
+        820,
+        821
+      ]
+    },
+    "crates/model/src/lib.rs": {
+      "lines": {
+        "covered": 3,
+        "total": 3,
+        "percent": 100.0
+      },
+      "uncovered_lcov_lines": []
+    },
+    "crates/model/src/process.rs": {
+      "lines": {
+        "covered": 21,
+        "total": 21,
+        "percent": 100.0
+      },
+      "uncovered_lcov_lines": []
+    },
+    "crates/provider/src/local/claude/inspection.rs": {
+      "lines": {
+        "covered": 186,
+        "total": 233,
+        "percent": 79.83
+      },
+      "uncovered_lcov_lines": [
+        66,
+        82,
+        83,
+        94,
+        95,
+        110,
+        147,
+        160,
+        170,
+        171,
+        208,
+        209,
+        210,
+        211,
+        212,
+        213,
+        214,
+        216,
+        218,
+        220,
+        221,
+        222,
+        223,
+        224,
+        225,
+        226,
+        227,
+        228,
+        229,
+        230,
+        231,
+        232,
+        233,
+        234,
+        235,
+        236,
+        237,
+        238,
+        239,
+        241,
+        242,
+        244,
+        245
+      ]
+    },
+    "crates/provider/src/local/claude/session.rs": {
+      "lines": {
+        "covered": 518,
+        "total": 542,
+        "percent": 95.57
+      },
+      "uncovered_lcov_lines": [
+        79,
+        84,
+        128,
+        132,
+        157,
+        170,
+        230,
+        238,
+        264,
+        283,
+        287,
+        299,
+        355,
+        373,
+        375,
+        384,
+        387,
+        409,
+        519,
+        616,
+        623
+      ]
+    },
+    "crates/provider/src/local/claude/transport.rs": {
+      "lines": {
+        "covered": 244,
+        "total": 264,
+        "percent": 92.42
+      },
+      "uncovered_lcov_lines": [
+        100,
+        114,
+        137,
+        156,
+        163,
+        164,
+        168,
+        176,
+        186,
+        192,
+        193,
+        194,
+        199,
+        247,
+        313,
+        314,
+        327
+      ]
+    },
+    "crates/provider/src/local/codex.rs": {
+      "lines": {
+        "covered": 896,
+        "total": 932,
+        "percent": 96.14
+      },
+      "uncovered_lcov_lines": [
+        41,
+        42,
+        43,
+        44,
+        185,
+        326,
+        332,
+        338,
+        405,
+        412,
+        457,
+        469,
+        578,
+        599,
+        605,
+        606,
+        889,
+        900,
+        902,
+        903,
+        904,
+        906,
+        907,
+        908,
+        909,
+        929,
+        930,
+        936,
+        954,
+        960,
+        966,
+        1009
+      ]
+    },
+    "crates/provider/src/local/codex/transport.rs": {
+      "lines": {
+        "covered": 250,
+        "total": 273,
+        "percent": 91.58
+      },
+      "uncovered_lcov_lines": [
+        103,
+        104,
+        105,
+        106,
+        107,
+        108,
+        109,
+        110,
+        112,
+        113,
+        114,
+        117,
+        118,
+        119,
+        142,
+        176,
+        177,
+        222,
+        250,
+        260,
+        261,
+        318
+      ]
+    },
+    "crates/provider/src/local/configuration.rs": {
+      "lines": {
+        "covered": 309,
+        "total": 323,
+        "percent": 95.67
+      },
+      "uncovered_lcov_lines": [
+        31,
+        71,
+        90,
+        128,
+        349,
+        363,
+        364,
+        365,
+        366,
+        369,
+        370,
+        371
+      ]
+    },
+    "crates/provider/src/local/configuration/options.rs": {
+      "lines": {
+        "covered": 48,
+        "total": 50,
+        "percent": 96.0
+      },
+      "uncovered_lcov_lines": [
+        23,
+        60
+      ]
+    },
+    "crates/provider/src/local/deepseek_harness/transport.rs": {
+      "lines": {
+        "covered": 152,
+        "total": 169,
+        "percent": 89.94
+      },
+      "uncovered_lcov_lines": [
+        63,
+        66,
+        72,
+        90,
+        94,
+        104,
+        105,
+        106,
+        146,
+        154,
+        169,
+        175,
+        212,
+        213,
+        214,
+        215,
+        216
+      ]
+    },
+    "crates/provider/src/local/opencode/runtime.rs": {
+      "lines": {
+        "covered": 167,
+        "total": 211,
+        "percent": 79.15
+      },
+      "uncovered_lcov_lines": [
+        54,
+        55,
+        56,
+        58,
+        80,
+        81,
+        82,
+        103,
+        104,
+        126,
+        127,
+        128,
+        129,
+        133,
+        134,
+        135,
+        137,
+        138,
+        189,
+        190,
+        191,
+        192,
+        199,
+        200,
+        201,
+        202,
+        215,
+        230
+      ]
+    },
+    "crates/terminal/src/local.rs": {
+      "lines": {
+        "covered": 196,
+        "total": 222,
+        "percent": 88.29
+      },
+      "uncovered_lcov_lines": [
+        88,
+        89,
+        91,
+        93,
+        111,
+        112,
+        113,
+        114,
+        115,
+        116,
+        143,
+        144,
+        145,
+        146,
+        148,
+        149,
+        182,
+        183,
+        184,
+        185,
+        240,
+        250,
+        251,
+        252
+      ]
+    },
+    "crates/voice/src/local.rs": {
+      "lines": {
+        "covered": 158,
+        "total": 163,
+        "percent": 96.93
+      },
+      "uncovered_lcov_lines": [
+        91,
+        145,
+        148,
+        149,
+        184
+      ]
+    },
+    "crates/voice/src/offline/worker.rs": {
+      "lines": {
+        "covered": 155,
+        "total": 169,
+        "percent": 91.72
+      },
+      "uncovered_lcov_lines": [
+        46,
+        47,
+        166,
+        167,
+        168,
+        169,
+        171,
+        172,
+        173,
+        175
+      ]
+    }
+  },
+  "metric_note": "Line totals use the LLVM JSON summary; uncovered line numbers use LCOV DA, whose counting differs. These denominators are not mixed.",
+  "unverified": [
+    "Codex project-layer MCP servers in a trusted project",
+    "Linux and Windows (case-insensitive environment names are unit-tested only)",
+    "Remote (non-loopback) Bonsai end to end",
+    "Process and SQLite failure injection beyond the unit tests",
+    "OpenCode and DeepSeek Harness child environments (stripped in code and inventoried; no behavioural process test)"
+  ],
+  "raw_llvm_summary_sha256": "abed22864d04ee978b5284dfa553e7bfdc5256a99a94f21bd2f11d712df7e6a3",
+  "lcov_sha256": "ff8c109ec5c09b5b738056e1cd602497024b96257294f39c444b446588116307"
+}

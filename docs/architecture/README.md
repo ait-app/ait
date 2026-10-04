@@ -19,8 +19,9 @@ Electron 位于 `apps/desktop`；`apps/mobile` 提供桌面、浏览器与移动
 | `schedule`   | 定时任务服务与协议                         | `model`                                |
 | `browser`    | 浏览器自动化请求与回传                     | `model`                                |
 | `relay`      | 主动建立控制连接与反向数据通道             | 无                                     |
+| `bonsai`     | 出站连接 Bonsai，执行派发的 run 并回传会话 | `model`                                |
 | `api`        | HTTP/WebSocket 鉴权、连接与跨能力协调      | 上述能力包、`protocol`、`model`        |
-| `daemon`     | 配置、进程锁、服务组装和停机               | API、领域及能力包；测试使用 `protocol` |
+| `daemon`     | 配置、进程锁、服务组装和停机               | API、领域及能力包、`bonsai`；测试使用 `protocol` |
 
 能力包自己声明方法分组、安装条件与请求处理。API 组装具体服务，不把业务协议反向传入
 能力包。具体 adapter 实现所属能力的 port；应用服务协调领域行为。`domain` 无 Tokio、
@@ -60,6 +61,12 @@ Electron 主进程提供桌面适配；Android 的原生适配使用 SecureStore
 远程主机进入 HostRuntime。浏览器和 iOS 未启用账户入口。
 前后台生命周期、配对校验与凭据边界见
 [ADR-076](../decisions/clients/adr-076-android-account-relay.md)。
+
+`bonsai` 只在设置了三个 `BONSAI_RUNTIME_*` 变量时由 daemon 组装，经 Executor / Observer /
+Backfill / Projects 四个 port 调用 `provider` 与 `metadata`，自己不依赖它们；运行记录与事件日志在
+`<data_dir>/bonsai/runtime.sqlite3`。daemon 起的每个子进程都剥掉 `BONSAI_RUNTIME_*` 与
+`AIT_SERVER_*`（`model::process`），清点守卫位于 `bins/daemon/tests/child_environment.rs`。
+详见 [ADR-083](../decisions/daemon/adr-083-bonsai-runtime-adapter.md)。
 
 Relay 的类型化消息集中在 `crates/relay/src/protocol.rs`，WebSocket 收发集中在
 `transport.rs`；单连接协商标识由 `crates/protocol/src/single.rs` 定义。

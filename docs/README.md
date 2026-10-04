@@ -13,6 +13,7 @@
 
 ## 架构决策
 
+- [ADR-083：Bonsai 执行端适配器](decisions/daemon/adr-083-bonsai-runtime-adapter.md)：出站连接用户自己的 Bonsai，接派发、翻译会话，空间成员回话与批权限；子进程剥离运行时凭据、会话只加载自己的 MCP；[验证报告](reports/daemon/bonsai-runtime.md)。
 - [ADR-080：Android APK 独立手动发布](decisions/clients/adr-080-standalone-android-release.md)：统一测试与正式入口，桌面发布不再调用 Android。
 - [ADR-079：移动端统一使用 Expo EAS 构建](decisions/clients/adr-079-mobile-eas-builds.md)：沿用原有 profile，Android 发布通用 APK，iOS 提交 TestFlight。
 - [ADR-078：Android 发布改为手动可选](decisions/clients/adr-078-optional-android-release.md)：标签发布只构建桌面，Android 默认关闭。

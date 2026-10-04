@@ -15,6 +15,7 @@
 - [ADR-047：移除 Plugin 接口并独立实现 Schedule 与 Browser](daemon/adr-047-daemon-schedule-browser.md)
 - [ADR-064：默认离线语音与模型准备](daemon/adr-064-offline-speech.md)
 - [ADR-072：Workspace 名称与当前文档边界](daemon/adr-072-workspace-names-and-documentation.md)
+- [ADR-083：Bonsai 执行端适配器](daemon/adr-083-bonsai-runtime-adapter.md)
 
 ## 工作区、文件与 Git
 
