@@ -204,7 +204,7 @@ async fn missing_null_and_blank_cwd_use_a_distinct_global_snapshot() {
         assert!(response.get("cwd").is_none());
     }
     assert_eq!(probes[0].state.lock().unwrap().discovery_cwds.len(), 1);
-    let home = super::super::super::scope::directory("~").unwrap();
+    let home = scope::directory("~").unwrap();
     let response = catalog
         .execute(
             &clients(&probes),

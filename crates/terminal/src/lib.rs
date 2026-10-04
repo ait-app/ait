@@ -39,16 +39,16 @@ pub enum Error {
 #[cfg(test)]
 mod tests;
 
-impl From<crate::Error> for model::ErrorCode {
-    fn from(error: crate::Error) -> Self {
+impl From<Error> for model::ErrorCode {
+    fn from(error: Error) -> Self {
         match error {
-            crate::Error::Invalid => Self::InvalidMessage,
-            crate::Error::NotFound => Self::TerminalNotFound,
-            crate::Error::WorkspaceNotFound => Self::WorkspaceNotFound,
-            crate::Error::Registry => Self::RegistryIo,
-            crate::Error::Exhausted => Self::ResourceExhausted,
-            crate::Error::Io => Self::TerminalIo,
-            crate::Error::MethodNotFound => Self::MethodNotFound,
+            Error::Invalid => Self::InvalidMessage,
+            Error::NotFound => Self::TerminalNotFound,
+            Error::WorkspaceNotFound => Self::WorkspaceNotFound,
+            Error::Registry => Self::RegistryIo,
+            Error::Exhausted => Self::ResourceExhausted,
+            Error::Io => Self::TerminalIo,
+            Error::MethodNotFound => Self::MethodNotFound,
         }
     }
 }

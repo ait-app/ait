@@ -28,14 +28,14 @@ pub enum ErrorCode {
     ResourceExhausted,
 }
 
-impl From<crate::rpc::ErrorCode> for model::ErrorCode {
-    fn from(error: crate::rpc::ErrorCode) -> Self {
+impl From<ErrorCode> for model::ErrorCode {
+    fn from(error: ErrorCode) -> Self {
         match error {
-            crate::rpc::ErrorCode::InvalidMessage => Self::InvalidMessage,
-            crate::rpc::ErrorCode::MethodNotFound => Self::MethodNotFound,
-            crate::rpc::ErrorCode::ProjectIo => Self::ProjectIo,
-            crate::rpc::ErrorCode::RegistryIo => Self::RegistryIo,
-            crate::rpc::ErrorCode::ResourceExhausted => Self::ResourceExhausted,
+            ErrorCode::InvalidMessage => Self::InvalidMessage,
+            ErrorCode::MethodNotFound => Self::MethodNotFound,
+            ErrorCode::ProjectIo => Self::ProjectIo,
+            ErrorCode::RegistryIo => Self::RegistryIo,
+            ErrorCode::ResourceExhausted => Self::ResourceExhausted,
         }
     }
 }

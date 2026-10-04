@@ -37,7 +37,7 @@ fn recovery_projection_preserves_every_stable_unavailable_reason() {
             serde_json::to_value(state)
                 .expect("serialize")
                 .get("reason")
-                .and_then(serde_json::Value::as_str),
+                .and_then(Value::as_str),
             Some(expected)
         );
     }

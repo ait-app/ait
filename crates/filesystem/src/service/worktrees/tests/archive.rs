@@ -91,8 +91,8 @@ fn failed_registration_reports_failed_rollback_and_keeps_the_original_cause() {
 
 #[derive(Debug, Clone, Default)]
 struct Cleanup {
-    failed: std::sync::Arc<std::sync::atomic::AtomicBool>,
-    calls: std::sync::Arc<std::sync::Mutex<Vec<Vec<String>>>>,
+    failed: Arc<std::sync::atomic::AtomicBool>,
+    calls: Arc<Mutex<Vec<Vec<String>>>>,
 }
 
 impl crate::ports::worktrees::WorktreeArchiveCleanup for Cleanup {

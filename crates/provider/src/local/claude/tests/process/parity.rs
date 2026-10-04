@@ -43,7 +43,7 @@ async fn installed_claude_completes_a_native_turn_and_reopens_history() {
     let client = ClaudeClient::new(
         std::env::var_os("AIT_SERVER_CLAUDE_BIN").map_or_else(|| "claude".into(), Into::into),
     );
-    let spec = super::super::spec(root.path());
+    let spec = spec(root.path());
     let mut session = client.create_session(&spec).await.unwrap();
     session
         .start_turn(

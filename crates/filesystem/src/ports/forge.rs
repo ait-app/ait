@@ -475,7 +475,7 @@ pub trait ForgeRuntime: std::fmt::Debug + Send {
     fn check_details(
         &self,
         cwd: &str,
-        query: crate::ports::forge::CheckDetailsQuery<'_>,
+        query: CheckDetailsQuery<'_>,
     ) -> Result<CheckDetails, ForgeRuntimeError>;
 }
 

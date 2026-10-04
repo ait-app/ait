@@ -519,7 +519,7 @@ impl Directory {
             self.refresh_project_for_workspace(&restored, &checkout, timestamp)?;
             return Ok(restored);
         }
-        self.create_workspace(crate::service::directory::WorkspaceCreation {
+        self.create_workspace(WorkspaceCreation {
             path: &checkout.cwd,
             title: None,
             project_id: None,

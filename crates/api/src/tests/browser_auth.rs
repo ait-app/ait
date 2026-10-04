@@ -8,7 +8,7 @@ async fn browser_ticket_requires_explicit_origin_and_bearer() {
     let client = reqwest::Client::builder().no_proxy().build().unwrap();
     let endpoint = fixture.url(crate::browser_auth::TICKET_PATH);
     let preflight = client
-        .request(reqwest::Method::OPTIONS, &endpoint)
+        .request(Method::OPTIONS, &endpoint)
         .header("origin", ORIGIN)
         .header("access-control-request-method", "POST")
         .header("access-control-request-headers", "authorization")
@@ -105,7 +105,7 @@ async fn browser_ticket_authenticates_real_upgrade_without_exposing_bearer() {
             .status(),
         StatusCode::UNAUTHORIZED
     );
-    let mut invalid_host = axum::http::HeaderMap::new();
+    let mut invalid_host = HeaderMap::new();
     invalid_host.insert("host", "evil.test".parse().unwrap());
     invalid_host.insert("origin", ORIGIN.parse().unwrap());
     assert!(

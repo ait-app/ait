@@ -9,6 +9,14 @@ use std::process::ExitCode;
 use anyhow::Context;
 use clap::Parser;
 
+// Binary unit tests inherit dependencies used by integration tests.
+#[cfg(test)]
+use futures_util as _;
+#[cfg(test)]
+use protocol as _;
+#[cfg(test)]
+use tokio_tungstenite as _;
+
 #[tokio::main]
 async fn main() -> ExitCode {
     if std::env::args_os()

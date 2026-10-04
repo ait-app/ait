@@ -32,8 +32,8 @@ Helper 是必需运行时。GitHub 仍自动提供标签对应的源码归档。
 
 ## 准备版本
 
-同步根 `Cargo.toml` 的 `workspace.package.version`、带版本约束的本地 Cargo path 依赖、
-Cargo.lock、根 package.json、所有活跃 npm workspace 及其 lockfile。然后运行：
+同步根 `Cargo.toml` 的 `workspace.package.version`、Cargo.lock、根 package.json、
+所有活跃 npm workspace 及其 lockfile。然后运行：
 
 ```bash
 npm ci

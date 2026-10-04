@@ -53,24 +53,22 @@ pub enum ErrorCode {
 pub mod workspace_automation;
 pub mod workspace_state;
 
-impl From<crate::rpc::ErrorCode> for model::ErrorCode {
-    fn from(error: crate::rpc::ErrorCode) -> Self {
+impl From<ErrorCode> for model::ErrorCode {
+    fn from(error: ErrorCode) -> Self {
         match error {
-            crate::rpc::ErrorCode::IdempotencyConflict => Self::IdempotencyConflict,
-            crate::rpc::ErrorCode::ResourceExhausted => Self::ResourceExhausted,
-            crate::rpc::ErrorCode::InvalidMessage => Self::InvalidMessage,
-            crate::rpc::ErrorCode::UnsupportedCapability => Self::UnsupportedCapability,
-            crate::rpc::ErrorCode::MethodNotFound => Self::MethodNotFound,
-            crate::rpc::ErrorCode::RegistryIo => Self::RegistryIo,
-            crate::rpc::ErrorCode::DaemonConfigInvalid => Self::DaemonConfigInvalid,
-            crate::rpc::ErrorCode::DaemonIo => Self::DaemonIo,
-            crate::rpc::ErrorCode::WorkspaceNotFound => Self::WorkspaceNotFound,
-            crate::rpc::ErrorCode::LabelNameEmpty => Self::LabelNameEmpty,
-            crate::rpc::ErrorCode::LabelNotFound => Self::LabelNotFound,
-            crate::rpc::ErrorCode::LabelNameTaken => Self::LabelNameTaken,
-            crate::rpc::ErrorCode::WorkspaceLabelStorageUncertain => {
-                Self::WorkspaceLabelStorageUncertain
-            }
+            ErrorCode::IdempotencyConflict => Self::IdempotencyConflict,
+            ErrorCode::ResourceExhausted => Self::ResourceExhausted,
+            ErrorCode::InvalidMessage => Self::InvalidMessage,
+            ErrorCode::UnsupportedCapability => Self::UnsupportedCapability,
+            ErrorCode::MethodNotFound => Self::MethodNotFound,
+            ErrorCode::RegistryIo => Self::RegistryIo,
+            ErrorCode::DaemonConfigInvalid => Self::DaemonConfigInvalid,
+            ErrorCode::DaemonIo => Self::DaemonIo,
+            ErrorCode::WorkspaceNotFound => Self::WorkspaceNotFound,
+            ErrorCode::LabelNameEmpty => Self::LabelNameEmpty,
+            ErrorCode::LabelNotFound => Self::LabelNotFound,
+            ErrorCode::LabelNameTaken => Self::LabelNameTaken,
+            ErrorCode::WorkspaceLabelStorageUncertain => Self::WorkspaceLabelStorageUncertain,
         }
     }
 }

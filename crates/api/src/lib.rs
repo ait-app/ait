@@ -477,8 +477,7 @@ async fn guard(
         browser_auth::cors(response.headers_mut(), origin);
         return Ok(response);
     }
-    let download = request.method() == axum::http::Method::GET
-        && request.uri().path() == "/api/files/download";
+    let download = request.method() == Method::GET && request.uri().path() == "/api/files/download";
     let terminal_activity =
         request.method() == Method::POST && request.uri().path() == terminal_activity::PATH;
     if !matches!(request.uri().path(), "/healthz" | "/readyz") && !download && !terminal_activity {
