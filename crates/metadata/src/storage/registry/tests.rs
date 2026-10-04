@@ -209,7 +209,7 @@ fn lexical_paths_match_windows_namespaces_and_keep_symlink_spellings_distinct() 
         ("\\\\?\\C:\\Repo", "c:/repo/"),
         ("\\\\?\\UNC\\Server\\Share\\Repo", "\\\\server\\share\\repo"),
     ] {
-        assert!(super::paths::equivalent(left, right), "{left} != {right}");
+        assert!(paths::equivalent(left, right), "{left} != {right}");
     }
     for (left, right) in [
         ("/repo", "/Repo"),
@@ -217,7 +217,7 @@ fn lexical_paths_match_windows_namespaces_and_keep_symlink_spellings_distinct() 
         ("/", "."),
         ("a\\b", "a/b"),
     ] {
-        assert!(!super::paths::equivalent(left, right));
+        assert!(!paths::equivalent(left, right));
     }
     let temp = tempfile::tempdir().unwrap();
     let registry = FileBackedProjectRegistry::new(temp.path().join("projects.json"));

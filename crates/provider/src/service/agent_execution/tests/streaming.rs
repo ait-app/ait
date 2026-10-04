@@ -248,11 +248,11 @@ async fn steer_validation_preserves_permissions_and_idle_selection_starts_a_turn
         .await
         .unwrap();
     send(&execution, id, "permit-command", false).await;
-    let permission = super::controls::pending(&execution, id).await;
+    let permission = controls::pending(&execution, id).await;
     for text in [""] {
         assert_eq!(send(&execution, id, text, true).await["accepted"], false);
     }
-    assert_eq!(super::controls::pending(&execution, id).await, permission);
+    assert_eq!(controls::pending(&execution, id).await, permission);
     assert_eq!(
         execution
             .execute(

@@ -26,14 +26,14 @@ struct Fixture {
 
 impl Fixture {
     async fn start() -> Self {
-        Self::with_services(crate::Services::default()).await
+        Self::with_services(Services::default()).await
     }
 
-    async fn with_services(services: crate::Services) -> Self {
+    async fn with_services(services: Services) -> Self {
         Self::with_origins(services, Vec::new()).await
     }
 
-    async fn with_origins(services: crate::Services, origins: Vec<String>) -> Self {
+    async fn with_origins(services: Services, origins: Vec<String>) -> Self {
         let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
         let address = listener.local_addr().unwrap();
         let api = Api::new(
@@ -119,7 +119,7 @@ fn rejects_bad_config_and_redacts_debug() {
                 "s".to_owned(),
                 "i".to_owned(),
                 TOKEN.into(),
-                crate::Services::default(),
+                Services::default(),
             )
             .is_err()
         );
@@ -130,7 +130,7 @@ fn rejects_bad_config_and_redacts_debug() {
             "s".to_owned(),
             "i".to_owned(),
             "short".into(),
-            crate::Services::default(),
+            Services::default(),
         )
         .is_err()
     );
@@ -139,7 +139,7 @@ fn rejects_bad_config_and_redacts_debug() {
         "s".to_owned(),
         "i".to_owned(),
         TOKEN.into(),
-        crate::Services::default(),
+        Services::default(),
     )
     .unwrap();
     assert!(!format!("{api:?}").contains(TOKEN));
@@ -148,10 +148,10 @@ fn rejects_bad_config_and_redacts_debug() {
         "s".to_owned(),
         "i".to_owned(),
         TOKEN.into(),
-        crate::Services::default(),
+        Services::default(),
     )
     .unwrap();
-    let mut headers = axum::http::HeaderMap::new();
+    let mut headers = HeaderMap::new();
     headers.insert("host", "[::1]".parse().unwrap());
     headers.insert("origin", "http://localhost".parse().unwrap());
     assert!(
@@ -164,7 +164,7 @@ fn rejects_bad_config_and_redacts_debug() {
     );
 }
 
-fn assert_default_capabilities(info: &protocol::ServerInfo) {
+fn assert_default_capabilities(info: &ServerInfo) {
     let expected: Vec<_> = CAPABILITIES
         .iter()
         .copied()
@@ -244,7 +244,7 @@ async fn http_authentication_origins_and_readiness() {
             .status(),
         StatusCode::BAD_REQUEST
     );
-    let info: protocol::ServerInfo = client
+    let info: ServerInfo = client
         .get(&info_url)
         .bearer_auth(TOKEN)
         .send()

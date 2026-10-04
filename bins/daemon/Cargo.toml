@@ -28,7 +28,6 @@ chrono.workspace = true
 clap.workspace = true
 secrecy.workspace = true
 serde.workspace = true
-tempfile.workspace = true
 tokio.workspace = true
 toml.workspace = true
 tracing.workspace = true
@@ -39,6 +38,7 @@ uuid.workspace = true
 workspace = true
 
 [dev-dependencies]
+tempfile.workspace = true
 protocol.workspace = true
 futures-util.workspace = true
 reqwest.workspace = true

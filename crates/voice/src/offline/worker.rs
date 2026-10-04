@@ -196,7 +196,7 @@ fn read_message<T: serde::de::DeserializeOwned>(
     input: &mut impl BufRead,
 ) -> Result<Option<T>, Error> {
     let mut line = Vec::new();
-    std::io::Read::take(input, CONTROL_LIMIT)
+    Read::take(input, CONTROL_LIMIT)
         .read_until(b'\n', &mut line)
         .map_err(|_| Error::Provider)?;
     if line.is_empty() {
@@ -213,7 +213,7 @@ fn read_message<T: serde::de::DeserializeOwned>(
 fn read_file(path: &Path, limit: usize) -> Result<Vec<u8>, Error> {
     let file = std::fs::File::open(path).map_err(|_| Error::Provider)?;
     let mut bytes = Vec::new();
-    std::io::Read::take(file, limit as u64 + 1)
+    Read::take(file, limit as u64 + 1)
         .read_to_end(&mut bytes)
         .map_err(|_| Error::Provider)?;
     if bytes.len() > limit {

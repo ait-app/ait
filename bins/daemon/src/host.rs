@@ -504,7 +504,7 @@ fn compose_push(data_dir: &std::path::Path) -> anyhow::Result<metadata::service:
         Box::new(metadata::storage::push::FileTokenStore::new(
             data_dir.join("push-tokens.json"),
         )),
-        chrono::Utc::now().timestamp_millis(),
+        Utc::now().timestamp_millis(),
     )
     .map_err(|_| anyhow::anyhow!("initialize push token leases"))
 }

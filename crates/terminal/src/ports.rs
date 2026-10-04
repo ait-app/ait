@@ -21,7 +21,7 @@ pub struct Launch {
     pub env: BTreeMap<String, String>,
 }
 
-impl std::fmt::Debug for Launch {
+impl Debug for Launch {
     fn fmt(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         formatter
             .debug_struct("Launch")

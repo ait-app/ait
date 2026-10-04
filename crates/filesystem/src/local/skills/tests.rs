@@ -5,7 +5,7 @@ use serde_json::{Value, json};
 
 mod paseo;
 
-fn store(root: &std::path::Path) -> LocalSkills {
+fn store(root: &Path) -> LocalSkills {
     LocalSkills::new(
         &root.join("bundle"),
         &["agents", "claude", "codex"].map(|name| root.join(name)),
@@ -14,12 +14,12 @@ fn store(root: &std::path::Path) -> LocalSkills {
     .unwrap()
 }
 
-fn put(path: &std::path::Path, text: &str) {
+fn put(path: &Path, text: &str) {
     fs::create_dir_all(path.parent().unwrap()).unwrap();
     fs::write(path, text).unwrap();
 }
 
-fn mark_owned(path: &std::path::Path) {
+fn mark_owned(path: &Path) {
     put(
         &path.join(tree::MANIFEST),
         r#"{"version":1,"owner":"ait","files":{}}"#,
@@ -213,7 +213,7 @@ fn overlapping_roots_bad_paths_and_corrupt_selection_fail_closed() {
         )
         .is_err()
     );
-    assert!(tree::normalize(std::path::Path::new("relative")).is_err());
+    assert!(tree::normalize(Path::new("relative")).is_err());
     assert!(!tree::valid_relative("../secret"));
     assert!(!tree::valid_relative("bad\\path"));
     put(&root.path().join("state/selection.json"), "broken");

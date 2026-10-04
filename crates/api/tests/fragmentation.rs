@@ -1,5 +1,26 @@
 //! Fragmentation must not bypass the cumulative input message budget.
 
+// Cargo passes the complete package dependency set to this integration test.
+use browser as _;
+use chrono as _;
+use filesystem as _;
+use metadata as _;
+use model as _;
+use provider as _;
+use relay as _;
+use reqwest as _;
+use schedule as _;
+use secrecy as _;
+use serde as _;
+use subtle as _;
+use terminal as _;
+use thiserror as _;
+use tokio_util as _;
+use tower_http as _;
+use tracing as _;
+use uuid as _;
+use voice as _;
+
 use api::Api;
 use futures_util::{SinkExt, StreamExt};
 use protocol::MAX_MESSAGE_BYTES;

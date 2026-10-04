@@ -11,8 +11,6 @@ metadata.workspace = true
 
 # Internal OpenCode approval and progress sinks over the owned HTTP runtime.
 async-trait.workspace = true
-# Consume bounded OpenCode HTTP and SSE response streams.
-futures-util.workspace = true
 # Validate image payloads before native prompt admission and decode provider image artifacts.
 base64.workspace = true
 # Read-only Claude OAuth quota inspection; credentials never enter public snapshots.

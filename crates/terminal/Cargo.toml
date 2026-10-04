@@ -13,7 +13,6 @@ secrecy.workspace = true
 subtle.workspace = true
 tracing.workspace = true
 tokio.workspace = true
-tokio-util.workspace = true
 portable-pty.workspace = true
 vt100.workspace = true
 serde.workspace = true

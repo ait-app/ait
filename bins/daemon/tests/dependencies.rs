@@ -3,6 +3,35 @@
 use std::collections::BTreeSet;
 use std::process::Command;
 
+// Cargo passes the complete package dependency set to this integration test.
+use anyhow as _;
+use api as _;
+use axum as _;
+use browser as _;
+use chrono as _;
+use clap as _;
+use domain as _;
+use filesystem as _;
+use futures_util as _;
+use metadata as _;
+use model as _;
+use protocol as _;
+use provider as _;
+use reqwest as _;
+use schedule as _;
+use secrecy as _;
+use serde as _;
+use tempfile as _;
+use terminal as _;
+use tokio as _;
+use tokio_tungstenite as _;
+use tokio_util as _;
+use toml as _;
+use tracing as _;
+use tracing_subscriber as _;
+use uuid as _;
+use voice as _;
+
 use serde_json::{Value, json};
 
 fn violations(packages: &[Value]) -> Vec<String> {

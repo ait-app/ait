@@ -54,24 +54,24 @@ pub enum ErrorCode {
     RegistryIo,
 }
 
-impl From<crate::rpc::ErrorCode> for model::ErrorCode {
-    fn from(error: crate::rpc::ErrorCode) -> Self {
+impl From<ErrorCode> for model::ErrorCode {
+    fn from(error: ErrorCode) -> Self {
         match error {
-            crate::rpc::ErrorCode::ResourceExhausted => Self::ResourceExhausted,
-            crate::rpc::ErrorCode::InvalidMessage => Self::InvalidMessage,
-            crate::rpc::ErrorCode::UnsupportedCapability => Self::UnsupportedCapability,
-            crate::rpc::ErrorCode::MethodNotFound => Self::MethodNotFound,
-            crate::rpc::ErrorCode::AgentIo => Self::AgentIo,
-            crate::rpc::ErrorCode::AgentNotFound => Self::AgentNotFound,
-            crate::rpc::ErrorCode::AgentRevisionNotFound => Self::AgentRevisionNotFound,
-            crate::rpc::ErrorCode::AgentRevisionConflict => Self::AgentRevisionConflict,
-            crate::rpc::ErrorCode::AgentDefaultConflict => Self::AgentDefaultConflict,
-            crate::rpc::ErrorCode::AgentDisabled => Self::AgentDisabled,
-            crate::rpc::ErrorCode::AgentIsDefault => Self::AgentIsDefault,
-            crate::rpc::ErrorCode::IdempotencyConflict => Self::IdempotencyConflict,
-            crate::rpc::ErrorCode::CatalogBusy => Self::CatalogBusy,
-            crate::rpc::ErrorCode::UnsupportedFormat => Self::UnsupportedFormat,
-            crate::rpc::ErrorCode::RegistryIo => Self::RegistryIo,
+            ErrorCode::ResourceExhausted => Self::ResourceExhausted,
+            ErrorCode::InvalidMessage => Self::InvalidMessage,
+            ErrorCode::UnsupportedCapability => Self::UnsupportedCapability,
+            ErrorCode::MethodNotFound => Self::MethodNotFound,
+            ErrorCode::AgentIo => Self::AgentIo,
+            ErrorCode::AgentNotFound => Self::AgentNotFound,
+            ErrorCode::AgentRevisionNotFound => Self::AgentRevisionNotFound,
+            ErrorCode::AgentRevisionConflict => Self::AgentRevisionConflict,
+            ErrorCode::AgentDefaultConflict => Self::AgentDefaultConflict,
+            ErrorCode::AgentDisabled => Self::AgentDisabled,
+            ErrorCode::AgentIsDefault => Self::AgentIsDefault,
+            ErrorCode::IdempotencyConflict => Self::IdempotencyConflict,
+            ErrorCode::CatalogBusy => Self::CatalogBusy,
+            ErrorCode::UnsupportedFormat => Self::UnsupportedFormat,
+            ErrorCode::RegistryIo => Self::RegistryIo,
         }
     }
 }
