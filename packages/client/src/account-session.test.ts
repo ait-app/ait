@@ -78,6 +78,32 @@ function fixture() {
   };
 }
 
+function hostIdentityFixture() {
+  const context = fixture();
+  const original = context.http.getMockImplementation()!;
+  const installations = new Map<string, string>();
+  context.http.mockImplementation((url, options) => {
+    if (String(url).endsWith("/nodes/register")) {
+      const body = JSON.parse(String(options?.body));
+      if (body.runtime) {
+        const serverId = body.runtime.server_id;
+        const installation = installations.get(serverId);
+        // mirrors nodes.host_id UNIQUE: closing a session never removes its node binding
+        if (installation && installation !== body.installation_id)
+          return Promise.resolve(
+            Response.json(
+              { error: { code: "conflict", message: "Resource already exists" } },
+              { status: 409 },
+            ),
+          );
+        installations.set(serverId, body.installation_id);
+      }
+    }
+    return original(url, options);
+  });
+  return context;
+}
+
 describe("client-only account lifecycle", () => {
   it("registers Android without publishing a host, discovers and renews independently of visits", async () => {
     const { manager, http, deps, login, host } = fixture();
@@ -170,6 +196,75 @@ describe("explicit daemon publication", () => {
     name: "Second host",
     platform: "darwin",
   };
+
+  it("reuses the host's node after stopping synchronization and after a daemon restart", async () => {
+    const { manager, http, login } = hostIdentityFixture();
+    await login();
+    await manager.publishHost(first);
+    await manager.unpublishHost(first.serverId);
+    await expect(manager.publishHost(first)).resolves.toMatchObject({
+      node_session_id: "lease-first",
+    });
+    await expect(manager.publishHost({ ...first, instanceId: "restarted" })).resolves.toMatchObject(
+      { node_session_id: "lease-first" },
+    );
+    const registrations = http.mock.calls
+      .filter(([url]) => String(url).endsWith("/nodes/register"))
+      .map(([, options]) => JSON.parse(String(options?.body)))
+      .filter((body) => body.runtime);
+    expect(registrations).toHaveLength(3);
+    expect(registrations.map((body) => body.installation_id)).toEqual([
+      first.serverId,
+      first.serverId,
+      first.serverId,
+    ]);
+    expect(new Set(registrations.map((body) => body.registration_id)).size).toBe(3);
+    await manager.unpublishHost(first.serverId);
+    await manager.logout();
+  });
+
+  it("reuses the same host identity when another client enables synchronization after lease expiry", async () => {
+    const { manager, deps, login } = hostIdentityFixture();
+    await login();
+    await manager.publishHost(first);
+    await manager.shutdown();
+    await vi.advanceTimersByTimeAsync(61_000);
+    const next = new AccountSessionManager({ ...deps, installationId: "another-client" });
+    await next.login("", "ME@example.test", " secret ");
+    await vi.advanceTimersByTimeAsync(1);
+    await expect(next.publishHost(first)).resolves.toMatchObject({
+      node_session_id: "lease-first",
+    });
+    await next.unpublishHost(first.serverId);
+    await next.logout();
+  });
+
+  it("replaces a closed registration ID while preserving the daemon installation identity", async () => {
+    const { manager, http, login } = fixture();
+    await login();
+    http.mockResolvedValueOnce(
+      Response.json(
+        { error: { code: "registration_expired", message: "Registration is closed" } },
+        { status: 409 },
+      ),
+    );
+    await expect(manager.publishHost(first)).rejects.toThrow("Registration is closed");
+    await expect(manager.publishHost(first)).resolves.toMatchObject({
+      node_session_id: "lease-first",
+    });
+    const registrations = http.mock.calls
+      .filter(([url]) => String(url).endsWith("/nodes/register"))
+      .map(([, options]) => JSON.parse(String(options?.body)))
+      .filter((body) => body.runtime);
+    expect(registrations).toHaveLength(2);
+    expect(registrations[0].registration_id).not.toBe(registrations[1].registration_id);
+    expect(registrations.map((body) => body.installation_id)).toEqual([
+      first.serverId,
+      first.serverId,
+    ]);
+    await manager.unpublishHost(first.serverId);
+    await manager.logout();
+  });
 
   it("keeps desktop login independent from daemon publication and binds grants to each host", async () => {
     const { manager, deps, http, login } = fixture();

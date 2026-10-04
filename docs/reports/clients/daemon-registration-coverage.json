@@ -1,0 +1,890 @@
+{
+  "date": "2026-10-05",
+  "repository": "ait-app/ait-server",
+  "base_revision": "87dc0768d1b8c8440e4c20d305261da49ba88519",
+  "measurement_scope": "ait-server package, integration-tests feature, test api filtered to relay::registration (7 tests)",
+  "platform": "macOS aarch64",
+  "command": "DATABASE_URL=postgres://ait_registration_test@127.0.0.1:55473/ait_registration cargo llvm-cov --offline --locked -p ait-server --features integration-tests --test api --json --output-path /private/tmp/ait-server-registration-coverage.json -- relay::registration",
+  "baseline": "No comparable baseline: prior 6-test measurement excluded password login and removed-host registration.",
+  "excluded_files": "No explicit filename exclusions; cargo-llvm-cov default dependency/test exclusions apply.",
+  "filtered_tests": 34,
+  "source_sha256": {
+    "src/api/nodes.rs": "6029da817460ac3808022b05dd595132e50c4f89e4a9e1d408c95e5c8ed61851",
+    "tests/api/relay.rs": "f8388a71eb35669df9ddad93b2367bb1f5f4d742148b7589ce442f139fc80c02",
+    "tests/api/relay/registration.rs": "46806aed8ce4f9bfbde4187d64e44e0fc64ade63ff324406130f3ffe82501b8a",
+    "docs/architecture.md": "161bc708c8f694b6d905373c0953a8f1954102dfe836523c24f90541eda47fd1"
+  },
+  "totals": {
+    "branches": {
+      "count": 0,
+      "covered": 0,
+      "notcovered": 0,
+      "percent": 0
+    },
+    "functions": {
+      "count": 309,
+      "covered": 135,
+      "percent": 43.689320388349515
+    },
+    "instantiations": {
+      "count": 379,
+      "covered": 153,
+      "percent": 40.36939313984168
+    },
+    "lines": {
+      "count": 2564,
+      "covered": 1118,
+      "percent": 43.60374414976599
+    },
+    "mcdc": {
+      "count": 0,
+      "covered": 0,
+      "notcovered": 0,
+      "percent": 0
+    },
+    "regions": {
+      "count": 3976,
+      "covered": 1625,
+      "notcovered": 2351,
+      "percent": 40.870221327967805
+    }
+  },
+  "files": [
+    {
+      "path": "src/access.rs",
+      "summary": {
+        "branches": {
+          "count": 0,
+          "covered": 0,
+          "notcovered": 0,
+          "percent": 0.0
+        },
+        "mcdc": {
+          "count": 0,
+          "covered": 0,
+          "notcovered": 0,
+          "percent": 0.0
+        },
+        "functions": {
+          "count": 2,
+          "covered": 2,
+          "percent": 100.0
+        },
+        "instantiations": {
+          "count": 2,
+          "covered": 2,
+          "percent": 100.0
+        },
+        "lines": {
+          "count": 11,
+          "covered": 11,
+          "percent": 100.0
+        },
+        "regions": {
+          "count": 13,
+          "covered": 12,
+          "notcovered": 1,
+          "percent": 92.3076923076923
+        }
+      }
+    },
+    {
+      "path": "src/accounts.rs",
+      "summary": {
+        "branches": {
+          "count": 0,
+          "covered": 0,
+          "notcovered": 0,
+          "percent": 0.0
+        },
+        "mcdc": {
+          "count": 0,
+          "covered": 0,
+          "notcovered": 0,
+          "percent": 0.0
+        },
+        "functions": {
+          "count": 6,
+          "covered": 0,
+          "percent": 0.0
+        },
+        "instantiations": {
+          "count": 6,
+          "covered": 0,
+          "percent": 0.0
+        },
+        "lines": {
+          "count": 77,
+          "covered": 0,
+          "percent": 0.0
+        },
+        "regions": {
+          "count": 93,
+          "covered": 0,
+          "notcovered": 93,
+          "percent": 0.0
+        }
+      }
+    },
+    {
+      "path": "src/api/admin.rs",
+      "summary": {
+        "branches": {
+          "count": 0,
+          "covered": 0,
+          "notcovered": 0,
+          "percent": 0.0
+        },
+        "mcdc": {
+          "count": 0,
+          "covered": 0,
+          "notcovered": 0,
+          "percent": 0.0
+        },
+        "functions": {
+          "count": 12,
+          "covered": 0,
+          "percent": 0.0
+        },
+        "instantiations": {
+          "count": 12,
+          "covered": 0,
+          "percent": 0.0
+        },
+        "lines": {
+          "count": 218,
+          "covered": 0,
+          "percent": 0.0
+        },
+        "regions": {
+          "count": 347,
+          "covered": 0,
+          "notcovered": 347,
+          "percent": 0.0
+        }
+      }
+    },
+    {
+      "path": "src/api/hosts.rs",
+      "summary": {
+        "branches": {
+          "count": 0,
+          "covered": 0,
+          "notcovered": 0,
+          "percent": 0.0
+        },
+        "mcdc": {
+          "count": 0,
+          "covered": 0,
+          "notcovered": 0,
+          "percent": 0.0
+        },
+        "functions": {
+          "count": 18,
+          "covered": 10,
+          "percent": 55.55555555555556
+        },
+        "instantiations": {
+          "count": 18,
+          "covered": 10,
+          "percent": 55.55555555555556
+        },
+        "lines": {
+          "count": 135,
+          "covered": 73,
+          "percent": 54.07407407407408
+        },
+        "regions": {
+          "count": 270,
+          "covered": 129,
+          "notcovered": 141,
+          "percent": 47.77777777777778
+        }
+      }
+    },
+    {
+      "path": "src/api/mod.rs",
+      "summary": {
+        "branches": {
+          "count": 0,
+          "covered": 0,
+          "notcovered": 0,
+          "percent": 0.0
+        },
+        "mcdc": {
+          "count": 0,
+          "covered": 0,
+          "notcovered": 0,
+          "percent": 0.0
+        },
+        "functions": {
+          "count": 2,
+          "covered": 2,
+          "percent": 100.0
+        },
+        "instantiations": {
+          "count": 2,
+          "covered": 2,
+          "percent": 100.0
+        },
+        "lines": {
+          "count": 11,
+          "covered": 8,
+          "percent": 72.72727272727273
+        },
+        "regions": {
+          "count": 11,
+          "covered": 10,
+          "notcovered": 1,
+          "percent": 90.9090909090909
+        }
+      }
+    },
+    {
+      "path": "src/api/nodes.rs",
+      "summary": {
+        "branches": {
+          "count": 0,
+          "covered": 0,
+          "notcovered": 0,
+          "percent": 0.0
+        },
+        "mcdc": {
+          "count": 0,
+          "covered": 0,
+          "notcovered": 0,
+          "percent": 0.0
+        },
+        "functions": {
+          "count": 18,
+          "covered": 18,
+          "percent": 100.0
+        },
+        "instantiations": {
+          "count": 18,
+          "covered": 18,
+          "percent": 100.0
+        },
+        "lines": {
+          "count": 286,
+          "covered": 264,
+          "percent": 92.3076923076923
+        },
+        "regions": {
+          "count": 426,
+          "covered": 385,
+          "notcovered": 41,
+          "percent": 90.3755868544601
+        }
+      }
+    },
+    {
+      "path": "src/api/users.rs",
+      "summary": {
+        "branches": {
+          "count": 0,
+          "covered": 0,
+          "notcovered": 0,
+          "percent": 0.0
+        },
+        "mcdc": {
+          "count": 0,
+          "covered": 0,
+          "notcovered": 0,
+          "percent": 0.0
+        },
+        "functions": {
+          "count": 6,
+          "covered": 2,
+          "percent": 33.33333333333333
+        },
+        "instantiations": {
+          "count": 6,
+          "covered": 2,
+          "percent": 33.33333333333333
+        },
+        "lines": {
+          "count": 34,
+          "covered": 18,
+          "percent": 52.94117647058824
+        },
+        "regions": {
+          "count": 67,
+          "covered": 32,
+          "notcovered": 35,
+          "percent": 47.76119402985074
+        }
+      }
+    },
+    {
+      "path": "src/auth.rs",
+      "summary": {
+        "branches": {
+          "count": 0,
+          "covered": 0,
+          "notcovered": 0,
+          "percent": 0.0
+        },
+        "mcdc": {
+          "count": 0,
+          "covered": 0,
+          "notcovered": 0,
+          "percent": 0.0
+        },
+        "functions": {
+          "count": 19,
+          "covered": 11,
+          "percent": 57.89473684210527
+        },
+        "instantiations": {
+          "count": 19,
+          "covered": 11,
+          "percent": 57.89473684210527
+        },
+        "lines": {
+          "count": 116,
+          "covered": 62,
+          "percent": 53.44827586206896
+        },
+        "regions": {
+          "count": 203,
+          "covered": 100,
+          "notcovered": 103,
+          "percent": 49.26108374384236
+        }
+      }
+    },
+    {
+      "path": "src/bin/ait-user.rs",
+      "summary": {
+        "branches": {
+          "count": 0,
+          "covered": 0,
+          "notcovered": 0,
+          "percent": 0.0
+        },
+        "mcdc": {
+          "count": 0,
+          "covered": 0,
+          "notcovered": 0,
+          "percent": 0.0
+        },
+        "functions": {
+          "count": 14,
+          "covered": 0,
+          "percent": 0.0
+        },
+        "instantiations": {
+          "count": 14,
+          "covered": 0,
+          "percent": 0.0
+        },
+        "lines": {
+          "count": 126,
+          "covered": 0,
+          "percent": 0.0
+        },
+        "regions": {
+          "count": 258,
+          "covered": 0,
+          "notcovered": 258,
+          "percent": 0.0
+        }
+      }
+    },
+    {
+      "path": "src/config.rs",
+      "summary": {
+        "branches": {
+          "count": 0,
+          "covered": 0,
+          "notcovered": 0,
+          "percent": 0.0
+        },
+        "mcdc": {
+          "count": 0,
+          "covered": 0,
+          "notcovered": 0,
+          "percent": 0.0
+        },
+        "functions": {
+          "count": 5,
+          "covered": 0,
+          "percent": 0.0
+        },
+        "instantiations": {
+          "count": 5,
+          "covered": 0,
+          "percent": 0.0
+        },
+        "lines": {
+          "count": 26,
+          "covered": 0,
+          "percent": 0.0
+        },
+        "regions": {
+          "count": 34,
+          "covered": 0,
+          "notcovered": 34,
+          "percent": 0.0
+        }
+      }
+    },
+    {
+      "path": "src/error.rs",
+      "summary": {
+        "branches": {
+          "count": 0,
+          "covered": 0,
+          "notcovered": 0,
+          "percent": 0.0
+        },
+        "mcdc": {
+          "count": 0,
+          "covered": 0,
+          "notcovered": 0,
+          "percent": 0.0
+        },
+        "functions": {
+          "count": 20,
+          "covered": 14,
+          "percent": 70.0
+        },
+        "instantiations": {
+          "count": 78,
+          "covered": 29,
+          "percent": 37.17948717948718
+        },
+        "lines": {
+          "count": 71,
+          "covered": 47,
+          "percent": 66.19718309859155
+        },
+        "regions": {
+          "count": 90,
+          "covered": 49,
+          "notcovered": 41,
+          "percent": 54.44444444444444
+        }
+      }
+    },
+    {
+      "path": "src/lib.rs",
+      "summary": {
+        "branches": {
+          "count": 0,
+          "covered": 0,
+          "notcovered": 0,
+          "percent": 0.0
+        },
+        "mcdc": {
+          "count": 0,
+          "covered": 0,
+          "notcovered": 0,
+          "percent": 0.0
+        },
+        "functions": {
+          "count": 15,
+          "covered": 4,
+          "percent": 26.666666666666668
+        },
+        "instantiations": {
+          "count": 15,
+          "covered": 4,
+          "percent": 26.666666666666668
+        },
+        "lines": {
+          "count": 105,
+          "covered": 81,
+          "percent": 77.14285714285715
+        },
+        "regions": {
+          "count": 172,
+          "covered": 141,
+          "notcovered": 31,
+          "percent": 81.97674418604652
+        }
+      }
+    },
+    {
+      "path": "src/main.rs",
+      "summary": {
+        "branches": {
+          "count": 0,
+          "covered": 0,
+          "notcovered": 0,
+          "percent": 0.0
+        },
+        "mcdc": {
+          "count": 0,
+          "covered": 0,
+          "notcovered": 0,
+          "percent": 0.0
+        },
+        "functions": {
+          "count": 9,
+          "covered": 0,
+          "percent": 0.0
+        },
+        "instantiations": {
+          "count": 9,
+          "covered": 0,
+          "percent": 0.0
+        },
+        "lines": {
+          "count": 61,
+          "covered": 0,
+          "percent": 0.0
+        },
+        "regions": {
+          "count": 88,
+          "covered": 0,
+          "notcovered": 88,
+          "percent": 0.0
+        }
+      }
+    },
+    {
+      "path": "src/models.rs",
+      "summary": {
+        "branches": {
+          "count": 0,
+          "covered": 0,
+          "notcovered": 0,
+          "percent": 0.0
+        },
+        "mcdc": {
+          "count": 0,
+          "covered": 0,
+          "notcovered": 0,
+          "percent": 0.0
+        },
+        "functions": {
+          "count": 2,
+          "covered": 1,
+          "percent": 50.0
+        },
+        "instantiations": {
+          "count": 2,
+          "covered": 1,
+          "percent": 50.0
+        },
+        "lines": {
+          "count": 11,
+          "covered": 5,
+          "percent": 45.45454545454545
+        },
+        "regions": {
+          "count": 9,
+          "covered": 6,
+          "notcovered": 3,
+          "percent": 66.66666666666666
+        }
+      }
+    },
+    {
+      "path": "src/passwords.rs",
+      "summary": {
+        "branches": {
+          "count": 0,
+          "covered": 0,
+          "notcovered": 0,
+          "percent": 0.0
+        },
+        "mcdc": {
+          "count": 0,
+          "covered": 0,
+          "notcovered": 0,
+          "percent": 0.0
+        },
+        "functions": {
+          "count": 39,
+          "covered": 23,
+          "percent": 58.97435897435898
+        },
+        "instantiations": {
+          "count": 49,
+          "covered": 26,
+          "percent": 53.06122448979592
+        },
+        "lines": {
+          "count": 262,
+          "covered": 205,
+          "percent": 78.2442748091603
+        },
+        "regions": {
+          "count": 366,
+          "covered": 275,
+          "notcovered": 91,
+          "percent": 75.13661202185791
+        }
+      }
+    },
+    {
+      "path": "src/relay/api.rs",
+      "summary": {
+        "branches": {
+          "count": 0,
+          "covered": 0,
+          "notcovered": 0,
+          "percent": 0.0
+        },
+        "mcdc": {
+          "count": 0,
+          "covered": 0,
+          "notcovered": 0,
+          "percent": 0.0
+        },
+        "functions": {
+          "count": 46,
+          "covered": 10,
+          "percent": 21.73913043478261
+        },
+        "instantiations": {
+          "count": 46,
+          "covered": 10,
+          "percent": 21.73913043478261
+        },
+        "lines": {
+          "count": 439,
+          "covered": 84,
+          "percent": 19.134396355353076
+        },
+        "regions": {
+          "count": 629,
+          "covered": 118,
+          "notcovered": 511,
+          "percent": 18.75993640699523
+        }
+      }
+    },
+    {
+      "path": "src/relay/control.rs",
+      "summary": {
+        "branches": {
+          "count": 0,
+          "covered": 0,
+          "notcovered": 0,
+          "percent": 0.0
+        },
+        "mcdc": {
+          "count": 0,
+          "covered": 0,
+          "notcovered": 0,
+          "percent": 0.0
+        },
+        "functions": {
+          "count": 6,
+          "covered": 4,
+          "percent": 66.66666666666666
+        },
+        "instantiations": {
+          "count": 6,
+          "covered": 4,
+          "percent": 66.66666666666666
+        },
+        "lines": {
+          "count": 104,
+          "covered": 73,
+          "percent": 70.1923076923077
+        },
+        "regions": {
+          "count": 170,
+          "covered": 120,
+          "notcovered": 50,
+          "percent": 70.58823529411765
+        }
+      }
+    },
+    {
+      "path": "src/relay/data.rs",
+      "summary": {
+        "branches": {
+          "count": 0,
+          "covered": 0,
+          "notcovered": 0,
+          "percent": 0.0
+        },
+        "mcdc": {
+          "count": 0,
+          "covered": 0,
+          "notcovered": 0,
+          "percent": 0.0
+        },
+        "functions": {
+          "count": 11,
+          "covered": 0,
+          "percent": 0.0
+        },
+        "instantiations": {
+          "count": 11,
+          "covered": 0,
+          "percent": 0.0
+        },
+        "lines": {
+          "count": 93,
+          "covered": 0,
+          "percent": 0.0
+        },
+        "regions": {
+          "count": 211,
+          "covered": 0,
+          "notcovered": 211,
+          "percent": 0.0
+        }
+      }
+    },
+    {
+      "path": "src/relay/mod.rs",
+      "summary": {
+        "branches": {
+          "count": 0,
+          "covered": 0,
+          "notcovered": 0,
+          "percent": 0.0
+        },
+        "mcdc": {
+          "count": 0,
+          "covered": 0,
+          "notcovered": 0,
+          "percent": 0.0
+        },
+        "functions": {
+          "count": 39,
+          "covered": 17,
+          "percent": 43.58974358974359
+        },
+        "instantiations": {
+          "count": 40,
+          "covered": 17,
+          "percent": 42.5
+        },
+        "lines": {
+          "count": 247,
+          "covered": 105,
+          "percent": 42.51012145748988
+        },
+        "regions": {
+          "count": 362,
+          "covered": 143,
+          "notcovered": 219,
+          "percent": 39.502762430939235
+        }
+      }
+    },
+    {
+      "path": "src/relay/protocol.rs",
+      "summary": {
+        "branches": {
+          "count": 0,
+          "covered": 0,
+          "notcovered": 0,
+          "percent": 0.0
+        },
+        "mcdc": {
+          "count": 0,
+          "covered": 0,
+          "notcovered": 0,
+          "percent": 0.0
+        },
+        "functions": {
+          "count": 4,
+          "covered": 3,
+          "percent": 75.0
+        },
+        "instantiations": {
+          "count": 4,
+          "covered": 3,
+          "percent": 75.0
+        },
+        "lines": {
+          "count": 30,
+          "covered": 14,
+          "percent": 46.666666666666664
+        },
+        "regions": {
+          "count": 17,
+          "covered": 11,
+          "notcovered": 6,
+          "percent": 64.70588235294117
+        }
+      }
+    },
+    {
+      "path": "src/relay/transport.rs",
+      "summary": {
+        "branches": {
+          "count": 0,
+          "covered": 0,
+          "notcovered": 0,
+          "percent": 0.0
+        },
+        "mcdc": {
+          "count": 0,
+          "covered": 0,
+          "notcovered": 0,
+          "percent": 0.0
+        },
+        "functions": {
+          "count": 5,
+          "covered": 4,
+          "percent": 80.0
+        },
+        "instantiations": {
+          "count": 6,
+          "covered": 4,
+          "percent": 66.66666666666666
+        },
+        "lines": {
+          "count": 18,
+          "covered": 14,
+          "percent": 77.77777777777779
+        },
+        "regions": {
+          "count": 24,
+          "covered": 19,
+          "notcovered": 5,
+          "percent": 79.16666666666666
+        }
+      }
+    },
+    {
+      "path": "src/validation.rs",
+      "summary": {
+        "branches": {
+          "count": 0,
+          "covered": 0,
+          "notcovered": 0,
+          "percent": 0.0
+        },
+        "mcdc": {
+          "count": 0,
+          "covered": 0,
+          "notcovered": 0,
+          "percent": 0.0
+        },
+        "functions": {
+          "count": 11,
+          "covered": 10,
+          "percent": 90.9090909090909
+        },
+        "instantiations": {
+          "count": 11,
+          "covered": 10,
+          "percent": 90.9090909090909
+        },
+        "lines": {
+          "count": 83,
+          "covered": 54,
+          "percent": 65.06024096385542
+        },
+        "regions": {
+          "count": 116,
+          "covered": 75,
+          "notcovered": 41,
+          "percent": 64.65517241379311
+        }
+      }
+    }
+  ]
+}

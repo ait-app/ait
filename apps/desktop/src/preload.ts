@@ -33,7 +33,7 @@ contextBridge.exposeInMainWorld("paseoDesktop", {
   platform: process.platform,
   windowChromeMode: readWindowChromeMode(),
   invoke: (command: string, args?: Record<string, unknown>) =>
-    ipcRenderer.invoke("paseo:invoke", command, args),
+    ipcRenderer.invoke("ait:invoke", command, args),
   getPendingOpenProject: () =>
     ipcRenderer.invoke("paseo:get-pending-open-project") as Promise<string | null>,
   agentNavigation: {

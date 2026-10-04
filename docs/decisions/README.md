@@ -53,6 +53,7 @@
 
 ## 客户端、连接与品牌
 
+- [ADR-085：Daemon 同步的稳定节点身份](clients/adr-085-stable-daemon-publication.md)
 - [ADR-084：iOS 在线服务账户与主机中继](clients/adr-084-ios-account-relay.md)
 - [ADR-080：Android APK 独立手动发布](clients/adr-080-standalone-android-release.md)
 - [ADR-079：移动端统一使用 Expo EAS 构建](clients/adr-079-mobile-eas-builds.md)
