@@ -337,7 +337,8 @@ const StoredProjectSchema = z.strictObject({
 
 // Older projections may have appended a fetched snapshot to display-only cached text.
 // Refetch timeline rows once; directory state and daemon history remain authoritative.
-const TIMELINE_PROJECTION_VERSION = 1;
+// Version 2 also drops copies persisted by repeated painted-cache preparation.
+const TIMELINE_PROJECTION_VERSION = 2;
 const StoredTimelineSchema = z.strictObject({
   projectionVersion: z.literal(TIMELINE_PROJECTION_VERSION),
   agentId: z.string(),

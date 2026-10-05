@@ -275,31 +275,34 @@ describe("ReplicaCache", () => {
     expect(restoredTimeline).toEqual(timeline());
   });
 
-  it("refetches unversioned timeline projections without clearing the directory", async () => {
-    const storage = new MemoryStorage();
-    const writer = createCache(storage);
-    commitDirectory(writer, SERVER_ID, directory());
-    writer.commitTimeline(SERVER_ID, "agent-1", timeline("RepeatedRepeated"));
-    await writer.flush();
-    const row = requireTimelineRow(storage);
-    const payload = JSON.parse(row.payload);
-    delete payload.projectionVersion;
-    storage.rows.set(`${row.serverId}:${row.kind}:${row.id}`, {
-      ...row,
-      payload: JSON.stringify(payload),
-    });
+  it.each([undefined, 1])(
+    "refetches old timeline projection %s without clearing the directory",
+    async (version) => {
+      const storage = new MemoryStorage();
+      const writer = createCache(storage);
+      commitDirectory(writer, SERVER_ID, directory());
+      writer.commitTimeline(SERVER_ID, "agent-1", timeline("RepeatedRepeated"));
+      await writer.flush();
+      const row = requireTimelineRow(storage);
+      const payload = JSON.parse(row.payload);
+      payload.projectionVersion = version;
+      storage.rows.set(`${row.serverId}:${row.kind}:${row.id}`, {
+        ...row,
+        payload: JSON.stringify(payload),
+      });
 
-    const reader = createCache(storage);
-    expect(await reader.readTimeline(SERVER_ID, "agent-1")).toBeUndefined();
-    expect((await reader.readDirectory(SERVER_ID)).agents.get("agent-1")?.title).toBe(
-      "Cached agent",
-    );
-    reader.commitTimeline(SERVER_ID, "agent-1", timeline("Repaired"));
-    await reader.flush();
-    expect(await createCache(storage).readTimeline(SERVER_ID, "agent-1")).toEqual(
-      timeline("Repaired"),
-    );
-  });
+      const reader = createCache(storage);
+      expect(await reader.readTimeline(SERVER_ID, "agent-1")).toBeUndefined();
+      expect((await reader.readDirectory(SERVER_ID)).agents.get("agent-1")?.title).toBe(
+        "Cached agent",
+      );
+      reader.commitTimeline(SERVER_ID, "agent-1", timeline("Repaired"));
+      await reader.flush();
+      expect(await createCache(storage).readTimeline(SERVER_ID, "agent-1")).toEqual(
+        timeline("Repaired"),
+      );
+    },
+  );
 
   it("preserves pending timeline updates across directory baseline replacement", async () => {
     const storage = new MemoryStorage();

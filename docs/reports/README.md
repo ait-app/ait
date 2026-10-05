@@ -59,6 +59,8 @@
 
 ## Provider、Agent 与会话
 
+- [DSH 缓存重复加载与回复累积](providers/deepseek-harness-cache-recurrence.md)
+
 - [DSH 内部上下文与缓存重复修复](providers/deepseek-harness-display-recovery.md)
 
 - [首次输入重试测试的 CI 会话隔离](daemon/initial-prompt-ci-validation.md)

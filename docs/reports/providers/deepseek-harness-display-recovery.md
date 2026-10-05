@@ -1,5 +1,9 @@
 # DSH 内部上下文与展示缓存重复修复
 
+后续固定 `4a706e5f` 桌面复测确认：上下文过滤通过，重复回复仍复发。
+第二条原因及后续修复见[缓存重复加载报告](deepseek-harness-cache-recurrence.md)。
+以下验证只对应本阶段，不代表桌面验收通过。
+
 日期：2026-10-04。PR #169；测量基于 `3be0648d40c6736a91fb9b832783b548754c1c73`
 加本次源码修改，[覆盖率附件](deepseek-harness-display-coverage.json)记录精确源码 SHA-256。
 

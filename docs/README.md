@@ -47,7 +47,7 @@
 - [Rust style guide](policy/rust.md)：Rust 代码、测试、lint 与覆盖率规范。
 - [Daemon 测试扩展与覆盖率验证](reports/daemon/crate-coverage-rebase.md)：最新 rebase 验证、逐 crate 证据与历史测量索引。
 - [文档规范](policy/documentation.md)：分类、维护和历史资料清理规则。
-- [DSH 展示恢复修复](reports/providers/deepseek-harness-display-recovery.md)：内部上下文过滤、刷新重复修复与复测交接。
+- [DSH 展示恢复修复](reports/providers/deepseek-harness-cache-recurrence.md)：重复缓存加载定位、SQLite 重开回归与复测交接。
 - [Provider 能力清单](plans/provider-parity.md)：当前能力与后续工作。
 - [大 Diff 加载与超限降级](reports/workspace/large-diff-loading.md)：输出预算、连接保持与验证结果。
 - [Agent 创建任务预算竞争](reports/providers/agent-creation-resource-contention.md)：DSH 创建报错复现与后台 fetch 失败隔离验证。
