@@ -114,6 +114,7 @@
 
 ## 发布验证
 
+- [Ait 0.0.19 发布说明](releases/release-0.0.19.md)
 - [Ait 0.0.18 发布说明](releases/release-0.0.18.md)
 - [Ait 0.0.16 发布说明](releases/release-0.0.16.md)
 - [Ait 0.0.15 发布说明](releases/release-0.0.15.md)
