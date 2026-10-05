@@ -45,6 +45,7 @@
 
 ## 工作区、文件与 Git
 
+- [工作区重置复用同名分支：PR 验证](workspace/workspace-reset-existing-branch-pr-validation-2026-10-05.md)
 - [工作区重置路径校验：PR 验证](workspace/workspace-reset-path-pr-validation-2026-10-05.md)
 - [工作区重置与 Git 主操作：PR 验证](workspace/workspace-git-actions-pr-validation-2026-10-05.md)
 - [活跃工作区后台 Git fetch 实施报告](workspace/background-git-fetch.md)
