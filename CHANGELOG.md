@@ -1,5 +1,12 @@
 # Ait changelog
 
+## 0.0.19 - 2026-10-05
+
+- Reuse a stable daemon identity when host synchronization is restarted or taken over by another client; existing host bindings require the matching online-service update.
+- Recover synchronization after a closed or expired registration by using a new registration ID on the next retry.
+- Replace the inherited Paseo name in desktop bridge errors with Ait.
+- Fix workspace reset failures when a saved path has a trailing separator and the requested path does not.
+
 ## 0.0.18 - 2026-10-05
 
 - Keep Codex computer-use screenshots and embedded image metadata from exhausting timeline rows and hiding subsequent replies.
