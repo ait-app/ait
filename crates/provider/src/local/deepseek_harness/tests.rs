@@ -17,8 +17,9 @@ fn fixture() -> (TempDir, DeepSeekHarnessClient, AgentSessionSpec) {
     let program = directory.path().join("dsh");
     std::fs::write(&program, include_str!("tests/fixtures/acp.cjs")).unwrap();
     std::fs::set_permissions(&program, std::fs::Permissions::from_mode(0o700)).unwrap();
-    let mut client =
-        DeepSeekHarnessClient::new(program).with_image_directory(directory.path().join("images"));
+    let mut client = DeepSeekHarnessClient::new(program)
+        .with_acp_profile()
+        .with_image_directory(directory.path().join("images"));
     // Successful Node handshakes must tolerate instrumented builds competing for CPU.
     // Timeout behavior is exercised separately with an explicit 300 ms deadline.
     client.deadline = Duration::from_secs(10);

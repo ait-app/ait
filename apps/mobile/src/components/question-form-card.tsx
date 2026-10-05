@@ -350,6 +350,7 @@ export function QuestionFormCard({ permission, onRespond, isResponding }: Questi
 
       setSelections((prev) => ({ ...prev, [qIndex]: next }));
       setOtherTexts((prev) => {
+        if (multiSelect && questions?.[qIndex]?.answerFormat === "array") return prev;
         if (!prev[qIndex]) return prev;
         const nextTexts = { ...prev };
         delete nextTexts[qIndex];
@@ -363,15 +364,19 @@ export function QuestionFormCard({ permission, onRespond, isResponding }: Questi
     [activeQuestionIndex, questions, selections],
   );
 
-  const setOtherText = useCallback((qIndex: number, text: string) => {
-    setOtherTexts((prev) => ({ ...prev, [qIndex]: text }));
-    if (text.length > 0) {
-      setSelections((prev) => {
-        if (!prev[qIndex] || prev[qIndex].size === 0) return prev;
-        return { ...prev, [qIndex]: new Set<number>() };
-      });
-    }
-  }, []);
+  const setOtherText = useCallback(
+    (qIndex: number, text: string) => {
+      setOtherTexts((prev) => ({ ...prev, [qIndex]: text }));
+      const question = questions?.[qIndex];
+      if (text.length > 0 && !(question?.multiSelect && question.answerFormat === "array")) {
+        setSelections((prev) => {
+          if (!prev[qIndex] || prev[qIndex].size === 0) return prev;
+          return { ...prev, [qIndex]: new Set<number>() };
+        });
+      }
+    },
+    [questions],
+  );
 
   const allAnswered = areQuestionsAnswered(questions, selections, otherTexts);
   const resolvedActiveQuestionIndex = questions

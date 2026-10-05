@@ -25,6 +25,8 @@ use super::super::http::Version;
     reason = "Each flag independently selects a fixture behavior"
 )]
 pub(in crate::local::opencode) struct StateData {
+    pub(in crate::local::opencode) empty_model_catalogs: usize,
+    pub(in crate::local::opencode) idle_completion: bool,
     version: Version,
     cwd: PathBuf,
     pub(in crate::local::opencode) permission: Value,
@@ -74,6 +76,8 @@ impl Fixture {
             std::fs::set_permissions(&binary, std::fs::Permissions::from_mode(0o700)).unwrap();
         }
         let state = Arc::new(Mutex::new(StateData {
+            empty_model_catalogs: 0,
+            idle_completion: false,
             version,
             cwd: cwd.clone(),
             permission: Value::Null,
@@ -112,6 +116,9 @@ impl Fixture {
 async fn handle(State(state): State<Arc<Mutex<StateData>>>, request: Request) -> Response {
     let path = request.uri().path().to_owned();
     let method = request.method().clone();
+    if path == "/api/model" && !valid_location_query(&request, &state.lock().unwrap().cwd) {
+        return StatusCode::BAD_REQUEST.into_response();
+    }
     if !request
         .headers()
         .get("authorization")
@@ -178,7 +185,12 @@ async fn handle(State(state): State<Arc<Mutex<StateData>>>, request: Request) ->
     let mut state = state.lock().unwrap();
     let v2 = state.version == Version::V2;
     if path == "/api/experimental/session/ses_one/log" {
-        let body = if state.history.is_empty() {
+        let body = if state.idle_completion {
+            format!(
+                "data: {}\n\n",
+                json!({"type":"log.synced","aggregateID":"ses_one","seq":state.submissions})
+            )
+        } else if state.history.is_empty() {
             String::new()
         } else {
             format!(
@@ -200,6 +212,12 @@ async fn handle(State(state): State<Arc<Mutex<StateData>>>, request: Request) ->
     }
 }
 
+fn valid_location_query(request: &Request, cwd: &std::path::Path) -> bool {
+    let url = reqwest::Url::parse(&format!("http://127.0.0.1{}", request.uri())).unwrap();
+    let query = url.query_pairs().collect::<Vec<_>>();
+    query.len() == 1 && query[0].0 == "location[directory]" && query[0].1 == cwd.to_string_lossy()
+}
+
 fn fixture_json(
     state: &mut StateData,
     method: &str,
@@ -213,6 +231,10 @@ fn fixture_json(
             json!({"connected":["local"],"all":[{"id":"local","models":{"test-model":{"name":"Test model","variants":{"high":{}}}}}]})
         }
         ("GET", "/api/model") => {
+            if state.empty_model_catalogs > 0 {
+                state.empty_model_catalogs -= 1;
+                return Ok(json!({"data":[]}));
+            }
             json!({"data":[{"providerID":"local","id":"test-model","name":"Test model","enabled":true,"variants":[{"id":"high"}]}]})
         }
         ("GET", "/session/status" | "/api/session/active") => {
@@ -314,6 +336,12 @@ fn record_prompt(state: &mut StateData, body: &Value) -> Result<Value, StatusCod
     }
     if state.early_failure {
         state.history.pop();
+    }
+    if state.idle_completion {
+        state
+            .history
+            .push(json!({"id":format!("idle{number}"),"type":"idle",
+            "time":{"created":13},"outcome":if state.early_failure {"failed"} else {"succeeded"}}));
     }
     if state.reject_ack {
         return Err(StatusCode::BAD_GATEWAY);

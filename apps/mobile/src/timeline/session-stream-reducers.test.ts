@@ -552,6 +552,52 @@ describe("processTimelineResponse", () => {
     expect(result.clearInitializing).toBe(true);
   });
 
+  it("replaces an untracked cache while retaining genuinely newer live text", () => {
+    const result = processTimelineResponse({
+      ...baseTimelineInput,
+      currentTail: [makeAssistantItem("RepeatedRepeated")],
+      currentHead: [
+        {
+          ...makeAssistantItem("New live answer"),
+          messageId: "new-answer",
+          timelineCursor: { epoch: "epoch-1", seq: 3 },
+        },
+      ],
+      payload: {
+        ...baseTimelineInput.payload,
+        direction: "tail",
+        window: { minSeq: 1, maxSeq: 2, nextSeq: 3 },
+        startCursor: { seq: 1 },
+        endCursor: { seq: 2 },
+        entries: [1, 2].map((seq) => ({
+          ...makeTimelineEntry(seq, "Repeated"),
+          item: {
+            type: "assistant_message" as const,
+            text: "Repeated",
+            messageId: `answer-${seq}`,
+          },
+        })),
+      },
+    });
+    expect(getAssistantTexts([...result.tail, ...result.head])).toEqual([
+      "Repeated",
+      "Repeated",
+      "New live answer",
+    ]);
+    expect(result.cursor).toEqual({ epoch: "epoch-1", startSeq: 1, endSeq: 2 });
+  });
+
+  it("clears stale display-only rows when the authoritative tail is empty", () => {
+    const result = processTimelineResponse({
+      ...baseTimelineInput,
+      currentTail: [makeAssistantItem("Stale cached reply")],
+      payload: { ...baseTimelineInput.payload, direction: "tail" },
+    });
+    expect(result.tail).toEqual([]);
+    expect(result.head).toEqual([]);
+    expect(result.cursor).toBeNull();
+  });
+
   it("replaces tail and clears head when reset=true", () => {
     const existingTail: StreamItem[] = [
       {

@@ -1,0 +1,110 @@
+{
+  "report_date": "2026-10-05",
+  "test_date": "2026-10-04",
+  "parent": "4a706e5f4c7568e19e68f03be031bf3d619eb2ba",
+  "revision": "Parent plus source_sha256; only documentation follows completed source validation.",
+  "platform": "aarch64-apple-darwin",
+  "source_sha256": {
+    ".github/workflows/ci.yml": "46f5d2bcbec049baf1c4976598d599d7276c1fb76d96085bc6863c12ebbe1746",
+    "apps/mobile/src/runtime/replica-cache/index.test.ts": "9c47f1cdd32a33866b9ed78f91c053fc6d09f305f708faa2eb2d39c602809d7e",
+    "apps/mobile/src/runtime/replica-cache/index.ts": "a275c4b30bd48d4ce5745e4e38700ddd9ba9da302fbc102777eb692e6cf63aff",
+    "apps/mobile/src/timeline/replica.test.ts": "92c1a544b88da733257190a1295d85268179e72546a17c0a8bcf457955c8189d",
+    "apps/mobile/src/timeline/viewed-timeline-sync.ts": "c1c14eff00dfb3656c8377489134e3c29a412ea5bf632edeacb8218de8f7e573"
+  },
+  "logs": {
+    "reproduce": {
+      "sha256": "e402028623a4d02e364f92d82668a4756b630e5810eb099d0fe8fbdfb9027fcf"
+    },
+    "growth": {
+      "sha256": "f4f3bb3450601bb4cc730e96ec48510af4fe11a06a52877e6894a180d19db62e"
+    },
+    "growth-counts.jsonl": {
+      "sha256": "0bf3ef3d32254ef31d5bdfd26761d48409da8a8bee5ab9f7953f90a94b2719bc"
+    },
+    "focused": {
+      "sha256": "8bb73602af3ba3415719b21b2f0f003ede6e0ff8676a17abfdbfbcb797139342",
+      "tests": {
+        "passed": 66,
+        "failed": 0
+      }
+    },
+    "expanded": {
+      "sha256": "0984e003f0c619fdfda84747913d5ba719815778e3deb6c83be95aaf92164399",
+      "tests": {
+        "passed": 305,
+        "failed": 3,
+        "note": "Three unchanged plugin identity baseline failures, documented in the preceding report."
+      }
+    },
+    "ci-ui": {
+      "sha256": "ef61e368b533003a655bfbc5abe4def46cc8ac2411602ed77a23256fb3986efa",
+      "tests": {
+        "passed": 186,
+        "failed": 0,
+        "skipped": 1,
+        "skip_reason": "Existing integration test requires AIT_TEST_RUST_SERVER."
+      }
+    },
+    "typecheck": {
+      "sha256": "6146671ebb045db472b73798279bc66a395927bd3b2c710a8e6cf573405b87a2"
+    },
+    "format": {
+      "sha256": "619976f51d31618ae89df18ea47f93fe00afd47539fd0aea5c77d201d57658dd"
+    },
+    "lint": {
+      "sha256": "871ac4f1def59e2a81035cbd9ae396ad030f843e71a714d4ed944f4dc1336260"
+    }
+  },
+  "baseline_growth": [
+    {
+      "reopen": 1,
+      "refresh": 1,
+      "answers": 3
+    },
+    {
+      "reopen": 1,
+      "refresh": 2,
+      "answers": 3
+    },
+    {
+      "reopen": 2,
+      "refresh": 1,
+      "answers": 5
+    },
+    {
+      "reopen": 2,
+      "refresh": 2,
+      "answers": 5
+    },
+    {
+      "reopen": 3,
+      "refresh": 1,
+      "answers": 9
+    },
+    {
+      "reopen": 3,
+      "refresh": 2,
+      "answers": 9
+    },
+    {
+      "reopen": 4,
+      "refresh": 1,
+      "answers": 17
+    },
+    {
+      "reopen": 4,
+      "refresh": 2,
+      "answers": 17
+    }
+  ],
+  "baseline_diagnostic_note": "Ran original 4a706e5f loader with final regression harness, temporarily replacing equality assertions with count capture to observe four reopens. This is diagnostic evidence, not a passing regression test. Final committed assertions remain intact.",
+  "coverage": {
+    "frontend": "not measured; existing Vitest config run without a coverage collector",
+    "rust": "not applicable; no Rust source or behavior changed, tests skipped per AGENTS.md"
+  },
+  "unverified": [
+    "Real Electron/model acceptance on fixed revision",
+    "Debian amd64 desktop",
+    "Windows and native mobile"
+  ]
+}

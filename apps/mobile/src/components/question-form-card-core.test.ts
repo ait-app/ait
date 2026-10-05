@@ -100,3 +100,25 @@ describe("question form card core", () => {
     });
   });
 });
+
+describe("structured native question answers", () => {
+  test("preserves commas inside labels and selected choices alongside custom text", () => {
+    const questions = parseQuestionFormQuestions({
+      questions: [
+        {
+          question: "Choose targets",
+          header: "Targets",
+          answerKey: "targets",
+          options: [{ label: "Linux, amd64" }, { label: "macOS" }],
+          multiSelect: true,
+          allowOther: true,
+          answerFormat: "array",
+        },
+      ],
+    });
+    if (!questions) throw new Error("questions did not parse");
+    expect(buildQuestionFormAnswers(questions, { 0: new Set([0, 1]) }, { 0: "Windows" })).toEqual({
+      targets: ["Linux, amd64", "macOS", "Windows"],
+    });
+  });
+});

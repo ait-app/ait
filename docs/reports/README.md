@@ -62,6 +62,14 @@
 
 ## Provider、Agent 与会话
 
+- [DSH 与 OpenCode 群反馈整合验证](providers/dsh-opencode-group-feedback-2026-10-05.md)
+
+- [DSH 缓存重复加载与回复累积](providers/deepseek-harness-cache-recurrence.md)
+
+- [DSH 内部上下文与缓存重复修复](providers/deepseek-harness-display-recovery.md)
+
+- [首次输入重试测试的 CI 会话隔离](daemon/initial-prompt-ci-validation.md)
+
 - [Agent 创建任务预算竞争与 DSH 回归](providers/agent-creation-resource-contention.md)
 - [OpenCode 工具与结论顺序修复](providers/opencode-tool-order.md)
 - [OpenCode 上游 PR 验证](providers/opencode-upstream-pr.md)
@@ -127,3 +135,5 @@
 - [Ait 0.0.7 发布准备](releases/release-0.0.7.md)
 - [Ait 0.0.8 发布准备](releases/release-0.0.8.md)
 - [Ait 0.0.9 发布说明](releases/release-0.0.9.md)
+
+- [DeepSeek Harness 原生 Host 验证](providers/deepseek-harness-native-host.md)：权限模式、question、原生会话与复测清单。

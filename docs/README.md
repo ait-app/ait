@@ -45,16 +45,20 @@
 - [Ait 0.0.14 发布说明](reports/releases/release-0.0.14.md)：Diff 语法高亮、侧边栏统计与 Codex 推理等级。
 - [Apple 本机构建](operations/apple-builds.md)：DMG、模拟器和 IPA。
 - [Claude Code](operations/claude-code.md)：认证、原生会话与审批。
-- [DeepSeek Harness](operations/deepseek-harness.md)：ACP 运行与模型配置。
+- [DeepSeek Harness](operations/deepseek-harness.md)：原生 Host、权限模式、question 与 ACP 兼容配置。
 - [语音与听写](operations/speech.md)：离线模型、后端配置和限制。
 
+- [DSH 原生交互 Host](decisions/providers/adr-082-deepseek-harness-native-host.md)：权限切换、结构化问题、用户消息持久化与原生历史恢复。
 - [OpenCode 原生 Provider](decisions/providers/adr-074-opencode-native-provider.md)：接入范围、审批与会话恢复。
 
 ## 工程规范与验证
 
+- [DSH 与 OpenCode 群反馈整合](reports/providers/dsh-opencode-group-feedback-2026-10-05.md)：权限与问答、历史缓存、真实 OpenCode 2.0.20 兼容和定向验证。
+
 - [Rust style guide](policy/rust.md)：Rust 代码、测试、lint 与覆盖率规范。
 - [Daemon 测试扩展与覆盖率验证](reports/daemon/crate-coverage-rebase.md)：最新 rebase 验证、逐 crate 证据与历史测量索引。
 - [文档规范](policy/documentation.md)：分类、维护和历史资料清理规则。
+- [DSH 展示恢复修复](reports/providers/deepseek-harness-cache-recurrence.md)：重复缓存加载定位、SQLite 重开回归与复测交接。
 - [Provider 能力清单](plans/provider-parity.md)：当前能力与后续工作。
 - [大 Diff 加载与超限降级](reports/workspace/large-diff-loading.md)：输出预算、连接保持与验证结果。
 - [Agent 创建任务预算竞争](reports/providers/agent-creation-resource-contention.md)：DSH 创建报错复现与后台 fetch 失败隔离验证。

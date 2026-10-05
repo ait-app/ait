@@ -1,0 +1,158 @@
+{
+  "date": "2026-10-04",
+  "parent": "aa438db58dffc081bad1489c5650c67bb2a8893f",
+  "revision": "Parent plus the sole Rust test-file change identified by source_sha256; only documentation follows measurement.",
+  "source_sha256": {
+    "bins/daemon/tests/process/agent_execution/workspace_creation/concurrency.rs": "cf77d0253ad8f29592a486076029b5323f72bdd30a43c9cda49760e21edd8e24"
+  },
+  "scope": {
+    "workspace": true,
+    "platform": "aarch64-apple-darwin",
+    "rust": "1.98.1",
+    "cargo-llvm-cov": "0.8.7",
+    "features": "default",
+    "file_filter": "cargo-llvm-cov defaults",
+    "explicit_exclusions": [],
+    "doctest_coverage": false
+  },
+  "commands": [
+    "CARGO_TARGET_DIR=/Users/lonnetkirisame/Documents/Developer/ait/target nix develop --command cargo llvm-cov --workspace --locked --offline --html -- --test-threads=1",
+    "CARGO_TARGET_DIR=/Users/lonnetkirisame/Documents/Developer/ait/target nix develop --command cargo llvm-cov report --json --summary-only --output-path /private/tmp/ait-dsh-ci-coverage.json"
+  ],
+  "workspace": {
+    "covered": 50385,
+    "total": 53391,
+    "percent": 94.37
+  },
+  "crates": {
+    "api": {
+      "covered": 1945,
+      "total": 2101,
+      "percent": 92.57
+    },
+    "browser": {
+      "covered": 706,
+      "total": 725,
+      "percent": 97.38
+    },
+    "domain": {
+      "covered": 121,
+      "total": 121,
+      "percent": 100.0
+    },
+    "filesystem": {
+      "covered": 11143,
+      "total": 11735,
+      "percent": 94.96
+    },
+    "metadata": {
+      "covered": 7523,
+      "total": 7938,
+      "percent": 94.77
+    },
+    "model": {
+      "covered": 737,
+      "total": 777,
+      "percent": 94.85
+    },
+    "protocol": {
+      "covered": 75,
+      "total": 75,
+      "percent": 100.0
+    },
+    "provider": {
+      "covered": 22659,
+      "total": 24185,
+      "percent": 93.69
+    },
+    "relay": {
+      "covered": 419,
+      "total": 464,
+      "percent": 90.3
+    },
+    "schedule": {
+      "covered": 805,
+      "total": 823,
+      "percent": 97.81
+    },
+    "terminal": {
+      "covered": 1481,
+      "total": 1538,
+      "percent": 96.29
+    },
+    "voice": {
+      "covered": 1850,
+      "total": 1944,
+      "percent": 95.16
+    },
+    "daemon": {
+      "covered": 921,
+      "total": 965,
+      "percent": 95.44
+    }
+  },
+  "baseline": {
+    "revision": "aa438db58dffc081bad1489c5650c67bb2a8893f",
+    "workspace": {
+      "covered": 50385,
+      "total": 53391,
+      "percent": 94.37
+    },
+    "daemon": {
+      "covered": 921,
+      "total": 965,
+      "percent": 95.44
+    },
+    "provider": {
+      "covered": 22658,
+      "total": 24185,
+      "percent": 93.69
+    },
+    "comparable": true,
+    "note": "Same production sources, platform, toolchain, default features and coverage file filters; only a daemon process test changed."
+  },
+  "logs": {
+    "reproduce": {
+      "sha256": "f8e4df14702a5220ba6d2ffc840c29cba7571b64240f073a9674f8090795043b",
+      "tests": {
+        "passed": 0,
+        "failed": 1,
+        "ignored": 0
+      }
+    },
+    "focused": {
+      "sha256": "1476686c29fc2e2890277e45f85119b36dcc7928f00af8655b7e3f3ba421e3c0",
+      "tests": {
+        "passed": 3,
+        "failed": 0,
+        "ignored": 0
+      }
+    },
+    "workspace": {
+      "sha256": "a1c3f9daad00334fb0caf2ba68543fbfd4f16cc8c1d1b4adc1fdff8fe90434ad",
+      "tests": {
+        "passed": 1786,
+        "failed": 0,
+        "ignored": 4
+      }
+    },
+    "coverage": {
+      "sha256": "fec348bc34d1f96d539a5b9b61f9775ef0e8b099cd536a0b5a09a0564fd4c74e",
+      "tests": {
+        "passed": 1786,
+        "failed": 0,
+        "ignored": 4
+      }
+    }
+  },
+  "raw_llvm_summary_sha256": "11b37c586b719a084c3112f6ef1fe472e3b7f14cba4364904df32927001f9c53",
+  "original_ci_failure": "https://github.com/ait-app/ait/actions/runs/37175370929/job/111356794938",
+  "reproduction": "Temporary 1.5-second delay allowed the background metadata turn into the request log, reproducing 2 != 1. Delay removed; final regression waits on the actual unrelated metadata request and counts only the user session.",
+  "ignored_tests": 4,
+  "html_report": "/Users/lonnetkirisame/Documents/Developer/ait/target/llvm-cov/html/index.html",
+  "gaps": [
+    "Existing launch/termination error branches and validation limits remain partly uncovered.",
+    "External provider/desktop scenarios were not rerun for this test-only correction.",
+    "Ubuntu CI result follows the push and is recorded in PR checks."
+  ]
+}

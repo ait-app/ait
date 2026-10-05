@@ -29,6 +29,8 @@ AgentManager 的输入接纳和 timeline 持久化。Claude Code 已通过 ADR-0
    按原生历史发布其已完成的前序条目（用户、说明文字、工具与推理），完成后核对完整 timeline。
    前序条目尚未写全时，该回合余下输出等最终历史确认；不重发输入。
    v2 在全分页历史前后核对持久执行日志及 idle，未排空/不完整历史不能完成。
+   2.0.20 的公开日志不返回执行事件时，以全分页历史末尾的持久 `idle` 记录为完成依据，
+   校验其时间不早于最近用户输入且 outcome 与会话一致；旧回复或单独会话状态不能完成新输入。
 4. 原生记录转换为 Paseo display items。原生消息 ID、客户端消息 ID 映射与 persistence
    handle 支持连续对话和重启恢复；历史读取不修改 permissions/model，也不提交输入。
    Ait 的 OpenCode 显示键带独立投影版本；升级时通过既有 reconcile 重建显示历史，原生消息不变。
@@ -42,6 +44,8 @@ AgentManager 的输入接纳和 timeline 持久化。Claude Code 已通过 ADR-0
    模型与 reasoning variant 动态发现。当前只提供 Build，不宣称 plan/custom agents、
    steer、附件、表单、rewind、导入/列举外部会话、MCP 配置和后台任务已支持。
    不支持的配置和输入在提交前拒绝，避免默默丢弃。
+7. v2 模型目录查询使用 `location[directory]` 编码。原生目录冷启动返回合法空数组时，
+   只在五秒内重试读取；HTTP 错误、畸形响应以及非空但未启用的目录不自动重试。
 
 ## 验证
 

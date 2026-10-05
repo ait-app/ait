@@ -102,4 +102,8 @@ jobs:
       - run: npm run test --workspace=@ait/protocol
       - run: npm run typecheck --workspace=@ait/desktop --workspace=@ait/mobile
       - run: npm test --workspace=@ait/desktop
-      - run: npm run test --workspace=@ait/mobile -- src/i18n/resources.test.ts src/runtime/rust-daemon maestro/support native-release-version.test.ts
+      - run: >-
+          npm run test --workspace=@ait/mobile --
+          src/i18n/resources.test.ts src/runtime/rust-daemon maestro/support native-release-version.test.ts
+          src/timeline src/types/stream.test.ts src/runtime/replica-cache
+          src/components/question-form-card-core.test.ts

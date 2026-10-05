@@ -5,6 +5,8 @@ use async_trait::async_trait;
 use serde_json::json;
 
 pub(super) mod fixture;
+#[cfg(unix)]
+mod installed;
 
 #[derive(Default)]
 struct Progress(std::sync::Mutex<Vec<ProgressEvent>>);
@@ -185,6 +187,62 @@ async fn model_catalog_uses_connected_native_models_and_variants() {
         assert_eq!(models.len(), 1);
         assert_eq!(models[0].id, "local/test-model");
         assert_eq!(models[0].reasoning_efforts, vec!["high"]);
+    }
+}
+
+#[tokio::test]
+async fn v2_cold_model_catalog_retries_are_bounded() {
+    let fixture = fixture::Fixture::start(http::Version::V2).await;
+    fixture.state.lock().unwrap().empty_model_catalogs = 2;
+    let driver = Driver::new(fixture.binary.clone());
+    let models = driver.discover_models(fixture.cwd.clone()).await.unwrap();
+    assert_eq!(models[0].id, "local/test-model");
+    assert_eq!(fixture.state.lock().unwrap().empty_model_catalogs, 0);
+
+    fixture.state.lock().unwrap().empty_model_catalogs = usize::MAX;
+    let result = tokio::time::timeout(
+        std::time::Duration::from_secs(8),
+        driver.discover_models(fixture.cwd.clone()),
+    )
+    .await
+    .expect("an empty native catalog must not hang discovery");
+    assert_eq!(result.unwrap_err().code, Fault::ProviderFailed);
+    assert_eq!(fixture.state.lock().unwrap().submissions, 0);
+}
+
+#[tokio::test]
+async fn v2_synced_log_and_idle_history_complete_without_replaying_input() {
+    for failed in [false, true] {
+        let fixture = fixture::Fixture::start(http::Version::V2).await;
+        {
+            let mut state = fixture.state.lock().unwrap();
+            state.idle_completion = true;
+            state.early_failure = failed;
+        }
+        let driver = Driver::new(fixture.binary.clone());
+        let mut request = invocation(fixture.cwd.clone());
+        let mut connection = driver.open(request.clone()).await.unwrap();
+        let snapshot = tokio::time::timeout(
+            std::time::Duration::from_secs(2),
+            connection.start(Arc::new(Progress::default())),
+        )
+        .await
+        .unwrap()
+        .unwrap();
+        assert_eq!(
+            snapshot.outcome,
+            Some(if failed {
+                Outcome::Failed
+            } else {
+                Outcome::Completed
+            })
+        );
+        connection.close().await;
+        request.session_id = Some(snapshot.id);
+        let mut resumed = driver.open(request).await.unwrap();
+        assert_eq!(resumed.prepared().messages, snapshot.messages);
+        assert_eq!(fixture.state.lock().unwrap().submissions, 1);
+        resumed.close().await;
     }
 }
 

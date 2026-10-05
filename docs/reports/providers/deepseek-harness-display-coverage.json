@@ -1,0 +1,264 @@
+{
+  "date": "2026-10-04",
+  "parent": "3be0648d40c6736a91fb9b832783b548754c1c73",
+  "revision": "Parent plus the exact source_sha256 changes; only documentation follows the completed measurements.",
+  "scope": {
+    "workspace": true,
+    "platform": "aarch64-apple-darwin",
+    "rust": "1.98.1",
+    "cargo-llvm-cov": "0.8.7",
+    "features": "default",
+    "file_filter": "cargo-llvm-cov defaults",
+    "explicit_exclusions": [],
+    "doctest_coverage": false,
+    "frontend_line_coverage": "not measured"
+  },
+  "commands": [
+    "cargo llvm-cov --workspace --locked --offline --html -- --test-threads=1",
+    "cargo llvm-cov report --json --summary-only --output-path /private/tmp/ait-dsh-display-coverage.json"
+  ],
+  "environment": "nix develop; CARGO_TARGET_DIR=/Users/lonnetkirisame/Documents/Developer/ait/target",
+  "workspace": {
+    "covered": 50391,
+    "total": 53398,
+    "percent": 94.37
+  },
+  "crates": {
+    "api": {
+      "covered": 1945,
+      "total": 2101,
+      "percent": 92.57
+    },
+    "browser": {
+      "covered": 706,
+      "total": 725,
+      "percent": 97.38
+    },
+    "domain": {
+      "covered": 121,
+      "total": 121,
+      "percent": 100.0
+    },
+    "filesystem": {
+      "covered": 11142,
+      "total": 11735,
+      "percent": 94.95
+    },
+    "metadata": {
+      "covered": 7523,
+      "total": 7938,
+      "percent": 94.77
+    },
+    "model": {
+      "covered": 737,
+      "total": 777,
+      "percent": 94.85
+    },
+    "protocol": {
+      "covered": 75,
+      "total": 75,
+      "percent": 100.0
+    },
+    "provider": {
+      "covered": 22666,
+      "total": 24192,
+      "percent": 93.69
+    },
+    "relay": {
+      "covered": 419,
+      "total": 464,
+      "percent": 90.3
+    },
+    "schedule": {
+      "covered": 805,
+      "total": 823,
+      "percent": 97.81
+    },
+    "terminal": {
+      "covered": 1481,
+      "total": 1538,
+      "percent": 96.29
+    },
+    "voice": {
+      "covered": 1850,
+      "total": 1944,
+      "percent": 95.16
+    },
+    "daemon": {
+      "covered": 921,
+      "total": 965,
+      "percent": 95.44
+    }
+  },
+  "dsh": {
+    "covered": 2309,
+    "total": 2513,
+    "percent": 91.88
+  },
+  "native_host": {
+    "covered": 1300,
+    "total": 1439,
+    "percent": 90.34
+  },
+  "baseline": {
+    "revision": "3be0648d40c6736a91fb9b832783b548754c1c73",
+    "workspace": {
+      "covered": 50385,
+      "total": 53391,
+      "percent": 94.37
+    },
+    "provider": {
+      "covered": 22659,
+      "total": 24185,
+      "percent": 93.69
+    },
+    "native_host": {
+      "covered": 1293,
+      "total": 1432,
+      "percent": 90.29
+    },
+    "native_host_revision": "aa438db58dffc081bad1489c5650c67bb2a8893f",
+    "note": "Same platform/toolchain/features/filters; 3be0648d only changed a daemon test, leaving native Host sources unchanged."
+  },
+  "native_files": {
+    "crates/provider/src/local/deepseek_harness/native.rs": {
+      "covered": 6,
+      "total": 6,
+      "percent": 100.0
+    },
+    "crates/provider/src/local/deepseek_harness/native/config.rs": {
+      "covered": 158,
+      "total": 168,
+      "percent": 94.05
+    },
+    "crates/provider/src/local/deepseek_harness/native/content.rs": {
+      "covered": 82,
+      "total": 91,
+      "percent": 90.11
+    },
+    "crates/provider/src/local/deepseek_harness/native/history.rs": {
+      "covered": 135,
+      "total": 149,
+      "percent": 90.6
+    },
+    "crates/provider/src/local/deepseek_harness/native/http.rs": {
+      "covered": 91,
+      "total": 104,
+      "percent": 87.5
+    },
+    "crates/provider/src/local/deepseek_harness/native/interactions.rs": {
+      "covered": 190,
+      "total": 198,
+      "percent": 95.96
+    },
+    "crates/provider/src/local/deepseek_harness/native/projection.rs": {
+      "covered": 113,
+      "total": 119,
+      "percent": 94.96
+    },
+    "crates/provider/src/local/deepseek_harness/native/runtime.rs": {
+      "covered": 162,
+      "total": 186,
+      "percent": 87.1
+    },
+    "crates/provider/src/local/deepseek_harness/native/session.rs": {
+      "covered": 347,
+      "total": 402,
+      "percent": 86.32
+    },
+    "crates/provider/src/local/deepseek_harness/native/usage.rs": {
+      "covered": 16,
+      "total": 16,
+      "percent": 100.0
+    }
+  },
+  "source_sha256": {
+    "crates/provider/src/local/deepseek_harness/native/tests/sources.rs": "e84b6ef3aba8b61e7f998245a2acb0ad4a38481687ae048fa786e9559401a294",
+    "apps/mobile/src/runtime/replica-cache/index.test.ts": "36b69225127691845b465560856e3aa941652bf268f373d6a236514bb68c4975",
+    "apps/mobile/src/runtime/replica-cache/index.ts": "d0279c20f799e0512cec543ff29308f1b878370e27931b50c73fa300b5b7985f",
+    "apps/mobile/src/timeline/replica.test.ts": "d5ec7221a9d7fbe412a90eb367cdd2dab40e668a18df1384f849cd066abbf97a",
+    "apps/mobile/src/timeline/session-stream-reducers.test.ts": "cb8b8ea8b436c0132a9343e593049747d9dd0af66f1c97763e3fd5e23ce908e4",
+    "apps/mobile/src/timeline/session-stream-reducers.ts": "82206930c8d022fc26e167a3acd87919988752a28ade0adef8f732a8c2b9574b",
+    "crates/provider/src/local/deepseek_harness/native/content.rs": "4b403ca29122b6bc6229b1581036b696bc12e982fc364a9623b51de0af3e6655",
+    "crates/provider/src/local/deepseek_harness/native/projection.rs": "552dd68596e1b7463847ef8d5e8204c73e8e07bda3167ea7fce3761774d90fc0",
+    "crates/provider/src/local/deepseek_harness/native/tests.rs": "8e60cc92c2b4692c8d1282b61e33623668fa253bed05fa5681d4b52211416e8f",
+    "crates/provider/src/local/deepseek_harness/native/tests/recovery.rs": "3ba617207b782dcb36a95c0e823609ed2ae11165fc31ee6b810393d0ab49b0de"
+  },
+  "logs": {
+    "rust-focused": {
+      "sha256": "b23ec726f158079bc64f3b05e06fd14358d1d87b74076d9113b9c7896c5c48e5",
+      "tests": {
+        "passed": 30,
+        "failed": 0,
+        "ignored": 1
+      }
+    },
+    "workspace": {
+      "sha256": "4fc9b2efc783461bb427537bd9e776ae0ab036c1e1c5a15c40509e18fcbf9420",
+      "tests": {
+        "passed": 1787,
+        "failed": 0,
+        "ignored": 4
+      }
+    },
+    "coverage": {
+      "sha256": "13e23d064f7ffc533fcbeaddb47a19b8ee2b82fee615806f79592b630fec55fc",
+      "tests": {
+        "passed": 1787,
+        "failed": 0,
+        "ignored": 4
+      }
+    },
+    "reproduce": {
+      "sha256": "6f846df949cff11d47f0e5f3cb091ba3f360f926397908559aeaf780060aa636",
+      "result": "New cache restoration regression failed before the fix: assistant text doubled."
+    },
+    "ui-baseline": {
+      "sha256": "5ad7b02d71ad25718019ef7aba03d1a0d01f047ce9c1ab730d0a1e893a0d03e2",
+      "result": "3 plugin identity tests fail with the original 3be0648d reducer; stream.ts and these existing tests are unchanged."
+    },
+    "ui-focused": {
+      "sha256": "805bd1fd4b6af4ea0ea8d7fd83a02bfaea15ae09719727f5d0529f218942bbe2",
+      "tests": {
+        "passed": 303,
+        "failed": 3
+      }
+    },
+    "cache-focused": {
+      "sha256": "2ed70d432404f417ccdf377852337eea538ae52d887996e6ec830cb746c87e90",
+      "tests": {
+        "passed": 64,
+        "failed": 0
+      }
+    },
+    "typecheck": {
+      "sha256": "6146671ebb045db472b73798279bc66a395927bd3b2c710a8e6cf573405b87a2"
+    },
+    "lint": {
+      "sha256": "255b581c5359218d0088f28b22a525bb33a409296198ce178ba629b38a7369b0"
+    },
+    "clippy": {
+      "sha256": "e1b2ef0cf0186b033464675aaf4be7aa9623cca830941749b5b5db46e261b848"
+    },
+    "build": {
+      "sha256": "d89fdd2c7842c82b518b6ef8a4ba018f3f4182e94b2957688e6febcb5b7dd862"
+    }
+  },
+  "raw_llvm_summary_sha256": "46554025a6b1384de8a153a08a181cc45a319aa845d9021db54ebbbde4ec0323",
+  "html_report": "/Users/lonnetkirisame/Documents/Developer/ait/target/llvm-cov/html/index.html",
+  "ignored_tests": 4,
+  "unverified": [
+    "Fixed desktop/model acceptance on Debian amd64 or other platforms",
+    "Installed DSH smoke was not repeated for this revision",
+    "Windows and native mobile execution"
+  ],
+  "coverage_gaps": [
+    "Some native launch/termination/RPC validation and history size-limit failures remain partly uncovered.",
+    "UI tests cover the production reducer/store/cache but Rust coverage does not measure frontend lines."
+  ],
+  "known_baseline_failures": [
+    "stream tool and plugin protocol identity",
+    "plugin-scoped live row replacement",
+    "plugin row older-page prepend identity"
+  ]
+}

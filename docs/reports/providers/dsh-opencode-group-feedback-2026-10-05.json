@@ -1,0 +1,887 @@
+{
+  "date": "2026-10-05",
+  "base_revision": "18631193f52e045407e2b43382d3de5df465809b",
+  "working_branch": "main",
+  "revision": "Base revision plus source_sha256; integrated commit preparation",
+  "dsh_source_revision": "f470cbda0debcf24d0e82f15d29e48177461d026",
+  "platform": "macOS arm64",
+  "rust": "1.98.1",
+  "features": "default",
+  "coverage": {
+    "status": "measured",
+    "command": "nix develop --command cargo llvm-cov --workspace --locked --offline --html -- --test-threads=1",
+    "tool": "cargo-llvm-cov 0.8.7",
+    "scope": "workspace, default features, default filename filtering, no additional exclusions; doctests not instrumented",
+    "baseline": null,
+    "scopes": {
+      "workspace": {
+        "count": 53867,
+        "covered": 50821,
+        "percent": 94.34533202146027
+      },
+      "provider": {
+        "covered": 22843,
+        "count": 24378,
+        "percent": 93.70333907621627
+      },
+      "dsh": {
+        "covered": 2309,
+        "count": 2513,
+        "percent": 91.88221249502587
+      },
+      "opencode": {
+        "covered": 2725,
+        "count": 3119,
+        "percent": 87.36774607245913
+      }
+    },
+    "html": "target/llvm-cov/html/index.html",
+    "provider_files": {
+      "crates/provider/src/capabilities.rs": {
+        "count": 12,
+        "covered": 12,
+        "percent": 100.0
+      },
+      "crates/provider/src/connection.rs": {
+        "count": 130,
+        "covered": 126,
+        "percent": 96.92307692307692
+      },
+      "crates/provider/src/connection/directory.rs": {
+        "count": 149,
+        "covered": 129,
+        "percent": 86.5771812080537
+      },
+      "crates/provider/src/dispatch.rs": {
+        "count": 112,
+        "covered": 97,
+        "percent": 86.60714285714286
+      },
+      "crates/provider/src/dispatch/agent_execution.rs": {
+        "count": 66,
+        "covered": 62,
+        "percent": 93.93939393939394
+      },
+      "crates/provider/src/dispatch/agent_runtime.rs": {
+        "count": 32,
+        "covered": 21,
+        "percent": 65.625
+      },
+      "crates/provider/src/local/claude.rs": {
+        "count": 219,
+        "covered": 200,
+        "percent": 91.32420091324201
+      },
+      "crates/provider/src/local/claude/config.rs": {
+        "count": 158,
+        "covered": 157,
+        "percent": 99.36708860759495
+      },
+      "crates/provider/src/local/claude/history.rs": {
+        "count": 320,
+        "covered": 297,
+        "percent": 92.8125
+      },
+      "crates/provider/src/local/claude/inputs.rs": {
+        "count": 54,
+        "covered": 51,
+        "percent": 94.44444444444444
+      },
+      "crates/provider/src/local/claude/inspection.rs": {
+        "count": 230,
+        "covered": 213,
+        "percent": 92.6086956521739
+      },
+      "crates/provider/src/local/claude/inspection/quota.rs": {
+        "count": 135,
+        "covered": 129,
+        "percent": 95.55555555555556
+      },
+      "crates/provider/src/local/claude/metadata.rs": {
+        "count": 33,
+        "covered": 32,
+        "percent": 96.96969696969698
+      },
+      "crates/provider/src/local/claude/permissions.rs": {
+        "count": 222,
+        "covered": 218,
+        "percent": 98.1981981981982
+      },
+      "crates/provider/src/local/claude/rewind.rs": {
+        "count": 223,
+        "covered": 214,
+        "percent": 95.96412556053812
+      },
+      "crates/provider/src/local/claude/session.rs": {
+        "count": 532,
+        "covered": 508,
+        "percent": 95.48872180451126
+      },
+      "crates/provider/src/local/claude/session/commands.rs": {
+        "count": 83,
+        "covered": 73,
+        "percent": 87.95180722891565
+      },
+      "crates/provider/src/local/claude/streaming.rs": {
+        "count": 240,
+        "covered": 220,
+        "percent": 91.66666666666666
+      },
+      "crates/provider/src/local/claude/subagents.rs": {
+        "count": 313,
+        "covered": 283,
+        "percent": 90.41533546325878
+      },
+      "crates/provider/src/local/claude/subagents/live.rs": {
+        "count": 397,
+        "covered": 373,
+        "percent": 93.95465994962218
+      },
+      "crates/provider/src/local/claude/subagents/workflow.rs": {
+        "count": 46,
+        "covered": 44,
+        "percent": 95.65217391304348
+      },
+      "crates/provider/src/local/claude/subagents/workflow/replay.rs": {
+        "count": 292,
+        "covered": 262,
+        "percent": 89.72602739726028
+      },
+      "crates/provider/src/local/claude/tasks.rs": {
+        "count": 165,
+        "covered": 162,
+        "percent": 98.18181818181819
+      },
+      "crates/provider/src/local/claude/transport.rs": {
+        "count": 261,
+        "covered": 243,
+        "percent": 93.10344827586206
+      },
+      "crates/provider/src/local/codex.rs": {
+        "count": 915,
+        "covered": 883,
+        "percent": 96.50273224043715
+      },
+      "crates/provider/src/local/codex/async_questions.rs": {
+        "count": 267,
+        "covered": 256,
+        "percent": 95.88014981273409
+      },
+      "crates/provider/src/local/codex/commands.rs": {
+        "count": 180,
+        "covered": 168,
+        "percent": 93.33333333333333
+      },
+      "crates/provider/src/local/codex/controls.rs": {
+        "count": 240,
+        "covered": 236,
+        "percent": 98.33333333333333
+      },
+      "crates/provider/src/local/codex/discovery.rs": {
+        "count": 245,
+        "covered": 232,
+        "percent": 94.6938775510204
+      },
+      "crates/provider/src/local/codex/inspection.rs": {
+        "count": 81,
+        "covered": 75,
+        "percent": 92.5925925925926
+      },
+      "crates/provider/src/local/codex/metadata.rs": {
+        "count": 76,
+        "covered": 69,
+        "percent": 90.78947368421053
+      },
+      "crates/provider/src/local/codex/native_sessions.rs": {
+        "count": 197,
+        "covered": 194,
+        "percent": 98.47715736040608
+      },
+      "crates/provider/src/local/codex/permissions.rs": {
+        "count": 290,
+        "covered": 287,
+        "percent": 98.9655172413793
+      },
+      "crates/provider/src/local/codex/plans.rs": {
+        "count": 231,
+        "covered": 220,
+        "percent": 95.23809523809523
+      },
+      "crates/provider/src/local/codex/prompts.rs": {
+        "count": 209,
+        "covered": 192,
+        "percent": 91.86602870813397
+      },
+      "crates/provider/src/local/codex/rewind.rs": {
+        "count": 102,
+        "covered": 98,
+        "percent": 96.07843137254902
+      },
+      "crates/provider/src/local/codex/streaming.rs": {
+        "count": 234,
+        "covered": 228,
+        "percent": 97.43589743589743
+      },
+      "crates/provider/src/local/codex/subagents.rs": {
+        "count": 246,
+        "covered": 222,
+        "percent": 90.2439024390244
+      },
+      "crates/provider/src/local/codex/transport.rs": {
+        "count": 270,
+        "covered": 248,
+        "percent": 91.85185185185183
+      },
+      "crates/provider/src/local/codex/workflows.rs": {
+        "count": 135,
+        "covered": 133,
+        "percent": 98.51851851851852
+      },
+      "crates/provider/src/local/configuration.rs": {
+        "count": 287,
+        "covered": 273,
+        "percent": 95.1219512195122
+      },
+      "crates/provider/src/local/configuration/options.rs": {
+        "count": 50,
+        "covered": 48,
+        "percent": 96.0
+      },
+      "crates/provider/src/local/deepseek_harness.rs": {
+        "count": 152,
+        "covered": 138,
+        "percent": 90.78947368421053
+      },
+      "crates/provider/src/local/deepseek_harness/config.rs": {
+        "count": 216,
+        "covered": 210,
+        "percent": 97.22222222222221
+      },
+      "crates/provider/src/local/deepseek_harness/native.rs": {
+        "count": 6,
+        "covered": 6,
+        "percent": 100.0
+      },
+      "crates/provider/src/local/deepseek_harness/native/config.rs": {
+        "count": 168,
+        "covered": 158,
+        "percent": 94.04761904761905
+      },
+      "crates/provider/src/local/deepseek_harness/native/content.rs": {
+        "count": 91,
+        "covered": 82,
+        "percent": 90.10989010989012
+      },
+      "crates/provider/src/local/deepseek_harness/native/history.rs": {
+        "count": 149,
+        "covered": 135,
+        "percent": 90.60402684563758
+      },
+      "crates/provider/src/local/deepseek_harness/native/http.rs": {
+        "count": 104,
+        "covered": 91,
+        "percent": 87.5
+      },
+      "crates/provider/src/local/deepseek_harness/native/interactions.rs": {
+        "count": 198,
+        "covered": 190,
+        "percent": 95.95959595959596
+      },
+      "crates/provider/src/local/deepseek_harness/native/projection.rs": {
+        "count": 119,
+        "covered": 113,
+        "percent": 94.9579831932773
+      },
+      "crates/provider/src/local/deepseek_harness/native/runtime.rs": {
+        "count": 186,
+        "covered": 162,
+        "percent": 87.09677419354838
+      },
+      "crates/provider/src/local/deepseek_harness/native/session.rs": {
+        "count": 402,
+        "covered": 347,
+        "percent": 86.31840796019901
+      },
+      "crates/provider/src/local/deepseek_harness/native/usage.rs": {
+        "count": 16,
+        "covered": 16,
+        "percent": 100.0
+      },
+      "crates/provider/src/local/deepseek_harness/permissions.rs": {
+        "count": 94,
+        "covered": 92,
+        "percent": 97.87234042553192
+      },
+      "crates/provider/src/local/deepseek_harness/session.rs": {
+        "count": 259,
+        "covered": 242,
+        "percent": 93.43629343629344
+      },
+      "crates/provider/src/local/deepseek_harness/streaming.rs": {
+        "count": 187,
+        "covered": 177,
+        "percent": 94.6524064171123
+      },
+      "crates/provider/src/local/deepseek_harness/transport.rs": {
+        "count": 166,
+        "covered": 150,
+        "percent": 90.36144578313254
+      },
+      "crates/provider/src/local/elicitation.rs": {
+        "count": 207,
+        "covered": 196,
+        "percent": 94.68599033816425
+      },
+      "crates/provider/src/local/images.rs": {
+        "count": 165,
+        "covered": 153,
+        "percent": 92.72727272727272
+      },
+      "crates/provider/src/local/notes.rs": {
+        "count": 65,
+        "covered": 63,
+        "percent": 96.92307692307692
+      },
+      "crates/provider/src/local/opencode.rs": {
+        "count": 75,
+        "covered": 75,
+        "percent": 100.0
+      },
+      "crates/provider/src/local/opencode/approvals.rs": {
+        "count": 181,
+        "covered": 157,
+        "percent": 86.74033149171271
+      },
+      "crates/provider/src/local/opencode/bridge.rs": {
+        "count": 93,
+        "covered": 90,
+        "percent": 96.7741935483871
+      },
+      "crates/provider/src/local/opencode/budget.rs": {
+        "count": 59,
+        "covered": 58,
+        "percent": 98.30508474576273
+      },
+      "crates/provider/src/local/opencode/client.rs": {
+        "count": 366,
+        "covered": 339,
+        "percent": 92.62295081967213
+      },
+      "crates/provider/src/local/opencode/execution.rs": {
+        "count": 98,
+        "covered": 86,
+        "percent": 87.75510204081633
+      },
+      "crates/provider/src/local/opencode/history.rs": {
+        "count": 302,
+        "covered": 269,
+        "percent": 89.0728476821192
+      },
+      "crates/provider/src/local/opencode/history/prefix.rs": {
+        "count": 56,
+        "covered": 56,
+        "percent": 100.0
+      },
+      "crates/provider/src/local/opencode/http.rs": {
+        "count": 500,
+        "covered": 389,
+        "percent": 77.8
+      },
+      "crates/provider/src/local/opencode/live.rs": {
+        "count": 362,
+        "covered": 317,
+        "percent": 87.56906077348067
+      },
+      "crates/provider/src/local/opencode/projection.rs": {
+        "count": 108,
+        "covered": 100,
+        "percent": 92.5925925925926
+      },
+      "crates/provider/src/local/opencode/publication.rs": {
+        "count": 60,
+        "covered": 44,
+        "percent": 73.33333333333333
+      },
+      "crates/provider/src/local/opencode/runtime.rs": {
+        "count": 205,
+        "covered": 163,
+        "percent": 79.51219512195122
+      },
+      "crates/provider/src/local/opencode/session.rs": {
+        "count": 471,
+        "covered": 405,
+        "percent": 85.98726114649682
+      },
+      "crates/provider/src/local/opencode/streaming.rs": {
+        "count": 177,
+        "covered": 175,
+        "percent": 98.87005649717514
+      },
+      "crates/provider/src/local/opencode/types.rs": {
+        "count": 6,
+        "covered": 2,
+        "percent": 33.33333333333333
+      },
+      "crates/provider/src/local/tool_detail.rs": {
+        "count": 174,
+        "covered": 163,
+        "percent": 93.67816091954022
+      },
+      "crates/provider/src/local/tool_detail/command_actions.rs": {
+        "count": 42,
+        "covered": 42,
+        "percent": 100.0
+      },
+      "crates/provider/src/local/usage.rs": {
+        "count": 156,
+        "covered": 154,
+        "percent": 98.71794871794872
+      },
+      "crates/provider/src/ports/agent.rs": {
+        "count": 3,
+        "covered": 3,
+        "percent": 100.0
+      },
+      "crates/provider/src/ports/agent_session.rs": {
+        "count": 217,
+        "covered": 217,
+        "percent": 100.0
+      },
+      "crates/provider/src/ports/environment.rs": {
+        "count": 32,
+        "covered": 32,
+        "percent": 100.0
+      },
+      "crates/provider/src/protocol/agent.rs": {
+        "count": 8,
+        "covered": 8,
+        "percent": 100.0
+      },
+      "crates/provider/src/protocol/agent_config.rs": {
+        "count": 26,
+        "covered": 26,
+        "percent": 100.0
+      },
+      "crates/provider/src/protocol/agent_execution.rs": {
+        "count": 9,
+        "covered": 9,
+        "percent": 100.0
+      },
+      "crates/provider/src/protocol/prompt.rs": {
+        "count": 102,
+        "covered": 101,
+        "percent": 99.01960784313727
+      },
+      "crates/provider/src/protocol/prompt/attachments.rs": {
+        "count": 118,
+        "covered": 108,
+        "percent": 91.52542372881356
+      },
+      "crates/provider/src/protocol/resume.rs": {
+        "count": 38,
+        "covered": 38,
+        "percent": 100.0
+      },
+      "crates/provider/src/protocol/usage.rs": {
+        "count": 17,
+        "covered": 17,
+        "percent": 100.0
+      },
+      "crates/provider/src/rpc.rs": {
+        "count": 31,
+        "covered": 24,
+        "percent": 77.41935483870968
+      },
+      "crates/provider/src/rpc/agent_execution.rs": {
+        "count": 573,
+        "covered": 543,
+        "percent": 94.76439790575915
+      },
+      "crates/provider/src/rpc/agent_execution/controls.rs": {
+        "count": 232,
+        "covered": 224,
+        "percent": 96.55172413793105
+      },
+      "crates/provider/src/rpc/agent_execution/native_sessions.rs": {
+        "count": 171,
+        "covered": 166,
+        "percent": 97.07602339181285
+      },
+      "crates/provider/src/rpc/agent_execution/placement.rs": {
+        "count": 86,
+        "covered": 83,
+        "percent": 96.51162790697676
+      },
+      "crates/provider/src/rpc/agent_execution/resume.rs": {
+        "count": 99,
+        "covered": 94,
+        "percent": 94.94949494949495
+      },
+      "crates/provider/src/rpc/agent_execution/voice.rs": {
+        "count": 59,
+        "covered": 53,
+        "percent": 89.83050847457628
+      },
+      "crates/provider/src/rpc/agent_execution/workspace_creation.rs": {
+        "count": 108,
+        "covered": 86,
+        "percent": 79.62962962962963
+      },
+      "crates/provider/src/rpc/agent_execution/worktrees.rs": {
+        "count": 243,
+        "covered": 235,
+        "percent": 96.70781893004116
+      },
+      "crates/provider/src/rpc/agent_runtime.rs": {
+        "count": 450,
+        "covered": 432,
+        "percent": 96.0
+      },
+      "crates/provider/src/rpc/agent_runtime/listing.rs": {
+        "count": 51,
+        "covered": 44,
+        "percent": 86.27450980392157
+      },
+      "crates/provider/src/rpc/agents.rs": {
+        "count": 124,
+        "covered": 122,
+        "percent": 98.38709677419355
+      },
+      "crates/provider/src/rpc/fork_context.rs": {
+        "count": 119,
+        "covered": 114,
+        "percent": 95.7983193277311
+      },
+      "crates/provider/src/rpc/fork_context/tools.rs": {
+        "count": 87,
+        "covered": 87,
+        "percent": 100.0
+      },
+      "crates/provider/src/rpc/timeline.rs": {
+        "count": 128,
+        "covered": 128,
+        "percent": 100.0
+      },
+      "crates/provider/src/rpc/timeline/projection.rs": {
+        "count": 146,
+        "covered": 136,
+        "percent": 93.15068493150685
+      },
+      "crates/provider/src/rpc/timeline/projection/page.rs": {
+        "count": 108,
+        "covered": 108,
+        "percent": 100.0
+      },
+      "crates/provider/src/rpc/timeline/text_search.rs": {
+        "count": 55,
+        "covered": 55,
+        "percent": 100.0
+      },
+      "crates/provider/src/service/agent_execution.rs": {
+        "count": 154,
+        "covered": 141,
+        "percent": 91.55844155844156
+      },
+      "crates/provider/src/service/agent_execution/voice.rs": {
+        "count": 49,
+        "covered": 49,
+        "percent": 100.0
+      },
+      "crates/provider/src/service/agent_execution/waits.rs": {
+        "count": 63,
+        "covered": 57,
+        "percent": 90.47619047619048
+      },
+      "crates/provider/src/service/agent_manager.rs": {
+        "count": 856,
+        "covered": 829,
+        "percent": 96.84579439252336
+      },
+      "crates/provider/src/service/agent_manager/auto_archive.rs": {
+        "count": 105,
+        "covered": 101,
+        "percent": 96.1904761904762
+      },
+      "crates/provider/src/service/agent_manager/controls.rs": {
+        "count": 548,
+        "covered": 519,
+        "percent": 94.7080291970803
+      },
+      "crates/provider/src/service/agent_manager/delivery.rs": {
+        "count": 269,
+        "covered": 234,
+        "percent": 86.98884758364312
+      },
+      "crates/provider/src/service/agent_manager/generated_titles.rs": {
+        "count": 99,
+        "covered": 92,
+        "percent": 92.92929292929293
+      },
+      "crates/provider/src/service/agent_manager/native_sessions.rs": {
+        "count": 297,
+        "covered": 280,
+        "percent": 94.27609427609428
+      },
+      "crates/provider/src/service/agent_manager/resume.rs": {
+        "count": 124,
+        "covered": 118,
+        "percent": 95.16129032258065
+      },
+      "crates/provider/src/service/agent_manager/streaming.rs": {
+        "count": 306,
+        "covered": 293,
+        "percent": 95.75163398692811
+      },
+      "crates/provider/src/service/agent_manager/titles.rs": {
+        "count": 89,
+        "covered": 89,
+        "percent": 100.0
+      },
+      "crates/provider/src/service/agent_runtime.rs": {
+        "count": 418,
+        "covered": 408,
+        "percent": 97.60765550239235
+      },
+      "crates/provider/src/service/agent_runtime/archive.rs": {
+        "count": 129,
+        "covered": 127,
+        "percent": 98.44961240310077
+      },
+      "crates/provider/src/service/agent_runtime/search.rs": {
+        "count": 133,
+        "covered": 132,
+        "percent": 99.24812030075188
+      },
+      "crates/provider/src/service/agents.rs": {
+        "count": 66,
+        "covered": 66,
+        "percent": 100.0
+      },
+      "crates/provider/src/service/metadata_generation.rs": {
+        "count": 77,
+        "covered": 75,
+        "percent": 97.40259740259741
+      },
+      "crates/provider/src/service/metadata_generation/candidates.rs": {
+        "count": 125,
+        "covered": 122,
+        "percent": 97.6
+      },
+      "crates/provider/src/service/metadata_generation/prompts.rs": {
+        "count": 107,
+        "covered": 107,
+        "percent": 100.0
+      },
+      "crates/provider/src/service/provider_catalog.rs": {
+        "count": 212,
+        "covered": 210,
+        "percent": 99.05660377358491
+      },
+      "crates/provider/src/service/provider_catalog/draft.rs": {
+        "count": 33,
+        "covered": 33,
+        "percent": 100.0
+      },
+      "crates/provider/src/service/provider_catalog/scope.rs": {
+        "count": 33,
+        "covered": 33,
+        "percent": 100.0
+      },
+      "crates/provider/src/service/workspace_attention.rs": {
+        "count": 248,
+        "covered": 230,
+        "percent": 92.74193548387096
+      },
+      "crates/provider/src/storage.rs": {
+        "count": 92,
+        "covered": 79,
+        "percent": 85.86956521739131
+      },
+      "crates/provider/src/storage/agent_runtime.rs": {
+        "count": 107,
+        "covered": 100,
+        "percent": 93.45794392523364
+      },
+      "crates/provider/src/storage/agents.rs": {
+        "count": 259,
+        "covered": 240,
+        "percent": 92.66409266409268
+      },
+      "crates/provider/src/storage/catalog.rs": {
+        "count": 8,
+        "covered": 8,
+        "percent": 100.0
+      },
+      "crates/provider/src/storage/migration.rs": {
+        "count": 42,
+        "covered": 36,
+        "percent": 85.71428571428571
+      },
+      "crates/provider/src/storage/timeline.rs": {
+        "count": 297,
+        "covered": 292,
+        "percent": 98.3164983164983
+      },
+      "crates/provider/src/storage/timeline/inbox.rs": {
+        "count": 196,
+        "covered": 192,
+        "percent": 97.95918367346938
+      },
+      "crates/provider/src/storage/timeline/progress.rs": {
+        "count": 173,
+        "covered": 164,
+        "percent": 94.79768786127167
+      },
+      "crates/provider/src/storage/timeline/subagents.rs": {
+        "count": 73,
+        "covered": 70,
+        "percent": 95.8904109589041
+      },
+      "crates/provider/src/test_support.rs": {
+        "count": 31,
+        "covered": 31,
+        "percent": 100.0
+      }
+    },
+    "ignored_tests": [
+      "local::claude::tests::process::installed_claude_control_protocol_discovers_models_without_inference",
+      "local::claude::tests::process::parity::installed_claude_completes_a_native_turn_and_reopens_history",
+      "local::codex::tests::installed::installed_codex_completes_a_native_turn_and_reopens_history",
+      "local::deepseek_harness::native::tests::installed_host_discovers_switches_permissions_and_adopts_legacy_sessions",
+      "local::opencode::tests::installed::installed_opencode_discovers_runs_and_restores_with_local_model"
+    ]
+  },
+  "test_execution": [
+    {
+      "command": "nix develop --command cargo test -p provider deepseek_harness --locked --offline",
+      "passed": 31,
+      "failed": 0,
+      "ignored_or_skipped": 1
+    },
+    {
+      "command": "nix develop --command cargo test -p provider local::opencode --locked --offline",
+      "passed": 53,
+      "failed": 0,
+      "ignored_or_skipped": 1
+    },
+    {
+      "command": "AIT_TEST_DSH_BIN=/absolute/path/to/dsh nix develop --command cargo test -p provider installed_host_discovers_switches_permissions_and_adopts_legacy_sessions --locked --offline -- --ignored",
+      "passed": 1,
+      "failed": 0,
+      "ignored_or_skipped": 0
+    },
+    {
+      "command": "AIT_TEST_OPENCODE_BIN=/absolute/path/to/opencode-2.0.20 nix develop --command cargo test -p provider installed_opencode_discovers_runs_and_restores_with_local_model --locked --offline -- --ignored",
+      "passed": 1,
+      "failed": 0,
+      "ignored_or_skipped": 0
+    },
+    {
+      "command": "nix develop --command cargo test -p daemon --test process opencode --locked --offline",
+      "passed": 2,
+      "failed": 0,
+      "ignored_or_skipped": 0
+    },
+    {
+      "command": "nix develop --command cargo test -p daemon --test process deepseek_harness --locked --offline",
+      "passed": 1,
+      "failed": 0,
+      "ignored_or_skipped": 0
+    },
+    {
+      "command": "nix develop --command cargo test -p daemon --test process attempted_initial_prompt_is_not_replayed_after_failure --locked --offline",
+      "passed": 1,
+      "failed": 0,
+      "ignored_or_skipped": 0
+    },
+    {
+      "command": "npm run test --workspace=@ait/mobile -- src/i18n/resources.test.ts src/runtime/rust-daemon maestro/support native-release-version.test.ts src/timeline src/types/stream.test.ts src/runtime/replica-cache src/components/question-form-card-core.test.ts",
+      "passed": 437,
+      "failed": 0,
+      "ignored_or_skipped": 1
+    },
+    {
+      "command": "npm run test --workspace=@ait/protocol -- src/provider-manifest.deepseek-harness.test.ts src/paseo-config-schema.test.ts",
+      "passed": 14,
+      "failed": 0,
+      "ignored_or_skipped": 0
+    },
+    {
+      "command": "nix develop --command cargo test --workspace --locked --offline",
+      "passed": 1819,
+      "failed": 0,
+      "ignored_or_skipped": 5,
+      "log_sha256": "2127abe938d8fb96e5deada4f3a80631d07d4f9e45f875d12a6ca8b91d602083"
+    },
+    {
+      "command": "nix develop --command cargo llvm-cov --workspace --locked --offline --html -- --test-threads=1",
+      "passed": 1819,
+      "failed": 0,
+      "ignored_or_skipped": 5,
+      "log_sha256": "adc25c8bc7b7e17003e95de98edb0b45a6c6a0fc4a72624ca147cac96ea92cf1"
+    }
+  ],
+  "opencode_binary": {
+    "version": "2.0.20",
+    "source": "https://formulae.brew.sh/api/formula/opencode.json",
+    "bottle_sha256": "11365b59361afa1234c412de7439d3e669a92671e7a7a322984e750996ea02e2",
+    "model": "loopback deterministic OpenAI-compatible SSE, no user credentials"
+  },
+  "dsh_binary": {
+    "version": "0.1.5-rc.2",
+    "inference": false
+  },
+  "source_sha256": {
+    ".github/workflows/ci.yml": "25b397b5bebb212efb77e7479402f72f38d9e1b240e06362c119439fcf65bdde",
+    "Cargo.lock": "f1d10c92d08faa044a904838924990f08977d5462eaae4198da5e6e6c1a885a9",
+    "apps/mobile/src/components/question-form-card-core.test.ts": "f81153d6058cf47f3cbfddd44cb1a9a625a6e01501798947b243ced0aa51fd07",
+    "apps/mobile/src/components/question-form-card-core.ts": "492509f1fd7e861c6c1a2b0379e3bfbb148a3c4bfe5bf2281e485ea33ed5c296",
+    "apps/mobile/src/components/question-form-card.tsx": "695cadd64ea276c097335d1ffd7a22ac9d67334dba885ec90746741941014e4a",
+    "apps/mobile/src/runtime/replica-cache/index.test.ts": "9c47f1cdd32a33866b9ed78f91c053fc6d09f305f708faa2eb2d39c602809d7e",
+    "apps/mobile/src/runtime/replica-cache/index.ts": "a275c4b30bd48d4ce5745e4e38700ddd9ba9da302fbc102777eb692e6cf63aff",
+    "apps/mobile/src/timeline/replica.test.ts": "92c1a544b88da733257190a1295d85268179e72546a17c0a8bcf457955c8189d",
+    "apps/mobile/src/timeline/session-stream-reducers.test.ts": "cb8b8ea8b436c0132a9343e593049747d9dd0af66f1c97763e3fd5e23ce908e4",
+    "apps/mobile/src/timeline/session-stream-reducers.ts": "82206930c8d022fc26e167a3acd87919988752a28ade0adef8f732a8c2b9574b",
+    "apps/mobile/src/timeline/viewed-timeline-sync.ts": "c1c14eff00dfb3656c8377489134e3c29a412ea5bf632edeacb8218de8f7e573",
+    "apps/mobile/src/types/stream.ts": "9d5a23f48f23856ffbff43f6e4408ce63c5d31f0b6493670cc2df5d9ebcdac1c",
+    "bins/daemon/src/host.rs": "75c252609bb9bcb151a5d773dff4c1ef145436936de96ebd0bffd8bd0d52ea25",
+    "bins/daemon/tests/process/agent_execution/workspace_creation/concurrency.rs": "cf77d0253ad8f29592a486076029b5323f72bdd30a43c9cda49760e21edd8e24",
+    "bins/daemon/tests/process/unix.rs": "85d12edd40bc632619b901add5fd673e357b22f1882087f0437a0917eea79ec9",
+    "crates/provider/Cargo.toml": "2b3ab3b5f3d839a108b5053fe15664bfc58829e912deaee3a00bbac233676b45",
+    "crates/provider/src/local/deepseek_harness.rs": "b1c647f6d4aaf1a9ddc0aee5416d96aadcf7e8bfd3e8cb87de2a19fe234a915e",
+    "crates/provider/src/local/deepseek_harness/native.rs": "56960c55cdfb77eca8b9bffa54026769af7fe4efb9b9ce612cdd9b5442136909",
+    "crates/provider/src/local/deepseek_harness/native/config.rs": "a6a678c5e889a1ff45b09ee03f0c633430ab4fedb3a564c201bafc39f2477f23",
+    "crates/provider/src/local/deepseek_harness/native/content.rs": "4b403ca29122b6bc6229b1581036b696bc12e982fc364a9623b51de0af3e6655",
+    "crates/provider/src/local/deepseek_harness/native/history.rs": "ebe08e4071c997df6ed9f76b8fc49cea57f0502764e767cd4a1dbad86c38c555",
+    "crates/provider/src/local/deepseek_harness/native/http.rs": "6ba081e4f91476962da6bb2bf53c6738ac09a8945b4a3ac5558d82cc6918f57b",
+    "crates/provider/src/local/deepseek_harness/native/interactions.rs": "47d0f851e0ed1dd93eca0e4571ebd2b6c5e7294d73f36e10e6737b7fc6072c8e",
+    "crates/provider/src/local/deepseek_harness/native/projection.rs": "552dd68596e1b7463847ef8d5e8204c73e8e07bda3167ea7fce3761774d90fc0",
+    "crates/provider/src/local/deepseek_harness/native/runtime.rs": "ecee4fb8d350ce2982c1921ac9ddab9e56925ebb1c6f0647baab618090455fca",
+    "crates/provider/src/local/deepseek_harness/native/session.rs": "94616446c06d756318096cfc8e9b37ff412a80ff735f15631ff1eaebb63da90f",
+    "crates/provider/src/local/deepseek_harness/native/tests.rs": "8e60cc92c2b4692c8d1282b61e33623668fa253bed05fa5681d4b52211416e8f",
+    "crates/provider/src/local/deepseek_harness/native/tests/fixture.rs": "e7ff6f9b995a860d8db9895e047c7561ac6010b617466694e6a2e5962432f510",
+    "crates/provider/src/local/deepseek_harness/native/tests/interactions.rs": "69e46b687f8678f9129e148b76b4f4c6ff9d2448d3a56d597c46ac3613b29fb3",
+    "crates/provider/src/local/deepseek_harness/native/tests/recovery.rs": "3ba617207b782dcb36a95c0e823609ed2ae11165fc31ee6b810393d0ab49b0de",
+    "crates/provider/src/local/deepseek_harness/native/tests/session.rs": "fa9a105a6d0a1f778f4d1a80f5a34b1c434b852fae81c362f2f16ef7d4befa14",
+    "crates/provider/src/local/deepseek_harness/native/tests/sources.rs": "e84b6ef3aba8b61e7f998245a2acb0ad4a38481687ae048fa786e9559401a294",
+    "crates/provider/src/local/deepseek_harness/native/tests/validation.rs": "77b6079a636289187da085198f3b64086e7f41e42741940a660e6eaf1fe15316",
+    "crates/provider/src/local/deepseek_harness/native/usage.rs": "d9fceae3f6a00cf7a6af69bb2b6e2e7b5572b6f89e890ae125ba195cfd2137af",
+    "crates/provider/src/local/deepseek_harness/tests.rs": "3b79f4db5db5275bf1efef8c63d6bdee28d283a584841ba3bfb3dd1d5d305e18",
+    "crates/provider/src/local/opencode/execution.rs": "58e984caa585c13b29100237dac5f13937166fb7925cc53abe3bcc64cf5c81db",
+    "crates/provider/src/local/opencode/execution/tests.rs": "5b0ca39ac26b0248742328c0dc8784cdd4bc6036affb23d76651fb24da9070d2",
+    "crates/provider/src/local/opencode/http.rs": "80c192271fb81dd58d42ac3f9a96565598147270eae5f75cb8b5c71bb7bca0a3",
+    "crates/provider/src/local/opencode/tests.rs": "dcc42ac18c1b617c1e217f75563ac988689e8d0385f6758defbf21bbf007fc69",
+    "crates/provider/src/local/opencode/tests/fixture.rs": "c9569a09373c547e48b60936fd5e848ef6fc8cfb99718f80ee55523e64872dbe",
+    "crates/provider/src/local/opencode/tests/installed.rs": "0f9716b575402adafee76621235f0df1860b4a8978ddaaf38d1d0f523cf0f637",
+    "crates/provider/src/service/agent_execution/tests/subscriptions/creation.rs": "dcdf7965953f6976e07b8759b74174f96bbf40c508c531d90bee4e7d559ec8b9",
+    "crates/provider/src/service/provider_catalog.rs": "01081df76641df60d6a2943e87b276a007cd3fbaeb6e6ca08f8a4d1295539180",
+    "packages/protocol/src/provider-manifest.ts": "c5c5d09a30f5dc857c9bcaf649b6854ad6aabcf251064921a75893e623bc815b"
+  },
+  "limitations": [
+    "No full Electron GUI or native mobile verification",
+    "No Windows/Linux execution in this run",
+    "Real DSH question/tool inference not run; native HTTP/WS fixtures and form tests cover interactions",
+    "Real OpenCode tool/approval/cancellation inference not run; offline tests cover these paths",
+    "No new remote CI run for this uncommitted working tree"
+  ]
+}

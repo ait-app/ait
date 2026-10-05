@@ -335,7 +335,12 @@ const StoredProjectSchema = z.strictObject({
   projectKind: z.enum(["git", "non_git", "directory"]),
 });
 
+// Older projections may have appended a fetched snapshot to display-only cached text.
+// Refetch timeline rows once; directory state and daemon history remain authoritative.
+// Version 2 also drops copies persisted by repeated painted-cache preparation.
+const TIMELINE_PROJECTION_VERSION = 2;
 const StoredTimelineSchema = z.strictObject({
+  projectionVersion: z.literal(TIMELINE_PROJECTION_VERSION),
   agentId: z.string(),
   items: z.array(StoredTimelineItemSchema),
   range: z
@@ -753,6 +758,7 @@ function serializeTimeline(timeline: CachedTimeline): StoredTimeline | null {
     ) &&
     canonicalItems.some((item) => item.timelineCursor?.seq === range.endSeq);
   return {
+    projectionVersion: TIMELINE_PROJECTION_VERSION,
     agentId: timeline.agentId,
     items: items.slice(-MAX_TIMELINE_ITEMS),
     range: canPersistCoverage
