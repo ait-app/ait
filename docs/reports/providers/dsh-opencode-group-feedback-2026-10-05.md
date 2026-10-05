@@ -96,3 +96,43 @@ doctest 未插桩。五个忽略项为既有 Claude/Codex CLI 或在线推理测
 本轮未执行完整 Electron GUI、原生移动端、Windows/Linux，未对真实 DSH 模型执行问答/工具回合。
 DSH 问答/审批由原生 HTTP/WS 夹具及共享表单回归覆盖；OpenCode 工具允许/拒绝/顺序和取消由离线回归覆盖，
 真实 2.0.20 测试覆盖文本回合及恢复。远端 CI 不计入本报告，推送后的状态以 GitHub 检查为准。
+
+## ACP CI 启动失败修复补充（768674fe 之后）
+
+CI [失败记录](https://github.com/KirisameLonnet/ait/actions/runs/37309033572/job/111759668393)
+在创建 ACP 会话时返回 `Unavailable`，定位到 `Command::spawn`，尚未开始协议交互。
+原代码丢弃了 OS 错误，不能确认原 CI 的具体 errno。
+Linux 容器复现了临时脚本的写入句柄被并发 fork 继承时产生 `ETXTBSY` 的机制；
+关闭所有写入句柄后同一脚本连续启动 100 次通过。这是风险验证，不是原 CI errno 的证明。
+
+测试改为执行仓库内带可执行权限的固定 ACP 脚本，避免运行期间创建、写入可执行文件。
+每个测试的 cwd 和日志仍独立。新增 16 路并发会话/日志隔离回归，以及程序不存在的错误回归。
+生产启动失败新增 tracing 诊断，仅含错误类型和 OS 错误码，不记录路径、参数或环境。
+未增加超时、重试或忽略失败测试。
+
+### Test coverage
+
+验证版本为 `768674fe` 合入 upstream `5df233ac`，加随附制品中的源码指纹与 fixture mode。
+`nix develop --command cargo test -p provider local::deepseek_harness --lib`：32 passed、1 ignored。
+`nix develop --command cargo test --workspace`：1824 passed、0 failed、5 ignored。
+`cargo fmt --all --check`、`cargo clippy --workspace --all-targets -- -D warnings` 和
+`cargo build --workspace` 均在 Nix dev shell 通过。
+
+`nix develop --command cargo llvm-cov --workspace --html -- --test-threads=1`：
+1824 passed、0 failed、5 ignored。
+
+| 范围 | 覆盖行 / 总行 | 行覆盖率 |
+| --- | ---: | ---: |
+| workspace | 50830 / 53874 | 94.35% |
+| provider | 22847 / 24383 | 93.70% |
+| dsh | 2312 / 2518 | 91.82% |
+
+相较 768674fe 同平台同范围测量的行覆盖率变化： workspace +0.0044 个百分点； provider -0.0028 个百分点； dsh -0.0633 个百分点；
+
+macOS arm64 / Rust 1.98.1，默认 features 与文件过滤，无额外排除，doctest 未插桩。
+5 个忽略项为既有真实 CLI/在线推理 opt-in 测试，本次未单独运行。
+基线为上节 768674fe 的同平台默认 features 测量；系统级故障路径存在运行差异，不将覆盖率差值单独解释为修复效果。
+[可审阅覆盖率制品](dsh-acp-ci-2026-10-05.json)包含范围、逐文件数据、源码和日志指纹；
+完整 HTML 位于 `target/llvm-cov/html/index.html`。
+尚未覆盖所有 OS 启动故障、真实服务断线路径；本地全量测试不代表 Linux/Windows 全量验证。
+远端 Linux CI 结果以本补充对应提交的 GitHub 检查为准。

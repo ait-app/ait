@@ -67,11 +67,27 @@ fn status_marks_only_linked_worktrees_in_the_managed_layout_as_owned() {
 #[test]
 fn reset_workspace_uses_origin_default_branch_and_restores_initial_branch() {
     for default_branch in ["main", "master"] {
-        reset_workspace_from_default_branch(default_branch);
+        reset_workspace_from_default_branch(default_branch, "renamed-workspace", false);
     }
 }
 
-fn reset_workspace_from_default_branch(default_branch: &str) {
+#[test]
+fn reset_workspace_checks_out_existing_initial_branch_and_updates_it_to_latest_default() {
+    for default_branch in ["main", "master"] {
+        reset_workspace_from_default_branch(default_branch, "renamed-workspace", true);
+    }
+}
+
+#[test]
+fn reset_workspace_updates_the_already_checked_out_initial_branch() {
+    reset_workspace_from_default_branch("main", "initial-workspace", true);
+}
+
+fn reset_workspace_from_default_branch(
+    default_branch: &str,
+    workspace_branch: &str,
+    initial_branch_exists: bool,
+) {
     let fixture = Fixture::new();
     let remote = fixture.temp.path().join("remote.git");
     git(
@@ -106,10 +122,16 @@ fn reset_workspace_from_default_branch(default_branch: &str) {
             linked.to_str().unwrap(),
         ],
     );
-    git(&linked, &["branch", "-m", "renamed-workspace"]);
+    if workspace_branch != "initial-workspace" {
+        git(&linked, &["branch", "-m", workspace_branch]);
+        if initial_branch_exists {
+            git(&fixture.repo, &["branch", "initial-workspace", "main"]);
+        }
+    }
     std::fs::write(linked.join("tracked.txt"), "local commit\n").unwrap();
     git(&linked, &["add", "tracked.txt"]);
     git(&linked, &["commit", "-m", "local work"]);
+    let local_commit = git_output(&linked, &["rev-parse", "HEAD"]);
     std::fs::write(linked.join("tracked.txt"), "dirty changes\n").unwrap();
     std::fs::write(linked.join("untracked.txt"), "keep\n").unwrap();
 
@@ -138,6 +160,16 @@ fn reset_workspace_from_default_branch(default_branch: &str) {
         "initial-workspace"
     );
     assert_eq!(git_output(&linked, &["rev-parse", "HEAD"]), latest);
+    assert_eq!(
+        git_output(&linked, &["rev-parse", "refs/heads/initial-workspace"]),
+        latest
+    );
+    if initial_branch_exists && workspace_branch != "initial-workspace" {
+        assert_eq!(
+            git_output(&linked, &["rev-parse", workspace_branch]),
+            local_commit
+        );
+    }
     assert_eq!(git_output(&linked, &["rev-parse", &remote_ref]), latest);
     assert_eq!(
         std::fs::read_to_string(linked.join("tracked.txt")).unwrap(),
@@ -146,6 +178,73 @@ fn reset_workspace_from_default_branch(default_branch: &str) {
     assert_eq!(
         std::fs::read_to_string(linked.join("untracked.txt")).unwrap(),
         "keep\n"
+    );
+}
+
+#[test]
+fn reset_workspace_preserves_both_worktrees_when_initial_branch_is_checked_out_elsewhere() {
+    let fixture = Fixture::new();
+    let remote = fixture.temp.path().join("remote.git");
+    git(
+        fixture.temp.path(),
+        &["init", "--bare", "-b", "main", remote.to_str().unwrap()],
+    );
+    git(
+        &fixture.repo,
+        &["remote", "add", "origin", remote.to_str().unwrap()],
+    );
+    git(&fixture.repo, &["push", "-u", "origin", "main"]);
+    let managed = fixture.temp.path().join("managed");
+    let linked = managed.join("repository-hash").join("initial-workspace");
+    std::fs::create_dir_all(linked.parent().unwrap()).unwrap();
+    git(
+        &fixture.repo,
+        &[
+            "worktree",
+            "add",
+            "-b",
+            "renamed-workspace",
+            linked.to_str().unwrap(),
+        ],
+    );
+    let other = fixture.temp.path().join("other-worktree");
+    git(
+        &fixture.repo,
+        &[
+            "worktree",
+            "add",
+            "-b",
+            "initial-workspace",
+            other.to_str().unwrap(),
+        ],
+    );
+    std::fs::write(linked.join("tracked.txt"), "local work\n").unwrap();
+    git(&linked, &["commit", "-am", "local work"]);
+    std::fs::write(linked.join("tracked.txt"), "dirty changes\n").unwrap();
+    std::fs::write(other.join("tracked.txt"), "other dirty changes\n").unwrap();
+    let before = git_output(&linked, &["rev-parse", "HEAD"]);
+    let other_before = git_output(&other, &["rev-parse", "HEAD"]);
+
+    let runtime = LocalCheckout::new(managed);
+    assert!(
+        runtime
+            .reset_workspace(linked.to_str().unwrap(), "initial-workspace")
+            .is_err()
+    );
+
+    assert_eq!(
+        git_output(&linked, &["branch", "--show-current"]),
+        "renamed-workspace"
+    );
+    assert_eq!(git_output(&linked, &["rev-parse", "HEAD"]), before);
+    assert_eq!(git_output(&other, &["rev-parse", "HEAD"]), other_before);
+    assert_eq!(
+        std::fs::read_to_string(linked.join("tracked.txt")).unwrap(),
+        "dirty changes\n"
+    );
+    assert_eq!(
+        std::fs::read_to_string(other.join("tracked.txt")).unwrap(),
+        "other dirty changes\n"
     );
 }
 
@@ -180,6 +279,7 @@ fn reset_workspace_preserves_branch_and_head_when_remote_lookup_fails() {
         ],
     );
     git(&linked, &["branch", "-m", "renamed-workspace"]);
+    git(&fixture.repo, &["branch", "initial-workspace", "main"]);
     git(
         &fixture.repo,
         &["remote", "add", "origin", "/missing/repository.git"],

@@ -533,7 +533,11 @@ impl CheckoutRuntime for LocalCheckout {
         git_write_noninteractive(&cwd, &["fetch", "--no-tags", "origin", &fetch_refspec])?;
         verify_commit(&cwd, &remote_ref)?;
         if current != initial_branch {
-            git_write(&cwd, &["branch", "-m", "--", &initial_branch])?;
+            if ref_exists(&cwd, &format!("refs/heads/{initial_branch}"))? {
+                git_write(&cwd, &["checkout", "--force", &initial_branch, "--"])?;
+            } else {
+                git_write(&cwd, &["branch", "-m", "--", &initial_branch])?;
+            }
         }
         git_write(&cwd, &["reset", "--hard", &remote_ref])?;
         Ok(())

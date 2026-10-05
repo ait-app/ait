@@ -12,11 +12,12 @@ const FLASH: &str = "[\"deepseek-official\",\"deepseek-v4-flash\"]";
 
 #[cfg(unix)]
 fn fixture() -> (TempDir, DeepSeekHarnessClient, AgentSessionSpec) {
-    use std::os::unix::fs::PermissionsExt;
     let directory = tempfile::tempdir().unwrap();
-    let program = directory.path().join("dsh");
-    std::fs::write(&program, include_str!("tests/fixtures/acp.cjs")).unwrap();
-    std::fs::set_permissions(&program, std::fs::Permissions::from_mode(0o700)).unwrap();
+    // Keep the executable immutable while concurrent tests spawn processes. Executing a
+    // freshly written script can fail with ETXTBSY on Linux if another fork inherited
+    // its writable descriptor before it was closed. Logs and cwd remain per-test.
+    let program = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
+        .join("src/local/deepseek_harness/tests/fixtures/acp.cjs");
     let mut client = DeepSeekHarnessClient::new(program)
         .with_acp_profile()
         .with_image_directory(directory.path().join("images"));
@@ -60,6 +61,41 @@ async fn event(session: &mut dyn AgentSession) -> AgentTurnEvent {
     })
     .await
     .unwrap()
+}
+
+#[cfg(unix)]
+#[tokio::test]
+async fn concurrent_acp_fixtures_keep_sessions_and_logs_isolated() {
+    let mut tasks = tokio::task::JoinSet::new();
+    for _ in 0..16 {
+        tasks.spawn(async {
+            let (directory, client, spec) = fixture();
+            let mut session = client.create_session(&spec).await.unwrap();
+            session.close().await.unwrap();
+            let logged = requests(&directory);
+            assert_eq!(
+                logged
+                    .iter()
+                    .filter(|request| request["method"] == "session/new")
+                    .count(),
+                1
+            );
+        });
+    }
+    while let Some(result) = tasks.join_next().await {
+        result.unwrap();
+    }
+}
+
+#[cfg(unix)]
+#[tokio::test]
+async fn missing_acp_program_is_unavailable() {
+    let (directory, mut client, spec) = fixture();
+    client.program = directory.path().join("missing-dsh");
+    assert!(matches!(
+        client.create_session(&spec).await,
+        Err(AgentSessionError::Unavailable)
+    ));
 }
 
 #[cfg(unix)]

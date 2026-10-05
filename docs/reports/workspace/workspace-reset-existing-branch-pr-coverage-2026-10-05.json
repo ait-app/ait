@@ -1,0 +1,147 @@
+{
+  "source_revision": "7b31f225d662cb9ae4d1b9ee2c95fd44ca37f33e",
+  "base_revision": "18631193f52e045407e2b43382d3de5df465809b",
+  "measurement_date": "2026-10-05",
+  "scope": "Rust Cargo workspace, default features, macOS arm64, rustc 1.98.1, cargo-llvm-cov 0.8.4; default file filtering, no additional exclusions; test-threads=4",
+  "commands": [
+    "SHERPA_ONNX_LIB_DIR=/Users/necokeine/Documents/ait/target/sherpa-onnx-prebuilt/sherpa-onnx-v1.13.8-osx-arm64-static-lib/lib cargo test --workspace --offline -- --test-threads=4",
+    "SHERPA_ONNX_LIB_DIR=/Users/necokeine/Documents/ait/target/sherpa-onnx-prebuilt/sherpa-onnx-v1.13.8-osx-arm64-static-lib/lib cargo build --workspace --offline",
+    "SHERPA_ONNX_LIB_DIR=/Users/necokeine/Documents/ait/target/sherpa-onnx-prebuilt/sherpa-onnx-v1.13.8-osx-arm64-static-lib/lib cargo clippy --workspace --all-targets --offline -- -D warnings",
+    "cargo fmt --all --check",
+    "SHERPA_ONNX_LIB_DIR=/Users/necokeine/Documents/ait/target/sherpa-onnx-prebuilt/sherpa-onnx-v1.13.8-osx-arm64-static-lib/lib cargo llvm-cov --workspace --html --offline -- --test-threads=4",
+    "SHERPA_ONNX_LIB_DIR=/Users/necokeine/Documents/ait/target/sherpa-onnx-prebuilt/sherpa-onnx-v1.13.8-osx-arm64-static-lib/lib cargo llvm-cov report --json --output-path /tmp/ait-reset-existing-branch-coverage-raw.json --offline"
+  ],
+  "test_execution": {
+    "result": "passed",
+    "targets": 28,
+    "passed": 1803,
+    "failed": 0,
+    "ignored": 3
+  },
+  "coverage_test_execution": {
+    "result": "passed",
+    "targets": 16,
+    "passed": 1803,
+    "failed": 0,
+    "ignored": 3
+  },
+  "retry_note": "The initial default-concurrency workspace test run timed out in unix::agent_execution::directory_sync::websocket_directory_streams_keep_sequences_ownership_and_reconnect_checkpoints. Its isolated rerun passed; both subsequent complete workspace runs with four test threads passed.",
+  "isolated_retry_command": "SHERPA_ONNX_LIB_DIR=/Users/necokeine/Documents/ait/target/sherpa-onnx-prebuilt/sherpa-onnx-v1.13.8-osx-arm64-static-lib/lib cargo test -p daemon --test process websocket_directory_streams_keep_sequences_ownership_and_reconnect_checkpoints --offline",
+  "ignored_tests": [
+    "test local::claude::tests::process::installed_claude_control_protocol_discovers_models_without_inference ... ignored, requires a locally installed Claude Code CLI; sends no model request",
+    "test local::claude::tests::process::parity::installed_claude_completes_a_native_turn_and_reopens_history ... ignored, requires installed Claude authentication and makes one small model request",
+    "test local::codex::tests::installed::installed_codex_completes_a_native_turn_and_reopens_history ... ignored, requires installed Codex authentication and makes one small model request"
+  ],
+  "unavailable_platforms": ["Linux", "Windows"],
+  "workspace_lines": {
+    "count": 52323,
+    "covered": 49428,
+    "percent": 94.4670603749785
+  },
+  "crate_lines": {
+    "bins/daemon": {
+      "count": 967,
+      "covered": 922,
+      "files": 7,
+      "percent": 95.3464322647363
+    },
+    "crates/api": {
+      "count": 2134,
+      "covered": 1975,
+      "files": 16,
+      "percent": 92.54920337394564
+    },
+    "crates/browser": {
+      "count": 725,
+      "covered": 706,
+      "files": 5,
+      "percent": 97.37931034482759
+    },
+    "crates/domain": {
+      "count": 121,
+      "covered": 121,
+      "files": 2,
+      "percent": 100.0
+    },
+    "crates/filesystem": {
+      "count": 11961,
+      "covered": 11338,
+      "files": 64,
+      "percent": 94.79140540088622
+    },
+    "crates/metadata": {
+      "count": 7955,
+      "covered": 7541,
+      "files": 57,
+      "percent": 94.79572595851666
+    },
+    "crates/model": {
+      "count": 777,
+      "covered": 737,
+      "files": 12,
+      "percent": 94.85199485199485
+    },
+    "crates/protocol": {
+      "count": 75,
+      "covered": 75,
+      "files": 2,
+      "percent": 100.0
+    },
+    "crates/provider": {
+      "count": 22834,
+      "covered": 21450,
+      "files": 131,
+      "percent": 93.93886309888762
+    },
+    "crates/relay": {
+      "count": 464,
+      "covered": 422,
+      "files": 5,
+      "percent": 90.94827586206897
+    },
+    "crates/schedule": {
+      "count": 823,
+      "covered": 805,
+      "files": 7,
+      "percent": 97.81287970838396
+    },
+    "crates/terminal": {
+      "count": 1543,
+      "covered": 1486,
+      "files": 11,
+      "percent": 96.30589760207388
+    },
+    "crates/voice": {
+      "count": 1944,
+      "covered": 1850,
+      "files": 19,
+      "percent": 95.16460905349794
+    }
+  },
+  "changed_source_lines": {
+    "crates/filesystem/src/local/checkout.rs": {
+      "count": 1595,
+      "covered": 1488,
+      "percent": 93.29153605015674
+    }
+  },
+  "changed_line_execution": {
+    "crates/filesystem/src/local/checkout.rs": {
+      "536": 10,
+      "537": 3,
+      "539": 7,
+      "542": 10
+    }
+  },
+  "html_report": "target/llvm-cov/html/index.html",
+  "baseline_comparison": {
+    "artifact": "docs/reports/workspace/workspace-reset-path-pr-coverage-2026-10-05.json",
+    "source_revision": "bfd87a1618accc501346cb44d0ced4984ddb20bb",
+    "workspace_percent": 94.4764,
+    "filesystem_percent": 94.8323,
+    "workspace_delta_percentage_points": -0.009339625021496545,
+    "filesystem_delta_percentage_points": -0.040894599113784125,
+    "note": "Historical same-platform and toolchain measurement; workspace package version and test concurrency differ, and runtime scheduling can affect coverage. The delta is not solely attributable to the reset change."
+  },
+  "uncovered_behavior": "Reset error propagation from fetch, ref existence lookup, branch rename, and final hard reset remains unexercised. Existing-target checkout rejection is exercised by the other-worktree regression. Deterministic Git failure injection is a possible follow-up."
+}

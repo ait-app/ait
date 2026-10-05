@@ -1,0 +1,133 @@
+{
+  "base_revision": "768674fed88ac23b15628087cefb0947045e871b",
+  "upstream_revision": "5df233ac",
+  "platform": "macOS arm64, Rust 1.98.1",
+  "source_sha256": {
+    "crates/provider/src/local/deepseek_harness/tests.rs": "dbb9cc89acab4dbef704769f66ae659f4075dfd928b516a88142780089af1438",
+    "crates/provider/src/local/deepseek_harness/transport.rs": "b968b86ef3ab04b867f4a3a2963fe77bbc339cfc75f51726f304188c7b13ee46",
+    "crates/provider/src/local/deepseek_harness/tests/fixtures/acp.cjs": "eb33aabe39c705d55d78dd38032807429c696b3d31aecb4147372d5d021c7a33"
+  },
+  "fixture_git_mode": "100755",
+  "coverage_command": "nix develop --command cargo llvm-cov --workspace --html -- --test-threads=1",
+  "export_command": "nix develop --command cargo llvm-cov report --json --summary-only --output-path /private/tmp/ait-ci-coverage.json",
+  "scope": "workspace, default features and filename filtering; no additional exclusions; doctests not instrumented; 5 opt-in tests ignored",
+  "coverage": {
+    "workspace": {
+      "count": 53874,
+      "covered": 50830,
+      "percent": 94.3497791142295
+    },
+    "provider": {
+      "count": 24383,
+      "covered": 22847,
+      "percent": 93.70052905712997
+    },
+    "dsh": {
+      "count": 2518,
+      "covered": 2312,
+      "percent": 91.81890389197775
+    }
+  },
+  "dsh_files": {
+    "crates/provider/src/local/deepseek_harness.rs": {
+      "count": 152,
+      "covered": 138,
+      "percent": 90.78947368421053
+    },
+    "crates/provider/src/local/deepseek_harness/config.rs": {
+      "count": 216,
+      "covered": 210,
+      "percent": 97.22222222222221
+    },
+    "crates/provider/src/local/deepseek_harness/native.rs": {
+      "count": 6,
+      "covered": 6,
+      "percent": 100.0
+    },
+    "crates/provider/src/local/deepseek_harness/native/config.rs": {
+      "count": 168,
+      "covered": 158,
+      "percent": 94.04761904761905
+    },
+    "crates/provider/src/local/deepseek_harness/native/content.rs": {
+      "count": 91,
+      "covered": 82,
+      "percent": 90.10989010989012
+    },
+    "crates/provider/src/local/deepseek_harness/native/history.rs": {
+      "count": 149,
+      "covered": 135,
+      "percent": 90.60402684563758
+    },
+    "crates/provider/src/local/deepseek_harness/native/http.rs": {
+      "count": 104,
+      "covered": 91,
+      "percent": 87.5
+    },
+    "crates/provider/src/local/deepseek_harness/native/interactions.rs": {
+      "count": 198,
+      "covered": 190,
+      "percent": 95.95959595959596
+    },
+    "crates/provider/src/local/deepseek_harness/native/projection.rs": {
+      "count": 119,
+      "covered": 113,
+      "percent": 94.9579831932773
+    },
+    "crates/provider/src/local/deepseek_harness/native/runtime.rs": {
+      "count": 186,
+      "covered": 162,
+      "percent": 87.09677419354838
+    },
+    "crates/provider/src/local/deepseek_harness/native/session.rs": {
+      "count": 402,
+      "covered": 347,
+      "percent": 86.31840796019901
+    },
+    "crates/provider/src/local/deepseek_harness/native/usage.rs": {
+      "count": 16,
+      "covered": 16,
+      "percent": 100.0
+    },
+    "crates/provider/src/local/deepseek_harness/permissions.rs": {
+      "count": 94,
+      "covered": 92,
+      "percent": 97.87234042553192
+    },
+    "crates/provider/src/local/deepseek_harness/session.rs": {
+      "count": 259,
+      "covered": 242,
+      "percent": 93.43629343629344
+    },
+    "crates/provider/src/local/deepseek_harness/streaming.rs": {
+      "count": 187,
+      "covered": 177,
+      "percent": 94.6524064171123
+    },
+    "crates/provider/src/local/deepseek_harness/transport.rs": {
+      "count": 171,
+      "covered": 153,
+      "percent": 89.47368421052632
+    }
+  },
+  "runs": {
+    "workspace": {
+      "passed": 1824,
+      "failed": 0,
+      "ignored": 5,
+      "log_sha256": "f23f2a1c9a0a9ec93a9e56f4923f155c29915763ab0dc483eb3fe2f0353b4bbf"
+    },
+    "coverage": {
+      "passed": 1824,
+      "failed": 0,
+      "ignored": 5,
+      "log_sha256": "f12d86231686887f49743ab14b76e26ff6afc20b1545621b05af7c3f3b042d78"
+    },
+    "focused_dsh": {
+      "passed": 32,
+      "failed": 0,
+      "ignored": 1,
+      "log_sha256": "9e28658f9b584ab1bb0fd7d73562c3c805fc702d6bfd40cbd5b1db4eeb59d0c3"
+    }
+  }
+}
