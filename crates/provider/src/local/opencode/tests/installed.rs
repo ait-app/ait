@@ -2,53 +2,29 @@ use super::super::client::OpenCodeClient;
 use crate::ports::agent_session::{
     AgentClient, AgentResumePurpose, AgentSession, AgentSessionSpec, AgentTurnEvent,
 };
-use axum::{Router, routing::post};
+use axum::{Json, Router, routing::post};
 use domain::agent_runtime::StoredAgentConfig;
-use serde_json::json;
+use serde_json::{Value, json};
 use std::{os::unix::fs::PermissionsExt, path::Path, time::Duration};
 use tokio_util::task::AbortOnDropHandle;
 
 #[tokio::test]
 #[ignore = "requires AIT_TEST_OPENCODE_BIN; isolated config and loopback model only"]
 async fn installed_opencode_discovers_runs_and_restores_with_local_model() {
-    let binary = std::env::var("AIT_TEST_OPENCODE_BIN").expect("set AIT_TEST_OPENCODE_BIN");
-    let root = tempfile::tempdir().unwrap();
-    let cwd = root.path().join("workspace + & 测试");
-    std::fs::create_dir(&cwd).unwrap();
-    let cwd = cwd.canonicalize().unwrap();
-    let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
-    let address = listener.local_addr().unwrap();
-    let server = AbortOnDropHandle::new(tokio::spawn(async move {
-        axum::serve(
-            listener,
-            Router::new().route("/v1/chat/completions", post(answer)),
-        )
-        .await
-        .unwrap();
-    }));
-    let wrapper = isolated_binary(root.path(), &binary);
-    let config = json!({"providers":{"local":{
-        "name":"Local test", "package":"@opencode/ai/providers/openai-compatible",
-        "settings":{"baseURL":format!("http://{address}/v1"),"apiKey":"local-only"},
-        "models":{"test-model":{"name":"Test","limit":{"context":32000,"output":2000}}}
-    }}});
-    std::fs::write(cwd.join("opencode.json"), config.to_string()).unwrap();
-    // Exercise the actual cold-start catalog, rather than warming it with a separate probe.
-    let client = OpenCodeClient::new(wrapper);
-    let spec = AgentSessionSpec {
-        provider: "opencode".into(),
-        cwd: cwd.to_string_lossy().into_owned(),
-        config: StoredAgentConfig {
-            model: Some("local/test-model".into()),
-            ..Default::default()
-        },
-    };
+    let (_root, client, spec, _server) =
+        installed_fixture(Router::new().route("/v1/chat/completions", post(answer))).await;
     let details = client.discover(&spec.cwd).await.unwrap();
     assert!(
         details
             .models
             .iter()
             .any(|model| model["id"] == "local/test-model")
+    );
+    assert!(
+        details
+            .models
+            .iter()
+            .any(|model| model["id"] == "second/test-model")
     );
     let mut session = client.create_session(&spec).await.unwrap();
     for prompt in ["first turn", "second turn"] {
@@ -70,7 +46,6 @@ async fn installed_opencode_discovers_runs_and_restores_with_local_model() {
     assert_completed(resumed.as_mut()).await;
     resumed.close().await.unwrap();
     assert_eq!(client.history(&handle, &spec.cwd).await.unwrap().len(), 6);
-    drop(server);
 }
 
 fn isolated_binary(root: &Path, binary: &str) -> std::path::PathBuf {
@@ -116,4 +91,109 @@ async fn assert_completed(session: &mut dyn AgentSession) {
     })
     .await
     .unwrap();
+}
+
+async fn installed_fixture(
+    router: Router,
+) -> (
+    tempfile::TempDir,
+    OpenCodeClient,
+    AgentSessionSpec,
+    AbortOnDropHandle<()>,
+) {
+    let binary = std::env::var("AIT_TEST_OPENCODE_BIN").expect("set AIT_TEST_OPENCODE_BIN");
+    let root = tempfile::tempdir().unwrap();
+    let cwd = root.path().join("workspace + & 测试");
+    std::fs::create_dir(&cwd).unwrap();
+    let cwd = cwd.canonicalize().unwrap();
+    let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
+    let address = listener.local_addr().unwrap();
+    let server = AbortOnDropHandle::new(tokio::spawn(async move {
+        axum::serve(listener, router).await.unwrap();
+    }));
+    let wrapper = isolated_binary(root.path(), &binary);
+    let mut config = json!({"providers":{"local":{
+        "name":"Local test", "package":"@opencode/ai/providers/openai-compatible",
+        "settings":{"baseURL":format!("http://{address}/v1"),"apiKey":"local-only"},
+        "models":{"test-model":{"name":"Test","limit":{"context":32000,"output":2000}}}
+    }}});
+    config["providers"]["second"] = config["providers"]["local"].clone();
+    std::fs::write(cwd.join("opencode.json"), config.to_string()).unwrap();
+    // Exercise the actual cold-start catalog, rather than warming it with a separate probe.
+    let client = OpenCodeClient::new(wrapper);
+    let spec = AgentSessionSpec {
+        provider: "opencode".into(),
+        cwd: cwd.to_string_lossy().into_owned(),
+        config: StoredAgentConfig {
+            model: Some("local/test-model".into()),
+            ..Default::default()
+        },
+    };
+    (root, client, spec, server)
+}
+
+#[tokio::test]
+#[ignore = "requires AIT_TEST_OPENCODE_BIN; isolated config and loopback model only"]
+async fn installed_opencode_declined_tool_settles_and_accepts_next_turn() {
+    let (_root, client, spec, _server) =
+        installed_fixture(Router::new().route("/v1/chat/completions", post(tool_answer))).await;
+    let mut session = client.create_session(&spec).await.unwrap();
+    session
+        .start_turn("request a tool", &spec.config)
+        .await
+        .unwrap();
+    tokio::time::timeout(Duration::from_secs(20), async {
+        let mut denied = false;
+        loop {
+            match session.poll_turn().unwrap() {
+                Some(AgentTurnEvent::PermissionRequested(request)) => {
+                    session
+                        .respond_permission(
+                            request["id"].as_str().unwrap(),
+                            &json!({"behavior":"deny","selectedActionId":"deny"}),
+                        )
+                        .await
+                        .unwrap();
+                    denied = true;
+                }
+                Some(AgentTurnEvent::Cancelled) => {
+                    assert!(denied);
+                    break;
+                }
+                Some(AgentTurnEvent::Failed | AgentTurnEvent::Completed(_)) => {
+                    panic!("unexpected terminal event")
+                }
+                _ => tokio::time::sleep(Duration::from_millis(10)).await,
+            }
+        }
+    })
+    .await
+    .expect("denial must settle without manually cancelling");
+    session
+        .start_turn("after denial", &spec.config)
+        .await
+        .unwrap();
+    assert_completed(session.as_mut()).await;
+    session.close().await.unwrap();
+}
+
+async fn tool_answer(Json(body): Json<Value>) -> ([(&'static str, &'static str); 1], String) {
+    let after_denial = body["messages"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .rev()
+        .find(|message| message["role"] == "user")
+        .is_some_and(|message| message["content"].to_string().contains("after denial"));
+    if after_denial || body["tools"].as_array().is_none_or(Vec::is_empty) {
+        return answer().await;
+    }
+    let delta = json!({"choices":[{"index":0,"delta":{"role":"assistant","tool_calls":[{
+        "index":0,"id":"call-denied","type":"function","function":{"name":"shell","arguments":"{\"command\":\"pwd\"}"}
+    }]},"finish_reason":null}]});
+    let finish = json!({"choices":[{"index":0,"delta":{},"finish_reason":"tool_calls"}]});
+    (
+        [("content-type", "text/event-stream")],
+        format!("data: {delta}\n\ndata: {finish}\n\ndata: [DONE]\n\n"),
+    )
 }

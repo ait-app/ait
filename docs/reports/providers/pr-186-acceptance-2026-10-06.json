@@ -1,0 +1,173 @@
+{
+  "base_revision": "951e9cec09c74fbf6b5b241ec37f0736321d5096",
+  "revision": "base plus source_sha256",
+  "source_sha256": {
+    "apps/mobile/src/components/question-form-card-core.test.ts": "c6c3fa439ea7e8052a2d28dae4d1b90622e5ded70c7d2236502de80c79a01353",
+    "apps/mobile/src/components/question-form-card-core.ts": "8d5bc6dc2dedcf110fe4fd6ccda61f1bff470b2a3badacfae5443604d31543ad",
+    "crates/provider/src/local/opencode/execution.rs": "5085c07d246b7b12bb092bece2a621753c655d589bc7c0904452b09027da5e67",
+    "crates/provider/src/local/opencode/execution/tests.rs": "bcabfbedc88db19c4c56d25715a0e8983b1baa268af3531f3830342114a295bb",
+    "crates/provider/src/local/opencode/http.rs": "0ffef2c10d13d5e5519317fe70e1264ff90cdff6f151318ec97fc2da9053df2c",
+    "crates/provider/src/local/opencode/tests.rs": "5a18fd1d0fae8f1ba3b266332081e60fad5a2337178bd4b767851ccdaca8e75d",
+    "crates/provider/src/local/opencode/tests/fixture.rs": "ca67110bcdd773a44e2a6ae72ecd208404ca2133e8bee22959e64a0cf0b9b0b9",
+    "crates/provider/src/local/opencode/tests/installed.rs": "492ceb9685f8c3edfed9c1c2bc3d007c219725fd567fb2bc7649e83d7b161258",
+    "crates/provider/tests/fixtures/opencode_http.py": "01b7ca63fbaf850d57b83b2f7999549254f9997bdd65023d3de99d2b061b712e"
+  },
+  "platform": "macOS arm64 / Rust 1.98.1 / cargo-llvm-cov 0.8.7",
+  "coverage_command": "nix develop --command cargo llvm-cov --workspace --html",
+  "export_command": "nix develop --command cargo llvm-cov report --json --summary-only --output-path /private/tmp/ait-acceptance-coverage.json",
+  "coverage_scope": "workspace; default features and filename filtering; no additional exclusions; doctests not instrumented",
+  "coverage": {
+    "workspace": {
+      "count": 53909,
+      "covered": 50861,
+      "percent": 94.3460275649706
+    },
+    "provider": {
+      "count": 24418,
+      "covered": 22877,
+      "percent": 93.68908182488329
+    },
+    "opencode": {
+      "count": 3154,
+      "covered": 2756,
+      "percent": 87.38110336081166
+    }
+  },
+  "baseline": {
+    "workspace": {
+      "count": 53874,
+      "covered": 50830,
+      "percent": 94.3497791142295
+    },
+    "provider": {
+      "count": 24383,
+      "covered": 22847,
+      "percent": 93.70052905712997
+    },
+    "opencode": {
+      "count": 3119,
+      "covered": 2725,
+      "percent": 87.36774607245913
+    }
+  },
+  "runs": {
+    "workspace": {
+      "passed": 1826,
+      "failed": 0,
+      "ignored": 6,
+      "log_sha256": "37aeb14b7d2956e01ab953ae97278f119f92df12fd68a367328a2bc66a9884c6"
+    },
+    "coverage": {
+      "passed": 1826,
+      "failed": 0,
+      "ignored": 6,
+      "log_sha256": "f241d1a913e756dce10e3e950efcc1c658a8912a31b6cba78e6d3a88c18c4252"
+    },
+    "opencode": {
+      "passed": 55,
+      "failed": 0,
+      "ignored": 2,
+      "log_sha256": "8aaec8ee2d0aeea65e54871df71c04ab6e66e27e7be56dba6835c36a2bcaafd4"
+    },
+    "installed_opencode": {
+      "passed": 2,
+      "failed": 0,
+      "ignored": 0,
+      "log_sha256": "fdb5557f3fec46287c029af736a1805d5886d78eb770418b65f43ef8a9ad3816"
+    },
+    "bounded_discovery": {
+      "passed": 1,
+      "failed": 0,
+      "ignored": 0,
+      "log_sha256": "545611612edfac742f79014e30b23265fd2a423dcba4aecc6a9d0636ed806cc0"
+    },
+    "daemon_opencode": {
+      "passed": 2,
+      "failed": 0,
+      "ignored": 0,
+      "log_sha256": "c62b9e29999ece1d89f3b7beaf5bae3d54ecb7312df2bf95271f80b8e3ba4870"
+    }
+  },
+  "opencode_files": {
+    "crates/provider/src/local/opencode.rs": {
+      "count": 75,
+      "covered": 75,
+      "percent": 100.0
+    },
+    "crates/provider/src/local/opencode/approvals.rs": {
+      "count": 181,
+      "covered": 157,
+      "percent": 86.74033149171271
+    },
+    "crates/provider/src/local/opencode/bridge.rs": {
+      "count": 93,
+      "covered": 90,
+      "percent": 96.7741935483871
+    },
+    "crates/provider/src/local/opencode/budget.rs": {
+      "count": 59,
+      "covered": 58,
+      "percent": 98.30508474576273
+    },
+    "crates/provider/src/local/opencode/client.rs": {
+      "count": 366,
+      "covered": 339,
+      "percent": 92.62295081967213
+    },
+    "crates/provider/src/local/opencode/execution.rs": {
+      "count": 122,
+      "covered": 110,
+      "percent": 90.1639344262295
+    },
+    "crates/provider/src/local/opencode/history.rs": {
+      "count": 302,
+      "covered": 269,
+      "percent": 89.0728476821192
+    },
+    "crates/provider/src/local/opencode/history/prefix.rs": {
+      "count": 56,
+      "covered": 56,
+      "percent": 100.0
+    },
+    "crates/provider/src/local/opencode/http.rs": {
+      "count": 511,
+      "covered": 396,
+      "percent": 77.49510763209393
+    },
+    "crates/provider/src/local/opencode/live.rs": {
+      "count": 362,
+      "covered": 317,
+      "percent": 87.56906077348067
+    },
+    "crates/provider/src/local/opencode/projection.rs": {
+      "count": 108,
+      "covered": 100,
+      "percent": 92.5925925925926
+    },
+    "crates/provider/src/local/opencode/publication.rs": {
+      "count": 60,
+      "covered": 44,
+      "percent": 73.33333333333333
+    },
+    "crates/provider/src/local/opencode/runtime.rs": {
+      "count": 205,
+      "covered": 163,
+      "percent": 79.51219512195122
+    },
+    "crates/provider/src/local/opencode/session.rs": {
+      "count": 471,
+      "covered": 405,
+      "percent": 85.98726114649682
+    },
+    "crates/provider/src/local/opencode/streaming.rs": {
+      "count": 177,
+      "covered": 175,
+      "percent": 98.87005649717514
+    },
+    "crates/provider/src/local/opencode/types.rs": {
+      "count": 6,
+      "covered": 2,
+      "percent": 33.33333333333333
+    }
+  }
+}

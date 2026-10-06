@@ -119,7 +119,9 @@ export function buildQuestionFormAnswers(
 
     if (q.answerFormat === "array") {
       const labels = Array.from(selected ?? []).map((idx) => q.options[idx].label);
-      answers[q.answerKey ?? q.header] = otherText ? [...labels, otherText] : labels;
+      answers[q.answerKey ?? q.header] = Array.from(
+        new Set(otherText ? [...labels, otherText] : labels),
+      );
       continue;
     }
 

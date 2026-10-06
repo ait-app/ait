@@ -2,6 +2,53 @@ use super::*;
 use serde_json::json;
 
 #[test]
+fn declined_tool_without_idle_settles_only_a_completed_current_aborted_assistant() {
+    let user = json!({"type":"user","time":{"created":10}});
+    let aborted = json!({"type":"assistant","finish":"error","error":{"type":"aborted"},
+        "time":{"created":11,"completed":12}});
+    assert_eq!(
+        outcome(
+            Version::V2,
+            &json!({}),
+            None,
+            &[user.clone(), aborted.clone()]
+        )
+        .unwrap(),
+        Some(Outcome::Interrupted)
+    );
+    for patch in [
+        json!({"time":{"created":9,"completed":12}}),
+        json!({"time":{"created":11}}),
+        json!({"time":{"created":11,"completed":10}}),
+        json!({"finish":"tool-calls"}),
+        json!({"error":{"type":"unknown"}}),
+    ] {
+        let mut last = aborted.clone();
+        for (key, value) in patch.as_object().unwrap() {
+            last[key] = value.clone();
+        }
+        assert_eq!(
+            outcome(Version::V2, &json!({}), None, &[user.clone(), last]).unwrap(),
+            None
+        );
+    }
+    assert_eq!(
+        outcome(
+            Version::V2,
+            &json!({}),
+            None,
+            std::slice::from_ref(&aborted)
+        )
+        .unwrap(),
+        None
+    );
+    assert_eq!(
+        outcome(Version::V2, &json!({}), None, &[aborted, user]).unwrap(),
+        None
+    );
+}
+
+#[test]
 fn persisted_idle_settles_v2_when_execution_events_are_not_exposed() {
     let user = json!({"type":"user","time":{"created":10}});
     for (status, expected) in [

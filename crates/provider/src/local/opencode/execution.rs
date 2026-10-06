@@ -75,6 +75,9 @@ pub(super) fn outcome(
 }
 
 fn idle_outcome(info: &Value, history: &[Value]) -> Result<Option<Outcome>, ProtocolError> {
+    if interrupted_assistant(history) {
+        return Ok(Some(Outcome::Interrupted));
+    }
     // V2.0.20 filters execution events out of the public log. Its persisted idle row
     // is the completion boundary; an old assistant or session-level outcome alone is not.
     let Some(last) = history.last().filter(|row| row["type"] == "idle") else {
@@ -111,6 +114,30 @@ fn idle_outcome(info: &Value, history: &[Value]) -> Result<Option<Outcome>, Prot
         ));
     }
     Ok(Some(outcome))
+}
+
+fn interrupted_assistant(history: &[Value]) -> bool {
+    // V2.0.20 aborts a declined tool without an idle row or a session outcome.
+    // snapshot() brackets this evidence with native inactivity checks.
+    let Some(last) = history.last() else {
+        return false;
+    };
+    if last["type"] != "assistant"
+        || last["finish"] != "error"
+        || last.pointer("/error/type").and_then(Value::as_str) != Some("aborted")
+    {
+        return false;
+    }
+    let input = history
+        .iter()
+        .rev()
+        .find(|row| row["type"] == "user")
+        .and_then(|row| row.pointer("/time/created"))
+        .and_then(Value::as_i64);
+    let created = last.pointer("/time/created").and_then(Value::as_i64);
+    let completed = last.pointer("/time/completed").and_then(Value::as_i64);
+    matches!((input, created, completed), (Some(input), Some(created), Some(completed))
+        if input <= created && created <= completed)
 }
 
 #[cfg(test)]

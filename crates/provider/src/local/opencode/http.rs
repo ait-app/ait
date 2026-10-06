@@ -377,10 +377,21 @@ impl Api {
         if self.version == Version::V1 {
             return self.json(Method::GET, path, None).await;
         }
-        // V2 initializes each location's catalog asynchronously after its first request.
-        // Retry only a valid empty catalog; malformed data and HTTP failures remain errors.
+        // V2 publishes nonempty, partial models during initial plugin activation.
+        // The plugin inventory is published after the initial activation batch, so
+        // wait for that boundary before reading models. A quiet/nonempty catalog alone
+        // is not evidence that configured providers have been applied.
+        let plugins_path = format!("/api/plugin?{}", location_query(&self.cwd));
         tokio::time::timeout(Duration::from_secs(5), async {
             loop {
+                let plugins = self.json(Method::GET, &plugins_path, None).await?;
+                let plugins = self.data(&plugins).as_array().ok_or_else(|| {
+                    failure(Fault::ProviderFailed, "invalid OpenCode plugin inventory")
+                })?;
+                if plugins.is_empty() {
+                    tokio::time::sleep(Duration::from_millis(100)).await;
+                    continue;
+                }
                 let response = self.json(Method::GET, path, None).await?;
                 if !self.data(&response).as_array().is_some_and(Vec::is_empty) {
                     return Ok(response);

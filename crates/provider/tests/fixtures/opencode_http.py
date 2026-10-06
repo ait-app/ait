@@ -62,6 +62,8 @@ class Handler(BaseHTTPRequestHandler):
         with lock:
             if path == "/api/info":
                 self.send({"data": {"version": "2.0.10"}})
+            elif path == "/api/plugin":
+                self.send({"data": [{"id": "config", "state": {"status": "active"}}]})
             elif path == "/api/model":
                 self.send({"data": [{"providerID": "local", "id": "model", "name": "Local model", "enabled": True, "variants": []}]})
             elif path == "/api/session/active":

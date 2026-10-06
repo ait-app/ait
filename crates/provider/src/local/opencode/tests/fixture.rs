@@ -25,8 +25,10 @@ use super::super::http::Version;
     reason = "Each flag independently selects a fixture behavior"
 )]
 pub(in crate::local::opencode) struct StateData {
+    pub(in crate::local::opencode) pending_plugin_polls: usize,
     pub(in crate::local::opencode) empty_model_catalogs: usize,
     pub(in crate::local::opencode) idle_completion: bool,
+    pub(in crate::local::opencode) aborted_completion: bool,
     version: Version,
     cwd: PathBuf,
     pub(in crate::local::opencode) permission: Value,
@@ -76,8 +78,10 @@ impl Fixture {
             std::fs::set_permissions(&binary, std::fs::Permissions::from_mode(0o700)).unwrap();
         }
         let state = Arc::new(Mutex::new(StateData {
+            pending_plugin_polls: 0,
             empty_model_catalogs: 0,
             idle_completion: false,
+            aborted_completion: false,
             version,
             cwd: cwd.clone(),
             permission: Value::Null,
@@ -116,7 +120,9 @@ impl Fixture {
 async fn handle(State(state): State<Arc<Mutex<StateData>>>, request: Request) -> Response {
     let path = request.uri().path().to_owned();
     let method = request.method().clone();
-    if path == "/api/model" && !valid_location_query(&request, &state.lock().unwrap().cwd) {
+    if matches!(path.as_str(), "/api/model" | "/api/plugin")
+        && !valid_location_query(&request, &state.lock().unwrap().cwd)
+    {
         return StatusCode::BAD_REQUEST.into_response();
     }
     if !request
@@ -185,7 +191,7 @@ async fn handle(State(state): State<Arc<Mutex<StateData>>>, request: Request) ->
     let mut state = state.lock().unwrap();
     let v2 = state.version == Version::V2;
     if path == "/api/experimental/session/ses_one/log" {
-        let body = if state.idle_completion {
+        let body = if state.idle_completion || state.aborted_completion {
             format!(
                 "data: {}\n\n",
                 json!({"type":"log.synced","aggregateID":"ses_one","seq":state.submissions})
@@ -230,13 +236,15 @@ fn fixture_json(
         ("GET", "/provider") => {
             json!({"connected":["local"],"all":[{"id":"local","models":{"test-model":{"name":"Test model","variants":{"high":{}}}}}]})
         }
-        ("GET", "/api/model") => {
-            if state.empty_model_catalogs > 0 {
-                state.empty_model_catalogs -= 1;
-                return Ok(json!({"data":[]}));
+        ("GET", "/api/plugin") => {
+            if state.pending_plugin_polls > 0 {
+                state.pending_plugin_polls -= 1;
+                json!({"data":[]})
+            } else {
+                json!({"data":[{"id":"config","state":{"status":"active"}}]})
             }
-            json!({"data":[{"providerID":"local","id":"test-model","name":"Test model","enabled":true,"variants":[{"id":"high"}]}]})
         }
+        ("GET", "/api/model") => model_catalog(state),
         ("GET", "/session/status" | "/api/session/active") => {
             if state.busy {
                 if v2 {
@@ -343,6 +351,11 @@ fn record_prompt(state: &mut StateData, body: &Value) -> Result<Value, StatusCod
             .push(json!({"id":format!("idle{number}"),"type":"idle",
             "time":{"created":13},"outcome":if state.early_failure {"failed"} else {"succeeded"}}));
     }
+    if state.aborted_completion {
+        let last = state.history.last_mut().unwrap();
+        last["finish"] = json!("error");
+        last["error"] = json!({"type":"aborted","message":"Step interrupted"});
+    }
     if state.reject_ack {
         return Err(StatusCode::BAD_GATEWAY);
     }
@@ -352,8 +365,19 @@ fn record_prompt(state: &mut StateData, body: &Value) -> Result<Value, StatusCod
 fn session_info(state: &StateData) -> Value {
     if state.version == Version::V2 {
         json!({"id":"ses_one","location":{"directory":state.cwd},"model":state.model,
-        "permissions":state.permission,"outcome":if state.history.is_empty() {None} else {Some(if state.early_failure {"failed"} else {"succeeded"})}})
+        "permissions":state.permission,"outcome":if state.history.is_empty() || state.aborted_completion {None} else {Some(if state.early_failure {"failed"} else {"succeeded"})}})
     } else {
         json!({"id":"ses_one","directory":state.cwd,"permission":state.permission})
     }
+}
+
+fn model_catalog(state: &mut StateData) -> Value {
+    if state.pending_plugin_polls > 0 {
+        return json!({"data":[{"providerID":"bootstrap","id":"partial","enabled":true}]});
+    }
+    if state.empty_model_catalogs > 0 {
+        state.empty_model_catalogs -= 1;
+        return json!({"data":[]});
+    }
+    json!({"data":[{"providerID":"local","id":"test-model","name":"Test model","enabled":true,"variants":[{"id":"high"}]}]})
 }

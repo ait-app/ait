@@ -53,6 +53,7 @@
 
 ## 工程规范与验证
 
+- [PR #186 验收反馈修复](reports/providers/pr-186-acceptance-2026-10-06.md)：OpenCode 拒绝工具结束、冷启动模型目录与 DSH 同文多选答案。
 - [DSH 与 OpenCode 群反馈整合](reports/providers/dsh-opencode-group-feedback-2026-10-05.md)：权限与问答、历史缓存、真实 OpenCode 2.0.20 兼容和定向验证。
 
 - [Rust style guide](policy/rust.md)：Rust 代码、测试、lint 与覆盖率规范。

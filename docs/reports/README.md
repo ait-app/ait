@@ -63,6 +63,7 @@
 
 ## Provider、Agent 与会话
 
+- [PR #186 验收反馈修复](providers/pr-186-acceptance-2026-10-06.md)
 - [DSH 与 OpenCode 群反馈整合验证](providers/dsh-opencode-group-feedback-2026-10-05.md)
 
 - [DSH 缓存重复加载与回复累积](providers/deepseek-harness-cache-recurrence.md)

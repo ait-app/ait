@@ -31,6 +31,9 @@ AgentManager 的输入接纳和 timeline 持久化。Claude Code 已通过 ADR-0
    v2 在全分页历史前后核对持久执行日志及 idle，未排空/不完整历史不能完成。
    2.0.20 的公开日志不返回执行事件时，以全分页历史末尾的持久 `idle` 记录为完成依据，
    校验其时间不早于最近用户输入且 outcome 与会话一致；旧回复或单独会话状态不能完成新输入。
+   拒绝工具时 2.0.20 可能只持久化 `finish=error`、`error.type=aborted` 的助手记录，
+   不写入 idle。仅当末条记录具有本轮创建/完成时间、且历史读取前后原生会话均不活跃时，
+   将该回合结算为 interrupted；不补发 interrupt，也不重放输入。
 4. 原生记录转换为 Paseo display items。原生消息 ID、客户端消息 ID 映射与 persistence
    handle 支持连续对话和重启恢复；历史读取不修改 permissions/model，也不提交输入。
    Ait 的 OpenCode 显示键带独立投影版本；升级时通过既有 reconcile 重建显示历史，原生消息不变。
@@ -44,8 +47,10 @@ AgentManager 的输入接纳和 timeline 持久化。Claude Code 已通过 ADR-0
    模型与 reasoning variant 动态发现。当前只提供 Build，不宣称 plan/custom agents、
    steer、附件、表单、rewind、导入/列举外部会话、MCP 配置和后台任务已支持。
    不支持的配置和输入在提交前拒绝，避免默默丢弃。
-7. v2 模型目录查询使用 `location[directory]` 编码。原生目录冷启动返回合法空数组时，
-   只在五秒内重试读取；HTTP 错误、畸形响应以及非空但未启用的目录不自动重试。
+7. v2 模型目录查询使用 `location[directory]` 编码。冷启动先等待原生 `/api/plugin` 发布
+   初始激活批次的 inventory，再读取模型；部分非空模型目录本身不能证明配置已应用。
+   空 inventory 或空模型目录只在五秒总预算内重试；HTTP 错误、畸形响应以及非空但未启用的目录不自动重试。
+   不创建探测会话、不重载用户配置。后续远程插件安装和运行中配置变更仍需重新发现。
 
 ## 验证
 
