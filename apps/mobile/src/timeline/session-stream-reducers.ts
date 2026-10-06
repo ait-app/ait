@@ -351,8 +351,13 @@ function deriveResumeTailPolicy(input: {
   currentCursor: TimelineCursor | undefined;
   bootstrapReplace: boolean;
 }): ResumeTailPolicy {
-  if (input.direction !== "tail" || input.reset || input.bootstrapReplace || !input.currentCursor) {
+  if (input.direction !== "tail" || input.reset || input.bootstrapReplace) {
     return { kind: "not_resume" };
+  }
+  // Display-only cache rows have no authoritative coverage. The first tail page
+  // replaces that snapshot; appending it would replay completed assistant text.
+  if (!input.currentCursor) {
+    return { kind: "replace", preserveContinuity: true };
   }
   if (input.currentCursor.epoch !== input.epoch) {
     return { kind: "replace", preserveContinuity: false };
