@@ -1,4 +1,4 @@
-import { app, BrowserWindow, safeStorage, type IpcMainInvokeEvent } from "electron";
+import { app, BrowserWindow, safeStorage, shell, type IpcMainInvokeEvent } from "electron";
 import { randomUUID } from "node:crypto";
 import { readFileSync } from "node:fs";
 import { mkdir, rename, writeFile } from "node:fs/promises";
@@ -7,6 +7,7 @@ import { AccountSessionManager, type SavedAccount } from "./account-session.js";
 import { AccountTransportManager } from "./account-transport.js";
 import { AccountDownloadManager } from "./account-download.js";
 import type { RustDaemonManager } from "./rust-daemon.js";
+import { desktopBrowserLogin } from "./account-browser-login.js";
 
 let account: AccountSessionManager | null = null;
 
@@ -65,6 +66,7 @@ export function createAccountIpc(
     installationId,
     appVersion: app.getVersion(),
     publishRuntime: false,
+    browserLogin: desktopBrowserLogin((url) => shell.openExternal(url)),
     runtime: () => getRuntime().status(),
     local: (method, body) => getRuntime().relayRequest(method, body),
     save,
@@ -96,6 +98,25 @@ export function createAccountIpc(
     const operation = async (): Promise<unknown> => {
       switch (command) {
         case "account_status":
+          return manager.snapshot();
+        case "account_login_methods":
+          if (args.center !== undefined && typeof args.center !== "string")
+            throw new Error("Invalid service URL");
+          return manager.loginMethods((args.center as string) ?? "");
+        case "account_login_hosted": {
+          if (args.center !== undefined && typeof args.center !== "string")
+            throw new Error("Invalid service URL");
+          const snapshot = await manager.loginWithBrowser((args.center as string) ?? "");
+          const window = BrowserWindow.fromWebContents(event.sender);
+          if (window && !window.isDestroyed()) {
+            if (window.isMinimized()) window.restore();
+            window.show();
+            window.focus();
+          }
+          return snapshot;
+        }
+        case "account_cancel_login":
+          manager.cancelLogin();
           return manager.snapshot();
         case "account_login": {
           if (
@@ -179,6 +200,7 @@ export function createAccountIpc(
     if (
       [
         "account_login",
+        "account_login_hosted",
         "account_logout",
         "account_select",
         "account_host_sync",

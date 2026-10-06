@@ -1,10 +1,15 @@
-import React, { useRef, useState } from "react";
+import React, { useEffect, useRef, useState } from "react";
 import { Keyboard, Pressable, Text, TextInput, View } from "react-native";
 import { useRouter } from "expo-router";
 import { StyleSheet } from "react-native-unistyles";
 import { useTranslation } from "react-i18next";
 import { Button } from "./ui/button";
-import { accountCommand, useAccountState, type AccountHost } from "@/runtime/account-state";
+import {
+  accountCommand,
+  accountLoginMethods,
+  useAccountState,
+  type AccountHost,
+} from "@/runtime/account-state";
 
 export function AccountHostPanel({
   onConnected,
@@ -22,7 +27,26 @@ export function AccountHostPanel({
   const [showServiceSettings, setShowServiceSettings] = useState(false);
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
-  const [busy, setBusy] = useState(false);
+  const [working, setBusy] = useState(false);
+  const busy = working || account.loginPending === true;
+  const [hosted, setHosted] = useState(false);
+  const [legacyLogin, setLegacyLogin] = useState(false);
+  useEffect(() => {
+    let current = true;
+    setHosted(false);
+    setLegacyLogin(false);
+    if (account.status !== "logged_out") return;
+    void accountLoginMethods(center)
+      .then((methods) => {
+        if (current) setHosted(methods.hosted);
+      })
+      .catch(() => {
+        /* Keep legacy login available when discovery is unreachable. */
+      });
+    return () => {
+      current = false;
+    };
+  }, [center, account.status]);
   const busyRef = useRef(false);
   const [error, setError] = useState<string | null>(null);
   const runAccountAction = async (work: () => Promise<unknown>) => {
@@ -66,39 +90,77 @@ export function AccountHostPanel({
       {account.status === "logged_out" ? (
         <>
           <Text style={styles.hint}>{t("onlineService.loginDescription")}</Text>
-          <TextInput
-            style={styles.input}
-            value={email}
-            onChangeText={setEmail}
-            placeholder={t("onlineService.email")}
-            accessibilityLabel={t("onlineService.email")}
-            inputMode="email"
-            keyboardType="email-address"
-            autoComplete="email"
-            textContentType="emailAddress"
-            maxLength={320}
-            autoCapitalize="none"
-            autoCorrect={false}
-            editable={!busy}
-            testID="account-email"
-          />
-          <TextInput
-            style={styles.input}
-            value={password}
-            onChangeText={setPassword}
-            placeholder={t("onlineService.password")}
-            accessibilityLabel={t("onlineService.password")}
-            secureTextEntry
-            autoComplete="current-password"
-            textContentType="password"
-            maxLength={512}
-            editable={!busy}
-            onSubmitEditing={login}
-            testID="account-password"
-          />
-          <Button disabled={loginDisabled} onPress={login} testID="account-login">
-            {t(busy ? "onlineService.signingIn" : "onlineService.signIn")}
-          </Button>
+          {hosted ? (
+            <>
+              <Button
+                disabled={busy}
+                testID="account-unified-login"
+                onPress={() =>
+                  void runAccountAction(() => accountCommand("account_login_hosted", { center }))
+                }
+              >
+                {t(
+                  account.loginPending
+                    ? "onlineService.browserWaiting"
+                    : "onlineService.unifiedLogin",
+                )}
+              </Button>
+              <Text style={styles.hint}>{t("onlineService.unifiedHint")}</Text>
+              <Pressable
+                accessibilityRole="button"
+                disabled={busy}
+                onPress={() => setLegacyLogin((shown) => !shown)}
+                testID="account-legacy-login"
+              >
+                <Text style={styles.hint}>{t("onlineService.legacyLogin")}</Text>
+              </Pressable>
+            </>
+          ) : null}
+          {account.loginPending ? (
+            <Button
+              onPress={() => void accountCommand("account_cancel_login")}
+              testID="account-cancel-login"
+            >
+              {t("common.actions.cancel")}
+            </Button>
+          ) : null}
+          {!hosted || legacyLogin ? (
+            <>
+              <TextInput
+                style={styles.input}
+                value={email}
+                onChangeText={setEmail}
+                placeholder={t("onlineService.email")}
+                accessibilityLabel={t("onlineService.email")}
+                inputMode="email"
+                keyboardType="email-address"
+                autoComplete="email"
+                textContentType="emailAddress"
+                maxLength={320}
+                autoCapitalize="none"
+                autoCorrect={false}
+                editable={!busy}
+                testID="account-email"
+              />
+              <TextInput
+                style={styles.input}
+                value={password}
+                onChangeText={setPassword}
+                placeholder={t("onlineService.password")}
+                accessibilityLabel={t("onlineService.password")}
+                secureTextEntry
+                autoComplete="current-password"
+                textContentType="password"
+                maxLength={512}
+                editable={!busy}
+                onSubmitEditing={login}
+                testID="account-password"
+              />
+              <Button disabled={loginDisabled} onPress={login} testID="account-login">
+                {t(busy ? "onlineService.signingIn" : "onlineService.signIn")}
+              </Button>
+            </>
+          ) : null}
           <Pressable
             accessibilityRole="button"
             accessibilityState={{ expanded: showServiceSettings }}
@@ -139,6 +201,13 @@ export function AccountHostPanel({
             )}
           </Text>
           <Text style={styles.hint}>{account.center}</Text>
+          {account.accountExpiresAt ? (
+            <Text style={styles.hint}>
+              {t("onlineService.expiresAt", {
+                date: new Date(account.accountExpiresAt).toLocaleString(),
+              })}
+            </Text>
+          ) : null}
           <View style={styles.actions}>
             <Button
               disabled={busy}

@@ -30,6 +30,7 @@ vi.mock("@/runtime/host-runtime", () => ({
 }));
 vi.mock("@/runtime/account-state", async (original) => ({
   ...(await original<typeof import("@/runtime/account-state")>()),
+  accountLoginMethods: vi.fn(async () => ({ hosted: false })),
   useAccountState: () => ({
     status: mocks.accountStatus,
     hosts: [{ host_id: "host", server_id: "server", name: "My computer", platform: "linux" }],
