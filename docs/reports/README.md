@@ -63,6 +63,7 @@
 
 ## Provider、Agent 与会话
 
+- [Timeline 单项 768 KiB：PR 覆盖率证据](providers/timeline-entry-768k-pr-coverage-2026-10-06.json)
 - [Agent 创建任务预算竞争与 DSH 回归](providers/agent-creation-resource-contention.md)
 - [OpenCode 工具与结论顺序修复](providers/opencode-tool-order.md)
 - [OpenCode 上游 PR 验证](providers/opencode-upstream-pr.md)
