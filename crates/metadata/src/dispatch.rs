@@ -5,7 +5,7 @@ use std::sync::{Arc, Mutex};
 use model::outbound::QueueError;
 use model::{Context, ErrorCode, Runtime};
 
-use crate::capabilities::Group;
+use crate::capabilities::{Group, IMPLEMENTED_GROUPS};
 
 /// Services installed for this capability crate, sharing server-wide runtime resources.
 #[derive(Debug)]
@@ -54,8 +54,6 @@ use crate::connection::Connection;
 
 /// Connection-wide work that follows metadata dispatch.
 pub enum Completion {
-    /// The response has been delivered by metadata.
-    Complete,
     /// Ask the API composition layer for the Provider owner's availability snapshot.
     DaemonSnapshot {
         /// Original correlation identifier.
@@ -109,14 +107,29 @@ impl State {
 }
 
 /// Dispatch an admitted request using concrete context, services and connection state.
+/// Leaves `context` unchanged for other crates; takes it when this crate handles the method.
+/// Returns optional work for the API to finish before ending request processing.
+///
+/// # Arguments
+/// * `context` - Pending request, consumed only when this crate recognizes its method.
+/// * `state` - Installed services and resources used to execute the request.
+/// * `connection` - Connection-owned subscriptions and streams for this capability.
+///
 /// # Errors
 /// Returns a delivery failure; business errors are sent using the request's correlation ID.
 pub async fn dispatch(
-    group: Group,
-    mut context: Context<'_>,
+    context: &mut Option<Context<'_>>,
     state: &State,
     connection: &mut Connection,
-) -> Result<Completion, QueueError> {
+) -> Result<Option<Completion>, QueueError> {
+    let matched = Context::take_matching(context, IMPLEMENTED_GROUPS).or_else(|| {
+        context
+            .take_if(|context| context.request.method == "server.status.unsubscribe")
+            .map(|context| (Group::Base, context))
+    });
+    let Some((group, mut context)) = matched else {
+        return Ok(None);
+    };
     match group {
         Group::Base => return base(context, state, connection),
         Group::Push => crate::connection::push::unregister(context, state, connection).await,
@@ -159,13 +172,13 @@ pub async fn dispatch(
         {
             if !context.request.params.is_object() {
                 context.respond(Err(ErrorCode::InvalidMessage))?;
-                return Ok(Completion::Complete);
+                return Ok(None);
             }
-            return Ok(Completion::DaemonSnapshot {
+            return Ok(Some(Completion::DaemonSnapshot {
                 request_id: context.request.id,
                 method: context.request.method,
                 params: context.request.params,
-            });
+            }));
         }
         Group::Daemon => {
             let params = std::mem::take(&mut context.request.params);
@@ -199,7 +212,7 @@ pub async fn dispatch(
             }
         }
     }?;
-    Ok(Completion::Complete)
+    Ok(None)
 }
 
 async fn labels(
@@ -247,20 +260,20 @@ fn base(
     context: Context<'_>,
     state: &State,
     connection: &mut Connection,
-) -> Result<Completion, QueueError> {
+) -> Result<Option<Completion>, QueueError> {
     if context.request.method == "subscription.release.request" {
         let request =
             serde_json::from_value::<SubscriptionReleaseRequest>(context.request.params.clone());
         if let Ok(request) = request
             && valid_id(&request.subscription_id)
         {
-            return Ok(Completion::Release {
+            return Ok(Some(Completion::Release {
                 request_id: context.request.id,
                 subscription_id: request.subscription_id,
-            });
+            }));
         }
         context.respond(Err(ErrorCode::InvalidMessage))?;
-        return Ok(Completion::Complete);
+        return Ok(None);
     }
     let mut status = None;
     let result = (|| {
@@ -301,7 +314,7 @@ fn base(
             lifecycle: state.info().lifecycle,
         })?;
     }
-    Ok(Completion::Complete)
+    Ok(None)
 }
 
 /// Finish a daemon snapshot using live availability obtained by the API from Provider.

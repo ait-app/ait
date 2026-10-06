@@ -9,16 +9,20 @@ use serde_json::{Value, json};
 
 use crate::Shared;
 
-pub(super) fn handles(method: &str) -> bool {
-    matches!(
-        method,
-        "workspace.archive.request"
-            | "project.remove.request"
-            | "workspace.worktree.archive.request"
-    )
-}
-
-pub(super) async fn request(mut context: Context<'_>, state: &Shared) -> Result<(), QueueError> {
+pub(super) async fn request(
+    context: &mut Option<Context<'_>>,
+    state: &Shared,
+) -> Result<(), QueueError> {
+    let Some(mut context) = context.take_if(|context| {
+        matches!(
+            context.request.method.as_str(),
+            "workspace.archive.request"
+                | "project.remove.request"
+                | "workspace.worktree.archive.request"
+        )
+    }) else {
+        return Ok(());
+    };
     let result = if context.request.method == "workspace.worktree.archive.request" {
         worktree(state, std::mem::take(&mut context.request.params)).await
     } else {

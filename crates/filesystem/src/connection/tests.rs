@@ -10,7 +10,6 @@ use serde_json::{Value, json};
 use tokio::sync::mpsc;
 
 use super::Connection;
-use crate::capabilities::Group;
 use crate::dispatch::{State, dispatch};
 use crate::local::{checkout::LocalCheckout, files::LocalFiles};
 use crate::service::{checkout::Checkout, files::Files};
@@ -83,28 +82,20 @@ impl Harness {
     }
 
     async fn request(&mut self, method: &str, params: Value) -> Value {
-        let group = if method.starts_with("checkout.") {
-            Group::Checkout
-        } else {
-            Group::Files
-        };
-        dispatch(
-            group,
-            Context {
-                request: Request {
-                    id: "request".to_owned(),
-                    method: method.to_owned(),
-                    params,
-                },
-                runtime: &self.state.runtime,
-                outbound: &self.outbound,
-                available_subscriptions: self.available,
+        let mut context = Some(Context {
+            request: Request {
+                id: "request".to_owned(),
+                method: method.to_owned(),
+                params,
             },
-            &self.state,
-            &mut self.connection,
-        )
-        .await
-        .unwrap();
+            runtime: &self.state.runtime,
+            outbound: &self.outbound,
+            available_subscriptions: self.available,
+        });
+        dispatch(&mut context, &self.state, &mut self.connection)
+            .await
+            .unwrap();
+        assert!(context.is_none(), "request was not handled: {method}");
         let response = self.receive().await;
         assert_eq!(
             response["request_id"], "request",

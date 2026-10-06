@@ -1,5 +1,5 @@
 //! Browser request dispatch; callbacks are owned by the physical connection.
-use crate::{broker::Broker, capabilities::Group, connection::Connection};
+use crate::{broker::Broker, capabilities::IMPLEMENTED_GROUPS, connection::Connection};
 use model::{Context, ErrorCode, outbound::QueueError};
 /// Host-composed automation broker.
 #[derive(Debug)]
@@ -8,15 +8,23 @@ pub struct State {
     pub broker: Option<Broker>,
 }
 /// Register a host using one connection subscription slot.
+/// Leaves `context` unchanged for other crates; takes it when this crate handles the method.
+///
+/// # Arguments
+/// * `context` - Pending request, consumed only when this crate recognizes its method.
+/// * `state` - Installed services and resources used to execute the request.
+/// * `connection` - Connection-owned subscriptions and streams for this capability.
+///
 /// # Errors
 /// Returns outbound queue failures after returning business errors in the response.
 pub fn dispatch(
-    group: Group,
-    mut context: Context<'_>,
+    context: &mut Option<Context<'_>>,
     state: &State,
     connection: &mut Connection,
 ) -> Result<(), QueueError> {
-    let Group::Browser = group;
+    let Some((_, mut context)) = Context::take_matching(context, IMPLEMENTED_GROUPS) else {
+        return Ok(());
+    };
     let result = if context.runtime.cancellation.is_cancelled() {
         Err(ErrorCode::ServerDraining)
     } else if context.available_subscriptions == 0 {

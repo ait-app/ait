@@ -26,6 +26,11 @@ Electron 位于 `apps/desktop`；`apps/mobile` 提供桌面、浏览器与移动
 能力包。具体 adapter 实现所属能力的 port；应用服务协调领域行为。`domain` 无 Tokio、
 传输或存储依赖。`model` 含 Tokio 请求资源，不属于纯领域层。
 
+请求通过名称、方向和 capability 校验后，以 `Option<Context>` 逐级进入处理入口。每个入口
+自行匹配，未匹配时保留请求，匹配后取走并执行；API 完成响应或跨能力收尾后，发现 Context
+已消费就返回。方法目录只用于协议校验，业务处理不预先选择 handler，详见
+[ADR-092](../decisions/daemon/adr-092-consumable-request-context.md)。
+
 内置 Provider 由 `provider::Providers` 组装。具体客户端列表、启动配置、安装发现与辅助
 元数据生成能力留在 provider crate 内部；daemon 提供数据目录并连接服务与进程生命周期。
 Codex、Claude 当前支持结构化辅助生成，其他内置客户端同样属于原生 Provider。

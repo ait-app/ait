@@ -5,7 +5,7 @@ use std::sync::{Arc, Mutex};
 use model::outbound::QueueError;
 use model::{Context, ErrorCode, Runtime};
 
-use crate::capabilities::Group;
+use crate::capabilities::{Group, IMPLEMENTED_GROUPS};
 
 /// Services installed for this capability crate, sharing server-wide runtime resources.
 #[derive(Debug)]
@@ -99,8 +99,6 @@ pub async fn retire_workspaces(
 
 /// Remaining composition work after provider dispatch has completed.
 pub enum Completion {
-    /// Provider has delivered the response or registered a tracked completion wait.
-    Complete,
     /// Close requested Terminals after Agent closure, then send the combined response.
     CloseTerminals {
         /// Correlation ID of the original request.
@@ -113,14 +111,24 @@ pub enum Completion {
 }
 
 /// Dispatch an admitted provider request using concrete shared request resources.
+/// Leaves `context` unchanged for other crates; takes it when this crate handles the method.
+/// Returns optional work for the API to finish before ending request processing.
+///
+/// # Arguments
+/// * `context` - Pending request, consumed only when this crate recognizes its method.
+/// * `state` - Installed services and resources used to execute the request.
+/// * `connection` - Connection-owned subscriptions and streams for this capability.
+///
 /// # Errors
 /// Returns delivery failures; business failures are sent using the original request ID.
 pub async fn dispatch(
-    group: Group,
-    mut context: Context<'_>,
+    context: &mut Option<Context<'_>>,
     state: &State,
     connection: &mut crate::connection::Connection,
-) -> Result<Completion, QueueError> {
+) -> Result<Option<Completion>, QueueError> {
+    let Some((group, mut context)) = Context::take_matching(context, IMPLEMENTED_GROUPS) else {
+        return Ok(None);
+    };
     match group {
         Group::Agents => {
             context
@@ -145,11 +153,11 @@ pub async fn dispatch(
             let params = std::mem::take(&mut context.request.params);
             match agent_runtime::dispatch(&context.request.method, params, state).await {
                 Ok(reply) if !reply.terminals.is_empty() => {
-                    return Ok(Completion::CloseTerminals {
+                    return Ok(Some(Completion::CloseTerminals {
                         request_id: context.request.id,
                         value: reply.value,
                         terminal_ids: reply.terminals,
-                    });
+                    }));
                 }
                 Ok(reply) => context.respond(Ok(reply.value)),
                 Err(error) => context.respond(Err(error)),
@@ -172,7 +180,7 @@ pub async fn dispatch(
         Group::Timeline if context.request.method == "agent.timeline.append.request" => {
             let Some(plugin) = connection.plugin() else {
                 context.respond(Err(ErrorCode::UnsupportedCapability))?;
-                return Ok(Completion::Complete);
+                return Ok(None);
             };
             let payload = serde_json::json!({"request":context.request.params,"plugin":plugin});
             let result =
@@ -186,5 +194,5 @@ pub async fn dispatch(
             context.respond(result)
         }
     }?;
-    Ok(Completion::Complete)
+    Ok(None)
 }

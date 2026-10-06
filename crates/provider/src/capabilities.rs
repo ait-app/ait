@@ -2,7 +2,7 @@
 
 use crate::protocol;
 
-/// Business method group selected by the transport after capability negotiation.
+/// Business method group matched by this crate when handling an admitted request.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Group {
     /// Versioned Agent presets.

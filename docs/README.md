@@ -13,6 +13,7 @@
 
 ## 架构决策
 
+- [ADR-092：以可消费 Context 逐级处理请求](decisions/daemon/adr-092-consumable-request-context.md)：能力入口自行匹配和消费请求，移除预先选择业务 handler 的全局路由。
 - [ADR-091：会话独立执行与 Provider 后台发现](decisions/providers/adr-091-independent-session-execution.md)：按稳定身份保序、后台 discovery、独立读取与 wait、级联屏障和全局资源预算。
 - [ADR-090：Timeline 单项 768 KiB 与按字节分页](decisions/providers/adr-090-timeline-entry-and-page-budgets.md)：展示条目预算、整页响应预算与连续 source 游标。
 - [ADR-089：内置 Provider 装配归 provider crate](decisions/providers/adr-089-provider-owned-composition.md)：内置列表、启动配置与辅助生成能力由 provider 自己组装。

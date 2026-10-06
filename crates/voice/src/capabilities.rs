@@ -1,6 +1,6 @@
 //! Voice capability ownership and installation.
 
-/// Speech capability group selected by API routing.
+/// Speech capability group matched by this crate when handling an admitted request.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Group {
     /// Voice conversations and dictation streams.

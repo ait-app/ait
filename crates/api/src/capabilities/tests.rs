@@ -31,9 +31,7 @@ fn empty_host_keeps_only_builtin_metadata_methods() {
 
 #[test]
 fn merged_groups_have_one_owner_per_method_and_keep_placeholders_separate() {
-    let methods: Vec<_> = implemented_groups()
-        .flat_map(|(_, methods)| methods.iter().copied())
-        .collect();
+    let methods: Vec<_> = implemented_methods().collect();
     let unique: BTreeSet<_> = methods.iter().copied().collect();
     assert_eq!(methods.len(), unique.len());
     assert_eq!(methods.len(), 179);

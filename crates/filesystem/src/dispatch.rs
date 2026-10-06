@@ -7,7 +7,7 @@ use std::sync::{Arc, Mutex};
 use model::outbound::QueueError;
 use model::{Context, ErrorCode, Runtime};
 
-use crate::capabilities::Group;
+use crate::capabilities::{Group, IMPLEMENTED_GROUPS};
 
 /// Services installed for this capability crate, sharing server-wide runtime resources.
 #[derive(Debug)]
@@ -49,14 +49,23 @@ use model::valid_id;
 use serde_json::{Value, json};
 
 /// Dispatch an admitted request through filesystem-owned services and connection state.
+/// Leaves `context` unchanged for other crates; takes it when this crate handles the method.
+///
+/// # Arguments
+/// * `context` - Pending request, consumed only when this crate recognizes its method.
+/// * `state` - Installed services and resources used to execute the request.
+/// * `connection` - Connection-owned subscriptions and streams for this capability.
+///
 /// # Errors
 /// Returns delivery failures; business failures use the request's error envelope.
 pub async fn dispatch(
-    group: Group,
-    mut context: Context<'_>,
+    context: &mut Option<Context<'_>>,
     state: &State,
     connection: &mut Connection,
 ) -> Result<(), QueueError> {
+    let Some((group, mut context)) = Context::take_matching(context, IMPLEMENTED_GROUPS) else {
+        return Ok(());
+    };
     if matches!(group, Group::Checkout | Group::Forge)
         && let Err(error) =
             metadata::fill(state, &context.request.method, &mut context.request.params).await

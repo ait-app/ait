@@ -118,3 +118,36 @@ fn failed_response_prevents_the_workspace_event() {
     ));
     assert!(outbound.failure().is_cancelled());
 }
+
+#[test]
+fn matching_preserves_foreign_requests_and_consumes_only_the_owning_group() {
+    let runtime = runtime();
+    let (outbound, mut receiver) = Outbound::new();
+    let mut pending = Some(Context {
+        request: request(),
+        runtime: &runtime,
+        outbound: &outbound,
+        available_subscriptions: 16,
+    });
+
+    assert!(Context::take_matching(&mut pending, &[(0, &["foreign.operation"])]).is_none());
+    let context = pending.as_ref().unwrap();
+    assert_eq!(context.request.id, "r1");
+    assert_eq!(context.request.method, "test.operation");
+    assert_eq!(context.request.params, json!({"increment":3}));
+    assert!(receiver.try_recv().is_err());
+
+    let (group, context) = Context::take_matching(
+        &mut pending,
+        &[(0, &["foreign.operation"]), (1, &["test.operation"])],
+    )
+    .unwrap();
+    assert_eq!(group, 1);
+    assert!(pending.is_none());
+    assert_eq!(context.request.id, "r1");
+    assert_eq!(context.request.params, json!({"increment":3}));
+    assert_eq!(context.available_subscriptions, 16);
+    assert!(std::ptr::eq(context.runtime, runtime.as_ref()));
+    assert!(std::ptr::eq(context.outbound, &raw const outbound));
+    assert!(Context::take_matching(&mut pending, &[(1, &["test.operation"])]).is_none());
+}

@@ -32,6 +32,26 @@ pub struct Context<'a> {
 }
 
 impl Context<'_> {
+    /// Take `pending` only when its method belongs to one of `groups`.
+    ///
+    /// # Arguments
+    /// * `pending` - Request shared by the successive handlers.
+    /// * `groups` - The current handler's method declarations and their owning groups.
+    ///
+    /// # Returns
+    /// Returns the owning group and context on a match. An absent or unmatched context is
+    /// left unchanged so the next handler can try it without cloning request resources.
+    pub fn take_matching<G: Copy>(
+        pending: &mut Option<Self>,
+        groups: &[(G, &[&str])],
+    ) -> Option<(G, Self)> {
+        let method = pending.as_ref()?.request.method.as_str();
+        let group = groups
+            .iter()
+            .find_map(|(group, methods)| methods.contains(&method).then_some(*group))?;
+        pending.take().map(|context| (group, context))
+    }
+
     /// Execute `operation` with the owned method and parameters using the shared job budget.
     /// # Errors
     /// Returns admission, service-lock, task or converted business errors.

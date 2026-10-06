@@ -8,56 +8,43 @@ use voice::capabilities as voice;
 
 use crate::Services;
 
-/// Crate-owned group whose transport handler is selected by the API.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub(super) enum Group {
-    /// Online service control owned by the transport connector.
-    Relay,
-    Schedule(schedule::Group),
-    Browser(browser::Group),
-    Metadata(metadata::Group),
-    Filesystem(filesystem::Group),
-    Provider(provider::Group),
-    Terminal(terminal::Group),
-    Voice(voice::Group),
-}
-
-/// Merge crate-owned declarations without copying their method lists.
-pub(super) fn implemented_groups() -> impl Iterator<Item = (Group, &'static [&'static str])> {
+/// Merge crate-owned method declarations for negotiation and envelope validation.
+pub(super) fn implemented_methods() -> impl Iterator<Item = &'static str> {
     schedule::IMPLEMENTED_GROUPS
         .iter()
-        .map(|&(group, methods)| (Group::Schedule(group), methods))
+        .map(|(_, methods)| *methods)
         .chain(
             browser::IMPLEMENTED_GROUPS
                 .iter()
-                .map(|&(group, methods)| (Group::Browser(group), methods)),
+                .map(|(_, methods)| *methods),
         )
         .chain(
             voice::IMPLEMENTED_GROUPS
                 .iter()
-                .map(|&(group, methods)| (Group::Voice(group), methods)),
+                .map(|(_, methods)| *methods),
         )
         .chain(
             metadata::IMPLEMENTED_GROUPS
                 .iter()
-                .map(|&(group, methods)| (Group::Metadata(group), methods)),
+                .map(|(_, methods)| *methods),
         )
         .chain(
             filesystem::IMPLEMENTED_GROUPS
                 .iter()
-                .map(|&(group, methods)| (Group::Filesystem(group), methods)),
+                .map(|(_, methods)| *methods),
         )
         .chain(
             provider::IMPLEMENTED_GROUPS
                 .iter()
-                .map(|&(group, methods)| (Group::Provider(group), methods)),
+                .map(|(_, methods)| *methods),
         )
         .chain(
             terminal::IMPLEMENTED_GROUPS
                 .iter()
-                .map(|&(group, methods)| (Group::Terminal(group), methods)),
+                .map(|(_, methods)| *methods),
         )
-        .chain(std::iter::once((Group::Relay, crate::relay_rpc::METHODS)))
+        .chain(std::iter::once(crate::relay_rpc::METHODS))
+        .flat_map(|methods| methods.iter().copied())
 }
 
 /// Supply service presence to each owner and collect its installed method names.

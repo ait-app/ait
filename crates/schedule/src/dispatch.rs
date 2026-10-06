@@ -1,5 +1,5 @@
 //! Schedule request dispatch with bounded, connection-independent execution.
-use crate::{capabilities::Group, service::Schedules};
+use crate::{capabilities::IMPLEMENTED_GROUPS, service::Schedules};
 use model::{Context, ErrorCode, outbound::QueueError};
 
 /// Host-composed schedule service.
@@ -9,14 +9,18 @@ pub struct State {
     pub schedules: Option<Schedules>,
 }
 /// Execute schedule requests; run-once waits do not block subsequent connection messages.
+/// Leaves `context` unchanged for other crates; takes it when this crate handles the method.
+///
+/// # Arguments
+/// * `context` - Pending request, consumed only when this crate recognizes its method.
+/// * `state` - Installed services and resources used to execute the request.
+///
 /// # Errors
 /// Returns outbound queue failures. Business failures use the stable schedule RPC error code.
-pub async fn dispatch(
-    group: Group,
-    mut context: Context<'_>,
-    state: &State,
-) -> Result<(), QueueError> {
-    let Group::Schedule = group;
+pub async fn dispatch(context: &mut Option<Context<'_>>, state: &State) -> Result<(), QueueError> {
+    let Some((_, mut context)) = Context::take_matching(context, IMPLEMENTED_GROUPS) else {
+        return Ok(());
+    };
     let Some(schedules) = &state.schedules else {
         return context.respond(Err(ErrorCode::UnsupportedCapability));
     };

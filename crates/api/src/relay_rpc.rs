@@ -18,7 +18,15 @@ pub(super) const METHODS: &[&str] = &[
 /// Returns the non-secret connector status and runtime identity through `context`.
 /// # Errors
 /// Returns a queue error if the bounded outbound connection is no longer writable.
-pub(super) async fn request(context: Context<'_>, state: &Shared) -> Result<(), QueueError> {
+pub(super) async fn request(
+    context: &mut Option<Context<'_>>,
+    state: &Shared,
+) -> Result<(), QueueError> {
+    let Some(context) =
+        context.take_if(|context| METHODS.contains(&context.request.method.as_str()))
+    else {
+        return Ok(());
+    };
     let result = execute(&context.request, state).await;
     context.respond(result)
 }

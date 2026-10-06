@@ -5,7 +5,7 @@ use std::sync::{Arc, Mutex};
 use model::outbound::QueueError;
 use model::{Context, ErrorCode, Runtime};
 
-use crate::capabilities::Group;
+use crate::capabilities::{Group, IMPLEMENTED_GROUPS};
 
 /// Services installed for this capability crate, sharing server-wide runtime resources.
 #[derive(Debug)]
@@ -25,14 +25,23 @@ impl std::ops::Deref for State {
 }
 
 /// Dispatch an admitted terminal request using its connection-owned streams.
+/// Leaves `context` unchanged for other crates; takes it when this crate handles the method.
+///
+/// # Arguments
+/// * `context` - Pending request, consumed only when this crate recognizes its method.
+/// * `state` - Installed services and resources used to execute the request.
+/// * `connection` - Connection-owned subscriptions and streams for this capability.
+///
 /// # Errors
 /// Returns a delivery failure; terminal errors are sent as protocol responses.
 pub async fn dispatch(
-    group: Group,
-    context: Context<'_>,
+    context: &mut Option<Context<'_>>,
     state: &State,
     connection: &mut crate::connection::TerminalConnection,
 ) -> Result<(), QueueError> {
+    let Some((group, context)) = Context::take_matching(context, IMPLEMENTED_GROUPS) else {
+        return Ok(());
+    };
     match group {
         Group::Terminal => {
             connection
