@@ -120,7 +120,8 @@ export async function accountCommand(
 export async function accountLoginMethods(center: string): Promise<{ hosted: boolean }> {
   const invoke = getDesktopHost()?.invoke;
   if (invoke) return (await invoke("account_login_methods", { center })) as { hosted: boolean };
-  if (Platform.OS === "android") return (await getNativeAccount()).loginMethods(center);
+  if (Platform.OS === "android" || Platform.OS === "ios")
+    return (await getNativeAccount()).loginMethods(center);
   return { hosted: false };
 }
 
