@@ -385,7 +385,13 @@ async fn failed_native_imports_leave_no_agents_or_workspaces_and_errors_are_safe
     )
     .await;
     assert_eq!(recent["entries"], json!([]));
-    assert_eq!(recent["providerErrors"][0]["provider"], "codex");
+    assert!(
+        recent["providerErrors"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .any(|error| error["provider"] == "codex")
+    );
     assert!(!recent.to_string().contains("sensitive"));
     terminate(&mut process).await;
 }

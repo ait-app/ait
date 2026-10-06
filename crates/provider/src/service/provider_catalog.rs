@@ -155,6 +155,11 @@ async fn discover(client: &dyn AgentClient, cwd: &str) -> Entry {
         value["description"] = json!("DeepSeek Harness via Agent Client Protocol");
         value["defaultModeId"] = Value::Null;
     }
+    if client.provider() == "antigravity" {
+        value["label"] = json!("Antigravity");
+        value["description"] = json!("Google Antigravity via the official AGY CLI");
+        value["defaultModeId"] = json!("default");
+    }
     if let Some(error) = error {
         value["error"] = json!(error);
     }

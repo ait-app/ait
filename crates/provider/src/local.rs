@@ -1,5 +1,6 @@
 //! Native Provider adapters owned by the independent server.
 
+pub mod antigravity;
 pub mod claude;
 pub mod codex;
 mod configuration;

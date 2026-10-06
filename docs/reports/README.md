@@ -63,6 +63,7 @@
 
 ## Provider、Agent 与会话
 
+- [Antigravity CLI 原生 Provider 验证](providers/antigravity-cli.md)
 - [Agent 创建任务预算竞争与 DSH 回归](providers/agent-creation-resource-contention.md)
 - [OpenCode 工具与结论顺序修复](providers/opencode-tool-order.md)
 - [OpenCode 上游 PR 验证](providers/opencode-upstream-pr.md)
