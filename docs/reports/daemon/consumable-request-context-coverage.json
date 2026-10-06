@@ -1,0 +1,635 @@
+{
+  "measurement_date": "2026-10-07",
+  "measurement_revision": "8b2eecee21e3cb313b07774373e4267d4a938289",
+  "base_revision": "c2a55fbe5817647eb9ac3ec7c53695df1bf885be",
+  "revision_note": "Measured before the source commit; Git-visible Rust source hashes were verified unchanged after committing. The later coverage evidence commit only adds this JSON document.",
+  "rust_source_sha256": "b98de9a564364a63587effdefce073f5b05809852e92ceb61321d812a319807e",
+  "hash_algorithm": "SHA-256 of sorted Git-visible bins/ and crates/ file paths plus Cargo.toml/Cargo.lock, NUL and per-file SHA-256, joined by newlines.",
+  "changed_source_hashes": {
+    "crates/api/src/capabilities.rs": "0ba0a39ad9360935e68b0efab9cee0e7ce4fb1b8c7fbcf31fe6a7a0ee5b96708",
+    "crates/api/src/capabilities/tests.rs": "e915698d675c5e092f3f51a25e55dd4703778cc420448abe7aa1c3b8ebf4614d",
+    "crates/api/src/connection.rs": "ea038c2e322b75aea9002e185609b95cad90bba84852575f0f97dec96895f969",
+    "crates/api/src/connection/dispatch.rs": "ae46c66cc3a5f1fbaafc655132c047a445b5ee11c2d96c080ff7a277833902c4",
+    "crates/api/src/connection/dispatch/tests.rs": "739d85c3d736b39b35edf80e7e1235deb336c0ac256c54afacd9c0eb962af9ad",
+    "crates/api/src/connection/single.rs": "11627d88aca1f9f4ce209fe5d8f0d8f2b8c5e44f97e836ee434bfa281f95fb63",
+    "crates/api/src/connection/single/tests.rs": "6b685e21dfa6f88dfa629ca50c709f1ad37dee604527055d2bb6a57508158b0f",
+    "crates/api/src/connection/validation.rs": "0402f4cae51c1db969cb5cc4ba84363cc4b8db2cc7df803aa4f6082bdaf1fc6a",
+    "crates/api/src/connection/validation/tests.rs": "5e2532efdea90a79b9b4a3b09c7a922ca751276e3c19cae84082a2f1246a063e",
+    "crates/api/src/connection/workspace_archive.rs": "c13154ce186afdc229bdb0c92ee259848907134e3d52eae05fbab0f9b0834776",
+    "crates/api/src/connection/workspace_creation.rs": "c1529b48ce229161c0c15a5aa62133cbc79882d1372ec3eb2759544f2e0eee24",
+    "crates/api/src/relay_rpc.rs": "311d1b87b0e6ff50092df3b9fe50b940cc35b963085cbcfbb30e7b6b5f988008",
+    "crates/browser/src/capabilities.rs": "b7db5a941b6368f791b44c2f41786418c0ed90c8d4c29b48b414be67d2bc9de1",
+    "crates/browser/src/dispatch.rs": "acec1e9a3d9cf47996500a35a98d21b113ec1902e2ce75dcde117e5a4edf41cf",
+    "crates/filesystem/src/capabilities.rs": "e18acc38ba5ea64f3e04d809c61f3e3cdee8b5e390424a19ca394fd433442a58",
+    "crates/filesystem/src/connection/tests.rs": "67f9b1dcb198060a26e12ee83cbab233456f9156ad62fffaa503d9b620e0661b",
+    "crates/filesystem/src/dispatch.rs": "008238c9ae68e1d9b5423c0032312eb80e9075543e8a09c63bd377d80e857596",
+    "crates/metadata/src/capabilities.rs": "1c06fea2790278f6e9fadedf9ed8ea823d6641a1e2e1b70ccef0c1eab953d3f0",
+    "crates/metadata/src/dispatch.rs": "b83572add6a0692ef660bdf0932c866b70593c8a6e5da227410746d49a8b133a",
+    "crates/model/src/context.rs": "5f92c43ba8b218749584a874088a24451f28e693dac0b880e703dcd2ae9d41c7",
+    "crates/model/src/context/tests.rs": "1c09dcf49af83ad125b798d01b31da524f571a760d85f9fa3253bea54c54df1c",
+    "crates/provider/src/capabilities.rs": "2cc6531c4fe69ea3b0c59ac9b1d6a11e3b247fafbc1c4c9ec25f4c713c33170e",
+    "crates/provider/src/dispatch.rs": "37cf7a6ffa8b9c09c95b8b0ad75df103d8704c0d6beb753767e744bc71a7f117",
+    "crates/schedule/src/capabilities.rs": "019a5a5fef3a27035695535cf437e1e99e0b60b27c46b007b5e34e0006753d24",
+    "crates/schedule/src/dispatch.rs": "90a2d9ecf5f6b4e94653040e78e40d9a81943132a25aed475ccba47a643a8fcc",
+    "crates/terminal/src/capabilities.rs": "05ebc6bdc8fc2e7c36f13a774f59a218210af0aed61493b8e1543b9dc0a6f6ba",
+    "crates/terminal/src/dispatch.rs": "2f3d9e77ec3f8864222d769e2b52d5be2fd6b832609ff92536105cf4539d4bea",
+    "crates/voice/src/capabilities.rs": "ac39014717f9d84c2a0a0635668b20e9d958a3e658ccd5ff14d3cef52ee5c8e1",
+    "crates/voice/src/connection/tests.rs": "c8a722ea9e276a63f4e8388d5db0b6b96e84710ba82741b935898a28dd7e42f1",
+    "crates/voice/src/dispatch.rs": "0a0c99d4ff14d37701605e32410cdcbe90dd6d65ddfb3615aff3bbcfa49ba329"
+  },
+  "scope": {
+    "packages": "entire Cargo workspace (13 crates)",
+    "features": "default Cargo features; no additional features",
+    "platform": "macOS arm64 / aarch64-apple-darwin",
+    "rustc": "1.98.1 (48a229cea 2026-09-01)",
+    "llvm": "22.1.8",
+    "cargo_llvm_cov": "0.8.4",
+    "source_filters": "cargo-llvm-cov defaults; no additional exclusions",
+    "test_threads": 1,
+    "excluded_measurements": [
+      "doctest instrumentation",
+      "native C/C++ instrumentation",
+      "TypeScript/UI coverage",
+      "Linux execution",
+      "Windows execution"
+    ]
+  },
+  "commands": {
+    "tests": "cargo test --workspace -- --test-threads=1",
+    "build": "cargo build --workspace",
+    "clippy": "cargo clippy --workspace --all-targets -- -D warnings",
+    "format": "cargo fmt --all --check",
+    "docs": "npm run check:docs",
+    "coverage": "SHERPA_ONNX_LIB_DIR=\"$PWD/target/sherpa-onnx-prebuilt/sherpa-onnx-v1.13.8-osx-arm64-static-lib/lib\" cargo llvm-cov --locked --offline --workspace --html -- --test-threads=1",
+    "coverage_summary": "cargo llvm-cov report --locked --offline --json --summary-only --output-path target/context-pr-coverage-summary.json",
+    "coverage_lcov": "cargo llvm-cov report --locked --offline --lcov --output-path target/context-pr-coverage.lcov"
+  },
+  "test_execution": {
+    "passed": 1897,
+    "failed": 0,
+    "ignored": 7,
+    "test_targets": 28,
+    "ignored_tests": [
+      "test local::antigravity::tests::installed::authenticated_multi_turn_and_resume ... ignored, requires authenticated AGY and explicitly consumes three model turns",
+      "test local::claude::tests::process::installed_claude_control_protocol_discovers_models_without_inference ... ignored, requires a locally installed Claude Code CLI; sends no model request",
+      "test local::claude::tests::process::parity::installed_claude_completes_a_native_turn_and_reopens_history ... ignored, requires installed Claude authentication and makes one small model request",
+      "test local::codex::tests::installed::installed_codex_completes_a_native_turn_and_reopens_history ... ignored, requires installed Codex authentication and makes one small model request",
+      "test local::deepseek_harness::native::tests::installed_host_discovers_switches_permissions_and_adopts_legacy_sessions ... ignored, requires an installed DSH CLI via AIT_TEST_DSH_BIN; no model request",
+      "test local::opencode::tests::installed::installed_opencode_declined_tool_settles_and_accepts_next_turn ... ignored, requires AIT_TEST_OPENCODE_BIN; isolated config and loopback model only",
+      "test local::opencode::tests::installed::installed_opencode_discovers_runs_and_restores_with_local_model ... ignored, requires AIT_TEST_OPENCODE_BIN; isolated config and loopback model only"
+    ]
+  },
+  "coverage_test_execution": {
+    "passed": 1897,
+    "failed": 0,
+    "ignored": 7,
+    "test_targets": 16,
+    "ignored_tests": [
+      "test local::antigravity::tests::installed::authenticated_multi_turn_and_resume ... ignored, requires authenticated AGY and explicitly consumes three model turns",
+      "test local::claude::tests::process::installed_claude_control_protocol_discovers_models_without_inference ... ignored, requires a locally installed Claude Code CLI; sends no model request",
+      "test local::claude::tests::process::parity::installed_claude_completes_a_native_turn_and_reopens_history ... ignored, requires installed Claude authentication and makes one small model request",
+      "test local::codex::tests::installed::installed_codex_completes_a_native_turn_and_reopens_history ... ignored, requires installed Codex authentication and makes one small model request",
+      "test local::deepseek_harness::native::tests::installed_host_discovers_switches_permissions_and_adopts_legacy_sessions ... ignored, requires an installed DSH CLI via AIT_TEST_DSH_BIN; no model request",
+      "test local::opencode::tests::installed::installed_opencode_declined_tool_settles_and_accepts_next_turn ... ignored, requires AIT_TEST_OPENCODE_BIN; isolated config and loopback model only",
+      "test local::opencode::tests::installed::installed_opencode_discovers_runs_and_restores_with_local_model ... ignored, requires AIT_TEST_OPENCODE_BIN; isolated config and loopback model only"
+    ]
+  },
+  "workspace_lines": {
+    "count": 56801,
+    "covered": 53591,
+    "percent": 94.34869104417176
+  },
+  "crate_lines": {
+    "bins/daemon": {
+      "count": 941,
+      "covered": 898,
+      "percent": 95.43039319872476
+    },
+    "crates/api": {
+      "count": 2139,
+      "covered": 1989,
+      "percent": 92.98737727910239
+    },
+    "crates/browser": {
+      "count": 725,
+      "covered": 707,
+      "percent": 97.51724137931035
+    },
+    "crates/domain": {
+      "count": 121,
+      "covered": 121,
+      "percent": 100.0
+    },
+    "crates/filesystem": {
+      "count": 11962,
+      "covered": 11341,
+      "percent": 94.80856044139776
+    },
+    "crates/metadata": {
+      "count": 7964,
+      "covered": 7550,
+      "percent": 94.80160723254646
+    },
+    "crates/model": {
+      "count": 789,
+      "covered": 749,
+      "percent": 94.93029150823827
+    },
+    "crates/protocol": {
+      "count": 75,
+      "covered": 75,
+      "percent": 100.0
+    },
+    "crates/provider": {
+      "count": 27306,
+      "covered": 25591,
+      "percent": 93.71932908518275
+    },
+    "crates/relay": {
+      "count": 464,
+      "covered": 422,
+      "percent": 90.94827586206897
+    },
+    "crates/schedule": {
+      "count": 820,
+      "covered": 803,
+      "percent": 97.92682926829268
+    },
+    "crates/terminal": {
+      "count": 1544,
+      "covered": 1489,
+      "percent": 96.43782383419689
+    },
+    "crates/voice": {
+      "count": 1951,
+      "covered": 1856,
+      "percent": 95.13070220399796
+    }
+  },
+  "changed_executable_lines": {
+    "count": 267,
+    "covered": 265,
+    "percent": 99.25093632958801
+  },
+  "changed_production_files": {
+    "crates/api/src/capabilities.rs": {
+      "file_lines": {
+        "count": 102,
+        "covered": 102,
+        "percent": 100.0
+      },
+      "added_or_modified_executable_lines": {
+        "count": 10,
+        "covered": 10,
+        "percent": 100.0
+      },
+      "uncovered_added_or_modified_lines": [],
+      "uncovered_file_lines": []
+    },
+    "crates/api/src/connection.rs": {
+      "file_lines": {
+        "count": 353,
+        "covered": 325,
+        "percent": 92.06798866855524
+      },
+      "added_or_modified_executable_lines": {
+        "count": 12,
+        "covered": 12,
+        "percent": 100.0
+      },
+      "uncovered_added_or_modified_lines": [],
+      "uncovered_file_lines": [
+        78,
+        103,
+        107,
+        207,
+        273,
+        302,
+        303,
+        377,
+        380,
+        381,
+        384,
+        387,
+        396
+      ]
+    },
+    "crates/api/src/connection/dispatch.rs": {
+      "file_lines": {
+        "count": 114,
+        "covered": 110,
+        "percent": 96.49122807017544
+      },
+      "added_or_modified_executable_lines": {
+        "count": 80,
+        "covered": 80,
+        "percent": 100.0
+      },
+      "uncovered_added_or_modified_lines": [],
+      "uncovered_file_lines": []
+    },
+    "crates/api/src/connection/single.rs": {
+      "file_lines": {
+        "count": 218,
+        "covered": 172,
+        "percent": 78.89908256880734
+      },
+      "added_or_modified_executable_lines": {
+        "count": 17,
+        "covered": 17,
+        "percent": 100.0
+      },
+      "uncovered_added_or_modified_lines": [],
+      "uncovered_file_lines": [
+        68,
+        92,
+        93,
+        94,
+        95,
+        96,
+        113,
+        114,
+        135,
+        146,
+        153,
+        154,
+        161,
+        168,
+        169,
+        170,
+        171,
+        172,
+        173,
+        176,
+        177,
+        178,
+        179,
+        180,
+        181,
+        184,
+        185,
+        186,
+        187,
+        188,
+        189,
+        194,
+        195,
+        196,
+        197,
+        198,
+        199,
+        220,
+        232,
+        233,
+        235,
+        238,
+        248,
+        249,
+        258
+      ]
+    },
+    "crates/api/src/connection/validation.rs": {
+      "file_lines": {
+        "count": 69,
+        "covered": 69,
+        "percent": 100.0
+      },
+      "added_or_modified_executable_lines": {
+        "count": 65,
+        "covered": 65,
+        "percent": 100.0
+      },
+      "uncovered_added_or_modified_lines": [],
+      "uncovered_file_lines": []
+    },
+    "crates/api/src/connection/workspace_archive.rs": {
+      "file_lines": {
+        "count": 141,
+        "covered": 137,
+        "percent": 97.16312056737588
+      },
+      "added_or_modified_executable_lines": {
+        "count": 12,
+        "covered": 12,
+        "percent": 100.0
+      },
+      "uncovered_added_or_modified_lines": [],
+      "uncovered_file_lines": [
+        59,
+        108,
+        142,
+        160
+      ]
+    },
+    "crates/api/src/connection/workspace_creation.rs": {
+      "file_lines": {
+        "count": 200,
+        "covered": 194,
+        "percent": 97.0
+      },
+      "added_or_modified_executable_lines": {
+        "count": 13,
+        "covered": 13,
+        "percent": 100.0
+      },
+      "uncovered_added_or_modified_lines": [],
+      "uncovered_file_lines": [
+        65,
+        223,
+        225,
+        226
+      ]
+    },
+    "crates/api/src/relay_rpc.rs": {
+      "file_lines": {
+        "count": 37,
+        "covered": 35,
+        "percent": 94.5945945945946
+      },
+      "added_or_modified_executable_lines": {
+        "count": 7,
+        "covered": 7,
+        "percent": 100.0
+      },
+      "uncovered_added_or_modified_lines": [],
+      "uncovered_file_lines": [
+        45,
+        50
+      ]
+    },
+    "crates/browser/src/capabilities.rs": {
+      "file_lines": {
+        "count": 6,
+        "covered": 6,
+        "percent": 100.0
+      },
+      "added_or_modified_executable_lines": {
+        "count": 0,
+        "covered": 0,
+        "percent": null
+      },
+      "uncovered_added_or_modified_lines": [],
+      "uncovered_file_lines": []
+    },
+    "crates/browser/src/dispatch.rs": {
+      "file_lines": {
+        "count": 19,
+        "covered": 18,
+        "percent": 94.73684210526316
+      },
+      "added_or_modified_executable_lines": {
+        "count": 3,
+        "covered": 3,
+        "percent": 100.0
+      },
+      "uncovered_added_or_modified_lines": [],
+      "uncovered_file_lines": [
+        29
+      ]
+    },
+    "crates/filesystem/src/capabilities.rs": {
+      "file_lines": {
+        "count": 16,
+        "covered": 16,
+        "percent": 100.0
+      },
+      "added_or_modified_executable_lines": {
+        "count": 0,
+        "covered": 0,
+        "percent": null
+      },
+      "uncovered_added_or_modified_lines": [],
+      "uncovered_file_lines": []
+    },
+    "crates/filesystem/src/dispatch.rs": {
+      "file_lines": {
+        "count": 140,
+        "covered": 132,
+        "percent": 94.28571428571429
+      },
+      "added_or_modified_executable_lines": {
+        "count": 3,
+        "covered": 3,
+        "percent": 100.0
+      },
+      "uncovered_added_or_modified_lines": [],
+      "uncovered_file_lines": [
+        70,
+        73,
+        134,
+        166,
+        181,
+        184,
+        196,
+        216
+      ]
+    },
+    "crates/metadata/src/capabilities.rs": {
+      "file_lines": {
+        "count": 16,
+        "covered": 16,
+        "percent": 100.0
+      },
+      "added_or_modified_executable_lines": {
+        "count": 0,
+        "covered": 0,
+        "percent": null
+      },
+      "uncovered_added_or_modified_lines": [],
+      "uncovered_file_lines": []
+    },
+    "crates/metadata/src/dispatch.rs": {
+      "file_lines": {
+        "count": 228,
+        "covered": 213,
+        "percent": 93.42105263157895
+      },
+      "added_or_modified_executable_lines": {
+        "count": 18,
+        "covered": 16,
+        "percent": 88.88888888888889
+      },
+      "uncovered_added_or_modified_lines": [
+        175,
+        276
+      ],
+      "uncovered_file_lines": [
+        174,
+        175,
+        211,
+        214,
+        231,
+        246,
+        247,
+        249,
+        250,
+        274,
+        275,
+        276,
+        306
+      ]
+    },
+    "crates/model/src/context.rs": {
+      "file_lines": {
+        "count": 59,
+        "covered": 59,
+        "percent": 100.0
+      },
+      "added_or_modified_executable_lines": {
+        "count": 10,
+        "covered": 10,
+        "percent": 100.0
+      },
+      "uncovered_added_or_modified_lines": [],
+      "uncovered_file_lines": []
+    },
+    "crates/provider/src/capabilities.rs": {
+      "file_lines": {
+        "count": 12,
+        "covered": 12,
+        "percent": 100.0
+      },
+      "added_or_modified_executable_lines": {
+        "count": 0,
+        "covered": 0,
+        "percent": null
+      },
+      "uncovered_added_or_modified_lines": [],
+      "uncovered_file_lines": []
+    },
+    "crates/provider/src/dispatch.rs": {
+      "file_lines": {
+        "count": 114,
+        "covered": 101,
+        "percent": 88.59649122807018
+      },
+      "added_or_modified_executable_lines": {
+        "count": 8,
+        "covered": 8,
+        "percent": 100.0
+      },
+      "uncovered_added_or_modified_lines": [],
+      "uncovered_file_lines": []
+    },
+    "crates/schedule/src/capabilities.rs": {
+      "file_lines": {
+        "count": 6,
+        "covered": 6,
+        "percent": 100.0
+      },
+      "added_or_modified_executable_lines": {
+        "count": 0,
+        "covered": 0,
+        "percent": null
+      },
+      "uncovered_added_or_modified_lines": [],
+      "uncovered_file_lines": []
+    },
+    "crates/schedule/src/dispatch.rs": {
+      "file_lines": {
+        "count": 40,
+        "covered": 38,
+        "percent": 95.0
+      },
+      "added_or_modified_executable_lines": {
+        "count": 3,
+        "covered": 3,
+        "percent": 100.0
+      },
+      "uncovered_added_or_modified_lines": [],
+      "uncovered_file_lines": [
+        33,
+        37
+      ]
+    },
+    "crates/terminal/src/capabilities.rs": {
+      "file_lines": {
+        "count": 10,
+        "covered": 10,
+        "percent": 100.0
+      },
+      "added_or_modified_executable_lines": {
+        "count": 0,
+        "covered": 0,
+        "percent": null
+      },
+      "uncovered_added_or_modified_lines": [],
+      "uncovered_file_lines": []
+    },
+    "crates/terminal/src/dispatch.rs": {
+      "file_lines": {
+        "count": 79,
+        "covered": 77,
+        "percent": 97.46835443037975
+      },
+      "added_or_modified_executable_lines": {
+        "count": 3,
+        "covered": 3,
+        "percent": 100.0
+      },
+      "uncovered_added_or_modified_lines": [],
+      "uncovered_file_lines": [
+        101,
+        118
+      ]
+    },
+    "crates/voice/src/capabilities.rs": {
+      "file_lines": {
+        "count": 6,
+        "covered": 6,
+        "percent": 100.0
+      },
+      "added_or_modified_executable_lines": {
+        "count": 0,
+        "covered": 0,
+        "percent": null
+      },
+      "uncovered_added_or_modified_lines": [],
+      "uncovered_file_lines": []
+    },
+    "crates/voice/src/dispatch.rs": {
+      "file_lines": {
+        "count": 33,
+        "covered": 32,
+        "percent": 96.96969696969697
+      },
+      "added_or_modified_executable_lines": {
+        "count": 3,
+        "covered": 3,
+        "percent": 100.0
+      },
+      "uncovered_added_or_modified_lines": [],
+      "uncovered_file_lines": []
+    }
+  },
+  "baseline_comparison": {
+    "revision": "5a5645789e25ca416eaf479edea70afab52307d7",
+    "artifact": "docs/reports/providers/paseo-concurrency-coverage-2026-10-07.json",
+    "source_equivalence": "git diff found no bins/, crates/, Cargo.toml or Cargo.lock changes between the measured baseline revision and target main.",
+    "scope_equivalence": "Same macOS arm64 platform, Rust/LLVM/cargo-llvm-cov versions, default features/source filtering, and serial full-workspace tests. Locked/offline flags do not change the unchanged Cargo.lock resolution.",
+    "workspace_percentage_point_change": 0.04133745544432088,
+    "crate_percentage_point_changes": {
+      "bins/daemon": 0.0,
+      "crates/api": 0.3913135490180366,
+      "crates/browser": 0.13793103448276156,
+      "crates/domain": 0.0,
+      "crates/filesystem": 0.0004340305625447627,
+      "crates/metadata": 0.0058812740298037625,
+      "crates/model": 0.07829665624342397,
+      "crates/protocol": 0.0,
+      "crates/provider": 0.033191015232191035,
+      "crates/relay": 0.0,
+      "crates/schedule": 0.11394955990871836,
+      "crates/terminal": 0.13192623212300703,
+      "crates/voice": 0.05125576627371231
+    }
+  },
+  "html_report": "target/llvm-cov/html/index.html",
+  "coverage_summary_sha256": "4c597a269f1f1bdf13e98a397821f8cc05aecd991cf36ece4559a5919dc69196",
+  "coverage_lcov_sha256": "8a336fa13fb3c0a728503008e33f17d2ab574cd8d46e4caf7dd8e958f91ac3a3",
+  "uncovered_behavior": [
+    "Two changed executable lines are existing metadata invalid-parameter early returns: malformed daemon snapshot parameters (dispatch.rs:175) and invalid subscription release parameters (dispatch.rs:276). Follow-up: add focused tests asserting one invalid_message response and no composition follow-up for these payloads.",
+    "Retained connection worker saturation, cancellation and delivery-error paths remain partially uncovered; their file-level uncovered lines are listed in changed_production_files. Follow-up: use bounded queue and cancellation fixtures when extending this transport behavior.",
+    "Seven existing native CLI/authentication tests were ignored by default. Linux/Windows execution, real authenticated model turns and native C/C++ coverage were not performed."
+  ]
+}
