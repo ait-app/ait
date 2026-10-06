@@ -1,0 +1,196 @@
+{
+  "schema_version": 1,
+  "slice": "Provider catalog and desktop startup isolation extracted from PR186",
+  "branch": "split/pr186-startup-catalog-20261006",
+  "base_revision": "5df233ac2f87cecda5f1a1ee99c003a15522dc49",
+  "staged_tree_sha": "3da07b404eb800ee7ba7b6ac22a9b19a814a78b3",
+  "source_patch_sha256": "f2faf199be8b7bf57a6e93fe435a548a676d4e8587338e59c76bd177f36e2784",
+  "source_equivalence": "Functionality of 07c9afe only; upstream DeepSeek Harness description retained; historical reports excluded; added a CI step selecting the host-runtime regression suite",
+  "measured_at_utc": "2026-10-06T09:15:36Z",
+  "platform": "x86_64-unknown-linux-gnu",
+  "toolchain": "rustc 1.98.1 (48a229cea 2026-09-01)\nbinary: rustc\ncommit-hash: 48a229ceaefd4985c50990b14116b6d856af0985\ncommit-date: 2026-09-01\nhost: x86_64-unknown-linux-gnu\nrelease: 1.98.1\nLLVM version: 22.1.8\ncargo 1.98.1 (797e8a9bc 2026-08-05)\ncargo-llvm-cov 0.8.7",
+  "features": "Cargo workspace defaults; no --features, --all-features, --no-default-features or source filename exclusions supplied",
+  "test_environment": "Isolated HOME/XDG/DSH_HOME, controlled PATH, CARGO_INCREMENTAL=0, CARGO_PROFILE_DEV_DEBUG=0 and CARGO_PROFILE_TEST_DEBUG=0, local cached Sherpa archive",
+  "commands": {
+    "focused_provider": "cargo test -p provider --lib catalog",
+    "focused_daemon": "cargo test -p daemon --test process agent_history::catalog",
+    "build": "cargo build --workspace",
+    "clippy": "cargo clippy --workspace --all-targets -- -D warnings",
+    "full_tests": "cargo test --workspace --no-fail-fast",
+    "coverage": "CARGO_TARGET_DIR=\"$COVERAGE_TARGET_DIR\" cargo llvm-cov --workspace --html --ignore-run-fail --output-dir \"$VALIDATION_DIR/coverage\"",
+    "coverage_json": "CARGO_TARGET_DIR=\"$COVERAGE_TARGET_DIR\" cargo llvm-cov report --json --summary-only --output-path \"$VALIDATION_DIR/coverage-summary-full.json\"",
+    "format": "cargo fmt --all --check",
+    "host_runtime": "npm run test --workspace=@ait/mobile -- src/runtime/host-runtime.test.ts",
+    "protocol_snapshot": "npm run test --workspace=@ait/protocol -- src/messages.providers-snapshot.test.ts",
+    "typecheck": "npm run typecheck --workspace=@ait/mobile --workspace=@ait/protocol",
+    "ui_dependencies": "npm run build:ui-deps",
+    "typescript_lint": "node_modules/.bin/oxlint apps/mobile/src/runtime/host-runtime.ts apps/mobile/src/runtime/host-runtime.test.ts packages/protocol/src/messages.providers-snapshot.test.ts",
+    "typescript_format": "node_modules/.bin/oxfmt --check apps/mobile/src/runtime/host-runtime.ts apps/mobile/src/runtime/host-runtime.test.ts packages/protocol/src/messages.providers-snapshot.test.ts",
+    "docs": "npm run check:docs",
+    "fresh_input_timestamps": "python3 \"$VALIDATION_TOOLS/refresh-rust-inputs.py\" \"$REPO_ROOT\""
+  },
+  "validation": {
+    "focused_provider": {
+      "passed": 34,
+      "failed": 0,
+      "ignored": 0
+    },
+    "focused_daemon": {
+      "passed": 2,
+      "failed": 0,
+      "ignored": 0
+    },
+    "workspace_build": "passed",
+    "workspace_clippy": "passed with -D warnings",
+    "workspace_tests": {
+      "passed": 1809,
+      "failed": 1,
+      "ignored": 3
+    },
+    "coverage_tests": {
+      "passed": 1809,
+      "failed": 1,
+      "ignored": 3
+    },
+    "provider_full_tests": {
+      "passed": 593,
+      "failed": 0,
+      "ignored": 3
+    },
+    "daemon_process_full_tests": {
+      "passed": 93,
+      "failed": 0,
+      "ignored": 0
+    },
+    "rust_format": "passed",
+    "host_runtime": {
+      "passed": 72,
+      "failed": 0
+    },
+    "protocol_snapshot": {
+      "passed": 9,
+      "failed": 0
+    },
+    "mobile_and_protocol_typecheck": "passed",
+    "ui_dependencies_build": "passed from current worktree with local @ait workspace links",
+    "typescript_lint": "passed with 0 warnings/errors",
+    "typescript_format": "passed",
+    "docs": "passed; 211 Markdown documents",
+    "ci_yaml_parse": "passed",
+    "local_package_link_verification": "passed; 6 local private @ait workspaces",
+    "patch_whitespace": "passed",
+    "python_fixture_ast": "passed",
+    "initial_shared_target_attempt": "INVALID and excluded from these counts; older artifact reuse selected 0 daemon catalog tests. Logs retained separately under invalid-stale-target-attempt. Refreshed tracked Rust/build-input mtimes and reran all checks, confirming 2 new daemon tests and 593 provider passes"
+  },
+  "test_coverage": {
+    "workspace": {
+      "covered_lines": 49522,
+      "total_lines": 52426,
+      "line_percent": 94.460764,
+      "measured_source_files": 340
+    },
+    "provider": {
+      "covered_lines": 21541,
+      "total_lines": 22937,
+      "line_percent": 93.913764,
+      "measured_source_files": 133
+    },
+    "daemon": {
+      "covered_lines": 922,
+      "total_lines": 967,
+      "line_percent": 95.346432,
+      "measured_source_files": 7
+    },
+    "dispatch_catalog": {
+      "covered_lines": 22,
+      "total_lines": 28,
+      "line_percent": 78.571429,
+      "measured_source_files": 1
+    },
+    "execution_catalog": {
+      "covered_lines": 30,
+      "total_lines": 30,
+      "line_percent": 100.0,
+      "measured_source_files": 1
+    },
+    "changed_production_files": [
+      {
+        "path": "crates/provider/src/dispatch.rs",
+        "count": 113,
+        "covered": 98,
+        "percent": 86.72566371681415
+      },
+      {
+        "path": "crates/provider/src/dispatch/catalog.rs",
+        "count": 28,
+        "covered": 22,
+        "percent": 78.57142857142857
+      },
+      {
+        "path": "crates/provider/src/service/agent_execution.rs",
+        "count": 225,
+        "covered": 210,
+        "percent": 93.33333333333333
+      },
+      {
+        "path": "crates/provider/src/service/agent_execution/catalog.rs",
+        "count": 30,
+        "covered": 30,
+        "percent": 100.0
+      },
+      {
+        "path": "crates/provider/src/service/agent_manager.rs",
+        "count": 864,
+        "covered": 837,
+        "percent": 96.875
+      },
+      {
+        "path": "crates/provider/src/service/provider_catalog.rs",
+        "count": 208,
+        "covered": 207,
+        "percent": 99.51923076923077
+      },
+      {
+        "path": "crates/provider/src/service/provider_catalog/draft.rs",
+        "count": 33,
+        "covered": 33,
+        "percent": 100.0
+      }
+    ],
+    "comparable_baseline": "Not measured for this standalone branch; no baseline delta claimed",
+    "ignored_tests": [
+      "local::claude::tests::process::installed_claude_control_protocol_discovers_models_without_inference",
+      "local::claude::tests::process::parity::installed_claude_completes_a_native_turn_and_reopens_history",
+      "local::codex::tests::installed::installed_codex_completes_a_native_turn_and_reopens_history"
+    ],
+    "explicitly_skipped_tests": [],
+    "unavailable_platforms": [
+      "macOS",
+      "Windows"
+    ],
+    "failure": {
+      "test": "filesystem::local::files::tests::directory_links_are_listed_but_special_files_cannot_be_copied",
+      "location": "crates/filesystem/src/local/files/tests.rs:96",
+      "error": "UnixListener::bind returned EPERM (Operation not permitted)",
+      "classification": "Same unchanged filesystem environment failure in ordinary and instrumented workspace suites; no test edits, timeout changes or skips",
+      "coverage_exit_semantics": "--ignore-run-fail runs all tests and generates a report with exit 0 despite the failing test; this is not a full passing suite"
+    },
+    "uncovered_behavior": [
+      "Catalog dispatch ServerDraining, absent-executor UnsupportedCapability, and admission-error response branches are not exercised (22/28 lines covered)",
+      "AgentExecution catalog admission wrong-method rejection and closed-worker channel error are not exercised; request/response capacity, caller cancellation, refresh and orderly shutdown are covered",
+      "New independent catalog lane handles/serve functions are fully line-covered (30/30); broader pre-existing execution and provider error branches remain partially uncovered",
+      "Rust instrumentation does not measure frontend line coverage; 72 host-runtime and 9 protocol snapshot tests pass separately",
+      "Three installed/authenticated Claude and Codex opt-in tests remain ignored and do not contribute instrumented profiles"
+    ],
+    "source_files_outside_repo_root": [],
+    "artifacts": {
+      "html": "coverage/html/index.html",
+      "full_json": "coverage-summary-full.json",
+      "coverage_log": "workspace-coverage.log",
+      "ordinary_full_test_log": "workspace-test-all.log"
+    },
+    "artifact_delivery": "Compact evidence is committed with this PR; complete HTML and logs are retained for the split verification bundle",
+    "measurement_scope": "All workspace production sources collected by cargo-llvm-cov with default features and no explicit package/filename exclusions; cargo-llvm-cov invoked cargo test --tests, so doctests were not instrumented; ordinary/instrumented totals were parsed independently"
+  },
+  "command_notation": "Machine-specific cache/output directories and checkout paths are normalized to variables; test/build/coverage options are unchanged"
+}

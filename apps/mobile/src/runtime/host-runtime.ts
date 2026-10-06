@@ -680,6 +680,20 @@ export class HostRuntimeController {
   async updateHost(host: HostProfile): Promise<void> {
     const activeConnectionId = this.snapshot.activeConnectionId;
     const previousActiveConnection = findConnectionById(this.host, activeConnectionId);
+    if (!equal(this.host.connections, host.connections)) {
+      // A restored endpoint can be replaced while its probe is still pending.
+      // Do not let that attempt delay or activate in place of the fresh endpoint.
+      this.probeRequestVersion += 1;
+      this.probeCycleInFlight = null;
+      for (const connection of host.connections) {
+        if (
+          !equal(findConnectionById(this.host, connection.id), connection) ||
+          this.snapshot.probeByConnectionId.get(connection.id)?.status === "pending"
+        ) {
+          this.connectionLastProbedAt.delete(connection.id);
+        }
+      }
+    }
     this.host = host;
     this.trackConnectionFirstSeen();
     const nextActiveConnection = findConnectionById(this.host, activeConnectionId);
@@ -1359,6 +1373,7 @@ export class HostRuntimeStore {
   private hostListVersion = 0;
   private hostRegistryLoaded = false;
   private hosts: HostProfile[] = [];
+  private pendingDesktopConnections = new Set<string>();
   private accountHostBackup: HostProfile | null = null;
   private accountHostKey: string | null = null;
   private hostAppearanceMutationTail: Promise<void> = Promise.resolve();
@@ -1482,6 +1497,16 @@ export class HostRuntimeStore {
         }
       }
       this.hosts = profiles;
+      if (shouldUseDesktopDaemon()) {
+        // Saved managed ports and main-process credentials belong to the previous
+        // daemon instance. Keep its cached UI, but wait for authenticated readiness.
+        for (const profile of profiles) {
+          const id = `desktop-managed-${profile.serverId}`;
+          if (profile.connections.some((connection) => connection.id === id)) {
+            this.pendingDesktopConnections.add(id);
+          }
+        }
+      }
       this.replicaCache.setHosts(profiles.map((profile) => profile.serverId));
       projectIconCache.setHosts(profiles.map((profile) => profile.serverId));
       await projectIconCache.restore();
@@ -1784,6 +1809,9 @@ export class HostRuntimeStore {
     if (!serverId) {
       throw new Error("Desktop daemon did not return a server id.");
     }
+    if (input.desktopManaged) {
+      this.pendingDesktopConnections.delete(`desktop-managed-${serverId}`);
+    }
     return this.upsertHostConnection({
       serverId,
       label: input.hostname ?? undefined,
@@ -2025,7 +2053,13 @@ export class HostRuntimeStore {
       this.emit(serverId);
     }
 
-    for (const host of hosts) {
+    for (const storedHost of hosts) {
+      const host = {
+        ...storedHost,
+        connections: storedHost.connections.filter(
+          (connection) => !this.pendingDesktopConnections.has(connection.id),
+        ),
+      };
       const initialConnection = options?.initialConnectionByServerId?.get(host.serverId);
       const existing = this.controllers.get(host.serverId);
       if (existing) {

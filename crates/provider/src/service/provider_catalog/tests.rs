@@ -42,9 +42,9 @@ impl AgentClient for Client {
 
 #[tokio::test]
 async fn catalog_uses_registered_adapters_scopes_cache_and_honors_content_hashes() {
-    let clients: BTreeMap<String, Box<dyn AgentClient>> = BTreeMap::from([(
+    let clients: BTreeMap<String, Arc<dyn AgentClient>> = BTreeMap::from([(
         "codex".to_owned(),
-        Box::new(Client(true)) as Box<dyn AgentClient>,
+        Arc::new(Client(true)) as Arc<dyn AgentClient>,
     )]);
     let mut catalog = Catalog::default();
     let events = SessionEvents::default();
@@ -146,9 +146,9 @@ async fn catalog_uses_registered_adapters_scopes_cache_and_honors_content_hashes
 
 #[tokio::test]
 async fn unavailable_provider_is_reported_truthfully() {
-    let clients: BTreeMap<String, Box<dyn AgentClient>> = BTreeMap::from([(
+    let clients: BTreeMap<String, Arc<dyn AgentClient>> = BTreeMap::from([(
         "codex".to_owned(),
-        Box::new(Client(false)) as Box<dyn AgentClient>,
+        Arc::new(Client(false)) as Arc<dyn AgentClient>,
     )]);
     let value = Catalog::default()
         .execute(

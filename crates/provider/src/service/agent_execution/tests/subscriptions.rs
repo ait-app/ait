@@ -9,6 +9,7 @@ use crate::dispatch::State;
 
 use super::*;
 
+mod catalog;
 mod creation;
 
 struct Peer {
