@@ -527,7 +527,8 @@ impl CheckoutRuntime for LocalCheckout {
         )?;
         let current = current_branch(&cwd, "reset")?;
         require_origin(&cwd)?;
-        let default_branch = origin_default_branch(&cwd)?;
+        let workspace_ref = format!("refs/heads/{initial_branch}");
+        let (default_branch, workspace_tip) = origin_reset_branches(&cwd, &workspace_ref)?;
         let remote_ref = format!("refs/remotes/origin/{default_branch}");
         let fetch_refspec = format!("+refs/heads/{default_branch}:{remote_ref}");
         git_write_noninteractive(&cwd, &["fetch", "--no-tags", "origin", &fetch_refspec])?;
@@ -540,6 +541,23 @@ impl CheckoutRuntime for LocalCheckout {
             }
         }
         git_write(&cwd, &["reset", "--hard", &remote_ref])?;
+        if let Some(workspace_tip) = workspace_tip {
+            let lease = format!("--force-with-lease={workspace_ref}:{workspace_tip}");
+            let push_refspec = format!("HEAD:{workspace_ref}");
+            git_write_noninteractive(
+                &cwd,
+                &["push", &lease, "--no-follow-tags", "origin", &push_refspec],
+            )
+            .map_err(|error| {
+                checkout_error(
+                    error.kind,
+                    format!(
+                        "Local workspace was reset, but resetting origin/{initial_branch} failed: {}",
+                        error.message
+                    ),
+                )
+            })?;
+        }
         Ok(())
     }
 
@@ -1379,8 +1397,14 @@ fn require_origin(cwd: &Path) -> Result<(), CheckoutRuntimeError> {
     }
 }
 
-fn origin_default_branch(cwd: &Path) -> Result<String, CheckoutRuntimeError> {
-    let output = git_write_noninteractive(cwd, &["ls-remote", "--symref", "origin", "HEAD"])?;
+fn origin_reset_branches(
+    cwd: &Path,
+    workspace_ref: &str,
+) -> Result<(String, Option<String>), CheckoutRuntimeError> {
+    let output = git_write_noninteractive(
+        cwd,
+        &["ls-remote", "--symref", "origin", "HEAD", workspace_ref],
+    )?;
     let branch = output
         .lines()
         .find_map(|line| {
@@ -1399,7 +1423,11 @@ fn origin_default_branch(cwd: &Path) -> Result<String, CheckoutRuntimeError> {
         &["check-ref-format", "--branch", &branch],
         SMALL_OUTPUT_LIMIT,
     )?;
-    Ok(branch)
+    let workspace_tip = output.lines().find_map(|line| {
+        let (revision, reference) = line.split_once('\t')?;
+        (reference == workspace_ref && !revision.starts_with("ref: ")).then(|| revision.to_owned())
+    });
+    Ok((branch, workspace_tip))
 }
 
 fn abort_pull_state(cwd: &Path) {

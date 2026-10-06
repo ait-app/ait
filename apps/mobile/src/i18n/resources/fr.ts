@@ -827,7 +827,7 @@ export const fr: TranslationResources = {
           success: "Espace de travail réinitialisé",
           confirmTitle: "Réinitialiser l’espace de travail ?",
           confirmMessage:
-            "Récupérer la dernière version de la branche par défaut de origin, restaurer la branche {{branch}} et supprimer les modifications suivies et les commits locaux.",
+            "Récupérer la dernière version de la branche par défaut de origin, restaurer la branche {{branch}} et supprimer les modifications suivies et les commits locaux. Si origin possède une branche du même nom, un push forcé la réinitialisera au même commit.",
           confirm: "Réinitialiser",
         },
         archive: {
