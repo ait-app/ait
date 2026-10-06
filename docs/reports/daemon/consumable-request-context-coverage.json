@@ -1,635 +1,244 @@
 {
   "measurement_date": "2026-10-07",
-  "measurement_revision": "8b2eecee21e3cb313b07774373e4267d4a938289",
-  "base_revision": "c2a55fbe5817647eb9ac3ec7c53695df1bf885be",
-  "revision_note": "Measured before the source commit; Git-visible Rust source hashes were verified unchanged after committing. The later coverage evidence commit only adds this JSON document.",
-  "rust_source_sha256": "b98de9a564364a63587effdefce073f5b05809852e92ceb61321d812a319807e",
+  "source_revision": "b94211adad8d31a0a6889cee0d78a160d54d8577",
+  "measurement_revision": "b94211adad8d31a0a6889cee0d78a160d54d8577",
+  "base_revision": "88f7262e5f2fb2a3c45d20cb29c3d141287ae9db",
+  "rust_source_sha256": "6179b043cd80e46f4ffd57d46a46d47a6479fd4c8b49c011a8d8412f42cde267",
   "hash_algorithm": "SHA-256 of sorted Git-visible bins/ and crates/ file paths plus Cargo.toml/Cargo.lock, NUL and per-file SHA-256, joined by newlines.",
   "changed_source_hashes": {
-    "crates/api/src/capabilities.rs": "0ba0a39ad9360935e68b0efab9cee0e7ce4fb1b8c7fbcf31fe6a7a0ee5b96708",
-    "crates/api/src/capabilities/tests.rs": "e915698d675c5e092f3f51a25e55dd4703778cc420448abe7aa1c3b8ebf4614d",
-    "crates/api/src/connection.rs": "ea038c2e322b75aea9002e185609b95cad90bba84852575f0f97dec96895f969",
-    "crates/api/src/connection/dispatch.rs": "ae46c66cc3a5f1fbaafc655132c047a445b5ee11c2d96c080ff7a277833902c4",
-    "crates/api/src/connection/dispatch/tests.rs": "739d85c3d736b39b35edf80e7e1235deb336c0ac256c54afacd9c0eb962af9ad",
-    "crates/api/src/connection/single.rs": "11627d88aca1f9f4ce209fe5d8f0d8f2b8c5e44f97e836ee434bfa281f95fb63",
+    "bins/daemon/tests/process/agent_runtime.rs": "c1a197a06687bbdc023177c1eb06daa537d3a0567cfec6b4b4f3a6c9f520edd9",
+    "bins/daemon/tests/process/agents.rs": "a98860f9a866565797be2fe4827afb4afd282ba008a406227397c831a9b0cad4",
+    "bins/daemon/tests/process/checkout.rs": "4e41ae812a0d4427ea9c7a192b4572bf74d2203b69d9aa2e1fde5aa1f869ea93",
+    "bins/daemon/tests/process/directory.rs": "c6299ad5e8260f80c4feb3d56a6b04ac109b6d5ab4a31e0961fda49da244357a",
+    "bins/daemon/tests/process/files.rs": "1e3e80eda9660b0ad03e0d6923c3a90a2365ee7e443b95aaae86d1961769a52f",
+    "bins/daemon/tests/process/files/paseo.rs": "0969c24e1710338bc34c42251cde85f86469ab345a374d17488f73c3111f7335",
+    "bins/daemon/tests/process/forge.rs": "3d79c16dc8859e5142f3b075c404e02875b896f52245b3def973c035d9b2e9c6",
+    "bins/daemon/tests/process/forge/gitlab.rs": "9c310ab8ca5e958eb3cddfe7bc0d1fb6b5bd838883ad0c8aa0e735cced29816f",
+    "bins/daemon/tests/process/github_projects.rs": "c08e26cf234b7b3b5e221d6e12c1202724175eb18ac7c3a57106ce82013e69b0",
+    "bins/daemon/tests/process/metadata.rs": "65d9b28f6216a3fb012119248c5f57df6009a4801b9ed81767f2845ff08b9c1f",
+    "bins/daemon/tests/process/terminal.rs": "9b6ec58962c3a9b88ebf06767b2315393c999a2d16dfa48e47b42d26884fa0e2",
+    "bins/daemon/tests/process/voice.rs": "18d775fd0bf2545fd5e2312ae83e0762b8f758ed8dc13bc096651be2359421d5",
+    "bins/daemon/tests/process/workspace_automation.rs": "480e4c0395cf51e1f08abe9afba768a013e11ff8442db816140163f92f510c7d",
+    "bins/daemon/tests/process/workspace_state.rs": "af6799183522e40e189c108bc0db3fc824c98a62ac1edffb9b50834ae9673dbd",
+    "bins/daemon/tests/process/worktrees.rs": "7fa392f3129ea06fe3e5bc3f6b3decda2d9a3ab11f6c28bafa194f9245f3640c",
+    "crates/api/src/capabilities.rs": "2fd9009d03f38e17f59342ddd323c2aa241994024d8192623ca3ebea8e0b3885",
+    "crates/api/src/capabilities/tests.rs": "4f716a26a36e9eac00a7d99bad0e8afabb653feea09f99f905947fad59ca6eeb",
+    "crates/api/src/connection.rs": "9fdee7bba4227899d46cb7397292a2152ce543d351f268ae338cc1c2bc6a4a9d",
+    "crates/api/src/connection/dispatch.rs": "538d85858043721ac62cef634c08d08766a6aa4d86031b874852c9c6370841ed",
+    "crates/api/src/connection/dispatch/tests.rs": "1a6d14d2a78665977a15c99e4ec9803966f8db79bd124196b91ecea37ddd1a01",
+    "crates/api/src/connection/single.rs": "60a29b0f78a257d54085d928b3a810c611cee312d5df5abe2038957a1bab9ee9",
     "crates/api/src/connection/single/tests.rs": "6b685e21dfa6f88dfa629ca50c709f1ad37dee604527055d2bb6a57508158b0f",
     "crates/api/src/connection/validation.rs": "0402f4cae51c1db969cb5cc4ba84363cc4b8db2cc7df803aa4f6082bdaf1fc6a",
     "crates/api/src/connection/validation/tests.rs": "5e2532efdea90a79b9b4a3b09c7a922ca751276e3c19cae84082a2f1246a063e",
-    "crates/api/src/connection/workspace_archive.rs": "c13154ce186afdc229bdb0c92ee259848907134e3d52eae05fbab0f9b0834776",
-    "crates/api/src/connection/workspace_creation.rs": "c1529b48ce229161c0c15a5aa62133cbc79882d1372ec3eb2759544f2e0eee24",
-    "crates/api/src/relay_rpc.rs": "311d1b87b0e6ff50092df3b9fe50b940cc35b963085cbcfbb30e7b6b5f988008",
-    "crates/browser/src/capabilities.rs": "b7db5a941b6368f791b44c2f41786418c0ed90c8d4c29b48b414be67d2bc9de1",
-    "crates/browser/src/dispatch.rs": "acec1e9a3d9cf47996500a35a98d21b113ec1902e2ce75dcde117e5a4edf41cf",
-    "crates/filesystem/src/capabilities.rs": "e18acc38ba5ea64f3e04d809c61f3e3cdee8b5e390424a19ca394fd433442a58",
+    "crates/api/src/connection/workspace_archive.rs": "c71e9acee681046aecd49953088f15bf0e152318f77b3e9a2a9584e7c41d7aab",
+    "crates/api/src/connection/workspace_creation.rs": "9879f41f1b7036fe3fd270a07d167a7b6706e4e23bbdca7ff708d3d0c62a0df5",
+    "crates/api/src/relay_rpc.rs": "08b30f56dd4e7dcc4e33972dfb4c4c59caeeeeb12cce079a3e5a61013089e4c3",
+    "crates/api/src/tests/voice.rs": "f8d07584c0ee7656af92fd3325bd6d09166fade08ab4364a652807e817f52f83",
+    "crates/browser/src/capabilities.rs": "2ebaaa32487219c9782411f96ba93268f99525535a087fb8cac06665f810772c",
+    "crates/browser/src/connection.rs": "04dca21f3a3d33a310872548e0de8e2163f73028b0de8bd1de9388cf5a8a575c",
+    "crates/browser/src/dispatch.rs": "c6755b40e51e59a2f84a3ae4213c8b55b1807a724a4e3284111fb874d12b66d6",
+    "crates/browser/src/protocol.rs": "fae42b603fb3d4d36a02a93f3b1f20ff079096c3052e517cfe41cba110652fbc",
+    "crates/filesystem/src/capabilities.rs": "79459c0018dea10b65f1fced095ab6a498ba330bf0ce48fe51a318cfde775eca",
+    "crates/filesystem/src/capabilities/tests.rs": "e252be14e213d2fe9ff211ad2101084328bd9324f3ccd33bcc547dd438eb4a48",
+    "crates/filesystem/src/connection/files.rs": "e37798636b993270ebcd5a990d957a3391860cafcf8ca4a7ed3ff551319612bf",
     "crates/filesystem/src/connection/tests.rs": "67f9b1dcb198060a26e12ee83cbab233456f9156ad62fffaa503d9b620e0661b",
-    "crates/filesystem/src/dispatch.rs": "008238c9ae68e1d9b5423c0032312eb80e9075543e8a09c63bd377d80e857596",
-    "crates/metadata/src/capabilities.rs": "1c06fea2790278f6e9fadedf9ed8ea823d6641a1e2e1b70ccef0c1eab953d3f0",
-    "crates/metadata/src/dispatch.rs": "b83572add6a0692ef660bdf0932c866b70593c8a6e5da227410746d49a8b133a",
-    "crates/model/src/context.rs": "5f92c43ba8b218749584a874088a24451f28e693dac0b880e703dcd2ae9d41c7",
-    "crates/model/src/context/tests.rs": "1c09dcf49af83ad125b798d01b31da524f571a760d85f9fa3253bea54c54df1c",
-    "crates/provider/src/capabilities.rs": "2cc6531c4fe69ea3b0c59ac9b1d6a11e3b247fafbc1c4c9ec25f4c713c33170e",
-    "crates/provider/src/dispatch.rs": "37cf7a6ffa8b9c09c95b8b0ad75df103d8704c0d6beb753767e744bc71a7f117",
-    "crates/schedule/src/capabilities.rs": "019a5a5fef3a27035695535cf437e1e99e0b60b27c46b007b5e34e0006753d24",
-    "crates/schedule/src/dispatch.rs": "90a2d9ecf5f6b4e94653040e78e40d9a81943132a25aed475ccba47a643a8fcc",
-    "crates/terminal/src/capabilities.rs": "05ebc6bdc8fc2e7c36f13a774f59a218210af0aed61493b8e1543b9dc0a6f6ba",
-    "crates/terminal/src/dispatch.rs": "2f3d9e77ec3f8864222d769e2b52d5be2fd6b832609ff92536105cf4539d4bea",
-    "crates/voice/src/capabilities.rs": "ac39014717f9d84c2a0a0635668b20e9d958a3e658ccd5ff14d3cef52ee5c8e1",
+    "crates/filesystem/src/dispatch.rs": "775171406079c59459e171474ca4c36498926b284224585a57305075f998aff6",
+    "crates/filesystem/src/dispatch/requests.rs": "64122dffdd05e96e464ea6c6a551aae787f578aa9312cf97488c30d2d36cc809",
+    "crates/filesystem/src/protocol/checkout.rs": "2eb7c20955683294bb4e7be2d98703c9fa608b8ad958214ab6b0517590de948d",
+    "crates/filesystem/src/protocol/checkout/tests.rs": "1d598b7557411455796bbfd11d4f76c43ea425accb2181e708c22aeb61b34819",
+    "crates/filesystem/src/protocol/files.rs": "ca56808aad2838fd0fbd5905fa28a983f775e522ef58b46a5c210f1860b78b7f",
+    "crates/filesystem/src/protocol/forge.rs": "44f5a4bf62297439656e652592992637b62a3eb9e7103022c1cfffc8f47c68d9",
+    "crates/filesystem/src/protocol/forge/tests.rs": "f59613a5f0dded025ad9e380a80c26fc26d2e02d0e46a669f6b308b473ac987d",
+    "crates/filesystem/src/protocol/github_projects.rs": "c3e7366da7d67cbe14de301925dfc3cf896d90a723f5d5996acf23773d81ed39",
+    "crates/filesystem/src/protocol/skills.rs": "435a54dd1bdd13984ac15b335acfcac018f8451eee5bfdf2af3504df4e230348",
+    "crates/filesystem/src/protocol/workspace_recovery.rs": "f36a9e6808576b63f41c0a9ea44daed1b91acdc3880b31130ee520db305278ed",
+    "crates/filesystem/src/protocol/worktrees.rs": "133cfbbd545c418678f933a6a6282e42099ebdeaad673bde1a3f9d724e8fee2f",
+    "crates/filesystem/src/protocol/worktrees/tests.rs": "f3a5b2b1784b8b774079f9b74f2f4c7b18516fcac74e63a84d4ccb983b3e8408",
+    "crates/filesystem/src/rpc/forge.rs": "437e17fba2eee13cf77cdac65639f0cbedd29ec3e7ebe035e79e55141e133a3a",
+    "crates/filesystem/src/rpc/github_projects.rs": "6134d38e02a5cf7d22f39be39227de5eeeed17172e6fdc6c94ed1715c74b4cd1",
+    "crates/filesystem/src/rpc/workspace_recovery.rs": "0fb4de8b30902bac8e3828f6d50d9abb3b208559f8ed13fbdfb5ebe57053f896",
+    "crates/filesystem/src/rpc/worktrees.rs": "40439cf41b3eeb0c351c95ebea1917f33ff0a2087bce7552ff29550d8a767eb1",
+    "crates/filesystem/src/service/skills.rs": "445d8aa20ff92b8a4ab1948d251bf264750f5b73150ae833ca38c895c74fa211",
+    "crates/metadata/src/capabilities.rs": "62cf15880edfe63d2d2b92a6ab83c776a9fd99d1df06db96229c38d2fe053cd3",
+    "crates/metadata/src/capabilities/tests.rs": "05bcce030df256a98db41e3ed8c0544ad24288b08a8e00992f50d21610ae63fc",
+    "crates/metadata/src/connection/creation.rs": "b9fd0b5fd3970ed5ed1cdca66c52d5d4f20ff95fa9e62f3630a3b6fe464d754c",
+    "crates/metadata/src/connection/daemon.rs": "94ecf3877321d4b1f098e09e3683fbed690a677d26a49337709449835e0f2791",
+    "crates/metadata/src/connection/push.rs": "dd2aa5bfbaf9e9a69951288c9b87f27603a20108f4948d5bad63b23d28a77fbb",
+    "crates/metadata/src/connection/session.rs": "236c86804548319891290b7946c7ed7d847755ec68a6f4c3e762d30e56906c45",
+    "crates/metadata/src/dispatch.rs": "3321c34456504e584804e3e1547fd63548644e66f83c70172dded6edbfa1240d",
+    "crates/metadata/src/dispatch/requests.rs": "e5695418b62b0d72cf8ff4785b5b55373d21df7152876da164a2af9b0e2be1e0",
+    "crates/metadata/src/protocol.rs": "a596b5c46c85db8c3f378e5dc8b717738f6ccd0a790ec9f5ef705dac789f79af",
+    "crates/metadata/src/protocol/creation.rs": "ed6bf9f24a676d48370b2e0f9654644458eb06e46057ceff187839fbb3e99e94",
+    "crates/metadata/src/protocol/daemon.rs": "e1dde3efa76cf6e8167f97edbee47ceb5e60cb2b52d347dd5a5b72fb999d91f1",
+    "crates/metadata/src/protocol/directory.rs": "f767df31779851ff9858a7680f899f04606552d64d57acc61cf8af09346e3dac",
+    "crates/metadata/src/protocol/project_config.rs": "10c5e7cd8605bc2b345b66ff3363fcad4c741f8fbc69699fc6d9798fbf637ce1",
+    "crates/metadata/src/protocol/project_icon.rs": "3138dfaf815439d485913aa93089df9a5669f8767f4983dc99a20ec9057ef870",
+    "crates/metadata/src/protocol/push.rs": "f7fd7929aef590adf9f359feb602aee14087d73b5d0a026a0958479a7d5be723",
+    "crates/metadata/src/protocol/session.rs": "be1e56c9659ca4eb5426bb2073b05082b75b0aaa7d8bec0983b6a9f4d5209fbb",
+    "crates/metadata/src/protocol/workspace_automation.rs": "f96d849caf4a111db61c3a82d17686d4072314ab7970ae339fc00a47eb06d739",
+    "crates/metadata/src/protocol/workspace_automation/tests.rs": "c2946508cc5aaab33bdf3dd70dd339856e9c14ebf850d81197b9899724326089",
+    "crates/metadata/src/protocol/workspace_labels.rs": "3a4eb6234b19b752de36300b7c0ea58d08cc26d499fd378dbf4e2c1036ca3a09",
+    "crates/metadata/src/protocol/workspace_state.rs": "6cede4dc248c66a6001021d16435e49530888bc89c3c3bbe1d27d13d102f7a95",
+    "crates/metadata/src/protocol/workspace_state/tests.rs": "0124c744a18b2edf7c562792679e3f126455664669a7f6535ca9b7115d48dfac",
+    "crates/metadata/src/rpc/directory.rs": "f4fbfdf9b9e6471609389dcdb5aae3b9d5e25263caa3eb8c8a4d307ec6cfc5c1",
+    "crates/metadata/src/rpc/editor.rs": "01fa8e77fd280fda48962ea560f3c6c70a14a4bce1e9eaaf27bbaae8e43633a7",
+    "crates/metadata/src/rpc/editor/tests.rs": "f39ad2bba3f32142e9f88b2a56da75ea67c656d6dc80b9c0f5d46984c9476067",
+    "crates/metadata/src/rpc/workspace_automation.rs": "5739b2fd77c93c5a8cc648be7d6e320aeeefdc5800c1eeea1c65d870af648a56",
+    "crates/metadata/src/rpc/workspace_labels.rs": "93048d53f2a5ea92b660121c57a070e43ed4e0ee4efce190c19314903e55886a",
+    "crates/metadata/src/rpc/workspace_state.rs": "2c5aa47834e7f50185a5a03a4731ec16329127dcd408cbf36767408fc1da0b46",
+    "crates/model/src/context.rs": "222505e487ce917c73b9f141c74ceb031b7f99639e930832af1ad61c4aa5378f",
+    "crates/model/src/context/tests.rs": "370197cdbdc51e4c0b1fa46e7b25e3627cf9ba367722cdcf790055588bb1066a",
+    "crates/model/src/lib.rs": "782170bfcd75ef74c20c456475881f017b5174f620271be94e05f5e5ea8025f2",
+    "crates/provider/src/capabilities.rs": "9e5f0c956ff00916eb60869bf238b07e15c0a3311a28420552a599a8a428d05f",
+    "crates/provider/src/capabilities/tests.rs": "49027243284bbff750f055c23dd4569f23a70c3abd05a9c48be69a223ff7c774",
+    "crates/provider/src/dispatch.rs": "ca86c378c9ef8bc20892d73b15dcca7a56a1a2b6609a04e147b93032bafbc2ec",
+    "crates/provider/src/dispatch/agent_execution.rs": "9cd57d5f92eb831e1ee909762bddfe0dd95d6db593ccd01a059449f39f3bdead",
+    "crates/provider/src/dispatch/catalog.rs": "f2d0dc84142dabf90eaf6e70d8b1daa89737a1b1ba7f54c62d55027f2721d51b",
+    "crates/provider/src/dispatch/requests.rs": "182b237cd9b3edcb0c24b3e30dc883d45e62f2e0cd6ff3a320a9c761f9497bc2",
+    "crates/provider/src/protocol/agent.rs": "dfada299f528eb44c9852b0b280e600ffadde7a2c66888b0ecf3141d4755dc7c",
+    "crates/provider/src/protocol/agent_config.rs": "dc359832a158ea0b441c81c406516873a100c86642c62577792579f7f989aa5c",
+    "crates/provider/src/protocol/agent_execution.rs": "e3f1db24c422ba87f8953e4b0205d56a7a518f6b421b464ae8bc68dab4a4c8df",
+    "crates/provider/src/protocol/agent_lifecycle.rs": "8898d39ceac6c9d5e081a4d2e64a3295c6d64533bc90cb228f67b3f907567dd2",
+    "crates/provider/src/protocol/agent_lifecycle/tests.rs": "17d8f0f868a5ff3055da8da66a11acc6bf41143a24bcb6e719730b4df115e841",
+    "crates/provider/src/protocol/controls.rs": "4a2545c777910284118bf960f8f1e46046578690e7593132b65b678549d06975",
+    "crates/provider/src/protocol/native_sessions.rs": "d836515b1ef6ac33d739ba770dfc6727c0eeb162bf55bd1d99d10f2d11e56e16",
+    "crates/provider/src/protocol/provider.rs": "9006d64b158d80c70bd6df08022f69cee07120a29328ff2371bb25018bd4ae68",
+    "crates/provider/src/protocol/timeline.rs": "0d6e5830243a9d9fb314fe0663437ed1a95eee58a8ed332b54a9621cc60f60f6",
+    "crates/provider/src/rpc/agent_runtime.rs": "9988f63ef86934e8c59541b1bee3b0a56a4cc926de8f15f591959c1e17436d03",
+    "crates/provider/src/rpc/agents.rs": "64ffca7c53f49d5fbedef7817fe27c57a7ca694e1f02585942f1d0dcc23720ef",
+    "crates/provider/src/rpc/timeline.rs": "8014899e5b2835ffc93f3d673649019c199da943d3a2bec4ddf3e917031d66ae",
+    "crates/schedule/src/capabilities.rs": "2e46c3d5e44af12f2598c431350373437f8894d7ad9a50d79fba019cea10c120",
+    "crates/schedule/src/dispatch.rs": "d08d43302faccd59e10d7225a6d54f17adfb30a39bef99b38b6d5d646ebe6bbb",
+    "crates/schedule/src/protocol.rs": "ca2f7b0d32cb67d995919662415cb0ecb347b0e77ab51f25cebd67e56546029a",
+    "crates/schedule/src/service.rs": "5fb6531f7efd4555236c7e9a75454b1284f7e1e79fa403ba29c08e98cab5f045",
+    "crates/terminal/src/capabilities.rs": "f42a77a3f77827fe19ac728472538f81c283348676d29351fca3a96776aa37dd",
+    "crates/terminal/src/capabilities/tests.rs": "7ea4c774d6d2c9130f599dbc39a2402440df8d62f91f6a13fe10469b9c419223",
+    "crates/terminal/src/connection.rs": "c75fb57237104da27eeffa9cd470f7d9a0f9a6881870fd2e7d13e9360b9f6c16",
+    "crates/terminal/src/dispatch.rs": "9c3a723028bd35b410889653891d9988bd3b3984004ee0aba0acc6aac7852cb0",
+    "crates/terminal/src/protocol.rs": "c831cbb0770cc6d0fdf8f16b068094fed8195f62eb53f968d31652a33c7b1e91",
+    "crates/terminal/src/protocol/tests.rs": "9c38470be7aab9d830559f178188c180748254385943f27dce819771733d5bbd",
+    "crates/voice/src/capabilities.rs": "29106707c99b37e5c4abb5c7ec15417aceaea43fdc475c9ba524695fa041f20e",
+    "crates/voice/src/connection.rs": "18d66866588d58e6024fc42926e312e639427f483277c135acd4be9834c0f0c7",
     "crates/voice/src/connection/tests.rs": "c8a722ea9e276a63f4e8388d5db0b6b96e84710ba82741b935898a28dd7e42f1",
-    "crates/voice/src/dispatch.rs": "0a0c99d4ff14d37701605e32410cdcbe90dd6d65ddfb3615aff3bbcfa49ba329"
+    "crates/voice/src/dispatch.rs": "0f8291d54ee0fac408eab3726415cc6d9cebe0dc7c8b849df9a3cb0e0c21987d",
+    "crates/voice/src/protocol.rs": "0151eab91f2550cff12cfff5f2feaa30ff0b687cf23d2849ac3222103cf3400c",
+    "crates/voice/src/tests.rs": "bdb37727f518d367d5784d6c3ab7801f2d792e95e16fa1a81dbe6b2905a2f4a2"
   },
+  "coverage_status": "not measured",
+  "workspace_lines": null,
+  "crate_lines": null,
+  "changed_executable_lines": null,
+  "reason": "The current full-workspace LLVM coverage attempt stopped after daemon process tests failed with startup and response timeouts. macOS also refused to load the installed Rust driver library (library load mig callout failed). A retry with --ignore-run-fail remained blocked while resolving the Cargo host triple for over two minutes and was stopped. No current complete HTML/JSON/LCOV report was produced; earlier coverage is not presented as current.",
+  "next_step": "Re-run the listed full-workspace tests and LLVM coverage command once macOS executable/library loading is functioning, then export and review the HTML, JSON summary and LCOV and update this artifact.",
   "scope": {
-    "packages": "entire Cargo workspace (13 crates)",
-    "features": "default Cargo features; no additional features",
+    "packages": "entire Cargo workspace (13 crates) requested; fail-fast runs stopped at a failed test target",
     "platform": "macOS arm64 / aarch64-apple-darwin",
     "rustc": "1.98.1 (48a229cea 2026-09-01)",
     "llvm": "22.1.8",
     "cargo_llvm_cov": "0.8.4",
+    "features": "default Cargo features; no additional features",
     "source_filters": "cargo-llvm-cov defaults; no additional exclusions",
     "test_threads": 1,
-    "excluded_measurements": [
-      "doctest instrumentation",
+    "unavailable_measurements": [
+      "complete workspace line coverage",
+      "complete per-crate line coverage",
+      "added or modified executable line coverage",
+      "Linux coverage",
+      "Windows execution",
       "native C/C++ instrumentation",
       "TypeScript/UI coverage",
-      "Linux execution",
-      "Windows execution"
+      "doctest instrumentation"
     ]
   },
   "commands": {
-    "tests": "cargo test --workspace -- --test-threads=1",
-    "build": "cargo build --workspace",
-    "clippy": "cargo clippy --workspace --all-targets -- -D warnings",
+    "tests": "cargo test --locked --offline --workspace -- --test-threads=1",
+    "build": "cargo build --locked --offline --workspace",
+    "clippy": "cargo clippy --locked --offline --workspace --all-targets -- -D warnings",
     "format": "cargo fmt --all --check",
     "docs": "npm run check:docs",
-    "coverage": "SHERPA_ONNX_LIB_DIR=\"$PWD/target/sherpa-onnx-prebuilt/sherpa-onnx-v1.13.8-osx-arm64-static-lib/lib\" cargo llvm-cov --locked --offline --workspace --html -- --test-threads=1",
+    "coverage_initial": "SHERPA_ONNX_LIB_DIR=\"$PWD/target/sherpa-onnx-prebuilt/sherpa-onnx-v1.13.8-osx-arm64-static-lib/lib\" cargo llvm-cov --locked --offline --workspace --html -- --test-threads=1",
+    "coverage_retry": "SHERPA_ONNX_LIB_DIR=\"$PWD/target/sherpa-onnx-prebuilt/sherpa-onnx-v1.13.8-osx-arm64-static-lib/lib\" cargo llvm-cov --locked --offline --workspace --html --ignore-run-fail -- --test-threads=1",
     "coverage_summary": "cargo llvm-cov report --locked --offline --json --summary-only --output-path target/context-pr-coverage-summary.json",
     "coverage_lcov": "cargo llvm-cov report --locked --offline --lcov --output-path target/context-pr-coverage.lcov"
   },
   "test_execution": {
-    "passed": 1897,
-    "failed": 0,
-    "ignored": 7,
-    "test_targets": 28,
-    "ignored_tests": [
-      "test local::antigravity::tests::installed::authenticated_multi_turn_and_resume ... ignored, requires authenticated AGY and explicitly consumes three model turns",
-      "test local::claude::tests::process::installed_claude_control_protocol_discovers_models_without_inference ... ignored, requires a locally installed Claude Code CLI; sends no model request",
-      "test local::claude::tests::process::parity::installed_claude_completes_a_native_turn_and_reopens_history ... ignored, requires installed Claude authentication and makes one small model request",
-      "test local::codex::tests::installed::installed_codex_completes_a_native_turn_and_reopens_history ... ignored, requires installed Codex authentication and makes one small model request",
-      "test local::deepseek_harness::native::tests::installed_host_discovers_switches_permissions_and_adopts_legacy_sessions ... ignored, requires an installed DSH CLI via AIT_TEST_DSH_BIN; no model request",
-      "test local::opencode::tests::installed::installed_opencode_declined_tool_settles_and_accepts_next_turn ... ignored, requires AIT_TEST_OPENCODE_BIN; isolated config and loopback model only",
-      "test local::opencode::tests::installed::installed_opencode_discovers_runs_and_restores_with_local_model ... ignored, requires AIT_TEST_OPENCODE_BIN; isolated config and loopback model only"
+    "log_sha256": "2217fca3c1d16823d3c71d7eadf0d7d56250398a568846d32115376568f2af58",
+    "passed": 219,
+    "failed": 11,
+    "ignored": 0,
+    "completed_test_targets": 6,
+    "status": "failed",
+    "failed_tests": [
+      "test unix::agent_controls::controls_route_over_websocket_and_pending_approvals_survive_client_reconnect ... FAILED",
+      "test unix::agent_execution::websocket_executes_native_turns_waits_concurrently_and_resumes_after_restart ... FAILED",
+      "test unix::agent_execution::workspace_creation::identity::completed_receipts_never_report_deleted_agents_or_recreate_them ... FAILED",
+      "test unix::agent_execution::workspace_creation::workspace_initial_agent_preserves_subdirectories_receipts_environment_and_first_prompt ... FAILED",
+      "test unix::agent_execution::worktrees::pr_checkout::modern_legacy_and_workspace_pr_checkout_preserve_fork_trust_and_native_placement ... FAILED",
+      "test unix::agent_history::catalog::slow_catalog_does_not_block_legacy_physical_socket ... FAILED",
+      "test unix::checkout::binary_serves_checkout_reads_and_connection_owned_diff_updates ... FAILED",
+      "test unix::forge::gitlab::server_routes_self_managed_gitlab_operations_without_github_queries ... FAILED",
+      "test unix::opencode::opencode_is_discovered_executed_and_restored_through_the_real_server ... FAILED",
+      "test unix::opencode::opencode_workspace_creation_returns_frontend_compatible_resume_handles ... FAILED",
+      "test unix::worktrees::creation::unified_worktree_creation_preserves_nested_placement_and_replays_after_restart ... FAILED"
+    ]
+  },
+  "earlier_test_attempt": {
+    "log_sha256": "41d4d9e46471a0c2e94b5fbcf7827f92941afe4279e4170b401b6675085a776e",
+    "passed": 673,
+    "failed": 4,
+    "ignored": 0,
+    "completed_test_targets": 8,
+    "status": "failed",
+    "failed_tests": [
+      "test local::checkout::tests::reset_workspace::reset_workspace_rejects_remote_updates_or_deletion_after_preflight ... FAILED",
+      "test local::forge::gitlab::tests::commands::ssh_aliases_are_resolved_before_selecting_the_forge ... FAILED",
+      "test local::worktrees::tests::change_request::absent_pull_refs_leave_existing_branches_and_temporary_refs_unchanged ... FAILED",
+      "test local::worktrees::tests::change_request::same_repo_pr_uses_unique_local_branches_and_tracks_the_original_remote_head ... FAILED"
     ]
   },
   "coverage_test_execution": {
-    "passed": 1897,
-    "failed": 0,
-    "ignored": 7,
-    "test_targets": 16,
-    "ignored_tests": [
-      "test local::antigravity::tests::installed::authenticated_multi_turn_and_resume ... ignored, requires authenticated AGY and explicitly consumes three model turns",
-      "test local::claude::tests::process::installed_claude_control_protocol_discovers_models_without_inference ... ignored, requires a locally installed Claude Code CLI; sends no model request",
-      "test local::claude::tests::process::parity::installed_claude_completes_a_native_turn_and_reopens_history ... ignored, requires installed Claude authentication and makes one small model request",
-      "test local::codex::tests::installed::installed_codex_completes_a_native_turn_and_reopens_history ... ignored, requires installed Codex authentication and makes one small model request",
-      "test local::deepseek_harness::native::tests::installed_host_discovers_switches_permissions_and_adopts_legacy_sessions ... ignored, requires an installed DSH CLI via AIT_TEST_DSH_BIN; no model request",
-      "test local::opencode::tests::installed::installed_opencode_declined_tool_settles_and_accepts_next_turn ... ignored, requires AIT_TEST_OPENCODE_BIN; isolated config and loopback model only",
-      "test local::opencode::tests::installed::installed_opencode_discovers_runs_and_restores_with_local_model ... ignored, requires AIT_TEST_OPENCODE_BIN; isolated config and loopback model only"
+    "log_sha256": "46dad895a0a5ca0f1a124dda8b50b29ae24bc1cf6ba7b029067855e8f2f622a2",
+    "passed": 222,
+    "failed": 8,
+    "ignored": 0,
+    "completed_test_targets": 6,
+    "status": "failed",
+    "failed_tests": [
+      "test unix::github_projects::binary_searches_and_clones_github_project_with_local_git_transport ... FAILED",
+      "test unix::metadata::projects_use_only_the_metadata_registry_and_survive_restart ... FAILED",
+      "test unix::metadata_generation::metadata_generation_applies_live_config_workspace_title_session_title_and_commit ... FAILED",
+      "test unix::metadata_generation::metadata_generation_names_new_managed_worktree_and_preserves_explicit_branch ... FAILED",
+      "test unix::native_sessions::failed_native_imports_leave_no_agents_or_workspaces_and_errors_are_safe ... FAILED",
+      "test unix::native_sessions::refresh_reconciles_external_history_and_interrupts_owned_execution ... FAILED",
+      "test unix::opencode::opencode_is_discovered_executed_and_restored_through_the_real_server ... FAILED",
+      "test unix::schedule::scheduled_worktree_is_isolated_and_archived_after_execution ... FAILED"
     ]
   },
-  "workspace_lines": {
-    "count": 56801,
-    "covered": 53591,
-    "percent": 94.34869104417176
-  },
-  "crate_lines": {
-    "bins/daemon": {
-      "count": 941,
-      "covered": 898,
-      "percent": 95.43039319872476
-    },
-    "crates/api": {
-      "count": 2139,
-      "covered": 1989,
-      "percent": 92.98737727910239
-    },
-    "crates/browser": {
-      "count": 725,
-      "covered": 707,
-      "percent": 97.51724137931035
-    },
-    "crates/domain": {
-      "count": 121,
-      "covered": 121,
-      "percent": 100.0
-    },
-    "crates/filesystem": {
-      "count": 11962,
-      "covered": 11341,
-      "percent": 94.80856044139776
-    },
-    "crates/metadata": {
-      "count": 7964,
-      "covered": 7550,
-      "percent": 94.80160723254646
-    },
-    "crates/model": {
-      "count": 789,
-      "covered": 749,
-      "percent": 94.93029150823827
-    },
-    "crates/protocol": {
-      "count": 75,
-      "covered": 75,
-      "percent": 100.0
-    },
-    "crates/provider": {
-      "count": 27306,
-      "covered": 25591,
-      "percent": 93.71932908518275
-    },
-    "crates/relay": {
-      "count": 464,
-      "covered": 422,
-      "percent": 90.94827586206897
-    },
-    "crates/schedule": {
-      "count": 820,
-      "covered": 803,
-      "percent": 97.92682926829268
-    },
-    "crates/terminal": {
-      "count": 1544,
-      "covered": 1489,
-      "percent": 96.43782383419689
-    },
-    "crates/voice": {
-      "count": 1951,
-      "covered": 1856,
-      "percent": 95.13070220399796
-    }
-  },
-  "changed_executable_lines": {
-    "count": 267,
-    "covered": 265,
-    "percent": 99.25093632958801
-  },
-  "changed_production_files": {
-    "crates/api/src/capabilities.rs": {
-      "file_lines": {
-        "count": 102,
-        "covered": 102,
-        "percent": 100.0
-      },
-      "added_or_modified_executable_lines": {
-        "count": 10,
-        "covered": 10,
-        "percent": 100.0
-      },
-      "uncovered_added_or_modified_lines": [],
-      "uncovered_file_lines": []
-    },
-    "crates/api/src/connection.rs": {
-      "file_lines": {
-        "count": 353,
-        "covered": 325,
-        "percent": 92.06798866855524
-      },
-      "added_or_modified_executable_lines": {
-        "count": 12,
-        "covered": 12,
-        "percent": 100.0
-      },
-      "uncovered_added_or_modified_lines": [],
-      "uncovered_file_lines": [
-        78,
-        103,
-        107,
-        207,
-        273,
-        302,
-        303,
-        377,
-        380,
-        381,
-        384,
-        387,
-        396
-      ]
-    },
-    "crates/api/src/connection/dispatch.rs": {
-      "file_lines": {
-        "count": 114,
-        "covered": 110,
-        "percent": 96.49122807017544
-      },
-      "added_or_modified_executable_lines": {
-        "count": 80,
-        "covered": 80,
-        "percent": 100.0
-      },
-      "uncovered_added_or_modified_lines": [],
-      "uncovered_file_lines": []
-    },
-    "crates/api/src/connection/single.rs": {
-      "file_lines": {
-        "count": 218,
-        "covered": 172,
-        "percent": 78.89908256880734
-      },
-      "added_or_modified_executable_lines": {
-        "count": 17,
-        "covered": 17,
-        "percent": 100.0
-      },
-      "uncovered_added_or_modified_lines": [],
-      "uncovered_file_lines": [
-        68,
-        92,
-        93,
-        94,
-        95,
-        96,
-        113,
-        114,
-        135,
-        146,
-        153,
-        154,
-        161,
-        168,
-        169,
-        170,
-        171,
-        172,
-        173,
-        176,
-        177,
-        178,
-        179,
-        180,
-        181,
-        184,
-        185,
-        186,
-        187,
-        188,
-        189,
-        194,
-        195,
-        196,
-        197,
-        198,
-        199,
-        220,
-        232,
-        233,
-        235,
-        238,
-        248,
-        249,
-        258
-      ]
-    },
-    "crates/api/src/connection/validation.rs": {
-      "file_lines": {
-        "count": 69,
-        "covered": 69,
-        "percent": 100.0
-      },
-      "added_or_modified_executable_lines": {
-        "count": 65,
-        "covered": 65,
-        "percent": 100.0
-      },
-      "uncovered_added_or_modified_lines": [],
-      "uncovered_file_lines": []
-    },
-    "crates/api/src/connection/workspace_archive.rs": {
-      "file_lines": {
-        "count": 141,
-        "covered": 137,
-        "percent": 97.16312056737588
-      },
-      "added_or_modified_executable_lines": {
-        "count": 12,
-        "covered": 12,
-        "percent": 100.0
-      },
-      "uncovered_added_or_modified_lines": [],
-      "uncovered_file_lines": [
-        59,
-        108,
-        142,
-        160
-      ]
-    },
-    "crates/api/src/connection/workspace_creation.rs": {
-      "file_lines": {
-        "count": 200,
-        "covered": 194,
-        "percent": 97.0
-      },
-      "added_or_modified_executable_lines": {
-        "count": 13,
-        "covered": 13,
-        "percent": 100.0
-      },
-      "uncovered_added_or_modified_lines": [],
-      "uncovered_file_lines": [
-        65,
-        223,
-        225,
-        226
-      ]
-    },
-    "crates/api/src/relay_rpc.rs": {
-      "file_lines": {
-        "count": 37,
-        "covered": 35,
-        "percent": 94.5945945945946
-      },
-      "added_or_modified_executable_lines": {
-        "count": 7,
-        "covered": 7,
-        "percent": 100.0
-      },
-      "uncovered_added_or_modified_lines": [],
-      "uncovered_file_lines": [
-        45,
-        50
-      ]
-    },
-    "crates/browser/src/capabilities.rs": {
-      "file_lines": {
-        "count": 6,
-        "covered": 6,
-        "percent": 100.0
-      },
-      "added_or_modified_executable_lines": {
-        "count": 0,
-        "covered": 0,
-        "percent": null
-      },
-      "uncovered_added_or_modified_lines": [],
-      "uncovered_file_lines": []
-    },
-    "crates/browser/src/dispatch.rs": {
-      "file_lines": {
-        "count": 19,
-        "covered": 18,
-        "percent": 94.73684210526316
-      },
-      "added_or_modified_executable_lines": {
-        "count": 3,
-        "covered": 3,
-        "percent": 100.0
-      },
-      "uncovered_added_or_modified_lines": [],
-      "uncovered_file_lines": [
-        29
-      ]
-    },
-    "crates/filesystem/src/capabilities.rs": {
-      "file_lines": {
-        "count": 16,
-        "covered": 16,
-        "percent": 100.0
-      },
-      "added_or_modified_executable_lines": {
-        "count": 0,
-        "covered": 0,
-        "percent": null
-      },
-      "uncovered_added_or_modified_lines": [],
-      "uncovered_file_lines": []
-    },
-    "crates/filesystem/src/dispatch.rs": {
-      "file_lines": {
-        "count": 140,
-        "covered": 132,
-        "percent": 94.28571428571429
-      },
-      "added_or_modified_executable_lines": {
-        "count": 3,
-        "covered": 3,
-        "percent": 100.0
-      },
-      "uncovered_added_or_modified_lines": [],
-      "uncovered_file_lines": [
-        70,
-        73,
-        134,
-        166,
-        181,
-        184,
-        196,
-        216
-      ]
-    },
-    "crates/metadata/src/capabilities.rs": {
-      "file_lines": {
-        "count": 16,
-        "covered": 16,
-        "percent": 100.0
-      },
-      "added_or_modified_executable_lines": {
-        "count": 0,
-        "covered": 0,
-        "percent": null
-      },
-      "uncovered_added_or_modified_lines": [],
-      "uncovered_file_lines": []
-    },
-    "crates/metadata/src/dispatch.rs": {
-      "file_lines": {
-        "count": 228,
-        "covered": 213,
-        "percent": 93.42105263157895
-      },
-      "added_or_modified_executable_lines": {
-        "count": 18,
-        "covered": 16,
-        "percent": 88.88888888888889
-      },
-      "uncovered_added_or_modified_lines": [
-        175,
-        276
-      ],
-      "uncovered_file_lines": [
-        174,
-        175,
-        211,
-        214,
-        231,
-        246,
-        247,
-        249,
-        250,
-        274,
-        275,
-        276,
-        306
-      ]
-    },
-    "crates/model/src/context.rs": {
-      "file_lines": {
-        "count": 59,
-        "covered": 59,
-        "percent": 100.0
-      },
-      "added_or_modified_executable_lines": {
-        "count": 10,
-        "covered": 10,
-        "percent": 100.0
-      },
-      "uncovered_added_or_modified_lines": [],
-      "uncovered_file_lines": []
-    },
-    "crates/provider/src/capabilities.rs": {
-      "file_lines": {
-        "count": 12,
-        "covered": 12,
-        "percent": 100.0
-      },
-      "added_or_modified_executable_lines": {
-        "count": 0,
-        "covered": 0,
-        "percent": null
-      },
-      "uncovered_added_or_modified_lines": [],
-      "uncovered_file_lines": []
-    },
-    "crates/provider/src/dispatch.rs": {
-      "file_lines": {
-        "count": 114,
-        "covered": 101,
-        "percent": 88.59649122807018
-      },
-      "added_or_modified_executable_lines": {
-        "count": 8,
-        "covered": 8,
-        "percent": 100.0
-      },
-      "uncovered_added_or_modified_lines": [],
-      "uncovered_file_lines": []
-    },
-    "crates/schedule/src/capabilities.rs": {
-      "file_lines": {
-        "count": 6,
-        "covered": 6,
-        "percent": 100.0
-      },
-      "added_or_modified_executable_lines": {
-        "count": 0,
-        "covered": 0,
-        "percent": null
-      },
-      "uncovered_added_or_modified_lines": [],
-      "uncovered_file_lines": []
-    },
-    "crates/schedule/src/dispatch.rs": {
-      "file_lines": {
-        "count": 40,
-        "covered": 38,
-        "percent": 95.0
-      },
-      "added_or_modified_executable_lines": {
-        "count": 3,
-        "covered": 3,
-        "percent": 100.0
-      },
-      "uncovered_added_or_modified_lines": [],
-      "uncovered_file_lines": [
-        33,
-        37
-      ]
-    },
-    "crates/terminal/src/capabilities.rs": {
-      "file_lines": {
-        "count": 10,
-        "covered": 10,
-        "percent": 100.0
-      },
-      "added_or_modified_executable_lines": {
-        "count": 0,
-        "covered": 0,
-        "percent": null
-      },
-      "uncovered_added_or_modified_lines": [],
-      "uncovered_file_lines": []
-    },
-    "crates/terminal/src/dispatch.rs": {
-      "file_lines": {
-        "count": 79,
-        "covered": 77,
-        "percent": 97.46835443037975
-      },
-      "added_or_modified_executable_lines": {
-        "count": 3,
-        "covered": 3,
-        "percent": 100.0
-      },
-      "uncovered_added_or_modified_lines": [],
-      "uncovered_file_lines": [
-        101,
-        118
-      ]
-    },
-    "crates/voice/src/capabilities.rs": {
-      "file_lines": {
-        "count": 6,
-        "covered": 6,
-        "percent": 100.0
-      },
-      "added_or_modified_executable_lines": {
-        "count": 0,
-        "covered": 0,
-        "percent": null
-      },
-      "uncovered_added_or_modified_lines": [],
-      "uncovered_file_lines": []
-    },
-    "crates/voice/src/dispatch.rs": {
-      "file_lines": {
-        "count": 33,
-        "covered": 32,
-        "percent": 96.96969696969697
-      },
-      "added_or_modified_executable_lines": {
-        "count": 3,
-        "covered": 3,
-        "percent": 100.0
-      },
-      "uncovered_added_or_modified_lines": [],
-      "uncovered_file_lines": []
-    }
+  "validation": {
+    "local_full_build": "passed",
+    "local_strict_workspace_clippy": "passed",
+    "local_format_retry": "failed to load the Rust driver library; CI format passed",
+    "docs": "passed",
+    "diff_check": "passed",
+    "new_api_dispatch_and_capability_regressions": "API crate: 77 passed, 0 failed, 0 ignored in normal and instrumented attempts"
   },
   "baseline_comparison": {
-    "revision": "5a5645789e25ca416eaf479edea70afab52307d7",
-    "artifact": "docs/reports/providers/paseo-concurrency-coverage-2026-10-07.json",
-    "source_equivalence": "git diff found no bins/, crates/, Cargo.toml or Cargo.lock changes between the measured baseline revision and target main.",
-    "scope_equivalence": "Same macOS arm64 platform, Rust/LLVM/cargo-llvm-cov versions, default features/source filtering, and serial full-workspace tests. Locked/offline flags do not change the unchanged Cargo.lock resolution.",
-    "workspace_percentage_point_change": 0.04133745544432088,
-    "crate_percentage_point_changes": {
-      "bins/daemon": 0.0,
-      "crates/api": 0.3913135490180366,
-      "crates/browser": 0.13793103448276156,
-      "crates/domain": 0.0,
-      "crates/filesystem": 0.0004340305625447627,
-      "crates/metadata": 0.0058812740298037625,
-      "crates/model": 0.07829665624342397,
-      "crates/protocol": 0.0,
-      "crates/provider": 0.033191015232191035,
-      "crates/relay": 0.0,
-      "crates/schedule": 0.11394955990871836,
-      "crates/terminal": 0.13192623212300703,
-      "crates/voice": 0.05125576627371231
-    }
+    "status": "not compared: current complete coverage unavailable",
+    "revision": "c4f340f72dbf9dccf79fb53e2e1cea9e8448aa38",
+    "artifact": "docs/reports/workspace/workspace-reset-remote-pr-coverage-2026-10-07.json",
+    "workspace_percentage_point_change": null
   },
-  "html_report": "target/llvm-cov/html/index.html",
-  "coverage_summary_sha256": "4c597a269f1f1bdf13e98a397821f8cc05aecd991cf36ece4559a5919dc69196",
-  "coverage_lcov_sha256": "8a336fa13fb3c0a728503008e33f17d2ab574cd8d46e4caf7dd8e958f91ac3a3",
+  "ci": {
+    "url": "https://github.com/ait-app/ait/actions/runs/37516171384",
+    "source_revision": "b94211adad8d31a0a6889cee0d78a160d54d8577",
+    "platform": "Ubuntu Linux",
+    "format": "passed",
+    "strict_clippy": "passed",
+    "docs": "passed",
+    "full_workspace_tests": "in progress when recorded"
+  },
   "uncovered_behavior": [
-    "Two changed executable lines are existing metadata invalid-parameter early returns: malformed daemon snapshot parameters (dispatch.rs:175) and invalid subscription release parameters (dispatch.rs:276). Follow-up: add focused tests asserting one invalid_message response and no composition follow-up for these payloads.",
-    "Retained connection worker saturation, cancellation and delivery-error paths remain partially uncovered; their file-level uncovered lines are listed in changed_production_files. Follow-up: use bounded queue and cancellation fixtures when extending this transport behavior.",
-    "Seven existing native CLI/authentication tests were ignored by default. Linux/Windows execution, real authenticated model turns and native C/C++ coverage were not performed."
+    "Current complete coverage and per-file gaps are unavailable because the measurement did not finish. Integration results are inconclusive for the failed native process and daemon startup cases; rerun after the macOS loading issue is resolved.",
+    "The 7 existing authenticated native CLI tests remain ignored by default; no new ignores or exclusions were introduced."
   ]
 }
