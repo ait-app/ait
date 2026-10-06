@@ -2,7 +2,7 @@
 
 ## 服务端准备
 
-先发布配套 `ait-server` 后端和 Web 控制台，运行 `0010_native_login.sql`。保持原有 Authing HTTPS 登录回调配置；桌面的回环地址和 Android 的应用链接由 AIT 中心处理，无需加入 Authing 应用回调白名单。
+先发布配套 `ait-server` 后端和 Web 控制台，运行 `0008_authing.sql`。保持原有 Authing HTTPS 登录回调配置；桌面的回环地址和 Android 的应用链接由 AIT 中心处理，无需加入 Authing 应用回调白名单。
 
 检查实际服务地址：
 

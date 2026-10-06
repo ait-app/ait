@@ -20,6 +20,6 @@
 
 ## 后果
 
-共享账户发现、中继访问和逐主机同步可复用原逻辑，认证结果最终仍是 AIT JWT。中心必须先部署配套 native handoff 接口、`0010_native_login.sql` 迁移和浏览器确认页；客户端不会把缺少接口的旧中心误判为支持统一登录。
+共享账户发现、中继访问和逐主机同步可复用原逻辑，认证结果最终仍是 AIT JWT。中心必须先部署配套 native handoff 接口、`0008_authing.sql` 迁移和浏览器确认页；客户端不会把缺少接口的旧中心误判为支持统一登录。
 
 配置与验收见[客户端统一登录](../../operations/authing-client-login.md)。原生浏览器与回环回调遵循 [RFC 8252](https://www.rfc-editor.org/rfc/rfc8252.html) 的模式；中心到客户端的一次性兑换是 AIT 自有协议，不是直接使用 Authing 原生应用凭据。
