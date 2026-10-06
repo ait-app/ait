@@ -823,7 +823,7 @@ export const ja: TranslationResources = {
           success: "リセット完了",
           confirmTitle: "ワークスペースをリセットしますか？",
           confirmMessage:
-            "origin の最新のデフォルトブランチを取得し、ブランチを {{branch}} に戻して、追跡済みファイルの変更とローカルコミットを破棄します。",
+            "origin の最新のデフォルトブランチを取得し、ブランチを {{branch}} に戻して、追跡済みファイルの変更とローカルコミットを破棄します。origin に同名のブランチがある場合は、強制プッシュで同じコミットにリセットします。",
           confirm: "リセット",
         },
         archive: {

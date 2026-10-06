@@ -820,7 +820,7 @@ export const ko: TranslationResources = {
           success: "초기화됨",
           confirmTitle: "워크스페이스를 초기화할까요?",
           confirmMessage:
-            "origin의 최신 기본 브랜치를 가져오고 브랜치를 {{branch}}로 복원한 뒤 추적 파일 변경 사항과 로컬 커밋을 삭제합니다.",
+            "origin의 최신 기본 브랜치를 가져오고 브랜치를 {{branch}}로 복원한 뒤 추적 파일 변경 사항과 로컬 커밋을 삭제합니다. origin에 같은 이름의 브랜치가 있으면 강제 푸시로 동일한 커밋으로 초기화합니다.",
           confirm: "초기화",
         },
         archive: {
