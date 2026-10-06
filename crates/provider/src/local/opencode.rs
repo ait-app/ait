@@ -27,6 +27,10 @@ pub use client::OpenCodeClient;
 
 /// Ceilings for content generated after the current input, excluding previous history.
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
+#[expect(
+    clippy::struct_field_names,
+    reason = "Each field names a ceiling, not an observed count"
+)]
 pub struct OpenCodeExecutionLimits {
     /// Maximum newly generated native content items.
     pub max_steps: u64,
@@ -60,6 +64,7 @@ impl Driver {
         }
     }
 
+    #[cfg(test)]
     fn with_execution_limits(
         mut self,
         limits: OpenCodeExecutionLimits,
