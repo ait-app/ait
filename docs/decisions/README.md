@@ -36,6 +36,8 @@
 
 ## Provider、Agent 与会话
 
+- [ADR-089：内置 Provider 装配归 provider crate](providers/adr-089-provider-owned-composition.md)
+- [ADR-087：Antigravity CLI 原生 Provider](providers/adr-087-antigravity-cli-provider.md)
 - [ADR-027：独立 AgentSession 与 AgentManager 生命周期边界](providers/adr-027-independent-agent-session-manager.md)
 - [ADR-031：拆出 provider 并统一 Workspace 自动化与 state 入口](providers/adr-031-daemon-provider.md)
 - [ADR-032：独立 server 接通 Codex 原生文本执行](providers/adr-032-daemon-native-provider-execution.md)

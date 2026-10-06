@@ -10,8 +10,10 @@ use domain::agent_runtime::{AgentPersistenceHandle, StoredAgentConfig};
 use serde_json::{Value, json};
 use tokio_util::sync::CancellationToken;
 
+#[cfg(test)]
+use super::OpenCodeExecutionLimits;
 use super::{
-    Driver, OpenCodeExecutionLimits, live, projection, runtime, session,
+    Driver, live, projection, runtime, session,
     types::{DenyApprovals, Fault, Invocation, ProtocolError, Snapshot},
 };
 use crate::{
@@ -43,6 +45,7 @@ impl OpenCodeClient {
     /// Bound newly generated native items, tokens and text before creating sessions.
     /// # Errors
     /// Rejects zero ceilings and transport sizes exceeding eight MiB.
+    #[cfg(test)]
     pub fn with_execution_limits(
         mut self,
         limits: OpenCodeExecutionLimits,

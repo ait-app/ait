@@ -11,6 +11,9 @@ export const PROVIDER_COMMAND_TEMPLATES: Record<
   string,
   Partial<Record<ProviderCommandId, string>>
 > = {
+  antigravity: {
+    resume: "agy --conversation {sessionId}",
+  },
   codex: {
     resume: "codex resume {sessionId}",
   },

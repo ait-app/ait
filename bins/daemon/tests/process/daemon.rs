@@ -37,11 +37,16 @@ async fn missing_provider_is_reported_and_editors_return_migration_responses() {
     )
     .await;
     let status = request(&mut socket, "daemon.get_status.request", json!({})).await;
-    assert_eq!(status["result"]["providers"][0]["provider"], "claude");
-    assert_eq!(status["result"]["providers"][0]["available"], false);
+    let providers = status["result"]["providers"].as_array().unwrap();
+    assert_eq!(providers.len(), 5);
+    assert!(
+        providers
+            .iter()
+            .all(|provider| provider["available"] == false)
+    );
     let diagnostic = request(&mut socket, "diagnostics.request", json!({})).await;
     let report = diagnostic["result"]["diagnostic"].as_str().unwrap();
-    assert!(report.contains("Total: 4"));
+    assert!(report.contains("Total: 5"));
     assert!(report.contains("Available: 0"));
     assert!(report.contains("codex: unavailable"));
     let editors = request(&mut socket, "editor.available.list.request", json!({})).await;
@@ -125,10 +130,17 @@ async fn daemon_status_config_diagnostics_and_update_match_canonical_contract() 
     assert_eq!(status["result"]["relay"], Value::Null);
     assert_eq!(
         status["result"]["providers"],
-        json!([{ "provider":"claude", "available":false, "error":"Provider executable is unavailable" },
+        json!([
+            { "provider":"antigravity", "available":false,
+                "error":"Provider executable is unavailable" },
+            { "provider":"claude", "available":false,
+                "error":"Provider executable is unavailable" },
             { "provider":"codex", "available":true, "error":null },
-            { "provider":"deepseek-harness", "available":false, "error":"Provider executable is unavailable" },
-            { "provider":"opencode", "available":false, "error":"Provider executable is unavailable" }])
+            { "provider":"deepseek-harness", "available":false,
+                "error":"Provider executable is unavailable" },
+            { "provider":"opencode", "available":false,
+                "error":"Provider executable is unavailable" }
+        ])
     );
 
     let pairing = request(&mut socket, "daemon.get_pairing_offer.request", json!({})).await;
@@ -173,7 +185,7 @@ async fn daemon_status_config_diagnostics_and_update_match_canonical_contract() 
     assert!(diagnostic.contains("Paseo diagnostics"));
     assert!(diagnostic.contains("daemon.get_status.request"));
     assert!(!diagnostic.contains(TOKEN));
-    assert!(diagnostic.contains("Total: 4"));
+    assert!(diagnostic.contains("Total: 5"));
     assert!(diagnostic.contains("codex: available"));
 
     let update = request(&mut socket, "daemon.update.request", json!({})).await;

@@ -64,6 +64,7 @@ export const ProviderOverrideSchema = z.object({
 });
 
 const BUILTIN_PROVIDER_IDS = [
+  "antigravity",
   "claude",
   "codex",
   "copilot",

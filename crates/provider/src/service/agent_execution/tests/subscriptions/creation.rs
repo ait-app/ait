@@ -5,7 +5,7 @@ use crate::local::deepseek_harness::DeepSeekHarnessClient;
 
 use super::*;
 
-fn harness_peer(fixture: &Fixture) -> (AgentExecution, Peer) {
+fn dsh_peer(fixture: &Fixture) -> (AgentExecution, Peer) {
     let program = fixture.root.path().join("dsh");
     std::fs::write(
         &program,
@@ -25,7 +25,7 @@ fn harness_peer(fixture: &Fixture) -> (AgentExecution, Peer) {
 fn parameters(fixture: &Fixture) -> Value {
     json!({
         "config":{"provider":"deepseek-harness","cwd":fixture.cwd},
-        "idempotencyKey":"subscribed-harness",
+        "idempotencyKey":"subscribed-dsh",
         "subscribe":true,
         "env":{"ACP_FIXTURE_LOG":fixture.cwd.join("acp-requests.jsonl")}
     })
@@ -35,7 +35,7 @@ async fn request(peer: &Peer, params: Value, budget: usize) {
     Connection::create(
         Context {
             request: Request {
-                id: "create-harness".to_owned(),
+                id: "create-dsh".to_owned(),
                 method: "agent.create.request".to_owned(),
                 params,
             },
@@ -53,16 +53,16 @@ fn response(peer: &mut Peer) -> Value {
     loop {
         let value = peer.next();
         if value["type"] != "event" {
-            assert_eq!(value["request_id"], "create-harness");
+            assert_eq!(value["request_id"], "create-dsh");
             return value;
         }
     }
 }
 
 #[tokio::test]
-async fn subscribed_harness_creation_waits_for_busy_foreground_jobs_before_launching() {
+async fn subscribed_dsh_creation_waits_for_busy_foreground_jobs_before_launching() {
     let fixture = Fixture::new();
-    let (execution, mut peer) = harness_peer(&fixture);
+    let (execution, mut peer) = dsh_peer(&fixture);
     // A slow Diff read occupies this same server-wide permit, even in another Workspace.
     let permit = peer
         .state
@@ -96,9 +96,9 @@ async fn subscribed_harness_creation_waits_for_busy_foreground_jobs_before_launc
 }
 
 #[tokio::test]
-async fn draining_cancels_queued_harness_creation_without_launching() {
+async fn draining_cancels_queued_dsh_creation_without_launching() {
     let fixture = Fixture::new();
-    let (execution, mut peer) = harness_peer(&fixture);
+    let (execution, mut peer) = dsh_peer(&fixture);
     let _permit = peer
         .state
         .runtime
@@ -126,9 +126,9 @@ async fn draining_cancels_queued_harness_creation_without_launching() {
 }
 
 #[tokio::test]
-async fn exhausted_subscription_capacity_rejects_harness_creation_before_launching() {
+async fn exhausted_subscription_capacity_rejects_dsh_creation_before_launching() {
     let fixture = Fixture::new();
-    let (execution, mut peer) = harness_peer(&fixture);
+    let (execution, mut peer) = dsh_peer(&fixture);
     request(&peer, parameters(&fixture), 0).await;
     assert_eq!(response(&mut peer)["code"], "resource_exhausted");
     assert!(!fixture.cwd.join("acp-requests.jsonl").exists());
@@ -136,9 +136,9 @@ async fn exhausted_subscription_capacity_rejects_harness_creation_before_launchi
 }
 
 #[tokio::test]
-async fn unsubscribed_harness_creation_does_not_need_foreground_job_capacity() {
+async fn unsubscribed_dsh_creation_does_not_need_foreground_job_capacity() {
     let fixture = Fixture::new();
-    let (execution, mut peer) = harness_peer(&fixture);
+    let (execution, mut peer) = dsh_peer(&fixture);
     let _permit = peer
         .state
         .runtime
@@ -157,9 +157,9 @@ async fn unsubscribed_harness_creation_does_not_need_foreground_job_capacity() {
 }
 
 #[tokio::test]
-async fn failed_harness_startup_returns_agent_io_and_keeps_runtime_ready() {
+async fn failed_dsh_startup_returns_agent_io_and_keeps_runtime_ready() {
     let fixture = Fixture::new();
-    let (execution, mut peer) = harness_peer(&fixture);
+    let (execution, mut peer) = dsh_peer(&fixture);
     let mut params = parameters(&fixture);
     params["env"]["ACP_FIXTURE_SCENARIO"] = json!("malformed");
     request(&peer, params, 1).await;
