@@ -415,9 +415,15 @@ pub trait CheckoutRuntime: std::fmt::Debug + Send + Sync {
     ) -> Result<(), CheckoutRuntimeError>;
 
     /// Fetch origin's default branch, restore the workspace's initial branch name, and reset HEAD.
+    /// Force-push the reset HEAD if origin has a branch with that initial name.
+    ///
+    /// # Arguments
+    /// * `cwd` - Directory of the managed worktree to reset.
+    /// * `initial_branch` - Branch name saved when the workspace was created.
     ///
     /// # Errors
-    /// Returns categorized validation, remote, Git, timeout, or output failures.
+    /// Returns categorized validation, remote, Git, timeout, or output failures. A push failure
+    /// leaves the local reset in place and reports that the remote reset did not complete.
     fn reset_workspace(&self, cwd: &str, initial_branch: &str) -> Result<(), CheckoutRuntimeError>;
 
     /// Pull the current branch.

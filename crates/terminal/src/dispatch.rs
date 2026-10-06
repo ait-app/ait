@@ -2,10 +2,7 @@
 
 use std::sync::{Arc, Mutex};
 
-use model::outbound::QueueError;
-use model::{Context, ErrorCode, Runtime};
-
-use crate::capabilities::{Group, IMPLEMENTED_GROUPS};
+use model::{Context, DispatchError, ErrorCode, Runtime};
 
 /// Services installed for this capability crate, sharing server-wide runtime resources.
 #[derive(Debug)]
@@ -26,6 +23,7 @@ impl std::ops::Deref for State {
 
 /// Dispatch an admitted terminal request using its connection-owned streams.
 /// Leaves `context` unchanged for other crates; takes it when this crate handles the method.
+/// Returns `DispatchError::NotImplemented` while leaving an unmatched Context available.
 ///
 /// # Arguments
 /// * `context` - Pending request, consumed only when this crate recognizes its method.
@@ -33,31 +31,45 @@ impl std::ops::Deref for State {
 /// * `connection` - Connection-owned subscriptions and streams for this capability.
 ///
 /// # Errors
-/// Returns a delivery failure; terminal errors are sent as protocol responses.
+/// Returns `NotImplemented` for an unmatched method and `Delivery` for an outbound failure.
+/// Terminal errors are sent as protocol responses.
 pub async fn dispatch(
     context: &mut Option<Context<'_>>,
     state: &State,
     connection: &mut crate::connection::TerminalConnection,
-) -> Result<(), QueueError> {
-    let Some((group, context)) = Context::take_matching(context, IMPLEMENTED_GROUPS) else {
+) -> Result<(), DispatchError> {
+    if context.is_none() {
         return Ok(());
-    };
-    match group {
-        Group::Terminal => {
-            connection
-                .request(
-                    crate::connection::Request {
-                        id: context.request.id,
-                        method: context.request.method,
-                        params: context.request.params,
-                        available: context.available_subscriptions,
-                    },
-                    state,
-                    context.outbound,
-                )
-                .await
-        }
     }
+    let Some(context) = context.take_if(|context| {
+        matches!(
+            context.request.method.as_str(),
+            "terminal.list.request"
+                | "terminal.list.subscribe.request"
+                | "terminal.list.unsubscribe.request"
+                | "terminal.create.request"
+                | "terminal.rename.request"
+                | "terminal.subscribe.request"
+                | "terminal.unsubscribe.request"
+                | "terminal.kill.request"
+                | "terminal.capture.request"
+        )
+    }) else {
+        return Err(DispatchError::NotImplemented);
+    };
+    connection
+        .request(
+            crate::connection::Request {
+                id: context.request.id,
+                method: context.request.method,
+                params: context.request.params,
+                available: context.available_subscriptions,
+            },
+            state,
+            context.outbound,
+        )
+        .await
+        .map_err(Into::into)
 }
 
 /// Finish an admitted cross-capability close after the provider has closed its Agents.

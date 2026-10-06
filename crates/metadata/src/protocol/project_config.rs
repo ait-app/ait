@@ -3,12 +3,6 @@
 use serde::{Deserialize, Deserializer, Serialize, Serializer};
 use serde_json::{Map, Value};
 
-/// Methods for editing a registered project's `ait.json`.
-pub const CAPABILITIES: &[&str] = &[
-    "project.config.read.request",
-    "project.config.write.request",
-];
-
 /// Raw project configuration with Paseo's passthrough and normalization behavior.
 #[derive(Debug, Clone, PartialEq)]
 pub struct PaseoConfigRaw(Value);

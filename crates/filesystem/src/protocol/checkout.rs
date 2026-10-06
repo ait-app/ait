@@ -2,31 +2,6 @@
 
 use serde::{Deserialize, Serialize};
 
-/// Canonical checkout methods implemented by the independent server.
-pub const CAPABILITIES: &[&str] = &[
-    "checkout.status.get.request",
-    "checkout.refresh.request",
-    "checkout.diff.get.request",
-    "checkout.diff.subscribe.request",
-    "checkout.diff.unsubscribe.request",
-    "checkout.commits.list.request",
-    "checkout.commits.file_diff.request",
-    "checkout.branch.validate.request",
-    "checkout.branch.suggestions.request",
-    "checkout.branch.switch.request",
-    "checkout.rename_branch.request",
-    "checkout.commit.request",
-    "checkout.merge.request",
-    "checkout.merge_from_base.request",
-    "checkout.reset_workspace.request",
-    "checkout.pull.request",
-    "checkout.push.request",
-    "checkout.discard_changes.request",
-    "checkout.stash.save.request",
-    "checkout.stash.pop.request",
-    "checkout.stash.list.request",
-];
-
 /// A checkout-scoped request.
 #[derive(Debug, Clone, PartialEq, Eq, Deserialize)]
 pub struct CheckoutPathRequest {

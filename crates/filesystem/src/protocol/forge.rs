@@ -3,20 +3,6 @@
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 
-/// Canonical forge methods implemented by the independent server.
-pub const CAPABILITIES: &[&str] = &[
-    "forge.search.request",
-    "github.search.request",
-    "checkout.pr.create.request",
-    "checkout.pr.merge.request",
-    "checkout.pr.status.request",
-    "checkout.pr.timeline.request",
-    "checkout.forge.set_auto_merge.request",
-    "checkout.forge.get_check_details.request",
-    "checkout.github.set_auto_merge.request",
-    "checkout.github.get_check_details.request",
-];
-
 /// Stable forge availability state copied from Paseo.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
 #[serde(rename_all = "snake_case")]

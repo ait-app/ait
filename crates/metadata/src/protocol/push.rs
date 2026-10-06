@@ -2,9 +2,6 @@
 
 use serde::Deserialize;
 
-/// Methods requiring an installed persistent token store.
-pub const CAPABILITIES: &[&str] = &["push.register", "push.unregister.request"];
-
 /// Token registration/revocation payload. Debug is omitted to prevent accidental disclosure.
 #[derive(Deserialize)]
 pub struct TokenRequest {

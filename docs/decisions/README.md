@@ -15,10 +15,11 @@
 - [ADR-047：移除 Plugin 接口并独立实现 Schedule 与 Browser](daemon/adr-047-daemon-schedule-browser.md)
 - [ADR-064：默认离线语音与模型准备](daemon/adr-064-offline-speech.md)
 - [ADR-072：Workspace 名称与当前文档边界](daemon/adr-072-workspace-names-and-documentation.md)
-- [ADR-092：以可消费 Context 逐级处理请求](daemon/adr-092-consumable-request-context.md)
+- [ADR-093：以可消费 Context 逐级处理请求](daemon/adr-093-consumable-request-context.md)
 
 ## 工作区、文件与 Git
 
+- [ADR-092：工作区重置同步 origin 同名分支](workspace/adr-092-reset-same-named-remote-branch.md)
 - [ADR-025：先移植 Paseo Project / Workspace 模型与 registry](workspace/adr-025-paseo-registry.md)
 - [ADR-028：GitHub 仓库发现与独立 Project 克隆注册](workspace/adr-028-github-project-provisioning.md)
 - [ADR-029：统一 Paseo Project 并纵向拆出 metadata](workspace/adr-029-daemon-metadata.md)

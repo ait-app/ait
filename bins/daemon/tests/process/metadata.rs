@@ -15,7 +15,7 @@ async fn projects_use_only_the_metadata_registry_and_survive_restart() {
     let log = root.path().join("server.log");
     let mut process = start(&state, &log);
     let address = ready(&mut process, &log).await;
-    let mut socket = connect(&address, metadata::protocol::directory::CAPABILITIES).await;
+    let mut socket = connect(&address, metadata::rpc::directory::METHODS).await;
 
     for method in [
         "project.open",
@@ -62,7 +62,7 @@ async fn projects_use_only_the_metadata_registry_and_survive_restart() {
 
     let mut restarted = start(&state, &log);
     let address = ready(&mut restarted, &log).await;
-    let mut socket = connect(&address, metadata::protocol::directory::CAPABILITIES).await;
+    let mut socket = connect(&address, metadata::rpc::directory::METHODS).await;
     let projects = request(&mut socket, "project.list.request", json!({})).await;
     assert_eq!(projects["result"]["projects"].as_array().unwrap().len(), 1);
     assert_eq!(projects["result"]["projects"][0]["projectId"], project_id);

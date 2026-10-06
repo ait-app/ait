@@ -1,5 +1,5 @@
-use model::Request;
 use model::outbound::Frame;
+use model::{DispatchError, Request};
 use serde_json::{Value, json};
 
 use super::*;
@@ -45,25 +45,41 @@ async fn try_handlers(
     state: &Shared,
     subscriptions: &mut ConnectionSubscriptions,
 ) -> Result<(), QueueError> {
-    super::super::workspace_creation::request(context, state).await?;
-    super::super::workspace_archive::request(context, state).await?;
-    crate::relay_rpc::request(context, state).await?;
-    schedule::dispatch::dispatch(context, &state.schedule).await?;
-    browser::dispatch::dispatch(context, &state.browser, &mut subscriptions.browser)?;
-    voice::dispatch::dispatch(context, &state.voice, &mut subscriptions.voice).await?;
+    super::super::workspace_creation::request(context, state)
+        .await
+        .or_else(DispatchError::or_next)?;
+    super::super::workspace_archive::request(context, state)
+        .await
+        .or_else(DispatchError::or_next)?;
+    crate::relay_rpc::request(context, state)
+        .await
+        .or_else(DispatchError::or_next)?;
+    schedule::dispatch::dispatch(context, &state.schedule)
+        .await
+        .or_else(DispatchError::or_next)?;
+    browser::dispatch::dispatch(context, &state.browser, &mut subscriptions.browser)
+        .or_else(DispatchError::or_next)?;
+    voice::dispatch::dispatch(context, &state.voice, &mut subscriptions.voice)
+        .await
+        .or_else(DispatchError::or_next)?;
     assert!(
         metadata::dispatch::dispatch(context, &state.metadata, &mut subscriptions.metadata)
-            .await?
+            .await
+            .or_else(DispatchError::or_next)?
             .is_none()
     );
     filesystem::dispatch::dispatch(context, &state.filesystem, &mut subscriptions.filesystem)
-        .await?;
+        .await
+        .or_else(DispatchError::or_next)?;
     assert!(
         provider::dispatch::dispatch(context, &state.provider, &mut subscriptions.provider)
-            .await?
+            .await
+            .or_else(DispatchError::or_next)?
             .is_none()
     );
-    terminal::dispatch::dispatch(context, &state.terminal, &mut subscriptions.terminals).await
+    terminal::dispatch::dispatch(context, &state.terminal, &mut subscriptions.terminals)
+        .await
+        .or_else(DispatchError::or_next)
 }
 
 fn decode(frame: Frame) -> Value {
@@ -263,6 +279,185 @@ async fn metadata_followup_finishes_before_the_consumed_request_returns() {
         } else {
             assert_eq!(response["code"], "unsupported_capability");
         }
+        assert!(receiver.try_recv().is_err());
+    }
+}
+
+#[tokio::test]
+async fn unmatched_owners_return_not_implemented_without_consuming_or_delivering() {
+    let api = api();
+    let (outbound, mut receiver) = Outbound::new();
+    let mut subscriptions = ConnectionSubscriptions::default();
+    for method in [
+        "unknown.request",
+        "checkout.future.request",
+        "agent.future.request",
+        "workspace.future.request",
+        "push.register",
+        "session.heartbeat",
+        "terminal.input",
+        "browser.automation.execute.response",
+        "voice.audio.chunk",
+        "voice.audio.played",
+        "dictation.stream.chunk",
+    ] {
+        let mut pending = Some(context(method, &api.shared, &outbound));
+        let results = [
+            super::super::workspace_creation::request(&mut pending, &api.shared).await,
+            super::super::workspace_archive::request(&mut pending, &api.shared).await,
+            crate::relay_rpc::request(&mut pending, &api.shared).await,
+            schedule::dispatch::dispatch(&mut pending, &api.shared.schedule).await,
+            browser::dispatch::dispatch(
+                &mut pending,
+                &api.shared.browser,
+                &mut subscriptions.browser,
+            ),
+            voice::dispatch::dispatch(&mut pending, &api.shared.voice, &mut subscriptions.voice)
+                .await,
+            metadata::dispatch::dispatch(
+                &mut pending,
+                &api.shared.metadata,
+                &mut subscriptions.metadata,
+            )
+            .await
+            .map(|_| ()),
+            filesystem::dispatch::dispatch(
+                &mut pending,
+                &api.shared.filesystem,
+                &mut subscriptions.filesystem,
+            )
+            .await,
+            provider::dispatch::dispatch(
+                &mut pending,
+                &api.shared.provider,
+                &mut subscriptions.provider,
+            )
+            .await
+            .map(|_| ()),
+            terminal::dispatch::dispatch(
+                &mut pending,
+                &api.shared.terminal,
+                &mut subscriptions.terminals,
+            )
+            .await,
+        ];
+        for result in results {
+            assert!(
+                matches!(result, Err(DispatchError::NotImplemented)),
+                "{method}: {result:?}"
+            );
+        }
+        let context = pending.as_ref().unwrap();
+        assert_eq!(context.request.id, "request-1");
+        assert_eq!(context.request.method, method);
+        assert_eq!(context.request.params, json!({"nonce":"alive"}));
+        assert_eq!(context.available_subscriptions, 16);
+        assert!(receiver.try_recv().is_err());
+    }
+}
+
+#[tokio::test]
+async fn every_declared_request_reaches_its_owners_consuming_branch() {
+    let owners = [
+        schedule::capabilities::implemented_capabilities().collect::<Vec<_>>(),
+        browser::capabilities::implemented_capabilities().collect(),
+        voice::capabilities::implemented_capabilities().collect(),
+        metadata::capabilities::implemented_capabilities()
+            .chain(["server.status.unsubscribe"])
+            .collect(),
+        filesystem::capabilities::implemented_capabilities().collect(),
+        provider::capabilities::implemented_capabilities().collect(),
+        terminal::capabilities::implemented_capabilities().collect(),
+    ];
+    for (owner, methods) in owners.into_iter().enumerate() {
+        for method in methods {
+            let entry = super::super::validation::lookup(method).unwrap();
+            if entry.kind != protocol::methods::InboundKind::Request {
+                continue;
+            }
+            let api = api();
+            let (outbound, _receiver) = Outbound::new();
+            let mut subscriptions = ConnectionSubscriptions::default();
+            let mut pending = Some(context(method, &api.shared, &outbound));
+            let result = match owner {
+                0 => schedule::dispatch::dispatch(&mut pending, &api.shared.schedule).await,
+                1 => browser::dispatch::dispatch(
+                    &mut pending,
+                    &api.shared.browser,
+                    &mut subscriptions.browser,
+                ),
+                2 => {
+                    voice::dispatch::dispatch(
+                        &mut pending,
+                        &api.shared.voice,
+                        &mut subscriptions.voice,
+                    )
+                    .await
+                }
+                3 => metadata::dispatch::dispatch(
+                    &mut pending,
+                    &api.shared.metadata,
+                    &mut subscriptions.metadata,
+                )
+                .await
+                .map(|_| ()),
+                4 => {
+                    filesystem::dispatch::dispatch(
+                        &mut pending,
+                        &api.shared.filesystem,
+                        &mut subscriptions.filesystem,
+                    )
+                    .await
+                }
+                5 => provider::dispatch::dispatch(
+                    &mut pending,
+                    &api.shared.provider,
+                    &mut subscriptions.provider,
+                )
+                .await
+                .map(|_| ()),
+                6 => {
+                    terminal::dispatch::dispatch(
+                        &mut pending,
+                        &api.shared.terminal,
+                        &mut subscriptions.terminals,
+                    )
+                    .await
+                }
+                _ => unreachable!(),
+            };
+            assert!(result.is_ok(), "{method}: {result:?}");
+            assert!(pending.is_none(), "{method} remained unhandled");
+        }
+    }
+}
+
+#[tokio::test]
+async fn workspace_creation_without_an_agent_continues_to_metadata() {
+    let api = api();
+    for agent in [None, Some(Value::Null)] {
+        let (outbound, mut receiver) = Outbound::new();
+        let mut pending = Some(context("workspace.create.request", &api.shared, &outbound));
+        if let Some(agent) = agent {
+            pending.as_mut().unwrap().request.params["agent"] = agent;
+        }
+        let params = pending.as_ref().unwrap().request.params.clone();
+        let result = super::super::workspace_creation::request(&mut pending, &api.shared).await;
+        assert!(matches!(result, Err(DispatchError::NotImplemented)));
+        assert_eq!(pending.as_ref().unwrap().request.params, params);
+        let mut subscriptions = ConnectionSubscriptions::default();
+        metadata::dispatch::dispatch(
+            &mut pending,
+            &api.shared.metadata,
+            &mut subscriptions.metadata,
+        )
+        .await
+        .unwrap();
+        assert!(pending.is_none());
+        assert_eq!(
+            decode(receiver.try_recv().unwrap().message)["code"],
+            "unsupported_capability"
+        );
         assert!(receiver.try_recv().is_err());
     }
 }

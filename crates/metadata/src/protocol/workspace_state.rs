@@ -2,12 +2,6 @@
 
 use serde::{Deserialize, Serialize};
 
-/// Canonical Workspace state methods implemented by the independent server.
-pub const CAPABILITIES: &[&str] = &[
-    "workspace.clear_attention.request",
-    "workspace.mark_unread.request",
-];
-
 /// One or several Workspace identities accepted by clear-attention.
 #[derive(Debug, Clone, PartialEq, Eq, Deserialize, Serialize)]
 #[serde(untagged)]

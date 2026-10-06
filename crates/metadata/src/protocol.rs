@@ -15,8 +15,5 @@ pub mod worktree_source;
 
 pub mod creation;
 
-/// Retired desktop editor request compatibility.
-pub mod editor;
-
 /// Leased push token management.
 pub mod push;

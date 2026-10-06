@@ -26,11 +26,8 @@ fn every_installation_combination_advertises_only_available_services() {
 }
 
 #[test]
-fn implemented_groups_are_unique_and_match_a_full_installation() {
-    let declared: Vec<_> = IMPLEMENTED_GROUPS
-        .iter()
-        .flat_map(|(_, methods)| methods.iter().copied())
-        .collect();
+fn implemented_capabilities_are_unique_and_match_a_full_installation() {
+    let declared: Vec<_> = implemented_capabilities().collect();
     let unique: BTreeSet<_> = declared.iter().copied().collect();
     assert_eq!(declared.len(), unique.len());
     assert_eq!(declared.len(), 10);

@@ -1,5 +1,5 @@
 use model::outbound::{Outbound, QueueError};
-use model::{Context, ErrorCode};
+use model::{Context, DispatchError, ErrorCode};
 
 use super::ConnectionSubscriptions;
 use crate::Shared;
@@ -16,33 +16,45 @@ pub(super) async fn request(
     }
     let outbound = context.outbound;
     let mut context = Some(context);
-    super::workspace_creation::request(&mut context, state).await?;
+    super::workspace_creation::request(&mut context, state)
+        .await
+        .or_else(DispatchError::or_next)?;
     if context.is_none() {
         return Ok(());
     }
-    super::workspace_archive::request(&mut context, state).await?;
+    super::workspace_archive::request(&mut context, state)
+        .await
+        .or_else(DispatchError::or_next)?;
     if context.is_none() {
         return Ok(());
     }
-    crate::relay_rpc::request(&mut context, state).await?;
+    crate::relay_rpc::request(&mut context, state)
+        .await
+        .or_else(DispatchError::or_next)?;
     if context.is_none() {
         return Ok(());
     }
-    schedule::dispatch::dispatch(&mut context, &state.schedule).await?;
+    schedule::dispatch::dispatch(&mut context, &state.schedule)
+        .await
+        .or_else(DispatchError::or_next)?;
     if context.is_none() {
         return Ok(());
     }
-    browser::dispatch::dispatch(&mut context, &state.browser, &mut subscriptions.browser)?;
+    browser::dispatch::dispatch(&mut context, &state.browser, &mut subscriptions.browser)
+        .or_else(DispatchError::or_next)?;
     if context.is_none() {
         return Ok(());
     }
-    voice::dispatch::dispatch(&mut context, &state.voice, &mut subscriptions.voice).await?;
+    voice::dispatch::dispatch(&mut context, &state.voice, &mut subscriptions.voice)
+        .await
+        .or_else(DispatchError::or_next)?;
     if context.is_none() {
         return Ok(());
     }
     if let Some(completion) =
         metadata::dispatch::dispatch(&mut context, &state.metadata, &mut subscriptions.metadata)
-            .await?
+            .await
+            .or_else(DispatchError::or_next)?
     {
         complete_metadata(completion, state, subscriptions, outbound).await?;
     }
@@ -54,7 +66,8 @@ pub(super) async fn request(
         &state.filesystem,
         &mut subscriptions.filesystem,
     )
-    .await?;
+    .await
+    .or_else(DispatchError::or_next)?;
     if context.is_none() {
         return Ok(());
     }
@@ -63,7 +76,8 @@ pub(super) async fn request(
         mut value,
         terminal_ids,
     }) = provider::dispatch::dispatch(&mut context, &state.provider, &mut subscriptions.provider)
-        .await?
+        .await
+        .or_else(DispatchError::or_next)?
     {
         let result = terminal::dispatch::close_many(&state.terminal, terminal_ids)
             .await
@@ -77,7 +91,8 @@ pub(super) async fn request(
         return Ok(());
     }
     terminal::dispatch::dispatch(&mut context, &state.terminal, &mut subscriptions.terminals)
-        .await?;
+        .await
+        .or_else(DispatchError::or_next)?;
     if let Some(context) = context {
         return context.respond(Err(ErrorCode::NotImplemented));
     }

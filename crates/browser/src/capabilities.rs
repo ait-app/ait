@@ -1,17 +1,17 @@
-//! Browser capability ownership.
-/// Crate-owned method group.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum Group {
-    /// Browser operations.
-    Browser,
+//! Browser capability discovery and installation.
+
+/// Return every implemented capability for negotiation and message validation.
+/// # Returns
+/// Static method names, including events, without selecting a request handler.
+pub fn implemented_capabilities() -> impl Iterator<Item = &'static str> {
+    crate::connection::METHODS.iter().copied()
 }
-/// Implemented methods recognized by this crate's request handler.
-pub const IMPLEMENTED_GROUPS: &[(Group, &[&str])] =
-    &[(Group::Browser, crate::protocol::CAPABILITIES)];
-/// Installed methods when the host composes this service.
+
+/// Return installed methods when this service is composed by the host.
+/// # Arguments
+/// * `installed` - Whether the host installed this service.
+/// # Returns
+/// Static method names; an absent service advertises no capabilities.
 pub fn installed_capabilities(installed: bool) -> impl Iterator<Item = &'static str> {
-    crate::protocol::CAPABILITIES
-        .iter()
-        .copied()
-        .filter(move |_| installed)
+    implemented_capabilities().filter(move |_| installed)
 }

@@ -31,27 +31,35 @@ pub struct Context<'a> {
     pub available_subscriptions: usize,
 }
 
-impl Context<'_> {
-    /// Take `pending` only when its method belongs to one of `groups`.
+/// Failure to handle a request or deliver its response.
+#[derive(Debug, thiserror::Error)]
+pub enum DispatchError {
+    /// This handler does not implement the pending request; its Context remains available.
+    #[error("request not implemented by this handler")]
+    NotImplemented,
+    /// A consumed request could not deliver its response; processing must stop.
+    #[error(transparent)]
+    Delivery(#[from] QueueError),
+}
+
+impl DispatchError {
+    /// Continue a handler chain after an unimplemented request.
     ///
     /// # Arguments
-    /// * `pending` - Request shared by the successive handlers.
-    /// * `groups` - The current handler's method declarations and their owning groups.
-    ///
+    /// * `self` - The attempted handler's error.
     /// # Returns
-    /// Returns the owning group and context on a match. An absent or unmatched context is
-    /// left unchanged so the next handler can try it without cloning request resources.
-    pub fn take_matching<G: Copy>(
-        pending: &mut Option<Self>,
-        groups: &[(G, &[&str])],
-    ) -> Option<(G, Self)> {
-        let method = pending.as_ref()?.request.method.as_str();
-        let group = groups
-            .iter()
-            .find_map(|(group, methods)| methods.contains(&method).then_some(*group))?;
-        pending.take().map(|context| (group, context))
+    /// Returns the empty completion value when another handler may try the pending Context.
+    /// # Errors
+    /// Propagates delivery failures without retrying the consumed request.
+    pub fn or_next<T: Default>(self) -> Result<T, QueueError> {
+        match self {
+            Self::NotImplemented => Ok(T::default()),
+            Self::Delivery(error) => Err(error),
+        }
     }
+}
 
+impl Context<'_> {
     /// Execute `operation` with the owned method and parameters using the shared job budget.
     /// # Errors
     /// Returns admission, service-lock, task or converted business errors.

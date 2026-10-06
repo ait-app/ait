@@ -1,3 +1,9 @@
+/// Client methods implemented by this component; consumed by capability discovery.
+pub(crate) const METHODS: &[&str] = &[
+    "session.heartbeat",
+    "session.events.set_subscription.request",
+];
+
 use std::sync::Arc;
 
 use crate::protocol::session::{EventsRequest, Heartbeat};

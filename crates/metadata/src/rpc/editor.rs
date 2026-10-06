@@ -1,5 +1,8 @@
 //! Compatibility responses for editor operations moved to the desktop application.
 
+/// Client methods implemented by this component; consumed by capability discovery.
+pub(crate) const METHODS: &[&str] = &["editor.available.list.request", "editor.open.request"];
+
 use model::ErrorCode;
 use serde::Deserialize;
 use serde_json::{Value, json};

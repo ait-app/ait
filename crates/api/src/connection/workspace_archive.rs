@@ -3,8 +3,7 @@
 use filesystem::service::worktrees::{
     ArchiveScope, ArchiveWorktree, PendingArchive, WorktreesError,
 };
-use model::outbound::QueueError;
-use model::{Context, ErrorCode};
+use model::{Context, DispatchError, ErrorCode};
 use serde_json::{Value, json};
 
 use crate::Shared;
@@ -12,7 +11,10 @@ use crate::Shared;
 pub(super) async fn request(
     context: &mut Option<Context<'_>>,
     state: &Shared,
-) -> Result<(), QueueError> {
+) -> Result<(), DispatchError> {
+    if context.is_none() {
+        return Ok(());
+    }
     let Some(mut context) = context.take_if(|context| {
         matches!(
             context.request.method.as_str(),
@@ -21,14 +23,14 @@ pub(super) async fn request(
                 | "workspace.worktree.archive.request"
         )
     }) else {
-        return Ok(());
+        return Err(DispatchError::NotImplemented);
     };
     let result = if context.request.method == "workspace.worktree.archive.request" {
         worktree(state, std::mem::take(&mut context.request.params)).await
     } else {
         metadata(state, &mut context).await
     };
-    context.respond(result)
+    context.respond(result).map_err(Into::into)
 }
 
 async fn metadata(state: &Shared, context: &mut Context<'_>) -> Result<Value, ErrorCode> {

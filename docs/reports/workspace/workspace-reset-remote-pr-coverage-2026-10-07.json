@@ -1,0 +1,204 @@
+{
+  "source_revision": "c4f340f72dbf9dccf79fb53e2e1cea9e8448aa38",
+  "base_revision": "c2a55fbe5817647eb9ac3ec7c53695df1bf885be",
+  "measurement_date": "2026-10-07",
+  "scope": "Rust Cargo workspace; default features; macOS arm64; rustc 1.98.1; cargo-llvm-cov 0.8.4; default file filtering; no additional exclusions; test-threads=1; doctests run normally but are not instrumented; native C/C++ dependencies are not instrumented",
+  "commands": {
+    "tests": "cargo test --workspace --locked --offline -- --test-threads=1",
+    "build": "cargo build --workspace --locked --offline",
+    "clippy": "cargo clippy --workspace --all-targets --locked --offline -- -D warnings",
+    "format": "cargo fmt --all --check",
+    "coverage": "SHERPA_ONNX_LIB_DIR=/Users/necokeine/.ait-server-desktop/worktrees/2vfcj658/big-stingray/target/sherpa-onnx-prebuilt/sherpa-onnx-v1.13.8-osx-arm64-static-lib/lib cargo llvm-cov --workspace --html --locked --offline -- --test-threads=1",
+    "coverage_export": "SHERPA_ONNX_LIB_DIR=/Users/necokeine/.ait-server-desktop/worktrees/2vfcj658/big-stingray/target/sherpa-onnx-prebuilt/sherpa-onnx-v1.13.8-osx-arm64-static-lib/lib cargo llvm-cov report --json --locked --offline --output-path /private/tmp/ait-reset-remote-pr-coverage-raw.json",
+    "client_tests": "npm run test --workspace=@ait/mobile -- src/i18n/resources.test.ts",
+    "client_lint": "./node_modules/.bin/oxlint apps/mobile/src/i18n/resources/*.ts",
+    "client_format": "./node_modules/.bin/oxfmt --check apps/mobile/src/i18n/resources/*.ts",
+    "docs": "npm run check:docs"
+  },
+  "test_execution": {
+    "result": "passed",
+    "targets": 28,
+    "passed": 1894,
+    "failed": 0,
+    "ignored": 7,
+    "ignored_tests": [
+      "test local::antigravity::tests::installed::authenticated_multi_turn_and_resume ... ignored, requires authenticated AGY and explicitly consumes three model turns",
+      "test local::claude::tests::process::installed_claude_control_protocol_discovers_models_without_inference ... ignored, requires a locally installed Claude Code CLI; sends no model request",
+      "test local::claude::tests::process::parity::installed_claude_completes_a_native_turn_and_reopens_history ... ignored, requires installed Claude authentication and makes one small model request",
+      "test local::codex::tests::installed::installed_codex_completes_a_native_turn_and_reopens_history ... ignored, requires installed Codex authentication and makes one small model request",
+      "test local::deepseek_harness::native::tests::installed_host_discovers_switches_permissions_and_adopts_legacy_sessions ... ignored, requires an installed DSH CLI via AIT_TEST_DSH_BIN; no model request",
+      "test local::opencode::tests::installed::installed_opencode_declined_tool_settles_and_accepts_next_turn ... ignored, requires AIT_TEST_OPENCODE_BIN; isolated config and loopback model only",
+      "test local::opencode::tests::installed::installed_opencode_discovers_runs_and_restores_with_local_model ... ignored, requires AIT_TEST_OPENCODE_BIN; isolated config and loopback model only"
+    ]
+  },
+  "coverage_test_execution": {
+    "result": "passed",
+    "targets": 16,
+    "passed": 1894,
+    "failed": 0,
+    "ignored": 7,
+    "ignored_tests": [
+      "test local::antigravity::tests::installed::authenticated_multi_turn_and_resume ... ignored, requires authenticated AGY and explicitly consumes three model turns",
+      "test local::claude::tests::process::installed_claude_control_protocol_discovers_models_without_inference ... ignored, requires a locally installed Claude Code CLI; sends no model request",
+      "test local::claude::tests::process::parity::installed_claude_completes_a_native_turn_and_reopens_history ... ignored, requires installed Claude authentication and makes one small model request",
+      "test local::codex::tests::installed::installed_codex_completes_a_native_turn_and_reopens_history ... ignored, requires installed Codex authentication and makes one small model request",
+      "test local::deepseek_harness::native::tests::installed_host_discovers_switches_permissions_and_adopts_legacy_sessions ... ignored, requires an installed DSH CLI via AIT_TEST_DSH_BIN; no model request",
+      "test local::opencode::tests::installed::installed_opencode_declined_tool_settles_and_accepts_next_turn ... ignored, requires AIT_TEST_OPENCODE_BIN; isolated config and loopback model only",
+      "test local::opencode::tests::installed::installed_opencode_discovers_runs_and_restores_with_local_model ... ignored, requires AIT_TEST_OPENCODE_BIN; isolated config and loopback model only"
+    ]
+  },
+  "client_test_execution": {
+    "files": 1,
+    "passed": 36,
+    "failed": 0
+  },
+  "workspace_lines": {
+    "count": 56802,
+    "covered": 53569,
+    "percent": 94.30829900355621
+  },
+  "crate_lines": {
+    "bins/daemon": {
+      "count": 941,
+      "covered": 898,
+      "percent": 95.43039319872476
+    },
+    "crates/api": {
+      "count": 2134,
+      "covered": 1976,
+      "percent": 92.59606373008435
+    },
+    "crates/browser": {
+      "count": 725,
+      "covered": 706,
+      "percent": 97.37931034482759
+    },
+    "crates/domain": {
+      "count": 121,
+      "covered": 121,
+      "percent": 100.0
+    },
+    "crates/filesystem": {
+      "count": 11988,
+      "covered": 11366,
+      "percent": 94.81147814481147
+    },
+    "crates/metadata": {
+      "count": 7955,
+      "covered": 7541,
+      "percent": 94.79572595851666
+    },
+    "crates/model": {
+      "count": 777,
+      "covered": 737,
+      "percent": 94.85199485199485
+    },
+    "crates/protocol": {
+      "count": 75,
+      "covered": 75,
+      "percent": 100.0
+    },
+    "crates/provider": {
+      "count": 27305,
+      "covered": 25581,
+      "percent": 93.68613806995056
+    },
+    "crates/relay": {
+      "count": 464,
+      "covered": 422,
+      "percent": 90.94827586206897
+    },
+    "crates/schedule": {
+      "count": 823,
+      "covered": 805,
+      "percent": 97.81287970838396
+    },
+    "crates/terminal": {
+      "count": 1543,
+      "covered": 1486,
+      "percent": 96.30589760207388
+    },
+    "crates/voice": {
+      "count": 1951,
+      "covered": 1855,
+      "percent": 95.07944643772424
+    }
+  },
+  "changed_source_lines": {
+    "crates/filesystem/src/local/checkout.rs": {
+      "count": 1622,
+      "covered": 1515,
+      "percent": 93.403205918619
+    }
+  },
+  "changed_source_sha256": {
+    "apps/mobile/src/i18n/resources/ar.ts": "4f0edade62ee1a726b19eceb4fe268c4b8f1fb6ab179398620270117bfcd2bd7",
+    "apps/mobile/src/i18n/resources/en.ts": "baf1f68b3498dcfe90961fc5ba6821d5f7ca962c5dbed22ffa21392524a3dcb5",
+    "apps/mobile/src/i18n/resources/es.ts": "dd3d244bcd17f7905088e670fd805c06bd4f2034c8d170e1959d1bf45af1e0c1",
+    "apps/mobile/src/i18n/resources/fr.ts": "642a19a7d4cdda675ff2a90395edcb477d5f78847fa3dcaa0346bc28c2c16b2a",
+    "apps/mobile/src/i18n/resources/ja.ts": "b3a92df1c27e97d49d4bf85200b2d0cb243cc2847b6202dd5ec7af56c5764aef",
+    "apps/mobile/src/i18n/resources/ko.ts": "52d049787f8be47fae6e3bec32912bcfef23b78101c61492be491a6deae80e4e",
+    "apps/mobile/src/i18n/resources/pt-BR.ts": "38f4e3250743b97f480ecb87aae065614afd8913b5d2021ed09ed50233f1ac7b",
+    "apps/mobile/src/i18n/resources/ru.ts": "9e82b3fa2155eaa337db1a053d60e733f29b097bfb8fccc9e11f009d72c6a5d2",
+    "apps/mobile/src/i18n/resources/zh-CN.ts": "e05953ae17bd7d8dae3472a6902017822a1af0e8d562217c3fc8bae1d0c35975",
+    "crates/filesystem/src/local/checkout.rs": "213b72698d04abb7e196ecbec1cc3526ab91662df902fc515fa3e19f3305c0f2",
+    "crates/filesystem/src/local/checkout/tests.rs": "3ba3bca0c05bb5618e3ce731d43f49e89c96b09fc73801477c33384cda783d7b",
+    "crates/filesystem/src/local/checkout/tests/reset_workspace.rs": "5f7d71af82432e0bd25a350a1df35ca232180a4504b906a335bf0d0e2bc5c61b",
+    "crates/filesystem/src/ports/checkout.rs": "99f07ce060400fe5c2689fcc730b031232fc4bda902ed84d76b3bfb7e1c1059b"
+  },
+  "html_report": "target/llvm-cov/html/index.html",
+  "raw_report_sha256": "b32e2de69bd4d625366513255faf938ab724aafa4f1bce4e30d6b2735f370e6f",
+  "reviewable_artifact": "This committed JSON records the measured source revision, exact commands, workspace/crate/changed-source counts, source hashes and skipped tests. The local HTML report is not a shared artifact.",
+  "baseline_comparison": {
+    "artifact": "docs/reports/providers/paseo-concurrency-coverage-2026-10-07.json",
+    "source_revision": "5a5645789e25ca416eaf479edea70afab52307d7",
+    "rust_sources_match_pr_base": true,
+    "scope": "Rust Cargo workspace; default features; macOS arm64; rustc 1.98.1; cargo-llvm-cov 0.8.4; default file filtering; no additional exclusions; test-threads=1; doctests run normally but are not instrumented; native C/C++ dependencies are not instrumented",
+    "workspace_lines": {
+      "count": 56775,
+      "covered": 53543,
+      "percent": 94.30735358872744
+    },
+    "filesystem_lines": {
+      "count": 11961,
+      "covered": 11340,
+      "percent": 94.80812641083521
+    },
+    "workspace_percentage_point_change": 0.0009454148287773023,
+    "filesystem_percentage_point_change": 0.003351733976259652,
+    "interpretation": "Historical measurement uses the same platform, toolchain, features and one-thread configuration. Its Rust sources match the PR base; no fresh baseline run was made. Runtime scheduling can change unrelated execution counts, so the full workspace delta is not attributed solely to this PR."
+  },
+  "uncovered_behavior": "Local Git validation/fetch/reset failure guards and bounded process timeout/output-limit paths are not all fault-injected by reset tests. Rejected push, concurrent remote update/deletion, stale/missing tracking refs, and one-push/no-tag behavior are exercised. Real hosted branch-protection and credential errors are represented by an isolated bare repository rejection, without contacting hosted repositories.",
+  "follow_up": "Run Linux CI and Windows-specific verification; add deterministic Git process failure injection if additional reset error paths need direct coverage. Default-ignored provider tests require installed/authenticated provider CLIs.",
+  "unavailable_platforms": [
+    "Linux",
+    "Windows"
+  ],
+  "behavior_execution_counts": {
+    "origin_reset_branches": 25,
+    "LocalCheckout.reset_workspace": 26
+  },
+  "source_region_execution_counts": [
+    {
+      "file": "crates/filesystem/src/local/checkout.rs",
+      "line": 543,
+      "column": 9,
+      "execution_count": 23,
+      "behavior": "local hard reset"
+    },
+    {
+      "file": "crates/filesystem/src/local/checkout.rs",
+      "line": 547,
+      "column": 13,
+      "execution_count": 12,
+      "behavior": "force push existing remote branch"
+    },
+    {
+      "file": "crates/filesystem/src/local/checkout.rs",
+      "line": 552,
+      "column": 17,
+      "execution_count": 3,
+      "behavior": "push failure context"
+    }
+  ]
+}

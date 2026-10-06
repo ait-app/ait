@@ -1,5 +1,19 @@
 //! Forge request validation and response projection.
 
+/// Client methods implemented by this component; consumed by capability discovery.
+pub const METHODS: &[&str] = &[
+    "forge.search.request",
+    "github.search.request",
+    "checkout.pr.create.request",
+    "checkout.pr.merge.request",
+    "checkout.pr.status.request",
+    "checkout.pr.timeline.request",
+    "checkout.forge.set_auto_merge.request",
+    "checkout.forge.get_check_details.request",
+    "checkout.github.set_auto_merge.request",
+    "checkout.github.get_check_details.request",
+];
+
 use serde::Serialize;
 use serde_json::Value;
 

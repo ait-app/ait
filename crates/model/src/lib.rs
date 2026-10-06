@@ -12,7 +12,7 @@ pub mod runtime;
 pub mod server;
 pub mod subscription;
 
-pub use context::{Context, Request};
+pub use context::{Context, DispatchError, Request};
 pub use message::{ErrorCode, ServerMessage};
 pub use runtime::{LifecycleIntent, Runtime};
 pub use server::{Lifecycle, Limits, ServerInfo, VERSION};

@@ -1,5 +1,18 @@
 //! Transport-independent agent runtime request handling.
 
+/// Client methods implemented by this component; consumed by capability discovery.
+pub const METHODS: &[&str] = &[
+    "agent.list.request",
+    "agent.history.get.request",
+    "agent.get.request",
+    "agent.update.request",
+    "agent.archive.request",
+    "agent.delete.request",
+    "agent.detach.request",
+    "agent.attention.clear.request",
+    "agent.items.close.request",
+];
+
 use std::collections::BTreeSet;
 
 pub(crate) mod listing;

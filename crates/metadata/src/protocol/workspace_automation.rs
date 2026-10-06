@@ -2,15 +2,6 @@
 
 use serde::{Deserialize, Serialize};
 
-/// Canonical setup and script methods implemented by the independent server.
-pub const CAPABILITIES: &[&str] = &[
-    "workspace.setup.status.request",
-    "workspace.setup.run.request",
-    "workspace.script.list.request",
-    "workspace.script.start.request",
-    "workspace.script.stop.request",
-];
-
 /// Select one workspace.
 #[derive(Debug, Clone, PartialEq, Eq, Deserialize)]
 #[serde(rename_all = "camelCase")]

@@ -2,15 +2,6 @@
 
 use serde::{Deserialize, Serialize};
 
-/// Configuration capabilities only; no provider/model validation or execution is advertised.
-pub const CAPABILITIES: &[&str] = &[
-    "agent.configure",
-    "agent.get",
-    "agent.list",
-    "agent.default.get",
-    "agent.default.set",
-];
-
 /// Complete preset configuration. Unknown fields, including raw credential fields, are rejected.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]

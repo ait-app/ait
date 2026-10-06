@@ -3,9 +3,6 @@
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 
-/// Creation observation method owned by metadata.
-pub const CAPABILITIES: &[&str] = &["creation.subscribe.request"];
-
 /// Resource whose creation is observed.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Deserialize, Serialize)]
 #[serde(rename_all = "lowercase")]

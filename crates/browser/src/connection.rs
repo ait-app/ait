@@ -1,4 +1,11 @@
 //! Physical connection ownership for browser-host subscriptions.
+
+/// Client methods implemented by this component; consumed by capability discovery.
+pub(crate) const METHODS: &[&str] = &[
+    "browser.host.register.request",
+    "browser.automation.execute.response",
+];
+
 use crate::broker::{Broker, Registration};
 use model::{ErrorCode, outbound::Outbound};
 use serde_json::{Value, json};

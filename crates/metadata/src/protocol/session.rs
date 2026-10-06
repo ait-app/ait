@@ -2,9 +2,6 @@
 
 use serde::{Deserialize, Serialize};
 
-/// Connection request methods owned by metadata.
-pub const CAPABILITIES: &[&str] = &["session.events.set_subscription.request"];
-
 /// Event streams with installed producers in the independent server.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Serialize, Deserialize)]
 pub enum SessionEventKind {

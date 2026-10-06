@@ -2,10 +2,9 @@
 
 use std::sync::{Arc, Mutex};
 
-use model::outbound::QueueError;
-use model::{Context, ErrorCode, Runtime};
+use model::{Context, DispatchError, ErrorCode, Runtime};
 
-use crate::capabilities::{Group, IMPLEMENTED_GROUPS};
+mod requests;
 
 /// Services installed for this capability crate, sharing server-wide runtime resources.
 #[derive(Debug)]
@@ -35,6 +34,8 @@ impl std::ops::Deref for State {
 pub(crate) mod agent_execution;
 mod agent_runtime;
 mod catalog;
+
+pub(crate) use catalog::METHODS as CATALOG_METHODS;
 
 /// Check exact Agent resource occupancy without serializing behind a native startup.
 /// # Errors
@@ -112,6 +113,7 @@ pub enum Completion {
 
 /// Dispatch an admitted provider request using concrete shared request resources.
 /// Leaves `context` unchanged for other crates; takes it when this crate handles the method.
+/// Returns `DispatchError::NotImplemented` while leaving an unmatched Context available.
 /// Returns optional work for the API to finish before ending request processing.
 ///
 /// # Arguments
@@ -120,79 +122,43 @@ pub enum Completion {
 /// * `connection` - Connection-owned subscriptions and streams for this capability.
 ///
 /// # Errors
-/// Returns delivery failures; business failures are sent using the original request ID.
+/// Returns `NotImplemented` for an unmatched method and `Delivery` for an outbound failure.
+/// Business failures are sent using the original request ID.
 pub async fn dispatch(
     context: &mut Option<Context<'_>>,
     state: &State,
     connection: &mut crate::connection::Connection,
-) -> Result<Option<Completion>, QueueError> {
-    let Some((group, mut context)) = Context::take_matching(context, IMPLEMENTED_GROUPS) else {
+) -> Result<Option<Completion>, DispatchError> {
+    if context.is_none() {
         return Ok(None);
-    };
-    match group {
-        Group::Agents => {
-            context
-                .rpc(
-                    state.agents.clone(),
-                    ErrorCode::AgentIo,
-                    crate::rpc::agents::execute,
-                )
-                .await
-        }
-        Group::AgentRuntime
-            if context.request.method == "agent.list.request"
-                && context
-                    .request
-                    .params
-                    .get("subscribe")
-                    .is_some_and(|subscribe| !subscribe.is_null()) =>
-        {
-            crate::connection::directory::subscribe(context, state, connection).await
-        }
-        Group::AgentRuntime => {
-            let params = std::mem::take(&mut context.request.params);
-            match agent_runtime::dispatch(&context.request.method, params, state).await {
-                Ok(reply) if !reply.terminals.is_empty() => {
-                    return Ok(Some(Completion::CloseTerminals {
-                        request_id: context.request.id,
-                        value: reply.value,
-                        terminal_ids: reply.terminals,
-                    }));
-                }
-                Ok(reply) => context.respond(Ok(reply.value)),
-                Err(error) => context.respond(Err(error)),
-            }
-        }
-        Group::AgentExecution if context.request.method == "agent.create.request" => {
-            crate::connection::Connection::create(context, state).await
-        }
-        Group::AgentExecution if context.request.method == "agent.finish.wait.request" => {
-            agent_execution::wait(
-                context.request.id,
-                context.request.params,
-                state,
-                context.outbound,
-            )
-        }
-        Group::Timeline if context.request.method == "agent.timeline.set_subscription.request" => {
-            connection.subscribe(context, state).await
-        }
-        Group::Timeline if context.request.method == "agent.timeline.append.request" => {
-            let Some(plugin) = connection.plugin() else {
-                context.respond(Err(ErrorCode::UnsupportedCapability))?;
-                return Ok(None);
-            };
-            let payload = serde_json::json!({"request":context.request.params,"plugin":plugin});
-            let result =
-                agent_execution::dispatch("internal.timeline.append", payload, state).await;
-            context.respond(result)
-        }
-        Group::ProviderCatalog => catalog::request(context, state),
-        Group::AgentExecution | Group::Timeline => {
-            let params = std::mem::take(&mut context.request.params);
-            let result = agent_execution::dispatch(&context.request.method, params, state).await;
-            context.respond(result)
-        }
-    }?;
-    Ok(None)
+    }
+    requests::agents(context, state)
+        .await
+        .or_else(DispatchError::or_next)?;
+    if context.is_none() {
+        return Ok(None);
+    }
+    let completion = requests::runtime(context, state, connection)
+        .await
+        .or_else(DispatchError::or_next)?;
+    if context.is_none() {
+        return Ok(completion);
+    }
+    requests::execution(context, state)
+        .await
+        .or_else(DispatchError::or_next)?;
+    if context.is_none() {
+        return Ok(None);
+    }
+    requests::timeline(context, state, connection)
+        .await
+        .or_else(DispatchError::or_next)?;
+    if context.is_none() {
+        return Ok(None);
+    }
+    requests::catalog(context, state).or_else(DispatchError::or_next)?;
+    if context.is_none() {
+        return Ok(None);
+    }
+    Err(DispatchError::NotImplemented)
 }

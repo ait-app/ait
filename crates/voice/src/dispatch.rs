@@ -2,9 +2,9 @@
 
 use std::sync::Arc;
 
-use model::{Context, ErrorCode, Runtime, outbound::QueueError};
+use model::{Context, DispatchError, ErrorCode, Runtime};
 
-use crate::{capabilities::IMPLEMENTED_GROUPS, connection::Connection, service::Speech};
+use crate::{connection::Connection, service::Speech};
 
 /// Concrete services and shared runtime used by speech request and event handlers.
 #[derive(Debug)]
@@ -17,6 +17,7 @@ pub struct State {
 
 /// Dispatch an admitted request to the connection's speech state.
 /// Leaves `context` unchanged for other crates; takes it when this crate handles the method.
+/// Returns `DispatchError::NotImplemented` while leaving an unmatched Context available.
 ///
 /// # Arguments
 /// * `context` - Pending request, consumed only when this crate recognizes its method.
@@ -24,15 +25,29 @@ pub struct State {
 /// * `connection` - Connection-owned subscriptions and streams for this capability.
 ///
 /// # Errors
-/// Returns encoding or queue errors; business errors are delivered in the correlated response.
+/// Returns `NotImplemented` for an unmatched method and `Delivery` for an outbound failure.
+/// Business errors are delivered in the correlated response.
 pub async fn dispatch(
     context: &mut Option<Context<'_>>,
     state: &State,
     connection: &mut Connection,
-) -> Result<(), QueueError> {
-    let Some((_, mut context)) = Context::take_matching(context, IMPLEMENTED_GROUPS) else {
+) -> Result<(), DispatchError> {
+    if context.is_none() {
         return Ok(());
+    }
+    let Some(mut context) = context.take_if(|context| {
+        matches!(
+            context.request.method.as_str(),
+            "voice.mode.set.request"
+                | "voice.abort.request"
+                | "dictation.stream.start"
+                | "dictation.stream.finish"
+                | "dictation.stream.cancel"
+        )
+    }) else {
+        return Err(DispatchError::NotImplemented);
     };
+
     let stopped = context.request.method == "voice.abort.request"
         || context.request.method == "voice.mode.set.request"
             && context.request.params["enabled"] == false;

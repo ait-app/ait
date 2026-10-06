@@ -2,15 +2,6 @@
 
 use serde::{Deserialize, Serialize};
 
-/// Production methods implemented by the workspace label service.
-pub const CAPABILITIES: &[&str] = &[
-    "workspace.label.list.request",
-    "workspace.label.assignment.set.request",
-    "workspace.label.update.request",
-    "workspace.label.delete.inspect.request",
-    "workspace.label.delete.request",
-];
-
 /// Paseo's fixed workspace label palette.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]

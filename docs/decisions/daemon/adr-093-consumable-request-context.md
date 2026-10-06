@@ -1,4 +1,4 @@
-# ADR-092：以可消费 Context 逐级处理请求
+# ADR-093：以可消费 Context 逐级处理请求
 
 - 状态：Accepted。
 - 日期：2026-10-07。
@@ -13,8 +13,16 @@ API 校验名称、消息方向、已协商 capability 和能力安装情况后�
 `&mut Option<Context>`，在自己的入口判断是否处理。未匹配时原样保留请求；匹配后取走
 Context，完成执行和响应。每层完成后，API 发现 Option 为 `None` 就正常返回。
 
-公共 `Context::take_matching` 根据调用方自己的方法分组匹配并取走请求，不复制请求或载荷。
-能力组只留在所属 crate 内部，API 删除跨 crate 的 Group 枚举、handler 路由表和组分发 match。
+各能力 crate 内部也逐个调用处理分支，在实际处理入口直接匹配方法并取走 Context。
+删除跨 crate 和 crate 内部的 Group、`IMPLEMENTED_GROUPS` 与 `Context::take_matching`，
+执行路径不查询 capability 目录。各实际实现组件在自己的 RPC、service 或 connection 模块
+声明 `METHODS`；crate 的能力发现只组合这些方法与安装条件，API 再组合各 crate 的迭代器。
+protocol 中重复的 capability 数组移除，协议类型与规范目录不决定 daemon 已实现什么。
+消息方向和兼容名称继续由协议校验，传输队列归属查询实现组件组合后的方法目录。
+未实现方法返回 `DispatchError::NotImplemented` 并保留 Context，调用方只忽略此错误以继续
+尝试下一层；已消费请求的队列或编码失败返回 `DispatchError::Delivery` 并立即传播。
+空 Context 入口仍然无操作成功返回。
+
 方法目录只保留消息方向与协商 capability，继续区分未知方法、错误方向、未协商能力与未安装
 实现。`server.status.unsubscribe` 继续使用 `server.status.subscribe` 的协商能力。
 
@@ -34,9 +42,9 @@ worker 队列，仅用于并发和订阅隔离，不选择业务 handler 或传�
 ## 后果与验证
 
 新增能力实现只需要所属 crate 的声明与处理分支。API 仍显式装配能力入口和跨能力协调，
-不引入动态 handler 注册、boxed future 或回调接口。匹配不分配内存，最坏按静态方法声明
-数量线性扫描；请求载荷只移动一次。
+不引入动态 handler 注册、boxed future 或回调接口。匹配不分配内存，最坏逐个尝试
+处理分支；请求载荷只移动一次。
 
-回归测试覆盖未匹配请求原样保留、空 Context 无操作、各 crate 消费一次、业务错误停止
-处理、发送失败传播、后段能力与最终兜底、metadata 收尾、校验错误优先级及 worker 归属。
+回归测试覆盖未匹配错误与请求原样保留、空 Context 无操作、所有已声明请求的消费分支、
+各 crate 消费一次、业务错误停止处理、发送失败传播、后段能力与最终兜底、metadata 收尾、校验错误优先级及 worker 归属。
 既有 WebSocket 测试继续验证 capability 协商、响应顺序、订阅释放和连接隔离。

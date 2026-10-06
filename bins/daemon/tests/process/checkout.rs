@@ -1,7 +1,7 @@
 use std::path::Path;
 use std::process::Command;
 
-use filesystem::protocol::checkout::CAPABILITIES;
+use filesystem::dispatch::CHECKOUT_METHODS;
 use serde_json::json;
 
 use super::transport::{Socket, connect, receive, request};
@@ -24,7 +24,7 @@ async fn large_diff_file_keeps_connection_and_subscription_usable() {
     let log = root.path().join("server.log");
     let mut process = start(&root.path().join("state"), &log);
     let address = ready(&mut process, &log).await;
-    let mut client = connect(&address, CAPABILITIES).await;
+    let mut client = connect(&address, CHECKOUT_METHODS).await;
     let diff = request(
         &mut client,
         "checkout.diff.get.request",
@@ -93,7 +93,7 @@ async fn large_diff_snapshot_limits_stay_inline_and_recover() {
     let log = root.path().join("server.log");
     let mut process = start(&root.path().join("state"), &log);
     let address = ready(&mut process, &log).await;
-    let mut client = connect(&address, CAPABILITIES).await;
+    let mut client = connect(&address, CHECKOUT_METHODS).await;
     let initial = request(
         &mut client,
         "checkout.diff.subscribe.request",
@@ -142,7 +142,7 @@ async fn binary_serves_checkout_reads_and_connection_owned_diff_updates() {
     let log = root.path().join("server.log");
     let mut process = start(&state, &log);
     let address = ready(&mut process, &log).await;
-    let mut client = connect(&address, CAPABILITIES).await;
+    let mut client = connect(&address, CHECKOUT_METHODS).await;
 
     let status = request(
         &mut client,
@@ -262,7 +262,7 @@ async fn binary_serves_checkout_branch_and_mutation_methods() {
     let log = root.path().join("server.log");
     let mut process = start(&state, &log);
     let address = ready(&mut process, &log).await;
-    let mut client = connect(&address, CAPABILITIES).await;
+    let mut client = connect(&address, CHECKOUT_METHODS).await;
 
     assert_branch_methods(&mut client, &repository).await;
     assert_mutation_methods(&mut client, &repository).await;

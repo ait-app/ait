@@ -26,8 +26,8 @@ async fn binary_serves_workspace_attention_and_recovery_methods() {
     let mut process = start(&state, &log);
     let address = ready(&mut process, &log).await;
     let capabilities = [
-        metadata::protocol::workspace_state::CAPABILITIES,
-        filesystem::protocol::workspace_recovery::CAPABILITIES,
+        metadata::rpc::workspace_state::METHODS,
+        filesystem::rpc::workspace_recovery::METHODS,
     ]
     .concat();
     let mut client = connect(&address, &capabilities).await;

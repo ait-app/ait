@@ -5,8 +5,7 @@ use std::sync::{Arc, Mutex};
 use metadata::protocol::creation::Kind;
 use metadata::rpc::directory::WorkspaceCreated;
 use model::events::Subscription;
-use model::outbound::QueueError;
-use model::{Context, ErrorCode};
+use model::{Context, DispatchError, ErrorCode};
 use serde_json::{Value, json};
 
 use crate::Shared;
@@ -14,7 +13,10 @@ use crate::Shared;
 pub(super) async fn request(
     context: &mut Option<Context<'_>>,
     state: &Shared,
-) -> Result<(), QueueError> {
+) -> Result<(), DispatchError> {
+    if context.is_none() {
+        return Ok(());
+    }
     let Some(mut context) = context.take_if(|context| {
         context.request.method == "workspace.create.request"
             && context
@@ -23,11 +25,11 @@ pub(super) async fn request(
                 .get("agent")
                 .is_some_and(|agent| !agent.is_null())
     }) else {
-        return Ok(());
+        return Err(DispatchError::NotImplemented);
     };
     let input = match prepare(&mut context, state).await {
         Ok(input) => input,
-        Err(error) => return context.respond(Err(error)),
+        Err(error) => return context.respond(Err(error)).map_err(Into::into),
     };
     if let Some(subscription) = &input.subscription {
         subscription.activate()?;
@@ -40,7 +42,7 @@ pub(super) async fn request(
             context.workspace(value, event)?;
             Ok(())
         }
-        Err(error) => context.respond(Err(error)),
+        Err(error) => context.respond(Err(error)).map_err(Into::into),
     }
 }
 

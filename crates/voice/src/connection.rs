@@ -1,5 +1,17 @@
 //! Physical-connection ownership, cancellation and ordered speech delivery.
 
+/// Client methods implemented by this component; consumed by capability discovery.
+pub const METHODS: &[&str] = &[
+    "voice.mode.set.request",
+    "voice.abort.request",
+    "dictation.stream.start",
+    "dictation.stream.finish",
+    "dictation.stream.cancel",
+    "voice.audio.chunk",
+    "voice.audio.played",
+    "dictation.stream.chunk",
+];
+
 mod dictation;
 mod jobs;
 mod voice;

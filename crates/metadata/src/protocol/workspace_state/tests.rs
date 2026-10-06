@@ -5,13 +5,13 @@ use super::*;
 #[test]
 fn capabilities_use_only_canonical_workspace_state_names() {
     assert_eq!(
-        CAPABILITIES,
+        crate::rpc::workspace_state::METHODS,
         [
             "workspace.clear_attention.request",
             "workspace.mark_unread.request",
         ]
     );
-    assert!(!CAPABILITIES.contains(&"workspace_recovery_inspect_request"));
+    assert!(!crate::rpc::workspace_state::METHODS.contains(&"workspace_recovery_inspect_request"));
 }
 
 #[test]

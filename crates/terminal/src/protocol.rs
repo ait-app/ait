@@ -4,20 +4,6 @@
 
 use serde::{Deserialize, Serialize};
 
-/// All implemented terminal methods, including the uncorrelated input event.
-pub const CAPABILITIES: &[&str] = &[
-    "terminal.list.request",
-    "terminal.list.subscribe.request",
-    "terminal.list.unsubscribe.request",
-    "terminal.create.request",
-    "terminal.rename.request",
-    "terminal.subscribe.request",
-    "terminal.unsubscribe.request",
-    "terminal.input",
-    "terminal.kill.request",
-    "terminal.capture.request",
-];
-
 /// PTY dimensions in character cells.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Deserialize, Serialize)]
 pub struct Size {

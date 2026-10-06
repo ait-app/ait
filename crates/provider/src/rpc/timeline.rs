@@ -1,5 +1,14 @@
 //! Timeline query semantics over immutable Provider display rows.
 
+/// Client methods implemented by this component; consumed by capability discovery.
+pub(crate) const METHODS: &[&str] = &[
+    "agent.timeline.get.request",
+    "agent.timeline.search.request",
+    "agent.timeline.list_prompts.request",
+    "agent.timeline.append.request",
+    "agent.timeline.set_subscription.request",
+];
+
 use model::ErrorCode;
 use serde_json::{Value, json};
 

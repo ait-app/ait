@@ -2,7 +2,8 @@ use std::time::Duration;
 
 use futures_util::{SinkExt, StreamExt};
 use serde_json::{Value, json};
-use terminal::protocol::{CAPABILITIES, Opcode, frame};
+use terminal::connection::METHODS;
+use terminal::protocol::{Opcode, frame};
 use tokio_tungstenite::tungstenite::Message;
 
 use super::transport::{Socket, connect};
@@ -23,7 +24,7 @@ struct Client {
 
 impl Client {
     async fn connect(address: &str) -> Self {
-        let mut methods = CAPABILITIES.to_vec();
+        let mut methods = METHODS.to_vec();
         methods.extend([
             "workspace.open.request",
             "workspace.archive.request",

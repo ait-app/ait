@@ -2,9 +2,6 @@
 
 use serde::{Deserialize, Serialize};
 
-/// Canonical project icon methods.
-pub const CAPABILITIES: &[&str] = &["project.icon.set.request", "project.icon.get.request"];
-
 /// Client-owned icon source. URL fetching is deliberately absent.
 #[derive(Debug, Clone, PartialEq, Eq, Deserialize)]
 #[serde(tag = "type", rename_all = "snake_case")]

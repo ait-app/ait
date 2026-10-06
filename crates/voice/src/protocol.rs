@@ -2,18 +2,6 @@
 
 use serde::Deserialize;
 
-/// Implemented request and event capabilities.
-pub const CAPABILITIES: &[&str] = &[
-    "voice.mode.set.request",
-    "voice.audio.chunk",
-    "voice.abort.request",
-    "voice.audio.played",
-    "dictation.stream.start",
-    "dictation.stream.chunk",
-    "dictation.stream.finish",
-    "dictation.stream.cancel",
-];
-
 /// Enable voice for a specific Agent, or disable the current connection's voice mode.
 #[derive(Debug, Deserialize)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]

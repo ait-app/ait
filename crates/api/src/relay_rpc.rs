@@ -1,7 +1,6 @@
 //! Authenticated control of this daemon's outbound online service connector.
 
-use model::outbound::QueueError;
-use model::{Context, ErrorCode};
+use model::{Context, DispatchError, ErrorCode};
 use serde_json::{Value, json};
 
 use crate::Shared;
@@ -17,18 +16,24 @@ pub(super) const METHODS: &[&str] = &[
 ///
 /// Returns the non-secret connector status and runtime identity through `context`.
 /// # Errors
-/// Returns a queue error if the bounded outbound connection is no longer writable.
+/// Returns `NotImplemented` for another method, or `Delivery` if outbound delivery fails.
 pub(super) async fn request(
     context: &mut Option<Context<'_>>,
     state: &Shared,
-) -> Result<(), QueueError> {
-    let Some(context) =
-        context.take_if(|context| METHODS.contains(&context.request.method.as_str()))
-    else {
+) -> Result<(), DispatchError> {
+    if context.is_none() {
         return Ok(());
+    }
+    let Some(context) = context.take_if(|context| {
+        matches!(
+            context.request.method.as_str(),
+            "relay.status.request" | "relay.start.request" | "relay.stop.request"
+        )
+    }) else {
+        return Err(DispatchError::NotImplemented);
     };
     let result = execute(&context.request, state).await;
-    context.respond(result)
+    context.respond(result).map_err(Into::into)
 }
 
 async fn execute(request: &model::Request, state: &Shared) -> Result<Value, ErrorCode> {

@@ -6,19 +6,6 @@ use serde_json::Value;
 use super::agent_execution::SessionConfig;
 use super::timeline::{Cursor, Direction};
 
-/// Methods owned by the serialized Provider worker.
-pub const CAPABILITIES: &[&str] = &[
-    "agent.rewind.request",
-    "agent.commands.list.request",
-    "agent.mode.set.request",
-    "agent.feature.set.request",
-    "agent.permission.resolve.request",
-    "agent.provider_subagents.list.request",
-    "agent.provider_subagents.timeline.get.request",
-    "provider.diagnostic.request",
-    "provider.usage.list.request",
-];
-
 /// A non-destructive native conversation rewind target.
 #[derive(Debug, Deserialize)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]

@@ -55,7 +55,7 @@ async fn server_routes_self_managed_gitlab_operations_without_github_queries() {
             .iter()
             .any(|feature| feature == "forge-gitlab-v1")
     );
-    let mut methods = filesystem::protocol::forge::CAPABILITIES.to_vec();
+    let mut methods = filesystem::rpc::forge::METHODS.to_vec();
     methods.extend(["workspace.create.request", "workspace.setup.status.request"]);
     let mut client = connect(&address, &methods).await;
     let status = request(

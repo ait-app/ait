@@ -10,41 +10,14 @@ use crate::Services;
 
 /// Merge crate-owned method declarations for negotiation and envelope validation.
 pub(super) fn implemented_methods() -> impl Iterator<Item = &'static str> {
-    schedule::IMPLEMENTED_GROUPS
-        .iter()
-        .map(|(_, methods)| *methods)
-        .chain(
-            browser::IMPLEMENTED_GROUPS
-                .iter()
-                .map(|(_, methods)| *methods),
-        )
-        .chain(
-            voice::IMPLEMENTED_GROUPS
-                .iter()
-                .map(|(_, methods)| *methods),
-        )
-        .chain(
-            metadata::IMPLEMENTED_GROUPS
-                .iter()
-                .map(|(_, methods)| *methods),
-        )
-        .chain(
-            filesystem::IMPLEMENTED_GROUPS
-                .iter()
-                .map(|(_, methods)| *methods),
-        )
-        .chain(
-            provider::IMPLEMENTED_GROUPS
-                .iter()
-                .map(|(_, methods)| *methods),
-        )
-        .chain(
-            terminal::IMPLEMENTED_GROUPS
-                .iter()
-                .map(|(_, methods)| *methods),
-        )
-        .chain(std::iter::once(crate::relay_rpc::METHODS))
-        .flat_map(|methods| methods.iter().copied())
+    schedule::implemented_capabilities()
+        .chain(browser::implemented_capabilities())
+        .chain(voice::implemented_capabilities())
+        .chain(metadata::implemented_capabilities())
+        .chain(filesystem::implemented_capabilities())
+        .chain(provider::implemented_capabilities())
+        .chain(terminal::implemented_capabilities())
+        .chain(crate::relay_rpc::METHODS.iter().copied())
 }
 
 /// Supply service presence to each owner and collect its installed method names.

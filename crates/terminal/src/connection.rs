@@ -1,3 +1,17 @@
+/// Client methods implemented by this component; consumed by capability discovery.
+pub const METHODS: &[&str] = &[
+    "terminal.list.request",
+    "terminal.list.subscribe.request",
+    "terminal.list.unsubscribe.request",
+    "terminal.create.request",
+    "terminal.rename.request",
+    "terminal.subscribe.request",
+    "terminal.unsubscribe.request",
+    "terminal.kill.request",
+    "terminal.capture.request",
+    "terminal.input",
+];
+
 use std::collections::BTreeMap;
 
 use crate::ports::Observation;

@@ -6,14 +6,6 @@ use serde::Deserialize;
 
 use super::timeline::Cursor;
 
-/// Methods implemented by the native session worker.
-pub const CAPABILITIES: &[&str] = &[
-    "provider.sessions.recent.list.request",
-    "agent.import.request",
-    "agent.refresh.request",
-    "agent.fork_context.request",
-];
-
 /// Filters for recent sessions which have not been actively imported.
 #[derive(Debug, Deserialize)]
 #[serde(deny_unknown_fields)]

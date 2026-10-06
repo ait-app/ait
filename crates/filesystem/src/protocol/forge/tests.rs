@@ -98,14 +98,14 @@ fn serializes_paseo_status_timeline_and_check_shapes() {
 
 #[test]
 fn capability_names_are_canonical_and_complete() {
-    assert_eq!(CAPABILITIES.len(), 10);
+    assert_eq!(crate::rpc::forge::METHODS.len(), 10);
     assert!(
-        CAPABILITIES
+        crate::rpc::forge::METHODS
             .iter()
             .all(|method| method.ends_with(".request"))
     );
     assert!(
-        CAPABILITIES
+        crate::rpc::forge::METHODS
             .iter()
             .all(|method| !method.ends_with("_request"))
     );

@@ -22,7 +22,7 @@ impl Fixture {
     }
 
     async fn socket(&self) -> Socket {
-        let mut methods = filesystem::protocol::files::CAPABILITIES.to_vec();
+        let mut methods = filesystem::connection::files::METHODS.to_vec();
         methods.extend(["subscription.release.request", "connection.ping"]);
         connect(&self.address, &methods).await
     }

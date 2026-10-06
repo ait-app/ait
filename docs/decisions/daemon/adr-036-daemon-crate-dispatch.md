@@ -2,7 +2,7 @@
 
 > 后续修订：[ADR-037](adr-037-daemon-model-context.md) 抽出公共 Context 并删除 Host 回调，
 > 能力 crate 直接使用 Tokio 与具体上下文；本文的 crate 优先分发顺序继续有效。
-> [ADR-092](adr-092-consumable-request-context.md) 随后移除预先路由，改由各入口逐级消费 Context。
+> [ADR-093](adr-093-consumable-request-context.md) 随后移除预先路由，改由各入口逐级消费 Context。
 
 - 状态：Accepted。
 - 日期：2026-09-25。

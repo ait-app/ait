@@ -5,21 +5,6 @@ use serde_json::Value;
 
 use crate::protocol::workspace::{WorkspaceDescriptorPayload, WorkspaceProjectDescriptorPayload};
 
-/// Methods whose first implementation is backed by the file registries.
-pub const CAPABILITIES: &[&str] = &[
-    "project.add.request",
-    "project.create_directory.request",
-    "project.list.request",
-    "project.rename.request",
-    "project.remove.request",
-    "workspace.open.request",
-    "workspace.create.request",
-    "workspace.list.request",
-    "workspace.archive.request",
-    "workspace.title.set.request",
-    "workspace.pin.set.request",
-];
-
 /// Register an existing directory as a project without creating a workspace.
 #[derive(Debug, Clone, PartialEq, Eq, Deserialize)]
 pub struct ProjectAddRequest {
