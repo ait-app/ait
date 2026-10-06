@@ -48,7 +48,14 @@ impl Worker {
             .stderr(Stdio::null())
             .kill_on_drop(true)
             .spawn()
-            .map_err(|_| Error::Unavailable)?;
+            .map_err(|error| {
+                tracing::warn!(
+                    error_kind = ?error.kind(),
+                    os_error = error.raw_os_error(),
+                    "failed to spawn offline speech worker"
+                );
+                Error::Unavailable
+            })?;
         let input = child.stdin.take().ok_or(Error::Provider)?;
         let output = BufReader::new(child.stdout.take().ok_or(Error::Provider)?);
         Ok(Self {

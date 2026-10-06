@@ -138,11 +138,10 @@ fn worker_protocol_acknowledges_only_completed_file_operations() {
 #[cfg(unix)]
 #[tokio::test]
 async fn invalid_worker_acknowledgments_drop_the_process_and_allow_a_retry() {
-    use std::os::unix::fs::PermissionsExt;
     let root = tempfile::tempdir().unwrap();
-    let program = root.path().join("worker");
-    std::fs::write(&program, "#!/bin/sh\nread line\nprintf 'bad\\n'\n").unwrap();
-    std::fs::set_permissions(&program, std::fs::Permissions::from_mode(0o700)).unwrap();
+    let program = Path::new(env!("CARGO_MANIFEST_DIR")).join("src/offline/tests/worker.py");
+    let behavior = root.path().join("behavior");
+    std::fs::write(&behavior, "invalid-ack").unwrap();
     let init = Init {
         model: Model::SenseVoice,
         directory: root.path().to_owned(),
@@ -174,11 +173,7 @@ async fn invalid_worker_acknowledgments_drop_the_process_and_allow_a_retry() {
         Err(Error::Provider)
     );
     assert!(worker.is_none());
-    std::fs::write(
-        &program,
-        "#!/bin/sh\nwhile IFS= read -r line; do printf 'ok\\n'; done\n",
-    )
-    .unwrap();
+    std::fs::write(&behavior, "acknowledge-only").unwrap();
     execute(
         &mut worker,
         &program,
@@ -199,15 +194,10 @@ async fn invalid_worker_acknowledgments_drop_the_process_and_allow_a_retry() {
 #[cfg(unix)]
 #[tokio::test]
 async fn worker_is_reused_and_cancelled_process_is_reaped() {
-    use std::os::unix::fs::PermissionsExt;
     let directory = tempfile::tempdir().unwrap();
-    let program = directory.path().join("worker");
-    std::fs::write(
-        &program,
-        "#!/bin/sh\nwhile IFS= read -r line; do printf 'ok\\n'; done\n",
-    )
-    .unwrap();
-    std::fs::set_permissions(&program, std::fs::Permissions::from_mode(0o700)).unwrap();
+    let program = Path::new(env!("CARGO_MANIFEST_DIR")).join("src/offline/tests/worker.py");
+    let behavior = directory.path().join("behavior");
+    std::fs::write(&behavior, "acknowledge-only").unwrap();
     let init = Init {
         model: Model::SenseVoice,
         directory: directory.path().to_owned(),
@@ -236,11 +226,7 @@ async fn worker_is_reused_and_cancelled_process_is_reaped() {
     assert_eq!(worker.as_ref().unwrap().child.id(), pid);
     worker.as_mut().unwrap().stop().await;
     worker = None;
-    std::fs::write(
-        &program,
-        "#!/bin/sh\nread line\nprintf 'ok\\n'\nread line\nread line\n",
-    )
-    .unwrap();
+    std::fs::write(&behavior, "block").unwrap();
     let cancel = CancellationToken::new();
     let trigger = cancel.clone();
     tokio::spawn(async move {

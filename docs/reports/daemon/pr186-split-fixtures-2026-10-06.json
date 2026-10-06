@@ -1,0 +1,130 @@
+{
+  "schema_version": 1,
+  "slice": "fixtures",
+  "base_revision": "5df233ac2f87cecda5f1a1ee99c003a15522dc49",
+  "original_combined_revision": "dc6cb1e01158ba14120e471b980ffe902ec7e09b",
+  "measured_source_tree_sha": "d66952e584eb8d9a6e281ea96dc7cfe981152217",
+  "source_patch_sha256": "a15bfb2f5fc69026d4f2c9af8f170a8ce3390b445314b06d6c9f9d63c663da97",
+  "measured_at_utc": "2026-10-06T09:34:14.703597+00:00",
+  "platform": "Linux x86_64",
+  "rust_version": "1.98.1",
+  "cargo_llvm_cov_version": "0.8.7",
+  "test_environment": "Isolated HOME/XDG/DSH_HOME and controlled provider PATH, CARGO_INCREMENTAL=0, CARGO_PROFILE_DEV_DEBUG=0, CARGO_PROFILE_TEST_DEBUG=0; tracked build input timestamps refreshed before reusing the shared target",
+  "features": "Default workspace features; no added package or filename exclusions; doctests not instrumented by cargo llvm-cov --tests",
+  "commands": {
+    "coverage-json": "cargo llvm-cov report --json --summary-only --output-path $VALIDATION_DIR/coverage-summary-full.json",
+    "workspace-coverage": "cargo llvm-cov --workspace --html --ignore-run-fail --output-dir $VALIDATION_DIR/coverage",
+    "voice-focused": "cargo test --workspace offline",
+    "workspace-clippy": "cargo clippy --workspace --all-targets -- -D warnings",
+    "workspace-test-all": "cargo test --workspace --no-fail-fast",
+    "daemon-process": "cargo test -p daemon --test process attempted_initial_prompt_is_not_replayed_after_failure",
+    "workspace-build": "cargo build --workspace",
+    "fmt": "cargo fmt --all --check"
+  },
+  "command_notation": "Machine-specific binary/cache/output paths normalized to variables; command options unchanged",
+  "command_status": {
+    "voice-focused": {
+      "exit_code": 0,
+      "time_utc": "2026-10-06T09:26:44Z"
+    },
+    "daemon-process": {
+      "exit_code": 0,
+      "time_utc": "2026-10-06T09:27:47Z"
+    },
+    "workspace-build": {
+      "exit_code": 0,
+      "time_utc": "2026-10-06T09:27:47Z"
+    },
+    "workspace-clippy": {
+      "exit_code": 0,
+      "time_utc": "2026-10-06T09:28:27Z"
+    },
+    "workspace-test-all": {
+      "exit_code": 101,
+      "time_utc": "2026-10-06T09:29:43Z"
+    },
+    "fmt": {
+      "exit_code": 0,
+      "time_utc": "2026-10-06T09:29:46Z"
+    },
+    "workspace-coverage": {
+      "exit_code": 0,
+      "time_utc": "2026-10-06T09:33:07Z"
+    },
+    "coverage-json": {
+      "exit_code": 0,
+      "time_utc": "2026-10-06T09:33:09Z"
+    }
+  },
+  "test_execution": {
+    "voice-focused": {
+      "passed": 22,
+      "failed": 0,
+      "ignored": 0
+    },
+    "daemon-process": {
+      "passed": 1,
+      "failed": 0,
+      "ignored": 0
+    },
+    "workspace-test-all": {
+      "passed": 1802,
+      "failed": 1,
+      "ignored": 3
+    },
+    "workspace-coverage": {
+      "passed": 1802,
+      "failed": 1,
+      "ignored": 3
+    }
+  },
+  "coverage": {
+    "schema_version": 1,
+    "scopes": {
+      "workspace": {
+        "source_prefix": ".",
+        "covered_lines": 49398,
+        "total_lines": 52295,
+        "line_percent": 94.460273,
+        "measured_source_files": 338
+      },
+      "voice": {
+        "source_prefix": "crates/voice",
+        "covered_lines": 1855,
+        "total_lines": 1951,
+        "line_percent": 95.079446,
+        "measured_source_files": 19
+      },
+      "daemon": {
+        "source_prefix": "bins/daemon",
+        "covered_lines": 922,
+        "total_lines": 967,
+        "line_percent": 95.346432,
+        "measured_source_files": 7
+      }
+    },
+    "source_files_outside_repo_root": [],
+    "note": "Counts sum measured file lines; this extraction does not establish test success or a comparable baseline"
+  },
+  "coverage_scope_definition": {
+    "workspace": "All collected production source files under this worktree",
+    "voice": "crates/voice/",
+    "daemon": "bins/daemon/"
+  },
+  "ignored_tests": [
+    "local::claude::tests::process::installed_claude_control_protocol_discovers_models_without_inference",
+    "local::claude::tests::process::parity::installed_claude_completes_a_native_turn_and_reopens_history",
+    "local::codex::tests::installed::installed_codex_completes_a_native_turn_and_reopens_history"
+  ],
+  "failures": [
+    "local::files::tests::directory_links_are_listed_but_special_files_cannot_be_copied"
+  ],
+  "environment_failure": "Unchanged filesystem directory_links_are_listed_but_special_files_cannot_be_copied: AF_UNIX creation/bind returns EPERM in this cloud environment. No test assertion/timeout changed and no explicit skips used. --ignore-run-fail produces a report despite this test failure; exit 0 does not mean an all-passing suite.",
+  "comparable_baseline": "No comparable standalone-slice baseline measured; no delta claimed",
+  "artifacts": "Compact evidence committed with this PR; full HTML, source-scoped JSON and logs retained for the split verification bundle",
+  "remaining_gaps": [
+    "Historical spawn errno was not captured, so ETXTBSY remains a risk mechanism rather than a proven original cause",
+    "Actual speech-model inference was not run; the offline process tests use deterministic fixtures",
+    "Voice production spawn failure diagnostics and less common OS cancellation/resource/error branches remain partly uncovered"
+  ]
+}
