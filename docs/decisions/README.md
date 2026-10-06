@@ -53,7 +53,7 @@
 
 ## 客户端、连接与品牌
 
-- [ADR-086：桌面与 Android 的 Authing 浏览器登录](clients/adr-086-authing-native-login.md)
+- [ADR-086：桌面、Android 与 iOS 的 Authing 浏览器登录](clients/adr-086-authing-native-login.md)
 - [ADR-085：Daemon 同步的稳定节点身份](clients/adr-085-stable-daemon-publication.md)
 - [ADR-084：iOS 在线服务账户与主机中继](clients/adr-084-ios-account-relay.md)
 - [ADR-080：Android APK 独立手动发布](clients/adr-080-standalone-android-release.md)
