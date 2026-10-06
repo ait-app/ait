@@ -235,7 +235,17 @@
     "format": "passed",
     "strict_clippy": "passed",
     "docs": "passed",
-    "full_workspace_tests": "in progress when recorded"
+    "full_workspace_tests": "passed",
+    "test_execution": {
+      "passed": 1905,
+      "failed": 0,
+      "ignored": 7,
+      "test_targets": 28,
+      "log_sha256": "4abf7c7fa35e498b94f3837b170c8a91de257122e976ab6256f3de5abb2f8490",
+      "command": "cargo test --workspace"
+    },
+    "job_url": "https://github.com/ait-app/ait/actions/runs/37516171384/job/112449571526",
+    "source_equivalence": "The later evidence commits only change this JSON document; bins/, crates/, Cargo.toml and Cargo.lock match the tested source revision."
   },
   "uncovered_behavior": [
     "Current complete coverage and per-file gaps are unavailable because the measurement did not finish. Integration results are inconclusive for the failed native process and daemon startup cases; rerun after the macOS loading issue is resolved.",
