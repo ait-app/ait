@@ -4,6 +4,8 @@ import { accountCommand, supportsAccountRelay, useAccountState } from "./account
 const mocks = vi.hoisted(() => ({
   manager: {
     login: vi.fn(),
+    loginWithBrowser: vi.fn(),
+    cancelLogin: vi.fn(),
     logout: vi.fn(),
     select: vi.fn(),
     refresh: vi.fn(),
@@ -32,6 +34,23 @@ vi.mock("./host-runtime", () => ({
 beforeEach(() => vi.clearAllMocks());
 
 describe("native mobile account commands", () => {
+  it("cancels browser login without waiting behind the native account queue", async () => {
+    mocks.platform = "android";
+    let finish!: () => void;
+    mocks.manager.loginWithBrowser.mockImplementationOnce(
+      () =>
+        new Promise<void>((resolve) => {
+          finish = resolve;
+        }),
+    );
+    mocks.manager.snapshot.mockReturnValue({ status: "logged_out", selected: null });
+    const login = accountCommand("account_login_hosted", { center: "https://center.test" });
+    await vi.waitFor(() => expect(mocks.manager.loginWithBrowser).toHaveBeenCalled());
+    await accountCommand("account_cancel_login");
+    expect(mocks.manager.cancelLogin).toHaveBeenCalledOnce();
+    finish();
+    await login;
+  });
   it.each(["android", "ios"])(
     "enables the %s account entry and awaits HostRuntime",
     async (platform) => {

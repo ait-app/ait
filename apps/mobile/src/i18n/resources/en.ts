@@ -7,6 +7,12 @@ export const en = {
     email: "Email",
     password: "Password",
     signIn: "Sign in",
+    unifiedLogin: "Sign in / Register",
+    unifiedHint:
+      "Continue in your browser with email, Google or WeChat. You can also verify your email or reset your password there.",
+    browserWaiting: "Waiting for browser sign-in…",
+    legacyLogin: "Use an existing AIT password",
+    expiresAt: "Account access expires: {{date}}",
     signingIn: "Signing in...",
     signOut: "Sign out",
     signOutHint:

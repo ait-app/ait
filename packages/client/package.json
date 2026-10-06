@@ -26,6 +26,10 @@
       "types": "./dist/daemon-client-websocket-transport.d.ts",
       "default": "./dist/daemon-client-websocket-transport.js"
     },
+    "./internal/account-browser-login": {
+      "types": "./dist/account-browser-login.d.ts",
+      "default": "./dist/account-browser-login.js"
+    },
     "./internal/account-session": {
       "types": "./dist/account-session.d.ts",
       "default": "./dist/account-session.js"

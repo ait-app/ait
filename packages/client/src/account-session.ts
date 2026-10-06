@@ -1,3 +1,9 @@
+import {
+  accountLoginError,
+  parseAccountCallback,
+  type AccountBrowserLogin,
+} from "./account-browser-login.js";
+
 /** API base includes the management gateway prefix; all relay URLs derive from it. */
 export const DEFAULT_ACCOUNT_CENTER = "https://dash.ait-app.com:8443/api";
 
@@ -24,6 +30,7 @@ export interface SavedAccount {
   expiresAt: number;
   name: string;
   nodeSessionId?: string;
+  accountExpiresAt?: string | null;
 }
 
 export interface AccountSnapshot {
@@ -37,6 +44,8 @@ export interface AccountSnapshot {
   selected: AccountHost | null;
   /** Independently maintained daemon leases; contains no credentials. */
   synchronizedHosts?: string[];
+  accountExpiresAt?: string | null;
+  loginPending?: boolean;
 }
 
 export interface AccountDependencies {
@@ -53,6 +62,7 @@ export interface AccountDependencies {
   fetch?: typeof fetch;
   /** Desktop can keep login independent of explicitly publishing individual daemons. */
   publishRuntime?: boolean;
+  browserLogin?: AccountBrowserLogin;
 }
 
 export interface AccountRuntime {
@@ -109,6 +119,7 @@ function retryDelay(failures: number): number {
 
 /** Platform-owned account authority; runtime connectors receive short-lived tickets only. */
 export class AccountSessionManager {
+  private browserLogin: AbortController | null = null;
   private account: SavedAccount | null = null;
   private suspended = false;
   private node: NodeSession | null = null;
@@ -170,17 +181,135 @@ export class AccountSessionManager {
     const result = await this.http<{
       access_token: string;
       expires_in: number;
-      user: { display_name?: string; email: string };
+      user: { display_name?: string; email: string; expires_at?: string | null };
     }>(center, null, "/v1/auth/login", "POST", { email, password });
     if (generation !== this.generation) throw new Error("Sign-in cancelled.");
+    return this.acceptLogin(center, result);
+  }
+
+  async loginMethods(center: string): Promise<{ hosted: boolean }> {
+    if (!this.deps.browserLogin) return { hosted: false };
+    try {
+      const options = await this.http<{
+        authing_enabled?: boolean;
+        native_login_enabled?: boolean;
+      }>(normalizeCenter(center), null, "/v1/auth/providers", "GET");
+      return { hosted: options.authing_enabled === true && options.native_login_enabled === true };
+    } catch (error) {
+      if (error instanceof AccountError && error.status === 404) return { hosted: false };
+      throw error;
+    }
+  }
+
+  cancelLogin(): void {
+    this.browserLogin?.abort();
+  }
+
+  async loginWithBrowser(center: string): Promise<AccountSnapshot> {
+    center = normalizeCenter(center);
+    const browser = this.deps.browserLogin;
+    if (!browser || !(await this.loginMethods(center)).hosted)
+      throw new Error(
+        "This service does not support client browser sign-in. Update the service or use email and password.",
+      );
+    await this.logout();
+    const attempt = new AbortController();
+    this.browserLogin = attempt;
+    this.update({ loginPending: true, center });
+    const requests = new Set<AbortController>();
+    attempt.signal.addEventListener(
+      "abort",
+      () => {
+        for (const request of requests) request.abort();
+      },
+      { once: true },
+    );
+    const timeout = setTimeout(() => attempt.abort(), 10 * 60_000);
+    try {
+      const state = browser.randomSecret();
+      const verifier = browser.randomSecret();
+      const challenge = await browser.challenge(verifier);
+      if (attempt.signal.aborted) throw new Error("Sign-in cancelled.");
+      const response = await browser.open(
+        (redirectUri) => {
+          const url = new URL(`${center}/v1/auth/authorize`);
+          url.searchParams.set("redirect_uri", redirectUri);
+          url.searchParams.set("state", state);
+          url.searchParams.set("code_challenge", challenge);
+          return url.toString();
+        },
+        state,
+        attempt.signal,
+      );
+      if (attempt.signal.aborted) throw new Error("Sign-in cancelled.");
+      const callback = parseAccountCallback(response.url, response.redirectUri, state);
+      if (!callback) throw new Error("The sign-in callback is invalid. Start sign-in again.");
+      const error = callback.searchParams.get("error");
+      if (error) throw new AccountError(accountLoginError(error), 401, error);
+      const result = await this.http<{
+        access_token: string;
+        expires_in: number;
+        user: { display_name?: string; email: string; expires_at?: string | null };
+      }>(
+        center,
+        null,
+        "/v1/auth/client/exchange",
+        "POST",
+        {
+          code: callback.searchParams.get("code"),
+          code_verifier: verifier,
+        },
+        requests,
+      );
+      if (attempt.signal.aborted) throw new Error("Sign-in cancelled.");
+      const snapshot = await this.acceptLogin(center, result);
+      if (attempt.signal.aborted) {
+        await this.logout();
+        throw new Error("Sign-in cancelled.");
+      }
+      return { ...snapshot, loginPending: false };
+    } catch (error) {
+      if (attempt.signal.aborted) throw new Error("Sign-in cancelled or timed out. Try again.");
+      throw error;
+    } finally {
+      clearTimeout(timeout);
+      if (this.browserLogin === attempt) {
+        this.browserLogin = null;
+        this.update({ loginPending: false });
+      }
+    }
+  }
+
+  private async acceptLogin(
+    center: string,
+    result: {
+      access_token: string;
+      expires_in: number;
+      user: { display_name?: string; email: string; expires_at?: string | null };
+    },
+  ): Promise<AccountSnapshot> {
+    if (
+      !result.access_token ||
+      !Number.isFinite(result.expires_in) ||
+      result.expires_in <= 0 ||
+      !result.user?.email
+    )
+      throw new Error("The service returned an invalid login session.");
     this.account = {
       center,
       token: result.access_token,
       expiresAt: Date.now() + result.expires_in * 1000,
       name: result.user.display_name || result.user.email,
+      accountExpiresAt: result.user.expires_at ?? null,
     };
     await this.deps.save(this.account);
-    this.update({ status: "connecting", center, name: this.account.name, error: null });
+    this.update({
+      status: "connecting",
+      center,
+      name: this.account.name,
+      accountExpiresAt: this.account.accountExpiresAt,
+      error: null,
+    });
     this.schedule(0);
     return this.snapshot();
   }
@@ -190,7 +319,12 @@ export class AccountSessionManager {
       return;
     }
     this.account = { ...account, center: normalizeCenter(account.center) };
-    this.update({ status: "connecting", center: this.account.center, name: account.name });
+    this.update({
+      status: "connecting",
+      center: this.account.center,
+      name: account.name,
+      accountExpiresAt: account.accountExpiresAt ?? null,
+    });
     // A previous process activation is released before registering this process.
     // If the request cannot reach the center, normal registration waits for its lease.
     if (account.nodeSessionId) {
@@ -200,6 +334,7 @@ export class AccountSessionManager {
   }
 
   async logout(): Promise<void> {
+    this.cancelLogin();
     this.generation += 1;
     if (this.timer) clearTimeout(this.timer);
     this.timer = null;
@@ -235,6 +370,7 @@ export class AccountSessionManager {
     this.update({
       status: "logged_out",
       name: "",
+      accountExpiresAt: null,
       hostOnline: false,
       hosts: [],
       stale: true,
@@ -597,7 +733,10 @@ export class AccountSessionManager {
       } else if (error instanceof AccountError && error.status === 401) {
         // Do not await logout from the tick it must drain.
         queueMicrotask(() => {
-          void this.logout();
+          if (generation !== this.generation) return;
+          void this.logout().then(() => {
+            if (!this.account) this.update({ error: error.message });
+          });
         });
       }
       if (!this.node) this.nextRegistration = Date.now() + retryDelay(this.registrationFailures++);
