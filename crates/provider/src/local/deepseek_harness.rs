@@ -1,6 +1,7 @@
-//! `DeepSeek` Harness sessions over ACP v1 JSON-RPC stdio, following Paseo's ACP adapter.
+//! `DeepSeek` Harness native interactive Host, with explicit legacy ACP compatibility.
 
 mod config;
+mod native;
 mod permissions;
 mod session;
 mod streaming;
@@ -22,26 +23,36 @@ use crate::protocol::provider::Details;
 /// Stable provider identity used by creation, discovery and durable resume handles.
 pub const PROVIDER: &str = "deepseek-harness";
 
-/// Local Harness launcher; the ACP profile owns credentials, tools and native persistence.
+/// Local Harness launcher; native profiles own credentials, tools and durable sessions.
 #[derive(Debug, Clone)]
 pub struct DeepSeekHarnessClient {
     program: PathBuf,
+    interactive: bool,
     deadline: Duration,
     environment: AgentEnvironment,
     images: super::images::ImageStore,
 }
 
 impl DeepSeekHarnessClient {
-    /// Launch `program --profile acp` without a shell, inheriting Harness configuration.
+    /// Launch the native interactive Web Host without a shell, inheriting Harness configuration.
     /// Control operations have a thirty-second deadline; prompts have no duration limit.
     #[must_use]
     pub fn new(program: PathBuf) -> Self {
         Self {
             program,
+            interactive: true,
             deadline: Duration::from_secs(30),
             environment: AgentEnvironment::default(),
             images: super::images::ImageStore::default(),
         }
+    }
+
+    /// Retain the automation-only ACP profile for older Harness installations.
+    /// ACP does not expose permission presets or interactive user questions.
+    #[must_use]
+    pub fn with_acp_profile(mut self) -> Self {
+        self.interactive = false;
+        self
     }
 
     /// Materialize native image output in `directory` for live display and saved timelines.
@@ -52,6 +63,14 @@ impl DeepSeekHarnessClient {
     }
 
     async fn probe(&self, spec: &AgentSessionSpec) -> Result<Details, AgentSessionError> {
+        if self.interactive {
+            let mut session = native::open(self, spec, None).await?;
+            let details = session.details();
+            let closed = session.close().await;
+            let details = details?;
+            closed?;
+            return Ok(details);
+        }
         let mut session = session::open(self, spec, None).await?;
         let details = config::details(&session.options);
         let closed = session.close().await;
@@ -67,14 +86,37 @@ impl AgentClient for DeepSeekHarnessClient {
     }
 
     fn supports_history_replay(&self) -> bool {
-        false
+        self.interactive
+    }
+
+    fn history<'a>(
+        &'a self,
+        handle: &'a AgentPersistenceHandle,
+        cwd: &'a str,
+    ) -> AgentSessionFuture<'a, Vec<crate::protocol::timeline::NativeItem>> {
+        Box::pin(async move {
+            if !self.interactive {
+                return Err(AgentSessionError::Unavailable);
+            }
+            native::history::read(self, handle, cwd).await
+        })
     }
 
     fn validate_config(&self, config: &StoredAgentConfig) -> Result<(), AgentSessionError> {
-        config::validate(config)
+        if self.interactive {
+            native::validate(config)
+        } else {
+            config::validate(config)
+        }
     }
 
     fn settings(&self, _config: &StoredAgentConfig) -> Value {
+        if self.interactive {
+            return json!({"availableModes":native::modes(),"features":[],"capabilities":{
+                "supportsMcpServers":false,"supportsStreaming":true,"supportsReasoningStream":true,
+                "supportsDynamicModes":true,"supportsSessionListing":false,
+                "supportsRewindConversation":false,"supportsRewindFiles":false,"supportsRewindBoth":false}});
+        }
         json!({"availableModes":[],"features":[],"capabilities":{
             "supportsMcpServers":true,"supportsStreaming":true,"supportsReasoningStream":true,
             "supportsDynamicModes":false,"supportsSessionListing":false,
@@ -95,7 +137,12 @@ impl AgentClient for DeepSeekHarnessClient {
                 .discover(cwd.to_str().ok_or(AgentSessionError::Failed)?)
                 .await?;
             Ok(format!(
-                "DeepSeek Harness ACP v1 ready; {} models",
+                "DeepSeek Harness {} ready; {} models",
+                if self.interactive {
+                    "native Host"
+                } else {
+                    "ACP v1"
+                },
                 details.models.len()
             ))
         })
@@ -121,7 +168,11 @@ impl AgentClient for DeepSeekHarnessClient {
         spec: &'a AgentSessionSpec,
     ) -> AgentSessionFuture<'a, Box<dyn AgentSession>> {
         Box::pin(async move {
-            Ok(Box::new(session::open(self, spec, None).await?) as Box<dyn AgentSession>)
+            if self.interactive {
+                Ok(Box::new(native::open(self, spec, None).await?) as Box<dyn AgentSession>)
+            } else {
+                Ok(Box::new(session::open(self, spec, None).await?) as Box<dyn AgentSession>)
+            }
         })
     }
 
@@ -145,7 +196,20 @@ impl AgentClient for DeepSeekHarnessClient {
             if purpose == AgentResumePurpose::History {
                 return Err(AgentSessionError::Unavailable);
             }
-            Ok(Box::new(session::open(self, spec, Some(handle)).await?) as Box<dyn AgentSession>)
+            if self.interactive {
+                Ok(Box::new(native::open(self, spec, Some(handle)).await?)
+                    as Box<dyn AgentSession>)
+            } else {
+                if handle
+                    .metadata
+                    .as_ref()
+                    .is_some_and(|metadata| metadata.get("transport").is_some())
+                {
+                    return Err(AgentSessionError::Rejected);
+                }
+                Ok(Box::new(session::open(self, spec, Some(handle)).await?)
+                    as Box<dyn AgentSession>)
+            }
         })
     }
 }
