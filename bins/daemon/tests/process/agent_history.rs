@@ -2,6 +2,8 @@ use super::transport::{connect, connect_as, receive, request};
 use super::{ready, start_with_path, terminate};
 use serde_json::json;
 
+#[path = "agent_history/catalog.rs"]
+mod catalog;
 #[path = "agent_history/paseo.rs"]
 mod paseo;
 

@@ -1,0 +1,101 @@
+{
+  "base_commit": "233c3112b51660e22890360f8287a562cb2abfb6",
+  "implementation_diff_sha256": "953abd3b3ea080521fabf1911ebcecad57161fa8841e3caaef4fad6bbed40a7f",
+  "platform": "Linux x86_64",
+  "rust": "1.98.1",
+  "cargo_llvm_cov": "0.8.7",
+  "features": "workspace default features; default file filtering; doctests not instrumented",
+  "profile": "CARGO_INCREMENTAL=0 CARGO_PROFILE_DEV_DEBUG=0 CARGO_PROFILE_TEST_DEBUG=0",
+  "command": "cargo +1.98.1 llvm-cov --workspace --locked -j2 --html --no-clean --ignore-run-fail",
+  "measurement": "Same-revision full attempts plus five isolated retries of the native DSH fixture are merged. ignore-run-fail permits report generation, not a test pass.",
+  "tests": {
+    "full_attempt_passed": 1831,
+    "full_attempt_failed": 2,
+    "ignored": 6,
+    "filesystem_fixture": "UnixListener::bind failed with EPERM in cloud executor, including after approved escalation",
+    "dsh_fixture": "create_session returned Unavailable once; isolated5/5 passed; original spawn errno unproven"
+  },
+  "scopes": {
+    "workspace": {
+      "covered": 50956,
+      "count": 54012,
+      "percent": 94.34199807450196
+    },
+    "crates/provider": {
+      "covered": 22969,
+      "count": 24521,
+      "percent": 93.67073120998329
+    },
+    "bins/daemon": {
+      "covered": 925,
+      "count": 969,
+      "percent": 95.45923632610939
+    }
+  },
+  "files": [
+    {
+      "path": "crates/provider/src/dispatch.rs",
+      "lines": {
+        "count": 113,
+        "covered": 98,
+        "percent": 86.72566371681415
+      }
+    },
+    {
+      "path": "crates/provider/src/dispatch/catalog.rs",
+      "lines": {
+        "count": 28,
+        "covered": 22,
+        "percent": 78.57142857142857
+      }
+    },
+    {
+      "path": "crates/provider/src/service/agent_execution.rs",
+      "lines": {
+        "count": 225,
+        "covered": 210,
+        "percent": 93.33333333333333
+      }
+    },
+    {
+      "path": "crates/provider/src/service/agent_execution/catalog.rs",
+      "lines": {
+        "count": 30,
+        "covered": 30,
+        "percent": 100.0
+      }
+    },
+    {
+      "path": "crates/provider/src/service/agent_manager.rs",
+      "lines": {
+        "count": 864,
+        "covered": 837,
+        "percent": 96.875
+      }
+    },
+    {
+      "path": "crates/provider/src/service/provider_catalog.rs",
+      "lines": {
+        "count": 212,
+        "covered": 210,
+        "percent": 99.05660377358491
+      }
+    },
+    {
+      "path": "crates/provider/src/service/provider_catalog/draft.rs",
+      "lines": {
+        "count": 33,
+        "covered": 33,
+        "percent": 100.0
+      }
+    }
+  ],
+  "baseline_comparison": "No comparable Linux coverage baseline. Earlier PR figures used macOS arm64.",
+  "limits": [
+    "macOS/Windows/native mobile not run",
+    "Filesystem special-file copy assertion blocked by Unix socket fixture permission",
+    "Some dispatch rejection/outbound-failure and OS-specific recovery branches remain uncovered",
+    "Frontend line coverage not measured; frontend passing counts are separate"
+  ],
+  "file_scope": "Changed Rust source files; the HTML attachment contains complete default workspace file coverage."
+}

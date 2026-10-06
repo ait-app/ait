@@ -550,6 +550,78 @@ class BrowserClientLifecycle {
 }
 
 describe("HostRuntimeController", () => {
+  it("retries unchanged pending endpoints when another connection invalidates their cycle", async () => {
+    const host = makeHost();
+    const pending =
+      createDeferred<Awaited<ReturnType<HostRuntimeControllerDeps["connectToDaemon"]>>>();
+    const fresh = makeConnectedProbeClient(1);
+    const probed: HostConnection[] = [];
+    const controller = new HostRuntimeController({
+      host,
+      deps: {
+        ...makeDeps({}, []),
+        connectToDaemon: async ({ connection }) => {
+          probed.push(connection);
+          return probed.length <= 2
+            ? pending.promise
+            : { client: fresh as unknown as DaemonClient, serverId: host.serverId, hostname: null };
+        },
+      },
+    });
+    const starting = controller.start({ autoProbe: false });
+    await controller.updateHost({ ...host, connections: [host.connections[0]!] });
+    expect(probed).toEqual([...host.connections, host.connections[0]]);
+    expect(controller.getSnapshot().client).toBe(fresh);
+    pending.reject(new Error("superseded probe"));
+    await starting;
+    expect(controller.getSnapshot().client).toBe(fresh);
+    await controller.stop();
+  });
+
+  it("probes a replacement endpoint without waiting for the old in-flight probe", async () => {
+    const oldConnection: HostConnection = {
+      id: "desktop-managed-srv_test",
+      type: "directTcp",
+      endpoint: "localhost:1234",
+    };
+    const nextConnection = { ...oldConnection, endpoint: "localhost:5678" };
+    const host = makeHost({ connections: [oldConnection] });
+    const oldProbe =
+      createDeferred<Awaited<ReturnType<HostRuntimeControllerDeps["connectToDaemon"]>>>();
+    const oldClient = makeConnectedProbeClient(1);
+    const newClient = makeConnectedProbeClient(2);
+    const probed: HostConnection[] = [];
+    const controller = new HostRuntimeController({
+      host,
+      deps: {
+        ...makeDeps({}, []),
+        connectToDaemon: async ({ connection }) => {
+          probed.push(connection);
+          return connection === oldConnection
+            ? oldProbe.promise
+            : {
+                client: newClient as unknown as DaemonClient,
+                serverId: host.serverId,
+                hostname: null,
+              };
+        },
+      },
+    });
+    const starting = controller.start({ autoProbe: false });
+    await controller.updateHost({ ...host, connections: [nextConnection] });
+    expect(probed).toEqual([oldConnection, nextConnection]);
+    expect(controller.getSnapshot().client).toBe(newClient);
+    oldProbe.resolve({
+      client: oldClient as unknown as DaemonClient,
+      serverId: host.serverId,
+      hostname: null,
+    });
+    await starting;
+    expect(oldClient.isDisposed()).toBe(true);
+    expect(controller.getSnapshot().client).toBe(newClient);
+    await controller.stop();
+  });
+
   it("publishes an old host and mounts observations through the client interface", async () => {
     const host = makeHost();
     const client = new FakeDaemonClient();
@@ -1524,6 +1596,81 @@ describe("HostRuntimeController", () => {
 });
 
 describe("HostRuntimeStore", () => {
+  it.each(["localhost:1234", "localhost:5678"])(
+    "waits for managed readiness, then immediately connects to %s",
+    async (listenAddress) => {
+      useHostRuntimeClock();
+      (globalThis as { window?: unknown }).window = { paseoDesktop: {} };
+      const managed: HostConnection = {
+        id: "desktop-managed-srv_test",
+        type: "directTcp",
+        endpoint: "localhost:1234",
+      };
+      const host = makeHost({ connections: [managed], preferredConnectionId: managed.id });
+      const probed: HostConnection[] = [];
+      const deps = makeDeps({ [managed.id]: 1 }, []);
+      const connect = deps.connectToDaemon;
+      deps.connectToDaemon = async (input) => {
+        probed.push(input.connection);
+        return connect(input);
+      };
+      const store = new HostRuntimeStore({
+        deps,
+        storage: createMemoryHostRuntimeStorage({
+          "@paseo:daemon-registry": JSON.stringify([host]),
+        }),
+      });
+      try {
+        await store.boot();
+        await vi.advanceTimersByTimeAsync(10_000);
+        expect(probed).toEqual([]);
+        expect(store.getHosts()[0]?.connections).toMatchObject([managed]);
+        await store.upsertConnectionFromListen({
+          serverId: host.serverId,
+          listenAddress,
+          hostname: null,
+          desktopManaged: true,
+        });
+        await waitForHostOnline(store, host.serverId);
+        expect(probed).toHaveLength(1);
+        expect(probed[0]).toMatchObject({ id: managed.id, endpoint: listenAddress });
+      } finally {
+        store.syncHosts([]);
+      }
+    },
+  );
+
+  it("keeps remote hosts available while the saved managed daemon waits for readiness", async () => {
+    (globalThis as { window?: unknown }).window = { paseoDesktop: {} };
+    const managed = makeHost({
+      connections: [
+        { id: "desktop-managed-srv_test", type: "directTcp", endpoint: "localhost:1234" },
+      ],
+    });
+    const remote = makeHost({ serverId: "srv_remote", connections: [makeHost().connections[0]!] });
+    const probed: string[] = [];
+    const deps = makeDeps({ [remote.connections[0]!.id]: 1 }, []);
+    const connect = deps.connectToDaemon;
+    deps.connectToDaemon = async (input) => {
+      probed.push(input.host.serverId);
+      return connect(input);
+    };
+    const store = new HostRuntimeStore({
+      deps,
+      storage: createMemoryHostRuntimeStorage({
+        "@paseo:daemon-registry": JSON.stringify([managed, remote]),
+      }),
+    });
+    try {
+      await store.boot();
+      await waitForHostOnline(store, remote.serverId);
+      expect(probed).toEqual([remote.serverId]);
+      expect(store.getSnapshot(managed.serverId)?.client).toBeNull();
+    } finally {
+      store.syncHosts([]);
+    }
+  });
+
   it.each(["active", "inactive", "background"] as const)(
     "keeps reconnect enabled through inactive/background and resumes immediately (mounted %s)",
     async (currentState) => {

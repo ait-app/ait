@@ -13,6 +13,7 @@
 
 ## 架构决策
 
+- [ADR-086：Provider 发现与启动历史同步隔离](decisions/providers/adr-086-provider-catalog-startup-isolation.md)：有界 catalog 通道与本机连接就绪后的恢复。
 - [ADR-085：Daemon 同步的稳定节点身份](decisions/clients/adr-085-stable-daemon-publication.md)：重复注册复用节点、旧 Host 绑定迁移、删除主机后的客户端登录及通用桌面 IPC 命名。
 - [ADR-084：iOS 在线服务账户与主机中继](decisions/clients/adr-084-ios-account-relay.md)：iOS 安全存储、原生账户会话、票据中继与下载。
 - [ADR-083：在线服务登录与逐主机同步分离](decisions/clients/adr-083-online-service-host-sync.md)：二级登录入口、应用账户设置及每台 daemon 的独立同步与租约。
@@ -53,6 +54,7 @@
 
 ## 工程规范与验证
 
+- [桌面启动连接与 Provider 发现隔离验证](reports/clients/desktop-startup-isolation-2026-10-06.md)：同连接队首阻塞、就绪后恢复、重复启动与覆盖率。
 - [PR #186 验收反馈修复](reports/providers/pr-186-acceptance-2026-10-06.md)：OpenCode 拒绝工具结束、冷启动模型目录与 DSH 同文多选答案。
 - [DSH 与 OpenCode 群反馈整合](reports/providers/dsh-opencode-group-feedback-2026-10-05.md)：权限与问答、历史缓存、真实 OpenCode 2.0.20 兼容和定向验证。
 

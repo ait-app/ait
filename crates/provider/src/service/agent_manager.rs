@@ -10,6 +10,7 @@ mod streaming;
 mod titles;
 
 use std::collections::BTreeMap;
+use std::sync::Arc;
 
 use chrono::{SecondsFormat, Utc};
 use domain::agent_runtime::{
@@ -97,7 +98,7 @@ struct LiveAgent {
 #[derive(Debug)]
 pub struct AgentManager {
     registry: Box<dyn AgentRuntimeRegistry>,
-    clients: BTreeMap<String, Box<dyn AgentClient>>,
+    clients: BTreeMap<String, Arc<dyn AgentClient>>,
     live: BTreeMap<String, LiveAgent>,
     events: SessionEvents,
     timeline: Option<crate::storage::timeline::Timeline>,
@@ -160,7 +161,7 @@ impl AgentManager {
     #[must_use]
     pub fn with_metadata_generation(
         mut self,
-        generator: std::sync::Arc<dyn metadata::ports::generation::MetadataGenerator>,
+        generator: Arc<dyn metadata::ports::generation::MetadataGenerator>,
     ) -> Self {
         self.generated_titles.generator = Some(generator);
         self
@@ -193,6 +194,16 @@ impl AgentManager {
         self.catalog
             .execute(&self.clients, &self.events, method, params)
             .await
+    }
+
+    /// Transfer the warmed discovery cache and shared adapters to the independent catalog lane.
+    pub(crate) fn take_catalog(
+        &mut self,
+    ) -> (
+        super::provider_catalog::Catalog,
+        BTreeMap<String, Arc<dyn AgentClient>>,
+    ) {
+        (std::mem::take(&mut self.catalog), self.clients.clone())
     }
 
     /// Load native history without claiming a writer, once per Agent in this process.
@@ -268,7 +279,7 @@ impl AgentManager {
         if self.clients.contains_key(&provider) {
             return Err(AgentManagerError::AlreadyExists(provider));
         }
-        self.clients.insert(provider, client);
+        self.clients.insert(provider, Arc::from(client));
         Ok(())
     }
 

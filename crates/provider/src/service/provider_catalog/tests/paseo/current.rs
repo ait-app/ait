@@ -91,7 +91,7 @@ async fn native_codex_draft_features_discover_workflows_without_opening_a_thread
     fixture.mode("workflows");
     let clients = BTreeMap::from([(
         "codex".to_owned(),
-        Box::new(fixture.client()) as Box<dyn AgentClient>,
+        Arc::new(fixture.client()) as Arc<dyn AgentClient>,
     )]);
     let mut catalog = Catalog::default();
     for model in [None, Some("default"), Some("  ")] {

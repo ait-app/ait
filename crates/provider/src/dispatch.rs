@@ -34,6 +34,7 @@ impl std::ops::Deref for State {
 
 pub(crate) mod agent_execution;
 mod agent_runtime;
+mod catalog;
 
 /// Check exact Agent resource occupancy without serializing behind a native startup.
 /// # Errors
@@ -178,7 +179,8 @@ pub async fn dispatch(
                 agent_execution::dispatch("internal.timeline.append", payload, state).await;
             context.respond(result)
         }
-        Group::AgentExecution | Group::Timeline | Group::ProviderCatalog => {
+        Group::ProviderCatalog => catalog::request(context, state),
+        Group::AgentExecution | Group::Timeline => {
             let params = std::mem::take(&mut context.request.params);
             let result = agent_execution::dispatch(&context.request.method, params, state).await;
             context.respond(result)

@@ -163,6 +163,11 @@ for line in sys.stdin:
             sessions.sort(key=lambda entry: entry["updatedAt"], reverse=True)
             result = {"data": sessions, "nextCursor": None}
     elif method == "model/list":
+        if mode == "delayed-discovery":
+            (root / "discovery-entered").write_text("")
+            deadline = time.monotonic() + 8
+            while not (root / "release-discovery").exists() and time.monotonic() < deadline:
+                time.sleep(0.01)
         result = {"data": [{"id": "offline-model", "model": "offline-model", "displayName": "Offline model", "isDefault": True, "hidden": False, "description": "Offline fixture", "supportedReasoningEfforts": [{"reasoningEffort": "high", "description": "High effort"}], "defaultReasoningEffort": "high", "serviceTiers": [] if mode == "no-fast" else [{"id": "fast"}]}], "nextCursor": None}
     elif method == "turn/start":
         if mode == "delayed-voice-admission":
