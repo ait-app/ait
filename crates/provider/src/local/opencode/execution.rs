@@ -27,7 +27,7 @@ pub(super) fn outcome(
         );
     }
     let Some(event) = execution else {
-        return Ok(None);
+        return idle_outcome(info, history);
     };
     let created = event
         .get("created")
@@ -72,6 +72,72 @@ pub(super) fn outcome(
         ));
     }
     Ok(Some(outcome))
+}
+
+fn idle_outcome(info: &Value, history: &[Value]) -> Result<Option<Outcome>, ProtocolError> {
+    if interrupted_assistant(history) {
+        return Ok(Some(Outcome::Interrupted));
+    }
+    // V2.0.20 filters execution events out of the public log. Its persisted idle row
+    // is the completion boundary; an old assistant or session-level outcome alone is not.
+    let Some(last) = history.last().filter(|row| row["type"] == "idle") else {
+        return Ok(None);
+    };
+    let created = last.pointer("/time/created").and_then(Value::as_i64);
+    let input = history
+        .iter()
+        .rev()
+        .find(|row| row["type"] == "user")
+        .and_then(|row| row.pointer("/time/created"))
+        .and_then(Value::as_i64);
+    if !matches!((created, input), (Some(end), Some(start)) if end >= start) {
+        return Err(failure(
+            Fault::RunRecoveryFailed,
+            "invalid OpenCode idle boundary",
+        ));
+    }
+    let outcome = match last["outcome"].as_str() {
+        Some("succeeded") => Outcome::Completed,
+        Some("failed") => Outcome::Failed,
+        Some("interrupted") => Outcome::Interrupted,
+        _ => {
+            return Err(failure(
+                Fault::ProviderFailed,
+                "invalid OpenCode idle outcome",
+            ));
+        }
+    };
+    if info.get("outcome") != last.get("outcome") {
+        return Err(failure(
+            Fault::RunRecoveryFailed,
+            "OpenCode idle outcome has not reconciled",
+        ));
+    }
+    Ok(Some(outcome))
+}
+
+fn interrupted_assistant(history: &[Value]) -> bool {
+    // V2.0.20 aborts a declined tool without an idle row or a session outcome.
+    // snapshot() brackets this evidence with native inactivity checks.
+    let Some(last) = history.last() else {
+        return false;
+    };
+    if last["type"] != "assistant"
+        || last["finish"] != "error"
+        || last.pointer("/error/type").and_then(Value::as_str) != Some("aborted")
+    {
+        return false;
+    }
+    let input = history
+        .iter()
+        .rev()
+        .find(|row| row["type"] == "user")
+        .and_then(|row| row.pointer("/time/created"))
+        .and_then(Value::as_i64);
+    let created = last.pointer("/time/created").and_then(Value::as_i64);
+    let completed = last.pointer("/time/completed").and_then(Value::as_i64);
+    matches!((input, created, completed), (Some(input), Some(created), Some(completed))
+        if input <= created && created <= completed)
 }
 
 #[cfg(test)]

@@ -4,7 +4,7 @@ use std::{collections::HashSet, time::Duration};
 use crate::local::opencode::types::{Fault, Model, ProtocolError};
 use reqwest::{Client, Method, Response, Url};
 use secrecy::{ExposeSecret, SecretString};
-use serde_json::{Value, json};
+use serde_json::Value;
 
 use super::failure;
 
@@ -310,9 +310,9 @@ impl Api {
     pub(super) async fn models(&self) -> Result<Vec<Model>, ProtocolError> {
         let path = match self.version {
             Version::V1 => "/provider".to_owned(),
-            Version::V2 => format!("/api/model?location={}", encoded_location(&self.cwd)),
+            Version::V2 => format!("/api/model?{}", location_query(&self.cwd)),
         };
-        let response = self.json(Method::GET, &path, None).await?;
+        let response = self.model_catalog(&path).await?;
         let models = match self.version {
             Version::V1 => {
                 let connected = response
@@ -372,6 +372,41 @@ impl Api {
         }
         Ok(models)
     }
+
+    async fn model_catalog(&self, path: &str) -> Result<Value, ProtocolError> {
+        if self.version == Version::V1 {
+            return self.json(Method::GET, path, None).await;
+        }
+        // V2 publishes nonempty, partial models during initial plugin activation.
+        // The plugin inventory is published after the initial activation batch, so
+        // wait for that boundary before reading models. A quiet/nonempty catalog alone
+        // is not evidence that configured providers have been applied.
+        let plugins_path = format!("/api/plugin?{}", location_query(&self.cwd));
+        tokio::time::timeout(Duration::from_secs(5), async {
+            loop {
+                let plugins = self.json(Method::GET, &plugins_path, None).await?;
+                let plugins = self.data(&plugins).as_array().ok_or_else(|| {
+                    failure(Fault::ProviderFailed, "invalid OpenCode plugin inventory")
+                })?;
+                if plugins.is_empty() {
+                    tokio::time::sleep(Duration::from_millis(100)).await;
+                    continue;
+                }
+                let response = self.json(Method::GET, path, None).await?;
+                if !self.data(&response).as_array().is_some_and(Vec::is_empty) {
+                    return Ok(response);
+                }
+                tokio::time::sleep(Duration::from_millis(100)).await;
+            }
+        })
+        .await
+        .map_err(|_| {
+            failure(
+                Fault::ProviderFailed,
+                "OpenCode model catalog remained unavailable",
+            )
+        })?
+    }
 }
 
 fn model_definition(provider: &str, id: &str, model: &Value) -> Result<Model, ProtocolError> {
@@ -396,15 +431,11 @@ fn model_definition(provider: &str, id: &str, model: &Value) -> Result<Model, Pr
     })
 }
 
-fn encoded_location(cwd: &str) -> String {
-    let encoded = json!({"directory":cwd}).to_string();
+fn location_query(cwd: &str) -> String {
     let mut url = Url::parse("http://127.0.0.1/").expect("constant loopback URL");
-    url.query_pairs_mut().append_pair("location", &encoded);
-    url.query()
-        .expect("query inserted")
-        .strip_prefix("location=")
-        .expect("query key")
-        .to_owned()
+    url.query_pairs_mut()
+        .append_pair("location[directory]", cwd);
+    url.query().expect("query inserted").to_owned()
 }
 
 pub(super) fn required_string<'a>(value: &'a Value, key: &str) -> Result<&'a str, ProtocolError> {

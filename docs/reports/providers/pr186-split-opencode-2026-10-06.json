@@ -1,0 +1,122 @@
+{
+  "schema_version": 1,
+  "scope": "OpenCode 2.0.20 compatibility split of PR #186",
+  "base_revision": "5df233ac2f87cecda5f1a1ee99c003a15522dc49",
+  "measured_source_tree_sha": "f31aad87d7c960e2669b2de44d14f14adc13af68",
+  "opencode_source_subtree_sha": "f7ddd77ed6fabc6f9f79405fb7c402066dc65ae4",
+  "source_tree_note": "Measured staged tree before adding this validation report; the eight extracted paths are byte-identical to dc6cb1e",
+  "measured_at_utc": "2026-10-06T09:02:55Z",
+  "platform": "x86_64-unknown-linux-gnu",
+  "rust_version": "rustc 1.98.1 (48a229cea 2026-09-01)",
+  "features": "Cargo workspace defaults; no --features, --all-features, --no-default-features or source filename exclusions supplied",
+  "test_environment": "isolated HOME/XDG/DSH_HOME, controlled PATH, CARGO_INCREMENTAL=0, CARGO_PROFILE_DEV_DEBUG=0 and CARGO_PROFILE_TEST_DEBUG=0, local cached Sherpa archive",
+  "commands": {
+    "focused_tests": "cargo test -p provider --lib local::opencode",
+    "installed_tests": "AIT_TEST_OPENCODE_BIN=\"$OPENCODE_2_0_20_BINARY\" LD_LIBRARY_PATH=\"$OPENCODE_ICU_LIBRARY_DIR\" cargo test -p provider --lib local::opencode::tests::installed -- --ignored --test-threads=1",
+    "daemon_process_tests": "cargo test -p daemon --test process opencode",
+    "workspace_build": "cargo build --workspace",
+    "workspace_clippy": "cargo clippy --workspace --all-targets -- -D warnings",
+    "workspace_tests": "cargo test --workspace --no-fail-fast",
+    "coverage": "CARGO_TARGET_DIR=\"$COVERAGE_TARGET_DIR\" cargo llvm-cov --workspace --html --ignore-run-fail --output-dir \"$VALIDATION_DIR/coverage\"",
+    "coverage_json": "CARGO_TARGET_DIR=\"$COVERAGE_TARGET_DIR\" cargo llvm-cov report --json --summary-only --output-path \"$VALIDATION_DIR/coverage-summary-full.json\"",
+    "format": "cargo fmt --all --check",
+    "filesystem_failure_rerun": "cargo test -p filesystem --lib local::files::tests::directory_links_are_listed_but_special_files_cannot_be_copied"
+  },
+  "command_notation": "Machine-specific artifact/cache directories and installed OpenCode/ICU paths are normalized to variables; test, build and coverage options are unchanged",
+  "test_execution": {
+    "focused": {
+      "passed": 55,
+      "failed": 0,
+      "ignored": 2
+    },
+    "installed_opencode_2_0_20": {
+      "passed": 2,
+      "failed": 0,
+      "ignored": 0
+    },
+    "daemon_process": {
+      "passed": 2,
+      "failed": 0,
+      "ignored": 0
+    },
+    "workspace_build": "passed",
+    "workspace_clippy": "passed with -D warnings",
+    "workspace_tests": {
+      "passed": 1806,
+      "failed": 1,
+      "ignored": 5
+    },
+    "coverage_tests": {
+      "passed": 1806,
+      "failed": 1,
+      "ignored": 5
+    },
+    "format": "passed",
+    "patch_whitespace": "passed",
+    "python_fixture_ast": "passed"
+  },
+  "test_coverage": {
+    "workspace": {
+      "covered_lines": 49476,
+      "total_lines": 52376,
+      "line_percent": 94.463113,
+      "measured_source_files": 338
+    },
+    "provider": {
+      "covered_lines": 21497,
+      "total_lines": 22887,
+      "line_percent": 93.926683,
+      "measured_source_files": 131
+    },
+    "opencode": {
+      "covered_lines": 2681,
+      "total_lines": 3079,
+      "line_percent": 87.073725,
+      "measured_source_files": 15
+    },
+    "changed_production_files": [
+      {
+        "path": "crates/provider/src/local/opencode/execution.rs",
+        "count": 122,
+        "covered": 110,
+        "percent": 90.1639344262295
+      },
+      {
+        "path": "crates/provider/src/local/opencode/http.rs",
+        "count": 511,
+        "covered": 396,
+        "percent": 77.49510763209393
+      }
+    ],
+    "comparable_baseline": "not measured for this standalone branch; no baseline delta claimed",
+    "measurement_scope": "All workspace production sources collected by cargo-llvm-cov; default features; no explicit filename or package exclusions; cargo-llvm-cov invoked cargo test --tests, so doctests were not instrumented",
+    "ordinary_test_scope": "Full cargo test --workspace --no-fail-fast, including doctest targets; ordinary and instrumented totals were parsed independently",
+    "ignored_tests": [
+      "local::claude::tests::process::installed_claude_control_protocol_discovers_models_without_inference",
+      "local::claude::tests::process::parity::installed_claude_completes_a_native_turn_and_reopens_history",
+      "local::codex::tests::installed::installed_codex_completes_a_native_turn_and_reopens_history",
+      "local::opencode::tests::installed::installed_opencode_declined_tool_settles_and_accepts_next_turn",
+      "local::opencode::tests::installed::installed_opencode_discovers_runs_and_restores_with_local_model"
+    ],
+    "explicitly_skipped_tests": [],
+    "unavailable_platforms": [
+      "macOS",
+      "Windows"
+    ],
+    "failure": {
+      "test": "filesystem::local::files::tests::directory_links_are_listed_but_special_files_cannot_be_copied",
+      "location": "crates/filesystem/src/local/files/tests.rs:96",
+      "error": "UnixListener::bind returned EPERM (Operation not permitted)",
+      "reproduction": "Targeted rerun failed identically; independent Python socket(AF_UNIX) creation fails with EPERM before binding a filesystem path",
+      "classification": "environment limitation unrelated to extracted OpenCode files; no test edits or skips",
+      "coverage_exit_semantics": "--ignore-run-fail generated a report with exit 0 despite the failing test; this is not a full passing suite"
+    },
+    "uncovered_behavior": [
+      "New malformed /api/plugin inventory rejection branch in http.rs is not exercised; successful inventory, empty-inventory deadline, partial models, empty-model retry and deadline branches are covered",
+      "Existing HTTP invalid-status/pagination/event-stream/limit error paths remain partly uncovered",
+      "Installed OpenCode opt-in tests passed separately but were ignored during coverage and did not contribute instrumented profiles"
+    ],
+    "reviewable_artifact": "docs/reports/providers/pr186-split-opencode-2026-10-06.json",
+    "additional_artifacts": "Full per-file JSON, HTML report, commands, ordinary/instrumented logs and the AF_UNIX reproduction are retained for the verification attachment; they are not committed"
+  }
+}
