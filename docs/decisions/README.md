@@ -36,6 +36,7 @@
 
 ## Provider、Agent 与会话
 
+- [ADR-087：Timeline 单项 768 KiB 与按字节分页](providers/adr-087-timeline-entry-and-page-budgets.md)
 - [ADR-027：独立 AgentSession 与 AgentManager 生命周期边界](providers/adr-027-independent-agent-session-manager.md)
 - [ADR-031：拆出 provider 并统一 Workspace 自动化与 state 入口](providers/adr-031-daemon-provider.md)
 - [ADR-032：独立 server 接通 Codex 原生文本执行](providers/adr-032-daemon-native-provider-execution.md)

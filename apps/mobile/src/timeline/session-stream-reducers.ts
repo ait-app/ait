@@ -1,7 +1,12 @@
 import type { AgentTimelineItem } from "@ait/protocol/agent-types";
 import type { AgentStreamEventPayload } from "@ait/protocol/messages";
 import { selectAgentTimelineState, useSessionStore } from "@/stores/session-store";
-import type { AssistantMessageItem, StreamItem, TodoEntry } from "@/types/stream";
+import type {
+  AgentToolCallItem,
+  AssistantMessageItem,
+  StreamItem,
+  TodoEntry,
+} from "@/types/stream";
 import type { TurnLivenessTransition } from "@/timeline/turn-liveness";
 import {
   applyStreamEvent,
@@ -665,7 +670,31 @@ function mergePrependedCanonicalTail(olderTail: StreamItem[], currentTail: Strea
 
   const remainingOlder: StreamItem[] = [];
   let reconciledCurrent = currentTail;
+  const newerTools = new Map<string, AgentToolCallItem>();
+  const reconciledToolIds = new Set<string>();
+  for (const item of currentTail) {
+    if (!isAgentToolCallItem(item)) continue;
+    const identity = streamTimelineItemIdentity(item);
+    if (identity !== null) newerTools.set(identity, item);
+  }
   for (const item of olderTail) {
+    if (isAgentToolCallItem(item)) {
+      const identity = streamTimelineItemIdentity(item);
+      const newer = identity === null ? undefined : newerTools.get(identity);
+      if (newer) {
+        remainingOlder.push({
+          ...mergeAgentToolCallItem(
+            item,
+            newer.payload.data,
+            newer.timestamp,
+            newer.timelineCursor,
+          ),
+          id: newer.id,
+        });
+        reconciledToolIds.add(newer.id);
+        continue;
+      }
+    }
     if (item.kind !== "user_message") {
       remainingOlder.push(item);
       continue;
@@ -688,7 +717,10 @@ function mergePrependedCanonicalTail(olderTail: StreamItem[], currentTail: Strea
     }
   }
   olderTail = remainingOlder;
-  currentTail = reconciledCurrent;
+  currentTail =
+    reconciledToolIds.size === 0
+      ? reconciledCurrent
+      : reconciledCurrent.filter((item) => !reconciledToolIds.has(item.id));
   if (olderTail.length === 0) return currentTail;
 
   const olderLast = olderTail.at(-1);

@@ -175,7 +175,51 @@ fn invalid_progress_and_oversized_fragments_are_rejected() {
         Err(ErrorCode::InvalidMessage)
     );
     assert_eq!(
-        timeline.progress("a", "codex", "large", &entry(&"x".repeat(256 * 1024))),
+        timeline.progress("a", "codex", "large", &entry(&"x".repeat(MAX_ENTRY_BYTES))),
         Err(ErrorCode::ResourceExhausted)
     );
+}
+
+#[test]
+fn large_progress_and_accumulated_unicode_text_survive_completion() {
+    let timeline = Timeline::memory().unwrap();
+    let text = "界".repeat(100 * 1024);
+    timeline
+        .progress("a", "codex", "one", &entry(&text))
+        .unwrap();
+    timeline
+        .progress("a", "codex", "two", &entry(&text))
+        .unwrap();
+    let complete = format!("{text}{text}!");
+    timeline.append("a", "codex", &[entry(&complete)]).unwrap();
+    let (_, rows) = timeline.read("a").unwrap();
+    assert_eq!(rows.len(), 3);
+    assert_eq!(rows[2].entry.item["text"], "!");
+    assert_eq!(
+        rows.iter()
+            .map(|row| row.entry.item["text"].as_str().unwrap())
+            .collect::<String>(),
+        complete
+    );
+}
+
+#[test]
+fn progress_uses_the_serialized_768_kib_boundary_and_rejects_larger_accumulation() {
+    let timeline = Timeline::memory().unwrap();
+    let overhead = serde_json::to_vec(&entry("")).unwrap().len();
+    let text = "x".repeat(MAX_ENTRY_BYTES - overhead);
+    timeline
+        .progress("a", "codex", "one", &entry(&text))
+        .unwrap();
+    assert_eq!(
+        timeline.progress("b", "codex", "oversized", &entry(&format!("{text}x"))),
+        Err(ErrorCode::ResourceExhausted)
+    );
+    timeline
+        .progress("a", "codex", "two", &entry(&"x".repeat(overhead + 1)))
+        .unwrap();
+    assert!(matches!(
+        timeline.read("a"),
+        Err(ErrorCode::ResourceExhausted)
+    ));
 }

@@ -9,7 +9,7 @@ use crate::storage::timeline::Row;
 
 mod page;
 
-pub(super) use page::select;
+pub(super) use page::{fit, select};
 
 #[derive(Debug, Clone, Copy, Serialize)]
 #[serde(rename_all = "camelCase")]

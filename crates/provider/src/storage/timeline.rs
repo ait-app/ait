@@ -15,6 +15,9 @@ use uuid::Uuid;
 
 use crate::protocol::timeline::NativeItem;
 
+/// Maximum serialized native display entry, shared by completed and incremental storage.
+pub(crate) const MAX_ENTRY_BYTES: usize = 768 * 1024;
+
 /// Immutable timeline row with a stable sequence in a durable generation.
 #[derive(Debug, Clone)]
 pub struct Row {
@@ -340,13 +343,13 @@ fn append_rows(
             continue;
         }
         let bytes = serde_json::to_string(entry).map_err(io)?;
-        if bytes.len() > 256 * 1024 {
+        if bytes.len() > MAX_ENTRY_BYTES {
             tracing::warn!(
                 agent_id = agent,
                 provider,
                 item_type = entry.item["type"].as_str().unwrap_or("unknown"),
                 size_bytes = bytes.len(),
-                limit_bytes = 256 * 1024,
+                limit_bytes = MAX_ENTRY_BYTES,
                 "Timeline item exceeds size limit"
             );
             return Err(ErrorCode::ResourceExhausted);

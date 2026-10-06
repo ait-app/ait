@@ -264,7 +264,11 @@ fn oversized_history_replacement_leaves_progress_epoch_and_plugin_state_unchange
         .unwrap();
     let before = timeline.read("a").unwrap();
     assert_eq!(
-        timeline.reconcile("a", "codex", &[assistant("m", &"x".repeat(300_000))]),
+        timeline.reconcile(
+            "a",
+            "codex",
+            &[assistant("m", &"x".repeat(MAX_ENTRY_BYTES))]
+        ),
         Err(ErrorCode::ResourceExhausted)
     );
     let after = timeline.read("a").unwrap();

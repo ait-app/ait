@@ -1,5 +1,6 @@
 //! Display-count limits with contiguous canonical source coverage.
 
+use model::ErrorCode;
 use serde::Serialize;
 
 use crate::protocol::timeline::Direction;
@@ -40,6 +41,71 @@ pub(in crate::rpc::timeline) fn select(
         Direction::Before => before(projected, first.seq, last.seq, cursor, limit),
         Direction::After => after(projected, first.seq, last.seq, cursor, limit),
     }
+}
+
+/// Fit a page within its serialized entry budget without truncating individual payloads.
+/// Oversized projections are split at source rows so interleaved tool lifecycles remain pageable.
+/// # Errors
+/// Returns a resource error when even one source row cannot fit, or an I/O serialization error.
+pub(in crate::rpc::timeline) fn fit(
+    rows: &[Row],
+    mut page: Page,
+    direction: Direction,
+    bytes: usize,
+) -> Result<Page, ErrorCode> {
+    let mut encoded = Vec::new();
+    let mut projected_bytes = 2;
+    for (index, entry) in page.entries.iter().enumerate() {
+        encoded.clear();
+        serde_json::to_writer(&mut encoded, entry).map_err(|_| ErrorCode::AgentIo)?;
+        projected_bytes += encoded.len() + usize::from(index > 0);
+        if projected_bytes > bytes {
+            break;
+        }
+    }
+    if projected_bytes <= bytes {
+        return Ok(page);
+    }
+    let start_seq = page.start_seq.ok_or(ErrorCode::ResourceExhausted)?;
+    let end_seq = page.end_seq.ok_or(ErrorCode::ResourceExhausted)?;
+    let start = rows.partition_point(|row| row.seq < start_seq);
+    let end = rows.partition_point(|row| row.seq <= end_seq);
+    let window = &rows[start..end];
+    page.entries.clear();
+    let mut used = 2; // JSON array brackets; each subsequent entry also needs a comma.
+    let mut count = 0;
+    for offset in 0..window.len() {
+        let index = if direction == Direction::After {
+            offset
+        } else {
+            window.len() - 1 - offset
+        };
+        encoded.clear();
+        serde_json::to_writer(&mut encoded, &Entry::from(&window[index]))
+            .map_err(|_| ErrorCode::AgentIo)?;
+        let next = used + encoded.len() + usize::from(count > 0);
+        if next > bytes {
+            break;
+        }
+        used = next;
+        count += 1;
+    }
+    if count == 0 {
+        return Err(ErrorCode::ResourceExhausted);
+    }
+    let selected = if direction == Direction::After {
+        &window[..count]
+    } else {
+        &window[window.len() - count..]
+    };
+    let first = selected.first().ok_or(ErrorCode::ResourceExhausted)?;
+    let last = selected.last().ok_or(ErrorCode::ResourceExhausted)?;
+    page.entries = project(selected);
+    page.start_seq = Some(first.seq);
+    page.end_seq = Some(last.seq);
+    page.has_older |= first.seq > start_seq;
+    page.has_newer |= last.seq < end_seq;
+    Ok(page)
 }
 
 fn tail(mut entries: Vec<Entry>, max_seq: u64, limit: usize) -> Page {

@@ -3310,6 +3310,90 @@ describe("processTimelineResponse", () => {
     ]);
   });
 
+  it("merges interleaved tool snapshots across byte-limited older pages", () => {
+    const turnId = "large-results-turn";
+    const output = "x".repeat(700 * 1024);
+    const completed = makeToolCallTimelineEntry(
+      5,
+      "two",
+      "completed",
+      {
+        type: "unknown",
+        input: {},
+        output,
+      },
+      turnId,
+    );
+    const currentTail = hydrateStreamState(
+      [
+        {
+          event: {
+            type: "timeline",
+            provider: "claude",
+            turnId,
+            item: completed.item,
+          } as AgentStreamEventPayload,
+          timestamp: new Date(completed.timestamp),
+          timelineCursor: { epoch: "epoch-1", seq: 5 },
+        },
+      ],
+      { source: "canonical" },
+    );
+    const first = makeToolCallTimelineEntry(
+      1,
+      "one",
+      "completed",
+      {
+        type: "unknown",
+        input: {},
+        output,
+      },
+      turnId,
+    );
+    first.seqEnd = 4;
+    first.sourceSeqRanges = [
+      { startSeq: 1, endSeq: 1 },
+      { startSeq: 4, endSeq: 4 },
+    ];
+    const older = processTimelineResponse({
+      ...baseTimelineInput,
+      currentTail,
+      currentCursor: { epoch: "epoch-1", startSeq: 5, endSeq: 5 },
+      payload: {
+        ...baseTimelineInput.payload,
+        direction: "before",
+        epoch: "epoch-1",
+        projection: "projected",
+        startCursor: { seq: 1 },
+        endCursor: { seq: 4 },
+        hasOlder: false,
+        entries: [
+          first,
+          makeToolCallTimelineEntry(
+            2,
+            "two",
+            "running",
+            { type: "unknown", input: {}, output: null },
+            turnId,
+          ),
+          makeTimelineEntry(3, "interleaved explanation"),
+        ],
+      },
+    });
+    const tools = getAgentToolCalls(older.tail);
+    expect(tools.map((item) => item.payload.data.callId)).toEqual(["one", "two"]);
+    expect(tools.map((item) => item.payload.data.status)).toEqual(["completed", "completed"]);
+    expect(tools[1]?.id).toBe(currentTail[0]?.id);
+    expect(tools[1]?.timelineCursor).toEqual({ epoch: "epoch-1", seq: 5 });
+    expect(tools[1]?.payload.data.detail).toEqual({ type: "unknown", input: {}, output });
+    expect(older.tail.map((item) => item.kind)).toEqual([
+      "tool_call",
+      "tool_call",
+      "assistant_message",
+    ]);
+    expect(older.cursor).toMatchObject({ epoch: "epoch-1", startSeq: 1, endSeq: 5 });
+  });
+
   it("keeps the newest plugin row across the older-page prepend boundary", () => {
     const currentTail = hydrateStreamState(
       [
