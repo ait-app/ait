@@ -36,7 +36,10 @@ fn discover(execution: &AgentExecution, fixture: &Fixture) -> tokio::task::JoinH
     let cwd = fixture.cwd.clone();
     tokio::spawn(async move {
         execution
-            .execute("provider.snapshot.get.request", json!({"cwd":cwd}))
+            .execute(
+                "provider.models.list.request",
+                json!({"provider":"codex","cwd":cwd}),
+            )
             .await
             .unwrap()
     })
@@ -81,7 +84,7 @@ async fn blocked_discovery_keeps_metadata_timeline_and_subscriptions_responsive(
     );
     assert!(!discovery.is_finished());
     gate.release();
-    assert_eq!(discovery.await.unwrap()["entries"][0]["status"], "ready");
+    assert!(discovery.await.unwrap()["models"].is_array());
     execution.shutdown().await.unwrap();
 }
 
@@ -96,7 +99,11 @@ async fn cancelled_discovery_caller_preserves_single_flight_cache_and_conditiona
     assert!(cancelled.await.unwrap_err().is_cancelled());
     let waiting = discover(&execution, &fixture);
     gate.release();
-    let snapshot = waiting.await.unwrap();
+    assert!(waiting.await.unwrap()["models"].is_array());
+    let snapshot = execution
+        .execute("provider.snapshot.get.request", json!({"cwd":fixture.cwd}))
+        .await
+        .unwrap();
     assert_eq!(snapshot["entries"][0]["status"], "ready");
     let unchanged = execution
         .execute(
@@ -120,18 +127,15 @@ async fn discovery_queue_is_bounded_and_shutdown_drains_accepted_requests() {
     let discovery = discover(&execution, &fixture);
     gate.entered().await;
     let mut replies = Vec::new();
-    for _ in 0..64 {
-        let (reply, receiver) = oneshot::channel();
-        execution
-            .0
-            .catalog
-            .try_send(crate::service::agent_execution::catalog::Request {
-                method: "provider.snapshot.get.request".to_owned(),
-                params: json!({"cwd":fixture.cwd}),
-                reply,
-            })
-            .unwrap();
-        replies.push(receiver);
+    for _ in 0..63 {
+        replies.push(
+            execution
+                .admit_catalog(
+                    "provider.models.list.request",
+                    json!({"provider":"codex","cwd":fixture.cwd}),
+                )
+                .unwrap(),
+        );
     }
     assert_eq!(
         execution
@@ -141,7 +145,7 @@ async fn discovery_queue_is_bounded_and_shutdown_drains_accepted_requests() {
     );
     let stopping = execution.clone();
     let shutdown = tokio::spawn(async move { stopping.shutdown().await });
-    execution.0.catalog_shutdown.cancelled().await;
+    execution.0.cancellation.cancelled().await;
     assert_eq!(
         execution
             .execute("provider.snapshot.get.request", json!({"cwd":fixture.cwd}))
@@ -150,12 +154,9 @@ async fn discovery_queue_is_bounded_and_shutdown_drains_accepted_requests() {
     );
     assert!(!shutdown.is_finished());
     gate.release();
-    assert_eq!(discovery.await.unwrap()["entries"][0]["status"], "ready");
-    for reply in replies {
-        assert_eq!(
-            reply.await.unwrap().unwrap()["entries"][0]["status"],
-            "ready"
-        );
+    assert!(discovery.await.unwrap()["models"].is_array());
+    for mut reply in replies {
+        assert!(reply.receive().await.unwrap()["models"].is_array());
     }
     shutdown.await.unwrap().unwrap();
     assert_eq!(discovery_count(&fixture), 1);
@@ -169,7 +170,7 @@ async fn failed_discovery_can_refresh_without_poisoning_the_execution_lane() {
     let created = create(&execution, &fixture).await;
     fixture.mode("error");
     let failed = discover(&execution, &fixture).await.unwrap();
-    assert_eq!(failed["entries"][0]["status"], "error");
+    assert_eq!(failed["error"], "Provider discovery failed");
     assert_eq!(
         execution
             .execute("agent.get.request", json!({"agentId":created["agentId"]}))
@@ -199,13 +200,9 @@ async fn failed_discovery_can_refresh_without_poisoning_the_execution_lane() {
         .await
         .unwrap();
     assert_eq!(refreshed["acknowledged"], true);
-    assert_eq!(received.lock().unwrap().len(), 1);
+    assert!(discover(&execution, &fixture).await.unwrap()["models"].is_array());
     assert_eq!(
-        received.lock().unwrap()[0].1["entries"][0]["status"],
-        "ready"
-    );
-    assert_eq!(
-        discover(&execution, &fixture).await.unwrap()["entries"][0]["status"],
+        received.lock().unwrap().last().unwrap().1["entries"][0]["status"],
         "ready"
     );
     execution.shutdown().await.unwrap();
@@ -225,15 +222,12 @@ async fn execution_loop_exit_closes_discovery_even_while_its_sender_is_retained(
         .send(Command::Shutdown(reply))
         .await
         .unwrap();
-    receiver.await.unwrap().unwrap();
-    tokio::time::timeout(
-        Duration::from_secs(2),
-        execution.0.catalog_shutdown.cancelled(),
-    )
-    .await
-    .expect("execution exit closes catalog admission without caller assistance");
+    tokio::time::timeout(Duration::from_secs(2), execution.0.cancellation.cancelled())
+        .await
+        .expect("execution exit closes catalog admission without caller assistance");
     gate.release();
     discovery.await.unwrap();
+    receiver.await.unwrap().unwrap();
     tokio::time::timeout(Duration::from_secs(2), execution.shutdown())
         .await
         .expect("both loops exit although the execution handle retains catalog sender")
@@ -251,35 +245,41 @@ async fn catalog_response_slots_remain_bounded_until_their_owners_are_dropped() 
     for _ in 0..63 {
         responses.push(
             execution
-                .admit_catalog("provider.snapshot.get.request", json!({"cwd":fixture.cwd}))
+                .admit_catalog(
+                    "provider.models.list.request",
+                    json!({"provider":"codex","cwd":fixture.cwd}),
+                )
                 .unwrap(),
         );
     }
     assert!(matches!(
-        execution.admit_catalog("provider.snapshot.get.request", json!({"cwd":fixture.cwd})),
+        execution.admit_catalog(
+            "provider.models.list.request",
+            json!({"provider":"codex","cwd":fixture.cwd})
+        ),
         Err(ErrorCode::CatalogBusy)
     ));
     gate.release();
     discovery.await.unwrap();
     for response in &mut responses {
-        assert_eq!(
-            response.receive().await.unwrap()["entries"][0]["status"],
-            "ready"
-        );
+        assert!(response.receive().await.unwrap()["models"].is_array());
     }
     let retained = execution
-        .admit_catalog("provider.snapshot.get.request", json!({"cwd":fixture.cwd}))
+        .admit_catalog(
+            "provider.models.list.request",
+            json!({"provider":"codex","cwd":fixture.cwd}),
+        )
         .unwrap();
     assert!(matches!(
-        execution.admit_catalog("provider.snapshot.get.request", json!({"cwd":fixture.cwd})),
+        execution.admit_catalog(
+            "provider.models.list.request",
+            json!({"provider":"codex","cwd":fixture.cwd})
+        ),
         Err(ErrorCode::CatalogBusy)
     ));
     drop(responses);
     drop(retained);
-    assert_eq!(
-        discover(&execution, &fixture).await.unwrap()["entries"][0]["status"],
-        "ready"
-    );
+    assert!(discover(&execution, &fixture).await.unwrap()["models"].is_array());
     assert_eq!(discovery_count(&fixture), 1);
     execution.shutdown().await.unwrap();
 }

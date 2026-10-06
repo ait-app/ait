@@ -4,6 +4,7 @@ mod controls;
 mod native_sessions;
 mod placement;
 mod resume;
+mod scheduling;
 mod voice;
 /// Initial Agent validation and placement for the composite Workspace creation operation.
 pub mod workspace_creation;
@@ -24,10 +25,13 @@ use crate::service::agent_runtime::AgentRuntimeDirectory;
 
 pub(crate) struct ExecutionState {
     pub(crate) manager: AgentManager,
+    pub(crate) message_observers:
+        std::collections::BTreeMap<String, tokio::sync::watch::Receiver<Option<String>>>,
+    pub(crate) owners: crate::service::agent_manager::ownership::Owners,
     pub(crate) directory: AgentRuntimeDirectory,
     pub(crate) registry: std::sync::Arc<dyn AgentRuntimeRegistry>,
-    pub(crate) workspaces: Box<dyn WorkspaceRegistry>,
-    pub(crate) projects: Box<dyn ProjectRegistry>,
+    pub(crate) workspaces: std::sync::Arc<dyn WorkspaceRegistry>,
+    pub(crate) projects: std::sync::Arc<dyn ProjectRegistry>,
     pub(crate) import_directory: Option<metadata::service::directory::Directory>,
     pub(crate) workspace_automation: Option<
         std::sync::Arc<
@@ -37,29 +41,27 @@ pub(crate) struct ExecutionState {
 }
 
 impl ExecutionState {
-    pub(crate) fn observe_wait(
-        &mut self,
-        identifier: &str,
-    ) -> Result<crate::service::agent_execution::waits::WaitObservation, ErrorCode> {
-        let id = self.resolve(identifier)?;
-        let last_message = self.manager.observe_last_message(&id);
-        Ok(crate::service::agent_execution::waits::WaitObservation { id, last_message })
-    }
-
     pub(crate) async fn execute(
         &mut self,
         method: &str,
         params: Value,
     ) -> Result<Value, ErrorCode> {
-        self.manager
-            .poll()
-            .await
-            .map_err(|error| map_manager(&error))?;
-        self.manager.dispatch_pending_inputs().await?;
         match method {
             "internal.workspace.agent.create" => self.create_workspace_agent(params).await,
             "internal.workspace.retire" => self.retire_workspaces(params).await,
             "internal.agent.directory.prepare" => self.prepare_agent_directory(params),
+            "internal.agent.identities.resolve" => {
+                only(&params, &["agentIds"])?;
+                let ids: Vec<String> = decode(params["agentIds"].clone())?;
+                if ids.len() > 32 {
+                    return Err(ErrorCode::InvalidMessage);
+                }
+                let ids = ids
+                    .iter()
+                    .map(|id| self.resolve(id))
+                    .collect::<Result<std::collections::BTreeSet<_>, _>>()?;
+                Ok(json!(ids))
+            }
             "agent.list.request" if params.get("sync").is_some_and(|sync| !sync.is_null()) => {
                 self.synchronized_agents(params)
             }
@@ -85,7 +87,7 @@ impl ExecutionState {
             | "provider.snapshot.get.request"
             | "provider.snapshot.refresh.request" => self
                 .manager
-                .providers(method, params)
+                .read_providers(method, params)
                 .await
                 .map_err(Into::into),
             "agent.timeline.get.request"
@@ -112,26 +114,7 @@ impl ExecutionState {
             "agent.finish.wait.request" => {
                 let request: AgentIdRequest = decode(params)?;
                 let id = self.resolve(&request.agent_id)?;
-                let snapshot = self.snapshot(&id)?;
-                let status = if !self.manager.interruption_pending(&id)
-                    && (snapshot["attentionReason"] == "permission"
-                        || snapshot["pendingPermissions"]
-                            .as_array()
-                            .is_some_and(|permissions| !permissions.is_empty()))
-                {
-                    "permission"
-                } else if self.manager.active_turn(&id).is_some()
-                    || self.manager.has_pending_input(&id)?
-                {
-                    "running"
-                } else if snapshot["status"] == "error" || snapshot["status"] == "running" {
-                    "error"
-                } else {
-                    "idle"
-                };
-                Ok(json!({"status":status,"final":snapshot,
-                    "error": if status == "error" { Some("Provider execution failed") } else { None },
-                    "lastMessage":self.manager.last_message(&id)}))
+                self.wait_result(&id)
             }
             _ => {
                 let result = super::agent_runtime::execute(&mut self.directory, method, params);
@@ -209,7 +192,11 @@ impl ExecutionState {
             .as_str()
             .ok_or(ErrorCode::InvalidMessage)?;
         let id = self.resolve(identifier)?;
-        self.manager.load_timeline(&id).await?;
+        // A queued warm read may run after rewind invalidates the shared hydration marker.
+        // Readers still use the committed projection; only the owner may start native hydration.
+        if self.manager.owns_runtime(&id) {
+            self.manager.load_timeline(&id).await?;
+        }
         let timeline = self
             .manager
             .timeline()
@@ -330,6 +317,7 @@ impl ExecutionState {
         workspace_id: String,
         created_worktree: bool,
     ) -> Result<Value, ErrorCode> {
+        self.manager.place_workspace(&workspace_id)?;
         let creations = self.manager.creations();
         let id = match admission.agent_id.clone() {
             Some(id) => {
@@ -356,7 +344,30 @@ impl ExecutionState {
                 &request.env,
             )
             .await;
+        let created = created.and_then(|record| {
+            self.workspace(Some(&workspace_id), &record.cwd)
+                .map_err(|_| AgentManagerError::InvalidRequest)?;
+            if let Some(parent) = record.labels.get("paseo.parent-agent-id")
+                && self
+                    .registry
+                    .get(parent)
+                    .map_err(|_| AgentManagerError::Registry)?
+                    .is_none_or(|parent| parent.archived_at.is_some())
+            {
+                return Err(AgentManagerError::InvalidRequest);
+            }
+            Ok(record)
+        });
         if let Err(error) = created {
+            if self.manager.live_snapshot(&id).is_some() {
+                self.directory
+                    .archive(&id, &chrono::Utc::now().to_rfc3339())
+                    .map_err(|_| ErrorCode::RegistryIo)?;
+                self.manager
+                    .reconcile()
+                    .await
+                    .map_err(|error| map_manager(&error))?;
+            }
             let cleanup_failed = created_worktree
                 && self
                     .cleanup_created_worktree(&id, &workspace_id)
@@ -446,7 +457,7 @@ impl ExecutionState {
         )
     }
 
-    fn workspace(&self, selected: Option<&str>, cwd: &str) -> Result<String, ErrorCode> {
+    pub(crate) fn workspace(&self, selected: Option<&str>, cwd: &str) -> Result<String, ErrorCode> {
         let canonical = std::fs::canonicalize(cwd).map_err(|_| ErrorCode::InvalidMessage)?;
         let workspace = if let Some(id) = selected {
             self.workspaces.get(id).map_err(|_| ErrorCode::RegistryIo)?
@@ -487,7 +498,7 @@ impl ExecutionState {
         Ok(workspace.workspace_id)
     }
 
-    fn resolve(&self, identifier: &str) -> Result<String, ErrorCode> {
+    pub(crate) fn resolve(&self, identifier: &str) -> Result<String, ErrorCode> {
         self.directory
             .get(identifier)
             .map(|resolved| resolved.agent.id)
@@ -532,6 +543,23 @@ impl ExecutionState {
             }
         }
         self.manager.control_snapshot(record, &mut snapshot);
+        if !self.manager.owns_runtime(&record.id)
+            && let Some(committed) = self.owners.snapshot(&record.id)
+        {
+            for field in [
+                "status",
+                "requiresAttention",
+                "attentionReason",
+                "lastError",
+                "activeTurn",
+                "providerUnavailable",
+                "pendingPermissions",
+            ] {
+                if let Some(value) = committed.get(field) {
+                    snapshot[field] = value.clone();
+                }
+            }
+        }
         Ok(snapshot)
     }
 

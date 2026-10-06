@@ -129,14 +129,22 @@ impl AgentManager {
         handle: &AgentPersistenceHandle,
         cwd: &str,
     ) -> Result<SessionHistory, ErrorCode> {
+        let _history = self
+            .history_budget
+            .acquire()
+            .await
+            .map_err(|_| ErrorCode::AgentIo)?;
         let client = self
             .clients
             .get(&handle.provider)
             .ok_or(ErrorCode::UnsupportedCapability)?;
-        let history = client
-            .inspect_session(handle, cwd)
-            .await
-            .map_err(|_| ErrorCode::AgentIo)?;
+        let history = super::execution::native(
+            &handle.provider,
+            "inspect_history",
+            client.inspect_session(handle, cwd),
+        )
+        .await
+        .map_err(|_| ErrorCode::AgentIo)?;
         if history.descriptor.provider_id != handle.provider
             || history.descriptor.provider_handle_id != handle.session_id
             || canonical(&history.descriptor.cwd)? != canonical(cwd)?
@@ -164,6 +172,9 @@ impl AgentManager {
             .ok_or(ErrorCode::UnsupportedCapability)?;
         timeline.reconcile(&record.id, &record.provider, &history.entries)?;
         apply_history(&mut record, history);
+        if let Some(owner) = &self.owner {
+            owner.bind(&record)?;
+        }
         let committed = if existing {
             self.registry
                 .update(&record.id, &|current| {
@@ -182,7 +193,7 @@ impl AgentManager {
                 .map_err(|_| ErrorCode::AgentIo)?;
             record
         };
-        self.loaded_timelines.insert(committed.id.clone());
+        self.mark_history_loaded(&committed.id);
         Ok(committed)
     }
 
@@ -236,7 +247,7 @@ impl AgentManager {
             })
             .map_err(|_| ErrorCode::AgentIo)?
             .ok_or(ErrorCode::AgentNotFound)?;
-        self.loaded_timelines.insert(id.to_owned());
+        self.mark_history_loaded(id);
         Ok(())
     }
 }

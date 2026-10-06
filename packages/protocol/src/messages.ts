@@ -6201,6 +6201,9 @@ export const GetProvidersSnapshotResponseMessageSchema = z.object({
   type: z.literal("get_providers_snapshot_response"),
   payload: z.object({
     cwd: z.string().optional(),
+    generation: z.string().optional(),
+    revision: z.number().int().nonnegative().optional(),
+    refreshing: z.array(AgentProviderSchema).optional(),
     entries: z.array(ProviderSnapshotEntrySchema),
     compactSnapshot: CompactProviderSnapshotSchema.optional(),
     snapshotHash: z.string().optional(),
@@ -6217,6 +6220,9 @@ export const ProvidersSnapshotUpdateMessageSchema = z.object({
   payload: z.object({
     subscriptionId: z.string().optional(),
     cwd: z.string().optional(),
+    generation: z.string().optional(),
+    revision: z.number().int().nonnegative().optional(),
+    refreshing: z.array(AgentProviderSchema).optional(),
     entries: z.array(ProviderSnapshotEntrySchema),
     compactSnapshot: CompactProviderSnapshotSchema.optional(),
     snapshotHash: z.string().optional(),
@@ -6231,6 +6237,8 @@ export const RefreshProvidersSnapshotResponseMessageSchema = z.object({
   payload: z.object({
     requestId: z.string(),
     acknowledged: z.boolean(),
+    generation: z.string().optional(),
+    revision: z.number().int().nonnegative().optional(),
   }),
 });
 

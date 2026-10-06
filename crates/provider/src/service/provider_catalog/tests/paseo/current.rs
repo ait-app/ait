@@ -1,12 +1,14 @@
 //! Current provider-catalog-session.test.ts request contracts (Paseo 30178c4).
 
+use std::sync::Arc;
+
 use super::*;
 
 #[tokio::test]
 async fn draft_features_use_the_proposed_settings_without_caching_or_creating_an_agent() {
     let root = tempfile::tempdir().unwrap();
     let probes = [Probe::new("codex")];
-    let mut catalog = Catalog::default();
+    let catalog = Catalog::default();
     for enabled in [true, false] {
         let reply = catalog.execute(&clients(&probes), &SessionEvents::default(),
             "provider.features.list.request", json!({"draftConfig":{
@@ -30,7 +32,7 @@ async fn draft_features_use_the_proposed_settings_without_caching_or_creating_an
         Some("high")
     );
     assert!(state.discovery_cwds.is_empty());
-    assert!(catalog.snapshots.is_empty());
+    assert!(catalog.cache.lock().unwrap().snapshots.is_empty());
 }
 
 #[tokio::test]
@@ -93,7 +95,7 @@ async fn native_codex_draft_features_discover_workflows_without_opening_a_thread
         "codex".to_owned(),
         Arc::new(fixture.client()) as Arc<dyn AgentClient>,
     )]);
-    let mut catalog = Catalog::default();
+    let catalog = Catalog::default();
     for model in [None, Some("default"), Some("  ")] {
         let response = catalog
             .execute(
@@ -162,8 +164,8 @@ async fn hidden_models_remain_in_snapshots_but_are_not_offered_in_the_model_pick
             json!({"id":"legacy","isSelectable":false}),
             json!({"id":"visible","isSelectable":true}),
         ]);
-    let mut catalog = Catalog::default();
-    let snapshot = snapshot(&mut catalog, &probes, root.path()).await;
+    let catalog = Catalog::default();
+    let snapshot = snapshot(&catalog, &probes, root.path()).await;
     assert_eq!(
         snapshot["entries"][0]["models"].as_array().unwrap().len(),
         3
@@ -189,7 +191,7 @@ async fn hidden_models_remain_in_snapshots_but_are_not_offered_in_the_model_pick
 #[tokio::test]
 async fn missing_null_and_blank_cwd_use_a_distinct_global_snapshot() {
     let probes = [Probe::new("codex")];
-    let mut catalog = Catalog::default();
+    let catalog = Catalog::default();
     let events = SessionEvents::default();
     for params in [json!({}), json!({"cwd":null}), json!({"cwd":" \n "})] {
         let response = catalog
@@ -215,7 +217,7 @@ async fn missing_null_and_blank_cwd_use_a_distinct_global_snapshot() {
         .await
         .unwrap();
     assert_eq!(response["cwd"], home);
-    assert_eq!(catalog.snapshots.len(), 2);
+    assert_eq!(catalog.cache.lock().unwrap().snapshots.len(), 2);
     assert_eq!(
         probes[0].state.lock().unwrap().discovery_cwds,
         [home.clone(), home]

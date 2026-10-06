@@ -10,6 +10,7 @@ use super::{ready, start_with_path, terminate};
 
 const METHODS: &[&str] = &[
     "provider.snapshot.get.request",
+    "provider.models.list.request",
     "workspace.open.request",
     "agent.create.request",
     "agent.get.request",
@@ -42,6 +43,12 @@ async fn deepseek_harness_acp_executes_and_keeps_history_after_server_restart() 
     let mut process = start_with_path(&state, &log, Some(&path));
     let address = ready(&mut process, &log).await;
     let mut socket = connect(&address, METHODS).await;
+    success(
+        &mut socket,
+        "provider.models.list.request",
+        json!({"provider":"deepseek-harness","cwd":cwd}),
+    )
+    .await;
     let snapshot = success(
         &mut socket,
         "provider.snapshot.get.request",

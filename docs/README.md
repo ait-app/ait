@@ -13,6 +13,7 @@
 
 ## 架构决策
 
+- [ADR-091：会话独立执行与 Provider 后台发现](decisions/providers/adr-091-independent-session-execution.md)：按稳定身份保序、后台 discovery、独立读取与 wait、级联屏障和全局资源预算。
 - [ADR-090：Timeline 单项 768 KiB 与按字节分页](decisions/providers/adr-090-timeline-entry-and-page-budgets.md)：展示条目预算、整页响应预算与连续 source 游标。
 - [ADR-089：内置 Provider 装配归 provider crate](decisions/providers/adr-089-provider-owned-composition.md)：内置列表、启动配置与辅助生成能力由 provider 自己组装。
 - [ADR-088：Provider 发现与启动历史同步隔离](decisions/providers/adr-088-provider-catalog-startup-isolation.md)：有界 catalog 通道与本机连接就绪后的恢复。
@@ -66,6 +67,9 @@
 - [Provider 能力清单](plans/provider-parity.md)：当前能力与后续工作。
 - [Antigravity CLI 验证](reports/providers/antigravity-cli.md)：协议夹具、安装路径和真实 AGY 验证范围。
 - [Provider 装配边界验证](reports/providers/provider-composition.md)：内置注册、辅助生成、DSH 简称与覆盖率证据。
+- [远程 Workspace 打开性能优化方案](plans/remote-workspace-open-performance.md)：连接、目录同步、Provider 排队与历史投影的代码分析、分阶段改动和验收指标。
+- [Paseo 并发模型对齐修改清单](plans/paseo-agent-concurrency.md)：Provider 独立发现、按 Agent 保序、事件与加载去重、只读和 wait 隔离的实施列表。
+- [Paseo 并发改造验证](reports/providers/paseo-concurrency-validation.md)：并发竞态、客户端兼容、格式/lint 与构建限制。
 - [大 Diff 加载与超限降级](reports/workspace/large-diff-loading.md)：输出预算、连接保持与验证结果。
 - [Agent 创建任务预算竞争](reports/providers/agent-creation-resource-contention.md)：DSH 创建报错复现与后台 fetch 失败隔离验证。
 - [OpenCode 工具与结论顺序修复](reports/providers/opencode-tool-order.md)：流式前序条目发布与旧历史修复。

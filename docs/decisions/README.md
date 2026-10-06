@@ -36,6 +36,7 @@
 
 ## Provider、Agent 与会话
 
+- [ADR-091：会话独立执行与 Provider 后台发现](providers/adr-091-independent-session-execution.md)
 - [ADR-090：Timeline 单项 768 KiB 与按字节分页](providers/adr-090-timeline-entry-and-page-budgets.md)
 - [ADR-089：内置 Provider 装配归 provider crate](providers/adr-089-provider-owned-composition.md)
 - [ADR-087：Antigravity CLI 原生 Provider](providers/adr-087-antigravity-cli-provider.md)

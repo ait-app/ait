@@ -1,16 +1,8 @@
-//! Wait ownership retains completion text without keeping a closed native session alive.
+//! Completion waits observe committed state rather than consuming session commands.
 
-use super::{AgentExecution, Command, Duration, ErrorCode, Value, json, mpsc, oneshot};
+use super::{AgentExecution, Duration, ErrorCode, Value, json};
 use crate::protocol::agent_execution::WaitRequest;
 use crate::rpc::agent_execution::only;
-
-/// Resolved identity and optional live-turn text retained only for this wait's lifetime.
-pub(crate) struct WaitObservation {
-    /// Stable public Agent identity.
-    pub(crate) id: String,
-    /// Missing when the request observes only a stored Agent.
-    pub(crate) last_message: Option<tokio::sync::watch::Receiver<Option<String>>>,
-}
 
 impl AgentExecution {
     pub(super) async fn wait(&self, params: Value) -> Result<Value, ErrorCode> {
@@ -31,49 +23,61 @@ impl AgentExecution {
                     .ok_or(ErrorCode::InvalidMessage)
             })
             .transpose()?;
-        let observation = match self.observe_wait(request.agent_id).await {
-            Ok(observation) => observation,
+        if self.0.cancellation.is_cancelled() {
+            return Err(ErrorCode::AgentIo);
+        }
+        let template = self.0.template.clone();
+        let observed = tokio::task::spawn_blocking(move || {
+            let state = template.lock().map_err(|_| ErrorCode::AgentIo)?.fork(None);
+            let id = state.resolve(&request.agent_id)?;
+            state.owners.observe(&id, state.wait_result(&id)?)
+        })
+        .await
+        .map_err(|_| ErrorCode::AgentIo)?;
+        let mut observed = match observed {
+            Ok(observed) => observed,
             Err(ErrorCode::AgentNotFound) => {
                 return Ok(json!({"status":"error","final":null,
-                    "error":"Agent not found","lastMessage":null}));
+                "error":"Agent not found","lastMessage":null}));
             }
             Err(error) => return Err(error),
         };
+        let retain_text = observed.borrow()["live"] == true;
         loop {
-            let mut result = self
-                .call(
-                    "agent.finish.wait.request",
-                    json!({"agentId":observation.id}),
-                )
-                .await?;
-            if result["status"] != "running" {
-                if result["lastMessage"].is_null()
-                    && result["final"]["archivedAt"].is_string()
-                    && let Some(message) = &observation.last_message
-                {
-                    result["lastMessage"] = json!(message.borrow().clone());
+            let result = observed.borrow_and_update().clone();
+            if result["status"] != "running" && result["busy"] != true {
+                return Ok(finish(result, retain_text));
+            }
+            let expire = async {
+                if let Some(deadline) = deadline {
+                    tokio::time::sleep_until(deadline).await;
+                } else {
+                    std::future::pending::<()>().await;
                 }
-                return Ok(result);
+            };
+            tokio::select! {
+                () = self.0.cancellation.cancelled() => return Err(ErrorCode::AgentIo),
+                () = expire => {
+                    let mut result = finish(observed.borrow().clone(), false);
+                    result["status"] = json!("timeout");
+                    result["lastMessage"] = Value::Null;
+                    result["error"] = Value::Null;
+                    return Ok(result);
+                }
+                result = observed.changed() => result.map_err(|_| ErrorCode::AgentIo)?,
             }
-            if deadline.is_some_and(|deadline| tokio::time::Instant::now() >= deadline) {
-                result["status"] = json!("timeout");
-                result["lastMessage"] = Value::Null;
-                result["error"] = Value::Null;
-                return Ok(result);
-            }
-            tokio::time::sleep(Duration::from_millis(25)).await;
         }
     }
+}
 
-    async fn observe_wait(&self, identifier: String) -> Result<WaitObservation, ErrorCode> {
-        let (reply, receiver) = oneshot::channel();
-        self.0
-            .sender
-            .try_send(Command::ObserveWait { identifier, reply })
-            .map_err(|error| match error {
-                mpsc::error::TrySendError::Full(_) => ErrorCode::CatalogBusy,
-                mpsc::error::TrySendError::Closed(_) => ErrorCode::AgentIo,
-            })?;
-        receiver.await.map_err(|_| ErrorCode::AgentIo)?
+fn finish(mut result: Value, retain_text: bool) -> Value {
+    if retain_text && result["lastMessage"].is_null() && result["final"]["archivedAt"].is_string() {
+        result["lastMessage"] = result["completionText"].clone();
     }
+    if let Some(object) = result.as_object_mut() {
+        object.remove("completionText");
+        object.remove("live");
+        object.remove("busy");
+    }
+    result
 }

@@ -45,6 +45,11 @@ Project/Workspace 和 Agent runtime 目录、配置、时间线由当前文件�
 浏览器用一次性 WebSocket 票据连接；桌面、Web 和移动端使用同一个 Rust transport adapter。
 连接关闭释放所属订阅，daemon 负责已接纳任务与原生进程的生命周期。
 
+Provider 的原生 session 由稳定身份所属的异步任务独占，不同身份独立执行和提交事件。
+Catalog discovery、已提交读取与 completion watch 使用独立路径；阻塞存储操作离开专用
+Tokio reactor，级联归档与 worktree 清理用相关会话屏障协调，全局预算限制接纳和 native
+资源总量。详见 [ADR-091](../decisions/providers/adr-091-independent-session-execution.md)。
+
 ## 名称与兼容
 
 源码、构建产物和运行日志使用 daemon 名称。WebSocket `server_info`、`server.*` 方法、

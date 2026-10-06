@@ -144,17 +144,14 @@ impl Connection {
                 .agent_execution
                 .as_ref()
                 .ok_or(ErrorCode::UnsupportedCapability)?;
-            let mut ids = BTreeSet::new();
-            for id in request.agent_ids {
-                let value = execution
-                    .execute("agent.get.request", json!({"agentId":id}))
-                    .await?;
-                let resolved = value
-                    .pointer("/agent/id")
-                    .and_then(serde_json::Value::as_str)
-                    .ok_or(ErrorCode::AgentNotFound)?;
-                ids.insert(resolved.to_owned());
-            }
+            let resolved = execution
+                .execute(
+                    "internal.agent.identities.resolve",
+                    json!({"agentIds":request.agent_ids}),
+                )
+                .await?;
+            let ids: BTreeSet<String> =
+                serde_json::from_value(resolved).map_err(|_| ErrorCode::AgentIo)?;
             let subscription = execution.timeline().events().subscribe(
                 Uuid::new_v4().to_string(),
                 ids.clone(),

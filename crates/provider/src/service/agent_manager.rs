@@ -1,10 +1,12 @@
 //! Provider session registration and recovery for the independent server.
 
-mod auto_archive;
+pub(crate) mod auto_archive;
 mod controls;
 mod delivery;
+mod execution;
 mod generated_titles;
 pub(crate) mod native_sessions;
+pub(crate) mod ownership;
 mod resume;
 mod streaming;
 mod titles;
@@ -78,6 +80,7 @@ pub struct AgentRegistration {
 #[derive(Debug)]
 struct LiveAgent {
     session: Box<dyn AgentSession>,
+    _permit: tokio::sync::OwnedSemaphorePermit,
     record: PersistedAgentRuntimeRecord,
     registered: bool,
     turn: Option<String>,
@@ -97,14 +100,17 @@ struct LiveAgent {
 /// a failed registration attempts to close the unregistered session before returning an error.
 #[derive(Debug)]
 pub struct AgentManager {
-    registry: Box<dyn AgentRuntimeRegistry>,
+    registry: Arc<dyn AgentRuntimeRegistry>,
     clients: BTreeMap<String, Arc<dyn AgentClient>>,
     live: BTreeMap<String, LiveAgent>,
     events: SessionEvents,
     timeline: Option<crate::storage::timeline::Timeline>,
     catalog: super::provider_catalog::Catalog,
     creations: metadata::service::creation::Creations,
-    loaded_timelines: std::collections::BTreeSet<String>,
+    loaded_timelines: Arc<std::sync::Mutex<std::collections::BTreeSet<String>>>,
+    session_budget: Arc<tokio::sync::Semaphore>,
+    history_budget: Arc<tokio::sync::Semaphore>,
+    owner: Option<ownership::Owner>,
     generated_titles: generated_titles::Titles,
     workspace_names: Option<metadata::service::workspace_names::WorkspaceNames>,
     auto_archives: auto_archive::AutoArchives,
@@ -123,14 +129,17 @@ impl AgentManager {
     #[must_use]
     pub fn new(registry: Box<dyn AgentRuntimeRegistry>) -> Self {
         Self {
-            registry,
+            registry: registry.into(),
             clients: BTreeMap::new(),
             live: BTreeMap::new(),
             events: SessionEvents::default(),
             timeline: None,
             catalog: super::provider_catalog::Catalog::default(),
             creations: metadata::service::creation::Creations::default(),
-            loaded_timelines: std::collections::BTreeSet::new(),
+            loaded_timelines: Arc::default(),
+            session_budget: Arc::new(tokio::sync::Semaphore::new(32)),
+            history_budget: Arc::new(tokio::sync::Semaphore::new(8)),
+            owner: None,
             generated_titles: generated_titles::Titles::default(),
             workspace_names: None,
             auto_archives: auto_archive::AutoArchives::default(),
@@ -196,22 +205,12 @@ impl AgentManager {
             .await
     }
 
-    /// Transfer the warmed discovery cache and shared adapters to the independent catalog lane.
-    pub(crate) fn take_catalog(
-        &mut self,
-    ) -> (
-        super::provider_catalog::Catalog,
-        BTreeMap<String, Arc<dyn AgentClient>>,
-    ) {
-        (std::mem::take(&mut self.catalog), self.clients.clone())
-    }
-
     /// Load native history without claiming a writer, once per Agent in this process.
     /// # Errors
     /// Returns unavailable history, missing Agent, or durable projection failures.
     pub async fn load_timeline(&mut self, agent_id: &str) -> Result<(), model::ErrorCode> {
         use model::ErrorCode;
-        if self.loaded_timelines.contains(agent_id) {
+        if self.history_loaded(agent_id) {
             return Ok(());
         }
         let timeline = self
@@ -223,6 +222,7 @@ impl AgentManager {
             .get(agent_id)
             .map_err(|_| ErrorCode::AgentIo)?
             .ok_or(ErrorCode::AgentNotFound)?;
+        let generation = timeline.generation(agent_id)?;
         let handle = record
             .persistence
             .as_ref()
@@ -234,8 +234,9 @@ impl AgentManager {
             == Some(&json!(true))
         {
             let history = self.inspect_native(handle, &record.cwd).await?;
+            self.verify_history(&record, &generation)?;
             self.finish_replacement(agent_id, &history)?;
-            self.loaded_timelines.insert(agent_id.to_owned());
+            self.mark_history_loaded(agent_id);
             return Ok(());
         }
         let client = self
@@ -243,18 +244,27 @@ impl AgentManager {
             .get(&record.provider)
             .ok_or(ErrorCode::UnsupportedCapability)?;
         if !client.supports_history_replay() {
-            self.loaded_timelines.insert(agent_id.to_owned());
+            self.mark_history_loaded(agent_id);
             return Ok(());
         }
-        let entries = client
-            .history(handle, &record.cwd)
+        let _history = self
+            .history_budget
+            .acquire()
             .await
             .map_err(|_| ErrorCode::AgentIo)?;
+        let entries = execution::native(
+            &record.provider,
+            "history",
+            client.history(handle, &record.cwd),
+        )
+        .await
+        .map_err(|_| ErrorCode::AgentIo)?;
+        self.verify_history(&record, &generation)?;
         timeline.reconcile(agent_id, &record.provider, &entries)?;
         if titles::missing(&record) {
             self.fill_missing_title(agent_id, titles::from_entries(&entries))?;
         }
-        self.loaded_timelines.insert(agent_id.to_owned());
+        self.mark_history_loaded(agent_id);
         Ok(())
     }
 
@@ -279,7 +289,7 @@ impl AgentManager {
         if self.clients.contains_key(&provider) {
             return Err(AgentManagerError::AlreadyExists(provider));
         }
-        self.clients.insert(provider, Arc::from(client));
+        self.clients.insert(provider, client.into());
         Ok(())
     }
 
@@ -441,11 +451,15 @@ impl AgentManager {
         {
             return Err(AgentManagerError::AlreadyExists(agent_id.to_owned()));
         }
+        let permit = self.reserve_session()?;
         let client = self.available_client(&spec.provider).await?;
-        let session = client
-            .create_session_with_environment(spec, environment)
-            .await
-            .map_err(map_session)?;
+        let session = execution::native(
+            &spec.provider,
+            "create",
+            client.create_session_with_environment(spec, environment),
+        )
+        .await
+        .map_err(map_session)?;
         let now = now_timestamp();
         let record = PersistedAgentRuntimeRecord {
             id: agent_id.to_owned(),
@@ -474,9 +488,9 @@ impl AgentManager {
             owner: None,
         };
         let record = self
-            .register_session(agent_id, session, record, Registration::Create)
+            .register_session(agent_id, session, record, Registration::Create, permit)
             .await?;
-        self.loaded_timelines.insert(agent_id.to_owned());
+        self.mark_history_loaded(agent_id);
         Ok(record)
     }
 
@@ -504,6 +518,7 @@ impl AgentManager {
         if self.live.len() >= 32 {
             return Err(AgentManagerError::Busy);
         }
+        let permit = self.reserve_session()?;
         let mut record = self
             .registry
             .get(agent_id)
@@ -544,11 +559,14 @@ impl AgentManager {
             AgentResumePurpose::Interactive
         };
         let client = self.available_client(&record.provider).await?;
-        let session = client
-            .resume_session(handle, &spec, purpose)
-            .await
-            .map_err(map_session)?;
-        self.register_session(agent_id, session, record, Registration::Read)
+        let session = execution::native(
+            &spec.provider,
+            "resume",
+            client.resume_session(handle, &spec, purpose),
+        )
+        .await
+        .map_err(map_session)?;
+        self.register_session(agent_id, session, record, Registration::Read, permit)
             .await
     }
 
@@ -628,7 +646,7 @@ impl AgentManager {
         prompt
             .validate()
             .map_err(|_| AgentManagerError::InvalidRequest)?;
-        if self.timeline.is_some() && !self.loaded_timelines.contains(agent_id) {
+        if self.timeline.is_some() && !self.history_loaded(agent_id) {
             self.load_timeline(agent_id)
                 .await
                 .map_err(|_| AgentManagerError::Registry)?;
@@ -903,11 +921,14 @@ impl AgentManager {
         mut session: Box<dyn AgentSession>,
         mut record: PersistedAgentRuntimeRecord,
         registration: Registration<'_>,
+        permit: tokio::sync::OwnedSemaphorePermit,
     ) -> Result<PersistedAgentRuntimeRecord, AgentManagerError> {
         let inspected = session.runtime_info().await;
         let mut runtime_info = match inspected {
             Ok(info) if valid_runtime_info(&info, session.provider(), &record.provider) => info,
-            Ok(_) | Err(_) => return Err(self.reject_session(agent_id, session, record).await),
+            Ok(_) | Err(_) => {
+                return Err(self.reject_session(agent_id, session, record, permit).await);
+            }
         };
         streaming::preserve_usage(&mut runtime_info, record.runtime_info.as_ref());
         let persistence = session.persistence().or(record.persistence.clone());
@@ -918,13 +939,21 @@ impl AgentManager {
                     .as_ref()
                     .is_some_and(|session_id| session_id != &handle.session_id)
         }) {
-            return Err(self.reject_session(agent_id, session, record).await);
+            return Err(self.reject_session(agent_id, session, record, permit).await);
         }
         record.last_mode_id.clone_from(&runtime_info.mode_id);
         record.runtime_info = Some(runtime_info);
         record.persistence = persistence;
         record.last_status = AgentRuntimeStatus::Idle;
         record.last_error = None;
+        if self.owner.as_ref().is_some_and(|owner| {
+            owner
+                .bind(&record)
+                .and_then(|()| owner.admitting(agent_id))
+                .is_err()
+        }) {
+            return Err(self.reject_session(agent_id, session, record, permit).await);
+        }
         let stored = if matches!(registration, Registration::Create) {
             self.registry.upsert(&record).map(|()| Some(record.clone()))
         } else {
@@ -951,6 +980,7 @@ impl AgentManager {
                     agent_id.to_owned(),
                     LiveAgent {
                         session,
+                        _permit: permit,
                         record,
                         registered: false,
                         turn: None,
@@ -972,6 +1002,7 @@ impl AgentManager {
             agent_id.to_owned(),
             LiveAgent {
                 session,
+                _permit: permit,
                 record: record.clone(),
                 registered: true,
                 turn: None,
@@ -993,12 +1024,14 @@ impl AgentManager {
         agent_id: &str,
         mut session: Box<dyn AgentSession>,
         record: PersistedAgentRuntimeRecord,
+        permit: tokio::sync::OwnedSemaphorePermit,
     ) -> AgentManagerError {
         if session.close().await.is_err() {
             self.live.insert(
                 agent_id.to_owned(),
                 LiveAgent {
                     session,
+                    _permit: permit,
                     record,
                     registered: false,
                     turn: None,

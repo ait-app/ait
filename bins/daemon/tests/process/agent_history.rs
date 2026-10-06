@@ -154,7 +154,21 @@ async fn assert_discovery(client: &mut super::transport::Socket, cwd: &std::path
         let result = request(client, method, json!({"provider":"codex","cwd":cwd})).await;
         assert!(result["result"][field].is_array(), "{result}");
     }
-    let snapshot = request(client, "provider.snapshot.get.request", json!({"cwd":cwd})).await;
+    let snapshot = tokio::time::timeout(std::time::Duration::from_secs(5), async {
+        loop {
+            let snapshot =
+                request(client, "provider.snapshot.get.request", json!({"cwd":cwd})).await;
+            if snapshot["result"]["refreshing"]
+                .as_array()
+                .is_some_and(Vec::is_empty)
+            {
+                break snapshot;
+            }
+            tokio::time::sleep(std::time::Duration::from_millis(20)).await;
+        }
+    })
+    .await
+    .expect("background catalog reaches a terminal snapshot");
     let conditional = request(
         client,
         "provider.snapshot.get.request",
@@ -169,28 +183,33 @@ async fn assert_discovery(client: &mut super::transport::Socket, cwd: &std::path
     )
     .await;
     assert_eq!(subscribed["type"], "response");
-    let first = request(
+    let mut event = request(
         client,
         "provider.snapshot.refresh.request",
         json!({"cwd":cwd}),
     )
     .await;
-    let second = receive(client).await;
-    let pair = [first, second];
-    assert!(
-        pair.iter()
-            .any(|value| value["result"]["acknowledged"] == true)
-    );
-    assert!(
-        pair.iter()
-            .any(|value| value["method"] == "providers_snapshot_update")
-    );
-    request(
+    let mut acknowledged = false;
+    let mut pushed = false;
+    loop {
+        acknowledged |= event["result"]["acknowledged"] == true;
+        pushed |= event["method"] == "providers_snapshot_update";
+        if acknowledged && pushed {
+            break;
+        }
+        event = receive(client).await;
+    }
+    let mut released = request(
         client,
         "subscription.release.request",
         json!({"subscriptionId":subscribed["result"]["subscriptionId"]}),
     )
     .await;
+    while released["type"] == "event" {
+        assert_eq!(released["method"], "providers_snapshot_update");
+        released = receive(client).await;
+    }
+    assert_eq!(released["type"], "response", "{released}");
 }
 
 async fn assert_plugin_append_and_release(

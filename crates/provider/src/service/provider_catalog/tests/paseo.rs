@@ -102,7 +102,7 @@ fn clients(probes: &[Probe]) -> BTreeMap<String, Arc<dyn AgentClient>> {
         .collect()
 }
 
-async fn snapshot(catalog: &mut Catalog, probes: &[Probe], cwd: &std::path::Path) -> Value {
+async fn snapshot(catalog: &Catalog, probes: &[Probe], cwd: &std::path::Path) -> Value {
     catalog
         .execute(
             &clients(probes),
@@ -118,9 +118,9 @@ async fn snapshot(catalog: &mut Catalog, probes: &[Probe], cwd: &std::path::Path
 async fn warm_snapshot_reads_do_not_probe_or_rediscover_the_provider() {
     let root = tempfile::tempdir().unwrap();
     let probe = Probe::new("codex");
-    let mut catalog = Catalog::default();
-    let first = snapshot(&mut catalog, std::slice::from_ref(&probe), root.path()).await;
-    let second = snapshot(&mut catalog, std::slice::from_ref(&probe), root.path()).await;
+    let catalog = Catalog::default();
+    let first = snapshot(&catalog, std::slice::from_ref(&probe), root.path()).await;
+    let second = snapshot(&catalog, std::slice::from_ref(&probe), root.path()).await;
     assert_eq!(first["snapshotHash"], second["snapshotHash"]);
     assert_eq!(first["entries"], second["entries"]);
     let state = probe.state.lock().unwrap();
@@ -132,8 +132,8 @@ async fn warm_snapshot_reads_do_not_probe_or_rediscover_the_provider() {
 async fn explicit_refresh_reprobes_only_the_selected_warm_provider() {
     let root = tempfile::tempdir().unwrap();
     let probes = [Probe::new("codex"), Probe::new("claude")];
-    let mut catalog = Catalog::default();
-    snapshot(&mut catalog, &probes, root.path()).await;
+    let catalog = Catalog::default();
+    snapshot(&catalog, &probes, root.path()).await;
     catalog
         .execute(
             &clients(&probes),
@@ -155,7 +155,7 @@ async fn unavailable_provider_does_not_fetch_its_catalog() {
     let probe = Probe::new("codex");
     probe.state.lock().unwrap().available = Ok(false);
     let value = snapshot(
-        &mut Catalog::default(),
+        &Catalog::default(),
         std::slice::from_ref(&probe),
         root.path(),
     )
@@ -171,7 +171,7 @@ async fn failed_availability_probe_is_reported_without_attempting_discovery() {
     let probe = Probe::new("codex");
     probe.state.lock().unwrap().available = Err(AgentSessionError::Failed);
     let value = snapshot(
-        &mut Catalog::default(),
+        &Catalog::default(),
         std::slice::from_ref(&probe),
         root.path(),
     )
@@ -189,7 +189,7 @@ async fn one_provider_discovery_failure_keeps_other_provider_results() {
     let root = tempfile::tempdir().unwrap();
     let probes = [Probe::new("codex"), Probe::new("claude")];
     probes[0].state.lock().unwrap().discovery = Err(AgentSessionError::Failed);
-    let value = snapshot(&mut Catalog::default(), &probes, root.path()).await;
+    let value = snapshot(&Catalog::default(), &probes, root.path()).await;
     let entries = value["entries"].as_array().unwrap();
     let healthy = entries
         .iter()
@@ -209,8 +209,8 @@ async fn one_provider_discovery_failure_keeps_other_provider_results() {
 async fn unchanged_refresh_does_not_include_discovery_freshness_in_the_content_hash() {
     let root = tempfile::tempdir().unwrap();
     let probes = [Probe::new("codex")];
-    let mut catalog = Catalog::default();
-    let before = snapshot(&mut catalog, &probes, root.path()).await;
+    let catalog = Catalog::default();
+    let before = snapshot(&catalog, &probes, root.path()).await;
     catalog
         .execute(
             &clients(&probes),
@@ -238,8 +238,8 @@ async fn unchanged_refresh_does_not_include_discovery_freshness_in_the_content_h
 async fn changed_native_model_content_invalidates_the_previous_snapshot_hash() {
     let root = tempfile::tempdir().unwrap();
     let probes = [Probe::new("codex")];
-    let mut catalog = Catalog::default();
-    let before = snapshot(&mut catalog, &probes, root.path()).await;
+    let catalog = Catalog::default();
+    let before = snapshot(&catalog, &probes, root.path()).await;
     probes[0]
         .state
         .lock()
@@ -257,7 +257,7 @@ async fn changed_native_model_content_invalidates_the_previous_snapshot_hash() {
         )
         .await
         .unwrap();
-    let after = snapshot(&mut catalog, &probes, root.path()).await;
+    let after = snapshot(&catalog, &probes, root.path()).await;
     assert_ne!(before["snapshotHash"], after["snapshotHash"]);
     assert_eq!(
         after["entries"][0]["models"][0]["label"],
@@ -274,9 +274,9 @@ async fn workspace_aliases_return_the_same_canonical_cache_scope() {
     std::fs::create_dir(&actual).unwrap();
     std::os::unix::fs::symlink(&actual, &alias).unwrap();
     let probes = [Probe::new("codex")];
-    let mut catalog = Catalog::default();
-    let first = snapshot(&mut catalog, &probes, &actual).await;
-    let second = snapshot(&mut catalog, &probes, &alias).await;
+    let catalog = Catalog::default();
+    let first = snapshot(&catalog, &probes, &actual).await;
+    let second = snapshot(&catalog, &probes, &alias).await;
     assert_eq!(
         first["cwd"],
         actual.canonicalize().unwrap().to_str().unwrap()
@@ -290,9 +290,9 @@ async fn different_workspace_scopes_do_not_reuse_another_workspaces_catalog() {
     let first = tempfile::tempdir().unwrap();
     let second = tempfile::tempdir().unwrap();
     let probes = [Probe::new("codex")];
-    let mut catalog = Catalog::default();
-    snapshot(&mut catalog, &probes, first.path()).await;
-    snapshot(&mut catalog, &probes, second.path()).await;
+    let catalog = Catalog::default();
+    snapshot(&catalog, &probes, first.path()).await;
+    snapshot(&catalog, &probes, second.path()).await;
     let state = probes[0].state.lock().unwrap();
     assert_eq!(state.discovery_cwds.len(), 2);
     assert_ne!(state.discovery_cwds[0], state.discovery_cwds[1]);
@@ -302,10 +302,21 @@ async fn different_workspace_scopes_do_not_reuse_another_workspaces_catalog() {
 async fn expired_snapshot_reprobes_before_returning_new_native_content() {
     let root = tempfile::tempdir().unwrap();
     let probes = [Probe::new("codex")];
-    let mut catalog = Catalog::default();
-    snapshot(&mut catalog, &probes, root.path()).await;
-    catalog.snapshots.values_mut().next().unwrap().fetched =
-        Instant::now().checked_sub(Duration::from_secs(61)).unwrap();
+    let catalog = Catalog::default();
+    snapshot(&catalog, &probes, root.path()).await;
+    catalog
+        .cache
+        .lock()
+        .unwrap()
+        .snapshots
+        .values_mut()
+        .next()
+        .unwrap()
+        .entries
+        .values_mut()
+        .next()
+        .unwrap()
+        .fetched = Some(Instant::now().checked_sub(Duration::from_secs(61)).unwrap());
     probes[0]
         .state
         .lock()
@@ -314,7 +325,7 @@ async fn expired_snapshot_reprobes_before_returning_new_native_content() {
         .as_mut()
         .unwrap()
         .models[0]["id"] = json!("new-model");
-    let refreshed = snapshot(&mut catalog, &probes, root.path()).await;
+    let refreshed = snapshot(&catalog, &probes, root.path()).await;
     assert_eq!(refreshed["entries"][0]["models"][0]["id"], "new-model");
     assert_eq!(probes[0].state.lock().unwrap().discovery_cwds.len(), 2);
 }
@@ -323,22 +334,25 @@ async fn expired_snapshot_reprobes_before_returning_new_native_content() {
 async fn directory_cache_evicts_the_oldest_scope_at_its_bound() {
     let root = tempfile::tempdir().unwrap();
     let probes = [Probe::new("codex")];
-    let mut catalog = Catalog::default();
+    let catalog = Catalog::default();
     for index in 0..17 {
         let cwd = root.path().join(index.to_string());
         std::fs::create_dir(&cwd).unwrap();
-        snapshot(&mut catalog, &probes, &cwd).await;
+        snapshot(&catalog, &probes, &cwd).await;
     }
-    assert_eq!(catalog.snapshots.len(), 16);
+    assert_eq!(catalog.cache.lock().unwrap().snapshots.len(), 16);
     let oldest = root.path().join("0").canonicalize().unwrap();
     assert!(
         !catalog
+            .cache
+            .lock()
+            .unwrap()
             .snapshots
             .contains_key(&Some(oldest.to_str().unwrap().to_owned()))
     );
-    snapshot(&mut catalog, &probes, &oldest).await;
+    snapshot(&catalog, &probes, &oldest).await;
     assert_eq!(probes[0].state.lock().unwrap().discovery_cwds.len(), 18);
-    assert_eq!(catalog.snapshots.len(), 16);
+    assert_eq!(catalog.cache.lock().unwrap().snapshots.len(), 16);
 }
 
 #[tokio::test]

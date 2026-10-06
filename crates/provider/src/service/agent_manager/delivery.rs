@@ -2,7 +2,8 @@
 
 use super::{AgentManager, AgentManagerError};
 use crate::protocol::{agent_execution::ActiveTurnBehavior, prompt::AgentPrompt};
-use crate::storage::timeline::inbox::Receipt;
+use crate::storage::timeline::Timeline;
+use crate::storage::timeline::inbox::{QueuedInput, Receipt};
 use model::ErrorCode;
 
 impl AgentManager {
@@ -232,8 +233,13 @@ impl AgentManager {
             return Ok(());
         };
         let mut seen = std::collections::BTreeSet::new();
-        for input in timeline.queued_inputs()? {
-            if selected.is_some_and(|agent| agent != input.agent) {
+        for input in self.pending_inputs(&timeline, selected)? {
+            if self
+                .owner
+                .as_ref()
+                .is_some_and(|owner| !owner.owns(&input.agent))
+                || selected.is_some_and(|agent| agent != input.agent)
+            {
                 continue;
             }
             if !seen.insert(input.agent.clone())
@@ -306,5 +312,31 @@ impl AgentManager {
             }
         }
         Ok(())
+    }
+
+    fn pending_inputs(
+        &self,
+        timeline: &Timeline,
+        selected: Option<&str>,
+    ) -> Result<Vec<QueuedInput>, ErrorCode> {
+        if let Some(agent) = selected {
+            return Ok(timeline.queued_for_agent(agent)?.into_iter().collect());
+        }
+        let Some(owner) = &self.owner else {
+            return timeline.queued_inputs();
+        };
+        owner
+            .agents()
+            .iter()
+            .filter(|agent| {
+                self.active_turn(agent).is_none()
+                    && !self
+                        .live
+                        .get(*agent)
+                        .is_some_and(|live| live.session.pending_foreground())
+            })
+            .map(|agent| timeline.queued_for_agent(agent))
+            .collect::<Result<Vec<_>, _>>()
+            .map(|inputs| inputs.into_iter().flatten().collect())
     }
 }

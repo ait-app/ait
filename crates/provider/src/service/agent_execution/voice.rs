@@ -44,6 +44,8 @@ pub(super) async fn dispatch(
     if abandoned() {
         cancel_accepted(state, &result).await;
     }
+    let _ = state.manager.reconcile().await;
+    let _ = state.publish();
     if let Err(result) = reply.send(result)
         && cancel.is_some()
     {

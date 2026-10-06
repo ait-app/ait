@@ -9,7 +9,7 @@ import {
   resolveProviderIconName,
   replaceProviderSnapshotIcons,
 } from "@/components/provider-icon-name";
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import {
   fetchProvidersSnapshot,
   isProvidersSnapshotHomeScope,
@@ -17,6 +17,7 @@ import {
   providersSnapshotQueryKey,
   providersSnapshotQueryRoot,
   providersSnapshotRequestOptions,
+  refreshAndApplyProvidersSnapshot,
 } from "@/data/providers-snapshot";
 
 describe("providers snapshot query scope", () => {
@@ -60,6 +61,127 @@ describe("providers snapshot query scope", () => {
       providersSnapshotQueryKey("server-1", "C:/Users/Ezekiel Bulver/project"),
     );
   });
+});
+
+describe("provider snapshot revisions and background refresh", () => {
+  it("keeps a newer published revision when an older GET or push arrives", async () => {
+    const queryClient = new QueryClient();
+    const cache = createProviderSnapshotCache(createStorage());
+    const serverId = "revision-fence";
+    const key = providersSnapshotQueryKey(serverId, snapshot.cwd);
+    const latest = { ...snapshot, entries, generation: "daemon-1", revision: 5 };
+    queryClient.setQueryData(key, latest);
+    try {
+      const result = await fetchProvidersSnapshot({
+        client: {
+          getProvidersSnapshot: async () => ({ ...snapshot, generation: "daemon-1", revision: 4 }),
+        },
+        serverId,
+        cwd: snapshot.cwd,
+        queryClient,
+        cache,
+      });
+      expect(result).toBe(latest);
+      await applyProvidersSnapshotUpdate({
+        client: { getProvidersSnapshot: async () => snapshot },
+        serverId,
+        queryClient,
+        cache,
+        message: {
+          type: "providers_snapshot_update",
+          payload: { ...snapshot, generation: "daemon-1", revision: 3 },
+        },
+      });
+      expect(queryClient.getQueryData(key)).toBe(latest);
+      const restarted = await fetchProvidersSnapshot({
+        client: {
+          getProvidersSnapshot: async () => ({ ...snapshot, generation: "daemon-2", revision: 1 }),
+        },
+        serverId,
+        cwd: snapshot.cwd,
+        queryClient,
+        cache,
+      });
+      expect(restarted.generation).toBe("daemon-2");
+      expect(restarted.revision).toBe(1);
+    } finally {
+      queryClient.clear();
+    }
+  });
+
+  it.each(["ready", "error"] as const)(
+    "waits beyond refresh acceptance for the %s terminal snapshot",
+    async (status) => {
+      vi.useFakeTimers();
+      const queryClient = new QueryClient();
+      const cache = createProviderSnapshotCache(createStorage());
+      const serverId = `refresh-${status}`;
+      let release = () => {};
+      let fetched = () => {};
+      const initialRead = new Promise<void>((resolve) => {
+        fetched = resolve;
+      });
+      const terminal = new Promise<void>((resolve) => {
+        release = resolve;
+      });
+      let calls = 0;
+      let finished = false;
+      const refresh = refreshAndApplyProvidersSnapshot({
+        client: {
+          refreshProvidersSnapshot: async () => ({
+            requestId: "refresh",
+            acknowledged: true,
+            generation: "daemon",
+            revision: 1,
+          }),
+          getProvidersSnapshot: async () => {
+            calls += 1;
+            if (calls === 1) {
+              fetched();
+              return {
+                ...snapshot,
+                generation: "daemon",
+                revision: 1,
+                refreshing: ["test-provider"],
+              };
+            }
+            await terminal;
+            return {
+              ...snapshot,
+              snapshotHash: `terminal-${status}`,
+              compactSnapshot: compactProviderSnapshot([{ ...entries[0]!, status }]),
+              generation: "daemon",
+              revision: 2,
+              refreshing: [],
+            };
+          },
+        },
+        serverId,
+        cwd: snapshot.cwd,
+        providers: ["test-provider"],
+        queryClient,
+        cache,
+      }).then((result) => {
+        finished = true;
+        return result;
+      });
+      try {
+        await initialRead;
+        await vi.advanceTimersByTimeAsync(200);
+        expect(finished).toBe(false);
+        release();
+        await refresh;
+        expect(calls).toBe(2);
+        expect(
+          queryClient.getQueryData(providersSnapshotQueryKey(serverId, snapshot.cwd)),
+        ).toMatchObject({ entries: [{ status }], revision: 2, refreshing: [] });
+      } finally {
+        release();
+        queryClient.clear();
+        vi.useRealTimers();
+      }
+    },
+  );
 });
 
 // Resolve the exact CommonJS implementation installed by React Native's setUpXHR.
