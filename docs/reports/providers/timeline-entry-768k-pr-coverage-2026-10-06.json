@@ -1,0 +1,196 @@
+{
+  "source_revision": "5d6318c459b13774e1e9e3327f6dbdde7ecdbc6a",
+  "base_revision": "91102e13e2b549a135b7e2b8dd9f2a5546468afa",
+  "measurement_date": "2026-10-06",
+  "scope": "Rust Cargo workspace; default features; macOS arm64; rustc 1.98.1; cargo-llvm-cov 0.8.4; tool default file filtering; no additional exclusions; coverage test threads=4; doctests are run by cargo test but not instrumented",
+  "commands": {
+    "tests": "cargo test --workspace --locked --offline -- --test-threads=1",
+    "build": "cargo build --workspace --locked --offline",
+    "clippy": "cargo clippy --workspace --all-targets --locked --offline -- -D warnings",
+    "format": "cargo fmt --all --check",
+    "coverage": "cargo llvm-cov --workspace --html --locked --offline -- --test-threads=4",
+    "coverage_export": "cargo llvm-cov report --json --output-path /private/tmp/ait-timeline-pr-coverage-raw.json --locked --offline",
+    "client_tests": "npm run test --workspace=@ait/mobile -- src/timeline/session-stream-reducers.test.ts src/timeline/replica.test.ts",
+    "client_typecheck": "npm run typecheck --workspace=@ait/mobile",
+    "client_lint": "../../node_modules/.bin/eslint src/timeline/session-stream-reducers.ts src/timeline/session-stream-reducers.test.ts (cwd: apps/mobile)",
+    "client_format": "./node_modules/.bin/oxfmt --check apps/mobile/src/timeline/session-stream-reducers.ts apps/mobile/src/timeline/session-stream-reducers.test.ts",
+    "docs": "npm run check:docs"
+  },
+  "test_execution": {
+    "targets": 28,
+    "passed": 1843,
+    "failed": 0,
+    "ignored": 6,
+    "ignored_tests": [
+      "test local::claude::tests::process::installed_claude_control_protocol_discovers_models_without_inference ... ignored, requires a locally installed Claude Code CLI; sends no model request",
+      "test local::claude::tests::process::parity::installed_claude_completes_a_native_turn_and_reopens_history ... ignored, requires installed Claude authentication and makes one small model request",
+      "test local::codex::tests::installed::installed_codex_completes_a_native_turn_and_reopens_history ... ignored, requires installed Codex authentication and makes one small model request",
+      "test local::deepseek_harness::native::tests::installed_host_discovers_switches_permissions_and_adopts_legacy_sessions ... ignored, requires an installed DSH CLI via AIT_TEST_DSH_BIN; no model request",
+      "test local::opencode::tests::installed::installed_opencode_declined_tool_settles_and_accepts_next_turn ... ignored, requires AIT_TEST_OPENCODE_BIN; isolated config and loopback model only",
+      "test local::opencode::tests::installed::installed_opencode_discovers_runs_and_restores_with_local_model ... ignored, requires AIT_TEST_OPENCODE_BIN; isolated config and loopback model only"
+    ]
+  },
+  "coverage_test_execution": {
+    "targets": 16,
+    "passed": 1843,
+    "failed": 0,
+    "ignored": 6,
+    "ignored_tests": [
+      "test local::claude::tests::process::installed_claude_control_protocol_discovers_models_without_inference ... ignored, requires a locally installed Claude Code CLI; sends no model request",
+      "test local::claude::tests::process::parity::installed_claude_completes_a_native_turn_and_reopens_history ... ignored, requires installed Claude authentication and makes one small model request",
+      "test local::codex::tests::installed::installed_codex_completes_a_native_turn_and_reopens_history ... ignored, requires installed Codex authentication and makes one small model request",
+      "test local::deepseek_harness::native::tests::installed_host_discovers_switches_permissions_and_adopts_legacy_sessions ... ignored, requires an installed DSH CLI via AIT_TEST_DSH_BIN; no model request",
+      "test local::opencode::tests::installed::installed_opencode_declined_tool_settles_and_accepts_next_turn ... ignored, requires AIT_TEST_OPENCODE_BIN; isolated config and loopback model only",
+      "test local::opencode::tests::installed::installed_opencode_discovers_runs_and_restores_with_local_model ... ignored, requires AIT_TEST_OPENCODE_BIN; isolated config and loopback model only"
+    ]
+  },
+  "client_test_execution": {
+    "files": 2,
+    "passed": 139,
+    "failed": 0
+  },
+  "client_lint": {
+    "errors": 0,
+    "existing_array_type_warnings": 4
+  },
+  "workspace_lines": {
+    "count": 54123,
+    "covered": 51066,
+    "percent": 94.35175433734273
+  },
+  "crate_lines": {
+    "bins/daemon": {
+      "count": 969,
+      "covered": 925,
+      "files": 7,
+      "percent": 95.45923632610939
+    },
+    "crates/api": {
+      "count": 2134,
+      "covered": 1976,
+      "files": 16,
+      "percent": 92.59606373008435
+    },
+    "crates/browser": {
+      "count": 725,
+      "covered": 706,
+      "files": 5,
+      "percent": 97.37931034482759
+    },
+    "crates/domain": {
+      "count": 121,
+      "covered": 121,
+      "files": 2,
+      "percent": 100.0
+    },
+    "crates/filesystem": {
+      "count": 11961,
+      "covered": 11337,
+      "files": 64,
+      "percent": 94.78304489591171
+    },
+    "crates/metadata": {
+      "count": 7955,
+      "covered": 7541,
+      "files": 57,
+      "percent": 94.79572595851666
+    },
+    "crates/model": {
+      "count": 777,
+      "covered": 737,
+      "files": 12,
+      "percent": 94.85199485199485
+    },
+    "crates/protocol": {
+      "count": 75,
+      "covered": 75,
+      "files": 2,
+      "percent": 100.0
+    },
+    "crates/provider": {
+      "count": 24625,
+      "covered": 23080,
+      "files": 143,
+      "percent": 93.7258883248731
+    },
+    "crates/relay": {
+      "count": 464,
+      "covered": 422,
+      "files": 5,
+      "percent": 90.94827586206897
+    },
+    "crates/schedule": {
+      "count": 823,
+      "covered": 805,
+      "files": 7,
+      "percent": 97.81287970838396
+    },
+    "crates/terminal": {
+      "count": 1543,
+      "covered": 1486,
+      "files": 11,
+      "percent": 96.30589760207388
+    },
+    "crates/voice": {
+      "count": 1951,
+      "covered": 1855,
+      "files": 19,
+      "percent": 95.07944643772424
+    }
+  },
+  "changed_source_lines": {
+    "crates/provider/src/rpc/timeline.rs": {
+      "count": 144,
+      "covered": 144,
+      "percent": 100.0
+    },
+    "crates/provider/src/rpc/timeline/projection.rs": {
+      "count": 146,
+      "covered": 136,
+      "percent": 93.15068493150685
+    },
+    "crates/provider/src/rpc/timeline/projection/page.rs": {
+      "count": 164,
+      "covered": 164,
+      "percent": 100.0
+    },
+    "crates/provider/src/storage/timeline.rs": {
+      "count": 296,
+      "covered": 292,
+      "percent": 98.64864864864865
+    },
+    "crates/provider/src/storage/timeline/progress.rs": {
+      "count": 171,
+      "covered": 166,
+      "percent": 97.07602339181285
+    }
+  },
+  "changed_source_sha256": {
+    "apps/mobile/src/timeline/session-stream-reducers.test.ts": "3602eeea8ab1a1aaf50e55bb852594e9aa450fb49adbb7b4ecd53cfd084307ad",
+    "apps/mobile/src/timeline/session-stream-reducers.ts": "c46f4e02189625080d08b24f9db1d20d250c8a3954d1fd42154aa5d9c47b54ee",
+    "crates/provider/src/rpc/timeline.rs": "1ca403717d7a3e1e7af44afe70e666bc9cdee8afb4c62d1ad321a5b426d4b24b",
+    "crates/provider/src/rpc/timeline/projection.rs": "647672f23b4e1a6bbe303615125aa0c3b08c32db7b25068da1b4b3053044d310",
+    "crates/provider/src/rpc/timeline/projection/page.rs": "7cea7c1a4a7efd5986a78c456afc2c1ef15c7c54a8e44e7ccff7eaaeb5b297a4",
+    "crates/provider/src/rpc/timeline/tests.rs": "ccccd0dee7c83cb3ec69f3c8b2b1f5bba909e5bd9164105cfaace9e59b6178fd",
+    "crates/provider/src/rpc/timeline/tests/budgets.rs": "77e9387c4bb1b375e361004f3d8e1ab246ef3545fcbe32598b674b32dc5fee0b",
+    "crates/provider/src/service/agent_manager/tests/paseo.rs": "16cbbc9b0eaaf673d2f9389bcc72f706e893ce69cf6b547b27f6e5757a5fd93c",
+    "crates/provider/src/storage/timeline.rs": "c5b7d8e32d300200d5be24f15ac9a4671dd4e471488f9b03d47f170dc49cf4c4",
+    "crates/provider/src/storage/timeline/progress.rs": "b3cd6df188a565e20d56abbab7c31de00cda759fcf485eac7f8fd885db8650af",
+    "crates/provider/src/storage/timeline/progress/tests.rs": "885523063633f4254e30c4416265fecfcd534a9fb659b509128dacb9b02d0b7d",
+    "crates/provider/src/storage/timeline/progress/tests/paseo.rs": "32d28be00aff3ba44a2e5bfa0179be2f4d4760f42c619287daef4001a7501855",
+    "crates/provider/src/storage/timeline/tests.rs": "ca7793945e519e75eca6503c9357b4126a2f3f341f548a8ba9cc446a010f2e9d"
+  },
+  "html_report": "target/llvm-cov/html/index.html",
+  "reviewable_artifact": "This committed JSON records exported workspace, crate, and changed-source line counts plus exact source hashes. The local HTML report is not a shared artifact.",
+  "baseline_comparison": {
+    "status": "No comparable coverage measurement of the updated base revision was made; no coverage delta is claimed."
+  },
+  "uncovered_behavior": "Serialization-failure and invalid internal page-cursor guards are not exercised with normal serde_json::Value source rows. Default-ignored installed-provider tests require separate CLI/authentication setup; no live GitHub log fetch or daemon performance benchmark was performed.",
+  "follow_up": "Run Linux CI for platform verification; use deterministic serialization/invariant failure injection if these unreachable guard paths become practical inputs.",
+  "unavailable_platforms": [
+    "Linux",
+    "Windows"
+  ],
+  "sandbox_retry": "The initial sandboxed cargo test run failed when local HTTP/WebSocket listeners returned Operation not permitted. All reported workspace results are from the successful rerun with local listener and subprocess permissions.",
+  "client_baseline_resolution": "The plugin identity test that failed before synchronization is fixed by upstream PR #187. All 139 relevant client tests pass on the synchronized source revision."
+}

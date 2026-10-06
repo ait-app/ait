@@ -63,6 +63,7 @@
 
 ## Provider、Agent 与会话
 
+- [Timeline 单项 768 KiB：PR 覆盖率证据](providers/timeline-entry-768k-pr-coverage-2026-10-06.json)
 - [Provider 装配边界验证](providers/provider-composition.md)
 - [Antigravity CLI 原生 Provider 验证](providers/antigravity-cli.md)
 - [Agent 创建任务预算竞争与 DSH 回归](providers/agent-creation-resource-contention.md)

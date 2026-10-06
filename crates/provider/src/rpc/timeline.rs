@@ -9,6 +9,8 @@ use crate::storage::timeline::Row;
 pub(super) mod projection;
 mod text_search;
 
+const MAX_RESPONSE_BYTES: usize = 900 * 1024;
+
 pub(crate) fn fetch(
     request: &FetchRequest,
     epoch: &str,
@@ -38,9 +40,10 @@ pub(crate) fn fetch(
     } else {
         200
     });
+    let selection = if reset { Direction::Tail } else { direction };
     let page = projection::select(
         rows,
-        if reset { Direction::Tail } else { direction },
+        selection,
         request.cursor.as_ref().map(|cursor| cursor.seq),
         limit,
     );
@@ -50,10 +53,25 @@ pub(crate) fn fetch(
         "startCursor":page.start_seq.map(|seq|json!({"epoch":epoch,"seq":seq})),
         "endCursor":page.end_seq.map(|seq|json!({"epoch":epoch,"seq":seq})),
         "hasOlder":page.has_older,"hasNewer":page.has_newer,
-        "entries":page.entries,"error":null});
+        "entries":[],"error":null});
     if request.merge_window == Some(true) {
         value["mergeWindow"] = json!(true);
     }
+    let envelope_bytes = serde_json::to_vec(&value)
+        .map_err(|_| ErrorCode::AgentIo)?
+        .len();
+    // A narrower source window can increase the digit count of either cursor's sequence.
+    let entry_bytes = MAX_RESPONSE_BYTES.saturating_sub(envelope_bytes + 40);
+    let page = projection::fit(rows, page, selection, entry_bytes)?;
+    value["entries"] = serde_json::to_value(page.entries).map_err(|_| ErrorCode::AgentIo)?;
+    value["startCursor"] = page
+        .start_seq
+        .map_or(Value::Null, |seq| json!({"epoch":epoch,"seq":seq}));
+    value["endCursor"] = page
+        .end_seq
+        .map_or(Value::Null, |seq| json!({"epoch":epoch,"seq":seq}));
+    value["hasOlder"] = json!(page.has_older);
+    value["hasNewer"] = json!(page.has_newer);
     bounded(value)
 }
 
@@ -132,7 +150,7 @@ pub(crate) fn bounded(value: Value) -> Result<Value, ErrorCode> {
     if serde_json::to_vec(&value)
         .map_err(|_| ErrorCode::AgentIo)?
         .len()
-        > 900 * 1024
+        > MAX_RESPONSE_BYTES
     {
         return Err(ErrorCode::ResourceExhausted);
     }

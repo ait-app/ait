@@ -1,6 +1,7 @@
 use super::*;
 use crate::protocol::timeline::NativeItem;
 
+mod budgets;
 mod paseo;
 
 fn rows() -> Vec<Row> {

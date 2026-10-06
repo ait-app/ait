@@ -3,7 +3,7 @@ use std::collections::{BTreeMap, BTreeSet};
 use model::ErrorCode;
 use rusqlite::{Connection, OptionalExtension, params};
 
-use super::{NativeItem, Row, Timeline, epoch, io};
+use super::{MAX_ENTRY_BYTES, NativeItem, Row, Timeline, epoch, io};
 
 impl Timeline {
     /// Persist and publish one retry-stable incremental item in the same cursor space as history.
@@ -26,13 +26,13 @@ impl Timeline {
             return Err(ErrorCode::InvalidMessage);
         }
         let bytes = serde_json::to_string(entry).map_err(io)?;
-        if bytes.len() > 256 * 1024 {
+        if bytes.len() > MAX_ENTRY_BYTES {
             tracing::warn!(
                 agent_id = agent,
                 provider,
                 item_type = entry.item["type"].as_str().unwrap_or("unknown"),
                 size_bytes = bytes.len(),
-                limit_bytes = 256 * 1024,
+                limit_bytes = MAX_ENTRY_BYTES,
                 "Timeline progress item exceeds size limit"
             );
             return Err(ErrorCode::ResourceExhausted);
@@ -189,11 +189,11 @@ fn additive(entry: &NativeItem) -> bool {
 
 fn extend(prefix: &mut String, entry: &NativeItem) -> Result<(), ErrorCode> {
     let delta = entry.item["text"].as_str().ok_or(ErrorCode::AgentIo)?;
-    if prefix.len().saturating_add(delta.len()) > 256 * 1024 {
+    if prefix.len().saturating_add(delta.len()) > MAX_ENTRY_BYTES {
         tracing::warn!(
             item_type = entry.item["type"].as_str().unwrap_or("unknown"),
             size_bytes = prefix.len().saturating_add(delta.len()),
-            limit_bytes = 256 * 1024,
+            limit_bytes = MAX_ENTRY_BYTES,
             "Timeline accumulated text exceeds size limit"
         );
         return Err(ErrorCode::ResourceExhausted);

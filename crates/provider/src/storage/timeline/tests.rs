@@ -88,7 +88,11 @@ fn storage_errors_and_oversized_items_do_not_publish_uncommitted_rows() {
     );
     subscription.activate().unwrap();
     assert_eq!(
-        timeline.append("agent", "codex", &[item("large", &"x".repeat(300_000))]),
+        timeline.append(
+            "agent",
+            "codex",
+            &[item("large", &"x".repeat(MAX_ENTRY_BYTES))]
+        ),
         Err(ErrorCode::ResourceExhausted)
     );
     assert!(receiver.try_recv().is_err());
@@ -172,7 +176,11 @@ fn refresh_preserves_prefix_cursors_and_retires_rewritten_history_atomically() {
     );
     observer.activate().unwrap();
     assert_eq!(
-        timeline.reconcile("agent", "codex", &[item("large", &"x".repeat(300_000))]),
+        timeline.reconcile(
+            "agent",
+            "codex",
+            &[item("large", &"x".repeat(MAX_ENTRY_BYTES))]
+        ),
         Err(ErrorCode::ResourceExhausted)
     );
     assert_eq!(timeline.read("agent").unwrap().0, epoch);
@@ -204,6 +212,29 @@ fn refresh_preserves_prefix_cursors_and_retires_rewritten_history_atomically() {
     assert_ne!(empty, replacement);
     assert_eq!(timeline.read("agent").unwrap().1.len(), 1);
     assert_eq!(timeline.reconcile("agent", "codex", &[]).unwrap(), empty);
+}
+
+#[test]
+fn serialized_entry_at_768_kib_is_persisted_and_one_byte_more_is_rejected() {
+    let timeline = Timeline::memory().unwrap();
+    let mut maximum = item("maximum", "");
+    let overhead = serde_json::to_vec(&maximum).unwrap().len();
+    maximum.item["text"] = json!("x".repeat(MAX_ENTRY_BYTES - overhead));
+    assert_eq!(serde_json::to_vec(&maximum).unwrap().len(), 768 * 1024);
+    timeline
+        .append("agent", "codex", std::slice::from_ref(&maximum))
+        .unwrap();
+    assert_eq!(timeline.read("agent").unwrap().1[0].entry, maximum);
+
+    assert_eq!(
+        timeline.append(
+            "other",
+            "codex",
+            &[item("maximum", &"x".repeat(MAX_ENTRY_BYTES - overhead + 1))]
+        ),
+        Err(ErrorCode::ResourceExhausted)
+    );
+    assert!(timeline.read("other").unwrap().1.is_empty());
 }
 
 #[test]

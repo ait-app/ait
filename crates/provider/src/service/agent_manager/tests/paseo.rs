@@ -240,12 +240,10 @@ async fn oversized_progress_closes_the_turn_before_any_partial_publication() {
     let (mut manager, registry, client) = running().await;
     let timeline = Timeline::memory().unwrap();
     manager = manager.with_timeline(timeline.clone());
-    client
-        .0
-        .lock()
-        .unwrap()
-        .events
-        .push_back(progress("large", &"x".repeat(256 * 1024)));
+    client.0.lock().unwrap().events.push_back(progress(
+        "large",
+        &"x".repeat(crate::storage::timeline::MAX_ENTRY_BYTES),
+    ));
     manager.poll().await.unwrap();
     assert!(timeline.read("agent-1").unwrap().1.is_empty());
     assert_eq!(
@@ -253,6 +251,37 @@ async fn oversized_progress_closes_the_turn_before_any_partial_publication() {
         AgentRuntimeStatus::Error
     );
     assert_eq!(client.0.lock().unwrap().close_calls, 1);
+}
+
+#[tokio::test]
+async fn large_completed_tool_result_is_saved_without_closing_the_native_session() {
+    let (mut manager, registry, client) = running().await;
+    let timeline = Timeline::memory().unwrap();
+    manager = manager.with_timeline(timeline.clone());
+    let output = "x".repeat(350 * 1024);
+    {
+        let mut state = client.0.lock().unwrap();
+        state.events.push_back(AgentTurnEvent::Timeline(NativeItem {
+            key: "native:native-turn:tool".to_owned(),
+            turn_id: Some("native-turn".to_owned()),
+            timestamp: "2026-10-06T00:00:00Z".to_owned(),
+            item: json!({"type":"tool_call","callId":"tool",
+                "name":"codex_apps.github.fetch_workflow_job_logs","status":"completed",
+                "error":null,"detail":{"type":"unknown","input":{},"output":output}}),
+        }));
+        state.events.push_back(AgentTurnEvent::Completed(None));
+    }
+    manager.poll().await.unwrap();
+    assert_eq!(
+        timeline.read("agent-1").unwrap().1[0].entry.item["detail"]["output"],
+        output
+    );
+    let record = registry.get("agent-1").unwrap().unwrap();
+    assert_eq!(record.last_status, AgentRuntimeStatus::Idle);
+    assert!(record.last_error.is_none());
+    assert_eq!(client.0.lock().unwrap().close_calls, 0);
+    manager.send("agent-1", "continue").await.unwrap();
+    assert_eq!(client.0.lock().unwrap().start_calls, 2);
 }
 
 #[tokio::test]
