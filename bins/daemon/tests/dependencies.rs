@@ -16,6 +16,7 @@ use domain as _;
 use filesystem as _;
 use futures_util as _;
 use host_link as _;
+#[cfg(unix)]
 use libc as _;
 use metadata as _;
 use model as _;

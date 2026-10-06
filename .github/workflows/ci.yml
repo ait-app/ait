@@ -81,7 +81,7 @@ jobs:
       - run: cargo fmt --all --check
       - run: cargo clippy --workspace --all-targets -- -D warnings
       - run: cargo install cargo-llvm-cov --version 0.9.1 --locked
-      - run: cargo llvm-cov --locked --workspace --html
+      - run: cargo llvm-cov --locked --workspace --html -- --test-threads=8
       - uses: actions/upload-artifact@v4
         if: always()
         with:

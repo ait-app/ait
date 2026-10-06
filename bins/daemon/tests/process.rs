@@ -5,6 +5,7 @@ use std::process::Command;
 use async_trait as _;
 use base64 as _;
 use host_link as _;
+#[cfg(unix)]
 use libc as _;
 // Cargo passes the complete package dependency set to this integration test.
 use anyhow as _;

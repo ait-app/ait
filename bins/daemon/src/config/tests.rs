@@ -175,6 +175,7 @@ fn supports_explicit_network_listeners_without_changing_loopback_default() {
     }
 }
 
+#[cfg(target_os = "linux")]
 #[test]
 fn headless_is_explicit_and_center_cannot_be_configured() {
     let configuration = Config::load(

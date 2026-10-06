@@ -157,14 +157,14 @@ Web/接入 token 请求还受原始过期时间约束。恢复窗口结束且新
 ## Test coverage
 
 提交前在 Linux / Rust 1.98.1、默认 features、完整 workspace 上运行
-`cargo llvm-cov --locked --workspace --html`（未额外排除文件）。测量源码是 `3b42a810`
+`cargo llvm-cov --locked --workspace --html -- --test-threads=8`（未额外排除文件）。测量源码是 `3b42a810`
 加本 PR 的 Rust 变更，最终提交与共享 HTML artifact 链接记录在 PR 的 Test coverage 中。
 
-- Workspace 行覆盖率 94.44%（50321 / 53286）；`host-link` 94.27%（181 / 192）。
+- Workspace 行覆盖率 94.44%（50322 / 53286）；`host-link` 94.27%（181 / 192）。
 - `daemon` 93.21%（1605 / 1722），`api` 93.32%（2038 / 2184），`model` 94.86%（738 / 778）。
 - 测试执行：1833 通过，3 个需要已安装 Claude/Codex 与真实 Provider 认证的既有测试忽略。
 - 没有可比基线，不声称覆盖率增幅。覆盖率不是测试通过率，也不代表所有错误分支覆盖。
 - 未覆盖主要是信号/错误处理与部分状态 adapter 路径；真实生产中心、systemd、断电和目标
   filesystem 的故障恢复验收仍待两端部署。macOS/Windows 的 headless 行为不在本轮验收范围。
 
-CI 的 `rust-coverage` artifact 上传 HTML；提交后等待该任务生成可下载报告，供 review。
+CI 的 `rust-coverage` artifact 上传 HTML；对应最终提交的下载链接记录在 PR 中，供 review。
