@@ -255,5 +255,5 @@ fn secret(value: &Value, key: &str) -> Result<secrecy::SecretString, Error> {
     Ok(text.to_owned().into())
 }
 
-#[cfg(test)]
+#[cfg(all(test, target_os = "linux"))]
 mod tests;

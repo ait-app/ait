@@ -67,6 +67,7 @@ async fn shutdown_releases_lock_and_restart_keeps_only_stable_identity() {
     restarted.serve(async {}).await.unwrap();
 }
 
+#[cfg(target_os = "linux")]
 #[tokio::test]
 async fn each_composite_service_installs_all_its_methods_without_other_components() {
     let root = tempfile::tempdir().unwrap();

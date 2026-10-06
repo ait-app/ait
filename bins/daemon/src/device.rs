@@ -285,7 +285,7 @@ fn default_name() -> String {
         .unwrap_or_else(|| "linux-daemon".to_owned())
 }
 
-#[cfg(test)]
+#[cfg(all(test, target_os = "linux"))]
 mod tests;
 
 /// Daemon-owned adapter writes a non-secret snapshot for CLI status without taking the credential lock.

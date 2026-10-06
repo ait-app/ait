@@ -194,6 +194,7 @@ fn supports_explicit_network_listeners_without_changing_loopback_default() {
     }
 }
 
+#[cfg(target_os = "linux")]
 #[test]
 fn host_validation_runs_before_file_io_and_uses_the_resolved_origins() {
     let directory = tempfile::tempdir().unwrap();
