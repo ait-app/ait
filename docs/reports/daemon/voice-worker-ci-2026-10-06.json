@@ -1,0 +1,31 @@
+{
+  "base_commit": "07c9afe51f667e14a82a7e05e3bdc1e8ef9a241a",
+  "failed_upstream_run": 37432706092,
+  "platform": "Linux x86_64",
+  "rust": "1.98.1",
+  "cargo_llvm_cov": "0.8.7",
+  "tests": {
+    "passed": 1833,
+    "failed": 1,
+    "ignored": 6,
+    "voice_passed": 78,
+    "local_failure": "filesystem UnixListener::bind EPERM"
+  },
+  "scopes": {
+    "workspace": {
+      "covered": 50958,
+      "count": 54019,
+      "percent": 94.33347525870526
+    },
+    "crates/voice": {
+      "covered": 1855,
+      "count": 1951,
+      "percent": 95.07944643772424
+    },
+    "crates/voice/src/offline/worker.rs": {
+      "covered": 158,
+      "count": 172,
+      "percent": 91.86046511627907
+    }
+  }
+}

@@ -1,6 +1,6 @@
 # 桌面启动连接与 Provider 发现隔离验证
 
-- 日期：2026-10-06。
+- 日期：2026-10-06；本报告的实现、GUI 二进制与覆盖率对应提交 `07c9afe51f667e14a82a7e05e3bdc1e8ef9a241a`。
 - 基线：PR [#186](https://github.com/ait-app/ait/pull/186) 的 `233c3112`，源码树与 `913f082c` 相同。
 - 上游基线 [CI 37414697556](https://github.com/ait-app/ait/actions/runs/37414697556) 已成功；此前失败的超时根因仍未证明。
 - 实现指纹、逐文件覆盖率与限制见[机器可读报告](desktop-startup-isolation-2026-10-06.json)。

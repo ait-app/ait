@@ -54,6 +54,8 @@
 
 ## 工程规范与验证
 
+- [Voice worker CI fixture 验证](reports/daemon/voice-worker-ci-2026-10-06.md)：不可变进程 fixture、并发重试与已知失败边界。
+
 - [桌面启动连接与 Provider 发现隔离验证](reports/clients/desktop-startup-isolation-2026-10-06.md)：同连接队首阻塞、就绪后恢复、重复启动与覆盖率。
 - [PR #186 验收反馈修复](reports/providers/pr-186-acceptance-2026-10-06.md)：OpenCode 拒绝工具结束、冷启动模型目录与 DSH 同文多选答案。
 - [DSH 与 OpenCode 群反馈整合](reports/providers/dsh-opencode-group-feedback-2026-10-05.md)：权限与问答、历史缓存、真实 OpenCode 2.0.20 兼容和定向验证。

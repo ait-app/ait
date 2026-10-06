@@ -4,6 +4,8 @@
 
 ## Daemon 与协议
 
+- [Voice worker CI fixture 验证](daemon/voice-worker-ci-2026-10-06.md)
+
 - [Rust code smell 清理：PR 验证](daemon/rust-code-smell-pr-validation-2026-10-04.md)
 - [Cargo workspace 依赖整理与警告清理：PR 验证](daemon/cargo-workspace-pr-validation-2026-10-04.md)
 - [Daemon 测试分支 rebase 验证](daemon/crate-coverage-rebase.md)
