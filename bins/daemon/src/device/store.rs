@@ -16,7 +16,7 @@ pub(crate) struct Store {
 }
 
 impl Store {
-    pub fn open(data: &Path) -> Result<Self, Error> {
+    pub(crate) fn open(data: &Path) -> Result<Self, Error> {
         let directory = data.join("device");
         match std::fs::symlink_metadata(&directory) {
             Ok(m) if m.file_type().is_symlink() || !m.is_dir() => return Err(Error::Storage),
@@ -61,7 +61,7 @@ impl Store {
         })
     }
 
-    pub fn load(&self) -> Result<Option<State>, Error> {
+    pub(crate) fn load(&self) -> Result<Option<State>, Error> {
         let path = self.directory.join(".env");
         regular(&path)?;
         let file = match private_options().read(true).open(path) {
@@ -98,7 +98,7 @@ impl Store {
         decode(&serde_json::from_slice::<Value>(&bytes).map_err(|_| Error::Storage)?).map(Some)
     }
 
-    pub fn clear(&self) -> Result<(), Error> {
+    pub(crate) fn clear(&self) -> Result<(), Error> {
         let path = self.directory.join(".env");
         regular(&path)?;
         match std::fs::remove_file(path) {

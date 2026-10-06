@@ -74,7 +74,7 @@ fn authorization_commands_are_explicit_and_status_never_requires_or_displays_sec
         .unwrap();
     assert!(status.status.success());
     let json: serde_json::Value = serde_json::from_slice(&status.stdout).unwrap();
-    assert_eq!(json["center"], "https://dash.ait-app.com:8443/api");
+    assert_eq!(json["center"], "https://aitapp.cn:8443/api");
     assert_eq!(json["credentials_present"], false);
     assert!(!data.exists());
     for token in ["", "bad token", "x\nsecret marker", &"x".repeat(8193)] {

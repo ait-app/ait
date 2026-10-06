@@ -84,6 +84,7 @@ async fn status_and_stop_reply_once_with_only_the_connectors_public_identity_and
                     "serverId":"relay-server",
                     "instanceId":"relay-instance",
                     "platform":std::env::consts::OS,
+                    "management":{"mode":"external"},
                     "status":{"connecting":false,"online":false,"epoch":null,"error":null}
                 }
             })

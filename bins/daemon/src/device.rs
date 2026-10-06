@@ -297,7 +297,11 @@ pub(super) struct StatusRelay {
 }
 
 impl StatusRelay {
-    pub fn new(inner: api::managed_relay::ManagedRelayHandle, data: &Path, instance: Uuid) -> Self {
+    pub(crate) fn new(
+        inner: api::managed_relay::ManagedRelayHandle,
+        data: &Path,
+        instance: Uuid,
+    ) -> Self {
         Self {
             inner,
             directory: data.join("device"),

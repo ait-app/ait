@@ -31,7 +31,7 @@ fn fixed_center_and_login_modes_are_unambiguous_and_redacted() {
     ] {
         assert!(crate::config::Cli::try_parse_from(args).is_err());
     }
-    assert_eq!(host_link::CENTER, "https://dash.ait-app.com:8443/api");
+    assert_eq!(host_link::CENTER, "https://aitapp.cn:8443/api");
     assert!(read_token(Some("".into()), false).is_err());
     assert!(read_token(Some("invalid token".into()), false).is_err());
     assert!(read_token(Some("x".repeat(8193).into()), false).is_err());

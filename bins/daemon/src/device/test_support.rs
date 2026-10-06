@@ -29,7 +29,7 @@ pub(super) struct Seen {
 }
 
 impl Fixture {
-    pub async fn new(responses: Vec<(StatusCode, Value)>) -> Self {
+    pub(super) async fn new(responses: Vec<(StatusCode, Value)>) -> Self {
         let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
         let address = listener.local_addr().unwrap();
         let seen = Arc::new(Mutex::new(Seen {

@@ -22,7 +22,7 @@ Electron 位于 `apps/desktop`；`apps/mobile` 提供桌面、浏览器与移动
 | `relay`       | 控制 RPC、主动连接与反向数据通道                     | `model`                                               |
 | `api`         | HTTP/WebSocket 鉴权、连接与跨能力协调                | 上述能力包、`domain`、`model`；测试使用 `persistence` |
 | `daemon`      | 启动配置、进程锁、server identity、服务组装和停机    | API、领域、`model`、`persistence` 及能力包            |
-| `host-link`  | 无人值守机器认证、租约和连接协调           | 无（通过 ports 调用 adapters）         |
+| `host-link`   | 无人值守机器认证、租约和连接协调                     | 无（通过 ports 调用 adapters）                        |
 
 `bot → provider` 是用户指定的单向协作边，Provider 不反向依赖 Bot，见
 [ADR-139](../decisions/bot/adr-139-workspace-bots-and-owned-channels.md)。

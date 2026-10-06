@@ -67,7 +67,6 @@ async fn shutdown_releases_lock_and_restart_keeps_only_stable_identity() {
     restarted.serve(async {}).await.unwrap();
 }
 
-#[cfg(target_os = "linux")]
 #[tokio::test]
 async fn each_composite_service_installs_all_its_methods_without_other_components() {
     let root = tempfile::tempdir().unwrap();
@@ -121,6 +120,7 @@ async fn each_composite_service_installs_all_its_methods_without_other_component
             listener,
             api,
             instance: instance.clone(),
+            managed: None,
         };
         let task = tokio::spawn(server.serve(async move {
             let _ = signal.await;
@@ -165,6 +165,7 @@ async fn each_composite_service_installs_all_its_methods_without_other_component
 
 mod workspace_attention;
 
+#[cfg(target_os = "linux")]
 #[tokio::test]
 async fn headless_host_composes_exclusive_internal_control_without_contacting_center() {
     use host_link::{Binding, Credential, CredentialStore, Machine, State};

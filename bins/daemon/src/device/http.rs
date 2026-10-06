@@ -39,7 +39,7 @@ struct TokenResponse {
 }
 
 impl HttpCenter {
-    pub fn new() -> Result<Self, Error> {
+    pub(crate) fn new() -> Result<Self, Error> {
         let client = reqwest::Client::builder()
             .redirect(reqwest::redirect::Policy::none())
             .timeout(Duration::from_secs(10))
@@ -106,12 +106,11 @@ impl HttpCenter {
             Some("refresh_reuse") => Err(Error::Unauthorized),
             _ if status.as_u16() == 401 || status.as_u16() == 403 => Err(Error::Unauthorized),
             _ if status.as_u16() == 409 => Err(Error::Conflict),
-            _ if status.as_u16() == 404 || status.as_u16() == 410 => Err(Error::SessionExpired),
             _ => Err(Error::Protocol),
         }
     }
 
-    pub async fn authorize(&self, machine: &Machine) -> Result<Authorization, Error> {
+    pub(crate) async fn authorize(&self, machine: &Machine) -> Result<Authorization, Error> {
         let value = self
             .request(
                 reqwest::Method::POST,
@@ -142,7 +141,11 @@ impl HttpCenter {
         })
     }
 
-    pub async fn poll(&self, code: &SecretString, request_id: Uuid) -> Result<Tokens, Error> {
+    pub(crate) async fn poll(
+        &self,
+        code: &SecretString,
+        request_id: Uuid,
+    ) -> Result<Tokens, Error> {
         decode_tokens(
             self.request(
                 reqwest::Method::POST,
@@ -154,7 +157,7 @@ impl HttpCenter {
         )
     }
 
-    pub async fn enroll(
+    pub(crate) async fn enroll(
         &self,
         token: &SecretString,
         request_id: Uuid,
@@ -171,7 +174,7 @@ impl HttpCenter {
         )
     }
 
-    pub async fn revoke(&self, token: &SecretString) -> Result<(), Error> {
+    pub(crate) async fn revoke(&self, token: &SecretString) -> Result<(), Error> {
         self.request(
             reqwest::Method::POST,
             "/v1/auth/device/revoke",

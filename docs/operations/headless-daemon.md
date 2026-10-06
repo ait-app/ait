@@ -2,7 +2,7 @@
 
 此功能需要配套 [ait-server PR #9](https://github.com/ait-app/ait-server/pull/9) 已部署，且中心开启
 `DEVICE_AUTH_ENABLED` 并配置独立签名/回执密钥。生产中心固定为
-`https://dash.ait-app.com:8443/api`，不能修改。安装与 systemd 管理由既有脚本负责。
+`https://aitapp.cn:8443/api`，不能修改。安装与 systemd 管理由既有脚本负责。
 
 ## 登录与运行
 

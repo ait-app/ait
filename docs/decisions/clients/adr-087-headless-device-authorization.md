@@ -16,7 +16,7 @@ relay 的连接。当前 Rust daemon 已有运行时和 relay 通道，但注册
 长期设备授权。
 
 本轮确定由中心管理设备，支持交互式 Web 授权和 CLI 自带 token 授权，由网页服务的后端
-签发 JWT 给 Rust daemon。中心固定为 `https://dash.ait-app.com:8443/api`，不允许用户修改。
+签发 JWT 给 Rust daemon。中心固定为 `https://aitapp.cn:8443/api`，不允许用户修改。
 安装与服务管理由既有脚本负责；浏览器负责用户认证和授权确认，签名密钥只属于中心后端。
 
 ## 决策
@@ -40,7 +40,7 @@ relay 的连接。当前 Rust daemon 已有运行时和 relay 通道，但注册
    不以 JWT 的 `jti` 作为节点会话身份。relay 持续校验中心状态，撤销不能只等待 JWT 到期。
 6. 新增 `host-link` crate 承担设备认证、刷新、注册与续租协调，通过 ports 访问凭据存储、
    中心 HTTP 和 relay 控制。`daemon` 组装适配器；`api` 实现 `ManagedRelay` port 并继续持有 `relay`，`relay` 继续
-   不依赖其他 workspace crate，仅接收短期一次性票据。`daemon → host-link` 与 `api → host-link` 已纳入依赖守卫。
+   依赖 `model` 声明控制 RPC，仅接收短期一次性票据。`daemon → host-link` 与 `api → host-link` 已纳入依赖守卫。
 7. relay 增加 `external` 和 `managed` 所有权模式。无人值守 daemon 由内部管理器持有
    控制权，外部客户端不能再次发布或覆盖控制授权；旧桌面管理模式继续保留。
 8. 沿用 `daemon` 二进制，只增加授权、运行和状态相关命令。既有安装脚本负责安装二进制、

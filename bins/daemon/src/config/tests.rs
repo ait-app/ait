@@ -194,7 +194,6 @@ fn supports_explicit_network_listeners_without_changing_loopback_default() {
     }
 }
 
-#[cfg(target_os = "linux")]
 #[test]
 fn host_validation_runs_before_file_io_and_uses_the_resolved_origins() {
     let directory = tempfile::tempdir().unwrap();
@@ -232,6 +231,7 @@ fn host_validation_runs_before_file_io_and_uses_the_resolved_origins() {
     assert_eq!(config.web_origins, ["http://127.0.0.1:8082"]);
 }
 
+#[cfg(target_os = "linux")]
 #[test]
 fn headless_is_explicit_and_center_cannot_be_configured() {
     let configuration = load(
