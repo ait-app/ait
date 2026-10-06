@@ -1,6 +1,6 @@
 {
   "measurement_date": "2026-10-07",
-  "source_revision": "aa6d8d820c139f3f761d89c09a7608ecdc5629c9 + working tree identified by source_fingerprint",
+  "source_revision": "5a5645789e25ca416eaf479edea70afab52307d7",
   "base_revision": "aa6d8d820c139f3f761d89c09a7608ecdc5629c9",
   "source_fingerprint": "9e9fc42dc56bf8fa3f14bc943a6e7974b34969136d7567e2f0fe82b32f2c7683",
   "source_fingerprint_algorithm": "SHA-256 over sorted Git-tracked/nonignored bins/, crates/, Cargo.toml, Cargo.lock, rust-toolchain.toml, .cargo/, clippy.toml and rustfmt configuration: UTF-8 relative path, NUL, SHA-256 file bytes",

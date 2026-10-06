@@ -2,6 +2,7 @@
 
 日期：2026-10-07。平台：macOS arm64。
 初期实现基线：`5df233ac2f87cecda5f1a1ee99c003a15522dc49`；PR 已整合 `aa6d8d820c139f3f761d89c09a7608ecdc5629c9` 的最新 main。
+测量源码提交：`5a5645789e25ca416eaf479edea70afab52307d7`；后续提交仅固定文档和覆盖率证据的修订字段。
 范围：[并发修改清单](../../plans/paseo-agent-concurrency.md) C01–C12 的实现、定向验证和 PR 提交检查；架构依据 [ADR-091](../../decisions/providers/adr-091-independent-session-execution.md)。
 
 ## 交付行为
