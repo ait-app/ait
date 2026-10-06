@@ -75,11 +75,13 @@ impl<C: Center, S: CredentialStore, R: ManagedRelay> Controller<C, S, R> {
 
     async fn refresh(&mut self) -> Result<Tokens, Error> {
         let credential = self.state.credential.as_ref().ok_or(Error::Unauthorized)?;
-        if credential.refresh_expires_at <= Utc::now() {
-            return Err(Error::Unauthorized);
-        }
         let request_id = match self.state.pending {
+            // A saved request may have committed before expiry. Only the center can decide
+            // whether its bounded receipt is still recoverable after the source expired.
             Some(Pending::Refresh(id)) => id,
+            None if credential.refresh_expires_at <= Utc::now() => {
+                return Err(Error::Unauthorized);
+            }
             None => Uuid::new_v4(),
             Some(_) => return Err(Error::Unauthorized),
         };

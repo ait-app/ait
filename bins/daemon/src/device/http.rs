@@ -106,7 +106,6 @@ impl HttpCenter {
             Some("refresh_reuse") => Err(Error::Unauthorized),
             _ if status.as_u16() == 401 || status.as_u16() == 403 => Err(Error::Unauthorized),
             _ if status.as_u16() == 409 => Err(Error::Conflict),
-            _ if status.as_u16() == 404 || status.as_u16() == 410 => Err(Error::SessionExpired),
             _ => Err(Error::Protocol),
         }
     }

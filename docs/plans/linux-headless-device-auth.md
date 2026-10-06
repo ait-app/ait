@@ -140,7 +140,9 @@ status 不取 credential 锁，读取非秘密缓存快照及其时间，不宣�
 任何无法确认持久化的失败都停止轮换，不能继续消费后继 token。
 
 中心允许相同秘密 + 相同 request ID 在 10 分钟内恢复同一结果，不产生第二次轮换。
-刷新用不同 request ID 重放、或超过恢复窗口会撤销 grant；客户端不能靠改 ID 解决恢复失败。
+尚未到期的已消费 refresh token 用不同 request ID 重放、或超过恢复窗口会撤销 grant；客户端不能靠改 ID 解决恢复失败。
+已有 refresh pending 必须保留旧秘密和 request ID，即使旧秘密到期也交由中心判断回执是否有效。
+中心只允许已到期旧秘密恢复有效回执，不能以它发起新的轮换；清理任务在回执有效期内保留源哈希。
 Web/接入 token 请求还受原始过期时间约束。恢复窗口结束且新凭据没有落盘时必须重新授权。
 新的 `daemon login` 可以继续未完成的 Web/enrollment 请求；刷新 pending 由 headless 启动恢复。
 `logout` 先尝试中心 revoke 再清本地；离线或未完成的初次领取可能留下未知 grant，CLI 提示网页撤销。
@@ -157,12 +159,12 @@ Web/接入 token 请求还受原始过期时间约束。恢复窗口结束且新
 ## Test coverage
 
 提交前在 Linux / Rust 1.98.1、默认 features、完整 workspace 上运行
-`cargo llvm-cov --locked --workspace --html -- --test-threads=8`（未额外排除文件）。测量源码是 `3b42a810`
-加本 PR 的 Rust 变更，最终提交与共享 HTML artifact 链接记录在 PR 的 Test coverage 中。
+`cargo llvm-cov --locked --workspace --html -- --test-threads=8`（未额外排除文件）。测量源码是 `406020d4`
+加本轮 review 修复，最终提交与共享 HTML artifact 链接记录在 PR 的 Test coverage 中。
 
-- Workspace 行覆盖率 94.44%（50322 / 53286）；`host-link` 94.27%（181 / 192）。
-- `daemon` 93.21%（1605 / 1722），`api` 93.32%（2038 / 2184），`model` 94.86%（738 / 778）。
-- 测试执行：1833 通过，3 个需要已安装 Claude/Codex 与真实 Provider 认证的既有测试忽略。
+- Workspace 行覆盖率 94.36%（52863 / 56022）；`host-link` 94.24%（180 / 191）。
+- `daemon` 93.22%（1580 / 1695），`api` 93.36%（2039 / 2184），`model` 94.86%（738 / 778）。
+- 测试执行：1902 通过，7 个需要实际 Provider 安装、认证或本地模型的既有测试忽略。
 - 没有可比基线，不声称覆盖率增幅。覆盖率不是测试通过率，也不代表所有错误分支覆盖。
 - 未覆盖主要是信号/错误处理与部分状态 adapter 路径；真实生产中心、systemd、断电和目标
   filesystem 的故障恢复验收仍待两端部署。macOS/Windows 的 headless 行为不在本轮验收范围。

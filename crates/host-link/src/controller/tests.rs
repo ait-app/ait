@@ -230,10 +230,73 @@ async fn restart_recovers_pending_rotation_without_changing_id() {
 }
 
 #[tokio::test]
+async fn expired_pending_rotation_replays_saved_secret_and_id_before_adopting_receipt() {
+    let (mut controller, mock) = fixture();
+    let request_id = Uuid::new_v4();
+    controller.state.pending = Some(Pending::Refresh(request_id));
+    controller
+        .state
+        .credential
+        .as_mut()
+        .unwrap()
+        .refresh_expires_at = Utc::now() - chrono::Duration::seconds(1);
+    let tokens = controller.refresh().await.unwrap();
+    let seen = mock.0.lock().unwrap();
+    assert_eq!(
+        seen.refreshes,
+        vec![("old-refresh-secret".to_owned(), request_id)]
+    );
+    assert_eq!(seen.saved.len(), 2);
+    assert!(matches!(seen.saved[0].pending, Some(Pending::Refresh(id)) if id == request_id));
+    assert!(seen.saved[1].pending.is_none());
+    assert_eq!(
+        controller
+            .state
+            .credential
+            .as_ref()
+            .unwrap()
+            .refresh_expires_at,
+        tokens.credential.refresh_expires_at
+    );
+    assert!(tokens.credential.refresh_expires_at > Utc::now());
+}
+
+#[tokio::test]
+async fn expired_pending_rotation_defers_rejection_to_center_and_preserves_recovery_state() {
+    let (mut controller, mock) = fixture();
+    let request_id = Uuid::new_v4();
+    controller.state.pending = Some(Pending::Refresh(request_id));
+    controller
+        .state
+        .credential
+        .as_mut()
+        .unwrap()
+        .refresh_expires_at = Utc::now() - chrono::Duration::seconds(1);
+    mock.0.lock().unwrap().refresh_error = Some(Error::Unauthorized);
+    assert_eq!(controller.refresh().await.unwrap_err(), Error::Unauthorized);
+    let seen = mock.0.lock().unwrap();
+    assert_eq!(seen.refreshes.len(), 1);
+    assert_eq!(seen.refreshes[0].1, request_id);
+    assert_eq!(seen.saved.len(), 1);
+    assert!(matches!(controller.state.pending, Some(Pending::Refresh(id)) if id == request_id));
+    assert_eq!(
+        controller
+            .state
+            .credential
+            .as_ref()
+            .unwrap()
+            .refresh_token
+            .expose_secret(),
+        "old-refresh-secret"
+    );
+}
+
+#[tokio::test]
 async fn rejects_missing_expired_mismatched_or_unfinished_login_state() {
     let (mut controller, mock) = fixture();
     mock.0.lock().unwrap().mismatch = true;
     assert_eq!(controller.refresh().await.unwrap_err(), Error::Protocol);
+    controller.state.pending = None;
     controller
         .state
         .credential
@@ -241,6 +304,7 @@ async fn rejects_missing_expired_mismatched_or_unfinished_login_state() {
         .unwrap()
         .refresh_expires_at = Utc::now();
     assert_eq!(controller.refresh().await.unwrap_err(), Error::Unauthorized);
+    assert_eq!(mock.0.lock().unwrap().refreshes.len(), 1);
     controller.state = state();
     controller.state.pending = Some(Pending::Enrollment {
         token: "enrollment".into(),

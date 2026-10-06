@@ -94,11 +94,12 @@ async fn errors_are_sanitized_and_distinguish_polling_session_and_revocation() {
         (400, "expired_token", Error::Denied),
         (400, "refresh_reuse", Error::Unauthorized),
         (401, "node_session_expired", Error::SessionExpired),
+        (409, "registration_expired", Error::SessionExpired),
         (401, "unauthorized", Error::Unauthorized),
         (403, "forbidden", Error::Unauthorized),
         (409, "conflict", Error::Conflict),
-        (410, "gone", Error::SessionExpired),
-        (404, "not_found", Error::SessionExpired),
+        (410, "gone", Error::Protocol),
+        (404, "not_found", Error::Protocol),
         (429, "device_rate_limited", Error::Unavailable),
         (503, "device_auth_disabled", Error::Unavailable),
         (400, "unexpected", Error::Protocol),
@@ -123,6 +124,44 @@ async fn errors_are_sanitized_and_distinguish_polling_session_and_revocation() {
             .unwrap_err();
         assert_eq!(error, expected);
         assert!(!error.to_string().contains("sensitive"));
+    }
+}
+
+#[tokio::test]
+async fn unknown_missing_endpoints_never_trigger_runtime_session_recovery() {
+    let machine = declaration();
+    let secret: SecretString = "private-secret".into();
+    for status in [StatusCode::NOT_FOUND, StatusCode::GONE] {
+        let fixture = Fixture::new(vec![(status, json!({"error":{"code":"unknown"}})); 4]).await;
+        assert_eq!(
+            fixture.center.authorize(&machine).await.unwrap_err(),
+            Error::Protocol
+        );
+        assert_eq!(
+            fixture
+                .center
+                .poll(&secret, Uuid::new_v4())
+                .await
+                .unwrap_err(),
+            Error::Protocol
+        );
+        assert_eq!(
+            fixture
+                .center
+                .enroll(&secret, Uuid::new_v4(), &machine)
+                .await
+                .unwrap_err(),
+            Error::Protocol
+        );
+        assert_eq!(
+            fixture
+                .center
+                .refresh(&secret, Uuid::new_v4())
+                .await
+                .unwrap_err(),
+            Error::Protocol
+        );
+        assert_eq!(fixture.seen.lock().unwrap().calls.len(), 4);
     }
 }
 
