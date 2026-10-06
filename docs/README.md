@@ -64,6 +64,7 @@
 - [文档规范](policy/documentation.md)：分类、维护和历史资料清理规则。
 - [Provider 能力清单](plans/provider-parity.md)：当前能力与后续工作。
 - [Antigravity CLI 验证](reports/providers/antigravity-cli.md)：协议夹具、安装路径和真实 AGY 验证范围。
+- [Provider 装配边界验证](reports/providers/provider-composition.md)：内置注册、辅助生成、DSH 简称与覆盖率证据。
 - [大 Diff 加载与超限降级](reports/workspace/large-diff-loading.md)：输出预算、连接保持与验证结果。
 - [Agent 创建任务预算竞争](reports/providers/agent-creation-resource-contention.md)：DSH 创建报错复现与后台 fetch 失败隔离验证。
 - [OpenCode 工具与结论顺序修复](reports/providers/opencode-tool-order.md)：流式前序条目发布与旧历史修复。
