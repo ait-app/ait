@@ -58,6 +58,7 @@
 
 ## 客户端、连接与品牌
 
+- [ADR-087：中心设备管理与 Linux daemon 的 JWT 授权](clients/adr-087-headless-device-authorization.md)
 - [ADR-086：桌面、Android 与 iOS 的 Authing 浏览器登录](clients/adr-086-authing-native-login.md)
 - [ADR-085：Daemon 同步的稳定节点身份](clients/adr-085-stable-daemon-publication.md)
 - [ADR-084：iOS 在线服务账户与主机中继](clients/adr-084-ios-account-relay.md)

@@ -69,6 +69,10 @@ export async function synchronizeOnlineServiceHost(
     if (status.serverId !== serverId)
       throw new Error("The host identity has changed. Reconnect first.");
     if (current !== generation) return;
+    if (status.management?.mode === "managed") {
+      update(serverId, { status, enabled: false });
+      return;
+    }
     const enabled = enable || previous.enabled;
     if (enabled) {
       const grant = await hostCommand("account_host_sync", {
@@ -98,6 +102,13 @@ export async function disconnectOnlineServiceHost(serverId: string): Promise<voi
   const current = generation;
   update(serverId, { busy: true, error: null });
   try {
+    const currentStatus = await client.getOnlineServiceStatus();
+    if (currentStatus.serverId !== serverId)
+      throw new Error("The host identity has changed. Reconnect first.");
+    if (currentStatus.management?.mode === "managed") {
+      if (current === generation) update(serverId, { status: currentStatus, enabled: false });
+      return;
+    }
     // Revoke the lease even if the transport disappears while stopping the connector.
     await hostCommand("account_host_disconnect", { serverId });
     if (current !== generation) return;

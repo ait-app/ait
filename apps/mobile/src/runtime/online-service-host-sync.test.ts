@@ -160,3 +160,20 @@ describe("host online service synchronization", () => {
     expect(useOnlineServiceHostSync.getState().hosts.first.enabled).toBe(false);
   });
 });
+
+it("reads a managed daemon without registering or stopping its machine session", async () => {
+  mocks.status.mockResolvedValue({
+    ...status("first", true),
+    management: { mode: "managed", phase: "running" },
+  });
+  await synchronizeOnlineServiceHost("first", "First", true);
+  expect(mocks.invoke).not.toHaveBeenCalled();
+  expect(mocks.connect).not.toHaveBeenCalled();
+  expect(useOnlineServiceHostSync.getState().hosts.first).toMatchObject({
+    enabled: false,
+    status: { management: { mode: "managed" } },
+  });
+  await disconnectOnlineServiceHost("first");
+  expect(mocks.invoke).not.toHaveBeenCalled();
+  expect(mocks.disconnect).not.toHaveBeenCalled();
+});

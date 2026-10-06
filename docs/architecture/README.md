@@ -18,6 +18,7 @@ Electron 位于 `apps/desktop`；`apps/mobile` 提供桌面、浏览器与移动
 | `voice`      | 语音、听写和离线推理                       | `model`                                |
 | `schedule`   | 定时任务服务与协议                         | `model`                                |
 | `browser`    | 浏览器自动化请求与回传                     | `model`                                |
+| `host-link`  | 无人值守机器认证、租约和连接协调           | 无（通过 ports 调用 adapters）         |
 | `relay`      | 主动建立控制连接与反向数据通道             | 无                                     |
 | `api`        | HTTP/WebSocket 鉴权、连接与跨能力协调      | 上述能力包、`protocol`、`model`        |
 | `daemon`     | 配置、进程锁、服务组装和停机               | API、领域及能力包；测试使用 `protocol` |
@@ -74,3 +75,8 @@ Electron 主进程提供桌面适配；Android 的原生适配使用 SecureStore
 Relay 的类型化消息集中在 `crates/relay/src/protocol.rs`，WebSocket 收发集中在
 `transport.rs`；单连接协商标识由 `crates/protocol/src/single.rs` 定义。
 模块职责见 [ADR-075](../decisions/clients/adr-075-relay-protocol-modules.md)。
+
+Linux headless 的 `daemon` 组装 `host-link` 的 HTTP/凭据 adapter，`api` 实现其
+`ManagedRelay` port 并独占 Relay 控制权。机器复用中心 Host/node 身份，长期授权是 node grant。
+普通客户端只读取 managed 状态；刷新 token 不进入传输模块或本地 RPC。
+详细边界见 [ADR-087](../decisions/clients/adr-087-headless-device-authorization.md)。

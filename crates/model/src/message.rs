@@ -8,6 +8,8 @@ use serde_json::Value;
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub enum ErrorCode {
+    /// Relay control belongs to the unattended device manager.
+    RelayManaged,
     /// Schedule request validation, persistence or execution failed.
     ScheduleRequestFailed,
     /// Speech backend configuration, processing or I/O failed.
@@ -77,6 +79,7 @@ impl ErrorCode {
     #[must_use]
     pub fn message(self) -> &'static str {
         match self {
+            Self::RelayManaged => "Relay is controlled by the unattended device manager",
             Self::ScheduleRequestFailed => "Schedule request failed",
             Self::SpeechIo => "Speech processing failed",
             Self::TerminalIo => "Terminal I/O failed",

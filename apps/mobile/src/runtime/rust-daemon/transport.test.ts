@@ -117,6 +117,43 @@ function harness(
 }
 
 describe("Rust protocol adapter", () => {
+  it("preserves managed Host ownership from Rust through the SDK status response", async () => {
+    const h = harness();
+    h.stopHello();
+    const client = new DaemonClient({
+      url: "ws://127.0.0.1:7316/v1/ws",
+      clientId: "managed-host-test",
+      transportFactory: () => h.transport,
+      reconnect: { enabled: false },
+    });
+    try {
+      const connected = client.connect();
+      h.ready();
+      await connected;
+      const status = client.getOnlineServiceStatus();
+      const request = h.last(1);
+      h.sockets[1].message({
+        type: "response",
+        request_id: request.request_id,
+        method: request.method,
+        result: {
+          serverId: "stable",
+          instanceId: "instance",
+          platform: "linux",
+          status: { online: true, connecting: false, epoch: null, error: null },
+          management: { mode: "managed", phase: "running", binding: null },
+        },
+      });
+      expect((await status).management).toEqual({
+        mode: "managed",
+        phase: "running",
+        binding: null,
+      });
+    } finally {
+      await client.close();
+    }
+  });
+
   it("carries typed online service control through the SDK without replaying a grant", async () => {
     const h = harness();
     h.stopHello();

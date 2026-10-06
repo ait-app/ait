@@ -24,6 +24,14 @@ pub(super) async fn request(context: Context<'_>, state: &Shared) -> Result<(), 
 }
 
 async fn execute(request: &model::Request, state: &Shared) -> Result<Value, ErrorCode> {
+    if state.managed_relay
+        && matches!(
+            request.method.as_str(),
+            "relay.start.request" | "relay.stop.request"
+        )
+    {
+        return Err(ErrorCode::RelayManaged);
+    }
     match request.method.as_str() {
         "relay.start.request" => {
             let grant = serde_json::from_value(request.params.clone())
@@ -46,5 +54,6 @@ async fn execute(request: &model::Request, state: &Shared) -> Result<Value, Erro
         "instanceId": state.info.instance_id,
         "platform": std::env::consts::OS,
         "status": state.relay.status().await,
+        "management": state.managed_status.lock().map_or(Value::Null, |s| s.clone()),
     }))
 }

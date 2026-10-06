@@ -34,6 +34,9 @@ export const en = {
     hostSettingsHint:
       "To bring a computer online, open its Host → Connections settings and enable synchronization.",
     requestFailed: "Request failed.",
+    managedHost: "Unattended host",
+    managedHostHint:
+      "This host keeps its own authorization. Manage or revoke it on the Host web page.",
     syncTitle: "Sync with online service",
     syncDescription:
       "Connect this host to your online service so you can access it from your other devices.",

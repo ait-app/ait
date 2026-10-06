@@ -4,6 +4,21 @@ export const RelayStatusSchema = z.object({
   serverId: z.string(),
   instanceId: z.string(),
   platform: z.string(),
+  management: z
+    .object({
+      mode: z.enum(["external", "managed"]),
+      phase: z.string().optional(),
+      binding: z
+        .object({
+          node_id: z.string().uuid(),
+          host_id: z.string().uuid(),
+          server_id: z.string().uuid(),
+          grant_id: z.string().uuid(),
+        })
+        .nullable()
+        .optional(),
+    })
+    .optional(),
   status: z.object({
     online: z.boolean(),
     connecting: z.boolean(),

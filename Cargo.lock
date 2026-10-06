@@ -97,11 +97,13 @@ checksum = "330a5ed07fa54e4702c9d6c4174f74427fc0ef6e214bbd677ae50a5099946470"
 name = "api"
 version = "0.0.20"
 dependencies = [
+ "async-trait",
  "axum",
  "browser",
  "chrono",
  "filesystem",
  "futures-util",
+ "host-link",
  "metadata",
  "model",
  "protocol",
@@ -534,13 +536,17 @@ version = "0.0.20"
 dependencies = [
  "anyhow",
  "api",
+ "async-trait",
  "axum",
+ "base64",
  "browser",
  "chrono",
  "clap",
  "domain",
  "filesystem",
  "futures-util",
+ "host-link",
+ "libc",
  "metadata",
  "model",
  "protocol",
@@ -904,6 +910,20 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "6c49c37c09c17a53d937dfbb742eb3a961d65a994e6bcdcf37e7399d0cc8ab5e"
 dependencies = [
  "digest",
+]
+
+[[package]]
+name = "host-link"
+version = "0.0.20"
+dependencies = [
+ "async-trait",
+ "chrono",
+ "secrecy",
+ "serde",
+ "thiserror 2.0.20",
+ "tokio",
+ "tokio-util",
+ "uuid",
 ]
 
 [[package]]

@@ -1,5 +1,7 @@
 //! Fragmentation must not bypass the cumulative input message budget.
 
+use async_trait as _;
+use host_link as _;
 // Cargo passes the complete package dependency set to this integration test.
 use browser as _;
 use chrono as _;
