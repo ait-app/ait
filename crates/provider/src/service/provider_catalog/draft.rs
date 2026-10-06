@@ -1,4 +1,5 @@
 use std::collections::BTreeMap;
+use std::sync::Arc;
 
 use chrono::Utc;
 use model::ErrorCode;
@@ -8,7 +9,7 @@ use crate::ports::agent_session::{AgentClient, AgentSessionError, AgentSessionSp
 use crate::protocol::provider::FeaturesRequest;
 
 pub(super) async fn features(
-    clients: &BTreeMap<String, Box<dyn AgentClient>>,
+    clients: &BTreeMap<String, Arc<dyn AgentClient>>,
     request: FeaturesRequest,
 ) -> Result<Value, ErrorCode> {
     let mut config = request.draft_config;

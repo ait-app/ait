@@ -159,15 +159,40 @@ async fn attempted_initial_prompt_is_not_replayed_after_failure() {
     assert!(failed["error"].is_string());
     let repeated = call(&mut client, "workspace.create.request", params).await;
     assert_eq!(repeated["creation"], failed["creation"]);
-    let requests = std::fs::read_to_string(fixture.cwd.join("native-requests.jsonl")).unwrap();
+    let session = failed["agent"]["persistence"]["sessionId"]
+        .as_str()
+        .unwrap();
+    // Metadata generation has its own ephemeral thread in the same cwd and request log.
+    // Observe that concurrent work so the assertion cannot depend on which task wins the race.
+    let requests = tokio::time::timeout(Duration::from_secs(10), async {
+        loop {
+            let log = std::fs::read_to_string(fixture.cwd.join("native-requests.jsonl")).unwrap();
+            let requests: Vec<Value> = log
+                .split_inclusive('\n')
+                .filter(|line| line.ends_with('\n'))
+                .map(|line| serde_json::from_str(line).unwrap())
+                .collect();
+            if requests.iter().any(|request| {
+                request["method"] == "turn/start"
+                    && request["params"]["threadId"] != session
+                    && request["params"]["outputSchema"].is_object()
+            }) {
+                break requests;
+            }
+            tokio::time::sleep(Duration::from_millis(10)).await;
+        }
+    })
+    .await
+    .expect("background title generation should attempt its own native turn");
     assert_eq!(
         requests
-            .lines()
-            .filter(|line| {
-                serde_json::from_str::<Value>(line).unwrap()["method"] == "turn/start"
+            .iter()
+            .filter(|request| {
+                request["method"] == "turn/start" && request["params"]["threadId"] == session
             })
             .count(),
-        1
+        1,
+        "the failed user input must not be replayed: {requests:?}"
     );
     terminate(&mut process).await;
 }

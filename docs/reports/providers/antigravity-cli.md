@@ -1,6 +1,7 @@
 # Antigravity CLI 原生 Provider 验证
 
-日期：2026-10-06。源码范围：`3b42a810f29c87c5ef7f31bd1cc6fffea2d16426` 加本 PR 修改。
+日期：2026-10-06。源码范围：`8d3d8b8a3d837eb30acdd8a8a405d20fcd577fb0`
+合并最新 `main` 的 `91102e13e2b549a135b7e2b8dd9f2a5546468afa`。
 测量源码的聚合 SHA-256、变更文件哈希与逐文件指标见[覆盖率工件](antigravity-cli-coverage.json)。
 平台：macOS arm64；本机 Homebrew `agy` 1.3.0。
 
@@ -15,11 +16,11 @@
 | --- | --- |
 | 新 adapter 针对性 Rust 测试 | 22 通过，0 失败，1 个在线测试默认 ignored |
 | Provider catalog 直接相关回归 | 20 通过，0 失败 |
-| 本机 AGY 在线测试单独运行 | 1 通过，0 失败；三轮短文本，不请求工具 |
+| 本机 AGY 在线测试（初版 `8d3d8b8a`） | 1 通过，0 失败；三轮短文本，不请求工具 |
 | 协议包完整回归 | 765 通过，0 失败；69 个测试文件 |
 | 客户端图标与恢复命令回归 | 13 通过，0 失败 |
-| Rust workspace 完整测试 | 1825 通过，0 失败，4 个真实 CLI 测试默认 ignored；串行运行 |
-| workspace 覆盖率插桩测试 | 1825 通过，0 失败，4 ignored；HTML 已生成 |
+| Rust workspace 完整测试 | 1857 通过，0 失败，7 个原生 CLI 测试默认 ignored；串行运行 |
+| workspace 覆盖率插桩测试 | 1857 通过，0 失败，7 ignored；HTML 已生成 |
 | workspace 严格 Clippy | 通过，`--all-targets -- -D warnings` |
 | workspace 构建 | 通过，`cargo build --workspace`，无警告 |
 | Rust 格式、TypeScript 格式/lint、协议包构建 | 通过 |
@@ -44,8 +45,12 @@ Linux 和 Windows 未进行实机运行。在线测试未运行 shell/edit 工�
 
 移动端类型检查的诊断包含本机缺少的 `expo-clipboard`、`@xterm/*`、
 `react-native-keyboard-controller` 和 `node:sqlite` 类型等。
-从上述基线 revision 导出桌面和移动端源码，在相同依赖与本地 SDK 下重跑 `tsgo --noEmit`，
+从最新 `main` revision 导出桌面和移动端源码，在相同依赖与本地 SDK 下重跑 `tsgo --noEmit`，
 移动端的 65 项诊断逐项一致；不将这一环境限制记为类型检查通过。
+
+PR #196 初版 CI 的 Rust、UI 与文档检查均通过，随后 `main` 新增提交导致文档索引冲突。
+本次同步保留 Antigravity 条目和 ADR-088、DSH 原生 Host 说明；代码自动合并保留两侧的
+Provider 注册、独立 catalog 通道和进程夹具隔离。完整测试在合并后的源码上重新运行。
 
 ## 命令
 
@@ -77,22 +82,26 @@ daemon 首次 lint 需要下载项目已有的 sherpa-onnx 1.13.8 静态库；�
 
 | 测量范围 | 覆盖行 / 总行 | 行覆盖率 |
 | --- | ---: | ---: |
-| Cargo workspace | 50309 / 53243 | **94.49%** |
-| `provider` | 22326 / 23750 | **94.00%** |
-| `daemon` | 925 / 971 | **95.26%** |
-| Antigravity 生产 adapter | 870 / 911 | **95.50%** |
+| Cargo workspace | 51874 / 54974 | **94.36%** |
+| `provider` | 23884 / 25472 | **93.77%** |
+| `daemon` | 928 / 973 | **95.38%** |
+| Antigravity 生产 adapter | 869 / 911 | **95.39%** |
 
 测量使用 Rust 1.98.1、LLVM 22.1.8 和 cargo-llvm-cov 0.8.4，
 平台为 macOS 27.0.1 (26A434) arm64；源码 revision 与哈希见本文开头及工件。
 完整 workspace 启用默认 features，使用工具默认源文件过滤，没有额外排除。
-没有以同一命令和源码范围测量的接入前覆盖率基线，不报告百分点变化。
-未插桩 doctest 或 TypeScript/UI；四项真实 Claude/Codex/AGY CLI 测试按默认 ignored 设置跳过。
+同命令基线为初版 `8d3d8b8a`：workspace 50309 / 53243（94.4894%），
+本次为 94.3610%，变化 -0.1284 个百分点。差值包含合入 `main` 的全部源码变化，
+不能归因于 AGY；AGY 生产源码哈希未变，覆盖率运行中的分支执行略有差异。
+没有接入 Antigravity 前的覆盖率基线。
+未插桩 doctest 或 TypeScript/UI；七项原生 Claude/Codex/AGY/DSH/OpenCode CLI 测试
+按默认 ignored 设置跳过，分别需要认证或显式安装测试 CLI。
 此前单独通过的 AGY 三轮在线测试不计入这些覆盖率数据。
 
 ```bash
 cargo llvm-cov --workspace --html --no-fail-fast -- --test-threads=1
-cargo llvm-cov report --json --summary-only --output-path target/antigravity-pr-validation/coverage-summary.json
-cargo llvm-cov report --lcov --output-path target/antigravity-pr-validation/coverage.lcov
+cargo llvm-cov report --json --summary-only --output-path target/antigravity-pr-sync-validation/coverage-summary.json
+cargo llvm-cov report --lcov --output-path target/antigravity-pr-sync-validation/coverage.lcov
 ```
 
 可共享的[覆盖率工件](antigravity-cli-coverage.json)包含 workspace/各 crate 计数、

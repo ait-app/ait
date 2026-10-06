@@ -1,4 +1,7 @@
 import { DatabaseSync } from "node:sqlite";
+import { mkdtempSync, rmSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 import { ReplicaCache } from "@/runtime/replica-cache";
 import {
   createSqliteReplicaRowStore,
@@ -13,6 +16,7 @@ import type { StreamItem } from "@/types/stream";
 import {
   createTimelineReplica,
   createViewedTimelineOwner,
+  type TimelineReplica,
   type TimelineReplicaStorage,
   type ViewedTimelineOwner,
 } from "./viewed-timeline-sync";
@@ -20,7 +24,11 @@ import {
 const SERVER_ID = "timeline-replica-host";
 const AGENT_ID = "agent-1";
 
-function item(id: string, text: string, seq: number): StreamItem {
+function item(
+  id: string,
+  text: string,
+  seq: number,
+): Extract<StreamItem, { kind: "assistant_message" }> {
   return {
     kind: "assistant_message",
     id,
@@ -39,12 +47,14 @@ function cachedTimeline(): CachedTimeline {
   };
 }
 
-function createOwner(storage: TimelineReplicaStorage): ViewedTimelineOwner {
-  const replica = createTimelineReplica({
+function createOwner(
+  storage: TimelineReplicaStorage,
+  replica: TimelineReplica = createTimelineReplica({
     serverId: SERVER_ID,
     storage,
     prepareAgent: async () => undefined,
-  });
+  }),
+): ViewedTimelineOwner {
   return createViewedTimelineOwner({
     serverId: SERVER_ID,
     replica,
@@ -230,6 +240,80 @@ describe("viewed timeline persistence", () => {
         ],
       });
     reopened.dispose();
+  });
+
+  it("replaces display-only cached replies on repeated refresh and restart", async () => {
+    const answer = {
+      ...item("dsh-answer", "Local answer 1 complete", 2),
+      messageId: "native:dsh:answer",
+    };
+    let durable: CachedTimeline = {
+      agentId: AGENT_ID,
+      items: [answer],
+      range: null,
+      hasOlder: false,
+    };
+    const storage: TimelineReplicaStorage = {
+      readTimeline: async () => durable,
+      commitTimeline: (_serverId, _agentId, timeline) => {
+        durable = timeline;
+      },
+    };
+    for (let restart = 0; restart < 3; restart++) {
+      useSessionStore.getState().initializeSession(SERVER_ID, null);
+      const owner = createOwner(storage);
+      owner.replaceVisibleAgentIds("test", [AGENT_ID]);
+      await expect
+        .poll(
+          () =>
+            selectAgentTimelineState(useSessionStore.getState().sessions[SERVER_ID], AGENT_ID)
+              .status,
+        )
+        .toBe("painted");
+      for (let refresh = 0; refresh < 2; refresh++) {
+        owner.applyTimelineResponse({
+          requestId: `refresh-${restart}-${refresh}`,
+          agentId: AGENT_ID,
+          agent: null,
+          direction: "tail",
+          projection: "projected",
+          reset: false,
+          epoch: "epoch-1",
+          window: { minSeq: 1, maxSeq: 2, nextSeq: 3 },
+          startCursor: { epoch: "epoch-1", seq: 1 },
+          endCursor: { epoch: "epoch-1", seq: 2 },
+          entries: [
+            {
+              provider: "deepseek-harness",
+              item: {
+                type: "assistant_message",
+                text: answer.text,
+                messageId: answer.messageId,
+              },
+              timestamp: answer.timestamp.toISOString(),
+              seqStart: 1,
+              seqEnd: 2,
+              sourceSeqRanges: [{ startSeq: 1, endSeq: 2 }],
+              collapsed: ["assistant_merge"],
+            },
+          ],
+          error: null,
+          hasNewer: false,
+          hasOlder: false,
+          staleCursor: false,
+          gap: false,
+        });
+        const session = useSessionStore.getState().sessions[SERVER_ID];
+        expect([
+          ...(session?.agentStreamTail.get(AGENT_ID) ?? []),
+          ...(session?.agentStreamHead.get(AGENT_ID) ?? []),
+        ]).toMatchObject([
+          { kind: "assistant_message", text: answer.text, messageId: answer.messageId },
+        ]);
+      }
+      owner.dispose();
+      useSessionStore.getState().clearSession(SERVER_ID);
+    }
   });
 
   it("does not let a late cache read overwrite newer network state", async () => {
@@ -443,8 +527,8 @@ describe("viewed timeline persistence", () => {
   });
 });
 
-function createSqliteCache() {
-  const database = new DatabaseSync(":memory:");
+function createSqliteCache(path = ":memory:") {
+  const database = new DatabaseSync(path);
   let beforeRead = async () => {};
   const connection: ReplicaSqliteConnection = {
     async exec(sql) {
@@ -481,6 +565,81 @@ function createSqliteCache() {
 }
 
 describe("SQLite baseline restoration", () => {
+  it("keeps same-text replies distinct across sequential preparation, empty catch-up and SQLite reopen", async () => {
+    const directory = mkdtempSync(join(tmpdir(), "ait-timeline-reopen-"));
+    const path = join(directory, "cache.sqlite");
+    const canonical: StreamItem[] = [
+      { ...item("first-user", "hello", 1), kind: "user_message", messageId: "first-user" },
+      { ...item("first-answer", "Local answer 1 complete", 2), messageId: "first-answer" },
+      { ...item("last-user", "after restart", 3), kind: "user_message", messageId: "last-user" },
+      { ...item("last-answer", "Local answer 1 complete", 4), messageId: "last-answer" },
+    ];
+    const seeded = createSqliteCache(path);
+    seeded.cache.setHosts([SERVER_ID]);
+    seeded.cache.commitTimeline(SERVER_ID, AGENT_ID, {
+      agentId: AGENT_ID,
+      items: canonical,
+      range: { epoch: "epoch-1", startSeq: 1, endSeq: 4 },
+      hasOlder: false,
+    });
+    await seeded.cache.flush();
+    seeded.database.close();
+    try {
+      for (let restart = 0; restart < 4; restart++) {
+        const { cache, database } = createSqliteCache(path);
+        cache.setHosts([SERVER_ID]);
+        useSessionStore.getState().initializeSession(SERVER_ID, null);
+        const replica = createTimelineReplica({
+          serverId: SERVER_ID,
+          storage: cache,
+          prepareAgent: async () => {},
+        });
+        const owner = createOwner(cache, replica);
+        try {
+          // Route preparation and visible-view preparation can run sequentially.
+          await replica.prepare(AGENT_ID);
+          await replica.prepare(AGENT_ID);
+          for (let refresh = 0; refresh < 2; refresh++) {
+            // The daemon has no new rows or model activity, so catch-up is empty.
+            owner.applyTimelineResponse({
+              requestId: `reopen-${restart}-${refresh}`,
+              agentId: AGENT_ID,
+              agent: null,
+              direction: "after",
+              projection: "projected",
+              reset: false,
+              epoch: "epoch-1",
+              window: { minSeq: 1, maxSeq: 4, nextSeq: 5 },
+              startCursor: null,
+              endCursor: null,
+              entries: [],
+              error: null,
+              hasNewer: false,
+              hasOlder: false,
+              staleCursor: false,
+              gap: false,
+            });
+            const session = useSessionStore.getState().sessions[SERVER_ID];
+            expect([
+              ...(session?.agentStreamTail.get(AGENT_ID) ?? []),
+              ...(session?.agentStreamHead.get(AGENT_ID) ?? []),
+            ]).toEqual(canonical);
+            expect(selectAgentTimelineState(session, AGENT_ID).status).toBe("synced");
+          }
+          await cache.flush();
+          expect((await cache.readTimeline(SERVER_ID, AGENT_ID))?.items).toEqual(canonical);
+        } finally {
+          owner.dispose();
+          await cache.flush();
+          database.close();
+          useSessionStore.getState().clearSession(SERVER_ID);
+        }
+      }
+    } finally {
+      rmSync(directory, { recursive: true, force: true });
+    }
+  });
+
   it.each([false, true])(
     "keeps display-only cached history under a live event (synced=%s)",
     async (synced) => {

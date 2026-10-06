@@ -16,7 +16,7 @@ fn harness_peer(fixture: &Fixture) -> (AgentExecution, Peer) {
     let (execution, _) = worker_with_client(
         fixture,
         metadata::service::creation::Creations::default(),
-        Box::new(DeepSeekHarnessClient::new(program)),
+        Box::new(DeepSeekHarnessClient::new(program).with_acp_profile()),
     );
     let peer = Peer::new(&execution);
     (execution, peer)

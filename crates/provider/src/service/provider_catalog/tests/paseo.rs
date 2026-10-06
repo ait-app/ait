@@ -90,13 +90,13 @@ impl AgentClient for Probe {
     }
 }
 
-fn clients(probes: &[Probe]) -> BTreeMap<String, Box<dyn AgentClient>> {
+fn clients(probes: &[Probe]) -> BTreeMap<String, Arc<dyn AgentClient>> {
     probes
         .iter()
         .map(|probe| {
             (
                 probe.provider.to_owned(),
-                Box::new(probe.clone()) as Box<dyn AgentClient>,
+                Arc::new(probe.clone()) as Arc<dyn AgentClient>,
             )
         })
         .collect()

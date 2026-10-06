@@ -4,6 +4,8 @@ export interface QuestionOption {
 }
 
 export interface QuestionFormQuestion {
+  answerFormat?: "array";
+  answerKey?: string;
   question: string;
   header: string;
   options: QuestionOption[];
@@ -49,6 +51,9 @@ export function parseQuestionFormQuestions(input: unknown): QuestionFormQuestion
       });
     }
     questions.push({
+      ...(q.answerFormat === "array"
+        ? { answerFormat: "array" as const, answerKey: readOptionalString(q, "answerKey") }
+        : {}),
       question: q.question,
       header: q.header,
       options,
@@ -105,12 +110,20 @@ export function buildQuestionFormAnswers(
   questions: QuestionFormQuestion[],
   selections: QuestionSelections,
   otherTexts: QuestionOtherTexts,
-): Record<string, string> {
-  const answers: Record<string, string> = {};
+): Record<string, string | string[]> {
+  const answers: Record<string, string | string[]> = {};
   for (let i = 0; i < questions.length; i++) {
     const q = questions[i];
     const selected = selections[i];
     const otherText = otherTexts[i]?.trim();
+
+    if (q.answerFormat === "array") {
+      const labels = Array.from(selected ?? []).map((idx) => q.options[idx].label);
+      answers[q.answerKey ?? q.header] = Array.from(
+        new Set(otherText ? [...labels, otherText] : labels),
+      );
+      continue;
+    }
 
     if (questionShowsTextInput(q)) {
       if (otherText && otherText.length > 0) {

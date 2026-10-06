@@ -42,9 +42,14 @@ impl Transport {
             .kill_on_drop(true);
         #[cfg(unix)]
         command.process_group(0);
-        let mut child = command
-            .spawn()
-            .map_err(|_| AgentSessionError::Unavailable)?;
+        let mut child = command.spawn().map_err(|error| {
+            tracing::warn!(
+                error_kind = ?error.kind(),
+                os_error = error.raw_os_error(),
+                "failed to spawn DeepSeek Harness ACP process"
+            );
+            AgentSessionError::Unavailable
+        })?;
         let input = child.stdin.take().ok_or(AgentSessionError::Failed)?;
         let output = child.stdout.take().ok_or(AgentSessionError::Failed)?;
         let (sender, messages) = mpsc::channel(MAX_EVENTS);

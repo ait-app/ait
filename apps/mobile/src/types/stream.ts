@@ -1026,6 +1026,16 @@ function finalizeActiveThoughts(state: StreamItem[]): StreamItem[] {
 }
 
 export function streamTimelineItemIdentity(item: StreamItem): string | null {
+  if (item.kind === "plugin") {
+    return timelineItemIdentity({
+      type: "plugin",
+      id: item.pluginItemId,
+      pluginId: item.pluginId,
+      kind: item.itemKind,
+      version: item.version,
+      data: item.data,
+    });
+  }
   if (isAgentToolCallItem(item)) {
     return agentToolCallIdentity({
       callId: item.payload.data.callId,

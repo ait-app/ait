@@ -1,4 +1,3 @@
-use std::os::unix::fs::PermissionsExt;
 use std::time::Duration;
 
 use super::*;
@@ -21,9 +20,9 @@ impl Fixture {
                 std::fs::write(path, "fixture").unwrap();
             }
         }
-        let program = root.path().join("worker");
-        std::fs::write(&program, include_str!("worker.py")).unwrap();
-        std::fs::set_permissions(&program, std::fs::Permissions::from_mode(0o700)).unwrap();
+        // Never write executable files while parallel tests spawn processes: another fork can
+        // inherit the writable descriptor and cause ETXTBSY. Mutable state stays per fixture.
+        let program = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("src/offline/tests/worker.py");
         let voice = Arc::new(Offline::new(root.path().to_owned(), program, model));
         Self { root, voice }
     }
@@ -44,6 +43,52 @@ impl Fixture {
         let input = std::fs::read_to_string(directory.join("last-input")).unwrap();
         assert!(!std::path::Path::new(&input).exists());
         assert!(self.root.path().exists());
+    }
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 4)]
+async fn concurrent_worker_fixtures_keep_retries_and_behavior_isolated() {
+    let barrier = Arc::new(tokio::sync::Barrier::new(16));
+    let mut tasks = tokio::task::JoinSet::new();
+    for index in 0..16 {
+        let barrier = barrier.clone();
+        tasks.spawn(async move {
+            let fixture = Fixture::new(Model::SenseVoice);
+            let invalid_ack = index % 2 == 0;
+            if invalid_ack {
+                fixture.behavior("invalid-ack");
+            }
+            barrier.wait().await;
+            let result = fixture
+                .voice
+                .transcribe(Fixture::audio(), CancellationToken::new())
+                .await;
+            if invalid_ack {
+                assert_eq!(result.unwrap_err(), Error::Provider);
+                assert!(fixture.voice.worker.lock().await.is_none());
+            } else {
+                assert_eq!(result.unwrap().text, "recognized offline");
+            }
+            fixture.behavior("ready");
+            assert_eq!(
+                fixture
+                    .voice
+                    .transcribe(Fixture::audio(), CancellationToken::new())
+                    .await
+                    .unwrap()
+                    .text,
+                "recognized offline"
+            );
+            fixture.assert_private_files_removed();
+            assert_eq!(
+                std::fs::read_to_string(fixture.voice.preparation.directory().join("starts"))
+                    .unwrap(),
+                if invalid_ack { "1\n1\n" } else { "1\n" }
+            );
+        });
+    }
+    while let Some(result) = tasks.join_next().await {
+        result.unwrap();
     }
 }
 

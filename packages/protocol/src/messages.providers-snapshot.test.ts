@@ -1,4 +1,5 @@
 import { describe, expect, test } from "vitest";
+import { validateWSOutboundMessage } from "./validation/ws-outbound.js";
 import {
   CompactProviderSnapshotModelSchema,
   ListProviderModelsResponseMessageSchema,
@@ -97,8 +98,7 @@ describe("provider snapshot message schemas", () => {
   });
 });
 
-test("accepts a bodyless announcement with separate discovery freshness", async () => {
-  const { validateWSOutboundMessage } = await import("./validation/ws-outbound.js");
+test("accepts a bodyless announcement with separate discovery freshness", () => {
   const message = {
     type: "providers_snapshot_update",
     payload: {
@@ -129,7 +129,7 @@ test("preserves models without an optional description", () => {
   expect(response.payload.models?.[0]).toStrictEqual(model);
 });
 
-test("normalizes null model descriptions from native providers", async () => {
+test("normalizes null model descriptions from native providers", () => {
   const model = { provider: "opencode", id: "model", label: "Model", description: null };
   const entry = ProviderSnapshotEntrySchema.parse({
     provider: "opencode",
@@ -148,7 +148,6 @@ test("normalizes null model descriptions from native providers", async () => {
     },
   });
   expect(response.payload.models?.[0]?.description).toBeUndefined();
-  const { validateWSOutboundMessage } = await import("./validation/ws-outbound.js");
   const validated = validateWSOutboundMessage({
     type: "session",
     message: { ...response, payload: { ...response.payload, models: [model] } },

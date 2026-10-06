@@ -1,0 +1,152 @@
+{
+  "schema_version": 1,
+  "slice": "dsh",
+  "base_revision": "5df233ac2f87cecda5f1a1ee99c003a15522dc49",
+  "original_combined_revision": "dc6cb1e01158ba14120e471b980ffe902ec7e09b",
+  "measured_source_tree_sha": "a43c32cfbfd90014b4e6fea7b7e7f15a9c1e0879",
+  "source_patch_sha256": "2254ed6dd24864e5823c7c98aee0c4357da16018599de2eed95edf4dc978ab18",
+  "measured_at_utc": "2026-10-06T09:24:31.589692+00:00",
+  "platform": "Linux x86_64",
+  "rust_version": "1.98.1",
+  "cargo_llvm_cov_version": "0.8.7",
+  "test_environment": "Isolated HOME/XDG/DSH_HOME and controlled provider PATH, CARGO_INCREMENTAL=0, CARGO_PROFILE_DEV_DEBUG=0, CARGO_PROFILE_TEST_DEBUG=0; tracked build input timestamps refreshed before reusing the shared target",
+  "features": "Default workspace features; no added package or filename exclusions; doctests not instrumented by cargo llvm-cov --tests",
+  "commands": {
+    "coverage-json": "cargo llvm-cov report --json --summary-only --output-path $VALIDATION_DIR/coverage-summary-full.json",
+    "workspace-coverage": "cargo llvm-cov --workspace --html --ignore-run-fail --output-dir $VALIDATION_DIR/coverage",
+    "workspace-clippy": "cargo clippy --workspace --all-targets -- -D warnings",
+    "workspace-test-all": "cargo test --workspace --no-fail-fast",
+    "daemon-process": "cargo test -p daemon --test process deepseek_harness",
+    "provider-focused": "cargo test -p provider --lib local::deepseek_harness",
+    "workspace-build": "cargo build --workspace",
+    "fmt": "cargo fmt --all --check",
+    "installed": "env AIT_TEST_DSH_BIN=$DSH_0_1_5_RC2_BINARY cargo test -p provider --lib installed_host_discovers_switches_permissions_and_adopts_legacy_sessions -- --ignored"
+  },
+  "command_notation": "Machine-specific binary/cache/output paths normalized to variables; command options unchanged",
+  "command_status": {
+    "provider-focused": {
+      "exit_code": 0,
+      "time_utc": "2026-10-06T09:18:03Z"
+    },
+    "installed": {
+      "exit_code": 0,
+      "time_utc": "2026-10-06T09:19:05Z"
+    },
+    "daemon-process": {
+      "exit_code": 0,
+      "time_utc": "2026-10-06T09:19:46Z"
+    },
+    "workspace-build": {
+      "exit_code": 0,
+      "time_utc": "2026-10-06T09:19:47Z"
+    },
+    "workspace-clippy": {
+      "exit_code": 0,
+      "time_utc": "2026-10-06T09:20:17Z"
+    },
+    "workspace-test-all": {
+      "exit_code": 101,
+      "time_utc": "2026-10-06T09:22:11Z"
+    },
+    "fmt": {
+      "exit_code": 0,
+      "time_utc": "2026-10-06T09:22:14Z"
+    },
+    "workspace-coverage": {
+      "exit_code": 0,
+      "time_utc": "2026-10-06T09:24:11Z"
+    },
+    "coverage-json": {
+      "exit_code": 0,
+      "time_utc": "2026-10-06T09:24:12Z"
+    }
+  },
+  "test_execution": {
+    "provider-focused": {
+      "passed": 32,
+      "failed": 0,
+      "ignored": 1
+    },
+    "daemon-process": {
+      "passed": 1,
+      "failed": 0,
+      "ignored": 0
+    },
+    "workspace-test-all": {
+      "passed": 1819,
+      "failed": 1,
+      "ignored": 4
+    },
+    "workspace-coverage": {
+      "passed": 1819,
+      "failed": 1,
+      "ignored": 4
+    },
+    "installed": {
+      "passed": 1,
+      "failed": 0,
+      "ignored": 0
+    }
+  },
+  "coverage": {
+    "schema_version": 1,
+    "scopes": {
+      "workspace": {
+        "source_prefix": ".",
+        "covered_lines": 50739,
+        "total_lines": 53786,
+        "line_percent": 94.334957,
+        "measured_source_files": 348
+      },
+      "provider": {
+        "source_prefix": "crates/provider",
+        "covered_lines": 22755,
+        "total_lines": 24295,
+        "line_percent": 93.661247,
+        "measured_source_files": 141
+      },
+      "dsh": {
+        "source_prefix": "crates/provider/src/local/deepseek_harness",
+        "covered_lines": 2173,
+        "total_lines": 2366,
+        "line_percent": 91.842773,
+        "measured_source_files": 15
+      }
+    },
+    "source_files_outside_repo_root": [],
+    "note": "Counts sum measured file lines; this extraction does not establish test success or a comparable baseline"
+  },
+  "coverage_scope_definition": {
+    "workspace": "All collected production source files under this worktree",
+    "provider": "crates/provider/",
+    "dsh": "crates/provider/src/local/deepseek_harness/ directory only; sibling deepseek_harness.rs remains counted in provider/workspace"
+  },
+  "ignored_tests": [
+    "local::claude::tests::process::installed_claude_control_protocol_discovers_models_without_inference",
+    "local::claude::tests::process::parity::installed_claude_completes_a_native_turn_and_reopens_history",
+    "local::codex::tests::installed::installed_codex_completes_a_native_turn_and_reopens_history",
+    "local::deepseek_harness::native::tests::installed_host_discovers_switches_permissions_and_adopts_legacy_sessions"
+  ],
+  "failures": [
+    "local::files::tests::directory_links_are_listed_but_special_files_cannot_be_copied"
+  ],
+  "environment_failure": "Unchanged filesystem directory_links_are_listed_but_special_files_cannot_be_copied: AF_UNIX creation/bind returns EPERM in this cloud environment. No test assertion/timeout changed and no explicit skips used. --ignore-run-fail produces a report despite this test failure; exit 0 does not mean an all-passing suite.",
+  "comparable_baseline": "No comparable standalone-slice baseline measured; no delta claimed",
+  "artifacts": "Compact evidence committed with this PR; full HTML, source-scoped JSON and logs retained for the split verification bundle",
+  "installed_cli_scope": "Actual DSH 0.1.5-rc.2: model/mode discovery, permission selection, native restore/history and legacy ACP adoption in isolated DSH_HOME, with no model request. Ignored in coverage and run separately.",
+  "frontend_validation": {
+    "question_form_tests": {
+      "passed": 6,
+      "failed": 0
+    },
+    "ui_dependency_build": "passed",
+    "desktop_mobile_typechecks": "passed",
+    "changed_file_oxfmt_oxlint": "passed",
+    "coverage": "not measured"
+  },
+  "remaining_gaps": [
+    "Real model tool/question behavior and full desktop/native mobile GUI acceptance were not rerun for this standalone slice",
+    "Provider network, process startup/disconnection, transport limits and negative native history/control paths remain partly uncovered; see full HTML",
+    "The shared client cache/restart correction is a separate recommended predecessor (PR187), with no compile prerequisite"
+  ]
+}

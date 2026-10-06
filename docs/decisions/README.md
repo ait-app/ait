@@ -48,9 +48,11 @@
 - [ADR-050：独立 server 的 Claude Code Provider](providers/adr-050-claude-code-provider.md)
 - [ADR-052: Native provider capability completion](providers/adr-052-native-provider-capabilities.md)
 - [ADR-058：Server 的有界 metadata generation](providers/adr-058-daemon-metadata-generation.md)
+- [ADR-082：DeepSeek Harness 原生交互 Host](providers/adr-082-deepseek-harness-native-host.md)
 - [ADR-067：DeepSeek Harness ACP Provider](providers/adr-067-deepseek-harness-acp.md)
 
 - [ADR-074：OpenCode 原生 Provider](providers/adr-074-opencode-native-provider.md)
+- [ADR-088：Provider 发现与启动历史同步隔离](providers/adr-088-provider-catalog-startup-isolation.md)
 
 ## 客户端、连接与品牌
 

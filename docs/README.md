@@ -13,6 +13,7 @@
 
 ## 架构决策
 
+- [ADR-088：Provider 发现与启动历史同步隔离](decisions/providers/adr-088-provider-catalog-startup-isolation.md)：有界 catalog 通道与本机连接就绪后的恢复。
 - [ADR-087：Antigravity CLI 原生 Provider](decisions/providers/adr-087-antigravity-cli-provider.md)：官方与 Homebrew 安装发现、NDJSON 会话、权限模式与恢复边界。
 - [ADR-086：桌面、Android 与 iOS 的 Authing 浏览器登录](decisions/clients/adr-086-authing-native-login.md)：浏览器认证、一次性代码与原生 PKCE 回传；[配置与验收](operations/authing-client-login.md)。
 - [ADR-085：Daemon 同步的稳定节点身份](decisions/clients/adr-085-stable-daemon-publication.md)：重复注册复用节点、旧 Host 绑定迁移、删除主机后的客户端登录及通用桌面 IPC 命名。
@@ -48,10 +49,11 @@
 - [Ait 0.0.14 发布说明](reports/releases/release-0.0.14.md)：Diff 语法高亮、侧边栏统计与 Codex 推理等级。
 - [Apple 本机构建](operations/apple-builds.md)：DMG、模拟器和 IPA。
 - [Claude Code](operations/claude-code.md)：认证、原生会话与审批。
-- [DeepSeek Harness](operations/deepseek-harness.md)：ACP 运行与模型配置。
+- [DeepSeek Harness](operations/deepseek-harness.md)：原生 Host、权限模式、question 与 ACP 兼容配置。
 - [Antigravity CLI](operations/antigravity.md)：AGY 安装、登录、权限模式与会话恢复。
 - [语音与听写](operations/speech.md)：离线模型、后端配置和限制。
 
+- [DSH 原生交互 Host](decisions/providers/adr-082-deepseek-harness-native-host.md)：权限切换、结构化问题、用户消息持久化与原生历史恢复。
 - [OpenCode 原生 Provider](decisions/providers/adr-074-opencode-native-provider.md)：接入范围、审批与会话恢复。
 
 ## 工程规范与验证

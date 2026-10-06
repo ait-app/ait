@@ -296,7 +296,7 @@ export const AGENT_PROVIDER_DEFINITIONS: AgentProviderDefinition[] = [
   {
     id: "deepseek-harness",
     label: "DeepSeek Harness",
-    description: "DeepSeek Harness via Agent Client Protocol with persistent sessions and tools",
+    description: "DeepSeek Harness with native permissions, questions, and persistent sessions",
     defaultModeId: null,
     modes: [],
   },

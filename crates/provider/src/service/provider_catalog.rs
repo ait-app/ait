@@ -1,6 +1,7 @@
 //! Bounded discovery cache over the same adapters used by native Agent execution.
 
 use std::collections::{BTreeMap, BTreeSet};
+use std::sync::Arc;
 use std::time::{Duration, Instant};
 
 use chrono::Utc;
@@ -36,7 +37,7 @@ pub(crate) struct Catalog {
 impl Catalog {
     pub(crate) async fn execute(
         &mut self,
-        clients: &BTreeMap<String, Box<dyn AgentClient>>,
+        clients: &BTreeMap<String, Arc<dyn AgentClient>>,
         events: &SessionEvents,
         method: &str,
         params: Value,
@@ -152,7 +153,14 @@ async fn discover(client: &dyn AgentClient, cwd: &str) -> Entry {
         "models":details.models,"modes":details.modes,"fetchedAt":Utc::now().to_rfc3339()});
     if client.provider() == "deepseek-harness" {
         value["label"] = json!("DeepSeek Harness");
-        value["description"] = json!("DeepSeek Harness via Agent Client Protocol");
+        value["description"] = json!(if client
+            .settings(&domain::agent_runtime::StoredAgentConfig::default())["capabilities"]["supportsDynamicModes"]
+            == true
+        {
+            "DeepSeek Harness native interactive Host"
+        } else {
+            "DeepSeek Harness via Agent Client Protocol"
+        });
         value["defaultModeId"] = Value::Null;
     }
     if client.provider() == "antigravity" {

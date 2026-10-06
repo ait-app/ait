@@ -100,3 +100,48 @@ describe("question form card core", () => {
     });
   });
 });
+
+describe("structured native question answers", () => {
+  test("submits a selected label only once when custom text matches it", () => {
+    const questions = parseQuestionFormQuestions({
+      questions: [
+        {
+          question: "Choose a test answer",
+          header: "Answer",
+          answerKey: "answer",
+          options: [{ label: "Alpha, beta" }, { label: "Gamma" }],
+          multiSelect: true,
+          allowOther: true,
+          answerFormat: "array",
+        },
+      ],
+    });
+    if (!questions) throw new Error("questions did not parse");
+    expect(
+      buildQuestionFormAnswers(questions, { 0: new Set([0, 1]) }, { 0: " Alpha, beta " }),
+    ).toEqual({ answer: ["Alpha, beta", "Gamma"] });
+    expect(buildQuestionFormAnswers(questions, { 0: new Set([0]) }, { 0: "alpha, beta" })).toEqual({
+      answer: ["Alpha, beta", "alpha, beta"],
+    });
+  });
+
+  test("preserves commas inside labels and selected choices alongside custom text", () => {
+    const questions = parseQuestionFormQuestions({
+      questions: [
+        {
+          question: "Choose targets",
+          header: "Targets",
+          answerKey: "targets",
+          options: [{ label: "Linux, amd64" }, { label: "macOS" }],
+          multiSelect: true,
+          allowOther: true,
+          answerFormat: "array",
+        },
+      ],
+    });
+    if (!questions) throw new Error("questions did not parse");
+    expect(buildQuestionFormAnswers(questions, { 0: new Set([0, 1]) }, { 0: "Windows" })).toEqual({
+      targets: ["Linux, amd64", "macOS", "Windows"],
+    });
+  });
+});
