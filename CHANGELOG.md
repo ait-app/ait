@@ -1,5 +1,12 @@
 # Ait changelog
 
+## 0.0.20 - 2026-10-06
+
+- Add unified browser sign-in and registration on desktop and Android when the online service supports Authing, while keeping the existing Ait password sign-in option.
+- Add iOS sign-in through the system authentication window, with callback validation, cancellation, and secure session storage.
+- Show account expiration independently from session expiration; browser sign-in preserves online host discovery and per-host synchronization.
+- Reset workspaces successfully when the original branch name already exists locally, preserving the renamed branch reference and protecting branches used by another worktree.
+
 ## 0.0.19 - 2026-10-05
 
 - Reuse a stable daemon identity when host synchronization is restarted or taken over by another client; existing host bindings require the matching online-service update.
