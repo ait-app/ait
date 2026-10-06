@@ -99,6 +99,7 @@ jobs:
       - run: npm run test:release
       - run: npm run test:mobile-release
       - run: npm run build:desktop-main
+      - run: npm run test --workspace=@ait/mobile -- src/components/question-form-card-core.test.ts
       - run: npm run test --workspace=@ait/protocol
       - run: npm run typecheck --workspace=@ait/desktop --workspace=@ait/mobile
       - run: npm test --workspace=@ait/desktop

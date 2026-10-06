@@ -1,6 +1,8 @@
 # ADR-067：DeepSeek Harness ACP Provider
 
-Status: Accepted
+Status: Superseded in part by [ADR-082](adr-082-deepseek-harness-native-host.md)
+
+默认接入已改为原生交互 Host；本文保留显式 ACP 兼容模式的契约。
 
 ## 背景
 

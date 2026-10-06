@@ -11,6 +11,10 @@ metadata.workspace = true
 
 # Internal OpenCode approval and progress sinks over the owned HTTP runtime.
 async-trait.workspace = true
+# Consume bounded native HTTP and event streams.
+futures-util.workspace = true
+# Authenticated DSH Host logical streams on an owned loopback WebSocket.
+tokio-tungstenite.workspace = true
 # Validate image payloads before native prompt admission and decode provider image artifacts.
 base64.workspace = true
 # Read-only Claude OAuth quota inspection; credentials never enter public snapshots.
