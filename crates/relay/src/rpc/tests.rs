@@ -57,12 +57,12 @@ async fn unrelated_requests_keep_their_context_and_consumed_requests_are_skipped
     let mut pending = Some(context("connection.ping", json!({}), &runtime, &outbound));
 
     assert!(matches!(
-        request(&mut pending, &connector).await,
+        request(&mut pending, &connector, None).await,
         Err(DispatchError::NotImplemented)
     ));
     assert_eq!(pending.as_ref().unwrap().request.method, "connection.ping");
     assert!(receiver.try_recv().is_err());
-    request(&mut None, &connector).await.unwrap();
+    request(&mut None, &connector, None).await.unwrap();
     assert!(receiver.try_recv().is_err());
 }
 
@@ -72,7 +72,7 @@ async fn status_and_stop_reply_once_with_only_the_connectors_public_identity_and
     let (outbound, mut receiver) = Outbound::new();
     for method in ["relay.status.request", "relay.stop.request"] {
         let mut pending = Some(context(method, json!({}), &runtime, &outbound));
-        request(&mut pending, &connector).await.unwrap();
+        request(&mut pending, &connector, None).await.unwrap();
 
         assert!(pending.is_none());
         assert_eq!(
@@ -88,7 +88,7 @@ async fn status_and_stop_reply_once_with_only_the_connectors_public_identity_and
                 }
             })
         );
-        request(&mut pending, &connector).await.unwrap();
+        request(&mut pending, &connector, None).await.unwrap();
         assert!(receiver.try_recv().is_err());
     }
 }
@@ -109,7 +109,7 @@ async fn malformed_or_invalid_grants_return_correlated_errors_without_starting_a
     ];
     for grant in grants {
         let mut pending = Some(context("relay.start.request", grant, &runtime, &outbound));
-        request(&mut pending, &connector).await.unwrap();
+        request(&mut pending, &connector, None).await.unwrap();
 
         assert!(pending.is_none());
         let response = decode(receiver.try_recv().unwrap().message);
@@ -135,7 +135,7 @@ async fn shutdown_rejects_start_with_a_stable_transport_error() {
         &outbound,
     ));
 
-    request(&mut pending, &connector).await.unwrap();
+    request(&mut pending, &connector, None).await.unwrap();
 
     assert!(pending.is_none());
     let response = decode(receiver.try_recv().unwrap().message);
@@ -157,7 +157,7 @@ async fn delivery_failure_consumes_the_handled_request_and_stops_dispatch() {
     ));
 
     assert!(matches!(
-        request(&mut pending, &connector).await,
+        request(&mut pending, &connector, None).await,
         Err(DispatchError::Delivery(_))
     ));
     assert!(pending.is_none());

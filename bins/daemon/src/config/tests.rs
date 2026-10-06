@@ -230,3 +230,38 @@ fn host_validation_runs_before_file_io_and_uses_the_resolved_origins() {
     assert_eq!(*origins.borrow(), config.web_origins);
     assert_eq!(config.web_origins, ["http://127.0.0.1:8082"]);
 }
+
+#[test]
+fn headless_is_explicit_and_center_cannot_be_configured() {
+    let configuration = load(
+        Cli::parse_from(["daemon", "run", "--headless", "--listen", "127.0.0.1:0"]),
+        environment,
+    )
+    .unwrap();
+    assert!(configuration.headless);
+    assert_eq!(configuration.listen.port(), 0);
+    assert!(
+        !load(Cli::parse_from(["daemon", "run"]), environment)
+            .unwrap()
+            .headless
+    );
+    let root = tempfile::tempdir().unwrap();
+    std::fs::write(
+        root.path().join("config.toml"),
+        "center = 'https://elsewhere.test/api'",
+    )
+    .unwrap();
+    assert!(
+        load(
+            Cli::parse_from([
+                "daemon",
+                "run",
+                "--headless",
+                "--data-dir",
+                root.path().to_str().unwrap()
+            ]),
+            environment
+        )
+        .is_err()
+    );
+}

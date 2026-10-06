@@ -134,7 +134,7 @@ async fn try_handlers(
         }
         Err(DispatchError::Delivery(error)) => return Err(error),
     }
-    match relay::rpc::request(context, &state.relay).await {
+    match relay::rpc::request(context, &state.relay, Some(state.relay_management())).await {
         Ok(()) => {}
         Err(DispatchError::NotImplemented) => Context::assert_unhandled(context, "relay"),
         Err(DispatchError::Delivery(error)) => return Err(error),
@@ -429,7 +429,12 @@ async fn unmatched_owners_return_not_implemented_without_consuming_or_delivering
         let results = [
             super::super::workspace_creation::request(&mut pending, &api.shared).await,
             super::super::workspace_archive::request(&mut pending, &api.shared).await,
-            relay::rpc::request(&mut pending, &api.shared.relay).await,
+            relay::rpc::request(
+                &mut pending,
+                &api.shared.relay,
+                Some(api.shared.relay_management()),
+            )
+            .await,
             schedule::dispatch::dispatch(&mut pending, &api.shared.schedule).await,
             browser::dispatch::dispatch(
                 &mut pending,
@@ -563,7 +568,14 @@ async fn every_declared_request_reaches_its_owners_consuming_branch() {
                     )
                     .await
                 }
-                7 => relay::rpc::request(&mut pending, &api.shared.relay).await,
+                7 => {
+                    relay::rpc::request(
+                        &mut pending,
+                        &api.shared.relay,
+                        Some(api.shared.relay_management()),
+                    )
+                    .await
+                }
                 _ => unreachable!(),
             };
             assert!(result.is_ok(), "{method}: {result:?}");
