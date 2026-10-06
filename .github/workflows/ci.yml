@@ -77,10 +77,17 @@ jobs:
       # Match rust-toolchain.toml so new stable lints cannot silently break this job.
       - uses: dtolnay/rust-toolchain@1.98.1
         with:
-          components: clippy,rustfmt
+          components: clippy,rustfmt,llvm-tools-preview
       - run: cargo fmt --all --check
       - run: cargo clippy --workspace --all-targets -- -D warnings
-      - run: cargo test --workspace
+      - run: cargo install cargo-llvm-cov --version 0.9.1 --locked
+      - run: cargo llvm-cov --locked --workspace --html -- --test-threads=8
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: rust-coverage
+          path: target/llvm-cov/html
+          if-no-files-found: ignore
 
   ui:
     needs: changes

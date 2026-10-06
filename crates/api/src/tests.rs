@@ -35,6 +35,10 @@ impl Fixture {
     }
 
     async fn with_origins(services: Services, origins: Vec<String>) -> Self {
+        Self::with_policy(services, origins, false).await
+    }
+
+    async fn with_policy(services: Services, origins: Vec<String>, managed: bool) -> Self {
         let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
         let address = listener.local_addr().unwrap();
         let api = Api::new(
@@ -45,7 +49,10 @@ impl Fixture {
             services,
         )
         .unwrap();
-        let api = api.with_browser_origins(origins).unwrap();
+        let mut api = api.with_browser_origins(origins).unwrap();
+        if managed {
+            api.claim_managed_relay().unwrap();
+        }
         let shutdown = api.clone();
         let router = api.router();
         let task = tokio::spawn(async move {

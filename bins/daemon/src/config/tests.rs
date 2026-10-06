@@ -174,3 +174,39 @@ fn supports_explicit_network_listeners_without_changing_loopback_default() {
         assert_eq!(config.listen, listen.parse().unwrap());
     }
 }
+
+#[cfg(target_os = "linux")]
+#[test]
+fn headless_is_explicit_and_center_cannot_be_configured() {
+    let configuration = Config::load(
+        Cli::parse_from(["daemon", "run", "--headless", "--listen", "127.0.0.1:0"]),
+        environment,
+    )
+    .unwrap();
+    assert!(configuration.headless);
+    assert_eq!(configuration.listen.port(), 0);
+    assert!(
+        !Config::load(Cli::parse_from(["daemon", "run"]), environment)
+            .unwrap()
+            .headless
+    );
+    let root = tempfile::tempdir().unwrap();
+    std::fs::write(
+        root.path().join("config.toml"),
+        "center = 'https://elsewhere.test/api'",
+    )
+    .unwrap();
+    assert!(
+        Config::load(
+            Cli::parse_from([
+                "daemon",
+                "run",
+                "--headless",
+                "--data-dir",
+                root.path().to_str().unwrap()
+            ]),
+            environment
+        )
+        .is_err()
+    );
+}

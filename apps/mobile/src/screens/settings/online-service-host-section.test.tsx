@@ -11,6 +11,7 @@ const mocks = vi.hoisted(() => ({
   synchronize: vi.fn(),
   loggedOut: true,
   enabled: true,
+  managed: false,
 }));
 vi.mock("@/runtime/account-state", () => ({
   useAccountState: () => ({
@@ -35,7 +36,10 @@ vi.mock("@/runtime/online-service-host-sync", () => ({
           enabled: mocks.enabled,
           busy: false,
           error: null,
-          status: { status: { online: mocks.enabled, connecting: false, error: null } },
+          status: {
+            status: { online: mocks.enabled, connecting: false, error: null },
+            management: mocks.managed ? { mode: "managed" } : undefined,
+          },
         },
       },
     }),
@@ -58,6 +62,7 @@ beforeEach(async () => {
   vi.clearAllMocks();
   mocks.loggedOut = true;
   mocks.enabled = true;
+  mocks.managed = false;
   await i18n.changeLanguage("en");
 });
 afterEach(() => cleanup());
@@ -80,4 +85,15 @@ describe("remote host synchronization after client logout", () => {
     fireEvent.click(start);
     expect(mocks.synchronize).not.toHaveBeenCalledWith("remote", host.label, true);
   });
+});
+
+it("keeps an unattended Host independent of client sign-in and synchronization controls", () => {
+  mocks.managed = true;
+  const view = render(<OnlineServiceHostSection host={host} />);
+  const button = view.getByTestId("host-online-service-sync") as HTMLButtonElement;
+  expect(button.disabled).toBe(true);
+  expect(button.textContent).toBe("Unattended host");
+  expect(view.queryByTestId("host-online-service-sign-in")).toBeNull();
+  fireEvent.click(button);
+  expect(mocks.disconnect).not.toHaveBeenCalled();
 });

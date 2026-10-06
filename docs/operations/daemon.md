@@ -125,3 +125,6 @@ npm run dev:mobile
 
 原生 Provider 凭据由对应程序保存。Ait 连接 token 与 Provider 凭据用途不同。
 更多行为边界见 [分类 ADR](../decisions/README.md)，验证范围见 [报告索引](../reports/README.md)。
+
+Linux 无人值守运行支持 `daemon login` 和 `daemon run --headless`，
+接入条件与命令见 [无人值守 daemon](headless-daemon.md)。

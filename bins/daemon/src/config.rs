@@ -3,28 +3,86 @@ use std::net::SocketAddr;
 use std::path::PathBuf;
 
 use anyhow::{Context, bail};
-use clap::Parser;
+use clap::{Args, Parser, Subcommand};
 use secrecy::SecretString;
 use serde::Deserialize;
 
 #[derive(Debug, Parser)]
 #[command(name = "daemon", version, about = "Ait local daemon")]
 pub(super) struct Cli {
+    #[command(subcommand)]
+    pub command: Option<Command>,
     /// Daemon data directory (default: `AIT_SERVER_DATA_DIR` or ~/.ait-server).
-    #[arg(long)]
-    data_dir: Option<PathBuf>,
+    #[arg(long, global = true)]
+    pub data_dir: Option<PathBuf>,
     /// IP socket address (default: `AIT_SERVER_LISTEN`, config, or 127.0.0.1:7316).
-    #[arg(long)]
+    #[arg(long, global = true)]
     listen: Option<SocketAddr>,
     /// Non-secret TOML configuration (default: <data-dir>/config.toml, if present).
-    #[arg(long)]
+    #[arg(long, global = true)]
     config: Option<PathBuf>,
     /// Logging threshold: error, warn, info, debug, trace, or off.
-    #[arg(long)]
+    #[arg(long, global = true)]
     log_level: Option<String>,
     /// Allowed browser page origin; repeat for multiple local frontends.
-    #[arg(long)]
+    #[arg(long, global = true)]
     web_origin: Vec<String>,
+}
+
+#[derive(Debug, Subcommand)]
+pub(super) enum Command {
+    /// Authorize this Linux daemon through Web approval or a single-use enrollment token.
+    Login(Login),
+    /// Revoke the machine grant and clear private local credentials (stop the service first).
+    Logout,
+    /// Run the existing daemon, optionally with independent center-managed Host publication.
+    Run {
+        /// Own authorization, lease renewal and Relay without a desktop client.
+        #[arg(long)]
+        headless: bool,
+    },
+    /// Read non-secret authorization and runtime status.
+    Status {
+        /// Emit machine-readable JSON.
+        #[arg(long)]
+        json: bool,
+    },
+}
+
+#[derive(Debug, Args)]
+pub(super) struct Login {
+    /// Host display label; defaults to the machine hostname.
+    #[arg(long)]
+    pub name: Option<String>,
+    /// Single-use enrollment JWT from the Host page (prefer stdin for scripts).
+    #[arg(long, conflicts_with = "token_stdin", value_parser = parse_secret)]
+    pub token: Option<SecretString>,
+    /// Read enrollment JWT from stdin; empty/invalid input never falls back to Web login.
+    #[arg(long, conflicts_with = "token")]
+    pub token_stdin: bool,
+}
+
+fn parse_secret(value: &str) -> Result<SecretString, String> {
+    if value.is_empty() {
+        return Err("enrollment token must not be empty".to_owned());
+    }
+    Ok(value.to_owned().into())
+}
+
+pub(super) fn data_directory(
+    cli: &Cli,
+    env: impl Fn(&str) -> Option<OsString>,
+) -> anyhow::Result<PathBuf> {
+    let path = cli
+        .data_dir
+        .clone()
+        .or_else(|| env("AIT_SERVER_DATA_DIR").map(PathBuf::from))
+        .or_else(|| env("HOME").map(|home| PathBuf::from(home).join(".ait-server")))
+        .context("set --data-dir or AIT_SERVER_DATA_DIR when HOME is unavailable")?;
+    if path.as_os_str().is_empty() {
+        bail!("data directory must not be empty");
+    }
+    Ok(path)
 }
 
 #[derive(Debug, Default, Deserialize)]
@@ -42,10 +100,15 @@ pub(super) struct Config {
     pub token: SecretString,
     pub log_level: tracing::level_filters::LevelFilter,
     pub web_origins: Vec<String>,
+    pub headless: bool,
 }
 
 impl Config {
     pub fn load(cli: Cli, env: impl Fn(&str) -> Option<OsString>) -> anyhow::Result<Self> {
+        let headless = matches!(cli.command, Some(Command::Run { headless: true }));
+        if headless && !cfg!(target_os = "linux") {
+            bail!("headless runtime currently requires Linux");
+        }
         // Validate credentials before touching disk or opening the listener.
         let token = env("AIT_SERVER_TOKEN")
             .context("set AIT_SERVER_TOKEN before starting daemon")?
@@ -110,6 +173,7 @@ impl Config {
             token,
             log_level,
             web_origins,
+            headless,
         })
     }
 }

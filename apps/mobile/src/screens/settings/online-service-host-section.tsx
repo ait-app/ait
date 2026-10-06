@@ -27,6 +27,7 @@ export function OnlineServiceHostSection({ host }: { host: HostProfile }) {
     if (connected && supported) void synchronizeOnlineServiceHost(host.serverId, host.label);
   }, [connected, supported, host.serverId, host.label]);
   const loggedOut = account.status === "logged_out";
+  const managed = sync?.status?.management?.mode === "managed";
   const online = sync?.status?.status.online;
   const connecting = sync?.status?.status.connecting;
   const statusKey = !connected
@@ -47,10 +48,16 @@ export function OnlineServiceHostSection({ host }: { host: HostProfile }) {
       <SettingsCard>
         <SettingsRow
           label={t("onlineService.title")}
-          hint={loggedOut ? t("onlineService.signInFirst") : `${account.name} · ${account.center}`}
+          hint={
+            managed
+              ? t("onlineService.managedHostHint")
+              : loggedOut
+                ? t("onlineService.signInFirst")
+                : `${account.name} · ${account.center}`
+          }
         >
           <Text style={settingsStyles.rowHint}>{t(`onlineService.${statusKey}`)}</Text>
-          {loggedOut ? (
+          {loggedOut && !managed ? (
             <Button
               variant="outline"
               size="sm"
@@ -63,7 +70,11 @@ export function OnlineServiceHostSection({ host }: { host: HostProfile }) {
         </SettingsRow>
         <SettingsRow
           label={t("onlineService.syncHost")}
-          hint={t("onlineService.syncHostHint", { name: host.label })}
+          hint={
+            managed
+              ? t("onlineService.managedHostHint")
+              : t("onlineService.syncHostHint", { name: host.label })
+          }
           error={sync?.error ?? sync?.status?.status.error}
         >
           <View>
@@ -71,6 +82,7 @@ export function OnlineServiceHostSection({ host }: { host: HostProfile }) {
               variant="outline"
               size="sm"
               disabled={
+                managed ||
                 (loggedOut && !sync?.enabled) ||
                 !connected ||
                 !supported ||
@@ -85,13 +97,15 @@ export function OnlineServiceHostSection({ host }: { host: HostProfile }) {
               testID="host-online-service-sync"
             >
               {t(
-                sync?.busy
-                  ? "onlineService.syncing"
-                  : sync?.enabled
-                    ? "onlineService.stopSync"
-                    : online
-                      ? "onlineService.hostOnline"
-                      : "onlineService.syncAction",
+                managed
+                  ? "onlineService.managedHost"
+                  : sync?.busy
+                    ? "onlineService.syncing"
+                    : sync?.enabled
+                      ? "onlineService.stopSync"
+                      : online
+                        ? "onlineService.hostOnline"
+                        : "onlineService.syncAction",
               )}
             </Button>
           </View>

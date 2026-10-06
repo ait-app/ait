@@ -1,6 +1,7 @@
 //! Local daemon entry point.
 
 mod config;
+mod device;
 mod host;
 mod instance;
 
@@ -42,7 +43,15 @@ async fn main() -> ExitCode {
     }
 }
 
-async fn run(cli: config::Cli) -> anyhow::Result<()> {
+async fn run(mut cli: config::Cli) -> anyhow::Result<()> {
+    let directory = config::data_directory(&cli, |name| std::env::var_os(name))?;
+    match cli.command.take() {
+        Some(config::Command::Login(options)) => return device::login(&directory, options).await,
+        Some(config::Command::Logout) => return device::logout(&directory).await,
+        Some(config::Command::Status { json }) => return device::status(&directory, json),
+        command @ (Some(config::Command::Run { .. }) | None) => cli.command = command,
+    }
+
     let config = config::Config::load(cli, |name| std::env::var_os(name))
         .context("load daemon configuration")?;
     tracing_subscriber::fmt()

@@ -8,6 +8,7 @@ edition = "2024"
 publish = false
 
 [workspace.dependencies]
+host-link = { path = "crates/host-link" }
 api = { path = "crates/api" }
 browser = { path = "crates/browser" }
 domain = { path = "crates/domain" }

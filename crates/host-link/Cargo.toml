@@ -1,0 +1,24 @@
+[package]
+name = "host-link"
+version.workspace = true
+edition.workspace = true
+publish.workspace = true
+
+[dependencies]
+async-trait.workspace = true
+chrono.workspace = true
+chrono.features = ["serde"]
+secrecy.workspace = true
+serde.workspace = true
+thiserror.workspace = true
+tokio.workspace = true
+tokio-util.workspace = true
+uuid.workspace = true
+uuid.features = ["serde"]
+
+[lints]
+workspace = true
+
+[dev-dependencies]
+tokio.workspace = true
+tokio.features = ["test-util"]
