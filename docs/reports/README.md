@@ -66,6 +66,7 @@
 - [Timeline 单项 768 KiB：PR 覆盖率证据](providers/timeline-entry-768k-pr-coverage-2026-10-06.json)
 - [Provider 装配边界验证](providers/provider-composition.md)
 - [Antigravity CLI 原生 Provider 验证](providers/antigravity-cli.md)
+- [Paseo 并发改造验证](providers/paseo-concurrency-validation.md)
 - [Agent 创建任务预算竞争与 DSH 回归](providers/agent-creation-resource-contention.md)
 - [OpenCode 工具与结论顺序修复](providers/opencode-tool-order.md)
 - [OpenCode 上游 PR 验证](providers/opencode-upstream-pr.md)

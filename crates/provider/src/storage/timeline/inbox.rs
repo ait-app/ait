@@ -184,6 +184,37 @@ impl Timeline {
             .collect()
     }
 
+    /// Read only identities needed by the scheduler, without decoding other Agents' prompts.
+    /// # Errors
+    /// Returns storage errors while listing pending identities.
+    pub(crate) fn queued_agents(&self) -> Result<Vec<String>, ErrorCode> {
+        let database = self.database.lock().map_err(io)?;
+        let mut query = database.prepare("SELECT DISTINCT agent FROM input_receipts WHERE state='queued' ORDER BY agent LIMIT 1024").map_err(io)?;
+        query
+            .query_map([], |row| row.get(0))
+            .map_err(io)?
+            .map(|row| row.map_err(io))
+            .collect()
+    }
+
+    /// Load the first FIFO input for one owner without scanning unrelated prompt bodies.
+    /// # Errors
+    /// Returns storage or persisted prompt decoding errors.
+    pub(crate) fn queued_for_agent(&self, agent: &str) -> Result<Option<QueuedInput>, ErrorCode> {
+        let database = self.database.lock().map_err(io)?;
+        let row = database.query_row("SELECT message,prompt FROM input_receipts WHERE state='queued' AND agent=? ORDER BY seq LIMIT 1", [agent], |row| {
+            Ok((row.get::<_, String>(0)?, row.get::<_, String>(1)?))
+        }).optional().map_err(io)?;
+        row.map(|(message, prompt)| {
+            Ok(QueuedInput {
+                agent: agent.to_owned(),
+                message,
+                prompt: serde_json::from_str(&prompt).map_err(io)?,
+            })
+        })
+        .transpose()
+    }
+
     /// Whether unsubmitted work remains for this Agent.
     pub(crate) fn has_queued_input(&self, agent: &str) -> Result<bool, ErrorCode> {
         self.database

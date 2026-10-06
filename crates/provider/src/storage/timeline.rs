@@ -143,6 +143,14 @@ impl Timeline {
         Ok((epoch, progress::read(&database, agent)?))
     }
 
+    /// Read the generation without loading or projecting its history rows.
+    /// # Errors
+    /// Returns storage errors when the generation cannot be read or initialized.
+    pub(crate) fn generation(&self, agent: &str) -> Result<String, ErrorCode> {
+        let database = self.database.lock().map_err(io)?;
+        epoch(&database, agent)
+    }
+
     /// Read the first nonempty user text for `agent` from the current durable generation.
     /// Returns `None` for absent text and an I/O error for unreadable storage.
     pub(crate) fn first_user_text(&self, agent: &str) -> Result<Option<String>, ErrorCode> {

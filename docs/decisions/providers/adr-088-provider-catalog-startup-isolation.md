@@ -6,6 +6,8 @@
 - 关系：细化 [ADR-032](adr-032-daemon-native-provider-execution.md) 的执行器资源所有权与
   [ADR-039](adr-039-agent-timeline-provider-creation.md) 的 Provider catalog 调度；协议不变。
 
+后续 [ADR-091](adr-091-independent-session-execution.md) 将 Catalog 改为后台并发发现，并将 Agent execution 细分为独立会话所有者；本 ADR 的物理连接响应预算和客户端连接就绪规则继续适用。
+
 ## 背景
 
 恢复的桌面页面会同时请求历史和模型目录。Provider discovery 可能启动原生进程并等待插件、

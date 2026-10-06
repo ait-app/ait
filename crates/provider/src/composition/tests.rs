@@ -17,18 +17,31 @@ fn registration_preserves_the_catalog_without_startup_writes_and_rejects_duplica
         data.join("agents.json"),
     )));
 
-    Providers::new(&data).register(&mut manager).unwrap();
-    let (_, clients) = manager.take_catalog();
+    let providers = Providers::new(&data);
     assert_eq!(
-        clients.keys().map(String::as_str).collect::<Vec<_>>(),
+        providers
+            .clients
+            .iter()
+            .map(|client| client.provider())
+            .collect::<Vec<_>>(),
         [
-            "antigravity",
-            "claude",
             "codex",
+            "claude",
+            "antigravity",
+            "opencode",
             "deepseek-harness",
-            "opencode"
         ]
     );
+    providers.register(&mut manager).unwrap();
+    for provider in [
+        "codex",
+        "claude",
+        "antigravity",
+        "opencode",
+        "deepseek-harness",
+    ] {
+        manager.validate_provider(provider).unwrap();
+    }
     assert!(matches!(
         Providers::new(&data).register(&mut manager),
         Err(AgentManagerError::AlreadyExists(provider)) if provider == "codex"

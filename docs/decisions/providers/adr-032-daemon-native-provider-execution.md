@@ -1,6 +1,7 @@
 # ADR-032：独立 server 接通 Codex 原生文本执行
 
 - 状态：Accepted。
+- 并发修订：当前调度与存储执行位置以 [ADR-091](adr-091-independent-session-execution.md) 为准，下面的全局串行描述保留为初始决策背景。
 - 日期：2026-09-24。
 - 范围：独立 server；延续 ADR-027/031，不依赖旧 `ait-*`。
 - 来源：`getpaseo/paseo@2c8e8a826810337492cc5a38bb0bbd705b6fb632` 的

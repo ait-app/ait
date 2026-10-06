@@ -1,9 +1,12 @@
+use std::sync::Arc;
+
 use super::*;
 use crate::ports::agent_session::{
     AgentResumePurpose, AgentSession, AgentSessionError, AgentSessionFuture, AgentSessionSpec,
 };
 use domain::agent_runtime::AgentPersistenceHandle;
 
+mod concurrency;
 mod paseo;
 
 #[derive(Debug)]
@@ -46,7 +49,7 @@ async fn catalog_uses_registered_adapters_scopes_cache_and_honors_content_hashes
         "codex".to_owned(),
         Arc::new(Client(true)) as Arc<dyn AgentClient>,
     )]);
-    let mut catalog = Catalog::default();
+    let catalog = Catalog::default();
     let events = SessionEvents::default();
     let cwd = tempfile::tempdir().unwrap();
     let first = catalog

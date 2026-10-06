@@ -1,6 +1,43 @@
 use super::*;
 
 #[test]
+fn owner_queries_read_only_its_first_fifo_input_and_scheduler_reads_only_ids() {
+    let timeline = Timeline::memory().unwrap();
+    for (agent, message) in [("a", "one"), ("b", "other"), ("a", "two")] {
+        timeline
+            .reserve_input(agent, message, &AgentPrompt::text(message), "interrupt")
+            .unwrap();
+    }
+    assert_eq!(timeline.queued_agents().unwrap(), vec!["a", "b"]);
+    assert_eq!(
+        timeline.queued_for_agent("a").unwrap().unwrap().message,
+        "one"
+    );
+    timeline.claim_input("a", "one").unwrap();
+    assert_eq!(
+        timeline.queued_for_agent("a").unwrap().unwrap().message,
+        "two"
+    );
+    // An unrelated corrupt body must not prevent owner b or the scheduler from reading.
+    timeline
+        .database
+        .lock()
+        .unwrap()
+        .execute(
+            "UPDATE input_receipts SET prompt='invalid-json' WHERE agent='a' AND message='two'",
+            [],
+        )
+        .unwrap();
+    assert_eq!(
+        timeline.queued_for_agent("b").unwrap().unwrap().prompt.text,
+        "other"
+    );
+    assert_eq!(timeline.queued_agents().unwrap(), vec!["a", "b"]);
+    assert!(timeline.queued_for_agent("a").is_err());
+    assert!(timeline.queued_for_agent("missing").unwrap().is_none());
+}
+
+#[test]
 fn retries_match_payload_and_policy_and_claimed_inputs_never_replay_after_restart() {
     let root = tempfile::tempdir().unwrap();
     let path = root.path().join("timeline.sqlite3");

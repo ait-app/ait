@@ -12,6 +12,8 @@ use tokio::sync::{OwnedSemaphorePermit, Semaphore, mpsc, oneshot};
 use tokio_util::sync::CancellationToken;
 
 mod catalog;
+mod lane;
+mod routing;
 mod voice;
 pub(crate) mod waits;
 
@@ -23,7 +25,7 @@ use crate::service::agent_runtime::AgentRuntimeDirectory;
 
 /// Independently composed dependencies retained for the full worker lifetime.
 pub struct ExecutionDependencies {
-    /// Native session owner with registered clients.
+    /// Registered native factories and shared durable services.
     pub manager: AgentManager,
     /// Agent metadata service using the same registry instance.
     pub directory: AgentRuntimeDirectory,
@@ -43,23 +45,22 @@ pub struct ExecutionDependencies {
 }
 
 enum Command {
-    ObserveWait {
-        identifier: String,
-        reply: oneshot::Sender<Result<waits::WaitObservation, ErrorCode>>,
-    },
     Request {
         method: String,
         params: Value,
         reply: oneshot::Sender<Result<Value, ErrorCode>>,
         cancel: Option<CancellationToken>,
+        permit: OwnedSemaphorePermit,
+        queued: std::time::Instant,
     },
     Shutdown(oneshot::Sender<Result<(), ErrorCode>>),
 }
 
 struct Worker {
     sender: mpsc::Sender<Command>,
-    catalog: mpsc::Sender<catalog::Request>,
-    catalog_shutdown: CancellationToken,
+    template: Arc<Mutex<ExecutionState>>,
+    cancellation: CancellationToken,
+    admission: Arc<Semaphore>,
     catalog_responses: Arc<Semaphore>,
     thread: Mutex<Option<JoinHandle<()>>>,
     events: SessionEvents,
@@ -131,11 +132,25 @@ impl AgentExecution {
             .enable_all()
             .build()?;
         let (sender, receiver) = mpsc::channel(64);
-        let (catalog_sender, catalog_receiver) = mpsc::channel(64);
-        let catalog_shutdown = CancellationToken::new();
-        let worker_catalog_shutdown = catalog_shutdown.clone();
-        let (catalog, clients) = dependencies.manager.take_catalog();
-        let catalog_events = events.clone();
+        let template = Arc::new(Mutex::new(ExecutionState {
+            message_observers: std::collections::BTreeMap::new(),
+            owners: crate::service::agent_manager::ownership::Owners::default().with_changes(
+                dependencies
+                    .import_directory
+                    .as_ref()
+                    .and_then(metadata::service::directory::Directory::changes),
+            ),
+            manager: dependencies.manager,
+            directory: dependencies.directory,
+            registry: worker_registry,
+            workspaces: dependencies.workspaces.into(),
+            projects: dependencies.projects.into(),
+            import_directory: dependencies.import_directory,
+            workspace_automation: dependencies.workspace_automation,
+        }));
+        let worker_template = template.clone();
+        let cancellation = CancellationToken::new();
+        let worker_cancellation = cancellation.clone();
         let thread = std::thread::Builder::new()
             .name("provider".to_owned())
             .spawn(move || {
@@ -143,36 +158,15 @@ impl AgentExecution {
                     runtime,
                     _lifetime: dependencies.lifetime,
                 };
-                let state = ExecutionState {
-                    manager: dependencies.manager,
-                    directory: dependencies.directory,
-                    registry: worker_registry,
-                    workspaces: dependencies.workspaces,
-                    projects: dependencies.projects,
-                    import_directory: dependencies.import_directory,
-                    workspace_automation: dependencies.workspace_automation,
-                };
-                owned.runtime.block_on(async {
-                    let execution = async {
-                        serve(state, receiver).await;
-                        worker_catalog_shutdown.cancel();
-                    };
-                    tokio::join!(
-                        execution,
-                        catalog::serve(
-                            catalog,
-                            clients,
-                            catalog_events,
-                            catalog_receiver,
-                            worker_catalog_shutdown.clone(),
-                        ),
-                    );
-                });
+                owned
+                    .runtime
+                    .block_on(serve(worker_template, receiver, worker_cancellation));
             })?;
         Ok(Self(Arc::new(Worker {
             sender,
-            catalog: catalog_sender,
-            catalog_shutdown,
+            template,
+            cancellation,
+            admission: Arc::new(Semaphore::new(64)),
             catalog_responses: Arc::new(Semaphore::new(64)),
             thread: Mutex::new(Some(thread)),
             events,
@@ -214,8 +208,8 @@ impl AgentExecution {
 
     /// Execute a canonical execution or Agent metadata request.
     ///
-    /// Catalog discovery uses a separate bounded lane and cache owner. Wait requests poll
-    /// without holding execution; caller cancellation does not cancel accepted native work.
+    /// Wait requests observe committed snapshots without holding a command lane; cancellation does not
+    /// cancel an accepted turn. Input queues and native requests are bounded independently.
     ///
     /// # Errors
     /// Returns safe validation, admission, provider or registry errors.
@@ -235,7 +229,7 @@ impl AgentExecution {
     /// Returns a native close or worker failure. The host lifetime guard remains owned until
     /// the worker has actually terminated, including after the calling future is dropped.
     pub async fn shutdown(&self) -> Result<(), ErrorCode> {
-        self.0.catalog_shutdown.cancel();
+        self.0.cancellation.cancel();
         let (reply, receiver) = oneshot::channel();
         let sent = self.0.sender.send(Command::Shutdown(reply)).await.is_ok();
         let result = if sent {
@@ -269,7 +263,7 @@ impl AgentExecution {
         if !catalog::handles(method) {
             return Err(ErrorCode::UnsupportedCapability);
         }
-        if self.0.catalog_shutdown.is_cancelled() {
+        if self.0.cancellation.is_cancelled() {
             return Err(ErrorCode::AgentIo);
         }
         let permit = self
@@ -278,13 +272,22 @@ impl AgentExecution {
             .clone()
             .try_acquire_owned()
             .map_err(|_| ErrorCode::CatalogBusy)?;
+        let command_permit = self
+            .0
+            .admission
+            .clone()
+            .try_acquire_owned()
+            .map_err(|_| ErrorCode::CatalogBusy)?;
         let (reply, receiver) = oneshot::channel();
         self.0
-            .catalog
-            .try_send(catalog::Request {
+            .sender
+            .try_send(Command::Request {
                 method: method.to_owned(),
                 params,
                 reply,
+                cancel: None,
+                permit: command_permit,
+                queued: std::time::Instant::now(),
             })
             .map_err(|error| match error {
                 mpsc::error::TrySendError::Full(_) => ErrorCode::CatalogBusy,
@@ -303,9 +306,24 @@ impl AgentExecution {
     async fn call_cancellable(
         &self,
         method: &str,
-        params: Value,
+        mut params: Value,
         cancel: Option<CancellationToken>,
     ) -> Result<Value, ErrorCode> {
+        if self.0.cancellation.is_cancelled() {
+            return Err(ErrorCode::AgentIo);
+        }
+        let permit = self
+            .0
+            .admission
+            .clone()
+            .try_acquire_owned()
+            .map_err(|_| ErrorCode::CatalogBusy)?;
+        if method == "agent.create.request"
+            && params.get("idempotencyKey").is_none()
+            && params.is_object()
+        {
+            params["idempotencyKey"] = json!(uuid::Uuid::new_v4().to_string());
+        }
         let (reply, receiver) = oneshot::channel();
         self.0
             .sender
@@ -314,6 +332,8 @@ impl AgentExecution {
                 params,
                 reply,
                 cancel,
+                permit,
+                queued: std::time::Instant::now(),
             })
             .map_err(|error| match error {
                 mpsc::error::TrySendError::Full(_) => ErrorCode::CatalogBusy,
@@ -323,34 +343,38 @@ impl AgentExecution {
     }
 }
 
-async fn serve(mut state: ExecutionState, mut commands: mpsc::Receiver<Command>) {
-    let mut interval = tokio::time::interval(Duration::from_millis(25));
+async fn serve(
+    template: Arc<Mutex<ExecutionState>>,
+    mut commands: mpsc::Receiver<Command>,
+    cancellation: CancellationToken,
+) {
+    let mut router = routing::Router::new(template);
+    let mut interval = tokio::time::interval(Duration::from_secs(1));
     interval.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Skip);
+    let mut retirements = tokio::time::interval(Duration::from_millis(25));
+    retirements.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Skip);
+    let mut shutdown = None;
     loop {
         tokio::select! {
             command = commands.recv() => match command {
-                Some(Command::Request { method, params, reply, cancel }) => {
-                    voice::dispatch(&mut state, &method, params, (reply, cancel)).await;
-                }
-                Some(Command::ObserveWait { identifier, reply }) => {
-                    let _ = reply.send(state.observe_wait(&identifier));
-                }
                 Some(Command::Shutdown(reply)) => {
+                    cancellation.cancel();
                     commands.close();
-                    let result = state.manager.close_all().await.map_err(|_| ErrorCode::AgentIo);
-                    let _ = reply.send(result);
+                    shutdown = Some(reply);
+                    while let Some(command) = commands.recv().await { router.dispatch(command).await; }
                     break;
                 }
-                None => { let _ = state.manager.close_all().await; break; }
+                Some(command) => router.dispatch(command).await,
+                None => break,
             },
-            _ = interval.tick() => {
-                // Failed durable writes retain their pending event and are retried here.
-                let _ = state.manager.poll().await;
-                let _ = state.manager.reconcile().await;
-                let _ = state.manager.dispatch_pending_inputs().await;
-                let _ = state.manager.poll_generated_titles().await;
-            }
+            _ = interval.tick() => router.maintenance().await,
+            _ = retirements.tick() => router.retirements().await,
         }
+    }
+    cancellation.cancel();
+    let result = router.close().await;
+    if let Some(reply) = shutdown {
+        let _ = reply.send(result);
     }
 }
 

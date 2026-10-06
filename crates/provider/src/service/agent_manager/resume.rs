@@ -34,6 +34,11 @@ impl AgentManager {
             config: record.config.clone().unwrap_or_default(),
         };
         validate_identity(&id, &spec)?;
+        if let Some(workspace) = &record.workspace_id {
+            self.place_workspace(workspace)
+                .map_err(|_| AgentManagerError::Busy)?;
+        }
+        let permit = self.reserve_session()?;
         let client = self.available_client(&spec.provider).await?;
         client
             .validate_selection(&spec)
@@ -43,11 +48,14 @@ impl AgentManager {
             .persistence
             .as_ref()
             .ok_or_else(|| AgentManagerError::MissingPersistence(id.clone()))?;
-        let session = client
-            .resume_session(handle, &spec, AgentResumePurpose::Interactive)
-            .await
-            .map_err(map_session)?;
-        self.register_session(&id, session, record, Registration::Create)
+        let session = super::execution::native(
+            &spec.provider,
+            "resume",
+            client.resume_session(handle, &spec, AgentResumePurpose::Interactive),
+        )
+        .await
+        .map_err(map_session)?;
+        self.register_session(&id, session, record, Registration::Create, permit)
             .await
     }
 
@@ -98,6 +106,7 @@ impl AgentManager {
             .await
             .map_err(|_| AgentManagerError::InvalidRequest)?;
         self.close(agent_id).await?;
+        let permit = self.reserve_session()?;
         // Closing may have saved a newer provider handle; resume exactly that history.
         record.persistence = self
             .registry
@@ -109,14 +118,22 @@ impl AgentManager {
             .persistence
             .as_ref()
             .ok_or_else(|| AgentManagerError::MissingPersistence(agent_id.to_owned()))?;
-        let session = self
-            .available_client(&record.provider)
-            .await?
-            .resume_session(handle, &spec, AgentResumePurpose::Interactive)
-            .await
-            .map_err(map_session)?;
-        self.register_session(agent_id, session, record, Registration::Restore(overrides))
-            .await
+        let client = self.available_client(&record.provider).await?;
+        let session = super::execution::native(
+            &spec.provider,
+            "restore",
+            client.resume_session(handle, &spec, AgentResumePurpose::Interactive),
+        )
+        .await
+        .map_err(map_session)?;
+        self.register_session(
+            agent_id,
+            session,
+            record,
+            Registration::Restore(overrides),
+            permit,
+        )
+        .await
     }
 }
 

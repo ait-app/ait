@@ -8,10 +8,39 @@ pub(super) struct AutoArchives {
     worktrees: BTreeMap<String, WorktreeCleanup>,
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 struct WorktreeCleanup {
     workspace: String,
     provisioning: std::sync::Arc<dyn metadata::ports::worktrees::WorktreeProvisioning>,
+}
+
+/// Completed turn retirement, executed by the scheduler after fencing related writers.
+#[derive(Debug, Clone)]
+pub(crate) struct Retirement {
+    pub(crate) id: String,
+    worktree: Option<WorktreeCleanup>,
+}
+
+impl Retirement {
+    /// Return the managed Workspace that must retire before filesystem cleanup.
+    pub(crate) fn workspace(&self) -> Option<&str> {
+        self.worktree
+            .as_ref()
+            .map(|worktree| worktree.workspace.as_str())
+    }
+
+    /// Remove a managed worktree only after all affected native writers have closed.
+    /// # Errors
+    /// Returns a cleanup error without removing the pending retirement.
+    pub(crate) fn cleanup(&self) -> Result<(), crate::rpc::ErrorCode> {
+        if let Some(worktree) = &self.worktree {
+            worktree
+                .provisioning
+                .archive(&worktree.workspace, &now_timestamp())
+                .map_err(|_| crate::rpc::ErrorCode::AgentIo)?;
+        }
+        Ok(())
+    }
 }
 
 impl AutoArchives {
@@ -72,6 +101,17 @@ impl AgentManager {
             .map(|(id, _)| id.clone())
             .collect();
         for id in ready {
+            if let Some(owner) = &self.owner {
+                owner
+                    .retire(Retirement {
+                        id: id.clone(),
+                        worktree: self.auto_archives.worktrees.get(&id).cloned(),
+                    })
+                    .map_err(|_| AgentManagerError::Registry)?;
+                self.auto_archives.states.remove(&id);
+                self.auto_archives.worktrees.remove(&id);
+                continue;
+            }
             if let Some(worktree) = self.auto_archives.worktrees.get(&id) {
                 let workspace = worktree.workspace.clone();
                 self.archive_workspace_agents(std::slice::from_ref(&workspace))?;

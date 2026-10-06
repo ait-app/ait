@@ -247,6 +247,11 @@ impl AgentManager {
         parent: &str,
         child: &NativeSubagent,
     ) -> Result<SessionHistory, ErrorCode> {
+        let _history = self
+            .history_budget
+            .acquire()
+            .await
+            .map_err(|_| ErrorCode::AgentIo)?;
         let record = self.control_record(parent)?;
         let handle = child
             .persistence
@@ -302,7 +307,12 @@ impl AgentManager {
         {
             return Err(ErrorCode::AgentIo);
         }
-        self.loaded_timelines.remove(id);
+        if let Some(owner) = &self.owner {
+            let mut replacement = record.clone();
+            super::native_sessions::apply_history(&mut replacement, &history);
+            owner.bind(&replacement)?;
+        }
+        self.invalidate_history(id);
         self.registry
             .update(id, &|current| {
                 let mut next = current.clone();
@@ -321,7 +331,7 @@ impl AgentManager {
             .map_err(|_| ErrorCode::AgentIo)?
             .ok_or(ErrorCode::AgentNotFound)?;
         self.finish_replacement(id, &history)?;
-        self.loaded_timelines.insert(id.to_owned());
+        self.mark_history_loaded(id);
         Ok(())
     }
 

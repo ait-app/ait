@@ -1,6 +1,7 @@
 //! Durable Paseo Agent runtime directory and metadata lifecycle use cases.
 
 use std::collections::{BTreeMap, BTreeSet};
+use std::sync::Arc;
 
 use chrono::DateTime;
 use domain::agent_runtime::{
@@ -180,12 +181,12 @@ pub enum AgentRuntimeError {
 }
 
 /// Durable Agent runtime directory independent of provider execution.
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct AgentRuntimeDirectory {
     pub(crate) sync: model::directory_sync::DirectorySync,
-    agents: Box<dyn AgentRuntimeRegistry>,
-    workspaces: Box<dyn WorkspaceRegistry>,
-    projects: Box<dyn ProjectRegistry>,
+    agents: Arc<dyn AgentRuntimeRegistry>,
+    workspaces: Arc<dyn WorkspaceRegistry>,
+    projects: Arc<dyn ProjectRegistry>,
 }
 
 impl AgentRuntimeDirectory {
@@ -198,9 +199,9 @@ impl AgentRuntimeDirectory {
     ) -> Self {
         Self {
             sync: model::directory_sync::DirectorySync::new(uuid::Uuid::new_v4().to_string()),
-            agents,
-            workspaces,
-            projects,
+            agents: agents.into(),
+            workspaces: workspaces.into(),
+            projects: projects.into(),
         }
     }
 

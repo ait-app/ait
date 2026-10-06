@@ -6,6 +6,7 @@ import {
   GetProvidersSnapshotResponseMessageSchema,
   ProviderSnapshotEntrySchema,
   ProvidersSnapshotUpdateMessageSchema,
+  RefreshProvidersSnapshotResponseMessageSchema,
 } from "./messages.js";
 
 describe("provider snapshot message schemas", () => {
@@ -98,7 +99,40 @@ describe("provider snapshot message schemas", () => {
   });
 });
 
-test("accepts a bodyless announcement with separate discovery freshness", () => {
+test("preserves background refresh revisions in responses, pushes and generated validators", async () => {
+  const { validateWSOutboundMessage } = await import("./validation/ws-outbound.js");
+  const fields = { generation: "daemon-generation", revision: 7, refreshing: ["codex"] };
+  const payload = { ...fields, entries: [], generatedAt: "2026-10-06T00:00:00Z" };
+  const response = {
+    type: "get_providers_snapshot_response",
+    payload: { ...payload, requestId: "snapshot" },
+  };
+  const push = { type: "providers_snapshot_update", payload };
+  const ack = {
+    type: "refresh_providers_snapshot_response",
+    payload: {
+      requestId: "refresh",
+      acknowledged: true,
+      generation: fields.generation,
+      revision: fields.revision,
+    },
+  };
+  expect(GetProvidersSnapshotResponseMessageSchema.parse(response)).toEqual(response);
+  expect(ProvidersSnapshotUpdateMessageSchema.parse(push)).toEqual(push);
+  expect(RefreshProvidersSnapshotResponseMessageSchema.parse(ack)).toEqual(ack);
+  for (const message of [response, push, ack]) {
+    expect(validateWSOutboundMessage({ type: "session", message }).success).toBe(true);
+  }
+  expect(
+    GetProvidersSnapshotResponseMessageSchema.safeParse({
+      ...response,
+      payload: { ...response.payload, revision: -1 },
+    }).success,
+  ).toBe(false);
+});
+
+test("accepts a bodyless announcement with separate discovery freshness", async () => {
+  const { validateWSOutboundMessage } = await import("./validation/ws-outbound.js");
   const message = {
     type: "providers_snapshot_update",
     payload: {

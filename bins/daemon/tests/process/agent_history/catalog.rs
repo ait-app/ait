@@ -96,8 +96,8 @@ async fn assert_responsive(single: bool) {
     send(
         &mut socket,
         "slow-catalog",
-        "provider.snapshot.get.request",
-        json!({"cwd":fixture.cwd}),
+        "provider.models.list.request",
+        json!({"provider":"codex","cwd":fixture.cwd}),
     )
     .await;
     gate.entered().await;
@@ -125,7 +125,13 @@ async fn assert_responsive(single: bool) {
     gate.release();
     let response = receive(&mut socket).await;
     assert_eq!(response["request_id"], "slow-catalog");
-    assert_eq!(response["result"]["entries"][0]["status"], "unavailable");
+    assert!(response["result"]["models"].is_array());
+    let response = request(
+        &mut socket,
+        "provider.snapshot.get.request",
+        json!({"cwd":fixture.cwd}),
+    )
+    .await;
     assert!(
         response["result"]["entries"]
             .as_array()
@@ -172,6 +178,13 @@ async fn assert_disconnected_refresh(
         "survivor"
     );
     gate.release();
+    let models = request(
+        &mut surviving,
+        "provider.models.list.request",
+        json!({"provider":"codex","cwd":cwd}),
+    )
+    .await;
+    assert_eq!(models["type"], "response");
     let snapshot = request(
         &mut surviving,
         "provider.snapshot.get.request",

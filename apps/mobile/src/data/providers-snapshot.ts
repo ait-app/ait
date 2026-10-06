@@ -60,6 +60,7 @@ export async function fetchProvidersSnapshot(input: {
 }): Promise<Snapshot> {
   const cache = input.cache ?? providerSnapshotCache;
   const queryClient = input.queryClient ?? singletonQueryClient;
+  const queryKey = providersSnapshotQueryKey(input.serverId, input.cwd);
   const cached = input.snapshot ? null : await cache.read(input.serverId, input.cwd);
   let snapshot =
     input.snapshot ??
@@ -103,6 +104,8 @@ export async function fetchProvidersSnapshot(input: {
   }
   if (input.signal?.aborted) throw new CancelledError();
   snapshot = await cache.materialize(input.serverId, snapshot);
+  const current = queryClient.getQueryData<Snapshot>(queryKey);
+  if (isNewerSnapshot(current, snapshot)) return current;
   if (snapshot.compactSnapshot && snapshot.snapshotHash) {
     await cache.write({
       serverId: input.serverId,
@@ -115,6 +118,8 @@ export async function fetchProvidersSnapshot(input: {
     });
   }
   if (input.signal?.aborted) throw new CancelledError();
+  const latest = queryClient.getQueryData<Snapshot>(queryKey);
+  if (isNewerSnapshot(latest, snapshot)) return latest;
   replaceProviderSnapshotIcons(input.serverId, snapshot.entries);
   return snapshot;
 }
@@ -132,12 +137,18 @@ export async function refreshAndApplyProvidersSnapshot(input: {
   );
   const queryKey = providersSnapshotQueryKey(input.serverId, input.cwd);
   await input.queryClient.cancelQueries({ queryKey, exact: true });
-  await input.queryClient.fetchQuery({
-    queryKey,
-    staleTime: 0,
-    structuralSharing: false,
-    queryFn: ({ signal }) => fetchProvidersSnapshot({ ...input, signal }),
-  });
+  const controller = new AbortController();
+  const deadline = Date.now() + 120_000;
+  while (true) {
+    const snapshot = await fetchProvidersSnapshot({ ...input, signal: controller.signal });
+    const pending = snapshot.refreshing?.some(
+      (provider) => !input.providers || input.providers.includes(provider),
+    );
+    input.queryClient.setQueryData(queryKey, snapshot);
+    if (!pending) break;
+    if (Date.now() >= deadline) throw new Error("Provider refresh timed out");
+    await waitForRefresh(controller.signal);
+  }
   void input.queryClient.invalidateQueries({
     queryKey: agentCommandsQueryRoot(input.serverId),
     exact: false,
@@ -149,4 +160,32 @@ export async function refreshAndApplyProvidersSnapshot(input: {
     });
   }
   return result;
+}
+
+function isNewerSnapshot(current: Snapshot | undefined, incoming: Snapshot): current is Snapshot {
+  return (
+    current?.generation !== undefined &&
+    current.generation === incoming.generation &&
+    current.revision !== undefined &&
+    incoming.revision !== undefined &&
+    current.revision > incoming.revision
+  );
+}
+
+function waitForRefresh(signal: AbortSignal): Promise<void> {
+  return new Promise((resolve, reject) => {
+    if (signal.aborted) {
+      reject(new CancelledError());
+      return;
+    }
+    const cancel = () => {
+      clearTimeout(timer);
+      reject(new CancelledError());
+    };
+    const timer = setTimeout(() => {
+      signal.removeEventListener("abort", cancel);
+      resolve();
+    }, 200);
+    signal.addEventListener("abort", cancel, { once: true });
+  });
 }
