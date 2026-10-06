@@ -26,7 +26,7 @@ import {
   processTimelineResponse,
 } from "./session-stream-reducers";
 import { isTimelineResumeSnapshotAuthoritative } from "./timeline-sync-plan";
-import { replaceWithCanonicalStream } from "@/types/stream";
+import { replaceWithCanonicalStream, type StreamItem } from "@/types/stream";
 
 export interface TimelineReplicaStorage {
   readTimeline(serverId: string, agentId: string): Promise<CachedTimeline | undefined>;
@@ -59,13 +59,23 @@ async function prepareCachedTimeline(input: {
     }
     if (currentTimeline.status !== "cold") return undefined;
   }
-  const liveItems =
-    currentTimeline.status === "painted"
-      ? [...currentTimeline.items, ...(currentHead ?? [])]
-      : (currentHead ?? []);
+  const coveredItems: StreamItem[] = [];
+  const liveItems: StreamItem[] = [];
+  // Route and visible-view preparation may load the same cache sequentially.
+  // Painted rows already covered by that snapshot are history, not a live
+  // continuation of its final reply (even when their text happens to match).
+  for (const item of currentTimeline.status === "painted" ? currentTimeline.items : []) {
+    const cursor = item.timelineCursor;
+    if (stored.range && cursor?.epoch === stored.range.epoch && cursor.seq <= stored.range.endSeq) {
+      coveredItems.push(item);
+    } else {
+      liveItems.push(item);
+    }
+  }
+  liveItems.push(...(currentHead ?? []));
   const replacement = replaceWithCanonicalStream({
     canonical: stored.items,
-    previousTail: [],
+    previousTail: coveredItems,
     previousHead: liveItems,
     sendingClientMessageIds: getSendingClientMessageIds(
       session?.messageSubmissions.get(input.agentId),
