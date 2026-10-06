@@ -1,6 +1,7 @@
 //! Bounded discovery cache over the same adapters used by native Agent execution.
 
 use std::collections::{BTreeMap, BTreeSet};
+use std::sync::Arc;
 use std::time::{Duration, Instant};
 
 use chrono::Utc;
@@ -36,7 +37,7 @@ pub(crate) struct Catalog {
 impl Catalog {
     pub(crate) async fn execute(
         &mut self,
-        clients: &BTreeMap<String, Box<dyn AgentClient>>,
+        clients: &BTreeMap<String, Arc<dyn AgentClient>>,
         events: &SessionEvents,
         method: &str,
         params: Value,

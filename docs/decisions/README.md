@@ -51,6 +51,7 @@
 - [ADR-067：DeepSeek Harness ACP Provider](providers/adr-067-deepseek-harness-acp.md)
 
 - [ADR-074：OpenCode 原生 Provider](providers/adr-074-opencode-native-provider.md)
+- [ADR-088：Provider 发现与启动历史同步隔离](providers/adr-088-provider-catalog-startup-isolation.md)
 
 ## 客户端、连接与品牌
 
