@@ -10,6 +10,7 @@ import {
   type SavedAccount,
 } from "@ait/client/internal/account-session";
 import { resolveAppVersion } from "@/utils/app-version";
+import { androidBrowserLogin, iosBrowserLogin } from "./account-browser-login.native";
 
 const INSTALLATION_KEY = "@ait:account-installation-v1";
 const CREDENTIAL_KEY = "ait.account.session.v1";
@@ -28,6 +29,7 @@ async function createAccount(): Promise<AccountSessionManager> {
     installationId,
     deviceName: platform === "ios" ? "Ait iOS" : "Ait Android",
     platform,
+    browserLogin: platform === "ios" ? iosBrowserLogin : androidBrowserLogin,
     randomUUID: Crypto.randomUUID,
     fetch: nativeFetch as typeof fetch,
     appVersion: resolveAppVersion() ?? "unknown",

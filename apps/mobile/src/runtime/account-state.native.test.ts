@@ -1,9 +1,17 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import { accountCommand, supportsAccountRelay, useAccountState } from "./account-state";
+import {
+  accountCommand,
+  accountLoginMethods,
+  supportsAccountRelay,
+  useAccountState,
+} from "./account-state";
 
 const mocks = vi.hoisted(() => ({
   manager: {
     login: vi.fn(),
+    loginMethods: vi.fn(),
+    loginWithBrowser: vi.fn(),
+    cancelLogin: vi.fn(),
     logout: vi.fn(),
     select: vi.fn(),
     refresh: vi.fn(),
@@ -32,6 +40,37 @@ vi.mock("./host-runtime", () => ({
 beforeEach(() => vi.clearAllMocks());
 
 describe("native mobile account commands", () => {
+  it.each(["android", "ios"])(
+    "discovers hosted login for %s through the native authority",
+    async (platform) => {
+      mocks.platform = platform;
+      mocks.manager.loginMethods.mockResolvedValueOnce({ hosted: true });
+      await expect(accountLoginMethods("https://center.test/api")).resolves.toEqual({
+        hosted: true,
+      });
+      expect(mocks.manager.loginMethods).toHaveBeenCalledExactlyOnceWith("https://center.test/api");
+    },
+  );
+  it.each(["android", "ios"])(
+    "cancels %s browser login without waiting behind the native account queue",
+    async (platform) => {
+      mocks.platform = platform;
+      let finish!: () => void;
+      mocks.manager.loginWithBrowser.mockImplementationOnce(
+        () =>
+          new Promise<void>((resolve) => {
+            finish = resolve;
+          }),
+      );
+      mocks.manager.snapshot.mockReturnValue({ status: "logged_out", selected: null });
+      const login = accountCommand("account_login_hosted", { center: "https://center.test" });
+      await vi.waitFor(() => expect(mocks.manager.loginWithBrowser).toHaveBeenCalled());
+      await accountCommand("account_cancel_login");
+      expect(mocks.manager.cancelLogin).toHaveBeenCalledOnce();
+      finish();
+      await login;
+    },
+  );
   it.each(["android", "ios"])(
     "enables the %s account entry and awaits HostRuntime",
     async (platform) => {

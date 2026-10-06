@@ -25,6 +25,8 @@ export interface AccountState {
   error: string | null;
   selected: AccountHost | null;
   synchronizedHosts?: string[];
+  accountExpiresAt?: string | null;
+  loginPending?: boolean;
 }
 
 export const useAccountState = create<AccountState>(() => ({
@@ -66,9 +68,20 @@ export async function accountCommand(
 ): Promise<AccountState> {
   const invoke = getDesktopHost()?.invoke;
   if (!invoke && (Platform.OS === "android" || Platform.OS === "ios")) {
+    // Cancellation must not queue behind the browser operation it is cancelling.
+    if (command === "account_cancel_login") {
+      const manager = await getNativeAccount();
+      manager.cancelLogin();
+      return manager.snapshot();
+    }
     return serializeNativeAccountCommand(async () => {
       const manager = await getNativeAccount();
       switch (command) {
+        case "account_login_hosted":
+          if (args?.center !== undefined && typeof args.center !== "string")
+            throw new Error("Invalid service URL.");
+          await manager.loginWithBrowser((args?.center as string) ?? "");
+          break;
         case "account_login":
           if (
             typeof args?.email !== "string" ||
@@ -101,6 +114,15 @@ export async function accountCommand(
   const snapshot = (await invoke(command, args)) as AccountState;
   useAccountState.setState(snapshot);
   return snapshot;
+}
+
+/** Provider discovery returns public capabilities, never credentials. */
+export async function accountLoginMethods(center: string): Promise<{ hosted: boolean }> {
+  const invoke = getDesktopHost()?.invoke;
+  if (invoke) return (await invoke("account_login_methods", { center })) as { hosted: boolean };
+  if (Platform.OS === "android" || Platform.OS === "ios")
+    return (await getNativeAccount()).loginMethods(center);
+  return { hosted: false };
 }
 
 /** Mount once next to HostRuntime bootstrap; discovery remains separate from runtime hosts. */

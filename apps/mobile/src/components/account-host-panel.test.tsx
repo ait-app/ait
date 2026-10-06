@@ -3,10 +3,11 @@ import React from "react";
 import "@/i18n/i18next";
 import { cleanup, fireEvent, render, waitFor } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { accountCommand } from "@/runtime/account-state";
+import { accountCommand, accountLoginMethods } from "@/runtime/account-state";
 import { AccountHostPanel } from "./account-host-panel";
 
 vi.mock("@/runtime/account-state", () => ({
+  accountLoginMethods: vi.fn(async () => ({ hosted: false })),
   accountCommand: vi.fn(async () => ({})),
   useAccountState: () => ({
     status: "logged_out",
@@ -21,6 +22,20 @@ afterEach(() => {
 });
 
 describe("AccountHostPanel email login", () => {
+  it("offers browser registration/login when supported and retains explicit legacy login", async () => {
+    vi.mocked(accountLoginMethods).mockResolvedValueOnce({ hosted: true });
+    const view = render(<AccountHostPanel />);
+    await waitFor(() => expect(view.getByTestId("account-unified-login")).toBeTruthy());
+    expect(view.queryByTestId("account-password")).toBeNull();
+    fireEvent.click(view.getByTestId("account-legacy-login"));
+    expect(view.getByTestId("account-password")).toBeTruthy();
+    fireEvent.click(view.getByTestId("account-unified-login"));
+    await waitFor(() =>
+      expect(accountCommand).toHaveBeenCalledWith("account_login_hosted", {
+        center: "https://dash.ait-app.com:8443/api",
+      }),
+    );
+  });
   it("submits email credentials through IPC and clears the password field", async () => {
     const view = render(<AccountHostPanel />);
     const email = view.getByLabelText("Email") as HTMLInputElement;

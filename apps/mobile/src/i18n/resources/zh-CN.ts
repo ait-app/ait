@@ -10,6 +10,11 @@ export const zhCN: TranslationResources = {
     email: "邮箱",
     password: "密码",
     signIn: "登录",
+    unifiedLogin: "登录 / 注册",
+    unifiedHint: "在浏览器中使用邮箱、Google 或微信登录，也可以验证邮箱或找回密码。",
+    browserWaiting: "等待浏览器完成登录…",
+    legacyLogin: "使用原 AIT 密码登录",
+    expiresAt: "账户有效期至：{{date}}",
     signingIn: "正在登录…",
     signOut: "退出登录",
     signOutHint:

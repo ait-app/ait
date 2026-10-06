@@ -1,4 +1,4 @@
-# ADR-086：Provider 发现与启动历史同步隔离
+# ADR-088：Provider 发现与启动历史同步隔离
 
 - 状态：Accepted。
 - 日期：2026-10-06。

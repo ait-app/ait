@@ -13,7 +13,8 @@
 
 ## 架构决策
 
-- [ADR-086：Provider 发现与启动历史同步隔离](decisions/providers/adr-086-provider-catalog-startup-isolation.md)：有界 catalog 通道与本机连接就绪后的恢复。
+- [ADR-088：Provider 发现与启动历史同步隔离](decisions/providers/adr-088-provider-catalog-startup-isolation.md)：有界 catalog 通道与本机连接就绪后的恢复。
+- [ADR-086：桌面、Android 与 iOS 的 Authing 浏览器登录](decisions/clients/adr-086-authing-native-login.md)：浏览器认证、一次性代码与原生 PKCE 回传；[配置与验收](operations/authing-client-login.md)。
 - [ADR-085：Daemon 同步的稳定节点身份](decisions/clients/adr-085-stable-daemon-publication.md)：重复注册复用节点、旧 Host 绑定迁移、删除主机后的客户端登录及通用桌面 IPC 命名。
 - [ADR-084：iOS 在线服务账户与主机中继](decisions/clients/adr-084-ios-account-relay.md)：iOS 安全存储、原生账户会话、票据中继与下载。
 - [ADR-083：在线服务登录与逐主机同步分离](decisions/clients/adr-083-online-service-host-sync.md)：二级登录入口、应用账户设置及每台 daemon 的独立同步与租约。
@@ -38,6 +39,7 @@
 
 - [Android APK 发布](operations/android-releases.md)：独立手动构建测试或正式通用 APK。
 - [发布指南](operations/releasing.md)：桌面 Release、Android Internal Testing、iOS TestFlight。
+- [Ait 0.0.20 发布说明](reports/releases/release-0.0.20.md)：统一浏览器登录、iOS 认证窗口与工作区重置分支复用。
 - [Ait 0.0.19 发布说明](reports/releases/release-0.0.19.md)：daemon 注册身份、同步重试、桌面 IPC 命名与工作区重置路径修复。
 - [Ait 0.0.18 发布说明](reports/releases/release-0.0.18.md)：Codex 截图时间线、在线服务与主机同步、工作区 Git 操作。
 - [Ait 0.0.17 发布说明](reports/releases/release-0.0.17.md)：OpenCode 工具顺序、Workspace 可空字段与 Rust 清理。

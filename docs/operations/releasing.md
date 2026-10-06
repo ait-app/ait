@@ -37,7 +37,7 @@ Helper 是必需运行时。GitHub 仍自动提供标签对应的源码归档。
 
 ```bash
 npm ci
-npm run verify:release -- v0.0.19
+npm run verify:release -- v0.0.20
 npm run test:release
 npm run test:mobile-release
 npm run build:desktop-main
@@ -52,9 +52,9 @@ npm run typecheck --workspace=@ait/desktop --workspace=@ait/mobile
 ```bash
 git switch main
 git pull --ff-only
-npm run verify:release -- v0.0.19
-git tag -a v0.0.19 -m "Ait v0.0.19"
-git push origin v0.0.19
+npm run verify:release -- v0.0.20
+git tag -a v0.0.20 -m "Ait v0.0.20"
+git push origin v0.0.20
 ```
 
 `.github/workflows/release.yml` 在 Linux x86_64 和 macOS arm64 原生 runner 上构建桌面：

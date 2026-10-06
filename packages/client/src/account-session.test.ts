@@ -1,5 +1,6 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { AccountSessionManager, type AccountDependencies } from "./account-session.js";
+import { createHash } from "node:crypto";
 
 afterEach(() => vi.useRealTimers());
 
@@ -103,6 +104,149 @@ function hostIdentityFixture() {
   });
   return context;
 }
+
+function browserFixture() {
+  const context = fixture();
+  const original = context.http.getMockImplementation()!;
+  let count = 0;
+  const open = vi.fn(async (build: (uri: string) => string) => {
+    const redirectUri = "ait://auth/callback";
+    const url = new URL(build(redirectUri));
+    expect(url.searchParams.get("redirect_uri")).toBe(redirectUri);
+    expect(url.searchParams.get("code_challenge")).toBe(
+      createHash("sha256").update("b".repeat(64)).digest("base64url"),
+    );
+    return {
+      redirectUri,
+      url: `${redirectUri}?state=${url.searchParams.get("state")}&code=${"c".repeat(64)}`,
+    };
+  });
+  context.deps.browserLogin = {
+    randomSecret: () => (++count === 1 ? "a" : "b").repeat(64),
+    challenge: async (value) => createHash("sha256").update(value).digest("base64url"),
+    open,
+  };
+  context.http.mockImplementation((url, options) => {
+    if (String(url).endsWith("/auth/providers"))
+      return Promise.resolve(Response.json({ authing_enabled: true, native_login_enabled: true }));
+    if (String(url).endsWith("/auth/client/exchange"))
+      return Promise.resolve(
+        Response.json({
+          access_token: "browser-jwt",
+          expires_in: 3600,
+          user: { email: "browser@example.test", expires_at: "2030-01-01T00:00:00Z" },
+        }),
+      );
+    return original(url, options);
+  });
+  return { ...context, open };
+}
+
+describe("hosted account login", () => {
+  it("keeps the renewal explanation after an expired account is signed out", async () => {
+    const { manager, http, deps } = browserFixture();
+    const original = http.getMockImplementation()!;
+    http.mockImplementation((url, options) =>
+      String(url).endsWith("/nodes/register")
+        ? Promise.resolve(
+            Response.json(
+              {
+                error: {
+                  code: "account_expired",
+                  message: "Account expired; contact your administrator to renew access.",
+                },
+              },
+              { status: 401 },
+            ),
+          )
+        : original(url, options),
+    );
+    await manager.loginWithBrowser("");
+    await vi.advanceTimersByTimeAsync(1);
+    expect(manager.snapshot()).toMatchObject({
+      status: "logged_out",
+      error: expect.stringContaining("renew"),
+    });
+    expect(deps.save).toHaveBeenLastCalledWith(null);
+  });
+  it("works with the native AbortSignal without throwIfAborted", async () => {
+    const { manager } = browserFixture();
+    const PlatformAbortController = class extends AbortController {
+      constructor() {
+        super();
+        Object.defineProperty(this.signal, "throwIfAborted", { value: undefined });
+      }
+    };
+    vi.stubGlobal("AbortController", PlatformAbortController);
+    try {
+      await manager.loginWithBrowser("");
+      expect(manager.snapshot().name).toBe("browser@example.test");
+      await manager.logout();
+    } finally {
+      vi.unstubAllGlobals();
+    }
+  });
+  it("exchanges native PKCE, persists only the AIT session and discovers hosts", async () => {
+    const { manager, deps, http } = browserFixture();
+    expect((await manager.loginWithBrowser("")).loginPending).toBe(false);
+    await vi.advanceTimersByTimeAsync(1);
+    const exchange = http.mock.calls.find(([url]) => String(url).endsWith("/client/exchange"))!;
+    expect(JSON.parse(String(exchange[1]?.body))).toEqual({
+      code: "c".repeat(64),
+      code_verifier: "b".repeat(64),
+    });
+    expect(manager.snapshot()).toMatchObject({
+      status: "online",
+      name: "browser@example.test",
+      accountExpiresAt: "2030-01-01T00:00:00Z",
+      loginPending: false,
+    });
+    expect(JSON.stringify(manager.snapshot())).not.toContain("browser-jwt");
+    expect(JSON.stringify(vi.mocked(deps.save).mock.calls)).not.toContain("b".repeat(64));
+    await manager.logout();
+  });
+  it("keeps browser login alive while Android backgrounds for the system browser", async () => {
+    const { manager, open } = browserFixture();
+    const original = open.getMockImplementation()!;
+    open.mockImplementation(async (build) => {
+      manager.suspend();
+      const response = await original(build);
+      manager.resume();
+      return response;
+    });
+    await manager.loginWithBrowser("");
+    expect(manager.snapshot().name).toBe("browser@example.test");
+    await manager.logout();
+  });
+  it("rejects a foreign callback without exchanging it", async () => {
+    const { manager, open, http } = browserFixture();
+    open.mockResolvedValue({
+      redirectUri: "ait://auth/callback",
+      url: `ait://auth/callback?state=wrong&code=${"c".repeat(64)}`,
+    });
+    await expect(manager.loginWithBrowser("")).rejects.toThrow("callback is invalid");
+    expect(http.mock.calls.some(([url]) => String(url).endsWith("/client/exchange"))).toBe(false);
+    expect(manager.snapshot()).toMatchObject({ status: "logged_out", loginPending: false });
+  });
+  it.each(["cancel", "timeout"])(
+    "ends browser login on %s before accepting credentials",
+    async (reason) => {
+      const { manager, deps } = browserFixture();
+      deps.browserLogin!.open = async (_build, _state, signal) =>
+        new Promise((_resolve, reject) => {
+          signal.addEventListener("abort", () => reject(new Error("cancelled")), { once: true });
+        });
+      const pending = manager.loginWithBrowser("");
+      const failure = expect(pending).rejects.toThrow("cancelled");
+      await vi.advanceTimersByTimeAsync(0);
+      expect(manager.snapshot().loginPending).toBe(true);
+      if (reason === "cancel") manager.cancelLogin();
+      else await vi.advanceTimersByTimeAsync(10 * 60_000);
+      await failure;
+      expect(manager.snapshot()).toMatchObject({ status: "logged_out", loginPending: false });
+    },
+  );
+});
 
 describe("client-only account lifecycle", () => {
   it("registers Android without publishing a host, discovers and renews independently of visits", async () => {

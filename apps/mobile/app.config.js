@@ -138,6 +138,7 @@ export default {
       withAndroidScroll,
       withAccountRelayWebSocket,
       "expo-secure-store",
+      "expo-web-browser",
       [withAndroidAsyncStorageSize, 64],
       ...(process.env.AIT_ANDROID_HERMES_O0 === "1" ? [withAndroidHermesO0] : []),
       [
