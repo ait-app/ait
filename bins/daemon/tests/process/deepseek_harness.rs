@@ -48,14 +48,14 @@ async fn deepseek_harness_acp_executes_and_keeps_history_after_server_restart() 
         json!({"cwd":cwd}),
     )
     .await;
-    let harness = snapshot["entries"]
+    let dsh = snapshot["entries"]
         .as_array()
         .unwrap()
         .iter()
         .find(|entry| entry["provider"] == "deepseek-harness")
         .unwrap();
-    assert_eq!(harness["label"], "DeepSeek Harness");
-    assert_eq!(harness["status"], "ready");
+    assert_eq!(dsh["label"], "DeepSeek Harness");
+    assert_eq!(dsh["status"], "ready");
     success(&mut socket, "workspace.open.request", json!({"cwd":cwd})).await;
     let created = success(
         &mut socket,

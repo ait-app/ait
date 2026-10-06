@@ -3,6 +3,11 @@ import { describe, expect, test } from "vitest";
 import { buildProviderCommand } from "@/utils/provider-command-templates";
 
 describe("buildProviderCommand", () => {
+  test("builds Antigravity resume commands from native conversation ids", () => {
+    expect(
+      buildProviderCommand({ provider: "antigravity", id: "resume", sessionId: "native-id" }),
+    ).toBe("agy --conversation native-id");
+  });
   test("builds Hermes resume commands from native session ids", () => {
     expect(
       buildProviderCommand({

@@ -1,4 +1,4 @@
-# ADR-087：Timeline 单项 768 KiB 与按字节分页
+# ADR-090：Timeline 单项 768 KiB 与按字节分页
 
 - 状态：Accepted。
 - 日期：2026-10-06。

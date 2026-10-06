@@ -33,7 +33,7 @@ use metadata::storage::project_config::LocalProjectConfigStore;
 use metadata::storage::project_icon::LocalProjectIconStore;
 use metadata::storage::registry::{FileBackedProjectRegistry, FileBackedWorkspaceRegistry};
 use metadata::storage::workspace_labels::FileWorkspaceLabelStore;
-use provider::local::{claude::ClaudeClient, codex::CodexClient};
+use provider::Providers;
 use provider::ports::agent_runtime::AgentRuntimeRegistry;
 use provider::service::agent_execution::{AgentExecution, ExecutionDependencies};
 use provider::service::agent_manager::AgentManager;
@@ -167,11 +167,12 @@ fn compose_services(
         _instance: instance.clone(),
     }));
     let server_id = instance.server_id.to_string();
+    let providers = Providers::new(&config.data_dir);
     let MetadataServices {
         config: config_store,
         generator: metadata_generator,
         names: workspace_names,
-    } = compose_metadata(&config.data_dir, &workspace_registry);
+    } = compose_metadata(&config.data_dir, &workspace_registry, &providers);
     let worktrees = Arc::new(Mutex::new(
         compose_worktrees(config, &project_registry, &workspace_registry, &server_id)
             .with_workspace_names(workspace_names.clone()),
@@ -208,7 +209,7 @@ fn compose_services(
         (agent_runtime_registry, timeline),
         (&workspace_registry, &project_registry),
         instance,
-        &config.data_dir,
+        providers,
         (
             directory.clone(),
             metadata_generator.clone(),
@@ -335,14 +336,10 @@ struct MetadataServices {
 fn compose_metadata(
     data_dir: &std::path::Path,
     registry: &FileBackedWorkspaceRegistry,
+    providers: &Providers,
 ) -> MetadataServices {
     let config_store = FileDaemonConfigStore::with_defaults(data_dir.join("config.json"));
-    let (codex, claude) = native_clients(data_dir);
-    let metadata_generator: Arc<dyn MetadataGenerator> =
-        Arc::new(provider::service::metadata_generation::Generation::new(
-            Arc::new(config_store.clone()),
-            vec![Arc::new(codex), Arc::new(claude)],
-        ));
+    let metadata_generator = providers.metadata_generator(Arc::new(config_store.clone()));
     let workspace_names = WorkspaceNames::new(
         Arc::new(registry.clone()),
         metadata_generator.clone(),
@@ -440,7 +437,7 @@ fn compose_provider(
     ),
     registries: (&FileBackedWorkspaceRegistry, &FileBackedProjectRegistry),
     instance: &Arc<InstanceLease>,
-    data_dir: &std::path::Path,
+    providers: Providers,
     metadata: (
         Directory,
         Arc<dyn MetadataGenerator>,
@@ -456,21 +453,7 @@ fn compose_provider(
         .with_creations(directory.creations())
         .with_metadata_generation(generator)
         .with_workspace_names(names);
-    let (codex, claude) = native_clients(data_dir);
-    manager.register_client(Box::new(codex))?;
-    manager.register_client(Box::new(claude))?;
-    manager.register_client(Box::new(provider::local::opencode::OpenCodeClient::new(
-        std::env::var_os("AIT_SERVER_OPENCODE_BIN").map_or_else(|| "opencode".into(), Into::into),
-    )))?;
-    let mut harness = provider::local::deepseek_harness::DeepSeekHarnessClient::new(
-        std::env::var_os("AIT_SERVER_DEEPSEEK_HARNESS_BIN")
-            .map_or_else(|| "dsh".into(), Into::into),
-    )
-    .with_image_directory(data_dir.join("agents/provider-images"));
-    if std::env::var("AIT_SERVER_DEEPSEEK_HARNESS_TRANSPORT").as_deref() == Ok("acp") {
-        harness = harness.with_acp_profile();
-    }
-    manager.register_client(Box::new(harness))?;
+    providers.register(&mut manager)?;
     AgentExecution::spawn(ExecutionDependencies {
         manager,
         directory: AgentRuntimeDirectory::new(
@@ -487,19 +470,6 @@ fn compose_provider(
         projects: Box::new(project_registry.clone()),
     })
     .context("start Provider worker")
-}
-
-fn native_clients(data_dir: &std::path::Path) -> (CodexClient, ClaudeClient) {
-    (
-        CodexClient::new(
-            std::env::var_os("AIT_SERVER_CODEX_BIN").map_or_else(|| "codex".into(), Into::into),
-        )
-        .with_image_directory(data_dir.join("agents/provider-images")),
-        ClaudeClient::new(
-            std::env::var_os("AIT_SERVER_CLAUDE_BIN").map_or_else(|| "claude".into(), Into::into),
-        )
-        .with_image_directory(data_dir.join("agents/provider-images")),
-    )
 }
 
 #[cfg(test)]

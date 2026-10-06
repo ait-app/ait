@@ -1,0 +1,228 @@
+{
+  "measurement_date": "2026-10-06",
+  "measurement_revision": "f7e0ddca886a1540997253743c4740e161282a21",
+  "revision_note": "Measured Rust source hashes match this revision. After the full workspace runs, DeepSeek Harness shorthand was renamed to dsh; the affected tests were instrumented again with --no-clean before regenerating the combined HTML/JSON/LCOV reports and committing the sources.",
+  "base_revision": "564d15b95ffe981d8f616c919f770f62d00d63c6",
+  "rust_source_sha256": "73666ba1f77bc6131f553686a1afc718b9d8d73a49ba5831da7db8afa8f72107",
+  "hash_algorithm": "SHA-256 of sorted repo-relative path + NUL + per-file SHA-256 entries, joined by newlines, for Git-visible bins/ and crates/ files plus Cargo.toml and Cargo.lock.",
+  "changed_source_hashes": {
+    "bins/daemon/src/host.rs": "981e45d12881d513c54743566c5b97d9a261668aae231bb168e6af195049ce85",
+    "bins/daemon/tests/process/deepseek_harness.rs": "e4e525df13e383ae923402d7e92f3d0ddfaacfd178dd8f464172961cb1006aaa",
+    "crates/provider/src/composition.rs": "5f23e698b4e18c0d837433bb065aff3be408d8fcc3de93d1b7b84e042f0f90e1",
+    "crates/provider/src/composition/tests.rs": "79511e59d9c5e30416d066d23bb43adef9a561fdd4400cd2e460eca50520eb65",
+    "crates/provider/src/lib.rs": "94c0d8552e80cbae2dc45889edccec8b6e588a30a92e7332d24bfa79cc7cc801",
+    "crates/provider/src/local/opencode.rs": "30d742edd84f274fb691130e19f5d8005d6840a0c2b09fe95a977685d876697e",
+    "crates/provider/src/local/opencode/client.rs": "bbe663dd1cee5d3ef77551bf33a643560711ceb4dbf97f8a9731f5561ac2ffe2",
+    "crates/provider/src/service/agent_execution/tests/subscriptions/creation.rs": "06dd083660a7ee448a288715d744dbcac3f826313c2377fd6e316f991f3227c5"
+  },
+  "scope": {
+    "packages": "entire Cargo workspace",
+    "features": "default Cargo features; no additional features",
+    "platform": "macOS 27.0.1 (26A434), aarch64-apple-darwin",
+    "rustc": "1.98.1 (48a229cea 2026-09-01)",
+    "llvm": "22.1.8",
+    "cargo_llvm_cov": "0.8.4",
+    "source_filters": "cargo-llvm-cov defaults; no additional exclusions",
+    "profile_runs": "Full workspace instrumented run plus focused post-rename runs for composition, DSH subscribed creation and the DSH daemon process fixture, accumulated with --no-clean.",
+    "skipped_tests": "Seven default-ignored native CLI tests requiring Claude/Codex/AGY authentication or an explicitly installed DSH/OpenCode test CLI; no authenticated model turns rerun for this composition refactor.",
+    "excluded_measurements": [
+      "doctest instrumentation",
+      "TypeScript/UI coverage",
+      "Linux execution",
+      "Windows execution"
+    ]
+  },
+  "commands": [
+    "cargo test -p provider composition::",
+    "cargo test -p daemon host::tests::",
+    "cargo test -p daemon --test process metadata_generation -- --test-threads=1",
+    "cargo test --workspace -- --test-threads=1",
+    "cargo build --workspace",
+    "cargo clippy --workspace --all-targets -- -D warnings",
+    "cargo fmt --all --check",
+    "cargo llvm-cov --workspace --html --no-fail-fast -- --test-threads=1",
+    "cargo llvm-cov --no-clean -p provider -- composition::",
+    "cargo llvm-cov --no-clean -p provider -- service::agent_execution::tests::subscriptions::creation",
+    "cargo llvm-cov --no-clean -p daemon --test process -- deepseek_harness --test-threads=1",
+    "cargo llvm-cov report --html",
+    "cargo llvm-cov report --json --summary-only --output-path target/provider-composition-validation/coverage-summary.json",
+    "cargo llvm-cov report --lcov --output-path target/provider-composition-validation/coverage.lcov"
+  ],
+  "test_runs": {
+    "workspace": {
+      "passed": 1861,
+      "failed": 0,
+      "ignored": 7,
+      "test_targets": 28
+    },
+    "workspace_instrumented": {
+      "passed": 1861,
+      "failed": 0,
+      "ignored": 7,
+      "test_targets": 16
+    },
+    "post_rename_composition": {
+      "passed": 4,
+      "failed": 0,
+      "ignored": 0,
+      "test_targets": 1
+    },
+    "post_rename_subscriptions": {
+      "passed": 5,
+      "failed": 0,
+      "ignored": 0,
+      "test_targets": 1
+    },
+    "post_rename_dsh_process": {
+      "passed": 1,
+      "failed": 0,
+      "ignored": 0,
+      "test_targets": 1
+    }
+  },
+  "workspace_totals": {
+    "branches": {
+      "count": 0,
+      "covered": 0,
+      "notcovered": 0,
+      "percent": 0
+    },
+    "functions": {
+      "count": 6040,
+      "covered": 5620,
+      "percent": 93.04635761589404
+    },
+    "instantiations": {
+      "count": 25405,
+      "covered": 11923,
+      "percent": 46.93170635701633
+    },
+    "lines": {
+      "count": 54993,
+      "covered": 51896,
+      "percent": 94.36837415671086
+    },
+    "mcdc": {
+      "count": 0,
+      "covered": 0,
+      "notcovered": 0,
+      "percent": 0
+    },
+    "regions": {
+      "count": 85631,
+      "covered": 77789,
+      "notcovered": 7842,
+      "percent": 90.84210157536407
+    }
+  },
+  "crate_lines": {
+    "daemon": {
+      "covered": 898,
+      "count": 941,
+      "percent": 95.43039319872476
+    },
+    "api": {
+      "covered": 1976,
+      "count": 2134,
+      "percent": 92.59606373008435
+    },
+    "browser": {
+      "covered": 706,
+      "count": 725,
+      "percent": 97.37931034482759
+    },
+    "model": {
+      "covered": 737,
+      "count": 777,
+      "percent": 94.85199485199485
+    },
+    "filesystem": {
+      "covered": 11338,
+      "count": 11961,
+      "percent": 94.79140540088622
+    },
+    "metadata": {
+      "covered": 7541,
+      "count": 7955,
+      "percent": 94.79572595851666
+    },
+    "protocol": {
+      "covered": 75,
+      "count": 75,
+      "percent": 100.0
+    },
+    "provider": {
+      "covered": 23936,
+      "count": 25523,
+      "percent": 93.78207890921914
+    },
+    "domain": {
+      "covered": 121,
+      "count": 121,
+      "percent": 100.0
+    },
+    "relay": {
+      "covered": 422,
+      "count": 464,
+      "percent": 90.94827586206897
+    },
+    "schedule": {
+      "covered": 805,
+      "count": 823,
+      "percent": 97.81287970838396
+    },
+    "terminal": {
+      "covered": 1486,
+      "count": 1543,
+      "percent": 96.30589760207388
+    },
+    "voice": {
+      "covered": 1855,
+      "count": 1951,
+      "percent": 95.07944643772424
+    }
+  },
+  "composition_production_lines": {
+    "covered": 51,
+    "count": 51,
+    "percent": 100.0
+  },
+  "composition_production_files": [
+    {
+      "path": "crates/provider/src/composition.rs",
+      "lines": {
+        "count": 51,
+        "covered": 51,
+        "percent": 100.0
+      },
+      "uncovered_lines": []
+    }
+  ],
+  "comparable_baseline": {
+    "revision": "564d15b95ffe981d8f616c919f770f62d00d63c6",
+    "artifact": "docs/reports/providers/antigravity-cli-coverage.json",
+    "scope_note": "Same full workspace command, default features and platform; current report additionally accumulates focused post-rename test profiles. The baseline predates this provider composition refactor.",
+    "lines": {
+      "workspace": {
+        "count": 54974,
+        "covered": 51874,
+        "percent": 94.3609706406665
+      },
+      "provider": {
+        "covered": 23884,
+        "count": 25472,
+        "percent": 93.76570351758794
+      },
+      "daemon": {
+        "covered": 928,
+        "count": 973,
+        "percent": 95.37512846865364
+      }
+    },
+    "percentage_point_changes": {
+      "workspace": 0.007403516044362846,
+      "provider": 0.016375391631200387,
+      "daemon": 0.055264730071115764
+    }
+  }
+}

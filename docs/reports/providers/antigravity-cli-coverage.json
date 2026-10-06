@@ -1,0 +1,288 @@
+{
+  "measurement_date": "2026-10-06",
+  "base_revision": "91102e13e2b549a135b7e2b8dd9f2a5546468afa",
+  "previous_pr_revision": "8d3d8b8a3d837eb30acdd8a8a405d20fcd577fb0",
+  "revision_note": "Latest main merged into the prior PR head; measured sources are identified by hashes below.",
+  "rust_source_sha256": "53eb3fd0b6c813b76e0474b27237c70f84c1cfff3711b8f48c52872ec7195b6f",
+  "hash_algorithm": "SHA-256 of sorted repo-relative path + NUL + per-file SHA-256 entries, joined by newlines, for Git-visible bins/ and crates/ files plus Cargo.toml and Cargo.lock.",
+  "changed_source_hashes": {
+    "bins/daemon/src/host.rs": "c265fd73f91ac64c682c62625ae3b9783f11857b4cf325f39627b7c7f1b3cade",
+    "bins/daemon/tests/process/daemon.rs": "ac01107c1a05da011fe4b93ca194ec428ccd0e86e6fa1394878b9634b5998958",
+    "bins/daemon/tests/process/native_sessions.rs": "f4540b712fc42ebbd24d38981b40644fef7d80939840c460676441d91bb85c6f",
+    "bins/daemon/tests/process/unix.rs": "16c02ea4791472defb4c89c712189a180231b9322c4f5a0345536d8464f48d16",
+    "crates/provider/src/local.rs": "8e9981fb48cbaf4bd11e6bff18db746ccf8c9640c56033a8bf403fd6828fc456",
+    "crates/provider/src/local/antigravity.rs": "6a054a7ca7e5e1a082337b290df8062581849c3b63cae4d69eb22f18332c0d30",
+    "crates/provider/src/local/antigravity/config.rs": "61198473e91defa8bdb03357dc2e2590916cf377142d57edc48487904067852f",
+    "crates/provider/src/local/antigravity/config/tests.rs": "03bc699284d76c61814e77cf1ea7f3dc6b0e9f41e5cc112370b45ab1fac7182c",
+    "crates/provider/src/local/antigravity/discovery.rs": "368eaed6cb04779eabd0d2d6726f30de8bd747626fc333f8b7731000118cdce0",
+    "crates/provider/src/local/antigravity/discovery/tests.rs": "c141929c4bbc5e12b6555bff765c22abb84ac1543605b5a8c68541cc0c3dc94f",
+    "crates/provider/src/local/antigravity/session.rs": "8674af4bc50ac3a2f2e2c54e3985fb264a68d72abd2da24a5e9043d63af99dd2",
+    "crates/provider/src/local/antigravity/streaming.rs": "4031a3ae9e85a9b46f5760c561634b1f5a1f84ccd06e06c3fe169cd71cc4b2a5",
+    "crates/provider/src/local/antigravity/streaming/tests.rs": "d83813cb08f586e0eb1ece68919145d74d327af16787d4d99c72cc3803d865b4",
+    "crates/provider/src/local/antigravity/tests.rs": "4f9658b8a57191fae14aa68ef136e5387fe872d6739a79dc020b5b0c56791450",
+    "crates/provider/src/local/antigravity/tests/fixtures/agy.py": "687716f21860d222c9b259f9a09563fcac15e138f1768f0c3bedafa0ea93bf68",
+    "crates/provider/src/local/antigravity/tests/installed.rs": "9898d1ba37f026e0f75ee4f7766c40dd0edc3aab237523f09619b54435b4c296",
+    "crates/provider/src/local/antigravity/transport.rs": "a288286e779b15d36ad16ee612f7c9df57bd05ab37de9ab1eec19aafdd4d531f",
+    "crates/provider/src/service/provider_catalog.rs": "dd0060a245e7ab8253ab6834ff74560b1f502cec3e2eb7025b8dd3130d65b2e1"
+  },
+  "scope": {
+    "packages": "entire Cargo workspace",
+    "features": "default Cargo features; no additional features",
+    "platform": "macOS 27.0.1 (26A434), aarch64-apple-darwin",
+    "rustc": "1.98.1 (48a229cea 2026-09-01)",
+    "llvm": "22.1.8",
+    "cargo_llvm_cov": "0.8.4",
+    "source_filters": "cargo-llvm-cov defaults; no additional exclusions",
+    "skipped_tests": "Seven default-ignored tests require native Claude/Codex/AGY authentication or an explicitly installed DSH/OpenCode test CLI. The AGY test passed separately before this measurement, consuming three short text turns; it is not included in these coverage counts.",
+    "excluded_measurements": [
+      "doctest instrumentation",
+      "TypeScript/UI coverage",
+      "Linux execution",
+      "Windows execution"
+    ]
+  },
+  "commands": [
+    "cargo test --workspace -- --test-threads=1",
+    "cargo build --workspace",
+    "cargo clippy --workspace --all-targets -- -D warnings",
+    "cargo fmt --all --check",
+    "cargo llvm-cov --workspace --html --no-fail-fast -- --test-threads=1",
+    "cargo llvm-cov report --json --summary-only --output-path target/antigravity-pr-sync-validation/coverage-summary.json",
+    "cargo llvm-cov report --lcov --output-path target/antigravity-pr-sync-validation/coverage.lcov"
+  ],
+  "test_runs": {
+    "workspace": {
+      "passed": 1857,
+      "failed": 0,
+      "ignored": 7,
+      "test_targets": 28
+    },
+    "workspace_instrumented": {
+      "passed": 1857,
+      "failed": 0,
+      "ignored": 7,
+      "test_targets": 16
+    }
+  },
+  "workspace_totals": {
+    "branches": {
+      "count": 0,
+      "covered": 0,
+      "notcovered": 0,
+      "percent": 0
+    },
+    "functions": {
+      "count": 6038,
+      "covered": 5618,
+      "percent": 93.04405432262338
+    },
+    "instantiations": {
+      "count": 14241,
+      "covered": 10281,
+      "percent": 72.1929639772488
+    },
+    "lines": {
+      "count": 54974,
+      "covered": 51874,
+      "percent": 94.3609706406665
+    },
+    "mcdc": {
+      "count": 0,
+      "covered": 0,
+      "notcovered": 0,
+      "percent": 0
+    },
+    "regions": {
+      "count": 85611,
+      "covered": 77760,
+      "notcovered": 7851,
+      "percent": 90.8294494866314
+    }
+  },
+  "crate_lines": {
+    "daemon": {
+      "covered": 928,
+      "count": 973,
+      "percent": 95.37512846865364
+    },
+    "api": {
+      "covered": 1976,
+      "count": 2134,
+      "percent": 92.59606373008435
+    },
+    "browser": {
+      "covered": 706,
+      "count": 725,
+      "percent": 97.37931034482759
+    },
+    "model": {
+      "covered": 737,
+      "count": 777,
+      "percent": 94.85199485199485
+    },
+    "filesystem": {
+      "covered": 11338,
+      "count": 11961,
+      "percent": 94.79140540088622
+    },
+    "metadata": {
+      "covered": 7541,
+      "count": 7955,
+      "percent": 94.79572595851666
+    },
+    "protocol": {
+      "covered": 75,
+      "count": 75,
+      "percent": 100.0
+    },
+    "provider": {
+      "covered": 23884,
+      "count": 25472,
+      "percent": 93.76570351758794
+    },
+    "domain": {
+      "covered": 121,
+      "count": 121,
+      "percent": 100.0
+    },
+    "relay": {
+      "covered": 422,
+      "count": 464,
+      "percent": 90.94827586206897
+    },
+    "schedule": {
+      "covered": 805,
+      "count": 823,
+      "percent": 97.81287970838396
+    },
+    "terminal": {
+      "covered": 1486,
+      "count": 1543,
+      "percent": 96.30589760207388
+    },
+    "voice": {
+      "covered": 1855,
+      "count": 1951,
+      "percent": 95.07944643772424
+    }
+  },
+  "antigravity_production_lines": {
+    "covered": 869,
+    "count": 911,
+    "percent": 95.38968166849615
+  },
+  "antigravity_production_files": [
+    {
+      "path": "crates/provider/src/local/antigravity.rs",
+      "lines": {
+        "count": 99,
+        "covered": 96,
+        "percent": 96.96969696969698
+      },
+      "uncovered_lines": [
+        64,
+        65,
+        66
+      ]
+    },
+    {
+      "path": "crates/provider/src/local/antigravity/config.rs",
+      "lines": {
+        "count": 121,
+        "covered": 120,
+        "percent": 99.17355371900827
+      },
+      "uncovered_lines": [
+        53
+      ]
+    },
+    {
+      "path": "crates/provider/src/local/antigravity/discovery.rs",
+      "lines": {
+        "count": 90,
+        "covered": 84,
+        "percent": 93.33333333333333
+      },
+      "uncovered_lines": [
+        53,
+        54,
+        55,
+        72
+      ]
+    },
+    {
+      "path": "crates/provider/src/local/antigravity/session.rs",
+      "lines": {
+        "count": 218,
+        "covered": 210,
+        "percent": 96.3302752293578
+      },
+      "uncovered_lines": [
+        89,
+        145,
+        154,
+        155,
+        199,
+        236,
+        243,
+        248
+      ]
+    },
+    {
+      "path": "crates/provider/src/local/antigravity/streaming.rs",
+      "lines": {
+        "count": 190,
+        "covered": 178,
+        "percent": 93.6842105263158
+      },
+      "uncovered_lines": [
+        49,
+        56,
+        62,
+        105,
+        119,
+        120,
+        121,
+        126,
+        144,
+        151,
+        161,
+        165
+      ]
+    },
+    {
+      "path": "crates/provider/src/local/antigravity/transport.rs",
+      "lines": {
+        "count": 193,
+        "covered": 181,
+        "percent": 93.78238341968913
+      },
+      "uncovered_lines": [
+        85,
+        93,
+        101,
+        102,
+        150,
+        156,
+        177,
+        188,
+        189,
+        190,
+        215,
+        226
+      ]
+    }
+  ],
+  "comparable_coverage_baseline": {
+    "count": 53243,
+    "covered": 50309,
+    "percent": 94.48941644911069
+  },
+  "baseline_revision": "8d3d8b8a3d837eb30acdd8a8a405d20fcd577fb0",
+  "baseline_note": "Same workspace command and default features; the difference includes all merged main changes, not only the AGY adapter.",
+  "client_typecheck": {
+    "desktop": "passed after building the local SDK",
+    "mobile": "65 diagnostics, identical to main in the same dependency environment",
+    "new_diagnostics": 0
+  }
+}

@@ -196,6 +196,44 @@ const MOCK_SLOW_MODES: AgentProviderModeDefinition[] = [
 
 export const AGENT_PROVIDER_DEFINITIONS: AgentProviderDefinition[] = [
   {
+    id: "antigravity",
+    label: "Antigravity",
+    description: "Google Antigravity via the official AGY CLI",
+    defaultModeId: "default",
+    modes: [
+      {
+        id: "default",
+        label: "Local Permissions",
+        description:
+          "Uses AGY's local permission rules. Tools requiring interactive approval are denied in headless mode.",
+        icon: "Shield",
+        colorTier: "moderate",
+      },
+      {
+        id: "accept-edits",
+        label: "Accept Edits",
+        description: "Uses AGY's accept-edits execution mode and local tool permission rules.",
+        icon: "ShieldPlus",
+        colorTier: "moderate",
+      },
+      {
+        id: "plan",
+        label: "Plan",
+        description: "Uses AGY's planning execution mode.",
+        icon: "ShieldEllipsis",
+        colorTier: "planning",
+      },
+      {
+        id: "full-access",
+        label: "Full Access",
+        description: "Approves all AGY tool calls, including commands and file writes.",
+        icon: "ShieldOff",
+        colorTier: "dangerous",
+        isUnattended: true,
+      },
+    ],
+  },
+  {
     id: "claude",
     label: "Claude",
     description: "Anthropic's multi-tool assistant with MCP support, streaming, and deep reasoning",

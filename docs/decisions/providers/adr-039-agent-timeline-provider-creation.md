@@ -6,7 +6,7 @@
 - 基线：Paseo `2c8e8a826810337492cc5a38bb0bbd705b6fb632` 的协议、Timeline 查询、
   Provider catalog、creation service 和 plugin session identity；本机 Codex 0.153.4 导出的协议 schema。
 
-> 单项预算与按字节分页由 [ADR-087](adr-087-timeline-entry-and-page-budgets.md) 修订为
+> 单项预算与按字节分页由 [ADR-090](adr-090-timeline-entry-and-page-budgets.md) 修订为
 > 768 KiB；下面的 256 KiB 记录初始决策。
 
 ## 边界
