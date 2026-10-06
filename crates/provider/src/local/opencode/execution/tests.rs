@@ -2,6 +2,95 @@ use super::*;
 use serde_json::json;
 
 #[test]
+fn declined_tool_without_idle_settles_only_a_completed_current_aborted_assistant() {
+    let user = json!({"type":"user","time":{"created":10}});
+    let aborted = json!({"type":"assistant","finish":"error","error":{"type":"aborted"},
+        "time":{"created":11,"completed":12}});
+    assert_eq!(
+        outcome(
+            Version::V2,
+            &json!({}),
+            None,
+            &[user.clone(), aborted.clone()]
+        )
+        .unwrap(),
+        Some(Outcome::Interrupted)
+    );
+    for patch in [
+        json!({"time":{"created":9,"completed":12}}),
+        json!({"time":{"created":11}}),
+        json!({"time":{"created":11,"completed":10}}),
+        json!({"finish":"tool-calls"}),
+        json!({"error":{"type":"unknown"}}),
+    ] {
+        let mut last = aborted.clone();
+        for (key, value) in patch.as_object().unwrap() {
+            last[key] = value.clone();
+        }
+        assert_eq!(
+            outcome(Version::V2, &json!({}), None, &[user.clone(), last]).unwrap(),
+            None
+        );
+    }
+    assert_eq!(
+        outcome(
+            Version::V2,
+            &json!({}),
+            None,
+            std::slice::from_ref(&aborted)
+        )
+        .unwrap(),
+        None
+    );
+    assert_eq!(
+        outcome(Version::V2, &json!({}), None, &[aborted, user]).unwrap(),
+        None
+    );
+}
+
+#[test]
+fn persisted_idle_settles_v2_when_execution_events_are_not_exposed() {
+    let user = json!({"type":"user","time":{"created":10}});
+    for (status, expected) in [
+        ("succeeded", Outcome::Completed),
+        ("failed", Outcome::Failed),
+        ("interrupted", Outcome::Interrupted),
+    ] {
+        let info = json!({"outcome":status});
+        let idle = json!({"type":"idle","time":{"created":11},"outcome":status});
+        let history = [user.clone(), idle.clone()];
+        assert_eq!(
+            outcome(Version::V2, &info, None, &history).unwrap(),
+            Some(expected)
+        );
+        assert_eq!(
+            outcome(Version::V2, &info, None, &[idle, user.clone()]).unwrap(),
+            None
+        );
+        assert!(outcome(Version::V2, &Value::Null, None, &history).is_err());
+    }
+    for idle in [
+        json!({"type":"idle","outcome":"succeeded"}),
+        json!({"type":"idle","time":{"created":9},"outcome":"succeeded"}),
+        json!({"type":"idle","time":{"created":11},"outcome":"unknown"}),
+    ] {
+        assert!(
+            outcome(
+                Version::V2,
+                &json!({"outcome":"succeeded"}),
+                None,
+                &[user.clone(), idle]
+            )
+            .is_err()
+        );
+    }
+    assert_eq!(
+        outcome(Version::V2, &json!({"outcome":"succeeded"}), None, &[user]).unwrap(),
+        None
+    );
+}
+
+#[test]
 fn latest_durable_execution_must_settle_after_the_latest_input() {
     let history = [json!({"type":"user","time":{"created":10}})];
     let info = json!({"outcome":"succeeded"});
