@@ -407,8 +407,9 @@ pub(crate) async fn run<R: Send + 'static>(
     state: &Shared,
     execute: impl FnOnce(&mut Terminals) -> Result<R, crate::Error> + Send + 'static,
 ) -> Result<R, ErrorCode> {
-    let service = state.terminals.clone().ok_or(ErrorCode::NotImplemented)?;
-    let admission = state.admission.lock().map_err(|_| ErrorCode::TerminalIo)?;
+    if state.terminals.is_none() {
+        return Err(ErrorCode::NotImplemented);
+    }
     if state.cancellation.is_cancelled() {
         return Err(ErrorCode::ServerDraining);
     }
@@ -417,6 +418,37 @@ pub(crate) async fn run<R: Send + 'static>(
         .clone()
         .try_acquire_owned()
         .map_err(|_| ErrorCode::ResourceExhausted)?;
+    run_with_permit(state, execute, permit).await
+}
+
+/// Await terminal capacity for cleanup belonging to an already admitted archive request.
+pub(crate) async fn run_queued<R: Send + 'static>(
+    state: &Shared,
+    execute: impl FnOnce(&mut Terminals) -> Result<R, crate::Error> + Send + 'static,
+) -> Result<R, ErrorCode> {
+    if state.terminals.is_none() {
+        return Err(ErrorCode::NotImplemented);
+    }
+    let permit = tokio::select! {
+        biased;
+        () = state.cancellation.cancelled() => return Err(ErrorCode::ServerDraining),
+        permit = state.terminal_jobs.clone().acquire_owned() => {
+            permit.map_err(|_| ErrorCode::ServerDraining)?
+        }
+    };
+    run_with_permit(state, execute, permit).await
+}
+
+async fn run_with_permit<R: Send + 'static>(
+    state: &Shared,
+    execute: impl FnOnce(&mut Terminals) -> Result<R, crate::Error> + Send + 'static,
+    permit: tokio::sync::OwnedSemaphorePermit,
+) -> Result<R, ErrorCode> {
+    let service = state.terminals.clone().ok_or(ErrorCode::NotImplemented)?;
+    let admission = state.admission.lock().map_err(|_| ErrorCode::TerminalIo)?;
+    if state.cancellation.is_cancelled() {
+        return Err(ErrorCode::ServerDraining);
+    }
     let tracking = state.tasks.token();
     let job = tokio::task::spawn_blocking(move || {
         let (_permit, _tracking) = (permit, tracking);
