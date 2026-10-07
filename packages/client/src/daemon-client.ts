@@ -4770,6 +4770,9 @@ export class DaemonClient {
     if (!bytes) {
       throw new Error("File bytes are required.");
     }
+    const chunkSize = input.chunkSize ?? 128 * 1024;
+    if (!Number.isInteger(chunkSize) || chunkSize <= 0 || chunkSize > 256 * 1024)
+      throw new Error("Invalid file upload chunk size");
     const uploadTransport = this.transport;
     const resolvedRequestId = this.createRequestId(input.requestId);
     const modifiedAt = input.modifiedAt ?? new Date().toISOString();
@@ -4813,7 +4816,7 @@ export class DaemonClient {
         }),
       );
 
-      const chunkSize = input.chunkSize ?? 128 * 1024;
+      await uploadTransport?.drain?.();
       for (let offset = 0; offset < bytes.byteLength; offset += chunkSize) {
         // Native WebSocket.send encodes binary synchronously. Let rendering and
         // incoming messages run between bounded pieces on every platform.
@@ -4829,6 +4832,7 @@ export class DaemonClient {
             payload: bytes.subarray(offset, Math.min(offset + chunkSize, bytes.byteLength)),
           }),
         );
+        await uploadTransport?.drain?.();
       }
 
       this.sendBinaryFrame(
@@ -4837,6 +4841,7 @@ export class DaemonClient {
           requestId: resolvedRequestId,
         }),
       );
+      await uploadTransport?.drain?.();
     } catch (error) {
       this.rejectWaitersForRequestId(
         resolvedRequestId,

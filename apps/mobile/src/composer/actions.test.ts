@@ -1083,7 +1083,7 @@ describe("file upload preparation", () => {
               fileName: "missing.bin",
               mimeType: "application/octet-stream",
               readBytes: async () => {
-                if (failure === "oversized") return new Uint8Array(50 * 1024 * 1024 + 1);
+                if (failure === "oversized") return new Uint8Array(256 * 1024 * 1024 + 1);
                 throw new Error("read failed");
               },
             },

@@ -65,7 +65,10 @@ pub(super) fn installed_capabilities(services: &Services) -> Vec<String> {
 
 /// Behaviors that need versioned discovery even when their method names already existed.
 pub(super) fn features(services: &Services) -> Vec<String> {
-    let mut features = vec![protocol::single::FEATURE.to_owned()];
+    let mut features = vec![
+        protocol::single::FEATURE.to_owned(),
+        "client-message-chunks-v1".to_owned(),
+    ];
     if services.git_fetch.is_some() && services.directory.is_some() {
         features.push("checkout-git-events-v1".to_owned());
     }

@@ -61,6 +61,8 @@
 
 ## 客户端、连接与品牌
 
+- [ADR-096：客户端消息分块与文件上传背压](clients/adr-096-acknowledged-client-chunks.md)
+
 - [ADR-094：客户端统一使用 Ait 标准方法名](clients/adr-094-canonical-ait-client-methods.md)
 - [ADR-086：桌面、Android 与 iOS 的 Authing 浏览器登录](clients/adr-086-authing-native-login.md)
 - [ADR-085：Daemon 同步的稳定节点身份](clients/adr-085-stable-daemon-publication.md)
@@ -90,3 +92,4 @@
 ## 品牌与视觉
 
 - [ADR-051：AIT 品牌识别与日间视觉系统](branding/adr-051-ait-brand-identity.md)
+

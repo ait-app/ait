@@ -1,0 +1,26 @@
+# ADR-096：客户端消息分块与文件上传背压
+
+- 状态：Accepted。
+- 日期：2026-10-07。
+- 范围：客户端到 daemon 的 JSON 消息与文件上传。
+- 关系：扩展 ADR-075 的传输执行边界，保留 ADR-090 的 timeline 展示预算。
+
+## 背景
+
+单帧 1 MiB 不能承载原始图片消息；直接放大 WebSocket 上限仍无法防止文件上传填满单连接 worker 队列。图片不得为了传输限制而强制压缩。
+
+## 决策
+
+Daemon 通过 `client-message-chunks-v1` feature 宣告分块及文件确认支持。旧客户端继续发送原有帧，旧 Host 收到客户端本地的明确升级提示而非超大帧。WebSocket 和 relay 单帧上限保持 1 MiB。
+
+超过 1 MiB 的规范 JSON envelope 以二进制帧发送：`0x30`、大端 u32 transfer ID、总字节数、offset、最多 256 KiB 数据。每条物理连接同时组装一条消息，完成前不分发；校验顺序、身份、长度及 60 秒绝对期限。通过 `connection.chunk.ack` 事件确认 `{id, offset}` 后客户端才发送下一块，客户端等待确认最多 15 秒。完整消息最多 64 MiB，全 daemon 的组装原始字节预留预算为 256 MiB。预留跟随解析结果直到请求准入；解析在线程池中进行，任务保存在连接状态中以抵抗 select 取消。断开连接后不自动重放。
+
+大文档沿用文件流协议，单文件最多 256 MiB，不把 PDF 编入 JSON。新客户端将文件帧 opcode 从 `0x10/0x11/0x12` 改为 `0x40/0x41/0x42`，布局不变；daemon 处理后返回 `connection.upload.ack {requestId, opcode}`（opcode 为原值）。SDK 的可选 `drain()` 等待处理确认，30 秒超时，避免文件流淹没单连接或 relay 队列。原 opcode 不触发确认，兼容旧客户端。
+
+Provider prompt 允许最多 50 张原图，单图 base64 最多 32 MiB，prompt 总计最多 63 MiB；原生 Provider 写入预算同步为 64 MiB，读取预算保持原值。模型服务自身的图片限制仍有效。单条图片消息超限时明确要求分批发送；该扩展不是无限上传。
+
+## 后果与验证
+
+协议扩展与 API adapter 共同负责重组，domain 无需了解二进制块。上限约束原始组装字节，不等于进程总内存上限；JSON 对象及模型适配会另有分配。现有上传数、失效清理和鉴权仍生效。
+
+测试覆盖 Unicode 字节重组、版本门控、错序/超时/断开、规范 envelope 转换、SDK 背压及真实 daemon 的 200 MiB 单连接文件上传。该大文件为传输夹具，不声称已验证 PDF 渲染或公网 relay 的吞吐。

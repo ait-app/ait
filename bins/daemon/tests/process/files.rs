@@ -9,6 +9,9 @@ use tokio_tungstenite::tungstenite::Message;
 use super::transport::{Socket, connect, receive, request};
 use super::{ready, start, terminate};
 
+#[path = "files/chunks.rs"]
+mod chunks;
+
 #[path = "files/paseo.rs"]
 mod paseo;
 

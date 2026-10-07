@@ -12,7 +12,7 @@ use protocol::{ClientMessage, ErrorCode, valid_id};
 use tokio::sync::{mpsc, oneshot};
 use tokio_util::sync::CancellationToken;
 
-use super::{ConnectionSubscriptions, Incoming, error, process_message, receive};
+use super::{ConnectionSubscriptions, Incoming, chunks, error, process_message};
 use crate::{
     Shared,
     outbound::{Outbound, QueueError},
@@ -123,6 +123,7 @@ async fn route(
     context: &WorkerContext<'_>,
     senders: [mpsc::Sender<Work>; 4],
 ) -> Result<(), QueueError> {
+    let mut assembly = chunks::Assembly::default();
     let mut releases: FuturesUnordered<BoxFuture<'static, Result<(), QueueError>>> =
         FuturesUnordered::new();
     loop {
@@ -130,26 +131,25 @@ async fn route(
             () = context.cancel.cancelled() => return Ok(()),
             () = context.state.cancellation.cancelled() => return Ok(()),
             Some(result) = releases.next() => { result?; continue; },
-            message = receive(&mut stream) => match message {
+            message = chunks::next(&mut stream, &mut assembly, context.outbound) => match message {
                 Some(Ok(message)) => message,
                 Some(Err(code)) => { error(context.outbound, None, code)?; return Ok(()); },
                 None => return Ok(()),
             },
         };
-        if let Incoming::Text(ClientMessage::Request {
-            request_id,
-            method,
-            params,
-        }) = &message
+        if let Incoming::Text(
+            ClientMessage::Request {
+                request_id,
+                method,
+                params,
+            },
+            _,
+        ) = &message
         {
             if !valid_id(request_id) {
                 return error(context.outbound, None, ErrorCode::InvalidMessage);
             }
-            if let Err(code) = super::validation::request(
-                method,
-                &context.state.info.implemented_capabilities,
-                context.capabilities,
-            ) {
+            if let Err(code) = validate_request(method, context) {
                 error(context.outbound, Some(request_id.clone()), code)?;
                 continue;
             }
@@ -222,6 +222,14 @@ async fn route(
     }
 }
 
+fn validate_request(method: &str, context: &WorkerContext<'_>) -> Result<(), ErrorCode> {
+    super::validation::request(
+        method,
+        &context.state.info.implemented_capabilities,
+        context.capabilities,
+    )
+}
+
 fn admit(
     senders: &[mpsc::Sender<Work>; 4],
     message: Incoming,
@@ -229,7 +237,7 @@ fn admit(
 ) -> Result<(), QueueError> {
     let lane = lane(&message);
     if let Err(failure) = senders[lane].try_send(Work::Message(message)) {
-        if let Work::Message(Incoming::Text(ClientMessage::Request { request_id, .. })) =
+        if let Work::Message(Incoming::Text(ClientMessage::Request { request_id, .. }, _)) =
             failure.into_inner()
         {
             error(outbound, Some(request_id), ErrorCode::ResourceExhausted)?;
@@ -247,6 +255,7 @@ fn lane(message: &Incoming) -> usize {
             ClientMessage::Request { method, .. }
             | ClientMessage::Event { method, .. }
             | ClientMessage::Response { method, .. },
+            _,
         ) => method,
         Incoming::Binary(bytes) => {
             return if bytes.first().is_some_and(|byte| *byte < 0x10) {
@@ -255,7 +264,7 @@ fn lane(message: &Incoming) -> usize {
                 2
             };
         }
-        Incoming::Text(ClientMessage::Hello(_)) => return 0,
+        Incoming::Text(ClientMessage::Hello(_), _) => return 0,
     };
     if terminal::capabilities::implemented_capabilities().any(|name| name == method)
         || voice::capabilities::implemented_capabilities().any(|name| name == method)

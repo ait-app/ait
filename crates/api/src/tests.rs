@@ -1,6 +1,7 @@
 use super::*;
 
 mod browser_auth;
+mod chunks;
 mod paseo;
 mod relay_rpc;
 mod server_info;

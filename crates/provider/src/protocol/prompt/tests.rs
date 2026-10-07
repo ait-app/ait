@@ -68,3 +68,19 @@ fn malformed_inputs_are_rejected_atomically_before_admission() {
         serde_json::from_value(json!({"images":[{"data":"aA==","mimeType":"image/png"}]})).unwrap();
     assert!(prompt.validate().is_ok());
 }
+
+#[test]
+fn accepts_fifty_original_images_above_the_legacy_message_limit() {
+    let image = PromptImage {
+        data: base64::engine::general_purpose::STANDARD.encode(vec![7; 32 * 1024]),
+        mime_type: "image/png".to_owned(),
+    };
+    let mut prompt = AgentPrompt {
+        images: vec![image; 50],
+        ..AgentPrompt::default()
+    };
+    assert!(prompt.validate().is_ok());
+    assert_eq!(prompt.images[0].decode().unwrap(), vec![7; 32 * 1024]);
+    prompt.images.push(prompt.images[0].clone());
+    assert_eq!(prompt.validate(), Err(AgentSessionError::Rejected));
+}

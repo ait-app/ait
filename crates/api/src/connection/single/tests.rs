@@ -17,11 +17,14 @@ fn worker_lanes_keep_streams_and_subscriptions_with_their_connection_owner() {
         ("relay.status.request", 0),
         ("unknown.request", 0),
     ] {
-        let message = Incoming::Text(ClientMessage::Request {
-            request_id: "r1".to_owned(),
-            method: method.to_owned(),
-            params: serde_json::json!({}),
-        });
+        let message = Incoming::Text(
+            ClientMessage::Request {
+                request_id: "r1".to_owned(),
+                method: method.to_owned(),
+                params: serde_json::json!({}),
+            },
+            None,
+        );
         assert_eq!(lane(&message), expected, "{method}");
     }
     assert_eq!(lane(&Incoming::Binary(vec![0x01])), 1);
