@@ -1,5 +1,16 @@
 # Ait changelog
 
+## 0.0.21 - 2026-10-07
+
+- Reset an existing same-named origin branch to the local workspace reset commit with one force push, while detecting concurrent remote changes.
+- Run independent agent sessions concurrently, keep operations ordered within each session, and discover providers in the background without blocking connection readiness.
+- Add native Antigravity CLI support with streaming, approvals, cancellation, and restored conversations.
+- Restore native DeepSeek Harness interaction, including permission changes, questions, and persistent session history.
+- Improve OpenCode v2 discovery and settle completed turns from durable history.
+- Preserve large tool results up to 768 KiB and paginate oversized timeline responses without losing complete entries.
+- Keep restored conversation history separate from live cache overlays to avoid stale or duplicated timeline entries.
+- Align the shared client, protocol, and daemon on canonical Ait method names and session events.
+
 ## 0.0.20 - 2026-10-06
 
 - Add unified browser sign-in and registration on desktop and Android when the online service supports Authing, while keeping the existing Ait password sign-in option.

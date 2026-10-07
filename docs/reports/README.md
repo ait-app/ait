@@ -120,6 +120,7 @@
 
 ## 发布验证
 
+- [Ait 0.0.21 发布说明](releases/release-0.0.21.md)
 - [Ait 0.0.20 发布说明](releases/release-0.0.20.md)
 - [Ait 0.0.19 发布说明](releases/release-0.0.19.md)
 - [Ait 0.0.18 发布说明](releases/release-0.0.18.md)
