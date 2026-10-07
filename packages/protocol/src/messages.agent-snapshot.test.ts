@@ -152,3 +152,33 @@ describe("Rust agent snapshots", () => {
     expect(validateWSOutboundMessage(message).success).toBe(false);
   });
 });
+
+it("preserves a workspace creation failure when Rust returns a null agent", () => {
+  const message = {
+    type: "session",
+    message: {
+      type: "workspace.create.response",
+      payload: {
+        requestId: "create",
+        workspace: null,
+        agent: null,
+        setupTerminalId: null,
+        error: "unknown project",
+        creation: {
+          kind: "workspace",
+          idempotencyKey: "create",
+          revision: 1,
+          phase: "failed",
+          workspaceId: null,
+          agentId: null,
+          error: "unknown project",
+        },
+      },
+    },
+  };
+  const expected = WSOutboundMessageSchema.parse(message);
+  expect(validateWSOutboundMessage(message)).toEqual({ success: true, data: expected });
+  expect(expected).toMatchObject({
+    message: { payload: { error: "unknown project", agent: undefined } },
+  });
+});

@@ -29,6 +29,7 @@ import {
   shell,
   webContents,
 } from "electron";
+import { openPreviewFile, openDirectoryLink } from "./features/file-opener.js";
 import { execFileSync } from "node:child_process";
 import { existsSync } from "node:fs";
 import path from "node:path";
@@ -717,6 +718,7 @@ async function createWindow(
       contextIsolation: true,
       nodeIntegration: false,
       webviewTag: true,
+      plugins: true,
     },
   });
   applyDesktopWindowChromeMode({ win: mainWindow, mode: DESKTOP_WINDOW_CHROME_MODE });
@@ -977,6 +979,10 @@ async function bootstrap(): Promise<void> {
   registerWindowManager({ mode: DESKTOP_WINDOW_CHROME_MODE });
   registerDialogHandlers();
   registerNotificationHandlers();
+  ipcMain.handle("paseo:opener:openDirectory", (_event, value: unknown) =>
+    openDirectoryLink(value),
+  );
+  ipcMain.handle("paseo:opener:openFile", (_event, value: unknown) => openPreviewFile(value));
   const openExternalUrl = createExternalUrlOpener({ open: shell.openExternal });
   ipcMain.handle("paseo:opener:openUrl", (_event, value: unknown) => openExternalUrl(value));
   registerEditorTargetHandlers();

@@ -23,8 +23,15 @@ const initialSnapshot: FilePreviewLifecycleSnapshot = { status: "initial" };
 
 /** Converts a completed raw read into the preview resources consumed by FilePane. */
 export async function createFilePanePreview(file: FileReadResult): Promise<FilePanePreview | null> {
+  // Older Hosts label PDF as octet-stream (or text for ASCII-only documents).
+  if (
+    /\.pdf$/i.test(file.path) &&
+    new TextDecoder().decode(file.bytes.subarray(0, 5)) === "%PDF-"
+  ) {
+    file = { ...file, kind: "binary", mime: "application/pdf" };
+  }
   const explorerFile = explorerFileFromReadResult(file);
-  if (file.kind !== "image") {
+  if (file.kind === "text") {
     return { file: explorerFile, imageAttachment: null };
   }
 

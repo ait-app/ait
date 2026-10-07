@@ -49,9 +49,14 @@ async fn directory_only_hosts_check_identity_and_retire_only_the_requested_works
             .await
             .unwrap()
     );
-    let retired = crate::dispatch::retire_workspaces(&state, vec!["wks-one".to_owned()])
-        .await
-        .unwrap();
+    let retired = {
+        let permit = runtime.jobs.clone().acquire_owned().await.unwrap();
+        let retirement = crate::dispatch::retire_workspaces(&state, vec!["wks-one".to_owned()]);
+        tokio::pin!(retirement);
+        assert!(futures_util::poll!(&mut retirement).is_pending());
+        drop(permit);
+        retirement.await.unwrap()
+    };
     assert_eq!(retired, ["agent-a", "agent-b"]);
     assert!(
         agents

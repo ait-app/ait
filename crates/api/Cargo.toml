@@ -36,6 +36,8 @@ chrono.workspace = true
 workspace = true
 
 [dev-dependencies]
+# Isolated upload roots for transport contention regression tests.
+tempfile.workspace = true
 reqwest.workspace = true
 reqwest.features = ["json"]
 tokio-tungstenite.workspace = true

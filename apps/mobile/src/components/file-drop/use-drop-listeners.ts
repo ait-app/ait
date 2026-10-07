@@ -16,6 +16,8 @@ import {
   WORKSPACE_FILE_DRAG_MIME,
 } from "@/attachments/workspace-file-drag";
 
+import { splitDroppedFiles } from "./dropped-files";
+
 type DesktopDragDropPayload =
   | { type: "enter"; paths: string[] }
   | { type: "over" }
@@ -252,7 +254,8 @@ export function useDropListeners({
           }
         }
 
-        const files = Array.from(e.dataTransfer?.files ?? []);
+        const { files, directoryPaths } = splitDroppedFiles(e.dataTransfer, getDesktopHost());
+        if (directoryPaths.length > 0) sink.onDirectoryPaths?.(directoryPaths);
         const genericItems: DroppedItem[] = files.map((file) => ({
           kind: "web-file",
           file,

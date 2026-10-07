@@ -27,7 +27,7 @@ impl PromptImage {
             self.mime_type.as_str(),
             "image/png" | "image/jpeg" | "image/gif" | "image/webp"
         ) || self.data.is_empty()
-            || self.data.len() > 768 * 1024
+            || self.data.len() > 32 * 1024 * 1024
         {
             return Err(AgentSessionError::Rejected);
         }
@@ -44,7 +44,7 @@ pub struct AgentPrompt {
     /// User-authored text, at most 64 KiB; may be empty when attachments are present.
     #[serde(default)]
     pub text: String,
-    /// Optional inline images, within the server's existing one MiB request budget.
+    /// Optional inline images, transported in acknowledged chunks for large messages.
     #[serde(default)]
     pub images: Vec<PromptImage>,
     /// Existing Paseo text, review, forge and uploaded-file attachment objects.
@@ -72,7 +72,7 @@ impl AgentPrompt {
     pub fn validate(&self) -> Result<(), AgentSessionError> {
         if self.text.len() > 65536
             || self.text.contains('\0')
-            || self.images.len() > 8
+            || self.images.len() > 50
             || self.attachments.len() > 32
             || (self.text.trim().is_empty()
                 && self.images.is_empty()
@@ -87,7 +87,7 @@ impl AgentPrompt {
             || serde_json::to_vec(self)
                 .map_err(|_| AgentSessionError::Rejected)?
                 .len()
-                > 896 * 1024
+                > 63 * 1024 * 1024
         {
             return Err(AgentSessionError::Rejected);
         }

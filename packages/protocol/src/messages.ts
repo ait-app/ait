@@ -4891,7 +4891,7 @@ export const AgentCreateResponseSchema = z.object({
 export const WorkspaceCreateResponseSchema = z.object({
   type: z.literal("workspace.create.response"),
   payload: z.object({
-    agent: AgentSnapshotPayloadSchema.optional(),
+    agent: AgentSnapshotPayloadSchema.nullish().transform((value) => value ?? undefined),
     creation: CreationSnapshotSchema.optional(),
     workspace: WorkspaceDescriptorPayloadSchema.nullable(),
     setupTerminalId: z.string().nullable(),

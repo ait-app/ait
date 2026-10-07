@@ -7008,3 +7008,73 @@ test("reviewed plugin updates gate before requests and preserve exact proposal d
     ]);
   }
 });
+
+test("uploadFile waits for transport acknowledgements before sending another frame", async () => {
+  const mock = createMockTransport();
+  const acknowledgements: (() => void)[] = [];
+  mock.transport.drain = () => new Promise<void>((resolve) => acknowledgements.push(resolve));
+  const client = new DaemonClient({
+    url: "ws://test",
+    clientId: "upload-backpressure",
+    logger: createMockLogger(),
+    reconnect: { enabled: false },
+    transportFactory: () => mock.transport,
+  });
+  clients.push(client);
+  const connected = client.connect();
+  mock.triggerOpen();
+  await connected;
+  await expect(
+    client.uploadFile({
+      fileName: "bad",
+      mimeType: "text/plain",
+      bytes: new Uint8Array([1]),
+      chunkSize: 0,
+    }),
+  ).rejects.toThrow("chunk size");
+  expect(mock.sent).toHaveLength(0);
+  const upload = client.uploadFile({
+    fileName: "test",
+    mimeType: "text/plain",
+    bytes: new Uint8Array([1, 2]),
+    chunkSize: 1,
+    requestId: "backpressure",
+  });
+  for (let index = 0; index < 4; index++) {
+    await vi.waitFor(() => expect(acknowledgements).toHaveLength(index + 1));
+    const frameCount = mock.sent.length;
+    await new Promise((resolve) => setTimeout(resolve, 5));
+    expect(mock.sent).toHaveLength(frameCount);
+    acknowledgements[index]();
+  }
+  mock.triggerMessage(
+    wrapSessionMessage({
+      type: "file.upload.response",
+      payload: {
+        requestId: "backpressure",
+        file: {
+          type: "uploaded_file",
+          id: "upload_backpressure",
+          fileName: "test",
+          mimeType: "text/plain",
+          size: 2,
+          path: "/tmp/test",
+        },
+        error: null,
+      },
+    }),
+  );
+  await expect(upload).resolves.toMatchObject({ requestId: "backpressure" });
+  expect(
+    mock.sent
+      .slice(1)
+      .map(assertUint8Array)
+      .map(decodeFileTransferFrame)
+      .map((frame) => frame.opcode),
+  ).toEqual([
+    FileTransferOpcode.FileBegin,
+    FileTransferOpcode.FileChunk,
+    FileTransferOpcode.FileChunk,
+    FileTransferOpcode.FileEnd,
+  ]);
+});

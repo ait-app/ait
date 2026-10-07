@@ -81,7 +81,7 @@ function harness(
   const stopHello = transport.onOpen(() =>
     transport.send(JSON.stringify({ type: "hello", clientId: "test" })),
   );
-  function ready(version?: string) {
+  function ready(version?: string, features: string[] = []) {
     for (const socket of sockets) socket.open();
     for (const [index, socket] of sockets.entries())
       socket.message({
@@ -90,6 +90,7 @@ function harness(
           server_id: "server",
           version,
           instance_id: "instance",
+          features,
           protocol: { major: 1, minor: 0 },
           implemented_capabilities: implemented,
         },
@@ -1161,5 +1162,60 @@ it("account relay negotiates and routes every capability through one business so
   h.transport.send(new Uint8Array([1, 2, 3]));
   h.transport.send(new Uint8Array([0x10, 2, 3]));
   expect(h.sockets[0].send).toHaveBeenLastCalledWith(new Uint8Array([0x10, 2, 3]));
+  h.transport.close();
+});
+
+it("chunks canonical envelopes and consumes upload acknowledgements inside the adapter", async () => {
+  const h = harness();
+  h.ready(undefined, ["client-message-chunks-v1"]);
+  const text = "x".repeat(2 * 1024 * 1024);
+  h.send({ type: "agent.message.send.request", requestId: "large", agentId: "agent", text });
+  const channel = METHODS["agent.message.send.request"].channel;
+  const socket = h.sockets[channel];
+  const pieces: Uint8Array[] = [];
+  for (;;) {
+    const bytes = socket.send.mock.lastCall![0] as Uint8Array;
+    expect(bytes[0]).toBe(0x30);
+    const view = new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength);
+    const offset = view.getUint32(9) + bytes.length - 13;
+    pieces.push(bytes.slice(13));
+    socket.message({
+      type: "event",
+      method: "connection.chunk.ack",
+      params: { id: view.getUint32(1), offset },
+    });
+    if (offset === view.getUint32(5)) break;
+  }
+  const joined = new Uint8Array(pieces.reduce((size, piece) => size + piece.length, 0));
+  let offset = 0;
+  for (const piece of pieces) {
+    joined.set(piece, offset);
+    offset += piece.length;
+  }
+  expect(JSON.parse(new TextDecoder().decode(joined))).toMatchObject({
+    type: "request",
+    method: "agent.message.send.request",
+    request_id: "large",
+    params: { text },
+  });
+  const upload = encodeFileTransferFrame({
+    opcode: FileTransferOpcode.FileChunk,
+    requestId: "upload",
+    payload: new Uint8Array([1]),
+  });
+  h.transport.send(upload);
+  const waiting = h.transport.drain!();
+  const uploadChannel = METHODS["file.upload.request"].channel;
+  expect(h.sockets[uploadChannel].send.mock.lastCall![0][0]).toBe(0x41);
+  h.sockets[uploadChannel].message({
+    type: "event",
+    method: "connection.upload.ack",
+    params: { requestId: "upload", opcode: 0x11 },
+  });
+  await waiting;
+  expect(h.errors).not.toHaveBeenCalled();
+  expect(
+    h.received.filter((entry) => JSON.stringify(entry).includes("connection.chunk.ack")),
+  ).toEqual([]);
   h.transport.close();
 });
