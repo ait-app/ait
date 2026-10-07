@@ -3,60 +3,11 @@ use std::collections::BTreeSet;
 use super::*;
 
 #[test]
-fn every_installation_combination_advertises_only_available_services() {
-    for mask in 0..8 {
-        let services = InstalledServices {
-            agents: mask & 1 != 0,
-            agent_runtime: mask & 2 != 0,
-            agent_execution: mask & 4 != 0,
-        };
-        let installed: Vec<_> = installed_methods(services).collect();
-        let methods: BTreeSet<_> = installed.iter().map(|spec| spec.name).collect();
-        let expected_count = 5 * usize::from(services.agents)
-            + 9 * usize::from(services.agent_runtime || services.agent_execution)
-            + 32 * usize::from(services.agent_execution);
-        assert_eq!(
-            installed.len(),
-            methods.len(),
-            "duplicate method for {mask}"
-        );
-        assert_eq!(methods.len(), expected_count, "installation {mask}");
-        assert_eq!(methods.contains("agent.configure"), services.agents);
-        assert_eq!(
-            methods.contains("agent.list.request"),
-            services.agent_runtime || services.agent_execution
-        );
-        assert_eq!(
-            methods.contains("agent.items.close.request"),
-            services.agent_runtime || services.agent_execution
-        );
-        assert_eq!(
-            methods.contains("agent.create.request"),
-            services.agent_execution
-        );
-        assert_eq!(
-            methods.contains("agent.finish.wait.request"),
-            services.agent_execution
-        );
-        assert_eq!(
-            methods.contains("agent.model.set.request"),
-            services.agent_execution
-        );
-        assert!(!methods.contains("provider.list.request"));
-    }
-}
-
-#[test]
-fn implemented_methods_are_unique_and_match_a_full_installation() {
+fn installation_selects_the_entire_crate() {
     let declared: Vec<_> = implemented_methods().collect();
-    let unique: BTreeSet<_> = declared.iter().map(|spec| spec.name).collect();
-    assert_eq!(declared.len(), unique.len());
+    let names: BTreeSet<_> = declared.iter().map(|spec| spec.name).collect();
     assert_eq!(declared.len(), 46);
-    let installed: Vec<_> = installed_methods(InstalledServices {
-        agents: true,
-        agent_runtime: true,
-        agent_execution: true,
-    })
-    .collect();
-    assert_eq!(installed, declared);
+    assert_eq!(declared.len(), names.len());
+    assert_eq!(installed_methods(true).collect::<Vec<_>>(), declared);
+    assert_eq!(installed_methods(false).count(), 0);
 }

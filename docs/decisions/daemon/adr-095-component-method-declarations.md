@@ -13,6 +13,9 @@
 
 ## 决策
 
+安装粒度后由 [ADR-097](adr-097-crate-level-service-installation.md) 收敛为完整 crate 服务；
+基础连接方法由 API 自行声明。下述细分安装组合描述本决策接受时的行为。
+
 移除 `protocol::methods` 中心目录和旧名称查找接口。公共的 `MethodSpec { name, kind }`
 及 `InboundKind` 放在 `model::methods`，各组件在原有方法声明处明确指定 request、event
 或 response。能力 crate 仅通过 `implemented_methods` 和 `installed_methods` 提供完整声明

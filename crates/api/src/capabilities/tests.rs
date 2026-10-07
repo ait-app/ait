@@ -5,7 +5,7 @@ use model::methods::InboundKind;
 use super::*;
 
 #[test]
-fn empty_host_keeps_only_builtin_metadata_methods() {
+fn empty_host_keeps_only_builtin_api_methods() {
     assert_eq!(features(&Services::default()), ["ait-rust-single-v1"]);
     let methods = installed_capabilities(&Services::default());
     assert_eq!(
@@ -52,13 +52,13 @@ fn merged_components_have_one_owner_per_method_and_keep_placeholders_separate() 
 
 #[test]
 fn file_methods_use_ait_names() {
-    let specs: Vec<_> = ::filesystem::capabilities::installed_methods(
-        ::filesystem::capabilities::InstalledServices {
-            files: true,
-            ..Default::default()
-        },
-    )
-    .collect();
+    let specs: Vec<_> = ::filesystem::capabilities::implemented_methods()
+        .filter(|method| {
+            method.name.starts_with("fs.")
+                || method.name.starts_with("file.")
+                || method.name.starts_with("directory.")
+        })
+        .collect();
     assert_eq!(specs.len(), 11);
     assert!(specs.iter().all(|spec| spec.kind == InboundKind::Request));
     assert!(specs.iter().all(|spec| spec.name.contains('.')));
@@ -79,9 +79,9 @@ fn baseline_methods_and_heartbeat_keep_their_shared_contracts() {
         protocol::CAPABILITIES,
         ::metadata::protocol::server::CAPABILITIES
     );
-    let heartbeat = ::metadata::capabilities::implemented_methods()
+    let heartbeat = implemented_methods()
         .find(|spec| spec.name == ::metadata::protocol::server::HEARTBEAT_METHOD)
-        .expect("heartbeat must be declared by metadata");
+        .expect("heartbeat must be declared by the API");
     assert_eq!(heartbeat.kind, InboundKind::Event);
 }
 
@@ -140,4 +140,23 @@ fn component_declarations_preserve_all_event_and_response_directions() {
         .map(|spec| spec.name)
         .collect();
     assert_eq!(responses, ["browser.automation.execute.response"]);
+}
+
+#[test]
+fn builtin_connection_methods_are_owned_by_api_and_not_optional_metadata() {
+    let metadata: BTreeSet<_> = ::metadata::capabilities::implemented_methods()
+        .map(|method| method.name)
+        .collect();
+    let builtin: Vec<_> = crate::core_methods::METHODS
+        .iter()
+        .map(|method| method.name)
+        .collect();
+    assert_eq!(builtin.len(), 9);
+    assert!(builtin.iter().all(|method| !metadata.contains(method)));
+    let installed = installed_capabilities(&Services::default());
+    assert!(
+        builtin
+            .iter()
+            .all(|method| installed.iter().any(|name| name == method))
+    );
 }

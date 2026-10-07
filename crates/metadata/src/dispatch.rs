@@ -1,16 +1,7 @@
 //! Concrete service state and crate-owned request dispatch.
 
-/// Client methods implemented by this component; consumed by capability discovery.
-pub(crate) const BASE_METHODS: &[MethodSpec] = &[
-    MethodSpec::request("server.info"),
-    MethodSpec::request("connection.ping"),
-    MethodSpec::request("server.status.subscribe"),
-    MethodSpec::request("subscription.release.request"),
-];
-
 use std::sync::{Arc, Mutex};
 
-use model::methods::MethodSpec;
 use model::outbound::QueueError;
 use model::{Context, DispatchError, ErrorCode, Runtime};
 
@@ -115,7 +106,8 @@ impl State {
     }
 }
 
-/// Dispatch an admitted request using concrete context, services and connection state.
+/// Dispatch metadata requests and reusable API connection protocol operations.
+/// The API owns built-in protocol method declarations; those operations require no metadata service.
 /// Leaves `context` unchanged for other crates; takes it when this crate handles the method.
 /// Returns `DispatchError::NotImplemented` while leaving an unmatched Context available.
 /// Returns optional work for the API to finish before ending request processing.

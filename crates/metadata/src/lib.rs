@@ -2,6 +2,11 @@
 //!
 //! The host owns transports and task scheduling. This crate has no dependencies on other server crates.
 
+mod installation;
+
+/// Complete crate-level service and its required composition inputs.
+pub use installation::{Dependencies, Service};
+
 pub mod capabilities;
 pub mod dispatch;
 pub mod local;

@@ -9,3 +9,6 @@ pub mod storage;
 
 pub mod capabilities;
 pub mod dispatch;
+
+/// Complete service installed as one capability component.
+pub use service::Schedules as Service;

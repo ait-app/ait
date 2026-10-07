@@ -55,3 +55,6 @@ impl From<Error> for model::ErrorCode {
 
 /// Connection-owned observers and request integration.
 pub mod connection;
+
+/// Complete service installed as one capability component.
+pub use service::Terminals as Service;

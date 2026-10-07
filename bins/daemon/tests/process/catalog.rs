@@ -51,7 +51,20 @@ async fn production_installs_every_in_scope_method_without_placeholders() {
         .chain(terminal::capabilities::implemented_methods())
         .map(|spec| (spec.name, spec.kind))
         .collect::<BTreeMap<_, _>>();
-    assert_eq!(catalog.len(), 176);
+    assert_eq!(catalog.len(), 167);
+    for method in [
+        "server.info",
+        "connection.ping",
+        "subscription.release.request",
+        "session.heartbeat",
+        "creation.subscribe.request",
+    ] {
+        assert!(implemented.contains(method));
+        assert!(
+            !catalog.contains_key(method),
+            "API connection method: {method}"
+        );
+    }
     assert!(catalog.keys().all(|method| published.contains(*method)));
     let placeholders = catalog
         .into_iter()

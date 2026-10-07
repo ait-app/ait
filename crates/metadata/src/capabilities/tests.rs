@@ -3,78 +3,11 @@ use std::collections::BTreeSet;
 use super::*;
 
 #[test]
-fn every_installation_combination_advertises_only_available_services() {
-    for mask in 0..64 {
-        let services = InstalledServices {
-            push_tokens: mask & 32 != 0,
-            directory: mask & 1 != 0,
-            daemon: mask & 2 != 0,
-            workspace_labels: mask & 4 != 0,
-            workspace_automation: mask & 8 != 0,
-            workspace_state: mask & 16 != 0,
-        };
-        let installed: Vec<_> = installed_methods(services).collect();
-        let methods: BTreeSet<_> = installed.iter().map(|spec| spec.name).collect();
-        let expected_count = 9
-            + 2 * usize::from(services.push_tokens)
-            + 15 * usize::from(services.directory)
-            + 9 * usize::from(services.daemon)
-            + 5 * usize::from(services.workspace_labels)
-            + 5 * usize::from(services.workspace_automation)
-            + 2 * usize::from(services.workspace_state);
-        assert_eq!(
-            installed.len(),
-            methods.len(),
-            "duplicate method for {mask}"
-        );
-        assert_eq!(methods.len(), expected_count, "installation {mask}");
-        assert_eq!(methods.contains("project.list.request"), services.directory);
-        assert_eq!(
-            methods.contains("project.config.read.request"),
-            services.directory
-        );
-        assert_eq!(
-            methods.contains("project.icon.get.request"),
-            services.directory
-        );
-        assert_eq!(
-            methods.contains("daemon.get_status.request"),
-            services.daemon
-        );
-        assert_eq!(
-            methods.contains("workspace.label.list.request"),
-            services.workspace_labels
-        );
-        assert_eq!(
-            methods.contains("workspace.setup.status.request"),
-            services.workspace_automation
-        );
-        assert_eq!(
-            methods.contains("workspace.mark_unread.request"),
-            services.workspace_state
-        );
-        assert!(methods.contains("server.info"));
-        assert!(methods.contains("subscription.release.request"));
-        assert!(methods.contains("session.heartbeat"));
-        assert!(methods.contains("session.events.set_subscription.request"));
-        assert!(!methods.contains("server.status.unsubscribe"));
-    }
-}
-
-#[test]
-fn implemented_methods_are_unique_and_match_a_full_installation() {
+fn installation_selects_the_entire_crate() {
     let declared: Vec<_> = implemented_methods().collect();
-    let unique: BTreeSet<_> = declared.iter().map(|spec| spec.name).collect();
-    assert_eq!(declared.len(), unique.len());
-    assert_eq!(declared.len(), 47);
-    let installed: Vec<_> = installed_methods(InstalledServices {
-        push_tokens: true,
-        directory: true,
-        daemon: true,
-        workspace_labels: true,
-        workspace_automation: true,
-        workspace_state: true,
-    })
-    .collect();
-    assert_eq!(installed, declared);
+    let names: BTreeSet<_> = declared.iter().map(|spec| spec.name).collect();
+    assert_eq!(declared.len(), 38);
+    assert_eq!(declared.len(), names.len());
+    assert_eq!(installed_methods(true).collect::<Vec<_>>(), declared);
+    assert_eq!(installed_methods(false).count(), 0);
 }

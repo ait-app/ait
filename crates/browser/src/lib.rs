@@ -5,3 +5,6 @@ pub mod protocol;
 
 pub mod capabilities;
 pub mod dispatch;
+
+/// Complete service installed as one capability component.
+pub use broker::Broker as Service;
