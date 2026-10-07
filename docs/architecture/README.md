@@ -74,7 +74,7 @@ Tokio reactor，级联归档与 worktree 清理用相关会话屏障协调，全
 应用在线服务登录与主机发布分离。平台账户管理器维护显式选中 daemon 的独立租约，
 客户端通过该主机的鉴权业务连接发送一次性控制票据，`api` 管理 `relay` 的状态、启动与停止。
 客户端退出只释放自身节点及绑定 daemon，其他 daemon 保留各自原账户授权，由运行中的平台账户管理器继续续租；主动停止同步只撤销单台租约。
-本机、TCP 和 SSH 主机使用相同入口，详见 [ADR-083](../decisions/clients/adr-083-online-service-host-sync.md)。
+本机、TCP 和 SSH 主机使用相同同步流程，详见 [ADR-083](../decisions/clients/adr-083-online-service-host-sync.md)。Desktop 登录后默认同步内置 daemon，手动停止的选择由桌面账户存储持久保存；其他主机仍需手动启用，详见 [ADR-096](../decisions/clients/adr-096-desktop-default-host-sync.md)。
 
 账户会话状态机位于 `packages/client`，通过依赖注入获取平台身份、存储、HTTP 和运行时操作。
 Electron 主进程提供桌面适配；Android 的原生适配使用 SecureStore 保存账户令牌，注册无本地

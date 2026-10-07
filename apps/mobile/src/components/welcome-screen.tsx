@@ -333,7 +333,7 @@ export function WelcomeScreen({ onHostAdded }: WelcomeScreenProps) {
           onDismiss={handleAccountDismissed}
           testID="welcome-account-sheet"
         >
-          <AccountHostPanel onConnected={handleAccountConnected} />
+          <AccountHostPanel onConnected={handleAccountConnected} onCancel={handleCloseAccount} />
         </AdaptiveModalSheet>
       ) : null}
     </View>

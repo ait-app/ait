@@ -29,12 +29,39 @@ describe("AccountHostPanel email login", () => {
     expect(view.queryByTestId("account-password")).toBeNull();
     fireEvent.click(view.getByTestId("account-legacy-login"));
     expect(view.getByTestId("account-password")).toBeTruthy();
+    expect(view.getByTestId("account-login")).toBeTruthy();
+    fireEvent.click(view.getByTestId("account-legacy-login"));
+    expect(view.queryByTestId("account-password")).toBeNull();
     fireEvent.click(view.getByTestId("account-unified-login"));
     await waitFor(() =>
       expect(accountCommand).toHaveBeenCalledWith("account_login_hosted", {
         center: "https://dash.ait-app.com:8443/api",
       }),
     );
+  });
+  it("keeps service settings optional and submits the edited service address", async () => {
+    const cancel = vi.fn();
+    const view = render(<AccountHostPanel onCancel={cancel} />);
+    expect(view.queryByTestId("account-center")).toBeNull();
+    fireEvent.click(view.getByTestId("account-service-settings"));
+    fireEvent.change(view.getByLabelText("Service URL"), {
+      target: { value: "https://private.example/api" },
+    });
+    fireEvent.change(view.getByLabelText("Email"), { target: { value: "owl@example.com" } });
+    fireEvent.change(view.getByLabelText("Password"), { target: { value: "password" } });
+    fireEvent.click(view.getByTestId("account-login"));
+    await waitFor(() =>
+      expect(accountCommand).toHaveBeenCalledWith("account_login", {
+        center: "https://private.example/api",
+        email: "owl@example.com",
+        password: "password",
+      }),
+    );
+    await waitFor(() =>
+      expect(view.getByRole("button", { name: "Cancel" }).hasAttribute("disabled")).toBe(false),
+    );
+    fireEvent.click(view.getByRole("button", { name: "Cancel" }));
+    expect(cancel).toHaveBeenCalledOnce();
   });
   it("submits email credentials through IPC and clears the password field", async () => {
     const view = render(<AccountHostPanel />);

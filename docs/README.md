@@ -13,6 +13,7 @@
 
 ## 架构决策
 
+- [ADR-096：Desktop 内置 daemon 默认同步与手动下线](decisions/clients/adr-096-desktop-default-host-sync.md)：登录后默认注册本机，持久保留手动下线选择，并统一在线服务添加主机表单风格。
 - [ADR-095：组件自行声明方法元数据](decisions/daemon/adr-095-component-method-declarations.md)：移除中心目录和 `MethodGroup`，功能 crate 仅提供两种方法元数据接口，API 聚合名称并校验。
 - [ADR-094：客户端统一使用 Ait 标准方法名](decisions/clients/adr-094-canonical-ait-client-methods.md)：应用、SDK、消息校验和方法目录使用标准名称，事件订阅参数转换集中在共享协议层。
 - [ADR-093：以可消费 Context 逐级处理请求](decisions/daemon/adr-093-consumable-request-context.md)：组件方法向上组合，仅 `NotImplemented` 继续分发并断言 Context 未消费。
