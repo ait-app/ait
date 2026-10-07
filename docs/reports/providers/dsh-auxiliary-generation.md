@@ -32,3 +32,7 @@ Workspace 1928 项通过、11 项 ignored；build、clippy（`-D warnings`）、
 ## 限制
 
 仅支持已知原生 headless 核心插件组合；自定义模型插件不自动启用。显式推理等级目前只支持 deepseek-official，其他模型的自动选择沿用原生默认值。Unix 取消结束进程组，其他平台仅保证直接子进程结束；进程崩溃后的临时文件清理不在本次保证范围内。
+
+## 后续兼容验证
+
+本机桌面版内置 CLI `0.2.0-rc.2` 的辅助通道已通过禁用工具、无持久化的安装测试；其原生模型请求改用 Messages API，测试服务已同时支持该协议与旧版 Chat Completions。`0.1.5-rc.2` 同样重新通过。与其余原子 PR 及最新主分支组合后的完整测试、覆盖率和测量树见[组合验证报告](atomic-pr-integration.md)。

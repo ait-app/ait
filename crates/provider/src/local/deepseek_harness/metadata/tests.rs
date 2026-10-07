@@ -1,4 +1,5 @@
 use super::*;
+use std::fmt::Write as _;
 
 #[test]
 fn rejects_unknown_compositions_without_starting_a_foreground_session() {
@@ -103,13 +104,36 @@ async fn installed_dsh_metadata_has_no_tools_or_persisted_session() {
             ),
         )
     }
+    async fn messages(Json(body): Json<Value>) -> ([(&'static str, &'static str); 1], String) {
+        assert!(body["tools"].as_array().is_none_or(Vec::is_empty));
+        let events = [
+            json!({"type":"message_start","message":{"usage":{"input_tokens":10,"output_tokens":0}}}),
+            json!({"type":"content_block_start","index":0,"content_block":{"type":"text","text":""}}),
+            json!({"type":"content_block_delta","index":0,"delta":{"type":"text_delta","text":"{\"title\":\"DSH metadata\"}"}}),
+            json!({"type":"content_block_stop","index":0}),
+            json!({"type":"message_delta","delta":{"stop_reason":"end_turn"},"usage":{"output_tokens":5}}),
+            json!({"type":"message_stop"}),
+        ];
+        let mut stream = String::new();
+        for event in events {
+            writeln!(
+                stream,
+                "event: {}\ndata: {event}\n",
+                event["type"].as_str().unwrap()
+            )
+            .unwrap();
+        }
+        ([("content-type", "text/event-stream")], stream)
+    }
     let root = tempfile::tempdir().unwrap();
     let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
     let address = listener.local_addr().unwrap();
     let server = tokio_util::task::AbortOnDropHandle::new(tokio::spawn(async move {
         axum::serve(
             listener,
-            Router::new().route("/chat/completions", post(answer)),
+            Router::new()
+                .route("/chat/completions", post(answer))
+                .route("/v1/messages", post(messages)),
         )
         .await
         .unwrap();
