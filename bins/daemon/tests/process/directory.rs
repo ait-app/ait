@@ -38,7 +38,7 @@ async fn binary_serves_canonical_project_workspace_directory_methods() {
         .iter()
         .chain(metadata::rpc::directory::PROJECT_CONFIG_METHODS)
         .chain(metadata::rpc::directory::PROJECT_ICON_METHODS)
-        .copied()
+        .map(|method| method.name)
         .collect::<Vec<_>>();
     let mut client = connect(&address, &capabilities).await;
 

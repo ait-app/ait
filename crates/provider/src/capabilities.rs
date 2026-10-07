@@ -1,5 +1,7 @@
 //! Capability discovery and installation rules; request execution is owned by dispatchers.
 
+use model::methods::MethodSpec;
+
 /// Presence of independently composed services, supplied by the host.
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
 pub struct InstalledServices {
@@ -11,11 +13,11 @@ pub struct InstalledServices {
     pub agent_execution: bool,
 }
 
-/// Return every implemented capability for negotiation and message validation.
+/// Return every component-owned method for negotiation and message validation.
 /// # Returns
-/// Static method names, including events, without selecting a request handler.
-pub fn implemented_capabilities() -> impl Iterator<Item = &'static str> {
-    installed_capabilities(InstalledServices {
+/// Method names and message directions, including events, without selecting a request handler.
+pub fn implemented_methods() -> impl Iterator<Item = MethodSpec> {
+    installed_methods(InstalledServices {
         agents: true,
         agent_runtime: true,
         agent_execution: true,
@@ -24,8 +26,12 @@ pub fn implemented_capabilities() -> impl Iterator<Item = &'static str> {
 
 /// Return methods supported by `services`, using this crate's installation rules.
 ///
-/// The iterator borrows static method names and excludes uninstalled optional services.
-pub fn installed_capabilities(services: InstalledServices) -> impl Iterator<Item = &'static str> {
+/// # Arguments
+/// * `services` - Service presence supplied by the host.
+///
+/// # Returns
+/// Static method metadata excluding uninstalled optional services.
+pub fn installed_methods(services: InstalledServices) -> impl Iterator<Item = MethodSpec> {
     [
         (services.agents, crate::rpc::agents::METHODS),
         (

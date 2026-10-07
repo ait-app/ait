@@ -47,7 +47,10 @@ fn attachment_normalization_keeps_supported_shapes_and_filters_invalid_neighbors
 #[test]
 fn methods_use_only_canonical_names() {
     assert_eq!(
-        crate::rpc::worktrees::METHODS,
+        crate::rpc::worktrees::METHODS
+            .iter()
+            .map(|method| method.name)
+            .collect::<Vec<_>>(),
         [
             "workspace.worktree.list.request",
             "workspace.worktree.create.request",

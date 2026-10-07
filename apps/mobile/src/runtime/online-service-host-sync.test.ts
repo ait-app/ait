@@ -1,9 +1,14 @@
-import { beforeEach, describe, expect, it, vi } from "vitest";
+/** @vitest-environment jsdom */
+import React from "react";
+import { cleanup, render, waitFor } from "@testing-library/react";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import {
   disconnectOnlineServiceHost,
   synchronizeOnlineServiceHost,
   useOnlineServiceHostSync,
   reconcileOnlineServiceHostsAfterLogout,
+  synchronizeDefaultDesktopHost,
+  OnlineServiceHostSyncLifecycle,
 } from "./online-service-host-sync";
 
 const mocks = vi.hoisted(() => ({
@@ -12,6 +17,10 @@ const mocks = vi.hoisted(() => ({
   connect: vi.fn(),
   disconnect: vi.fn(),
   accountStatus: "online",
+  syncBuiltInDaemon: true,
+  daemonStatus: vi.fn(),
+  connected: true,
+  supported: true,
   desktop: true,
   platform: "ios",
   publishHost: vi.fn(),
@@ -27,9 +36,19 @@ vi.mock("react-native", () => ({
 vi.mock("@/desktop/host", () => ({
   getDesktopHost: () => (mocks.desktop ? { invoke: mocks.invoke } : undefined),
 }));
+vi.mock("@/desktop/daemon/desktop-daemon", () => ({ getDesktopDaemonStatus: mocks.daemonStatus }));
 vi.mock("./account-state", () => ({
   serializeNativeAccountCommand: (work: () => Promise<unknown>) => work(),
-  useAccountState: Object.assign(vi.fn(), { getState: () => ({ status: mocks.accountStatus }) }),
+  useAccountState: Object.assign(
+    (selector: (state: unknown) => unknown) =>
+      selector({
+        status: mocks.accountStatus,
+        syncBuiltInDaemon: mocks.syncBuiltInDaemon,
+      }),
+    {
+      getState: () => ({ status: mocks.accountStatus, syncBuiltInDaemon: mocks.syncBuiltInDaemon }),
+    },
+  ),
 }));
 vi.mock("./native-account", () => ({
   getNativeAccount: async () => ({
@@ -39,8 +58,13 @@ vi.mock("./native-account", () => ({
 }));
 vi.mock("./host-runtime", () => ({
   getHostRuntimeStore: () => ({
+    getHosts: () => [
+      { serverId: "first", label: "Built-in daemon" },
+      { serverId: "remote", label: "Remote" },
+    ],
     getClient: () => ({
-      isConnected: true,
+      isConnected: mocks.connected,
+      getLastServerInfoMessage: () => ({ features: { onlineServiceSync: mocks.supported } }),
       getOnlineServiceStatus: mocks.status,
       connectOnlineService: mocks.connect,
       disconnectOnlineService: mocks.disconnect,
@@ -63,6 +87,10 @@ beforeEach(() => {
   vi.resetAllMocks();
   mocks.accountStatus = "online";
   mocks.desktop = true;
+  mocks.syncBuiltInDaemon = true;
+  mocks.connected = true;
+  mocks.supported = true;
+  mocks.daemonStatus.mockResolvedValue({ status: "running", serverId: "first" });
   useOnlineServiceHostSync.setState({ hosts: {} });
   mocks.status.mockResolvedValue(status());
   mocks.invoke.mockResolvedValue(grant);
@@ -73,8 +101,89 @@ beforeEach(() => {
   mocks.disconnect.mockResolvedValue(status());
   mocks.publishHost.mockResolvedValue(grant);
 });
+afterEach(() => {
+  cleanup();
+  vi.useRealTimers();
+});
 
 describe("host online service synchronization", () => {
+  it("starts synchronization after login without opening settings and keeps a manual stop offline", async () => {
+    mocks.accountStatus = "logged_out";
+    const view = render(React.createElement(OnlineServiceHostSyncLifecycle));
+    expect(mocks.invoke).not.toHaveBeenCalled();
+    mocks.accountStatus = "online";
+    view.rerender(React.createElement(OnlineServiceHostSyncLifecycle));
+    await waitFor(() => expect(mocks.connect).toHaveBeenCalledExactlyOnceWith(grant));
+    await disconnectOnlineServiceHost("first");
+    mocks.syncBuiltInDaemon = false;
+    mocks.invoke.mockClear();
+    vi.useFakeTimers();
+    view.rerender(React.createElement(OnlineServiceHostSyncLifecycle));
+    await vi.advanceTimersByTimeAsync(10000);
+    expect(mocks.invoke).not.toHaveBeenCalled();
+  });
+  it("automatically publishes only the desktop's built-in daemon after sign-in", async () => {
+    await synchronizeDefaultDesktopHost();
+    expect(mocks.invoke).toHaveBeenCalledExactlyOnceWith(
+      "account_host_sync",
+      expect.objectContaining({ serverId: "first", name: "Built-in daemon" }),
+    );
+    expect(mocks.connect).toHaveBeenCalledExactlyOnceWith(grant);
+  });
+
+  it("respects a persisted manual stop and can explicitly re-enable synchronization", async () => {
+    mocks.syncBuiltInDaemon = false;
+    await synchronizeDefaultDesktopHost();
+    expect(mocks.daemonStatus).not.toHaveBeenCalled();
+    expect(mocks.invoke).not.toHaveBeenCalled();
+    await synchronizeOnlineServiceHost("first", "Built-in daemon", true);
+    expect(mocks.connect).toHaveBeenCalledExactlyOnceWith(grant);
+  });
+
+  it("does not auto-publish on mobile or before account registration completes", async () => {
+    mocks.desktop = false;
+    await synchronizeDefaultDesktopHost();
+    mocks.desktop = true;
+    mocks.accountStatus = "logged_out";
+    await synchronizeDefaultDesktopHost();
+    mocks.accountStatus = "connecting";
+    await synchronizeDefaultDesktopHost();
+    expect(mocks.daemonStatus).not.toHaveBeenCalled();
+    expect(mocks.invoke).not.toHaveBeenCalled();
+  });
+
+  it("waits for the local daemon and its connection, then retries after startup", async () => {
+    mocks.daemonStatus.mockResolvedValueOnce({ status: "stopped", serverId: "first" });
+    await synchronizeDefaultDesktopHost();
+    mocks.connected = false;
+    await synchronizeDefaultDesktopHost();
+    mocks.connected = true;
+    mocks.supported = false;
+    await synchronizeDefaultDesktopHost();
+    mocks.supported = true;
+    expect(mocks.invoke).not.toHaveBeenCalled();
+    await synchronizeDefaultDesktopHost();
+    expect(mocks.connect).toHaveBeenCalledExactlyOnceWith(grant);
+  });
+
+  it("does not publish when manual stop arrives during the daemon status request", async () => {
+    mocks.daemonStatus.mockImplementationOnce(async () => {
+      mocks.syncBuiltInDaemon = false;
+      return { status: "running", serverId: "first" };
+    });
+    await synchronizeDefaultDesktopHost();
+    expect(mocks.invoke).not.toHaveBeenCalled();
+  });
+
+  it("reuses the stable host identity after the desktop daemon restarts", async () => {
+    await synchronizeDefaultDesktopHost();
+    mocks.status.mockResolvedValue(status("first", false, "instance-2"));
+    await synchronizeDefaultDesktopHost();
+    expect(mocks.invoke).toHaveBeenLastCalledWith(
+      "account_host_sync",
+      expect.objectContaining({ serverId: "first", instanceId: "instance-2" }),
+    );
+  });
   it("uses the iOS native account authority to synchronize and disconnect a host", async () => {
     mocks.desktop = false;
     await synchronizeOnlineServiceHost("first", "First", true);
@@ -98,6 +207,7 @@ describe("host online service synchronization", () => {
       platform: "linux",
       name: "First",
       needsGrant: true,
+      enableBuiltInDaemon: true,
     });
     expect(mocks.connect).toHaveBeenCalledExactlyOnceWith(grant);
     expect(useOnlineServiceHostSync.getState().hosts.first).toMatchObject({

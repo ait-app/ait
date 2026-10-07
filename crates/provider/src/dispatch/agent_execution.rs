@@ -1,30 +1,31 @@
 /// Client methods implemented by this component; consumed by capability discovery.
-pub(crate) const METHODS: &[&str] = &[
-    "agent.create.request",
-    "agent.resume.request",
-    "agent.message.send.request",
-    "agent.cancel.request",
-    "agent.finish.wait.request",
-    "agent.model.set.request",
-    "agent.thinking.set.request",
-    "agent.config.apply.request",
-    "provider.sessions.recent.list.request",
-    "agent.import.request",
-    "agent.refresh.request",
-    "agent.fork_context.request",
-    "agent.rewind.request",
-    "agent.commands.list.request",
-    "agent.mode.set.request",
-    "agent.feature.set.request",
-    "agent.permission.resolve.request",
-    "agent.provider_subagents.list.request",
-    "agent.provider_subagents.timeline.get.request",
-    "provider.diagnostic.request",
-    "provider.usage.list.request",
+pub(crate) const METHODS: &[MethodSpec] = &[
+    MethodSpec::request("agent.create.request"),
+    MethodSpec::request("agent.resume.request"),
+    MethodSpec::request("agent.message.send.request"),
+    MethodSpec::request("agent.cancel.request"),
+    MethodSpec::request("agent.finish.wait.request"),
+    MethodSpec::request("agent.model.set.request"),
+    MethodSpec::request("agent.thinking.set.request"),
+    MethodSpec::request("agent.config.apply.request"),
+    MethodSpec::request("provider.sessions.recent.list.request"),
+    MethodSpec::request("agent.import.request"),
+    MethodSpec::request("agent.refresh.request"),
+    MethodSpec::request("agent.fork_context.request"),
+    MethodSpec::request("agent.rewind.request"),
+    MethodSpec::request("agent.commands.list.request"),
+    MethodSpec::request("agent.mode.set.request"),
+    MethodSpec::request("agent.feature.set.request"),
+    MethodSpec::request("agent.permission.resolve.request"),
+    MethodSpec::request("agent.provider_subagents.list.request"),
+    MethodSpec::request("agent.provider_subagents.timeline.get.request"),
+    MethodSpec::request("provider.diagnostic.request"),
+    MethodSpec::request("provider.usage.list.request"),
 ];
 
 use model::ErrorCode;
 use model::ServerMessage;
+use model::methods::MethodSpec;
 use serde_json::Value;
 
 use crate::dispatch::State as Shared;

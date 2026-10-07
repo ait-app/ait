@@ -1,6 +1,6 @@
 use serde_json::{Value, json};
 
-use super::transport::{Socket, connect, request};
+use super::transport::{Socket, connect, method_names, request};
 use super::{CREDENTIAL_SENTINEL, ready, start, terminate};
 
 fn configuration(name: &str, enabled: bool) -> Value {
@@ -20,7 +20,7 @@ async fn binary_agent_revisions_defaults_reconnect_and_secret_exclusion() {
         "unsupported_capability"
     );
     drop(unnegotiated);
-    let mut client = connect(&address, provider::rpc::agents::METHODS).await;
+    let mut client = connect(&address, &method_names(provider::rpc::agents::METHODS)).await;
     assert_eq!(
         request(&mut client, "agent.default.get", json!({})).await["result"],
         json!({"agent_id":null,"version":0})
@@ -56,7 +56,7 @@ async fn binary_agent_revisions_defaults_reconnect_and_secret_exclusion() {
         json!([])
     );
     drop(client);
-    let mut client = connect(&address, provider::rpc::agents::METHODS).await;
+    let mut client = connect(&address, &method_names(provider::rpc::agents::METHODS)).await;
     assert_eq!(
         request(&mut client, "agent.configure", create.clone()).await["result"],
         original
@@ -65,7 +65,7 @@ async fn binary_agent_revisions_defaults_reconnect_and_secret_exclusion() {
     let mut process = start(&directory, &log);
     let mut client = connect(
         &ready(&mut process, &log).await,
-        provider::rpc::agents::METHODS,
+        &method_names(provider::rpc::agents::METHODS),
     )
     .await;
     assert_eq!(
@@ -108,7 +108,7 @@ async fn agent_rpc_rejects_unsafe_or_ambiguous_parameters_without_writes() {
     let mut process = start(&root.path().join("server"), &log);
     let mut client = connect(
         &ready(&mut process, &log).await,
-        provider::rpc::agents::METHODS,
+        &method_names(provider::rpc::agents::METHODS),
     )
     .await;
     let valid = json!({"config":configuration("original",true),"idempotency_key":"create"});

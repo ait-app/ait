@@ -21,15 +21,26 @@ const { SessionInboundMessageSchema } = await tsImport(
   import.meta.url,
 );
 const sha = (text) => crypto.createHash("sha256").update(text).digest("hex");
-const catalog = fs.readFileSync("crates/protocol/src/methods.rs", "utf8");
-const mapping = new Map(
-  [...catalog.matchAll(/(request|event|response)!\(\s*(\w+),\s*"([^"]+)",\s*"([^"]+)"\s*\)/g)].map(
-    (match) => [match[3], { kind: match[1], group: match[2], canonical: match[4] }],
+const methods = new Map(
+  Object.entries(
+    JSON.parse(execFileSync("python3", ["scripts/rust_method_specs.py"], { encoding: "utf8" })),
   ),
+);
+// Keep pinned upstream mappings in the audit snapshot, outside the runtime catalog.
+const fixture = "scripts/fixtures/paseo/paseo-api-contracts.json";
+const snapshot = JSON.parse(fs.readFileSync(fixture, "utf8"));
+assert.equal(snapshot.source.revision, revision);
+const mapping = new Map(
+  snapshot.entries
+    .filter((entry) => !entry.excluded)
+    .map(({ name, kind, group, canonical }) => {
+      assert.equal(methods.get(canonical), kind, `Ait method drifted: ${canonical}`);
+      return [name, { kind, group, canonical }];
+    }),
 );
 const excluded = new Set(
   fs
-    .readFileSync("crates/protocol/src/methods/fixtures/excluded-inbound.txt", "utf8")
+    .readFileSync("scripts/fixtures/paseo/excluded-inbound.txt", "utf8")
     .split("\n")
     .filter((line) => line && !line.startsWith("#")),
 );
@@ -161,7 +172,6 @@ assert.equal(
   new Set(entries.filter((entry) => !entry.excluded).map((entry) => entry.canonical)).size,
   168,
 );
-const fixture = "crates/protocol/src/methods/fixtures/paseo-api-contracts.json";
 const source = {
   revision,
   packageVersion: JSON.parse(

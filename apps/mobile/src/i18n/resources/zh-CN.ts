@@ -31,9 +31,10 @@ export const zhCN: TranslationResources = {
     hostCount: "{{count}} 台主机在线",
     selected: "已选择",
     emptyHosts:
-      "在另一台电脑上登录同一账户，并在该主机的连接设置中开启在线服务同步，即可在此连接。",
+      "在另一台电脑的 Desktop 上登录同一账户，内置 daemon 会默认上线。其他主机可在连接设置中开启同步。",
     disconnectRemoteHost: "断开远程主机",
-    hostSettingsHint: "要让电脑上线，请打开该主机的「连接」设置，开启在线服务同步。",
+    hostSettingsHint:
+      "Desktop 登录后默认同步内置 daemon。手动停止后将保持下线，可在主机的「连接」设置中重新开启；其他主机需手动开启同步。",
     requestFailed: "请求失败。",
     syncTitle: "与在线服务同步",
     syncDescription: "将此主机接入在线服务，即可从其他设备远程访问。",

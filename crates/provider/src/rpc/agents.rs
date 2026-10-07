@@ -1,15 +1,16 @@
 //! Transport-independent agents request handling.
 
 /// Client methods implemented by this component; consumed by capability discovery.
-pub const METHODS: &[&str] = &[
-    "agent.configure",
-    "agent.get",
-    "agent.list",
-    "agent.default.get",
-    "agent.default.set",
+pub const METHODS: &[MethodSpec] = &[
+    MethodSpec::request("agent.configure"),
+    MethodSpec::request("agent.get"),
+    MethodSpec::request("agent.list"),
+    MethodSpec::request("agent.default.get"),
+    MethodSpec::request("agent.default.set"),
 ];
 
 use domain::agent::{AgentConfig, AgentSnapshot, AgentTarget, Revision};
+use model::methods::MethodSpec;
 use serde_json::Value;
 
 use crate::protocol::agent;

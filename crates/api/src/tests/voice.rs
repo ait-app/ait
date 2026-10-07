@@ -28,8 +28,11 @@ impl Transcriber for Engine {
 async fn voice_socket(fixture: &Fixture) -> Socket {
     let mut socket = fixture.socket().await;
     let mut offer = hello();
-    offer["capabilities"] =
-        json!(::voice::capabilities::implemented_capabilities().collect::<Vec<_>>());
+    offer["capabilities"] = json!(
+        ::voice::capabilities::implemented_methods()
+            .map(|spec| spec.name)
+            .collect::<Vec<_>>()
+    );
     send(&mut socket, offer).await;
     let info = receive(&mut socket).await;
     assert_eq!(info["negotiated_capabilities"].as_array().unwrap().len(), 8);

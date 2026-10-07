@@ -1,7 +1,5 @@
 use std::collections::{BTreeMap, BTreeSet};
 
-use protocol::methods::PASEO_METHODS;
-
 use super::{TOKEN, ready, start};
 
 #[tokio::test]
@@ -44,11 +42,16 @@ async fn production_installs_every_in_scope_method_without_placeholders() {
         assert!(!published.contains(retired));
         assert!(!implemented.contains(retired));
     }
-    let catalog = PASEO_METHODS
-        .iter()
-        .map(|spec| (spec.canonical_name, spec.kind))
+    let catalog = schedule::capabilities::implemented_methods()
+        .chain(browser::capabilities::implemented_methods())
+        .chain(voice::capabilities::implemented_methods())
+        .chain(metadata::capabilities::implemented_methods())
+        .chain(filesystem::capabilities::implemented_methods())
+        .chain(provider::capabilities::implemented_methods())
+        .chain(terminal::capabilities::implemented_methods())
+        .map(|spec| (spec.name, spec.kind))
         .collect::<BTreeMap<_, _>>();
-    assert_eq!(catalog.len(), 168);
+    assert_eq!(catalog.len(), 176);
     assert!(catalog.keys().all(|method| published.contains(*method)));
     let placeholders = catalog
         .into_iter()
