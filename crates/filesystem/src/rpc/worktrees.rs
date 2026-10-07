@@ -1,13 +1,14 @@
 //! Worktree request validation and response projection.
 
 /// Client methods implemented by this component; consumed by capability discovery.
-pub const METHODS: &[&str] = &[
-    "workspace.worktree.list.request",
-    "workspace.worktree.create.request",
-    "workspace.worktree.archive.request",
+pub const METHODS: &[MethodSpec] = &[
+    MethodSpec::request("workspace.worktree.list.request"),
+    MethodSpec::request("workspace.worktree.create.request"),
+    MethodSpec::request("workspace.worktree.archive.request"),
 ];
 
 use chrono::{SecondsFormat, Utc};
+use model::methods::MethodSpec;
 use serde::Serialize;
 use serde_json::Value;
 

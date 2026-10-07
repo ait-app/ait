@@ -180,7 +180,7 @@ fn runtime_info(
     services: &Services,
 ) -> Arc<Runtime> {
     let implemented_capabilities = installed_capabilities(services);
-    let capabilities = registered_capabilities(&implemented_capabilities);
+    let capabilities = registered_capabilities();
     Arc::new(Runtime::new(ServerInfo {
         server_id,
         version: Some(env!("CARGO_PKG_VERSION").to_owned()),
@@ -414,18 +414,11 @@ impl Api {
     }
 }
 
-fn registered_capabilities(implemented: &[String]) -> Vec<String> {
-    let mut capabilities = implemented.to_vec();
-    capabilities.push(protocol::single::CAPABILITY.to_owned());
-    for method in protocol::methods::PASEO_METHODS {
-        if !capabilities
-            .iter()
-            .any(|capability| capability == method.canonical_name)
-        {
-            capabilities.push(method.canonical_name.to_owned());
-        }
-    }
-    capabilities
+fn registered_capabilities() -> Vec<String> {
+    capabilities::implemented_methods()
+        .map(|method| method.name.to_owned())
+        .chain(std::iter::once(protocol::single::CAPABILITY.to_owned()))
+        .collect()
 }
 
 #[derive(Debug)]

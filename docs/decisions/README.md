@@ -4,6 +4,7 @@
 
 ## Daemon 与协议
 
+- [ADR-095：组件自行声明方法元数据](daemon/adr-095-component-method-declarations.md)
 - [ADR-026：规范化 Paseo WebSocket 接口并按能力分期接入](daemon/adr-026-canonical-paseo-websocket-surface.md)
 - [ADR-033：独立 terminal 与完整 Terminal 方法分组](daemon/adr-033-daemon-terminal.md)
 - [ADR-035：能力分组与安装规则归所属 server crate](daemon/adr-035-daemon-capability-groups.md)

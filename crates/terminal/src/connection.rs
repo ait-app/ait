@@ -1,15 +1,15 @@
 /// Client methods implemented by this component; consumed by capability discovery.
-pub const METHODS: &[&str] = &[
-    "terminal.list.request",
-    "terminal.list.subscribe.request",
-    "terminal.list.unsubscribe.request",
-    "terminal.create.request",
-    "terminal.rename.request",
-    "terminal.subscribe.request",
-    "terminal.unsubscribe.request",
-    "terminal.kill.request",
-    "terminal.capture.request",
-    "terminal.input",
+pub const METHODS: &[MethodSpec] = &[
+    MethodSpec::request("terminal.list.request"),
+    MethodSpec::request("terminal.list.subscribe.request"),
+    MethodSpec::request("terminal.list.unsubscribe.request"),
+    MethodSpec::request("terminal.create.request"),
+    MethodSpec::request("terminal.rename.request"),
+    MethodSpec::request("terminal.subscribe.request"),
+    MethodSpec::request("terminal.unsubscribe.request"),
+    MethodSpec::request("terminal.kill.request"),
+    MethodSpec::request("terminal.capture.request"),
+    MethodSpec::event("terminal.input"),
 ];
 
 use std::collections::BTreeMap;
@@ -18,6 +18,7 @@ use crate::ports::Observation;
 use crate::protocol::{self as wire, Input, Opcode};
 use crate::rpc::decode;
 use crate::service::Terminals;
+use model::methods::MethodSpec;
 use model::{ErrorCode, ServerMessage};
 use serde_json::{Value, json};
 use uuid::Uuid;

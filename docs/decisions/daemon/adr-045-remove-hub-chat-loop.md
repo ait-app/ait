@@ -5,7 +5,7 @@
 - 决策来源：用户明确要求这三组不再支持，直接删除。
 - 修订：ADR-026 的协议支持范围、ADR-044 的前端 Rust transport 方法映射。
 
-从 Rust `MethodGroup` 和 `PASEO_METHODS` 删除 Hub 7 项、Chat 7 项、Loop 5 项，同时从前端 Rust transport 映射删除全部对应方法。不提供别名、占位处理器或迁移响应；HTTP server info 不发布这些 capability，WS optional capability 不协商，required capability 拒绝，已握手请求返回 `method_not_found`。
+从 Rust 方法目录删除 Hub 7 项、Chat 7 项、Loop 5 项，同时从前端 Rust transport 映射删除全部对应方法。不提供别名、占位处理器或迁移响应；HTTP server info 不发布这些 capability，WS optional capability 不协商，required capability 拒绝，已握手请求返回 `method_not_found`。
 
 固定 Paseo 的原始 205 项 fixture 保持原样用于上游审计；仅在测试中维护 19 项显式排除清单。校验要求 registered 与 excluded 不相交，且 registered 等于 upstream 减 excluded。运行期不加载排除清单。
 

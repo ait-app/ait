@@ -4,6 +4,7 @@
 
 ## Daemon 与协议
 
+- [组件方法声明：PR 覆盖率证据](daemon/component-method-declarations-pr-coverage-2026-10-07.json)
 - [Rust code smell 清理：PR 验证](daemon/rust-code-smell-pr-validation-2026-10-04.md)
 - [Cargo workspace 依赖整理与警告清理：PR 验证](daemon/cargo-workspace-pr-validation-2026-10-04.md)
 - [Daemon 测试分支 rebase 验证](daemon/crate-coverage-rebase.md)

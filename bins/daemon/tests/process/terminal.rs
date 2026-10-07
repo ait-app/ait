@@ -6,7 +6,7 @@ use terminal::connection::METHODS;
 use terminal::protocol::{Opcode, frame};
 use tokio_tungstenite::tungstenite::Message;
 
-use super::transport::{Socket, connect};
+use super::transport::{Socket, connect, method_names};
 use super::{ready, start, terminate};
 
 #[path = "terminal/paseo.rs"]
@@ -24,7 +24,7 @@ struct Client {
 
 impl Client {
     async fn connect(address: &str) -> Self {
-        let mut methods = METHODS.to_vec();
+        let mut methods = method_names(METHODS);
         methods.extend([
             "workspace.open.request",
             "workspace.archive.request",

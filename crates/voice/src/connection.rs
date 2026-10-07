@@ -1,15 +1,15 @@
 //! Physical-connection ownership, cancellation and ordered speech delivery.
 
 /// Client methods implemented by this component; consumed by capability discovery.
-pub const METHODS: &[&str] = &[
-    "voice.mode.set.request",
-    "voice.abort.request",
-    "dictation.stream.start",
-    "dictation.stream.finish",
-    "dictation.stream.cancel",
-    "voice.audio.chunk",
-    "voice.audio.played",
-    "dictation.stream.chunk",
+pub const METHODS: &[MethodSpec] = &[
+    MethodSpec::request("voice.mode.set.request"),
+    MethodSpec::request("voice.abort.request"),
+    MethodSpec::event("dictation.stream.start"),
+    MethodSpec::event("dictation.stream.finish"),
+    MethodSpec::event("dictation.stream.cancel"),
+    MethodSpec::event("voice.audio.chunk"),
+    MethodSpec::event("voice.audio.played"),
+    MethodSpec::event("dictation.stream.chunk"),
 ];
 
 mod dictation;
@@ -18,6 +18,7 @@ mod voice;
 
 use std::{collections::BTreeMap, sync::Arc};
 
+use model::methods::MethodSpec;
 use model::{
     Runtime, ServerMessage,
     outbound::{Outbound, QueueError},

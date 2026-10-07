@@ -1,15 +1,16 @@
 //! Concrete service state and crate-owned request dispatch.
 
 /// Client methods implemented by this component; consumed by capability discovery.
-pub(crate) const BASE_METHODS: &[&str] = &[
-    "server.info",
-    "connection.ping",
-    "server.status.subscribe",
-    "subscription.release.request",
+pub(crate) const BASE_METHODS: &[MethodSpec] = &[
+    MethodSpec::request("server.info"),
+    MethodSpec::request("connection.ping"),
+    MethodSpec::request("server.status.subscribe"),
+    MethodSpec::request("subscription.release.request"),
 ];
 
 use std::sync::{Arc, Mutex};
 
+use model::methods::MethodSpec;
 use model::outbound::QueueError;
 use model::{Context, DispatchError, ErrorCode, Runtime};
 

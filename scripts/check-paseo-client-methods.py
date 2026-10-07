@@ -1,27 +1,47 @@
-"""Check canonical Ait client methods against the authoritative Rust catalog."""
+"""Check Ait client methods against component-owned Rust metadata."""
 
-from pathlib import Path
+import json
 import re
 import subprocess
+from pathlib import Path
+
+from rust_method_specs import read_method_specs
 
 ROOT = Path(__file__).resolve().parents[1]
-rust = (ROOT / "crates/protocol/src/methods.rs").read_text()
-client = (ROOT / "apps/mobile/src/runtime/rust-daemon/methods.ts").read_text()
-entries = re.findall(
-    r'(request|event|response)!\(\s*\w+,\s*"([^"]+)",\s*"([^"]+)"\s*\)', rust
+expected = read_method_specs()
+client = "\n".join(
+    (ROOT / "apps/mobile/src/runtime/rust-daemon" / file).read_text()
+    for file in ["methods.ts", "relay-methods.ts", "transport.ts"]
 )
-expected = {canonical: kind for kind, _, canonical in entries}
 actual = {
     name: (kind, method)
     for name, method, kind in re.findall(
         r'"([^"]+)":\s*\{\s*method:\s*"([^"]+)",\s*kind:\s*"([^"]+)"', client
     )
 }
-if actual != {name: (kind, name) for name, kind in expected.items()}:
+if not actual or any(
+    method != name or expected.get(name) != kind
+    for name, (kind, method) in actual.items()
+):
     raise SystemExit("Frontend methods must use canonical Rust names as both keys and wire methods")
 
-legacy = {source for _, source, canonical in entries if source != canonical}
-# The catalog source name "ping" is also an ordinary command and SDK function name.
+# Historical source names belong to the pinned audit snapshot, not the runtime catalog.
+snapshot = json.loads(
+    (ROOT / "scripts/fixtures/paseo/paseo-api-contracts.json").read_text()
+)
+for entry in snapshot["entries"]:
+    if entry["excluded"]:
+        continue
+    name = entry["canonical"]
+    kind = entry["kind"]
+    if expected.get(name) != kind or actual.get(name) != (kind, name):
+        raise SystemExit(f"Missing or mismatched Ait method: {name}")
+legacy = {
+    entry["name"]
+    for entry in snapshot["entries"]
+    if not entry["excluded"] and entry["name"] != entry["canonical"]
+}
+# The historical source name "ping" is also an ordinary command and SDK function name.
 # Check it only in message discriminators; other legacy names are unambiguous.
 ping_pattern = re.compile(r'(?:type|method|requestType)\s*:\s*[\'"]ping[\'"]')
 files = subprocess.check_output(
@@ -50,4 +70,4 @@ for file in files:
             violations.append(f"{file}:{number}: {line.strip()}")
 if violations:
     raise SystemExit("Legacy Paseo operations remain in apps/:\n" + "\n".join(violations))
-print(f"Verified {len(expected)} canonical Ait client methods and apps/ operation names")
+print(f"Verified {len(actual)} Ait client methods against {len(expected)} component declarations")
