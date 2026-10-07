@@ -27,8 +27,9 @@ Electron 位于 `apps/desktop`；`apps/mobile` 提供桌面、浏览器与移动
 传输或存储依赖。`model` 含 Tokio 请求资源，不属于纯领域层。
 
 请求通过名称、方向和 capability 校验后，以 `Option<Context>` 逐级进入处理入口。每个入口
-自行匹配，未匹配时保留请求，匹配后取走并执行；API 完成响应或跨能力收尾后，发现 Context
-已消费就返回。方法目录只用于协议校验，业务处理不预先选择 handler，详见
+自行匹配，未匹配时保留请求，匹配后取走并执行；成功后 API 完成响应或跨能力收尾并返回，
+仅在 `NotImplemented` 时断言 Context 仍为 `Some` 后继续。违约消费会先记录 error 再触发断言。
+方法目录只用于协议校验，业务处理不预先选择 handler，详见
 [ADR-093](../decisions/daemon/adr-093-consumable-request-context.md)。
 
 内置 Provider 由 `provider::Providers` 组装。具体客户端列表、启动配置、安装发现与辅助

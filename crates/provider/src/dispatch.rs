@@ -132,33 +132,40 @@ pub async fn dispatch(
     if context.is_none() {
         return Ok(None);
     }
-    requests::agents(context, state)
-        .await
-        .or_else(DispatchError::or_next)?;
-    if context.is_none() {
-        return Ok(None);
+    match requests::agents(context, state).await {
+        Ok(()) => return Ok(None),
+        Err(DispatchError::NotImplemented) => {
+            Context::assert_unhandled(context, "provider::agents");
+        }
+        Err(error) => return Err(error),
     }
-    let completion = requests::runtime(context, state, connection)
-        .await
-        .or_else(DispatchError::or_next)?;
-    if context.is_none() {
-        return Ok(completion);
+    match requests::runtime(context, state, connection).await {
+        Ok(completion) => return Ok(completion),
+        Err(DispatchError::NotImplemented) => {
+            Context::assert_unhandled(context, "provider::runtime");
+        }
+        Err(error) => return Err(error),
     }
-    requests::execution(context, state)
-        .await
-        .or_else(DispatchError::or_next)?;
-    if context.is_none() {
-        return Ok(None);
+    match requests::execution(context, state).await {
+        Ok(()) => return Ok(None),
+        Err(DispatchError::NotImplemented) => {
+            Context::assert_unhandled(context, "provider::execution");
+        }
+        Err(error) => return Err(error),
     }
-    requests::timeline(context, state, connection)
-        .await
-        .or_else(DispatchError::or_next)?;
-    if context.is_none() {
-        return Ok(None);
+    match requests::timeline(context, state, connection).await {
+        Ok(()) => return Ok(None),
+        Err(DispatchError::NotImplemented) => {
+            Context::assert_unhandled(context, "provider::timeline");
+        }
+        Err(error) => return Err(error),
     }
-    requests::catalog(context, state).or_else(DispatchError::or_next)?;
-    if context.is_none() {
-        return Ok(None);
+    match requests::catalog(context, state) {
+        Ok(()) => return Ok(None),
+        Err(DispatchError::NotImplemented) => {
+            Context::assert_unhandled(context, "provider::catalog");
+        }
+        Err(error) => return Err(error),
     }
     Err(DispatchError::NotImplemented)
 }

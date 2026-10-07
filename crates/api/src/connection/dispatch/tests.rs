@@ -45,41 +45,70 @@ async fn try_handlers(
     state: &Shared,
     subscriptions: &mut ConnectionSubscriptions,
 ) -> Result<(), QueueError> {
-    super::super::workspace_creation::request(context, state)
+    match super::super::workspace_creation::request(context, state).await {
+        Ok(()) => {}
+        Err(DispatchError::NotImplemented) => {
+            Context::assert_unhandled(context, "api::workspace_creation");
+        }
+        Err(DispatchError::Delivery(error)) => return Err(error),
+    }
+    match super::super::workspace_archive::request(context, state).await {
+        Ok(()) => {}
+        Err(DispatchError::NotImplemented) => {
+            Context::assert_unhandled(context, "api::workspace_archive");
+        }
+        Err(DispatchError::Delivery(error)) => return Err(error),
+    }
+    match crate::relay_rpc::request(context, state).await {
+        Ok(()) => {}
+        Err(DispatchError::NotImplemented) => Context::assert_unhandled(context, "api::relay"),
+        Err(DispatchError::Delivery(error)) => return Err(error),
+    }
+    match schedule::dispatch::dispatch(context, &state.schedule).await {
+        Ok(()) => {}
+        Err(DispatchError::NotImplemented) => Context::assert_unhandled(context, "schedule"),
+        Err(DispatchError::Delivery(error)) => return Err(error),
+    }
+    match browser::dispatch::dispatch(context, &state.browser, &mut subscriptions.browser) {
+        Ok(()) => {}
+        Err(DispatchError::NotImplemented) => Context::assert_unhandled(context, "browser"),
+        Err(DispatchError::Delivery(error)) => return Err(error),
+    }
+    match voice::dispatch::dispatch(context, &state.voice, &mut subscriptions.voice).await {
+        Ok(()) => {}
+        Err(DispatchError::NotImplemented) => Context::assert_unhandled(context, "voice"),
+        Err(DispatchError::Delivery(error)) => return Err(error),
+    }
+    match metadata::dispatch::dispatch(context, &state.metadata, &mut subscriptions.metadata)
         .await
-        .or_else(DispatchError::or_next)?;
-    super::super::workspace_archive::request(context, state)
+        .map(|completion| assert!(completion.is_none()))
+    {
+        Ok(()) => {}
+        Err(DispatchError::NotImplemented) => Context::assert_unhandled(context, "metadata"),
+        Err(DispatchError::Delivery(error)) => return Err(error),
+    }
+    match filesystem::dispatch::dispatch(context, &state.filesystem, &mut subscriptions.filesystem)
         .await
-        .or_else(DispatchError::or_next)?;
-    crate::relay_rpc::request(context, state)
+    {
+        Ok(()) => {}
+        Err(DispatchError::NotImplemented) => Context::assert_unhandled(context, "filesystem"),
+        Err(DispatchError::Delivery(error)) => return Err(error),
+    }
+    match provider::dispatch::dispatch(context, &state.provider, &mut subscriptions.provider)
         .await
-        .or_else(DispatchError::or_next)?;
-    schedule::dispatch::dispatch(context, &state.schedule)
-        .await
-        .or_else(DispatchError::or_next)?;
-    browser::dispatch::dispatch(context, &state.browser, &mut subscriptions.browser)
-        .or_else(DispatchError::or_next)?;
-    voice::dispatch::dispatch(context, &state.voice, &mut subscriptions.voice)
-        .await
-        .or_else(DispatchError::or_next)?;
-    assert!(
-        metadata::dispatch::dispatch(context, &state.metadata, &mut subscriptions.metadata)
-            .await
-            .or_else(DispatchError::or_next)?
-            .is_none()
-    );
-    filesystem::dispatch::dispatch(context, &state.filesystem, &mut subscriptions.filesystem)
-        .await
-        .or_else(DispatchError::or_next)?;
-    assert!(
-        provider::dispatch::dispatch(context, &state.provider, &mut subscriptions.provider)
-            .await
-            .or_else(DispatchError::or_next)?
-            .is_none()
-    );
-    terminal::dispatch::dispatch(context, &state.terminal, &mut subscriptions.terminals)
-        .await
-        .or_else(DispatchError::or_next)
+        .map(|completion| assert!(completion.is_none()))
+    {
+        Ok(()) => {}
+        Err(DispatchError::NotImplemented) => Context::assert_unhandled(context, "provider"),
+        Err(DispatchError::Delivery(error)) => return Err(error),
+    }
+    match terminal::dispatch::dispatch(context, &state.terminal, &mut subscriptions.terminals).await
+    {
+        Ok(()) => {}
+        Err(DispatchError::NotImplemented) => Context::assert_unhandled(context, "terminal"),
+        Err(DispatchError::Delivery(error)) => return Err(error),
+    }
+    Ok(())
 }
 
 fn decode(frame: Frame) -> Value {
@@ -154,6 +183,26 @@ async fn response_delivery_failure_consumes_the_request_and_propagates() {
 
         assert!(matches!(result, Err(QueueError::Full)), "{method}");
         assert!(pending.is_none(), "{method}");
+    }
+}
+
+#[tokio::test]
+async fn request_chain_stops_on_delivery_failure_from_each_owner() {
+    let api = api();
+    for &method in OWNED_METHODS {
+        let (outbound, receiver) = Outbound::new();
+        drop(receiver);
+        let mut subscriptions = ConnectionSubscriptions::default();
+
+        let result = request(
+            context(method, &api.shared, &outbound),
+            &api.shared,
+            &mut subscriptions,
+        )
+        .await;
+
+        assert!(matches!(result, Err(QueueError::Full)), "{method}");
+        assert!(outbound.failure().is_cancelled(), "{method}");
     }
 }
 

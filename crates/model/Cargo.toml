@@ -14,6 +14,8 @@ serde_json.workspace = true
 thiserror.workspace = true
 tokio.workspace = true
 tokio-util.workspace = true
+# Record consumed-context invariant violations before ending the dispatch task.
+tracing.workspace = true
 
 [lints]
 workspace = true

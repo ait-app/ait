@@ -135,59 +135,71 @@ pub async fn dispatch(
     if context.is_none() {
         return Ok(None);
     }
-    let completion = base(context, state, connection).or_else(DispatchError::or_next)?;
-    if context.is_none() {
-        return Ok(completion);
+    match base(context, state, connection) {
+        Ok(completion) => return Ok(completion),
+        Err(DispatchError::NotImplemented) => Context::assert_unhandled(context, "metadata::base"),
+        Err(error) => return Err(error),
     }
-    requests::push(context, state, connection)
-        .await
-        .or_else(DispatchError::or_next)?;
-    if context.is_none() {
-        return Ok(None);
+    match requests::push(context, state, connection).await {
+        Ok(()) => return Ok(None),
+        Err(DispatchError::NotImplemented) => Context::assert_unhandled(context, "metadata::push"),
+        Err(error) => return Err(error),
     }
-    requests::editor(context, state).or_else(DispatchError::or_next)?;
-    if context.is_none() {
-        return Ok(None);
+    match requests::editor(context, state) {
+        Ok(()) => return Ok(None),
+        Err(DispatchError::NotImplemented) => {
+            Context::assert_unhandled(context, "metadata::editor");
+        }
+        Err(error) => return Err(error),
     }
-    requests::creation(context, state, connection)
-        .await
-        .or_else(DispatchError::or_next)?;
-    if context.is_none() {
-        return Ok(None);
+    match requests::creation(context, state, connection).await {
+        Ok(()) => return Ok(None),
+        Err(DispatchError::NotImplemented) => {
+            Context::assert_unhandled(context, "metadata::creation");
+        }
+        Err(error) => return Err(error),
     }
-    requests::session(context, state, connection).or_else(DispatchError::or_next)?;
-    if context.is_none() {
-        return Ok(None);
+    match requests::session(context, state, connection) {
+        Ok(()) => return Ok(None),
+        Err(DispatchError::NotImplemented) => {
+            Context::assert_unhandled(context, "metadata::session");
+        }
+        Err(error) => return Err(error),
     }
-    requests::directory(context, state, connection)
-        .await
-        .or_else(DispatchError::or_next)?;
-    if context.is_none() {
-        return Ok(None);
+    match requests::directory(context, state, connection).await {
+        Ok(()) => return Ok(None),
+        Err(DispatchError::NotImplemented) => {
+            Context::assert_unhandled(context, "metadata::directory");
+        }
+        Err(error) => return Err(error),
     }
-    let completion = requests::daemon(context, state)
-        .await
-        .or_else(DispatchError::or_next)?;
-    if context.is_none() {
-        return Ok(completion);
+    match requests::daemon(context, state).await {
+        Ok(completion) => return Ok(completion),
+        Err(DispatchError::NotImplemented) => {
+            Context::assert_unhandled(context, "metadata::daemon");
+        }
+        Err(error) => return Err(error),
     }
-    labels(context, state, connection)
-        .await
-        .or_else(DispatchError::or_next)?;
-    if context.is_none() {
-        return Ok(None);
+    match labels(context, state, connection).await {
+        Ok(()) => return Ok(None),
+        Err(DispatchError::NotImplemented) => {
+            Context::assert_unhandled(context, "metadata::labels");
+        }
+        Err(error) => return Err(error),
     }
-    requests::automation(context, state)
-        .await
-        .or_else(DispatchError::or_next)?;
-    if context.is_none() {
-        return Ok(None);
+    match requests::automation(context, state).await {
+        Ok(()) => return Ok(None),
+        Err(DispatchError::NotImplemented) => {
+            Context::assert_unhandled(context, "metadata::automation");
+        }
+        Err(error) => return Err(error),
     }
-    requests::workspace_state(context, state)
-        .await
-        .or_else(DispatchError::or_next)?;
-    if context.is_none() {
-        return Ok(None);
+    match requests::workspace_state(context, state).await {
+        Ok(()) => return Ok(None),
+        Err(DispatchError::NotImplemented) => {
+            Context::assert_unhandled(context, "metadata::workspace_state");
+        }
+        Err(error) => return Err(error),
     }
     Err(DispatchError::NotImplemented)
 }

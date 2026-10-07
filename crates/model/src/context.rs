@@ -42,24 +42,30 @@ pub enum DispatchError {
     Delivery(#[from] QueueError),
 }
 
-impl DispatchError {
-    /// Continue a handler chain after an unimplemented request.
+impl Context<'_> {
+    /// Assert that a handler declining a request retained its Context.
     ///
     /// # Arguments
-    /// * `self` - The attempted handler's error.
+    /// * `pending` - Request ownership after the handler returned `NotImplemented`.
+    /// * `handler` - Handler name included in the invariant failure diagnostic.
     /// # Returns
-    /// Returns the empty completion value when another handler may try the pending Context.
-    /// # Errors
-    /// Propagates delivery failures without retrying the consumed request.
-    pub fn or_next<T: Default>(self) -> Result<T, QueueError> {
-        match self {
-            Self::NotImplemented => Ok(T::default()),
-            Self::Delivery(error) => Err(error),
+    /// Returns without modifying `pending` when the Context is still available.
+    /// # Panics
+    /// Logs an error and panics if the handler consumed the declined request.
+    #[track_caller]
+    pub fn assert_unhandled(pending: &Option<Self>, handler: &str) {
+        if pending.is_none() {
+            tracing::error!(
+                handler,
+                "Handler returned NotImplemented after consuming Context"
+            );
         }
+        assert!(
+            pending.is_some(),
+            "Handler `{handler}` returned NotImplemented after consuming Context"
+        );
     }
-}
 
-impl Context<'_> {
     /// Execute `operation` with the owned method and parameters using the shared job budget.
     /// # Errors
     /// Returns admission, service-lock, task or converted business errors.

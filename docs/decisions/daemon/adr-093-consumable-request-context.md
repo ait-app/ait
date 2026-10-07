@@ -11,7 +11,8 @@
 API 校验名称、消息方向、已协商 capability 和能力安装情况后，将请求放入
 `Some(Context)`。工作区创建、归档、relay 和各能力 crate 的入口依次接收
 `&mut Option<Context>`，在自己的入口判断是否处理。未匹配时原样保留请求；匹配后取走
-Context，完成执行和响应。每层完成后，API 发现 Option 为 `None` 就正常返回。
+Context，完成执行和响应。调用方只根据返回值结束或继续：成功直接返回，只有
+`DispatchError::NotImplemented` 才进入下一层，其他错误立即传播。
 
 各能力 crate 内部也逐个调用处理分支，在实际处理入口直接匹配方法并取走 Context。
 删除跨 crate 和 crate 内部的 Group、`IMPLEMENTED_GROUPS` 与 `Context::take_matching`，
@@ -19,8 +20,11 @@ Context，完成执行和响应。每层完成后，API 发现 Option 为 `None`
 声明 `METHODS`；crate 的能力发现只组合这些方法与安装条件，API 再组合各 crate 的迭代器。
 protocol 中重复的 capability 数组移除，协议类型与规范目录不决定 daemon 已实现什么。
 消息方向和兼容名称继续由协议校验，传输队列归属查询实现组件组合后的方法目录。
-未实现方法返回 `DispatchError::NotImplemented` 并保留 Context，调用方只忽略此错误以继续
-尝试下一层；已消费请求的队列或编码失败返回 `DispatchError::Delivery` 并立即传播。
+未实现方法返回 `DispatchError::NotImplemented` 并保留 Context。每个继续分发的分支调用
+`Context::assert_unhandled`，断言请求仍为 `Some`；若 Context 已消费，先记录带 handler 名称的
+error，再触发断言，阻止违反契约的处理链继续执行。此断言在 debug 和 release 均生效。
+删除把未实现错误转成成功默认值的 `DispatchError::or_next`，也不在成功后用 Context 的
+Option 状态再次决定流程。已消费请求的队列或编码失败返回 `DispatchError::Delivery` 并立即传播。
 空 Context 入口仍然无操作成功返回。
 
 方法目录只保留消息方向与协商 capability，继续区分未知方法、错误方向、未协商能力与未安装
@@ -32,7 +36,7 @@ protocol 中重复的 capability 数组移除，协议类型与规范目录不�
 
 metadata 和 provider 仍以明确的数据返回跨能力收尾工作：释放连接订阅、获取 daemon 的
 Provider 可用性快照，以及关闭 Agent 后关闭关联 Terminal。API 必须完成收尾并发送响应后，
-才能根据已消费的 Context 返回。已接纳的后台等待继续由 Runtime 追踪，Option 为 `None`
+才从成功分支返回。已接纳的后台等待继续由 Runtime 追踪，Option 为 `None`
 表示请求所有权已移交，不要求长任务此时已经结束。
 
 单连接模式保留四个有界 worker 及其连接状态所有权。入口按所属 crate 的方法声明选择
@@ -45,6 +49,6 @@ worker 队列，仅用于并发和订阅隔离，不选择业务 handler 或传�
 不引入动态 handler 注册、boxed future 或回调接口。匹配不分配内存，最坏逐个尝试
 处理分支；请求载荷只移动一次。
 
-回归测试覆盖未匹配错误与请求原样保留、空 Context 无操作、所有已声明请求的消费分支、
+回归测试覆盖未匹配错误与请求原样保留、违约消费的断言、空 Context 无操作、所有已声明请求的消费分支、
 各 crate 消费一次、业务错误停止处理、发送失败传播、后段能力与最终兜底、metadata 收尾、校验错误优先级及 worker 归属。
 既有 WebSocket 测试继续验证 capability 协商、响应顺序、订阅释放和连接隔离。

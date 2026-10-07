@@ -92,47 +92,54 @@ pub async fn dispatch(
     if context.is_none() {
         return Ok(());
     }
-    requests::skills(context, state)
-        .await
-        .or_else(DispatchError::or_next)?;
-    if context.is_none() {
-        return Ok(());
+    match requests::skills(context, state).await {
+        Ok(()) => return Ok(()),
+        Err(DispatchError::NotImplemented) => {
+            Context::assert_unhandled(context, "filesystem::skills");
+        }
+        Err(error) => return Err(error),
     }
-    checkout(context, state, connection)
-        .await
-        .or_else(DispatchError::or_next)?;
-    if context.is_none() {
-        return Ok(());
+    match checkout(context, state, connection).await {
+        Ok(()) => return Ok(()),
+        Err(DispatchError::NotImplemented) => {
+            Context::assert_unhandled(context, "filesystem::checkout");
+        }
+        Err(error) => return Err(error),
     }
-    requests::forge(context, state)
-        .await
-        .or_else(DispatchError::or_next)?;
-    if context.is_none() {
-        return Ok(());
+    match requests::forge(context, state).await {
+        Ok(()) => return Ok(()),
+        Err(DispatchError::NotImplemented) => {
+            Context::assert_unhandled(context, "filesystem::forge");
+        }
+        Err(error) => return Err(error),
     }
-    requests::files(context, state, connection)
-        .await
-        .or_else(DispatchError::or_next)?;
-    if context.is_none() {
-        return Ok(());
+    match requests::files(context, state, connection).await {
+        Ok(()) => return Ok(()),
+        Err(DispatchError::NotImplemented) => {
+            Context::assert_unhandled(context, "filesystem::files");
+        }
+        Err(error) => return Err(error),
     }
-    requests::github_projects(context, state)
-        .await
-        .or_else(DispatchError::or_next)?;
-    if context.is_none() {
-        return Ok(());
+    match requests::github_projects(context, state).await {
+        Ok(()) => return Ok(()),
+        Err(DispatchError::NotImplemented) => {
+            Context::assert_unhandled(context, "filesystem::github_projects");
+        }
+        Err(error) => return Err(error),
     }
-    worktrees(context, state)
-        .await
-        .or_else(DispatchError::or_next)?;
-    if context.is_none() {
-        return Ok(());
+    match worktrees(context, state).await {
+        Ok(()) => return Ok(()),
+        Err(DispatchError::NotImplemented) => {
+            Context::assert_unhandled(context, "filesystem::worktrees");
+        }
+        Err(error) => return Err(error),
     }
-    requests::recovery(context, state)
-        .await
-        .or_else(DispatchError::or_next)?;
-    if context.is_none() {
-        return Ok(());
+    match requests::recovery(context, state).await {
+        Ok(()) => return Ok(()),
+        Err(DispatchError::NotImplemented) => {
+            Context::assert_unhandled(context, "filesystem::recovery");
+        }
+        Err(error) => return Err(error),
     }
     Err(DispatchError::NotImplemented)
 }
