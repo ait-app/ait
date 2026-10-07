@@ -1,15 +1,16 @@
 //! Authenticated control of this daemon's outbound online service connector.
 
+use model::methods::MethodSpec;
 use model::{Context, DispatchError, ErrorCode};
 use serde_json::{Value, json};
 
 use crate::Shared;
 
-/// Extra transport-owned methods, independent of the pinned Paseo catalog.
-pub(super) const METHODS: &[&str] = &[
-    "relay.status.request",
-    "relay.start.request",
-    "relay.stop.request",
+/// Online service methods owned by this transport component.
+pub(super) const METHODS: &[MethodSpec] = &[
+    MethodSpec::request("relay.status.request"),
+    MethodSpec::request("relay.start.request"),
+    MethodSpec::request("relay.stop.request"),
 ];
 
 /// Handle a negotiated relay request using this daemon's fixed local destination.

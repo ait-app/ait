@@ -1,29 +1,33 @@
 //! Project and Workspace request handling and descriptor projections.
 
 /// Client methods implemented by this component branch.
-pub const METHODS: &[&str] = &[
-    "project.add.request",
-    "project.create_directory.request",
-    "project.list.request",
-    "project.rename.request",
-    "project.remove.request",
-    "workspace.open.request",
-    "workspace.create.request",
-    "workspace.list.request",
-    "workspace.archive.request",
-    "workspace.title.set.request",
-    "workspace.pin.set.request",
+pub const METHODS: &[MethodSpec] = &[
+    MethodSpec::request("project.add.request"),
+    MethodSpec::request("project.create_directory.request"),
+    MethodSpec::request("project.list.request"),
+    MethodSpec::request("project.rename.request"),
+    MethodSpec::request("project.remove.request"),
+    MethodSpec::request("workspace.open.request"),
+    MethodSpec::request("workspace.create.request"),
+    MethodSpec::request("workspace.list.request"),
+    MethodSpec::request("workspace.archive.request"),
+    MethodSpec::request("workspace.title.set.request"),
+    MethodSpec::request("workspace.pin.set.request"),
 ];
 
 /// Client methods implemented by this component branch.
-pub const PROJECT_CONFIG_METHODS: &[&str] = &[
-    "project.config.read.request",
-    "project.config.write.request",
+pub const PROJECT_CONFIG_METHODS: &[MethodSpec] = &[
+    MethodSpec::request("project.config.read.request"),
+    MethodSpec::request("project.config.write.request"),
 ];
 
 /// Client methods implemented by this component branch.
-pub const PROJECT_ICON_METHODS: &[&str] = &["project.icon.set.request", "project.icon.get.request"];
+pub const PROJECT_ICON_METHODS: &[MethodSpec] = &[
+    MethodSpec::request("project.icon.set.request"),
+    MethodSpec::request("project.icon.get.request"),
+];
 
+use model::methods::MethodSpec;
 use std::path::Path;
 
 use crate::model::registry::{

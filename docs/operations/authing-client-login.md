@@ -19,6 +19,8 @@ curl https://dash.ait-app.com:8443/api/v1/auth/providers
 3. 浏览器显示当前邮箱，点击「确认并返回客户端」。iOS 的认证窗口自动关闭并回到客户端；Android 如未自动唤起，点击页面上的「返回 AIT」。
 4. 客户端保存 AIT 会话，显示账户有效期并加载在线主机。新账号默认创建 7 天后到期，管理员续期后可重新登录。
 
+Desktop 登录后默认将内置 daemon 注册到在线服务。若在该主机的「连接」设置中停止同步，重启或重新登录后仍保持下线，直到手动重新开启同步。其他主机继续手动启用同步，详见 [ADR-096](../decisions/clients/adr-096-desktop-default-host-sync.md)。
+
 同邮箱已有旧账号时，先使用原密码登录 Web 控制台，在设置里绑定统一登录；绑定保留原 Host、角色和有效期。客户端保留「使用原 AIT 密码登录」入口。
 
 客户端退出保持已有逐主机同步语义，不等同于中心的全会话注销。详情见 [ADR-086](../decisions/clients/adr-086-authing-native-login.md)。

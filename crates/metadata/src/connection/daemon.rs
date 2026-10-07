@@ -1,18 +1,19 @@
 /// Client methods implemented by this component; consumed by capability discovery.
-pub(crate) const METHODS: &[&str] = &[
-    "daemon.get_status.request",
-    "daemon.get_pairing_offer.request",
-    "daemon.config.reload.request",
-    "daemon.update.request",
-    "diagnostics.request",
-    "daemon.config.get.request",
-    "daemon.config.set.request",
-    "server.restart.request",
-    "server.shutdown.request",
+pub(crate) const METHODS: &[MethodSpec] = &[
+    MethodSpec::request("daemon.get_status.request"),
+    MethodSpec::request("daemon.get_pairing_offer.request"),
+    MethodSpec::request("daemon.config.reload.request"),
+    MethodSpec::request("daemon.update.request"),
+    MethodSpec::request("diagnostics.request"),
+    MethodSpec::request("daemon.config.get.request"),
+    MethodSpec::request("daemon.config.set.request"),
+    MethodSpec::request("server.restart.request"),
+    MethodSpec::request("server.shutdown.request"),
 ];
 
 use crate::rpc::daemon;
 use model::ErrorCode;
+use model::methods::MethodSpec;
 use serde_json::Value;
 
 use crate::dispatch::State as Shared;

@@ -4,6 +4,7 @@
 - 日期：2026-09-22。
 - 来源：`getpaseo/paseo@2c8e8a826810337492cc5a38bb0bbd705b6fb632`。
 - 范围：新 `server` binary 及其全新 `server-*` crate；旧 daemon 与旧 Ait crate 不变。
+- 后续修订：[ADR-095](adr-095-component-method-declarations.md) 移除运行时中心目录，由组件声明 Ait 名称和消息方向；来源映射和功能标签仅留在审计快照。
 
 ## 背景
 

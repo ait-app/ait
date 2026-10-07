@@ -3,7 +3,7 @@ use std::time::{Duration, Instant};
 
 use serde_json::{Value, json};
 
-use super::transport::{Socket, connect, request};
+use super::transport::{Socket, connect, method_names, request};
 use super::{ready, start, terminate};
 
 #[tokio::test]
@@ -27,7 +27,11 @@ async fn binary_runs_canonical_workspace_setup_and_script_methods() {
     let log = root.path().join("server.log");
     let mut process = start(&state, &log);
     let address = ready(&mut process, &log).await;
-    let mut client = connect(&address, metadata::rpc::workspace_automation::METHODS).await;
+    let mut client = connect(
+        &address,
+        &method_names(metadata::rpc::workspace_automation::METHODS),
+    )
+    .await;
 
     assert_blocked_and_approve(&mut client, &workspace).await;
     assert_script_lifecycle(&mut client, &workspace).await;

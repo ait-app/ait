@@ -1,13 +1,14 @@
 //! GitHub provisioning payload validation and projection.
 
 /// Client methods implemented by this component; consumed by capability discovery.
-pub const METHODS: &[&str] = &[
-    "workspace.github.search_repositories.request",
-    "project.github.clone.request",
+pub const METHODS: &[MethodSpec] = &[
+    MethodSpec::request("workspace.github.search_repositories.request"),
+    MethodSpec::request("project.github.clone.request"),
 ];
 
 use chrono::{SecondsFormat, Utc};
 use metadata::rpc::directory::project_descriptor;
+use model::methods::MethodSpec;
 use serde::Serialize;
 use serde_json::Value;
 

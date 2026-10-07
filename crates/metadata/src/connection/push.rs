@@ -1,8 +1,12 @@
 //! Connection-local token ownership and asynchronous persistence admission.
 
 /// Client methods implemented by this component; consumed by capability discovery.
-pub(crate) const METHODS: &[&str] = &["push.register", "push.unregister.request"];
+pub(crate) const METHODS: &[MethodSpec] = &[
+    MethodSpec::event("push.register"),
+    MethodSpec::request("push.unregister.request"),
+];
 
+use model::methods::MethodSpec;
 use model::outbound::QueueError;
 use model::{Context, ErrorCode};
 use serde_json::{Value, json};

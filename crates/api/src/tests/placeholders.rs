@@ -1,21 +1,20 @@
 use std::collections::BTreeMap;
 
 use super::*;
-use protocol::methods::{InboundKind, PASEO_METHODS};
+use model::methods::InboundKind;
 
 #[tokio::test]
 async fn every_catalog_placeholder_uses_its_canonical_envelope_and_explicit_error() {
     let fixture = Fixture::start().await;
     let implemented = fixture.api.shared.info.implemented_capabilities.clone();
-    let catalog = PASEO_METHODS
-        .iter()
-        .map(|spec| (spec.canonical_name, spec.kind))
+    let catalog = capabilities::implemented_methods()
+        .map(|spec| (spec.name, spec.kind))
         .collect::<BTreeMap<_, _>>();
     let placeholders = catalog
         .into_iter()
         .filter(|(method, _)| !implemented.iter().any(|ready| ready == method))
         .collect::<Vec<_>>();
-    assert_eq!(placeholders.len(), 161);
+    assert_eq!(placeholders.len(), 167);
     for batch in placeholders.chunks(64) {
         let mut socket = fixture.socket().await;
         let mut offer = hello();
@@ -111,7 +110,7 @@ async fn removed_groups_are_not_negotiable_and_requests_are_unknown() {
     let fixture = Fixture::start().await;
     let names = include_str!(concat!(
         env!("CARGO_MANIFEST_DIR"),
-        "/../protocol/src/methods/fixtures/excluded-inbound.txt"
+        "/../../scripts/fixtures/paseo/excluded-inbound.txt"
     ))
     .lines()
     .filter(|line| !line.starts_with('#') && !line.is_empty())

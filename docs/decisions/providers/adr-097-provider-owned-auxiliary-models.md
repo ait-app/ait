@@ -1,4 +1,4 @@
-# ADR-095：Provider 自选辅助小模型
+# ADR-097：Provider 自选辅助小模型
 
 - 状态：Accepted。
 - 日期：2026-10-07。

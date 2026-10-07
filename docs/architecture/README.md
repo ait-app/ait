@@ -6,21 +6,21 @@ Electron 位于 `apps/desktop`；`apps/mobile` 提供桌面、浏览器与移动
 
 ## Rust 能力边界
 
-| Crate        | 职责                                       | 允许的内部依赖                         |
-| ------------ | ------------------------------------------ | -------------------------------------- |
-| `domain`     | Agent 身份与配置不变量                     | 无                                     |
-| `model`      | 公共错误、消息、请求上下文和运行资源       | 无                                     |
-| `protocol`   | WebSocket envelope、能力协商和静态方法目录 | `model`                                |
-| `metadata`   | Project/Workspace 目录、标签、配置和自动化 | `model`                                |
-| `filesystem` | 文件、Git、worktree、Forge 和技能安装      | `metadata`、`model`                    |
-| `provider`   | 原生 Provider 会话、执行、历史和元数据生成 | `domain`、`metadata`、`model`          |
-| `terminal`   | PTY、终端快照、活动和连接订阅              | `metadata`、`model`                    |
-| `voice`      | 语音、听写和离线推理                       | `model`                                |
-| `schedule`   | 定时任务服务与协议                         | `model`                                |
-| `browser`    | 浏览器自动化请求与回传                     | `model`                                |
-| `relay`      | 主动建立控制连接与反向数据通道             | 无                                     |
-| `api`        | HTTP/WebSocket 鉴权、连接与跨能力协调      | 上述能力包、`protocol`、`model`        |
-| `daemon`     | 配置、进程锁、服务组装和停机               | API、领域及能力包；测试使用 `protocol` |
+| Crate        | 职责                                             | 允许的内部依赖                         |
+| ------------ | ------------------------------------------------ | -------------------------------------- |
+| `domain`     | Agent 身份与配置不变量                           | 无                                     |
+| `model`      | 公共错误、消息、方法元数据、请求上下文和运行资源 | 无                                     |
+| `protocol`   | WebSocket envelope、版本与能力协商               | `model`                                |
+| `metadata`   | Project/Workspace 目录、标签、配置和自动化       | `model`                                |
+| `filesystem` | 文件、Git、worktree、Forge 和技能安装            | `metadata`、`model`                    |
+| `provider`   | 原生 Provider 会话、执行、历史和元数据生成       | `domain`、`metadata`、`model`          |
+| `terminal`   | PTY、终端快照、活动和连接订阅                    | `metadata`、`model`                    |
+| `voice`      | 语音、听写和离线推理                             | `model`                                |
+| `schedule`   | 定时任务服务与协议                               | `model`                                |
+| `browser`    | 浏览器自动化请求与回传                           | `model`                                |
+| `relay`      | 主动建立控制连接与反向数据通道                   | 无                                     |
+| `api`        | HTTP/WebSocket 鉴权、连接与跨能力协调            | 上述能力包、`protocol`、`model`        |
+| `daemon`     | 配置、进程锁、服务组装和停机                     | API、领域及能力包；测试使用 `protocol` |
 
 各实现组件自己声明方法，能力包组合组件方法与安装条件，API 再组合能力包与具体服务，不把业务协议反向传入
 能力包。具体 adapter 实现所属能力的 port；应用服务协调领域行为。`domain` 无 Tokio、
@@ -29,8 +29,9 @@ Electron 位于 `apps/desktop`；`apps/mobile` 提供桌面、浏览器与移动
 请求通过名称、方向和 capability 校验后，以 `Option<Context>` 逐级进入处理入口。每个入口
 自行匹配，未匹配时保留请求，匹配后取走并执行；成功后 API 完成响应或跨能力收尾并返回，
 仅在 `NotImplemented` 时断言 Context 仍为 `Some` 后继续。违约消费会先记录 error 再触发断言。
-方法目录只用于协议校验，业务处理不预先选择 handler，详见
-[ADR-093](../decisions/daemon/adr-093-consumable-request-context.md)。
+方法名称和消息方向由所属组件声明，功能 crate 聚合，API 汇总用于协议校验；业务处理
+不预先选择 handler，详见 [ADR-093](../decisions/daemon/adr-093-consumable-request-context.md)
+与 [ADR-095](../decisions/daemon/adr-095-component-method-declarations.md)。
 
 内置 Provider 由 `provider::Providers` 组装。具体客户端列表、启动配置、安装发现与辅助
 元数据生成能力留在 provider crate 内部；daemon 提供数据目录并连接服务与进程生命周期。
@@ -73,7 +74,7 @@ Tokio reactor，级联归档与 worktree 清理用相关会话屏障协调，全
 应用在线服务登录与主机发布分离。平台账户管理器维护显式选中 daemon 的独立租约，
 客户端通过该主机的鉴权业务连接发送一次性控制票据，`api` 管理 `relay` 的状态、启动与停止。
 客户端退出只释放自身节点及绑定 daemon，其他 daemon 保留各自原账户授权，由运行中的平台账户管理器继续续租；主动停止同步只撤销单台租约。
-本机、TCP 和 SSH 主机使用相同入口，详见 [ADR-083](../decisions/clients/adr-083-online-service-host-sync.md)。
+本机、TCP 和 SSH 主机使用相同同步流程，详见 [ADR-083](../decisions/clients/adr-083-online-service-host-sync.md)。Desktop 登录后默认同步内置 daemon，手动停止的选择由桌面账户存储持久保存；其他主机仍需手动启用，详见 [ADR-096](../decisions/clients/adr-096-desktop-default-host-sync.md)。
 
 账户会话状态机位于 `packages/client`，通过依赖注入获取平台身份、存储、HTTP 和运行时操作。
 Electron 主进程提供桌面适配；Android 的原生适配使用 SecureStore 保存账户令牌，注册无本地

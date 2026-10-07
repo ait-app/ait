@@ -1,23 +1,24 @@
 //! Connection-owned file observers and transfers.
 
 /// Client methods implemented by this component; consumed by capability discovery.
-pub const METHODS: &[&str] = &[
-    "directory.suggestions.request",
-    "fs.explorer.request",
-    "fs.file.subscribe.request",
-    "fs.file.unsubscribe.request",
-    "fs.file.write.request",
-    "fs.entry.create.request",
-    "fs.entry.rename.request",
-    "fs.entry.duplicate.request",
-    "fs.entry.delete.request",
-    "fs.file.download_token.request",
-    "file.upload.request",
+pub const METHODS: &[MethodSpec] = &[
+    MethodSpec::request("directory.suggestions.request"),
+    MethodSpec::request("fs.explorer.request"),
+    MethodSpec::request("fs.file.subscribe.request"),
+    MethodSpec::request("fs.file.unsubscribe.request"),
+    MethodSpec::request("fs.file.write.request"),
+    MethodSpec::request("fs.entry.create.request"),
+    MethodSpec::request("fs.entry.rename.request"),
+    MethodSpec::request("fs.entry.duplicate.request"),
+    MethodSpec::request("fs.entry.delete.request"),
+    MethodSpec::request("fs.file.download_token.request"),
+    MethodSpec::request("file.upload.request"),
 ];
 
 use crate::rpc::files::project_version;
 use crate::service::files as port;
 use model::ErrorCode;
+use model::methods::MethodSpec;
 use serde::Serialize;
 use serde_json::Value;
 

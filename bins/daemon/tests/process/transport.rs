@@ -10,6 +10,17 @@ use super::TOKEN;
 
 pub(super) type Socket = WebSocketStream<MaybeTlsStream<TcpStream>>;
 
+/// Project component metadata into capability names for connection fixtures.
+///
+/// # Arguments
+/// * `methods` - Method declarations from the component under test.
+///
+/// # Returns
+/// Borrowed wire names for the fixture's capability offer.
+pub(super) fn method_names(methods: &[model::methods::MethodSpec]) -> Vec<&'static str> {
+    methods.iter().map(|method| method.name).collect()
+}
+
 pub(super) async fn connect(address: &str, capabilities: &[&str]) -> Socket {
     connect_as(address, capabilities, "process").await
 }

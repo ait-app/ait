@@ -1,16 +1,16 @@
 //! Bounded schedule actor: disk operations run on a dedicated thread, not the WebSocket reactor.
 
 /// Client methods implemented by this component; consumed by capability discovery.
-pub(crate) const METHODS: &[&str] = &[
-    "schedule.create.request",
-    "schedule.list.request",
-    "schedule.inspect.request",
-    "schedule.logs.request",
-    "schedule.update.request",
-    "schedule.pause.request",
-    "schedule.resume.request",
-    "schedule.delete.request",
-    "schedule.run_once.request",
+pub(crate) const METHODS: &[MethodSpec] = &[
+    MethodSpec::request("schedule.create.request"),
+    MethodSpec::request("schedule.list.request"),
+    MethodSpec::request("schedule.inspect.request"),
+    MethodSpec::request("schedule.logs.request"),
+    MethodSpec::request("schedule.update.request"),
+    MethodSpec::request("schedule.pause.request"),
+    MethodSpec::request("schedule.resume.request"),
+    MethodSpec::request("schedule.delete.request"),
+    MethodSpec::request("schedule.run_once.request"),
 ];
 
 use crate::{
@@ -18,6 +18,7 @@ use crate::{
     ports::{Checkpoint, Error, Outcome, Progress, Runner, Store},
 };
 use chrono::Utc;
+use model::methods::MethodSpec;
 use serde_json::{Value, json};
 use std::{
     fmt,

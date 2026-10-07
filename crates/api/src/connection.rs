@@ -4,7 +4,7 @@ use std::time::Duration;
 
 use axum::extract::ws::{CloseFrame, Message, WebSocket, close_code};
 use futures_util::{SinkExt, StreamExt, stream::SplitStream};
-use protocol::methods::InboundKind;
+use model::methods::InboundKind;
 use protocol::{ClientMessage, ErrorCode, Hello, ServerMessage, valid_id};
 use tokio::time::timeout;
 
@@ -336,7 +336,7 @@ async fn process_event(
 ) -> Result<(), QueueError> {
     let (method, params) = input;
     if validation::lookup(&method).is_some_and(|metadata| metadata.kind == InboundKind::Event)
-        && voice::capabilities::implemented_capabilities().any(|name| name == method)
+        && voice::capabilities::implemented_methods().any(|spec| spec.name == method)
         && capabilities.iter().any(|capability| capability == &method)
         && state.voice.speech.is_some()
     {
