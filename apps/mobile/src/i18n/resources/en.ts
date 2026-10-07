@@ -29,10 +29,10 @@ export const en = {
     hostCount: "{{count}} hosts online",
     selected: "Selected",
     emptyHosts:
-      "On another computer, sign in to the same account and enable online service synchronization in its host connection settings.",
+      "Sign in to the same account in Desktop on another computer. Its built-in daemon comes online automatically. Enable synchronization in connection settings for other hosts.",
     disconnectRemoteHost: "Disconnect remote host",
     hostSettingsHint:
-      "To bring a computer online, open its Host → Connections settings and enable synchronization.",
+      "Desktop synchronizes its built-in daemon after sign-in. A manual stop keeps it offline until you enable synchronization in Host → Connections. Other hosts require manual synchronization.",
     requestFailed: "Request failed.",
     syncTitle: "Sync with online service",
     syncDescription:
