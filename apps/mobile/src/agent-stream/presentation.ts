@@ -78,8 +78,11 @@ export function createStreamPresentation() {
       const index = prefix.length + offset;
       let blockText = text;
       if (offset === textBlocks.length - 1) {
-        const trailingNewlines = /\n+$/.exec(item.text)?.[0] ?? "";
-        blockText += trailingNewlines;
+        // The splitter drops pending blank lines. Keep the complete whitespace
+        // suffix for the next delta, including indentation after a newline.
+        // Replace any retained suffix so structural blank lines are not doubled.
+        const trailingWhitespace = /\s+$/.exec(growingText)?.[0] ?? "";
+        blockText = blockText.trimEnd() + trailingWhitespace;
       }
       const existing = previous?.[index];
       const id = `${item.id}:block:${index}`;

@@ -82,6 +82,36 @@ afterEach(() => {
 });
 
 describe("Mermaid sandbox runtime", () => {
+  it("renders the reported flowchart when streamed statement separators are preserved", async () => {
+    const frame = await mountRuntime();
+    const source = [
+      "flowchart TD",
+      '    A["客户端：daemon.config.set.request"] --> B["API：鉴权、协议校验、创建 Context"]',
+      '    B --> C["metadata dispatch / connection"]',
+      '    C --> D["RPC：解码并校验 DaemonConfigPatch"]',
+      '    D --> E["Daemon::set_config"]',
+      '    E --> F["DaemonConfigStore::patch"]',
+      '    F --> G["FileDaemonConfigStore：合并、校验、原子写入"]',
+      '    G --> H["config.json"]',
+      '    G --> I["更新共享缓存"]',
+      '    I --> J["返回配置并发布配置变更事件"]',
+    ].join("\n");
+    const joinedStatements = source.replace(
+      'E["Daemon::set_config"]\n    E',
+      'E["Daemon::set_config"] E',
+    );
+
+    expect(await render(frame, { revision: 1, source: joinedStatements })).toEqual({
+      type: "renderError",
+      revision: 1,
+    });
+    expect(await render(frame, { revision: 2, source })).toMatchObject({
+      type: "rendered",
+      revision: 2,
+      source,
+    });
+  });
+
   it("renders successive valid streaming prefixes and reports an invalid prefix", async () => {
     const frame = await mountRuntime();
     const firstSource = "flowchart TD\nA --> B";
