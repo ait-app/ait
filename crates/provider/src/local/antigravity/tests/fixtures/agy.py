@@ -43,7 +43,6 @@ if model is not None:
     init['model'] = model
 if scenario == 'wrong-model':
     init['model'] = 'foreign-model'
-emit({'event': 'init', 'conversation_id': conversation, 'init': init})
 turns = 0
 step_index = 0
 
@@ -57,6 +56,8 @@ def interrupted(signum, frame):
     sys.exit(0)
 
 signal.signal(signal.SIGINT, interrupted)
+# Install cancellation handling before advertising that the process is ready.
+emit({'event': 'init', 'conversation_id': conversation, 'init': init})
 for line in sys.stdin:
     message = json.loads(line)
     log({'input': message})
