@@ -1,3 +1,5 @@
+import { UploadAcknowledgements } from "./upload-acks";
+import { ClientMessageChunks } from "./chunks";
 import { METHODS, type MethodSpec } from "./methods";
 import { sessionEventKind } from "@ait/protocol/session-event-kinds";
 import { eventMessage, responseMessage, rpcError, serverInfo } from "./messages";
@@ -68,6 +70,8 @@ export function createRustDaemonTransportFactory(baseFactory: TransportFactory):
     const errorHandlers = new Set<(event?: unknown) => void>();
     const messageHandlers = new Set<(data: unknown, binary: boolean) => void>();
     const channels: Transport[] = [];
+    const uploads = new UploadAcknowledgements(fail);
+    const chunks = new ClientMessageChunks(channels, fail);
     const cleanup: (() => void)[] = [];
     const opened = new Set<number>();
     const negotiated = new Map<number, Set<string>>();
@@ -96,6 +100,8 @@ export function createRustDaemonTransportFactory(baseFactory: TransportFactory):
         clearTimeout(item.retryTimer);
       }
       pending.clear();
+      chunks.dispose();
+      uploads.dispose();
       subscriptions.clear();
       for (const remove of cleanup) remove();
       for (const channel of channels) channel.close(code, reason);
@@ -170,6 +176,16 @@ export function createRustDaemonTransportFactory(baseFactory: TransportFactory):
       }
       if (!ready)
         throw new Error(`Rust handshake rejected: ${String(message.code ?? message.type)}`);
+      if (message.type === "event" && message.method === "connection.upload.ack") {
+        const ack = object(message.params);
+        uploads.acknowledge(ack.requestId, ack.opcode);
+        return;
+      }
+      if (message.type === "event" && message.method === "connection.chunk.ack") {
+        const ack = object(message.params);
+        chunks.acknowledge(channel, ack.id, ack.offset);
+        return;
+      }
       if (message.type === "event") {
         if (message.method === "status.server_info") {
           const params = object(message.params);
@@ -216,7 +232,7 @@ export function createRustDaemonTransportFactory(baseFactory: TransportFactory):
             item.retryTimer = undefined;
             if (disposed || pending.get(id) !== item) return;
             try {
-              channels[channel].send(item.wire);
+              sendWire(channel, item.wire);
             } catch (error) {
               fail(error instanceof Error ? error : new Error("Rust request retry failed"));
             }
@@ -244,6 +260,14 @@ export function createRustDaemonTransportFactory(baseFactory: TransportFactory):
       if (item.rawPing) emit({ type: "connection.pong" });
       else if (item.spec.response)
         emit(responseMessage(item.spec.response, id, result, item.request));
+    }
+
+    function sendWire(channel: number, wire: string): void {
+      chunks.send(
+        channel,
+        wire,
+        Array.isArray(info?.features) && info.features.includes("client-message-chunks-v1"),
+      );
     }
 
     function request(message: Payload, rawPing = false): void {
@@ -290,7 +314,8 @@ export function createRustDaemonTransportFactory(baseFactory: TransportFactory):
       }
       if (rawPing) params.nonce = id;
       if (spec.kind !== "request") {
-        channels[channel].send(
+        sendWire(
+          channel,
           JSON.stringify({
             type: spec.kind,
             method: spec.method,
@@ -308,12 +333,15 @@ export function createRustDaemonTransportFactory(baseFactory: TransportFactory):
         method: spec.method,
         params,
       });
-      const timer = setTimeout(() => {
-        const timedOut = pending.get(id);
-        if (!pending.delete(id) || disposed) return;
-        clearTimeout(timedOut?.retryTimer);
-        emit(rpcError(id, name, "timeout", "Rust daemon request timed out"));
-      }, 300_000);
+      const timer = setTimeout(
+        () => {
+          const timedOut = pending.get(id);
+          if (!pending.delete(id) || disposed) return;
+          clearTimeout(timedOut?.retryTimer);
+          emit(rpcError(id, name, "timeout", "Rust daemon request timed out"));
+        },
+        spec.method === "file.upload.request" ? 30 * 60_000 : 300_000,
+      );
       pending.set(id, {
         request: message,
         spec,
@@ -324,7 +352,7 @@ export function createRustDaemonTransportFactory(baseFactory: TransportFactory):
         timer,
       });
       try {
-        channels[channel].send(wire);
+        sendWire(channel, wire);
       } catch (error) {
         pending.delete(id);
         clearTimeout(timer);
@@ -378,7 +406,15 @@ export function createRustDaemonTransportFactory(baseFactory: TransportFactory):
           const bytes = data instanceof ArrayBuffer ? new Uint8Array(data) : data;
           if (!bytes.length) throw new Error("Empty Rust binary frame");
           // Rust preserves Paseo's binary opcode families: terminal < 0x10, files >= 0x10.
-          channels[single ? 0 : bytes[0] < 0x10 ? 1 : 2].send(data);
+          const channel = channels[single ? 0 : bytes[0] < 0x10 ? 1 : 2];
+          if (
+            bytes[0] >= 0x10 &&
+            bytes[0] <= 0x12 &&
+            Array.isArray(info?.features) &&
+            info.features.includes("client-message-chunks-v1")
+          )
+            uploads.send(channel, bytes);
+          else channel.send(data);
           return;
         }
         const message = object(JSON.parse(data));
@@ -410,6 +446,7 @@ export function createRustDaemonTransportFactory(baseFactory: TransportFactory):
         else throw new Error(`Unsupported client envelope: ${String(message.type)}`);
       },
       close: dispose,
+      drain: () => uploads.drain(),
       onOpen: (handler) => {
         openHandlers.add(handler);
         return () => {

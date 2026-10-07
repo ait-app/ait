@@ -4,7 +4,7 @@
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { act, renderHook, waitFor } from "@testing-library/react";
 import React, { useCallback, useMemo, useState, type ReactNode } from "react";
-import { describe, expect, it, vi } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import type { ToastApi } from "@/components/toast-host";
 import type { InlinePathTarget } from "./parse";
 import { AssistantFileLinkResolverProvider } from "./provider";
@@ -15,6 +15,16 @@ import type { OpenFileDisposition } from "@/workspace/file-open";
 vi.mock("@/utils/open-external-url", () => ({
   openExternalUrl: vi.fn(async () => {}),
 }));
+
+const localOpening = vi.hoisted(() => ({ local: false, openDirectory: vi.fn(async () => true) }));
+vi.mock("@/hooks/use-is-local-daemon", () => ({ useIsLocalDaemon: () => localOpening.local }));
+vi.mock("@/desktop/host", () => ({
+  getDesktopHost: () => ({ opener: { openDirectory: localOpening.openDirectory } }),
+}));
+afterEach(() => {
+  localOpening.local = false;
+  localOpening.openDirectory.mockClear();
+});
 
 const SOURCE = {
   href: "http://dumm.md",
@@ -49,7 +59,7 @@ interface TestClient {
     query: string;
     cwd: string;
     includeFiles: true;
-    includeDirectories: false;
+    includeDirectories: true;
     matchMode: "suffix";
     limit: number;
   }) => Promise<DirectorySuggestionResult>;
@@ -326,3 +336,27 @@ describe("useFileLink", () => {
 });
 
 const WorkspaceSwitchContext = React.createContext<(workspaceRoot: string) => void>(() => {});
+
+describe("directory link dispatch", () => {
+  it.each([true, false])(
+    "only opens directories through the system for a local Host (%s)",
+    async (local) => {
+      localOpening.local = local;
+      const openedFiles: OpenedFile[] = [];
+      const { result } = renderHook(
+        () => useFileLink({ href: "/tmp/reports", text: "/tmp/reports", markup: "link" }),
+        {
+          wrapper: createWrapper({
+            client: { getDirectorySuggestions: vi.fn(async () => resolvedSuggestions([])) },
+            openedFiles,
+          }),
+        },
+      );
+      await act(async () => {
+        result.current.onPress();
+      });
+      expect(localOpening.openDirectory).toHaveBeenCalledTimes(local ? 1 : 0);
+      await waitFor(() => expect(openedFiles).toHaveLength(local ? 0 : 1));
+    },
+  );
+});

@@ -1,0 +1,50 @@
+[
+  {
+    "path": "apps/mobile/src/hooks/use-fork-agent.ts",
+    "sha256": "4c6e60d04c438b5047e8c3dda753e70cf301e4db05f41cc0c1b921abb2776f07"
+  },
+  {
+    "path": "apps/mobile/src/projects/host-project-model.ts",
+    "sha256": "7591529a44fbcd89c715ee15f9cc712f2093036cf6f8b3854e5c9136c2f1baf1"
+  },
+  {
+    "path": "apps/mobile/src/projects/host-projects.test.ts",
+    "sha256": "426f01cecadfd4e123880847376f7308b867de62ee3ae1d7838d3ba1e4682adc"
+  },
+  {
+    "path": "crates/api/src/connection/workspace_archive.rs",
+    "sha256": "e1ce307c196ec6343eb26e94318a05f769ab5f7166543db43c61513dcdfab0f7"
+  },
+  {
+    "path": "crates/api/src/connection/workspace_archive/tests.rs",
+    "sha256": "92314b4cedd1d4c09b4a1c85748594fa7ba2a637aeff0a62faac2deac90aa27e"
+  },
+  {
+    "path": "crates/provider/src/dispatch.rs",
+    "sha256": "e31aa46128bb32d857297a46ff37c7e0b6d0696f917290b75747730dface2385"
+  },
+  {
+    "path": "crates/provider/src/service/agent_runtime/tests.rs",
+    "sha256": "69493a68ecbdfcfeeb35c6a7bee6a5276fcbfc55ce81b8e15cd0aefb44dc4e2f"
+  },
+  {
+    "path": "crates/terminal/src/connection.rs",
+    "sha256": "8b4d7fde16119586b0204ee7db9bb90d823600e288fd3d85aa5d65278dba5366"
+  },
+  {
+    "path": "crates/terminal/src/connection/tests.rs",
+    "sha256": "3c2bbe493928c25a1fd89d5e9a68f3a6eb0096cb5798d2e0f2aee29b8045a48a"
+  },
+  {
+    "path": "crates/terminal/src/dispatch.rs",
+    "sha256": "638e14d727c03e447ab83d3269a74e3c23f57072a58b116cf98db58879c76fc9"
+  },
+  {
+    "path": "packages/protocol/src/messages.agent-snapshot.test.ts",
+    "sha256": "927f77ed024cd0d1957f114b2912706cbe0bc7a594271d2b8ec87cf1b3b5440f"
+  },
+  {
+    "path": "packages/protocol/src/messages.ts",
+    "sha256": "bdbbd0e729332f665dac88795e02ebdf88f24e3d8c20c9d9be0d0e0be777156a"
+  }
+]

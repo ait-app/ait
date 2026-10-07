@@ -61,6 +61,8 @@ export interface DesktopNotificationBridge {
 }
 
 export interface DesktopOpenerBridge {
+  openDirectory?: (input: { path: string; cwd: string }) => Promise<boolean>;
+  openFile?: (path: string) => Promise<void>;
   openUrl?: (url: string) => Promise<void>;
 }
 

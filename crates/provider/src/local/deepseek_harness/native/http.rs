@@ -86,7 +86,7 @@ impl Api {
         let id = uuid::Uuid::new_v4().to_string();
         let body =
             json!({"type":"client-request","rpcId":id,"method":endpoint,"payload":{"args":args}});
-        if body.to_string().len() > MAX_FRAME {
+        if body.to_string().len() > 64 * 1024 * 1024 {
             return Err(AgentSessionError::Rejected);
         }
         let response = self

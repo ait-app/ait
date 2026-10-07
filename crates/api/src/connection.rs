@@ -12,6 +12,7 @@ use crate::Shared;
 use crate::outbound::{Frame, Outbound, QueueError};
 use model::{Context, Request};
 
+mod chunks;
 mod creation_receipts;
 mod dispatch;
 mod single;
@@ -64,7 +65,7 @@ pub(super) async fn serve(socket: WebSocket, state: Arc<Shared>) {
     let (mut sink, mut stream) = socket.split();
     let hello = tokio::select! {
         () = state.cancellation.cancelled() => return,
-        result = timeout(HELLO_TIMEOUT, receive(&mut stream)) => if let Ok(Some(Ok(Incoming::Text(ClientMessage::Hello(hello))))) = result {
+        result = timeout(HELLO_TIMEOUT, receive(&mut stream)) => if let Ok(Some(Ok(Incoming::Text(ClientMessage::Hello(hello), _)))) = result {
             hello
         } else {
                 let error = ServerMessage::Error {
@@ -189,6 +190,7 @@ async fn read(
         ))
         .await;
     }
+    let mut assembly = chunks::Assembly::default();
     let mut terminal_poll = tokio::time::interval(Duration::from_millis(40));
     terminal_poll.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Skip);
     let mut upload_expiry = tokio::time::interval(Duration::from_secs(30));
@@ -207,7 +209,7 @@ async fn read(
                 }
                 continue;
             },
-            message = receive(&mut stream) => message,
+            message = chunks::next(&mut stream, &mut assembly, outbound) => message,
             _ = upload_expiry.tick() => {
                 subscriptions.filesystem.files.prune_uploads();
                 continue;
@@ -222,6 +224,34 @@ async fn read(
     }
 }
 
+async fn process_file_frame(
+    mut bytes: Vec<u8>,
+    state: &Shared,
+    outbound: &Outbound,
+    subscriptions: &mut ConnectionSubscriptions,
+) -> Result<ControlFlow<()>, QueueError> {
+    let acknowledged = matches!(bytes.first(), Some(0x40..=0x42));
+    if acknowledged {
+        bytes[0] -= 0x30;
+    }
+    let Some((id, frame)) = filesystem::protocol::file_transfer::decode(&bytes) else {
+        error(outbound, None, ErrorCode::InvalidMessage)?;
+        return Ok(ControlFlow::Break(()));
+    };
+    subscriptions
+        .filesystem
+        .files
+        .frame(id.clone(), frame, &state.filesystem, outbound)
+        .await?;
+    if acknowledged {
+        outbound.send(&ServerMessage::Event {
+            method: "connection.upload.ack".to_owned(),
+            params: serde_json::json!({"requestId": id, "opcode": bytes[0]}),
+        })?;
+    }
+    Ok(ControlFlow::Continue(()))
+}
+
 async fn process_message(
     message: Option<Result<Incoming, ErrorCode>>,
     state: &Shared,
@@ -230,11 +260,14 @@ async fn process_message(
     subscriptions: &mut ConnectionSubscriptions,
 ) -> Result<ControlFlow<()>, QueueError> {
     match message {
-        Some(Ok(Incoming::Text(ClientMessage::Request {
-            request_id,
-            method,
-            params,
-        }))) if valid_id(&request_id) && valid_id(&method) => {
+        Some(Ok(Incoming::Text(
+            ClientMessage::Request {
+                request_id,
+                method,
+                params,
+            },
+            _lease,
+        ))) if valid_id(&request_id) && valid_id(&method) => {
             process_request(
                 Request {
                     id: request_id,
@@ -248,7 +281,9 @@ async fn process_message(
             )
             .await?;
         }
-        Some(Ok(Incoming::Text(ClientMessage::Event { method, params }))) if valid_id(&method) => {
+        Some(Ok(Incoming::Text(ClientMessage::Event { method, params }, _lease)))
+            if valid_id(&method) =>
+        {
             process_event(
                 (method, params),
                 state,
@@ -258,11 +293,14 @@ async fn process_message(
             )
             .await?;
         }
-        Some(Ok(Incoming::Text(ClientMessage::Response {
-            request_id,
-            method,
-            params,
-        }))) if valid_id(&method) && request_id.as_deref().is_none_or(valid_id) => {
+        Some(Ok(Incoming::Text(
+            ClientMessage::Response {
+                request_id,
+                method,
+                params,
+            },
+            _lease,
+        ))) if valid_id(&method) && request_id.as_deref().is_none_or(valid_id) => {
             if method == "browser.automation.execute.response"
                 && capabilities.iter().any(|name| name == &method)
                 && let Some(broker) = &state.browser.broker
@@ -298,15 +336,7 @@ async fn process_message(
                 .iter()
                 .any(|method| method == "file.upload.request") =>
         {
-            let Some((id, frame)) = filesystem::protocol::file_transfer::decode(&bytes) else {
-                error(outbound, None, ErrorCode::InvalidMessage)?;
-                return Ok(ControlFlow::Break(()));
-            };
-            subscriptions
-                .filesystem
-                .files
-                .frame(id, frame, &state.filesystem, outbound)
-                .await?;
+            return process_file_frame(bytes, state, outbound, subscriptions).await;
         }
         Some(
             Ok(
@@ -315,6 +345,7 @@ async fn process_message(
                     | ClientMessage::Request { .. }
                     | ClientMessage::Event { .. }
                     | ClientMessage::Response { .. },
+                    _,
                 )
                 | Incoming::Binary(_),
             )
@@ -430,7 +461,7 @@ async fn process_request(
 }
 
 enum Incoming {
-    Text(ClientMessage),
+    Text(ClientMessage, Option<tokio::sync::OwnedSemaphorePermit>),
     Binary(Vec<u8>),
 }
 
@@ -440,7 +471,7 @@ async fn receive(stream: &mut SplitStream<WebSocket>) -> Option<Result<Incoming,
             Ok(Message::Text(text)) => {
                 return Some(
                     serde_json::from_str(&text)
-                        .map(Incoming::Text)
+                        .map(|message| Incoming::Text(message, None))
                         .map_err(|_| ErrorCode::InvalidMessage),
                 );
             }

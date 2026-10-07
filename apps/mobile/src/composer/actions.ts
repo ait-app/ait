@@ -131,9 +131,9 @@ export async function uploadFileAttachments(input: {
 
   for (const file of input.files) {
     const bytes = await file.readBytes();
-    if (bytes.byteLength > 50 * 1024 * 1024) {
+    if (bytes.byteLength > 256 * 1024 * 1024) {
       throw new Error(
-        i18n.t("composer.errors.fileTooLarge", { size: "50MB", fileName: file.fileName }),
+        i18n.t("composer.errors.fileTooLarge", { size: "256MiB", fileName: file.fileName }),
       );
     }
     prepared.push({

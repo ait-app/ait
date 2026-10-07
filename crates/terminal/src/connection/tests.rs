@@ -134,3 +134,58 @@ fn slot(value: &Value) -> u8 {
 fn subscription(value: &Value) -> &str {
     value["subscriptionId"].as_str().unwrap()
 }
+
+#[tokio::test]
+async fn archive_cleanup_waits_for_terminal_capacity() {
+    let fixture = Fixture::new();
+    let permit = fixture
+        .state
+        .terminal_jobs
+        .clone()
+        .acquire_many_owned(4)
+        .await
+        .unwrap();
+    let cleanup = crate::dispatch::reconcile_workspaces(&fixture.state, vec!["w".into()]);
+    tokio::pin!(cleanup);
+    std::future::poll_fn(|cx| {
+        assert!(cleanup.as_mut().poll(cx).is_pending());
+        std::task::Poll::Ready(())
+    })
+    .await;
+    drop(permit);
+    cleanup.await.unwrap();
+    assert_eq!(fixture.calls.lock().unwrap().killed, 1);
+    assert!(
+        fixture
+            .state
+            .terminals
+            .as_ref()
+            .unwrap()
+            .lock()
+            .unwrap()
+            .list(&crate::protocol::ListRequest::default())
+            .unwrap()
+            .is_empty()
+    );
+}
+
+#[tokio::test]
+async fn archive_cleanup_wait_is_cancelled_by_shutdown() {
+    let fixture = Fixture::new();
+    let _permit = fixture
+        .state
+        .terminal_jobs
+        .clone()
+        .acquire_many_owned(4)
+        .await
+        .unwrap();
+    let cleanup = crate::dispatch::reconcile_workspaces(&fixture.state, vec!["w".into()]);
+    tokio::pin!(cleanup);
+    std::future::poll_fn(|cx| {
+        assert!(cleanup.as_mut().poll(cx).is_pending());
+        std::task::Poll::Ready(())
+    })
+    .await;
+    fixture.state.cancellation.cancel();
+    assert_eq!(cleanup.await, Err(ErrorCode::ServerDraining));
+}

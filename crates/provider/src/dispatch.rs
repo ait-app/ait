@@ -86,7 +86,7 @@ pub async fn retire_workspaces(
     }
     state
         .runtime
-        .run(
+        .run_queued(
             state.agent_runtime.clone(),
             ErrorCode::AgentIo,
             move |directory| {
