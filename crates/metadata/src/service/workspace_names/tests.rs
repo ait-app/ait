@@ -1,10 +1,12 @@
-use super::*;
-use crate::model::registry::PersistedWorkspaceRecord;
-use crate::ports::registry::WorkspaceMutationContext;
-use crate::storage::registry::FileBackedWorkspaceRegistry;
-use model::summary::{SummaryError, SummaryFuture};
-use serde_json::json;
 use std::sync::atomic::{AtomicUsize, Ordering};
+
+use file::storage::registry::FileBackedWorkspaceRegistry;
+use model::summary::{SummaryError, SummaryFuture};
+use model::workspace::records::PersistedWorkspaceRecord;
+use model::workspace::registry::WorkspaceMutationContext;
+use serde_json::json;
+
+use super::*;
 
 #[derive(Debug, Default)]
 struct Generator {

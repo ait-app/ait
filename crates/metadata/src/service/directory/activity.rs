@@ -3,9 +3,9 @@
 use std::collections::BTreeMap;
 use std::sync::{Arc, Mutex};
 
-use crate::model::registry::PersistedWorkspaceRecord;
-use crate::model::workspace_activity::WorkspaceStateBucket;
-use crate::ports::workspace_state::{WorkspaceActivity, WorkspaceActivitySource};
+use model::workspace::activity::WorkspaceStateBucket;
+use model::workspace::attention::{WorkspaceActivity, WorkspaceActivitySource};
+use model::workspace::records::PersistedWorkspaceRecord;
 
 use super::{Directory, DirectoryError};
 

@@ -100,6 +100,7 @@ dependencies = [
  "axum",
  "browser",
  "chrono",
+ "file",
  "filesystem",
  "futures-util",
  "metadata",
@@ -540,6 +541,7 @@ dependencies = [
  "chrono",
  "clap",
  "domain",
+ "file",
  "filesystem",
  "futures-util",
  "metadata",
@@ -548,15 +550,12 @@ dependencies = [
  "provider",
  "reqwest",
  "schedule",
- "secrecy",
- "serde",
  "serde_json",
  "tempfile",
  "terminal",
  "tokio",
  "tokio-tungstenite",
  "tokio-util",
- "toml",
  "tracing",
  "tracing-subscriber",
  "uuid",
@@ -676,6 +675,29 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "da7c62ceae207dd37ea5b845da6a0696c799f85e97da1ab5b7910be3c1c80223"
 
 [[package]]
+name = "file"
+version = "0.0.22"
+dependencies = [
+ "anyhow",
+ "chrono",
+ "clap",
+ "domain",
+ "getrandom 0.4.3",
+ "indexmap",
+ "model",
+ "secrecy",
+ "serde",
+ "serde_json",
+ "sha2",
+ "tempfile",
+ "thiserror 2.0.20",
+ "tokio",
+ "toml",
+ "tracing",
+ "uuid",
+]
+
+[[package]]
 name = "filedescriptor"
 version = "0.8.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -692,6 +714,7 @@ version = "0.0.22"
 dependencies = [
  "base64",
  "chrono",
+ "file",
  "getrandom 0.4.3",
  "libc",
  "memchr",
@@ -1340,11 +1363,11 @@ version = "0.0.22"
 dependencies = [
  "base64",
  "chrono",
+ "file",
  "getrandom 0.4.3",
  "model",
  "serde",
  "serde_json",
- "sha2",
  "tempfile",
  "thiserror 2.0.20",
  "tokio",
@@ -1399,11 +1422,9 @@ dependencies = [
  "getrandom 0.4.3",
  "icu_collator",
  "icu_locale_core",
- "indexmap",
  "serde",
  "serde_json",
  "sha2",
- "tempfile",
  "thiserror 2.0.20",
  "tokio",
  "tokio-util",
@@ -1613,6 +1634,7 @@ dependencies = [
  "base64",
  "chrono",
  "domain",
+ "file",
  "futures-util",
  "model",
  "pulldown-cmark",
@@ -1811,6 +1833,7 @@ name = "relay"
 version = "0.0.22"
 dependencies = [
  "futures-util",
+ "model",
  "reqwest",
  "secrecy",
  "serde",
@@ -1975,11 +1998,11 @@ version = "0.0.22"
 dependencies = [
  "chrono",
  "chrono-tz",
+ "file",
  "model",
  "serde",
  "serde_json",
  "tempfile",
- "thiserror 2.0.20",
  "tokio",
  "tokio-util",
  "uuid",

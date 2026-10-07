@@ -8,6 +8,9 @@
 本 ADR 的后续迁移已由 [ADR-102](adr-102-provider-metadata-independence.md) 完成：provider
 不再依赖 metadata，共享契约与基础设施归 model。以下保留摘要生成迁移阶段的决策背景。
 
+后续 [ADR-107](../daemon/adr-107-direct-imports-from-owning-crates.md) 移除 summary 的共享类型
+重导出；生成接口继续归 provider，请求和结果类型直接从 model 导入。
+
 ## 背景
 
 标题、分支名、提交信息和 PR 文案都通过原生 Provider 的辅助调用生成。此前 provider

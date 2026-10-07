@@ -4,7 +4,6 @@ use serde::{Deserialize, Serialize};
 use serde_json::Value;
 
 pub mod single;
-pub mod subscription;
 
 pub use model::server::{
     CAPABILITIES, Lifecycle, Limits, MAX_CONNECTIONS, MAX_MESSAGE_BYTES, MAX_QUEUE_BYTES,

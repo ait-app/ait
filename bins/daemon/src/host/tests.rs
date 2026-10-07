@@ -1,6 +1,6 @@
 use super::*;
-use crate::config::Cli;
 use clap::Parser;
+use file::config::Cli;
 
 fn config(directory: &std::path::Path) -> Config {
     Config::load(
@@ -15,6 +15,8 @@ fn config(directory: &std::path::Path) -> Config {
             (name == "AIT_SERVER_TOKEN")
                 .then(|| "offline-host-test-token-at-least-32-characters".into())
         },
+        |token| api::validate_token(token).map_err(Into::into),
+        |origin| api::validate_browser_origin(origin).map_err(Into::into),
     )
     .unwrap()
 }

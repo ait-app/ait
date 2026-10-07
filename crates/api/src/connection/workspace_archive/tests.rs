@@ -1,15 +1,14 @@
 use std::sync::Arc;
 
-use super::*;
-use crate::{Api, Services};
+use file::storage::project_config::LocalProjectConfigStore;
+use file::storage::project_icon::LocalProjectIconStore;
+use file::storage::registry::{FileBackedProjectRegistry, FileBackedWorkspaceRegistry};
 use filesystem::local::provisioning::LocalDirectorySource;
 use metadata::service::directory::{Directory, DirectoryDependencies};
-use metadata::storage::{
-    project_config::LocalProjectConfigStore,
-    project_icon::LocalProjectIconStore,
-    registry::{FileBackedProjectRegistry, FileBackedWorkspaceRegistry},
-};
 use model::{Request, outbound::Outbound};
+
+use super::*;
+use crate::{Api, Services};
 
 struct Fixture {
     root: std::path::PathBuf,

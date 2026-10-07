@@ -1,6 +1,9 @@
 use std::path::Path;
 use std::sync::{Arc, Mutex};
 
+use file::storage::project_config::LocalProjectConfigStore;
+use file::storage::project_icon::LocalProjectIconStore;
+use file::storage::registry::{FileBackedProjectRegistry, FileBackedWorkspaceRegistry};
 use filesystem::local::{
     checkout::LocalCheckout, files::LocalFiles, forge::LocalForge, git_fetch::LocalGitFetch,
     github_projects::LocalGithubProjects, provisioning::LocalDirectorySource, skills::LocalSkills,
@@ -12,10 +15,6 @@ use filesystem::service::{
     worktrees::Worktrees,
 };
 use metadata::service::directory::{Directory, DirectoryDependencies};
-use metadata::storage::{
-    project_config::LocalProjectConfigStore, project_icon::LocalProjectIconStore,
-};
-use model::storage::registry::{FileBackedProjectRegistry, FileBackedWorkspaceRegistry};
 
 /// Install a complete filesystem service with all storage confined to the test `root`.
 pub(super) fn service(root: &Path) -> filesystem::Service {

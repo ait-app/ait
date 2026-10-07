@@ -1,14 +1,16 @@
 //! Checkout presentation facts survive listing, mutations, and directory subscriptions.
 
-use super::*;
-use crate::ports::workspace_runtime::{
+use std::sync::Arc;
+
+use model::ServerMessage;
+use model::workspace::runtime::{
     WorkspaceCheckSnapshot, WorkspaceDiffStat, WorkspaceForgeSnapshot, WorkspaceGitSnapshot,
     WorkspacePullRequestSnapshot, WorkspaceRuntimeSnapshot, WorkspaceRuntimeSource,
 };
-use crate::rpc::directory::{execute, listing};
-use model::ServerMessage;
 use serde_json::json;
-use std::sync::Arc;
+
+use super::*;
+use crate::rpc::directory::{execute, listing};
 
 #[derive(Debug, Default)]
 struct Runtime {

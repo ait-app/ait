@@ -15,6 +15,7 @@ use std::collections::BTreeMap;
 use std::sync::Arc;
 
 use chrono::{SecondsFormat, Utc};
+use domain::agent_runtime::registry::AgentRuntimeRegistry;
 use domain::agent_runtime::{
     AgentRuntimeStatus, PersistedAgentRuntimeRecord, StoredAgentConfig, StoredAgentRuntimeInfo,
 };
@@ -22,7 +23,6 @@ use model::session::SessionEvents;
 use model::session::protocol::SessionEventKind;
 use serde_json::json;
 
-use crate::ports::agent_runtime::AgentRuntimeRegistry;
 use crate::ports::agent_session::{
     AgentClient, AgentResumePurpose, AgentSession, AgentSessionError, AgentSessionSpec,
     AgentTurnEvent,
@@ -696,7 +696,7 @@ impl AgentManager {
             names.schedule(
                 workspace,
                 context,
-                Some(crate::summary::SummarySelection {
+                Some(model::summary::SummarySelection {
                     provider: record.provider.clone(),
                     model: record
                         .config
@@ -1104,7 +1104,7 @@ fn publish_terminal_attention(
 }
 
 const fn map_registry(
-    _: crate::ports::agent_runtime::AgentRuntimeRegistryError,
+    _: domain::agent_runtime::registry::AgentRuntimeRegistryError,
 ) -> AgentManagerError {
     AgentManagerError::Registry
 }

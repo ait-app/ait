@@ -59,9 +59,9 @@ async fn try_handlers(
         }
         Err(DispatchError::Delivery(error)) => return Err(error),
     }
-    match crate::relay_rpc::request(context, state).await {
+    match relay::rpc::request(context, &state.relay).await {
         Ok(()) => {}
-        Err(DispatchError::NotImplemented) => Context::assert_unhandled(context, "api::relay"),
+        Err(DispatchError::NotImplemented) => Context::assert_unhandled(context, "relay"),
         Err(DispatchError::Delivery(error)) => return Err(error),
     }
     match schedule::dispatch::dispatch(context, &state.schedule).await {
@@ -354,7 +354,7 @@ async fn unmatched_owners_return_not_implemented_without_consuming_or_delivering
         let results = [
             super::super::workspace_creation::request(&mut pending, &api.shared).await,
             super::super::workspace_archive::request(&mut pending, &api.shared).await,
-            crate::relay_rpc::request(&mut pending, &api.shared).await,
+            relay::rpc::request(&mut pending, &api.shared.relay).await,
             schedule::dispatch::dispatch(&mut pending, &api.shared.schedule).await,
             browser::dispatch::dispatch(
                 &mut pending,
@@ -418,6 +418,7 @@ async fn every_declared_request_reaches_its_owners_consuming_branch() {
             .map(|spec| spec.name)
             .collect(),
         metadata::capabilities::implemented_methods()
+            .chain(metadata::capabilities::connection_methods())
             .map(|spec| spec.name)
             .chain(["server.status.unsubscribe"])
             .collect(),
@@ -430,6 +431,7 @@ async fn every_declared_request_reaches_its_owners_consuming_branch() {
         terminal::capabilities::implemented_methods()
             .map(|spec| spec.name)
             .collect(),
+        relay::rpc::METHODS.iter().map(|spec| spec.name).collect(),
     ];
     for (owner, methods) in owners.into_iter().enumerate() {
         for method in methods {
@@ -486,6 +488,7 @@ async fn every_declared_request_reaches_its_owners_consuming_branch() {
                     )
                     .await
                 }
+                7 => relay::rpc::request(&mut pending, &api.shared.relay).await,
                 _ => unreachable!(),
             };
             assert!(result.is_ok(), "{method}: {result:?}");

@@ -1,4 +1,6 @@
-//! Shared atomic file persistence used by capability-owned registries.
+//! Shared persistence contracts; concrete file adapters are owned by the file crate.
 
-pub mod registry;
-pub mod workspace_labels;
+pub mod daemon_config;
+pub mod project;
+pub mod push;
+pub mod schedule;

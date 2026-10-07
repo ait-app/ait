@@ -21,12 +21,12 @@ use std::time::Duration;
 
 use domain::agent_runtime::{AgentPersistenceHandle, StoredAgentConfig, StoredAgentRuntimeInfo};
 use serde_json::{Value, json};
+use transport::Transport;
 
 use crate::ports::agent_session::{
     AgentClient, AgentResumePurpose, AgentSession, AgentSessionError, AgentSessionFuture,
     AgentSessionSpec, AgentTurnEvent,
 };
-use transport::Transport;
 
 /// A native Codex executable. Authentication remains in Codex's own environment and storage.
 #[derive(Debug, Clone)]
@@ -206,7 +206,7 @@ impl AgentClient for CodexClient {
         Box::pin(async move { client.open(spec, None).await })
     }
 
-    fn summary_model(&self, models: &[Value]) -> Option<crate::summary::SummarySelection> {
+    fn summary_model(&self, models: &[Value]) -> Option<model::summary::SummarySelection> {
         super::summary_model::select(
             self.provider(),
             models,

@@ -1,8 +1,8 @@
-use super::*;
-
-use metadata::ports::daemon::{DaemonConfigReload, DaemonConfigStoreError};
-use metadata::storage::daemon_config::FileDaemonConfigStore;
+use file::storage::daemon_config::FileDaemonConfigStore;
+use model::storage::daemon_config::{DaemonConfigReload, DaemonConfigStoreError};
 use serde_json::json;
+
+use super::*;
 
 #[test]
 fn configuration_reads_live_preferences_and_repository_styles_with_legacy_fallback() {

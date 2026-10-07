@@ -2,6 +2,7 @@
 
 - 状态：已实现
 - 日期：2026-10-01
+- 后续边界修订：[ADR-108](../daemon/adr-108-relay-rpc-and-metadata-connection-methods.md) 将控制 RPC 移入 relay，允许其仅依赖 model 的共享请求契约。
 - 修订：[ADR-061](adr-061-app-ait-e2e-remove-relay-plugin.md) 中不再提供中继连接的产品范围；旧公钥中继协议及配对格式继续停用。
 - 后续：[ADR-075](adr-075-relay-protocol-modules.md) 明确协议模块职责；[ADR-076](adr-076-android-account-relay.md) 将账户会话移入共享 SDK 并扩展 Android 客户端。
 

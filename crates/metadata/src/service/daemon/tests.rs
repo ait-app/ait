@@ -1,6 +1,8 @@
 use std::sync::Mutex;
 
-use crate::ports::daemon::{DaemonConfigReload, DaemonConfigStore, DaemonConfigStoreError};
+use model::storage::daemon_config::{
+    DaemonConfigReload, DaemonConfigStore, DaemonConfigStoreError,
+};
 use serde_json::json;
 
 use super::*;
@@ -87,9 +89,10 @@ fn status_diagnostics_and_update_are_sanitized_and_stable() {
 
 #[test]
 fn snapshots_report_provider_availability_without_backend_secrets() {
+    use model::Lifecycle;
+
     use crate::protocol::daemon::ProviderAvailability;
     use crate::rpc::daemon::snapshot;
-    use model::Lifecycle;
 
     let daemon = daemon();
     let providers = vec![

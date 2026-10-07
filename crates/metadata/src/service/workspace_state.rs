@@ -1,10 +1,9 @@
 //! Workspace attention validation and batch coordination over a consumer-owned port.
 
-use crate::model::registry::PersistedWorkspaceRecord;
-use crate::ports::registry::{RegistryError, WorkspaceRegistry};
-use crate::ports::workspace_state::{WorkspaceAttention, WorkspaceAttentionScan};
-
-pub use crate::ports::workspace_state::WorkspaceStateError;
+use model::workspace::attention::WorkspaceStateError;
+use model::workspace::attention::{WorkspaceAttention, WorkspaceAttentionScan};
+use model::workspace::records::PersistedWorkspaceRecord;
+use model::workspace::registry::{RegistryError, WorkspaceRegistry};
 
 /// Result for one Workspace in a clear-attention batch.
 #[derive(Debug, Clone, PartialEq, Eq)]

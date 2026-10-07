@@ -4,6 +4,7 @@ use std::cmp::Ordering;
 use std::collections::BTreeMap;
 
 use chrono::{DateTime, Duration, SecondsFormat, Utc};
+use domain::agent_runtime::registry::{AgentRuntimeRegistry, AgentRuntimeRegistryError};
 use domain::agent_runtime::{
     AgentAttentionReason, AgentRuntimeStatus, PersistedAgentRuntimeRecord,
 };
@@ -12,8 +13,6 @@ use model::workspace::attention::{
     WorkspaceActivity, WorkspaceActivitySource, WorkspaceAttention, WorkspaceAttentionChanges,
     WorkspaceAttentionScan, WorkspaceStateError,
 };
-
-use crate::ports::agent_runtime::{AgentRuntimeRegistry, AgentRuntimeRegistryError};
 
 const PARENT_AGENT_ID_LABEL: &str = "paseo.parent-agent-id";
 

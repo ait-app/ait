@@ -11,12 +11,12 @@ pub(crate) const METHODS: &[MethodSpec] = &[
     MethodSpec::request("server.shutdown.request"),
 ];
 
-use crate::rpc::daemon;
 use model::ErrorCode;
 use model::methods::MethodSpec;
 use serde_json::Value;
 
 use crate::dispatch::State as Shared;
+use crate::rpc::daemon;
 
 pub async fn dispatch(method: &str, params: Value, state: &Shared) -> Result<Value, ErrorCode> {
     if let Some(request) = daemon::lifecycle(method, &params)? {
@@ -47,7 +47,7 @@ pub async fn dispatch(method: &str, params: Value, state: &Shared) -> Result<Val
                         .clone()
                 };
                 events.publish(
-                    crate::protocol::session::SessionEventKind::DaemonConfig,
+                    model::session::protocol::SessionEventKind::DaemonConfig,
                     &serde_json::json!({"status":"daemon_config_changed","config":config}),
                 );
             }

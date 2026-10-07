@@ -1,11 +1,12 @@
-use crate::{
-    cadence,
-    ports::{Error, Outcome, Store},
-    protocol::{Cadence, Create, Run, RunStatus, Schedule, Status, Target},
-};
 use chrono::{DateTime, Utc};
+use model::schedule::{Cadence, Run, RunStatus, Schedule, Status, Target};
+use model::storage::schedule::{Error, Store};
 use serde_json::{Value, json};
 use uuid::Uuid;
+
+use crate::cadence;
+use crate::ports::Outcome;
+use crate::protocol::Create;
 
 pub(crate) struct Engine {
     store: Box<dyn Store>,
@@ -472,3 +473,6 @@ fn limit_text(text: &str) -> String {
 }
 #[cfg(test)]
 pub(crate) mod tests;
+
+#[cfg(test)]
+mod storage_tests;

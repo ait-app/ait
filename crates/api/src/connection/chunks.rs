@@ -4,12 +4,12 @@ use std::time::Duration;
 
 use axum::extract::ws::WebSocket;
 use futures_util::stream::SplitStream;
+use model::outbound::Outbound;
 use protocol::ErrorCode;
 use tokio::sync::{OwnedSemaphorePermit, Semaphore};
 use tokio::time::{Instant, timeout_at};
 
 use super::{Incoming, receive};
-use crate::outbound::Outbound;
 
 const MAX_BYTES: usize = 64 * 1024 * 1024;
 const CHUNK_BYTES: usize = 256 * 1024;

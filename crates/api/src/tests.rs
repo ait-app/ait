@@ -177,7 +177,7 @@ fn assert_default_capabilities(info: &ServerInfo) {
             "session.events.set_subscription.request",
             "creation.subscribe.request",
         ])
-        .chain(crate::relay_rpc::METHODS.iter().map(|method| method.name))
+        .chain(relay::rpc::METHODS.iter().map(|method| method.name))
         .collect();
     assert_eq!(info.implemented_capabilities, expected);
     assert_eq!(info.capabilities.len(), 180);

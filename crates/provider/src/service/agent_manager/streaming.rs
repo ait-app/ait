@@ -2,7 +2,7 @@ use super::{AgentManager, AgentManagerError, AgentTurnEvent, now_timestamp};
 use crate::ports::agent_session::AgentSessionError;
 
 pub(super) fn drain(
-    registry: &dyn crate::ports::agent_runtime::AgentRuntimeRegistry,
+    registry: &dyn domain::agent_runtime::registry::AgentRuntimeRegistry,
     timeline: Option<&crate::storage::timeline::Timeline>,
     events: &model::session::SessionEvents,
     id: &str,
@@ -66,7 +66,7 @@ pub(super) fn drain(
 }
 
 fn persist_info(
-    registry: &dyn crate::ports::agent_runtime::AgentRuntimeRegistry,
+    registry: &dyn domain::agent_runtime::registry::AgentRuntimeRegistry,
     id: &str,
     agent: &super::LiveAgent,
     info: &domain::agent_runtime::StoredAgentRuntimeInfo,
@@ -88,7 +88,7 @@ fn persist_info(
 }
 
 fn persist_started(
-    registry: &dyn crate::ports::agent_runtime::AgentRuntimeRegistry,
+    registry: &dyn domain::agent_runtime::registry::AgentRuntimeRegistry,
     timeline: Option<&crate::storage::timeline::Timeline>,
     id: &str,
     agent: &super::LiveAgent,
@@ -131,7 +131,7 @@ fn persist_started(
 }
 
 fn persist_usage(
-    registry: &dyn crate::ports::agent_runtime::AgentRuntimeRegistry,
+    registry: &dyn domain::agent_runtime::registry::AgentRuntimeRegistry,
     timeline: Option<&crate::storage::timeline::Timeline>,
     id: &str,
     agent: &super::LiveAgent,
@@ -289,7 +289,7 @@ impl AgentManager {
 }
 
 pub(super) fn persist_input(
-    registry: &dyn crate::ports::agent_runtime::AgentRuntimeRegistry,
+    registry: &dyn domain::agent_runtime::registry::AgentRuntimeRegistry,
     agent_id: &str,
     agent: &mut super::LiveAgent,
 ) -> Result<(), AgentManagerError> {
@@ -310,7 +310,7 @@ pub(super) fn persist_input(
 }
 
 pub(super) fn persist_handle(
-    registry: &dyn crate::ports::agent_runtime::AgentRuntimeRegistry,
+    registry: &dyn domain::agent_runtime::registry::AgentRuntimeRegistry,
     agent_id: &str,
     agent: &mut super::LiveAgent,
 ) -> Result<(), AgentManagerError> {

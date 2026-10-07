@@ -1,7 +1,7 @@
 use std::collections::{BTreeMap, BTreeSet};
 use std::sync::{Arc, Mutex};
 
-use crate::ports::agent_runtime::{AgentRuntimeRegistry, AgentRuntimeRegistryError};
+use domain::agent_runtime::registry::{AgentRuntimeRegistry, AgentRuntimeRegistryError};
 use model::workspace::registry::{
     ActiveProjectInput, MutationListener, MutationSubscription, ProjectMutation,
     WorkspaceArchiveContext, WorkspaceMutation, WorkspaceMutationContext,

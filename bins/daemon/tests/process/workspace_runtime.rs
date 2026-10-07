@@ -113,8 +113,10 @@ async fn binary_workspace_runtime_streams_sidebar_facts_and_live_edits() {
         "success"
     );
     assert_eq!(workspace["forge"], "github");
-    serde_json::from_value::<metadata::protocol::workspace::WorkspaceDescriptorPayload>(workspace)
-        .unwrap();
+    serde_json::from_value::<model::workspace::protocol::workspace::WorkspaceDescriptorPayload>(
+        workspace,
+    )
+    .unwrap();
 
     fs::write(repo.join("tracked.txt"), "base\nnew\nnewer\n").unwrap();
     loop {

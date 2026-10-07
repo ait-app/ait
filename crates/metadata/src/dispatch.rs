@@ -26,9 +26,9 @@ pub struct State {
     /// Installed workspace state service.
     pub workspace_state: Option<Arc<Mutex<crate::service::workspace_state::WorkspaceState>>>,
     /// Durable progress of Workspace and native Agent creation.
-    pub creations: crate::service::creation::Creations,
+    pub creations: model::creation::Creations,
     /// Shared ephemeral session event hub.
-    pub session_events: crate::service::session::SessionEvents,
+    pub session_events: model::session::SessionEvents,
     /// Whether Agent attention event production is installed.
     pub has_agent_execution: bool,
     /// Whether terminal hook attention events are installed.
@@ -97,7 +97,7 @@ impl State {
             let mut info = self.info();
             info.lifecycle = Lifecycle::Draining;
             self.session_events.publish(
-                crate::protocol::session::SessionEventKind::ServerInfo,
+                model::session::protocol::SessionEventKind::ServerInfo,
                 &json!({"status":"server_info","info":info}),
             );
         }
@@ -107,7 +107,7 @@ impl State {
 }
 
 /// Dispatch metadata requests and reusable API connection protocol operations.
-/// The API owns built-in protocol method declarations; those operations require no metadata service.
+/// This crate owns connection method declarations; those operations require no metadata service.
 /// Leaves `context` unchanged for other crates; takes it when this crate handles the method.
 /// Returns `DispatchError::NotImplemented` while leaving an unmatched Context available.
 /// Returns optional work for the API to finish before ending request processing.

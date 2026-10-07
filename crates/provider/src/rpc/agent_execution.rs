@@ -11,11 +11,11 @@ pub mod workspace_creation;
 mod worktrees;
 
 use domain::agent_runtime::PersistedAgentRuntimeRecord;
+use domain::agent_runtime::registry::AgentRuntimeRegistry;
 use model::workspace::registry::{ProjectRegistry, WorkspaceRegistry};
 use serde_json::{Value, json};
 use uuid::Uuid;
 
-use crate::ports::agent_runtime::AgentRuntimeRegistry;
 use crate::ports::agent_session::AgentSessionSpec;
 use crate::protocol::agent_execution::{CreateRequest, ResumeRequest, SendRequest};
 use crate::protocol::agent_lifecycle::AgentIdRequest;

@@ -1,11 +1,11 @@
 use std::collections::BTreeMap;
 use std::sync::{Arc, Mutex};
 
-use crate::ports::agent_runtime::{AgentRuntimeRegistry, AgentRuntimeRegistryError};
-use crate::ports::agent_session::{AgentSessionFuture, AgentSessionSpec};
+use domain::agent_runtime::registry::{AgentRuntimeRegistry, AgentRuntimeRegistryError};
 use domain::agent_runtime::{AgentPersistenceHandle, StoredAgentConfig};
 
 use super::*;
+use crate::ports::agent_session::{AgentSessionFuture, AgentSessionSpec};
 
 mod auto_archive;
 mod environment;

@@ -459,7 +459,7 @@ fn descendants(
 mod tests;
 
 pub(super) fn publish_permission(
-    registry: &dyn crate::ports::agent_runtime::AgentRuntimeRegistry,
+    registry: &dyn domain::agent_runtime::registry::AgentRuntimeRegistry,
     timeline: Option<&crate::storage::timeline::Timeline>,
     events: &model::session::SessionEvents,
     agent: &super::LiveAgent,
@@ -491,7 +491,7 @@ pub(super) fn publish_permission(
 }
 
 pub(super) fn resolve_permission(
-    registry: &dyn crate::ports::agent_runtime::AgentRuntimeRegistry,
+    registry: &dyn domain::agent_runtime::registry::AgentRuntimeRegistry,
     timeline: Option<&crate::storage::timeline::Timeline>,
     events: &model::session::SessionEvents,
     agent: &super::LiveAgent,

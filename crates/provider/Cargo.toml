@@ -41,6 +41,7 @@ regex.workspace = true
 workspace = true
 
 [dev-dependencies]
+file.workspace = true
 # Offline native HTTP fixtures, without provider credentials or a model API.
 axum.workspace = true
 tokio-stream.workspace = true

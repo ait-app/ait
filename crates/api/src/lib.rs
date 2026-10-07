@@ -6,18 +6,13 @@ mod capabilities;
 mod composition;
 pub use composition::summary_source;
 mod connection;
-mod core_methods;
 mod files;
 mod listener;
-mod outbound;
-mod relay_rpc;
 mod terminal_activity;
 mod workspace_cleanup;
 
 use std::net::SocketAddr;
 use std::sync::{Arc, Mutex};
-
-use model::Runtime;
 use std::time::Duration;
 
 use axum::extract::{ConnectInfo, Request, State, WebSocketUpgrade};
@@ -26,15 +21,20 @@ use axum::middleware::{self, Next};
 use axum::response::{IntoResponse, Response};
 use axum::routing::{get, post};
 use axum::{Json, Router};
+use browser::broker::Broker;
 use filesystem::service::worktrees::{WorkspaceWorktrees, Worktrees};
 use metadata::service::directory::Directory;
 use metadata::service::workspace_automation::WorkspaceAutomation;
+use model::Runtime;
 use protocol::{Lifecycle, Limits, ServerInfo, VERSION};
 use provider::service::agent_execution::AgentExecution;
+use schedule::service::Schedules;
 use secrecy::SecretString;
+use terminal::service::Terminals;
 use tokio::sync::Semaphore;
 use tower_http::timeout::TimeoutLayer;
 use tower_http::trace::TraceLayer;
+use voice::service::Speech;
 
 pub use auth::validate_token;
 pub use browser_auth::validate_browser_origin;
@@ -102,16 +102,16 @@ pub struct Services {
     /// Agent presets, runtime metadata, native execution, and history.
     pub provider: Option<provider::Service>,
     /// Persistent timed Agent executions.
-    pub schedule: Option<schedule::Service>,
+    pub schedule: Option<Schedules>,
     /// Connection-owned browser automation.
-    pub browser: Option<browser::Service>,
+    pub browser: Option<Broker>,
     /// Local terminal lifecycle and streaming.
-    pub terminal: Option<terminal::Service>,
+    pub terminal: Option<Terminals>,
     /// Voice conversations and dictation.
-    pub voice: Option<voice::Service>,
+    pub voice: Option<Speech>,
 }
 
-pub use metadata::rpc::daemon::LifecycleIntent;
+pub use model::LifecycleIntent;
 
 impl Shared {
     fn start_draining(&self) {
@@ -289,7 +289,7 @@ impl Api {
 
     /// Return the composed broker for host-side browser tool execution.
     #[must_use]
-    pub fn browser(&self) -> Option<browser::broker::Broker> {
+    pub fn browser(&self) -> Option<Broker> {
         self.shared.browser.broker.clone()
     }
 
@@ -545,21 +545,21 @@ fn compose_directory(
     worktrees: Option<&Arc<Mutex<Worktrees>>>,
     git_fetch: Option<filesystem::service::git_fetch::GitFetch>,
     runtime: &Arc<Runtime>,
-    events: &metadata::service::session::SessionEvents,
+    events: &model::session::SessionEvents,
     has_automation: bool,
 ) -> (Option<Directory>, bool) {
     let has_git_fetch = directory.is_some() && git_fetch.is_some();
     let directory = directory.map(|directory| {
         let project_events = events.clone();
         let directory = directory.with_project_updates(Arc::new(move |mutation| {
-            use metadata::ports::registry::MutationKind;
-            use metadata::protocol::session::SessionEventKind;
+            use model::workspace::registry::MutationKind;
+            use model::session::protocol::SessionEventKind;
 
             let payload = if mutation.kind == MutationKind::Upsert {
                 mutation.project.as_ref().map(|project| {
                     serde_json::json!({
                         "kind": "upsert",
-                        "project": metadata::rpc::directory::project_descriptor(project),
+                        "project": model::workspace::protocol::projection::project_descriptor(project),
                     })
                 })
             } else {
@@ -575,8 +575,8 @@ fn compose_directory(
         let directory = if has_automation {
             let setup_events = events.clone();
             directory.with_workspace_updates(Arc::new(move |mutation| {
-                use metadata::ports::registry::MutationKind;
-                use metadata::protocol::session::SessionEventKind;
+                use model::workspace::registry::MutationKind;
+                use model::session::protocol::SessionEventKind;
 
                 if mutation.kind != MutationKind::Upsert {
                     return;
@@ -623,10 +623,10 @@ fn compose_directory(
 
 fn compose_automation_events(
     automation: Option<&Arc<Mutex<WorkspaceAutomation>>>,
-    events: &metadata::service::session::SessionEvents,
+    events: &model::session::SessionEvents,
 ) -> Result<(), ConfigError> {
     use metadata::ports::workspace_automation::AutomationEvent;
-    use metadata::protocol::session::SessionEventKind;
+    use model::session::protocol::SessionEventKind;
 
     let Some(automation) = automation else {
         return Ok(());
@@ -671,7 +671,7 @@ fn shared_service<S>(service: S) -> Arc<Mutex<S>> {
     Arc::new(Mutex::new(service))
 }
 
-fn creation_receipts(services: &composition::Parts) -> metadata::service::creation::Creations {
+fn creation_receipts(services: &composition::Parts) -> model::creation::Creations {
     services
         .agent_execution
         .as_ref()

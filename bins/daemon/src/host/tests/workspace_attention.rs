@@ -1,21 +1,20 @@
-use metadata::service::workspace_state::WorkspaceState;
-use model::workspace::records::PersistedWorkspaceKind;
-use model::workspace::records::PersistedWorkspaceRecord;
-use model::workspace::registry::{RegistryError, WorkspaceRegistry};
 use std::collections::BTreeMap;
 use std::sync::atomic::{AtomicUsize, Ordering};
 use std::sync::{Arc, Mutex};
 
+use domain::agent_runtime::registry::{AgentRuntimeRegistry, AgentRuntimeRegistryError};
+use domain::agent_runtime::{
+    AgentAttentionReason, AgentRuntimeStatus, PersistedAgentRuntimeRecord,
+};
+use metadata::service::workspace_state::WorkspaceState;
+use model::workspace::attention::{WorkspaceAttention, WorkspaceStateError};
+use model::workspace::records::PersistedWorkspaceKind;
+use model::workspace::records::PersistedWorkspaceRecord;
 use model::workspace::registry::{
     MutationListener, MutationSubscription, WorkspaceArchiveContext, WorkspaceMutation,
     WorkspaceMutationContext,
 };
-
-use domain::agent_runtime::{
-    AgentAttentionReason, AgentRuntimeStatus, PersistedAgentRuntimeRecord,
-};
-use model::workspace::attention::{WorkspaceAttention, WorkspaceStateError};
-use provider::ports::agent_runtime::{AgentRuntimeRegistry, AgentRuntimeRegistryError};
+use model::workspace::registry::{RegistryError, WorkspaceRegistry};
 use provider::service::workspace_attention::AgentWorkspaceAttention;
 
 const PARENT_AGENT_ID_LABEL: &str = "paseo.parent-agent-id";

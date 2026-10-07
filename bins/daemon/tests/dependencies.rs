@@ -11,6 +11,7 @@ use browser as _;
 use chrono as _;
 use clap as _;
 use domain as _;
+use file as _;
 use filesystem as _;
 use futures_util as _;
 use metadata as _;
@@ -19,20 +20,16 @@ use protocol as _;
 use provider as _;
 use reqwest as _;
 use schedule as _;
-use secrecy as _;
-use serde as _;
+use serde_json::{Value, json};
 use tempfile as _;
 use terminal as _;
 use tokio as _;
 use tokio_tungstenite as _;
 use tokio_util as _;
-use toml as _;
 use tracing as _;
 use tracing_subscriber as _;
 use uuid as _;
 use voice as _;
-
-use serde_json::{Value, json};
 
 fn violations(packages: &[Value]) -> Vec<String> {
     let workspace_names: BTreeSet<_> = packages
@@ -44,6 +41,7 @@ fn violations(packages: &[Value]) -> Vec<String> {
         let name = package["name"].as_str().unwrap();
         let allowed: &[&str] = match name {
             "daemon" => &[
+                "file",
                 "voice",
                 "schedule",
                 "browser",
@@ -57,6 +55,7 @@ fn violations(packages: &[Value]) -> Vec<String> {
                 "domain",
             ],
             "api" => &[
+                "file",
                 "relay",
                 "voice",
                 "schedule",
@@ -68,10 +67,11 @@ fn violations(packages: &[Value]) -> Vec<String> {
                 "metadata",
                 "filesystem",
             ],
-            "provider" => &["domain", "model"],
-            "protocol" | "metadata" | "voice" | "schedule" | "browser" | "terminal"
-            | "filesystem" => &["model"],
-            "domain" | "model" | "relay" => &[],
+            "provider" => &["domain", "model", "file"],
+            "file" => &["model", "domain"],
+            "metadata" | "schedule" | "filesystem" => &["model", "file"],
+            "protocol" | "voice" | "browser" | "terminal" | "relay" => &["model"],
+            "domain" | "model" => &[],
             _ => {
                 violations.push(format!("unregistered workspace package: {name}"));
                 continue;
@@ -84,9 +84,15 @@ fn violations(packages: &[Value]) -> Vec<String> {
             {
                 violations.push(format!("{name} -> {target}"));
             }
+            if target == "file"
+                && matches!(name, "api" | "filesystem" | "provider" | "schedule")
+                && dependency["kind"].as_str() != Some("dev")
+            {
+                violations.push(format!("{name} -> file outside tests"));
+            }
             if matches!(
                 name,
-                "domain" | "model" | "protocol" | "metadata" | "filesystem" | "terminal"
+                "domain" | "file" | "model" | "protocol" | "metadata" | "filesystem" | "terminal"
             ) && [
                 "sqlx", "rusqlite", "axum", "hyper", "reqwest", "tonic", "tauri", "rig", "codex",
             ]
@@ -259,6 +265,7 @@ fn terminal_cannot_depend_on_metadata_provider_transport_or_old_workspace_packag
 fn tokio_is_allowed_in_capability_crates_but_not_domain_or_protocol() {
     for name in [
         "model",
+        "file",
         "metadata",
         "filesystem",
         "provider",
@@ -285,6 +292,7 @@ fn tokio_is_allowed_in_capability_crates_but_not_domain_or_protocol() {
 #[test]
 fn shared_context_cannot_depend_on_capability_or_transport_packages() {
     for dependency in [
+        "file",
         "api",
         "protocol",
         "metadata",
@@ -298,6 +306,65 @@ fn shared_context_cannot_depend_on_capability_or_transport_packages() {
             json!({"id":"model", "name":"model", "dependencies":[{"name":dependency,"path":"../dependency"}]}),
         ];
         assert_eq!(violations(&packages), [format!("model -> {dependency}")]);
+    }
+}
+
+#[test]
+fn file_adapters_depend_on_shared_contracts_without_reverse_or_transport_dependencies() {
+    for owner in [
+        "daemon",
+        "metadata",
+        "provider",
+        "schedule",
+        "filesystem",
+        "api",
+    ] {
+        let packages = [
+            json!({"name":owner,"dependencies":[{"name":"file","path":"../file",
+                "kind":if matches!(owner,"daemon"|"metadata") { Value::Null } else { json!("dev") }
+            }]}),
+            json!({"name":"file","dependencies":[]}),
+        ];
+        assert!(violations(&packages).is_empty());
+    }
+    for dependency in ["model", "domain"] {
+        let packages =
+            [json!({"name":"file","dependencies":[{"name":dependency,"path":"../dependency"}]})];
+        assert!(violations(&packages).is_empty());
+    }
+    for dependency in ["metadata", "provider", "schedule", "filesystem", "api"] {
+        for kind in [Value::Null, json!("dev"), json!("build")] {
+            let packages = [json!({"name":"file","dependencies":[{
+                "name":dependency,"path":"../dependency","rename":"renamed",
+                "kind":kind,"optional":true,"target":"cfg(windows)"
+            }]})];
+            assert_eq!(violations(&packages), [format!("file -> {dependency}")]);
+        }
+    }
+    for dependency in ["axum", "rusqlite", "reqwest"] {
+        let packages = [json!({"name":"file","dependencies":[{"name":dependency}]})];
+        assert_eq!(
+            violations(&packages),
+            [format!("impure file -> {dependency}")]
+        );
+    }
+}
+
+#[test]
+fn consumers_inject_file_adapters_without_production_or_build_dependencies() {
+    for owner in ["api", "filesystem", "provider", "schedule"] {
+        for kind in [Value::Null, json!("dev"), json!("build")] {
+            let packages = [json!({"name":owner,"dependencies":[{
+                "name":"file","path":"../file","rename":"storage",
+                "kind":kind,"optional":true,"target":"cfg(windows)"
+            }]})];
+            let expected = if kind == json!("dev") {
+                Vec::new()
+            } else {
+                vec![format!("{owner} -> file outside tests")]
+            };
+            assert_eq!(violations(&packages), expected);
+        }
     }
 }
 
@@ -338,13 +405,13 @@ fn voice_keeps_speech_io_but_cannot_depend_on_transport_or_agent_implementation(
 }
 
 #[test]
-fn relay_is_a_leaf_transport_owned_by_the_api() {
+fn relay_owns_rpc_using_model_contracts_without_host_or_business_dependencies() {
     let packages = [
         json!({"id":"api", "name":"api", "dependencies":[{"name":"relay", "path":"../relay"}]}),
-        json!({"id":"relay", "name":"relay", "dependencies":[{"name":"tokio"}, {"name":"reqwest"}]}),
+        json!({"id":"relay", "name":"relay", "dependencies":[{"name":"model", "path":"../model"}, {"name":"tokio"}, {"name":"reqwest"}]}),
     ];
     assert!(violations(&packages).is_empty());
-    for dependency in ["api", "model", "provider", "protocol"] {
+    for dependency in ["api", "metadata", "provider", "protocol", "domain", "file"] {
         let packages = [
             json!({"id":"relay", "name":"relay", "dependencies":[{"name":dependency, "path":"../dependency"}]}),
         ];

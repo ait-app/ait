@@ -1,9 +1,10 @@
 //! Physical-connection and subscription contracts from Paseo owned-subscriptions tests.
 
-use super::*;
-use metadata::protocol::session::SessionEventKind;
+use model::session::protocol::SessionEventKind;
 use tokio_tungstenite::tungstenite::protocol::frame::Frame as WebSocketFrame;
 use tokio_tungstenite::tungstenite::protocol::frame::coding::{Data, OpCode};
+
+use super::*;
 
 mod transport;
 

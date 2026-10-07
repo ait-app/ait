@@ -11,10 +11,10 @@ pub const METHODS: &[MethodSpec] = &[
 
 use chrono::{SecondsFormat, Utc};
 use model::methods::MethodSpec;
+use model::workspace::records::UntrustedWorkspaceSource;
 use serde::Serialize;
 use serde_json::Value;
 
-use crate::model::registry::UntrustedWorkspaceSource;
 use crate::protocol::workspace_automation::{
     WorkspaceBlockedSource, WorkspaceScript, WorkspaceScriptLifecycle, WorkspaceScriptListResult,
     WorkspaceScriptMutationResult, WorkspaceScriptRequest, WorkspaceScriptType,

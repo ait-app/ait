@@ -1,13 +1,15 @@
+use std::collections::VecDeque;
+use std::sync::Mutex;
+
+use domain::agent_runtime::AgentPersistenceHandle;
+use model::summary::{SummaryKind, SummarySelection};
+use serde_json::json;
+
 use super::*;
 use crate::ports::agent_session::{
     AgentResumePurpose, AgentSession, AgentSessionError, AgentSessionFuture,
 };
 use crate::service::summary_generation::test_config::Configuration;
-use crate::summary::{SummaryKind, SummarySelection};
-use domain::agent_runtime::AgentPersistenceHandle;
-use serde_json::json;
-use std::collections::VecDeque;
-use std::sync::Mutex;
 
 #[derive(Debug)]
 struct Client {

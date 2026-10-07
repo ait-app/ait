@@ -4,8 +4,8 @@ use std::path::Path;
 
 use super::workspace::{
     ProjectKind, WorkspaceDescriptorPayload, WorkspaceKind, WorkspaceProjectDescriptorPayload,
-    WorkspaceStateBucket,
 };
+use crate::workspace::activity::WorkspaceStateBucket;
 use crate::workspace::records::{
     PersistedProjectKind, PersistedProjectRecord, PersistedWorkspaceKind, PersistedWorkspaceRecord,
 };

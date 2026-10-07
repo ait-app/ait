@@ -1,14 +1,14 @@
-use super::*;
-use crate::{
-    engine::tests::{Memory, input},
-    ports::Progress,
-    protocol::Schedule,
-};
 use std::{
     future::Future,
     pin::Pin,
     sync::atomic::{AtomicUsize, Ordering},
 };
+
+use model::schedule::Schedule;
+
+use super::*;
+use crate::engine::tests::{Memory, input};
+use crate::ports::Progress;
 #[derive(Debug, Default)]
 struct Fake {
     calls: AtomicUsize,
@@ -123,7 +123,7 @@ async fn manual_run_does_not_hold_lane_and_shutdown_cancels_it() {
     assert!(run.await.unwrap().is_ok());
     assert_eq!(
         store.0.lock().unwrap().0[0].runs[0].status,
-        crate::protocol::RunStatus::Failed
+        model::schedule::RunStatus::Failed
     );
 }
 #[tokio::test]

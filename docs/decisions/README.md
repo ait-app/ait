@@ -4,6 +4,10 @@
 
 ## Daemon 与协议
 
+- [ADR-108：Relay RPC 与基础连接方法归所属 crate](daemon/adr-108-relay-rpc-and-metadata-connection-methods.md)
+- [ADR-107：共享组件直接从所属 crate 导入](daemon/adr-107-direct-imports-from-owning-crates.md)
+- [ADR-106：具体文件持久化归 file，model 仅声明契约](daemon/adr-106-concrete-file-persistence.md)
+- [ADR-105：File 工具、通用 Registry 与启动配置独立成 crate](daemon/adr-105-file-tools-and-startup-config.md)
 - [ADR-103：Terminal 仅依赖 model 的共享契约](daemon/adr-103-terminal-model-dependency.md)
 - [ADR-100：功能 crate 作为完整服务安装](daemon/adr-100-crate-level-service-installation.md)
 

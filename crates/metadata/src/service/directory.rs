@@ -3,15 +3,17 @@
 use std::path::Path;
 use std::sync::{Arc, Mutex};
 
-use crate::model::registry::{
+use model::storage::project::{
+    ProjectConfigRevision as StoreConfigRevision, ProjectConfigStore, ProjectConfigStoreError,
+    ProjectConfigWrite, ProjectIconStore, ProjectIconStoreError,
+};
+use model::workspace::identity::{basename, derive_project_key};
+use model::workspace::lifecycle::WorkspaceCreation;
+use model::workspace::provisioning::{Checkout, DirectorySource, DirectorySourceError};
+use model::workspace::records::{
     PersistedProjectKind, PersistedProjectRecord, PersistedWorkspaceKind, PersistedWorkspaceRecord,
 };
-use crate::ports::provisioning::{
-    Checkout, DirectorySource, DirectorySourceError, ProjectConfigRevision as StoreConfigRevision,
-    ProjectConfigStore, ProjectConfigStoreError, ProjectConfigWrite, ProjectIconStore,
-    ProjectIconStoreError,
-};
-use crate::ports::registry::{
+use model::workspace::registry::{
     ActiveProjectInput, MutationSubscription, ProjectRegistry, RegistryError,
     WorkspaceArchiveContext, WorkspaceMutationContext, WorkspaceRegistry,
 };
@@ -119,18 +121,16 @@ pub struct ProjectIconValue {
     pub mime_type: String,
 }
 
-pub use model::workspace::lifecycle::WorkspaceCreation;
-
 /// Blocking project/workspace coordinator; clones share the same registries and adapters.
 #[derive(Debug, Clone)]
 pub struct Directory {
     sync: model::directory_sync::DirectorySync,
     activity: activity::ActivityProjection,
-    git_observer: Option<Arc<dyn crate::ports::workspace_git::WorkspaceGitObserver>>,
-    creations: super::creation::Creations,
+    git_observer: Option<Arc<dyn model::workspace::git::WorkspaceGitObserver>>,
+    creations: model::creation::Creations,
     names: Option<super::workspace_names::WorkspaceNames>,
-    runtime_source: Option<Arc<dyn crate::ports::workspace_runtime::WorkspaceRuntimeSource>>,
-    worktree_provisioning: Option<Arc<dyn crate::ports::worktrees::WorktreeProvisioning>>,
+    runtime_source: Option<Arc<dyn model::workspace::runtime::WorkspaceRuntimeSource>>,
+    worktree_provisioning: Option<Arc<dyn model::workspace::worktrees::WorktreeProvisioning>>,
     projects: Arc<dyn ProjectRegistry>,
     workspaces: Arc<dyn WorkspaceRegistry>,
     source: Arc<dyn DirectorySource>,
@@ -166,7 +166,7 @@ impl Directory {
             sync: model::directory_sync::DirectorySync::new(uuid::Uuid::new_v4().to_string()),
             activity: activity::ActivityProjection::default(),
             git_observer: None,
-            creations: super::creation::Creations::default(),
+            creations: model::creation::Creations::default(),
             names: None,
             runtime_source: None,
             worktree_provisioning: None,
@@ -208,7 +208,7 @@ impl Directory {
     #[must_use]
     pub fn with_project_updates(
         self,
-        publish: Arc<dyn Fn(&crate::ports::registry::ProjectMutation) + Send + Sync>,
+        publish: Arc<dyn Fn(&model::workspace::registry::ProjectMutation) + Send + Sync>,
     ) -> Self {
         let subscription = self
             .projects
@@ -227,7 +227,7 @@ impl Directory {
     #[must_use]
     pub fn with_workspace_updates(
         self,
-        publish: Arc<dyn Fn(&crate::ports::registry::WorkspaceMutation) + Send + Sync>,
+        publish: Arc<dyn Fn(&model::workspace::registry::WorkspaceMutation) + Send + Sync>,
     ) -> Self {
         let subscription = self
             .workspaces
@@ -260,7 +260,7 @@ impl Directory {
     #[must_use]
     pub fn with_activity_source(
         mut self,
-        source: Arc<dyn crate::ports::workspace_state::WorkspaceActivitySource>,
+        source: Arc<dyn model::workspace::attention::WorkspaceActivitySource>,
     ) -> Self {
         self.activity.add(source);
         self
@@ -270,7 +270,7 @@ impl Directory {
     #[must_use]
     pub fn with_runtime_source(
         mut self,
-        source: Arc<dyn crate::ports::workspace_runtime::WorkspaceRuntimeSource>,
+        source: Arc<dyn model::workspace::runtime::WorkspaceRuntimeSource>,
     ) -> Self {
         self.runtime_source = Some(source);
         self
@@ -280,7 +280,7 @@ impl Directory {
     pub(crate) fn runtime_snapshot(
         &self,
         cwd: &str,
-    ) -> Option<crate::ports::workspace_runtime::WorkspaceRuntimeSnapshot> {
+    ) -> Option<model::workspace::runtime::WorkspaceRuntimeSnapshot> {
         self.runtime_source
             .as_ref()
             .map(|source| source.snapshot(cwd))
@@ -290,7 +290,7 @@ impl Directory {
     #[must_use]
     pub fn with_git_observer(
         mut self,
-        observer: Arc<dyn crate::ports::workspace_git::WorkspaceGitObserver>,
+        observer: Arc<dyn model::workspace::git::WorkspaceGitObserver>,
     ) -> Self {
         self.git_observer = Some(observer);
         self
@@ -298,7 +298,7 @@ impl Directory {
 
     pub(crate) fn git_observer(
         &self,
-    ) -> Option<Arc<dyn crate::ports::workspace_git::WorkspaceGitObserver>> {
+    ) -> Option<Arc<dyn model::workspace::git::WorkspaceGitObserver>> {
         self.git_observer.clone()
     }
 
@@ -318,14 +318,14 @@ impl Directory {
 
     /// Share durable creation receipts with the native Agent worker.
     #[must_use]
-    pub fn with_creations(mut self, creations: super::creation::Creations) -> Self {
+    pub fn with_creations(mut self, creations: model::creation::Creations) -> Self {
         self.creations = creations;
         self
     }
 
     /// Return the metadata-owned creation coordinator.
     #[must_use]
-    pub fn creations(&self) -> super::creation::Creations {
+    pub fn creations(&self) -> model::creation::Creations {
         self.creations.clone()
     }
 
@@ -333,7 +333,7 @@ impl Directory {
     #[must_use]
     pub fn with_worktrees(
         mut self,
-        provisioning: Arc<dyn crate::ports::worktrees::WorktreeProvisioning>,
+        provisioning: Arc<dyn model::workspace::worktrees::WorktreeProvisioning>,
     ) -> Self {
         self.worktree_provisioning = Some(provisioning);
         self
@@ -341,7 +341,7 @@ impl Directory {
 
     /// Return the installed worktree provisioning capability, when available.
     #[must_use]
-    pub fn worktrees(&self) -> Option<&dyn crate::ports::worktrees::WorktreeProvisioning> {
+    pub fn worktrees(&self) -> Option<&dyn model::workspace::worktrees::WorktreeProvisioning> {
         self.worktree_provisioning.as_deref()
     }
 
@@ -349,7 +349,7 @@ impl Directory {
     #[must_use]
     pub fn shared_worktrees(
         &self,
-    ) -> Option<Arc<dyn crate::ports::worktrees::WorktreeProvisioning>> {
+    ) -> Option<Arc<dyn model::workspace::worktrees::WorktreeProvisioning>> {
         self.worktree_provisioning.clone()
     }
 
@@ -442,7 +442,7 @@ impl Directory {
             timestamp,
         );
         if workspace.title.is_none() {
-            workspace.auto_name = Some(crate::model::registry::PendingWorkspaceName {
+            workspace.auto_name = Some(model::workspace::records::PendingWorkspaceName {
                 placeholder_branch: None,
             });
         }
@@ -1097,14 +1097,12 @@ fn normalize_optional_text(text: Option<String>) -> Option<String> {
         .filter(|text| !text.is_empty())
 }
 
-pub use model::workspace::identity::{RemoteLocation, basename, derive_project_key, parse_remote};
-
 /// Allocate a fresh Paseo Workspace identity using operating-system randomness.
 ///
 /// # Errors
 /// Returns a filesystem error if the random source is unavailable.
 pub fn generate_workspace_id() -> Result<String, DirectoryError> {
-    model::storage::registry::generate_workspace_id().map_err(|_| DirectoryError::FileSystem)
+    model::workspace::registry::generate_workspace_id().map_err(|_| DirectoryError::FileSystem)
 }
 
 fn generate_icon_revision() -> Result<String, DirectoryError> {

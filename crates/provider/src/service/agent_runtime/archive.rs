@@ -2,11 +2,12 @@
 
 use std::collections::{BTreeMap, BTreeSet};
 
+use domain::agent_runtime::registry::AgentRuntimeRegistry;
+
 use super::{
     AgentRuntimeError, AgentRuntimeStatus, OPEN_AGENT_TAB_LABEL_PREFIX, PARENT_AGENT_ID_LABEL,
     PersistedAgentRuntimeRecord, map_agent_registry,
 };
-use crate::ports::agent_runtime::AgentRuntimeRegistry;
 
 pub(crate) fn archive(
     registry: &dyn AgentRuntimeRegistry,

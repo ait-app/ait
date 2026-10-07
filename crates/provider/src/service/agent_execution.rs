@@ -17,7 +17,8 @@ mod routing;
 mod voice;
 pub(crate) mod waits;
 
-use crate::ports::agent_runtime::AgentRuntimeRegistry;
+use domain::agent_runtime::registry::AgentRuntimeRegistry;
+
 use crate::rpc::ErrorCode;
 use crate::rpc::agent_execution::ExecutionState;
 use crate::service::agent_manager::AgentManager;

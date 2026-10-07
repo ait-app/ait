@@ -88,6 +88,3 @@ impl From<Error> for model::ErrorCode {
 
 #[cfg(test)]
 mod tests;
-
-/// Complete service installed as one capability component.
-pub use service::Speech as Service;

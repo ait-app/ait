@@ -1,6 +1,7 @@
 //! Actor counterparts of Paseo concurrent updates and in-flight lifecycle tests.
+use model::schedule::{RunStatus, Status};
+
 use super::{controlled::*, *};
-use crate::protocol::{RunStatus, Status};
 
 #[tokio::test]
 async fn global_run_limit_releases_capacity_only_after_an_occurrence_finishes() {

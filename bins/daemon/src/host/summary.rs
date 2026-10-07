@@ -3,10 +3,11 @@
 use std::path::Path;
 use std::sync::Arc;
 
-use metadata::ports::daemon::DaemonConfigStore;
-use metadata::ports::provisioning::ProjectConfigStore;
-use metadata::storage::project_config::LocalProjectConfigStore;
-use provider::summary::{SummaryConfiguration, SummaryError};
+use file::storage::project_config::LocalProjectConfigStore;
+use model::storage::daemon_config::DaemonConfigStore;
+use model::storage::project::ProjectConfigStore;
+use model::summary::SummaryError;
+use provider::summary::SummaryConfiguration;
 use serde_json::Value;
 
 #[derive(Debug)]

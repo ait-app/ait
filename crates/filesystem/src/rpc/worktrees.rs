@@ -97,7 +97,7 @@ fn create(worktrees: &Worktrees, request: WorktreeCreateRequest) -> Result<Dispa
         },
         checkout_source: request
             .checkout_source
-            .map(crate::protocol::worktrees::ChangeRequestCheckoutSource::into_intent)
+            .map(model::workspace::protocol::worktree_source::ChangeRequestCheckoutSource::into_intent)
             .or_else(|| {
                 request.github_pr_number.map(|number| {
                     model::workspace::worktrees::WorktreeChangeRequest {

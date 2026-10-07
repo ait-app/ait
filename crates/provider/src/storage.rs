@@ -1,6 +1,5 @@
-//! Agent preset SQLite catalog and Agent runtime snapshot storage.
+//! Agent preset SQLite catalog and durable Agent timelines.
 
-pub mod agent_runtime;
 mod agents;
 mod catalog;
 mod migration;

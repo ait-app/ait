@@ -1,5 +1,5 @@
 //! Shared catalog matching; preference order belongs to each adapter.
-use crate::summary::SummarySelection;
+use model::summary::SummarySelection;
 use serde_json::Value;
 
 pub(super) fn select(

@@ -4,13 +4,13 @@ use std::collections::{BTreeMap, BTreeSet};
 
 use model::ServerMessage;
 use model::directory_sync::{Cursor, Mode};
+use model::workspace::protocol::projection::{project_descriptor, workspace_descriptor};
 use serde_json::{Value, json};
 
 use super::{
     Directory, ErrorCode, WorkspaceDescriptorPayload, WorkspaceListRequest, WorkspaceListResult,
     WorkspaceProjectDescriptorPayload, active_project, active_workspace, directory_error, encode,
-    matches_filter, pagination, project_descriptor, project_matches_filter, timestamp,
-    workspace_descriptor,
+    matches_filter, pagination, project_matches_filter, timestamp,
 };
 
 struct Snapshot {
@@ -25,8 +25,8 @@ pub(crate) struct Observation {
     previous: BTreeMap<String, Value>,
     empty_projects: BTreeSet<String>,
     paths: Vec<String>,
-    git_observer: Option<std::sync::Arc<dyn crate::ports::workspace_git::WorkspaceGitObserver>>,
-    git_interest: Option<Box<dyn crate::ports::workspace_git::WorkspaceGitObservation>>,
+    git_observer: Option<std::sync::Arc<dyn model::workspace::git::WorkspaceGitObserver>>,
+    git_interest: Option<Box<dyn model::workspace::git::WorkspaceGitObservation>>,
 }
 
 pub(super) fn list(

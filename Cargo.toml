@@ -11,6 +11,7 @@ publish = false
 api = { path = "crates/api" }
 browser = { path = "crates/browser" }
 domain = { path = "crates/domain" }
+file = { path = "crates/file" }
 filesystem = { path = "crates/filesystem" }
 metadata = { path = "crates/metadata" }
 model = { path = "crates/model" }

@@ -1,8 +1,11 @@
 //! Mutable preferences supplied to summary tests without metadata storage.
 
-use crate::summary::{SummaryConfiguration, SummaryError};
-use serde_json::{Value, json};
 use std::sync::Mutex;
+
+use model::summary::SummaryError;
+use serde_json::{Value, json};
+
+use crate::summary::SummaryConfiguration;
 
 #[derive(Debug)]
 pub(crate) struct Configuration(Mutex<Value>);

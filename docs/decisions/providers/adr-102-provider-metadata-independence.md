@@ -5,6 +5,10 @@
 - 修订：[ADR-101](adr-101-provider-summary-generator.md) 的剩余依赖边界，以及
   [ADR-089](adr-089-provider-owned-composition.md) 中 provider 的内部依赖集合。
 
+后续 [ADR-106](../daemon/adr-106-concrete-file-persistence.md) 将具体文件实现迁到 file，
+[ADR-107](../daemon/adr-107-direct-imports-from-owning-crates.md) 删除兼容转发路径，
+调用处直接导入所属 crate。
+
 ## 背景
 
 摘要生成迁移后，provider 仍依赖 metadata 的 Workspace/Project 记录与 registry、

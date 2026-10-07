@@ -5,12 +5,11 @@ edition.workspace = true
 publish.workspace = true
 
 [dependencies]
-# Shared creation receipts, event presence, and atomic workspace registries.
+# Shared creation coordination, records, persistence contracts, and event presence.
 chrono.workspace = true
+chrono.features = ["serde"]
 getrandom.workspace = true
-indexmap.workspace = true
 sha2.workspace = true
-tempfile.workspace = true
 uuid.workspace = true
 base64.workspace = true
 # Match Paseo's ICU-backed localeCompare for directory ordering and continuation cursors.

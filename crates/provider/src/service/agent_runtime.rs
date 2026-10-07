@@ -4,6 +4,7 @@ use std::collections::{BTreeMap, BTreeSet};
 use std::sync::Arc;
 
 use chrono::DateTime;
+use domain::agent_runtime::registry::{AgentRuntimeRegistry, AgentRuntimeRegistryError};
 use domain::agent_runtime::{
     AgentAttentionReason, AgentRuntimeStatus, PersistedAgentRuntimeRecord,
 };
@@ -12,8 +13,6 @@ use model::workspace::records::{
     PersistedProjectKind, PersistedProjectRecord, PersistedWorkspaceKind, PersistedWorkspaceRecord,
 };
 use model::workspace::registry::{ProjectRegistry, RegistryError, WorkspaceRegistry};
-
-use crate::ports::agent_runtime::{AgentRuntimeRegistry, AgentRuntimeRegistryError};
 
 pub(crate) mod archive;
 mod search;

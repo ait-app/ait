@@ -30,9 +30,9 @@ pub(super) async fn request(
         }
         Err(DispatchError::Delivery(error)) => return Err(error),
     }
-    match crate::relay_rpc::request(&mut context, state).await {
+    match relay::rpc::request(&mut context, &state.relay).await {
         Ok(()) => return Ok(()),
-        Err(DispatchError::NotImplemented) => Context::assert_unhandled(&context, "api::relay"),
+        Err(DispatchError::NotImplemented) => Context::assert_unhandled(&context, "relay"),
         Err(DispatchError::Delivery(error)) => return Err(error),
     }
     match schedule::dispatch::dispatch(&mut context, &state.schedule).await {

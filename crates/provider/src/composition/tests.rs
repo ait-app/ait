@@ -2,12 +2,11 @@ use super::*;
 
 #[cfg(unix)]
 use crate::service::summary_generation::test_config::Configuration;
+use file::storage::agent_runtime::FileBackedAgentRuntimeRegistry;
 #[cfg(unix)]
-use crate::summary::{SummaryKind, SummaryRequest, SummarySelection};
+use model::summary::{SummaryKind, SummaryRequest, SummarySelection};
 #[cfg(unix)]
 use serde_json::json;
-
-use crate::storage::agent_runtime::FileBackedAgentRuntimeRegistry;
 
 #[test]
 fn registration_preserves_the_catalog_without_startup_writes_and_rejects_duplicates() {
@@ -141,7 +140,7 @@ async fn configured_codex_and_claude_generate_summary_without_foreground_agents(
             generator.shutdown();
             assert_eq!(
                 generator.generate(request).await,
-                Err(crate::summary::SummaryError::Cancelled)
+                Err(model::summary::SummaryError::Cancelled)
             );
         }
     }

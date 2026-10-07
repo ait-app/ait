@@ -2,11 +2,8 @@
 
 use std::fmt::Debug;
 
+use model::summary::{SummaryError, SummaryFuture, SummaryRequest};
 use serde_json::Value;
-
-pub use model::summary::{
-    SummaryError, SummaryFuture, SummaryKind, SummaryRequest, SummarySelection,
-};
 
 /// Isolated summary generation; implementations own budgets and native cleanup.
 pub trait SummaryGenerator: Debug + Send + Sync {

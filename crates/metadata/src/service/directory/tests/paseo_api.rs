@@ -1,13 +1,14 @@
 //! Workspace list cases adapted from Paseo workspace-directory and sortable-pager tests.
 
-use serde_json::{Value, json};
 use std::sync::Arc;
 
-use super::*;
-use crate::model::workspace_activity::WorkspaceStateBucket;
-use crate::ports::workspace_state::{
+use model::workspace::activity::WorkspaceStateBucket;
+use model::workspace::attention::{
     WorkspaceActivity, WorkspaceActivitySource, WorkspaceStateError,
 };
+use serde_json::{Value, json};
+
+use super::*;
 use crate::rpc::directory::execute;
 
 #[derive(Debug, Default)]
@@ -17,7 +18,7 @@ struct Activity(Mutex<Vec<WorkspaceActivity>>);
 fn explicit_creation_identity_cannot_overwrite_an_existing_workspace() {
     let directory = directory();
     let before = directory.workspaces.get("wks_a").unwrap().unwrap();
-    let created = directory.create_workspace(crate::service::directory::WorkspaceCreation {
+    let created = directory.create_workspace(model::workspace::lifecycle::WorkspaceCreation {
         path: "/tmp/alpha/nested",
         title: Some("Overwrite attempt".into()),
         project_id: None,
@@ -78,11 +79,12 @@ impl WorkspaceActivitySource for Activity {
 #[test]
 fn projects_only_owned_worktree_slugs() {
     let mut record = workspace();
-    let descriptor = crate::rpc::directory::workspace_descriptor(&record, Some(&project()));
+    let descriptor =
+        model::workspace::protocol::projection::workspace_descriptor(&record, Some(&project()));
     assert!(descriptor.worktree_slug.is_none());
     record.is_paseo_owned_worktree = true;
     assert_eq!(
-        crate::rpc::directory::workspace_descriptor(&record, Some(&project()))
+        model::workspace::protocol::projection::workspace_descriptor(&record, Some(&project()))
             .worktree_slug
             .as_deref(),
         Some("alpha")

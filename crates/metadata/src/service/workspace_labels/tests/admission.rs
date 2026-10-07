@@ -1,11 +1,12 @@
 use std::sync::atomic::{AtomicBool, Ordering};
 
-use super::*;
-use crate::ports::registry::{
+use file::storage::registry::FileBackedWorkspaceRegistry;
+use file::storage::workspace_labels::FileWorkspaceLabelStore;
+use model::workspace::registry::{
     WorkspaceArchiveContext, WorkspaceMutationContext, WorkspaceRegistry,
 };
-use crate::storage::registry::FileBackedWorkspaceRegistry;
-use crate::storage::workspace_labels::FileWorkspaceLabelStore;
+
+use super::*;
 
 #[derive(Debug)]
 struct ArchiveAfterSnapshot {

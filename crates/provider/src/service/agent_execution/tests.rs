@@ -7,11 +7,12 @@ mod placement;
 mod reasoning;
 mod resume;
 mod waits;
-use crate::ports::agent_runtime::AgentRuntimeRegistry;
-use crate::storage::agent_runtime::FileBackedAgentRuntimeRegistry;
-use crate::test_support::Fixture;
-use model::storage::registry::{FileBackedProjectRegistry, FileBackedWorkspaceRegistry};
+use domain::agent_runtime::registry::AgentRuntimeRegistry;
+use file::storage::agent_runtime::FileBackedAgentRuntimeRegistry;
+use file::storage::registry::{FileBackedProjectRegistry, FileBackedWorkspaceRegistry};
 use model::workspace::registry::{ProjectRegistry, WorkspaceRegistry};
+
+use crate::test_support::Fixture;
 
 #[tokio::test]
 async fn configuration_commits_atomically_applies_next_turn_and_survives_restart() {

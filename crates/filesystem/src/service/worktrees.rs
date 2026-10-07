@@ -1,11 +1,11 @@
 //! Worktree lifecycle coordination over Git and Paseo-shaped registry ports.
 
-use model::storage::registry::generate_workspace_id;
 use model::workspace::identity::{basename, derive_project_key};
 use model::workspace::provisioning::Checkout;
 use model::workspace::records::{
     PersistedProjectKind, PersistedProjectRecord, PersistedWorkspaceKind, PersistedWorkspaceRecord,
 };
+use model::workspace::registry::generate_workspace_id;
 use model::workspace::registry::{
     ActiveProjectInput, ProjectRegistry, RegistryError, WorkspaceArchiveContext,
     WorkspaceMutationContext, WorkspaceRegistry,

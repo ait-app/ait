@@ -3,14 +3,12 @@
 use std::collections::BTreeSet;
 use std::sync::{Arc, Mutex};
 
+use model::summary::SummarySource;
+use model::summary::{SummaryKind, SummaryRequest, SummarySelection};
+use model::workspace::naming::WorkspaceBranchNamer;
+use model::workspace::registry::WorkspaceRegistry;
 use serde_json::Value;
 use tokio_util::{sync::CancellationToken, task::TaskTracker};
-
-use crate::ports::generation::{SummarySource, WorkspaceBranchNamer};
-use crate::ports::registry::WorkspaceRegistry;
-use model::summary::{SummaryKind, SummaryRequest, SummarySelection};
-
-pub use model::workspace::naming::first_agent_source;
 
 /// Shared background coordinator for directory titles and managed placeholder branches.
 #[derive(Debug, Clone)]

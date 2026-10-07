@@ -2,7 +2,9 @@
 
 use std::fmt::Write as _;
 
-use crate::ports::daemon::{DaemonConfigReload, DaemonConfigStore, DaemonConfigStoreError};
+use model::storage::daemon_config::{
+    DaemonConfigReload, DaemonConfigStore, DaemonConfigStoreError,
+};
 use serde_json::Value;
 
 /// Immutable runtime facts owned by one server process.

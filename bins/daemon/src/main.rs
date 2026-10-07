@@ -1,6 +1,5 @@
 //! Local daemon entry point.
 
-mod config;
 mod host;
 mod instance;
 
@@ -8,6 +7,7 @@ use std::process::ExitCode;
 
 use anyhow::Context;
 use clap::Parser;
+use file::config;
 
 // Binary unit tests inherit dependencies used by integration tests.
 #[cfg(test)]
@@ -43,8 +43,13 @@ async fn main() -> ExitCode {
 }
 
 async fn run(cli: config::Cli) -> anyhow::Result<()> {
-    let config = config::Config::load(cli, |name| std::env::var_os(name))
-        .context("load daemon configuration")?;
+    let config = config::Config::load(
+        cli,
+        |name| std::env::var_os(name),
+        |token| api::validate_token(token).map_err(Into::into),
+        |origin| api::validate_browser_origin(origin).map_err(Into::into),
+    )
+    .context("load daemon configuration")?;
     tracing_subscriber::fmt()
         .with_ansi(false)
         .with_max_level(config.log_level)

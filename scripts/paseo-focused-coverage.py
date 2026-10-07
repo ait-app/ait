@@ -15,6 +15,7 @@ BASE_REVISION = "b797e0d2f83ae57f62892c288a5d81776f8afa6a"
 REPORT = ROOT / "docs/reports/daemon/paseo-server-coverage-2026-09-29"
 TEMP = ROOT / "target/paseo-focused-coverage"
 SCOPES = [
+    ("file", ["--lib"], ["config::", "registry::", "single::", "watch::", "creation::", "storage::"]),
     ("provider", ["--lib"], [
         "service::agent_execution::", "service::agent_manager::", "service::agent_runtime::",
         "service::provider_catalog::", "service::workspace_attention::", "rpc::timeline::",

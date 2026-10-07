@@ -1,11 +1,12 @@
 //! Workspace-owned sort values for the shared Paseo keyset pager.
 
 use model::pagination::{self, Direction, Entry, Sort, SortValue};
-
-use crate::protocol::directory::{
+use model::workspace::activity::WorkspaceStateBucket;
+use model::workspace::protocol::directory::{
     SortDirection, WorkspacePage, WorkspacePageInfo, WorkspaceSort, WorkspaceSortKey,
 };
-use crate::protocol::workspace::{WorkspaceDescriptorPayload, WorkspaceStateBucket};
+use model::workspace::protocol::workspace::WorkspaceDescriptorPayload;
+
 use crate::rpc::ErrorCode;
 
 pub(super) fn paginate(

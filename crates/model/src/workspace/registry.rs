@@ -27,6 +27,15 @@ pub enum RegistryError {
     Observer,
 }
 
+/// Generate an opaque `wks_` identity with eight cryptographically random bytes.
+/// # Errors
+/// Returns `Io` when the operating system cannot supply random bytes.
+pub fn generate_workspace_id() -> Result<String, RegistryError> {
+    let mut bytes = [0; 8];
+    getrandom::fill(&mut bytes).map_err(|_| RegistryError::Io)?;
+    Ok(format!("wks_{:016x}", u64::from_be_bytes(bytes)))
+}
+
 /// Source lifecycle mutation kind.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum MutationKind {

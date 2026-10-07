@@ -13,11 +13,15 @@
 
 ## 架构决策
 
+- [ADR-108：Relay RPC 与基础连接方法归所属 crate](decisions/daemon/adr-108-relay-rpc-and-metadata-connection-methods.md)：relay 拥有控制 RPC 并仅依赖 model；metadata 声明始终可用的基础连接方法，API 保留传输与跨能力协调。
+- [ADR-107：共享组件直接从所属 crate 导入](decisions/daemon/adr-107-direct-imports-from-owning-crates.md)：删除迁移用转发模块，调用处直接引用 model/domain/file，provider 和 schedule 仅在测试中依赖 file。
+- [ADR-106：具体文件持久化归 file，model 仅声明契约](decisions/daemon/adr-106-concrete-file-persistence.md)：迁移 registry、创建回执和 JSON 文件适配器，依赖调整为 file → model/domain。
+- [ADR-105：File 工具、通用 Registry 与启动配置独立成 crate](decisions/daemon/adr-105-file-tools-and-startup-config.md)：单文件读写与监听、共享 Registry 引擎及启动配置归 file，业务服务继续拥有 schema 和事务。
 - [ADR-104：Filesystem 仅通过 model 契约协作](decisions/workspace/adr-104-filesystem-model-collaboration.md)：共享观察和纯投影归 model，项目登记、命名与 setup 通过接口注入，移除最后一条功能 crate 间依赖。
 - [ADR-103：Terminal 仅依赖 model 的共享契约](decisions/daemon/adr-103-terminal-model-dependency.md)：registry、Workspace 活动和连接事件直接使用 model，移除 metadata 依赖。
 - [ADR-102：共享协作契约归 model，Provider 不依赖 metadata](decisions/providers/adr-102-provider-metadata-independence.md)：共享记录、协议、事件、创建回执和存储下沉，Workspace 业务通过接口协作。
 - [ADR-101：Provider 拥有摘要生成能力](decisions/providers/adr-101-provider-summary-generator.md)：生成接口归 provider，配置与消费者通过宿主适配。
-- [ADR-100：功能 crate 作为完整服务安装](decisions/daemon/adr-100-crate-level-service-installation.md)：每个功能 crate 提供一个服务入口，API 按 crate 整体安装，基础连接方法归 API。
+- [ADR-100：功能 crate 作为完整服务安装](decisions/daemon/adr-100-crate-level-service-installation.md)：各功能 crate 通过具体服务类型按 crate 整体安装；基础连接声明归属由 ADR-108 修订。
 - [ADR-097：Google Play 内部测试手动发布](decisions/clients/adr-097-google-play-internal-release.md)：签名 AAB、远端版本计数与内部测试草稿或发布。
 - [ADR-099：Provider 自选辅助小模型](decisions/providers/adr-099-provider-owned-auxiliary-models.md)：能力声明、原生认证与用户覆盖。
 - [ADR-098：客户端消息分块与文件上传背压](decisions/clients/adr-098-acknowledged-client-chunks.md)：原图消息有界重组、文件逐块确认与兼容性。

@@ -3,27 +3,48 @@
 pub mod protocol;
 
 use std::collections::{BTreeMap, BTreeSet};
-use std::path::PathBuf;
 use std::sync::{Arc, Mutex};
 
-use crate::ErrorCode;
-use crate::events::{EventHub, Subscription};
-use crate::outbound::Outbound;
 use serde::{Deserialize, Serialize};
 use serde_json::{Value, json};
 use sha2::{Digest, Sha256};
 use uuid::Uuid;
 
+use crate::ErrorCode;
 use crate::creation::protocol::{Kind, Snapshot};
-use crate::storage::registry::FileRegistry;
+use crate::events::{EventHub, Subscription};
+use crate::outbound::Outbound;
 
+/// Persisted immutable creation intent and its latest committed progress.
 #[derive(Debug, Clone, Serialize, Deserialize)]
-struct Receipt {
-    id: String,
-    intent: Value,
-    snapshot: Snapshot,
+pub struct Receipt {
+    /// Opaque, kind-qualified digest of the idempotency key.
+    pub id: String,
+    /// Original request excluding its key and subscription flag.
+    pub intent: Value,
+    /// Latest committed progress and reserved identities.
+    pub snapshot: Snapshot,
+    /// A proven initial Agent startup failure may retry the reserved identity.
     #[serde(default, skip_serializing_if = "std::ops::Not::not")]
-    retry_initial_agent: bool,
+    pub retry_initial_agent: bool,
+}
+
+/// Blocking persistence boundary for creation receipts; implementations own storage mechanics.
+pub trait ReceiptStore: std::fmt::Debug + Send + Sync {
+    /// Return all committed receipts to restore resource claims at startup.
+    /// # Errors
+    /// Returns `RegistryIo` if persisted state cannot be loaded.
+    fn list(&self) -> Result<Vec<Receipt>, ErrorCode>;
+
+    /// Return the receipt for `id`, or none when it has not been committed.
+    /// # Errors
+    /// Returns `RegistryIo` when storage is unavailable.
+    fn get(&self, id: &str) -> Result<Option<Receipt>, ErrorCode>;
+
+    /// Durably replace `receipt` before publishing its progress or claiming resources.
+    /// # Errors
+    /// Returns `RegistryIo` on failure; implementations preserve the prior committed record.
+    fn put(&self, receipt: Receipt) -> Result<(), ErrorCode>;
 }
 
 #[derive(Debug, Default)]
@@ -33,10 +54,10 @@ struct State {
     claimed: BTreeSet<String>,
 }
 
-/// Shared creation coordinator. Production uses an atomic file; embedded defaults are ephemeral.
+/// Shared creation coordinator with injected persistence; embedded defaults are ephemeral.
 #[derive(Debug, Clone, Default)]
 pub struct Creations {
-    file: Option<Arc<FileRegistry<Receipt>>>,
+    store: Option<Arc<dyn ReceiptStore>>,
     state: Arc<Mutex<State>>,
     events: EventHub,
 }
@@ -51,20 +72,17 @@ pub struct Admission {
 }
 
 impl Creations {
-    /// Open atomic creation receipts at `path` and load them without retrying interrupted work.
+    /// Load receipts from `store` without retrying interrupted work; return a shared coordinator.
     /// # Errors
-    /// Returns registry errors for malformed or inaccessible receipt files.
-    pub fn open(path: PathBuf) -> Result<Self, ErrorCode> {
-        let file = FileRegistry::new(path, |receipt: &Receipt| &receipt.id);
-        file.initialize().map_err(io)?;
-        let claimed = file
-            .list()
-            .map_err(io)?
+    /// Returns the store's load error before accepting any new creation side effects.
+    pub fn with_store(store: Arc<dyn ReceiptStore>) -> Result<Self, ErrorCode> {
+        let claimed = store
+            .list()?
             .iter()
             .flat_map(|receipt| owned_resources(&receipt.snapshot))
             .collect();
         Ok(Self {
-            file: Some(Arc::new(file)),
+            store: Some(store),
             state: Arc::new(Mutex::new(State {
                 claimed,
                 ..State::default()
@@ -93,7 +111,9 @@ impl Creations {
         } else {
             match kind {
                 Kind::Agent => Uuid::new_v4().to_string(),
-                Kind::Workspace => crate::storage::registry::generate_workspace_id().map_err(io)?,
+                Kind::Workspace => {
+                    crate::workspace::registry::generate_workspace_id().map_err(io)?
+                }
             }
         };
         let snapshot = Snapshot {
@@ -304,19 +324,15 @@ impl Creations {
     }
 
     fn read(&self, state: &State, id: &str) -> Result<Option<Receipt>, ErrorCode> {
-        match &self.file {
-            Some(file) => file.get(id).map_err(io),
+        match &self.store {
+            Some(store) => store.get(id),
             None => Ok(state.memory.get(id).cloned()),
         }
     }
 
     fn write(&self, state: &mut State, receipt: Receipt) -> Result<(), ErrorCode> {
-        if let Some(file) = &self.file {
-            file.mutate(|records| {
-                records.insert(receipt.id.clone(), receipt.clone());
-                Ok(((), true))
-            })
-            .map_err(io)?;
+        if let Some(store) = &self.store {
+            store.put(receipt)?;
         } else {
             state.memory.insert(receipt.id.clone(), receipt);
         }

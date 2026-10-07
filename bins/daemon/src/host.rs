@@ -9,7 +9,16 @@ mod summary;
 mod voice;
 
 use api::{Api, LifecycleIntent, LocalAddress, Services};
+use browser::broker::Broker;
 use chrono::{SecondsFormat, Utc};
+use domain::agent_runtime::registry::AgentRuntimeRegistry;
+use file::config::Config;
+use file::storage::agent_runtime::FileBackedAgentRuntimeRegistry;
+use file::storage::daemon_config::FileDaemonConfigStore;
+use file::storage::project_config::LocalProjectConfigStore;
+use file::storage::project_icon::LocalProjectIconStore;
+use file::storage::registry::{FileBackedProjectRegistry, FileBackedWorkspaceRegistry};
+use file::storage::workspace_labels::FileWorkspaceLabelStore;
 use filesystem::local::{
     checkout::LocalCheckout, forge::LocalForge, github_projects::LocalGithubProjects,
     provisioning::LocalDirectorySource, workspace_runtime::LocalWorkspaceRuntime,
@@ -21,32 +30,23 @@ use filesystem::service::forge::Forge;
 use filesystem::service::worktrees::{WorkspaceWorktrees, Worktrees};
 use filesystem::service::{github_projects::GithubProjects, workspace_recovery::WorkspaceRecovery};
 use metadata::local::workspace_automation::LocalWorkspaceAutomation;
-use metadata::ports::registry::{ProjectRegistry, WorkspaceRegistry};
 use metadata::service::daemon::{Daemon, DaemonRuntime};
 use metadata::service::directory::{Directory, DirectoryDependencies};
 use metadata::service::workspace_automation::WorkspaceAutomation;
 use metadata::service::workspace_labels::WorkspaceLabels;
 use metadata::service::workspace_names::WorkspaceNames;
 use metadata::service::workspace_state::WorkspaceState;
-use metadata::storage::daemon_config::FileDaemonConfigStore;
-use metadata::storage::project_config::LocalProjectConfigStore;
-use metadata::storage::project_icon::LocalProjectIconStore;
-use metadata::storage::registry::{FileBackedProjectRegistry, FileBackedWorkspaceRegistry};
-use metadata::storage::workspace_labels::FileWorkspaceLabelStore;
+use model::workspace::registry::{ProjectRegistry, WorkspaceRegistry};
 use provider::Providers;
-use provider::ports::agent_runtime::AgentRuntimeRegistry;
 use provider::service::agent_execution::{AgentExecution, ExecutionDependencies};
 use provider::service::agent_manager::AgentManager;
 use provider::service::agent_runtime::AgentRuntimeDirectory;
 use provider::service::agents::Agents;
 use provider::service::workspace_attention::AgentWorkspaceAttention;
 use provider::storage::SqliteCatalog;
-use provider::storage::agent_runtime::FileBackedAgentRuntimeRegistry;
 use provider::summary::SummaryGenerator;
-
 use tokio::net::TcpListener;
 
-use crate::config::Config;
 use crate::instance::InstanceLease;
 
 pub(super) struct Server {
@@ -249,7 +249,7 @@ fn compose_services(
             agents,
         })),
         schedule: Some(schedules),
-        browser: Some(browser::Service::default()),
+        browser: Some(Broker::default()),
         voice: Some(voice::compose(agent_execution, &config.data_dir)?),
         terminal: Some(terminals),
     })
@@ -386,10 +386,8 @@ fn compose_directory(
     server_id: String,
     changes: model::changes::Changes,
 ) -> anyhow::Result<Directory> {
-    let creations = metadata::service::creation::Creations::open(
-        config.data_dir.join("creations/receipts.json"),
-    )
-    .map_err(|_| anyhow::anyhow!("initialize creation receipts"))?;
+    let creations = file::creation::open(config.data_dir.join("creations/receipts.json"))
+        .map_err(|_| anyhow::anyhow!("initialize creation receipts"))?;
     Ok(Directory::new(DirectoryDependencies {
         projects: Box::new(project_registry.clone()),
         workspaces: Box::new(workspace_registry.clone()),
@@ -508,7 +506,7 @@ mod tests;
 
 fn compose_push(data_dir: &std::path::Path) -> anyhow::Result<metadata::service::push::PushTokens> {
     metadata::service::push::PushTokens::open(
-        Box::new(metadata::storage::push::FileTokenStore::new(
+        Box::new(file::storage::push::FileTokenStore::new(
             data_dir.join("push-tokens.json"),
         )),
         Utc::now().timestamp_millis(),

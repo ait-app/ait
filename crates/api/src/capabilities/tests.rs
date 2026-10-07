@@ -78,13 +78,10 @@ fn skill_methods_are_owned_by_filesystem_and_remain_requests() {
 
 #[test]
 fn baseline_methods_and_heartbeat_keep_their_shared_contracts() {
-    assert_eq!(
-        protocol::CAPABILITIES,
-        ::metadata::protocol::server::CAPABILITIES
-    );
+    assert_eq!(protocol::CAPABILITIES, model::server::CAPABILITIES);
     let heartbeat = implemented_methods()
         .find(|spec| spec.name == ::metadata::protocol::server::HEARTBEAT_METHOD)
-        .expect("heartbeat must be declared by the API");
+        .expect("heartbeat must be declared by metadata");
     assert_eq!(heartbeat.kind, InboundKind::Event);
 }
 
@@ -146,12 +143,11 @@ fn component_declarations_preserve_all_event_and_response_directions() {
 }
 
 #[test]
-fn builtin_connection_methods_are_owned_by_api_and_not_optional_metadata() {
+fn metadata_connection_methods_remain_available_without_its_business_service() {
     let metadata: BTreeSet<_> = ::metadata::capabilities::implemented_methods()
         .map(|method| method.name)
         .collect();
-    let builtin: Vec<_> = crate::core_methods::METHODS
-        .iter()
+    let builtin: Vec<_> = ::metadata::capabilities::connection_methods()
         .map(|method| method.name)
         .collect();
     assert_eq!(builtin.len(), 9);

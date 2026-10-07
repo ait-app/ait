@@ -13,19 +13,17 @@ pub(super) fn implemented_methods() -> impl Iterator<Item = model::methods::Meth
     schedule::implemented_methods()
         .chain(browser::implemented_methods())
         .chain(voice::implemented_methods())
-        .chain(crate::core_methods::METHODS.iter().copied())
+        .chain(metadata::connection_methods())
         .chain(metadata::implemented_methods())
         .chain(filesystem::implemented_methods())
         .chain(provider::implemented_methods())
         .chain(terminal::implemented_methods())
-        .chain(crate::relay_rpc::METHODS.iter().copied())
+        .chain(relay::rpc::METHODS.iter().copied())
 }
 
 /// Supply crate-level installation presence to each owner and collect its installed method names.
 pub(super) fn installed_capabilities(services: &Services) -> Vec<String> {
-    crate::core_methods::METHODS
-        .iter()
-        .copied()
+    metadata::connection_methods()
         .chain(metadata::installed_methods(services.metadata.is_some()))
         .chain(filesystem::installed_methods(services.filesystem.is_some()))
         .chain(provider::installed_methods(services.provider.is_some()))
@@ -33,7 +31,7 @@ pub(super) fn installed_capabilities(services: &Services) -> Vec<String> {
         .chain(voice::installed_methods(services.voice.is_some()))
         .chain(schedule::installed_methods(services.schedule.is_some()))
         .chain(browser::installed_methods(services.browser.is_some()))
-        .chain(crate::relay_rpc::METHODS.iter().copied())
+        .chain(relay::rpc::METHODS.iter().copied())
         .map(|method| method.name.to_owned())
         .collect()
 }

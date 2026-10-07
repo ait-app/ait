@@ -3,6 +3,7 @@
 - 状态：Accepted。
 - 日期：2026-10-07。
 - 范围：功能 crate 对外服务、daemon 组装、API 安装与方法声明。
+- 后续：[ADR-108](adr-108-relay-rpc-and-metadata-connection-methods.md) 将基础连接方法声明归 metadata，保留其独立于业务服务安装的行为。
 - 修订：[ADR-035](adr-035-daemon-capability-groups.md) 的细分服务安装组合与 [ADR-095](adr-095-component-method-declarations.md) 的安装筛选粒度。
 
 ## 背景
@@ -14,9 +15,11 @@ filesystem 的文件、Git、Forge 等对象多数并列，通过共享注册表
 
 ## 决策
 
-七个功能 crate 均提供根级 `Service` 入口。filesystem、metadata、provider 使用完整组合
-对象和无可选功能字段的 `Dependencies`；browser、schedule、terminal、voice 复用现有单一
-对象作为 `Service`。构造参数是组装输入，内部功能对象不再是 API 的独立安装单位。
+七个功能 crate 均以完整服务对象作为 API 安装单位。filesystem、metadata、provider 使用
+组合类型 `Service` 和无可选功能字段的 `Dependencies`；browser、schedule、terminal、voice
+分别直接使用 `broker::Broker`、`service::Schedules`、`service::Terminals`、`service::Speech`，
+调用方从对应模块引入具体类型，不增加统一的 `Service` 别名。构造参数是组装输入，内部
+功能对象不再是 API 的独立安装单位。
 
 `api::Services` 仅包含七个可选的 crate 级服务。各能力模块继续提供两种方法元数据接口：
 `implemented_methods()` 返回本 crate 的全部声明；`installed_methods(bool)` 在已安装时

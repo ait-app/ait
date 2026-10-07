@@ -8,14 +8,13 @@ use std::sync::Arc;
 use std::time::Duration;
 
 use domain::agent_runtime::StoredAgentConfig;
+use model::summary::{SummaryError, SummaryFuture, SummaryRequest};
 use serde_json::Value;
 use tokio::sync::Semaphore;
 use tokio_util::sync::CancellationToken;
 
 use crate::ports::agent_session::{AgentClient, AgentSessionSpec};
-use crate::summary::{
-    SummaryConfiguration, SummaryError, SummaryFuture, SummaryGenerator, SummaryRequest,
-};
+use crate::summary::{SummaryConfiguration, SummaryGenerator};
 
 /// Model-backed summary generator shared by all four wording use cases.
 #[derive(Debug)]

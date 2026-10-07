@@ -7,16 +7,14 @@ use futures_util::{
     future::BoxFuture,
     stream::{FuturesUnordered, SplitStream},
 };
+use model::outbound::{Outbound, QueueError};
 use model::subscription::SubscriptionReleaseRequest;
 use protocol::{ClientMessage, ErrorCode, valid_id};
 use tokio::sync::{mpsc, oneshot};
 use tokio_util::sync::CancellationToken;
 
 use super::{ConnectionSubscriptions, Incoming, chunks, error, process_message};
-use crate::{
-    Shared,
-    outbound::{Outbound, QueueError},
-};
+use crate::Shared;
 
 enum Work {
     Message(Incoming),

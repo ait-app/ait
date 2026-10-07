@@ -5,12 +5,12 @@ use std::time::Duration;
 use axum::extract::ws::{CloseFrame, Message, WebSocket, close_code};
 use futures_util::{SinkExt, StreamExt, stream::SplitStream};
 use model::methods::InboundKind;
+use model::outbound::{Frame, Outbound, QueueError};
+use model::{Context, Request};
 use protocol::{ClientMessage, ErrorCode, Hello, ServerMessage, valid_id};
 use tokio::time::timeout;
 
 use crate::Shared;
-use crate::outbound::{Frame, Outbound, QueueError};
-use model::{Context, Request};
 
 mod chunks;
 mod creation_receipts;

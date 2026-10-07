@@ -1,8 +1,27 @@
-//! Crate-owned method metadata; the complete service is installed as one unit.
+//! Connection method declarations and metadata service installation.
 
 use model::methods::MethodSpec;
 
-/// Return every method implemented by this crate for negotiation and envelope validation.
+const CONNECTION_METHODS: &[MethodSpec] = &[
+    MethodSpec::request("server.info"),
+    MethodSpec::request("connection.ping"),
+    MethodSpec::request("server.status.subscribe"),
+    MethodSpec::request("subscription.release.request"),
+    MethodSpec::request("editor.available.list.request"),
+    MethodSpec::request("editor.open.request"),
+    MethodSpec::event("session.heartbeat"),
+    MethodSpec::request("session.events.set_subscription.request"),
+    MethodSpec::request("creation.subscribe.request"),
+];
+
+/// Return the connection methods available independently of metadata service installation.
+/// # Returns
+/// Static names and message directions for host negotiation and envelope validation.
+pub fn connection_methods() -> impl Iterator<Item = MethodSpec> {
+    CONNECTION_METHODS.iter().copied()
+}
+
+/// Return every optional metadata service method for negotiation and envelope validation.
 /// # Returns
 /// Static names and message directions, independent of host installation or backend availability.
 pub fn implemented_methods() -> impl Iterator<Item = MethodSpec> {
@@ -20,9 +39,12 @@ pub fn implemented_methods() -> impl Iterator<Item = MethodSpec> {
     .flat_map(|methods| methods.iter().copied())
 }
 
-/// Return this crate's complete method set when its service is `installed`.
+/// Return the complete metadata service method set when its service is `installed`.
+/// # Arguments
+/// * `installed` - Whether the host provides this crate's optional business service.
 /// # Returns
-/// Every implemented method for a present service, or an empty iterator for an absent service.
+/// Every business method for a present service, or an empty iterator for an absent service.
+/// Always available connection methods are returned separately by [`connection_methods`].
 pub fn installed_methods(installed: bool) -> impl Iterator<Item = MethodSpec> {
     implemented_methods().filter(move |_| installed)
 }

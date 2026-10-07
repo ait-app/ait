@@ -1,15 +1,14 @@
 use std::collections::{BTreeMap, BTreeSet};
 use std::sync::Arc;
 
-use crate::summary::{
-    SummaryError, SummaryGenerator, SummaryKind, SummaryRequest, SummarySelection,
-};
 use domain::agent_runtime::{PersistedAgentRuntimeRecord, TitleOrigin};
 use model::ErrorCode;
+use model::summary::{SummaryError, SummaryKind, SummaryRequest, SummarySelection};
 use serde_json::Value;
 use tokio::task::JoinHandle;
 
 use super::AgentManager;
+use crate::summary::SummaryGenerator;
 
 #[derive(Debug)]
 struct Pending {
