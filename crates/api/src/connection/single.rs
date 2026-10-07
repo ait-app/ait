@@ -257,15 +257,15 @@ fn lane(message: &Incoming) -> usize {
         }
         Incoming::Text(ClientMessage::Hello(_)) => return 0,
     };
-    if terminal::capabilities::implemented_capabilities().any(|name| name == method)
-        || voice::capabilities::implemented_capabilities().any(|name| name == method)
+    if terminal::capabilities::implemented_methods().any(|spec| spec.name == method)
+        || voice::capabilities::implemented_methods().any(|spec| spec.name == method)
     {
         return 1;
     }
-    if filesystem::capabilities::implemented_capabilities().any(|name| name == method) {
+    if filesystem::capabilities::implemented_methods().any(|spec| spec.name == method) {
         return 2;
     }
-    if provider::capabilities::implemented_capabilities().any(|name| name == method) {
+    if provider::capabilities::implemented_methods().any(|spec| spec.name == method) {
         return 3;
     }
     0

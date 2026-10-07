@@ -22,7 +22,7 @@ pub(super) fn implemented_methods() -> impl Iterator<Item = model::methods::Meth
 
 /// Supply service presence to each owner and collect its installed method names.
 pub(super) fn installed_capabilities(services: &Services) -> Vec<String> {
-    metadata::installed_capabilities(metadata::InstalledServices {
+    metadata::installed_methods(metadata::InstalledServices {
         push_tokens: services.push_tokens.is_some(),
         directory: services.directory.is_some(),
         daemon: services.daemon.is_some(),
@@ -30,7 +30,7 @@ pub(super) fn installed_capabilities(services: &Services) -> Vec<String> {
         workspace_automation: services.workspace_automation.is_some(),
         workspace_state: services.workspace_state.is_some(),
     })
-    .chain(filesystem::installed_capabilities(
+    .chain(filesystem::installed_methods(
         filesystem::InstalledServices {
             checkout: services.checkout.is_some(),
             forge: services.forge.is_some(),
@@ -41,25 +41,19 @@ pub(super) fn installed_capabilities(services: &Services) -> Vec<String> {
             skills: services.skills.is_some(),
         },
     ))
-    .chain(provider::installed_capabilities(
-        provider::InstalledServices {
-            agents: services.agents.is_some(),
-            agent_runtime: services.agent_runtime.is_some(),
-            agent_execution: services.agent_execution.is_some(),
-        },
-    ))
-    .chain(terminal::installed_capabilities(
-        terminal::InstalledServices {
-            terminals: services.terminals.is_some(),
-        },
-    ))
-    .chain(voice::installed_capabilities(services.speech.is_some()))
-    .chain(schedule::installed_capabilities(
-        services.schedules.is_some(),
-    ))
-    .chain(browser::installed_capabilities(services.browser.is_some()))
-    .chain(crate::relay_rpc::METHODS.iter().map(|method| method.name))
-    .map(str::to_owned)
+    .chain(provider::installed_methods(provider::InstalledServices {
+        agents: services.agents.is_some(),
+        agent_runtime: services.agent_runtime.is_some(),
+        agent_execution: services.agent_execution.is_some(),
+    }))
+    .chain(terminal::installed_methods(terminal::InstalledServices {
+        terminals: services.terminals.is_some(),
+    }))
+    .chain(voice::installed_methods(services.speech.is_some()))
+    .chain(schedule::installed_methods(services.schedules.is_some()))
+    .chain(browser::installed_methods(services.browser.is_some()))
+    .chain(crate::relay_rpc::METHODS.iter().copied())
+    .map(|method| method.name.to_owned())
     .collect()
 }
 

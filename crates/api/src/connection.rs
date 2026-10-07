@@ -336,7 +336,7 @@ async fn process_event(
 ) -> Result<(), QueueError> {
     let (method, params) = input;
     if validation::lookup(&method).is_some_and(|metadata| metadata.kind == InboundKind::Event)
-        && voice::capabilities::implemented_capabilities().any(|name| name == method)
+        && voice::capabilities::implemented_methods().any(|spec| spec.name == method)
         && capabilities.iter().any(|capability| capability == &method)
         && state.voice.speech.is_some()
     {

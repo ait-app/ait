@@ -408,15 +408,28 @@ async fn unmatched_owners_return_not_implemented_without_consuming_or_delivering
 #[tokio::test]
 async fn every_declared_request_reaches_its_owners_consuming_branch() {
     let owners = [
-        schedule::capabilities::implemented_capabilities().collect::<Vec<_>>(),
-        browser::capabilities::implemented_capabilities().collect(),
-        voice::capabilities::implemented_capabilities().collect(),
-        metadata::capabilities::implemented_capabilities()
+        schedule::capabilities::implemented_methods()
+            .map(|spec| spec.name)
+            .collect::<Vec<_>>(),
+        browser::capabilities::implemented_methods()
+            .map(|spec| spec.name)
+            .collect(),
+        voice::capabilities::implemented_methods()
+            .map(|spec| spec.name)
+            .collect(),
+        metadata::capabilities::implemented_methods()
+            .map(|spec| spec.name)
             .chain(["server.status.unsubscribe"])
             .collect(),
-        filesystem::capabilities::implemented_capabilities().collect(),
-        provider::capabilities::implemented_capabilities().collect(),
-        terminal::capabilities::implemented_capabilities().collect(),
+        filesystem::capabilities::implemented_methods()
+            .map(|spec| spec.name)
+            .collect(),
+        provider::capabilities::implemented_methods()
+            .map(|spec| spec.name)
+            .collect(),
+        terminal::capabilities::implemented_methods()
+            .map(|spec| spec.name)
+            .collect(),
     ];
     for (owner, methods) in owners.into_iter().enumerate() {
         for method in methods {

@@ -15,8 +15,12 @@
 
 移除 `protocol::methods` 中心目录和旧名称查找接口。公共的 `MethodSpec { name, kind }`
 及 `InboundKind` 放在 `model::methods`，各组件在原有方法声明处明确指定 request、event
-或 response。能力 crate 的 `implemented_methods` 和 `installed_methods` 汇总这些声明；
-现有 capability 名称接口直接从元数据派生，不另行维护清单。
+或 response。能力 crate 仅通过 `implemented_methods` 和 `installed_methods` 提供完整声明
+与按服务安装筛选的元数据，不再提供 `implemented_capabilities` 或 `installed_capabilities`
+名称包装接口。API 聚合时统一提取名称；消息队列与事件分发直接使用方法元数据。
+
+对外 `ServerInfo.capabilities` 仍表示可协商能力，`implemented_capabilities` 仍表示当前 host
+已安装服务支持的能力，两者都从组件方法元数据派生。
 
 API 汇总所有组件的元数据用于名称、消息方向和 capability 校验，拒绝重复声明，不再把
 缺少中心记录的方法默认当成 request。可协商方法来自全部组件声明，已安装方法仍按 host

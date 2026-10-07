@@ -13,8 +13,8 @@ fn every_installation_combination_advertises_only_available_services() {
             workspace_automation: mask & 8 != 0,
             workspace_state: mask & 16 != 0,
         };
-        let capabilities: Vec<_> = installed_capabilities(services).collect();
-        let methods: BTreeSet<_> = capabilities.iter().copied().collect();
+        let installed: Vec<_> = installed_methods(services).collect();
+        let methods: BTreeSet<_> = installed.iter().map(|spec| spec.name).collect();
         let expected_count = 9
             + 2 * usize::from(services.push_tokens)
             + 15 * usize::from(services.directory)
@@ -23,7 +23,7 @@ fn every_installation_combination_advertises_only_available_services() {
             + 5 * usize::from(services.workspace_automation)
             + 2 * usize::from(services.workspace_state);
         assert_eq!(
-            capabilities.len(),
+            installed.len(),
             methods.len(),
             "duplicate method for {mask}"
         );
@@ -62,12 +62,12 @@ fn every_installation_combination_advertises_only_available_services() {
 }
 
 #[test]
-fn implemented_capabilities_are_unique_and_match_a_full_installation() {
-    let declared: Vec<_> = implemented_capabilities().collect();
-    let unique: BTreeSet<_> = declared.iter().copied().collect();
+fn implemented_methods_are_unique_and_match_a_full_installation() {
+    let declared: Vec<_> = implemented_methods().collect();
+    let unique: BTreeSet<_> = declared.iter().map(|spec| spec.name).collect();
     assert_eq!(declared.len(), unique.len());
     assert_eq!(declared.len(), 47);
-    let installed: Vec<_> = installed_capabilities(InstalledServices {
+    let installed: Vec<_> = installed_methods(InstalledServices {
         push_tokens: true,
         directory: true,
         daemon: true,

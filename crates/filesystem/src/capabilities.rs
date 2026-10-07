@@ -68,24 +68,5 @@ pub fn installed_methods(services: InstalledServices) -> impl Iterator<Item = Me
     .flat_map(|(_, methods)| methods.iter().copied())
 }
 
-/// Return every implemented capability name, including events and client responses.
-///
-/// # Returns
-/// Names derived from the component-owned method metadata.
-pub fn implemented_capabilities() -> impl Iterator<Item = &'static str> {
-    implemented_methods().map(|method| method.name)
-}
-
-/// Return capability names supported by the host's service installation.
-///
-/// # Arguments
-/// * `services` - Service presence supplied by the host.
-///
-/// # Returns
-/// Names derived from installed component-owned method metadata.
-pub fn installed_capabilities(services: InstalledServices) -> impl Iterator<Item = &'static str> {
-    installed_methods(services).map(|method| method.name)
-}
-
 #[cfg(test)]
 mod tests;
