@@ -1926,6 +1926,7 @@ export const fr: TranslationResources = {
       directoryMissing: "Répertoire Workspace introuvable.",
       loading: "Chargement du fichier...",
       noPreview: "Aucun aperçu disponible",
+      openWithSystem: "Ouvrir avec une application système",
       binaryPreviewUnavailable: "Aperçu binaire indisponible",
       tooLargeToDisplay: "Ce fichier est trop volumineux pour être affiché",
       failedToLoad: "Échec du chargement du fichier",

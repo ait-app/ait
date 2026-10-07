@@ -179,12 +179,21 @@ export function useForkAgent(
           sourceDirectory,
         });
       }
+      const session = useSessionStore.getState().sessions[serverId];
+      const projectId =
+        (workspaceId ? session?.workspaces.get(workspaceId)?.projectId : undefined) ??
+        Array.from(session?.projects.values() ?? []).find(
+          (project) =>
+            agent.projectPlacement?.projectKey &&
+            project.projectKey === agent.projectPlacement.projectKey &&
+            project.projectRootPath === sourceDirectory,
+        )?.projectId;
       router.push(
         buildNewWorkspaceRoute({
           serverId,
           sourceDirectory,
           displayName: agent.projectPlacement?.projectName,
-          projectId: agent.projectPlacement?.projectKey,
+          projectId,
           draftId,
         }),
       );

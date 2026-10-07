@@ -1146,6 +1146,9 @@ export class DaemonClient {
     failed: (error) => this.logger.error({ err: error }, "Subscription failed"),
   });
   private transport: DaemonTransport | null = null;
+  private uploadTail: Promise<void> = Promise.resolve();
+  private queuedUploadCount = 0;
+  private queuedUploadBytes = 0;
   private transportCleanup: Array<() => void> = [];
   private rawMessageListeners: Set<(message: SessionOutboundMessage) => void> = new Set();
   private messageHandlers: Map<
@@ -4774,6 +4777,41 @@ export class DaemonClient {
     if (!bytes) {
       throw new Error("File bytes are required.");
     }
+    const chunkSize = input.chunkSize ?? 128 * 1024;
+    if (!Number.isInteger(chunkSize) || chunkSize <= 0 || chunkSize > 256 * 1024)
+      throw new Error("Invalid file upload chunk size");
+    if (
+      this.queuedUploadCount >= 16 ||
+      this.queuedUploadBytes + bytes.byteLength > 512 * 1024 * 1024
+    ) {
+      throw new Error("File upload queue capacity exceeded");
+    }
+    const transport = this.transport;
+    const previous = this.uploadTail;
+    let release!: () => void;
+    this.uploadTail = new Promise<void>((resolve) => {
+      release = resolve;
+    });
+    this.queuedUploadCount++;
+    this.queuedUploadBytes += bytes.byteLength;
+    try {
+      await previous;
+      if (this.transport !== transport || this.connectionState.status !== "connected") {
+        throw new DaemonConnectionError("Connection changed while waiting to upload");
+      }
+      return await this.uploadFileNow(input, bytes, chunkSize);
+    } finally {
+      this.queuedUploadCount--;
+      this.queuedUploadBytes -= bytes.byteLength;
+      release();
+    }
+  }
+
+  private async uploadFileNow(
+    input: FileUploadInput,
+    bytes: Uint8Array,
+    chunkSize: number,
+  ): Promise<FileUploadResult> {
     const uploadTransport = this.transport;
     const resolvedRequestId = this.createRequestId(input.requestId);
     const modifiedAt = input.modifiedAt ?? new Date().toISOString();
@@ -4788,9 +4826,33 @@ export class DaemonClient {
         requestId: resolvedRequestId,
       },
       responseType: "file.upload.response",
+      timeout: 0,
       options: { skipQueue: true },
     });
 
+    let rejectDrain: ((error: Error) => void) | null = null;
+    const timeout = (message: string) => {
+      const error = new DaemonConnectionError(message, "DAEMON_REQUEST_TIMEOUT");
+      this.rejectWaitersForRequestId(resolvedRequestId, error);
+      rejectDrain?.(error);
+    };
+    const totalTimer = setTimeout(() => timeout("File upload exceeded 30 minutes"), 30 * 60_000);
+    let idleTimer: ReturnType<typeof setTimeout> | undefined;
+    const progress = () => {
+      clearTimeout(idleTimer);
+      idleTimer = setTimeout(() => timeout("File upload made no progress for 60 seconds"), 60_000);
+    };
+    const drain = async () => {
+      // Keep only the current frame's cancellation handler, not one response waiter per chunk.
+      // The final response may arrive before its ACK; retain ownership until ACK is drained.
+      await new Promise<void>((resolve, reject) => {
+        rejectDrain = reject;
+        Promise.resolve(uploadTransport?.drain?.()).then(resolve, reject);
+      });
+      rejectDrain = null;
+      progress();
+    };
+    progress();
     let settled = false;
     void responsePromise.then(
       () => {
@@ -4817,7 +4879,7 @@ export class DaemonClient {
         }),
       );
 
-      const chunkSize = input.chunkSize ?? 128 * 1024;
+      await drain();
       for (let offset = 0; offset < bytes.byteLength; offset += chunkSize) {
         // Native WebSocket.send encodes binary synchronously. Let rendering and
         // incoming messages run between bounded pieces on every platform.
@@ -4833,23 +4895,32 @@ export class DaemonClient {
             payload: bytes.subarray(offset, Math.min(offset + chunkSize, bytes.byteLength)),
           }),
         );
+        await drain();
       }
 
+      if (settled) return await responsePromise;
+      if (this.transport !== uploadTransport || this.connectionState.status !== "connected") {
+        throw new DaemonConnectionError("Connection changed during file upload");
+      }
       this.sendBinaryFrame(
         encodeFileTransferFrame({
           opcode: FileTransferOpcode.FileEnd,
           requestId: resolvedRequestId,
         }),
       );
+      await drain();
+      return await responsePromise;
     } catch (error) {
       this.rejectWaitersForRequestId(
         resolvedRequestId,
         error instanceof Error ? error : new Error(String(error)),
       );
       throw error;
+    } finally {
+      rejectDrain = null;
+      clearTimeout(idleTimer);
+      clearTimeout(totalTimer);
     }
-
-    return responsePromise;
   }
 
   async requestDownloadToken(

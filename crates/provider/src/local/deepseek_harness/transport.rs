@@ -92,7 +92,7 @@ impl Transport {
             return Err(AgentSessionError::Failed);
         }
         let mut bytes = serde_json::to_vec(message).map_err(|_| AgentSessionError::Failed)?;
-        if bytes.len() >= MAX_FRAME {
+        if bytes.len() >= 64 * 1024 * 1024 {
             return Err(AgentSessionError::Rejected);
         }
         bytes.push(b'\n');

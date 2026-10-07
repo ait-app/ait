@@ -1,5 +1,15 @@
 # PR #205: consolidation and QA follow-up (2026-10-07)
 
+## Main synchronization after #206, #209 and #212 merged
+
+Updated against main `5a003888` on 2026-10-07. This is the latest validation entry; the earlier combined-source report below is historical. The source is the previous PR head plus this main merge. No production fix was dropped or rewritten.
+
+SDK daemon-client: 143 passed; mobile model-selection/upload regressions: 19 passed; mobile TypeScript passed. `npm run build:ui-deps`, changed-file oxfmt and oxlint passed. #205 retains both the upload acknowledgement test from #212 and the deferred-model notice test; the conflict was overlapping appended test blocks.
+
+### Test coverage
+
+TypeScript line coverage was not measured; this synchronization uses focused behavior tests. No new Rust behavior is introduced by this PR, so independent Rust tests are not required for this frontend update. The Rust-bearing #208 synchronization is validated separately. GUI/native-provider acceptance remains outside these tests.
+
 Base: upstream `d6a5d246afae820a41cb90f3a9c40adbc50f8a9b`. Group: model.
 This supersedes older validation claims for the updated code. Original reports are historical.
 All six prepared branches were merged locally; every file under apps/bins/crates/packages matches the tested integration working tree byte-for-byte, except upstream's unrelated apps/mobile/eas.json release change. Exact changed-file fingerprints are in the adjacent JSON artifact.

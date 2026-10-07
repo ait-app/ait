@@ -34,11 +34,14 @@ pub(super) async fn request(
 }
 
 async fn metadata(state: &Shared, context: &mut Context<'_>) -> Result<Value, ErrorCode> {
-    let (value, workspace_ids) = context
-        .call(
+    let method = context.request.method.clone();
+    let params = std::mem::take(&mut context.request.params);
+    let (value, workspace_ids) = state
+        .runtime
+        .run_queued(
             state.metadata.directory.clone(),
             ErrorCode::RegistryIo,
-            prepare_metadata,
+            move |directory| prepare_metadata(directory, &method, params),
         )
         .await?;
     let mut plans = Vec::new();
@@ -117,7 +120,7 @@ async fn begin(
 ) -> Result<Result<PendingArchive, WorktreesError>, ErrorCode> {
     state
         .runtime
-        .run(
+        .run_queued(
             state.filesystem.worktrees.clone(),
             ErrorCode::RegistryIo,
             move |worktrees| Ok(worktrees.begin_archive(&input, &chrono::Utc::now().to_rfc3339())),
@@ -131,7 +134,7 @@ async fn finish(
 ) -> Result<Result<(), WorktreesError>, ErrorCode> {
     state
         .runtime
-        .run(
+        .run_queued(
             state.filesystem.worktrees.clone(),
             ErrorCode::RegistryIo,
             move |worktrees| Ok(worktrees.finish_archive(plan).map(|_| ())),
@@ -149,7 +152,7 @@ async fn retire(state: &Shared, workspace_ids: Vec<String>) -> Result<Vec<String
     if state.metadata.workspace_automation.is_some() {
         state
             .runtime
-            .run(
+            .run_queued(
                 state.metadata.workspace_automation.clone(),
                 ErrorCode::RegistryIo,
                 move |automation| {
@@ -166,3 +169,6 @@ async fn retire(state: &Shared, workspace_ids: Vec<String>) -> Result<Vec<String
 fn failure(error: &WorktreesError) -> Value {
     json!({"success":false,"removedAgents":[],"error":filesystem::rpc::worktrees::checkout_error(error)})
 }
+
+#[cfg(test)]
+mod tests;

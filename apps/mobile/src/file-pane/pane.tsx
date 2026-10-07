@@ -28,6 +28,8 @@ import { useLiveFile } from "./live-file/hook";
 import { useFilePreview } from "./preview-lifecycle/hook";
 import { resolveFilePreviewLifecycle } from "./preview-lifecycle/model";
 import { FilePanelBar } from "./bar";
+import type { AttachmentMetadata } from "@/attachments/types";
+import { FileBinaryPreview } from "./binary-preview";
 import { FileHtmlPreview } from "./html-preview";
 import { FileMarkdownPreview } from "./markdown-preview";
 import { FileEditorModel, getFileConflictCallout, type FileConflictCallout } from "./editor/model";
@@ -54,6 +56,7 @@ interface FilePreviewBodyProps {
   location: WorkspaceFileLocation;
   navigationRevision: number;
   imagePreviewUri: string | null;
+  previewAttachment?: AttachmentMetadata | null;
 }
 
 type TextExplorerFile = ExplorerFile & { kind: "text" };
@@ -135,6 +138,7 @@ function FilePreviewBody({
   location,
   navigationRevision,
   imagePreviewUri,
+  previewAttachment,
 }: FilePreviewBodyProps) {
   const { t } = useTranslation();
   const filePath = location.path;
@@ -211,12 +215,7 @@ function FilePreviewBody({
     return <ZoomableImage uri={imagePreviewUri} testID="image-file-preview" />;
   }
 
-  return (
-    <View style={styles.centerState}>
-      <Text style={styles.emptyText}>{t("panels.file.binaryPreviewUnavailable")}</Text>
-      <Text style={styles.binaryMetaText}>{formatFileSize({ size: preview.size })}</Text>
-    </View>
-  );
+  return <FileBinaryPreview attachment={previewAttachment ?? null} uri={imagePreviewUri} />;
 }
 
 export function FilePane({
@@ -315,6 +314,7 @@ export function FilePane({
       isMobile={isMobile}
       location={location}
       navigationRevision={navigationRevision}
+      previewAttachment={imageAttachment}
       imagePreviewUri={imagePreviewUri}
     />
   );
@@ -357,6 +357,7 @@ function FilePanePresentation({
   location,
   navigationRevision,
   imagePreviewUri,
+  previewAttachment,
 }: {
   serverId: string;
   client: DaemonClient | null;
@@ -378,6 +379,7 @@ function FilePanePresentation({
   location: WorkspaceFileLocation;
   navigationRevision: number;
   imagePreviewUri: string | null;
+  previewAttachment?: AttachmentMetadata | null;
 }) {
   if (!client && readTarget) {
     return (
@@ -448,6 +450,7 @@ function FilePanePresentation({
         isMobile={isMobile}
         location={location}
         navigationRevision={navigationRevision}
+        previewAttachment={previewAttachment}
         imagePreviewUri={imagePreviewUri}
       />
     </View>

@@ -37,7 +37,7 @@ fn upload_expiration_and_invalid_sizes_do_not_retain_pending_state() {
     connection.prune();
     assert!(connection.uploads.is_empty());
     assert!(matches!(
-        connection.begin("huge", upload_params(64 * 1024 * 1024 + 1)),
+        connection.begin("huge", upload_params(256 * 1024 * 1024 + 1)),
         Err(ErrorCode::ResourceExhausted)
     ));
     assert!(matches!(

@@ -129,7 +129,7 @@ pub async fn reconcile_workspaces(
     if state.terminals.is_none() {
         return Ok(());
     }
-    crate::connection::run(state, move |terminals| {
+    crate::connection::run_queued(state, move |terminals| {
         terminals.close_workspaces(&workspace_ids)
     })
     .await

@@ -13,6 +13,7 @@ use schedule as _;
 use secrecy as _;
 use serde as _;
 use subtle as _;
+use tempfile as _;
 use terminal as _;
 use thiserror as _;
 use tokio_util as _;
