@@ -280,3 +280,38 @@ describe("local transport session lifecycle", () => {
     expect(events).toEqual([]);
   });
 });
+
+describe("broken local transport writes", () => {
+  it.each(["callback", "throw"])(
+    "closes %s failures so clients reconnect, without replaying a message",
+    async (failure) => {
+      const socket = createConnectingSocket();
+      const callbacks = new Map<string, (...args: unknown[]) => void>();
+      vi.mocked(socket.once).mockImplementation((event, listener) => {
+        callbacks.set(event, listener);
+      });
+      const endpoint = createEndpoint();
+      const h = createManagerHarness(async () => endpoint, [socket]);
+      h.manager.open(SESSION_INPUT);
+      await Promise.resolve();
+      Object.defineProperty(socket, "readyState", { value: 1 });
+      callbacks.get("open")?.();
+      vi.mocked(socket.send).mockImplementation((_data, callback) => {
+        if (failure === "throw") throw new Error("write EPIPE");
+        callback(new Error("write EPIPE"));
+      });
+      await expect(
+        h.manager.send({ sessionId: SESSION_INPUT.sessionId, text: "user message" }),
+      ).rejects.toThrow("write EPIPE");
+      expect(socket.send).toHaveBeenCalledTimes(1);
+      expect(socket.terminate).toHaveBeenCalledTimes(1);
+      expect(endpoint.close).toHaveBeenCalledTimes(1);
+      expect(h.events.filter((event) => event.kind === "close")).toEqual([
+        expect.objectContaining({ code: 1006, sessionId: SESSION_INPUT.sessionId }),
+      ]);
+      await expect(
+        h.manager.send({ sessionId: SESSION_INPUT.sessionId, text: "retry" }),
+      ).rejects.toThrow("not found");
+    },
+  );
+});

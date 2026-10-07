@@ -390,6 +390,19 @@ export function createLocalTransportManager(
     emitEvent({ sessionId: session.id, kind: "error", error: message });
   }
 
+  function failConnectedSession(session: Session, message: string): void {
+    if (!isCurrent(session)) return;
+    const ws = session.ws;
+    disposeSession(session);
+    try {
+      ws?.terminate();
+    } catch {
+      /* Release a broken socket without waiting for a close handshake. */
+    }
+    emitEvent({ sessionId: session.id, kind: "error", error: message });
+    emitEvent({ sessionId: session.id, kind: "close", code: 1006, reason: message });
+  }
+
   async function connectSession(session: Session): Promise<void> {
     let endpoint: TransportEndpoint;
     try {
@@ -502,7 +515,7 @@ export function createLocalTransportManager(
         return;
       }
 
-      emitEvent({ sessionId: session.id, kind: "error", error: detail });
+      failConnectedSession(session, detail);
     });
   }
 
@@ -552,13 +565,19 @@ export function createLocalTransportManager(
 
     const payload = decodeTransportMessage(input);
     await new Promise<void>((resolve, reject) => {
-      ws.send(payload, (error) => {
-        if (error) {
-          reject(new Error(`Local transport write failed: ${error.message}`));
-          return;
-        }
-        resolve();
-      });
+      const failed = (error: unknown) => {
+        const message = `Local transport write failed: ${getErrorMessage(error)}`;
+        failConnectedSession(session, message);
+        reject(new Error(message));
+      };
+      try {
+        ws.send(payload, (error) => {
+          if (error) failed(error);
+          else resolve();
+        });
+      } catch (error) {
+        failed(error);
+      }
     });
   }
 
