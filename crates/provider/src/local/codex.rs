@@ -188,6 +188,10 @@ impl CodexClient {
 }
 
 impl AgentClient for CodexClient {
+    fn supports_session_import(&self) -> bool {
+        true
+    }
+
     fn create_session_with_environment<'a>(
         &'a self,
         spec: &'a AgentSessionSpec,

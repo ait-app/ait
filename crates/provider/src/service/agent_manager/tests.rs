@@ -23,7 +23,7 @@ struct RegistryState {
 }
 
 #[derive(Debug, Clone, Default)]
-struct MemoryRegistry(Arc<Mutex<RegistryState>>);
+pub(super) struct MemoryRegistry(Arc<Mutex<RegistryState>>);
 
 impl AgentRuntimeRegistry for MemoryRegistry {
     fn initialize(&self) -> Result<(), AgentRuntimeRegistryError> {

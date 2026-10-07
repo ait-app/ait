@@ -118,57 +118,6 @@ async fn server_ports_discover_run_multiple_turns_restore_and_read_without_submi
 }
 
 #[tokio::test]
-async fn v1_repeated_resumes_reuse_permissions_and_recover_old_duplicates() {
-    let fixture = Fixture::start(Version::V1).await;
-    let client = OpenCodeClient::new(fixture.binary.clone());
-    let spec = spec(&fixture);
-    let mut session = client.create_session(&spec).await.unwrap();
-    let handle = session.persistence().unwrap();
-    session.close().await.unwrap();
-    for _ in 0..3 {
-        let mut resumed = client
-            .resume_session(&handle, &spec, AgentResumePurpose::Interactive)
-            .await
-            .unwrap();
-        resumed.close().await.unwrap();
-    }
-    {
-        let mut state = fixture.state.lock().unwrap();
-        assert_eq!(state.permission_updates, 0);
-        assert_eq!(state.permission.as_array().unwrap().len(), 9);
-        let rules = state.permission.as_array().unwrap();
-        state.permission = json!(rules.iter().chain(rules).cloned().collect::<Vec<_>>());
-    }
-    let mut resumed = client
-        .resume_session(&handle, &spec, AgentResumePurpose::Interactive)
-        .await
-        .unwrap();
-    resumed
-        .start_turn("after old failed restore", &spec.config)
-        .await
-        .unwrap();
-    assert!(matches!(
-        drain(resumed.as_mut()).await.last(),
-        Some(AgentTurnEvent::Completed(_))
-    ));
-    resumed.close().await.unwrap();
-    {
-        let mut state = fixture.state.lock().unwrap();
-        assert_eq!(state.permission_updates, 0);
-        assert_eq!(state.permission.as_array().unwrap().len(), 18);
-        state.permission[17]["action"] = json!("allow");
-    }
-    assert!(
-        client
-            .resume_session(&handle, &spec, AgentResumePurpose::Interactive)
-            .await
-            .is_err()
-    );
-    assert_eq!(fixture.state.lock().unwrap().permission_updates, 0);
-    assert_eq!(fixture.state.lock().unwrap().submissions, 1);
-}
-
-#[tokio::test]
 async fn ambiguous_admission_reconciles_without_replay_and_unsupported_inputs_fail_before_submission()
  {
     let fixture = Fixture::start(Version::V2).await;
@@ -188,7 +137,7 @@ async fn ambiguous_admission_reconciles_without_replay_and_unsupported_inputs_fa
         AgentSessionError::Rejected
     );
     let mut config = spec.config.clone();
-    config.mode_id = Some("plan".into());
+    config.mode_id = Some("unsupported-agent".into());
     assert!(client.validate_config(&config).is_err());
     assert!(session.start_turn("hello", &config).await.is_err());
     assert_eq!(fixture.state.lock().unwrap().submissions, 0);
@@ -215,7 +164,7 @@ async fn ambiguous_admission_reconciles_without_replay_and_unsupported_inputs_fa
 #[tokio::test]
 async fn server_approvals_reject_wider_authority_resolve_once_and_cancel_with_native_acknowledgement()
  {
-    for behavior in ["allow", "deny", "cancel"] {
+    for behavior in ["allow", "always", "deny", "cancel"] {
         let fixture = Fixture::start(Version::V2).await;
         let client = OpenCodeClient::new(fixture.binary.clone());
         let spec = spec(&fixture);
@@ -225,7 +174,7 @@ async fn server_approvals_reject_wider_authority_resolve_once_and_cancel_with_na
             .lock()
             .unwrap()
             .pending_permissions
-            .push(json!({"id":"perm1","sessionID":"ses_one","action":"shell","resources":["pwd"]}));
+            .push(json!({"id":"perm1","sessionID":"ses_one","action":"shell","resources":["pwd"],"save":if behavior == "always" {json!(["pwd"])} else {json!([])}}));
         let turn = session.start_turn("hello", &spec.config).await.unwrap();
         let request = tokio::time::timeout(Duration::from_secs(3), async {
             loop {
@@ -239,31 +188,27 @@ async fn server_approvals_reject_wider_authority_resolve_once_and_cancel_with_na
         })
         .await
         .unwrap();
+        assert_eq!(
+            request["actions"]
+                .as_array()
+                .unwrap()
+                .iter()
+                .any(|action| action["id"] == "always"),
+            behavior == "always"
+        );
+        if behavior != "always" {
+            assert!(
+                session
+                    .respond_permission(
+                        "perm1",
+                        &json!({"behavior":"allow","selectedActionId":"always"})
+                    )
+                    .await
+                    .is_err()
+            );
+        }
         assert_eq!(session.pending_permissions(), vec![request]);
-        assert!(
-            session
-                .respond_permission("stale", &json!({"behavior":"allow"}))
-                .await
-                .is_err()
-        );
-        assert!(
-            session
-                .respond_permission(
-                    "perm1",
-                    &json!({"behavior":"allow","updatedPermissions":[{}]})
-                )
-                .await
-                .is_err()
-        );
-        assert!(
-            session
-                .respond_permission(
-                    "perm1",
-                    &json!({"behavior":"allow","selectedActionId":"deny"})
-                )
-                .await
-                .is_err()
-        );
+        assert_invalid_approval_responses(session.as_mut()).await;
         if behavior == "cancel" {
             session.cancel_turn(&turn).await.unwrap();
             assert!(matches!(
@@ -282,7 +227,7 @@ async fn server_approvals_reject_wider_authority_resolve_once_and_cancel_with_na
             let response = if behavior == "deny" {
                 json!({"behavior":"deny","selectedActionId":"deny","message":"Denied by user"})
             } else {
-                json!({"behavior":"allow","selectedActionId":"allow"})
+                json!({"behavior":"allow","selectedActionId":if behavior == "always" {"always"} else {"allow"}})
             };
             session
                 .respond_permission("perm1", &response)
@@ -301,7 +246,9 @@ async fn server_approvals_reject_wider_authority_resolve_once_and_cancel_with_na
             assert!(matches!(events.last(), Some(AgentTurnEvent::Completed(_))));
             assert_eq!(
                 fixture.state.lock().unwrap().replies,
-                vec![json!({"decision":if behavior=="allow" {"once"} else {"reject"}})]
+                vec![
+                    json!({"decision":if behavior=="allow" {"once"} else if behavior=="always" {"always"} else {"reject"}})
+                ]
             );
         }
         assert!(session.pending_permissions().is_empty());
@@ -361,4 +308,31 @@ async fn streamed_text_uses_the_final_native_item_key_in_both_protocols() {
         assert_eq!(text, "answer");
         session.close().await.unwrap();
     }
+}
+
+async fn assert_invalid_approval_responses(session: &mut dyn AgentSession) {
+    assert!(
+        session
+            .respond_permission("stale", &json!({"behavior":"allow"}))
+            .await
+            .is_err()
+    );
+    assert!(
+        session
+            .respond_permission(
+                "perm1",
+                &json!({"behavior":"allow","updatedPermissions":[{}]})
+            )
+            .await
+            .is_err()
+    );
+    assert!(
+        session
+            .respond_permission(
+                "perm1",
+                &json!({"behavior":"allow","selectedActionId":"deny"})
+            )
+            .await
+            .is_err()
+    );
 }

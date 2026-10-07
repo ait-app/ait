@@ -240,6 +240,11 @@ pub trait AgentSession: Debug + Send {
 
 /// Factory and availability boundary for one independent provider adapter.
 pub trait AgentClient: Debug + Send + Sync {
+    /// Whether this adapter implements native session listing and import inspection.
+    fn supports_session_import(&self) -> bool {
+        false
+    }
+
     /// Whether native history can be replayed as a complete authoritative transcript.
     /// Adapters without replay retain the server's already persisted display timeline.
     fn supports_history_replay(&self) -> bool {

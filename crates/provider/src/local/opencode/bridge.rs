@@ -72,20 +72,33 @@ impl Bridge {
         }) || response
             .get("message")
             .is_some_and(|value| value.as_str().is_none_or(|message| message.len() > 4096))
-            || response
-                .get("selectedActionId")
-                .is_some_and(|id| id.as_str() != Some(action))
+            || response.get("selectedActionId").is_some_and(|id| {
+                id.as_str() != Some(action) && !(action == "allow" && id.as_str() == Some("always"))
+            })
         {
             return Err(AgentSessionError::Rejected);
         }
         let mut pending = self.pending.lock().map_err(|_| AgentSessionError::Failed)?;
+        if response["selectedActionId"] == "always"
+            && !pending.get(id).is_some_and(|permission| {
+                permission.payload["actions"]
+                    .as_array()
+                    .is_some_and(|actions| actions.iter().any(|action| action["id"] == "always"))
+            })
+        {
+            return Err(AgentSessionError::Rejected);
+        }
         let answer = pending
             .get_mut(id)
             .and_then(|value| value.answer.take())
             .ok_or(AgentSessionError::Rejected)?;
         answer
             .send(if action == "allow" {
-                Decision::Approved
+                if response["selectedActionId"] == "always" {
+                    Decision::ApprovedAlways
+                } else {
+                    Decision::Approved
+                }
             } else {
                 Decision::Denied
             })
@@ -116,13 +129,21 @@ impl ApprovalSink for Bridge {
     async fn decide(&self, request: ApprovalRequest) -> Result<Decision, ProtocolError> {
         let (name, input) = match request.target {
             ApprovalTarget::Command { command, cwd } => {
-                ("Shell", json!({"command":command,"cwd":cwd}))
+                ("Shell".to_owned(), json!({"command":command,"cwd":cwd}))
             }
-            ApprovalTarget::Files { paths } => ("Edit", json!({"paths":paths})),
+            ApprovalTarget::Files { paths } => ("Edit".to_owned(), json!({"paths":paths})),
+            ApprovalTarget::Native { action, resources } => {
+                (action, json!({"resources":resources}))
+            }
         };
-        let payload = json!({"id":request.id,"provider":"opencode","kind":"tool","name":name,"input":input,"actions":[
+        let mut payload = json!({"id":request.id,"provider":"opencode","kind":"tool","name":name,"input":input,"actions":[
             {"id":"allow","label":"Allow once","behavior":"allow","variant":"primary"},
             {"id":"deny","label":"Deny","behavior":"deny","variant":"secondary"}]});
+        if !request.save_resources.is_empty() {
+            payload["input"]["saveResources"] = json!(request.save_resources);
+            payload["actions"].as_array_mut().expect("permission actions are an array").insert(1,
+                json!({"id":"always","label":"Always allow matching rules","behavior":"allow","variant":"secondary"}));
+        }
         let (answer, receiver) = oneshot::channel();
         {
             let mut pending = self

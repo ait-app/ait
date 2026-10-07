@@ -30,6 +30,7 @@ pub(super) fn invocation(cwd: PathBuf) -> Invocation {
         reasoning_effort: None,
         full_access: true,
         verify_settings: true,
+        agent: "build".into(),
         approvals: Arc::new(DenyApprovals),
         cancellation: tokio_util::sync::CancellationToken::new(),
         cancel_acknowledged: Arc::default(),

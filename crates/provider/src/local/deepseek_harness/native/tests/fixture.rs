@@ -27,6 +27,8 @@ struct Host {
     requests: Arc<Mutex<Vec<Value>>>,
     frames: broadcast::Sender<Value>,
     records: Arc<Mutex<Vec<Value>>>,
+    sessions: Arc<Mutex<Value>>,
+    snapshot_fields: Arc<Mutex<Value>>,
 }
 
 pub(super) struct Fixture {
@@ -48,6 +50,8 @@ impl Fixture {
                 json!({"type":"event","event":{"seq":0,"type":"permission/preset","time":1_700_000_000_000_i64,"data":{"preset":"workspace-write"}}}),
             ])),
             frames: broadcast::channel(128).0,
+            sessions: Arc::new(Mutex::new(json!([]))),
+            snapshot_fields: Arc::new(Mutex::new(json!({}))),
         };
         let app = Router::new()
             .route("/", get(auth))
@@ -75,6 +79,15 @@ impl Fixture {
         }
     }
 
+    pub(super) fn seed_records(&self, records: Vec<Value>) {
+        *self.host.records.lock().unwrap() = records;
+    }
+    pub(super) fn set_sessions(&self, rows: Value) {
+        *self.host.sessions.lock().unwrap() = rows;
+    }
+    pub(super) fn set_snapshot_fields(&self, fields: Value) {
+        *self.host.snapshot_fields.lock().unwrap() = fields;
+    }
     pub(super) fn history(&self, seq: u64, kind: &str, data: Value) {
         let mut frame = json!({"type":"item","streamId":"history","value":{"type":"event","event":{"seq":seq,"type":kind,"time":1_700_000_000_000_u64+seq}}});
         frame["value"]["event"]["data"] = data;
@@ -159,6 +172,7 @@ async fn rpc(State(host): State<Host>, headers: HeaderMap, Json(request): Json<V
     }
     host.requests.lock().unwrap().push(request.clone());
     let value = match request["method"].as_str() {
+        Some("session/list") => json!({"items":*host.sessions.lock().unwrap()}),
         Some("session/modelCatalog") => {
             json!({"default":{"provider":"local","model":"test"},"groups":[{"id":"local","name":"Local","models":[{"id":"test","name":"Test","reasoning":{"defaultEffort":"low","efforts":[{"id":"low","name":"Low"},{"id":"high","name":"High"}]}}]}]})
         }
@@ -215,5 +229,14 @@ fn snapshot(host: &Host) -> Value {
         .last()
         .map_or(0, |r| r["event"]["seq"].as_u64().unwrap());
     let page = page(host, cut + 1);
-    json!({"type":"snapshot","header":{"id":"session","cwd":host.cwd},"cursor":cut,"records":page["records"],"hasMore":page["hasMore"],"projections":{"values":{"permissions":{"options":[{"value":"read-only","name":"Read only"},{"value":"workspace-write","name":"Workspace write"},{"value":"danger-full-access","name":"Full access"}],"currentValue":"workspace-write"},"modelSelection":{"next":null}}}})
+    let mut snapshot = json!({"type":"snapshot","header":{"id":"session","cwd":host.cwd,"createdAt":1_700_000_000_000_i64},"cursor":cut,"records":page["records"],"hasMore":page["hasMore"],"projections":{"values":{"permissions":{"options":[{"value":"read-only","name":"Read only"},{"value":"workspace-write","name":"Workspace write"},{"value":"danger-full-access","name":"Full access"}],"currentValue":"workspace-write"},"modelSelection":{"next":null}}}});
+    snapshot.as_object_mut().unwrap().extend(
+        host.snapshot_fields
+            .lock()
+            .unwrap()
+            .as_object()
+            .unwrap()
+            .clone(),
+    );
+    snapshot
 }

@@ -30,6 +30,59 @@ AppImage 文件名保持稳定，版本体现在 Release 标签和应用内部�
 和独立 CLI 不属于本次发布。安装包 `resources/bin/` 中只有 `daemon`；Electron 主程序与
 Helper 是必需运行时。GitHub 仍自动提供标签对应的源码归档。
 
+## Arch Linux 本地源码安装
+
+在仓库根目录运行（需要 Arch 的 `base-devel`）：
+
+```bash
+makepkg -si
+```
+
+根目录的 [`PKGBUILD`](../../PKGBUILD) 构建当前工作区，包含未提交修改和未被 Git
+忽略的新文件。它先复制源码再编译 Rust daemon、Web 界面和 Electron 主进程；Electron
+运行时和 npm/Cargo 依赖仍从上游下载。不会在原仓库生成 `src/`、`pkg/`、`node_modules/`、
+`target/` 或安装包，也不会改写原仓库的版本文件。
+
+源码副本、依赖缓存、临时文件、日志和 `.pkg.tar.zst` 默认位于
+`${XDG_CACHE_HOME:-$HOME/.cache}/ait/makepkg/<仓库路径哈希>/`，安装包在其中的 `packages/`。
+Cargo 的下载缓存沿用用户配置。可用 `AIT_MAKEPKG_DIR=/外部目录 makepkg -si` 更换构建位置；
+路径指向仓库内部时会拒绝执行。`makepkg --packagelist` 可查看安装包的完整路径。
+
+修改源码后同版本重建安装使用 `makepkg -sif`，避免复用之前的安装包。此配方依赖当前
+Git 工作区，不用于 `makepkg --source` 或单独发布到 AUR；AUR 二进制配方见下节。
+`packaging/` 是需要提交的打包源文件，不在 `.gitignore` 中。
+
+## Arch Linux / AUR
+
+[`packaging/aur/ait-bin`](../../packaging/aur/ait-bin/PKGBUILD) 提供 Linux x86_64
+二进制包配方，使用对应 GitHub Release 的 tar.gz，包含 Electron、Web 界面和 Rust daemon。
+在仓库根目录运行：
+
+```bash
+cd packaging/aur/ait-bin
+makepkg -si
+```
+
+安装后可在应用菜单打开 Ait，或运行 `ait`；同时注册 `ait://` 链接。
+此安装方式由 pacman / AUR helper 管理升级，不使用 AppImage 自动更新。
+
+桌面 Release 发布成功后，更新 `PKGBUILD` 的 `pkgver` 并把 `pkgrel` 重置为 `1`，
+从该 Release 的 `SHA256SUMS` 更新归档校验值；同版本配方修复则递增 `pkgrel`。
+修改 `ait.desktop` 时也需更新其 SHA-256。提交前运行：
+
+```bash
+makepkg --verifysource
+makepkg --printsrcinfo > .SRCINFO
+makepkg
+namcap PKGBUILD ./*.pkg.tar.zst
+desktop-file-validate ait.desktop
+```
+
+AUR 使用独立 Git 仓库。首次发布需要维护者的 AUR 账户和 SSH 公钥，将此目录中的
+`PKGBUILD`、`.SRCINFO` 和 `ait.desktop` 提交到 `ssh://aur@aur.archlinux.org/ait-bin.git`。
+不要上传下载的归档、`src/`、`pkg/` 或生成的二进制包。仓库内提供配方不代表已发布到 AUR；
+发布后用户才能通过 `paru -S ait-bin` 安装。
+
 ## 准备版本
 
 同步根 `Cargo.toml` 的 `workspace.package.version`、Cargo.lock、根 package.json、

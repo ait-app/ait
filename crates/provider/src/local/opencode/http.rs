@@ -102,7 +102,7 @@ impl Api {
             .base
             .join(path)
             .map_err(|_| failure(Fault::ProviderFailed, "invalid OpenCode request path"))?;
-        if self.version == Version::V1 {
+        if self.version == Version::V1 && url.path() != "/experimental/session" {
             url.query_pairs_mut().append_pair("directory", &self.cwd);
         }
         let mut request = self

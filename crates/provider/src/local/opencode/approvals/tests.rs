@@ -90,11 +90,11 @@ async fn approved_requests_reply_once_and_withdrawn_permissions_expire() {
 }
 
 #[test]
-fn only_concrete_reviewable_permissions_reach_the_host() {
+fn native_permissions_preserve_commands_patterns_and_other_actions() {
     let request = super::super::tests::invocation("/tmp/project".into());
     let mut data =
         json!({"id":"perm1","sessionID":"ses_one","action":"shell","resources":["git *"]});
-    assert!(normalize(Version::V2, &request, "ses_one", &data).is_none());
+    assert!(normalize(Version::V2, &request, "ses_one", &data).is_some());
     data["metadata"] = json!({"command":"git status"});
     let approval = normalize(Version::V2, &request, "ses_one", &data).unwrap();
     assert_eq!(approval.id, "perm1");
@@ -102,14 +102,19 @@ fn only_concrete_reviewable_permissions_reach_the_host() {
         matches!(approval.target, ApprovalTarget::Command {command,..} if command=="git status")
     );
     data["metadata"] = json!({"command":"echo bearer secret"});
-    assert!(normalize(Version::V2, &request, "ses_one", &data).is_none());
+    assert!(normalize(Version::V2, &request, "ses_one", &data).is_some());
     data = json!({"id":"perm2","permission":"edit","patterns":["src/main.rs"]});
     assert!(
         matches!(normalize(Version::V1, &request, "ses_one", &data).unwrap().target,
         ApprovalTarget::Files {paths} if paths[0]=="/tmp/project/src/main.rs")
     );
     data["patterns"] = json!(["src/*"]);
-    assert!(normalize(Version::V1, &request, "ses_one", &data).is_none());
+    assert!(normalize(Version::V1, &request, "ses_one", &data).is_some());
     data = json!({"id":"perm3","action":"network","resources":["*"]});
-    assert!(normalize(Version::V2, &request, "ses_one", &data).is_none());
+    assert!(matches!(
+        normalize(Version::V2, &request, "ses_one", &data)
+            .unwrap()
+            .target,
+        ApprovalTarget::Native { .. }
+    ));
 }

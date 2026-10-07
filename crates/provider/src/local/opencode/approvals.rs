@@ -1,4 +1,4 @@
-//! Asynchronous native approvals retain exact request identity and authorize only one operation.
+//! Asynchronous native approvals retain exact request identity and retain native approval scope.
 use std::collections::HashMap;
 
 use crate::local::opencode::types::{ApprovalRequest, Decision, Invocation};
@@ -121,11 +121,10 @@ impl Pending {
                 } else {
                     Decision::Denied
                 };
-                // Session-wide grants cannot widen the exact reviewed native request.
-                let reply = if matches!(decision, Decision::Approved) {
-                    "once"
-                } else {
-                    "reject"
+                let reply = match decision {
+                    Decision::Approved => "once",
+                    Decision::ApprovedAlways => "always",
+                    Decision::Denied | Decision::Cancelled => "reject",
                 };
                 let (path, body) = match api.version {
                     Version::V1 => (format!("/permission/{id}/reply"), json!({"reply":reply})),
@@ -171,52 +170,91 @@ fn normalize(
             Version::V2 => "resources",
         })?
         .as_array()?;
-    let cwd = request.cwd.to_string_lossy().into_owned();
+    if action.is_empty()
+        || action.len() > 256
+        || action.chars().any(char::is_control)
+        || resources.is_empty()
+        || resources.len() > 64
+        || resources.iter().any(|v| {
+            v.as_str()
+                .is_none_or(|v| v.is_empty() || v.len() > 4096 || v.contains('\0'))
+        })
+    {
+        return None;
+    }
+    let native = || ApprovalTarget::Native {
+        action: action.to_owned(),
+        resources: resources
+            .iter()
+            .filter_map(Value::as_str)
+            .map(str::to_owned)
+            .collect(),
+    };
     let target = match action {
         "bash" | "shell" if resources.len() == 1 => {
             let explicit = data.pointer("/metadata/command").and_then(Value::as_str);
             let command = explicit.or_else(|| resources[0].as_str())?;
+            if command.len() > 4096 || command.contains('\0') {
+                return None;
+            }
             if explicit.is_none() && command.contains(['*', '?', '[', ']']) {
-                return None;
-            }
-            let lower = command.to_ascii_lowercase();
-            if command.len() > 4096
-                || command.chars().any(char::is_control)
-                || ["bearer ", "token", "password", "secret", "api_key", "://"]
-                    .iter()
-                    .any(|key| lower.contains(key))
-            {
-                return None;
-            }
-            ApprovalTarget::Command {
-                command: command.to_owned(),
-                cwd,
+                native()
+            } else {
+                ApprovalTarget::Command {
+                    command: command.to_owned(),
+                    cwd: request.cwd.to_string_lossy().into_owned(),
+                }
             }
         }
-        "edit" if !resources.is_empty() && resources.len() <= 64 => {
-            let changes = resources
+        "edit"
+            if resources.iter().all(|value| {
+                value
+                    .as_str()
+                    .is_some_and(|path| !path.contains(['*', '?', '[', ']']))
+            }) =>
+        {
+            let paths = resources
                 .iter()
-                .map(|value| {
-                    let path = value.as_str()?;
-                    if path.len() > 4096 || path.contains(['\0', '*', '?', '[', ']']) {
-                        return None;
-                    }
+                .filter_map(Value::as_str)
+                .map(|path| {
                     let path = std::path::Path::new(path);
-                    let path = if path.is_absolute() {
+                    if path.is_absolute() {
                         path.to_owned()
                     } else {
                         request.cwd.join(path)
-                    };
-                    Some(path.to_string_lossy().into_owned())
+                    }
+                    .to_string_lossy()
+                    .into_owned()
                 })
-                .collect::<Option<Vec<_>>>()?;
-            ApprovalTarget::Files { paths: changes }
+                .collect();
+            ApprovalTarget::Files { paths }
         }
-        _ => return None,
+        _ => native(),
     };
     Some(ApprovalRequest {
         id: id.to_owned(),
         target,
+        save_resources: data
+            .get(match version {
+                Version::V1 => "always",
+                Version::V2 => "save",
+            })
+            .and_then(Value::as_array)
+            .filter(|values| values.len() <= 64)
+            .filter(|values| {
+                values.iter().all(|v| {
+                    v.as_str()
+                        .is_some_and(|s| !s.is_empty() && s.len() <= 4096 && !s.contains('\0'))
+                })
+            })
+            .map(|values| {
+                values
+                    .iter()
+                    .filter_map(Value::as_str)
+                    .map(str::to_owned)
+                    .collect()
+            })
+            .unwrap_or_default(),
     })
 }
 

@@ -1,4 +1,5 @@
 //! Provider discovery, configuration and native history inspection.
+mod native_sessions;
 use std::{
     borrow::Cow,
     collections::BTreeMap,
@@ -22,7 +23,7 @@ use crate::{
             AgentClient, AgentResumePurpose, AgentSession, AgentSessionError, AgentSessionFuture,
             AgentSessionSpec,
         },
-        native_history::{SessionDescriptor, SessionHistory},
+        native_history::{ListOptions, SessionDescriptor, SessionHistory},
     },
     protocol::{provider::Details, timeline::NativeItem},
 };
@@ -65,8 +66,9 @@ impl OpenCodeClient {
         let id = if let Some((handle, _)) = binding {
             validate_handle(handle)?;
             let native = native_handle(handle)?;
-            let saved: StoredAgentConfig = serde_json::from_value(native["config"].clone())
+            let mut saved: StoredAgentConfig = serde_json::from_value(native["config"].clone())
                 .map_err(|_| AgentSessionError::Rejected)?;
+            saved.mode_id.clone_from(&effective(&config, "").mode_id);
             if saved
                 != effective(
                     &config,
@@ -160,6 +162,9 @@ impl OpenCodeClient {
         cwd: &str,
     ) -> Result<SessionHistory, AgentSessionError> {
         validate_handle(handle)?;
+        if handle.native_handle.is_none() {
+            return self.read_external(handle, cwd).await;
+        }
         let native = native_handle(handle)?;
         let config: StoredAgentConfig = serde_json::from_value(native["config"].clone())
             .map_err(|_| AgentSessionError::Rejected)?;
@@ -196,6 +201,15 @@ impl OpenCodeClient {
 }
 
 impl AgentClient for OpenCodeClient {
+    fn supports_session_import(&self) -> bool {
+        true
+    }
+    fn list_sessions<'a>(
+        &'a self,
+        options: &'a ListOptions,
+    ) -> AgentSessionFuture<'a, Vec<SessionDescriptor>> {
+        Box::pin(self.list_native(options))
+    }
     fn provider(&self) -> &'static str {
         "opencode"
     }
@@ -213,7 +227,7 @@ impl AgentClient for OpenCodeClient {
         })
     }
     fn settings(&self, _config: &StoredAgentConfig) -> Value {
-        json!({"availableModes":modes(),"features":[],"capabilities":{"supportsStreaming":true,"supportsSessionListing":false,"supportsDynamicModes":false,"supportsMcpServers":false}})
+        json!({"availableModes":modes(),"features":[],"capabilities":{"supportsStreaming":true,"supportsSessionListing":true,"supportsDynamicModes":false,"supportsMcpServers":false}})
     }
     fn discover<'a>(&'a self, cwd: &'a str) -> AgentSessionFuture<'a, Details> {
         Box::pin(async move {
@@ -271,7 +285,10 @@ pub(super) fn error(error: ProtocolError) -> AgentSessionError {
 }
 
 pub(super) fn validate(config: &StoredAgentConfig) -> Result<(), AgentSessionError> {
-    if config.mode_id.as_deref().is_some_and(|id| id != "build")
+    if config
+        .mode_id
+        .as_deref()
+        .is_some_and(|id| !matches!(id, "build" | "plan"))
         || config.model.as_ref().is_some_and(|model| {
             model.len() > 512
                 || model.chars().any(char::is_control)
@@ -309,7 +326,7 @@ pub(super) fn validate(config: &StoredAgentConfig) -> Result<(), AgentSessionErr
 
 pub(super) fn effective(config: &StoredAgentConfig, model: &str) -> StoredAgentConfig {
     StoredAgentConfig {
-        mode_id: Some("build".into()),
+        mode_id: Some(config.mode_id.as_deref().unwrap_or("build").into()),
         model: Some(config.model.as_deref().unwrap_or(model).to_owned()),
         ..config.clone()
     }
@@ -356,6 +373,13 @@ fn native_handle(handle: &AgentPersistenceHandle) -> Result<Cow<'_, Value>, Agen
         }
         // Existing server records used an object before the frontend string contract was fixed.
         Some(value @ Value::Object(_)) => Ok(Cow::Borrowed(value)),
+        None => handle
+            .metadata
+            .as_ref()
+            .and_then(|metadata| metadata.get("opencode"))
+            .filter(|value| value.is_object())
+            .map(Cow::Borrowed)
+            .ok_or(AgentSessionError::Rejected),
         _ => Err(AgentSessionError::Rejected),
     }
 }
@@ -396,6 +420,7 @@ fn invocation(
         reasoning_effort: spec.config.thinking_option_id.clone(),
         full_access: true,
         verify_settings: true,
+        agent: spec.config.mode_id.as_deref().unwrap_or("build").into(),
         approvals: Arc::new(DenyApprovals),
         cancellation: CancellationToken::new(),
         cancel_acknowledged: Arc::default(),
@@ -404,7 +429,8 @@ fn invocation(
 
 fn modes() -> Vec<Value> {
     vec![
-        json!({"id":"build","label":"Build (ask before commands and edits)","description":"Native tools run with full filesystem access; commands and edits require approval.","icon":"Shield","colorTier":"moderate"}),
+        json!({"id":"build","label":"Build","description":"Use the native Build agent and OpenCode permission rules.","icon":"Hammer","colorTier":"moderate"}),
+        json!({"id":"plan","label":"Plan","description":"Use the native Plan agent and its permission rules.","icon":"ShieldCheck","colorTier":"planning"}),
     ]
 }
 

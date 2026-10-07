@@ -71,7 +71,7 @@ impl Session {
             session_id: Some(snapshot.id.clone()),
             model: Some(snapshot.model.clone()),
             thinking_option_id: snapshot.reasoning_effort.clone(),
-            mode_id: Some("build".into()),
+            mode_id: config.mode_id.clone(),
             extra: None,
         };
         let known = projection::entries(snapshot, &clients)?
@@ -100,6 +100,48 @@ impl Session {
         })
     }
 
+    async fn apply_mode(&mut self, config: &StoredAgentConfig) -> Result<(), AgentSessionError> {
+        let effective = client::effective(
+            config,
+            self.info
+                .model
+                .as_deref()
+                .ok_or(AgentSessionError::Failed)?,
+        );
+        // Only the agent can change on this live connection; other settings require a reopen.
+        let mut previous = self.config.clone();
+        previous.mode_id.clone_from(&effective.mode_id);
+        if previous != effective {
+            return Err(AgentSessionError::Rejected);
+        }
+        let connection = self.connection.as_mut().ok_or(AgentSessionError::Failed)?;
+        if effective.mode_id != self.config.mode_id {
+            let agent = effective
+                .mode_id
+                .as_deref()
+                .ok_or(AgentSessionError::Rejected)?;
+            if connection.runtime.api.version == Version::V2 {
+                connection
+                    .runtime
+                    .api
+                    .json(
+                        reqwest::Method::POST,
+                        &connection
+                            .runtime
+                            .api
+                            .path(&connection.prepared.id, "/agent"),
+                        Some(&json!({"agent":agent})),
+                    )
+                    .await
+                    .map_err(client::error)?;
+            }
+            connection.invocation.agent = agent.into();
+            self.info.mode_id.clone_from(&effective.mode_id);
+            self.config = effective;
+        }
+        Ok(())
+    }
+
     async fn start(
         &mut self,
         prompt: &AgentPrompt,
@@ -114,17 +156,11 @@ impl Session {
             || self.failed
             || self.history_only
             || self.turn.is_some()
-            || client::effective(
-                config,
-                self.info
-                    .model
-                    .as_deref()
-                    .ok_or(AgentSessionError::Failed)?,
-            ) != self.config
             || self.clients.len() >= 512
         {
             return Err(AgentSessionError::Rejected);
         }
+        self.apply_mode(config).await?;
         let connection = self.connection.as_mut().ok_or(AgentSessionError::Failed)?;
         let turn = input_id(connection.runtime.api.version);
         connection.invocation.input_id.clone_from(&turn);

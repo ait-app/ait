@@ -680,7 +680,8 @@ describe("ImportSessionSheet", () => {
           entries: [
             createSnapshotEntry("claude"),
             createSnapshotEntry("codex"),
-            createSnapshotEntry("opencode", { enabled: false }),
+            createSnapshotEntry("opencode", { supportsSessionImport: false }),
+            createSnapshotEntry("deepseek-harness", { status: "unavailable" }),
             createSnapshotEntry("z-ai"),
           ],
         },
@@ -711,6 +712,10 @@ describe("ImportSessionSheet", () => {
     await screen.findByText("Session claude");
     await screen.findByText("Session codex");
     await screen.findByText("Session z-ai");
+    expect(fetchRecentProviderSessions).not.toHaveBeenCalledWith(
+      expect.objectContaining({ providers: ["deepseek-harness"] }),
+    );
+    expect(screen.queryByTestId("import-session-provider-errors")).toBeNull();
   });
 
   it("shows partial-failure note when one provider request fails but others succeed", async () => {
@@ -1205,26 +1210,32 @@ describe("ImportSessionSheet", () => {
     expect(fetchRecentProviderSessions).toHaveBeenCalledTimes(1);
   });
 
-  it("shows an error row for a provider the daemon reported as failed", async () => {
-    const fetchRecentProviderSessions = vi.fn(async () => ({
-      requestId: "recent-provider-sessions",
-      entries: [createProviderSessionEntry({ providerId: "codex", providerLabel: "Codex" })],
-      providerErrors: [{ provider: "codex", message: "timed out" }],
-    }));
-    const importAgent = vi.fn();
+  it.each([true, false])(
+    "shows a provider error without a false empty state (has rows: %s)",
+    async (hasRows) => {
+      const fetchRecentProviderSessions = vi.fn(async () => ({
+        requestId: "recent-provider-sessions",
+        entries: hasRows
+          ? [createProviderSessionEntry({ providerId: "codex", providerLabel: "Codex" })]
+          : [],
+        providerErrors: [{ provider: "codex", message: "timed out" }],
+      }));
+      const importAgent = vi.fn();
 
-    renderSheet(
-      { fetchRecentProviderSessions, importAgent } as Pick<
-        DaemonClient,
-        "fetchRecentProviderSessions" | "importAgent"
-      >,
-      {
-        snapshot: { supportsSnapshot: true, entries: [createSnapshotEntry("codex")] },
-      },
-    );
+      renderSheet(
+        { fetchRecentProviderSessions, importAgent } as Pick<
+          DaemonClient,
+          "fetchRecentProviderSessions" | "importAgent"
+        >,
+        {
+          snapshot: { supportsSnapshot: true, entries: [createSnapshotEntry("codex")] },
+        },
+      );
 
-    await screen.findByText("Could not load Codex sessions");
-  });
+      await screen.findByText("Could not load Codex sessions");
+      expect(screen.queryByText("No recent sessions to import.")).toBeNull();
+    },
+  );
 
   it("imports a foreign-directory row without the current workspace once Show all is on", async () => {
     const fetchRecentProviderSessions = vi.fn(async (options: { cwd?: string } | undefined) => ({

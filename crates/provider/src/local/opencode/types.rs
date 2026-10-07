@@ -43,6 +43,7 @@ pub(super) struct Invocation {
     pub reasoning_effort: Option<String>,
     pub full_access: bool,
     pub verify_settings: bool,
+    pub agent: String,
     pub approvals: Arc<dyn ApprovalSink>,
     pub cancellation: CancellationToken,
     pub cancel_acknowledged: Arc<std::sync::atomic::AtomicBool>,
@@ -131,19 +132,30 @@ pub(super) struct Snapshot {
 
 #[derive(Clone, Debug)]
 pub(super) enum ApprovalTarget {
-    Command { command: String, cwd: String },
-    Files { paths: Vec<String> },
+    Command {
+        command: String,
+        cwd: String,
+    },
+    Files {
+        paths: Vec<String>,
+    },
+    Native {
+        action: String,
+        resources: Vec<String>,
+    },
 }
 
 #[derive(Clone, Debug)]
 pub(super) struct ApprovalRequest {
     pub id: String,
     pub target: ApprovalTarget,
+    pub save_resources: Vec<String>,
 }
 
 #[derive(Clone, Copy, Debug)]
 pub(super) enum Decision {
     Approved,
+    ApprovedAlways,
     Denied,
     Cancelled,
 }

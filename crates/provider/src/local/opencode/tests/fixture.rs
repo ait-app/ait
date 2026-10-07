@@ -25,6 +25,8 @@ use super::super::http::Version;
     reason = "Each flag independently selects a fixture behavior"
 )]
 pub(in crate::local::opencode) struct StateData {
+    pub(in crate::local::opencode) session_pages: Vec<Value>,
+    pub(in crate::local::opencode) session_queries: Vec<Vec<(String, String)>>,
     pub(in crate::local::opencode) pending_plugin_polls: usize,
     pub(in crate::local::opencode) empty_model_catalogs: usize,
     pub(in crate::local::opencode) idle_completion: bool,
@@ -32,8 +34,9 @@ pub(in crate::local::opencode) struct StateData {
     version: Version,
     cwd: PathBuf,
     pub(in crate::local::opencode) permission: Value,
+    pub(in crate::local::opencode) agent: String,
     pub(in crate::local::opencode) permission_updates: usize,
-    model: Value,
+    pub(in crate::local::opencode) model: Value,
     pub(in crate::local::opencode) history: Vec<Value>,
     pub(in crate::local::opencode) submissions: usize,
     pub(in crate::local::opencode) reject_ack: bool,
@@ -78,6 +81,8 @@ impl Fixture {
             std::fs::set_permissions(&binary, std::fs::Permissions::from_mode(0o700)).unwrap();
         }
         let state = Arc::new(Mutex::new(StateData {
+            session_pages: Vec::new(),
+            session_queries: Vec::new(),
             pending_plugin_polls: 0,
             empty_model_catalogs: 0,
             idle_completion: false,
@@ -85,6 +90,7 @@ impl Fixture {
             version,
             cwd: cwd.clone(),
             permission: Value::Null,
+            agent: "build".into(),
             permission_updates: 0,
             model: Value::Null,
             history: Vec::new(),
@@ -120,6 +126,9 @@ impl Fixture {
 async fn handle(State(state): State<Arc<Mutex<StateData>>>, request: Request) -> Response {
     let path = request.uri().path().to_owned();
     let method = request.method().clone();
+    if let Some(response) = session_page(&state, &request) {
+        return response;
+    }
     if matches!(path.as_str(), "/api/model" | "/api/plugin")
         && !valid_location_query(&request, &state.lock().unwrap().cwd)
     {
@@ -207,7 +216,11 @@ async fn handle(State(state): State<Arc<Mutex<StateData>>>, request: Request) ->
         };
         return ([("content-type", "text/event-stream")], body).into_response();
     }
-    let response = match fixture_json(&mut state, method.as_str(), &path, body) {
+    fixture_response(fixture_json(&mut state, method.as_str(), &path, body), v2)
+}
+
+fn fixture_response(result: Result<Value, StatusCode>, v2: bool) -> Response {
+    let response = match result {
         Ok(response) => response,
         Err(status) => return status.into_response(),
     };
@@ -218,10 +231,39 @@ async fn handle(State(state): State<Arc<Mutex<StateData>>>, request: Request) ->
     }
 }
 
+fn session_page(state: &Arc<Mutex<StateData>>, request: &Request) -> Option<Response> {
+    let path = request.uri().path();
+    let method = request.method();
+    if method == "GET" && matches!(path, "/api/session" | "/experimental/session") {
+        let url = reqwest::Url::parse(&format!("http://127.0.0.1{}", request.uri())).unwrap();
+        let mut data = state.lock().unwrap();
+        let page = data.session_queries.len();
+        data.session_queries
+            .push(url.query_pairs().into_owned().collect());
+        if let Some(response) = data.session_pages.get(page) {
+            return Some(Json(response.clone()).into_response());
+        }
+    }
+    None
+}
+
 fn valid_location_query(request: &Request, cwd: &std::path::Path) -> bool {
     let url = reqwest::Url::parse(&format!("http://127.0.0.1{}", request.uri())).unwrap();
     let query = url.query_pairs().collect::<Vec<_>>();
     query.len() == 1 && query[0].0 == "location[directory]" && query[0].1 == cwd.to_string_lossy()
+}
+
+fn patch_permissions(state: &mut StateData, v2: bool, body: &Value) -> Value {
+    state.permission_updates += 1;
+    if v2 {
+        state.permission = body["permissions"].clone();
+    } else {
+        // OpenCode 1.18.33 SessionHttpApi.update uses Permission.merge (flat).
+        let mut rules = state.permission.as_array().cloned().unwrap_or_default();
+        rules.extend(body["permission"].as_array().unwrap().iter().cloned());
+        state.permission = json!(rules);
+    }
+    if v2 { Value::Null } else { session_info(state) }
 }
 
 fn fixture_json(
@@ -258,24 +300,25 @@ fn fixture_json(
                 json!({})
             }
         }
+        ("GET", "/experimental/session" | "/api/session") => {
+            json!([session_info(state)])
+        }
         ("POST", "/session" | "/api/session") => {
-            state.permission = body[if v2 { "permissions" } else { "permission" }].clone();
+            let key = if v2 { "permissions" } else { "permission" };
+            if let Some(permission) = body.get(key) {
+                state.permission = permission.clone();
+            }
+            state.agent = body["agent"].as_str().unwrap_or("build").into();
             state.model = body["model"].clone();
             session_info(state)
         }
         ("PATCH", "/session/ses_one" | "/api/session/ses_one") => {
-            state.permission_updates += 1;
-            if v2 {
-                state.permission = body["permissions"].clone();
-            } else {
-                // OpenCode 1.18.33 SessionHttpApi.update uses Permission.merge (flat).
-                state
-                    .permission
-                    .as_array_mut()
-                    .unwrap()
-                    .extend(body["permission"].as_array().unwrap().iter().cloned());
-            }
-            if v2 { Value::Null } else { session_info(state) }
+            patch_permissions(state, v2, &body)
+        }
+
+        ("POST", "/api/session/ses_one/agent") => {
+            state.agent = body["agent"].as_str().unwrap().into();
+            Value::Null
         }
         ("POST", "/api/session/ses_one/model") => {
             state.model = body["model"].clone();
@@ -333,6 +376,9 @@ fn fixture_json(
 
 fn record_prompt(state: &mut StateData, body: &Value) -> Result<Value, StatusCode> {
     state.submissions += 1;
+    if let Some(agent) = body["agent"].as_str() {
+        state.agent = agent.into();
+    }
     state.busy |= !state.pending_permissions.is_empty();
     let number = state.submissions;
     if state.version == Version::V2 {
@@ -364,10 +410,10 @@ fn record_prompt(state: &mut StateData, body: &Value) -> Result<Value, StatusCod
 
 fn session_info(state: &StateData) -> Value {
     if state.version == Version::V2 {
-        json!({"id":"ses_one","location":{"directory":state.cwd},"model":state.model,
-        "permissions":state.permission,"outcome":if state.history.is_empty() || state.aborted_completion {None} else {Some(if state.early_failure {"failed"} else {"succeeded"})}})
+        json!({"id":"ses_one","title":"Existing session","time":{"created":1,"updated":13},"location":{"directory":state.cwd},"model":state.model,
+        "agent":state.agent,"permissions":state.permission,"outcome":if state.history.is_empty() || state.aborted_completion {None} else {Some(if state.early_failure {"failed"} else {"succeeded"})}})
     } else {
-        json!({"id":"ses_one","directory":state.cwd,"permission":state.permission})
+        json!({"id":"ses_one","title":"Existing session","time":{"created":1,"updated":13},"directory":state.cwd,"permission":state.permission})
     }
 }
 

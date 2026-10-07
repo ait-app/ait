@@ -9,6 +9,7 @@ use domain::agent_runtime::StoredAgentConfig;
 use std::collections::BTreeMap;
 
 mod fixture;
+mod imports;
 mod interactions;
 mod recovery;
 mod session;
@@ -43,6 +44,41 @@ async fn installed_host_discovers_switches_permissions_and_adopts_legacy_session
     let handle = session.persistence().unwrap();
     session.close().await.unwrap();
     assert!(client.history(&handle, &spec.cwd).await.unwrap().is_empty());
+    let listed = client
+        .list_sessions(&crate::ports::native_history::ListOptions {
+            cwd: Some(spec.cwd.clone()),
+            scan_limit: 20,
+        })
+        .await
+        .unwrap();
+    // Cold sessions without cached list metadata can remain visible in DSH 0.1.5.
+    assert!(listed.iter().all(|entry| entry.cwd == spec.cwd));
+    let mut imported_handle = handle.clone();
+    imported_handle.metadata = None;
+    let imported = client
+        .inspect_session(&imported_handle, &spec.cwd)
+        .await
+        .unwrap();
+    assert!(imported.entries.is_empty());
+    assert!(!imported.active);
+    assert_eq!(imported.config.mode_id.as_deref(), Some("read-only"));
+    imported_handle.metadata = Some(imported.resume_metadata);
+    let mut adopted_import = client
+        .resume_session(
+            &imported_handle,
+            &AgentSessionSpec {
+                config: imported.config,
+                ..spec.clone()
+            },
+            AgentResumePurpose::Interactive,
+        )
+        .await
+        .unwrap();
+    assert_eq!(
+        adopted_import.persistence().unwrap().session_id,
+        handle.session_id
+    );
+    adopted_import.close().await.unwrap();
     let mut resumed = client
         .resume_session(&handle, &spec, AgentResumePurpose::Interactive)
         .await

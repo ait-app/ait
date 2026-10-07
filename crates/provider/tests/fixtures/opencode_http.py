@@ -68,11 +68,16 @@ class Handler(BaseHTTPRequestHandler):
                 self.send({"data": [{"providerID": "local", "id": "model", "name": "Local model", "enabled": True, "variants": []}]})
             elif path == "/api/session/active":
                 self.send({"data": {}})
+            elif path == "/api/session" and self.command == "GET":
+                self.send({"data": [state["info"]] if "info" in state else [], "cursor": {"next": None}})
             elif path == "/api/session" and self.command == "POST":
                 state["info"] = dict(body, id="ses_one")
                 self.send({"data": state["info"]})
             elif path == "/api/session/ses_one" and self.command == "PATCH":
                 state["info"]["permissions"] = body["permissions"]
+                self.send(None)
+            elif path == "/api/session/ses_one/agent":
+                state["info"]["agent"] = body["agent"]
                 self.send(None)
             elif path == "/api/session/ses_one/model":
                 state["info"]["model"] = body["model"]

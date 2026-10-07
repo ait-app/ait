@@ -9,6 +9,14 @@ use domain::agent_runtime::AgentPersistenceHandle;
 use serde_json::{Value, json};
 use std::collections::BTreeMap;
 
+/// A fixed journal cut and its native metadata, shared by replay and import.
+pub(super) struct Journal {
+    pub(super) header: Value,
+    pub(super) values: Value,
+    pub(super) entries: Vec<NativeItem>,
+    pub(super) active: bool,
+}
+
 /// Recover display entries for a registered native handle and its exact working directory.
 /// Returns an ordered projection, or an error for invalid handles, transport failures,
 /// incomplete journals, or content that cannot be projected. Never submits input.
@@ -30,20 +38,22 @@ pub(in crate::local::deepseek_harness) async fn read(
         return Err(AgentSessionError::Rejected);
     }
     let mut runtime = Runtime::open(client, cwd).await?;
-    let result = read_owned(&mut runtime, client, handle, cwd).await;
+    let result = read_snapshot(&mut runtime, client, &handle.session_id, cwd).await;
     let closed = runtime.close().await;
     let result = result?;
     closed?;
-    Ok(result)
+    Ok(result.entries)
 }
 
-async fn read_owned(
+/// Read a complete, fixed history cut without activating its native Agent.
+/// Rejects mismatched identities, subagents, and incomplete journals.
+pub(super) async fn read_snapshot(
     runtime: &mut Runtime,
     client: &DeepSeekHarnessClient,
-    handle: &AgentPersistenceHandle,
+    session_id: &str,
     cwd: &str,
-) -> Result<Vec<NativeItem>, AgentSessionError> {
-    let address = json!({"kind":"session","sessionId":handle.session_id});
+) -> Result<Journal, AgentSessionError> {
+    let address = json!({"kind":"session","sessionId":session_id});
     runtime
         .subscribe(
             "history",
@@ -71,7 +81,7 @@ async fn read_owned(
     })
     .await
     .map_err(|_| AgentSessionError::Failed)??;
-    if snapshot["header"]["id"] != handle.session_id
+    if snapshot["header"]["id"] != session_id
         || snapshot["header"]["cwd"] != cwd
         || snapshot["header"]["origin"] == "subagent"
     {
@@ -80,7 +90,19 @@ async fn read_owned(
     let cut = snapshot["cursor"]
         .as_i64()
         .ok_or(AgentSessionError::Failed)?;
+    let header = snapshot["header"].clone();
+    let values = snapshot["projections"]["values"].clone();
     let records = pages(runtime, &address, cut, snapshot).await?;
+    let active = records
+        .iter()
+        .rev()
+        .find(|record| {
+            matches!(
+                record["event"]["type"].as_str(),
+                Some("turn/start" | "turn/end")
+            )
+        })
+        .is_some_and(|record| record["event"]["type"] == "turn/start");
     let mut stream = Stream::new(client.images.clone());
     let mut tools = BTreeMap::new();
     let mut entries: Vec<NativeItem> = Vec::new();
@@ -88,14 +110,13 @@ async fn read_owned(
     for record in records {
         let mut frame = json!({"streamId":"history","value":record});
         if content::has_images(&frame) {
-            frame =
-                content::hydrate(frame, &runtime.api, &handle.session_id, &client.images).await?;
+            frame = content::hydrate(frame, &runtime.api, session_id, &client.images).await?;
         }
         projection::apply(
             &mut stream,
             &mut tools,
             &frame["value"]["event"],
-            &handle.session_id,
+            session_id,
         )?;
         for event in stream.events.drain(..) {
             let (AgentTurnEvent::Timeline(entry) | AgentTurnEvent::Progress { entry, .. }) = event
@@ -110,7 +131,12 @@ async fn read_owned(
             }
         }
     }
-    Ok(entries)
+    Ok(Journal {
+        header,
+        values,
+        entries,
+        active,
+    })
 }
 
 async fn pages(

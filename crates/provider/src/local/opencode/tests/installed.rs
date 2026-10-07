@@ -33,8 +33,47 @@ async fn installed_opencode_discovers_runs_and_restores_with_local_model() {
     }
     let handle = session.persistence().unwrap();
     session.close().await.unwrap();
+    let listed = client
+        .list_sessions(&crate::ports::native_history::ListOptions {
+            cwd: Some(spec.cwd.clone()),
+            scan_limit: 100,
+        })
+        .await
+        .unwrap();
+    assert!(
+        listed
+            .iter()
+            .any(|entry| entry.provider_handle_id == handle.session_id)
+    );
+    let mut imported = domain::agent_runtime::AgentPersistenceHandle {
+        provider: "opencode".into(),
+        session_id: handle.session_id.clone(),
+        native_handle: None,
+        metadata: None,
+    };
+    let inspected = client.inspect_session(&imported, &spec.cwd).await.unwrap();
+    assert_eq!(inspected.entries.len(), 4);
+    imported.metadata = Some(inspected.resume_metadata);
+    let imported_spec = AgentSessionSpec {
+        config: inspected.config,
+        ..spec.clone()
+    };
+    let mut imported_session = client
+        .resume_session(&imported, &imported_spec, AgentResumePurpose::Interactive)
+        .await
+        .unwrap();
+    assert_eq!(
+        imported_session.persistence().unwrap().session_id,
+        handle.session_id
+    );
+    imported_session
+        .start_turn("after import", &imported_spec.config)
+        .await
+        .unwrap();
+    assert_completed(imported_session.as_mut()).await;
+    imported_session.close().await.unwrap();
     let history = client.history(&handle, &spec.cwd).await.unwrap();
-    assert_eq!(history.len(), 4);
+    assert_eq!(history.len(), 6);
     let mut resumed = client
         .resume_session(&handle, &spec, AgentResumePurpose::Interactive)
         .await
@@ -45,7 +84,7 @@ async fn installed_opencode_discovers_runs_and_restores_with_local_model() {
         .unwrap();
     assert_completed(resumed.as_mut()).await;
     resumed.close().await.unwrap();
-    assert_eq!(client.history(&handle, &spec.cwd).await.unwrap().len(), 6);
+    assert_eq!(client.history(&handle, &spec.cwd).await.unwrap().len(), 8);
 }
 
 fn isolated_binary(root: &Path, binary: &str) -> std::path::PathBuf {
@@ -117,6 +156,7 @@ async fn installed_fixture(
         "settings":{"baseURL":format!("http://{address}/v1"),"apiKey":"local-only"},
         "models":{"test-model":{"name":"Test","limit":{"context":32000,"output":2000}}}
     }}});
+    config["permissions"] = json!([{ "action":"shell", "resource":"*", "effect":"ask" }]);
     config["providers"]["second"] = config["providers"]["local"].clone();
     std::fs::write(cwd.join("opencode.json"), config.to_string()).unwrap();
     // Exercise the actual cold-start catalog, rather than warming it with a separate probe.
@@ -196,4 +236,97 @@ async fn tool_answer(Json(body): Json<Value>) -> ([(&'static str, &'static str);
         [("content-type", "text/event-stream")],
         format!("data: {delta}\n\ndata: {finish}\n\ndata: [DONE]\n\n"),
     )
+}
+
+#[tokio::test]
+#[ignore = "requires AIT_TEST_OPENCODE_BIN; isolated config and loopback model only"]
+async fn installed_opencode_plan_import_and_switch_use_native_agent() {
+    let (_root, client, mut spec, _server) =
+        installed_fixture(Router::new().route("/v1/chat/completions", post(answer))).await;
+    spec.config.mode_id = Some("plan".into());
+    let mut session = client.create_session(&spec).await.unwrap();
+    session.start_turn("plan only", &spec.config).await.unwrap();
+    assert_completed(session.as_mut()).await;
+    let handle = session.persistence().unwrap();
+    let external = domain::agent_runtime::AgentPersistenceHandle {
+        provider: "opencode".into(),
+        session_id: handle.session_id.clone(),
+        native_handle: None,
+        metadata: None,
+    };
+    let history = client.inspect_session(&external, &spec.cwd).await.unwrap();
+    assert_eq!(history.config.mode_id.as_deref(), Some("plan"));
+    spec.config.mode_id = Some("build".into());
+    session.start_turn("build now", &spec.config).await.unwrap();
+    assert_completed(session.as_mut()).await;
+    let history = client.inspect_session(&external, &spec.cwd).await.unwrap();
+    assert_eq!(history.config.mode_id.as_deref(), Some("build"));
+    session.close().await.unwrap();
+}
+
+#[tokio::test]
+#[ignore = "requires AIT_TEST_OPENCODE_BIN; isolated config and loopback model only"]
+async fn installed_opencode_saves_only_explicit_native_permission_rules() {
+    let (_root, client, spec, _server) =
+        installed_fixture(Router::new().route("/v1/chat/completions", post(saved_tool_answer)))
+            .await;
+    let mut session = client.create_session(&spec).await.unwrap();
+    session
+        .start_turn("request a tool", &spec.config)
+        .await
+        .unwrap();
+    tokio::time::timeout(Duration::from_secs(20), async {
+        let mut allowed = false;
+        loop {
+            match session.poll_turn().unwrap() {
+                Some(AgentTurnEvent::PermissionRequested(request)) => {
+                    assert!(!allowed, "one tool request must not ask twice");
+                    assert!(
+                        request["actions"]
+                            .as_array()
+                            .unwrap()
+                            .iter()
+                            .any(|action| action["id"] == "always"),
+                        "{request}"
+                    );
+                    assert!(
+                        !request["input"]["saveResources"]
+                            .as_array()
+                            .unwrap()
+                            .is_empty()
+                    );
+                    session
+                        .respond_permission(
+                            request["id"].as_str().unwrap(),
+                            &json!({"behavior":"allow","selectedActionId":"always"}),
+                        )
+                        .await
+                        .unwrap();
+                    allowed = true;
+                }
+                Some(AgentTurnEvent::Completed(_)) => {
+                    assert!(allowed);
+                    break;
+                }
+                Some(AgentTurnEvent::Failed | AgentTurnEvent::Cancelled) => panic!("turn failed"),
+                _ => tokio::time::sleep(Duration::from_millis(10)).await,
+            }
+        }
+    })
+    .await
+    .unwrap();
+    session.close().await.unwrap();
+}
+
+async fn saved_tool_answer(Json(body): Json<Value>) -> ([(&'static str, &'static str); 1], String) {
+    if body["messages"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .any(|message| message["role"] == "tool")
+    {
+        answer().await
+    } else {
+        tool_answer(Json(body)).await
+    }
 }
