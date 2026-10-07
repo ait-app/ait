@@ -19,5 +19,6 @@ export type DroppedItem = DroppedFileItem | DroppedPathItem;
 export interface FileDropSink {
   onFiles: (images: ImageAttachment[]) => void;
   onGenericFiles?: (items: DroppedItem[]) => void;
+  onDirectoryPaths?: (paths: string[]) => void;
   onWorkspaceFile?: (payload: WorkspaceFileDragPayload) => void;
 }

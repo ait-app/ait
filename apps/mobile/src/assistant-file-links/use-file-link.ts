@@ -1,3 +1,4 @@
+import { getDesktopHost } from "@/desktop/host";
 import { useCallback, useMemo } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useTranslation } from "react-i18next";
@@ -296,6 +297,22 @@ async function dispatchFileTarget(input: {
     current.workspaceRoot !== input.capturedWorkspaceRoot
   ) {
     return;
+  }
+  const openDirectory = getDesktopHost()?.opener?.openDirectory;
+  if (current.isLocalExecution && current.workspaceRoot && openDirectory) {
+    try {
+      if (await openDirectory({ path: input.target.path, cwd: current.workspaceRoot })) return;
+    } catch (error) {
+      current.toast?.show(error instanceof Error ? error.message : String(error), {
+        variant: "error",
+      });
+      return;
+    }
+    if (
+      input.context.configRef.current.serverId !== input.capturedServerId ||
+      input.context.configRef.current.workspaceRoot !== input.capturedWorkspaceRoot
+    )
+      return;
   }
   current.onOpenWorkspaceFile?.(input.target, input.disposition);
 }

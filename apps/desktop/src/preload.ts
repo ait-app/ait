@@ -92,6 +92,9 @@ contextBridge.exposeInMainWorld("paseoDesktop", {
       ipcRenderer.invoke("paseo:notification:send", payload),
   },
   opener: {
+    openDirectory: (input: { path: string; cwd: string }) =>
+      ipcRenderer.invoke("paseo:opener:openDirectory", input),
+    openFile: (path: string) => ipcRenderer.invoke("paseo:opener:openFile", path),
     openUrl: (url: string) => ipcRenderer.invoke("paseo:opener:openUrl", url),
   },
   editor: {

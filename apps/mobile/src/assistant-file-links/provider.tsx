@@ -8,6 +8,7 @@ import {
   type ReactNode,
 } from "react";
 import React from "react";
+import { useIsLocalDaemon } from "@/hooks/use-is-local-daemon";
 import type { ToastApi } from "@/components/toast-host";
 import type { OpenFileDisposition } from "@/workspace/file-open";
 import type { InlinePathTarget } from "./parse";
@@ -19,6 +20,7 @@ export interface AssistantFileLinkDaemonClient {
 
 export interface AssistantFileLinkResolverConfig {
   client?: AssistantFileLinkDaemonClient | null;
+  isLocalExecution?: boolean;
   serverId?: string;
   workspaceRoot?: string;
   onOpenWorkspaceFile?: (target: InlinePathTarget, disposition: OpenFileDisposition) => void;
@@ -45,6 +47,7 @@ export function AssistantFileLinkResolverProvider({
   toast,
   children,
 }: AssistantFileLinkResolverProviderProps) {
+  const isLocalExecution = useIsLocalDaemon(serverId ?? "");
   const configRef = useRef<AssistantFileLinkResolverConfig>({
     client,
     serverId,
@@ -52,7 +55,14 @@ export function AssistantFileLinkResolverProvider({
     onOpenWorkspaceFile,
     toast,
   });
-  configRef.current = { client, serverId, workspaceRoot, onOpenWorkspaceFile, toast };
+  configRef.current = {
+    client,
+    serverId,
+    workspaceRoot,
+    onOpenWorkspaceFile,
+    toast,
+    isLocalExecution,
+  };
 
   const getDirectorySuggestions = useCallback<GetDirectorySuggestions>(async (input) => {
     const activeClient = configRef.current.client;
