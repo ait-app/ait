@@ -31,6 +31,25 @@ pub(in crate::local::deepseek_harness) fn validate(
     Ok(())
 }
 
+/// Resolve current permissions and the native catalog across DSH protocol versions.
+/// Older Hosts embed options in the projection; newer Hosts expose a separate catalog.
+/// Returns transport/schema errors rather than substituting permissions the Host did not advertise.
+pub(super) async fn permission_selection(
+    api: &Api,
+    projection: &Value,
+) -> Result<Value, AgentSessionError> {
+    text(projection, "currentValue")?;
+    let mut permissions = projection.clone();
+    if permissions.get("options").is_none() {
+        let catalog = api.call("permissionPresets/catalog", json!({})).await?;
+        permissions["options"] = catalog["options"].clone();
+    }
+    if !permissions["options"].is_array() {
+        return Err(AgentSessionError::Failed);
+    }
+    Ok(permissions)
+}
+
 #[derive(Debug)]
 pub(super) struct Selection {
     pub(super) catalog: Value,

@@ -44,6 +44,14 @@ async fn external_import_reads_full_history_without_writes_then_restores_the_nat
         .unwrap();
     assert_eq!(entries[0].provider_handle_id, "session");
     assert_eq!(
+        entries[0].first_prompt_preview.as_deref(),
+        Some("External question")
+    );
+    assert_eq!(
+        entries[0].last_prompt_preview.as_deref(),
+        Some("External question")
+    );
+    assert_eq!(
         fixture.requests("session/list"),
         vec![json!({"_request":{}})]
     );
@@ -289,6 +297,30 @@ async fn application_rejects_importing_an_unfinished_native_turn() {
             .await
             .unwrap_err(),
         model::ErrorCode::CatalogBusy
+    );
+    assert!(fixture.requests("session/create").is_empty());
+}
+
+#[tokio::test]
+async fn missing_preview_history_does_not_hide_discovered_sessions() {
+    let fixture = Fixture::new().await;
+    fixture.set_sessions(json!([
+        {"sessionId":"missing","cwd":fixture.spec.cwd,"updatedAt":2},
+        {"sessionId":"session","cwd":fixture.spec.cwd,"updatedAt":1,"projections":{"values":{"turnOutline":[{"prompt":"cached question"}]}}}
+    ]));
+    let entries = fixture
+        .client
+        .list_sessions(&ListOptions {
+            cwd: None,
+            scan_limit: 20,
+        })
+        .await
+        .unwrap();
+    assert_eq!(entries.len(), 2);
+    assert!(entries[0].first_prompt_preview.is_none());
+    assert_eq!(
+        entries[1].first_prompt_preview.as_deref(),
+        Some("cached question")
     );
     assert!(fixture.requests("session/create").is_empty());
 }

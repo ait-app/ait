@@ -104,6 +104,10 @@ impl ClaudeClient {
 }
 
 impl AgentClient for ClaudeClient {
+    fn supports_metadata_generation(&self) -> bool {
+        true
+    }
+
     fn supports_session_import(&self) -> bool {
         true
     }
@@ -127,6 +131,13 @@ impl AgentClient for ClaudeClient {
             client.config_dir = Some(PathBuf::from(home).join(".claude"));
         }
         Box::pin(async move { session::open(&client, spec, None).await })
+    }
+
+    fn metadata_model(
+        &self,
+        models: &[Value],
+    ) -> Option<::metadata::ports::generation::MetadataSelection> {
+        super::metadata_model::select(self.provider(), models, &["haiku"])
     }
 
     fn generate_metadata<'a>(

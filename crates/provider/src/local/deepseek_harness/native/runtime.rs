@@ -5,7 +5,7 @@ use std::{process::Stdio, time::Duration};
 use tokio::{
     io::{AsyncBufReadExt, AsyncReadExt, BufReader},
     net::TcpStream,
-    process::{Child, Command},
+    process::Child,
     sync::mpsc,
     task::JoinHandle,
 };
@@ -37,7 +37,7 @@ impl Runtime {
         client: &DeepSeekHarnessClient,
         cwd: &str,
     ) -> Result<Self, AgentSessionError> {
-        let mut command = Command::new(&client.program);
+        let mut command = client.command();
         command
             .args([
                 "--profile",
@@ -49,7 +49,6 @@ impl Runtime {
                 "0",
             ])
             .current_dir(cwd)
-            .envs(client.environment.entries())
             .stdin(Stdio::null())
             .stdout(Stdio::piped())
             .stderr(Stdio::null())
@@ -173,6 +172,16 @@ impl Runtime {
                 json!({"type":"open","streamId":id,"endpoint":endpoint,"payload":{"args":args}})
                     .to_string()
                     .into(),
+            ))
+            .await
+            .map_err(|_| AgentSessionError::Failed)
+    }
+
+    /// Release one read-only native stream; returns an error if its socket is closed.
+    pub(super) async fn unsubscribe(&mut self, id: &str) -> Result<(), AgentSessionError> {
+        self.writer
+            .send(Message::Text(
+                json!({"type":"cancel","streamId":id}).to_string().into(),
             ))
             .await
             .map_err(|_| AgentSessionError::Failed)

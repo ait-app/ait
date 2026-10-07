@@ -1,6 +1,8 @@
 //! `DeepSeek` Harness native interactive Host, with explicit legacy ACP compatibility.
 
 mod config;
+mod launcher;
+mod metadata;
 mod native;
 mod permissions;
 mod session;
@@ -27,6 +29,7 @@ pub const PROVIDER: &str = "deepseek-harness";
 #[derive(Debug, Clone)]
 pub struct DeepSeekHarnessClient {
     program: PathBuf,
+    desktop: Option<launcher::Desktop>,
     interactive: bool,
     deadline: Duration,
     environment: AgentEnvironment,
@@ -40,6 +43,7 @@ impl DeepSeekHarnessClient {
     pub fn new(program: PathBuf) -> Self {
         Self {
             program,
+            desktop: None,
             interactive: true,
             deadline: Duration::from_secs(30),
             environment: AgentEnvironment::default(),
@@ -81,6 +85,40 @@ impl DeepSeekHarnessClient {
 }
 
 impl AgentClient for DeepSeekHarnessClient {
+    fn supports_metadata_generation(&self) -> bool {
+        true
+    }
+
+    fn metadata_model(
+        &self,
+        models: &[Value],
+    ) -> Option<::metadata::ports::generation::MetadataSelection> {
+        let mut selection = super::metadata_model::select(
+            self.provider(),
+            models,
+            &["deepseek-flash", "haiku", "mini", "flash"],
+        )?;
+        // The headless profile only exposes a reasoning override for the official
+        // DeepSeek adapter. Other adapters retain their native defaults.
+        let model: Vec<String> = serde_json::from_str(selection.model.as_deref()?).ok()?;
+        if model
+            .first()
+            .is_none_or(|provider| provider != "deepseek-official")
+        {
+            selection.thinking_option_id = None;
+        }
+        Some(selection)
+    }
+
+    fn generate_metadata<'a>(
+        &'a self,
+        spec: &'a AgentSessionSpec,
+        prompt: &'a str,
+        schema: &'a Value,
+    ) -> AgentSessionFuture<'a, String> {
+        Box::pin(self.metadata(spec, prompt, schema))
+    }
+
     fn supports_session_import(&self) -> bool {
         self.interactive
     }
@@ -143,7 +181,13 @@ impl AgentClient for DeepSeekHarnessClient {
     }
 
     fn is_available(&self) -> AgentSessionFuture<'_, bool> {
-        Box::pin(async { Ok(super::configuration::executable(&self.program)) })
+        Box::pin(async {
+            Ok(super::configuration::executable(&self.program)
+                && self
+                    .desktop
+                    .as_ref()
+                    .is_none_or(|desktop| desktop.entrypoint.is_file()))
+        })
     }
 
     fn diagnostic(&self) -> AgentSessionFuture<'_, String> {
@@ -169,6 +213,9 @@ impl AgentClient for DeepSeekHarnessClient {
 
     fn discover<'a>(&'a self, cwd: &'a str) -> AgentSessionFuture<'a, Details> {
         Box::pin(async move {
+            if self.interactive {
+                return native::discover(self, cwd).await;
+            }
             self.probe(&AgentSessionSpec {
                 provider: PROVIDER.to_owned(),
                 cwd: cwd.to_owned(),

@@ -330,3 +330,35 @@ async fn saved_tool_answer(Json(body): Json<Value>) -> ([(&'static str, &'static
         tool_answer(Json(body)).await
     }
 }
+
+#[tokio::test]
+#[ignore = "requires AIT_TEST_OPENCODE_BIN; private loopback model, no credentials"]
+async fn installed_opencode_metadata_disables_tools_and_removes_private_history() {
+    async fn metadata_answer(
+        Json(request): Json<Value>,
+    ) -> ([(&'static str, &'static str); 1], String) {
+        assert!(
+            request["tools"].as_array().is_none_or(Vec::is_empty),
+            "metadata must not advertise tools"
+        );
+        answer().await
+    }
+    let (_root, client, spec, _server) =
+        installed_fixture(Router::new().route("/v1/chat/completions", post(metadata_answer))).await;
+    let result = tokio::time::timeout(
+        Duration::from_secs(40),
+        client.generate_metadata(&spec, "Generate a title", &json!({"type":"object"})),
+    )
+    .await
+    .unwrap()
+    .unwrap();
+    assert_eq!(result, "Local deterministic answer.");
+    let listed = client
+        .list_sessions(&crate::ports::native_history::ListOptions {
+            cwd: Some(spec.cwd),
+            scan_limit: 100,
+        })
+        .await
+        .unwrap();
+    assert!(listed.is_empty());
+}

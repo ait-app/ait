@@ -75,15 +75,17 @@ pub(super) fn apply(
             stream.update(&json!({"sessionUpdate":"tool_call","toolCallId":id,"title":data["name"],"status":"in_progress","rawInput":input}))?;
         }
         Some("tool/result") => {
-            for block in data["message"]["content"]
+            let message = &data["message"];
+            let content = message["content"]
                 .as_array()
-                .ok_or(AgentSessionError::Failed)?
-            {
-                let id = text(block, "toolCallId")?;
-                if !tools.contains_key(id) {
-                    return Err(AgentSessionError::Failed);
+                .ok_or(AgentSessionError::Failed)?;
+            if message.get("toolCallId").is_some() {
+                tool_result(stream, tools, message)?;
+            } else {
+                // Older Hosts wrapped each result in a content block.
+                for block in content {
+                    tool_result(stream, tools, block)?;
                 }
-                stream.update(&json!({"sessionUpdate":"tool_call_update","toolCallId":id,"status":if block["isError"]==true{"failed"}else{"completed"},"rawOutput":block["content"]}))?;
             }
         }
         _ => {}
@@ -122,6 +124,20 @@ pub(super) fn apply(
         entry.timestamp = timestamp(time)?;
     }
     Ok(())
+}
+
+fn tool_result(
+    stream: &mut Stream,
+    tools: &BTreeMap<String, Value>,
+    result: &Value,
+) -> Result<(), AgentSessionError> {
+    let id = text(result, "toolCallId")?;
+    if !tools.contains_key(id) {
+        return Err(AgentSessionError::Failed);
+    }
+    stream.update(&json!({"sessionUpdate":"tool_call_update","toolCallId":id,
+        "status":if result["isError"]==true{"failed"}else{"completed"},
+        "rawOutput":result["content"]}))
 }
 
 fn timestamp(time: &Value) -> Result<String, AgentSessionError> {
@@ -164,3 +180,6 @@ fn user(event: &Value, session: &str) -> Result<NativeItem, AgentSessionError> {
         item,
     })
 }
+
+#[cfg(test)]
+mod tests;

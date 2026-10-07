@@ -147,6 +147,7 @@ async fn stream(socket: WebSocket, host: Host) {
             received=reader.next()=> {
                 let Some(Ok(Message::Text(text)))=received else { break; };
                 let request:Value=serde_json::from_str(&text).unwrap();
+                if request["type"] == "cancel" { continue; }
                 let value=match request["endpoint"].as_str() {
                     Some("$events")=>json!({"type":"ready","clientId":"client"}),
                     Some("session/follow")=>snapshot(&host),
@@ -172,6 +173,9 @@ async fn rpc(State(host): State<Host>, headers: HeaderMap, Json(request): Json<V
     }
     host.requests.lock().unwrap().push(request.clone());
     let value = match request["method"].as_str() {
+        Some("permissionPresets/catalog") => {
+            json!({"options":[{"value":"read-only","name":"Read only"},{"value":"workspace-write","name":"Workspace write"},{"value":"custom-policy","name":"Custom policy"}]})
+        }
         Some("session/list") => json!({"items":*host.sessions.lock().unwrap()}),
         Some("session/modelCatalog") => {
             json!({"default":{"provider":"local","model":"test"},"groups":[{"id":"local","name":"Local","models":[{"id":"test","name":"Test","reasoning":{"defaultEffort":"low","efforts":[{"id":"low","name":"Low"},{"id":"high","name":"High"}]}}]}]})

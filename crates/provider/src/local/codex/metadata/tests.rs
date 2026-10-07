@@ -35,10 +35,34 @@ async fn auxiliary_codex_request_is_ephemeral_tool_restricted_and_schema_constra
             .get("model_reasoning_effort")
             .is_none()
     );
-    for feature in ["apps", "plugins", "hooks", "goals", "memories"] {
+    for feature in [
+        "apps",
+        "plugins",
+        "hooks",
+        "goals",
+        "memories",
+        "code_mode",
+        "code_mode_host",
+        "code_mode_only",
+        "view_image",
+        "image_generation",
+        "sleep_tool",
+        "skill_search",
+        "tool_suggest",
+        "default_mode_request_user_input",
+        "request_permissions_tool",
+    ] {
         assert_eq!(start["params"]["config"]["features"][feature], false);
     }
     assert_eq!(start["params"]["config"]["notify"], json!([]));
+    assert_eq!(
+        start["params"]["config"]["tools"]["experimental_request_user_input"]["enabled"],
+        false
+    );
+    assert_eq!(
+        start["params"]["config"]["tools"]["update_plan"]["enabled"],
+        false
+    );
     let turn = requests
         .iter()
         .find(|request| request["method"] == "turn/start")
@@ -72,4 +96,33 @@ async fn auxiliary_codex_protocol_errors_fail_without_foreground_sessions() {
             .await
             .is_err()
     );
+}
+
+#[tokio::test]
+async fn auxiliary_codex_rejects_unexpected_native_tool_execution() {
+    for kind in [
+        "commandExecution",
+        "imageView",
+        "dynamicToolCall",
+        "futureTool",
+    ] {
+        let fixture = Fixture::new();
+        std::fs::write(
+            fixture.cwd.join("metadata-response.json"),
+            r#"{"title":"ignore tool result"}"#,
+        )
+        .unwrap();
+        std::fs::write(
+            fixture.cwd.join("metadata-tool.json"),
+            json!({"type":kind,"id":"tool"}).to_string(),
+        )
+        .unwrap();
+        assert_eq!(
+            fixture
+                .client()
+                .generate_metadata(&fixture.spec(), "source", &json!({}))
+                .await,
+            Err(AgentSessionError::Rejected)
+        );
+    }
 }

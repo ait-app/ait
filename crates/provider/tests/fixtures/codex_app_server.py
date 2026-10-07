@@ -207,6 +207,9 @@ for line in sys.stdin:
         complete(pending, "Goal completed")
     if method == "turn/start" and ephemeral and (root / "metadata-response.json").exists():
         response = (root / "metadata-response.json").read_text()
+        if (root / "metadata-tool.json").exists():
+            emit({"method":"item/started","params":{"threadId":thread_id,"turnId":pending,
+                "item":json.loads((root / "metadata-tool.json").read_text())}})
         emit({"method":"item/completed","params":{"threadId":thread_id,"turnId":pending,
             "item":{"type":"agentMessage","id":"metadata-output","text":response}}})
         emit({"method":"turn/completed","params":{"threadId":thread_id,"turn":{"id":pending,"status":"completed"}}})
