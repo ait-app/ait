@@ -71,7 +71,7 @@ function resolvePreferredModelId(
   normalizedConfiguredModelId: string | null,
   normalizedRuntimeModelId: string | null,
 ): string | null {
-  return runtimeSelectedModel?.id ?? normalizedConfiguredModelId ?? normalizedRuntimeModelId;
+  return normalizedConfiguredModelId ?? runtimeSelectedModel?.id ?? normalizedRuntimeModelId;
 }
 
 function pickSelectedModel(
@@ -82,7 +82,7 @@ function pickSelectedModel(
   if (!models || !preferredModelId) {
     return fallbackModel;
   }
-  return findModelById(models, preferredModelId) ?? fallbackModel;
+  return findModelById(models, preferredModelId);
 }
 
 function resolveThinkingId(

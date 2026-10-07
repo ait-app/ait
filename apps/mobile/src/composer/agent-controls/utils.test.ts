@@ -75,7 +75,7 @@ describe("resolveAgentModelSelection", () => {
     expect(selection.selectedThinkingId).toBe("high");
   });
 
-  it("prefers runtime model over configured model", () => {
+  it("shows the newly configured model while the previous turn still reports its model", () => {
     const selection = resolveAgentModelSelection({
       models: [
         {
@@ -85,15 +85,22 @@ describe("resolveAgentModelSelection", () => {
           thinkingOptions: [{ id: "low", label: "Low" }],
           defaultThinkingOptionId: "low",
         },
+        {
+          id: "b",
+          provider: "codex",
+          label: "Model B",
+          thinkingOptions: [{ id: "high", label: "High" }],
+          defaultThinkingOptionId: "high",
+        },
       ],
       runtimeModelId: "a",
       configuredModelId: "b",
       explicitThinkingOptionId: null,
     });
 
-    expect(selection.activeModelId).toBe("a");
-    expect(selection.displayModel).toBe("Model A");
-    expect(selection.selectedThinkingId).toBe("low");
+    expect(selection.activeModelId).toBe("b");
+    expect(selection.displayModel).toBe("Model B");
+    expect(selection.selectedThinkingId).toBe("high");
   });
 
   it("uses explicit thinking option when provided", () => {
