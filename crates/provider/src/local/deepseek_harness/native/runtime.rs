@@ -178,6 +178,16 @@ impl Runtime {
             .map_err(|_| AgentSessionError::Failed)
     }
 
+    /// Release one read-only native stream; returns an error if its socket is closed.
+    pub(super) async fn unsubscribe(&mut self, id: &str) -> Result<(), AgentSessionError> {
+        self.writer
+            .send(Message::Text(
+                json!({"type":"cancel","streamId":id}).to_string().into(),
+            ))
+            .await
+            .map_err(|_| AgentSessionError::Failed)
+    }
+
     /// Receive a bounded frame during initialization; timeout prevents stalled native controls.
     pub(super) async fn next(&mut self) -> Result<Value, AgentSessionError> {
         tokio::time::timeout(Duration::from_secs(30), self.events.recv())

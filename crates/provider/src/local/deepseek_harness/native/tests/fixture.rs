@@ -147,6 +147,7 @@ async fn stream(socket: WebSocket, host: Host) {
             received=reader.next()=> {
                 let Some(Ok(Message::Text(text)))=received else { break; };
                 let request:Value=serde_json::from_str(&text).unwrap();
+                if request["type"] == "cancel" { continue; }
                 let value=match request["endpoint"].as_str() {
                     Some("$events")=>json!({"type":"ready","clientId":"client"}),
                     Some("session/follow")=>snapshot(&host),

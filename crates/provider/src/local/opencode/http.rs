@@ -57,6 +57,14 @@ pub(super) struct Api {
 }
 
 impl Api {
+    /// Reuse the authenticated loopback connection for another discovered session directory.
+    pub(super) fn for_directory(&self, cwd: &str) -> Self {
+        Self {
+            cwd: cwd.to_owned(),
+            ..self.clone()
+        }
+    }
+
     pub(super) fn new(
         version: Version,
         base: Url,

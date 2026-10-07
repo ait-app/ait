@@ -1,6 +1,7 @@
 //! Discover and inspect provider-owned sessions without submitting input.
 use std::{collections::HashSet, time::Duration};
 
+use futures_util::{StreamExt, stream};
 use reqwest::{Method, Url};
 
 use super::{
@@ -26,9 +27,13 @@ impl OpenCodeClient {
             runtime::Runtime::spawn(&self.driver.binary, &cwd, &CancellationToken::new())
                 .await
                 .map_err(error)?;
-        let result = tokio::time::timeout(Duration::from_secs(30), list(&runtime.api, options))
-            .await
-            .unwrap_or(Err(AgentSessionError::Failed));
+        let result = tokio::time::timeout(Duration::from_secs(30), async {
+            let mut sessions = list(&runtime.api, options).await?;
+            previews(&runtime.api, &mut sessions).await;
+            Ok(sessions)
+        })
+        .await
+        .unwrap_or(Err(AgentSessionError::Failed));
         let _ = runtime.close().await;
         result
     }
@@ -110,6 +115,61 @@ async fn list(
         if !cursors.insert(cursor.clone()) {
             return Err(AgentSessionError::Failed);
         }
+    }
+}
+
+async fn previews(api: &Api, sessions: &mut [SessionDescriptor]) {
+    let deadline = tokio::time::Instant::now() + Duration::from_secs(10);
+    let inputs: Vec<_> = sessions
+        .iter()
+        .enumerate()
+        .map(|(index, session)| {
+            (
+                index,
+                session.provider_handle_id.clone(),
+                api.for_directory(&session.cwd),
+            )
+        })
+        .collect();
+    let mut reads = stream::iter(inputs)
+        .map(|(index, id, api)| async move {
+            let result = tokio::time::timeout(Duration::from_secs(2), api.history(&id)).await;
+            (index, api.version, result)
+        })
+        .buffer_unordered(4);
+    while let Ok(Some((index, version, result))) =
+        tokio::time::timeout_at(deadline, reads.next()).await
+    {
+        let Ok(Ok(messages)) = result else {
+            continue;
+        };
+        let mut prompts = messages
+            .iter()
+            .filter_map(|message| prompt(version, message));
+        let session = &mut sessions[index];
+        session.first_prompt_preview = prompts.next();
+        session.last_prompt_preview = prompts
+            .next_back()
+            .or_else(|| session.first_prompt_preview.clone());
+    }
+}
+
+fn prompt(version: Version, message: &Value) -> Option<String> {
+    use crate::local::session_preview;
+    match version {
+        Version::V1 if message["info"]["role"] == "user" => session_preview::text(
+            message["parts"]
+                .as_array()?
+                .iter()
+                .filter(|part| {
+                    part["type"] == "text" && part["synthetic"] != true && part["ignored"] != true
+                })
+                .filter_map(|part| part["text"].as_str()),
+        ),
+        Version::V2 if message["type"] == "user" => {
+            session_preview::text(message["text"].as_str().into_iter())
+        }
+        Version::V1 | Version::V2 => None,
     }
 }
 

@@ -66,6 +66,8 @@
 
 ## 工程规范与验证
 
+- [原生会话预览验证](reports/providers/native-session-previews.md)：OpenCode / DSH 的首尾 prompt、只读查询及降级行为。
+
 - [Rust style guide](policy/rust.md)：Rust 代码、测试、lint 与覆盖率规范。
 - [Daemon 测试扩展与覆盖率验证](reports/daemon/crate-coverage-rebase.md)：最新 rebase 验证、逐 crate 证据与历史测量索引。
 - [文档规范](policy/documentation.md)：分类、维护和历史资料清理规则。

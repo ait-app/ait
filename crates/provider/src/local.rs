@@ -11,3 +11,5 @@ mod notes;
 pub mod opencode;
 mod tool_detail;
 mod usage;
+
+mod session_preview;

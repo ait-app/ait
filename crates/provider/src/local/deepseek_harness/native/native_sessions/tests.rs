@@ -59,3 +59,20 @@ fn malformed_list_records_and_identifiers_fail_without_fabricated_metadata() {
     }
     assert!(timestamp(i64::MAX).is_err());
 }
+
+#[test]
+fn list_uses_native_turn_outline_without_assistant_previews() {
+    let entries = descriptors(&json!({"items":[{"sessionId":"id","cwd":"/tmp","updatedAt":0,"projections":{"values":{"title":"Native", "turnOutline":[
+        {"prompt":"  first\nquestion ","response":"not the prompt"},
+        {"prompt":" ","response":"assistant only"},
+        {"prompt":"last question","response":"answer"}
+    ]}}}]}), &ListOptions{cwd:None,scan_limit:20}).unwrap();
+    assert_eq!(
+        entries[0].first_prompt_preview.as_deref(),
+        Some("first question")
+    );
+    assert_eq!(
+        entries[0].last_prompt_preview.as_deref(),
+        Some("last question")
+    );
+}
