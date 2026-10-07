@@ -46,6 +46,18 @@
         "gradleCommand": ":app:assembleRelease -x lint -x lintVitalAnalyzeRelease -x lintVitalRelease -x generateReleaseLintModel -x generateReleaseLintVitalModel"
       }
     },
+    "production-play": {
+      "extends": "ait",
+      "distribution": "store",
+      "autoIncrement": true,
+      "android": {
+        "resourceClass": "medium",
+        "env": {
+          "AIT_ANDROID_HERMES_O0": "1"
+        },
+        "buildType": "app-bundle"
+      }
+    },
     "simulator": {
       "extends": "production",
       "distribution": "internal",
@@ -59,6 +71,19 @@
     }
   },
   "submit": {
+    "play-internal": {
+      "android": {
+        "applicationId": "dev.ait.mobile",
+        "track": "internal",
+        "releaseStatus": "completed"
+      }
+    },
+    "play-internal-draft": {
+      "extends": "play-internal",
+      "android": {
+        "releaseStatus": "draft"
+      }
+    },
     "ait": {
       "android": {
         "track": "internal",

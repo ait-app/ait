@@ -190,133 +190,17 @@ AIT_DESKTOP_SMOKE=1 npm run package:mac
 
 ## Google Play Android Internal Testing
 
-`apps/mobile` 的 Android 构建通过 EAS Build/Submit 发布到 Google Play 的 **Internal testing**
-渠道，用于真机验证，与上文桌面 GitHub Release 完全独立，不经过 `.github/workflows/release.yml`。
-本节只覆盖 Internal testing；正式商店发布不在本节范围内，流程和门禁仍需另行确认。
+Android Play 内部测试使用独立手动工作流
+[Release Android to Google Play](../../.github/workflows/release-android-play.yml)，
+支持只构建 AAB、上传内部测试草稿或发布给内部测试者。它使用 EAS 托管上传签名，
+在 Play runner 中启用远端递增 `versionCode`，并在提交前验证构建来源及 AAB。
 
-### 前提条件
-
-在第一次运行任何命令前，需要先在 Google Play Console 确认或完成：
-
-- 一个可用的 Google Play 开发者账号，并已创建对应 app，package name 为 `dev.ait.mobile`
-  （见 `apps/mobile/app.config.js` 的 `production` variant；`development` variant 用的是
-  `dev.ait.mobile.debug`，不用于 Play 发布）。仓库里不记录这个 app 是否已经在 Play Console
-  创建，执行前需要自己去 Play Console 确认。
-- app 的签名方式。首次创建 app 时 Play Console 会要求选择 **Choose signing key**，官方推荐
-  **Google-generated key**（即 Play App Signing），这样即使本地 upload key 丢失也能继续发布。
-- 一个 Google Service Account JSON key，并已经上传到 EAS 的项目 credentials 里。这是
-  `eas submit --platform android` 鉴权用的凭据，创建步骤见
-  [Creating a Google Service Account key](https://expo.fyi/creating-google-service-account)，
-  上传步骤见 [Submit to the Google Play Store with EAS Submit](https://docs.expo.dev/submit/android/)
-  的 "Create a Google Service Account key" 一节。JSON key 文件本身绝不能提交到仓库；
-  上传后凭据保存在 Expo 服务器端，本地不需要长期保留这份文件。
-- Internal testing 渠道的测试者名单（Play Console → Testing → Internal testing → Testers），
-  参考 [Set up an open, closed, or internal test](https://support.google.com/googleplay/android-developer/answer/9845334)。
-  没有测试者名单时构建仍能上传，但测试者收不到安装链接。
-
-仓库侧不持有、也不应该持有上述任何账号凭据、service account key 或测试者名单；它们都在
-Google Play Console 和 EAS 的账号系统里维护。
-
-### app 身份与版本号
-
-- Android package：`dev.ait.mobile`（`apps/mobile/app.config.js` 的 `variants.production.packageId`）。
-- 版本号来自根 `package.json`/`apps/mobile/package.json` 的 `version` 字段，由
-  `apps/mobile/native-release-version.js` 的 `getNativeReleaseVersion()` 派生：`appVersion` 原样用作
-  Android `versionName`，`androidVersionCode` 由 `major*1_000_000 + minor*1_000 + patch` 计算。
-  例如当前 `package.json` 的 `0.0.11` 会派生出 `versionCode = 11`。构建前确认两处 `package.json`
-  版本一致，发布准备流程与桌面发布共用同一份[准备版本](#准备版本)步骤。
-
-### EAS 构建与提交 profile
-
-`apps/mobile/eas.json` 里和 Internal testing 相关的 profile 只有这两个：
-
-- `build.ait`：`extends: "production"`，`distribution: "store"`，用于生成可提交 Play Store 的
-  `.aab`；同时带着 iOS 的 `EXPO_OWNER`/`EXPO_SLUG`/`EAS_PROJECT_ID`/`APPLE_TEAM_ID` 等公开标识，
-  不含任何密钥。
-- `submit.ait.android`：`{ "track": "internal", "releaseStatus": "completed" }`，提交后直接出现
-  在 Internal testing 渠道，不会碰 production 轨道。
-
-### 安全的构建 / 提交命令
-
-全部命令从 `apps/mobile` 目录运行：
-
-```bash
-cd apps/mobile
-eas build --platform android --profile ait
-```
-
-构建完成后用返回的 build id 提交（或用 `--latest` 提交最近一次成功构建）：
-
-```bash
-eas submit --platform android --profile ait --id <build-id>
-# 或
-eas submit --platform android --profile ait --latest
-```
-
-`--profile ait` 是关键参数：它锁定使用 `submit.ait.android`，保证目标轨道是 `internal`。
-两条命令都可以加 `--non-interactive`，配合已上传的 Google Service Account key 在 CI 环境执行。
-
-### 产物检查
-
-- `eas build --platform android --profile ait` 结束后会打印 build id、build 详情页 URL 和产物
-  下载链接；执行前先用 `eas build:list --platform android --limit 5` 或打开详情页确认这是预期的
-  commit/版本，再继续提交。
-- 可选：`eas build:view <build-id>` 查看该次构建使用的 profile、`versionCode`/`versionName`
-  和 Git commit，核对与上面"app 身份与版本号"一节推导出的数值一致。
-- `eas submit` 提交成功后，去 Play Console 的 Internal testing 页面确认新版本已经出现在
-  release 列表里，状态变为可供测试者安装。
-
-### 首次上传 / 手动上传规则
-
-如果这是该 app 在 Play Console 的第一次发布，按官方说明有两条路径，二选一：
-
-1. 先在 Play Console 完成 [Manually submit an Android app to the Google Play Store](https://docs.expo.dev/submit/android-manual) 的步骤，手动上传第一个 `.aab`、创建第一个 release；之后的版本再用上面的
-   `eas submit --profile ait` 命令提交。
-2. 直接用 `eas submit --platform android --profile ait`。官方文档说明：只要 app 已经在 Play
-   Console 创建（即使商店资料、隐私政策等还没填完），且 EAS 已经配置好 Google Service Account
-   key，`eas submit` 就可以创建该 app 在 Play Console 的第一个 release，并默认落在 internal
-   testing 轨道。
-
-两条路径都要求 app 已经在 Play Console 创建，这一步无法跳过，也不能靠命令行自动完成。
-选哪条路径取决于个人偏好，仓库里没有记录哪条路径已经执行过，发布前需要自己去 Play Console
-确认当前状态。
-
-### 真机冒烟测试（连接 Rust daemon）
-
-当前仓库 README 和 [Apple 构建说明](apple-builds.md) 都明确没有做过真机网络访问验证：
-独立 Rust daemon 默认只监听 loopback，真机访问电脑上的 daemon 需要额外的网络入口或隧道，这一步
-在本仓库里还没有被验证过，执行 Internal testing 发布时需要自己完成，不能假定已经打通。
-
-建议的手动验证步骤：
-
-1. 在一台可被测试手机访问的机器上启动 Rust daemon，并显式监听非 loopback 地址，例如：
-   ```bash
-   cargo run -p daemon --bin daemon -- --data-dir /path/to/data --listen 0.0.0.0:7316
-   ```
-   需要自行解决真机到这台机器的网络可达性（同一局域网、内网隧道或其他方式），仓库当前不提供
-   现成方案。
-2. 在 Play Console 的 Internal testing 页面把测试者邮箱加入 Testers 名单，并通过 opt-in 链接
-   在真机上安装刚提交的版本。
-3. 打开 app，按照连接表单填写 daemon 的 Host、端口 `7316` 和当前 daemon 的访问令牌，确认能
-   正常建立连接、收发消息，覆盖一次完整的鉴权 + RPC 往返。
-4. 把实际验证到的机型、Android 版本和结果记录下来；本节本身不包含任何已完成的验证结果。
-
-### 明确禁止事项
-
-- **不要**使用 `submit.production`（对应 `track: "production"`）来做 Internal testing 提交；
-  它会把构建推到正式商店轨道，不是内部测试轨道。
-- **不要**运行或触发 `.eas/workflows/release-mobile.yml`、`.eas/workflows/release-ios-beta.yml`
-  或 `.eas/workflows/resubmit-ios-review.yml`。这些 workflow 现在只保留手动触发，但仍使用
-  `profile: production` 或 fastlane 旧应用路径；`release-mobile.yml` 的
-  `submit_ios_for_review` 还会调用 fastlane 提交 App Store 审核。这些是桌面之外的遗留正式发布
-  流水线，和本节的内部测试流程无关，误触会导致未经验证的构建被提交审核。
-- `apps/mobile/scripts/eas-submit-tracks.test.cjs` 和
-  `apps/mobile/scripts/ios-testflight-workflow.test.cjs` 是保护上述边界的回归测试，确认
-  `submit.ait.android` 始终是 `{ track: "internal", releaseStatus: "completed" }`、
-  `submit.production.android` 始终是 `{ track: "production", releaseStatus: "completed" }`，
-  并且遗留 EAS workflow 没有 `push` 触发器。改动 `eas.json` 或这些 workflow 前，先用
-  `node --test apps/mobile/scripts/eas-submit-tracks.test.cjs` 确认没有破坏这个边界；该测试文件
-  与 `eas.json` 本身属于移动发布边界的一部分。
+首次服务账号配置、Play App Signing、测试者名单、安装链接和重试步骤统一见
+[Google Play 内部测试与 CI 发布](google-play-internal-testing.md)。
+请使用其中的 `play-internal` / `play-internal-draft` 提交 profile 和确定的 build ID。
+GitHub APK 使用[另一个入口](android-releases.md)，遗留 EAS production workflow
+不用于本流程。发布边界见
+[ADR-097](../decisions/clients/adr-097-google-play-internal-release.md)。
 
 ## Apple TestFlight iOS 手动发布
 
