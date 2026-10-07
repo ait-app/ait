@@ -5,7 +5,7 @@ describe("schedule RPC schemas", () => {
   it("round-trips new-agent run options on create requests", () => {
     expect(
       ScheduleCreateRequestSchema.parse({
-        type: "schedule/create",
+        type: "schedule.create.request",
         requestId: "request-1",
         prompt: "Run the task",
         cadence: { type: "every", everyMs: 60_000 },
@@ -21,7 +21,7 @@ describe("schedule RPC schemas", () => {
         },
       }),
     ).toEqual({
-      type: "schedule/create",
+      type: "schedule.create.request",
       requestId: "request-1",
       prompt: "Run the task",
       cadence: { type: "every", everyMs: 60_000 },
@@ -41,7 +41,7 @@ describe("schedule RPC schemas", () => {
   it("round-trips new-agent run options on update requests", () => {
     expect(
       ScheduleUpdateRequestSchema.parse({
-        type: "schedule/update",
+        type: "schedule.update.request",
         requestId: "request-1",
         scheduleId: "schedule-1",
         newAgentConfig: {
@@ -51,7 +51,7 @@ describe("schedule RPC schemas", () => {
         },
       }),
     ).toEqual({
-      type: "schedule/update",
+      type: "schedule.update.request",
       requestId: "request-1",
       scheduleId: "schedule-1",
       newAgentConfig: {

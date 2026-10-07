@@ -17,7 +17,7 @@ function schemaWithoutMessageTypes(
 describe("rename entity message schemas", () => {
   test("new client schema still parses old daemon checkout and terminal responses", () => {
     const checkoutResponse = SessionOutboundMessageSchema.parse({
-      type: "checkout_switch_branch_response",
+      type: "checkout.branch.switch.response",
       payload: {
         cwd: "/tmp/repo",
         success: true,
@@ -28,7 +28,7 @@ describe("rename entity message schemas", () => {
       },
     });
     const terminalResponse = SessionOutboundMessageSchema.parse({
-      type: "kill_terminal_response",
+      type: "terminal.kill.response",
       payload: {
         terminalId: "terminal-1",
         success: true,
@@ -37,7 +37,7 @@ describe("rename entity message schemas", () => {
     });
 
     expect(checkoutResponse).toEqual({
-      type: "checkout_switch_branch_response",
+      type: "checkout.branch.switch.response",
       payload: {
         cwd: "/tmp/repo",
         success: true,
@@ -48,7 +48,7 @@ describe("rename entity message schemas", () => {
       },
     });
     expect(terminalResponse).toEqual({
-      type: "kill_terminal_response",
+      type: "terminal.kill.response",
       payload: {
         terminalId: "terminal-1",
         success: true,
@@ -108,20 +108,20 @@ describe("rename entity message schemas", () => {
 
     expect(
       legacyInboundSchema.parse({
-        type: "checkout_switch_branch_request",
+        type: "checkout.branch.switch.request",
         cwd: "/tmp/repo",
         branch: "main",
         requestId: "request-switch",
       }),
     ).toEqual({
-      type: "checkout_switch_branch_request",
+      type: "checkout.branch.switch.request",
       cwd: "/tmp/repo",
       branch: "main",
       requestId: "request-switch",
     });
     expect(
       legacyOutboundSchema.parse({
-        type: "kill_terminal_response",
+        type: "terminal.kill.response",
         payload: {
           terminalId: "terminal-1",
           success: true,
@@ -129,7 +129,7 @@ describe("rename entity message schemas", () => {
         },
       }),
     ).toEqual({
-      type: "kill_terminal_response",
+      type: "terminal.kill.response",
       payload: {
         terminalId: "terminal-1",
         success: true,

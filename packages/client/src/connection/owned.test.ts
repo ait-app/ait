@@ -30,7 +30,10 @@ function connection() {
         (accept) =>
           new Promise((resolve) => {
             requests.push((subscriptionId) => {
-              const snapshot = { subscriptionId, requestId: `request-${requests.length}` };
+              const snapshot = {
+                subscriptionId,
+                requestId: `request-${requests.length}`,
+              };
               accept(snapshot);
               resolve(snapshot);
             });
@@ -42,7 +45,7 @@ function connection() {
 
 function update(subscriptionId: string, seq: number): SessionOutboundMessage {
   return {
-    type: "agent_update",
+    type: "agent.update",
     payload: { kind: "remove", agentId: `agent-${seq}`, subscriptionId, seq },
   };
 }
@@ -92,7 +95,10 @@ test("surviving handles use new remote IDs after reconnect and released handles 
   await Promise.all([a.ready, b.ready]);
   await b.release();
   const seen: string[] = [];
-  a.subscribe({ snapshot: (s) => seen.push(s.subscriptionId), update: () => seen.push("update") });
+  a.subscribe({
+    snapshot: (s) => seen.push(s.subscriptionId),
+    update: () => seen.push("update"),
+  });
   c.subscriptions.disconnected();
   c.subscriptions.restore();
   expect(c.requests).toHaveLength(3);

@@ -9,19 +9,6 @@ use serde_json::{Map, Value};
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct InvalidDaemonConfig;
 
-/// Canonical daemon methods implemented by the independent server.
-pub const CAPABILITIES: &[&str] = &[
-    "daemon.get_status.request",
-    "daemon.get_pairing_offer.request",
-    "daemon.config.reload.request",
-    "daemon.update.request",
-    "diagnostics.request",
-    "daemon.config.get.request",
-    "daemon.config.set.request",
-    "server.restart.request",
-    "server.shutdown.request",
-];
-
 /// Request without method-specific parameters.
 #[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
 pub struct EmptyRequest {}

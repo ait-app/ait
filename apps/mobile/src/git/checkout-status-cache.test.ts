@@ -86,7 +86,7 @@ function checkoutStatusUpdate(
   extraPrStatus?: NonNullable<CheckoutStatusUpdate["payload"]["prStatus"]>,
 ): CheckoutStatusUpdate {
   return {
-    type: "checkout_status_update",
+    type: "checkout.status.update",
     payload: extraPrStatus ? { ...payload, prStatus: extraPrStatus } : payload,
   };
 }

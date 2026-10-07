@@ -3,11 +3,6 @@ use model::ErrorCode;
 use serde::Deserialize;
 use serde_json::{Value, json};
 
-/// Client operations owned by this capability.
-pub const CAPABILITIES: &[&str] = &[
-    "browser.host.register.request",
-    "browser.automation.execute.response",
-];
 /// Commands supported by the upstream browser protocol.
 pub const COMMANDS: &[&str] = &[
     "list_tabs",

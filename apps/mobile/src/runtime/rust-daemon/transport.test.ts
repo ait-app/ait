@@ -229,7 +229,12 @@ describe("Rust protocol adapter", () => {
           encodeFileTransferFrame({
             opcode: FileTransferOpcode.FileBegin,
             requestId: id,
-            metadata: { mime: "text/plain", size: 3, encoding: "utf-8", modifiedAt: "now" },
+            metadata: {
+              mime: "text/plain",
+              size: 3,
+              encoding: "utf-8",
+              modifiedAt: "now",
+            },
           }).buffer,
           true,
         );
@@ -279,7 +284,7 @@ describe("Rust protocol adapter", () => {
       for (let index = 0; index < 260; index++) {
         const requestId = `file-${index}`;
         h.send({
-          type: "file_explorer_request",
+          type: "fs.explorer.request",
           requestId,
           cwd: "/workspace",
           path: "empty.txt",
@@ -291,14 +296,24 @@ describe("Rust protocol adapter", () => {
           encodeFileTransferFrame({
             opcode: FileTransferOpcode.FileBegin,
             requestId: id,
-            metadata: { mime: "text/plain", size: 0, encoding: "utf-8", modifiedAt: "now" },
+            metadata: {
+              mime: "text/plain",
+              size: 0,
+              encoding: "utf-8",
+              modifiedAt: "now",
+            },
           }),
           true,
         );
-        const end = encodeFileTransferFrame({ opcode: FileTransferOpcode.FileEnd, requestId: id });
+        const end = encodeFileTransferFrame({
+          opcode: FileTransferOpcode.FileEnd,
+          requestId: id,
+        });
         h.sockets[2].message(end, true);
         expect(received.mock.lastCall![0]).toBe(end);
-        expect(decodeFileTransferFrame(received.mock.lastCall![0])).toMatchObject({ requestId });
+        expect(decodeFileTransferFrame(received.mock.lastCall![0])).toMatchObject({
+          requestId,
+        });
         const count = received.mock.calls.length;
         h.sockets[2].message(end, true);
         expect(received).toHaveBeenCalledTimes(count);
@@ -321,7 +336,7 @@ describe("Rust protocol adapter", () => {
     try {
       h.ready();
       h.send({
-        type: "file_explorer_request",
+        type: "fs.explorer.request",
         requestId: "failed-read",
         cwd: "/workspace",
         path: "removed.rs",
@@ -343,7 +358,7 @@ describe("Rust protocol adapter", () => {
       });
       expect(h.received.at(-1)).toMatchObject({
         message: {
-          type: "file_explorer_response",
+          type: "fs.explorer.response",
           payload: { requestId: "failed-read", error: "File disappeared" },
         },
       });
@@ -367,7 +382,7 @@ describe("Rust protocol adapter", () => {
     try {
       h.ready();
       h.send({
-        type: "file_explorer_request",
+        type: "fs.explorer.request",
         requestId: "wrong-channel",
         cwd: "/workspace",
         path: "empty.rs",
@@ -415,8 +430,9 @@ describe("Rust protocol adapter", () => {
     }
   });
 
-  it("maps the scoped pinned surface and stays within Rust's per-connection limits", () => {
-    expect(Object.keys(METHODS)).toHaveLength(174);
+  it("uses canonical names and stays within Rust's per-connection limits", () => {
+    expect(Object.keys(METHODS)).toHaveLength(171);
+    for (const [name, spec] of Object.entries(METHODS)) expect(spec.method).toBe(name);
     expect(new Set(Object.values(METHODS).map((spec) => spec.method)).size).toBe(171);
     for (const capabilities of CHANNEL_CAPABILITIES) {
       expect(capabilities.length).toBeLessThanOrEqual(64);
@@ -434,7 +450,7 @@ describe("Rust protocol adapter", () => {
       h.ready();
       expect(CHANNEL_CAPABILITIES[2]).toContain(method);
       h.send({
-        type: "checkout_reset_workspace_request",
+        type: "checkout.reset_workspace.request",
         requestId: "reset-1",
         cwd: "/workspace",
         workspaceId: "workspace-1",
@@ -484,26 +500,26 @@ describe("Rust protocol adapter", () => {
     try {
       h.ready();
       h.send({
-        type: "fetch_recent_provider_sessions_request",
+        type: "provider.sessions.recent.list.request",
         requestId: "recent-sessions",
         cwd: "/repo",
         providers: ["codex"],
         query: "session title",
         limit: 15,
       });
-      expect(h.last(METHODS.fetch_recent_provider_sessions_request.channel)).toMatchObject({
+      expect(h.last(METHODS["provider.sessions.recent.list.request"].channel)).toMatchObject({
         method: "provider.sessions.recent.list.request",
         params: { cwd: "/repo", providers: ["codex"], query: "session title", limit: 15 },
       });
       h.send({
-        type: "import_agent_request",
+        type: "agent.import.request",
         requestId: "import-session",
         providerId: "codex",
         providerHandleId: "native-session",
         cwd: "/repo",
         workspaceId: "wks_0123456789abcdef",
       });
-      expect(h.last(METHODS.import_agent_request.channel)).toMatchObject({
+      expect(h.last(METHODS["agent.import.request"].channel)).toMatchObject({
         method: "agent.import.request",
         params: {
           providerId: "codex",
@@ -524,7 +540,7 @@ describe("Rust protocol adapter", () => {
       h.send({ type: "project.list.request", requestId: "projects" });
       const first = h.last(1);
       h.send({
-        type: "fetch_workspaces_request",
+        type: "workspace.list.request",
         requestId: "workspaces",
       });
       const second = h.last(1);
@@ -549,7 +565,7 @@ describe("Rust protocol adapter", () => {
       });
       expect(h.received.at(-2)).toMatchObject({
         message: {
-          type: "fetch_workspaces_response",
+          type: "workspace.list.response",
           payload: { requestId: "workspaces" },
         },
       });
@@ -563,7 +579,7 @@ describe("Rust protocol adapter", () => {
     try {
       h.ready();
       h.send({ type: "project.list.request", requestId: "shared-id" });
-      expect(() => h.send({ type: "fetch_workspaces_request", requestId: "shared-id" })).toThrow(
+      expect(() => h.send({ type: "workspace.list.request", requestId: "shared-id" })).toThrow(
         "Duplicate pending Rust daemon request ID",
       );
       h.sockets[1].message({
@@ -574,7 +590,7 @@ describe("Rust protocol adapter", () => {
       expect(h.received.at(-1)).toMatchObject({
         message: { type: "project.list.response", payload: { requestId: "shared-id" } },
       });
-      h.send({ type: "fetch_workspaces_request", requestId: "shared-id" });
+      h.send({ type: "workspace.list.request", requestId: "shared-id" });
       expect(h.last(1).request_id).toBe("shared-id");
     } finally {
       h.transport.close();
@@ -620,7 +636,7 @@ describe("Rust protocol adapter", () => {
         params: snapshot,
       });
       expect(update).toHaveBeenCalledWith({
-        type: "terminals_changed",
+        type: "terminal.list.changed",
         payload: snapshot,
       });
       expect(client.isConnected).toBe(true);
@@ -683,7 +699,7 @@ describe("Rust protocol adapter", () => {
           payload: { requestId: "list", code: "registry_io" },
         },
       });
-      h.send({ type: "schedule/list", requestId: "schedule" });
+      h.send({ type: "schedule.list.request", requestId: "schedule" });
       expect(h.received.at(-1)).toMatchObject({
         message: {
           type: "rpc_error",
@@ -700,14 +716,14 @@ describe("Rust protocol adapter", () => {
     try {
       h.ready();
       h.send({
-        type: "agent_permission_response",
+        type: "agent.permission.resolve.request",
         requestId: "permission",
         agentId: "agent",
         response: { behavior: "allow" },
       });
       expect(h.last(0).params.requestId).toBe("permission");
       h.send({
-        type: "dictation_stream_start",
+        type: "dictation.stream.start",
         dictationId: "dictation",
         format: "audio/wav",
       });
@@ -722,7 +738,7 @@ describe("Rust protocol adapter", () => {
         params: { dictationId: "dictation", ackSeq: -1 },
       });
       expect(h.received.at(-1)).toMatchObject({
-        message: { type: "dictation_stream_ack" },
+        message: { type: "dictation.stream.ack" },
       });
     } finally {
       h.transport.close();
@@ -747,7 +763,7 @@ describe("Rust protocol adapter", () => {
   it("translates the SDK liveness ping and cleans every socket on partial failure", () => {
     const h = harness();
     h.ready();
-    h.transport.send(JSON.stringify({ type: "ping" }));
+    h.transport.send(JSON.stringify({ type: "connection.ping" }));
     const ping = h.last(0);
     expect(ping.request_id).toMatch(
       /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/,
@@ -758,7 +774,7 @@ describe("Rust protocol adapter", () => {
       request_id: ping.request_id,
       result: { nonce: ping.params.nonce },
     });
-    expect(h.received.at(-1)).toEqual({ type: "pong" });
+    expect(h.received.at(-1)).toEqual({ type: "connection.pong" });
     h.sockets[2].end();
     expect(h.sockets.every((socket) => socket.close.mock.calls.length === 1)).toBe(true);
     expect(h.closed).toHaveBeenCalledTimes(1);
@@ -923,7 +939,7 @@ describe("Rust admission retries", () => {
     const h = harness();
     try {
       h.ready();
-      h.send({ type: "get_daemon_config_request", requestId: "config" });
+      h.send({ type: "daemon.config.get.request", requestId: "config" });
       const wire = h.last(1);
       h.sockets[1].message({
         type: "error",
@@ -942,7 +958,7 @@ describe("Rust admission retries", () => {
       });
       expect(h.received.at(-1)).toMatchObject({
         message: {
-          type: "get_daemon_config_response",
+          type: "daemon.config.get.response",
           payload: {
             requestId: "config",
             config: { appendSystemPrompt: "saved" },
@@ -960,7 +976,7 @@ describe("Rust admission retries", () => {
     const h = harness();
     try {
       h.ready();
-      h.send({ type: "get_daemon_config_request", requestId: "config" });
+      h.send({ type: "daemon.config.get.request", requestId: "config" });
       const wire = h.last(1);
       for (let attempt = 0; attempt < 6; attempt++) {
         h.sockets[1].message({
@@ -979,7 +995,7 @@ describe("Rust admission retries", () => {
         },
       });
       h.send({
-        type: "get_daemon_config_request",
+        type: "daemon.config.get.request",
         requestId: "cancelled",
       });
       h.sockets[1].message({
@@ -1029,7 +1045,7 @@ describe("Rust admission retries", () => {
         message: {
           type: "rpc_error",
           payload: {
-            requestType: "terminal_input",
+            requestType: "terminal.input",
             code: "invalid_message",
             error: "Invalid terminal parameters",
           },
@@ -1061,7 +1077,7 @@ describe("Rust admission retries", () => {
     const h = harness();
     try {
       h.ready();
-      h.send({ type: "get_daemon_config_request", requestId: "config" });
+      h.send({ type: "daemon.config.get.request", requestId: "config" });
       const sent = h.sockets[1].send.mock.calls.length;
       h.sockets[1].message({
         type: "error",

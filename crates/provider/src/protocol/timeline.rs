@@ -3,15 +3,6 @@
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 
-/// Timeline methods installed with the native execution service.
-pub const CAPABILITIES: &[&str] = &[
-    "agent.timeline.get.request",
-    "agent.timeline.search.request",
-    "agent.timeline.list_prompts.request",
-    "agent.timeline.append.request",
-    "agent.timeline.set_subscription.request",
-];
-
 /// Stable position in one timeline generation.
 #[derive(Debug, Clone, PartialEq, Eq, Deserialize, Serialize)]
 #[serde(deny_unknown_fields)]

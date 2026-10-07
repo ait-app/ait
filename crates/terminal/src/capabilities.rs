@@ -1,16 +1,11 @@
 //! Terminal method groups and installation rules owned by this crate.
 
-use crate::protocol;
-
-/// Business method group selected by the transport after capability negotiation.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum Group {
-    /// PTY lifecycle, subscriptions, and input.
-    Terminal,
+/// Return every implemented capability for negotiation and message validation.
+/// # Returns
+/// Static method names, including events, without selecting a request handler.
+pub fn implemented_capabilities() -> impl Iterator<Item = &'static str> {
+    crate::connection::METHODS.iter().copied()
 }
-
-/// Implemented method groups, including event methods; catalog placeholders are excluded.
-pub const IMPLEMENTED_GROUPS: &[(Group, &[&str])] = &[(Group::Terminal, protocol::CAPABILITIES)];
 
 /// Presence of independently composed services, supplied by the host.
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
@@ -23,12 +18,7 @@ pub struct InstalledServices {
 ///
 /// The iterator borrows static method names and excludes uninstalled optional services.
 pub fn installed_capabilities(services: InstalledServices) -> impl Iterator<Item = &'static str> {
-    IMPLEMENTED_GROUPS
-        .iter()
-        .filter(move |(group, _)| match group {
-            Group::Terminal => services.terminals,
-        })
-        .flat_map(|(_, methods)| methods.iter().copied())
+    implemented_capabilities().filter(move |_| services.terminals)
 }
 
 #[cfg(test)]

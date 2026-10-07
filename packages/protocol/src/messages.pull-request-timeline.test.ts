@@ -12,14 +12,14 @@ describe("pull request timeline message schemas", () => {
   test("requires request identity fields", () => {
     expect(() =>
       PullRequestTimelineRequestSchema.parse({
-        type: "pull_request_timeline_request",
+        type: "checkout.pr.timeline.request",
       }),
     ).toThrow();
   });
 
   test("parses request fields", () => {
     const parsed = PullRequestTimelineRequestSchema.parse({
-      type: "pull_request_timeline_request",
+      type: "checkout.pr.timeline.request",
       cwd: "/tmp/repo",
       prNumber: 42,
       repoOwner: "getpaseo",
@@ -28,7 +28,7 @@ describe("pull request timeline message schemas", () => {
     });
 
     expect(parsed).toEqual({
-      type: "pull_request_timeline_request",
+      type: "checkout.pr.timeline.request",
       cwd: "/tmp/repo",
       prNumber: 42,
       repoOwner: "getpaseo",
@@ -39,7 +39,7 @@ describe("pull request timeline message schemas", () => {
 
   test("parses request through the inbound message union", () => {
     const parsed = SessionInboundMessageSchema.parse({
-      type: "pull_request_timeline_request",
+      type: "checkout.pr.timeline.request",
       cwd: "/tmp/repo",
       prNumber: 42,
       repoOwner: "getpaseo",
@@ -48,7 +48,7 @@ describe("pull request timeline message schemas", () => {
     });
 
     expect(parsed).toEqual({
-      type: "pull_request_timeline_request",
+      type: "checkout.pr.timeline.request",
       cwd: "/tmp/repo",
       prNumber: 42,
       repoOwner: "getpaseo",
@@ -59,14 +59,14 @@ describe("pull request timeline message schemas", () => {
 
   test("defaults optional response payload and malformed timeline item fields", () => {
     const parsed = PullRequestTimelineResponseSchema.parse({
-      type: "pull_request_timeline_response",
+      type: "checkout.pr.timeline.response",
       payload: {
         items: [{}, { kind: "review" }],
       },
     });
 
     expect(parsed).toEqual({
-      type: "pull_request_timeline_response",
+      type: "checkout.pr.timeline.response",
       payload: {
         cwd: "",
         prNumber: null,
@@ -99,7 +99,7 @@ describe("pull request timeline message schemas", () => {
 
   test("normalizes unknown timeline item kinds to comments", () => {
     const parsed = PullRequestTimelineResponseSchema.parse({
-      type: "pull_request_timeline_response",
+      type: "checkout.pr.timeline.response",
       payload: {
         items: [
           {
@@ -128,7 +128,7 @@ describe("pull request timeline message schemas", () => {
 
   test("parses optional author avatar, author URL, and inline comment location fields", () => {
     const parsed = PullRequestTimelineResponseSchema.parse({
-      type: "pull_request_timeline_response",
+      type: "checkout.pr.timeline.response",
       payload: {
         items: [
           {
@@ -199,7 +199,7 @@ describe("pull request timeline message schemas", () => {
 
   test("parses response through the outbound message union", () => {
     const parsed = SessionOutboundMessageSchema.parse({
-      type: "pull_request_timeline_response",
+      type: "checkout.pr.timeline.response",
       payload: {
         cwd: "/tmp/repo",
         prNumber: 42,
@@ -229,12 +229,12 @@ describe("pull request timeline message schemas", () => {
       },
     });
 
-    expect(parsed.type).toBe("pull_request_timeline_response");
+    expect(parsed.type).toBe("checkout.pr.timeline.response");
   });
 
   test("an old client timeline schema parses new daemon avatar and inline location fields", () => {
     const oldClientPullRequestTimelineResponseSchema = z.object({
-      type: z.literal("pull_request_timeline_response"),
+      type: z.literal("checkout.pr.timeline.response"),
       payload: z.object({
         cwd: z.string(),
         prNumber: z.number().nullable(),
@@ -266,7 +266,7 @@ describe("pull request timeline message schemas", () => {
       }),
     });
     const newDaemonPayload = PullRequestTimelineResponseSchema.parse({
-      type: "pull_request_timeline_response",
+      type: "checkout.pr.timeline.response",
       payload: {
         cwd: "/tmp/repo",
         prNumber: 42,
@@ -295,7 +295,7 @@ describe("pull request timeline message schemas", () => {
     });
 
     expect(oldClientPullRequestTimelineResponseSchema.parse(newDaemonPayload)).toEqual({
-      type: "pull_request_timeline_response",
+      type: "checkout.pr.timeline.response",
       payload: {
         cwd: "/tmp/repo",
         prNumber: 42,
@@ -319,7 +319,7 @@ describe("pull request timeline message schemas", () => {
 
   test("normalizes future error kinds to unknown", () => {
     const parsed = PullRequestTimelineResponseSchema.parse({
-      type: "pull_request_timeline_response",
+      type: "checkout.pr.timeline.response",
       payload: {
         error: { kind: "future_kind", message: "x" },
       },
@@ -332,7 +332,7 @@ describe("pull request timeline message schemas", () => {
     "normalizes malformed error kind %j to unknown",
     (kind) => {
       const parsed = PullRequestTimelineResponseSchema.parse({
-        type: "pull_request_timeline_response",
+        type: "checkout.pr.timeline.response",
         payload: {
           error: { kind },
         },
@@ -346,7 +346,7 @@ describe("pull request timeline message schemas", () => {
 describe("checkout PR status compatibility", () => {
   test("an old client schema parses a new daemon checkout PR status response", () => {
     const oldClientCheckoutPrStatusResponseSchema = z.object({
-      type: z.literal("checkout_pr_status_response"),
+      type: z.literal("checkout.pr.status.response"),
       payload: z.object({
         cwd: z.string(),
         status: z
@@ -377,7 +377,7 @@ describe("checkout PR status compatibility", () => {
       }),
     });
     const newDaemonPayload = CheckoutPrStatusResponseSchema.parse({
-      type: "checkout_pr_status_response",
+      type: "checkout.pr.status.response",
       payload: {
         cwd: "/tmp/repo",
         status: {
@@ -408,7 +408,7 @@ describe("checkout PR status compatibility", () => {
     });
 
     expect(oldClientCheckoutPrStatusResponseSchema.parse(newDaemonPayload)).toEqual({
-      type: "checkout_pr_status_response",
+      type: "checkout.pr.status.response",
       payload: {
         cwd: "/tmp/repo",
         status: {

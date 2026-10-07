@@ -8,19 +8,6 @@ use serde_json::Value;
 
 use super::agent_config::NullableSetting;
 
-/// Agent runtime methods backed by the durable runtime registry.
-pub const CAPABILITIES: &[&str] = &[
-    "agent.list.request",
-    "agent.history.get.request",
-    "agent.get.request",
-    "agent.update.request",
-    "agent.archive.request",
-    "agent.delete.request",
-    "agent.detach.request",
-    "agent.attention.clear.request",
-    "agent.items.close.request",
-];
-
 /// Paseo Agent lifecycle status.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]

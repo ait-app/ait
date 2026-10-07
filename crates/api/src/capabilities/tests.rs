@@ -30,10 +30,8 @@ fn empty_host_keeps_only_builtin_metadata_methods() {
 }
 
 #[test]
-fn merged_groups_have_one_owner_per_method_and_keep_placeholders_separate() {
-    let methods: Vec<_> = implemented_groups()
-        .flat_map(|(_, methods)| methods.iter().copied())
-        .collect();
+fn merged_components_have_one_owner_per_method_and_keep_placeholders_separate() {
+    let methods: Vec<_> = implemented_methods().collect();
     let unique: BTreeSet<_> = methods.iter().copied().collect();
     assert_eq!(methods.len(), unique.len());
     assert_eq!(methods.len(), 179);
@@ -46,25 +44,29 @@ fn merged_groups_have_one_owner_per_method_and_keep_placeholders_separate() {
 
 #[test]
 fn request_shapes_match_paseo_and_keep_only_dotted_methods() {
-    assert_eq!(::filesystem::protocol::files::CAPABILITIES.len(), 11);
-    assert!(
-        ::filesystem::protocol::files::CAPABILITIES
+    let methods: Vec<_> = ::filesystem::capabilities::implemented_capabilities().collect();
+    let specs: Vec<_> = methods
+        .iter()
+        .filter_map(|method| protocol::methods::by_canonical_name(method))
+        .collect();
+    assert_eq!(
+        specs
             .iter()
-            .all(|name| {
-                protocol::methods::PASEO_METHODS
-                    .iter()
-                    .any(|method| method.canonical_name == *name)
-            })
+            .filter(|spec| spec.group == protocol::methods::MethodGroup::Files)
+            .count(),
+        11
     );
+    assert!(methods.iter().all(|method| method.contains('.')));
 }
 
 #[test]
 fn skill_methods_are_owned_by_filesystem_and_remain_canonical_requests() {
-    for method in ::filesystem::protocol::skills::METHODS {
-        let spec = protocol::methods::PASEO_METHODS
-            .iter()
-            .find(|spec| spec.canonical_name == *method)
-            .unwrap();
+    let methods: Vec<_> = ::filesystem::capabilities::implemented_capabilities()
+        .filter(|method| method.starts_with("agent.skills."))
+        .collect();
+    assert_eq!(methods.len(), 5);
+    for method in methods {
+        let spec = protocol::methods::by_canonical_name(method).unwrap();
         assert_eq!(spec.group, protocol::methods::MethodGroup::Skills);
         assert_eq!(spec.kind, protocol::methods::InboundKind::Request);
     }

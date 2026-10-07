@@ -385,7 +385,7 @@ describe("checkout PR schemas", () => {
 
     expect(
       GitHubSearchResponseSchema.parse({
-        type: "github_search_response",
+        type: "github.search.response",
         payload: {
           items: [],
           githubFeaturesEnabled: false,
@@ -447,7 +447,7 @@ describe("checkout PR schemas", () => {
     (mergeMethod) => {
       expect(
         CheckoutPrMergeRequestSchema.parse({
-          type: "checkout_pr_merge_request",
+          type: "checkout.pr.merge.request",
           cwd: "/tmp/repo",
           mergeMethod,
           requestId: "request-merge-pr",
@@ -459,7 +459,7 @@ describe("checkout PR schemas", () => {
   test("rejects unknown PR merge methods", () => {
     expect(() =>
       CheckoutPrMergeRequestSchema.parse({
-        type: "checkout_pr_merge_request",
+        type: "checkout.pr.merge.request",
         cwd: "/tmp/repo",
         mergeMethod: "auto",
         requestId: "request-merge-pr",

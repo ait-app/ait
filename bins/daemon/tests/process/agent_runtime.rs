@@ -21,7 +21,7 @@ async fn binary_serves_agent_runtime_directory_and_metadata_lifecycle() {
     let log = root.path().join("server.log");
     let mut process = start(&state, &log);
     let address = ready(&mut process, &log).await;
-    let mut client = connect(&address, provider::protocol::agent_lifecycle::CAPABILITIES).await;
+    let mut client = connect(&address, provider::rpc::agent_runtime::METHODS).await;
 
     assert_directory_reads(&mut client).await;
     assert_metadata_mutations(&mut client).await;

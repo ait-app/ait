@@ -1,13 +1,37 @@
 //! Concrete service state and crate-owned request dispatch.
 
+/// Client methods implemented by this component; consumed by capability discovery.
+pub const CHECKOUT_METHODS: &[&str] = &[
+    "checkout.status.get.request",
+    "checkout.refresh.request",
+    "checkout.diff.get.request",
+    "checkout.diff.subscribe.request",
+    "checkout.diff.unsubscribe.request",
+    "checkout.commits.list.request",
+    "checkout.commits.file_diff.request",
+    "checkout.branch.validate.request",
+    "checkout.branch.suggestions.request",
+    "checkout.branch.switch.request",
+    "checkout.rename_branch.request",
+    "checkout.commit.request",
+    "checkout.merge.request",
+    "checkout.merge_from_base.request",
+    "checkout.reset_workspace.request",
+    "checkout.pull.request",
+    "checkout.push.request",
+    "checkout.discard_changes.request",
+    "checkout.stash.save.request",
+    "checkout.stash.pop.request",
+    "checkout.stash.list.request",
+];
+
 mod metadata;
 
 use std::sync::{Arc, Mutex};
 
-use model::outbound::QueueError;
-use model::{Context, ErrorCode, Runtime};
+use model::{Context, DispatchError, ErrorCode, Runtime};
 
-use crate::capabilities::Group;
+mod requests;
 
 /// Services installed for this capability crate, sharing server-wide runtime resources.
 #[derive(Debug)]
@@ -49,86 +73,89 @@ use model::valid_id;
 use serde_json::{Value, json};
 
 /// Dispatch an admitted request through filesystem-owned services and connection state.
+/// Leaves `context` unchanged for other crates; takes it when this crate handles the method.
+/// Returns `DispatchError::NotImplemented` while leaving an unmatched Context available.
+///
+/// # Arguments
+/// * `context` - Pending request, consumed only when this crate recognizes its method.
+/// * `state` - Installed services and resources used to execute the request.
+/// * `connection` - Connection-owned subscriptions and streams for this capability.
+///
 /// # Errors
-/// Returns delivery failures; business failures use the request's error envelope.
+/// Returns `NotImplemented` for an unmatched method and `Delivery` for an outbound failure.
+/// Business failures use the request's error envelope.
 pub async fn dispatch(
-    group: Group,
-    mut context: Context<'_>,
+    context: &mut Option<Context<'_>>,
     state: &State,
     connection: &mut Connection,
-) -> Result<(), QueueError> {
-    if matches!(group, Group::Checkout | Group::Forge)
-        && let Err(error) =
-            metadata::fill(state, &context.request.method, &mut context.request.params).await
-    {
-        return context.respond(Err(error));
+) -> Result<(), DispatchError> {
+    if context.is_none() {
+        return Ok(());
     }
-    match group {
-        Group::Skills => {
-            context
-                .rpc(
-                    state.skills.clone(),
-                    ErrorCode::RegistryIo,
-                    crate::service::skills::Skills::execute,
-                )
-                .await
+    match requests::skills(context, state).await {
+        Ok(()) => return Ok(()),
+        Err(DispatchError::NotImplemented) => {
+            Context::assert_unhandled(context, "filesystem::skills");
         }
-        Group::Checkout => checkout(context, state, connection).await,
-        Group::Forge => {
-            context
-                .rpc(
-                    state.forge.clone(),
-                    ErrorCode::ProjectIo,
-                    |service, method, params| crate::rpc::forge::execute(service, method, params),
-                )
-                .await
-        }
-        Group::Files => {
-            connection
-                .files
-                .request(
-                    crate::connection::files::FileRequest {
-                        id: context.request.id,
-                        method: context.request.method,
-                        params: context.request.params,
-                        available_subscriptions: context.available_subscriptions,
-                    },
-                    state,
-                    context.outbound,
-                )
-                .await
-        }
-        Group::GithubProjects => {
-            context
-                .rpc(
-                    state.github_projects.clone(),
-                    ErrorCode::RegistryIo,
-                    |service, method, params| {
-                        crate::rpc::github_projects::execute(service, method, params)
-                    },
-                )
-                .await
-        }
-        Group::Worktrees => worktrees(context, state).await,
-        Group::WorkspaceRecovery => {
-            let result = context
-                .call(
-                    state.workspace_recovery.clone(),
-                    ErrorCode::RegistryIo,
-                    |service, method, params| {
-                        crate::rpc::workspace_recovery::execute(service, method, params)
-                    },
-                )
-                .await;
-            match result {
-                Ok(reply) => context.workspace(reply.value, reply.event),
-                Err(error) => context.respond(Err(error)),
-            }
-        }
+        Err(error) => return Err(error),
     }
+    match checkout(context, state, connection).await {
+        Ok(()) => return Ok(()),
+        Err(DispatchError::NotImplemented) => {
+            Context::assert_unhandled(context, "filesystem::checkout");
+        }
+        Err(error) => return Err(error),
+    }
+    match requests::forge(context, state).await {
+        Ok(()) => return Ok(()),
+        Err(DispatchError::NotImplemented) => {
+            Context::assert_unhandled(context, "filesystem::forge");
+        }
+        Err(error) => return Err(error),
+    }
+    match requests::files(context, state, connection).await {
+        Ok(()) => return Ok(()),
+        Err(DispatchError::NotImplemented) => {
+            Context::assert_unhandled(context, "filesystem::files");
+        }
+        Err(error) => return Err(error),
+    }
+    match requests::github_projects(context, state).await {
+        Ok(()) => return Ok(()),
+        Err(DispatchError::NotImplemented) => {
+            Context::assert_unhandled(context, "filesystem::github_projects");
+        }
+        Err(error) => return Err(error),
+    }
+    match worktrees(context, state).await {
+        Ok(()) => return Ok(()),
+        Err(DispatchError::NotImplemented) => {
+            Context::assert_unhandled(context, "filesystem::worktrees");
+        }
+        Err(error) => return Err(error),
+    }
+    match requests::recovery(context, state).await {
+        Ok(()) => return Ok(()),
+        Err(DispatchError::NotImplemented) => {
+            Context::assert_unhandled(context, "filesystem::recovery");
+        }
+        Err(error) => return Err(error),
+    }
+    Err(DispatchError::NotImplemented)
 }
 
-async fn worktrees(mut context: Context<'_>, state: &State) -> Result<(), QueueError> {
+async fn worktrees(pending: &mut Option<Context<'_>>, state: &State) -> Result<(), DispatchError> {
+    let Some(mut context) = pending.take_if(|context| {
+        matches!(
+            context.request.method.as_str(),
+            "workspace.worktree.list.request"
+                | "workspace.worktree.create.request"
+                | "workspace.worktree.archive.request"
+        )
+    }) else {
+        return Err(DispatchError::NotImplemented);
+    };
+
     let result = context
         .call(
             state.worktrees.clone(),
@@ -153,28 +180,72 @@ async fn worktrees(mut context: Context<'_>, state: &State) -> Result<(), QueueE
             .await;
     }
     match result {
-        Ok(reply) => context.workspace(reply.value, reply.event),
-        Err(error) => context.respond(Err(error)),
+        Ok(reply) => context
+            .workspace(reply.value, reply.event)
+            .map_err(Into::into),
+        Err(error) => context.respond(Err(error)).map_err(Into::into),
     }
 }
 
 async fn checkout(
-    mut context: Context<'_>,
+    pending: &mut Option<Context<'_>>,
     state: &State,
     connection: &mut Connection,
-) -> Result<(), QueueError> {
+) -> Result<(), DispatchError> {
+    let Some(mut context) = pending.take_if(|context| {
+        matches!(
+            context.request.method.as_str(),
+            "checkout.status.get.request"
+                | "checkout.refresh.request"
+                | "checkout.diff.get.request"
+                | "checkout.diff.subscribe.request"
+                | "checkout.diff.unsubscribe.request"
+                | "checkout.commits.list.request"
+                | "checkout.commits.file_diff.request"
+                | "checkout.branch.validate.request"
+                | "checkout.branch.suggestions.request"
+                | "checkout.branch.switch.request"
+                | "checkout.rename_branch.request"
+                | "checkout.commit.request"
+                | "checkout.merge.request"
+                | "checkout.merge_from_base.request"
+                | "checkout.reset_workspace.request"
+                | "checkout.pull.request"
+                | "checkout.push.request"
+                | "checkout.discard_changes.request"
+                | "checkout.stash.save.request"
+                | "checkout.stash.pop.request"
+                | "checkout.stash.list.request"
+        )
+    }) else {
+        return Err(DispatchError::NotImplemented);
+    };
+    if let Err(error) =
+        metadata::fill(state, &context.request.method, &mut context.request.params).await
+    {
+        return context.respond(Err(error)).map_err(Into::into);
+    }
+
     if context.request.method == "checkout.diff.unsubscribe.request" {
         let request = serde_json::from_value::<
             crate::protocol::checkout::CheckoutDiffUnsubscribeRequest,
         >(std::mem::take(&mut context.request.params));
         let request = match request {
             Ok(request) if valid_id(&request.subscription_id) => request,
-            _ => return context.respond(Err(ErrorCode::InvalidMessage)),
+            _ => {
+                return context
+                    .respond(Err(ErrorCode::InvalidMessage))
+                    .map_err(Into::into);
+            }
         };
         if connection.diffs.remove(&request.subscription_id).is_none() {
-            return context.respond(Err(ErrorCode::SubscriptionNotFound));
+            return context
+                .respond(Err(ErrorCode::SubscriptionNotFound))
+                .map_err(Into::into);
         }
-        return context.respond(Ok(json!({"subscriptionId":request.subscription_id})));
+        return context
+            .respond(Ok(json!({"subscriptionId":request.subscription_id})))
+            .map_err(Into::into);
     }
     if context.request.method == "checkout.diff.subscribe.request" {
         let replacement = context
@@ -184,7 +255,9 @@ async fn checkout(
             .and_then(Value::as_str)
             .is_some_and(|id| connection.diffs.contains_key(id));
         if context.available_subscriptions == 0 && !replacement {
-            return context.respond(Err(ErrorCode::ResourceExhausted));
+            return context
+                .respond(Err(ErrorCode::ResourceExhausted))
+                .map_err(Into::into);
         }
     }
     let params = std::mem::take(&mut context.request.params);
@@ -204,6 +277,6 @@ async fn checkout(
             }
             Ok(())
         }
-        Err(error) => context.respond(Err(error)),
+        Err(error) => context.respond(Err(error)).map_err(Into::into),
     }
 }

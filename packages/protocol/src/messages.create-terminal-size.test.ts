@@ -5,7 +5,7 @@ import { CreateTerminalRequestSchema } from "./messages";
 // app clients don't, and programmatic callers may. These tests pin that contract.
 describe("CreateTerminalRequest size", () => {
   const base = {
-    type: "create_terminal_request" as const,
+    type: "terminal.create.request" as const,
     cwd: "/work/repo",
     requestId: "req-1",
   };
@@ -16,7 +16,10 @@ describe("CreateTerminalRequest size", () => {
   });
 
   it("parses a request carrying a viewport size", () => {
-    const parsed = CreateTerminalRequestSchema.parse({ ...base, size: { rows: 55, cols: 136 } });
+    const parsed = CreateTerminalRequestSchema.parse({
+      ...base,
+      size: { rows: 55, cols: 136 },
+    });
     expect(parsed.size).toEqual({ rows: 55, cols: 136 });
   });
 

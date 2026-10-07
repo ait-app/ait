@@ -3,13 +3,6 @@
 use domain::agent_runtime::StoredAgentConfig;
 use serde::Deserialize;
 
-/// Configuration methods supported by the native worker.
-pub const CAPABILITIES: &[&str] = &[
-    "agent.model.set.request",
-    "agent.thinking.set.request",
-    "agent.config.apply.request",
-];
-
 /// Three-state patch value, distinguishing omission from explicit null.
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
 pub enum NullableSetting<T = String> {

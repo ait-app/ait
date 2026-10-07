@@ -5,7 +5,7 @@ import { KNOWN_PROVIDER_ICON_NAMES } from "./provider-icon-names.js";
  * Marks where a typed prompt goes inside a profile's `command` or `args`. A
  * profile carrying it accepts a prompt; one without it launches as-is.
  *
- * Substitution happens client-side before `create_terminal_request` is sent, so
+ * Substitution happens client-side before `terminal.create.request` is sent, so
  * this is profile-format vocabulary rather than anything on the wire. It lives
  * here because this module owns what a `TerminalProfile` means.
  */
@@ -17,7 +17,13 @@ export const PROMPT_SENTINEL = "{{{prompt}}}";
 // `--flag=value` form to keep it one argv entry that can be dropped whole when
 // no prompt is typed.
 export const DEFAULT_TERMINAL_PROFILES: readonly TerminalProfile[] = [
-  { id: "claude", name: "Claude Code", command: "claude", args: [PROMPT_SENTINEL], icon: "claude" },
+  {
+    id: "claude",
+    name: "Claude Code",
+    command: "claude",
+    args: [PROMPT_SENTINEL],
+    icon: "claude",
+  },
   { id: "codex", name: "Codex", command: "codex", args: [PROMPT_SENTINEL], icon: "codex" },
   {
     id: "opencode",

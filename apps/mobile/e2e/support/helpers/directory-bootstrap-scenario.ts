@@ -125,9 +125,9 @@ export class DirectoryBootstrapScenario {
       "aria-selected",
       "true",
     );
-    const pings = this.gate.getClientRequestCount("ping");
+    const pings = this.gate.getClientRequestCount("connection.ping");
     await expect
-      .poll(() => this.gate.getClientRequestCount("ping"), { timeout: 30_000 })
+      .poll(() => this.gate.getClientRequestCount("connection.ping"), { timeout: 30_000 })
       .toBeGreaterThan(pings);
     await this.expectDirectoryStarts(2);
   }

@@ -179,7 +179,7 @@ export interface TimelinePageResult {
 
 export type TimelineResponsePayload = Extract<
   SessionOutboundMessage,
-  { type: "fetch_agent_timeline_response" }
+  { type: "agent.timeline.get.response" }
 >["payload"];
 
 export function consumeForcedTimelineTailReplacement(

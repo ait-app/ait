@@ -3,7 +3,7 @@ import type { OwnedSubscription, TimelineSubscription } from "../connection/inde
 
 type TimelineUpdate = Extract<
   SessionOutboundMessage,
-  { type: "agent_stream" | "agent.timeline.replacement" }
+  { type: "agent.stream" | "agent.timeline.replacement" }
 >;
 
 /** Local SDK lifecycle messages; these are not additional wire RPCs. */
@@ -59,7 +59,7 @@ export function subscribeTimeline(
       });
     },
     update: (message) => {
-      if (message.type === "agent_stream" || message.type === "agent.timeline.replacement")
+      if (message.type === "agent.stream" || message.type === "agent.timeline.replacement")
         notify(message);
     },
     error: fail,
@@ -69,7 +69,9 @@ export function subscribeTimeline(
     release,
     subscriptionId: null,
   });
-  Object.defineProperty(subscription, "subscriptionId", { get: () => observation.subscriptionId });
+  Object.defineProperty(subscription, "subscriptionId", {
+    get: () => observation.subscriptionId,
+  });
   void subscription.ready.catch(fail);
   return subscription;
 }

@@ -280,7 +280,10 @@ export class DirectorySync {
         if (!this.isCurrent(client, source)) return;
         if (message.type === "project.update") this.receiveWorkspaceDelta(source, message.payload);
         if (message.type === "script_status_update")
-          this.receiveWorkspaceDelta(source, { kind: "script_status", update: message.payload });
+          this.receiveWorkspaceDelta(source, {
+            kind: "script_status",
+            update: message.payload,
+          });
       },
     });
   }
@@ -557,7 +560,7 @@ export class DirectorySync {
         subscription.subscribe({
           snapshot: () => {},
           update: (message) => {
-            if (message.type === "workspace_update" && this.isCurrent(client, source))
+            if (message.type === "workspace.update" && this.isCurrent(client, source))
               this.receiveWorkspaceDelta(source, message.payload);
           },
         });
@@ -657,7 +660,7 @@ export class DirectorySync {
         subscription.subscribe({
           snapshot: () => {},
           update: (message) => {
-            if (message.type === "agent_update" && this.isCurrent(client, source))
+            if (message.type === "agent.update" && this.isCurrent(client, source))
               this.receiveAgentDelta(source, message.payload);
           },
         });

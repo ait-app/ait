@@ -126,7 +126,7 @@ async function expectPendingSubmissionNotRestoredAfterReload(page: Page): Promis
   try {
     await openAgentRoute(page, session);
     await expectComposerVisible(page);
-    gate.holdNextClientRequest("send_agent_message_request");
+    gate.holdNextClientRequest("agent.message.send.request");
     await submitMessage(page, prompt);
     await gate.waitForHeldClientRequest();
     await waitForCurrentSubmissionExcludedFromCache(page, prompt);

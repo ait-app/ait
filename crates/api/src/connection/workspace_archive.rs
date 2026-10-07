@@ -3,28 +3,34 @@
 use filesystem::service::worktrees::{
     ArchiveScope, ArchiveWorktree, PendingArchive, WorktreesError,
 };
-use model::outbound::QueueError;
-use model::{Context, ErrorCode};
+use model::{Context, DispatchError, ErrorCode};
 use serde_json::{Value, json};
 
 use crate::Shared;
 
-pub(super) fn handles(method: &str) -> bool {
-    matches!(
-        method,
-        "workspace.archive.request"
-            | "project.remove.request"
-            | "workspace.worktree.archive.request"
-    )
-}
-
-pub(super) async fn request(mut context: Context<'_>, state: &Shared) -> Result<(), QueueError> {
+pub(super) async fn request(
+    context: &mut Option<Context<'_>>,
+    state: &Shared,
+) -> Result<(), DispatchError> {
+    if context.is_none() {
+        return Ok(());
+    }
+    let Some(mut context) = context.take_if(|context| {
+        matches!(
+            context.request.method.as_str(),
+            "workspace.archive.request"
+                | "project.remove.request"
+                | "workspace.worktree.archive.request"
+        )
+    }) else {
+        return Err(DispatchError::NotImplemented);
+    };
     let result = if context.request.method == "workspace.worktree.archive.request" {
         worktree(state, std::mem::take(&mut context.request.params)).await
     } else {
         metadata(state, &mut context).await
     };
-    context.respond(result)
+    context.respond(result).map_err(Into::into)
 }
 
 async fn metadata(state: &Shared, context: &mut Context<'_>) -> Result<Value, ErrorCode> {

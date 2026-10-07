@@ -3,12 +3,6 @@
 use metadata::protocol::workspace::WorkspaceProjectDescriptorPayload;
 use serde::{Deserialize, Serialize};
 
-/// GitHub project methods backed by the host CLI and project registry.
-pub const CAPABILITIES: &[&str] = &[
-    "workspace.github.search_repositories.request",
-    "project.github.clone.request",
-];
-
 /// Repository discovery input. Empty query lists recent owned repositories.
 #[derive(Debug, Clone, PartialEq, Eq, Deserialize)]
 pub struct GithubRepositorySearchRequest {

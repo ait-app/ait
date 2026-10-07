@@ -61,7 +61,7 @@ export class DaemonClientRuntimeMetrics {
   }
 
   recordAgentStream(
-    payload: Extract<SessionOutboundMessage, { type: "agent_stream" }>["payload"],
+    payload: Extract<SessionOutboundMessage, { type: "agent.stream" }>["payload"],
   ): void {
     const { agentId, event } = payload;
     const eventType = event.type === "timeline" ? `timeline:${event.item.type}` : event.type;

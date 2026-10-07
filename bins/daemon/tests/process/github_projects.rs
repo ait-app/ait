@@ -15,11 +15,7 @@ async fn binary_searches_and_clones_github_project_with_local_git_transport() {
     let log = root.path().join("server.log");
     let mut process = start_with_path(&state, &log, Some(std::ffi::OsStr::new(&path)));
     let address = ready(&mut process, &log).await;
-    let mut socket = connect(
-        &address,
-        filesystem::protocol::github_projects::CAPABILITIES,
-    )
-    .await;
+    let mut socket = connect(&address, filesystem::rpc::github_projects::METHODS).await;
 
     let search = request(
         &mut socket,

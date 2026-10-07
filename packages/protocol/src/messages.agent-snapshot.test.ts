@@ -34,7 +34,7 @@ describe("Rust agent snapshots", () => {
       const message = {
         type: "session",
         message: {
-          type: "fetch_agent_response",
+          type: "agent.get.response",
           payload: { requestId: "agent", agent: snapshot, error: null },
         },
       };
@@ -48,7 +48,7 @@ describe("Rust agent snapshots", () => {
     const message = {
       type: "session",
       message: {
-        type: "fetch_agents_response",
+        type: "agent.list.response",
         payload: {
           requestId: "agents",
           entries: [
@@ -62,7 +62,11 @@ describe("Rust agent snapshots", () => {
                   nativeHandle: null,
                   metadata: null,
                 },
-                runtimeInfo: { provider: "codex", sessionId: "native-session", extra: null },
+                runtimeInfo: {
+                  provider: "codex",
+                  sessionId: "native-session",
+                  extra: null,
+                },
               },
               project: {
                 projectKey: "directory:/workspace",
@@ -106,7 +110,7 @@ describe("Rust agent snapshots", () => {
     const message = {
       type: "session",
       message: {
-        type: "fetch_agent_response",
+        type: "agent.get.response",
         payload: { requestId: "agent", agent: snapshot, error: null },
       },
     };
@@ -128,7 +132,7 @@ describe("Rust agent snapshots", () => {
     const message = {
       type: "session",
       message: {
-        type: "fetch_agent_response",
+        type: "agent.get.response",
         payload: { requestId: "agent", agent: { ...agent, ...fields }, error: null },
       },
     };
@@ -140,7 +144,7 @@ describe("Rust agent snapshots", () => {
     const message = {
       type: "session",
       message: {
-        type: "fetch_agent_response",
+        type: "agent.get.response",
         payload: { requestId: "agent", agent: { ...agent, lastError: 42 }, error: null },
       },
     };

@@ -13,7 +13,8 @@ if '--conversation' in args:
 model = args[args.index('--model') + 1] if '--model' in args else None
 
 def emit(value):
-    print(json.dumps(value), flush=True)
+    # SIGINT may interrupt another emission while Python's stdout buffer is locked.
+    os.write(sys.stdout.fileno(), (json.dumps(value) + '\n').encode())
 
 def log(value):
     path = os.environ.get('AGY_FIXTURE_LOG')
@@ -43,7 +44,6 @@ if model is not None:
     init['model'] = model
 if scenario == 'wrong-model':
     init['model'] = 'foreign-model'
-emit({'event': 'init', 'conversation_id': conversation, 'init': init})
 turns = 0
 step_index = 0
 
@@ -57,6 +57,8 @@ def interrupted(signum, frame):
     sys.exit(0)
 
 signal.signal(signal.SIGINT, interrupted)
+# Install cancellation handling before advertising that the process is ready.
+emit({'event': 'init', 'conversation_id': conversation, 'init': init})
 for line in sys.stdin:
     message = json.loads(line)
     log({'input': message})

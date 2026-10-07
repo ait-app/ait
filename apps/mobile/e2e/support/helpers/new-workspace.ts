@@ -579,10 +579,9 @@ export async function delayBrowserAgentCreatedStatus(
 
     ws.onMessage((message) => {
       const sessionMessage = frames.client(message);
-      if (sessionMessage?.type === "send_agent_message_request")
+      if (sessionMessage?.type === "agent.message.send.request")
         creationRequests.push(sessionMessage);
       if (
-        sessionMessage?.type === "create_agent_request" ||
         sessionMessage?.type === "agent.create.request" ||
         sessionMessage?.type === "workspace.create.request"
       ) {
@@ -672,7 +671,7 @@ export async function delayBrowserWorkspaceCreatedResponse(
 
     ws.onMessage((message) => {
       const sessionMessage = frames.client(message);
-      if (sessionMessage?.type === "create_agent_request") agentRequests.push(sessionMessage);
+      if (sessionMessage?.type === "agent.create.request") agentRequests.push(sessionMessage);
       if (sessionMessage?.type === "workspace.create.request") {
         createRequestIds.add(sessionMessage.requestId);
         if (sessionMessage.idempotencyKey) creationKeys.add(sessionMessage.idempotencyKey);

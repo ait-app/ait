@@ -2,7 +2,7 @@ import type { SessionOutboundMessage } from "@ait/protocol/messages";
 import { normalizeWorkspaceDescriptor, type WorkspaceDescriptor } from "@/stores/session-store";
 import { shouldSuppressWorkspaceForLocalArchive } from "./session-workspace-upserts";
 
-type WorkspaceDelta = Extract<SessionOutboundMessage, { type: "workspace_update" }>["payload"];
+type WorkspaceDelta = Extract<SessionOutboundMessage, { type: "workspace.update" }>["payload"];
 
 export function reconcileWorkspaceDirectory(input: {
   serverId: string;

@@ -84,8 +84,8 @@ function readClientRequest(message: string | Buffer): ClientRequest | null {
 
 function directoryForRequest(request: ClientRequest): keyof DirectoryBootstrapCounts | null {
   if (request.page?.cursor) return null;
-  if (request.type === "fetch_agents_request") return "agents";
-  if (request.type === "fetch_workspaces_request") return "workspaces";
+  if (request.type === "agent.list.request") return "agents";
+  if (request.type === "workspace.list.request") return "workspaces";
   return null;
 }
 
@@ -94,7 +94,7 @@ function stripAssistantMessageId(
   enabled: boolean,
   messageType: unknown,
 ): string | Buffer {
-  if (!enabled || messageType !== "agent_stream" || typeof message !== "string") return message;
+  if (!enabled || messageType !== "agent.stream" || typeof message !== "string") return message;
   const envelope = JSON.parse(message) as {
     message?: { payload?: { event?: { type?: unknown; item?: Record<string, unknown> } } };
     payload?: { event?: { type?: unknown; item?: Record<string, unknown> } };
@@ -171,7 +171,7 @@ function rewriteShellToolCommand(
 }
 
 function readAgentStreamEventType(message: ClientRequest | null): string | null {
-  if (message?.type !== "agent_stream" || !message.payload || typeof message.payload !== "object") {
+  if (message?.type !== "agent.stream" || !message.payload || typeof message.payload !== "object") {
     return null;
   }
   const event = (message.payload as { event?: { type?: unknown } }).event;
@@ -179,7 +179,7 @@ function readAgentStreamEventType(message: ClientRequest | null): string | null 
 }
 
 function readAgentStreamAgentId(message: ClientRequest | null): string | null {
-  if (message?.type !== "agent_stream" || !message.payload || typeof message.payload !== "object") {
+  if (message?.type !== "agent.stream" || !message.payload || typeof message.payload !== "object") {
     return null;
   }
   const agentId = (message.payload as { agentId?: unknown }).agentId;
@@ -187,7 +187,7 @@ function readAgentStreamAgentId(message: ClientRequest | null): string | null {
 }
 
 function readAgentStreamItemType(message: ClientRequest | null): string | null {
-  if (message?.type !== "agent_stream" || !message.payload || typeof message.payload !== "object") {
+  if (message?.type !== "agent.stream" || !message.payload || typeof message.payload !== "object") {
     return null;
   }
   const event = (message.payload as { event?: { type?: unknown; item?: { type?: unknown } } })
@@ -236,7 +236,7 @@ function shouldSuppressServerMessage(input: {
 }): boolean {
   const messageType = typeof input.message?.type === "string" ? input.message.type : null;
   if (messageType && input.messageTypes.has(messageType)) return true;
-  if (input.suppressAgentStream && messageType === "agent_stream") return true;
+  if (input.suppressAgentStream && messageType === "agent.stream") return true;
   const itemType = readAgentStreamItemType(input.message);
   if (itemType && input.agentStreamItemTypes.has(itemType)) return true;
   const eventType = readAgentStreamEventType(input.message);
@@ -260,7 +260,7 @@ function agentUpdateKey(agentId: string, status: string): string {
 }
 
 function matchesAgentUpdate(message: ClientRequest | null, agentUpdate: HeldAgentUpdate): boolean {
-  if (message?.type !== "agent_update") return false;
+  if (message?.type !== "agent.update") return false;
   const payload = message.payload;
   if (
     !payload ||
@@ -281,7 +281,7 @@ function recordClientRequest(
 ): void {
   if (typeof request?.type !== "string") return;
   clientRequestCounts.set(request.type, (clientRequestCounts.get(request.type) ?? 0) + 1);
-  if (request.type === "fetch_agent_timeline_request" && typeof request.direction === "string") {
+  if (request.type === "agent.timeline.get.request" && typeof request.direction === "string") {
     timelineRequestCounts.set(
       request.direction,
       (timelineRequestCounts.get(request.direction) ?? 0) + 1,
@@ -484,7 +484,7 @@ export async function installDaemonWebSocketGate(page: Page) {
         return;
       }
       if (
-        request?.type === "file_explorer_request" &&
+        request?.type === "fs.explorer.request" &&
         request.mode === "file" &&
         request.path === fileReadPathToHold
       ) {
@@ -515,12 +515,12 @@ export async function installDaemonWebSocketGate(page: Page) {
         stripCanonicalSubmittedPromptsFeature,
         serverMessage?.type,
       );
-      const isTimelineResponse = serverMessage?.type === "fetch_agent_timeline_response";
+      const isTimelineResponse = serverMessage?.type === "agent.timeline.get.response";
       if (isTimelineResponse) {
         outboundMessage = failTimelineResponse(outboundMessage, failingTimelineAgentId);
       }
       const shouldForceTimelineReset =
-        forceTimelineEpochReset && serverMessage?.type === "fetch_agent_timeline_response";
+        forceTimelineEpochReset && serverMessage?.type === "agent.timeline.get.response";
       outboundMessage = forceTimelineReset(outboundMessage, shouldForceTimelineReset);
       if (shouldForceTimelineReset) forceTimelineEpochReset = false;
       recordServerMessage(serverMessage);
@@ -747,7 +747,7 @@ export async function installDaemonWebSocketGate(page: Page) {
         JSON.stringify({
           type: "session",
           message: {
-            type: "fetch_agent_timeline_request",
+            type: "agent.timeline.get.request",
             agentId,
             requestId: `playwright-timeline-${Date.now()}`,
             direction: "tail",
@@ -851,7 +851,7 @@ export async function installDaemonWebSocketGate(page: Page) {
     },
     getTimelineRequestCount(direction: "tail" | "before" | "after", agentId?: string): number {
       if (agentId) {
-        return (clientRequests.get("fetch_agent_timeline_request") ?? []).filter(
+        return (clientRequests.get("agent.timeline.get.request") ?? []).filter(
           (request) => request.agentId === agentId && request.direction === direction,
         ).length;
       }

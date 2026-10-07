@@ -1,6 +1,6 @@
 //! Browser request dispatch; callbacks are owned by the physical connection.
-use crate::{broker::Broker, capabilities::Group, connection::Connection};
-use model::{Context, ErrorCode, outbound::QueueError};
+use crate::{broker::Broker, connection::Connection};
+use model::{Context, DispatchError, ErrorCode};
 /// Host-composed automation broker.
 #[derive(Debug)]
 pub struct State {
@@ -8,15 +8,34 @@ pub struct State {
     pub broker: Option<Broker>,
 }
 /// Register a host using one connection subscription slot.
+/// Leaves `context` unchanged for other crates; takes it when this crate handles the method.
+/// Returns `DispatchError::NotImplemented` while leaving an unmatched Context available.
+///
+/// # Arguments
+/// * `context` - Pending request, consumed only when this crate recognizes its method.
+/// * `state` - Installed services and resources used to execute the request.
+/// * `connection` - Connection-owned subscriptions and streams for this capability.
+///
 /// # Errors
-/// Returns outbound queue failures after returning business errors in the response.
+/// Returns `NotImplemented` for an unmatched method and `Delivery` for an outbound failure.
+/// Business errors are delivered in the response.
 pub fn dispatch(
-    group: Group,
-    mut context: Context<'_>,
+    context: &mut Option<Context<'_>>,
     state: &State,
     connection: &mut Connection,
-) -> Result<(), QueueError> {
-    let Group::Browser = group;
+) -> Result<(), DispatchError> {
+    if context.is_none() {
+        return Ok(());
+    }
+    let Some(mut context) = context.take_if(|context| {
+        matches!(
+            context.request.method.as_str(),
+            "browser.host.register.request"
+        )
+    }) else {
+        return Err(DispatchError::NotImplemented);
+    };
+
     let result = if context.runtime.cancellation.is_cancelled() {
         Err(ErrorCode::ServerDraining)
     } else if context.available_subscriptions == 0 {
@@ -30,5 +49,5 @@ pub fn dispatch(
     } else {
         Err(ErrorCode::UnsupportedCapability)
     };
-    context.respond(result)
+    context.respond(result).map_err(Into::into)
 }

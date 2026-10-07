@@ -1,10 +1,5 @@
 //! Archived Workspace recovery messages.
 use serde::{Deserialize, Serialize};
-/// Canonical recovery methods implemented by the filesystem service.
-pub const CAPABILITIES: &[&str] = &[
-    "workspace.recovery.inspect.request",
-    "workspace.recovery.restore.request",
-];
 /// Recovery request shared by inspect and restore.
 #[derive(Debug, Clone, PartialEq, Eq, Deserialize)]
 #[serde(rename_all = "camelCase")]

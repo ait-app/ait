@@ -3,19 +3,6 @@ use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 
-/// The nine supported client requests.
-pub const CAPABILITIES: &[&str] = &[
-    "schedule.create.request",
-    "schedule.list.request",
-    "schedule.inspect.request",
-    "schedule.logs.request",
-    "schedule.update.request",
-    "schedule.pause.request",
-    "schedule.resume.request",
-    "schedule.delete.request",
-    "schedule.run_once.request",
-];
-
 /// Fixed interval or five-field cron cadence.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(

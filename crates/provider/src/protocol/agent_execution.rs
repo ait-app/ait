@@ -5,15 +5,6 @@ use std::collections::BTreeMap;
 use domain::agent_runtime::{AgentPersistenceHandle, StoredAgentConfig};
 use serde::Deserialize;
 
-/// Methods backed by the native Provider worker.
-pub const CAPABILITIES: &[&str] = &[
-    "agent.create.request",
-    "agent.resume.request",
-    "agent.message.send.request",
-    "agent.cancel.request",
-    "agent.finish.wait.request",
-];
-
 /// Native session configuration. Advanced fields are validated before any side effect.
 #[derive(Debug, Clone, Deserialize)]
 #[serde(rename_all = "camelCase")]

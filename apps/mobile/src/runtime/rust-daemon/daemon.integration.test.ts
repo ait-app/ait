@@ -152,7 +152,7 @@ async function verifyReadInterfaces(client: DaemonClient, agentId: string, cwd: 
       .toEqual(
         expect.arrayContaining([
           expect.objectContaining({
-            type: "workspace_update",
+            type: "workspace.update",
             payload: expect.objectContaining({
               subscriptionId: snapshot.subscriptionId,
               kind: "upsert",
@@ -163,11 +163,14 @@ async function verifyReadInterfaces(client: DaemonClient, agentId: string, cwd: 
             }),
           }),
           expect.objectContaining({
-            type: "agent_update",
+            type: "agent.update",
             payload: expect.objectContaining({
               subscriptionId: agentSnapshot.subscriptionId,
               kind: "upsert",
-              agent: expect.objectContaining({ id: agentId, title: "Live agent title" }),
+              agent: expect.objectContaining({
+                id: agentId,
+                title: "Live agent title",
+              }),
             }),
           }),
         ]),
@@ -179,9 +182,9 @@ async function verifyReadInterfaces(client: DaemonClient, agentId: string, cwd: 
 }
 
 async function verifyPermissionAndResume(client: DaemonClient, agentId: string) {
-  const events = client.observeEvents(["agent_permission_request", "agent_permission_resolved"]);
+  const events = client.observeEvents(["agent.permission.request", "agent.permission.resolved"]);
   let permissionId: string | undefined;
-  const unsubscribe = client.on("agent_permission_request", (message) => {
+  const unsubscribe = client.on("agent.permission.request", (message) => {
     if (message.payload.agentId === agentId) permissionId = message.payload.request.id;
   });
   try {
@@ -213,9 +216,9 @@ async function verifyPermissionAndResume(client: DaemonClient, agentId: string) 
 }
 
 async function verifyTerminalActivity(client: DaemonClient, cwd: string, workspaceId: string) {
-  const events = client.observeEvents(["terminal_attention_required"]);
+  const events = client.observeEvents(["terminal.attention.required"]);
   const notifications: { terminalId: string; reason: string }[] = [];
-  const unsubscribe = client.on("terminal_attention_required", (message) => {
+  const unsubscribe = client.on("terminal.attention.required", (message) => {
     notifications.push(message.payload);
   });
   let terminalId: string | undefined;

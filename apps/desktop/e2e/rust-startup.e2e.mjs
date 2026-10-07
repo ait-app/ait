@@ -116,7 +116,10 @@ try {
   const live = await page.evaluate(
     async ({ id, cwd }) => {
       const client = globalThis.__paseoHostRuntimeStore.getSnapshot(id).client;
-      const project = await client.createProjectDirectory({ parentPath: cwd, name: "first-chat" });
+      const project = await client.createProjectDirectory({
+        parentPath: cwd,
+        name: "first-chat",
+      });
       if (!project.project || !project.directoryPath)
         throw new Error(project.error ?? "No new project");
       const prompt = "first conversation";
@@ -139,13 +142,18 @@ try {
       await client.waitForFinish(agent.id, 5000);
       const timeline = client.observeTimeline([agent.id]);
       const events = [];
-      timeline.subscribe({ snapshot: () => {}, update: (message) => events.push(message.type) });
+      timeline.subscribe({
+        snapshot: () => {},
+        update: (message) => events.push(message.type),
+      });
       try {
         await timeline.ready;
         const initial = await client.fetchAgentTimeline(agent.id, { timeout: 5000 });
         await client.sendAgentMessage(agent.id, "stream");
         const running = await client.fetchAgents({});
-        await client.sendAgentMessage(agent.id, "continue", { activeTurnBehavior: "steer" });
+        await client.sendAgentMessage(agent.id, "continue", {
+          activeTurnBehavior: "steer",
+        });
         const finished = await client.waitForFinish(agent.id, 5000);
         const page = await client.fetchAgentTimeline(agent.id, { timeout: 5000 });
         return {
@@ -168,7 +176,7 @@ try {
   assert.equal(live.initialEntries[1].item.text, "Echo: first conversation");
   assert.equal(live.running, "running");
   assert.equal(live.finished, "idle");
-  assert(live.events.includes("agent_stream"), "No live timeline updates reached the SDK");
+  assert(live.events.includes("agent.stream"), "No live timeline updates reached the SDK");
   const assistantText = (entries) =>
     entries
       .filter((entry) => entry.item.type === "assistant_message")

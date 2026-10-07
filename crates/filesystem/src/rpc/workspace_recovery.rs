@@ -1,4 +1,11 @@
 //! Workspace recovery dispatch and post-response update projection.
+
+/// Client methods implemented by this component; consumed by capability discovery.
+pub const METHODS: &[&str] = &[
+    "workspace.recovery.inspect.request",
+    "workspace.recovery.restore.request",
+];
+
 use chrono::{SecondsFormat, Utc};
 use serde::Serialize;
 use serde_json::Value;

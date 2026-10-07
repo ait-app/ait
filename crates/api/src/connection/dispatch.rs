@@ -1,12 +1,10 @@
-use model::outbound::QueueError;
-use model::{Context, ErrorCode};
+use model::outbound::{Outbound, QueueError};
+use model::{Context, DispatchError, ErrorCode};
 
 use super::ConnectionSubscriptions;
 use crate::Shared;
-use crate::capabilities::Group;
 
 pub(super) async fn request(
-    group: Group,
     context: Context<'_>,
     state: &Shared,
     subscriptions: &mut ConnectionSubscriptions,
@@ -16,107 +14,120 @@ pub(super) async fn request(
     {
         return context.respond(Err(error));
     }
-    if super::workspace_creation::handles(&context.request) {
-        return super::workspace_creation::request(context, state).await;
+    let outbound = context.outbound;
+    let mut context = Some(context);
+    match super::workspace_creation::request(&mut context, state).await {
+        Ok(()) => return Ok(()),
+        Err(DispatchError::NotImplemented) => {
+            Context::assert_unhandled(&context, "api::workspace_creation");
+        }
+        Err(DispatchError::Delivery(error)) => return Err(error),
     }
-    if super::workspace_archive::handles(&context.request.method) {
-        return super::workspace_archive::request(context, state).await;
+    match super::workspace_archive::request(&mut context, state).await {
+        Ok(()) => return Ok(()),
+        Err(DispatchError::NotImplemented) => {
+            Context::assert_unhandled(&context, "api::workspace_archive");
+        }
+        Err(DispatchError::Delivery(error)) => return Err(error),
     }
-    dispatch_group(group, context, state, subscriptions).await
+    match crate::relay_rpc::request(&mut context, state).await {
+        Ok(()) => return Ok(()),
+        Err(DispatchError::NotImplemented) => Context::assert_unhandled(&context, "api::relay"),
+        Err(DispatchError::Delivery(error)) => return Err(error),
+    }
+    match schedule::dispatch::dispatch(&mut context, &state.schedule).await {
+        Ok(()) => return Ok(()),
+        Err(DispatchError::NotImplemented) => Context::assert_unhandled(&context, "schedule"),
+        Err(DispatchError::Delivery(error)) => return Err(error),
+    }
+    match browser::dispatch::dispatch(&mut context, &state.browser, &mut subscriptions.browser) {
+        Ok(()) => return Ok(()),
+        Err(DispatchError::NotImplemented) => Context::assert_unhandled(&context, "browser"),
+        Err(DispatchError::Delivery(error)) => return Err(error),
+    }
+    match voice::dispatch::dispatch(&mut context, &state.voice, &mut subscriptions.voice).await {
+        Ok(()) => return Ok(()),
+        Err(DispatchError::NotImplemented) => Context::assert_unhandled(&context, "voice"),
+        Err(DispatchError::Delivery(error)) => return Err(error),
+    }
+    match metadata::dispatch::dispatch(&mut context, &state.metadata, &mut subscriptions.metadata)
+        .await
+    {
+        Ok(Some(completion)) => {
+            return complete_metadata(completion, state, subscriptions, outbound).await;
+        }
+        Ok(None) => return Ok(()),
+        Err(DispatchError::NotImplemented) => Context::assert_unhandled(&context, "metadata"),
+        Err(DispatchError::Delivery(error)) => return Err(error),
+    }
+    match filesystem::dispatch::dispatch(
+        &mut context,
+        &state.filesystem,
+        &mut subscriptions.filesystem,
+    )
+    .await
+    {
+        Ok(()) => return Ok(()),
+        Err(DispatchError::NotImplemented) => Context::assert_unhandled(&context, "filesystem"),
+        Err(DispatchError::Delivery(error)) => return Err(error),
+    }
+    match provider::dispatch::dispatch(&mut context, &state.provider, &mut subscriptions.provider)
+        .await
+    {
+        Ok(Some(provider::dispatch::Completion::CloseTerminals {
+            request_id,
+            mut value,
+            terminal_ids,
+        })) => {
+            let result = terminal::dispatch::close_many(&state.terminal, terminal_ids)
+                .await
+                .map(|terminals| {
+                    value["terminals"] = terminals;
+                    value
+                });
+            return outbound.respond(request_id, result);
+        }
+        Ok(None) => return Ok(()),
+        Err(DispatchError::NotImplemented) => Context::assert_unhandled(&context, "provider"),
+        Err(DispatchError::Delivery(error)) => return Err(error),
+    }
+    match terminal::dispatch::dispatch(&mut context, &state.terminal, &mut subscriptions.terminals)
+        .await
+    {
+        Ok(()) => return Ok(()),
+        Err(DispatchError::NotImplemented) => Context::assert_unhandled(&context, "terminal"),
+        Err(DispatchError::Delivery(error)) => return Err(error),
+    }
+    context
+        .expect("All handlers declined without consuming the request")
+        .respond(Err(ErrorCode::NotImplemented))
 }
 
-async fn dispatch_group(
-    group: Group,
-    context: Context<'_>,
+async fn complete_metadata(
+    completion: metadata::dispatch::Completion,
     state: &Shared,
     subscriptions: &mut ConnectionSubscriptions,
+    outbound: &Outbound,
 ) -> Result<(), QueueError> {
-    let outbound = context.outbound;
-    match group {
-        Group::Relay => crate::relay_rpc::request(context, state).await,
-        Group::Schedule(group) => {
-            schedule::dispatch::dispatch(group, context, &state.schedule).await
+    match completion {
+        metadata::dispatch::Completion::DaemonSnapshot {
+            request_id,
+            method,
+            params,
+        } => {
+            let result = daemon_snapshot(state, method, params).await;
+            outbound.respond(request_id, result)
         }
-        Group::Browser(group) => {
-            browser::dispatch::dispatch(group, context, &state.browser, &mut subscriptions.browser)
-        }
-        Group::Voice(group) => {
-            voice::dispatch::dispatch(group, context, &state.voice, &mut subscriptions.voice).await
-        }
-        Group::Metadata(group) => {
-            match metadata::dispatch::dispatch(
-                group,
-                context,
-                &state.metadata,
-                &mut subscriptions.metadata,
-            )
-            .await?
-            {
-                metadata::dispatch::Completion::Complete => Ok(()),
-                metadata::dispatch::Completion::DaemonSnapshot {
-                    request_id,
-                    method,
-                    params,
-                } => {
-                    let result = daemon_snapshot(state, method, params).await;
-                    outbound.respond(request_id, result)
-                }
-                metadata::dispatch::Completion::Release {
-                    request_id,
-                    subscription_id,
-                } => {
-                    subscriptions.release(&subscription_id);
-                    let value =
-                        serde_json::to_value(model::subscription::SubscriptionReleaseResult {
-                            subscription_id,
-                        })
-                        .map_err(|_| ErrorCode::InvalidMessage);
-                    outbound.respond(request_id, value)
-                }
-            }
-        }
-        Group::Filesystem(group) => {
-            filesystem::dispatch::dispatch(
-                group,
-                context,
-                &state.filesystem,
-                &mut subscriptions.filesystem,
-            )
-            .await
-        }
-        Group::Provider(group) => {
-            match provider::dispatch::dispatch(
-                group,
-                context,
-                &state.provider,
-                &mut subscriptions.provider,
-            )
-            .await?
-            {
-                provider::dispatch::Completion::Complete => Ok(()),
-                provider::dispatch::Completion::CloseTerminals {
-                    request_id,
-                    mut value,
-                    terminal_ids,
-                } => {
-                    let result = terminal::dispatch::close_many(&state.terminal, terminal_ids)
-                        .await
-                        .map(|terminals| {
-                            value["terminals"] = terminals;
-                            value
-                        });
-                    outbound.respond(request_id, result)
-                }
-            }
-        }
-        Group::Terminal(group) => {
-            terminal::dispatch::dispatch(
-                group,
-                context,
-                &state.terminal,
-                &mut subscriptions.terminals,
-            )
-            .await
+        metadata::dispatch::Completion::Release {
+            request_id,
+            subscription_id,
+        } => {
+            subscriptions.release(&subscription_id);
+            let value = serde_json::to_value(model::subscription::SubscriptionReleaseResult {
+                subscription_id,
+            })
+            .map_err(|_| ErrorCode::InvalidMessage);
+            outbound.respond(request_id, value)
         }
     }
 }
@@ -137,3 +148,6 @@ async fn daemon_snapshot(
     };
     metadata::dispatch::daemon_snapshot(&state.metadata, method, params, providers).await
 }
+
+#[cfg(test)]
+mod tests;

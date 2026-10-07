@@ -5,7 +5,7 @@ use super::*;
 #[test]
 fn capabilities_merge_legacy_setup_and_script_names_into_canonical_methods() {
     assert_eq!(
-        CAPABILITIES,
+        crate::rpc::workspace_automation::METHODS,
         [
             "workspace.setup.status.request",
             "workspace.setup.run.request",

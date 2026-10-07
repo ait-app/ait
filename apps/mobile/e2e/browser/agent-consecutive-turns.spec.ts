@@ -746,7 +746,7 @@ async function recordDelayedRunningTransition(
   const prompt = "Second prompt keeps streaming.";
   gate.holdNextAgentStreamEvent("turn_started");
   gate.holdNextAgentUpdate(agent.agentId, "running");
-  gate.holdNextServerMessage("send_agent_message_response");
+  gate.holdNextServerMessage("agent.message.send.response");
   gate.setAgentStreamSuppressed(true);
   await recordTurnFrames(page, prompt);
   await installActivityContinuityOracle(page, prompt);
@@ -754,7 +754,7 @@ async function recordDelayedRunningTransition(
   await Promise.all([
     gate.waitForHeldAgentStreamEvent("turn_started"),
     gate.waitForHeldAgentUpdate(agent.agentId, "running"),
-    gate.waitForHeldServerMessage("send_agent_message_response"),
+    gate.waitForHeldServerMessage("agent.message.send.response"),
   ]);
 
   let turnReleased = false;
@@ -771,12 +771,12 @@ async function recordDelayedRunningTransition(
       gate.releaseHeldAgentStreamEvent("turn_started");
       turnReleased = true;
       await expect(page.getByTestId("turn-working-elapsed")).toBeVisible();
-      gate.releaseHeldServerMessage("send_agent_message_response");
+      gate.releaseHeldServerMessage("agent.message.send.response");
       responseReleased = true;
       gate.releaseHeldAgentUpdate(agent.agentId, "running");
       snapshotReleased = true;
     } else if (releaseOrder === "response-before-turn") {
-      gate.releaseHeldServerMessage("send_agent_message_response");
+      gate.releaseHeldServerMessage("agent.message.send.response");
       responseReleased = true;
       await recordPaintsFor(page, 80);
       gate.releaseHeldAgentStreamEvent("turn_started");
@@ -785,7 +785,7 @@ async function recordDelayedRunningTransition(
       gate.releaseHeldAgentUpdate(agent.agentId, "running");
       snapshotReleased = true;
     } else {
-      gate.releaseHeldServerMessage("send_agent_message_response");
+      gate.releaseHeldServerMessage("agent.message.send.response");
       responseReleased = true;
       await recordPaintsFor(page, 80);
       gate.releaseHeldAgentUpdate(agent.agentId, "running");
@@ -805,7 +805,7 @@ async function recordDelayedRunningTransition(
   } finally {
     if (!turnReleased) gate.releaseHeldAgentStreamEvent("turn_started");
     if (!snapshotReleased) gate.releaseHeldAgentUpdate(agent.agentId, "running");
-    if (!responseReleased) gate.releaseHeldServerMessage("send_agent_message_response");
+    if (!responseReleased) gate.releaseHeldServerMessage("agent.message.send.response");
     gate.setAgentStreamSuppressed(false);
   }
 }
@@ -835,7 +835,7 @@ test("keeps the first prompt of a new agent in place through authoritative hydra
     await expectComposerVisible(page);
 
     const prompt = "Delay synthetic user message by 300ms.";
-    gate.holdNextServerMessage("fetch_agent_timeline_response");
+    gate.holdNextServerMessage("agent.timeline.get.response");
     gate.setAgentStreamEventSuppressed("timeline", true);
     await attachImageFromMenu(page, FIRST_PROMPT_IMAGE);
     await expectAttachmentPill(page, "composer-image-attachment-pill");
@@ -844,9 +844,9 @@ test("keeps the first prompt of a new agent in place through authoritative hydra
 
     const submittedRow = page.getByTestId("user-message").filter({ hasText: prompt }).first();
     await expect(submittedRow).toBeVisible();
-    await gate.waitForHeldServerMessage("fetch_agent_timeline_response");
+    await gate.waitForHeldServerMessage("agent.timeline.get.response");
     gate.truncateHeldTimelineAfterLast("user_message");
-    gate.releaseHeldServerMessage("fetch_agent_timeline_response");
+    gate.releaseHeldServerMessage("agent.timeline.get.response");
     await expect(submittedRow.getByTestId("rewind-menu-trigger")).toBeVisible();
     await recordPaintsFor(page, 80);
     expectAtomicFirstPromptTransition(await stopTurnFrameRecording(page));

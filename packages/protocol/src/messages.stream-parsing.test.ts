@@ -37,9 +37,9 @@ describe("shared messages stream parsing", () => {
     ]);
   });
 
-  it("parses representative fetch_agent_timeline_response payload", () => {
+  it("parses representative agent.timeline.get.response payload", () => {
     const parsed = FetchAgentTimelineResponseMessageSchema.parse({
-      type: "fetch_agent_timeline_response",
+      type: "agent.timeline.get.response",
       payload: {
         requestId: "req-1",
         agentId: "agent_live",
@@ -76,7 +76,7 @@ describe("shared messages stream parsing", () => {
 
   it("parses legacy worktree setup timeline entries without per-command log", () => {
     const parsed = FetchAgentTimelineResponseMessageSchema.parse({
-      type: "fetch_agent_timeline_response",
+      type: "agent.timeline.get.response",
       payload: {
         requestId: "req-legacy-setup",
         agentId: "agent_legacy_setup",
@@ -139,25 +139,25 @@ describe("shared messages stream parsing", () => {
 
   it("parses explicit shutdown and restart lifecycle request payloads as distinct message types", () => {
     const shutdownParsed = SessionInboundMessageSchema.safeParse({
-      type: "shutdown_server_request",
+      type: "server.shutdown.request",
       requestId: "req-shutdown-1",
     });
     expect(shutdownParsed.success).toBe(true);
 
     const restartParsed = SessionInboundMessageSchema.safeParse({
-      type: "restart_server_request",
+      type: "server.restart.request",
       requestId: "req-restart-1",
       reason: "settings_changed",
     });
     expect(restartParsed.success).toBe(true);
 
-    expect(shutdownParsed.success && shutdownParsed.data.type).toBe("shutdown_server_request");
-    expect(restartParsed.success && restartParsed.data.type).toBe("restart_server_request");
+    expect(shutdownParsed.success && shutdownParsed.data.type).toBe("server.shutdown.request");
+    expect(restartParsed.success && restartParsed.data.type).toBe("server.restart.request");
   });
 
-  it("parses representative agent_stream tool_call event", () => {
+  it("parses representative agent.stream tool_call event", () => {
     const parsed = AgentStreamMessageSchema.parse({
-      type: "agent_stream",
+      type: "agent.stream",
       payload: {
         agentId: "agent_live",
         timestamp: "2026-02-08T20:10:00.000Z",
@@ -190,7 +190,7 @@ describe("shared messages stream parsing", () => {
 
   it("parses representative sub_agent tool_call event", () => {
     const parsed = AgentStreamMessageSchema.parse({
-      type: "agent_stream",
+      type: "agent.stream",
       payload: {
         agentId: "agent_live",
         timestamp: "2026-02-08T20:10:00.000Z",
@@ -225,7 +225,7 @@ describe("shared messages stream parsing", () => {
 
   it("parses optional permission actions and selectedActionId compatibly", () => {
     const requestParsed = AgentStreamMessageSchema.parse({
-      type: "agent_stream",
+      type: "agent.stream",
       payload: {
         agentId: "agent_live",
         timestamp: "2026-02-08T20:10:00.000Z",
@@ -266,7 +266,7 @@ describe("shared messages stream parsing", () => {
     }
 
     const resolutionParsed = AgentStreamMessageSchema.parse({
-      type: "agent_stream",
+      type: "agent.stream",
       payload: {
         agentId: "agent_live",
         timestamp: "2026-02-08T20:10:01.000Z",
@@ -293,7 +293,7 @@ describe("shared messages stream parsing", () => {
 
   it("parses permission request detail compatibly", () => {
     const parsed = AgentStreamMessageSchema.parse({
-      type: "agent_stream",
+      type: "agent.stream",
       payload: {
         agentId: "agent_live",
         timestamp: "2026-02-08T20:10:00.000Z",
@@ -353,7 +353,7 @@ describe("shared messages stream parsing", () => {
 
   it("parses directory suggestions request and response payloads", () => {
     const requestParsed = SessionInboundMessageSchema.safeParse({
-      type: "directory_suggestions_request",
+      type: "directory.suggestions.request",
       query: "proj",
       cwd: "/tmp/project",
       includeFiles: true,
@@ -365,7 +365,7 @@ describe("shared messages stream parsing", () => {
     expect(requestParsed.success).toBe(true);
 
     const responseParsed = SessionOutboundMessageSchema.safeParse({
-      type: "directory_suggestions_response",
+      type: "directory.suggestions.response",
       payload: {
         directories: ["/Users/test/projects/paseo"],
         entries: [{ path: "/Users/test/projects/paseo", kind: "directory" }],

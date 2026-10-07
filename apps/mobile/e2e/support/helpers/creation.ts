@@ -258,11 +258,11 @@ export function createPromptRetryScenario(
       firstMessage = gate.getClientRequests("agent.create.request").at(-1);
     },
     async disconnectAndReconnect() {
-      const fetches = gate.getClientRequestCount("fetch_agents_request");
+      const fetches = gate.getClientRequestCount("agent.list.request");
       await gate.drop();
       gate.restore();
       await expect
-        .poll(() => gate.getClientRequestCount("fetch_agents_request"))
+        .poll(() => gate.getClientRequestCount("agent.list.request"))
         .toBeGreaterThan(fetches);
     },
     async expectSameAgentAndMessage() {
@@ -271,7 +271,7 @@ export function createPromptRetryScenario(
         .poll(() => gate.getClientRequestCount("creation.subscribe.request"))
         .toBeGreaterThan(0);
       expect(gate.getClientRequests("agent.create.request").at(-1)).toEqual(firstMessage);
-      expect(gate.getClientRequestCount("send_agent_message_request")).toBe(0);
+      expect(gate.getClientRequestCount("agent.message.send.request")).toBe(0);
       await expect(page.getByTestId("user-message").filter({ visible: true })).toHaveCount(1);
     },
   };

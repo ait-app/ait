@@ -12,10 +12,9 @@ use protocol::{ClientMessage, ErrorCode, valid_id};
 use tokio::sync::{mpsc, oneshot};
 use tokio_util::sync::CancellationToken;
 
-use super::{ConnectionSubscriptions, Incoming, error, process_message, receive, request_handler};
+use super::{ConnectionSubscriptions, Incoming, error, process_message, receive};
 use crate::{
     Shared,
-    capabilities::Group,
     outbound::{Outbound, QueueError},
 };
 
@@ -146,7 +145,11 @@ async fn route(
             if !valid_id(request_id) {
                 return error(context.outbound, None, ErrorCode::InvalidMessage);
             }
-            if let Err(code) = request_handler(method, context.state, context.capabilities) {
+            if let Err(code) = super::validation::request(
+                method,
+                &context.state.info.implemented_capabilities,
+                context.capabilities,
+            ) {
                 error(context.outbound, Some(request_id.clone()), code)?;
                 continue;
             }
@@ -254,15 +257,19 @@ fn lane(message: &Incoming) -> usize {
         }
         Incoming::Text(ClientMessage::Hello(_)) => return 0,
     };
-    if method == "terminal.input" {
+    if terminal::capabilities::implemented_capabilities().any(|name| name == method)
+        || voice::capabilities::implemented_capabilities().any(|name| name == method)
+    {
         return 1;
     }
-    match super::routing::lookup(method).and_then(|route| route.handler) {
-        Some(Group::Terminal(_) | Group::Voice(_)) => 1,
-        Some(Group::Filesystem(_)) => 2,
-        Some(Group::Provider(_)) => 3,
-        Some(Group::Relay | Group::Metadata(_) | Group::Schedule(_) | Group::Browser(_)) | None => {
-            0
-        }
+    if filesystem::capabilities::implemented_capabilities().any(|name| name == method) {
+        return 2;
     }
+    if provider::capabilities::implemented_capabilities().any(|name| name == method) {
+        return 3;
+    }
+    0
 }
+
+#[cfg(test)]
+mod tests;

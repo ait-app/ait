@@ -88,11 +88,11 @@ function createTimelineClient(
 
 function unsupportedTimelineError(): Error {
   const error = new Error(
-    "Unknown request, try upgrading the daemon requestType=pull_request_timeline_request code=unknown_schema",
+    "Unknown request, try upgrading the daemon requestType=checkout.pr.timeline.request code=unknown_schema",
   ) as Error & { code: string; requestType: string };
   error.name = "DaemonRpcError";
   error.code = "unknown_schema";
-  error.requestType = "pull_request_timeline_request";
+  error.requestType = "checkout.pr.timeline.request";
   return error;
 }
 
@@ -167,7 +167,10 @@ describe("shouldFetchTimelineFrom", () => {
       name: "missing PR number",
       overrides: { identity: { ...baseGate.identity, prNumber: null } },
     },
-    { name: "missing owner", overrides: { identity: { ...baseGate.identity, repoOwner: null } } },
+    {
+      name: "missing owner",
+      overrides: { identity: { ...baseGate.identity, repoOwner: null } },
+    },
     { name: "missing name", overrides: { identity: { ...baseGate.identity, repoName: null } } },
     { name: "tuple marked unsupported", overrides: { timelineUnsupported: true } },
   ])("skips fetching when $name", ({ overrides }) => {
@@ -337,7 +340,7 @@ describe("fetchPrPaneTimelinePage", () => {
 });
 
 describe("isUnsupportedTimelineError", () => {
-  it("matches the daemon's unknown-schema error for pull_request_timeline_request", () => {
+  it("matches the daemon's unknown-schema error for checkout.pr.timeline.request", () => {
     expect(isUnsupportedTimelineError(unsupportedTimelineError())).toBe(true);
   });
 
@@ -551,7 +554,9 @@ describe("selectPrPaneState", () => {
     const state = selectPrPaneState({
       ...baseSelectInput,
       status: prStatus(),
-      timelinePayload: timelinePayload({ error: { kind: "unknown", message: "rate limited" } }),
+      timelinePayload: timelinePayload({
+        error: { kind: "unknown", message: "rate limited" },
+      }),
     });
 
     expect(state.error?.message).toBe("rate limited");

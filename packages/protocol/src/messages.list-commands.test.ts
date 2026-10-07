@@ -1,17 +1,17 @@
 import { describe, expect, test } from "vitest";
 import { SessionInboundMessageSchema, SessionOutboundMessageSchema } from "./messages.js";
 
-describe("list_commands_request schema", () => {
+describe("agent.commands.list.request schema", () => {
   test("accepts legacy agent-only payload", () => {
     const parsed = SessionInboundMessageSchema.parse({
-      type: "list_commands_request",
+      type: "agent.commands.list.request",
       agentId: "agent-123",
       requestId: "req-123",
     });
 
-    expect(parsed.type).toBe("list_commands_request");
-    if (parsed.type !== "list_commands_request") {
-      throw new Error("Expected list_commands_request message");
+    expect(parsed.type).toBe("agent.commands.list.request");
+    if (parsed.type !== "agent.commands.list.request") {
+      throw new Error("Expected agent.commands.list.request message");
     }
     expect(parsed.agentId).toBe("agent-123");
     expect(parsed.draftConfig).toBeUndefined();
@@ -19,7 +19,7 @@ describe("list_commands_request schema", () => {
 
   test("accepts draft command context payload", () => {
     const parsed = SessionInboundMessageSchema.parse({
-      type: "list_commands_request",
+      type: "agent.commands.list.request",
       agentId: "__new_agent__",
       draftConfig: {
         provider: "codex",
@@ -34,9 +34,9 @@ describe("list_commands_request schema", () => {
       requestId: "req-456",
     });
 
-    expect(parsed.type).toBe("list_commands_request");
-    if (parsed.type !== "list_commands_request") {
-      throw new Error("Expected list_commands_request message");
+    expect(parsed.type).toBe("agent.commands.list.request");
+    if (parsed.type !== "agent.commands.list.request") {
+      throw new Error("Expected agent.commands.list.request message");
     }
     expect(parsed.draftConfig).toEqual({
       provider: "codex",
@@ -52,7 +52,7 @@ describe("list_commands_request schema", () => {
 
   test("preserves command kind metadata in responses", () => {
     const parsed = SessionOutboundMessageSchema.parse({
-      type: "list_commands_response",
+      type: "agent.commands.list.response",
       payload: {
         agentId: "agent-123",
         requestId: "req-123",
@@ -68,9 +68,9 @@ describe("list_commands_request schema", () => {
       },
     });
 
-    expect(parsed.type).toBe("list_commands_response");
-    if (parsed.type !== "list_commands_response") {
-      throw new Error("Expected list_commands_response message");
+    expect(parsed.type).toBe("agent.commands.list.response");
+    if (parsed.type !== "agent.commands.list.response") {
+      throw new Error("Expected agent.commands.list.response message");
     }
     expect(parsed.payload.commands).toEqual([
       {
@@ -84,7 +84,7 @@ describe("list_commands_request schema", () => {
 
   test("falls back to command for unknown future command kinds", () => {
     const parsed = SessionOutboundMessageSchema.parse({
-      type: "list_commands_response",
+      type: "agent.commands.list.response",
       payload: {
         agentId: "agent-123",
         requestId: "req-123",
@@ -100,9 +100,9 @@ describe("list_commands_request schema", () => {
       },
     });
 
-    expect(parsed.type).toBe("list_commands_response");
-    if (parsed.type !== "list_commands_response") {
-      throw new Error("Expected list_commands_response message");
+    expect(parsed.type).toBe("agent.commands.list.response");
+    if (parsed.type !== "agent.commands.list.response") {
+      throw new Error("Expected agent.commands.list.response message");
     }
     expect(parsed.payload.commands[0]?.kind).toBe("command");
   });

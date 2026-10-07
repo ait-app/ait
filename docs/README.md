@@ -13,6 +13,8 @@
 
 ## 架构决策
 
+- [ADR-094：客户端统一使用 Ait 标准方法名](decisions/clients/adr-094-canonical-ait-client-methods.md)：应用、SDK、消息校验和方法目录使用标准名称，事件订阅参数转换集中在共享协议层。
+- [ADR-093：以可消费 Context 逐级处理请求](decisions/daemon/adr-093-consumable-request-context.md)：组件方法向上组合，仅 `NotImplemented` 继续分发并断言 Context 未消费。
 - [ADR-092：工作区重置同步 origin 同名分支](decisions/workspace/adr-092-reset-same-named-remote-branch.md)：存在远端初始分支时一次强制推送同步，并校验远端并发变更。
 - [ADR-091：会话独立执行与 Provider 后台发现](decisions/providers/adr-091-independent-session-execution.md)：按稳定身份保序、后台 discovery、独立读取与 wait、级联屏障和全局资源预算。
 - [ADR-090：Timeline 单项 768 KiB 与按字节分页](decisions/providers/adr-090-timeline-entry-and-page-budgets.md)：展示条目预算、整页响应预算与连续 source 游标。

@@ -2,21 +2,6 @@
 
 use serde::{Deserialize, Serialize};
 
-/// Implemented canonical filesystem methods.
-pub const CAPABILITIES: &[&str] = &[
-    "directory.suggestions.request",
-    "fs.explorer.request",
-    "fs.file.subscribe.request",
-    "fs.file.unsubscribe.request",
-    "fs.file.write.request",
-    "fs.entry.create.request",
-    "fs.entry.rename.request",
-    "fs.entry.duplicate.request",
-    "fs.entry.delete.request",
-    "fs.file.download_token.request",
-    "file.upload.request",
-];
-
 /// Entry Kind discriminator.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]

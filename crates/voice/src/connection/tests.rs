@@ -67,23 +67,20 @@ async fn unavailable_speech_requests_keep_correlation_and_do_not_emit_success_ev
         if available {
             state.runtime.cancellation.cancel();
         }
-        crate::dispatch::dispatch(
-            crate::capabilities::Group::Voice,
-            model::Context {
-                request: model::Request {
-                    id: "speech-request".to_owned(),
-                    method: "voice.abort.request".to_owned(),
-                    params: json!({}),
-                },
-                runtime: &fixture.runtime,
-                outbound: &fixture.outbound,
-                available_subscriptions: 0,
+        let mut context = Some(model::Context {
+            request: model::Request {
+                id: "speech-request".to_owned(),
+                method: "voice.abort.request".to_owned(),
+                params: json!({}),
             },
-            &state,
-            &mut fixture.connection,
-        )
-        .await
-        .unwrap();
+            runtime: &fixture.runtime,
+            outbound: &fixture.outbound,
+            available_subscriptions: 0,
+        });
+        crate::dispatch::dispatch(&mut context, &state, &mut fixture.connection)
+            .await
+            .unwrap();
+        assert!(context.is_none());
         let Frame::Text(text) = fixture.receiver.try_recv().unwrap().message else {
             panic!("expected correlated error");
         };

@@ -63,7 +63,10 @@ export type {
   AgentFileExplorerState,
 } from "@/stores/session-store";
 
-type AudioOutputPayload = Extract<SessionOutboundMessage, { type: "audio_output" }>["payload"];
+type AudioOutputPayload = Extract<
+  SessionOutboundMessage,
+  { type: "voice.audio.output" }
+>["payload"];
 
 interface BufferedAudioChunk {
   chunkIndex: number;
@@ -392,7 +395,7 @@ function SessionProviderInternal({ children, serverId, client }: SessionProvider
   useEffect(() => {
     const setAgentInitializing = createSetAgentInitializing(serverId, setInitializingAgents);
     const onStream = (message: SessionOutboundMessage) => {
-      if (message.type !== "agent_stream") return;
+      if (message.type !== "agent.stream") return;
       const { agentId, event, timestamp, seq, epoch } = message.payload;
       const parsedTimestamp = new Date(timestamp);
       const streamEvent = event;
@@ -418,7 +421,7 @@ function SessionProviderInternal({ children, serverId, client }: SessionProvider
       });
 
       // NOTE: We don't update lastActivityAt on every stream event to prevent
-      // cascading rerenders. The agent_update handler updates agent.lastActivityAt
+      // cascading rerenders. The agent.update handler updates agent.lastActivityAt
       // on status changes, which is sufficient for sorting and display purposes.
     };
     const onReplacement = (message: SessionOutboundMessage) => {
@@ -439,7 +442,7 @@ function SessionProviderInternal({ children, serverId, client }: SessionProvider
         observation.subscribe({
           snapshot: () => {},
           update: (message) => {
-            if (message.type === "agent_stream") onStream(message);
+            if (message.type === "agent.stream") onStream(message);
             else if (message.type === "agent.timeline.replacement") onReplacement(message);
           },
         });
@@ -473,7 +476,11 @@ function SessionProviderInternal({ children, serverId, client }: SessionProvider
         try {
           const page = await getHostRuntimeStore().fetchAgentTimeline(serverId, agentId, request);
           if (shouldInitialize && getInitDeferred(initKey)) {
-            refreshAgentInitializationTimeout({ key: initKey, agentId, setAgentInitializing });
+            refreshAgentInitializationTimeout({
+              key: initKey,
+              agentId,
+              setAgentInitializing,
+            });
           }
           return page;
         } catch (error) {
@@ -487,7 +494,10 @@ function SessionProviderInternal({ children, serverId, client }: SessionProvider
       fetchLatestTail: (agentId) =>
         getHostRuntimeStore().fetchAgentTimeline(serverId, agentId, planTimelineTailFetch()),
       reportError: (error) => {
-        console.warn("[Session] viewed timeline synchronization failed", { serverId, error });
+        console.warn("[Session] viewed timeline synchronization failed", {
+          serverId,
+          error,
+        });
       },
       schedule: (task, delayMs) => {
         const timeout = setTimeout(task, delayMs);
@@ -519,12 +529,12 @@ function SessionProviderInternal({ children, serverId, client }: SessionProvider
   useEffect(() => {
     const availableEvents = client.getLastServerInfoMessage()?.sessionEventTypes;
     const requestedEvents: Parameters<typeof client.observeEvents>[0] = [
-      "agent_attention_required",
-      "terminal_attention_required",
-      "agent_permission_request",
-      "agent_permission_resolved",
+      "agent.attention.required",
+      "terminal.attention.required",
+      "agent.permission.request",
+      "agent.permission.resolved",
       "agent.provider_subagents.update",
-      "checkout_status_update",
+      "checkout.status.update",
       "workspace_setup_progress",
       "activity_log",
       "status.server_info",
@@ -546,8 +556,8 @@ function SessionProviderInternal({ children, serverId, client }: SessionProvider
         },
       });
 
-    const unsubAgentAttention = onFeed("agent_attention_required", (message) => {
-      if (message.type !== "agent_attention_required") return;
+    const unsubAgentAttention = onFeed("agent.attention.required", (message) => {
+      if (message.type !== "agent.attention.required") return;
       const notification = message.payload;
       if (notification.shouldNotify) {
         notifyAgentAttention(notification);
@@ -559,8 +569,8 @@ function SessionProviderInternal({ children, serverId, client }: SessionProvider
       useProviderSubagentStore.getState().applyUpdate(serverId, message.payload);
     });
 
-    const unsubCheckoutStatusUpdate = onFeed("checkout_status_update", (message) => {
-      if (message.type !== "checkout_status_update") return;
+    const unsubCheckoutStatusUpdate = onFeed("checkout.status.update", (message) => {
+      if (message.type !== "checkout.status.update") return;
       applyCheckoutStatusUpdateFromEvent({ queryClient, serverId, message });
     });
 
@@ -587,8 +597,8 @@ function SessionProviderInternal({ children, serverId, client }: SessionProvider
       }
     });
 
-    const unsubPermissionRequest = onFeed("agent_permission_request", (message) => {
-      if (message.type !== "agent_permission_request") return;
+    const unsubPermissionRequest = onFeed("agent.permission.request", (message) => {
+      if (message.type !== "agent.permission.request") return;
       const { agentId, request } = message.payload;
 
       setPendingPermissions(serverId, (prev) => {
@@ -599,8 +609,8 @@ function SessionProviderInternal({ children, serverId, client }: SessionProvider
       });
     });
 
-    const unsubPermissionResolved = onFeed("agent_permission_resolved", (message) => {
-      if (message.type !== "agent_permission_resolved") return;
+    const unsubPermissionResolved = onFeed("agent.permission.resolved", (message) => {
+      if (message.type !== "agent.permission.resolved") return;
       const { requestId, agentId } = message.payload;
 
       setPendingPermissions(serverId, (prev) => {
@@ -618,8 +628,8 @@ function SessionProviderInternal({ children, serverId, client }: SessionProvider
       });
     });
 
-    const unsubAudioOutput = client.on("audio_output", async (message) => {
-      if (message.type !== "audio_output") return;
+    const unsubAudioOutput = client.on("voice.audio.output", async (message) => {
+      if (message.type !== "voice.audio.output") return;
       if (!voiceAudioEngine) {
         return;
       }
@@ -696,20 +706,20 @@ function SessionProviderInternal({ children, serverId, client }: SessionProvider
       notifyVoiceAbortFailure(message.payload, toast.error);
     });
 
-    const unsubTranscription = client.on("transcription_result", (message) => {
-      if (message.type !== "transcription_result") return;
+    const unsubTranscription = client.on("voice.transcription.result", (message) => {
+      if (message.type !== "voice.transcription.result") return;
 
       const transcriptText = message.payload.text.trim();
       voiceRuntime?.onTranscriptionResult(serverId, transcriptText);
     });
 
-    const unsubVoiceInputState = client.on("voice_input_state", (message) => {
-      if (message.type !== "voice_input_state") return;
+    const unsubVoiceInputState = client.on("voice.input.state", (message) => {
+      if (message.type !== "voice.input.state") return;
       voiceRuntime?.onServerSpeechStateChanged(serverId, message.payload.isSpeaking);
     });
 
-    const unsubTerminalAttention = onFeed("terminal_attention_required", (message) => {
-      if (message.type !== "terminal_attention_required") {
+    const unsubTerminalAttention = onFeed("terminal.attention.required", (message) => {
+      if (message.type !== "terminal.attention.required") {
         return;
       }
       if (!message.payload.shouldNotify) {

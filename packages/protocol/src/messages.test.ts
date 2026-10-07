@@ -28,7 +28,7 @@ function workspaceDescriptor(overrides: Record<string, unknown> = {}) {
 
 function fetchWorkspacesResponse(workspace: Record<string, unknown>) {
   return {
-    type: "fetch_workspaces_response",
+    type: "workspace.list.response",
     payload: {
       requestId: "req-1",
       entries: [workspace],
@@ -77,19 +77,19 @@ describe("project icon revision compatibility", () => {
 });
 
 describe("workspace descriptor message compatibility", () => {
-  test("old-shaped fetch_workspaces_response without project still parses", () => {
+  test("old-shaped workspace.list.response without project still parses", () => {
     const parsed = SessionOutboundMessageSchema.parse(
       fetchWorkspacesResponse(workspaceDescriptor()),
     );
 
-    expect(parsed.type).toBe("fetch_workspaces_response");
-    if (parsed.type !== "fetch_workspaces_response") {
-      throw new Error("Expected fetch_workspaces_response");
+    expect(parsed.type).toBe("workspace.list.response");
+    if (parsed.type !== "workspace.list.response") {
+      throw new Error("Expected workspace.list.response");
     }
     expect(parsed.payload.entries[0]?.project).toBeUndefined();
   });
 
-  test("new-shaped fetch_workspaces_response with project placement parses", () => {
+  test("new-shaped workspace.list.response with project placement parses", () => {
     const parsed = SessionOutboundMessageSchema.parse(
       fetchWorkspacesResponse(
         workspaceDescriptor({
@@ -110,9 +110,9 @@ describe("workspace descriptor message compatibility", () => {
       ),
     );
 
-    expect(parsed.type).toBe("fetch_workspaces_response");
-    if (parsed.type !== "fetch_workspaces_response") {
-      throw new Error("Expected fetch_workspaces_response");
+    expect(parsed.type).toBe("workspace.list.response");
+    if (parsed.type !== "workspace.list.response") {
+      throw new Error("Expected workspace.list.response");
     }
     expect(parsed.payload.entries[0]?.project).toEqual({
       projectKey: "remote:github.com/acme/app",
@@ -155,9 +155,9 @@ describe("workspace descriptor message compatibility", () => {
       ),
     );
 
-    expect(parsed.type).toBe("fetch_workspaces_response");
-    if (parsed.type !== "fetch_workspaces_response") {
-      throw new Error("Expected fetch_workspaces_response");
+    expect(parsed.type).toBe("workspace.list.response");
+    if (parsed.type !== "workspace.list.response") {
+      throw new Error("Expected workspace.list.response");
     }
     expect(parsed.payload.entries[0]).toMatchObject({
       projectKind: "non_git",
@@ -364,7 +364,7 @@ describe("agent detach RPC", () => {
 describe("agent setting action responses", () => {
   test("parses optional provider notices on mode and thinking responses", () => {
     const mode = SessionOutboundMessageSchema.parse({
-      type: "set_agent_mode_response",
+      type: "agent.mode.set.response",
       payload: {
         requestId: "req-mode",
         agentId: "agent-1",
@@ -377,7 +377,7 @@ describe("agent setting action responses", () => {
       },
     });
     const thinking = SessionOutboundMessageSchema.parse({
-      type: "set_agent_thinking_response",
+      type: "agent.thinking.set.response",
       payload: {
         requestId: "req-thinking",
         agentId: "agent-1",
@@ -386,17 +386,17 @@ describe("agent setting action responses", () => {
       },
     });
 
-    expect(mode.type).toBe("set_agent_mode_response");
-    if (mode.type !== "set_agent_mode_response") {
-      throw new Error("Expected set_agent_mode_response");
+    expect(mode.type).toBe("agent.mode.set.response");
+    if (mode.type !== "agent.mode.set.response") {
+      throw new Error("Expected agent.mode.set.response");
     }
     expect(mode.payload.notice).toEqual({
       type: "info",
       message: "This change applies next turn.",
     });
-    expect(thinking.type).toBe("set_agent_thinking_response");
-    if (thinking.type !== "set_agent_thinking_response") {
-      throw new Error("Expected set_agent_thinking_response");
+    expect(thinking.type).toBe("agent.thinking.set.response");
+    if (thinking.type !== "agent.thinking.set.response") {
+      throw new Error("Expected agent.thinking.set.response");
     }
     expect(thinking.payload.notice).toBeUndefined();
   });
@@ -406,14 +406,14 @@ describe("file explorer request compatibility", () => {
   test("acceptBinary is optional for old clients and accepted for new clients", () => {
     expect(
       FileExplorerRequestSchema.parse({
-        type: "file_explorer_request",
+        type: "fs.explorer.request",
         cwd: "/repo/app",
         path: "image.png",
         mode: "file",
         requestId: "req-old",
       }),
     ).toEqual({
-      type: "file_explorer_request",
+      type: "fs.explorer.request",
       cwd: "/repo/app",
       path: "image.png",
       mode: "file",
@@ -422,7 +422,7 @@ describe("file explorer request compatibility", () => {
 
     expect(
       FileExplorerRequestSchema.parse({
-        type: "file_explorer_request",
+        type: "fs.explorer.request",
         cwd: "/repo/app",
         path: "image.png",
         mode: "file",
@@ -430,7 +430,7 @@ describe("file explorer request compatibility", () => {
         acceptBinary: true,
       }),
     ).toMatchObject({
-      type: "file_explorer_request",
+      type: "fs.explorer.request",
       requestId: "req-new",
       acceptBinary: true,
     });
@@ -440,7 +440,7 @@ describe("file explorer request compatibility", () => {
 describe("paseo worktree archive request compatibility", () => {
   test("omitted scope defaults to workspace", () => {
     const parsed = PaseoWorktreeArchiveRequestSchema.parse({
-      type: "paseo_worktree_archive_request",
+      type: "workspace.worktree.archive.request",
       worktreePath: "/repo/app",
       requestId: "req-old-scope",
     });
@@ -449,7 +449,7 @@ describe("paseo worktree archive request compatibility", () => {
 
   test("scope worktree parses", () => {
     const parsed = PaseoWorktreeArchiveRequestSchema.parse({
-      type: "paseo_worktree_archive_request",
+      type: "workspace.worktree.archive.request",
       worktreePath: "/repo/app",
       scope: "worktree",
       requestId: "req-worktree-scope",
@@ -459,7 +459,7 @@ describe("paseo worktree archive request compatibility", () => {
 
   test("unknown extra field is still accepted", () => {
     const parsed = PaseoWorktreeArchiveRequestSchema.parse({
-      type: "paseo_worktree_archive_request",
+      type: "workspace.worktree.archive.request",
       worktreePath: "/repo/app",
       requestId: "req-extra",
       extraField: "ignored",

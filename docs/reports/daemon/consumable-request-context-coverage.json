@@ -1,0 +1,343 @@
+{
+  "measurement_date": "2026-10-07",
+  "measurement_revision": "bd9b48d14c466a5aa3320da861988e5018fb3553",
+  "base_revision": "f1d18d1e29419fef993783ea371268506687d8ea",
+  "pr_base_revision": "88f7262e5f2fb2a3c45d20cb29c3d141287ae9db",
+  "change_scope": "Added or modified executable production lines since this refinement began at the base_revision; workspace comparison covers the entire current PR against the recorded main baseline.",
+  "revision_note": "Tests and coverage were measured before the source commit; source SHA-256 was verified unchanged after committing. The subsequent evidence commit updates only this JSON document.",
+  "rust_source_sha256": "7800695f0896a55adf6e197427d6c7f533b5ec356d35b38833742243b5a8307c",
+  "hash_algorithm": "SHA-256 of sorted Git-visible bins/ and crates/ file paths plus Cargo.toml/Cargo.lock, NUL and per-file SHA-256, joined by newlines.",
+  "changed_source_hashes": {
+    "Cargo.lock": "4e4d0ed5eb5d6dba2c54f9a47f6c34b4904d142003431d5793f77ac323e4a6fb",
+    "crates/api/src/connection/dispatch.rs": "076044d89467cec05a1856681ecb37638da2dc8b312981785fea76b5a44b99cc",
+    "crates/api/src/connection/dispatch/tests.rs": "0594ec1b319c5fc4a0c667e3f9cbd2a0abcfe4a51647fb20dde45e24d2feb236",
+    "crates/filesystem/src/dispatch.rs": "4d7a2e618b7682c605c24e24485fa116213629cb1105597d9538a07b09f44382",
+    "crates/metadata/src/dispatch.rs": "7420fa6afbadf2f7be8642868c709a078d31e0cecabc6bff86bf70961bff9694",
+    "crates/model/Cargo.toml": "e0bb262792587b825feeb99d9131794ea458b3284e6e336743ec7502062ec65b",
+    "crates/model/src/context.rs": "e78f40000d0a49334d6bcc99db4d3b5dcd2885627495cba1436094188ae9f3f7",
+    "crates/model/src/context/tests.rs": "048eb15ebc5a34eb17439becea8ec88c20c8449b63c1b01c0da6e7d9d0b9e442",
+    "crates/provider/src/dispatch.rs": "279bd5f34406a6eecbcc29f0dfce90b9c79587143bc7e524b811936a75776936"
+  },
+  "scope": {
+    "packages": "entire Cargo workspace (13 crates)",
+    "features": "default Cargo features; no additional features",
+    "platform": "macOS arm64 / aarch64-apple-darwin",
+    "rustc": "1.98.1 (48a229cea 2026-09-01)",
+    "llvm": "22.1.8",
+    "cargo_llvm_cov": "0.8.4",
+    "source_filters": "cargo-llvm-cov defaults; no additional exclusions",
+    "test_threads": 1,
+    "excluded_measurements": [
+      "doctest instrumentation",
+      "native C/C++ instrumentation",
+      "TypeScript/UI coverage",
+      "Linux execution",
+      "Windows execution"
+    ]
+  },
+  "commands": {
+    "tests": "cargo test --locked --offline --workspace -- --test-threads=1",
+    "build": "cargo build --locked --offline --workspace",
+    "clippy": "cargo clippy --locked --offline --workspace --all-targets -- -D warnings",
+    "format": "cargo fmt --all --check",
+    "docs": "npm run check:docs",
+    "coverage": "SHERPA_ONNX_LIB_DIR=\"$PWD/target/sherpa-onnx-prebuilt/sherpa-onnx-v1.13.8-osx-arm64-static-lib/lib\" cargo llvm-cov --locked --offline --workspace --html -- --test-threads=1",
+    "coverage_summary": "cargo llvm-cov report --locked --offline --json --summary-only --output-path target/context-result-coverage-summary.json",
+    "coverage_lcov": "cargo llvm-cov report --locked --offline --lcov --output-path target/context-result-coverage.lcov"
+  },
+  "test_execution": {
+    "passed": 1908,
+    "failed": 0,
+    "ignored": 7,
+    "test_targets": 28,
+    "status": "passed",
+    "failed_tests": [],
+    "ignored_tests": [
+      "test local::antigravity::tests::installed::authenticated_multi_turn_and_resume ... ignored, requires authenticated AGY and explicitly consumes three model turns",
+      "test local::claude::tests::process::installed_claude_control_protocol_discovers_models_without_inference ... ignored, requires a locally installed Claude Code CLI; sends no model request",
+      "test local::claude::tests::process::parity::installed_claude_completes_a_native_turn_and_reopens_history ... ignored, requires installed Claude authentication and makes one small model request",
+      "test local::codex::tests::installed::installed_codex_completes_a_native_turn_and_reopens_history ... ignored, requires installed Codex authentication and makes one small model request",
+      "test local::deepseek_harness::native::tests::installed_host_discovers_switches_permissions_and_adopts_legacy_sessions ... ignored, requires an installed DSH CLI via AIT_TEST_DSH_BIN; no model request",
+      "test local::opencode::tests::installed::installed_opencode_declined_tool_settles_and_accepts_next_turn ... ignored, requires AIT_TEST_OPENCODE_BIN; isolated config and loopback model only",
+      "test local::opencode::tests::installed::installed_opencode_discovers_runs_and_restores_with_local_model ... ignored, requires AIT_TEST_OPENCODE_BIN; isolated config and loopback model only"
+    ]
+  },
+  "coverage_test_execution": {
+    "passed": 1908,
+    "failed": 0,
+    "ignored": 7,
+    "test_targets": 16,
+    "status": "passed",
+    "failed_tests": [],
+    "ignored_tests": [
+      "test local::antigravity::tests::installed::authenticated_multi_turn_and_resume ... ignored, requires authenticated AGY and explicitly consumes three model turns",
+      "test local::claude::tests::process::installed_claude_control_protocol_discovers_models_without_inference ... ignored, requires a locally installed Claude Code CLI; sends no model request",
+      "test local::claude::tests::process::parity::installed_claude_completes_a_native_turn_and_reopens_history ... ignored, requires installed Claude authentication and makes one small model request",
+      "test local::codex::tests::installed::installed_codex_completes_a_native_turn_and_reopens_history ... ignored, requires installed Codex authentication and makes one small model request",
+      "test local::deepseek_harness::native::tests::installed_host_discovers_switches_permissions_and_adopts_legacy_sessions ... ignored, requires an installed DSH CLI via AIT_TEST_DSH_BIN; no model request",
+      "test local::opencode::tests::installed::installed_opencode_declined_tool_settles_and_accepts_next_turn ... ignored, requires AIT_TEST_OPENCODE_BIN; isolated config and loopback model only",
+      "test local::opencode::tests::installed::installed_opencode_discovers_runs_and_restores_with_local_model ... ignored, requires AIT_TEST_OPENCODE_BIN; isolated config and loopback model only"
+    ]
+  },
+  "workspace_lines": {
+    "count": 57479,
+    "covered": 54243,
+    "percent": 94.37011778214652
+  },
+  "crate_lines": {
+    "bins/daemon": {
+      "count": 941,
+      "covered": 898,
+      "percent": 95.43039319872476
+    },
+    "crates/api": {
+      "count": 2131,
+      "covered": 1970,
+      "percent": 92.44486156733927
+    },
+    "crates/browser": {
+      "count": 733,
+      "covered": 715,
+      "percent": 97.5443383356071
+    },
+    "crates/domain": {
+      "count": 121,
+      "covered": 121,
+      "percent": 100.0
+    },
+    "crates/filesystem": {
+      "count": 12187,
+      "covered": 11562,
+      "percent": 94.87158447526052
+    },
+    "crates/metadata": {
+      "count": 8205,
+      "covered": 7786,
+      "percent": 94.8933577087142
+    },
+    "crates/model": {
+      "count": 784,
+      "covered": 744,
+      "percent": 94.89795918367346
+    },
+    "crates/protocol": {
+      "count": 75,
+      "covered": 75,
+      "percent": 100.0
+    },
+    "crates/provider": {
+      "count": 27472,
+      "covered": 25755,
+      "percent": 93.75
+    },
+    "crates/relay": {
+      "count": 464,
+      "covered": 422,
+      "percent": 90.94827586206897
+    },
+    "crates/schedule": {
+      "count": 847,
+      "covered": 826,
+      "percent": 97.52066115702479
+    },
+    "crates/terminal": {
+      "count": 1556,
+      "covered": 1501,
+      "percent": 96.46529562982005
+    },
+    "crates/voice": {
+      "count": 1963,
+      "covered": 1868,
+      "percent": 95.16046867040245
+    }
+  },
+  "changed_executable_lines": {
+    "count": 193,
+    "covered": 172,
+    "percent": 89.11917098445596
+  },
+  "changed_production_files": {
+    "crates/api/src/connection/dispatch.rs": {
+      "file_lines": {
+        "count": 117,
+        "covered": 103,
+        "percent": 88.03418803418803
+      },
+      "added_or_modified_executable_lines": {
+        "count": 60,
+        "covered": 58,
+        "percent": 96.66666666666667
+      },
+      "uncovered_added_or_modified_lines": [
+        24,
+        31
+      ],
+      "uncovered_file_lines": [
+        24,
+        31
+      ]
+    },
+    "crates/filesystem/src/dispatch.rs": {
+      "file_lines": {
+        "count": 181,
+        "covered": 169,
+        "percent": 93.37016574585635
+      },
+      "added_or_modified_executable_lines": {
+        "count": 42,
+        "covered": 36,
+        "percent": 85.71428571428571
+      },
+      "uncovered_added_or_modified_lines": [
+        107,
+        114,
+        121,
+        128,
+        135,
+        142
+      ],
+      "uncovered_file_lines": [
+        107,
+        114,
+        121,
+        128,
+        135,
+        142,
+        242,
+        243,
+        244,
+        258,
+        259,
+        260
+      ]
+    },
+    "crates/metadata/src/dispatch.rs": {
+      "file_lines": {
+        "count": 239,
+        "covered": 220,
+        "percent": 92.05020920502092
+      },
+      "added_or_modified_executable_lines": {
+        "count": 56,
+        "covered": 47,
+        "percent": 83.92857142857143
+      },
+      "uncovered_added_or_modified_lines": [
+        146,
+        153,
+        160,
+        167,
+        174,
+        181,
+        188,
+        195,
+        202
+      ],
+      "uncovered_file_lines": [
+        146,
+        153,
+        160,
+        167,
+        174,
+        181,
+        188,
+        195,
+        202,
+        233,
+        234,
+        235,
+        250,
+        251,
+        253,
+        254,
+        323
+      ]
+    },
+    "crates/model/src/context.rs": {
+      "file_lines": {
+        "count": 54,
+        "covered": 54,
+        "percent": 100.0
+      },
+      "added_or_modified_executable_lines": {
+        "count": 5,
+        "covered": 5,
+        "percent": 100.0
+      },
+      "uncovered_added_or_modified_lines": [],
+      "uncovered_file_lines": []
+    },
+    "crates/provider/src/dispatch.rs": {
+      "file_lines": {
+        "count": 96,
+        "covered": 79,
+        "percent": 82.29166666666667
+      },
+      "added_or_modified_executable_lines": {
+        "count": 30,
+        "covered": 26,
+        "percent": 86.66666666666667
+      },
+      "uncovered_added_or_modified_lines": [
+        140,
+        154,
+        161,
+        168
+      ],
+      "uncovered_file_lines": [
+        140,
+        154,
+        161,
+        168
+      ]
+    }
+  },
+  "baseline_comparison": {
+    "revision": "c4f340f72dbf9dccf79fb53e2e1cea9e8448aa38",
+    "artifact": "docs/reports/workspace/workspace-reset-remote-pr-coverage-2026-10-07.json",
+    "source_equivalence": "git diff found no bins/, crates/, Cargo.toml or Cargo.lock changes between the measured baseline revision and recorded target main 88f7262e5f2fb2a3c45d20cb29c3d141287ae9db.",
+    "scope_equivalence": "Same macOS arm64 platform, Rust/LLVM/cargo-llvm-cov versions, default features/source filtering, and serial full-workspace tests. Locked/offline flags use the recorded lockfile without fetching dependencies; the refinement links the existing workspace tracing version into model.",
+    "workspace_percentage_point_change": 0.06181877859030749,
+    "crate_percentage_point_changes": {
+      "bins/daemon": 0.0,
+      "crates/api": -0.15120216274507925,
+      "crates/browser": 0.1650279907795067,
+      "crates/domain": 0.0,
+      "crates/filesystem": 0.06010633044904523,
+      "crates/metadata": 0.0976317501975501,
+      "crates/model": 0.045964331678618464,
+      "crates/protocol": 0.0,
+      "crates/provider": 0.06386193004944118,
+      "crates/relay": 0.0,
+      "crates/schedule": -0.29221855135916996,
+      "crates/terminal": 0.15939802774616396,
+      "crates/voice": 0.08102223267820818
+    }
+  },
+  "html_report": "target/llvm-cov/html/index.html",
+  "coverage_summary_sha256": "1af4d017da549fa290c05e78ff1c97625425d3e6403d7f80b6645df4ab7cb336",
+  "coverage_lcov_sha256": "fc34323f962d9ab81b7c1255eeb14c4df86f983271fcf5b39e4b359584503e91",
+  "uncovered_behavior": [
+    "The 21 uncovered modified executable lines forward Delivery errors: 2 in API workspace creation/archive, 6 in filesystem leaf dispatch, 9 in metadata leaf dispatch, and 4 in provider leaf dispatch. Follow-up coverage can close or saturate the outbound queue for these specific operations. Their ordinary success and NotImplemented paths are covered; no exclusions or test ignores were added.",
+    "Context assert_unhandled, including the consumed-context error/logging and panic path, is exercised. crates/model/src/context.rs has 54/54 covered executable lines. Default ignored authenticated/native CLI cases and unavailable platforms are listed separately."
+  ],
+  "dispatch_contract": "Only NotImplemented continues; Context::assert_unhandled logs an error then asserts when a declining handler consumed the request. Success or Delivery ends the chain. The invariant assertion remains enabled in release builds.",
+  "coverage_status": "measured",
+  "source_revision": "bd9b48d14c466a5aa3320da861988e5018fb3553",
+  "validation": {
+    "full_workspace_tests": "passed",
+    "full_workspace_build": "passed",
+    "strict_workspace_clippy": "passed",
+    "format": "passed",
+    "docs_links": "passed",
+    "diff_check": "passed",
+    "focused_api_dispatch": {
+      "passed": 11,
+      "failed": 0
+    },
+    "focused_model_context": {
+      "passed": 6,
+      "failed": 0
+    }
+  }
+}

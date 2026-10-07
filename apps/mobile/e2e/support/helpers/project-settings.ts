@@ -294,7 +294,7 @@ export async function installReadTransportFailure(
 
     ws.onMessage((message) => {
       const sessionMessage = getSessionMessage(message);
-      if (shouldFailReads && sessionMessage?.type === "read_project_config_request") {
+      if (shouldFailReads && sessionMessage?.type === "project.config.read.request") {
         const requestId = sessionMessage.requestId;
         if (typeof requestId === "string") {
           ws.send(
@@ -304,7 +304,7 @@ export async function installReadTransportFailure(
                 type: "rpc_error",
                 payload: {
                   requestId,
-                  requestType: "read_project_config_request",
+                  requestType: "project.config.read.request",
                   error: "Test read transport failure.",
                   code: "transport",
                 },

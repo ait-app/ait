@@ -50,7 +50,7 @@ export async function delayDirectorySuggestionResponses(page: Page, delayMs = 40
     ws.onMessage((message) => server.send(message));
     server.onMessage((message) => {
       const sessionMessage = parseSessionMessage(message);
-      if (sessionMessage?.type === "directory_suggestions_response") {
+      if (sessionMessage?.type === "directory.suggestions.response") {
         setTimeout(() => ws.send(message), delayMs);
         return;
       }
@@ -64,7 +64,7 @@ export async function failDirectorySuggestionRequests(page: Page): Promise<void>
     const server = ws.connectToServer();
     ws.onMessage((message) => {
       const sessionMessage = parseSessionMessage(message);
-      if (sessionMessage?.type === "directory_suggestions_request") {
+      if (sessionMessage?.type === "directory.suggestions.request") {
         const requestId = sessionMessage.requestId;
         if (typeof requestId === "string") {
           ws.send(
@@ -74,7 +74,7 @@ export async function failDirectorySuggestionRequests(page: Page): Promise<void>
                 type: "rpc_error",
                 payload: {
                   requestId,
-                  requestType: "directory_suggestions_request",
+                  requestType: "directory.suggestions.request",
                   error: "Test file search transport failure.",
                   code: "transport",
                 },
@@ -125,7 +125,11 @@ export async function startCommandCenterLayoutObservation(page: Page): Promise<v
       record();
     }
 
-    mutationObserver.observe(document.body, { attributes: true, childList: true, subtree: true });
+    mutationObserver.observe(document.body, {
+      attributes: true,
+      childList: true,
+      subtree: true,
+    });
     discover();
 
     const sampleFrame = () => {

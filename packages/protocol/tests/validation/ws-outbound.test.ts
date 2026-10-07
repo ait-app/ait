@@ -113,7 +113,9 @@ const SourceSchema = z.object({
       }),
     ).toMatchObject({
       success: true,
-      data: { item: { type: "tool_call", status: "completed", callId: "done", output: "ok" } },
+      data: {
+        item: { type: "tool_call", status: "completed", callId: "done", output: "ok" },
+      },
     });
     expect(
       schema.safeParse({
@@ -132,7 +134,9 @@ const SourceSchema = z.object({
   });
 
   it("accepts a minimal valid envelope and rejects a corrupted envelope", () => {
-    expect(GeneratedWSOutboundMessageSchema.safeParse({ type: "pong" }).success).toBe(true);
+    expect(GeneratedWSOutboundMessageSchema.safeParse({ type: "connection.pong" }).success).toBe(
+      true,
+    );
     expect(GeneratedWSOutboundMessageSchema.safeParse({ type: "not_a_message" }).success).toBe(
       false,
     );
@@ -153,7 +157,7 @@ const SourceSchema = z.object({
     ) => ({
       type: "session",
       message: {
-        type: "read_project_config_response",
+        type: "project.config.read.response",
         payload: responsePayload,
       },
     });
@@ -170,7 +174,7 @@ const SourceSchema = z.object({
     const envelope = {
       type: "session",
       message: {
-        type: "get_providers_snapshot_response",
+        type: "provider.snapshot.get.response",
         payload: {
           entries: [],
           compactSnapshot: {
@@ -206,7 +210,7 @@ const SourceSchema = z.object({
     {
       name: "dedicated attention message",
       message: {
-        type: "agent_attention_required",
+        type: "agent.attention.required",
         payload: {
           agentId: "agent-1",
           reason: "finished",
@@ -228,7 +232,7 @@ const SourceSchema = z.object({
     {
       name: "agent stream attention event",
       message: {
-        type: "agent_stream",
+        type: "agent.stream",
         payload: {
           agentId: "agent-1",
           timestamp: "2026-07-22T18:00:00.000Z",
@@ -292,11 +296,11 @@ const SourceSchema = z.object({
     expect(result.success).toBe(true);
   });
 
-  it("accepts a legacy github_search_response envelope", () => {
+  it("accepts a legacy github.search.response envelope", () => {
     const result = GeneratedWSOutboundMessageSchema.safeParse({
       type: "session",
       message: {
-        type: "github_search_response",
+        type: "github.search.response",
         payload: {
           items: [
             {

@@ -7,7 +7,7 @@ import type { SessionOutboundMessage } from "@ait/protocol/messages";
 type AgentDirectoryFetchEntry = FetchAgentsEntry;
 export type AgentDirectoryDelta = Extract<
   SessionOutboundMessage,
-  { type: "agent_update" }
+  { type: "agent.update" }
 >["payload"];
 
 interface PendingPermissionEntry {

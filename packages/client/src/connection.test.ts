@@ -72,7 +72,7 @@ function connection(
         );
       }
       if (
-        frame.message?.type === "fetch_agent_timeline_request" &&
+        frame.message?.type === "agent.timeline.get.request" &&
         options.acknowledgeTimelineReads !== false
       ) {
         receive(
@@ -234,14 +234,14 @@ test("provider reference hydration preserves independent owners and drops releas
     const connecting = h.client.connect();
     h.open();
     await connecting;
-    const a = h.client.observeEvents(["providers_snapshot_update"]);
-    const b = h.client.observeEvents(["providers_snapshot_update"]);
+    const a = h.client.observeEvents(["provider.snapshot.update"]);
+    const b = h.client.observeEvents(["provider.snapshot.update"]);
     await Promise.all([a.ready, b.ready]);
     for (const owner of [a, b])
       owner.subscribe({
         snapshot: () => {},
         update: (message) => {
-          if (message.type === "providers_snapshot_update")
+          if (message.type === "provider.snapshot.update")
             updates.push(message.payload.subscriptionId!);
         },
       });
@@ -252,17 +252,17 @@ test("provider reference hydration preserves independent owners and drops releas
     };
     for (const owner of [a, b])
       h.receive({
-        type: "providers_snapshot_update",
+        type: "provider.snapshot.update",
         payload: { ...payload, subscriptionId: owner.subscriptionId },
       });
     const requests = h.sent.filter(
-      (frame) => frame.message?.type === "get_providers_snapshot_request",
+      (frame) => frame.message?.type === "provider.snapshot.get.request",
     );
     expect(requests).toHaveLength(2);
     await a.release();
     for (const request of requests)
       h.receive({
-        type: "get_providers_snapshot_response",
+        type: "provider.snapshot.get.response",
         payload: {
           ...payload,
           requestId: request.message!.requestId,
@@ -349,10 +349,14 @@ test("passive provider listeners never hydrate unowned references", async () => 
     const connecting = h.client.connect();
     h.open();
     await connecting;
-    const off = h.client.on("providers_snapshot_update", () => {});
+    const off = h.client.on("provider.snapshot.update", () => {});
     h.receive({
-      type: "providers_snapshot_update",
-      payload: { entries: [], snapshotHash: "updated", generatedAt: "2026-09-08T00:00:00.000Z" },
+      type: "provider.snapshot.update",
+      payload: {
+        entries: [],
+        snapshotHash: "updated",
+        generatedAt: "2026-09-08T00:00:00.000Z",
+      },
     });
     h.disconnect();
     off();
@@ -374,7 +378,7 @@ test("failed terminal bootstrap reports the domain error without reconnecting or
     const terminal = h.client.observeTerminal("missing-terminal", () => {});
     const request = h.sent.at(-1)!.message!;
     h.receive({
-      type: "subscribe_terminal_response",
+      type: "terminal.subscribe.response",
       payload: {
         requestId: request.requestId,
         terminalId: "missing-terminal",
@@ -432,9 +436,7 @@ test("invalid observation input rejects without reconnecting the transport", asy
     await expect(invalid.ready).rejects.toThrow();
     await invalid.release();
     expect(h.client.isConnected).toBe(true);
-    expect(h.sent.filter((frame) => frame.message?.type === "fetch_agents_request")).toHaveLength(
-      0,
-    );
+    expect(h.sent.filter((frame) => frame.message?.type === "agent.list.request")).toHaveLength(0);
   } finally {
     await h.client.close();
   }
@@ -452,9 +454,7 @@ test("a timed-out subscription rejects and cannot replay on reconnect", async ()
     const reconnecting = h.client.connect();
     h.open();
     await reconnecting;
-    expect(h.sent.filter((frame) => frame.message?.type === "fetch_agents_request")).toHaveLength(
-      1,
-    );
+    expect(h.sent.filter((frame) => frame.message?.type === "agent.list.request")).toHaveLength(1);
   } finally {
     await h.client.close();
   }
@@ -462,7 +462,7 @@ test("a timed-out subscription rejects and cannot replay on reconnect", async ()
 
 function timelinePage(requestId: string | undefined, epoch: string, seq: number) {
   return {
-    type: "fetch_agent_timeline_response",
+    type: "agent.timeline.get.response",
     payload: {
       requestId,
       agentId: "agent",
@@ -523,7 +523,7 @@ test.each([
       await reconnected;
       await expect.poll(() => owners[0].subscriptionId).not.toBe(oldIds[0]);
       expect(
-        h.sent.filter((frame) => frame.message?.type === "fetch_agent_timeline_request"),
+        h.sent.filter((frame) => frame.message?.type === "agent.timeline.get.request"),
       ).toEqual([]);
       for (const index of [0, 1]) {
         expect(owners[index].subscriptionId).not.toBeNull();
@@ -541,10 +541,10 @@ test.each([
       if (mode.ownedSubscriptions) {
         for (const owner of owners.slice(0, 2))
           h.receive({
-            type: "agent_stream",
+            type: "agent.stream",
             payload: { ...live, subscriptionId: owner.subscriptionId },
           });
-      } else h.receive({ type: "agent_stream", payload: live });
+      } else h.receive({ type: "agent.stream", payload: live });
       for (const events of received.slice(0, 2))
         expect(events.map((update) => update.event.type)).toEqual(
           Array.from({ length: cycle + 1 }, () => [
@@ -588,9 +588,7 @@ test("a consumer chooses its recovery cursor and a failed read leaves live deliv
     h.open();
     await reconnected;
     await expect.poll(() => read !== undefined).toBe(true);
-    const requests = h.sent.filter(
-      (frame) => frame.message?.type === "fetch_agent_timeline_request",
-    );
+    const requests = h.sent.filter((frame) => frame.message?.type === "agent.timeline.get.request");
     expect(requests).toHaveLength(1);
     expect(requests[0].message).toMatchObject({
       direction: "after",
@@ -600,7 +598,7 @@ test("a consumer chooses its recovery cursor and a failed read leaves live deliv
     // A slow consumer-owned history read must not buffer or filter live events.
     for (let seq = 43; seq < 173; seq++)
       h.receive({
-        type: "agent_stream",
+        type: "agent.stream",
         payload: {
           agentId: "agent",
           subscriptionId: owner.subscriptionId,
@@ -622,7 +620,7 @@ test("a consumer chooses its recovery cursor and a failed read leaves live deliv
     expect(owner.subscriptionId).not.toBeNull();
     expect(received.some((message) => message.event.type === "error")).toBe(false);
     expect(
-      h.sent.filter((frame) => frame.message?.type === "fetch_agent_timeline_request"),
+      h.sent.filter((frame) => frame.message?.type === "agent.timeline.get.request"),
     ).toHaveLength(1);
     await owner.release();
   } finally {
@@ -737,9 +735,9 @@ test.each([
       await connecting;
       const workspaces = h.client.observeWorkspaces();
       const request = h.sent.at(-1)!.message!;
-      expect(request.type).toBe("fetch_agents_request");
+      expect(request.type).toBe("agent.list.request");
       h.receive({
-        type: "fetch_agents_response",
+        type: "agent.list.response",
         payload: {
           requestId: request.requestId,
           entries: [legacyAgent({ id: "agent", cwd, projectRoot: root, status: "idle" })],
@@ -756,12 +754,15 @@ test.each([
         }),
       ]);
       const updates: unknown[] = [];
-      workspaces.subscribe({ snapshot: () => {}, update: (message) => updates.push(message) });
+      workspaces.subscribe({
+        snapshot: () => {},
+        update: (message) => updates.push(message),
+      });
       const changed = legacyAgent({ id: "agent", cwd, projectRoot: root, status: "running" });
-      h.receive({ type: "agent_update", payload: { kind: "upsert", ...changed } });
+      h.receive({ type: "agent.update", payload: { kind: "upsert", ...changed } });
       expect(updates).toEqual([
         expect.objectContaining({
-          type: "workspace_update",
+          type: "workspace.update",
           payload: expect.objectContaining({
             kind: "upsert",
             workspace: expect.objectContaining({
@@ -776,7 +777,7 @@ test.each([
       const fetching = h.client.fetchAgent("agent");
       const detail = h.sent.at(-1)!.message!;
       h.receive({
-        type: "fetch_agent_response",
+        type: "agent.get.response",
         payload: { requestId: detail.requestId, ...changed, error: null },
       });
       expect((await fetching).agent?.workspaceId).toBe(id);
@@ -796,7 +797,7 @@ test("legacy workspace pages contain only that page's groups and retain earlier 
     await connecting;
     const workspaces = h.client.observeWorkspaces();
     h.receive({
-      type: "fetch_agents_response",
+      type: "agent.list.response",
       payload: {
         requestId: h.sent.at(-1)!.message!.requestId,
         entries: [legacyAgent({ id: "first", cwd: "/first", status: "running" })],
@@ -808,7 +809,7 @@ test("legacy workspace pages contain only that page's groups and retain earlier 
       page: { cursor: first.pageInfo.nextCursor!, limit: 1 },
     });
     h.receive({
-      type: "fetch_agents_response",
+      type: "agent.list.response",
       payload: {
         requestId: h.sent.at(-1)!.message!.requestId,
         entries: [legacyAgent({ id: "second", cwd: "/second" })],
@@ -825,14 +826,14 @@ test("legacy workspace pages contain only that page's groups and retain earlier 
     // Earlier pages must remain in the aggregate: this idle sibling cannot
     // replace the running status of the first workspace.
     h.receive({
-      type: "agent_update",
+      type: "agent.update",
       payload: { kind: "upsert", ...legacyAgent({ id: "sibling", cwd: "/first" }) },
     });
     expect(updates).toEqual([]);
-    h.receive({ type: "agent_update", payload: { kind: "remove", agentId: "first" } });
+    h.receive({ type: "agent.update", payload: { kind: "remove", agentId: "first" } });
     expect(updates).toEqual([
       expect.objectContaining({
-        type: "workspace_update",
+        type: "workspace.update",
         payload: expect.objectContaining({
           kind: "upsert",
           workspace: expect.objectContaining({ id: "/first", status: "done" }),
@@ -851,12 +852,12 @@ test("old attention stream events reach the current notification interface", asy
     const connecting = h.client.connect();
     h.open();
     await connecting;
-    const observation = h.client.observeEvents(["agent_attention_required"]);
+    const observation = h.client.observeEvents(["agent.attention.required"]);
     await observation.ready;
     const received: unknown[] = [];
     observation.subscribe({ snapshot: () => {}, update: (message) => received.push(message) });
     h.receive({
-      type: "agent_stream",
+      type: "agent.stream",
       payload: {
         agentId: "agent",
         timestamp: "2026-09-11T00:00:00Z",
@@ -871,7 +872,7 @@ test("old attention stream events reach the current notification interface", asy
     });
     expect(received).toEqual([
       {
-        type: "agent_attention_required",
+        type: "agent.attention.required",
         payload: {
           agentId: "agent",
           reason: "finished",

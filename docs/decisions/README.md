@@ -15,6 +15,7 @@
 - [ADR-047：移除 Plugin 接口并独立实现 Schedule 与 Browser](daemon/adr-047-daemon-schedule-browser.md)
 - [ADR-064：默认离线语音与模型准备](daemon/adr-064-offline-speech.md)
 - [ADR-072：Workspace 名称与当前文档边界](daemon/adr-072-workspace-names-and-documentation.md)
+- [ADR-093：以可消费 Context 逐级处理请求](daemon/adr-093-consumable-request-context.md)
 
 ## 工作区、文件与 Git
 
@@ -60,6 +61,7 @@
 
 ## 客户端、连接与品牌
 
+- [ADR-094：客户端统一使用 Ait 标准方法名](clients/adr-094-canonical-ait-client-methods.md)
 - [ADR-086：桌面、Android 与 iOS 的 Authing 浏览器登录](clients/adr-086-authing-native-login.md)
 - [ADR-085：Daemon 同步的稳定节点身份](clients/adr-085-stable-daemon-publication.md)
 - [ADR-084：iOS 在线服务账户与主机中继](clients/adr-084-ios-account-relay.md)

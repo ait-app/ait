@@ -7,7 +7,7 @@ const DICTATION_DRAIN_IDLE_TIMEOUT_MS = 30_000;
 
 const waitForNextFlushTurn = (): Promise<void> => new Promise((resolve) => setTimeout(resolve, 0));
 
-type DictationStreamAckMessage = Extract<SessionOutboundMessage, { type: "dictation_stream_ack" }>;
+type DictationStreamAckMessage = Extract<SessionOutboundMessage, { type: "dictation.stream.ack" }>;
 
 interface DrainWaitResult {
   kind: "signaled" | "timed-out";
@@ -88,7 +88,7 @@ export class DictationStreamSender {
     }
 
     this.clientCleanup = client.subscribeRawMessages((message) => {
-      if (message.type !== "dictation_stream_ack") {
+      if (message.type !== "dictation.stream.ack") {
         return;
       }
       this.handleAck(message);

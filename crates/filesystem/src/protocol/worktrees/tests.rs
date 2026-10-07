@@ -1,8 +1,8 @@
 use serde_json::json;
 
 use super::{
-    CAPABILITIES, WorktreeArchiveRequest, WorktreeArchiveScope, WorktreeCreateAction,
-    WorktreeCreateRequest, WorktreeListRequest,
+    WorktreeArchiveRequest, WorktreeArchiveScope, WorktreeCreateAction, WorktreeCreateRequest,
+    WorktreeListRequest,
 };
 
 #[test]
@@ -47,7 +47,7 @@ fn attachment_normalization_keeps_supported_shapes_and_filters_invalid_neighbors
 #[test]
 fn methods_use_only_canonical_names() {
     assert_eq!(
-        CAPABILITIES,
+        crate::rpc::worktrees::METHODS,
         [
             "workspace.worktree.list.request",
             "workspace.worktree.create.request",

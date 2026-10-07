@@ -252,7 +252,7 @@ describe("buildForgeSearchQueryOptions", () => {
 
     const result = await query.queryFn();
 
-    expect(result.requestId).toBe("github_search_request");
+    expect(result.requestId).toBe("github.search.request");
     expect(client.requests).toEqual([{ cwd: "/repo", query: "789", limit: 20 }]);
   });
 });
@@ -277,6 +277,6 @@ class ThisDependentSearchClient {
   }
 
   async searchGitHub(options: { cwd: string; query: string; limit?: number }) {
-    return this.send("github_search_request", options);
+    return this.send("github.search.request", options);
   }
 }

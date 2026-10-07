@@ -8,56 +8,16 @@ use voice::capabilities as voice;
 
 use crate::Services;
 
-/// Crate-owned group whose transport handler is selected by the API.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub(super) enum Group {
-    /// Online service control owned by the transport connector.
-    Relay,
-    Schedule(schedule::Group),
-    Browser(browser::Group),
-    Metadata(metadata::Group),
-    Filesystem(filesystem::Group),
-    Provider(provider::Group),
-    Terminal(terminal::Group),
-    Voice(voice::Group),
-}
-
-/// Merge crate-owned declarations without copying their method lists.
-pub(super) fn implemented_groups() -> impl Iterator<Item = (Group, &'static [&'static str])> {
-    schedule::IMPLEMENTED_GROUPS
-        .iter()
-        .map(|&(group, methods)| (Group::Schedule(group), methods))
-        .chain(
-            browser::IMPLEMENTED_GROUPS
-                .iter()
-                .map(|&(group, methods)| (Group::Browser(group), methods)),
-        )
-        .chain(
-            voice::IMPLEMENTED_GROUPS
-                .iter()
-                .map(|&(group, methods)| (Group::Voice(group), methods)),
-        )
-        .chain(
-            metadata::IMPLEMENTED_GROUPS
-                .iter()
-                .map(|&(group, methods)| (Group::Metadata(group), methods)),
-        )
-        .chain(
-            filesystem::IMPLEMENTED_GROUPS
-                .iter()
-                .map(|&(group, methods)| (Group::Filesystem(group), methods)),
-        )
-        .chain(
-            provider::IMPLEMENTED_GROUPS
-                .iter()
-                .map(|&(group, methods)| (Group::Provider(group), methods)),
-        )
-        .chain(
-            terminal::IMPLEMENTED_GROUPS
-                .iter()
-                .map(|&(group, methods)| (Group::Terminal(group), methods)),
-        )
-        .chain(std::iter::once((Group::Relay, crate::relay_rpc::METHODS)))
+/// Merge crate-owned method declarations for negotiation and envelope validation.
+pub(super) fn implemented_methods() -> impl Iterator<Item = &'static str> {
+    schedule::implemented_capabilities()
+        .chain(browser::implemented_capabilities())
+        .chain(voice::implemented_capabilities())
+        .chain(metadata::implemented_capabilities())
+        .chain(filesystem::implemented_capabilities())
+        .chain(provider::implemented_capabilities())
+        .chain(terminal::implemented_capabilities())
+        .chain(crate::relay_rpc::METHODS.iter().copied())
 }
 
 /// Supply service presence to each owner and collect its installed method names.

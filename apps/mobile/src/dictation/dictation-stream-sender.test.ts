@@ -18,7 +18,7 @@ interface FakeChunk {
 }
 
 interface FakeAck {
-  type: "dictation_stream_ack";
+  type: "dictation.stream.ack";
   payload: {
     dictationId: string;
     ackSeq: number;
@@ -71,7 +71,7 @@ class FakeDaemonClient {
 
   emitAck(dictationId: string, ackSeq: number): void {
     const message: FakeAck = {
-      type: "dictation_stream_ack",
+      type: "dictation.stream.ack",
       payload: { dictationId, ackSeq },
     };
     for (const listener of this.rawMessageListeners) {

@@ -81,7 +81,7 @@ export function useWorkspaceTerminals(input: UseWorkspaceTerminalsInput) {
   const query = useReplicaQuery({
     queryKey,
     enabled: canCreateNow,
-    pushEvent: "terminals_changed",
+    pushEvent: "terminal.list.changed",
     meta: workspaceTerminalsPushRoute({
       enabled: canCreateNow,
       serverId: normalizedServerId,

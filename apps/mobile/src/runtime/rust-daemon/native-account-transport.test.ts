@@ -37,11 +37,11 @@ describe("native account relay", () => {
       },
       negotiated_capabilities: ["connection.ping"],
     });
-    transport.send('{"type":"ping"}');
+    transport.send('{"type":"connection.ping"}');
     const ping = JSON.parse(String(vi.mocked(h.socket.send).mock.calls.at(-1)![0]));
     expect(ping).toMatchObject({ type: "request", method: "connection.ping" });
     h.message({ type: "response", request_id: ping.request_id, result: {} });
-    expect(receive).toHaveBeenLastCalledWith('{"type":"pong"}', false);
+    expect(receive).toHaveBeenLastCalledWith('{"type":"connection.pong"}', false);
     expect(h.deps.connect).toHaveBeenCalledOnce();
     expect(error).not.toHaveBeenCalled();
     transport.close();
@@ -64,7 +64,11 @@ describe("native account relay", () => {
     expect(open).toHaveBeenCalledOnce();
     h.message({
       type: "server_info",
-      info: { server_id: "server", instance_id: "instance", features: ["ait-rust-single-v1"] },
+      info: {
+        server_id: "server",
+        instance_id: "instance",
+        features: ["ait-rust-single-v1"],
+      },
     });
     const frame = new Uint8Array([0x10, 5, 7]);
     h.message(frame, true);
@@ -83,11 +87,18 @@ describe("native account relay", () => {
     transport.onError(error);
     transport.onOpen(() => transport.send('{"type":"hello"}'));
     await h.flush();
-    h.message({ type: "relay.ready", relay_session_id: kind === "pairing" ? "wrong" : "visit" });
+    h.message({
+      type: "relay.ready",
+      relay_session_id: kind === "pairing" ? "wrong" : "visit",
+    });
     if (kind === "identity")
       h.message({
         type: "server_info",
-        info: { server_id: "wrong", instance_id: "instance", features: ["ait-rust-single-v1"] },
+        info: {
+          server_id: "wrong",
+          instance_id: "instance",
+          features: ["ait-rust-single-v1"],
+        },
       });
     expect(error).toHaveBeenCalledOnce();
     expect(h.socket.close).toHaveBeenCalledOnce();

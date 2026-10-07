@@ -1,3 +1,16 @@
+/// Client methods implemented by this component; consumed by capability discovery.
+pub(crate) const METHODS: &[&str] = &[
+    "daemon.get_status.request",
+    "daemon.get_pairing_offer.request",
+    "daemon.config.reload.request",
+    "daemon.update.request",
+    "diagnostics.request",
+    "daemon.config.get.request",
+    "daemon.config.set.request",
+    "server.restart.request",
+    "server.shutdown.request",
+];
+
 use crate::rpc::daemon;
 use model::ErrorCode;
 use serde_json::Value;

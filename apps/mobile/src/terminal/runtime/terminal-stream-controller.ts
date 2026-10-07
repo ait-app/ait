@@ -71,7 +71,11 @@ export class TerminalStreamController {
       return;
     }
     const restore = this.options.getRestoreOptions?.();
-    this.options.onStatusChange?.({ terminalId: nextTerminalId, isAttaching: true, error: null });
+    this.options.onStatusChange?.({
+      terminalId: nextTerminalId,
+      isAttaching: true,
+      error: null,
+    });
     let subscription: ReturnType<DaemonClient["observeTerminal"]>;
     try {
       const preferredSize = restore?.size ?? this.options.getPreferredSize();
@@ -94,7 +98,7 @@ export class TerminalStreamController {
     subscription.subscribe({
       snapshot: () => {},
       update: (message) => {
-        if (message.type !== "terminal_stream_exit" || this.subscription !== subscription) return;
+        if (message.type !== "terminal.stream.exit" || this.subscription !== subscription) return;
         if (message.payload.error)
           this.failAttach(nextTerminalId, new Error(message.payload.error));
         else this.handleTerminalExit({ terminalId: nextTerminalId });

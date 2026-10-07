@@ -1,5 +1,5 @@
-// Generated from crates/protocol/src/methods.rs; pinned Paseo 2c8e8a8.
-// Verify with scripts/check-paseo-client-methods.py; response aliases are adapter-owned.
+// Canonical Ait names from crates/protocol/src/methods.rs.
+// Verify with scripts/check-paseo-client-methods.py.
 import { RELAY_METHODS } from "./relay-methods";
 export interface MethodSpec {
   method: string;
@@ -40,25 +40,25 @@ export const METHODS: Readonly<Record<string, MethodSpec>> = {
     channel: 1,
     response: "diagnostics.response",
   },
-  get_daemon_config_request: {
+  "daemon.config.get.request": {
     method: "daemon.config.get.request",
     kind: "request",
     channel: 1,
-    response: "get_daemon_config_response",
+    response: "daemon.config.get.response",
   },
-  set_daemon_config_request: {
+  "daemon.config.set.request": {
     method: "daemon.config.set.request",
     kind: "request",
     channel: 1,
-    response: "set_daemon_config_response",
+    response: "daemon.config.set.response",
   },
-  restart_server_request: {
+  "server.restart.request": {
     method: "server.restart.request",
     kind: "request",
     channel: 1,
     response: "status:restart_requested",
   },
-  shutdown_server_request: {
+  "server.shutdown.request": {
     method: "server.shutdown.request",
     kind: "request",
     channel: 1,
@@ -112,35 +112,29 @@ export const METHODS: Readonly<Record<string, MethodSpec>> = {
     channel: 1,
     response: "project.icon.get.response",
   },
-  project_icon_request: {
-    method: "project.icon.get.request",
-    kind: "request",
-    channel: 1,
-    response: "project_icon_response",
-  },
-  read_project_config_request: {
+  "project.config.read.request": {
     method: "project.config.read.request",
     kind: "request",
     channel: 1,
-    response: "read_project_config_response",
+    response: "project.config.read.response",
   },
-  write_project_config_request: {
+  "project.config.write.request": {
     method: "project.config.write.request",
     kind: "request",
     channel: 1,
-    response: "write_project_config_response",
+    response: "project.config.write.response",
   },
-  fetch_workspaces_request: {
+  "workspace.list.request": {
     method: "workspace.list.request",
     kind: "request",
     channel: 1,
-    response: "fetch_workspaces_response",
+    response: "workspace.list.response",
   },
-  open_project_request: {
+  "workspace.open.request": {
     method: "workspace.open.request",
     kind: "request",
     channel: 1,
-    response: "open_project_response",
+    response: "workspace.open.response",
   },
   "workspace.create.request": {
     method: "workspace.create.request",
@@ -148,11 +142,11 @@ export const METHODS: Readonly<Record<string, MethodSpec>> = {
     channel: 1,
     response: "workspace.create.response",
   },
-  archive_workspace_request: {
+  "workspace.archive.request": {
     method: "workspace.archive.request",
     kind: "request",
     channel: 1,
-    response: "archive_workspace_response",
+    response: "workspace.archive.response",
   },
   "workspace.title.set.request": {
     method: "workspace.title.set.request",
@@ -226,29 +220,29 @@ export const METHODS: Readonly<Record<string, MethodSpec>> = {
     channel: 1,
     response: "workspace.label.delete.response",
   },
-  paseo_worktree_list_request: {
+  "workspace.worktree.list.request": {
     method: "workspace.worktree.list.request",
     kind: "request",
     channel: 1,
-    response: "paseo_worktree_list_response",
+    response: "workspace.worktree.list.response",
   },
-  create_paseo_worktree_request: {
+  "workspace.worktree.create.request": {
     method: "workspace.worktree.create.request",
     kind: "request",
     channel: 1,
-    response: "create_paseo_worktree_response",
+    response: "workspace.worktree.create.response",
   },
-  paseo_worktree_archive_request: {
+  "workspace.worktree.archive.request": {
     method: "workspace.worktree.archive.request",
     kind: "request",
     channel: 1,
-    response: "paseo_worktree_archive_response",
+    response: "workspace.worktree.archive.response",
   },
-  workspace_setup_status_request: {
+  "workspace.setup.status.request": {
     method: "workspace.setup.status.request",
     kind: "request",
     channel: 1,
-    response: "workspace_setup_status_response",
+    response: "workspace.setup.status.response",
   },
   "workspace.setup.run.request": {
     method: "workspace.setup.run.request",
@@ -274,29 +268,23 @@ export const METHODS: Readonly<Record<string, MethodSpec>> = {
     channel: 1,
     response: "workspace.script.stop.response",
   },
-  start_workspace_script_request: {
-    method: "workspace.script.start.request",
-    kind: "request",
-    channel: 1,
-    response: "start_workspace_script_response",
-  },
-  fetch_agents_request: {
+  "agent.list.request": {
     method: "agent.list.request",
     kind: "request",
     channel: 0,
-    response: "fetch_agents_response",
+    response: "agent.list.response",
   },
-  fetch_agent_request: {
+  "agent.get.request": {
     method: "agent.get.request",
     kind: "request",
     channel: 0,
-    response: "fetch_agent_response",
+    response: "agent.get.response",
   },
-  fetch_agent_history_request: {
+  "agent.history.get.request": {
     method: "agent.history.get.request",
     kind: "request",
     channel: 0,
-    response: "fetch_agent_history_response",
+    response: "agent.history.get.response",
   },
   "agent.create.request": {
     method: "agent.create.request",
@@ -304,65 +292,59 @@ export const METHODS: Readonly<Record<string, MethodSpec>> = {
     channel: 0,
     response: "agent.create.response",
   },
-  create_agent_request: {
-    method: "agent.create.request",
-    kind: "request",
-    channel: 0,
-    response: "status:agent_created",
-  },
-  resume_agent_request: {
+  "agent.resume.request": {
     method: "agent.resume.request",
     kind: "request",
     channel: 0,
     response: "status:agent_resumed",
   },
-  import_agent_request: {
+  "agent.import.request": {
     method: "agent.import.request",
     kind: "request",
     channel: 0,
     response: "status:agent_resumed",
   },
-  refresh_agent_request: {
+  "agent.refresh.request": {
     method: "agent.refresh.request",
     kind: "request",
     channel: 0,
     response: "status:agent_refreshed",
   },
-  update_agent_request: {
+  "agent.update.request": {
     method: "agent.update.request",
     kind: "request",
     channel: 0,
-    response: "update_agent_response",
+    response: "agent.update.response",
   },
-  send_agent_message_request: {
+  "agent.message.send.request": {
     method: "agent.message.send.request",
     kind: "request",
     channel: 0,
-    response: "send_agent_message_response",
+    response: "agent.message.send.response",
   },
-  wait_for_finish_request: {
+  "agent.finish.wait.request": {
     method: "agent.finish.wait.request",
     kind: "request",
     channel: 0,
-    response: "wait_for_finish_response",
+    response: "agent.finish.wait.response",
   },
-  cancel_agent_request: {
+  "agent.cancel.request": {
     method: "agent.cancel.request",
     kind: "request",
     channel: 0,
-    response: "cancel_agent_response",
+    response: "agent.cancel.response",
   },
-  archive_agent_request: {
+  "agent.archive.request": {
     method: "agent.archive.request",
     kind: "request",
     channel: 0,
-    response: "agent_archived",
+    response: "agent.archive.response",
   },
-  delete_agent_request: {
+  "agent.delete.request": {
     method: "agent.delete.request",
     kind: "request",
     channel: 0,
-    response: "agent_deleted",
+    response: "agent.delete.response",
   },
   "agent.detach.request": {
     method: "agent.detach.request",
@@ -376,47 +358,47 @@ export const METHODS: Readonly<Record<string, MethodSpec>> = {
     channel: 0,
     response: "agent.rewind.response",
   },
-  clear_agent_attention: {
+  "agent.attention.clear.request": {
     method: "agent.attention.clear.request",
     kind: "request",
     channel: 0,
     response: null,
   },
-  close_items_request: {
+  "agent.items.close.request": {
     method: "agent.items.close.request",
     kind: "request",
     channel: 0,
-    response: "close_items_response",
+    response: "agent.items.close.response",
   },
-  list_commands_request: {
+  "agent.commands.list.request": {
     method: "agent.commands.list.request",
     kind: "request",
     channel: 0,
-    response: "list_commands_response",
+    response: "agent.commands.list.response",
   },
-  set_agent_mode_request: {
+  "agent.mode.set.request": {
     method: "agent.mode.set.request",
     kind: "request",
     channel: 0,
-    response: "set_agent_mode_response",
+    response: "agent.mode.set.response",
   },
-  set_agent_model_request: {
+  "agent.model.set.request": {
     method: "agent.model.set.request",
     kind: "request",
     channel: 0,
-    response: "set_agent_model_response",
+    response: "agent.model.set.response",
   },
-  set_agent_thinking_request: {
+  "agent.thinking.set.request": {
     method: "agent.thinking.set.request",
     kind: "request",
     channel: 0,
-    response: "set_agent_thinking_response",
+    response: "agent.thinking.set.response",
   },
-  set_agent_feature_request: {
+  "agent.feature.set.request": {
     method: "agent.feature.set.request",
     kind: "request",
     channel: 0,
-    response: "set_agent_feature_response",
+    response: "agent.feature.set.response",
   },
   "agent.config.apply.request": {
     method: "agent.config.apply.request",
@@ -424,17 +406,17 @@ export const METHODS: Readonly<Record<string, MethodSpec>> = {
     channel: 0,
     response: "agent.config.apply.response",
   },
-  agent_permission_response: {
+  "agent.permission.resolve.request": {
     method: "agent.permission.resolve.request",
     kind: "request",
     channel: 0,
     response: null,
   },
-  fetch_agent_timeline_request: {
+  "agent.timeline.get.request": {
     method: "agent.timeline.get.request",
     kind: "request",
     channel: 0,
-    response: "fetch_agent_timeline_response",
+    response: "agent.timeline.get.response",
   },
   "agent.timeline.search.request": {
     method: "agent.timeline.search.request",
@@ -478,47 +460,47 @@ export const METHODS: Readonly<Record<string, MethodSpec>> = {
     channel: 0,
     response: "agent.provider_subagents.timeline.get.response",
   },
-  list_available_providers_request: {
+  "provider.available.list.request": {
     method: "provider.available.list.request",
     kind: "request",
     channel: 0,
-    response: "list_available_providers_response",
+    response: "provider.available.list.response",
   },
-  list_provider_models_request: {
+  "provider.models.list.request": {
     method: "provider.models.list.request",
     kind: "request",
     channel: 0,
-    response: "list_provider_models_response",
+    response: "provider.models.list.response",
   },
-  list_provider_modes_request: {
+  "provider.modes.list.request": {
     method: "provider.modes.list.request",
     kind: "request",
     channel: 0,
-    response: "list_provider_modes_response",
+    response: "provider.modes.list.response",
   },
-  list_provider_features_request: {
+  "provider.features.list.request": {
     method: "provider.features.list.request",
     kind: "request",
     channel: 0,
-    response: "list_provider_features_response",
+    response: "provider.features.list.response",
   },
-  get_providers_snapshot_request: {
+  "provider.snapshot.get.request": {
     method: "provider.snapshot.get.request",
     kind: "request",
     channel: 0,
-    response: "get_providers_snapshot_response",
+    response: "provider.snapshot.get.response",
   },
-  refresh_providers_snapshot_request: {
+  "provider.snapshot.refresh.request": {
     method: "provider.snapshot.refresh.request",
     kind: "request",
     channel: 0,
-    response: "refresh_providers_snapshot_response",
+    response: "provider.snapshot.refresh.response",
   },
-  provider_diagnostic_request: {
+  "provider.diagnostic.request": {
     method: "provider.diagnostic.request",
     kind: "request",
     channel: 0,
-    response: "provider_diagnostic_response",
+    response: "provider.diagnostic.response",
   },
   "provider.usage.list.request": {
     method: "provider.usage.list.request",
@@ -526,11 +508,11 @@ export const METHODS: Readonly<Record<string, MethodSpec>> = {
     channel: 0,
     response: "provider.usage.list.response",
   },
-  fetch_recent_provider_sessions_request: {
+  "provider.sessions.recent.list.request": {
     method: "provider.sessions.recent.list.request",
     kind: "request",
     channel: 0,
-    response: "fetch_recent_provider_sessions_response",
+    response: "provider.sessions.recent.list.response",
   },
   "agent.skills.get_status.request": {
     method: "agent.skills.get_status.request",
@@ -562,11 +544,11 @@ export const METHODS: Readonly<Record<string, MethodSpec>> = {
     channel: 0,
     response: "agent.skills.import_legacy_selection.response",
   },
-  checkout_status_request: {
+  "checkout.status.get.request": {
     method: "checkout.status.get.request",
     kind: "request",
     channel: 2,
-    response: "checkout_status_response",
+    response: "checkout.status.get.response",
   },
   "checkout.refresh.request": {
     method: "checkout.refresh.request",
@@ -580,13 +562,13 @@ export const METHODS: Readonly<Record<string, MethodSpec>> = {
     channel: 2,
     response: "checkout.diff.get.response",
   },
-  subscribe_checkout_diff_request: {
+  "checkout.diff.subscribe.request": {
     method: "checkout.diff.subscribe.request",
     kind: "request",
     channel: 2,
-    response: "subscribe_checkout_diff_response",
+    response: "checkout.diff.subscribe.response",
   },
-  unsubscribe_checkout_diff_request: {
+  "checkout.diff.unsubscribe.request": {
     method: "checkout.diff.unsubscribe.request",
     kind: "request",
     channel: 2,
@@ -604,23 +586,23 @@ export const METHODS: Readonly<Record<string, MethodSpec>> = {
     channel: 2,
     response: "checkout.commits.file_diff.response",
   },
-  validate_branch_request: {
+  "checkout.branch.validate.request": {
     method: "checkout.branch.validate.request",
     kind: "request",
     channel: 2,
-    response: "validate_branch_response",
+    response: "checkout.branch.validate.response",
   },
-  branch_suggestions_request: {
+  "checkout.branch.suggestions.request": {
     method: "checkout.branch.suggestions.request",
     kind: "request",
     channel: 2,
-    response: "branch_suggestions_response",
+    response: "checkout.branch.suggestions.response",
   },
-  checkout_switch_branch_request: {
+  "checkout.branch.switch.request": {
     method: "checkout.branch.switch.request",
     kind: "request",
     channel: 2,
-    response: "checkout_switch_branch_response",
+    response: "checkout.branch.switch.response",
   },
   "checkout.rename_branch.request": {
     method: "checkout.rename_branch.request",
@@ -628,35 +610,35 @@ export const METHODS: Readonly<Record<string, MethodSpec>> = {
     channel: 2,
     response: "checkout.rename_branch.response",
   },
-  checkout_commit_request: {
+  "checkout.commit.request": {
     method: "checkout.commit.request",
     kind: "request",
     channel: 2,
-    response: "checkout_commit_response",
+    response: "checkout.commit.response",
   },
-  checkout_merge_request: {
+  "checkout.merge.request": {
     method: "checkout.merge.request",
     kind: "request",
     channel: 2,
-    response: "checkout_merge_response",
+    response: "checkout.merge.response",
   },
-  checkout_merge_from_base_request: {
+  "checkout.merge_from_base.request": {
     method: "checkout.merge_from_base.request",
     kind: "request",
     channel: 2,
-    response: "checkout_merge_from_base_response",
+    response: "checkout.merge_from_base.response",
   },
-  checkout_pull_request: {
+  "checkout.pull.request": {
     method: "checkout.pull.request",
     kind: "request",
     channel: 2,
-    response: "checkout_pull_response",
+    response: "checkout.pull.response",
   },
-  checkout_push_request: {
+  "checkout.push.request": {
     method: "checkout.push.request",
     kind: "request",
     channel: 2,
-    response: "checkout_push_response",
+    response: "checkout.push.response",
   },
   "checkout.discard_changes.request": {
     method: "checkout.discard_changes.request",
@@ -664,23 +646,23 @@ export const METHODS: Readonly<Record<string, MethodSpec>> = {
     channel: 2,
     response: "checkout.discard_changes.response",
   },
-  stash_save_request: {
+  "checkout.stash.save.request": {
     method: "checkout.stash.save.request",
     kind: "request",
     channel: 2,
-    response: "stash_save_response",
+    response: "checkout.stash.save.response",
   },
-  stash_pop_request: {
+  "checkout.stash.pop.request": {
     method: "checkout.stash.pop.request",
     kind: "request",
     channel: 2,
-    response: "stash_pop_response",
+    response: "checkout.stash.pop.response",
   },
-  stash_list_request: {
+  "checkout.stash.list.request": {
     method: "checkout.stash.list.request",
     kind: "request",
     channel: 2,
-    response: "stash_list_response",
+    response: "checkout.stash.list.response",
   },
   "forge.search.request": {
     method: "forge.search.request",
@@ -688,35 +670,35 @@ export const METHODS: Readonly<Record<string, MethodSpec>> = {
     channel: 2,
     response: "forge.search.response",
   },
-  github_search_request: {
+  "github.search.request": {
     method: "github.search.request",
     kind: "request",
     channel: 2,
-    response: "github_search_response",
+    response: "github.search.response",
   },
-  checkout_pr_create_request: {
+  "checkout.pr.create.request": {
     method: "checkout.pr.create.request",
     kind: "request",
     channel: 2,
-    response: "checkout_pr_create_response",
+    response: "checkout.pr.create.response",
   },
-  checkout_pr_merge_request: {
+  "checkout.pr.merge.request": {
     method: "checkout.pr.merge.request",
     kind: "request",
     channel: 2,
-    response: "checkout_pr_merge_response",
+    response: "checkout.pr.merge.response",
   },
-  checkout_pr_status_request: {
+  "checkout.pr.status.request": {
     method: "checkout.pr.status.request",
     kind: "request",
     channel: 2,
-    response: "checkout_pr_status_response",
+    response: "checkout.pr.status.response",
   },
-  pull_request_timeline_request: {
+  "checkout.pr.timeline.request": {
     method: "checkout.pr.timeline.request",
     kind: "request",
     channel: 2,
-    response: "pull_request_timeline_response",
+    response: "checkout.pr.timeline.response",
   },
   "checkout.forge.set_auto_merge.request": {
     method: "checkout.forge.set_auto_merge.request",
@@ -742,17 +724,17 @@ export const METHODS: Readonly<Record<string, MethodSpec>> = {
     channel: 2,
     response: "checkout.github.get_check_details.response",
   },
-  directory_suggestions_request: {
+  "directory.suggestions.request": {
     method: "directory.suggestions.request",
     kind: "request",
     channel: 2,
-    response: "directory_suggestions_response",
+    response: "directory.suggestions.response",
   },
-  file_explorer_request: {
+  "fs.explorer.request": {
     method: "fs.explorer.request",
     kind: "request",
     channel: 2,
-    response: "file_explorer_response",
+    response: "fs.explorer.response",
   },
   "fs.file.subscribe.request": {
     method: "fs.file.subscribe.request",
@@ -796,11 +778,11 @@ export const METHODS: Readonly<Record<string, MethodSpec>> = {
     channel: 2,
     response: "fs.entry.delete.response",
   },
-  file_download_token_request: {
+  "fs.file.download_token.request": {
     method: "fs.file.download_token.request",
     kind: "request",
     channel: 2,
-    response: "file_download_token_response",
+    response: "fs.file.download_token.response",
   },
   "file.upload.request": {
     method: "file.upload.request",
@@ -808,29 +790,29 @@ export const METHODS: Readonly<Record<string, MethodSpec>> = {
     channel: 2,
     response: "file.upload.response",
   },
-  list_terminals_request: {
+  "terminal.list.request": {
     method: "terminal.list.request",
     kind: "request",
     channel: 1,
-    response: "list_terminals_response",
+    response: "terminal.list.response",
   },
-  subscribe_terminals_request: {
+  "terminal.list.subscribe.request": {
     method: "terminal.list.subscribe.request",
     kind: "request",
     channel: 1,
-    response: "terminals_changed",
+    response: "terminal.list.changed",
   },
-  unsubscribe_terminals_request: {
+  "terminal.list.unsubscribe.request": {
     method: "terminal.list.unsubscribe.request",
     kind: "request",
     channel: 1,
     response: null,
   },
-  create_terminal_request: {
+  "terminal.create.request": {
     method: "terminal.create.request",
     kind: "request",
     channel: 1,
-    response: "create_terminal_response",
+    response: "terminal.create.response",
   },
   "terminal.rename.request": {
     method: "terminal.rename.request",
@@ -838,133 +820,133 @@ export const METHODS: Readonly<Record<string, MethodSpec>> = {
     channel: 1,
     response: "terminal.rename.response",
   },
-  subscribe_terminal_request: {
+  "terminal.subscribe.request": {
     method: "terminal.subscribe.request",
     kind: "request",
     channel: 1,
-    response: "subscribe_terminal_response",
+    response: "terminal.subscribe.response",
   },
-  unsubscribe_terminal_request: {
+  "terminal.unsubscribe.request": {
     method: "terminal.unsubscribe.request",
     kind: "request",
     channel: 1,
     response: null,
   },
-  terminal_input: {
+  "terminal.input": {
     method: "terminal.input",
     kind: "event",
     channel: 1,
     response: null,
   },
-  kill_terminal_request: {
+  "terminal.kill.request": {
     method: "terminal.kill.request",
     kind: "request",
     channel: 1,
-    response: "kill_terminal_response",
+    response: "terminal.kill.response",
   },
-  capture_terminal_request: {
+  "terminal.capture.request": {
     method: "terminal.capture.request",
     kind: "request",
     channel: 1,
-    response: "capture_terminal_response",
+    response: "terminal.capture.response",
   },
-  "schedule/create": {
+  "schedule.create.request": {
     method: "schedule.create.request",
     kind: "request",
     channel: 3,
-    response: "schedule/create/response",
+    response: "schedule.create.response",
   },
-  "schedule/list": {
+  "schedule.list.request": {
     method: "schedule.list.request",
     kind: "request",
     channel: 3,
-    response: "schedule/list/response",
+    response: "schedule.list.response",
   },
-  "schedule/inspect": {
+  "schedule.inspect.request": {
     method: "schedule.inspect.request",
     kind: "request",
     channel: 3,
-    response: "schedule/inspect/response",
+    response: "schedule.inspect.response",
   },
-  "schedule/logs": {
+  "schedule.logs.request": {
     method: "schedule.logs.request",
     kind: "request",
     channel: 3,
-    response: "schedule/logs/response",
+    response: "schedule.logs.response",
   },
-  "schedule/update": {
+  "schedule.update.request": {
     method: "schedule.update.request",
     kind: "request",
     channel: 3,
-    response: "schedule/update/response",
+    response: "schedule.update.response",
   },
-  "schedule/pause": {
+  "schedule.pause.request": {
     method: "schedule.pause.request",
     kind: "request",
     channel: 3,
-    response: "schedule/pause/response",
+    response: "schedule.pause.response",
   },
-  "schedule/resume": {
+  "schedule.resume.request": {
     method: "schedule.resume.request",
     kind: "request",
     channel: 3,
-    response: "schedule/resume/response",
+    response: "schedule.resume.response",
   },
-  "schedule/delete": {
+  "schedule.delete.request": {
     method: "schedule.delete.request",
     kind: "request",
     channel: 3,
-    response: "schedule/delete/response",
+    response: "schedule.delete.response",
   },
-  "schedule/run-once": {
+  "schedule.run_once.request": {
     method: "schedule.run_once.request",
     kind: "request",
     channel: 3,
-    response: "schedule/run-once/response",
+    response: "schedule.run_once.response",
   },
-  set_voice_mode: {
+  "voice.mode.set.request": {
     method: "voice.mode.set.request",
     kind: "request",
     channel: 0,
-    response: "set_voice_mode_response",
+    response: "voice.mode.set.response",
   },
-  voice_audio_chunk: {
+  "voice.audio.chunk": {
     method: "voice.audio.chunk",
     kind: "event",
     channel: 0,
     response: null,
   },
-  abort_request: {
+  "voice.abort.request": {
     method: "voice.abort.request",
     kind: "request",
     channel: 0,
     response: null,
   },
-  audio_played: {
+  "voice.audio.played": {
     method: "voice.audio.played",
     kind: "event",
     channel: 0,
     response: null,
   },
-  dictation_stream_start: {
+  "dictation.stream.start": {
     method: "dictation.stream.start",
     kind: "event",
     channel: 0,
     response: null,
   },
-  dictation_stream_chunk: {
+  "dictation.stream.chunk": {
     method: "dictation.stream.chunk",
     kind: "event",
     channel: 0,
     response: null,
   },
-  dictation_stream_finish: {
+  "dictation.stream.finish": {
     method: "dictation.stream.finish",
     kind: "event",
     channel: 0,
     response: null,
   },
-  dictation_stream_cancel: {
+  "dictation.stream.cancel": {
     method: "dictation.stream.cancel",
     kind: "event",
     channel: 0,
@@ -988,19 +970,19 @@ export const METHODS: Readonly<Record<string, MethodSpec>> = {
     channel: 0,
     response: "creation.subscribe.response",
   },
-  client_heartbeat: {
+  "session.heartbeat": {
     method: "session.heartbeat",
     kind: "event",
     channel: 0,
     response: null,
   },
-  ping: {
+  "connection.ping": {
     method: "connection.ping",
     kind: "request",
     channel: 0,
-    response: "pong",
+    response: "connection.pong",
   },
-  register_push_token: {
+  "push.register": {
     method: "push.register",
     kind: "event",
     channel: 0,
@@ -1024,16 +1006,16 @@ export const METHODS: Readonly<Record<string, MethodSpec>> = {
     channel: 3,
     response: null,
   },
-  list_available_editors_request: {
+  "editor.available.list.request": {
     method: "editor.available.list.request",
     kind: "request",
     channel: 1,
-    response: "list_available_editors_response",
+    response: "editor.available.list.response",
   },
-  open_in_editor_request: {
+  "editor.open.request": {
     method: "editor.open.request",
     kind: "request",
     channel: 1,
-    response: "open_in_editor_response",
+    response: "editor.open.response",
   },
 };

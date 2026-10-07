@@ -118,3 +118,30 @@ fn failed_response_prevents_the_workspace_event() {
     ));
     assert!(outbound.failure().is_cancelled());
 }
+
+#[test]
+fn declining_a_request_preserves_its_context() {
+    let runtime = runtime();
+    let (outbound, mut receiver) = Outbound::new();
+    let pending = Some(Context {
+        request: request(),
+        runtime: &runtime,
+        outbound: &outbound,
+        available_subscriptions: 16,
+    });
+    Context::assert_unhandled(&pending, "test::declining_handler");
+    assert_eq!(pending.as_ref().unwrap().request.id, "r1");
+    assert_eq!(
+        pending.as_ref().unwrap().request.params,
+        json!({"increment":3})
+    );
+    assert!(receiver.try_recv().is_err());
+}
+
+#[test]
+#[should_panic(
+    expected = "Handler `test::broken_handler` returned NotImplemented after consuming Context"
+)]
+fn declining_a_consumed_context_violates_the_handler_contract() {
+    Context::assert_unhandled(&None, "test::broken_handler");
+}

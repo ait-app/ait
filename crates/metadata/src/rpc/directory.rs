@@ -1,5 +1,29 @@
 //! Project and Workspace request handling and descriptor projections.
 
+/// Client methods implemented by this component branch.
+pub const METHODS: &[&str] = &[
+    "project.add.request",
+    "project.create_directory.request",
+    "project.list.request",
+    "project.rename.request",
+    "project.remove.request",
+    "workspace.open.request",
+    "workspace.create.request",
+    "workspace.list.request",
+    "workspace.archive.request",
+    "workspace.title.set.request",
+    "workspace.pin.set.request",
+];
+
+/// Client methods implemented by this component branch.
+pub const PROJECT_CONFIG_METHODS: &[&str] = &[
+    "project.config.read.request",
+    "project.config.write.request",
+];
+
+/// Client methods implemented by this component branch.
+pub const PROJECT_ICON_METHODS: &[&str] = &["project.icon.set.request", "project.icon.get.request"];
+
 use std::path::Path;
 
 use crate::model::registry::{

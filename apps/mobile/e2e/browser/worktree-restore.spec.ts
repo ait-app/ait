@@ -248,7 +248,7 @@ test.describe("Worktree restore", () => {
         () => reject(new Error("Secondary client did not receive the restored workspace")),
         30_000,
       );
-      unsubscribeSecondaryWorkspaceUpdate = worktreeClient.on("workspace_update", (message) => {
+      unsubscribeSecondaryWorkspaceUpdate = worktreeClient.on("workspace.update", (message) => {
         if (
           message.payload.kind === "upsert" &&
           message.payload.workspace.id === worktree.workspaceId

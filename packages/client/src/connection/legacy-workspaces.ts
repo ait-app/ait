@@ -7,13 +7,13 @@ import {
 
 type AgentEntry = Extract<
   SessionOutboundMessage,
-  { type: "fetch_agents_response" }
+  { type: "agent.list.response" }
 >["payload"]["entries"][number];
 type Workspace = Extract<
   SessionOutboundMessage,
-  { type: "fetch_workspaces_response" }
+  { type: "workspace.list.response" }
 >["payload"]["entries"][number];
-type WorkspaceUpdate = Extract<SessionOutboundMessage, { type: "workspace_update" }>;
+type WorkspaceUpdate = Extract<SessionOutboundMessage, { type: "workspace.update" }>;
 
 // Preserve the pre-registry app's identity format. This is an opaque ID, never
 // a filesystem path: converting C:\ to C: changes a drive root into a relative path.
@@ -32,7 +32,7 @@ export class LegacyWorkspaces {
       ...agent,
       workspaceId: agent.workspaceId ?? legacyWorkspaceId(agent.cwd),
     });
-    if (message.type === "fetch_agents_response")
+    if (message.type === "agent.list.response")
       return {
         ...message,
         payload: {
@@ -43,12 +43,15 @@ export class LegacyWorkspaces {
           })),
         },
       };
-    if (message.type === "agent_update" && message.payload.kind === "upsert")
-      return { ...message, payload: { ...message.payload, agent: stamp(message.payload.agent) } };
+    if (message.type === "agent.update" && message.payload.kind === "upsert")
+      return {
+        ...message,
+        payload: { ...message.payload, agent: stamp(message.payload.agent) },
+      };
     if (
-      (message.type === "fetch_agent_response" ||
-        message.type === "fetch_agent_timeline_response" ||
-        message.type === "cancel_agent_response") &&
+      (message.type === "agent.get.response" ||
+        message.type === "agent.timeline.get.response" ||
+        message.type === "agent.cancel.response") &&
       message.payload.agent
     ) {
       return {
@@ -79,7 +82,7 @@ export class LegacyWorkspaces {
   }
 
   update(message: SessionOutboundMessage): WorkspaceUpdate[] {
-    if (message.type !== "agent_update") return [];
+    if (message.type !== "agent.update") return [];
     const before = this.workspaces();
     const update = message.payload;
     if (update.kind === "remove") this.agents.delete(update.agentId);
@@ -92,11 +95,11 @@ export class LegacyWorkspaces {
     const changes: WorkspaceUpdate[] = [];
     for (const [id, workspace] of after) {
       if (JSON.stringify(before.get(id)) !== JSON.stringify(workspace))
-        changes.push({ type: "workspace_update", payload: { kind: "upsert", workspace } });
+        changes.push({ type: "workspace.update", payload: { kind: "upsert", workspace } });
     }
     for (const id of before.keys())
       if (!after.has(id))
-        changes.push({ type: "workspace_update", payload: { kind: "remove", id } });
+        changes.push({ type: "workspace.update", payload: { kind: "remove", id } });
     return changes;
   }
 

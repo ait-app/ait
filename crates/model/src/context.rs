@@ -31,7 +31,41 @@ pub struct Context<'a> {
     pub available_subscriptions: usize,
 }
 
+/// Failure to handle a request or deliver its response.
+#[derive(Debug, thiserror::Error)]
+pub enum DispatchError {
+    /// This handler does not implement the pending request; its Context remains available.
+    #[error("request not implemented by this handler")]
+    NotImplemented,
+    /// A consumed request could not deliver its response; processing must stop.
+    #[error(transparent)]
+    Delivery(#[from] QueueError),
+}
+
 impl Context<'_> {
+    /// Assert that a handler declining a request retained its Context.
+    ///
+    /// # Arguments
+    /// * `pending` - Request ownership after the handler returned `NotImplemented`.
+    /// * `handler` - Handler name included in the invariant failure diagnostic.
+    /// # Returns
+    /// Returns without modifying `pending` when the Context is still available.
+    /// # Panics
+    /// Logs an error and panics if the handler consumed the declined request.
+    #[track_caller]
+    pub fn assert_unhandled(pending: &Option<Self>, handler: &str) {
+        if pending.is_none() {
+            tracing::error!(
+                handler,
+                "Handler returned NotImplemented after consuming Context"
+            );
+        }
+        assert!(
+            pending.is_some(),
+            "Handler `{handler}` returned NotImplemented after consuming Context"
+        );
+    }
+
     /// Execute `operation` with the owned method and parameters using the shared job budget.
     /// # Errors
     /// Returns admission, service-lock, task or converted business errors.

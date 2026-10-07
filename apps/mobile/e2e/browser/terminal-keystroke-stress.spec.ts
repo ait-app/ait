@@ -338,7 +338,7 @@ async function waitForLargeAgentStreamMessage(page: Page, expectedBytes: number)
   }
   const report = await readTerminalKeystrokeStressReport(page, INPUT_TEXT);
   throw new Error(
-    `Timed out waiting for large agent_stream message: largest=${report.largestAgentStreamTextMessageBytes}, expected=${expectedBytes}`,
+    `Timed out waiting for large agent.stream message: largest=${report.largestAgentStreamTextMessageBytes}, expected=${expectedBytes}`,
   );
 }
 
@@ -353,7 +353,7 @@ async function waitForAgentStreamMessages(page: Page, expectedCount: number): Pr
   }
   const report = await readTerminalKeystrokeStressReport(page, INPUT_TEXT);
   throw new Error(
-    `Timed out waiting for agent_stream messages: count=${report.agentStreamTextMessageCount}, expected=${expectedCount}`,
+    `Timed out waiting for agent.stream messages: count=${report.agentStreamTextMessageCount}, expected=${expectedCount}`,
   );
 }
 

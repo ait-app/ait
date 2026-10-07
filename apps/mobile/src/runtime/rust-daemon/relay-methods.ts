@@ -1,6 +1,6 @@
 import type { MethodSpec } from "./methods";
 
-// Transport-owned additions to the pinned Paseo method catalog.
+// Transport-owned additions to the canonical Ait method catalog.
 export const RELAY_METHODS: Readonly<Record<string, MethodSpec>> = {
   "relay.status.request": {
     method: "relay.status.request",

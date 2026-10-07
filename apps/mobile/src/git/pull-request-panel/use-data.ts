@@ -320,7 +320,7 @@ export function isUnsupportedTimelineError(error: unknown): boolean {
   if (
     name === "daemonrpcerror" &&
     rpcError.code === "unknown_schema" &&
-    rpcError.requestType === "pull_request_timeline_request"
+    rpcError.requestType === "checkout.pr.timeline.request"
   ) {
     return true;
   }

@@ -213,19 +213,35 @@ export async function installTerminalRenderProbe(page: Page): Promise<void> {
               .slice(0, 160);
             if (text.includes("\u001bc")) {
               probe.resetWrites += 1;
-              probe.events.push({ at: performance.now(), type: "reset-write", preview });
+              probe.events.push({
+                at: performance.now(),
+                type: "reset-write",
+                preview,
+              });
             }
             if (text.includes("\u001b[2J")) {
               probe.clearScreenWrites += 1;
-              probe.events.push({ at: performance.now(), type: "clear-write", preview });
+              probe.events.push({
+                at: performance.now(),
+                type: "clear-write",
+                preview,
+              });
             }
             if (text.includes("\u001b[?1049h")) {
               probe.altEnterWrites += 1;
-              probe.events.push({ at: performance.now(), type: "alt-enter-write", preview });
+              probe.events.push({
+                at: performance.now(),
+                type: "alt-enter-write",
+                preview,
+              });
             }
             if (text.includes("\u001b[?1049l")) {
               probe.altExitWrites += 1;
-              probe.events.push({ at: performance.now(), type: "alt-exit-write", preview });
+              probe.events.push({
+                at: performance.now(),
+                type: "alt-exit-write",
+                preview,
+              });
             }
             return originalWrite(data, callback);
           };
@@ -498,18 +514,18 @@ export async function installTerminalKeystrokeStressProbe(page: Page): Promise<v
             ...this.textMessageFrames.map((frame) => frame.bytes),
           ),
           agentStreamTextMessageCount: this.textMessageFrames.filter(
-            (frame) => frame.kind === "session:agent_stream",
+            (frame) => frame.kind === "session:agent.stream",
           ).length,
           agentStreamTextMessagePayloadBytes: this.textMessageFrames
-            .filter((frame) => frame.kind === "session:agent_stream")
+            .filter((frame) => frame.kind === "session:agent.stream")
             .reduce((sum, frame) => sum + frame.bytes, 0),
           largeAgentStreamTextMessageCount: this.textMessageFrames.filter(
-            (frame) => frame.kind === "session:agent_stream" && frame.bytes >= 50_000,
+            (frame) => frame.kind === "session:agent.stream" && frame.bytes >= 50_000,
           ).length,
           largestAgentStreamTextMessageBytes: Math.max(
             0,
             ...this.textMessageFrames
-              .filter((frame) => frame.kind === "session:agent_stream")
+              .filter((frame) => frame.kind === "session:agent.stream")
               .map((frame) => frame.bytes),
           ),
           appEventCount: this.appEvents.length,

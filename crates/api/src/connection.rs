@@ -14,8 +14,8 @@ use model::{Context, Request};
 
 mod creation_receipts;
 mod dispatch;
-mod routing;
 mod single;
+mod validation;
 mod workspace_archive;
 mod workspace_creation;
 
@@ -273,7 +273,7 @@ async fn process_message(
                     error(outbound, None, ErrorCode::InvalidMessage)?;
                 }
             } else {
-                let code = routing::placeholder(&method, InboundKind::Response, capabilities);
+                let code = validation::placeholder(&method, InboundKind::Response, capabilities);
                 error(outbound, request_id, code)?;
             }
         }
@@ -335,10 +335,9 @@ async fn process_event(
     subscriptions: &mut ConnectionSubscriptions,
 ) -> Result<(), QueueError> {
     let (method, params) = input;
-    if routing::lookup(&method).is_some_and(|route| {
-        route.kind == InboundKind::Event
-            && matches!(route.handler, Some(crate::capabilities::Group::Voice(_)))
-    }) && capabilities.iter().any(|capability| capability == &method)
+    if validation::lookup(&method).is_some_and(|metadata| metadata.kind == InboundKind::Event)
+        && voice::capabilities::implemented_capabilities().any(|name| name == method)
+        && capabilities.iter().any(|capability| capability == &method)
         && state.voice.speech.is_some()
     {
         subscriptions
@@ -398,7 +397,7 @@ async fn process_event(
         }
         return Ok(());
     }
-    let code = routing::placeholder(&method, InboundKind::Event, capabilities);
+    let code = validation::placeholder(&method, InboundKind::Event, capabilities);
     error(outbound, None, code)?;
     Ok(())
 }
@@ -410,12 +409,14 @@ async fn process_request(
     capabilities: &[String],
     subscriptions: &mut ConnectionSubscriptions,
 ) -> Result<(), QueueError> {
-    let handler = match request_handler(&request.method, state, capabilities) {
-        Ok(handler) => handler,
-        Err(code) => return error(outbound, Some(request.id), code),
-    };
+    if let Err(code) = validation::request(
+        &request.method,
+        &state.info.implemented_capabilities,
+        capabilities,
+    ) {
+        return error(outbound, Some(request.id), code);
+    }
     dispatch::request(
-        handler,
         Context {
             request,
             runtime: state,
@@ -426,33 +427,6 @@ async fn process_request(
         subscriptions,
     )
     .await
-}
-
-fn request_handler(
-    method: &str,
-    state: &Shared,
-    capabilities: &[String],
-) -> Result<routing::Handler, ErrorCode> {
-    let route = routing::lookup(method).ok_or(ErrorCode::MethodNotFound)?;
-    if route.kind != InboundKind::Request {
-        return Err(ErrorCode::InvalidMessage);
-    }
-    if !capabilities
-        .iter()
-        .any(|negotiated| negotiated == route.capability)
-    {
-        return Err(ErrorCode::UnsupportedCapability);
-    }
-    if method != "server.status.unsubscribe"
-        && !state
-            .info
-            .implemented_capabilities
-            .iter()
-            .any(|implemented| implemented == method)
-    {
-        return Err(ErrorCode::NotImplemented);
-    }
-    route.handler.ok_or(ErrorCode::NotImplemented)
 }
 
 enum Incoming {

@@ -164,7 +164,7 @@ export interface PaseoWorkspaceArchiveResult {
 
 export type PaseoWorkspaceUpdate = Extract<
   SessionOutboundMessage,
-  { type: "workspace_update" }
+  { type: "workspace.update" }
 >["payload"];
 
 export type PaseoWorkspaceUpdateHandler = (update: PaseoWorkspaceUpdate) => void;
@@ -184,7 +184,7 @@ export interface PaseoWorkspaceHandle {
   setTitle(title: string | null, requestId?: string): Promise<{ title: string | null }>;
   archive(requestId?: string): Promise<PaseoWorkspaceArchiveResult>;
   /**
-   * Subscribes to already-emitted daemon workspace_update events for this id.
+   * Subscribes to already-emitted daemon workspace.update events for this id.
    * This returns a local unsubscribe function; it does not own app cache state or
    * send a daemon unsubscribe RPC. Call `workspaces.list({ subscribe: {} })` when
    * the daemon should start streaming workspace directory updates.
@@ -216,7 +216,7 @@ export interface PaseoWorkspaceActions {
     requestId?: string,
   ): Promise<PaseoWorkspaceArchiveResult>;
   /**
-   * Local event subscription over the low-level driver's workspace_update stream.
+   * Local event subscription over the low-level driver's workspace.update stream.
    * The returned function only removes this SDK listener.
    */
   subscribe(handler: PaseoWorkspaceUpdateHandler): () => void;
@@ -300,9 +300,9 @@ export interface PaseoAgentCommandsOptions {
 
 export type PaseoAgentCommandsResult = ListCommandsResponse["payload"];
 
-export type PaseoAgentUpdate = Extract<SessionOutboundMessage, { type: "agent_update" }>["payload"];
+export type PaseoAgentUpdate = Extract<SessionOutboundMessage, { type: "agent.update" }>["payload"];
 
-export type PaseoAgentStream = Extract<SessionOutboundMessage, { type: "agent_stream" }>["payload"];
+export type PaseoAgentStream = Extract<SessionOutboundMessage, { type: "agent.stream" }>["payload"];
 
 export type PaseoAgentUpdateHandler = (update: PaseoAgentUpdate) => void;
 
@@ -394,7 +394,7 @@ export interface PaseoAgentActions {
   ref(agent: string | PaseoAgent): PaseoAgentHandle;
   create(options: PaseoAgentCreateOptions): Promise<PaseoAgentHandle>;
   /**
-   * Local event subscription over the low-level driver's agent_update stream.
+   * Local event subscription over the low-level driver's agent.update stream.
    * The returned function only removes this SDK listener.
    */
   subscribe(handler: PaseoAgentUpdateHandler): () => void;
@@ -415,7 +415,7 @@ export type PaseoProviderAvailabilityResult = ListAvailableProvidersResponse["pa
 export type PaseoProviderSnapshotResult = GetProvidersSnapshotResponseMessage["payload"];
 export type PaseoProviderSnapshotUpdate = Extract<
   SessionOutboundMessage,
-  { type: "providers_snapshot_update" }
+  { type: "provider.snapshot.update" }
 >["payload"];
 export type PaseoProviderRefreshResult = RefreshProvidersSnapshotResponseMessage["payload"];
 export type PaseoProviderDiagnosticResult = ProviderDiagnosticResponseMessage["payload"];
@@ -637,7 +637,7 @@ export function createPaseoApi(
     own(() => daemonClient.observeEvents(events, options));
 
   const subscribeEvent = (
-    event: "project.update" | "providers_snapshot_update",
+    event: "project.update" | "provider.snapshot.update",
     update: (message: SessionOutboundMessage) => void,
   ): (() => void) => {
     const observation = observeEvents([event]);
@@ -666,7 +666,7 @@ export function createPaseoApi(
     subscription.subscribe({
       snapshot: () => {},
       update: (message) => {
-        if (message.type === "workspace_update")
+        if (message.type === "workspace.update")
           for (const listener of workspaceListeners) listener(message.payload);
       },
     });
@@ -688,7 +688,7 @@ export function createPaseoApi(
     subscription.subscribe({
       snapshot: () => {},
       update: (message) => {
-        if (message.type === "agent_update")
+        if (message.type === "agent.update")
           for (const listener of agentListeners) listener(message.payload);
       },
     });
@@ -744,7 +744,7 @@ export function createPaseoApi(
       waitForReady: (options) =>
         waitForProvidersReady(
           daemonClient,
-          observeEvents(["providers_snapshot_update"]),
+          observeEvents(["provider.snapshot.update"]),
           lifetime.signal,
           options,
         ),
@@ -752,8 +752,8 @@ export function createPaseoApi(
       diagnostic: (provider, options) => daemonClient.getProviderDiagnostic(provider, options),
       listUsage: (options) => listProviderUsage(daemonClient, options),
       subscribe: (handler) => {
-        return subscribeEvent("providers_snapshot_update", (message) => {
-          if (message.type === "providers_snapshot_update") handler(message.payload);
+        return subscribeEvent("provider.snapshot.update", (message) => {
+          if (message.type === "provider.snapshot.update") handler(message.payload);
         });
       },
     },
@@ -878,7 +878,7 @@ function createAgentHandleFactory(
         subscribe: (handler) =>
           subscribeTimeline(id, (message) => {
             switch (message.type) {
-              case "agent_stream":
+              case "agent.stream":
                 return handler(message.payload);
               case "agent.timeline.subscription_restored":
                 return handler({
@@ -1080,7 +1080,7 @@ async function waitForProvidersReady(
       const unsubscribe = observation.subscribe({
         snapshot: () => {},
         update: (message) => {
-          if (message.type !== "providers_snapshot_update") return;
+          if (message.type !== "provider.snapshot.update") return;
           const update = message.payload;
           if (!requestId) {
             pendingUpdates.set(update.cwd, update);

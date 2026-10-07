@@ -1,3 +1,28 @@
+/// Client methods implemented by this component; consumed by capability discovery.
+pub(crate) const METHODS: &[&str] = &[
+    "agent.create.request",
+    "agent.resume.request",
+    "agent.message.send.request",
+    "agent.cancel.request",
+    "agent.finish.wait.request",
+    "agent.model.set.request",
+    "agent.thinking.set.request",
+    "agent.config.apply.request",
+    "provider.sessions.recent.list.request",
+    "agent.import.request",
+    "agent.refresh.request",
+    "agent.fork_context.request",
+    "agent.rewind.request",
+    "agent.commands.list.request",
+    "agent.mode.set.request",
+    "agent.feature.set.request",
+    "agent.permission.resolve.request",
+    "agent.provider_subagents.list.request",
+    "agent.provider_subagents.timeline.get.request",
+    "provider.diagnostic.request",
+    "provider.usage.list.request",
+];
+
 use model::ErrorCode;
 use model::ServerMessage;
 use serde_json::Value;

@@ -25,7 +25,7 @@ const ScheduleCreateTargetSchema = z.discriminatedUnion("type", [
 ]);
 
 export const ScheduleCreateRequestSchema = z.object({
-  type: z.literal("schedule/create"),
+  type: z.literal("schedule.create.request"),
   requestId: z.string(),
   prompt: z.string().min(1),
   name: z.string().optional(),
@@ -37,42 +37,42 @@ export const ScheduleCreateRequestSchema = z.object({
 });
 
 export const ScheduleListRequestSchema = z.object({
-  type: z.literal("schedule/list"),
+  type: z.literal("schedule.list.request"),
   requestId: z.string(),
 });
 
 export const ScheduleInspectRequestSchema = z.object({
-  type: z.literal("schedule/inspect"),
+  type: z.literal("schedule.inspect.request"),
   requestId: z.string(),
   scheduleId: z.string(),
 });
 
 export const ScheduleLogsRequestSchema = z.object({
-  type: z.literal("schedule/logs"),
+  type: z.literal("schedule.logs.request"),
   requestId: z.string(),
   scheduleId: z.string(),
 });
 
 export const SchedulePauseRequestSchema = z.object({
-  type: z.literal("schedule/pause"),
+  type: z.literal("schedule.pause.request"),
   requestId: z.string(),
   scheduleId: z.string(),
 });
 
 export const ScheduleResumeRequestSchema = z.object({
-  type: z.literal("schedule/resume"),
+  type: z.literal("schedule.resume.request"),
   requestId: z.string(),
   scheduleId: z.string(),
 });
 
 export const ScheduleDeleteRequestSchema = z.object({
-  type: z.literal("schedule/delete"),
+  type: z.literal("schedule.delete.request"),
   requestId: z.string(),
   scheduleId: z.string(),
 });
 
 export const ScheduleRunOnceRequestSchema = z.object({
-  type: z.literal("schedule/run-once"),
+  type: z.literal("schedule.run_once.request"),
   requestId: z.string(),
   scheduleId: z.string(),
 });
@@ -88,7 +88,7 @@ const ScheduleUpdateNewAgentConfigSchema = z.object({
 });
 
 export const ScheduleUpdateRequestSchema = z.object({
-  type: z.literal("schedule/update"),
+  type: z.literal("schedule.update.request"),
   requestId: z.string(),
   scheduleId: z.string(),
   name: z.string().nullable().optional(),
@@ -100,7 +100,7 @@ export const ScheduleUpdateRequestSchema = z.object({
 });
 
 export const ScheduleCreateResponseSchema = z.object({
-  type: z.literal("schedule/create/response"),
+  type: z.literal("schedule.create.response"),
   payload: z.object({
     requestId: z.string(),
     schedule: ScheduleSummarySchema.nullable(),
@@ -109,7 +109,7 @@ export const ScheduleCreateResponseSchema = z.object({
 });
 
 export const ScheduleListResponseSchema = z.object({
-  type: z.literal("schedule/list/response"),
+  type: z.literal("schedule.list.response"),
   payload: z.object({
     requestId: z.string(),
     schedules: z.array(ScheduleSummarySchema),
@@ -118,7 +118,7 @@ export const ScheduleListResponseSchema = z.object({
 });
 
 export const ScheduleInspectResponseSchema = z.object({
-  type: z.literal("schedule/inspect/response"),
+  type: z.literal("schedule.inspect.response"),
   payload: z.object({
     requestId: z.string(),
     schedule: StoredScheduleSchema.nullable(),
@@ -127,7 +127,7 @@ export const ScheduleInspectResponseSchema = z.object({
 });
 
 export const ScheduleLogsResponseSchema = z.object({
-  type: z.literal("schedule/logs/response"),
+  type: z.literal("schedule.logs.response"),
   payload: z.object({
     requestId: z.string(),
     runs: z.array(ScheduleRunSchema),
@@ -136,7 +136,7 @@ export const ScheduleLogsResponseSchema = z.object({
 });
 
 export const SchedulePauseResponseSchema = z.object({
-  type: z.literal("schedule/pause/response"),
+  type: z.literal("schedule.pause.response"),
   payload: z.object({
     requestId: z.string(),
     schedule: ScheduleSummarySchema.nullable(),
@@ -145,7 +145,7 @@ export const SchedulePauseResponseSchema = z.object({
 });
 
 export const ScheduleResumeResponseSchema = z.object({
-  type: z.literal("schedule/resume/response"),
+  type: z.literal("schedule.resume.response"),
   payload: z.object({
     requestId: z.string(),
     schedule: ScheduleSummarySchema.nullable(),
@@ -154,7 +154,7 @@ export const ScheduleResumeResponseSchema = z.object({
 });
 
 export const ScheduleDeleteResponseSchema = z.object({
-  type: z.literal("schedule/delete/response"),
+  type: z.literal("schedule.delete.response"),
   payload: z.object({
     requestId: z.string(),
     scheduleId: z.string(),
@@ -163,7 +163,7 @@ export const ScheduleDeleteResponseSchema = z.object({
 });
 
 export const ScheduleRunOnceResponseSchema = z.object({
-  type: z.literal("schedule/run-once/response"),
+  type: z.literal("schedule.run_once.response"),
   payload: z.object({
     requestId: z.string(),
     schedule: StoredScheduleSchema.nullable(),
@@ -172,7 +172,7 @@ export const ScheduleRunOnceResponseSchema = z.object({
 });
 
 export const ScheduleUpdateResponseSchema = z.object({
-  type: z.literal("schedule/update/response"),
+  type: z.literal("schedule.update.response"),
   payload: z.object({
     requestId: z.string(),
     schedule: StoredScheduleSchema.nullable(),

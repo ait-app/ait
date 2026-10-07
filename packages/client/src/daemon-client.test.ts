@@ -71,8 +71,8 @@ function createMockTransport() {
         return;
       }
       const frame = JSON.parse(data) as { type?: string };
-      if (frame.type === "ping") {
-        onMessage(JSON.stringify({ type: "pong" }));
+      if (frame.type === "connection.ping") {
+        onMessage(JSON.stringify({ type: "connection.pong" }));
       }
     },
     close: () => {},
@@ -159,7 +159,9 @@ function respondToScheduleRequest(
   request: Record<string, unknown>,
 ): void {
   const responseType =
-    request.type === "schedule/create" ? "schedule/create/response" : "schedule/update/response";
+    request.type === "schedule.create.request"
+      ? "schedule.create.response"
+      : "schedule.update.response";
 
   mock.triggerMessage(
     wrapSessionMessage({
@@ -369,7 +371,7 @@ test.each([
     expect(transport.sent).toHaveLength(1);
     const request = parseSentFrame(transport.sent[0]);
     expect(request).toMatchObject({
-      type: "create_agent_request",
+      type: "agent.create.request",
       config: input.config,
       workspaceId: input.workspaceId,
       callerAgentId: input.callerAgentId,
@@ -384,9 +386,9 @@ test.each([
     expect(request).not.toHaveProperty("idempotencyKey");
     transport.triggerMessage(
       wrapSessionMessage({
-        type: "status",
+        type: "agent.create.response",
         payload: {
-          status: "agent_create_failed",
+          agent: null,
           requestId: request.requestId,
           error: "Provider failed",
         },
@@ -513,7 +515,7 @@ test("timeline observation consumes broadcasts from a host without selective del
   observation.subscribe({ snapshot: () => {}, update: (message) => updates.push(message) });
   mock.triggerMessage(
     wrapSessionMessage({
-      type: "agent_stream",
+      type: "agent.stream",
       payload: {
         agentId: "agent",
         timestamp: "2026-09-11T00:00:00Z",
@@ -521,7 +523,7 @@ test("timeline observation consumes broadcasts from a host without selective del
       },
     }),
   );
-  expect(updates).toEqual([expect.objectContaining({ type: "agent_stream" })]);
+  expect(updates).toEqual([expect.objectContaining({ type: "agent.stream" })]);
   await observation.release();
   expect(mock.sent).toEqual([]);
 });
@@ -549,7 +551,7 @@ test("normalizes legacy and dedicated agent attention notifications", async () =
 
   mock.triggerMessage(
     wrapSessionMessage({
-      type: "agent_stream",
+      type: "agent.stream",
       payload: {
         agentId: payload.agentId,
         timestamp: payload.timestamp,
@@ -557,7 +559,7 @@ test("normalizes legacy and dedicated agent attention notifications", async () =
       },
     }),
   );
-  mock.triggerMessage(wrapSessionMessage({ type: "agent_attention_required", payload }));
+  mock.triggerMessage(wrapSessionMessage({ type: "agent.attention.required", payload }));
 
   expect(notifications).toEqual([payload, payload]);
 });
@@ -591,8 +593,10 @@ class FakeDaemon {
         message?: { type?: string; requestId: string; clientSentAt: number };
       };
       const sessionPing =
-        frame.type === "session" && frame.message?.type === "ping" ? frame.message : null;
-      if (frame.type !== "ping" && !sessionPing) {
+        frame.type === "session" && frame.message?.type === "connection.ping"
+          ? frame.message
+          : null;
+      if (frame.type !== "connection.ping" && !sessionPing) {
         return;
       }
       this.pingsSentAt.push(performance.now());
@@ -605,10 +609,14 @@ class FakeDaemon {
       }
       const pong = sessionPing
         ? wrapSessionMessage({
-            type: "pong",
-            payload: { ...sessionPing, serverReceivedAt: Date.now(), serverSentAt: Date.now() },
+            type: "connection.pong",
+            payload: {
+              ...sessionPing,
+              serverReceivedAt: Date.now(),
+              serverSentAt: Date.now(),
+            },
           })
-        : JSON.stringify({ type: "pong" });
+        : JSON.stringify({ type: "connection.pong" });
       if (this.pongMode.delayMs === 0) {
         this.onMessage(pong);
         return;
@@ -785,10 +793,10 @@ test("sends checkout push without a target override", async () => {
 
   const response = client.checkoutPush("/repo");
   const request = parseSentFrame(mock.sent.at(-1));
-  expect(request).toMatchObject({ type: "checkout_push_request", cwd: "/repo" });
+  expect(request).toMatchObject({ type: "checkout.push.request", cwd: "/repo" });
   mock.triggerMessage(
     wrapSessionMessage({
-      type: "checkout_push_response",
+      type: "checkout.push.response",
       payload: { cwd: "/repo", success: true, error: null, requestId: request.requestId },
     }),
   );
@@ -822,7 +830,7 @@ test("dedupes in-flight checkout status requests per agentId", async () => {
   const response = {
     type: "session",
     message: {
-      type: "checkout_status_response",
+      type: "checkout.status.get.response",
       payload: {
         cwd: "/tmp/project",
         error: null,
@@ -1019,7 +1027,7 @@ test("sends new-agent run options when creating schedules", async () => {
 
   const request = parseSentFrame(mock.sent[0]);
   expect(request).toEqual({
-    type: "schedule/create",
+    type: "schedule.create.request",
     requestId: "request-1",
     prompt: "Run the task",
     cadence: { type: "cron", expression: "* * * * *" },
@@ -1072,7 +1080,7 @@ test("sends new-agent run options when updating schedules", async () => {
 
   const request = parseSentFrame(mock.sent[0]);
   expect(request).toEqual({
-    type: "schedule/update",
+    type: "schedule.update.request",
     requestId: "request-1",
     scheduleId: "schedule-1",
     newAgentConfig: {
@@ -1386,7 +1394,7 @@ test("defaults session RPC waiters to sixty seconds", async () => {
   );
 
   expect(parseSentFrame(mock.sent[0])).toEqual({
-    type: "fetch_agent_request",
+    type: "agent.get.request",
     requestId: "req-agent-1",
     agentId: "agent-1",
   });
@@ -1434,7 +1442,7 @@ test("honors explicit fetchAgent timeout below the session RPC default", async (
   );
 
   expect(parseSentFrame(mock.sent[0])).toEqual({
-    type: "fetch_agent_request",
+    type: "agent.get.request",
     requestId: "req-agent-1",
     agentId: "agent-1",
   });
@@ -1466,14 +1474,14 @@ test("preserves legacy fetchAgent id overload", async () => {
   const responsePromise = client.fetchAgent("agent-1", "req-agent-legacy");
 
   expect(parseSentFrame(mock.sent[0])).toEqual({
-    type: "fetch_agent_request",
+    type: "agent.get.request",
     requestId: "req-agent-legacy",
     agentId: "agent-1",
   });
 
   mock.triggerMessage(
     wrapSessionMessage({
-      type: "fetch_agent_response",
+      type: "agent.get.response",
       payload: {
         requestId: "req-agent-legacy",
         agent: null,
@@ -1524,7 +1532,7 @@ test("honors explicit fetchAgentTimeline timeout below the session RPC default",
   );
 
   expect(parseSentFrame(mock.sent[0])).toEqual({
-    type: "fetch_agent_timeline_request",
+    type: "agent.timeline.get.request",
     requestId: "req-timeline-1",
     agentId: "agent-1",
     direction: "tail",
@@ -1620,7 +1628,7 @@ test("honors explicit fetchAgents timeout below the session RPC default", async 
   );
 
   expect(parseSentFrame(mock.sent[0])).toEqual({
-    type: "fetch_agents_request",
+    type: "agent.list.request",
     requestId: "req-agents-1",
     scope: "active",
   });
@@ -1667,7 +1675,7 @@ test("honors explicit shutdownServer timeout below the session RPC default", asy
   );
 
   expect(parseSentFrame(mock.sent[0])).toEqual({
-    type: "shutdown_server_request",
+    type: "server.shutdown.request",
     requestId: "req-shutdown-1",
   });
 
@@ -1906,7 +1914,7 @@ test("keeps waitForAgentUpsert initial fetch inside the requested deadline", asy
   );
 
   expect(parseSentFrame(mock.sent[0])).toEqual({
-    type: "fetch_agent_request",
+    type: "agent.get.request",
     requestId: expect.any(String),
     agentId: "agent-1",
   });
@@ -2476,7 +2484,7 @@ test("listDirectory sends a list file explorer request and returns directory ent
   expect(JSON.parse(assertStr(mock.sent[0]))).toEqual({
     type: "session",
     message: {
-      type: "file_explorer_request",
+      type: "fs.explorer.request",
       cwd: "/tmp/project",
       path: "src",
       mode: "list",
@@ -2486,7 +2494,7 @@ test("listDirectory sends a list file explorer request and returns directory ent
 
   mock.triggerMessage(
     wrapSessionMessage({
-      type: "file_explorer_response",
+      type: "fs.explorer.response",
       payload: {
         cwd: "/tmp/project",
         path: "src",
@@ -2546,7 +2554,7 @@ test("readFile hides legacy base64 behind bytes", async () => {
   expect(JSON.parse(assertStr(mock.sent[0]))).toEqual({
     type: "session",
     message: {
-      type: "file_explorer_request",
+      type: "fs.explorer.request",
       cwd: "/tmp/project",
       path: "logo.png",
       mode: "file",
@@ -2557,7 +2565,7 @@ test("readFile hides legacy base64 behind bytes", async () => {
 
   mock.triggerMessage(
     wrapSessionMessage({
-      type: "file_explorer_response",
+      type: "fs.explorer.response",
       payload: {
         cwd: "/tmp/project",
         path: "logo.png",
@@ -2611,7 +2619,7 @@ test("readFile resolves from binary file frames when the daemon supports them", 
   expect(JSON.parse(assertStr(mock.sent[0]))).toEqual({
     type: "session",
     message: {
-      type: "file_explorer_request",
+      type: "fs.explorer.request",
       cwd: "/tmp/project",
       path: "logo.png",
       mode: "file",
@@ -2676,7 +2684,7 @@ test("readFile drops an old daemon's over-budget binary chunks and reports the r
   expect(JSON.parse(assertStr(mock.sent[0]))).toEqual({
     type: "session",
     message: {
-      type: "file_explorer_request",
+      type: "fs.explorer.request",
       cwd: "/tmp/project",
       path: "large.txt",
       mode: "file",
@@ -2903,7 +2911,7 @@ test("normalizes workspace_setup_progress into a workspace-scoped daemon event",
   });
 });
 
-test("sends create_agent_request with workspace and caller identity", async () => {
+test("sends agent.create.request with workspace and caller identity", async () => {
   const logger = createMockLogger();
   const mock = createMockTransport();
 
@@ -2934,7 +2942,7 @@ test("sends create_agent_request with workspace and caller identity", async () =
   const request = parseSentFrame(mock.sent[0]);
   expect(request).toEqual(
     expect.objectContaining({
-      type: "create_agent_request",
+      type: "agent.create.request",
       idempotencyKey: "one-creation",
       workspaceId: "ws-feature-a",
       callerAgentId: "parent-agent",
@@ -2943,9 +2951,9 @@ test("sends create_agent_request with workspace and caller identity", async () =
 
   mock.triggerMessage(
     wrapSessionMessage({
-      type: "status",
+      type: "agent.create.response",
       payload: {
-        status: "agent_create_failed",
+        agent: null,
         requestId: request.requestId,
         error: "compat test sentinel",
       },
@@ -2955,7 +2963,7 @@ test("sends create_agent_request with workspace and caller identity", async () =
   await expect(createPromise).rejects.toThrow("compat test sentinel");
 });
 
-test("sends worktree target and autoArchive in create_agent_request", async () => {
+test("sends worktree target and autoArchive in agent.create.request", async () => {
   const logger = createMockLogger();
   const mock = createMockTransport();
 
@@ -2987,7 +2995,7 @@ test("sends worktree target and autoArchive in create_agent_request", async () =
   const request = parseSentFrame(mock.sent[0]);
   expect(request).toEqual(
     expect.objectContaining({
-      type: "create_agent_request",
+      type: "agent.create.request",
       worktree: {
         mode: "branch-off",
         newBranch: "agent-lifecycle-dispatch",
@@ -2999,9 +3007,9 @@ test("sends worktree target and autoArchive in create_agent_request", async () =
 
   mock.triggerMessage(
     wrapSessionMessage({
-      type: "status",
+      type: "agent.create.response",
       payload: {
-        status: "agent_create_failed",
+        agent: null,
         requestId: request.requestId,
         error: "worktree auto archive sentinel",
       },
@@ -3011,7 +3019,7 @@ test("sends worktree target and autoArchive in create_agent_request", async () =
   await expect(createPromise).rejects.toThrow("worktree auto archive sentinel");
 });
 
-test("sends structured attachments with create_agent_request", async () => {
+test("sends structured attachments with agent.create.request", async () => {
   const logger = createMockLogger();
   const mock = createMockTransport();
 
@@ -3061,9 +3069,9 @@ test("sends structured attachments with create_agent_request", async () => {
 
   mock.triggerMessage(
     wrapSessionMessage({
-      type: "status",
+      type: "agent.create.response",
       payload: {
-        status: "agent_create_failed",
+        agent: null,
         requestId: request.requestId,
         error: "attachment test sentinel",
       },
@@ -3073,7 +3081,7 @@ test("sends structured attachments with create_agent_request", async () => {
   await expect(createPromise).rejects.toThrow("attachment test sentinel");
 });
 
-test("sends worktree base-ref fields in create_agent_request git options", async () => {
+test("sends worktree base-ref fields in agent.create.request git options", async () => {
   const logger = createMockLogger();
   const mock = createMockTransport();
 
@@ -3115,9 +3123,9 @@ test("sends worktree base-ref fields in create_agent_request git options", async
 
   mock.triggerMessage(
     wrapSessionMessage({
-      type: "status",
+      type: "agent.create.response",
       payload: {
-        status: "agent_create_failed",
+        agent: null,
         requestId: request.requestId,
         error: "git ref fields sentinel",
       },
@@ -3127,7 +3135,7 @@ test("sends worktree base-ref fields in create_agent_request git options", async
   await expect(createPromise).rejects.toThrow("git ref fields sentinel");
 });
 
-test("omitting create_agent_request worktree base-ref fields preserves legacy wire shape", async () => {
+test("omitting agent.create.request worktree base-ref fields preserves legacy wire shape", async () => {
   const logger = createMockLogger();
   const mock = createMockTransport();
 
@@ -3158,7 +3166,7 @@ test("omitting create_agent_request worktree base-ref fields preserves legacy wi
     JSON.stringify({
       type: "session",
       message: {
-        type: "create_agent_request",
+        type: "agent.create.request",
         config: {
           provider: "codex",
           cwd: "/tmp/project",
@@ -3175,9 +3183,9 @@ test("omitting create_agent_request worktree base-ref fields preserves legacy wi
 
   mock.triggerMessage(
     wrapSessionMessage({
-      type: "status",
+      type: "agent.create.response",
       payload: {
-        status: "agent_create_failed",
+        agent: null,
         requestId: "req-agent-legacy",
         error: "legacy git shape sentinel",
       },
@@ -3187,7 +3195,7 @@ test("omitting create_agent_request worktree base-ref fields preserves legacy wi
   await expect(createPromise).rejects.toThrow("legacy git shape sentinel");
 });
 
-test("sends structured first-agent context attachments with create_paseo_worktree_request", async () => {
+test("sends structured first-agent context attachments with workspace.worktree.create.request", async () => {
   const logger = createMockLogger();
   const mock = createMockTransport();
 
@@ -3237,7 +3245,7 @@ test("sends structured first-agent context attachments with create_paseo_worktre
 
   mock.triggerMessage(
     wrapSessionMessage({
-      type: "create_paseo_worktree_response",
+      type: "workspace.worktree.create.response",
       payload: {
         requestId: request.requestId,
         workspace: null,
@@ -3588,7 +3596,7 @@ test("sends project.remove.request", async () => {
   await expect(removePromise).resolves.toEqual({ removedWorkspaceIds: ["ws-main"] });
 });
 
-test("sends worktree base-ref fields in create_paseo_worktree_request", async () => {
+test("sends worktree base-ref fields in workspace.worktree.create.request", async () => {
   const logger = createMockLogger();
   const mock = createMockTransport();
 
@@ -3620,7 +3628,7 @@ test("sends worktree base-ref fields in create_paseo_worktree_request", async ()
   expect(mock.sent).toHaveLength(1);
   const request = parseSentFrame(mock.sent[0]);
   expect(request).toEqual({
-    type: "create_paseo_worktree_request",
+    type: "workspace.worktree.create.request",
     cwd: "/tmp/project",
     projectId: "remote:github.com/acme/project",
     worktreeSlug: "review-pr-123",
@@ -3632,7 +3640,7 @@ test("sends worktree base-ref fields in create_paseo_worktree_request", async ()
 
   mock.triggerMessage(
     wrapSessionMessage({
-      type: "create_paseo_worktree_response",
+      type: "workspace.worktree.create.response",
       payload: {
         requestId: request.requestId,
         workspace: null,
@@ -3650,7 +3658,7 @@ test("sends worktree base-ref fields in create_paseo_worktree_request", async ()
   });
 });
 
-test("omitting create_paseo_worktree_request worktree base-ref fields preserves legacy wire shape", async () => {
+test("omitting workspace.worktree.create.request worktree base-ref fields preserves legacy wire shape", async () => {
   const logger = createMockLogger();
   const mock = createMockTransport();
 
@@ -3679,7 +3687,7 @@ test("omitting create_paseo_worktree_request worktree base-ref fields preserves 
     JSON.stringify({
       type: "session",
       message: {
-        type: "create_paseo_worktree_request",
+        type: "workspace.worktree.create.request",
         cwd: "/tmp/project",
         worktreeSlug: "feature-a",
         requestId: "req-worktree-legacy",
@@ -3689,7 +3697,7 @@ test("omitting create_paseo_worktree_request worktree base-ref fields preserves 
 
   mock.triggerMessage(
     wrapSessionMessage({
-      type: "create_paseo_worktree_response",
+      type: "workspace.worktree.create.response",
       payload: {
         requestId: "req-worktree-legacy",
         workspace: null,
@@ -3707,7 +3715,7 @@ test("omitting create_paseo_worktree_request worktree base-ref fields preserves 
   });
 });
 
-test("sends explicit shutdown_server_request via shutdownServer", async () => {
+test("sends explicit server.shutdown.request via shutdownServer", async () => {
   const logger = createMockLogger();
   const mock = createMockTransport();
 
@@ -3730,7 +3738,7 @@ test("sends explicit shutdown_server_request via shutdownServer", async () => {
   expect(mock.sent).toHaveLength(1);
   const request = parseSentFrame(mock.sent[0]);
   expect(request).toEqual({
-    type: "shutdown_server_request",
+    type: "server.shutdown.request",
     requestId: "req-shutdown-1",
   });
 
@@ -3752,7 +3760,7 @@ test("sends explicit shutdown_server_request via shutdownServer", async () => {
   });
 });
 
-test("restartServer remains restart-only and sends restart_server_request", async () => {
+test("restartServer remains restart-only and sends server.restart.request", async () => {
   const logger = createMockLogger();
   const mock = createMockTransport();
 
@@ -3774,7 +3782,7 @@ test("restartServer remains restart-only and sends restart_server_request", asyn
   expect(mock.sent).toHaveLength(1);
   const request = parseSentFrame(mock.sent[0]);
   expect(request).toEqual({
-    type: "restart_server_request",
+    type: "server.restart.request",
     reason: "settings_update",
     requestId: "req-restart-1",
   });
@@ -3954,7 +3962,7 @@ test("subscribes to checkout diff updates via RPC handshake", async () => {
 
   expect(mock.sent).toHaveLength(1);
   const request = parseSentFrame(mock.sent[0]);
-  expect(request.type).toBe("subscribe_checkout_diff_request");
+  expect(request.type).toBe("checkout.diff.subscribe.request");
   expect(request.subscriptionId).toBeUndefined();
   expect(request.cwd).toBe("/tmp/project");
   expect(request.compare).toEqual({ mode: "uncommitted" });
@@ -3963,7 +3971,7 @@ test("subscribes to checkout diff updates via RPC handshake", async () => {
     JSON.stringify({
       type: "session",
       message: {
-        type: "subscribe_checkout_diff_response",
+        type: "checkout.diff.subscribe.response",
         payload: {
           subscriptionId: "checkout-sub-1",
           cwd: "/tmp/project",
@@ -4061,7 +4069,7 @@ test("requests branch suggestions via RPC", async () => {
 
   expect(mock.sent).toHaveLength(1);
   const request = parseSentFrame(mock.sent[0]);
-  expect(request.type).toBe("branch_suggestions_request");
+  expect(request.type).toBe("checkout.branch.suggestions.request");
   expect(request.cwd).toBe("/tmp/project");
   expect(request.query).toBe("mai");
   expect(request.limit).toBe(5);
@@ -4071,7 +4079,7 @@ test("requests branch suggestions via RPC", async () => {
     JSON.stringify({
       type: "session",
       message: {
-        type: "branch_suggestions_response",
+        type: "checkout.branch.suggestions.response",
         payload: {
           branches: ["main"],
           error: null,
@@ -4109,14 +4117,14 @@ test("reads project config via correlated RPC", async () => {
   expect(mock.sent).toHaveLength(1);
   const request = parseSentFrame(mock.sent[0]);
   expect(request).toEqual({
-    type: "read_project_config_request",
+    type: "project.config.read.request",
     requestId: "read-project-config-1",
     repoRoot: "/repo/app",
   });
 
   mock.triggerMessage(
     wrapSessionMessage({
-      type: "read_project_config_response",
+      type: "project.config.read.response",
       payload: {
         requestId: "read-project-config-1",
         repoRoot: "/repo/app",
@@ -4162,7 +4170,7 @@ test("writes project config via correlated RPC and returns inline failures", asy
   expect(mock.sent).toHaveLength(1);
   const request = parseSentFrame(mock.sent[0]);
   expect(request).toEqual({
-    type: "write_project_config_request",
+    type: "project.config.write.request",
     requestId: "write-project-config-1",
     repoRoot: "/repo/app",
     config: { worktree: { setup: ["npm install"] } },
@@ -4171,7 +4179,7 @@ test("writes project config via correlated RPC and returns inline failures", asy
 
   mock.triggerMessage(
     wrapSessionMessage({
-      type: "write_project_config_response",
+      type: "project.config.write.response",
       payload: {
         requestId: "write-project-config-1",
         repoRoot: "/repo/app",
@@ -4226,7 +4234,7 @@ test("requests directory suggestions via RPC", async () => {
 
   expect(mock.sent).toHaveLength(1);
   const request = parseSentFrame(mock.sent[0]);
-  expect(request.type).toBe("directory_suggestions_request");
+  expect(request.type).toBe("directory.suggestions.request");
   expect(request.query).toBe("proj");
   expect(request.cwd).toBe("/tmp/project");
   expect(request.includeFiles).toBe(true);
@@ -4239,7 +4247,7 @@ test("requests directory suggestions via RPC", async () => {
     JSON.stringify({
       type: "session",
       message: {
-        type: "directory_suggestions_response",
+        type: "directory.suggestions.response",
         payload: {
           directories: ["/Users/test/projects/paseo"],
           entries: [{ path: "README.md", kind: "file" }],
@@ -4283,7 +4291,7 @@ test("requests checkout merge from base via RPC", async () => {
 
   expect(mock.sent).toHaveLength(1);
   const request = parseSentFrame(mock.sent[0]);
-  expect(request.type).toBe("checkout_merge_from_base_request");
+  expect(request.type).toBe("checkout.merge_from_base.request");
   expect(request.cwd).toBe("/tmp/project");
   expect(request.baseRef).toBe("main");
   expect(request.requireCleanTarget).toBe(true);
@@ -4293,7 +4301,7 @@ test("requests checkout merge from base via RPC", async () => {
     JSON.stringify({
       type: "session",
       message: {
-        type: "checkout_merge_from_base_response",
+        type: "checkout.merge_from_base.response",
         payload: {
           cwd: "/tmp/project",
           requestId: "req-merge-from-base",
@@ -4336,7 +4344,7 @@ test("requests a workspace reset with its initial branch", async () => {
   );
   const request = parseSentFrame(mock.sent[0]);
   expect(request).toMatchObject({
-    type: "checkout_reset_workspace_request",
+    type: "checkout.reset_workspace.request",
     cwd: "/tmp/project",
     workspaceId: "workspace-1",
     initialBranch: "initial-workspace",
@@ -4347,7 +4355,7 @@ test("requests a workspace reset with its initial branch", async () => {
     JSON.stringify({
       type: "session",
       message: {
-        type: "checkout_reset_workspace_response",
+        type: "checkout.reset_workspace.response",
         payload: {
           cwd: "/tmp/project",
           requestId: "req-reset-workspace",
@@ -4576,7 +4584,7 @@ test("requests checkout pull via RPC", async () => {
 
   expect(mock.sent).toHaveLength(1);
   const request = parseSentFrame(mock.sent[0]);
-  expect(request.type).toBe("checkout_pull_request");
+  expect(request.type).toBe("checkout.pull.request");
   expect(request.cwd).toBe("/tmp/project");
   expect(request.requestId).toBe("req-pull");
 
@@ -4584,7 +4592,7 @@ test("requests checkout pull via RPC", async () => {
     JSON.stringify({
       type: "session",
       message: {
-        type: "checkout_pull_response",
+        type: "checkout.pull.response",
         payload: {
           cwd: "/tmp/project",
           requestId: "req-pull",
@@ -4733,12 +4741,15 @@ test("resubscribes checkout diff streams after reconnect", async () => {
   mock.triggerOpen();
   await connectPromise;
 
-  const observation = client.observeCheckoutDiff("/tmp/project", { mode: "base", baseRef: "main" });
+  const observation = client.observeCheckoutDiff("/tmp/project", {
+    mode: "base",
+    baseRef: "main",
+  });
   await vi.waitFor(() => expect(mock.sent).toHaveLength(1));
   const first = parseSentFrame(mock.sent[0]);
   mock.triggerMessage(
     wrapSessionMessage({
-      type: "subscribe_checkout_diff_response",
+      type: "checkout.diff.subscribe.response",
       payload: {
         requestId: first.requestId,
         subscriptionId: "server-first",
@@ -4756,7 +4767,7 @@ test("resubscribes checkout diff streams after reconnect", async () => {
   await vi.waitFor(() => expect(mock.sent).toHaveLength(1));
   const request = parseSentFrame(mock.sent[0]);
   expect(request).toMatchObject({
-    type: "subscribe_checkout_diff_request",
+    type: "checkout.diff.subscribe.request",
     cwd: "/tmp/project",
     compare: { mode: "base", baseRef: "main" },
   });
@@ -4764,7 +4775,7 @@ test("resubscribes checkout diff streams after reconnect", async () => {
   expect(request.requestId).not.toBe(first.requestId);
   mock.triggerMessage(
     wrapSessionMessage({
-      type: "subscribe_checkout_diff_response",
+      type: "checkout.diff.subscribe.response",
       payload: {
         requestId: request.requestId,
         subscriptionId: "server-second",
@@ -4806,7 +4817,7 @@ test("fetches agents via RPC with filters, sort, and pagination", async () => {
 
   await vi.waitFor(() => expect(mock.sent).toHaveLength(1));
   const request = parseSentFrame(mock.sent[0]);
-  expect(request.type).toBe("fetch_agents_request");
+  expect(request.type).toBe("agent.list.request");
   expect(request.sort).toEqual([
     { key: "status_priority", direction: "asc" },
     { key: "created_at", direction: "desc" },
@@ -4818,7 +4829,7 @@ test("fetches agents via RPC with filters, sort, and pagination", async () => {
     JSON.stringify({
       type: "session",
       message: {
-        type: "fetch_agents_response",
+        type: "agent.list.response",
         payload: {
           requestId: request.requestId,
           subscriptionId: "sub-1",
@@ -4891,7 +4902,7 @@ test("detaches an agent through the namespaced detach RPC", async () => {
   await expect(promise).resolves.toBeUndefined();
 });
 
-test("sends active-scoped fetch_agents_request", async () => {
+test("sends active-scoped agent.list.request", async () => {
   const logger = createMockLogger();
   const mock = createMockTransport();
 
@@ -4916,7 +4927,7 @@ test("sends active-scoped fetch_agents_request", async () => {
   expect(mock.sent).toHaveLength(1);
   const request = parseSentFrame(mock.sent[0]);
   expect(request).toMatchObject({
-    type: "fetch_agents_request",
+    type: "agent.list.request",
     scope: "active",
   });
 
@@ -4924,7 +4935,7 @@ test("sends active-scoped fetch_agents_request", async () => {
     JSON.stringify({
       type: "session",
       message: {
-        type: "fetch_agents_response",
+        type: "agent.list.response",
         payload: {
           requestId: request.requestId,
           entries: [],
@@ -4968,14 +4979,14 @@ test("fetches paginated agent history separately from active agents", async () =
 
   expect(mock.sent).toHaveLength(1);
   const request = parseSentFrame(mock.sent[0]);
-  expect(request.type).toBe("fetch_agent_history_request");
+  expect(request.type).toBe("agent.history.get.request");
   expect(request.page).toEqual({ limit: 25, cursor: "cursor-1" });
 
   mock.triggerMessage(
     JSON.stringify({
       type: "session",
       message: {
-        type: "fetch_agent_history_response",
+        type: "agent.history.get.response",
         payload: {
           requestId: request.requestId,
           entries: [],
@@ -5029,7 +5040,7 @@ test("fetches scoped recent provider sessions", async () => {
   const request = JSON.parse(String(mock.sent[0])) as {
     type: "session";
     message: {
-      type: "fetch_recent_provider_sessions_request";
+      type: "provider.sessions.recent.list.request";
       requestId: string;
       cwd?: string;
       providers?: string[];
@@ -5039,7 +5050,7 @@ test("fetches scoped recent provider sessions", async () => {
     };
   };
   expect(request.message).toMatchObject({
-    type: "fetch_recent_provider_sessions_request",
+    type: "provider.sessions.recent.list.request",
     cwd: "/tmp/repo",
     providers: ["my-claude"],
     since: "2026-04-30T00:00:00.000Z",
@@ -5051,7 +5062,7 @@ test("fetches scoped recent provider sessions", async () => {
     JSON.stringify({
       type: "session",
       message: {
-        type: "fetch_recent_provider_sessions_response",
+        type: "provider.sessions.recent.list.response",
         payload: {
           requestId: request.message.requestId,
           entries: [
@@ -5115,7 +5126,7 @@ test("imports an agent by provider handle id", async () => {
   const request = JSON.parse(String(mock.sent[0])) as {
     type: "session";
     message: {
-      type: "import_agent_request";
+      type: "agent.import.request";
       requestId: string;
       providerId?: string;
       providerHandleId?: string;
@@ -5124,7 +5135,7 @@ test("imports an agent by provider handle id", async () => {
     };
   };
   expect(request.message).toMatchObject({
-    type: "import_agent_request",
+    type: "agent.import.request",
     providerId: "custom-codex",
     providerHandleId: "thread-1",
     cwd: "/tmp/repo",
@@ -5209,7 +5220,7 @@ test("uses server-provided dictation finish timeout budget", async () => {
   expect(mock.sent).toHaveLength(1);
   mock.triggerMessage(
     wrapSessionMessage({
-      type: "dictation_stream_finish_accepted",
+      type: "dictation.stream.finish.accepted",
       payload: {
         dictationId: "dict-1",
         timeoutMs: 100,
@@ -5249,7 +5260,7 @@ test("resolves dictation finish when final arrives after finish accepted", async
 
   mock.triggerMessage(
     wrapSessionMessage({
-      type: "dictation_stream_finish_accepted",
+      type: "dictation.stream.finish.accepted",
       payload: {
         dictationId: "dict-2",
         timeoutMs: 1000,
@@ -5258,7 +5269,7 @@ test("resolves dictation finish when final arrives after finish accepted", async
   );
   mock.triggerMessage(
     wrapSessionMessage({
-      type: "dictation_stream_final",
+      type: "dictation.stream.final",
       payload: {
         dictationId: "dict-2",
         text: "hello",
@@ -5333,13 +5344,13 @@ test("lists available providers via RPC", async () => {
   expect(mock.sent).toHaveLength(1);
 
   const request = parseSentFrame(mock.sent[0]);
-  expect(request.type).toBe("list_available_providers_request");
+  expect(request.type).toBe("provider.available.list.request");
 
   mock.triggerMessage(
     JSON.stringify({
       type: "session",
       message: {
-        type: "list_available_providers_response",
+        type: "provider.available.list.response",
         payload: {
           providers: [
             { provider: "claude", available: true, error: null },
@@ -5381,14 +5392,14 @@ test("requests provider snapshots conditionally and expands the compact response
   const promise = client.getProvidersSnapshot({ cwd: "/repo", ifNoneMatch: "previous-hash" });
   const request = parseSentFrame(mock.sent[0]);
   expect(request).toMatchObject({
-    type: "get_providers_snapshot_request",
+    type: "provider.snapshot.get.request",
     cwd: "/repo",
     ifNoneMatch: "previous-hash",
   });
 
   mock.triggerMessage(
     wrapSessionMessage({
-      type: "get_providers_snapshot_response",
+      type: "provider.snapshot.get.response",
       payload: {
         entries: [],
         compactSnapshot: {
@@ -5469,7 +5480,7 @@ test("lists commands with draft config via RPC", async () => {
   expect(mock.sent).toHaveLength(1);
 
   const request = parseSentFrame(mock.sent[0]);
-  expect(request.type).toBe("list_commands_request");
+  expect(request.type).toBe("agent.commands.list.request");
   expect(request.agentId).toBe("__new_agent__");
   expect(request.draftConfig).toEqual({
     provider: "codex",
@@ -5483,7 +5494,7 @@ test("lists commands with draft config via RPC", async () => {
     JSON.stringify({
       type: "session",
       message: {
-        type: "list_commands_response",
+        type: "agent.commands.list.response",
         payload: {
           agentId: "__new_agent__",
           commands: [{ name: "help", description: "Show help", argumentHint: "" }],
@@ -5526,7 +5537,7 @@ test("lists commands with explicit requestId via RPC", async () => {
   expect(mock.sent).toHaveLength(1);
 
   const request = parseSentFrame(mock.sent[0]);
-  expect(request.type).toBe("list_commands_request");
+  expect(request.type).toBe("agent.commands.list.request");
   expect(request.agentId).toBe("agent-1");
   expect(request.requestId).toBe("req-commands");
   expect(request.draftConfig).toBeUndefined();
@@ -5535,7 +5546,7 @@ test("lists commands with explicit requestId via RPC", async () => {
     JSON.stringify({
       type: "session",
       message: {
-        type: "list_commands_response",
+        type: "agent.commands.list.response",
         payload: {
           agentId: "agent-1",
           commands: [],
@@ -5574,14 +5585,14 @@ test("preserves legacy listCommands id overload", async () => {
   const promise = client.listCommands("agent-1", "req-commands-legacy");
 
   expect(parseSentFrame(mock.sent[0])).toEqual({
-    type: "list_commands_request",
+    type: "agent.commands.list.request",
     requestId: "req-commands-legacy",
     agentId: "agent-1",
   });
 
   mock.triggerMessage(
     wrapSessionMessage({
-      type: "list_commands_response",
+      type: "agent.commands.list.response",
       payload: {
         agentId: "agent-1",
         commands: [],
@@ -5628,7 +5639,7 @@ test("preserves legacy listCommands options overload", async () => {
   });
 
   expect(parseSentFrame(mock.sent[0])).toEqual({
-    type: "list_commands_request",
+    type: "agent.commands.list.request",
     requestId: "req-commands-draft-legacy",
     agentId: "__new_agent__",
     draftConfig: {
@@ -5642,7 +5653,7 @@ test("preserves legacy listCommands options overload", async () => {
 
   mock.triggerMessage(
     wrapSessionMessage({
-      type: "list_commands_response",
+      type: "agent.commands.list.response",
       payload: {
         agentId: "__new_agent__",
         commands: [{ name: "help", description: "Show help", argumentHint: "" }],
@@ -5687,11 +5698,11 @@ test("emits output events for the active terminal stream", async () => {
 
   const subscribePromise = client.subscribeTerminal("term-1", { requestId: "sub-1" });
   await vi.waitFor(() =>
-    expect(parseSentFrame(mock.sent.at(-1)).type).toBe("subscribe_terminal_request"),
+    expect(parseSentFrame(mock.sent.at(-1)).type).toBe("terminal.subscribe.request"),
   );
   mock.triggerMessage(
     wrapSessionMessage({
-      type: "subscribe_terminal_response",
+      type: "terminal.subscribe.response",
       payload: {
         subscriptionId: "server-" + String(parseSentFrame(mock.sent.at(-1)).requestId),
         terminalId: "term-1",
@@ -5743,11 +5754,11 @@ test("emits snapshot events for the subscribed terminal stream", async () => {
 
   const subscribePromise = client.subscribeTerminal("term-1", { requestId: "sub-2" });
   await vi.waitFor(() =>
-    expect(parseSentFrame(mock.sent.at(-1)).type).toBe("subscribe_terminal_request"),
+    expect(parseSentFrame(mock.sent.at(-1)).type).toBe("terminal.subscribe.request"),
   );
   mock.triggerMessage(
     wrapSessionMessage({
-      type: "subscribe_terminal_response",
+      type: "terminal.subscribe.response",
       payload: {
         subscriptionId: "server-" + String(parseSentFrame(mock.sent.at(-1)).requestId),
         terminalId: "term-1",
@@ -5796,11 +5807,11 @@ test("sends explicit terminal input and resize commands", async () => {
 
   const subscribePromise = client.subscribeTerminal("term-1", { requestId: "sub-3" });
   await vi.waitFor(() =>
-    expect(parseSentFrame(mock.sent.at(-1)).type).toBe("subscribe_terminal_request"),
+    expect(parseSentFrame(mock.sent.at(-1)).type).toBe("terminal.subscribe.request"),
   );
   mock.triggerMessage(
     wrapSessionMessage({
-      type: "subscribe_terminal_response",
+      type: "terminal.subscribe.response",
       payload: {
         subscriptionId: "server-" + String(parseSentFrame(mock.sent.at(-1)).requestId),
         terminalId: "term-1",
@@ -5826,12 +5837,12 @@ test("sends explicit terminal input and resize commands", async () => {
 
   expect(mock.sent.map(parseSentFrame)).toEqual([
     {
-      type: "terminal_input",
+      type: "terminal.input",
       terminalId: "term-1",
       message: { type: "input", data: "echo hello\r" },
     },
     {
-      type: "terminal_input",
+      type: "terminal.input",
       terminalId: "term-1",
       message: { type: "resize", rows: 24, cols: 80, intent: "update" },
     },
@@ -5865,11 +5876,11 @@ test("routes concurrent terminal stream frames by slot", async () => {
 
   const subscribeFirstPromise = client.subscribeTerminal("term-1", { requestId: "sub-multi-1" });
   await vi.waitFor(() =>
-    expect(parseSentFrame(mock.sent.at(-1)).type).toBe("subscribe_terminal_request"),
+    expect(parseSentFrame(mock.sent.at(-1)).type).toBe("terminal.subscribe.request"),
   );
   mock.triggerMessage(
     wrapSessionMessage({
-      type: "subscribe_terminal_response",
+      type: "terminal.subscribe.response",
       payload: {
         subscriptionId: "server-" + String(parseSentFrame(mock.sent.at(-1)).requestId),
         terminalId: "term-1",
@@ -5883,11 +5894,11 @@ test("routes concurrent terminal stream frames by slot", async () => {
 
   const subscribeSecondPromise = client.subscribeTerminal("term-2", { requestId: "sub-multi-2" });
   await vi.waitFor(() =>
-    expect(parseSentFrame(mock.sent.at(-1)).type).toBe("subscribe_terminal_request"),
+    expect(parseSentFrame(mock.sent.at(-1)).type).toBe("terminal.subscribe.request"),
   );
   mock.triggerMessage(
     wrapSessionMessage({
-      type: "subscribe_terminal_response",
+      type: "terminal.subscribe.response",
       payload: {
         subscriptionId: "server-" + String(parseSentFrame(mock.sent.at(-1)).requestId),
         terminalId: "term-2",
@@ -5928,19 +5939,19 @@ test("routes concurrent terminal stream frames by slot", async () => {
   expect(seen).toEqual(["term-2:beta", "term-1:alpha"]);
   expect(mock.sent.map(parseSentFrame)).toEqual([
     {
-      type: "terminal_input",
+      type: "terminal.input",
       terminalId: "term-2",
       message: { type: "input", data: "echo beta\r" },
     },
     {
-      type: "terminal_input",
+      type: "terminal.input",
       terminalId: "term-1",
       message: { type: "resize", rows: 10, cols: 20 },
     },
   ]);
 });
 
-test("ignores terminal stream frames after terminal_stream_exit", async () => {
+test("ignores terminal stream frames after terminal.stream.exit", async () => {
   const logger = createMockLogger();
   const mock = createMockTransport();
 
@@ -5967,11 +5978,11 @@ test("ignores terminal stream frames after terminal_stream_exit", async () => {
 
   const subscribePromise = client.subscribeTerminal("term-1", { requestId: "sub-4" });
   await vi.waitFor(() =>
-    expect(parseSentFrame(mock.sent.at(-1)).type).toBe("subscribe_terminal_request"),
+    expect(parseSentFrame(mock.sent.at(-1)).type).toBe("terminal.subscribe.request"),
   );
   mock.triggerMessage(
     wrapSessionMessage({
-      type: "subscribe_terminal_response",
+      type: "terminal.subscribe.response",
       payload: {
         subscriptionId: "server-" + String(parseSentFrame(mock.sent.at(-1)).requestId),
         terminalId: "term-1",
@@ -5994,7 +6005,7 @@ test("ignores terminal stream frames after terminal_stream_exit", async () => {
 
   mock.triggerMessage(
     wrapSessionMessage({
-      type: "terminal_stream_exit",
+      type: "terminal.stream.exit",
       payload: {
         subscriptionId: "server-sub-4",
         terminalId: "term-1",
@@ -6029,7 +6040,7 @@ test("ignores terminal stream frames after terminal_stream_exit", async () => {
   unsubscribe();
 });
 
-test("parses canonical agent_stream tool_call payloads without crashing", async () => {
+test("parses canonical agent.stream tool_call payloads without crashing", async () => {
   const logger = createMockLogger();
   const mock = createMockTransport();
 
@@ -6047,13 +6058,13 @@ test("parses canonical agent_stream tool_call payloads without crashing", async 
   await connectPromise;
 
   const received: unknown[] = [];
-  const unsubscribe = client.on("agent_stream", (msg) => {
+  const unsubscribe = client.on("agent.stream", (msg) => {
     received.push(msg);
   });
 
   mock.triggerMessage(
     wrapSessionMessage({
-      type: "agent_stream",
+      type: "agent.stream",
       payload: {
         agentId: "agent_cli",
         timestamp: "2026-02-08T20:20:00.000Z",
@@ -6093,7 +6104,7 @@ test("parses canonical agent_stream tool_call payloads without crashing", async 
   expect(logger.warn).not.toHaveBeenCalled();
 });
 
-test("drops legacy agent_stream tool_call payloads and logs validation warning", async () => {
+test("drops legacy agent.stream tool_call payloads and logs validation warning", async () => {
   const logger = createMockLogger();
   const mock = createMockTransport();
 
@@ -6111,13 +6122,13 @@ test("drops legacy agent_stream tool_call payloads and logs validation warning",
   await connectPromise;
 
   const received: unknown[] = [];
-  const unsubscribe = client.on("agent_stream", (msg) => {
+  const unsubscribe = client.on("agent.stream", (msg) => {
     received.push(msg);
   });
 
   mock.triggerMessage(
     wrapSessionMessage({
-      type: "agent_stream",
+      type: "agent.stream",
       payload: {
         agentId: "agent_cli",
         timestamp: "2026-02-08T20:20:00.000Z",
@@ -6146,7 +6157,7 @@ test("drops legacy agent_stream tool_call payloads and logs validation warning",
   expect(logger.warn).toHaveBeenCalled();
 });
 
-test("parses canonical fetch_agent_timeline_response payloads without crashing", async () => {
+test("parses canonical agent.timeline.get.response payloads without crashing", async () => {
   const logger = createMockLogger();
   const mock = createMockTransport();
 
@@ -6164,13 +6175,13 @@ test("parses canonical fetch_agent_timeline_response payloads without crashing",
   await connectPromise;
 
   const received: unknown[] = [];
-  const unsubscribe = client.on("fetch_agent_timeline_response", (msg) => {
+  const unsubscribe = client.on("agent.timeline.get.response", (msg) => {
     received.push(msg);
   });
 
   mock.triggerMessage(
     wrapSessionMessage({
-      type: "fetch_agent_timeline_response",
+      type: "agent.timeline.get.response",
       payload: {
         requestId: "req-1",
         agentId: "agent_cli",
@@ -6260,7 +6271,7 @@ test("rejects and logs a correlated response that violates the protocol schema",
 
   mock.triggerMessage(
     wrapSessionMessage({
-      type: "fetch_agent_timeline_response",
+      type: "agent.timeline.get.response",
       payload: {
         requestId: "req-invalid",
         agentId: "agent_cli",
@@ -6374,11 +6385,11 @@ test("sends subscribe/unsubscribe terminals messages", async () => {
   const observation = client.observeTerminals({ cwd: "/tmp/project" });
   await vi.waitFor(() => expect(mock.sent).toHaveLength(1));
   const request = parseSentFrame(mock.sent[0]);
-  expect(request).toMatchObject({ type: "subscribe_terminals_request", cwd: "/tmp/project" });
+  expect(request).toMatchObject({ type: "terminal.list.subscribe.request", cwd: "/tmp/project" });
   expect(request.subscriptionId).toBeUndefined();
   mock.triggerMessage(
     wrapSessionMessage({
-      type: "terminals_changed",
+      type: "terminal.list.changed",
       payload: {
         requestId: request.requestId,
         subscriptionId: "server-terminals",
@@ -6408,7 +6419,7 @@ test("sends subscribe/unsubscribe terminals messages", async () => {
   await release;
 });
 
-test("dispatches terminals_changed events to typed listeners", async () => {
+test("dispatches terminal.list.changed events to typed listeners", async () => {
   const logger = createMockLogger();
   const mock = createMockTransport();
 
@@ -6426,7 +6437,7 @@ test("dispatches terminals_changed events to typed listeners", async () => {
   await connectPromise;
 
   const received: Array<{ cwd: string; names: string[] }> = [];
-  const unsubscribe = client.on("terminals_changed", (message) => {
+  const unsubscribe = client.on("terminal.list.changed", (message) => {
     received.push({
       cwd: message.payload.cwd,
       names: message.payload.terminals.map((terminal) => terminal.name),
@@ -6435,7 +6446,7 @@ test("dispatches terminals_changed events to typed listeners", async () => {
 
   mock.triggerMessage(
     wrapSessionMessage({
-      type: "terminals_changed",
+      type: "terminal.list.changed",
       payload: {
         cwd: "/tmp/project",
         terminals: [
@@ -6533,7 +6544,7 @@ test("sends provider.usage.list.request and resolves provider.usage.list.respons
   });
 });
 
-test("sends close_items_request and resolves close_items_response", async () => {
+test("sends agent.items.close.request and resolves agent.items.close.response", async () => {
   const logger = createMockLogger();
   const mock = createMockTransport();
 
@@ -6561,7 +6572,7 @@ test("sends close_items_request and resolves close_items_response", async () => 
   expect(JSON.parse(assertStr(mock.sent[0]))).toEqual({
     type: "session",
     message: {
-      type: "close_items_request",
+      type: "agent.items.close.request",
       agentIds: ["agent-1"],
       terminalIds: ["term-1"],
       requestId: "req-close-items",
@@ -6570,7 +6581,7 @@ test("sends close_items_request and resolves close_items_response", async () => 
 
   mock.triggerMessage(
     wrapSessionMessage({
-      type: "close_items_response",
+      type: "agent.items.close.response",
       payload: {
         agents: [{ agentId: "agent-1", archivedAt: "2026-04-01T00:00:00.000Z" }],
         terminals: [{ terminalId: "term-1", success: true }],
@@ -6609,7 +6620,7 @@ test("waitForFinish with timeout=0 omits timeoutMs and has no client deadline", 
 
     expect(mock.sent).toHaveLength(1);
     const request = parseSentFrame(mock.sent[0]);
-    expect(request.type).toBe("wait_for_finish_request");
+    expect(request.type).toBe("agent.finish.wait.request");
     expect(request.agentId).toBe("agent-wait-zero-timeout");
     expect(request).not.toHaveProperty("timeoutMs");
 
@@ -6630,7 +6641,7 @@ test("waitForFinish with timeout=0 omits timeoutMs and has no client deadline", 
 
     mock.triggerMessage(
       wrapSessionMessage({
-        type: "wait_for_finish_response",
+        type: "agent.finish.wait.response",
         payload: {
           requestId: request.requestId,
           status: "idle",
@@ -6669,14 +6680,14 @@ test("wire snapshot callers own expansion and receive hash references unchanged"
     true,
   );
   const received: unknown[] = [];
-  client.on("providers_snapshot_update", (message) => received.push(message.payload));
+  client.on("provider.snapshot.update", (message) => received.push(message.payload));
   const payload = {
     entries: [],
     snapshotHash: "content",
     fetchedAt: { codex: "2026-09-06T12:00:00.000Z" },
     generatedAt: "2026-09-06T12:00:00.000Z",
   };
-  transport.triggerMessage(wrapSessionMessage({ type: "providers_snapshot_update", payload }));
+  transport.triggerMessage(wrapSessionMessage({ type: "provider.snapshot.update", payload }));
   expect(received).toEqual([payload]);
   const request = client.getProvidersSnapshot();
   const sent = parseSentFrame(transport.sent.at(-1)!);
@@ -6696,7 +6707,7 @@ test("wire snapshot callers own expansion and receive hash references unchanged"
     requestId: sent.requestId,
   };
   transport.triggerMessage(
-    wrapSessionMessage({ type: "get_providers_snapshot_response", payload: body }),
+    wrapSessionMessage({ type: "provider.snapshot.get.response", payload: body }),
   );
   expect(await request).toEqual(body);
 });

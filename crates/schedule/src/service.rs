@@ -1,4 +1,18 @@
 //! Bounded schedule actor: disk operations run on a dedicated thread, not the WebSocket reactor.
+
+/// Client methods implemented by this component; consumed by capability discovery.
+pub(crate) const METHODS: &[&str] = &[
+    "schedule.create.request",
+    "schedule.list.request",
+    "schedule.inspect.request",
+    "schedule.logs.request",
+    "schedule.update.request",
+    "schedule.pause.request",
+    "schedule.resume.request",
+    "schedule.delete.request",
+    "schedule.run_once.request",
+];
+
 use crate::{
     engine::{Engine, only},
     ports::{Checkpoint, Error, Outcome, Progress, Runner, Store},

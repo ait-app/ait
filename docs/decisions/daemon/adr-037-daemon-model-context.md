@@ -2,6 +2,8 @@
 
 > 后续修订：[ADR-038](adr-038-daemon-protocol-dependencies.md) 将 protocol 的直接
 > workspace 依赖收敛为 model；下表已同步这一边界。
+> [ADR-093](adr-093-consumable-request-context.md) 随后改为 `Option<Context>` 逐级处理请求，
+> API 不再提前选择业务能力组。
 
 - 状态：Accepted。
 - 日期：2026-09-25。

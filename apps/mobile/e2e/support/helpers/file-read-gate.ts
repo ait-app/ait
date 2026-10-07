@@ -12,7 +12,7 @@ function fileReadRequest(message: WebSocketMessage, path: string): boolean {
         ? (envelope.message as { type?: unknown; mode?: unknown; path?: unknown })
         : (envelope as { type?: unknown; mode?: unknown; path?: unknown });
     return (
-      session.type === "file_explorer_request" && session.mode === "file" && session.path === path
+      session.type === "fs.explorer.request" && session.mode === "file" && session.path === path
     );
   } catch {
     return false;

@@ -45,24 +45,24 @@ class FakeDaemonClient {
   public sendAgentMessageFailures: Error[] = [];
   public sendAgentMessageResponses: Promise<void>[] = [];
   private agentUpdateListeners = new Set<
-    (message: Extract<SessionOutboundMessage, { type: "agent_update" }>) => void
+    (message: Extract<SessionOutboundMessage, { type: "agent.update" }>) => void
   >();
   private fetchWaiters = new Set<() => void>();
   private agentListenerWaiters = new Set<() => void>();
   private sentMessageWaiters = new Set<() => void>();
 
   on(
-    type: "agent_update",
-    listener: (message: Extract<SessionOutboundMessage, { type: "agent_update" }>) => void,
+    type: "agent.update",
+    listener: (message: Extract<SessionOutboundMessage, { type: "agent.update" }>) => void,
   ): () => void {
-    if (type === "agent_update") this.agentUpdateListeners.add(listener);
+    if (type === "agent.update") this.agentUpdateListeners.add(listener);
     for (const waiter of this.agentListenerWaiters) waiter();
     return () => this.agentUpdateListeners.delete(listener);
   }
 
   observeAgents(options: Parameters<DaemonClient["observeAgents"]>[0]) {
     return subscriptionFixture(this.fetchAgents({ ...options, subscribe: {} }), (receive) =>
-      this.on("agent_update", receive),
+      this.on("agent.update", receive),
     );
   }
 
@@ -82,9 +82,9 @@ class FakeDaemonClient {
     });
   }
 
-  agentUpdate(payload: Extract<SessionOutboundMessage, { type: "agent_update" }>["payload"]): void {
+  agentUpdate(payload: Extract<SessionOutboundMessage, { type: "agent.update" }>["payload"]): void {
     for (const listener of this.agentUpdateListeners) {
-      listener({ type: "agent_update", payload });
+      listener({ type: "agent.update", payload });
     }
   }
 
@@ -564,7 +564,11 @@ describe("HostRuntimeController", () => {
           probed.push(connection);
           return probed.length <= 2
             ? pending.promise
-            : { client: fresh as unknown as DaemonClient, serverId: host.serverId, hostname: null };
+            : {
+                client: fresh as unknown as DaemonClient,
+                serverId: host.serverId,
+                hostname: null,
+              };
         },
       },
     });
@@ -1647,7 +1651,10 @@ describe("HostRuntimeStore", () => {
         { id: "desktop-managed-srv_test", type: "directTcp", endpoint: "localhost:1234" },
       ],
     });
-    const remote = makeHost({ serverId: "srv_remote", connections: [makeHost().connections[0]!] });
+    const remote = makeHost({
+      serverId: "srv_remote",
+      connections: [makeHost().connections[0]!],
+    });
     const probed: string[] = [];
     const deps = makeDeps({ [remote.connections[0]!.id]: 1 }, []);
     const connect = deps.connectToDaemon;
@@ -1914,7 +1921,11 @@ describe("HostRuntimeStore", () => {
           serverId: "srv_legacy",
           label: "Legacy",
           connections: [
-            { id: "socket:/tmp/legacy.sock", type: "directSocket", path: "/tmp/legacy.sock" },
+            {
+              id: "socket:/tmp/legacy.sock",
+              type: "directSocket",
+              path: "/tmp/legacy.sock",
+            },
           ],
           preferredConnectionId: "socket:/tmp/legacy.sock",
         },
@@ -2700,7 +2711,11 @@ describe("HostRuntimeStore", () => {
       updatedAt: "2026-07-17T10:00:00.000Z",
       title: "preserved",
     });
-    fakeClient.agentUpdate({ kind: "upsert", agent: liveEntry.agent, project: liveEntry.project });
+    fakeClient.agentUpdate({
+      kind: "upsert",
+      agent: liveEntry.agent,
+      project: liveEntry.project,
+    });
 
     const newerPage = new Deferred<Awaited<ReturnType<DaemonClient["fetchAgents"]>>>();
     fakeClient.fetchAgentsResponses.push(newerPage.promise);
@@ -3635,7 +3650,10 @@ describe("HostRuntimeStore initial connection hint bootstrap", () => {
         createClient: () => new FakeDaemonClient() as unknown as DaemonClient,
         connectToDaemon: async ({ connection }) => {
           if (connection.type === "directTcp") {
-            seenProbes.push({ endpoint: connection.endpoint, useTls: connection.useTls });
+            seenProbes.push({
+              endpoint: connection.endpoint,
+              useTls: connection.useTls,
+            });
           }
           return {
             client: makeConnectedProbeClient(5) as unknown as DaemonClient,
@@ -3676,7 +3694,10 @@ describe("HostRuntimeStore initial connection hint bootstrap", () => {
         createClient: () => new FakeDaemonClient() as unknown as DaemonClient,
         connectToDaemon: async ({ connection }) => {
           if (connection.type === "directTcp") {
-            seenProbes.push({ endpoint: connection.endpoint, useTls: connection.useTls });
+            seenProbes.push({
+              endpoint: connection.endpoint,
+              useTls: connection.useTls,
+            });
           }
           firstProbe.resolve();
           throw new Error("probe unavailable");

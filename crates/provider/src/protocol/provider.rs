@@ -3,16 +3,6 @@
 use serde::Deserialize;
 use serde_json::Value;
 
-/// Implemented discovery methods; diagnostics, usage and recent sessions remain separate.
-pub const CAPABILITIES: &[&str] = &[
-    "provider.available.list.request",
-    "provider.models.list.request",
-    "provider.modes.list.request",
-    "provider.features.list.request",
-    "provider.snapshot.get.request",
-    "provider.snapshot.refresh.request",
-];
-
 /// Provider-owned model and mode definitions, with no credentials or private diagnostics.
 #[derive(Debug, Clone, Default)]
 pub struct Details {

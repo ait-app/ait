@@ -19,14 +19,14 @@ import type { Query, QueryCacheNotifyEvent, QueryClient, QueryKey } from "@tanst
 
 type ProvidersSnapshotUpdateMessage = Extract<
   SessionOutboundMessage,
-  { type: "providers_snapshot_update" }
+  { type: "provider.snapshot.update" }
 >;
 type SubscribeCheckoutDiffResponseMessage = Extract<
   SessionOutboundMessage,
-  { type: "subscribe_checkout_diff_response" }
+  { type: "checkout.diff.subscribe.response" }
 >;
 type StatusMessage = Extract<SessionOutboundMessage, { type: "status" }>;
-type TerminalsChangedMessage = Extract<SessionOutboundMessage, { type: "terminals_changed" }>;
+type TerminalsChangedMessage = Extract<SessionOutboundMessage, { type: "terminal.list.changed" }>;
 type CheckoutDiffResponsePayload = SubscribeCheckoutDiffResponseMessage["payload"];
 type CheckoutDiffCachePayload = Omit<CheckoutDiffResponsePayload, "subscriptionId">;
 type ListTerminalsPayload = ListTerminalsResponse["payload"];
@@ -176,7 +176,7 @@ export async function applyProvidersSnapshotUpdate(input: {
   client: Pick<ServerDataPushClient, "getProvidersSnapshot">;
   cache?: ProviderSnapshotCache;
 }): Promise<void> {
-  const snapshot = { ...input.message.payload, requestId: "providers_snapshot_update" };
+  const snapshot = { ...input.message.payload, requestId: "provider.snapshot.update" };
   const cwd = normalizeProvidersSnapshotCwd(snapshot.cwd);
   const queryKey = providersSnapshotQueryKey(input.serverId, cwd);
   const previous = input.queryClient.getQueryData<{ snapshotHash?: string }>(queryKey);
@@ -256,7 +256,7 @@ export function mountServerDataPushRouter(input: PushRouterInput): () => void {
           queryClient: input.queryClient,
           serverId: input.serverId,
           route,
-          message: { type: "terminals_changed", payload },
+          message: { type: "terminal.list.changed", payload },
         }),
     });
   }
@@ -273,13 +273,13 @@ export function mountServerDataPushRouter(input: PushRouterInput): () => void {
     reconcileSubscriptions();
   });
   const events = input.client.observeEvents([
-    "providers_snapshot_update",
+    "provider.snapshot.update",
     "status.daemon_config_changed",
   ]);
   events.subscribe({
     snapshot: () => {},
     update: (message) => {
-      if (message.type === "providers_snapshot_update") {
+      if (message.type === "provider.snapshot.update") {
         void applyProvidersSnapshotUpdate({
           client: input.client,
           queryClient: input.queryClient,
@@ -353,7 +353,7 @@ function reconcileCheckoutDiffSubscriptions(input: {
     subscription.subscribe({
       snapshot: apply,
       update: (message) => {
-        if (message.type === "checkout_diff_update") apply(message.payload);
+        if (message.type === "checkout.diff.update") apply(message.payload);
       },
       error: (error) => {
         if (input.active.get(key) === registration) input.active.delete(key);
@@ -390,7 +390,7 @@ function reconcileTerminalSubscriptions(input: {
     subscription.subscribe({
       snapshot: apply,
       update: (message) => {
-        if (message.type === "terminals_changed") apply(message.payload);
+        if (message.type === "terminal.list.changed") apply(message.payload);
       },
       error: (error) => {
         if (input.active.get(key) === registration) input.active.delete(key);

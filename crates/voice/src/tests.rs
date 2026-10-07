@@ -5,7 +5,7 @@ fn errors_have_safe_stable_codes_and_capabilities_are_installed_only_with_servic
     assert!(capabilities::installed_capabilities(false).next().is_none());
     assert_eq!(
         capabilities::installed_capabilities(true).collect::<Vec<_>>(),
-        protocol::CAPABILITIES
+        connection::METHODS
     );
     for error in [
         Error::Invalid,

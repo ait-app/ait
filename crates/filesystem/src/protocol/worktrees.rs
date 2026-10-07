@@ -4,13 +4,6 @@ use metadata::protocol::workspace::WorkspaceDescriptorPayload;
 use serde::{Deserialize, Deserializer, Serialize};
 use serde_json::Value;
 
-/// Canonical worktree methods implemented by the independent server.
-pub const CAPABILITIES: &[&str] = &[
-    "workspace.worktree.list.request",
-    "workspace.worktree.create.request",
-    "workspace.worktree.archive.request",
-];
-
 /// List server-managed worktrees for one repository.
 #[derive(Debug, Clone, PartialEq, Eq, Deserialize)]
 #[serde(rename_all = "camelCase")]

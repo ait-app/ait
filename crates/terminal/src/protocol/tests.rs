@@ -84,6 +84,6 @@ fn capture_default_and_input_forms_round_trip_source_shapes() {
     ] {
         assert!(serde_json::from_value::<Input>(value).is_ok());
     }
-    assert_eq!(CAPABILITIES.len(), 10);
-    assert!(CAPABILITIES.contains(&"terminal.input"));
+    assert_eq!(crate::connection::METHODS.len(), 10);
+    assert!(crate::connection::METHODS.contains(&"terminal.input"));
 }

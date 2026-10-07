@@ -1,20 +1,17 @@
-//! Voice capability ownership and installation.
+//! Voice capability discovery and installation.
 
-/// Speech capability group selected by API routing.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum Group {
-    /// Voice conversations and dictation streams.
-    Voice,
+/// Return every implemented capability for negotiation and message validation.
+/// # Returns
+/// Static method names, including events, without selecting a request handler.
+pub fn implemented_capabilities() -> impl Iterator<Item = &'static str> {
+    crate::connection::METHODS.iter().copied()
 }
 
-/// All implemented speech methods, including client events.
-pub const IMPLEMENTED_GROUPS: &[(Group, &[&str])] =
-    &[(Group::Voice, crate::protocol::CAPABILITIES)];
-
-/// Return installed methods when a speech service is composed by the host.
+/// Return installed methods when this service is composed by the host.
+/// # Arguments
+/// * `installed` - Whether the host installed this service.
+/// # Returns
+/// Static method names; an absent service advertises no capabilities.
 pub fn installed_capabilities(installed: bool) -> impl Iterator<Item = &'static str> {
-    crate::protocol::CAPABILITIES
-        .iter()
-        .copied()
-        .filter(move |_| installed)
+    implemented_capabilities().filter(move |_| installed)
 }

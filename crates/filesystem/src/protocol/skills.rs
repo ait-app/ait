@@ -11,18 +11,6 @@ pub const SAVE_SELECTION: &str = "agent.skills.save_selection.request";
 /// Canonical import legacy selection request.
 pub const IMPORT_LEGACY_SELECTION: &str = "agent.skills.import_legacy_selection.request";
 
-/// Canonical skill operations.
-pub const METHODS: &[&str] = &[
-    GET_STATUS,
-    RECONCILE,
-    UNINSTALL,
-    SAVE_SELECTION,
-    IMPORT_LEGACY_SELECTION,
-];
-
-/// Installed capability declarations.
-pub const CAPABILITIES: &[&str] = METHODS;
-
 /// Desired bundle membership; unknown custom names are retained but not installed.
 #[derive(Debug, Clone, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
 #[serde(tag = "mode", rename_all = "lowercase", deny_unknown_fields)]

@@ -70,7 +70,7 @@ fn clear_attention_accepts_one_or_many_agent_ids() {
 #[test]
 fn capabilities_use_only_canonical_agent_runtime_names() {
     assert_eq!(
-        super::CAPABILITIES,
+        crate::rpc::agent_runtime::METHODS,
         [
             "agent.list.request",
             "agent.history.get.request",
@@ -84,7 +84,7 @@ fn capabilities_use_only_canonical_agent_runtime_names() {
         ]
     );
     assert!(
-        !super::CAPABILITIES
+        !crate::rpc::agent_runtime::METHODS
             .iter()
             .any(|method| method.contains('_'))
     );

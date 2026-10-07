@@ -107,7 +107,7 @@ async fn production_voice_calls_speech_and_native_agent_then_disconnect_interrup
     )
     .await;
     let id = agent["result"]["agentId"].as_str().unwrap().to_owned();
-    let mut client = connect(&address, voice::protocol::CAPABILITIES).await;
+    let mut client = connect(&address, voice::connection::METHODS).await;
     let mode = request(
         &mut client,
         "voice.mode.set.request",

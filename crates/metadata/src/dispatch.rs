@@ -1,11 +1,19 @@
 //! Concrete service state and crate-owned request dispatch.
 
+/// Client methods implemented by this component; consumed by capability discovery.
+pub(crate) const BASE_METHODS: &[&str] = &[
+    "server.info",
+    "connection.ping",
+    "server.status.subscribe",
+    "subscription.release.request",
+];
+
 use std::sync::{Arc, Mutex};
 
 use model::outbound::QueueError;
-use model::{Context, ErrorCode, Runtime};
+use model::{Context, DispatchError, ErrorCode, Runtime};
 
-use crate::capabilities::Group;
+mod requests;
 
 /// Services installed for this capability crate, sharing server-wide runtime resources.
 #[derive(Debug)]
@@ -54,8 +62,6 @@ use crate::connection::Connection;
 
 /// Connection-wide work that follows metadata dispatch.
 pub enum Completion {
-    /// The response has been delivered by metadata.
-    Complete,
     /// Ask the API composition layer for the Provider owner's availability snapshot.
     DaemonSnapshot {
         /// Original correlation identifier.
@@ -109,104 +115,113 @@ impl State {
 }
 
 /// Dispatch an admitted request using concrete context, services and connection state.
+/// Leaves `context` unchanged for other crates; takes it when this crate handles the method.
+/// Returns `DispatchError::NotImplemented` while leaving an unmatched Context available.
+/// Returns optional work for the API to finish before ending request processing.
+///
+/// # Arguments
+/// * `context` - Pending request, consumed only when this crate recognizes its method.
+/// * `state` - Installed services and resources used to execute the request.
+/// * `connection` - Connection-owned subscriptions and streams for this capability.
+///
 /// # Errors
-/// Returns a delivery failure; business errors are sent using the request's correlation ID.
+/// Returns `NotImplemented` for an unmatched method and `Delivery` for an outbound failure.
+/// Business errors are sent using the request's correlation ID.
 pub async fn dispatch(
-    group: Group,
-    mut context: Context<'_>,
+    context: &mut Option<Context<'_>>,
     state: &State,
     connection: &mut Connection,
-) -> Result<Completion, QueueError> {
-    match group {
-        Group::Base => return base(context, state, connection),
-        Group::Push => crate::connection::push::unregister(context, state, connection).await,
-        Group::Editor => {
-            let result = crate::rpc::editor::execute(
-                &context.request.method,
-                context.request.params.clone(),
-            );
-            context.respond(result)
+) -> Result<Option<Completion>, DispatchError> {
+    if context.is_none() {
+        return Ok(None);
+    }
+    match base(context, state, connection) {
+        Ok(completion) => return Ok(completion),
+        Err(DispatchError::NotImplemented) => Context::assert_unhandled(context, "metadata::base"),
+        Err(error) => return Err(error),
+    }
+    match requests::push(context, state, connection).await {
+        Ok(()) => return Ok(None),
+        Err(DispatchError::NotImplemented) => Context::assert_unhandled(context, "metadata::push"),
+        Err(error) => return Err(error),
+    }
+    match requests::editor(context, state) {
+        Ok(()) => return Ok(None),
+        Err(DispatchError::NotImplemented) => {
+            Context::assert_unhandled(context, "metadata::editor");
         }
-        Group::Creation => crate::connection::creation::dispatch(context, state, connection).await,
-        Group::Directory if context.request.method == "workspace.create.request" => {
-            crate::connection::creation::create(context, state).await
+        Err(error) => return Err(error),
+    }
+    match requests::creation(context, state, connection).await {
+        Ok(()) => return Ok(None),
+        Err(DispatchError::NotImplemented) => {
+            Context::assert_unhandled(context, "metadata::creation");
         }
-        Group::Session => crate::connection::session::subscribe(context, state, connection),
-        Group::Directory
-            if context.request.method == "workspace.list.request"
-                && context
-                    .request
-                    .params
-                    .get("subscribe")
-                    .is_some_and(|subscribe| !subscribe.is_null()) =>
-        {
-            crate::connection::directory::subscribe(context, state, connection).await
+        Err(error) => return Err(error),
+    }
+    match requests::session(context, state, connection) {
+        Ok(()) => return Ok(None),
+        Err(DispatchError::NotImplemented) => {
+            Context::assert_unhandled(context, "metadata::session");
         }
-        Group::Directory => {
-            context
-                .rpc(
-                    state.directory.clone(),
-                    ErrorCode::RegistryIo,
-                    crate::rpc::directory::execute,
-                )
-                .await
+        Err(error) => return Err(error),
+    }
+    match requests::directory(context, state, connection).await {
+        Ok(()) => return Ok(None),
+        Err(DispatchError::NotImplemented) => {
+            Context::assert_unhandled(context, "metadata::directory");
         }
-        Group::Daemon
-            if matches!(
-                context.request.method.as_str(),
-                "daemon.get_status.request" | "diagnostics.request"
-            ) =>
-        {
-            if !context.request.params.is_object() {
-                context.respond(Err(ErrorCode::InvalidMessage))?;
-                return Ok(Completion::Complete);
-            }
-            return Ok(Completion::DaemonSnapshot {
-                request_id: context.request.id,
-                method: context.request.method,
-                params: context.request.params,
-            });
+        Err(error) => return Err(error),
+    }
+    match requests::daemon(context, state).await {
+        Ok(completion) => return Ok(completion),
+        Err(DispatchError::NotImplemented) => {
+            Context::assert_unhandled(context, "metadata::daemon");
         }
-        Group::Daemon => {
-            let params = std::mem::take(&mut context.request.params);
-            let result =
-                crate::connection::daemon::dispatch(&context.request.method, params, state).await;
-            context.respond(result)
+        Err(error) => return Err(error),
+    }
+    match labels(context, state, connection).await {
+        Ok(()) => return Ok(None),
+        Err(DispatchError::NotImplemented) => {
+            Context::assert_unhandled(context, "metadata::labels");
         }
-        Group::Labels => labels(context, state, connection).await,
-        Group::Automation => {
-            context
-                .rpc(
-                    state.workspace_automation.clone(),
-                    ErrorCode::RegistryIo,
-                    |service, method, params| {
-                        crate::rpc::workspace_automation::execute(service, method, params)
-                    },
-                )
-                .await
+        Err(error) => return Err(error),
+    }
+    match requests::automation(context, state).await {
+        Ok(()) => return Ok(None),
+        Err(DispatchError::NotImplemented) => {
+            Context::assert_unhandled(context, "metadata::automation");
         }
-        Group::WorkspaceState => {
-            let result = context
-                .call(
-                    state.workspace_state.clone(),
-                    ErrorCode::RegistryIo,
-                    crate::rpc::workspace_state::execute,
-                )
-                .await;
-            match result {
-                Ok(reply) => context.workspace(reply.value, reply.event),
-                Err(error) => context.respond(Err(error)),
-            }
+        Err(error) => return Err(error),
+    }
+    match requests::workspace_state(context, state).await {
+        Ok(()) => return Ok(None),
+        Err(DispatchError::NotImplemented) => {
+            Context::assert_unhandled(context, "metadata::workspace_state");
         }
-    }?;
-    Ok(Completion::Complete)
+        Err(error) => return Err(error),
+    }
+    Err(DispatchError::NotImplemented)
 }
 
 async fn labels(
-    mut context: Context<'_>,
+    pending: &mut Option<Context<'_>>,
     state: &State,
     connection: &mut Connection,
-) -> Result<(), QueueError> {
+) -> Result<(), DispatchError> {
+    let Some(mut context) = pending.take_if(|context| {
+        matches!(
+            context.request.method.as_str(),
+            "workspace.label.list.request"
+                | "workspace.label.assignment.set.request"
+                | "workspace.label.update.request"
+                | "workspace.label.delete.inspect.request"
+                | "workspace.label.delete.request"
+        )
+    }) else {
+        return Err(DispatchError::NotImplemented);
+    };
+
     if context.request.method == "workspace.label.list.request"
         && context
             .request
@@ -215,7 +230,9 @@ async fn labels(
             .is_some_and(|value| !value.is_null())
         && context.available_subscriptions == 0
     {
-        return context.respond(Err(ErrorCode::ResourceExhausted));
+        return context
+            .respond(Err(ErrorCode::ResourceExhausted))
+            .map_err(Into::into);
     }
     let params = std::mem::take(&mut context.request.params);
     let reply = crate::connection::workspace_labels::dispatch(
@@ -239,28 +256,41 @@ async fn labels(
             }
             Ok(())
         }
-        Err(error) => context.respond(Err(error)),
+        Err(error) => context.respond(Err(error)).map_err(Into::into),
     }
 }
 
 fn base(
-    context: Context<'_>,
+    pending: &mut Option<Context<'_>>,
     state: &State,
     connection: &mut Connection,
-) -> Result<Completion, QueueError> {
+) -> Result<Option<Completion>, DispatchError> {
+    let Some(context) = pending.take_if(|context| {
+        matches!(
+            context.request.method.as_str(),
+            "server.info"
+                | "connection.ping"
+                | "server.status.subscribe"
+                | "subscription.release.request"
+                | "server.status.unsubscribe"
+        )
+    }) else {
+        return Err(DispatchError::NotImplemented);
+    };
+
     if context.request.method == "subscription.release.request" {
         let request =
             serde_json::from_value::<SubscriptionReleaseRequest>(context.request.params.clone());
         if let Ok(request) = request
             && valid_id(&request.subscription_id)
         {
-            return Ok(Completion::Release {
+            return Ok(Some(Completion::Release {
                 request_id: context.request.id,
                 subscription_id: request.subscription_id,
-            });
+            }));
         }
         context.respond(Err(ErrorCode::InvalidMessage))?;
-        return Ok(Completion::Complete);
+        return Ok(None);
     }
     let mut status = None;
     let result = (|| {
@@ -301,7 +331,7 @@ fn base(
             lifecycle: state.info().lifecycle,
         })?;
     }
-    Ok(Completion::Complete)
+    Ok(None)
 }
 
 /// Finish a daemon snapshot using live availability obtained by the API from Provider.

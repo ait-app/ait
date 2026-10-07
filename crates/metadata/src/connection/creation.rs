@@ -1,3 +1,6 @@
+/// Client methods implemented by this component; consumed by capability discovery.
+pub(crate) const METHODS: &[&str] = &["creation.subscribe.request"];
+
 use model::events::Subscription;
 use model::outbound::QueueError;
 use model::{Context, ErrorCode};
