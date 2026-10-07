@@ -1,0 +1,22 @@
+[
+  {
+    "path": "apps/mobile/src/composer/agent-controls/index.tsx",
+    "sha256": "4261e7343469dbf0160f21b074cfcf2731d8fbca751026f6c90eb912069027fe"
+  },
+  {
+    "path": "apps/mobile/src/composer/agent-controls/utils.test.ts",
+    "sha256": "e1c9124f08b9f52a3b6ba30f3ec037b0931d334e217e0db6c98b2656b328eab3"
+  },
+  {
+    "path": "apps/mobile/src/composer/agent-controls/utils.ts",
+    "sha256": "8192cff49d10b241f6bf4c8214b49a2ae02795970c7c4136705af5182b2d93b0"
+  },
+  {
+    "path": "packages/client/src/daemon-client.test.ts",
+    "sha256": "c5a0bda00c049e93896a1a49849c1c83877f03bc886ef29ae3e50b420e487116"
+  },
+  {
+    "path": "packages/client/src/daemon-client.ts",
+    "sha256": "19639e3ac127aff710e95bf7b2bf3dc6bc9d2bfd853da162c27b04d9596e997f"
+  }
+]

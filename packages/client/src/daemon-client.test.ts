@@ -7078,3 +7078,35 @@ test("uploadFile waits for transport acknowledgements before sending another fra
     FileTransferOpcode.FileEnd,
   ]);
 });
+
+test("setAgentModel returns the provider notice for a deferred switch", async () => {
+  const mock = createMockTransport();
+  const client = new DaemonClient({
+    url: "ws://test",
+    clientId: "model-switch",
+    logger: createMockLogger(),
+    reconnect: { enabled: false },
+    transportFactory: () => mock.transport,
+  });
+  clients.push(client);
+  const connecting = client.connect();
+  mock.triggerOpen();
+  await connecting;
+  const switching = client.setAgentModel("agent", "next-model");
+  const request = parseSentFrame(mock.sent.at(-1));
+  expect(request).toMatchObject({ type: "agent.model.set.request", modelId: "next-model" });
+  const notice = { type: "info", message: "Configuration applies next turn" };
+  mock.triggerMessage(
+    wrapSessionMessage({
+      type: "agent.model.set.response",
+      payload: {
+        requestId: request.requestId,
+        agentId: "agent",
+        accepted: true,
+        error: null,
+        notice,
+      },
+    }),
+  );
+  await expect(switching).resolves.toEqual(notice);
+});

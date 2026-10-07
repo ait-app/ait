@@ -3454,7 +3454,10 @@ export class DaemonClient {
     return payload.notice ?? null;
   }
 
-  async setAgentModel(agentId: string, modelId: string | null): Promise<void> {
+  async setAgentModel(
+    agentId: string,
+    modelId: string | null,
+  ): Promise<AgentProviderNotice | null> {
     const requestId = this.createRequestId();
     const message = SessionInboundMessageSchema.parse({
       type: "agent.model.set.request",
@@ -3479,6 +3482,7 @@ export class DaemonClient {
     if (!payload.accepted) {
       throw new Error(payload.error ?? "setAgentModel rejected");
     }
+    return payload.notice ?? null;
   }
 
   async setAgentFeature(agentId: string, featureId: string, value: unknown): Promise<void> {
