@@ -1,6 +1,6 @@
 # 附件分块传输验证
 
-超过 1 MiB 的客户端规范 JSON 消息按 256 KiB 分块，daemon 完整组装后分发。文件流逐帧确认并等待工作槽，避免单连接队列溢出或与后台任务竞争导致上传丢失。见 [ADR-096](../../decisions/clients/adr-096-acknowledged-client-chunks.md)。
+超过 1 MiB 的客户端规范 JSON 消息按 256 KiB 分块，daemon 完整组装后分发。文件流逐帧确认并等待工作槽，避免单连接队列溢出或与后台任务竞争导致上传丢失。见 [ADR-096](../../decisions/clients/adr-098-acknowledged-client-chunks.md)。
 
 ## Test coverage
 

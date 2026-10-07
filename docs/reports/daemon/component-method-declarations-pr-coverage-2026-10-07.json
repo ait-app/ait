@@ -1,0 +1,570 @@
+{
+  "source_revision": "586266b562c89916faf36b686b94da3d67751cb3",
+  "base_revision": "f83d95794afd3c3538ad4258b787ea20f7dde0da",
+  "rust_source_fingerprint_sha256": "032f0b763b5682e5984ab54aaf10efe63b2f9bb40934bf9f251e69c0d24dc4e6",
+  "fingerprint_scope": "Sorted tracked Rust files, Cargo manifests, Cargo.lock and rust-toolchain.toml; SHA-256 over path, NUL, bytes, NUL.",
+  "changed_source_sha256": {
+    "bins/daemon/tests/process/agent_runtime.rs": "6000317b9abbbcd60bc4dffec457bfe692ce1bacd737f5fefff27852606f9a84",
+    "bins/daemon/tests/process/agents.rs": "744782ad0318542dc878c4964c61d39afc176c349a4ef9e59f0e589c6f0c4911",
+    "bins/daemon/tests/process/catalog.rs": "0f06c71b4f9c327928e3634161d4c0a3e32e1368ffe1be11b3c73d3a0ecab7ab",
+    "bins/daemon/tests/process/checkout.rs": "85e795736e56a3b0d1c7d8cc7b9158dccaf30ab885e8ff782e96be55d8f1f4d9",
+    "bins/daemon/tests/process/directory.rs": "8888291a0abd89d842581388dfb1cd22a7d78976e1337786521133d90af1dddb",
+    "bins/daemon/tests/process/files.rs": "91170776b6041aca53945aa8f7aa46a7a2c98797a4008165358d0c1eef54dc63",
+    "bins/daemon/tests/process/files/paseo.rs": "7ed511c798d2cffa533508498dfd4b5a9cdf594b05101fbadca1fff9e1744f2f",
+    "bins/daemon/tests/process/forge.rs": "fe6f514bd4aa231bdfc4ab41d4a004bf47b0439f9ac4f2ea60f044a1990f2540",
+    "bins/daemon/tests/process/forge/gitlab.rs": "aeaa8df7716aa867e805e2a60f5dc21d36d352ffd9d426205568fb570457516e",
+    "bins/daemon/tests/process/github_projects.rs": "eabb3b34cbedcb9f8a0b5c3444ef90448552e30a192fec1ade33bdc500839242",
+    "bins/daemon/tests/process/metadata.rs": "15c3a00e541e8973e65bbeba853f2f7f65351d7e89f29de8b7e3c92d115d1977",
+    "bins/daemon/tests/process/terminal.rs": "d9cd671b9a91b84a2ffad2b52d11f533753871cc8d8ce91717498f3d245d6797",
+    "bins/daemon/tests/process/transport.rs": "3720afce0d12ce32865ab0794c6ba387eacb30b5909345fd90c71cec375ba773",
+    "bins/daemon/tests/process/voice.rs": "32bad2ee3fcdd7088e45a7591672e2023446125e366effb09310c6f6175ae086",
+    "bins/daemon/tests/process/workspace_automation.rs": "8c8881bdb6116bac9850b4b50fafb6b85b49352bab8febd634cbd39c3709b444",
+    "bins/daemon/tests/process/workspace_state.rs": "e780101ff08c974d3a0902b70d7fdbc7e71d3f026fbd563b22deff485d466e64",
+    "bins/daemon/tests/process/worktrees.rs": "d456e381c1c0c861b9bf0fc3aa5385515bdebde00d07b2d9cb638e4389446136",
+    "crates/api/src/capabilities.rs": "ede057ea14fb18d823e28602c41c5b468936d9538466ad8f172764ca0b923a63",
+    "crates/api/src/capabilities/tests.rs": "a0a45b6268f598008a1349f9db1a4778ac8c265e763d168bc1ff7f57c5f30b80",
+    "crates/api/src/connection.rs": "63a66b316929ff810416ccc9a7f508bac953980ee11f086d77ad6e61c69b01f2",
+    "crates/api/src/connection/dispatch/tests.rs": "48ddb77591475fc48bb4de6221b1b61eef98cd467aeda07724e3f03965eaa454",
+    "crates/api/src/connection/single.rs": "a7894ef1fbdd50b45e55ff3713d0c666b69c7e8e510d3fbaf4df9478fc4ec246",
+    "crates/api/src/connection/validation.rs": "82c23f3a2fd6da581238c21fca18bebb804483c756c67ec2cfbf97439c2543fa",
+    "crates/api/src/connection/validation/tests.rs": "76ebc493fecd489068892bf501b1a7a6d1833ae1de7c6ad7de24fbd95a2eeecc",
+    "crates/api/src/lib.rs": "bbe1ff3e3cccde54f9735c8717513565c642c353552e5d01cce043b36ec86e04",
+    "crates/api/src/relay_rpc.rs": "10682926b28787eb7ea0710f3a987cad48fc49fa64e705c2f9d7baea44d0d06a",
+    "crates/api/src/tests.rs": "d2ad80145f4775c24e190a6931aac85d181fbdc3bf6dd87e861e0966ed11c8cc",
+    "crates/api/src/tests/placeholders.rs": "d58d30aca77784c7d98242e7336616a37b1f2feb03f40399e28e49487701d4fe",
+    "crates/api/src/tests/relay_rpc.rs": "7260e5515d9850cf06bb75db4302bcd0f7a1f4fca9a1188522f997d7bd1284ac",
+    "crates/api/src/tests/voice.rs": "ba818b0b514fcabbfe6b86ee0f1336df010740b773bb00513d51e3cab7d6cfd8",
+    "crates/browser/src/capabilities.rs": "e3328afb6bf68443b0de033b24d60a7076b3372a9ba8294e953d6debee58e1d8",
+    "crates/browser/src/capabilities/tests.rs": "793afbff11e9fbe446187c74585f05e83e0f9c99ff07567a3ed2cb0fd35f5179",
+    "crates/browser/src/connection.rs": "880fe29e3531806f991a5e27868aaf520f957df2d20ef152110d5f363a36a7d5",
+    "crates/filesystem/src/capabilities.rs": "82aafdf8b2c507d0b43086b1531a5e53200e13cec0ee849166943fda0aa0bd24",
+    "crates/filesystem/src/capabilities/tests.rs": "c8628809d8812eaedff7b78ea9a9d496357cc57916bb368a711d36c7c17f2968",
+    "crates/filesystem/src/connection/files.rs": "859c214210b91d02f4c88028286ab09d57316ff5166017b305cda597c810ae7b",
+    "crates/filesystem/src/dispatch.rs": "8c496808688a5972697a5af77c385e5dd88249a52d9b9920141efe2c919bbd73",
+    "crates/filesystem/src/protocol/checkout/tests.rs": "52678d463f1c13b35bfaa39ff6bb518b92e8015e5b85881b8e1c7a119f606f94",
+    "crates/filesystem/src/protocol/forge/tests.rs": "15ca1bd87088ac765eac948cd28cdb3d68b23d5ff055bae50837224c6b23867e",
+    "crates/filesystem/src/protocol/worktrees/tests.rs": "db5390c2a515b025abc1daf1b635745acf0ce16ebc12a671a60809fb22e55870",
+    "crates/filesystem/src/rpc/forge.rs": "009463c73b7fdd453492d2b27e170c35eb06c902ae550b073fdd9f9e058d97c1",
+    "crates/filesystem/src/rpc/github_projects.rs": "42aa01970a4ec6d21090705bc3eb664603dab982e1c8bac7d64b735fc68c0faf",
+    "crates/filesystem/src/rpc/workspace_recovery.rs": "b60ecf715320b61d7556c2d8df97ae44a5a029d6930cb1526648a6d643ddd4be",
+    "crates/filesystem/src/rpc/worktrees.rs": "597af2ebee4cf5d70f8024d5cb34645b50b978453681b029f178be1dacc667b8",
+    "crates/filesystem/src/service/skills.rs": "e8d4bc242bc67a5df708ed2af850ee79a2cb47f0e1a710ea5c53281e373869f9",
+    "crates/metadata/src/capabilities.rs": "03be6e5e8c64fb0f37643c80cf3670b8c5aa40893b1c0b6a0aad63665e0a2f2a",
+    "crates/metadata/src/capabilities/tests.rs": "d4254c8bbcebfc2cfc08060467d68086bdc95b3178a8b6210bd768ab06220743",
+    "crates/metadata/src/connection/creation.rs": "c0b61880aef79000776d33d23d210ddb880ec32bbd5de4ef0c868686286b7991",
+    "crates/metadata/src/connection/daemon.rs": "25a5db4d840cc68cb1c63a47963db9533d33c9e4c4ccb1d1e3b687cf21a8a16b",
+    "crates/metadata/src/connection/push.rs": "1d547de3b88c2b058f92064676f6fd840003cbac42325f245378706181e76f00",
+    "crates/metadata/src/connection/session.rs": "292a437cb2ddc105546ba1d5e0db34310667961c746655a7ad5fa3129b377995",
+    "crates/metadata/src/dispatch.rs": "ae5f998d424470eac3a628471cd25d005e2662d498327a58153c225859a14824",
+    "crates/metadata/src/protocol/workspace_automation/tests.rs": "2a9ca80a72b57ceb71eb93455eb73f936885d270d1cfe5c77a0f28ca8813bdba",
+    "crates/metadata/src/protocol/workspace_state/tests.rs": "9b68a6b1828138cb58a4e4bec9ead48b8f5e15b8a0265424a98c476b4abc1257",
+    "crates/metadata/src/rpc/directory.rs": "44b1acaa051a5b0d2ace86835ab656ad0f38b6055d3327357482c92ab661f13f",
+    "crates/metadata/src/rpc/editor.rs": "163449a27eca0266dc678ee4ced62740beba8598e9ed47a0ab7b87af5fdf5d29",
+    "crates/metadata/src/rpc/editor/tests.rs": "3ce1d3254b920437fab351406945377cc0c96823bbae45e38f40856485cdde1d",
+    "crates/metadata/src/rpc/workspace_automation.rs": "0b7bd5f03a0e9e40e7c1719fc56f758182f6be16c6d6edebbac9ec30a688ff16",
+    "crates/metadata/src/rpc/workspace_labels.rs": "fc9f003ee0a1b31714ad4c2c641021e2038d81d564eee8e4172d18cce5ef0a0e",
+    "crates/metadata/src/rpc/workspace_state.rs": "4145d2a7953215f818895e1248dfd7d6cfd9ba72be28bb0b0e5f4f5084a5e73e",
+    "crates/model/src/lib.rs": "9af8792f4cd594c0d04c028ca23deb5844b244d22c013df34a2742f57b7d2bb8",
+    "crates/model/src/methods.rs": "ae83a5fd61c944fbb8e855b0e563d3ae794798489fb7cc3e4c370b59c87f4ccd",
+    "crates/model/src/methods/tests.rs": "bb53206984feabab1de4e7a37fa06cac428de4fcf35adddcc9f8e7d576fec30a",
+    "crates/protocol/src/lib.rs": "fed9212e216b1e93a5973ec3f29db6d01702dad6492f8e7f02993cba1454dc25",
+    "crates/provider/src/capabilities.rs": "72942b73a2a3cc73de413b2e74931017e371e8516969654f44d80aae39a92c8e",
+    "crates/provider/src/capabilities/tests.rs": "9c37c5d5a5f10d3e616c09da7460563fc0746ee53ab26d34cf8f3abcdba0f1bc",
+    "crates/provider/src/dispatch/agent_execution.rs": "e3e3f19b46a8fd9ca284473e81eb2b61094a1c2f4bbff5e98653e4ac99565f19",
+    "crates/provider/src/dispatch/catalog.rs": "67e9207358d775cec0a9f72a5cd64dd4db9e8a3b22e799e16414e7775a6c4a97",
+    "crates/provider/src/protocol/agent_lifecycle/tests.rs": "c40efb62892beac1b8ac0446934eab30a835f51ecab24920f24a28b0627d53b4",
+    "crates/provider/src/rpc/agent_runtime.rs": "34548e7de97b88f49f2f13e93edbe127a471be2614b485fc69eb17a8f0343f8a",
+    "crates/provider/src/rpc/agents.rs": "bc61da3405ea47ba9ebd93dc3181509d9a2aabab4ec22a5252e5f62b60cc7034",
+    "crates/provider/src/rpc/timeline.rs": "8a38f96dfaea2d48333d1381f4d1c889de4bc215f3c5251c7c14f7c834ccc525",
+    "crates/schedule/src/capabilities.rs": "5e5b06be800b8d8598cec535125e0e34671dd057fe867755b09a6f43b77b825b",
+    "crates/schedule/src/capabilities/tests.rs": "c1f3859eef2a448f07a4bc1b3e487fdf02ef58e3e5497144ba32fd74710b2a29",
+    "crates/schedule/src/service.rs": "ea83c2334c1f1ec11e1c848f80626a6bbcc41b0f9b537d762aa1c6cedabaf523",
+    "crates/terminal/src/capabilities.rs": "dee9dd7840c5085396dddce95f5f25f49a1eb751f743a78e9a791bc3922071ce",
+    "crates/terminal/src/capabilities/tests.rs": "f2067469880a0c4c6e882b6e3343a4b51848ab72e29ad77e204b5977bb4fc262",
+    "crates/terminal/src/connection.rs": "41f556628264192eec868b38202811b5f163692b0fdae93f622076e9262a78b7",
+    "crates/terminal/src/protocol/tests.rs": "dc29ae00ead4af31b39a8e1dcc3421cb195f0e81e1fd72e87f0c405bb3821c8a",
+    "crates/voice/src/capabilities.rs": "c7de71e9c6c8905dcff9d71272debec2e0d9e268c465ab168f3481d7ed7153e2",
+    "crates/voice/src/connection.rs": "dc6a6c6bd0696f90f96162f20747c69c4e63bc389c7994672bcf6fac126a90b7",
+    "crates/voice/src/tests.rs": "a476935ca3fe0cef18c5d17bfe55afdff34d8346549ea76cff80d4b01bde722c"
+  },
+  "measurement_date": "2026-10-07",
+  "scope": "Rust Cargo workspace (13 crates); default features; macOS arm64; rustc 1.98.1; cargo-llvm-cov 0.8.4; tool default file filtering; no additional file exclusions; test threads=1; doctests run by cargo test but not instrumented by this coverage command.",
+  "commands": {
+    "tests": "RUST_BACKTRACE=1 cargo test --workspace --no-fail-fast -- --test-threads=1",
+    "build": "cargo build --workspace",
+    "clippy": "cargo clippy --workspace --all-targets -- -D warnings",
+    "format": "cargo fmt --all --check",
+    "coverage": "cargo llvm-cov --workspace --html -- --test-threads=1",
+    "coverage_export": "cargo llvm-cov report --json --output-path target/component-methods-followup-coverage-raw.json",
+    "script_tests": "python3 -m unittest discover -s scripts -p rust_method_specs_test.py",
+    "client_metadata": "python3 scripts/check-paseo-client-methods.py",
+    "script_syntax": "node --check scripts/paseo-server-api-audit.mjs",
+    "script_lint": "./node_modules/.bin/oxlint scripts/paseo-server-api-audit.mjs",
+    "docs": "npm run check:docs",
+    "capability_tests": "cargo test -p api -p browser -p filesystem -p metadata -p provider -p schedule -p terminal capabilities::tests",
+    "connection_tests": "cargo test -p api --lib connection::"
+  },
+  "test_execution": {
+    "targets": 28,
+    "passed": 1924,
+    "failed": 0,
+    "ignored": 10,
+    "ignored_tests": [
+      "test local::antigravity::tests::installed::authenticated_multi_turn_and_resume ... ignored, requires authenticated AGY and explicitly consumes three model turns",
+      "test local::claude::tests::process::installed_claude_control_protocol_discovers_models_without_inference ... ignored, requires a locally installed Claude Code CLI; sends no model request",
+      "test local::claude::tests::process::parity::installed_claude_completes_a_native_turn_and_reopens_history ... ignored, requires installed Claude authentication and makes one small model request",
+      "test local::codex::tests::installed::installed_codex_completes_a_native_turn_and_reopens_history ... ignored, requires installed Codex authentication and makes one small model request",
+      "test local::deepseek_harness::native::tests::installed_host_discovers_switches_permissions_and_adopts_legacy_sessions ... ignored, requires an installed DSH CLI via AIT_TEST_DSH_BIN; no model request",
+      "test local::opencode::client::native_sessions::tests::installed_existing_sessions_are_discovered_and_inspected_without_submission ... ignored, reads existing native sessions; requires AIT_TEST_OPENCODE_BIN and AIT_TEST_OPENCODE_CWD",
+      "test local::opencode::tests::installed::installed_opencode_declined_tool_settles_and_accepts_next_turn ... ignored, requires AIT_TEST_OPENCODE_BIN; isolated config and loopback model only",
+      "test local::opencode::tests::installed::installed_opencode_discovers_runs_and_restores_with_local_model ... ignored, requires AIT_TEST_OPENCODE_BIN; isolated config and loopback model only",
+      "test local::opencode::tests::installed::installed_opencode_plan_import_and_switch_use_native_agent ... ignored, requires AIT_TEST_OPENCODE_BIN; isolated config and loopback model only",
+      "test local::opencode::tests::installed::installed_opencode_saves_only_explicit_native_permission_rules ... ignored, requires AIT_TEST_OPENCODE_BIN; isolated config and loopback model only"
+    ]
+  },
+  "coverage_test_execution": {
+    "targets": 16,
+    "passed": 1924,
+    "failed": 0,
+    "ignored": 10,
+    "ignored_tests": [
+      "test local::antigravity::tests::installed::authenticated_multi_turn_and_resume ... ignored, requires authenticated AGY and explicitly consumes three model turns",
+      "test local::claude::tests::process::installed_claude_control_protocol_discovers_models_without_inference ... ignored, requires a locally installed Claude Code CLI; sends no model request",
+      "test local::claude::tests::process::parity::installed_claude_completes_a_native_turn_and_reopens_history ... ignored, requires installed Claude authentication and makes one small model request",
+      "test local::codex::tests::installed::installed_codex_completes_a_native_turn_and_reopens_history ... ignored, requires installed Codex authentication and makes one small model request",
+      "test local::deepseek_harness::native::tests::installed_host_discovers_switches_permissions_and_adopts_legacy_sessions ... ignored, requires an installed DSH CLI via AIT_TEST_DSH_BIN; no model request",
+      "test local::opencode::client::native_sessions::tests::installed_existing_sessions_are_discovered_and_inspected_without_submission ... ignored, reads existing native sessions; requires AIT_TEST_OPENCODE_BIN and AIT_TEST_OPENCODE_CWD",
+      "test local::opencode::tests::installed::installed_opencode_declined_tool_settles_and_accepts_next_turn ... ignored, requires AIT_TEST_OPENCODE_BIN; isolated config and loopback model only",
+      "test local::opencode::tests::installed::installed_opencode_discovers_runs_and_restores_with_local_model ... ignored, requires AIT_TEST_OPENCODE_BIN; isolated config and loopback model only",
+      "test local::opencode::tests::installed::installed_opencode_plan_import_and_switch_use_native_agent ... ignored, requires AIT_TEST_OPENCODE_BIN; isolated config and loopback model only",
+      "test local::opencode::tests::installed::installed_opencode_saves_only_explicit_native_permission_rules ... ignored, requires AIT_TEST_OPENCODE_BIN; isolated config and loopback model only"
+    ]
+  },
+  "workspace_lines": {
+    "count": 57981,
+    "covered": 54754,
+    "percent": 94.43438367741157
+  },
+  "crate_lines": {
+    "bins/daemon": {
+      "count": 941,
+      "covered": 898,
+      "files": 7,
+      "percent": 95.43039319872476
+    },
+    "crates/api": {
+      "count": 2115,
+      "covered": 1954,
+      "files": 16,
+      "percent": 92.38770685579196
+    },
+    "crates/browser": {
+      "count": 733,
+      "covered": 715,
+      "files": 5,
+      "percent": 97.5443383356071
+    },
+    "crates/domain": {
+      "count": 121,
+      "covered": 121,
+      "files": 2,
+      "percent": 100.0
+    },
+    "crates/filesystem": {
+      "count": 12187,
+      "covered": 11563,
+      "files": 65,
+      "percent": 94.87978994010011
+    },
+    "crates/metadata": {
+      "count": 8205,
+      "covered": 7786,
+      "files": 58,
+      "percent": 94.8933577087142
+    },
+    "crates/model": {
+      "count": 802,
+      "covered": 762,
+      "files": 13,
+      "percent": 95.01246882793018
+    },
+    "crates/protocol": {
+      "count": 63,
+      "covered": 63,
+      "files": 1,
+      "percent": 100.0
+    },
+    "crates/provider": {
+      "count": 27984,
+      "covered": 26275,
+      "files": 160,
+      "percent": 93.8929388221841
+    },
+    "crates/relay": {
+      "count": 464,
+      "covered": 422,
+      "files": 5,
+      "percent": 90.94827586206897
+    },
+    "crates/schedule": {
+      "count": 847,
+      "covered": 826,
+      "files": 7,
+      "percent": 97.52066115702479
+    },
+    "crates/terminal": {
+      "count": 1556,
+      "covered": 1501,
+      "files": 11,
+      "percent": 96.46529562982005
+    },
+    "crates/voice": {
+      "count": 1963,
+      "covered": 1868,
+      "files": 19,
+      "percent": 95.16046867040244
+    }
+  },
+  "method_metadata_source_lines": {
+    "crates/api/src/capabilities.rs": {
+      "count": 78,
+      "covered": 78,
+      "percent": 100.0
+    },
+    "crates/api/src/connection/validation.rs": {
+      "count": 61,
+      "covered": 61,
+      "percent": 100.0
+    },
+    "crates/browser/src/capabilities.rs": {
+      "count": 6,
+      "covered": 6,
+      "percent": 100.0
+    },
+    "crates/filesystem/src/capabilities.rs": {
+      "count": 32,
+      "covered": 32,
+      "percent": 100.0
+    },
+    "crates/metadata/src/capabilities.rs": {
+      "count": 45,
+      "covered": 45,
+      "percent": 100.0
+    },
+    "crates/model/src/methods.rs": {
+      "count": 18,
+      "covered": 18,
+      "percent": 100.0
+    },
+    "crates/provider/src/capabilities.rs": {
+      "count": 22,
+      "covered": 22,
+      "percent": 100.0
+    },
+    "crates/schedule/src/capabilities.rs": {
+      "count": 6,
+      "covered": 6,
+      "percent": 100.0
+    },
+    "crates/terminal/src/capabilities.rs": {
+      "count": 6,
+      "covered": 6,
+      "percent": 100.0
+    },
+    "crates/voice/src/capabilities.rs": {
+      "count": 6,
+      "covered": 6,
+      "percent": 100.0
+    }
+  },
+  "changed_production_source_lines": {
+    "crates/api/src/capabilities.rs": {
+      "count": 78,
+      "covered": 78,
+      "percent": 100.0
+    },
+    "crates/api/src/connection.rs": {
+      "count": 354,
+      "covered": 326,
+      "percent": 92.09039548022598
+    },
+    "crates/api/src/connection/single.rs": {
+      "count": 216,
+      "covered": 170,
+      "percent": 78.70370370370371
+    },
+    "crates/api/src/connection/validation.rs": {
+      "count": 61,
+      "covered": 61,
+      "percent": 100.0
+    },
+    "crates/api/src/lib.rs": {
+      "count": 484,
+      "covered": 447,
+      "percent": 92.35537190082646
+    },
+    "crates/api/src/relay_rpc.rs": {
+      "count": 43,
+      "covered": 41,
+      "percent": 95.34883720930233
+    },
+    "crates/browser/src/capabilities.rs": {
+      "count": 6,
+      "covered": 6,
+      "percent": 100.0
+    },
+    "crates/browser/src/connection.rs": {
+      "count": 25,
+      "covered": 22,
+      "percent": 88.0
+    },
+    "crates/filesystem/src/capabilities.rs": {
+      "count": 32,
+      "covered": 32,
+      "percent": 100.0
+    },
+    "crates/filesystem/src/connection/files.rs": {
+      "count": 15,
+      "covered": 15,
+      "percent": 100.0
+    },
+    "crates/filesystem/src/dispatch.rs": {
+      "count": 181,
+      "covered": 169,
+      "percent": 93.37016574585635
+    },
+    "crates/filesystem/src/rpc/forge.rs": {
+      "count": 462,
+      "covered": 455,
+      "percent": 98.48484848484848
+    },
+    "crates/filesystem/src/rpc/github_projects.rs": {
+      "count": 88,
+      "covered": 78,
+      "percent": 88.63636363636364
+    },
+    "crates/filesystem/src/rpc/workspace_recovery.rs": {
+      "count": 84,
+      "covered": 77,
+      "percent": 91.66666666666666
+    },
+    "crates/filesystem/src/rpc/worktrees.rs": {
+      "count": 173,
+      "covered": 169,
+      "percent": 97.6878612716763
+    },
+    "crates/filesystem/src/service/skills.rs": {
+      "count": 82,
+      "covered": 82,
+      "percent": 100.0
+    },
+    "crates/metadata/src/capabilities.rs": {
+      "count": 45,
+      "covered": 45,
+      "percent": 100.0
+    },
+    "crates/metadata/src/connection/creation.rs": {
+      "count": 121,
+      "covered": 116,
+      "percent": 95.86776859504133
+    },
+    "crates/metadata/src/connection/daemon.rs": {
+      "count": 35,
+      "covered": 35,
+      "percent": 100.0
+    },
+    "crates/metadata/src/connection/push.rs": {
+      "count": 65,
+      "covered": 63,
+      "percent": 96.92307692307692
+    },
+    "crates/metadata/src/connection/session.rs": {
+      "count": 94,
+      "covered": 88,
+      "percent": 93.61702127659576
+    },
+    "crates/metadata/src/dispatch.rs": {
+      "count": 239,
+      "covered": 220,
+      "percent": 92.05020920502092
+    },
+    "crates/metadata/src/rpc/directory.rs": {
+      "count": 781,
+      "covered": 695,
+      "percent": 88.98847631241996
+    },
+    "crates/metadata/src/rpc/editor.rs": {
+      "count": 15,
+      "covered": 15,
+      "percent": 100.0
+    },
+    "crates/metadata/src/rpc/workspace_automation.rs": {
+      "count": 186,
+      "covered": 170,
+      "percent": 91.39784946236558
+    },
+    "crates/metadata/src/rpc/workspace_labels.rs": {
+      "count": 257,
+      "covered": 256,
+      "percent": 99.61089494163424
+    },
+    "crates/metadata/src/rpc/workspace_state.rs": {
+      "count": 71,
+      "covered": 63,
+      "percent": 88.73239436619718
+    },
+    "crates/model/src/lib.rs": {
+      "count": 3,
+      "covered": 3,
+      "percent": 100.0
+    },
+    "crates/model/src/methods.rs": {
+      "count": 18,
+      "covered": 18,
+      "percent": 100.0
+    },
+    "crates/protocol/src/lib.rs": {
+      "count": 63,
+      "covered": 63,
+      "percent": 100.0
+    },
+    "crates/provider/src/capabilities.rs": {
+      "count": 22,
+      "covered": 22,
+      "percent": 100.0
+    },
+    "crates/provider/src/dispatch/agent_execution.rs": {
+      "count": 66,
+      "covered": 63,
+      "percent": 95.45454545454545
+    },
+    "crates/provider/src/dispatch/catalog.rs": {
+      "count": 28,
+      "covered": 23,
+      "percent": 82.14285714285714
+    },
+    "crates/provider/src/rpc/agent_runtime.rs": {
+      "count": 450,
+      "covered": 432,
+      "percent": 96.0
+    },
+    "crates/provider/src/rpc/agents.rs": {
+      "count": 124,
+      "covered": 122,
+      "percent": 98.38709677419355
+    },
+    "crates/provider/src/rpc/timeline.rs": {
+      "count": 144,
+      "covered": 144,
+      "percent": 100.0
+    },
+    "crates/schedule/src/capabilities.rs": {
+      "count": 6,
+      "covered": 6,
+      "percent": 100.0
+    },
+    "crates/schedule/src/service.rs": {
+      "count": 168,
+      "covered": 164,
+      "percent": 97.61904761904762
+    },
+    "crates/terminal/src/capabilities.rs": {
+      "count": 6,
+      "covered": 6,
+      "percent": 100.0
+    },
+    "crates/terminal/src/connection.rs": {
+      "count": 383,
+      "covered": 357,
+      "percent": 93.21148825065274
+    },
+    "crates/voice/src/capabilities.rs": {
+      "count": 6,
+      "covered": 6,
+      "percent": 100.0
+    },
+    "crates/voice/src/connection.rs": {
+      "count": 105,
+      "covered": 105,
+      "percent": 100.0
+    }
+  },
+  "html_report": "target/llvm-cov/html/index.html",
+  "reviewable_artifact": "This committed JSON records exported workspace, crate and changed-source line counts, exact source revision and SHA-256 fingerprints. The local HTML report is not a shared artifact.",
+  "baseline_comparison": {
+    "scope": "Comparable previous PR revision: same workspace, default features, macOS arm64, toolchain, filtering and single-thread coverage command.",
+    "source_revision": "432f3386ac9360bba4630b484d6b4bb667094e67",
+    "workspace_lines": {
+      "count": 58025,
+      "covered": 54798,
+      "percent": 94.43860404997847
+    },
+    "percentage_point_change": -0.004220372566891228,
+    "artifact": "https://github.com/ait-app/ait/blob/2615da21e75ca9467d359c8500b1f7f82b12b4a5/docs/reports/daemon/component-method-declarations-pr-coverage-2026-10-07.json",
+    "base_revision_comparison": "The comparable measurement is the previous PR revision; the main base revision itself was not measured."
+  },
+  "uncovered_behavior": "Default-ignored installed-provider integration tests require local CLIs, authentication or explicit model requests. Duplicate-declaration panic paths are not deliberately triggered; ownership uniqueness is verified against the complete component aggregation. Line coverage does not establish branch coverage.",
+  "unavailable_platforms": ["Linux", "Windows"],
+  "follow_up": "Review Linux CI results. Investigate the directory stream integration test if the intermittent event timeout recurs under concurrent execution.",
+  "previous_revision_concurrency_retries": {
+    "source_revision": "432f3386ac9360bba4630b484d6b4bb667094e67",
+    "default_workspace_test": {
+      "targets": 28,
+      "passed": 1923,
+      "failed": 1,
+      "ignored": 10,
+      "ignored_tests": [
+        "test local::antigravity::tests::installed::authenticated_multi_turn_and_resume ... ignored, requires authenticated AGY and explicitly consumes three model turns",
+        "test local::claude::tests::process::installed_claude_control_protocol_discovers_models_without_inference ... ignored, requires a locally installed Claude Code CLI; sends no model request",
+        "test local::claude::tests::process::parity::installed_claude_completes_a_native_turn_and_reopens_history ... ignored, requires installed Claude authentication and makes one small model request",
+        "test local::codex::tests::installed::installed_codex_completes_a_native_turn_and_reopens_history ... ignored, requires installed Codex authentication and makes one small model request",
+        "test local::deepseek_harness::native::tests::installed_host_discovers_switches_permissions_and_adopts_legacy_sessions ... ignored, requires an installed DSH CLI via AIT_TEST_DSH_BIN; no model request",
+        "test local::opencode::client::native_sessions::tests::installed_existing_sessions_are_discovered_and_inspected_without_submission ... ignored, reads existing native sessions; requires AIT_TEST_OPENCODE_BIN and AIT_TEST_OPENCODE_CWD",
+        "test local::opencode::tests::installed::installed_opencode_declined_tool_settles_and_accepts_next_turn ... ignored, requires AIT_TEST_OPENCODE_BIN; isolated config and loopback model only",
+        "test local::opencode::tests::installed::installed_opencode_discovers_runs_and_restores_with_local_model ... ignored, requires AIT_TEST_OPENCODE_BIN; isolated config and loopback model only",
+        "test local::opencode::tests::installed::installed_opencode_plan_import_and_switch_use_native_agent ... ignored, requires AIT_TEST_OPENCODE_BIN; isolated config and loopback model only",
+        "test local::opencode::tests::installed::installed_opencode_saves_only_explicit_native_permission_rules ... ignored, requires AIT_TEST_OPENCODE_BIN; isolated config and loopback model only"
+      ]
+    },
+    "four_thread_workspace_test": {
+      "targets": 28,
+      "passed": 1923,
+      "failed": 1,
+      "ignored": 10,
+      "ignored_tests": [
+        "test local::antigravity::tests::installed::authenticated_multi_turn_and_resume ... ignored, requires authenticated AGY and explicitly consumes three model turns",
+        "test local::claude::tests::process::installed_claude_control_protocol_discovers_models_without_inference ... ignored, requires a locally installed Claude Code CLI; sends no model request",
+        "test local::claude::tests::process::parity::installed_claude_completes_a_native_turn_and_reopens_history ... ignored, requires installed Claude authentication and makes one small model request",
+        "test local::codex::tests::installed::installed_codex_completes_a_native_turn_and_reopens_history ... ignored, requires installed Codex authentication and makes one small model request",
+        "test local::deepseek_harness::native::tests::installed_host_discovers_switches_permissions_and_adopts_legacy_sessions ... ignored, requires an installed DSH CLI via AIT_TEST_DSH_BIN; no model request",
+        "test local::opencode::client::native_sessions::tests::installed_existing_sessions_are_discovered_and_inspected_without_submission ... ignored, reads existing native sessions; requires AIT_TEST_OPENCODE_BIN and AIT_TEST_OPENCODE_CWD",
+        "test local::opencode::tests::installed::installed_opencode_declined_tool_settles_and_accepts_next_turn ... ignored, requires AIT_TEST_OPENCODE_BIN; isolated config and loopback model only",
+        "test local::opencode::tests::installed::installed_opencode_discovers_runs_and_restores_with_local_model ... ignored, requires AIT_TEST_OPENCODE_BIN; isolated config and loopback model only",
+        "test local::opencode::tests::installed::installed_opencode_plan_import_and_switch_use_native_agent ... ignored, requires AIT_TEST_OPENCODE_BIN; isolated config and loopback model only",
+        "test local::opencode::tests::installed::installed_opencode_saves_only_explicit_native_permission_rules ... ignored, requires AIT_TEST_OPENCODE_BIN; isolated config and loopback model only"
+      ]
+    },
+    "default_coverage_attempt": {
+      "targets": 6,
+      "passed": 234,
+      "failed": 1,
+      "ignored": 0,
+      "ignored_tests": []
+    },
+    "failure": "websocket_directory_streams_keep_sequences_ownership_and_reconnect_checkpoints timed out waiting for an event in transport::receive; no Rust implementation or test behavior was changed to suppress the failure.",
+    "isolated_process_target": {
+      "targets": 1,
+      "passed": 94,
+      "failed": 0,
+      "ignored": 0,
+      "ignored_tests": []
+    },
+    "isolated_process_command": "RUST_BACKTRACE=1 target/debug/deps/process-ab98d7c8e47fe343 --test-threads=4",
+    "resolution": "The isolated failing test and all 94 process tests passed; final complete workspace tests and coverage were run with test threads=1."
+  },
+  "focused_test_execution": {
+    "passed": 32,
+    "failed": 0,
+    "scope": "17 capability metadata and service installation tests plus 15 API connection/dispatch/validation tests."
+  }
+}

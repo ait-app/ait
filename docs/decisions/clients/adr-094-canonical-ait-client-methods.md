@@ -7,14 +7,14 @@
 
 ## 背景
 
-Rust 已使用 `crates/protocol/src/methods.rs` 中 `PASEO_METHODS.canonical_name` 接收请求。
+Rust 已使用所属组件声明的 Ait 标准名称接收请求，聚合规则见 [ADR-095](../daemon/adr-095-component-method-declarations.md)。
 客户端仍以旧名称索引方法目录、发送 SDK 消息并监听响应，直到传输层才转换名称。
 这让 UI、类型校验和测试夹具继续依赖 Paseo 名称，也保留了合并操作的重复入口。
 
 ## 决策
 
 应用调用、SDK 消息 discriminator、响应监听和测试夹具统一使用 Ait 标准方法名。
-前端方法目录按 Rust catalog 的 canonical name 去重，目录键与发送到服务端的 method 相同。
+前端方法目录按 Rust 组件声明的 Ait 名称去重，目录键与发送到服务端的 method 相同。
 Agent 创建、Project 图标读取和 Workspace 脚本启动只保留一个标准校验分支。
 未启用创建生命周期订阅的 SDK 路径同样使用 `agent.create.request` / `agent.create.response`。
 脚本启动从标准结果的 `script.terminalId` 读取终端。
@@ -30,6 +30,6 @@ Rust API、crate 领域依赖和数据所有权保持原有边界。
 ## 后果与验证
 
 应用只依赖 Ait 标准操作名，仓库内 SDK 和协议包需要一起重建。
-`scripts/check-paseo-client-methods.py` 校验去重后的方法目录与 Rust catalog 一致，
+`scripts/check-paseo-client-methods.py` 校验客户端方法与 Rust 组件声明的名称、消息方向一致，
 并拒绝 `apps/` 中重新引入旧操作名。相关协议、SDK、transport、目录推送和听写测试
 覆盖名称迁移、合并分支、请求关联与事件订阅参数。

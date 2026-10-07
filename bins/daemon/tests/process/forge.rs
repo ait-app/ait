@@ -6,7 +6,7 @@ use std::process::Command;
 
 use serde_json::json;
 
-use super::transport::{connect, request};
+use super::transport::{connect, method_names, request};
 use super::{ready, start_with_path, terminate};
 
 #[path = "forge/gitlab.rs"]
@@ -26,7 +26,7 @@ async fn binary_serves_all_forge_and_pull_request_methods() {
     let log = root.path().join("server.log");
     let mut process = start_with_path(&state, &log, Some(&path));
     let address = ready(&mut process, &log).await;
-    let mut client = connect(&address, filesystem::rpc::forge::METHODS).await;
+    let mut client = connect(&address, &method_names(filesystem::rpc::forge::METHODS)).await;
 
     let search = request(
         &mut client,

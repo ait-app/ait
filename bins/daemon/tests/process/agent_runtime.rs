@@ -8,7 +8,7 @@ use metadata::model::registry::{
 };
 use serde_json::json;
 
-use super::transport::{Socket, connect, request};
+use super::transport::{Socket, connect, method_names, request};
 use super::{ready, start, terminate};
 
 const PARENT_LABEL: &str = "paseo.parent-agent-id";
@@ -21,7 +21,11 @@ async fn binary_serves_agent_runtime_directory_and_metadata_lifecycle() {
     let log = root.path().join("server.log");
     let mut process = start(&state, &log);
     let address = ready(&mut process, &log).await;
-    let mut client = connect(&address, provider::rpc::agent_runtime::METHODS).await;
+    let mut client = connect(
+        &address,
+        &method_names(provider::rpc::agent_runtime::METHODS),
+    )
+    .await;
 
     assert_directory_reads(&mut client).await;
     assert_metadata_mutations(&mut client).await;

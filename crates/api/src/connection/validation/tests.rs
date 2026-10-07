@@ -4,19 +4,14 @@ use super::*;
 
 #[test]
 fn catalog_and_implemented_methods_keep_their_envelope_metadata() {
-    let implemented: BTreeSet<_> = implemented_methods().collect();
-    assert_eq!(implemented.len(), 179);
-    for method in &implemented {
-        let metadata = lookup(method).expect("implemented method must exist");
-        let kind = PASEO_METHODS
-            .iter()
-            .find(|spec| spec.canonical_name == *method)
-            .map_or(InboundKind::Request, |spec| spec.kind);
-        assert_eq!(metadata.kind, kind, "{method}");
-        assert_eq!(metadata.capability, *method);
-    }
-    for spec in PASEO_METHODS {
-        assert_eq!(lookup(spec.canonical_name).unwrap().kind, spec.kind);
+    let specs: Vec<_> = implemented_methods().collect();
+    let names: BTreeSet<_> = specs.iter().map(|spec| spec.name).collect();
+    assert_eq!(specs.len(), names.len());
+    assert_eq!(names.len(), 179);
+    for spec in specs {
+        let metadata = lookup(spec.name).expect("declared method must exist");
+        assert_eq!(metadata.kind, spec.kind, "{}", spec.name);
+        assert_eq!(metadata.capability, spec.name);
     }
     assert!(lookup("connection.single.v1").is_none());
     for unknown in [

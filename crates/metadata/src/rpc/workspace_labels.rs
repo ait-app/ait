@@ -1,14 +1,15 @@
 //! Label request handling and ordered subscription delivery.
 
 /// Client methods implemented by this component; consumed by capability discovery.
-pub(crate) const METHODS: &[&str] = &[
-    "workspace.label.list.request",
-    "workspace.label.assignment.set.request",
-    "workspace.label.update.request",
-    "workspace.label.delete.inspect.request",
-    "workspace.label.delete.request",
+pub(crate) const METHODS: &[MethodSpec] = &[
+    MethodSpec::request("workspace.label.list.request"),
+    MethodSpec::request("workspace.label.assignment.set.request"),
+    MethodSpec::request("workspace.label.update.request"),
+    MethodSpec::request("workspace.label.delete.inspect.request"),
+    MethodSpec::request("workspace.label.delete.request"),
 ];
 
+use model::methods::MethodSpec;
 use std::sync::{Arc, Mutex};
 
 use crate::model::workspace_labels::{

@@ -1,3 +1,5 @@
+use super::transport::method_names;
+
 use std::sync::{
     Arc,
     atomic::{AtomicBool, Ordering},
@@ -107,7 +109,7 @@ async fn production_voice_calls_speech_and_native_agent_then_disconnect_interrup
     )
     .await;
     let id = agent["result"]["agentId"].as_str().unwrap().to_owned();
-    let mut client = connect(&address, voice::connection::METHODS).await;
+    let mut client = connect(&address, &method_names(voice::connection::METHODS)).await;
     let mode = request(
         &mut client,
         "voice.mode.set.request",

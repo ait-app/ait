@@ -3,7 +3,6 @@
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 
-pub mod methods;
 pub mod single;
 pub mod subscription;
 

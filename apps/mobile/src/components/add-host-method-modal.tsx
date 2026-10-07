@@ -104,7 +104,7 @@ export function AddHostMethodModal({
       testID="add-host-method-modal"
     >
       {showOnlineService ? (
-        <AccountHostPanel onConnected={handleAccountConnected} />
+        <AccountHostPanel onConnected={handleAccountConnected} onCancel={onClose} />
       ) : (
         <>
           <Pressable

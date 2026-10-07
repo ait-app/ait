@@ -4,6 +4,7 @@
 
 ## Daemon 与协议
 
+- [ADR-095：组件自行声明方法元数据](daemon/adr-095-component-method-declarations.md)
 - [ADR-026：规范化 Paseo WebSocket 接口并按能力分期接入](daemon/adr-026-canonical-paseo-websocket-surface.md)
 - [ADR-033：独立 terminal 与完整 Terminal 方法分组](daemon/adr-033-daemon-terminal.md)
 - [ADR-035：能力分组与安装规则归所属 server crate](daemon/adr-035-daemon-capability-groups.md)
@@ -61,8 +62,9 @@
 
 ## 客户端、连接与品牌
 
-- [ADR-096：客户端消息分块与文件上传背压](clients/adr-096-acknowledged-client-chunks.md)
+- [ADR-098：客户端消息分块与文件上传背压](clients/adr-098-acknowledged-client-chunks.md)
 
+- [ADR-096：Desktop 内置 daemon 默认同步与手动下线](clients/adr-096-desktop-default-host-sync.md)
 - [ADR-094：客户端统一使用 Ait 标准方法名](clients/adr-094-canonical-ait-client-methods.md)
 - [ADR-086：桌面、Android 与 iOS 的 Authing 浏览器登录](clients/adr-086-authing-native-login.md)
 - [ADR-085：Daemon 同步的稳定节点身份](clients/adr-085-stable-daemon-publication.md)

@@ -4,7 +4,7 @@ use std::process::Command;
 
 use serde_json::json;
 
-use super::transport::{connect, request};
+use super::transport::{connect, method_names, request};
 use super::{ready, start_with_path, terminate};
 
 #[tokio::test]
@@ -15,7 +15,11 @@ async fn binary_searches_and_clones_github_project_with_local_git_transport() {
     let log = root.path().join("server.log");
     let mut process = start_with_path(&state, &log, Some(std::ffi::OsStr::new(&path)));
     let address = ready(&mut process, &log).await;
-    let mut socket = connect(&address, filesystem::rpc::github_projects::METHODS).await;
+    let mut socket = connect(
+        &address,
+        &method_names(filesystem::rpc::github_projects::METHODS),
+    )
+    .await;
 
     let search = request(
         &mut socket,
