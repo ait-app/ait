@@ -117,6 +117,50 @@ function harness(
 }
 
 describe("Rust protocol adapter", () => {
+  it("delivers Rust timeline producer notifications to the owning SDK observation", async () => {
+    const h = harness();
+    h.stopHello();
+    const client = new DaemonClient({
+      url: "ws://127.0.0.1:7316/v1/ws",
+      clientId: "timeline-producer-test",
+      transportFactory: () => h.transport,
+      reconnect: { enabled: false },
+    });
+    try {
+      const connected = client.connect();
+      h.ready();
+      await connected;
+      const timeline = client.observeTimeline(["agent"]);
+      const updates = vi.fn();
+      timeline.subscribe({ snapshot: () => {}, update: updates });
+      const request = h.last(0);
+      expect(request.method).toBe("agent.timeline.set_subscription.request");
+      h.sockets[0].message({
+        type: "response",
+        request_id: request.request_id,
+        method: request.method,
+        result: { subscriptionId: "timeline-lease", agentIds: ["agent"] },
+      });
+      await timeline.ready;
+      const payload = {
+        subscriptionId: "timeline-lease",
+        agentId: "agent",
+        timestamp: "2026-10-07T00:00:00Z",
+        seq: 3,
+        epoch: "epoch",
+        event: {
+          type: "timeline",
+          provider: "codex",
+          item: { type: "assistant_message", text: "Live reply" },
+        },
+      };
+      h.sockets[0].message({ type: "event", method: "agent_stream", params: payload });
+      expect(updates).toHaveBeenCalledExactlyOnceWith({ type: "agent.stream", payload });
+    } finally {
+      await client.close();
+    }
+  });
+
   it("carries typed online service control through the SDK without replaying a grant", async () => {
     const h = harness();
     h.stopHello();

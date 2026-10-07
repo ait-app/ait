@@ -9,9 +9,13 @@ const SESSION_EVENT_KINDS: Readonly<Record<string, string>> = {
   "checkout.status.update": "checkout_status_update",
 };
 
-const SESSION_EVENT_METHODS = Object.fromEntries(
-  Object.entries(SESSION_EVENT_KINDS).map(([method, kind]) => [kind, method]),
-);
+const SESSION_EVENT_METHODS: Readonly<Record<string, string>> = {
+  ...Object.fromEntries(
+    Object.entries(SESSION_EVENT_KINDS).map(([method, kind]) => [kind, method]),
+  ),
+  // Timeline producers use a separate subscription, outside SessionEventKind.
+  agent_stream: "agent.stream",
+};
 
 export function sessionEventKind(method: string): string {
   return SESSION_EVENT_KINDS[method] ?? method;
