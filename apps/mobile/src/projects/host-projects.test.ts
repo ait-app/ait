@@ -8,6 +8,7 @@ import {
   hostProjectFromRoute,
   hostProjectFromWorkspace,
   resolveEquivalentHostProjectCandidate,
+  resolveHostProjectCandidate,
 } from "./host-project-model";
 import { normalizeWorkspaceDescriptor } from "@/stores/session-store";
 
@@ -161,4 +162,34 @@ describe("host project lookups", () => {
       hosts: [{ serverId: "host-a", projectId: "project-a" }],
     });
   });
+});
+
+test("legacy fork routes resolve grouping keys to the correct Host project ID", () => {
+  const actual = project();
+  const candidate = hostProjectFromRoute({
+    serverId: "host-a",
+    projectId: actual.projectKey!,
+    sourceDirectory: "/repo/a",
+  })!;
+  const resolved = resolveHostProjectCandidate({
+    candidate,
+    projects: [actual],
+    serverId: "host-a",
+  });
+  expect(resolved).toBe(actual);
+  expect(getHostProjectId(resolved!, "host-a")).toBe("prj_a");
+  expect(
+    resolveHostProjectCandidate({ candidate, projects: [actual], serverId: "host-b" }),
+  ).toBeNull();
+  const unrelatedRoot = { ...actual, hosts: [{ ...actual.hosts[0]!, iconWorkingDir: "/other" }] };
+  expect(
+    resolveHostProjectCandidate({ candidate, projects: [unrelatedRoot], serverId: "host-a" }),
+  ).toBeNull();
+  expect(
+    resolveHostProjectCandidate({
+      candidate,
+      projects: [actual, { ...actual }],
+      serverId: "host-a",
+    }),
+  ).toBeNull();
 });
