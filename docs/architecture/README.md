@@ -22,8 +22,11 @@ Electron 位于 `apps/desktop`；`apps/mobile` 提供桌面、浏览器与移动
 | `api`        | HTTP/WebSocket 鉴权、连接与跨能力协调            | 上述能力包、`protocol`、`model`        |
 | `daemon`     | 配置、进程锁、服务组装和停机                     | API、领域及能力包；测试使用 `protocol` |
 
-各实现组件自己声明方法，能力包组合组件方法与安装条件，API 再组合能力包与具体服务，不把业务协议反向传入
-能力包。具体 adapter 实现所属能力的 port；应用服务协调领域行为。`domain` 无 Tokio、
+各实现组件自己声明方法，功能 crate 对外提供一个完整的 `Service`，API 按 crate 整体安装。
+`implemented_methods()` 返回全部声明，`installed_methods(bool)` 返回全部或空集合；API
+自行声明始终可用的连接方法，并复用 metadata 的会话和创建记录基础设施。内部功能对象
+保留独立锁、适配器和任务，私有 transport composition 负责连接共享资源，不作为安装开关。
+详见 [ADR-099](../decisions/daemon/adr-099-crate-level-service-installation.md)。具体 adapter 实现所属能力的 port；应用服务协调领域行为。`domain` 无 Tokio、
 传输或存储依赖。`model` 含 Tokio 请求资源，不属于纯领域层。
 
 请求通过名称、方向和 capability 校验后，以 `Option<Context>` 逐级进入处理入口。每个入口

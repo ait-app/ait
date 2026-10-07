@@ -13,6 +13,7 @@
 
 ## 架构决策
 
+- [ADR-099：功能 crate 作为完整服务安装](decisions/daemon/adr-099-crate-level-service-installation.md)：每个功能 crate 提供一个服务入口，API 按 crate 整体安装，基础连接方法归 API。
 - [ADR-097：Google Play 内部测试手动发布](decisions/clients/adr-097-google-play-internal-release.md)：签名 AAB、远端版本计数与内部测试草稿或发布。
 - [ADR-099：Provider 自选辅助小模型](decisions/providers/adr-099-provider-owned-auxiliary-models.md)：能力声明、原生认证与用户覆盖。
 - [ADR-098：客户端消息分块与文件上传背压](decisions/clients/adr-098-acknowledged-client-chunks.md)：原图消息有界重组、文件逐块确认与兼容性。

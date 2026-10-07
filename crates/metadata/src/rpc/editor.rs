@@ -1,13 +1,6 @@
 //! Compatibility responses for editor operations moved to the desktop application.
 
-/// Client methods implemented by this component; consumed by capability discovery.
-pub(crate) const METHODS: &[MethodSpec] = &[
-    MethodSpec::request("editor.available.list.request"),
-    MethodSpec::request("editor.open.request"),
-];
-
 use model::ErrorCode;
-use model::methods::MethodSpec;
 use serde::Deserialize;
 use serde_json::{Value, json};
 

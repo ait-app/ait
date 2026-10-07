@@ -1,53 +1,27 @@
-//! Capability discovery and installation rules; request execution is owned by dispatchers.
+//! Crate-owned method metadata; the complete service is installed as one unit.
 
 use model::methods::MethodSpec;
 
-/// Presence of independently composed services, supplied by the host.
-#[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
-pub struct InstalledServices {
-    /// Versioned Agent preset service.
-    pub agents: bool,
-    /// Agent runtime directory service.
-    pub agent_runtime: bool,
-    /// Native Agent execution service, which also implements runtime methods.
-    pub agent_execution: bool,
-}
-
-/// Return every component-owned method for negotiation and message validation.
+/// Return every method implemented by this crate for negotiation and envelope validation.
 /// # Returns
-/// Method names and message directions, including events, without selecting a request handler.
+/// Static names and message directions, independent of host installation or backend availability.
 pub fn implemented_methods() -> impl Iterator<Item = MethodSpec> {
-    installed_methods(InstalledServices {
-        agents: true,
-        agent_runtime: true,
-        agent_execution: true,
-    })
-}
-
-/// Return methods supported by `services`, using this crate's installation rules.
-///
-/// # Arguments
-/// * `services` - Service presence supplied by the host.
-///
-/// # Returns
-/// Static method metadata excluding uninstalled optional services.
-pub fn installed_methods(services: InstalledServices) -> impl Iterator<Item = MethodSpec> {
     [
-        (services.agents, crate::rpc::agents::METHODS),
-        (
-            services.agent_runtime || services.agent_execution,
-            crate::rpc::agent_runtime::METHODS,
-        ),
-        (
-            services.agent_execution,
-            crate::dispatch::agent_execution::METHODS,
-        ),
-        (services.agent_execution, crate::rpc::timeline::METHODS),
-        (services.agent_execution, crate::dispatch::CATALOG_METHODS),
+        crate::rpc::agents::METHODS,
+        crate::rpc::agent_runtime::METHODS,
+        crate::dispatch::agent_execution::METHODS,
+        crate::rpc::timeline::METHODS,
+        crate::dispatch::CATALOG_METHODS,
     ]
     .into_iter()
-    .filter(|(installed, _)| *installed)
-    .flat_map(|(_, methods)| methods.iter().copied())
+    .flat_map(|methods| methods.iter().copied())
+}
+
+/// Return this crate's complete method set when its service is `installed`.
+/// # Returns
+/// Every implemented method for a present service, or an empty iterator for an absent service.
+pub fn installed_methods(installed: bool) -> impl Iterator<Item = MethodSpec> {
+    implemented_methods().filter(move |_| installed)
 }
 
 #[cfg(test)]

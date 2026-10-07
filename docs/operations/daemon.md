@@ -82,6 +82,10 @@ npm run dev:mobile
 
 ## WebSocket 与能力
 
+功能 crate 通过一个完整服务安装，`implemented_capabilities` 按已安装 crate 汇总其全部方法。
+基础连接与 relay 方法始终可用；业务后端的安装、认证和模型状态由调用结果与诊断表达。
+组装边界见 [ADR-099](../decisions/daemon/adr-099-crate-level-service-installation.md)。
+
 客户端首先发送 hello，协商协议与所需方法：
 
 ```json

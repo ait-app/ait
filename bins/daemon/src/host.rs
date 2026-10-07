@@ -223,34 +223,55 @@ fn compose_services(
         directory.clone(),
         worktrees.clone(),
     )?;
-    let github_projects =
-        GithubProjects::new(directory.clone(), Box::new(LocalGithubProjects::new()));
-    let (checkout, git_fetch) = compose_git(&config.data_dir, &workspace_registry);
+    let metadata = metadata::Service::new(metadata::Dependencies {
+        workspace_names,
+        push_tokens: compose_push(&config.data_dir)?,
+        daemon,
+        directory: directory.clone(),
+        workspace_labels,
+        workspace_automation,
+        workspace_state,
+    });
+    let filesystem = compose_filesystem(
+        config,
+        &workspace_registry,
+        directory,
+        worktrees,
+        workspace_recovery,
+    )?;
     Ok(Services {
-        metadata_generator: Some(metadata_generator),
-        workspace_names: Some(workspace_names),
-        schedules: Some(schedules),
-        browser: Some(browser::broker::Broker::default()),
-        skills: Some(compose_skills(&config.data_dir)?),
-        push_tokens: Some(compose_push(&config.data_dir)?),
-        speech: Some(voice::compose(agent_execution.clone(), &config.data_dir)?),
-        terminals: Some(terminals),
-        agent_execution: Some(agent_execution),
-        agents: Some(agents),
-        checkout: Some(checkout),
-        git_fetch: Some(git_fetch),
-        agent_runtime: None,
-        daemon: Some(daemon),
-        directory: Some(directory),
-        github_projects: Some(github_projects),
-        workspace_recovery: Some(workspace_recovery),
-        forge: Some(Forge::new(Box::new(LocalForge::new()))),
-        files: Some(compose_files(config)),
-        workspace_labels: Some(workspace_labels),
-        workspace_automation: Some(workspace_automation),
-        workspace_state: Some(workspace_state),
-        worktrees: Some(worktrees),
+        metadata: Some(metadata),
+        filesystem: Some(filesystem),
+        provider: Some(provider::Service::new(provider::Dependencies {
+            metadata_generator,
+            execution: agent_execution.clone(),
+            agents,
+        })),
+        schedule: Some(schedules),
+        browser: Some(browser::Service::default()),
+        voice: Some(voice::compose(agent_execution, &config.data_dir)?),
+        terminal: Some(terminals),
     })
+}
+
+fn compose_filesystem(
+    config: &Config,
+    workspace_registry: &FileBackedWorkspaceRegistry,
+    directory: Directory,
+    worktrees: Arc<Mutex<Worktrees>>,
+    workspace_recovery: WorkspaceRecovery,
+) -> anyhow::Result<filesystem::Service> {
+    let (checkout, git_fetch) = compose_git(&config.data_dir, workspace_registry);
+    Ok(filesystem::Service::new(filesystem::Dependencies {
+        skills: compose_skills(&config.data_dir)?,
+        workspace_recovery,
+        github_projects: GithubProjects::new(directory, Box::new(LocalGithubProjects::new())),
+        checkout,
+        git_fetch,
+        forge: Forge::new(Box::new(LocalForge::new())),
+        files: compose_files(config),
+        worktrees,
+    }))
 }
 
 fn open_directory_registries(
