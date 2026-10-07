@@ -1612,7 +1612,8 @@ export const AgentControls = memo(function AgentControls({
         return;
       }
       try {
-        await client.setAgentModel(agentId, modelId);
+        const notice = await client.setAgentModel(agentId, modelId);
+        showProviderNoticeToast(toast, notice);
         await updatePreferences((current) =>
           mergeProviderPreferences({
             preferences: current,
