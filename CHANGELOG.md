@@ -2,6 +2,8 @@
 
 ## 0.0.22 - 2026-10-07
 
+- Import existing OpenCode and DeepSeek Harness sessions with native permissions, model settings, and resume state; expose OpenCode Build and Plan agents.
+- Add Arch Linux local source and AUR binary package recipes.
 - Restore live timeline delivery after the canonical method migration by adapting Rust timeline producer notifications at the protocol boundary.
 - Reset an existing same-named origin branch to the local workspace reset commit with one force push, while detecting concurrent remote changes.
 - Run independent agent sessions concurrently, keep operations ordered within each session, and discover providers in the background without blocking connection readiness.
