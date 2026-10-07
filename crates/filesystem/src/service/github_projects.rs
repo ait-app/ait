@@ -1,6 +1,9 @@
 //! GitHub search and clone with shared Project registration.
-use metadata::model::registry::PersistedProjectRecord;
-use metadata::service::directory::{Directory, parse_remote};
+use std::sync::Arc;
+
+use model::workspace::identity::parse_remote;
+use model::workspace::lifecycle::ProjectRegistration;
+use model::workspace::records::PersistedProjectRecord;
 
 pub use crate::ports::github_projects::{
     GithubCloneProtocol, GithubProjectsError, GithubProjectsRuntime, GithubRepository,
@@ -19,18 +22,24 @@ pub struct GithubCloneOutcome {
     pub error: Option<String>,
 }
 
-/// Coordinates GitHub provisioning and metadata registration.
+/// Coordinates GitHub provisioning and host-supplied Project registration.
 #[derive(Debug)]
 pub struct GithubProjects {
-    directory: Directory,
+    registration: Arc<dyn ProjectRegistration>,
     github: Box<dyn GithubProjectsRuntime>,
 }
 
 impl GithubProjects {
-    /// Compose a runtime and a Directory sharing the host's metadata adapters.
+    /// Compose `github` with the host's shared Project `registration` boundary.
     #[must_use]
-    pub fn new(directory: Directory, github: Box<dyn GithubProjectsRuntime>) -> Self {
-        Self { directory, github }
+    pub fn new(
+        registration: Arc<dyn ProjectRegistration>,
+        github: Box<dyn GithubProjectsRuntime>,
+    ) -> Self {
+        Self {
+            registration,
+            github,
+        }
     }
     /// Search GitHub repositories using the host CLI and its configured clone protocol.
     ///
@@ -81,7 +90,10 @@ impl GithubProjects {
                 };
             }
         };
-        match self.directory.add_project(&checkout_path, timestamp) {
+        match self
+            .registration
+            .register_project(&checkout_path, timestamp)
+        {
             Ok(project) => GithubCloneOutcome {
                 repo: display_name,
                 checkout_path: Some(checkout_path),

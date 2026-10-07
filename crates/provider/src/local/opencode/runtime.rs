@@ -151,7 +151,7 @@ fn metadata_configuration(version: Version, agent: &str) -> Result<String, Proto
             "invalid OpenCode inline configuration",
         ));
     }
-    let overlay = super::metadata::configuration(version, agent);
+    let overlay = super::summary::configuration(version, agent);
     for (key, value) in overlay
         .as_object()
         .expect("metadata configuration is an object")

@@ -3,6 +3,7 @@
 // Cargo passes the complete package dependency set to this integration test.
 use browser as _;
 use chrono as _;
+use file as _;
 use filesystem as _;
 use metadata as _;
 use model as _;

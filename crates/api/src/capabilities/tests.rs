@@ -5,7 +5,7 @@ use model::methods::InboundKind;
 use super::*;
 
 #[test]
-fn empty_host_keeps_only_builtin_metadata_methods() {
+fn empty_host_keeps_only_builtin_api_methods() {
     assert_eq!(
         features(&Services::default()),
         ["ait-rust-single-v1", "client-message-chunks-v1"]
@@ -55,13 +55,13 @@ fn merged_components_have_one_owner_per_method_and_keep_placeholders_separate() 
 
 #[test]
 fn file_methods_use_ait_names() {
-    let specs: Vec<_> = ::filesystem::capabilities::installed_methods(
-        ::filesystem::capabilities::InstalledServices {
-            files: true,
-            ..Default::default()
-        },
-    )
-    .collect();
+    let specs: Vec<_> = ::filesystem::capabilities::implemented_methods()
+        .filter(|method| {
+            method.name.starts_with("fs.")
+                || method.name.starts_with("file.")
+                || method.name.starts_with("directory.")
+        })
+        .collect();
     assert_eq!(specs.len(), 11);
     assert!(specs.iter().all(|spec| spec.kind == InboundKind::Request));
     assert!(specs.iter().all(|spec| spec.name.contains('.')));
@@ -78,11 +78,8 @@ fn skill_methods_are_owned_by_filesystem_and_remain_requests() {
 
 #[test]
 fn baseline_methods_and_heartbeat_keep_their_shared_contracts() {
-    assert_eq!(
-        protocol::CAPABILITIES,
-        ::metadata::protocol::server::CAPABILITIES
-    );
-    let heartbeat = ::metadata::capabilities::implemented_methods()
+    assert_eq!(protocol::CAPABILITIES, model::server::CAPABILITIES);
+    let heartbeat = implemented_methods()
         .find(|spec| spec.name == ::metadata::protocol::server::HEARTBEAT_METHOD)
         .expect("heartbeat must be declared by metadata");
     assert_eq!(heartbeat.kind, InboundKind::Event);
@@ -143,4 +140,22 @@ fn component_declarations_preserve_all_event_and_response_directions() {
         .map(|spec| spec.name)
         .collect();
     assert_eq!(responses, ["browser.automation.execute.response"]);
+}
+
+#[test]
+fn metadata_connection_methods_remain_available_without_its_business_service() {
+    let metadata: BTreeSet<_> = ::metadata::capabilities::implemented_methods()
+        .map(|method| method.name)
+        .collect();
+    let builtin: Vec<_> = ::metadata::capabilities::connection_methods()
+        .map(|method| method.name)
+        .collect();
+    assert_eq!(builtin.len(), 9);
+    assert!(builtin.iter().all(|method| !metadata.contains(method)));
+    let installed = installed_capabilities(&Services::default());
+    assert!(
+        builtin
+            .iter()
+            .all(|method| installed.iter().any(|name| name == method))
+    );
 }

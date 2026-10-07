@@ -1,20 +1,18 @@
-use crate::model::workspace_labels::{WorkspaceLabelColor, WorkspaceLabelDefinition};
-use crate::rpc::ErrorCode;
-use crate::service::workspace_labels::{
-    SequencedWorkspaceLabelChange, WorkspaceLabelChange, WorkspaceLabelError,
-};
-
 use std::sync::{Arc, Mutex};
 
-use serde_json::{Value, json};
-
-use crate::ports::workspace_labels::{
+use model::workspace::label_store::{
     WorkspaceLabelStore, WorkspaceLabelStoreError, WorkspaceLabelStoreMutation,
     WorkspaceLabelStoreSnapshot,
 };
-use crate::service::workspace_labels::WorkspaceLabels;
+use model::workspace::labels::{WorkspaceLabelColor, WorkspaceLabelDefinition};
+use serde_json::{Value, json};
 
 use super::{Delivery, live_update, map_error};
+use crate::rpc::ErrorCode;
+use crate::service::workspace_labels::WorkspaceLabels;
+use crate::service::workspace_labels::{
+    SequencedWorkspaceLabelChange, WorkspaceLabelChange, WorkspaceLabelError,
+};
 
 #[test]
 fn all_palette_colors_roundtrip_and_incremental_sync_reports_deletion() {

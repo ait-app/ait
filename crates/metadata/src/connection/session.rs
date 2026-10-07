@@ -1,21 +1,14 @@
-/// Client methods implemented by this component; consumed by capability discovery.
-pub(crate) const METHODS: &[MethodSpec] = &[
-    MethodSpec::event("session.heartbeat"),
-    MethodSpec::request("session.events.set_subscription.request"),
-];
-
 use std::sync::Arc;
 
-use crate::protocol::session::{EventsRequest, Heartbeat};
-use crate::service::session::SessionError;
-use model::methods::MethodSpec;
+use model::Context;
+use model::outbound::QueueError;
+use model::session::SessionError;
+use model::session::protocol::{EventsRequest, Heartbeat};
 use model::{ErrorCode, ServerMessage};
 use serde_json::{Value, json};
 
 use crate::connection::Connection;
 use crate::dispatch::State as Shared;
-use model::Context;
-use model::outbound::QueueError;
 
 /// Update connection presence from a validated heartbeat payload.
 /// # Errors

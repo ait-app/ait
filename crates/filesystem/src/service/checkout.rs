@@ -3,7 +3,7 @@
 use std::path::Path;
 use std::sync::Arc;
 
-use metadata::ports::registry::WorkspaceRegistry;
+use model::workspace::registry::WorkspaceRegistry;
 
 pub use crate::ports::checkout::{
     AheadBehind, CheckoutBranchResolution, CheckoutBranchSource, CheckoutBranchSuggestion,
@@ -286,7 +286,7 @@ fn invalid_reset_workspace(message: &str) -> CheckoutRuntimeError {
     }
 }
 
-fn registry_reset_error(_error: metadata::ports::registry::RegistryError) -> CheckoutRuntimeError {
+fn registry_reset_error(_error: model::workspace::registry::RegistryError) -> CheckoutRuntimeError {
     CheckoutRuntimeError {
         kind: CheckoutFailureKind::Unknown,
         message: "Unable to update workspace record".to_owned(),

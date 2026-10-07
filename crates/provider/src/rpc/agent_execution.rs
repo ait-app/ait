@@ -11,11 +11,11 @@ pub mod workspace_creation;
 mod worktrees;
 
 use domain::agent_runtime::PersistedAgentRuntimeRecord;
-use metadata::ports::registry::{ProjectRegistry, WorkspaceRegistry};
+use domain::agent_runtime::registry::AgentRuntimeRegistry;
+use model::workspace::registry::{ProjectRegistry, WorkspaceRegistry};
 use serde_json::{Value, json};
 use uuid::Uuid;
 
-use crate::ports::agent_runtime::AgentRuntimeRegistry;
 use crate::ports::agent_session::AgentSessionSpec;
 use crate::protocol::agent_execution::{CreateRequest, ResumeRequest, SendRequest};
 use crate::protocol::agent_lifecycle::AgentIdRequest;
@@ -32,12 +32,10 @@ pub(crate) struct ExecutionState {
     pub(crate) registry: std::sync::Arc<dyn AgentRuntimeRegistry>,
     pub(crate) workspaces: std::sync::Arc<dyn WorkspaceRegistry>,
     pub(crate) projects: std::sync::Arc<dyn ProjectRegistry>,
-    pub(crate) import_directory: Option<metadata::service::directory::Directory>,
-    pub(crate) workspace_automation: Option<
-        std::sync::Arc<
-            std::sync::Mutex<metadata::service::workspace_automation::WorkspaceAutomation>,
-        >,
-    >,
+    pub(crate) import_directory:
+        Option<std::sync::Arc<dyn model::workspace::lifecycle::WorkspaceDirectory>>,
+    pub(crate) workspace_automation:
+        Option<std::sync::Arc<dyn model::workspace::lifecycle::WorkspaceSetup>>,
 }
 
 impl ExecutionState {
@@ -270,7 +268,7 @@ impl ExecutionState {
             .take()
             .unwrap_or_else(|| Uuid::new_v4().to_string());
         let creations = self.manager.creations();
-        let admission = creations.begin(metadata::protocol::creation::Kind::Agent, &key, intent)?;
+        let admission = creations.begin(model::creation::protocol::Kind::Agent, &key, intent)?;
         if !admission.execute {
             if admission.snapshot.phase == "completed"
                 && let Some(id) = &admission.snapshot.agent_id
@@ -313,7 +311,7 @@ impl ExecutionState {
     async fn register_creation(
         &mut self,
         request: CreateRequest,
-        admission: &metadata::protocol::creation::Snapshot,
+        admission: &model::creation::protocol::Snapshot,
         workspace_id: String,
         created_worktree: bool,
     ) -> Result<Value, ErrorCode> {
@@ -403,7 +401,7 @@ impl ExecutionState {
     async fn finish_creation(
         &mut self,
         id: &str,
-        admission: &metadata::protocol::creation::Snapshot,
+        admission: &model::creation::protocol::Snapshot,
         prompt: Option<crate::protocol::prompt::AgentPrompt>,
     ) -> Result<Value, ErrorCode> {
         let creations = self.manager.creations();

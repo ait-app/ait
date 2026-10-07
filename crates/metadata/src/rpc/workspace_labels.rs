@@ -9,12 +9,17 @@ pub(crate) const METHODS: &[MethodSpec] = &[
     MethodSpec::request("workspace.label.delete.request"),
 ];
 
-use model::methods::MethodSpec;
 use std::sync::{Arc, Mutex};
 
-use crate::model::workspace_labels::{
+use chrono::{SecondsFormat, Utc};
+use model::methods::MethodSpec;
+use model::workspace::labels::{
     WorkspaceLabelColor as DomainColor, WorkspaceLabelDefinition as DomainDefinition,
 };
+use serde::Serialize;
+use serde_json::Value;
+use uuid::Uuid;
+
 use crate::protocol::workspace_labels::{
     WorkspaceLabelAffectedResult, WorkspaceLabelAssignmentSetRequest,
     WorkspaceLabelAssignmentSetResult, WorkspaceLabelColor, WorkspaceLabelDefinition,
@@ -28,10 +33,6 @@ use crate::service::workspace_labels::{
     SequencedWorkspaceLabelChange, WorkspaceLabelChange, WorkspaceLabelCursor, WorkspaceLabelError,
     WorkspaceLabelSubscription, WorkspaceLabelSync, WorkspaceLabelSyncMode, WorkspaceLabels,
 };
-use chrono::{SecondsFormat, Utc};
-use serde::Serialize;
-use serde_json::Value;
-use uuid::Uuid;
 
 /// Ephemeral delivery failure; the host closes a connection when its budget is exhausted.
 #[derive(Debug, thiserror::Error)]

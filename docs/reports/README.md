@@ -6,6 +6,9 @@
 
 ## Daemon 与协议
 
+- [File、共享契约与 RPC 边界：PR 验证](daemon/file-and-rpc-boundaries-pr-validation-2026-10-08.md)
+- [Crate 边界整合到最新 main 的验证](daemon/crate-boundaries-main-rebase-2026-10-07.md)
+- [Crate 级完整服务安装：PR 覆盖率证据](daemon/crate-level-service-installation-pr-coverage-2026-10-07.json)
 - [组件方法声明：PR 覆盖率证据](daemon/component-method-declarations-pr-coverage-2026-10-07.json)
 - [Rust code smell 清理：PR 验证](daemon/rust-code-smell-pr-validation-2026-10-04.md)
 - [Cargo workspace 依赖整理与警告清理：PR 验证](daemon/cargo-workspace-pr-validation-2026-10-04.md)

@@ -1,7 +1,7 @@
 use std::path::Path;
 use std::sync::{Arc, Mutex};
 
-use metadata::ports::registry::{
+use model::workspace::registry::{
     MutationListener, MutationSubscription, ProjectMutation, WorkspaceMutation,
 };
 
@@ -314,7 +314,7 @@ struct Managed {
 #[derive(Debug)]
 struct ManagedState {
     fail_remove: bool,
-    directory_inputs: Vec<(String, metadata::ports::worktrees::DirectoryGit)>,
+    directory_inputs: Vec<(String, model::workspace::worktrees::DirectoryGit)>,
     listed: Vec<ManagedWorktreeInfo>,
     created_inputs: Vec<ManagedWorktreeCreate>,
     removed: Vec<String>,
@@ -353,7 +353,7 @@ impl ManagedWorktrees for Managed {
     fn prepare_directory(
         &self,
         cwd: &str,
-        intent: &metadata::ports::worktrees::DirectoryGit,
+        intent: &model::workspace::worktrees::DirectoryGit,
     ) -> Result<(), WorktreeError> {
         self.state
             .lock()

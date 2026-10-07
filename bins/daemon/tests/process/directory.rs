@@ -1,6 +1,6 @@
 use std::path::Path;
 
-use metadata::model::registry::{
+use model::workspace::records::{
     PersistedProjectKind, PersistedProjectRecord, PersistedWorkspaceKind, PersistedWorkspaceRecord,
 };
 use serde_json::json;

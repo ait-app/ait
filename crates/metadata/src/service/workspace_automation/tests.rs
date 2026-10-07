@@ -1,13 +1,13 @@
 use std::sync::{Arc, Mutex};
 
-use crate::model::registry::{PersistedWorkspaceKind, UntrustedWorkspaceSource};
-use crate::ports::registry::{
+use model::workspace::records::{PersistedWorkspaceKind, UntrustedWorkspaceSource};
+use model::workspace::registry::{
     MutationListener, MutationSubscription, WorkspaceArchiveContext, WorkspaceMutation,
     WorkspaceMutationContext,
 };
-use crate::ports::workspace_automation::{ScriptType, SetupLifecycle};
 
 use super::*;
+use crate::ports::workspace_automation::{ScriptType, SetupLifecycle};
 
 mod paseo;
 
@@ -163,8 +163,9 @@ fn status_prefers_runtime_and_derives_persisted_block() {
 
 #[test]
 fn rpc_reports_missing_workspaces_inline_and_keeps_absent_setup_distinct() {
-    use crate::rpc::workspace_automation::execute;
     use serde_json::json;
+
+    use crate::rpc::workspace_automation::execute;
     let (service, _, runtime) = service();
     let status = execute(
         &service,
@@ -323,8 +324,9 @@ fn script(name: &str, running: bool) -> ScriptSnapshot {
 
 #[test]
 fn setup_status_reports_registry_failure_as_a_failed_snapshot_and_recovers_on_retry() {
-    use crate::rpc::workspace_automation::execute;
     use serde_json::json;
+
+    use crate::rpc::workspace_automation::execute;
     let (service, workspaces, runtime) = service();
     *workspaces.1.lock().unwrap() = true;
     let result = execute(
@@ -346,3 +348,5 @@ fn setup_status_reports_registry_failure_as_a_failed_snapshot_and_recovers_on_re
     .unwrap();
     assert!(retry["snapshot"].is_null());
 }
+
+mod collaboration;

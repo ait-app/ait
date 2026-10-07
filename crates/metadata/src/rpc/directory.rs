@@ -27,13 +27,10 @@ pub const PROJECT_ICON_METHODS: &[MethodSpec] = &[
     MethodSpec::request("project.icon.get.request"),
 ];
 
+use base64::Engine;
+use chrono::{SecondsFormat, Utc};
 use model::methods::MethodSpec;
-use std::path::Path;
-
-use crate::model::registry::{
-    PersistedProjectKind, PersistedProjectRecord, PersistedWorkspaceKind, PersistedWorkspaceRecord,
-};
-use crate::protocol::directory::{
+use model::workspace::protocol::directory::{
     ProjectAddRequest, ProjectAddResult, ProjectCreateDirectoryRequest,
     ProjectCreateDirectoryResult, ProjectListRequest, ProjectListResult, ProjectRemoveRequest,
     ProjectRemoveResult, ProjectRenameRequest, ProjectRenameResult, WorkspaceArchiveRequest,
@@ -42,6 +39,14 @@ use crate::protocol::directory::{
     WorkspacePinSetRequest, WorkspacePinSetResult, WorkspaceTitleSetRequest,
     WorkspaceTitleSetResult,
 };
+use model::workspace::protocol::projection::{project_descriptor, workspace_descriptor};
+use model::workspace::protocol::workspace::{
+    WorkspaceDescriptorPayload, WorkspaceProjectDescriptorPayload,
+};
+use model::workspace::records::{PersistedProjectRecord, PersistedWorkspaceRecord};
+use serde::Serialize;
+use serde_json::Value;
+
 use crate::protocol::project_config::{
     PaseoConfigRaw, PaseoConfigRevision, ProjectConfigReadRequest, ProjectConfigReadResult,
     ProjectConfigRpcError, ProjectConfigWriteRequest, ProjectConfigWriteResult,
@@ -50,16 +55,8 @@ use crate::protocol::project_icon::{
     ProjectIconGetRequest, ProjectIconGetResult, ProjectIconPayload, ProjectIconSetRequest,
     ProjectIconSetResult, ProjectIconSource,
 };
-use crate::protocol::workspace::{
-    ProjectKind, WorkspaceDescriptorPayload, WorkspaceKind, WorkspaceProjectDescriptorPayload,
-    WorkspaceStateBucket,
-};
 use crate::rpc::ErrorCode;
 use crate::service::directory::{Directory, DirectoryError};
-use base64::Engine;
-use chrono::{SecondsFormat, Utc};
-use serde::Serialize;
-use serde_json::Value;
 
 pub(crate) mod listing;
 mod pagination;
@@ -338,7 +335,7 @@ pub struct WorkspaceCreated {
     /// Newly created worktree whose setup and update should be dispatched.
     pub created_worktree_id: Option<String>,
     /// Fresh Workspace receipt awaiting its initial Agent, owned by the API coordinator.
-    pub pending_agent: Option<crate::protocol::creation::Snapshot>,
+    pub pending_agent: Option<model::creation::protocol::Snapshot>,
 }
 
 /// Create or replay a Workspace intent using the metadata creation coordinator.
@@ -369,7 +366,7 @@ fn create_workspace_intent(
     mut params: Value,
     agent_intent: Option<Value>,
 ) -> Result<WorkspaceCreated, ErrorCode> {
-    use crate::protocol::creation::Kind;
+    use model::creation::protocol::Kind;
     let mut request: WorkspaceCreateRequest = decode(params.clone())?;
     let is_worktree = matches!(request.source, WorkspaceCreateSource::Worktree(_));
     if (request.agent.is_some() && agent_intent.is_none())
@@ -379,13 +376,14 @@ fn create_workspace_intent(
     }
     let has_agent = agent_intent.is_some();
     if let Some(intent) = agent_intent {
-        request.first_agent_context = Some(crate::protocol::directory::FirstAgentContext {
-            prompt: intent["initialPrompt"].as_str().map(str::to_owned),
-            attachments: intent["attachments"]
-                .as_array()
-                .cloned()
-                .unwrap_or_default(),
-        });
+        request.first_agent_context =
+            Some(model::workspace::protocol::directory::FirstAgentContext {
+                prompt: intent["initialPrompt"].as_str().map(str::to_owned),
+                attachments: intent["attachments"]
+                    .as_array()
+                    .cloned()
+                    .unwrap_or_default(),
+            });
         request.agent = None;
         params["agent"] = intent;
     }
@@ -475,7 +473,7 @@ fn workspace_create(
         }
     };
     let timestamp = timestamp();
-    match directory.create_workspace(crate::service::directory::WorkspaceCreation {
+    match directory.create_workspace(model::workspace::lifecycle::WorkspaceCreation {
         path: &path,
         title: request.title,
         project_id: project_id.as_deref(),
@@ -485,7 +483,7 @@ fn workspace_create(
     }) {
         Ok(workspace) => {
             if let Some(context) = request.first_agent_context
-                && let Some(source) = crate::service::workspace_names::first_agent_source(
+                && let Some(source) = model::workspace::naming::first_agent_source(
                     context.prompt.as_deref(),
                     &context.attachments,
                 )
@@ -512,10 +510,10 @@ fn workspace_create(
 fn workspace_create_worktree(
     directory: &Directory,
     request: WorkspaceCreateRequest,
-    source: crate::protocol::directory::WorkspaceWorktreeSource,
+    source: model::workspace::protocol::directory::WorkspaceWorktreeSource,
 ) -> Result<Value, ErrorCode> {
-    use crate::ports::worktrees::{WorktreeAction, WorktreeCreation};
-    use crate::protocol::directory::WorkspaceWorktreeAction;
+    use model::workspace::protocol::directory::WorkspaceWorktreeAction;
+    use model::workspace::worktrees::{WorktreeAction, WorktreeCreation};
     let provisioning = directory
         .worktrees()
         .ok_or(ErrorCode::UnsupportedCapability)?;
@@ -535,10 +533,10 @@ fn workspace_create_worktree(
             },
             checkout_source: source
                 .checkout_source
-                .map(crate::protocol::worktree_source::ChangeRequestCheckoutSource::into_intent)
+                .map(model::workspace::protocol::worktree_source::ChangeRequestCheckoutSource::into_intent)
                 .or_else(|| {
                     source.github_pr_number.map(|number| {
-                        crate::ports::worktrees::WorktreeChangeRequest {
+                        model::workspace::worktrees::WorktreeChangeRequest {
                             forge: Some("github".to_owned()),
                             number: number.get(),
                             project_path: None,
@@ -556,7 +554,7 @@ fn workspace_create_worktree(
     encode(match result {
         Ok(created) => {
             if let Some(context) = request.first_agent_context
-                && let Some(source) = crate::service::workspace_names::first_agent_source(
+                && let Some(source) = model::workspace::naming::first_agent_source(
                     context.prompt.as_deref(),
                     &context.attachments,
                 )
@@ -733,87 +731,6 @@ fn workspace_pin_set(
     })
 }
 
-/// Project a stored Project into its public descriptor.
-#[must_use]
-pub fn project_descriptor(project: &PersistedProjectRecord) -> WorkspaceProjectDescriptorPayload {
-    WorkspaceProjectDescriptorPayload {
-        project_id: project.project_id.clone(),
-        project_key: project.project_key.clone(),
-        project_display_name: project.display_name().to_owned(),
-        project_custom_name: project.custom_name.clone(),
-        project_custom_icon_revision: project.custom_icon_revision.clone(),
-        project_icon_revision: None,
-        project_root_path: project.root_path.clone(),
-        project_kind: project_kind(project.kind),
-        sync_seq: None,
-    }
-}
-
-/// Project a durable workspace and its optional Project into the public descriptor.
-#[must_use]
-pub fn workspace_descriptor(
-    workspace: &PersistedWorkspaceRecord,
-    project: Option<&PersistedProjectRecord>,
-) -> WorkspaceDescriptorPayload {
-    let project_display_name = project.map_or(workspace.project_id.as_str(), |project| {
-        project.display_name()
-    });
-    let project_root_path = project.map_or_else(
-        || {
-            workspace
-                .main_repo_root
-                .clone()
-                .unwrap_or_else(|| workspace.cwd.clone())
-        },
-        |project| project.root_path.clone(),
-    );
-    WorkspaceDescriptorPayload {
-        id: workspace.workspace_id.clone(),
-        project_id: workspace.project_id.clone(),
-        project_display_name: project_display_name.to_owned(),
-        project_custom_name: project.and_then(|project| project.custom_name.clone()),
-        project_custom_icon_revision: project
-            .and_then(|project| project.custom_icon_revision.clone()),
-        project_root_path,
-        workspace_directory: workspace.cwd.clone(),
-        worktree_slug: workspace
-            .is_paseo_owned_worktree
-            .then_some(workspace.worktree_root.as_deref())
-            .flatten()
-            .and_then(|root| Path::new(root).file_name())
-            .and_then(|name| name.to_str())
-            .map(str::to_owned),
-        initial_branch: workspace
-            .is_paseo_owned_worktree
-            .then(|| workspace.display_name.clone()),
-        project_kind: project.map_or_else(
-            || match workspace.kind {
-                PersistedWorkspaceKind::Directory => ProjectKind::NonGit,
-                PersistedWorkspaceKind::LocalCheckout | PersistedWorkspaceKind::Worktree => {
-                    ProjectKind::Git
-                }
-            },
-            |project| project_kind(project.kind),
-        ),
-        workspace_kind: workspace_kind(workspace.kind),
-        name: workspace.display_name().to_owned(),
-        title: workspace.title.clone(),
-        pinned_at: workspace.pinned_at.clone(),
-        labels: workspace.labels.clone().filter(|labels| !labels.is_empty()),
-        archiving_at: None,
-        status: WorkspaceStateBucket::Done,
-        status_entered_at: Some(workspace.created_at.clone()),
-        activity_at: None,
-        diff_stat: None,
-        scripts: Vec::new(),
-        git_runtime: None,
-        github_runtime: None,
-        forge: None,
-        project: None,
-        sync_seq: None,
-    }
-}
-
 fn describe_workspace(
     directory: &Directory,
     workspace: &PersistedWorkspaceRecord,
@@ -894,21 +811,6 @@ fn active_project(project: &PersistedProjectRecord) -> bool {
 
 fn active_workspace(workspace: &PersistedWorkspaceRecord) -> bool {
     workspace.archived_at.as_ref().is_none_or(String::is_empty)
-}
-
-const fn project_kind(kind: PersistedProjectKind) -> ProjectKind {
-    match kind {
-        PersistedProjectKind::Git => ProjectKind::Git,
-        PersistedProjectKind::NonGit => ProjectKind::NonGit,
-    }
-}
-
-const fn workspace_kind(kind: PersistedWorkspaceKind) -> WorkspaceKind {
-    match kind {
-        PersistedWorkspaceKind::LocalCheckout => WorkspaceKind::LocalCheckout,
-        PersistedWorkspaceKind::Worktree => WorkspaceKind::Worktree,
-        PersistedWorkspaceKind::Directory => WorkspaceKind::Directory,
-    }
 }
 
 fn normalize_optional_text(value: Option<String>) -> Option<String> {

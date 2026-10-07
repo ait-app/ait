@@ -63,7 +63,7 @@ pub(super) async fn forge(
         return Err(DispatchError::NotImplemented);
     };
     if let Err(error) =
-        super::metadata::fill(state, &context.request.method, &mut context.request.params).await
+        super::summary::fill(state, &context.request.method, &mut context.request.params).await
     {
         return context.respond(Err(error)).map_err(Into::into);
     }

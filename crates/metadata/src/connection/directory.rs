@@ -3,10 +3,10 @@
 use std::sync::{Arc, Mutex};
 
 use model::outbound::QueueError;
+use model::workspace::protocol::directory::WorkspaceListRequest;
 use model::{Context, ErrorCode};
 
 use crate::dispatch::State;
-use crate::protocol::directory::WorkspaceListRequest;
 
 pub(crate) async fn subscribe(
     mut context: Context<'_>,

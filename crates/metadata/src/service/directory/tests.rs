@@ -1,21 +1,21 @@
 use std::sync::{Arc, Mutex};
 
-use crate::model::registry::{
-    PersistedProjectKind, PersistedProjectRecord, PersistedWorkspaceKind, PersistedWorkspaceRecord,
-};
-use crate::ports::provisioning::{Checkout, DirectorySource, DirectorySourceError};
-use crate::ports::provisioning::{
+use model::storage::project::{
     ProjectConfigDocument, ProjectConfigRevision as StoreConfigRevision, ProjectConfigStore,
     ProjectConfigStoreError, ProjectConfigWrite, ProjectIcon, ProjectIconStore,
     ProjectIconStoreError,
 };
-use crate::ports::registry::{
+use model::workspace::provisioning::{Checkout, DirectorySource, DirectorySourceError};
+use model::workspace::records::{
+    PersistedProjectKind, PersistedProjectRecord, PersistedWorkspaceKind, PersistedWorkspaceRecord,
+};
+use model::workspace::registry::{
     ActiveProjectInput, MutationListener, MutationSubscription, ProjectMutation, ProjectRegistry,
     RegistryError, WorkspaceArchiveContext, WorkspaceMutation, WorkspaceMutationContext,
     WorkspaceRegistry,
 };
 
-use super::{Directory, DirectoryDependencies, DirectoryError, derive_project_key};
+use super::{Directory, DirectoryDependencies, DirectoryError};
 
 mod git_observation;
 mod paseo;
@@ -26,7 +26,7 @@ mod synchronization;
 
 #[test]
 fn committed_registry_mutations_wake_directory_and_publish_project_updates() {
-    use crate::storage::registry::{FileBackedProjectRegistry, FileBackedWorkspaceRegistry};
+    use file::storage::registry::{FileBackedProjectRegistry, FileBackedWorkspaceRegistry};
 
     let root = tempfile::tempdir().expect("registry root");
     let projects = FileBackedProjectRegistry::new(root.path().join("projects.json"));
@@ -64,12 +64,12 @@ fn committed_registry_mutations_wake_directory_and_publish_project_updates() {
     receiver.borrow_and_update();
     assert_eq!(
         mutations.lock().unwrap()[0].kind,
-        crate::ports::registry::MutationKind::Upsert
+        model::workspace::registry::MutationKind::Upsert
     );
     projects.remove("prj_a").expect("project removal");
     assert_eq!(
         mutations.lock().unwrap()[1].kind,
-        crate::ports::registry::MutationKind::Remove
+        model::workspace::registry::MutationKind::Remove
     );
     assert!(receiver.has_changed().expect("project removal wake"));
     receiver.borrow_and_update();
@@ -551,7 +551,7 @@ fn adds_selected_nested_roots_and_creates_fresh_workspaces() {
         Some("remote:github.com/example/repo#subdir:nested")
     );
     let first = directory
-        .create_workspace(crate::service::directory::WorkspaceCreation {
+        .create_workspace(model::workspace::lifecycle::WorkspaceCreation {
             path: "/tmp/alpha/nested",
             title: Some("  First  ".to_owned()),
             project_id: Some(&project.project_id),
@@ -561,7 +561,7 @@ fn adds_selected_nested_roots_and_creates_fresh_workspaces() {
         })
         .unwrap();
     let second = directory
-        .create_workspace(crate::service::directory::WorkspaceCreation {
+        .create_workspace(model::workspace::lifecycle::WorkspaceCreation {
             path: "/tmp/alpha/nested",
             title: None,
             project_id: Some(&project.project_id),
@@ -594,7 +594,7 @@ fn opening_reuses_active_and_restores_oldest_archived_workspace() {
 fn explicit_project_and_directory_creation_errors_match_paseo_classes() {
     let directory = directory();
     assert_eq!(
-        directory.create_workspace(crate::service::directory::WorkspaceCreation {
+        directory.create_workspace(model::workspace::lifecycle::WorkspaceCreation {
             path: "/tmp/alpha",
             title: None,
             project_id: Some("missing"),
@@ -616,41 +616,6 @@ fn explicit_project_and_directory_creation_errors_match_paseo_classes() {
         directory.add_project("/tmp/missing", "now"),
         Err(DirectoryError::DirectoryNotFound)
     );
-}
-
-#[test]
-fn project_key_parser_matches_paseo_remote_and_host_forms() {
-    let mut checkout = Source.inspect("/tmp/alpha/nested").unwrap();
-    assert_eq!(
-        derive_project_key(&checkout, "server"),
-        "remote:github.com/example/repo#subdir:nested"
-    );
-    checkout.remote_url = Some("ssh://git@git.example.com:60443/team/repo.git".to_owned());
-    assert_eq!(
-        derive_project_key(&checkout, "server"),
-        "remote:git.example.com:60443/team/repo#subdir:nested"
-    );
-    checkout.remote_url = None;
-    assert_eq!(
-        derive_project_key(&checkout, "server"),
-        "host:server:/tmp/alpha/nested"
-    );
-}
-
-#[test]
-fn escaped_remote_paths_share_identity_and_invalid_percent_sequences_are_rejected() {
-    use super::parse_remote;
-    let expected = parse_remote("https://github.com/owner/repo.git").unwrap();
-    for remote in [
-        "https://github.com/%6fwner/%72epo.git",
-        "https://github.com/owner%2Frepo.git",
-        "https://github.com/owner%2frepo.git",
-    ] {
-        assert_eq!(parse_remote(remote), Some(expected.clone()));
-    }
-    for path in ["%", "%2", "%GG", "%ff"] {
-        assert!(parse_remote(&format!("https://github.com/owner/{path}")).is_none());
-    }
 }
 
 #[test]
@@ -702,3 +667,5 @@ fn project_icon_round_trips_custom_bytes_and_returns_to_automatic() {
             .is_none()
     );
 }
+
+mod collaboration;

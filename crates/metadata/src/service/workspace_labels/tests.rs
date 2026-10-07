@@ -1,11 +1,11 @@
 use std::sync::{Arc, Mutex};
 
-use crate::model::registry::{PersistedWorkspaceKind, PersistedWorkspaceRecord};
-use crate::model::workspace_labels::{WorkspaceLabelColor, WorkspaceLabelDefinition};
-use crate::ports::workspace_labels::{
+use model::workspace::label_store::{
     WorkspaceLabelStore, WorkspaceLabelStoreError, WorkspaceLabelStoreMutation,
     WorkspaceLabelStoreSnapshot,
 };
+use model::workspace::labels::{WorkspaceLabelColor, WorkspaceLabelDefinition};
+use model::workspace::records::{PersistedWorkspaceKind, PersistedWorkspaceRecord};
 
 use super::{
     WorkspaceLabelChange, WorkspaceLabelCursor, WorkspaceLabelError, WorkspaceLabelSyncMode,

@@ -10,7 +10,7 @@ use std::process::{Command, ExitStatus, Stdio};
 use std::time::{Duration, Instant, SystemTime};
 
 use chrono::{DateTime, Utc};
-use metadata::ports::provisioning::{LEGACY_PROJECT_CONFIG_FILE_NAME, PROJECT_CONFIG_FILE_NAME};
+use model::workspace::provisioning::{LEGACY_PROJECT_CONFIG_FILE_NAME, PROJECT_CONFIG_FILE_NAME};
 use sha2::{Digest, Sha256};
 
 use crate::ports::workspace_recovery::{
@@ -102,7 +102,7 @@ impl ManagedWorktrees for LocalManagedWorktrees {
     fn resolve_change_request(
         &self,
         cwd: &str,
-        source: &metadata::ports::worktrees::WorktreeChangeRequest,
+        source: &model::workspace::worktrees::WorktreeChangeRequest,
         head_ref: Option<&str>,
     ) -> Result<crate::ports::worktrees::ChangeRequestCheckout, WorktreeError> {
         self.forge.worktree_checkout(cwd, source, head_ref)
@@ -111,7 +111,7 @@ impl ManagedWorktrees for LocalManagedWorktrees {
     fn prepare_directory(
         &self,
         cwd: &str,
-        intent: &metadata::ports::worktrees::DirectoryGit,
+        intent: &model::workspace::worktrees::DirectoryGit,
     ) -> Result<(), WorktreeError> {
         directory::prepare(cwd, intent)
     }

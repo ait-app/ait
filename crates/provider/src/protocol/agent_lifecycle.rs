@@ -2,7 +2,7 @@
 
 use std::collections::BTreeMap;
 
-use metadata::protocol::workspace::ProjectPlacementPayload;
+use model::workspace::protocol::workspace::ProjectPlacementPayload;
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 
@@ -232,7 +232,7 @@ pub struct AgentListRequest {
     pub page: Option<AgentPageRequest>,
     /// Connection-owned live directory subscription.
     #[serde(default)]
-    pub subscribe: Option<metadata::protocol::directory::SubscriptionRequest>,
+    pub subscribe: Option<model::workspace::protocol::directory::SubscriptionRequest>,
     /// Latest-state synchronization checkpoint.
     #[serde(default)]
     pub sync: Option<model::directory_sync::Cursor>,

@@ -15,14 +15,14 @@ use std::collections::BTreeMap;
 use std::sync::Arc;
 
 use chrono::{SecondsFormat, Utc};
+use domain::agent_runtime::registry::AgentRuntimeRegistry;
 use domain::agent_runtime::{
     AgentRuntimeStatus, PersistedAgentRuntimeRecord, StoredAgentConfig, StoredAgentRuntimeInfo,
 };
-use metadata::protocol::session::SessionEventKind;
-use metadata::service::session::SessionEvents;
+use model::session::SessionEvents;
+use model::session::protocol::SessionEventKind;
 use serde_json::json;
 
-use crate::ports::agent_runtime::AgentRuntimeRegistry;
 use crate::ports::agent_session::{
     AgentClient, AgentResumePurpose, AgentSession, AgentSessionError, AgentSessionSpec,
     AgentTurnEvent,
@@ -106,13 +106,13 @@ pub struct AgentManager {
     events: SessionEvents,
     timeline: Option<crate::storage::timeline::Timeline>,
     catalog: super::provider_catalog::Catalog,
-    creations: metadata::service::creation::Creations,
+    creations: model::creation::Creations,
     loaded_timelines: Arc<std::sync::Mutex<std::collections::BTreeSet<String>>>,
     session_budget: Arc<tokio::sync::Semaphore>,
     history_budget: Arc<tokio::sync::Semaphore>,
     owner: Option<ownership::Owner>,
     generated_titles: generated_titles::Titles,
-    workspace_names: Option<metadata::service::workspace_names::WorkspaceNames>,
+    workspace_names: Option<Arc<dyn model::workspace::lifecycle::WorkspaceNaming>>,
     auto_archives: auto_archive::AutoArchives,
 }
 
@@ -135,7 +135,7 @@ impl AgentManager {
             events: SessionEvents::default(),
             timeline: None,
             catalog: super::provider_catalog::Catalog::default(),
-            creations: metadata::service::creation::Creations::default(),
+            creations: model::creation::Creations::default(),
             loaded_timelines: Arc::default(),
             session_budget: Arc::new(tokio::sync::Semaphore::new(32)),
             history_budget: Arc::new(tokio::sync::Semaphore::new(8)),
@@ -148,14 +148,14 @@ impl AgentManager {
 
     /// Install the same creation receipt service used by Workspace metadata.
     #[must_use]
-    pub fn with_creations(mut self, creations: metadata::service::creation::Creations) -> Self {
+    pub fn with_creations(mut self, creations: model::creation::Creations) -> Self {
         self.creations = creations;
         self
     }
 
-    /// Return the metadata-owned creation coordinator shared with this manager.
+    /// Return the shared creation coordinator shared with this manager.
     #[must_use]
-    pub fn creations(&self) -> metadata::service::creation::Creations {
+    pub fn creations(&self) -> model::creation::Creations {
         self.creations.clone()
     }
 
@@ -168,9 +168,9 @@ impl AgentManager {
 
     /// Install shared auxiliary generation; foreground sessions retain their own lifecycle.
     #[must_use]
-    pub fn with_metadata_generation(
+    pub fn with_summary_generation(
         mut self,
-        generator: Arc<dyn metadata::ports::generation::MetadataGenerator>,
+        generator: Arc<dyn crate::summary::SummaryGenerator>,
     ) -> Self {
         self.generated_titles.generator = Some(generator);
         self
@@ -180,7 +180,7 @@ impl AgentManager {
     #[must_use]
     pub fn with_workspace_names(
         mut self,
-        names: metadata::service::workspace_names::WorkspaceNames,
+        names: Arc<dyn model::workspace::lifecycle::WorkspaceNaming>,
     ) -> Self {
         self.workspace_names = Some(names);
         self
@@ -696,7 +696,7 @@ impl AgentManager {
             names.schedule(
                 workspace,
                 context,
-                Some(metadata::ports::generation::MetadataSelection {
+                Some(model::summary::SummarySelection {
                     provider: record.provider.clone(),
                     model: record
                         .config
@@ -1104,7 +1104,7 @@ fn publish_terminal_attention(
 }
 
 const fn map_registry(
-    _: crate::ports::agent_runtime::AgentRuntimeRegistryError,
+    _: domain::agent_runtime::registry::AgentRuntimeRegistryError,
 ) -> AgentManagerError {
     AgentManagerError::Registry
 }

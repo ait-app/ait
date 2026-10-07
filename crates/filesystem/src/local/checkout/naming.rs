@@ -1,4 +1,4 @@
-use metadata::ports::generation::WorkspaceBranchNamer;
+use model::workspace::naming::WorkspaceBranchNamer;
 
 use super::{
     CheckoutRuntime, LocalCheckout, git_optional, git_write, require_git_directory,

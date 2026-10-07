@@ -3,18 +3,16 @@
 mod auth;
 mod browser_auth;
 mod capabilities;
+mod composition;
+pub use composition::summary_source;
 mod connection;
 mod files;
 mod listener;
-mod outbound;
-mod relay_rpc;
 mod terminal_activity;
 mod workspace_cleanup;
 
 use std::net::SocketAddr;
 use std::sync::{Arc, Mutex};
-
-use model::Runtime;
 use std::time::Duration;
 
 use axum::extract::{ConnectInfo, Request, State, WebSocketUpgrade};
@@ -23,25 +21,20 @@ use axum::middleware::{self, Next};
 use axum::response::{IntoResponse, Response};
 use axum::routing::{get, post};
 use axum::{Json, Router};
-use filesystem::service::checkout::Checkout;
-use filesystem::service::files::Files;
-use filesystem::service::forge::Forge;
-use filesystem::service::github_projects::GithubProjects;
-use filesystem::service::workspace_recovery::WorkspaceRecovery;
+use browser::broker::Broker;
 use filesystem::service::worktrees::{WorkspaceWorktrees, Worktrees};
-use metadata::service::daemon::Daemon;
 use metadata::service::directory::Directory;
 use metadata::service::workspace_automation::WorkspaceAutomation;
-use metadata::service::workspace_labels::WorkspaceLabels;
-use metadata::service::workspace_state::WorkspaceState;
+use model::Runtime;
 use protocol::{Lifecycle, Limits, ServerInfo, VERSION};
 use provider::service::agent_execution::AgentExecution;
-use provider::service::agent_runtime::AgentRuntimeDirectory;
-use provider::service::agents::Agents;
+use schedule::service::Schedules;
 use secrecy::SecretString;
+use terminal::service::Terminals;
 use tokio::sync::Semaphore;
 use tower_http::timeout::TimeoutLayer;
 use tower_http::trace::TraceLayer;
+use voice::service::Speech;
 
 pub use auth::validate_token;
 pub use browser_auth::validate_browser_origin;
@@ -98,58 +91,27 @@ impl std::ops::Deref for Shared {
     }
 }
 
-/// Optional independently composed business services; only installed methods are advertised.
+/// Complete functional services installed independently at crate granularity.
+/// Each present service supplies every method owned by its crate; API connection methods are built in.
 #[derive(Debug, Default)]
 pub struct Services {
-    /// Bounded model-backed wording generation shared by title and Git use cases.
-    pub metadata_generator: Option<Arc<dyn metadata::ports::generation::MetadataGenerator>>,
-    /// First-prompt workspace naming with independently drained background work.
-    pub workspace_names: Option<metadata::service::workspace_names::WorkspaceNames>,
+    /// Project and Workspace metadata, configuration, labels, and automation.
+    pub metadata: Option<metadata::Service>,
+    /// File, Git, Forge, worktree, recovery, and skill operations.
+    pub filesystem: Option<filesystem::Service>,
+    /// Agent presets, runtime metadata, native execution, and history.
+    pub provider: Option<provider::Service>,
     /// Persistent timed Agent executions.
-    pub schedules: Option<schedule::service::Schedules>,
-    /// Connection-owned browser automation broker.
-    pub browser: Option<browser::broker::Broker>,
-    /// Orchestration skill selection and installation.
-    pub skills: Option<filesystem::service::skills::Skills>,
-    /// Durable push registration and lease renewal.
-    pub push_tokens: Option<metadata::service::push::PushTokens>,
-    /// Connection-owned voice and dictation with independently selected speech engines.
-    pub speech: Option<voice::service::Speech>,
-    /// Local PTY terminal lifecycle, input, capture, and streaming.
-    pub terminals: Option<terminal::service::Terminals>,
-    /// Native Provider execution and coordinated Agent runtime metadata.
-    pub agent_execution: Option<AgentExecution>,
-    /// Filesystem workspace recovery operations.
-    pub workspace_recovery: Option<WorkspaceRecovery>,
-    /// Filesystem github projects operations.
-    pub github_projects: Option<GithubProjects>,
-    /// Versioned Agent presets and explicit default selection.
-    pub agents: Option<Agents>,
-    /// Git checkout status, diff, refresh, and history use cases.
-    pub checkout: Option<Checkout>,
-    /// Background origin fetches for actively observed workspace repositories.
-    pub git_fetch: Option<filesystem::service::git_fetch::GitFetch>,
-    /// Paseo Agent runtime directory and metadata lifecycle use cases.
-    pub agent_runtime: Option<AgentRuntimeDirectory>,
-    /// Daemon status, mutable configuration, diagnostics, and update boundary.
-    pub daemon: Option<Daemon>,
-    /// Paseo-shaped project and workspace registries.
-    pub directory: Option<Directory>,
-    /// Forge search and pull request use cases.
-    pub forge: Option<Forge>,
-    /// Scoped filesystem, upload, and download operations.
-    pub files: Option<Files>,
-    /// Paseo workspace label catalog, assignment, and subscription use cases.
-    pub workspace_labels: Option<WorkspaceLabels>,
-    /// Paseo workspace setup and configured script runtime.
-    pub workspace_automation: Option<Arc<Mutex<WorkspaceAutomation>>>,
-    /// Workspace attention and archived-placement recovery use cases.
-    pub workspace_state: Option<WorkspaceState>,
-    /// Paseo-owned Git worktree lifecycle use cases.
-    pub worktrees: Option<Arc<Mutex<Worktrees>>>,
+    pub schedule: Option<Schedules>,
+    /// Connection-owned browser automation.
+    pub browser: Option<Broker>,
+    /// Local terminal lifecycle and streaming.
+    pub terminal: Option<Terminals>,
+    /// Voice conversations and dictation.
+    pub voice: Option<Speech>,
 }
 
-pub use metadata::rpc::daemon::LifecycleIntent;
+pub use model::LifecycleIntent;
 
 impl Shared {
     fn start_draining(&self) {
@@ -157,7 +119,7 @@ impl Shared {
         if let Some(schedules) = &self.schedule.schedules {
             schedules.stop();
         }
-        if let Some(generator) = &self.filesystem.metadata_generator {
+        if let Some(generator) = &self.filesystem.summary_source {
             generator.shutdown();
         }
         if let Some(names) = &self.workspace_names {
@@ -216,13 +178,6 @@ impl Api {
             return Err(ConfigError::InvalidAddress);
         }
         validate_token(token.expose_secret())?;
-        let session_events = services
-            .agent_execution
-            .as_ref()
-            .map(AgentExecution::events)
-            .unwrap_or_default();
-        compose_automation_events(services.workspace_automation.as_ref(), &session_events)?;
-        let creations = creation_receipts(&services);
         let relay = relay::Connector::new(
             address,
             token.clone(),
@@ -230,6 +185,14 @@ impl Api {
             instance_id.clone(),
         );
         let runtime = runtime_info(address, server_id, instance_id, &services);
+        let services = composition::Parts::from(services);
+        let session_events = services
+            .agent_execution
+            .as_ref()
+            .map(AgentExecution::events)
+            .unwrap_or_default();
+        compose_automation_events(services.workspace_automation.as_ref(), &session_events)?;
+        let creations = creation_receipts(&services);
         let worktrees = services.worktrees;
         let (directory, has_git_fetch) = compose_directory(
             services.directory,
@@ -255,7 +218,7 @@ impl Api {
             has_git_fetch,
         });
         let filesystem = Arc::new(filesystem::dispatch::State {
-            metadata_generator: services.metadata_generator,
+            summary_source: services.summary_source,
             runtime: runtime.clone(),
             checkout: services.checkout.map(shared_service),
             forge: services.forge.map(shared_service),
@@ -264,12 +227,12 @@ impl Api {
             worktrees,
             workspace_recovery: services.workspace_recovery.map(shared_service),
             skills: services.skills.map(shared_service),
-            workspace_automation: metadata.workspace_automation.clone(),
+            workspace_setup: composition::workspace_setup(metadata.workspace_automation.as_ref()),
         });
         let provider = Arc::new(provider::dispatch::State {
             runtime: runtime.clone(),
             agents: services.agents.map(shared_service),
-            agent_runtime: services.agent_runtime.map(shared_service),
+            agent_runtime: None,
             agent_execution: services.agent_execution,
             directory_changes,
             has_terminals: services.terminals.is_some(),
@@ -326,7 +289,7 @@ impl Api {
 
     /// Return the composed broker for host-side browser tool execution.
     #[must_use]
-    pub fn browser(&self) -> Option<browser::broker::Broker> {
+    pub fn browser(&self) -> Option<Broker> {
         self.shared.browser.broker.clone()
     }
 
@@ -582,21 +545,21 @@ fn compose_directory(
     worktrees: Option<&Arc<Mutex<Worktrees>>>,
     git_fetch: Option<filesystem::service::git_fetch::GitFetch>,
     runtime: &Arc<Runtime>,
-    events: &metadata::service::session::SessionEvents,
+    events: &model::session::SessionEvents,
     has_automation: bool,
 ) -> (Option<Directory>, bool) {
     let has_git_fetch = directory.is_some() && git_fetch.is_some();
     let directory = directory.map(|directory| {
         let project_events = events.clone();
         let directory = directory.with_project_updates(Arc::new(move |mutation| {
-            use metadata::ports::registry::MutationKind;
-            use metadata::protocol::session::SessionEventKind;
+            use model::workspace::registry::MutationKind;
+            use model::session::protocol::SessionEventKind;
 
             let payload = if mutation.kind == MutationKind::Upsert {
                 mutation.project.as_ref().map(|project| {
                     serde_json::json!({
                         "kind": "upsert",
-                        "project": metadata::rpc::directory::project_descriptor(project),
+                        "project": model::workspace::protocol::projection::project_descriptor(project),
                     })
                 })
             } else {
@@ -612,8 +575,8 @@ fn compose_directory(
         let directory = if has_automation {
             let setup_events = events.clone();
             directory.with_workspace_updates(Arc::new(move |mutation| {
-                use metadata::ports::registry::MutationKind;
-                use metadata::protocol::session::SessionEventKind;
+                use model::workspace::registry::MutationKind;
+                use model::session::protocol::SessionEventKind;
 
                 if mutation.kind != MutationKind::Upsert {
                     return;
@@ -660,10 +623,10 @@ fn compose_directory(
 
 fn compose_automation_events(
     automation: Option<&Arc<Mutex<WorkspaceAutomation>>>,
-    events: &metadata::service::session::SessionEvents,
+    events: &model::session::SessionEvents,
 ) -> Result<(), ConfigError> {
     use metadata::ports::workspace_automation::AutomationEvent;
-    use metadata::protocol::session::SessionEventKind;
+    use model::session::protocol::SessionEventKind;
 
     let Some(automation) = automation else {
         return Ok(());
@@ -708,7 +671,7 @@ fn shared_service<S>(service: S) -> Arc<Mutex<S>> {
     Arc::new(Mutex::new(service))
 }
 
-fn creation_receipts(services: &Services) -> metadata::service::creation::Creations {
+fn creation_receipts(services: &composition::Parts) -> model::creation::Creations {
     services
         .agent_execution
         .as_ref()

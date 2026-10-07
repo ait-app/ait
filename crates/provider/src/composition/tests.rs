@@ -1,13 +1,12 @@
 use super::*;
 
 #[cfg(unix)]
-use metadata::ports::generation::{MetadataKind, MetadataRequest, MetadataSelection};
+use crate::service::summary_generation::test_config::Configuration;
+use file::storage::agent_runtime::FileBackedAgentRuntimeRegistry;
 #[cfg(unix)]
-use metadata::storage::daemon_config::FileDaemonConfigStore;
+use model::summary::{SummaryKind, SummaryRequest, SummarySelection};
 #[cfg(unix)]
 use serde_json::json;
-
-use crate::storage::agent_runtime::FileBackedAgentRuntimeRegistry;
 
 #[test]
 fn registration_preserves_the_catalog_without_startup_writes_and_rejects_duplicates() {
@@ -64,7 +63,7 @@ async fn explicit_missing_executables_do_not_fall_back_to_installed_programs() {
             client.provider()
         );
     }
-    for client in &providers.metadata_clients {
+    for client in &providers.summary_clients {
         assert!(
             !client.is_available().await.unwrap(),
             "{}",
@@ -97,11 +96,9 @@ fn dsh_transport_override_preserves_native_and_acp_capabilities() {
 
 #[cfg(unix)]
 #[tokio::test]
-async fn configured_codex_and_claude_generate_metadata_without_foreground_agents() {
+async fn configured_codex_and_claude_generate_summary_without_foreground_agents() {
     let fixture = crate::test_support::Fixture::new();
-    let config = Arc::new(FileDaemonConfigStore::with_defaults(
-        fixture.root.path().join("config.json"),
-    ));
+    let config = Arc::new(Configuration::default());
     let providers = Providers::configured(fixture.root.path(), |name| {
         Some(match name {
             "AIT_SERVER_CODEX_BIN" => fixture.program.clone().into_os_string(),
@@ -111,7 +108,7 @@ async fn configured_codex_and_claude_generate_metadata_without_foreground_agents
             _ => fixture.root.path().join(name).into_os_string(),
         })
     });
-    let generator = providers.metadata_generator(config.clone());
+    let generator = providers.summary_generator(config.clone());
     std::fs::write(
         fixture.cwd.join("metadata-response.json"),
         r#"{"title":"Configured metadata"}"#,
@@ -125,11 +122,11 @@ async fn configured_codex_and_claude_generate_metadata_without_foreground_agents
                 "claude":{"enabled":provider == "claude"}
             },"metadataGeneration":{"providers":[{"provider":provider,"model":"metadata-only"}]}}))
             .unwrap();
-        let request = MetadataRequest {
-            kind: MetadataKind::Title,
+        let request = SummaryRequest {
+            kind: SummaryKind::Title,
             cwd: fixture.cwd.to_str().unwrap().to_owned(),
             context: "Fix metadata assembly".into(),
-            selection: Some(MetadataSelection {
+            selection: Some(SummarySelection {
                 provider: provider.into(),
                 model: Some("metadata-only".into()),
                 thinking_option_id: None,
@@ -143,7 +140,7 @@ async fn configured_codex_and_claude_generate_metadata_without_foreground_agents
             generator.shutdown();
             assert_eq!(
                 generator.generate(request).await,
-                Err(metadata::ports::generation::MetadataError::Cancelled)
+                Err(model::summary::SummaryError::Cancelled)
             );
         }
     }

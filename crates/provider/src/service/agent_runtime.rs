@@ -4,16 +4,15 @@ use std::collections::{BTreeMap, BTreeSet};
 use std::sync::Arc;
 
 use chrono::DateTime;
+use domain::agent_runtime::registry::{AgentRuntimeRegistry, AgentRuntimeRegistryError};
 use domain::agent_runtime::{
     AgentAttentionReason, AgentRuntimeStatus, PersistedAgentRuntimeRecord,
 };
-use metadata::model::registry::{
+use model::pagination::{self, Direction, Entry, Sort, SortValue};
+use model::workspace::records::{
     PersistedProjectKind, PersistedProjectRecord, PersistedWorkspaceKind, PersistedWorkspaceRecord,
 };
-use metadata::ports::registry::{ProjectRegistry, RegistryError, WorkspaceRegistry};
-use model::pagination::{self, Direction, Entry, Sort, SortValue};
-
-use crate::ports::agent_runtime::{AgentRuntimeRegistry, AgentRuntimeRegistryError};
+use model::workspace::registry::{ProjectRegistry, RegistryError, WorkspaceRegistry};
 
 pub(crate) mod archive;
 mod search;

@@ -7,11 +7,12 @@ mod placement;
 mod reasoning;
 mod resume;
 mod waits;
-use crate::ports::agent_runtime::AgentRuntimeRegistry;
-use crate::storage::agent_runtime::FileBackedAgentRuntimeRegistry;
+use domain::agent_runtime::registry::AgentRuntimeRegistry;
+use file::storage::agent_runtime::FileBackedAgentRuntimeRegistry;
+use file::storage::registry::{FileBackedProjectRegistry, FileBackedWorkspaceRegistry};
+use model::workspace::registry::{ProjectRegistry, WorkspaceRegistry};
+
 use crate::test_support::Fixture;
-use metadata::ports::registry::{ProjectRegistry, WorkspaceRegistry};
-use metadata::storage::registry::{FileBackedProjectRegistry, FileBackedWorkspaceRegistry};
 
 #[tokio::test]
 async fn configuration_commits_atomically_applies_next_turn_and_survives_restart() {
@@ -190,19 +191,19 @@ async fn assert_configuration_after_restart(fixture: &Fixture, id: &str) {
 }
 
 fn worker(fixture: &Fixture) -> (AgentExecution, FileBackedAgentRuntimeRegistry) {
-    worker_with_creations(fixture, metadata::service::creation::Creations::default())
+    worker_with_creations(fixture, model::creation::Creations::default())
 }
 
 fn worker_with_creations(
     fixture: &Fixture,
-    creations: metadata::service::creation::Creations,
+    creations: model::creation::Creations,
 ) -> (AgentExecution, FileBackedAgentRuntimeRegistry) {
     worker_with_client(fixture, creations, Box::new(fixture.client()))
 }
 
 fn worker_with_client(
     fixture: &Fixture,
-    creations: metadata::service::creation::Creations,
+    creations: model::creation::Creations,
     client: Box<dyn crate::ports::agent_session::AgentClient>,
 ) -> (AgentExecution, FileBackedAgentRuntimeRegistry) {
     let registry = FileBackedAgentRuntimeRegistry::new(fixture.root.path().join("agents.json"));
@@ -223,7 +224,7 @@ fn worker_with_client(
                 "updatedAt":"2026-09-24T00:00:00Z","archivedAt":null
             }))
             .unwrap(),
-            metadata::ports::registry::WorkspaceMutationContext::default(),
+            model::workspace::registry::WorkspaceMutationContext::default(),
         )
         .unwrap();
     let mut manager = AgentManager::new(Box::new(registry.clone()))

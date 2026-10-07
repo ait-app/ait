@@ -1,11 +1,11 @@
 //! Checkout facts projected into the existing Workspace wire shape.
 
-use crate::ports::workspace_runtime::{WorkspacePullRequestSnapshot, WorkspaceRuntimeSnapshot};
-use crate::protocol::workspace::{
+use model::workspace::protocol::workspace::{
     AheadBehind, CheckStatus, ChecksStatus, DiffStat, Mergeable, ReviewDecision, WorkspaceCheck,
     WorkspaceDescriptorPayload, WorkspaceGitHubRuntimePayload, WorkspaceGitRuntimePayload,
     WorkspacePullRequest, WorkspaceRuntimeError,
 };
+use model::workspace::runtime::{WorkspacePullRequestSnapshot, WorkspaceRuntimeSnapshot};
 
 /// Overlay cached facts onto `descriptor`, explicitly clearing fields absent from `snapshot`.
 pub(super) fn apply(

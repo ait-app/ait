@@ -2,6 +2,7 @@
 mod bridge;
 mod download;
 mod protocol;
+pub mod rpc;
 mod transport;
 
 use std::collections::HashMap;

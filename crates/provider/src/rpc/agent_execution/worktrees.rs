@@ -1,4 +1,4 @@
-use metadata::ports::worktrees::{DirectoryGit, WorktreeAction, WorktreeCreation};
+use model::workspace::worktrees::{DirectoryGit, WorktreeAction, WorktreeCreation};
 
 use crate::protocol::creation::{GitAction, GitOptions, WorktreeTarget};
 
@@ -44,7 +44,7 @@ pub(super) fn intent(request: &CreateRequest) -> Result<Option<WorktreeCreation>
                 return Err(ErrorCode::InvalidMessage);
             }
             input.action = WorktreeAction::Checkout;
-            input.checkout_source = Some(metadata::ports::worktrees::WorktreeChangeRequest {
+            input.checkout_source = Some(model::workspace::worktrees::WorktreeChangeRequest {
                 forge: Some("github".into()),
                 number: *pr_number,
                 project_path: None,
@@ -106,14 +106,15 @@ fn legacy(input: &mut WorktreeCreation, git: &GitOptions) -> Result<bool, ErrorC
     input.checkout_source = git
         .checkout_source
         .clone()
-        .map(metadata::protocol::worktree_source::ChangeRequestCheckoutSource::into_intent)
+        .map(model::workspace::protocol::worktree_source::ChangeRequestCheckoutSource::into_intent)
         .or_else(|| {
-            git.github_pr_number
-                .map(|number| metadata::ports::worktrees::WorktreeChangeRequest {
+            git.github_pr_number.map(
+                |number| model::workspace::worktrees::WorktreeChangeRequest {
                     forge: Some("github".into()),
                     number,
                     project_path: None,
-                })
+                },
+            )
         });
     input.worktree_slug = git
         .worktree_slug
@@ -165,7 +166,7 @@ impl ExecutionState {
         let provisioning = self
             .import_directory
             .as_ref()
-            .and_then(metadata::service::directory::Directory::shared_worktrees)
+            .and_then(|directory| directory.shared_worktrees())
             .ok_or(ErrorCode::UnsupportedCapability)?;
         let cwd = request.config.cwd.clone();
         tokio::task::spawn_blocking(move || provisioning.prepare_directory(&cwd, &intent))
@@ -178,13 +179,8 @@ impl ExecutionState {
         if let Some(automation) = self.workspace_automation.clone() {
             let workspace = workspace.to_owned();
             // Setup has its own observable failure status; it does not undo Agent creation.
-            let _ = tokio::task::spawn_blocking(move || {
-                automation
-                    .lock()
-                    .ok()
-                    .map(|automation| automation.start_created_setup(&workspace))
-            })
-            .await;
+            let _ = tokio::task::spawn_blocking(move || automation.start_created_setup(&workspace))
+                .await;
         }
     }
 
@@ -197,7 +193,7 @@ impl ExecutionState {
         let provisioning = self
             .import_directory
             .as_ref()
-            .and_then(metadata::service::directory::Directory::shared_worktrees)
+            .and_then(|directory| directory.shared_worktrees())
             .ok_or(ErrorCode::UnsupportedCapability)?;
         let created = tokio::task::spawn_blocking(move || {
             provisioning.create(&input, &chrono::Utc::now().to_rfc3339())
@@ -222,7 +218,7 @@ impl ExecutionState {
         let provisioning = self
             .import_directory
             .as_ref()
-            .and_then(metadata::service::directory::Directory::shared_worktrees)
+            .and_then(|directory| directory.shared_worktrees())
             .ok_or(ErrorCode::UnsupportedCapability)?;
         let workspace = workspace.to_owned();
         tokio::task::spawn_blocking(move || {
@@ -243,7 +239,7 @@ impl ExecutionState {
             let provisioning = self
                 .import_directory
                 .as_ref()
-                .and_then(metadata::service::directory::Directory::shared_worktrees)
+                .and_then(|directory| directory.shared_worktrees())
                 .ok_or(ErrorCode::UnsupportedCapability)?;
             self.manager.auto_archive_worktree_on_finish(
                 id.to_owned(),

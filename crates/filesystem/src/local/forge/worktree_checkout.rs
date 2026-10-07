@@ -2,7 +2,7 @@
 
 use super::{ForgeContext, ForgeKind, LocalForge, READ_TIMEOUT, Value, require_git_directory};
 use crate::ports::worktrees::{ChangeRequestCheckout, ChangeRequestCheckoutRef, WorktreeError};
-use metadata::ports::worktrees::WorktreeChangeRequest;
+use model::workspace::worktrees::WorktreeChangeRequest;
 
 const CHECKOUT_QUERY: &str = "query PullRequestCheckoutTarget($owner: String!, $name: String!, $number: Int!) { repository(owner: $owner, name: $name) { pullRequest(number: $number) { number baseRefName headRefName isCrossRepository headRepositoryOwner { login } headRepository { sshUrl url } } } }";
 

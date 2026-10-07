@@ -347,7 +347,7 @@ async fn installed_opencode_metadata_disables_tools_and_removes_private_history(
         installed_fixture(Router::new().route("/v1/chat/completions", post(metadata_answer))).await;
     let result = tokio::time::timeout(
         Duration::from_secs(40),
-        client.generate_metadata(&spec, "Generate a title", &json!({"type":"object"})),
+        client.generate_summary(&spec, "Generate a title", &json!({"type":"object"})),
     )
     .await
     .unwrap()

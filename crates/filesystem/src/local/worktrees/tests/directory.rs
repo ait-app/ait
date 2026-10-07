@@ -1,4 +1,4 @@
-use metadata::ports::worktrees::DirectoryGit;
+use model::workspace::worktrees::DirectoryGit;
 
 use super::*;
 

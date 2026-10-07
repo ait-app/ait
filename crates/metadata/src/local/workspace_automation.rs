@@ -329,7 +329,7 @@ impl ScriptProcess {
 }
 
 fn read_config(root: &Path) -> Result<PaseoConfig, WorkspaceAutomationError> {
-    let path = crate::storage::project_config::read_path(root)
+    let path = file::storage::project_config::read_path(root)
         .map_err(|error| config_error(root, &error))?;
     let metadata = match path.symlink_metadata() {
         Ok(metadata) => metadata,

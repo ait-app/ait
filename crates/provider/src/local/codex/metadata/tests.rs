@@ -15,7 +15,7 @@ async fn auxiliary_codex_request_is_ephemeral_tool_restricted_and_schema_constra
     let schema = json!({"type":"object","properties":{"title":{"type":"string"}},"required":["title"],"additionalProperties":false});
     let text = fixture
         .client()
-        .generate_metadata(&spec, "Source material", &schema)
+        .generate_summary(&spec, "Source material", &schema)
         .await
         .unwrap();
     assert_eq!(
@@ -92,7 +92,7 @@ async fn auxiliary_codex_protocol_errors_fail_without_foreground_sessions() {
     assert!(
         fixture
             .client()
-            .generate_metadata(&fixture.spec(), "source", &json!({}))
+            .generate_summary(&fixture.spec(), "source", &json!({}))
             .await
             .is_err()
     );
@@ -120,7 +120,7 @@ async fn auxiliary_codex_rejects_unexpected_native_tool_execution() {
         assert_eq!(
             fixture
                 .client()
-                .generate_metadata(&fixture.spec(), "source", &json!({}))
+                .generate_summary(&fixture.spec(), "source", &json!({}))
                 .await,
             Err(AgentSessionError::Rejected)
         );

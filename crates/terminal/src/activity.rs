@@ -4,8 +4,8 @@ use std::collections::BTreeMap;
 use std::sync::{Arc, Mutex};
 use std::time::{SystemTime, UNIX_EPOCH};
 
-use metadata::model::workspace_activity::WorkspaceStateBucket;
-use metadata::ports::workspace_state::{
+use model::workspace::activity::WorkspaceStateBucket;
+use model::workspace::attention::{
     WorkspaceActivity, WorkspaceActivitySource, WorkspaceStateError,
 };
 use serde::{Deserialize, Serialize};

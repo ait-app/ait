@@ -1,7 +1,6 @@
+use model::workspace::protocol::projection::workspace_descriptor;
+use model::workspace::records::{PersistedWorkspaceKind, PersistedWorkspaceRecord};
 use serde_json::json;
-
-use super::workspace_descriptor;
-use crate::model::registry::{PersistedWorkspaceKind, PersistedWorkspaceRecord};
 
 #[test]
 fn managed_descriptor_keeps_initial_branch_after_title_and_branch_change() {

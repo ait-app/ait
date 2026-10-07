@@ -1,14 +1,15 @@
 //! Worktree lifecycle coordination over Git and Paseo-shaped registry ports.
 
-use metadata::model::registry::{
+use model::workspace::identity::{basename, derive_project_key};
+use model::workspace::provisioning::Checkout;
+use model::workspace::records::{
     PersistedProjectKind, PersistedProjectRecord, PersistedWorkspaceKind, PersistedWorkspaceRecord,
 };
-use metadata::ports::provisioning::Checkout;
-use metadata::ports::registry::{
+use model::workspace::registry::generate_workspace_id;
+use model::workspace::registry::{
     ActiveProjectInput, ProjectRegistry, RegistryError, WorkspaceArchiveContext,
     WorkspaceMutationContext, WorkspaceRegistry,
 };
-use metadata::service::directory::{basename, derive_project_key, generate_workspace_id};
 
 use crate::ports::worktrees::{
     CreatedManagedWorktree, ManagedWorktreeCreate, ManagedWorktreeInfo, ManagedWorktrees,
@@ -49,7 +50,7 @@ pub struct CreateWorktree {
     /// Explicit or default action.
     pub action: CreateAction,
     /// Optional forge change-request checkout source.
-    pub checkout_source: Option<metadata::ports::worktrees::WorktreeChangeRequest>,
+    pub checkout_source: Option<model::workspace::worktrees::WorktreeChangeRequest>,
     /// First-Agent prompt used as a provisional workspace title.
     pub first_agent_prompt: Option<String>,
     /// Whether the caller supplied any first-Agent context.
@@ -183,7 +184,7 @@ pub struct Worktrees {
     workspaces: Box<dyn WorkspaceRegistry>,
     managed: Box<dyn ManagedWorktrees>,
     server_id: String,
-    names: Option<metadata::service::workspace_names::WorkspaceNames>,
+    names: Option<std::sync::Arc<dyn model::workspace::lifecycle::WorkspaceNaming>>,
     archive_cleanup: Option<Box<dyn crate::ports::worktrees::WorktreeArchiveCleanup>>,
 }
 
@@ -218,7 +219,7 @@ impl Worktrees {
     #[must_use]
     pub fn with_workspace_names(
         mut self,
-        names: metadata::service::workspace_names::WorkspaceNames,
+        names: std::sync::Arc<dyn model::workspace::lifecycle::WorkspaceNaming>,
     ) -> Self {
         self.names = Some(names);
         self
@@ -286,7 +287,7 @@ impl Worktrees {
             .map_or_else(random_slug, Ok)?;
         let untrusted_source = change_request.as_ref().and_then(|target| {
             target.untrusted_repository.as_ref().map(|repository| {
-                metadata::model::registry::UntrustedWorkspaceSource::ChangeRequest {
+                model::workspace::records::UntrustedWorkspaceSource::ChangeRequest {
                     forge: target.forge.clone(),
                     number: target.number,
                     head_repository: repository.clone(),
@@ -465,7 +466,7 @@ impl Worktrees {
         created: &CreatedManagedWorktree,
         input: &CreateWorktree,
         timestamp: &str,
-        untrusted_source: Option<metadata::model::registry::UntrustedWorkspaceSource>,
+        untrusted_source: Option<model::workspace::records::UntrustedWorkspaceSource>,
     ) -> Result<CreatedWorkspace, WorktreesError> {
         let project = self.resolve_project(created, input.project_id.as_deref(), timestamp)?;
         let workspace = PersistedWorkspaceRecord {
@@ -496,7 +497,7 @@ impl Worktrees {
             pinned_at: None,
             labels: None,
             auto_name: input.title.is_none().then(|| {
-                metadata::model::registry::PendingWorkspaceName {
+                model::workspace::records::PendingWorkspaceName {
                     placeholder_branch: (input.checkout_source.is_none()
                         && input.action == CreateAction::BranchOff
                         && normalize_ref(input.branch_name.as_deref()).is_none()

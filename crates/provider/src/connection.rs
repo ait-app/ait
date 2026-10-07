@@ -96,7 +96,7 @@ impl Connection {
                     Some(std::sync::Arc::new(std::sync::Mutex::new(creations))),
                     ErrorCode::RegistryIo,
                     move |creations| {
-                        creations.observe(metadata::protocol::creation::Kind::Agent, &key, outbound)
+                        creations.observe(model::creation::protocol::Kind::Agent, &key, outbound)
                     },
                 )
                 .await;

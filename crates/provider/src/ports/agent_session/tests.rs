@@ -198,7 +198,7 @@ async fn default_discovery_and_control_contracts_report_unavailable() {
         Err(AgentSessionError::Unavailable)
     );
     unavailable(client.validate_selection(&spec)).await;
-    unavailable(client.generate_metadata(&spec, "title", &json!({}))).await;
+    unavailable(client.generate_summary(&spec, "title", &json!({}))).await;
     unavailable(client.diagnostic()).await;
     unavailable(client.usage()).await;
     unavailable(client.commands(&spec)).await;

@@ -81,6 +81,24 @@ impl Runtime {
         failure: ErrorCode,
         execute: impl FnOnce(&mut S) -> Result<R, ErrorCode> + Send + 'static,
     ) -> Result<R, ErrorCode> {
+        self.run_shared(service, failure, move |service| {
+            let mut service = service.lock().map_err(|_| failure)?;
+            execute(&mut service)
+        })
+        .await
+    }
+
+    /// Run `execute` against a shared service that owns its synchronization.
+    /// Uses the existing job budget, cancellation and tracking without wrapping another lock.
+    /// # Errors
+    /// Rejects missing services, draining or exhausted resources. Panics return `failure`;
+    /// business errors are passed through. An admitted job survives a dropped response future.
+    pub async fn run_shared<S: Send + Sync + ?Sized + 'static, R: Send + 'static>(
+        &self,
+        service: Option<Arc<S>>,
+        failure: ErrorCode,
+        execute: impl FnOnce(&S) -> Result<R, ErrorCode> + Send + 'static,
+    ) -> Result<R, ErrorCode> {
         let service = service.ok_or(ErrorCode::UnsupportedCapability)?;
         if self.cancellation.is_cancelled() {
             return Err(ErrorCode::ServerDraining);
@@ -90,7 +108,7 @@ impl Runtime {
             .clone()
             .try_acquire_owned()
             .map_err(|_| ErrorCode::ResourceExhausted)?;
-        let job = self.spawn_tracked(service, failure, execute, permit)?;
+        let job = self.spawn_tracked(service, execute, permit)?;
         job.await.map_err(|_| failure)?
     }
 
@@ -110,15 +128,21 @@ impl Runtime {
             () = self.cancellation.cancelled() => return Err(ErrorCode::ServerDraining),
             permit = self.jobs.clone().acquire_owned() => permit.map_err(|_| ErrorCode::ServerDraining)?,
         };
-        let job = self.spawn_tracked(service, failure, execute, permit)?;
+        let job = self.spawn_tracked(
+            service,
+            move |service| {
+                let mut service = service.lock().map_err(|_| failure)?;
+                execute(&mut service)
+            },
+            permit,
+        )?;
         job.await.map_err(|_| failure)?
     }
 
-    fn spawn_tracked<S: Send + 'static, R: Send + 'static>(
+    fn spawn_tracked<S: Send + Sync + ?Sized + 'static, R: Send + 'static>(
         &self,
-        service: Arc<Mutex<S>>,
-        failure: ErrorCode,
-        execute: impl FnOnce(&mut S) -> Result<R, ErrorCode> + Send + 'static,
+        service: Arc<S>,
+        execute: impl FnOnce(&S) -> Result<R, ErrorCode> + Send + 'static,
         permit: tokio::sync::OwnedSemaphorePermit,
     ) -> Result<tokio::task::JoinHandle<Result<R, ErrorCode>>, ErrorCode> {
         let _admission = self
@@ -131,8 +155,7 @@ impl Runtime {
         let tracking = self.tasks.token();
         let job = tokio::task::spawn_blocking(move || {
             let (_tracking, _permit) = (tracking, permit);
-            let mut service = service.lock().map_err(|_| failure)?;
-            execute(&mut service)
+            execute(&service)
         });
         Ok(job)
     }

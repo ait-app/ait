@@ -8,6 +8,9 @@ use std::collections::BTreeMap;
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 
+/// Blocking storage contract for the persisted runtime record.
+pub mod registry;
+
 /// Lifecycle states persisted by Paseo for an Agent runtime instance.
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq, PartialOrd, Ord, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]

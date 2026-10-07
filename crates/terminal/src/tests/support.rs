@@ -1,7 +1,7 @@
 use std::sync::{Arc, Mutex};
 
-use metadata::model::registry::{PersistedProjectRecord, PersistedWorkspaceRecord};
-use metadata::ports::registry::{
+use model::workspace::records::{PersistedProjectRecord, PersistedWorkspaceRecord};
+use model::workspace::registry::{
     ActiveProjectInput, MutationListener, MutationSubscription, ProjectMutation, ProjectRegistry,
     RegistryError, WorkspaceArchiveContext, WorkspaceMutation, WorkspaceMutationContext,
     WorkspaceRegistry,

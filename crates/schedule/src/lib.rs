@@ -5,7 +5,6 @@ mod engine;
 pub mod ports;
 pub mod protocol;
 pub mod service;
-pub mod storage;
 
 pub mod capabilities;
 pub mod dispatch;

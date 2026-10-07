@@ -13,8 +13,9 @@ pub const METHODS: &[MethodSpec] = &[
     MethodSpec::request("agent.items.close.request"),
 ];
 
-use model::methods::MethodSpec;
 use std::collections::BTreeSet;
+
+use model::methods::MethodSpec;
 
 pub(crate) mod listing;
 
@@ -22,7 +23,8 @@ use chrono::{SecondsFormat, Utc};
 use domain::agent_runtime::{
     AgentAttentionReason as DomainAttentionReason, AgentRuntimeStatus, PersistedAgentRuntimeRecord,
 };
-use metadata::protocol::workspace::{ProjectCheckoutLitePayload, ProjectPlacementPayload};
+use model::workspace::protocol::workspace::ProjectCheckoutLitePayload;
+use model::workspace::protocol::workspace::ProjectPlacementPayload;
 use serde_json::Value;
 
 use crate::protocol::agent_config::NullableSetting;

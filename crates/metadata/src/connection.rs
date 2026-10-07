@@ -2,7 +2,8 @@
 
 use std::collections::{BTreeMap, BTreeSet};
 
-use crate::service::session::{SessionConnection, SessionSubscription};
+use model::session::{SessionConnection, SessionSubscription};
+
 use crate::service::workspace_labels::WorkspaceLabelSubscription;
 
 pub(crate) mod creation;

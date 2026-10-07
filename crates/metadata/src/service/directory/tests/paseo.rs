@@ -1,7 +1,8 @@
 //! Paseo session.workspaces exact placement, archive, and project lifecycle cases.
 
+use model::workspace::lifecycle::WorkspaceCreation;
+
 use super::*;
-use crate::service::directory::WorkspaceCreation;
 
 #[test]
 fn opening_a_child_does_not_reuse_an_active_parent_workspace() {

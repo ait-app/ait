@@ -6,7 +6,7 @@ use std::sync::atomic::{AtomicUsize, Ordering};
 use std::sync::{Arc, Mutex};
 use std::time::{Duration, Instant};
 
-use metadata::ports::workspace_runtime::{
+use model::workspace::runtime::{
     WorkspaceForgeSnapshot, WorkspaceRuntimeSnapshot, WorkspaceRuntimeSource,
 };
 

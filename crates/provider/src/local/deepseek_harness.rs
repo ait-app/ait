@@ -85,15 +85,12 @@ impl DeepSeekHarnessClient {
 }
 
 impl AgentClient for DeepSeekHarnessClient {
-    fn supports_metadata_generation(&self) -> bool {
+    fn supports_summary_generation(&self) -> bool {
         true
     }
 
-    fn metadata_model(
-        &self,
-        models: &[Value],
-    ) -> Option<::metadata::ports::generation::MetadataSelection> {
-        let mut selection = super::metadata_model::select(
+    fn summary_model(&self, models: &[Value]) -> Option<model::summary::SummarySelection> {
+        let mut selection = super::summary_model::select(
             self.provider(),
             models,
             &["deepseek-flash", "haiku", "mini", "flash"],
@@ -110,7 +107,7 @@ impl AgentClient for DeepSeekHarnessClient {
         Some(selection)
     }
 
-    fn generate_metadata<'a>(
+    fn generate_summary<'a>(
         &'a self,
         spec: &'a AgentSessionSpec,
         prompt: &'a str,

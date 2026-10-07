@@ -1,15 +1,4 @@
 //! Host coordination between schedules, independent Agent execution and workspace ownership.
-use anyhow::Context;
-use filesystem::service::worktrees::{CreateAction, CreateWorktree, Worktrees};
-use metadata::service::directory::{Directory, WorkspaceCreation};
-use provider::service::agent_execution::AgentExecution;
-use schedule::{
-    ports::{Outcome, Progress, Runner, Store},
-    protocol::{RunStatus, Schedule, Target},
-    service::Schedules,
-    storage::FileStore,
-};
-use serde_json::json;
 use std::{
     future::Future,
     path::Path,
@@ -17,6 +6,18 @@ use std::{
     sync::{Arc, Mutex},
     time::Duration,
 };
+
+use anyhow::Context;
+use file::storage::schedule::FileStore;
+use filesystem::service::worktrees::{CreateAction, CreateWorktree, Worktrees};
+use metadata::service::directory::Directory;
+use model::schedule::{RunStatus, Schedule, Target};
+use model::storage::schedule::Store;
+use model::workspace::lifecycle::WorkspaceCreation;
+use provider::service::agent_execution::AgentExecution;
+use schedule::ports::{Outcome, Progress, Runner};
+use schedule::service::Schedules;
+use serde_json::json;
 use tokio_util::sync::CancellationToken;
 
 #[derive(Debug)]

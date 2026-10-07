@@ -1,7 +1,10 @@
 //! Failure injection around Paseo's durable run history and concurrent mutation scenarios.
-use super::{controlled::*, *};
-use crate::{ports::Store, protocol::RunStatus};
 use std::sync::atomic::AtomicBool;
+
+use model::schedule::RunStatus;
+use model::storage::schedule::Store;
+
+use super::{controlled::*, *};
 
 #[derive(Debug, Clone, Default)]
 struct FaultStore {

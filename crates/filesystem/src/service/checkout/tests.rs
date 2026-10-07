@@ -2,9 +2,9 @@ use std::path::{Path, PathBuf};
 use std::process::Command;
 use std::sync::Arc;
 
-use metadata::model::registry::PersistedWorkspaceRecord;
-use metadata::ports::registry::{WorkspaceMutationContext, WorkspaceRegistry};
-use metadata::storage::registry::FileBackedWorkspaceRegistry;
+use file::storage::registry::FileBackedWorkspaceRegistry;
+use model::workspace::records::PersistedWorkspaceRecord;
+use model::workspace::registry::{WorkspaceMutationContext, WorkspaceRegistry};
 use serde_json::json;
 use tempfile::TempDir;
 

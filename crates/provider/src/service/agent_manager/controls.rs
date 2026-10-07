@@ -182,7 +182,7 @@ impl AgentManager {
             timeline.events().publish(id,"agent_stream",&json!({"agentId":id,"event":{"type":"permission_resolved","provider":agent.record.provider,"requestId":request,"resolution":response}}));
         }
         self.events.publish(
-            metadata::protocol::session::SessionEventKind::AgentPermissionResolved,
+            model::session::protocol::SessionEventKind::AgentPermissionResolved,
             &json!({"agentId":id,"requestId":request,"resolution":response}),
         );
         Ok(())
@@ -459,9 +459,9 @@ fn descendants(
 mod tests;
 
 pub(super) fn publish_permission(
-    registry: &dyn crate::ports::agent_runtime::AgentRuntimeRegistry,
+    registry: &dyn domain::agent_runtime::registry::AgentRuntimeRegistry,
     timeline: Option<&crate::storage::timeline::Timeline>,
-    events: &metadata::service::session::SessionEvents,
+    events: &model::session::SessionEvents,
     agent: &super::LiveAgent,
     request: &Value,
 ) -> Result<(), super::AgentManagerError> {
@@ -480,20 +480,20 @@ pub(super) fn publish_permission(
         timeline.events().publish(id,"agent_stream",&json!({"agentId":id,"event":{"type":"permission_requested","provider":agent.record.provider,"request":request}}));
     }
     events.publish(
-        metadata::protocol::session::SessionEventKind::AgentPermissionRequest,
+        model::session::protocol::SessionEventKind::AgentPermissionRequest,
         &json!({"agentId":id,"request":request}),
     );
     events.publish(
-        metadata::protocol::session::SessionEventKind::AgentAttention,
+        model::session::protocol::SessionEventKind::AgentAttention,
         &json!({"agentId":id,"reason":"permission","timestamp":now}),
     );
     Ok(())
 }
 
 pub(super) fn resolve_permission(
-    registry: &dyn crate::ports::agent_runtime::AgentRuntimeRegistry,
+    registry: &dyn domain::agent_runtime::registry::AgentRuntimeRegistry,
     timeline: Option<&crate::storage::timeline::Timeline>,
-    events: &metadata::service::session::SessionEvents,
+    events: &model::session::SessionEvents,
     agent: &super::LiveAgent,
     request: &str,
 ) -> Result<(), super::AgentManagerError> {
@@ -523,7 +523,7 @@ pub(super) fn resolve_permission(
         );
     }
     events.publish(
-        metadata::protocol::session::SessionEventKind::AgentPermissionResolved,
+        model::session::protocol::SessionEventKind::AgentPermissionResolved,
         &json!({"agentId":id,"requestId":request,
             "resolution":{"behavior":"deny","message":"Resolved by native provider"}}),
     );
@@ -532,7 +532,7 @@ pub(super) fn resolve_permission(
 
 pub(super) fn publish_subagent(
     timeline: Option<&crate::storage::timeline::Timeline>,
-    events: &metadata::service::session::SessionEvents,
+    events: &model::session::SessionEvents,
     agent: &super::LiveAgent,
     event: &crate::ports::controls::SubagentEvent,
 ) -> Result<(), ErrorCode> {
@@ -564,7 +564,7 @@ pub(super) fn publish_subagent(
                 &json!({"kind":"upsert","subagent":descriptor}),
             );
             events.publish(
-                metadata::protocol::session::SessionEventKind::ProviderSubagents,
+                model::session::protocol::SessionEventKind::ProviderSubagents,
                 &json!({"kind":"upsert","subagent":descriptor}),
             );
             Ok(())
@@ -580,7 +580,7 @@ pub(super) fn publish_subagent(
 
 pub(super) fn publish_children(
     timeline: Option<&crate::storage::timeline::Timeline>,
-    events: &metadata::service::session::SessionEvents,
+    events: &model::session::SessionEvents,
     agent: &super::LiveAgent,
 ) -> Result<(), super::AgentManagerError> {
     for child in agent.session.subagents() {

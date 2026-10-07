@@ -99,7 +99,7 @@ Codex 的 [history 适配](../../crates/provider/src/local/codex/discovery.rs) �
 ### 6. 已有优化与局部等待
 
 - [Workspace runtime](../../crates/filesystem/src/local/workspace_runtime.rs) 已将 Git/Forge 命令放到后台缓存，Git 与 Forge 分别限流；不要把目录列表描述为同步等待所有 GitHub 请求。目录 canonicalize 和完整投影仍有本地成本。
-- [文件 registry](../../crates/metadata/src/storage/registry/core.rs) 首次加载后保留内存记录，不能假设每次 list 都重新读 JSON 文件。
+- [文件 registry](../../crates/file/src/registry.rs) 首次加载后保留内存记录，不能假设每次 list 都重新读 JSON 文件。
 - [客户端缓存](../../apps/mobile/src/runtime/replica-cache/index.ts) 已保存目录和最近最多 50 个时间线展示项；[ViewedTimelineSync](../../apps/mobile/src/timeline/viewed-timeline-sync.ts) 已优先补齐可见 Agent，并在普通恢复溢出时退回最新 tail。优化应扩展这些机制。
 - [Workspace 保留](../../apps/mobile/src/screens/workspace/workspace-deck-retention.ts) 在桌面/Web 最多 10 个、闲置 TTL 10 分钟，原生端最多 1 个。移动端切换会更频繁重新挂载，但数据缓存与 UI 挂载需要分开测。
 - [标题栏](../../apps/mobile/src/screens/workspace/use-workspace-checkout-status.ts) 会额外读取 checkout status；[header 派生](../../apps/mobile/src/screens/workspace/workspace-screen.tsx) 在其 pending 时显示 loading。它是局部等待，不能与整页、会话等待合并归因。

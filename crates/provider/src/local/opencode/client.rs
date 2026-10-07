@@ -201,28 +201,25 @@ impl OpenCodeClient {
 }
 
 impl AgentClient for OpenCodeClient {
-    fn supports_metadata_generation(&self) -> bool {
+    fn supports_summary_generation(&self) -> bool {
         true
     }
 
-    fn metadata_model(
-        &self,
-        models: &[Value],
-    ) -> Option<::metadata::ports::generation::MetadataSelection> {
-        crate::local::metadata_model::select(
+    fn summary_model(&self, models: &[Value]) -> Option<model::summary::SummarySelection> {
+        crate::local::summary_model::select(
             self.provider(),
             models,
             &["haiku", "mini", "flash", "minimax-m3", "nemotron-3-super"],
         )
     }
 
-    fn generate_metadata<'a>(
+    fn generate_summary<'a>(
         &'a self,
         spec: &'a AgentSessionSpec,
         prompt: &'a str,
         schema: &'a Value,
     ) -> AgentSessionFuture<'a, String> {
-        Box::pin(super::metadata::generate(
+        Box::pin(super::summary::generate(
             &self.driver.binary,
             spec,
             prompt,

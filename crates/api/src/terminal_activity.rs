@@ -15,7 +15,7 @@ pub(super) fn compose(
     runtime: &Arc<model::Runtime>,
     terminals: Option<terminal::service::Terminals>,
     address: SocketAddr,
-    events: &metadata::service::session::SessionEvents,
+    events: &model::session::SessionEvents,
 ) -> Arc<terminal::dispatch::State> {
     Arc::new(terminal::dispatch::State {
         runtime: runtime.clone(),

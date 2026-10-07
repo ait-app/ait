@@ -1,16 +1,16 @@
 //! Server status, mutable configuration and lifecycle request semantics.
 
+use model::LifecycleIntent;
+use model::server::Lifecycle;
+use serde_json::Value;
+
 use crate::protocol::daemon::{
     ConfigReloadResult, DaemonConfig, DaemonConfigResult, DaemonConfigSetRequest, DaemonStatus,
     DaemonUpdateResult, DiagnosticsResult, EmptyRequest, LifecycleResult, ProviderAvailability,
     RestartRequest,
 };
-use crate::protocol::server::Lifecycle;
 use crate::rpc::ErrorCode;
 use crate::service::daemon::{Daemon, DaemonError};
-use serde_json::Value;
-
-pub use model::LifecycleIntent;
 
 /// Response and associated host lifecycle intent.
 pub struct LifecycleRequest {

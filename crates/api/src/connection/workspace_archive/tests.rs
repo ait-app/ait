@@ -1,13 +1,14 @@
-use super::*;
-use crate::{Api, Services};
+use std::sync::Arc;
+
+use file::storage::project_config::LocalProjectConfigStore;
+use file::storage::project_icon::LocalProjectIconStore;
+use file::storage::registry::{FileBackedProjectRegistry, FileBackedWorkspaceRegistry};
 use filesystem::local::provisioning::LocalDirectorySource;
 use metadata::service::directory::{Directory, DirectoryDependencies};
-use metadata::storage::{
-    project_config::LocalProjectConfigStore,
-    project_icon::LocalProjectIconStore,
-    registry::{FileBackedProjectRegistry, FileBackedWorkspaceRegistry},
-};
 use model::{Request, outbound::Outbound};
+
+use super::*;
+use crate::{Api, Services};
 
 struct Fixture {
     root: std::path::PathBuf,
@@ -33,17 +34,17 @@ impl Fixture {
             .open_workspace(root.to_str().unwrap(), "2026-10-07T00:00:00Z")
             .unwrap()
             .workspace_id;
-        let api = Api::new(
+        let mut api = Api::new(
             "127.0.0.1:7316".parse().unwrap(),
             "test-server".into(),
             "instance".into(),
             "in-process-test-token-at-least-32-characters".into(),
-            Services {
-                directory: Some(directory),
-                ..Services::default()
-            },
+            Services::default(),
         )
         .unwrap();
+        let shared = Arc::get_mut(&mut api.shared).unwrap();
+        Arc::get_mut(&mut shared.metadata).unwrap().directory =
+            Some(crate::shared_service(directory));
         Self {
             root,
             api,

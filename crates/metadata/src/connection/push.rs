@@ -8,13 +8,13 @@ pub(crate) const METHODS: &[MethodSpec] = &[
 
 use model::methods::MethodSpec;
 use model::outbound::QueueError;
+use model::storage::push::PushError;
 use model::{Context, ErrorCode};
 use serde_json::{Value, json};
 
 use crate::connection::Connection;
 use crate::dispatch::State;
 use crate::protocol::push::TokenRequest;
-use crate::service::push::PushError;
 
 /// Persist registration before making the token eligible for this connection's heartbeats.
 /// # Errors

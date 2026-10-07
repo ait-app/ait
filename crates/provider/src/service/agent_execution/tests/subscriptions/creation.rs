@@ -15,7 +15,7 @@ fn dsh_peer(fixture: &Fixture) -> (AgentExecution, Peer) {
     std::fs::set_permissions(&program, std::fs::Permissions::from_mode(0o700)).unwrap();
     let (execution, _) = worker_with_client(
         fixture,
-        metadata::service::creation::Creations::default(),
+        model::creation::Creations::default(),
         Box::new(DeepSeekHarnessClient::new(program).with_acp_profile()),
     );
     let peer = Peer::new(&execution);

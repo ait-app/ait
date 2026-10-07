@@ -42,7 +42,7 @@ async fn voice_socket(fixture: &Fixture) -> Socket {
 #[tokio::test]
 async fn dictation_roundtrip_is_real_and_scoped_to_the_physical_socket() {
     let services = Services {
-        speech: Some(Speech::new(Some(Arc::new(Engine)), None, None)),
+        voice: Some(Speech::new(Some(Arc::new(Engine)), None, None)),
         ..Services::default()
     };
     let fixture = Fixture::with_services(services).await;
@@ -90,7 +90,7 @@ async fn dictation_roundtrip_is_real_and_scoped_to_the_physical_socket() {
 #[tokio::test]
 async fn speech_envelope_and_negotiation_errors_do_not_reach_engines() {
     let fixture = Fixture::with_services(Services {
-        speech: Some(Speech::new(None, None, None)),
+        voice: Some(Speech::new(None, None, None)),
         ..Services::default()
     })
     .await;

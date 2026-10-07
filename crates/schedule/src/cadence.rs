@@ -1,6 +1,7 @@
-use crate::{ports::Error, protocol::Cadence};
 use chrono::{DateTime, Datelike, Duration, Timelike, Utc};
 use chrono_tz::Tz;
+use model::schedule::Cadence;
+use model::storage::schedule::Error;
 
 pub(crate) fn next(cadence: &Cadence, after: DateTime<Utc>) -> Result<DateTime<Utc>, Error> {
     match cadence {

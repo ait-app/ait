@@ -58,6 +58,8 @@ cargo llvm-cov report --html --ignore-filename-regex '/(tests|test_support)(/|\.
 
 ## 改动文件
 
+文件名和计数保留测量时的历史路径；已迁移文件的链接指向当前定义，本报告未重新测量覆盖率。
+
 | 文件                                                                                                                                       | 已覆盖 / 总行数 | 新增修改行：已覆盖 / 总行数 |
 | ------------------------------------------------------------------------------------------------------------------------------------------ | --------------: | --------------------------: |
 | [bins/daemon/src/host.rs](../../../../bins/daemon/src/host.rs)                                                                             |       369 / 372 |                     41 / 41 |
@@ -89,18 +91,18 @@ cargo llvm-cov report --html --ignore-filename-regex '/(tests|test_support)(/|\.
 | [crates/metadata/src/dispatch.rs](../../../../crates/metadata/src/dispatch.rs)                                                             |       104 / 210 |                       8 / 8 |
 | [crates/metadata/src/local/workspace_automation.rs](../../../../crates/metadata/src/local/workspace_automation.rs)                         |       478 / 534 |                     23 / 29 |
 | [crates/metadata/src/local/workspace_automation/retirement.rs](../../../../crates/metadata/src/local/workspace_automation/retirement.rs)   |         52 / 61 |                     52 / 61 |
-| [crates/metadata/src/model/workspace_activity.rs](../../../../crates/metadata/src/model/workspace_activity.rs)                             |           8 / 8 |                       8 / 8 |
-| [crates/metadata/src/protocol/directory.rs](../../../../crates/metadata/src/protocol/directory.rs)                                         |         37 / 37 |                       0 / 0 |
-| [crates/metadata/src/protocol/session.rs](../../../../crates/metadata/src/protocol/session.rs)                                             |         11 / 11 |                       4 / 4 |
-| [crates/metadata/src/protocol/workspace.rs](../../../../crates/metadata/src/protocol/workspace.rs)                                         |         32 / 32 |                       0 / 0 |
-| [crates/metadata/src/protocol/worktree_source.rs](../../../../crates/metadata/src/protocol/worktree_source.rs)                             |         16 / 16 |                     16 / 16 |
+| [crates/metadata/src/model/workspace_activity.rs](../../../../crates/model/src/workspace/activity.rs)                             |           8 / 8 |                       8 / 8 |
+| [crates/metadata/src/protocol/directory.rs](../../../../crates/model/src/workspace/protocol/directory.rs)                                         |         37 / 37 |                       0 / 0 |
+| [crates/metadata/src/protocol/session.rs](../../../../crates/model/src/session/protocol.rs)                                             |         11 / 11 |                       4 / 4 |
+| [crates/metadata/src/protocol/workspace.rs](../../../../crates/model/src/workspace/protocol/workspace.rs)                                         |         32 / 32 |                       0 / 0 |
+| [crates/metadata/src/protocol/worktree_source.rs](../../../../crates/model/src/workspace/protocol/worktree_source.rs)                             |         16 / 16 |                     16 / 16 |
 | [crates/metadata/src/rpc/directory.rs](../../../../crates/metadata/src/rpc/directory.rs)                                                   |       578 / 735 |                     77 / 84 |
 | [crates/metadata/src/rpc/directory/listing.rs](../../../../crates/metadata/src/rpc/directory/listing.rs)                                   |       212 / 225 |                   212 / 225 |
 | [crates/metadata/src/rpc/directory/pagination.rs](../../../../crates/metadata/src/rpc/directory/pagination.rs)                             |         81 / 88 |                     81 / 88 |
-| [crates/metadata/src/service/creation.rs](../../../../crates/metadata/src/service/creation.rs)                                             |       255 / 257 |                     99 / 99 |
+| [crates/metadata/src/service/creation.rs](../../../../crates/model/src/creation.rs)                                             |       255 / 257 |                     99 / 99 |
 | [crates/metadata/src/service/directory.rs](../../../../crates/metadata/src/service/directory.rs)                                           |       718 / 778 |                     37 / 38 |
 | [crates/metadata/src/service/directory/activity.rs](../../../../crates/metadata/src/service/directory/activity.rs)                         |         61 / 61 |                     61 / 61 |
-| [crates/metadata/src/service/session.rs](../../../../crates/metadata/src/service/session.rs)                                               |       207 / 212 |                     10 / 10 |
+| [crates/metadata/src/service/session.rs](../../../../crates/model/src/session.rs)                                               |       207 / 212 |                     10 / 10 |
 | [crates/metadata/src/service/workspace_automation.rs](../../../../crates/metadata/src/service/workspace_automation.rs)                     |       129 / 134 |                       8 / 8 |
 | [crates/model/src/directory_sync.rs](../../../../crates/model/src/directory_sync.rs)                                                       |         88 / 88 |                     88 / 88 |
 | [crates/model/src/events.rs](../../../../crates/model/src/events.rs)                                                                       |       108 / 112 |                     16 / 16 |

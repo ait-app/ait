@@ -4,14 +4,12 @@ use std::collections::BTreeMap;
 use std::fmt;
 
 use chrono::DateTime;
+use model::storage::push::{PushError, TokenStore};
 use serde_json::{Value, json};
 
 /// Paseo renews push subscriptions for forty-eight hours.
 pub const LEASE_MS: i64 = 48 * 60 * 60 * 1000;
 const MAX_TOKENS: usize = 4096;
-
-/// Storage contract and safe persistence errors.
-pub use crate::ports::push::{PushError, TokenStore};
 
 /// Process-wide token leases. Debug output deliberately excludes token contents.
 pub struct PushTokens {
@@ -150,3 +148,6 @@ fn document(subscriptions: &BTreeMap<String, i64>) -> Result<Value, PushError> {
 
 #[cfg(test)]
 mod tests;
+
+#[cfg(test)]
+mod storage_tests;

@@ -1,6 +1,6 @@
 //! Paseo-shaped GitHub repository search and project clone payloads.
 
-use metadata::protocol::workspace::WorkspaceProjectDescriptorPayload;
+use model::workspace::protocol::workspace::WorkspaceProjectDescriptorPayload;
 use serde::{Deserialize, Serialize};
 
 /// Repository discovery input. Empty query lists recent owned repositories.

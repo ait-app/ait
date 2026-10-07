@@ -2,8 +2,8 @@
 
 use std::path::Path;
 
-use metadata::protocol::creation::Snapshot;
-use metadata::protocol::directory::WorkspaceCreateSource;
+use model::creation::protocol::Snapshot;
+use model::workspace::protocol::directory::WorkspaceCreateSource;
 use serde::Deserialize;
 use serde_json::Value;
 

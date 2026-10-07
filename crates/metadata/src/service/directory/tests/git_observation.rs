@@ -2,10 +2,10 @@
 
 use std::sync::Arc;
 
+use model::workspace::git::{WorkspaceGitObservation, WorkspaceGitObserver};
 use serde_json::json;
 
 use super::*;
-use crate::ports::workspace_git::{WorkspaceGitObservation, WorkspaceGitObserver};
 use crate::rpc::directory::{execute, listing};
 
 #[derive(Debug, Default)]

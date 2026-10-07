@@ -3,7 +3,7 @@
 use std::io;
 use std::path::{Component, Path, PathBuf};
 
-use metadata::ports::provisioning::{Checkout, DirectorySource, DirectorySourceError};
+use model::workspace::provisioning::{Checkout, DirectorySource, DirectorySourceError};
 
 use crate::local::git::GitError;
 

@@ -2,6 +2,7 @@
 
 pub mod changes;
 mod context;
+pub mod creation;
 pub mod directory_sync;
 pub mod events;
 mod message;
@@ -10,8 +11,13 @@ pub mod outbound;
 pub mod pagination;
 pub mod polling;
 pub mod runtime;
+pub mod schedule;
 pub mod server;
+pub mod session;
+pub mod storage;
 pub mod subscription;
+pub mod summary;
+pub mod workspace;
 
 pub use context::{Context, DispatchError, Request};
 pub use message::{ErrorCode, ServerMessage};

@@ -2,11 +2,6 @@
 
 use serde::{Deserialize, Serialize};
 
-pub use model::server::{
-    CAPABILITIES, Lifecycle, Limits, MAX_CONNECTIONS, MAX_MESSAGE_BYTES, MAX_QUEUE_BYTES,
-    MAX_QUEUE_MESSAGES, ServerInfo, VERSION, Version,
-};
-
 /// Application ping parameters; extra fields remain accepted for compatibility.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct Ping {
