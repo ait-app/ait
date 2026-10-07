@@ -1,0 +1,130 @@
+[
+  {
+    "path": "apps/desktop/src/features/file-opener.test.ts",
+    "sha256": "7ceb0ee82ab8781df4bcf48db6461b6a831d077bc4b45d66af765e879863e91c"
+  },
+  {
+    "path": "apps/desktop/src/features/file-opener.ts",
+    "sha256": "28b50fb12f8bb6942d0943b88d3f88398624ad5436736cfa7542a680f7ac9e63"
+  },
+  {
+    "path": "apps/desktop/src/main.ts",
+    "sha256": "8b18b23c861ad525ef0833cdabf886c3153e1ebbe4f34fff3f559db53d311263"
+  },
+  {
+    "path": "apps/desktop/src/preload.ts",
+    "sha256": "64c28e50b326dde9636a4858d09da89211de222c4bb7240d2b2d7c84adaa9a91"
+  },
+  {
+    "path": "apps/mobile/src/assistant-file-links/provider.tsx",
+    "sha256": "e08f209d470ddc12d4d736b21fdba71b9d425b86ef8cf201cfcb8a0c051bfcd3"
+  },
+  {
+    "path": "apps/mobile/src/assistant-file-links/resolver.ts",
+    "sha256": "792e30dca8cf8e3768a7f91daa48b9b47631fea7718bc67c45686796b0dc954f"
+  },
+  {
+    "path": "apps/mobile/src/assistant-file-links/use-file-link.test.tsx",
+    "sha256": "90bfa9a32eff8837530e9281335fccfe11703106bb0e00b4e347e220255fac92"
+  },
+  {
+    "path": "apps/mobile/src/assistant-file-links/use-file-link.ts",
+    "sha256": "d14a8bae9bca9281b081f48c83174666e68720725dda3d782da00f8e240b9eac"
+  },
+  {
+    "path": "apps/mobile/src/components/file-drop/dropped-files.test.ts",
+    "sha256": "b8436cb29978965090bc6392f07bd3891b64146cdf37ea944db1182d692b0599"
+  },
+  {
+    "path": "apps/mobile/src/components/file-drop/dropped-files.ts",
+    "sha256": "7b4c3d6bc311484bcdc123ba3fc3d6801326060ac77a1b2c79c378f5e680e541"
+  },
+  {
+    "path": "apps/mobile/src/components/file-drop/types.ts",
+    "sha256": "b55ac984ff83e4fe02894af85035cd0404cb6896bc43667dd94d5d10aceafd42"
+  },
+  {
+    "path": "apps/mobile/src/components/file-drop/use-drop-listeners.ts",
+    "sha256": "220f6764895eda90d71975dcc6b1599b539e495371853ea853c0dfa0c0d05b69"
+  },
+  {
+    "path": "apps/mobile/src/composer/attachments/directory-drop.test.ts",
+    "sha256": "7ea2ae7182ed6bcf97a8bce9a628e330301143df06f374e0e1b3c3454c52d3cd"
+  },
+  {
+    "path": "apps/mobile/src/composer/attachments/directory-drop.ts",
+    "sha256": "3718cf80a120ac1e7db0461509d891e1a65561678ea2a6d8f4c5b4e7802ae6b3"
+  },
+  {
+    "path": "apps/mobile/src/composer/index.tsx",
+    "sha256": "8298dc2d32470820d994abf698d6c839c745e5605f0d3f721af5e905a54bbcd4"
+  },
+  {
+    "path": "apps/mobile/src/desktop/host.ts",
+    "sha256": "3c7f28bccad9a9edc4df801f6d8a79c53d22c30ba3c5e17640f24a5bfe886c9a"
+  },
+  {
+    "path": "apps/mobile/src/file-pane/binary-preview.test.tsx",
+    "sha256": "a1fecba6dff349cee31d25aee7609ce767638bf50f7dfa78e5bc2dab3b2efd60"
+  },
+  {
+    "path": "apps/mobile/src/file-pane/binary-preview.tsx",
+    "sha256": "c0820afb493e4626ddcffa9666e2b59fbbae9ce0ab7793bf2d5c1b67ae4d9ad5"
+  },
+  {
+    "path": "apps/mobile/src/file-pane/pane.tsx",
+    "sha256": "45a2d377ccd8042ff0cdbf899482b7ef4684ed334f23f7a961df17979534417c"
+  },
+  {
+    "path": "apps/mobile/src/file-pane/pdf-preview.tsx",
+    "sha256": "7de559f4a1ce317c57795292d19ff4b463f715548bdee3f3dc0511c83770bae2"
+  },
+  {
+    "path": "apps/mobile/src/file-pane/pdf-preview.web.tsx",
+    "sha256": "2a0b0736227b75d3e99788241176c1702c8736d2273b244d04c6bdbe296d4218"
+  },
+  {
+    "path": "apps/mobile/src/file-pane/preview-lifecycle/model.test.ts",
+    "sha256": "53d7c3254278889de8016a7f665ea316953bb087d32e62ed2bf76ef924eba163"
+  },
+  {
+    "path": "apps/mobile/src/file-pane/preview-lifecycle/model.ts",
+    "sha256": "c12563923e5eef69f91333abc5628a9b2e35ad0301c544ecd80b01d5fa3c7252"
+  },
+  {
+    "path": "apps/mobile/src/i18n/resources/ar.ts",
+    "sha256": "d063758628dccb344618b0b1549d3b341fd8d9fac96aa277741c348afe23e57f"
+  },
+  {
+    "path": "apps/mobile/src/i18n/resources/en.ts",
+    "sha256": "62d6cd8961ab50e079f5ce941660a596fc71680b5423ece5533573ddbd2f0fa2"
+  },
+  {
+    "path": "apps/mobile/src/i18n/resources/es.ts",
+    "sha256": "bbeeab69934892752e04cda0f958501cba24915fb8b58c5cc41e728656d42e8c"
+  },
+  {
+    "path": "apps/mobile/src/i18n/resources/fr.ts",
+    "sha256": "a939378b563d5a2edff85c603e005b4a08be188f5cc24255eac157108f876f38"
+  },
+  {
+    "path": "apps/mobile/src/i18n/resources/ja.ts",
+    "sha256": "25697ff508b2aefe433537ed53e843dd012f1260b284bfdd10f6672d84295bf0"
+  },
+  {
+    "path": "apps/mobile/src/i18n/resources/ko.ts",
+    "sha256": "ce5ae1d52810651d367131925c52509de39bf572ab48cec0c6e62c8a49b25a6c"
+  },
+  {
+    "path": "apps/mobile/src/i18n/resources/pt-BR.ts",
+    "sha256": "056c40f7f5754721cc70956f376fef89de1bca824b6dd3f932b8f761d404d7fc"
+  },
+  {
+    "path": "apps/mobile/src/i18n/resources/ru.ts",
+    "sha256": "6872e241af8158a671c5fa247d2ba46154cc3e279c92c7c0acf363532446bcc4"
+  },
+  {
+    "path": "apps/mobile/src/i18n/resources/zh-CN.ts",
+    "sha256": "443f67e7b6d96d9dc05cda3bcfd388995a3ff331951cd9e65847a4ba3ce320c2"
+  }
+]

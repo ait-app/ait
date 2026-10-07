@@ -1,7 +1,8 @@
 import type { FileReadResult } from "@ait/client/internal/daemon-client";
 import type { LiveFileSnapshot } from "../live-file/model";
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import {
+  createFilePanePreview,
   FilePreviewLifecycleModel,
   type FilePanePreview,
   type FilePreviewLifecycleSnapshot,
@@ -155,3 +156,41 @@ async function expectSnapshot(
   await new Promise<void>((resolve) => queueMicrotask(resolve));
   expect(model.getSnapshot()).toEqual(expected);
 }
+
+vi.mock("@/attachments/service", () => ({
+  persistAttachmentFromBytes: vi.fn(async (input) => ({
+    id: input.id,
+    mimeType: input.mimeType,
+    fileName: input.fileName,
+    storageType: "desktop-file",
+    storageKey: "/preview/file",
+    createdAt: 0,
+  })),
+}));
+
+describe("binary preview preparation", () => {
+  it.each(["text", "binary"] as const)(
+    "recognizes PDFs reported as %s by older Hosts",
+    async (kind) => {
+      const bytes = new TextEncoder().encode("%PDF-1.4\ncontent");
+      const preview = await createFilePanePreview({
+        ...file(),
+        path: "report.pdf",
+        bytes,
+        kind,
+        mime: "application/octet-stream",
+      });
+      expect(preview?.file.kind).toBe("binary");
+      expect(preview?.imageAttachment?.mimeType).toBe("application/pdf");
+    },
+  );
+  it("prepares unknown binary files for the system opener", async () => {
+    const preview = await createFilePanePreview({
+      ...file(),
+      kind: "binary",
+      mime: "application/zip",
+      path: "archive.zip",
+    });
+    expect(preview?.imageAttachment?.fileName).toBe("archive.zip");
+  });
+});
