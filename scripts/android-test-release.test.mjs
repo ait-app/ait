@@ -37,12 +37,17 @@ async function fixture(t) {
   for (const file of [
     "scripts/android-release.mjs",
     "scripts/release-assets.mjs",
+    "scripts/release-version.mjs",
     "apps/mobile/native-release-version.js",
   ])
     await copyFile(new URL(`../${file}`, import.meta.url), path.join(root, file));
   await copyFile(
     new URL("../scripts/release-assets.mjs", import.meta.url),
     path.join(root, ".tmp/release-tools/scripts/release-assets.mjs"),
+  );
+  await copyFile(
+    new URL("./release-version.mjs", import.meta.url),
+    path.join(root, ".tmp/release-tools/scripts/release-version.mjs"),
   );
   await writeFile(
     path.join(root, "apps/mobile/package.json"),

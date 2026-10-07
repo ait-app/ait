@@ -1,5 +1,19 @@
 # Ait changelog
 
+## 0.0.23-beta.1 - 2026-10-08
+
+- Publish desktop beta installers and updater metadata on the beta channel, while keeping stable updates on the latest stable release.
+- Reconnect desktop clients after a failed local daemon transport closes.
+- Preserve Markdown whitespace across streamed message chunks.
+- Reflect configured models in the composer and explain model switches deferred until the current turn finishes.
+- Preview PDFs, open external files explicitly, and handle folder drops as directory attachments.
+- Transfer large messages in bounded chunks and serialize file uploads with progress and acknowledgements.
+- Synchronize the built-in desktop daemon after sign-in and simplify online host controls.
+- Fix workspace fork project resolution and accept workspace creation without an initial agent.
+- Improve provider auxiliary generation, native session previews, DeepSeek Harness model discovery, and permission compatibility.
+- Align daemon services, file persistence, shared contracts, and RPC ownership across crates.
+- Add an independent manual Google Play internal testing pipeline.
+
 ## 0.0.22 - 2026-10-07
 
 - Import existing OpenCode and DeepSeek Harness sessions with native permissions, model settings, and resume state; expose OpenCode Build and Plan agents.

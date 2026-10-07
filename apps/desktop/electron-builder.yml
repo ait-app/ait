@@ -38,6 +38,7 @@ publish:
   provider: github
   owner: ait-app
   repo: ait
+  channel: "${channel}"
 mac:
   artifactName: "Ait-${version}-macos-${arch}.${ext}"
   minimumSystemVersion: "13.0.0"

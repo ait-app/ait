@@ -1,6 +1,7 @@
 import { readFile } from "node:fs/promises";
 import { fileURLToPath } from "node:url";
 import { resolve } from "node:path";
+import { releaseChannel } from "./release-version.mjs";
 
 const root = fileURLToPath(new URL("../", import.meta.url));
 const read = (path) => readFile(resolve(root, path), "utf8");
@@ -10,9 +11,8 @@ const version = workspacePackage?.match(/^version\s*=\s*"([^"]+)"/m)?.[1];
 if (!version) throw new Error("Could not read workspace.package.version from Cargo.toml");
 
 const tag = process.argv[2] ?? `v${version}`;
-if (!/^v(?:0|[1-9]\d*)\.(?:0|[1-9]\d*)\.(?:0|[1-9]\d*)$/.test(tag)) {
-  throw new Error(`Release tag must use semantic version form vX.Y.Z: ${tag}`);
-}
+if (!tag.startsWith("v")) throw new Error(`Release tag must start with v: ${tag}`);
+releaseChannel(tag.slice(1));
 if (tag !== `v${version}`) throw new Error(`Release tag ${tag} differs from Ait ${version}`);
 
 const workspace = JSON.parse(await read("package.json"));

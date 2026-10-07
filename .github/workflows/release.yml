@@ -212,12 +212,20 @@ jobs:
       - name: Create or repair GitHub Release
         shell: bash
         run: |
+          release_flags=()
+          if [[ "$RELEASE_TAG" == *-beta.* ]]; then
+            release_flags+=(--prerelease --latest=false)
+          fi
           if gh release view "$RELEASE_TAG" --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
+            if [ "${#release_flags[@]}" -gt 0 ]; then
+              gh release edit "$RELEASE_TAG" "${release_flags[@]}" --repo "$GITHUB_REPOSITORY"
+            fi
             gh release upload "$RELEASE_TAG" release-assets/* --clobber --repo "$GITHUB_REPOSITORY"
           else
             gh release create "$RELEASE_TAG" release-assets/* \
               --generate-notes \
               --title "Ait ${RELEASE_TAG}" \
               --verify-tag \
+              "${release_flags[@]}" \
               --repo "$GITHUB_REPOSITORY"
           fi
