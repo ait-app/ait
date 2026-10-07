@@ -26,6 +26,23 @@ impl Runtime {
         cwd: &Path,
         cancellation: &CancellationToken,
     ) -> Result<Self, ProtocolError> {
+        Self::spawn_config(binary, cwd, cancellation, None).await
+    }
+
+    pub(super) async fn spawn_metadata(
+        binary: &Path,
+        cwd: &Path,
+        agent: &str,
+    ) -> Result<Self, ProtocolError> {
+        Self::spawn_config(binary, cwd, &CancellationToken::new(), Some(agent)).await
+    }
+
+    async fn spawn_config(
+        binary: &Path,
+        cwd: &Path,
+        cancellation: &CancellationToken,
+        metadata_agent: Option<&str>,
+    ) -> Result<Self, ProtocolError> {
         let version = probe(binary, cwd, cancellation).await?;
         let password = uuid::Uuid::new_v4().simple().to_string();
         let mut command = Command::new(binary);
@@ -37,6 +54,12 @@ impl Runtime {
             .stderr(Stdio::piped())
             .kill_on_drop(true)
             .env("OPENCODE_SERVER_USERNAME", "opencode");
+        if let Some(agent) = metadata_agent {
+            command.env(
+                "OPENCODE_CONFIG_CONTENT",
+                metadata_configuration(version, agent)?,
+            );
+        }
         match version {
             Version::V1 => {
                 command.env("OPENCODE_SERVER_PASSWORD", &password);
@@ -108,6 +131,34 @@ impl Runtime {
         self.drain.abort();
         result
     }
+}
+
+fn metadata_configuration(version: Version, agent: &str) -> Result<String, ProtocolError> {
+    let mut config: serde_json::Value = std::env::var("OPENCODE_CONFIG_CONTENT")
+        .ok()
+        .map(|value| serde_json::from_str(&value))
+        .transpose()
+        .map_err(|_| {
+            failure(
+                Fault::ProviderFailed,
+                "invalid OpenCode inline configuration",
+            )
+        })?
+        .unwrap_or_else(|| serde_json::json!({}));
+    if !config.is_object() {
+        return Err(failure(
+            Fault::ProviderFailed,
+            "invalid OpenCode inline configuration",
+        ));
+    }
+    let overlay = super::metadata::configuration(version, agent);
+    for (key, value) in overlay
+        .as_object()
+        .expect("metadata configuration is an object")
+    {
+        config[key] = value.clone();
+    }
+    Ok(config.to_string())
 }
 
 async fn startup_address(stdout: &mut (impl AsyncBufRead + Unpin)) -> Result<Url, ProtocolError> {

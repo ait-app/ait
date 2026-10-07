@@ -68,6 +68,8 @@
 
 ## 工程规范与验证
 
+- [OpenCode 辅助生成验证](reports/providers/opencode-auxiliary-generation.md)：私有、禁用工具的原生通道与清理边界。
+
 - [Rust style guide](policy/rust.md)：Rust 代码、测试、lint 与覆盖率规范。
 - [Daemon 测试扩展与覆盖率验证](reports/daemon/crate-coverage-rebase.md)：最新 rebase 验证、逐 crate 证据与历史测量索引。
 - [文档规范](policy/documentation.md)：分类、维护和历史资料清理规则。
