@@ -204,7 +204,22 @@ export function resolveHostProjectCandidate(input: {
   projects: readonly HostProjectListItem[];
   serverId: string;
 }): HostProjectListItem | null {
-  return resolveExactHostProjectCandidate(input) ?? resolveEquivalentHostProjectCandidate(input);
+  const exact = resolveExactHostProjectCandidate(input);
+  if (exact) return exact;
+  // Older fork routes passed a shared project key as the Host's project ID.
+  // Resolve only an unambiguous placement on this Host at the same root.
+  const legacyId = getHostProjectId(input.candidate, input.serverId);
+  const legacy = input.projects.filter(
+    (project) =>
+      legacyId !== null &&
+      project.projectKey === legacyId &&
+      project.hosts.some(
+        (host) =>
+          host.serverId === input.serverId &&
+          host.iconWorkingDir === getHostProjectSourceDirectory(input.candidate, input.serverId),
+      ),
+  );
+  return (legacy.length === 1 ? legacy[0] : null) ?? resolveEquivalentHostProjectCandidate(input);
 }
 
 export function resolveInitialWorkspaceProject(input: {
