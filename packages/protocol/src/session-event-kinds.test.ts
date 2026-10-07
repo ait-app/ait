@@ -21,4 +21,10 @@ describe("Ait methods and Rust session event kinds", () => {
       expect(sessionEventMethod(method)).toBe(method);
     }
   });
+
+  it("normalizes timeline notifications without adding a session event category", () => {
+    expect(sessionEventMethod("agent_stream")).toBe("agent.stream");
+    expect(sessionEventMethod("agent.stream")).toBe("agent.stream");
+    expect(sessionEventKind("agent.stream")).toBe("agent.stream");
+  });
 });

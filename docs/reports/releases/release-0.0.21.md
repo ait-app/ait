@@ -1,6 +1,8 @@
-# Ait 0.0.21 发布说明
+# Ait 0.0.21 发布准备与失败记录
 
-日期：2026-10-07（Asia/Shanghai）。本次准备基于 main `f50408452e245d9dac7c6edfaf102459d82b2321`；正式源码以合并后的不可变标签 `v0.0.21` 和 Release 的 `BUILD-INFO.json` 为准。
+**未发布。** [首次正式构建](https://github.com/ait-app/ait/actions/runs/37574574517)在 Linux 和 macOS 成品冒烟测试中均失败：daemon 仍以 `agent_stream` 发送 Timeline 通知，名称迁移后的客户端缺少映射，SDK 校验丢弃实时更新。没有生成 GitHub Release 或对外安装包。标签 `v0.0.21` 保留不动；修复后改用 [0.0.22](release-0.0.22.md) 发布。
+
+日期：2026-10-07（Asia/Shanghai）。本次准备基于 main `f50408452e245d9dac7c6edfaf102459d82b2321`；版本 PR #201 合并后标签 `v0.0.21` 指向 `0fc1e3e399df86cf3947bac82243e70dbbc515c8`；发布门禁失败，未生成 Release 或 `BUILD-INFO.json`。
 
 ## 更新内容
 
@@ -11,16 +13,16 @@
 - **大结果和历史恢复。** Timeline 单项支持 768 KiB，超大查询分页保留完整条目；恢复的历史与实时缓存覆盖层分离，减少重复或过期条目。见 [ADR-090](../../decisions/providers/adr-090-timeline-entry-and-page-budgets.md)。
 - **共享客户端协议。** 客户端、SDK、协议包与 daemon 统一采用 Ait 标准方法名；仓库内 SDK 和协议包同步重建。见 [ADR-094](../../decisions/clients/adr-094-canonical-ait-client-methods.md)。
 
-## 安装与升级
+## 原计划产物（未发布）
 
-[Release 下载页](https://github.com/ait-app/ait/releases/tag/v0.0.21)。
+以下为准备时的预期文件名；本版本没有可下载的 Release。
 
 | 平台                           | 安装包                                                     |
 | ------------------------------ | ---------------------------------------------------------- |
 | macOS Apple Silicon，macOS 13+ | `Ait-0.0.21-macos-arm64.dmg`、`Ait-0.0.21-macos-arm64.zip` |
 | Linux x86_64                   | `Ait-linux-x86_64.AppImage`、`Ait-0.0.21-linux-x64.tar.gz` |
 
-退出旧桌面应用，安装新版本后重新打开。桌面标签发布由 `Release Ait` 工作流构建 Linux/macOS 安装包、自动更新资产、签名与公证，并验证打包应用和 daemon 启动。Android APK、Google Play 和 iOS TestFlight 使用独立的手动流程。
+桌面标签发布由 `Release Ait` 工作流构建 Linux/macOS 安装包、自动更新资产、签名与公证，并验证打包应用和 daemon 启动。Android APK、Google Play 和 iOS TestFlight 使用独立的手动流程。
 
 ## 发布准备验证
 
@@ -36,10 +38,10 @@
 - `cargo fmt --all --check`、变更清单和文档的 Oxfmt、`npm run check:docs`、`git diff --check`：通过。
 - 结构化比较 Cargo/npm 锁文件确认只更新本地包版本，第三方依赖及其锁定信息未变。
 
-发布准备经 PR 验证并合并后创建 `v0.0.21`；正式工作流完成后核对安装包、SHA-256、自动更新摘要和 `BUILD-INFO.json` 的源码提交。
+发布准备经 [PR #201](https://github.com/ait-app/ait/pull/201) 验证并合并，已创建 `v0.0.21`。正式工作流的实时 Timeline 门禁失败，未进入资产发布；修复后的发布流程见 0.0.22。
 
 ## Test coverage
 
-**Not applicable — 本次发布准备没有修改 Rust 源码或业务行为。** 本次不重新测量行覆盖率；普通发布脚本测试的通过数量不代表覆盖率。下一步由版本 PR 的 CI 验证最终版本清单和构建，正式发布工作流验证真实安装包。
+**Not applicable — 本次发布准备没有修改 Rust 源码或业务行为。** 本次不重新测量行覆盖率；普通发布脚本测试的通过数量不代表覆盖率。版本 PR CI 已验证清单和构建；真实成品验证发现实时 Timeline 回归并阻止发布。下一步在 0.0.22 修复并重新验证。
 
 [工作区远端重置的历史验证](../workspace/workspace-reset-remote-pr-validation-2026-10-07.md)记录源码 `c4f340f72dbf9dccf79fb53e2e1cea9e8448aa38` 的 1,894 passed、7 ignored，以及 workspace 53,569/56,802（94.31%）、filesystem 11,366/11,988（94.81%）的测量和证据。该统计不代表最终 0.0.21 标签的重新测量；其后 main 的客户端和请求分发更新也由各自 PR 与 CI 验证。

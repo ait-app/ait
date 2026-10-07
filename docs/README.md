@@ -46,7 +46,8 @@
 
 - [Android APK 发布](operations/android-releases.md)：独立手动构建测试或正式通用 APK。
 - [发布指南](operations/releasing.md)：桌面 Release、Android Internal Testing、iOS TestFlight。
-- [Ait 0.0.21 发布说明](reports/releases/release-0.0.21.md)：远端分支重置、独立会话并发、Antigravity、Provider 交互与 Timeline 分页。
+- [Ait 0.0.22 发布说明](reports/releases/release-0.0.22.md)：远端分支重置、会话并发、Antigravity 与实时 Timeline 通知修复。
+- [Ait 0.0.21 发布准备与失败记录](reports/releases/release-0.0.21.md)：成品 Timeline 门禁阻止发布。
 - [Ait 0.0.20 发布说明](reports/releases/release-0.0.20.md)：统一浏览器登录、iOS 认证窗口与工作区重置分支复用。
 - [Ait 0.0.19 发布说明](reports/releases/release-0.0.19.md)：daemon 注册身份、同步重试、桌面 IPC 命名与工作区重置路径修复。
 - [Ait 0.0.18 发布说明](reports/releases/release-0.0.18.md)：Codex 截图时间线、在线服务与主机同步、工作区 Git 操作。
