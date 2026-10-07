@@ -1,19 +1,20 @@
 //! Forge request validation and response projection.
 
 /// Client methods implemented by this component; consumed by capability discovery.
-pub const METHODS: &[&str] = &[
-    "forge.search.request",
-    "github.search.request",
-    "checkout.pr.create.request",
-    "checkout.pr.merge.request",
-    "checkout.pr.status.request",
-    "checkout.pr.timeline.request",
-    "checkout.forge.set_auto_merge.request",
-    "checkout.forge.get_check_details.request",
-    "checkout.github.set_auto_merge.request",
-    "checkout.github.get_check_details.request",
+pub const METHODS: &[MethodSpec] = &[
+    MethodSpec::request("forge.search.request"),
+    MethodSpec::request("github.search.request"),
+    MethodSpec::request("checkout.pr.create.request"),
+    MethodSpec::request("checkout.pr.merge.request"),
+    MethodSpec::request("checkout.pr.status.request"),
+    MethodSpec::request("checkout.pr.timeline.request"),
+    MethodSpec::request("checkout.forge.set_auto_merge.request"),
+    MethodSpec::request("checkout.forge.get_check_details.request"),
+    MethodSpec::request("checkout.github.set_auto_merge.request"),
+    MethodSpec::request("checkout.github.get_check_details.request"),
 ];
 
+use model::methods::MethodSpec;
 use serde::Serialize;
 use serde_json::Value;
 

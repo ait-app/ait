@@ -3,8 +3,8 @@
 use std::collections::BTreeMap;
 use std::sync::OnceLock;
 
+use model::methods::InboundKind;
 use protocol::ErrorCode;
-use protocol::methods::{InboundKind, PASEO_METHODS};
 
 use crate::capabilities::implemented_methods;
 
@@ -15,26 +15,18 @@ pub(super) struct Method {
 }
 
 fn methods() -> &'static BTreeMap<&'static str, Method> {
-    static METHODS: OnceLock<BTreeMap<&'static str, Method>> = OnceLock::new();
-    METHODS.get_or_init(|| {
+    static METHOD_METADATA: OnceLock<BTreeMap<&'static str, Method>> = OnceLock::new();
+    METHOD_METADATA.get_or_init(|| {
         let mut methods = BTreeMap::new();
-        for spec in PASEO_METHODS {
+        for spec in implemented_methods() {
             let previous = methods.insert(
-                spec.canonical_name,
+                spec.name,
                 Method {
                     kind: spec.kind,
-                    capability: spec.canonical_name,
+                    capability: spec.name,
                 },
             );
-            if let Some(previous) = previous {
-                assert_eq!(previous.kind, spec.kind, "conflicting method direction");
-            }
-        }
-        for method in implemented_methods() {
-            methods.entry(method).or_insert(Method {
-                kind: InboundKind::Request,
-                capability: method,
-            });
+            assert!(previous.is_none(), "duplicate Ait method: {}", spec.name);
         }
         let previous = methods.insert(
             "server.status.unsubscribe",

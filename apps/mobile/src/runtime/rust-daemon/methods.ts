@@ -1,4 +1,4 @@
-// Canonical Ait names from crates/protocol/src/methods.rs.
+// Ait names declared by Rust capability components.
 // Verify with scripts/check-paseo-client-methods.py.
 import { RELAY_METHODS } from "./relay-methods";
 export interface MethodSpec {

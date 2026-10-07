@@ -1,15 +1,16 @@
 //! Serialized orchestration skill selection and deletion consent.
 
 /// Client methods implemented by this component; consumed by capability discovery.
-pub(crate) const METHODS: &[&str] = &[
-    "agent.skills.get_status.request",
-    "agent.skills.reconcile.request",
-    "agent.skills.uninstall.request",
-    "agent.skills.save_selection.request",
-    "agent.skills.import_legacy_selection.request",
+pub(crate) const METHODS: &[MethodSpec] = &[
+    MethodSpec::request("agent.skills.get_status.request"),
+    MethodSpec::request("agent.skills.reconcile.request"),
+    MethodSpec::request("agent.skills.uninstall.request"),
+    MethodSpec::request("agent.skills.save_selection.request"),
+    MethodSpec::request("agent.skills.import_legacy_selection.request"),
 ];
 
 use model::ErrorCode;
+use model::methods::MethodSpec;
 use serde_json::{Value, json};
 
 use crate::ports::skills::{ApplyMode, SkillStore};

@@ -1,13 +1,14 @@
 /// Client methods implemented by this component; consumed by capability discovery.
-pub(crate) const METHODS: &[&str] = &[
-    "session.heartbeat",
-    "session.events.set_subscription.request",
+pub(crate) const METHODS: &[MethodSpec] = &[
+    MethodSpec::event("session.heartbeat"),
+    MethodSpec::request("session.events.set_subscription.request"),
 ];
 
 use std::sync::Arc;
 
 use crate::protocol::session::{EventsRequest, Heartbeat};
 use crate::service::session::SessionError;
+use model::methods::MethodSpec;
 use model::{ErrorCode, ServerMessage};
 use serde_json::{Value, json};
 

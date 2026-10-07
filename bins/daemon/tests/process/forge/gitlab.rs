@@ -1,5 +1,7 @@
 //! Real server + WebSocket + Git, with an isolated offline glab process.
 
+use super::super::transport::method_names;
+
 use super::*;
 use crate::unix::TOKEN;
 
@@ -55,7 +57,7 @@ async fn server_routes_self_managed_gitlab_operations_without_github_queries() {
             .iter()
             .any(|feature| feature == "forge-gitlab-v1")
     );
-    let mut methods = filesystem::rpc::forge::METHODS.to_vec();
+    let mut methods = method_names(filesystem::rpc::forge::METHODS);
     methods.extend(["workspace.create.request", "workspace.setup.status.request"]);
     let mut client = connect(&address, &methods).await;
     let status = request(

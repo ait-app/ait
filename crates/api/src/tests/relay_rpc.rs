@@ -8,7 +8,7 @@ async fn relay_control_is_negotiated_and_returns_only_public_runtime_state() {
         &mut socket,
         json!({"type":"hello","client_id":"relay-client",
         "protocol":{"major":1,"min_minor":0,"max_minor":0},
-        "capabilities":crate::relay_rpc::METHODS,
+        "capabilities":crate::relay_rpc::METHODS.iter().map(|method| method.name).collect::<Vec<_>>(),
         "required_capabilities":["connection.single.v1"]}),
     )
     .await;

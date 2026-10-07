@@ -1,7 +1,8 @@
 /// Client methods implemented by this component; consumed by capability discovery.
-pub(crate) const METHODS: &[&str] = &["creation.subscribe.request"];
+pub(crate) const METHODS: &[MethodSpec] = &[MethodSpec::request("creation.subscribe.request")];
 
 use model::events::Subscription;
+use model::methods::MethodSpec;
 use model::outbound::QueueError;
 use model::{Context, ErrorCode};
 use serde_json::{Value, json};

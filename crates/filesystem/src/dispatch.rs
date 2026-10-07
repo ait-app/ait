@@ -1,34 +1,35 @@
 //! Concrete service state and crate-owned request dispatch.
 
 /// Client methods implemented by this component; consumed by capability discovery.
-pub const CHECKOUT_METHODS: &[&str] = &[
-    "checkout.status.get.request",
-    "checkout.refresh.request",
-    "checkout.diff.get.request",
-    "checkout.diff.subscribe.request",
-    "checkout.diff.unsubscribe.request",
-    "checkout.commits.list.request",
-    "checkout.commits.file_diff.request",
-    "checkout.branch.validate.request",
-    "checkout.branch.suggestions.request",
-    "checkout.branch.switch.request",
-    "checkout.rename_branch.request",
-    "checkout.commit.request",
-    "checkout.merge.request",
-    "checkout.merge_from_base.request",
-    "checkout.reset_workspace.request",
-    "checkout.pull.request",
-    "checkout.push.request",
-    "checkout.discard_changes.request",
-    "checkout.stash.save.request",
-    "checkout.stash.pop.request",
-    "checkout.stash.list.request",
+pub const CHECKOUT_METHODS: &[MethodSpec] = &[
+    MethodSpec::request("checkout.status.get.request"),
+    MethodSpec::request("checkout.refresh.request"),
+    MethodSpec::request("checkout.diff.get.request"),
+    MethodSpec::request("checkout.diff.subscribe.request"),
+    MethodSpec::request("checkout.diff.unsubscribe.request"),
+    MethodSpec::request("checkout.commits.list.request"),
+    MethodSpec::request("checkout.commits.file_diff.request"),
+    MethodSpec::request("checkout.branch.validate.request"),
+    MethodSpec::request("checkout.branch.suggestions.request"),
+    MethodSpec::request("checkout.branch.switch.request"),
+    MethodSpec::request("checkout.rename_branch.request"),
+    MethodSpec::request("checkout.commit.request"),
+    MethodSpec::request("checkout.merge.request"),
+    MethodSpec::request("checkout.merge_from_base.request"),
+    MethodSpec::request("checkout.reset_workspace.request"),
+    MethodSpec::request("checkout.pull.request"),
+    MethodSpec::request("checkout.push.request"),
+    MethodSpec::request("checkout.discard_changes.request"),
+    MethodSpec::request("checkout.stash.save.request"),
+    MethodSpec::request("checkout.stash.pop.request"),
+    MethodSpec::request("checkout.stash.list.request"),
 ];
 
 mod metadata;
 
 use std::sync::{Arc, Mutex};
 
+use model::methods::MethodSpec;
 use model::{Context, DispatchError, ErrorCode, Runtime};
 
 mod requests;

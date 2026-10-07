@@ -1,9 +1,11 @@
-//! Terminal method groups and installation rules owned by this crate.
+//! Terminal method metadata and installation rules owned by this crate.
 
-/// Return every implemented capability for negotiation and message validation.
+use model::methods::MethodSpec;
+
+/// Return every component-owned method for negotiation and message validation.
 /// # Returns
-/// Static method names, including events, without selecting a request handler.
-pub fn implemented_capabilities() -> impl Iterator<Item = &'static str> {
+/// Method names and message directions, including events, without selecting a request handler.
+pub fn implemented_methods() -> impl Iterator<Item = MethodSpec> {
     crate::connection::METHODS.iter().copied()
 }
 
@@ -16,9 +18,13 @@ pub struct InstalledServices {
 
 /// Return methods supported by `services`, using this crate's installation rules.
 ///
-/// The iterator borrows static method names and excludes uninstalled optional services.
-pub fn installed_capabilities(services: InstalledServices) -> impl Iterator<Item = &'static str> {
-    implemented_capabilities().filter(move |_| services.terminals)
+/// # Arguments
+/// * `services` - Service presence supplied by the host.
+///
+/// # Returns
+/// Static method metadata excluding uninstalled optional services.
+pub fn installed_methods(services: InstalledServices) -> impl Iterator<Item = MethodSpec> {
+    implemented_methods().filter(move |_| services.terminals)
 }
 
 #[cfg(test)]

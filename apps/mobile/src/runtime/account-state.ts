@@ -25,6 +25,8 @@ export interface AccountState {
   error: string | null;
   selected: AccountHost | null;
   synchronizedHosts?: string[];
+  /** Desktop-owned preference, retained when the built-in daemon is manually taken offline. */
+  syncBuiltInDaemon?: boolean;
   accountExpiresAt?: string | null;
   loginPending?: boolean;
 }

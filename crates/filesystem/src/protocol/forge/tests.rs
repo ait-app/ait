@@ -102,11 +102,11 @@ fn capability_names_are_canonical_and_complete() {
     assert!(
         crate::rpc::forge::METHODS
             .iter()
-            .all(|method| method.ends_with(".request"))
+            .all(|method| method.name.ends_with(".request"))
     );
     assert!(
         crate::rpc::forge::METHODS
             .iter()
-            .all(|method| !method.ends_with("_request"))
+            .all(|method| !method.name.ends_with("_request"))
     );
 }

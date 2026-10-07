@@ -1,11 +1,11 @@
 use super::*;
 
 #[test]
-fn errors_have_safe_stable_codes_and_capabilities_are_installed_only_with_service() {
-    assert!(capabilities::installed_capabilities(false).next().is_none());
+fn errors_have_safe_stable_codes_and_methods_follow_service_installation() {
+    assert!(capabilities::installed_methods(false).next().is_none());
     assert_eq!(
-        capabilities::installed_capabilities(true).collect::<Vec<_>>(),
-        connection::METHODS
+        capabilities::installed_methods(true).collect::<Vec<_>>(),
+        connection::METHODS.to_vec()
     );
     for error in [
         Error::Invalid,

@@ -3,7 +3,11 @@ import { randomUUID } from "node:crypto";
 import { readFileSync } from "node:fs";
 import { mkdir, rename, writeFile } from "node:fs/promises";
 import path from "node:path";
-import { AccountSessionManager, type SavedAccount } from "./account-session.js";
+import {
+  AccountSessionManager,
+  type AccountSnapshot,
+  type SavedAccount,
+} from "./account-session.js";
 import { AccountTransportManager } from "./account-transport.js";
 import { AccountDownloadManager } from "./account-download.js";
 import type { RustDaemonManager } from "./rust-daemon.js";
@@ -30,13 +34,16 @@ export function createAccountIpc(
   const file = path.join(app.getPath("userData"), "account-node.json");
   let installationId: string = randomUUID();
   let saved: SavedAccount | null = null;
+  let syncBuiltInDaemon = true;
   try {
     const stored = JSON.parse(readFileSync(file, "utf8")) as {
       installationId?: string;
       account?: string;
+      syncBuiltInDaemon?: boolean;
     };
     if (typeof stored.installationId === "string" && /^[0-9a-f-]{36}$/i.test(stored.installationId))
       installationId = stored.installationId;
+    if (typeof stored.syncBuiltInDaemon === "boolean") syncBuiltInDaemon = stored.syncBuiltInDaemon;
     if (stored.account && canRemember())
       saved = JSON.parse(
         safeStorage.decryptString(Buffer.from(stored.account, "base64")),
@@ -46,15 +53,21 @@ export function createAccountIpc(
   }
   let saveTail = Promise.resolve();
   const save = (value: SavedAccount | null): Promise<void> => {
+    saved = value;
     const encoded =
       value && canRemember()
         ? safeStorage.encryptString(JSON.stringify(value)).toString("base64")
         : null;
+    const syncPreference = syncBuiltInDaemon;
     const next = saveTail.then(async () => {
       await mkdir(path.dirname(file), { recursive: true });
-      await writeFile(`${file}.tmp`, JSON.stringify({ installationId, account: encoded }), {
-        mode: 0o600,
-      });
+      await writeFile(
+        `${file}.tmp`,
+        JSON.stringify({ installationId, account: encoded, syncBuiltInDaemon: syncPreference }),
+        {
+          mode: 0o600,
+        },
+      );
       await rename(`${file}.tmp`, file);
     });
     saveTail = next.catch(() => undefined);
@@ -62,6 +75,11 @@ export function createAccountIpc(
   };
   let transports: AccountTransportManager;
   let downloads: AccountDownloadManager;
+  const notify = (snapshot: AccountSnapshot) => {
+    for (const window of BrowserWindow.getAllWindows())
+      if (isAppWindow(window.webContents))
+        window.webContents.send("paseo:event:account-state", { ...snapshot, syncBuiltInDaemon });
+  };
   const manager = new AccountSessionManager({
     installationId,
     appVersion: app.getVersion(),
@@ -74,12 +92,21 @@ export function createAccountIpc(
       transports?.closeAll();
       downloads?.closeAll();
     },
-    notify: (snapshot) => {
-      for (const window of BrowserWindow.getAllWindows())
-        if (isAppWindow(window.webContents))
-          window.webContents.send("paseo:event:account-state", snapshot);
-    },
+    notify,
   });
+  const snapshot = () => ({ ...manager.snapshot(), syncBuiltInDaemon });
+  const setBuiltInHostSync = async (serverId: unknown, enabled: boolean) => {
+    if (serverId !== getRuntime().status().serverId || syncBuiltInDaemon === enabled) return;
+    const previous = syncBuiltInDaemon;
+    syncBuiltInDaemon = enabled;
+    try {
+      await save(saved);
+    } catch (error) {
+      syncBuiltInDaemon = previous;
+      throw error;
+    }
+    notify(manager.snapshot());
+  };
   account = manager;
   transports = new AccountTransportManager(manager);
   downloads = new AccountDownloadManager(manager);
@@ -98,7 +125,7 @@ export function createAccountIpc(
     const operation = async (): Promise<unknown> => {
       switch (command) {
         case "account_status":
-          return manager.snapshot();
+          return snapshot();
         case "account_login_methods":
           if (args.center !== undefined && typeof args.center !== "string")
             throw new Error("Invalid service URL");
@@ -106,18 +133,18 @@ export function createAccountIpc(
         case "account_login_hosted": {
           if (args.center !== undefined && typeof args.center !== "string")
             throw new Error("Invalid service URL");
-          const snapshot = await manager.loginWithBrowser((args.center as string) ?? "");
+          await manager.loginWithBrowser((args.center as string) ?? "");
           const window = BrowserWindow.fromWebContents(event.sender);
           if (window && !window.isDestroyed()) {
             if (window.isMinimized()) window.restore();
             window.show();
             window.focus();
           }
-          return snapshot;
+          return snapshot();
         }
         case "account_cancel_login":
           manager.cancelLogin();
-          return manager.snapshot();
+          return snapshot();
         case "account_login": {
           if (
             (args.center !== undefined && typeof args.center !== "string") ||
@@ -125,18 +152,28 @@ export function createAccountIpc(
             typeof args.password !== "string"
           )
             throw new Error("Invalid login");
-          return manager.login(args.center ?? "", args.email, args.password);
+          await manager.login(args.center ?? "", args.email, args.password);
+          return snapshot();
         }
         case "account_logout":
           await manager.logout();
-          return manager.snapshot();
+          return snapshot();
         case "account_refresh":
           manager.refresh();
-          return manager.snapshot();
+          return snapshot();
         case "account_select":
-          return manager.select(typeof args.hostId === "string" ? args.hostId : null);
-        case "account_host_sync":
-          return manager.publishHost(
+          await manager.select(typeof args.hostId === "string" ? args.hostId : null);
+          return snapshot();
+        case "account_host_sync": {
+          // A delayed automatic request must never undo a user's manual stop.
+          if (
+            args.serverId === getRuntime().status().serverId &&
+            !syncBuiltInDaemon &&
+            args.enableBuiltInDaemon !== true
+          )
+            return null;
+          if (args.enableBuiltInDaemon === true) await setBuiltInHostSync(args.serverId, true);
+          const grant = await manager.publishHost(
             {
               serverId: args.serverId as string,
               instanceId: args.instanceId as string,
@@ -145,9 +182,14 @@ export function createAccountIpc(
             },
             args.needsGrant !== false,
           );
+          notify(manager.snapshot());
+          return grant;
+        }
         case "account_host_disconnect":
           if (typeof args.serverId !== "string") throw new Error("Invalid host identity");
+          await setBuiltInHostSync(args.serverId, false);
           await manager.unpublishHost(args.serverId);
+          notify(manager.snapshot());
           return;
         case "account_transport_open":
           return transports.open(

@@ -1,15 +1,16 @@
 //! Discovery replies are tracked independently of the physical WebSocket reader.
 
 /// Client methods implemented by this component; consumed by capability discovery.
-pub(crate) const METHODS: &[&str] = &[
-    "provider.available.list.request",
-    "provider.models.list.request",
-    "provider.modes.list.request",
-    "provider.features.list.request",
-    "provider.snapshot.get.request",
-    "provider.snapshot.refresh.request",
+pub(crate) const METHODS: &[MethodSpec] = &[
+    MethodSpec::request("provider.available.list.request"),
+    MethodSpec::request("provider.models.list.request"),
+    MethodSpec::request("provider.modes.list.request"),
+    MethodSpec::request("provider.features.list.request"),
+    MethodSpec::request("provider.snapshot.get.request"),
+    MethodSpec::request("provider.snapshot.refresh.request"),
 ];
 
+use model::methods::MethodSpec;
 use model::outbound::QueueError;
 use model::{Context, ErrorCode};
 
