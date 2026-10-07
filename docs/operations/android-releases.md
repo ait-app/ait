@@ -43,7 +43,8 @@ gh workflow run release-android.yml --repo OWNER/REPO --ref BRANCH -f mode=test
 APK 使用原 profile 默认的 EAS 托管签名。首次 CI 构建前须在 EAS 配置 Android keystore；
 工作流冻结凭据，不创建或更换密钥，也不重新签名下载的 APK。
 原测试签名安装包不能直接被不同证书签名的同包名 APK 覆盖。
-本流程提供 GitHub APK 下载，Google Play 内测仍按原有发布指南执行。
+本流程提供 GitHub APK 下载，Google Play 内测使用独立的
+[AAB 发布入口](google-play-internal-testing.md)。
 
 首次配置签名时，在已登录 Expo 的本地终端执行：
 
@@ -82,7 +83,8 @@ APK 类型和 Gradle 命令保持原样。
 `production-apk.android.env` 设置 `AIT_ANDROID_HERMES_O0=1`，Expo prebuild 通过
 `with-android-hermes-o0` 插件写入 `hermesFlags = ["-O0", "-output-source-map"]`。
 这会关闭 Hermes 编译优化，尝试降低生成协议校验代码的内存开销，保留 source map。
-其他 profile 和 iOS 不启用此开关。删除该环境变量后，新的干净 prebuild 将恢复默认 `-O`；
+Play AAB 的 `production-play` profile 也沿用此开关，iOS 不启用。删除该环境变量后，
+新的干净 prebuild 将恢复默认 `-O`；
 本地复现时也需使用同一环境变量。构建成功后需验证启动与交互性能，不能仅以 APK 生成
 判断该优化等级适合长期发布。
 

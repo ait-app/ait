@@ -1,0 +1,183 @@
+name: Release Android to Google Play
+
+on:
+  workflow_dispatch:
+    inputs:
+      action:
+        description: Build an AAB, upload an internal draft, or release to internal testers
+        required: true
+        default: build-only
+        type: choice
+        options: [build-only, internal-draft, internal]
+      tag:
+        description: Optional stable tag (vX.Y.Z); blank builds the selected branch commit
+        required: false
+        type: string
+
+permissions:
+  contents: read
+
+# Serialize submissions so an older build cannot overtake a newer versionCode.
+concurrency:
+  group: release-android-play
+  cancel-in-progress: false
+
+jobs:
+  release:
+    name: Build and optionally submit a Play AAB
+    runs-on: ubuntu-24.04
+    timeout-minutes: 150
+    env:
+      ACTION: ${{ inputs.action }}
+      TAG: ${{ inputs.tag }}
+      APP_VARIANT: production
+      EXPO_NO_TELEMETRY: "1"
+      CI: "1"
+    steps:
+      - name: Validate release request
+        run: |
+          case "$ACTION" in build-only|internal-draft|internal) ;; *) exit 1 ;; esac
+          if [ -n "$TAG" ]; then
+            [[ "$TAG" =~ ^v(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)$ ]]
+          fi
+
+      - name: Check out release source
+        uses: actions/checkout@v5
+        with:
+          ref: ${{ inputs.tag != '' && format('refs/tags/{0}', inputs.tag) || github.sha }}
+          persist-credentials: false
+
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 24
+          cache: npm
+          cache-dependency-path: package-lock.json
+
+      - name: Verify source version
+        run: node scripts/verify-release-version.mjs ${TAG:+"$TAG"}
+
+      - name: Install workspace dependencies
+        run: npm ci
+
+      - name: Check out release tooling
+        uses: actions/checkout@v5
+        with:
+          ref: ${{ github.workflow_sha }}
+          path: .tmp/android-play-release-tools
+          persist-credentials: false
+
+      - name: Move tooling outside the EAS source archive
+        run: mv .tmp/android-play-release-tools "$RUNNER_TEMP/android-play-release-tools"
+
+      - name: Configure Play build and remote versionCode
+        id: plan
+        run: |
+          export SOURCE_COMMIT=$(git rev-parse HEAD)
+          node --input-type=module <<'NODE'
+          import { appendFileSync, readFileSync, writeFileSync } from 'node:fs';
+          import { pathToFileURL } from 'node:url';
+          const tooling = `${process.env.RUNNER_TEMP}/android-play-release-tools`;
+          const { configureAndroidPlayBuild, planAndroidPlayRelease } =
+            await import(pathToFileURL(`${tooling}/scripts/android-play-release.mjs`));
+          const read = path => JSON.parse(readFileSync(path, 'utf8'));
+          const config = configureAndroidPlayBuild(read('apps/mobile/eas.json'), read(`${tooling}/apps/mobile/eas.json`));
+          const plan = planAndroidPlayRelease({
+            tag: process.env.TAG, version: read('apps/mobile/package.json').version,
+            sourceCommit: process.env.SOURCE_COMMIT, action: process.env.ACTION,
+          });
+          writeFileSync('apps/mobile/eas.json', JSON.stringify(config, null, 2) + '\n');
+          writeFileSync(`${process.env.RUNNER_TEMP}/android-play-plan.json`, JSON.stringify(plan));
+          for (const key of ['EXPO_OWNER', 'EXPO_SLUG', 'EAS_PROJECT_ID'])
+            appendFileSync(process.env.GITHUB_ENV, `${key}=${config.build.ait.env[key]}\n`);
+          appendFileSync(process.env.GITHUB_OUTPUT,
+            `version=${plan.version}\nsource_commit=${plan.sourceCommit}\nsubmit_profile=${plan.submitProfile ?? ''}\n`);
+          NODE
+
+      - name: Build AAB with EAS
+        working-directory: apps/mobile
+        timeout-minutes: 120
+        env:
+          EXPO_TOKEN: ${{ secrets.EXPO_TOKEN }}
+        run: |
+          npx --no-install eas build --platform android --profile production-play \
+            --non-interactive --freeze-credentials --wait --json > "$RUNNER_TEMP/android-play-build.json"
+
+      - name: Validate EAS build provenance
+        id: build
+        run: |
+          node --input-type=module <<'NODE'
+          import { appendFileSync, readFileSync, writeFileSync } from 'node:fs';
+          import { pathToFileURL } from 'node:url';
+          const { androidPlayBuildArtifact } = await import(pathToFileURL(
+            `${process.env.RUNNER_TEMP}/android-play-release-tools/scripts/android-play-release.mjs`));
+          const read = name => JSON.parse(readFileSync(`${process.env.RUNNER_TEMP}/${name}`, 'utf8'));
+          const artifact = androidPlayBuildArtifact(read('android-play-build.json'), read('android-play-plan.json'), process.env.EAS_PROJECT_ID);
+          writeFileSync(`${process.env.RUNNER_TEMP}/android-play-artifact.json`, JSON.stringify(artifact));
+          appendFileSync(process.env.GITHUB_OUTPUT,
+            `build_id=${artifact.id}\nartifact_url=${artifact.url}\nversion_code=${artifact.versionCode}\n`);
+          NODE
+
+      - name: Download AAB and pinned bundletool
+        env:
+          ARTIFACT_URL: ${{ steps.build.outputs.artifact_url }}
+        run: |
+          curl --fail --location --retry 3 --proto '=https' --proto-redir '=https' \
+            "$ARTIFACT_URL" --output "$RUNNER_TEMP/app-release.aab"
+          curl --fail --location --retry 3 --proto '=https' --proto-redir '=https' \
+            https://github.com/google/bundletool/releases/download/1.18.3/bundletool-all-1.18.3.jar \
+            --output "$RUNNER_TEMP/bundletool.jar"
+          printf '%s  %s\n' a099cfa1543f55593bc2ed16a70a7c67fe54b1747bb7301f37fdfd6d91028e29 \
+            "$RUNNER_TEMP/bundletool.jar" | sha256sum --check
+
+      - uses: actions/setup-java@v5
+        with:
+          distribution: temurin
+          java-version: "17"
+
+      - name: Verify and collect signed AAB
+        run: |
+          node "$RUNNER_TEMP/android-play-release-tools/scripts/android-play-release.mjs" \
+            --bundle "$RUNNER_TEMP/app-release.aab" --bundletool "$RUNNER_TEMP/bundletool.jar" \
+            --plan "$RUNNER_TEMP/android-play-plan.json" --artifact "$RUNNER_TEMP/android-play-artifact.json" \
+            --output-dir release-assets-play
+
+      - uses: actions/upload-artifact@v6
+        with:
+          name: ait-android-play-aab
+          path: release-assets-play/*
+          if-no-files-found: error
+          retention-days: 14
+
+      - name: Submit this verified build to Google Play
+        if: inputs.action != 'build-only'
+        working-directory: apps/mobile
+        timeout-minutes: 20
+        env:
+          EXPO_TOKEN: ${{ secrets.EXPO_TOKEN }}
+          EAS_BUILD_ID: ${{ steps.build.outputs.build_id }}
+          SUBMIT_PROFILE: ${{ steps.plan.outputs.submit_profile }}
+        run: |
+          npx --no-install eas submit --platform android --profile "$SUBMIT_PROFILE" \
+            --id "$EAS_BUILD_ID" --non-interactive --wait
+
+      - name: Write release summary
+        if: always()
+        env:
+          BUILD_ID: ${{ steps.build.outputs.build_id }}
+          VERSION: ${{ steps.plan.outputs.version }}
+          VERSION_CODE: ${{ steps.build.outputs.version_code }}
+          SOURCE_COMMIT: ${{ steps.plan.outputs.source_commit }}
+        run: |
+          {
+            echo "## Ait Google Play Android"
+            echo "- Action: $ACTION"
+            echo "- Package: dev.ait.mobile"
+            echo "- Version: $VERSION ($VERSION_CODE)"
+            echo "- Source: $SOURCE_COMMIT"
+            echo "- Workflow result: ${{ job.status }}"
+            if [ -n "$BUILD_ID" ]; then
+              echo "- EAS build: https://expo.dev/accounts/$EXPO_OWNER/projects/$EXPO_SLUG/builds/$BUILD_ID"
+            fi
+            echo "- AAB artifact: ait-android-play-aab"
+            echo "- Internal testing: https://play.google.com/console"
+          } >> "$GITHUB_STEP_SUMMARY"

@@ -13,6 +13,7 @@
 
 ## 架构决策
 
+- [ADR-097：Google Play 内部测试手动发布](decisions/clients/adr-097-google-play-internal-release.md)：签名 AAB、远端版本计数与内部测试草稿或发布。
 - [ADR-096：Desktop 内置 daemon 默认同步与手动下线](decisions/clients/adr-096-desktop-default-host-sync.md)：登录后默认注册本机，持久保留手动下线选择，并统一在线服务添加主机表单风格。
 - [ADR-095：组件自行声明方法元数据](decisions/daemon/adr-095-component-method-declarations.md)：移除中心目录和 `MethodGroup`，功能 crate 仅提供两种方法元数据接口，API 聚合名称并校验。
 - [ADR-094：客户端统一使用 Ait 标准方法名](decisions/clients/adr-094-canonical-ait-client-methods.md)：应用、SDK、消息校验和方法目录使用标准名称，事件订阅参数转换集中在共享协议层。
@@ -47,6 +48,7 @@
 ## 运维与发布
 
 - [Android APK 发布](operations/android-releases.md)：独立手动构建测试或正式通用 APK。
+- [Google Play 内部测试](operations/google-play-internal-testing.md)：首次账号配置、测试者安装与手动 AAB 发布 CI。
 - [发布指南](operations/releasing.md)：桌面 Release、Android Internal Testing、iOS TestFlight。
 - [Ait 0.0.22 发布说明](reports/releases/release-0.0.22.md)：远端分支重置、会话并发、Antigravity 与实时 Timeline 通知修复。
 - [Ait 0.0.21 发布准备与失败记录](reports/releases/release-0.0.21.md)：成品 Timeline 门禁阻止发布。
