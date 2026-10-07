@@ -4,7 +4,7 @@ use std::time::Duration;
 
 use axum::extract::ws::{CloseFrame, Message, WebSocket, close_code};
 use futures_util::{SinkExt, StreamExt, stream::SplitStream};
-use protocol::methods::InboundKind;
+use model::methods::InboundKind;
 use protocol::{ClientMessage, ErrorCode, Hello, ServerMessage, valid_id};
 use tokio::time::timeout;
 

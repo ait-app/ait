@@ -1,5 +1,7 @@
 //! Capability discovery and installation rules; request execution is owned by dispatchers.
 
+use model::methods::MethodSpec;
+
 /// Presence of independently composed services, supplied by the host.
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
 #[expect(
@@ -21,11 +23,11 @@ pub struct InstalledServices {
     pub workspace_state: bool,
 }
 
-/// Return every implemented capability for negotiation and message validation.
+/// Return every component-owned method for negotiation and message validation.
 /// # Returns
-/// Static method names, including events, without selecting a request handler.
-pub fn implemented_capabilities() -> impl Iterator<Item = &'static str> {
-    installed_capabilities(InstalledServices {
+/// Method names and message directions, including events, without selecting a request handler.
+pub fn implemented_methods() -> impl Iterator<Item = MethodSpec> {
+    installed_methods(InstalledServices {
         push_tokens: true,
         directory: true,
         daemon: true,
@@ -37,8 +39,12 @@ pub fn implemented_capabilities() -> impl Iterator<Item = &'static str> {
 
 /// Return methods supported by `services`, using this crate's installation rules.
 ///
-/// The iterator borrows static method names and excludes uninstalled optional services.
-pub fn installed_capabilities(services: InstalledServices) -> impl Iterator<Item = &'static str> {
+/// # Arguments
+/// * `services` - Service presence supplied by the host.
+///
+/// # Returns
+/// Static method metadata excluding uninstalled optional services.
+pub fn installed_methods(services: InstalledServices) -> impl Iterator<Item = MethodSpec> {
     [
         (true, crate::dispatch::BASE_METHODS),
         (services.push_tokens, crate::connection::push::METHODS),
@@ -71,6 +77,25 @@ pub fn installed_capabilities(services: InstalledServices) -> impl Iterator<Item
     .into_iter()
     .filter(|(installed, _)| *installed)
     .flat_map(|(_, methods)| methods.iter().copied())
+}
+
+/// Return every implemented capability name, including events and client responses.
+///
+/// # Returns
+/// Names derived from the component-owned method metadata.
+pub fn implemented_capabilities() -> impl Iterator<Item = &'static str> {
+    implemented_methods().map(|method| method.name)
+}
+
+/// Return capability names supported by the host's service installation.
+///
+/// # Arguments
+/// * `services` - Service presence supplied by the host.
+///
+/// # Returns
+/// Names derived from installed component-owned method metadata.
+pub fn installed_capabilities(services: InstalledServices) -> impl Iterator<Item = &'static str> {
+    installed_methods(services).map(|method| method.name)
 }
 
 #[cfg(test)]

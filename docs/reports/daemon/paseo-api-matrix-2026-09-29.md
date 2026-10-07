@@ -3,7 +3,7 @@
 由 `scripts/paseo-api-audit.mjs` 从本地 Paseo `30178c4f58b67f8472901356e1484022bd835de0` 的真实 Zod union 生成。
 205 个入站名称，34 个已明确移除，171 个有效名称归并为 168 个 canonical 方法。
 完整嵌套字段、每项 schema 指纹、上游分派位置和关联 Rust 测试保存在
-[契约快照](../../../crates/protocol/src/methods/fixtures/paseo-api-contracts.json)；测试索引不是逐项语义覆盖率。
+[契约快照](../../../scripts/fixtures/paseo/paseo-api-contracts.json)；测试索引不是逐项语义覆盖率。
 
 [修复、验证与未覆盖范围](paseo-api-audit-2026-09-29.md)。表格不以“有路由”推断完全兼容。
 

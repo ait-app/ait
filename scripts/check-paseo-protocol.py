@@ -7,7 +7,7 @@ import subprocess
 
 PIN = "30178c4f58b67f8472901356e1484022bd835de0"
 ROOT = pathlib.Path(__file__).resolve().parents[1]
-FIXTURE = ROOT / "crates/protocol/src/methods/fixtures/paseo-inbound.txt"
+FIXTURE = ROOT / "scripts/fixtures/paseo/paseo-inbound.txt"
 
 
 def extract(checkout):

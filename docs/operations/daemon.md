@@ -112,7 +112,8 @@ npm run dev:mobile
 终端使用对应 binary frame，浏览器回传使用对应 response envelope，不能替换为普通 RPC。
 
 公开的 `server.*`、`server_info` 和 HTTP 路径保留协议拼写。
-规范方法目录见 `crates/protocol/src/methods.rs`，SDK 与适配器见
+方法名称和消息方向由各 Rust 组件声明，通过功能 crate 的 `capabilities::implemented_methods`
+汇总；公共元数据类型见 `crates/model/src/methods.rs`。SDK 与适配器见
 [客户端说明](../../packages/client/README.md)和 [协议说明](../../packages/protocol/README.md)。
 
 ## Provider 与扩展能力

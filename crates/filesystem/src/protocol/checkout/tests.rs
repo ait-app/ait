@@ -5,7 +5,10 @@ use super::*;
 #[test]
 fn capabilities_use_only_canonical_checkout_names() {
     assert_eq!(
-        crate::dispatch::CHECKOUT_METHODS,
+        crate::dispatch::CHECKOUT_METHODS
+            .iter()
+            .map(|method| method.name)
+            .collect::<Vec<_>>(),
         [
             "checkout.status.get.request",
             "checkout.refresh.request",
@@ -30,8 +33,16 @@ fn capabilities_use_only_canonical_checkout_names() {
             "checkout.stash.list.request",
         ]
     );
-    assert!(!crate::dispatch::CHECKOUT_METHODS.contains(&"checkout_status_request"));
-    assert!(!crate::dispatch::CHECKOUT_METHODS.contains(&"subscribe_checkout_diff_request"));
+    assert!(
+        !crate::dispatch::CHECKOUT_METHODS
+            .iter()
+            .any(|method| method.name == "checkout_status_request")
+    );
+    assert!(
+        !crate::dispatch::CHECKOUT_METHODS
+            .iter()
+            .any(|method| method.name == "subscribe_checkout_diff_request")
+    );
 }
 
 #[test]

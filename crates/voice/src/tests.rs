@@ -6,6 +6,9 @@ fn errors_have_safe_stable_codes_and_capabilities_are_installed_only_with_servic
     assert_eq!(
         capabilities::installed_capabilities(true).collect::<Vec<_>>(),
         connection::METHODS
+            .iter()
+            .map(|method| method.name)
+            .collect::<Vec<_>>()
     );
     for error in [
         Error::Invalid,

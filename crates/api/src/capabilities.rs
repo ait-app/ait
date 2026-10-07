@@ -9,14 +9,14 @@ use voice::capabilities as voice;
 use crate::Services;
 
 /// Merge crate-owned method declarations for negotiation and envelope validation.
-pub(super) fn implemented_methods() -> impl Iterator<Item = &'static str> {
-    schedule::implemented_capabilities()
-        .chain(browser::implemented_capabilities())
-        .chain(voice::implemented_capabilities())
-        .chain(metadata::implemented_capabilities())
-        .chain(filesystem::implemented_capabilities())
-        .chain(provider::implemented_capabilities())
-        .chain(terminal::implemented_capabilities())
+pub(super) fn implemented_methods() -> impl Iterator<Item = model::methods::MethodSpec> {
+    schedule::implemented_methods()
+        .chain(browser::implemented_methods())
+        .chain(voice::implemented_methods())
+        .chain(metadata::implemented_methods())
+        .chain(filesystem::implemented_methods())
+        .chain(provider::implemented_methods())
+        .chain(terminal::implemented_methods())
         .chain(crate::relay_rpc::METHODS.iter().copied())
 }
 
@@ -58,7 +58,7 @@ pub(super) fn installed_capabilities(services: &Services) -> Vec<String> {
         services.schedules.is_some(),
     ))
     .chain(browser::installed_capabilities(services.browser.is_some()))
-    .chain(crate::relay_rpc::METHODS.iter().copied())
+    .chain(crate::relay_rpc::METHODS.iter().map(|method| method.name))
     .map(str::to_owned)
     .collect()
 }

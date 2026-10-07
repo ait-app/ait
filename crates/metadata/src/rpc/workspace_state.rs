@@ -1,12 +1,13 @@
 //! Transport-independent workspace state request handling.
 
 /// Client methods implemented by this component; consumed by capability discovery.
-pub const METHODS: &[&str] = &[
-    "workspace.clear_attention.request",
-    "workspace.mark_unread.request",
+pub const METHODS: &[MethodSpec] = &[
+    MethodSpec::request("workspace.clear_attention.request"),
+    MethodSpec::request("workspace.mark_unread.request"),
 ];
 
 use chrono::{SecondsFormat, Utc};
+use model::methods::MethodSpec;
 use serde::Serialize;
 use serde_json::Value;
 

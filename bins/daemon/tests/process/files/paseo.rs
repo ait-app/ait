@@ -1,5 +1,7 @@
 //! Paseo owned-subscriptions/file-upload cases over the production server transport.
 
+use super::super::transport::method_names;
+
 use super::*;
 
 struct Fixture {
@@ -22,7 +24,7 @@ impl Fixture {
     }
 
     async fn socket(&self) -> Socket {
-        let mut methods = filesystem::connection::files::METHODS.to_vec();
+        let mut methods = method_names(filesystem::connection::files::METHODS);
         methods.extend(["subscription.release.request", "connection.ping"]);
         connect(&self.address, &methods).await
     }

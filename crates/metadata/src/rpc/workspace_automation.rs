@@ -1,15 +1,16 @@
 //! Transport-independent workspace automation request handling.
 
 /// Client methods implemented by this component; consumed by capability discovery.
-pub const METHODS: &[&str] = &[
-    "workspace.setup.status.request",
-    "workspace.setup.run.request",
-    "workspace.script.list.request",
-    "workspace.script.start.request",
-    "workspace.script.stop.request",
+pub const METHODS: &[MethodSpec] = &[
+    MethodSpec::request("workspace.setup.status.request"),
+    MethodSpec::request("workspace.setup.run.request"),
+    MethodSpec::request("workspace.script.list.request"),
+    MethodSpec::request("workspace.script.start.request"),
+    MethodSpec::request("workspace.script.stop.request"),
 ];
 
 use chrono::{SecondsFormat, Utc};
+use model::methods::MethodSpec;
 use serde::Serialize;
 use serde_json::Value;
 

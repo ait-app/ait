@@ -421,7 +421,7 @@ async fn every_declared_request_reaches_its_owners_consuming_branch() {
     for (owner, methods) in owners.into_iter().enumerate() {
         for method in methods {
             let entry = super::super::validation::lookup(method).unwrap();
-            if entry.kind != protocol::methods::InboundKind::Request {
+            if entry.kind != model::methods::InboundKind::Request {
                 continue;
             }
             let api = api();
