@@ -1,45 +1,66 @@
-use super::{Version, permissions, permissions_match};
-use serde_json::{Value, json};
+use super::super::client::OpenCodeClient;
+use super::super::tests::fixture::Fixture;
+use super::Version;
+use crate::ports::agent_session::{
+    AgentClient, AgentResumePurpose, AgentSessionSpec, AgentTurnEvent,
+};
+use domain::agent_runtime::StoredAgentConfig;
+use serde_json::json;
 
-#[test]
-fn v1_accepts_only_complete_ordered_copies_of_the_creation_policy() {
-    let policy = permissions(Version::V1);
-    let rules = policy.as_array().unwrap();
-    for copies in 1..=3 {
-        let repeated = Value::Array(
-            rules
-                .iter()
-                .cycle()
-                .take(rules.len() * copies)
-                .cloned()
-                .collect(),
+#[tokio::test]
+async fn native_policies_survive_creation_restore_and_agent_switching() {
+    for version in [Version::V1, Version::V2] {
+        let fixture = Fixture::start(version).await;
+        let policy = match version {
+            Version::V1 => json!([{"permission":"bash","pattern":"git push *","action":"deny"}]),
+            Version::V2 => json!([{"action":"shell","resource":"git push *","effect":"deny"}]),
+        };
+        fixture.state.lock().unwrap().permission = policy.clone();
+        let client = OpenCodeClient::new(fixture.binary.clone());
+        let mut spec = AgentSessionSpec {
+            provider: "opencode".into(),
+            cwd: fixture.cwd.to_str().unwrap().into(),
+            config: StoredAgentConfig {
+                model: Some("local/test-model".into()),
+                mode_id: Some("build".into()),
+                ..Default::default()
+            },
+        };
+        let mut session = client.create_session(&spec).await.unwrap();
+        spec.config.mode_id = Some("plan".into());
+        session.start_turn("plan", &spec.config).await.unwrap();
+        tokio::time::timeout(std::time::Duration::from_secs(5), async {
+            loop {
+                if matches!(
+                    session.poll_turn().unwrap(),
+                    Some(AgentTurnEvent::Completed(_))
+                ) {
+                    break;
+                }
+                tokio::time::sleep(std::time::Duration::from_millis(5)).await;
+            }
+        })
+        .await
+        .unwrap();
+        assert_eq!(
+            session.runtime_info().await.unwrap().mode_id.as_deref(),
+            Some("plan")
         );
-        assert!(permissions_match(Version::V1, Some(&repeated)));
+        assert_eq!(fixture.state.lock().unwrap().agent, "plan");
+        let handle = session.persistence().unwrap();
+        session.close().await.unwrap();
+        spec.config.mode_id = Some("build".into());
+        let mut restored = client
+            .resume_session(&handle, &spec, AgentResumePurpose::Interactive)
+            .await
+            .unwrap();
+        assert_eq!(
+            restored.runtime_info().await.unwrap().mode_id.as_deref(),
+            Some("build")
+        );
+        restored.close().await.unwrap();
+        let state = fixture.state.lock().unwrap();
+        assert_eq!(state.permission, policy);
+        assert_eq!(state.permission_updates, 0);
     }
-    for invalid in [Value::Null, json!([]), json!({}), json!(rules[..8])] {
-        assert!(!permissions_match(Version::V1, Some(&invalid)));
-    }
-    assert!(!permissions_match(Version::V1, None));
-    let mut reordered = policy.clone();
-    reordered.as_array_mut().unwrap().swap(0, 1);
-    assert!(!permissions_match(Version::V1, Some(&reordered)));
-    let mut additional = policy.clone();
-    additional
-        .as_array_mut()
-        .unwrap()
-        .push(json!({"permission":"bash","pattern":"*","action":"allow"}));
-    assert!(!permissions_match(Version::V1, Some(&additional)));
-    let mut changed = Value::Array(rules.iter().chain(rules).cloned().collect());
-    changed[17]["action"] = json!("allow");
-    assert!(!permissions_match(Version::V1, Some(&changed)));
-}
-
-#[test]
-fn v2_requires_exact_replacement_policy() {
-    let policy = permissions(Version::V2);
-    assert!(permissions_match(Version::V2, Some(&policy)));
-    assert!(!permissions_match(Version::V2, None));
-    let rules = policy.as_array().unwrap();
-    let repeated = Value::Array(rules.iter().chain(rules).cloned().collect());
-    assert!(!permissions_match(Version::V2, Some(&repeated)));
 }

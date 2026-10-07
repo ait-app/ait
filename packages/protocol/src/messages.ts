@@ -337,6 +337,7 @@ const AgentModelDefinitionSchema = z.object({
 }) satisfies z.ZodType<AgentModelDefinition>;
 
 export const ProviderSnapshotEntrySchema = z.object({
+  supportsSessionImport: z.boolean().optional(),
   provider: AgentProviderSchema,
   status: ProviderStatusSchema,
   enabled: z.boolean().optional().default(true),

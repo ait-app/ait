@@ -81,6 +81,25 @@ impl DeepSeekHarnessClient {
 }
 
 impl AgentClient for DeepSeekHarnessClient {
+    fn supports_session_import(&self) -> bool {
+        self.interactive
+    }
+
+    fn list_sessions<'a>(
+        &'a self,
+        options: &'a crate::ports::native_history::ListOptions,
+    ) -> AgentSessionFuture<'a, Vec<crate::ports::native_history::SessionDescriptor>> {
+        Box::pin(native::native_sessions::list(self, options))
+    }
+
+    fn inspect_session<'a>(
+        &'a self,
+        handle: &'a AgentPersistenceHandle,
+        cwd: &'a str,
+    ) -> AgentSessionFuture<'a, crate::ports::native_history::SessionHistory> {
+        Box::pin(native::native_sessions::inspect(self, handle, cwd))
+    }
+
     fn provider(&self) -> &'static str {
         PROVIDER
     }
@@ -114,7 +133,7 @@ impl AgentClient for DeepSeekHarnessClient {
         if self.interactive {
             return json!({"availableModes":native::modes(),"features":[],"capabilities":{
                 "supportsMcpServers":false,"supportsStreaming":true,"supportsReasoningStream":true,
-                "supportsDynamicModes":true,"supportsSessionListing":false,
+                "supportsDynamicModes":true,"supportsSessionListing":true,
                 "supportsRewindConversation":false,"supportsRewindFiles":false,"supportsRewindBoth":false}});
         }
         json!({"availableModes":[],"features":[],"capabilities":{

@@ -168,3 +168,26 @@ async fn unavailable_provider_is_reported_truthfully() {
         "Provider executable is unavailable"
     );
 }
+
+#[tokio::test]
+async fn native_import_support_does_not_require_an_installed_executable() {
+    assert_eq!(
+        discover(&Client(true), "/tmp").await.value["supportsSessionImport"],
+        false
+    );
+    let root = tempfile::tempdir().unwrap();
+    let missing = root.path().join("missing-provider");
+    let clients: Vec<Box<dyn AgentClient>> = vec![
+        Box::new(crate::local::codex::CodexClient::new(missing.clone())),
+        Box::new(crate::local::claude::ClaudeClient::new(missing.clone())),
+        Box::new(crate::local::opencode::OpenCodeClient::new(missing.clone())),
+        Box::new(crate::local::deepseek_harness::DeepSeekHarnessClient::new(
+            missing,
+        )),
+    ];
+    for client in clients {
+        let entry = discover(client.as_ref(), root.path().to_str().unwrap()).await;
+        assert_eq!(entry.value["supportsSessionImport"], true);
+        assert_eq!(entry.value["status"], "unavailable");
+    }
+}

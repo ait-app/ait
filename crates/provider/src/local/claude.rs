@@ -104,6 +104,10 @@ impl ClaudeClient {
 }
 
 impl AgentClient for ClaudeClient {
+    fn supports_session_import(&self) -> bool {
+        true
+    }
+
     fn create_session_with_environment<'a>(
         &'a self,
         spec: &'a AgentSessionSpec,

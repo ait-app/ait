@@ -44,10 +44,17 @@ DSH 官方 ACP 是 automation-only profile，不提供权限模式和 user quest
   既有 timeline reconcile 原子修复旧版本漏掉的用户消息及误投影的内部上下文；
   再次读取不重复追加或改变 epoch。
   历史有缺口或无法完整读取时返回错误，保留现有展示历史；恢复不调用 create/prompt、不重发输入。
-  验证原生 session ID/cwd 后才接纳历史；不枚举或导入未登记会话。
+  验证原生 session ID/cwd 后才接纳历史。
   已安装 CLI 的隔离测试确认可接续旧 ACP handle。默认模式不自动回退 ACP。
 - 工具参数遵循原生 agent loop：精确空字符串转 `{}`，合法 JSON 保留其类型，非法 JSON 原样保留字符串。
   工具自身负责后续校验，adapter 不把工具参数错误升级成整轮传输失败。
+
+- 外部会话通过同一 `AgentClient` 的 `list_sessions` 与 `inspect_session` 接入（2026-10-07）。
+  原生 `session/list` 返回有大小和时限上界的摘要，Ait 在数量截断前过滤目录、原生标记为空的 probe 与 subagent，
+  按原生活动时间排序。旧 DSH 冷会话缺少缓存空白标记时保留原生可见性，不据缺失元信息隐藏真实会话。
+  检查复用固定 cursor 的完整 journal 投影，不调用 create、prompt 或修改配置。
+  元信息保存原生标题、时间、模型、推理档位与非秘密 cwd/transport 恢复信息；自定义权限组合不强制替换。
+  未闭合 turn 标记 active，由现有导入服务拒绝；历史缺口继续返回错误。ACP 不声明导入支持。
 
 ## 兼容与边界
 
@@ -56,7 +63,7 @@ DSH 官方 ACP 是 automation-only profile，不提供权限模式和 user quest
 原生 Host 使用 DSH 自己配置的 MCP；当前没有等价的每会话 MCP override RPC，Ait 显式拒绝该配置。
 这不影响 DSH web profile 自带 MCP。原先保存 override 的会话需继续使用 ACP 或改在 DSH 配置 MCP。
 
-暂不提供原生会话导入、其他客户端的实时历史同步、rewind、steer、slash command 列表和结构化输出约束。
+暂不提供其他客户端的实时历史同步、rewind、steer、slash command 列表和结构化输出约束。
 展示使用已落盘的 assistant/message，与旧 ACP 一样不声明逐 token 延迟保证。
 原生模型选择可能依照 DSH 自身行为更新其默认模型。模型发现会创建 probe session，保留策略归 DSH。
 

@@ -211,6 +211,12 @@ async fn discover(client: &dyn AgentClient, cwd: &str) -> Entry {
                 Details::default(),
             ),
         }
+    } else if available.is_err() {
+        (
+            "error",
+            Some("Provider availability check failed"),
+            Details::default(),
+        )
     } else {
         (
             "unavailable",
@@ -219,6 +225,7 @@ async fn discover(client: &dyn AgentClient, cwd: &str) -> Entry {
         )
     };
     let mut value = json!({"provider":client.provider(),"status":status,"enabled":true,"source":"builtin",
+        "supportsSessionImport":client.supports_session_import(),
         "models":details.models,"modes":details.modes,"fetchedAt":Utc::now().to_rfc3339()});
     if client.provider() == "deepseek-harness" {
         value["label"] = json!("DeepSeek Harness");

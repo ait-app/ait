@@ -85,7 +85,6 @@ pub(super) async fn prepare(api: &Api, request: &Invocation) -> Result<Snapshot,
             "OpenCode model or variant is unavailable",
         ));
     }
-    let permission = permissions(api.version);
     let id = if let Some(id) = &request.session_id {
         if !api.idle(id).await? {
             return Err(failure(
@@ -95,25 +94,24 @@ pub(super) async fn prepare(api: &Api, request: &Invocation) -> Result<Snapshot,
         }
         if api.version == Version::V2 {
             api.json(
-                Method::PATCH,
-                &api.path(id, ""),
-                Some(&json!({"permissions":permission})),
-            )
-            .await?;
-            api.json(
                 Method::POST,
                 &api.path(id, "/model"),
                 Some(&json!({"model":model(request, api.version)})),
             )
             .await?;
+            api.json(
+                Method::POST,
+                &api.path(id, "/agent"),
+                Some(&json!({"agent":request.agent})),
+            )
+            .await?;
         }
-        // V1 PATCH appends rules. Reuse the creation policy and verify it in snapshot.
         id.clone()
     } else {
         let body = match api.version {
-            Version::V1 => json!({"permission":permission}),
-            Version::V2 => json!({"location":{"directory":request.cwd}, "agent":"build",
-                "model":model(request, api.version), "permissions":permission}),
+            Version::V1 => json!({}),
+            Version::V2 => json!({"location":{"directory":request.cwd}, "agent":request.agent,
+                "model":model(request, api.version)}),
         };
         let response = api
             .json(
@@ -171,50 +169,6 @@ fn model(request: &Invocation, version: Version) -> Value {
     selected
 }
 
-fn permissions(version: Version) -> Value {
-    let rules = [
-        ("*", "deny"),
-        ("read", "allow"),
-        ("glob", "allow"),
-        ("grep", "allow"),
-        ("list", "allow"),
-        ("skill", "allow"),
-        ("todowrite", "allow"),
-        ("edit", "ask"),
-        (
-            if version == Version::V1 {
-                "bash"
-            } else {
-                "shell"
-            },
-            "ask",
-        ),
-    ];
-    Value::Array(
-        rules
-            .into_iter()
-            .map(|(name, action)| match version {
-                Version::V1 => json!({"permission":name,"pattern":"*","action":action}),
-                Version::V2 => json!({"action":name,"resource":"*","effect":action}),
-            })
-            .collect(),
-    )
-}
-
-fn permissions_match(version: Version, actual: Option<&Value>) -> bool {
-    let expected = permissions(version);
-    if version == Version::V2 {
-        return actual == Some(&expected);
-    }
-    let Some(rules) = actual.and_then(Value::as_array) else {
-        return false;
-    };
-    let expected = expected.as_array().expect("permission policy is an array");
-    // Older Ait resumes appended whole copies of this policy. Only accept exact copies,
-    // preserving rule order and rejecting any additional grants or partial policies.
-    !rules.is_empty() && rules.chunks(expected.len()).all(|chunk| chunk == expected)
-}
-
 pub(super) async fn snapshot(
     api: &Api,
     id: &str,
@@ -234,17 +188,10 @@ pub(super) async fn snapshot(
     }
     .and_then(Value::as_str)
     .ok_or_else(|| failure(Fault::ProviderFailed, "OpenCode cwd missing"))?;
-    let effective_permissions = match api.version {
-        Version::V1 => info.get("permission"),
-        Version::V2 => info.get("permissions"),
-    };
-    if required_string(info, "id")? != id
-        || std::path::Path::new(cwd) != request.cwd
-        || (request.verify_settings && !permissions_match(api.version, effective_permissions))
-    {
+    if required_string(info, "id")? != id || std::path::Path::new(cwd) != request.cwd {
         return Err(failure(
             Fault::AgentCapabilityUnsupported,
-            "OpenCode session identity, cwd or permissions differ from admission",
+            "OpenCode session identity or cwd differ from admission",
         ));
     }
     if request.verify_settings
@@ -333,7 +280,7 @@ impl Connection {
         let mut body = match self.runtime.api.version {
             Version::V1 => {
                 json!({"messageID":self.invocation.input_id,"parts":[{"type":"text","text":self.invocation.prompt}],
-                "model":model(&self.invocation, Version::V1)})
+                "agent":self.invocation.agent,"model":model(&self.invocation, Version::V1)})
             }
             Version::V2 => json!({"text":self.invocation.prompt,"files":[],
                 "metadata":{"aitInputId":self.invocation.input_id}}),

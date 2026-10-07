@@ -53,6 +53,41 @@ function settled(
 }
 
 describe("resolveProvidersToFetch", () => {
+  it("skips absent, loading and unsupported adapters without hiding discovery failures", () => {
+    expect(
+      resolveProvidersToFetch(true, [
+        {
+          provider: "deepseek-harness",
+          enabled: true,
+          status: "unavailable",
+        },
+        {
+          provider: "opencode",
+          status: "ready",
+          supportsSessionImport: false,
+        },
+        { provider: "pending", status: "loading" },
+        {
+          provider: "codex",
+          status: "ready",
+          supportsSessionImport: true,
+        },
+        {
+          provider: "claude",
+          status: "error",
+          supportsSessionImport: true,
+        },
+      ]),
+    ).toEqual(["codex", "claude"]);
+  });
+
+  it("keeps discovery pending until loading providers settle", () => {
+    expect(resolveProvidersToFetch(true, [{ provider: "codex", status: "loading" }])).toBeNull();
+    expect(resolveProvidersToFetch(true, [{ provider: "codex", status: "unavailable" }])).toEqual(
+      [],
+    );
+  });
+
   it("returns null when the daemon does not support provider snapshots", () => {
     expect(resolveProvidersToFetch(false, [{ provider: "claude" }])).toBeNull();
   });

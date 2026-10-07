@@ -176,10 +176,10 @@ async fn failed_availability_probe_is_reported_without_attempting_discovery() {
         root.path(),
     )
     .await;
-    assert_eq!(value["entries"][0]["status"], "unavailable");
+    assert_eq!(value["entries"][0]["status"], "error");
     assert_eq!(
         value["entries"][0]["error"],
-        "Provider executable is unavailable"
+        "Provider availability check failed"
     );
     assert!(probe.state.lock().unwrap().discovery_cwds.is_empty());
 }

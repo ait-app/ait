@@ -692,7 +692,8 @@ export function ImportSessionSheet({
   );
 
   const isSnapshotUnsupported = requiresHostUpgrade;
-  const isWaitingForSnapshot = supportsSnapshot && snapshotEntries === undefined;
+  const isWaitingForSnapshot =
+    supportsSnapshot && !requiresHostUpgrade && providersToFetch === null;
   const hasNoImportableProviders = providersToFetch !== null && providersToFetch.length === 0;
   const isQueryingProviders = queries.length > 0;
   const isLoadingSessions =
@@ -700,7 +701,11 @@ export function ImportSessionSheet({
     (isQueryingProviders &&
       queries.some((providerQuery) => providerQuery.isLoading || providerQuery.isPending));
   const allQueriesErrored =
-    isQueryingProviders && queries.every((providerQuery) => providerQuery.isError);
+    isQueryingProviders &&
+    queries.every(
+      (providerQuery) =>
+        providerQuery.isError || (providerQuery.data?.providerErrors?.length ?? 0) > 0,
+    );
   const allQueriesSettled =
     isQueryingProviders &&
     queries.every((providerQuery) => !providerQuery.isLoading && !providerQuery.isPending);

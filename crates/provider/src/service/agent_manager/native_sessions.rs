@@ -9,7 +9,8 @@ use model::ErrorCode;
 use serde_json::{Value, json};
 
 use super::{AgentManager, now_timestamp};
-use crate::ports::native_history::{ListOptions, SessionHistory};
+use crate::ports::agent_session::{AgentClient, AgentSessionError};
+use crate::ports::native_history::{ListOptions, SessionDescriptor, SessionHistory};
 use crate::protocol::native_sessions::RecentRequest;
 
 impl AgentManager {
@@ -53,11 +54,12 @@ impl AgentManager {
             {
                 continue;
             }
-            let Ok(sessions) = client.list_sessions(&options).await else {
-                errors.push(
-                    json!({"provider":provider,"message":"Provider session discovery failed"}),
-                );
-                continue;
+            let sessions = match list_importable_sessions(client.as_ref(), &options).await {
+                Ok(sessions) => sessions,
+                Err(error) => {
+                    errors.push(json!({"provider":provider,"message":error.to_string()}));
+                    continue;
+                }
             };
             let mut seen = BTreeSet::new();
             for session in sessions {
@@ -317,7 +319,7 @@ pub(crate) fn canonical(cwd: &str) -> Result<String, ErrorCode> {
         .map_err(|_| ErrorCode::InvalidMessage)
 }
 
-fn matches_query(session: &crate::ports::native_history::SessionDescriptor, query: &str) -> bool {
+fn matches_query(session: &SessionDescriptor, query: &str) -> bool {
     query.is_empty()
         || [
             Some(session.provider_handle_id.as_str()),
@@ -329,6 +331,16 @@ fn matches_query(session: &crate::ports::native_history::SessionDescriptor, quer
         .into_iter()
         .flatten()
         .any(|text| text.to_lowercase().contains(query))
+}
+
+async fn list_importable_sessions(
+    client: &dyn AgentClient,
+    options: &ListOptions,
+) -> Result<Vec<SessionDescriptor>, AgentSessionError> {
+    if !client.supports_session_import() || !client.is_available().await? {
+        return Ok(Vec::new());
+    }
+    client.list_sessions(options).await
 }
 
 #[cfg(test)]

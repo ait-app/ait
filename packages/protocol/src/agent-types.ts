@@ -114,6 +114,8 @@ export function normalizeAgentModelCatalog(models: AgentModelDefinition[]): Agen
 }
 
 export interface ProviderSnapshotEntry {
+  /** Whether the host adapter supports listing and importing native sessions. */
+  supportsSessionImport?: boolean;
   provider: AgentProvider;
   status: ProviderStatus;
   enabled: boolean;

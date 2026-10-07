@@ -10,6 +10,18 @@ import {
 } from "./messages.js";
 
 describe("provider snapshot message schemas", () => {
+  test("preserves explicit native session import support", () => {
+    for (const supportsSessionImport of [true, false]) {
+      expect(
+        ProviderSnapshotEntrySchema.parse({
+          provider: "opencode",
+          status: "ready",
+          supportsSessionImport,
+        }).supportsSessionImport,
+      ).toBe(supportsSessionImport);
+    }
+  });
+
   test("defaults missing provider snapshot entry enabled state to true", () => {
     const parsed = ProviderSnapshotEntrySchema.parse({
       provider: "codex",

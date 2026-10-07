@@ -38,19 +38,31 @@ AgentManager 的输入接纳和 timeline 持久化。Claude Code 已通过 ADR-0
    handle 支持连续对话和重启恢复；历史读取不修改 permissions/model，也不提交输入。
    Ait 的 OpenCode 显示键带独立投影版本；升级时通过既有 reconcile 重建显示历史，原生消息不变。
    完成条目不可覆盖已有条目。Host admission、registry 与 timeline 事务继续归属 AgentManager。
-5. Build 模式允许原生只读工具，shell/edit 请求交给现有审批接口。
-   只接受具体可审查请求，所有 allow 均回复 native once；修改权限/输入的响应拒绝。
+5. Build / Plan 对应原生 agent，不再写入 Ait 固定权限策略。创建、导入、恢复和模式切换
+   均保留 OpenCode 的配置及会话权限；原生 allow / ask / deny 决定是否需要审批。
+   shell/edit 及其他原生 action/resource 请求交给现有审批接口，保留原生规则范围。
+   默认允许回复 native once；仅当原生请求提供非空的可保存规则时显示 always，必须由用户
+   显式选择，并展示保存范围。未知动作、修改权限/输入的响应拒绝。
    撤回、取消与关闭清理待审批项。取消只有原生 interrupt HTTP 确认后才能成功。
    确认后继续核对完整 idle 历史，更新下一轮的预算基线，再释放当前 turn；
    无法核对时关闭 writer，不自动重发。已排空的取消允许后续 queued 输入继续执行。
 6. 如原型，原生工具具有完整文件系统访问；native permission 不是 OS sandbox。
-   模型与 reasoning variant 动态发现。当前只提供 Build，不宣称 plan/custom agents、
-   steer、附件、表单、rewind、导入/列举外部会话、MCP 配置和后台任务已支持。
+   模型与 reasoning variant 动态发现。支持 Build / Plan 及空闲回合间切换，不宣称 custom agents、
+   steer、附件、表单、rewind、MCP 配置和后台任务已支持。
    不支持的配置和输入在提交前拒绝，避免默默丢弃。
 7. v2 模型目录查询使用 `location[directory]` 编码。冷启动先等待原生 `/api/plugin` 发布
    初始激活批次的 inventory，再读取模型；部分非空模型目录本身不能证明配置已应用。
    空 inventory 或空模型目录只在五秒总预算内重试；HTTP 错误、畸形响应以及非空但未启用的目录不自动重试。
    不创建探测会话、不重载用户配置。后续远程插件安装和运行中配置变更仍需重新发现。
+
+8. 通过既有 `AgentClient` 的列表和检查端口导入外部会话。v1 使用跨项目
+   `/experimental/session`，v2 使用带游标的 `/api/session`；仅在用户指定目录时过滤，
+   限制扫描数量、响应总字节和列表请求总时限。导入检查保留原生身份、标题、时间、模型和
+   variant（原生 `default` 映射为未显式指定）；历史和模型凭据仍由 OpenCode 管理。
+   既有 `resume_metadata` 保存恢复所需非秘密配置，兼容旧 Ait persistence handle。
+   列表和导入不发送 prompt 或修改权限，保留原生 agent；不支持的自定义 agent 明确拒绝。
+   继续和恢复时也不追加或替换权限。升级前已写入原生会话的规则继续保留，避免误删用户规则；
+   需要修改这些规则时使用 OpenCode 原生权限配置。
 
 ## 验证
 

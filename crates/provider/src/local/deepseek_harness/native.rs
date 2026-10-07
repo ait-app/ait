@@ -4,6 +4,7 @@ mod content;
 pub(super) mod history;
 mod http;
 mod interactions;
+pub(super) mod native_sessions;
 mod projection;
 mod runtime;
 mod session;

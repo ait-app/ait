@@ -37,8 +37,13 @@ export AIT_SERVER_DEEPSEEK_HARNESS_BIN=/absolute/path/to/dsh
 工具参数的空字符串按 DSH 原生规则转为空对象；非法 JSON 原样交给工具校验。
 
 目前支持文本、附件、受 native capability 约束的图片输入、图片输出、工具生命周期、
-上下文用量、DSH profile 配置的 MCP、审批、question、权限模式、取消和会话恢复。
-暂不支持原生会话导入、其他前端历史同步、steer、rewind、commands 和结构化输出约束。
+上下文用量、DSH profile 配置的 MCP、审批、question、权限模式、取消、会话恢复与外部会话导入。
+在工作区的导入会话列表选择 DeepSeek Harness，或通过 `provider.sessions.recent.list.request`
+列举已有会话；指定 `cwd` 时只显示该目录，未指定时跨目录发现。列表过滤原生标记为空的 probe 和子智能体会话；旧 DSH 未缓存空白状态时，会话可能仍显示在列表中。
+`agent.import.request` 只读检查完整历史，保留原生 ID、模型、推理档位和权限配置；
+导入不发送 prompt、不创建原生会话。未结束的回合或不完整日志不能作为已完成历史导入。
+导入后的 Ait 会话可在 daemon 重启后继续原生对话；DSH 自定义权限组合保持原样，不强制换成内置 preset。
+暂不支持其他前端实时历史同步、steer、rewind、commands 和结构化输出约束。
 原生 Host 不接受 Ait 每会话 MCP override；请在 DSH web profile 中配置 MCP。
 显示按原生已落盘消息更新，不保证逐 token 输出。
 模型发现会创建并关闭一个 Harness probe session；Harness 没有会话删除接口，
@@ -50,7 +55,7 @@ export AIT_SERVER_DEEPSEEK_HARNESS_BIN=/absolute/path/to/dsh
 export AIT_SERVER_DEEPSEEK_HARNESS_TRANSPORT=acp
 ```
 
-ACP 没有权限模式和 question。默认不会因原生 Host 出错而悄悄回退 ACP；
+ACP 没有权限模式、question 和外部会话导入。默认不会因原生 Host 出错而悄悄回退 ACP；
 原生 Host 创建的 handle 不能交给 ACP 恢复。旧 ACP handle 可由原生 Host 接续，并从原生记录恢复展示历史；显式 ACP 模式仍保留原有本地展示历史。
 
 实现边界见 [ADR-082](../decisions/providers/adr-082-deepseek-harness-native-host.md)，
