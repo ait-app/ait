@@ -174,7 +174,7 @@ impl FileConnection {
             return respond(outbound, id, Err(ErrorCode::InvalidMessage));
         };
         let result = state
-            .run(state.files.clone(), ErrorCode::ProjectIo, move |files| {
+            .run_queued(state.files.clone(), ErrorCode::ProjectIo, move |files| {
                 Ok(upload.apply(frame, files))
             })
             .await;

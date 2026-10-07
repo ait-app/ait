@@ -113,6 +113,7 @@ dependencies = [
  "serde",
  "serde_json",
  "subtle",
+ "tempfile",
  "terminal",
  "thiserror 2.0.20",
  "tokio",
