@@ -1,7 +1,7 @@
 {
-  "source_revision": "432f3386ac9360bba4630b484d6b4bb667094e67",
+  "source_revision": "586266b562c89916faf36b686b94da3d67751cb3",
   "base_revision": "f83d95794afd3c3538ad4258b787ea20f7dde0da",
-  "rust_source_fingerprint_sha256": "472bd67ae1786d93b2ccf90bc0d5637ecceea56baf1772da8d9a911f47ff63c9",
+  "rust_source_fingerprint_sha256": "032f0b763b5682e5984ab54aaf10efe63b2f9bb40934bf9f251e69c0d24dc4e6",
   "fingerprint_scope": "Sorted tracked Rust files, Cargo manifests, Cargo.lock and rust-toolchain.toml; SHA-256 over path, NUL, bytes, NUL.",
   "changed_source_sha256": {
     "bins/daemon/tests/process/agent_runtime.rs": "6000317b9abbbcd60bc4dffec457bfe692ce1bacd737f5fefff27852606f9a84",
@@ -21,10 +21,11 @@
     "bins/daemon/tests/process/workspace_automation.rs": "8c8881bdb6116bac9850b4b50fafb6b85b49352bab8febd634cbd39c3709b444",
     "bins/daemon/tests/process/workspace_state.rs": "e780101ff08c974d3a0902b70d7fdbc7e71d3f026fbd563b22deff485d466e64",
     "bins/daemon/tests/process/worktrees.rs": "d456e381c1c0c861b9bf0fc3aa5385515bdebde00d07b2d9cb638e4389446136",
-    "crates/api/src/capabilities.rs": "154b08132c9cb98e9181708f7fd36317166dc805174f564e69686bd386902e40",
+    "crates/api/src/capabilities.rs": "ede057ea14fb18d823e28602c41c5b468936d9538466ad8f172764ca0b923a63",
     "crates/api/src/capabilities/tests.rs": "a0a45b6268f598008a1349f9db1a4778ac8c265e763d168bc1ff7f57c5f30b80",
-    "crates/api/src/connection.rs": "72d1cbd35a0b283c233e392f2ad7b6726ad36ff5404c0762d6174dcca2d5bab5",
-    "crates/api/src/connection/dispatch/tests.rs": "663c517ea4ff287162ce2007730aec18203f7ce21292bc78a39393e72175f508",
+    "crates/api/src/connection.rs": "63a66b316929ff810416ccc9a7f508bac953980ee11f086d77ad6e61c69b01f2",
+    "crates/api/src/connection/dispatch/tests.rs": "48ddb77591475fc48bb4de6221b1b61eef98cd467aeda07724e3f03965eaa454",
+    "crates/api/src/connection/single.rs": "a7894ef1fbdd50b45e55ff3713d0c666b69c7e8e510d3fbaf4df9478fc4ec246",
     "crates/api/src/connection/validation.rs": "82c23f3a2fd6da581238c21fca18bebb804483c756c67ec2cfbf97439c2543fa",
     "crates/api/src/connection/validation/tests.rs": "76ebc493fecd489068892bf501b1a7a6d1833ae1de7c6ad7de24fbd95a2eeecc",
     "crates/api/src/lib.rs": "bbe1ff3e3cccde54f9735c8717513565c642c353552e5d01cce043b36ec86e04",
@@ -32,10 +33,12 @@
     "crates/api/src/tests.rs": "d2ad80145f4775c24e190a6931aac85d181fbdc3bf6dd87e861e0966ed11c8cc",
     "crates/api/src/tests/placeholders.rs": "d58d30aca77784c7d98242e7336616a37b1f2feb03f40399e28e49487701d4fe",
     "crates/api/src/tests/relay_rpc.rs": "7260e5515d9850cf06bb75db4302bcd0f7a1f4fca9a1188522f997d7bd1284ac",
-    "crates/browser/src/capabilities.rs": "d27219f23c055c3b45167f02ae5e72e58839426f63ed649ffae00e352cb1ba35",
-    "crates/browser/src/capabilities/tests.rs": "ef4208b7610e16a55703894829a7a666bbbf0deb5b853a8d0b66c1e5c28200b7",
+    "crates/api/src/tests/voice.rs": "ba818b0b514fcabbfe6b86ee0f1336df010740b773bb00513d51e3cab7d6cfd8",
+    "crates/browser/src/capabilities.rs": "e3328afb6bf68443b0de033b24d60a7076b3372a9ba8294e953d6debee58e1d8",
+    "crates/browser/src/capabilities/tests.rs": "793afbff11e9fbe446187c74585f05e83e0f9c99ff07567a3ed2cb0fd35f5179",
     "crates/browser/src/connection.rs": "880fe29e3531806f991a5e27868aaf520f957df2d20ef152110d5f363a36a7d5",
-    "crates/filesystem/src/capabilities.rs": "a3542d92022eda6ffbca8ac1f1adc5330f7b898eef900f70ad2b94470ad18282",
+    "crates/filesystem/src/capabilities.rs": "82aafdf8b2c507d0b43086b1531a5e53200e13cec0ee849166943fda0aa0bd24",
+    "crates/filesystem/src/capabilities/tests.rs": "c8628809d8812eaedff7b78ea9a9d496357cc57916bb368a711d36c7c17f2968",
     "crates/filesystem/src/connection/files.rs": "859c214210b91d02f4c88028286ab09d57316ff5166017b305cda597c810ae7b",
     "crates/filesystem/src/dispatch.rs": "8c496808688a5972697a5af77c385e5dd88249a52d9b9920141efe2c919bbd73",
     "crates/filesystem/src/protocol/checkout/tests.rs": "52678d463f1c13b35bfaa39ff6bb518b92e8015e5b85881b8e1c7a119f606f94",
@@ -46,7 +49,8 @@
     "crates/filesystem/src/rpc/workspace_recovery.rs": "b60ecf715320b61d7556c2d8df97ae44a5a029d6930cb1526648a6d643ddd4be",
     "crates/filesystem/src/rpc/worktrees.rs": "597af2ebee4cf5d70f8024d5cb34645b50b978453681b029f178be1dacc667b8",
     "crates/filesystem/src/service/skills.rs": "e8d4bc242bc67a5df708ed2af850ee79a2cb47f0e1a710ea5c53281e373869f9",
-    "crates/metadata/src/capabilities.rs": "bd1aa600de13d4df484ba6763e439d7c2c6a2e1649979d4172a4b02c87ae1feb",
+    "crates/metadata/src/capabilities.rs": "03be6e5e8c64fb0f37643c80cf3670b8c5aa40893b1c0b6a0aad63665e0a2f2a",
+    "crates/metadata/src/capabilities/tests.rs": "d4254c8bbcebfc2cfc08060467d68086bdc95b3178a8b6210bd768ab06220743",
     "crates/metadata/src/connection/creation.rs": "c0b61880aef79000776d33d23d210ddb880ec32bbd5de4ef0c868686286b7991",
     "crates/metadata/src/connection/daemon.rs": "25a5db4d840cc68cb1c63a47963db9533d33c9e4c4ccb1d1e3b687cf21a8a16b",
     "crates/metadata/src/connection/push.rs": "1d547de3b88c2b058f92064676f6fd840003cbac42325f245378706181e76f00",
@@ -64,22 +68,24 @@
     "crates/model/src/methods.rs": "ae83a5fd61c944fbb8e855b0e563d3ae794798489fb7cc3e4c370b59c87f4ccd",
     "crates/model/src/methods/tests.rs": "bb53206984feabab1de4e7a37fa06cac428de4fcf35adddcc9f8e7d576fec30a",
     "crates/protocol/src/lib.rs": "fed9212e216b1e93a5973ec3f29db6d01702dad6492f8e7f02993cba1454dc25",
-    "crates/provider/src/capabilities.rs": "8bc7dcf40b0ce3b5f3d1107acb7190cf0ff61c4dbbd28b3a21082155a433394c",
+    "crates/provider/src/capabilities.rs": "72942b73a2a3cc73de413b2e74931017e371e8516969654f44d80aae39a92c8e",
+    "crates/provider/src/capabilities/tests.rs": "9c37c5d5a5f10d3e616c09da7460563fc0746ee53ab26d34cf8f3abcdba0f1bc",
     "crates/provider/src/dispatch/agent_execution.rs": "e3e3f19b46a8fd9ca284473e81eb2b61094a1c2f4bbff5e98653e4ac99565f19",
     "crates/provider/src/dispatch/catalog.rs": "67e9207358d775cec0a9f72a5cd64dd4db9e8a3b22e799e16414e7775a6c4a97",
     "crates/provider/src/protocol/agent_lifecycle/tests.rs": "c40efb62892beac1b8ac0446934eab30a835f51ecab24920f24a28b0627d53b4",
     "crates/provider/src/rpc/agent_runtime.rs": "34548e7de97b88f49f2f13e93edbe127a471be2614b485fc69eb17a8f0343f8a",
     "crates/provider/src/rpc/agents.rs": "bc61da3405ea47ba9ebd93dc3181509d9a2aabab4ec22a5252e5f62b60cc7034",
     "crates/provider/src/rpc/timeline.rs": "8a38f96dfaea2d48333d1381f4d1c889de4bc215f3c5251c7c14f7c834ccc525",
-    "crates/schedule/src/capabilities.rs": "526a747b21f390c0bda11f0c9ca29c73dbbf4861e2af81c1c6dd82db54715746",
-    "crates/schedule/src/capabilities/tests.rs": "07ee65425256cd38660126a4d3f4b846dbcfc95c05efef55c6c679d82aa6cc22",
+    "crates/schedule/src/capabilities.rs": "5e5b06be800b8d8598cec535125e0e34671dd057fe867755b09a6f43b77b825b",
+    "crates/schedule/src/capabilities/tests.rs": "c1f3859eef2a448f07a4bc1b3e487fdf02ef58e3e5497144ba32fd74710b2a29",
     "crates/schedule/src/service.rs": "ea83c2334c1f1ec11e1c848f80626a6bbcc41b0f9b537d762aa1c6cedabaf523",
-    "crates/terminal/src/capabilities.rs": "a5d526ac937f8f61e295fdd919e2643efbed7f5f3455fb25016da4676604c623",
+    "crates/terminal/src/capabilities.rs": "dee9dd7840c5085396dddce95f5f25f49a1eb751f743a78e9a791bc3922071ce",
+    "crates/terminal/src/capabilities/tests.rs": "f2067469880a0c4c6e882b6e3343a4b51848ab72e29ad77e204b5977bb4fc262",
     "crates/terminal/src/connection.rs": "41f556628264192eec868b38202811b5f163692b0fdae93f622076e9262a78b7",
     "crates/terminal/src/protocol/tests.rs": "dc29ae00ead4af31b39a8e1dcc3421cb195f0e81e1fd72e87f0c405bb3821c8a",
-    "crates/voice/src/capabilities.rs": "8f524d11180847d4ae48290e88d72501d93b617720a643917dd190bfc109bab6",
+    "crates/voice/src/capabilities.rs": "c7de71e9c6c8905dcff9d71272debec2e0d9e268c465ab168f3481d7ed7153e2",
     "crates/voice/src/connection.rs": "dc6a6c6bd0696f90f96162f20747c69c4e63bc389c7994672bcf6fac126a90b7",
-    "crates/voice/src/tests.rs": "8eb83839eb2b4907518b647f8f7c0ec30aab11876243b91eae5428a63776ab19"
+    "crates/voice/src/tests.rs": "a476935ca3fe0cef18c5d17bfe55afdff34d8346549ea76cff80d4b01bde722c"
   },
   "measurement_date": "2026-10-07",
   "scope": "Rust Cargo workspace (13 crates); default features; macOS arm64; rustc 1.98.1; cargo-llvm-cov 0.8.4; tool default file filtering; no additional file exclusions; test threads=1; doctests run by cargo test but not instrumented by this coverage command.",
@@ -89,12 +95,14 @@
     "clippy": "cargo clippy --workspace --all-targets -- -D warnings",
     "format": "cargo fmt --all --check",
     "coverage": "cargo llvm-cov --workspace --html -- --test-threads=1",
-    "coverage_export": "cargo llvm-cov report --json --output-path target/component-methods-coverage-raw.json",
+    "coverage_export": "cargo llvm-cov report --json --output-path target/component-methods-followup-coverage-raw.json",
     "script_tests": "python3 -m unittest discover -s scripts -p rust_method_specs_test.py",
     "client_metadata": "python3 scripts/check-paseo-client-methods.py",
     "script_syntax": "node --check scripts/paseo-server-api-audit.mjs",
     "script_lint": "./node_modules/.bin/oxlint scripts/paseo-server-api-audit.mjs",
-    "docs": "npm run check:docs"
+    "docs": "npm run check:docs",
+    "capability_tests": "cargo test -p api -p browser -p filesystem -p metadata -p provider -p schedule -p terminal capabilities::tests",
+    "connection_tests": "cargo test -p api --lib connection::"
   },
   "test_execution": {
     "targets": 28,
@@ -133,9 +141,9 @@
     ]
   },
   "workspace_lines": {
-    "count": 58025,
-    "covered": 54798,
-    "percent": 94.43860404997847
+    "count": 57981,
+    "covered": 54754,
+    "percent": 94.43438367741157
   },
   "crate_lines": {
     "bins/daemon": {
@@ -145,16 +153,16 @@
       "percent": 95.43039319872476
     },
     "crates/api": {
-      "count": 2117,
-      "covered": 1956,
+      "count": 2115,
+      "covered": 1954,
       "files": 16,
-      "percent": 92.39489844119036
+      "percent": 92.38770685579196
     },
     "crates/browser": {
-      "count": 739,
-      "covered": 721,
+      "count": 733,
+      "covered": 715,
       "files": 5,
-      "percent": 97.56427604871448
+      "percent": 97.5443383356071
     },
     "crates/domain": {
       "count": 121,
@@ -163,22 +171,22 @@
       "percent": 100.0
     },
     "crates/filesystem": {
-      "count": 12193,
-      "covered": 11568,
+      "count": 12187,
+      "covered": 11563,
       "files": 65,
-      "percent": 94.87410809480849
+      "percent": 94.87978994010011
     },
     "crates/metadata": {
-      "count": 8211,
-      "covered": 7792,
+      "count": 8205,
+      "covered": 7786,
       "files": 58,
-      "percent": 94.89708927049081
+      "percent": 94.8933577087142
     },
     "crates/model": {
       "count": 802,
-      "covered": 763,
+      "covered": 762,
       "files": 13,
-      "percent": 95.13715710723191
+      "percent": 95.01246882793018
     },
     "crates/protocol": {
       "count": 63,
@@ -187,10 +195,10 @@
       "percent": 100.0
     },
     "crates/provider": {
-      "count": 27990,
-      "covered": 26281,
+      "count": 27984,
+      "covered": 26275,
       "files": 160,
-      "percent": 93.89424794569489
+      "percent": 93.8929388221841
     },
     "crates/relay": {
       "count": 464,
@@ -199,28 +207,28 @@
       "percent": 90.94827586206897
     },
     "crates/schedule": {
-      "count": 853,
-      "covered": 832,
+      "count": 847,
+      "covered": 826,
       "files": 7,
-      "percent": 97.53810082063306
+      "percent": 97.52066115702479
     },
     "crates/terminal": {
-      "count": 1562,
-      "covered": 1507,
+      "count": 1556,
+      "covered": 1501,
       "files": 11,
-      "percent": 96.47887323943662
+      "percent": 96.46529562982005
     },
     "crates/voice": {
-      "count": 1969,
-      "covered": 1874,
+      "count": 1963,
+      "covered": 1868,
       "files": 19,
-      "percent": 95.17521584560691
+      "percent": 95.16046867040244
     }
   },
   "method_metadata_source_lines": {
     "crates/api/src/capabilities.rs": {
-      "count": 80,
-      "covered": 80,
+      "count": 78,
+      "covered": 78,
       "percent": 100.0
     },
     "crates/api/src/connection/validation.rs": {
@@ -229,18 +237,18 @@
       "percent": 100.0
     },
     "crates/browser/src/capabilities.rs": {
-      "count": 12,
-      "covered": 12,
+      "count": 6,
+      "covered": 6,
       "percent": 100.0
     },
     "crates/filesystem/src/capabilities.rs": {
-      "count": 38,
-      "covered": 38,
+      "count": 32,
+      "covered": 32,
       "percent": 100.0
     },
     "crates/metadata/src/capabilities.rs": {
-      "count": 51,
-      "covered": 51,
+      "count": 45,
+      "covered": 45,
       "percent": 100.0
     },
     "crates/model/src/methods.rs": {
@@ -249,36 +257,41 @@
       "percent": 100.0
     },
     "crates/provider/src/capabilities.rs": {
-      "count": 28,
-      "covered": 28,
+      "count": 22,
+      "covered": 22,
       "percent": 100.0
     },
     "crates/schedule/src/capabilities.rs": {
-      "count": 12,
-      "covered": 12,
+      "count": 6,
+      "covered": 6,
       "percent": 100.0
     },
     "crates/terminal/src/capabilities.rs": {
-      "count": 12,
-      "covered": 12,
+      "count": 6,
+      "covered": 6,
       "percent": 100.0
     },
     "crates/voice/src/capabilities.rs": {
-      "count": 12,
-      "covered": 12,
+      "count": 6,
+      "covered": 6,
       "percent": 100.0
     }
   },
   "changed_production_source_lines": {
     "crates/api/src/capabilities.rs": {
-      "count": 80,
-      "covered": 80,
+      "count": 78,
+      "covered": 78,
       "percent": 100.0
     },
     "crates/api/src/connection.rs": {
       "count": 354,
       "covered": 326,
       "percent": 92.09039548022598
+    },
+    "crates/api/src/connection/single.rs": {
+      "count": 216,
+      "covered": 170,
+      "percent": 78.70370370370371
     },
     "crates/api/src/connection/validation.rs": {
       "count": 61,
@@ -296,8 +309,8 @@
       "percent": 95.34883720930233
     },
     "crates/browser/src/capabilities.rs": {
-      "count": 12,
-      "covered": 12,
+      "count": 6,
+      "covered": 6,
       "percent": 100.0
     },
     "crates/browser/src/connection.rs": {
@@ -306,8 +319,8 @@
       "percent": 88.0
     },
     "crates/filesystem/src/capabilities.rs": {
-      "count": 38,
-      "covered": 38,
+      "count": 32,
+      "covered": 32,
       "percent": 100.0
     },
     "crates/filesystem/src/connection/files.rs": {
@@ -346,8 +359,8 @@
       "percent": 100.0
     },
     "crates/metadata/src/capabilities.rs": {
-      "count": 51,
-      "covered": 51,
+      "count": 45,
+      "covered": 45,
       "percent": 100.0
     },
     "crates/metadata/src/connection/creation.rs": {
@@ -416,8 +429,8 @@
       "percent": 100.0
     },
     "crates/provider/src/capabilities.rs": {
-      "count": 28,
-      "covered": 28,
+      "count": 22,
+      "covered": 22,
       "percent": 100.0
     },
     "crates/provider/src/dispatch/agent_execution.rs": {
@@ -446,8 +459,8 @@
       "percent": 100.0
     },
     "crates/schedule/src/capabilities.rs": {
-      "count": 12,
-      "covered": 12,
+      "count": 6,
+      "covered": 6,
       "percent": 100.0
     },
     "crates/schedule/src/service.rs": {
@@ -456,8 +469,8 @@
       "percent": 97.61904761904762
     },
     "crates/terminal/src/capabilities.rs": {
-      "count": 12,
-      "covered": 12,
+      "count": 6,
+      "covered": 6,
       "percent": 100.0
     },
     "crates/terminal/src/connection.rs": {
@@ -466,8 +479,8 @@
       "percent": 93.21148825065274
     },
     "crates/voice/src/capabilities.rs": {
-      "count": 12,
-      "covered": 12,
+      "count": 6,
+      "covered": 6,
       "percent": 100.0
     },
     "crates/voice/src/connection.rs": {
@@ -478,11 +491,23 @@
   },
   "html_report": "target/llvm-cov/html/index.html",
   "reviewable_artifact": "This committed JSON records exported workspace, crate and changed-source line counts, exact source revision and SHA-256 fingerprints. The local HTML report is not a shared artifact.",
-  "baseline_comparison": "No comparable coverage measurement of the updated base revision was made; no coverage delta is claimed.",
+  "baseline_comparison": {
+    "scope": "Comparable previous PR revision: same workspace, default features, macOS arm64, toolchain, filtering and single-thread coverage command.",
+    "source_revision": "432f3386ac9360bba4630b484d6b4bb667094e67",
+    "workspace_lines": {
+      "count": 58025,
+      "covered": 54798,
+      "percent": 94.43860404997847
+    },
+    "percentage_point_change": -0.004220372566891228,
+    "artifact": "https://github.com/ait-app/ait/blob/2615da21e75ca9467d359c8500b1f7f82b12b4a5/docs/reports/daemon/component-method-declarations-pr-coverage-2026-10-07.json",
+    "base_revision_comparison": "The comparable measurement is the previous PR revision; the main base revision itself was not measured."
+  },
   "uncovered_behavior": "Default-ignored installed-provider integration tests require local CLIs, authentication or explicit model requests. Duplicate-declaration panic paths are not deliberately triggered; ownership uniqueness is verified against the complete component aggregation. Line coverage does not establish branch coverage.",
   "unavailable_platforms": ["Linux", "Windows"],
   "follow_up": "Review Linux CI results. Investigate the directory stream integration test if the intermittent event timeout recurs under concurrent execution.",
-  "concurrency_retries": {
+  "previous_revision_concurrency_retries": {
+    "source_revision": "432f3386ac9360bba4630b484d6b4bb667094e67",
     "default_workspace_test": {
       "targets": 28,
       "passed": 1923,
@@ -536,5 +561,10 @@
     },
     "isolated_process_command": "RUST_BACKTRACE=1 target/debug/deps/process-ab98d7c8e47fe343 --test-threads=4",
     "resolution": "The isolated failing test and all 94 process tests passed; final complete workspace tests and coverage were run with test threads=1."
+  },
+  "focused_test_execution": {
+    "passed": 32,
+    "failed": 0,
+    "scope": "17 capability metadata and service installation tests plus 15 API connection/dispatch/validation tests."
   }
 }
