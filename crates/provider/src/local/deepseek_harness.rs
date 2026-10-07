@@ -1,6 +1,7 @@
 //! `DeepSeek` Harness native interactive Host, with explicit legacy ACP compatibility.
 
 mod config;
+mod metadata;
 mod native;
 mod permissions;
 mod session;
@@ -81,6 +82,40 @@ impl DeepSeekHarnessClient {
 }
 
 impl AgentClient for DeepSeekHarnessClient {
+    fn supports_metadata_generation(&self) -> bool {
+        true
+    }
+
+    fn metadata_model(
+        &self,
+        models: &[Value],
+    ) -> Option<::metadata::ports::generation::MetadataSelection> {
+        let mut selection = super::metadata_model::select(
+            self.provider(),
+            models,
+            &["deepseek-flash", "haiku", "mini", "flash"],
+        )?;
+        // The headless profile only exposes a reasoning override for the official
+        // DeepSeek adapter. Other adapters retain their native defaults.
+        let model: Vec<String> = serde_json::from_str(selection.model.as_deref()?).ok()?;
+        if model
+            .first()
+            .is_none_or(|provider| provider != "deepseek-official")
+        {
+            selection.thinking_option_id = None;
+        }
+        Some(selection)
+    }
+
+    fn generate_metadata<'a>(
+        &'a self,
+        spec: &'a AgentSessionSpec,
+        prompt: &'a str,
+        schema: &'a Value,
+    ) -> AgentSessionFuture<'a, String> {
+        Box::pin(self.metadata(spec, prompt, schema))
+    }
+
     fn supports_session_import(&self) -> bool {
         self.interactive
     }

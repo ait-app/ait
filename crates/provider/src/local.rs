@@ -8,6 +8,7 @@ pub mod deepseek_harness;
 mod elicitation;
 mod images;
 mod metadata_model;
+mod metadata_process;
 mod notes;
 pub mod opencode;
 mod tool_detail;

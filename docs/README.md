@@ -68,6 +68,8 @@
 
 ## 工程规范与验证
 
+- [DSH 辅助生成验证](reports/providers/dsh-auxiliary-generation.md)：无工具、无持久化的原生 headless 通道与覆盖率。
+
 - [Rust style guide](policy/rust.md)：Rust 代码、测试、lint 与覆盖率规范。
 - [Daemon 测试扩展与覆盖率验证](reports/daemon/crate-coverage-rebase.md)：最新 rebase 验证、逐 crate 证据与历史测量索引。
 - [文档规范](policy/documentation.md)：分类、维护和历史资料清理规则。
