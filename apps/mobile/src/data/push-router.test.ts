@@ -15,15 +15,15 @@ import { describe, expect, it } from "vitest";
 
 type ProvidersSnapshotUpdateMessage = Extract<
   SessionOutboundMessage,
-  { type: "providers_snapshot_update" }
+  { type: "provider.snapshot.update" }
 >;
-type CheckoutDiffUpdateMessage = Extract<SessionOutboundMessage, { type: "checkout_diff_update" }>;
+type CheckoutDiffUpdateMessage = Extract<SessionOutboundMessage, { type: "checkout.diff.update" }>;
 type SubscribeCheckoutDiffResponseMessage = Extract<
   SessionOutboundMessage,
-  { type: "subscribe_checkout_diff_response" }
+  { type: "checkout.diff.subscribe.response" }
 >;
 type StatusMessage = Extract<SessionOutboundMessage, { type: "status" }>;
-type TerminalsChangedMessage = Extract<SessionOutboundMessage, { type: "terminals_changed" }>;
+type TerminalsChangedMessage = Extract<SessionOutboundMessage, { type: "terminal.list.changed" }>;
 type RouterMessage =
   | ProvidersSnapshotUpdateMessage
   | CheckoutDiffUpdateMessage
@@ -58,11 +58,11 @@ function createFakeClient(config: { rejectCheckoutDiffSubscribe?: boolean } = {}
   unsubscribeTerminalCalls: Array<{ cwd: string; workspaceId?: string }>;
 } {
   const handlers: Record<RouterMessageType, RouterHandler[]> = {
-    providers_snapshot_update: [],
-    checkout_diff_update: [],
-    subscribe_checkout_diff_response: [],
+    "provider.snapshot.update": [],
+    "checkout.diff.update": [],
+    "checkout.diff.subscribe.response": [],
     status: [],
-    terminals_changed: [],
+    "terminal.list.changed": [],
   };
   const subscribeCheckoutDiffCalls: Array<{
     cwd: string;
@@ -106,7 +106,7 @@ function createFakeClient(config: { rejectCheckoutDiffSubscribe?: boolean } = {}
       on(type, (message) => {
         if (!matches(message)) return;
         for (const observer of observers) {
-          if (message.type === "subscribe_checkout_diff_response")
+          if (message.type === "checkout.diff.subscribe.response")
             observer.snapshot({ ...snapshot, ...message.payload });
           else observer.update(message);
         }
@@ -140,15 +140,21 @@ function createFakeClient(config: { rejectCheckoutDiffSubscribe?: boolean } = {}
       observeEvents: () =>
         observe(
           { subscriptionId: "events", requestId: "events", events: [] },
-          ["status", "providers_snapshot_update"],
+          ["status", "provider.snapshot.update"],
           () => {},
         ),
       observeCheckoutDiff(cwd, compare) {
         const subscriptionId = `server-diff-${subscribeCheckoutDiffCalls.length + 1}`;
         subscribeCheckoutDiffCalls.push({ cwd, compare, subscriptionId });
         const handle = observe(
-          { subscriptionId, cwd, files: [], error: null, requestId: "subscribe-checkout-diff" },
-          ["checkout_diff_update", "subscribe_checkout_diff_response"],
+          {
+            subscriptionId,
+            cwd,
+            files: [],
+            error: null,
+            requestId: "subscribe-checkout-diff",
+          },
+          ["checkout.diff.update", "checkout.diff.subscribe.response"],
           () => unsubscribeCheckoutDiffCalls.push(subscriptionId),
           (message) =>
             "subscriptionId" in message.payload &&
@@ -173,9 +179,10 @@ function createFakeClient(config: { rejectCheckoutDiffSubscribe?: boolean } = {}
             requestId: "terminals",
             terminals: [],
           },
-          ["terminals_changed"],
+          ["terminal.list.changed"],
           () => unsubscribeTerminalCalls.push(query),
-          (message) => message.type === "terminals_changed" && message.payload.cwd === query.cwd,
+          (message) =>
+            message.type === "terminal.list.changed" && message.payload.cwd === query.cwd,
         );
       },
     },
@@ -189,7 +196,7 @@ function createFakeClient(config: { rejectCheckoutDiffSubscribe?: boolean } = {}
 
 function providerUpdate(generatedAt: string): ProvidersSnapshotUpdateMessage {
   return {
-    type: "providers_snapshot_update",
+    type: "provider.snapshot.update",
     payload: {
       entries: [{ provider: "codex", status: "ready", enabled: true, models: [] }],
       generatedAt,
@@ -240,14 +247,18 @@ describe("server data push router", () => {
                 { text: " answer = 42", style: null },
               ],
             },
-            { type: "add", content: "answer", tokens: [{ text: "answer", style: null }] },
+            {
+              type: "add",
+              content: "answer",
+              tokens: [{ text: "answer", style: null }],
+            },
           ],
         },
       ],
     }));
     const publish = (incomingFiles: Payload["files"], requestId: string) => {
       fake.emit({
-        type: "subscribe_checkout_diff_response",
+        type: "checkout.diff.subscribe.response",
         payload: {
           subscriptionId: fake.subscribeCheckoutDiffCalls[0]!.subscriptionId,
           cwd,
@@ -294,7 +305,7 @@ describe("server data push router", () => {
       .toEqual({
         entries: [{ provider: "codex", status: "ready", enabled: true, models: [] }],
         generatedAt: "2026-01-01T00:00:00.000Z",
-        requestId: "providers_snapshot_update",
+        requestId: "provider.snapshot.update",
       });
     expect(queryClient.getQueryData(daemonConfigQueryKey(serverId))).toEqual(daemonConfig);
 
@@ -306,7 +317,7 @@ describe("server data push router", () => {
       .toEqual({
         entries: [{ provider: "codex", status: "ready", enabled: true, models: [] }],
         generatedAt: "2026-01-01T00:00:00.000Z",
-        requestId: "providers_snapshot_update",
+        requestId: "provider.snapshot.update",
       });
   });
 
@@ -344,7 +355,7 @@ describe("server data push router", () => {
     ]);
 
     fake.emit({
-      type: "subscribe_checkout_diff_response",
+      type: "checkout.diff.subscribe.response",
       payload: {
         subscriptionId: serverSubscriptionId,
         cwd,
@@ -364,7 +375,7 @@ describe("server data push router", () => {
     });
 
     fake.emit({
-      type: "checkout_diff_update",
+      type: "checkout.diff.update",
       payload: {
         subscriptionId: serverSubscriptionId,
         cwd,
@@ -452,7 +463,7 @@ describe("server data push router", () => {
     expect(fake.subscribeTerminalCalls).toEqual([{ cwd, workspaceId }]);
 
     fake.emit({
-      type: "terminals_changed",
+      type: "terminal.list.changed",
       payload: {
         cwd,
         terminals: [
@@ -545,7 +556,7 @@ describe("server data push router", () => {
     expect(fake.subscribeTerminalCalls).toEqual([{ cwd, workspaceId }]);
 
     fake.emit({
-      type: "terminals_changed",
+      type: "terminal.list.changed",
       payload: {
         cwd,
         terminals: [
@@ -602,7 +613,7 @@ describe("server data push router", () => {
     const unsubscribePlainObserver = plainObserver.subscribe(() => undefined);
 
     fake.emit({
-      type: "terminals_changed",
+      type: "terminal.list.changed",
       payload: {
         cwd,
         terminals: [

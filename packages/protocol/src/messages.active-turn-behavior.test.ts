@@ -6,11 +6,11 @@ import {
 import { describe, expect, it } from "vitest";
 import { z } from "zod";
 
-describe("send_agent_message_request active-turn behavior", () => {
+describe("agent.message.send.request active-turn behavior", () => {
   it("accepts an optional steer intent while retaining interrupt compatibility", () => {
     expect(
       SendAgentMessageRequestSchema.parse({
-        type: "send_agent_message_request",
+        type: "agent.message.send.request",
         requestId: "request-1",
         agentId: "agent-1",
         text: "Follow this instruction",
@@ -20,7 +20,7 @@ describe("send_agent_message_request active-turn behavior", () => {
 
     expect(
       SendAgentMessageRequestSchema.parse({
-        type: "send_agent_message_request",
+        type: "agent.message.send.request",
         requestId: "request-2",
         agentId: "agent-1",
         text: "Keep the old behavior",
@@ -59,7 +59,7 @@ describe("canonical timeline turn ID compatibility", () => {
 
 describe("legacy daemon send request schema compatibility", () => {
   const LegacySendAgentMessageRequestSchema = z.object({
-    type: z.literal("send_agent_message_request"),
+    type: z.literal("agent.message.send.request"),
     requestId: z.string(),
     agentId: z.string(),
     text: z.string(),
@@ -68,7 +68,7 @@ describe("legacy daemon send request schema compatibility", () => {
 
   it("ignores a new client's active-turn intent and retains legacy interrupt dispatch", () => {
     const newClientRequest = SendAgentMessageRequestSchema.parse({
-      type: "send_agent_message_request",
+      type: "agent.message.send.request",
       requestId: "request-legacy",
       agentId: "agent-1",
       text: "replace the turn",
@@ -77,7 +77,7 @@ describe("legacy daemon send request schema compatibility", () => {
     const legacyRequest = LegacySendAgentMessageRequestSchema.parse(newClientRequest);
 
     expect(legacyRequest).toEqual({
-      type: "send_agent_message_request",
+      type: "agent.message.send.request",
       requestId: "request-legacy",
       agentId: "agent-1",
       text: "replace the turn",

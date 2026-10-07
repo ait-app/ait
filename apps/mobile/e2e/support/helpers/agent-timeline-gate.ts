@@ -49,7 +49,7 @@ export async function trackPromptJumpRequests(
     ws.onMessage((message) => {
       const sessionMessage = getSessionMessage(message);
       if (
-        sessionMessage?.type === "fetch_agent_timeline_request" &&
+        sessionMessage?.type === "agent.timeline.get.request" &&
         sessionMessage.agentId === agentId &&
         sessionMessage.direction === "before" &&
         sessionMessage.mergeWindow === true
@@ -207,7 +207,7 @@ export async function holdRewindCompletion(
       const payload = sessionMessage ? getPayload(sessionMessage) : null;
       const streamEvent = payload?.event;
       if (
-        sessionMessage?.type === "agent_stream" &&
+        sessionMessage?.type === "agent.stream" &&
         payload?.agentId === agentId &&
         streamEvent &&
         typeof streamEvent === "object" &&
@@ -294,7 +294,7 @@ export async function delayCreatedAgentInitialTailResponse(
         resolveCreatedAgent?.(createdId);
       }
 
-      if (sessionMessage?.type === "fetch_agent_timeline_response") {
+      if (sessionMessage?.type === "agent.timeline.get.response") {
         const agentId = sessionMessage.payload.agentId;
         const direction = sessionMessage.payload.direction;
         if (
@@ -367,7 +367,7 @@ export async function holdAgentOlderTimelinePages(
     ws.onMessage((message) => {
       const sessionMessage = getSessionMessage(message);
       if (
-        sessionMessage?.type === "fetch_agent_timeline_request" &&
+        sessionMessage?.type === "agent.timeline.get.request" &&
         sessionMessage.agentId === agentId &&
         sessionMessage.direction === "before"
       ) {
@@ -380,14 +380,14 @@ export async function holdAgentOlderTimelinePages(
       const sessionMessage = getSessionMessage(message);
       const payload = sessionMessage ? getPayload(sessionMessage) : null;
       if (
-        sessionMessage?.type === "fetch_agent_timeline_response" &&
+        sessionMessage?.type === "agent.timeline.get.response" &&
         payload?.agentId === agentId &&
         (payload.direction === "tail" || payload.direction === "before")
       ) {
         recordOwnedTimelineEntries(payload, ownedEntries);
       }
       if (
-        sessionMessage?.type === "fetch_agent_timeline_response" &&
+        sessionMessage?.type === "agent.timeline.get.response" &&
         payload?.agentId === agentId &&
         payload.direction === "before"
       ) {
@@ -452,7 +452,7 @@ export async function delayAgentBootstrapTailResponse(
       const sessionMessage = getSessionMessage(message);
       const payload = sessionMessage ? getPayload(sessionMessage) : null;
       const isTimelineResponse =
-        sessionMessage?.type === "fetch_agent_timeline_response" && payload?.agentId === agentId;
+        sessionMessage?.type === "agent.timeline.get.response" && payload?.agentId === agentId;
       if (isTimelineResponse && payload.direction === "tail") {
         resolveDelayedTail?.();
         if (tailReleased) ws.send(message);
@@ -506,7 +506,7 @@ async function delayAgentTimelineResponse(
       const payload = sessionMessage ? getPayload(sessionMessage) : null;
       if (
         !delayedResponseSeen &&
-        sessionMessage?.type === "fetch_agent_timeline_response" &&
+        sessionMessage?.type === "agent.timeline.get.response" &&
         payload?.agentId === agentId &&
         payload.direction === direction
       ) {
@@ -552,14 +552,14 @@ export async function holdAssistantStream(page: Page, agentId: string) {
     server.onMessage((message) => {
       const session = getSessionMessage(message);
       const payload = session ? getPayload(session) : null;
-      if (session?.type === "fetch_agent_timeline_response" && payload?.agentId === agentId) {
+      if (session?.type === "agent.timeline.get.response" && payload?.agentId === agentId) {
         notifyInitialTimeline();
       }
       const event = payload?.event as
         | { type?: string; item?: { type?: string; text?: string } }
         | undefined;
       const text =
-        session?.type === "agent_stream" &&
+        session?.type === "agent.stream" &&
         payload?.agentId === agentId &&
         event?.type === "timeline" &&
         event.item?.type === "assistant_message"

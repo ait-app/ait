@@ -48,7 +48,7 @@ async function recordSetAgentModeRequests(page: Page): Promise<{
     const server = ws.connectToServer();
     ws.onMessage((message) => {
       const sessionMessage = getSessionMessage(message);
-      if (sessionMessage?.type === "set_agent_mode_request") {
+      if (sessionMessage?.type === "agent.mode.set.request") {
         const agentId = typeof sessionMessage.agentId === "string" ? sessionMessage.agentId : "";
         const modeId = typeof sessionMessage.modeId === "string" ? sessionMessage.modeId : "";
         seen.push({ agentId, modeId });

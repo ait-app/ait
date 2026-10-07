@@ -94,29 +94,29 @@ async function installDictationFailureHarness(page: Page) {
       const type = request?.type;
       const dictationId = typeof request?.dictationId === "string" ? request.dictationId : null;
 
-      if (type === "dictation_stream_start" && dictationId) {
+      if (type === "dictation.stream.start" && dictationId) {
         sendSessionMessage(ws, {
-          type: "dictation_stream_ack",
+          type: "dictation.stream.ack",
           payload: { dictationId, ackSeq: -1 },
         });
         return;
       }
-      if (type === "dictation_stream_chunk" && dictationId) {
+      if (type === "dictation.stream.chunk" && dictationId) {
         const seq = typeof request?.seq === "number" ? request.seq : 0;
         sendSessionMessage(ws, {
-          type: "dictation_stream_ack",
+          type: "dictation.stream.ack",
           payload: { dictationId, ackSeq: seq },
         });
         resolveAudioChunk();
         return;
       }
-      if (type === "dictation_stream_finish" && dictationId) {
+      if (type === "dictation.stream.finish" && dictationId) {
         sendSessionMessage(ws, {
-          type: "dictation_stream_finish_accepted",
+          type: "dictation.stream.finish.accepted",
           payload: { dictationId, timeoutMs: 5_000 },
         });
         sendSessionMessage(ws, {
-          type: "dictation_stream_final",
+          type: "dictation.stream.final",
           payload: { dictationId, text: TRANSCRIPT },
         });
         return;

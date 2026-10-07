@@ -21,7 +21,7 @@ export type WorkspaceSetupProgressPayload = Extract<
 
 export type WorkspaceSetupStatusResult = Extract<
   SessionOutboundMessage,
-  { type: "workspace_setup_status_response" }
+  { type: "workspace.setup.status.response" }
 >["payload"];
 
 export interface WorkspaceSetupStatusClient {

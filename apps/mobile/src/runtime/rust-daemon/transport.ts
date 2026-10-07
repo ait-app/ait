@@ -1,4 +1,5 @@
 import { METHODS, type MethodSpec } from "./methods";
+import { sessionEventKind } from "@ait/protocol/session-event-kinds";
 import { eventMessage, responseMessage, rpcError, serverInfo } from "./messages";
 import { object, strings, type Payload, type Transport, type TransportFactory } from "./types";
 import {
@@ -9,11 +10,11 @@ import {
 
 const RUNTIME_METHODS: Readonly<Record<string, MethodSpec>> = {
   ...METHODS,
-  checkout_reset_workspace_request: {
+  "checkout.reset_workspace.request": {
     method: "checkout.reset_workspace.request",
     kind: "request",
     channel: 2,
-    response: "checkout_reset_workspace_response",
+    response: "checkout.reset_workspace.response",
   },
 };
 
@@ -192,7 +193,7 @@ export function createRustDaemonTransportFactory(baseFactory: TransportFactory):
         emit(
           rpcError(
             crypto.randomUUID(),
-            channel === 1 ? "terminal_input" : "event",
+            channel === 1 ? "terminal.input" : "event",
             String(message.code),
             String(message.message ?? message.code),
           ),
@@ -240,7 +241,7 @@ export function createRustDaemonTransportFactory(baseFactory: TransportFactory):
       ) {
         subscriptions.delete(item.request.subscriptionId);
       }
-      if (item.rawPing) emit({ type: "pong" });
+      if (item.rawPing) emit({ type: "connection.pong" });
       else if (item.spec.response)
         emit(responseMessage(item.spec.response, id, result, item.request));
     }
@@ -270,7 +271,7 @@ export function createRustDaemonTransportFactory(baseFactory: TransportFactory):
         }
         throw new Error(error);
       }
-      if (name === "ping" && !rawPing) {
+      if (name === "connection.ping" && !rawPing) {
         emit(
           rpcError(
             id,
@@ -283,7 +284,10 @@ export function createRustDaemonTransportFactory(baseFactory: TransportFactory):
       }
       const { type: _type, requestId: _requestId, ...params } = message;
       // This requestId identifies a provider permission, not just the UI RPC waiter.
-      if (name === "agent_permission_response") params.requestId = message.requestId;
+      if (name === "agent.permission.resolve.request") params.requestId = message.requestId;
+      if (name === "session.events.set_subscription.request" && Array.isArray(params.events)) {
+        params.events = strings(params.events).map(sessionEventKind);
+      }
       if (rawPing) params.nonce = id;
       if (spec.kind !== "request") {
         channels[channel].send(
@@ -401,7 +405,7 @@ export function createRustDaemonTransportFactory(baseFactory: TransportFactory):
           return;
         }
         if (!ready) throw new Error("Rust daemon is not ready");
-        if (message.type === "ping") request({ type: "ping" }, true);
+        if (message.type === "connection.ping") request({ type: "connection.ping" }, true);
         else if (message.type === "session") request(object(message.message));
         else throw new Error(`Unsupported client envelope: ${String(message.type)}`);
       },

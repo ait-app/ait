@@ -77,7 +77,7 @@ export function useCheckoutDiffQuery({
     queryKey,
     structuralSharing: shareCheckoutDiff,
     enabled: routeEnabled,
-    pushEvent: "checkout_diff_update",
+    pushEvent: "checkout.diff.update",
     meta: checkoutDiffPushRoute({
       enabled: routeEnabled,
       serverId,

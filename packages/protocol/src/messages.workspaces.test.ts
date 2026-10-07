@@ -92,9 +92,9 @@ describe("workspace message schemas", () => {
     ).toMatchObject({ type: "workspace.setup.run.response", payload: { started: true } });
   });
 
-  test("parses fetch_workspaces_request", () => {
+  test("parses workspace.list.request", () => {
     const parsed = SessionInboundMessageSchema.parse({
-      type: "fetch_workspaces_request",
+      type: "workspace.list.request",
       requestId: "req-1",
       filter: {
         query: "repo",
@@ -106,7 +106,7 @@ describe("workspace message schemas", () => {
       subscribe: {},
     });
 
-    expect(parsed.type).toBe("fetch_workspaces_request");
+    expect(parsed.type).toBe("workspace.list.request");
   });
 
   test("parses project.add request and response", () => {
@@ -153,24 +153,24 @@ describe("workspace message schemas", () => {
     });
   });
 
-  test("parses active-scoped fetch_agents_request as an optional extension", () => {
+  test("parses active-scoped agent.list.request as an optional extension", () => {
     const legacy = SessionInboundMessageSchema.parse({
-      type: "fetch_agents_request",
+      type: "agent.list.request",
       requestId: "req-agents-legacy",
       page: { limit: 50 },
     });
     const activeScoped = SessionInboundMessageSchema.parse({
-      type: "fetch_agents_request",
+      type: "agent.list.request",
       requestId: "req-agents-active",
       scope: "active",
       page: { limit: 50 },
       subscribe: {},
     });
 
-    expect(legacy.type).toBe("fetch_agents_request");
-    expect(activeScoped.type).toBe("fetch_agents_request");
-    if (activeScoped.type !== "fetch_agents_request") {
-      throw new Error("Expected fetch_agents_request");
+    expect(legacy.type).toBe("agent.list.request");
+    expect(activeScoped.type).toBe("agent.list.request");
+    if (activeScoped.type !== "agent.list.request") {
+      throw new Error("Expected agent.list.request");
     }
     expect(activeScoped.scope).toBe("active");
   });
@@ -185,14 +185,14 @@ describe("workspace message schemas", () => {
     ).toMatchObject({ sync: { generation: "daemon-generation", afterSeq: 7 } });
     expect(
       SessionInboundMessageSchema.parse({
-        type: "fetch_workspaces_request",
+        type: "workspace.list.request",
         requestId: "workspaces-sync",
         sync: { generation: "daemon-generation", afterSeq: 11 },
       }),
     ).toMatchObject({ sync: { generation: "daemon-generation", afterSeq: 11 } });
     expect(
       SessionInboundMessageSchema.parse({
-        type: "fetch_agents_request",
+        type: "agent.list.request",
         requestId: "agents-sync",
         scope: "active",
         sync: { generation: "daemon-generation", afterSeq: 13 },
@@ -228,9 +228,9 @@ describe("workspace message schemas", () => {
     });
   });
 
-  test("parses agent_update without project placement", () => {
+  test("parses agent.update without project placement", () => {
     const result = SessionOutboundMessageSchema.safeParse({
-      type: "agent_update",
+      type: "agent.update",
       payload: {
         kind: "upsert",
         agent: {
@@ -268,15 +268,15 @@ describe("workspace message schemas", () => {
     expect(result.success).toBe(true);
   });
 
-  test("parses paginated fetch_agent_history_request and response", () => {
+  test("parses paginated agent.history.get.request and response", () => {
     const request = SessionInboundMessageSchema.parse({
-      type: "fetch_agent_history_request",
+      type: "agent.history.get.request",
       requestId: "req-history",
       page: { limit: 25, cursor: "cursor-1" },
       sort: [{ key: "updated_at", direction: "desc" }],
     });
     const response = SessionOutboundMessageSchema.parse({
-      type: "fetch_agent_history_response",
+      type: "agent.history.get.response",
       payload: {
         requestId: "req-history",
         entries: [],
@@ -288,8 +288,8 @@ describe("workspace message schemas", () => {
       },
     });
 
-    expect(request.type).toBe("fetch_agent_history_request");
-    expect(response.type).toBe("fetch_agent_history_response");
+    expect(request.type).toBe("agent.history.get.request");
+    expect(response.type).toBe("agent.history.get.response");
   });
 
   test("parses recent provider session descriptors without legacy handle fields", () => {
@@ -318,7 +318,7 @@ describe("workspace message schemas", () => {
 
   test("parses fetch_recent_provider_sessions request and response", () => {
     const request = SessionInboundMessageSchema.parse({
-      type: "fetch_recent_provider_sessions_request",
+      type: "provider.sessions.recent.list.request",
       requestId: "req-recent-provider-sessions",
       cwd: "/tmp/repo",
       providers: ["my-claude"],
@@ -326,7 +326,7 @@ describe("workspace message schemas", () => {
       limit: 25,
     });
     const response = SessionOutboundMessageSchema.parse({
-      type: "fetch_recent_provider_sessions_response",
+      type: "provider.sessions.recent.list.response",
       payload: {
         requestId: "req-recent-provider-sessions",
         entries: [
@@ -344,7 +344,7 @@ describe("workspace message schemas", () => {
       },
     });
 
-    expect(request.type).toBe("fetch_recent_provider_sessions_request");
+    expect(request.type).toBe("provider.sessions.recent.list.request");
     expect(request.providers).toEqual(["my-claude"]);
     expect(request.query).toBeUndefined();
     expect(response.payload).toEqual({
@@ -366,12 +366,12 @@ describe("workspace message schemas", () => {
 
   test("parses session import search requests and per-provider errors", () => {
     const request = SessionInboundMessageSchema.parse({
-      type: "fetch_recent_provider_sessions_request",
+      type: "provider.sessions.recent.list.request",
       requestId: "req-search-provider-sessions",
       query: "invoice",
     });
     const response = SessionOutboundMessageSchema.parse({
-      type: "fetch_recent_provider_sessions_response",
+      type: "provider.sessions.recent.list.response",
       payload: {
         requestId: "req-search-provider-sessions",
         entries: [],
@@ -380,8 +380,8 @@ describe("workspace message schemas", () => {
     });
 
     expect(request.query).toBe("invoice");
-    if (response.type !== "fetch_recent_provider_sessions_response") {
-      throw new Error("expected fetch_recent_provider_sessions_response");
+    if (response.type !== "provider.sessions.recent.list.response") {
+      throw new Error("expected provider.sessions.recent.list.response");
     }
     expect(response.payload.providerErrors).toEqual([
       { provider: "codex", message: "Codex listing timed out" },
@@ -390,7 +390,7 @@ describe("workspace message schemas", () => {
 
   test("parses fetch_recent_provider_sessions response with filteredAlreadyImportedCount", () => {
     const response = SessionOutboundMessageSchema.parse({
-      type: "fetch_recent_provider_sessions_response",
+      type: "provider.sessions.recent.list.response",
       payload: {
         requestId: "req-recent-provider-sessions",
         entries: [],
@@ -398,22 +398,22 @@ describe("workspace message schemas", () => {
       },
     });
 
-    if (response.type !== "fetch_recent_provider_sessions_response") {
-      throw new Error("expected fetch_recent_provider_sessions_response");
+    if (response.type !== "provider.sessions.recent.list.response") {
+      throw new Error("expected provider.sessions.recent.list.response");
     }
     expect(response.payload.filteredAlreadyImportedCount).toBe(3);
   });
 
   test("parses new and legacy import agent requests", () => {
     const newRequest = SessionInboundMessageSchema.parse({
-      type: "import_agent_request",
+      type: "agent.import.request",
       requestId: "req-import-new",
       providerId: "custom-codex",
       providerHandleId: "thread-1",
       cwd: "/tmp/repo",
     });
     const legacyRequest = SessionInboundMessageSchema.parse({
-      type: "import_agent_request",
+      type: "agent.import.request",
       requestId: "req-import-legacy",
       provider: "custom-codex",
       sessionId: "thread-1",
@@ -421,14 +421,14 @@ describe("workspace message schemas", () => {
     });
 
     expect(newRequest).toEqual({
-      type: "import_agent_request",
+      type: "agent.import.request",
       requestId: "req-import-new",
       providerId: "custom-codex",
       providerHandleId: "thread-1",
       cwd: "/tmp/repo",
     });
     expect(legacyRequest).toEqual({
-      type: "import_agent_request",
+      type: "agent.import.request",
       requestId: "req-import-legacy",
       provider: "custom-codex",
       sessionId: "thread-1",
@@ -436,14 +436,14 @@ describe("workspace message schemas", () => {
     });
   });
 
-  test("parses open_project_request", () => {
+  test("parses workspace.open.request", () => {
     const parsed = SessionInboundMessageSchema.parse({
-      type: "open_project_request",
+      type: "workspace.open.request",
       cwd: "/tmp/repo",
       requestId: "req-open",
     });
 
-    expect(parsed.type).toBe("open_project_request");
+    expect(parsed.type).toBe("workspace.open.request");
   });
 
   test("parses a GitHub clone response that registers a project without a workspace", () => {
@@ -518,11 +518,11 @@ describe("workspace message schemas", () => {
 
   test("parses legacy editor RPC messages for compatibility", () => {
     const listRequest = SessionInboundMessageSchema.parse({
-      type: "list_available_editors_request",
+      type: "editor.available.list.request",
       requestId: "req-editors",
     });
     const openRequest = SessionInboundMessageSchema.parse({
-      type: "open_in_editor_request",
+      type: "editor.open.request",
       requestId: "req-open-editor",
       editorId: "unknown-editor",
       path: "/tmp/repo",
@@ -530,7 +530,7 @@ describe("workspace message schemas", () => {
       cwd: "/tmp",
     });
     const listResponse = SessionOutboundMessageSchema.parse({
-      type: "list_available_editors_response",
+      type: "editor.available.list.response",
       payload: {
         requestId: "req-editors",
         editors: [{ id: "unknown-editor", label: "Unknown Editor" }],
@@ -538,22 +538,22 @@ describe("workspace message schemas", () => {
       },
     });
     const openResponse = SessionOutboundMessageSchema.parse({
-      type: "open_in_editor_response",
+      type: "editor.open.response",
       payload: {
         requestId: "req-open-editor",
         error: "Editor opening moved to the desktop app",
       },
     });
 
-    expect(listRequest.type).toBe("list_available_editors_request");
-    expect(openRequest.type).toBe("open_in_editor_request");
-    expect(listResponse.type).toBe("list_available_editors_response");
-    expect(openResponse.type).toBe("open_in_editor_response");
+    expect(listRequest.type).toBe("editor.available.list.request");
+    expect(openRequest.type).toBe("editor.open.request");
+    expect(listResponse.type).toBe("editor.available.list.response");
+    expect(openResponse.type).toBe("editor.open.response");
   });
 
   test("rejects empty legacy editor ids", () => {
     const result = SessionInboundMessageSchema.safeParse({
-      type: "open_in_editor_request",
+      type: "editor.open.request",
       requestId: "req-open-empty",
       editorId: "",
       path: "/tmp/repo",
@@ -564,7 +564,7 @@ describe("workspace message schemas", () => {
 
   test("rejects invalid workspace update payload", () => {
     const result = SessionOutboundMessageSchema.safeParse({
-      type: "workspace_update",
+      type: "workspace.update",
       payload: {
         kind: "upsert",
         workspace: {
@@ -587,7 +587,7 @@ describe("workspace message schemas", () => {
 
   test("parses workspace descriptors with scripts", () => {
     const parsed = SessionOutboundMessageSchema.parse({
-      type: "workspace_update",
+      type: "workspace.update",
       payload: {
         kind: "upsert",
         workspace: {
@@ -615,9 +615,9 @@ describe("workspace message schemas", () => {
       },
     });
 
-    expect(parsed.type).toBe("workspace_update");
-    if (parsed.type !== "workspace_update" || parsed.payload.kind !== "upsert") {
-      throw new Error("Expected workspace_update upsert payload");
+    expect(parsed.type).toBe("workspace.update");
+    if (parsed.type !== "workspace.update" || parsed.payload.kind !== "upsert") {
+      throw new Error("Expected workspace.update upsert payload");
     }
     expect(parsed.payload.workspace.scripts).toEqual([
       {
@@ -636,7 +636,7 @@ describe("workspace message schemas", () => {
 
   test("parses legacy workspace descriptors without workspaceDirectory", () => {
     const parsed = SessionOutboundMessageSchema.parse({
-      type: "workspace_update",
+      type: "workspace.update",
       payload: {
         kind: "upsert",
         workspace: {
@@ -654,9 +654,9 @@ describe("workspace message schemas", () => {
       },
     });
 
-    expect(parsed.type).toBe("workspace_update");
-    if (parsed.type !== "workspace_update" || parsed.payload.kind !== "upsert") {
-      throw new Error("Expected workspace_update upsert payload");
+    expect(parsed.type).toBe("workspace.update");
+    if (parsed.type !== "workspace.update" || parsed.payload.kind !== "upsert") {
+      throw new Error("Expected workspace.update upsert payload");
     }
     expect(parsed.payload.workspace.workspaceDirectory).toBe("/repo");
     expect(parsed.payload.workspace.worktreeSlug).toBeUndefined();
@@ -775,7 +775,7 @@ describe("workspace message schemas", () => {
 
   test("parses legacy workspace descriptor enum values", () => {
     const parsed = SessionOutboundMessageSchema.parse({
-      type: "workspace_update",
+      type: "workspace.update",
       payload: {
         kind: "upsert",
         workspace: {
@@ -794,9 +794,9 @@ describe("workspace message schemas", () => {
       },
     });
 
-    expect(parsed.type).toBe("workspace_update");
-    if (parsed.type !== "workspace_update" || parsed.payload.kind !== "upsert") {
-      throw new Error("Expected workspace_update upsert payload");
+    expect(parsed.type).toBe("workspace.update");
+    if (parsed.type !== "workspace.update" || parsed.payload.kind !== "upsert") {
+      throw new Error("Expected workspace.update upsert payload");
     }
     expect(parsed.payload.workspace.projectKind).toBe("non_git");
     expect(parsed.payload.workspace.workspaceKind).toBe("directory");
@@ -941,19 +941,19 @@ describe("workspace message schemas", () => {
     expect(parsed.type).toBe("workspace_setup_progress");
   });
 
-  test("parses workspace_setup_status_request", () => {
+  test("parses workspace.setup.status.request", () => {
     const parsed = SessionInboundMessageSchema.parse({
-      type: "workspace_setup_status_request",
+      type: "workspace.setup.status.request",
       workspaceId: "ws-feature-a",
       requestId: "req-status",
     });
 
-    expect(parsed.type).toBe("workspace_setup_status_request");
+    expect(parsed.type).toBe("workspace.setup.status.request");
   });
 
-  test("parses workspace_setup_status_response payload", () => {
+  test("parses workspace.setup.status.response payload", () => {
     const parsed = SessionOutboundMessageSchema.parse({
-      type: "workspace_setup_status_response",
+      type: "workspace.setup.status.response",
       payload: {
         requestId: "req-status",
         workspaceId: "ws-feature-a",
@@ -971,10 +971,10 @@ describe("workspace message schemas", () => {
       },
     });
 
-    expect(parsed.type).toBe("workspace_setup_status_response");
+    expect(parsed.type).toBe("workspace.setup.status.response");
   });
 
-  test("parses fetch_workspaces_response with optional runtime fields", () => {
+  test("parses workspace.list.response with optional runtime fields", () => {
     const checks = [
       { name: "legacy", status: "success", url: null },
       {
@@ -985,7 +985,7 @@ describe("workspace message schemas", () => {
       },
     ];
     const parsed = SessionOutboundMessageSchema.parse({
-      type: "fetch_workspaces_response",
+      type: "workspace.list.response",
       payload: {
         requestId: "req-workspaces",
         entries: [
@@ -1040,7 +1040,7 @@ describe("workspace message schemas", () => {
       },
     });
 
-    expect(parsed.type).toBe("fetch_workspaces_response");
+    expect(parsed.type).toBe("workspace.list.response");
     expect(parsed.payload.entries[0]?.gitRuntime).toMatchObject({
       currentBranch: "main",
       isDirty: true,
@@ -1052,7 +1052,7 @@ describe("workspace message schemas", () => {
 
   test("older workspace parsers ignore additive runtime fields", () => {
     const message = {
-      type: "fetch_workspaces_response",
+      type: "workspace.list.response",
       payload: {
         requestId: "req-workspaces",
         entries: [
@@ -1114,7 +1114,7 @@ describe("workspace message schemas", () => {
         .optional(),
     });
     const legacyMessageSchema = z.object({
-      type: z.literal("fetch_workspaces_response"),
+      type: z.literal("workspace.list.response"),
       payload: z.object({
         requestId: z.string(),
         entries: z.array(legacyWorkspaceSchema),
@@ -1142,9 +1142,9 @@ describe("workspace message schemas", () => {
     });
   });
 
-  test("parses legacy fetch_agents_response checkout payloads without worktreeRoot", () => {
+  test("parses legacy agent.list.response checkout payloads without worktreeRoot", () => {
     const result = SessionOutboundMessageSchema.safeParse({
-      type: "fetch_agents_response",
+      type: "agent.list.response",
       payload: {
         requestId: "req-1",
         entries: [

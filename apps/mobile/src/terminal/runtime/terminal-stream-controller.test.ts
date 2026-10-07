@@ -301,8 +301,12 @@ it("reports observation failure without declaring the PTY exited, then allows re
   h.controller.setTerminal({ terminalId: "term-1" });
   await flushAsyncWork();
   h.client.emitUpdate({
-    type: "terminal_stream_exit",
-    payload: { terminalId: "term-1", subscriptionId: "terminal-1", error: "Snapshot read failed" },
+    type: "terminal.stream.exit",
+    payload: {
+      terminalId: "term-1",
+      subscriptionId: "terminal-1",
+      error: "Snapshot read failed",
+    },
   });
   expect(h.statuses.at(-1)).toEqual({
     terminalId: "term-1",

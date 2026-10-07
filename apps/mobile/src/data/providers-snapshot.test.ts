@@ -74,7 +74,11 @@ describe("provider snapshot revisions and background refresh", () => {
     try {
       const result = await fetchProvidersSnapshot({
         client: {
-          getProvidersSnapshot: async () => ({ ...snapshot, generation: "daemon-1", revision: 4 }),
+          getProvidersSnapshot: async () => ({
+            ...snapshot,
+            generation: "daemon-1",
+            revision: 4,
+          }),
         },
         serverId,
         cwd: snapshot.cwd,
@@ -88,14 +92,18 @@ describe("provider snapshot revisions and background refresh", () => {
         queryClient,
         cache,
         message: {
-          type: "providers_snapshot_update",
+          type: "provider.snapshot.update",
           payload: { ...snapshot, generation: "daemon-1", revision: 3 },
         },
       });
       expect(queryClient.getQueryData(key)).toBe(latest);
       const restarted = await fetchProvidersSnapshot({
         client: {
-          getProvidersSnapshot: async () => ({ ...snapshot, generation: "daemon-2", revision: 1 }),
+          getProvidersSnapshot: async () => ({
+            ...snapshot,
+            generation: "daemon-2",
+            revision: 1,
+          }),
         },
         serverId,
         cwd: snapshot.cwd,
@@ -222,7 +230,12 @@ const entries: ProviderSnapshotEntry[] = [
     enabled: true,
     iconSvg: '<svg xmlns="http://www.w3.org/2000/svg"/>',
     models: [
-      { provider: "test-provider", id: "test-model", label: "Test model", thinkingOptions: [] },
+      {
+        provider: "test-provider",
+        id: "test-model",
+        label: "Test model",
+        thinkingOptions: [],
+      },
     ],
   },
 ];
@@ -300,7 +313,10 @@ describe.each([
       });
       const serverId = "cancelled-provider-fetch";
       const queryKey = providersSnapshotQueryKey(serverId, snapshot.cwd);
-      const previous = { ...snapshot, entries: [{ ...entries[0], iconSvg: "previous-icon" }] };
+      const previous = {
+        ...snapshot,
+        entries: [{ ...entries[0], iconSvg: "previous-icon" }],
+      };
       queryClient.setQueryData(queryKey, previous);
       replaceProviderSnapshotIcons(serverId, previous.entries);
       try {
@@ -346,7 +362,9 @@ describe.each([
 it("keeps a replacement query when the cancelled native fetch finishes late", async () => {
   const controller = new NativeAbortController();
   const cache = createProviderSnapshotCache(createStorage());
-  const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false, gcTime: 0 } } });
+  const queryClient = new QueryClient({
+    defaultOptions: { queries: { retry: false, gcTime: 0 } },
+  });
   const serverId = "superseded-provider-fetch";
   const queryKey = providersSnapshotQueryKey(serverId, snapshot.cwd);
   let finishResponse = () => {};
@@ -442,7 +460,7 @@ describe("provider snapshot publication identity", () => {
           queryClient,
           cache,
           client,
-          message: { type: "providers_snapshot_update", payload: body },
+          message: { type: "provider.snapshot.update", payload: body },
         });
         const canonical = await cache.materialize(serverId, body);
         const published = queryClient.getQueryData<GetProvidersSnapshotResponseMessage["payload"]>(

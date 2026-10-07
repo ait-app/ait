@@ -219,14 +219,14 @@ test("createPaseoClient exposes workspace list through the daemon client", async
   const request = parseSentSessionMessage(ws.sent.at(-1));
 
   expect(request).toMatchObject({
-    type: "fetch_workspaces_request",
+    type: "workspace.list.request",
     filter: { query: "sdk" },
     page: { limit: 10 },
   });
 
   ws.message(
     sessionMessage({
-      type: "fetch_workspaces_response",
+      type: "workspace.list.response",
       payload: {
         requestId: request.requestId,
         entries: [],
@@ -294,7 +294,7 @@ test("agent handles send permission responses for their agent", async () => {
   expect(parseSentFrame(ws.sent.at(-1))).toEqual({
     type: "session",
     message: {
-      type: "agent_permission_response",
+      type: "agent.permission.resolve.request",
       agentId: "agent_sdk",
       requestId: "permission-request",
       response: {
@@ -450,14 +450,14 @@ test("agent actions list the daemon directory without exposing the low-level cli
   });
   const request = parseSentSessionMessage(ws.sent.at(-1));
   expect(request).toMatchObject({
-    type: "fetch_agents_request",
+    type: "agent.list.request",
     filter: { includeArchived: false },
     page: { limit: 10 },
   });
 
   ws.message(
     sessionMessage({
-      type: "fetch_agents_response",
+      type: "agent.list.response",
       payload: {
         requestId: request.requestId,
         entries: [
@@ -499,13 +499,13 @@ test("workspace handles keep identity and refresh snapshots through existing dri
 
   const openPromise = client.workspaces.open("/repo/sdk", "open-workspace-request");
   expect(parseSentSessionMessage(ws.sent.at(-1))).toMatchObject({
-    type: "open_project_request",
+    type: "workspace.open.request",
     cwd: "/repo/sdk",
   });
 
   ws.message(
     sessionMessage({
-      type: "open_project_response",
+      type: "workspace.open.response",
       payload: {
         requestId: "open-workspace-request",
         workspace: openedWorkspace,
@@ -523,14 +523,14 @@ test("workspace handles keep identity and refresh snapshots through existing dri
   const refreshedWorkspace = createWorkspace({ name: "sdk refreshed" });
   const refetchPromise = workspace.refresh({ requestId: "workspace-refetch-request" });
   expect(parseSentSessionMessage(ws.sent.at(-1))).toMatchObject({
-    type: "fetch_workspaces_request",
+    type: "workspace.list.request",
     requestId: "workspace-refetch-request",
     page: { limit: 200 },
   });
 
   ws.message(
     sessionMessage({
-      type: "fetch_workspaces_response",
+      type: "workspace.list.response",
       payload: {
         requestId: "workspace-refetch-request",
         entries: [],
@@ -546,12 +546,12 @@ test("workspace handles keep identity and refresh snapshots through existing dri
   await new Promise((resolve) => setTimeout(resolve, 0));
   const secondPageRequest = parseSentSessionMessage(ws.sent.at(-1));
   expect(secondPageRequest).toMatchObject({
-    type: "fetch_workspaces_request",
+    type: "workspace.list.request",
     page: { limit: 200, cursor: "workspace-page-2" },
   });
   ws.message(
     sessionMessage({
-      type: "fetch_workspaces_response",
+      type: "workspace.list.response",
       payload: {
         requestId: secondPageRequest.requestId,
         entries: [refreshedWorkspace],
@@ -579,8 +579,12 @@ test("workspace handles keep identity and refresh snapshots through existing dri
   const pushedWorkspace = createWorkspace({ name: "sdk pushed" });
   ws.message(
     sessionMessage({
-      type: "workspace_update",
-      payload: { subscriptionId: "workspaces-sdk", kind: "upsert", workspace: pushedWorkspace },
+      type: "workspace.update",
+      payload: {
+        subscriptionId: "workspaces-sdk",
+        kind: "upsert",
+        workspace: pushedWorkspace,
+      },
     }),
   );
   expect(updates).toEqual(["sdk pushed"]);
@@ -610,7 +614,7 @@ test("workspace handles keep identity and refresh snapshots through existing dri
   unsubscribe();
   ws.message(
     sessionMessage({
-      type: "workspace_update",
+      type: "workspace.update",
       payload: {
         subscriptionId: "workspaces-sdk",
         kind: "upsert",
@@ -667,7 +671,7 @@ test("plugin-shaped PR workspace create and agent create use the existing daemon
   });
   const agentRequest = parseSentSessionMessage(ws.sent.at(-1));
   expect(agentRequest).toMatchObject({
-    type: "create_agent_request",
+    type: "agent.create.request",
     config: { provider: "codex", model: "gpt-5.4", cwd: "/repo/sdk" },
     workspaceId: "workspace_fresh",
     callerAgentId: "parent_sdk",
@@ -675,9 +679,9 @@ test("plugin-shaped PR workspace create and agent create use the existing daemon
   });
   ws.message(
     sessionMessage({
-      type: "status",
+      type: "agent.create.response",
       payload: {
-        status: "agent_created",
+        error: null,
         requestId: agentRequest.requestId,
         agentId: "agent_sdk",
         agent: createAgent({ workspaceId: "workspace_fresh" }),
@@ -702,7 +706,7 @@ test("agent handles delegate create, send, timeline refetch, archive, and local 
   });
   const createRequest = parseSentSessionMessage(ws.sent.at(-1));
   expect(createRequest).toMatchObject({
-    type: "create_agent_request",
+    type: "agent.create.request",
     config: {
       provider: "codex",
       model: "gpt-5.4",
@@ -713,9 +717,9 @@ test("agent handles delegate create, send, timeline refetch, archive, and local 
 
   ws.message(
     sessionMessage({
-      type: "status",
+      type: "agent.create.response",
       payload: {
-        status: "agent_created",
+        error: null,
         requestId: createRequest.requestId,
         agentId: "agent_sdk",
         agent: createdAgent,
@@ -737,8 +741,13 @@ test("agent handles delegate create, send, timeline refetch, archive, and local 
   const updatedAgent = createAgent({ title: "Updated" });
   ws.message(
     sessionMessage({
-      type: "agent_update",
-      payload: { subscriptionId: "agents-sdk", kind: "upsert", agent: updatedAgent, project: null },
+      type: "agent.update",
+      payload: {
+        subscriptionId: "agents-sdk",
+        kind: "upsert",
+        agent: updatedAgent,
+        project: null,
+      },
     }),
   );
   expect(updatedAgents).toEqual(["Updated"]);
@@ -747,7 +756,7 @@ test("agent handles delegate create, send, timeline refetch, archive, and local 
   const sendPromise = agent.send("hello", { messageId: "message-sdk" });
   const sendRequest = parseSentSessionMessage(ws.sent.at(-1));
   expect(sendRequest).toMatchObject({
-    type: "send_agent_message_request",
+    type: "agent.message.send.request",
     agentId: "agent_sdk",
     text: "hello",
     messageId: "message-sdk",
@@ -755,7 +764,7 @@ test("agent handles delegate create, send, timeline refetch, archive, and local 
 
   ws.message(
     sessionMessage({
-      type: "send_agent_message_response",
+      type: "agent.message.send.response",
       payload: {
         requestId: sendRequest.requestId,
         agentId: "agent_sdk",
@@ -772,14 +781,14 @@ test("agent handles delegate create, send, timeline refetch, archive, and local 
   });
   const runSendRequest = parseSentSessionMessage(ws.sent.at(-1));
   expect(runSendRequest).toMatchObject({
-    type: "send_agent_message_request",
+    type: "agent.message.send.request",
     agentId: "agent_sdk",
     text: "finish the task",
     messageId: "run-message-sdk",
   });
   ws.message(
     sessionMessage({
-      type: "send_agent_message_response",
+      type: "agent.message.send.response",
       payload: {
         requestId: runSendRequest.requestId,
         agentId: "agent_sdk",
@@ -791,14 +800,14 @@ test("agent handles delegate create, send, timeline refetch, archive, and local 
   await new Promise((resolve) => setTimeout(resolve, 0));
   const waitRequest = parseSentSessionMessage(ws.sent.at(-1));
   expect(waitRequest).toMatchObject({
-    type: "wait_for_finish_request",
+    type: "agent.finish.wait.request",
     agentId: "agent_sdk",
     timeoutMs: 30_000,
   });
   const finishedAgent = createAgent({ title: "Finished" });
   ws.message(
     sessionMessage({
-      type: "wait_for_finish_response",
+      type: "agent.finish.wait.response",
       payload: {
         requestId: waitRequest.requestId,
         agentId: "agent_sdk",
@@ -815,13 +824,13 @@ test("agent handles delegate create, send, timeline refetch, archive, and local 
   const defaultWaitPromise = agent.waitForFinish();
   const defaultWaitRequest = parseSentSessionMessage(ws.sent.at(-1));
   expect(defaultWaitRequest).toMatchObject({
-    type: "wait_for_finish_request",
+    type: "agent.finish.wait.request",
     agentId: "agent_sdk",
     timeoutMs: 10 * 60_000,
   });
   ws.message(
     sessionMessage({
-      type: "wait_for_finish_response",
+      type: "agent.finish.wait.response",
       payload: {
         requestId: defaultWaitRequest.requestId,
         agentId: "agent_sdk",
@@ -838,13 +847,13 @@ test("agent handles delegate create, send, timeline refetch, archive, and local 
   const timelinePromise = agent.timeline.refetch({ limit: 5 });
   const timelineRequest = parseSentSessionMessage(ws.sent.at(-1));
   expect(timelineRequest).toMatchObject({
-    type: "fetch_agent_timeline_request",
+    type: "agent.timeline.get.request",
     agentId: "agent_sdk",
     limit: 5,
   });
   ws.message(
     sessionMessage({
-      type: "fetch_agent_timeline_response",
+      type: "agent.timeline.get.response",
       payload: {
         requestId: timelineRequest.requestId,
         agentId: "agent_sdk",
@@ -896,12 +905,12 @@ test("agent handles delegate create, send, timeline refetch, archive, and local 
   const archivePromise = agent.archive();
   const archiveRequest = parseSentSessionMessage(ws.sent.at(-1));
   expect(archiveRequest).toMatchObject({
-    type: "archive_agent_request",
+    type: "agent.archive.request",
     agentId: "agent_sdk",
   });
   ws.message(
     sessionMessage({
-      type: "agent_archived",
+      type: "agent.archive.response",
       payload: {
         requestId: archiveRequest.requestId,
         agentId: "agent_sdk",
@@ -926,14 +935,14 @@ test("agent handles list the session's own commands through the existing daemon 
   const commandsPromise = agent.commands({ requestId: "agent-commands-request" });
   const request = parseSentSessionMessage(ws.sent.at(-1));
   expect(request).toMatchObject({
-    type: "list_commands_request",
+    type: "agent.commands.list.request",
     agentId: "agent_sdk",
     requestId: "agent-commands-request",
   });
 
   ws.message(
     sessionMessage({
-      type: "list_commands_response",
+      type: "agent.commands.list.response",
       payload: {
         requestId: "agent-commands-request",
         agentId: "agent_sdk",
@@ -1006,7 +1015,7 @@ test("agent handles expose the observed snapshot through readonly properties", a
   const unsubscribe = agent.subscribe(() => {});
   ws.message(
     sessionMessage({
-      type: "agent_update",
+      type: "agent.update",
       payload: {
         subscriptionId: "agents-sdk",
         kind: "upsert",
@@ -1049,14 +1058,14 @@ test("provider actions delegate to existing provider RPCs and local snapshot upd
     requestId: "provider-models-request",
   });
   expect(parseSentSessionMessage(ws.sent.at(-1))).toMatchObject({
-    type: "list_provider_models_request",
+    type: "provider.models.list.request",
     requestId: "provider-models-request",
     provider: "codex",
     cwd: "/repo/sdk",
   });
   ws.message(
     sessionMessage({
-      type: "list_provider_models_response",
+      type: "provider.models.list.response",
       payload: {
         requestId: "provider-models-request",
         provider: "codex",
@@ -1076,14 +1085,14 @@ test("provider actions delegate to existing provider RPCs and local snapshot upd
     requestId: "provider-modes-request",
   });
   expect(parseSentSessionMessage(ws.sent.at(-1))).toMatchObject({
-    type: "list_provider_modes_request",
+    type: "provider.modes.list.request",
     requestId: "provider-modes-request",
     provider: "codex",
     cwd: "/repo/sdk",
   });
   ws.message(
     sessionMessage({
-      type: "list_provider_modes_response",
+      type: "provider.modes.list.response",
       payload: {
         requestId: "provider-modes-request",
         provider: "codex",
@@ -1109,7 +1118,7 @@ test("provider actions delegate to existing provider RPCs and local snapshot upd
     { requestId: "provider-features-request" },
   );
   expect(parseSentSessionMessage(ws.sent.at(-1))).toMatchObject({
-    type: "list_provider_features_request",
+    type: "provider.features.list.request",
     requestId: "provider-features-request",
     draftConfig: {
       provider: "codex",
@@ -1122,7 +1131,7 @@ test("provider actions delegate to existing provider RPCs and local snapshot upd
   });
   ws.message(
     sessionMessage({
-      type: "list_provider_features_response",
+      type: "provider.features.list.response",
       payload: {
         requestId: "provider-features-request",
         provider: "codex",
@@ -1141,12 +1150,12 @@ test("provider actions delegate to existing provider RPCs and local snapshot upd
     requestId: "providers-available-request",
   });
   expect(parseSentSessionMessage(ws.sent.at(-1))).toMatchObject({
-    type: "list_available_providers_request",
+    type: "provider.available.list.request",
     requestId: "providers-available-request",
   });
   ws.message(
     sessionMessage({
-      type: "list_available_providers_response",
+      type: "provider.available.list.response",
       payload: {
         requestId: "providers-available-request",
         providers: [{ provider: "codex", available: true, error: null }],
@@ -1164,13 +1173,13 @@ test("provider actions delegate to existing provider RPCs and local snapshot upd
     requestId: "providers-snapshot-request",
   });
   expect(parseSentSessionMessage(ws.sent.at(-1))).toMatchObject({
-    type: "get_providers_snapshot_request",
+    type: "provider.snapshot.get.request",
     requestId: "providers-snapshot-request",
     cwd: "/repo/sdk",
   });
   ws.message(
     sessionMessage({
-      type: "get_providers_snapshot_response",
+      type: "provider.snapshot.get.response",
       payload: {
         requestId: "providers-snapshot-request",
         entries: [{ provider: "codex", status: "ready", enabled: true }],
@@ -1187,12 +1196,12 @@ test("provider actions delegate to existing provider RPCs and local snapshot upd
   await new Promise((resolve) => setTimeout(resolve, 0));
   const readyRequest = parseSentSessionMessage(ws.sent.at(-1));
   expect(readyRequest).toMatchObject({
-    type: "get_providers_snapshot_request",
+    type: "provider.snapshot.get.request",
     cwd: "/repo/sdk",
   });
   ws.message(
     sessionMessage({
-      type: "get_providers_snapshot_response",
+      type: "provider.snapshot.get.response",
       payload: {
         requestId: readyRequest.requestId,
         cwd: "/repo/sdk",
@@ -1203,7 +1212,7 @@ test("provider actions delegate to existing provider RPCs and local snapshot upd
   );
   ws.message(
     sessionMessage({
-      type: "providers_snapshot_update",
+      type: "provider.snapshot.update",
       payload: {
         subscriptionId: "provider-wait",
         cwd: "/repo/other",
@@ -1214,7 +1223,7 @@ test("provider actions delegate to existing provider RPCs and local snapshot upd
   );
   ws.message(
     sessionMessage({
-      type: "providers_snapshot_update",
+      type: "provider.snapshot.update",
       payload: {
         subscriptionId: "provider-wait",
         cwd: "/repo/sdk",
@@ -1238,7 +1247,7 @@ test("provider actions delegate to existing provider RPCs and local snapshot upd
   const canonicalReadyRequest = parseSentSessionMessage(ws.sent.at(-1));
   ws.message(
     sessionMessage({
-      type: "providers_snapshot_update",
+      type: "provider.snapshot.update",
       payload: {
         subscriptionId: "provider-canonical-wait",
         cwd: "/repo/sdk",
@@ -1249,7 +1258,7 @@ test("provider actions delegate to existing provider RPCs and local snapshot upd
   );
   ws.message(
     sessionMessage({
-      type: "get_providers_snapshot_response",
+      type: "provider.snapshot.get.response",
       payload: {
         requestId: canonicalReadyRequest.requestId,
         cwd: "/repo/sdk",
@@ -1270,14 +1279,14 @@ test("provider actions delegate to existing provider RPCs and local snapshot upd
     requestId: "providers-refresh-request",
   });
   expect(parseSentSessionMessage(ws.sent.at(-1))).toMatchObject({
-    type: "refresh_providers_snapshot_request",
+    type: "provider.snapshot.refresh.request",
     requestId: "providers-refresh-request",
     cwd: "/repo/sdk",
     providers: ["codex"],
   });
   ws.message(
     sessionMessage({
-      type: "refresh_providers_snapshot_response",
+      type: "provider.snapshot.refresh.response",
       payload: {
         requestId: "providers-refresh-request",
         acknowledged: true,
@@ -1293,13 +1302,13 @@ test("provider actions delegate to existing provider RPCs and local snapshot upd
     requestId: "provider-diagnostic-request",
   });
   expect(parseSentSessionMessage(ws.sent.at(-1))).toMatchObject({
-    type: "provider_diagnostic_request",
+    type: "provider.diagnostic.request",
     requestId: "provider-diagnostic-request",
     provider: "codex",
   });
   ws.message(
     sessionMessage({
-      type: "provider_diagnostic_response",
+      type: "provider.diagnostic.response",
       payload: {
         requestId: "provider-diagnostic-request",
         provider: "codex",
@@ -1377,12 +1386,12 @@ test("provider actions delegate to existing provider RPCs and local snapshot upd
   });
   expect(parseSentSessionMessage(ws.sent.at(-1))).toMatchObject({
     type: "session.events.set_subscription.request",
-    events: ["providers_snapshot_update"],
+    events: ["provider.snapshot.update"],
   });
   acknowledgeObservation(ws, "provider-updates");
   ws.message(
     sessionMessage({
-      type: "providers_snapshot_update",
+      type: "provider.snapshot.update",
       payload: {
         subscriptionId: "provider-updates",
         cwd: "/repo/sdk",
@@ -1417,11 +1426,11 @@ test("waitForReady reads an older host on the existing connection", async () => 
   const waiting = client.providers.waitForReady({ cwd: "/repo/./sdk" });
   await expect
     .poll(() => parseSentSessionMessage(ws.sent.at(-1)).type)
-    .toBe("get_providers_snapshot_request");
+    .toBe("provider.snapshot.get.request");
   const request = parseSentSessionMessage(ws.sent.at(-1));
   ws.message(
     sessionMessage({
-      type: "get_providers_snapshot_response",
+      type: "provider.snapshot.get.response",
       payload: {
         requestId: request.requestId,
         entries: [],
@@ -1451,12 +1460,12 @@ test("config actions delegate to existing daemon config RPCs", async () => {
 
   const getPromise = client.config.get("config-get-request");
   expect(parseSentSessionMessage(ws.sent.at(-1))).toMatchObject({
-    type: "get_daemon_config_request",
+    type: "daemon.config.get.request",
     requestId: "config-get-request",
   });
   ws.message(
     sessionMessage({
-      type: "get_daemon_config_response",
+      type: "daemon.config.get.response",
       payload: {
         requestId: "config-get-request",
         config: {
@@ -1491,7 +1500,7 @@ test("config actions delegate to existing daemon config RPCs", async () => {
     "config-patch-request",
   );
   expect(parseSentSessionMessage(ws.sent.at(-1))).toMatchObject({
-    type: "set_daemon_config_request",
+    type: "daemon.config.set.request",
     requestId: "config-patch-request",
     config: {
       providers: {
@@ -1503,7 +1512,7 @@ test("config actions delegate to existing daemon config RPCs", async () => {
   });
   ws.message(
     sessionMessage({
-      type: "set_daemon_config_response",
+      type: "daemon.config.set.response",
       payload: {
         requestId: "config-patch-request",
         config: {
@@ -1564,7 +1573,7 @@ test("agent config maps provider/model and provider-native options to the daemon
   });
   const request = parseSentSessionMessage(ws.sent.at(-1));
   expect(request).toMatchObject({
-    type: "create_agent_request",
+    type: "agent.create.request",
     config: {
       provider: "codex",
       cwd: "/repo/sdk",
@@ -1586,9 +1595,9 @@ test("agent config maps provider/model and provider-native options to the daemon
 
   ws.message(
     sessionMessage({
-      type: "status",
+      type: "agent.create.response",
       payload: {
-        status: "agent_created",
+        error: null,
         requestId: request.requestId,
         agentId: "agent_sdk",
         agent: createdAgent,

@@ -3,7 +3,7 @@ import type {
   SessionOutboundMessage,
 } from "@ait/protocol/messages";
 
-type Update = Extract<SessionOutboundMessage, { type: "providers_snapshot_update" }>;
+type Update = Extract<SessionOutboundMessage, { type: "provider.snapshot.update" }>;
 type Snapshot = GetProvidersSnapshotResponseMessage["payload"];
 
 interface PendingSnapshot {
@@ -56,7 +56,7 @@ export class ProviderSnapshotUpdates {
           continue;
         this.pending.delete(key);
         this.host.emit({
-          type: "providers_snapshot_update",
+          type: "provider.snapshot.update",
           payload: { ...snapshot, subscriptionId: announced.payload.subscriptionId },
         });
         return;

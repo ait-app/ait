@@ -6,12 +6,12 @@ describe("terminal restore schemas", () => {
   test("accepts legacy terminal subscribe requests without restore options", () => {
     expect(
       SubscribeTerminalRequestSchema.parse({
-        type: "subscribe_terminal_request",
+        type: "terminal.subscribe.request",
         terminalId: "term-1",
         requestId: "req-1",
       }),
     ).toEqual({
-      type: "subscribe_terminal_request",
+      type: "terminal.subscribe.request",
       terminalId: "term-1",
       requestId: "req-1",
     });
@@ -21,7 +21,7 @@ describe("terminal restore schemas", () => {
     for (const mode of ["live", "visible-snapshot", "full-snapshot"] as const) {
       expect(
         SubscribeTerminalRequestSchema.parse({
-          type: "subscribe_terminal_request",
+          type: "terminal.subscribe.request",
           terminalId: "term-1",
           requestId: `req-${mode}`,
           restore: {
@@ -37,7 +37,7 @@ describe("terminal restore schemas", () => {
   test("rejects camel-case terminal restore modes", () => {
     expect(() =>
       SubscribeTerminalRequestSchema.parse({
-        type: "subscribe_terminal_request",
+        type: "terminal.subscribe.request",
         terminalId: "term-1",
         requestId: "req-1",
         restore: {

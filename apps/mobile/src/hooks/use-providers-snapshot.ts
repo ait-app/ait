@@ -82,7 +82,7 @@ export function useProvidersSnapshot(
     // The content-hash cache already owns catalog and model identity.
     structuralSharing: false,
     enabled: Boolean(enabled && supportsSnapshot && serverId && client && isConnected),
-    pushEvent: "providers_snapshot_update",
+    pushEvent: "provider.snapshot.update",
     queryFn: async ({ signal }) => {
       if (!client || !serverId) {
         throw new Error(t("workspace.terminal.hostDisconnected"));
@@ -153,6 +153,12 @@ export function prefetchProvidersSnapshot(
     staleTime: Infinity,
     structuralSharing: false,
     queryFn: ({ signal }) =>
-      fetchProvidersSnapshot({ client, serverId, cwd, queryClient: singletonQueryClient, signal }),
+      fetchProvidersSnapshot({
+        client,
+        serverId,
+        cwd,
+        queryClient: singletonQueryClient,
+        signal,
+      }),
   });
 }

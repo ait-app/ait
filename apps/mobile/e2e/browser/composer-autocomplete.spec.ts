@@ -132,7 +132,7 @@ async function installListCommandsStub(page: Page): Promise<void> {
         };
         if (
           parsed.type === "session" &&
-          parsed.message?.type === "list_commands_response" &&
+          parsed.message?.type === "agent.commands.list.response" &&
           parsed.message.payload
         ) {
           parsed.message.payload.commands = TEST_COMMANDS;

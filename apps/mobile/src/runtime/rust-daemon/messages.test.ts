@@ -9,8 +9,8 @@ import { eventMessage, responseMessage, serverInfo } from "./messages";
 import { object } from "./types";
 
 it.each([
-  ["agent.update", "agent_update", { agentId: "agent" }],
-  ["workspace.update", "workspace_update", { id: "workspace", removedProjectId: "project" }],
+  ["agent.update", "agent.update", { agentId: "agent" }],
+  ["workspace.update", "workspace.update", { id: "workspace", removedProjectId: "project" }],
 ] as const)(
   "adapts %s directory events without losing subscription or sync metadata",
   (method, type, identity) => {
@@ -75,9 +75,9 @@ describe("Ait host capabilities", () => {
         ),
       )?.sessionEventTypes;
     const method = "checkout.status.get.request";
-    expect(read(["checkout-git-events-v1"], [method])).toContain("checkout_status_update");
-    expect(read([], [method])).not.toContain("checkout_status_update");
-    expect(read(["checkout-git-events-v1"], [])).not.toContain("checkout_status_update");
+    expect(read(["checkout-git-events-v1"], [method])).toContain("checkout.status.update");
+    expect(read([], [method])).not.toContain("checkout.status.update");
+    expect(read(["checkout-git-events-v1"], [])).not.toContain("checkout.status.update");
   });
 
   it("enables composite creation only with the lifecycle producer and its methods", () => {
@@ -109,13 +109,13 @@ describe("Ait host capabilities", () => {
     const method = "agent.permission.resolve.request";
     expect(read(["agent-session-events-v1"], [method])).toEqual(
       expect.arrayContaining([
-        "agent_permission_request",
-        "agent_permission_resolved",
+        "agent.permission.request",
+        "agent.permission.resolved",
         "agent.provider_subagents.update",
       ]),
     );
-    expect(read([], [method])).not.toContain("agent_permission_request");
-    expect(read(["agent-session-events-v1"], [])).not.toContain("agent_permission_resolved");
+    expect(read([], [method])).not.toContain("agent.permission.request");
+    expect(read(["agent-session-events-v1"], [])).not.toContain("agent.permission.resolved");
   });
   it("advertises terminal attention only for hosts with terminal activity events", () => {
     const read = (features: string[], methods: string[]) =>
@@ -125,10 +125,10 @@ describe("Ait host capabilities", () => {
         ),
       )?.sessionEventTypes;
     expect(read(["terminal-activity-v1"], ["terminal.list.request"])).toContain(
-      "terminal_attention_required",
+      "terminal.attention.required",
     );
-    expect(read([], ["terminal.list.request"])).not.toContain("terminal_attention_required");
-    expect(read(["terminal-activity-v1"], [])).not.toContain("terminal_attention_required");
+    expect(read([], ["terminal.list.request"])).not.toContain("terminal.attention.required");
+    expect(read(["terminal-activity-v1"], [])).not.toContain("terminal.attention.required");
   });
 
   it("enables directory sync and streams only when the connected host advertises them", () => {
@@ -148,7 +148,10 @@ describe("Ait host capabilities", () => {
     expect(read(features)).toMatchObject({ directorySync: true, directorySubscriptions: true });
     expect(read([])).toMatchObject({ directorySync: false, directorySubscriptions: false });
     methods.delete("agent.list.request");
-    expect(read(features)).toMatchObject({ directorySync: false, directorySubscriptions: false });
+    expect(read(features)).toMatchObject({
+      directorySync: false,
+      directorySubscriptions: false,
+    });
   });
 
   it("enables GitLab panels only when the server advertises its installed adapter", () => {
@@ -190,8 +193,8 @@ describe("Ait host capabilities", () => {
     expect(value?.sessionEventTypes).toEqual([
       "status.server_info",
       "status.daemon_config_changed",
-      "providers_snapshot_update",
-      "agent_attention_required",
+      "provider.snapshot.update",
+      "agent.attention.required",
     ]);
   });
 
@@ -232,7 +235,7 @@ it("adapts post-fetch checkout status events into the SDK schema", () => {
   const parsed = WSOutboundMessageSchema.parse(envelope);
   expect(parsed).toMatchObject({
     type: "session",
-    message: { type: "checkout_status_update", payload: { ...payload, requestId: "" } },
+    message: { type: "checkout.status.update", payload: { ...payload, requestId: "" } },
   });
 });
 
@@ -248,7 +251,7 @@ describe("Rust provider snapshots", () => {
   ];
   it("supplies a cacheable compact body for a full hashed response", () => {
     const message = responseMessage(
-      "get_providers_snapshot_response",
+      "provider.snapshot.get.response",
       "catalog",
       { entries, snapshotHash: "hash", notModified: false },
       {},
@@ -261,7 +264,7 @@ describe("Rust provider snapshots", () => {
     });
   });
   it("normalizes pushed catalogs as full snapshots too", () => {
-    const message = eventMessage("providers_snapshot_update", {
+    const message = eventMessage("provider.snapshot.update", {
       entries,
       snapshotHash: "hash",
       subscriptionId: "feed",
@@ -273,7 +276,7 @@ describe("Rust provider snapshots", () => {
   });
   it("does not replace a not-modified reply with an empty catalog", () => {
     const message = responseMessage(
-      "get_providers_snapshot_response",
+      "provider.snapshot.get.response",
       "cached",
       { entries: [], snapshotHash: "hash", notModified: true },
       {},
@@ -282,7 +285,7 @@ describe("Rust provider snapshots", () => {
   });
   it("keeps a genuinely empty full catalog cacheable", () => {
     const message = responseMessage(
-      "get_providers_snapshot_response",
+      "provider.snapshot.get.response",
       "empty",
       { entries: [], snapshotHash: "empty", notModified: false },
       {},

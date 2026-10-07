@@ -134,7 +134,12 @@ describe("fetchProvidersSnapshot", () => {
     const client = createClient({
       snapshots: [
         providersSnapshot([
-          { provider: "snapshot-icon-provider", status: "ready", enabled: true, iconSvg: svg },
+          {
+            provider: "snapshot-icon-provider",
+            status: "ready",
+            enabled: true,
+            iconSvg: svg,
+          },
         ]),
       ],
     });
@@ -355,7 +360,7 @@ describe("applyProvidersSnapshotUpdate", () => {
 
   function updateMessage(entries: ProviderSnapshotEntry[], cwd?: string): ProvidersSnapshotUpdate {
     return {
-      type: "providers_snapshot_update",
+      type: "provider.snapshot.update",
       payload: {
         ...(cwd ? { cwd } : {}),
         entries,
@@ -375,7 +380,7 @@ describe("applyProvidersSnapshotUpdate", () => {
     expect(queryClient.getQueryData(providersSnapshotQueryKey(serverId))).toEqual({
       entries: [codexEntry("ready", [readyCodexModel])],
       generatedAt: "2026-01-01T00:00:01.000Z",
-      requestId: "providers_snapshot_update",
+      requestId: "provider.snapshot.update",
     });
   });
 
@@ -392,7 +397,7 @@ describe("applyProvidersSnapshotUpdate", () => {
     expect(queryClient.getQueryData(providersSnapshotQueryKey(serverId, "/repo-a"))).toMatchObject({
       entries: [codexEntry("ready", [readyCodexModel])],
       generatedAt: "2026-01-01T00:00:01.000Z",
-      requestId: "providers_snapshot_update",
+      requestId: "provider.snapshot.update",
     });
     expect(queryClient.getQueryData(providersSnapshotQueryKey(serverId, "/repo-b"))).toEqual(
       providersSnapshot([]),
@@ -446,7 +451,7 @@ describe("applyProvidersSnapshotUpdate", () => {
     ).toMatchObject({
       entries: [codexEntry("ready", [readyCodexModel])],
       generatedAt: "2026-01-01T00:00:01.000Z",
-      requestId: "providers_snapshot_update",
+      requestId: "provider.snapshot.update",
     });
   });
 

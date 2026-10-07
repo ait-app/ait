@@ -28,7 +28,7 @@ export function useCheckoutStatusQuery({ serverId, cwd }: UseCheckoutStatusQuery
     },
     enabled: !!client && isConnected && !!cwd,
     staleTime: Infinity,
-    // Freshness is push-driven (checkout_status_update applied globally); with
+    // Freshness is push-driven (checkout.status.update applied globally); with
     // staleTime: Infinity, refetchOnMount only fires after an explicit invalidation
     // (e.g. reconnect), which is exactly when the push stream may have been missed.
     refetchOnMount: true,

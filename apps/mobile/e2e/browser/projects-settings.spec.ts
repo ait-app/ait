@@ -425,7 +425,7 @@ test.describe("Projects settings — error UX", () => {
     page,
     editableProject,
   }) => {
-    // Reject read_project_config_request calls until the user clicks Reload.
+    // Reject project.config.read.request calls until the user clicks Reload.
     // This keeps automatic reconnect refetches from racing past the callout.
     const transportFailure = await installReadTransportFailure(page);
 

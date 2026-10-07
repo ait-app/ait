@@ -626,7 +626,11 @@ it("stores and expands identical content once across directory associations", as
   const storage = createStorage();
   const cache = createProviderSnapshotCache(storage);
   for (const cwd of ["/a", "/b", "/c"]) {
-    await writeSnapshot(cache, { cwd, label: "shared", generatedAt: "2026-09-06T12:00:00.000Z" });
+    await writeSnapshot(cache, {
+      cwd,
+      label: "shared",
+      generatedAt: "2026-09-06T12:00:00.000Z",
+    });
   }
   const a = await cache.read("server-1", "/a");
   const b = await cache.read("server-1", "/b");
@@ -667,7 +671,7 @@ it("coalesces missing bodies and keeps a newer pushed association when an older 
       cache,
       client,
       message: {
-        type: "providers_snapshot_update",
+        type: "provider.snapshot.update",
         payload: {
           cwd,
           entries: [],
@@ -739,7 +743,10 @@ it("coalesces missing bodies and keeps a newer pushed association when an older 
       queryClient,
       cache,
       client,
-      message: { type: "providers_snapshot_update", payload: { ...snapshot("new"), cwd: "/a" } },
+      message: {
+        type: "provider.snapshot.update",
+        payload: { ...snapshot("new"), cwd: "/a" },
+      },
     });
     release(snapshot("old"));
     await cancelled;
@@ -762,7 +769,7 @@ it("coalesces missing bodies and keeps a newer pushed association when an older 
       cache: evicted,
       client,
       message: {
-        type: "providers_snapshot_update",
+        type: "provider.snapshot.update",
         payload: {
           cwd: "/b",
           entries: [],

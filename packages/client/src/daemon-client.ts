@@ -14,7 +14,6 @@ import type { ClientCapability } from "@ait/protocol/client-capabilities";
 import type { AgentAttentionNotificationPayload } from "@ait/protocol/agent-attention-notification";
 import {
   AgentCreateFailedStatusPayloadSchema,
-  AgentCreatedStatusPayloadSchema,
   AgentRefreshedStatusPayloadSchema,
   AgentResumedStatusPayloadSchema,
   CheckoutRenameBranchResponseSchema,
@@ -271,14 +270,14 @@ export type ConnectionState =
 
 export type DaemonEvent =
   | {
-      type: "agent_update";
+      type: "agent.update";
       agentId: string;
-      payload: Extract<SessionOutboundMessage, { type: "agent_update" }>["payload"];
+      payload: Extract<SessionOutboundMessage, { type: "agent.update" }>["payload"];
     }
   | {
-      type: "workspace_update";
+      type: "workspace.update";
       workspaceId: string;
-      payload: Extract<SessionOutboundMessage, { type: "workspace_update" }>["payload"];
+      payload: Extract<SessionOutboundMessage, { type: "workspace.update" }>["payload"];
     }
   | {
       type: "project.update";
@@ -290,7 +289,7 @@ export type DaemonEvent =
       payload: Extract<SessionOutboundMessage, { type: "workspace_setup_progress" }>["payload"];
     }
   | {
-      type: "agent_stream";
+      type: "agent.stream";
       agentId: string;
       event: AgentStreamEventPayload;
       timestamp: string;
@@ -298,21 +297,21 @@ export type DaemonEvent =
       epoch?: string;
     }
   | { type: "status"; payload: { status: string } & Record<string, unknown> }
-  | { type: "agent_deleted"; agentId: string }
+  | { type: "agent.delete.response"; agentId: string }
   | {
-      type: "agent_permission_request";
+      type: "agent.permission.request";
       agentId: string;
       request: AgentPermissionRequest;
     }
   | {
-      type: "agent_permission_resolved";
+      type: "agent.permission.resolved";
       agentId: string;
       requestId: string;
       resolution: AgentPermissionResponse;
     }
   | {
-      type: "providers_snapshot_update";
-      payload: Extract<SessionOutboundMessage, { type: "providers_snapshot_update" }>["payload"];
+      type: "provider.snapshot.update";
+      payload: Extract<SessionOutboundMessage, { type: "provider.snapshot.update" }>["payload"];
     }
   | { type: "error"; message: string };
 
@@ -424,7 +423,7 @@ export interface CreatePaseoWorktreeInput extends Pick<
 type CheckoutStatusPayload = CheckoutStatusResponse["payload"];
 type SubscribeCheckoutDiffPayload = Extract<
   SessionOutboundMessage,
-  { type: "subscribe_checkout_diff_response" }
+  { type: "checkout.diff.subscribe.response" }
 >["payload"];
 type CheckoutDiffPayload = Omit<SubscribeCheckoutDiffPayload, "subscriptionId">;
 type CheckoutCommitPayload = CheckoutCommitResponse["payload"];
@@ -456,7 +455,7 @@ type PaseoWorktreeListPayload = PaseoWorktreeListResponse["payload"];
 type PaseoWorktreeArchivePayload = PaseoWorktreeArchiveResponse["payload"];
 type CreatePaseoWorktreePayload = Extract<
   SessionOutboundMessage,
-  { type: "create_paseo_worktree_response" }
+  { type: "workspace.worktree.create.response" }
 >["payload"];
 type WorkspaceCreatePayload = Extract<
   SessionOutboundMessage,
@@ -497,11 +496,11 @@ type DaemonPairingOfferPayload = DaemonGetPairingOfferResponse["payload"];
 type DiagnosticsPayload = DiagnosticsResponse["payload"];
 type ReadProjectConfigPayload = Extract<
   SessionOutboundMessage,
-  { type: "read_project_config_response" }
+  { type: "project.config.read.response" }
 >["payload"];
 type WriteProjectConfigPayload = Extract<
   SessionOutboundMessage,
-  { type: "write_project_config_response" }
+  { type: "project.config.write.response" }
 >["payload"];
 
 type ListCommandsPayload = ListCommandsResponse["payload"];
@@ -523,11 +522,11 @@ interface ListCommandsOptions {
 type LegacyListCommandsOptions = Omit<ListCommandsOptions, "agentId">;
 type SetVoiceModePayload = Extract<
   SessionOutboundMessage,
-  { type: "set_voice_mode_response" }
+  { type: "voice.mode.set.response" }
 >["payload"];
 type DictationFinishAcceptedPayload = Extract<
   SessionOutboundMessage,
-  { type: "dictation_stream_finish_accepted" }
+  { type: "dictation.stream.finish.accepted" }
 >["payload"];
 type AgentPermissionResolvedPayload = AgentPermissionResolvedMessage["payload"];
 type ListTerminalsPayload = ListTerminalsResponse["payload"];
@@ -539,39 +538,39 @@ type KillTerminalPayload = KillTerminalResponse["payload"];
 type CaptureTerminalPayload = CaptureTerminalResponse["payload"];
 type ScheduleCreatePayload = Extract<
   SessionOutboundMessage,
-  { type: "schedule/create/response" }
+  { type: "schedule.create.response" }
 >["payload"];
 type ScheduleListPayload = Extract<
   SessionOutboundMessage,
-  { type: "schedule/list/response" }
+  { type: "schedule.list.response" }
 >["payload"];
 type ScheduleInspectPayload = Extract<
   SessionOutboundMessage,
-  { type: "schedule/inspect/response" }
+  { type: "schedule.inspect.response" }
 >["payload"];
 type ScheduleLogsPayload = Extract<
   SessionOutboundMessage,
-  { type: "schedule/logs/response" }
+  { type: "schedule.logs.response" }
 >["payload"];
 type SchedulePausePayload = Extract<
   SessionOutboundMessage,
-  { type: "schedule/pause/response" }
+  { type: "schedule.pause.response" }
 >["payload"];
 type ScheduleResumePayload = Extract<
   SessionOutboundMessage,
-  { type: "schedule/resume/response" }
+  { type: "schedule.resume.response" }
 >["payload"];
 type ScheduleDeletePayload = Extract<
   SessionOutboundMessage,
-  { type: "schedule/delete/response" }
+  { type: "schedule.delete.response" }
 >["payload"];
 type ScheduleRunOncePayload = Extract<
   SessionOutboundMessage,
-  { type: "schedule/run-once/response" }
+  { type: "schedule.run_once.response" }
 >["payload"];
 type ScheduleUpdatePayload = Extract<
   SessionOutboundMessage,
-  { type: "schedule/update/response" }
+  { type: "schedule.update.response" }
 >["payload"];
 export type FetchAgentTimelinePayload = FetchAgentTimelineResponseMessage["payload"];
 export type AgentForkContextPayload = AgentForkContextResponseMessage["payload"];
@@ -678,9 +677,9 @@ export interface DaemonPairingOfferOptions {
 type DaemonUpdateResponse = z.infer<typeof DaemonUpdateResponseSchema>;
 type FetchAgentsPayload = Extract<
   SessionOutboundMessage,
-  { type: "fetch_agents_response" }
+  { type: "agent.list.response" }
 >["payload"];
-type FetchAgentsRequest = Extract<SessionInboundMessage, { type: "fetch_agents_request" }>;
+type FetchAgentsRequest = Extract<SessionInboundMessage, { type: "agent.list.request" }>;
 export type FetchAgentsOptions = Omit<FetchAgentsRequest, "type" | "requestId"> & {
   signal?: AbortSignal;
   requestId?: string;
@@ -690,11 +689,11 @@ export type FetchAgentsEntry = FetchAgentsPayload["entries"][number];
 export type FetchAgentsPageInfo = FetchAgentsPayload["pageInfo"];
 type FetchAgentHistoryPayload = Extract<
   SessionOutboundMessage,
-  { type: "fetch_agent_history_response" }
+  { type: "agent.history.get.response" }
 >["payload"];
 type FetchAgentHistoryRequest = Extract<
   SessionInboundMessage,
-  { type: "fetch_agent_history_request" }
+  { type: "agent.history.get.request" }
 >;
 export type FetchAgentHistoryOptions = Omit<FetchAgentHistoryRequest, "type" | "requestId"> & {
   requestId?: string;
@@ -703,11 +702,11 @@ export type FetchAgentHistoryEntry = FetchAgentHistoryPayload["entries"][number]
 export type FetchAgentHistoryPageInfo = FetchAgentHistoryPayload["pageInfo"];
 type FetchRecentProviderSessionsPayload = Extract<
   SessionOutboundMessage,
-  { type: "fetch_recent_provider_sessions_response" }
+  { type: "provider.sessions.recent.list.response" }
 >["payload"];
 type FetchRecentProviderSessionsRequest = Extract<
   SessionInboundMessage,
-  { type: "fetch_recent_provider_sessions_request" }
+  { type: "provider.sessions.recent.list.request" }
 >;
 export type FetchRecentProviderSessionsOptions = Omit<
   FetchRecentProviderSessionsRequest,
@@ -718,9 +717,9 @@ export type FetchRecentProviderSessionsOptions = Omit<
 export type FetchRecentProviderSessionEntry = FetchRecentProviderSessionsPayload["entries"][number];
 type FetchWorkspacesPayload = Extract<
   SessionOutboundMessage,
-  { type: "fetch_workspaces_response" }
+  { type: "workspace.list.response" }
 >["payload"];
-type FetchWorkspacesRequest = Extract<SessionInboundMessage, { type: "fetch_workspaces_request" }>;
+type FetchWorkspacesRequest = Extract<SessionInboundMessage, { type: "workspace.list.request" }>;
 export type FetchWorkspacesOptions = Omit<FetchWorkspacesRequest, "type" | "requestId"> & {
   signal?: AbortSignal;
   requestId?: string;
@@ -895,15 +894,15 @@ interface BinaryFileTransferState extends PendingBinaryFileRead {
 type RpcWaitResult<T> = { kind: "ok"; value: T } | { kind: "error"; error: DaemonRpcError };
 type GetDaemonConfigResponse = Extract<
   SessionOutboundMessage,
-  { type: "get_daemon_config_response" }
+  { type: "daemon.config.get.response" }
 >;
 type SetDaemonConfigResponse = Extract<
   SessionOutboundMessage,
-  { type: "set_daemon_config_response" }
+  { type: "daemon.config.set.response" }
 >;
 type CorrelatedResponseMessage =
   | Extract<SessionOutboundMessage, { payload: { requestId: string } }>
-  | Extract<SessionOutboundMessage, { type: "terminals_changed" }>
+  | Extract<SessionOutboundMessage, { type: "terminal.list.changed" }>
   | GetDaemonConfigResponse
   | SetDaemonConfigResponse;
 type CorrelatedResponseType = CorrelatedResponseMessage["type"];
@@ -1126,7 +1125,10 @@ export class DaemonClient {
   private readonly owned = new ConnectionSubscriptions({
     send: (message) =>
       this.sendSessionMessageOrThrow(
-        SessionInboundMessageSchema.parse({ ...message, requestId: this.createRequestId() }),
+        SessionInboundMessageSchema.parse({
+          ...message,
+          requestId: this.createRequestId(),
+        }),
       ),
     release: async (subscriptionId) => {
       if (!this.isConnected) return;
@@ -1579,7 +1581,7 @@ export class DaemonClient {
   onAgentAttentionRequired(
     handler: (notification: AgentAttentionRequiredNotification) => void,
   ): () => void {
-    const unsubscribeLegacy = this.on("agent_stream", (message) => {
+    const unsubscribeLegacy = this.on("agent.stream", (message) => {
       if (message.payload.event.type !== "attention_required") {
         return;
       }
@@ -1592,7 +1594,7 @@ export class DaemonClient {
         ...(event.notification ? { notification: event.notification } : {}),
       });
     });
-    const unsubscribeDedicated = this.on("agent_attention_required", (message) => {
+    const unsubscribeDedicated = this.on("agent.attention.required", (message) => {
       handler(message.payload);
     });
     return () => {
@@ -1745,7 +1747,10 @@ export class DaemonClient {
       try {
         if (this.transport && this.connectionState.status === "connected") {
           const payload = SessionInboundMessageSchema.parse(pending.message);
-          this.sendJsonMessage("session", payload.type, { type: "session", message: payload });
+          this.sendJsonMessage("session", payload.type, {
+            type: "session",
+            message: payload,
+          });
           pending.resolve();
         } else {
           pending.reject(new DaemonConnectionError("Connection lost before message could be sent"));
@@ -1911,7 +1916,7 @@ export class DaemonClient {
   async clearAgentAttention(agentId: string | string[]): Promise<void> {
     const requestId = this.createRequestId();
     const message = SessionInboundMessageSchema.parse({
-      type: "clear_agent_attention",
+      type: "agent.attention.clear.request",
       agentId,
       requestId,
     });
@@ -1980,7 +1985,7 @@ export class DaemonClient {
     appVisibilityChangedAt?: string;
   }): void {
     this.sendSessionMessage({
-      type: "client_heartbeat",
+      type: "session.heartbeat",
       deviceType: params.deviceType,
       focusedAgentId: params.focusedAgentId,
       focusedTerminalId: params.focusedTerminalId ?? null,
@@ -1992,7 +1997,7 @@ export class DaemonClient {
 
   registerPushToken(token: string): void {
     this.sendSessionMessage({
-      type: "register_push_token",
+      type: "push.register",
       token,
     });
   }
@@ -2020,10 +2025,10 @@ export class DaemonClient {
 
     const payload = await this.sendRequest({
       requestId,
-      message: { type: "ping", requestId, clientSentAt },
+      message: { type: "connection.ping", requestId, clientSentAt },
       timeout: params?.timeoutMs ?? 5000,
       select: (msg) => {
-        if (msg.type !== "pong") return null;
+        if (msg.type !== "connection.pong") return null;
         if (msg.payload.requestId !== requestId) return null;
         if (typeof msg.payload.serverReceivedAt !== "number") return null;
         if (typeof msg.payload.serverSentAt !== "number") return null;
@@ -2101,7 +2106,7 @@ export class DaemonClient {
     this.pingProbe = probe;
 
     try {
-      this.sendJsonMessage("ping", "ping", { type: "ping" });
+      this.sendJsonMessage("connection.ping", "connection.ping", { type: "connection.ping" });
     } catch (error) {
       this.clearPingProbe();
       const sendError = error instanceof Error ? error : new Error(String(error));
@@ -2227,8 +2232,8 @@ export class DaemonClient {
   ): OwnedSubscription<FetchAgentsPayload> {
     const { signal, requestId, timeout, ...query } = options;
     return this.observe(
-      "fetch_agents_response",
-      { ...query, type: "fetch_agents_request", subscribe: {} },
+      "agent.list.response",
+      { ...query, type: "agent.list.request", subscribe: {} },
       { signal, requestId, timeout },
     );
   }
@@ -2238,8 +2243,8 @@ export class DaemonClient {
   ): OwnedSubscription<FetchWorkspacesPayload> {
     const { signal, requestId, ...query } = options;
     return this.observe(
-      "fetch_workspaces_response",
-      { ...query, type: "fetch_workspaces_request", subscribe: {} },
+      "workspace.list.response",
+      { ...query, type: "workspace.list.request", subscribe: {} },
       { signal, requestId },
     );
   }
@@ -2259,7 +2264,7 @@ export class DaemonClient {
     }
     const resolvedRequestId = this.createRequestId(options?.requestId);
     const message = SessionInboundMessageSchema.parse({
-      type: "fetch_agents_request",
+      type: "agent.list.request",
       requestId: resolvedRequestId,
       ...(options?.scope ? { scope: options.scope } : {}),
       ...(options?.filter ? { filter: options.filter } : {}),
@@ -2274,7 +2279,7 @@ export class DaemonClient {
       timeout: options?.timeout,
       options: { skipQueue: true },
       select: (msg) => {
-        if (msg.type !== "fetch_agents_response") {
+        if (msg.type !== "agent.list.response") {
           return null;
         }
         if (msg.payload.requestId !== resolvedRequestId) {
@@ -2288,7 +2293,7 @@ export class DaemonClient {
   async fetchAgentHistory(options?: FetchAgentHistoryOptions): Promise<FetchAgentHistoryPayload> {
     const resolvedRequestId = this.createRequestId(options?.requestId);
     const message = SessionInboundMessageSchema.parse({
-      type: "fetch_agent_history_request",
+      type: "agent.history.get.request",
       requestId: resolvedRequestId,
       ...(options?.filter ? { filter: options.filter } : {}),
       ...(options?.search ? { search: options.search } : {}),
@@ -2300,7 +2305,7 @@ export class DaemonClient {
       message,
       options: { skipQueue: true },
       select: (msg) => {
-        if (msg.type !== "fetch_agent_history_response") {
+        if (msg.type !== "agent.history.get.response") {
           return null;
         }
         if (msg.payload.requestId !== resolvedRequestId) {
@@ -2316,7 +2321,7 @@ export class DaemonClient {
   ): Promise<FetchRecentProviderSessionsPayload> {
     const resolvedRequestId = this.createRequestId(options?.requestId);
     const message = SessionInboundMessageSchema.parse({
-      type: "fetch_recent_provider_sessions_request",
+      type: "provider.sessions.recent.list.request",
       requestId: resolvedRequestId,
       ...(options?.cwd ? { cwd: options.cwd } : {}),
       ...(options?.providers ? { providers: options.providers } : {}),
@@ -2329,7 +2334,7 @@ export class DaemonClient {
       message,
       options: { skipQueue: true },
       select: (msg) => {
-        if (msg.type !== "fetch_recent_provider_sessions_response") {
+        if (msg.type !== "provider.sessions.recent.list.response") {
           return null;
         }
         if (msg.payload.requestId !== resolvedRequestId) {
@@ -2357,7 +2362,7 @@ export class DaemonClient {
     }
     const resolvedRequestId = this.createRequestId(options?.requestId);
     const message = SessionInboundMessageSchema.parse({
-      type: "fetch_workspaces_request",
+      type: "workspace.list.request",
       requestId: resolvedRequestId,
       ...(options?.filter ? { filter: options.filter } : {}),
       ...(options?.sort ? { sort: options.sort } : {}),
@@ -2370,7 +2375,7 @@ export class DaemonClient {
       message,
       options: { skipQueue: true },
       select: (msg) => {
-        if (msg.type !== "fetch_workspaces_response") {
+        if (msg.type !== "workspace.list.response") {
           return null;
         }
         if (msg.payload.requestId !== resolvedRequestId) {
@@ -2490,10 +2495,10 @@ export class DaemonClient {
     return this.sendCorrelatedSessionRequest({
       requestId,
       message: {
-        type: "open_project_request",
+        type: "workspace.open.request",
         cwd,
       },
-      responseType: "open_project_response",
+      responseType: "workspace.open.response",
     });
   }
 
@@ -2539,7 +2544,11 @@ export class DaemonClient {
   }
 
   async cloneGithubProject(
-    input: { repo: string; targetDirectory: string; cloneProtocol?: ProjectGithubCloneProtocol },
+    input: {
+      repo: string;
+      targetDirectory: string;
+      cloneProtocol?: ProjectGithubCloneProtocol;
+    },
     requestId?: string,
   ): Promise<ProjectGithubClonePayload> {
     const message = {
@@ -2560,16 +2569,16 @@ export class DaemonClient {
     scriptName: string,
     requestId?: string,
   ): Promise<
-    Extract<SessionOutboundMessage, { type: "start_workspace_script_response" }>["payload"]
+    Extract<SessionOutboundMessage, { type: "workspace.script.start.response" }>["payload"]
   > {
     return this.sendCorrelatedSessionRequest({
       requestId,
       message: {
-        type: "start_workspace_script_request",
+        type: "workspace.script.start.request",
         workspaceId,
         scriptName,
       },
-      responseType: "start_workspace_script_response",
+      responseType: "workspace.script.start.response",
     });
   }
 
@@ -2621,10 +2630,10 @@ export class DaemonClient {
     return this.sendCorrelatedSessionRequest({
       requestId,
       message: {
-        type: "archive_workspace_request",
+        type: "workspace.archive.request",
         workspaceId,
       },
-      responseType: "archive_workspace_response",
+      responseType: "workspace.archive.response",
     });
   }
 
@@ -2635,10 +2644,10 @@ export class DaemonClient {
     return this.sendCorrelatedSessionRequest({
       requestId,
       message: {
-        type: "workspace_setup_status_request",
+        type: "workspace.setup.status.request",
         workspaceId,
       },
-      responseType: "workspace_setup_status_response",
+      responseType: "workspace.setup.status.response",
     });
   }
 
@@ -2665,7 +2674,7 @@ export class DaemonClient {
     const options = normalizeFetchAgentOptions(input, legacyOptions);
     const resolvedRequestId = this.createRequestId(options.requestId);
     const message = SessionInboundMessageSchema.parse({
-      type: "fetch_agent_request",
+      type: "agent.get.request",
       requestId: resolvedRequestId,
       agentId: options.agentId,
     });
@@ -2675,7 +2684,7 @@ export class DaemonClient {
       timeout: options.timeout,
       options: { skipQueue: true },
       select: (msg) => {
-        if (msg.type !== "fetch_agent_response") {
+        if (msg.type !== "agent.get.response") {
           return null;
         }
         if (msg.payload.requestId !== resolvedRequestId) {
@@ -2752,7 +2761,7 @@ export class DaemonClient {
     const config = resolveAgentConfig(options);
 
     const message = SessionInboundMessageSchema.parse({
-      type: "create_agent_request",
+      type: "agent.create.request",
       requestId,
       config,
       ...(options.env ? { env: options.env } : {}),
@@ -2775,36 +2784,25 @@ export class DaemonClient {
         : {}),
     });
 
-    const status = await this.sendRequest({
+    const payload = await this.sendRequest({
       requestId,
       message,
       options: { skipQueue: true },
-      select: (msg) => {
-        if (msg.type !== "status") {
-          return null;
-        }
-        const created = AgentCreatedStatusPayloadSchema.safeParse(msg.payload);
-        if (created.success && created.data.requestId === requestId) {
-          return created.data;
-        }
-        const failed = AgentCreateFailedStatusPayloadSchema.safeParse(msg.payload);
-        if (failed.success && failed.data.requestId === requestId) {
-          return failed.data;
-        }
-        return null;
-      },
+      select: (msg) =>
+        msg.type === "agent.create.response" && msg.payload.requestId === requestId
+          ? msg.payload
+          : null,
     });
-    if (status.status === "agent_create_failed") {
-      throw new Error(status.error);
+    if (payload.error || !payload.agent) {
+      throw new Error(payload.error ?? "Agent creation failed");
     }
-
-    return status.agent;
+    return payload.agent;
   }
 
   async deleteAgent(agentId: string): Promise<void> {
     const requestId = this.createRequestId();
     const message = SessionInboundMessageSchema.parse({
-      type: "delete_agent_request",
+      type: "agent.delete.request",
       agentId,
       requestId,
     });
@@ -2813,7 +2811,7 @@ export class DaemonClient {
       message,
       options: { skipQueue: true },
       select: (msg) => {
-        if (msg.type !== "agent_deleted") {
+        if (msg.type !== "agent.delete.response") {
           return null;
         }
         if (msg.payload.requestId !== requestId) {
@@ -2827,7 +2825,7 @@ export class DaemonClient {
   async archiveAgent(agentId: string): Promise<{ archivedAt: string }> {
     const requestId = this.createRequestId();
     const message = SessionInboundMessageSchema.parse({
-      type: "archive_agent_request",
+      type: "agent.archive.request",
       agentId,
       requestId,
     });
@@ -2836,7 +2834,7 @@ export class DaemonClient {
       message,
       options: { skipQueue: true },
       select: (msg) => {
-        if (msg.type !== "agent_archived") {
+        if (msg.type !== "agent.archive.response") {
           return null;
         }
         if (msg.payload.requestId !== requestId) {
@@ -2866,7 +2864,7 @@ export class DaemonClient {
   ): Promise<void> {
     const requestId = this.createRequestId();
     const message = SessionInboundMessageSchema.parse({
-      type: "update_agent_request",
+      type: "agent.update.request",
       agentId,
       ...(updates.name !== undefined ? { name: updates.name } : {}),
       ...(updates.labels && Object.keys(updates.labels).length > 0
@@ -2879,7 +2877,7 @@ export class DaemonClient {
       message,
       options: { skipQueue: true },
       select: (msg) => {
-        if (msg.type !== "update_agent_response") {
+        if (msg.type !== "agent.update.response") {
           return null;
         }
         if (msg.payload.requestId !== requestId) {
@@ -3018,7 +3016,7 @@ export class DaemonClient {
   ): Promise<AgentSnapshotPayload> {
     const requestId = this.createRequestId();
     const message = SessionInboundMessageSchema.parse({
-      type: "resume_agent_request",
+      type: "agent.resume.request",
       requestId,
       handle,
       ...(overrides ? { overrides } : {}),
@@ -3046,7 +3044,7 @@ export class DaemonClient {
   async importAgent(input: ImportAgentInput): Promise<AgentSnapshotPayload> {
     const requestId = this.createRequestId();
     const message = SessionInboundMessageSchema.parse({
-      type: "import_agent_request",
+      type: "agent.import.request",
       requestId,
       ...("providerId" in input
         ? { providerId: input.providerId, providerHandleId: input.providerHandleId }
@@ -3088,7 +3086,7 @@ export class DaemonClient {
   async refreshAgent(agentId: string, requestId?: string): Promise<AgentRefreshedStatusPayload> {
     const resolvedRequestId = this.createRequestId(requestId);
     const message = SessionInboundMessageSchema.parse({
-      type: "refresh_agent_request",
+      type: "agent.refresh.request",
       agentId,
       requestId: resolvedRequestId,
     });
@@ -3115,7 +3113,7 @@ export class DaemonClient {
   ): Promise<FetchAgentTimelinePayload> {
     const resolvedRequestId = this.createRequestId(options.requestId);
     const message = SessionInboundMessageSchema.parse({
-      type: "fetch_agent_timeline_request",
+      type: "agent.timeline.get.request",
       agentId,
       requestId: resolvedRequestId,
       ...(options.direction ? { direction: options.direction } : {}),
@@ -3131,7 +3129,7 @@ export class DaemonClient {
       timeout: options.timeout,
       options: { skipQueue: true },
       select: (msg) => {
-        if (msg.type !== "fetch_agent_timeline_response") {
+        if (msg.type !== "agent.timeline.get.response") {
           return null;
         }
         if (msg.payload.requestId !== resolvedRequestId) {
@@ -3334,7 +3332,7 @@ export class DaemonClient {
     const requestId = this.createRequestId();
     const messageId = options?.messageId ?? crypto.randomUUID();
     const message = SessionInboundMessageSchema.parse({
-      type: "send_agent_message_request",
+      type: "agent.message.send.request",
       requestId,
       agentId,
       text,
@@ -3348,7 +3346,7 @@ export class DaemonClient {
       message,
       options: { skipQueue: true },
       select: (msg) => {
-        if (msg.type !== "send_agent_message_response") {
+        if (msg.type !== "agent.message.send.response") {
           return null;
         }
         if (msg.payload.requestId !== requestId) {
@@ -3402,7 +3400,7 @@ export class DaemonClient {
   async cancelAgent(agentId: string): Promise<void> {
     const requestId = this.createRequestId();
     const message = SessionInboundMessageSchema.parse({
-      type: "cancel_agent_request",
+      type: "agent.cancel.request",
       agentId,
       requestId,
     });
@@ -3411,7 +3409,7 @@ export class DaemonClient {
       message,
       options: { skipQueue: true },
       select: (msg) => {
-        if (msg.type !== "cancel_agent_response") {
+        if (msg.type !== "agent.cancel.response") {
           return null;
         }
         if (msg.payload.requestId !== requestId) {
@@ -3428,7 +3426,7 @@ export class DaemonClient {
   async setAgentMode(agentId: string, modeId: string): Promise<AgentProviderNotice | null> {
     const requestId = this.createRequestId();
     const message = SessionInboundMessageSchema.parse({
-      type: "set_agent_mode_request",
+      type: "agent.mode.set.request",
       agentId,
       modeId,
       requestId,
@@ -3438,7 +3436,7 @@ export class DaemonClient {
       message,
       options: { skipQueue: true },
       select: (msg) => {
-        if (msg.type !== "set_agent_mode_response") {
+        if (msg.type !== "agent.mode.set.response") {
           return null;
         }
         if (msg.payload.requestId !== requestId) {
@@ -3456,7 +3454,7 @@ export class DaemonClient {
   async setAgentModel(agentId: string, modelId: string | null): Promise<void> {
     const requestId = this.createRequestId();
     const message = SessionInboundMessageSchema.parse({
-      type: "set_agent_model_request",
+      type: "agent.model.set.request",
       agentId,
       modelId,
       requestId,
@@ -3466,7 +3464,7 @@ export class DaemonClient {
       message,
       options: { skipQueue: true },
       select: (msg) => {
-        if (msg.type !== "set_agent_model_response") {
+        if (msg.type !== "agent.model.set.response") {
           return null;
         }
         if (msg.payload.requestId !== requestId) {
@@ -3483,7 +3481,7 @@ export class DaemonClient {
   async setAgentFeature(agentId: string, featureId: string, value: unknown): Promise<void> {
     const requestId = this.createRequestId();
     const message = SessionInboundMessageSchema.parse({
-      type: "set_agent_feature_request",
+      type: "agent.feature.set.request",
       agentId,
       featureId,
       value,
@@ -3494,7 +3492,7 @@ export class DaemonClient {
       message,
       options: { skipQueue: true },
       select: (msg) => {
-        if (msg.type !== "set_agent_feature_response") {
+        if (msg.type !== "agent.feature.set.response") {
           return null;
         }
         if (msg.payload.requestId !== requestId) {
@@ -3514,7 +3512,7 @@ export class DaemonClient {
   ): Promise<AgentProviderNotice | null> {
     const requestId = this.createRequestId();
     const message = SessionInboundMessageSchema.parse({
-      type: "set_agent_thinking_request",
+      type: "agent.thinking.set.request",
       agentId,
       thinkingOptionId,
       requestId,
@@ -3524,7 +3522,7 @@ export class DaemonClient {
       message,
       options: { skipQueue: true },
       select: (msg) => {
-        if (msg.type !== "set_agent_thinking_response") {
+        if (msg.type !== "agent.thinking.set.response") {
           return null;
         }
         if (msg.payload.requestId !== requestId) {
@@ -3584,7 +3582,7 @@ export class DaemonClient {
   ): Promise<RestartRequestedStatusPayload> {
     const resolvedRequestId = this.createRequestId(requestId);
     const message = SessionInboundMessageSchema.parse({
-      type: "restart_server_request",
+      type: "server.restart.request",
       ...(reason && reason.trim().length > 0 ? { reason } : {}),
       requestId: resolvedRequestId,
     });
@@ -3612,7 +3610,7 @@ export class DaemonClient {
   async shutdownServer(options?: ShutdownServerOptions): Promise<ShutdownRequestedStatusPayload> {
     const resolvedRequestId = this.createRequestId(options?.requestId);
     const message = SessionInboundMessageSchema.parse({
-      type: "shutdown_server_request",
+      type: "server.shutdown.request",
       requestId: resolvedRequestId,
     });
     return this.sendRequest({
@@ -3667,7 +3665,7 @@ export class DaemonClient {
   async setVoiceMode(enabled: boolean, agentId?: string): Promise<SetVoiceModePayload> {
     const requestId = this.createRequestId();
     const message = SessionInboundMessageSchema.parse({
-      type: "set_voice_mode",
+      type: "voice.mode.set.request",
       enabled,
       ...(agentId ? { agentId } : {}),
       requestId,
@@ -3676,7 +3674,7 @@ export class DaemonClient {
       requestId,
       message,
       select: (msg) => {
-        if (msg.type !== "set_voice_mode_response") {
+        if (msg.type !== "voice.mode.set.response") {
           return null;
         }
         if (msg.payload.requestId !== requestId) {
@@ -3696,13 +3694,13 @@ export class DaemonClient {
   }
 
   async sendVoiceAudioChunk(audio: string, format: string, isLast = false): Promise<void> {
-    this.sendSessionMessage({ type: "voice_audio_chunk", audio, format, isLast });
+    this.sendSessionMessage({ type: "voice.audio.chunk", audio, format, isLast });
   }
 
   async startDictationStream(dictationId: string, format: string): Promise<void> {
     const ack = this.waitForWithCancel(
       (msg) => {
-        if (msg.type !== "dictation_stream_ack") {
+        if (msg.type !== "dictation.stream.ack") {
           return null;
         }
         if (msg.payload.dictationId !== dictationId) {
@@ -3720,7 +3718,7 @@ export class DaemonClient {
 
     const streamError = this.waitForWithCancel(
       (msg) => {
-        if (msg.type !== "dictation_stream_error") {
+        if (msg.type !== "dictation.stream.error") {
           return null;
         }
         if (msg.payload.dictationId !== dictationId) {
@@ -3737,7 +3735,7 @@ export class DaemonClient {
 
     const cleanupError = new Error("Cancelled dictation start waiter");
     try {
-      this.sendSessionMessageStrict({ type: "dictation_stream_start", dictationId, format });
+      this.sendSessionMessageStrict({ type: "dictation.stream.start", dictationId, format });
       await Promise.race([ackPromise, errorPromise]);
     } finally {
       ack.cancel(cleanupError);
@@ -3749,7 +3747,7 @@ export class DaemonClient {
 
   sendDictationStreamChunk(dictationId: string, seq: number, audio: string, format: string): void {
     this.sendSessionMessageStrict({
-      type: "dictation_stream_chunk",
+      type: "dictation.stream.chunk",
       dictationId,
       seq,
       audio,
@@ -3763,7 +3761,7 @@ export class DaemonClient {
   ): Promise<{ dictationId: string; text: string }> {
     const final = this.waitForWithCancel(
       (msg) => {
-        if (msg.type !== "dictation_stream_final") {
+        if (msg.type !== "dictation.stream.final") {
           return null;
         }
         if (msg.payload.dictationId !== dictationId) {
@@ -3777,7 +3775,7 @@ export class DaemonClient {
 
     const streamError = this.waitForWithCancel(
       (msg) => {
-        if (msg.type !== "dictation_stream_error") {
+        if (msg.type !== "dictation.stream.error") {
           return null;
         }
         if (msg.payload.dictationId !== dictationId) {
@@ -3791,7 +3789,7 @@ export class DaemonClient {
 
     const finishAccepted = this.waitForWithCancel<DictationFinishAcceptedPayload>(
       (msg) => {
-        if (msg.type !== "dictation_stream_finish_accepted") {
+        if (msg.type !== "dictation.stream.finish.accepted") {
           return null;
         }
         if (msg.payload.dictationId !== dictationId) {
@@ -3873,7 +3871,11 @@ export class DaemonClient {
 
     const cleanupError = new Error("Cancelled dictation finish waiter");
     try {
-      this.sendSessionMessageStrict({ type: "dictation_stream_finish", dictationId, finalSeq });
+      this.sendSessionMessageStrict({
+        type: "dictation.stream.finish",
+        dictationId,
+        finalSeq,
+      });
       const firstOutcome = await Promise.race([
         finalOutcomePromise,
         errorOutcomePromise,
@@ -3905,15 +3907,15 @@ export class DaemonClient {
   }
 
   cancelDictationStream(dictationId: string): void {
-    this.sendSessionMessageStrict({ type: "dictation_stream_cancel", dictationId });
+    this.sendSessionMessageStrict({ type: "dictation.stream.cancel", dictationId });
   }
 
   async abortRequest(): Promise<void> {
-    this.sendSessionMessage({ type: "abort_request" });
+    this.sendSessionMessage({ type: "voice.abort.request" });
   }
 
   async audioPlayed(id: string): Promise<void> {
-    this.sendSessionMessage({ type: "audio_played", id });
+    this.sendSessionMessage({ type: "voice.audio.played", id });
   }
 
   // ============================================================================
@@ -3935,7 +3937,7 @@ export class DaemonClient {
 
     const resolvedRequestId = this.createRequestId(requestId);
     const message = SessionInboundMessageSchema.parse({
-      type: "checkout_status_request",
+      type: "checkout.status.get.request",
       cwd,
       requestId: resolvedRequestId,
     });
@@ -3945,7 +3947,7 @@ export class DaemonClient {
       message,
       options: { skipQueue: true },
       select: (msg) => {
-        if (msg.type !== "checkout_status_response") {
+        if (msg.type !== "checkout.status.get.response") {
           return null;
         }
         if (msg.payload.requestId !== resolvedRequestId) {
@@ -4012,9 +4014,9 @@ export class DaemonClient {
     options?: { requestId?: string; signal?: AbortSignal },
   ): OwnedSubscription<SubscribeCheckoutDiffPayload> {
     return this.observe(
-      "subscribe_checkout_diff_response",
+      "checkout.diff.subscribe.response",
       {
-        type: "subscribe_checkout_diff_request",
+        type: "checkout.diff.subscribe.request",
         cwd,
         compare: this.normalizeCheckoutDiffCompare(compare),
       },
@@ -4030,12 +4032,12 @@ export class DaemonClient {
     return this.sendCorrelatedSessionRequest({
       requestId,
       message: {
-        type: "checkout_commit_request",
+        type: "checkout.commit.request",
         cwd,
         message: input.message,
         addAll: input.addAll,
       },
-      responseType: "checkout_commit_response",
+      responseType: "checkout.commit.response",
     });
   }
 
@@ -4047,13 +4049,13 @@ export class DaemonClient {
     return this.sendCorrelatedSessionRequest({
       requestId,
       message: {
-        type: "checkout_merge_request",
+        type: "checkout.merge.request",
         cwd,
         baseRef: input.baseRef,
         strategy: input.strategy,
         requireCleanTarget: input.requireCleanTarget,
       },
-      responseType: "checkout_merge_response",
+      responseType: "checkout.merge.response",
     });
   }
 
@@ -4065,12 +4067,12 @@ export class DaemonClient {
     return this.sendCorrelatedSessionRequest({
       requestId,
       message: {
-        type: "checkout_merge_from_base_request",
+        type: "checkout.merge_from_base.request",
         cwd,
         baseRef: input.baseRef,
         requireCleanTarget: input.requireCleanTarget,
       },
-      responseType: "checkout_merge_from_base_response",
+      responseType: "checkout.merge_from_base.response",
     });
   }
 
@@ -4082,8 +4084,8 @@ export class DaemonClient {
   ): Promise<CheckoutResetWorkspacePayload> {
     return this.sendCorrelatedSessionRequest({
       requestId,
-      message: { type: "checkout_reset_workspace_request", cwd, workspaceId, initialBranch },
-      responseType: "checkout_reset_workspace_response",
+      message: { type: "checkout.reset_workspace.request", cwd, workspaceId, initialBranch },
+      responseType: "checkout.reset_workspace.response",
     });
   }
 
@@ -4091,18 +4093,18 @@ export class DaemonClient {
     return this.sendCorrelatedSessionRequest({
       requestId,
       message: {
-        type: "checkout_pull_request",
+        type: "checkout.pull.request",
         cwd,
       },
-      responseType: "checkout_pull_response",
+      responseType: "checkout.pull.response",
     });
   }
 
   async checkoutPush(cwd: string, requestId?: string): Promise<CheckoutPushPayload> {
     return this.sendCorrelatedSessionRequest({
       requestId,
-      message: { type: "checkout_push_request", cwd },
-      responseType: "checkout_push_response",
+      message: { type: "checkout.push.request", cwd },
+      responseType: "checkout.push.response",
     });
   }
 
@@ -4167,13 +4169,13 @@ export class DaemonClient {
     return this.sendCorrelatedSessionRequest({
       requestId,
       message: {
-        type: "checkout_pr_create_request",
+        type: "checkout.pr.create.request",
         cwd,
         title: input.title,
         body: input.body,
         baseRef: input.baseRef,
       },
-      responseType: "checkout_pr_create_response",
+      responseType: "checkout.pr.create.response",
     });
   }
 
@@ -4185,11 +4187,11 @@ export class DaemonClient {
     return this.sendCorrelatedSessionRequest({
       requestId,
       message: {
-        type: "checkout_pr_merge_request",
+        type: "checkout.pr.merge.request",
         cwd,
         mergeMethod: input.method,
       },
-      responseType: "checkout_pr_merge_response",
+      responseType: "checkout.pr.merge.response",
     });
   }
 
@@ -4283,10 +4285,10 @@ export class DaemonClient {
     return this.sendCorrelatedSessionRequest({
       requestId,
       message: {
-        type: "checkout_pr_status_request",
+        type: "checkout.pr.status.request",
         cwd,
       },
-      responseType: "checkout_pr_status_response",
+      responseType: "checkout.pr.status.response",
     });
   }
 
@@ -4297,13 +4299,13 @@ export class DaemonClient {
     return this.sendCorrelatedSessionRequest({
       requestId,
       message: {
-        type: "pull_request_timeline_request",
+        type: "checkout.pr.timeline.request",
         cwd: input.cwd,
         prNumber: input.prNumber,
         repoOwner: input.repoOwner,
         repoName: input.repoName,
       },
-      responseType: "pull_request_timeline_response",
+      responseType: "checkout.pr.timeline.response",
     });
   }
 
@@ -4315,11 +4317,11 @@ export class DaemonClient {
     return this.sendCorrelatedSessionRequest({
       requestId,
       message: {
-        type: "checkout_switch_branch_request",
+        type: "checkout.branch.switch.request",
         cwd,
         branch,
       },
-      responseType: "checkout_switch_branch_response",
+      responseType: "checkout.branch.switch.response",
     });
   }
 
@@ -4343,11 +4345,11 @@ export class DaemonClient {
     return this.sendCorrelatedSessionRequest({
       requestId,
       message: {
-        type: "stash_save_request",
+        type: "checkout.stash.save.request",
         cwd,
         branch: options?.branch,
       },
-      responseType: "stash_save_response",
+      responseType: "checkout.stash.save.response",
     });
   }
 
@@ -4355,11 +4357,11 @@ export class DaemonClient {
     return this.sendCorrelatedSessionRequest({
       requestId,
       message: {
-        type: "stash_pop_request",
+        type: "checkout.stash.pop.request",
         cwd,
         stashIndex,
       },
-      responseType: "stash_pop_response",
+      responseType: "checkout.stash.pop.response",
     });
   }
 
@@ -4371,11 +4373,11 @@ export class DaemonClient {
     return this.sendCorrelatedSessionRequest({
       requestId,
       message: {
-        type: "stash_list_request",
+        type: "checkout.stash.list.request",
         cwd,
         paseoOnly: options?.paseoOnly,
       },
-      responseType: "stash_list_response",
+      responseType: "checkout.stash.list.response",
     });
   }
 
@@ -4386,11 +4388,11 @@ export class DaemonClient {
     return this.sendCorrelatedSessionRequest({
       requestId,
       message: {
-        type: "paseo_worktree_list_request",
+        type: "workspace.worktree.list.request",
         cwd: input.cwd,
         repoRoot: input.repoRoot,
       },
-      responseType: "paseo_worktree_list_response",
+      responseType: "workspace.worktree.list.response",
     });
   }
 
@@ -4407,14 +4409,14 @@ export class DaemonClient {
     return this.sendCorrelatedSessionRequest({
       requestId,
       message: {
-        type: "paseo_worktree_archive_request",
+        type: "workspace.worktree.archive.request",
         worktreePath: input.worktreePath,
         repoRoot: input.repoRoot,
         branchName: input.branchName,
         ...(input.workspaceId !== undefined ? { workspaceId: input.workspaceId } : {}),
         ...(input.scope !== undefined ? { scope: input.scope } : {}),
       },
-      responseType: "paseo_worktree_archive_response",
+      responseType: "workspace.worktree.archive.response",
     });
   }
 
@@ -4425,7 +4427,7 @@ export class DaemonClient {
     return this.sendCorrelatedSessionRequest({
       requestId,
       message: {
-        type: "create_paseo_worktree_request",
+        type: "workspace.worktree.create.request",
         cwd: input.cwd,
         ...(input.projectId !== undefined ? { projectId: input.projectId } : {}),
         worktreeSlug: input.worktreeSlug,
@@ -4437,7 +4439,7 @@ export class DaemonClient {
         ...(input.checkoutSource !== undefined ? { checkoutSource: input.checkoutSource } : {}),
         ...(input.githubPrNumber !== undefined ? { githubPrNumber: input.githubPrNumber } : {}),
       },
-      responseType: "create_paseo_worktree_response",
+      responseType: "workspace.worktree.create.response",
     });
   }
 
@@ -4492,11 +4494,11 @@ export class DaemonClient {
     return this.sendCorrelatedSessionRequest({
       requestId,
       message: {
-        type: "validate_branch_request",
+        type: "checkout.branch.validate.request",
         cwd: options.cwd,
         branchName: options.branchName,
       },
-      responseType: "validate_branch_response",
+      responseType: "checkout.branch.validate.response",
     });
   }
 
@@ -4507,17 +4509,22 @@ export class DaemonClient {
     return this.sendCorrelatedSessionRequest({
       requestId,
       message: {
-        type: "branch_suggestions_request",
+        type: "checkout.branch.suggestions.request",
         cwd: options.cwd,
         query: options.query,
         limit: options.limit,
       },
-      responseType: "branch_suggestions_response",
+      responseType: "checkout.branch.suggestions.response",
     });
   }
 
   async searchForge(
-    options: { cwd: string; query: string; limit?: number; kinds?: ForgeSearchRequest["kinds"] },
+    options: {
+      cwd: string;
+      query: string;
+      limit?: number;
+      kinds?: ForgeSearchRequest["kinds"];
+    },
     requestId?: string,
   ): Promise<ForgeSearchPayload> {
     return this.sendCorrelatedSessionRequest({
@@ -4535,19 +4542,24 @@ export class DaemonClient {
   }
 
   async searchGitHub(
-    options: { cwd: string; query: string; limit?: number; kinds?: GitHubSearchRequest["kinds"] },
+    options: {
+      cwd: string;
+      query: string;
+      limit?: number;
+      kinds?: GitHubSearchRequest["kinds"];
+    },
     requestId?: string,
   ): Promise<GitHubSearchPayload> {
     return this.sendCorrelatedSessionRequest({
       requestId,
       message: {
-        type: "github_search_request",
+        type: "github.search.request",
         cwd: options.cwd,
         query: options.query,
         limit: options.limit,
         kinds: options.kinds,
       },
-      responseType: "github_search_response",
+      responseType: "github.search.response",
     });
   }
 
@@ -4565,7 +4577,7 @@ export class DaemonClient {
     return this.sendCorrelatedSessionRequest({
       requestId,
       message: {
-        type: "directory_suggestions_request",
+        type: "directory.suggestions.request",
         query: options.query,
         cwd: options.cwd,
         includeFiles: options.includeFiles,
@@ -4573,7 +4585,7 @@ export class DaemonClient {
         matchMode: options.matchMode,
         limit: options.limit,
       },
-      responseType: "directory_suggestions_response",
+      responseType: "directory.suggestions.response",
       // Home-tree scans on large home dirs can take several seconds; don't cut
       // the suggestion request off early (it would surface as an empty list).
     });
@@ -4594,14 +4606,14 @@ export class DaemonClient {
     return this.sendCorrelatedSessionRequest({
       requestId,
       message: {
-        type: "file_explorer_request",
+        type: "fs.explorer.request",
         cwd,
         path,
         mode,
         ...(acceptBinary ? { acceptBinary: true } : {}),
         ...(maxBytes ? { maxBytes } : {}),
       },
-      responseType: "file_explorer_response",
+      responseType: "fs.explorer.response",
     });
   }
 
@@ -4844,26 +4856,19 @@ export class DaemonClient {
     return this.sendCorrelatedSessionRequest({
       requestId,
       message: {
-        type: "file_download_token_request",
+        type: "fs.file.download_token.request",
         cwd,
         path,
       },
-      responseType: "file_download_token_response",
+      responseType: "fs.file.download_token.response",
     });
   }
 
   async requestProjectIcon(
-    cwd: string,
+    projectId: string,
     requestId?: string,
   ): Promise<ProjectIconResponse["payload"]> {
-    return this.sendCorrelatedSessionRequest({
-      requestId,
-      message: {
-        type: "project_icon_request",
-        cwd,
-      },
-      responseType: "project_icon_response",
-    });
+    return this.getProjectIcon(projectId, requestId);
   }
 
   async getProjectIcon(
@@ -4887,11 +4892,11 @@ export class DaemonClient {
     const payload = await this.sendCorrelatedSessionRequest({
       requestId: options?.requestId,
       message: {
-        type: "list_provider_models_request",
+        type: "provider.models.list.request",
         provider,
         cwd: options?.cwd,
       },
-      responseType: "list_provider_models_response",
+      responseType: "provider.models.list.response",
       // Provider SDK cold starts (especially model discovery) can exceed 60s.
       timeout: 90000,
     });
@@ -4905,11 +4910,11 @@ export class DaemonClient {
     return this.sendCorrelatedSessionRequest({
       requestId: options?.requestId,
       message: {
-        type: "list_provider_modes_request",
+        type: "provider.modes.list.request",
         provider,
         cwd: options?.cwd,
       },
-      responseType: "list_provider_modes_response",
+      responseType: "provider.modes.list.response",
       timeout: 90000,
     });
   }
@@ -4921,10 +4926,10 @@ export class DaemonClient {
     return this.sendCorrelatedSessionRequest({
       requestId: options?.requestId,
       message: {
-        type: "list_provider_features_request",
+        type: "provider.features.list.request",
         draftConfig,
       },
-      responseType: "list_provider_features_response",
+      responseType: "provider.features.list.response",
       timeout: 90000,
     });
   }
@@ -4935,9 +4940,9 @@ export class DaemonClient {
     return this.sendCorrelatedSessionRequest({
       requestId: options?.requestId,
       message: {
-        type: "list_available_providers_request",
+        type: "provider.available.list.request",
       },
-      responseType: "list_available_providers_response",
+      responseType: "provider.available.list.response",
     });
   }
 
@@ -4958,11 +4963,11 @@ export class DaemonClient {
     return this.sendCorrelatedSessionRequest({
       requestId: options?.requestId,
       message: {
-        type: "get_providers_snapshot_request",
+        type: "provider.snapshot.get.request",
         cwd: options?.cwd,
         ifNoneMatch: options?.ifNoneMatch,
       },
-      responseType: "get_providers_snapshot_response",
+      responseType: "provider.snapshot.get.response",
     });
   }
 
@@ -4972,9 +4977,9 @@ export class DaemonClient {
     return this.sendCorrelatedSessionRequest({
       requestId,
       message: {
-        type: "get_daemon_config_request",
+        type: "daemon.config.get.request",
       },
-      responseType: "get_daemon_config_response",
+      responseType: "daemon.config.get.response",
     });
   }
 
@@ -5096,10 +5101,10 @@ export class DaemonClient {
     return this.sendCorrelatedSessionRequest({
       requestId,
       message: {
-        type: "set_daemon_config_request",
+        type: "daemon.config.set.request",
         config,
       },
-      responseType: "set_daemon_config_response",
+      responseType: "daemon.config.set.response",
     });
   }
 
@@ -5111,10 +5116,10 @@ export class DaemonClient {
     return this.sendCorrelatedSessionRequest({
       requestId,
       message: {
-        type: "read_project_config_request",
+        type: "project.config.read.request",
         repoRoot,
       },
-      responseType: "read_project_config_response",
+      responseType: "project.config.read.response",
     });
   }
 
@@ -5122,12 +5127,12 @@ export class DaemonClient {
     return this.sendCorrelatedSessionRequest({
       requestId: input.requestId,
       message: {
-        type: "write_project_config_request",
+        type: "project.config.write.request",
         repoRoot: input.repoRoot,
         config: input.config,
         expectedRevision: input.expectedRevision,
       },
-      responseType: "write_project_config_response",
+      responseType: "project.config.write.response",
     });
   }
 
@@ -5139,11 +5144,11 @@ export class DaemonClient {
     return this.sendCorrelatedSessionRequest({
       requestId: options?.requestId,
       message: {
-        type: "refresh_providers_snapshot_request",
+        type: "provider.snapshot.refresh.request",
         cwd: options?.cwd,
         providers: options?.providers,
       },
-      responseType: "refresh_providers_snapshot_response",
+      responseType: "provider.snapshot.refresh.response",
       timeout: 120000,
     });
   }
@@ -5155,10 +5160,10 @@ export class DaemonClient {
     return this.sendCorrelatedSessionRequest({
       requestId: options?.requestId,
       message: {
-        type: "provider_diagnostic_request",
+        type: "provider.diagnostic.request",
         provider,
       },
-      responseType: "provider_diagnostic_response",
+      responseType: "provider.diagnostic.response",
       timeout: 180000,
     });
   }
@@ -5186,11 +5191,11 @@ export class DaemonClient {
     return this.sendCorrelatedSessionRequest({
       requestId: options.requestId,
       message: {
-        type: "list_commands_request",
+        type: "agent.commands.list.request",
         agentId: options.agentId,
         ...(options.draftConfig ? { draftConfig: options.draftConfig } : {}),
       },
-      responseType: "list_commands_response",
+      responseType: "agent.commands.list.response",
     });
   }
 
@@ -5204,7 +5209,7 @@ export class DaemonClient {
     response: AgentPermissionResponse,
   ): Promise<void> {
     this.sendSessionMessage({
-      type: "agent_permission_response",
+      type: "agent.permission.resolve.request",
       agentId,
       requestId,
       response,
@@ -5300,7 +5305,12 @@ export class DaemonClient {
     const requestId = this.createRequestId();
     const payload = await this.sendCorrelatedSessionRequest({
       requestId,
-      message: { type: "plugin.directory.install.request", requestId, path, ...(id ? { id } : {}) },
+      message: {
+        type: "plugin.directory.install.request",
+        requestId,
+        path,
+        ...(id ? { id } : {}),
+      },
       responseType: "plugin.directory.install.response",
     });
     return payload.plugin;
@@ -5457,7 +5467,7 @@ export class DaemonClient {
     timeout = 15000,
   ): Promise<AgentPermissionResolvedPayload> {
     const message = SessionInboundMessageSchema.parse({
-      type: "agent_permission_response",
+      type: "agent.permission.resolve.request",
       agentId,
       requestId,
       response,
@@ -5468,7 +5478,7 @@ export class DaemonClient {
       timeout,
       options: { skipQueue: true },
       select: (msg) => {
-        if (msg.type !== "agent_permission_resolved") {
+        if (msg.type !== "agent.permission.resolved") {
           return null;
         }
         if (msg.payload.requestId !== requestId) {
@@ -5562,7 +5572,7 @@ export class DaemonClient {
         }
       };
 
-      unsubscribe = this.on("agent_update", (message) => {
+      unsubscribe = this.on("agent.update", (message) => {
         if (settled) {
           return;
         }
@@ -5595,7 +5605,7 @@ export class DaemonClient {
     const requestId = this.createRequestId();
     const hasTimeout = Number.isFinite(timeout) && timeout > 0;
     const message = SessionInboundMessageSchema.parse({
-      type: "wait_for_finish_request",
+      type: "agent.finish.wait.request",
       requestId,
       agentId,
       ...(hasTimeout ? { timeoutMs: timeout } : {}),
@@ -5603,7 +5613,7 @@ export class DaemonClient {
     const payload = await this.sendCorrelatedRequest({
       requestId,
       message,
-      responseType: "wait_for_finish_response",
+      responseType: "agent.finish.wait.response",
       timeout: hasTimeout ? timeout + 5000 : 0,
       options: { skipQueue: true },
     });
@@ -5623,11 +5633,11 @@ export class DaemonClient {
     cwd: string;
     workspaceId?: string;
     signal?: AbortSignal;
-  }): OwnedSubscription<CorrelatedResponsePayload<"terminals_changed">> {
+  }): OwnedSubscription<CorrelatedResponsePayload<"terminal.list.changed">> {
     const { signal, ...query } = input;
     return this.observe(
-      "terminals_changed",
-      { type: "subscribe_terminals_request", ...query },
+      "terminal.list.changed",
+      { type: "terminal.list.subscribe.request", ...query },
       { signal },
     );
   }
@@ -5639,7 +5649,7 @@ export class DaemonClient {
   ): Promise<ListTerminalsPayload> {
     const resolvedRequestId = this.createRequestId(requestId);
     const message = SessionInboundMessageSchema.parse({
-      type: "list_terminals_request",
+      type: "terminal.list.request",
       ...(cwd === undefined ? {} : { cwd }),
       ...(options?.workspaceId !== undefined ? { workspaceId: options.workspaceId } : {}),
       requestId: resolvedRequestId,
@@ -5647,7 +5657,7 @@ export class DaemonClient {
     return this.sendCorrelatedRequest({
       requestId: resolvedRequestId,
       message,
-      responseType: "list_terminals_response",
+      responseType: "terminal.list.response",
       options: { skipQueue: true },
     });
   }
@@ -5666,7 +5676,7 @@ export class DaemonClient {
   ): Promise<CreateTerminalPayload> {
     const resolvedRequestId = this.createRequestId(requestId);
     const message = SessionInboundMessageSchema.parse({
-      type: "create_terminal_request",
+      type: "terminal.create.request",
       cwd,
       name,
       agentId: options?.agentId,
@@ -5679,7 +5689,7 @@ export class DaemonClient {
     return this.sendCorrelatedRequest({
       requestId: resolvedRequestId,
       message,
-      responseType: "create_terminal_response",
+      responseType: "terminal.create.response",
       options: { skipQueue: true },
     });
   }
@@ -5698,7 +5708,7 @@ export class DaemonClient {
 
   /**
    * Snapshot/restore and output arrive in receive. Subscribe to the returned handle
-   * for terminal_stream_exit: payload.error means observation failure, not PTY exit.
+   * for terminal.stream.exit: payload.error means observation failure, not PTY exit.
    * Either outcome detaches this slot and releases the handle automatically.
    */
   observeTerminal(
@@ -5712,9 +5722,9 @@ export class DaemonClient {
   ): OwnedSubscription<SubscribeTerminalPayload> {
     options?.signal?.throwIfAborted();
     const observation = this.observe(
-      "subscribe_terminal_response",
+      "terminal.subscribe.response",
       {
-        type: "subscribe_terminal_request",
+        type: "terminal.subscribe.request",
         terminalId,
         ...(options?.restore ? { restore: options.restore } : {}),
       },
@@ -5747,7 +5757,7 @@ export class DaemonClient {
         });
       },
       update: (message) => {
-        if (message.type === "terminal_stream_exit") {
+        if (message.type === "terminal.stream.exit") {
           detach();
           queueMicrotask(abort);
         }
@@ -5781,20 +5791,20 @@ export class DaemonClient {
   }
 
   sendTerminalInput(terminalId: string, message: TerminalInput["message"]): void {
-    this.sendSessionMessage({ type: "terminal_input", terminalId, message });
+    this.sendSessionMessage({ type: "terminal.input", terminalId, message });
   }
 
   async killTerminal(terminalId: string, requestId?: string): Promise<KillTerminalPayload> {
     const resolvedRequestId = this.createRequestId(requestId);
     const message = SessionInboundMessageSchema.parse({
-      type: "kill_terminal_request",
+      type: "terminal.kill.request",
       terminalId,
       requestId: resolvedRequestId,
     });
     return this.sendCorrelatedRequest({
       requestId: resolvedRequestId,
       message,
-      responseType: "kill_terminal_response",
+      responseType: "terminal.kill.response",
       options: { skipQueue: true },
     });
   }
@@ -5805,7 +5815,7 @@ export class DaemonClient {
   ): Promise<CloseItemsPayload> {
     const resolvedRequestId = this.createRequestId(requestId);
     const message = SessionInboundMessageSchema.parse({
-      type: "close_items_request",
+      type: "agent.items.close.request",
       agentIds: input.agentIds ?? [],
       terminalIds: input.terminalIds ?? [],
       requestId: resolvedRequestId,
@@ -5813,7 +5823,7 @@ export class DaemonClient {
     return this.sendCorrelatedRequest({
       requestId: resolvedRequestId,
       message,
-      responseType: "close_items_response",
+      responseType: "agent.items.close.response",
       options: { skipQueue: true },
     });
   }
@@ -5825,7 +5835,7 @@ export class DaemonClient {
   ): Promise<CaptureTerminalPayload> {
     const resolvedRequestId = this.createRequestId(requestId);
     const message = SessionInboundMessageSchema.parse({
-      type: "capture_terminal_request",
+      type: "terminal.capture.request",
       terminalId,
       ...(options?.start === undefined ? {} : { start: options.start }),
       ...(options?.end === undefined ? {} : { end: options.end }),
@@ -5835,7 +5845,7 @@ export class DaemonClient {
     return this.sendCorrelatedRequest({
       requestId: resolvedRequestId,
       message,
-      responseType: "capture_terminal_response",
+      responseType: "terminal.capture.response",
       options: { skipQueue: true },
     });
   }
@@ -5844,7 +5854,7 @@ export class DaemonClient {
     return this.sendCorrelatedSessionRequest({
       requestId: options.requestId,
       message: {
-        type: "schedule/create",
+        type: "schedule.create.request",
         prompt: options.prompt,
         cadence: options.cadence,
         target: options.target,
@@ -5853,7 +5863,7 @@ export class DaemonClient {
         ...(options.expiresAt ? { expiresAt: options.expiresAt } : {}),
         ...(typeof options.runOnCreate === "boolean" ? { runOnCreate: options.runOnCreate } : {}),
       },
-      responseType: "schedule/create/response",
+      responseType: "schedule.create.response",
     });
   }
 
@@ -5861,9 +5871,9 @@ export class DaemonClient {
     return this.sendCorrelatedSessionRequest({
       requestId,
       message: {
-        type: "schedule/list",
+        type: "schedule.list.request",
       },
-      responseType: "schedule/list/response",
+      responseType: "schedule.list.response",
     });
   }
 
@@ -5871,10 +5881,10 @@ export class DaemonClient {
     return this.sendCorrelatedSessionRequest({
       requestId: options.requestId,
       message: {
-        type: "schedule/inspect",
+        type: "schedule.inspect.request",
         scheduleId: options.id,
       },
-      responseType: "schedule/inspect/response",
+      responseType: "schedule.inspect.response",
     });
   }
 
@@ -5882,10 +5892,10 @@ export class DaemonClient {
     return this.sendCorrelatedSessionRequest({
       requestId: options.requestId,
       message: {
-        type: "schedule/logs",
+        type: "schedule.logs.request",
         scheduleId: options.id,
       },
-      responseType: "schedule/logs/response",
+      responseType: "schedule.logs.response",
     });
   }
 
@@ -5893,10 +5903,10 @@ export class DaemonClient {
     return this.sendCorrelatedSessionRequest({
       requestId: options.requestId,
       message: {
-        type: "schedule/pause",
+        type: "schedule.pause.request",
         scheduleId: options.id,
       },
-      responseType: "schedule/pause/response",
+      responseType: "schedule.pause.response",
     });
   }
 
@@ -5904,10 +5914,10 @@ export class DaemonClient {
     return this.sendCorrelatedSessionRequest({
       requestId: options.requestId,
       message: {
-        type: "schedule/resume",
+        type: "schedule.resume.request",
         scheduleId: options.id,
       },
-      responseType: "schedule/resume/response",
+      responseType: "schedule.resume.response",
     });
   }
 
@@ -5915,10 +5925,10 @@ export class DaemonClient {
     return this.sendCorrelatedSessionRequest({
       requestId: options.requestId,
       message: {
-        type: "schedule/delete",
+        type: "schedule.delete.request",
         scheduleId: options.id,
       },
-      responseType: "schedule/delete/response",
+      responseType: "schedule.delete.response",
     });
   }
 
@@ -5926,10 +5936,10 @@ export class DaemonClient {
     return this.sendCorrelatedSessionRequest({
       requestId: options.requestId,
       message: {
-        type: "schedule/run-once",
+        type: "schedule.run_once.request",
         scheduleId: options.id,
       },
-      responseType: "schedule/run-once/response",
+      responseType: "schedule.run_once.response",
     });
   }
 
@@ -5937,7 +5947,7 @@ export class DaemonClient {
     return this.sendCorrelatedSessionRequest({
       requestId: options.requestId,
       message: {
-        type: "schedule/update",
+        type: "schedule.update.request",
         scheduleId: options.id,
         ...(options.name !== undefined ? { name: options.name } : {}),
         ...(options.prompt !== undefined ? { prompt: options.prompt } : {}),
@@ -5946,7 +5956,7 @@ export class DaemonClient {
         ...(options.maxRuns !== undefined ? { maxRuns: options.maxRuns } : {}),
         ...(options.expiresAt !== undefined ? { expiresAt: options.expiresAt } : {}),
       },
-      responseType: "schedule/update/response",
+      responseType: "schedule.update.response",
     });
   }
 
@@ -6156,13 +6166,13 @@ export class DaemonClient {
 
     this.consecutiveLivenessFailures = 0;
 
-    if (parsed.data.type === "pong") {
+    if (parsed.data.type === "connection.pong") {
       this.traceInstant("paseo.ws.message.inbound", {
-        envelopeType: "pong",
-        messageType: "pong",
+        envelopeType: "connection.pong",
+        messageType: "connection.pong",
       });
       this.resolvePingProbe();
-      this.runtimeMetrics?.recordMessage("pong", bytes, perfNow() - startMs);
+      this.runtimeMetrics?.recordMessage("connection.pong", bytes, perfNow() - startMs);
       return;
     }
 
@@ -6173,7 +6183,7 @@ export class DaemonClient {
     this.handleSessionMessage(parsed.data.message);
     const msgType = parsed.data.message.type;
     this.runtimeMetrics?.recordMessage(msgType, bytes, perfNow() - startMs);
-    if (parsed.data.message.type === "agent_stream") {
+    if (parsed.data.message.type === "agent.stream") {
       this.runtimeMetrics?.recordAgentStream(parsed.data.message.payload);
     }
   }
@@ -6257,7 +6267,7 @@ export class DaemonClient {
     if (transfer.maxBytes && transfer.size > transfer.maxBytes) {
       this.activeBinaryFileTransfers.delete(frame.requestId);
       this.handleSessionMessage({
-        type: "file_explorer_response",
+        type: "fs.explorer.response",
         payload: {
           cwd: transfer.cwd,
           path: transfer.path,
@@ -6283,7 +6293,7 @@ export class DaemonClient {
       revision: transfer.revision,
     });
     this.handleSessionMessage({
-      type: "file_explorer_response",
+      type: "fs.explorer.response",
       payload: {
         cwd: transfer.cwd,
         path: transfer.path,
@@ -6456,7 +6466,7 @@ export class DaemonClient {
   private handleSessionMessage(msg: SessionOutboundMessage): void {
     msg = this.owned.normalize(msg);
     if (
-      msg.type === "providers_snapshot_update" &&
+      msg.type === "provider.snapshot.update" &&
       this.config.providerSnapshots !== "wire" &&
       msg.payload.snapshotHash &&
       !msg.payload.compactSnapshot
@@ -6572,15 +6582,15 @@ export class DaemonClient {
 
   private toEvent(msg: SessionOutboundMessage): DaemonEvent | null {
     switch (msg.type) {
-      case "agent_update":
+      case "agent.update":
         return {
-          type: "agent_update",
+          type: "agent.update",
           agentId: msg.payload.kind === "upsert" ? msg.payload.agent.id : msg.payload.agentId,
           payload: msg.payload,
         };
-      case "workspace_update":
+      case "workspace.update":
         return {
-          type: "workspace_update",
+          type: "workspace.update",
           workspaceId: msg.payload.kind === "upsert" ? msg.payload.workspace.id : msg.payload.id,
           payload: msg.payload,
         };
@@ -6592,9 +6602,9 @@ export class DaemonClient {
           workspaceId: msg.payload.workspaceId,
           payload: msg.payload,
         };
-      case "agent_stream":
+      case "agent.stream":
         return {
-          type: "agent_stream",
+          type: "agent.stream",
           agentId: msg.payload.agentId,
           event: msg.payload.event,
           timestamp: msg.payload.timestamp,
@@ -6603,24 +6613,24 @@ export class DaemonClient {
         };
       case "status":
         return { type: "status", payload: msg.payload };
-      case "agent_deleted":
-        return { type: "agent_deleted", agentId: msg.payload.agentId };
-      case "agent_permission_request":
+      case "agent.delete.response":
+        return { type: "agent.delete.response", agentId: msg.payload.agentId };
+      case "agent.permission.request":
         return {
-          type: "agent_permission_request",
+          type: "agent.permission.request",
           agentId: msg.payload.agentId,
           request: msg.payload.request,
         };
-      case "agent_permission_resolved":
+      case "agent.permission.resolved":
         return {
-          type: "agent_permission_resolved",
+          type: "agent.permission.resolved",
           agentId: msg.payload.agentId,
           requestId: msg.payload.requestId,
           resolution: msg.payload.resolution,
         };
-      case "providers_snapshot_update":
+      case "provider.snapshot.update":
         return {
-          type: "providers_snapshot_update",
+          type: "provider.snapshot.update",
           payload: msg.payload,
         };
       default:

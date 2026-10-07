@@ -1,5 +1,6 @@
 import { ProviderSnapshotEntrySchema } from "@ait/protocol/messages";
 import { compactProviderSnapshot } from "@ait/protocol/provider-snapshot-codec";
+import { sessionEventMethod } from "@ait/protocol/session-event-kinds";
 import { object, type Payload } from "./types";
 
 export function session(type: string, payload: Payload): Payload {
@@ -34,19 +35,19 @@ export function serverInfo(info: Payload, implemented: Set<string>): Payload {
     sessionEventTypes: [
       "status.server_info",
       ...(features.has("checkout-git-events-v1") && has("checkout.status.get.request")
-        ? ["checkout_status_update"]
+        ? ["checkout.status.update"]
         : []),
       ...(has("daemon.config.get.request") ? ["status.daemon_config_changed"] : []),
       ...(has("provider.snapshot.get.request")
-        ? ["providers_snapshot_update", "agent_attention_required"]
+        ? ["provider.snapshot.update", "agent.attention.required"]
         : []),
       ...(features.has("terminal-activity-v1") && has("terminal.list.request")
-        ? ["terminal_attention_required"]
+        ? ["terminal.attention.required"]
         : []),
       ...(features.has("agent-session-events-v1") && has("agent.permission.resolve.request")
         ? [
-            "agent_permission_request",
-            "agent_permission_resolved",
+            "agent.permission.request",
+            "agent.permission.resolved",
             "agent.provider_subagents.update",
           ]
         : []),
@@ -121,31 +122,6 @@ export function serverInfo(info: Payload, implemented: Set<string>): Payload {
   });
 }
 
-const EVENTS: Readonly<Record<string, string>> = {
-  "agent.update": "agent_update",
-  "workspace.update": "workspace_update",
-  "provider.snapshot.update": "providers_snapshot_update",
-  "agent.attention.required": "agent_attention_required",
-  "agent.permission.request": "agent_permission_request",
-  "agent.permission.resolved": "agent_permission_resolved",
-  "agent.stream": "agent_stream",
-  "checkout.diff.update": "checkout_diff_update",
-  "checkout.status.update": "checkout_status_update",
-  "terminal.stream.exit": "terminal_stream_exit",
-  "terminal.list.changed": "terminals_changed",
-  "terminal.attention.required": "terminal_attention_required",
-  "voice.audio.output": "audio_output",
-  "voice.input.state": "voice_input_state",
-  "voice.transcription.result": "transcription_result",
-  "voice.assistant.chunk": "assistant_chunk",
-  "voice.error": "error",
-  "dictation.stream.ack": "dictation_stream_ack",
-  "dictation.stream.partial": "dictation_stream_partial",
-  "dictation.stream.final": "dictation_stream_final",
-  "dictation.stream.error": "dictation_stream_error",
-  "dictation.stream.finish.accepted": "dictation_stream_finish_accepted",
-};
-
 function providerSnapshot(payload: Payload): Payload {
   if (payload.notModified === true || payload.compactSnapshot || !Array.isArray(payload.entries))
     return payload;
@@ -164,25 +140,26 @@ function providerSnapshot(payload: Payload): Payload {
 }
 
 export function eventMessage(method: string, params: unknown): Payload {
+  method = sessionEventMethod(method);
   const payload = object(params);
   if (method === "checkout.status.update") {
     // The SDK reuses the correlated status schema for unsolicited updates.
-    return session("checkout_status_update", { requestId: "", ...payload });
+    return session("checkout.status.update", { requestId: "", ...payload });
   }
-  if (method === "providers_snapshot_update" || method === "provider.snapshot.update") {
-    return session("providers_snapshot_update", providerSnapshot(payload));
+  if (method === "provider.snapshot.update") {
+    return session("provider.snapshot.update", providerSnapshot(payload));
   }
   if (method === "browser.automation.execute.request") {
     return { type: "session", message: { type: method, ...payload } };
   }
   if (method.startsWith("status.")) {
-    // Session server-info events are already Paseo status payloads.
+    // Status event payloads retain their SDK discriminator.
     return session("status", {
       ...payload,
       status: method.slice("status.".length),
     });
   }
-  return session(EVENTS[method] ?? method, payload);
+  return session(method, payload);
 }
 
 export function responseMessage(
@@ -192,16 +169,10 @@ export function responseMessage(
   request: Payload,
 ): Payload {
   const payload: Payload = { ...object(result), requestId };
-  if (response === "get_providers_snapshot_response")
+  if (response === "provider.snapshot.get.response")
     return session(response, providerSnapshot(payload));
   if (response.startsWith("status:")) {
     const status = response.slice("status:".length);
-    if (status === "agent_created" && typeof payload.error === "string") {
-      return session("status", {
-        ...payload,
-        status: "agent_create_failed",
-      });
-    }
     return session("status", {
       ...payload,
       ...(payload.agentId === undefined && typeof request.agentId === "string"

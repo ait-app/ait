@@ -73,7 +73,7 @@ export async function restoreViewedTimelineWithHeldResponse(
   page: Page,
   gate: DaemonWebSocketGate,
 ): Promise<void> {
-  gate.holdNextServerMessage("fetch_agent_timeline_response");
+  gate.holdNextServerMessage("agent.timeline.get.response");
   gate.restore();
   await gate.waitForHeldServerMessage();
   await expectReconnectingToastGone(page);

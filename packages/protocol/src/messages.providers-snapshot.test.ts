@@ -56,7 +56,7 @@ describe("provider snapshot message schemas", () => {
 
   test("defaults missing enabled state in providers snapshot response entries", () => {
     const parsed = GetProvidersSnapshotResponseMessageSchema.parse({
-      type: "get_providers_snapshot_response",
+      type: "provider.snapshot.get.response",
       payload: {
         entries: [
           {
@@ -81,7 +81,7 @@ describe("provider snapshot message schemas", () => {
 
   test("defaults missing enabled state in providers snapshot update entries", () => {
     const parsed = ProvidersSnapshotUpdateMessageSchema.parse({
-      type: "providers_snapshot_update",
+      type: "provider.snapshot.update",
       payload: {
         cwd: "/tmp/repo",
         entries: [
@@ -104,12 +104,12 @@ test("preserves background refresh revisions in responses, pushes and generated 
   const fields = { generation: "daemon-generation", revision: 7, refreshing: ["codex"] };
   const payload = { ...fields, entries: [], generatedAt: "2026-10-06T00:00:00Z" };
   const response = {
-    type: "get_providers_snapshot_response",
+    type: "provider.snapshot.get.response",
     payload: { ...payload, requestId: "snapshot" },
   };
-  const push = { type: "providers_snapshot_update", payload };
+  const push = { type: "provider.snapshot.update", payload };
   const ack = {
-    type: "refresh_providers_snapshot_response",
+    type: "provider.snapshot.refresh.response",
     payload: {
       requestId: "refresh",
       acknowledged: true,
@@ -134,7 +134,7 @@ test("preserves background refresh revisions in responses, pushes and generated 
 test("accepts a bodyless announcement with separate discovery freshness", async () => {
   const { validateWSOutboundMessage } = await import("./validation/ws-outbound.js");
   const message = {
-    type: "providers_snapshot_update",
+    type: "provider.snapshot.update",
     payload: {
       cwd: "/project",
       entries: [],
@@ -151,7 +151,7 @@ test("accepts a bodyless announcement with separate discovery freshness", async 
 test("preserves models without an optional description", () => {
   const model = { provider: "deepseek", id: "model", label: "Model" };
   const response = ListProviderModelsResponseMessageSchema.parse({
-    type: "list_provider_models_response",
+    type: "provider.models.list.response",
     payload: {
       provider: "deepseek",
       models: [model],
@@ -173,7 +173,7 @@ test("normalizes null model descriptions from native providers", () => {
   expect(entry.models?.[0]?.description).toBeUndefined();
   expect(CompactProviderSnapshotModelSchema.parse(model).description).toBeUndefined();
   const response = ListProviderModelsResponseMessageSchema.parse({
-    type: "list_provider_models_response",
+    type: "provider.models.list.response",
     payload: {
       provider: "opencode",
       models: [model],

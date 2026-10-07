@@ -2,10 +2,10 @@ import { describe, expect, test } from "vitest";
 
 import { SessionInboundMessageSchema } from "./messages.js";
 
-describe("create_agent_request worktree and autoArchive fields", () => {
+describe("agent.create.request worktree and autoArchive fields", () => {
   test("accepts optional worktree branch-off target and autoArchive", () => {
     const parsed = SessionInboundMessageSchema.parse({
-      type: "create_agent_request",
+      type: "agent.create.request",
       requestId: "create-agent-worktree",
       config: {
         provider: "codex",
@@ -20,7 +20,7 @@ describe("create_agent_request worktree and autoArchive fields", () => {
     });
 
     expect(parsed).toEqual({
-      type: "create_agent_request",
+      type: "agent.create.request",
       requestId: "create-agent-worktree",
       config: {
         provider: "codex",
@@ -36,9 +36,9 @@ describe("create_agent_request worktree and autoArchive fields", () => {
     });
   });
 
-  test("keeps legacy create_agent_request defaults unchanged", () => {
+  test("keeps legacy agent.create.request defaults unchanged", () => {
     const parsed = SessionInboundMessageSchema.parse({
-      type: "create_agent_request",
+      type: "agent.create.request",
       requestId: "legacy-create-agent",
       config: {
         provider: "codex",
@@ -47,7 +47,7 @@ describe("create_agent_request worktree and autoArchive fields", () => {
     });
 
     expect(parsed).toEqual({
-      type: "create_agent_request",
+      type: "agent.create.request",
       requestId: "legacy-create-agent",
       config: {
         provider: "codex",

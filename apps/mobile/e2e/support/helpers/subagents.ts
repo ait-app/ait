@@ -251,7 +251,7 @@ export async function rejectNextManagedSubagentArchiveRequest(
               type: "rpc_error",
               payload: {
                 requestId,
-                requestType: "archive_agent_request",
+                requestType: "agent.archive.request",
                 error: "Archive rejected for test",
                 code: "archive_rejected",
               },
@@ -282,7 +282,7 @@ function archiveRequestId(message: WebSocketMessage, subagentId: string): string
     };
     if (
       envelope.type === "session" &&
-      envelope.message?.type === "archive_agent_request" &&
+      envelope.message?.type === "agent.archive.request" &&
       envelope.message.agentId === subagentId &&
       typeof envelope.message.requestId === "string"
     ) {

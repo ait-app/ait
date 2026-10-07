@@ -83,7 +83,10 @@ interface RuntimeState {
   serverSpeechStartedAt: number | null;
 }
 
-type AudioOutputPayload = Extract<SessionOutboundMessage, { type: "audio_output" }>["payload"];
+type AudioOutputPayload = Extract<
+  SessionOutboundMessage,
+  { type: "voice.audio.output" }
+>["payload"];
 
 interface StreamingPlaybackChunk {
   id: string;

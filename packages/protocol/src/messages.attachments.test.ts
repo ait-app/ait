@@ -52,7 +52,7 @@ describe("shared messages attachments", () => {
 
   it("keeps valid review attachments", () => {
     const parsed = SendAgentMessageRequestSchema.parse({
-      type: "send_agent_message_request",
+      type: "agent.message.send.request",
       requestId: "req-review",
       agentId: "agent-1",
       text: "Please address these comments",
@@ -142,7 +142,7 @@ describe("shared messages attachments", () => {
 
   it("drops malformed review attachments while keeping valid attachments", () => {
     const parsed = SendAgentMessageRequestSchema.parse({
-      type: "send_agent_message_request",
+      type: "agent.message.send.request",
       requestId: "req-bad-review",
       agentId: "agent-1",
       text: "Review",
@@ -194,7 +194,7 @@ describe("shared messages attachments", () => {
 
   it("keeps known attachments and drops unknown create-agent attachments", () => {
     const parsed = CreateAgentRequestMessageSchema.parse({
-      type: "create_agent_request",
+      type: "agent.create.request",
       requestId: "req-1",
       config: {
         provider: "codex",
@@ -236,7 +236,7 @@ describe("shared messages attachments", () => {
 
   it("keeps known attachments and drops unknown send-message attachments", () => {
     const parsed = SendAgentMessageRequestSchema.parse({
-      type: "send_agent_message_request",
+      type: "agent.message.send.request",
       requestId: "req-2",
       agentId: "agent-1",
       text: "Review",
@@ -271,7 +271,7 @@ describe("shared messages attachments", () => {
 
   it("keeps known text attachment context kinds and ignores future ones", () => {
     const parsed = SendAgentMessageRequestSchema.parse({
-      type: "send_agent_message_request",
+      type: "agent.message.send.request",
       requestId: "req-text-context",
       agentId: "agent-1",
       text: "Continue",
@@ -312,7 +312,7 @@ describe("shared messages attachments", () => {
 
   it("preserves neutral external-resource presentation on text attachments", () => {
     const parsed = SendAgentMessageRequestSchema.parse({
-      type: "send_agent_message_request",
+      type: "agent.message.send.request",
       requestId: "req-external-resource",
       agentId: "agent-1",
       text: "Implement this",
@@ -356,7 +356,7 @@ describe("shared messages attachments", () => {
 
   it("keeps known firstAgentContext attachments and drops unknown ones", () => {
     const parsed = CreatePaseoWorktreeRequestSchema.parse({
-      type: "create_paseo_worktree_request",
+      type: "workspace.worktree.create.request",
       requestId: "req-3",
       cwd: "/tmp/repo",
       firstAgentContext: {
@@ -392,13 +392,13 @@ describe("shared messages attachments", () => {
 
   it("parses worktree-create payloads without a firstAgentContext", () => {
     const parsed = CreatePaseoWorktreeRequestSchema.parse({
-      type: "create_paseo_worktree_request",
+      type: "workspace.worktree.create.request",
       requestId: "req-4",
       cwd: "/tmp/repo",
     });
 
     expect(parsed).toEqual({
-      type: "create_paseo_worktree_request",
+      type: "workspace.worktree.create.request",
       requestId: "req-4",
       cwd: "/tmp/repo",
     });
@@ -406,7 +406,7 @@ describe("shared messages attachments", () => {
 
   it("accepts and strips create-worktree intent fields compatibly", () => {
     const parsed = CreatePaseoWorktreeRequestSchema.parse({
-      type: "create_paseo_worktree_request",
+      type: "workspace.worktree.create.request",
       requestId: "req-5",
       cwd: "/tmp/repo",
       action: "checkout",
@@ -416,7 +416,7 @@ describe("shared messages attachments", () => {
     });
 
     expect(parsed).toEqual({
-      type: "create_paseo_worktree_request",
+      type: "workspace.worktree.create.request",
       requestId: "req-5",
       cwd: "/tmp/repo",
       action: "checkout",
@@ -427,7 +427,7 @@ describe("shared messages attachments", () => {
 
   it("accepts optional create-agent git intent fields and strips unknown git fields", () => {
     const parsed = CreateAgentRequestMessageSchema.parse({
-      type: "create_agent_request",
+      type: "agent.create.request",
       requestId: "req-6",
       config: {
         provider: "codex",

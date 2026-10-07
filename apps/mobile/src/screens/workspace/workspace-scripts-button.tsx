@@ -580,8 +580,8 @@ export function WorkspaceScriptsButton({
       );
     },
     onSuccess: (result) => {
-      if (result.terminalId) {
-        onScriptTerminalStarted?.(result.terminalId);
+      if (result.script?.terminalId) {
+        onScriptTerminalStarted?.(result.script.terminalId);
       }
     },
   });

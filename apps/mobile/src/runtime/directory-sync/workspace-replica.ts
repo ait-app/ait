@@ -16,7 +16,7 @@ import { resolveWorkspaceMapKeyByIdentity } from "@/utils/workspace-identity";
 import type { DirectoryReplicaMutation } from "@/runtime/replica-cache";
 
 export type WorkspaceDirectoryDelta =
-  | Extract<SessionOutboundMessage, { type: "workspace_update" | "project.update" }>["payload"]
+  | Extract<SessionOutboundMessage, { type: "workspace.update" | "project.update" }>["payload"]
   | { kind: "script_status"; update: ScriptStatusUpdateMessage["payload"] };
 
 export interface WorkspaceDirectorySnapshot {
@@ -160,7 +160,7 @@ export class WorkspaceDirectoryReplica {
   }
 
   private removeWorkspace(
-    delta: Extract<SessionOutboundMessage, { type: "workspace_update" }>["payload"] & {
+    delta: Extract<SessionOutboundMessage, { type: "workspace.update" }>["payload"] & {
       kind: "remove";
     },
   ): DirectoryReplicaMutation[] {
@@ -171,7 +171,12 @@ export class WorkspaceDirectoryReplica {
     if (delta.emptyProject) {
       const project = normalizeProjectDescriptor(delta.emptyProject);
       this.setProject(project);
-      mutations.push({ kind: "project", type: "upsert", id: project.projectId, value: project });
+      mutations.push({
+        kind: "project",
+        type: "upsert",
+        id: project.projectId,
+        value: project,
+      });
     }
     if (delta.removedProjectId) {
       this.projects.delete(delta.removedProjectId);

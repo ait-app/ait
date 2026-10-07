@@ -167,8 +167,8 @@ export function useDictation(options: UseDictationOptions): UseDictationResult {
     if (!client) {
       return;
     }
-    return client.on("dictation_stream_partial", (message) => {
-      if (message.type !== "dictation_stream_partial") {
+    return client.on("dictation.stream.partial", (message) => {
+      if (message.type !== "dictation.stream.partial") {
         return;
       }
       const activeDictationId = senderRef.current?.getDictationId();

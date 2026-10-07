@@ -43,11 +43,11 @@ export class LegacySubscriptions {
       finish: async () => {},
     };
     const workspaces = this.workspaces;
-    if (workspaces && message.type === "fetch_workspaces_request") {
+    if (workspaces && message.type === "workspace.list.request") {
       return {
         ...identity,
         message: SessionInboundMessageSchema.parse({
-          type: "fetch_agents_request",
+          type: "agent.list.request",
           requestId: message.requestId,
           scope: "active",
           sort: [{ key: "updated_at", direction: "desc" }],
@@ -55,10 +55,10 @@ export class LegacySubscriptions {
           subscribe: message.subscribe,
         }),
         receive: (value) => {
-          if (value.type !== "fetch_agents_response") return value;
+          if (value.type !== "agent.list.response") return value;
           if (value.payload.requestId !== message.requestId) return value;
           return {
-            type: "fetch_workspaces_response",
+            type: "workspace.list.response",
             payload: {
               ...value.payload,
               entries: workspaces.read(value.payload.entries, !message.page?.cursor),
@@ -68,19 +68,26 @@ export class LegacySubscriptions {
         },
       };
     }
-    if (message.type === "subscribe_terminals_request") {
+    if (message.type === "terminal.list.subscribe.request") {
       return {
         ...identity,
         receive: (value) => {
-          if (value.type !== "terminals_changed" || value.payload.cwd !== message.cwd) return value;
-          return { ...value, payload: { ...value.payload, requestId: message.requestId } };
+          if (value.type !== "terminal.list.changed" || value.payload.cwd !== message.cwd)
+            return value;
+          return {
+            ...value,
+            payload: { ...value.payload, requestId: message.requestId },
+          };
         },
       };
     }
     if (message.type === "workspace.label.list.request" && !message.subscribe) {
       return {
         ...identity,
-        message: { ...message, subscribe: { subscriptionId: `legacy:${crypto.randomUUID()}` } },
+        message: {
+          ...message,
+          subscribe: { subscriptionId: `legacy:${crypto.randomUUID()}` },
+        },
       };
     }
     if (message.type === "checkout.diff.get.request") {
@@ -88,15 +95,15 @@ export class LegacySubscriptions {
       return {
         message: SessionInboundMessageSchema.parse({
           ...message,
-          type: "subscribe_checkout_diff_request",
+          type: "checkout.diff.subscribe.request",
           subscriptionId,
         }),
         receive: (value) => {
-          if (value.type !== "subscribe_checkout_diff_response") return value;
+          if (value.type !== "checkout.diff.subscribe.response") return value;
           if (value.payload.requestId !== message.requestId) return value;
           return { ...value, type: "checkout.diff.get.response" };
         },
-        finish: () => this.send({ type: "unsubscribe_checkout_diff_request", subscriptionId }),
+        finish: () => this.send({ type: "checkout.diff.unsubscribe.request", subscriptionId }),
       };
     }
     return identity;
@@ -110,12 +117,12 @@ export class LegacySubscriptions {
 
   request({ id, query }: Interest): ObservationRequest | null {
     switch (query.type) {
-      case "fetch_agents_request":
-      case "fetch_workspaces_request":
+      case "agent.list.request":
+      case "workspace.list.request":
       case "workspace.label.list.request":
         return { ...query, subscribe: { subscriptionId: id } };
       case "fs.file.subscribe.request":
-      case "subscribe_checkout_diff_request":
+      case "checkout.diff.subscribe.request":
         return { ...query, subscriptionId: id };
       case "agent.timeline.set_subscription.request":
         if (!this.info.features?.selectiveAgentTimeline) return null;
@@ -158,17 +165,17 @@ export class LegacySubscriptions {
         return this.request(interest);
       case "fs.file.subscribe.request":
         return { type: "fs.file.unsubscribe.request", subscriptionId: id };
-      case "subscribe_checkout_diff_request":
-        return { type: "unsubscribe_checkout_diff_request", subscriptionId: id };
-      case "subscribe_terminal_request":
+      case "checkout.diff.subscribe.request":
+        return { type: "checkout.diff.unsubscribe.request", subscriptionId: id };
+      case "terminal.subscribe.request":
         if (
           [...this.interests.values()].some(
             (item) => item.query.type === query.type && item.query.terminalId === query.terminalId,
           )
         )
           return null;
-        return { type: "unsubscribe_terminal_request", terminalId: query.terminalId };
-      case "subscribe_terminals_request":
+        return { type: "terminal.unsubscribe.request", terminalId: query.terminalId };
+      case "terminal.list.subscribe.request":
         if (
           [...this.interests.values()].some(
             (item) =>
@@ -179,7 +186,7 @@ export class LegacySubscriptions {
         )
           return null;
         return {
-          type: "unsubscribe_terminals_request",
+          type: "terminal.list.unsubscribe.request",
           cwd: query.cwd,
           workspaceId: query.workspaceId,
         };
@@ -201,10 +208,10 @@ export class LegacySubscriptions {
       message,
       ...(this.workspaces?.update(message) ?? []),
     ];
-    if (message.type === "agent_stream" && message.payload.event.type === "attention_required") {
+    if (message.type === "agent.stream" && message.payload.event.type === "attention_required") {
       const { agentId, event } = message.payload;
       updates.push({
-        type: "agent_attention_required",
+        type: "agent.attention.required",
         payload: {
           agentId,
           reason: event.reason,
@@ -228,25 +235,25 @@ export class LegacySubscriptions {
 
   private matches({ id, query }: Interest, message: SessionOutboundMessage): boolean {
     switch (query.type) {
-      case "fetch_agents_request":
-        return message.type === "agent_update";
-      case "fetch_workspaces_request":
-        return message.type === "workspace_update";
+      case "agent.list.request":
+        return message.type === "agent.update";
+      case "workspace.list.request":
+        return message.type === "workspace.update";
       case "workspace.label.list.request":
         return message.type === "workspace.label.update";
       case "fs.file.subscribe.request":
         return message.type === "fs.file.update" && message.payload.subscriptionId === id;
-      case "subscribe_checkout_diff_request":
-        return message.type === "checkout_diff_update" && message.payload.subscriptionId === id;
-      case "subscribe_terminals_request":
-        return message.type === "terminals_changed" && message.payload.cwd === query.cwd;
-      case "subscribe_terminal_request":
+      case "checkout.diff.subscribe.request":
+        return message.type === "checkout.diff.update" && message.payload.subscriptionId === id;
+      case "terminal.list.subscribe.request":
+        return message.type === "terminal.list.changed" && message.payload.cwd === query.cwd;
+      case "terminal.subscribe.request":
         return (
-          message.type === "terminal_stream_exit" && message.payload.terminalId === query.terminalId
+          message.type === "terminal.stream.exit" && message.payload.terminalId === query.terminalId
         );
       case "agent.timeline.set_subscription.request":
         return (
-          (message.type === "agent_stream" || message.type === "agent.timeline.replacement") &&
+          (message.type === "agent.stream" || message.type === "agent.timeline.replacement") &&
           (query.agentIds as string[]).includes(message.payload.agentId)
         );
       case "session.events.set_subscription.request":
@@ -264,10 +271,10 @@ export class LegacySubscriptions {
 function isLegacyEvent(event: string): boolean {
   return [
     "project.update",
-    "providers_snapshot_update",
-    "agent_attention_required",
-    "agent_permission_request",
-    "agent_permission_resolved",
+    "provider.snapshot.update",
+    "agent.attention.required",
+    "agent.permission.request",
+    "agent.permission.resolved",
   ].includes(event);
 }
 

@@ -77,7 +77,7 @@ describe("agent feature schemas", () => {
 
   it("parses valid requests", () => {
     const parsed = SetAgentFeatureRequestMessageSchema.parse({
-      type: "set_agent_feature_request",
+      type: "agent.feature.set.request",
       agentId: "agent-123",
       featureId: "fast_mode",
       value: true,
@@ -90,7 +90,7 @@ describe("agent feature schemas", () => {
 
   it("parses valid responses", () => {
     const parsed = SetAgentFeatureResponseMessageSchema.parse({
-      type: "set_agent_feature_response",
+      type: "agent.feature.set.response",
       payload: {
         requestId: "req-123",
         agentId: "agent-123",

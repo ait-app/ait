@@ -8,7 +8,7 @@ import { getServerId } from "../support/helpers/server-id";
  * Regression: a terminal created while the window is unfocused must still claim its PTY size
  * once focus returns.
  *
- * The PTY is only ever resized by an explicit client claim (`terminal_input` resize). A freshly
+ * The PTY is only ever resized by an explicit client claim (`terminal.input` resize). A freshly
  * mounted terminal starts its claim from terminal-pane's pane-focus reflow effect. Previously, if
  * that claim was emitted while the app was not actively visible, `handleTerminalResize` dropped
  * it without a retry, leaving the PTY at 80x24 while xterm rendered the real pane size.

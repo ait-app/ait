@@ -11,7 +11,7 @@ type ListProviderModelsPayload = ListProviderModelsResponseMessage["payload"];
 type GetProvidersSnapshotPayload = GetProvidersSnapshotResponseMessage["payload"];
 type ProvidersSnapshotUpdatePayload = Extract<
   SessionOutboundMessage,
-  { type: "providers_snapshot_update" }
+  { type: "provider.snapshot.update" }
 >["payload"];
 
 // COMPAT(model-normalize): daemon normalizes at source (provider-registry) — shim covers older daemons; drop when floor >= v0.1.104
@@ -78,7 +78,7 @@ export function normalizeProviderSnapshotUpdateMessage(
   msg: SessionOutboundMessage,
   expand = true,
 ): SessionOutboundMessage {
-  if (msg.type !== "providers_snapshot_update") {
+  if (msg.type !== "provider.snapshot.update") {
     return msg;
   }
 

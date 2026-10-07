@@ -127,13 +127,13 @@ class FakeDirectoryClient {
 
   observeAgents(options: Parameters<DaemonClient["observeAgents"]>[0]) {
     return subscriptionFixture(this.fetchAgents({ ...options, subscribe: {} }), (receive) =>
-      this.on("agent_update", receive),
+      this.on("agent.update", receive),
     );
   }
 
   observeWorkspaces(options: Parameters<DaemonClient["observeWorkspaces"]>[0]) {
     return subscriptionFixture(this.fetchWorkspaces(options), (receive) =>
-      this.on("workspace_update", receive),
+      this.on("workspace.update", receive),
     );
   }
 
@@ -686,7 +686,7 @@ describe("DirectorySync session readiness", () => {
     const refresh = directory.refreshWorkspaces();
     await Promise.resolve();
     client.emit({
-      type: "workspace_update",
+      type: "workspace.update",
       payload: { kind: "remove", id: "deleted-live" },
     });
     releaseCache({
@@ -1077,7 +1077,7 @@ describe("DirectorySync session readiness", () => {
     const refresh = directory.refreshDemand();
     await expect.poll(() => client.fetchWorkspacesCalls).toBe(1);
     client.emit({
-      type: "workspace_update",
+      type: "workspace.update",
       payload: {
         kind: "remove",
         id: "removed-workspace",
@@ -1268,10 +1268,15 @@ it("fills every cached workspace beneath live updates received during the SQLite
     if (updated) return;
     updated = true;
     client.emit({
-      type: "workspace_update",
+      type: "workspace.update",
       payload: {
         kind: "upsert",
-        workspace: { ...workspaces[0], name: "Live", activityAt: null, statusEnteredAt: null },
+        workspace: {
+          ...workspaces[0],
+          name: "Live",
+          activityAt: null,
+          statusEnteredAt: null,
+        },
       },
     });
   });
@@ -1301,7 +1306,11 @@ describe("snapshot-only host directories", () => {
     const info = {
       status: "server_info" as const,
       serverId,
-      features: { directorySubscriptions: false, projectList: true, workspaceMultiplicity: true },
+      features: {
+        directorySubscriptions: false,
+        projectList: true,
+        workspaceMultiplicity: true,
+      },
     };
     Object.assign(client, { getLastServerInfoMessage: () => info });
     useSessionStore.getState().initializeSession(serverId, client as unknown as DaemonClient, 1);

@@ -5,7 +5,7 @@ import { TerminalInputSchema } from "./messages.js";
 describe("terminal resize messages", () => {
   it.each(["claim", "update"] as const)("accepts the optional %s intent", (intent) => {
     const result = TerminalInputSchema.safeParse({
-      type: "terminal_input",
+      type: "terminal.input",
       terminalId: "terminal-1",
       message: { type: "resize", rows: 24, cols: 80, intent },
     });
@@ -20,7 +20,7 @@ describe("terminal resize messages", () => {
 
   it("accepts legacy resize messages without an intent", () => {
     const result = TerminalInputSchema.safeParse({
-      type: "terminal_input",
+      type: "terminal.input",
       terminalId: "terminal-1",
       message: { type: "resize", rows: 24, cols: 80 },
     });

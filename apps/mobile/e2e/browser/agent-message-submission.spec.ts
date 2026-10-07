@@ -258,7 +258,10 @@ async function beginTimelineRowStabilityCheck(
       if (!state) throw new Error("Timeline-row stability check was not started");
       state.active = false;
       delete windowState.__messageSubmissionTimelineRowStability;
-      return { largestDownwardShift: state.largestDownwardShift, sawMissing: state.sawMissing };
+      return {
+        largestDownwardShift: state.largestDownwardShift,
+        sawMissing: state.sawMissing,
+      };
     });
     expect(result.sawMissing).toBe(false);
     expect(result.largestDownwardShift).toBeLessThanOrEqual(2);
@@ -414,13 +417,13 @@ async function expectInterruptedTurnOrderAfterReconnect(
     await page.getByRole("button", { name: "Send queued message now" }).click();
     const promptRow = page.getByTestId("user-message").filter({ hasText: prompt });
     await expect(promptRow).toBeVisible();
-    await gate.waitForServerMessage("send_agent_message_response");
+    await gate.waitForServerMessage("agent.message.send.response");
     await gate.drop();
     await agent.client.waitForFinish(agent.agentId, 30_000);
     gate.setAgentStreamSuppressed(false);
     gate.forceNextTimelineEpochReset();
     gate.restoreFresh();
-    await gate.waitForServerMessage("fetch_agent_timeline_response", 2);
+    await gate.waitForServerMessage("agent.timeline.get.response", 2);
     const response = page.getByText("(end of synthetic stream)", { exact: true }).last();
     await expect(promptRow).toBeVisible();
     await expect(response).toBeVisible();
@@ -547,20 +550,20 @@ async function expectCompletedSubmissionClearsAfterMissedRunningTransition(
     await openAgentRoute(page, { workspaceId: agent.workspaceId, agentId: agent.agentId });
     await expectComposerVisible(page);
     await expectAgentIdle(page);
-    gate.holdNextClientRequest("send_agent_message_request");
+    gate.holdNextClientRequest("agent.message.send.request");
     const userMessage = await submitImageOnlyMessage(page);
     await gate.waitForHeldClientRequest();
     gate.setServerMessageSuppressed("agent_status", true);
-    gate.setServerMessageSuppressed("agent_update", true);
+    gate.setServerMessageSuppressed("agent.update", true);
     gate.releaseHeldClientRequest();
-    await gate.waitForServerMessage("send_agent_message_response");
+    await gate.waitForServerMessage("agent.message.send.response");
     await expect(userMessage).toHaveAttribute("aria-busy", "false");
     await gate.drop();
     await agent.client.waitForFinish(agent.agentId, 30_000);
     gate.setServerMessageSuppressed("agent_status", false);
-    gate.setServerMessageSuppressed("agent_update", false);
+    gate.setServerMessageSuppressed("agent.update", false);
     gate.restoreFresh();
-    await gate.waitForServerMessage("fetch_agent_timeline_response", 2);
+    await gate.waitForServerMessage("agent.timeline.get.response", 2);
     await expect(page.getByText("(end of synthetic stream)", { exact: true }).last()).toBeVisible();
     await expect(page.getByTestId("turn-working-indicator")).toHaveCount(0);
     await expect(userMessage).toHaveAttribute("aria-busy", "false");
@@ -586,8 +589,8 @@ async function expectProviderAcknowledgementBeforeRpcAcceptanceSettlesSubmission
     await expectComposerVisible(page);
     await expectAgentIdle(page);
     gate.setServerMessageSuppressed("agent_status", true);
-    gate.setServerMessageSuppressed("agent_update", true);
-    gate.holdNextServerMessage("send_agent_message_response");
+    gate.setServerMessageSuppressed("agent.update", true);
+    gate.holdNextServerMessage("agent.message.send.response");
     const userMessage = await submitMessageWithImage(page, prompt);
     await gate.waitForHeldServerMessage();
     await gate.waitForAgentStreamItem("user_message");
@@ -600,7 +603,7 @@ async function expectProviderAcknowledgementBeforeRpcAcceptanceSettlesSubmission
 
     await agent.client.waitForFinish(agent.agentId, 30_000);
     gate.setServerMessageSuppressed("agent_status", false);
-    gate.setServerMessageSuppressed("agent_update", false);
+    gate.setServerMessageSuppressed("agent.update", false);
     gate.restoreFresh();
     await expectVisibleAgentSurfacesIdle(page);
     await expect(userMessage).toHaveAttribute("aria-busy", "false");
@@ -663,7 +666,7 @@ async function expectStaleCanonicalPagePreservesNewerLiveOutput(
       .click();
     await expectAgentIdle(page);
 
-    gate.holdNextServerMessage("fetch_agent_timeline_response");
+    gate.holdNextServerMessage("agent.timeline.get.response");
     gate.requestTimelineTail(agent.agentId);
     await gate.waitForHeldServerMessage();
     gate.truncateHeldTimelineAfterLast("tool_call");
@@ -700,7 +703,7 @@ async function expectCanonicalOrderWinsAcrossOverlappingClients(
     await openAgentRoute(page, { workspaceId: agent.workspaceId, agentId: agent.agentId });
     await expectComposerVisible(page);
     await expectAgentIdle(page);
-    gate.holdNextClientRequest("send_agent_message_request");
+    gate.holdNextClientRequest("agent.message.send.request");
     const localRow = await submitMessageWithImage(page, localPrompt);
     await gate.waitForHeldClientRequest();
 
@@ -778,28 +781,30 @@ async function expectOldHostSubmissionBehavior(
     await openAgentRoute(page, { workspaceId: agent.workspaceId, agentId: agent.agentId });
     await expectComposerVisible(page);
     await expectAgentIdle(page);
-    gate.holdNextClientRequest("send_agent_message_request");
+    gate.holdNextClientRequest("agent.message.send.request");
     const composer = page.getByRole("textbox", { name: "Message agent..." }).first();
     await composer.fill(prompt);
     await composer.press("Enter");
     const nextFrame = await composer.evaluate(
       (_, submittedPrompt) =>
-        new Promise<{ rowPresent: boolean; ariaBusy: string | null; workingPresent: boolean }>(
-          (resolve) => {
-            requestAnimationFrame(() => {
-              const row = Array.from(
-                document.querySelectorAll('[data-testid="user-message"]'),
-              ).find((candidate) => candidate.textContent?.includes(submittedPrompt));
-              resolve({
-                rowPresent: Boolean(row),
-                ariaBusy: row?.getAttribute("aria-busy") ?? null,
-                workingPresent: Boolean(
-                  document.querySelector('[data-testid="turn-working-indicator"]'),
-                ),
-              });
+        new Promise<{
+          rowPresent: boolean;
+          ariaBusy: string | null;
+          workingPresent: boolean;
+        }>((resolve) => {
+          requestAnimationFrame(() => {
+            const row = Array.from(document.querySelectorAll('[data-testid="user-message"]')).find(
+              (candidate) => candidate.textContent?.includes(submittedPrompt),
+            );
+            resolve({
+              rowPresent: Boolean(row),
+              ariaBusy: row?.getAttribute("aria-busy") ?? null,
+              workingPresent: Boolean(
+                document.querySelector('[data-testid="turn-working-indicator"]'),
+              ),
             });
-          },
-        ),
+          });
+        }),
       prompt,
     );
     expect(nextFrame).toEqual({ rowPresent: true, ariaBusy: "false", workingPresent: false });
@@ -843,7 +848,9 @@ async function expectCreatedAgentHandoff(
   userMessage: Locator,
 ): Promise<void> {
   await expect(page.getByTestId("turn-working-indicator")).toBeVisible();
-  await expect(page.getByTestId(/^workspace-tab-agent_/).first()).toBeVisible({ timeout: 30_000 });
+  await expect(page.getByTestId(/^workspace-tab-agent_/).first()).toBeVisible({
+    timeout: 30_000,
+  });
   await expect(userMessage).toHaveAttribute("aria-busy", "false", { timeout: 30_000 });
   await expect(page.getByTestId("turn-working-indicator")).toBeVisible();
   await expect(page.getByTestId("user-message").filter({ hasText: prompt })).toHaveCount(1);
@@ -894,7 +901,9 @@ test.describe("Agent message submission", () => {
 
       const submittedPrompt = page.getByTestId("user-message").filter({ hasText: prompt });
       await expect(submittedPrompt).toHaveCount(1);
-      await expect(submittedPrompt).toHaveAttribute("aria-busy", "false", { timeout: 30_000 });
+      await expect(submittedPrompt).toHaveAttribute("aria-busy", "false", {
+        timeout: 30_000,
+      });
       await expect(page.getByText("(end of synthetic stream)", { exact: true })).toHaveCount(0);
       await expectVisibleAgentSurfacesIdle(page);
       await expectComposerEditable(page);
@@ -962,7 +971,9 @@ test.describe("Agent message submission", () => {
 
       await submitMessage(page, prompt);
       const submittedPrompt = page.getByTestId("user-message").filter({ hasText: prompt });
-      await expect(submittedPrompt).toHaveAttribute("aria-busy", "false", { timeout: 30_000 });
+      await expect(submittedPrompt).toHaveAttribute("aria-busy", "false", {
+        timeout: 30_000,
+      });
 
       await submittedPrompt.hover();
       await expect(submittedPrompt.getByTestId("rewind-menu-trigger")).toBeVisible({
@@ -989,7 +1000,9 @@ test.describe("Agent message submission", () => {
 
       await submitMessage(page, prompt);
       const submittedPrompt = page.getByTestId("user-message").filter({ hasText: prompt });
-      await expect(submittedPrompt).toHaveAttribute("aria-busy", "false", { timeout: 30_000 });
+      await expect(submittedPrompt).toHaveAttribute("aria-busy", "false", {
+        timeout: 30_000,
+      });
       await expectVisibleAgentSurfacesIdle(page);
       await page.reload();
 
@@ -1015,7 +1028,7 @@ test.describe("Agent message submission", () => {
       await submitMessage(page, "Keep running while the next prompt is submitted.");
       await expectAgentReadyToInterrupt(page);
 
-      gate.holdNextClientRequest("send_agent_message_request");
+      gate.holdNextClientRequest("agent.message.send.request");
       await fillComposerDraft(page, "Replace the running turn without duplicating its action.");
       await expect(page.getByRole("button", { name: "Send and steer", exact: true })).toHaveCount(
         1,
@@ -1056,7 +1069,7 @@ test.describe("Agent message submission", () => {
       await queueMessage(page, secondPrompt);
       await expect(page.getByRole("button", { name: "Send queued message now" })).toBeVisible();
 
-      gate.holdNextServerMessage("cancel_agent_response");
+      gate.holdNextServerMessage("agent.cancel.response");
       await page.getByRole("button", { name: "Stop agent", exact: true }).click();
       await gate.waitForHeldServerMessage();
 
@@ -1066,7 +1079,7 @@ test.describe("Agent message submission", () => {
       await expectRunningAgentChrome(page, title);
       await expectAgentReadyToInterrupt(page);
 
-      gate.holdNextClientRequest("cancel_agent_request");
+      gate.holdNextClientRequest("agent.cancel.request");
       await page.getByRole("button", { name: "Stop agent", exact: true }).click();
       await gate.waitForHeldClientRequest();
       await expect(
@@ -1196,8 +1209,8 @@ test.describe("Agent message submission", () => {
       await page.goBack();
       await expectComposerVisible(page);
       await expectAgentReadyToInterrupt(page);
-      const sendsBefore = gate.getClientRequestCount("send_agent_message_request");
-      const cancelsBefore = gate.getClientRequestCount("cancel_agent_request");
+      const sendsBefore = gate.getClientRequestCount("agent.message.send.request");
+      const cancelsBefore = gate.getClientRequestCount("agent.cancel.request");
 
       await submitMessageThatWillBeRejected(page, prompt);
       await expectRejectedSubmissionRestored(page, {
@@ -1206,9 +1219,9 @@ test.describe("Agent message submission", () => {
         preservesActiveTurn: true,
       });
 
-      expect(gate.getClientRequestCount("send_agent_message_request")).toBe(sendsBefore + 1);
-      expect(gate.getClientRequestCount("cancel_agent_request")).toBe(cancelsBefore);
-      expect(gate.getClientRequests("send_agent_message_request").at(-1)).toMatchObject({
+      expect(gate.getClientRequestCount("agent.message.send.request")).toBe(sendsBefore + 1);
+      expect(gate.getClientRequestCount("agent.cancel.request")).toBe(cancelsBefore);
+      expect(gate.getClientRequests("agent.message.send.request").at(-1)).toMatchObject({
         text: prompt,
         activeTurnBehavior: "steer",
       });
@@ -1233,12 +1246,12 @@ test.describe("Agent message submission", () => {
       await page.goBack();
       await expectComposerVisible(page);
       await expectAgentReadyToInterrupt(page);
-      gate.holdNextServerMessage("send_agent_message_response");
+      gate.holdNextServerMessage("agent.message.send.response");
       await submitMessage(page, "hello");
-      await gate.waitForHeldServerMessage("send_agent_message_response");
+      await gate.waitForHeldServerMessage("agent.message.send.response");
       await expect(page.getByText("hello", { exact: true })).toHaveCount(1);
       await expect(page.getByText(/^Worked for/)).toHaveCount(0);
-      gate.releaseHeldServerMessage("send_agent_message_response");
+      gate.releaseHeldServerMessage("agent.message.send.response");
       await expect(page.getByText("hello", { exact: true })).toHaveCount(1);
     } finally {
       gate.restore();

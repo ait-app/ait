@@ -31,7 +31,7 @@ function getToolCallStatus(
   agentId: string,
 ): { callId: string; status: string } | null {
   const sessionMessage = parseSessionMessage(message);
-  if (sessionMessage?.type !== "agent_stream") {
+  if (sessionMessage?.type !== "agent.stream") {
     return null;
   }
   const payload = sessionMessage.payload as Record<string, unknown> | undefined;
