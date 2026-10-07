@@ -7,7 +7,7 @@
 测量源码：基于 `59072cd8` 的 Git tree `2ac1e07a32e931938325de1f1c273e0b02437ac6`。Linux x86_64，默认 features，无源码排除；11 个需安装 CLI 的测试 ignored，未验证 macOS/Windows。命令：
 
 ```sh
-CARGO_TARGET_DIR=/home/lonnet/Developers/ait/target \
+CARGO_TARGET_DIR=/home/lonnet/.cache/ait-pr-targets/opencode \
 XDG_CONFIG_HOME=/tmp/ait-pr-isolated-config RUST_TEST_THREADS=1 \
 LLVM_COV=/usr/bin/llvm-cov LLVM_PROFDATA=/usr/bin/llvm-profdata \
 cargo llvm-cov --workspace --html
