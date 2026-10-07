@@ -78,19 +78,23 @@ impl Providers {
         if environment("AIT_SERVER_DEEPSEEK_HARNESS_TRANSPORT").as_deref() == Some("acp".as_ref()) {
             dsh = dsh.with_acp_profile();
         }
-        // Structured metadata generation is currently implemented only by these adapters.
-        let metadata_clients: Vec<Arc<dyn AgentClient>> =
-            vec![Arc::new(codex.clone()), Arc::new(claude.clone())];
-        Self {
-            clients: vec![
-                Box::new(codex),
-                Box::new(claude),
-                Box::new(antigravity),
-                Box::new(opencode),
-                Box::new(dsh),
-            ],
-            metadata_clients,
+        let mut providers = Self {
+            clients: Vec::new(),
+            metadata_clients: Vec::new(),
+        };
+        providers.add(codex);
+        providers.add(claude);
+        providers.add(antigravity);
+        providers.add(opencode);
+        providers.add(dsh);
+        providers
+    }
+
+    fn add(&mut self, client: impl AgentClient + Clone + 'static) {
+        if client.supports_metadata_generation() {
+            self.metadata_clients.push(Arc::new(client.clone()));
         }
+        self.clients.push(Box::new(client));
     }
 }
 

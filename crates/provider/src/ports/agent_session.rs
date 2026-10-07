@@ -269,7 +269,24 @@ pub trait AgentClient: Debug + Send + Sync {
         })
     }
 
-    /// Run an isolated, non-persisted structured request without registering a foreground Agent.
+    /// Whether this adapter implements an isolated auxiliary generation channel.
+    fn supports_metadata_generation(&self) -> bool {
+        false
+    }
+
+    /// Select this adapter's auxiliary model from its discovered model catalog.
+    ///
+    /// Returns `None` when no suitable small model is available. Explicit user model
+    /// overrides are resolved separately and do not inherit the foreground model.
+    fn metadata_model(
+        &self,
+        _models: &[serde_json::Value],
+    ) -> Option<metadata::ports::generation::MetadataSelection> {
+        None
+    }
+
+    /// Run an isolated, tool-disabled structured request without registering a foreground Agent.
+    /// Any temporary native history is cleaned up by the adapter.
     /// `spec` selects cwd/model/reasoning; `prompt` is source-only wording and `schema` its output.
     /// # Errors
     /// Returns unavailable for unsupported providers, or safe protocol/timeout failures.

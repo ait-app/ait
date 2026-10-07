@@ -17,6 +17,21 @@ struct Client {
     wait: bool,
 }
 impl AgentClient for Client {
+    fn discover<'a>(
+        &'a self,
+        _: &'a str,
+    ) -> AgentSessionFuture<'a, crate::protocol::provider::Details> {
+        Box::pin(async { Ok(crate::protocol::provider::Details::default()) })
+    }
+
+    fn metadata_model(&self, _: &[Value]) -> Option<MetadataSelection> {
+        Some(MetadataSelection {
+            provider: self.provider.clone(),
+            model: Some("small".into()),
+            thinking_option_id: None,
+        })
+    }
+
     fn provider(&self) -> &str {
         &self.provider
     }
@@ -105,7 +120,7 @@ async fn repairs_invalid_json_then_falls_back_and_reads_live_configuration() {
     let recorded = calls.lock().unwrap().clone();
     assert_eq!(
         recorded.iter().map(|c| c.0.as_str()).collect::<Vec<_>>(),
-        ["preferred", "preferred", "preferred", "current"]
+        ["preferred", "preferred", "preferred", "small"]
     );
     assert!(recorded[1].1.contains("previous response was invalid"));
     config
