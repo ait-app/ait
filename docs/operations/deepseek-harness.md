@@ -60,3 +60,7 @@ ACP 没有权限模式、question 和外部会话导入。默认不会因原生 
 
 实现边界见 [ADR-082](../decisions/providers/adr-082-deepseek-harness-native-host.md)，
 测试范围见[原生 Host 验证报告](https://github.com/KirisameLonnet/ait/blob/dc6cb1e01158ba14120e471b980ffe902ec7e09b/docs/reports/providers/deepseek-harness-native-host.md)。
+
+## DSH 0.2 权限目录
+
+新版 Host 从 `permissionPresets/catalog` 提供可选权限，历史投影只保留当前值；Ait 兼容此协议及旧版内嵌选项。恢复桌面中打开的原生会话前，应先让 DSH 释放该会话的写入所有权；即使没有运行中的回合，桌面仍可能持有写入锁。只读导入不需要抢占写入所有权。验证范围见[权限目录兼容报告](../reports/providers/dsh-permission-catalog.md)。

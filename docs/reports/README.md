@@ -2,6 +2,8 @@
 
 文档按当前能力归属分类。历史验证记录只对应各文件注明的源码提交与平台。
 
+- [DSH 权限目录兼容与真实会话继承](providers/dsh-permission-catalog.md)
+
 ## Daemon 与协议
 
 - [Rust code smell 清理：PR 验证](daemon/rust-code-smell-pr-validation-2026-10-04.md)

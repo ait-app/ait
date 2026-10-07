@@ -172,6 +172,9 @@ async fn rpc(State(host): State<Host>, headers: HeaderMap, Json(request): Json<V
     }
     host.requests.lock().unwrap().push(request.clone());
     let value = match request["method"].as_str() {
+        Some("permissionPresets/catalog") => {
+            json!({"options":[{"value":"read-only","name":"Read only"},{"value":"workspace-write","name":"Workspace write"},{"value":"custom-policy","name":"Custom policy"}]})
+        }
         Some("session/list") => json!({"items":*host.sessions.lock().unwrap()}),
         Some("session/modelCatalog") => {
             json!({"default":{"provider":"local","model":"test"},"groups":[{"id":"local","name":"Local","models":[{"id":"test","name":"Test","reasoning":{"defaultEffort":"low","efforts":[{"id":"low","name":"Low"},{"id":"high","name":"High"}]}}]}]})

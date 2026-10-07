@@ -10,6 +10,7 @@ use std::collections::BTreeMap;
 
 mod fixture;
 mod imports;
+mod installed_history;
 mod interactions;
 mod recovery;
 mod session;
