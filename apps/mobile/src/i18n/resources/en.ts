@@ -2198,6 +2198,7 @@ export const en = {
       directoryMissing: "Workspace directory not found.",
       loading: "Loading file...",
       noPreview: "No preview available",
+      openWithSystem: "Open with system application",
       binaryPreviewUnavailable: "Binary preview unavailable",
       tooLargeToDisplay: "This file is too large to display",
       failedToLoad: "Failed to load file",

@@ -2164,6 +2164,7 @@ export const zhCN: TranslationResources = {
       directoryMissing: "未找到 workspace 目录。",
       loading: "正在加载文件...",
       noPreview: "没有可用预览",
+      openWithSystem: "使用系统应用打开",
       binaryPreviewUnavailable: "二进制预览不可用",
       tooLargeToDisplay: "此文件过大，无法显示",
       failedToLoad: "加载文件失败",
