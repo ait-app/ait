@@ -13,7 +13,8 @@ if '--conversation' in args:
 model = args[args.index('--model') + 1] if '--model' in args else None
 
 def emit(value):
-    print(json.dumps(value), flush=True)
+    # SIGINT may interrupt another emission while Python's stdout buffer is locked.
+    os.write(sys.stdout.fileno(), (json.dumps(value) + '\n').encode())
 
 def log(value):
     path = os.environ.get('AGY_FIXTURE_LOG')
