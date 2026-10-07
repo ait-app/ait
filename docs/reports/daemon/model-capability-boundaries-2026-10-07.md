@@ -1,6 +1,6 @@
 # 共享 model 与功能 crate 边界验证
 
-日期：2026-10-07。实现范围对应 ADR-100、ADR-101 和 ADR-102，尚未包含 filesystem 去除 metadata 依赖的后续修改。
+日期：2026-10-07。实现范围对应 ADR-101、ADR-102 和 ADR-103，尚未包含 filesystem 去除 metadata 依赖的后续修改。
 测量源码为父提交 `5467bc48188df86ec9180e93d0f709eb00e7acdd` 加本报告所在提交的 Rust 改动；JSON 保存暂存差异摘要和逐文件 SHA-256，明确识别测量版本。
 
 ## 验证结果

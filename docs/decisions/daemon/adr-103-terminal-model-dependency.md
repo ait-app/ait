@@ -1,12 +1,12 @@
-# ADR-102：Terminal 仅依赖 model 的共享契约
+# ADR-103：Terminal 仅依赖 model 的共享契约
 
 - 状态：接受
 - 日期：2026-10-07
-- 关联：[ADR-101](../providers/adr-101-provider-metadata-independence.md)
+- 关联：[ADR-102](../providers/adr-102-provider-metadata-independence.md)
 
 ## 背景
 
-ADR-101 已将 Project/Workspace 记录与 registry、Workspace 活动接口和连接事件资源
+ADR-102 已将 Project/Workspace 记录与 registry、Workspace 活动接口和连接事件资源
 迁入 model。terminal 仍通过 metadata 的重导出路径访问这些定义，因此保留了一条
 没有业务服务调用的同级 crate 依赖。
 

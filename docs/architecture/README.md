@@ -26,7 +26,7 @@ Electron 位于 `apps/desktop`；`apps/mobile` 提供桌面、浏览器与移动
 `implemented_methods()` 返回全部声明，`installed_methods(bool)` 返回全部或空集合；API
 自行声明始终可用的连接方法，并复用 model 的会话和创建记录基础设施。内部功能对象
 保留独立锁、适配器和任务，私有 transport composition 负责连接共享资源，不作为安装开关。
-详见 [ADR-099](../decisions/daemon/adr-099-crate-level-service-installation.md)。具体 adapter 实现所属能力的 port；应用服务协调领域行为。`domain` 无 Tokio、
+详见 [ADR-100](../decisions/daemon/adr-100-crate-level-service-installation.md)。具体 adapter 实现所属能力的 port；应用服务协调领域行为。`domain` 无 Tokio、
 传输或存储依赖。`model` 含 Tokio 请求资源，不属于纯领域层。
 
 请求通过名称、方向和 capability 校验后，以 `Option<Context>` 逐级进入处理入口。每个入口
@@ -39,27 +39,28 @@ Electron 位于 `apps/desktop`；`apps/mobile` 提供桌面、浏览器与移动
 摘要生成能力由 `provider::SummaryGenerator` 声明，输入输出类型位于 `model::summary`。
 生成器通过自己的配置端口读取偏好，daemon 连接现有存储；API 将同一生成器适配为
 model 的消费端口 `SummarySource`，见
-[ADR-100](../decisions/providers/adr-100-provider-summary-generator.md)。
+[ADR-101](../decisions/providers/adr-101-provider-summary-generator.md)。
 
 Provider 不依赖 metadata。共享 Workspace 记录、registry、活动与关注接口、worktree
 契约和 wire 类型归 `model::workspace`；事件通道归 `model::session`，幂等创建回执归
 `model::creation`，原子文件 registry 和标签事务归 `model::storage`。Workspace 登记、
 setup 和命名仍由 metadata 实现，通过 `model::workspace::lifecycle` 的接口注入
 provider。metadata 的旧共享路径只重导出 model 类型，没有第二份状态或实现。
-详见 [ADR-101](../decisions/providers/adr-101-provider-metadata-independence.md)。
+详见 [ADR-102](../decisions/providers/adr-102-provider-metadata-independence.md)。
 
 Terminal 同样直接使用 model 的 Workspace registry、活动契约和连接事件资源，
-不依赖 metadata；见 [ADR-102](../decisions/daemon/adr-102-terminal-model-dependency.md)。
+不依赖 metadata；见 [ADR-103](../decisions/daemon/adr-103-terminal-model-dependency.md)。
 Filesystem 也只依赖 model：共享目录观察、Git/Forge 快照、摘要消费、身份与 descriptor
 纯函数归 model；Project 登记、命名和 setup 通过 `ProjectRegistration`、`WorkspaceNaming`
 与 `WorkspaceSetup` 注入 metadata 的现有服务。API 的 setup 适配器继续使用原有自动化锁，
 Runtime 保留阻塞执行、admission 和任务跟踪。功能 crate 之间没有直接依赖；见
-[ADR-103](../decisions/workspace/adr-103-filesystem-model-collaboration.md)。
+[ADR-104](../decisions/workspace/adr-104-filesystem-model-collaboration.md)。
 
 内置 Provider 由 `provider::Providers` 组装。具体客户端列表、启动配置、安装发现与辅助
 元数据生成能力留在 provider crate 内部；daemon 提供数据目录并连接服务与进程生命周期。
-Codex、Claude 当前支持结构化辅助生成，其他内置客户端同样属于原生 Provider。
-详见 [ADR-089](../decisions/providers/adr-089-provider-owned-composition.md)。
+Codex、Claude、OpenCode 和 DSH 当前支持结构化辅助生成，各 adapter 自行选择辅助小模型。
+详见 [ADR-089](../decisions/providers/adr-089-provider-owned-composition.md) 与
+[ADR-099](../decisions/providers/adr-099-provider-owned-auxiliary-models.md)。
 
 依赖守卫位于 `bins/daemon/tests/dependencies.rs`。它检查 `cargo metadata --no-deps` 的全部
 workspace 包与普通、开发、构建、optional 和平台条件依赖，拒绝未知内部包及向外依赖。

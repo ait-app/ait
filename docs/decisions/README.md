@@ -4,8 +4,8 @@
 
 ## Daemon 与协议
 
-- [ADR-102：Terminal 仅依赖 model 的共享契约](daemon/adr-102-terminal-model-dependency.md)
-- [ADR-099：功能 crate 作为完整服务安装](daemon/adr-099-crate-level-service-installation.md)
+- [ADR-103：Terminal 仅依赖 model 的共享契约](daemon/adr-103-terminal-model-dependency.md)
+- [ADR-100：功能 crate 作为完整服务安装](daemon/adr-100-crate-level-service-installation.md)
 
 - [ADR-095：组件自行声明方法元数据](daemon/adr-095-component-method-declarations.md)
 - [ADR-026：规范化 Paseo WebSocket 接口并按能力分期接入](daemon/adr-026-canonical-paseo-websocket-surface.md)
@@ -23,7 +23,7 @@
 
 ## 工作区、文件与 Git
 
-- [ADR-103：Filesystem 仅通过 model 契约协作](workspace/adr-103-filesystem-model-collaboration.md)
+- [ADR-104：Filesystem 仅通过 model 契约协作](workspace/adr-104-filesystem-model-collaboration.md)
 - [ADR-092：工作区重置同步 origin 同名分支](workspace/adr-092-reset-same-named-remote-branch.md)
 - [ADR-025：先移植 Paseo Project / Workspace 模型与 registry](workspace/adr-025-paseo-registry.md)
 - [ADR-028：GitHub 仓库发现与独立 Project 克隆注册](workspace/adr-028-github-project-provisioning.md)
@@ -43,8 +43,8 @@
 
 ## Provider、Agent 与会话
 
-- [ADR-101：共享协作契约归 model，Provider 不依赖 metadata](providers/adr-101-provider-metadata-independence.md)
-- [ADR-100：Provider 拥有摘要生成能力](providers/adr-100-provider-summary-generator.md)
+- [ADR-102：共享协作契约归 model，Provider 不依赖 metadata](providers/adr-102-provider-metadata-independence.md)
+- [ADR-101：Provider 拥有摘要生成能力](providers/adr-101-provider-summary-generator.md)
 - [ADR-091：会话独立执行与 Provider 后台发现](providers/adr-091-independent-session-execution.md)
 - [ADR-090：Timeline 单项 768 KiB 与按字节分页](providers/adr-090-timeline-entry-and-page-budgets.md)
 - [ADR-089：内置 Provider 装配归 provider crate](providers/adr-089-provider-owned-composition.md)

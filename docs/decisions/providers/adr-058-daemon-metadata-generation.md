@@ -4,7 +4,7 @@
 - 日期：2026-09-27
 - 关联：ADR-001 v4、ADR-031、ADR-032、ADR-050、ADR-052
 
-生成接口归属及配置注入现由 [ADR-100](adr-100-provider-summary-generator.md) 修订；原有配置键和生成行为保留。
+生成接口归属及配置注入现由 [ADR-101](adr-101-provider-summary-generator.md) 修订；原有配置键和生成行为保留。
 
 ## 背景
 

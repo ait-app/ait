@@ -1,11 +1,11 @@
-# ADR-100：Provider 拥有摘要生成能力
+# ADR-101：Provider 拥有摘要生成能力
 
 - 状态：Accepted。
 - 日期：2026-10-07。
 - 范围：辅助摘要生成接口、配置注入和跨组件消费。
 - 修订：[ADR-058](adr-058-daemon-metadata-generation.md) 的生成端口归属与 [ADR-089](adr-089-provider-owned-composition.md) 的生成器组装接口。
 
-本 ADR 的后续迁移已由 [ADR-101](adr-101-provider-metadata-independence.md) 完成：provider
+本 ADR 的后续迁移已由 [ADR-102](adr-102-provider-metadata-independence.md) 完成：provider
 不再依赖 metadata，共享契约与基础设施归 model。以下保留摘要生成迁移阶段的决策背景。
 
 ## 背景
@@ -34,7 +34,7 @@
    适配器直接转发请求和取消，不新增缓存、任务、队列或锁。
 5. provider 仍依赖 metadata，因此 metadata 不能反向依赖 provider。消费端口与宿主
    适配器保留单向编译依赖；生成器能力的定义和实现均归 provider。剩余依赖及迁移方向
-   记录在[ADR-101](adr-101-provider-metadata-independence.md)。
+   记录在[ADR-102](adr-102-provider-metadata-independence.md)。
 
 ## 后果与验证
 

@@ -6,7 +6,8 @@
 - 关系：细化 [ADR-031](adr-031-daemon-provider.md) 的能力边界与
   [ADR-058](adr-058-daemon-metadata-generation.md) 的辅助生成职责。
 
-生成接口归属及配置注入现由 [ADR-100](adr-100-provider-summary-generator.md) 修订；原有配置键和生成行为保留。
+生成接口归属及配置注入现由 [ADR-101](adr-101-provider-summary-generator.md) 修订；原有配置键保留。
+[ADR-099](adr-099-provider-owned-auxiliary-models.md) 扩展了按能力注册、adapter 自选模型与 OpenCode/DSH 通道。
 
 ## 背景
 
@@ -14,7 +15,7 @@ daemon 的 `compose_provider` 直接列举各个原生客户端，读取启动�
 图片目录。增加一个 provider 就必须修改 daemon。`compose_metadata` 又单独构造 Codex 和
 Claude，并通过 `native_clients` 命名暗示只有两者属于原生客户端。
 
-实际上所有内置 adapter 都对接对应的原生程序；Codex 与 Claude 目前额外实现了
+实际上所有内置 adapter 都对接对应的原生程序；Codex 与 Claude 当时额外实现了
 `AgentClient::generate_metadata`，可执行不进入前台 Agent registry 的结构化辅助请求。
 
 ## 决策

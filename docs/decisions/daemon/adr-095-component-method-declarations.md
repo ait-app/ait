@@ -13,7 +13,7 @@
 
 ## 决策
 
-安装粒度后由 [ADR-099](adr-099-crate-level-service-installation.md) 收敛为完整 crate 服务；
+安装粒度后由 [ADR-100](adr-100-crate-level-service-installation.md) 收敛为完整 crate 服务；
 基础连接方法由 API 自行声明。下述细分安装组合描述本决策接受时的行为。
 
 移除 `protocol::methods` 中心目录和旧名称查找接口。公共的 `MethodSpec { name, kind }`

@@ -1,8 +1,8 @@
-# ADR-103：Filesystem 仅通过 model 契约协作
+# ADR-104：Filesystem 仅通过 model 契约协作
 
 - 状态：接受
 - 日期：2026-10-07
-- 关联：[ADR-101](../providers/adr-101-provider-metadata-independence.md)、[ADR-102](../daemon/adr-102-terminal-model-dependency.md)
+- 关联：[ADR-102](../providers/adr-102-provider-metadata-independence.md)、[ADR-103](../daemon/adr-103-terminal-model-dependency.md)
 
 ## 背景
 

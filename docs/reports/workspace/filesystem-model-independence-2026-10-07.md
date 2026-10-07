@@ -1,6 +1,6 @@
 # Filesystem 移除 metadata 依赖的验证
 
-日期：2026-10-07。对应 [ADR-103](../../decisions/workspace/adr-103-filesystem-model-collaboration.md)。
+日期：2026-10-07。对应 [ADR-104](../../decisions/workspace/adr-104-filesystem-model-collaboration.md)。
 源码是 `612a816f99cbe29797b795fccb64dc64bf612afc` 加本报告所在提交的迁移；[验证证据与 Rust 源码摘要](filesystem-model-independence-2026-10-07.json)
 保存逐文件 SHA-256、测试命令和结果，区分本轮修改与提交前的 model/provider/terminal 快照。
 

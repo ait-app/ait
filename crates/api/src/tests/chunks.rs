@@ -1,5 +1,7 @@
 use super::*;
 
+mod filesystem_service;
+
 #[tokio::test]
 async fn chunks_dispatch_once_after_assembly_in_legacy_and_single_connections() {
     for single in [false, true] {
@@ -45,9 +47,7 @@ async fn acknowledged_upload_waits_for_contended_jobs_without_losing_the_file() 
     use filesystem::protocol::file_transfer::{self, FileBegin, FileFrame};
     let root = tempfile::tempdir().unwrap();
     let fixture = Fixture::with_services(Services {
-        files: Some(Files::new(Box::new(
-            filesystem::local::files::LocalFiles::new(root.path().to_owned(), root.path()),
-        ))),
+        filesystem: Some(filesystem_service::service(root.path())),
         ..Services::default()
     })
     .await;

@@ -1,8 +1,8 @@
-# ADR-101：共享协作契约归 model，Provider 不依赖 metadata
+# ADR-102：共享协作契约归 model，Provider 不依赖 metadata
 
 - 状态：接受
 - 日期：2026-10-07
-- 修订：[ADR-100](adr-100-provider-summary-generator.md) 的剩余依赖边界，以及
+- 修订：[ADR-101](adr-101-provider-summary-generator.md) 的剩余依赖边界，以及
   [ADR-089](adr-089-provider-owned-composition.md) 中 provider 的内部依赖集合。
 
 ## 背景
@@ -36,7 +36,7 @@ Workspace 服务全部放入 model 会混淆业务所有权；仅保留开发依
 ## 后果
 
 provider 的内部依赖只有 domain 和 model。Workspace 的业务规则仍由 metadata 管理；
-Git/worktree 的实际实现仍归 filesystem。共享摘要生成仍按 ADR-100 由 provider 提供。
+Git/worktree 的实际实现仍归 filesystem。共享摘要生成仍按 ADR-101 由 provider 提供。
 
 创建失败清理和自动归档继续先关闭相关原生写入会话，再执行 worktree 清理。创建回执、
 目录通知、Workspace 命名任务及 setup 使用原来的共享实例。磁盘文件路径和格式不变，

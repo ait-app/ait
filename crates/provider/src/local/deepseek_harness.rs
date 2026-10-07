@@ -89,10 +89,7 @@ impl AgentClient for DeepSeekHarnessClient {
         true
     }
 
-    fn summary_model(
-        &self,
-        models: &[Value],
-    ) -> Option<crate::summary::SummarySelection> {
+    fn summary_model(&self, models: &[Value]) -> Option<crate::summary::SummarySelection> {
         let mut selection = super::summary_model::select(
             self.provider(),
             models,

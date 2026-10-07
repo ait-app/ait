@@ -7,10 +7,10 @@ mod configuration;
 pub mod deepseek_harness;
 mod elicitation;
 mod images;
-mod summary_model;
 mod metadata_process;
 mod notes;
 pub mod opencode;
+mod summary_model;
 mod tool_detail;
 mod usage;
 

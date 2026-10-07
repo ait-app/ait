@@ -1,3 +1,5 @@
+use std::sync::Arc;
+
 use super::*;
 use crate::{Api, Services};
 use filesystem::local::provisioning::LocalDirectorySource;
@@ -33,17 +35,17 @@ impl Fixture {
             .open_workspace(root.to_str().unwrap(), "2026-10-07T00:00:00Z")
             .unwrap()
             .workspace_id;
-        let api = Api::new(
+        let mut api = Api::new(
             "127.0.0.1:7316".parse().unwrap(),
             "test-server".into(),
             "instance".into(),
             "in-process-test-token-at-least-32-characters".into(),
-            Services {
-                directory: Some(directory),
-                ..Services::default()
-            },
+            Services::default(),
         )
         .unwrap();
+        let shared = Arc::get_mut(&mut api.shared).unwrap();
+        Arc::get_mut(&mut shared.metadata).unwrap().directory =
+            Some(crate::shared_service(directory));
         Self {
             root,
             api,

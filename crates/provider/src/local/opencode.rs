@@ -7,12 +7,12 @@ mod execution;
 mod history;
 mod http;
 mod live;
-mod summary;
 mod projection;
 mod publication;
 mod runtime;
 mod session;
 mod streaming;
+mod summary;
 mod types;
 
 use std::path::PathBuf;
