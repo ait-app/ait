@@ -1,0 +1,10 @@
+[
+  {
+    "path": "apps/desktop/src/daemon/local-transport.test.ts",
+    "sha256": "9755a57047bd56f9803973665efb510ea84e8e601db63ae10af3ef4b149039f7"
+  },
+  {
+    "path": "apps/desktop/src/daemon/local-transport.ts",
+    "sha256": "88ec566e7bd4733a1e0dbd143c37a45cb16b562f92ac71e268156dd1c26a19f4"
+  }
+]
