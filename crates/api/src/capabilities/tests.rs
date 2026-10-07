@@ -6,7 +6,10 @@ use super::*;
 
 #[test]
 fn empty_host_keeps_only_builtin_metadata_methods() {
-    assert_eq!(features(&Services::default()), ["ait-rust-single-v1"]);
+    assert_eq!(
+        features(&Services::default()),
+        ["ait-rust-single-v1", "client-message-chunks-v1"]
+    );
     let methods = installed_capabilities(&Services::default());
     assert_eq!(
         methods,

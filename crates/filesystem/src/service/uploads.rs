@@ -53,7 +53,7 @@ impl Uploads {
         {
             return Err(ErrorCode::InvalidMessage);
         }
-        if request.size > 64 * 1024 * 1024
+        if request.size > 256 * 1024 * 1024
             || (self.uploads.len() >= 8 && !self.uploads.contains_key(id))
         {
             return Err(ErrorCode::ResourceExhausted);

@@ -1,4 +1,6 @@
 export interface DaemonTransport {
+  /** Wait for acknowledged upload writes when the transport supports backpressure. */
+  drain?: () => Promise<void>;
   send: (data: string | Uint8Array | ArrayBuffer) => void;
   close: (code?: number, reason?: string) => void;
   onMessage: (handler: (data: unknown, isBinary: boolean) => void) => () => void;

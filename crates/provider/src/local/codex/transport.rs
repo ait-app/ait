@@ -12,7 +12,7 @@ use tokio::task::JoinHandle;
 
 use crate::ports::agent_session::AgentSessionError;
 
-const MAX_OUTBOUND_FRAME: usize = 2 * 1024 * 1024;
+const MAX_OUTBOUND_FRAME: usize = 64 * 1024 * 1024;
 const MAX_EVENTS: usize = 128;
 
 #[derive(Debug)]
