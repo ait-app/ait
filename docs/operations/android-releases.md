@@ -83,7 +83,8 @@ APK 类型和 Gradle 命令保持原样。
 `production-apk.android.env` 设置 `AIT_ANDROID_HERMES_O0=1`，Expo prebuild 通过
 `with-android-hermes-o0` 插件写入 `hermesFlags = ["-O0", "-output-source-map"]`。
 这会关闭 Hermes 编译优化，尝试降低生成协议校验代码的内存开销，保留 source map。
-其他 profile 和 iOS 不启用此开关。删除该环境变量后，新的干净 prebuild 将恢复默认 `-O`；
+Play AAB 的 `production-play` profile 也沿用此开关，iOS 不启用。删除该环境变量后，
+新的干净 prebuild 将恢复默认 `-O`；
 本地复现时也需使用同一环境变量。构建成功后需验证启动与交互性能，不能仅以 APK 生成
 判断该优化等级适合长期发布。
 
