@@ -33,6 +33,7 @@ import {
 } from "@/components/attachment-pill";
 import { ContextWindowMeter } from "@/components/context-window-meter";
 import type { DroppedItem } from "@/components/file-drop/types";
+import { insertDirectoryPaths } from "./attachments/directory-drop";
 import { useFileDrop } from "@/components/file-drop/use-file-drop";
 import type { AutocompleteOption } from "@/components/ui/autocomplete";
 import { AutocompletePopover } from "@/components/ui/autocomplete-popover";
@@ -1460,6 +1461,20 @@ function ComposerContentImpl({
     });
   }, []);
 
+  const handleDirectoryPathsDropped = useCallback(
+    (paths: string[]) => {
+      const fallback = textSource.getSnapshot();
+      const input = messageInputRef.current?.getInputSnapshot() ?? {
+        text: fallback,
+        selection: { start: fallback.length, end: fallback.length },
+      };
+      const updated = insertDirectoryPaths(input, paths);
+      replaceUserInput(updated.text, updated.selection);
+      focusInput();
+    },
+    [focusInput, replaceUserInput, textSource],
+  );
+
   const handleWorkspaceFileDropped = useCallback(
     (payload: WorkspaceFileDragPayload) => {
       if (!workspaceId) {
@@ -2309,6 +2324,7 @@ function ComposerContentImpl({
       onFiles: addImages,
       onGenericFiles: handleGenericFilesDropped,
       onWorkspaceFile: handleWorkspaceFileDropped,
+      onDirectoryPaths: handleDirectoryPathsDropped,
     },
     { disabled: isSubmitLoadingVisible },
   );
