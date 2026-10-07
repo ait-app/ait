@@ -64,6 +64,40 @@ describe("native stream presentation", () => {
     expect(result.head).toMatchObject([{ text: "```ts\nconst a = 1;\n\nconst b = 2;" }]);
   });
 
+  it("preserves newlines when code indentation arrives in separate deltas", () => {
+    const harness = streamHarness();
+    harness.send(assistant("Intro\n\n```text\ndomain::agent_runtime::PersistedAgentRuntimeRecord"));
+    harness.send(assistant("\n"));
+    harness.send(assistant("   "));
+    harness.send(assistant(" 定义保存的数据\n"));
+    harness.send(assistant("                 "));
+    const result = harness.send(
+      assistant(" ↓\nprovider::storage::agent_runtime::FileBackedAgentRuntimeRegistry\n```"),
+    );
+
+    expect(result.head).toMatchObject([
+      {
+        text: "```text\ndomain::agent_runtime::PersistedAgentRuntimeRecord\n    定义保存的数据\n                  ↓\nprovider::storage::agent_runtime::FileBackedAgentRuntimeRegistry\n```",
+      },
+    ]);
+    expect(harness.send({ type: "turn_completed", provider: "claude" }).tail).toEqual(rows(result));
+  });
+
+  it.each([
+    "```text\nfirst\n    second\n\n  \n\tthird\n```",
+    "```text\nfirst\n  \n \n```",
+    '```mermaid\nflowchart TD\n    D --> E["Daemon::set_config"]\n    E --> F["DaemonConfigStore::patch"]\n```',
+    "first\n    second\nthird",
+    "- first\n  continuation\n\n- second",
+  ])("keeps the growing block source intact at every character boundary: %s", (block) => {
+    const harness = streamHarness();
+    harness.send(assistant("Intro\n\n"));
+    for (let length = 1; length <= block.length; length++) {
+      const result = harness.send(assistant(block[length - 1]));
+      expect(result.head).toMatchObject([{ text: block.slice(0, length) }]);
+    }
+  });
+
   it("leaves fetched native Markdown intact, including cross-paragraph references", () => {
     const source = hydrateStreamState([
       {
