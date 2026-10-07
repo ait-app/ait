@@ -100,6 +100,20 @@ npm run typecheck --workspace=@ait/desktop --workspace=@ait/mobile
 更新根 CHANGELOG.md：该文件
 会打入应用，供“新功能”页面读取。把版本与发布变更经 PR 合并到 `main` 后，再创建标签。
 
+### Beta 版本
+
+桌面 beta 使用 `X.Y.Z-beta.N`（N 从 1 开始），例如 `0.0.23-beta.1`；Cargo、npm
+workspace 和 lockfile 同步使用完整版本。创建不可变标签 `v0.0.23-beta.1`，由同一个桌面
+工作流构建、签名、公证并执行成品门禁。
+
+Electron 自动更新资产使用 `beta-linux.yml`、`beta-mac.yml`，不上传 `latest-*.yml`。
+GitHub Release 创建和修复均使用 `--prerelease --latest=false`，保留正式版的 Latest 指向。
+用户可以在桌面更新设置中选择 beta 通道，或从预发布下载页手动安装。
+
+根 `PKGBUILD` 的 Arch 版本使用 `0.0.23beta1`，`_ait_version` 保留完整 SemVer 用于
+源码校验；正式版准备时也要同步这两个字段。AUR 二进制配方继续引用已验证的正式版。
+Android APK、Google Play、iOS TestFlight 仍通过各自的手动入口发布，不随 beta 标签触发。
+
 ## 创建 Release
 
 ```bash

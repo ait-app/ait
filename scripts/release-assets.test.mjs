@@ -16,29 +16,51 @@ import path from "node:path";
 import test from "node:test";
 import { fileURLToPath } from "node:url";
 import { Arch, getArtifactArchName } from "builder-util";
+import { AppInfo } from "app-builder-lib/out/appInfo.js";
+import { Platform } from "app-builder-lib/out/core.js";
+import { getPublishConfigs } from "app-builder-lib/out/publish/PublishManager.js";
+import { createUpdateInfoTasks } from "app-builder-lib/out/publish/updateInfoBuilder.js";
 import { expandMacro } from "app-builder-lib/out/util/macroExpander.js";
 import { stringify, parse } from "yaml";
 import { collectReleaseAssets, releaseAssetNames, verifyReleaseAssets } from "./release-assets.mjs";
+import { releaseChannel } from "./release-version.mjs";
 
-async function builderAssetNames(platform, version) {
+async function builderPackager(platform, version) {
   const config = parse(
     await readFile(new URL("../apps/desktop/electron-builder.yml", import.meta.url), "utf8"),
   );
+  const info = { config, metadata: { name: "ait", version } };
+  const appInfo = new AppInfo(info);
+  info.appInfo = appInfo;
+  return {
+    config,
+    info,
+    appInfo,
+    platformSpecificBuildOptions: config[platform],
+    platform: platform === "linux" ? Platform.LINUX : Platform.MAC,
+    expandMacro: (value, arch) => expandMacro(value, arch, appInfo),
+    getResource: async () => null,
+  };
+}
+
+async function builderAssetNames(platform, version) {
+  const packager = await builderPackager(platform, version);
+  const { config } = packager;
   const arch = platform === "linux" ? Arch.x64 : Arch.arm64;
   const installers = config[platform].target.map((ext) => {
     const options = ext === "AppImage" ? config.appImage : config[platform];
     return expandMacro(options.artifactName, getArtifactArchName(arch, ext), { version }, { ext });
   });
-  return [...installers, `latest-${platform}.yml`];
+  const [publish] = await getPublishConfigs(packager, null, arch, true);
+  return [...installers, `${publish.channel}-${platform}.yml`];
 }
 
-async function fixture(t, platform) {
+async function fixture(t, platform, version = "0.0.7") {
   const root = await mkdtemp(path.join(tmpdir(), "ait-release-assets-"));
   t.after(() => rm(root, { recursive: true, force: true }));
   const source = path.join(root, "source");
   const destination = path.join(root, "release");
   await mkdir(source);
-  const version = "0.0.7";
   // Generate fixtures from builder's naming rules, independently of the collector allowlist.
   const names = await builderAssetNames(platform, version);
   const files = [];
@@ -61,12 +83,64 @@ async function addAndroidAssets(directory) {
 }
 
 test("release assets match electron-builder's target-specific architecture names", async () => {
-  for (const platform of ["linux", "mac"]) {
-    assert.deepEqual(
-      releaseAssetNames(platform, "0.0.7"),
-      await builderAssetNames(platform, "0.0.7"),
-    );
+  for (const version of ["0.0.7", "0.0.8-beta.1"]) {
+    for (const platform of ["linux", "mac"]) {
+      assert.deepEqual(
+        releaseAssetNames(platform, version),
+        await builderAssetNames(platform, version),
+      );
+    }
   }
+});
+
+test("accepts stable and numbered beta versions but rejects ambiguous release channels", () => {
+  assert.equal(releaseChannel("0.0.7"), "latest");
+  assert.equal(releaseChannel("0.0.8-beta.12"), "beta");
+  for (const version of [
+    "v0.0.7",
+    "00.0.7",
+    "0.0.8-beta",
+    "0.0.8-beta.0",
+    "0.0.8-beta.01",
+    "0.0.8-alpha.1",
+    "0.0.8+build.1",
+    "0.0.8\n",
+  ]) {
+    assert.throws(() => releaseChannel(version), /Release version must use/);
+  }
+});
+
+test("builder generates beta updater files and collector rejects stable metadata in a beta release", async (t) => {
+  const version = "0.0.8-beta.1";
+  const linux = await fixture(t, "linux", version);
+  const mac = await fixture(t, "mac", version);
+  for (const input of [linux, mac]) {
+    const packager = await builderPackager(input.platform, version);
+    const arch = input.platform === "linux" ? Arch.x64 : Arch.arm64;
+    const publish = await getPublishConfigs(packager, null, arch, true);
+    const names = releaseAssetNames(input.platform, version);
+    const tasks = await createUpdateInfoTasks(
+      {
+        packager,
+        arch,
+        file: path.join(input.source, names[input.platform === "mac" ? 1 : 0]),
+        target: { outDir: input.source },
+      },
+      publish,
+    );
+    assert.deepEqual(
+      tasks.map((task) => path.basename(task.file)),
+      [names[2]],
+    );
+    assert.equal(tasks[0].info.version, version);
+    await collectReleaseAssets({ ...input, destination: linux.destination });
+  }
+  await verifyReleaseAssets({ version, directory: linux.destination });
+  await writeFile(path.join(linux.destination, "latest-linux.yml"), "version: 0.0.7");
+  await assert.rejects(
+    verifyReleaseAssets({ version, directory: linux.destination }),
+    /Unexpected release asset: latest-linux.yml/,
+  );
 });
 
 test("checksums desktop and Android installers, updater metadata and blockmaps", async (t) => {
@@ -169,6 +243,10 @@ test("desktop release verifies published desktop assets and any retained Android
   await copyFile(
     new URL("./release-assets.mjs", import.meta.url),
     path.join(tooling, "release-assets.mjs"),
+  );
+  await copyFile(
+    new URL("./release-version.mjs", import.meta.url),
+    path.join(tooling, "release-version.mjs"),
   );
   const workflow = parse(
     await readFile(new URL("../.github/workflows/release.yml", import.meta.url), "utf8"),
@@ -293,4 +371,64 @@ test("checksums build provenance and rejects a mismatched source version", async
     verifyReleaseAssets({ version: linux.version, directory: linux.destination }),
     /full commit SHA/,
   );
+});
+
+test("GitHub creation and repair keep beta prereleases out of latest stable", async (t) => {
+  const root = await mkdtemp(path.join(tmpdir(), "ait-beta-publish-"));
+  t.after(() => rm(root, { recursive: true, force: true }));
+  await mkdir(path.join(root, "bin"));
+  await mkdir(path.join(root, "release-assets"));
+  await writeFile(path.join(root, "release-assets/SHA256SUMS"), "fixture");
+  const calls = path.join(root, "gh-calls.jsonl");
+  await writeFile(
+    path.join(root, "bin/gh"),
+    `#!/usr/bin/env node
+const fs = require('node:fs');
+const args = process.argv.slice(2);
+fs.appendFileSync(process.env.GH_CALLS, JSON.stringify(args) + '\\n');
+if (args[1] === 'view' && process.env.RELEASE_EXISTS !== '1') process.exit(1);
+`,
+    { mode: 0o700 },
+  );
+  const workflow = parse(
+    await readFile(new URL("../.github/workflows/release.yml", import.meta.url), "utf8"),
+  );
+  const step = workflow.jobs.release.steps.find(
+    (item) => item.name === "Create or repair GitHub Release",
+  );
+  for (const tag of ["v0.0.7", "v0.0.8-beta.1"]) {
+    for (const exists of [false, true]) {
+      await writeFile(calls, "");
+      const result = spawnSync("bash", ["-e", "-o", "pipefail", "-c", step.run], {
+        cwd: root,
+        env: {
+          ...process.env,
+          PATH: `${root}/bin:${process.env.PATH}`,
+          GH_CALLS: calls,
+          RELEASE_EXISTS: exists ? "1" : "0",
+          RELEASE_TAG: tag,
+          GITHUB_REPOSITORY: "example/ait",
+        },
+        encoding: "utf8",
+      });
+      assert.equal(result.status, 0, result.stderr);
+      const commands = (await readFile(calls, "utf8"))
+        .trim()
+        .split("\n")
+        .map((line) => JSON.parse(line));
+      const publish = commands.find((args) => args[1] === (exists ? "edit" : "create"));
+      if (tag.includes("-beta.")) {
+        assert(publish, "beta flags must be set on both creation and repair");
+        assert(publish.includes("--prerelease"));
+        assert(publish.includes("--latest=false"));
+      } else {
+        assert(
+          !commands.some(
+            (args) => args.includes("--prerelease") || args.includes("--latest=false"),
+          ),
+        );
+      }
+      if (exists) assert(commands.some((args) => args[1] === "upload"));
+    }
+  }
 });

@@ -4,16 +4,18 @@ import { createReadStream } from "node:fs";
 import { copyFile, mkdir, readdir, readFile, stat, writeFile } from "node:fs/promises";
 import path from "node:path";
 import { pathToFileURL } from "node:url";
+import { releaseChannel } from "./release-version.mjs";
 
 export function releaseAssetNames(platform, version) {
-  assert(
-    /^(?:0|[1-9]\d*)\.(?:0|[1-9]\d*)\.(?:0|[1-9]\d*)$/.test(version),
-    "Invalid release version",
-  );
+  const channel = releaseChannel(version);
   if (platform === "linux")
-    return [`Ait-linux-x86_64.AppImage`, `Ait-${version}-linux-x64.tar.gz`, "latest-linux.yml"];
+    return [`Ait-linux-x86_64.AppImage`, `Ait-${version}-linux-x64.tar.gz`, `${channel}-linux.yml`];
   if (platform === "mac")
-    return [`Ait-${version}-macos-arm64.dmg`, `Ait-${version}-macos-arm64.zip`, "latest-mac.yml"];
+    return [
+      `Ait-${version}-macos-arm64.dmg`,
+      `Ait-${version}-macos-arm64.zip`,
+      `${channel}-mac.yml`,
+    ];
   if (platform === "android") return [`Ait-${version}-android.apk`];
   throw new Error(`Unsupported release platform: ${platform}`);
 }
