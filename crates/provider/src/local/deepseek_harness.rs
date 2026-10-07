@@ -169,6 +169,9 @@ impl AgentClient for DeepSeekHarnessClient {
 
     fn discover<'a>(&'a self, cwd: &'a str) -> AgentSessionFuture<'a, Details> {
         Box::pin(async move {
+            if self.interactive {
+                return native::discover(self, cwd).await;
+            }
             self.probe(&AgentSessionSpec {
                 provider: PROVIDER.to_owned(),
                 cwd: cwd.to_owned(),

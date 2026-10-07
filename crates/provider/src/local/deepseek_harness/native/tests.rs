@@ -33,6 +33,10 @@ async fn installed_host_discovers_switches_permissions_and_adopts_legacy_session
         config: StoredAgentConfig::default(),
     };
     let details = client.discover(&spec.cwd).await.unwrap();
+    assert!(
+        !directory.path().join("sessions").exists(),
+        "discovery must not create native history"
+    );
     assert!(!details.models.is_empty());
     assert!(details.modes.iter().any(|mode| mode["id"] == "read-only"));
     spec.config.mode_id = Some("read-only".into());
@@ -99,4 +103,25 @@ async fn installed_host_discovers_switches_permissions_and_adopts_legacy_session
         legacy_handle.session_id
     );
     adopted.close().await.unwrap();
+}
+
+#[tokio::test]
+async fn discovery_does_not_require_session_permissions_or_create_native_history() {
+    let fixture = fixture::Fixture::new().await;
+    fixture.set_snapshot_fields(serde_json::json!({"projections":{"values":{}}}));
+    let details = fixture.client.discover(&fixture.spec.cwd).await.unwrap();
+    assert_eq!(details.models[0]["id"], "[\"local\",\"test\"]");
+    assert!(details.modes.iter().any(|mode| mode["id"] == "read-only"));
+    assert_eq!(fixture.requests("session/modelCatalog").len(), 1);
+    for method in [
+        "session/create",
+        "session/selectModel",
+        "session/prompt",
+        "commands/execute",
+    ] {
+        assert!(
+            fixture.requests(method).is_empty(),
+            "{method} must not run during discovery"
+        );
+    }
 }

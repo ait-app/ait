@@ -46,8 +46,7 @@ export AIT_SERVER_DEEPSEEK_HARNESS_BIN=/absolute/path/to/dsh
 暂不支持其他前端实时历史同步、steer、rewind、commands 和结构化输出约束。
 原生 Host 不接受 Ait 每会话 MCP override；请在 DSH web profile 中配置 MCP。
 显示按原生已落盘消息更新，不保证逐 token 输出。
-模型发现会创建并关闭一个 Harness probe session；Harness 没有会话删除接口，
-因此 probe 的原生持久化记录由 Harness 的保留策略管理。
+原生模型发现只读目录，不再创建 probe session；显式 ACP 模式仍需打开会话进行发现。
 
 旧 CLI 或需要 ACP 每会话 MCP override 时，可在 daemon 启动前设置：
 
@@ -60,3 +59,7 @@ ACP 没有权限模式、question 和外部会话导入。默认不会因原生 
 
 实现边界见 [ADR-082](../decisions/providers/adr-082-deepseek-harness-native-host.md)，
 测试范围见[原生 Host 验证报告](https://github.com/KirisameLonnet/ait/blob/dc6cb1e01158ba14120e471b980ffe902ec7e09b/docs/reports/providers/deepseek-harness-native-host.md)。
+
+## 模型发现
+
+Provider 模型菜单直接读取原生 Host 的 `session/modelCatalog`，不会为读取目录创建原生会话、选择模型或发送输入。菜单先列出内置权限预设，创建/恢复会话时仍由原生会话的实际权限目录校验选择。目录读取不再依赖默认会话能否成功初始化。CLI 启动、原生目录或认证错误仍可能使 Provider 显示错误，应结合展开后的错误文字和 DSH 版本诊断。
