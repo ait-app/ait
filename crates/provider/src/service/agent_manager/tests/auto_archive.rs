@@ -1,6 +1,6 @@
 use super::*;
 
-use metadata::ports::worktrees::{
+use model::workspace::worktrees::{
     CreatedWorktreeWorkspace, WorktreeCreation, WorktreeCreationError, WorktreeProvisioning,
 };
 
@@ -14,7 +14,7 @@ impl WorktreeProvisioning for WorktreeCleanup {
     fn prepare_directory(
         &self,
         _: &str,
-        _: &metadata::ports::worktrees::DirectoryGit,
+        _: &model::workspace::worktrees::DirectoryGit,
     ) -> Result<(), WorktreeCreationError> {
         panic!("cleanup must not change the source branch");
     }

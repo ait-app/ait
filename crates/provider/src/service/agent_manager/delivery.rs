@@ -296,7 +296,7 @@ impl AgentManager {
                         .map_err(|_| ErrorCode::AgentIo)?;
                     if let Some(committed) = committed {
                         if !queued && !committed.internal {
-                            self.events.publish(metadata::protocol::session::SessionEventKind::AgentAttention,
+                            self.events.publish(model::session::protocol::SessionEventKind::AgentAttention,
                                 &serde_json::json!({"agentId":input.agent,"reason":"error","timestamp":now}));
                             timeline.events().publish(&input.agent,"agent_stream",&serde_json::json!({"agentId":input.agent,
                                 "event":{"type":"turn_failed","provider":committed.provider,"error":"Queued input could not be admitted"},"timestamp":now}));

@@ -6,10 +6,9 @@ use std::sync::{Arc, Mutex};
 use serde_json::Value;
 use tokio_util::{sync::CancellationToken, task::TaskTracker};
 
-use crate::ports::generation::{
-    MetadataGenerator, MetadataKind, MetadataRequest, MetadataSelection, WorkspaceBranchNamer,
-};
+use crate::ports::generation::{SummarySource, WorkspaceBranchNamer};
 use crate::ports::registry::WorkspaceRegistry;
+use model::summary::{SummaryKind, SummaryRequest, SummarySelection};
 
 /// Encode meaningful first-Agent source material without reading attachment files.
 /// Empty or whitespace-only prompts with no attachments return none and retain naming eligibility.
@@ -30,7 +29,7 @@ pub struct WorkspaceNames {
 #[derive(Debug)]
 struct Inner {
     registry: Arc<dyn WorkspaceRegistry>,
-    generator: Arc<dyn MetadataGenerator>,
+    generator: Arc<dyn SummarySource>,
     branches: Arc<dyn WorkspaceBranchNamer>,
     handle: tokio::runtime::Handle,
     pending: Mutex<BTreeSet<String>>,
@@ -44,7 +43,7 @@ impl WorkspaceNames {
     #[must_use]
     pub fn new(
         registry: Arc<dyn WorkspaceRegistry>,
-        generator: Arc<dyn MetadataGenerator>,
+        generator: Arc<dyn SummarySource>,
         branches: Arc<dyn WorkspaceBranchNamer>,
     ) -> Self {
         Self {
@@ -62,7 +61,7 @@ impl WorkspaceNames {
 
     /// Queue nonempty first-prompt source material without delaying creation or foreground turns.
     /// Duplicate, oversized, draining, and full-queue requests are ignored; explicit titles stay intact.
-    pub fn schedule(&self, id: String, context: String, selection: Option<MetadataSelection>) {
+    pub fn schedule(&self, id: String, context: String, selection: Option<SummarySelection>) {
         if context.trim().is_empty() || context.len() > 1024 * 1024 {
             return;
         }
@@ -109,7 +108,7 @@ impl WorkspaceNames {
     }
 }
 
-async fn generate(inner: &Inner, id: &str, context: String, selection: Option<MetadataSelection>) {
+async fn generate(inner: &Inner, id: &str, context: String, selection: Option<SummarySelection>) {
     let registry = inner.registry.clone();
     let identity = id.to_owned();
     let Ok(Ok(Some(before))) = tokio::task::spawn_blocking(move || registry.get(&identity)).await
@@ -121,8 +120,8 @@ async fn generate(inner: &Inner, id: &str, context: String, selection: Option<Me
     }
     let Ok(value) = inner
         .generator
-        .generate(MetadataRequest {
-            kind: MetadataKind::BranchName,
+        .generate(SummaryRequest {
+            kind: SummaryKind::BranchName,
             cwd: before.cwd.clone(),
             context,
             selection,

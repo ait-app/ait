@@ -68,9 +68,9 @@ fn violations(packages: &[Value]) -> Vec<String> {
                 "metadata",
                 "filesystem",
             ],
-            "provider" => &["domain", "metadata", "model"],
-            "protocol" | "metadata" | "voice" | "schedule" | "browser" => &["model"],
-            "filesystem" | "terminal" => &["metadata", "model"],
+            "provider" => &["domain", "model"],
+            "protocol" | "metadata" | "voice" | "schedule" | "browser" | "terminal" => &["model"],
+            "filesystem" => &["metadata", "model"],
             "domain" | "model" | "relay" => &[],
             _ => {
                 violations.push(format!("unregistered workspace package: {name}"));
@@ -204,7 +204,7 @@ fn filesystem_cannot_depend_on_host_agent_or_transport_crates() {
 
 #[test]
 fn provider_depends_inward_and_retired_packages_cannot_return() {
-    for dependency in ["api", "protocol", "filesystem", "ait-domain"] {
+    for dependency in ["api", "protocol", "filesystem", "metadata", "ait-domain"] {
         let packages = [
             json!({"id":"provider", "name":"provider", "dependencies":[{"name":dependency, "path":"../dependency"}]}),
         ];
@@ -220,19 +220,26 @@ fn provider_depends_inward_and_retired_packages_cannot_return() {
 }
 
 #[test]
-fn terminal_cannot_depend_on_provider_transport_or_old_workspace_packages() {
+fn terminal_cannot_depend_on_metadata_provider_transport_or_old_workspace_packages() {
     for dependency in [
         "api",
         "protocol",
         "provider",
         "domain",
         "filesystem",
+        "metadata",
         "ait-domain",
     ] {
         let packages = [
             json!({"id":"terminal", "name":"terminal", "dependencies":[{"name":dependency,"path":"../dependency"}]}),
         ];
         assert_eq!(violations(&packages), [format!("terminal -> {dependency}")]);
+    }
+    for kind in [Value::Null, json!("dev"), json!("build")] {
+        let packages = [
+            json!({"id":"terminal", "name":"terminal", "dependencies":[{"name":"metadata", "rename":"workspace_records", "kind":kind, "optional":true, "target":"cfg(windows)", "path":"../metadata"}]}),
+        ];
+        assert_eq!(violations(&packages), ["terminal -> metadata"]);
     }
     for dependency in ["axum", "rusqlite", "reqwest"] {
         let packages =
@@ -338,5 +345,28 @@ fn relay_is_a_leaf_transport_owned_by_the_api() {
             json!({"id":"relay", "name":"relay", "dependencies":[{"name":dependency, "path":"../dependency"}]}),
         ];
         assert_eq!(violations(&packages), [format!("relay -> {dependency}")]);
+    }
+}
+
+#[test]
+fn provider_and_terminal_sources_do_not_import_metadata_contracts_or_storage() {
+    let crates = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../../crates");
+    for capability in ["provider", "terminal"] {
+        let mut pending = vec![crates.join(capability).join("src")];
+        while let Some(directory) = pending.pop() {
+            for entry in std::fs::read_dir(directory).unwrap() {
+                let path = entry.unwrap().path();
+                if path.is_dir() {
+                    pending.push(path);
+                } else if path.extension().is_some_and(|extension| extension == "rs") {
+                    let source = std::fs::read_to_string(&path).unwrap();
+                    assert!(
+                        !source.contains("metadata::"),
+                        "{capability} depends on metadata: {}",
+                        path.display()
+                    );
+                }
+            }
+        }
     }
 }

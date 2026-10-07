@@ -346,3 +346,5 @@ fn setup_status_reports_registry_failure_as_a_failed_snapshot_and_recovers_on_re
     .unwrap();
     assert!(retry["snapshot"].is_null());
 }
+
+mod collaboration;

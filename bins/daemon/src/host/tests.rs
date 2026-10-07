@@ -152,3 +152,5 @@ async fn each_composite_service_installs_all_its_methods_without_other_component
     remaining.begin_shutdown();
     remaining.wait_closed().await;
 }
+
+mod workspace_attention;

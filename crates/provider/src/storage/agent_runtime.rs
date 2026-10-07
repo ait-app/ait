@@ -1,10 +1,10 @@
-//! Durable Agent snapshots backed by the shared metadata file engine.
+//! Durable Agent snapshots backed by the shared atomic file engine.
 
 use std::path::PathBuf;
 
 use domain::agent_runtime::PersistedAgentRuntimeRecord;
-use metadata::ports::registry::RegistryError;
-use metadata::storage::registry::FileRegistry;
+use model::storage::registry::FileRegistry;
+use model::workspace::registry::RegistryError;
 
 use crate::ports::agent_runtime::{AgentRuntimeRegistry, AgentRuntimeRegistryError};
 

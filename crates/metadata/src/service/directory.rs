@@ -119,22 +119,7 @@ pub struct ProjectIconValue {
     pub mime_type: String,
 }
 
-/// Parameters for creating a new Workspace registry record.
-#[derive(Debug, Clone)]
-pub struct WorkspaceCreation<'a> {
-    /// Existing directory to inspect.
-    pub path: &'a str,
-    /// Optional user title.
-    pub title: Option<String>,
-    /// Explicit active owning Project, or automatic registration.
-    pub project_id: Option<&'a str>,
-    /// Caller-reserved identity, or a freshly generated identity.
-    pub workspace_id: Option<String>,
-    /// Whether a first Agent will follow creation.
-    pub expects_initial_agent: bool,
-    /// Creation and update timestamp.
-    pub timestamp: &'a str,
-}
+pub use model::workspace::lifecycle::WorkspaceCreation;
 
 /// Blocking project/workspace coordinator; clones share the same registries and adapters.
 #[derive(Debug, Clone)]

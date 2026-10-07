@@ -7,11 +7,11 @@ use chrono::DateTime;
 use domain::agent_runtime::{
     AgentAttentionReason, AgentRuntimeStatus, PersistedAgentRuntimeRecord,
 };
-use metadata::model::registry::{
+use model::pagination::{self, Direction, Entry, Sort, SortValue};
+use model::workspace::records::{
     PersistedProjectKind, PersistedProjectRecord, PersistedWorkspaceKind, PersistedWorkspaceRecord,
 };
-use metadata::ports::registry::{ProjectRegistry, RegistryError, WorkspaceRegistry};
-use model::pagination::{self, Direction, Entry, Sort, SortValue};
+use model::workspace::registry::{ProjectRegistry, RegistryError, WorkspaceRegistry};
 
 use crate::ports::agent_runtime::{AgentRuntimeRegistry, AgentRuntimeRegistryError};
 

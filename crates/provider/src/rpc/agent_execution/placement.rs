@@ -1,6 +1,6 @@
 use std::path::Path;
 
-use metadata::service::directory::WorkspaceCreation;
+use model::workspace::lifecycle::WorkspaceCreation;
 
 use super::{CreateRequest, ErrorCode, ExecutionState};
 

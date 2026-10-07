@@ -7,7 +7,6 @@ publish.workspace = true
 [dependencies]
 model.workspace = true
 domain.workspace = true
-metadata.workspace = true
 
 # Internal OpenCode approval and progress sinks over the owned HTTP runtime.
 async-trait.workspace = true

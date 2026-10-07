@@ -270,7 +270,7 @@ pub trait AgentClient: Debug + Send + Sync {
     }
 
     /// Whether this adapter implements an isolated auxiliary generation channel.
-    fn supports_metadata_generation(&self) -> bool {
+    fn supports_summary_generation(&self) -> bool {
         false
     }
 
@@ -278,10 +278,10 @@ pub trait AgentClient: Debug + Send + Sync {
     ///
     /// Returns `None` when no suitable small model is available. Explicit user model
     /// overrides are resolved separately and do not inherit the foreground model.
-    fn metadata_model(
+    fn summary_model(
         &self,
         _models: &[serde_json::Value],
-    ) -> Option<metadata::ports::generation::MetadataSelection> {
+    ) -> Option<crate::summary::SummarySelection> {
         None
     }
 
@@ -290,7 +290,7 @@ pub trait AgentClient: Debug + Send + Sync {
     /// `spec` selects cwd/model/reasoning; `prompt` is source-only wording and `schema` its output.
     /// # Errors
     /// Returns unavailable for unsupported providers, or safe protocol/timeout failures.
-    fn generate_metadata<'a>(
+    fn generate_summary<'a>(
         &'a self,
         _spec: &'a AgentSessionSpec,
         _prompt: &'a str,

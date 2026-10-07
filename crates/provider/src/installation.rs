@@ -2,7 +2,7 @@
 
 use std::sync::Arc;
 
-use metadata::ports::generation::MetadataGenerator;
+use crate::summary::SummaryGenerator;
 
 use crate::service::{agent_execution::AgentExecution, agents::Agents};
 
@@ -14,7 +14,7 @@ pub struct Dependencies {
     /// Native execution, runtime directory, provider catalog, and timeline.
     pub execution: AgentExecution,
     /// Shared model-backed wording generation used by other components.
-    pub metadata_generator: Arc<dyn MetadataGenerator>,
+    pub summary_generator: Arc<dyn SummaryGenerator>,
 }
 
 /// One complete provider service with independently owned preset storage and execution lanes.

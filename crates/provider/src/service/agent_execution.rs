@@ -5,8 +5,8 @@ use std::sync::{Arc, Mutex};
 use std::thread::JoinHandle;
 use std::time::Duration;
 
-use metadata::ports::registry::{ProjectRegistry, WorkspaceRegistry};
-use metadata::service::session::SessionEvents;
+use model::session::SessionEvents;
+use model::workspace::registry::{ProjectRegistry, WorkspaceRegistry};
 use serde_json::{Value, json};
 use tokio::sync::{OwnedSemaphorePermit, Semaphore, mpsc, oneshot};
 use tokio_util::sync::CancellationToken;
@@ -35,11 +35,10 @@ pub struct ExecutionDependencies {
     pub workspaces: Box<dyn WorkspaceRegistry>,
     /// Shared Project records for active placement validation.
     pub projects: Box<dyn ProjectRegistry>,
-    /// Optional metadata coordinator for opening imported session Workspaces.
-    pub import_directory: Option<metadata::service::directory::Directory>,
+    /// Optional Workspace coordinator for opening imported session Workspaces.
+    pub import_directory: Option<Arc<dyn model::workspace::lifecycle::WorkspaceDirectory>>,
     /// Shared setup coordinator, started only after a worktree Agent is registered.
-    pub workspace_automation:
-        Option<Arc<Mutex<metadata::service::workspace_automation::WorkspaceAutomation>>>,
+    pub workspace_automation: Option<Arc<dyn model::workspace::lifecycle::WorkspaceSetup>>,
     /// Host resource guard, such as the data-directory lease.
     pub lifetime: Arc<dyn Send + Sync>,
 }
@@ -65,7 +64,7 @@ struct Worker {
     thread: Mutex<Option<JoinHandle<()>>>,
     events: SessionEvents,
     timeline: crate::storage::timeline::Timeline,
-    creations: metadata::service::creation::Creations,
+    creations: model::creation::Creations,
     registry: Arc<dyn AgentRuntimeRegistry>,
 }
 
@@ -138,7 +137,7 @@ impl AgentExecution {
                 dependencies
                     .import_directory
                     .as_ref()
-                    .and_then(metadata::service::directory::Directory::changes),
+                    .and_then(|directory| directory.changes()),
             ),
             manager: dependencies.manager,
             directory: dependencies.directory,
@@ -194,9 +193,9 @@ impl AgentExecution {
         self.0.timeline.clone()
     }
 
-    /// Return shared metadata-owned creation receipts.
+    /// Return shared shared creation receipts.
     #[must_use]
-    pub fn creations(&self) -> metadata::service::creation::Creations {
+    pub fn creations(&self) -> model::creation::Creations {
         self.0.creations.clone()
     }
 

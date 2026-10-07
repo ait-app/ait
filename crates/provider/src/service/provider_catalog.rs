@@ -5,9 +5,9 @@ use std::sync::{Arc, Mutex};
 use std::time::{Duration, Instant};
 
 use chrono::Utc;
-use metadata::protocol::session::SessionEventKind;
-use metadata::service::session::SessionEvents;
 use model::ErrorCode;
+use model::session::SessionEvents;
+use model::session::protocol::SessionEventKind;
 use serde_json::{Value, json};
 use sha2::{Digest, Sha256};
 use tokio::sync::{Semaphore, watch};

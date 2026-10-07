@@ -102,17 +102,35 @@ fn bucket_precedence_matches_permission_error_running_attention_and_done() {
     let mut record = agent("agent", "wks", "2026-09-29T00:00:00.000Z");
     record.last_status = AgentRuntimeStatus::Running;
     record.attention_reason = Some(AgentAttentionReason::Permission);
-    assert_eq!(agent_bucket(&record), WorkspaceStateBucket::NeedsInput);
+    assert_eq!(
+        snapshot(vec![record.clone()])[0].bucket,
+        WorkspaceStateBucket::NeedsInput
+    );
     record.attention_reason = Some(AgentAttentionReason::Error);
-    assert_eq!(agent_bucket(&record), WorkspaceStateBucket::Failed);
+    assert_eq!(
+        snapshot(vec![record.clone()])[0].bucket,
+        WorkspaceStateBucket::Failed
+    );
     record.attention_reason = None;
-    assert_eq!(agent_bucket(&record), WorkspaceStateBucket::Running);
+    assert_eq!(
+        snapshot(vec![record.clone()])[0].bucket,
+        WorkspaceStateBucket::Running
+    );
     record.last_status = AgentRuntimeStatus::Error;
-    assert_eq!(agent_bucket(&record), WorkspaceStateBucket::Failed);
+    assert_eq!(
+        snapshot(vec![record.clone()])[0].bucket,
+        WorkspaceStateBucket::Failed
+    );
     record.last_status = AgentRuntimeStatus::Closed;
-    assert_eq!(agent_bucket(&record), WorkspaceStateBucket::Attention);
+    assert_eq!(
+        snapshot(vec![record.clone()])[0].bucket,
+        WorkspaceStateBucket::Attention
+    );
     record.requires_attention = false;
-    assert_eq!(agent_bucket(&record), WorkspaceStateBucket::Done);
+    assert_eq!(
+        snapshot(vec![record.clone()])[0].bucket,
+        WorkspaceStateBucket::Done
+    );
 }
 
 #[test]

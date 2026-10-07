@@ -188,7 +188,7 @@ impl CodexClient {
 }
 
 impl AgentClient for CodexClient {
-    fn supports_metadata_generation(&self) -> bool {
+    fn supports_summary_generation(&self) -> bool {
         true
     }
 
@@ -206,18 +206,18 @@ impl AgentClient for CodexClient {
         Box::pin(async move { client.open(spec, None).await })
     }
 
-    fn metadata_model(
+    fn summary_model(
         &self,
         models: &[Value],
-    ) -> Option<::metadata::ports::generation::MetadataSelection> {
-        super::metadata_model::select(
+    ) -> Option<crate::summary::SummarySelection> {
+        super::summary_model::select(
             self.provider(),
             models,
             &["gpt-6-luna", "gpt-5.6-luna", "gpt-5.4-mini", "mini"],
         )
     }
 
-    fn generate_metadata<'a>(
+    fn generate_summary<'a>(
         &'a self,
         spec: &'a AgentSessionSpec,
         prompt: &'a str,

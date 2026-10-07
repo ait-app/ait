@@ -3,8 +3,8 @@
 use std::collections::{BTreeMap, BTreeSet};
 use std::path::Path;
 
-use metadata::model::registry::PersistedWorkspaceRecord;
-use metadata::ports::registry::{ProjectRegistry, WorkspaceRegistry};
+use model::workspace::records::PersistedWorkspaceRecord;
+use model::workspace::registry::{ProjectRegistry, WorkspaceRegistry};
 use secrecy::{ExposeSecret, SecretString};
 use subtle::ConstantTimeEq;
 use uuid::Uuid;
@@ -34,7 +34,7 @@ pub struct Terminals {
     entries: BTreeMap<String, Entry>,
     activities: crate::activity::Activities,
     activity_url: Option<String>,
-    events: metadata::service::session::SessionEvents,
+    events: model::session::SessionEvents,
     server_id: Option<String>,
 }
 
@@ -53,7 +53,7 @@ impl Terminals {
             entries: BTreeMap::new(),
             activities: crate::activity::Activities::default(),
             activity_url: None,
-            events: metadata::service::session::SessionEvents::default(),
+            events: model::session::SessionEvents::default(),
             server_id: None,
         }
     }
@@ -64,11 +64,7 @@ impl Terminals {
     }
 
     /// Connect hook attention to the shared connection event hub and server identity.
-    pub fn set_session_events(
-        &mut self,
-        events: metadata::service::session::SessionEvents,
-        server_id: String,
-    ) {
+    pub fn set_session_events(&mut self, events: model::session::SessionEvents, server_id: String) {
         self.events = events;
         self.server_id = Some(server_id);
     }
@@ -119,7 +115,7 @@ impl Terminals {
                 crate::activity::AttentionReason::Finished => "Terminal finished",
                 crate::activity::AttentionReason::NeedsInput => "Terminal needs input",
             };
-            self.events.publish(metadata::protocol::session::SessionEventKind::TerminalAttention,
+            self.events.publish(model::session::protocol::SessionEventKind::TerminalAttention,
                 &serde_json::json!({"serverId":self.server_id,"terminalId":id,"cwd":entry.info.cwd,
                     "workspaceId":entry.info.workspace_id,"reason":reason,"title":title,"body":entry.info.name}));
         }

@@ -1,8 +1,8 @@
 use super::*;
 use crate::model::registry::PersistedWorkspaceRecord;
-use crate::ports::generation::{MetadataError, MetadataFuture};
 use crate::ports::registry::WorkspaceMutationContext;
 use crate::storage::registry::FileBackedWorkspaceRegistry;
+use model::summary::{SummaryError, SummaryFuture};
 use serde_json::json;
 use std::sync::atomic::{AtomicUsize, Ordering};
 
@@ -12,15 +12,15 @@ struct Generator {
     release: tokio::sync::Notify,
     calls: AtomicUsize,
 }
-impl MetadataGenerator for Generator {
-    fn generate(&self, request: MetadataRequest) -> MetadataFuture<'_> {
+impl SummarySource for Generator {
+    fn generate(&self, request: SummaryRequest) -> SummaryFuture<'_> {
         Box::pin(async move {
-            assert_eq!(request.kind, MetadataKind::BranchName);
+            assert_eq!(request.kind, SummaryKind::BranchName);
             self.calls.fetch_add(1, Ordering::SeqCst);
             self.started.notify_one();
             self.release.notified().await;
             if request.context == "fail" {
-                Err(MetadataError::Unavailable)
+                Err(SummaryError::Unavailable)
             } else {
                 Ok(json!({"title":"Generated title","branch":"fix/title"}))
             }
@@ -53,7 +53,12 @@ async fn applies_only_owned_fields_and_coalesces_duplicate_work() {
     let generator = Arc::new(Generator::default());
     let branches = Arc::new(Branches::default());
     let names = WorkspaceNames::new(registry.clone(), generator.clone(), branches.clone());
-    names.schedule("wks_test".into(), "source".into(), None);
+    model::workspace::lifecycle::WorkspaceNaming::schedule(
+        &names,
+        "wks_test".into(),
+        "source".into(),
+        None,
+    );
     generator.started.notified().await;
     names.schedule("wks_test".into(), "duplicate".into(), None);
     registry

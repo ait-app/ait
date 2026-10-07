@@ -104,7 +104,7 @@ impl ClaudeClient {
 }
 
 impl AgentClient for ClaudeClient {
-    fn supports_metadata_generation(&self) -> bool {
+    fn supports_summary_generation(&self) -> bool {
         true
     }
 
@@ -133,14 +133,14 @@ impl AgentClient for ClaudeClient {
         Box::pin(async move { session::open(&client, spec, None).await })
     }
 
-    fn metadata_model(
+    fn summary_model(
         &self,
         models: &[Value],
-    ) -> Option<::metadata::ports::generation::MetadataSelection> {
-        super::metadata_model::select(self.provider(), models, &["haiku"])
+    ) -> Option<crate::summary::SummarySelection> {
+        super::summary_model::select(self.provider(), models, &["haiku"])
     }
 
-    fn generate_metadata<'a>(
+    fn generate_summary<'a>(
         &'a self,
         spec: &'a AgentSessionSpec,
         prompt: &'a str,

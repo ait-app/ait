@@ -583,7 +583,7 @@ async fn terminal_write_failures_retain_work_and_close_preserves_concurrent_meta
     let sink = notifications.clone();
     let subscription = connection
         .subscribe(
-            metadata::protocol::session::EventsRequest {
+            model::session::protocol::EventsRequest {
                 events: vec!["agent_attention_required".to_owned()],
                 notifications: false,
             },
@@ -661,7 +661,7 @@ async fn accepted_turn_survives_runtime_write_failure_and_reports_inspection_fai
     let captured = activities.clone();
     let subscription = connection
         .subscribe(
-            metadata::protocol::session::EventsRequest {
+            model::session::protocol::EventsRequest {
                 events: vec!["activity_log".to_owned()],
                 notifications: false,
             },
@@ -713,7 +713,7 @@ async fn cancelled_internal_archived_and_deleted_agents_do_not_publish_attention
         let captured = events.clone();
         let subscription = connection
             .subscribe(
-                metadata::protocol::session::EventsRequest {
+                model::session::protocol::EventsRequest {
                     events: vec!["agent_attention_required".to_owned()],
                     notifications: false,
                 },

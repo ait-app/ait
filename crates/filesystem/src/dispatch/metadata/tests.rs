@@ -6,24 +6,24 @@ fn fills_only_missing_fields_and_preserves_explicit_wording() {
     let mut commit = json!({"message":"  "});
     apply(
         &mut commit,
-        MetadataKind::CommitMessage,
+        SummaryKind::CommitMessage,
         Some(&json!({"message":"Fix titles"})),
     );
     assert_eq!(commit["message"], "Fix titles");
     let mut pr = json!({"title":"My title","body":null});
     apply(
         &mut pr,
-        MetadataKind::PullRequest,
+        SummaryKind::PullRequest,
         Some(&json!({"title":"Generated","body":"Generated body"})),
     );
     assert_eq!(pr, json!({"title":"My title","body":"Generated body"}));
     let mut missing = json!({"title":" ","body":"Explicit body"});
-    apply(&mut missing, MetadataKind::PullRequest, None);
+    apply(&mut missing, SummaryKind::PullRequest, None);
     assert_eq!(
         missing,
         json!({"title":"Update changes","body":"Explicit body"})
     );
-    apply(&mut commit, MetadataKind::CommitMessage, None);
+    apply(&mut commit, SummaryKind::CommitMessage, None);
     assert_eq!(commit["message"], "Fix titles");
 }
 
@@ -52,7 +52,7 @@ fn bounded_diff_preserves_file_names_changes_and_unicode() {
             }],
         }],
     };
-    let text = source(&diff, MetadataKind::CommitMessage);
+    let text = source(&diff, SummaryKind::CommitMessage);
     assert!(text.starts_with("Changed files:\nA 标题.rs (+1 -0)"));
     assert!(text.contains("+新"));
     assert!(text.len() <= 120_000);
@@ -61,14 +61,11 @@ fn bounded_diff_preserves_file_names_changes_and_unicode() {
 #[derive(Debug)]
 struct Generator {
     runtime: std::sync::Arc<model::Runtime>,
-    requests: std::sync::Mutex<Vec<MetadataRequest>>,
+    requests: std::sync::Mutex<Vec<SummaryRequest>>,
     fail: bool,
 }
-impl metadata::ports::generation::MetadataGenerator for Generator {
-    fn generate(
-        &self,
-        request: MetadataRequest,
-    ) -> metadata::ports::generation::MetadataFuture<'_> {
+impl metadata::ports::generation::SummarySource for Generator {
+    fn generate(&self, request: SummaryRequest) -> model::summary::SummaryFuture<'_> {
         Box::pin(async move {
             assert!(
                 self.runtime.jobs.try_acquire().is_ok(),
@@ -76,7 +73,7 @@ impl metadata::ports::generation::MetadataGenerator for Generator {
             );
             self.requests.lock().unwrap().push(request);
             if self.fail {
-                Err(metadata::ports::generation::MetadataError::Unavailable)
+                Err(model::summary::SummaryError::Unavailable)
             } else {
                 Ok(
                     json!({"title":"Generated PR","body":"Generated details","message":"Generated commit"}),
@@ -108,7 +105,7 @@ fn state(root: &std::path::Path, fail: bool) -> (State, std::sync::Arc<Generator
     });
     (
         State {
-            metadata_generator: Some(generator.clone()),
+            summary_source: Some(generator.clone()),
             runtime,
             checkout: Some(Arc::new(Mutex::new(
                 crate::service::checkout::Checkout::new(Box::new(
@@ -161,7 +158,7 @@ async fn missing_pr_fields_use_base_diff_without_holding_foreground_permit() {
     {
         let requests = generator.requests.lock().unwrap();
         assert_eq!(requests.len(), 1);
-        assert_eq!(requests[0].kind, MetadataKind::PullRequest);
+        assert_eq!(requests[0].kind, SummaryKind::PullRequest);
         assert!(requests[0].context.contains("committed behavior"));
     }
     fill(&state, "checkout.pr.create.request", &mut params)

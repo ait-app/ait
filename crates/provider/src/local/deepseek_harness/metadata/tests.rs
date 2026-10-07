@@ -162,7 +162,7 @@ async fn installed_dsh_metadata_has_no_tools_or_persisted_session() {
     };
     let result = tokio::time::timeout(
         Duration::from_secs(30),
-        client.generate_metadata(&spec, "Generate a title", &json!({"type":"object"})),
+        client.generate_summary(&spec, "Generate a title", &json!({"type":"object"})),
     )
     .await
     .unwrap()

@@ -16,8 +16,10 @@ pub mod protocol;
 pub mod rpc;
 pub mod service;
 pub mod storage;
+pub mod summary;
 
 pub use composition::Providers;
+pub use summary::{SummaryConfiguration, SummaryGenerator};
 
 #[cfg(all(test, unix))]
 mod test_support;

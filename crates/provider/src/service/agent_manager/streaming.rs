@@ -4,7 +4,7 @@ use crate::ports::agent_session::AgentSessionError;
 pub(super) fn drain(
     registry: &dyn crate::ports::agent_runtime::AgentRuntimeRegistry,
     timeline: Option<&crate::storage::timeline::Timeline>,
-    events: &metadata::service::session::SessionEvents,
+    events: &model::session::SessionEvents,
     id: &str,
     agent: &mut super::LiveAgent,
 ) -> Result<(), AgentManagerError> {

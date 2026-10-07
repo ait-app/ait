@@ -6,6 +6,8 @@
 - 关系：细化 [ADR-031](adr-031-daemon-provider.md) 的能力边界与
   [ADR-058](adr-058-daemon-metadata-generation.md) 的辅助生成职责。
 
+生成接口归属及配置注入现由 [ADR-100](adr-100-provider-summary-generator.md) 修订；原有配置键和生成行为保留。
+
 ## 背景
 
 daemon 的 `compose_provider` 直接列举各个原生客户端，读取启动路径、DSH 传输选择并配置

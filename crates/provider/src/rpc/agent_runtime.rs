@@ -22,7 +22,7 @@ use chrono::{SecondsFormat, Utc};
 use domain::agent_runtime::{
     AgentAttentionReason as DomainAttentionReason, AgentRuntimeStatus, PersistedAgentRuntimeRecord,
 };
-use metadata::protocol::workspace::{ProjectCheckoutLitePayload, ProjectPlacementPayload};
+use model::workspace::protocol::workspace::{ProjectCheckoutLitePayload, ProjectPlacementPayload};
 use serde_json::Value;
 
 use crate::protocol::agent_config::NullableSetting;

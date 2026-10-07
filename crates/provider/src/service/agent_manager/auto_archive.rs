@@ -11,7 +11,7 @@ pub(super) struct AutoArchives {
 #[derive(Debug, Clone)]
 struct WorktreeCleanup {
     workspace: String,
-    provisioning: std::sync::Arc<dyn metadata::ports::worktrees::WorktreeProvisioning>,
+    provisioning: std::sync::Arc<dyn model::workspace::worktrees::WorktreeProvisioning>,
 }
 
 /// Completed turn retirement, executed by the scheduler after fencing related writers.
@@ -57,7 +57,7 @@ impl AgentManager {
         &mut self,
         id: String,
         workspace: String,
-        provisioning: std::sync::Arc<dyn metadata::ports::worktrees::WorktreeProvisioning>,
+        provisioning: std::sync::Arc<dyn model::workspace::worktrees::WorktreeProvisioning>,
     ) {
         self.auto_archive_on_finish(id.clone());
         self.auto_archives.worktrees.insert(

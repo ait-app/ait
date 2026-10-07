@@ -4,6 +4,7 @@ mod auth;
 mod browser_auth;
 mod capabilities;
 mod composition;
+pub use composition::summary_source;
 mod connection;
 mod core_methods;
 mod files;
@@ -118,7 +119,7 @@ impl Shared {
         if let Some(schedules) = &self.schedule.schedules {
             schedules.stop();
         }
-        if let Some(generator) = &self.filesystem.metadata_generator {
+        if let Some(generator) = &self.filesystem.summary_source {
             generator.shutdown();
         }
         if let Some(names) = &self.workspace_names {
@@ -217,7 +218,7 @@ impl Api {
             has_git_fetch,
         });
         let filesystem = Arc::new(filesystem::dispatch::State {
-            metadata_generator: services.metadata_generator,
+            summary_source: services.summary_source,
             runtime: runtime.clone(),
             checkout: services.checkout.map(shared_service),
             forge: services.forge.map(shared_service),

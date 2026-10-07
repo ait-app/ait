@@ -6,25 +6,25 @@ Electron 位于 `apps/desktop`；`apps/mobile` 提供桌面、浏览器与移动
 
 ## Rust 能力边界
 
-| Crate        | 职责                                             | 允许的内部依赖                         |
-| ------------ | ------------------------------------------------ | -------------------------------------- |
-| `domain`     | Agent 身份与配置不变量                           | 无                                     |
-| `model`      | 公共错误、消息、方法元数据、请求上下文和运行资源 | 无                                     |
-| `protocol`   | WebSocket envelope、版本与能力协商               | `model`                                |
-| `metadata`   | Project/Workspace 目录、标签、配置和自动化       | `model`                                |
-| `filesystem` | 文件、Git、worktree、Forge 和技能安装            | `metadata`、`model`                    |
-| `provider`   | 原生 Provider 会话、执行、历史和元数据生成       | `domain`、`metadata`、`model`          |
-| `terminal`   | PTY、终端快照、活动和连接订阅                    | `metadata`、`model`                    |
-| `voice`      | 语音、听写和离线推理                             | `model`                                |
-| `schedule`   | 定时任务服务与协议                               | `model`                                |
-| `browser`    | 浏览器自动化请求与回传                           | `model`                                |
-| `relay`      | 主动建立控制连接与反向数据通道                   | 无                                     |
-| `api`        | HTTP/WebSocket 鉴权、连接与跨能力协调            | 上述能力包、`protocol`、`model`        |
-| `daemon`     | 配置、进程锁、服务组装和停机                     | API、领域及能力包；测试使用 `protocol` |
+| Crate        | 职责                                         | 允许的内部依赖                         |
+| ------------ | -------------------------------------------- | -------------------------------------- |
+| `domain`     | Agent 身份与配置不变量                       | 无                                     |
+| `model`      | 公共契约、请求与事件资源、创建回执和文件存储 | 无                                     |
+| `protocol`   | WebSocket envelope、版本与能力协商           | `model`                                |
+| `metadata`   | Project/Workspace 目录、标签、配置和自动化   | `model`                                |
+| `filesystem` | 文件、Git、worktree、Forge 和技能安装        | `metadata`、`model`                    |
+| `provider`   | 原生 Provider 会话、执行、历史和摘要生成     | `domain`、`model`                      |
+| `terminal`   | PTY、终端快照、活动和连接订阅                | `model`                                |
+| `voice`      | 语音、听写和离线推理                         | `model`                                |
+| `schedule`   | 定时任务服务与协议                           | `model`                                |
+| `browser`    | 浏览器自动化请求与回传                       | `model`                                |
+| `relay`      | 主动建立控制连接与反向数据通道               | 无                                     |
+| `api`        | HTTP/WebSocket 鉴权、连接与跨能力协调        | 上述能力包、`protocol`、`model`        |
+| `daemon`     | 配置、进程锁、服务组装和停机                 | API、领域及能力包；测试使用 `protocol` |
 
 各实现组件自己声明方法，功能 crate 对外提供一个完整的 `Service`，API 按 crate 整体安装。
 `implemented_methods()` 返回全部声明，`installed_methods(bool)` 返回全部或空集合；API
-自行声明始终可用的连接方法，并复用 metadata 的会话和创建记录基础设施。内部功能对象
+自行声明始终可用的连接方法，并复用 model 的会话和创建记录基础设施。内部功能对象
 保留独立锁、适配器和任务，私有 transport composition 负责连接共享资源，不作为安装开关。
 详见 [ADR-099](../decisions/daemon/adr-099-crate-level-service-installation.md)。具体 adapter 实现所属能力的 port；应用服务协调领域行为。`domain` 无 Tokio、
 传输或存储依赖。`model` 含 Tokio 请求资源，不属于纯领域层。
@@ -35,6 +35,22 @@ Electron 位于 `apps/desktop`；`apps/mobile` 提供桌面、浏览器与移动
 方法名称和消息方向由所属组件声明，功能 crate 聚合，API 汇总用于协议校验；业务处理
 不预先选择 handler，详见 [ADR-093](../decisions/daemon/adr-093-consumable-request-context.md)
 与 [ADR-095](../decisions/daemon/adr-095-component-method-declarations.md)。
+
+摘要生成能力由 `provider::SummaryGenerator` 声明，输入输出类型位于 `model::summary`。
+生成器通过自己的配置端口读取偏好，daemon 连接现有存储；API 将同一生成器适配为
+metadata 的消费端口 `SummarySource`，见
+[ADR-100](../decisions/providers/adr-100-provider-summary-generator.md)。
+
+Provider 不依赖 metadata。共享 Workspace 记录、registry、活动与关注接口、worktree
+契约和 wire 类型归 `model::workspace`；事件通道归 `model::session`，幂等创建回执归
+`model::creation`，原子文件 registry 和标签事务归 `model::storage`。Workspace 登记、
+setup 和命名仍由 metadata 实现，通过 `model::workspace::lifecycle` 的接口注入
+provider。metadata 的旧共享路径只重导出 model 类型，没有第二份状态或实现。
+详见 [ADR-101](../decisions/providers/adr-101-provider-metadata-independence.md)。
+
+Terminal 同样直接使用 model 的 Workspace registry、活动契约和连接事件资源，
+不依赖 metadata；见 [ADR-102](../decisions/daemon/adr-102-terminal-model-dependency.md)。
+功能 crate 之间剩余的直接依赖是 filesystem → metadata。
 
 内置 Provider 由 `provider::Providers` 组装。具体客户端列表、启动配置、安装发现与辅助
 元数据生成能力留在 provider crate 内部；daemon 提供数据目录并连接服务与进程生命周期。

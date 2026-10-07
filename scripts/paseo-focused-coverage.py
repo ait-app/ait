@@ -22,11 +22,12 @@ SCOPES = [
         "local::codex::", "local::claude::", "storage::timeline::", "ports::environment::",
         "ports::agent_session::", "protocol::tests::",
     ]),
-    ("model", ["--lib"], ["pagination::", "directory_sync::", "polling::", "runtime::", "events::"]),
+    ("model", ["--lib"], [
+        "pagination::", "directory_sync::", "polling::", "runtime::", "events::",
+        "workspace::", "storage::", "session::", "creation::", "summary::",
+    ]),
     ("metadata", ["--lib"], [
-        "service::directory::", "service::session::", "service::creation::",
-        "workspace_automation::", "protocol::worktree_source::", "rpc::directory::",
-        "protocol::directory::", "protocol::workspace::",
+        "service::directory::", "workspace_automation::", "rpc::directory::",
     ]),
     ("filesystem", ["--lib"], ["worktrees::", "worktree_checkout::"]),
     ("terminal", ["--lib"], ["service::", "activity::"]),
@@ -34,6 +35,7 @@ SCOPES = [
         "terminal_activity::", "listener::", "capabilities::", "auth::", "browser_auth::",
         "tests::session::", "tests::paseo::",
     ]),
+    ("daemon", ["--bin", "daemon"], ["host::tests::workspace_attention::"]),
     ("daemon", ["--test", "process"], [
         "agent_execution::", "agent_controls::", "agent_history::", "terminal::", "worktrees::",
         "workspace_automation::", "directory::", "native_sessions::", "schedule::", "session::",

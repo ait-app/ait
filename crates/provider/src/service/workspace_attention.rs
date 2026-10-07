@@ -7,8 +7,8 @@ use chrono::{DateTime, Duration, SecondsFormat, Utc};
 use domain::agent_runtime::{
     AgentAttentionReason, AgentRuntimeStatus, PersistedAgentRuntimeRecord,
 };
-use metadata::model::workspace_activity::WorkspaceStateBucket;
-use metadata::ports::workspace_state::{
+use model::workspace::activity::WorkspaceStateBucket;
+use model::workspace::attention::{
     WorkspaceActivity, WorkspaceActivitySource, WorkspaceAttention, WorkspaceAttentionChanges,
     WorkspaceAttentionScan, WorkspaceStateError,
 };

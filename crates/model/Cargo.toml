@@ -5,6 +5,13 @@ edition.workspace = true
 publish.workspace = true
 
 [dependencies]
+# Shared creation receipts, event presence, and atomic workspace registries.
+chrono.workspace = true
+getrandom.workspace = true
+indexmap.workspace = true
+sha2.workspace = true
+tempfile.workspace = true
+uuid.workspace = true
 base64.workspace = true
 # Match Paseo's ICU-backed localeCompare for directory ordering and continuation cursors.
 icu_collator.workspace = true

@@ -14,3 +14,6 @@ pub mod push;
 
 /// Background workspace title and placeholder branch generation.
 pub mod workspace_names;
+
+/// Adapters for shared Workspace collaboration contracts.
+pub mod workspace_collaboration;

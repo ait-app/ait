@@ -5,6 +5,7 @@ use std::time::Duration;
 use anyhow::Context;
 mod catalog;
 mod schedule;
+mod summary;
 mod voice;
 
 use api::{Api, LifecycleIntent, LocalAddress, Services};
@@ -20,7 +21,6 @@ use filesystem::service::forge::Forge;
 use filesystem::service::worktrees::{WorkspaceWorktrees, Worktrees};
 use filesystem::service::{github_projects::GithubProjects, workspace_recovery::WorkspaceRecovery};
 use metadata::local::workspace_automation::LocalWorkspaceAutomation;
-use metadata::ports::generation::MetadataGenerator;
 use metadata::ports::registry::{ProjectRegistry, WorkspaceRegistry};
 use metadata::service::daemon::{Daemon, DaemonRuntime};
 use metadata::service::directory::{Directory, DirectoryDependencies};
@@ -42,6 +42,7 @@ use provider::service::agents::Agents;
 use provider::service::workspace_attention::AgentWorkspaceAttention;
 use provider::storage::SqliteCatalog;
 use provider::storage::agent_runtime::FileBackedAgentRuntimeRegistry;
+use provider::summary::SummaryGenerator;
 
 use tokio::net::TcpListener;
 
@@ -170,7 +171,7 @@ fn compose_services(
     let providers = Providers::new(&config.data_dir);
     let MetadataServices {
         config: config_store,
-        generator: metadata_generator,
+        generator: summary_generator,
         names: workspace_names,
     } = compose_metadata(&config.data_dir, &workspace_registry, &providers);
     let worktrees = Arc::new(Mutex::new(
@@ -212,7 +213,7 @@ fn compose_services(
         providers,
         (
             directory.clone(),
-            metadata_generator.clone(),
+            summary_generator.clone(),
             workspace_names.clone(),
             workspace_automation.clone(),
         ),
@@ -243,7 +244,7 @@ fn compose_services(
         metadata: Some(metadata),
         filesystem: Some(filesystem),
         provider: Some(provider::Service::new(provider::Dependencies {
-            metadata_generator,
+            summary_generator,
             execution: agent_execution.clone(),
             agents,
         })),
@@ -350,7 +351,7 @@ fn compose_workspace_services(
 
 struct MetadataServices {
     config: FileDaemonConfigStore,
-    generator: Arc<dyn MetadataGenerator>,
+    generator: Arc<dyn SummaryGenerator>,
     names: WorkspaceNames,
 }
 
@@ -360,15 +361,17 @@ fn compose_metadata(
     providers: &Providers,
 ) -> MetadataServices {
     let config_store = FileDaemonConfigStore::with_defaults(data_dir.join("config.json"));
-    let metadata_generator = providers.metadata_generator(Arc::new(config_store.clone()));
+    let summary_generator = providers.summary_generator(Arc::new(summary::Configuration(
+        Arc::new(config_store.clone()),
+    )));
     let workspace_names = WorkspaceNames::new(
         Arc::new(registry.clone()),
-        metadata_generator.clone(),
+        api::summary_source(summary_generator.clone()),
         Arc::new(LocalCheckout::new(data_dir.join("worktrees"))),
     );
     MetadataServices {
         config: config_store,
-        generator: metadata_generator,
+        generator: summary_generator,
         names: workspace_names,
     }
 }
@@ -461,7 +464,7 @@ fn compose_provider(
     providers: Providers,
     metadata: (
         Directory,
-        Arc<dyn MetadataGenerator>,
+        Arc<dyn SummaryGenerator>,
         WorkspaceNames,
         Arc<Mutex<WorkspaceAutomation>>,
     ),
@@ -472,8 +475,8 @@ fn compose_provider(
     let mut manager = AgentManager::new(Box::new(agent_runtime_registry.clone()))
         .with_timeline(timeline)
         .with_creations(directory.creations())
-        .with_metadata_generation(generator)
-        .with_workspace_names(names);
+        .with_summary_generation(generator)
+        .with_workspace_names(Arc::new(names));
     providers.register(&mut manager)?;
     AgentExecution::spawn(ExecutionDependencies {
         manager,
@@ -486,8 +489,12 @@ fn compose_provider(
         registry: Box::new(agent_runtime_registry),
         workspaces: Box::new(workspace_registry.clone()),
         lifetime: instance.clone(),
-        import_directory: Some(directory),
-        workspace_automation: Some(workspace_automation),
+        import_directory: Some(Arc::new(directory)),
+        workspace_automation: Some(Arc::new(
+            metadata::service::workspace_collaboration::SharedWorkspaceSetup::new(
+                workspace_automation,
+            ),
+        )),
         projects: Box::new(project_registry.clone()),
     })
     .context("start Provider worker")

@@ -38,7 +38,7 @@ mod requests;
 #[derive(Debug)]
 pub struct State {
     /// Optional model-backed wording service; unavailable generation uses deterministic fallbacks.
-    pub metadata_generator: Option<Arc<dyn ::metadata::ports::generation::MetadataGenerator>>,
+    pub summary_source: Option<Arc<dyn ::metadata::ports::generation::SummarySource>>,
     /// Installed skills service.
     pub skills: Option<Arc<Mutex<crate::service::skills::Skills>>>,
     /// Shared Tokio admission, cancellation and task tracking.

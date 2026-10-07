@@ -13,7 +13,7 @@ async fn auxiliary_claude_request_disables_tools_mcp_hooks_and_history() {
     .unwrap();
     let schema = json!({"type":"object","properties":{"message":{"type":"string"}},"required":["message"],"additionalProperties":false});
     let result = client
-        .generate_metadata(&spec, "source", &schema)
+        .generate_summary(&spec, "source", &schema)
         .await
         .unwrap();
     assert_eq!(
@@ -40,14 +40,14 @@ async fn auxiliary_claude_errors_and_timeout_release_native_process() {
     let (_root, client, spec) = fixture();
     assert!(
         client
-            .generate_metadata(&spec, "error-result", &json!({}))
+            .generate_summary(&spec, "error-result", &json!({}))
             .await
             .is_err()
     );
     assert!(
         tokio::time::timeout(
             std::time::Duration::from_millis(100),
-            client.generate_metadata(&spec, "hold", &json!({}))
+            client.generate_summary(&spec, "hold", &json!({}))
         )
         .await
         .is_err()

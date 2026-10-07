@@ -702,3 +702,5 @@ fn project_icon_round_trips_custom_bytes_and_returns_to_automatic() {
             .is_none()
     );
 }
+
+mod collaboration;

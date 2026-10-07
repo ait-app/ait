@@ -1,6 +1,6 @@
 use super::*;
+use crate::summary::{SummaryFuture, SummaryGenerator, SummaryRequest};
 use domain::agent_runtime::TitleOrigin;
-use metadata::ports::generation::{MetadataFuture, MetadataGenerator, MetadataRequest};
 use serde_json::json;
 
 #[derive(Debug, Default)]
@@ -8,8 +8,8 @@ struct Generator {
     started: tokio::sync::Notify,
     release: tokio::sync::Notify,
 }
-impl MetadataGenerator for Generator {
-    fn generate(&self, request: MetadataRequest) -> MetadataFuture<'_> {
+impl SummaryGenerator for Generator {
+    fn generate(&self, request: SummaryRequest) -> SummaryFuture<'_> {
         Box::pin(async move {
             assert_eq!(request.context, "First user prompt");
             self.started.notify_one();
@@ -44,7 +44,7 @@ async fn generated_titles_are_nonblocking_and_respect_manual_same_value_edits() 
             .unwrap();
         manager = manager
             .with_timeline(timeline.clone())
-            .with_metadata_generation(generator.clone());
+            .with_summary_generation(generator.clone());
         tokio::time::timeout(
             std::time::Duration::from_millis(100),
             manager.poll_generated_titles(),
@@ -109,7 +109,7 @@ async fn shutdown_cancels_auxiliary_generation_without_requiring_model_completio
         .unwrap();
     manager = manager
         .with_timeline(timeline)
-        .with_metadata_generation(generator.clone());
+        .with_summary_generation(generator.clone());
     manager.poll_generated_titles().await.unwrap();
     generator.started.notified().await;
     tokio::time::timeout(std::time::Duration::from_millis(100), manager.close_all())

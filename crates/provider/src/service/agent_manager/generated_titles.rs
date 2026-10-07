@@ -1,10 +1,10 @@
 use std::collections::{BTreeMap, BTreeSet};
 use std::sync::Arc;
 
-use domain::agent_runtime::{PersistedAgentRuntimeRecord, TitleOrigin};
-use metadata::ports::generation::{
-    MetadataError, MetadataGenerator, MetadataKind, MetadataRequest, MetadataSelection,
+use crate::summary::{
+    SummaryError, SummaryGenerator, SummaryKind, SummaryRequest, SummarySelection,
 };
+use domain::agent_runtime::{PersistedAgentRuntimeRecord, TitleOrigin};
 use model::ErrorCode;
 use serde_json::Value;
 use tokio::task::JoinHandle;
@@ -15,12 +15,12 @@ use super::AgentManager;
 struct Pending {
     title: Option<String>,
     created_at: String,
-    task: JoinHandle<Result<Value, MetadataError>>,
+    task: JoinHandle<Result<Value, SummaryError>>,
 }
 
 #[derive(Debug, Default)]
 pub(super) struct Titles {
-    pub(super) generator: Option<Arc<dyn MetadataGenerator>>,
+    pub(super) generator: Option<Arc<dyn SummaryGenerator>>,
     pending: BTreeMap<String, Pending>,
     attempted: BTreeSet<String>,
     next_scan: Option<std::time::Instant>,
@@ -64,7 +64,7 @@ impl AgentManager {
                 .remove(&id)
                 .expect("selected pending title");
             let result = pending.task.await;
-            if matches!(result, Ok(Err(MetadataError::Cancelled))) {
+            if matches!(result, Ok(Err(SummaryError::Cancelled))) {
                 self.generated_titles.attempted.remove(&id);
             }
             if let Ok(Ok(value)) = result
@@ -111,11 +111,11 @@ impl AgentManager {
                 continue;
             };
             let config = record.config.as_ref();
-            let request = MetadataRequest {
-                kind: MetadataKind::Title,
+            let request = SummaryRequest {
+                kind: SummaryKind::Title,
                 cwd: record.cwd,
                 context,
-                selection: Some(MetadataSelection {
+                selection: Some(SummarySelection {
                     provider: record.provider,
                     model: config.and_then(|config| config.model.clone()),
                     thinking_option_id: config.and_then(|config| config.thinking_option_id.clone()),

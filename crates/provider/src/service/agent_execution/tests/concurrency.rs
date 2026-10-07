@@ -105,7 +105,7 @@ impl AgentClient for GatedClient {
 fn gated(fixture: &Fixture, gate: &Arc<Gate>) -> AgentExecution {
     worker_with_client(
         fixture,
-        metadata::service::creation::Creations::default(),
+        model::creation::Creations::default(),
         Box::new(GatedClient {
             native: fixture.client(),
             gate: gate.clone(),
@@ -585,7 +585,7 @@ async fn creation_revalidates_workspace_after_a_delayed_native_factory() {
     workspaces
         .upsert(
             &workspace,
-            metadata::ports::registry::WorkspaceMutationContext::default(),
+            model::workspace::registry::WorkspaceMutationContext::default(),
         )
         .unwrap();
     gate.release.add_permits(1);

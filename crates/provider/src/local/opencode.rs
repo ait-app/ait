@@ -7,7 +7,7 @@ mod execution;
 mod history;
 mod http;
 mod live;
-mod metadata;
+mod summary;
 mod projection;
 mod publication;
 mod runtime;

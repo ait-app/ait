@@ -4,7 +4,7 @@ pub mod agent_execution;
 pub mod agent_manager;
 pub mod agent_runtime;
 pub mod agents;
-pub mod metadata_generation;
+pub mod summary_generation;
 pub mod workspace_attention;
 
 pub(crate) mod provider_catalog;

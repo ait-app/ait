@@ -18,7 +18,7 @@ use crate::Services;
 #[derive(Default)]
 pub(super) struct Parts {
     /// Bounded model-backed wording generation shared by title and Git use cases.
-    pub(super) metadata_generator: Option<Arc<dyn metadata::ports::generation::MetadataGenerator>>,
+    pub(super) summary_source: Option<Arc<dyn metadata::ports::generation::SummarySource>>,
     /// First-prompt workspace naming with independently drained background work.
     pub(super) workspace_names: Option<metadata::service::workspace_names::WorkspaceNames>,
     /// Persistent timed Agent executions.
@@ -95,10 +95,39 @@ impl From<Services> for Parts {
         }
         if let Some(provider) = services.provider {
             let provider = provider.into_dependencies();
-            parts.metadata_generator = Some(provider.metadata_generator);
+            parts.summary_source = Some(summary_source(provider.summary_generator));
             parts.agent_execution = Some(provider.execution);
             parts.agents = Some(provider.agents);
         }
         parts
     }
 }
+
+/// Adapt a provider-owned generator to the Workspace and Git summary consumption port.
+///
+/// `generator` is the shared provider instance. Returns a source that forwards requests and
+/// shutdown directly, without adding a queue, worker, cache, or independent lifetime.
+#[must_use]
+pub fn summary_source(
+    generator: Arc<dyn provider::summary::SummaryGenerator>,
+) -> Arc<dyn metadata::ports::generation::SummarySource> {
+    Arc::new(SummarySource(generator))
+}
+
+#[derive(Debug)]
+struct SummarySource(Arc<dyn provider::summary::SummaryGenerator>);
+
+impl metadata::ports::generation::SummarySource for SummarySource {
+    fn generate(
+        &self,
+        request: model::summary::SummaryRequest,
+    ) -> model::summary::SummaryFuture<'_> {
+        self.0.generate(request)
+    }
+    fn shutdown(&self) {
+        self.0.shutdown();
+    }
+}
+
+#[cfg(test)]
+mod tests;

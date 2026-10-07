@@ -48,7 +48,8 @@ pub struct GitOptions {
     /// Branch creation or existing checkout.
     pub action: Option<GitAction>,
     /// Forge-specific change request selection.
-    pub checkout_source: Option<metadata::protocol::worktree_source::ChangeRequestCheckoutSource>,
+    pub checkout_source:
+        Option<model::workspace::protocol::worktree_source::ChangeRequestCheckoutSource>,
     /// Legacy GitHub change request selection.
     pub github_pr_number: Option<u64>,
 }
