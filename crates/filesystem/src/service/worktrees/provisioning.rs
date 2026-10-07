@@ -2,7 +2,7 @@
 
 use std::sync::{Arc, Mutex};
 
-use metadata::ports::worktrees::{
+use model::workspace::worktrees::{
     CreatedWorktreeWorkspace, DirectoryGit, WorktreeAction, WorktreeCreation,
     WorktreeCreationError, WorktreeProvisioning,
 };

@@ -4,14 +4,25 @@ use std::sync::{Arc, Mutex};
 
 use model::summary::SummarySelection;
 use model::workspace::lifecycle::{
-    WorkspaceCreation, WorkspaceDirectory, WorkspaceLifecycleError, WorkspaceNaming, WorkspaceSetup,
+    ProjectRegistration, WorkspaceCreation, WorkspaceDirectory, WorkspaceLifecycleError,
+    WorkspaceNaming, WorkspaceSetup,
 };
-use model::workspace::records::PersistedWorkspaceRecord;
+use model::workspace::records::{PersistedProjectRecord, PersistedWorkspaceRecord};
 use model::workspace::worktrees::WorktreeProvisioning;
 
 use super::directory::Directory;
 use super::workspace_automation::WorkspaceAutomation;
 use super::workspace_names::WorkspaceNames;
+
+impl ProjectRegistration for Directory {
+    fn register_project(
+        &self,
+        path: &str,
+        timestamp: &str,
+    ) -> Result<PersistedProjectRecord, WorkspaceLifecycleError> {
+        Directory::add_project(self, path, timestamp).map_err(failure)
+    }
+}
 
 impl WorkspaceDirectory for Directory {
     fn create_workspace(

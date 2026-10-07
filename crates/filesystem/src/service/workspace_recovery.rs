@@ -1,8 +1,8 @@
 //! Archived Workspace inspection and exact-placement recovery.
-use metadata::model::registry::{
+use model::workspace::records::{
     PersistedProjectRecord, PersistedWorkspaceKind, PersistedWorkspaceRecord,
 };
-use metadata::ports::registry::{ProjectRegistry, RegistryError, WorkspaceRegistry};
+use model::workspace::registry::{ProjectRegistry, RegistryError, WorkspaceRegistry};
 
 use crate::ports::workspace_recovery::{ArchivedWorktreeRestore, WorkspaceRecoveryRuntime};
 /// Archived Workspace recovery action.

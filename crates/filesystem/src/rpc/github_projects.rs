@@ -7,8 +7,8 @@ pub const METHODS: &[MethodSpec] = &[
 ];
 
 use chrono::{SecondsFormat, Utc};
-use metadata::rpc::directory::project_descriptor;
 use model::methods::MethodSpec;
+use model::workspace::protocol::projection::project_descriptor;
 use serde::Serialize;
 use serde_json::Value;
 

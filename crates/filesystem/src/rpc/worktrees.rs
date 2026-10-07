@@ -100,7 +100,7 @@ fn create(worktrees: &Worktrees, request: WorktreeCreateRequest) -> Result<Dispa
             .map(crate::protocol::worktrees::ChangeRequestCheckoutSource::into_intent)
             .or_else(|| {
                 request.github_pr_number.map(|number| {
-                    metadata::ports::worktrees::WorktreeChangeRequest {
+                    model::workspace::worktrees::WorktreeChangeRequest {
                         forge: Some("github".to_owned()),
                         number,
                         project_path: None,
@@ -113,14 +113,14 @@ fn create(worktrees: &Worktrees, request: WorktreeCreateRequest) -> Result<Dispa
     match worktrees.create(&input, &timestamp()) {
         Ok(created) => {
             if let Some(context) = context
-                && let Some(source) = metadata::service::workspace_names::first_agent_source(
+                && let Some(source) = model::workspace::naming::first_agent_source(
                     context.prompt.as_deref(),
                     &context.attachments,
                 )
             {
                 worktrees.name_workspace(created.workspace.workspace_id.clone(), source);
             }
-            let descriptor = metadata::rpc::directory::workspace_descriptor(
+            let descriptor = model::workspace::protocol::projection::workspace_descriptor(
                 &created.workspace,
                 Some(&created.project),
             );

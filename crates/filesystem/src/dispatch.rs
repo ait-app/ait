@@ -25,7 +25,7 @@ pub const CHECKOUT_METHODS: &[MethodSpec] = &[
     MethodSpec::request("checkout.stash.list.request"),
 ];
 
-mod metadata;
+mod summary;
 
 use std::sync::{Arc, Mutex};
 
@@ -38,7 +38,7 @@ mod requests;
 #[derive(Debug)]
 pub struct State {
     /// Optional model-backed wording service; unavailable generation uses deterministic fallbacks.
-    pub summary_source: Option<Arc<dyn ::metadata::ports::generation::SummarySource>>,
+    pub summary_source: Option<Arc<dyn model::summary::SummarySource>>,
     /// Installed skills service.
     pub skills: Option<Arc<Mutex<crate::service::skills::Skills>>>,
     /// Shared Tokio admission, cancellation and task tracking.
@@ -56,9 +56,8 @@ pub struct State {
     /// Installed workspace recovery service.
     pub workspace_recovery:
         Option<Arc<Mutex<crate::service::workspace_recovery::WorkspaceRecovery>>>,
-    /// Installed workspace automation service.
-    pub workspace_automation:
-        Option<Arc<Mutex<::metadata::service::workspace_automation::WorkspaceAutomation>>>,
+    /// Host-supplied setup trigger sharing the owning service and synchronization.
+    pub workspace_setup: Option<Arc<dyn model::workspace::lifecycle::WorkspaceSetup>>,
 }
 
 impl std::ops::Deref for State {
@@ -168,8 +167,8 @@ async fn worktrees(pending: &mut Option<Context<'_>>, state: &State) -> Result<(
         && let Some(workspace_id) = reply.created_workspace_id.clone()
     {
         let _ = state
-            .run(
-                state.workspace_automation.clone(),
+            .run_shared(
+                state.workspace_setup.clone(),
                 ErrorCode::RegistryIo,
                 move |automation| {
                     automation
@@ -222,7 +221,7 @@ async fn checkout(
         return Err(DispatchError::NotImplemented);
     };
     if let Err(error) =
-        metadata::fill(state, &context.request.method, &mut context.request.params).await
+        summary::fill(state, &context.request.method, &mut context.request.params).await
     {
         return context.respond(Err(error)).map_err(Into::into);
     }

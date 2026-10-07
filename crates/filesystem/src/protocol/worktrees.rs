@@ -1,6 +1,6 @@
 //! Paseo worktree request and response payloads exposed under canonical method names.
 
-use metadata::protocol::workspace::WorkspaceDescriptorPayload;
+use model::workspace::protocol::workspace::WorkspaceDescriptorPayload;
 use serde::{Deserialize, Deserializer, Serialize};
 use serde_json::Value;
 
@@ -120,7 +120,7 @@ pub enum WorktreeCreateAction {
     Checkout,
 }
 
-pub use metadata::protocol::worktree_source::{
+pub use model::workspace::protocol::worktree_source::{
     ChangeRequestCheckoutKind, ChangeRequestCheckoutSource,
 };
 

@@ -1,10 +1,10 @@
-use metadata::ports::worktrees::{WorktreeAction, WorktreeCreation, WorktreeProvisioning};
+use model::workspace::worktrees::{WorktreeAction, WorktreeCreation, WorktreeProvisioning};
 
 use super::*;
 
 #[test]
 fn legacy_directory_placement_normalizes_the_new_branch_before_using_the_git_owner() {
-    use metadata::ports::worktrees::DirectoryGit;
+    use model::workspace::worktrees::DirectoryGit;
     let managed = Managed::default();
     let adapter = WorkspaceWorktrees::new(Arc::new(Mutex::new(service(
         &Projects::default(),
@@ -164,7 +164,7 @@ fn unified_creation_validates_sources_before_git_side_effects() {
         "archived_project"
     );
     input.project_id = None;
-    input.checkout_source = Some(metadata::ports::worktrees::WorktreeChangeRequest {
+    input.checkout_source = Some(model::workspace::worktrees::WorktreeChangeRequest {
         forge: Some("gitlab".into()),
         number: 1,
         project_path: None,

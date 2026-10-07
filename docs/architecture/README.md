@@ -12,7 +12,7 @@ Electron 位于 `apps/desktop`；`apps/mobile` 提供桌面、浏览器与移动
 | `model`      | 公共契约、请求与事件资源、创建回执和文件存储 | 无                                     |
 | `protocol`   | WebSocket envelope、版本与能力协商           | `model`                                |
 | `metadata`   | Project/Workspace 目录、标签、配置和自动化   | `model`                                |
-| `filesystem` | 文件、Git、worktree、Forge 和技能安装        | `metadata`、`model`                    |
+| `filesystem` | 文件、Git、worktree、Forge 和技能安装        | `model`                                |
 | `provider`   | 原生 Provider 会话、执行、历史和摘要生成     | `domain`、`model`                      |
 | `terminal`   | PTY、终端快照、活动和连接订阅                | `model`                                |
 | `voice`      | 语音、听写和离线推理                         | `model`                                |
@@ -38,7 +38,7 @@ Electron 位于 `apps/desktop`；`apps/mobile` 提供桌面、浏览器与移动
 
 摘要生成能力由 `provider::SummaryGenerator` 声明，输入输出类型位于 `model::summary`。
 生成器通过自己的配置端口读取偏好，daemon 连接现有存储；API 将同一生成器适配为
-metadata 的消费端口 `SummarySource`，见
+model 的消费端口 `SummarySource`，见
 [ADR-100](../decisions/providers/adr-100-provider-summary-generator.md)。
 
 Provider 不依赖 metadata。共享 Workspace 记录、registry、活动与关注接口、worktree
@@ -50,7 +50,11 @@ provider。metadata 的旧共享路径只重导出 model 类型，没有第二�
 
 Terminal 同样直接使用 model 的 Workspace registry、活动契约和连接事件资源，
 不依赖 metadata；见 [ADR-102](../decisions/daemon/adr-102-terminal-model-dependency.md)。
-功能 crate 之间剩余的直接依赖是 filesystem → metadata。
+Filesystem 也只依赖 model：共享目录观察、Git/Forge 快照、摘要消费、身份与 descriptor
+纯函数归 model；Project 登记、命名和 setup 通过 `ProjectRegistration`、`WorkspaceNaming`
+与 `WorkspaceSetup` 注入 metadata 的现有服务。API 的 setup 适配器继续使用原有自动化锁，
+Runtime 保留阻塞执行、admission 和任务跟踪。功能 crate 之间没有直接依赖；见
+[ADR-103](../decisions/workspace/adr-103-filesystem-model-collaboration.md)。
 
 内置 Provider 由 `provider::Providers` 组装。具体客户端列表、启动配置、安装发现与辅助
 元数据生成能力留在 provider crate 内部；daemon 提供数据目录并连接服务与进程生命周期。

@@ -5,10 +5,10 @@ use std::path::PathBuf;
 use std::sync::{Arc, RwLock};
 use std::time::Duration;
 
-use metadata::ports::workspace_git::{WorkspaceGitObservation, WorkspaceGitObserver};
-use metadata::protocol::session::SessionEventKind;
-use metadata::service::session::SessionEvents;
 use model::Runtime;
+use model::session::SessionEvents;
+use model::session::protocol::SessionEventKind;
+use model::workspace::git::{WorkspaceGitObservation, WorkspaceGitObserver};
 use tokio::sync::{Notify, Semaphore};
 use tokio::task::JoinHandle;
 use tokio::time::MissedTickBehavior;

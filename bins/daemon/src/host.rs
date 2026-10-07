@@ -176,7 +176,7 @@ fn compose_services(
     } = compose_metadata(&config.data_dir, &workspace_registry, &providers);
     let worktrees = Arc::new(Mutex::new(
         compose_worktrees(config, &project_registry, &workspace_registry, &server_id)
-            .with_workspace_names(workspace_names.clone()),
+            .with_workspace_names(Arc::new(workspace_names.clone())),
     ));
     let WorkspaceServices {
         automation: workspace_automation,
@@ -266,7 +266,10 @@ fn compose_filesystem(
     Ok(filesystem::Service::new(filesystem::Dependencies {
         skills: compose_skills(&config.data_dir)?,
         workspace_recovery,
-        github_projects: GithubProjects::new(directory, Box::new(LocalGithubProjects::new())),
+        github_projects: GithubProjects::new(
+            Arc::new(directory),
+            Box::new(LocalGithubProjects::new()),
+        ),
         checkout,
         git_fetch,
         forge: Forge::new(Box::new(LocalForge::new())),

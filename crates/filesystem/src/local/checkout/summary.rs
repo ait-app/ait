@@ -4,7 +4,7 @@ use std::fs::{self, File};
 use std::io::Read;
 use std::path::Path;
 
-use metadata::ports::workspace_runtime::{WorkspaceDiffStat, WorkspaceGitSnapshot};
+use model::workspace::runtime::{WorkspaceDiffStat, WorkspaceGitSnapshot};
 
 use super::{
     CheckoutFailureKind, CheckoutRuntime, CheckoutRuntimeError, DIFF_OUTPUT_LIMIT, LocalCheckout,

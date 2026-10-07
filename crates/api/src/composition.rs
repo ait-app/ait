@@ -18,7 +18,7 @@ use crate::Services;
 #[derive(Default)]
 pub(super) struct Parts {
     /// Bounded model-backed wording generation shared by title and Git use cases.
-    pub(super) summary_source: Option<Arc<dyn metadata::ports::generation::SummarySource>>,
+    pub(super) summary_source: Option<Arc<dyn model::summary::SummarySource>>,
     /// First-prompt workspace naming with independently drained background work.
     pub(super) workspace_names: Option<metadata::service::workspace_names::WorkspaceNames>,
     /// Persistent timed Agent executions.
@@ -110,14 +110,28 @@ impl From<Services> for Parts {
 #[must_use]
 pub fn summary_source(
     generator: Arc<dyn provider::summary::SummaryGenerator>,
-) -> Arc<dyn metadata::ports::generation::SummarySource> {
+) -> Arc<dyn model::summary::SummarySource> {
     Arc::new(SummarySource(generator))
+}
+
+/// Adapt installed `automation` to setup requests sharing its existing lock and task owner.
+/// Returns none when automation is absent; no independent runtime or lock is created.
+pub(super) fn workspace_setup(
+    automation: Option<&Arc<Mutex<WorkspaceAutomation>>>,
+) -> Option<Arc<dyn model::workspace::lifecycle::WorkspaceSetup>> {
+    automation.map(|automation| {
+        Arc::new(
+            metadata::service::workspace_collaboration::SharedWorkspaceSetup::new(
+                automation.clone(),
+            ),
+        ) as Arc<dyn model::workspace::lifecycle::WorkspaceSetup>
+    })
 }
 
 #[derive(Debug)]
 struct SummarySource(Arc<dyn provider::summary::SummaryGenerator>);
 
-impl metadata::ports::generation::SummarySource for SummarySource {
+impl model::summary::SummarySource for SummarySource {
     fn generate(
         &self,
         request: model::summary::SummaryRequest,

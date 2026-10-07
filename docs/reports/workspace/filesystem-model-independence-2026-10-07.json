@@ -1,0 +1,2577 @@
+{
+  "base_revision": "612a816f99cbe29797b795fccb64dc64bf612afc",
+  "scope": "Filesystem metadata-independence commit preparation; parent revision plus Rust sources identified by SHA-256, macOS arm64, default features",
+  "coverage": {
+    "commands": [
+      "cargo llvm-cov --workspace --html",
+      "cargo llvm-cov report --json --summary-only --output-path target/filesystem-commit-coverage.json",
+      "cargo llvm-cov report --lcov --output-path target/filesystem-commit-coverage.lcov"
+    ],
+    "scope": "Entire Rust workspace, default features, no extra file exclusions, 10 installed/authenticated Provider tests ignored by default; macOS arm64 only",
+    "workspace": {
+      "count": 58122,
+      "covered": 54897,
+      "percent": 94.45132652007845
+    },
+    "crates": {
+      "bins/daemon": {
+        "covered": 939,
+        "total": 983,
+        "percent": 95.52390640895219
+      },
+      "crates/api": {
+        "covered": 2005,
+        "total": 2162,
+        "percent": 92.73820536540241
+      },
+      "crates/browser": {
+        "covered": 715,
+        "total": 733,
+        "percent": 97.5443383356071
+      },
+      "crates/domain": {
+        "covered": 121,
+        "total": 121,
+        "percent": 100.0
+      },
+      "crates/filesystem": {
+        "covered": 11567,
+        "total": 12189,
+        "percent": 94.89703831323324
+      },
+      "crates/metadata": {
+        "covered": 6089,
+        "total": 6458,
+        "percent": 94.28615670486218
+      },
+      "crates/model": {
+        "covered": 2495,
+        "total": 2589,
+        "percent": 96.36925453843183
+      },
+      "crates/protocol": {
+        "covered": 63,
+        "total": 63,
+        "percent": 100.0
+      },
+      "crates/provider": {
+        "covered": 26287,
+        "total": 27995,
+        "percent": 93.89891051973567
+      },
+      "crates/relay": {
+        "covered": 422,
+        "total": 464,
+        "percent": 90.94827586206897
+      },
+      "crates/schedule": {
+        "covered": 826,
+        "total": 847,
+        "percent": 97.52066115702479
+      },
+      "crates/terminal": {
+        "covered": 1500,
+        "total": 1555,
+        "percent": 96.46302250803859
+      },
+      "crates/voice": {
+        "covered": 1868,
+        "total": 1963,
+        "percent": 95.16046867040245
+      }
+    },
+    "files": {
+      "bins/daemon/src/config.rs": {
+        "covered": 59,
+        "total": 66,
+        "percent": 89.39393939393939,
+        "sha256": "baa579f276232b511f5b02a545ea971f0d812f2974724cdefb97451d944ed417"
+      },
+      "bins/daemon/src/host.rs": {
+        "covered": 423,
+        "total": 434,
+        "percent": 97.46543778801843,
+        "sha256": "13e3b55aeaddcbdb76bff6553d409622eed59cfbd3f9e19d1f26a6eb93387a59"
+      },
+      "bins/daemon/src/host/catalog.rs": {
+        "covered": 23,
+        "total": 23,
+        "percent": 100.0,
+        "sha256": "6fbe0fa510e0afb125bc4390c976721951f9091dd17471c63a2b3db8a7eaea46"
+      },
+      "bins/daemon/src/host/schedule.rs": {
+        "covered": 240,
+        "total": 258,
+        "percent": 93.02325581395348,
+        "sha256": "451cd18298d64a6e9d77577b14af50a25ad9a6f42e7552eb9229e029cf2dc143"
+      },
+      "bins/daemon/src/host/summary.rs": {
+        "covered": 16,
+        "total": 16,
+        "percent": 100.0,
+        "sha256": "ad421e30f448aa4af529036855fb64867916f02fc4f0a20a3ea2eb16221ab289"
+      },
+      "bins/daemon/src/host/voice.rs": {
+        "covered": 83,
+        "total": 87,
+        "percent": 95.40229885057471,
+        "sha256": "954997c45cd6d5b485990528c384e7d5be1c151a8137caac2e0b40bd8da76ef6"
+      },
+      "bins/daemon/src/instance.rs": {
+        "covered": 39,
+        "total": 40,
+        "percent": 97.5,
+        "sha256": "a1176aef37e2bc59443aa83b48fe45759bd415e508339b1fca09fa31f5195630"
+      },
+      "bins/daemon/src/main.rs": {
+        "covered": 56,
+        "total": 59,
+        "percent": 94.91525423728814,
+        "sha256": "2a6e15b9633b8c260d4b819969c90a3e720a0974e6ee2c1fd6bb364cc84aa38b"
+      },
+      "crates/api/src/auth.rs": {
+        "covered": 93,
+        "total": 93,
+        "percent": 100.0,
+        "sha256": "4ff691589bdd7d106dad78ef1c7085e880a50aa39c5e1afaf3079517ac7ea1b4"
+      },
+      "crates/api/src/browser_auth.rs": {
+        "covered": 82,
+        "total": 82,
+        "percent": 100.0,
+        "sha256": "5aaba84bcd13616666717c2857b1f64801e3a986788ba4ccf3edc35d933af1bc"
+      },
+      "crates/api/src/capabilities.rs": {
+        "covered": 61,
+        "total": 61,
+        "percent": 100.0,
+        "sha256": "d91674c38907fff568b72b8c7d6a78dc27a7df1608092cfc76942dfc110d3363"
+      },
+      "crates/api/src/composition.rs": {
+        "covered": 63,
+        "total": 63,
+        "percent": 100.0,
+        "sha256": "2387a52504715761c1961be574cfb061fa678e4b66f831b6a1daa8edb8746a58"
+      },
+      "crates/api/src/connection.rs": {
+        "covered": 326,
+        "total": 354,
+        "percent": 92.09039548022598,
+        "sha256": "63a66b316929ff810416ccc9a7f508bac953980ee11f086d77ad6e61c69b01f2"
+      },
+      "crates/api/src/connection/creation_receipts.rs": {
+        "covered": 44,
+        "total": 44,
+        "percent": 100.0,
+        "sha256": "8af4919d4451728b9c327fa3eb701b0e857ce5346d4b069ef022cb7463524c45"
+      },
+      "crates/api/src/connection/dispatch.rs": {
+        "covered": 103,
+        "total": 117,
+        "percent": 88.03418803418803,
+        "sha256": "076044d89467cec05a1856681ecb37638da2dc8b312981785fea76b5a44b99cc"
+      },
+      "crates/api/src/connection/single.rs": {
+        "covered": 170,
+        "total": 216,
+        "percent": 78.70370370370371,
+        "sha256": "a7894ef1fbdd50b45e55ff3713d0c666b69c7e8e510d3fbaf4df9478fc4ec246"
+      },
+      "crates/api/src/connection/validation.rs": {
+        "covered": 61,
+        "total": 61,
+        "percent": 100.0,
+        "sha256": "82c23f3a2fd6da581238c21fca18bebb804483c756c67ec2cfbf97439c2543fa"
+      },
+      "crates/api/src/connection/workspace_archive.rs": {
+        "covered": 140,
+        "total": 144,
+        "percent": 97.22222222222221,
+        "sha256": "c71e9acee681046aecd49953088f15bf0e152318f77b3e9a2a9584e7c41d7aab"
+      },
+      "crates/api/src/connection/workspace_creation.rs": {
+        "covered": 196,
+        "total": 203,
+        "percent": 96.55172413793105,
+        "sha256": "9879f41f1b7036fe3fd270a07d167a7b6706e4e23bbdca7ff708d3d0c62a0df5"
+      },
+      "crates/api/src/files.rs": {
+        "covered": 66,
+        "total": 72,
+        "percent": 91.66666666666666,
+        "sha256": "ed9b658f494138763b3d5b454e67f80f9d66d8d2006e38ec82720e1dfc675eea"
+      },
+      "crates/api/src/lib.rs": {
+        "covered": 452,
+        "total": 485,
+        "percent": 93.1958762886598,
+        "sha256": "9fd5969d5d0b074cc6b9612bc04fb3112ba5310fd1b8f32bdd1d10076b47b012"
+      },
+      "crates/api/src/listener.rs": {
+        "covered": 31,
+        "total": 31,
+        "percent": 100.0,
+        "sha256": "1fa5a6228f97ebf11b6e8842a7b1c494be621e63be652fd736b7fd9a78973be4"
+      },
+      "crates/api/src/relay_rpc.rs": {
+        "covered": 41,
+        "total": 43,
+        "percent": 95.34883720930233,
+        "sha256": "10682926b28787eb7ea0710f3a987cad48fc49fa64e705c2f9d7baea44d0d06a"
+      },
+      "crates/api/src/terminal_activity.rs": {
+        "covered": 49,
+        "total": 52,
+        "percent": 94.23076923076923,
+        "sha256": "65261a2b0eeb5918aef0c9d459f8f258e03958bda158e4b363cf0d4b97212a30"
+      },
+      "crates/api/src/workspace_cleanup.rs": {
+        "covered": 27,
+        "total": 41,
+        "percent": 65.85365853658537,
+        "sha256": "400aaf1bd5bf57281a451a17ec442cf83ba671b5e73103f3eeb498f175dc35bf"
+      },
+      "crates/browser/src/broker.rs": {
+        "covered": 292,
+        "total": 300,
+        "percent": 97.33333333333334,
+        "sha256": "731e7603e0ea82a46ed7cff930180b182ad9bf0e0500174cbfb9fd9dca8ca740"
+      },
+      "crates/browser/src/capabilities.rs": {
+        "covered": 6,
+        "total": 6,
+        "percent": 100.0,
+        "sha256": "e3328afb6bf68443b0de033b24d60a7076b3372a9ba8294e953d6debee58e1d8"
+      },
+      "crates/browser/src/connection.rs": {
+        "covered": 22,
+        "total": 25,
+        "percent": 88.0,
+        "sha256": "880fe29e3531806f991a5e27868aaf520f957df2d20ef152110d5f363a36a7d5"
+      },
+      "crates/browser/src/dispatch.rs": {
+        "covered": 26,
+        "total": 27,
+        "percent": 96.29629629629629,
+        "sha256": "c6755b40e51e59a2f84a3ae4213c8b55b1807a724a4e3284111fb874d12b66d6"
+      },
+      "crates/browser/src/protocol.rs": {
+        "covered": 369,
+        "total": 375,
+        "percent": 98.4,
+        "sha256": "fae42b603fb3d4d36a02a93f3b1f20ff079096c3052e517cfe41cba110652fbc"
+      },
+      "crates/domain/src/agent.rs": {
+        "covered": 108,
+        "total": 108,
+        "percent": 100.0,
+        "sha256": "bf653cf3d7ff41a84380c41cb321fdc828d4ea7e32d84d21804b65d5be3c2adf"
+      },
+      "crates/domain/src/lib.rs": {
+        "covered": 13,
+        "total": 13,
+        "percent": 100.0,
+        "sha256": "95da0ea4bdea2d5db76f077e10d1d5fc175477acafacdbbbf765eee7313778d6"
+      },
+      "crates/filesystem/src/capabilities.rs": {
+        "covered": 17,
+        "total": 17,
+        "percent": 100.0,
+        "sha256": "fe3c565ede636f05196ed3a6041fd8d3510f606fdccd46f804be40e1731f7ede"
+      },
+      "crates/filesystem/src/connection.rs": {
+        "covered": 10,
+        "total": 10,
+        "percent": 100.0,
+        "sha256": "1040d3bf96d5eb033a675e6f78ad8dd4a393bd357afbf33c4bf6ffa0d22a3bae"
+      },
+      "crates/filesystem/src/connection/checkout.rs": {
+        "covered": 114,
+        "total": 116,
+        "percent": 98.27586206896551,
+        "sha256": "81869c021604cb0089c8c70f3bd3c80719090d2953a81e9f44fd804b7e8b47a8"
+      },
+      "crates/filesystem/src/connection/files.rs": {
+        "covered": 15,
+        "total": 15,
+        "percent": 100.0,
+        "sha256": "859c214210b91d02f4c88028286ab09d57316ff5166017b305cda597c810ae7b"
+      },
+      "crates/filesystem/src/connection/files/connection.rs": {
+        "covered": 242,
+        "total": 256,
+        "percent": 94.53125,
+        "sha256": "25e0229f405738714ce96f58527d428ac19a1bdade46ddc89637452ffddb630d"
+      },
+      "crates/filesystem/src/connection/files/transfer.rs": {
+        "covered": 77,
+        "total": 84,
+        "percent": 91.66666666666666,
+        "sha256": "1633b347dca99b10dd67d514f763e30783dd283776f8e0b6cf049c7d4134d211"
+      },
+      "crates/filesystem/src/dispatch.rs": {
+        "covered": 169,
+        "total": 181,
+        "percent": 93.37016574585635,
+        "sha256": "606e6a920b9763a0249485a27bea1ced7de6a02f807444c5df976da8a5f27bdf"
+      },
+      "crates/filesystem/src/dispatch/requests.rs": {
+        "covered": 141,
+        "total": 141,
+        "percent": 100.0,
+        "sha256": "6d90b22c1ce200a5b06cc1e3276ff1419e17cbce649bc91264f4c0f0e68f2d37"
+      },
+      "crates/filesystem/src/dispatch/summary.rs": {
+        "covered": 115,
+        "total": 127,
+        "percent": 90.5511811023622,
+        "sha256": "bab4fd4938856eda10eee3abd898865ac539044f5f698ab4c0a6b56f4c02ae7e"
+      },
+      "crates/filesystem/src/installation.rs": {
+        "covered": 9,
+        "total": 9,
+        "percent": 100.0,
+        "sha256": "f908f54b78d027fdaba762cfc2703fa12eba22bae47bddd6ad0bbfe9854e35ea"
+      },
+      "crates/filesystem/src/local/checkout.rs": {
+        "covered": 1518,
+        "total": 1622,
+        "percent": 93.5881627620222,
+        "sha256": "213b72698d04abb7e196ecbec1cc3526ab91662df902fc515fa3e19f3305c0f2"
+      },
+      "crates/filesystem/src/local/checkout/branch_status.rs": {
+        "covered": 28,
+        "total": 28,
+        "percent": 100.0,
+        "sha256": "a54719f43fa3e401101ef49a2bdbaf8b0670bf35868910556dda0622d79b8325"
+      },
+      "crates/filesystem/src/local/checkout/highlight.rs": {
+        "covered": 312,
+        "total": 314,
+        "percent": 99.36305732484077,
+        "sha256": "4621f582a1f1eff1854490e350776d1a38389ac1416fa0161ed43a1854b5187d"
+      },
+      "crates/filesystem/src/local/checkout/naming.rs": {
+        "covered": 29,
+        "total": 31,
+        "percent": 93.54838709677419,
+        "sha256": "70fac7d536711a9ca6f0a3baf82772626e4bc1d1f5a68ddd3f5ad381e2ff9986"
+      },
+      "crates/filesystem/src/local/checkout/summary.rs": {
+        "covered": 111,
+        "total": 118,
+        "percent": 94.0677966101695,
+        "sha256": "a720bbf2178a939a7292aef1d8a6721e51bc91b443b8c9518c2a7673f4a6c844"
+      },
+      "crates/filesystem/src/local/files.rs": {
+        "covered": 501,
+        "total": 528,
+        "percent": 94.88636363636364,
+        "sha256": "a416dd705f5d7f031621d4b4e73823cb4a1c53d5b91b717db0db8d4804b83963"
+      },
+      "crates/filesystem/src/local/files/search.rs": {
+        "covered": 184,
+        "total": 193,
+        "percent": 95.33678756476684,
+        "sha256": "5cc33a86a24e6aaf44376692dc843d0b59c1af1a020a7d27765efe70365024c5"
+      },
+      "crates/filesystem/src/local/files/upload.rs": {
+        "covered": 69,
+        "total": 75,
+        "percent": 92.0,
+        "sha256": "b53c170dcfd9b641b189ee96cbb0cb24e8f1e06e33db46020cafdfc1b5e834f0"
+      },
+      "crates/filesystem/src/local/forge.rs": {
+        "covered": 1124,
+        "total": 1178,
+        "percent": 95.41595925297113,
+        "sha256": "320ce109385c9c1520d095880f4fd915713cef66b2eb25167e0913f4919844d0"
+      },
+      "crates/filesystem/src/local/forge/gitlab.rs": {
+        "covered": 380,
+        "total": 398,
+        "percent": 95.47738693467338,
+        "sha256": "08716634070c72811f30da5e4c8a978cde0170e9ebde47dff0e9238247196deb"
+      },
+      "crates/filesystem/src/local/forge/gitlab/checkout.rs": {
+        "covered": 46,
+        "total": 49,
+        "percent": 93.87755102040816,
+        "sha256": "d30095a8e175bd0e8f043497139c6a8a565b0825147ba2028b14b1d85ed7678d"
+      },
+      "crates/filesystem/src/local/forge/gitlab/pipeline.rs": {
+        "covered": 190,
+        "total": 198,
+        "percent": 95.95959595959596,
+        "sha256": "613ba024865e47b35fe412898cfdcd429fb692831c4e9695ba1aaf6742072a06"
+      },
+      "crates/filesystem/src/local/forge/gitlab/status.rs": {
+        "covered": 102,
+        "total": 103,
+        "percent": 99.02912621359224,
+        "sha256": "1f9df21086c67a25ceb32c23382e5dde788f930a4e161bad69b79325ec63e1ed"
+      },
+      "crates/filesystem/src/local/forge/gitlab/timeline.rs": {
+        "covered": 131,
+        "total": 143,
+        "percent": 91.6083916083916,
+        "sha256": "dd0d2db6f9f8baf6008cfec808af3ed43001cf22cd2a59a4a47b8bb027aeaa54"
+      },
+      "crates/filesystem/src/local/forge/resolver.rs": {
+        "covered": 86,
+        "total": 88,
+        "percent": 97.72727272727273,
+        "sha256": "d0c727640bf06e169a7da607ccd669fc3e38e432e41b61ffb95426137759dbca"
+      },
+      "crates/filesystem/src/local/forge/worktree_checkout.rs": {
+        "covered": 199,
+        "total": 212,
+        "percent": 93.86792452830188,
+        "sha256": "c7572cb28b6523272b7f0de6576e712b27c7ecbf0dfc57ceac9cec0f11645035"
+      },
+      "crates/filesystem/src/local/git.rs": {
+        "covered": 41,
+        "total": 45,
+        "percent": 91.11111111111111,
+        "sha256": "cb2241cb03b4ef229b531937cd02541addca78eddcfa217fa9ba8830e6a81d9a"
+      },
+      "crates/filesystem/src/local/git_fetch.rs": {
+        "covered": 87,
+        "total": 91,
+        "percent": 95.6043956043956,
+        "sha256": "09b4b6dd2575e1975608d0c4946f2207a6316569d9b4186fa2b77d63a59f4c61"
+      },
+      "crates/filesystem/src/local/github_projects.rs": {
+        "covered": 237,
+        "total": 245,
+        "percent": 96.73469387755102,
+        "sha256": "9058ba4d16e2320755c63e285065f834bf378971c31ccdfe8a407b44307e6d46"
+      },
+      "crates/filesystem/src/local/provisioning.rs": {
+        "covered": 127,
+        "total": 137,
+        "percent": 92.7007299270073,
+        "sha256": "adaffc6e18535cf94849274392e981c9771bcdad14bfdbcc01dc9708b31745e8"
+      },
+      "crates/filesystem/src/local/skills.rs": {
+        "covered": 168,
+        "total": 176,
+        "percent": 95.45454545454545,
+        "sha256": "7dcea101aa4c9a695aceded94886877c3c78cada27c9582b3fbede7a9c5a4e5d"
+      },
+      "crates/filesystem/src/local/skills/transaction.rs": {
+        "covered": 159,
+        "total": 167,
+        "percent": 95.20958083832335,
+        "sha256": "6177989faf912d985bee1332a8b62f466b51af25254546fc31cd12859d45d8d8"
+      },
+      "crates/filesystem/src/local/skills/tree.rs": {
+        "covered": 236,
+        "total": 247,
+        "percent": 95.54655870445345,
+        "sha256": "48faef6fe5f501aff924dcc701dd7778002eb1b9f8b7282c2a4e2fec63c5614c"
+      },
+      "crates/filesystem/src/local/workspace_runtime.rs": {
+        "covered": 105,
+        "total": 116,
+        "percent": 90.51724137931035,
+        "sha256": "d663f98deff38d248204838a067d7eb9cd56dfc74b5ffb7bbacaf30e94cb19a0"
+      },
+      "crates/filesystem/src/local/workspace_runtime/forge.rs": {
+        "covered": 47,
+        "total": 49,
+        "percent": 95.91836734693877,
+        "sha256": "47178ae3dcf1b2adf59052ea4c936c1d81e911ed681506ef4e39867fc701e16a"
+      },
+      "crates/filesystem/src/local/workspace_runtime/reads.rs": {
+        "covered": 128,
+        "total": 145,
+        "percent": 88.27586206896552,
+        "sha256": "36ea9ee6e89ecaa59a1a5a8b7b4059f1588f6e5ad55eb2125356d239b5fb1835"
+      },
+      "crates/filesystem/src/local/worktrees.rs": {
+        "covered": 718,
+        "total": 778,
+        "percent": 92.2879177377892,
+        "sha256": "ae936a48d0919db46cd7c1c5e27c49712da379c2e4e4b7130fabad13a710d380"
+      },
+      "crates/filesystem/src/local/worktrees/change_request.rs": {
+        "covered": 112,
+        "total": 123,
+        "percent": 91.05691056910568,
+        "sha256": "e713b12c9457eaa47135edb4623aac44b2e557f9e960ed6cbb076c3980bf5a4c"
+      },
+      "crates/filesystem/src/local/worktrees/directory.rs": {
+        "covered": 61,
+        "total": 64,
+        "percent": 95.3125,
+        "sha256": "0714c0e51a67a6b524daf5a17d6ef68cc71412ef5dff54785f7849890f67409d"
+      },
+      "crates/filesystem/src/ports/files.rs": {
+        "covered": 3,
+        "total": 3,
+        "percent": 100.0,
+        "sha256": "0b7cd3afa502e9623ce6564c9b537868ef1a21c6f129c051f7a169c6c98a9b2a"
+      },
+      "crates/filesystem/src/ports/forge.rs": {
+        "covered": 3,
+        "total": 3,
+        "percent": 100.0,
+        "sha256": "8cc941da244511605c1145b395d09750a5d66f0a1cf304559c27c69bb4a839a2"
+      },
+      "crates/filesystem/src/ports/worktrees.rs": {
+        "covered": 8,
+        "total": 8,
+        "percent": 100.0,
+        "sha256": "4f5ff094ecb7c096e86731fda222220c16da2f598b1560f90c534ed05135e7fb"
+      },
+      "crates/filesystem/src/protocol.rs": {
+        "covered": 3,
+        "total": 3,
+        "percent": 100.0,
+        "sha256": "ad67a997751d17e41ffdd9038361ccf3331828f652b404fc4b391c6c05342476"
+      },
+      "crates/filesystem/src/protocol/checkout.rs": {
+        "covered": 24,
+        "total": 24,
+        "percent": 100.0,
+        "sha256": "2eb7c20955683294bb4e7be2d98703c9fa608b8ad958214ab6b0517590de948d"
+      },
+      "crates/filesystem/src/protocol/file_transfer.rs": {
+        "covered": 47,
+        "total": 49,
+        "percent": 95.91836734693877,
+        "sha256": "d9906ce3e9264e89ab2cb1fb2c6c3ab5770c26bb5c74828de5381a1c5d1fb8eb"
+      },
+      "crates/filesystem/src/protocol/skills.rs": {
+        "covered": 22,
+        "total": 22,
+        "percent": 100.0,
+        "sha256": "435a54dd1bdd13984ac15b335acfcac018f8451eee5bfdf2af3504df4e230348"
+      },
+      "crates/filesystem/src/protocol/worktrees.rs": {
+        "covered": 90,
+        "total": 91,
+        "percent": 98.9010989010989,
+        "sha256": "e9657f0d3c4227b646980c2d3d25be479d95b0668c0a552b7c6e4c0eddcbf29d"
+      },
+      "crates/filesystem/src/rpc.rs": {
+        "covered": 4,
+        "total": 8,
+        "percent": 50.0,
+        "sha256": "c1bbc008a515592556316ddfe73d6889e393a13e4f968cba8a6e049a3c7dec46"
+      },
+      "crates/filesystem/src/rpc/budget.rs": {
+        "covered": 10,
+        "total": 13,
+        "percent": 76.92307692307693,
+        "sha256": "7c554f7b9c5a1f9392d76f56ed167c1b1e6503f28f7ff8dd89bef958a6b0ba0f"
+      },
+      "crates/filesystem/src/rpc/checkout.rs": {
+        "covered": 518,
+        "total": 553,
+        "percent": 93.67088607594938,
+        "sha256": "f69debc2ee7c3433dc7174a969d86b21949c202070c5ebf8027a08916d286dc9"
+      },
+      "crates/filesystem/src/rpc/files.rs": {
+        "covered": 301,
+        "total": 312,
+        "percent": 96.47435897435898,
+        "sha256": "75ec8c9f1b59ca33a5263dd230e47b93852a862da4803c1e4091c6d1a3672239"
+      },
+      "crates/filesystem/src/rpc/forge.rs": {
+        "covered": 455,
+        "total": 462,
+        "percent": 98.48484848484848,
+        "sha256": "009463c73b7fdd453492d2b27e170c35eb06c902ae550b073fdd9f9e058d97c1"
+      },
+      "crates/filesystem/src/rpc/github_projects.rs": {
+        "covered": 78,
+        "total": 88,
+        "percent": 88.63636363636364,
+        "sha256": "9af23f5cf6d458dfed1c4fc1a9d708103675ce48cf50d85c4797e98068b7254c"
+      },
+      "crates/filesystem/src/rpc/workspace_recovery.rs": {
+        "covered": 77,
+        "total": 84,
+        "percent": 91.66666666666666,
+        "sha256": "561bef96289e615f709c98b08a596496fe0e675d6873a5fcd0e4654f2f6752ca"
+      },
+      "crates/filesystem/src/rpc/worktrees.rs": {
+        "covered": 169,
+        "total": 173,
+        "percent": 97.6878612716763,
+        "sha256": "9f22c9ca78ef4b934f523fe83e0bc0966a57fe01202a3d36ec1fb06797182dfa"
+      },
+      "crates/filesystem/src/service/checkout.rs": {
+        "covered": 158,
+        "total": 169,
+        "percent": 93.49112426035504,
+        "sha256": "88a6e2b105d616380b210910942702fefa57986d4b17705652ab0e7e1634d32b"
+      },
+      "crates/filesystem/src/service/files.rs": {
+        "covered": 47,
+        "total": 47,
+        "percent": 100.0,
+        "sha256": "c8b462d88f8e14e39cfe2786d1dd4a5cfd1df001c8aad933f55db8f52e49b486"
+      },
+      "crates/filesystem/src/service/forge.rs": {
+        "covered": 94,
+        "total": 94,
+        "percent": 100.0,
+        "sha256": "154c4e6425c9d57ae7adf1eb0523d43ebe9e2aefd478b102c01282e1a62a7e58"
+      },
+      "crates/filesystem/src/service/git_fetch.rs": {
+        "covered": 255,
+        "total": 264,
+        "percent": 96.5909090909091,
+        "sha256": "e33db03ee6674d485a04dcc98727733a3306e05bbdeb3977367938c38e32ab77"
+      },
+      "crates/filesystem/src/service/github_projects.rs": {
+        "covered": 108,
+        "total": 109,
+        "percent": 99.08256880733946,
+        "sha256": "472cce875b4a29c6625bbd3ee801bc7bb8a48c8be86c96de18f20fe0805278ca"
+      },
+      "crates/filesystem/src/service/skills.rs": {
+        "covered": 82,
+        "total": 82,
+        "percent": 100.0,
+        "sha256": "e8d4bc242bc67a5df708ed2af850ee79a2cb47f0e1a710ea5c53281e373869f9"
+      },
+      "crates/filesystem/src/service/transfer.rs": {
+        "covered": 17,
+        "total": 17,
+        "percent": 100.0,
+        "sha256": "22579d6d7a382504ef82bc460c0d62c337e554a5d90fb417236fc50f83a61df6"
+      },
+      "crates/filesystem/src/service/uploads.rs": {
+        "covered": 63,
+        "total": 63,
+        "percent": 100.0,
+        "sha256": "7e3ac6644ac8cbaead26a6a8fced4a405cab17725db94f316cc52f48909e3d7c"
+      },
+      "crates/filesystem/src/service/workspace_recovery.rs": {
+        "covered": 162,
+        "total": 187,
+        "percent": 86.63101604278076,
+        "sha256": "19bc88169aaba0901773d4d70955089ad61e660d25c9b157d9b12790b1380887"
+      },
+      "crates/filesystem/src/service/worktrees.rs": {
+        "covered": 497,
+        "total": 505,
+        "percent": 98.41584158415841,
+        "sha256": "5335171e270974675dcd6c611c18821481a7eb9bd4394e4dac4e5fe878df72c0"
+      },
+      "crates/filesystem/src/service/worktrees/provisioning.rs": {
+        "covered": 127,
+        "total": 139,
+        "percent": 91.36690647482014,
+        "sha256": "10835271185ba20d6aa258662acea833b8589944a76c636cf304f3fd182c3ca9"
+      },
+      "crates/metadata/src/capabilities.rs": {
+        "covered": 18,
+        "total": 18,
+        "percent": 100.0,
+        "sha256": "c2d79cf30fe60b811b6a6e6222dbf2bef2d9e6e9c52a2f52f2402b232d5f844c"
+      },
+      "crates/metadata/src/connection.rs": {
+        "covered": 32,
+        "total": 35,
+        "percent": 91.42857142857143,
+        "sha256": "3d81d1d47d2fd2e6fae7643c4c510acd2802f2ad5f1f57e61a18161afbf65026"
+      },
+      "crates/metadata/src/connection/creation.rs": {
+        "covered": 115,
+        "total": 121,
+        "percent": 95.0413223140496,
+        "sha256": "8fb5d253bcb40c8218fb2f3d8b99079523ef753a922140d9d1d3cc9d23b57bdf"
+      },
+      "crates/metadata/src/connection/daemon.rs": {
+        "covered": 35,
+        "total": 35,
+        "percent": 100.0,
+        "sha256": "25a5db4d840cc68cb1c63a47963db9533d33c9e4c4ccb1d1e3b687cf21a8a16b"
+      },
+      "crates/metadata/src/connection/directory.rs": {
+        "covered": 65,
+        "total": 70,
+        "percent": 92.85714285714286,
+        "sha256": "9f4ab043cf0cd648ab2d88c8a6951e5f9d1f8393c633f0fcf30e37b8af3b625c"
+      },
+      "crates/metadata/src/connection/push.rs": {
+        "covered": 63,
+        "total": 65,
+        "percent": 96.92307692307692,
+        "sha256": "1d547de3b88c2b058f92064676f6fd840003cbac42325f245378706181e76f00"
+      },
+      "crates/metadata/src/connection/session.rs": {
+        "covered": 88,
+        "total": 94,
+        "percent": 93.61702127659576,
+        "sha256": "1097960cc346f765649bd6d2d8861c233a277879638ee67b8e351e443f7f9e52"
+      },
+      "crates/metadata/src/connection/workspace_labels.rs": {
+        "covered": 27,
+        "total": 27,
+        "percent": 100.0,
+        "sha256": "dab06001918bdf171b53722f44fd998bc428777b635425811d67974a534dfcee"
+      },
+      "crates/metadata/src/dispatch.rs": {
+        "covered": 217,
+        "total": 239,
+        "percent": 90.7949790794979,
+        "sha256": "d53bbcf25669840a8e4364ac9cb543205e65fc72985b8f31bb8d5a5827b716d2"
+      },
+      "crates/metadata/src/dispatch/requests.rs": {
+        "covered": 199,
+        "total": 201,
+        "percent": 99.00497512437812,
+        "sha256": "e5695418b62b0d72cf8ff4785b5b55373d21df7152876da164a2af9b0e2be1e0"
+      },
+      "crates/metadata/src/installation.rs": {
+        "covered": 6,
+        "total": 6,
+        "percent": 100.0,
+        "sha256": "4a3d407b9ee291196ef75465413bf850ef4ff107c10571f5a95145afb4e2c84c"
+      },
+      "crates/metadata/src/local/workspace_automation.rs": {
+        "covered": 576,
+        "total": 667,
+        "percent": 86.3568215892054,
+        "sha256": "d14857cfa68c3833226f5ff21cc3668c25702eaea58b7371fd0efe5d166a3f62"
+      },
+      "crates/metadata/src/local/workspace_automation/retirement.rs": {
+        "covered": 51,
+        "total": 65,
+        "percent": 78.46153846153847,
+        "sha256": "0f8885b3bdc1801ea271fe218768b500d5337190364c7d95bb6f1bf0c3694da9"
+      },
+      "crates/metadata/src/ports/workspace_automation.rs": {
+        "covered": 1,
+        "total": 1,
+        "percent": 100.0,
+        "sha256": "de2ee9c8b0540ad2f0cfcb8b453e88569adf2d7781258a67188caf9fa1637af6"
+      },
+      "crates/metadata/src/protocol/daemon.rs": {
+        "covered": 160,
+        "total": 161,
+        "percent": 99.37888198757764,
+        "sha256": "e1dde3efa76cf6e8167f97edbee47ceb5e60cb2b52d347dd5a5b72fb999d91f1"
+      },
+      "crates/metadata/src/protocol/project_config.rs": {
+        "covered": 156,
+        "total": 156,
+        "percent": 100.0,
+        "sha256": "10c5e7cd8605bc2b345b66ff3363fcad4c741f8fbc69699fc6d9798fbf637ce1"
+      },
+      "crates/metadata/src/rpc.rs": {
+        "covered": 18,
+        "total": 25,
+        "percent": 72.0,
+        "sha256": "ce0154a0100b8dad85af9f839780174773d5eb30c7f10aacfc302ecce82967de"
+      },
+      "crates/metadata/src/rpc/daemon.rs": {
+        "covered": 126,
+        "total": 129,
+        "percent": 97.67441860465115,
+        "sha256": "71cd448ea2f11d58b500e8de86f6cfb4996d727d0c08c7a544661e579fe570b8"
+      },
+      "crates/metadata/src/rpc/directory.rs": {
+        "covered": 609,
+        "total": 693,
+        "percent": 87.87878787878788,
+        "sha256": "3b9ddfd18f7e281875f1eb45c1d0776cad4afbf23a5b88830fa10a5147233f16"
+      },
+      "crates/metadata/src/rpc/directory/listing.rs": {
+        "covered": 273,
+        "total": 276,
+        "percent": 98.91304347826086,
+        "sha256": "6882d8ad9cdb2f559a1985f360f80eab4dbe839b6617146b9ce296e3722c0dba"
+      },
+      "crates/metadata/src/rpc/directory/pagination.rs": {
+        "covered": 84,
+        "total": 93,
+        "percent": 90.32258064516128,
+        "sha256": "0bdc49a19d6f9400080efa64cc6c06c389364ee8976713ba81ca13b2080c110d"
+      },
+      "crates/metadata/src/rpc/directory/runtime.rs": {
+        "covered": 88,
+        "total": 88,
+        "percent": 100.0,
+        "sha256": "bc1e5cfc0b996dc435e3f46e47fc8c3ca754a8d29dd4165762277288e67ceab0"
+      },
+      "crates/metadata/src/rpc/editor.rs": {
+        "covered": 15,
+        "total": 15,
+        "percent": 100.0,
+        "sha256": "b2f44e3a8a2024bf18028d64b30b8c6dd91e3e415ad152a41f533e91d30c5678"
+      },
+      "crates/metadata/src/rpc/server.rs": {
+        "covered": 10,
+        "total": 10,
+        "percent": 100.0,
+        "sha256": "93b0844ed3066354ca73d6481edd13713019972ec5adb74b3ea706ee4d6031ec"
+      },
+      "crates/metadata/src/rpc/workspace_automation.rs": {
+        "covered": 170,
+        "total": 186,
+        "percent": 91.39784946236558,
+        "sha256": "0b7bd5f03a0e9e40e7c1719fc56f758182f6be16c6d6edebbac9ec30a688ff16"
+      },
+      "crates/metadata/src/rpc/workspace_labels.rs": {
+        "covered": 256,
+        "total": 257,
+        "percent": 99.61089494163424,
+        "sha256": "fc9f003ee0a1b31714ad4c2c641021e2038d81d564eee8e4172d18cce5ef0a0e"
+      },
+      "crates/metadata/src/rpc/workspace_state.rs": {
+        "covered": 63,
+        "total": 71,
+        "percent": 88.73239436619718,
+        "sha256": "4145d2a7953215f818895e1248dfd7d6cfd9ba72be28bb0b0e5f4f5084a5e73e"
+      },
+      "crates/metadata/src/service/daemon.rs": {
+        "covered": 80,
+        "total": 86,
+        "percent": 93.02325581395348,
+        "sha256": "3974a509762fd084769b28ebc98745fe5c88ec5c45a3d93fa877c7c7d1d5a1b0"
+      },
+      "crates/metadata/src/service/directory.rs": {
+        "covered": 776,
+        "total": 789,
+        "percent": 98.35234474017744,
+        "sha256": "648c2c1035ef34b27e47e8649d4f0ec843a581a82f3d78d3533cff3105f1f3b2"
+      },
+      "crates/metadata/src/service/directory/activity.rs": {
+        "covered": 64,
+        "total": 64,
+        "percent": 100.0,
+        "sha256": "58eb35f77db98afd76690a2ef6cc5132a0229e3ba2a70912b2a9b3de7836e0de"
+      },
+      "crates/metadata/src/service/push.rs": {
+        "covered": 110,
+        "total": 111,
+        "percent": 99.09909909909909,
+        "sha256": "108a9f24ae36b0997ae7f53293e1a36f293631c42489924e1334d70ad240908c"
+      },
+      "crates/metadata/src/service/workspace_automation.rs": {
+        "covered": 156,
+        "total": 167,
+        "percent": 93.4131736526946,
+        "sha256": "9bbaddf61814850bf517f5672ed8753c0a7df128e85662d1ce984090e0df7603"
+      },
+      "crates/metadata/src/service/workspace_collaboration.rs": {
+        "covered": 44,
+        "total": 44,
+        "percent": 100.0,
+        "sha256": "cba1f0631903797c67da2072d773726d5775e29905614d734d70e05aedc43e58"
+      },
+      "crates/metadata/src/service/workspace_labels.rs": {
+        "covered": 430,
+        "total": 453,
+        "percent": 94.92273730684326,
+        "sha256": "491f86c8910c4393fbd58a16b59c9f27fff44dd43cdbe01cb6f1608a4c668010"
+      },
+      "crates/metadata/src/service/workspace_names.rs": {
+        "covered": 114,
+        "total": 118,
+        "percent": 96.61016949152543,
+        "sha256": "bbb40acd646e90b0e77d3edd139709bd8f400beacb1d6ec07b928a6963f09ac1"
+      },
+      "crates/metadata/src/service/workspace_state.rs": {
+        "covered": 108,
+        "total": 111,
+        "percent": 97.2972972972973,
+        "sha256": "e6eb366679a36c787ebad9dcd11b92cafbefbf068ced71e2c28eee8511067343"
+      },
+      "crates/metadata/src/storage/daemon_config.rs": {
+        "covered": 326,
+        "total": 337,
+        "percent": 96.73590504451039,
+        "sha256": "08b1244ec3972803a650475e86f09e14e53a911ce2a2010eb9d77e97e9b9623c"
+      },
+      "crates/metadata/src/storage/project_config.rs": {
+        "covered": 79,
+        "total": 84,
+        "percent": 94.04761904761905,
+        "sha256": "f32329dfd308ec88d9d34a6cdbe3e89b59584ddb02aded63d06a2ac6140e8ca8"
+      },
+      "crates/metadata/src/storage/project_icon.rs": {
+        "covered": 209,
+        "total": 212,
+        "percent": 98.58490566037736,
+        "sha256": "3764b103e2d3e5c01496382dbb7804b3e643b2134b4a6c817cdcc8fff753a7e6"
+      },
+      "crates/metadata/src/storage/push.rs": {
+        "covered": 47,
+        "total": 51,
+        "percent": 92.15686274509804,
+        "sha256": "c5676e80d8e42fbe16c6a67862bb5ace856730508d28eb0848c95bb24b0e73e5"
+      },
+      "crates/metadata/src/storage/server_identity.rs": {
+        "covered": 25,
+        "total": 27,
+        "percent": 92.5925925925926,
+        "sha256": "9abf06fae635a2cdcdc7f83506c17f378c05708bd8d5510d09c871fb3808a2e8"
+      },
+      "crates/model/src/changes.rs": {
+        "covered": 10,
+        "total": 10,
+        "percent": 100.0,
+        "sha256": "d27f7d37fdd4821514024b82ef95715762ab0c2b7f0aca2d3a68f514abd8d0a2"
+      },
+      "crates/model/src/context.rs": {
+        "covered": 54,
+        "total": 54,
+        "percent": 100.0,
+        "sha256": "e78f40000d0a49334d6bcc99db4d3b5dcd2885627495cba1436094188ae9f3f7"
+      },
+      "crates/model/src/creation.rs": {
+        "covered": 265,
+        "total": 268,
+        "percent": 98.88059701492537,
+        "sha256": "d8cbfa9d1200886628e9a180219cfae23297665c9812778fa5d7da1f7561b065"
+      },
+      "crates/model/src/creation/protocol.rs": {
+        "covered": 5,
+        "total": 5,
+        "percent": 100.0,
+        "sha256": "ed6bf9f24a676d48370b2e0f9654644458eb06e46057ceff187839fbb3e99e94"
+      },
+      "crates/model/src/directory_sync.rs": {
+        "covered": 88,
+        "total": 92,
+        "percent": 95.65217391304348,
+        "sha256": "134589f4949af56d2f3335866fe81620b934acfc39d69d4a827a6ee1198024f6"
+      },
+      "crates/model/src/events.rs": {
+        "covered": 112,
+        "total": 116,
+        "percent": 96.55172413793105,
+        "sha256": "3c4a9b31961498dbf183ac274c6e1b7f34370c032884c5fd5a88bed59b2dc7bc"
+      },
+      "crates/model/src/lib.rs": {
+        "covered": 3,
+        "total": 3,
+        "percent": 100.0,
+        "sha256": "af2a52e5f0ccba0c1775500209d99140909aa0d308b6c296e639871559123964"
+      },
+      "crates/model/src/message.rs": {
+        "covered": 31,
+        "total": 38,
+        "percent": 81.57894736842105,
+        "sha256": "a4cb9ac3967014e90ba4031ddc780ae154b7514c9c12f764ba57d2555ba3e32c"
+      },
+      "crates/model/src/methods.rs": {
+        "covered": 18,
+        "total": 18,
+        "percent": 100.0,
+        "sha256": "ae83a5fd61c944fbb8e855b0e563d3ae794798489fb7cc3e4c370b59c87f4ccd"
+      },
+      "crates/model/src/outbound.rs": {
+        "covered": 130,
+        "total": 138,
+        "percent": 94.20289855072464,
+        "sha256": "f45ca32b81bd4eeca6993495846520583e7dfbb2539a6e2ed0132467fbbc187b"
+      },
+      "crates/model/src/pagination.rs": {
+        "covered": 121,
+        "total": 123,
+        "percent": 98.37398373983739,
+        "sha256": "96931153007dedcc4fcec1e82930088f11bf3ba92c8d343a5b2e869a40fed8b5"
+      },
+      "crates/model/src/pagination/collation.rs": {
+        "covered": 26,
+        "total": 26,
+        "percent": 100.0,
+        "sha256": "5d5a5423d8de24408db9d2b5296533bc0b03a9dead8d6c24c4185d4972ae2537"
+      },
+      "crates/model/src/polling.rs": {
+        "covered": 87,
+        "total": 100,
+        "percent": 87.0,
+        "sha256": "5a153e4cf376db1d55d29ad8188c60d13a7dceaf560f8b513428a4f5dfedf606"
+      },
+      "crates/model/src/runtime.rs": {
+        "covered": 92,
+        "total": 95,
+        "percent": 96.84210526315788,
+        "sha256": "fce923e93d2a24ac8b2552a4e60c4b3a63a11ed5d19992a19e89200beef07990"
+      },
+      "crates/model/src/server.rs": {
+        "covered": 8,
+        "total": 8,
+        "percent": 100.0,
+        "sha256": "4f874660054fd6a047760c77a74133ac998f1ca4c590a64e5b2c3204006d8ec7"
+      },
+      "crates/model/src/session.rs": {
+        "covered": 220,
+        "total": 225,
+        "percent": 97.77777777777777,
+        "sha256": "ab4d1c5a38669f35342d94d8f9e14495c3d9ad09e4e4beba08b2f362468d32d9"
+      },
+      "crates/model/src/session/protocol.rs": {
+        "covered": 12,
+        "total": 16,
+        "percent": 75.0,
+        "sha256": "be1e56c9659ca4eb5426bb2073b05082b75b0aaa7d8bec0983b6a9f4d5209fbb"
+      },
+      "crates/model/src/storage/registry.rs": {
+        "covered": 8,
+        "total": 8,
+        "percent": 100.0,
+        "sha256": "c074cfb95dcc1ade6afb951ba915722a639ebb1ebbc0e753faa32ccdc2019595"
+      },
+      "crates/model/src/storage/registry/core.rs": {
+        "covered": 93,
+        "total": 98,
+        "percent": 94.89795918367348,
+        "sha256": "19d4314e4a64c102a0f93abd14551476aa8f49989cca37c7e2e0c985cdf1083b"
+      },
+      "crates/model/src/storage/registry/listeners.rs": {
+        "covered": 32,
+        "total": 40,
+        "percent": 80.0,
+        "sha256": "2b92f419093993300645b0aaaa840934af1c7e500c086fa118007f1cc732ca64"
+      },
+      "crates/model/src/storage/registry/paths.rs": {
+        "covered": 62,
+        "total": 65,
+        "percent": 95.38461538461539,
+        "sha256": "3b1a4430932a923cee560ccce5d84911fc210bed4d9461eacc76e355b89d45c9"
+      },
+      "crates/model/src/storage/registry/projects.rs": {
+        "covered": 173,
+        "total": 184,
+        "percent": 94.02173913043478,
+        "sha256": "3cf3ccb407e31fada0ac3c2b9788c1460a7e239feac1d5f50389992c6fa5d0ab"
+      },
+      "crates/model/src/storage/registry/workspaces.rs": {
+        "covered": 149,
+        "total": 150,
+        "percent": 99.33333333333333,
+        "sha256": "d445f7c4c6094c68c616fa909e62523ecccafb1e2441d415dee90e4d5322c552"
+      },
+      "crates/model/src/storage/workspace_labels.rs": {
+        "covered": 294,
+        "total": 307,
+        "percent": 95.76547231270358,
+        "sha256": "465a3d55a4ecd4f9634e4665d9f991ec868c4084c7673d9113e572deb48e09f3"
+      },
+      "crates/model/src/workspace/activity.rs": {
+        "covered": 8,
+        "total": 8,
+        "percent": 100.0,
+        "sha256": "ee01cb5e9d59d42e26b7a0da36e89c1187fb14094ce27d78a0d0b2543768a214"
+      },
+      "crates/model/src/workspace/identity.rs": {
+        "covered": 112,
+        "total": 112,
+        "percent": 100.0,
+        "sha256": "8f6e121d5011473ade758563ce53e96db9bae3ae5f9089dd27d7e42baf604852"
+      },
+      "crates/model/src/workspace/labels.rs": {
+        "covered": 6,
+        "total": 6,
+        "percent": 100.0,
+        "sha256": "64d942784f30879cf305ef377d94c7fe3f045fcb83c5f2be447e1a53a22d32bf"
+      },
+      "crates/model/src/workspace/naming.rs": {
+        "covered": 7,
+        "total": 7,
+        "percent": 100.0,
+        "sha256": "956c1204e478cad080f2e7d12e9cd3e9c9599aeb754a5dd9cd683cf0cb732591"
+      },
+      "crates/model/src/workspace/protocol/directory.rs": {
+        "covered": 40,
+        "total": 40,
+        "percent": 100.0,
+        "sha256": "27cc6f640838e5fbb6b060440140675b21280d322e9caf1a14fcd4d39336466e"
+      },
+      "crates/model/src/workspace/protocol/projection.rs": {
+        "covered": 88,
+        "total": 88,
+        "percent": 100.0,
+        "sha256": "e2f931f40e3f4b792c65347fed7cbf1cc5a4d26d8fa4cbf7221a67e0a6f2542a"
+      },
+      "crates/model/src/workspace/protocol/workspace.rs": {
+        "covered": 34,
+        "total": 34,
+        "percent": 100.0,
+        "sha256": "6ab654e07b2bddb23ab8290637aafc53134d60f696daf0909ee8ae7e51e709a5"
+      },
+      "crates/model/src/workspace/protocol/workspace/checkout.rs": {
+        "covered": 29,
+        "total": 29,
+        "percent": 100.0,
+        "sha256": "1a28eb3800a58fa33313d637d3e45d7dfb735115b09a1961662e425f7e84772b"
+      },
+      "crates/model/src/workspace/protocol/workspace/serde_fields.rs": {
+        "covered": 36,
+        "total": 36,
+        "percent": 100.0,
+        "sha256": "c94581a94906b36240036113c383fc667e26b1f4c4d07abbfacd427df06f62a3"
+      },
+      "crates/model/src/workspace/protocol/worktree_source.rs": {
+        "covered": 16,
+        "total": 16,
+        "percent": 100.0,
+        "sha256": "17adcec283e916dff36d487c4066d4dc64b17b1e1f7d264b1b24687ed61a6ab6"
+      },
+      "crates/model/src/workspace/records.rs": {
+        "covered": 26,
+        "total": 26,
+        "percent": 100.0,
+        "sha256": "4fb5806fba4d685ddf53c8c268c768a2f0a1bc7dd2d6ccd45568a8e17e7e4405"
+      },
+      "crates/protocol/src/lib.rs": {
+        "covered": 63,
+        "total": 63,
+        "percent": 100.0,
+        "sha256": "fed9212e216b1e93a5973ec3f29db6d01702dad6492f8e7f02993cba1454dc25"
+      },
+      "crates/provider/src/capabilities.rs": {
+        "covered": 15,
+        "total": 15,
+        "percent": 100.0,
+        "sha256": "f4f7b3fd21bcfb73ee204bc2c093883e0e8a585daecd406ca11b080db96590d6"
+      },
+      "crates/provider/src/composition.rs": {
+        "covered": 50,
+        "total": 50,
+        "percent": 100.0,
+        "sha256": "185fd80a95ec0eb519a291d72b9b787c81d5e0f92cb0683e217f6a4009b9bd78"
+      },
+      "crates/provider/src/connection.rs": {
+        "covered": 124,
+        "total": 128,
+        "percent": 96.875,
+        "sha256": "a130d2a33e5203e62518a12db79c13a81b6a22ca4758571e85948b0fbed06633"
+      },
+      "crates/provider/src/connection/directory.rs": {
+        "covered": 129,
+        "total": 149,
+        "percent": 86.5771812080537,
+        "sha256": "c3a50bdb0e8290ebf2838d37bfa419e0aaa816110f5b2b498926f48fe622db78"
+      },
+      "crates/provider/src/dispatch.rs": {
+        "covered": 79,
+        "total": 96,
+        "percent": 82.29166666666666,
+        "sha256": "279bd5f34406a6eecbcc29f0dfce90b9c79587143bc7e524b811936a75776936"
+      },
+      "crates/provider/src/dispatch/agent_execution.rs": {
+        "covered": 63,
+        "total": 66,
+        "percent": 95.45454545454545,
+        "sha256": "e3e3f19b46a8fd9ca284473e81eb2b61094a1c2f4bbff5e98653e4ac99565f19"
+      },
+      "crates/provider/src/dispatch/agent_runtime.rs": {
+        "covered": 28,
+        "total": 32,
+        "percent": 87.5,
+        "sha256": "3b48dd974057523b50005da307274e012a24fe0171f7ef2f673f8a366acf0428"
+      },
+      "crates/provider/src/dispatch/catalog.rs": {
+        "covered": 23,
+        "total": 28,
+        "percent": 82.14285714285714,
+        "sha256": "67e9207358d775cec0a9f72a5cd64dd4db9e8a3b22e799e16414e7775a6c4a97"
+      },
+      "crates/provider/src/dispatch/requests.rs": {
+        "covered": 174,
+        "total": 174,
+        "percent": 100.0,
+        "sha256": "182b237cd9b3edcb0c24b3e30dc883d45e62f2e0cd6ff3a320a9c761f9497bc2"
+      },
+      "crates/provider/src/installation.rs": {
+        "covered": 6,
+        "total": 6,
+        "percent": 100.0,
+        "sha256": "3fb0e080b0941069be95ba7d430e2a4946301b6d3d690b17253b947ea0c63726"
+      },
+      "crates/provider/src/local/antigravity.rs": {
+        "covered": 96,
+        "total": 99,
+        "percent": 96.96969696969698,
+        "sha256": "6a054a7ca7e5e1a082337b290df8062581849c3b63cae4d69eb22f18332c0d30"
+      },
+      "crates/provider/src/local/antigravity/config.rs": {
+        "covered": 120,
+        "total": 121,
+        "percent": 99.17355371900827,
+        "sha256": "61198473e91defa8bdb03357dc2e2590916cf377142d57edc48487904067852f"
+      },
+      "crates/provider/src/local/antigravity/discovery.rs": {
+        "covered": 84,
+        "total": 90,
+        "percent": 93.33333333333333,
+        "sha256": "368eaed6cb04779eabd0d2d6726f30de8bd747626fc333f8b7731000118cdce0"
+      },
+      "crates/provider/src/local/antigravity/session.rs": {
+        "covered": 211,
+        "total": 218,
+        "percent": 96.78899082568807,
+        "sha256": "8674af4bc50ac3a2f2e2c54e3985fb264a68d72abd2da24a5e9043d63af99dd2"
+      },
+      "crates/provider/src/local/antigravity/streaming.rs": {
+        "covered": 178,
+        "total": 190,
+        "percent": 93.6842105263158,
+        "sha256": "4031a3ae9e85a9b46f5760c561634b1f5a1f84ccd06e06c3fe169cd71cc4b2a5"
+      },
+      "crates/provider/src/local/antigravity/transport.rs": {
+        "covered": 181,
+        "total": 193,
+        "percent": 93.78238341968913,
+        "sha256": "a288286e779b15d36ad16ee612f7c9df57bd05ab37de9ab1eec19aafdd4d531f"
+      },
+      "crates/provider/src/local/claude.rs": {
+        "covered": 203,
+        "total": 222,
+        "percent": 91.44144144144144,
+        "sha256": "b1d4242eba093c1a7bad7f0f7ecdf4039a18f241a8ad9b96c8b96271ce582136"
+      },
+      "crates/provider/src/local/claude/config.rs": {
+        "covered": 157,
+        "total": 158,
+        "percent": 99.36708860759495,
+        "sha256": "0d5c19fd5dd431001ecb49c8eeb746d9085d9104b01b5e7963d7227f057d81ac"
+      },
+      "crates/provider/src/local/claude/history.rs": {
+        "covered": 297,
+        "total": 320,
+        "percent": 92.8125,
+        "sha256": "0e69dee5d3a1307290579ccbf2dd1298971cc4ccc2ad74e8dc37707fcfd52c66"
+      },
+      "crates/provider/src/local/claude/inputs.rs": {
+        "covered": 51,
+        "total": 54,
+        "percent": 94.44444444444444,
+        "sha256": "4d53955a1ad654c70bef57c4a5ccb78e86143f4d1b5c81269470113d7305e6bf"
+      },
+      "crates/provider/src/local/claude/inspection.rs": {
+        "covered": 215,
+        "total": 230,
+        "percent": 93.47826086956522,
+        "sha256": "adb7cee0f5acb30259dad7da1f7ad8f1863e24506739e29360c1287c8d817035"
+      },
+      "crates/provider/src/local/claude/inspection/quota.rs": {
+        "covered": 129,
+        "total": 135,
+        "percent": 95.55555555555556,
+        "sha256": "92ff2ed8ae63048166497f2dae0446bf481041af90fe47606e9ded3b4fffed04"
+      },
+      "crates/provider/src/local/claude/metadata.rs": {
+        "covered": 32,
+        "total": 33,
+        "percent": 96.96969696969698,
+        "sha256": "3ff9f8758090e1fbbc9c7e46931f35cca7bd272f88a3f01b3ccf8802bbd15e3c"
+      },
+      "crates/provider/src/local/claude/permissions.rs": {
+        "covered": 218,
+        "total": 222,
+        "percent": 98.1981981981982,
+        "sha256": "eff55fcdbb085bb5b1d9b03fdae40f2776287e053d04e471cb098d9959f8d8fe"
+      },
+      "crates/provider/src/local/claude/rewind.rs": {
+        "covered": 214,
+        "total": 223,
+        "percent": 95.96412556053812,
+        "sha256": "aaea41780c2a1b017c05cf9e7c46f2431bfcf6e4428e5d73ac14770d341c0127"
+      },
+      "crates/provider/src/local/claude/session.rs": {
+        "covered": 508,
+        "total": 532,
+        "percent": 95.48872180451126,
+        "sha256": "2d3755cd070c34d83513f2a787eafb1f87446a31a5579e5ccb9f19cef11f64be"
+      },
+      "crates/provider/src/local/claude/session/commands.rs": {
+        "covered": 73,
+        "total": 83,
+        "percent": 87.95180722891565,
+        "sha256": "61661c256164302c91841bbad231390c145efc7b4b873452d6f65e58c7940167"
+      },
+      "crates/provider/src/local/claude/streaming.rs": {
+        "covered": 220,
+        "total": 240,
+        "percent": 91.66666666666666,
+        "sha256": "d7cdd463350270fd18da4fb96f9fcd668e7ad57fe4fecf0812709c394ede0675"
+      },
+      "crates/provider/src/local/claude/subagents.rs": {
+        "covered": 283,
+        "total": 313,
+        "percent": 90.41533546325878,
+        "sha256": "d6ad7003b37b34ea858cf0d77f8fa888f69b90b4c690cd2d070acf227e19c436"
+      },
+      "crates/provider/src/local/claude/subagents/live.rs": {
+        "covered": 373,
+        "total": 397,
+        "percent": 93.95465994962218,
+        "sha256": "3421eae7331670cd60e761bdcb65f042dcd21a30df530526df02a011876a62f9"
+      },
+      "crates/provider/src/local/claude/subagents/workflow.rs": {
+        "covered": 44,
+        "total": 46,
+        "percent": 95.65217391304348,
+        "sha256": "ae50bdb4114148c36801ad057f5488dfd226f4b350592141d8c172625d1cf6a8"
+      },
+      "crates/provider/src/local/claude/subagents/workflow/replay.rs": {
+        "covered": 262,
+        "total": 292,
+        "percent": 89.72602739726028,
+        "sha256": "8f7ff407857c640489c22519cecc56eadf05b24b6a00bdd982d4593a9ec4f475"
+      },
+      "crates/provider/src/local/claude/tasks.rs": {
+        "covered": 162,
+        "total": 165,
+        "percent": 98.18181818181819,
+        "sha256": "7961a32edd51eada0f2b7e019e41f252dfbfa2221d9c039c5a092b0ea3281624"
+      },
+      "crates/provider/src/local/claude/transport.rs": {
+        "covered": 243,
+        "total": 261,
+        "percent": 93.10344827586206,
+        "sha256": "8b302029c77fe33bf91bae71c349948982475424894450e317472ce469ab1142"
+      },
+      "crates/provider/src/local/codex.rs": {
+        "covered": 886,
+        "total": 918,
+        "percent": 96.51416122004359,
+        "sha256": "a6f1e53d73f36d73ec3939e88ca65b3780fb113096b98351c9447b07c57d6c25"
+      },
+      "crates/provider/src/local/codex/async_questions.rs": {
+        "covered": 256,
+        "total": 267,
+        "percent": 95.88014981273409,
+        "sha256": "356c792c44e22812eddd7cdc6f07e88632a2aa874f1b5f1cd38bdcf81e53aa48"
+      },
+      "crates/provider/src/local/codex/commands.rs": {
+        "covered": 168,
+        "total": 180,
+        "percent": 93.33333333333333,
+        "sha256": "55310c4d60bb0e7e3f4358537ed1bc17a606228500051f96e3bb110b5c7342b7"
+      },
+      "crates/provider/src/local/codex/controls.rs": {
+        "covered": 236,
+        "total": 240,
+        "percent": 98.33333333333333,
+        "sha256": "ac64dd0b8569d5d25582ba3905eaf3d64a3f78e523691970277fd9626f332e9a"
+      },
+      "crates/provider/src/local/codex/discovery.rs": {
+        "covered": 232,
+        "total": 245,
+        "percent": 94.6938775510204,
+        "sha256": "7214b72350a1518070583d09bfff25e5c1f75e0e8c9b66fac7e193ced3d75a85"
+      },
+      "crates/provider/src/local/codex/inspection.rs": {
+        "covered": 75,
+        "total": 81,
+        "percent": 92.5925925925926,
+        "sha256": "12c66c29a2a562a489e31eb9a4631b13310daec9a0983298f425d62fe1573070"
+      },
+      "crates/provider/src/local/codex/metadata.rs": {
+        "covered": 69,
+        "total": 76,
+        "percent": 90.78947368421053,
+        "sha256": "b251e8824433e2f14a0bc294a9e6c8485dc0c426af921f0dbaf38faa2d7bb70a"
+      },
+      "crates/provider/src/local/codex/native_sessions.rs": {
+        "covered": 194,
+        "total": 197,
+        "percent": 98.47715736040608,
+        "sha256": "28f4b7380afcb398239cc7a4aebe9928f196f13d19b0e1dfc978a9470f4c4cf4"
+      },
+      "crates/provider/src/local/codex/permissions.rs": {
+        "covered": 287,
+        "total": 290,
+        "percent": 98.9655172413793,
+        "sha256": "9065729e3550df8f9c579b9fe75c82d870b9df9bfe9ff483b1f2bdea0d4e7ca9"
+      },
+      "crates/provider/src/local/codex/plans.rs": {
+        "covered": 220,
+        "total": 231,
+        "percent": 95.23809523809523,
+        "sha256": "739f5f2720b6534da9ad70565c39e48dfbb2de26368c28293bad3fd8064910a1"
+      },
+      "crates/provider/src/local/codex/prompts.rs": {
+        "covered": 192,
+        "total": 209,
+        "percent": 91.86602870813397,
+        "sha256": "70e60e49120610a1fb9b7cbc1145d11e05390f2712cbe3f31184bcb5d0661a94"
+      },
+      "crates/provider/src/local/codex/rewind.rs": {
+        "covered": 98,
+        "total": 102,
+        "percent": 96.07843137254902,
+        "sha256": "41aeb53addb20338d53349db8a944d7ea58e2b944d64f7eccc2428843eff9fd9"
+      },
+      "crates/provider/src/local/codex/streaming.rs": {
+        "covered": 228,
+        "total": 234,
+        "percent": 97.43589743589743,
+        "sha256": "e92b6cbda1f349c8e5048f9097a85d3ab9d394bbb2d62d818ee895f52de68eea"
+      },
+      "crates/provider/src/local/codex/subagents.rs": {
+        "covered": 222,
+        "total": 246,
+        "percent": 90.2439024390244,
+        "sha256": "15fe160b631138019b4d539c1009fbbf3f50baf4a4309ffc51db8b2f0edb8260"
+      },
+      "crates/provider/src/local/codex/transport.rs": {
+        "covered": 248,
+        "total": 270,
+        "percent": 91.85185185185183,
+        "sha256": "705055549335596df68bea6aa2ac8969dd7e8c08f0a8e3b000dd3c170b66e710"
+      },
+      "crates/provider/src/local/codex/workflows.rs": {
+        "covered": 133,
+        "total": 135,
+        "percent": 98.51851851851852,
+        "sha256": "74972e04fb0bbe5a3f4beca2515eed3c20df2fe109a80f6ea69d7e642c0d91ae"
+      },
+      "crates/provider/src/local/configuration.rs": {
+        "covered": 273,
+        "total": 287,
+        "percent": 95.1219512195122,
+        "sha256": "f333bb397c9918bc988d924ef667e5165dbc9a714921052aa81d2fa49a1baa29"
+      },
+      "crates/provider/src/local/configuration/options.rs": {
+        "covered": 48,
+        "total": 50,
+        "percent": 96.0,
+        "sha256": "6473448412e1bcd3a0b50b619c4136175de2d9c2f0976886ba4ce344b70f938e"
+      },
+      "crates/provider/src/local/deepseek_harness.rs": {
+        "covered": 154,
+        "total": 168,
+        "percent": 91.66666666666666,
+        "sha256": "e1bf2b2c91e115a4568680f7d4685baeac8d155763b973edbf9f6d4f9fbc9919"
+      },
+      "crates/provider/src/local/deepseek_harness/config.rs": {
+        "covered": 210,
+        "total": 216,
+        "percent": 97.22222222222221,
+        "sha256": "8e12913d848dbc1f78c41542df4232a4eef65568ea254a3ae1c0f0034464d812"
+      },
+      "crates/provider/src/local/deepseek_harness/native.rs": {
+        "covered": 6,
+        "total": 6,
+        "percent": 100.0,
+        "sha256": "67d3cc433dff6a3a9e2a341ed08cdb17c51b81736ebb0a7dee6921507b1b4f3d"
+      },
+      "crates/provider/src/local/deepseek_harness/native/config.rs": {
+        "covered": 158,
+        "total": 168,
+        "percent": 94.04761904761905,
+        "sha256": "a6a678c5e889a1ff45b09ee03f0c633430ab4fedb3a564c201bafc39f2477f23"
+      },
+      "crates/provider/src/local/deepseek_harness/native/content.rs": {
+        "covered": 82,
+        "total": 91,
+        "percent": 90.10989010989012,
+        "sha256": "4b403ca29122b6bc6229b1581036b696bc12e982fc364a9623b51de0af3e6655"
+      },
+      "crates/provider/src/local/deepseek_harness/native/history.rs": {
+        "covered": 154,
+        "total": 166,
+        "percent": 92.7710843373494,
+        "sha256": "5dc01ffa182a0026cbb90392ce37edfb150e46e4fb3eb367a7883620a427e47a"
+      },
+      "crates/provider/src/local/deepseek_harness/native/http.rs": {
+        "covered": 91,
+        "total": 104,
+        "percent": 87.5,
+        "sha256": "6ba081e4f91476962da6bb2bf53c6738ac09a8945b4a3ac5558d82cc6918f57b"
+      },
+      "crates/provider/src/local/deepseek_harness/native/interactions.rs": {
+        "covered": 190,
+        "total": 198,
+        "percent": 95.95959595959596,
+        "sha256": "47d0f851e0ed1dd93eca0e4571ebd2b6c5e7294d73f36e10e6737b7fc6072c8e"
+      },
+      "crates/provider/src/local/deepseek_harness/native/native_sessions.rs": {
+        "covered": 173,
+        "total": 179,
+        "percent": 96.64804469273743,
+        "sha256": "50ce5df7e63fe4bdd759ada5b4162342673ba842a8a91594403138bda6e6d041"
+      },
+      "crates/provider/src/local/deepseek_harness/native/projection.rs": {
+        "covered": 113,
+        "total": 119,
+        "percent": 94.9579831932773,
+        "sha256": "552dd68596e1b7463847ef8d5e8204c73e8e07bda3167ea7fce3761774d90fc0"
+      },
+      "crates/provider/src/local/deepseek_harness/native/runtime.rs": {
+        "covered": 162,
+        "total": 186,
+        "percent": 87.09677419354838,
+        "sha256": "ecee4fb8d350ce2982c1921ac9ddab9e56925ebb1c6f0647baab618090455fca"
+      },
+      "crates/provider/src/local/deepseek_harness/native/session.rs": {
+        "covered": 354,
+        "total": 402,
+        "percent": 88.05970149253731,
+        "sha256": "94616446c06d756318096cfc8e9b37ff412a80ff735f15631ff1eaebb63da90f"
+      },
+      "crates/provider/src/local/deepseek_harness/native/usage.rs": {
+        "covered": 16,
+        "total": 16,
+        "percent": 100.0,
+        "sha256": "d9fceae3f6a00cf7a6af69bb2b6e2e7b5572b6f89e890ae125ba195cfd2137af"
+      },
+      "crates/provider/src/local/deepseek_harness/permissions.rs": {
+        "covered": 92,
+        "total": 94,
+        "percent": 97.87234042553192,
+        "sha256": "21448f6b1283f8f6bd52b6210c149f8b74f41d9d74ae0c3bba32a06871a8e53d"
+      },
+      "crates/provider/src/local/deepseek_harness/session.rs": {
+        "covered": 242,
+        "total": 259,
+        "percent": 93.43629343629344,
+        "sha256": "34e4a8ed3b4703c9d08dc8eeb48ec0b819515b6f1d2d420987d84a4fb2861ebc"
+      },
+      "crates/provider/src/local/deepseek_harness/streaming.rs": {
+        "covered": 177,
+        "total": 187,
+        "percent": 94.6524064171123,
+        "sha256": "b5431b01a1598c0f1b0a9a5de424c70a7e467e5f5a1035c52354b9f05ccf86b3"
+      },
+      "crates/provider/src/local/deepseek_harness/transport.rs": {
+        "covered": 153,
+        "total": 171,
+        "percent": 89.47368421052632,
+        "sha256": "b968b86ef3ab04b867f4a3a2963fe77bbc339cfc75f51726f304188c7b13ee46"
+      },
+      "crates/provider/src/local/elicitation.rs": {
+        "covered": 196,
+        "total": 207,
+        "percent": 94.68599033816425,
+        "sha256": "a4e3e4a53b3ca08f6dd9804f8ff2bde199587f7b2ee5eae758177421e26a7317"
+      },
+      "crates/provider/src/local/images.rs": {
+        "covered": 153,
+        "total": 165,
+        "percent": 92.72727272727272,
+        "sha256": "89a098f35a54b822866f1d975c514a186a5618cbf776e92a254f6c2f984fde1b"
+      },
+      "crates/provider/src/local/notes.rs": {
+        "covered": 63,
+        "total": 65,
+        "percent": 96.92307692307692,
+        "sha256": "83f6a5ffc09407a845826cec2d1132a6853ed6c739557d9bc1afdd0546f91437"
+      },
+      "crates/provider/src/local/opencode.rs": {
+        "covered": 75,
+        "total": 75,
+        "percent": 100.0,
+        "sha256": "30d742edd84f274fb691130e19f5d8005d6840a0c2b09fe95a977685d876697e"
+      },
+      "crates/provider/src/local/opencode/approvals.rs": {
+        "covered": 198,
+        "total": 224,
+        "percent": 88.39285714285714,
+        "sha256": "5916822fe7257b167f95f801ef9db49ce5473f2aa18b82ae3ee256fd918db794"
+      },
+      "crates/provider/src/local/opencode/bridge.rs": {
+        "covered": 103,
+        "total": 106,
+        "percent": 97.16981132075472,
+        "sha256": "2c891f01d319bdc3af3bd327797b82eace36900c3d39330fb86905f297f28bc0"
+      },
+      "crates/provider/src/local/opencode/budget.rs": {
+        "covered": 58,
+        "total": 59,
+        "percent": 98.30508474576273,
+        "sha256": "9bc2a1efbf613d18ce72edbebae43fa1e9f2ad5d9ea2fc89b5b4ea5bdc4e5431"
+      },
+      "crates/provider/src/local/opencode/client.rs": {
+        "covered": 370,
+        "total": 393,
+        "percent": 94.14758269720103,
+        "sha256": "659dbabf0b29dcb80f3d85b175801301c8e2c1d88e41504dd09b7016ab489860"
+      },
+      "crates/provider/src/local/opencode/client/native_sessions.rs": {
+        "covered": 192,
+        "total": 196,
+        "percent": 97.95918367346938,
+        "sha256": "f6a9eb0a2d47e15708a02b4d5be73b9290883aa51ffd6757b0dfdfe7d25df94b"
+      },
+      "crates/provider/src/local/opencode/execution.rs": {
+        "covered": 110,
+        "total": 122,
+        "percent": 90.1639344262295,
+        "sha256": "5085c07d246b7b12bb092bece2a621753c655d589bc7c0904452b09027da5e67"
+      },
+      "crates/provider/src/local/opencode/history.rs": {
+        "covered": 269,
+        "total": 302,
+        "percent": 89.0728476821192,
+        "sha256": "35efe7acf4f113dd465a804ec44fdc7d18182c3c3c8677304db6309ece5f4dc0"
+      },
+      "crates/provider/src/local/opencode/history/prefix.rs": {
+        "covered": 56,
+        "total": 56,
+        "percent": 100.0,
+        "sha256": "76347c84b857109b6009116c84895fc876a3ae447bbedc04318a079147723516"
+      },
+      "crates/provider/src/local/opencode/http.rs": {
+        "covered": 396,
+        "total": 511,
+        "percent": 77.49510763209393,
+        "sha256": "5a7a5e7326f008bc44c45d61f4e73a8f4014ea3b9d136b120ad87a4dbb4a6c8c"
+      },
+      "crates/provider/src/local/opencode/live.rs": {
+        "covered": 351,
+        "total": 396,
+        "percent": 88.63636363636364,
+        "sha256": "5e209995ee1afb2eaa6cbb2e8bf71b1219e7580f58bb66fbc574d2ad5589cef8"
+      },
+      "crates/provider/src/local/opencode/projection.rs": {
+        "covered": 101,
+        "total": 108,
+        "percent": 93.51851851851852,
+        "sha256": "76cf63bfc61bb0780219be7ddd2fbc12ca3e1507c48fdf9863c73be2e2113cf0"
+      },
+      "crates/provider/src/local/opencode/publication.rs": {
+        "covered": 44,
+        "total": 60,
+        "percent": 73.33333333333333,
+        "sha256": "f77d517623dae531ae6c84d743e648309971bf9eda134c2ad00c2698ea82f881"
+      },
+      "crates/provider/src/local/opencode/runtime.rs": {
+        "covered": 163,
+        "total": 205,
+        "percent": 79.51219512195122,
+        "sha256": "8edbacfbf0af120538495987747cc1bf38c844176c58e291e340cc99ab9bdceb"
+      },
+      "crates/provider/src/local/opencode/session.rs": {
+        "covered": 367,
+        "total": 431,
+        "percent": 85.1508120649652,
+        "sha256": "2ad0bba6005ccbbffb701295c4d73623cb02dbbcd744c8e0d0f1f91b0e1c8769"
+      },
+      "crates/provider/src/local/opencode/streaming.rs": {
+        "covered": 175,
+        "total": 177,
+        "percent": 98.87005649717514,
+        "sha256": "69da8fb7aa57eed5d09bdca61621dd5f4e6335f7305aa79470b7bc299129cfca"
+      },
+      "crates/provider/src/local/opencode/types.rs": {
+        "covered": 2,
+        "total": 6,
+        "percent": 33.33333333333333,
+        "sha256": "6afeb48b28cd7c9aa512f6c8fab253f57b8e0369ff354878cd9cb4ce8e85d8a2"
+      },
+      "crates/provider/src/local/tool_detail.rs": {
+        "covered": 163,
+        "total": 174,
+        "percent": 93.67816091954022,
+        "sha256": "69addd9c92494f0019d32d5623d9c5de4e8fd633e257d2615ece4d9d7195d225"
+      },
+      "crates/provider/src/local/tool_detail/command_actions.rs": {
+        "covered": 42,
+        "total": 42,
+        "percent": 100.0,
+        "sha256": "9a2201687c5299e5fc5c72b01b59cb2250c11e3c77c5b9f9167ffe787e88ff53"
+      },
+      "crates/provider/src/local/usage.rs": {
+        "covered": 154,
+        "total": 156,
+        "percent": 98.71794871794872,
+        "sha256": "29f273d3f8e8e76c679180a556fbf4efa0ad6e4acf84ff660ac3e52176c56065"
+      },
+      "crates/provider/src/ports/agent.rs": {
+        "covered": 3,
+        "total": 3,
+        "percent": 100.0,
+        "sha256": "520b72518b192094fc19909c0a1aebd58611111b14ed76ea1aa82d8f1776c7da"
+      },
+      "crates/provider/src/ports/agent_session.rs": {
+        "covered": 220,
+        "total": 220,
+        "percent": 100.0,
+        "sha256": "57e81506d5af1e339d5d11fd2d2a21a9135673cd0ad1eee6c6190041fff0ba3b"
+      },
+      "crates/provider/src/ports/environment.rs": {
+        "covered": 32,
+        "total": 32,
+        "percent": 100.0,
+        "sha256": "903f593bc4e16d480fddd53f10ddfedbd6c223cbfc5b713122c43fe0a7693acc"
+      },
+      "crates/provider/src/protocol/agent.rs": {
+        "covered": 8,
+        "total": 8,
+        "percent": 100.0,
+        "sha256": "dfada299f528eb44c9852b0b280e600ffadde7a2c66888b0ecf3141d4755dc7c"
+      },
+      "crates/provider/src/protocol/agent_config.rs": {
+        "covered": 26,
+        "total": 26,
+        "percent": 100.0,
+        "sha256": "dc359832a158ea0b441c81c406516873a100c86642c62577792579f7f989aa5c"
+      },
+      "crates/provider/src/protocol/agent_execution.rs": {
+        "covered": 9,
+        "total": 9,
+        "percent": 100.0,
+        "sha256": "e3f1db24c422ba87f8953e4b0205d56a7a518f6b421b464ae8bc68dab4a4c8df"
+      },
+      "crates/provider/src/protocol/prompt.rs": {
+        "covered": 101,
+        "total": 102,
+        "percent": 99.01960784313727,
+        "sha256": "5292fe735271e74d66a7039064a44d9ab8c28caa92664c8f8402754b3cc733f5"
+      },
+      "crates/provider/src/protocol/prompt/attachments.rs": {
+        "covered": 108,
+        "total": 118,
+        "percent": 91.52542372881356,
+        "sha256": "3b9f74822fd48627c341daeea385b1f93c2f1ae1751eeb0ddc63d0d8c9808bb1"
+      },
+      "crates/provider/src/protocol/resume.rs": {
+        "covered": 38,
+        "total": 38,
+        "percent": 100.0,
+        "sha256": "f863d14fee53b2b24184ec31a73338a33628dd78f58199242e92dc60b94dde41"
+      },
+      "crates/provider/src/protocol/usage.rs": {
+        "covered": 17,
+        "total": 17,
+        "percent": 100.0,
+        "sha256": "a0b85d2350901c5381a51973ab47268ef73a9ff23cdb358e11131c172e6e21d6"
+      },
+      "crates/provider/src/rpc.rs": {
+        "covered": 25,
+        "total": 31,
+        "percent": 80.64516129032258,
+        "sha256": "e48d88a03a5e58d93c54808115673aa5aa86265727ee964c311157781b249a07"
+      },
+      "crates/provider/src/rpc/agent_execution.rs": {
+        "covered": 566,
+        "total": 598,
+        "percent": 94.64882943143813,
+        "sha256": "becc63e0a37061246f1153b724d49385e1a3f1b90c1aa3fc0e75d627ea988870"
+      },
+      "crates/provider/src/rpc/agent_execution/controls.rs": {
+        "covered": 223,
+        "total": 232,
+        "percent": 96.12068965517241,
+        "sha256": "413c9474f10573ad31a8a0053f583fb656228ed084baac38d4184db80c37f2e7"
+      },
+      "crates/provider/src/rpc/agent_execution/native_sessions.rs": {
+        "covered": 166,
+        "total": 171,
+        "percent": 97.07602339181285,
+        "sha256": "8048af67ad8de527d428cf9cbd19395b78c07ef7fc2a5e27e4a93c5ae4d25c10"
+      },
+      "crates/provider/src/rpc/agent_execution/placement.rs": {
+        "covered": 83,
+        "total": 86,
+        "percent": 96.51162790697676,
+        "sha256": "80f88eb0d1fe6d080dcf7b839c0eb1cbbe1c19a5b15fd5a68bf146e214c07ade"
+      },
+      "crates/provider/src/rpc/agent_execution/resume.rs": {
+        "covered": 94,
+        "total": 99,
+        "percent": 94.94949494949495,
+        "sha256": "6c8d413c3df7fc8cdbbb77c1696725c856a6e5bf8f7b747dfe23788656809815"
+      },
+      "crates/provider/src/rpc/agent_execution/scheduling.rs": {
+        "covered": 54,
+        "total": 55,
+        "percent": 98.18181818181819,
+        "sha256": "04d05fde0a33edccc448d491e9b607715fe3a9328d807a91c7fec00b432c9819"
+      },
+      "crates/provider/src/rpc/agent_execution/voice.rs": {
+        "covered": 53,
+        "total": 59,
+        "percent": 89.83050847457628,
+        "sha256": "9923ac57d3ceb65311220d081207145d8d1f3321018e7d9e0586407a4298ca71"
+      },
+      "crates/provider/src/rpc/agent_execution/workspace_creation.rs": {
+        "covered": 86,
+        "total": 108,
+        "percent": 79.62962962962963,
+        "sha256": "87ceaefd86bf13daefa52ee83047ddf4afb57a0d9b857b05e85bc2e40a6501c9"
+      },
+      "crates/provider/src/rpc/agent_execution/worktrees.rs": {
+        "covered": 232,
+        "total": 240,
+        "percent": 96.66666666666667,
+        "sha256": "67a84fa743a1bdcc7933f3d48c040a790eb9b18ea12cbd49067c7f5b66475bcb"
+      },
+      "crates/provider/src/rpc/agent_runtime.rs": {
+        "covered": 432,
+        "total": 450,
+        "percent": 96.0,
+        "sha256": "00d00312a20e4baa3ddaccf49231e73e602f0dc7ed2e528fad96908c4aab1f41"
+      },
+      "crates/provider/src/rpc/agent_runtime/listing.rs": {
+        "covered": 44,
+        "total": 51,
+        "percent": 86.27450980392157,
+        "sha256": "4368be298fe967739cf80a65c40cab9b8d8ef5d7009215da1ac2ab55fb07bb39"
+      },
+      "crates/provider/src/rpc/agents.rs": {
+        "covered": 122,
+        "total": 124,
+        "percent": 98.38709677419355,
+        "sha256": "bc61da3405ea47ba9ebd93dc3181509d9a2aabab4ec22a5252e5f62b60cc7034"
+      },
+      "crates/provider/src/rpc/fork_context.rs": {
+        "covered": 114,
+        "total": 119,
+        "percent": 95.7983193277311,
+        "sha256": "ba410075a5ecd5f8d81bb102492bd43262d1f5e6489a12fd9e196f3de764b1a7"
+      },
+      "crates/provider/src/rpc/fork_context/tools.rs": {
+        "covered": 87,
+        "total": 87,
+        "percent": 100.0,
+        "sha256": "65384214f351c320e650f46b11b76bdf6c711ffb8ec18c5147dcd589173ed740"
+      },
+      "crates/provider/src/rpc/timeline.rs": {
+        "covered": 144,
+        "total": 144,
+        "percent": 100.0,
+        "sha256": "8a38f96dfaea2d48333d1381f4d1c889de4bc215f3c5251c7c14f7c834ccc525"
+      },
+      "crates/provider/src/rpc/timeline/projection.rs": {
+        "covered": 136,
+        "total": 146,
+        "percent": 93.15068493150685,
+        "sha256": "647672f23b4e1a6bbe303615125aa0c3b08c32db7b25068da1b4b3053044d310"
+      },
+      "crates/provider/src/rpc/timeline/projection/page.rs": {
+        "covered": 164,
+        "total": 164,
+        "percent": 100.0,
+        "sha256": "7cea7c1a4a7efd5986a78c456afc2c1ef15c7c54a8e44e7ccff7eaaeb5b297a4"
+      },
+      "crates/provider/src/rpc/timeline/text_search.rs": {
+        "covered": 55,
+        "total": 55,
+        "percent": 100.0,
+        "sha256": "a0cfea1bc3ac52e120b265eb4895affb32fb967917e2b2e830cb99d3033e0704"
+      },
+      "crates/provider/src/service/agent_execution.rs": {
+        "covered": 227,
+        "total": 250,
+        "percent": 90.8,
+        "sha256": "937d9711500573f3c12d40126400f103a0edd12b50170deaeba0797dc0f12ec7"
+      },
+      "crates/provider/src/service/agent_execution/catalog.rs": {
+        "covered": 10,
+        "total": 10,
+        "percent": 100.0,
+        "sha256": "2318be5ee78e4051caf3faea3ffd7c798fb7faa2e5983f3defdb53c0355d482e"
+      },
+      "crates/provider/src/service/agent_execution/lane.rs": {
+        "covered": 145,
+        "total": 180,
+        "percent": 80.55555555555556,
+        "sha256": "5db0079a122925a14723d2efc9e2d6ba0f08e511a7d9e78d0a44df845d91749b"
+      },
+      "crates/provider/src/service/agent_execution/routing.rs": {
+        "covered": 288,
+        "total": 316,
+        "percent": 91.13924050632912,
+        "sha256": "102ed54c47b4e218b9334f21738efd93456b9fbb19c9c34904ad3e826a410977"
+      },
+      "crates/provider/src/service/agent_execution/routing/mutation.rs": {
+        "covered": 263,
+        "total": 292,
+        "percent": 90.06849315068493,
+        "sha256": "99b35c909309e76f6a5359a509e5984e9766c6c91385bc1e73396b711cccb2be"
+      },
+      "crates/provider/src/service/agent_execution/voice.rs": {
+        "covered": 51,
+        "total": 51,
+        "percent": 100.0,
+        "sha256": "f99eab1a350be01689a8d2b0bd3a12f83c6a5e6813add79b4e6cbc8c43b2c5d3"
+      },
+      "crates/provider/src/service/agent_execution/waits.rs": {
+        "covered": 67,
+        "total": 69,
+        "percent": 97.10144927536231,
+        "sha256": "18ade37e3a2dbc12ef93d15b90f57b816fcfe2d7064fdce14539c11bc6a9ce60"
+      },
+      "crates/provider/src/service/agent_manager.rs": {
+        "covered": 870,
+        "total": 893,
+        "percent": 97.42441209406495,
+        "sha256": "a2be107975098e057c3f957c2f49441a53fa3e7cf4fe47b01c2d276bfd7294ac"
+      },
+      "crates/provider/src/service/agent_manager/auto_archive.rs": {
+        "covered": 124,
+        "total": 131,
+        "percent": 94.65648854961832,
+        "sha256": "211eec3aa89a642e2adbe39ef85e25ab402c4e7e176c2d1d72e42843d7297b69"
+      },
+      "crates/provider/src/service/agent_manager/controls.rs": {
+        "covered": 517,
+        "total": 558,
+        "percent": 92.65232974910394,
+        "sha256": "e7dc07aa0caa4e9a6196ce6030fe113e8a427b96191007ce85e17481332dfc06"
+      },
+      "crates/provider/src/service/agent_manager/delivery.rs": {
+        "covered": 266,
+        "total": 302,
+        "percent": 88.0794701986755,
+        "sha256": "84e52b995ce7db38489fe10a9f097871f4b4d4f5814c3575ba8e0e894c2647fd"
+      },
+      "crates/provider/src/service/agent_manager/execution.rs": {
+        "covered": 109,
+        "total": 113,
+        "percent": 96.46017699115043,
+        "sha256": "6be4d42e46d22644bf819144d628a5c1e302e960ca96476a4232a7ab7fc0a633"
+      },
+      "crates/provider/src/service/agent_manager/generated_titles.rs": {
+        "covered": 91,
+        "total": 99,
+        "percent": 91.91919191919192,
+        "sha256": "636312e805af910452f3b93dd2ed3bd3e63a0f2c82edb1bb3348e226ea4f3d13"
+      },
+      "crates/provider/src/service/agent_manager/native_sessions.rs": {
+        "covered": 301,
+        "total": 319,
+        "percent": 94.35736677115987,
+        "sha256": "be9108c14c8a2df65f44f8b47c88a71bd655470fc089d16bd46ea336e2684af9"
+      },
+      "crates/provider/src/service/agent_manager/ownership.rs": {
+        "covered": 332,
+        "total": 340,
+        "percent": 97.6470588235294,
+        "sha256": "d5b353d51e14a22cd3c19bcf9f44c02861e2aa051eeae774c03e9b48214c3dfb"
+      },
+      "crates/provider/src/service/agent_manager/resume.rs": {
+        "covered": 134,
+        "total": 141,
+        "percent": 95.0354609929078,
+        "sha256": "93cc325ae7ec9868f03d5f72adfd3601e94285c98ee27968d6424d5325c8eef1"
+      },
+      "crates/provider/src/service/agent_manager/streaming.rs": {
+        "covered": 295,
+        "total": 306,
+        "percent": 96.40522875816994,
+        "sha256": "b3ccdfcd52e44f97213abb2129a8d3697695e282d1bde8addf74717eab945162"
+      },
+      "crates/provider/src/service/agent_manager/titles.rs": {
+        "covered": 89,
+        "total": 89,
+        "percent": 100.0,
+        "sha256": "af48347e297ad8722aba09f75ed9aada9d279358d5074bb64534b5079f8307e5"
+      },
+      "crates/provider/src/service/agent_runtime.rs": {
+        "covered": 408,
+        "total": 418,
+        "percent": 97.60765550239235,
+        "sha256": "0d065503e5d1d9a439f004f3dc000f192a5771ef37a43e196dca9b4714e3835e"
+      },
+      "crates/provider/src/service/agent_runtime/archive.rs": {
+        "covered": 127,
+        "total": 129,
+        "percent": 98.44961240310077,
+        "sha256": "889c4e4b8cdbfd606bb715e8d4581298b26ea20d0e182ccc657f93422a29608e"
+      },
+      "crates/provider/src/service/agent_runtime/search.rs": {
+        "covered": 132,
+        "total": 133,
+        "percent": 99.24812030075188,
+        "sha256": "5ccb4fd84f2c826c5189dd4cd7c37cf69b08cf0bc67722bc128eba71917a7015"
+      },
+      "crates/provider/src/service/agents.rs": {
+        "covered": 66,
+        "total": 66,
+        "percent": 100.0,
+        "sha256": "2679deeafc2b0a7d4f22a22a305a930999a5b457665a204406266a8b6240023c"
+      },
+      "crates/provider/src/service/provider_catalog.rs": {
+        "covered": 267,
+        "total": 270,
+        "percent": 98.88888888888889,
+        "sha256": "339599aa735cd8563a0e23c84eed940db64c57aa975e60267e4b3532d3e27eea"
+      },
+      "crates/provider/src/service/provider_catalog/draft.rs": {
+        "covered": 33,
+        "total": 33,
+        "percent": 100.0,
+        "sha256": "6d8dd218b0a1dc4f6b995c76ce4dea653f41b66a1dc62c735b8c63b7271393f7"
+      },
+      "crates/provider/src/service/provider_catalog/loading.rs": {
+        "covered": 167,
+        "total": 179,
+        "percent": 93.29608938547486,
+        "sha256": "6a31d2ac9c65b7e95a7587fb13915daf5d49119da8df3d80a9b8f2ad7a80fcb2"
+      },
+      "crates/provider/src/service/provider_catalog/scope.rs": {
+        "covered": 33,
+        "total": 33,
+        "percent": 100.0,
+        "sha256": "e230048852b1cee1ef358893d0422d7e480e9c2664fa7c06822087646ccb7e27"
+      },
+      "crates/provider/src/service/summary_generation.rs": {
+        "covered": 75,
+        "total": 77,
+        "percent": 97.40259740259741,
+        "sha256": "b13de976626495c1041aec509d0284dcd8a8e74c5705d77f17d4e2c83c23ebcf"
+      },
+      "crates/provider/src/service/summary_generation/candidates.rs": {
+        "covered": 124,
+        "total": 125,
+        "percent": 99.2,
+        "sha256": "2fa9d7bfe986c64d99b66c1e2f2dc1fa3a41519849e3b45d1e50da5f210f0718"
+      },
+      "crates/provider/src/service/summary_generation/prompts.rs": {
+        "covered": 96,
+        "total": 96,
+        "percent": 100.0,
+        "sha256": "c3e504736ca674904efed09214d50e92e702b085b6cb8b7646c0a0a7a0a12739"
+      },
+      "crates/provider/src/service/summary_generation/test_config.rs": {
+        "covered": 26,
+        "total": 27,
+        "percent": 96.29629629629629,
+        "sha256": "2014ff7fe4991fd695969fd3de741ce907f37efb9f408146378ef4c49278fc56"
+      },
+      "crates/provider/src/service/workspace_attention.rs": {
+        "covered": 230,
+        "total": 248,
+        "percent": 92.74193548387096,
+        "sha256": "ead35c8f83da14598fe3c0aa9ec1697ccb877ddfc3b3f9334f7ca8a5ed153413"
+      },
+      "crates/provider/src/storage.rs": {
+        "covered": 79,
+        "total": 92,
+        "percent": 85.86956521739131,
+        "sha256": "666f15d741a97a86163314c41e2334d3625d78887a77aeec00a0455d014acc15"
+      },
+      "crates/provider/src/storage/agent_runtime.rs": {
+        "covered": 100,
+        "total": 107,
+        "percent": 93.45794392523364,
+        "sha256": "0a2a670b4475456516be45a38767fba8f009ab6eadf86081432e9ec511e5e8ef"
+      },
+      "crates/provider/src/storage/agents.rs": {
+        "covered": 240,
+        "total": 259,
+        "percent": 92.66409266409268,
+        "sha256": "d3e1c5e346720e21aaa88cfac5b71569123d6ee6b7df04a0660622bfa6ca5149"
+      },
+      "crates/provider/src/storage/catalog.rs": {
+        "covered": 8,
+        "total": 8,
+        "percent": 100.0,
+        "sha256": "09f5c7bf968e6b19f86cd76493ff62281d991020d044ea30c2091d7c0d876e42"
+      },
+      "crates/provider/src/storage/migration.rs": {
+        "covered": 36,
+        "total": 42,
+        "percent": 85.71428571428571,
+        "sha256": "7ba10f4626cb87020a7a79cbf770c433e578eec68aeb64549364f99ea3f0bbd9"
+      },
+      "crates/provider/src/storage/timeline.rs": {
+        "covered": 296,
+        "total": 300,
+        "percent": 98.66666666666667,
+        "sha256": "8ec9d74419026197f8ad0ef3f7c4794ddae44170a6de320301ce6170a475ec2e"
+      },
+      "crates/provider/src/storage/timeline/inbox.rs": {
+        "covered": 218,
+        "total": 222,
+        "percent": 98.1981981981982,
+        "sha256": "1f8fdd36e231d648681e427bbf304270255742a9726affc5e1a2bf6b4e52b267"
+      },
+      "crates/provider/src/storage/timeline/progress.rs": {
+        "covered": 166,
+        "total": 171,
+        "percent": 97.07602339181285,
+        "sha256": "b3cd6df188a565e20d56abbab7c31de00cda759fcf485eac7f8fd885db8650af"
+      },
+      "crates/provider/src/storage/timeline/subagents.rs": {
+        "covered": 70,
+        "total": 73,
+        "percent": 95.8904109589041,
+        "sha256": "5e6ea63c2a78ae4fbfa94a926caa0ed5911431ba10e8902c0a93996300774e4c"
+      },
+      "crates/provider/src/test_support.rs": {
+        "covered": 31,
+        "total": 31,
+        "percent": 100.0,
+        "sha256": "ee0a230612a0e38c1c0b628399cd23b06050bd76a5d73d2747629428580e6abf"
+      },
+      "crates/relay/src/bridge.rs": {
+        "covered": 56,
+        "total": 68,
+        "percent": 82.35294117647058,
+        "sha256": "359641f9ddd5de9248d47ad249ff226fc478a8310b845c0c9652a49c801362f2"
+      },
+      "crates/relay/src/download.rs": {
+        "covered": 116,
+        "total": 125,
+        "percent": 92.80000000000001,
+        "sha256": "ec0979e43ae1b912bc5dce04ab53e2d71ca1ce0fc8316ed9ea4c0cc2c8009c60"
+      },
+      "crates/relay/src/lib.rs": {
+        "covered": 174,
+        "total": 195,
+        "percent": 89.23076923076925,
+        "sha256": "439bdb1db7de80931794ba7359a8703f91a7d3f903c6d6b13f318742459a9c81"
+      },
+      "crates/relay/src/protocol.rs": {
+        "covered": 38,
+        "total": 38,
+        "percent": 100.0,
+        "sha256": "fd64ec6118c55a177b9e817ee8e420d0acadce54e1fbdd2a26fc24aa91111cd1"
+      },
+      "crates/relay/src/transport.rs": {
+        "covered": 38,
+        "total": 38,
+        "percent": 100.0,
+        "sha256": "226bc440ad2e16169ee8a50680c5e518526a6a1d4beb0f7d5a82eaf1f832b8c3"
+      },
+      "crates/schedule/src/cadence.rs": {
+        "covered": 86,
+        "total": 87,
+        "percent": 98.85057471264368,
+        "sha256": "4312aaf4a8920a4e72d512dda66c6ff8e078398537cfb901ec93e00a86311a6b"
+      },
+      "crates/schedule/src/capabilities.rs": {
+        "covered": 6,
+        "total": 6,
+        "percent": 100.0,
+        "sha256": "5e5b06be800b8d8598cec535125e0e34671dd057fe867755b09a6f43b77b825b"
+      },
+      "crates/schedule/src/dispatch.rs": {
+        "covered": 61,
+        "total": 67,
+        "percent": 91.04477611940298,
+        "sha256": "d08d43302faccd59e10d7225a6d54f17adfb30a39bef99b38b6d5d646ebe6bbb"
+      },
+      "crates/schedule/src/engine.rs": {
+        "covered": 436,
+        "total": 444,
+        "percent": 98.1981981981982,
+        "sha256": "fc168714a3dc22b7714991178b1f5e3e3fbb55245b2e4d2b504ea4384f0041f5"
+      },
+      "crates/schedule/src/ports.rs": {
+        "covered": 19,
+        "total": 19,
+        "percent": 100.0,
+        "sha256": "6933f70c5baa0934050e1cab6148b6b35f57486b745638ada4c7f194827e6267"
+      },
+      "crates/schedule/src/service.rs": {
+        "covered": 164,
+        "total": 168,
+        "percent": 97.61904761904762,
+        "sha256": "ea83c2334c1f1ec11e1c848f80626a6bbcc41b0f9b537d762aa1c6cedabaf523"
+      },
+      "crates/schedule/src/storage.rs": {
+        "covered": 54,
+        "total": 56,
+        "percent": 96.42857142857143,
+        "sha256": "7c8689a8dfd24145fcb48130e287f714f726bae1051ee5aa1bfa832024a2ec6b"
+      },
+      "crates/terminal/src/activity.rs": {
+        "covered": 128,
+        "total": 128,
+        "percent": 100.0,
+        "sha256": "72eb63c958024dde39826b19abcc40b52537bdfc80238e516f6ef5a5a2848c89"
+      },
+      "crates/terminal/src/capabilities.rs": {
+        "covered": 9,
+        "total": 9,
+        "percent": 100.0,
+        "sha256": "a7e29e86759d62d622fde440aac8bc71c85ac5aea4e96c8b5d00979aa2c7f37a"
+      },
+      "crates/terminal/src/connection.rs": {
+        "covered": 357,
+        "total": 383,
+        "percent": 93.21148825065274,
+        "sha256": "41f556628264192eec868b38202811b5f163692b0fdae93f622076e9262a78b7"
+      },
+      "crates/terminal/src/dispatch.rs": {
+        "covered": 93,
+        "total": 95,
+        "percent": 97.89473684210527,
+        "sha256": "9c3a723028bd35b410889653891d9988bd3b3984004ee0aba0acc6aac7852cb0"
+      },
+      "crates/terminal/src/lib.rs": {
+        "covered": 10,
+        "total": 10,
+        "percent": 100.0,
+        "sha256": "5afe8406d0b26040bb17685a3e19c4793487c14fa173b3a35985cc711c744aa1"
+      },
+      "crates/terminal/src/local.rs": {
+        "covered": 197,
+        "total": 223,
+        "percent": 88.34080717488789,
+        "sha256": "414ca6b1ce0d694aa4016532a551b1e9b4a24615f90c6be6ecf60598c2048045"
+      },
+      "crates/terminal/src/ports.rs": {
+        "covered": 8,
+        "total": 8,
+        "percent": 100.0,
+        "sha256": "d4ad72ee29d60b03864e51367d7c8f5143b24bd0a522155430ceafa19e3bc58d"
+      },
+      "crates/terminal/src/protocol.rs": {
+        "covered": 31,
+        "total": 31,
+        "percent": 100.0,
+        "sha256": "c831cbb0770cc6d0fdf8f16b068094fed8195f62eb53f968d31652a33c7b1e91"
+      },
+      "crates/terminal/src/rpc.rs": {
+        "covered": 48,
+        "total": 48,
+        "percent": 100.0,
+        "sha256": "763ba29385d3d74d0ada633a80568791d2be5cc095a6d1e4d783af712aaf690e"
+      },
+      "crates/terminal/src/screen.rs": {
+        "covered": 263,
+        "total": 263,
+        "percent": 100.0,
+        "sha256": "9f61831c169c1407b5e06623df175779a4560463a3caca93e4f0091c079fdd8e"
+      },
+      "crates/terminal/src/service.rs": {
+        "covered": 356,
+        "total": 357,
+        "percent": 99.71988795518207,
+        "sha256": "b6e5d7e54aacbbce0ec4d47a43be62af9eb7d05f6211175cf6a47aa1b1f24a28"
+      },
+      "crates/voice/src/audio.rs": {
+        "covered": 128,
+        "total": 129,
+        "percent": 99.2248062015504,
+        "sha256": "d9827067d8b11a38e475af28717579e7e699592aeabc275b948883c6d29e4085"
+      },
+      "crates/voice/src/capabilities.rs": {
+        "covered": 6,
+        "total": 6,
+        "percent": 100.0,
+        "sha256": "c7de71e9c6c8905dcff9d71272debec2e0d9e268c465ab168f3481d7ed7153e2"
+      },
+      "crates/voice/src/connection.rs": {
+        "covered": 105,
+        "total": 105,
+        "percent": 100.0,
+        "sha256": "dc6a6c6bd0696f90f96162f20747c69c4e63bc389c7994672bcf6fac126a90b7"
+      },
+      "crates/voice/src/connection/dictation.rs": {
+        "covered": 279,
+        "total": 284,
+        "percent": 98.23943661971832,
+        "sha256": "26421997381223eee862a793c4de786db0052521d130898c98c7513672e2535e"
+      },
+      "crates/voice/src/connection/jobs.rs": {
+        "covered": 101,
+        "total": 103,
+        "percent": 98.05825242718448,
+        "sha256": "06b05d8206e36b2826d54e422031625225cb40134f23b3b064ea0cf13379d129"
+      },
+      "crates/voice/src/connection/voice.rs": {
+        "covered": 217,
+        "total": 220,
+        "percent": 98.63636363636363,
+        "sha256": "0f99694a14b02a176ae8e075d1a63b9c788210bb13b4ddbe4a8043bb06ee91d0"
+      },
+      "crates/voice/src/dispatch.rs": {
+        "covered": 44,
+        "total": 45,
+        "percent": 97.77777777777777,
+        "sha256": "0f8291d54ee0fac408eab3726415cc6d9cebe0dc7c8b849df9a3cb0e0c21987d"
+      },
+      "crates/voice/src/lib.rs": {
+        "covered": 23,
+        "total": 23,
+        "percent": 100.0,
+        "sha256": "8c2a8aa61e2b1e72c5af9adb481e7491ad14924d50c3ed3849bfce1c1e12dc89"
+      },
+      "crates/voice/src/local.rs": {
+        "covered": 157,
+        "total": 160,
+        "percent": 98.125,
+        "sha256": "3e462111b560088243ae39bed3ee8e4ff772e4ffb502989573d8ff1ba381002a"
+      },
+      "crates/voice/src/offline.rs": {
+        "covered": 85,
+        "total": 85,
+        "percent": 100.0,
+        "sha256": "0e8a8f8e6c0e6c99b16d55abc3ec53933b414410f2c049514cd43de73a9eaf81"
+      },
+      "crates/voice/src/offline/catalog.rs": {
+        "covered": 48,
+        "total": 49,
+        "percent": 97.95918367346938,
+        "sha256": "2eebdd6d7154ac3959b27abd9c30c7792c2690e4007e37b2d8c59d7dcde1b48c"
+      },
+      "crates/voice/src/offline/download.rs": {
+        "covered": 154,
+        "total": 162,
+        "percent": 95.06172839506173,
+        "sha256": "5fbf60c67e22c31862e5b5be74c37b2a3e9fa0f83cd89dedd3ee31fdc7883075"
+      },
+      "crates/voice/src/offline/engine.rs": {
+        "covered": 119,
+        "total": 161,
+        "percent": 73.91304347826086,
+        "sha256": "fd316f7c788776579138cc05dfd0e7450cabb17105eeeabc77a023714b4a7b96"
+      },
+      "crates/voice/src/offline/worker.rs": {
+        "covered": 158,
+        "total": 172,
+        "percent": 91.86046511627907,
+        "sha256": "a36d0f5e5886e419f1318c889a4104c64bb92b1609f82edea5713a4142c68b8b"
+      },
+      "crates/voice/src/openai.rs": {
+        "covered": 120,
+        "total": 122,
+        "percent": 98.36065573770492,
+        "sha256": "6abb075adbc92bb53648d842061db899fcbdd595ffe06b46846774dc54afdd85"
+      },
+      "crates/voice/src/ports.rs": {
+        "covered": 6,
+        "total": 6,
+        "percent": 100.0,
+        "sha256": "d3eeb65a474dcacc7cc87e591ae4433cdae12221a87ffe00c9afa76e3b858be0"
+      },
+      "crates/voice/src/protocol.rs": {
+        "covered": 5,
+        "total": 5,
+        "percent": 100.0,
+        "sha256": "0151eab91f2550cff12cfff5f2feaa30ff0b687cf23d2849ac3222103cf3400c"
+      },
+      "crates/voice/src/service.rs": {
+        "covered": 56,
+        "total": 56,
+        "percent": 100.0,
+        "sha256": "edebf05d85e3a04f90676ec34bc613f94ff2b0ad3db25ecdfb5829e774b75fd4"
+      },
+      "crates/voice/src/service/config.rs": {
+        "covered": 57,
+        "total": 70,
+        "percent": 81.42857142857143,
+        "sha256": "df8cd33885ecb7147d4396fed1b6109b0c0c79750167daab74fcd0ac3f9039c5"
+      }
+    }
+  },
+  "tests": [
+    {
+      "command": [
+        "cargo",
+        "test",
+        "-p",
+        "model",
+        "--lib",
+        "--",
+        "runtime::",
+        "workspace::",
+        "--test-threads=1"
+      ],
+      "exit_code": 0,
+      "seconds": 6.9,
+      "log": "target/filesystem-model-test-0.log",
+      "tests": {
+        "passed": 24,
+        "failed": 0,
+        "ignored": 0
+      }
+    },
+    {
+      "command": ["cargo", "test", "-p", "filesystem", "--lib", "--", "--test-threads=1"],
+      "exit_code": 0,
+      "seconds": 125.9,
+      "log": "target/filesystem-model-test-1.log",
+      "tests": {
+        "passed": 442,
+        "failed": 0,
+        "ignored": 0
+      }
+    },
+    {
+      "command": [
+        "cargo",
+        "test",
+        "-p",
+        "metadata",
+        "--lib",
+        "--",
+        "service::directory::",
+        "service::workspace_names::",
+        "--test-threads=1"
+      ],
+      "exit_code": 0,
+      "seconds": 4.2,
+      "log": "target/filesystem-model-test-2.log",
+      "tests": {
+        "passed": 61,
+        "failed": 0,
+        "ignored": 0
+      }
+    },
+    {
+      "command": [
+        "cargo",
+        "test",
+        "-p",
+        "api",
+        "--lib",
+        "--",
+        "composition::",
+        "connection::dispatch::",
+        "--test-threads=1"
+      ],
+      "exit_code": 0,
+      "seconds": 30.6,
+      "log": "target/filesystem-model-test-3.log",
+      "tests": {
+        "passed": 12,
+        "failed": 0,
+        "ignored": 0
+      }
+    },
+    {
+      "command": [
+        "cargo",
+        "test",
+        "-p",
+        "daemon",
+        "--bin",
+        "daemon",
+        "--",
+        "host::tests::",
+        "--test-threads=1"
+      ],
+      "exit_code": 0,
+      "seconds": 26.4,
+      "log": "target/filesystem-model-test-4.log",
+      "tests": {
+        "passed": 13,
+        "failed": 0,
+        "ignored": 0
+      }
+    },
+    {
+      "command": [
+        "cargo",
+        "test",
+        "-p",
+        "daemon",
+        "--test",
+        "dependencies",
+        "--",
+        "--test-threads=1"
+      ],
+      "exit_code": 0,
+      "seconds": 4.1,
+      "log": "target/filesystem-model-test-5.log",
+      "tests": {
+        "passed": 12,
+        "failed": 0,
+        "ignored": 0
+      }
+    },
+    {
+      "command": [
+        "cargo",
+        "test",
+        "-p",
+        "daemon",
+        "--test",
+        "process",
+        "--",
+        "github_projects::",
+        "worktrees::",
+        "workspace_automation::",
+        "agent_execution::worktrees::",
+        "checkout::",
+        "--test-threads=1"
+      ],
+      "exit_code": 0,
+      "seconds": 23.8,
+      "log": "target/filesystem-model-test-6.log",
+      "tests": {
+        "passed": 13,
+        "failed": 0,
+        "ignored": 0
+      }
+    }
+  ],
+  "changed_rust_sha256": {
+    "bins/daemon/src/host.rs": "13e3b55aeaddcbdb76bff6553d409622eed59cfbd3f9e19d1f26a6eb93387a59",
+    "bins/daemon/tests/dependencies.rs": "c357bbd31035726ca34406cb6f68fcb71634a5f00650e645007dff099ecbd18f",
+    "crates/api/src/composition.rs": "2387a52504715761c1961be574cfb061fa678e4b66f831b6a1daa8edb8746a58",
+    "crates/api/src/lib.rs": "9fd5969d5d0b074cc6b9612bc04fb3112ba5310fd1b8f32bdd1d10076b47b012",
+    "crates/filesystem/src/connection/tests.rs": "b4f65a33c4967fd833c3616572674db903d67046e0df77b64c365183f41d6ad2",
+    "crates/filesystem/src/dispatch.rs": "606e6a920b9763a0249485a27bea1ced7de6a02f807444c5df976da8a5f27bdf",
+    "crates/filesystem/src/dispatch/requests.rs": "6d90b22c1ce200a5b06cc1e3276ff1419e17cbce649bc91264f4c0f0e68f2d37",
+    "crates/filesystem/src/dispatch/summary.rs": "bab4fd4938856eda10eee3abd898865ac539044f5f698ab4c0a6b56f4c02ae7e",
+    "crates/filesystem/src/dispatch/summary/tests.rs": "5dd9a4b8f1d22378bd01c36983468d5dc2c3656ca85256a917a2d40cde55619b",
+    "crates/filesystem/src/local/checkout/naming.rs": "70fac7d536711a9ca6f0a3baf82772626e4bc1d1f5a68ddd3f5ad381e2ff9986",
+    "crates/filesystem/src/local/checkout/summary.rs": "a720bbf2178a939a7292aef1d8a6721e51bc91b443b8c9518c2a7673f4a6c844",
+    "crates/filesystem/src/local/checkout/tests/naming.rs": "6f98faee8cbe69570f98f2fd7bb18d390b4ebd3c01606138a9803864d726e920",
+    "crates/filesystem/src/local/forge/gitlab/tests/commands.rs": "9b58d94a2144afac402a2a2b0e7b1008ebde8ae376a13bd4dea47a92f64d74e6",
+    "crates/filesystem/src/local/forge/tests/commands.rs": "edc16ca604c130934d0f69ee19b4d1377c7e3a00749198baa524e90c50331d47",
+    "crates/filesystem/src/local/forge/worktree_checkout.rs": "c7572cb28b6523272b7f0de6576e712b27c7ecbf0dfc57ceac9cec0f11645035",
+    "crates/filesystem/src/local/provisioning.rs": "adaffc6e18535cf94849274392e981c9771bcdad14bfdbcc01dc9708b31745e8",
+    "crates/filesystem/src/local/workspace_runtime.rs": "d663f98deff38d248204838a067d7eb9cd56dfc74b5ffb7bbacaf30e94cb19a0",
+    "crates/filesystem/src/local/workspace_runtime/forge.rs": "47178ae3dcf1b2adf59052ea4c936c1d81e911ed681506ef4e39867fc701e16a",
+    "crates/filesystem/src/local/worktrees.rs": "ae936a48d0919db46cd7c1c5e27c49712da379c2e4e4b7130fabad13a710d380",
+    "crates/filesystem/src/local/worktrees/directory.rs": "0714c0e51a67a6b524daf5a17d6ef68cc71412ef5dff54785f7849890f67409d",
+    "crates/filesystem/src/local/worktrees/tests/change_request.rs": "a1ba6a7181ccbeacb105a365fcf46ec2a5aeb69bf3452e825cf533cbef9e0ba5",
+    "crates/filesystem/src/local/worktrees/tests/directory.rs": "e8a626a30e76ec6865756546c03971f404663ae3f8a237b7e77785778ee25a22",
+    "crates/filesystem/src/ports/worktrees.rs": "4f5ff094ecb7c096e86731fda222220c16da2f598b1560f90c534ed05135e7fb",
+    "crates/filesystem/src/protocol/github_projects.rs": "7b9d3b8c5d38cea2458f6b89d06f890f9dc8c2773e02f4db21d91e28444adaf4",
+    "crates/filesystem/src/protocol/worktrees.rs": "e9657f0d3c4227b646980c2d3d25be479d95b0668c0a552b7c6e4c0eddcbf29d",
+    "crates/filesystem/src/rpc/github_projects.rs": "9af23f5cf6d458dfed1c4fc1a9d708103675ce48cf50d85c4797e98068b7254c",
+    "crates/filesystem/src/rpc/workspace_recovery.rs": "561bef96289e615f709c98b08a596496fe0e675d6873a5fcd0e4654f2f6752ca",
+    "crates/filesystem/src/rpc/worktrees.rs": "9f22c9ca78ef4b934f523fe83e0bc0966a57fe01202a3d36ec1fb06797182dfa",
+    "crates/filesystem/src/service/checkout.rs": "88a6e2b105d616380b210910942702fefa57986d4b17705652ab0e7e1634d32b",
+    "crates/filesystem/src/service/checkout/tests.rs": "4daedf192013307d193608906cf1e512c44e30f296a883b57a34958f623a5d01",
+    "crates/filesystem/src/service/git_fetch.rs": "e33db03ee6674d485a04dcc98727733a3306e05bbdeb3977367938c38e32ab77",
+    "crates/filesystem/src/service/git_fetch/tests.rs": "3720e917ba297bb0a72cb7a568b31142979a13f9c8faf2df8deb1825da24c400",
+    "crates/filesystem/src/service/github_projects.rs": "472cce875b4a29c6625bbd3ee801bc7bb8a48c8be86c96de18f20fe0805278ca",
+    "crates/filesystem/src/service/github_projects/tests.rs": "5c58c10c39cd957de72ecffe7da9ad4ab4f8ecc14ab87dd763c247da0f6b7b5c",
+    "crates/filesystem/src/service/workspace_recovery.rs": "19bc88169aaba0901773d4d70955089ad61e660d25c9b157d9b12790b1380887",
+    "crates/filesystem/src/service/workspace_recovery/tests.rs": "87462079556bd11ef756fee0958f763a1058c2388a3dc328ea508a2a84e3d63c",
+    "crates/filesystem/src/service/worktrees.rs": "5335171e270974675dcd6c611c18821481a7eb9bd4394e4dac4e5fe878df72c0",
+    "crates/filesystem/src/service/worktrees/provisioning.rs": "10835271185ba20d6aa258662acea833b8589944a76c636cf304f3fd182c3ca9",
+    "crates/filesystem/src/service/worktrees/tests.rs": "2729ec47543b6525d132a0460dba2d535ceb266abbef35c6c70cfba5cbe1cd6d",
+    "crates/filesystem/src/service/worktrees/tests/provisioning.rs": "6ee8f02ace1dcd53d6733a9a04e4905365695a41e557220aebfbab853d5c3598",
+    "crates/metadata/src/ports/generation.rs": "1c77a2d156f21409fb2fdf9d27495097b2b0ef767cbcd2416043729f61cde538",
+    "crates/metadata/src/ports/provisioning.rs": "eae3db78d9f3ee216872fb8f54b8e0a331401f1968e4e7d4e2e4171916591231",
+    "crates/metadata/src/ports/workspace_git.rs": "b3758f94712cb47473245e915301004099abfe9ce6575b7f9dc3327d3279504b",
+    "crates/metadata/src/ports/workspace_runtime.rs": "f349ed2f68e4dd3f4da5c8042122a0378afb24ee96fcfea489458998e22389be",
+    "crates/metadata/src/rpc/directory.rs": "3b9ddfd18f7e281875f1eb45c1d0776cad4afbf23a5b88830fa10a5147233f16",
+    "crates/metadata/src/service/directory.rs": "648c2c1035ef34b27e47e8649d4f0ec843a581a82f3d78d3533cff3105f1f3b2",
+    "crates/metadata/src/service/directory/tests.rs": "a36ed1982ad57092b929803b1658f941ca4b969d1847437be3dfd9c8ab360199",
+    "crates/metadata/src/service/directory/tests/collaboration.rs": "7107e4af8e9a1e5a2672db9a0b3d24547c2a4fbb0243445230352d95d03f6fcd",
+    "crates/metadata/src/service/workspace_collaboration.rs": "cba1f0631903797c67da2072d773726d5775e29905614d734d70e05aedc43e58",
+    "crates/metadata/src/service/workspace_names.rs": "bbb40acd646e90b0e77d3edd139709bd8f400beacb1d6ec07b928a6963f09ac1",
+    "crates/metadata/src/service/workspace_names/tests.rs": "4de8fed8b2fc17f07aeefab867ac0aa08920530ecbcae6a0381e1c974cdcc1d9",
+    "crates/model/src/runtime.rs": "fce923e93d2a24ac8b2552a4e60c4b3a63a11ed5d19992a19e89200beef07990",
+    "crates/model/src/runtime/tests.rs": "af759879b32cd67736e941f328e9ca4adba9a3f7f795befdf1b3c9836fc9497e",
+    "crates/model/src/runtime/tests/shared.rs": "97778d01b6ae5f740e928a33e28a80a12ad9f1994a9dfc9d5cc882b140603bb4",
+    "crates/model/src/summary.rs": "ea26c7d292c1023d2b63db83ae0022ac3cfd9ca1577b53ded7259c470e1d5e94",
+    "crates/model/src/workspace.rs": "69455362c0d03a77b81a7b9a4adc2d981e897ebef447949943eac34de77d6d24",
+    "crates/model/src/workspace/git.rs": "0e70d7d8fd616625318dbcfe4ca916f781dd596c72fe712476eacbb44773eb86",
+    "crates/model/src/workspace/identity.rs": "8f6e121d5011473ade758563ce53e96db9bae3ae5f9089dd27d7e42baf604852",
+    "crates/model/src/workspace/identity/tests.rs": "75a481a8840c8d45f5b1a044b062a86177956d19cf797e229cbf32f08dc203aa",
+    "crates/model/src/workspace/lifecycle.rs": "d357d46cce5c9fc61ee18ff76717822bf681b2cf3024998baaa45da98bdbcda9",
+    "crates/model/src/workspace/naming.rs": "956c1204e478cad080f2e7d12e9cd3e9c9599aeb754a5dd9cd683cf0cb732591",
+    "crates/model/src/workspace/naming/tests.rs": "beac5cca11e68fe5130abeda0e6958b97330c654f797ad3859045e05d02af5fb",
+    "crates/model/src/workspace/protocol.rs": "873672118638ea511ac65af25309da9f576900d86a224cd9ffa3e44adf450925",
+    "crates/model/src/workspace/protocol/projection.rs": "e2f931f40e3f4b792c65347fed7cbf1cc5a4d26d8fa4cbf7221a67e0a6f2542a",
+    "crates/model/src/workspace/protocol/projection/tests.rs": "84ecd93615b4df730646e29c38976dcec78271ed2994eec9e624e897d03af8db",
+    "crates/model/src/workspace/provisioning.rs": "2bf08a4ff5b8e928be680ba82c6a45abe8ddbecf6223c05b5681d75cb0cd3105",
+    "crates/model/src/workspace/runtime.rs": "703d90d0ec3f7f74c993f3a5b5b5ea0df24734993c754c38f33fa810b3f0c53e"
+  },
+  "commit_tests": {
+    "command": ["cargo", "test", "--workspace"],
+    "passed": 1938,
+    "failed": 0,
+    "ignored": 10
+  }
+}

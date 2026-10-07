@@ -2,6 +2,7 @@ use super::*;
 use crate::tests::runtime;
 
 mod polling;
+mod shared;
 
 #[tokio::test]
 async fn admitted_continuations_wait_for_the_existing_budget() {

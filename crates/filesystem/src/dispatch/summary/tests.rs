@@ -64,7 +64,7 @@ struct Generator {
     requests: std::sync::Mutex<Vec<SummaryRequest>>,
     fail: bool,
 }
-impl metadata::ports::generation::SummarySource for Generator {
+impl model::summary::SummarySource for Generator {
     fn generate(&self, request: SummaryRequest) -> model::summary::SummaryFuture<'_> {
         Box::pin(async move {
             assert!(
@@ -118,7 +118,7 @@ fn state(root: &std::path::Path, fail: bool) -> (State, std::sync::Arc<Generator
             github_projects: None,
             worktrees: None,
             workspace_recovery: None,
-            workspace_automation: None,
+            workspace_setup: None,
         },
         generator,
     )

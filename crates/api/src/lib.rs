@@ -227,7 +227,7 @@ impl Api {
             worktrees,
             workspace_recovery: services.workspace_recovery.map(shared_service),
             skills: services.skills.map(shared_service),
-            workspace_automation: metadata.workspace_automation.clone(),
+            workspace_setup: composition::workspace_setup(metadata.workspace_automation.as_ref()),
         });
         let provider = Arc::new(provider::dispatch::State {
             runtime: runtime.clone(),

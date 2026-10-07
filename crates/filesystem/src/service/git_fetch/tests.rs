@@ -2,7 +2,7 @@ use std::sync::Mutex;
 use std::sync::atomic::{AtomicBool, AtomicU64, AtomicUsize, Ordering};
 use std::time::Instant;
 
-use metadata::protocol::session::EventsRequest;
+use model::session::protocol::EventsRequest;
 use model::{Lifecycle, Limits, ServerInfo, VERSION};
 use serde_json::Value;
 
@@ -73,8 +73,8 @@ struct Harness {
     backend: Arc<Backend>,
     source: Arc<dyn WorkspaceGitObserver>,
     updates: Arc<Mutex<Vec<Value>>>,
-    _connection: metadata::service::session::SessionConnection,
-    _subscription: metadata::service::session::SessionSubscription,
+    _connection: model::session::SessionConnection,
+    _subscription: model::session::SessionSubscription,
 }
 
 impl Harness {

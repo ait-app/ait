@@ -1,5 +1,5 @@
 use super::*;
-use metadata::ports::generation::WorkspaceBranchNamer;
+use model::workspace::naming::WorkspaceBranchNamer;
 
 #[test]
 fn placeholder_rename_checks_ownership_current_branch_upstream_and_collisions() {

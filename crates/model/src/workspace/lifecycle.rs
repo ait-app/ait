@@ -4,7 +4,7 @@ use std::fmt::Debug;
 use std::sync::Arc;
 
 use crate::summary::SummarySelection;
-use crate::workspace::records::PersistedWorkspaceRecord;
+use crate::workspace::records::{PersistedProjectRecord, PersistedWorkspaceRecord};
 use crate::workspace::worktrees::WorktreeProvisioning;
 
 /// Parameters for registering a new Workspace.
@@ -30,6 +30,19 @@ pub struct WorkspaceCreation<'a> {
 pub struct WorkspaceLifecycleError {
     /// Business error description without native diagnostics or credentials.
     pub message: String,
+}
+
+/// Blocking Project registration after filesystem checkout provisioning.
+pub trait ProjectRegistration: Debug + Send + Sync {
+    /// Inspect and register the completed checkout at `path`, using `timestamp` for mutations.
+    /// Returns the active Project, retaining existing identity and user metadata on reuse.
+    /// # Errors
+    /// Returns safe inspection, validation, or registry failures.
+    fn register_project(
+        &self,
+        path: &str,
+        timestamp: &str,
+    ) -> Result<PersistedProjectRecord, WorkspaceLifecycleError>;
 }
 
 /// Blocking Workspace registration used by native Agent placement.

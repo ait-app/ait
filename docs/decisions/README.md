@@ -23,6 +23,7 @@
 
 ## 工作区、文件与 Git
 
+- [ADR-103：Filesystem 仅通过 model 契约协作](workspace/adr-103-filesystem-model-collaboration.md)
 - [ADR-092：工作区重置同步 origin 同名分支](workspace/adr-092-reset-same-named-remote-branch.md)
 - [ADR-025：先移植 Paseo Project / Workspace 模型与 registry](workspace/adr-025-paseo-registry.md)
 - [ADR-028：GitHub 仓库发现与独立 Project 克隆注册](workspace/adr-028-github-project-provisioning.md)

@@ -15,7 +15,7 @@ use crate::ports::registry::{
     WorkspaceRegistry,
 };
 
-use super::{Directory, DirectoryDependencies, DirectoryError, derive_project_key};
+use super::{Directory, DirectoryDependencies, DirectoryError};
 
 mod git_observation;
 mod paseo;
@@ -616,41 +616,6 @@ fn explicit_project_and_directory_creation_errors_match_paseo_classes() {
         directory.add_project("/tmp/missing", "now"),
         Err(DirectoryError::DirectoryNotFound)
     );
-}
-
-#[test]
-fn project_key_parser_matches_paseo_remote_and_host_forms() {
-    let mut checkout = Source.inspect("/tmp/alpha/nested").unwrap();
-    assert_eq!(
-        derive_project_key(&checkout, "server"),
-        "remote:github.com/example/repo#subdir:nested"
-    );
-    checkout.remote_url = Some("ssh://git@git.example.com:60443/team/repo.git".to_owned());
-    assert_eq!(
-        derive_project_key(&checkout, "server"),
-        "remote:git.example.com:60443/team/repo#subdir:nested"
-    );
-    checkout.remote_url = None;
-    assert_eq!(
-        derive_project_key(&checkout, "server"),
-        "host:server:/tmp/alpha/nested"
-    );
-}
-
-#[test]
-fn escaped_remote_paths_share_identity_and_invalid_percent_sequences_are_rejected() {
-    use super::parse_remote;
-    let expected = parse_remote("https://github.com/owner/repo.git").unwrap();
-    for remote in [
-        "https://github.com/%6fwner/%72epo.git",
-        "https://github.com/owner%2Frepo.git",
-        "https://github.com/owner%2frepo.git",
-    ] {
-        assert_eq!(parse_remote(remote), Some(expected.clone()));
-    }
-    for path in ["%", "%2", "%GG", "%ff"] {
-        assert!(parse_remote(&format!("https://github.com/owner/{path}")).is_none());
-    }
 }
 
 #[test]

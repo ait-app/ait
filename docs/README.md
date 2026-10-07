@@ -13,6 +13,7 @@
 
 ## 架构决策
 
+- [ADR-103：Filesystem 仅通过 model 契约协作](decisions/workspace/adr-103-filesystem-model-collaboration.md)：共享观察和纯投影归 model，项目登记、命名与 setup 通过接口注入，移除最后一条功能 crate 间依赖。
 - [ADR-102：Terminal 仅依赖 model 的共享契约](decisions/daemon/adr-102-terminal-model-dependency.md)：registry、Workspace 活动和连接事件直接使用 model，移除 metadata 依赖。
 - [ADR-101：共享协作契约归 model，Provider 不依赖 metadata](decisions/providers/adr-101-provider-metadata-independence.md)：共享记录、协议、事件、创建回执和存储下沉，Workspace 业务通过接口协作。
 - [ADR-100：Provider 拥有摘要生成能力](decisions/providers/adr-100-provider-summary-generator.md)：生成接口归 provider，配置与消费者通过宿主适配。

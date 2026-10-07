@@ -69,8 +69,8 @@ fn violations(packages: &[Value]) -> Vec<String> {
                 "filesystem",
             ],
             "provider" => &["domain", "model"],
-            "protocol" | "metadata" | "voice" | "schedule" | "browser" | "terminal" => &["model"],
-            "filesystem" => &["metadata", "model"],
+            "protocol" | "metadata" | "voice" | "schedule" | "browser" | "terminal"
+            | "filesystem" => &["model"],
             "domain" | "model" | "relay" => &[],
             _ => {
                 violations.push(format!("unregistered workspace package: {name}"));
@@ -173,7 +173,7 @@ fn metadata_cannot_depend_on_host_crates_or_transport_adapters() {
 }
 
 #[test]
-fn filesystem_cannot_depend_on_host_agent_or_transport_crates() {
+fn filesystem_cannot_depend_on_metadata_host_agent_or_transport_crates() {
     for dependency in [
         "api",
         "protocol",
@@ -182,6 +182,7 @@ fn filesystem_cannot_depend_on_host_agent_or_transport_crates() {
         "domain",
         "workspace",
         "provider",
+        "metadata",
         "ait-domain",
     ] {
         let packages = [
@@ -235,11 +236,14 @@ fn terminal_cannot_depend_on_metadata_provider_transport_or_old_workspace_packag
         ];
         assert_eq!(violations(&packages), [format!("terminal -> {dependency}")]);
     }
-    for kind in [Value::Null, json!("dev"), json!("build")] {
-        let packages = [
-            json!({"id":"terminal", "name":"terminal", "dependencies":[{"name":"metadata", "rename":"workspace_records", "kind":kind, "optional":true, "target":"cfg(windows)", "path":"../metadata"}]}),
-        ];
-        assert_eq!(violations(&packages), ["terminal -> metadata"]);
+    for capability in ["terminal", "filesystem", "provider"] {
+        for kind in [Value::Null, json!("dev"), json!("build")] {
+            let packages = [json!({"id":capability, "name":capability, "dependencies":[{
+                "name":"metadata", "rename":"workspace_records", "kind":kind, "optional":true,
+                "target":"cfg(windows)", "path":"../metadata"
+            }]})];
+            assert_eq!(violations(&packages), [format!("{capability} -> metadata")]);
+        }
     }
     for dependency in ["axum", "rusqlite", "reqwest"] {
         let packages =
@@ -349,9 +353,9 @@ fn relay_is_a_leaf_transport_owned_by_the_api() {
 }
 
 #[test]
-fn provider_and_terminal_sources_do_not_import_metadata_contracts_or_storage() {
+fn independent_capability_sources_do_not_import_metadata_contracts_or_storage() {
     let crates = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../../crates");
-    for capability in ["provider", "terminal"] {
+    for capability in ["provider", "terminal", "filesystem"] {
         let mut pending = vec![crates.join(capability).join("src")];
         while let Some(directory) = pending.pop() {
             for entry in std::fs::read_dir(directory).unwrap() {

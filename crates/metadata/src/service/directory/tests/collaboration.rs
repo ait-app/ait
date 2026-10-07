@@ -52,3 +52,23 @@ fn directory_port_preserves_safe_business_failures() {
     assert_eq!(error.message, "unknown project");
     assert!(port.changes().is_none());
 }
+
+#[test]
+fn project_registration_port_reuses_shared_records_and_preserves_safe_failures() {
+    use model::workspace::lifecycle::ProjectRegistration;
+
+    let directory = directory();
+    let port: Arc<dyn ProjectRegistration> = Arc::new(directory.clone());
+    let project = port.register_project("/tmp/alpha", "registered").unwrap();
+    assert_eq!(project.project_id, "prj_a");
+    assert!(directory.list_projects().unwrap().contains(&project));
+    let reused = port.register_project("/tmp/alpha", "again").unwrap();
+    assert_eq!(reused.project_id, project.project_id);
+    assert_eq!(reused.created_at, project.created_at);
+    assert_eq!(
+        port.register_project("/missing", "now")
+            .unwrap_err()
+            .message,
+        "directory not found"
+    );
+}

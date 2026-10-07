@@ -1,11 +1,6 @@
-use metadata::ports::provisioning::{Checkout, DirectorySource, DirectorySourceError};
-use metadata::ports::registry::{ProjectRegistry, WorkspaceRegistry};
-use metadata::service::directory::{Directory, DirectoryDependencies};
-use metadata::storage::{
-    project_config::LocalProjectConfigStore,
-    project_icon::LocalProjectIconStore,
-    registry::{FileBackedProjectRegistry, FileBackedWorkspaceRegistry},
-};
+use model::workspace::lifecycle::{ProjectRegistration, WorkspaceLifecycleError};
+use model::workspace::records::PersistedProjectKind;
+use std::sync::{Arc, Mutex};
 
 use super::*;
 use crate::ports::github_projects::{
@@ -34,7 +29,7 @@ fn direct_github_urls_preserve_the_requested_transport_and_reject_ambiguous_urls
     ] {
         assert!(normalize_clone_repository(url, None).is_none(), "{url}");
     }
-    let (_temp, directory) = directory();
+    let directory = directory();
     assert_eq!(
         crate::rpc::github_projects::execute(&directory, "unknown", serde_json::json!({})),
         Err(crate::rpc::ErrorCode::MethodNotFound)
@@ -54,42 +49,37 @@ fn direct_github_urls_preserve_the_requested_transport_and_reject_ambiguous_urls
     }
 }
 #[derive(Debug, Default)]
-struct Source;
-impl DirectorySource for Source {
-    fn inspect(&self, path: &str) -> Result<Checkout, DirectorySourceError> {
+struct Registration {
+    calls: Mutex<Vec<(String, String)>>,
+}
+
+impl ProjectRegistration for Registration {
+    fn register_project(
+        &self,
+        path: &str,
+        timestamp: &str,
+    ) -> Result<PersistedProjectRecord, WorkspaceLifecycleError> {
+        self.calls
+            .lock()
+            .unwrap()
+            .push((path.to_owned(), timestamp.to_owned()));
         if path.contains("missing") {
-            return Err(DirectorySourceError::NotFound);
+            return Err(WorkspaceLifecycleError {
+                message: "directory not found".to_owned(),
+            });
         }
-        let is_git = !path.contains("plain");
-        Ok(Checkout {
-            cwd: path.to_owned(),
-            is_git,
-            current_branch: is_git.then(|| "main".to_owned()),
-            remote_url: is_git.then(|| "git@github.com:Example/Repo.git".to_owned()),
-            worktree_root: is_git.then(|| "/tmp/alpha".to_owned()),
-            is_paseo_owned_worktree: false,
-            main_repo_root: None,
+        Ok(PersistedProjectRecord {
+            project_id: "prj_test".to_owned(),
+            root_path: path.to_owned(),
+            kind: PersistedProjectKind::Git,
+            display_name: "repo".to_owned(),
+            project_key: Some("remote:github.com/example/repo".to_owned()),
+            custom_name: None,
+            custom_icon_revision: None,
+            created_at: timestamp.to_owned(),
+            updated_at: timestamp.to_owned(),
+            archived_at: None,
         })
-    }
-
-    fn create_child(&self, parent: &str, name: &str) -> Result<String, DirectorySourceError> {
-        if name == "exists" {
-            Err(DirectorySourceError::AlreadyExists)
-        } else {
-            Ok(format!("{parent}/{name}"))
-        }
-    }
-
-    fn remove_empty(&self, _path: &str) -> Result<(), DirectorySourceError> {
-        Ok(())
-    }
-
-    fn equivalent(&self, left: &str, right: &str) -> bool {
-        left == right
-    }
-
-    fn canonical(&self, path: &str) -> Result<String, DirectorySourceError> {
-        self.inspect(path).map(|checkout| checkout.cwd)
     }
 }
 
@@ -139,29 +129,16 @@ impl GithubProjectsRuntime for Github {
     }
 }
 
-fn directory() -> (tempfile::TempDir, GithubProjects) {
-    let temp = tempfile::tempdir().unwrap();
-    let projects = FileBackedProjectRegistry::new(temp.path().join("projects.json"));
-    let workspaces = FileBackedWorkspaceRegistry::new(temp.path().join("workspaces.json"));
-    projects.initialize().unwrap();
-    workspaces.initialize().unwrap();
-    let directory = Directory::new(DirectoryDependencies {
-        projects: Box::new(projects),
-        workspaces: Box::new(workspaces),
-        source: Box::new(Source),
-        config_store: Box::new(LocalProjectConfigStore),
-        icon_store: Box::new(LocalProjectIconStore::new(temp.path().join("icons"))),
-        server_id: "server-test".to_owned(),
-    });
-    (
-        temp,
-        GithubProjects::new(directory, Box::new(Github::default())),
+fn directory() -> GithubProjects {
+    GithubProjects::new(
+        Arc::new(Registration::default()),
+        Box::new(Github::default()),
     )
 }
 
 #[test]
 fn repository_search_preserves_availability_and_authentication_error_categories() {
-    let (_temp, mut directory) = directory();
+    let mut directory = directory();
     for (error, status, available, reason) in [
         (
             GithubProjectsError::CliMissing,
@@ -198,7 +175,7 @@ fn repository_search_preserves_availability_and_authentication_error_categories(
 }
 #[test]
 fn github_clone_normalizes_repo_and_registers_project_without_workspace() {
-    let (_temp, directory) = directory();
+    let directory = directory();
     let outcome = directory.clone_github_project(
         " owner/repo.git ",
         Some(GithubCloneProtocol::Ssh),
@@ -227,7 +204,7 @@ fn github_clone_normalizes_repo_and_registers_project_without_workspace() {
 
 #[test]
 fn github_clone_rejects_unsafe_input_without_launching_or_registering() {
-    let (_temp, directory) = directory();
+    let directory = directory();
     for repo in [
         "owner/../repo",
         "https://evil.example/owner/repo",
@@ -242,7 +219,7 @@ fn github_clone_rejects_unsafe_input_without_launching_or_registering() {
 
 #[test]
 fn github_clone_preserves_completed_checkout_on_registration_failure() {
-    let (_temp, directory) = directory();
+    let directory = directory();
 
     let outcome = directory.clone_github_project(
         "owner/missing",
@@ -261,7 +238,7 @@ fn github_clone_preserves_completed_checkout_on_registration_failure() {
 
 #[test]
 fn github_clone_reports_planned_checkout_path_when_clone_fails() {
-    let (_temp, directory) = directory();
+    let directory = directory();
     let outcome = directory.clone_github_project(
         "owner/exists",
         Some(GithubCloneProtocol::Https),
@@ -278,4 +255,33 @@ fn github_clone_reports_planned_checkout_path_when_clone_fails() {
         outcome.error.as_deref(),
         Some("Checkout path already exists")
     );
+}
+
+#[test]
+fn clone_passes_the_completed_checkout_and_timestamp_to_shared_registration() {
+    let registration = Arc::new(Registration::default());
+    let service = GithubProjects::new(registration.clone(), Box::new(Github::default()));
+    let outcome = service.clone_github_project(
+        "owner/repo",
+        Some(GithubCloneProtocol::Https),
+        "/projects",
+        "now",
+    );
+    assert!(outcome.error.is_none());
+    assert_eq!(
+        registration.calls.lock().unwrap().as_slice(),
+        &[("/projects/repo".to_owned(), "now".to_owned())]
+    );
+    assert_eq!(outcome.project.unwrap().created_at, "now");
+    let outcome = service.clone_github_project(
+        "owner/exists",
+        Some(GithubCloneProtocol::Https),
+        "/projects",
+        "later",
+    );
+    assert!(outcome.error.is_some());
+    assert_eq!(registration.calls.lock().unwrap().len(), 1);
+    let outcome = service.clone_github_project("owner/../unsafe", None, "/projects", "later");
+    assert!(outcome.error.is_some());
+    assert_eq!(registration.calls.lock().unwrap().len(), 1);
 }

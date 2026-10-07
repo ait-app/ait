@@ -6,8 +6,6 @@ publish.workspace = true
 
 [dependencies]
 model.workspace = true
-# Project/Workspace registries and consumer-owned provisioning contracts.
-metadata.workspace = true
 
 tracing.workspace = true
 tokio.workspace = true
