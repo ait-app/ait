@@ -18,8 +18,13 @@ impl CodexClient {
                 .map(|(name, _)| (name.clone(), json!({"enabled":false}))).collect();
             let mut config = json!({
                 "project_doc_max_bytes":0,"web_search":"disabled","mcp_servers":servers,"notify":[],
+                "tools":{"experimental_request_user_input":{"enabled":false},"update_plan":{"enabled":false}},
                 "features":{"shell_tool":false,"multi_agent":false,"multi_agent_v2":false,
-                    "apps":false,"plugins":false,"hooks":false,"goals":false,"memories":false}
+                    "apps":false,"plugins":false,"hooks":false,"goals":false,"memories":false,
+                    "code_mode":false,"code_mode_host":false,"code_mode_only":false,
+                    "view_image":false,"image_generation":false,"sleep_tool":false,
+                    "skill_search":false,"tool_suggest":false,"default_mode_request_user_input":false,
+                    "request_permissions_tool":false}
             });
             if let Some(effort) = &spec.config.thinking_option_id { config["model_reasoning_effort"] = json!(effort); }
             let started = transport.request("thread/start", json!({
@@ -59,6 +64,17 @@ async fn collect(
         }
         if event["params"]["threadId"] != thread {
             continue;
+        }
+        if matches!(
+            event["method"].as_str(),
+            Some("item/started" | "item/completed")
+        ) && event["params"]["turnId"] == turn
+            && !matches!(
+                event["params"]["item"]["type"].as_str(),
+                Some("agentMessage" | "userMessage" | "reasoning")
+            )
+        {
+            return Err(AgentSessionError::Rejected);
         }
         match event["method"].as_str() {
             Some("item/completed") if event["params"]["turnId"] == turn => {

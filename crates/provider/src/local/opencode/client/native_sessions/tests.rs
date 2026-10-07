@@ -33,6 +33,14 @@ async fn lists_and_imports_external_history_without_mutations_then_resumes() {
             .await
             .unwrap();
         assert_eq!(listed.len(), 1);
+        assert_eq!(
+            listed[0].first_prompt_preview.as_deref(),
+            Some("native prompt")
+        );
+        assert_eq!(
+            listed[0].last_prompt_preview.as_deref(),
+            Some("native prompt")
+        );
         assert_eq!(listed[0].title.as_deref(), Some("Existing session"));
         let mut handle = AgentPersistenceHandle {
             provider: "opencode".into(),
@@ -254,4 +262,47 @@ async fn installed_existing_sessions_are_discovered_and_inspected_without_submis
         entries.len()
     );
     assert!(inspected > 0, "no existing session could be inspected");
+}
+
+#[test]
+fn discovery_previews_ignore_tools_assistants_and_synthetic_user_parts() {
+    assert!(prompt(Version::V2, &json!({"type":"assistant","text":"not user"})).is_none());
+    let message = json!({"info":{"role":"user"},"parts":[
+        {"type":"text","synthetic":true,"text":"injected"},
+        {"type":"text","ignored":true,"text":"ignored"},
+        {"type":"file","text":"binary"},
+        {"type":"text","text":"first\n question"},
+        {"type":"text","text":"continued"}
+    ]});
+    assert_eq!(
+        prompt(Version::V1, &message).as_deref(),
+        Some("first question continued")
+    );
+}
+
+#[tokio::test]
+async fn previews_keep_first_and_last_user_text_separate_from_assistant_messages() {
+    let fixture = Fixture::start(Version::V2).await;
+    fixture.state.lock().unwrap().history = vec![
+        json!({"type":"user","text":"first question"}),
+        json!({"type":"assistant","text":"answer"}),
+        json!({"type":"user","text":"last question"}),
+    ];
+    let client = OpenCodeClient::new(fixture.binary.clone());
+    let entries = client
+        .list_sessions(&ListOptions {
+            cwd: Some(fixture.cwd.to_str().unwrap().into()),
+            scan_limit: 20,
+        })
+        .await
+        .unwrap();
+    assert_eq!(
+        entries[0].first_prompt_preview.as_deref(),
+        Some("first question")
+    );
+    assert_eq!(
+        entries[0].last_prompt_preview.as_deref(),
+        Some("last question")
+    );
+    assert_eq!(fixture.state.lock().unwrap().submissions, 0);
 }

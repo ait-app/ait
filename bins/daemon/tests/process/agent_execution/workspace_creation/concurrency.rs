@@ -149,7 +149,19 @@ async fn attempted_initial_prompt_is_not_replayed_after_failure() {
     let log = fixture.root.path().join("server.log");
     let mut process = start_with_path(&state, &log, Some(&fixture.path));
     let address = ready(&mut process, &log).await;
-    let mut client = connect(&address, &methods()).await;
+    let mut capabilities = methods();
+    capabilities.push("daemon.config.set.request");
+    let mut client = connect(&address, &capabilities).await;
+    // The fixture catalog intentionally has no small model; explicitly enable its
+    // metadata model so this concurrency test still observes the auxiliary turn.
+    call(
+        &mut client,
+        "daemon.config.set.request",
+        json!({"config": {
+            "metadataGeneration": {"providers": [{"provider": "codex", "model": "metadata-only"}]}
+        }}),
+    )
+    .await;
     let params = json!({"idempotencyKey":"prompt-failure","source":{"kind":"directory","path":fixture.cwd},
         "agent":{"config":{"provider":"codex","cwd":fixture.cwd},"initialPrompt":"attempt once"}});
     let failed = call(&mut client, "workspace.create.request", params.clone()).await;

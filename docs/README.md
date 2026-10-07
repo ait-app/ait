@@ -14,6 +14,8 @@
 ## 架构决策
 
 - [ADR-097：Google Play 内部测试手动发布](decisions/clients/adr-097-google-play-internal-release.md)：签名 AAB、远端版本计数与内部测试草稿或发布。
+- [ADR-099：Provider 自选辅助小模型](decisions/providers/adr-099-provider-owned-auxiliary-models.md)：能力声明、原生认证与用户覆盖。
+
 - [ADR-096：Desktop 内置 daemon 默认同步与手动下线](decisions/clients/adr-096-desktop-default-host-sync.md)：登录后默认注册本机，持久保留手动下线选择，并统一在线服务添加主机表单风格。
 - [ADR-095：组件自行声明方法元数据](decisions/daemon/adr-095-component-method-declarations.md)：移除中心目录和 `MethodGroup`，功能 crate 仅提供两种方法元数据接口，API 聚合名称并校验。
 - [ADR-094：客户端统一使用 Ait 标准方法名](decisions/clients/adr-094-canonical-ait-client-methods.md)：应用、SDK、消息校验和方法目录使用标准名称，事件订阅参数转换集中在共享协议层。
@@ -69,6 +71,11 @@
 - [OpenCode 原生 Provider](decisions/providers/adr-074-opencode-native-provider.md)：接入范围、审批、外部会话发现与导入恢复。
 
 ## 工程规范与验证
+
+- [DSH 辅助生成验证](reports/providers/dsh-auxiliary-generation.md)：无工具、无持久化的原生 headless 通道与覆盖率。
+- [OpenCode 辅助生成验证](reports/providers/opencode-auxiliary-generation.md)：私有、禁用工具的原生通道与清理边界。
+- [原生会话预览验证](reports/providers/native-session-previews.md)：OpenCode / DSH 的首尾 prompt、只读查询及降级行为。
+- [DSH 模型发现验证](reports/providers/dsh-readonly-discovery.md)：只读模型目录与会话初始化隔离。
 
 - [Rust style guide](policy/rust.md)：Rust 代码、测试、lint 与覆盖率规范。
 - [Daemon 测试扩展与覆盖率验证](reports/daemon/crate-coverage-rebase.md)：最新 rebase 验证、逐 crate 证据与历史测量索引。

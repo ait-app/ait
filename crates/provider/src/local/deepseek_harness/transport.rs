@@ -4,7 +4,7 @@ use std::time::Duration;
 
 use serde_json::{Value, json};
 use tokio::io::{AsyncBufReadExt, AsyncReadExt, AsyncWriteExt, BufReader};
-use tokio::process::{Child, ChildStdin, Command};
+use tokio::process::{Child, ChildStdin};
 use tokio::sync::mpsc;
 use tokio::task::JoinHandle;
 
@@ -31,11 +31,10 @@ impl Transport {
         client: &DeepSeekHarnessClient,
         cwd: &str,
     ) -> Result<Self, AgentSessionError> {
-        let mut command = Command::new(&client.program);
+        let mut command = client.command();
         command
             .args(["--profile", "acp"])
             .current_dir(cwd)
-            .envs(client.environment.entries())
             .stdin(Stdio::piped())
             .stdout(Stdio::piped())
             .stderr(Stdio::null())

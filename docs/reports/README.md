@@ -2,6 +2,8 @@
 
 文档按当前能力归属分类。历史验证记录只对应各文件注明的源码提交与平台。
 
+- [DSH 权限目录兼容与真实会话继承](providers/dsh-permission-catalog.md)
+
 ## Daemon 与协议
 
 - [组件方法声明：PR 覆盖率证据](daemon/component-method-declarations-pr-coverage-2026-10-07.json)

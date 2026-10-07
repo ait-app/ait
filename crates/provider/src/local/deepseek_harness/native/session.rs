@@ -110,7 +110,7 @@ pub(in crate::local::deepseek_harness) async fn open(
     );
     let mut selection = Selection {
         catalog,
-        permissions: values["permissions"].clone(),
+        permissions: config::permission_selection(&runtime.api, &values["permissions"]).await?,
         model: selected,
     };
     selection.apply(&runtime.api, &id, &spec.config).await?;

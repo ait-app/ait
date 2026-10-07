@@ -123,7 +123,7 @@ async fn configured_codex_and_claude_generate_metadata_without_foreground_agents
             .patch(&json!({"providers":{
                 "codex":{"enabled":provider == "codex"},
                 "claude":{"enabled":provider == "claude"}
-            }}))
+            },"metadataGeneration":{"providers":[{"provider":provider,"model":"metadata-only"}]}}))
             .unwrap();
         let request = MetadataRequest {
             kind: MetadataKind::Title,

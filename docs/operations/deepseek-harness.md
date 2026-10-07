@@ -5,7 +5,15 @@
 Ait daemon 注册 `deepseek-harness`；客户端模型选择器显示 **DeepSeek Harness**，
 模型和推理等级从本机 Harness 的实际配置目录发现。
 
-默认从 PATH 启动 `dsh`。桌面启动环境找不到它时，在启动 server/desktop 前设置：
+默认优先从 PATH 启动 `dsh`。找不到 CLI 时，Ait 自动检查 DSH 桌面安装包：
+Linux 会解析 PATH 中 `deepseek-harness` 的真实位置，并检查 `/opt/dsh-desktop-linux-bin`
+和 `/opt/deepseek-harness`；macOS 检查 `/Applications` 与 `~/Applications` 下的 DSH 应用。
+仅识别包身份为 `@deepseek-ai/dsh-desktop` 且包含 CLI 入口的安装包。
+Linux 使用包内 Node；macOS 没有独立 Node 时以 `ELECTRON_RUN_AS_NODE=1` 启动包内运行时。
+这些入口用于模型发现、会话导入/恢复、ACP 和辅助生成，不会打开 DSH 桌面窗口。
+缺失或不完整的安装包仍报告不可用；安装或升级 DSH 后需要重启 Ait daemon 重新发现。
+
+独立启动 daemon 时，可以指定 CLI 路径覆盖自动发现（不要指向桌面 GUI 可执行文件）：
 
 ```sh
 export AIT_SERVER_DEEPSEEK_HARNESS_BIN=/absolute/path/to/dsh
@@ -46,8 +54,7 @@ export AIT_SERVER_DEEPSEEK_HARNESS_BIN=/absolute/path/to/dsh
 暂不支持其他前端实时历史同步、steer、rewind、commands 和结构化输出约束。
 原生 Host 不接受 Ait 每会话 MCP override；请在 DSH web profile 中配置 MCP。
 显示按原生已落盘消息更新，不保证逐 token 输出。
-模型发现会创建并关闭一个 Harness probe session；Harness 没有会话删除接口，
-因此 probe 的原生持久化记录由 Harness 的保留策略管理。
+原生模型发现只读目录，不再创建 probe session；显式 ACP 模式仍需打开会话进行发现。
 
 旧 CLI 或需要 ACP 每会话 MCP override 时，可在 daemon 启动前设置：
 
@@ -60,3 +67,13 @@ ACP 没有权限模式、question 和外部会话导入。默认不会因原生 
 
 实现边界见 [ADR-082](../decisions/providers/adr-082-deepseek-harness-native-host.md)，
 测试范围见[原生 Host 验证报告](https://github.com/KirisameLonnet/ait/blob/dc6cb1e01158ba14120e471b980ffe902ec7e09b/docs/reports/providers/deepseek-harness-native-host.md)。
+
+## 导入列表预览
+
+导入列表保留 DSH 原生标题、目录与活动时间，优先使用 turnOutline 的首尾用户 prompt。旧会话没有缓存摘要时，通过只读历史快照及分页补齐；不会提交消息或创建 Agent。预览规范化空白并限制为 300 个 Unicode 字符。单会话读取最多两秒、8 MiB / 100 页，全列表额外预算十秒；超限、损坏或只有图片而没有用户文本时保留原列表项，不伪造 prompt。
+## 模型发现
+
+Provider 模型菜单直接读取原生 Host 的 `session/modelCatalog`，不会为读取目录创建原生会话、选择模型或发送输入。菜单先列出内置权限预设，创建/恢复会话时仍由原生会话的实际权限目录校验选择。目录读取不再依赖默认会话能否成功初始化。CLI 启动、原生目录或认证错误仍可能使 Provider 显示错误，应结合展开后的错误文字和 DSH 版本诊断。
+## DSH 0.2 权限目录
+
+新版 Host 从 `permissionPresets/catalog` 提供可选权限，历史投影只保留当前值；Ait 兼容此协议及旧版内嵌选项。恢复桌面中打开的原生会话前，应先让 DSH 释放该会话的写入所有权；即使没有运行中的回合，桌面仍可能持有写入锁。只读导入不需要抢占写入所有权。验证范围见[权限目录兼容报告](../reports/providers/dsh-permission-catalog.md)。

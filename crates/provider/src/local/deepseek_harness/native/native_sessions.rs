@@ -1,4 +1,5 @@
 //! Read-only discovery and import through the native Host's public session API.
+mod previews;
 use std::{collections::BTreeMap, path::Path};
 
 use domain::agent_runtime::{AgentPersistenceHandle, StoredAgentConfig};
@@ -35,10 +36,19 @@ pub(in crate::local::deepseek_harness) async fn list(
         .api
         .call("session/list", json!({"_request":{}}))
         .await;
+    let result = match result {
+        Ok(response) => match descriptors(&response, options) {
+            Ok(mut sessions) => {
+                previews::populate(&mut runtime, &mut sessions).await;
+                Ok(sessions)
+            }
+            Err(error) => Err(error),
+        },
+        Err(error) => Err(error),
+    };
     let closed = runtime.close().await;
-    let response = result?;
     closed?;
-    descriptors(&response, options)
+    result
 }
 
 fn descriptors(
@@ -66,6 +76,8 @@ fn descriptors(
         let id = text(row, "sessionId")?;
         validate_id(id)?;
         let updated = row["updatedAt"].as_i64().ok_or(AgentSessionError::Failed)?;
+        let (first_prompt_preview, last_prompt_preview) =
+            previews::projection(&row["projections"]["values"]);
         entries.push((
             updated,
             SessionDescriptor {
@@ -76,8 +88,8 @@ fn descriptors(
                 title: row["projections"]["values"]["title"]
                     .as_str()
                     .map(str::to_owned),
-                first_prompt_preview: None,
-                last_prompt_preview: None,
+                first_prompt_preview,
+                last_prompt_preview,
                 last_activity_at: timestamp(updated)?,
             },
         ));

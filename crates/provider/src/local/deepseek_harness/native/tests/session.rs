@@ -320,3 +320,45 @@ async fn image_output_is_materialized_before_following_text_and_completion() {
     ));
     session.close().await.unwrap();
 }
+
+#[tokio::test]
+async fn separate_permission_catalog_preserves_native_choices() {
+    let mut fixture = Fixture::new().await;
+    fixture.set_snapshot_fields(json!({"projections":{"values":{
+        "permissions":{"currentValue":"workspace-write"}
+    }}}));
+    fixture.spec.config.mode_id = Some("custom-policy".into());
+    let mut session = fixture.client.create_session(&fixture.spec).await.unwrap();
+    assert_eq!(fixture.requests("permissionPresets/catalog").len(), 1);
+    assert_eq!(
+        fixture.requests("commands/execute")[0]["line"],
+        "/permission custom-policy"
+    );
+    assert_eq!(
+        session.runtime_info().await.unwrap().mode_id.as_deref(),
+        Some("custom-policy")
+    );
+    session.close().await.unwrap();
+}
+
+#[tokio::test]
+async fn embedded_permission_catalog_needs_no_new_endpoint() {
+    let fixture = Fixture::new().await;
+    let mut session = fixture.client.create_session(&fixture.spec).await.unwrap();
+    assert!(fixture.requests("permissionPresets/catalog").is_empty());
+    session.close().await.unwrap();
+}
+
+#[tokio::test]
+async fn malformed_permission_projection_is_not_replaced_with_defaults() {
+    for permissions in [
+        json!({}),
+        json!({"currentValue":"read-only","options":null}),
+    ] {
+        let fixture = Fixture::new().await;
+        fixture.set_snapshot_fields(json!({"projections":{"values":{"permissions":permissions}}}));
+        assert!(fixture.client.create_session(&fixture.spec).await.is_err());
+        assert!(fixture.requests("permissionPresets/catalog").is_empty());
+        assert!(fixture.requests("commands/execute").is_empty());
+    }
+}
