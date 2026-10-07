@@ -1,0 +1,394 @@
+{
+  "source_revision": "3fd9036abea462f501616327f36813374cc15469",
+  "base_revision": "76880f66c47832546fd86aeb35eeea4bd6b81c9a",
+  "measurement_date": "2026-10-07",
+  "scope": "Rust Cargo workspace (13 crates); default features; macOS arm64; rustc 1.98.1; cargo-llvm-cov 0.8.4; tool default file filtering; no additional file exclusions; test threads=1; doctests run by cargo test but not instrumented by this coverage command.",
+  "commands": {
+    "tests": "RUST_BACKTRACE=1 cargo test --workspace --no-fail-fast -- --test-threads=1",
+    "build": "cargo build --workspace",
+    "clippy": "cargo clippy --workspace --all-targets -- -D warnings",
+    "format": "cargo fmt --all --check",
+    "coverage": "cargo llvm-cov --workspace --html -- --test-threads=1",
+    "coverage_export": "cargo llvm-cov report --json --output-path target/crate-service-coverage-raw.json",
+    "client_metadata": "python3 scripts/check-paseo-client-methods.py",
+    "metadata_extraction_tests": "python3 scripts/rust_method_specs_test.py",
+    "docs": "npm run check:docs"
+  },
+  "rust_source_fingerprint_sha256": "932b79de8db092a9bd75469f802063aec03416476b9b89998527c8bdd7577f9d",
+  "fingerprint_scope": "Sorted tracked Rust files, Cargo manifests, Cargo.lock and rust-toolchain.toml; SHA-256 over path, NUL, bytes, NUL.",
+  "changed_source_sha256": {
+    "bins/daemon/src/host.rs": "4a13be45a5478ddec7619a98b72b99765280b8fabfd2db592cc640abddab6312",
+    "bins/daemon/src/host/tests.rs": "62f389b54dde331efd451d9647c3e37321c4a64f72c24fcb1f0abf4b6efb86ad",
+    "bins/daemon/tests/process/catalog.rs": "cae5af151490d227f46f1b38b1f65be20debb92f62506ba601bfbf896ddac515",
+    "crates/api/src/capabilities.rs": "d91674c38907fff568b72b8c7d6a78dc27a7df1608092cfc76942dfc110d3363",
+    "crates/api/src/capabilities/tests.rs": "378f224e4d4c6f76720afbd69a19b9611bbef71c86a4947f2370d8c4254055e2",
+    "crates/api/src/composition.rs": "9c78d9b5f9b5867d716cb7c2aea499027688cfc5447126c4ee9b0811782e8f09",
+    "crates/api/src/core_methods.rs": "d9f6eac9c6246f00508980e488b1fd189d78c4ce3775605387e3c3c21d23f201",
+    "crates/api/src/lib.rs": "26af1dfc84ac2636623a0c217162d582765ccf9ce02b8550324a3a27849a6c66",
+    "crates/api/src/tests/voice.rs": "d6d1fda4bf4c5002719ad355a87bb62f495ce87c6a8cb987e6cb83fc0c820a08",
+    "crates/browser/src/lib.rs": "d53610c40a40a207bdf0ac3959fa496c836d7442bd4f0d2ab53f5ccd9027b371",
+    "crates/filesystem/src/capabilities.rs": "fe3c565ede636f05196ed3a6041fd8d3510f606fdccd46f804be40e1731f7ede",
+    "crates/filesystem/src/capabilities/tests.rs": "ed0f14d35f0d6eb09fa545ab5f9f068702dbfd66d42263b79d7cacbdb3f654a5",
+    "crates/filesystem/src/installation.rs": "f908f54b78d027fdaba762cfc2703fa12eba22bae47bddd6ad0bbfe9854e35ea",
+    "crates/filesystem/src/lib.rs": "7fcff16e276608b3e0569e70b1601f5759f87372260532f348adec3b4ef612a7",
+    "crates/metadata/src/capabilities.rs": "c2d79cf30fe60b811b6a6e6222dbf2bef2d9e6e9c52a2f52f2402b232d5f844c",
+    "crates/metadata/src/capabilities/tests.rs": "97d54fba82efb5d8c241a1524547949735c813da6d2f78884453c763eb65d12c",
+    "crates/metadata/src/connection/creation.rs": "8fb5d253bcb40c8218fb2f3d8b99079523ef753a922140d9d1d3cc9d23b57bdf",
+    "crates/metadata/src/connection/session.rs": "1097960cc346f765649bd6d2d8861c233a277879638ee67b8e351e443f7f9e52",
+    "crates/metadata/src/dispatch.rs": "d53bbcf25669840a8e4364ac9cb543205e65fc72985b8f31bb8d5a5827b716d2",
+    "crates/metadata/src/installation.rs": "4a3d407b9ee291196ef75465413bf850ef4ff107c10571f5a95145afb4e2c84c",
+    "crates/metadata/src/lib.rs": "0d24d7dc3a30662e1365cdbb3ce89ec6c377c91160bac48a60d8b4d9fd8f4e7c",
+    "crates/metadata/src/rpc/editor.rs": "b2f44e3a8a2024bf18028d64b30b8c6dd91e3e415ad152a41f533e91d30c5678",
+    "crates/metadata/src/rpc/editor/tests.rs": "b56eda362adc1ea0b5379cb575ffc0cf0c7ed790bfcb2dd50377561fb7367c5e",
+    "crates/provider/src/capabilities.rs": "f4f7b3fd21bcfb73ee204bc2c093883e0e8a585daecd406ca11b080db96590d6",
+    "crates/provider/src/capabilities/tests.rs": "8b87b7deca58d2bfb7165d8c1a2b605d40b0261fcceae1c028820c12fdac6351",
+    "crates/provider/src/installation.rs": "723cd93d5a086c3827b9ab53ea922f7a0e7c1f8055457160ed63b1f428fd1775",
+    "crates/provider/src/lib.rs": "f17c5f77d959d328677ace0368c3da94b82b948af02e66505e8b3994962b3d3d",
+    "crates/schedule/src/lib.rs": "963deb5ce0e00035e999c4de1b07458b60fe9d2313f18b2ef38af9daec42ff45",
+    "crates/terminal/src/capabilities.rs": "a7e29e86759d62d622fde440aac8bc71c85ac5aea4e96c8b5d00979aa2c7f37a",
+    "crates/terminal/src/capabilities/tests.rs": "b10cc39f97035b2568e474c62da7e98da44be2e3ffc9c74fb3a24484c6356d5c",
+    "crates/terminal/src/lib.rs": "5afe8406d0b26040bb17685a3e19c4793487c14fa173b3a35985cc711c744aa1",
+    "crates/voice/src/lib.rs": "8c2a8aa61e2b1e72c5af9adb481e7491ad14924d50c3ed3849bfce1c1e12dc89"
+  },
+  "test_execution": {
+    "targets": 28,
+    "passed": 1922,
+    "failed": 0,
+    "ignored": 10,
+    "ignored_tests": [
+      "test local::antigravity::tests::installed::authenticated_multi_turn_and_resume ... ignored, requires authenticated AGY and explicitly consumes three model turns",
+      "test local::claude::tests::process::installed_claude_control_protocol_discovers_models_without_inference ... ignored, requires a locally installed Claude Code CLI; sends no model request",
+      "test local::claude::tests::process::parity::installed_claude_completes_a_native_turn_and_reopens_history ... ignored, requires installed Claude authentication and makes one small model request",
+      "test local::codex::tests::installed::installed_codex_completes_a_native_turn_and_reopens_history ... ignored, requires installed Codex authentication and makes one small model request",
+      "test local::deepseek_harness::native::tests::installed_host_discovers_switches_permissions_and_adopts_legacy_sessions ... ignored, requires an installed DSH CLI via AIT_TEST_DSH_BIN; no model request",
+      "test local::opencode::client::native_sessions::tests::installed_existing_sessions_are_discovered_and_inspected_without_submission ... ignored, reads existing native sessions; requires AIT_TEST_OPENCODE_BIN and AIT_TEST_OPENCODE_CWD",
+      "test local::opencode::tests::installed::installed_opencode_declined_tool_settles_and_accepts_next_turn ... ignored, requires AIT_TEST_OPENCODE_BIN; isolated config and loopback model only",
+      "test local::opencode::tests::installed::installed_opencode_discovers_runs_and_restores_with_local_model ... ignored, requires AIT_TEST_OPENCODE_BIN; isolated config and loopback model only",
+      "test local::opencode::tests::installed::installed_opencode_plan_import_and_switch_use_native_agent ... ignored, requires AIT_TEST_OPENCODE_BIN; isolated config and loopback model only",
+      "test local::opencode::tests::installed::installed_opencode_saves_only_explicit_native_permission_rules ... ignored, requires AIT_TEST_OPENCODE_BIN; isolated config and loopback model only"
+    ]
+  },
+  "coverage_test_execution": {
+    "targets": 16,
+    "passed": 1922,
+    "failed": 0,
+    "ignored": 10,
+    "ignored_tests": [
+      "test local::antigravity::tests::installed::authenticated_multi_turn_and_resume ... ignored, requires authenticated AGY and explicitly consumes three model turns",
+      "test local::claude::tests::process::installed_claude_control_protocol_discovers_models_without_inference ... ignored, requires a locally installed Claude Code CLI; sends no model request",
+      "test local::claude::tests::process::parity::installed_claude_completes_a_native_turn_and_reopens_history ... ignored, requires installed Claude authentication and makes one small model request",
+      "test local::codex::tests::installed::installed_codex_completes_a_native_turn_and_reopens_history ... ignored, requires installed Codex authentication and makes one small model request",
+      "test local::deepseek_harness::native::tests::installed_host_discovers_switches_permissions_and_adopts_legacy_sessions ... ignored, requires an installed DSH CLI via AIT_TEST_DSH_BIN; no model request",
+      "test local::opencode::client::native_sessions::tests::installed_existing_sessions_are_discovered_and_inspected_without_submission ... ignored, reads existing native sessions; requires AIT_TEST_OPENCODE_BIN and AIT_TEST_OPENCODE_CWD",
+      "test local::opencode::tests::installed::installed_opencode_declined_tool_settles_and_accepts_next_turn ... ignored, requires AIT_TEST_OPENCODE_BIN; isolated config and loopback model only",
+      "test local::opencode::tests::installed::installed_opencode_discovers_runs_and_restores_with_local_model ... ignored, requires AIT_TEST_OPENCODE_BIN; isolated config and loopback model only",
+      "test local::opencode::tests::installed::installed_opencode_plan_import_and_switch_use_native_agent ... ignored, requires AIT_TEST_OPENCODE_BIN; isolated config and loopback model only",
+      "test local::opencode::tests::installed::installed_opencode_saves_only_explicit_native_permission_rules ... ignored, requires AIT_TEST_OPENCODE_BIN; isolated config and loopback model only"
+    ]
+  },
+  "workspace_lines": {
+    "count": 57995,
+    "covered": 54766,
+    "percent": 94.43227864471075
+  },
+  "crate_lines": {
+    "bins/daemon": {
+      "count": 959,
+      "covered": 915,
+      "percent": 95.4118873826903
+    },
+    "crates/api": {
+      "count": 2136,
+      "covered": 1979,
+      "percent": 92.6498127340824
+    },
+    "crates/browser": {
+      "count": 733,
+      "covered": 715,
+      "percent": 97.5443383356071
+    },
+    "crates/domain": {
+      "count": 121,
+      "covered": 121,
+      "percent": 100.0
+    },
+    "crates/filesystem": {
+      "count": 12181,
+      "covered": 11556,
+      "percent": 94.86905836959198
+    },
+    "crates/metadata": {
+      "count": 8184,
+      "covered": 7761,
+      "percent": 94.83137829912023
+    },
+    "crates/model": {
+      "count": 802,
+      "covered": 762,
+      "percent": 95.01246882793018
+    },
+    "crates/protocol": {
+      "count": 63,
+      "covered": 63,
+      "percent": 100.0
+    },
+    "crates/provider": {
+      "count": 27983,
+      "covered": 26274,
+      "percent": 93.89272058035236
+    },
+    "crates/relay": {
+      "count": 464,
+      "covered": 422,
+      "percent": 90.94827586206897
+    },
+    "crates/schedule": {
+      "count": 847,
+      "covered": 826,
+      "percent": 97.52066115702479
+    },
+    "crates/terminal": {
+      "count": 1559,
+      "covered": 1504,
+      "percent": 96.47209749839641
+    },
+    "crates/voice": {
+      "count": 1963,
+      "covered": 1868,
+      "percent": 95.16046867040245
+    }
+  },
+  "service_installation_and_method_metadata_lines": {
+    "total": {
+      "count": 275,
+      "covered": 275,
+      "percent": 100.0
+    },
+    "files": {
+      "crates/api/src/capabilities.rs": {
+        "count": 61,
+        "covered": 61,
+        "percent": 100.0
+      },
+      "crates/api/src/composition.rs": {
+        "count": 37,
+        "covered": 37,
+        "percent": 100.0
+      },
+      "crates/api/src/connection/validation.rs": {
+        "count": 61,
+        "covered": 61,
+        "percent": 100.0
+      },
+      "crates/model/src/methods.rs": {
+        "count": 18,
+        "covered": 18,
+        "percent": 100.0
+      },
+      "crates/browser/src/capabilities.rs": {
+        "count": 6,
+        "covered": 6,
+        "percent": 100.0
+      },
+      "crates/filesystem/src/capabilities.rs": {
+        "count": 17,
+        "covered": 17,
+        "percent": 100.0
+      },
+      "crates/metadata/src/capabilities.rs": {
+        "count": 18,
+        "covered": 18,
+        "percent": 100.0
+      },
+      "crates/provider/src/capabilities.rs": {
+        "count": 15,
+        "covered": 15,
+        "percent": 100.0
+      },
+      "crates/schedule/src/capabilities.rs": {
+        "count": 6,
+        "covered": 6,
+        "percent": 100.0
+      },
+      "crates/terminal/src/capabilities.rs": {
+        "count": 9,
+        "covered": 9,
+        "percent": 100.0
+      },
+      "crates/voice/src/capabilities.rs": {
+        "count": 6,
+        "covered": 6,
+        "percent": 100.0
+      },
+      "crates/filesystem/src/installation.rs": {
+        "count": 9,
+        "covered": 9,
+        "percent": 100.0
+      },
+      "crates/metadata/src/installation.rs": {
+        "count": 6,
+        "covered": 6,
+        "percent": 100.0
+      },
+      "crates/provider/src/installation.rs": {
+        "count": 6,
+        "covered": 6,
+        "percent": 100.0
+      }
+    }
+  },
+  "changed_production_source_lines": {
+    "bins/daemon/src/host.rs": {
+      "count": 426,
+      "covered": 415,
+      "percent": 97.41784037558685
+    },
+    "crates/api/src/capabilities.rs": {
+      "count": 61,
+      "covered": 61,
+      "percent": 100.0
+    },
+    "crates/api/src/composition.rs": {
+      "count": 37,
+      "covered": 37,
+      "percent": 100.0
+    },
+    "crates/api/src/core_methods.rs": {
+      "count": 0,
+      "covered": 0,
+      "percent": 0
+    },
+    "crates/api/src/lib.rs": {
+      "count": 485,
+      "covered": 452,
+      "percent": 93.1958762886598
+    },
+    "crates/browser/src/lib.rs": {
+      "count": 0,
+      "covered": 0,
+      "percent": 0
+    },
+    "crates/filesystem/src/capabilities.rs": {
+      "count": 17,
+      "covered": 17,
+      "percent": 100.0
+    },
+    "crates/filesystem/src/installation.rs": {
+      "count": 9,
+      "covered": 9,
+      "percent": 100.0
+    },
+    "crates/filesystem/src/lib.rs": {
+      "count": 0,
+      "covered": 0,
+      "percent": 0
+    },
+    "crates/metadata/src/capabilities.rs": {
+      "count": 18,
+      "covered": 18,
+      "percent": 100.0
+    },
+    "crates/metadata/src/connection/creation.rs": {
+      "count": 121,
+      "covered": 115,
+      "percent": 95.0413223140496
+    },
+    "crates/metadata/src/connection/session.rs": {
+      "count": 94,
+      "covered": 88,
+      "percent": 93.61702127659576
+    },
+    "crates/metadata/src/dispatch.rs": {
+      "count": 239,
+      "covered": 217,
+      "percent": 90.7949790794979
+    },
+    "crates/metadata/src/installation.rs": {
+      "count": 6,
+      "covered": 6,
+      "percent": 100.0
+    },
+    "crates/metadata/src/lib.rs": {
+      "count": 0,
+      "covered": 0,
+      "percent": 0
+    },
+    "crates/metadata/src/rpc/editor.rs": {
+      "count": 15,
+      "covered": 15,
+      "percent": 100.0
+    },
+    "crates/provider/src/capabilities.rs": {
+      "count": 15,
+      "covered": 15,
+      "percent": 100.0
+    },
+    "crates/provider/src/installation.rs": {
+      "count": 6,
+      "covered": 6,
+      "percent": 100.0
+    },
+    "crates/provider/src/lib.rs": {
+      "count": 0,
+      "covered": 0,
+      "percent": 0
+    },
+    "crates/schedule/src/lib.rs": {
+      "count": 0,
+      "covered": 0,
+      "percent": 0
+    },
+    "crates/terminal/src/capabilities.rs": {
+      "count": 9,
+      "covered": 9,
+      "percent": 100.0
+    },
+    "crates/terminal/src/lib.rs": {
+      "count": 10,
+      "covered": 10,
+      "percent": 100.0
+    },
+    "crates/voice/src/lib.rs": {
+      "count": 23,
+      "covered": 23,
+      "percent": 100.0
+    }
+  },
+  "constant_declarations": {
+    "file": "crates/api/src/core_methods.rs",
+    "lines": {
+      "count": 0,
+      "covered": 0,
+      "percent": 0
+    },
+    "validation": "All nine API connection declarations are checked for ownership, unique names, event direction and installation in API tests and the client metadata extraction check."
+  },
+  "raw_report_sha256": "036d52f16a0379939cf8b2bb715af035c2100bb9a560f9bbc3c2dcf9420cb533",
+  "reviewable_artifact": "docs/reports/daemon/crate-level-service-installation-pr-coverage-2026-10-07.json",
+  "html_report": "target/llvm-cov/html/index.html",
+  "baseline_comparison": {
+    "source_revision": "586266b562c89916faf36b686b94da3d67751cb3",
+    "scope": "Previous merged method-metadata PR; same Rust workspace, default features, platform, toolchain, filtering and single-thread command. Main changes after that PR affect only clients and documentation.",
+    "workspace_lines": {
+      "count": 57981,
+      "covered": 54754,
+      "percent": 94.43438367741157
+    },
+    "percentage_point_change": -0.0021050327008254044,
+    "uncovered_line_change": 2,
+    "artifact": "https://github.com/ait-app/ait/blob/2ecfc7d3c3b0b32ae5a3a090bff869fdab7dccbe/docs/reports/daemon/component-method-declarations-pr-coverage-2026-10-07.json",
+    "interpretation": "The new service-construction, API conversion and capability metadata modules are fully line covered. Workspace uncovered lines increased by two in net: daemon host +1, unchanged checkout +1, creation subscriptions +1, metadata dispatch +3, API lifecycle/composition -4. Some unchanged asynchronous paths varied in execution; this is a line-coverage comparison, not a failing test result."
+  },
+  "unavailable_platforms": ["Linux", "Windows"],
+  "excluded_scopes": ["TypeScript clients", "doctest instrumentation"],
+  "uncovered_behavior": "Installed and authenticated native-provider paths remain opt-in; the ten existing ignored tests were not enabled. Panic invariants and platform-specific adapter paths are not deliberately exercised. No new file exclusions or ignored tests were added. The extracted daemon filesystem composition has no dedicated I/O fault-injection test for its error propagation; existing generic composition error paths remain partly uncovered.",
+  "follow_up": "Review Linux CI and run installed-provider tests only with their required local CLIs/authentication and explicit opt-in. Review any uncovered critical lines before delivery; installed-provider and platform-specific validation remains opt-in.",
+  "validation": {
+    "client_methods": 172,
+    "declared_methods": 179,
+    "negotiable_capabilities": 180,
+    "builtin_installed_methods": 12,
+    "docs_markdown_documents": 234,
+    "composite_installations": "Metadata, filesystem and provider each independently install their complete method set through real HTTP info and clean shutdown; their dependencies cannot omit functional parts."
+  }
+}
