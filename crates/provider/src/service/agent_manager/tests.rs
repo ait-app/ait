@@ -15,6 +15,22 @@ mod resume;
 mod titles;
 mod usage;
 
+#[test]
+fn provider_rejections_remain_distinct_from_provider_failures() {
+    assert_eq!(
+        map_session(AgentSessionError::Rejected),
+        AgentManagerError::SessionRejected
+    );
+    assert_eq!(
+        map_session(AgentSessionError::Unavailable),
+        AgentManagerError::Session
+    );
+    assert_eq!(
+        map_session(AgentSessionError::Failed),
+        AgentManagerError::Session
+    );
+}
+
 #[derive(Debug, Default)]
 struct RegistryState {
     records: BTreeMap<String, PersistedAgentRuntimeRecord>,
@@ -95,6 +111,7 @@ struct FakeState {
     fail_close: bool,
     handle_session_id: String,
     create_calls: usize,
+    create_error: Option<AgentSessionError>,
     resume_purposes: Vec<AgentResumePurpose>,
     resume_specs: Vec<AgentSessionSpec>,
     close_calls: usize,
@@ -115,6 +132,7 @@ impl Default for FakeState {
             fail_close: false,
             handle_session_id: "native-1".to_owned(),
             create_calls: 0,
+            create_error: None,
             resume_purposes: Vec::new(),
             resume_specs: Vec::new(),
             close_calls: 0,
@@ -153,7 +171,13 @@ impl AgentClient for FakeClient {
         _spec: &'a AgentSessionSpec,
     ) -> AgentSessionFuture<'a, Box<dyn AgentSession>> {
         Box::pin(async move {
-            self.0.lock().expect("state").create_calls += 1;
+            {
+                let mut state = self.0.lock().expect("state");
+                state.create_calls += 1;
+                if let Some(error) = state.create_error {
+                    return Err(error);
+                }
+            }
             Ok(Box::new(FakeSession(self.0.clone())) as Box<dyn AgentSession>)
         })
     }
@@ -386,6 +410,30 @@ async fn unavailable_provider_does_not_create_session() {
         Err(AgentManagerError::ProviderUnavailable("codex".to_owned()))
     );
     assert_eq!(client.0.lock().expect("state").create_calls, 0);
+}
+
+#[tokio::test]
+async fn rejected_creation_preserves_reason_without_registering_session() {
+    let (mut manager, registry, client) = make_manager();
+    client.0.lock().unwrap().create_error = Some(AgentSessionError::Rejected);
+
+    assert_eq!(
+        manager
+            .create("agent-1", &spec(), AgentRegistration::default())
+            .await,
+        Err(AgentManagerError::SessionRejected)
+    );
+    assert!(manager.live_snapshot("agent-1").is_none());
+    assert!(registry.get("agent-1").unwrap().is_none());
+    assert_eq!(client.0.lock().unwrap().create_calls, 1);
+
+    client.0.lock().unwrap().create_error = None;
+    assert!(
+        manager
+            .create("agent-1", &spec(), AgentRegistration::default())
+            .await
+            .is_ok()
+    );
 }
 
 #[tokio::test]

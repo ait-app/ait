@@ -1,5 +1,9 @@
 //! Asynchronous native approvals retain exact request identity and retain native approval scope.
 use std::collections::HashMap;
+use std::sync::{
+    Arc,
+    atomic::{AtomicBool, Ordering},
+};
 
 use crate::local::opencode::types::{ApprovalRequest, Decision, Invocation};
 use crate::local::opencode::types::{ApprovalTarget, Fault, ProtocolError};
@@ -15,13 +19,23 @@ use super::{
 
 pub(super) struct Pending {
     tasks: HashMap<String, Task>,
-    sender: tokio::sync::mpsc::Sender<Result<(), ProtocolError>>,
-    pub(super) receiver: tokio::sync::mpsc::Receiver<Result<(), ProtocolError>>,
+    sender: tokio::sync::mpsc::Sender<Result<Resolution, ProtocolError>>,
+    pub(super) receiver: tokio::sync::mpsc::Receiver<Result<Resolution, ProtocolError>>,
+}
+
+/// Result of sending one native permission decision back to `OpenCode`.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub(super) enum Resolution {
+    /// `OpenCode` may continue the current turn.
+    Resolved,
+    /// The current turn must settle as cancelled after a denial.
+    Declined,
 }
 
 struct Task {
     handle: AbortOnDropHandle<()>,
     approval: Option<ApprovalRequest>,
+    waiting: Arc<AtomicBool>,
 }
 
 impl Pending {
@@ -32,6 +46,11 @@ impl Pending {
             sender,
             receiver,
         }
+    }
+
+    /// Native idle state cannot settle a turn before in-flight decisions are observed.
+    pub(super) fn can_settle(&self) -> bool {
+        self.tasks.values().all(|task| task.handle.is_finished()) && self.receiver.is_empty()
     }
 
     pub(super) async fn reconcile(
@@ -62,9 +81,12 @@ impl Pending {
             .collect::<std::collections::HashSet<_>>();
         let withdrawn = self
             .tasks
-            .keys()
-            .filter(|id| !ids.contains(id.as_str()))
-            .cloned()
+            .iter()
+            .filter(|(id, task)| {
+                !ids.contains(id.as_str())
+                    && (task.waiting.load(Ordering::Acquire) || task.handle.is_finished())
+            })
+            .map(|(id, _)| id.clone())
             .collect::<Vec<_>>();
         for id in withdrawn {
             if let Some(task) = self.tasks.remove(&id) {
@@ -108,6 +130,8 @@ impl Pending {
         let id = id.to_owned();
         let session = session.to_owned();
         let sender = self.sender.clone();
+        let waiting = Arc::new(AtomicBool::new(true));
+        let task_waiting = waiting.clone();
         let task = tokio::spawn(async move {
             let result = async {
                 let decision = if let Some(approval) = approval {
@@ -121,6 +145,7 @@ impl Pending {
                 } else {
                     Decision::Denied
                 };
+                task_waiting.store(false, Ordering::Release);
                 let reply = match decision {
                     Decision::Approved => "once",
                     Decision::ApprovedAlways => "always",
@@ -135,7 +160,10 @@ impl Pending {
                 };
                 api.json(Method::POST, &path, Some(&body)).await?;
                 approvals.resolved(&id).await?;
-                Ok(())
+                Ok(match decision {
+                    Decision::Approved | Decision::ApprovedAlways => Resolution::Resolved,
+                    Decision::Denied | Decision::Cancelled => Resolution::Declined,
+                })
             }
             .await;
             let _ = sender.send(result).await;
@@ -145,6 +173,7 @@ impl Pending {
             Task {
                 handle: AbortOnDropHandle::new(task),
                 approval: retained_approval,
+                waiting,
             },
         );
         Ok(())

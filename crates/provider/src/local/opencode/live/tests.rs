@@ -3,6 +3,7 @@ use super::*;
 use crate::ports::agent_session::{AgentClient, AgentResumePurpose, AgentSessionSpec};
 
 mod ordering;
+mod permissions;
 mod streaming;
 mod tool_ordering;
 
@@ -39,6 +40,17 @@ async fn drain(session: &mut dyn AgentSession) -> Vec<AgentTurnEvent> {
     })
     .await
     .unwrap()
+}
+
+async fn continue_after_cancel(session: &mut dyn AgentSession, spec: &AgentSessionSpec) {
+    session
+        .start_turn("continue after cancel", &spec.config)
+        .await
+        .unwrap();
+    assert!(matches!(
+        drain(session).await.last(),
+        Some(AgentTurnEvent::Completed(_))
+    ));
 }
 
 #[tokio::test]
@@ -175,6 +187,9 @@ async fn server_approvals_reject_wider_authority_resolve_once_and_cancel_with_na
             .unwrap()
             .pending_permissions
             .push(json!({"id":"perm1","sessionID":"ses_one","action":"shell","resources":["pwd"],"save":if behavior == "always" {json!(["pwd"])} else {json!([])}}));
+        if behavior == "deny" {
+            fixture.state.lock().unwrap().stream_after_permission = true;
+        }
         let turn = session.start_turn("hello", &spec.config).await.unwrap();
         let request = tokio::time::timeout(Duration::from_secs(3), async {
             loop {
@@ -215,14 +230,7 @@ async fn server_approvals_reject_wider_authority_resolve_once_and_cancel_with_na
                 drain(session.as_mut()).await.last(),
                 Some(AgentTurnEvent::Cancelled)
             ));
-            session
-                .start_turn("continue after cancel", &spec.config)
-                .await
-                .unwrap();
-            assert!(matches!(
-                drain(session.as_mut()).await.last(),
-                Some(AgentTurnEvent::Completed(_))
-            ));
+            continue_after_cancel(session.as_mut(), &spec).await;
         } else {
             let response = if behavior == "deny" {
                 json!({"behavior":"deny","selectedActionId":"deny","message":"Denied by user"})
@@ -243,7 +251,13 @@ async fn server_approvals_reject_wider_authority_resolve_once_and_cancel_with_na
             assert!(events.iter().any(
                 |event| matches!(event,AgentTurnEvent::PermissionResolved(id) if id=="perm1")
             ));
-            assert!(matches!(events.last(), Some(AgentTurnEvent::Completed(_))));
+            if behavior == "deny" {
+                assert!(matches!(events.last(), Some(AgentTurnEvent::Cancelled)));
+                assert_eq!(fixture.state.lock().unwrap().interrupts, 1);
+                continue_after_cancel(session.as_mut(), &spec).await;
+            } else {
+                assert!(matches!(events.last(), Some(AgentTurnEvent::Completed(_))));
+            }
             assert_eq!(
                 fixture.state.lock().unwrap().replies,
                 vec![
@@ -254,7 +268,11 @@ async fn server_approvals_reject_wider_authority_resolve_once_and_cancel_with_na
         assert!(session.pending_permissions().is_empty());
         assert_eq!(
             fixture.state.lock().unwrap().submissions,
-            if behavior == "cancel" { 2 } else { 1 }
+            if matches!(behavior, "cancel" | "deny") {
+                2
+            } else {
+                1
+            }
         );
         session.close().await.unwrap();
     }

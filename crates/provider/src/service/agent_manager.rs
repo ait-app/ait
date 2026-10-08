@@ -56,6 +56,9 @@ pub enum AgentManagerError {
     /// The provider adapter failed or returned inconsistent facts.
     #[error("provider session failed")]
     Session,
+    /// The provider rejected the requested session operation or configuration.
+    #[error("provider rejected the Agent session operation or configuration")]
+    SessionRejected,
     /// Durable Agent state could not be read or written.
     #[error("Agent runtime registry failed")]
     Registry,
@@ -1109,8 +1112,11 @@ const fn map_registry(
     AgentManagerError::Registry
 }
 
-const fn map_session(_: AgentSessionError) -> AgentManagerError {
-    AgentManagerError::Session
+const fn map_session(error: AgentSessionError) -> AgentManagerError {
+    match error {
+        AgentSessionError::Rejected => AgentManagerError::SessionRejected,
+        AgentSessionError::Unavailable | AgentSessionError::Failed => AgentManagerError::Session,
+    }
 }
 
 #[cfg(test)]

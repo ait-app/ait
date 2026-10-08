@@ -13,7 +13,7 @@ async fn adapters_without_environment_support_reject_overrides_without_creating_
                 &environment
             )
             .await,
-        Err(AgentManagerError::Session)
+        Err(AgentManagerError::SessionRejected)
     );
     assert!(registry.list().unwrap().is_empty());
     assert_eq!(client.0.lock().unwrap().create_calls, 0);

@@ -7,7 +7,7 @@ use reqwest::Method;
 use serde_json::{Value, json};
 
 use super::{
-    approvals::Pending,
+    approvals::{Pending, Resolution},
     failure, history,
     http::{Api, Events, Version, required_string},
     runtime::Runtime,
@@ -441,7 +441,7 @@ impl Connection {
                     } else {
                         // Lost events require state reconciliation; they never imply execution failure.
                         if let Ok(history) = snapshot(&self.runtime.api, &self.prepared.id, &self.invocation).await
-                            && accepted(&history) { self.check_budget().await?; return Ok(history); }
+                            && accepted(&history) && approvals.can_settle() { self.check_budget().await?; return Ok(history); }
                         events = self.ready_events().await?;
                     }
                 }
@@ -453,12 +453,16 @@ impl Connection {
                     }
                     approvals.reconcile(&self.runtime.api,&self.invocation,&self.prepared.id).await?;
                     if let Ok(history) = snapshot(&self.runtime.api, &self.prepared.id, &self.invocation).await
-                        && accepted(&history) {
+                        && accepted(&history) && approvals.can_settle() {
                         return Ok(history);
                     }
                 }
                 result = approvals.receiver.recv() => {
-                    if let Some(result) = result {result?;}
+                    if let Some(result) = result
+                        && result? == Resolution::Declined
+                    {
+                        return Err(failure(Fault::RunCancelled, "OpenCode permission declined"));
+                    }
                 }
             }
         }

@@ -57,6 +57,7 @@ async fn approved_requests_reply_once_and_withdrawn_permissions_expire() {
             .reconcile(&runtime.api, &request, "ses_one")
             .await
             .unwrap();
+        assert!(!pending.can_settle());
         tokio::time::timeout(
             std::time::Duration::from_secs(3),
             approval.entered.acquire(),
@@ -73,12 +74,15 @@ async fn approved_requests_reply_once_and_withdrawn_permissions_expire() {
                 .unwrap();
             assert_eq!(approval.expired.load(Ordering::SeqCst), 1);
             assert!(fixture.state.lock().unwrap().replies.is_empty());
+            assert!(pending.can_settle());
         } else {
-            tokio::time::timeout(std::time::Duration::from_secs(3), pending.receiver.recv())
-                .await
-                .unwrap()
-                .unwrap()
-                .unwrap();
+            let resolution =
+                tokio::time::timeout(std::time::Duration::from_secs(3), pending.receiver.recv())
+                    .await
+                    .unwrap()
+                    .unwrap()
+                    .unwrap();
+            assert_eq!(resolution, Resolution::Resolved);
             assert_eq!(
                 fixture.state.lock().unwrap().replies,
                 vec![json!({"decision":"once"})]
@@ -87,6 +91,56 @@ async fn approved_requests_reply_once_and_withdrawn_permissions_expire() {
         let mut runtime = runtime;
         let _ = runtime.close().await;
     }
+}
+
+#[tokio::test]
+async fn native_withdrawal_does_not_abort_an_in_flight_decision() {
+    let fixture = super::super::tests::fixture::Fixture::start(Version::V2).await;
+    let mut runtime = super::super::runtime::Runtime::spawn(
+        &fixture.binary,
+        &fixture.cwd,
+        &tokio_util::sync::CancellationToken::new(),
+    )
+    .await
+    .unwrap();
+    let request = super::super::tests::invocation(fixture.cwd.clone());
+    let mut pending = Pending::new();
+    let (release, ready) = tokio::sync::oneshot::channel();
+    let sender = pending.sender.clone();
+    let handle = tokio::spawn(async move {
+        ready.await.unwrap();
+        sender.send(Ok(Resolution::Declined)).await.unwrap();
+    });
+    pending.tasks.insert(
+        "perm1".into(),
+        Task {
+            handle: AbortOnDropHandle::new(handle),
+            approval: None,
+            waiting: Arc::new(AtomicBool::new(false)),
+        },
+    );
+
+    pending
+        .reconcile(&runtime.api, &request, "ses_one")
+        .await
+        .unwrap();
+    assert_eq!(pending.tasks.len(), 1);
+    assert!(!pending.can_settle());
+    release.send(()).unwrap();
+    let resolution =
+        tokio::time::timeout(std::time::Duration::from_secs(3), pending.receiver.recv())
+            .await
+            .unwrap()
+            .unwrap()
+            .unwrap();
+    assert_eq!(resolution, Resolution::Declined);
+    pending
+        .reconcile(&runtime.api, &request, "ses_one")
+        .await
+        .unwrap();
+    assert!(pending.tasks.is_empty());
+    assert!(pending.can_settle());
+    runtime.close().await.unwrap();
 }
 
 #[test]
