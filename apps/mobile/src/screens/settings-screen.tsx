@@ -62,7 +62,6 @@ import { EditorSection } from "@/screens/settings/editor-section";
 import {
   HostAgentsPage,
   HostConnectionsPage,
-  HostPairDevicePage,
   HostProvidersPage,
   HostSettingsPage,
   HostTerminalsPage,
@@ -113,7 +112,6 @@ import {
   Server,
   Settings,
   Shield,
-  Smartphone,
   Sparkles,
   SquareTerminal,
   Stethoscope,
@@ -183,7 +181,6 @@ const HOST_SECTION_ITEMS: HostSectionItem[] = [
   { id: "host", labelKey: "settings.hostSections.host", icon: Server },
   { id: "projects", labelKey: "settings.hostSections.projects", icon: FolderGit2 },
   { id: "connections", labelKey: "settings.hostSections.connections", icon: Network },
-  { id: "pair-device", labelKey: "openProject.tiles.pairDevice.title", icon: Smartphone },
   { id: "agents", labelKey: "settings.hostSections.agents", icon: Bot },
   { id: "metadata", labelKey: "settings.hostSections.metadata", icon: Sparkles },
   { id: "workspaces", labelKey: "settings.hostSections.workspaces", icon: FolderGit2 },
@@ -201,8 +198,6 @@ function renderHostSettingsContent(
       return <ProjectsScreen serverId={view.serverId} />;
     case "connections":
       return <HostConnectionsPage serverId={view.serverId} />;
-    case "pair-device":
-      return <HostPairDevicePage serverId={view.serverId} />;
     case "agents":
       return <HostAgentsPage serverId={view.serverId} />;
     case "metadata":
