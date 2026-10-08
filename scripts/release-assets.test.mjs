@@ -24,11 +24,19 @@ import { expandMacro } from "app-builder-lib/out/util/macroExpander.js";
 import { stringify, parse } from "yaml";
 import { collectReleaseAssets, releaseAssetNames, verifyReleaseAssets } from "./release-assets.mjs";
 import { releaseChannel } from "./release-version.mjs";
+import { nightlyBuildLabel, nightlyBuilderArgs } from "./nightly-build.mjs";
 
-async function builderPackager(platform, version) {
+async function builderPackager(platform, version, buildLabel) {
   const config = parse(
     await readFile(new URL("../apps/desktop/electron-builder.yml", import.meta.url), "utf8"),
   );
+  if (buildLabel) {
+    for (const arg of nightlyBuilderArgs(buildLabel)) {
+      const [, key, value] = arg.match(/^-c\.([^=]+)=(.*)$/);
+      const [section, property] = key.split(".");
+      config[section][property] = value;
+    }
+  }
   const info = { config, metadata: { name: "ait", version } };
   const appInfo = new AppInfo(info);
   info.appInfo = appInfo;
@@ -43,8 +51,8 @@ async function builderPackager(platform, version) {
   };
 }
 
-async function builderAssetNames(platform, version) {
-  const packager = await builderPackager(platform, version);
+async function builderAssetNames(platform, version, buildLabel) {
+  const packager = await builderPackager(platform, version, buildLabel);
   const { config } = packager;
   const arch = platform === "linux" ? Arch.x64 : Arch.arm64;
   const installers = config[platform].target.map((ext) => {
@@ -55,14 +63,14 @@ async function builderAssetNames(platform, version) {
   return [...installers, `${publish.channel}-${platform}.yml`];
 }
 
-async function fixture(t, platform, version = "0.0.7") {
+async function fixture(t, platform, version = "0.0.7", buildLabel) {
   const root = await mkdtemp(path.join(tmpdir(), "ait-release-assets-"));
   t.after(() => rm(root, { recursive: true, force: true }));
   const source = path.join(root, "source");
   const destination = path.join(root, "release");
   await mkdir(source);
   // Generate fixtures from builder's naming rules, independently of the collector allowlist.
-  const names = await builderAssetNames(platform, version);
+  const names = await builderAssetNames(platform, version, buildLabel);
   const files = [];
   for (const name of names.slice(0, 2)) {
     const contents = Buffer.from(`packaged installer: ${name}`);
@@ -75,7 +83,7 @@ async function fixture(t, platform, version = "0.0.7") {
   }
   await writeFile(path.join(source, names[2]), stringify({ version, files }));
   await writeFile(path.join(source, "old-server.exe"), "should never be collected");
-  return { platform, version, source, destination };
+  return { platform, version, source, destination, buildLabel };
 }
 
 async function addAndroidAssets(directory) {
@@ -91,6 +99,86 @@ test("release assets match electron-builder's target-specific architecture names
       );
     }
   }
+});
+
+test("nightly identity uses eight hash characters and a deterministic UTC commit date", () => {
+  const sha = "abcdef01".repeat(5);
+  const timestamp = Date.parse("2026-10-08T00:15:00+02:00") / 1000;
+  assert.equal(nightlyBuildLabel(sha, timestamp), "abcdef01-2026-10-07");
+  assert.throws(() => nightlyBuildLabel("bad", timestamp));
+  assert.throws(() => nightlyBuildLabel(sha, NaN));
+  assert.throws(() => nightlyBuilderArgs("../../invalid"));
+});
+
+test("nightly builder names and update URLs use the build label on both platforms", async (t) => {
+  const version = "0.0.23-beta.1";
+  const buildLabel = "abcdef01-2026-10-08";
+  const inputs = [];
+  for (const platform of ["linux", "mac"]) {
+    const input = await fixture(t, platform, version, buildLabel);
+    inputs.push(input);
+    const packager = await builderPackager(platform, version, buildLabel);
+    const arch = platform === "linux" ? Arch.x64 : Arch.arm64;
+    const names = releaseAssetNames(platform, version, buildLabel);
+    assert.deepEqual(names, await builderAssetNames(platform, version, buildLabel));
+    assert.ok(
+      names.slice(0, 2).every((name) => name.includes(buildLabel) && !name.includes(version)),
+    );
+    const tasks = await createUpdateInfoTasks(
+      {
+        packager,
+        arch,
+        file: path.join(input.source, names[platform === "mac" ? 1 : 0]),
+        target: { outDir: input.source },
+      },
+      await getPublishConfigs(packager, null, arch, true),
+    );
+    assert.equal(tasks.length, 1);
+    assert.equal(path.basename(tasks[0].file), `${releaseChannel(version)}-${platform}.yml`);
+    assert.equal(tasks[0].info.version, version); // Required by the updater's SemVer parser.
+    assert.ok(tasks[0].info.files.every((file) => file.url.includes(buildLabel)));
+    await writeFile(path.join(input.source, names[0] + ".blockmap"), "block map");
+    await collectReleaseAssets(input);
+    assert.ok((await readdir(input.destination)).includes(names[0] + ".blockmap"));
+    await assert.rejects(collectReleaseAssets({ ...input, buildLabel: undefined }));
+  }
+  const directory = inputs[0].destination;
+  for (const name of await readdir(inputs[1].destination))
+    await copyFile(path.join(inputs[1].destination, name), path.join(directory, name));
+  const info = {
+    version: buildLabel,
+    packagedVersion: version,
+    releaseTag: "nightly",
+    sourceCommit: "abcdef01".repeat(5),
+    workflowCommit: "abcdef01".repeat(5),
+  };
+  await writeFile(path.join(directory, "BUILD-INFO.json"), JSON.stringify(info));
+  await verifyReleaseAssets({ version, buildLabel, directory });
+  const cli = spawnSync(
+    process.execPath,
+    [
+      fileURLToPath(new URL("./release-assets.mjs", import.meta.url)),
+      "verify",
+      version,
+      directory,
+      "--nightly",
+      buildLabel,
+    ],
+    { encoding: "utf8" },
+  );
+  assert.equal(cli.status, 0, cli.stderr);
+  const checksums = await readFile(path.join(directory, "SHA256SUMS"), "utf8");
+  assert.match(checksums, /Ait-abcdef01-2026-10-08-linux-x86_64.AppImage/);
+  assert.match(checksums, /Ait-abcdef01-2026-10-08-macos-arm64.dmg.blockmap/);
+  assert.doesNotMatch(checksums, /0\.0\.23/);
+  await writeFile(
+    path.join(directory, "BUILD-INFO.json"),
+    JSON.stringify({ ...info, version: "obsolete" }),
+  );
+  await assert.rejects(
+    verifyReleaseAssets({ version, buildLabel, directory }),
+    /Build information version/,
+  );
 });
 
 test("accepts stable and numbered beta versions but rejects ambiguous release channels", () => {

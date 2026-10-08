@@ -6,17 +6,20 @@ import path from "node:path";
 import { pathToFileURL } from "node:url";
 import { releaseChannel } from "./release-version.mjs";
 
-export function releaseAssetNames(platform, version) {
+export function releaseAssetNames(platform, version, buildLabel) {
   const channel = releaseChannel(version);
+  if (buildLabel !== undefined)
+    assert.match(buildLabel, /^[0-9a-f]{8}-\d{4}-\d{2}-\d{2}$/, "Invalid nightly build label");
+  const label = buildLabel ?? version;
   if (platform === "linux")
-    return [`Ait-linux-x86_64.AppImage`, `Ait-${version}-linux-x64.tar.gz`, `${channel}-linux.yml`];
-  if (platform === "mac")
     return [
-      `Ait-${version}-macos-arm64.dmg`,
-      `Ait-${version}-macos-arm64.zip`,
-      `${channel}-mac.yml`,
+      buildLabel ? `Ait-${label}-linux-x86_64.AppImage` : `Ait-linux-x86_64.AppImage`,
+      `Ait-${label}-linux-x64.tar.gz`,
+      `${channel}-linux.yml`,
     ];
-  if (platform === "android") return [`Ait-${version}-android.apk`];
+  if (platform === "mac")
+    return [`Ait-${label}-macos-arm64.dmg`, `Ait-${label}-macos-arm64.zip`, `${channel}-mac.yml`];
+  if (platform === "android" && !buildLabel) return [`Ait-${version}-android.apk`];
   throw new Error(`Unsupported release platform: ${platform}`);
 }
 
@@ -26,8 +29,8 @@ async function digest(file, algorithm, encoding) {
   return hash.digest(encoding);
 }
 
-export async function collectReleaseAssets({ platform, version, source, destination }) {
-  const names = releaseAssetNames(platform, version);
+export async function collectReleaseAssets({ platform, version, source, destination, buildLabel }) {
+  const names = releaseAssetNames(platform, version, buildLabel);
   for (const name of names)
     assert((await stat(path.join(source, name))).size > 0, `Empty release asset: ${name}`);
   const { parse } = await import("yaml");
@@ -72,8 +75,17 @@ export async function collectReleaseAssets({ platform, version, source, destinat
   return [...names, ...blockmaps];
 }
 
-export async function verifyReleaseAssets({ version, directory, includeAndroid = false }) {
-  const desktop = [...releaseAssetNames("linux", version), ...releaseAssetNames("mac", version)];
+export async function verifyReleaseAssets({
+  version,
+  directory,
+  includeAndroid = false,
+  buildLabel,
+}) {
+  assert(!(includeAndroid && buildLabel), "Nightly builds support desktop platforms only");
+  const desktop = [
+    ...releaseAssetNames("linux", version, buildLabel),
+    ...releaseAssetNames("mac", version, buildLabel),
+  ];
   const required = [...desktop, ...(includeAndroid ? releaseAssetNames("android", version) : [])];
   const allowed = new Set([
     ...required,
@@ -83,8 +95,18 @@ export async function verifyReleaseAssets({ version, directory, includeAndroid =
   const names = (await readdir(directory)).filter((name) => name !== "SHA256SUMS").sort();
   if (names.includes("BUILD-INFO.json")) {
     const info = JSON.parse(await readFile(path.join(directory, "BUILD-INFO.json"), "utf8"));
-    assert.equal(info.version, version, "Build information version differs from release");
-    assert.equal(info.releaseTag, `v${version}`, "Build information tag differs from release");
+    assert.equal(
+      info.version,
+      buildLabel ?? version,
+      "Build information version differs from release",
+    );
+    assert.equal(
+      info.releaseTag,
+      buildLabel ? "nightly" : `v${version}`,
+      "Build information tag differs from release",
+    );
+    if (buildLabel)
+      assert.equal(info.packagedVersion, version, "Packaged version differs from release");
     assert.match(info.sourceCommit, /^[0-9a-f]{40}$/, "Build source must be a full commit SHA");
     assert.match(
       info.workflowCommit,
@@ -107,20 +129,30 @@ export async function verifyReleaseAssets({ version, directory, includeAndroid =
 
 async function main() {
   const [command, ...args] = process.argv.slice(2);
+  let buildLabel;
+  if (args.at(-2) === "--nightly") {
+    buildLabel = args.pop();
+    args.pop();
+  }
   if (command === "collect" && args.length === 4) {
     const [platform, version, source, destination] = args;
-    console.log(await collectReleaseAssets({ platform, version, source, destination }));
+    console.log(await collectReleaseAssets({ platform, version, source, destination, buildLabel }));
   } else if (
     command === "verify" &&
     (args.length === 2 || (args.length === 3 && args[2] === "--android"))
   ) {
     const [version, directory] = args;
     console.log(
-      await verifyReleaseAssets({ version, directory, includeAndroid: args.length === 3 }),
+      await verifyReleaseAssets({
+        version,
+        directory,
+        includeAndroid: args.length === 3,
+        buildLabel,
+      }),
     );
   } else {
     throw new Error(
-      "Usage: release-assets.mjs collect linux|mac VERSION SOURCE DEST | verify VERSION DIRECTORY [--android]",
+      "Usage: release-assets.mjs collect linux|mac VERSION SOURCE DEST [--nightly LABEL] | verify VERSION DIRECTORY [--android | --nightly LABEL]",
     );
   }
 }

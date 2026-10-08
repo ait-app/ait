@@ -20,6 +20,14 @@ APK 的签名方式、安装要求与手动测试入口见 [Android APK 发布](
 和 Apple Silicon 安装包，适用的 CI 检查和两个平台构建全部成功后更新固定的 [nightly 预发布](https://github.com/ait-app/ait/releases/tag/nightly)。
 无需创建版本标签；不再使用独立的 dev nightly 工作流。
 
+nightly 的公开构建标识统一为 `<8位提交hash>-<提交UTC日期>`，例如 `38fb6054-2026-10-08`。
+Release 标题为 `Ait Nightly 38fb6054-2026-10-08`，安装包名例如
+`Ait-38fb6054-2026-10-08-macos-arm64.dmg`、`Ait-38fb6054-2026-10-08-linux-x86_64.AppImage`。
+ZIP、tar.gz、blockmap、CI 产物和 `BUILD-INFO.json` 使用同一标识；两平台及重跑均取同一提交日期。
+更新元数据沿用更新器识别的 `latest` / `beta` 入口文件名，内部引用对应的新安装包名。
+Electron、daemon 及更新协议内部仍保留必需的 SemVer 兼容字段，在构建信息中记作 `packagedVersion`。
+固定下载地址仍使用 `nightly` 标签；正式版本和 PR 测试包继续使用各自的命名方式。
+
 最多保留最新两次 main CI 并行运行，以整个工作流为单位（每次包含检查及 Linux、macOS 构建）；
 取消旧构建也会取消该次旧 CI 中尚未完成的检查，PR 不参与这个调度窗口：
 
