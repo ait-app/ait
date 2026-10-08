@@ -53,6 +53,10 @@ fn start_with_path(directory: &Path, log: &Path, path: Option<&std::ffi::OsStr>)
             directory.parent().unwrap().join("dsh"),
         )
         .env(
+            "AIT_SERVER_CURSOR_BIN",
+            directory.parent().unwrap().join("cursor-agent"),
+        )
+        .env(
             "AIT_SERVER_ANTIGRAVITY_BIN",
             directory.parent().unwrap().join("agy"),
         )
@@ -87,6 +91,9 @@ mod claude;
 
 #[path = "opencode.rs"]
 mod opencode;
+
+#[path = "cursor.rs"]
+mod cursor;
 
 #[path = "deepseek_harness.rs"]
 mod deepseek_harness;

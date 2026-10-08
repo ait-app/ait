@@ -72,6 +72,8 @@
 
 ## Provider、Agent 与会话
 
+- [Cursor ACP 接入验证](providers/cursor-acp.md)
+
 - [Timeline 单项 768 KiB：PR 覆盖率证据](providers/timeline-entry-768k-pr-coverage-2026-10-06.json)
 - [Provider 装配边界验证](providers/provider-composition.md)
 - [Antigravity CLI 原生 Provider 验证](providers/antigravity-cli.md)

@@ -14,6 +14,9 @@ export const PROVIDER_COMMAND_TEMPLATES: Record<
   antigravity: {
     resume: "agy --conversation {sessionId}",
   },
+  cursor: {
+    resume: "cursor-agent --resume {sessionId}",
+  },
   codex: {
     resume: "codex resume {sessionId}",
   },

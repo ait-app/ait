@@ -81,6 +81,20 @@ pub enum AgentTurnEvent {
 
 /// Live provider session. Closing releases resources without deleting native history.
 pub trait AgentSession: Debug + Send {
+    /// Return session-scoped controls when native composition owns the available choices.
+    /// `config` includes pending user selections; `None` retains client-level controls.
+    fn control_settings(&self, _config: &StoredAgentConfig) -> Option<serde_json::Value> {
+        None
+    }
+
+    /// Validate a proposed configuration against this session's native constraints.
+    /// `config` is the proposed configuration; success permits further catalog validation.
+    /// # Errors
+    /// Returns rejection before persisting a change that cannot apply to this session.
+    fn validate_config_update(&self, _config: &StoredAgentConfig) -> Result<(), AgentSessionError> {
+        Ok(())
+    }
+
     /// Native foreground work was accepted but its start notification has not arrived yet.
     fn pending_foreground(&self) -> bool {
         false

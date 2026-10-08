@@ -11,7 +11,7 @@ fn request() -> Value {
 
 #[test]
 fn maps_actual_permission_options_without_implicit_permanent_grants() {
-    let pending = capture(&request()).unwrap();
+    let pending = capture("deepseek-harness", &request()).unwrap();
     assert_eq!(
         resolve(
             &pending,
@@ -50,7 +50,7 @@ fn maps_actual_permission_options_without_implicit_permanent_grants() {
         json!([{ "optionId":"always","name":"Allow always","kind":"allow_always" }]);
     assert!(
         resolve(
-            &capture(&only_always).unwrap(),
+            &capture("deepseek-harness", &only_always).unwrap(),
             &json!({"behavior":"allow"})
         )
         .is_err()
@@ -61,9 +61,9 @@ fn maps_actual_permission_options_without_implicit_permanent_grants() {
 fn rejects_duplicate_or_unknown_permission_choices() {
     let mut duplicate = request();
     duplicate["params"]["options"][1]["optionId"] = json!("once");
-    assert!(capture(&duplicate).is_err());
+    assert!(capture("deepseek-harness", &duplicate).is_err());
     let mut unknown = request();
     unknown["params"]["options"][0]["kind"] = json!("execute");
-    assert!(capture(&unknown).is_err());
-    assert!(capture(&json!({})).is_err());
+    assert!(capture("deepseek-harness", &unknown).is_err());
+    assert!(capture("deepseek-harness", &json!({})).is_err());
 }

@@ -3,7 +3,7 @@ use std::collections::{BTreeMap, BTreeSet, VecDeque};
 use chrono::Utc;
 use serde_json::{Value, json};
 
-use super::config::text;
+use super::text;
 use crate::ports::agent_session::{AgentSessionError, AgentTurnEvent};
 use crate::protocol::{timeline::NativeItem, usage::AgentUsage};
 
@@ -17,28 +17,32 @@ struct Text {
     buffer: String,
 }
 
+/// Bounded text, tool and usage projection for one native turn.
 #[derive(Debug, Default)]
-pub(super) struct Stream {
-    pub(super) events: VecDeque<AgentTurnEvent>,
+pub(in crate::local) struct Stream {
+    pub(in crate::local) events: VecDeque<AgentTurnEvent>,
     current: Option<Text>,
     tools: BTreeMap<String, Value>,
     completed_tools: BTreeSet<String>,
     turn: String,
     sequence: usize,
     observation: usize,
-    pub(super) last_message: Option<String>,
+    pub(in crate::local) last_message: Option<String>,
     images: crate::local::images::ImageStore,
+    usage: AgentUsage,
 }
 
 impl Stream {
-    pub(super) fn new(images: crate::local::images::ImageStore) -> Self {
+    /// Create a timeline projection using `images` for native bitmap artifacts.
+    pub(in crate::local) fn new(images: crate::local::images::ImageStore) -> Self {
         Self {
             images,
             ..Self::default()
         }
     }
 
-    pub(super) fn begin(&mut self, turn: String) {
+    /// Reset turn-local projection state for the native `turn` identifier.
+    pub(in crate::local) fn begin(&mut self, turn: String) {
         self.turn = turn;
         self.sequence = 0;
         self.observation = 0;
@@ -48,31 +52,115 @@ impl Stream {
         self.completed_tools.clear();
     }
 
-    pub(super) fn update(&mut self, update: &Value) -> Result<(), AgentSessionError> {
+    /// Project one native `update`; fail on malformed, oversized or inconsistent output.
+    pub(in crate::local) fn update(&mut self, update: &Value) -> Result<(), AgentSessionError> {
         match update["sessionUpdate"].as_str() {
             Some("agent_message_chunk") => self.chunk("assistant_message", update),
             Some("agent_thought_chunk") => self.chunk("reasoning", update),
             Some("tool_call" | "tool_call_update") => self.tool(update),
             Some("usage_update") => {
-                let usage = AgentUsage {
-                    context_window_used_tokens: Some(
-                        update["used"].as_u64().ok_or(AgentSessionError::Failed)?,
-                    ),
-                    context_window_max_tokens: Some(
-                        update["size"].as_u64().ok_or(AgentSessionError::Failed)?,
-                    ),
-                    ..AgentUsage::default()
-                };
-                if !usage.is_valid() {
-                    return Err(AgentSessionError::Failed);
-                }
-                self.events.push_back(AgentTurnEvent::Usage(usage));
-                Ok(())
+                let mut usage = self.usage.clone();
+                usage.context_window_used_tokens =
+                    Some(update["used"].as_u64().ok_or(AgentSessionError::Failed)?);
+                usage.context_window_max_tokens =
+                    Some(update["size"].as_u64().ok_or(AgentSessionError::Failed)?);
+                self.publish_usage(usage)
             }
-            // Harness currently omits plans/commands/modes. Unknown extension notifications
+            Some("plan") => self.plan(update),
+            // Unknown extension notifications
             // have no authority over the host's lifecycle or execution policy.
             _ => Ok(()),
         }
+    }
+
+    /// Merge prompt `response` token facts with the latest native context observation.
+    /// Fail on invalid native usage; repeated counters replace prior facts rather than sum.
+    pub(in crate::local) fn prompt_usage(
+        &mut self,
+        response: &Value,
+    ) -> Result<(), AgentSessionError> {
+        let Some(native) = response.get("usage").filter(|usage| !usage.is_null()) else {
+            return Ok(());
+        };
+        if !native.is_object() {
+            return Err(AgentSessionError::Failed);
+        }
+        let tokens = |field| {
+            native
+                .get(field)
+                .filter(|value| !value.is_null())
+                .map(|value| value.as_u64().ok_or(AgentSessionError::Failed))
+                .transpose()
+        };
+        let usage = AgentUsage {
+            input_tokens: tokens("inputTokens")?,
+            output_tokens: tokens("outputTokens")?,
+            cached_input_tokens: tokens("cachedReadTokens")?,
+            ..self.usage.clone()
+        };
+        self.publish_usage(usage)
+    }
+
+    fn publish_usage(&mut self, usage: AgentUsage) -> Result<(), AgentSessionError> {
+        if !usage.is_valid() {
+            return Err(AgentSessionError::Failed);
+        }
+        self.usage = usage.clone();
+        self.events.push_back(AgentTurnEvent::Usage(usage));
+        Ok(())
+    }
+
+    /// Return whether native tool calls remain unfinished at the turn boundary.
+    pub(in crate::local) fn has_unfinished_tools(&self) -> bool {
+        !self.tools.is_empty()
+    }
+
+    /// Flush text and finalize unfinished tool snapshots with `reason` at the turn boundary.
+    /// Fail if an inconsistent tool snapshot cannot be projected.
+    pub(in crate::local) fn finish(&mut self, reason: &str) -> Result<(), AgentSessionError> {
+        self.flush();
+        while let Some(id) = self.tools.keys().next() {
+            let id = id.clone();
+            self.tool(&json!({"toolCallId":id,"status":"failed"}))?;
+            if let Some(AgentTurnEvent::Timeline(entry)) = self.events.back_mut() {
+                entry.item["error"]["message"] = json!(reason);
+            }
+        }
+        Ok(())
+    }
+
+    fn plan(&mut self, update: &Value) -> Result<(), AgentSessionError> {
+        let entries = update["entries"]
+            .as_array()
+            .filter(|entries| entries.len() <= MAX_ITEMS)
+            .ok_or(AgentSessionError::Failed)?;
+        let mut size = 0_usize;
+        let items = entries
+            .iter()
+            .map(|entry| {
+                let content = entry["content"].as_str().ok_or(AgentSessionError::Failed)?;
+                size = size.saturating_add(content.len());
+                if size > MAX_TEXT {
+                    return Err(AgentSessionError::Failed);
+                }
+                let completed = match entry["status"].as_str() {
+                    Some("completed") => true,
+                    Some("pending" | "in_progress") => false,
+                    _ => return Err(AgentSessionError::Failed),
+                };
+                Ok(json!({"text":content,"completed":completed}))
+            })
+            .collect::<Result<Vec<_>, AgentSessionError>>()?;
+        self.flush();
+        self.sequence += 1;
+        if self.sequence > MAX_ITEMS {
+            return Err(AgentSessionError::Failed);
+        }
+        self.events.push_back(AgentTurnEvent::Timeline(self.entry(
+            format!("native:{}:plan:{}", self.turn, self.sequence),
+            json!({"type":"todo","items":items}),
+        )));
+        Ok(())
     }
 
     fn chunk(&mut self, kind: &str, update: &Value) -> Result<(), AgentSessionError> {
@@ -179,7 +267,7 @@ impl Stream {
             "detail":{"type":"unknown","input":snapshot["rawInput"],
                 "output":snapshot.get("rawOutput").unwrap_or(&snapshot["content"])},
             "metadata":{"kind":snapshot["kind"],"title":snapshot["title"]},
-            "error":if status == "failed" { json!({"message":"Harness tool failed"}) } else { Value::Null }});
+            "error":if status == "failed" { json!({"message":"ACP tool failed"}) } else { Value::Null }});
         let entry = self.entry(format!("native:{}:tool:{id}", self.turn), item);
         if status == "running" {
             self.observation += 1;
@@ -195,7 +283,8 @@ impl Stream {
         Ok(())
     }
 
-    pub(super) fn flush(&mut self) {
+    /// Publish accumulated text and remember the latest completed assistant message.
+    pub(in crate::local) fn flush(&mut self) {
         if let Some(mut current) = self.current.take() {
             current.entry.item["text"] = json!(current.buffer);
             if current.entry.item["type"] == "assistant_message" {

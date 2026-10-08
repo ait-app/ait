@@ -1,9 +1,11 @@
 //! Native Provider adapters owned by the independent server.
 
+mod acp;
 pub mod antigravity;
 pub mod claude;
 pub mod codex;
 mod configuration;
+pub mod cursor;
 pub mod deepseek_harness;
 mod elicitation;
 mod images;

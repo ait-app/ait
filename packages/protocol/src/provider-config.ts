@@ -67,6 +67,7 @@ const BUILTIN_PROVIDER_IDS = [
   "antigravity",
   "claude",
   "codex",
+  "cursor",
   "copilot",
   "opencode",
   "pi",

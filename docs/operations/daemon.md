@@ -122,6 +122,7 @@ npm run dev:mobile
 
 ## Provider 与扩展能力
 
+- [Cursor CLI](cursor.md)使用官方 ACP 与本机认证；`AIT_SERVER_CURSOR_BIN` 覆盖程序路径。
 - Codex 使用本机 `codex app-server`；`AIT_SERVER_CODEX_BIN` 覆盖程序路径。
 - [Claude Code](claude-code.md)使用本机认证与原生会话；`AIT_SERVER_CLAUDE_BIN` 覆盖路径。
 - [DeepSeek Harness](deepseek-harness.md)使用 stdio ACP 与动态模型目录。

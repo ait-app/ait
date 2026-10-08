@@ -244,6 +244,14 @@ async fn discover(client: &dyn AgentClient, cwd: &str) -> Entry {
         value["description"] = json!("Google Antigravity via the official AGY CLI");
         value["defaultModeId"] = json!("default");
     }
+    if client.provider() == "cursor" {
+        value["label"] = json!("Cursor");
+        value["description"] = json!("Cursor CLI via Agent Client Protocol");
+        value["defaultModeId"] = value["modes"]
+            .as_array()
+            .and_then(|modes| modes.iter().find(|mode| mode["isDefault"] == true))
+            .map_or(Value::Null, |mode| mode["id"].clone());
+    }
     if let Some(error) = error {
         value["error"] = json!(error);
     }
