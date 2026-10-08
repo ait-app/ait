@@ -1,5 +1,17 @@
 # Ait changelog
 
+## 0.0.23 - 2026-10-08
+
+- Bring the 0.0.23 beta improvements to the stable desktop update channel.
+- Reconnect desktop clients after failed local daemon transports and preserve whitespace in streamed Markdown.
+- Reflect configured composer models and explain model switches deferred until the current turn finishes.
+- Preview PDFs, open external files explicitly, and handle folder drops as directory attachments.
+- Transfer large messages in bounded chunks and serialize file uploads with progress and acknowledgements.
+- Synchronize the built-in daemon after sign-in and simplify host settings by removing the obsolete Pair device section.
+- Fix workspace fork project resolution and allow workspace creation without an initial agent.
+- Improve provider auxiliary generation, native session previews, model discovery, and permission compatibility.
+- Publish main nightly installers with a commit hash and date, and provide downloadable desktop test packages for pull requests.
+
 ## 0.0.23-beta.1 - 2026-10-08
 
 - Publish desktop beta installers and updater metadata on the beta channel, while keeping stable updates on the latest stable release.
