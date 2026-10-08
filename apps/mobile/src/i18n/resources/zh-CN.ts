@@ -454,6 +454,8 @@ export const zhCN: TranslationResources = {
       loading: "正在加载最近会话...",
       failedProvider: "无法加载 {{provider}} 的会话",
       failedImport: "无法导入所选会话。",
+      workingDirectoryUnavailable:
+        "此会话在主机上的原工作目录不可用：{{path}}。请恢复该目录后重试导入。",
     },
     actions: {
       refresh: "刷新会话",
@@ -1357,6 +1359,7 @@ export const zhCN: TranslationResources = {
       listen: {
         host: "监听地址",
         port: "端口",
+        savedHint: "重启 daemon 以应用修改",
         override:
           "环境变量 AIT_SERVER_LISTEN 正在覆盖此设置：{{address}}。移除该环境变量后将使用保存的地址。",
         invalid: "请输入 IPv4、IPv6 地址或 localhost，端口范围为 0–65535。",
@@ -2894,6 +2897,8 @@ export const zhCN: TranslationResources = {
           confirm: "重启",
           confirmTitle: "重启 {{name}}",
           confirmMessage: "这会重启守护进程。其上运行的智能体会继续运行；应用会自动重新连接。",
+          confirmDesktopMessage:
+            "使用已保存的设置重启内置 daemon？运行中的任务和终端会话将被中断。",
           restarting: "正在重启...",
           unableToReconnectTitle: "无法重新连接",
           unableToReconnectMessage: "{{name}} 没有重新上线。请确认它已重启。",

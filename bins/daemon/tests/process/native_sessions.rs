@@ -366,6 +366,18 @@ async fn failed_native_imports_leave_no_agents_or_workspaces_and_errors_are_safe
         assert_eq!(failed["type"], "error", "{failed}");
         assert!(!failed.to_string().contains("sensitive"));
     }
+    let missing = fixture.root.path().join("deleted-workspace");
+    let failed = request(
+        &mut client,
+        "agent.import.request",
+        import(&missing, "missing-directory"),
+    )
+    .await;
+    assert_eq!(failed["code"], "working_directory_unavailable");
+    assert_eq!(failed["retryable"], false);
+    assert!(failed["message"].as_str().unwrap().contains("Restore"));
+    assert!(!failed.to_string().contains(missing.to_str().unwrap()));
+    assert!(!missing.exists());
     for name in [
         "agents/agents.json",
         "projects/workspaces.json",

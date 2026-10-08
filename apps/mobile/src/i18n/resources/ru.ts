@@ -410,6 +410,7 @@ export const ru: TranslationResources = {
       loading: "Загрузка недавних сессий...",
       failedProvider: "Не удалось загрузить сессии провайдера {{provider}}",
       failedImport: "Не удалось импортировать выбранную сессию.",
+      workingDirectoryUnavailable: en.importSession.status.workingDirectoryUnavailable,
     },
     actions: {
       refresh: "Обновить список сессий",
@@ -2617,6 +2618,7 @@ export const ru: TranslationResources = {
           confirmTitle: "Перезапустить {{name}}",
           confirmMessage:
             "Это перезапустит демон. Агенты, работающие на нём, продолжат работу, а приложение автоматически переподключится.",
+          confirmDesktopMessage: en.settings.host.daemon.restart.confirmDesktopMessage,
           restarting: "Перезапуск...",
           unableToReconnectTitle: "Не удалось переподключиться",
           unableToReconnectMessage:

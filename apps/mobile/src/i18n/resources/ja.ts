@@ -411,6 +411,7 @@ export const ja: TranslationResources = {
       loading: "最近のセッションを読み込み中...",
       failedProvider: "{{provider}} のセッションを読み込めませんでした",
       failedImport: "選択したセッションをインポートできませんでした。",
+      workingDirectoryUnavailable: en.importSession.status.workingDirectoryUnavailable,
     },
     actions: {
       refresh: "セッションを更新",
@@ -2594,6 +2595,7 @@ export const ja: TranslationResources = {
           confirmTitle: "{{name}}を再起動",
           confirmMessage:
             "これによりデーモンが再起動されます。実行中のエージェントは継続し、アプリは自動的に再接続します。",
+          confirmDesktopMessage: en.settings.host.daemon.restart.confirmDesktopMessage,
           restarting: "再起動中...",
           unableToReconnectTitle: "再接続できません",
           unableToReconnectMessage:

@@ -7,6 +7,11 @@ fn provider_failures_keep_public_codes_messages_and_retry_semantics() {
     for (business, expected, retryable) in [
         (ProviderError::InvalidMessage, "invalid_message", false),
         (
+            ProviderError::WorkingDirectoryUnavailable,
+            "working_directory_unavailable",
+            false,
+        ),
+        (
             ProviderError::UnsupportedCapability,
             "unsupported_capability",
             false,

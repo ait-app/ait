@@ -18,6 +18,8 @@ pub enum ErrorCode {
     TerminalNotFound,
     /// Invalid JSON, envelope, parameter, or message order.
     InvalidMessage,
+    /// The requested working directory is missing, inaccessible, or not a directory.
+    WorkingDirectoryUnavailable,
     /// The offered protocol range cannot be served.
     IncompatibleVersion,
     /// A required or unnegotiated capability cannot be used.
@@ -82,6 +84,9 @@ impl ErrorCode {
             Self::TerminalIo => "Terminal I/O failed",
             Self::TerminalNotFound => "Terminal not found",
             Self::InvalidMessage => "Invalid message or parameters",
+            Self::WorkingDirectoryUnavailable => {
+                "The session's working directory is unavailable. Restore it on the host and retry."
+            }
             Self::IncompatibleVersion => "Incompatible protocol version",
             Self::UnsupportedCapability => "Capability was not negotiated",
             Self::MethodNotFound => "Unknown method",

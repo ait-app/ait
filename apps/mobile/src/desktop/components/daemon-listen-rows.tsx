@@ -63,6 +63,9 @@ export function DaemonListenRows({
         <View key={field} style={[settingsStyles.row, settingsStyles.rowBorder]}>
           <View style={settingsStyles.rowContent}>
             <Text style={settingsStyles.rowTitle}>{t(`desktop.daemon.listen.${field}`)}</Text>
+            {field === "host" && !override ? (
+              <Text style={settingsStyles.rowHint}>{t("desktop.daemon.listen.savedHint")}</Text>
+            ) : null}
             {field === "host" && override ? (
               <Text style={settingsStyles.rowHint}>
                 {t("desktop.daemon.listen.override", { address: override })}

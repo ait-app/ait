@@ -309,11 +309,14 @@ pub(super) fn apply_history(record: &mut PersistedAgentRuntimeRecord, history: &
 
 pub(crate) fn canonical(cwd: &str) -> Result<String, ErrorCode> {
     let path = std::path::Path::new(cwd);
-    if !path.is_absolute() || !path.is_dir() {
+    if !path.is_absolute() {
         return Err(ErrorCode::InvalidMessage);
     }
+    if !path.is_dir() {
+        return Err(ErrorCode::WorkingDirectoryUnavailable);
+    }
     path.canonicalize()
-        .map_err(|_| ErrorCode::InvalidMessage)?
+        .map_err(|_| ErrorCode::WorkingDirectoryUnavailable)?
         .into_os_string()
         .into_string()
         .map_err(|_| ErrorCode::InvalidMessage)

@@ -51,6 +51,9 @@ export AIT_SERVER_DEEPSEEK_HARNESS_BIN=/absolute/path/to/dsh
 `agent.import.request` 只读检查完整历史，保留原生 ID、模型、推理档位和权限配置；
 导入不发送 prompt、不创建原生会话。未结束的回合或不完整日志不能作为已完成历史导入。
 导入后的 Ait 会话可在 daemon 重启后继续原生对话；DSH 自定义权限组合保持原样，不强制换成内置 preset。
+原生历史文件与工作目录分开保存，因此原目录删除后，会话仍可能出现在导入列表中。
+导入需要原工作目录存在且可访问；目录不可用时返回 `working_directory_unavailable`，
+界面显示原路径并提示恢复目录后重试。重新创建空目录只能恢复导入所需的路径，不能恢复原项目文件。
 暂不支持其他前端实时历史同步、steer、rewind、commands 和结构化输出约束。
 原生 Host 不接受 Ait 每会话 MCP override；请在 DSH web profile 中配置 MCP。
 显示按原生已落盘消息更新，不保证逐 token 输出。

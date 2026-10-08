@@ -136,7 +136,8 @@ interface SheetStatusMessagesProps {
   hasNoImportableProviders: boolean;
   isLoadingSessions: boolean;
   hasRows: boolean;
-  importErrored: boolean;
+  importError: unknown;
+  importCwd?: string | null;
 }
 
 function SheetStatusMessages({
@@ -145,7 +146,8 @@ function SheetStatusMessages({
   hasNoImportableProviders,
   isLoadingSessions,
   hasRows,
-  importErrored,
+  importError,
+  importCwd,
 }: SheetStatusMessagesProps) {
   const { theme } = useUnistyles();
   const { t } = useTranslation();
@@ -166,8 +168,14 @@ function SheetStatusMessages({
           <Text style={styles.statusText}>{t("importSession.status.loading")}</Text>
         </View>
       ) : null}
-      {importErrored ? (
-        <Text style={styles.statusText}>{t("importSession.status.failedImport")}</Text>
+      {importError ? (
+        <Text style={styles.statusText}>
+          {typeof importError === "object" &&
+          "code" in importError &&
+          importError.code === "working_directory_unavailable"
+            ? t("importSession.status.workingDirectoryUnavailable", { path: importCwd ?? "" })
+            : t("importSession.status.failedImport")}
+        </Text>
       ) : null}
     </>
   );
@@ -776,7 +784,8 @@ export function ImportSessionSheet({
         hasNoImportableProviders={hasNoImportableProviders}
         isLoadingSessions={isLoadingSessions}
         hasRows={visibleEntries.length > 0}
-        importErrored={importMutation.isError}
+        importError={importMutation.error}
+        importCwd={importMutation.variables?.cwd}
       />
       {providerErrorRows.length > 0 ? (
         <ProviderErrorBanner rows={providerErrorRows} onRetry={handleRetryProvider} />

@@ -12,12 +12,18 @@ import { StatusBadge, type StatusBadgeVariant } from "@/components/ui/status-bad
 import { Switch } from "@/components/ui/switch";
 import { getIsElectron } from "@/constants/platform";
 import { LocalDaemonSection } from "@/desktop/components/desktop-updates-section";
-import { startDesktopDaemon, stopDesktopDaemon } from "@/desktop/daemon/desktop-daemon";
+import {
+  getDesktopDaemonStatus,
+  restartDesktopDaemon,
+  startDesktopDaemon,
+  stopDesktopDaemon,
+} from "@/desktop/daemon/desktop-daemon";
 import { useDaemonStatus } from "@/desktop/hooks/use-daemon-status";
 import { useDesktopSettings } from "@/desktop/settings/desktop-settings";
 import { isVersionMismatch } from "@/desktop/updates/desktop-updates";
 import { useDaemonConfig } from "@/hooks/use-daemon-config";
 import { useIsLocalDaemon } from "@/hooks/use-is-local-daemon";
+import { upsertDesktopDaemonConnection } from "@/runtime/daemon-start-service";
 import { ProviderUsageSettingsSection } from "@/provider-usage/settings-section";
 import { useProviderUsage } from "@/provider-usage/use-provider-usage";
 import {
@@ -558,6 +564,8 @@ function RestartDaemonCard({ host }: { host: HostProfile }) {
   const daemonClient = useHostRuntimeClient(host.serverId);
   const isConnected = useHostRuntimeIsConnected(host.serverId);
   const runtime = getHostRuntimeStore();
+  const isLocalDaemon = useIsLocalDaemon(host.serverId);
+  const { setStatus, refetch: refreshDesktopStatus } = useDaemonStatus();
   const [isRestarting, setIsRestarting] = useState(false);
   const isMountedRef = useRef(true);
 
@@ -606,7 +614,11 @@ function RestartDaemonCard({ host }: { host: HostProfile }) {
 
     void confirmDialog({
       title: t("settings.host.daemon.restart.confirmTitle", { name: host.label }),
-      message: t("settings.host.daemon.restart.confirmMessage"),
+      message: t(
+        isLocalDaemon
+          ? "settings.host.daemon.restart.confirmDesktopMessage"
+          : "settings.host.daemon.restart.confirmMessage",
+      ),
       confirmLabel: t("settings.host.daemon.restart.confirm"),
       cancelLabel: t("common.actions.cancel"),
       destructive: true,
@@ -618,6 +630,26 @@ function RestartDaemonCard({ host }: { host: HostProfile }) {
           host.serverId,
           `settings_daemon_restart_${host.serverId}`,
           {
+            ...(isLocalDaemon
+              ? {
+                  desktop: {
+                    getStatus: getDesktopDaemonStatus,
+                    restart: async () => {
+                      try {
+                        const status = await restartDesktopDaemon();
+                        setStatus(status);
+                        return status;
+                      } finally {
+                        refreshDesktopStatus();
+                      }
+                    },
+                    reconnect: async (status: Awaited<ReturnType<typeof restartDesktopDaemon>>) => {
+                      const result = await upsertDesktopDaemonConnection(runtime, status);
+                      if (!result.ok) throw new Error(result.error);
+                    },
+                  },
+                }
+              : {}),
             restartServer: (reason) => daemonClient.restartServer(reason),
             getStatus: async () => ({
               ...(await daemonClient.getDaemonStatus({ timeout: 1500 })),
@@ -636,7 +668,18 @@ function RestartDaemonCard({ host }: { host: HostProfile }) {
           t("settings.host.daemon.restart.dialogFailedMessage"),
         );
       });
-  }, [daemonClient, host.label, host.serverId, isHostConnected, t, waitForDaemonRestart]);
+  }, [
+    daemonClient,
+    host.label,
+    host.serverId,
+    isHostConnected,
+    isLocalDaemon,
+    runtime,
+    setStatus,
+    refreshDesktopStatus,
+    t,
+    waitForDaemonRestart,
+  ]);
 
   return (
     <View style={settingsStyles.card} testID="host-page-restart-card">

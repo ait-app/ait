@@ -453,6 +453,8 @@ export const en = {
       loading: "Loading recent sessions...",
       failedProvider: "Could not load {{provider}} sessions",
       failedImport: "Could not import selected session.",
+      workingDirectoryUnavailable:
+        "The session’s working directory is unavailable on this host: {{path}}. Restore the directory and try importing again.",
     },
     actions: {
       refresh: "Refresh sessions",
@@ -1378,6 +1380,7 @@ export const en = {
       listen: {
         host: "Listen address",
         port: "Port",
+        savedHint: "Restart daemon to apply changes.",
         override:
           "AIT_SERVER_LISTEN overrides this setting: {{address}}. Remove the environment variable to use the saved address.",
         invalid: "Enter an IPv4 or IPv6 address (or localhost) and a port from 0 to 65535.",
@@ -2992,6 +2995,8 @@ export const en = {
           confirmTitle: "Restart {{name}}",
           confirmMessage:
             "This will restart the daemon. Agents running on it will keep going; the app will reconnect automatically.",
+          confirmDesktopMessage:
+            "Restart the built-in daemon with the saved settings? Running tasks and terminal sessions will be interrupted.",
           restarting: "Restarting...",
           unableToReconnectTitle: "Unable to reconnect",
           unableToReconnectMessage:

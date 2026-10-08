@@ -411,6 +411,7 @@ export const es: TranslationResources = {
       loading: "Cargando sesiones recientes...",
       failedProvider: "No se pudieron cargar las sesiones de {{provider}}",
       failedImport: "No se pudo importar la sesión seleccionada.",
+      workingDirectoryUnavailable: en.importSession.status.workingDirectoryUnavailable,
     },
     actions: {
       refresh: "Actualizar sesiones",
@@ -2627,6 +2628,7 @@ export const es: TranslationResources = {
           confirmTitle: "Reiniciar{{name}}",
           confirmMessage:
             "Esto reiniciará el demonio. Los agentes que se ejecutan en él seguirán funcionando; la aplicación se volverá a conectar automáticamente.",
+          confirmDesktopMessage: en.settings.host.daemon.restart.confirmDesktopMessage,
           restarting: "Reiniciando...",
           unableToReconnectTitle: "No se puede volver a conectar",
           unableToReconnectMessage:

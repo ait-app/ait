@@ -410,6 +410,7 @@ export const ptBR: TranslationResources = {
       loading: "Carregando sessões recentes...",
       failedProvider: "Não foi possível carregar as sessões de {{provider}}",
       failedImport: "Não foi possível importar a sessão selecionada.",
+      workingDirectoryUnavailable: en.importSession.status.workingDirectoryUnavailable,
     },
     actions: {
       refresh: "Atualizar sessões",
@@ -2610,6 +2611,7 @@ export const ptBR: TranslationResources = {
           confirmTitle: "Reiniciar {{name}}",
           confirmMessage:
             "Isso vai reiniciar o daemon. Agentes em execução nele continuarão rodando; o app reconectará automaticamente.",
+          confirmDesktopMessage: en.settings.host.daemon.restart.confirmDesktopMessage,
           restarting: "Reiniciando...",
           unableToReconnectTitle: "Não foi possível reconectar",
           unableToReconnectMessage:

@@ -22,10 +22,22 @@ fn recent_query_matches_all_display_fields_and_paths_are_canonical_directories()
         canonical(root.path().to_str().unwrap()).unwrap(),
         root.path().canonicalize().unwrap().to_str().unwrap()
     );
-    assert!(canonical("relative").is_err());
+    assert_eq!(canonical("relative"), Err(ErrorCode::InvalidMessage));
     let file = root.path().join("file");
     std::fs::write(&file, b"file").unwrap();
-    assert!(canonical(file.to_str().unwrap()).is_err());
+    assert_eq!(
+        canonical(file.to_str().unwrap()),
+        Err(ErrorCode::WorkingDirectoryUnavailable)
+    );
+    let missing = root.path().join("deleted-workspace");
+    assert_eq!(
+        canonical(missing.to_str().unwrap()),
+        Err(ErrorCode::WorkingDirectoryUnavailable)
+    );
+    assert!(
+        !missing.exists(),
+        "validation must not recreate a workspace"
+    );
 }
 
 #[derive(Debug)]

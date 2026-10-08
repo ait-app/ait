@@ -33,6 +33,9 @@ Settings → Host → Overview → Daemon edits the built-in daemon's IP and por
 The fields save on blur or Enter; the current listener appears in the existing Status row.
 The desktop saves `settings.daemon.listen` in Electron's `userData/desktop-settings.json`
 and reads it when starting the daemon. Saving does not interrupt the current daemon.
+The hint below Listen address directs users to Restart daemon below. For the local built-in
+daemon, that action relaunches the owned process with the saved settings and updates its connection
+to the new listener; remote hosts retain their service restart RPC.
 The default is `127.0.0.1:0`; port `0` selects an available port. IPv4, IPv6, wildcard
 and LAN addresses are supported. `AIT_SERVER_LISTEN` overrides the saved setting.
 
