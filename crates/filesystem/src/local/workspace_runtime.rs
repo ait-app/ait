@@ -6,9 +6,8 @@ use std::sync::atomic::{AtomicUsize, Ordering};
 use std::sync::{Arc, Mutex};
 use std::time::{Duration, Instant};
 
-use model::workspace::runtime::{
-    WorkspaceForgeSnapshot, WorkspaceRuntimeSnapshot, WorkspaceRuntimeSource,
-};
+use domain::workspace::runtime::{WorkspaceForgeSnapshot, WorkspaceRuntimeSnapshot};
+use model::workspace::runtime::WorkspaceRuntimeSource;
 
 use crate::local::{checkout::LocalCheckout, forge::LocalForge};
 

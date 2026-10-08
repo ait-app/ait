@@ -25,7 +25,7 @@ SCOPES = [
     ]),
     ("model", ["--lib"], [
         "pagination::", "directory_sync::", "polling::", "runtime::", "events::",
-        "workspace::", "storage::", "session::", "creation::", "summary::",
+        "workspace::", "storage::", "session::", "creation::", "server::", "methods::",
     ]),
     ("metadata", ["--lib"], [
         "service::directory::", "workspace_automation::", "rpc::directory::",
@@ -41,7 +41,10 @@ SCOPES = [
         "agent_execution::", "agent_controls::", "agent_history::", "terminal::", "worktrees::",
         "workspace_automation::", "directory::", "native_sessions::", "schedule::", "session::",
     ]),
-    ("protocol", ["--lib"], ["methods::"]),
+    ("domain", ["--lib"], [
+        "workspace::", "creation::", "session::", "summary::", "directory_sync::",
+        "pagination::", "schedule::", "storage::",
+    ]),
 ]
 IGNORE = r"/(tests|test_support)(/|\.rs$)"
 

@@ -271,7 +271,7 @@ impl ExecutionState {
             .take()
             .unwrap_or_else(|| Uuid::new_v4().to_string());
         let creations = self.manager.creations();
-        let admission = creations.begin(model::creation::protocol::Kind::Agent, &key, intent)?;
+        let admission = creations.begin(domain::creation::protocol::Kind::Agent, &key, intent)?;
         if !admission.execute {
             if admission.snapshot.phase == "completed"
                 && let Some(id) = &admission.snapshot.agent_id
@@ -314,7 +314,7 @@ impl ExecutionState {
     async fn register_creation(
         &mut self,
         request: CreateRequest,
-        admission: &model::creation::protocol::Snapshot,
+        admission: &domain::creation::protocol::Snapshot,
         workspace_id: String,
         created_worktree: bool,
     ) -> Result<Value, ErrorCode> {
@@ -404,7 +404,7 @@ impl ExecutionState {
     async fn finish_creation(
         &mut self,
         id: &str,
-        admission: &model::creation::protocol::Snapshot,
+        admission: &domain::creation::protocol::Snapshot,
         prompt: Option<crate::protocol::prompt::AgentPrompt>,
     ) -> Result<Value, ErrorCode> {
         let creations = self.manager.creations();

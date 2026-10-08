@@ -1,7 +1,7 @@
-use model::workspace::records::{
+use domain::workspace::records::{
     PersistedProjectKind, PersistedProjectRecord, PersistedWorkspaceRecord,
 };
-use model::workspace::registry::ActiveProjectInput;
+use domain::workspace::registry::ActiveProjectInput;
 
 pub(super) fn project(id: &str) -> PersistedProjectRecord {
     serde_json::from_value(serde_json::json!({

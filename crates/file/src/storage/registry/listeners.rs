@@ -1,7 +1,8 @@
 use std::fmt;
 use std::sync::{Arc, Mutex, Weak};
 
-use model::workspace::registry::{MutationListener, MutationSubscription, RegistryError};
+use domain::workspace::registry::RegistryError;
+use model::workspace::registry::{MutationListener, MutationSubscription};
 
 type ListenerList<T> = Mutex<Vec<Weak<Registration<T>>>>;
 

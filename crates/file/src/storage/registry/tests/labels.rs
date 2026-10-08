@@ -2,11 +2,10 @@ use std::sync::atomic::{AtomicBool, Ordering};
 
 use super::*;
 use crate::storage::workspace_labels::FileWorkspaceLabelStore;
-use model::workspace::label_store::{
-    WorkspaceLabelStore, WorkspaceLabelStoreError, WorkspaceLabelStoreMutation,
-};
-use model::workspace::labels::{WorkspaceLabelColor, WorkspaceLabelDefinition};
-use model::workspace::registry::{RegistryError, WorkspaceMutationContext};
+use domain::workspace::label_store::{WorkspaceLabelStoreError, WorkspaceLabelStoreMutation};
+use domain::workspace::labels::{WorkspaceLabelColor, WorkspaceLabelDefinition};
+use domain::workspace::registry::{RegistryError, WorkspaceMutationContext};
+use model::workspace::label_store::WorkspaceLabelStore;
 
 #[test]
 fn label_journal_callback_observes_the_locked_before_image() {

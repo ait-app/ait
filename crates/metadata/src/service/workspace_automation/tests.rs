@@ -1,10 +1,10 @@
 use std::sync::{Arc, Mutex};
 
-use model::workspace::records::{PersistedWorkspaceKind, UntrustedWorkspaceSource};
-use model::workspace::registry::{
-    MutationListener, MutationSubscription, WorkspaceArchiveContext, WorkspaceMutation,
-    WorkspaceMutationContext,
+use domain::workspace::records::{PersistedWorkspaceKind, UntrustedWorkspaceSource};
+use domain::workspace::registry::{
+    WorkspaceArchiveContext, WorkspaceMutation, WorkspaceMutationContext,
 };
+use model::workspace::registry::{MutationListener, MutationSubscription};
 
 use super::*;
 use crate::ports::workspace_automation::{ScriptType, SetupLifecycle};

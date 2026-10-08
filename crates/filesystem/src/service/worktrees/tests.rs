@@ -1,9 +1,8 @@
 use std::path::Path;
 use std::sync::{Arc, Mutex};
 
-use model::workspace::registry::{
-    MutationListener, MutationSubscription, ProjectMutation, WorkspaceMutation,
-};
+use domain::workspace::registry::{ProjectMutation, WorkspaceMutation};
+use model::workspace::registry::{MutationListener, MutationSubscription};
 
 use super::*;
 
@@ -314,7 +313,7 @@ struct Managed {
 #[derive(Debug)]
 struct ManagedState {
     fail_remove: bool,
-    directory_inputs: Vec<(String, model::workspace::worktrees::DirectoryGit)>,
+    directory_inputs: Vec<(String, domain::workspace::worktrees::DirectoryGit)>,
     listed: Vec<ManagedWorktreeInfo>,
     created_inputs: Vec<ManagedWorktreeCreate>,
     removed: Vec<String>,
@@ -353,7 +352,7 @@ impl ManagedWorktrees for Managed {
     fn prepare_directory(
         &self,
         cwd: &str,
-        intent: &model::workspace::worktrees::DirectoryGit,
+        intent: &domain::workspace::worktrees::DirectoryGit,
     ) -> Result<(), WorktreeError> {
         self.state
             .lock()

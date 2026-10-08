@@ -157,7 +157,7 @@ pub trait ManagedWorktrees: Debug + Send + Sync {
     fn resolve_change_request(
         &self,
         _cwd: &str,
-        _source: &model::workspace::worktrees::WorktreeChangeRequest,
+        _source: &domain::workspace::worktrees::WorktreeChangeRequest,
         _head_ref: Option<&str>,
     ) -> Result<ChangeRequestCheckout, WorktreeError> {
         Err(WorktreeError::ForgeUnavailable)
@@ -170,7 +170,7 @@ pub trait ManagedWorktrees: Debug + Send + Sync {
     fn prepare_directory(
         &self,
         cwd: &str,
-        intent: &model::workspace::worktrees::DirectoryGit,
+        intent: &domain::workspace::worktrees::DirectoryGit,
     ) -> Result<(), WorktreeError>;
 
     /// List managed worktrees belonging to the repository containing `cwd`.

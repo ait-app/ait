@@ -1,8 +1,9 @@
 use super::*;
 
-use model::workspace::worktrees::{
-    CreatedWorktreeWorkspace, WorktreeCreation, WorktreeCreationError, WorktreeProvisioning,
+use domain::workspace::worktrees::{
+    CreatedWorktreeWorkspace, WorktreeCreation, WorktreeCreationError,
 };
+use model::workspace::worktrees::WorktreeProvisioning;
 
 #[derive(Debug)]
 struct WorktreeCleanup {
@@ -14,7 +15,7 @@ impl WorktreeProvisioning for WorktreeCleanup {
     fn prepare_directory(
         &self,
         _: &str,
-        _: &model::workspace::worktrees::DirectoryGit,
+        _: &domain::workspace::worktrees::DirectoryGit,
     ) -> Result<(), WorktreeCreationError> {
         panic!("cleanup must not change the source branch");
     }

@@ -1,9 +1,10 @@
 use std::sync::atomic::{AtomicUsize, Ordering};
 
+use domain::summary::SummaryError;
+use domain::workspace::records::PersistedWorkspaceRecord;
+use domain::workspace::registry::WorkspaceMutationContext;
 use file::storage::registry::FileBackedWorkspaceRegistry;
-use model::summary::{SummaryError, SummaryFuture};
-use model::workspace::records::PersistedWorkspaceRecord;
-use model::workspace::registry::WorkspaceMutationContext;
+use model::summary::SummaryFuture;
 use serde_json::json;
 
 use super::*;

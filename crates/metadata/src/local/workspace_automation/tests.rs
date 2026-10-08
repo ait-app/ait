@@ -426,7 +426,7 @@ fn setup_thread_does_not_retain_the_runtime_across_restart() {
 
 #[test]
 fn script_config_prefers_ait_and_reads_legacy_only_when_ait_is_absent() {
-    use model::workspace::provisioning::{
+    use domain::workspace::provisioning::{
         LEGACY_PROJECT_CONFIG_FILE_NAME, PROJECT_CONFIG_FILE_NAME,
     };
 

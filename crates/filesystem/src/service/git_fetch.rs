@@ -5,9 +5,9 @@ use std::path::PathBuf;
 use std::sync::{Arc, RwLock};
 use std::time::Duration;
 
+use domain::session::protocol::SessionEventKind;
 use model::Runtime;
 use model::session::SessionEvents;
-use model::session::protocol::SessionEventKind;
 use model::workspace::git::{WorkspaceGitObservation, WorkspaceGitObserver};
 use tokio::sync::{Notify, Semaphore};
 use tokio::task::JoinHandle;

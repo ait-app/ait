@@ -1,8 +1,7 @@
 //! Bounded, versioned atomic schedule storage.
-use model::{
-    schedule::Schedule,
-    storage::schedule::{Error, Store},
-};
+use domain::schedule::Schedule;
+use domain::storage::schedule::Error;
+use model::storage::schedule::Store;
 use serde::{Deserialize, Serialize};
 use std::{fs, io::Read, path::PathBuf};
 

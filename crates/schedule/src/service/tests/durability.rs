@@ -1,7 +1,7 @@
 //! Failure injection around Paseo's durable run history and concurrent mutation scenarios.
 use std::sync::atomic::AtomicBool;
 
-use model::schedule::RunStatus;
+use domain::schedule::RunStatus;
 use model::storage::schedule::Store;
 
 use super::{controlled::*, *};

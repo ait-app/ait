@@ -1,4 +1,4 @@
-//! Connection event subscriptions and client presence; unrelated to domain Session history.
+//! Connection event subscription and client presence payloads, without live observers.
 
 use serde::{Deserialize, Serialize};
 

@@ -3,11 +3,11 @@ use std::fmt;
 use std::path::PathBuf;
 use std::sync::Arc;
 
-use model::workspace::records::PersistedProjectRecord;
-use model::workspace::registry::{
-    ActiveProjectInput, MutationKind, MutationListener, MutationSubscription, ProjectMutation,
-    ProjectRegistry, RegistryError,
+use domain::workspace::records::PersistedProjectRecord;
+use domain::workspace::registry::{
+    ActiveProjectInput, MutationKind, ProjectMutation, RegistryError,
 };
+use model::workspace::registry::{MutationListener, MutationSubscription, ProjectRegistry};
 
 use super::listeners::Listeners;
 use crate::registry::FileRegistry;

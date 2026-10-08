@@ -8,11 +8,13 @@ use domain::agent_runtime::registry::{AgentRuntimeRegistry, AgentRuntimeRegistry
 use domain::agent_runtime::{
     AgentAttentionReason, AgentRuntimeStatus, PersistedAgentRuntimeRecord,
 };
-use model::pagination::{self, Direction, Entry, Sort, SortValue};
-use model::workspace::records::{
+use domain::pagination::{Direction, Entry, Sort, SortValue};
+use domain::workspace::records::{
     PersistedProjectKind, PersistedProjectRecord, PersistedWorkspaceKind, PersistedWorkspaceRecord,
 };
-use model::workspace::registry::{ProjectRegistry, RegistryError, WorkspaceRegistry};
+use domain::workspace::registry::RegistryError;
+use model::pagination;
+use model::workspace::registry::{ProjectRegistry, WorkspaceRegistry};
 
 pub(crate) mod archive;
 mod search;

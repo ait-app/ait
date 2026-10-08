@@ -1,10 +1,10 @@
 use std::sync::{Arc, Mutex};
 
-use model::workspace::label_store::{
-    WorkspaceLabelStore, WorkspaceLabelStoreError, WorkspaceLabelStoreMutation,
-    WorkspaceLabelStoreSnapshot,
+use domain::workspace::label_store::{
+    WorkspaceLabelStoreError, WorkspaceLabelStoreMutation, WorkspaceLabelStoreSnapshot,
 };
-use model::workspace::labels::{WorkspaceLabelColor, WorkspaceLabelDefinition};
+use domain::workspace::labels::{WorkspaceLabelColor, WorkspaceLabelDefinition};
+use model::workspace::label_store::WorkspaceLabelStore;
 use serde_json::{Value, json};
 
 use super::{Delivery, live_update, map_error};

@@ -134,7 +134,7 @@ struct SummarySource(Arc<dyn provider::summary::SummaryGenerator>);
 impl model::summary::SummarySource for SummarySource {
     fn generate(
         &self,
-        request: model::summary::SummaryRequest,
+        request: domain::summary::SummaryRequest,
     ) -> model::summary::SummaryFuture<'_> {
         self.0.generate(request)
     }

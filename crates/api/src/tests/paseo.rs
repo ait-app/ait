@@ -1,6 +1,6 @@
 //! Physical-connection and subscription contracts from Paseo owned-subscriptions tests.
 
-use model::session::protocol::SessionEventKind;
+use domain::session::protocol::SessionEventKind;
 use tokio_tungstenite::tungstenite::protocol::frame::Frame as WebSocketFrame;
 use tokio_tungstenite::tungstenite::protocol::frame::coding::{Data, OpCode};
 

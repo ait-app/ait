@@ -1,7 +1,7 @@
 //! Schedule input and shared durable records.
 
 use chrono::{DateTime, Utc};
-use model::schedule::{Cadence, Target};
+use domain::schedule::{Cadence, Target};
 use serde::Deserialize;
 
 /// Input accepted by create; unknown fields are rejected before any write.

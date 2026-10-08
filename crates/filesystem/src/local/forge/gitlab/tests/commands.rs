@@ -204,7 +204,7 @@ fn gitlab_checkout_resolves_refs_and_fork_trust_without_querying_github() {
     let fixture = Fixture::new();
     let result = fixture.forge.worktree_checkout(
         fixture.cwd(),
-        &model::workspace::worktrees::WorktreeChangeRequest {
+        &domain::workspace::worktrees::WorktreeChangeRequest {
             forge: None,
             number: 42,
             project_path: None,
@@ -218,7 +218,7 @@ fn gitlab_checkout_resolves_refs_and_fork_trust_without_querying_github() {
     );
     assert_eq!(target.checkout_refs[1].reference, "refs/heads/feature");
     assert!(target.track_origin && target.untrusted_repository.is_none());
-    let source = model::workspace::worktrees::WorktreeChangeRequest {
+    let source = domain::workspace::worktrees::WorktreeChangeRequest {
         forge: Some("gitlab".to_owned()),
         number: 42,
         project_path: None,
@@ -275,7 +275,7 @@ fn unknown_hosts_do_not_default_to_github_and_negative_probes_are_bounded() {
             .forge
             .worktree_checkout(
                 fixture.cwd(),
-                &model::workspace::worktrees::WorktreeChangeRequest {
+                &domain::workspace::worktrees::WorktreeChangeRequest {
                     forge: None,
                     number: 42,
                     project_path: None

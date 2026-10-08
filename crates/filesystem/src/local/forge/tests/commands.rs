@@ -357,7 +357,7 @@ fn inferred_pull_request_base_prefers_remote_head_and_rejects_using_head_itself(
 
 #[test]
 fn checkout_falls_back_to_pr_view_for_a_missing_head_and_rejects_mismatched_forge_data() {
-    use model::workspace::worktrees::WorktreeChangeRequest;
+    use domain::workspace::worktrees::WorktreeChangeRequest;
     let fixture = Fixture::new(
         "case \"$1\" in repo) printf '{\"owner\":{\"login\":\"acme\"},\"name\":\"app\"}';; api) cat \"$root/facts\";; pr) printf '{\"headRefName\":\"feature/fallback\"}';; esac",
     );

@@ -1,9 +1,8 @@
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, Mutex};
 
-use model::workspace::registry::{
-    ProjectRegistry, RegistryError, WorkspaceMutationContext, WorkspaceRegistry,
-};
+use domain::workspace::registry::{RegistryError, WorkspaceMutationContext};
+use model::workspace::registry::{ProjectRegistry, WorkspaceRegistry};
 
 use super::super::{FileBackedProjectRegistry, FileBackedWorkspaceRegistry};
 use super::fixtures::{input, project, workspace};
@@ -71,7 +70,7 @@ fn malformed_files_and_invalid_programmatic_records_are_never_silently_overwritt
     registry.initialize().unwrap();
     let mut invalid = workspace("one");
     invalid.untrusted_source = Some(
-        model::workspace::records::UntrustedWorkspaceSource::ChangeRequest {
+        domain::workspace::records::UntrustedWorkspaceSource::ChangeRequest {
             forge: "github".into(),
             number: 0,
             head_repository: "example/repo".into(),

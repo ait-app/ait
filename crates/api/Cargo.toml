@@ -5,6 +5,7 @@ edition.workspace = true
 publish.workspace = true
 
 [dependencies]
+domain.workspace = true
 relay.workspace = true
 schedule.workspace = true
 browser.workspace = true
@@ -14,7 +15,6 @@ terminal.workspace = true
 provider.workspace = true
 filesystem.workspace = true
 metadata.workspace = true
-protocol.workspace = true
 
 axum.workspace = true
 futures-util.workspace = true

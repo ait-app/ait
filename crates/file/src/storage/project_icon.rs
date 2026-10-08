@@ -4,7 +4,8 @@ use std::fs::File;
 use std::io::Write;
 use std::path::{Path, PathBuf};
 
-use model::storage::project::{ProjectIcon, ProjectIconStore, ProjectIconStoreError};
+use domain::storage::project::{ProjectIcon, ProjectIconStoreError};
+use model::storage::project::ProjectIconStore;
 use sha2::{Digest, Sha256};
 
 const MAX_CUSTOM_BYTES: usize = 512 * 1024;

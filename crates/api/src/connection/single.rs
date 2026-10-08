@@ -8,8 +8,8 @@ use futures_util::{
     stream::{FuturesUnordered, SplitStream},
 };
 use model::outbound::{Outbound, QueueError};
-use model::subscription::SubscriptionReleaseRequest;
-use protocol::{ClientMessage, ErrorCode, valid_id};
+use model::server::SubscriptionReleaseRequest;
+use model::server::{ClientMessage, ErrorCode, valid_id};
 use tokio::sync::{mpsc, oneshot};
 use tokio_util::sync::CancellationToken;
 

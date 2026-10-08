@@ -1,7 +1,7 @@
 //! Paseo worktree request and response payloads exposed under canonical method names.
 
-use model::workspace::protocol::workspace::WorkspaceDescriptorPayload;
-use model::workspace::protocol::worktree_source::ChangeRequestCheckoutSource;
+use domain::workspace::protocol::workspace::WorkspaceDescriptorPayload;
+use domain::workspace::protocol::worktree_source::ChangeRequestCheckoutSource;
 use serde::{Deserialize, Deserializer, Serialize};
 use serde_json::Value;
 

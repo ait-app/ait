@@ -1,7 +1,8 @@
 //! Stable project grouping and Git remote identities shared by capability crates.
 
-use super::provisioning::Checkout;
 use std::path::Path;
+
+use super::provisioning::Checkout;
 
 /// Return the final UTF-8 path component, falling back to the supplied path.
 #[must_use]

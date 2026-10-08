@@ -4,9 +4,8 @@ use std::collections::{BTreeSet, HashSet};
 use std::path::{Path, PathBuf};
 use std::sync::{Arc, Mutex, MutexGuard};
 
-use model::storage::daemon_config::{
-    DaemonConfigReload, DaemonConfigStore, DaemonConfigStoreError,
-};
+use domain::storage::daemon_config::{DaemonConfigReload, DaemonConfigStoreError};
+use model::storage::daemon_config::DaemonConfigStore;
 use serde_json::{Map, Value};
 
 const MAX_CONFIG_BYTES: u64 = 4 * 1024 * 1024;

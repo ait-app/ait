@@ -40,7 +40,7 @@ async fn server_routes_self_managed_gitlab_operations_without_github_queries() {
     let log = root.path().join("server.log");
     let mut process = start_with_path(&state, &log, Some(&path));
     let address = ready(&mut process, &log).await;
-    let info: protocol::ServerInfo = reqwest::Client::builder()
+    let info: model::server::ServerInfo = reqwest::Client::builder()
         .no_proxy()
         .build()
         .unwrap()

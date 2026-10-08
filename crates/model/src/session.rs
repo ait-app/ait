@@ -1,34 +1,18 @@
 //! Bounded connection observers and activity policy, without a transport/runtime dependency.
 
-pub mod protocol;
-
 use std::collections::{BTreeMap, BTreeSet, VecDeque};
 use std::fmt;
 use std::sync::{Arc, Mutex, Weak};
 
 use chrono::{DateTime, Utc};
+use domain::session::SessionError;
+use domain::session::protocol::{EventsRequest, Heartbeat, SessionEventKind};
 use serde_json::Value;
 use uuid::Uuid;
-
-use crate::session::protocol::{EventsRequest, Heartbeat, SessionEventKind};
 
 const PRESENCE_MS: i64 = 180_000;
 const MAX_PENDING_EVENTS: usize = 64;
 const MAX_PENDING_BYTES: usize = 1024 * 1024;
-
-/// Safe subscription validation or delivery failure.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, thiserror::Error)]
-pub enum SessionError {
-    /// Invalid heartbeat or subscription parameters.
-    #[error("invalid session parameters")]
-    Invalid,
-    /// The requested producer has not been implemented.
-    #[error("unsupported session event")]
-    Unsupported,
-    /// Delivery closed or exhausted its bounded pending queue.
-    #[error("session event delivery closed")]
-    Closed,
-}
 
 /// Transport-owned bounded delivery callback. Payload includes its subscription identity.
 pub type EventSink = Arc<dyn Fn(SessionEventKind, Value) -> Result<(), SessionError> + Send + Sync>;

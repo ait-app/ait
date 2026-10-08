@@ -2,9 +2,9 @@ use super::*;
 
 #[cfg(unix)]
 use crate::service::summary_generation::test_config::Configuration;
-use file::storage::agent_runtime::FileBackedAgentRuntimeRegistry;
 #[cfg(unix)]
-use model::summary::{SummaryKind, SummaryRequest, SummarySelection};
+use domain::summary::{SummaryKind, SummaryRequest, SummarySelection};
+use file::storage::agent_runtime::FileBackedAgentRuntimeRegistry;
 #[cfg(unix)]
 use serde_json::json;
 
@@ -140,7 +140,7 @@ async fn configured_codex_and_claude_generate_summary_without_foreground_agents(
             generator.shutdown();
             assert_eq!(
                 generator.generate(request).await,
-                Err(model::summary::SummaryError::Cancelled)
+                Err(domain::summary::SummaryError::Cancelled)
             );
         }
     }

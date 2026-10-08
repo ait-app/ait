@@ -2,10 +2,10 @@
 
 use std::sync::{Arc, Mutex};
 
-use model::workspace::worktrees::{
-    CreatedWorktreeWorkspace, DirectoryGit, WorktreeAction, WorktreeCreation,
-    WorktreeCreationError, WorktreeProvisioning,
+use domain::workspace::worktrees::{
+    CreatedWorktreeWorkspace, DirectoryGit, WorktreeAction, WorktreeCreation, WorktreeCreationError,
 };
+use model::workspace::worktrees::WorktreeProvisioning;
 
 use super::{CreateAction, CreateWorktree, Worktrees, WorktreesError, is_active_project};
 use crate::ports::worktrees::WorktreeError;

@@ -182,7 +182,7 @@ impl AgentManager {
             timeline.events().publish(id,"agent_stream",&json!({"agentId":id,"event":{"type":"permission_resolved","provider":agent.record.provider,"requestId":request,"resolution":response}}));
         }
         self.events.publish(
-            model::session::protocol::SessionEventKind::AgentPermissionResolved,
+            domain::session::protocol::SessionEventKind::AgentPermissionResolved,
             &json!({"agentId":id,"requestId":request,"resolution":response}),
         );
         Ok(())
@@ -480,11 +480,11 @@ pub(super) fn publish_permission(
         timeline.events().publish(id,"agent_stream",&json!({"agentId":id,"event":{"type":"permission_requested","provider":agent.record.provider,"request":request}}));
     }
     events.publish(
-        model::session::protocol::SessionEventKind::AgentPermissionRequest,
+        domain::session::protocol::SessionEventKind::AgentPermissionRequest,
         &json!({"agentId":id,"request":request}),
     );
     events.publish(
-        model::session::protocol::SessionEventKind::AgentAttention,
+        domain::session::protocol::SessionEventKind::AgentAttention,
         &json!({"agentId":id,"reason":"permission","timestamp":now}),
     );
     Ok(())
@@ -523,7 +523,7 @@ pub(super) fn resolve_permission(
         );
     }
     events.publish(
-        model::session::protocol::SessionEventKind::AgentPermissionResolved,
+        domain::session::protocol::SessionEventKind::AgentPermissionResolved,
         &json!({"agentId":id,"requestId":request,
             "resolution":{"behavior":"deny","message":"Resolved by native provider"}}),
     );
@@ -564,7 +564,7 @@ pub(super) fn publish_subagent(
                 &json!({"kind":"upsert","subagent":descriptor}),
             );
             events.publish(
-                model::session::protocol::SessionEventKind::ProviderSubagents,
+                domain::session::protocol::SessionEventKind::ProviderSubagents,
                 &json!({"kind":"upsert","subagent":descriptor}),
             );
             Ok(())

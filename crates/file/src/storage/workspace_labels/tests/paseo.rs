@@ -3,7 +3,7 @@
 use std::sync::{Arc, Mutex};
 
 use super::*;
-use model::workspace::registry::RegistryError;
+use domain::workspace::registry::RegistryError;
 
 fn fixture() -> (
     tempfile::TempDir,

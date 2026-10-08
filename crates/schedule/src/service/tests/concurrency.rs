@@ -1,5 +1,5 @@
 //! Actor counterparts of Paseo concurrent updates and in-flight lifecycle tests.
-use model::schedule::{RunStatus, Status};
+use domain::schedule::{RunStatus, Status};
 
 use super::{controlled::*, *};
 

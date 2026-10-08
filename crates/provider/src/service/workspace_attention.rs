@@ -8,10 +8,12 @@ use domain::agent_runtime::registry::{AgentRuntimeRegistry, AgentRuntimeRegistry
 use domain::agent_runtime::{
     AgentAttentionReason, AgentRuntimeStatus, PersistedAgentRuntimeRecord,
 };
-use model::workspace::activity::WorkspaceStateBucket;
+use domain::workspace::activity::WorkspaceStateBucket;
+use domain::workspace::attention::{
+    WorkspaceActivity, WorkspaceAttentionChanges, WorkspaceStateError,
+};
 use model::workspace::attention::{
-    WorkspaceActivity, WorkspaceActivitySource, WorkspaceAttention, WorkspaceAttentionChanges,
-    WorkspaceAttentionScan, WorkspaceStateError,
+    WorkspaceActivitySource, WorkspaceAttention, WorkspaceAttentionScan,
 };
 
 const PARENT_AGENT_ID_LABEL: &str = "paseo.parent-agent-id";

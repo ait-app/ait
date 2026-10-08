@@ -1,10 +1,9 @@
 use std::sync::atomic::{AtomicBool, Ordering};
 
+use domain::workspace::registry::{WorkspaceArchiveContext, WorkspaceMutationContext};
 use file::storage::registry::FileBackedWorkspaceRegistry;
 use file::storage::workspace_labels::FileWorkspaceLabelStore;
-use model::workspace::registry::{
-    WorkspaceArchiveContext, WorkspaceMutationContext, WorkspaceRegistry,
-};
+use model::workspace::registry::WorkspaceRegistry;
 
 use super::*;
 

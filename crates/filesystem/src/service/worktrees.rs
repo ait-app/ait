@@ -1,15 +1,15 @@
 //! Worktree lifecycle coordination over Git and Paseo-shaped registry ports.
 
-use model::workspace::identity::{basename, derive_project_key};
-use model::workspace::provisioning::Checkout;
-use model::workspace::records::{
+use domain::workspace::identity::{basename, derive_project_key};
+use domain::workspace::provisioning::Checkout;
+use domain::workspace::records::{
     PersistedProjectKind, PersistedProjectRecord, PersistedWorkspaceKind, PersistedWorkspaceRecord,
 };
-use model::workspace::registry::generate_workspace_id;
-use model::workspace::registry::{
-    ActiveProjectInput, ProjectRegistry, RegistryError, WorkspaceArchiveContext,
-    WorkspaceMutationContext, WorkspaceRegistry,
+use domain::workspace::registry::generate_workspace_id;
+use domain::workspace::registry::{
+    ActiveProjectInput, RegistryError, WorkspaceArchiveContext, WorkspaceMutationContext,
 };
+use model::workspace::registry::{ProjectRegistry, WorkspaceRegistry};
 
 use crate::ports::worktrees::{
     CreatedManagedWorktree, ManagedWorktreeCreate, ManagedWorktreeInfo, ManagedWorktrees,
@@ -50,7 +50,7 @@ pub struct CreateWorktree {
     /// Explicit or default action.
     pub action: CreateAction,
     /// Optional forge change-request checkout source.
-    pub checkout_source: Option<model::workspace::worktrees::WorktreeChangeRequest>,
+    pub checkout_source: Option<domain::workspace::worktrees::WorktreeChangeRequest>,
     /// First-Agent prompt used as a provisional workspace title.
     pub first_agent_prompt: Option<String>,
     /// Whether the caller supplied any first-Agent context.
@@ -287,7 +287,7 @@ impl Worktrees {
             .map_or_else(random_slug, Ok)?;
         let untrusted_source = change_request.as_ref().and_then(|target| {
             target.untrusted_repository.as_ref().map(|repository| {
-                model::workspace::records::UntrustedWorkspaceSource::ChangeRequest {
+                domain::workspace::records::UntrustedWorkspaceSource::ChangeRequest {
                     forge: target.forge.clone(),
                     number: target.number,
                     head_repository: repository.clone(),
@@ -466,7 +466,7 @@ impl Worktrees {
         created: &CreatedManagedWorktree,
         input: &CreateWorktree,
         timestamp: &str,
-        untrusted_source: Option<model::workspace::records::UntrustedWorkspaceSource>,
+        untrusted_source: Option<domain::workspace::records::UntrustedWorkspaceSource>,
     ) -> Result<CreatedWorkspace, WorktreesError> {
         let project = self.resolve_project(created, input.project_id.as_deref(), timestamp)?;
         let workspace = PersistedWorkspaceRecord {
@@ -497,7 +497,7 @@ impl Worktrees {
             pinned_at: None,
             labels: None,
             auto_name: input.title.is_none().then(|| {
-                model::workspace::records::PendingWorkspaceName {
+                domain::workspace::records::PendingWorkspaceName {
                     placeholder_branch: (input.checkout_source.is_none()
                         && input.action == CreateAction::BranchOff
                         && normalize_ref(input.branch_name.as_deref()).is_none()

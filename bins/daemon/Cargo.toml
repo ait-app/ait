@@ -37,7 +37,6 @@ workspace = true
 
 [dev-dependencies]
 tempfile.workspace = true
-protocol.workspace = true
 futures-util.workspace = true
 reqwest.workspace = true
 reqwest.features = ["json"]

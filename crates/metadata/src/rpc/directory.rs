@@ -29,8 +29,7 @@ pub const PROJECT_ICON_METHODS: &[MethodSpec] = &[
 
 use base64::Engine;
 use chrono::{SecondsFormat, Utc};
-use model::methods::MethodSpec;
-use model::workspace::protocol::directory::{
+use domain::workspace::protocol::directory::{
     ProjectAddRequest, ProjectAddResult, ProjectCreateDirectoryRequest,
     ProjectCreateDirectoryResult, ProjectListRequest, ProjectListResult, ProjectRemoveRequest,
     ProjectRemoveResult, ProjectRenameRequest, ProjectRenameResult, WorkspaceArchiveRequest,
@@ -39,11 +38,12 @@ use model::workspace::protocol::directory::{
     WorkspacePinSetRequest, WorkspacePinSetResult, WorkspaceTitleSetRequest,
     WorkspaceTitleSetResult,
 };
-use model::workspace::protocol::projection::{project_descriptor, workspace_descriptor};
-use model::workspace::protocol::workspace::{
+use domain::workspace::protocol::projection::{project_descriptor, workspace_descriptor};
+use domain::workspace::protocol::workspace::{
     WorkspaceDescriptorPayload, WorkspaceProjectDescriptorPayload,
 };
-use model::workspace::records::{PersistedProjectRecord, PersistedWorkspaceRecord};
+use domain::workspace::records::{PersistedProjectRecord, PersistedWorkspaceRecord};
+use model::methods::MethodSpec;
 use serde::Serialize;
 use serde_json::Value;
 
@@ -335,7 +335,7 @@ pub struct WorkspaceCreated {
     /// Newly created worktree whose setup and update should be dispatched.
     pub created_worktree_id: Option<String>,
     /// Fresh Workspace receipt awaiting its initial Agent, owned by the API coordinator.
-    pub pending_agent: Option<model::creation::protocol::Snapshot>,
+    pub pending_agent: Option<domain::creation::protocol::Snapshot>,
 }
 
 /// Create or replay a Workspace intent using the metadata creation coordinator.
@@ -366,7 +366,7 @@ fn create_workspace_intent(
     mut params: Value,
     agent_intent: Option<Value>,
 ) -> Result<WorkspaceCreated, ErrorCode> {
-    use model::creation::protocol::Kind;
+    use domain::creation::protocol::Kind;
     let mut request: WorkspaceCreateRequest = decode(params.clone())?;
     let is_worktree = matches!(request.source, WorkspaceCreateSource::Worktree(_));
     if (request.agent.is_some() && agent_intent.is_none())
@@ -377,7 +377,7 @@ fn create_workspace_intent(
     let has_agent = agent_intent.is_some();
     if let Some(intent) = agent_intent {
         request.first_agent_context =
-            Some(model::workspace::protocol::directory::FirstAgentContext {
+            Some(domain::workspace::protocol::directory::FirstAgentContext {
                 prompt: intent["initialPrompt"].as_str().map(str::to_owned),
                 attachments: intent["attachments"]
                     .as_array()
@@ -473,7 +473,7 @@ fn workspace_create(
         }
     };
     let timestamp = timestamp();
-    match directory.create_workspace(model::workspace::lifecycle::WorkspaceCreation {
+    match directory.create_workspace(domain::workspace::lifecycle::WorkspaceCreation {
         path: &path,
         title: request.title,
         project_id: project_id.as_deref(),
@@ -483,7 +483,7 @@ fn workspace_create(
     }) {
         Ok(workspace) => {
             if let Some(context) = request.first_agent_context
-                && let Some(source) = model::workspace::naming::first_agent_source(
+                && let Some(source) = domain::workspace::naming::first_agent_source(
                     context.prompt.as_deref(),
                     &context.attachments,
                 )
@@ -510,10 +510,10 @@ fn workspace_create(
 fn workspace_create_worktree(
     directory: &Directory,
     request: WorkspaceCreateRequest,
-    source: model::workspace::protocol::directory::WorkspaceWorktreeSource,
+    source: domain::workspace::protocol::directory::WorkspaceWorktreeSource,
 ) -> Result<Value, ErrorCode> {
-    use model::workspace::protocol::directory::WorkspaceWorktreeAction;
-    use model::workspace::worktrees::{WorktreeAction, WorktreeCreation};
+    use domain::workspace::protocol::directory::WorkspaceWorktreeAction;
+    use domain::workspace::worktrees::{WorktreeAction, WorktreeCreation};
     let provisioning = directory
         .worktrees()
         .ok_or(ErrorCode::UnsupportedCapability)?;
@@ -533,10 +533,10 @@ fn workspace_create_worktree(
             },
             checkout_source: source
                 .checkout_source
-                .map(model::workspace::protocol::worktree_source::ChangeRequestCheckoutSource::into_intent)
+                .map(domain::workspace::protocol::worktree_source::ChangeRequestCheckoutSource::into_intent)
                 .or_else(|| {
                     source.github_pr_number.map(|number| {
-                        model::workspace::worktrees::WorktreeChangeRequest {
+                        domain::workspace::worktrees::WorktreeChangeRequest {
                             forge: Some("github".to_owned()),
                             number: number.get(),
                             project_path: None,
@@ -554,7 +554,7 @@ fn workspace_create_worktree(
     encode(match result {
         Ok(created) => {
             if let Some(context) = request.first_agent_context
-                && let Some(source) = model::workspace::naming::first_agent_source(
+                && let Some(source) = domain::workspace::naming::first_agent_source(
                     context.prompt.as_deref(),
                     &context.attachments,
                 )

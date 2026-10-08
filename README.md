@@ -52,14 +52,14 @@ Android 作为客户端连接在线电脑，不发布手机为工作主机。退
 
 ## Workspace
 
-| 目录           | 职责                                                                                                      |
-| -------------- | --------------------------------------------------------------------------------------------------------- |
-| `bins/daemon`  | Rust 服务入口、配置和组装                                                                                 |
-| `crates/`      | `domain`、`model`、`protocol`、`api` 及 metadata/filesystem/provider/terminal/voice/schedule/browser 能力 |
-| `apps/desktop` | `@ait/desktop` Electron 桌面和 daemon 生命周期                                                            |
-| `apps/mobile`  | `@ait/mobile` 桌面、Web 与移动端共享界面                                                                  |
-| `packages/`    | 本地私有 SDK、协议、高亮和音频模块                                                                        |
-| `docs/`        | 当前架构、分类 ADR、运维、工程规范和验证报告                                                              |
+| 目录           | 职责                                                                                          |
+| -------------- | --------------------------------------------------------------------------------------------- |
+| `bins/daemon`  | Rust 服务入口、配置和组装                                                                     |
+| `crates/`      | `domain`、`model`、`api` 及 metadata/filesystem/provider/terminal/voice/schedule/browser 能力 |
+| `apps/desktop` | `@ait/desktop` Electron 桌面和 daemon 生命周期                                                |
+| `apps/mobile`  | `@ait/mobile` 桌面、Web 与移动端共享界面                                                      |
+| `packages/`    | 本地私有 SDK、协议、高亮和音频模块                                                            |
+| `docs/`        | 当前架构、分类 ADR、运维、工程规范和验证报告                                                  |
 
 本地包使用显式 `file:` 依赖，运行 `npm run verify:local-packages` 校验。
 Rust 依赖方向见 [当前架构](docs/architecture/README.md)，所有修改遵循 [AGENTS.md](AGENTS.md)。

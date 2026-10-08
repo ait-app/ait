@@ -10,8 +10,8 @@ pub const METHODS: &[MethodSpec] = &[
 ];
 
 use chrono::{SecondsFormat, Utc};
+use domain::workspace::records::UntrustedWorkspaceSource;
 use model::methods::MethodSpec;
-use model::workspace::records::UntrustedWorkspaceSource;
 use serde::Serialize;
 use serde_json::Value;
 

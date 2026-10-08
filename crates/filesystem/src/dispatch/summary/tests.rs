@@ -73,7 +73,7 @@ impl model::summary::SummarySource for Generator {
             );
             self.requests.lock().unwrap().push(request);
             if self.fail {
-                Err(model::summary::SummaryError::Unavailable)
+                Err(domain::summary::SummaryError::Unavailable)
             } else {
                 Ok(
                     json!({"title":"Generated PR","body":"Generated details","message":"Generated commit"}),

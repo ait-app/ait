@@ -1,5 +1,6 @@
-use super::*;
 use serde_json::json;
+
+use super::*;
 
 fn workspace(kind: PersistedWorkspaceKind) -> PersistedWorkspaceRecord {
     serde_json::from_value(json!({

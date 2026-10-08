@@ -1,10 +1,19 @@
-//! Pure Agent identities and configuration for the independent server.
+//! Pure business identities, records, values and validation shared across server capabilities.
 
 pub mod agent;
 pub mod agent_runtime;
+pub mod creation;
+pub mod directory_sync;
+pub mod pagination;
+pub mod schedule;
+pub mod session;
+pub mod storage;
+pub mod summary;
+pub mod workspace;
 
 use std::fmt;
 use std::str::FromStr;
+
 use uuid::Uuid;
 
 /// A persisted or supplied domain value violates an invariant.

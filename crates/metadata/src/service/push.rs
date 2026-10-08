@@ -4,7 +4,8 @@ use std::collections::BTreeMap;
 use std::fmt;
 
 use chrono::DateTime;
-use model::storage::push::{PushError, TokenStore};
+use domain::storage::push::PushError;
+use model::storage::push::TokenStore;
 use serde_json::{Value, json};
 
 /// Paseo renews push subscriptions for forty-eight hours.

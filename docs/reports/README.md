@@ -8,6 +8,8 @@
 
 ## Daemon 与协议
 
+- [Domain 数据与 Server 协议归属：PR 验证](daemon/domain-values-server-protocol-pr-validation-2026-10-09.md)
+
 - [本地诊断证据：PR 验证](daemon/diagnostic-evidence-pr-validation-2026-10-08.md)
 
 - [File、共享契约与 RPC 边界：PR 验证](daemon/file-and-rpc-boundaries-pr-validation-2026-10-08.md)

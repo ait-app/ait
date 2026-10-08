@@ -6,9 +6,9 @@ pub(crate) const METHODS: &[MethodSpec] = &[
     MethodSpec::request("push.unregister.request"),
 ];
 
+use domain::storage::push::PushError;
 use model::methods::MethodSpec;
 use model::outbound::QueueError;
-use model::storage::push::PushError;
 use model::{Context, ErrorCode};
 use serde_json::{Value, json};
 

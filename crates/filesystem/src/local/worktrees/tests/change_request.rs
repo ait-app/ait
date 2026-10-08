@@ -3,7 +3,7 @@
 use std::os::unix::fs::PermissionsExt;
 
 use super::*;
-use model::workspace::worktrees::WorktreeChangeRequest;
+use domain::workspace::worktrees::WorktreeChangeRequest;
 
 const GH_FIXTURE: &str = include_str!("../../../../tests/fixtures/gh_checkout.py");
 

@@ -1,8 +1,7 @@
 use std::sync::Mutex;
 
-use model::storage::daemon_config::{
-    DaemonConfigReload, DaemonConfigStore, DaemonConfigStoreError,
-};
+use domain::storage::daemon_config::{DaemonConfigReload, DaemonConfigStoreError};
+use model::storage::daemon_config::DaemonConfigStore;
 use serde_json::json;
 
 use super::*;

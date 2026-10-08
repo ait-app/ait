@@ -286,7 +286,9 @@ fn invalid_reset_workspace(message: &str) -> CheckoutRuntimeError {
     }
 }
 
-fn registry_reset_error(_error: model::workspace::registry::RegistryError) -> CheckoutRuntimeError {
+fn registry_reset_error(
+    _error: domain::workspace::registry::RegistryError,
+) -> CheckoutRuntimeError {
     CheckoutRuntimeError {
         kind: CheckoutFailureKind::Unknown,
         message: "Unable to update workspace record".to_owned(),
