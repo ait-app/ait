@@ -144,7 +144,7 @@ export function buildSelectableProviderSelectorProviders(
   entries: ProviderSnapshotEntry[] | undefined,
 ): ProviderSelectorProvider[] {
   return (entries ?? [])
-    .filter((entry) => entry.enabled)
+    .filter((entry) => entry.enabled && entry.status !== "unavailable")
     .map((entry) => {
       const label = entry.label ?? entry.provider;
       return {
