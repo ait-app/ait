@@ -49,6 +49,10 @@ async fn missing_provider_is_reported_and_editors_return_migration_responses() {
     assert!(report.contains("Total: 5"));
     assert!(report.contains("Available: 0"));
     assert!(report.contains("codex: unavailable"));
+    assert!(report.contains("Ait incident evidence v1"));
+    assert!(report.contains("Harness: opencode"));
+    assert!(report.contains("UTC window:"));
+    assert!(!report.contains(TOKEN));
     let editors = request(&mut socket, "editor.available.list.request", json!({})).await;
     assert_eq!(editors["result"]["editors"], json!([]));
     let opened = request(

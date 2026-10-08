@@ -2174,6 +2174,8 @@ export const ja: TranslationResources = {
         rowHint: "Collect connection, daemon, provider, desktop, and log details",
         run: "Run",
         running: "Running diagnostic...",
+        exportAccessibility: "診断ファイルをエクスポート",
+        exportFailed: "診断ファイルのエクスポートに失敗しました",
         copyLabel: "diagnostic",
         copyAccessibility: "Copy diagnostic",
         copyFailed: "Failed to copy diagnostic",

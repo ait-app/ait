@@ -144,6 +144,9 @@ pub(super) async fn native<T>(
 ) -> Result<T, crate::ports::agent_session::AgentSessionError> {
     let started = std::time::Instant::now();
     let result = future.await;
+    if let Err(error) = &result {
+        tracing::warn!(provider, operation, error = ?error, "Native provider operation failed");
+    }
     tracing::debug!(
         provider,
         operation,

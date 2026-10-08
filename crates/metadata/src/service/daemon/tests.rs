@@ -159,3 +159,20 @@ fn snapshots_report_provider_availability_without_backend_secrets() {
         Err(crate::rpc::ErrorCode::InvalidMessage)
     );
 }
+
+#[test]
+fn diagnostics_include_host_owned_evidence() {
+    #[derive(Debug)]
+    struct Evidence;
+    impl crate::ports::diagnostics::DaemonDiagnostics for Evidence {
+        fn report(&self) -> String {
+            "bounded fixture evidence".into()
+        }
+    }
+    let daemon = daemon().with_diagnostics(std::sync::Arc::new(Evidence));
+    assert!(
+        daemon
+            .diagnostics(&[], "ready", &[])
+            .contains("bounded fixture evidence")
+    );
+}

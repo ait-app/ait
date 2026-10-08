@@ -2166,6 +2166,8 @@ export const ko: TranslationResources = {
         rowHint: "연결, 데몬, 프로바이더, 데스크톱 및 로그 세부 정보를 수집합니다.",
         run: "실행",
         running: "진단 실행 중...",
+        exportAccessibility: "진단 파일 내보내기",
+        exportFailed: "진단 파일을 내보내지 못했습니다",
         copyLabel: "진단",
         copyAccessibility: "진단 복사",
         copyFailed: "진단을 복사하지 못했습니다.",

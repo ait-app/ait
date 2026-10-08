@@ -85,6 +85,12 @@ impl Outbound {
     /// # Errors
     /// Cancels the failure token if encoding or a queue budget fails.
     pub fn send(&self, message: &ServerMessage) -> Result<(), QueueError> {
+        if let ServerMessage::Error {
+            request_id, code, ..
+        } = message
+        {
+            tracing::warn!(request_id = ?request_id, error_code = ?code, "RPC failed");
+        }
         let result = self.try_send(message);
         if result.is_err() {
             self.failed.cancel();

@@ -13,6 +13,8 @@
 
 ## 架构决策
 
+- [ADR-109：本地故障证据与 Harness 日志采集](decisions/daemon/adr-109-local-incident-evidence.md)：后台取证、脱敏、保留与文件导出。
+
 - [ADR-108：Relay RPC 与基础连接方法归所属 crate](decisions/daemon/adr-108-relay-rpc-and-metadata-connection-methods.md)：relay 拥有控制 RPC 并仅依赖 model；metadata 声明始终可用的基础连接方法，API 保留传输与跨能力协调。
 - [ADR-107：共享组件直接从所属 crate 导入](decisions/daemon/adr-107-direct-imports-from-owning-crates.md)：删除迁移用转发模块，调用处直接引用 model/domain/file，provider 和 schedule 仅在测试中依赖 file。
 - [ADR-106：具体文件持久化归 file，model 仅声明契约](decisions/daemon/adr-106-concrete-file-persistence.md)：迁移 registry、创建回执和 JSON 文件适配器，依赖调整为 file → model/domain。
@@ -58,6 +60,8 @@
 - [桌面主窗口导航边界](decisions/clients/adr-073-desktop-renderer-navigation.md)：应用 preload 的来源限制。
 
 ## 运维与发布
+
+- [故障诊断与证据导出](operations/diagnostics.md)：日志来源、保留策略和附件分享。
 
 - [Android APK 发布](operations/android-releases.md)：独立手动构建测试或正式通用 APK。
 - [Google Play 内部测试](operations/google-play-internal-testing.md)：首次账号配置、测试者安装与手动 AAB 发布 CI。
