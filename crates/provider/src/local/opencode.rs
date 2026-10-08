@@ -1,22 +1,21 @@
 //! `OpenCode` plugin implementing the same native session ports as Codex and Claude Code.
 mod approvals;
 mod bridge;
-mod budget;
 mod client;
-mod execution;
-mod history;
-mod http;
 mod live;
 mod projection;
+mod protocol;
 mod publication;
 mod runtime;
 mod session;
-mod streaming;
 mod summary;
 mod types;
 
 use std::path::PathBuf;
 
+#[cfg(test)]
+use protocol::history;
+use protocol::http;
 use types::{Fault, Invocation, Model, ProtocolError};
 #[cfg(test)]
 use {

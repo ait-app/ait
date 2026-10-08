@@ -1,13 +1,10 @@
-//! Materialize native text only after its parent message is confirmed as assistant-owned.
+//! Native event codecs materialize text only after confirming assistant ownership.
 use std::collections::{BTreeMap, HashMap};
 
 use serde_json::Value;
 
-use super::{
-    OpenCodeExecutionLimits, failure,
-    http::{Version, required_string},
-    types::{Fault, ProgressEvent, ProtocolError},
-};
+use super::{OpenCodeExecutionLimits, Version, failure, http::required_string};
+use crate::local::opencode::types::{Fault, ProgressEvent, ProtocolError};
 
 #[derive(Debug)]
 struct Part {
@@ -17,7 +14,8 @@ struct Part {
 }
 
 #[derive(Debug)]
-pub(super) struct Stream {
+pub(in crate::local::opencode) struct Stream {
+    version: Version,
     session: String,
     roles: HashMap<String, bool>,
     parts: BTreeMap<String, Part>,
@@ -26,8 +24,23 @@ pub(super) struct Stream {
 }
 
 impl Stream {
-    pub(super) fn new(session: &str, input: &str, limits: OpenCodeExecutionLimits) -> Self {
+    #[cfg(test)]
+    pub(in crate::local::opencode) fn new(
+        session: &str,
+        input: &str,
+        limits: OpenCodeExecutionLimits,
+    ) -> Self {
+        Self::for_protocol(Version::V1, session, input, limits)
+    }
+
+    pub(in crate::local::opencode) fn for_protocol(
+        version: Version,
+        session: &str,
+        input: &str,
+        limits: OpenCodeExecutionLimits,
+    ) -> Self {
         Self {
+            version,
             session: session.into(),
             roles: HashMap::from([(input.into(), false)]),
             parts: BTreeMap::new(),
@@ -36,10 +49,19 @@ impl Stream {
         }
     }
 
-    pub(super) fn observe(
+    #[cfg(test)]
+    fn observe_versioned(
         &mut self,
         raw: &Value,
         version: Version,
+    ) -> Result<Vec<ProgressEvent>, ProtocolError> {
+        self.version = version;
+        self.observe(raw)
+    }
+
+    pub(in crate::local::opencode) fn observe(
+        &mut self,
+        raw: &Value,
     ) -> Result<Vec<ProgressEvent>, ProtocolError> {
         let event = raw.get("payload").unwrap_or(raw);
         let data = event
@@ -54,7 +76,7 @@ impl Stream {
         if owner != Some(&self.session) {
             return Ok(Vec::new());
         }
-        match (version, event["type"].as_str()) {
+        match (self.version, event["type"].as_str()) {
             (Version::V1, Some("message.updated")) => self.message(&data["info"]),
             (Version::V1, Some("message.part.updated")) if data["part"]["type"] == "text" => {
                 self.updated(&data["part"])
@@ -71,7 +93,7 @@ impl Stream {
                     Vec::new()
                 } else {
                     vec![ProgressEvent::TextDelta {
-                        id: id.into(),
+                        id: format!("{id}:0"),
                         delta: delta.into(),
                     }]
                 })

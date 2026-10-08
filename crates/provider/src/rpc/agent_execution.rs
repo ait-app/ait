@@ -10,6 +10,9 @@ mod voice;
 pub mod workspace_creation;
 mod worktrees;
 
+#[cfg(test)]
+mod tests;
+
 use domain::agent_runtime::PersistedAgentRuntimeRecord;
 use domain::agent_runtime::registry::AgentRuntimeRegistry;
 use model::workspace::registry::{ProjectRegistry, WorkspaceRegistry};
@@ -602,9 +605,9 @@ const fn map_manager(error: &AgentManagerError) -> ErrorCode {
         AgentManagerError::ProviderUnavailable(_)
         | AgentManagerError::MissingPersistence(_)
         | AgentManagerError::Busy => ErrorCode::UnsupportedCapability,
-        AgentManagerError::InvalidRequest | AgentManagerError::AlreadyExists(_) => {
-            ErrorCode::InvalidMessage
-        }
+        AgentManagerError::InvalidRequest
+        | AgentManagerError::AlreadyExists(_)
+        | AgentManagerError::SessionRejected => ErrorCode::InvalidMessage,
         AgentManagerError::Session | AgentManagerError::Registry => ErrorCode::AgentIo,
     }
 }

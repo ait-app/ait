@@ -3,7 +3,7 @@ use crate::local::opencode::types::Outcome;
 use crate::local::opencode::types::{Fault, ProtocolError};
 use serde_json::Value;
 
-use super::{failure, http::Version};
+use super::{Version, failure};
 
 pub(super) fn outcome(
     version: Version,

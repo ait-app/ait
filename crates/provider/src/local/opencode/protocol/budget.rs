@@ -1,5 +1,5 @@
 //! Limits count newly generated native items and usage, excluding immutable prepared history.
-use super::{OpenCodeExecutionLimits, failure, http::Version};
+use super::{OpenCodeExecutionLimits, Version, failure};
 use crate::local::opencode::types::Snapshot;
 use crate::local::opencode::types::{Fault, ProtocolError};
 use serde_json::Value;

@@ -1,6 +1,6 @@
 use super::super::client::OpenCodeClient;
 use super::super::tests::fixture::Fixture;
-use super::Version;
+use crate::local::opencode::protocol::Version;
 use crate::ports::agent_session::{
     AgentClient, AgentResumePurpose, AgentSessionSpec, AgentTurnEvent,
 };

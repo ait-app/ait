@@ -85,17 +85,16 @@ async fn run(version: Version, denied: bool, same_message: bool, stream_preface:
         )
         .await
         .unwrap();
-    loop {
-        let event = next(session.as_mut()).await;
-        let progress =
-            matches!(&event, AgentTurnEvent::Progress { entry, .. } if entry.item["text"] == "ans");
-        persist(&timeline, event);
-        if progress {
-            break;
+    if !denied {
+        loop {
+            let event = next(session.as_mut()).await;
+            let progress = matches!(&event, AgentTurnEvent::Progress { entry, .. } if entry.item["text"] == "ans");
+            persist(&timeline, event);
+            if progress {
+                break;
+            }
         }
-    }
-    verify_stream_order(&timeline, denied, stream_preface);
-    {
+        verify_stream_order(&timeline, denied, stream_preface);
         let mut state = fixture.state.lock().unwrap();
         state.busy = false;
         let answer = state.history.last_mut().unwrap();
@@ -106,12 +105,20 @@ async fn run(version: Version, denied: bool, same_message: bool, stream_preface:
         }
     }
     let finished = drain(session.as_mut()).await;
-    assert!(matches!(
-        finished.last(),
-        Some(AgentTurnEvent::Completed(_))
-    ));
+    if denied {
+        assert!(matches!(finished.last(), Some(AgentTurnEvent::Cancelled)));
+        assert_eq!(fixture.state.lock().unwrap().interrupts, 1);
+    } else {
+        assert!(matches!(
+            finished.last(),
+            Some(AgentTurnEvent::Completed(_))
+        ));
+    }
     for event in finished {
         persist(&timeline, event);
+    }
+    if denied {
+        verify_stream_order(&timeline, denied, stream_preface);
     }
     let handle = session.persistence().unwrap();
     session.close().await.unwrap();

@@ -33,7 +33,7 @@ fn invalid_required_tool_fields_fall_back_to_unknown_details() {
 
 #[test]
 fn native_tool_history_matches_the_shared_frontend_contract() {
-    use crate::local::opencode::{history, http::Version};
+    use crate::local::opencode::{history, protocol::Version};
     let cases: Vec<Value> = serde_json::from_str(include_str!(
         "../../../../tests/fixtures/opencode-tool-history.json"
     ))
@@ -55,7 +55,7 @@ fn native_tool_history_matches_the_shared_frontend_contract() {
 #[test]
 fn legacy_null_tool_fields_are_replaced_on_history_refresh() {
     use crate::{
-        local::opencode::{history, http::Version},
+        local::opencode::{history, protocol::Version},
         storage::timeline::Timeline,
     };
     let cases: Vec<Value> = serde_json::from_str(include_str!(

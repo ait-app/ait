@@ -1,4 +1,5 @@
 use super::*;
+use crate::local::opencode::protocol::Version;
 use crate::local::opencode::{
     Driver,
     tests::{fixture::Fixture, invocation},
@@ -20,7 +21,7 @@ fn delta(version: Version) -> ProgressEvent {
     ProgressEvent::TextDelta {
         id: match version {
             Version::V1 => "prt_0123456789abABCDEFGHIJKLM1",
-            Version::V2 => "answer1",
+            Version::V2 => "answer1:0",
         }
         .into(),
         delta: "ans".into(),

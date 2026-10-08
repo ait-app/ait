@@ -18,7 +18,7 @@ use serde_json::{Value, json};
 use tokio_stream::StreamExt;
 use tokio_util::task::AbortOnDropHandle;
 
-use super::super::http::Version;
+use super::super::protocol::Version;
 
 #[expect(
     clippy::struct_excessive_bools,
@@ -45,6 +45,8 @@ pub(in crate::local::opencode) struct StateData {
     pub(in crate::local::opencode) early_failure: bool,
     pub(in crate::local::opencode) pending_permissions: Vec<Value>,
     pub(in crate::local::opencode) replies: Vec<Value>,
+    pub(in crate::local::opencode) interrupts: usize,
+    pub(in crate::local::opencode) reject_interrupt: bool,
     pub(in crate::local::opencode) stream_text: bool,
     pub(in crate::local::opencode) stream_after_permission: bool,
     pub(in crate::local::opencode) unfinished_while_busy: bool,
@@ -101,6 +103,8 @@ impl Fixture {
             early_failure: false,
             pending_permissions: Vec::new(),
             replies: Vec::new(),
+            interrupts: 0,
+            reject_interrupt: false,
             stream_text: false,
             stream_after_permission: false,
             unfinished_while_busy: false,
@@ -126,6 +130,9 @@ impl Fixture {
 async fn handle(State(state): State<Arc<Mutex<StateData>>>, request: Request) -> Response {
     let path = request.uri().path().to_owned();
     let method = request.method().clone();
+    if path.starts_with("/api/") != (state.lock().unwrap().version == Version::V2) {
+        return StatusCode::NOT_FOUND.into_response();
+    }
     if let Some(response) = session_page(&state, &request) {
         return response;
     }
@@ -362,9 +369,7 @@ fn fixture_json(
             Value::Null
         }
         ("POST", "/session/ses_one/abort" | "/api/session/ses_one/interrupt") => {
-            state.busy = false;
-            state.pending_permissions.clear();
-            Value::Null
+            return interrupt_session(state);
         }
         ("POST", "/session/ses_one/prompt_async" | "/api/session/ses_one/prompt") => {
             return record_prompt(state, &body);
@@ -372,6 +377,32 @@ fn fixture_json(
         _ => return Err(StatusCode::NOT_FOUND),
     };
     Ok(response)
+}
+
+fn interrupt_session(state: &mut StateData) -> Result<Value, StatusCode> {
+    state.interrupts += 1;
+    if state.reject_interrupt {
+        return Err(StatusCode::BAD_GATEWAY);
+    }
+    state.busy = false;
+    state.pending_permissions.clear();
+    for message in &mut state.history {
+        let info = if state.version == Version::V2 {
+            message
+        } else {
+            &mut message["info"]
+        };
+        if (info["type"] == "assistant" || info["role"] == "assistant")
+            && info.pointer("/time/completed").is_none()
+        {
+            info["time"]["completed"] = json!(13);
+            if state.version == Version::V2 {
+                info["finish"] = json!("error");
+                info["error"] = json!({"type":"aborted","message":"Step interrupted"});
+            }
+        }
+    }
+    Ok(Value::Null)
 }
 
 fn record_prompt(state: &mut StateData, body: &Value) -> Result<Value, StatusCode> {

@@ -40,13 +40,19 @@ pub(super) fn invocation(cwd: PathBuf) -> Invocation {
 #[test]
 fn selects_protocol_and_rejects_unsupported_versions() {
     for value in ["1.14.46", "opencode v1.14.46\n"] {
-        assert_eq!(http::Version::parse(value).unwrap(), http::Version::V1);
+        assert_eq!(
+            protocol::Version::parse(value).unwrap(),
+            protocol::Version::V1
+        );
     }
     for value in ["2.0.10", "v2.1.0-beta.1"] {
-        assert_eq!(http::Version::parse(value).unwrap(), http::Version::V2);
+        assert_eq!(
+            protocol::Version::parse(value).unwrap(),
+            protocol::Version::V2
+        );
     }
     for value in ["2.0.9", "3.0.0", "garbage", "1.1", "0.1.0"] {
-        assert!(http::Version::parse(value).is_err());
+        assert!(protocol::Version::parse(value).is_err());
     }
 }
 
@@ -62,7 +68,7 @@ fn rejects_remote_loopback_lookalikes_and_credentials() {
     ] {
         assert!(
             http::Api::new(
-                http::Version::V1,
+                protocol::Version::V1,
                 reqwest::Url::parse(base).unwrap(),
                 "private".into(),
                 "/tmp".into()
@@ -106,8 +112,12 @@ fn maps_terminal_native_tools_to_native_records_and_redacts_secret_fields() {
             {"type":"reasoning","text":"thought","providerState":{"token":"secret"}}
         ]}
     ]);
-    let mapped =
-        history::normalize(http::Version::V2, "ses_one", records.as_array().unwrap()).unwrap();
+    let mapped = history::normalize(
+        protocol::Version::V2,
+        "ses_one",
+        records.as_array().unwrap(),
+    )
+    .unwrap();
     assert_eq!(mapped.len(), 3);
     assert_eq!(mapped[0].input_id.as_deref(), Some("input-1"));
     assert!(
@@ -123,7 +133,7 @@ fn rejects_duplicate_and_unfinished_history() {
     let assistant = json!({"id":"a1","type":"assistant","time":{"created":2},"content":[]});
     assert!(
         history::normalize(
-            http::Version::V2,
+            protocol::Version::V2,
             "ses_one",
             std::slice::from_ref(&assistant)
         )
@@ -132,24 +142,29 @@ fn rejects_duplicate_and_unfinished_history() {
     let mut complete = assistant;
     complete["time"]["completed"] = json!(3);
     assert!(
-        history::normalize(http::Version::V2, "ses_one", &[complete.clone(), complete]).is_err()
+        history::normalize(
+            protocol::Version::V2,
+            "ses_one",
+            &[complete.clone(), complete]
+        )
+        .is_err()
     );
     let wrong = json!({"info":{"id":"u1","role":"user","sessionID":"other","time":{"created":1}},"parts":[]});
-    assert!(history::normalize(http::Version::V1, "ses_one", &[wrong]).is_err());
+    assert!(history::normalize(protocol::Version::V1, "ses_one", &[wrong]).is_err());
     let running = json!({"id":"a1","type":"assistant","time":{"created":1,"completed":2},"content":[{"type":"tool","id":"c","name":"shell","state":{"status":"running","input":{}}}]});
-    assert!(history::normalize(http::Version::V2, "ses_one", &[running]).is_err());
+    assert!(history::normalize(protocol::Version::V2, "ses_one", &[running]).is_err());
 }
 
 #[tokio::test]
 async fn native_v1_and_v2_prepare_send_once_read_and_resume() {
-    for version in [http::Version::V1, http::Version::V2] {
+    for version in [protocol::Version::V1, protocol::Version::V2] {
         let fixture = fixture::Fixture::start(version).await;
         let adapter = Driver::new(fixture.binary.clone());
         let request = invocation(fixture.cwd.clone());
         let mut connection = adapter.open(request.clone()).await.unwrap();
         assert_eq!(fixture.state.lock().unwrap().submissions, 0);
         assert!(connection.prepared().messages.is_empty());
-        if version == http::Version::V1 {
+        if version == protocol::Version::V1 {
             assert!(connection.prepared().input_id.starts_with("msg_"));
         }
         let snapshot = connection
@@ -179,7 +194,7 @@ async fn native_v1_and_v2_prepare_send_once_read_and_resume() {
 
 #[tokio::test]
 async fn model_catalog_uses_connected_native_models_and_variants() {
-    for version in [http::Version::V1, http::Version::V2] {
+    for version in [protocol::Version::V1, protocol::Version::V2] {
         let fixture = fixture::Fixture::start(version).await;
         let models = Driver::new(fixture.binary.clone())
             .discover_models(fixture.cwd.clone())
@@ -193,7 +208,7 @@ async fn model_catalog_uses_connected_native_models_and_variants() {
 
 #[tokio::test]
 async fn v2_partial_nonempty_catalog_waits_for_initial_plugin_activation() {
-    let fixture = fixture::Fixture::start(http::Version::V2).await;
+    let fixture = fixture::Fixture::start(protocol::Version::V2).await;
     fixture.state.lock().unwrap().pending_plugin_polls = 3;
     let driver = Driver::new(fixture.binary.clone());
     let models = driver.discover_models(fixture.cwd.clone()).await.unwrap();
@@ -210,7 +225,7 @@ async fn v2_partial_nonempty_catalog_waits_for_initial_plugin_activation() {
 
 #[tokio::test]
 async fn v2_cold_model_catalog_retries_are_bounded() {
-    let fixture = fixture::Fixture::start(http::Version::V2).await;
+    let fixture = fixture::Fixture::start(protocol::Version::V2).await;
     fixture.state.lock().unwrap().empty_model_catalogs = 2;
     let driver = Driver::new(fixture.binary.clone());
     let models = driver.discover_models(fixture.cwd.clone()).await.unwrap();
@@ -237,7 +252,7 @@ async fn v2_cold_model_catalog_retries_are_bounded() {
 #[tokio::test]
 async fn v2_synced_log_and_idle_history_complete_without_replaying_input() {
     for expected in [Outcome::Completed, Outcome::Failed, Outcome::Interrupted] {
-        let fixture = fixture::Fixture::start(http::Version::V2).await;
+        let fixture = fixture::Fixture::start(protocol::Version::V2).await;
         {
             let mut state = fixture.state.lock().unwrap();
             state.idle_completion = expected != Outcome::Interrupted;
@@ -266,7 +281,7 @@ async fn v2_synced_log_and_idle_history_complete_without_replaying_input() {
 
 #[tokio::test]
 async fn response_ambiguity_reconciles_without_replaying_input() {
-    let fixture = fixture::Fixture::start(http::Version::V2).await;
+    let fixture = fixture::Fixture::start(protocol::Version::V2).await;
     fixture.state.lock().unwrap().reject_ack = true;
     let mut connection = Driver::new(fixture.binary.clone())
         .open(invocation(fixture.cwd.clone()))
@@ -283,7 +298,7 @@ async fn response_ambiguity_reconciles_without_replaying_input() {
 
 #[tokio::test]
 async fn active_session_and_unknown_model_fail_before_input() {
-    let fixture = fixture::Fixture::start(http::Version::V2).await;
+    let fixture = fixture::Fixture::start(protocol::Version::V2).await;
     let adapter = Driver::new(fixture.binary.clone());
     let mut request = invocation(fixture.cwd.clone());
     request.model = "local/missing".into();
@@ -303,7 +318,7 @@ async fn active_session_and_unknown_model_fail_before_input() {
 
 #[tokio::test]
 async fn history_cursor_cycles_fail_closed() {
-    let fixture = fixture::Fixture::start(http::Version::V2).await;
+    let fixture = fixture::Fixture::start(protocol::Version::V2).await;
     fixture.state.lock().unwrap().cursor_cycle = true;
     let result = Driver::new(fixture.binary.clone())
         .open(invocation(fixture.cwd.clone()))
@@ -314,7 +329,7 @@ async fn history_cursor_cycles_fail_closed() {
 
 #[tokio::test]
 async fn cancelling_an_active_execution_interrupts_without_replaying() {
-    let fixture = fixture::Fixture::start(http::Version::V2).await;
+    let fixture = fixture::Fixture::start(protocol::Version::V2).await;
     let request = invocation(fixture.cwd.clone());
     let cancellation = request.cancellation.clone();
     let mut connection = Driver::new(fixture.binary.clone())
@@ -347,7 +362,7 @@ async fn cancelling_an_active_execution_interrupts_without_replaying() {
 
 #[tokio::test]
 async fn native_failure_without_assistant_content_is_terminal() {
-    let fixture = fixture::Fixture::start(http::Version::V2).await;
+    let fixture = fixture::Fixture::start(protocol::Version::V2).await;
     fixture.state.lock().unwrap().early_failure = true;
     let mut connection = Driver::new(fixture.binary.clone())
         .open(invocation(fixture.cwd.clone()))
@@ -367,7 +382,7 @@ async fn native_failure_without_assistant_content_is_terminal() {
 
 #[tokio::test]
 async fn native_budget_overrun_interrupts_execution() {
-    let fixture = fixture::Fixture::start(http::Version::V2).await;
+    let fixture = fixture::Fixture::start(protocol::Version::V2).await;
     let adapter = Driver::new(fixture.binary.clone())
         .with_execution_limits(OpenCodeExecutionLimits {
             max_output_bytes: 1,

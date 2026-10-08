@@ -21,7 +21,7 @@ fn delta(text: &str) -> Value {
 
 fn texts(stream: &mut Stream, event: &Value) -> Vec<String> {
     stream
-        .observe(event, Version::V1)
+        .observe_versioned(event, Version::V1)
         .unwrap()
         .into_iter()
         .map(|event| match event {
@@ -74,7 +74,7 @@ fn text_still_requires_a_string_and_nonempty_native_identities() {
         texts(&mut stream, &message("assistant"));
         assert_eq!(
             stream
-                .observe(&part(invalid), Version::V1)
+                .observe_versioned(&part(invalid), Version::V1)
                 .unwrap_err()
                 .code,
             Fault::ProviderFailed
@@ -86,10 +86,10 @@ fn text_still_requires_a_string_and_nonempty_native_identities() {
         .as_object_mut()
         .unwrap()
         .remove("text");
-    assert!(stream.observe(&missing, Version::V1).is_err());
+    assert!(stream.observe_versioned(&missing, Version::V1).is_err());
     let mut invalid = part(json!("text"));
     invalid["properties"]["part"]["id"] = json!("");
-    assert!(stream.observe(&invalid, Version::V1).is_err());
+    assert!(stream.observe_versioned(&invalid, Version::V1).is_err());
 }
 
 #[test]
@@ -121,14 +121,14 @@ fn changed_roles_parents_and_published_text_fail_without_relabeling_history() {
     texts(&mut stream, &part(json!("answer")));
     assert_eq!(
         stream
-            .observe(&message("user"), Version::V1)
+            .observe_versioned(&message("user"), Version::V1)
             .unwrap_err()
             .code,
         Fault::RunRecoveryFailed
     );
     assert_eq!(
         stream
-            .observe(&part(json!("changed")), Version::V1)
+            .observe_versioned(&part(json!("changed")), Version::V1)
             .unwrap_err()
             .code,
         Fault::RunRecoveryFailed
@@ -136,13 +136,19 @@ fn changed_roles_parents_and_published_text_fail_without_relabeling_history() {
     let mut wrong = part(json!("answer more"));
     wrong["properties"]["part"]["messageID"] = json!("msg_other");
     assert_eq!(
-        stream.observe(&wrong, Version::V1).unwrap_err().code,
+        stream
+            .observe_versioned(&wrong, Version::V1)
+            .unwrap_err()
+            .code,
         Fault::ProviderFailed
     );
     let mut wrong = delta("more");
     wrong["properties"]["messageID"] = json!("msg_other");
     assert_eq!(
-        stream.observe(&wrong, Version::V1).unwrap_err().code,
+        stream
+            .observe_versioned(&wrong, Version::V1)
+            .unwrap_err()
+            .code,
         Fault::ProviderFailed
     );
 }
@@ -160,19 +166,28 @@ fn observation_limits_allow_updates_at_capacity_and_reject_new_resources() {
     assert_eq!(texts(&mut stream, &delta("answer")), ["answer"]);
     assert!(texts(&mut stream, &part(json!("answer"))).is_empty());
     assert_eq!(
-        stream.observe(&delta("!"), Version::V1).unwrap_err().code,
+        stream
+            .observe_versioned(&delta("!"), Version::V1)
+            .unwrap_err()
+            .code,
         Fault::RunLimitExceeded
     );
     let mut another = part(json!(""));
     another["properties"]["part"]["id"] = json!("prt_other");
     assert_eq!(
-        stream.observe(&another, Version::V1).unwrap_err().code,
+        stream
+            .observe_versioned(&another, Version::V1)
+            .unwrap_err()
+            .code,
         Fault::RunLimitExceeded
     );
     let mut another = message("assistant");
     another["properties"]["info"]["id"] = json!("msg_other");
     assert_eq!(
-        stream.observe(&another, Version::V1).unwrap_err().code,
+        stream
+            .observe_versioned(&another, Version::V1)
+            .unwrap_err()
+            .code,
         Fault::RunLimitExceeded
     );
 }
@@ -181,14 +196,22 @@ fn observation_limits_allow_updates_at_capacity_and_reject_new_resources() {
 fn v2_empty_text_deltas_are_noops_but_missing_or_nonstring_text_is_rejected() {
     let mut stream = stream();
     let mut event = json!({"type":"session.text.delta","data":{"sessionID":"ses_one","assistantMessageID":"a1","delta":""}});
-    assert!(stream.observe(&event, Version::V2).unwrap().is_empty());
+    assert!(
+        stream
+            .observe_versioned(&event, Version::V2)
+            .unwrap()
+            .is_empty()
+    );
     event["data"]["delta"] = json!("answer");
     assert!(
-        matches!(stream.observe(&event, Version::V2).unwrap().as_slice(), [ProgressEvent::TextDelta {delta, ..}] if delta == "answer")
+        matches!(stream.observe_versioned(&event, Version::V2).unwrap().as_slice(), [ProgressEvent::TextDelta {id, delta}] if id == "a1:0" && delta == "answer")
     );
     event["data"]["delta"] = Value::Null;
     assert_eq!(
-        stream.observe(&event, Version::V2).unwrap_err().code,
+        stream
+            .observe_versioned(&event, Version::V2)
+            .unwrap_err()
+            .code,
         Fault::ProviderFailed
     );
 }
