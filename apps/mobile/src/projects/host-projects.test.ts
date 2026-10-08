@@ -8,6 +8,7 @@ import {
   hostProjectFromRoute,
   hostProjectFromWorkspace,
   resolveEquivalentHostProjectCandidate,
+  resolveExactHostProjectCandidate,
   resolveHostProjectCandidate,
 } from "./host-project-model";
 import { normalizeWorkspaceDescriptor } from "@/stores/session-store";
@@ -38,6 +39,23 @@ function project(): HostProjectListItem {
 }
 
 describe("host project lookups", () => {
+  test("resolves repository equivalence only on the selected host", () => {
+    const local = project();
+    local.viewKey = JSON.stringify(["host-a", "prj_a"]);
+    local.projectName = "A local";
+    local.hosts = [local.hosts[0]!];
+    const remote = project();
+    remote.viewKey = JSON.stringify(["host-b", "prj_b"]);
+    remote.projectName = "Z remote";
+    remote.hosts = [remote.hosts[1]!];
+    const input = { candidate: local, projects: [local, remote], serverId: "host-b" };
+
+    expect(resolveExactHostProjectCandidate(input)).toBeNull();
+    expect(resolveEquivalentHostProjectCandidate(input)).toBe(remote);
+    expect(resolveHostProjectCandidate(input)).toBe(remote);
+    expect(resolveEquivalentHostProjectCandidate({ ...input, serverId: "missing" })).toBeNull();
+  });
+
   test("resolves equivalent projects without Array.prototype.toSorted", () => {
     const descriptor = Object.getOwnPropertyDescriptor(Array.prototype, "toSorted");
     Reflect.deleteProperty(Array.prototype, "toSorted");

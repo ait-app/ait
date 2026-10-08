@@ -177,7 +177,11 @@ export function resolveExactHostProjectCandidate(input: {
   }
 
   const exactView = input.projects.find((project) => project.viewKey === input.candidate.viewKey);
-  if (input.candidate.projectKey !== null && exactView?.projectKey === input.candidate.projectKey) {
+  if (
+    input.candidate.projectKey !== null &&
+    exactView?.projectKey === input.candidate.projectKey &&
+    getHostProjectId(exactView, input.serverId) !== null
+  ) {
     return exactView;
   }
 
@@ -191,7 +195,9 @@ export function resolveEquivalentHostProjectCandidate(input: {
 }): HostProjectListItem | null {
   if (input.candidate.projectKey === null) return null;
   const equivalents = input.projects.filter(
-    (project) => project.projectKey === input.candidate.projectKey,
+    (project) =>
+      project.projectKey === input.candidate.projectKey &&
+      getHostProjectId(project, input.serverId) !== null,
   );
   if (equivalents.length === 0) return null;
   return equivalents.sort((left, right) =>

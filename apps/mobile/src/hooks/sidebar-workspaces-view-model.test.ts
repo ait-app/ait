@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import type { Agent, WorkspaceDescriptor } from "@/stores/session-store";
 import type { WorkspaceStructureProject } from "@/projects/workspace-structure";
+import { buildWorkspaceStructureProjects } from "@/projects/workspace-structure";
 import { buildWorkspaceAgentActivityIndex } from "@/utils/workspace-agent-activity";
 import {
   appendMissingOrderKeys,
@@ -330,6 +331,45 @@ describe("buildSidebarProjectsFromStructure", () => {
 });
 
 describe("shared sidebar workspace model", () => {
+  it("shows each host's ait entries under its own project group", () => {
+    const projects = buildWorkspaceStructureProjects({
+      sessions: ["local", "remote"].map((serverId) => ({
+        serverId,
+        projects: [
+          {
+            projectId: "prj_ait",
+            projectKey: "remote:github.com/acme/ait",
+            projectDisplayName: "ait",
+            projectCustomName: null,
+            projectRootPath: `/${serverId}/ait`,
+            projectKind: "git" as const,
+          },
+        ],
+        workspaces: [
+          workspace({
+            id: "ws-main",
+            name: "main",
+            projectId: "prj_ait",
+            projectDisplayName: "ait",
+          }),
+        ],
+      })),
+    });
+    const model = buildSidebarWorkspacePlacementModel({ projects });
+
+    expect(model.projects).toHaveLength(2);
+    for (const [index, serverId] of ["local", "remote"].entries()) {
+      expect(model.projects[index]).toMatchObject({
+        projectName: "ait",
+        hosts: [{ serverId, projectId: "prj_ait", iconWorkingDir: `/${serverId}/ait` }],
+        workspaces: [{ serverId, workspaceId: "ws-main", workspaceKey: `${serverId}:ws-main` }],
+      });
+      expect(model.projects[index]?.hosts).toHaveLength(1);
+      expect(model.projects[index]?.workspaces).toHaveLength(1);
+    }
+    expect(shouldShowSidebarHostLabels(model.projects)).toBe(true);
+  });
+
   it("feeds project placement and status grouping from the same cross-host workspace identities", () => {
     const model = buildSidebarWorkspacePlacementModel({
       projects: [

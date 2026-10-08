@@ -34,49 +34,27 @@ interface ProjectDraft {
   viewKey: string;
   projectKey: string | null;
   projectName: string;
-  hasCustomName: boolean;
   projectKind: WorkspaceDescriptor["projectKind"];
   iconWorkingDir: string;
   hosts: Map<string, WorkspaceStructureHostPlacement>;
   workspaces: Array<{ workspaceId: string; workspaceName: string; workspaceKey: string }>;
 }
 
-/** The single app boundary that turns host-local projects into grouped display projects. */
+/** Build display projects by host-local identity, independently of repository equivalence. */
 export function buildWorkspaceStructureProjects(input: {
   sessions: WorkspaceStructureSession[];
 }): WorkspaceStructureProject[] {
   const byProject = new Map<string, ProjectDraft>();
-  const projectEntries: Array<{ serverId: string; project: ProjectDescriptor }> = [];
-  const keyCountsByServer = new Map<string, Map<string, number>>();
   const viewKeyByServerProjectId = new Map<string, Map<string, string>>();
 
   for (const session of input.sessions) {
     for (const project of session.projects) {
-      projectEntries.push({ serverId: session.serverId, project });
-      const sharedKey = project.projectKey ?? null;
-      if (sharedKey) {
-        const counts = getOrCreate(keyCountsByServer, session.serverId, () => new Map());
-        counts.set(sharedKey, (counts.get(sharedKey) ?? 0) + 1);
-      }
+      const viewKey = addProjectToView({ byProject, serverId: session.serverId, project });
+      getOrCreate(viewKeyByServerProjectId, session.serverId, () => new Map()).set(
+        project.projectId,
+        viewKey,
+      );
     }
-  }
-
-  const allocatedViewKeys = new Set(
-    projectEntries.flatMap(({ project }) => (project.projectKey ? [project.projectKey] : [])),
-  );
-
-  for (const { serverId, project } of projectEntries) {
-    const viewKey = addProjectToView({
-      byProject,
-      keyCountsByServer,
-      allocatedViewKeys,
-      serverId,
-      project,
-    });
-    getOrCreate(viewKeyByServerProjectId, serverId, () => new Map()).set(
-      project.projectId,
-      viewKey,
-    );
   }
 
   for (const session of input.sessions) {
@@ -112,49 +90,25 @@ export function buildWorkspaceStructureProjects(input: {
     );
 }
 
-export function createProjectViewKey(
-  identity:
-    | { kind: "equivalence"; projectKey: string }
-    | { kind: "placement"; serverId: string; projectId: string },
-): string {
-  return identity.kind === "equivalence"
-    ? identity.projectKey
-    : JSON.stringify([identity.serverId, identity.projectId]);
-}
-
-function allocatePlacementViewKey(
-  allocatedViewKeys: Set<string>,
-  serverId: string,
-  projectId: string,
-): string {
-  const legacyKey = createProjectViewKey({ kind: "placement", serverId, projectId });
-  if (!allocatedViewKeys.has(legacyKey)) {
-    allocatedViewKeys.add(legacyKey);
-    return legacyKey;
-  }
-
-  for (let suffix = 0; ; suffix += 1) {
-    const collisionKey = JSON.stringify(["placement", serverId, projectId, suffix]);
-    if (allocatedViewKeys.has(collisionKey)) continue;
-    allocatedViewKeys.add(collisionKey);
-    return collisionKey;
-  }
+export function createProjectViewKey(identity: {
+  kind: "placement";
+  serverId: string;
+  projectId: string;
+}): string {
+  return JSON.stringify([identity.serverId, identity.projectId]);
 }
 
 function addProjectToView(input: {
   byProject: Map<string, ProjectDraft>;
-  keyCountsByServer: Map<string, Map<string, number>>;
-  allocatedViewKeys: Set<string>;
   serverId: string;
   project: ProjectDescriptor;
 }): string {
-  const { byProject, keyCountsByServer, serverId, project } = input;
-  const sharedKey = project.projectKey ?? null;
-  const canUseSharedKey =
-    sharedKey !== null && keyCountsByServer.get(serverId)?.get(sharedKey) === 1;
-  const viewKey = canUseSharedKey
-    ? createProjectViewKey({ kind: "equivalence", projectKey: sharedKey })
-    : allocatePlacementViewKey(input.allocatedViewKeys, serverId, project.projectId);
+  const { byProject, serverId, project } = input;
+  const viewKey = createProjectViewKey({
+    kind: "placement",
+    serverId,
+    projectId: project.projectId,
+  });
   const placement: WorkspaceStructureHostPlacement = {
     serverId,
     projectId: project.projectId,
@@ -163,28 +117,18 @@ function addProjectToView(input: {
     customIconRevision: project.projectCustomIconRevision,
     iconRevision: project.projectIconRevision,
   };
-  const draft = byProject.get(viewKey);
-  if (!draft) {
-    byProject.set(viewKey, {
-      viewKey,
-      projectKey: sharedKey,
-      projectName:
-        project.projectCustomName ??
-        project.projectDisplayName ??
-        projectDisplayNameFromProjectId(project.projectId),
-      hasCustomName: Boolean(project.projectCustomName),
-      projectKind: project.projectKind,
-      iconWorkingDir: project.projectRootPath,
-      hosts: new Map([[serverId, placement]]),
-      workspaces: [],
-    });
-  } else {
-    if (project.projectCustomName && !draft.hasCustomName) {
-      draft.projectName = project.projectCustomName;
-      draft.hasCustomName = true;
-    }
-    draft.hosts.set(serverId, placement);
-  }
+  byProject.set(viewKey, {
+    viewKey,
+    projectKey: project.projectKey ?? null,
+    projectName:
+      project.projectCustomName ??
+      project.projectDisplayName ??
+      projectDisplayNameFromProjectId(project.projectId),
+    projectKind: project.projectKind,
+    iconWorkingDir: project.projectRootPath,
+    hosts: new Map([[serverId, placement]]),
+    workspaces: [],
+  });
   return viewKey;
 }
 

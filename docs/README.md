@@ -13,6 +13,8 @@
 
 ## 架构决策
 
+- [ADR-111：项目显示身份按主机隔离](decisions/clients/adr-111-host-scoped-project-display.md)：本地与远程同仓库独立显示，创建工作区的候选限定目标主机。
+
 - [ADR-110：OpenCode 双版本私有协议边界](decisions/providers/adr-110-opencode-private-protocol-boundary.md)：协议差异收口、统一文本身份，以及原生权限拒绝与主动取消的独立结算。
 - [ADR-109：本地故障证据与 Harness 日志采集](decisions/daemon/adr-109-local-incident-evidence.md)：后台取证、脱敏、保留与文件导出。
 - [ADR-108：Relay RPC 与基础连接方法归所属 crate](decisions/daemon/adr-108-relay-rpc-and-metadata-connection-methods.md)：relay 拥有控制 RPC 并仅依赖 model；metadata 声明始终可用的基础连接方法，API 保留传输与跨能力协调。

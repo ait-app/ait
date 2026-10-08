@@ -75,6 +75,8 @@
 
 ## 客户端、连接与品牌
 
+- [ADR-111：项目显示身份按主机隔离](clients/adr-111-host-scoped-project-display.md)
+
 - [ADR-097：Google Play 内部测试手动发布](clients/adr-097-google-play-internal-release.md)
 - [ADR-098：客户端消息分块与文件上传背压](clients/adr-098-acknowledged-client-chunks.md)
 

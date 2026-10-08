@@ -28,8 +28,8 @@ import {
 
 const SERVER_ID = "test-server";
 
-function equivalenceViewKey(projectKey: string): string {
-  return createProjectViewKey({ kind: "equivalence", projectKey });
+function placementViewKey(projectId: string): string {
+  return createProjectViewKey({ kind: "placement", serverId: SERVER_ID, projectId });
 }
 
 function createWorkspace(
@@ -402,8 +402,8 @@ describe("workspace structure composition", () => {
     }
 
     expect(emittedProjectKeys).toEqual([
-      [equivalenceViewKey("project-a")],
-      [equivalenceViewKey("project-a")],
+      [placementViewKey("project-a")],
+      [placementViewKey("project-a")],
     ]);
   });
 
@@ -495,12 +495,12 @@ describe("workspace structure composition", () => {
     const before = snapshotStructure(SERVER_ID, emptySidebarOrder());
     const after = snapshotStructure(SERVER_ID, {
       ...emptySidebarOrder(),
-      projectOrder: [equivalenceViewKey("project-b"), equivalenceViewKey("project-a")],
+      projectOrder: [placementViewKey("project-b"), placementViewKey("project-a")],
     });
 
     expect(after.projects.map((project) => project.viewKey)).toEqual([
-      equivalenceViewKey("project-b"),
-      equivalenceViewKey("project-a"),
+      placementViewKey("project-b"),
+      placementViewKey("project-a"),
     ]);
     expect(after).not.toEqual(before);
   });

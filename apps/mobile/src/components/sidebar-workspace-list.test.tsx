@@ -426,8 +426,8 @@ describe("sidebar workspace render isolation", () => {
 
     expect(counts.frame).toBe(1);
     expect(counts.projectSelection).toEqual({
-      [createProjectViewKey({ kind: "equivalence", projectKey: "project-a" })]: 1,
-      [createProjectViewKey({ kind: "equivalence", projectKey: "project-b" })]: 1,
+      [createProjectViewKey({ kind: "placement", serverId: SERVER_ID, projectId: "project-a" })]: 1,
+      [createProjectViewKey({ kind: "placement", serverId: SERVER_ID, projectId: "project-b" })]: 1,
     });
     expect(counts.rowSelection).toEqual({
       "a-main": 1,
