@@ -12,7 +12,6 @@ import { StatusBadge, type StatusBadgeVariant } from "@/components/ui/status-bad
 import { Switch } from "@/components/ui/switch";
 import { getIsElectron } from "@/constants/platform";
 import { LocalDaemonSection } from "@/desktop/components/desktop-updates-section";
-import { PairDeviceModal } from "@/desktop/components/pair-device-modal";
 import { startDesktopDaemon, stopDesktopDaemon } from "@/desktop/daemon/desktop-daemon";
 import { useDaemonStatus } from "@/desktop/hooks/use-daemon-status";
 import { useDesktopSettings } from "@/desktop/settings/desktop-settings";
@@ -52,7 +51,6 @@ import {
   ArrowDown,
   ArrowUp,
   ArrowUpToLine,
-  ChevronRight,
   Globe,
   Monitor,
   Pencil,
@@ -63,7 +61,7 @@ import {
 } from "lucide-react-native";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
-import { Alert, Pressable, Text, View } from "react-native";
+import { Alert, Text, View } from "react-native";
 import { StyleSheet, useUnistyles, withUnistyles } from "react-native-unistyles";
 import { BrowserToolsOptInCard } from "./browser-tools-card";
 import { restartDaemonFromSettings, updateDaemonFromSettings } from "./daemon-lifecycle";
@@ -239,21 +237,6 @@ export function HostConnectionsPage({ serverId }: { serverId: string }) {
       <ConnectionsSection host={host} />
       {supportsAccountRelay() ? <OnlineServiceHostSection host={host} /> : null}
     </View>
-  );
-}
-
-export function HostPairDevicePage({ serverId }: { serverId: string }) {
-  const { t } = useTranslation();
-  const host = useHostProfile(serverId);
-
-  if (!host) {
-    return <HostNotFound />;
-  }
-
-  return (
-    <SettingsSection title={t("settings.host.pairDevices.title")}>
-      <PairDeviceRow serverId={serverId} />
-    </SettingsSection>
   );
 }
 
@@ -1102,48 +1085,6 @@ function AppendSystemPromptCard({ serverId }: { serverId: string }) {
         </AdaptiveModalSheet>
       ) : null}
     </>
-  );
-}
-
-function PairDeviceRow({ serverId }: { serverId: string }) {
-  const { t } = useTranslation();
-  const pairingUnavailable = useSessionStore(
-    (state) => state.sessions[serverId]?.serverInfo?.features?.daemonPairing === false,
-  );
-  const { theme } = useUnistyles();
-  const [isModalOpen, setIsModalOpen] = useState(false);
-
-  const handleOpen = useCallback(() => setIsModalOpen(true), []);
-  const handleClose = useCallback(() => setIsModalOpen(false), []);
-
-  return (
-    <View style={settingsStyles.card}>
-      <Pressable
-        style={settingsStyles.row}
-        onPress={handleOpen}
-        accessibilityRole="button"
-        testID="host-page-pair-device-row"
-      >
-        <View style={settingsStyles.rowContent}>
-          <Text style={settingsStyles.rowTitle}>{t("settings.host.pairDevices.rowTitle")}</Text>
-          <Text style={settingsStyles.rowHint}>
-            {t(
-              pairingUnavailable
-                ? "pairing.device.directConnectionHint"
-                : "settings.host.pairDevices.rowHint",
-            )}
-          </Text>
-        </View>
-        <ChevronRight size={theme.iconSize.sm} color={theme.colors.foregroundMuted} />
-      </Pressable>
-
-      <PairDeviceModal
-        serverId={serverId}
-        visible={isModalOpen}
-        onClose={handleClose}
-        testID="host-page-pair-device-card"
-      />
-    </View>
   );
 }
 

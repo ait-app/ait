@@ -246,7 +246,6 @@ describe("global routes", () => {
 describe("host settings section slugs", () => {
   it("keeps current host settings sections", () => {
     expect(normalizeHostSectionSlug("connections")).toBe("connections");
-    expect(normalizeHostSectionSlug("pair-device")).toBe("pair-device");
     expect(normalizeHostSectionSlug("agents")).toBe("agents");
     expect(normalizeHostSectionSlug("metadata")).toBe("metadata");
     expect(normalizeHostSectionSlug("workspaces")).toBe("workspaces");
@@ -256,8 +255,9 @@ describe("host settings section slugs", () => {
     expect(normalizeHostSectionSlug("host")).toBe("host");
   });
 
-  it("does not expose removed plugin settings", () => {
+  it("does not expose removed host settings", () => {
     expect(normalizeHostSectionSlug("plugins")).toBeNull();
+    expect(normalizeHostSectionSlug("pair-device")).toBeNull();
   });
 
   it("maps old host settings sections to their new names", () => {
