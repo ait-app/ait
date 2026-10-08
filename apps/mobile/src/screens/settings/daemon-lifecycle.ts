@@ -1,3 +1,5 @@
+import type { DesktopDaemonStatus } from "@/desktop/daemon/desktop-daemon";
+
 interface WorkerStatus {
   pid: number;
   serverId: string;
@@ -10,6 +12,11 @@ interface StatusReader {
 
 export interface SettingsDaemonRestartDeps extends StatusReader {
   restartServer: (reason: string) => Promise<unknown>;
+  desktop?: {
+    getStatus: () => Promise<DesktopDaemonStatus>;
+    restart: () => Promise<DesktopDaemonStatus>;
+    reconnect: (status: DesktopDaemonStatus) => Promise<void>;
+  };
 }
 
 /** Confirm a fresh service instance, including Ait's restart within the same process. */
@@ -18,6 +25,18 @@ export async function restartDaemonFromSettings(
   reason: string,
   deps: SettingsDaemonRestartDeps,
 ): Promise<void> {
+  if (deps.desktop) {
+    const previous = await deps.desktop.getStatus();
+    if (previous.serverId !== hostServerId || !previous.ownedByDesktop) {
+      throw new Error("The selected daemon is no longer managed by this desktop.");
+    }
+    const current = await deps.desktop.restart();
+    if (current.serverId !== hostServerId || current.status !== "running") {
+      throw new Error("The restarted desktop daemon identity or status could not be confirmed.");
+    }
+    await deps.desktop.reconnect(current);
+    return;
+  }
   const previous = await readSelectedWorker(hostServerId, deps);
   let acknowledged = false;
   try {

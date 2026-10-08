@@ -407,6 +407,7 @@ export const ko: TranslationResources = {
       loading: "최근 세션을 불러오는 중...",
       failedProvider: "{{provider}} 세션을 불러올 수 없습니다",
       failedImport: "선택한 세션을 가져올 수 없습니다.",
+      workingDirectoryUnavailable: en.importSession.status.workingDirectoryUnavailable,
     },
     actions: {
       refresh: "세션 새로고침",
@@ -2581,6 +2582,7 @@ export const ko: TranslationResources = {
           confirmTitle: "{{name}} 재시작",
           confirmMessage:
             "데몬을 재시작합니다. 데몬에서 실행 중인 에이전트는 계속 동작하며 앱이 자동으로 다시 연결됩니다.",
+          confirmDesktopMessage: en.settings.host.daemon.restart.confirmDesktopMessage,
           restarting: "재시작 중...",
           unableToReconnectTitle: "다시 연결할 수 없습니다",
           unableToReconnectMessage:

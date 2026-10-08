@@ -61,6 +61,7 @@ it("uses settings rows without a section or button and commits on blur or Enter"
   expect(host.value).toBe("127.0.0.1");
   expect(port.value).toBe("0");
   expect(screen.queryByRole("button")).toBeNull();
+  expect(screen.getByText("desktop.daemon.listen.savedHint")).toBeTruthy();
   expect(screen.queryByText("desktop.daemon.listen.title")).toBeNull();
   fireEvent.change(host, { target: { value: "0.0.0.0" } });
   expect(save).not.toHaveBeenCalled();
@@ -119,4 +120,5 @@ it("queues a second field edit while the first commit is still saving", async ()
 it("shows an environment override only as a row hint", () => {
   show("0.0.0.0:8080");
   expect(screen.getByText(/desktop.daemon.listen.override.*0.0.0.0:8080/)).toBeTruthy();
+  expect(screen.queryByText("desktop.daemon.listen.savedHint")).toBeNull();
 });

@@ -903,6 +903,43 @@ describe("ImportSessionSheet", () => {
     ).toBe("/home/me/work/other-project");
   });
 
+  it.each([
+    ["working_directory_unavailable", true],
+    ["agent_io", false],
+  ])(
+    "explains an unavailable import directory for %s and permits retry",
+    async (code, unavailable) => {
+      const cwd = "/deleted/workspace";
+      const entry = createProviderSessionEntry({ providerId: "claude", cwd });
+      const fetchRecentProviderSessions = vi.fn(async () => ({
+        requestId: "recent-provider-sessions",
+        entries: [entry],
+      }));
+      const importAgent = vi
+        .fn()
+        .mockRejectedValueOnce(Object.assign(new Error("Import failed"), { code }))
+        .mockResolvedValueOnce(createImportedAgentSnapshot("agent-imported"));
+      const onClose = vi.fn();
+      renderSheet(createRecentSessionsClient(fetchRecentProviderSessions, importAgent), {
+        cwd: null,
+        onClose,
+        snapshot: { supportsSnapshot: true, entries: [createSnapshotEntry("claude")] },
+      });
+      const row = await screen.findByTestId(
+        `import-session-session-claude-${entry.providerHandleId}`,
+      );
+      fireEvent.click(row);
+      const message = unavailable
+        ? `The session’s working directory is unavailable on this host: ${cwd}. Restore the directory and try importing again.`
+        : "Could not import selected session.";
+      await screen.findByText(message);
+      expect(onClose).not.toHaveBeenCalled();
+      fireEvent.click(row);
+      await waitFor(() => expect(onClose).toHaveBeenCalledTimes(1));
+      expect(importAgent).toHaveBeenCalledTimes(2);
+    },
+  );
+
   it("uses the session's cwd when importing in cwd-less mode and fires onImported", async () => {
     const fetchRecentProviderSessions = vi.fn(async () => ({
       requestId: "recent-provider-sessions",

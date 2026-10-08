@@ -406,6 +406,7 @@ export const ar: TranslationResources = {
       loading: "جارٍ تحميل الجلسات الأخيرة...",
       failedProvider: "تعذر تحميل جلسات {{provider}}",
       failedImport: "تعذر استيراد الجلسة المحددة.",
+      workingDirectoryUnavailable: en.importSession.status.workingDirectoryUnavailable,
     },
     actions: {
       refresh: "تحديث الجلسات",
@@ -2569,6 +2570,7 @@ export const ar: TranslationResources = {
           confirmTitle: "أعد تشغيل{{name}}",
           confirmMessage:
             "سيؤدي هذا إلى إعادة تشغيل البرنامج الخفي. سيستمر العملاء الذين يعملون عليه؛ سيتم إعادة الاتصال بالتطبيق تلقائيًا.",
+          confirmDesktopMessage: en.settings.host.daemon.restart.confirmDesktopMessage,
           restarting: "جارٍ إعادة التشغيل...",
           unableToReconnectTitle: "غير قادر على إعادة الاتصال",
           unableToReconnectMessage: "لم يعد{{name}}متصلاً بالإنترنت. يرجى التحقق من إعادة تشغيله.",

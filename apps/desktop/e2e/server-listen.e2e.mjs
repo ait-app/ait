@@ -63,12 +63,14 @@ async function launch() {
     daemon.getByTestId("daemon-status-row").getByTestId("daemon-status-listen"),
   ).toHaveText(status.listen);
   await expect(page.getByTestId("server-listen-save")).toHaveCount(0);
+  await expect(page.getByText("Restart daemon to apply changes.")).toBeVisible();
   await expect(page.getByText("Server listener", { exact: true })).toHaveCount(0);
   await expect(page.getByText(/Changes apply the next time the desktop/)).toHaveCount(0);
   return { page, status };
 }
 
 async function save(page, host, port) {
+  const previous = await page.evaluate(() => window.paseoDesktop.invoke("desktop_daemon_status"));
   await page.getByTestId("server-listen-host").fill(host);
   await page.getByTestId("server-listen-port").fill(port);
   await page.getByTestId("server-listen-port").press("Tab");
@@ -80,6 +82,38 @@ async function save(page, host, port) {
       return config.settings.daemon.listen;
     })
     .toBe(`${host}:${port}`);
+  assert.equal(
+    (await page.evaluate(() => window.paseoDesktop.invoke("desktop_daemon_status"))).listen,
+    previous.listen,
+  );
+  await app.evaluate(({ dialog }) => {
+    dialog.showMessageBox = async () => ({ response: 1, checkboxChecked: false });
+  });
+  await page.getByTestId("host-page-restart-button").click();
+  await expect
+    .poll(
+      async () => {
+        const status = await page.evaluate(() =>
+          window.paseoDesktop.invoke("desktop_daemon_status"),
+        );
+        return (
+          status.status === "running" &&
+          (port === "0"
+            ? status.listen.startsWith(`${host}:`)
+            : status.listen === `${host}:${port}`)
+        );
+      },
+      { timeout: 60000 },
+    )
+    .toBe(true);
+  const applied = await page.evaluate(() => window.paseoDesktop.invoke("desktop_daemon_status"));
+  await expect(page.getByTestId("daemon-status-listen")).toHaveText(applied.listen);
+  await page.waitForFunction(
+    (id) => globalThis.__paseoHostRuntimeStore?.getSnapshot(id)?.connectionStatus === "online",
+    applied.serverId,
+    { timeout: 30000 },
+  );
+  return applied;
 }
 
 try {
@@ -92,11 +126,9 @@ try {
   await expect(
     page.getByText("Enter an IPv4 or IPv6 address (or localhost) and a port from 0 to 65535."),
   ).toBeVisible();
-  await save(page, "0.0.0.0", "0");
-  assert.equal(
-    (await page.evaluate(() => window.paseoDesktop.invoke("desktop_daemon_status"))).listen,
-    status.listen,
-  );
+  const applied = await save(page, "0.0.0.0", "0");
+  assert.notEqual(applied.pid, status.pid);
+  assert.equal(applied.serverId, serverId);
   await app.close();
 
   ({ page, status } = await launch());
@@ -114,7 +146,7 @@ try {
   await expect(page.getByTestId("server-listen-port")).toHaveValue(port);
   await page.screenshot({ path: path.join(os.tmpdir(), "ait-server-listen-overview.png") });
   console.log(
-    "Listener settings persisted across three Electron launches; wildcard and fixed-port reconnection passed.",
+    "Listener settings saved on blur and applied by Restart daemon; wildcard and fixed-port reconnection passed across three Electron launches.",
   );
 } finally {
   if (app) await app.close().catch(() => {});

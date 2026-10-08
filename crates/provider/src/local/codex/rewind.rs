@@ -62,7 +62,9 @@ async fn rewind(
     let (approval, sandbox, _) = controls::policy(&spec.config);
     let mut params = json!({"threadId":id,"cwd":spec.cwd,"model":spec.config.model,
         "approvalPolicy":approval,"sandbox":sandbox,"excludeTurns":false});
-    if index > 0 {
+    if index == 0 {
+        params["beforeTurnId"] = turns[0]["id"].clone();
+    } else {
         params["lastTurnId"] = turns[index - 1]["id"].clone();
     }
     let forked = transport.request("thread/fork", params).await?;
@@ -70,7 +72,18 @@ async fn rewind(
     if fork == id {
         return Err(AgentSessionError::Failed);
     }
-    if index == 0 {
+    let mut response = transport
+        .request("thread/read", json!({"threadId":fork,"includeTurns":true}))
+        .await?;
+    let retained = response["thread"]["turns"]
+        .as_array()
+        .ok_or(AgentSessionError::Failed)?;
+    // Older app servers ignore beforeTurnId and need rollback on the fork only.
+    // Newer app servers support the exclusive fork but have removed thread/rollback.
+    if index == 0 && !retained.is_empty() {
+        if response["thread"]["id"] != fork || retained.len() != turns.len() {
+            return Err(AgentSessionError::Failed);
+        }
         let count = u32::try_from(turns.len()).map_err(|_| AgentSessionError::Failed)?;
         let rolled = transport
             .request("thread/rollback", json!({"threadId":fork,"numTurns":count}))
@@ -78,10 +91,10 @@ async fn rewind(
         if rolled["thread"]["id"] != fork {
             return Err(AgentSessionError::Failed);
         }
+        response = transport
+            .request("thread/read", json!({"threadId":fork,"includeTurns":true}))
+            .await?;
     }
-    let response = transport
-        .request("thread/read", json!({"threadId":fork,"includeTurns":true}))
-        .await?;
     let result = native_sessions::history_with_images(&response["thread"], images)?;
     if result.active
         || result.descriptor.provider_handle_id != fork

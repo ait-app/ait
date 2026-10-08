@@ -132,12 +132,17 @@ for line in sys.stdin:
         turns = json.loads(turns_path.read_text()) if turns_path.exists() else []
         if "lastTurnId" in params:
             turns = turns[:next(index + 1 for index, turn in enumerate(turns) if turn["id"] == params["lastTurnId"])]
+        if "beforeTurnId" in params and mode != "legacy-fork":
+            turns = turns[:next(index for index, turn in enumerate(turns) if turn["id"] == params["beforeTurnId"])]
         thread_id = source if mode == "fork-same-id" else str(uuid.uuid4())
         metadata = {**thread_metadata(source), "id": thread_id}
         (root / ("native-session-" + thread_id + ".json")).write_text(json.dumps(metadata))
         history_path().write_text(json.dumps(turns))
         result = {"thread": {**metadata, "turns": turns}}
     elif method == "thread/rollback":
+        if mode == "rollback-removed":
+            emit({"id": request["id"], "error": {"code": -32600, "message": "unknown variant thread/rollback"}})
+            continue
         thread_id = params["threadId"]
         turns = load_history()[:-params["numTurns"]]
         history_path().write_text(json.dumps(turns))

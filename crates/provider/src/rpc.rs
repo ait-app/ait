@@ -13,6 +13,9 @@ pub enum ErrorCode {
     /// Invalid Agent request.
     #[error("InvalidMessage")]
     InvalidMessage,
+    /// The requested working directory cannot be opened.
+    #[error("WorkingDirectoryUnavailable")]
+    WorkingDirectoryUnavailable,
     /// Requested runtime capability is unavailable.
     #[error("UnsupportedCapability")]
     UnsupportedCapability,
@@ -59,6 +62,7 @@ impl From<ErrorCode> for model::ErrorCode {
         match error {
             ErrorCode::ResourceExhausted => Self::ResourceExhausted,
             ErrorCode::InvalidMessage => Self::InvalidMessage,
+            ErrorCode::WorkingDirectoryUnavailable => Self::WorkingDirectoryUnavailable,
             ErrorCode::UnsupportedCapability => Self::UnsupportedCapability,
             ErrorCode::MethodNotFound => Self::MethodNotFound,
             ErrorCode::AgentIo => Self::AgentIo,
@@ -86,6 +90,7 @@ impl From<model::ErrorCode> for ErrorCode {
     fn from(error: model::ErrorCode) -> Self {
         match error {
             model::ErrorCode::InvalidMessage => Self::InvalidMessage,
+            model::ErrorCode::WorkingDirectoryUnavailable => Self::WorkingDirectoryUnavailable,
             model::ErrorCode::UnsupportedCapability => Self::UnsupportedCapability,
             model::ErrorCode::MethodNotFound => Self::MethodNotFound,
             model::ErrorCode::RegistryIo => Self::RegistryIo,

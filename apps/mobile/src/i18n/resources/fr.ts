@@ -412,6 +412,7 @@ export const fr: TranslationResources = {
       loading: "Chargement des sessions récentes...",
       failedProvider: "Impossible de charger les sessions {{provider}}",
       failedImport: "Impossible d'importer la session sélectionnée.",
+      workingDirectoryUnavailable: en.importSession.status.workingDirectoryUnavailable,
     },
     actions: {
       refresh: "Sessions de rafraîchissement",
@@ -2634,6 +2635,7 @@ export const fr: TranslationResources = {
           confirmTitle: "Redémarrer{{name}}",
           confirmMessage:
             "Cela redémarrera le démon. Les agents qui s'y exécutent continueront à fonctionner; l'application se reconnectera automatiquement.",
+          confirmDesktopMessage: en.settings.host.daemon.restart.confirmDesktopMessage,
           restarting: "Redémarrage...",
           unableToReconnectTitle: "Impossible de se reconnecter",
           unableToReconnectMessage:

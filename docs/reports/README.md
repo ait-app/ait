@@ -2,6 +2,8 @@
 
 文档按当前能力归属分类。历史验证记录只对应各文件注明的源码提交与平台。
 
+- [桌面监听重启与原生会话导入诊断验证](clients/desktop-listen-import-2026-10-08.md)
+- [Codex 首轮回退兼容与远程归档诊断](providers/codex-first-turn-rewind-2026-10-08.md)
 - [DSH 权限目录兼容与真实会话继承](providers/dsh-permission-catalog.md)
 
 ## Daemon 与协议

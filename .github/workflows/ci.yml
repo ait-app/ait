@@ -109,3 +109,246 @@ jobs:
           npm run test --workspace=@ait/mobile --
           src/i18n/resources.test.ts src/runtime/rust-daemon maestro/support native-release-version.test.ts
           src/timeline src/types/stream.test.ts src/runtime/replica-cache
+
+  nightly-prepare:
+    if: github.event_name != 'pull_request' && github.ref == 'refs/heads/main'
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: read
+      actions: write
+    # Admission and publication share a lock so cancellation cannot interrupt uploads.
+    concurrency:
+      group: nightly-main-control
+      cancel-in-progress: false
+      queue: max
+    outputs:
+      admitted: ${{ steps.window.outputs.admitted }}
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          persist-credentials: false
+      - name: Keep the two newest builds
+        id: window
+        uses: actions/github-script@v8
+        with:
+          script: |
+            const { admitBuild } = require('./scripts/nightly-control.cjs');
+            core.setOutput('admitted', String(await admitBuild({ github, context, core })));
+
+  desktop:
+    needs: nightly-prepare
+    if: ${{ !cancelled() && (github.event_name == 'pull_request' || needs.nightly-prepare.outputs.admitted == 'true') }}
+    name: Desktop ${{ matrix.label }}
+    permissions:
+      contents: read
+    runs-on: ${{ matrix.runner }}
+    timeout-minutes: 90
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - label: Linux x86_64
+            runner: ubuntu-24.04
+            rust_target: x86_64-unknown-linux-gnu
+            platform: linux
+            arch: x64
+          - label: Apple Silicon
+            runner: macos-15
+            rust_target: aarch64-apple-darwin
+            platform: mac
+            arch: arm64
+    env:
+      CARGO_TERM_COLOR: always
+      CI: "1"
+      EXPO_NO_TELEMETRY: "1"
+      AIT_DESKTOP_SMOKE: "1"
+      CSC_IDENTITY_AUTO_DISCOVERY: "false"
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          persist-credentials: false
+      - uses: dtolnay/rust-toolchain@1.98.1
+        with:
+          targets: ${{ matrix.rust_target }}
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 24
+          cache: npm
+      - run: npm ci
+      - name: Validate release tooling and version
+        run: |
+          npm run test:release
+          npm run verify:release
+      - name: Install Linux packaging dependencies
+        if: matrix.platform == 'linux'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends libfuse2 xvfb libgtk-3-0 libnss3 libasound2t64
+          if [ -f /proc/sys/kernel/apparmor_restrict_unprivileged_userns ]; then
+            sudo sysctl -w kernel.apparmor_restrict_unprivileged_userns=0
+          fi
+      - name: Build daemon
+        run: cargo build --locked --release -p daemon --bin daemon --target "${{ matrix.rust_target }}"
+      - name: Build desktop
+        env:
+          AIT_SERVER_BIN: ${{ github.workspace }}/target/${{ matrix.rust_target }}/release/daemon
+        run: |
+          npm run build:desktop-assets
+          (cd apps/desktop && node scripts/prepare-daemon.mjs && npm run build:main)
+      - name: Package desktop preview
+        working-directory: apps/desktop
+        env:
+          PLATFORM: ${{ matrix.platform }}
+          ARCH: ${{ matrix.arch }}
+        run: |
+          args=()
+          if [ "$PLATFORM" = mac ]; then
+            args+=(-c.mac.identity=- -c.mac.notarize=false)
+          fi
+          npm exec -- electron-builder --config electron-builder.yml \
+            "--$PLATFORM" "--$ARCH" --publish never \
+            -c.publish.owner="${GITHUB_REPOSITORY_OWNER}" \
+            -c.publish.repo="${GITHUB_REPOSITORY#*/}" "${args[@]}"
+      - name: Collect assets
+        env:
+          PLATFORM: ${{ matrix.platform }}
+        run: |
+          version=$(node -p 'require("./package.json").version')
+          node scripts/release-assets.mjs collect "$PLATFORM" "$version" apps/desktop/release release-assets
+      - name: Record PR build source
+        if: github.event_name == 'pull_request'
+        env:
+          PR_NUMBER: ${{ github.event.pull_request.number }}
+          PR_HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+          PR_BASE_SHA: ${{ github.event.pull_request.base.sha }}
+          PLATFORM: ${{ matrix.platform }}
+        run: node scripts/pr-build-info.mjs release-assets
+      - uses: actions/upload-artifact@v6
+        id: artifact
+        with:
+          name: ${{ github.event_name == 'pull_request' && format('pr-{0}-{1}-{2}', github.event.pull_request.number, matrix.platform, github.event.pull_request.head.sha) || format('nightly-{0}', matrix.platform) }}
+          path: release-assets/*
+          if-no-files-found: error
+          overwrite: true
+          retention-days: ${{ github.event_name == 'pull_request' && 14 || 1 }}
+      - name: Link PR download
+        if: github.event_name == 'pull_request'
+        env:
+          ARTIFACT_URL: ${{ steps.artifact.outputs.artifact-url }}
+          PLATFORM: ${{ matrix.platform }}
+          PR_NUMBER: ${{ github.event.pull_request.number }}
+          PR_HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+        run: |
+          printf '### PR #%s — %s\n\n[Download test package](%s)\n\nPR commit: `%s`\n\nTested merge: `%s`\n' \
+            "$PR_NUMBER" "$PLATFORM" "$ARTIFACT_URL" "$PR_HEAD_SHA" "$GITHUB_SHA" >> "$GITHUB_STEP_SUMMARY"
+
+  nightly-publish:
+    if: >-
+      ${{ !cancelled() && github.event_name != 'pull_request' && github.ref == 'refs/heads/main'
+          && needs.desktop.result == 'success' && needs.docs.result == 'success'
+          && contains(fromJSON('["success","skipped"]'), needs.rust.result)
+          && contains(fromJSON('["success","skipped"]'), needs.ui.result) }}
+    needs: [desktop, rust, ui, docs]
+    runs-on: ubuntu-24.04
+    # Unchanged code may skip Rust/UI checks; failures must still block publication.
+    # Use the admission lock while replacing and uploading the release.
+    concurrency:
+      group: nightly-main-control
+      cancel-in-progress: false
+      queue: max
+    permissions:
+      contents: write
+      actions: write
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 24
+      - uses: actions/download-artifact@v7
+        with:
+          pattern: nightly-*
+          path: release-assets
+          merge-multiple: true
+      - name: Verify assets and record source
+        run: |
+          version=$(node -p 'require("./package.json").version')
+          node scripts/release-assets.mjs verify "$version" release-assets
+          node <<'NODE'
+          const { writeFileSync } = require('node:fs');
+          const info = {
+            version: require('./package.json').version,
+            releaseTag: 'nightly',
+            sourceCommit: process.env.GITHUB_SHA,
+            workflowRunNumber: Number(process.env.GITHUB_RUN_NUMBER),
+            workflowRunUrl: `${process.env.GITHUB_SERVER_URL}/${process.env.GITHUB_REPOSITORY}/actions/runs/${process.env.GITHUB_RUN_ID}`,
+            macSigning: 'ad-hoc, not notarized',
+          };
+          writeFileSync('release-assets/BUILD-INFO.json', JSON.stringify(info, null, 2) + '\n');
+          NODE
+          (cd release-assets && sha256sum BUILD-INFO.json >> SHA256SUMS)
+      - name: Replace previous nightly release and move tag
+        id: release
+        uses: actions/github-script@v8
+        with:
+          script: |
+            const repo = context.repo;
+            const { canPublish } = require('./scripts/nightly-control.cjs');
+            if (!await canPublish({ github, context, core })) {
+              core.notice('This build is outside the two-build window or a newer nightly is already published.');
+              core.setOutput('publish', 'false');
+              return;
+            }
+            try {
+              const { data: release } = await github.rest.repos.getReleaseByTag({ ...repo, tag: 'nightly' });
+              await github.rest.repos.deleteRelease({ ...repo, release_id: release.id });
+            } catch (error) {
+              if (error.status !== 404) throw error;
+            }
+            try {
+              await github.rest.git.getRef({ ...repo, ref: 'tags/nightly' });
+              await github.rest.git.updateRef({ ...repo, ref: 'tags/nightly', sha: context.sha, force: true });
+            } catch (error) {
+              if (error.status !== 404) throw error;
+              await github.rest.git.createRef({ ...repo, ref: 'refs/tags/nightly', sha: context.sha });
+            }
+            core.setOutput('publish', 'true');
+      - name: Publish latest nightly
+        if: steps.release.outputs.publish == 'true'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release create nightly release-assets/* --verify-tag --target "$GITHUB_SHA" \
+            --title 'Ait Nightly' --prerelease --latest=false \
+            --notes "Development build from $GITHUB_SHA. Replaced on the next successful main build. macOS is ad-hoc signed and not notarized. <!-- ait-nightly-run: $GITHUB_RUN_NUMBER --> <!-- ait-nightly-workflow: ci.yml -->" \
+            --repo "$GITHUB_REPOSITORY"
+          echo "$GITHUB_SERVER_URL/$GITHUB_REPOSITORY/releases/tag/nightly" >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Cancel older builds after successful publication
+        if: steps.release.outputs.publish == 'true'
+        uses: actions/github-script@v8
+        with:
+          script: |
+            const { cancelOlderBuilds } = require('./scripts/nightly-control.cjs');
+            await cancelOlderBuilds({ github, context, core });
+
+  nightly-cleanup:
+    name: Remove temporary nightly artifacts
+    needs: [desktop, nightly-publish]
+    if: ${{ always() && github.event_name != 'pull_request' && github.ref == 'refs/heads/main' }}
+    runs-on: ubuntu-24.04
+    permissions:
+      actions: write
+    steps:
+      - uses: actions/github-script@v8
+        with:
+          script: |
+            const artifacts = await github.paginate(github.rest.actions.listWorkflowRunArtifacts, {
+              ...context.repo, run_id: context.runId, per_page: 100,
+            });
+            for (const artifact of artifacts) {
+              if (['nightly-linux', 'nightly-mac'].includes(artifact.name)) {
+                await github.rest.actions.deleteArtifact({ ...context.repo, artifact_id: artifact.id });
+              }
+            }
