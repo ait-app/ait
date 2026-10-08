@@ -410,3 +410,5 @@ async fn manager_persists_timeline_and_resume_identity_across_restart() {
 
 #[cfg(test)]
 mod installed;
+
+mod diagnostics;

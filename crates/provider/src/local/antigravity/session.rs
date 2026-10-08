@@ -5,7 +5,10 @@ use domain::agent_runtime::{AgentPersistenceHandle, StoredAgentConfig, StoredAge
 use serde_json::{Value, json};
 use uuid::Uuid;
 
-use super::{AntigravityClient, PROVIDER, config, streaming::Stream, transport::Transport};
+use super::{
+    AntigravityClient, PROVIDER, config, diagnostics::Failure, streaming::Stream,
+    transport::Transport,
+};
 use crate::ports::agent_session::{
     AgentSession, AgentSessionError, AgentSessionFuture, AgentSessionSpec, AgentTurnEvent,
 };
@@ -70,6 +73,17 @@ async fn connect(
     let response = tokio::time::timeout(client.deadline, transport.receive()).await;
     let Ok(Ok(initialized)) = response else {
         let _ = transport.close().await;
+        tracing::warn!(
+            message = transport
+                .failure()
+                .unwrap_or(if response.is_err() {
+                    Failure::Timeout
+                } else {
+                    Failure::Exit
+                })
+                .message(),
+            "AGY initialization failed"
+        );
         return Err(AgentSessionError::Failed);
     };
     let id = initialized["conversation_id"]
@@ -107,6 +121,7 @@ impl Session {
             return Err(AgentSessionError::Rejected);
         }
         let blocks = prompt.blocks()?;
+        self.stream.failure = None;
         if self.transport.is_none() || self.config != *config {
             if let Some(mut transport) = self.transport.take() {
                 transport.close().await?;
@@ -122,11 +137,21 @@ impl Session {
             self.config.clone_from(config);
         }
         // Write once; a timeout leaves admission uncertain and closes the writer.
-        self.transport
+        let sent = self
+            .transport
             .as_mut()
             .ok_or(AgentSessionError::Failed)?
             .send(&json!({"event":"user","message":{"content":blocks}}))
-            .await?;
+            .await;
+        if let Err(error) = sent {
+            self.stream.failure = Some(
+                self.transport
+                    .as_ref()
+                    .and_then(Transport::failure)
+                    .unwrap_or(Failure::Exit),
+            );
+            return Err(error);
+        }
         let turn = Uuid::new_v4().to_string();
         self.stream.begin(turn.clone(), self.id.clone());
         self.active = Some(turn.clone());
@@ -158,6 +183,15 @@ impl Session {
 }
 
 impl AgentSession for Session {
+    fn failure_message(&self) -> Option<&str> {
+        self.stream
+            .failure
+            .into_iter()
+            .chain(self.transport.as_ref().and_then(Transport::failure))
+            .max()
+            .map(Failure::message)
+    }
+
     fn provider(&self) -> &'static str {
         PROVIDER
     }
@@ -198,10 +232,25 @@ impl AgentSession for Session {
         let Some(transport) = &mut self.transport else {
             return Ok(None);
         };
-        let Some(message) = transport.poll()? else {
-            return Ok(None);
+        let message = match transport.poll() {
+            Ok(Some(message)) => message,
+            Ok(None) => return Ok(None),
+            Err(_) => {
+                self.stream
+                    .abort(transport.failure().unwrap_or(Failure::Exit));
+                self.active = None;
+                return Ok(self.stream.events.pop_front());
+            }
         };
-        self.consume(&message)?;
+        if self.consume(&message).is_err() {
+            let failure = self
+                .transport
+                .as_ref()
+                .and_then(Transport::failure)
+                .unwrap_or(Failure::Protocol);
+            self.stream.abort(failure);
+            self.active = None;
+        }
         Ok(self.stream.events.pop_front())
     }
 
@@ -252,8 +301,19 @@ impl AgentSession for Session {
 
     fn close(&mut self) -> AgentSessionFuture<'_, ()> {
         Box::pin(async move {
+            let failed = self.stream.failure.is_some() || self.active.is_some();
             if let Some(mut transport) = self.transport.take() {
                 transport.close().await?;
+                if let Some(failure) = transport.failure().filter(|_| failed) {
+                    self.stream.failure = Some(
+                        self.stream
+                            .failure
+                            .map_or(failure, |current| current.max(failure)),
+                    );
+                }
+            }
+            if let Some(failure) = self.stream.failure {
+                tracing::warn!(message = failure.message(), "AGY session failed");
             }
             self.closed = true;
             Ok(())

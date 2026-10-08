@@ -74,6 +74,7 @@
 
 ## Provider、Agent 与会话
 
+- [AGY headless 拒绝与错误诊断：PR 验证](providers/antigravity-headless-errors-validation-2026-10-09.md)
 - [Codex 异步提问历史排序：PR 覆盖率证据](providers/codex-async-question-history-pr-coverage-2026-10-09.json)
 - [Timeline 单项 768 KiB：PR 覆盖率证据](providers/timeline-entry-768k-pr-coverage-2026-10-06.json)
 - [Provider 装配边界验证](providers/provider-composition.md)

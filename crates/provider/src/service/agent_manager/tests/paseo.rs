@@ -300,6 +300,35 @@ async fn provider_poll_failure_is_terminal_and_keeps_safe_error_metadata() {
 }
 
 #[tokio::test]
+async fn uses_adapter_failure_explanations_and_rejects_invalid_display_messages() {
+    for (message, expected) in [
+        (
+            "AGY denied a tool requiring approval.",
+            "AGY denied a tool requiring approval.",
+        ),
+        ("  ", "Provider execution failed"),
+        ("invalid\0message", "Provider execution failed"),
+    ] {
+        let (mut manager, registry, client) = running().await;
+        {
+            let mut state = client.0.lock().unwrap();
+            state.failure_message = Some(message);
+            state.events.push_back(AgentTurnEvent::Failed);
+        }
+        manager.poll().await.unwrap();
+        assert_eq!(
+            registry
+                .get("agent-1")
+                .unwrap()
+                .unwrap()
+                .last_error
+                .as_deref(),
+            Some(expected)
+        );
+    }
+}
+
+#[tokio::test]
 async fn failed_terminal_cleanup_retains_pending_failure_and_blocks_new_writer() {
     let (mut manager, registry, client) = running().await;
     {

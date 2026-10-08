@@ -47,10 +47,10 @@ if scenario == 'wrong-model':
 turns = 0
 step_index = 0
 
-def terminal(status, response):
+def terminal(status, response, **fields):
     emit({'event': 'result', 'result': {'conversation_id': conversation, 'status': status,
         'response': response, 'num_turns': turns, 'usage': {'input_tokens': turns * 100,
-            'output_tokens': turns * 10, 'cache_read_tokens': turns * 50}}})
+            'output_tokens': turns * 10, 'cache_read_tokens': turns * 50}, **fields}})
 
 def interrupted(signum, frame):
     terminal('INTERRUPTED', '')
@@ -80,6 +80,33 @@ for line in sys.stdin:
     def step(kind, state, **fields):
         emit({'event': 'step_update', 'step_update': {'conversation_id': conversation,
             'step_index': step_index, 'state': state, 'step_type': kind, **fields}})
+    if scenario in ('denied', 'denied-unfinished', 'denied-response', 'stderr-failure',
+                    'stderr-flood', 'turn-malformed', 'empty-tool'):
+        step('agent_response', 'DONE')
+        step_index += 1
+        step('tool', 'ACTIVE', tool_name='run_command', tool_info={
+            'name': 'run_command', 'parameters': {'CommandLine': 'printf agy_diagnostic'}})
+        if scenario == 'turn-malformed':
+            print('{', flush=True)
+            continue
+        if scenario in ('stderr-failure', 'stderr-flood'):
+            if scenario == 'stderr-flood':
+                sys.stderr.write('x' * (512 * 1024) + '\n')
+            sys.stderr.write('AGY_ERROR: {"message":"quota exceeded","token":"fixture-secret"}\n')
+            sys.stderr.flush()
+            sys.exit(3)
+        if scenario != 'denied-unfinished':
+            step('tool', 'DONE', tool_name='run_command', tool_info={
+                'name': 'run_command', 'parameters': {'CommandLine': 'printf agy_diagnostic'}})
+        step_index += 1
+        if scenario == 'empty-tool':
+            terminal('SUCCESS', 'Tool completed')
+        else:
+            sys.stderr.write('jetski: a tool required the "command" permission and was auto-denied.\n')
+            sys.stderr.flush()
+            terminal('SUCCESS', 'Command was denied' if scenario == 'denied-response' else '',
+                     denied_actions=[{'action': 'command', 'display_name': 'RunCommand'}])
+        continue
     step('user_input', 'DONE')
     step_index += 1
     step('tool', 'ACTIVE', tool_name='run_command', tool_info={

@@ -816,7 +816,7 @@ impl AgentManager {
                     } else {
                         AgentRuntimeStatus::Idle
                     };
-                    next.last_error = failed.then(|| "Provider execution failed".to_owned());
+                    next.last_error = failed.then(|| streaming::failure_message(agent).to_owned());
                     next.updated_at.clone_from(&now);
                     next.last_activity_at = Some(now.clone());
                     next.requires_attention = permission || (!cancelled && !queued);
@@ -854,8 +854,11 @@ impl AgentManager {
             {
                 publish_terminal_attention(&self.events, &id, &now, failed);
             }
-            if failed && committed.as_ref().is_some_and(|record| !record.internal) {
-                publish_failure_activity(&self.events, &id, &now);
+            if let Some(record) = committed
+                .as_ref()
+                .filter(|record| failed && !record.internal)
+            {
+                publish_failure_activity(&self.events, &id, &now, record);
             }
             if failed {
                 self.live.remove(&id);
@@ -1077,14 +1080,19 @@ fn now_timestamp() -> String {
     Utc::now().to_rfc3339_opts(SecondsFormat::Millis, true)
 }
 
-fn publish_failure_activity(events: &SessionEvents, agent_id: &str, timestamp: &str) {
+fn publish_failure_activity(
+    events: &SessionEvents,
+    agent_id: &str,
+    timestamp: &str,
+    record: &PersistedAgentRuntimeRecord,
+) {
     events.publish(
         SessionEventKind::ActivityLog,
         &json!({
             "id": uuid::Uuid::new_v4().to_string(),
             "timestamp": timestamp,
             "type": "error",
-            "content": "Provider execution failed",
+            "content": record.last_error.as_deref().unwrap_or("Provider execution failed"),
             "metadata": {"agentId": agent_id},
         }),
     );
