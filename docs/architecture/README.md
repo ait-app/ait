@@ -76,6 +76,8 @@ Runtime 保留阻塞执行、admission 和任务跟踪。功能 crate 之间没�
 内置 Provider 由 `provider::Providers` 组装。具体客户端列表、启动配置、安装发现与辅助
 元数据生成能力留在 provider crate 内部；daemon 提供数据目录并连接服务与进程生命周期。
 Codex、Claude、OpenCode 和 DSH 当前支持结构化辅助生成，各 adapter 自行选择辅助小模型。
+Cursor CLI 使用官方 ACP，会话与认证归 Cursor，通用传输和流式投影在 provider 内部复用，
+见 [ADR-110](../decisions/providers/adr-110-cursor-acp-provider.md)。
 详见 [ADR-089](../decisions/providers/adr-089-provider-owned-composition.md) 与
 [ADR-099](../decisions/providers/adr-099-provider-owned-auxiliary-models.md)。
 
@@ -87,7 +89,7 @@ workspace 包与普通、开发、构建、optional 和平台条件依赖，拒�
 daemon 持有数据目录的 OS 文件锁及稳定 `server-id`，同一目录只能有一个活动实例。
 Project/Workspace 和 Agent runtime 目录、配置、时间线由当前文件存储与 Provider adapter
 管理；Agent preset catalog 的 SQLite 存储位于 `provider`。这些职责不能合并成一个通用数据库入口。
-原生 Codex、Claude Code、Antigravity、OpenCode 与 DeepSeek Harness 的凭据和会话仍由对应程序持有。
+原生 Codex、Claude Code、Cursor、Antigravity、OpenCode 与 DeepSeek Harness 的凭据和会话仍由对应程序持有。
 
 桌面进程只管理自己启动的 daemon 子进程，生成连接凭据并通过主进程 bridge 提供授权。
 浏览器用一次性 WebSocket 票据连接；桌面、Web 和移动端使用同一个 Rust transport adapter。

@@ -27,6 +27,7 @@ fn registration_preserves_the_catalog_without_startup_writes_and_rejects_duplica
             "codex",
             "claude",
             "antigravity",
+            "cursor",
             "opencode",
             "deepseek-harness",
         ]
@@ -36,6 +37,7 @@ fn registration_preserves_the_catalog_without_startup_writes_and_rejects_duplica
         "codex",
         "claude",
         "antigravity",
+        "cursor",
         "opencode",
         "deepseek-harness",
     ] {

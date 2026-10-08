@@ -13,6 +13,8 @@
 
 ## 架构决策
 
+- [ADR-110：Cursor CLI ACP Provider](decisions/providers/adr-110-cursor-acp-provider.md)：原生模型与模式、工具/问题/计划审批、恢复及内部 ACP 复用。
+
 - [ADR-108：Relay RPC 与基础连接方法归所属 crate](decisions/daemon/adr-108-relay-rpc-and-metadata-connection-methods.md)：relay 拥有控制 RPC 并仅依赖 model；metadata 声明始终可用的基础连接方法，API 保留传输与跨能力协调。
 - [ADR-107：共享组件直接从所属 crate 导入](decisions/daemon/adr-107-direct-imports-from-owning-crates.md)：删除迁移用转发模块，调用处直接引用 model/domain/file，provider 和 schedule 仅在测试中依赖 file。
 - [ADR-106：具体文件持久化归 file，model 仅声明契约](decisions/daemon/adr-106-concrete-file-persistence.md)：迁移 registry、创建回执和 JSON 文件适配器，依赖调整为 file → model/domain。
@@ -73,6 +75,7 @@
 - [Ait 0.0.15 发布说明](reports/releases/release-0.0.15.md)：OpenCode、账户主机中继、Android APK 与稳定性修复。
 - [Ait 0.0.14 发布说明](reports/releases/release-0.0.14.md)：Diff 语法高亮、侧边栏统计与 Codex 推理等级。
 - [Apple 本机构建](operations/apple-builds.md)：DMG、模拟器和 IPA。
+- [Cursor CLI](operations/cursor.md)：安装、认证、动态模式与 ACP 会话恢复。
 - [Claude Code](operations/claude-code.md)：认证、原生会话与审批。
 - [DeepSeek Harness](operations/deepseek-harness.md)：原生 Host、会话导入、权限模式、question 与 ACP 兼容配置。
 - [Antigravity CLI](operations/antigravity.md)：AGY 安装、登录、权限模式与会话恢复。
@@ -82,6 +85,8 @@
 - [OpenCode 原生 Provider](decisions/providers/adr-074-opencode-native-provider.md)：接入范围、审批、外部会话发现与导入恢复。
 
 ## 工程规范与验证
+
+- [Cursor ACP 验证](reports/providers/cursor-acp.md)：专项协议、客户端与 daemon 重启恢复验证。
 
 - [Crate 边界与 main 整合验证](reports/daemon/crate-boundaries-main-rebase-2026-10-07.md)：完整测试、覆盖率与依赖守卫结果。
 - [DSH 辅助生成验证](reports/providers/dsh-auxiliary-generation.md)：无工具、无持久化的原生 headless 通道与覆盖率。

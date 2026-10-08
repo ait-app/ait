@@ -48,7 +48,9 @@ pub(super) async fn open(
     {
         return Err(AgentSessionError::Rejected);
     }
-    let mut transport = Transport::spawn(client, &spec.cwd)?;
+    let mut command = client.command();
+    command.args(["--profile", "acp"]).current_dir(&spec.cwd);
+    let mut transport = Transport::spawn(command, client.deadline)?;
     let initialized = transport
         .request(
             "initialize",
@@ -168,7 +170,7 @@ impl Session {
                 {
                     return Err(AgentSessionError::Failed);
                 }
-                let pending = permissions::capture(message)?;
+                let pending = permissions::capture(PROVIDER, message)?;
                 let id = config::text(&pending.request, "id")?.to_owned();
                 self.stream
                     .events

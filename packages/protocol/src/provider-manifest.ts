@@ -258,6 +258,35 @@ export const AGENT_PROVIDER_DEFINITIONS: AgentProviderDefinition[] = [
     },
   },
   {
+    id: "cursor",
+    label: "Cursor",
+    description: "Cursor CLI via Agent Client Protocol",
+    defaultModeId: null,
+    modes: [
+      {
+        id: "agent",
+        label: "Agent",
+        description: "Edit files and run tools with native approvals",
+        icon: "Hammer",
+        colorTier: "moderate",
+      },
+      {
+        id: "plan",
+        label: "Plan",
+        description: "Read-only planning",
+        icon: "ShieldEllipsis",
+        colorTier: "planning",
+      },
+      {
+        id: "ask",
+        label: "Ask",
+        description: "Read-only questions and analysis",
+        icon: "Shield",
+        colorTier: "safe",
+      },
+    ],
+  },
+  {
     id: "copilot",
     label: "Copilot",
     description: "GitHub Copilot via Agent Client Protocol with dynamic modes and session support",

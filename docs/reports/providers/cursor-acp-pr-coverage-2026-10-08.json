@@ -1,0 +1,303 @@
+{
+  "source_revision": "pre-commit worktree based on 4794dbc493aee9926f37438f8f2d5f9085e3d835; see changed_source_sha256",
+  "base_revision": "4794dbc493aee9926f37438f8f2d5f9085e3d835",
+  "measurement_date": "2026-10-08",
+  "scope": "Rust Cargo workspace; default features; Linux x86_64-unknown-linux-gnu; rustc/cargo 1.98.1; cargo-llvm-cov 0.9.1; LLVM 23.1.1; tool default file filtering; no additional exclusions; coverage test threads=1; 15 default-ignored installed-provider tests; doctests run by cargo test but are not instrumented",
+  "commands": {
+    "tests": "XDG_CONFIG_HOME=/tmp/ait-cursor-pr-test-config CARGO_TARGET_DIR=/home/lonnet/Developers/ait/target cargo test --workspace --locked --offline -- --test-threads=1",
+    "build": "CARGO_TARGET_DIR=/home/lonnet/Developers/ait/target cargo build --workspace --locked --offline",
+    "clippy": "CARGO_TARGET_DIR=/home/lonnet/Developers/ait/target cargo clippy --workspace --all-targets --locked --offline -- -D warnings",
+    "format": "cargo fmt --all --check",
+    "coverage": "LLVM_COV=/usr/bin/llvm-cov LLVM_PROFDATA=/usr/bin/llvm-profdata XDG_CONFIG_HOME=/tmp/ait-cursor-pr-test-config CARGO_TARGET_DIR=/home/lonnet/Developers/ait/target cargo llvm-cov --workspace --html --locked --offline -- --test-threads=1",
+    "coverage_export": "LLVM_COV=/usr/bin/llvm-cov LLVM_PROFDATA=/usr/bin/llvm-profdata XDG_CONFIG_HOME=/tmp/ait-cursor-pr-test-config CARGO_TARGET_DIR=/home/lonnet/Developers/ait/target cargo llvm-cov report --json --output-path /tmp/ait-cursor-pr-coverage-raw.json --locked --offline",
+    "protocol_tests": "npm exec --workspace=@ait/protocol -- vitest run src/provider-manifest.cursor.test.ts src/provider-manifest.antigravity.test.ts src/provider-manifest.deepseek-harness.test.ts",
+    "mobile_tests": "npm exec --workspace=@ait/mobile -- vitest run --project unit src/utils/provider-command-templates.test.ts src/components/provider-icons.test.ts",
+    "protocol_typecheck": "npm run typecheck --workspace=@ait/protocol",
+    "client_lint": "node_modules/.bin/oxlint packages/protocol/src/provider-config.ts packages/protocol/src/provider-manifest.ts packages/protocol/src/provider-manifest.cursor.test.ts apps/mobile/src/utils/provider-command-templates.ts apps/mobile/src/utils/provider-command-templates.test.ts",
+    "client_format": "node_modules/.bin/oxfmt --check packages/protocol/src/provider-config.ts packages/protocol/src/provider-manifest.ts packages/protocol/src/provider-manifest.cursor.test.ts apps/mobile/src/utils/provider-command-templates.ts apps/mobile/src/utils/provider-command-templates.test.ts",
+    "docs": "npm run check:docs",
+    "diff": "git diff --cached --check"
+  },
+  "test_execution": {
+    "targets": 30,
+    "passed": 2022,
+    "failed": 0,
+    "ignored": 15,
+    "ignored_tests": [
+      "test local::antigravity::tests::installed::authenticated_multi_turn_and_resume ... ignored, requires authenticated AGY and explicitly consumes three model turns",
+      "test local::claude::tests::process::installed_claude_control_protocol_discovers_models_without_inference ... ignored, requires a locally installed Claude Code CLI; sends no model request",
+      "test local::claude::tests::process::parity::installed_claude_completes_a_native_turn_and_reopens_history ... ignored, requires installed Claude authentication and makes one small model request",
+      "test local::codex::tests::installed::installed_codex_completes_a_native_turn_and_reopens_history ... ignored, requires installed Codex authentication and makes one small model request",
+      "test local::deepseek_harness::launcher::tests::installed_launcher_runs_native_cli_without_a_wrapper ... ignored, requires an installed DSH CLI or desktop bundle; does not open a session",
+      "test local::deepseek_harness::metadata::tests::installed_dsh_metadata_has_no_tools_or_persisted_session ... ignored, requires AIT_TEST_DSH_BIN; loopback model and temporary native profile only",
+      "test local::deepseek_harness::native::tests::installed_history::installed_existing_session_import_and_resume_preserve_history ... ignored, requires AIT_TEST_DSH_BIN and an idle, released AIT_TEST_DSH_SESSION_ID; no prompt",
+      "test local::deepseek_harness::native::tests::installed_history::installed_existing_session_is_importable_without_writes ... ignored, requires AIT_TEST_DSH_BIN and AIT_TEST_DSH_SESSION_ID; read-only existing history",
+      "test local::deepseek_harness::native::tests::installed_host_discovers_switches_permissions_and_adopts_legacy_sessions ... ignored, requires an installed DSH CLI via AIT_TEST_DSH_BIN; no model request",
+      "test local::opencode::client::native_sessions::tests::installed_existing_sessions_are_discovered_and_inspected_without_submission ... ignored, reads existing native sessions; requires AIT_TEST_OPENCODE_BIN and AIT_TEST_OPENCODE_CWD",
+      "test local::opencode::tests::installed::installed_opencode_declined_tool_settles_and_accepts_next_turn ... ignored, requires AIT_TEST_OPENCODE_BIN; isolated config and loopback model only",
+      "test local::opencode::tests::installed::installed_opencode_discovers_runs_and_restores_with_local_model ... ignored, requires AIT_TEST_OPENCODE_BIN; isolated config and loopback model only",
+      "test local::opencode::tests::installed::installed_opencode_metadata_disables_tools_and_removes_private_history ... ignored, requires AIT_TEST_OPENCODE_BIN; private loopback model, no credentials",
+      "test local::opencode::tests::installed::installed_opencode_plan_import_and_switch_use_native_agent ... ignored, requires AIT_TEST_OPENCODE_BIN; isolated config and loopback model only",
+      "test local::opencode::tests::installed::installed_opencode_saves_only_explicit_native_permission_rules ... ignored, requires AIT_TEST_OPENCODE_BIN; isolated config and loopback model only"
+    ]
+  },
+  "coverage_test_execution": {
+    "targets": 17,
+    "passed": 2021,
+    "failed": 0,
+    "ignored": 15,
+    "ignored_tests": [
+      "test local::antigravity::tests::installed::authenticated_multi_turn_and_resume ... ignored, requires authenticated AGY and explicitly consumes three model turns",
+      "test local::claude::tests::process::installed_claude_control_protocol_discovers_models_without_inference ... ignored, requires a locally installed Claude Code CLI; sends no model request",
+      "test local::claude::tests::process::parity::installed_claude_completes_a_native_turn_and_reopens_history ... ignored, requires installed Claude authentication and makes one small model request",
+      "test local::codex::tests::installed::installed_codex_completes_a_native_turn_and_reopens_history ... ignored, requires installed Codex authentication and makes one small model request",
+      "test local::deepseek_harness::launcher::tests::installed_launcher_runs_native_cli_without_a_wrapper ... ignored, requires an installed DSH CLI or desktop bundle; does not open a session",
+      "test local::deepseek_harness::metadata::tests::installed_dsh_metadata_has_no_tools_or_persisted_session ... ignored, requires AIT_TEST_DSH_BIN; loopback model and temporary native profile only",
+      "test local::deepseek_harness::native::tests::installed_history::installed_existing_session_import_and_resume_preserve_history ... ignored, requires AIT_TEST_DSH_BIN and an idle, released AIT_TEST_DSH_SESSION_ID; no prompt",
+      "test local::deepseek_harness::native::tests::installed_history::installed_existing_session_is_importable_without_writes ... ignored, requires AIT_TEST_DSH_BIN and AIT_TEST_DSH_SESSION_ID; read-only existing history",
+      "test local::deepseek_harness::native::tests::installed_host_discovers_switches_permissions_and_adopts_legacy_sessions ... ignored, requires an installed DSH CLI via AIT_TEST_DSH_BIN; no model request",
+      "test local::opencode::client::native_sessions::tests::installed_existing_sessions_are_discovered_and_inspected_without_submission ... ignored, reads existing native sessions; requires AIT_TEST_OPENCODE_BIN and AIT_TEST_OPENCODE_CWD",
+      "test local::opencode::tests::installed::installed_opencode_declined_tool_settles_and_accepts_next_turn ... ignored, requires AIT_TEST_OPENCODE_BIN; isolated config and loopback model only",
+      "test local::opencode::tests::installed::installed_opencode_discovers_runs_and_restores_with_local_model ... ignored, requires AIT_TEST_OPENCODE_BIN; isolated config and loopback model only",
+      "test local::opencode::tests::installed::installed_opencode_metadata_disables_tools_and_removes_private_history ... ignored, requires AIT_TEST_OPENCODE_BIN; private loopback model, no credentials",
+      "test local::opencode::tests::installed::installed_opencode_plan_import_and_switch_use_native_agent ... ignored, requires AIT_TEST_OPENCODE_BIN; isolated config and loopback model only",
+      "test local::opencode::tests::installed::installed_opencode_saves_only_explicit_native_permission_rules ... ignored, requires AIT_TEST_OPENCODE_BIN; isolated config and loopback model only"
+    ]
+  },
+  "client_test_execution": {
+    "files": 5,
+    "passed": 10,
+    "failed": 0
+  },
+  "workspace_lines": {
+    "count": 60632,
+    "covered": 57071,
+    "percent": 94.1268637023354
+  },
+  "crate_lines": {
+    "bins/daemon": {
+      "count": 919,
+      "covered": 881,
+      "files": 7,
+      "percent": 95.86507072905331
+    },
+    "crates/api": {
+      "count": 2255,
+      "covered": 2126,
+      "files": 17,
+      "percent": 94.27937915742794
+    },
+    "crates/browser": {
+      "count": 733,
+      "covered": 715,
+      "files": 5,
+      "percent": 97.5443383356071
+    },
+    "crates/domain": {
+      "count": 121,
+      "covered": 121,
+      "files": 2,
+      "percent": 100.0
+    },
+    "crates/file": {
+      "count": 1924,
+      "covered": 1837,
+      "files": 18,
+      "percent": 95.47817047817048
+    },
+    "crates/filesystem": {
+      "count": 12189,
+      "covered": 11563,
+      "files": 66,
+      "percent": 94.86422183936337
+    },
+    "crates/metadata": {
+      "count": 5751,
+      "covered": 5411,
+      "files": 36,
+      "percent": 94.08798469831333
+    },
+    "crates/model": {
+      "count": 1735,
+      "covered": 1679,
+      "files": 29,
+      "percent": 96.77233429394812
+    },
+    "crates/protocol": {
+      "count": 63,
+      "covered": 63,
+      "files": 1,
+      "percent": 100.0
+    },
+    "crates/provider": {
+      "count": 30102,
+      "covered": 28046,
+      "files": 175,
+      "percent": 93.16988904391735
+    },
+    "crates/relay": {
+      "count": 503,
+      "covered": 462,
+      "files": 6,
+      "percent": 91.84890656063618
+    },
+    "crates/schedule": {
+      "count": 791,
+      "covered": 772,
+      "files": 6,
+      "percent": 97.59797724399495
+    },
+    "crates/terminal": {
+      "count": 1583,
+      "covered": 1527,
+      "files": 11,
+      "percent": 96.46241313960834
+    },
+    "crates/voice": {
+      "count": 1963,
+      "covered": 1868,
+      "files": 19,
+      "percent": 95.16046867040245
+    }
+  },
+  "cursor_lines": {
+    "count": 1189,
+    "covered": 1098,
+    "files": 5,
+    "percent": 92.34650967199327
+  },
+  "shared_acp_lines": {
+    "count": 562,
+    "covered": 533,
+    "files": 4,
+    "percent": 94.83985765124555
+  },
+  "changed_source_lines": {
+    "crates/provider/src/composition.rs": {
+      "count": 65,
+      "covered": 65,
+      "percent": 100.0
+    },
+    "crates/provider/src/local/acp.rs": {
+      "count": 9,
+      "covered": 9,
+      "percent": 100.0
+    },
+    "crates/provider/src/local/acp/permissions.rs": {
+      "count": 100,
+      "covered": 98,
+      "percent": 98.0
+    },
+    "crates/provider/src/local/acp/streaming.rs": {
+      "count": 265,
+      "covered": 254,
+      "percent": 95.8490566037736
+    },
+    "crates/provider/src/local/acp/transport.rs": {
+      "count": 188,
+      "covered": 172,
+      "percent": 91.48936170212765
+    },
+    "crates/provider/src/local/cursor.rs": {
+      "count": 144,
+      "covered": 135,
+      "percent": 93.75
+    },
+    "crates/provider/src/local/cursor/config.rs": {
+      "count": 404,
+      "covered": 372,
+      "percent": 92.07920792079209
+    },
+    "crates/provider/src/local/cursor/discovery.rs": {
+      "count": 22,
+      "covered": 22,
+      "percent": 100.0
+    },
+    "crates/provider/src/local/cursor/interactions.rs": {
+      "count": 200,
+      "covered": 194,
+      "percent": 97.0
+    },
+    "crates/provider/src/local/cursor/session.rs": {
+      "count": 419,
+      "covered": 375,
+      "percent": 89.49880668257757
+    },
+    "crates/provider/src/local/deepseek_harness.rs": {
+      "count": 206,
+      "covered": 184,
+      "percent": 89.32038834951457
+    },
+    "crates/provider/src/local/deepseek_harness/session.rs": {
+      "count": 261,
+      "covered": 244,
+      "percent": 93.48659003831418
+    },
+    "crates/provider/src/ports/agent_session.rs": {
+      "count": 235,
+      "covered": 229,
+      "percent": 97.44680851063829
+    },
+    "crates/provider/src/service/agent_manager.rs": {
+      "count": 899,
+      "covered": 876,
+      "percent": 97.4416017797553
+    },
+    "crates/provider/src/service/agent_manager/controls.rs": {
+      "count": 568,
+      "covered": 527,
+      "percent": 92.78169014084507
+    },
+    "crates/provider/src/service/provider_catalog.rs": {
+      "count": 281,
+      "covered": 278,
+      "percent": 98.93238434163702
+    }
+  },
+  "changed_source_sha256": {
+    "apps/mobile/src/utils/provider-command-templates.test.ts": "9c11b4301ea32a2885d9e8fd6005173bc7d22bd520233ef004981d20281ef66a",
+    "apps/mobile/src/utils/provider-command-templates.ts": "2961816746ffacbab8bd4dbc35f8fd5558be99ecc0d8857e74b6afa30bf4c1dd",
+    "bins/daemon/tests/process/cursor.rs": "7f1e7b5b0a67956c0929d8ff57c380fa757b6fe7d3d758b5f0af02b7bcd595ef",
+    "bins/daemon/tests/process/daemon.rs": "58b345b166d7c361ec3b238d910f3a980c819d5df52bd6a346347f9e2a3e01fe",
+    "bins/daemon/tests/process/unix.rs": "977522a12ad8ba6998261a95c357225735275df4acf9f843d385596a5edb8ff4",
+    "crates/provider/src/composition.rs": "e05771a89ca0826eb91daa8068d3e27c839c88f8e8d498d1c4f713b2d5ec16ed",
+    "crates/provider/src/composition/tests.rs": "15be5f165e928eda135566aee9a0b6873a028b3953ff2da98924741edfa62878",
+    "crates/provider/src/local.rs": "69871d2d382036c4f04f6973cc5233e13bb51b872dbf57b0fb7aa085b505f395",
+    "crates/provider/src/local/acp.rs": "0e05bc643aa8927d208568cd8737f74b83b7b8ae6aed21badcc7694f3febca1b",
+    "crates/provider/src/local/acp/permissions.rs": "3c914c9ee21224c1d632f1aa646ca7b2618809c99a1ccc327c9953347a22570d",
+    "crates/provider/src/local/acp/permissions/tests.rs": "7b0b59499296b391e604f1d755df9bbca1aa0601583790fac26162e06f09fad8",
+    "crates/provider/src/local/acp/streaming.rs": "3f09b07c472e3cc9445d8f0691a1d286228e2214ab49559d528c0bc5d9aa53a3",
+    "crates/provider/src/local/acp/streaming/tests.rs": "1e1b2732b83644160997f2debedfd35da00b78406a1f5548cd5f34149ece35dd",
+    "crates/provider/src/local/acp/tests.rs": "c1c9ad38b24ca259ef6a9778388b928354668435cc536bf7504c0a8fdadb589b",
+    "crates/provider/src/local/acp/transport.rs": "c20cca822e54199907a816d0a65dafc119a5671ba56029da9f0dbe5826cfc371",
+    "crates/provider/src/local/cursor.rs": "62cde93d9e298a634a986b3831141b936bc0706a9537851baf335d476b4a8d2b",
+    "crates/provider/src/local/cursor/config.rs": "eabf44ac8b8d266c120f41e8adb960572bfad73b21a30971ba59b18b19266a78",
+    "crates/provider/src/local/cursor/config/tests.rs": "00c483ba9e6b97a7850e04255a1828bc96c9e7d4c15de1abfc6250586473bcbf",
+    "crates/provider/src/local/cursor/discovery.rs": "5efa4e81b83a2e602f28ca48316820e581ac97c7f4da0ee465b5f7a7b8c97ad0",
+    "crates/provider/src/local/cursor/discovery/tests.rs": "809325ea6f360364f674d0f2ab369d1718e5016c55a928a7c235629fe4358fa7",
+    "crates/provider/src/local/cursor/interactions.rs": "f9a8718677b4f15611f03ded48d66402c99f87523d4c726663088ea2535e391e",
+    "crates/provider/src/local/cursor/interactions/tests.rs": "cec62aab72063cc68ca4776dc2aebdca191cc2c75d522d4261b13a8fd3265c4b",
+    "crates/provider/src/local/cursor/session.rs": "42c2c06952acc146f7c9055cc103d6375896880000a0053dc26de1fe5c6c0683",
+    "crates/provider/src/local/cursor/tests.rs": "fe6ef75fd9ba951f085830e5b376c9440c4a4a86cd423852c47d6004ca9ac0df",
+    "crates/provider/src/local/cursor/tests/fixtures/acp.py": "55b2bcafa8bb44e5875adaf85f53b430536d22ff599e264179cd3167ca63e890",
+    "crates/provider/src/local/deepseek_harness.rs": "8b4faa0931d997a579da501bf137485d09b2dd66039d0d1dd1ef6d6386de68b2",
+    "crates/provider/src/local/deepseek_harness/session.rs": "609fb0807b1b7ef09f973a6c2ac97c57a78ea06805b950ae3e1de55e5856832d",
+    "crates/provider/src/ports/agent_session.rs": "99a396d971821a17db5b961f2f77836688dbbe6234d4eb67f107565c294318b3",
+    "crates/provider/src/service/agent_manager.rs": "41ff4741d06105a54f75635e8f5747fcfeaad219e8d2d5df0b30562cd4d5992d",
+    "crates/provider/src/service/agent_manager/controls.rs": "213ebff5e56554d7e5dc7ff6e97c76edcd7b09fdbfac774d4b5afe0e3ee30355",
+    "crates/provider/src/service/provider_catalog.rs": "b9fb739d9c765c566cadcbe7664c557d47a3f26b3556202fa34f97c109b29579",
+    "packages/protocol/src/provider-config.ts": "a9b3e05f50bed5eb7139be9f107644923a861b6ee449eb78c57f20cdcce6b03f",
+    "packages/protocol/src/provider-manifest.cursor.test.ts": "135513f2bc2da65978b037cdea08989e22e570900e688c7a7a8cfc7979754dd6",
+    "packages/protocol/src/provider-manifest.ts": "b505beb1e7cc699814c1d185dd3cbcfa84b363546d0a662544370a24d1233a72"
+  },
+  "html_report": "/home/lonnet/Developers/ait/target/llvm-cov/html/index.html",
+  "reviewable_artifact": "This committed summary records the llvm-cov JSON export workspace, crate, and changed-source line counts with exact source hashes. The local HTML and raw export are not shared artifacts.",
+  "baseline_comparison": {
+    "status": "No comparable measurement of the PR base revision was made; no coverage delta is claimed."
+  },
+  "uncovered_behavior": "Live Cursor authentication, native model catalog and inference/image calls; advertised optional session/close branch; overflow/invalid-message guards and some uncommon mode/config/notification failures. Line coverage does not establish branch coverage.",
+  "follow_up": "Verify a supported authenticated Cursor CLI and its native catalog/session/image behaviors, plus macOS and Windows installation. Use deterministic protocol fixtures for optional close and remaining unusual failure branches.",
+  "unavailable_platforms": ["macOS", "Windows"],
+  "retry_context": "Initial workspace and coverage attempts failed in existing reset_workspace fixture tests because the user global git core.hooksPath=.githooks leaked into repositories created by tests. The reported successful runs use a temporary empty XDG_CONFIG_HOME without changing HOME or the user global config. A parallel retry also failed in an existing GitHub CLI fixture test, which passed alone; the final complete run uses --test-threads=1. No existing filesystem/GitHub implementation was changed.",
+  "protocol_typecheck_context": "The first direct tsgo invocation lacked ignored generated validators. The actual npm typecheck pipeline ran its pretypecheck generator and passed."
+}

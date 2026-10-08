@@ -4,18 +4,18 @@ use std::time::Duration;
 
 use serde_json::{Value, json};
 use tokio::io::{AsyncBufReadExt, AsyncReadExt, AsyncWriteExt, BufReader};
-use tokio::process::{Child, ChildStdin};
+use tokio::process::{Child, ChildStdin, Command};
 use tokio::sync::mpsc;
 use tokio::task::JoinHandle;
 
-use super::DeepSeekHarnessClient;
 use crate::ports::agent_session::AgentSessionError;
 
 const MAX_FRAME: usize = 2 * 1024 * 1024;
 const MAX_EVENTS: usize = 128;
 
+/// Owned ACP child process with bounded frames, buffering and RPC deadlines.
 #[derive(Debug)]
-pub(super) struct Transport {
+pub(in crate::local) struct Transport {
     child: Child,
     input: ChildStdin,
     messages: mpsc::Receiver<Value>,
@@ -27,14 +27,12 @@ pub(super) struct Transport {
 }
 
 impl Transport {
-    pub(super) fn spawn(
-        client: &DeepSeekHarnessClient,
-        cwd: &str,
+    /// Spawn `command` with bounded ACP pipes and control `deadline`; fail if the child cannot start.
+    pub(in crate::local) fn spawn(
+        mut command: Command,
+        deadline: Duration,
     ) -> Result<Self, AgentSessionError> {
-        let mut command = client.command();
         command
-            .args(["--profile", "acp"])
-            .current_dir(cwd)
             .stdin(Stdio::piped())
             .stdout(Stdio::piped())
             .stderr(Stdio::null())
@@ -45,7 +43,7 @@ impl Transport {
             tracing::warn!(
                 error_kind = ?error.kind(),
                 os_error = error.raw_os_error(),
-                "failed to spawn DeepSeek Harness ACP process"
+                "failed to spawn ACP process"
             );
             AgentSessionError::Unavailable
         })?;
@@ -81,12 +79,16 @@ impl Transport {
             reader,
             events: VecDeque::new(),
             sequence: 0,
-            deadline: client.deadline,
+            deadline,
             closed: false,
         })
     }
 
-    pub(super) async fn send(&mut self, message: &Value) -> Result<(), AgentSessionError> {
+    /// Write `message` exactly once; reject oversized payloads and close on failed or timed-out writes.
+    pub(in crate::local) async fn send(
+        &mut self,
+        message: &Value,
+    ) -> Result<(), AgentSessionError> {
         if self.closed {
             return Err(AgentSessionError::Failed);
         }
@@ -107,7 +109,8 @@ impl Transport {
         Err(AgentSessionError::Failed)
     }
 
-    pub(super) async fn begin(
+    /// Send an RPC `method` with `params` and return its unique ID; propagate write failures.
+    pub(in crate::local) async fn begin(
         &mut self,
         method: &str,
         params: Value,
@@ -119,7 +122,8 @@ impl Transport {
         Ok(id)
     }
 
-    pub(super) async fn request(
+    /// Request `method` with `params` under the control deadline; return its result or fail and close.
+    pub(in crate::local) async fn request(
         &mut self,
         method: &str,
         params: Value,
@@ -160,7 +164,8 @@ impl Transport {
         }
     }
 
-    pub(super) fn poll(&mut self) -> Result<Option<Value>, AgentSessionError> {
+    /// Read the next buffered frame without blocking; fail if the transport disconnects.
+    pub(in crate::local) fn poll(&mut self) -> Result<Option<Value>, AgentSessionError> {
         if let Some(message) = self.events.pop_front() {
             return Ok(Some(message));
         }
@@ -171,7 +176,31 @@ impl Transport {
         }
     }
 
-    pub(super) async fn close(&mut self) -> Result<(), AgentSessionError> {
+    /// Consume buffered notifications accepted by `consume` in wire order, retaining other frames.
+    /// Returns the callback error without submitting or repeating any native operation.
+    pub(in crate::local) fn consume_notifications(
+        &mut self,
+        mut consume: impl FnMut(&Value) -> Result<bool, AgentSessionError>,
+    ) -> Result<(), AgentSessionError> {
+        for _ in 0..self.events.len() {
+            let message = self.events.pop_front().ok_or(AgentSessionError::Failed)?;
+            if !consume(&message)? {
+                self.events.push_back(message);
+            }
+        }
+        Ok(())
+    }
+
+    /// Wait for the next buffered frame; callers own the deadline. Fail on disconnected transport.
+    pub(in crate::local) async fn receive(&mut self) -> Result<Value, AgentSessionError> {
+        if let Some(message) = self.events.pop_front() {
+            return Ok(message);
+        }
+        self.messages.recv().await.ok_or(AgentSessionError::Failed)
+    }
+
+    /// Idempotently stop the reader and native process group; fail if child reaping fails.
+    pub(in crate::local) async fn close(&mut self) -> Result<(), AgentSessionError> {
         if self.closed {
             return Ok(());
         }
@@ -207,7 +236,8 @@ fn kill_group(child: &Child) {
     let _ = child;
 }
 
-pub(super) fn response(message: &Value) -> Result<Value, AgentSessionError> {
+/// Extract the RPC result from `message`; reject native errors and fail on invalid envelopes.
+pub(in crate::local) fn response(message: &Value) -> Result<Value, AgentSessionError> {
     if message.get("result").is_some() && message.get("error").is_none() {
         return Ok(message["result"].clone());
     }

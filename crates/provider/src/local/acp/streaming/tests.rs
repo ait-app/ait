@@ -107,3 +107,70 @@ fn rejects_invalid_usage_and_oversized_text() {
     assert!(stream.update(&json!({"sessionUpdate":"agent_message_chunk","content":{"type":"image","data":"not text"}})).is_err());
     assert!(stream.update(&json!({"sessionUpdate":"agent_message_chunk","content":{"type":"text","text":"x".repeat(MAX_TEXT + 1)}})).is_err());
 }
+
+#[test]
+fn prompt_usage_replaces_counters_and_retains_native_context() {
+    let mut stream = Stream::default();
+    stream.begin("turn".into());
+    stream
+        .update(&json!({"sessionUpdate":"usage_update","used":123,"size":1000}))
+        .unwrap();
+    for _ in 0..2 {
+        stream
+            .prompt_usage(
+                &json!({"usage":{"inputTokens":42,"outputTokens":7,"cachedReadTokens":12}}),
+            )
+            .unwrap();
+    }
+    assert_eq!(stream.usage.input_tokens, Some(42));
+    assert_eq!(stream.usage.cached_input_tokens, Some(12));
+    assert_eq!(stream.usage.output_tokens, Some(7));
+    assert_eq!(stream.usage.context_window_used_tokens, Some(123));
+    for usage in [
+        json!([]),
+        json!({"inputTokens":-1}),
+        json!({"outputTokens":9_007_199_254_740_992_u64}),
+    ] {
+        assert!(stream.prompt_usage(&json!({"usage":usage})).is_err());
+    }
+    stream.prompt_usage(&json!({"usage":null})).unwrap();
+}
+
+#[test]
+fn interrupted_turn_finalizes_tool_snapshot_without_discarding_input() {
+    let mut stream = Stream::default();
+    stream.begin("turn".into());
+    stream.update(&json!({"sessionUpdate":"tool_call","toolCallId":"tool","title":"shell","status":"in_progress","rawInput":{"command":"sleep"}})).unwrap();
+    assert!(stream.has_unfinished_tools());
+    stream.finish("Turn cancelled").unwrap();
+    assert!(!stream.has_unfinished_tools());
+    let AgentTurnEvent::Timeline(entry) = stream.events.pop_back().unwrap() else {
+        panic!("missing tool")
+    };
+    assert_eq!(entry.item["detail"]["input"]["command"], "sleep");
+    assert_eq!(entry.item["status"], "failed");
+    assert_eq!(entry.item["error"]["message"], "Turn cancelled");
+}
+
+#[test]
+fn plan_updates_project_tasks_and_reject_invalid_statuses() {
+    let mut stream = Stream::default();
+    stream.begin("turn".into());
+    stream.update(&json!({"sessionUpdate":"plan","entries":[{"content":"Implement","status":"in_progress"},{"content":"Verify","status":"completed"}]})).unwrap();
+    let AgentTurnEvent::Timeline(entry) = stream.events.pop_back().unwrap() else {
+        panic!("missing plan")
+    };
+    assert_eq!(
+        entry.item["items"],
+        json!([{"text":"Implement","completed":false},{"text":"Verify","completed":true}])
+    );
+    for plan in [
+        json!({"entries":null}),
+        json!({"entries":[{"content":"Task","status":"invalid"}]}),
+        json!({"entries":[{"content":"x".repeat(MAX_TEXT + 1),"status":"pending"}]}),
+    ] {
+        let mut plan = plan;
+        plan["sessionUpdate"] = json!("plan");
+        assert!(stream.update(&plan).is_err());
+    }
+}

@@ -4,16 +4,15 @@ mod config;
 mod launcher;
 mod metadata;
 mod native;
-mod permissions;
 mod session;
-mod streaming;
-mod transport;
 
 use std::path::PathBuf;
 use std::time::Duration;
 
 use domain::agent_runtime::{AgentPersistenceHandle, StoredAgentConfig};
 use serde_json::{Value, json};
+
+use super::acp::{permissions, streaming, transport};
 
 use crate::ports::agent_session::{
     AgentClient, AgentResumePurpose, AgentSession, AgentSessionError, AgentSessionFuture,

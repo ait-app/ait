@@ -1,17 +1,22 @@
 use serde_json::{Value, json};
 use uuid::Uuid;
 
-use super::{PROVIDER, config::text};
+use super::text;
 use crate::ports::agent_session::AgentSessionError;
 
+/// One standard ACP tool permission request with exact native option identities.
 #[derive(Debug)]
-pub(super) struct Pending {
-    pub(super) rpc_id: Value,
-    pub(super) request: Value,
+pub(in crate::local) struct Pending {
+    pub(in crate::local) rpc_id: Value,
+    pub(in crate::local) request: Value,
     options: Vec<Value>,
 }
 
-pub(super) fn capture(message: &Value) -> Result<Pending, AgentSessionError> {
+/// Project `message` as a tool approval for `provider`; fail on invalid or oversized options.
+pub(in crate::local) fn capture(
+    provider: &str,
+    message: &Value,
+) -> Result<Pending, AgentSessionError> {
     let params = &message["params"];
     let rpc_id = message
         .get("id")
@@ -46,14 +51,18 @@ pub(super) fn capture(message: &Value) -> Result<Pending, AgentSessionError> {
     Ok(Pending {
         rpc_id,
         options: options.clone(),
-        request: json!({"id":Uuid::new_v4().to_string(),"provider":PROVIDER,"name":title,
+        request: json!({"id":Uuid::new_v4().to_string(),"provider":provider,"name":title,
             "kind":"tool","title":title,"input":params["toolCall"]["rawInput"],"actions":actions,
             "detail":{"type":"unknown","input":params["toolCall"]["rawInput"],"output":null},
             "metadata":{"toolCallId":params["toolCall"]["toolCallId"]}}),
     })
 }
 
-pub(super) fn resolve(pending: &Pending, response: &Value) -> Result<Value, AgentSessionError> {
+/// Encode an explicit `response` to `pending`; reject absent or mismatched native choices.
+pub(in crate::local) fn resolve(
+    pending: &Pending,
+    response: &Value,
+) -> Result<Value, AgentSessionError> {
     let fields = response.as_object().ok_or(AgentSessionError::Rejected)?;
     if fields.keys().any(|key| {
         !matches!(

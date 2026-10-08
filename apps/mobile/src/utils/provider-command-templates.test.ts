@@ -8,6 +8,11 @@ describe("buildProviderCommand", () => {
       buildProviderCommand({ provider: "antigravity", id: "resume", sessionId: "native-id" }),
     ).toBe("agy --conversation native-id");
   });
+  test("builds Cursor resume commands from native session ids", () => {
+    expect(buildProviderCommand({ provider: "cursor", id: "resume", sessionId: "native-id" })).toBe(
+      "cursor-agent --resume native-id",
+    );
+  });
   test("builds Hermes resume commands from native session ids", () => {
     expect(
       buildProviderCommand({

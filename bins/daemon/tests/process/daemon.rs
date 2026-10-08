@@ -38,7 +38,7 @@ async fn missing_provider_is_reported_and_editors_return_migration_responses() {
     .await;
     let status = request(&mut socket, "daemon.get_status.request", json!({})).await;
     let providers = status["result"]["providers"].as_array().unwrap();
-    assert_eq!(providers.len(), 5);
+    assert_eq!(providers.len(), 6);
     assert!(
         providers
             .iter()
@@ -46,7 +46,7 @@ async fn missing_provider_is_reported_and_editors_return_migration_responses() {
     );
     let diagnostic = request(&mut socket, "diagnostics.request", json!({})).await;
     let report = diagnostic["result"]["diagnostic"].as_str().unwrap();
-    assert!(report.contains("Total: 5"));
+    assert!(report.contains("Total: 6"));
     assert!(report.contains("Available: 0"));
     assert!(report.contains("codex: unavailable"));
     let editors = request(&mut socket, "editor.available.list.request", json!({})).await;
@@ -136,6 +136,8 @@ async fn daemon_status_config_diagnostics_and_update_match_canonical_contract() 
             { "provider":"claude", "available":false,
                 "error":"Provider executable is unavailable" },
             { "provider":"codex", "available":true, "error":null },
+            { "provider":"cursor", "available":false,
+                "error":"Provider executable is unavailable" },
             { "provider":"deepseek-harness", "available":false,
                 "error":"Provider executable is unavailable" },
             { "provider":"opencode", "available":false,
@@ -185,7 +187,7 @@ async fn daemon_status_config_diagnostics_and_update_match_canonical_contract() 
     assert!(diagnostic.contains("Paseo diagnostics"));
     assert!(diagnostic.contains("daemon.get_status.request"));
     assert!(!diagnostic.contains(TOKEN));
-    assert!(diagnostic.contains("Total: 5"));
+    assert!(diagnostic.contains("Total: 6"));
     assert!(diagnostic.contains("codex: available"));
 
     let update = request(&mut socket, "daemon.update.request", json!({})).await;

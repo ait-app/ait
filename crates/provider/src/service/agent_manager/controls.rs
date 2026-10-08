@@ -69,6 +69,14 @@ impl AgentManager {
             let settings = client.settings(&record.config.clone().unwrap_or_default());
             snapshot["availableModes"] = settings["availableModes"].clone();
             snapshot["features"] = settings["features"].clone();
+            if let Some(controls) = self.live.get(&record.id).and_then(|agent| {
+                agent
+                    .session
+                    .control_settings(&record.config.clone().unwrap_or_default())
+            }) {
+                snapshot["availableModes"] = controls["availableModes"].clone();
+                snapshot["features"] = controls["features"].clone();
+            }
             if let (Some(target), Some(flags)) = (
                 snapshot["capabilities"].as_object_mut(),
                 settings["capabilities"].as_object(),

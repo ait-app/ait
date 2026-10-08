@@ -9,6 +9,7 @@ use crate::summary::{SummaryConfiguration, SummaryGenerator};
 use crate::local::antigravity::AntigravityClient;
 use crate::local::claude::ClaudeClient;
 use crate::local::codex::CodexClient;
+use crate::local::cursor::CursorClient;
 use crate::local::deepseek_harness::DeepSeekHarnessClient;
 use crate::local::opencode::OpenCodeClient;
 use crate::ports::agent_session::AgentClient;
@@ -71,6 +72,11 @@ impl Providers {
             .map_or_else(AntigravityClient::installed, |program| {
                 AntigravityClient::new(program.into())
             });
+        let cursor = environment("AIT_SERVER_CURSOR_BIN")
+            .map_or_else(CursorClient::installed, |program| {
+                CursorClient::new(program.into())
+            })
+            .with_image_directory(images.clone());
         let opencode = OpenCodeClient::new(program("AIT_SERVER_OPENCODE_BIN", "opencode"));
         let mut dsh = environment("AIT_SERVER_DEEPSEEK_HARNESS_BIN")
             .map_or_else(DeepSeekHarnessClient::installed, |program| {
@@ -87,6 +93,7 @@ impl Providers {
         providers.add(codex);
         providers.add(claude);
         providers.add(antigravity);
+        providers.add(cursor);
         providers.add(opencode);
         providers.add(dsh);
         providers
