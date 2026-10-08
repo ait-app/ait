@@ -14,6 +14,20 @@ APK 的签名方式、安装要求与手动测试入口见 [Android APK 发布](
 [Apple TestFlight iOS 手动发布](#apple-testflight-ios-手动发布)一节，
 同样与桌面 GitHub Release 相互独立。见 [ADR-070](../decisions/clients/adr-070-ios-testflight-release.md)。
 
+## dev Nightly
+
+每次推送 `dev` 都会通过 [Nightly Build](../../.github/workflows/nightly.yml) 构建 Linux x86_64
+和 Apple Silicon 安装包，成功后更新固定的 [nightly 预发布](https://github.com/ait-app/ait/releases/tag/nightly)。
+无需创建版本标签；也可在 Actions 中选择 `dev` 手动运行该工作流。
+
+新提交会取消同平台尚未完成的旧构建。重跑旧提交时会先检查 `dev` 分支头，避免替换当前构建；
+发布前再检查一次，过期构建不会更新 nightly。发布步骤串行执行，避免上传过程中被新构建打断。
+每次运行只清理自身的临时产物，不删除其他构建正在使用的文件。
+
+nightly 对应最近成功发布的 `dev` 提交；新提交构建期间或构建失败时仍保留上一版。
+Release 内的 `BUILD-INFO.json` 记录源码提交和构建链接，可用于确认安装包是否包含指定修复。
+macOS nightly 使用 ad-hoc 签名，未公证。
+
 ## 发布产物
 
 | 平台                | 架构                    | 文件                                                     |

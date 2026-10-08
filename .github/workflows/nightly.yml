@@ -8,14 +8,28 @@ on:
 permissions:
   contents: read
 
-# Do not interrupt a release while its assets are being replaced.
-concurrency:
-  group: nightly-dev
-  cancel-in-progress: false
-
 jobs:
-  build:
+  prepare:
     if: github.ref == 'refs/heads/dev'
+    runs-on: ubuntu-24.04
+    outputs:
+      current: ${{ steps.head.outputs.current }}
+    steps:
+      - name: Ignore reruns of superseded commits
+        id: head
+        uses: actions/github-script@v8
+        with:
+          script: |
+            const { data: branch } = await github.rest.repos.getBranch({ ...context.repo, branch: 'dev' });
+            core.setOutput('current', String(branch.commit.sha === context.sha));
+
+  build:
+    needs: prepare
+    if: needs.prepare.outputs.current == 'true'
+    # New commits replace obsolete builds without interrupting a release upload.
+    concurrency:
+      group: nightly-dev-build-${{ matrix.platform }}
+      cancel-in-progress: true
     name: Build ${{ matrix.label }}
     runs-on: ${{ matrix.runner }}
     timeout-minutes: 90
@@ -101,6 +115,10 @@ jobs:
   publish:
     needs: build
     runs-on: ubuntu-24.04
+    # Serialize the tag/release replacement; never cancel a partial upload.
+    concurrency:
+      group: nightly-dev-publish
+      cancel-in-progress: false
     permissions:
       contents: write
     steps:
@@ -162,7 +180,7 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          gh release create nightly release-assets/* --verify-tag \
+          gh release create nightly release-assets/* --verify-tag --target "$GITHUB_SHA" \
             --title 'Ait Nightly' --prerelease --latest=false \
             --notes "Development build from $GITHUB_SHA. Replaced on the next successful dev build. macOS is ad-hoc signed and not notarized." \
             --repo "$GITHUB_REPOSITORY"
@@ -179,13 +197,11 @@ jobs:
       - uses: actions/github-script@v8
         with:
           script: |
-            const artifacts = await github.paginate(github.rest.actions.listArtifactsForRepo, {
-              ...context.repo, per_page: 100,
+            const artifacts = await github.paginate(github.rest.actions.listWorkflowRunArtifacts, {
+              ...context.repo, run_id: context.runId, per_page: 100,
             });
             for (const artifact of artifacts) {
-              if (['nightly-linux', 'nightly-mac'].includes(artifact.name)
-                  && artifact.workflow_run?.head_branch === 'dev'
-                  && artifact.workflow_run.id <= context.runId) {
+              if (['nightly-linux', 'nightly-mac'].includes(artifact.name)) {
                 await github.rest.actions.deleteArtifact({ ...context.repo, artifact_id: artifact.id });
               }
             }
