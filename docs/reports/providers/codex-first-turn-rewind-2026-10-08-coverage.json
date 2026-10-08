@@ -1,0 +1,135 @@
+{
+  "revision": "7b356d67f5b2cce6a323660349c871d2cc82fe0f plus the Codex rewind patch in this commit",
+  "source_patch_sha256": "4466df0d2395f3ffb5cbf5f81751c81e03415deb2b76dc4355aacb91316456ad",
+  "platform": "macOS aarch64, Rust 1.98.1",
+  "scope": "All workspace packages; default features and cargo-llvm-cov filters; no additional exclusions. No Linux/Windows or TypeScript coverage.",
+  "commands": [
+    "nix develop --command cargo llvm-cov --workspace --html -- --test-threads=1",
+    "nix develop --command cargo test --workspace --doc",
+    "nix develop --command cargo llvm-cov report --json --summary-only --output-path /tmp/ait-rewind-coverage.json"
+  ],
+  "instrumented_tests": {
+    "passed": 1998,
+    "failed": 0,
+    "ignored": 15
+  },
+  "doctests": {
+    "passed": 1,
+    "failed": 0,
+    "ignored": 0
+  },
+  "workspace_lines": {
+    "count": 59325,
+    "covered": 55847,
+    "percent": 94.13737884534346
+  },
+  "crates": {
+    "daemon": {
+      "covered": 881,
+      "count": 919,
+      "percent": 95.86507072905331
+    },
+    "api": {
+      "covered": 2126,
+      "count": 2255,
+      "percent": 94.27937915742794
+    },
+    "browser": {
+      "covered": 715,
+      "count": 733,
+      "percent": 97.5443383356071
+    },
+    "domain": {
+      "covered": 121,
+      "count": 121,
+      "percent": 100.0
+    },
+    "file": {
+      "covered": 1837,
+      "count": 1924,
+      "percent": 95.47817047817048
+    },
+    "filesystem": {
+      "covered": 11564,
+      "count": 12189,
+      "percent": 94.87242595783083
+    },
+    "metadata": {
+      "covered": 5411,
+      "count": 5751,
+      "percent": 94.08798469831333
+    },
+    "model": {
+      "covered": 1679,
+      "count": 1735,
+      "percent": 96.77233429394812
+    },
+    "protocol": {
+      "covered": 63,
+      "count": 63,
+      "percent": 100.0
+    },
+    "provider": {
+      "covered": 26821,
+      "count": 28795,
+      "percent": 93.14464316721653
+    },
+    "relay": {
+      "covered": 462,
+      "count": 503,
+      "percent": 91.84890656063618
+    },
+    "schedule": {
+      "covered": 772,
+      "count": 791,
+      "percent": 97.59797724399495
+    },
+    "terminal": {
+      "covered": 1527,
+      "count": 1583,
+      "percent": 96.46241313960834
+    },
+    "voice": {
+      "covered": 1868,
+      "count": 1963,
+      "percent": 95.16046867040245
+    }
+  },
+  "changed_production_files": [
+    {
+      "path": "crates/provider/src/local/codex/rewind.rs",
+      "lines": {
+        "count": 113,
+        "covered": 108,
+        "percent": 95.57522123893804
+      }
+    }
+  ],
+  "baseline": {
+    "revision": "7b356d67",
+    "artifact": "../clients/desktop-listen-import-2026-10-08-coverage.json",
+    "workspace_lines": {
+      "count": 59314,
+      "covered": 55838,
+      "percent": 94.13966348585494
+    },
+    "delta_percentage_points": -0.0022846405114762547
+  },
+  "ignored_tests": [
+    "test local::antigravity::tests::installed::authenticated_multi_turn_and_resume ... ignored, requires authenticated AGY and explicitly consumes three model turns",
+    "test local::claude::tests::process::installed_claude_control_protocol_discovers_models_without_inference ... ignored, requires a locally installed Claude Code CLI; sends no model request",
+    "test local::claude::tests::process::parity::installed_claude_completes_a_native_turn_and_reopens_history ... ignored, requires installed Claude authentication and makes one small model request",
+    "test local::codex::tests::installed::installed_codex_completes_a_native_turn_and_reopens_history ... ignored, requires installed Codex authentication and makes one small model request",
+    "test local::deepseek_harness::launcher::tests::installed_launcher_runs_native_cli_without_a_wrapper ... ignored, requires an installed DSH CLI or desktop bundle; does not open a session",
+    "test local::deepseek_harness::metadata::tests::installed_dsh_metadata_has_no_tools_or_persisted_session ... ignored, requires AIT_TEST_DSH_BIN; loopback model and temporary native profile only",
+    "test local::deepseek_harness::native::tests::installed_history::installed_existing_session_import_and_resume_preserve_history ... ignored, requires AIT_TEST_DSH_BIN and an idle, released AIT_TEST_DSH_SESSION_ID; no prompt",
+    "test local::deepseek_harness::native::tests::installed_history::installed_existing_session_is_importable_without_writes ... ignored, requires AIT_TEST_DSH_BIN and AIT_TEST_DSH_SESSION_ID; read-only existing history",
+    "test local::deepseek_harness::native::tests::installed_host_discovers_switches_permissions_and_adopts_legacy_sessions ... ignored, requires an installed DSH CLI via AIT_TEST_DSH_BIN; no model request",
+    "test local::opencode::client::native_sessions::tests::installed_existing_sessions_are_discovered_and_inspected_without_submission ... ignored, reads existing native sessions; requires AIT_TEST_OPENCODE_BIN and AIT_TEST_OPENCODE_CWD",
+    "test local::opencode::tests::installed::installed_opencode_declined_tool_settles_and_accepts_next_turn ... ignored, requires AIT_TEST_OPENCODE_BIN; isolated config and loopback model only",
+    "test local::opencode::tests::installed::installed_opencode_discovers_runs_and_restores_with_local_model ... ignored, requires AIT_TEST_OPENCODE_BIN; isolated config and loopback model only",
+    "test local::opencode::tests::installed::installed_opencode_metadata_disables_tools_and_removes_private_history ... ignored, requires AIT_TEST_OPENCODE_BIN; private loopback model, no credentials",
+    "test local::opencode::tests::installed::installed_opencode_plan_import_and_switch_use_native_agent ... ignored, requires AIT_TEST_OPENCODE_BIN; isolated config and loopback model only",
+    "test local::opencode::tests::installed::installed_opencode_saves_only_explicit_native_permission_rules ... ignored, requires AIT_TEST_OPENCODE_BIN; isolated config and loopback model only"
+  ]
+}
