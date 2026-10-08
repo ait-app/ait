@@ -217,6 +217,12 @@ fn reads_text_images_json_binary_and_split_utf8_samples() {
             FileKind::Image,
             "image/png",
         ),
+        (
+            "report.PDF",
+            b"%PDF-1.4 ASCII document".as_slice(),
+            FileKind::Binary,
+            "application/pdf",
+        ),
         ("nul", &[0, 1], FileKind::Binary, "application/octet-stream"),
         (
             "invalid",
