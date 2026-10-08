@@ -6,7 +6,6 @@ publish.workspace = true
 
 [dependencies]
 domain.workspace = true
-file.workspace = true
 model.workspace = true
 
 tokio.workspace = true
@@ -25,3 +24,5 @@ uuid.workspace = true
 workspace = true
 
 [dev-dependencies]
+# Real file adapters for service composition tests.
+persistence.workspace = true

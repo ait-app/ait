@@ -1,7 +1,7 @@
 use std::path::{Path, PathBuf};
 use std::process::Command;
 
-use filesystem::rpc::worktrees::METHODS;
+use filesystem::worktrees::rpc::worktrees::METHODS;
 use serde_json::json;
 
 use super::transport::{Socket, connect, method_names, receive, request};

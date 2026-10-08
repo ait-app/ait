@@ -8,9 +8,9 @@ mod reasoning;
 mod resume;
 mod waits;
 use domain::agent_runtime::registry::AgentRuntimeRegistry;
-use file::storage::agent_runtime::FileBackedAgentRuntimeRegistry;
-use file::storage::registry::{FileBackedProjectRegistry, FileBackedWorkspaceRegistry};
 use model::workspace::registry::{ProjectRegistry, WorkspaceRegistry};
+use persistence::storage::agent_runtime::FileBackedAgentRuntimeRegistry;
+use persistence::storage::registry::{FileBackedProjectRegistry, FileBackedWorkspaceRegistry};
 
 use crate::test_support::Fixture;
 

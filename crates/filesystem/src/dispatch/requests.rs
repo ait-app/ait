@@ -30,7 +30,7 @@ pub(super) async fn skills(
         .rpc(
             state.skills.clone(),
             ErrorCode::RegistryIo,
-            crate::service::skills::Skills::execute,
+            crate::skills::service::skills::Skills::execute,
         )
         .await
         .map_err(Into::into)
@@ -71,7 +71,7 @@ pub(super) async fn forge(
         .rpc(
             state.forge.clone(),
             ErrorCode::ProjectIo,
-            |service, method, params| crate::rpc::forge::execute(service, method, params),
+            |service, method, params| crate::forge::rpc::forge::execute(service, method, params),
         )
         .await
         .map_err(Into::into)
@@ -98,7 +98,9 @@ pub(super) async fn github_projects(
         .rpc(
             state.github_projects.clone(),
             ErrorCode::RegistryIo,
-            |service, method, params| crate::rpc::github_projects::execute(service, method, params),
+            |service, method, params| {
+                crate::forge::rpc::github_projects::execute(service, method, params)
+            },
         )
         .await
         .map_err(Into::into)
@@ -135,7 +137,7 @@ pub(super) async fn files(
     connection
         .files
         .request(
-            crate::connection::files::FileRequest {
+            crate::files::connection::files::FileRequest {
                 id: context.request.id,
                 method: context.request.method,
                 params: context.request.params,
@@ -170,7 +172,7 @@ pub(super) async fn recovery(
             state.workspace_recovery.clone(),
             ErrorCode::RegistryIo,
             |service, method, params| {
-                crate::rpc::workspace_recovery::execute(service, method, params)
+                crate::worktrees::rpc::workspace_recovery::execute(service, method, params)
             },
         )
         .await;

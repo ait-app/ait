@@ -4,7 +4,7 @@ use super::*;
 use crate::service::summary_generation::test_config::Configuration;
 #[cfg(unix)]
 use domain::summary::{SummaryKind, SummaryRequest, SummarySelection};
-use file::storage::agent_runtime::FileBackedAgentRuntimeRegistry;
+use persistence::storage::agent_runtime::FileBackedAgentRuntimeRegistry;
 #[cfg(unix)]
 use serde_json::json;
 

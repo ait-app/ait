@@ -8,27 +8,20 @@ mod schedule;
 mod summary;
 mod voice;
 
-use api::{Api, LifecycleIntent, LocalAddress, Services};
+use api::{Api, LocalAddress, Services};
 use browser::broker::Broker;
 use chrono::{SecondsFormat, Utc};
 use domain::agent_runtime::registry::AgentRuntimeRegistry;
-use file::config::Config;
-use file::storage::agent_runtime::FileBackedAgentRuntimeRegistry;
-use file::storage::daemon_config::FileDaemonConfigStore;
-use file::storage::project_config::LocalProjectConfigStore;
-use file::storage::project_icon::LocalProjectIconStore;
-use file::storage::registry::{FileBackedProjectRegistry, FileBackedWorkspaceRegistry};
-use file::storage::workspace_labels::FileWorkspaceLabelStore;
-use filesystem::local::{
-    checkout::LocalCheckout, forge::LocalForge, github_projects::LocalGithubProjects,
-    provisioning::LocalDirectorySource, workspace_runtime::LocalWorkspaceRuntime,
-    worktrees::LocalManagedWorktrees,
-};
-use filesystem::service::checkout::Checkout;
-use filesystem::service::files::Files;
-use filesystem::service::forge::Forge;
-use filesystem::service::worktrees::{WorkspaceWorktrees, Worktrees};
-use filesystem::service::{github_projects::GithubProjects, workspace_recovery::WorkspaceRecovery};
+use filesystem::files::service::files::Files;
+use filesystem::forge::local::{forge::LocalForge, github_projects::LocalGithubProjects};
+use filesystem::forge::service::forge::Forge;
+use filesystem::forge::service::github_projects::GithubProjects;
+use filesystem::git::local::{checkout::LocalCheckout, provisioning::LocalDirectorySource};
+use filesystem::git::service::checkout::Checkout;
+use filesystem::workspace_runtime::LocalWorkspaceRuntime;
+use filesystem::worktrees::local::worktrees::LocalManagedWorktrees;
+use filesystem::worktrees::service::workspace_recovery::WorkspaceRecovery;
+use filesystem::worktrees::service::worktrees::{WorkspaceWorktrees, Worktrees};
 use metadata::local::workspace_automation::LocalWorkspaceAutomation;
 use metadata::service::daemon::{Daemon, DaemonRuntime};
 use metadata::service::directory::{Directory, DirectoryDependencies};
@@ -36,7 +29,14 @@ use metadata::service::workspace_automation::WorkspaceAutomation;
 use metadata::service::workspace_labels::WorkspaceLabels;
 use metadata::service::workspace_names::WorkspaceNames;
 use metadata::service::workspace_state::WorkspaceState;
+use model::LifecycleIntent;
 use model::workspace::registry::{ProjectRegistry, WorkspaceRegistry};
+use persistence::storage::agent_runtime::FileBackedAgentRuntimeRegistry;
+use persistence::storage::daemon_config::FileDaemonConfigStore;
+use persistence::storage::project_config::LocalProjectConfigStore;
+use persistence::storage::project_icon::LocalProjectIconStore;
+use persistence::storage::registry::{FileBackedProjectRegistry, FileBackedWorkspaceRegistry};
+use persistence::storage::workspace_labels::FileWorkspaceLabelStore;
 use provider::Providers;
 use provider::service::agent_execution::{AgentExecution, ExecutionDependencies};
 use provider::service::agent_manager::AgentManager;
@@ -47,6 +47,7 @@ use provider::storage::SqliteCatalog;
 use provider::summary::SummaryGenerator;
 use tokio::net::TcpListener;
 
+use crate::config::Config;
 use crate::instance::InstanceLease;
 
 pub(super) struct Server {
@@ -330,12 +331,12 @@ fn compose_terminals(
 fn compose_git(
     data_dir: &std::path::Path,
     workspace_registry: &FileBackedWorkspaceRegistry,
-) -> (Checkout, filesystem::service::git_fetch::GitFetch) {
+) -> (Checkout, filesystem::git::service::git_fetch::GitFetch) {
     let root = data_dir.join("worktrees");
     let checkout = Checkout::new(Box::new(LocalCheckout::new(root.clone())))
         .with_workspace_registry(Arc::new(workspace_registry.clone()));
-    let fetch = filesystem::service::git_fetch::GitFetch::new(Arc::new(
-        filesystem::local::git_fetch::LocalGitFetch::new(root),
+    let fetch = filesystem::git::service::git_fetch::GitFetch::new(Arc::new(
+        filesystem::git::local::git_fetch::LocalGitFetch::new(root),
     ));
     (checkout, fetch)
 }
@@ -354,7 +355,9 @@ fn compose_workspace_services(
 ) -> WorkspaceServices {
     let workspace_automation = WorkspaceAutomation::new(
         Box::new(workspace_registry.clone()),
-        Box::new(LocalWorkspaceAutomation::default()),
+        Box::new(LocalWorkspaceAutomation::new(Arc::new(
+            LocalProjectConfigStore,
+        ))),
     );
     let workspace_state = WorkspaceState::new(
         Box::new(AgentWorkspaceAttention::new(Box::new(
@@ -367,6 +370,7 @@ fn compose_workspace_services(
         Box::new(project_registry.clone()),
         Box::new(LocalManagedWorktrees::new(
             config.data_dir.join("worktrees"),
+            Arc::new(LocalForge::new()),
         )),
     );
     WorkspaceServices {
@@ -410,8 +414,9 @@ fn compose_directory(
     server_id: String,
     changes: model::changes::Changes,
 ) -> anyhow::Result<Directory> {
-    let creations = file::creation::open(config.data_dir.join("creations/receipts.json"))
-        .map_err(|_| anyhow::anyhow!("initialize creation receipts"))?;
+    let creations =
+        persistence::storage::creation::open(config.data_dir.join("creations/receipts.json"))
+            .map_err(|_| anyhow::anyhow!("initialize creation receipts"))?;
     Ok(Directory::new(DirectoryDependencies {
         projects: Box::new(project_registry.clone()),
         workspaces: Box::new(workspace_registry.clone()),
@@ -444,6 +449,7 @@ fn compose_worktrees(
         Box::new(workspaces.clone()),
         Box::new(LocalManagedWorktrees::new(
             config.data_dir.join("worktrees"),
+            Arc::new(LocalForge::new()),
         )),
         server_id.to_owned(),
     )
@@ -530,7 +536,7 @@ mod tests;
 
 fn compose_push(data_dir: &std::path::Path) -> anyhow::Result<metadata::service::push::PushTokens> {
     metadata::service::push::PushTokens::open(
-        Box::new(file::storage::push::FileTokenStore::new(
+        Box::new(persistence::storage::push::FileTokenStore::new(
             data_dir.join("push-tokens.json"),
         )),
         Utc::now().timestamp_millis(),
@@ -538,7 +544,9 @@ fn compose_push(data_dir: &std::path::Path) -> anyhow::Result<metadata::service:
     .map_err(|_| anyhow::anyhow!("initialize push token leases"))
 }
 
-fn compose_skills(data: &std::path::Path) -> anyhow::Result<filesystem::service::skills::Skills> {
+fn compose_skills(
+    data: &std::path::Path,
+) -> anyhow::Result<filesystem::skills::service::skills::Skills> {
     let data = data
         .canonicalize()
         .context("resolve skills data directory")?;
@@ -548,14 +556,19 @@ fn compose_skills(data: &std::path::Path) -> anyhow::Result<filesystem::service:
     let source = std::env::var_os("AIT_SERVER_SKILLS_BUNDLE")
         .map_or_else(|| data.join("skills-bundle"), std::path::PathBuf::from);
     let targets = [".agents/skills", ".claude/skills", ".codex/skills"].map(|path| home.join(path));
-    let store =
-        filesystem::local::skills::LocalSkills::new(&source, &targets, &data.join("skills-state"))
-            .map_err(|error| anyhow::anyhow!("invalid skills configuration: {error:?}"))?;
-    Ok(filesystem::service::skills::Skills::new(Box::new(store)))
+    let store = filesystem::skills::local::skills::LocalSkills::new(
+        &source,
+        &targets,
+        &data.join("skills-state"),
+    )
+    .map_err(|error| anyhow::anyhow!("invalid skills configuration: {error:?}"))?;
+    Ok(filesystem::skills::service::skills::Skills::new(Box::new(
+        store,
+    )))
 }
 
 fn compose_files(config: &Config) -> Files {
-    Files::new(Box::new(filesystem::local::files::LocalFiles::new(
+    Files::new(Box::new(filesystem::files::local::files::LocalFiles::new(
         std::env::var_os("HOME").map_or_else(|| config.data_dir.clone(), std::path::PathBuf::from),
         &config.data_dir,
     )))

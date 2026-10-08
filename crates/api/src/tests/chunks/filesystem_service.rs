@@ -1,26 +1,28 @@
 use std::path::Path;
 use std::sync::{Arc, Mutex};
 
-use file::storage::project_config::LocalProjectConfigStore;
-use file::storage::project_icon::LocalProjectIconStore;
-use file::storage::registry::{FileBackedProjectRegistry, FileBackedWorkspaceRegistry};
-use filesystem::local::{
-    checkout::LocalCheckout, files::LocalFiles, forge::LocalForge, git_fetch::LocalGitFetch,
-    github_projects::LocalGithubProjects, provisioning::LocalDirectorySource, skills::LocalSkills,
-    worktrees::LocalManagedWorktrees,
+use filesystem::files::local::files::LocalFiles;
+use filesystem::files::service::files::Files;
+use filesystem::forge::local::{forge::LocalForge, github_projects::LocalGithubProjects};
+use filesystem::forge::service::{forge::Forge, github_projects::GithubProjects};
+use filesystem::git::local::{
+    checkout::LocalCheckout, git_fetch::LocalGitFetch, provisioning::LocalDirectorySource,
 };
-use filesystem::service::{
-    checkout::Checkout, files::Files, forge::Forge, git_fetch::GitFetch,
-    github_projects::GithubProjects, skills::Skills, workspace_recovery::WorkspaceRecovery,
-    worktrees::Worktrees,
-};
+use filesystem::git::service::{checkout::Checkout, git_fetch::GitFetch};
+use filesystem::skills::local::skills::LocalSkills;
+use filesystem::skills::service::skills::Skills;
+use filesystem::worktrees::local::worktrees::LocalManagedWorktrees;
+use filesystem::worktrees::service::{workspace_recovery::WorkspaceRecovery, worktrees::Worktrees};
 use metadata::service::directory::{Directory, DirectoryDependencies};
+use persistence::storage::project_config::LocalProjectConfigStore;
+use persistence::storage::project_icon::LocalProjectIconStore;
+use persistence::storage::registry::{FileBackedProjectRegistry, FileBackedWorkspaceRegistry};
 
 /// Install a complete filesystem service with all storage confined to the test `root`.
 pub(super) fn service(root: &Path) -> filesystem::Service {
     let projects = FileBackedProjectRegistry::new(root.join("projects.json"));
     let workspaces = FileBackedWorkspaceRegistry::new(root.join("workspaces.json"));
-    let managed = LocalManagedWorktrees::new(root.join("worktrees"));
+    let managed = LocalManagedWorktrees::new(root.join("worktrees"), Arc::new(LocalForge::new()));
     let directory = Directory::new(DirectoryDependencies {
         projects: Box::new(projects.clone()),
         workspaces: Box::new(workspaces.clone()),

@@ -2,8 +2,8 @@
 use std::{fs, path::PathBuf};
 
 use domain::storage::schedule::Error;
-use file::storage::schedule::FileStore;
 use model::storage::schedule::Store;
+use persistence::storage::schedule::FileStore;
 use serde_json::json;
 
 use crate::{engine::Engine, engine::tests::input, ports::Outcome};

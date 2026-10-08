@@ -44,7 +44,7 @@ async fn chunks_dispatch_once_after_assembly_in_legacy_and_single_connections() 
 
 #[tokio::test]
 async fn acknowledged_upload_waits_for_contended_jobs_without_losing_the_file() {
-    use filesystem::protocol::file_transfer::{self, FileBegin, FileFrame};
+    use filesystem::files::protocol::file_transfer::{self, FileBegin, FileFrame};
     let root = tempfile::tempdir().unwrap();
     let fixture = Fixture::with_services(Services {
         filesystem: Some(filesystem_service::service(root.path())),

@@ -11,20 +11,24 @@ use browser as _;
 use chrono as _;
 use clap as _;
 use domain as _;
-use file as _;
 use filesystem as _;
 use futures_util as _;
 use metadata as _;
 use model as _;
+use persistence as _;
 use provider as _;
 use reqwest as _;
 use schedule as _;
+use secrecy as _;
+use serde as _;
 use serde_json::{Value, json};
 use tempfile as _;
 use terminal as _;
+use thiserror as _;
 use tokio as _;
 use tokio_tungstenite as _;
 use tokio_util as _;
+use toml as _;
 use tracing as _;
 use tracing_subscriber as _;
 use uuid as _;
@@ -40,7 +44,7 @@ fn violations(packages: &[Value]) -> Vec<String> {
         let name = package["name"].as_str().unwrap();
         let allowed: &[&str] = match name {
             "daemon" => &[
-                "file",
+                "persistence",
                 "voice",
                 "schedule",
                 "browser",
@@ -53,7 +57,7 @@ fn violations(packages: &[Value]) -> Vec<String> {
                 "domain",
             ],
             "api" => &[
-                "file",
+                "persistence",
                 "relay",
                 "voice",
                 "schedule",
@@ -65,8 +69,10 @@ fn violations(packages: &[Value]) -> Vec<String> {
                 "metadata",
                 "filesystem",
             ],
-            "file" => &["model", "domain"],
-            "provider" | "metadata" | "schedule" | "filesystem" => &["domain", "model", "file"],
+            "persistence" => &["model", "domain"],
+            "provider" | "metadata" | "schedule" | "filesystem" => {
+                &["domain", "model", "persistence"]
+            }
             "terminal" => &["domain", "model"],
             "voice" | "browser" | "relay" => &["model"],
             "model" => &["domain"],
@@ -83,15 +89,16 @@ fn violations(packages: &[Value]) -> Vec<String> {
             {
                 violations.push(format!("{name} -> {target}"));
             }
-            if target == "file"
-                && matches!(name, "api" | "filesystem" | "provider" | "schedule")
+            if target == "persistence"
+                && name != "daemon"
+                && allowed.contains(&target)
                 && dependency["kind"].as_str() != Some("dev")
             {
-                violations.push(format!("{name} -> file outside tests"));
+                violations.push(format!("{name} -> persistence outside tests"));
             }
             if matches!(
                 name,
-                "domain" | "file" | "model" | "metadata" | "filesystem" | "terminal"
+                "domain" | "persistence" | "model" | "metadata" | "filesystem" | "terminal"
             ) && [
                 "sqlx", "rusqlite", "axum", "hyper", "reqwest", "tonic", "tauri", "rig", "codex",
             ]
@@ -213,6 +220,7 @@ fn provider_depends_inward_and_retired_packages_cannot_return() {
         "workspace",
         "providers",
         "protocol",
+        "file",
     ] {
         let packages = [json!({"id":retired, "name":retired, "dependencies":[]})];
         assert_eq!(
@@ -260,7 +268,7 @@ fn terminal_cannot_depend_on_metadata_provider_transport_or_old_workspace_packag
 fn tokio_is_allowed_in_capability_crates_but_not_domain() {
     for name in [
         "model",
-        "file",
+        "persistence",
         "metadata",
         "filesystem",
         "provider",
@@ -286,7 +294,7 @@ fn tokio_is_allowed_in_capability_crates_but_not_domain() {
 #[test]
 fn shared_context_cannot_depend_on_capability_or_transport_packages() {
     for dependency in [
-        "file",
+        "persistence",
         "api",
         "protocol",
         "metadata",
@@ -306,7 +314,7 @@ fn shared_context_cannot_depend_on_capability_or_transport_packages() {
 fn shared_values_are_consumed_directly_from_domain() {
     for owner in [
         "model",
-        "file",
+        "persistence",
         "metadata",
         "filesystem",
         "provider",
@@ -326,7 +334,7 @@ fn shared_values_are_consumed_directly_from_domain() {
 }
 
 #[test]
-fn file_adapters_depend_on_shared_contracts_without_reverse_or_transport_dependencies() {
+fn persistence_adapters_depend_on_shared_contracts_without_reverse_or_transport_dependencies() {
     for owner in [
         "daemon",
         "metadata",
@@ -336,51 +344,61 @@ fn file_adapters_depend_on_shared_contracts_without_reverse_or_transport_depende
         "api",
     ] {
         let packages = [
-            json!({"name":owner,"dependencies":[{"name":"file","path":"../file",
-                "kind":if matches!(owner,"daemon"|"metadata") { Value::Null } else { json!("dev") }
+            json!({"name":owner,"dependencies":[{"name":"persistence","path":"../persistence",
+                "kind":if owner == "daemon" { Value::Null } else { json!("dev") }
             }]}),
-            json!({"name":"file","dependencies":[]}),
+            json!({"name":"persistence","dependencies":[]}),
         ];
         assert!(violations(&packages).is_empty());
     }
     for dependency in ["model", "domain"] {
-        let packages =
-            [json!({"name":"file","dependencies":[{"name":dependency,"path":"../dependency"}]})];
+        let packages = [json!({"name":"persistence","dependencies":[
+            {"name":dependency,"path":"../dependency"}
+        ]})];
         assert!(violations(&packages).is_empty());
     }
     for dependency in ["metadata", "provider", "schedule", "filesystem", "api"] {
         for kind in [Value::Null, json!("dev"), json!("build")] {
-            let packages = [json!({"name":"file","dependencies":[{
+            let packages = [json!({"name":"persistence","dependencies":[{
                 "name":dependency,"path":"../dependency","rename":"renamed",
                 "kind":kind,"optional":true,"target":"cfg(windows)"
             }]})];
-            assert_eq!(violations(&packages), [format!("file -> {dependency}")]);
+            assert_eq!(
+                violations(&packages),
+                [format!("persistence -> {dependency}")]
+            );
         }
     }
     for dependency in ["axum", "rusqlite", "reqwest"] {
-        let packages = [json!({"name":"file","dependencies":[{"name":dependency}]})];
+        let packages = [json!({"name":"persistence","dependencies":[{"name":dependency}]})];
         assert_eq!(
             violations(&packages),
-            [format!("impure file -> {dependency}")]
+            [format!("impure persistence -> {dependency}")]
         );
     }
 }
 
 #[test]
-fn consumers_inject_file_adapters_without_production_or_build_dependencies() {
-    for owner in ["api", "filesystem", "provider", "schedule"] {
+fn only_the_daemon_injects_persistence_adapters_outside_tests() {
+    for owner in ["api", "metadata", "filesystem", "provider", "schedule"] {
         for kind in [Value::Null, json!("dev"), json!("build")] {
             let packages = [json!({"name":owner,"dependencies":[{
-                "name":"file","path":"../file","rename":"storage",
+                "name":"persistence","path":"../persistence","rename":"storage",
                 "kind":kind,"optional":true,"target":"cfg(windows)"
             }]})];
             let expected = if kind == json!("dev") {
                 Vec::new()
             } else {
-                vec![format!("{owner} -> file outside tests")]
+                vec![format!("{owner} -> persistence outside tests")]
             };
             assert_eq!(violations(&packages), expected);
         }
+    }
+    for kind in [Value::Null, json!("build")] {
+        let packages = [json!({"name":"daemon","dependencies":[{
+            "name":"persistence","path":"../persistence","kind":kind
+        }]})];
+        assert!(violations(&packages).is_empty());
     }
 }
 
@@ -393,7 +411,7 @@ fn domain_cannot_depend_outward_even_through_test_or_optional_edges() {
         "terminal",
         "voice",
         "model",
-        "file",
+        "persistence",
         "api",
         "ait-domain",
     ] {
@@ -428,7 +446,14 @@ fn relay_owns_rpc_using_model_contracts_without_host_or_business_dependencies() 
         json!({"id":"relay", "name":"relay", "dependencies":[{"name":"model", "path":"../model"}, {"name":"tokio"}, {"name":"reqwest"}]}),
     ];
     assert!(violations(&packages).is_empty());
-    for dependency in ["api", "metadata", "provider", "protocol", "domain", "file"] {
+    for dependency in [
+        "api",
+        "metadata",
+        "provider",
+        "protocol",
+        "domain",
+        "persistence",
+    ] {
         let packages = [
             json!({"id":"relay", "name":"relay", "dependencies":[{"name":dependency, "path":"../dependency"}]}),
         ];

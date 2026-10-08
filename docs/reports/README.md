@@ -8,6 +8,7 @@
 
 ## Daemon 与协议
 
+- [Persistence 与 filesystem 能力边界：PR 验证](daemon/persistence-filesystem-pr-validation-2026-10-09.md)
 - [Domain 数据与 Server 协议归属：PR 验证](daemon/domain-values-server-protocol-pr-validation-2026-10-09.md)
 
 - [本地诊断证据：PR 验证](daemon/diagnostic-evidence-pr-validation-2026-10-08.md)

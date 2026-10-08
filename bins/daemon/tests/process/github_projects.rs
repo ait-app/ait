@@ -17,7 +17,7 @@ async fn binary_searches_and_clones_github_project_with_local_git_transport() {
     let address = ready(&mut process, &log).await;
     let mut socket = connect(
         &address,
-        &method_names(filesystem::rpc::github_projects::METHODS),
+        &method_names(filesystem::forge::rpc::github_projects::METHODS),
     )
     .await;
 

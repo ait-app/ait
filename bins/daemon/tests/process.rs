@@ -7,10 +7,14 @@ use anyhow as _;
 use api as _;
 use browser as _;
 use clap as _;
-use file as _;
 use model as _;
+use persistence as _;
 use schedule as _;
+use secrecy as _;
+use serde as _;
+use thiserror as _;
 use tokio_util as _;
+use toml as _;
 use tracing as _;
 use tracing_subscriber as _;
 

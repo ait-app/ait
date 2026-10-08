@@ -22,11 +22,11 @@ use axum::response::{IntoResponse, Response};
 use axum::routing::{get, post};
 use axum::{Json, Router};
 use browser::broker::Broker;
-use filesystem::service::worktrees::{WorkspaceWorktrees, Worktrees};
+use filesystem::worktrees::service::worktrees::{WorkspaceWorktrees, Worktrees};
 use metadata::service::directory::Directory;
 use metadata::service::workspace_automation::WorkspaceAutomation;
-use model::Runtime;
 use model::server::{Lifecycle, Limits, ServerInfo, VERSION};
+use model::{LifecycleIntent, Runtime};
 use provider::service::agent_execution::AgentExecution;
 use schedule::service::Schedules;
 use secrecy::SecretString;
@@ -110,8 +110,6 @@ pub struct Services {
     /// Voice conversations and dictation.
     pub voice: Option<Speech>,
 }
-
-pub use model::LifecycleIntent;
 
 impl Shared {
     fn start_draining(&self) {
@@ -545,7 +543,7 @@ mod tests;
 fn compose_directory(
     directory: Option<Directory>,
     worktrees: Option<&Arc<Mutex<Worktrees>>>,
-    git_fetch: Option<filesystem::service::git_fetch::GitFetch>,
+    git_fetch: Option<filesystem::git::service::git_fetch::GitFetch>,
     runtime: &Arc<Runtime>,
     events: &model::session::SessionEvents,
     has_automation: bool,

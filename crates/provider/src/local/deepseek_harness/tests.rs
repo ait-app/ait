@@ -292,7 +292,7 @@ async fn environment_is_ephemeral_and_catalog_has_a_user_facing_label() {
             .all(|request| request["hasEnvironment"] == true)
     );
     let mut manager = crate::service::agent_manager::AgentManager::new(Box::new(
-        file::storage::agent_runtime::FileBackedAgentRuntimeRegistry::new(
+        persistence::storage::agent_runtime::FileBackedAgentRuntimeRegistry::new(
             directory.path().join("agents.json"),
         ),
     ));

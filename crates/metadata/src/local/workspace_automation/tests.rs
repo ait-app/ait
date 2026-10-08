@@ -1,6 +1,8 @@
 use std::fs;
 use std::thread;
 
+use persistence::storage::project_config::LocalProjectConfigStore;
+
 use super::*;
 
 #[cfg(unix)]
@@ -10,7 +12,7 @@ mod paseo;
 #[test]
 fn setup_output_limit_applies_to_fast_commands_that_exit_between_polls() {
     let root = tempfile::tempdir().unwrap();
-    let runtime = LocalWorkspaceAutomation::default();
+    let runtime = automation();
     let workspace = placement(root.path(), "output-limit");
     let result = run_setup_command(
         &Arc::downgrade(&runtime.inner),
@@ -26,7 +28,7 @@ fn setup_output_limit_applies_to_fast_commands_that_exit_between_polls() {
 #[test]
 fn invalid_setup_configuration_is_recorded_without_launching_commands() {
     let root = tempfile::tempdir().unwrap();
-    let runtime = LocalWorkspaceAutomation::default();
+    let runtime = automation();
     let workspace = placement(root.path(), "invalid");
     for content in ["[]".to_owned(), " ".repeat(CONFIG_BYTES + 1)] {
         fs::write(root.path().join("ait.json"), content).unwrap();
@@ -50,7 +52,7 @@ fn setup_transitions_publish_running_and_completed_snapshots() {
     use std::sync::mpsc;
 
     let root = tempfile::tempdir().expect("setup root");
-    let mut runtime = LocalWorkspaceAutomation::default();
+    let mut runtime = automation();
     let workspace = placement(root.path(), "setup-events");
     let (sender, receiver) = mpsc::channel();
     runtime.set_event_sink(Arc::new(move |event| {
@@ -93,7 +95,7 @@ fn natural_script_exit_publishes_stopped_status() {
     use std::sync::mpsc;
 
     let root = tempfile::tempdir().expect("script root");
-    let mut runtime = LocalWorkspaceAutomation::default();
+    let mut runtime = automation();
     let workspace = placement(root.path(), "script-exit");
     let (sender, receiver) = mpsc::channel();
     runtime.set_event_sink(Arc::new(move |event| {
@@ -141,7 +143,7 @@ fn removed_configuration_does_not_hide_running_scripts_and_drop_reaps_them() {
         r#"{"scripts":{"web":{"type":"service","command":"while :; do sleep 1; done"}}}"#,
     )
     .unwrap();
-    let runtime = LocalWorkspaceAutomation::default();
+    let runtime = automation();
     let started = runtime.start_script(&workspace, "web").unwrap();
     let pid = lock(&runtime.inner.state)
         .scripts
@@ -178,7 +180,7 @@ fn removed_configuration_does_not_hide_running_scripts_and_drop_reaps_them() {
 fn setup_spawn_failure_finishes_the_attempt_and_releases_running_state() {
     let root = tempfile::tempdir().unwrap();
     let workspace = placement(&root.path().join("removed"), "removed");
-    let runtime = LocalWorkspaceAutomation::default();
+    let runtime = automation();
     lock(&runtime.inner.state)
         .setup_running
         .insert(workspace.workspace_id.clone());
@@ -204,6 +206,10 @@ fn setup_spawn_failure_finishes_the_attempt_and_releases_running_state() {
             .setup_running
             .contains(&workspace.workspace_id)
     );
+}
+
+fn automation() -> LocalWorkspaceAutomation {
+    LocalWorkspaceAutomation::new(Arc::new(LocalProjectConfigStore))
 }
 
 fn placement(root: &Path, id: &str) -> WorkspacePlacement {
@@ -254,7 +260,7 @@ fn script_config_filters_invalid_entries_and_sorts_names() {
         }"#,
     )
     .expect("config");
-    let automation = LocalWorkspaceAutomation::default();
+    let automation = automation();
     let scripts = automation
         .list_scripts(&placement(directory.path(), "wks_list"))
         .expect("list");
@@ -275,7 +281,7 @@ fn script_config_filters_invalid_entries_and_sorts_names() {
 fn malformed_and_linked_configs_are_rejected() {
     let directory = tempfile::tempdir().expect("tempdir");
     fs::write(directory.path().join("ait.json"), "[").expect("config");
-    let automation = LocalWorkspaceAutomation::default();
+    let automation = automation();
     assert!(matches!(
         automation.list_scripts(&placement(directory.path(), "wks_bad")),
         Err(WorkspaceAutomationError::InvalidConfig(_))
@@ -308,7 +314,7 @@ fn scripts_start_refresh_and_stop_real_children() {
     )
     .expect("config");
     let workspace = placement(directory.path(), "wks_process");
-    let automation = LocalWorkspaceAutomation::default();
+    let automation = automation();
     let started = automation
         .start_script(&workspace, "once")
         .expect("start once");
@@ -365,7 +371,7 @@ fn setup_runs_in_order_with_paseo_environment() {
     )
     .expect("config");
     let workspace = placement(directory.path(), "wks_setup");
-    let automation = LocalWorkspaceAutomation::default();
+    let automation = automation();
     assert!(automation.start_setup(&workspace).expect("start"));
     assert!(!automation.start_setup(&workspace).expect("deduplicate"));
     let snapshot = wait_for(&automation, "wks_setup", SetupLifecycle::Completed);
@@ -398,7 +404,7 @@ fn setup_stops_after_the_first_failed_command() {
     )
     .expect("config");
     let workspace = placement(directory.path(), "wks_failure");
-    let automation = LocalWorkspaceAutomation::default();
+    let automation = automation();
     assert!(automation.start_setup(&workspace).expect("start"));
     let snapshot = wait_for(&automation, "wks_failure", SetupLifecycle::Failed);
     assert_eq!(snapshot.commands.len(), 1);
@@ -417,7 +423,7 @@ fn setup_thread_does_not_retain_the_runtime_across_restart() {
     )
     .expect("config");
     let workspace = placement(directory.path(), "wks_restart");
-    let automation = LocalWorkspaceAutomation::default();
+    let automation = automation();
     let inner = Arc::downgrade(&automation.inner);
     assert!(automation.start_setup(&workspace).expect("start"));
     drop(automation);
@@ -437,7 +443,7 @@ fn script_config_prefers_ait_and_reads_legacy_only_when_ait_is_absent() {
     )
     .unwrap();
     assert!(
-        read_config(directory.path())
+        read_config(&LocalProjectConfigStore, directory.path())
             .unwrap()
             .scripts
             .contains_key("legacy")
@@ -448,9 +454,9 @@ fn script_config_prefers_ait_and_reads_legacy_only_when_ait_is_absent() {
         r#"{"scripts":{"ait":{"command":"echo current"}}}"#,
     )
     .unwrap();
-    let config = read_config(directory.path()).unwrap();
+    let config = read_config(&LocalProjectConfigStore, directory.path()).unwrap();
     assert!(config.scripts.contains_key("ait"));
     assert!(!config.scripts.contains_key("legacy"));
     fs::write(&preferred, "invalid").unwrap();
-    assert!(read_config(directory.path()).is_err());
+    assert!(read_config(&LocalProjectConfigStore, directory.path()).is_err());
 }

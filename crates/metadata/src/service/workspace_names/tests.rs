@@ -3,8 +3,8 @@ use std::sync::atomic::{AtomicUsize, Ordering};
 use domain::summary::SummaryError;
 use domain::workspace::records::PersistedWorkspaceRecord;
 use domain::workspace::registry::WorkspaceMutationContext;
-use file::storage::registry::FileBackedWorkspaceRegistry;
 use model::summary::SummaryFuture;
+use persistence::storage::registry::FileBackedWorkspaceRegistry;
 use serde_json::json;
 
 use super::*;

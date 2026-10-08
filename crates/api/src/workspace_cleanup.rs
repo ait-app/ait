@@ -2,7 +2,7 @@
 
 use std::sync::{Arc, Mutex};
 
-use filesystem::ports::worktrees::{WorktreeArchiveCleanup, WorktreeError};
+use filesystem::worktrees::ports::worktrees::{WorktreeArchiveCleanup, WorktreeError};
 
 use crate::{ConfigError, Shared};
 

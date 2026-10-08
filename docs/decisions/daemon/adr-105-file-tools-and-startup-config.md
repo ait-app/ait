@@ -1,7 +1,8 @@
 # ADR-105：File 工具、通用 Registry 与启动配置独立成 crate
 
 - 状态：接受
-- 后续修订：[ADR-106](adr-106-concrete-file-persistence.md) 将具体文件适配器一并迁入 file，并反转与 model 的依赖。
+- 后续修订：[ADR-106](adr-106-concrete-file-persistence.md) 将具体文件适配器一并迁入 file，并反转与 model 的依赖；
+  [ADR-112](adr-112-persistence-crate.md) 将 file 改名为 persistence，启动配置迁回 `bins/daemon`。
 - 日期：2026-10-07
 - 修订：[ADR-102](../providers/adr-102-provider-metadata-independence.md) 中通用文件引擎的归属。
 - 关联：[ADR-104](../workspace/adr-104-filesystem-model-collaboration.md)。

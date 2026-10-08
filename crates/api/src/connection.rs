@@ -234,7 +234,7 @@ async fn process_file_frame(
     if acknowledged {
         bytes[0] -= 0x30;
     }
-    let Some((id, frame)) = filesystem::protocol::file_transfer::decode(&bytes) else {
+    let Some((id, frame)) = filesystem::files::protocol::file_transfer::decode(&bytes) else {
         error(outbound, None, ErrorCode::InvalidMessage)?;
         return Ok(ControlFlow::Break(()));
     };

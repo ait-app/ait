@@ -3,6 +3,7 @@
 - 状态：接受
 - 日期：2026-10-07
 - 关联：[ADR-102](../providers/adr-102-provider-metadata-independence.md)、[ADR-103](../daemon/adr-103-terminal-model-dependency.md)
+- 后续：[ADR-113](adr-113-filesystem-capability-groups.md) 将内部模块改为按能力组组织。
 
 ## 背景
 
