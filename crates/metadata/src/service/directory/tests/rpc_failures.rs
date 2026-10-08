@@ -52,6 +52,10 @@ fn registry_outages_fail_reads_and_mutations_without_claiming_success() {
 struct BrokenConfig(ProjectConfigStoreError);
 
 impl ProjectConfigStore for BrokenConfig {
+    fn config_path(&self, _: &std::path::Path) -> std::io::Result<std::path::PathBuf> {
+        Err(std::io::Error::other("broken config"))
+    }
+
     fn read(&self, _: &str) -> Result<ProjectConfigDocument, ProjectConfigStoreError> {
         Err(self.0)
     }

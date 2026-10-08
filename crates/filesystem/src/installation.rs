@@ -2,11 +2,11 @@
 
 use std::sync::{Arc, Mutex};
 
-use crate::service::{
-    checkout::Checkout, files::Files, forge::Forge, git_fetch::GitFetch,
-    github_projects::GithubProjects, skills::Skills, workspace_recovery::WorkspaceRecovery,
-    worktrees::Worktrees,
-};
+use crate::files::service::files::Files;
+use crate::forge::service::{forge::Forge, github_projects::GithubProjects};
+use crate::git::service::{checkout::Checkout, git_fetch::GitFetch};
+use crate::skills::service::skills::Skills;
+use crate::worktrees::service::{workspace_recovery::WorkspaceRecovery, worktrees::Worktrees};
 
 /// Required functional parts of the filesystem service; locks remain independently scoped.
 #[derive(Debug)]

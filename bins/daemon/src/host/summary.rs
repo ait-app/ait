@@ -4,9 +4,9 @@ use std::path::Path;
 use std::sync::Arc;
 
 use domain::summary::SummaryError;
-use file::storage::project_config::LocalProjectConfigStore;
 use model::storage::daemon_config::DaemonConfigStore;
 use model::storage::project::ProjectConfigStore;
+use persistence::storage::project_config::LocalProjectConfigStore;
 use provider::summary::SummaryConfiguration;
 use serde_json::Value;
 

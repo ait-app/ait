@@ -1,0 +1,178 @@
+use std::sync::{Arc, Mutex};
+use std::time::Duration;
+
+use crate::git::rpc::checkout::DiffObservation;
+use crate::git::service::checkout::{self as port, Checkout};
+use model::{ErrorCode, ServerMessage};
+use serde_json::Value;
+use tokio::sync::Semaphore;
+use tokio::time::{Instant, MissedTickBehavior};
+use tokio_util::sync::CancellationToken;
+use tokio_util::task::TaskTracker;
+
+use crate::dispatch::State as Shared;
+use model::outbound::Outbound;
+
+const POLL_INTERVAL: Duration = Duration::from_millis(200);
+
+pub struct Dispatch {
+    pub value: Value,
+    pub subscription: Option<PendingSubscription>,
+}
+
+pub struct PendingSubscription {
+    observation: DiffObservation,
+    service: Arc<Mutex<Checkout>>,
+    jobs: Arc<Semaphore>,
+    tracker: TaskTracker,
+    server_cancel: CancellationToken,
+    outbound: Outbound,
+}
+
+/// RAII owner for one connection-local diff polling task.
+pub struct CheckoutDiffSubscription {
+    cancellation: CancellationToken,
+}
+
+impl Drop for CheckoutDiffSubscription {
+    fn drop(&mut self) {
+        self.cancellation.cancel();
+    }
+}
+
+impl PendingSubscription {
+    pub fn activate(self) -> (String, CheckoutDiffSubscription) {
+        let cancellation = CancellationToken::new();
+        let task_cancellation = cancellation.clone();
+        let subscription_id = self.observation.id().to_owned();
+        self.tracker.spawn(async move {
+            let mut observation = self.observation;
+            let mut interval =
+                tokio::time::interval_at(Instant::now() + POLL_INTERVAL, POLL_INTERVAL);
+            interval.set_missed_tick_behavior(MissedTickBehavior::Skip);
+            loop {
+                tokio::select! {
+                    biased;
+                    () = task_cancellation.cancelled() => break,
+                    () = self.server_cancel.cancelled() => break,
+                    _ = interval.tick() => {}
+                }
+                let Some(snapshot) = poll_diff(
+                    self.service.clone(),
+                    self.jobs.clone(),
+                    &observation,
+                    &task_cancellation,
+                    &self.server_cancel,
+                )
+                .await
+                else {
+                    break;
+                };
+                let params = match observation.update(snapshot) {
+                    Ok(Some(params)) => params,
+                    Ok(None) => continue,
+                    Err(_) => break,
+                };
+                if self
+                    .outbound
+                    .send(&ServerMessage::Event {
+                        method: "checkout.diff.update".to_owned(),
+                        params,
+                    })
+                    .is_err()
+                {
+                    break;
+                }
+            }
+        });
+        (subscription_id, CheckoutDiffSubscription { cancellation })
+    }
+}
+
+pub async fn dispatch(
+    method: &str,
+    params: Value,
+    state: &Shared,
+    outbound: Outbound,
+) -> Result<Dispatch, ErrorCode> {
+    if method == "checkout.diff.subscribe.request" {
+        return subscribe(params, state, outbound).await;
+    }
+    let method = method.to_owned();
+    state
+        .run(
+            state.checkout.clone(),
+            ErrorCode::ProjectIo,
+            move |checkout| {
+                let value = crate::git::rpc::checkout::execute(checkout, &method, params)?;
+                Ok(Dispatch {
+                    value,
+                    subscription: None,
+                })
+            },
+        )
+        .await
+}
+
+async fn subscribe(
+    params: Value,
+    state: &Shared,
+    outbound: Outbound,
+) -> Result<Dispatch, ErrorCode> {
+    let (observation, value) = state
+        .run(
+            state.checkout.clone(),
+            ErrorCode::ProjectIo,
+            move |checkout| DiffObservation::prepare(checkout, params).map_err(Into::into),
+        )
+        .await?;
+    Ok(Dispatch {
+        value,
+        subscription: Some(PendingSubscription {
+            observation,
+            service: state
+                .checkout
+                .clone()
+                .ok_or(ErrorCode::UnsupportedCapability)?,
+            jobs: state.checkout_poll_jobs.clone(),
+            tracker: state.tasks.clone(),
+            server_cancel: state.cancellation.clone(),
+            outbound,
+        }),
+    })
+}
+
+async fn poll_diff(
+    service: Arc<Mutex<Checkout>>,
+    jobs: Arc<Semaphore>,
+    observation: &DiffObservation,
+    cancellation: &CancellationToken,
+    server_cancel: &CancellationToken,
+) -> Option<Result<port::CheckoutDiff, port::CheckoutRuntimeError>> {
+    let permit = tokio::select! {
+        biased;
+        () = cancellation.cancelled() => return None,
+        () = server_cancel.cancelled() => return None,
+        permit = jobs.acquire_owned() => permit.ok()?,
+    };
+    let cwd = observation.cwd().to_owned();
+    let compare = observation.compare().clone();
+    // Keep this task tracked until the blocking read releases its permit, even after cancellation.
+    let snapshot = tokio::task::spawn_blocking(move || {
+        let _permit = permit;
+        let checkout = service
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
+        checkout.diff(&cwd, &compare)
+    })
+    .await
+    .ok()?;
+    if cancellation.is_cancelled() || server_cancel.is_cancelled() {
+        None
+    } else {
+        Some(snapshot)
+    }
+}
+
+#[cfg(test)]
+mod tests;

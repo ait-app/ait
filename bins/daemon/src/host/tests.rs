@@ -1,6 +1,6 @@
 use super::*;
+use crate::config::Cli;
 use clap::Parser;
-use file::config::Cli;
 
 fn config(directory: &std::path::Path) -> Config {
     Config::load(

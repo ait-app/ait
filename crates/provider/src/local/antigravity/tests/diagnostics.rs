@@ -1,9 +1,9 @@
 use std::sync::{Arc, Mutex};
 
 use domain::agent_runtime::{AgentRuntimeStatus, registry::AgentRuntimeRegistry};
-use file::storage::agent_runtime::FileBackedAgentRuntimeRegistry;
+use domain::session::protocol::EventsRequest;
 use model::outbound::{Frame, Outbound};
-use model::session::protocol::EventsRequest;
+use persistence::storage::agent_runtime::FileBackedAgentRuntimeRegistry;
 
 use super::*;
 use crate::local::antigravity::diagnostics::Failure;

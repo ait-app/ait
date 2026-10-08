@@ -1,6 +1,6 @@
 //! Local automatic incident capture. The tracing callback never performs file or process I/O.
 
-use file::diagnostics::{self as storage, REPORT_LIMIT};
+mod store;
 
 use std::collections::VecDeque;
 use std::fmt::Write as _;
@@ -15,6 +15,8 @@ use chrono::{DateTime, Utc};
 use metadata::ports::diagnostics::DaemonDiagnostics;
 use tracing::field::{Field, Visit};
 use tracing_subscriber::Layer;
+
+use store::REPORT_LIMIT;
 
 const EVENT_LIMIT: usize = 128;
 const CAPTURE_INTERVAL: Duration = Duration::from_secs(30);
@@ -143,7 +145,7 @@ impl Worker {
         let mut cache: Option<(Instant, String)> = None;
         let mut captured_through = Utc::now();
         let mut maintenance = Instant::now();
-        let _ = storage::prune(&self.directory, Utc::now());
+        let _ = store::prune(&self.directory, Utc::now());
         loop {
             match receiver.recv_timeout(Duration::from_secs(1)) {
                 Ok(Job::Incident(at)) => {
@@ -157,8 +159,8 @@ impl Worker {
                         .is_none_or(|(time, _)| time.elapsed() >= CAPTURE_INTERVAL)
                     {
                         let mut report = self.capture(&runtime, Utc::now());
-                        match storage::prune(&self.directory, Utc::now()) {
-                            Ok(()) => report.push_str(&sanitize(&storage::recent(&self.directory))),
+                        match store::prune(&self.directory, Utc::now()) {
+                            Ok(()) => report.push_str(&sanitize(&store::recent(&self.directory))),
                             Err(_) => report.push_str("\nIncident storage unavailable; automatic evidence may not have been saved\n"),
                         }
                         cache = Some((Instant::now(), report));
@@ -171,7 +173,7 @@ impl Worker {
                 Err(mpsc::RecvTimeoutError::Disconnected) => break,
             }
             if maintenance.elapsed() >= CAPTURE_INTERVAL {
-                let _ = storage::prune(&self.directory, Utc::now());
+                let _ = store::prune(&self.directory, Utc::now());
                 if let Some(at) = self.pending(captured_through) {
                     captured_through = Utc::now();
                     self.save(&runtime, at);
@@ -208,7 +210,7 @@ impl Worker {
 
     fn save(&self, runtime: &tokio::runtime::Runtime, at: DateTime<Utc>) {
         let report = self.capture(runtime, at);
-        if storage::save(&self.directory, &report, Utc::now()).is_err() {
+        if store::save(&self.directory, &report, Utc::now()).is_err() {
             self.storage_failures.fetch_add(1, Ordering::Relaxed);
         }
     }

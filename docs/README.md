@@ -13,6 +13,8 @@
 
 ## 架构决策
 
+- [ADR-113：filesystem 按能力组组织模块](decisions/workspace/adr-113-filesystem-capability-groups.md)：git/forge/worktrees/files/skills 五组沿用原分层，组间仅经 ports/protocol 协作，并由模块边界测试约束。
+- [ADR-112：file 瘦身为 persistence，宿主专用文件归 daemon](decisions/daemon/adr-112-persistence-crate.md)：启动配置、故障证据与 server identity 迁回 daemon，metadata 经端口定位项目配置，仅 daemon 在生产代码中依赖 persistence。
 - [ADR-111：纯业务数据归 domain，连接协议并入 model::server](decisions/daemon/adr-111-domain-values-and-server-protocol.md)：移除 protocol crate，数据值与运行资源分离，消费者直接依赖类型所属 crate。
 - [ADR-110：OpenCode 双版本私有协议边界](decisions/providers/adr-110-opencode-private-protocol-boundary.md)：协议差异收口、统一文本身份，以及原生权限拒绝与主动取消的独立结算。
 - [ADR-109：本地故障证据与 Harness 日志采集](decisions/daemon/adr-109-local-incident-evidence.md)：后台取证、脱敏、保留与文件导出。
@@ -88,6 +90,7 @@
 
 ## 工程规范与验证
 
+- [Persistence 与 filesystem 能力边界 PR 验证](reports/daemon/persistence-filesystem-pr-validation-2026-10-09.md)：13-crate 完整测试、覆盖率与原样保留的未接入摘要草稿。
 - [Domain 数据与 Server 协议归属 PR 验证](reports/daemon/domain-values-server-protocol-pr-validation-2026-10-09.md)：13-crate workspace 测试、覆盖率与源码证据。
 
 - [Crate 边界与 main 整合验证](reports/daemon/crate-boundaries-main-rebase-2026-10-07.md)：完整测试、覆盖率与依赖守卫结果。

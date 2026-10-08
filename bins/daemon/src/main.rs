@@ -1,5 +1,6 @@
 //! Local daemon entry point.
 
+mod config;
 mod diagnostics;
 mod host;
 mod instance;
@@ -8,7 +9,6 @@ use std::process::ExitCode;
 
 use anyhow::Context;
 use clap::Parser;
-use file::config;
 use tracing_subscriber::prelude::*;
 
 // Binary unit tests inherit dependencies used by integration tests.
@@ -74,10 +74,10 @@ async fn run(cli: config::Cli) -> anyhow::Result<()> {
         .await?;
         tracing::info!(listen = %server.address(), "daemon ready");
         match server.serve(shutdown_signal()?).await? {
-            Some(api::LifecycleIntent::Restart { reason }) => {
+            Some(model::LifecycleIntent::Restart { reason }) => {
                 tracing::info!(%reason, "restarting daemon");
             }
-            Some(api::LifecycleIntent::Shutdown) | None => return Ok(()),
+            Some(model::LifecycleIntent::Shutdown) | None => return Ok(()),
         }
     }
 }

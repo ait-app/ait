@@ -101,11 +101,11 @@ dependencies = [
  "browser",
  "chrono",
  "domain",
- "file",
  "filesystem",
  "futures-util",
  "metadata",
  "model",
+ "persistence",
  "provider",
  "relay",
  "reqwest",
@@ -541,20 +541,24 @@ dependencies = [
  "chrono",
  "clap",
  "domain",
- "file",
  "filesystem",
  "futures-util",
  "metadata",
  "model",
+ "persistence",
  "provider",
  "reqwest",
  "schedule",
+ "secrecy",
+ "serde",
  "serde_json",
  "tempfile",
  "terminal",
+ "thiserror 2.0.20",
  "tokio",
  "tokio-tungstenite",
  "tokio-util",
+ "toml",
  "tracing",
  "tracing-subscriber",
  "uuid",
@@ -676,29 +680,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "da7c62ceae207dd37ea5b845da6a0696c799f85e97da1ab5b7910be3c1c80223"
 
 [[package]]
-name = "file"
-version = "0.0.23"
-dependencies = [
- "anyhow",
- "chrono",
- "clap",
- "domain",
- "getrandom 0.4.3",
- "indexmap",
- "model",
- "secrecy",
- "serde",
- "serde_json",
- "sha2",
- "tempfile",
- "thiserror 2.0.20",
- "tokio",
- "toml",
- "tracing",
- "uuid",
-]
-
-[[package]]
 name = "filedescriptor"
 version = "0.8.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -716,11 +697,11 @@ dependencies = [
  "base64",
  "chrono",
  "domain",
- "file",
  "getrandom 0.4.3",
  "libc",
  "memchr",
  "model",
+ "persistence",
  "serde",
  "serde_json",
  "sha2",
@@ -1366,9 +1347,9 @@ dependencies = [
  "base64",
  "chrono",
  "domain",
- "file",
  "getrandom 0.4.3",
  "model",
+ "persistence",
  "serde",
  "serde_json",
  "tempfile",
@@ -1534,6 +1515,24 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "9b4f627cb1b25917193a259e49bdad08f671f8d9708acfd5fe0a8c1455d87220"
 
 [[package]]
+name = "persistence"
+version = "0.0.23"
+dependencies = [
+ "chrono",
+ "domain",
+ "getrandom 0.4.3",
+ "indexmap",
+ "model",
+ "serde",
+ "serde_json",
+ "sha2",
+ "tempfile",
+ "thiserror 2.0.20",
+ "tokio",
+ "tracing",
+]
+
+[[package]]
 name = "phf"
 version = "0.12.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1628,9 +1627,9 @@ dependencies = [
  "base64",
  "chrono",
  "domain",
- "file",
  "futures-util",
  "model",
+ "persistence",
  "pulldown-cmark",
  "regex",
  "reqwest",
@@ -1993,8 +1992,8 @@ dependencies = [
  "chrono",
  "chrono-tz",
  "domain",
- "file",
  "model",
+ "persistence",
  "serde",
  "serde_json",
  "tempfile",

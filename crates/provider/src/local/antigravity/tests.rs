@@ -82,7 +82,7 @@ async fn discovers_native_models_and_labels_without_a_prompt() {
             .all(|entry| entry.get("input").is_none())
     );
     let mut manager = crate::service::agent_manager::AgentManager::new(Box::new(
-        file::storage::agent_runtime::FileBackedAgentRuntimeRegistry::new(
+        persistence::storage::agent_runtime::FileBackedAgentRuntimeRegistry::new(
             directory.path().join("agents.json"),
         ),
     ));
@@ -335,7 +335,7 @@ async fn missing_explicit_binary_is_unavailable_without_installation_fallback() 
 
 #[tokio::test]
 async fn manager_persists_timeline_and_resume_identity_across_restart() {
-    use file::storage::agent_runtime::FileBackedAgentRuntimeRegistry;
+    use persistence::storage::agent_runtime::FileBackedAgentRuntimeRegistry;
 
     use crate::service::agent_manager::{AgentManager, AgentRegistration};
     use crate::storage::timeline::Timeline;

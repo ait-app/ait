@@ -1,0 +1,24 @@
+[package]
+name = "persistence"
+version.workspace = true
+edition.workspace = true
+publish.workspace = true
+
+[dependencies]
+# Shared records and storage ports implemented by the concrete file adapters.
+model.workspace = true
+domain.workspace = true
+# Atomic single-file I/O, observations, typed registries, and concrete storage adapters.
+chrono.workspace = true
+getrandom.workspace = true
+indexmap.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+sha2.workspace = true
+tempfile.workspace = true
+thiserror.workspace = true
+tokio.workspace = true
+tracing.workspace = true
+
+[lints]
+workspace = true

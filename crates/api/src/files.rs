@@ -5,7 +5,7 @@ use axum::body::Body;
 use axum::extract::{Query, State};
 use axum::http::{StatusCode, header};
 use axum::response::{IntoResponse, Response};
-use filesystem::service::transfer::Cursor;
+use filesystem::files::service::transfer::Cursor;
 use futures_util::stream;
 use model::server::ErrorCode;
 
@@ -51,7 +51,7 @@ pub(crate) async fn download(
             if cancel.is_cancelled() {
                 return None;
             }
-            match filesystem::connection::files::transfer::chunk(cursor, &tasks).await {
+            match filesystem::files::connection::files::transfer::chunk(cursor, &tasks).await {
                 Ok((next, Some(bytes))) => Some((Ok::<_, std::io::Error>(bytes), Some(next))),
                 Ok((_, None)) => None,
                 Err(error) => Some((Err(std::io::Error::other(error.0)), None)),

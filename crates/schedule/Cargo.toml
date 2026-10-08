@@ -23,7 +23,7 @@ chrono-tz.workspace = true
 workspace = true
 
 [dev-dependencies]
-file.workspace = true
+persistence.workspace = true
 tempfile.workspace = true
 tokio.workspace = true
 tokio.features = ["test-util", "rt-multi-thread"]

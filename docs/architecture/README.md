@@ -6,21 +6,21 @@ Electron 位于 `apps/desktop`；`apps/mobile` 提供桌面、浏览器与移动
 
 ## Rust 能力边界
 
-| Crate        | 职责                                             | 允许的内部依赖                                 |
-| ------------ | ------------------------------------------------ | ---------------------------------------------- |
-| `domain`     | Agent/Project/Workspace 值、记录、不变量与纯投影 | 无                                             |
-| `file`       | 单文件工具、启动配置及具体文件持久化适配器       | `model`、`domain`                              |
-| `model`      | 协作端口、连接协议、请求和事件资源、创建流程协调 | `domain`                                       |
-| `metadata`   | 基础连接方法、Project/Workspace 目录与配置       | `domain`、`model`、`file`                      |
-| `filesystem` | 文件、Git、worktree、Forge 和技能安装            | `domain`、`model`；测试使用 `file`             |
-| `provider`   | 原生 Provider 会话、执行、历史和摘要生成         | `domain`、`model`；测试使用 `file`             |
-| `terminal`   | PTY、终端快照、活动和连接订阅                    | `domain`、`model`                              |
-| `voice`      | 语音、听写和离线推理                             | `model`                                        |
-| `schedule`   | 定时任务服务与协议                               | `domain`、`model`；测试使用 `file`             |
-| `browser`    | 浏览器自动化请求与回传                           | `model`                                        |
-| `relay`      | 控制 RPC、主动连接与反向数据通道                 | `model`                                        |
-| `api`        | HTTP/WebSocket 鉴权、连接与跨能力协调            | 上述能力包、`domain`、`model`；测试使用 `file` |
-| `daemon`     | 进程锁、服务组装和停机                           | API、领域、`model`、`file` 及能力包            |
+| Crate         | 职责                                              | 允许的内部依赖                                        |
+| ------------- | ------------------------------------------------- | ----------------------------------------------------- |
+| `domain`      | Agent/Project/Workspace 值、记录、不变量与纯投影  | 无                                                    |
+| `persistence` | 单文件工具、通用 Registry 及具体文件持久化适配器  | `model`、`domain`                                     |
+| `model`       | 协作端口、连接协议、请求和事件资源、创建流程协调  | `domain`                                              |
+| `metadata`    | 基础连接方法、Project/Workspace 目录与配置        | `domain`、`model`；测试使用 `persistence`             |
+| `filesystem`  | 文件、Git、worktree、Forge 和技能安装             | `domain`、`model`；测试使用 `persistence`             |
+| `provider`    | 原生 Provider 会话、执行、历史和摘要生成          | `domain`、`model`；测试使用 `persistence`             |
+| `terminal`    | PTY、终端快照、活动和连接订阅                     | `domain`、`model`                                     |
+| `voice`       | 语音、听写和离线推理                              | `model`                                               |
+| `schedule`    | 定时任务服务与协议                                | `domain`、`model`；测试使用 `persistence`             |
+| `browser`     | 浏览器自动化请求与回传                            | `model`                                               |
+| `relay`       | 控制 RPC、主动连接与反向数据通道                  | `model`                                               |
+| `api`         | HTTP/WebSocket 鉴权、连接与跨能力协调             | 上述能力包、`domain`、`model`；测试使用 `persistence` |
+| `daemon`      | 启动配置、进程锁、server identity、服务组装和停机 | API、领域、`model`、`persistence` 及能力包            |
 
 各实现组件自己声明方法，功能 crate 对外提供一个完整的 `Service`，API 按 crate 整体安装。
 `implemented_methods()` 返回业务方法声明，`installed_methods(bool)` 返回全部或空集合。
@@ -53,34 +53,46 @@ wire 类型归 `domain::workspace`；registry、活动与关注接口、worktree
 创建回执与进度归 `domain::creation`，幂等创建协调归 `model::creation`，通过
 `ReceiptStore` 使用持久化。目录 checkpoint 值归 `domain::directory_sync`，共享序列资源
 归 `model::directory_sync`；排序、行值和分页结果归 `domain::pagination`，分页算法归
-`model::pagination`；调度记录归 `domain::schedule`。通用原子文件引擎归 `file::registry`，
-Project/Workspace registry 和标签事务归 `file::storage`，回执文件适配归 `file::creation`。
+`model::pagination`；调度记录归 `domain::schedule`。通用原子文件引擎归 `persistence::registry`，
+Project/Workspace registry 和标签事务归 `persistence::storage`，回执文件适配归
+`persistence::storage::creation`。
 Workspace 登记、setup 和命名仍由 metadata 实现，通过 `model::workspace::lifecycle` 的接口注入
 provider。调用处直接导入共享定义，metadata 的旧共享转发路径已移除。
 详见 [ADR-102](../decisions/providers/adr-102-provider-metadata-independence.md)。
 
-`file` 提供单文件读取、原子写入和可取消的轮询观察，并承载通用 FileRegistry 的缓存、
+`persistence` 提供单文件读取、原子写入和可取消的轮询观察，并承载通用 FileRegistry 的缓存、
 提交锁、事务 hooks 和冻结。它通过 model/domain 契约实现 registry、创建回执、daemon/project
-配置、project icon、push token、server identity、Agent runtime 和 schedule 文件持久化。
-`model::storage` 只声明共享存储接口，不执行文件 I/O，也不依赖 file；功能服务保留流程协调，
-daemon 注入具体适配器。daemon 启动 CLI/环境/TOML 由 `file::config` 加载，API 校验策略
-仍由宿主注入。见 [ADR-106](../decisions/daemon/adr-106-concrete-file-persistence.md)，
-修订前的通用工具提取见 [ADR-105](../decisions/daemon/adr-105-file-tools-and-startup-config.md)。
+配置、project icon、push token、Agent runtime 和 schedule 文件持久化。
+`model::storage` 只声明共享存储接口，不执行文件 I/O，也不依赖 persistence；功能服务保留
+流程协调，只有 daemon 在生产代码中注入具体适配器。metadata 的 workspace 自动化通过
+`ProjectConfigStore::config_path` 定位项目配置。daemon 自己拥有启动 CLI/环境/TOML 加载
+（`bins/daemon/src/config.rs`）、故障证据文件和稳定 server identity，API 校验策略仍由宿主注入。
+见 [ADR-112](../decisions/daemon/adr-112-persistence-crate.md) 与
+[ADR-106](../decisions/daemon/adr-106-concrete-file-persistence.md)，修订前的通用工具提取见
+[ADR-105](../decisions/daemon/adr-105-file-tools-and-startup-config.md)。
 存储端口交换的 revision、事务结果与错误值归 `domain::storage` 和 `domain::workspace`，
 具体存储端口继续归 model。
 
 迁移时保留的纯 `pub use` 模块已删除；共享组件直接从 model/domain 导入，具体文件适配器
-直接从 file 导入。provider 和 schedule 的生产代码仅通过存储契约接收宿主注入，测试使用
-file 适配器；见 [ADR-107](../decisions/daemon/adr-107-direct-imports-from-owning-crates.md)。
+直接从 persistence 导入。功能 crate 的生产代码仅通过存储契约接收宿主注入，测试使用
+persistence 适配器；见 [ADR-107](../decisions/daemon/adr-107-direct-imports-from-owning-crates.md)。
 
 Terminal 同样直接使用 model 的 Workspace registry、活动契约和连接事件资源，以及 domain
 的记录和活动值，不依赖 metadata；见 [ADR-103](../decisions/daemon/adr-103-terminal-model-dependency.md)。
-Filesystem 的生产代码依赖 domain/model，相关测试使用 file 适配器：共享目录观察与摘要
+Filesystem 的生产代码依赖 domain/model，相关测试使用 persistence 适配器：共享目录观察与摘要
 消费端口归 model，Git/Forge 快照、身份与 descriptor 纯函数归 domain；Project 登记、命名和
 setup 通过 `ProjectRegistration`、`WorkspaceNaming`
 与 `WorkspaceSetup` 注入 metadata 的现有服务。API 的 setup 适配器继续使用原有自动化锁，
 Runtime 保留阻塞执行、admission 和任务跟踪。功能 crate 之间没有直接依赖；见
 [ADR-104](../decisions/workspace/adr-104-filesystem-model-collaboration.md)。
+
+filesystem 内部按能力组组织：`git`、`forge`、`worktrees`、`files` 和 `skills` 各自保留
+`ports`/`protocol`/`service`/`rpc`/`connection`/`local` 分层。组之间只引用对方的 `ports` 和
+`protocol`；`installation`、`capabilities`、`dispatch`、`connection` 以及组合 Git/Forge 缓存的
+`workspace_runtime` 位于顶层，可以组合多个组；组间共享的输出预算、有界 Git runner 和分发
+错误码位于不依赖任何组的 `support`。worktree 的 change request 解析通过
+`ChangeRequestResolver` 端口注入 Forge 实现。`crates/filesystem/tests/module_boundaries.rs`
+检查这些约定，见 [ADR-113](../decisions/workspace/adr-113-filesystem-capability-groups.md)。
 
 内置 Provider 由 `provider::Providers` 组装。具体客户端列表、启动配置、安装发现与辅助
 元数据生成能力留在 provider crate 内部；daemon 提供数据目录并连接服务与进程生命周期。

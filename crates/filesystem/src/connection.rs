@@ -2,15 +2,12 @@
 
 use std::collections::BTreeMap;
 
-pub(crate) mod checkout;
-pub mod files;
-
 /// Filesystem resources belonging to one physical connection.
 #[derive(Default)]
 pub struct Connection {
     /// File subscriptions and unfinished uploads.
-    pub files: files::FileConnection,
-    pub(crate) diffs: BTreeMap<String, checkout::CheckoutDiffSubscription>,
+    pub files: crate::files::connection::files::FileConnection,
+    pub(crate) diffs: BTreeMap<String, crate::git::connection::checkout::CheckoutDiffSubscription>,
 }
 
 impl Connection {

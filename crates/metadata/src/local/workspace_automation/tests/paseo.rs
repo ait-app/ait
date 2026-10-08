@@ -29,7 +29,7 @@ fn wait_script(
 #[test]
 fn missing_config_returns_no_scripts_without_creating_a_file() {
     let root = tempfile::tempdir().unwrap();
-    let automation = LocalWorkspaceAutomation::default();
+    let automation = automation();
     assert!(
         automation
             .list_scripts(&placement(root.path(), "missing"))
@@ -46,7 +46,7 @@ fn same_cwd_workspaces_run_and_stop_scripts_independently() {
         root.path(),
         &json!({"scripts":{"serve":{"type":"service","command":"while :; do sleep 1; done"}}}),
     );
-    let automation = LocalWorkspaceAutomation::default();
+    let automation = automation();
     let first = placement(root.path(), "first");
     let second = placement(root.path(), "second");
     let one = automation.start_script(&first, "serve").unwrap();
@@ -66,7 +66,7 @@ fn plain_script_does_not_expose_a_service_port_from_config() {
         root.path(),
         &json!({"scripts":{"build":{"command":"exit 0","port":4321}}}),
     );
-    let automation = LocalWorkspaceAutomation::default();
+    let automation = automation();
     let workspace = placement(root.path(), "build");
     let configured = automation.list_scripts(&workspace).unwrap().remove(0);
     assert_eq!(configured.kind, ScriptType::Script);
@@ -84,7 +84,7 @@ fn service_keeps_its_explicit_port_and_kind_after_exit() {
         root.path(),
         &json!({"scripts":{"serve":{"type":"service","command":"exit 9","port":4321}}}),
     );
-    let automation = LocalWorkspaceAutomation::default();
+    let automation = automation();
     let workspace = placement(root.path(), "serve");
     let started = automation.start_script(&workspace, "serve").unwrap();
     assert_eq!(started.port, Some(4321));
@@ -102,7 +102,7 @@ fn exited_script_can_restart_with_a_new_terminal_identity() {
         root.path(),
         &json!({"scripts":{"once":{"command":"printf x >> executions"}}}),
     );
-    let automation = LocalWorkspaceAutomation::default();
+    let automation = automation();
     let workspace = placement(root.path(), "restart");
     let first = automation.start_script(&workspace, "once").unwrap();
     assert_eq!(wait_script(&automation, &workspace).exit_code, Some(0));
@@ -122,7 +122,7 @@ fn removing_script_configuration_keeps_the_live_process_stoppable() {
         root.path(),
         &json!({"scripts":{"serve":{"command":"while :; do sleep 1; done"}}}),
     );
-    let automation = LocalWorkspaceAutomation::default();
+    let automation = automation();
     let workspace = placement(root.path(), "removed-config");
     let started = automation.start_script(&workspace, "serve").unwrap();
     config(root.path(), &json!({"scripts":{}}));
@@ -144,7 +144,7 @@ fn unknown_script_does_not_spawn_or_pollute_another_workspace() {
         root.path(),
         &json!({"scripts":{"known":{"command":"touch unexpected"}}}),
     );
-    let automation = LocalWorkspaceAutomation::default();
+    let automation = automation();
     let workspace = placement(root.path(), "unknown");
     assert!(matches!(
         automation.start_script(&workspace, "missing"),
@@ -161,7 +161,7 @@ fn unknown_script_does_not_spawn_or_pollute_another_workspace() {
 fn malformed_setup_config_publishes_a_failed_snapshot_without_running_commands() {
     let root = tempfile::tempdir().unwrap();
     config(root.path(), &json!(["touch unexpected"]));
-    let automation = LocalWorkspaceAutomation::default();
+    let automation = automation();
     assert!(matches!(
         automation.start_setup(&placement(root.path(), "bad")),
         Err(WorkspaceAutomationError::InvalidConfig(_))
@@ -176,7 +176,7 @@ fn malformed_setup_config_publishes_a_failed_snapshot_without_running_commands()
 #[test]
 fn setup_accepts_one_command_and_filters_blank_or_non_string_commands() {
     let root = tempfile::tempdir().unwrap();
-    let automation = LocalWorkspaceAutomation::default();
+    let automation = automation();
     config(
         root.path(),
         &json!({"worktree":{"setup":"printf first > sequence"}}),
@@ -223,7 +223,7 @@ fn setup_environment_uses_saved_checkout_and_repository_placement() {
     let mut workspace = placement(root.path(), "environment");
     workspace.worktree_path = "/saved/checkout".to_owned();
     workspace.repo_root = "/saved/repository".to_owned();
-    let automation = LocalWorkspaceAutomation::default();
+    let automation = automation();
     automation.start_setup(&workspace).unwrap();
     wait_for(&automation, "environment", SetupLifecycle::Completed);
     assert_eq!(

@@ -29,7 +29,7 @@ mod synchronization;
 
 #[test]
 fn committed_registry_mutations_wake_directory_and_publish_project_updates() {
-    use file::storage::registry::{FileBackedProjectRegistry, FileBackedWorkspaceRegistry};
+    use persistence::storage::registry::{FileBackedProjectRegistry, FileBackedWorkspaceRegistry};
 
     let root = tempfile::tempdir().expect("registry root");
     let projects = FileBackedProjectRegistry::new(root.path().join("projects.json"));
@@ -347,6 +347,10 @@ impl DirectorySource for Source {
 struct ConfigStore(Mutex<Option<(serde_json::Value, StoreConfigRevision)>>);
 
 impl ProjectConfigStore for ConfigStore {
+    fn config_path(&self, root: &std::path::Path) -> std::io::Result<std::path::PathBuf> {
+        Ok(root.join("ait.json"))
+    }
+
     fn read(&self, _root: &str) -> Result<ProjectConfigDocument, ProjectConfigStoreError> {
         let value = self.0.lock().unwrap().clone();
         Ok(ProjectConfigDocument {

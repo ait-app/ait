@@ -2373,13 +2373,13 @@
       },
       "handlers": [
         {
-          "file": "crates/filesystem/src/rpc/checkout.rs",
+          "file": "crates/filesystem/src/git/rpc/checkout.rs",
           "line": 21
         }
       ],
       "tests": [
-        "crates/filesystem/src/protocol/checkout/tests.rs",
-        "crates/filesystem/src/rpc/checkout/tests.rs",
+        "crates/filesystem/src/git/protocol/checkout/tests.rs",
+        "crates/filesystem/src/git/rpc/checkout/tests.rs",
         "bins/daemon/tests/process/checkout.rs"
       ],
       "assessment": "名称、输入字段与实现入口已核对；语义证据见关联测试及主报告",
@@ -3850,14 +3850,14 @@
           "line": 12
         },
         {
-          "file": "crates/filesystem/src/rpc/checkout.rs",
+          "file": "crates/filesystem/src/git/rpc/checkout.rs",
           "line": 24
         }
       ],
       "tests": [
         "crates/filesystem/src/dispatch/metadata/tests.rs",
-        "crates/filesystem/src/protocol/checkout/tests.rs",
-        "crates/filesystem/src/rpc/checkout/tests.rs",
+        "crates/filesystem/src/git/protocol/checkout/tests.rs",
+        "crates/filesystem/src/git/rpc/checkout/tests.rs",
         "bins/daemon/tests/process/checkout.rs",
         "bins/daemon/tests/process/metadata_generation.rs"
       ],
@@ -3909,13 +3909,13 @@
       },
       "handlers": [
         {
-          "file": "crates/filesystem/src/rpc/checkout.rs",
+          "file": "crates/filesystem/src/git/rpc/checkout.rs",
           "line": 26
         }
       ],
       "tests": [
-        "crates/filesystem/src/protocol/checkout/tests.rs",
-        "crates/filesystem/src/rpc/checkout/tests.rs",
+        "crates/filesystem/src/git/protocol/checkout/tests.rs",
+        "crates/filesystem/src/git/rpc/checkout/tests.rs",
         "bins/daemon/tests/process/checkout.rs"
       ],
       "assessment": "名称、输入字段与实现入口已核对；语义证据见关联测试及主报告",
@@ -3966,13 +3966,13 @@
       },
       "handlers": [
         {
-          "file": "crates/filesystem/src/rpc/checkout.rs",
+          "file": "crates/filesystem/src/git/rpc/checkout.rs",
           "line": 25
         }
       ],
       "tests": [
-        "crates/filesystem/src/protocol/checkout/tests.rs",
-        "crates/filesystem/src/rpc/checkout/tests.rs",
+        "crates/filesystem/src/git/protocol/checkout/tests.rs",
+        "crates/filesystem/src/git/rpc/checkout/tests.rs",
         "bins/daemon/tests/process/checkout.rs"
       ],
       "assessment": "名称、输入字段与实现入口已核对；语义证据见关联测试及主报告",
@@ -4034,14 +4034,14 @@
           "line": 20
         },
         {
-          "file": "crates/filesystem/src/rpc/forge.rs",
+          "file": "crates/filesystem/src/forge/rpc/forge.rs",
           "line": 19
         }
       ],
       "tests": [
         "crates/api/src/connection/routing/tests.rs",
         "crates/filesystem/src/dispatch/metadata/tests.rs",
-        "crates/filesystem/src/rpc/forge/tests.rs",
+        "crates/filesystem/src/forge/rpc/forge/tests.rs",
         "bins/daemon/tests/process/forge.rs"
       ],
       "assessment": "核对输入与路由；当前仅 GitHub/GHES，GitLab/Gitea 尚未接入",
@@ -4095,12 +4095,12 @@
       },
       "handlers": [
         {
-          "file": "crates/filesystem/src/rpc/forge.rs",
+          "file": "crates/filesystem/src/forge/rpc/forge.rs",
           "line": 20
         }
       ],
       "tests": [
-        "crates/filesystem/src/rpc/forge/tests.rs",
+        "crates/filesystem/src/forge/rpc/forge/tests.rs",
         "bins/daemon/tests/process/forge.rs"
       ],
       "assessment": "核对输入与路由；当前仅 GitHub/GHES，GitLab/Gitea 尚未接入",
@@ -4154,12 +4154,12 @@
       },
       "handlers": [
         {
-          "file": "crates/filesystem/src/rpc/forge.rs",
+          "file": "crates/filesystem/src/forge/rpc/forge.rs",
           "line": 21
         }
       ],
       "tests": [
-        "crates/filesystem/src/rpc/forge/tests.rs",
+        "crates/filesystem/src/forge/rpc/forge/tests.rs",
         "bins/daemon/tests/process/forge.rs"
       ],
       "assessment": "核对输入与路由；当前仅 GitHub/GHES，GitLab/Gitea 尚未接入",
@@ -4204,13 +4204,13 @@
       },
       "handlers": [
         {
-          "file": "crates/filesystem/src/rpc/checkout.rs",
+          "file": "crates/filesystem/src/git/rpc/checkout.rs",
           "line": 27
         }
       ],
       "tests": [
-        "crates/filesystem/src/protocol/checkout/tests.rs",
-        "crates/filesystem/src/rpc/checkout/tests.rs",
+        "crates/filesystem/src/git/protocol/checkout/tests.rs",
+        "crates/filesystem/src/git/rpc/checkout/tests.rs",
         "bins/daemon/tests/process/checkout.rs"
       ],
       "assessment": "名称、输入字段与实现入口已核对；语义证据见关联测试及主报告",
@@ -4255,13 +4255,13 @@
       },
       "handlers": [
         {
-          "file": "crates/filesystem/src/rpc/checkout.rs",
+          "file": "crates/filesystem/src/git/rpc/checkout.rs",
           "line": 28
         }
       ],
       "tests": [
-        "crates/filesystem/src/protocol/checkout/tests.rs",
-        "crates/filesystem/src/rpc/checkout/tests.rs",
+        "crates/filesystem/src/git/protocol/checkout/tests.rs",
+        "crates/filesystem/src/git/rpc/checkout/tests.rs",
         "bins/daemon/tests/process/checkout.rs"
       ],
       "assessment": "名称、输入字段与实现入口已核对；语义证据见关联测试及主报告",
@@ -4306,14 +4306,14 @@
       },
       "handlers": [
         {
-          "file": "crates/filesystem/src/rpc/checkout.rs",
+          "file": "crates/filesystem/src/git/rpc/checkout.rs",
           "line": 15
         }
       ],
       "tests": [
         "crates/filesystem/src/capabilities/tests.rs",
-        "crates/filesystem/src/protocol/checkout/tests.rs",
-        "crates/filesystem/src/rpc/checkout/tests.rs",
+        "crates/filesystem/src/git/protocol/checkout/tests.rs",
+        "crates/filesystem/src/git/rpc/checkout/tests.rs",
         "crates/protocol/src/methods/tests.rs",
         "bins/daemon/tests/process/checkout.rs"
       ],
@@ -4359,13 +4359,13 @@
       },
       "handlers": [
         {
-          "file": "crates/filesystem/src/rpc/checkout.rs",
+          "file": "crates/filesystem/src/git/rpc/checkout.rs",
           "line": 22
         }
       ],
       "tests": [
-        "crates/filesystem/src/protocol/checkout/tests.rs",
-        "crates/filesystem/src/rpc/checkout/tests.rs",
+        "crates/filesystem/src/git/protocol/checkout/tests.rs",
+        "crates/filesystem/src/git/rpc/checkout/tests.rs",
         "bins/daemon/tests/process/checkout.rs"
       ],
       "assessment": "名称、输入字段与实现入口已核对；语义证据见关联测试及主报告",
@@ -4414,13 +4414,13 @@
       },
       "handlers": [
         {
-          "file": "crates/filesystem/src/rpc/checkout.rs",
+          "file": "crates/filesystem/src/git/rpc/checkout.rs",
           "line": 19
         }
       ],
       "tests": [
-        "crates/filesystem/src/protocol/checkout/tests.rs",
-        "crates/filesystem/src/rpc/checkout/tests.rs",
+        "crates/filesystem/src/git/protocol/checkout/tests.rs",
+        "crates/filesystem/src/git/rpc/checkout/tests.rs",
         "bins/daemon/tests/process/checkout.rs"
       ],
       "assessment": "名称、输入字段与实现入口已核对；语义证据见关联测试及主报告",
@@ -4473,13 +4473,13 @@
       },
       "handlers": [
         {
-          "file": "crates/filesystem/src/rpc/checkout.rs",
+          "file": "crates/filesystem/src/git/rpc/checkout.rs",
           "line": 18
         }
       ],
       "tests": [
-        "crates/filesystem/src/protocol/checkout/tests.rs",
-        "crates/filesystem/src/rpc/checkout/tests.rs",
+        "crates/filesystem/src/git/protocol/checkout/tests.rs",
+        "crates/filesystem/src/git/rpc/checkout/tests.rs",
         "bins/daemon/tests/process/checkout.rs"
       ],
       "assessment": "名称、输入字段与实现入口已核对；语义证据见关联测试及主报告",
@@ -4524,14 +4524,14 @@
       },
       "handlers": [
         {
-          "file": "crates/filesystem/src/rpc/checkout.rs",
+          "file": "crates/filesystem/src/git/rpc/checkout.rs",
           "line": 17
         }
       ],
       "tests": [
         "crates/api/src/connection/routing/tests.rs",
-        "crates/filesystem/src/protocol/checkout/tests.rs",
-        "crates/filesystem/src/rpc/checkout/tests.rs",
+        "crates/filesystem/src/git/protocol/checkout/tests.rs",
+        "crates/filesystem/src/git/rpc/checkout/tests.rs",
         "bins/daemon/tests/process/checkout.rs"
       ],
       "assessment": "名称、输入字段与实现入口已核对；语义证据见关联测试及主报告",
@@ -4598,13 +4598,13 @@
       },
       "handlers": [
         {
-          "file": "crates/filesystem/src/rpc/checkout.rs",
+          "file": "crates/filesystem/src/git/rpc/checkout.rs",
           "line": 29
         }
       ],
       "tests": [
-        "crates/filesystem/src/protocol/checkout/tests.rs",
-        "crates/filesystem/src/rpc/checkout/tests.rs",
+        "crates/filesystem/src/git/protocol/checkout/tests.rs",
+        "crates/filesystem/src/git/rpc/checkout/tests.rs",
         "bins/daemon/tests/process/checkout.rs"
       ],
       "assessment": "名称、输入字段与实现入口已核对；语义证据见关联测试及主报告",
@@ -4657,7 +4657,7 @@
       },
       "handlers": [
         {
-          "file": "crates/filesystem/src/rpc/forge.rs",
+          "file": "crates/filesystem/src/forge/rpc/forge.rs",
           "line": 26
         }
       ],
@@ -4729,12 +4729,12 @@
       },
       "handlers": [
         {
-          "file": "crates/filesystem/src/rpc/forge.rs",
+          "file": "crates/filesystem/src/forge/rpc/forge.rs",
           "line": 23
         }
       ],
       "tests": [
-        "crates/filesystem/src/rpc/forge/tests.rs",
+        "crates/filesystem/src/forge/rpc/forge/tests.rs",
         "bins/daemon/tests/process/forge.rs"
       ],
       "assessment": "核对输入与路由；当前仅 GitHub/GHES，GitLab/Gitea 尚未接入",
@@ -4791,12 +4791,12 @@
       },
       "handlers": [
         {
-          "file": "crates/filesystem/src/rpc/forge.rs",
+          "file": "crates/filesystem/src/forge/rpc/forge.rs",
           "line": 27
         }
       ],
       "tests": [
-        "crates/filesystem/src/rpc/forge/tests.rs",
+        "crates/filesystem/src/forge/rpc/forge/tests.rs",
         "bins/daemon/tests/process/forge.rs"
       ],
       "assessment": "核对输入与路由；当前仅 GitHub/GHES，GitLab/Gitea 尚未接入",
@@ -4864,12 +4864,12 @@
       },
       "handlers": [
         {
-          "file": "crates/filesystem/src/rpc/forge.rs",
+          "file": "crates/filesystem/src/forge/rpc/forge.rs",
           "line": 23
         }
       ],
       "tests": [
-        "crates/filesystem/src/rpc/forge/tests.rs",
+        "crates/filesystem/src/forge/rpc/forge/tests.rs",
         "bins/daemon/tests/process/forge.rs"
       ],
       "assessment": "核对输入与路由；当前仅 GitHub/GHES，GitLab/Gitea 尚未接入",
@@ -4926,13 +4926,13 @@
       },
       "handlers": [
         {
-          "file": "crates/filesystem/src/rpc/checkout.rs",
+          "file": "crates/filesystem/src/git/rpc/checkout.rs",
           "line": 16
         }
       ],
       "tests": [
-        "crates/filesystem/src/protocol/checkout/tests.rs",
-        "crates/filesystem/src/rpc/checkout/tests.rs",
+        "crates/filesystem/src/git/protocol/checkout/tests.rs",
+        "crates/filesystem/src/git/rpc/checkout/tests.rs",
         "bins/daemon/tests/process/checkout.rs"
       ],
       "assessment": "名称、输入字段与实现入口已核对；语义证据见关联测试及主报告",
@@ -4977,13 +4977,13 @@
       },
       "handlers": [
         {
-          "file": "crates/filesystem/src/rpc/checkout.rs",
+          "file": "crates/filesystem/src/git/rpc/checkout.rs",
           "line": 23
         }
       ],
       "tests": [
-        "crates/filesystem/src/protocol/checkout/tests.rs",
-        "crates/filesystem/src/rpc/checkout/tests.rs",
+        "crates/filesystem/src/git/protocol/checkout/tests.rs",
+        "crates/filesystem/src/git/rpc/checkout/tests.rs",
         "bins/daemon/tests/process/checkout.rs"
       ],
       "assessment": "名称、输入字段与实现入口已核对；语义证据见关联测试及主报告",
@@ -5736,12 +5736,12 @@
       },
       "handlers": [
         {
-          "file": "crates/filesystem/src/rpc/worktrees.rs",
+          "file": "crates/filesystem/src/worktrees/rpc/worktrees.rs",
           "line": 39
         }
       ],
       "tests": [
-        "crates/filesystem/src/protocol/worktrees/tests.rs",
+        "crates/filesystem/src/worktrees/protocol/worktrees/tests.rs",
         "bins/daemon/tests/process/agent_execution/worktrees/pr_checkout.rs",
         "bins/daemon/tests/process/metadata_generation.rs",
         "bins/daemon/tests/process/worktrees.rs"
@@ -6526,7 +6526,7 @@
       },
       "handlers": [
         {
-          "file": "crates/filesystem/src/rpc/files.rs",
+          "file": "crates/filesystem/src/files/rpc/files.rs",
           "line": 21
         }
       ],
@@ -7317,7 +7317,7 @@
       },
       "handlers": [
         {
-          "file": "crates/filesystem/src/rpc/files.rs",
+          "file": "crates/filesystem/src/files/rpc/files.rs",
           "line": 28
         }
       ],
@@ -7370,11 +7370,11 @@
       },
       "handlers": [
         {
-          "file": "crates/filesystem/src/connection/files/connection.rs",
+          "file": "crates/filesystem/src/files/connection/files/connection.rs",
           "line": 92
         },
         {
-          "file": "crates/filesystem/src/rpc/files.rs",
+          "file": "crates/filesystem/src/files/rpc/files.rs",
           "line": 22
         }
       ],
@@ -7446,7 +7446,7 @@
           "line": 243
         },
         {
-          "file": "crates/filesystem/src/connection/files/connection.rs",
+          "file": "crates/filesystem/src/files/connection/files/connection.rs",
           "line": 88
         }
       ],
@@ -7514,13 +7514,13 @@
       },
       "handlers": [
         {
-          "file": "crates/filesystem/src/rpc/forge.rs",
+          "file": "crates/filesystem/src/forge/rpc/forge.rs",
           "line": 17
         }
       ],
       "tests": [
         "crates/filesystem/src/capabilities/tests.rs",
-        "crates/filesystem/src/rpc/forge/tests.rs",
+        "crates/filesystem/src/forge/rpc/forge/tests.rs",
         "bins/daemon/tests/process/forge.rs"
       ],
       "assessment": "核对输入与路由；当前仅 GitHub/GHES，GitLab/Gitea 尚未接入",
@@ -7587,7 +7587,7 @@
       },
       "handlers": [
         {
-          "file": "crates/filesystem/src/rpc/files.rs",
+          "file": "crates/filesystem/src/files/rpc/files.rs",
           "line": 24
         }
       ],
@@ -7652,7 +7652,7 @@
       },
       "handlers": [
         {
-          "file": "crates/filesystem/src/rpc/files.rs",
+          "file": "crates/filesystem/src/files/rpc/files.rs",
           "line": 27
         }
       ],
@@ -7705,7 +7705,7 @@
       },
       "handlers": [
         {
-          "file": "crates/filesystem/src/rpc/files.rs",
+          "file": "crates/filesystem/src/files/rpc/files.rs",
           "line": 26
         }
       ],
@@ -7758,7 +7758,7 @@
       },
       "handlers": [
         {
-          "file": "crates/filesystem/src/rpc/files.rs",
+          "file": "crates/filesystem/src/files/rpc/files.rs",
           "line": 25
         }
       ],
@@ -7815,7 +7815,7 @@
       },
       "handlers": [
         {
-          "file": "crates/filesystem/src/connection/files/connection.rs",
+          "file": "crates/filesystem/src/files/connection/files/connection.rs",
           "line": 75
         }
       ],
@@ -7873,7 +7873,7 @@
       },
       "handlers": [
         {
-          "file": "crates/filesystem/src/connection/files/connection.rs",
+          "file": "crates/filesystem/src/files/connection/files/connection.rs",
           "line": 80
         }
       ],
@@ -7922,7 +7922,7 @@
       },
       "handlers": [
         {
-          "file": "crates/filesystem/src/rpc/files.rs",
+          "file": "crates/filesystem/src/files/rpc/files.rs",
           "line": 23
         }
       ],
@@ -8095,12 +8095,12 @@
       },
       "handlers": [
         {
-          "file": "crates/filesystem/src/rpc/forge.rs",
+          "file": "crates/filesystem/src/forge/rpc/forge.rs",
           "line": 18
         }
       ],
       "tests": [
-        "crates/filesystem/src/rpc/forge/tests.rs",
+        "crates/filesystem/src/forge/rpc/forge/tests.rs",
         "bins/daemon/tests/process/forge.rs"
       ],
       "assessment": "核对输入与路由；当前仅 GitHub/GHES，GitLab/Gitea 尚未接入",
@@ -9765,12 +9765,12 @@
           "line": 17
         },
         {
-          "file": "crates/filesystem/src/rpc/worktrees.rs",
+          "file": "crates/filesystem/src/worktrees/rpc/worktrees.rs",
           "line": 40
         }
       ],
       "tests": [
-        "crates/filesystem/src/protocol/worktrees/tests.rs",
+        "crates/filesystem/src/worktrees/protocol/worktrees/tests.rs",
         "bins/daemon/tests/process/agent_execution/archive.rs",
         "bins/daemon/tests/process/worktrees.rs"
       ],
@@ -9836,14 +9836,14 @@
       },
       "handlers": [
         {
-          "file": "crates/filesystem/src/rpc/worktrees.rs",
+          "file": "crates/filesystem/src/worktrees/rpc/worktrees.rs",
           "line": 38
         }
       ],
       "tests": [
         "crates/api/src/connection/routing/tests.rs",
         "crates/filesystem/src/capabilities/tests.rs",
-        "crates/filesystem/src/protocol/worktrees/tests.rs",
+        "crates/filesystem/src/worktrees/protocol/worktrees/tests.rs",
         "bins/daemon/tests/process/agent_execution/worktrees.rs",
         "bins/daemon/tests/process/worktrees.rs",
         "bins/daemon/tests/process/worktrees/creation.rs"
@@ -10853,7 +10853,7 @@
       },
       "handlers": [
         {
-          "file": "crates/filesystem/src/rpc/github_projects.rs",
+          "file": "crates/filesystem/src/forge/rpc/github_projects.rs",
           "line": 27
         }
       ],
@@ -11327,12 +11327,12 @@
       },
       "handlers": [
         {
-          "file": "crates/filesystem/src/rpc/forge.rs",
+          "file": "crates/filesystem/src/forge/rpc/forge.rs",
           "line": 22
         }
       ],
       "tests": [
-        "crates/filesystem/src/rpc/forge/tests.rs",
+        "crates/filesystem/src/forge/rpc/forge/tests.rs",
         "bins/daemon/tests/process/forge.rs"
       ],
       "assessment": "核对输入与路由；当前仅 GitHub/GHES，GitLab/Gitea 尚未接入",
@@ -13693,13 +13693,13 @@
       },
       "handlers": [
         {
-          "file": "crates/filesystem/src/rpc/checkout.rs",
+          "file": "crates/filesystem/src/git/rpc/checkout.rs",
           "line": 32
         }
       ],
       "tests": [
-        "crates/filesystem/src/protocol/checkout/tests.rs",
-        "crates/filesystem/src/rpc/checkout/tests.rs",
+        "crates/filesystem/src/git/protocol/checkout/tests.rs",
+        "crates/filesystem/src/git/rpc/checkout/tests.rs",
         "bins/daemon/tests/process/checkout.rs"
       ],
       "assessment": "名称、输入字段与实现入口已核对；语义证据见关联测试及主报告",
@@ -13747,13 +13747,13 @@
       },
       "handlers": [
         {
-          "file": "crates/filesystem/src/rpc/checkout.rs",
+          "file": "crates/filesystem/src/git/rpc/checkout.rs",
           "line": 31
         }
       ],
       "tests": [
-        "crates/filesystem/src/protocol/checkout/tests.rs",
-        "crates/filesystem/src/rpc/checkout/tests.rs",
+        "crates/filesystem/src/git/protocol/checkout/tests.rs",
+        "crates/filesystem/src/git/rpc/checkout/tests.rs",
         "bins/daemon/tests/process/checkout.rs"
       ],
       "assessment": "名称、输入字段与实现入口已核对；语义证据见关联测试及主报告",
@@ -13804,13 +13804,13 @@
       },
       "handlers": [
         {
-          "file": "crates/filesystem/src/rpc/checkout.rs",
+          "file": "crates/filesystem/src/git/rpc/checkout.rs",
           "line": 30
         }
       ],
       "tests": [
-        "crates/filesystem/src/protocol/checkout/tests.rs",
-        "crates/filesystem/src/rpc/checkout/tests.rs",
+        "crates/filesystem/src/git/protocol/checkout/tests.rs",
+        "crates/filesystem/src/git/rpc/checkout/tests.rs",
         "bins/daemon/tests/process/checkout.rs"
       ],
       "assessment": "名称、输入字段与实现入口已核对；语义证据见关联测试及主报告",
@@ -13858,7 +13858,7 @@
       },
       "handlers": [
         {
-          "file": "crates/filesystem/src/connection/checkout.rs",
+          "file": "crates/filesystem/src/git/connection/checkout.rs",
           "line": 98
         },
         {
@@ -13868,7 +13868,7 @@
       ],
       "tests": [
         "crates/filesystem/src/connection/tests.rs",
-        "crates/filesystem/src/protocol/checkout/tests.rs",
+        "crates/filesystem/src/git/protocol/checkout/tests.rs",
         "bins/daemon/tests/process/checkout.rs"
       ],
       "assessment": "名称、输入字段与实现入口已核对；语义证据见关联测试及主报告",
@@ -14326,7 +14326,7 @@
         }
       ],
       "tests": [
-        "crates/filesystem/src/protocol/checkout/tests.rs",
+        "crates/filesystem/src/git/protocol/checkout/tests.rs",
         "bins/daemon/tests/process/checkout.rs"
       ],
       "assessment": "名称、输入字段与实现入口已核对；语义证据见关联测试及主报告",
@@ -14520,13 +14520,13 @@
       },
       "handlers": [
         {
-          "file": "crates/filesystem/src/rpc/checkout.rs",
+          "file": "crates/filesystem/src/git/rpc/checkout.rs",
           "line": 20
         }
       ],
       "tests": [
-        "crates/filesystem/src/protocol/checkout/tests.rs",
-        "crates/filesystem/src/rpc/checkout/tests.rs",
+        "crates/filesystem/src/git/protocol/checkout/tests.rs",
+        "crates/filesystem/src/git/rpc/checkout/tests.rs",
         "bins/daemon/tests/process/checkout.rs"
       ],
       "assessment": "名称、输入字段与实现入口已核对；语义证据见关联测试及主报告",
@@ -15822,7 +15822,7 @@
       },
       "handlers": [
         {
-          "file": "crates/filesystem/src/rpc/github_projects.rs",
+          "file": "crates/filesystem/src/forge/rpc/github_projects.rs",
           "line": 28
         }
       ],
@@ -16305,7 +16305,7 @@
       },
       "handlers": [
         {
-          "file": "crates/filesystem/src/rpc/workspace_recovery.rs",
+          "file": "crates/filesystem/src/worktrees/rpc/workspace_recovery.rs",
           "line": 33
         }
       ],
@@ -16355,7 +16355,7 @@
       },
       "handlers": [
         {
-          "file": "crates/filesystem/src/rpc/workspace_recovery.rs",
+          "file": "crates/filesystem/src/worktrees/rpc/workspace_recovery.rs",
           "line": 34
         }
       ],

@@ -12,6 +12,7 @@ use std::sync::{Arc, Mutex, Weak};
 use std::thread;
 use std::time::{Duration, Instant};
 
+use model::storage::project::ProjectConfigStore;
 use serde_json::Value;
 
 use crate::ports::workspace_automation::{
@@ -29,16 +30,45 @@ const SCRIPT_EXIT_AUDIT: Duration = Duration::from_secs(5);
 const TRUNCATION_MARKER: &[u8] = b"\n... setup output truncated ...\n";
 
 /// Process-backed workspace setup and script adapter.
-#[derive(Debug, Clone, Default)]
+#[derive(Debug, Clone)]
 pub struct LocalWorkspaceAutomation {
     inner: Arc<Inner>,
 }
 
-#[derive(Default)]
+impl LocalWorkspaceAutomation {
+    /// Run scripts and setup from the project configuration located through `config_store`.
+    /// Returns an idle runtime; configuration is read on demand without caching.
+    #[must_use]
+    pub fn new(config_store: Arc<dyn ProjectConfigStore>) -> Self {
+        Self {
+            inner: Arc::new(Inner::new(config_store)),
+        }
+    }
+
+    fn read_config(
+        &self,
+        workspace: &WorkspacePlacement,
+    ) -> Result<PaseoConfig, WorkspaceAutomationError> {
+        read_config(self.inner.config_store.as_ref(), Path::new(&workspace.cwd))
+    }
+}
+
 struct Inner {
+    config_store: Arc<dyn ProjectConfigStore>,
     state: Mutex<State>,
     sequence: AtomicU64,
     event_sink: Mutex<Option<AutomationEventSink>>,
+}
+
+impl Inner {
+    fn new(config_store: Arc<dyn ProjectConfigStore>) -> Self {
+        Self {
+            config_store,
+            state: Mutex::default(),
+            sequence: AtomicU64::default(),
+            event_sink: Mutex::default(),
+        }
+    }
 }
 
 impl std::fmt::Debug for Inner {
@@ -110,7 +140,7 @@ impl WorkspaceAutomationRuntime for LocalWorkspaceAutomation {
         &self,
         workspace: &WorkspacePlacement,
     ) -> Result<Vec<ScriptSnapshot>, WorkspaceAutomationError> {
-        let config = read_config(Path::new(&workspace.cwd))?;
+        let config = self.read_config(workspace)?;
         let mut state = lock(&self.inner.state);
         let exited = refresh_workspace_processes(&mut state, &workspace.workspace_id)?;
         let mut snapshots = Vec::with_capacity(config.scripts.len());
@@ -147,7 +177,7 @@ impl WorkspaceAutomationRuntime for LocalWorkspaceAutomation {
         workspace: &WorkspacePlacement,
         script_name: &str,
     ) -> Result<ScriptSnapshot, WorkspaceAutomationError> {
-        let config = read_config(Path::new(&workspace.cwd))?;
+        let config = self.read_config(workspace)?;
         let configured = config
             .scripts
             .get(script_name)
@@ -234,7 +264,7 @@ impl WorkspaceAutomationRuntime for LocalWorkspaceAutomation {
         &self,
         workspace: &WorkspacePlacement,
     ) -> Result<bool, WorkspaceAutomationError> {
-        let config = match read_config(Path::new(&workspace.cwd)) {
+        let config = match self.read_config(workspace) {
             Ok(config) => config,
             Err(error) => {
                 lock(&self.inner.state).setups.insert(
@@ -328,8 +358,12 @@ impl ScriptProcess {
     }
 }
 
-fn read_config(root: &Path) -> Result<PaseoConfig, WorkspaceAutomationError> {
-    let path = file::storage::project_config::read_path(root)
+fn read_config(
+    config_store: &dyn ProjectConfigStore,
+    root: &Path,
+) -> Result<PaseoConfig, WorkspaceAutomationError> {
+    let path = config_store
+        .config_path(root)
         .map_err(|error| config_error(root, &error))?;
     let metadata = match path.symlink_metadata() {
         Ok(metadata) => metadata,

@@ -1,7 +1,7 @@
 use std::path::Path;
 use std::process::Command;
 
-use filesystem::dispatch::CHECKOUT_METHODS;
+use filesystem::git::rpc::checkout::METHODS as CHECKOUT_METHODS;
 use serde_json::json;
 
 use super::transport::{Socket, connect, method_names, receive, request};

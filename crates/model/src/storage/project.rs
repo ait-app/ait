@@ -1,6 +1,7 @@
 //! Project configuration and icon persistence ports over domain values.
 
 use std::fmt::Debug;
+use std::path::{Path, PathBuf};
 
 use domain::storage::project::{
     ProjectConfigDocument, ProjectConfigRevision, ProjectConfigStoreError, ProjectConfigWrite,
@@ -10,6 +11,15 @@ use serde_json::Value;
 
 /// Blocking adapter for one project's `ait.json` file.
 pub trait ProjectConfigStore: Debug + Send + Sync {
+    /// Resolve the configuration file that reads beneath `root` would use.
+    ///
+    /// The preferred file wins even when it is invalid; the legacy name is returned only when
+    /// the preferred entry is absent. The returned path may not exist.
+    ///
+    /// # Errors
+    /// Returns metadata errors without silently selecting another file.
+    fn config_path(&self, root: &Path) -> std::io::Result<PathBuf>;
+
     /// Read and parse `ait.json`; absence is a successful empty state.
     ///
     /// # Errors

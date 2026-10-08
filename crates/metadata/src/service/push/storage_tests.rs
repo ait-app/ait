@@ -1,7 +1,7 @@
 use std::fs;
 
-use file::storage::push::FileTokenStore;
 use model::storage::push::TokenStore;
+use persistence::storage::push::FileTokenStore;
 use serde_json::json;
 
 use crate::service::push::PushTokens;

@@ -4,6 +4,7 @@ use std::os::unix::fs::PermissionsExt;
 use std::path::Path;
 use std::process::Command;
 
+use filesystem::forge::rpc::forge::METHODS as FORGE_METHODS;
 use serde_json::json;
 
 use super::transport::{connect, method_names, request};
@@ -26,7 +27,7 @@ async fn binary_serves_all_forge_and_pull_request_methods() {
     let log = root.path().join("server.log");
     let mut process = start_with_path(&state, &log, Some(&path));
     let address = ready(&mut process, &log).await;
-    let mut client = connect(&address, &method_names(filesystem::rpc::forge::METHODS)).await;
+    let mut client = connect(&address, &method_names(FORGE_METHODS)).await;
 
     let search = request(
         &mut client,
