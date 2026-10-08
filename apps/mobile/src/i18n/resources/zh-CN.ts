@@ -2481,6 +2481,8 @@ export const zhCN: TranslationResources = {
         rowHint: "收集连接、守护进程、提供方、桌面端和日志详情",
         run: "运行",
         running: "正在运行诊断...",
+        exportAccessibility: "导出诊断文件",
+        exportFailed: "导出诊断文件失败",
         copyLabel: "诊断信息",
         copyAccessibility: "复制诊断信息",
         copyFailed: "复制诊断信息失败",
