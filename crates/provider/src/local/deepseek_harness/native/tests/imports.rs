@@ -275,6 +275,10 @@ async fn application_import_persists_metadata_deduplicates_and_reopens_for_conti
         2
     );
     let record = reopened.resume("imported-agent").await.unwrap();
+    let mut snapshot = json!({"capabilities":{}});
+    reopened.control_snapshot(&record, &mut snapshot);
+    assert_eq!(snapshot["features"][0]["id"], "permission_preset");
+    assert_eq!(snapshot["features"][0]["value"], "workspace-write");
     assert_eq!(record.persistence.unwrap().session_id, "session");
     reopened
         .send("imported-agent", "continue after restart")

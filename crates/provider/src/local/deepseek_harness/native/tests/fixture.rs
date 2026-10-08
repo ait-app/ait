@@ -29,6 +29,7 @@ struct Host {
     records: Arc<Mutex<Vec<Value>>>,
     sessions: Arc<Mutex<Value>>,
     snapshot_fields: Arc<Mutex<Value>>,
+    presets: Arc<Mutex<Value>>,
 }
 
 pub(super) struct Fixture {
@@ -45,6 +46,9 @@ impl Fixture {
         let cwd = directory.path().to_str().unwrap().to_owned();
         let host = Host {
             cwd: cwd.clone(),
+            presets: Arc::new(Mutex::new(
+                json!({"presets":[{"id":"team/review.v2","name":"Team review","isDefault":true},{"id":"broken","broken":"missing plugin","isDefault":false}]}),
+            )),
             requests: Arc::default(),
             records: Arc::new(Mutex::new(vec![
                 json!({"type":"event","event":{"seq":0,"type":"permission/preset","time":1_700_000_000_000_i64,"data":{"preset":"workspace-write"}}}),
@@ -64,7 +68,7 @@ impl Fixture {
             axum::serve(listener, app).await.unwrap();
         });
         let program = directory.path().join("dsh");
-        std::fs::write(&program,format!("#!/bin/sh\nprintf 'dsh web: http://127.0.0.1:{port}/?token=fixture\\n'\nexec sleep 120\n")).unwrap();
+        std::fs::write(&program,format!("#!/bin/sh\nprintf '%s\\n' \"$@\" > \"$0.args\"\nprintf 'dsh web: http://127.0.0.1:{port}/?token=fixture\\n'\nexec sleep 120\n")).unwrap();
         std::fs::set_permissions(&program, std::fs::Permissions::from_mode(0o700)).unwrap();
         Self {
             directory,
@@ -79,6 +83,9 @@ impl Fixture {
         }
     }
 
+    pub(super) fn set_presets(&self, roster: Value) {
+        *self.host.presets.lock().unwrap() = roster;
+    }
     pub(super) fn seed_records(&self, records: Vec<Value>) {
         *self.host.records.lock().unwrap() = records;
     }
@@ -173,6 +180,7 @@ async fn rpc(State(host): State<Host>, headers: HeaderMap, Json(request): Json<V
     }
     host.requests.lock().unwrap().push(request.clone());
     let value = match request["method"].as_str() {
+        Some("agentPresets/list") => host.presets.lock().unwrap().clone(),
         Some("permissionPresets/catalog") => {
             json!({"options":[{"value":"read-only","name":"Read only"},{"value":"workspace-write","name":"Workspace write"},{"value":"custom-policy","name":"Custom policy"}]})
         }
@@ -186,7 +194,15 @@ async fn rpc(State(host): State<Host>, headers: HeaderMap, Json(request): Json<V
                 .unwrap();
             page(&host, before)
         }
-        Some("session/create") => json!({"sessionId":"session"}),
+        Some("session/create") => {
+            let preset = &request["payload"]["args"]["request"]["agentPreset"];
+            if preset.is_string() {
+                host.snapshot_fields.lock().unwrap()["projections"] = json!({"values":{
+                    "agentPreset":preset,"permissions":{"currentValue":"workspace-write"},
+                    "modelSelection":{"next":null}}});
+            }
+            json!({"sessionId":"session","agentPreset":preset})
+        }
         Some("session/selectModel") => {
             let mut model = request["payload"]["args"]["request"].clone();
             model.as_object_mut().unwrap().remove("sessionId");

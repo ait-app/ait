@@ -376,6 +376,12 @@ impl AgentManager {
                 .as_ref()
                 .unwrap_or(&StoredAgentConfig::default()),
         );
+        if let Some(agent) = self.live.get(agent_id) {
+            agent
+                .session
+                .validate_config_update(&config)
+                .map_err(|_| AgentManagerError::InvalidRequest)?;
+        }
         self.clients
             .get(&record.provider)
             .ok_or_else(|| AgentManagerError::ProviderUnavailable(record.provider.clone()))?
