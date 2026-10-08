@@ -121,6 +121,7 @@ struct FakeState {
     steer_result: Result<(), AgentSessionError>,
     steer_calls: Vec<(String, String)>,
     poll_error: Option<AgentSessionError>,
+    failure_message: Option<&'static str>,
     during_resume: Option<MemoryRegistry>,
 }
 
@@ -142,6 +143,7 @@ impl Default for FakeState {
             steer_result: Err(AgentSessionError::Rejected),
             steer_calls: Vec::new(),
             poll_error: None,
+            failure_message: None,
             during_resume: None,
         }
     }
@@ -211,6 +213,10 @@ impl AgentClient for FakeClient {
 }
 
 impl AgentSession for FakeSession {
+    fn failure_message(&self) -> Option<&str> {
+        self.0.lock().unwrap().failure_message
+    }
+
     fn start_turn<'a>(
         &'a mut self,
         _text: &'a str,

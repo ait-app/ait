@@ -124,7 +124,7 @@ fn probes_fail_without_hanging_and_collection_reports_missing_sources() {
                 Err(ProbeError::Timeout)
             );
             assert_eq!(
-                probe(Path::new("/bin/false"), &[]).await,
+                probe(Path::new("/usr/bin/false"), &[]).await,
                 Err(ProbeError::Failed)
             );
             assert_eq!(

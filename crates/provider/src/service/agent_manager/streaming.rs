@@ -1,6 +1,20 @@
 use super::{AgentManager, AgentManagerError, AgentTurnEvent, now_timestamp};
 use crate::ports::agent_session::AgentSessionError;
 
+pub(super) fn failure_message(agent: &super::LiveAgent) -> &str {
+    agent
+        .session
+        .failure_message()
+        .filter(|message| {
+            !message.trim().is_empty()
+                && message.len() <= 4096
+                && !message
+                    .chars()
+                    .any(|character| character.is_control() && !matches!(character, '\n' | '\t'))
+        })
+        .unwrap_or("Provider execution failed")
+}
+
 pub(super) fn drain(
     registry: &dyn domain::agent_runtime::registry::AgentRuntimeRegistry,
     timeline: Option<&crate::storage::timeline::Timeline>,
@@ -214,7 +228,11 @@ pub(super) fn publish_terminal(
     }
     if failed {
         tracing::warn!(provider = %agent.record.provider, agent_id = %agent.record.id, "Native provider turn failed");
-        event["error"] = json!("Provider execution failed");
+        event["error"] = json!(
+            committed
+                .and_then(|record| record.last_error.as_deref())
+                .unwrap_or_else(|| failure_message(agent))
+        );
     }
     if cancelled {
         event["reason"] = json!("interrupted");

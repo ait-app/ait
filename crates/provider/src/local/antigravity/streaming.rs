@@ -1,9 +1,10 @@
 use std::borrow::Cow;
-use std::collections::{BTreeMap, VecDeque};
+use std::collections::{BTreeMap, BTreeSet, VecDeque};
 
 use chrono::Utc;
 use serde_json::{Value, json};
 
+use super::diagnostics::Failure;
 use crate::ports::agent_session::{AgentSessionError, AgentTurnEvent};
 use crate::protocol::{timeline::NativeItem, usage::AgentUsage};
 
@@ -16,6 +17,7 @@ struct Step {
     text: String,
     tool: Value,
     done: bool,
+    published: bool,
 }
 
 #[derive(Debug, Default)]
@@ -27,6 +29,7 @@ pub(super) struct Stream {
     observation: usize,
     bytes: usize,
     assistant_seen: bool,
+    pub(super) failure: Option<Failure>,
 }
 
 impl Stream {
@@ -37,6 +40,7 @@ impl Stream {
         self.observation = 0;
         self.bytes = 0;
         self.assistant_seen = false;
+        self.failure = None;
     }
 
     pub(super) fn update(&mut self, update: &Value) -> Result<(), AgentSessionError> {
@@ -75,18 +79,19 @@ impl Stream {
             text: String::new(),
             tool: json!({}),
             done: false,
+            published: false,
         });
         if step.done || step.entry.item["type"] != kind {
             return Err(AgentSessionError::Failed);
         }
         let mut progress = step.entry.clone();
         if kind == "assistant_message" {
-            self.assistant_seen = true;
             let delta = update
                 .get("text_delta")
                 .map(|value| value.as_str().ok_or(AgentSessionError::Failed))
                 .transpose()?
                 .unwrap_or_default();
+            self.assistant_seen |= !delta.is_empty();
             if step.text.len().saturating_add(delta.len()) > MAX_TEXT {
                 return Err(AgentSessionError::Failed);
             }
@@ -95,31 +100,7 @@ impl Stream {
             step.entry.item["text"] = json!(step.text);
             progress.item["text"] = json!(delta);
         } else {
-            if let Some(info) = update.get("tool_info") {
-                let fields = info.as_object().ok_or(AgentSessionError::Failed)?;
-                for (name, value) in fields {
-                    let (value, bytes) = preview(value);
-                    self.bytes = self.bytes.saturating_add(bytes);
-                    step.tool[name] = value;
-                }
-            }
-            if let Some(name) = update.get("tool_name") {
-                step.tool["name"] = name.clone();
-            }
-            let name = step.tool["name"]
-                .as_str()
-                .filter(|name| {
-                    !name.is_empty() && name.len() <= 512 && !name.chars().any(char::is_control)
-                })
-                .ok_or(AgentSessionError::Failed)?;
-            let status = tool_status(&step.tool, done);
-            step.entry.item = json!({"type":"tool_call","callId":key,"name":name,"status":status,
-                "detail":tool_detail(&step.tool),"error":step.tool["error"]});
-            if let Some(info) = update.get("subagent_info") {
-                let (info, bytes) = preview(info);
-                self.bytes = self.bytes.saturating_add(bytes);
-                step.entry.item["metadata"] = json!({"subagentInfo":info});
-            }
+            self.bytes = self.bytes.saturating_add(update_tool(step, update, done)?);
             progress.clone_from(&step.entry);
         }
         if self.bytes > 8 * 1024 * 1024 {
@@ -128,8 +109,20 @@ impl Stream {
         self.observation += 1;
         if done {
             step.done = true;
-            self.events
-                .push_back(AgentTurnEvent::Timeline(step.entry.clone()));
+            // AGY omits both output and error for auto-denied tools. Wait for denied_actions
+            // before committing an immutable completion for an otherwise empty tool result.
+            if kind == "tool_call" && step.tool["output"].is_null() && step.tool["error"].is_null()
+            {
+                progress.item["status"] = json!("running");
+                self.events.push_back(AgentTurnEvent::Progress {
+                    observation: format!("{}:{}", self.turn, self.observation),
+                    entry: progress,
+                });
+            } else {
+                step.published = true;
+                self.events
+                    .push_back(AgentTurnEvent::Timeline(step.entry.clone()));
+            }
         } else {
             self.events.push_back(AgentTurnEvent::Progress {
                 observation: format!("{}:{}", self.turn, self.observation),
@@ -144,6 +137,8 @@ impl Stream {
             return Err(AgentSessionError::Failed);
         }
         let status = result["status"].as_str().ok_or(AgentSessionError::Failed)?;
+        let denied_tools = denied_tools(result)?;
+        let denied = !denied_tools.is_empty();
         let response = result["response"]
             .as_str()
             .ok_or(AgentSessionError::Failed)?;
@@ -163,8 +158,52 @@ impl Stream {
             // Native result usage is cumulative. Publish replacement snapshots, never sums.
             self.events.push_back(AgentTurnEvent::Usage(snapshot));
         }
-        if status == "SUCCESS" && self.steps.values().any(|step| !step.done) {
+        if status == "SUCCESS"
+            && self.steps.values().any(|step| {
+                !(step.done
+                    || step.entry.item["type"] == "tool_call"
+                        && step.tool["name"]
+                            .as_str()
+                            .is_some_and(|name| denied_tools.contains(&normalized_tool_name(name))))
+            })
+        {
             return Err(AgentSessionError::Failed);
+        }
+        let failed = !matches!(status, "SUCCESS" | "CANCELED" | "INTERRUPTED")
+            || (denied && response.trim().is_empty());
+        if failed {
+            self.failure = Some(if denied {
+                Failure::Permission
+            } else {
+                result["error"]
+                    .as_str()
+                    .and_then(Failure::classify)
+                    .unwrap_or(Failure::Native)
+            });
+        }
+        for step in self.steps.values_mut().filter(|step| !step.published) {
+            if step.entry.item["type"] == "tool_call" {
+                let refused = step.tool["name"]
+                    .as_str()
+                    .is_some_and(|name| denied_tools.contains(&normalized_tool_name(name)));
+                if refused || !step.done {
+                    let failure = if refused {
+                        Failure::Permission
+                    } else {
+                        self.failure.unwrap_or(Failure::Exit)
+                    };
+                    if !refused && matches!(status, "CANCELED" | "INTERRUPTED") {
+                        step.entry.item["status"] = json!("canceled");
+                        step.entry.item["error"] = Value::Null;
+                    } else {
+                        step.entry.item["status"] = json!("failed");
+                        step.entry.item["error"] = json!({"message":failure.message()});
+                    }
+                }
+            }
+            step.published = true;
+            self.events
+                .push_back(AgentTurnEvent::Timeline(step.entry.clone()));
         }
         if !self.assistant_seen && !response.is_empty() {
             let key = format!(
@@ -179,12 +218,87 @@ impl Stream {
             }));
         }
         self.events.push_back(match status {
+            "SUCCESS" if failed => AgentTurnEvent::Failed,
             "SUCCESS" => AgentTurnEvent::Completed(Some(response.to_owned())),
             "CANCELED" | "INTERRUPTED" => AgentTurnEvent::Cancelled,
             _ => AgentTurnEvent::Failed,
         });
         Ok(())
     }
+
+    pub(super) fn abort(&mut self, failure: Failure) {
+        self.failure = Some(self.failure.map_or(failure, |current| current.max(failure)));
+        let failure = self.failure.expect("failure assigned above");
+        for step in self.steps.values_mut().filter(|step| !step.published) {
+            if step.entry.item["type"] == "tool_call" {
+                step.entry.item["status"] = json!("failed");
+                step.entry.item["error"] = json!({"message":failure.message()});
+            }
+            step.published = true;
+            self.events
+                .push_back(AgentTurnEvent::Timeline(step.entry.clone()));
+        }
+        self.events.push_back(AgentTurnEvent::Failed);
+    }
+}
+
+fn update_tool(step: &mut Step, update: &Value, done: bool) -> Result<usize, AgentSessionError> {
+    let mut bytes = 0_usize;
+    if let Some(info) = update.get("tool_info") {
+        let fields = info.as_object().ok_or(AgentSessionError::Failed)?;
+        for (name, value) in fields {
+            let (value, size) = preview(value);
+            bytes = bytes.saturating_add(size);
+            step.tool[name] = value;
+        }
+    }
+    if let Some(name) = update.get("tool_name") {
+        step.tool["name"] = name.clone();
+    }
+    let name = step.tool["name"]
+        .as_str()
+        .filter(|name| !name.is_empty() && name.len() <= 512 && !name.chars().any(char::is_control))
+        .ok_or(AgentSessionError::Failed)?;
+    step.entry.item = json!({"type":"tool_call","callId":step.entry.key,"name":name,
+        "status":tool_status(&step.tool, done),"detail":tool_detail(&step.tool),
+        "error":step.tool["error"]});
+    if let Some(info) = update.get("subagent_info") {
+        let (info, size) = preview(info);
+        bytes = bytes.saturating_add(size);
+        step.entry.item["metadata"] = json!({"subagentInfo":info});
+    }
+    Ok(bytes)
+}
+
+fn denied_tools(result: &Value) -> Result<BTreeSet<String>, AgentSessionError> {
+    let mut names = BTreeSet::new();
+    let Some(actions) = result.get("denied_actions") else {
+        return Ok(names);
+    };
+    let actions = actions.as_array().ok_or(AgentSessionError::Failed)?;
+    if actions.len() > MAX_ITEMS {
+        return Err(AgentSessionError::Failed);
+    }
+    for action in actions {
+        let display = action["display_name"]
+            .as_str()
+            .ok_or(AgentSessionError::Failed)?;
+        if display.is_empty() || display.len() > 512 || display.chars().any(char::is_control) {
+            return Err(AgentSessionError::Failed);
+        }
+        names.insert(normalized_tool_name(display));
+        if action["action"] == "command" {
+            names.insert("runcommand".to_owned());
+        }
+    }
+    Ok(names)
+}
+
+fn normalized_tool_name(name: &str) -> String {
+    name.bytes()
+        .filter(u8::is_ascii_alphanumeric)
+        .map(|byte| char::from(byte.to_ascii_lowercase()))
+        .collect()
 }
 
 fn counter(usage: &Value, field: &str) -> Result<Option<u64>, AgentSessionError> {
