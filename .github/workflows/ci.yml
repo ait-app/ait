@@ -229,6 +229,7 @@ jobs:
           name: ${{ github.event_name == 'pull_request' && format('pr-{0}-{1}-{2}', github.event.pull_request.number, matrix.platform, github.event.pull_request.head.sha) || format('nightly-{0}', matrix.platform) }}
           path: release-assets/*
           if-no-files-found: error
+          overwrite: true
           retention-days: ${{ github.event_name == 'pull_request' && 14 || 1 }}
       - name: Link PR download
         if: github.event_name == 'pull_request'

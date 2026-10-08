@@ -45,7 +45,8 @@ PR 构建使用合并预览提交，检查 PR 与目标分支组合后的行为�
 
 在 PR 的 **Checks → CI → Details** 打开工作流，点击 Summary 中的 **Download test package**，
 或下载 **Artifacts** 下的 `pr-<编号>-<平台>-<PR提交SHA>`，解压后安装 DMG/AppImage 或使用 tar.gz。
-测试包保留 14 天；`BUILD-INFO.json` 分别记录 PR 提交、目标分支提交和实际构建的合并提交，
+AppImage 解压后需执行 `chmod +x Ait-linux-x86_64.AppImage` 再运行；tar.gz 内保留可执行权限。
+测试包保留 14 天；同次 CI 重跑会替换同名产物。`BUILD-INFO.json` 分别记录 PR 提交、目标分支提交和实际构建的合并提交，
 `SHA256SUMS` 可校验包内文件。
 
 PR 打包任务只有仓库读取权限，不使用发布凭据，也不更新 nightly Release；fork PR 可能需维护者批准运行。

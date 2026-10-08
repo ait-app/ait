@@ -110,6 +110,7 @@ test("PR merge builds are read-only and never schedule, publish, or clean up nig
   const upload = workflow.jobs.desktop.steps.find((step) =>
     step.uses?.startsWith("actions/upload-artifact@"),
   );
+  assert.equal(upload.with.overwrite, true);
   assert.match(upload.with.name, /pull_request.number/);
   assert.match(upload.with.name, /pull_request.head.sha/);
   assert.equal(
