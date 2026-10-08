@@ -1,8 +1,8 @@
 # Maintainer: Ait contributors <https://github.com/ait-app/ait>
 # Local working-tree build. Run makepkg -si from this repository's root.
 pkgname=ait
-pkgver=0.0.23beta1
-_ait_version=0.0.23-beta.1
+pkgver=0.0.23
+_ait_version=0.0.23
 pkgrel=1
 pkgdesc='Local-first multi-agent manager, built from the local source tree'
 arch=('x86_64')

@@ -1,6 +1,6 @@
 {
   "name": "@ait/client",
-  "version": "0.0.23-beta.1",
+  "version": "0.0.23",
   "private": true,
   "description": "Ait repository-local client and compatibility SDK",
   "files": [

@@ -128,6 +128,7 @@
 
 ## 发布验证
 
+- [Ait 0.0.23 发布说明](releases/release-0.0.23.md)
 - [Ait 0.0.23-beta.1 发布说明](releases/release-0.0.23-beta.1.md)
 - [Ait 0.0.22 发布说明](releases/release-0.0.22.md)
 - [Ait 0.0.21 发布准备与失败记录](releases/release-0.0.21.md)
