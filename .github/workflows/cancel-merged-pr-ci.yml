@@ -1,0 +1,51 @@
+name: Cancel merged PR CI
+
+on:
+  pull_request_target:
+    branches: [main]
+    types: [closed]
+
+permissions:
+  actions: write
+
+jobs:
+  cancel:
+    if: github.event.pull_request.merged == true
+    runs-on: ubuntu-latest
+    steps:
+      # Use only event metadata and the Actions API; never check out PR code.
+      - name: Cancel unfinished CI runs for the merged PR
+        uses: actions/github-script@v8
+        with:
+          script: |
+            const pr = context.payload.pull_request;
+            const runs = [];
+            for (const status of ['queued', 'in_progress', 'waiting', 'pending', 'requested']) {
+              runs.push(...await github.paginate(github.rest.actions.listWorkflowRuns, {
+                ...context.repo,
+                workflow_id: 'ci.yml',
+                event: 'pull_request',
+                branch: pr.head.ref,
+                status,
+                per_page: 100,
+              }));
+            }
+            // Collect every page before cancelling so mutations cannot shift pagination.
+            for (const run of runs) {
+              if (run.event !== 'pull_request' || run.status === 'completed') continue;
+              const pulls = run.pull_requests ?? [];
+              const belongsToPr = pulls.some(pull => pull.number === pr.number)
+                // Fork runs can omit PR associations; match both repository and branch.
+                || (pulls.length === 0 && pr.head.repo != null
+                    && run.head_repository?.id === pr.head.repo.id
+                    && run.head_branch === pr.head.ref);
+              if (!belongsToPr) continue;
+              try {
+                await github.rest.actions.cancelWorkflowRun({ ...context.repo, run_id: run.id });
+                core.notice(`Cancelled CI run ${run.id} for merged PR #${pr.number}.`);
+              } catch (error) {
+                // A run may finish between listing and cancellation.
+                if (error.status !== 409) throw error;
+                core.notice(`CI run ${run.id} is no longer cancellable.`);
+              }
+            }
