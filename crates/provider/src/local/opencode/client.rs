@@ -298,6 +298,7 @@ impl AgentClient for OpenCodeClient {
 }
 
 pub(super) fn error(error: ProtocolError) -> AgentSessionError {
+    tracing::warn!(fault = ?error.code, reason = error.message, "OpenCode operation failed");
     match error.code {
         Fault::AgentCapabilityUnsupported => AgentSessionError::Rejected,
         Fault::ProviderFailed

@@ -127,6 +127,10 @@ impl Api {
             .map_err(|_| failure(Fault::RunRecoveryFailed, "OpenCode request timed out"))?
             .map_err(|_| failure(Fault::RunRecoveryFailed, "OpenCode HTTP connection failed"))?;
         if !response.status().is_success() {
+            tracing::warn!(
+                status = response.status().as_u16(),
+                "OpenCode HTTP request rejected"
+            );
             return Err(failure(
                 Fault::ProviderFailed,
                 "OpenCode rejected the HTTP request",
