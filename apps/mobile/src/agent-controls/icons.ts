@@ -2,6 +2,7 @@ import type { ComponentType } from "react";
 import {
   Bot,
   Brain,
+  Hammer,
   ListTodo,
   Settings2,
   Shield,
@@ -27,6 +28,7 @@ export const PlanModeIcon = ListTodo;
 
 const MODE_ICONS: Record<string, AgentControlIcon> = {
   Bot,
+  Hammer,
   Shield,
   ShieldAlert,
   ShieldCheck,
@@ -49,15 +51,6 @@ export function getAgentModeIcon(
 ): AgentControlIcon {
   const icon = getModeVisuals(provider, modeId, providerDefinitions)?.icon;
   return (icon ? MODE_ICONS[icon] : undefined) ?? Bot;
-}
-
-export function getAgentModeOptionIcon(
-  provider: string,
-  modeId: string,
-  providerDefinitions: AgentProviderDefinition[],
-): AgentControlIcon | undefined {
-  const icon = getModeVisuals(provider, modeId, providerDefinitions)?.icon;
-  return icon ? MODE_ICONS[icon] : undefined;
 }
 
 export function getAgentFeatureIcon(icon?: string): AgentControlIcon {
