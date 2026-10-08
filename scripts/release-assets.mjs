@@ -7,10 +7,9 @@ import { pathToFileURL } from "node:url";
 import { releaseChannel } from "./release-version.mjs";
 
 export function releaseAssetNames(platform, version, buildLabel) {
-  const release = releaseChannel(version);
+  const channel = releaseChannel(version);
   if (buildLabel !== undefined)
     assert.match(buildLabel, /^[0-9a-f]{8}-\d{4}-\d{2}-\d{2}$/, "Invalid nightly build label");
-  const channel = buildLabel ? "nightly" : release;
   const label = buildLabel ?? version;
   if (platform === "linux")
     return [

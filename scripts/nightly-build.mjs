@@ -19,7 +19,6 @@ export function nightlyBuilderArgs(label) {
     `-c.mac.artifactName=Ait-${label}-macos-\${arch}.\${ext}`,
     `-c.linux.artifactName=Ait-${label}-linux-\${arch}.\${ext}`,
     `-c.appImage.artifactName=Ait-${label}-linux-\${arch}.\${ext}`,
-    "-c.publish.channel=nightly",
   ];
 }
 

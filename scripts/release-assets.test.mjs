@@ -134,7 +134,7 @@ test("nightly builder names and update URLs use the build label on both platform
       await getPublishConfigs(packager, null, arch, true),
     );
     assert.equal(tasks.length, 1);
-    assert.equal(path.basename(tasks[0].file), `nightly-${platform}.yml`);
+    assert.equal(path.basename(tasks[0].file), `${releaseChannel(version)}-${platform}.yml`);
     assert.equal(tasks[0].info.version, version); // Required by the updater's SemVer parser.
     assert.ok(tasks[0].info.files.every((file) => file.url.includes(buildLabel)));
     await writeFile(path.join(input.source, names[0] + ".blockmap"), "block map");

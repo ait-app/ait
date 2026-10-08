@@ -24,7 +24,7 @@ nightly 的公开构建标识统一为 `<8位提交hash>-<提交UTC日期>`，�
 Release 标题为 `Ait Nightly 38fb6054-2026-10-08`，安装包名例如
 `Ait-38fb6054-2026-10-08-macos-arm64.dmg`、`Ait-38fb6054-2026-10-08-linux-x86_64.AppImage`。
 ZIP、tar.gz、blockmap、CI 产物和 `BUILD-INFO.json` 使用同一标识；两平台及重跑均取同一提交日期。
-更新元数据使用 `nightly-mac.yml` / `nightly-linux.yml`，引用对应的新文件名。
+更新元数据沿用更新器识别的 `latest` / `beta` 入口文件名，内部引用对应的新安装包名。
 Electron、daemon 及更新协议内部仍保留必需的 SemVer 兼容字段，在构建信息中记作 `packagedVersion`。
 固定下载地址仍使用 `nightly` 标签；正式版本和 PR 测试包继续使用各自的命名方式。
 
