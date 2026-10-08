@@ -88,6 +88,8 @@
 
 ## 工程规范与验证
 
+- [Domain 数据与 Server 协议归属 PR 验证](reports/daemon/domain-values-server-protocol-pr-validation-2026-10-09.md)：13-crate workspace 测试、覆盖率与源码证据。
+
 - [Crate 边界与 main 整合验证](reports/daemon/crate-boundaries-main-rebase-2026-10-07.md)：完整测试、覆盖率与依赖守卫结果。
 - [DSH 辅助生成验证](reports/providers/dsh-auxiliary-generation.md)：无工具、无持久化的原生 headless 通道与覆盖率。
 - [OpenCode 辅助生成验证](reports/providers/opencode-auxiliary-generation.md)：私有、禁用工具的原生通道与清理边界。
