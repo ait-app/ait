@@ -80,6 +80,7 @@
 - [OpenCode 工具与结论顺序修复](providers/opencode-tool-order.md)
 - [OpenCode 上游 PR 验证](providers/opencode-upstream-pr.md)
 - [OpenCode 时间线顺序与工具历史](providers/opencode-history-order-and-tools.md)
+- [OpenCode 模型偏好、权限拒绝与会话错误分类：PR 覆盖率证据](providers/opencode-session-regressions-coverage-2026-10-08.json)
 - [OpenCode 原生流式与会话恢复](providers/opencode-native-streaming.md)
 - [OpenCode 1.18.33 兼容性](providers/opencode-1.18.33-compatibility.md)
 - [OpenCode Provider 迁移](providers/opencode-server-migration.md)
