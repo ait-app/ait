@@ -14,13 +14,14 @@ APK 的签名方式、安装要求与手动测试入口见 [Android APK 发布](
 [Apple TestFlight iOS 手动发布](#apple-testflight-ios-手动发布)一节，
 同样与桌面 GitHub Release 相互独立。见 [ADR-070](../decisions/clients/adr-070-ios-testflight-release.md)。
 
-## dev Nightly
+## main CI Nightly
 
-每次推送 `dev` 都会通过 [Nightly Build](../../.github/workflows/nightly.yml) 构建 Linux x86_64
-和 Apple Silicon 安装包，成功后更新固定的 [nightly 预发布](https://github.com/ait-app/ait/releases/tag/nightly)。
-无需创建版本标签；也可在 Actions 中选择 `dev` 手动运行该工作流。
+每次推送 `main` 都会通过 [CI](../../.github/workflows/ci.yml) 构建 Linux x86_64
+和 Apple Silicon 安装包，适用的 CI 检查和两个平台构建全部成功后更新固定的 [nightly 预发布](https://github.com/ait-app/ait/releases/tag/nightly)。
+无需创建版本标签；不再使用独立的 dev nightly 工作流。
 
-最多保留最新两次构建并行运行，以整个工作流为单位（每次包含 Linux 和 macOS 两个平台）：
+最多保留最新两次 main CI 并行运行，以整个工作流为单位（每次包含检查及 Linux、macOS 构建）；
+取消旧构建也会取消该次旧 CI 中尚未完成的检查，PR 不参与这个调度窗口：
 
 - 提交 1、2 相继触发构建时，保留两次构建。
 - 1 先完成则先发布 1，2 完成后覆盖 1。
@@ -36,6 +37,21 @@ APK 的签名方式、安装要求与手动测试入口见 [Android APK 发布](
 `BUILD-INFO.json` 记录源码提交、构建序号和构建链接，可用于确认安装包是否包含指定修复。
 新提交编译期间或编译失败时仍保留上一版。
 macOS nightly 使用 ad-hoc 签名，未公证。
+
+## PR 测试安装包
+
+创建或更新 PR 会在同一个 CI 中构建 Linux x86_64 和 macOS Apple Silicon 测试包，无需合并到 main。
+PR 构建使用合并预览提交，检查 PR 与目标分支组合后的行为。
+
+在 PR 的 **Checks → CI → Details** 打开工作流，点击 Summary 中的 **Download test package**，
+或下载 **Artifacts** 下的 `pr-<编号>-<平台>-<PR提交SHA>`，解压后安装 DMG/AppImage 或使用 tar.gz。
+测试包保留 14 天；`BUILD-INFO.json` 分别记录 PR 提交、目标分支提交和实际构建的合并提交，
+`SHA256SUMS` 可校验包内文件。
+
+PR 打包任务只有仓库读取权限，不使用发布凭据，也不更新 nightly Release；fork PR 可能需维护者批准运行。
+macOS 测试包同样使用 ad-hoc 签名、未公证。当前没有 Windows 打包链路。
+Android APK、Google Play 和 iOS TestFlight 继续仅由各自的 `workflow_dispatch` 手动触发，
+main/PR CI 不调用 EAS 构建或提交，不消耗移动端发布配额。
 
 ## 发布产物
 

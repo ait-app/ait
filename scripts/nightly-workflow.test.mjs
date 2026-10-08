@@ -1,12 +1,16 @@
 import assert from "node:assert/strict";
 import { spawnSync } from "node:child_process";
-import { readFile } from "node:fs/promises";
+import { mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
+import { tmpdir } from "node:os";
+import path from "node:path";
+import { createHash } from "node:crypto";
 import test from "node:test";
 import yaml from "yaml";
 import control from "./nightly-control.cjs";
+import { recordPrBuild } from "./pr-build-info.mjs";
 
 const workflow = yaml.parse(
-  await readFile(new URL("../.github/workflows/nightly.yml", import.meta.url), "utf8"),
+  await readFile(new URL("../.github/workflows/ci.yml", import.meta.url), "utf8"),
 );
 const AsyncFunction = Object.getPrototypeOf(async function () {}).constructor;
 const context = { repo: { owner: "ait-app", repo: "ait" }, sha: "current", runId: 42 };
@@ -29,27 +33,39 @@ async function runScript(step, github, outputs = {}, controller = control) {
   return outputs;
 }
 
-test("dev builds run independently while admission and publication share a queued lock", () => {
-  assert.deepEqual(workflow.on.push.branches, ["dev"]);
+test("main builds run independently while admission and publication share a queued lock", () => {
+  assert.deepEqual(workflow.on.push.branches, ["main"]);
   assert.equal(workflow.concurrency, undefined);
-  assert.equal(workflow.jobs.prepare.if, "github.ref == 'refs/heads/dev'");
-  assert.equal(workflow.jobs.prepare.outputs.admitted, "${{ steps.window.outputs.admitted }}");
-  assert.equal(workflow.jobs.build.needs, "prepare");
-  assert.equal(workflow.jobs.build.if, "needs.prepare.outputs.admitted == 'true'");
-  assert.equal(workflow.jobs.build.concurrency, undefined);
-  assert.deepEqual(workflow.jobs.prepare.concurrency, workflow.jobs.publish.concurrency);
-  assert.equal(workflow.jobs.prepare.permissions.actions, "write");
-  assert.equal(workflow.jobs.publish.permissions.actions, "write");
-  const platforms = workflow.jobs.build.strategy.matrix.include.map((entry) => entry.platform);
+  assert.equal(
+    workflow.jobs["nightly-prepare"].if,
+    "github.event_name != 'pull_request' && github.ref == 'refs/heads/main'",
+  );
+  assert.equal(
+    workflow.jobs["nightly-prepare"].outputs.admitted,
+    "${{ steps.window.outputs.admitted }}",
+  );
+  assert.equal(workflow.jobs.desktop.needs, "nightly-prepare");
+  assert.equal(
+    workflow.jobs.desktop.if,
+    "${{ !cancelled() && (github.event_name == 'pull_request' || needs.nightly-prepare.outputs.admitted == 'true') }}",
+  );
+  assert.equal(workflow.jobs.desktop.concurrency, undefined);
+  assert.deepEqual(
+    workflow.jobs["nightly-prepare"].concurrency,
+    workflow.jobs["nightly-publish"].concurrency,
+  );
+  assert.equal(workflow.jobs["nightly-prepare"].permissions.actions, "write");
+  assert.equal(workflow.jobs["nightly-publish"].permissions.actions, "write");
+  const platforms = workflow.jobs.desktop.strategy.matrix.include.map((entry) => entry.platform);
   assert.equal(new Set(platforms).size, platforms.length);
-  assert.equal(workflow.jobs.publish.needs, "build");
-  assert.deepEqual(workflow.jobs.publish.concurrency, {
-    group: "nightly-dev-control",
+  assert.deepEqual(workflow.jobs["nightly-publish"].needs, ["desktop", "rust", "ui", "docs"]);
+  assert.deepEqual(workflow.jobs["nightly-publish"].concurrency, {
+    group: "nightly-main-control",
     queue: "max",
     "cancel-in-progress": false,
   });
-  assert.deepEqual(workflow.jobs.cleanup.needs, ["build", "publish"]);
-  assert.match(workflow.jobs.cleanup.if, /always\(\)/);
+  assert.deepEqual(workflow.jobs["nightly-cleanup"].needs, ["desktop", "nightly-publish"]);
+  assert.match(workflow.jobs["nightly-cleanup"].if, /always\(\)/);
   for (const job of Object.values(workflow.jobs)) {
     for (const step of job.steps) {
       if (!step.run) continue;
@@ -59,22 +75,139 @@ test("dev builds run independently while admission and publication share a queue
   }
 });
 
-const releaseStep = workflow.jobs.publish.steps.find((step) => step.id === "release");
+function condition(expression, github, needs = {}, cancelled = false) {
+  const code = expression
+    .replace(/^\s*\$\{\{|\}\}\s*$/g, "")
+    .replaceAll("needs.nightly-prepare", 'needs["nightly-prepare"]');
+  return new Function(
+    "github",
+    "needs",
+    "cancelled",
+    "always",
+    "contains",
+    "fromJSON",
+    `return (${code});`,
+  )(
+    github,
+    needs,
+    () => cancelled,
+    () => true,
+    (list, value) => list.includes(value),
+    JSON.parse,
+  );
+}
+
+test("PR merge builds are read-only and never schedule, publish, or clean up nightly", () => {
+  assert.ok(Object.hasOwn(workflow.on, "pull_request"));
+  assert.equal(workflow.on.pull_request_target, undefined);
+  assert.deepEqual(workflow.permissions, { contents: "read" });
+  assert.deepEqual(workflow.jobs.desktop.permissions, { contents: "read" });
+  const github = { event_name: "pull_request", ref: "refs/pull/123/merge" };
+  assert.equal(condition(workflow.jobs.desktop.if, github), true);
+  for (const job of ["nightly-prepare", "nightly-publish", "nightly-cleanup"])
+    assert.equal(condition(workflow.jobs[job].if, github), false);
+  assert.equal(condition(workflow.jobs.desktop.if, github, {}, true), false);
+  const upload = workflow.jobs.desktop.steps.find((step) =>
+    step.uses?.startsWith("actions/upload-artifact@"),
+  );
+  assert.match(upload.with.name, /pull_request.number/);
+  assert.match(upload.with.name, /pull_request.head.sha/);
+  assert.equal(
+    upload.with["retention-days"],
+    "${{ github.event_name == 'pull_request' && 14 || 1 }}",
+  );
+  const checkout = workflow.jobs.desktop.steps.find((step) =>
+    step.uses?.startsWith("actions/checkout@"),
+  );
+  assert.deepEqual(checkout.with, { "persist-credentials": false }); // Default checkout tests the merge commit.
+  assert.doesNotMatch(
+    JSON.stringify(workflow.jobs.desktop),
+    /secrets\.|GH_TOKEN|EXPO_TOKEN|eas build/,
+  );
+});
+
+test("main publishing requires desktop and applicable CI checks to pass", () => {
+  const github = { event_name: "push", ref: "refs/heads/main" };
+  const needs = {
+    desktop: { result: "success" },
+    docs: { result: "success" },
+    rust: { result: "skipped" },
+    ui: { result: "success" },
+  };
+  assert.equal(condition(workflow.jobs["nightly-publish"].if, github, needs), true);
+  for (const job of ["desktop", "docs", "rust", "ui"]) {
+    assert.equal(
+      condition(workflow.jobs["nightly-publish"].if, github, {
+        ...needs,
+        [job]: { result: "failure" },
+      }),
+      false,
+    );
+  }
+  assert.equal(
+    condition(workflow.jobs["nightly-publish"].if, { ...github, ref: "refs/heads/dev" }, needs),
+    false,
+  );
+});
+
+test("mobile publishing remains manual only", async () => {
+  for (const name of ["release-android", "release-android-play", "release-ios-testflight"]) {
+    const mobile = yaml.parse(
+      await readFile(new URL(`../.github/workflows/${name}.yml`, import.meta.url), "utf8"),
+    );
+    assert.deepEqual(Object.keys(mobile.on), ["workflow_dispatch"]);
+  }
+});
+
+test("PR package records both source and merge commits and checksums all downloaded files", async (t) => {
+  const directory = await mkdtemp(path.join(tmpdir(), "ait-pr-assets-"));
+  t.after(() => rm(directory, { recursive: true, force: true }));
+  await writeFile(path.join(directory, "Ait.dmg"), "test package");
+  const env = {
+    PR_NUMBER: "123",
+    PR_HEAD_SHA: "a".repeat(40),
+    PR_BASE_SHA: "b".repeat(40),
+    GITHUB_SHA: "c".repeat(40),
+    PLATFORM: "mac",
+    GITHUB_SERVER_URL: "https://github.com",
+    GITHUB_REPOSITORY: "ait-app/ait",
+    GITHUB_RUN_ID: "456",
+  };
+  const info = await recordPrBuild(directory, env);
+  assert.equal(info.pullRequest, 123);
+  assert.equal(info.headCommit, env.PR_HEAD_SHA);
+  assert.equal(info.sourceCommit, env.GITHUB_SHA);
+  assert.equal(info.baseCommit, env.PR_BASE_SHA);
+  assert.equal(info.channel, "pull-request");
+  const sums = await readFile(path.join(directory, "SHA256SUMS"), "utf8");
+  for (const file of ["Ait.dmg", "BUILD-INFO.json"]) {
+    const hash = createHash("sha256")
+      .update(await readFile(path.join(directory, file)))
+      .digest("hex");
+    assert.ok(sums.includes(`${hash}  ${file}\n`));
+  }
+  await assert.rejects(
+    recordPrBuild(directory, { ...env, GITHUB_SHA: "unknown" }),
+    /Invalid GITHUB_SHA/,
+  );
+});
+
+const releaseStep = workflow.jobs["nightly-publish"].steps.find((step) => step.id === "release");
 
 test("a rejected publication cannot touch the release or tag", async () => {
   assert.deepEqual(await runScript(releaseStep, {}, {}, { canPublish: async () => false }), {
     publish: "false",
   });
-  const publish = workflow.jobs.publish.steps.find(
+  const publish = workflow.jobs["nightly-publish"].steps.find(
     (step) => step.name === "Publish latest nightly",
   );
   assert.equal(publish.if, "steps.release.outputs.publish == 'true'");
   assert.match(publish.run, /<!-- ait-nightly-run: \$GITHUB_RUN_NUMBER -->/);
-  const cancelIndex = workflow.jobs.publish.steps.findIndex(
+  const cancelIndex = workflow.jobs["nightly-publish"].steps.findIndex(
     (step) => step.name === "Cancel older builds after successful publication",
   );
-  assert.equal(workflow.jobs.publish.steps[cancelIndex - 1], publish);
-  assert.equal(workflow.jobs.publish.steps[cancelIndex].if, publish.if);
+  assert.equal(workflow.jobs["nightly-publish"].steps[cancelIndex - 1], publish);
+  assert.equal(workflow.jobs["nightly-publish"].steps[cancelIndex].if, publish.if);
 });
 
 for (const existing of [true, false]) {
@@ -133,7 +266,7 @@ test("cleanup queries only its own run and preserves unrelated artifacts", async
       ];
     },
   };
-  await runScript(workflow.jobs.cleanup.steps[0], github);
+  await runScript(workflow.jobs["nightly-cleanup"].steps[0], github);
   assert.deepEqual(deleted, [
     { ...context.repo, artifact_id: 1 },
     { ...context.repo, artifact_id: 2 },
@@ -160,7 +293,11 @@ function simulation() {
         getReleaseByTag: async () => {
           if (state.releaseError) throw state.releaseError;
           if (!state.published) throw Object.assign(new Error("Not found"), { status: 404 });
-          return { data: { body: `<!-- ait-nightly-run: ${state.published} -->` } };
+          return {
+            data: {
+              body: `<!-- ait-nightly-run: ${state.published} --> <!-- ait-nightly-workflow: ci.yml -->`,
+            },
+          };
         },
       },
     },
@@ -168,8 +305,8 @@ function simulation() {
       assert.equal(endpoint, endpoints.listWorkflowRuns);
       assert.deepEqual(args, {
         ...context.repo,
-        workflow_id: "nightly.yml",
-        branch: "dev",
+        workflow_id: "ci.yml",
+        branch: "main",
         per_page: 100,
       });
       // Deliberately return runs in arrival order, not sorted newest first.
@@ -187,7 +324,7 @@ function simulation() {
     state.runs.push({
       id: number * 10,
       run_number: number,
-      head_branch: "dev",
+      head_branch: "main",
       head_sha: String(number).padStart(40, "0"),
       event: "push",
       status: "in_progress",
@@ -254,7 +391,7 @@ for (const first of [2, 3]) {
 test("burst arrivals and out-of-order preparation retain only the newest two", async () => {
   const { state, api, add } = simulation();
   for (let number = 1; number <= 5; number++) add(number);
-  add(50, { head_branch: "main" });
+  add(50, { head_branch: "dev" });
   add(51, { event: "pull_request" });
   assert.equal(await control.admitBuild(api(4)), true);
   assert.deepEqual(state.cancelled.sort(), [1, 2, 3]);
@@ -283,7 +420,7 @@ test("manual reruns keep their original order and never cancel a newer pair", as
   assert.equal(await control.canPublish(api(1)), false);
 });
 
-test("legacy nightly provenance is migrated without allowing rollback", async () => {
+test("legacy dev nightly migrates without mixing workflow run numbers", async () => {
   const { api, add } = simulation();
   add(1);
   add(2);
@@ -293,7 +430,7 @@ test("legacy nightly provenance is migrated without allowing rollback", async ()
       body: `Development build from ${String(2).padStart(40, "0")}. Replaced on the next build.`,
     },
   });
-  assert.equal(await control.canPublish(legacyApi), false);
+  assert.equal(await control.canPublish(legacyApi), true);
   assert.equal(await control.canPublish(api(2)), true);
 });
 
