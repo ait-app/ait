@@ -36,7 +36,7 @@ export AIT_SERVER_DEEPSEEK_HARNESS_BIN=/absolute/path/to/dsh
 指定模型时使用 `provider.models.list.request` 返回的完整 `id`，不要把 opaque ID 改写成裸模型名。
 `thinkingOptionId` 也应使用返回选项的 `id`；某些模型的空字符串表示 provider default。
 
-权限菜单支持 Read only、Workspace write 和 Full access，原生权限配置在下一次输入前应用。
+模式菜单从 DSH 的 `agentPresets/list` 读取当前 profile 的插件情景模式，包括用户自定义预设；不硬编码内置名称。权限单独显示为 Permissions，选项来自原生权限目录，在下一次输入前应用。
 工具审批保留一次性允许或拒绝，question 支持单选、多选与自由文本，回答会完成原生待决请求。通过现有
 `agent.permission.resolve.request` 回答；`agent.cancel.request` 取消当前工作。
 服务重启后 `agent.resume.request` 恢复已登记 handle。原生模式读取展示历史时，从 DSH 的完整记录
@@ -76,7 +76,33 @@ ACP 没有权限模式、question 和外部会话导入。默认不会因原生 
 导入列表保留 DSH 原生标题、目录与活动时间，优先使用 turnOutline 的首尾用户 prompt。旧会话没有缓存摘要时，通过只读历史快照及分页补齐；不会提交消息或创建 Agent。预览规范化空白并限制为 300 个 Unicode 字符。单会话读取最多两秒、8 MiB / 100 页，全列表额外预算十秒；超限、损坏或只有图片而没有用户文本时保留原列表项，不伪造 prompt。
 ## 模型发现
 
-Provider 模型菜单直接读取原生 Host 的 `session/modelCatalog`，不会为读取目录创建原生会话、选择模型或发送输入。菜单先列出内置权限预设，创建/恢复会话时仍由原生会话的实际权限目录校验选择。目录读取不再依赖默认会话能否成功初始化。CLI 启动、原生目录或认证错误仍可能使 Provider 显示错误，应结合展开后的错误文字和 DSH 版本诊断。
+Provider 模型菜单直接读取原生 Host 的 `session/modelCatalog`，不会为读取目录创建原生会话、选择模型或发送输入。情景模式、默认模式和权限选项也来自只读原生目录，创建/恢复时仍由原生状态校验选择。目录读取不再依赖默认会话能否成功初始化。CLI 启动、原生目录或认证错误仍可能使 Provider 显示错误，应结合展开后的错误文字和 DSH 版本诊断。
 ## DSH 0.2 权限目录
 
 新版 Host 从 `permissionPresets/catalog` 提供可选权限，历史投影只保留当前值；Ait 兼容此协议及旧版内嵌选项。恢复桌面中打开的原生会话前，应先让 DSH 释放该会话的写入所有权；即使没有运行中的回合，桌面仍可能持有写入锁。只读导入不需要抢占写入所有权。验证范围见[权限目录兼容报告](../reports/providers/dsh-permission-catalog.md)。
+
+## 情景模式、插件与 profile
+
+情景模式是插件组合，决定工具、提示词和技能；它与权限预设相互独立。
+Ait 使用 `agent-preset:<原生 ID>` 作为模式 ID，创建请求直接传递原生 `agentPreset`。
+模式以目录返回的名称和描述显示，损坏预设不可选。未指定模式时沿用 DSH 默认值。
+已有会话保留原生组合；更换情景模式请新建会话。导入会话不修改其插件或权限。
+
+独立权限设置使用 `featureValues.permission_preset`，例如 `"read-only"`，实际可用值以
+`provider.features.list.request` 为准。旧 Ait 保存的无前缀权限 `modeId` 仍兼容；
+未设置权限时保留原生值，包括自定义权限组合。配置校验不会创建临时探测会话。
+
+默认使用 `web` profile。若插件安装在其他支持 Web Host 的自定义 profile，设置：
+
+```sh
+export AIT_SERVER_DEEPSEEK_HARNESS_PROFILE=team-web
+```
+
+该 profile 必须已经配置好原生 Web Host。启动参数由 DSH 校验，配置错误不会自动回退。
+CLI 不能直接启动 Electron 专属 `desktop` profile；桌面安装包内的 CLI 与桌面 profile
+是不同概念。桌面专属插件不会自动复制到 web，请在选定的 Host profile 中通过 DSH 管理插件。
+更换 daemon profile 后，已有会话需要原生 ID 对应的插件组合仍可用。
+
+安装或更新插件后刷新 Provider 目录可发现新预设；现有会话仍受原生组合生命周期约束。
+插件管理工具若由所选模式提供，会通过 DSH 的普通工具和审批通道运行。
+Ait 不托管插件专属 Web 界面或插件安装面板。详见 [ADR-109](../decisions/providers/adr-109-dsh-native-plugin-presets.md)。

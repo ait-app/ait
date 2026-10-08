@@ -237,7 +237,10 @@ async fn discover(client: &dyn AgentClient, cwd: &str) -> Entry {
         } else {
             "DeepSeek Harness via Agent Client Protocol"
         });
-        value["defaultModeId"] = Value::Null;
+        value["defaultModeId"] = value["modes"]
+            .as_array()
+            .and_then(|modes| modes.iter().find(|mode| mode["isDefault"] == true))
+            .map_or(Value::Null, |mode| mode["id"].clone());
     }
     if client.provider() == "antigravity" {
         value["label"] = json!("Antigravity");

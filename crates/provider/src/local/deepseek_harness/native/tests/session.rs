@@ -12,7 +12,7 @@ async fn native_permissions_questions_order_and_resume_use_exact_session() {
             .as_array()
             .unwrap()
             .len(),
-        3
+        0
     );
     assert_eq!(
         fixture.requests("commands/execute")[0]["line"],

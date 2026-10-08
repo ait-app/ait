@@ -1,0 +1,181 @@
+{
+  "baseCommit": "4794dbc493aee9926f37438f8f2d5f9085e3d835",
+  "rustPatchSha256": "bf19c30a2f6031c064ccb37ba8f232936699e43069820efd8ac1e93a8d79d588",
+  "scope": "workspace, default features, Linux x86_64; default ignored tests and doctests excluded from coverage; no explicit filename exclusions",
+  "command": "PATH=/tmp/ait-dsh-test-bin:$PATH LLVM_COV=/usr/bin/llvm-cov LLVM_PROFDATA=/usr/bin/llvm-profdata CARGO_TARGET_DIR=/home/lonnet/Developers/ait/target cargo llvm-cov --workspace --html -- --test-threads=4",
+  "workspace": {
+    "count": 59555,
+    "covered": 56089,
+    "percent": 94.18016959113424
+  },
+  "crates": {
+    "bins/daemon": {
+      "covered": 881,
+      "count": 919,
+      "percent": 95.87
+    },
+    "crates/api": {
+      "covered": 2126,
+      "count": 2255,
+      "percent": 94.28
+    },
+    "crates/browser": {
+      "covered": 715,
+      "count": 733,
+      "percent": 97.54
+    },
+    "crates/domain": {
+      "covered": 121,
+      "count": 121,
+      "percent": 100.0
+    },
+    "crates/file": {
+      "covered": 1837,
+      "count": 1924,
+      "percent": 95.48
+    },
+    "crates/filesystem": {
+      "covered": 11562,
+      "count": 12189,
+      "percent": 94.86
+    },
+    "crates/metadata": {
+      "covered": 5411,
+      "count": 5751,
+      "percent": 94.09
+    },
+    "crates/model": {
+      "covered": 1679,
+      "count": 1735,
+      "percent": 96.77
+    },
+    "crates/protocol": {
+      "covered": 63,
+      "count": 63,
+      "percent": 100.0
+    },
+    "crates/provider": {
+      "covered": 27065,
+      "count": 29025,
+      "percent": 93.25
+    },
+    "crates/relay": {
+      "covered": 462,
+      "count": 503,
+      "percent": 91.85
+    },
+    "crates/schedule": {
+      "covered": 772,
+      "count": 791,
+      "percent": 97.6
+    },
+    "crates/terminal": {
+      "covered": 1527,
+      "count": 1583,
+      "percent": 96.46
+    },
+    "crates/voice": {
+      "covered": 1868,
+      "count": 1963,
+      "percent": 95.16
+    }
+  },
+  "changedFiles": [
+    {
+      "file": "crates/provider/src/composition.rs",
+      "lines": {
+        "count": 61,
+        "covered": 60,
+        "percent": 98.36065573770492
+      }
+    },
+    {
+      "file": "crates/provider/src/local/deepseek_harness.rs",
+      "lines": {
+        "count": 241,
+        "covered": 222,
+        "percent": 92.11618257261411
+      }
+    },
+    {
+      "file": "crates/provider/src/local/deepseek_harness/native/config.rs",
+      "lines": {
+        "count": 236,
+        "covered": 228,
+        "percent": 96.61016949152543
+      }
+    },
+    {
+      "file": "crates/provider/src/local/deepseek_harness/native/discovery.rs",
+      "lines": {
+        "count": 28,
+        "covered": 28,
+        "percent": 100.0
+      }
+    },
+    {
+      "file": "crates/provider/src/local/deepseek_harness/native/native_sessions.rs",
+      "lines": {
+        "count": 194,
+        "covered": 190,
+        "percent": 97.9381443298969
+      }
+    },
+    {
+      "file": "crates/provider/src/local/deepseek_harness/native/presets.rs",
+      "lines": {
+        "count": 102,
+        "covered": 101,
+        "percent": 99.01960784313727
+      }
+    },
+    {
+      "file": "crates/provider/src/local/deepseek_harness/native/runtime.rs",
+      "lines": {
+        "count": 188,
+        "covered": 164,
+        "percent": 87.2340425531915
+      }
+    },
+    {
+      "file": "crates/provider/src/local/deepseek_harness/native/session.rs",
+      "lines": {
+        "count": 448,
+        "covered": 402,
+        "percent": 89.73214285714286
+      }
+    },
+    {
+      "file": "crates/provider/src/ports/agent_session.rs",
+      "lines": {
+        "count": 235,
+        "covered": 229,
+        "percent": 97.44680851063829
+      }
+    },
+    {
+      "file": "crates/provider/src/service/agent_manager.rs",
+      "lines": {
+        "count": 899,
+        "covered": 876,
+        "percent": 97.4416017797553
+      }
+    },
+    {
+      "file": "crates/provider/src/service/agent_manager/controls.rs",
+      "lines": {
+        "count": 568,
+        "covered": 527,
+        "percent": 92.78169014084507
+      }
+    },
+    {
+      "file": "crates/provider/src/service/provider_catalog.rs",
+      "lines": {
+        "count": 276,
+        "covered": 271,
+        "percent": 98.18840579710145
+      }
+    }
+  ]
+}

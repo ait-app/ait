@@ -31,6 +31,7 @@ pub struct DeepSeekHarnessClient {
     program: PathBuf,
     desktop: Option<launcher::Desktop>,
     interactive: bool,
+    native_profile: std::ffi::OsString,
     deadline: Duration,
     environment: AgentEnvironment,
     images: super::images::ImageStore,
@@ -45,10 +46,20 @@ impl DeepSeekHarnessClient {
             program,
             desktop: None,
             interactive: true,
+            native_profile: "web".into(),
             deadline: Duration::from_secs(30),
             environment: AgentEnvironment::default(),
             images: super::images::ImageStore::default(),
         }
+    }
+
+    /// Select the Web Host profile whose plugins and presets discovery and sessions use.
+    /// `profile` is passed as one CLI argument; DSH validates the profile and its Host support.
+    /// Returns this configured client without initializing or changing the native profile.
+    #[must_use]
+    pub fn with_native_profile(mut self, profile: std::ffi::OsString) -> Self {
+        self.native_profile = profile;
+        self
     }
 
     /// Retain the automation-only ACP profile for older Harness installations.
@@ -166,7 +177,7 @@ impl AgentClient for DeepSeekHarnessClient {
 
     fn settings(&self, _config: &StoredAgentConfig) -> Value {
         if self.interactive {
-            return json!({"availableModes":native::modes(),"features":[],"capabilities":{
+            return json!({"availableModes":[],"features":[],"capabilities":{
                 "supportsMcpServers":false,"supportsStreaming":true,"supportsReasoningStream":true,
                 "supportsDynamicModes":true,"supportsSessionListing":true,
                 "supportsRewindConversation":false,"supportsRewindFiles":false,"supportsRewindBoth":false}});
@@ -175,6 +186,28 @@ impl AgentClient for DeepSeekHarnessClient {
             "supportsMcpServers":true,"supportsStreaming":true,"supportsReasoningStream":true,
             "supportsDynamicModes":false,"supportsSessionListing":false,
             "supportsRewindConversation":false,"supportsRewindFiles":false,"supportsRewindBoth":false}})
+    }
+
+    fn draft_features<'a>(
+        &'a self,
+        spec: &'a AgentSessionSpec,
+    ) -> AgentSessionFuture<'a, Vec<Value>> {
+        Box::pin(async move {
+            self.validate_config(&spec.config)?;
+            if !self.interactive {
+                return Ok(Vec::new());
+            }
+            let mut details = native::discover(self, &spec.cwd).await?;
+            if let Some(value) = spec
+                .config
+                .feature_values
+                .as_ref()
+                .and_then(|values| values.get("permission_preset"))
+            {
+                details.features[0]["value"] = value.clone();
+            }
+            Ok(details.features)
+        })
     }
 
     fn is_available(&self) -> AgentSessionFuture<'_, bool> {
@@ -223,7 +256,14 @@ impl AgentClient for DeepSeekHarnessClient {
     }
 
     fn validate_selection<'a>(&'a self, spec: &'a AgentSessionSpec) -> AgentSessionFuture<'a, ()> {
-        Box::pin(async move { self.probe(spec).await.map(|_| ()) })
+        Box::pin(async move {
+            if self.interactive {
+                self.validate_config(&spec.config)?;
+                let details = native::discover(self, &spec.cwd).await?;
+                return native::validate_selection(&details, &spec.config);
+            }
+            self.probe(spec).await.map(|_| ())
+        })
     }
 
     fn create_session<'a>(

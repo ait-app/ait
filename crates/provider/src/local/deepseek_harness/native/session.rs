@@ -3,6 +3,7 @@ use super::super::{DeepSeekHarnessClient, PROVIDER, config::text, streaming::Str
 use super::{
     config::{self, Selection},
     interactions::Pending,
+    presets,
     runtime::Runtime,
 };
 use crate::{
@@ -41,29 +42,26 @@ pub(in crate::local::deepseek_harness) async fn open(
     spec: &AgentSessionSpec,
     handle: Option<&AgentPersistenceHandle>,
 ) -> Result<Session, AgentSessionError> {
-    config::validate(&spec.config)?;
-    if spec.provider != PROVIDER
-        || !std::path::Path::new(&spec.cwd).is_absolute()
-        || !std::path::Path::new(&spec.cwd).is_dir()
-    {
-        return Err(AgentSessionError::Rejected);
-    }
-    if let Some(handle) = handle
-        && (handle.provider != PROVIDER
-            || handle.session_id.is_empty()
-            || handle.session_id.len() > 1024
-            || handle
-                .metadata
-                .as_ref()
-                .and_then(|metadata| metadata.get("cwd"))
-                .and_then(Value::as_str)
-                != Some(&spec.cwd))
-    {
-        return Err(AgentSessionError::Rejected);
-    }
+    validate_identity(spec, handle)?;
     let mut runtime = Runtime::open(client, &spec.cwd).await?;
     let catalog = runtime.api.call("session/modelCatalog", json!({})).await?;
+    let presets = runtime.api.call("agentPresets/list", json!({})).await?;
     let mut request = json!({"cwd":spec.cwd});
+    if let Some(mode) = spec
+        .config
+        .mode_id
+        .as_deref()
+        .filter(|id| id.starts_with(presets::PREFIX))
+    {
+        if handle.is_none()
+            && !presets::modes(&presets)?
+                .iter()
+                .any(|option| option["id"] == mode)
+        {
+            return Err(AgentSessionError::Rejected);
+        }
+        request["agentPreset"] = json!(mode.strip_prefix(presets::PREFIX));
+    }
     if let Some(handle) = handle {
         request["sessionId"] = json!(handle.session_id);
     }
@@ -109,6 +107,8 @@ pub(in crate::local::deepseek_harness) async fn open(
         |value| Value::Object(value.clone()),
     );
     let mut selection = Selection {
+        presets,
+        preset: values["agentPreset"].as_str().map(str::to_owned),
         catalog,
         permissions: config::permission_selection(&runtime.api, &values["permissions"]).await?,
         model: selected,
@@ -136,6 +136,33 @@ pub(in crate::local::deepseek_harness) async fn open(
         images: client.images.clone(),
         hydration: JoinSet::new(),
     })
+}
+
+fn validate_identity(
+    spec: &AgentSessionSpec,
+    handle: Option<&AgentPersistenceHandle>,
+) -> Result<(), AgentSessionError> {
+    config::validate(&spec.config)?;
+    if spec.provider != PROVIDER
+        || !std::path::Path::new(&spec.cwd).is_absolute()
+        || !std::path::Path::new(&spec.cwd).is_dir()
+    {
+        return Err(AgentSessionError::Rejected);
+    }
+    if let Some(handle) = handle
+        && (handle.provider != PROVIDER
+            || handle.session_id.is_empty()
+            || handle.session_id.len() > 1024
+            || handle
+                .metadata
+                .as_ref()
+                .and_then(|metadata| metadata.get("cwd"))
+                .and_then(Value::as_str)
+                != Some(&spec.cwd))
+    {
+        return Err(AgentSessionError::Rejected);
+    }
+    Ok(())
 }
 
 impl Session {
@@ -345,6 +372,29 @@ impl Session {
 }
 
 impl AgentSession for Session {
+    fn validate_config_update(&self, config: &StoredAgentConfig) -> Result<(), AgentSessionError> {
+        config::validate(config)?;
+        self.selection.validate_controls(config).map(|_| ())
+    }
+
+    fn control_settings(&self, config: &StoredAgentConfig) -> Option<Value> {
+        let mut details = self.selection.details().ok()?;
+        // A composed session exposes its identity, not choices that would replace its plugins.
+        let mode = self.selection.runtime(&self.id).mode_id;
+        details
+            .modes
+            .retain(|option| option["id"].as_str() == mode.as_deref());
+        if let Some(value) = config
+            .feature_values
+            .as_ref()
+            .and_then(|values| values.get(presets::PERMISSION))
+            && let Some(feature) = details.features.first_mut()
+        {
+            feature["value"] = value.clone();
+        }
+        Some(json!({"availableModes":details.modes,"features":details.features}))
+    }
+
     fn provider(&self) -> &'static str {
         PROVIDER
     }

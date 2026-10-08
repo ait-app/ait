@@ -39,15 +39,9 @@ impl Runtime {
     ) -> Result<Self, AgentSessionError> {
         let mut command = client.command();
         command
-            .args([
-                "--profile",
-                "web",
-                "--no-open",
-                "--host",
-                "127.0.0.1",
-                "--port",
-                "0",
-            ])
+            .arg("--profile")
+            .arg(&client.native_profile)
+            .args(["--no-open", "--host", "127.0.0.1", "--port", "0"])
             .current_dir(cwd)
             .stdin(Stdio::null())
             .stdout(Stdio::piped())

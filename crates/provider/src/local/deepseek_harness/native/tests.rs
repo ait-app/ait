@@ -12,6 +12,7 @@ mod fixture;
 mod imports;
 mod installed_history;
 mod interactions;
+mod presets;
 mod recovery;
 mod session;
 mod sources;
@@ -39,12 +40,25 @@ async fn installed_host_discovers_switches_permissions_and_adopts_legacy_session
         "discovery must not create native history"
     );
     assert!(!details.models.is_empty());
-    assert!(details.modes.iter().any(|mode| mode["id"] == "read-only"));
+    assert!(!details.modes.is_empty());
+    assert!(
+        details.features[0]["options"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .any(|option| option["id"] == "read-only")
+    );
     spec.config.mode_id = Some("read-only".into());
     let mut session = client.create_session(&spec).await.unwrap();
+    let native_mode = session.runtime_info().await.unwrap().mode_id;
+    assert!(
+        native_mode
+            .as_deref()
+            .is_some_and(|id| id.starts_with("agent-preset:"))
+    );
     assert_eq!(
-        session.runtime_info().await.unwrap().mode_id.as_deref(),
-        Some("read-only")
+        session.control_settings(&spec.config).unwrap()["features"][0]["value"],
+        "read-only"
     );
     let handle = session.persistence().unwrap();
     session.close().await.unwrap();
@@ -66,7 +80,7 @@ async fn installed_host_discovers_switches_permissions_and_adopts_legacy_session
         .unwrap();
     assert!(imported.entries.is_empty());
     assert!(!imported.active);
-    assert_eq!(imported.config.mode_id.as_deref(), Some("read-only"));
+    assert_eq!(imported.config.mode_id, native_mode);
     imported_handle.metadata = Some(imported.resume_metadata);
     let mut adopted_import = client
         .resume_session(
@@ -112,7 +126,14 @@ async fn discovery_does_not_require_session_permissions_or_create_native_history
     fixture.set_snapshot_fields(serde_json::json!({"projections":{"values":{}}}));
     let details = fixture.client.discover(&fixture.spec.cwd).await.unwrap();
     assert_eq!(details.models[0]["id"], "[\"local\",\"test\"]");
-    assert!(details.modes.iter().any(|mode| mode["id"] == "read-only"));
+    assert!(!details.modes.is_empty());
+    assert!(
+        details.features[0]["options"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .any(|option| option["id"] == "read-only")
+    );
     assert_eq!(fixture.requests("session/modelCatalog").len(), 1);
     for method in [
         "session/create",

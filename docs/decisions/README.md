@@ -47,6 +47,8 @@
 
 ## Provider、Agent 与会话
 
+- [ADR-109：DSH 原生插件情景模式与权限分离](providers/adr-109-dsh-native-plugin-presets.md)
+
 - [ADR-102：共享协作契约归 model，Provider 不依赖 metadata](providers/adr-102-provider-metadata-independence.md)
 - [ADR-101：Provider 拥有摘要生成能力](providers/adr-101-provider-summary-generator.md)
 - [ADR-091：会话独立执行与 Provider 后台发现](providers/adr-091-independent-session-execution.md)
