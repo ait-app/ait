@@ -9,6 +9,8 @@ pub use installation::{Dependencies, Service};
 
 pub mod capabilities;
 mod composition;
+/// Bounded read-only native harness evidence collection.
+pub mod diagnostics;
 pub mod dispatch;
 mod local;
 pub mod ports;

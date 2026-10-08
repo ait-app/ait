@@ -5,6 +5,8 @@
 
 pub mod config;
 pub mod creation;
+/// Bounded local incident file persistence and retention.
+pub mod diagnostics;
 pub mod registry;
 mod single;
 pub mod storage;

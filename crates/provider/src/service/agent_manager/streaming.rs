@@ -213,6 +213,7 @@ pub(super) fn publish_terminal(
         event["turnId"] = json!(turn);
     }
     if failed {
+        tracing::warn!(provider = %agent.record.provider, agent_id = %agent.record.id, "Native provider turn failed");
         event["error"] = json!("Provider execution failed");
     }
     if cancelled {

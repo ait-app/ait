@@ -3,7 +3,7 @@
 - 状态：Accepted，2026-09-30。
 - 范围：`bins/daemon` 与 `crates/provider`；取代已退役的原型执行路径（历史保存在 Git 中）。
 - 上位约束：ADR-046、ADR-050、ADR-052、ADR-072。
-- 2026-10-08：[ADR-109](adr-109-opencode-private-protocol-boundary.md) 细化双版本私有协议边界和权限拒绝结算，不改变公共 Provider 契约。
+- 2026-10-08：[ADR-110](adr-110-opencode-private-protocol-boundary.md) 细化双版本私有协议边界和权限拒绝结算，不改变公共 Provider 契约。
 
 ## 背景与参考
 

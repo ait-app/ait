@@ -40,13 +40,28 @@ pub enum DaemonError {
 pub struct Daemon {
     runtime: DaemonRuntime,
     config: Box<dyn DaemonConfigStore>,
+    diagnostics: Option<std::sync::Arc<dyn crate::ports::diagnostics::DaemonDiagnostics>>,
 }
 
 impl Daemon {
     /// Construct a daemon coordinator from immutable runtime facts and a new storage port.
     #[must_use]
     pub fn new(runtime: DaemonRuntime, config: Box<dyn DaemonConfigStore>) -> Self {
-        Self { runtime, config }
+        Self {
+            runtime,
+            config,
+            diagnostics: None,
+        }
+    }
+
+    /// Attach the host's bounded incident collector without transferring provider ownership.
+    #[must_use]
+    pub fn with_diagnostics(
+        mut self,
+        diagnostics: std::sync::Arc<dyn crate::ports::diagnostics::DaemonDiagnostics>,
+    ) -> Self {
+        self.diagnostics = Some(diagnostics);
+        self
     }
 
     /// Return immutable process status.
@@ -137,6 +152,10 @@ impl Daemon {
                     "unavailable"
                 },
             );
+        }
+        if let Some(diagnostics) = &self.diagnostics {
+            report.push('\n');
+            report.push_str(&diagnostics.report());
         }
         report
     }

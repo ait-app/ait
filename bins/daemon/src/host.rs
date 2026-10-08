@@ -57,7 +57,24 @@ pub(super) struct Server {
 }
 
 impl Server {
+    #[cfg(test)]
     pub async fn bind(config: Config) -> anyhow::Result<Self> {
+        Self::bind_optional_diagnostics(config, None).await
+    }
+
+    /// Bind the daemon with the host's bounded evidence collector.
+    /// Returns a ready server, or configuration, listener, storage or assembly errors.
+    pub async fn bind_with_diagnostics(
+        config: Config,
+        diagnostics: Arc<dyn metadata::ports::diagnostics::DaemonDiagnostics>,
+    ) -> anyhow::Result<Self> {
+        Self::bind_optional_diagnostics(config, Some(diagnostics)).await
+    }
+
+    async fn bind_optional_diagnostics(
+        config: Config,
+        diagnostics: Option<Arc<dyn metadata::ports::diagnostics::DaemonDiagnostics>>,
+    ) -> anyhow::Result<Self> {
         let listener = TcpListener::bind(config.listen)
             .await
             .context("bind server listener")?;
@@ -68,7 +85,14 @@ impl Server {
             .context("read server listener address")?;
         let (instance, services) = tokio::task::spawn_blocking(move || {
             let instance = Arc::new(InstanceLease::acquire(&config.data_dir)?);
-            let services = compose_services(&config, address, &instance)?;
+            let mut services = compose_services(&config, address, &instance)?;
+            if let Some(diagnostics) = diagnostics {
+                services.metadata = services.metadata.map(|service| {
+                    let mut dependencies = service.into_dependencies();
+                    dependencies.daemon = dependencies.daemon.with_diagnostics(diagnostics);
+                    metadata::Service::new(dependencies)
+                });
+            }
             Ok::<_, anyhow::Error>((instance, services))
         })
         .await

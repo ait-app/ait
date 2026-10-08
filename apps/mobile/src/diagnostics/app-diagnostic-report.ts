@@ -113,13 +113,14 @@ export function redactAppDiagnosticReport(report: string, hosts: HostProfile[]):
     redacted = redacted.split(value).join("[redacted]");
   }
   return redacted
+    .replace(/\b(Bearer|Basic)\s+[A-Za-z0-9._~+/-]+=*/gi, "$1 [redacted]")
     .replace(/(ait|paseo):\/\/\S+/gi, "$1://[redacted]")
     .replace(
       /([?&](?:password|token|secret|key|publicKey|daemonPublicKeyB64)=)[^&\s"']+/gi,
       "$1[redacted]",
     )
     .replace(
-      /((?:password|token|secret|authorization|api[_-]?key|daemonPublicKeyB64|relayKey)\s*[:=]\s*)("[^"]+"|'[^']+'|[^\s,}]+)/gi,
+      /(["']?(?:password|(?:access|refresh)[_-]?token|token|secret|authorization|api[_-]?key|daemonPublicKeyB64|relayKey)["']?\s*[:=]\s*)("(?:\\.|[^"\\])*"|'(?:\\.|[^'\\])*'|[^\s,}]+)/gi,
       "$1[redacted]",
     );
 }

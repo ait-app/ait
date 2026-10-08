@@ -1,4 +1,4 @@
-# ADR-109：OpenCode 双版本私有协议边界
+# ADR-110：OpenCode 双版本私有协议边界
 
 - 状态：Accepted，2026-10-08。
 - 范围：`crates/provider/src/local/opencode`；细化 ADR-074，不修改 Provider ports、domain、RPC 或客户端协议。

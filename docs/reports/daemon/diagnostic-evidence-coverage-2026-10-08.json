@@ -1,0 +1,459 @@
+{
+  "date": "2026-10-08",
+  "platform": "Linux x86_64",
+  "base_commit": "4794dbc4",
+  "tested_tree": "9430cf0a35a4b0e00b2aec684e08c1b9ab72209e",
+  "scope": "Rust workspace default features; unit and integration tests; excludes doc tests and frontend coverage",
+  "command": "XDG_CONFIG_HOME=/tmp/ait-diagnostics-test-config LLVM_COV=/usr/bin/llvm-cov LLVM_PROFDATA=/usr/bin/llvm-profdata CARGO_TARGET_DIR=target/diagnostics-coverage cargo llvm-cov --workspace --html -- --test-threads=4",
+  "totals": {
+    "branches": {
+      "count": 0,
+      "covered": 0,
+      "notcovered": 0,
+      "percent": 0
+    },
+    "functions": {
+      "count": 6610,
+      "covered": 6165,
+      "percent": 93.267776096823
+    },
+    "instantiations": {
+      "count": 15826,
+      "covered": 11470,
+      "percent": 72.47567294325793
+    },
+    "lines": {
+      "count": 59921,
+      "covered": 56412,
+      "percent": 94.14395620900852
+    },
+    "mcdc": {
+      "count": 0,
+      "covered": 0,
+      "notcovered": 0,
+      "percent": 0
+    },
+    "regions": {
+      "count": 92967,
+      "covered": 84343,
+      "notcovered": 8624,
+      "percent": 90.7235900911076
+    }
+  },
+  "crate_lines": {
+    "bins/daemon": {
+      "count": 1225,
+      "covered": 1165,
+      "percent": 95.102
+    },
+    "crates/api": {
+      "count": 2255,
+      "covered": 2126,
+      "percent": 94.2794
+    },
+    "crates/browser": {
+      "count": 733,
+      "covered": 715,
+      "percent": 97.5443
+    },
+    "crates/domain": {
+      "count": 121,
+      "covered": 121,
+      "percent": 100.0
+    },
+    "crates/file": {
+      "count": 1992,
+      "covered": 1902,
+      "percent": 95.4819
+    },
+    "crates/filesystem": {
+      "count": 12189,
+      "covered": 11564,
+      "percent": 94.8724
+    },
+    "crates/metadata": {
+      "count": 5766,
+      "covered": 5426,
+      "percent": 94.1034
+    },
+    "crates/model": {
+      "count": 1739,
+      "covered": 1683,
+      "percent": 96.7798
+    },
+    "crates/protocol": {
+      "count": 63,
+      "covered": 63,
+      "percent": 100.0
+    },
+    "crates/provider": {
+      "count": 28998,
+      "covered": 27018,
+      "percent": 93.1719
+    },
+    "crates/relay": {
+      "count": 503,
+      "covered": 462,
+      "percent": 91.8489
+    },
+    "crates/schedule": {
+      "count": 791,
+      "covered": 772,
+      "percent": 97.598
+    },
+    "crates/terminal": {
+      "count": 1583,
+      "covered": 1527,
+      "percent": 96.4624
+    },
+    "crates/voice": {
+      "count": 1963,
+      "covered": 1868,
+      "percent": 95.1605
+    }
+  },
+  "changed_files": [
+    {
+      "filename": "bins/daemon/src/diagnostics.rs",
+      "summary": {
+        "branches": {
+          "count": 0,
+          "covered": 0,
+          "notcovered": 0,
+          "percent": 0.0
+        },
+        "mcdc": {
+          "count": 0,
+          "covered": 0,
+          "notcovered": 0,
+          "percent": 0.0
+        },
+        "functions": {
+          "count": 24,
+          "covered": 22,
+          "percent": 91.66666666666666
+        },
+        "instantiations": {
+          "count": 48,
+          "covered": 40,
+          "percent": 83.33333333333334
+        },
+        "lines": {
+          "count": 272,
+          "covered": 251,
+          "percent": 92.27941176470588
+        },
+        "regions": {
+          "count": 362,
+          "covered": 321,
+          "notcovered": 41,
+          "percent": 88.67403314917127
+        }
+      }
+    },
+    {
+      "filename": "bins/daemon/src/host.rs",
+      "summary": {
+        "branches": {
+          "count": 0,
+          "covered": 0,
+          "notcovered": 0,
+          "percent": 0.0
+        },
+        "mcdc": {
+          "count": 0,
+          "covered": 0,
+          "notcovered": 0,
+          "percent": 0.0
+        },
+        "functions": {
+          "count": 38,
+          "covered": 32,
+          "percent": 84.21052631578947
+        },
+        "instantiations": {
+          "count": 84,
+          "covered": 69,
+          "percent": 82.14285714285714
+        },
+        "lines": {
+          "count": 455,
+          "covered": 443,
+          "percent": 97.36263736263736
+        },
+        "regions": {
+          "count": 620,
+          "covered": 582,
+          "notcovered": 38,
+          "percent": 93.87096774193549
+        }
+      }
+    },
+    {
+      "filename": "bins/daemon/src/main.rs",
+      "summary": {
+        "branches": {
+          "count": 0,
+          "covered": 0,
+          "notcovered": 0,
+          "percent": 0.0
+        },
+        "mcdc": {
+          "count": 0,
+          "covered": 0,
+          "notcovered": 0,
+          "percent": 0.0
+        },
+        "functions": {
+          "count": 11,
+          "covered": 9,
+          "percent": 81.81818181818183
+        },
+        "instantiations": {
+          "count": 22,
+          "covered": 9,
+          "percent": 40.909090909090914
+        },
+        "lines": {
+          "count": 74,
+          "covered": 70,
+          "percent": 94.5945945945946
+        },
+        "regions": {
+          "count": 100,
+          "covered": 82,
+          "notcovered": 18,
+          "percent": 82.0
+        }
+      }
+    },
+    {
+      "filename": "crates/file/src/diagnostics.rs",
+      "summary": {
+        "branches": {
+          "count": 0,
+          "covered": 0,
+          "notcovered": 0,
+          "percent": 0.0
+        },
+        "mcdc": {
+          "count": 0,
+          "covered": 0,
+          "notcovered": 0,
+          "percent": 0.0
+        },
+        "functions": {
+          "count": 9,
+          "covered": 9,
+          "percent": 100.0
+        },
+        "instantiations": {
+          "count": 18,
+          "covered": 17,
+          "percent": 94.44444444444444
+        },
+        "lines": {
+          "count": 68,
+          "covered": 65,
+          "percent": 95.58823529411765
+        },
+        "regions": {
+          "count": 143,
+          "covered": 131,
+          "notcovered": 12,
+          "percent": 91.6083916083916
+        }
+      }
+    },
+    {
+      "filename": "crates/metadata/src/service/daemon.rs",
+      "summary": {
+        "branches": {
+          "count": 0,
+          "covered": 0,
+          "notcovered": 0,
+          "percent": 0.0
+        },
+        "mcdc": {
+          "count": 0,
+          "covered": 0,
+          "notcovered": 0,
+          "percent": 0.0
+        },
+        "functions": {
+          "count": 12,
+          "covered": 10,
+          "percent": 83.33333333333334
+        },
+        "instantiations": {
+          "count": 24,
+          "covered": 20,
+          "percent": 83.33333333333334
+        },
+        "lines": {
+          "count": 101,
+          "covered": 95,
+          "percent": 94.05940594059405
+        },
+        "regions": {
+          "count": 142,
+          "covered": 135,
+          "notcovered": 7,
+          "percent": 95.07042253521126
+        }
+      }
+    },
+    {
+      "filename": "crates/model/src/outbound.rs",
+      "summary": {
+        "branches": {
+          "count": 0,
+          "covered": 0,
+          "notcovered": 0,
+          "percent": 0.0
+        },
+        "mcdc": {
+          "count": 0,
+          "covered": 0,
+          "notcovered": 0,
+          "percent": 0.0
+        },
+        "functions": {
+          "count": 14,
+          "covered": 14,
+          "percent": 100.0
+        },
+        "instantiations": {
+          "count": 33,
+          "covered": 31,
+          "percent": 93.93939393939394
+        },
+        "lines": {
+          "count": 142,
+          "covered": 134,
+          "percent": 94.36619718309859
+        },
+        "regions": {
+          "count": 211,
+          "covered": 188,
+          "notcovered": 23,
+          "percent": 89.0995260663507
+        }
+      }
+    },
+    {
+      "filename": "crates/provider/src/diagnostics.rs",
+      "summary": {
+        "branches": {
+          "count": 0,
+          "covered": 0,
+          "notcovered": 0,
+          "percent": 0.0
+        },
+        "mcdc": {
+          "count": 0,
+          "covered": 0,
+          "notcovered": 0,
+          "percent": 0.0
+        },
+        "functions": {
+          "count": 32,
+          "covered": 28,
+          "percent": 87.5
+        },
+        "instantiations": {
+          "count": 72,
+          "covered": 45,
+          "percent": 62.5
+        },
+        "lines": {
+          "count": 234,
+          "covered": 220,
+          "percent": 94.017094017094
+        },
+        "regions": {
+          "count": 404,
+          "covered": 362,
+          "notcovered": 42,
+          "percent": 89.60396039603961
+        }
+      }
+    },
+    {
+      "filename": "crates/provider/src/service/agent_manager/execution.rs",
+      "summary": {
+        "branches": {
+          "count": 0,
+          "covered": 0,
+          "notcovered": 0,
+          "percent": 0.0
+        },
+        "mcdc": {
+          "count": 0,
+          "covered": 0,
+          "notcovered": 0,
+          "percent": 0.0
+        },
+        "functions": {
+          "count": 18,
+          "covered": 18,
+          "percent": 100.0
+        },
+        "instantiations": {
+          "count": 44,
+          "covered": 44,
+          "percent": 100.0
+        },
+        "lines": {
+          "count": 116,
+          "covered": 112,
+          "percent": 96.55172413793105
+        },
+        "regions": {
+          "count": 139,
+          "covered": 128,
+          "notcovered": 11,
+          "percent": 92.08633093525181
+        }
+      }
+    },
+    {
+      "filename": "crates/provider/src/service/agent_manager/streaming.rs",
+      "summary": {
+        "branches": {
+          "count": 0,
+          "covered": 0,
+          "notcovered": 0,
+          "percent": 0.0
+        },
+        "mcdc": {
+          "count": 0,
+          "covered": 0,
+          "notcovered": 0,
+          "percent": 0.0
+        },
+        "functions": {
+          "count": 29,
+          "covered": 27,
+          "percent": 93.10344827586206
+        },
+        "instantiations": {
+          "count": 58,
+          "covered": 49,
+          "percent": 84.48275862068965
+        },
+        "lines": {
+          "count": 307,
+          "covered": 296,
+          "percent": 96.41693811074919
+        },
+        "regions": {
+          "count": 448,
+          "covered": 418,
+          "notcovered": 30,
+          "percent": 93.30357142857143
+        }
+      }
+    }
+  ]
+}
