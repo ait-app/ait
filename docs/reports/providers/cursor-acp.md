@@ -118,8 +118,10 @@ reset_workspace 夹具测试失败。成功运行使用空的临时 `XDG_CONFIG_
 | Cursor 生产源码 | 92.35% | 1098 / 1189 |
 | 共享 ACP 生产源码 | 94.84% | 533 / 562 |
 
-测量源码：基于 `4794dbc493aee9926f37438f8f2d5f9085e3d835` 的隔离 PR 工作区；
-artifact 中的 `changed_source_sha256` 绑定实际检查的源码，提交后补记代码提交 SHA。
+测量源码：[代码提交 `05875ae714dfb588b7c3b1ddf75c1e6bd53c1ab2`](https://github.com/ait-app/ait/commit/05875ae714dfb588b7c3b1ddf75c1e6bd53c1ab2)，
+base 为 `4794dbc493aee9926f37438f8f2d5f9085e3d835`。测量在提交前执行，
+artifact 中的 `changed_source_sha256` 已逐个核对提交 blob 与实际检查的工作区源码一致；
+随后验证提交仅修改文档，无 Rust/客户端源码变化。
 范围为默认 features 的完整 Rust workspace，Linux x86_64；rustc/cargo 1.98.1、
 cargo-llvm-cov 0.9.1、LLVM 23.1.1。采用工具默认文件过滤，没有额外 exclusions；
 15 个默认忽略测试未执行，macOS/Windows 未验证，doc tests 没有插桩。

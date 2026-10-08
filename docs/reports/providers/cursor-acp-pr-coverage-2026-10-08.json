@@ -1,5 +1,5 @@
 {
-  "source_revision": "pre-commit worktree based on 4794dbc493aee9926f37438f8f2d5f9085e3d835; see changed_source_sha256",
+  "source_revision": "05875ae714dfb588b7c3b1ddf75c1e6bd53c1ab2",
   "base_revision": "4794dbc493aee9926f37438f8f2d5f9085e3d835",
   "measurement_date": "2026-10-08",
   "scope": "Rust Cargo workspace; default features; Linux x86_64-unknown-linux-gnu; rustc/cargo 1.98.1; cargo-llvm-cov 0.9.1; LLVM 23.1.1; tool default file filtering; no additional exclusions; coverage test threads=1; 15 default-ignored installed-provider tests; doctests run by cargo test but are not instrumented",
@@ -299,5 +299,6 @@
   "follow_up": "Verify a supported authenticated Cursor CLI and its native catalog/session/image behaviors, plus macOS and Windows installation. Use deterministic protocol fixtures for optional close and remaining unusual failure branches.",
   "unavailable_platforms": ["macOS", "Windows"],
   "retry_context": "Initial workspace and coverage attempts failed in existing reset_workspace fixture tests because the user global git core.hooksPath=.githooks leaked into repositories created by tests. The reported successful runs use a temporary empty XDG_CONFIG_HOME without changing HOME or the user global config. A parallel retry also failed in an existing GitHub CLI fixture test, which passed alone; the final complete run uses --test-threads=1. No existing filesystem/GitHub implementation was changed.",
-  "protocol_typecheck_context": "The first direct tsgo invocation lacked ignored generated validators. The actual npm typecheck pipeline ran its pretypecheck generator and passed."
+  "protocol_typecheck_context": "The first direct tsgo invocation lacked ignored generated validators. The actual npm typecheck pipeline ran its pretypecheck generator and passed.",
+  "revision_binding": "Measurement ran before the feature commit. All measured code and fixture sources are unchanged in this commit; changed_source_sha256 was checked against both committed blobs and the worktree. The following verification commit changes only documentation."
 }
