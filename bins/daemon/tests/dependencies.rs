@@ -16,7 +16,6 @@ use filesystem as _;
 use futures_util as _;
 use metadata as _;
 use model as _;
-use protocol as _;
 use provider as _;
 use reqwest as _;
 use schedule as _;
@@ -51,7 +50,6 @@ fn violations(packages: &[Value]) -> Vec<String> {
                 "provider",
                 "api",
                 "terminal",
-                "protocol",
                 "domain",
             ],
             "api" => &[
@@ -63,15 +61,16 @@ fn violations(packages: &[Value]) -> Vec<String> {
                 "model",
                 "terminal",
                 "provider",
-                "protocol",
+                "domain",
                 "metadata",
                 "filesystem",
             ],
-            "provider" => &["domain", "model", "file"],
             "file" => &["model", "domain"],
-            "metadata" | "schedule" | "filesystem" => &["model", "file"],
-            "protocol" | "voice" | "browser" | "terminal" | "relay" => &["model"],
-            "domain" | "model" => &[],
+            "provider" | "metadata" | "schedule" | "filesystem" => &["domain", "model", "file"],
+            "terminal" => &["domain", "model"],
+            "voice" | "browser" | "relay" => &["model"],
+            "model" => &["domain"],
+            "domain" => &[],
             _ => {
                 violations.push(format!("unregistered workspace package: {name}"));
                 continue;
@@ -92,7 +91,7 @@ fn violations(packages: &[Value]) -> Vec<String> {
             }
             if matches!(
                 name,
-                "domain" | "file" | "model" | "protocol" | "metadata" | "filesystem" | "terminal"
+                "domain" | "file" | "model" | "metadata" | "filesystem" | "terminal"
             ) && [
                 "sqlx", "rusqlite", "axum", "hyper", "reqwest", "tonic", "tauri", "rig", "codex",
             ]
@@ -101,9 +100,7 @@ fn violations(packages: &[Value]) -> Vec<String> {
             {
                 violations.push(format!("impure {name} -> {target}"));
             }
-            if matches!(name, "domain" | "protocol")
-                && (target == "tokio" || target.starts_with("tokio-"))
-            {
+            if name == "domain" && (target == "tokio" || target.starts_with("tokio-")) {
                 violations.push(format!("impure {name} -> {target}"));
             }
         }
@@ -155,14 +152,7 @@ fn guard_catches_indirect_renamed_optional_target_and_development_edges() {
 
 #[test]
 fn metadata_cannot_depend_on_host_crates_or_transport_adapters() {
-    for dependency in [
-        "protocol",
-        "provider",
-        "domain",
-        "ports",
-        "application",
-        "ait-domain",
-    ] {
+    for dependency in ["protocol", "provider", "ports", "application", "ait-domain"] {
         let packages = [
             json!({"id":"metadata", "name":"metadata", "dependencies":[{"name":dependency, "path":"../dependency"}]}),
         ];
@@ -185,7 +175,6 @@ fn filesystem_cannot_depend_on_metadata_host_agent_or_transport_crates() {
         "protocol",
         "application",
         "ports",
-        "domain",
         "workspace",
         "provider",
         "metadata",
@@ -217,7 +206,14 @@ fn provider_depends_inward_and_retired_packages_cannot_return() {
         ];
         assert_eq!(violations(&packages), [format!("provider -> {dependency}")]);
     }
-    for retired in ["application", "ports", "storage", "workspace", "providers"] {
+    for retired in [
+        "application",
+        "ports",
+        "storage",
+        "workspace",
+        "providers",
+        "protocol",
+    ] {
         let packages = [json!({"id":retired, "name":retired, "dependencies":[]})];
         assert_eq!(
             violations(&packages),
@@ -232,7 +228,6 @@ fn terminal_cannot_depend_on_metadata_provider_transport_or_old_workspace_packag
         "api",
         "protocol",
         "provider",
-        "domain",
         "filesystem",
         "metadata",
         "ait-domain",
@@ -262,7 +257,7 @@ fn terminal_cannot_depend_on_metadata_provider_transport_or_old_workspace_packag
 }
 
 #[test]
-fn tokio_is_allowed_in_capability_crates_but_not_domain_or_protocol() {
+fn tokio_is_allowed_in_capability_crates_but_not_domain() {
     for name in [
         "model",
         "file",
@@ -271,14 +266,13 @@ fn tokio_is_allowed_in_capability_crates_but_not_domain_or_protocol() {
         "provider",
         "terminal",
         "domain",
-        "protocol",
     ] {
         for dependency in ["tokio", "tokio-util"] {
             for kind in [Value::Null, json!("dev"), json!("build")] {
                 let packages = [
                     json!({"id":name, "name":name, "dependencies":[{"name":dependency,"kind":kind,"optional":true,"target":"cfg(windows)"}]}),
                 ];
-                let expected = if matches!(name, "domain" | "protocol") {
+                let expected = if name == "domain" {
                     vec![format!("impure {name} -> {dependency}")]
                 } else {
                     Vec::new()
@@ -299,13 +293,35 @@ fn shared_context_cannot_depend_on_capability_or_transport_packages() {
         "filesystem",
         "provider",
         "terminal",
-        "domain",
         "ait-domain",
     ] {
         let packages = [
             json!({"id":"model", "name":"model", "dependencies":[{"name":dependency,"path":"../dependency"}]}),
         ];
         assert_eq!(violations(&packages), [format!("model -> {dependency}")]);
+    }
+}
+
+#[test]
+fn shared_values_are_consumed_directly_from_domain() {
+    for owner in [
+        "model",
+        "file",
+        "metadata",
+        "filesystem",
+        "provider",
+        "terminal",
+        "schedule",
+        "api",
+        "daemon",
+    ] {
+        for kind in [Value::Null, json!("dev"), json!("build")] {
+            let packages = [json!({"name":owner,"dependencies":[{
+                "name":"domain", "path":"../domain", "rename":"values",
+                "kind":kind, "optional":true, "target":"cfg(windows)"
+            }]})];
+            assert!(violations(&packages).is_empty(), "{owner} -> domain");
+        }
     }
 }
 
@@ -369,23 +385,24 @@ fn consumers_inject_file_adapters_without_production_or_build_dependencies() {
 }
 
 #[test]
-fn protocol_cannot_depend_on_business_crates_even_through_test_or_optional_edges() {
+fn domain_cannot_depend_outward_even_through_test_or_optional_edges() {
     for dependency in [
         "metadata",
         "filesystem",
         "provider",
         "terminal",
         "voice",
-        "domain",
+        "model",
+        "file",
         "api",
         "ait-domain",
     ] {
         for kind in [Value::Null, json!("dev"), json!("build")] {
-            let packages = [json!({"id":"protocol", "name":"protocol", "dependencies":[{
+            let packages = [json!({"id":"domain", "name":"domain", "dependencies":[{
                 "name":dependency, "path":"../dependency", "rename":"renamed",
                 "kind":kind, "optional":true, "target":"cfg(windows)"
             }]})];
-            assert_eq!(violations(&packages), [format!("protocol -> {dependency}")]);
+            assert_eq!(violations(&packages), [format!("domain -> {dependency}")]);
         }
     }
 }

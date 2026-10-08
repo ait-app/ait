@@ -3,8 +3,9 @@
 use std::path::PathBuf;
 use std::sync::Arc;
 
+use domain::creation::Receipt;
 use model::ErrorCode;
-use model::creation::{Creations, Receipt, ReceiptStore};
+use model::creation::{Creations, ReceiptStore};
 
 use crate::registry::FileRegistry;
 

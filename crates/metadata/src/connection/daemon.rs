@@ -47,7 +47,7 @@ pub async fn dispatch(method: &str, params: Value, state: &Shared) -> Result<Val
                         .clone()
                 };
                 events.publish(
-                    model::session::protocol::SessionEventKind::DaemonConfig,
+                    domain::session::protocol::SessionEventKind::DaemonConfig,
                     &serde_json::json!({"status":"daemon_config_changed","config":config}),
                 );
             }

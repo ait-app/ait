@@ -1,5 +1,6 @@
 use domain::agent_runtime::TitleOrigin;
-use model::summary::{SummaryFuture, SummaryRequest};
+use domain::summary::SummaryRequest;
+use model::summary::SummaryFuture;
 use serde_json::json;
 
 use super::*;

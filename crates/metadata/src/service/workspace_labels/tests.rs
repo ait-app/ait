@@ -1,11 +1,11 @@
 use std::sync::{Arc, Mutex};
 
-use model::workspace::label_store::{
-    WorkspaceLabelStore, WorkspaceLabelStoreError, WorkspaceLabelStoreMutation,
-    WorkspaceLabelStoreSnapshot,
+use domain::workspace::label_store::{
+    WorkspaceLabelStoreError, WorkspaceLabelStoreMutation, WorkspaceLabelStoreSnapshot,
 };
-use model::workspace::labels::{WorkspaceLabelColor, WorkspaceLabelDefinition};
-use model::workspace::records::{PersistedWorkspaceKind, PersistedWorkspaceRecord};
+use domain::workspace::labels::{WorkspaceLabelColor, WorkspaceLabelDefinition};
+use domain::workspace::records::{PersistedWorkspaceKind, PersistedWorkspaceRecord};
+use model::workspace::label_store::WorkspaceLabelStore;
 
 use super::{
     WorkspaceLabelChange, WorkspaceLabelCursor, WorkspaceLabelError, WorkspaceLabelSyncMode,

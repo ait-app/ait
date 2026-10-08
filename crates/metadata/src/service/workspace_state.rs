@@ -1,9 +1,10 @@
 //! Workspace attention validation and batch coordination over a consumer-owned port.
 
-use model::workspace::attention::WorkspaceStateError;
+use domain::workspace::attention::WorkspaceStateError;
+use domain::workspace::records::PersistedWorkspaceRecord;
+use domain::workspace::registry::RegistryError;
 use model::workspace::attention::{WorkspaceAttention, WorkspaceAttentionScan};
-use model::workspace::records::PersistedWorkspaceRecord;
-use model::workspace::registry::{RegistryError, WorkspaceRegistry};
+use model::workspace::registry::WorkspaceRegistry;
 
 /// Result for one Workspace in a clear-attention batch.
 #[derive(Debug, Clone, PartialEq, Eq)]

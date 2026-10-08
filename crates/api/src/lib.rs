@@ -26,7 +26,7 @@ use filesystem::service::worktrees::{WorkspaceWorktrees, Worktrees};
 use metadata::service::directory::Directory;
 use metadata::service::workspace_automation::WorkspaceAutomation;
 use model::Runtime;
-use protocol::{Lifecycle, Limits, ServerInfo, VERSION};
+use model::server::{Lifecycle, Limits, ServerInfo, VERSION};
 use provider::service::agent_execution::AgentExecution;
 use schedule::service::Schedules;
 use secrecy::SecretString;
@@ -266,7 +266,7 @@ impl Api {
                 browser_auth: browser_auth::BrowserAuth::default(),
                 authorities: allowed_authorities(address),
                 wildcard_listener: address.ip().is_unspecified(),
-                connections: Arc::new(Semaphore::new(protocol::MAX_CONNECTIONS)),
+                connections: Arc::new(Semaphore::new(model::server::MAX_CONNECTIONS)),
             }),
         };
         workspace_cleanup::configure(&api.shared)?;
@@ -380,7 +380,9 @@ impl Api {
 fn registered_capabilities() -> Vec<String> {
     capabilities::implemented_methods()
         .map(|method| method.name.to_owned())
-        .chain(std::iter::once(protocol::single::CAPABILITY.to_owned()))
+        .chain(std::iter::once(
+            model::server::single::CAPABILITY.to_owned(),
+        ))
         .collect()
 }
 
@@ -527,10 +529,10 @@ async fn upgrade(
         .filter(|value| value.starts_with(browser_auth::TICKET_PROTOCOL));
     Ok(ws
         .protocols(protocol.map(str::to_owned))
-        .max_message_size(protocol::MAX_MESSAGE_BYTES)
-        .max_frame_size(protocol::MAX_MESSAGE_BYTES)
+        .max_message_size(model::server::MAX_MESSAGE_BYTES)
+        .max_frame_size(model::server::MAX_MESSAGE_BYTES)
         .write_buffer_size(0)
-        .max_write_buffer_size(protocol::MAX_QUEUE_BYTES)
+        .max_write_buffer_size(model::server::MAX_QUEUE_BYTES)
         .on_upgrade(move |socket| async move {
             let (_tracking, _permit) = (tracking, permit);
             Box::pin(connection::serve(socket, state)).await;
@@ -552,14 +554,14 @@ fn compose_directory(
     let directory = directory.map(|directory| {
         let project_events = events.clone();
         let directory = directory.with_project_updates(Arc::new(move |mutation| {
-            use model::workspace::registry::MutationKind;
-            use model::session::protocol::SessionEventKind;
+            use domain::workspace::registry::MutationKind;
+            use domain::session::protocol::SessionEventKind;
 
             let payload = if mutation.kind == MutationKind::Upsert {
                 mutation.project.as_ref().map(|project| {
                     serde_json::json!({
                         "kind": "upsert",
-                        "project": model::workspace::protocol::projection::project_descriptor(project),
+                        "project": domain::workspace::protocol::projection::project_descriptor(project),
                     })
                 })
             } else {
@@ -575,8 +577,8 @@ fn compose_directory(
         let directory = if has_automation {
             let setup_events = events.clone();
             directory.with_workspace_updates(Arc::new(move |mutation| {
-                use model::workspace::registry::MutationKind;
-                use model::session::protocol::SessionEventKind;
+                use domain::workspace::registry::MutationKind;
+                use domain::session::protocol::SessionEventKind;
 
                 if mutation.kind != MutationKind::Upsert {
                     return;
@@ -625,8 +627,8 @@ fn compose_automation_events(
     automation: Option<&Arc<Mutex<WorkspaceAutomation>>>,
     events: &model::session::SessionEvents,
 ) -> Result<(), ConfigError> {
+    use domain::session::protocol::SessionEventKind;
     use metadata::ports::workspace_automation::AutomationEvent;
-    use model::session::protocol::SessionEventKind;
 
     let Some(automation) = automation else {
         return Ok(());

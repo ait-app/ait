@@ -12,10 +12,10 @@ pub(crate) const METHODS: &[MethodSpec] = &[
 use std::sync::{Arc, Mutex};
 
 use chrono::{SecondsFormat, Utc};
-use model::methods::MethodSpec;
-use model::workspace::labels::{
+use domain::workspace::labels::{
     WorkspaceLabelColor as DomainColor, WorkspaceLabelDefinition as DomainDefinition,
 };
+use model::methods::MethodSpec;
 use serde::Serialize;
 use serde_json::Value;
 use uuid::Uuid;

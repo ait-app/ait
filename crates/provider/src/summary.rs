@@ -2,7 +2,8 @@
 
 use std::fmt::Debug;
 
-use model::summary::{SummaryError, SummaryFuture, SummaryRequest};
+use domain::summary::{SummaryError, SummaryRequest};
+use model::summary::SummaryFuture;
 use serde_json::Value;
 
 /// Isolated summary generation; implementations own budgets and native cleanup.

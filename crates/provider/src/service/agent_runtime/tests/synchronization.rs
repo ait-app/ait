@@ -84,7 +84,7 @@ fn shared_directory_owner_keeps_the_same_generation_for_agent_reads() {
         json!({"scope":"active","sync":{}}),
     )
     .unwrap();
-    let projects = sync.synchronize("projects", [], &model::directory_sync::Cursor::default());
+    let projects = sync.synchronize("projects", [], &domain::directory_sync::Cursor::default());
     assert_eq!(first["sync"]["generation"], projects.sync.generation);
     assert_eq!(projects.sync.head_seq, 0);
 }

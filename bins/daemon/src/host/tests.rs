@@ -117,7 +117,7 @@ async fn each_composite_service_installs_all_its_methods_without_other_component
         let task = tokio::spawn(server.serve(async move {
             let _ = signal.await;
         }));
-        let info: protocol::ServerInfo = reqwest::Client::builder()
+        let info: model::server::ServerInfo = reqwest::Client::builder()
             .no_proxy()
             .build()
             .unwrap()

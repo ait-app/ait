@@ -5,8 +5,9 @@ mod paseo;
 
 use std::sync::{Arc, Mutex};
 
+use domain::workspace::registry::generate_workspace_id;
 use fixtures::{input, project, workspace};
-use model::workspace::registry::{ProjectRegistry, WorkspaceRegistry, generate_workspace_id};
+use model::workspace::registry::{ProjectRegistry, WorkspaceRegistry};
 
 use super::*;
 
@@ -21,7 +22,7 @@ fn project_lifecycle_preserves_records_and_publishes_committed_changes_only() {
     let observed = events.clone();
     let reader = registry.clone();
     let listener: model::workspace::registry::MutationListener<
-        model::workspace::registry::ProjectMutation,
+        domain::workspace::registry::ProjectMutation,
     > = Arc::new(move |event| {
         assert_eq!(reader.get(&event.project_id).unwrap(), event.project);
         observed.lock().unwrap().push(event.clone());
@@ -96,7 +97,7 @@ fn active_root_allocation_serializes_and_keeps_archived_and_legacy_ids() {
     legacy.custom_name = Some("Kept".to_owned());
     registry.upsert(&legacy).unwrap();
     let mut refreshed_input = input("/repo");
-    refreshed_input.kind = model::workspace::records::PersistedProjectKind::NonGit;
+    refreshed_input.kind = domain::workspace::records::PersistedProjectKind::NonGit;
     refreshed_input.project_key = Some("new-key".to_owned());
     refreshed_input.display_name = "Must not replace".to_owned();
     let refreshed = registry
@@ -116,7 +117,7 @@ fn active_root_allocation_serializes_and_keeps_archived_and_legacy_ids() {
 
 #[test]
 fn workspace_lifecycle_keeps_distinct_ids_at_one_cwd_and_archive_context() {
-    use model::workspace::registry::{WorkspaceArchiveContext, WorkspaceMutationContext};
+    use domain::workspace::registry::{WorkspaceArchiveContext, WorkspaceMutationContext};
     let temp = tempfile::tempdir().unwrap();
     let path = temp.path().join("workspaces.json");
     let registry = FileBackedWorkspaceRegistry::new(path.clone());

@@ -4,14 +4,13 @@ use std::collections::{BTreeMap, VecDeque};
 use std::fmt;
 use std::sync::{Arc, Mutex, Weak};
 
-use model::workspace::label_store::{
-    WorkspaceLabelStore, WorkspaceLabelStoreError, WorkspaceLabelStoreMutation,
-};
-use model::workspace::labels::{
+use domain::workspace::label_store::{WorkspaceLabelStoreError, WorkspaceLabelStoreMutation};
+use domain::workspace::labels::{
     WorkspaceLabelColor, WorkspaceLabelDefinition, normalize_workspace_label_name,
     workspace_label_key,
 };
-use model::workspace::records::PersistedWorkspaceRecord;
+use domain::workspace::records::PersistedWorkspaceRecord;
+use model::workspace::label_store::WorkspaceLabelStore;
 
 const JOURNAL_LIMIT: usize = 256;
 

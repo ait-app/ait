@@ -2,7 +2,7 @@ use std::sync::Mutex;
 use std::sync::atomic::{AtomicBool, AtomicU64, AtomicUsize, Ordering};
 use std::time::Instant;
 
-use model::session::protocol::EventsRequest;
+use domain::session::protocol::EventsRequest;
 use model::{Lifecycle, Limits, ServerInfo, VERSION};
 use serde_json::Value;
 

@@ -1,9 +1,9 @@
 //! GitHub search and clone with shared Project registration.
 use std::sync::Arc;
 
-use model::workspace::identity::parse_remote;
+use domain::workspace::identity::parse_remote;
+use domain::workspace::records::PersistedProjectRecord;
 use model::workspace::lifecycle::ProjectRegistration;
-use model::workspace::records::PersistedProjectRecord;
 
 pub use crate::ports::github_projects::{
     GithubCloneProtocol, GithubProjectsError, GithubProjectsRuntime, GithubRepository,

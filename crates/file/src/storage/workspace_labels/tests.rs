@@ -1,11 +1,11 @@
 use std::fs;
 
-use model::workspace::label_store::{
-    WorkspaceLabelStore, WorkspaceLabelStoreError, WorkspaceLabelStoreMutation,
-};
-use model::workspace::labels::{WorkspaceLabelColor, WorkspaceLabelDefinition};
-use model::workspace::records::{PersistedWorkspaceKind, PersistedWorkspaceRecord};
-use model::workspace::registry::{WorkspaceMutationContext, WorkspaceRegistry};
+use domain::workspace::label_store::{WorkspaceLabelStoreError, WorkspaceLabelStoreMutation};
+use domain::workspace::labels::{WorkspaceLabelColor, WorkspaceLabelDefinition};
+use domain::workspace::records::{PersistedWorkspaceKind, PersistedWorkspaceRecord};
+use domain::workspace::registry::WorkspaceMutationContext;
+use model::workspace::label_store::WorkspaceLabelStore;
+use model::workspace::registry::WorkspaceRegistry;
 
 use crate::storage::registry::FileBackedWorkspaceRegistry;
 

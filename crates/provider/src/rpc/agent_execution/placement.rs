@@ -1,6 +1,6 @@
 use std::path::Path;
 
-use model::workspace::lifecycle::WorkspaceCreation;
+use domain::workspace::lifecycle::WorkspaceCreation;
 
 use super::{CreateRequest, ErrorCode, ExecutionState};
 

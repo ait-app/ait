@@ -1,12 +1,12 @@
 use std::sync::atomic::{AtomicUsize, Ordering};
 use std::sync::{Arc, Mutex};
 
-use model::workspace::attention::WorkspaceAttentionChanges;
-use model::workspace::records::PersistedWorkspaceKind;
-use model::workspace::registry::{
-    MutationListener, MutationSubscription, WorkspaceArchiveContext, WorkspaceMutation,
-    WorkspaceMutationContext,
+use domain::workspace::attention::WorkspaceAttentionChanges;
+use domain::workspace::records::PersistedWorkspaceKind;
+use domain::workspace::registry::{
+    WorkspaceArchiveContext, WorkspaceMutation, WorkspaceMutationContext,
 };
+use model::workspace::registry::{MutationListener, MutationSubscription};
 
 use super::*;
 

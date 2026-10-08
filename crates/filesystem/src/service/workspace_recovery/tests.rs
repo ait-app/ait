@@ -1,13 +1,15 @@
 use std::collections::BTreeSet;
 use std::sync::{Arc, Mutex};
 
-use model::workspace::records::{
+use domain::workspace::records::{
     PersistedProjectRecord, PersistedWorkspaceKind, PersistedWorkspaceRecord,
 };
+use domain::workspace::registry::{
+    ActiveProjectInput, ProjectMutation, RegistryError, WorkspaceArchiveContext, WorkspaceMutation,
+    WorkspaceMutationContext,
+};
 use model::workspace::registry::{
-    ActiveProjectInput, MutationListener, MutationSubscription, ProjectMutation, ProjectRegistry,
-    RegistryError, WorkspaceArchiveContext, WorkspaceMutation, WorkspaceMutationContext,
-    WorkspaceRegistry,
+    MutationListener, MutationSubscription, ProjectRegistry, WorkspaceRegistry,
 };
 
 use super::*;
@@ -417,7 +419,7 @@ fn project() -> PersistedProjectRecord {
     PersistedProjectRecord {
         project_id: "project".to_owned(),
         root_path: "/repo".to_owned(),
-        kind: model::workspace::records::PersistedProjectKind::Git,
+        kind: domain::workspace::records::PersistedProjectKind::Git,
         display_name: "Repo".to_owned(),
         project_key: Some("local:repo".to_owned()),
         custom_name: None,

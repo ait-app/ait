@@ -1,5 +1,6 @@
-use model::workspace::lifecycle::{ProjectRegistration, WorkspaceLifecycleError};
-use model::workspace::records::PersistedProjectKind;
+use domain::workspace::lifecycle::WorkspaceLifecycleError;
+use domain::workspace::records::PersistedProjectKind;
+use model::workspace::lifecycle::ProjectRegistration;
 use std::sync::{Arc, Mutex};
 
 use super::*;

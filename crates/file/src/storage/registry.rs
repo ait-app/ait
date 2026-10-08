@@ -9,7 +9,7 @@ mod workspaces;
 pub use projects::FileBackedProjectRegistry;
 pub use workspaces::FileBackedWorkspaceRegistry;
 
-use model::workspace::registry::RegistryError;
+use domain::workspace::registry::RegistryError;
 
 impl From<crate::registry::Error> for RegistryError {
     fn from(error: crate::registry::Error) -> Self {

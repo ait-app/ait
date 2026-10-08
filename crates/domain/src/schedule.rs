@@ -1,4 +1,4 @@
-//! Paseo-compatible schedule records and canonical methods.
+//! Paseo-compatible durable schedule, cadence and run records.
 use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
 use serde_json::Value;

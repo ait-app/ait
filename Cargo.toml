@@ -15,7 +15,6 @@ file = { path = "crates/file" }
 filesystem = { path = "crates/filesystem" }
 metadata = { path = "crates/metadata" }
 model = { path = "crates/model" }
-protocol = { path = "crates/protocol" }
 provider = { path = "crates/provider" }
 relay = { path = "crates/relay" }
 schedule = { path = "crates/schedule" }

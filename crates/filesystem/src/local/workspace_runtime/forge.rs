@@ -1,6 +1,6 @@
 //! Existing Forge outcomes mapped into the metadata consumer's contract.
 
-use model::workspace::runtime::{
+use domain::workspace::runtime::{
     WorkspaceCheckSnapshot, WorkspaceForgeSnapshot, WorkspacePullRequestSnapshot,
 };
 

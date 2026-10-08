@@ -1,6 +1,6 @@
 //! Coherent Agent directory bootstrap for connection-owned observers.
 
-use model::directory_sync::Cursor;
+use domain::directory_sync::Cursor;
 use serde_json::{Value, json};
 
 use super::{

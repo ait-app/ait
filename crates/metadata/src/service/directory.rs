@@ -3,20 +3,22 @@
 use std::path::Path;
 use std::sync::{Arc, Mutex};
 
-use model::storage::project::{
-    ProjectConfigRevision as StoreConfigRevision, ProjectConfigStore, ProjectConfigStoreError,
-    ProjectConfigWrite, ProjectIconStore, ProjectIconStoreError,
+use domain::storage::project::{
+    ProjectConfigRevision as StoreConfigRevision, ProjectConfigStoreError, ProjectConfigWrite,
+    ProjectIconStoreError,
 };
-use model::workspace::identity::{basename, derive_project_key};
-use model::workspace::lifecycle::WorkspaceCreation;
-use model::workspace::provisioning::{Checkout, DirectorySource, DirectorySourceError};
-use model::workspace::records::{
+use domain::workspace::identity::{basename, derive_project_key};
+use domain::workspace::lifecycle::WorkspaceCreation;
+use domain::workspace::provisioning::{Checkout, DirectorySourceError};
+use domain::workspace::records::{
     PersistedProjectKind, PersistedProjectRecord, PersistedWorkspaceKind, PersistedWorkspaceRecord,
 };
-use model::workspace::registry::{
-    ActiveProjectInput, MutationSubscription, ProjectRegistry, RegistryError,
-    WorkspaceArchiveContext, WorkspaceMutationContext, WorkspaceRegistry,
+use domain::workspace::registry::{
+    ActiveProjectInput, RegistryError, WorkspaceArchiveContext, WorkspaceMutationContext,
 };
+use model::storage::project::{ProjectConfigStore, ProjectIconStore};
+use model::workspace::provisioning::DirectorySource;
+use model::workspace::registry::{MutationSubscription, ProjectRegistry, WorkspaceRegistry};
 
 mod activity;
 
@@ -208,7 +210,7 @@ impl Directory {
     #[must_use]
     pub fn with_project_updates(
         self,
-        publish: Arc<dyn Fn(&model::workspace::registry::ProjectMutation) + Send + Sync>,
+        publish: Arc<dyn Fn(&domain::workspace::registry::ProjectMutation) + Send + Sync>,
     ) -> Self {
         let subscription = self
             .projects
@@ -227,7 +229,7 @@ impl Directory {
     #[must_use]
     pub fn with_workspace_updates(
         self,
-        publish: Arc<dyn Fn(&model::workspace::registry::WorkspaceMutation) + Send + Sync>,
+        publish: Arc<dyn Fn(&domain::workspace::registry::WorkspaceMutation) + Send + Sync>,
     ) -> Self {
         let subscription = self
             .workspaces
@@ -280,7 +282,7 @@ impl Directory {
     pub(crate) fn runtime_snapshot(
         &self,
         cwd: &str,
-    ) -> Option<model::workspace::runtime::WorkspaceRuntimeSnapshot> {
+    ) -> Option<domain::workspace::runtime::WorkspaceRuntimeSnapshot> {
         self.runtime_source
             .as_ref()
             .map(|source| source.snapshot(cwd))
@@ -442,7 +444,7 @@ impl Directory {
             timestamp,
         );
         if workspace.title.is_none() {
-            workspace.auto_name = Some(model::workspace::records::PendingWorkspaceName {
+            workspace.auto_name = Some(domain::workspace::records::PendingWorkspaceName {
                 placeholder_branch: None,
             });
         }
@@ -1102,7 +1104,7 @@ fn normalize_optional_text(text: Option<String>) -> Option<String> {
 /// # Errors
 /// Returns a filesystem error if the random source is unavailable.
 pub fn generate_workspace_id() -> Result<String, DirectoryError> {
-    model::workspace::registry::generate_workspace_id().map_err(|_| DirectoryError::FileSystem)
+    domain::workspace::registry::generate_workspace_id().map_err(|_| DirectoryError::FileSystem)
 }
 
 fn generate_icon_revision() -> Result<String, DirectoryError> {

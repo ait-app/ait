@@ -133,7 +133,7 @@ impl AgentClient for ClaudeClient {
         Box::pin(async move { session::open(&client, spec, None).await })
     }
 
-    fn summary_model(&self, models: &[Value]) -> Option<model::summary::SummarySelection> {
+    fn summary_model(&self, models: &[Value]) -> Option<domain::summary::SummarySelection> {
         super::summary_model::select(self.provider(), models, &["haiku"])
     }
 

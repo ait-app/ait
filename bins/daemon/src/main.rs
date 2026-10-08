@@ -15,8 +15,6 @@ use tracing_subscriber::prelude::*;
 #[cfg(test)]
 use futures_util as _;
 #[cfg(test)]
-use protocol as _;
-#[cfg(test)]
 use tokio_tungstenite as _;
 
 #[tokio::main]

@@ -1,33 +1,17 @@
 //! Durable creation progress shared by Workspace and Agent capabilities.
 
-pub mod protocol;
-
 use std::collections::{BTreeMap, BTreeSet};
 use std::sync::{Arc, Mutex};
 
-use serde::{Deserialize, Serialize};
+use domain::creation::protocol::{Kind, Snapshot};
+use domain::creation::{Admission, Receipt};
 use serde_json::{Value, json};
 use sha2::{Digest, Sha256};
 use uuid::Uuid;
 
 use crate::ErrorCode;
-use crate::creation::protocol::{Kind, Snapshot};
 use crate::events::{EventHub, Subscription};
 use crate::outbound::Outbound;
-
-/// Persisted immutable creation intent and its latest committed progress.
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct Receipt {
-    /// Opaque, kind-qualified digest of the idempotency key.
-    pub id: String,
-    /// Original request excluding its key and subscription flag.
-    pub intent: Value,
-    /// Latest committed progress and reserved identities.
-    pub snapshot: Snapshot,
-    /// A proven initial Agent startup failure may retry the reserved identity.
-    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
-    pub retry_initial_agent: bool,
-}
 
 /// Blocking persistence boundary for creation receipts; implementations own storage mechanics.
 pub trait ReceiptStore: std::fmt::Debug + Send + Sync {
@@ -60,15 +44,6 @@ pub struct Creations {
     store: Option<Arc<dyn ReceiptStore>>,
     state: Arc<Mutex<State>>,
     events: EventHub,
-}
-
-/// Admission result: only a newly accepted intent may perform resource side effects.
-#[derive(Debug)]
-pub struct Admission {
-    /// Whether the caller owns the first attempt.
-    pub execute: bool,
-    /// Latest committed state, including IDs reserved before the side effect.
-    pub snapshot: Snapshot,
 }
 
 impl Creations {
@@ -112,7 +87,7 @@ impl Creations {
             match kind {
                 Kind::Agent => Uuid::new_v4().to_string(),
                 Kind::Workspace => {
-                    crate::workspace::registry::generate_workspace_id().map_err(io)?
+                    domain::workspace::registry::generate_workspace_id().map_err(io)?
                 }
             }
         };

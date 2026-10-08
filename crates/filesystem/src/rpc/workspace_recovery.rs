@@ -61,7 +61,7 @@ fn recovery_restore(
 ) -> Result<Dispatched, ErrorCode> {
     match workspace_state.restore(&request.workspace_id, &timestamp()) {
         Ok(recovered) => {
-            let descriptor = model::workspace::protocol::projection::workspace_descriptor(
+            let descriptor = domain::workspace::protocol::projection::workspace_descriptor(
                 &recovered.workspace,
                 Some(&recovered.project),
             );

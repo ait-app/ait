@@ -1,10 +1,12 @@
 use std::sync::{Arc, Mutex};
 
-use model::workspace::records::{PersistedProjectRecord, PersistedWorkspaceRecord};
+use domain::workspace::records::{PersistedProjectRecord, PersistedWorkspaceRecord};
+use domain::workspace::registry::{
+    ActiveProjectInput, ProjectMutation, RegistryError, WorkspaceArchiveContext, WorkspaceMutation,
+    WorkspaceMutationContext,
+};
 use model::workspace::registry::{
-    ActiveProjectInput, MutationListener, MutationSubscription, ProjectMutation, ProjectRegistry,
-    RegistryError, WorkspaceArchiveContext, WorkspaceMutation, WorkspaceMutationContext,
-    WorkspaceRegistry,
+    MutationListener, MutationSubscription, ProjectRegistry, WorkspaceRegistry,
 };
 use serde_json::json;
 

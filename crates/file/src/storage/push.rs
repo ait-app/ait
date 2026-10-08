@@ -6,7 +6,8 @@ use std::path::PathBuf;
 
 use serde_json::Value;
 
-use model::storage::push::{PushError, TokenStore};
+use domain::storage::push::PushError;
+use model::storage::push::TokenStore;
 
 /// File adapter owned by the server's exclusively leased data directory.
 #[derive(Debug)]

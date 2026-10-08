@@ -585,7 +585,7 @@ async fn creation_revalidates_workspace_after_a_delayed_native_factory() {
     workspaces
         .upsert(
             &workspace,
-            model::workspace::registry::WorkspaceMutationContext::default(),
+            domain::workspace::registry::WorkspaceMutationContext::default(),
         )
         .unwrap();
     gate.release.add_permits(1);

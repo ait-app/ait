@@ -205,7 +205,7 @@ impl AgentClient for OpenCodeClient {
         true
     }
 
-    fn summary_model(&self, models: &[Value]) -> Option<model::summary::SummarySelection> {
+    fn summary_model(&self, models: &[Value]) -> Option<domain::summary::SummarySelection> {
         crate::local::summary_model::select(
             self.provider(),
             models,

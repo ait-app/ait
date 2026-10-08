@@ -1,9 +1,7 @@
-use model::{
-    ErrorCode,
-    creation::protocol::Kind,
-    creation::{Creations, validate_key},
-    outbound::Outbound,
-};
+use domain::creation::protocol::Kind;
+use model::ErrorCode;
+use model::creation::{Creations, validate_key};
+use model::outbound::Outbound;
 use serde_json::{Value, json};
 
 use super::*;

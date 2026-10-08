@@ -3,9 +3,10 @@
 use std::collections::BTreeMap;
 use std::sync::{Arc, Mutex};
 
-use model::workspace::activity::WorkspaceStateBucket;
-use model::workspace::attention::{WorkspaceActivity, WorkspaceActivitySource};
-use model::workspace::records::PersistedWorkspaceRecord;
+use domain::workspace::activity::WorkspaceStateBucket;
+use domain::workspace::attention::WorkspaceActivity;
+use domain::workspace::records::PersistedWorkspaceRecord;
+use model::workspace::attention::WorkspaceActivitySource;
 
 use super::{Directory, DirectoryError};
 

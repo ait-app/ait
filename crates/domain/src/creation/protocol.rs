@@ -1,4 +1,4 @@
-//! Durable creation receipts and their connection-owned observers.
+//! Creation categories, subscription requests and committed progress values.
 
 use serde::{Deserialize, Serialize};
 use serde_json::Value;

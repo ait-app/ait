@@ -8,12 +8,12 @@ use std::{
 };
 
 use anyhow::Context;
+use domain::schedule::{RunStatus, Schedule, Target};
+use domain::workspace::lifecycle::WorkspaceCreation;
 use file::storage::schedule::FileStore;
 use filesystem::service::worktrees::{CreateAction, CreateWorktree, Worktrees};
 use metadata::service::directory::Directory;
-use model::schedule::{RunStatus, Schedule, Target};
 use model::storage::schedule::Store;
-use model::workspace::lifecycle::WorkspaceCreation;
 use provider::service::agent_execution::AgentExecution;
 use schedule::ports::{Outcome, Progress, Runner};
 use schedule::service::Schedules;

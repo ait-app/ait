@@ -1,6 +1,6 @@
 use std::path::Path;
 
-use model::workspace::records::{
+use domain::workspace::records::{
     PersistedProjectKind, PersistedProjectRecord, PersistedWorkspaceKind, PersistedWorkspaceRecord,
 };
 use serde_json::json;

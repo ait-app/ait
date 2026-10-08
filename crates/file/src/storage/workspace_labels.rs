@@ -7,13 +7,14 @@ use std::io::Write;
 use std::path::{Path, PathBuf};
 use std::sync::{Mutex, MutexGuard};
 
-use model::workspace::label_store::{
-    WorkspaceLabelStore, WorkspaceLabelStoreError, WorkspaceLabelStoreMutation,
-    WorkspaceLabelStoreSnapshot,
+use domain::workspace::label_store::{
+    WorkspaceLabelStoreError, WorkspaceLabelStoreMutation, WorkspaceLabelStoreSnapshot,
 };
-use model::workspace::labels::{WorkspaceLabelDefinition, workspace_label_key};
-use model::workspace::records::PersistedWorkspaceRecord;
-use model::workspace::registry::{RegistryError, WorkspaceRegistry};
+use domain::workspace::labels::{WorkspaceLabelDefinition, workspace_label_key};
+use domain::workspace::records::PersistedWorkspaceRecord;
+use domain::workspace::registry::RegistryError;
+use model::workspace::label_store::WorkspaceLabelStore;
+use model::workspace::registry::WorkspaceRegistry;
 use serde::{Deserialize, Serialize};
 
 use crate::storage::registry::FileBackedWorkspaceRegistry;

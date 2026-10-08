@@ -1,5 +1,6 @@
 use super::*;
-use model::workspace::lifecycle::{WorkspaceCreation, WorkspaceDirectory};
+use domain::workspace::lifecycle::WorkspaceCreation;
+use model::workspace::lifecycle::WorkspaceDirectory;
 
 #[test]
 fn directory_port_shares_registration_restoration_and_observer_resources() {

@@ -1,11 +1,12 @@
 use std::path::PathBuf;
 use std::sync::Arc;
 
-use model::workspace::records::PersistedWorkspaceRecord;
-use model::workspace::registry::{
-    MutationKind, MutationListener, MutationSubscription, RegistryError, WorkspaceArchiveContext,
-    WorkspaceMutation, WorkspaceMutationContext, WorkspaceRegistry,
+use domain::workspace::records::PersistedWorkspaceRecord;
+use domain::workspace::registry::{
+    MutationKind, RegistryError, WorkspaceArchiveContext, WorkspaceMutation,
+    WorkspaceMutationContext,
 };
+use model::workspace::registry::{MutationListener, MutationSubscription, WorkspaceRegistry};
 
 use super::listeners::Listeners;
 use crate::registry::FileRegistry;

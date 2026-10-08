@@ -2,7 +2,7 @@
 
 use std::sync::{Arc, Mutex};
 
-use model::creation::protocol::{Kind, Snapshot, SubscribeRequest};
+use domain::creation::protocol::{Kind, Snapshot, SubscribeRequest};
 use model::{ErrorCode, Request};
 
 use crate::Shared;

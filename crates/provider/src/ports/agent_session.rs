@@ -281,7 +281,7 @@ pub trait AgentClient: Debug + Send + Sync {
     fn summary_model(
         &self,
         _models: &[serde_json::Value],
-    ) -> Option<model::summary::SummarySelection> {
+    ) -> Option<domain::summary::SummarySelection> {
         None
     }
 

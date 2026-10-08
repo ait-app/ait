@@ -1,5 +1,6 @@
-use super::*;
 use serde_json::json;
+
+use super::*;
 
 #[test]
 fn empty_creation_context_waits_for_a_real_prompt_or_attachment() {

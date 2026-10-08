@@ -3,7 +3,7 @@
 use std::sync::Barrier;
 
 use super::*;
-use model::workspace::registry::{WorkspaceArchiveContext, WorkspaceMutationContext};
+use domain::workspace::registry::{WorkspaceArchiveContext, WorkspaceMutationContext};
 
 #[test]
 fn concurrent_workspace_field_updates_compose_and_survive_reopening() {

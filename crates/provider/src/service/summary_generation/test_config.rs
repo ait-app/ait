@@ -2,7 +2,7 @@
 
 use std::sync::Mutex;
 
-use model::summary::SummaryError;
+use domain::summary::SummaryError;
 use serde_json::{Value, json};
 
 use crate::summary::SummaryConfiguration;

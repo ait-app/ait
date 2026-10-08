@@ -21,8 +21,9 @@ use std::{
 };
 
 use chrono::Utc;
+use domain::storage::schedule::Error;
 use model::methods::MethodSpec;
-use model::storage::schedule::{Error, Store};
+use model::storage::schedule::Store;
 use serde_json::{Value, json};
 use tokio::{
     sync::{mpsc, oneshot},

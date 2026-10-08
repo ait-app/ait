@@ -224,7 +224,7 @@ fn worker_with_client(
                 "updatedAt":"2026-09-24T00:00:00Z","archivedAt":null
             }))
             .unwrap(),
-            model::workspace::registry::WorkspaceMutationContext::default(),
+            domain::workspace::registry::WorkspaceMutationContext::default(),
         )
         .unwrap();
     let mut manager = AgentManager::new(Box::new(registry.clone()))

@@ -1,5 +1,5 @@
-use model::workspace::protocol::projection::workspace_descriptor;
-use model::workspace::records::{PersistedWorkspaceKind, PersistedWorkspaceRecord};
+use domain::workspace::protocol::projection::workspace_descriptor;
+use domain::workspace::records::{PersistedWorkspaceKind, PersistedWorkspaceRecord};
 use serde_json::json;
 
 #[test]

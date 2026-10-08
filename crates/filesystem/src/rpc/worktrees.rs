@@ -97,10 +97,10 @@ fn create(worktrees: &Worktrees, request: WorktreeCreateRequest) -> Result<Dispa
         },
         checkout_source: request
             .checkout_source
-            .map(model::workspace::protocol::worktree_source::ChangeRequestCheckoutSource::into_intent)
+            .map(domain::workspace::protocol::worktree_source::ChangeRequestCheckoutSource::into_intent)
             .or_else(|| {
                 request.github_pr_number.map(|number| {
-                    model::workspace::worktrees::WorktreeChangeRequest {
+                    domain::workspace::worktrees::WorktreeChangeRequest {
                         forge: Some("github".to_owned()),
                         number,
                         project_path: None,
@@ -113,14 +113,14 @@ fn create(worktrees: &Worktrees, request: WorktreeCreateRequest) -> Result<Dispa
     match worktrees.create(&input, &timestamp()) {
         Ok(created) => {
             if let Some(context) = context
-                && let Some(source) = model::workspace::naming::first_agent_source(
+                && let Some(source) = domain::workspace::naming::first_agent_source(
                     context.prompt.as_deref(),
                     &context.attachments,
                 )
             {
                 worktrees.name_workspace(created.workspace.workspace_id.clone(), source);
             }
-            let descriptor = model::workspace::protocol::projection::workspace_descriptor(
+            let descriptor = domain::workspace::protocol::projection::workspace_descriptor(
                 &created.workspace,
                 Some(&created.project),
             );

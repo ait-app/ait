@@ -1,7 +1,7 @@
 //! Generate missing Git wording outside the serialized filesystem job permit.
 
+use domain::summary::{SummaryKind, SummaryRequest};
 use model::ErrorCode;
-use model::summary::{SummaryKind, SummaryRequest};
 use serde_json::{Value, json};
 
 use super::State;

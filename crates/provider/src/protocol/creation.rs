@@ -49,7 +49,7 @@ pub struct GitOptions {
     pub action: Option<GitAction>,
     /// Forge-specific change request selection.
     pub checkout_source:
-        Option<model::workspace::protocol::worktree_source::ChangeRequestCheckoutSource>,
+        Option<domain::workspace::protocol::worktree_source::ChangeRequestCheckoutSource>,
     /// Legacy GitHub change request selection.
     pub github_pr_number: Option<u64>,
 }

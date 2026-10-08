@@ -2,7 +2,7 @@ use std::collections::{BTreeMap, BTreeSet};
 use std::sync::Arc;
 use std::time::Duration;
 
-use model::summary::{SummaryRequest, SummarySelection};
+use domain::summary::{SummaryRequest, SummarySelection};
 use serde_json::Value;
 
 use crate::ports::agent_session::AgentClient;

@@ -3,7 +3,8 @@
 use std::io;
 use std::path::{Component, Path, PathBuf};
 
-use model::workspace::provisioning::{Checkout, DirectorySource, DirectorySourceError};
+use domain::workspace::provisioning::{Checkout, DirectorySourceError};
+use model::workspace::provisioning::DirectorySource;
 
 use crate::local::git::GitError;
 

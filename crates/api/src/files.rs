@@ -7,7 +7,7 @@ use axum::http::{StatusCode, header};
 use axum::response::{IntoResponse, Response};
 use filesystem::service::transfer::Cursor;
 use futures_util::stream;
-use protocol::ErrorCode;
+use model::server::ErrorCode;
 
 use crate::Shared;
 

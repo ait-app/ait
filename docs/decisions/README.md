@@ -4,6 +4,7 @@
 
 ## Daemon 与协议
 
+- [ADR-111：纯业务数据归 domain，连接协议并入 model::server](daemon/adr-111-domain-values-and-server-protocol.md)
 - [ADR-109：本地故障证据与 Harness 日志采集](daemon/adr-109-local-incident-evidence.md)
 
 - [ADR-108：Relay RPC 与基础连接方法归所属 crate](daemon/adr-108-relay-rpc-and-metadata-connection-methods.md)

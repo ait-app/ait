@@ -5,11 +5,11 @@ use std::io::Write;
 use std::path::Path;
 use std::time::UNIX_EPOCH;
 
-use model::storage::project::{
-    ProjectConfigDocument, ProjectConfigRevision, ProjectConfigStore, ProjectConfigStoreError,
-    ProjectConfigWrite,
+use domain::storage::project::{
+    ProjectConfigDocument, ProjectConfigRevision, ProjectConfigStoreError, ProjectConfigWrite,
 };
-use model::workspace::provisioning::{LEGACY_PROJECT_CONFIG_FILE_NAME, PROJECT_CONFIG_FILE_NAME};
+use domain::workspace::provisioning::{LEGACY_PROJECT_CONFIG_FILE_NAME, PROJECT_CONFIG_FILE_NAME};
+use model::storage::project::ProjectConfigStore;
 
 const MAX_CONFIG_BYTES: u32 = 4 * 1024 * 1024;
 

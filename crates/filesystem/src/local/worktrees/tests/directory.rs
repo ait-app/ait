@@ -1,4 +1,4 @@
-use model::workspace::worktrees::DirectoryGit;
+use domain::workspace::worktrees::DirectoryGit;
 
 use super::*;
 

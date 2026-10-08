@@ -40,7 +40,7 @@ async fn native_permission_withdrawal_clears_durable_attention_without_ending_th
     let captured = events.clone();
     let subscription = connection
         .subscribe(
-            model::session::protocol::EventsRequest {
+            domain::session::protocol::EventsRequest {
                 events: vec![
                     "agent_permission_request".into(),
                     "agent_permission_resolved".into(),

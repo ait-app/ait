@@ -113,7 +113,7 @@ async fn binary_workspace_runtime_streams_sidebar_facts_and_live_edits() {
         "success"
     );
     assert_eq!(workspace["forge"], "github");
-    serde_json::from_value::<model::workspace::protocol::workspace::WorkspaceDescriptorPayload>(
+    serde_json::from_value::<domain::workspace::protocol::workspace::WorkspaceDescriptorPayload>(
         workspace,
     )
     .unwrap();

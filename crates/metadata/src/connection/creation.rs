@@ -1,4 +1,4 @@
-use model::creation::protocol::{Kind, SubscribeRequest};
+use domain::creation::protocol::{Kind, SubscribeRequest};
 use model::events::Subscription;
 use model::outbound::QueueError;
 use model::{Context, ErrorCode};

@@ -123,10 +123,9 @@ async fn complete_metadata(
             subscription_id,
         } => {
             subscriptions.release(&subscription_id);
-            let value = serde_json::to_value(model::subscription::SubscriptionReleaseResult {
-                subscription_id,
-            })
-            .map_err(|_| ErrorCode::InvalidMessage);
+            let value =
+                serde_json::to_value(model::server::SubscriptionReleaseResult { subscription_id })
+                    .map_err(|_| ErrorCode::InvalidMessage);
             outbound.respond(request_id, value)
         }
     }

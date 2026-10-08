@@ -100,12 +100,12 @@ dependencies = [
  "axum",
  "browser",
  "chrono",
+ "domain",
  "file",
  "filesystem",
  "futures-util",
  "metadata",
  "model",
- "protocol",
  "provider",
  "relay",
  "reqwest",
@@ -546,7 +546,6 @@ dependencies = [
  "futures-util",
  "metadata",
  "model",
- "protocol",
  "provider",
  "reqwest",
  "schedule",
@@ -617,6 +616,8 @@ dependencies = [
 name = "domain"
 version = "0.0.23"
 dependencies = [
+ "chrono",
+ "getrandom 0.4.3",
  "serde",
  "serde_json",
  "thiserror 2.0.20",
@@ -714,6 +715,7 @@ version = "0.0.23"
 dependencies = [
  "base64",
  "chrono",
+ "domain",
  "file",
  "getrandom 0.4.3",
  "libc",
@@ -1363,6 +1365,7 @@ version = "0.0.23"
 dependencies = [
  "base64",
  "chrono",
+ "domain",
  "file",
  "getrandom 0.4.3",
  "model",
@@ -1419,7 +1422,7 @@ version = "0.0.23"
 dependencies = [
  "base64",
  "chrono",
- "getrandom 0.4.3",
+ "domain",
  "icu_collator",
  "icu_locale_core",
  "serde",
@@ -1614,15 +1617,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "985e7ec9bb745e6ce6535b544d84d6cd6f7ad8bd711c398938ae983b91a766d9"
 dependencies = [
  "unicode-ident",
-]
-
-[[package]]
-name = "protocol"
-version = "0.0.23"
-dependencies = [
- "model",
- "serde",
- "serde_json",
 ]
 
 [[package]]
@@ -1998,6 +1992,7 @@ version = "0.0.23"
 dependencies = [
  "chrono",
  "chrono-tz",
+ "domain",
  "file",
  "model",
  "serde",
@@ -2332,6 +2327,7 @@ name = "terminal"
 version = "0.0.23"
 dependencies = [
  "chrono",
+ "domain",
  "model",
  "nix 0.31.3",
  "portable-pty",

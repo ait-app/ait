@@ -19,8 +19,8 @@ use domain::agent_runtime::registry::AgentRuntimeRegistry;
 use domain::agent_runtime::{
     AgentRuntimeStatus, PersistedAgentRuntimeRecord, StoredAgentConfig, StoredAgentRuntimeInfo,
 };
+use domain::session::protocol::SessionEventKind;
 use model::session::SessionEvents;
-use model::session::protocol::SessionEventKind;
 use serde_json::json;
 
 use crate::ports::agent_session::{
@@ -699,7 +699,7 @@ impl AgentManager {
             names.schedule(
                 workspace,
                 context,
-                Some(model::summary::SummarySelection {
+                Some(domain::summary::SummarySelection {
                     provider: record.provider.clone(),
                     model: record
                         .config

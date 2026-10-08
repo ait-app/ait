@@ -6,8 +6,8 @@ use axum::extract::ws::{CloseFrame, Message, WebSocket, close_code};
 use futures_util::{SinkExt, StreamExt, stream::SplitStream};
 use model::methods::InboundKind;
 use model::outbound::{Frame, Outbound, QueueError};
+use model::server::{ClientMessage, ErrorCode, Hello, ServerMessage, valid_id};
 use model::{Context, Request};
-use protocol::{ClientMessage, ErrorCode, Hello, ServerMessage, valid_id};
 use tokio::time::timeout;
 
 use crate::Shared;

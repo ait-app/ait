@@ -3,7 +3,8 @@ use super::*;
 use std::sync::Mutex;
 use std::sync::atomic::{AtomicBool, Ordering};
 
-use model::summary::{SummaryError, SummaryFuture, SummaryKind, SummaryRequest, SummarySelection};
+use domain::summary::{SummaryError, SummaryKind, SummaryRequest, SummarySelection};
+use model::summary::SummaryFuture;
 use serde_json::json;
 
 #[derive(Debug, Default)]

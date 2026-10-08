@@ -1,7 +1,8 @@
 //! Workspace setup and script coordination over registry and process ports.
 
-use model::workspace::records::{PersistedWorkspaceRecord, UntrustedWorkspaceSource};
-use model::workspace::registry::{RegistryError, WorkspaceRegistry};
+use domain::workspace::records::{PersistedWorkspaceRecord, UntrustedWorkspaceSource};
+use domain::workspace::registry::RegistryError;
+use model::workspace::registry::WorkspaceRegistry;
 
 use crate::ports::workspace_automation::{AutomationEvent, AutomationEventSink};
 
