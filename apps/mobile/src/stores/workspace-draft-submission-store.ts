@@ -1,4 +1,3 @@
-import type { CreateAgentRequestOptions } from "@ait/client/internal/daemon-client";
 import type { AgentSnapshotPayload } from "@ait/protocol/messages";
 import { create } from "zustand";
 import type { ComposerAttachment } from "@/attachments/types";
@@ -8,8 +7,8 @@ import type { WorkspaceDraftTabSetup } from "@/workspace-tabs/model";
 export interface PendingWorkspaceDraftSubmission {
   /** Already-running creation. Mounting the draft only observes its result. */
   agentCreation?: {
+    clientMessageId: string;
     result: Promise<AgentSnapshotPayload>;
-    retry: (input: CreateAgentRequestOptions) => Promise<AgentSnapshotPayload>;
   };
   serverId: string;
   workspaceId: string;

@@ -1,7 +1,4 @@
-import type {
-  CreateAgentRequestOptions,
-  CreateWorkspaceRequestOptions,
-} from "@ait/client/internal/daemon-client";
+import type { CreateWorkspaceRequestOptions } from "@ait/client/internal/daemon-client";
 import type { AgentSnapshotPayload, CreationSnapshot } from "@ait/protocol/messages";
 import { encodeImages } from "@/utils/encode-images";
 import { getHostRuntimeStore } from "@/runtime/host-runtime";
@@ -760,8 +757,8 @@ type SubmitOutcome = "navigated" | "background";
 interface SubmitDraftInput {
   clearConsumedDraft: () => void;
   agentCreation?: {
+    clientMessageId: string;
     result: Promise<AgentSnapshotPayload>;
-    retry: (input: CreateAgentRequestOptions) => Promise<AgentSnapshotPayload>;
   };
   serverId: string;
   draftKey: string;
@@ -980,13 +977,13 @@ async function createWorkspaceChatAgent(input: CreateChatAgentInput): Promise<Su
     images: images?.length ? images : undefined,
     attachments: wirePayload.attachments?.length ? wirePayload.attachments : undefined,
   };
-  const execute = async (requestedAgent = initialAgent): Promise<AgentSnapshotPayload> => {
+  const execute = async (): Promise<AgentSnapshotPayload> => {
     const { agent } = await ensureWorkspace({
       cwd,
       prompt: text,
       attachments: workspaceNamingAttachments,
       withInitialAgent: true,
-      agent: requestedAgent,
+      agent: initialAgent,
       onEvent: (snapshot) => {
         if (!snapshot.workspace || navigated) return;
         navigated = true;
@@ -1026,16 +1023,8 @@ async function createWorkspaceChatAgent(input: CreateChatAgentInput): Promise<Su
     return agent;
   };
   const agentCreation = {
+    clientMessageId: initialAgent.clientMessageId!,
     result: Promise.resolve().then(() => execute()),
-    retry: (request: CreateAgentRequestOptions) =>
-      execute({
-        ...initialAgent,
-        config: { ...request.config!, cwd },
-        initialPrompt: request.initialPrompt ?? "",
-        clientMessageId: initialAgent.clientMessageId,
-        images: request.images,
-        attachments: request.attachments,
-      }),
   };
   await agentCreation.result;
   if (outcome === "background") clearConsumedDraft();

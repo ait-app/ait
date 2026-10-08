@@ -46,10 +46,10 @@ test("the production app consumes a draft once and leaves other drafts pending",
   expect(Object.keys(store.getState().pendingByDraftId)).toEqual(["draft-2"]);
 });
 
-test("consuming draft presentation retains its running creation through remount and retry", () => {
+test("consuming draft presentation retains its running creation and identity through remount", () => {
   const store = loadProductionStore();
   const result = new Promise<never>(() => {});
-  const creation = { result, retry: () => result };
+  const creation = { result, clientMessageId: "message" };
   const submission = {
     serverId: "server",
     workspaceId: "workspace",
