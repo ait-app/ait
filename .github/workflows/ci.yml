@@ -123,10 +123,14 @@ jobs:
       queue: max
     outputs:
       admitted: ${{ steps.window.outputs.admitted }}
+      label: ${{ steps.identity.outputs.label }}
     steps:
       - uses: actions/checkout@v5
         with:
           persist-credentials: false
+      - name: Resolve nightly build identity
+        id: identity
+        run: node scripts/nightly-build.mjs identity
       - name: Keep the two newest builds
         id: window
         uses: actions/github-script@v8
@@ -163,6 +167,7 @@ jobs:
       EXPO_NO_TELEMETRY: "1"
       AIT_DESKTOP_SMOKE: "1"
       CSC_IDENTITY_AUTO_DISCOVERY: "false"
+      NIGHTLY_BUILD_LABEL: ${{ needs.nightly-prepare.outputs.label }}
     steps:
       - uses: actions/checkout@v5
         with:
@@ -205,6 +210,10 @@ jobs:
           if [ "$PLATFORM" = mac ]; then
             args+=(-c.mac.identity=- -c.mac.notarize=false)
           fi
+          if [ -n "$NIGHTLY_BUILD_LABEL" ]; then
+            nightly_args=$(node ../../scripts/nightly-build.mjs builder-args "$NIGHTLY_BUILD_LABEL")
+            while IFS= read -r arg; do args+=("$arg"); done <<< "$nightly_args"
+          fi
           npm exec -- electron-builder --config electron-builder.yml \
             "--$PLATFORM" "--$ARCH" --publish never \
             -c.publish.owner="${GITHUB_REPOSITORY_OWNER}" \
@@ -214,7 +223,9 @@ jobs:
           PLATFORM: ${{ matrix.platform }}
         run: |
           version=$(node -p 'require("./package.json").version')
-          node scripts/release-assets.mjs collect "$PLATFORM" "$version" apps/desktop/release release-assets
+          args=()
+          if [ -n "$NIGHTLY_BUILD_LABEL" ]; then args+=(--nightly "$NIGHTLY_BUILD_LABEL"); fi
+          node scripts/release-assets.mjs collect "$PLATFORM" "$version" apps/desktop/release release-assets "${args[@]}"
       - name: Record PR build source
         if: github.event_name == 'pull_request'
         env:
@@ -226,7 +237,7 @@ jobs:
       - uses: actions/upload-artifact@v6
         id: artifact
         with:
-          name: ${{ github.event_name == 'pull_request' && format('pr-{0}-{1}-{2}', github.event.pull_request.number, matrix.platform, github.event.pull_request.head.sha) || format('nightly-{0}', matrix.platform) }}
+          name: ${{ github.event_name == 'pull_request' && format('pr-{0}-{1}-{2}', github.event.pull_request.number, matrix.platform, github.event.pull_request.head.sha) || format('nightly-{0}-{1}', needs.nightly-prepare.outputs.label, matrix.platform) }}
           path: release-assets/*
           if-no-files-found: error
           overwrite: true
@@ -248,7 +259,9 @@ jobs:
           && needs.desktop.result == 'success' && needs.docs.result == 'success'
           && contains(fromJSON('["success","skipped"]'), needs.rust.result)
           && contains(fromJSON('["success","skipped"]'), needs.ui.result) }}
-    needs: [desktop, rust, ui, docs]
+    needs: [nightly-prepare, desktop, rust, ui, docs]
+    env:
+      NIGHTLY_BUILD_LABEL: ${{ needs.nightly-prepare.outputs.label }}
     runs-on: ubuntu-24.04
     # Unchanged code may skip Rust/UI checks; failures must still block publication.
     # Use the admission lock while replacing and uploading the release.
@@ -274,20 +287,21 @@ jobs:
       - name: Verify assets and record source
         run: |
           version=$(node -p 'require("./package.json").version')
-          node scripts/release-assets.mjs verify "$version" release-assets
           node <<'NODE'
           const { writeFileSync } = require('node:fs');
           const info = {
-            version: require('./package.json').version,
+            version: process.env.NIGHTLY_BUILD_LABEL,
+            packagedVersion: require('./package.json').version,
             releaseTag: 'nightly',
             sourceCommit: process.env.GITHUB_SHA,
+            workflowCommit: process.env.GITHUB_SHA,
             workflowRunNumber: Number(process.env.GITHUB_RUN_NUMBER),
             workflowRunUrl: `${process.env.GITHUB_SERVER_URL}/${process.env.GITHUB_REPOSITORY}/actions/runs/${process.env.GITHUB_RUN_ID}`,
             macSigning: 'ad-hoc, not notarized',
           };
           writeFileSync('release-assets/BUILD-INFO.json', JSON.stringify(info, null, 2) + '\n');
           NODE
-          (cd release-assets && sha256sum BUILD-INFO.json >> SHA256SUMS)
+          node scripts/release-assets.mjs verify "$version" release-assets --nightly "$NIGHTLY_BUILD_LABEL"
       - name: Replace previous nightly release and move tag
         id: release
         uses: actions/github-script@v8
@@ -320,7 +334,7 @@ jobs:
           GH_TOKEN: ${{ github.token }}
         run: |
           gh release create nightly release-assets/* --verify-tag --target "$GITHUB_SHA" \
-            --title 'Ait Nightly' --prerelease --latest=false \
+            --title "Ait Nightly $NIGHTLY_BUILD_LABEL" --prerelease --latest=false \
             --notes "Development build from $GITHUB_SHA. Replaced on the next successful main build. macOS is ad-hoc signed and not notarized. <!-- ait-nightly-run: $GITHUB_RUN_NUMBER --> <!-- ait-nightly-workflow: ci.yml -->" \
             --repo "$GITHUB_REPOSITORY"
           echo "$GITHUB_SERVER_URL/$GITHUB_REPOSITORY/releases/tag/nightly" >> "$GITHUB_STEP_SUMMARY"
@@ -348,7 +362,7 @@ jobs:
               ...context.repo, run_id: context.runId, per_page: 100,
             });
             for (const artifact of artifacts) {
-              if (['nightly-linux', 'nightly-mac'].includes(artifact.name)) {
+              if (/^nightly-(?:[0-9a-f]{8}-\d{4}-\d{2}-\d{2}-)?(?:linux|mac)$/.test(artifact.name)) {
                 await github.rest.actions.deleteArtifact({ ...context.repo, artifact_id: artifact.id });
               }
             }

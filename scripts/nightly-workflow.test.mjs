@@ -8,6 +8,7 @@ import test from "node:test";
 import yaml from "yaml";
 import control from "./nightly-control.cjs";
 import { recordPrBuild } from "./pr-build-info.mjs";
+import { nightlyBuilderArgs } from "./nightly-build.mjs";
 
 const workflow = yaml.parse(
   await readFile(new URL("../.github/workflows/ci.yml", import.meta.url), "utf8"),
@@ -58,7 +59,13 @@ test("main builds run independently while admission and publication share a queu
   assert.equal(workflow.jobs["nightly-publish"].permissions.actions, "write");
   const platforms = workflow.jobs.desktop.strategy.matrix.include.map((entry) => entry.platform);
   assert.equal(new Set(platforms).size, platforms.length);
-  assert.deepEqual(workflow.jobs["nightly-publish"].needs, ["desktop", "rust", "ui", "docs"]);
+  assert.deepEqual(workflow.jobs["nightly-publish"].needs, [
+    "nightly-prepare",
+    "desktop",
+    "rust",
+    "ui",
+    "docs",
+  ]);
   assert.deepEqual(workflow.jobs["nightly-publish"].concurrency, {
     group: "nightly-main-control",
     queue: "max",
@@ -158,6 +165,55 @@ test("mobile publishing remains manual only", async () => {
     );
     assert.deepEqual(Object.keys(mobile.on), ["workflow_dispatch"]);
   }
+});
+
+test("packaging shell passes nightly names literally while PR builds keep release names", async (t) => {
+  const directory = await mkdtemp(path.join(tmpdir(), "ait-nightly-args-"));
+  t.after(() => rm(directory, { recursive: true, force: true }));
+  await writeFile(
+    path.join(directory, "npm"),
+    "#!/usr/bin/env node\nconsole.log(JSON.stringify(process.argv.slice(2)));\n",
+    { mode: 0o755 },
+  );
+  const step = workflow.jobs.desktop.steps.find((step) => step.name === "Package desktop preview");
+  for (const platform of ["linux", "mac"]) {
+    for (const label of ["", "abcdef01-2026-10-08"]) {
+      const result = spawnSync("bash", ["-e", "-o", "pipefail", "-c", step.run], {
+        cwd: new URL("../apps/desktop", import.meta.url),
+        env: {
+          ...process.env,
+          PATH: `${directory}:${process.env.PATH}`,
+          NIGHTLY_BUILD_LABEL: label,
+          PLATFORM: platform,
+          ARCH: platform === "mac" ? "arm64" : "x64",
+          GITHUB_REPOSITORY: "ait-app/ait",
+          GITHUB_REPOSITORY_OWNER: "ait-app",
+        },
+        encoding: "utf8",
+      });
+      assert.equal(result.status, 0, result.stderr);
+      const args = JSON.parse(result.stdout);
+      if (label) {
+        for (const arg of nightlyBuilderArgs(label)) assert.ok(args.includes(arg), arg);
+      } else {
+        assert.ok(
+          args.every((arg) => !arg.includes("artifactName=") && !arg.includes("publish.channel=")),
+        );
+      }
+    }
+  }
+  assert.equal(
+    workflow.jobs.desktop.env.NIGHTLY_BUILD_LABEL,
+    "${{ needs.nightly-prepare.outputs.label }}",
+  );
+  assert.equal(
+    workflow.jobs["nightly-publish"].env.NIGHTLY_BUILD_LABEL,
+    workflow.jobs.desktop.env.NIGHTLY_BUILD_LABEL,
+  );
+  const publish = workflow.jobs["nightly-publish"].steps.find(
+    (step) => step.name === "Publish latest nightly",
+  );
+  assert.match(publish.run, /--title "Ait Nightly \$NIGHTLY_BUILD_LABEL"/);
 });
 
 test("PR package records both source and merge commits and checksums all downloaded files", async (t) => {
@@ -261,8 +317,8 @@ test("cleanup queries only its own run and preserves unrelated artifacts", async
       assert.equal(endpoint, listWorkflowRunArtifacts);
       assert.deepEqual(args, { ...context.repo, run_id: context.runId, per_page: 100 });
       return [
-        { id: 1, name: "nightly-linux" },
-        { id: 2, name: "nightly-mac" },
+        { id: 1, name: "nightly-01234567-2026-10-08-linux" },
+        { id: 2, name: "nightly-01234567-2026-10-08-mac" },
         { id: 3, name: "diagnostics" },
       ];
     },
