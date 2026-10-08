@@ -12,24 +12,31 @@ jobs:
   prepare:
     if: github.ref == 'refs/heads/dev'
     runs-on: ubuntu-24.04
+    permissions:
+      contents: read
+      actions: write
+    # Admission and publication share a lock so cancellation cannot interrupt uploads.
+    concurrency:
+      group: nightly-dev-control
+      cancel-in-progress: false
+      queue: max
     outputs:
-      current: ${{ steps.head.outputs.current }}
+      admitted: ${{ steps.window.outputs.admitted }}
     steps:
-      - name: Ignore reruns of superseded commits
-        id: head
+      - uses: actions/checkout@v5
+        with:
+          persist-credentials: false
+      - name: Keep the two newest builds
+        id: window
         uses: actions/github-script@v8
         with:
           script: |
-            const { data: branch } = await github.rest.repos.getBranch({ ...context.repo, branch: 'dev' });
-            core.setOutput('current', String(branch.commit.sha === context.sha));
+            const { admitBuild } = require('./scripts/nightly-control.cjs');
+            core.setOutput('admitted', String(await admitBuild({ github, context, core })));
 
   build:
     needs: prepare
-    if: needs.prepare.outputs.current == 'true'
-    # New commits replace obsolete builds without interrupting a release upload.
-    concurrency:
-      group: nightly-dev-build-${{ matrix.platform }}
-      cancel-in-progress: true
+    if: needs.prepare.outputs.admitted == 'true'
     name: Build ${{ matrix.label }}
     runs-on: ${{ matrix.runner }}
     timeout-minutes: 90
@@ -115,12 +122,14 @@ jobs:
   publish:
     needs: build
     runs-on: ubuntu-24.04
-    # Serialize the tag/release replacement; never cancel a partial upload.
+    # Use the admission lock while replacing and uploading the release.
     concurrency:
-      group: nightly-dev-publish
+      group: nightly-dev-control
       cancel-in-progress: false
+      queue: max
     permissions:
       contents: write
+      actions: write
     steps:
       - uses: actions/checkout@v5
         with:
@@ -143,6 +152,7 @@ jobs:
             version: require('./package.json').version,
             releaseTag: 'nightly',
             sourceCommit: process.env.GITHUB_SHA,
+            workflowRunNumber: Number(process.env.GITHUB_RUN_NUMBER),
             workflowRunUrl: `${process.env.GITHUB_SERVER_URL}/${process.env.GITHUB_REPOSITORY}/actions/runs/${process.env.GITHUB_RUN_ID}`,
             macSigning: 'ad-hoc, not notarized',
           };
@@ -155,9 +165,9 @@ jobs:
         with:
           script: |
             const repo = context.repo;
-            const { data: branch } = await github.rest.repos.getBranch({ ...repo, branch: 'dev' });
-            if (branch.commit.sha !== context.sha) {
-              core.notice('A newer dev commit exists; skip publishing this build.');
+            const { canPublish } = require('./scripts/nightly-control.cjs');
+            if (!await canPublish({ github, context, core })) {
+              core.notice('This build is outside the two-build window or a newer nightly is already published.');
               core.setOutput('publish', 'false');
               return;
             }
@@ -182,9 +192,17 @@ jobs:
         run: |
           gh release create nightly release-assets/* --verify-tag --target "$GITHUB_SHA" \
             --title 'Ait Nightly' --prerelease --latest=false \
-            --notes "Development build from $GITHUB_SHA. Replaced on the next successful dev build. macOS is ad-hoc signed and not notarized." \
+            --notes "Development build from $GITHUB_SHA. Replaced on the next successful dev build. macOS is ad-hoc signed and not notarized. <!-- ait-nightly-run: $GITHUB_RUN_NUMBER -->" \
             --repo "$GITHUB_REPOSITORY"
           echo "$GITHUB_SERVER_URL/$GITHUB_REPOSITORY/releases/tag/nightly" >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Cancel older builds after successful publication
+        if: steps.release.outputs.publish == 'true'
+        uses: actions/github-script@v8
+        with:
+          script: |
+            const { cancelOlderBuilds } = require('./scripts/nightly-control.cjs');
+            await cancelOlderBuilds({ github, context, core });
 
   cleanup:
     name: Remove temporary nightly artifacts
