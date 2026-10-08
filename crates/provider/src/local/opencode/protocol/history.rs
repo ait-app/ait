@@ -1,4 +1,4 @@
-//! Version-specific records become transport-free content, without assigning Ait identities.
+//! Native history codecs produce transport-free records without assigning Ait identities.
 use std::collections::HashSet;
 
 use crate::local::opencode::types::Record;
@@ -7,12 +7,9 @@ use crate::local::opencode::types::{
 };
 use serde_json::{Value, json};
 
-use super::{
-    failure,
-    http::{Version, required_string},
-};
+use super::{Version, failure, http::required_string};
 
-pub(super) fn normalize(
+pub(in crate::local::opencode) fn normalize(
     version: Version,
     session: &str,
     messages: &[Value],
@@ -352,4 +349,4 @@ fn new_record(
 }
 
 mod prefix;
-pub(super) use prefix::before_text;
+pub(in crate::local::opencode) use prefix::before_text;

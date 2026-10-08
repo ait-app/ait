@@ -18,7 +18,7 @@ use serde_json::{Value, json};
 use tokio_stream::StreamExt;
 use tokio_util::task::AbortOnDropHandle;
 
-use super::super::http::Version;
+use super::super::protocol::Version;
 
 #[expect(
     clippy::struct_excessive_bools,
@@ -130,6 +130,9 @@ impl Fixture {
 async fn handle(State(state): State<Arc<Mutex<StateData>>>, request: Request) -> Response {
     let path = request.uri().path().to_owned();
     let method = request.method().clone();
+    if path.starts_with("/api/") != (state.lock().unwrap().version == Version::V2) {
+        return StatusCode::NOT_FOUND.into_response();
+    }
     if let Some(response) = session_page(&state, &request) {
         return response;
     }

@@ -3,6 +3,7 @@ use crate::{
     local::opencode::tests::fixture::Fixture,
     ports::agent_session::{AgentClient, AgentResumePurpose, AgentSessionSpec},
 };
+use serde_json::Value;
 
 #[tokio::test]
 async fn lists_and_imports_external_history_without_mutations_then_resumes() {

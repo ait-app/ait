@@ -1,5 +1,6 @@
 use super::super::{OpenCodeExecutionLimits, client::OpenCodeClient, tests::fixture::Fixture};
 use super::*;
+use crate::local::opencode::protocol::Version;
 use crate::ports::agent_session::{AgentClient, AgentResumePurpose, AgentSessionSpec};
 
 mod ordering;

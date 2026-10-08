@@ -7,7 +7,6 @@ use tokio::sync::{mpsc, oneshot};
 
 use super::{
     failure,
-    http::Version,
     types::{
         ApprovalRequest, ApprovalSink, ApprovalTarget, Decision, Fault, ProgressEvent,
         ProgressSink, ProtocolError,
@@ -26,7 +25,6 @@ struct Permission {
 pub(super) struct Bridge {
     pending: Mutex<BTreeMap<String, Permission>>,
     events: mpsc::Sender<AgentTurnEvent>,
-    version: Version,
     turn: String,
     client_message_id: Option<String>,
 }
@@ -34,14 +32,12 @@ pub(super) struct Bridge {
 impl Bridge {
     pub(super) fn new(
         events: mpsc::Sender<AgentTurnEvent>,
-        version: Version,
         turn: String,
         client_message_id: Option<String>,
     ) -> Self {
         Self {
             pending: Mutex::default(),
             events,
-            version,
             turn,
             client_message_id,
         }
@@ -204,11 +200,7 @@ impl ProgressSink for Bridge {
             }
             ProgressEvent::TextDelta { id, delta } => (id, delta),
         };
-        let key = if self.version == Version::V1 {
-            id
-        } else {
-            format!("{id}:0")
-        };
+        let key = id;
         let entry = NativeItem {
             key: super::projection::key(&key),
             turn_id: Some(self.turn.clone()),

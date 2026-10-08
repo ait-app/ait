@@ -5,9 +5,7 @@ use std::{
 };
 
 use super::{
-    failure, history,
-    http::Version,
-    projection,
+    failure, projection,
     session::Connection,
     types::{Fault, ProgressEvent, ProgressSink, ProtocolError},
 };
@@ -39,12 +37,8 @@ impl Publication {
             ));
         };
         let api = &connection.runtime.api;
-        let native = if api.version == Version::V1 {
-            id.clone()
-        } else {
-            format!("{id}:0")
-        };
-        if self.deferred || self.finalized.contains(&projection::key(&native)) {
+        let native = id;
+        if self.deferred || self.finalized.contains(&projection::key(native)) {
             return Ok(());
         }
         if !self.streamed.contains(id) {
@@ -55,9 +49,8 @@ impl Publication {
                 ));
             }
             let raw = api.history(&connection.prepared.id).await?;
-            super::budget::validate(api.version, &raw, &connection.prepared, connection.limits)?;
-            let Some(records) = history::before_text(
-                api.version,
+            api.validate_budget(&raw, &connection.prepared, connection.limits)?;
+            let Some(records) = api.before_text(
                 &connection.prepared.id,
                 &connection.prepared.input_id,
                 id,

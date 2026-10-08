@@ -1,5 +1,5 @@
 use super::super::client::OpenCodeClient;
-use super::super::{http::Version, runtime};
+use super::super::{protocol::Version, runtime};
 use crate::ports::agent_session::{
     AgentClient, AgentResumePurpose, AgentSession, AgentSessionSpec, AgentTurnEvent,
 };

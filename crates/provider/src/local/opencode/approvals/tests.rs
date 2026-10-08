@@ -1,5 +1,5 @@
 use super::*;
-use crate::local::opencode::types::ApprovalSink;
+use crate::local::opencode::types::{ApprovalSink, ApprovalTarget};
 use async_trait::async_trait;
 use serde_json::json;
 use std::sync::{

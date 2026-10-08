@@ -53,12 +53,12 @@ fn limits_ignore_prepared_history_and_reject_new_tokens_items_or_text() {
         .is_ok()
     );
     assert!(
-        super::super::Driver::new("opencode".into())
+        crate::local::opencode::Driver::new("opencode".into())
             .with_execution_limits(OpenCodeExecutionLimits::default())
             .is_ok()
     );
     assert!(
-        super::super::Driver::new("opencode".into())
+        crate::local::opencode::Driver::new("opencode".into())
             .with_execution_limits(OpenCodeExecutionLimits {
                 max_steps: 0,
                 ..Default::default()

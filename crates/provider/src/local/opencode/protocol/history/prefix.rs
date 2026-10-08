@@ -4,7 +4,7 @@ use serde_json::Value;
 use super::normalize_messages;
 use crate::local::opencode::{
     failure,
-    http::Version,
+    protocol::Version,
     types::{Fault, ProtocolError, Record},
 };
 
@@ -41,7 +41,7 @@ pub(in crate::local::opencode) fn before_text(
                 .map(|part| (index, part)),
             Version::V2
                 if message["type"] == "assistant"
-                    && message["id"] == text
+                    && message["id"].as_str() == text.strip_suffix(":0")
                     && message["content"][0]["type"] == "text" =>
             {
                 Some((index, 0))

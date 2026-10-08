@@ -8,47 +8,13 @@ use serde_json::Value;
 
 use super::failure;
 
-pub(super) const MAX_BODY: usize = 8 * 1024 * 1024;
+pub(in crate::local::opencode) const MAX_BODY: usize = 8 * 1024 * 1024;
 const MAX_EVENT: usize = 256 * 1024;
 
-#[derive(Clone, Copy, Debug, Eq, PartialEq)]
-pub(super) enum Version {
-    V1,
-    V2,
-}
-
-impl Version {
-    pub(super) fn parse(output: &str) -> Result<Self, ProtocolError> {
-        let version = output
-            .trim()
-            .strip_prefix("opencode ")
-            .unwrap_or(output.trim());
-        let version = version.strip_prefix('v').unwrap_or(version);
-        let numbers = version
-            .split(['.', '-', '+'])
-            .take(3)
-            .map(str::parse::<u32>)
-            .collect::<Result<Vec<_>, _>>();
-        match numbers.as_deref() {
-            Ok([1, _, _]) => Ok(Self::V1),
-            Ok([2, minor, patch]) if *minor > 0 || *patch >= 10 => Ok(Self::V2),
-            Ok(_) | Err(_) => Err(failure(
-                Fault::AgentCapabilityUnsupported,
-                "unsupported OpenCode version; require OpenCode 1.x or 2.0.10+",
-            )),
-        }
-    }
-
-    pub(super) fn prefix(self) -> &'static str {
-        match self {
-            Self::V1 => "",
-            Self::V2 => "/api",
-        }
-    }
-}
+use super::Version;
 
 #[derive(Clone)]
-pub(super) struct Api {
+pub(in crate::local::opencode) struct Api {
     pub(super) version: Version,
     client: Client,
     base: Url,
@@ -58,14 +24,14 @@ pub(super) struct Api {
 
 impl Api {
     /// Reuse the authenticated loopback connection for another discovered session directory.
-    pub(super) fn for_directory(&self, cwd: &str) -> Self {
+    pub(in crate::local::opencode) fn for_directory(&self, cwd: &str) -> Self {
         Self {
             cwd: cwd.to_owned(),
             ..self.clone()
         }
     }
 
-    pub(super) fn new(
+    pub(in crate::local::opencode) fn new(
         version: Version,
         base: Url,
         password: String,
@@ -100,7 +66,7 @@ impl Api {
         })
     }
 
-    pub(super) async fn response(
+    pub(in crate::local::opencode) async fn response(
         &self,
         method: Method,
         path: &str,
@@ -135,7 +101,7 @@ impl Api {
         Ok(response)
     }
 
-    pub(super) async fn json(
+    pub(in crate::local::opencode) async fn json(
         &self,
         method: Method,
         path: &str,
@@ -152,11 +118,11 @@ impl Api {
             .map_err(|_| failure(Fault::ProviderFailed, "OpenCode returned invalid JSON"))
     }
 
-    pub(super) fn path(&self, id: &str, suffix: &str) -> String {
+    pub(in crate::local::opencode) fn path(&self, id: &str, suffix: &str) -> String {
         format!("{}/session/{id}{suffix}", self.version.prefix())
     }
 
-    pub(super) async fn idle(&self, id: &str) -> Result<bool, ProtocolError> {
+    pub(in crate::local::opencode) async fn idle(&self, id: &str) -> Result<bool, ProtocolError> {
         let path = match self.version {
             Version::V1 => "/session/status",
             Version::V2 => "/api/session/active",
@@ -182,14 +148,17 @@ impl Api {
         }
     }
 
-    pub(super) fn data<'a>(&self, response: &'a Value) -> &'a Value {
+    pub(in crate::local::opencode) fn data<'a>(&self, response: &'a Value) -> &'a Value {
         match self.version {
             Version::V1 => response,
             Version::V2 => response.get("data").unwrap_or(response),
         }
     }
 
-    pub(super) async fn history(&self, id: &str) -> Result<Vec<Value>, ProtocolError> {
+    pub(in crate::local::opencode) async fn history(
+        &self,
+        id: &str,
+    ) -> Result<Vec<Value>, ProtocolError> {
         let path = self.path(id, "/message");
         if self.version == Version::V1 {
             return self
@@ -252,12 +221,15 @@ impl Api {
         }
     }
 
-    pub(super) async fn events(&self) -> Result<Events, ProtocolError> {
+    pub(in crate::local::opencode) async fn events(&self) -> Result<Events, ProtocolError> {
         let path = format!("{}/event", self.version.prefix());
         Events::new(self.response(Method::GET, &path, None).await?)
     }
 
-    pub(super) async fn execution(&self, id: &str) -> Result<Option<Value>, ProtocolError> {
+    pub(in crate::local::opencode) async fn execution(
+        &self,
+        id: &str,
+    ) -> Result<Option<Value>, ProtocolError> {
         let path = format!("/api/experimental/session/{id}/log?after=0&follow=false");
         let mut events = Events::new(self.response(Method::GET, &path, None).await?)?;
         tokio::time::timeout(Duration::from_secs(30), async {
@@ -315,7 +287,7 @@ impl Api {
         })?
     }
 
-    pub(super) async fn models(&self) -> Result<Vec<Model>, ProtocolError> {
+    pub(in crate::local::opencode) async fn models(&self) -> Result<Vec<Model>, ProtocolError> {
         let path = match self.version {
             Version::V1 => "/provider".to_owned(),
             Version::V2 => format!("/api/model?{}", location_query(&self.cwd)),
@@ -446,7 +418,10 @@ fn location_query(cwd: &str) -> String {
     url.query().expect("query inserted").to_owned()
 }
 
-pub(super) fn required_string<'a>(value: &'a Value, key: &str) -> Result<&'a str, ProtocolError> {
+pub(in crate::local::opencode) fn required_string<'a>(
+    value: &'a Value,
+    key: &str,
+) -> Result<&'a str, ProtocolError> {
     value
         .get(key)
         .and_then(Value::as_str)
@@ -477,13 +452,29 @@ async fn bounded_body(mut response: Response) -> Result<Vec<u8>, ProtocolError> 
     Ok(bytes)
 }
 
-pub(super) struct Events {
+pub(in crate::local::opencode) struct Events {
     response: Response,
     buffer: Vec<u8>,
 }
 
 impl Events {
-    pub(super) fn new(response: Response) -> Result<Self, ProtocolError> {
+    /// Wait for native readiness before submission; a missing or broken stream is an error.
+    pub(in crate::local::opencode) async fn wait_ready(&mut self) -> Result<(), ProtocolError> {
+        loop {
+            let event = self.next().await?.ok_or_else(|| {
+                failure(
+                    Fault::RunRecoveryFailed,
+                    "OpenCode event stream ended before readiness",
+                )
+            })?;
+            let event = event.get("payload").unwrap_or(&event);
+            if event.get("type").and_then(Value::as_str) == Some("server.connected") {
+                return Ok(());
+            }
+        }
+    }
+
+    pub(in crate::local::opencode) fn new(response: Response) -> Result<Self, ProtocolError> {
         if !response
             .headers()
             .get(reqwest::header::CONTENT_TYPE)
@@ -501,7 +492,9 @@ impl Events {
         })
     }
 
-    pub(super) async fn next(&mut self) -> Result<Option<Value>, ProtocolError> {
+    pub(in crate::local::opencode) async fn next(
+        &mut self,
+    ) -> Result<Option<Value>, ProtocolError> {
         loop {
             if let Some((end, separator)) = frame_end(&self.buffer) {
                 let frame = self.buffer.drain(..end + separator).collect::<Vec<_>>();
