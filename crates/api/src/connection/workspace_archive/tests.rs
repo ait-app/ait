@@ -1,11 +1,11 @@
 use std::sync::Arc;
 
-use file::storage::project_config::LocalProjectConfigStore;
-use file::storage::project_icon::LocalProjectIconStore;
-use file::storage::registry::{FileBackedProjectRegistry, FileBackedWorkspaceRegistry};
-use filesystem::local::provisioning::LocalDirectorySource;
+use filesystem::git::local::provisioning::LocalDirectorySource;
 use metadata::service::directory::{Directory, DirectoryDependencies};
 use model::{Request, outbound::Outbound};
+use persistence::storage::project_config::LocalProjectConfigStore;
+use persistence::storage::project_icon::LocalProjectIconStore;
+use persistence::storage::registry::{FileBackedProjectRegistry, FileBackedWorkspaceRegistry};
 
 use super::*;
 use crate::{Api, Services};

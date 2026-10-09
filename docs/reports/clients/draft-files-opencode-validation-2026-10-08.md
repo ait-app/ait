@@ -7,7 +7,41 @@
 3. **PDF 类型识别**：包括 `.PDF` 在内的 PDF 扩展名返回 Binary / application/pdf，避免 ASCII 头 PDF 被当作文本。
 4. **OpenCode 错误与并发回归**：保留静态错误原因并记录 HTTP 状态、历史变更失败，端口错误分类不变；增加已安装 OpenCode 的兄弟会话关闭回归测试。
 
-## Test coverage
+## Test coverage — 2026-10-09
+
+基线 `f7f434a5`，受测实现树 `0f67a96006a5ad334a7c5ad24c76e279dd72a209`。
+Linux x86_64、Rust 1.98.1、LLVM 23.1.1，workspace 默认特性。
+
+- `cargo test --workspace`：2,044 passed / 16 ignored，包含 doc tests。
+- `cargo build --workspace`、`cargo clippy --workspace --all-targets -- -D warnings`、`cargo fmt --all --check`：通过。
+- 下列前端 7 文件测试：36 passed；typecheck、oxlint 和文档链接检查通过。
+- `AIT_TEST_OPENCODE_BIN=/usr/bin/opencode cargo test -p provider installed_opencode_keeps_sessions_writable -- --ignored`：1 passed，隔离配置和 loopback 模型。
+
+Rust 测试使用空 `XDG_CONFIG_HOME=/tmp/ait-diagnostics-test-config` 隔离 Git 全局 hook 设置。
+覆盖率命令：
+
+```sh
+XDG_CONFIG_HOME=/tmp/ait-diagnostics-test-config \
+LLVM_COV=/usr/bin/llvm-cov LLVM_PROFDATA=/usr/bin/llvm-profdata \
+CARGO_TARGET_DIR=target/diagnostics-coverage \
+cargo llvm-cov --no-clean --workspace --html -- --test-threads=4
+```
+
+首次插桩运行的 DSH 测试 `native_argument_validation_failures_do_not_fail_the_adapter_or_lose_user_messages`
+在创建夹具会话时返回 `Unavailable`。保留采样数据完整复测后，2,043 passed / 16 ignored，0 failed。
+此次未改动 DSH 实现；失败原因尚未确定。覆盖率不含 doc tests，前端覆盖率未测量。
+
+| Rust 行覆盖范围 | Covered / total | 行覆盖率 |
+| --- | --- | --- |
+| Workspace | 57,093 / 60,604 | 94.21% |
+| Filesystem | 11,570 / 12,198 | 94.85% |
+| Provider | 27,646 / 29,631 | 93.30% |
+
+[本次覆盖率摘要](draft-files-opencode-coverage-2026-10-09.json)包含完整命令和修改文件统计。
+HTML 可在 `target/diagnostics-coverage/llvm-cov/html/index.html` 重建。
+没有同一源码基线的对照测量，不计算覆盖率增量。未验证其他平台、可选特性及真机 UI。
+
+## Test coverage — 2026-10-08 历史结果
 
 受测实现树：`481cfaffd6814361718010c32865074fe65e7fe0`（文档整理前的实现树）。
 环境：Linux x86_64，Rust 1.98.1，LLVM 23.1.1。无同范围 main 基线测量，不声称覆盖率增量。

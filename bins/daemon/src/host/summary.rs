@@ -3,10 +3,10 @@
 use std::path::Path;
 use std::sync::Arc;
 
-use file::storage::project_config::LocalProjectConfigStore;
+use domain::summary::SummaryError;
 use model::storage::daemon_config::DaemonConfigStore;
 use model::storage::project::ProjectConfigStore;
-use model::summary::SummaryError;
+use persistence::storage::project_config::LocalProjectConfigStore;
 use provider::summary::SummaryConfiguration;
 use serde_json::Value;
 

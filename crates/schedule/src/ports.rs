@@ -1,8 +1,8 @@
 //! Host execution and durable storage boundaries.
 use std::{future::Future, pin::Pin};
 
-use model::schedule::Schedule;
-use model::storage::schedule::Error;
+use domain::schedule::Schedule;
+use domain::storage::schedule::Error;
 use tokio_util::sync::CancellationToken;
 
 /// Completed execution, including identities allocated before an error.

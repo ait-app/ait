@@ -10,7 +10,7 @@ mod single;
 mod voice;
 
 use futures_util::{SinkExt, StreamExt};
-use protocol::CAPABILITIES;
+use model::server::CAPABILITIES;
 use serde_json::{Value, json};
 use tokio::net::{TcpListener, TcpStream};
 use tokio::task::JoinHandle;
@@ -402,7 +402,7 @@ async fn rejects_oversized_frames_binary_and_malformed_messages() {
     }
     let mut socket = fixture.socket().await;
     let mut oversized = hello();
-    oversized["future"] = json!("x".repeat(protocol::MAX_MESSAGE_BYTES));
+    oversized["future"] = json!("x".repeat(model::server::MAX_MESSAGE_BYTES));
     let sent = socket
         .send(Message::Text(oversized.to_string().into()))
         .await;
@@ -440,7 +440,7 @@ async fn unauthenticated_upgrade_and_connection_budget_are_rejected() {
         matches!(error, tokio_tungstenite::tungstenite::Error::Http(response) if response.status() == StatusCode::UNAUTHORIZED)
     );
     let mut sockets = Vec::new();
-    for _ in 0..protocol::MAX_CONNECTIONS {
+    for _ in 0..model::server::MAX_CONNECTIONS {
         sockets.push(fixture.socket().await);
     }
     let mut request = format!("ws://{}/v1/ws", fixture.address)

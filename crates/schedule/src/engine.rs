@@ -1,6 +1,7 @@
 use chrono::{DateTime, Utc};
-use model::schedule::{Cadence, Run, RunStatus, Schedule, Status, Target};
-use model::storage::schedule::{Error, Store};
+use domain::schedule::{Cadence, Run, RunStatus, Schedule, Status, Target};
+use domain::storage::schedule::Error;
+use model::storage::schedule::Store;
 use serde_json::{Value, json};
 use uuid::Uuid;
 

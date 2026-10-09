@@ -42,13 +42,21 @@ export AIT_SERVER_ANTIGRAVITY_BIN="/custom/path/agy"
 | 模式 | 原生行为 |
 | --- | --- |
 | Local Permissions（默认） | 保留本机 AGY 权限规则；headless 中无法询问的工具会被原生拒绝 |
-| Accept Edits | `--mode accept-edits`，工具权限仍归本机 AGY 规则 |
+| Accept Edits | `--mode accept-edits`，允许编辑；需要审批的命令仍会在 headless 中被拒绝 |
 | Plan | `--mode plan` |
 | Full Access | `--dangerously-skip-permissions`，全部工具调用自动批准 |
 
 Google 的 headless 接口没有交互审批回传。需要运行特定命令时，可按
 [官方 Headless 文档](https://antigravity.google/docs/cli/headless)配置 AGY 自己的权限规则，
 或显式选择 Full Access。Ait 不改写全局权限文件。
+
+工具被自动拒绝时，AGY 1.3.0 可能返回 `SUCCESS`、空响应和 `denied_actions`，
+且工具完成事件不带 `error`。Ait 根据拒绝列表将对应工具显示为失败；没有响应的拒绝轮次
+也显示失败，并在会话错误和活动日志中提示配置 `permissions.allow` 或选择 Full Access。
+已有响应且原生成功的轮次保留响应，对被拒绝工具仍显示失败。
+
+AGY 的 stderr 会持续、有界地读取，仅公开权限、登录、额度、模型/API 或协议失败的分类说明；
+原始诊断不进入 Ait 日志或快照。更详细的原生日志位于 `~/.gemini/antigravity-cli/log/`。
 
 模型选择保留 CLI 返回的完整 slug，包括模型的 effort 变体。
 会话支持多轮文本、工具进度、累计 token 用量与 conversation ID 恢复；

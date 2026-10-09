@@ -2208,6 +2208,8 @@ export const es: TranslationResources = {
         rowHint: "Collect connection, daemon, provider, desktop, and log details",
         run: "Run",
         running: "Running diagnostic...",
+        exportAccessibility: "Exportar archivo de diagnóstico",
+        exportFailed: "No se pudo exportar el archivo de diagnóstico",
         copyLabel: "diagnostic",
         copyAccessibility: "Copy diagnostic",
         copyFailed: "Failed to copy diagnostic",

@@ -8,7 +8,8 @@ use std::sync::Arc;
 use std::time::Duration;
 
 use domain::agent_runtime::StoredAgentConfig;
-use model::summary::{SummaryError, SummaryFuture, SummaryRequest};
+use domain::summary::{SummaryError, SummaryRequest};
+use model::summary::SummaryFuture;
 use serde_json::Value;
 use tokio::sync::Semaphore;
 use tokio_util::sync::CancellationToken;

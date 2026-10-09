@@ -15,7 +15,7 @@ BASE_REVISION = "b797e0d2f83ae57f62892c288a5d81776f8afa6a"
 REPORT = ROOT / "docs/reports/daemon/paseo-server-coverage-2026-09-29"
 TEMP = ROOT / "target/paseo-focused-coverage"
 SCOPES = [
-    ("file", ["--lib"], ["config::", "registry::", "single::", "watch::", "creation::", "storage::"]),
+    ("persistence", ["--lib"], ["registry::", "single::", "watch::", "storage::"]),
     ("provider", ["--lib"], [
         "service::agent_execution::", "service::agent_manager::", "service::agent_runtime::",
         "service::provider_catalog::", "service::workspace_attention::", "rpc::timeline::",
@@ -25,7 +25,7 @@ SCOPES = [
     ]),
     ("model", ["--lib"], [
         "pagination::", "directory_sync::", "polling::", "runtime::", "events::",
-        "workspace::", "storage::", "session::", "creation::", "summary::",
+        "workspace::", "storage::", "session::", "creation::", "server::", "methods::",
     ]),
     ("metadata", ["--lib"], [
         "service::directory::", "workspace_automation::", "rpc::directory::",
@@ -36,12 +36,17 @@ SCOPES = [
         "terminal_activity::", "listener::", "capabilities::", "auth::", "browser_auth::",
         "tests::session::", "tests::paseo::",
     ]),
-    ("daemon", ["--bin", "daemon"], ["host::tests::workspace_attention::"]),
+    ("daemon", ["--bin", "daemon"], [
+        "host::tests::workspace_attention::", "config::", "instance::", "diagnostics::store::",
+    ]),
     ("daemon", ["--test", "process"], [
         "agent_execution::", "agent_controls::", "agent_history::", "terminal::", "worktrees::",
         "workspace_automation::", "directory::", "native_sessions::", "schedule::", "session::",
     ]),
-    ("protocol", ["--lib"], ["methods::"]),
+    ("domain", ["--lib"], [
+        "workspace::", "creation::", "session::", "summary::", "directory_sync::",
+        "pagination::", "schedule::", "storage::",
+    ]),
 ]
 IGNORE = r"/(tests|test_support)(/|\.rs$)"
 

@@ -1,5 +1,7 @@
 //! Local daemon entry point.
 
+mod config;
+mod diagnostics;
 mod host;
 mod instance;
 
@@ -7,13 +9,11 @@ use std::process::ExitCode;
 
 use anyhow::Context;
 use clap::Parser;
-use file::config;
+use tracing_subscriber::prelude::*;
 
 // Binary unit tests inherit dependencies used by integration tests.
 #[cfg(test)]
 use futures_util as _;
-#[cfg(test)]
-use protocol as _;
 #[cfg(test)]
 use tokio_tungstenite as _;
 
@@ -50,20 +50,34 @@ async fn run(cli: config::Cli) -> anyhow::Result<()> {
         |origin| api::validate_browser_origin(origin).map_err(Into::into),
     )
     .context("load daemon configuration")?;
-    tracing_subscriber::fmt()
-        .with_ansi(false)
-        .with_max_level(config.log_level)
-        .with_writer(std::io::stderr)
+    let diagnostics = diagnostics::Diagnostics::start(config.data_dir.join("diagnostics"))
+        .context("start diagnostic collector")?;
+    tracing_subscriber::registry()
+        .with(
+            diagnostics
+                .clone()
+                .with_filter(tracing_subscriber::filter::LevelFilter::WARN),
+        )
+        .with(
+            tracing_subscriber::fmt::layer()
+                .with_ansi(false)
+                .with_writer(std::io::stderr)
+                .with_filter(config.log_level),
+        )
         .try_init()
         .map_err(|error| anyhow::anyhow!("initialize logging: {error}"))?;
     loop {
-        let server = host::Server::bind(config.clone()).await?;
+        let server = host::Server::bind_with_diagnostics(
+            config.clone(),
+            std::sync::Arc::new(diagnostics.clone()),
+        )
+        .await?;
         tracing::info!(listen = %server.address(), "daemon ready");
         match server.serve(shutdown_signal()?).await? {
-            Some(api::LifecycleIntent::Restart { reason }) => {
+            Some(model::LifecycleIntent::Restart { reason }) => {
                 tracing::info!(%reason, "restarting daemon");
             }
-            Some(api::LifecycleIntent::Shutdown) | None => return Ok(()),
+            Some(model::LifecycleIntent::Shutdown) | None => return Ok(()),
         }
     }
 }

@@ -23,8 +23,8 @@ use chrono::{SecondsFormat, Utc};
 use domain::agent_runtime::{
     AgentAttentionReason as DomainAttentionReason, AgentRuntimeStatus, PersistedAgentRuntimeRecord,
 };
-use model::workspace::protocol::workspace::ProjectCheckoutLitePayload;
-use model::workspace::protocol::workspace::ProjectPlacementPayload;
+use domain::workspace::protocol::workspace::ProjectCheckoutLitePayload;
+use domain::workspace::protocol::workspace::ProjectPlacementPayload;
 use serde_json::Value;
 
 use crate::protocol::agent_config::NullableSetting;
@@ -130,7 +130,7 @@ pub(crate) fn sync_snapshot(
 pub(crate) fn synchronize(
     directory: &AgentRuntimeDirectory,
     mut snapshot: Value,
-    cursor: &model::directory_sync::Cursor,
+    cursor: &domain::directory_sync::Cursor,
 ) -> Result<Value, ErrorCode> {
     let Value::Array(rows) = snapshot["entries"].take() else {
         return Err(ErrorCode::AgentIo);

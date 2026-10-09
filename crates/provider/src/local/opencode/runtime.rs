@@ -11,7 +11,7 @@ use tokio_util::{sync::CancellationToken, task::AbortOnDropHandle};
 
 use super::{
     failure,
-    http::{Api, Version},
+    protocol::{Version, http::Api},
 };
 
 pub(super) struct Runtime {
@@ -60,14 +60,7 @@ impl Runtime {
                 metadata_configuration(version, agent)?,
             );
         }
-        match version {
-            Version::V1 => {
-                command.env("OPENCODE_SERVER_PASSWORD", &password);
-            }
-            Version::V2 => {
-                command.env("OPENCODE_PASSWORD", &password);
-            }
-        }
+        command.env(version.password_environment(), &password);
         #[cfg(unix)]
         command.process_group(0);
         let mut child = command.spawn().map_err(|_| {
@@ -111,10 +104,7 @@ impl Runtime {
             let _ = tokio::join!(drain, drain_stdout);
         }));
         let mut runtime = Self { api, child, drain };
-        let path = match version {
-            Version::V1 => "/global/health",
-            Version::V2 => "/api/info",
-        };
+        let path = version.health_path();
         let readiness = tokio::select! {
             () = cancellation.cancelled() => Err(failure(Fault::RunCancelled, "OpenCode startup cancelled")),
             result = runtime.api.json(Method::GET, path, None) => result,
@@ -151,7 +141,7 @@ fn metadata_configuration(version: Version, agent: &str) -> Result<String, Proto
             "invalid OpenCode inline configuration",
         ));
     }
-    let overlay = super::summary::configuration(version, agent);
+    let overlay = version.metadata_configuration(agent);
     for (key, value) in overlay
         .as_object()
         .expect("metadata configuration is an object")

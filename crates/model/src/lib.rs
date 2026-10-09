@@ -1,34 +1,24 @@
-//! Concrete request context and shared Tokio runtime resources for server capability crates.
+//! Shared collaboration ports, server transport definitions and runtime resources.
 
 pub mod changes;
 mod context;
 pub mod creation;
 pub mod directory_sync;
 pub mod events;
-mod message;
 pub mod methods;
 pub mod outbound;
 pub mod pagination;
 pub mod polling;
 pub mod runtime;
-pub mod schedule;
 pub mod server;
 pub mod session;
 pub mod storage;
-pub mod subscription;
 pub mod summary;
 pub mod workspace;
 
 pub use context::{Context, DispatchError, Request};
-pub use message::{ErrorCode, ServerMessage};
 pub use runtime::{LifecycleIntent, Runtime};
-pub use server::{Lifecycle, Limits, ServerInfo, VERSION};
-
-/// Validate a bounded, nonempty correlation or diagnostic identifier.
-#[must_use]
-pub fn valid_id(value: &str) -> bool {
-    !value.is_empty() && value.len() <= 128 && !value.chars().any(char::is_control)
-}
+pub use server::{ErrorCode, Lifecycle, Limits, ServerInfo, ServerMessage, VERSION, valid_id};
 
 #[cfg(test)]
 mod tests;

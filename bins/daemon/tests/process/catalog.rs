@@ -8,7 +8,7 @@ async fn production_installs_every_in_scope_method_without_placeholders() {
     let log = root.path().join("server.log");
     let mut server = start(&root.path().join("state"), &log);
     let address = ready(&mut server, &log).await;
-    let info: protocol::ServerInfo = reqwest::Client::builder()
+    let info: model::server::ServerInfo = reqwest::Client::builder()
         .no_proxy()
         .build()
         .unwrap()

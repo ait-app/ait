@@ -2191,6 +2191,8 @@ export const ptBR: TranslationResources = {
         rowHint: "Collect connection, daemon, provider, desktop, and log details",
         run: "Run",
         running: "Running diagnostic...",
+        exportAccessibility: "Exportar arquivo de diagnóstico",
+        exportFailed: "Falha ao exportar arquivo de diagnóstico",
         copyLabel: "diagnostic",
         copyAccessibility: "Copy diagnostic",
         copyFailed: "Failed to copy diagnostic",

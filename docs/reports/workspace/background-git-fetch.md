@@ -23,8 +23,8 @@ Ait 补齐了 Paseo 的远端引用刷新：活跃目录订阅首次观察仓库
   提交列表与 merge-from-base 使用本地和 origin 中进展更大的基准，避免远端提交被
   误算成当前工作区变更。按钮本身仍只合并已有引用，不额外等待网络 fetch。
 
-生产实现：[观察协调](../../../crates/filesystem/src/service/git_fetch.rs)、
-[Git adapter](../../../crates/filesystem/src/local/git_fetch.rs)、
+生产实现：[观察协调](../../../crates/filesystem/src/git/service/git_fetch.rs)、
+[Git adapter](../../../crates/filesystem/src/git/local/git_fetch.rs)、
 [目录订阅](../../../crates/metadata/src/rpc/directory/listing.rs)、
 [App 事件映射](../../../apps/mobile/src/runtime/rust-daemon/messages.ts)。
 
@@ -69,10 +69,10 @@ git diff --check
 API/进程测试需要本机 loopback socket，获准后在沙箱外运行。默认语音依赖使用已有的
 Sherpa ONNX 静态库缓存；前端复用本机已安装依赖，未做干净的依赖安装。
 
-可审阅测试：[定时、共享任务与取消](../../../crates/filesystem/src/service/git_fetch/tests.rs)、
-[真实 fetch/prune 和进程回收](../../../crates/filesystem/src/local/git_fetch/tests.rs)、
+可审阅测试：[定时、共享任务与取消](../../../crates/filesystem/src/git/service/git_fetch/tests.rs)、
+[真实 fetch/prune 和进程回收](../../../crates/filesystem/src/git/local/git_fetch/tests.rs)、
 [目录筛选和归档](../../../crates/metadata/src/service/directory/tests/git_observation.rs)、
-[基准引用](../../../crates/filesystem/src/local/checkout/tests/remote_base.rs)、
+[基准引用](../../../crates/filesystem/src/git/local/checkout/tests/remote_base.rs)、
 [真实 server WebSocket 流程](../../../bins/daemon/tests/process/git_fetch.rs)、
 [SDK schema 验证](../../../apps/mobile/src/runtime/rust-daemon/messages.test.ts)。
 

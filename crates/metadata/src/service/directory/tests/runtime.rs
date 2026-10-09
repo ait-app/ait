@@ -2,11 +2,12 @@
 
 use std::sync::Arc;
 
-use model::ServerMessage;
-use model::workspace::runtime::{
+use domain::workspace::runtime::{
     WorkspaceCheckSnapshot, WorkspaceDiffStat, WorkspaceForgeSnapshot, WorkspaceGitSnapshot,
-    WorkspacePullRequestSnapshot, WorkspaceRuntimeSnapshot, WorkspaceRuntimeSource,
+    WorkspacePullRequestSnapshot, WorkspaceRuntimeSnapshot,
 };
+use model::ServerMessage;
+use model::workspace::runtime::WorkspaceRuntimeSource;
 use serde_json::json;
 
 use super::*;

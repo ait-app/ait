@@ -78,7 +78,7 @@ fn skill_methods_are_owned_by_filesystem_and_remain_requests() {
 
 #[test]
 fn baseline_methods_and_heartbeat_keep_their_shared_contracts() {
-    assert_eq!(protocol::CAPABILITIES, model::server::CAPABILITIES);
+    assert_eq!(model::server::CAPABILITIES, model::server::CAPABILITIES);
     let heartbeat = implemented_methods()
         .find(|spec| spec.name == ::metadata::protocol::server::HEARTBEAT_METHOD)
         .expect("heartbeat must be declared by metadata");

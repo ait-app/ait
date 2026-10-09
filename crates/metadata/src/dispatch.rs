@@ -45,7 +45,7 @@ impl std::ops::Deref for State {
     }
 }
 
-use model::subscription::SubscriptionReleaseRequest;
+use model::server::SubscriptionReleaseRequest;
 use model::{Lifecycle, LifecycleIntent, ServerMessage, valid_id};
 use serde_json::{Value, json};
 use uuid::Uuid;
@@ -97,7 +97,7 @@ impl State {
             let mut info = self.info();
             info.lifecycle = Lifecycle::Draining;
             self.session_events.publish(
-                model::session::protocol::SessionEventKind::ServerInfo,
+                domain::session::protocol::SessionEventKind::ServerInfo,
                 &json!({"status":"server_info","info":info}),
             );
         }

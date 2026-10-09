@@ -1,0 +1,181 @@
+{
+  "source_revision": "49572122d944d98e13ac2c770667bad61446a24e",
+  "base_revision": "fdd6ce6375b9f40c9f5d5eb22216f11e238bf736",
+  "measurement_date": "2026-10-09",
+  "scope": "Rust Cargo workspace; default features; macOS arm64; rustc 1.98.1; cargo-llvm-cov 0.8.4; tool default file filtering; no additional exclusions; one test thread; doctests run by cargo test but are not instrumented.",
+  "commands": {
+    "tests": "cargo test --workspace --locked -- --test-threads=1",
+    "build": "cargo build --workspace --locked",
+    "clippy": "cargo clippy --workspace --all-targets --locked -- -D warnings",
+    "format": "cargo fmt --all --check",
+    "coverage": "cargo llvm-cov --workspace --html --locked -- --test-threads=1",
+    "coverage_export": "cargo llvm-cov report --json --summary-only --locked --output-path /tmp/ait-async-history-workspace-coverage.json",
+    "missing_lines": "cargo llvm-cov report --show-missing-lines --locked",
+    "docs": "node --test scripts/check-docs.test.mjs && node scripts/check-docs.mjs"
+  },
+  "test_execution": {
+    "result": "passed",
+    "targets": 30,
+    "passed": 2028,
+    "failed": 0,
+    "ignored": 15,
+    "ignored_tests": [
+      "test local::antigravity::tests::installed::authenticated_multi_turn_and_resume ... ignored, requires authenticated AGY and explicitly consumes three model turns",
+      "test local::claude::tests::process::installed_claude_control_protocol_discovers_models_without_inference ... ignored, requires a locally installed Claude Code CLI; sends no model request",
+      "test local::claude::tests::process::parity::installed_claude_completes_a_native_turn_and_reopens_history ... ignored, requires installed Claude authentication and makes one small model request",
+      "test local::codex::tests::installed::installed_codex_completes_a_native_turn_and_reopens_history ... ignored, requires installed Codex authentication and makes one small model request",
+      "test local::deepseek_harness::launcher::tests::installed_launcher_runs_native_cli_without_a_wrapper ... ignored, requires an installed DSH CLI or desktop bundle; does not open a session",
+      "test local::deepseek_harness::metadata::tests::installed_dsh_metadata_has_no_tools_or_persisted_session ... ignored, requires AIT_TEST_DSH_BIN; loopback model and temporary native profile only",
+      "test local::deepseek_harness::native::tests::installed_history::installed_existing_session_import_and_resume_preserve_history ... ignored, requires AIT_TEST_DSH_BIN and an idle, released AIT_TEST_DSH_SESSION_ID; no prompt",
+      "test local::deepseek_harness::native::tests::installed_history::installed_existing_session_is_importable_without_writes ... ignored, requires AIT_TEST_DSH_BIN and AIT_TEST_DSH_SESSION_ID; read-only existing history",
+      "test local::deepseek_harness::native::tests::installed_host_discovers_switches_permissions_and_adopts_legacy_sessions ... ignored, requires an installed DSH CLI via AIT_TEST_DSH_BIN; no model request",
+      "test local::opencode::client::native_sessions::tests::installed_existing_sessions_are_discovered_and_inspected_without_submission ... ignored, reads existing native sessions; requires AIT_TEST_OPENCODE_BIN and AIT_TEST_OPENCODE_CWD",
+      "test local::opencode::tests::installed::installed_opencode_declined_tool_settles_and_accepts_next_turn ... ignored, requires AIT_TEST_OPENCODE_BIN; isolated config and loopback model only",
+      "test local::opencode::tests::installed::installed_opencode_discovers_runs_and_restores_with_local_model ... ignored, requires AIT_TEST_OPENCODE_BIN; isolated config and loopback model only",
+      "test local::opencode::tests::installed::installed_opencode_metadata_disables_tools_and_removes_private_history ... ignored, requires AIT_TEST_OPENCODE_BIN; private loopback model, no credentials",
+      "test local::opencode::tests::installed::installed_opencode_plan_import_and_switch_use_native_agent ... ignored, requires AIT_TEST_OPENCODE_BIN; isolated config and loopback model only",
+      "test local::opencode::tests::installed::installed_opencode_saves_only_explicit_native_permission_rules ... ignored, requires AIT_TEST_OPENCODE_BIN; isolated config and loopback model only"
+    ]
+  },
+  "coverage_test_execution": {
+    "result": "passed",
+    "targets": 17,
+    "passed": 2027,
+    "failed": 0,
+    "ignored": 15,
+    "ignored_tests": [
+      "test local::antigravity::tests::installed::authenticated_multi_turn_and_resume ... ignored, requires authenticated AGY and explicitly consumes three model turns",
+      "test local::claude::tests::process::installed_claude_control_protocol_discovers_models_without_inference ... ignored, requires a locally installed Claude Code CLI; sends no model request",
+      "test local::claude::tests::process::parity::installed_claude_completes_a_native_turn_and_reopens_history ... ignored, requires installed Claude authentication and makes one small model request",
+      "test local::codex::tests::installed::installed_codex_completes_a_native_turn_and_reopens_history ... ignored, requires installed Codex authentication and makes one small model request",
+      "test local::deepseek_harness::launcher::tests::installed_launcher_runs_native_cli_without_a_wrapper ... ignored, requires an installed DSH CLI or desktop bundle; does not open a session",
+      "test local::deepseek_harness::metadata::tests::installed_dsh_metadata_has_no_tools_or_persisted_session ... ignored, requires AIT_TEST_DSH_BIN; loopback model and temporary native profile only",
+      "test local::deepseek_harness::native::tests::installed_history::installed_existing_session_import_and_resume_preserve_history ... ignored, requires AIT_TEST_DSH_BIN and an idle, released AIT_TEST_DSH_SESSION_ID; no prompt",
+      "test local::deepseek_harness::native::tests::installed_history::installed_existing_session_is_importable_without_writes ... ignored, requires AIT_TEST_DSH_BIN and AIT_TEST_DSH_SESSION_ID; read-only existing history",
+      "test local::deepseek_harness::native::tests::installed_host_discovers_switches_permissions_and_adopts_legacy_sessions ... ignored, requires an installed DSH CLI via AIT_TEST_DSH_BIN; no model request",
+      "test local::opencode::client::native_sessions::tests::installed_existing_sessions_are_discovered_and_inspected_without_submission ... ignored, reads existing native sessions; requires AIT_TEST_OPENCODE_BIN and AIT_TEST_OPENCODE_CWD",
+      "test local::opencode::tests::installed::installed_opencode_declined_tool_settles_and_accepts_next_turn ... ignored, requires AIT_TEST_OPENCODE_BIN; isolated config and loopback model only",
+      "test local::opencode::tests::installed::installed_opencode_discovers_runs_and_restores_with_local_model ... ignored, requires AIT_TEST_OPENCODE_BIN; isolated config and loopback model only",
+      "test local::opencode::tests::installed::installed_opencode_metadata_disables_tools_and_removes_private_history ... ignored, requires AIT_TEST_OPENCODE_BIN; private loopback model, no credentials",
+      "test local::opencode::tests::installed::installed_opencode_plan_import_and_switch_use_native_agent ... ignored, requires AIT_TEST_OPENCODE_BIN; isolated config and loopback model only",
+      "test local::opencode::tests::installed::installed_opencode_saves_only_explicit_native_permission_rules ... ignored, requires AIT_TEST_OPENCODE_BIN; isolated config and loopback model only"
+    ]
+  },
+  "regression_tests_added": 6,
+  "workspace_lines": {
+    "count": 60295,
+    "covered": 56801,
+    "percent": 94.20515797329796
+  },
+  "crate_lines": {
+    "bins/daemon": {
+      "count": 1225,
+      "covered": 1165,
+      "files": 8,
+      "percent": 95.10204081632654
+    },
+    "crates/api": {
+      "count": 2255,
+      "covered": 2126,
+      "files": 17,
+      "percent": 94.27937915742794
+    },
+    "crates/browser": {
+      "count": 733,
+      "covered": 715,
+      "files": 5,
+      "percent": 97.5443383356071
+    },
+    "crates/domain": {
+      "count": 121,
+      "covered": 121,
+      "files": 2,
+      "percent": 100
+    },
+    "crates/file": {
+      "count": 1992,
+      "covered": 1901,
+      "files": 19,
+      "percent": 95.43172690763052
+    },
+    "crates/filesystem": {
+      "count": 12189,
+      "covered": 11566,
+      "files": 66,
+      "percent": 94.88883419476578
+    },
+    "crates/metadata": {
+      "count": 5766,
+      "covered": 5426,
+      "files": 36,
+      "percent": 94.10336455081513
+    },
+    "crates/model": {
+      "count": 1739,
+      "covered": 1683,
+      "files": 29,
+      "percent": 96.77975848188615
+    },
+    "crates/protocol": {
+      "count": 63,
+      "covered": 63,
+      "files": 1,
+      "percent": 100
+    },
+    "crates/provider": {
+      "count": 29372,
+      "covered": 27406,
+      "files": 176,
+      "percent": 93.30655045621681
+    },
+    "crates/relay": {
+      "count": 503,
+      "covered": 462,
+      "files": 6,
+      "percent": 91.84890656063618
+    },
+    "crates/schedule": {
+      "count": 791,
+      "covered": 772,
+      "files": 6,
+      "percent": 97.59797724399495
+    },
+    "crates/terminal": {
+      "count": 1583,
+      "covered": 1527,
+      "files": 11,
+      "percent": 96.46241313960834
+    },
+    "crates/voice": {
+      "count": 1963,
+      "covered": 1868,
+      "files": 19,
+      "percent": 95.16046867040245
+    }
+  },
+  "changed_source_lines": {
+    "crates/provider/src/local/codex.rs": {
+      "count": 928,
+      "covered": 897,
+      "percent": 96.65948275862068
+    },
+    "crates/provider/src/local/codex/async_questions.rs": {
+      "count": 394,
+      "covered": 389,
+      "percent": 98.73096446700508
+    }
+  },
+  "html_report": "target/llvm-cov/html/index.html",
+  "raw_report_sha256": "1291b3b9bc395da7714a4baf4c629116dd95254d51ca8e3117aa19d845af256e",
+  "unavailable_platforms": ["Linux", "Windows"],
+  "baseline_comparison": "No comparable baseline was measured at fdd6ce63 with this configuration; no coverage delta claimed.",
+  "retry_note": "The initial ordinary suite failed because a newly merged diagnostics test hardcoded /bin/false, absent on macOS. The fixture now uses /usr/bin/false on macOS and Linux; its focused rerun and final workspace suite passed. No new ignored tests or changed timeouts.",
+  "uncovered_behavior": "Tests exercise history placement, saved timestamp/order, legacy restoration, deduplication and answer-budget rollback. async_questions.rs has five uncovered lines (117, 118, 329, 347, 386): pre-existing reception-budget rollback, malformed native kind/question bounds and unknown response behavior. The ordinal-overflow guard was not fault-injected. Codex session coverage also omits several existing capacity-error, permission-resolution and notification-exhaustion branches. Follow up with malformed native fixtures, counter-overflow metadata and controlled notification/error injection. Installed native CLI tests remain ignored; no live Codex account or model request was exercised.",
+  "uncovered_lines": {
+    "crates/provider/src/local/codex/async_questions.rs": [117, 118, 329, 347, 386],
+    "crates/provider/src/local/codex.rs": [
+      167, 324, 330, 336, 403, 410, 455, 467, 592, 612, 618, 619, 902, 913, 915, 916, 917, 919, 920,
+      921, 922, 942, 943, 952, 959, 965, 1008
+    ]
+  }
+}

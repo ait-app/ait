@@ -3,34 +3,11 @@
 use std::fmt::Debug;
 use std::sync::Arc;
 
-use crate::summary::SummarySelection;
-use crate::workspace::records::{PersistedProjectRecord, PersistedWorkspaceRecord};
+use domain::summary::SummarySelection;
+use domain::workspace::lifecycle::{WorkspaceCreation, WorkspaceLifecycleError};
+use domain::workspace::records::{PersistedProjectRecord, PersistedWorkspaceRecord};
+
 use crate::workspace::worktrees::WorktreeProvisioning;
-
-/// Parameters for registering a new Workspace.
-#[derive(Debug, Clone)]
-pub struct WorkspaceCreation<'a> {
-    /// Existing directory to inspect.
-    pub path: &'a str,
-    /// Optional user title.
-    pub title: Option<String>,
-    /// Explicit active owning Project, or automatic registration.
-    pub project_id: Option<&'a str>,
-    /// Caller-reserved identity, or a freshly generated identity.
-    pub workspace_id: Option<String>,
-    /// Whether a first Agent will follow creation.
-    pub expects_initial_agent: bool,
-    /// Creation and update timestamp.
-    pub timestamp: &'a str,
-}
-
-/// Safe failure returned by a Workspace collaboration adapter.
-#[derive(Debug, Clone, PartialEq, Eq, thiserror::Error)]
-#[error("{message}")]
-pub struct WorkspaceLifecycleError {
-    /// Business error description without native diagnostics or credentials.
-    pub message: String,
-}
 
 /// Blocking Project registration after filesystem checkout provisioning.
 pub trait ProjectRegistration: Debug + Send + Sync {

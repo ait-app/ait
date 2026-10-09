@@ -212,14 +212,16 @@ export const AGENT_PROVIDER_DEFINITIONS: AgentProviderDefinition[] = [
       {
         id: "accept-edits",
         label: "Accept Edits",
-        description: "Uses AGY's accept-edits execution mode and local tool permission rules.",
+        description:
+          "Allows edits under AGY's local permission rules. Commands requiring approval are denied in headless mode; add a scoped AGY allow rule or select Full Access.",
         icon: "ShieldPlus",
         colorTier: "moderate",
       },
       {
         id: "plan",
         label: "Plan",
-        description: "Uses AGY's planning execution mode.",
+        description:
+          "Uses AGY's planning execution mode. Tools requiring interactive approval are denied in headless mode.",
         icon: "ShieldEllipsis",
         colorTier: "planning",
       },

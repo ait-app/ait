@@ -7,13 +7,13 @@ use model::methods::MethodSpec;
 /// Static names and message directions, independent of host installation or backend availability.
 pub fn implemented_methods() -> impl Iterator<Item = MethodSpec> {
     [
-        crate::service::skills::METHODS,
-        crate::dispatch::CHECKOUT_METHODS,
-        crate::rpc::forge::METHODS,
-        crate::connection::files::METHODS,
-        crate::rpc::github_projects::METHODS,
-        crate::rpc::worktrees::METHODS,
-        crate::rpc::workspace_recovery::METHODS,
+        crate::skills::service::skills::METHODS,
+        crate::git::rpc::checkout::METHODS,
+        crate::forge::rpc::forge::METHODS,
+        crate::files::connection::files::METHODS,
+        crate::forge::rpc::github_projects::METHODS,
+        crate::worktrees::rpc::worktrees::METHODS,
+        crate::worktrees::rpc::workspace_recovery::METHODS,
     ]
     .into_iter()
     .flat_map(|methods| methods.iter().copied())

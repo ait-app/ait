@@ -106,8 +106,8 @@ fn failed_input_keeps_activity_and_natural_exit_clears_the_workspace_projection(
 
 #[test]
 fn attention_events_are_owned_by_the_terminal_and_repeat_reports_do_not_notify_twice() {
+    use domain::session::protocol::EventsRequest;
     use model::session::SessionEvents;
-    use model::session::protocol::EventsRequest;
     use std::sync::{Arc, Mutex};
     let events = SessionEvents::default();
     let connection = events.connect();

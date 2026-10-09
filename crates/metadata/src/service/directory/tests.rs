@@ -1,18 +1,21 @@
 use std::sync::{Arc, Mutex};
 
-use model::storage::project::{
-    ProjectConfigDocument, ProjectConfigRevision as StoreConfigRevision, ProjectConfigStore,
-    ProjectConfigStoreError, ProjectConfigWrite, ProjectIcon, ProjectIconStore,
-    ProjectIconStoreError,
+use domain::storage::project::{
+    ProjectConfigDocument, ProjectConfigRevision as StoreConfigRevision, ProjectConfigStoreError,
+    ProjectConfigWrite, ProjectIcon, ProjectIconStoreError,
 };
-use model::workspace::provisioning::{Checkout, DirectorySource, DirectorySourceError};
-use model::workspace::records::{
+use domain::workspace::provisioning::{Checkout, DirectorySourceError};
+use domain::workspace::records::{
     PersistedProjectKind, PersistedProjectRecord, PersistedWorkspaceKind, PersistedWorkspaceRecord,
 };
+use domain::workspace::registry::{
+    ActiveProjectInput, ProjectMutation, RegistryError, WorkspaceArchiveContext, WorkspaceMutation,
+    WorkspaceMutationContext,
+};
+use model::storage::project::{ProjectConfigStore, ProjectIconStore};
+use model::workspace::provisioning::DirectorySource;
 use model::workspace::registry::{
-    ActiveProjectInput, MutationListener, MutationSubscription, ProjectMutation, ProjectRegistry,
-    RegistryError, WorkspaceArchiveContext, WorkspaceMutation, WorkspaceMutationContext,
-    WorkspaceRegistry,
+    MutationListener, MutationSubscription, ProjectRegistry, WorkspaceRegistry,
 };
 
 use super::{Directory, DirectoryDependencies, DirectoryError};
@@ -26,7 +29,7 @@ mod synchronization;
 
 #[test]
 fn committed_registry_mutations_wake_directory_and_publish_project_updates() {
-    use file::storage::registry::{FileBackedProjectRegistry, FileBackedWorkspaceRegistry};
+    use persistence::storage::registry::{FileBackedProjectRegistry, FileBackedWorkspaceRegistry};
 
     let root = tempfile::tempdir().expect("registry root");
     let projects = FileBackedProjectRegistry::new(root.path().join("projects.json"));
@@ -64,12 +67,12 @@ fn committed_registry_mutations_wake_directory_and_publish_project_updates() {
     receiver.borrow_and_update();
     assert_eq!(
         mutations.lock().unwrap()[0].kind,
-        model::workspace::registry::MutationKind::Upsert
+        domain::workspace::registry::MutationKind::Upsert
     );
     projects.remove("prj_a").expect("project removal");
     assert_eq!(
         mutations.lock().unwrap()[1].kind,
-        model::workspace::registry::MutationKind::Remove
+        domain::workspace::registry::MutationKind::Remove
     );
     assert!(receiver.has_changed().expect("project removal wake"));
     receiver.borrow_and_update();
@@ -344,6 +347,10 @@ impl DirectorySource for Source {
 struct ConfigStore(Mutex<Option<(serde_json::Value, StoreConfigRevision)>>);
 
 impl ProjectConfigStore for ConfigStore {
+    fn config_path(&self, root: &std::path::Path) -> std::io::Result<std::path::PathBuf> {
+        Ok(root.join("ait.json"))
+    }
+
     fn read(&self, _root: &str) -> Result<ProjectConfigDocument, ProjectConfigStoreError> {
         let value = self.0.lock().unwrap().clone();
         Ok(ProjectConfigDocument {
@@ -551,7 +558,7 @@ fn adds_selected_nested_roots_and_creates_fresh_workspaces() {
         Some("remote:github.com/example/repo#subdir:nested")
     );
     let first = directory
-        .create_workspace(model::workspace::lifecycle::WorkspaceCreation {
+        .create_workspace(domain::workspace::lifecycle::WorkspaceCreation {
             path: "/tmp/alpha/nested",
             title: Some("  First  ".to_owned()),
             project_id: Some(&project.project_id),
@@ -561,7 +568,7 @@ fn adds_selected_nested_roots_and_creates_fresh_workspaces() {
         })
         .unwrap();
     let second = directory
-        .create_workspace(model::workspace::lifecycle::WorkspaceCreation {
+        .create_workspace(domain::workspace::lifecycle::WorkspaceCreation {
             path: "/tmp/alpha/nested",
             title: None,
             project_id: Some(&project.project_id),
@@ -594,7 +601,7 @@ fn opening_reuses_active_and_restores_oldest_archived_workspace() {
 fn explicit_project_and_directory_creation_errors_match_paseo_classes() {
     let directory = directory();
     assert_eq!(
-        directory.create_workspace(model::workspace::lifecycle::WorkspaceCreation {
+        directory.create_workspace(domain::workspace::lifecycle::WorkspaceCreation {
             path: "/tmp/alpha",
             title: None,
             project_id: Some("missing"),

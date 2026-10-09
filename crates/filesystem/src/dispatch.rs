@@ -1,35 +1,9 @@
 //! Concrete service state and crate-owned request dispatch.
 
-/// Client methods implemented by this component; consumed by capability discovery.
-pub const CHECKOUT_METHODS: &[MethodSpec] = &[
-    MethodSpec::request("checkout.status.get.request"),
-    MethodSpec::request("checkout.refresh.request"),
-    MethodSpec::request("checkout.diff.get.request"),
-    MethodSpec::request("checkout.diff.subscribe.request"),
-    MethodSpec::request("checkout.diff.unsubscribe.request"),
-    MethodSpec::request("checkout.commits.list.request"),
-    MethodSpec::request("checkout.commits.file_diff.request"),
-    MethodSpec::request("checkout.branch.validate.request"),
-    MethodSpec::request("checkout.branch.suggestions.request"),
-    MethodSpec::request("checkout.branch.switch.request"),
-    MethodSpec::request("checkout.rename_branch.request"),
-    MethodSpec::request("checkout.commit.request"),
-    MethodSpec::request("checkout.merge.request"),
-    MethodSpec::request("checkout.merge_from_base.request"),
-    MethodSpec::request("checkout.reset_workspace.request"),
-    MethodSpec::request("checkout.pull.request"),
-    MethodSpec::request("checkout.push.request"),
-    MethodSpec::request("checkout.discard_changes.request"),
-    MethodSpec::request("checkout.stash.save.request"),
-    MethodSpec::request("checkout.stash.pop.request"),
-    MethodSpec::request("checkout.stash.list.request"),
-];
-
 mod summary;
 
 use std::sync::{Arc, Mutex};
 
-use model::methods::MethodSpec;
 use model::{Context, DispatchError, ErrorCode, Runtime};
 
 mod requests;
@@ -40,22 +14,22 @@ pub struct State {
     /// Optional model-backed wording service; unavailable generation uses deterministic fallbacks.
     pub summary_source: Option<Arc<dyn model::summary::SummarySource>>,
     /// Installed skills service.
-    pub skills: Option<Arc<Mutex<crate::service::skills::Skills>>>,
+    pub skills: Option<Arc<Mutex<crate::skills::service::skills::Skills>>>,
     /// Shared Tokio admission, cancellation and task tracking.
     pub runtime: Arc<Runtime>,
     /// Installed checkout service.
-    pub checkout: Option<Arc<Mutex<crate::service::checkout::Checkout>>>,
+    pub checkout: Option<Arc<Mutex<crate::git::service::checkout::Checkout>>>,
     /// Installed forge service.
-    pub forge: Option<Arc<Mutex<crate::service::forge::Forge>>>,
+    pub forge: Option<Arc<Mutex<crate::forge::service::forge::Forge>>>,
     /// Installed files service.
-    pub files: Option<Arc<Mutex<crate::service::files::Files>>>,
+    pub files: Option<Arc<Mutex<crate::files::service::files::Files>>>,
     /// Installed github projects service.
-    pub github_projects: Option<Arc<Mutex<crate::service::github_projects::GithubProjects>>>,
+    pub github_projects: Option<Arc<Mutex<crate::forge::service::github_projects::GithubProjects>>>,
     /// Installed worktrees service.
-    pub worktrees: Option<Arc<Mutex<crate::service::worktrees::Worktrees>>>,
+    pub worktrees: Option<Arc<Mutex<crate::worktrees::service::worktrees::Worktrees>>>,
     /// Installed workspace recovery service.
     pub workspace_recovery:
-        Option<Arc<Mutex<crate::service::workspace_recovery::WorkspaceRecovery>>>,
+        Option<Arc<Mutex<crate::worktrees::service::workspace_recovery::WorkspaceRecovery>>>,
     /// Host-supplied setup trigger sharing the owning service and synchronization.
     pub workspace_setup: Option<Arc<dyn model::workspace::lifecycle::WorkspaceSetup>>,
 }
@@ -160,7 +134,7 @@ async fn worktrees(pending: &mut Option<Context<'_>>, state: &State) -> Result<(
         .call(
             state.worktrees.clone(),
             ErrorCode::RegistryIo,
-            crate::rpc::worktrees::execute,
+            crate::worktrees::rpc::worktrees::execute,
         )
         .await;
     if let Ok(reply) = &result
@@ -228,7 +202,7 @@ async fn checkout(
 
     if context.request.method == "checkout.diff.unsubscribe.request" {
         let request = serde_json::from_value::<
-            crate::protocol::checkout::CheckoutDiffUnsubscribeRequest,
+            crate::git::protocol::checkout::CheckoutDiffUnsubscribeRequest,
         >(std::mem::take(&mut context.request.params));
         let request = match request {
             Ok(request) if valid_id(&request.subscription_id) => request,
@@ -261,7 +235,7 @@ async fn checkout(
         }
     }
     let params = std::mem::take(&mut context.request.params);
-    let reply = crate::connection::checkout::dispatch(
+    let reply = crate::git::connection::checkout::dispatch(
         &context.request.method,
         params,
         state,

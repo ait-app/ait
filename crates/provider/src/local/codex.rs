@@ -206,7 +206,7 @@ impl AgentClient for CodexClient {
         Box::pin(async move { client.open(spec, None).await })
     }
 
-    fn summary_model(&self, models: &[Value]) -> Option<model::summary::SummarySelection> {
+    fn summary_model(&self, models: &[Value]) -> Option<domain::summary::SummarySelection> {
         super::summary_model::select(
             self.provider(),
             models,
@@ -557,6 +557,22 @@ impl CodexSession {
                 .events
                 .push_back(AgentTurnEvent::PermissionRequested(request));
         }
+        Ok(())
+    }
+
+    fn queue_completed_item(&mut self, item: &Value, turn: &str) -> Result<(), AgentSessionError> {
+        if item["type"] == "agentMessage" {
+            self.last_message = item["text"].as_str().map(str::to_owned);
+        }
+        self.observe_interaction(item, turn)?;
+        let entries =
+            discovery::timeline_items(item, turn, &discovery::timestamp(), &self.client.images)?;
+        if let Some(entry) = entries.last() {
+            self.questions.observe(entry);
+        }
+        self.stream
+            .events
+            .extend(entries.into_iter().map(AgentTurnEvent::Timeline));
         Ok(())
     }
 
@@ -927,31 +943,17 @@ impl AgentSession for CodexSession {
                 continue;
             }
             if let Some(event) = self.stream.progress(method, params)? {
+                if let AgentTurnEvent::Progress { entry, .. } = &event {
+                    self.questions.observe(entry);
+                }
                 return Ok(Some(event));
             }
             if method == "item/completed" && !self.stream.complete(&params["item"])? {
                 continue;
             }
-            if method == "item/completed"
-                && params.pointer("/item/type").and_then(Value::as_str) == Some("agentMessage")
-            {
-                self.last_message = params
-                    .pointer("/item/text")
-                    .and_then(Value::as_str)
-                    .map(str::to_owned);
-            }
             if method == "item/completed" {
                 let turn = turn_id.ok_or(AgentSessionError::Failed)?;
-                self.observe_interaction(&params["item"], turn)?;
-                let entries = discovery::timeline_items(
-                    &params["item"],
-                    turn,
-                    &discovery::timestamp(),
-                    &self.client.images,
-                )?;
-                self.stream
-                    .events
-                    .extend(entries.into_iter().map(AgentTurnEvent::Timeline));
+                self.queue_completed_item(&params["item"], turn)?;
                 if let Some(event) = self.stream.events.pop_front() {
                     return Ok(Some(event));
                 }

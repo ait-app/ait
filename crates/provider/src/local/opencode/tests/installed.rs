@@ -1,4 +1,5 @@
 use super::super::client::OpenCodeClient;
+use super::super::{protocol::Version, runtime};
 use crate::ports::agent_session::{
     AgentClient, AgentResumePurpose, AgentSession, AgentSessionSpec, AgentTurnEvent,
 };
@@ -153,13 +154,26 @@ async fn installed_fixture(
         axum::serve(listener, router).await.unwrap();
     }));
     let wrapper = isolated_binary(root.path(), &binary);
-    let mut config = json!({"providers":{"local":{
-        "name":"Local test", "package":"@opencode/ai/providers/openai-compatible",
-        "settings":{"baseURL":format!("http://{address}/v1"),"apiKey":"local-only"},
-        "models":{"test-model":{"name":"Test","limit":{"context":32000,"output":2000}}}
-    }}});
-    config["permissions"] = json!([{ "action":"shell", "resource":"*", "effect":"ask" }]);
-    config["providers"]["second"] = config["providers"]["local"].clone();
+    let version = runtime::probe(&wrapper, &cwd, &tokio_util::sync::CancellationToken::new())
+        .await
+        .unwrap();
+    let mut config = match version {
+        Version::V1 => json!({"provider":{"local":{
+            "name":"Local test", "npm":"@ai-sdk/openai-compatible",
+            "options":{"baseURL":format!("http://{address}/v1"),"apiKey":"local-only"},
+            "models":{"test-model":{"name":"Test","limit":{"context":32000,"output":2000}}}
+        }}, "permission":{"*":"ask"}}),
+        Version::V2 => json!({"providers":{"local":{
+            "name":"Local test", "package":"@opencode/ai/providers/openai-compatible",
+            "settings":{"baseURL":format!("http://{address}/v1"),"apiKey":"local-only"},
+            "models":{"test-model":{"name":"Test","limit":{"context":32000,"output":2000}}}
+        }}, "permissions":[{"action":"shell", "resource":"*", "effect":"ask"}]}),
+    };
+    let providers = match version {
+        Version::V1 => "provider",
+        Version::V2 => "providers",
+    };
+    config[providers]["second"] = config[providers]["local"].clone();
     std::fs::write(cwd.join("opencode.json"), config.to_string()).unwrap();
     // Exercise the actual cold-start catalog, rather than warming it with a separate probe.
     let client = OpenCodeClient::new(wrapper);
@@ -202,8 +216,8 @@ async fn installed_opencode_declined_tool_settles_and_accepts_next_turn() {
                     assert!(denied);
                     break;
                 }
-                Some(AgentTurnEvent::Failed | AgentTurnEvent::Completed(_)) => {
-                    panic!("unexpected terminal event")
+                Some(event @ (AgentTurnEvent::Failed | AgentTurnEvent::Completed(_))) => {
+                    panic!("unexpected terminal event: {event:?}")
                 }
                 _ => tokio::time::sleep(Duration::from_millis(10)).await,
             }
@@ -227,11 +241,23 @@ async fn tool_answer(Json(body): Json<Value>) -> ([(&'static str, &'static str);
         .rev()
         .find(|message| message["role"] == "user")
         .is_some_and(|message| message["content"].to_string().contains("after denial"));
-    if after_denial || body["tools"].as_array().is_none_or(Vec::is_empty) {
+    if after_denial {
         return answer().await;
     }
+    if body["tools"].as_array().is_none_or(Vec::is_empty) {
+        // Native metadata requests do not expose tools; permission tests below
+        // still require a real foreground request and native approval round trip.
+        return answer().await;
+    }
+    let tool = body["tools"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .filter_map(|tool| tool.pointer("/function/name").and_then(Value::as_str))
+        .find(|name| matches!(*name, "bash" | "shell"))
+        .expect("OpenCode must advertise its native command tool");
     let delta = json!({"choices":[{"index":0,"delta":{"role":"assistant","tool_calls":[{
-        "index":0,"id":"call-denied","type":"function","function":{"name":"shell","arguments":"{\"command\":\"pwd\"}"}
+        "index":0,"id":"call-denied","type":"function","function":{"name":tool,"arguments":"{\"command\":\"pwd\"}"}
     }]},"finish_reason":null}]});
     let finish = json!({"choices":[{"index":0,"delta":{},"finish_reason":"tool_calls"}]});
     (

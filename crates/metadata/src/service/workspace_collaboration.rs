@@ -2,12 +2,12 @@
 
 use std::sync::{Arc, Mutex};
 
-use model::summary::SummarySelection;
+use domain::summary::SummarySelection;
+use domain::workspace::lifecycle::{WorkspaceCreation, WorkspaceLifecycleError};
+use domain::workspace::records::{PersistedProjectRecord, PersistedWorkspaceRecord};
 use model::workspace::lifecycle::{
-    ProjectRegistration, WorkspaceCreation, WorkspaceDirectory, WorkspaceLifecycleError,
-    WorkspaceNaming, WorkspaceSetup,
+    ProjectRegistration, WorkspaceDirectory, WorkspaceNaming, WorkspaceSetup,
 };
-use model::workspace::records::{PersistedProjectRecord, PersistedWorkspaceRecord};
 use model::workspace::worktrees::WorktreeProvisioning;
 
 use super::directory::Directory;

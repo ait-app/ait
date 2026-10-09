@@ -1,0 +1,339 @@
+{
+  "base": "f7f434a5baf7bbd8ceb247924bcf63dfea06cdeb",
+  "tested_tree": "0f67a96006a5ad334a7c5ad24c76e279dd72a209",
+  "platform": "Linux x86_64; Rust 1.98.1; LLVM 23.1.1",
+  "scope": "Default-feature Rust workspace unit/integration tests; excludes doc tests; 16 ignored tests",
+  "command": "XDG_CONFIG_HOME=/tmp/ait-diagnostics-test-config LLVM_COV=/usr/bin/llvm-cov LLVM_PROFDATA=/usr/bin/llvm-profdata CARGO_TARGET_DIR=target/diagnostics-coverage cargo llvm-cov --no-clean --workspace --html -- --test-threads=4",
+  "totals": {
+    "branches": {
+      "count": 0,
+      "covered": 0,
+      "notcovered": 0,
+      "percent": 0
+    },
+    "functions": {
+      "count": 6709,
+      "covered": 6257,
+      "percent": 93.26278133850052
+    },
+    "instantiations": {
+      "count": 16039,
+      "covered": 11595,
+      "percent": 72.29253694120581
+    },
+    "lines": {
+      "count": 60604,
+      "covered": 57093,
+      "percent": 94.20665302620289
+    },
+    "mcdc": {
+      "count": 0,
+      "covered": 0,
+      "notcovered": 0,
+      "percent": 0
+    },
+    "regions": {
+      "count": 93767,
+      "covered": 85207,
+      "notcovered": 8560,
+      "percent": 90.87098872737744
+    }
+  },
+  "crate_lines": {
+    "bins/daemon": {
+      "count": 1403,
+      "covered": 1331,
+      "percent": 94.8681
+    },
+    "crates/api": {
+      "count": 2259,
+      "covered": 2130,
+      "percent": 94.2895
+    },
+    "crates/browser": {
+      "count": 733,
+      "covered": 715,
+      "percent": 97.5443
+    },
+    "crates/domain": {
+      "count": 549,
+      "covered": 549,
+      "percent": 100.0
+    },
+    "crates/filesystem": {
+      "count": 12198,
+      "covered": 11570,
+      "percent": 94.8516
+    },
+    "crates/metadata": {
+      "count": 5789,
+      "covered": 5449,
+      "percent": 94.1268
+    },
+    "crates/model": {
+      "count": 1374,
+      "covered": 1323,
+      "percent": 96.2882
+    },
+    "crates/persistence": {
+      "count": 1828,
+      "covered": 1751,
+      "percent": 95.7877
+    },
+    "crates/provider": {
+      "count": 29631,
+      "covered": 27646,
+      "percent": 93.3009
+    },
+    "crates/relay": {
+      "count": 503,
+      "covered": 462,
+      "percent": 91.8489
+    },
+    "crates/schedule": {
+      "count": 791,
+      "covered": 772,
+      "percent": 97.598
+    },
+    "crates/terminal": {
+      "count": 1583,
+      "covered": 1527,
+      "percent": 96.4624
+    },
+    "crates/voice": {
+      "count": 1963,
+      "covered": 1868,
+      "percent": 95.1605
+    }
+  },
+  "changed_files": [
+    {
+      "filename": "crates/filesystem/src/files/local/files.rs",
+      "summary": {
+        "branches": {
+          "count": 0,
+          "covered": 0,
+          "notcovered": 0,
+          "percent": 0.0
+        },
+        "mcdc": {
+          "count": 0,
+          "covered": 0,
+          "notcovered": 0,
+          "percent": 0.0
+        },
+        "functions": {
+          "count": 60,
+          "covered": 52,
+          "percent": 86.66666666666667
+        },
+        "instantiations": {
+          "count": 142,
+          "covered": 108,
+          "percent": 76.05633802816901
+        },
+        "lines": {
+          "count": 531,
+          "covered": 504,
+          "percent": 94.91525423728814
+        },
+        "regions": {
+          "count": 966,
+          "covered": 868,
+          "notcovered": 98,
+          "percent": 89.85507246376811
+        }
+      }
+    },
+    {
+      "filename": "crates/provider/src/local/opencode.rs",
+      "summary": {
+        "branches": {
+          "count": 0,
+          "covered": 0,
+          "notcovered": 0,
+          "percent": 0.0
+        },
+        "mcdc": {
+          "count": 0,
+          "covered": 0,
+          "notcovered": 0,
+          "percent": 0.0
+        },
+        "functions": {
+          "count": 15,
+          "covered": 15,
+          "percent": 100.0
+        },
+        "instantiations": {
+          "count": 22,
+          "covered": 22,
+          "percent": 100.0
+        },
+        "lines": {
+          "count": 75,
+          "covered": 75,
+          "percent": 100.0
+        },
+        "regions": {
+          "count": 87,
+          "covered": 85,
+          "notcovered": 2,
+          "percent": 97.70114942528735
+        }
+      }
+    },
+    {
+      "filename": "crates/provider/src/local/opencode/client.rs",
+      "summary": {
+        "branches": {
+          "count": 0,
+          "covered": 0,
+          "notcovered": 0,
+          "percent": 0.0
+        },
+        "mcdc": {
+          "count": 0,
+          "covered": 0,
+          "notcovered": 0,
+          "percent": 0.0
+        },
+        "functions": {
+          "count": 56,
+          "covered": 51,
+          "percent": 91.07142857142857
+        },
+        "instantiations": {
+          "count": 111,
+          "covered": 96,
+          "percent": 86.48648648648648
+        },
+        "lines": {
+          "count": 416,
+          "covered": 381,
+          "percent": 91.58653846153845
+        },
+        "regions": {
+          "count": 593,
+          "covered": 528,
+          "notcovered": 65,
+          "percent": 89.03878583473862
+        }
+      }
+    },
+    {
+      "filename": "crates/provider/src/local/opencode/live.rs",
+      "summary": {
+        "branches": {
+          "count": 0,
+          "covered": 0,
+          "notcovered": 0,
+          "percent": 0.0
+        },
+        "mcdc": {
+          "count": 0,
+          "covered": 0,
+          "notcovered": 0,
+          "percent": 0.0
+        },
+        "functions": {
+          "count": 34,
+          "covered": 32,
+          "percent": 94.11764705882352
+        },
+        "instantiations": {
+          "count": 68,
+          "covered": 52,
+          "percent": 76.47058823529412
+        },
+        "lines": {
+          "count": 370,
+          "covered": 326,
+          "percent": 88.10810810810811
+        },
+        "regions": {
+          "count": 528,
+          "covered": 456,
+          "notcovered": 72,
+          "percent": 86.36363636363636
+        }
+      }
+    },
+    {
+      "filename": "crates/provider/src/local/opencode/protocol/http.rs",
+      "summary": {
+        "branches": {
+          "count": 0,
+          "covered": 0,
+          "notcovered": 0,
+          "percent": 0.0
+        },
+        "mcdc": {
+          "count": 0,
+          "covered": 0,
+          "notcovered": 0,
+          "percent": 0.0
+        },
+        "functions": {
+          "count": 74,
+          "covered": 48,
+          "percent": 64.86486486486487
+        },
+        "instantiations": {
+          "count": 148,
+          "covered": 92,
+          "percent": 62.16216216216216
+        },
+        "lines": {
+          "count": 513,
+          "covered": 395,
+          "percent": 76.99805068226122
+        },
+        "regions": {
+          "count": 728,
+          "covered": 595,
+          "notcovered": 133,
+          "percent": 81.73076923076923
+        }
+      }
+    },
+    {
+      "filename": "crates/provider/src/local/opencode/types.rs",
+      "summary": {
+        "branches": {
+          "count": 0,
+          "covered": 0,
+          "notcovered": 0,
+          "percent": 0.0
+        },
+        "mcdc": {
+          "count": 0,
+          "covered": 0,
+          "notcovered": 0,
+          "percent": 0.0
+        },
+        "functions": {
+          "count": 3,
+          "covered": 1,
+          "percent": 33.33333333333333
+        },
+        "instantiations": {
+          "count": 7,
+          "covered": 1,
+          "percent": 14.285714285714285
+        },
+        "lines": {
+          "count": 6,
+          "covered": 2,
+          "percent": 33.33333333333333
+        },
+        "regions": {
+          "count": 6,
+          "covered": 2,
+          "notcovered": 4,
+          "percent": 33.33333333333333
+        }
+      }
+    }
+  ]
+}

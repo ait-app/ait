@@ -6,8 +6,8 @@ use axum::extract::ws::{CloseFrame, Message, WebSocket, close_code};
 use futures_util::{SinkExt, StreamExt, stream::SplitStream};
 use model::methods::InboundKind;
 use model::outbound::{Frame, Outbound, QueueError};
+use model::server::{ClientMessage, ErrorCode, Hello, ServerMessage, valid_id};
 use model::{Context, Request};
-use protocol::{ClientMessage, ErrorCode, Hello, ServerMessage, valid_id};
 use tokio::time::timeout;
 
 use crate::Shared;
@@ -234,7 +234,7 @@ async fn process_file_frame(
     if acknowledged {
         bytes[0] -= 0x30;
     }
-    let Some((id, frame)) = filesystem::protocol::file_transfer::decode(&bytes) else {
+    let Some((id, frame)) = filesystem::files::protocol::file_transfer::decode(&bytes) else {
         error(outbound, None, ErrorCode::InvalidMessage)?;
         return Ok(ControlFlow::Break(()));
     };

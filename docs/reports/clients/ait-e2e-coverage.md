@@ -38,14 +38,14 @@ cargo llvm-cov report --show-missing-lines
 
 | 文件                                                                                                                  | 已覆盖 / 总行数 | 行覆盖率 |
 | --------------------------------------------------------------------------------------------------------------------- | --------------: | -------: |
-| [crates/filesystem/src/local/files/search.rs](../../../crates/filesystem/src/local/files/search.rs)                   |       184 / 193 |   95.34% |
-| [crates/filesystem/src/local/github_projects.rs](../../../crates/filesystem/src/local/github_projects.rs)             |       221 / 245 |   90.20% |
-| [crates/filesystem/src/local/worktrees.rs](../../../crates/filesystem/src/local/worktrees.rs)                         |       670 / 756 |   88.62% |
+| [crates/filesystem/src/local/files/search.rs](../../../crates/filesystem/src/files/local/files/search.rs)                   |       184 / 193 |   95.34% |
+| [crates/filesystem/src/local/github_projects.rs](../../../crates/filesystem/src/forge/local/github_projects.rs)             |       221 / 245 |   90.20% |
+| [crates/filesystem/src/local/worktrees.rs](../../../crates/filesystem/src/worktrees/local/worktrees.rs)                         |       670 / 756 |   88.62% |
 | [crates/metadata/src/local/workspace_automation.rs](../../../crates/metadata/src/local/workspace_automation.rs)       |       473 / 537 |   88.08% |
 | [crates/metadata/src/protocol/project_config.rs](../../../crates/metadata/src/protocol/project_config.rs)             |       137 / 156 |   87.82% |
 | [crates/metadata/src/protocol/workspace_automation.rs](../../../crates/metadata/src/protocol/workspace_automation.rs) |           3 / 3 |  100.00% |
 | [crates/metadata/src/service/directory.rs](../../../crates/metadata/src/service/directory.rs)                         |       712 / 778 |   91.52% |
-| [crates/metadata/src/storage/project_config.rs](../../../crates/file/src/storage/project_config.rs)               |         79 / 84 |   94.05% |
+| [crates/metadata/src/storage/project_config.rs](../../../crates/persistence/src/storage/project_config.rs)               |         79 / 84 |   94.05% |
 
 仅改文档/类型声明而没有可执行行的文件不产生 coverage 记录。下面保留 `--show-missing-lines` 对这些文件列出的未覆盖行，便于按上述代码版本审阅：
 

@@ -2,10 +2,11 @@ use std::collections::{BTreeMap, BTreeSet};
 use std::sync::{Arc, Mutex};
 
 use domain::agent_runtime::registry::{AgentRuntimeRegistry, AgentRuntimeRegistryError};
-use model::workspace::registry::{
-    ActiveProjectInput, MutationListener, MutationSubscription, ProjectMutation,
-    WorkspaceArchiveContext, WorkspaceMutation, WorkspaceMutationContext,
+use domain::workspace::registry::{
+    ActiveProjectInput, ProjectMutation, WorkspaceArchiveContext, WorkspaceMutation,
+    WorkspaceMutationContext,
 };
+use model::workspace::registry::{MutationListener, MutationSubscription};
 
 use super::*;
 

@@ -3,7 +3,7 @@ use std::collections::BTreeMap;
 use domain::agent_runtime::{
     AgentAttentionReason, AgentRuntimeStatus, PersistedAgentRuntimeRecord,
 };
-use model::workspace::records::{
+use domain::workspace::records::{
     PersistedProjectKind, PersistedProjectRecord, PersistedWorkspaceKind, PersistedWorkspaceRecord,
 };
 use serde_json::json;
@@ -27,7 +27,7 @@ async fn binary_serves_workspace_attention_and_recovery_methods() {
     let address = ready(&mut process, &log).await;
     let capabilities = metadata::rpc::workspace_state::METHODS
         .iter()
-        .chain(filesystem::rpc::workspace_recovery::METHODS)
+        .chain(filesystem::worktrees::rpc::workspace_recovery::METHODS)
         .map(|method| method.name)
         .collect::<Vec<_>>();
     let mut client = connect(&address, &capabilities).await;

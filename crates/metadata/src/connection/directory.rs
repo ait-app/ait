@@ -2,8 +2,8 @@
 
 use std::sync::{Arc, Mutex};
 
+use domain::workspace::protocol::directory::WorkspaceListRequest;
 use model::outbound::QueueError;
-use model::workspace::protocol::directory::WorkspaceListRequest;
 use model::{Context, ErrorCode};
 
 use crate::dispatch::State;

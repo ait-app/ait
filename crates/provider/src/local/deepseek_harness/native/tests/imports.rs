@@ -215,8 +215,9 @@ async fn acp_does_not_advertise_or_attempt_native_import_and_invalid_requests_do
 
 fn manager(fixture: &Fixture) -> crate::service::agent_manager::AgentManager {
     let root = std::path::Path::new(&fixture.spec.cwd);
-    let registry =
-        file::storage::agent_runtime::FileBackedAgentRuntimeRegistry::new(root.join("agents.json"));
+    let registry = persistence::storage::agent_runtime::FileBackedAgentRuntimeRegistry::new(
+        root.join("agents.json"),
+    );
     let timeline = crate::storage::timeline::Timeline::open(&root.join("timeline.sqlite")).unwrap();
     let mut manager = crate::service::agent_manager::AgentManager::new(Box::new(registry))
         .with_timeline(timeline);

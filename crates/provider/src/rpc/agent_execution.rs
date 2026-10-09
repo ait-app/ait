@@ -10,6 +10,9 @@ mod voice;
 pub mod workspace_creation;
 mod worktrees;
 
+#[cfg(test)]
+mod tests;
+
 use domain::agent_runtime::PersistedAgentRuntimeRecord;
 use domain::agent_runtime::registry::AgentRuntimeRegistry;
 use model::workspace::registry::{ProjectRegistry, WorkspaceRegistry};
@@ -268,7 +271,7 @@ impl ExecutionState {
             .take()
             .unwrap_or_else(|| Uuid::new_v4().to_string());
         let creations = self.manager.creations();
-        let admission = creations.begin(model::creation::protocol::Kind::Agent, &key, intent)?;
+        let admission = creations.begin(domain::creation::protocol::Kind::Agent, &key, intent)?;
         if !admission.execute {
             if admission.snapshot.phase == "completed"
                 && let Some(id) = &admission.snapshot.agent_id
@@ -311,7 +314,7 @@ impl ExecutionState {
     async fn register_creation(
         &mut self,
         request: CreateRequest,
-        admission: &model::creation::protocol::Snapshot,
+        admission: &domain::creation::protocol::Snapshot,
         workspace_id: String,
         created_worktree: bool,
     ) -> Result<Value, ErrorCode> {
@@ -401,7 +404,7 @@ impl ExecutionState {
     async fn finish_creation(
         &mut self,
         id: &str,
-        admission: &model::creation::protocol::Snapshot,
+        admission: &domain::creation::protocol::Snapshot,
         prompt: Option<crate::protocol::prompt::AgentPrompt>,
     ) -> Result<Value, ErrorCode> {
         let creations = self.manager.creations();
@@ -602,9 +605,9 @@ const fn map_manager(error: &AgentManagerError) -> ErrorCode {
         AgentManagerError::ProviderUnavailable(_)
         | AgentManagerError::MissingPersistence(_)
         | AgentManagerError::Busy => ErrorCode::UnsupportedCapability,
-        AgentManagerError::InvalidRequest | AgentManagerError::AlreadyExists(_) => {
-            ErrorCode::InvalidMessage
-        }
+        AgentManagerError::InvalidRequest
+        | AgentManagerError::AlreadyExists(_)
+        | AgentManagerError::SessionRejected => ErrorCode::InvalidMessage,
         AgentManagerError::Session | AgentManagerError::Registry => ErrorCode::AgentIo,
     }
 }

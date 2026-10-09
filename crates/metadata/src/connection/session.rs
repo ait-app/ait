@@ -1,9 +1,9 @@
 use std::sync::Arc;
 
+use domain::session::SessionError;
+use domain::session::protocol::{EventsRequest, Heartbeat};
 use model::Context;
 use model::outbound::QueueError;
-use model::session::SessionError;
-use model::session::protocol::{EventsRequest, Heartbeat};
 use model::{ErrorCode, ServerMessage};
 use serde_json::{Value, json};
 

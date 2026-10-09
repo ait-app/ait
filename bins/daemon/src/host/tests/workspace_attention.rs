@@ -6,15 +6,17 @@ use domain::agent_runtime::registry::{AgentRuntimeRegistry, AgentRuntimeRegistry
 use domain::agent_runtime::{
     AgentAttentionReason, AgentRuntimeStatus, PersistedAgentRuntimeRecord,
 };
-use metadata::service::workspace_state::WorkspaceState;
-use model::workspace::attention::{WorkspaceAttention, WorkspaceStateError};
-use model::workspace::records::PersistedWorkspaceKind;
-use model::workspace::records::PersistedWorkspaceRecord;
-use model::workspace::registry::{
-    MutationListener, MutationSubscription, WorkspaceArchiveContext, WorkspaceMutation,
-    WorkspaceMutationContext,
+use domain::workspace::attention::WorkspaceStateError;
+use domain::workspace::records::PersistedWorkspaceKind;
+use domain::workspace::records::PersistedWorkspaceRecord;
+use domain::workspace::registry::RegistryError;
+use domain::workspace::registry::{
+    WorkspaceArchiveContext, WorkspaceMutation, WorkspaceMutationContext,
 };
-use model::workspace::registry::{RegistryError, WorkspaceRegistry};
+use metadata::service::workspace_state::WorkspaceState;
+use model::workspace::attention::WorkspaceAttention;
+use model::workspace::registry::WorkspaceRegistry;
+use model::workspace::registry::{MutationListener, MutationSubscription};
 use provider::service::workspace_attention::AgentWorkspaceAttention;
 
 const PARENT_AGENT_ID_LABEL: &str = "paseo.parent-agent-id";

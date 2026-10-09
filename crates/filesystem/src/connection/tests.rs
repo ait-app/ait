@@ -11,8 +11,10 @@ use tokio::sync::mpsc;
 
 use super::Connection;
 use crate::dispatch::{State, dispatch};
-use crate::local::{checkout::LocalCheckout, files::LocalFiles};
-use crate::service::{checkout::Checkout, files::Files};
+use crate::files::local::files::LocalFiles;
+use crate::files::service::files::Files;
+use crate::git::local::checkout::LocalCheckout;
+use crate::git::service::checkout::Checkout;
 
 struct Harness {
     root: Arc<tempfile::TempDir>,

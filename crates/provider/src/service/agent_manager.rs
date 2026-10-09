@@ -19,8 +19,8 @@ use domain::agent_runtime::registry::AgentRuntimeRegistry;
 use domain::agent_runtime::{
     AgentRuntimeStatus, PersistedAgentRuntimeRecord, StoredAgentConfig, StoredAgentRuntimeInfo,
 };
+use domain::session::protocol::SessionEventKind;
 use model::session::SessionEvents;
-use model::session::protocol::SessionEventKind;
 use serde_json::json;
 
 use crate::ports::agent_session::{
@@ -56,6 +56,9 @@ pub enum AgentManagerError {
     /// The provider adapter failed or returned inconsistent facts.
     #[error("provider session failed")]
     Session,
+    /// The provider rejected the requested session operation or configuration.
+    #[error("provider rejected the Agent session operation or configuration")]
+    SessionRejected,
     /// Durable Agent state could not be read or written.
     #[error("Agent runtime registry failed")]
     Registry,
@@ -696,7 +699,7 @@ impl AgentManager {
             names.schedule(
                 workspace,
                 context,
-                Some(model::summary::SummarySelection {
+                Some(domain::summary::SummarySelection {
                     provider: record.provider.clone(),
                     model: record
                         .config
@@ -813,7 +816,7 @@ impl AgentManager {
                     } else {
                         AgentRuntimeStatus::Idle
                     };
-                    next.last_error = failed.then(|| "Provider execution failed".to_owned());
+                    next.last_error = failed.then(|| streaming::failure_message(agent).to_owned());
                     next.updated_at.clone_from(&now);
                     next.last_activity_at = Some(now.clone());
                     next.requires_attention = permission || (!cancelled && !queued);
@@ -851,8 +854,11 @@ impl AgentManager {
             {
                 publish_terminal_attention(&self.events, &id, &now, failed);
             }
-            if failed && committed.as_ref().is_some_and(|record| !record.internal) {
-                publish_failure_activity(&self.events, &id, &now);
+            if let Some(record) = committed
+                .as_ref()
+                .filter(|record| failed && !record.internal)
+            {
+                publish_failure_activity(&self.events, &id, &now, record);
             }
             if failed {
                 self.live.remove(&id);
@@ -1074,14 +1080,19 @@ fn now_timestamp() -> String {
     Utc::now().to_rfc3339_opts(SecondsFormat::Millis, true)
 }
 
-fn publish_failure_activity(events: &SessionEvents, agent_id: &str, timestamp: &str) {
+fn publish_failure_activity(
+    events: &SessionEvents,
+    agent_id: &str,
+    timestamp: &str,
+    record: &PersistedAgentRuntimeRecord,
+) {
     events.publish(
         SessionEventKind::ActivityLog,
         &json!({
             "id": uuid::Uuid::new_v4().to_string(),
             "timestamp": timestamp,
             "type": "error",
-            "content": "Provider execution failed",
+            "content": record.last_error.as_deref().unwrap_or("Provider execution failed"),
             "metadata": {"agentId": agent_id},
         }),
     );
@@ -1109,8 +1120,11 @@ const fn map_registry(
     AgentManagerError::Registry
 }
 
-const fn map_session(_: AgentSessionError) -> AgentManagerError {
-    AgentManagerError::Session
+const fn map_session(error: AgentSessionError) -> AgentManagerError {
+    match error {
+        AgentSessionError::Rejected => AgentManagerError::SessionRejected,
+        AgentSessionError::Unavailable | AgentSessionError::Failed => AgentManagerError::Session,
+    }
 }
 
 #[cfg(test)]

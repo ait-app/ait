@@ -1,6 +1,7 @@
 //! Google Antigravity's official `agy` CLI over its headless NDJSON protocol.
 
 mod config;
+mod diagnostics;
 mod discovery;
 mod session;
 mod streaming;

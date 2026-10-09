@@ -81,6 +81,14 @@ pub enum AgentTurnEvent {
 
 /// Live provider session. Closing releases resources without deleting native history.
 pub trait AgentSession: Debug + Send {
+    /// Return the most recent failure's user-visible explanation, if available.
+    ///
+    /// Adapters must exclude credentials and private diagnostics, and keep the message at most
+    /// 4096 bytes. The explanation remains available after closing a failed session.
+    fn failure_message(&self) -> Option<&str> {
+        None
+    }
+
     /// Native foreground work was accepted but its start notification has not arrived yet.
     fn pending_foreground(&self) -> bool {
         false
@@ -281,7 +289,7 @@ pub trait AgentClient: Debug + Send + Sync {
     fn summary_model(
         &self,
         _models: &[serde_json::Value],
-    ) -> Option<model::summary::SummarySelection> {
+    ) -> Option<domain::summary::SummarySelection> {
         None
     }
 

@@ -3,7 +3,7 @@
 use std::collections::{BTreeMap, BTreeSet};
 use std::path::Path;
 
-use model::workspace::records::PersistedWorkspaceRecord;
+use domain::workspace::records::PersistedWorkspaceRecord;
 use model::workspace::registry::{ProjectRegistry, WorkspaceRegistry};
 use secrecy::{ExposeSecret, SecretString};
 use subtle::ConstantTimeEq;
@@ -115,7 +115,7 @@ impl Terminals {
                 crate::activity::AttentionReason::Finished => "Terminal finished",
                 crate::activity::AttentionReason::NeedsInput => "Terminal needs input",
             };
-            self.events.publish(model::session::protocol::SessionEventKind::TerminalAttention,
+            self.events.publish(domain::session::protocol::SessionEventKind::TerminalAttention,
                 &serde_json::json!({"serverId":self.server_id,"terminalId":id,"cwd":entry.info.cwd,
                     "workspaceId":entry.info.workspace_id,"reason":reason,"title":title,"body":entry.info.name}));
         }

@@ -186,7 +186,11 @@ impl ApprovalSink for DenyApprovals {
 #[derive(Debug)]
 pub(super) enum ProgressEvent {
     Timeline(Box<crate::protocol::timeline::NativeItem>),
-    TextDelta { id: String, delta: String },
+    /// `id` is the canonical native text item identity, not a protocol-specific message ID.
+    TextDelta {
+        id: String,
+        delta: String,
+    },
 }
 
 #[async_trait]

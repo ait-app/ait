@@ -15,6 +15,22 @@ mod resume;
 mod titles;
 mod usage;
 
+#[test]
+fn provider_rejections_remain_distinct_from_provider_failures() {
+    assert_eq!(
+        map_session(AgentSessionError::Rejected),
+        AgentManagerError::SessionRejected
+    );
+    assert_eq!(
+        map_session(AgentSessionError::Unavailable),
+        AgentManagerError::Session
+    );
+    assert_eq!(
+        map_session(AgentSessionError::Failed),
+        AgentManagerError::Session
+    );
+}
+
 #[derive(Debug, Default)]
 struct RegistryState {
     records: BTreeMap<String, PersistedAgentRuntimeRecord>,
@@ -95,6 +111,7 @@ struct FakeState {
     fail_close: bool,
     handle_session_id: String,
     create_calls: usize,
+    create_error: Option<AgentSessionError>,
     resume_purposes: Vec<AgentResumePurpose>,
     resume_specs: Vec<AgentSessionSpec>,
     close_calls: usize,
@@ -104,6 +121,7 @@ struct FakeState {
     steer_result: Result<(), AgentSessionError>,
     steer_calls: Vec<(String, String)>,
     poll_error: Option<AgentSessionError>,
+    failure_message: Option<&'static str>,
     during_resume: Option<MemoryRegistry>,
 }
 
@@ -115,6 +133,7 @@ impl Default for FakeState {
             fail_close: false,
             handle_session_id: "native-1".to_owned(),
             create_calls: 0,
+            create_error: None,
             resume_purposes: Vec::new(),
             resume_specs: Vec::new(),
             close_calls: 0,
@@ -124,6 +143,7 @@ impl Default for FakeState {
             steer_result: Err(AgentSessionError::Rejected),
             steer_calls: Vec::new(),
             poll_error: None,
+            failure_message: None,
             during_resume: None,
         }
     }
@@ -153,7 +173,13 @@ impl AgentClient for FakeClient {
         _spec: &'a AgentSessionSpec,
     ) -> AgentSessionFuture<'a, Box<dyn AgentSession>> {
         Box::pin(async move {
-            self.0.lock().expect("state").create_calls += 1;
+            {
+                let mut state = self.0.lock().expect("state");
+                state.create_calls += 1;
+                if let Some(error) = state.create_error {
+                    return Err(error);
+                }
+            }
             Ok(Box::new(FakeSession(self.0.clone())) as Box<dyn AgentSession>)
         })
     }
@@ -187,6 +213,10 @@ impl AgentClient for FakeClient {
 }
 
 impl AgentSession for FakeSession {
+    fn failure_message(&self) -> Option<&str> {
+        self.0.lock().unwrap().failure_message
+    }
+
     fn start_turn<'a>(
         &'a mut self,
         _text: &'a str,
@@ -389,6 +419,30 @@ async fn unavailable_provider_does_not_create_session() {
 }
 
 #[tokio::test]
+async fn rejected_creation_preserves_reason_without_registering_session() {
+    let (mut manager, registry, client) = make_manager();
+    client.0.lock().unwrap().create_error = Some(AgentSessionError::Rejected);
+
+    assert_eq!(
+        manager
+            .create("agent-1", &spec(), AgentRegistration::default())
+            .await,
+        Err(AgentManagerError::SessionRejected)
+    );
+    assert!(manager.live_snapshot("agent-1").is_none());
+    assert!(registry.get("agent-1").unwrap().is_none());
+    assert_eq!(client.0.lock().unwrap().create_calls, 1);
+
+    client.0.lock().unwrap().create_error = None;
+    assert!(
+        manager
+            .create("agent-1", &spec(), AgentRegistration::default())
+            .await
+            .is_ok()
+    );
+}
+
+#[tokio::test]
 async fn failed_inspection_or_mismatched_handle_closes_unregistered_session() {
     let (mut manager, registry, client) = make_manager();
     client.0.lock().expect("state").fail_info = true;
@@ -583,7 +637,7 @@ async fn terminal_write_failures_retain_work_and_close_preserves_concurrent_meta
     let sink = notifications.clone();
     let subscription = connection
         .subscribe(
-            model::session::protocol::EventsRequest {
+            domain::session::protocol::EventsRequest {
                 events: vec!["agent_attention_required".to_owned()],
                 notifications: false,
             },
@@ -661,7 +715,7 @@ async fn accepted_turn_survives_runtime_write_failure_and_reports_inspection_fai
     let captured = activities.clone();
     let subscription = connection
         .subscribe(
-            model::session::protocol::EventsRequest {
+            domain::session::protocol::EventsRequest {
                 events: vec!["activity_log".to_owned()],
                 notifications: false,
             },
@@ -713,7 +767,7 @@ async fn cancelled_internal_archived_and_deleted_agents_do_not_publish_attention
         let captured = events.clone();
         let subscription = connection
             .subscribe(
-                model::session::protocol::EventsRequest {
+                domain::session::protocol::EventsRequest {
                     events: vec!["agent_attention_required".to_owned()],
                     notifications: false,
                 },

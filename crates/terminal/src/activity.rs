@@ -4,10 +4,9 @@ use std::collections::BTreeMap;
 use std::sync::{Arc, Mutex};
 use std::time::{SystemTime, UNIX_EPOCH};
 
-use model::workspace::activity::WorkspaceStateBucket;
-use model::workspace::attention::{
-    WorkspaceActivity, WorkspaceActivitySource, WorkspaceStateError,
-};
+use domain::workspace::activity::WorkspaceStateBucket;
+use domain::workspace::attention::{WorkspaceActivity, WorkspaceStateError};
+use model::workspace::attention::WorkspaceActivitySource;
 use serde::{Deserialize, Serialize};
 
 /// State reported by a local shell or Agent hook.

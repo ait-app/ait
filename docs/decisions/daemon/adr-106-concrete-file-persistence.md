@@ -7,6 +7,8 @@
 
 后续 [ADR-107](adr-107-direct-imports-from-owning-crates.md) 删除旧功能 crate 的兼容重导出，
 调用处直接使用所属 crate；provider 和 schedule 的 file 依赖收缩到测试。
+[ADR-112](adr-112-persistence-crate.md) 将 file 改名为 persistence，server identity 迁回
+`bins/daemon`，创建回执适配器移到 `persistence::storage::creation`，metadata 仅在测试中依赖它。
 
 ## 背景
 

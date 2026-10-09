@@ -1,6 +1,6 @@
 use super::*;
+use crate::config::Cli;
 use clap::Parser;
-use file::config::Cli;
 
 fn config(directory: &std::path::Path) -> Config {
     Config::load(
@@ -117,7 +117,7 @@ async fn each_composite_service_installs_all_its_methods_without_other_component
         let task = tokio::spawn(server.serve(async move {
             let _ = signal.await;
         }));
-        let info: protocol::ServerInfo = reqwest::Client::builder()
+        let info: model::server::ServerInfo = reqwest::Client::builder()
             .no_proxy()
             .build()
             .unwrap()

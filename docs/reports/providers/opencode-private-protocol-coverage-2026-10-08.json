@@ -1,0 +1,338 @@
+{
+  "source_revision": "04131368e540beb3f0d89b125078b1274ef1fa83",
+  "previous_revision": "19c11978251a24f18536dedd0ac91dcf43ced4d6",
+  "source_tree": "4124635cb25d219126a72e5b208fbaabc1b07ccc",
+  "measurement_date": "2026-10-08",
+  "scope": "Rust Cargo workspace, default features, macOS arm64, rustc 1.98.1, cargo-llvm-cov 0.8.7. Merged default workspace tests and isolated instrumented native OpenCode 1.18.4 and 2.0.20 tests. Tool default file filtering, no additional file exclusions. Doctests and third-party OpenCode executables are not instrumented.",
+  "commands": {
+    "focused_tests": "cargo test -p provider --lib local::opencode -- --test-threads=4",
+    "workspace_tests": "cargo test --workspace -- --test-threads=1",
+    "build": "cargo build --workspace",
+    "clippy": "cargo clippy --workspace --all-targets -- -D warnings",
+    "format": "cargo fmt --all --check",
+    "docs": "npm run check:docs",
+    "native_tests": "AIT_TEST_OPENCODE_BIN=<binary> cargo test -p provider --lib local::opencode::tests::installed -- --ignored --test-threads=1",
+    "coverage_initial": "cargo llvm-cov --workspace --html -- --test-threads=4",
+    "coverage_before_native": "cargo llvm-cov report --json --summary-only --output-path /private/tmp/ait-opencode-clean.lvDfjM/workspace-summary.json",
+    "coverage_native_v2": "AIT_TEST_OPENCODE_BIN=/private/tmp/ait-opencode-v2.zhss9B/package/bin/opencode cargo llvm-cov --no-report -p provider --lib -- local::opencode::tests::installed --ignored --test-threads=1",
+    "coverage_native_v1": "AIT_TEST_OPENCODE_BIN=/etc/profiles/per-user/lonnetkirisame/bin/opencode cargo llvm-cov --no-report -p provider --lib -- local::opencode::tests::installed --ignored --test-threads=1",
+    "coverage_merged_html": "cargo llvm-cov report --html",
+    "coverage_merged_summary": "cargo llvm-cov report --json --summary-only --output-path /private/tmp/ait-opencode-clean.lvDfjM/coverage-summary.json",
+    "coverage_missing_lines": "cargo llvm-cov report --show-missing-lines"
+  },
+  "environment": {
+    "toolchain_path_prefix": "/nix/store/8y714xd10svzhbw35p1m7xvm166g9k0v-rust-minimal-1.98.1/bin",
+    "rustfmt_path_prefix": "/nix/store/3ikqdk1rrnylklfdb52j72z2vxk9sdzb-rustfmt-preview-1.98.1-aarch64-apple-darwin/bin",
+    "clippy_path_prefix": "/nix/store/jwcq7x9ykicy917rjn089zbp1asd62gf-clippy-preview-1.98.1-aarch64-apple-darwin/bin",
+    "coverage_tool_path_prefix": "/nix/store/vkq6sjzwy657lxb3r3a1pm63d2yqw52s-cargo-llvm-cov-0.8.7/bin",
+    "LLVM_COV": "/nix/store/8f8k4hg7f5039lll8r2frm9jw4ys5nhg-llvm-tools-preview-1.98.1-aarch64-apple-darwin/lib/rustlib/aarch64-apple-darwin/bin/llvm-cov",
+    "LLVM_PROFDATA": "/nix/store/8f8k4hg7f5039lll8r2frm9jw4ys5nhg-llvm-tools-preview-1.98.1-aarch64-apple-darwin/lib/rustlib/aarch64-apple-darwin/bin/llvm-profdata",
+    "SHERPA_ONNX_LIB_DIR": "/Users/lonnetkirisame/Documents/Developer/ait/target/sherpa-onnx-prebuilt/sherpa-onnx-v1.13.8-osx-arm64-static-lib/lib"
+  },
+  "rust_source_fingerprint_sha256": "cf97a745ab6163cd0256d9af9c9da1bd23c6bac78c885a910ec2157627de7f03",
+  "fingerprint_scope": "Sorted tracked .rs files, paths ending Cargo.toml, Cargo.lock and rust-toolchain.toml; SHA-256 over path, NUL, bytes, NUL.",
+  "results": {
+    "focused": {
+      "passed": 72,
+      "ignored": 6,
+      "failed": 0
+    },
+    "workspace": {
+      "passed": 2009,
+      "ignored": 15,
+      "failed": 0,
+      "doctests_included": 1
+    },
+    "instrumented_workspace": {
+      "passed": 2008,
+      "ignored": 15,
+      "failed": 0,
+      "doctests_included": 0
+    },
+    "native_v1": {
+      "version": "1.18.4",
+      "passed": 5,
+      "failed": 0,
+      "instrumented_passed": 5
+    },
+    "native_v2": {
+      "version": "2.0.20",
+      "passed": 5,
+      "failed": 0,
+      "instrumented_passed": 5
+    },
+    "build": "passed",
+    "clippy": "passed",
+    "format": "passed",
+    "docs": "passed",
+    "native_scope": "Five unique installed-provider tests run once per version, both ordinarily and instrumented. Independent temporary XDG configuration, temporary workspaces and loopback model. No real provider credentials or paid model calls. User installation and configuration unchanged.",
+    "v2_binary_source": "Official @opencode/cli-darwin-arm64@2.0.20 npm package, unpacked in an isolated temporary directory with npm pack --ignore-scripts.",
+    "real_cases": [
+      "discovery, multi-turn, restore and import",
+      "permission decline followed by next input",
+      "native Plan import and Build switch",
+      "saved explicit permissions",
+      "tool-disabled auxiliary metadata and native cleanup"
+    ]
+  },
+  "workspace_lines": {
+    "count": 59536,
+    "covered": 56244,
+    "percent": 94.47057242676699
+  },
+  "crate_lines": {
+    "bins/daemon": {
+      "count": 919,
+      "covered": 881,
+      "percent": 95.86507072905331
+    },
+    "crates/api": {
+      "count": 2255,
+      "covered": 2126,
+      "percent": 94.27937915742794
+    },
+    "crates/browser": {
+      "count": 733,
+      "covered": 715,
+      "percent": 97.5443383356071
+    },
+    "crates/domain": {
+      "count": 121,
+      "covered": 121,
+      "percent": 100
+    },
+    "crates/file": {
+      "count": 1924,
+      "covered": 1837,
+      "percent": 95.47817047817048
+    },
+    "crates/filesystem": {
+      "count": 12189,
+      "covered": 11566,
+      "percent": 94.88883419476576
+    },
+    "crates/metadata": {
+      "count": 5751,
+      "covered": 5411,
+      "percent": 94.08798469831333
+    },
+    "crates/model": {
+      "count": 1735,
+      "covered": 1679,
+      "percent": 96.77233429394812
+    },
+    "crates/protocol": {
+      "count": 63,
+      "covered": 63,
+      "percent": 100
+    },
+    "crates/provider": {
+      "count": 29006,
+      "covered": 27216,
+      "percent": 93.82886299386334
+    },
+    "crates/relay": {
+      "count": 503,
+      "covered": 462,
+      "percent": 91.84890656063618
+    },
+    "crates/schedule": {
+      "count": 791,
+      "covered": 772,
+      "percent": 97.59797724399493
+    },
+    "crates/terminal": {
+      "count": 1583,
+      "covered": 1527,
+      "percent": 96.46241313960834
+    },
+    "crates/voice": {
+      "count": 1963,
+      "covered": 1868,
+      "percent": 95.16046867040244
+    }
+  },
+  "comparable_default_only": {
+    "scope": "Default workspace tests only; same platform, toolchain and cargo-llvm-cov filtering as historical baseline; native tests excluded from both.",
+    "baseline_source_revision": "e6d7df97b54c73bf97024985179dacdb8cdd69bc",
+    "baseline_artifact": "opencode-session-regressions-coverage-2026-10-08.json",
+    "baseline_workspace_lines": {
+      "count": 59344,
+      "covered": 55870,
+      "percent": 94.14599622539768
+    },
+    "baseline_provider_lines": {
+      "count": 28814,
+      "covered": 26841,
+      "percent": 93.1526341361838
+    },
+    "current_workspace_lines": {
+      "count": 59536,
+      "covered": 56070,
+      "percent": 94.17831228164472
+    },
+    "current_provider_lines": {
+      "count": 29006,
+      "covered": 27042,
+      "percent": 93.22898710611598
+    },
+    "workspace_percentage_point_delta": 0.03231605624704059,
+    "provider_percentage_point_delta": 0.07635296993217366,
+    "merged_baseline": "No same-scope baseline for the native-augmented measurement; do not compare its percentages with the historical default-only measurement."
+  },
+  "opencode_source_lines": {
+    "crates/provider/src/local/opencode.rs": {
+      "count": 75,
+      "covered": 75,
+      "percent": 100,
+      "missing_lines": []
+    },
+    "crates/provider/src/local/opencode/approvals.rs": {
+      "count": 112,
+      "covered": 98,
+      "percent": 87.5,
+      "missing_lines": [65, 86, 100, 101, 102, 103, 106, 109, 110, 111, 112, 130, 131, 135]
+    },
+    "crates/provider/src/local/opencode/bridge.rs": {
+      "count": 104,
+      "covered": 101,
+      "percent": 97.11538461538461,
+      "missing_lines": [148, 163, 175]
+    },
+    "crates/provider/src/local/opencode/client.rs": {
+      "count": 415,
+      "covered": 393,
+      "percent": 94.6987951807229,
+      "missing_lines": [55, 80, 96, 97, 98, 99, 100, 101, 102, 110, 136, 137, 138, 156, 189, 377, 385, 423]
+    },
+    "crates/provider/src/local/opencode/client/native_sessions.rs": {
+      "count": 155,
+      "covered": 151,
+      "percent": 97.41935483870968,
+      "missing_lines": [28, 80, 90, 160]
+    },
+    "crates/provider/src/local/opencode/live.rs": {
+      "count": 362,
+      "covered": 324,
+      "percent": 89.50276243093923,
+      "missing_lines": [50, 51, 52, 53, 54, 55, 114, 180, 181, 182, 225, 226, 246, 247, 255, 331, 339, 340, 356, 357, 370, 371, 392, 393, 394, 396, 397, 398, 401, 402, 403, 407, 409, 429, 430, 432, 434]
+    },
+    "crates/provider/src/local/opencode/projection.rs": {
+      "count": 108,
+      "covered": 102,
+      "percent": 94.44444444444444,
+      "missing_lines": [54, 64, 98, 99, 100]
+    },
+    "crates/provider/src/local/opencode/protocol.rs": {
+      "count": 55,
+      "covered": 55,
+      "percent": 100,
+      "missing_lines": []
+    },
+    "crates/provider/src/local/opencode/protocol/budget.rs": {
+      "count": 59,
+      "covered": 58,
+      "percent": 98.30508474576273,
+      "missing_lines": [29]
+    },
+    "crates/provider/src/local/opencode/protocol/discovery.rs": {
+      "count": 145,
+      "covered": 144,
+      "percent": 99.3103448275862,
+      "missing_lines": [120]
+    },
+    "crates/provider/src/local/opencode/protocol/execution.rs": {
+      "count": 122,
+      "covered": 110,
+      "percent": 90.1639344262295,
+      "missing_lines": [22, 36, 37, 38, 40, 62, 63, 64, 65]
+    },
+    "crates/provider/src/local/opencode/protocol/history.rs": {
+      "count": 302,
+      "covered": 269,
+      "percent": 89.0728476821192,
+      "missing_lines": [57, 100, 101, 102, 103, 111, 112, 113, 114, 143, 144, 145, 146, 154, 156, 157, 158, 159, 167, 181, 182, 183, 184, 242, 300, 307, 308, 309, 310]
+    },
+    "crates/provider/src/local/opencode/protocol/history/prefix.rs": {
+      "count": 56,
+      "covered": 56,
+      "percent": 100,
+      "missing_lines": []
+    },
+    "crates/provider/src/local/opencode/protocol/http.rs": {
+      "count": 518,
+      "covered": 399,
+      "percent": 77.02702702702705,
+      "missing_lines": [132, 133, 134, 136, 142, 143, 144, 145, 190, 191, 192, 193, 206, 207, 208, 209, 241, 242, 243, 244, 257, 258, 265, 266, 267, 268, 271, 272, 273, 274, 283, 284, 285, 287, 302, 303, 304, 306, 311, 312, 316, 317, 328, 348, 349, 350, 351, 369, 370, 399, 401, 402, 403, 404, 445, 446, 447, 448, 465, 466, 467, 469, 473, 484, 485, 486, 487, 502, 503, 520, 521, 522, 524, 528, 529, 530, 531, 532, 535, 536, 537, 538]
+    },
+    "crates/provider/src/local/opencode/protocol/metadata.rs": {
+      "count": 128,
+      "covered": 125,
+      "percent": 97.65625,
+      "missing_lines": [132, 141, 161]
+    },
+    "crates/provider/src/local/opencode/protocol/permissions.rs": {
+      "count": 150,
+      "covered": 140,
+      "percent": 93.33333333333333,
+      "missing_lines": [20, 21, 22, 24, 70, 76, 88, 103, 127]
+    },
+    "crates/provider/src/local/opencode/protocol/requests.rs": {
+      "count": 109,
+      "covered": 108,
+      "percent": 99.08256880733946,
+      "missing_lines": []
+    },
+    "crates/provider/src/local/opencode/protocol/sessions.rs": {
+      "count": 143,
+      "covered": 119,
+      "percent": 83.21678321678321,
+      "missing_lines": [56, 57, 58, 59, 64, 65, 66, 98, 99, 100, 101, 113, 114, 115, 116, 126, 127, 128, 129, 132, 133, 134, 135]
+    },
+    "crates/provider/src/local/opencode/protocol/streaming.rs": {
+      "count": 197,
+      "covered": 195,
+      "percent": 98.98477157360406,
+      "missing_lines": [185]
+    },
+    "crates/provider/src/local/opencode/publication.rs": {
+      "count": 57,
+      "covered": 41,
+      "percent": 71.9298245614035,
+      "missing_lines": [34, 35, 36, 37, 46, 47, 48, 49, 64, 65, 70, 71, 72, 73]
+    },
+    "crates/provider/src/local/opencode/runtime.rs": {
+      "count": 248,
+      "covered": 195,
+      "percent": 78.62903225806451,
+      "missing_lines": [67, 68, 69, 71, 93, 94, 95, 113, 114, 132, 133, 134, 136, 139, 140, 141, 142, 164, 165, 166, 167, 171, 172, 173, 175, 176, 224, 225, 226, 227, 234, 235, 236, 237, 250, 265]
+    },
+    "crates/provider/src/local/opencode/session.rs": {
+      "count": 244,
+      "covered": 223,
+      "percent": 91.39344262295081,
+      "missing_lines": [124, 125, 126, 127, 146, 147, 148, 149, 150, 166, 167, 238, 239, 247, 248, 249, 262]
+    },
+    "crates/provider/src/local/opencode/summary.rs": {
+      "count": 102,
+      "covered": 89,
+      "percent": 87.25490196078431,
+      "missing_lines": [18, 28, 40, 41, 42, 43, 44, 45, 46, 47, 48, 49]
+    },
+    "crates/provider/src/local/opencode/types.rs": {
+      "count": 6,
+      "covered": 2,
+      "percent": 33.33333333333333,
+      "missing_lines": [176, 178, 179, 181]
+    }
+  },
+  "local_html_report": "target/llvm-cov/html/index.html",
+  "gaps": [
+    "Only macOS arm64 and actual OpenCode 1.18.4 / 2.0.20 binaries were validated. The 1.x / 2.0.10+ support gate does not prove every patch version. Linux and Windows were not exercised.",
+    "Ten other unique ignored external-provider tests were not executed. Workspace doctest executed by cargo test is not included in LLVM coverage.",
+    "No live DeepSeek service, billing/authentication integration or desktop UI end-to-end verification in this cleanup; no new frontend changes. Earlier frontend results remain in the historical artifact.",
+    "HTTP transport failures, malformed native payloads, broken SSE frames, process startup/fork/kill failures and resource-limit branches remain incompletely covered.",
+    "Deferred or invalid history publication, local approval cancellation or malformed/over-limit approvals, v2 effective-variant/instructions failures and incomplete native reconciliation still have uncovered paths; exact reported physical line numbers are retained above.",
+    "Line coverage is not branch coverage. LLVM summary counters and the physical missing-line listing are retained separately; the list length is not used to recompute the measured percentage."
+  ]
+}

@@ -2155,6 +2155,8 @@ export const ar: TranslationResources = {
         rowHint: "Collect connection, daemon, provider, desktop, and log details",
         run: "Run",
         running: "Running diagnostic...",
+        exportAccessibility: "تصدير ملف التشخيص",
+        exportFailed: "تعذر تصدير ملف التشخيص",
         copyLabel: "diagnostic",
         copyAccessibility: "Copy diagnostic",
         copyFailed: "Failed to copy diagnostic",

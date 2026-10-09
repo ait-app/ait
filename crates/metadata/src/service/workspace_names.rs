@@ -3,8 +3,8 @@
 use std::collections::BTreeSet;
 use std::sync::{Arc, Mutex};
 
+use domain::summary::{SummaryKind, SummaryRequest, SummarySelection};
 use model::summary::SummarySource;
-use model::summary::{SummaryKind, SummaryRequest, SummarySelection};
 use model::workspace::naming::WorkspaceBranchNamer;
 use model::workspace::registry::WorkspaceRegistry;
 use serde_json::Value;

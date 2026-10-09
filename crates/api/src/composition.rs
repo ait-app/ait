@@ -2,10 +2,10 @@
 
 use std::sync::{Arc, Mutex};
 
-use filesystem::service::{
-    checkout::Checkout, files::Files, forge::Forge, github_projects::GithubProjects,
-    workspace_recovery::WorkspaceRecovery, worktrees::Worktrees,
-};
+use filesystem::files::service::files::Files;
+use filesystem::forge::service::{forge::Forge, github_projects::GithubProjects};
+use filesystem::git::service::checkout::Checkout;
+use filesystem::worktrees::service::{workspace_recovery::WorkspaceRecovery, worktrees::Worktrees};
 use metadata::service::{
     daemon::Daemon, directory::Directory, workspace_automation::WorkspaceAutomation,
     workspace_labels::WorkspaceLabels, workspace_state::WorkspaceState,
@@ -26,7 +26,7 @@ pub(super) struct Parts {
     /// Connection-owned browser automation broker.
     pub(super) browser: Option<browser::broker::Broker>,
     /// Orchestration skill selection and installation.
-    pub(super) skills: Option<filesystem::service::skills::Skills>,
+    pub(super) skills: Option<filesystem::skills::service::skills::Skills>,
     /// Durable push registration and lease renewal.
     pub(super) push_tokens: Option<metadata::service::push::PushTokens>,
     /// Connection-owned voice and dictation with independently selected speech engines.
@@ -44,7 +44,7 @@ pub(super) struct Parts {
     /// Git checkout status, diff, refresh, and history use cases.
     pub(super) checkout: Option<Checkout>,
     /// Background origin fetches for actively observed workspace repositories.
-    pub(super) git_fetch: Option<filesystem::service::git_fetch::GitFetch>,
+    pub(super) git_fetch: Option<filesystem::git::service::git_fetch::GitFetch>,
     /// Daemon status, mutable configuration, diagnostics, and update boundary.
     pub(super) daemon: Option<Daemon>,
     /// Project and workspace registries.
@@ -134,7 +134,7 @@ struct SummarySource(Arc<dyn provider::summary::SummaryGenerator>);
 impl model::summary::SummarySource for SummarySource {
     fn generate(
         &self,
-        request: model::summary::SummaryRequest,
+        request: domain::summary::SummaryRequest,
     ) -> model::summary::SummaryFuture<'_> {
         self.0.generate(request)
     }

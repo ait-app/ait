@@ -10,6 +10,11 @@
 
 ## Daemon 与协议
 
+- [Persistence 与 filesystem 能力边界：PR 验证](daemon/persistence-filesystem-pr-validation-2026-10-09.md)
+- [Domain 数据与 Server 协议归属：PR 验证](daemon/domain-values-server-protocol-pr-validation-2026-10-09.md)
+
+- [本地诊断证据：PR 验证](daemon/diagnostic-evidence-pr-validation-2026-10-08.md)
+
 - [File、共享契约与 RPC 边界：PR 验证](daemon/file-and-rpc-boundaries-pr-validation-2026-10-08.md)
 - [Crate 边界整合到最新 main 的验证](daemon/crate-boundaries-main-rebase-2026-10-07.md)
 - [Crate 级完整服务安装：PR 覆盖率证据](daemon/crate-level-service-installation-pr-coverage-2026-10-07.json)
@@ -74,6 +79,8 @@
 
 ## Provider、Agent 与会话
 
+- [AGY headless 拒绝与错误诊断：PR 验证](providers/antigravity-headless-errors-validation-2026-10-09.md)
+- [Codex 异步提问历史排序：PR 覆盖率证据](providers/codex-async-question-history-pr-coverage-2026-10-09.json)
 - [Timeline 单项 768 KiB：PR 覆盖率证据](providers/timeline-entry-768k-pr-coverage-2026-10-06.json)
 - [Provider 装配边界验证](providers/provider-composition.md)
 - [Antigravity CLI 原生 Provider 验证](providers/antigravity-cli.md)
@@ -82,6 +89,8 @@
 - [OpenCode 工具与结论顺序修复](providers/opencode-tool-order.md)
 - [OpenCode 上游 PR 验证](providers/opencode-upstream-pr.md)
 - [OpenCode 时间线顺序与工具历史](providers/opencode-history-order-and-tools.md)
+- [OpenCode 模型偏好、权限拒绝与会话错误分类：PR 覆盖率证据](providers/opencode-session-regressions-coverage-2026-10-08.json)
+- [OpenCode v1/v2 私有协议隔离与真实双版本验证：PR 覆盖率证据](providers/opencode-private-protocol-coverage-2026-10-08.json)
 - [OpenCode 原生流式与会话恢复](providers/opencode-native-streaming.md)
 - [OpenCode 1.18.33 兼容性](providers/opencode-1.18.33-compatibility.md)
 - [OpenCode Provider 迁移](providers/opencode-server-migration.md)

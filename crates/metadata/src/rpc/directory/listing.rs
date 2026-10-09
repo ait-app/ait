@@ -2,9 +2,9 @@
 
 use std::collections::{BTreeMap, BTreeSet};
 
+use domain::directory_sync::{Cursor, Mode};
+use domain::workspace::protocol::projection::{project_descriptor, workspace_descriptor};
 use model::ServerMessage;
-use model::directory_sync::{Cursor, Mode};
-use model::workspace::protocol::projection::{project_descriptor, workspace_descriptor};
 use serde_json::{Value, json};
 
 use super::{

@@ -1,5 +1,5 @@
 use super::*;
-use crate::service::checkout::{DiffHunk, DiffLine, ParsedDiffFile};
+use crate::git::service::checkout::{DiffHunk, DiffLine, ParsedDiffFile};
 
 #[test]
 fn fills_only_missing_fields_and_preserves_explicit_wording() {
@@ -73,7 +73,7 @@ impl model::summary::SummarySource for Generator {
             );
             self.requests.lock().unwrap().push(request);
             if self.fail {
-                Err(model::summary::SummaryError::Unavailable)
+                Err(domain::summary::SummaryError::Unavailable)
             } else {
                 Ok(
                     json!({"title":"Generated PR","body":"Generated details","message":"Generated commit"}),
@@ -108,8 +108,8 @@ fn state(root: &std::path::Path, fail: bool) -> (State, std::sync::Arc<Generator
             summary_source: Some(generator.clone()),
             runtime,
             checkout: Some(Arc::new(Mutex::new(
-                crate::service::checkout::Checkout::new(Box::new(
-                    crate::local::checkout::LocalCheckout::new(root.join("managed")),
+                crate::git::service::checkout::Checkout::new(Box::new(
+                    crate::git::local::checkout::LocalCheckout::new(root.join("managed")),
                 )),
             ))),
             forge: None,

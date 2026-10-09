@@ -4,6 +4,10 @@
 
 ## Daemon 与协议
 
+- [ADR-112：file 瘦身为 persistence，宿主专用文件归 daemon](daemon/adr-112-persistence-crate.md)
+- [ADR-111：纯业务数据归 domain，连接协议并入 model::server](daemon/adr-111-domain-values-and-server-protocol.md)
+- [ADR-109：本地故障证据与 Harness 日志采集](daemon/adr-109-local-incident-evidence.md)
+
 - [ADR-108：Relay RPC 与基础连接方法归所属 crate](daemon/adr-108-relay-rpc-and-metadata-connection-methods.md)
 - [ADR-107：共享组件直接从所属 crate 导入](daemon/adr-107-direct-imports-from-owning-crates.md)
 - [ADR-106：具体文件持久化归 file，model 仅声明契约](daemon/adr-106-concrete-file-persistence.md)
@@ -27,6 +31,7 @@
 
 ## 工作区、文件与 Git
 
+- [ADR-113：filesystem 按能力组组织模块](workspace/adr-113-filesystem-capability-groups.md)
 - [ADR-104：Filesystem 仅通过 model 契约协作](workspace/adr-104-filesystem-model-collaboration.md)
 - [ADR-092：工作区重置同步 origin 同名分支](workspace/adr-092-reset-same-named-remote-branch.md)
 - [ADR-025：先移植 Paseo Project / Workspace 模型与 registry](workspace/adr-025-paseo-registry.md)
@@ -47,6 +52,7 @@
 
 ## Provider、Agent 与会话
 
+- [ADR-110：OpenCode 双版本私有协议边界](providers/adr-110-opencode-private-protocol-boundary.md)
 - [ADR-102：共享协作契约归 model，Provider 不依赖 metadata](providers/adr-102-provider-metadata-independence.md)
 - [ADR-101：Provider 拥有摘要生成能力](providers/adr-101-provider-summary-generator.md)
 - [ADR-091：会话独立执行与 Provider 后台发现](providers/adr-091-independent-session-execution.md)

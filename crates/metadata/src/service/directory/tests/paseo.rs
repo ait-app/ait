@@ -1,6 +1,6 @@
 //! Paseo session.workspaces exact placement, archive, and project lifecycle cases.
 
-use model::workspace::lifecycle::WorkspaceCreation;
+use domain::workspace::lifecycle::WorkspaceCreation;
 
 use super::*;
 

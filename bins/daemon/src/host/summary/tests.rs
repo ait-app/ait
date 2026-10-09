@@ -1,5 +1,5 @@
-use file::storage::daemon_config::FileDaemonConfigStore;
-use model::storage::daemon_config::{DaemonConfigReload, DaemonConfigStoreError};
+use domain::storage::daemon_config::{DaemonConfigReload, DaemonConfigStoreError};
+use persistence::storage::daemon_config::FileDaemonConfigStore;
 use serde_json::json;
 
 use super::*;

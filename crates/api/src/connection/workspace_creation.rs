@@ -2,8 +2,8 @@
 
 use std::sync::{Arc, Mutex};
 
+use domain::creation::protocol::Kind;
 use metadata::rpc::directory::WorkspaceCreated;
-use model::creation::protocol::Kind;
 use model::events::Subscription;
 use model::{Context, DispatchError, ErrorCode};
 use serde_json::{Value, json};
@@ -57,7 +57,7 @@ async fn prepare(context: &mut Context<'_>, state: &Shared) -> Result<Input, Err
     if state.provider.agent_execution.is_none() {
         return Err(ErrorCode::UnsupportedCapability);
     }
-    let request: model::workspace::protocol::directory::WorkspaceCreateRequest =
+    let request: domain::workspace::protocol::directory::WorkspaceCreateRequest =
         serde_json::from_value(context.request.params.clone())
             .map_err(|_| ErrorCode::InvalidMessage)?;
     let agent = request.agent.ok_or(ErrorCode::InvalidMessage)?;
@@ -164,7 +164,7 @@ async fn create(
 }
 
 async fn await_replay(state: &Shared, created: &mut WorkspaceCreated) -> Result<(), ErrorCode> {
-    let mut snapshot: model::creation::protocol::Snapshot =
+    let mut snapshot: domain::creation::protocol::Snapshot =
         serde_json::from_value(created.value["creation"].clone())
             .map_err(|_| ErrorCode::RegistryIo)?;
     let service = Arc::new(Mutex::new(state.metadata.creations.clone()));
@@ -195,7 +195,7 @@ async fn finish(
     state: &Shared,
     input: &Input,
     created: &mut WorkspaceCreated,
-    receipt: model::creation::protocol::Snapshot,
+    receipt: domain::creation::protocol::Snapshot,
 ) -> Result<(), ErrorCode> {
     let execution = state
         .provider

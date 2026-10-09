@@ -13,9 +13,8 @@ use tokio_util::{sync::CancellationToken, task::AbortOnDropHandle};
 
 use super::{
     bridge::Bridge,
-    client,
-    http::{Api, Version},
-    projection,
+    client, projection,
+    protocol::http::Api,
     session::{Connection, Submission},
     types::{Fault, Outcome, ProtocolError, Snapshot},
 };
@@ -120,21 +119,12 @@ impl Session {
                 .mode_id
                 .as_deref()
                 .ok_or(AgentSessionError::Rejected)?;
-            if connection.runtime.api.version == Version::V2 {
-                connection
-                    .runtime
-                    .api
-                    .json(
-                        reqwest::Method::POST,
-                        &connection
-                            .runtime
-                            .api
-                            .path(&connection.prepared.id, "/agent"),
-                        Some(&json!({"agent":agent})),
-                    )
-                    .await
-                    .map_err(client::error)?;
-            }
+            connection
+                .runtime
+                .api
+                .change_agent(&connection.prepared.id, agent)
+                .await
+                .map_err(client::error)?;
             connection.invocation.agent = agent.into();
             self.info.mode_id.clone_from(&effective.mode_id);
             self.config = effective;
@@ -162,7 +152,7 @@ impl Session {
         }
         self.apply_mode(config).await?;
         let connection = self.connection.as_mut().ok_or(AgentSessionError::Failed)?;
-        let turn = input_id(connection.runtime.api.version);
+        let turn = connection.runtime.api.new_input_id();
         connection.invocation.input_id.clone_from(&turn);
         connection.prepared.input_id.clone_from(&turn);
         connection.invocation.prompt.clone_from(&prompt.text);
@@ -177,7 +167,6 @@ impl Session {
         connection.submitted = false;
         let bridge = Arc::new(Bridge::new(
             self.sender.clone(),
-            connection.runtime.api.version,
             turn.clone(),
             prompt.client_message_id.clone(),
         ));
@@ -347,26 +336,12 @@ impl AgentSession for Session {
             {
                 return Err(AgentSessionError::Rejected);
             }
-            let suffix = if self.api.version == Version::V1 {
-                "/abort"
-            } else {
-                "/interrupt"
-            };
             let id = self
                 .info
                 .session_id
                 .as_deref()
                 .ok_or(AgentSessionError::Failed)?;
-            let result = tokio::time::timeout(
-                Duration::from_secs(5),
-                self.api.json(
-                    reqwest::Method::POST,
-                    &self.api.path(id, suffix),
-                    Some(&json!({})),
-                ),
-            )
-            .await;
-            if !result.is_ok_and(|result| result.is_ok()) {
+            if self.api.interrupt(id).await.is_err() {
                 self.cancel.cancel();
                 return Err(AgentSessionError::Failed);
             }
@@ -458,7 +433,8 @@ async fn reconcile_interrupt(connection: &Connection) -> Result<Snapshot, Protoc
             )
             .await
             {
-                Ok(snapshot) => return Ok(snapshot),
+                Ok(snapshot) if super::session::accepted(&snapshot) => return Ok(snapshot),
+                Ok(_) => tokio::time::sleep(Duration::from_millis(100)).await,
                 Err(error)
                     if matches!(error.code, Fault::SessionBusy | Fault::RunRecoveryFailed) =>
                 {
@@ -475,24 +451,6 @@ async fn reconcile_interrupt(connection: &Connection) -> Result<Snapshot, Protoc
             "interrupted history did not drain",
         )
     })?
-}
-
-fn input_id(version: Version) -> String {
-    let random = uuid::Uuid::new_v4().simple().to_string();
-    match version {
-        Version::V1 => {
-            let timestamp = std::time::SystemTime::now()
-                .duration_since(std::time::UNIX_EPOCH)
-                .unwrap_or_default()
-                .as_millis();
-            format!(
-                "msg_{:012x}{}",
-                (timestamp << 12) & 0xffff_ffff_ffff,
-                &random[..14]
-            )
-        }
-        Version::V2 => random,
-    }
 }
 
 #[cfg(test)]

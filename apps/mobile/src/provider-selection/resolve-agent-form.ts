@@ -317,9 +317,15 @@ function resolveModelField(input: {
       : resolveCanonicalModelId(availableModels, initialModel) || initialModel;
   }
   if (preferredModel) {
-    return !availableModels
-      ? preferredModel
-      : resolveCanonicalModelId(availableModels, preferredModel) || preferredModel;
+    const canonicalModel = availableModels
+      ? resolveCanonicalModelId(availableModels, preferredModel)
+      : null;
+    if (canonicalModel) return canonicalModel;
+    // OpenCode admits only IDs from its native catalogue. Do not replace an
+    // explicit draft choice, or treat an unavailable/empty catalogue as authoritative.
+    return provider === "opencode" && availableModels?.length
+      ? resolveDefaultModelId(availableModels)
+      : preferredModel;
   }
   return "";
 }

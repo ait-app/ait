@@ -1,8 +1,7 @@
 use std::sync::Mutex;
 
-use model::storage::daemon_config::{
-    DaemonConfigReload, DaemonConfigStore, DaemonConfigStoreError,
-};
+use domain::storage::daemon_config::{DaemonConfigReload, DaemonConfigStoreError};
+use model::storage::daemon_config::DaemonConfigStore;
 use serde_json::json;
 
 use super::*;
@@ -157,5 +156,22 @@ fn snapshots_report_provider_availability_without_backend_secrets() {
             (&[], Lifecycle::Ready)
         ),
         Err(crate::rpc::ErrorCode::InvalidMessage)
+    );
+}
+
+#[test]
+fn diagnostics_include_host_owned_evidence() {
+    #[derive(Debug)]
+    struct Evidence;
+    impl crate::ports::diagnostics::DaemonDiagnostics for Evidence {
+        fn report(&self) -> String {
+            "bounded fixture evidence".into()
+        }
+    }
+    let daemon = daemon().with_diagnostics(std::sync::Arc::new(Evidence));
+    assert!(
+        daemon
+            .diagnostics(&[], "ready", &[])
+            .contains("bounded fixture evidence")
     );
 }
