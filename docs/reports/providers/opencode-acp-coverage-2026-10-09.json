@@ -1,6 +1,6 @@
 {
   "measurement_date": "2026-10-09",
-  "source_revision": "refactor/opencode-acp working tree with serialized text-budget regression; exact fingerprint below",
+  "source_revision": "85ddcc35fa6291ffa8b126c0ccbac1ffcb5f930a",
   "rust_source_fingerprint_sha256": "6ea3eb85bf062475f1593d7aa0eecfac1ddb26aa76c8946c27c382454eed48e9",
   "fingerprint_scope": "Sorted tracked .rs files, Cargo.toml paths, Cargo.lock and rust-toolchain.toml; SHA-256 over path, NUL, bytes, NUL.",
   "fixture_sha256": "4f4c11f26e44d4af1d21700537faee59fbfb2d1d5be00d971934439a1286ab9c",
@@ -3498,5 +3498,6 @@
     "result": "success",
     "url": "https://github.com/ait-app/ait/actions/runs/37902945996/job/113729569322",
     "scope": "Linux Rust full CI, after process-state assertion correction and before final text-budget tightening."
-  }
+  },
+  "source_tree": "4c0781e6405a2980edd6b409e854135bfa34c871"
 }

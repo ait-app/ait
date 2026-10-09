@@ -1,7 +1,7 @@
 # OpenCode 官方 ACP 迁移验证
 
 2026-10-09；基于 `938a98f5`，分支 `refactor/opencode-acp`。
-测量源码版本：最终序列化尺寸修正的 worktree，提交与指纹见 JSON。
+测量源码提交：`85ddcc35fa6291ffa8b126c0ccbac1ffcb5f930a`；后续仅更新验证文档，不改变测量的 Rust 源码。
 边界决策见 [ADR-115](../../decisions/providers/adr-115-opencode-acp-provider.md)。
 
 ## 实现范围
