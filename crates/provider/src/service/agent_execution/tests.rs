@@ -6,6 +6,7 @@ mod environment;
 mod placement;
 mod reasoning;
 mod resume;
+mod usage;
 mod waits;
 use domain::agent_runtime::registry::AgentRuntimeRegistry;
 use model::workspace::registry::{ProjectRegistry, WorkspaceRegistry};

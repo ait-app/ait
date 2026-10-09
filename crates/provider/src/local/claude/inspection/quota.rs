@@ -154,6 +154,14 @@ fn normalize(name: &str) -> String {
 }
 
 fn window(id: &str, label: &str, used: Option<f64>, reset: Option<&str>) -> Value {
-    json!({"id":id,"label":label,"usedPct":used,"remainingPct":used.map(|used|(100.0-used).clamp(0.0,100.0)),
-        "resetsAt":reset,"tone":match used { Some(used) if used>90.0=>"danger",Some(used) if used>=70.0=>"warning",Some(_)=>"ok",None=>"default"}})
+    let mut window = json!({"id":id,"label":label,"summary":id=="five_hour","usedPct":used,"remainingPct":used.map(|used|(100.0-used).clamp(0.0,100.0)),
+        "resetsAt":reset,"tone":match used { Some(used) if used>90.0=>"danger",Some(used) if used>=70.0=>"warning",Some(_)=>"ok",None=>"default"}});
+    if let Some(short_label) = match id {
+        "five_hour" => Some("5h"),
+        "weekly" => Some("wk"),
+        _ => None,
+    } {
+        window["shortLabel"] = json!(short_label);
+    }
+    window
 }

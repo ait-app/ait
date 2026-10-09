@@ -168,3 +168,9 @@ export function formatDuration(durationMs: number): string {
   const remMinutes = totalMinutes % 60;
   return remMinutes === 0 ? `${hours}h` : `${hours}h ${remMinutes}m`;
 }
+
+export function formatCompactTimeAgoAsProse(label: string): string {
+  if (label === "now") return "just now";
+  if (/^\d/.test(label)) return `${label} ago`;
+  return label;
+}

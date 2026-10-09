@@ -30,11 +30,28 @@ impl CodexClient {
     }
 
     pub(super) async fn native_usage(&self) -> Result<Value, AgentSessionError> {
-        let cwd = current_dir()?;
+        self.native_usage_in(&current_dir()?).await
+    }
+
+    /// Read account quota in the session directory using this client's launch environment.
+    /// # Errors
+    /// Returns native transport failure or malformed quota facts.
+    pub(super) async fn native_usage_in(&self, cwd: &str) -> Result<Value, AgentSessionError> {
         let response = self
-            .query(&cwd, "account/rateLimits/read", json!({}))
+            .query(cwd, "account/rateLimits/read", json!({}))
             .await?;
-        usage(&response)
+        let mut report = usage(&response)?;
+        if let Ok(account) = self
+            .query(cwd, "account/read", json!({"refreshToken":false}))
+            .await
+            && let Some(email) = account
+                .pointer("/account/email")
+                .and_then(Value::as_str)
+                .filter(|email| email.len() <= 256 && !email.chars().any(char::is_control))
+        {
+            report["accountLabel"] = json!(email);
+        }
+        Ok(report)
     }
 }
 
@@ -84,8 +101,18 @@ fn usage(response: &Value) -> Result<Value, AgentSessionError> {
                         .map(|time| time.to_rfc3339())
                 })
                 .transpose()?;
-            windows.push(json!({"id":format!("{bucket}:{id}"),"label":format!("{bucket} {label}"),"usedPct":used,"remainingPct":(100-used).max(0),
-                "resetsAt":reset,"tone":if used>=95 {"danger"} else if used>=80 {"warning"} else {"ok"}}));
+            let mut projected = json!({"id":format!("{bucket}:{id}"),"label":format!("{bucket} {label}"),"summary":bucket=="codex" && id=="primary","usedPct":used,"remainingPct":(100-used).max(0),
+                "resetsAt":reset,"tone":if used>=95 {"danger"} else if used>=80 {"warning"} else {"ok"}});
+            if let Some(minutes) = window["windowDurationMins"].as_u64() {
+                projected["shortLabel"] = json!(if minutes >= 1440 {
+                    format!("{}d", minutes / 1440)
+                } else if minutes >= 60 {
+                    format!("{}h", minutes / 60)
+                } else {
+                    format!("{minutes}m")
+                });
+            }
+            windows.push(projected);
         }
     }
     Ok(

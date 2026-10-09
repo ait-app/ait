@@ -13,6 +13,7 @@ import {
   type WorkspaceTabPresentation,
 } from "@/screens/workspace/workspace-tab-presentation";
 import type { Theme } from "@/styles/theme";
+import { getPanelManifest } from "@/panels/panel-manifest";
 import type { SubagentRow } from "./select";
 import type { ArchiveFinishedStatus } from "./use-archive-finished";
 import {
@@ -51,6 +52,7 @@ function buildRowPresentation(row: SubagentRow, serverId: string): WorkspaceTabP
     ...data,
     tooltip: data.label,
     modified: false,
+    showCloseButton: getPanelManifest(data.kind).showCloseButton,
     icon: getProviderIcon(row.provider, serverId),
   };
 }

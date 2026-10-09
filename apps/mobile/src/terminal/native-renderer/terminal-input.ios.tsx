@@ -9,7 +9,8 @@ interface NativeInputHandle {
   blur(): Promise<void>;
 }
 
-interface NativeInputProps extends ViewProps {
+interface NativeInputProps extends Omit<ViewProps, "style"> {
+  style?: TerminalInputProps["style"];
   onInput: (event: NativeSyntheticEvent<{ data: string }>) => void;
   onTerminalKey: (event: NativeSyntheticEvent<{ key: string }>) => void;
   onFocus: () => void;

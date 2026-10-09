@@ -7,7 +7,7 @@ import {
 import type { AgentStreamEventPayload } from "@ait/protocol/messages";
 import { describe, expect, it } from "vitest";
 import { buildAgentStreamRenderModel } from "./model";
-import { createStreamPresentation } from "./presentation";
+import { createStreamPresentation, getStreamItemMessageId } from "./presentation";
 
 const presentationOptions = { level: "overview" as const, isTurnActive: true };
 
@@ -64,6 +64,29 @@ describe("native stream presentation", () => {
     expect(result.head).toMatchObject([{ text: "```ts\nconst a = 1;\n\nconst b = 2;" }]);
   });
 
+  it("refreshes every retained block's cursor when the canonical message replaces live metadata", () => {
+    const present = createStreamPresentation();
+    const source = {
+      ...assistantMessage("canonical", 1),
+      text: "First block\n\nLast block",
+      timelineCursor: { epoch: "old", seq: 1 },
+    };
+    const first = rows(present({ ...presentationOptions, tail: [], head: [source] }));
+    const canonical = {
+      ...source,
+      text: source.text + " grows",
+      timestamp: createTimestamp(2),
+      timelineCursor: { epoch: "new", seq: 5 },
+    };
+    const next = rows(present({ ...presentationOptions, tail: [canonical], head: [] }));
+    expect(next.map((item) => item.id)).toEqual(first.map((item) => item.id));
+    expect(
+      next.every((item) => item.timelineCursor?.epoch === "new" && item.timelineCursor.seq === 5),
+    ).toBe(true);
+    expect(next.every((item) => item.timestamp === canonical.timestamp)).toBe(true);
+    expect(next[0]).not.toBe(first[0]);
+  });
+
   it("preserves newlines when code indentation arrives in separate deltas", () => {
     const harness = streamHarness();
     harness.send(assistant("Intro\n\n```text\ndomain::agent_runtime::PersistedAgentRuntimeRecord"));
@@ -110,8 +133,11 @@ describe("native stream presentation", () => {
       tail: source,
       head: [],
     });
-    expect(result.tail).toEqual(source);
-    expect(result.tail[0]).toBe(source[0]);
+    expect(result.tail).toMatchObject([
+      { text: "[Link][docs]\n\n[docs]: https://example.com", blockGroupId: source[0]!.id },
+    ]);
+    expect(getStreamItemMessageId(result.tail[0]!)).toBe(source[0]!.id);
+    expect(source[0]!.id).toBe("message-1");
   });
 });
 
@@ -203,7 +229,11 @@ describe("timeline presentation", () => {
         text: "<spoken-input>Example</spoken-input><instruction>Explain this XML.</instruction>",
       },
     ];
-    expect(projectTimelineItems(items)).toEqual(items);
+    const projected = projectTimelineItems(items);
+    expect(projected.map((item) => ("text" in item ? item.text : null))).toEqual(
+      items.map((item) => ("text" in item ? item.text : null)),
+    );
+    expect(projected.map(getStreamItemMessageId)).toEqual(items.map((item) => item.id));
     expect(projectTimelineItems(items)[0]).toBe(items[0]);
   });
 });

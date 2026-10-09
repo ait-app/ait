@@ -26,14 +26,14 @@ import { ToolCallDetailsContent } from "@/components/tool-call-details";
 import { ToolCallSheetProvider } from "@/components/tool-call-sheet";
 import { LoadingSpinner } from "@/components/ui/loading-spinner";
 import type { PendingMessageSubmission } from "@/composer/submission/model";
-import { MAX_CONTENT_WIDTH, useIsCompactFormFactor } from "@/constants/layout";
+import { useIsCompactFormFactor } from "@/constants/layout";
 import { isWeb } from "@/constants/platform";
 import type { AgentScreenAgent } from "@/hooks/use-agent-screen-state-machine";
 import { useFileExplorerActions } from "@/hooks/use-file-explorer-actions";
 import { useForkAgent } from "@/hooks/use-fork-agent";
 import { useLoadOlderAgentHistory } from "@/hooks/use-load-older-agent-history";
 import { useRevealedText } from "@/hooks/use-revealed-text";
-import { useSettings } from "@/hooks/use-settings";
+import { resolveContentMaxWidth, useSettings } from "@/hooks/use-settings";
 import { useStableEvent } from "@/hooks/use-stable-event";
 import { getHostRuntimeStore } from "@/runtime/host-runtime";
 import { navigateToWorkspace } from "@/stores/navigation-active-workspace-store";
@@ -92,7 +92,7 @@ import {
 import { resolveBottomOverlayTailInset } from "./bottom-overlay-inset";
 import { layoutStream, type StreamLayoutItem } from "./layout";
 import { buildAgentStreamRenderModel, type AgentStreamRenderModel } from "./model";
-import { createStreamPresentation } from "./presentation";
+import { createStreamPresentation, getStreamItemMessageId } from "./presentation";
 import { type StreamSegmentRenderers, type StreamViewportHandle } from "./strategy";
 import { resolveStreamRenderStrategy } from "./strategy-resolver";
 import { returnToTimelineTail } from "./timeline-tail-navigation";
@@ -348,6 +348,7 @@ const AgentStreamViewComponent = forwardRef<AgentStreamViewHandle, AgentStreamVi
     const autoExpandReasoning = useSettings((settings) => settings.autoExpandReasoning);
     const toolCallDetailLevel = useSettings((settings) => settings.toolCallDetailLevel);
     const chatOutlineEnabled = useSettings((settings) => settings.chatOutlineEnabled);
+    const contentMaxWidth = useSettings(resolveContentMaxWidth);
     const viewportRef = useRef<StreamViewportHandle | null>(null);
     const pendingClientMessageIds = useMemo(
       () => new Set(pendingMessageSubmissions.map((submission) => submission.clientMessageId)),
@@ -595,10 +596,14 @@ const AgentStreamViewComponent = forwardRef<AgentStreamViewHandle, AgentStreamVi
     const handleTimelineHistoryLoadError = useCallback(() => {
       toast?.error(t("agentStream.historyLoadFailed"));
     }, [t, toast]);
-    const visibleHistoryItemIds = useMemo(
+    // Chat find and the chat outline address messages, and an assistant message is a
+    // group of block rows, so this is a set of message ids and never of row ids.
+    const visibleMessageIds = useMemo(
       () =>
         new Set(
-          [...baseRenderModel.history, ...baseRenderModel.segments.liveHead].map((item) => item.id),
+          [...baseRenderModel.history, ...baseRenderModel.segments.liveHead].map(
+            getStreamItemMessageId,
+          ),
         ),
       [baseRenderModel.history, baseRenderModel.segments.liveHead],
     );
@@ -611,7 +616,7 @@ const AgentStreamViewComponent = forwardRef<AgentStreamViewHandle, AgentStreamVi
       enabled: supportsChatOutline && chatOutlineEnabled,
       viewportRef,
       onJumpError: handleTimelineHistoryLoadError,
-      visibleItemIds: visibleHistoryItemIds,
+      visibleItemIds: visibleMessageIds,
       revealLoadedItem: revealLoadedHistory,
     });
 
@@ -708,7 +713,7 @@ const AgentStreamViewComponent = forwardRef<AgentStreamViewHandle, AgentStreamVi
             onOpenWorkspaceFile={handleInlinePathPress}
             toast={toast}
           >
-            <ChatFindExpansion itemId={item.id}>
+            <ChatFindExpansion messageId={getStreamItemMessageId(item)}>
               {(renderFullContent) => (
                 <AssistantMessage
                   renderFullContent={renderFullContent}
@@ -1086,8 +1091,8 @@ const AgentStreamViewComponent = forwardRef<AgentStreamViewHandle, AgentStreamVi
         epoch={timelineEpoch}
         items={findItems}
         viewportRef={viewportRef}
-        revealLoadedItem={revealLoadedHistory}
-        visibleItemIds={visibleHistoryItemIds}
+        revealLoadedMessage={revealLoadedHistory}
+        visibleMessageIds={visibleMessageIds}
       >
         <ToolCallSheetProvider>
           <AssistantSelectionCopySurface style={stylesheet.container}>
@@ -1113,6 +1118,8 @@ const AgentStreamViewComponent = forwardRef<AgentStreamViewHandle, AgentStreamVi
                 listStyle: stylesheet.list,
                 baseListContentContainerStyle: stylesheet.listContentContainer,
                 forwardListContentContainerStyle: stylesheet.forwardListContentContainer,
+                contentMaxWidth,
+                imageContext: { serverId: resolvedServerId, workspaceRoot },
               })}
             </MessageOuterSpacingProvider>
             <ChatOutlineRail
@@ -1606,7 +1613,7 @@ const stylesheet = StyleSheet.create((theme) => ({
   },
   contentWrapper: {
     width: "100%",
-    maxWidth: MAX_CONTENT_WIDTH,
+    maxWidth: theme.contentMaxWidth,
     alignSelf: "center",
     paddingHorizontal: theme.spacing[2],
   },
@@ -1627,7 +1634,7 @@ const stylesheet = StyleSheet.create((theme) => ({
   },
   streamItemWrapper: {
     width: "100%",
-    maxWidth: MAX_CONTENT_WIDTH,
+    maxWidth: theme.contentMaxWidth,
     alignSelf: "center",
     paddingHorizontal: theme.spacing[2],
   },

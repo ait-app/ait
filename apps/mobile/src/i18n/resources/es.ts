@@ -1205,6 +1205,7 @@ export const es: TranslationResources = {
       appName: "Ait",
     },
     sections: {
+      usage: "Usage",
       workspaces: "Espacios de trabajo",
       sessions: "Historial",
       search: "Buscar",
@@ -2017,6 +2018,8 @@ export const es: TranslationResources = {
     dismiss: "Despedir",
   },
   contextWindow: {
+    noData: "No context usage yet",
+    accessibilityNoData: "View account usage",
     title: "ventana contextual",
     used: "{{percentage}}% utilizado",
     tokens: "Fichas{{used}}/{{max}}",
@@ -2299,6 +2302,14 @@ export const es: TranslationResources = {
         codeSize: "Tamaño del código",
         codeSizeHint: "Se usa en código, diferencias y la salida del terminal",
         codeSizeAccessibility: "Tamaño de fuente del código",
+      },
+      layout: {
+        title: "Diseño",
+        contentWidth: "Ancho del contenido",
+        contentWidthHint: "Ancho máximo del chat y de los archivos Markdown en pantallas anchas",
+        contentWidthAccessibility: "Ancho del contenido en píxeles",
+        reset: "Restablecer",
+        resetAccessibility: "Restablecer el ancho del contenido",
       },
       syntax: {
         title: "Sintaxis",

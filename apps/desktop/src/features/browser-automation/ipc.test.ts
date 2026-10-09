@@ -3,6 +3,15 @@ import { executeAutomationCommand, type BrowserRegistry, type TabImage } from ".
 import { adaptWebContents, HostSnapshotEngineRegistry } from "./ipc.js";
 import type { IsolatedKeyboardInputEvent } from "./trusted-input.js";
 
+vi.mock("electron", () => ({ ipcMain: { handle: vi.fn() } }));
+vi.mock("../browser-webviews/index.js", () => ({
+  listRegisteredPaseoBrowserIds: () => [],
+  listRegisteredPaseoBrowserIdsForWorkspace: () => [],
+  getPaseoBrowserWebContentsForHostWindow: () => null,
+  getWorkspaceActivePaseoBrowserIdForHostWindow: () => null,
+  getPaseoBrowserWorkspaceId: () => null,
+}));
+
 class FakeImage implements TabImage {
   public toPNG(): Uint8Array {
     return new Uint8Array([137, 80, 78, 71]);
@@ -189,6 +198,8 @@ class FakeWebContents {
   public sendInputEvent(event: IsolatedKeyboardInputEvent): void {
     this.inputEvents.push(event);
   }
+
+  public async insertText(_text: string): Promise<void> {}
 
   public on(event: "console-message", listener: ConsoleMessageListener): void {
     expect(event).toBe("console-message");

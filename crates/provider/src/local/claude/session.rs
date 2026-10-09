@@ -430,6 +430,10 @@ impl ClaudeSession {
 }
 
 impl AgentSession for ClaudeSession {
+    fn account_usage(&self) -> AgentSessionFuture<'_, Value> {
+        Box::pin(self.client.native_usage())
+    }
+
     fn subagents(&self) -> Vec<crate::ports::controls::NativeSubagent> {
         self.children.children()
     }

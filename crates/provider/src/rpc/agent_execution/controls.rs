@@ -26,8 +26,30 @@ impl ExecutionState {
                 self.manager.diagnostic(provider).await.map_err(Into::into)
             }
             "provider.usage.list.request" => {
-                only(&params, &[])?;
-                self.manager.usage().await.map_err(Into::into)
+                only(&params, &["agentId", "providerId", "forceRefresh"])?;
+                let agent = match params.get("agentId") {
+                    None => None,
+                    Some(value) => {
+                        Some(self.resolve(value.as_str().ok_or(ErrorCode::InvalidMessage)?)?)
+                    }
+                };
+                let force = match params.get("forceRefresh") {
+                    None => false,
+                    Some(value) => value.as_bool().ok_or(ErrorCode::InvalidMessage)?,
+                };
+                let provider = match params.get("providerId") {
+                    None => None,
+                    Some(value) => Some(
+                        value
+                            .as_str()
+                            .filter(|id| !id.is_empty() && id.len() <= 256)
+                            .ok_or(ErrorCode::InvalidMessage)?,
+                    ),
+                };
+                self.manager
+                    .usage(agent.as_deref(), provider, force)
+                    .await
+                    .map_err(Into::into)
             }
             "agent.commands.list.request" => self.commands(params).await,
             "agent.rewind.request" => {

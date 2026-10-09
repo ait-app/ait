@@ -2,14 +2,27 @@ import React, { type RefCallback } from "react";
 import { flushSync } from "react-dom";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
-import { useWebOverlayRegistration } from "./overlay-root";
+import { dispatchTopWebOverlayKeyDown, useWebOverlayRegistration } from "./overlay-root";
 
 function nextFrame(): Promise<void> {
   return new Promise((resolve) => requestAnimationFrame(() => resolve()));
 }
 
-function OverlayHarness({ active, showScope }: { active: boolean; showScope: boolean }) {
-  const setScope = useWebOverlayRegistration({ active, layer: 20, onKeyDown: () => false });
+function OverlayHarness({
+  active,
+  showScope,
+  manageFocus = true,
+}: {
+  active: boolean;
+  showScope: boolean;
+  manageFocus?: boolean;
+}) {
+  const setScope = useWebOverlayRegistration({
+    active,
+    layer: 20,
+    manageFocus,
+    onKeyDown: () => false,
+  });
   return showScope ? (
     <div data-testid="scope" ref={setScope as RefCallback<HTMLDivElement>} tabIndex={-1}>
       <input data-testid="overlay-input" />
@@ -66,5 +79,24 @@ describe("useWebOverlayRegistration in the browser", () => {
     await renderHarness(false, false);
 
     expect(openerFocusCalls).toBe(1);
+  });
+
+  it("leaves focus and Tab navigation outside a hover card and does not restore on close", async () => {
+    flushSync(() => root.render(<OverlayHarness active showScope manageFocus={false} />));
+    await nextFrame();
+    expect(document.activeElement).toBe(opener);
+    const tab = new KeyboardEvent("keydown", { key: "Tab", cancelable: true });
+    expect(dispatchTopWebOverlayKeyDown(tab)).toBe(false);
+    expect(tab.defaultPrevented).toBe(false);
+    const input = document.createElement("input");
+    document.body.append(input);
+    input.focus();
+    await nextFrame();
+    expect(document.activeElement).toBe(input);
+    flushSync(() =>
+      root.render(<OverlayHarness active={false} showScope={false} manageFocus={false} />),
+    );
+    await nextFrame();
+    expect(document.activeElement).toBe(input);
   });
 });

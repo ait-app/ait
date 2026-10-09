@@ -1176,6 +1176,7 @@ export const ko: TranslationResources = {
       appName: "Ait",
     },
     sections: {
+      usage: "Usage",
       workspaces: "워크스페이스",
       sessions: "기록",
       search: "검색",
@@ -1978,6 +1979,8 @@ export const ko: TranslationResources = {
     dismiss: "닫기",
   },
   contextWindow: {
+    noData: "No context usage yet",
+    accessibilityNoData: "View account usage",
     title: "컨텍스트 윈도우",
     used: "{{percentage}}% 사용됨",
     tokens: "{{used}} / {{max}} 토큰",
@@ -2255,6 +2258,14 @@ export const ko: TranslationResources = {
         codeSize: "코드 크기",
         codeSizeHint: "코드, diff 및 터미널 출력에 사용됩니다",
         codeSizeAccessibility: "코드 글꼴 크기",
+      },
+      layout: {
+        title: "레이아웃",
+        contentWidth: "콘텐츠 너비",
+        contentWidthHint: "와이드 화면에서 채팅과 Markdown 파일의 최대 너비",
+        contentWidthAccessibility: "콘텐츠 너비(픽셀)",
+        reset: "재설정",
+        resetAccessibility: "콘텐츠 너비를 기본값으로 재설정",
       },
       syntax: {
         title: "구문",

@@ -25,3 +25,8 @@ export function useBottomSheetInternal() {
     animatedPosition: sharedValue(0),
   };
 }
+
+export const useBottomSheetModal = () => ({
+  dismiss: () => undefined,
+  dismissAll: () => undefined,
+});
