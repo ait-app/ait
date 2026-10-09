@@ -8,4 +8,5 @@ pub mod project_icon;
 pub mod push;
 pub mod registry;
 pub mod schedule;
+pub mod summary_config;
 pub mod workspace_labels;

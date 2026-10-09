@@ -20,3 +20,26 @@ pub trait SummarySource: Debug + Send + Sync {
     /// Cancel outstanding auxiliary work when the server drains. Does not cancel user turns.
     fn shutdown(&self);
 }
+
+/// Isolated summary generation; provider implements it and owns budgets and native cleanup.
+pub trait SummaryGenerator: Debug + Send + Sync {
+    /// Generate and validate the summary requested by `request`.
+    /// # Errors
+    /// Returns unavailable output, admission exhaustion, or shutdown cancellation.
+    fn generate(&self, request: SummaryRequest) -> SummaryFuture<'_>;
+
+    /// Cancel auxiliary operations when the daemon drains, preserving foreground turns.
+    fn shutdown(&self);
+}
+
+/// Preferences consumed by summary generation, independent of their persistence owner.
+/// Blocking reads must run outside an async reactor.
+pub trait SummaryConfiguration: Debug + Send + Sync {
+    /// Read live provider/model preferences.
+    /// # Errors
+    /// Returns unavailable when configuration cannot be read.
+    fn current(&self) -> Result<Value, SummaryError>;
+
+    /// Read project wording preferences for `cwd`; missing preferences use defaults.
+    fn project(&self, cwd: &str) -> Value;
+}

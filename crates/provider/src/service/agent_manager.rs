@@ -176,7 +176,7 @@ impl AgentManager {
     #[must_use]
     pub fn with_summary_generation(
         mut self,
-        generator: Arc<dyn crate::summary::SummaryGenerator>,
+        generator: Arc<dyn model::summary::SummaryGenerator>,
     ) -> Self {
         self.generated_titles.generator = Some(generator);
         self

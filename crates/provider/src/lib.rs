@@ -18,7 +18,6 @@ pub(crate) mod protocol;
 pub mod rpc;
 pub mod service;
 pub mod storage;
-pub mod summary;
 
 pub use composition::Providers;
 

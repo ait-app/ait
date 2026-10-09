@@ -38,6 +38,8 @@ pub struct Runtime {
     pub terminal_jobs: Arc<Semaphore>,
     /// Serializes background checkout reads without consuming foreground admission.
     pub checkout_poll_jobs: Arc<Semaphore>,
+    /// Serializes background directory subscription reads without consuming foreground admission.
+    directory_poll_jobs: Arc<Semaphore>,
     /// Bounded Agent completion waits.
     pub execution_waits: Arc<Semaphore>,
 }
@@ -55,6 +57,7 @@ impl Runtime {
             jobs: Arc::new(Semaphore::new(1)),
             terminal_jobs: Arc::new(Semaphore::new(4)),
             checkout_poll_jobs: Arc::new(Semaphore::new(1)),
+            directory_poll_jobs: Arc::new(Semaphore::new(1)),
             execution_waits: Arc::new(Semaphore::new(32)),
         }
     }
@@ -122,11 +125,39 @@ impl Runtime {
         failure: ErrorCode,
         execute: impl FnOnce(&mut S) -> Result<R, ErrorCode> + Send + 'static,
     ) -> Result<R, ErrorCode> {
+        self.run_waiting(&self.jobs, service, failure, execute)
+            .await
+    }
+
+    /// Run one background directory subscription read on its own serialized budget.
+    ///
+    /// Change-driven reads wait for `directory_poll_jobs` instead of the foreground `jobs` permit,
+    /// so a burst of directory wakeups cannot make concurrent requests fail admission. The
+    /// service lock still orders the read with foreground operations on the same service.
+    /// # Errors
+    /// Returns missing services, shutdown, poisoned service locks or business failures.
+    pub async fn run_directory_read<S: Send + 'static, R: Send + 'static>(
+        &self,
+        service: Option<Arc<Mutex<S>>>,
+        failure: ErrorCode,
+        execute: impl FnOnce(&mut S) -> Result<R, ErrorCode> + Send + 'static,
+    ) -> Result<R, ErrorCode> {
+        self.run_waiting(&self.directory_poll_jobs, service, failure, execute)
+            .await
+    }
+
+    async fn run_waiting<S: Send + 'static, R: Send + 'static>(
+        &self,
+        budget: &Arc<Semaphore>,
+        service: Option<Arc<Mutex<S>>>,
+        failure: ErrorCode,
+        execute: impl FnOnce(&mut S) -> Result<R, ErrorCode> + Send + 'static,
+    ) -> Result<R, ErrorCode> {
         let service = service.ok_or(ErrorCode::UnsupportedCapability)?;
         let permit = tokio::select! {
             biased;
             () = self.cancellation.cancelled() => return Err(ErrorCode::ServerDraining),
-            permit = self.jobs.clone().acquire_owned() => permit.map_err(|_| ErrorCode::ServerDraining)?,
+            permit = budget.clone().acquire_owned() => permit.map_err(|_| ErrorCode::ServerDraining)?,
         };
         let job = self.spawn_tracked(
             service,

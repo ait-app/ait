@@ -1,6 +1,6 @@
 # Paseo desktop/app 选定改动移植
 
-日期：2026-10-10。AIT 基线：`b2dba057f90abc5f5f0fdd6b740a52fbaa5b31dd`，测试源码树：`7e359788ed8a0ef804bbf658b5b7c215a34e0216`，后续只更新报告和覆盖率证据；平台为 macOS arm64，浏览器测试使用 Chromium。
+日期：2026-10-10。AIT 基线：`afa2eb500dfb379d2ac34064f2a4df3a1de63f8f`，测试源码树：`d4b530d8ccf4bfcfed4e797fe3c90eec1c3cde77`，后续只更新报告和覆盖率证据；平台为 macOS arm64，浏览器测试使用 Chromium。
 
 ## 范围与来源
 
@@ -28,7 +28,7 @@
 
 全部 PR 对应 `https://github.com/getpaseo/paseo/pull/<编号>`。消息身份整理只作为滚动修复的必要依赖，保留 AIT 的流式空白、语音消息投影和聊天搜索计数。目录同步保留 AIT 的 `workspace.update` 事件名与本地缓存实现。未恢复已经移除的 Plugin 功能。
 
-用量能力与速度档位由 Rust 原生适配，边界见 [ADR-118](../../decisions/providers/adr-118-native-account-usage-and-codex-speed.md)。Lucide 更新到 1.50.0，以使用标签控件的图标 Provider。已合入最新 main 的 OpenCode 原生权限/ACP、iOS 中文输入、终端配色和 crate 可见性重构；保留主分支的 0.0.24 版本。
+用量能力与速度档位由 Rust 原生适配，边界见 [ADR-119](../../decisions/providers/adr-119-native-account-usage-and-codex-speed.md)。Lucide 更新到 1.50.0，以使用标签控件的图标 Provider。已合入最新 main 的 OpenCode 原生权限/ACP、iOS 中文输入、终端配色和 crate 可见性重构；保留主分支的 0.0.24 版本。创建 PR 期间 main 新增摘要契约归 model、配置适配归 persistence 与目录读取预算隔离，已再次整合；界面源码与首次验证版本一致。
 
 ## 验证
 
@@ -46,8 +46,8 @@
 | 构建：共享 UI 依赖、Electron 主进程与 desktop renderer                            | 通过                                            |
 | iOS / Android Hermes 资源导出                                                     | 通过，均为 40.2 MB                              |
 | Rust workspace 构建、Clippy 与格式                                                | 通过，Clippy 使用 `-D warnings`                 |
-| Rust 完整 workspace 测试                                                          | 2007 项通过、0 失败、14 项原生安装/认证测试忽略 |
-| Rust 完整 workspace 覆盖率运行                                                    | 2007 项通过、0 失败、14 项忽略；HTML 已生成     |
+| Rust 完整 workspace 测试                                                          | 2009 项通过、0 失败、14 项原生安装/认证测试忽略 |
+| Rust 完整 workspace 覆盖率运行                                                    | 2009 项通过、0 失败、14 项忽略；HTML 已生成     |
 | TypeScript 格式、Oxlint、文档链接、git diff 空白检查                              | 通过；Oxlint 零警告、零错误                     |
 
 移动端主检查的完整文件清单：
@@ -111,7 +111,7 @@ npm exec --workspace=@ait/mobile -- expo export --platform ios --platform androi
 cargo build --workspace
 cargo clippy --workspace --all-targets -- -D warnings
 cargo fmt --all --check
-cargo test --workspace -- --test-threads=1
+cargo test --workspace -- --test-threads=4
 cargo llvm-cov --workspace --html -- --test-threads=1
 cargo llvm-cov report --json --summary-only --output-path /tmp/ait-pr-coverage-raw.json
 cargo llvm-cov report --lcov --output-path /tmp/ait-pr-coverage.lcov
@@ -127,13 +127,13 @@ git diff --cached --check
 
 | 范围      | 当前 covered/total | 当前行覆盖率 | 可比基线 | 变化（百分点） |
 | --------- | ------------------ | ------------ | -------- | -------------- |
-| Workspace | 56138/59333        | 94.6151%     | 94.6999% | -0.0848        |
+| Workspace | 56168/59355        | 94.6306%     | 94.7087% | -0.0780        |
 | Provider  | 26735/28408        | 94.1108%     | 94.2613% | -0.1505        |
 
-命令：`cargo llvm-cov --workspace --html -- --test-threads=1`。测量对应文首的源码树及 AIT 基线，完整 Rust 源码指纹为 `8da993d0ea9d59de2c01ab284591a4d4dfd17ff0f749544a2449076021474e37`；后续只更新文档与证据。基线使用 [crate visibility 覆盖率证据](../daemon/crate-visibility-pr-coverage-2026-10-09.json)：其 Rust 源码指纹与当前 main 基线完全一致，平台、features、串行设置及 14 项原生 ignore 范围相同，可以比较。
+命令：`cargo llvm-cov --workspace --html -- --test-threads=1`。测量对应文首的源码树及 AIT 基线，完整 Rust 源码指纹为 `1b73668657ae5b6a6e2b8277058f0b18cd9c03103b073362a2a85f8aff98cf67`；后续只更新文档与证据。基线使用 [摘要契约与目录准入覆盖率证据](../daemon/summary-contracts-directory-admission-coverage-2026-10-10.json)：其 Rust 源码指纹与最新 main 完全一致，平台、features、覆盖率串行设置及 14 项原生 ignore 范围相同，可以比较。
 
-共享制品：[逐 crate / 文件行覆盖率、源码 SHA-256、改动文件未覆盖行与忽略测试清单](paseo-desktop-app-pr-coverage-2026-10-10.json)。HTML 已生成在 `target/llvm-cov/html/index.html`；运行产物不纳入源码提交。普通测试与 instrumented 测试均为 2007 通过、0 失败、14 忽略，通过数量与覆盖率分开记录。
+共享制品：[逐 crate / 文件行覆盖率、源码 SHA-256、改动文件未覆盖行与忽略测试清单](paseo-desktop-app-pr-coverage-2026-10-10.json)。HTML 已生成在 `target/llvm-cov/html/index.html`；运行产物不纳入源码提交。普通测试（`--test-threads=4`）与 instrumented 测试（`--test-threads=1`）均为 2009 通过、0 失败、14 忽略，通过数量与覆盖率分开记录。
 
-重要未覆盖行为：Claude 的真实 HTTPS OAuth 请求及 `native_usage` 内 401/403 投影分支未执行；过期凭据/API-key 路径、HTTP 错误体脱敏和 quota 投影分别由离线测试覆盖，后续应补可注入响应的集成测试并验收已登录账号。Linux/Windows 专用路径未在本机测量。主分支保留的 `persistence/storage/summary_config` 两个文件仍未编译，与本次改动无关。Codex 速度投影模块为 100%（112/112 行），主机用量缓存模块为 95.8763%（93/97 行）。
+重要未覆盖行为：Claude 的真实 HTTPS OAuth 请求及 `native_usage` 内 401/403 投影分支未执行；过期凭据/API-key 路径、HTTP 错误体脱敏和 quota 投影分别由离线测试覆盖，后续应补可注入响应的集成测试并验收已登录账号。Linux/Windows 专用路径未在本机测量。主分支的摘要配置适配器已接入编译并纳入本次完整测量。Codex 速度投影模块为 100%（112/112 行），主机用量缓存模块为 95.8763%（93/97 行）。
 
 仍需真实 Android 返回键、iOS 叠层 Sheet、Electron 窗口拖动及真实已登录 CLI/订阅账号的产品验收；离线夹具、Chromium 和资源导出不能代表这些实机行为。

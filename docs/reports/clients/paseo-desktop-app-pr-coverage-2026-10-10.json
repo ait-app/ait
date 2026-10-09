@@ -1,9 +1,9 @@
 {
-  "generated_at": "2026-10-09T17:37:42.782120+00:00",
-  "base_revision": "b2dba057f90abc5f5f0fdd6b740a52fbaa5b31dd",
+  "generated_at": "2026-10-09T17:52:05.635975+00:00",
+  "base_revision": "afa2eb500dfb379d2ac34064f2a4df3a1de63f8f",
   "source_revision": "Measured tree on base_revision; subsequent changes affect only documentation and evidence",
-  "measured_tree": "7e359788ed8a0ef804bbf658b5b7c215a34e0216",
-  "rust_source_fingerprint_sha256": "8da993d0ea9d59de2c01ab284591a4d4dfd17ff0f749544a2449076021474e37",
+  "measured_tree": "d4b530d8ccf4bfcfed4e797fe3c90eec1c3cde77",
+  "rust_source_fingerprint_sha256": "1b73668657ae5b6a6e2b8277058f0b18cd9c03103b073362a2a85f8aff98cf67",
   "fingerprint_scope": "Sorted tracked and new .rs files, Cargo.toml files, Cargo.lock and rust-toolchain.toml; SHA-256 over path, NUL, bytes, NUL.",
   "platform": {
     "system": "Darwin",
@@ -32,29 +32,27 @@
     "coverage_includes_doctests": false,
     "native_ignored_tests_run": false,
     "unavailable_platforms": ["Linux", "Windows"],
-    "uncompiled_rust_files": [
-      "crates/persistence/src/storage/summary_config.rs",
-      "crates/persistence/src/storage/summary_config/tests.rs"
-    ]
+    "uncompiled_rust_files": [],
+    "summary_configuration_draft_now_compiled": true
   },
   "comparable_baseline": {
-    "artifact": "docs/reports/daemon/crate-visibility-pr-coverage-2026-10-09.json",
-    "source_revision": "fa5fc947a95a18bf0a95b606c8312b172e875d1f",
-    "rust_source_fingerprint_sha256": "d3a1bf41e98ca65b7dcdef66dd2a6a9d5a91693c0595780af6a35b26737c0e2f",
+    "artifact": "docs/reports/daemon/summary-contracts-directory-admission-coverage-2026-10-10.json",
+    "source_revision": "c5dc75fd4a398038bbc5749d50edce94f265c761",
+    "rust_source_fingerprint_sha256": "4bbab07fbdea2999838383261c7f4bc8e5e643cac68c7b3e05c01951d1120f06",
     "note": "Rust source fingerprint matches the exact main base; same macOS arm64, default features and ignored native tests.",
     "coverage": {
       "workspace": {
         "current": {
-          "covered": 56138,
-          "total": 59333,
-          "percent": 94.61513828729375
+          "covered": 56168,
+          "total": 59355,
+          "percent": 94.63061241681409
         },
         "baseline": {
-          "covered": 55854,
-          "total": 58980,
-          "percent": 94.6998982706002
+          "covered": 55880,
+          "total": 59002,
+          "percent": 94.70865394393412
         },
-        "delta_percentage_points": -0.08475998330645496
+        "delta_percentage_points": -0.07804152712003543
       },
       "provider": {
         "current": {
@@ -75,14 +73,14 @@
     "cargo fmt --all --check",
     "cargo build --workspace",
     "cargo clippy --workspace --all-targets -- -D warnings",
-    "cargo test --workspace -- --test-threads=1",
+    "cargo test --workspace -- --test-threads=4",
     "cargo llvm-cov --workspace --html -- --test-threads=1",
     "cargo llvm-cov report --json --summary-only --output-path /tmp/ait-pr-coverage-raw.json",
     "cargo llvm-cov report --lcov --output-path /tmp/ait-pr-coverage.lcov"
   ],
   "tests": {
     "ordinary_workspace": {
-      "passed": 2007,
+      "passed": 2009,
       "failed": 0,
       "ignored": 14,
       "ignored_tests": [
@@ -103,7 +101,7 @@
       ]
     },
     "instrumented_workspace": {
-      "passed": 2007,
+      "passed": 2009,
       "failed": 0,
       "ignored": 14,
       "ignored_tests": [
@@ -126,9 +124,9 @@
   },
   "coverage": {
     "workspace": {
-      "covered": 56138,
-      "total": 59333,
-      "percent": 94.61513828729375
+      "covered": 56168,
+      "total": 59355,
+      "percent": 94.63061241681409
     },
     "packages": {
       "api": {
@@ -142,9 +140,9 @@
         "percent": 97.5443383356071
       },
       "daemon": {
-        "covered": 1334,
-        "total": 1407,
-        "percent": 94.81165600568586
+        "covered": 1318,
+        "total": 1391,
+        "percent": 94.75197699496765
       },
       "domain": {
         "covered": 549,
@@ -152,24 +150,24 @@
         "percent": 100.0
       },
       "filesystem": {
-        "covered": 11595,
+        "covered": 11593,
         "total": 12216,
-        "percent": 94.91650294695481
+        "percent": 94.90013097576949
       },
       "metadata": {
-        "covered": 5464,
-        "total": 5804,
-        "percent": 94.14197105444521
+        "covered": 5462,
+        "total": 5801,
+        "percent": 94.15617996897086
       },
       "model": {
-        "covered": 1314,
-        "total": 1366,
-        "percent": 96.19326500732065
+        "covered": 1337,
+        "total": 1388,
+        "percent": 96.3256484149856
       },
       "persistence": {
-        "covered": 1675,
-        "total": 1750,
-        "percent": 95.71428571428571
+        "covered": 1696,
+        "total": 1769,
+        "percent": 95.87337478801582
       },
       "provider": {
         "covered": 26735,
@@ -177,9 +175,9 @@
         "percent": 94.11081385525205
       },
       "relay": {
-        "covered": 456,
+        "covered": 462,
         "total": 503,
-        "percent": 90.65606361829026
+        "percent": 91.84890656063618
       },
       "schedule": {
         "covered": 772,
@@ -222,7 +220,7 @@
     },
     {
       "path": "bins/daemon/src/host.rs",
-      "sha256": "b45cb18fbd2ee6cf8500e5be35029932530bcea7070b3e5c8521b218e5988189",
+      "sha256": "b515b5820432b6c2ec2e04022b47b6e27fb7f60ebb43422cdbfdef48b0e2000f",
       "covered": 454,
       "total": 466,
       "percent": 97.42489270386267
@@ -240,13 +238,6 @@
       "covered": 240,
       "total": 258,
       "percent": 93.02325581395348
-    },
-    {
-      "path": "bins/daemon/src/host/summary.rs",
-      "sha256": "c892f12d58c8c5c9fd5f630c6d7c06d2c6858ef16ab9538ee62661c6ccf1ad69",
-      "covered": 16,
-      "total": 16,
-      "percent": 100.0
     },
     {
       "path": "bins/daemon/src/host/voice.rs",
@@ -299,7 +290,7 @@
     },
     {
       "path": "crates/api/src/composition.rs",
-      "sha256": "9ad23c9aaa3bada2b2537f73d1dd7b1acdf05da05a634c295272e8b92926aa03",
+      "sha256": "3ebdd5a62c74d541bc27ff767e6cfd4ff3cd25f9562fdb33529ec7f16a9fcfa2",
       "covered": 63,
       "total": 63,
       "percent": 100.0
@@ -769,9 +760,9 @@
     {
       "path": "crates/filesystem/src/git/local/checkout.rs",
       "sha256": "ed2f732147cb4b1c67d918871cd1e41d56dc91b10cd9f5f02664940f6053ee59",
-      "covered": 1516,
+      "covered": 1515,
       "total": 1622,
-      "percent": 93.4648581997534
+      "percent": 93.403205918619
     },
     {
       "path": "crates/filesystem/src/git/local/checkout/branch_status.rs",
@@ -797,9 +788,9 @@
     {
       "path": "crates/filesystem/src/git/local/checkout/summary.rs",
       "sha256": "c6dd117f93d1a1f457283ee9b37ff4d9ee4adf195295677e42f24249f1ba9df3",
-      "covered": 112,
+      "covered": 111,
       "total": 118,
-      "percent": 94.91525423728814
+      "percent": 94.0677966101695
     },
     {
       "path": "crates/filesystem/src/git/local/git_fetch.rs",
@@ -1027,10 +1018,10 @@
     },
     {
       "path": "crates/metadata/src/connection/directory.rs",
-      "sha256": "cf5259340cee7c38632d5447092187edd93cb7378b6f4ff78d0dd518ef1e788b",
-      "covered": 65,
-      "total": 70,
-      "percent": 92.85714285714286
+      "sha256": "a7374f73fe8206e39d91de1146864bea4672c6bb56653c922327c5fde72e846b",
+      "covered": 63,
+      "total": 67,
+      "percent": 94.02985074626865
     },
     {
       "path": "crates/metadata/src/connection/push.rs",
@@ -1315,16 +1306,16 @@
     {
       "path": "crates/model/src/polling.rs",
       "sha256": "5a153e4cf376db1d55d29ad8188c60d13a7dceaf560f8b513428a4f5dfedf606",
-      "covered": 87,
+      "covered": 88,
       "total": 100,
-      "percent": 87.0
+      "percent": 88.0
     },
     {
       "path": "crates/model/src/runtime.rs",
-      "sha256": "fce923e93d2a24ac8b2552a4e60c4b3a63a11ed5d19992a19e89200beef07990",
-      "covered": 92,
-      "total": 95,
-      "percent": 96.84210526315789
+      "sha256": "7e1b20305f6702b77783823183a50c8b900084aea31d5c978261845802015ed7",
+      "covered": 114,
+      "total": 117,
+      "percent": 97.43589743589743
     },
     {
       "path": "crates/model/src/server.rs",
@@ -1371,9 +1362,9 @@
     {
       "path": "crates/persistence/src/storage/daemon_config.rs",
       "sha256": "3956d96c199000ac85c3fd02e6eddd5e9edbecdb51946232f04858db3f753d2f",
-      "covered": 310,
+      "covered": 312,
       "total": 325,
-      "percent": 95.38461538461539
+      "percent": 96.0
     },
     {
       "path": "crates/persistence/src/storage/project_config.rs",
@@ -1439,6 +1430,13 @@
       "percent": 94.64285714285714
     },
     {
+      "path": "crates/persistence/src/storage/summary_config.rs",
+      "sha256": "6711a7e9a4bf07fce1f1c9603fbc40fc385e24a554a3e0c1cd37cf9dfaa9dde4",
+      "covered": 19,
+      "total": 19,
+      "percent": 100.0
+    },
+    {
       "path": "crates/persistence/src/storage/workspace_labels.rs",
       "sha256": "9490a646070af17f60e06fd22edfddeaa475a1c30f4cce3691268bf6fe25baa0",
       "covered": 294,
@@ -1454,7 +1452,7 @@
     },
     {
       "path": "crates/provider/src/composition.rs",
-      "sha256": "c9fdfd337fd3cf4653c814a0b8eb90dc5d8c1c37a1d409d1d7d3c2d29af8ff86",
+      "sha256": "4de04ddd4270c19832dc85191b920524dd9a0390163de0323e47f5f5983f4102",
       "covered": 58,
       "total": 58,
       "percent": 100.0
@@ -1468,7 +1466,7 @@
     },
     {
       "path": "crates/provider/src/connection/directory.rs",
-      "sha256": "c3a50bdb0e8290ebf2838d37bfa419e0aaa816110f5b2b498926f48fe622db78",
+      "sha256": "c84451cdc3a03e1c1609852e0cc362868d6511171d94a72dd7d82e3448626fef",
       "covered": 129,
       "total": 149,
       "percent": 86.57718120805369
@@ -1517,7 +1515,7 @@
     },
     {
       "path": "crates/provider/src/installation.rs",
-      "sha256": "3fb0e080b0941069be95ba7d430e2a4946301b6d3d690b17253b947ea0c63726",
+      "sha256": "1cbbad9aed8fdaa42ee7fdd1a8fdf4dcae5d501e1b72bb9f5f6a2dc2c8cb2130",
       "covered": 6,
       "total": 6,
       "percent": 100.0
@@ -2410,7 +2408,7 @@
     },
     {
       "path": "crates/provider/src/service/agent_manager.rs",
-      "sha256": "a88b2a796b430c8073d57ff2d373f4fa1f5f88e94e801c4aaaa00dada617b391",
+      "sha256": "955776a2a2913449343feeff960527fdb52529ddb97f539c69a22a746a340850",
       "covered": 885,
       "total": 908,
       "percent": 97.4669603524229,
@@ -2451,7 +2449,7 @@
     },
     {
       "path": "crates/provider/src/service/agent_manager/generated_titles.rs",
-      "sha256": "8ff9efe68ecaf2ec223e08e87bfa89d92047643a257eb9831cd86e862f8086fa",
+      "sha256": "9568db43fad261ae36c1cdbaa6f7662c5d85646dcfd1230c18758803ed45734d",
       "covered": 90,
       "total": 99,
       "percent": 90.9090909090909
@@ -2557,7 +2555,7 @@
     },
     {
       "path": "crates/provider/src/service/summary_generation.rs",
-      "sha256": "7cc8f25812bb0941c30ae9399217c15eea46def56ff80750e2ec9459e7307980",
+      "sha256": "0acdfc5f184ee978063859a20561c561adca1d1ca12bbe01632fd9c676a71b16",
       "covered": 78,
       "total": 80,
       "percent": 97.5
@@ -2578,7 +2576,7 @@
     },
     {
       "path": "crates/provider/src/service/summary_generation/test_config.rs",
-      "sha256": "953a1685671d443eb34a9b943e90ffc38c5b71d50817a13299ed528aecc52990",
+      "sha256": "68cd489437f8476974e9f2f950999c1162ca1b7adfa97b62f9f206b593df3398",
       "covered": 26,
       "total": 27,
       "percent": 96.29629629629629
@@ -2656,9 +2654,9 @@
     {
       "path": "crates/relay/src/bridge.rs",
       "sha256": "359641f9ddd5de9248d47ad249ff226fc478a8310b845c0c9652a49c801362f2",
-      "covered": 50,
+      "covered": 56,
       "total": 68,
-      "percent": 73.52941176470588
+      "percent": 82.3529411764706
     },
     {
       "path": "crates/relay/src/download.rs",
@@ -2956,9 +2954,8 @@
   ],
   "uncovered_lines_source": "LLVM LCOV export from the same completed instrumented workspace run; changed files only.",
   "important_uncovered_behavior": [
-    "Claude native_usage real HTTPS OAuth request and its 401/403 projection branch are unexecuted. Expiry/API-key paths, HTTP response-body redaction and quota projection have separate offline tests; add an injected-response integration test and verify a real signed-in account in follow-up.",
     "Native installed/authenticated tests remain ignored; real subscription quota and service tier availability need product acceptance.",
     "Linux and Windows-specific implementations are not measured by this macOS run.",
-    "The pre-existing persistence summary_config files remain uncompiled and outside this change."
+    "Claude native_usage real HTTPS OAuth request and its 401/403 projection branch are unexecuted; expiry/API-key paths, HTTP error-body redaction and quota projection have separate offline tests."
   ]
 }

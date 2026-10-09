@@ -5,7 +5,7 @@ use std::sync::Mutex;
 use domain::summary::SummaryError;
 use serde_json::{Value, json};
 
-use crate::summary::SummaryConfiguration;
+use model::summary::SummaryConfiguration;
 
 #[derive(Debug)]
 pub(crate) struct Configuration(Mutex<Value>);

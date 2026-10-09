@@ -18,8 +18,9 @@ metadata 的 workspace 自动化还直接调用 `file::storage::project_config::
 
 ## 决策
 
-1. crate 改名为 `persistence`，目录为 `crates/persistence`。它保留 `File`、`watch`、
-   `registry::FileRegistry` 和 `storage::*` 文件适配器，仍只依赖 model 和 domain。
+1. crate 改名为 `persistence`，目录为 `crates/persistence`。它保留 `File`、
+   `registry::FileRegistry` 和 `storage::*` 文件适配器，仍只依赖 model 和 domain
+   （没有消费者的 `watch` 观察模块随后由 [ADR-116](adr-116-crate-visibility.md) 删除）。
    创建回执适配器从 `file::creation` 移到 `persistence::storage::creation`，所有具体适配器
    都位于 `storage` 下。
 2. 宿主专用模块迁回 `bins/daemon`：

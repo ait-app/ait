@@ -15,7 +15,8 @@
 
 ## 架构决策
 
-- [ADR-118：原生账号用量与 Codex 速度目录](decisions/providers/adr-118-native-account-usage-and-codex-speed.md)：会话实际账号、只读凭据边界、主机缓存与原生速度档位。
+- [ADR-119：原生账号用量与 Codex 速度目录](decisions/providers/adr-119-native-account-usage-and-codex-speed.md)：会话实际账号、只读凭据边界、主机缓存与原生速度档位。
+- [ADR-118：摘要接口归 model，配置文件适配归 persistence](decisions/daemon/adr-118-summary-contracts-and-persistence-configuration.md)：`SummaryGenerator`/`SummaryConfiguration` 移入 `model::summary`，daemon 注入 persistence 的配置适配器并删除自有实现。
 - [ADR-117：终端配色查询与外观更新生命周期](decisions/clients/adr-117-terminal-palette-and-appearance-lifetime.md)：显示端回答配色查询，workspace 和终端实例在外观变化时保持存活。
 - [ADR-116：库 crate 只公开被其他 crate 使用的项](decisions/daemon/adr-116-crate-visibility.md)：默认私有，启用 `unreachable_pub`，删除收缩后暴露的未使用代码与转发 `pub use`。
 - [ADR-115：OpenCode 官方 ACP Provider](decisions/providers/adr-115-opencode-acp-provider.md)：1.x / 2.x 官方 stdio 协议、按原生能力处理问答和辅助会话、审批、取消和历史重放，取代私有 HTTP/SSE adapter。
@@ -33,7 +34,7 @@
 - [ADR-104：Filesystem 仅通过 model 契约协作](decisions/workspace/adr-104-filesystem-model-collaboration.md)：共享观察和纯投影归 model，项目登记、命名与 setup 通过接口注入，移除最后一条功能 crate 间依赖。
 - [ADR-103：Terminal 仅依赖 model 的共享契约](decisions/daemon/adr-103-terminal-model-dependency.md)：registry、Workspace 活动和连接事件直接使用 model，移除 metadata 依赖。
 - [ADR-102：共享协作契约归 model，Provider 不依赖 metadata](decisions/providers/adr-102-provider-metadata-independence.md)：共享记录、协议、事件、创建回执和存储下沉，Workspace 业务通过接口协作。
-- [ADR-101：Provider 拥有摘要生成能力](decisions/providers/adr-101-provider-summary-generator.md)：生成接口归 provider，配置与消费者通过宿主适配。
+- [ADR-101：Provider 拥有摘要生成能力](decisions/providers/adr-101-provider-summary-generator.md)：有界生成实现归 provider；接口与配置适配归属由 ADR-118 修订。
 - [ADR-100：功能 crate 作为完整服务安装](decisions/daemon/adr-100-crate-level-service-installation.md)：各功能 crate 通过具体服务类型按 crate 整体安装；基础连接声明归属由 ADR-108 修订。
 - [ADR-097：Google Play 内部测试手动发布](decisions/clients/adr-097-google-play-internal-release.md)：签名 AAB、远端版本计数与内部测试草稿或发布。
 - [ADR-099：Provider 自选辅助小模型](decisions/providers/adr-099-provider-owned-auxiliary-models.md)：能力声明、原生认证与用户覆盖。
@@ -99,6 +100,7 @@
 ## 工程规范与验证
 
 - [Paseo desktop/app 选定改动移植](reports/clients/paseo-desktop-app-port-2026-10-10.md)：17 项推荐与产品增强、原生适配和定向验证。
+- [摘要契约与目录准入：提交验证](reports/daemon/summary-contracts-directory-admission-validation-2026-10-10.md)：摘要草稿接入、目录预算隔离、完整测试与可比基线覆盖率。
 - [Crate 可见性与最新 main 整合验证](reports/daemon/crate-visibility-pr-validation-2026-10-09.md)：PR #239 的 ACP 冲突处理、完整测试、逐 crate 覆盖率与源码证据。
 - [OpenCode 官方 ACP 迁移验证](reports/providers/opencode-acp-2026-10-09.md)：真实原生问答、审批、恢复、无工具摘要及覆盖率证据。
 

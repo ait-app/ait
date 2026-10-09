@@ -3,9 +3,10 @@
 use std::path::Path;
 use std::sync::Arc;
 
+use domain::summary::SummaryError;
 use model::storage::daemon_config::DaemonConfigStore;
 use model::storage::project::ProjectConfigStore;
-use model::summary::{SummaryConfiguration, SummaryError};
+use model::summary::SummaryConfiguration;
 use serde_json::Value;
 
 use super::project_config::LocalProjectConfigStore;
@@ -13,7 +14,7 @@ use super::project_config::LocalProjectConfigStore;
 /// Live daemon preferences and repository wording styles backed by local configuration files.
 /// Blocking configuration reads must run outside an async reactor.
 #[derive(Debug)]
-pub(crate) struct LocalSummaryConfiguration {
+pub struct LocalSummaryConfiguration {
     daemon: Arc<dyn DaemonConfigStore>,
 }
 
@@ -21,7 +22,7 @@ impl LocalSummaryConfiguration {
     /// Bind the shared `daemon` store to local project configuration reads.
     /// Returns an adapter that reads current preferences on every call without caching a snapshot.
     #[must_use]
-    pub(crate) fn new(daemon: Arc<dyn DaemonConfigStore>) -> Self {
+    pub fn new(daemon: Arc<dyn DaemonConfigStore>) -> Self {
         Self { daemon }
     }
 }
