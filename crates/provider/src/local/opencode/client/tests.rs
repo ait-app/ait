@@ -52,3 +52,47 @@ fn native_handles_accept_encoded_and_legacy_objects_and_reject_invalid_data() {
         );
     }
 }
+
+#[test]
+fn permission_control_exposes_only_native_effects_and_keeps_unselected_rules() {
+    use domain::agent_runtime::StoredAgentConfig;
+    let mut config = StoredAgentConfig::default();
+    assert_eq!(super::permission(&config), None);
+    let feature = super::features(&config).remove(0);
+    assert_eq!(feature["type"], "select");
+    assert!(feature["value"].is_null());
+    assert_eq!(
+        feature["options"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .map(|option| option["id"].as_str().unwrap())
+            .collect::<Vec<_>>(),
+        ["allow", "ask", "deny"]
+    );
+    for effect in ["allow", "ask", "deny"] {
+        config.feature_values = Some(std::collections::BTreeMap::from([(
+            "permission".into(),
+            json!(effect),
+        )]));
+        super::validate(&config).unwrap();
+        assert_eq!(super::permission(&config), Some(effect));
+        assert_eq!(super::features(&config)[0]["value"], effect);
+    }
+    config.feature_values = Some(std::collections::BTreeMap::from([(
+        "permission".into(),
+        Value::Null,
+    )]));
+    super::validate(&config).unwrap();
+    assert_eq!(super::permission(&config), None);
+    assert!(super::features(&config)[0]["value"].is_null());
+    for (key, value) in [
+        ("permission", json!(true)),
+        ("permission", json!("auto")),
+        ("auto_approve", json!(true)),
+        ("unknown", Value::Null),
+    ] {
+        config.feature_values = Some(std::collections::BTreeMap::from([(key.into(), value)]));
+        assert!(super::validate(&config).is_err());
+    }
+}

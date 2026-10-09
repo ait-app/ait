@@ -11,6 +11,8 @@
 - [daemon 使用与连接协议](operations/daemon.md)：配置、鉴权、数据目录和生命周期。
 - [当前架构](architecture/README.md)：能力归属、依赖边界和数据所有权。
 
+- [OpenCode 使用问题追踪](reports/providers/opencode-feedback-2026-10-09.md)：Build 图标与原生权限管理问题。
+
 ## 架构决策
 
 - [ADR-114：iOS 终端组合输入归 UIKit](decisions/clients/adr-114-ios-terminal-ime.md)：原生组合范围识别、确认文字提交与终端控制键分离。

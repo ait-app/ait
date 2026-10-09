@@ -8,6 +8,8 @@
 - [Codex 首轮回退兼容与远程归档诊断](providers/codex-first-turn-rewind-2026-10-08.md)
 - [DSH 权限目录兼容与真实会话继承](providers/dsh-permission-catalog.md)
 
+- [OpenCode 使用问题追踪：图标与权限管理](providers/opencode-feedback-2026-10-09.md)
+
 ## Daemon 与协议
 
 - [Persistence 与 filesystem 能力边界：PR 验证](daemon/persistence-filesystem-pr-validation-2026-10-09.md)

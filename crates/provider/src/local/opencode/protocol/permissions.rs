@@ -7,6 +7,77 @@ use reqwest::Method;
 use serde_json::{Value, json};
 
 impl Api {
+    /// Apply an explicitly selected wildcard rule through the native session API.
+    /// Existing rules are retained; the new rule has native last-match precedence.
+    /// Errors reject busy sessions, invalid effects, oversized rules and unverified writes.
+    pub(in crate::local::opencode) async fn set_permission(
+        &self,
+        session: &str,
+        effect: &str,
+    ) -> Result<(), ProtocolError> {
+        if !matches!(effect, "allow" | "ask" | "deny") {
+            return Err(failure(
+                Fault::AgentCapabilityUnsupported,
+                "invalid permission selection",
+            ));
+        }
+        if !self.idle(session).await? {
+            return Err(failure(
+                Fault::SessionBusy,
+                "OpenCode session is active elsewhere",
+            ));
+        }
+        let path = self.path(session, "");
+        let info = self.json(Method::GET, &path, None).await?;
+        let (key, rule) = match self.version {
+            Version::V1 => (
+                "permission",
+                json!({"permission":"*","pattern":"*","action":effect}),
+            ),
+            Version::V2 => (
+                "permissions",
+                json!({"action":"*","resource":"*","effect":effect}),
+            ),
+        };
+        let rules = match self.data(&info).get(key) {
+            None | Some(Value::Null) => &[][..],
+            Some(Value::Array(rules)) if rules.len() <= 4096 => rules.as_slice(),
+            Some(_) => {
+                return Err(failure(
+                    Fault::ProviderFailed,
+                    "invalid native permission rules",
+                ));
+            }
+        };
+        if rules.last() == Some(&rule) {
+            return Ok(());
+        }
+        if rules.len() == 4096 {
+            return Err(failure(
+                Fault::RunLimitExceeded,
+                "too many native permission rules",
+            ));
+        }
+        let mut expected = Vec::with_capacity(rules.len() + 1);
+        expected.extend_from_slice(rules);
+        expected.push(rule.clone());
+        let update = match self.version {
+            // V1 appends rules; sending the previous array again duplicates it on each change.
+            Version::V1 => json!({key:[rule]}),
+            // V2 replaces rules, so preserve the native rules before appending the selection.
+            Version::V2 => json!({key:expected}),
+        };
+        self.json(Method::PATCH, &path, Some(&update)).await?;
+        let confirmed = self.json(Method::GET, &path, None).await?;
+        if self.data(&confirmed).get(key).and_then(Value::as_array) != Some(&expected) {
+            return Err(failure(
+                Fault::ProviderFailed,
+                "native permission update was not confirmed",
+            ));
+        }
+        Ok(())
+    }
+
     pub(in crate::local::opencode) async fn pending_permissions(
         &self,
         session: &str,
@@ -55,6 +126,9 @@ impl Api {
         Ok(())
     }
 }
+
+#[cfg(test)]
+mod tests;
 
 pub(in crate::local::opencode) fn normalize(
     version: Version,

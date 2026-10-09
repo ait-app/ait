@@ -36,6 +36,7 @@ pub(in crate::local::opencode) struct StateData {
     pub(in crate::local::opencode) permission: Value,
     pub(in crate::local::opencode) agent: String,
     pub(in crate::local::opencode) permission_updates: usize,
+    pub(in crate::local::opencode) permission_after_patch: Option<Value>,
     pub(in crate::local::opencode) model: Value,
     pub(in crate::local::opencode) history: Vec<Value>,
     pub(in crate::local::opencode) submissions: usize,
@@ -94,6 +95,7 @@ impl Fixture {
             permission: Value::Null,
             agent: "build".into(),
             permission_updates: 0,
+            permission_after_patch: None,
             model: Value::Null,
             history: Vec::new(),
             submissions: 0,
@@ -269,6 +271,9 @@ fn patch_permissions(state: &mut StateData, v2: bool, body: &Value) -> Value {
         let mut rules = state.permission.as_array().cloned().unwrap_or_default();
         rules.extend(body["permission"].as_array().unwrap().iter().cloned());
         state.permission = json!(rules);
+    }
+    if let Some(permission) = state.permission_after_patch.take() {
+        state.permission = permission;
     }
     if v2 { Value::Null } else { session_info(state) }
 }
