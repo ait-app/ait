@@ -36,14 +36,14 @@ struct State {
 pub struct Broker(Arc<Mutex<State>>);
 /// Registration lease. Dropping it removes the host and settles its outstanding requests.
 #[derive(Debug)]
-pub struct Registration {
+pub(crate) struct Registration {
     broker: Broker,
     id: String,
 }
 impl Registration {
     /// Connection-owned subscription identity returned to the client.
     #[must_use]
-    pub fn id(&self) -> &str {
+    pub(crate) fn id(&self) -> &str {
         &self.id
     }
 }
@@ -67,7 +67,7 @@ impl Broker {
     /// Register the host's actual supported commands and allocate a releaseable lease.
     /// # Errors
     /// Rejects malformed declarations or exhausted host capacity.
-    pub fn register(
+    pub(crate) fn register(
         &self,
         request: Register,
         outbound: Outbound,
@@ -300,7 +300,7 @@ impl Broker {
     /// Accept a callback only from a registration owned by this physical connection.
     /// Malformed matching responses settle the pending call as a safe browser error.
     #[must_use]
-    pub fn receive(&self, id: &str, payload: Value, owners: &BTreeSet<&str>) -> bool {
+    pub(crate) fn receive(&self, id: &str, payload: Value, owners: &BTreeSet<&str>) -> bool {
         let Ok(mut state) = self.0.lock() else {
             return false;
         };

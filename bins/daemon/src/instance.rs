@@ -15,7 +15,7 @@ pub(super) struct InstanceLease {
 }
 
 impl InstanceLease {
-    pub fn acquire(directory: &Path) -> anyhow::Result<Self> {
+    pub(crate) fn acquire(directory: &Path) -> anyhow::Result<Self> {
         create_directory(directory)?;
         let directory = directory
             .canonicalize()

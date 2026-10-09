@@ -13,7 +13,7 @@ use serde::Deserialize;
 /// Daemon startup arguments; CLI values override environment and TOML settings.
 #[derive(Debug, Parser)]
 #[command(name = "daemon", version, about = "Ait local daemon")]
-pub struct Cli {
+pub(crate) struct Cli {
     /// Daemon data directory (default: `AIT_SERVER_DATA_DIR` or ~/.ait-server).
     #[arg(long)]
     data_dir: Option<PathBuf>,
@@ -41,7 +41,7 @@ struct FileConfig {
 
 /// Resolved startup settings with a redacted credential and validated browser origins.
 #[derive(Debug, Clone)]
-pub struct Config {
+pub(crate) struct Config {
     /// Directory owned by the host's process lease.
     pub data_dir: PathBuf,
     /// Resolved socket address.
@@ -60,7 +60,7 @@ impl Config {
     /// Both policies are injected by the host, keeping transport dependencies outside this crate.
     /// # Errors
     /// Returns missing credentials, validation, file, TOML, address, or logging errors.
-    pub fn load(
+    pub(crate) fn load(
         cli: Cli,
         env: impl Fn(&str) -> Option<OsString>,
         validate_token: impl FnOnce(&str) -> anyhow::Result<()>,

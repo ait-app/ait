@@ -30,7 +30,7 @@ use crate::ports::agent_session::{
 
 /// A native Codex executable. Authentication remains in Codex's own environment and storage.
 #[derive(Debug, Clone)]
-pub struct CodexClient {
+pub(crate) struct CodexClient {
     program: PathBuf,
     deadline: Duration,
     capabilities: std::sync::Arc<std::sync::atomic::AtomicU8>,
@@ -58,7 +58,7 @@ impl CodexClient {
 
     /// Use `program` directly without invoking a shell. Requests have a ten-second deadline.
     #[must_use]
-    pub fn new(program: PathBuf) -> Self {
+    pub(crate) fn new(program: PathBuf) -> Self {
         Self {
             program,
             deadline: Duration::from_secs(10),
@@ -70,7 +70,7 @@ impl CodexClient {
 
     /// Store decoded native image output in a private, persistent directory.
     #[must_use]
-    pub fn with_image_directory(mut self, directory: PathBuf) -> Self {
+    pub(crate) fn with_image_directory(mut self, directory: PathBuf) -> Self {
         self.images = super::images::ImageStore::new(directory);
         self
     }

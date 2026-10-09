@@ -20,7 +20,7 @@ use crate::{
 
 /// whisper.cpp CLI and its already-installed model.
 #[derive(Debug, Clone)]
-pub struct Whisper {
+pub(crate) struct Whisper {
     binary: PathBuf,
     model: PathBuf,
 }
@@ -29,7 +29,7 @@ impl Whisper {
     /// Use an executable path/name and a local ggml model; no download is performed.
     /// # Errors
     /// Rejects missing model files or an empty executable name.
-    pub fn new(binary: PathBuf, model: PathBuf) -> Result<Self, Error> {
+    pub(crate) fn new(binary: PathBuf, model: PathBuf) -> Result<Self, Error> {
         validate(&binary, &model)?;
         Ok(Self { binary, model })
     }
@@ -69,7 +69,7 @@ impl Transcriber for Whisper {
 
 /// Piper CLI and its already-installed ONNX voice (with adjacent JSON configuration).
 #[derive(Debug, Clone)]
-pub struct Piper {
+pub(crate) struct Piper {
     binary: PathBuf,
     model: PathBuf,
 }
@@ -78,7 +78,7 @@ impl Piper {
     /// Use an executable path/name and a local voice model; no download is performed.
     /// # Errors
     /// Rejects missing model files or an empty executable name.
-    pub fn new(binary: PathBuf, model: PathBuf) -> Result<Self, Error> {
+    pub(crate) fn new(binary: PathBuf, model: PathBuf) -> Result<Self, Error> {
         validate(&binary, &model)?;
         Ok(Self { binary, model })
     }

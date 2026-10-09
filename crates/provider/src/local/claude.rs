@@ -28,7 +28,7 @@ use crate::protocol::{provider::Details, timeline::NativeItem};
 
 /// Local Claude Code executable; credentials and native tools remain owned by Claude Code.
 #[derive(Debug, Clone)]
-pub struct ClaudeClient {
+pub(crate) struct ClaudeClient {
     program: PathBuf,
     config_dir: Option<PathBuf>,
     deadline: Duration,
@@ -41,7 +41,7 @@ impl ClaudeClient {
     /// Use `program` without a shell and inherit Claude Code's configuration and authentication.
     /// Control requests time out after thirty seconds; foreground turns have no time limit.
     #[must_use]
-    pub fn new(program: PathBuf) -> Self {
+    pub(crate) fn new(program: PathBuf) -> Self {
         Self {
             program,
             config_dir: std::env::var_os("CLAUDE_CONFIG_DIR").map(PathBuf::from),
@@ -54,7 +54,7 @@ impl ClaudeClient {
 
     /// Store decoded native image output in a private, persistent directory.
     #[must_use]
-    pub fn with_image_directory(mut self, directory: PathBuf) -> Self {
+    pub(crate) fn with_image_directory(mut self, directory: PathBuf) -> Self {
         self.images = super::images::ImageStore::new(directory);
         self
     }

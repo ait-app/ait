@@ -41,11 +41,11 @@ pub struct Progress {
 }
 #[derive(Debug)]
 pub(crate) struct Checkpoint {
-    pub schedule_id: String,
-    pub run_id: String,
-    pub agent_id: Option<String>,
-    pub workspace_id: Option<String>,
-    pub reply: tokio::sync::oneshot::Sender<Result<(), Error>>,
+    pub(crate) schedule_id: String,
+    pub(crate) run_id: String,
+    pub(crate) agent_id: Option<String>,
+    pub(crate) workspace_id: Option<String>,
+    pub(crate) reply: tokio::sync::oneshot::Sender<Result<(), Error>>,
 }
 impl Progress {
     /// Persist allocated identities before further side effects.

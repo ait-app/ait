@@ -60,7 +60,7 @@ Workspace 登记、setup 和命名仍由 metadata 实现，通过 `model::worksp
 provider。调用处直接导入共享定义，metadata 的旧共享转发路径已移除。
 详见 [ADR-102](../decisions/providers/adr-102-provider-metadata-independence.md)。
 
-`persistence` 提供单文件读取、原子写入和可取消的轮询观察，并承载通用 FileRegistry 的缓存、
+`persistence` 提供单文件读取与原子写入，并承载通用 FileRegistry 的缓存、
 提交锁、事务 hooks 和冻结。它通过 model/domain 契约实现 registry、创建回执、daemon/project
 配置、project icon、push token、Agent runtime 和 schedule 文件持久化。
 `model::storage` 只声明共享存储接口，不执行文件 I/O，也不依赖 persistence；功能服务保留

@@ -1,11 +1,8 @@
 //! Forge search and pull request use cases.
 
-pub use crate::forge::ports::forge::{
-    CheckAnnotation, CheckDetails, CheckFailedJob, CheckOutput, ForgeAuthState, ForgeFailureKind,
-    ForgeRuntime, ForgeRuntimeError, ForgeSearch, ForgeSearchItem, ForgeSearchKind,
-    PullRequestCheck, PullRequestCreated, PullRequestMergeMethod, PullRequestMergeable,
-    PullRequestStatus, PullRequestStatusRead, PullRequestTimeline, PullRequestTimelineItem,
-    TimelineCommentLocation, TimelineError, TimelineErrorKind, TimelineReviewState,
+use crate::forge::ports::forge::{
+    CheckDetails, ForgeFailureKind, ForgeRuntime, ForgeRuntimeError, ForgeSearch, ForgeSearchKind,
+    PullRequestCreated, PullRequestMergeMethod, PullRequestStatusRead, PullRequestTimeline,
 };
 
 /// Thin application boundary over the blocking forge adapter.
@@ -31,7 +28,7 @@ impl Forge {
     ///
     /// # Errors
     /// Returns categorized CLI, authentication, remote, or parsing failures.
-    pub fn search(
+    pub(crate) fn search(
         &self,
         cwd: &str,
         query: &str,
@@ -45,7 +42,7 @@ impl Forge {
     ///
     /// # Errors
     /// Returns invalid metadata, Git push, CLI, authentication, or forge failures.
-    pub fn create_pull_request(
+    pub(crate) fn create_pull_request(
         &self,
         cwd: &str,
         title: &str,
@@ -67,7 +64,7 @@ impl Forge {
     ///
     /// # Errors
     /// Returns categorized local Git or forge failures.
-    pub fn current_pull_request_status(
+    pub(crate) fn current_pull_request_status(
         &self,
         cwd: &str,
     ) -> Result<PullRequestStatusRead, ForgeRuntimeError> {
@@ -78,7 +75,7 @@ impl Forge {
     ///
     /// # Errors
     /// Returns current-request resolution, validation, or forge command failures.
-    pub fn merge_current_pull_request(
+    pub(crate) fn merge_current_pull_request(
         &self,
         cwd: &str,
         merge_method: PullRequestMergeMethod,
@@ -90,7 +87,7 @@ impl Forge {
     ///
     /// # Errors
     /// Rejects a missing enable method, an unexpected disable method, or forge failures.
-    pub fn set_current_pull_request_auto_merge(
+    pub(crate) fn set_current_pull_request_auto_merge(
         &self,
         cwd: &str,
         enabled: bool,
@@ -118,7 +115,7 @@ impl Forge {
     ///
     /// # Errors
     /// Returns identity, CLI, authentication, or forge failures.
-    pub fn pull_request_timeline(
+    pub(crate) fn pull_request_timeline(
         &self,
         cwd: &str,
         pr_number: u64,
@@ -133,7 +130,7 @@ impl Forge {
     ///
     /// # Errors
     /// Returns invalid check identity, CLI, authentication, or forge failures.
-    pub fn check_details(
+    pub(crate) fn check_details(
         &self,
         cwd: &str,
         query: crate::forge::ports::forge::CheckDetailsQuery<'_>,

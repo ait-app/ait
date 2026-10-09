@@ -63,7 +63,7 @@ pub struct CreatedWorkspace {
     /// Persisted workspace.
     pub workspace: PersistedWorkspaceRecord,
     /// Owning project used for descriptor construction.
-    pub project: PersistedProjectRecord,
+    pub(crate) project: PersistedProjectRecord,
 }
 
 /// Archive scope independent of the transport schema.
@@ -96,7 +96,7 @@ pub struct ArchiveWorktree {
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct ArchivedWorktree {
     /// Workspace identities archived by this operation.
-    pub workspace_ids: Vec<String>,
+    workspace_ids: Vec<String>,
 }
 
 /// An archive marked in the registry, awaiting resource closure before disk removal.
@@ -226,7 +226,7 @@ impl Worktrees {
     }
 
     /// Queue naming after creation, preserving any explicit branch selection.
-    pub fn name_workspace(&self, id: String, context: String) {
+    pub(crate) fn name_workspace(&self, id: String, context: String) {
         if let Some(names) = &self.names {
             names.schedule(id, context, None);
         }
@@ -236,7 +236,7 @@ impl Worktrees {
     ///
     /// # Errors
     /// Returns categorized Git and filesystem failures.
-    pub fn list(&self, cwd: &str) -> Result<Vec<ManagedWorktreeInfo>, WorktreesError> {
+    pub(crate) fn list(&self, cwd: &str) -> Result<Vec<ManagedWorktreeInfo>, WorktreesError> {
         self.managed.list(cwd).map_err(Into::into)
     }
 
@@ -339,7 +339,7 @@ impl Worktrees {
     ///
     /// # Errors
     /// Returns invalid selection, ownership, registry, Git, or filesystem failures.
-    pub fn archive(
+    pub(crate) fn archive(
         &self,
         input: &ArchiveWorktree,
         timestamp: &str,

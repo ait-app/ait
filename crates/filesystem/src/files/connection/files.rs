@@ -15,8 +15,8 @@ pub const METHODS: &[MethodSpec] = &[
     MethodSpec::request("file.upload.request"),
 ];
 
+use crate::files::ports::files as port;
 use crate::files::rpc::files::project_version;
-use crate::files::service::files as port;
 use model::ErrorCode;
 use model::methods::MethodSpec;
 use serde::Serialize;
@@ -26,7 +26,7 @@ use crate::dispatch::State as Shared;
 mod connection;
 /// Binary preview and shared download chunk reading.
 pub mod transfer;
-pub use connection::FileConnection;
+pub(crate) use connection::FileConnection;
 pub(crate) use connection::FileRequest;
 
 async fn execute(method: String, params: Value, state: &Shared) -> Result<Value, ErrorCode> {

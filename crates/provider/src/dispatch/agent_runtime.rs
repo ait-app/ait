@@ -3,7 +3,11 @@ use serde_json::Value;
 
 use crate::dispatch::State as Shared;
 
-pub async fn dispatch(method: &str, mut params: Value, state: &Shared) -> Result<Reply, ErrorCode> {
+pub(crate) async fn dispatch(
+    method: &str,
+    mut params: Value,
+    state: &Shared,
+) -> Result<Reply, ErrorCode> {
     let terminal_ids = if method == "agent.items.close.request" {
         let request: crate::protocol::agent_lifecycle::AgentItemsCloseRequest =
             serde_json::from_value(params.clone()).map_err(|_| ErrorCode::InvalidMessage)?;

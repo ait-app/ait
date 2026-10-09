@@ -87,36 +87,36 @@ pub enum DirectoryError {
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub struct ProjectConfigRevision {
     /// Last modification time in Unix milliseconds.
-    pub mtime_ms: f64,
+    pub(crate) mtime_ms: f64,
     /// File size in bytes.
-    pub size: f64,
+    pub(crate) size: f64,
 }
 
 /// Successful project configuration read.
 #[derive(Debug, Clone, PartialEq)]
-pub struct ProjectConfigRead {
+pub(crate) struct ProjectConfigRead {
     /// Canonical active project root.
-    pub repo_root: String,
+    pub(crate) repo_root: String,
     /// Parsed document, or none when `ait.json` is absent.
-    pub config: Option<serde_json::Value>,
+    pub(crate) config: Option<serde_json::Value>,
     /// Matching file revision, or none when absent.
-    pub revision: Option<ProjectConfigRevision>,
+    pub(crate) revision: Option<ProjectConfigRevision>,
 }
 
 /// Successful project configuration write.
 #[derive(Debug, Clone, PartialEq)]
-pub struct ProjectConfigWritten {
+pub(crate) struct ProjectConfigWritten {
     /// Canonical active project root.
-    pub repo_root: String,
+    pub(crate) repo_root: String,
     /// Installed document.
-    pub config: serde_json::Value,
+    pub(crate) config: serde_json::Value,
     /// Revision after installation.
-    pub revision: ProjectConfigRevision,
+    pub(crate) revision: ProjectConfigRevision,
 }
 
 /// Effective project icon bytes and MIME type.
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub struct ProjectIconValue {
+pub(crate) struct ProjectIconValue {
     /// Raw validated image bytes.
     pub bytes: Vec<u8>,
     /// MIME type detected by the adapter.
@@ -312,7 +312,7 @@ impl Directory {
     }
 
     /// Queue first-prompt metadata after successfully creating a directory workspace.
-    pub fn name_workspace(&self, id: String, context: String) {
+    pub(crate) fn name_workspace(&self, id: String, context: String) {
         if let Some(names) = &self.names {
             names.schedule(id, context, None);
         }
@@ -343,13 +343,15 @@ impl Directory {
 
     /// Return the installed worktree provisioning capability, when available.
     #[must_use]
-    pub fn worktrees(&self) -> Option<&dyn model::workspace::worktrees::WorktreeProvisioning> {
+    pub(crate) fn worktrees(
+        &self,
+    ) -> Option<&dyn model::workspace::worktrees::WorktreeProvisioning> {
         self.worktree_provisioning.as_deref()
     }
 
     /// Share worktree lifecycle ownership with an Agent that requested automatic cleanup.
     #[must_use]
-    pub fn shared_worktrees(
+    pub(crate) fn shared_worktrees(
         &self,
     ) -> Option<Arc<dyn model::workspace::worktrees::WorktreeProvisioning>> {
         self.worktree_provisioning.clone()
@@ -361,7 +363,7 @@ impl Directory {
     ///
     /// # Errors
     /// Returns a categorized inspection or registry error.
-    pub fn add_project(
+    pub(crate) fn add_project(
         &self,
         path: &str,
         timestamp: &str,
@@ -374,7 +376,7 @@ impl Directory {
     ///
     /// # Errors
     /// Returns validation, filesystem, rollback, or registry errors with Paseo-compatible classes.
-    pub fn create_project_directory(
+    pub(crate) fn create_project_directory(
         &self,
         parent_path: &str,
         name: &str,
@@ -520,7 +522,7 @@ impl Directory {
     ///
     /// # Errors
     /// Returns `DirectoryError::Registry` when the registry cannot be read.
-    pub fn list_projects(&self) -> Result<Vec<PersistedProjectRecord>, DirectoryError> {
+    pub(crate) fn list_projects(&self) -> Result<Vec<PersistedProjectRecord>, DirectoryError> {
         self.projects.list().map_err(map_error)
     }
 
@@ -551,7 +553,7 @@ impl Directory {
     ///
     /// # Errors
     /// Returns project-not-found or invalid-config errors inline to the API layer.
-    pub fn read_project_config(
+    pub(crate) fn read_project_config(
         &self,
         requested_root: &str,
     ) -> Result<ProjectConfigRead, DirectoryError> {
@@ -571,7 +573,7 @@ impl Directory {
     ///
     /// # Errors
     /// Returns project-not-found, stale-revision, or write failures inline to the API layer.
-    pub fn write_project_config(
+    pub(crate) fn write_project_config(
         &self,
         requested_root: &str,
         config: &serde_json::Value,
@@ -604,7 +606,7 @@ impl Directory {
     ///
     /// # Errors
     /// Returns missing-project, invalid-image, registry, or icon-storage failures.
-    pub fn set_project_icon(
+    pub(crate) fn set_project_icon(
         &self,
         project_id: &str,
         upload: Option<&[u8]>,
@@ -643,7 +645,7 @@ impl Directory {
     ///
     /// # Errors
     /// Returns missing-project or icon-storage failures.
-    pub fn get_project_icon(
+    pub(crate) fn get_project_icon(
         &self,
         project_id: &str,
     ) -> Result<Option<ProjectIconValue>, DirectoryError> {
@@ -669,7 +671,7 @@ impl Directory {
     ///
     /// # Errors
     /// Returns `DirectoryError::Registry` when validation or persistence fails.
-    pub fn rename_project(
+    pub(crate) fn rename_project(
         &self,
         project_id: &str,
         custom_name: Option<&str>,
@@ -692,7 +694,7 @@ impl Directory {
     ///
     /// # Errors
     /// Returns `DirectoryError::Registry` after any committed prefix if a later write fails.
-    pub fn remove_project(
+    pub(crate) fn remove_project(
         &self,
         project_id: &str,
         archived_at: &str,
@@ -753,7 +755,7 @@ impl Directory {
     ///
     /// # Errors
     /// Returns `DirectoryError::Registry` when validation or persistence fails.
-    pub fn set_workspace_title(
+    pub(crate) fn set_workspace_title(
         &self,
         workspace_id: &str,
         title: Option<&str>,
@@ -774,7 +776,7 @@ impl Directory {
     ///
     /// # Errors
     /// Returns `DirectoryError::Registry` when validation or persistence fails.
-    pub fn set_workspace_pin(
+    pub(crate) fn set_workspace_pin(
         &self,
         workspace_id: &str,
         pinned_at: Option<&str>,
@@ -1103,7 +1105,7 @@ fn normalize_optional_text(text: Option<String>) -> Option<String> {
 ///
 /// # Errors
 /// Returns a filesystem error if the random source is unavailable.
-pub fn generate_workspace_id() -> Result<String, DirectoryError> {
+fn generate_workspace_id() -> Result<String, DirectoryError> {
     domain::workspace::registry::generate_workspace_id().map_err(|_| DirectoryError::FileSystem)
 }
 

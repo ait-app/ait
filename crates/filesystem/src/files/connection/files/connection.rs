@@ -39,14 +39,8 @@ impl Drop for Subscription {
 impl FileConnection {
     /// Count active file observers.
     #[must_use]
-    pub fn len(&self) -> usize {
+    pub(crate) fn len(&self) -> usize {
         self.subscriptions.len()
-    }
-
-    /// Whether no file observers remain.
-    #[must_use]
-    pub fn is_empty(&self) -> bool {
-        self.len() == 0
     }
 
     /// Release a matching observer and prevent subsequent deliveries.
@@ -211,10 +205,10 @@ impl FileConnection {
 }
 
 pub(crate) struct FileRequest {
-    pub id: String,
-    pub method: String,
-    pub params: Value,
-    pub available_subscriptions: usize,
+    pub(crate) id: String,
+    pub(crate) method: String,
+    pub(crate) params: Value,
+    pub(crate) available_subscriptions: usize,
 }
 
 pub(crate) fn respond(

@@ -85,7 +85,7 @@ impl Terminals {
     /// Unknown terminals and wrong tokens both return false. Native inspection errors propagate.
     /// # Errors
     /// Returns a process inspection failure.
-    pub fn report_activity(
+    pub(crate) fn report_activity(
         &mut self,
         id: &str,
         token: &str,
@@ -123,7 +123,7 @@ impl Terminals {
     }
 
     /// Clear attention for a visible client's focused terminal; missing terminals return false.
-    pub fn clear_attention(&mut self, id: &str) -> bool {
+    pub(crate) fn clear_attention(&mut self, id: &str) -> bool {
         self.activities.clear_attention(id)
     }
 
@@ -131,7 +131,7 @@ impl Terminals {
     ///
     /// # Errors
     /// Returns invalid options, inactive/mismatched placement, registry errors, or spawn failures.
-    pub fn create(&mut self, request: &CreateRequest) -> Result<TerminalInfo, Error> {
+    pub(crate) fn create(&mut self, request: &CreateRequest) -> Result<TerminalInfo, Error> {
         request.size.validate()?;
         if request.agent_id.as_ref().is_some_and(|id| !id.is_empty())
             || request
@@ -244,7 +244,7 @@ impl Terminals {
     ///
     /// # Errors
     /// Returns path, registry, or process inspection failures.
-    pub fn list(&mut self, filter: &ListRequest) -> Result<Vec<TerminalInfo>, Error> {
+    pub(crate) fn list(&mut self, filter: &ListRequest) -> Result<Vec<TerminalInfo>, Error> {
         let workspaces = self.active_workspaces()?;
         let root = filter
             .cwd
@@ -286,7 +286,7 @@ impl Terminals {
     ///
     /// # Errors
     /// Returns an invalid title or a missing terminal.
-    pub fn rename(&mut self, id: &str, title: &str) -> Result<(), Error> {
+    pub(crate) fn rename(&mut self, id: &str, title: &str) -> Result<(), Error> {
         let title = title.trim();
         if title.is_empty()
             || title.encode_utf16().count() > 200
@@ -307,7 +307,7 @@ impl Terminals {
     ///
     /// # Errors
     /// Returns invalid input, missing terminal, full queue, or native I/O failures.
-    pub fn input(&mut self, id: &str, owner: &str, input: &Input) -> Result<(), Error> {
+    pub(crate) fn input(&mut self, id: &str, owner: &str, input: &Input) -> Result<(), Error> {
         let entry = self.entries.get_mut(id).ok_or(Error::NotFound)?;
         if entry.closed || entry.process.exited()? {
             return Err(Error::NotFound);
@@ -334,7 +334,7 @@ impl Terminals {
     ///
     /// # Errors
     /// Returns a missing terminal or snapshot/native failures.
-    pub fn observe(
+    pub(crate) fn observe(
         &mut self,
         id: &str,
         revision: Option<u64>,
@@ -356,7 +356,7 @@ impl Terminals {
     ///
     /// # Errors
     /// Returns a native screen access error.
-    pub fn capture(&self, id: &str) -> Result<Vec<String>, Error> {
+    pub(crate) fn capture(&self, id: &str) -> Result<Vec<String>, Error> {
         self.entries
             .get(id)
             .filter(|entry| !entry.closed)
@@ -367,7 +367,7 @@ impl Terminals {
     ///
     /// # Errors
     /// Returns native termination/reaping failures and retains the entry for retry.
-    pub fn kill(&mut self, id: &str) -> Result<(), Error> {
+    pub(crate) fn kill(&mut self, id: &str) -> Result<(), Error> {
         if let Some(entry) = self.entries.get_mut(id)
             && !entry.closed
         {
@@ -399,7 +399,7 @@ impl Terminals {
     ///
     /// # Errors
     /// Returns registry or process cleanup failures; failed entries remain retryable.
-    pub fn reconcile(&mut self) -> Result<(), Error> {
+    pub(crate) fn reconcile(&mut self) -> Result<(), Error> {
         for (id, entry) in &mut self.entries {
             if entry.closed || entry.process.exited()? {
                 self.activities.remove(id);

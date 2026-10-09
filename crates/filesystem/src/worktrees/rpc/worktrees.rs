@@ -24,20 +24,20 @@ use crate::worktrees::service::worktrees::{
 };
 
 /// Completed dispatch plus an optional workspace event sent after the response.
-pub struct Dispatched {
+pub(crate) struct Dispatched {
     /// Serialized response.
-    pub value: Value,
+    pub(crate) value: Value,
     /// Workspace update to publish after the response.
-    pub event: Option<Value>,
+    pub(crate) event: Option<Value>,
     /// Workspace whose setup should be scheduled by the host.
-    pub created_workspace_id: Option<String>,
+    pub(crate) created_workspace_id: Option<String>,
 }
 
 /// Execute a filesystem request.
 ///
 /// # Errors
 /// Rejects invalid parameters, unknown methods, or failed result encoding.
-pub fn execute(
+pub(crate) fn execute(
     worktrees: &mut Worktrees,
     method: &str,
     params: Value,

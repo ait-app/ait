@@ -10,12 +10,12 @@ use std::pin::Pin;
 use domain::agent_runtime::{AgentPersistenceHandle, StoredAgentConfig, StoredAgentRuntimeInfo};
 
 /// A sendable provider operation borrowing its client or session.
-pub type AgentSessionFuture<'a, T> =
+pub(crate) type AgentSessionFuture<'a, T> =
     Pin<Box<dyn Future<Output = Result<T, AgentSessionError>> + Send + 'a>>;
 
 /// Provider failure safe to expose at the application boundary.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, thiserror::Error)]
-pub enum AgentSessionError {
+pub(crate) enum AgentSessionError {
     /// The provider cannot currently start or resume a session.
     #[error("provider is unavailable")]
     Unavailable,
@@ -29,18 +29,18 @@ pub enum AgentSessionError {
 
 /// Provider-independent inputs required to construct or resume a native session.
 #[derive(Debug, Clone, PartialEq)]
-pub struct AgentSessionSpec {
+pub(crate) struct AgentSessionSpec {
     /// Provider identity.
-    pub provider: String,
+    pub(crate) provider: String,
     /// Native session working directory.
-    pub cwd: String,
+    pub(crate) cwd: String,
     /// Persistable provider configuration.
-    pub config: StoredAgentConfig,
+    pub(crate) config: StoredAgentConfig,
 }
 
 /// Whether a resumed native session may accept a new foreground turn.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum AgentResumePurpose {
+pub(crate) enum AgentResumePurpose {
     /// Resume an active Agent for interaction.
     Interactive,
     /// Read the history of an archived Agent without claiming an interactive writer.
@@ -49,7 +49,7 @@ pub enum AgentResumePurpose {
 
 /// Native foreground-turn progress or result. This is not a host Run or Message tree.
 #[derive(Debug, Clone, PartialEq)]
-pub enum AgentTurnEvent {
+pub(crate) enum AgentTurnEvent {
     /// A native autonomous foreground turn started, for example while pursuing a Codex goal.
     Started(String),
     /// Native child progress or lifecycle, independent of the foreground turn's completion.
@@ -80,7 +80,7 @@ pub enum AgentTurnEvent {
 }
 
 /// Live provider session. Closing releases resources without deleting native history.
-pub trait AgentSession: Debug + Send {
+pub(crate) trait AgentSession: Debug + Send {
     /// Return the most recent failure's user-visible explanation, if available.
     ///
     /// Adapters must exclude credentials and private diagnostics, and keep the message at most
@@ -247,7 +247,7 @@ pub trait AgentSession: Debug + Send {
 }
 
 /// Factory and availability boundary for one independent provider adapter.
-pub trait AgentClient: Debug + Send + Sync {
+pub(crate) trait AgentClient: Debug + Send + Sync {
     /// Whether this adapter implements native session listing and import inspection.
     fn supports_session_import(&self) -> bool {
         false

@@ -38,7 +38,7 @@ impl HarnessEvidence {
     /// Resolve configured launchers and log roots using `environment`, without I/O.
     /// Returns a read-only collector; custom log roots must be dedicated native log directories.
     #[must_use]
-    pub fn configured(environment: impl Fn(&str) -> Option<OsString>) -> Self {
+    fn configured(environment: impl Fn(&str) -> Option<OsString>) -> Self {
         let home = environment("HOME")
             .or_else(|| environment("USERPROFILE"))
             .map(PathBuf::from);

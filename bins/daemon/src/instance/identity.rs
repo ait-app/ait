@@ -8,7 +8,7 @@ use uuid::Uuid;
 
 /// Stable identity loading or publication failed.
 #[derive(Debug, thiserror::Error)]
-pub enum IdentityError {
+pub(crate) enum IdentityError {
     /// Persisted state is not a non-nil UUID in a regular file.
     #[error("invalid persisted server identity")]
     Invalid,
@@ -23,7 +23,7 @@ pub enum IdentityError {
 ///
 /// # Errors
 /// Returns invalid-state or I/O errors without overwriting an existing identity.
-pub fn load_or_create(directory: &Path) -> Result<Uuid, IdentityError> {
+pub(crate) fn load_or_create(directory: &Path) -> Result<Uuid, IdentityError> {
     let path = directory.join("server-id");
     match fs::symlink_metadata(&path) {
         Ok(metadata) if !metadata.is_file() || metadata.file_type().is_symlink() => {

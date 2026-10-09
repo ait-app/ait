@@ -9,7 +9,8 @@ use tokio_util::sync::CancellationToken;
 use tokio_util::task::TaskTracker;
 
 use super::super::{DiffObservation, PendingSubscription};
-use crate::git::service::checkout::*;
+use crate::git::ports::checkout::*;
+use crate::git::service::checkout::Checkout;
 
 const WAIT_LIMIT: Duration = Duration::from_secs(5);
 
@@ -145,7 +146,7 @@ impl CheckoutRuntime for GatedCheckout {
                 additions: 1,
                 deletions: 0,
                 hunks: Vec::new(),
-                status: Some(ParsedDiffStatus::Ok),
+                status: None,
             }],
             diff_too_large: false,
         })

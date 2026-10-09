@@ -21,11 +21,11 @@ use crate::ports::environment::AgentEnvironment;
 use crate::protocol::provider::Details;
 
 /// Stable provider identity, independent of the executable's `agy` name.
-pub const PROVIDER: &str = "antigravity";
+const PROVIDER: &str = "antigravity";
 
 /// Installed native CLI; credentials, permissions and conversation storage remain AGY-owned.
 #[derive(Debug, Clone)]
-pub struct AntigravityClient {
+pub(crate) struct AntigravityClient {
     program: PathBuf,
     deadline: Duration,
     environment: AgentEnvironment,
@@ -36,7 +36,7 @@ impl AntigravityClient {
     ///
     /// Startup and discovery are bounded to thirty seconds; foreground turns have no timeout.
     #[must_use]
-    pub fn new(program: PathBuf) -> Self {
+    pub(crate) fn new(program: PathBuf) -> Self {
         Self {
             program,
             deadline: Duration::from_secs(30),
@@ -48,7 +48,7 @@ impl AntigravityClient {
     ///
     /// Returns an unavailable launcher when no executable exists. Does not install software.
     #[must_use]
-    pub fn installed() -> Self {
+    pub(crate) fn installed() -> Self {
         Self::new(discovery::installed_program())
     }
 }

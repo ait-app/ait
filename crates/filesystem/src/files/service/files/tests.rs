@@ -1,6 +1,10 @@
 use std::io::Read;
 
 use super::*;
+use crate::files::ports::files::{
+    EntryKind, FileEntry, FileKind, FileSearch, FileUpload, FileVersion, FileWrite, FileWritten,
+    UploadedFile,
+};
 
 #[derive(Debug)]
 struct MemoryFiles;

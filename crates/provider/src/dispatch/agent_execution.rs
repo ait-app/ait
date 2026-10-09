@@ -31,7 +31,7 @@ use serde_json::Value;
 use crate::dispatch::State as Shared;
 use model::outbound::{Outbound, QueueError};
 
-pub fn wait(
+pub(crate) fn wait(
     request_id: String,
     params: Value,
     state: &Shared,
@@ -86,7 +86,11 @@ fn send_error(outbound: &Outbound, request_id: String, code: ErrorCode) -> Resul
     })
 }
 
-pub async fn dispatch(method: &str, params: Value, state: &Shared) -> Result<Value, ErrorCode> {
+pub(crate) async fn dispatch(
+    method: &str,
+    params: Value,
+    state: &Shared,
+) -> Result<Value, ErrorCode> {
     let execution = state
         .agent_execution
         .as_ref()

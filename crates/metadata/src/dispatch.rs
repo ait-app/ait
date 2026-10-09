@@ -74,7 +74,7 @@ pub enum Completion {
 
 impl State {
     /// Request a process lifecycle transition under the common admission lock.
-    pub fn request_lifecycle(&self, intent: LifecycleIntent) {
+    pub(crate) fn request_lifecycle(&self, intent: LifecycleIntent) {
         let admission = self
             .admission
             .lock()

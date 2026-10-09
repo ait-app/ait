@@ -25,7 +25,7 @@ pub struct Connection {
     pub(crate) labels: BTreeMap<String, WorkspaceLabelSubscription>,
     pub(crate) events: BTreeMap<String, SessionSubscription>,
     /// Presence connection created during the API handshake.
-    pub session: Option<SessionConnection>,
+    session: Option<SessionConnection>,
 }
 
 impl Connection {

@@ -22,7 +22,10 @@ fn single_connection_requires_explicit_selection_and_has_a_unique_capability_bud
     assert!(!offer.requires_single_connection());
     offer.required_capabilities = vec![single::CAPABILITY.to_owned()];
     assert!(offer.requires_single_connection());
-    assert_eq!(offer.negotiate(), Err(ErrorCode::UnsupportedCapability));
+    assert_eq!(
+        offer.negotiate_available(&default_capabilities()),
+        Err(ErrorCode::UnsupportedCapability)
+    );
 
     offer.capabilities = (0..255).map(|id| format!("cap.{id}")).collect();
     let mut available = offer.capabilities.clone();
@@ -53,11 +56,14 @@ fn single_connection_requires_explicit_selection_and_has_a_unique_capability_bud
 fn negotiates_supported_intersection_and_rejects_required_unknown() {
     let mut offer = hello();
     assert_eq!(
-        offer.negotiate().unwrap(),
+        offer.negotiate_available(&default_capabilities()).unwrap(),
         ["server.info", "connection.ping"]
     );
     offer.required_capabilities.push("run.submit".to_owned());
-    assert_eq!(offer.negotiate(), Err(ErrorCode::UnsupportedCapability));
+    assert_eq!(
+        offer.negotiate_available(&default_capabilities()),
+        Err(ErrorCode::UnsupportedCapability)
+    );
 }
 
 #[test]
@@ -81,7 +87,10 @@ fn rejects_incompatible_and_reversed_version_ranges() {
     ] {
         let mut offer = hello();
         offer.protocol = protocol;
-        assert_eq!(offer.negotiate(), Err(ErrorCode::IncompatibleVersion));
+        assert_eq!(
+            offer.negotiate_available(&default_capabilities()),
+            Err(ErrorCode::IncompatibleVersion)
+        );
     }
 }
 
@@ -90,7 +99,10 @@ fn bounds_diagnostic_ids_and_capability_lists() {
     for value in [String::new(), "x".repeat(129), "bad\nlabel".to_owned()] {
         let mut offer = hello();
         offer.client_id = value;
-        assert_eq!(offer.negotiate(), Err(ErrorCode::InvalidMessage));
+        assert_eq!(
+            offer.negotiate_available(&default_capabilities()),
+            Err(ErrorCode::InvalidMessage)
+        );
     }
     for required in [false, true] {
         let mut offer = hello();
@@ -99,11 +111,17 @@ fn bounds_diagnostic_ids_and_capability_lists() {
         } else {
             offer.capabilities = vec!["x".to_owned(); 65];
         }
-        assert_eq!(offer.negotiate(), Err(ErrorCode::InvalidMessage));
+        assert_eq!(
+            offer.negotiate_available(&default_capabilities()),
+            Err(ErrorCode::InvalidMessage)
+        );
     }
     let mut offer = hello();
     offer.capabilities.push(String::new());
-    assert_eq!(offer.negotiate(), Err(ErrorCode::InvalidMessage));
+    assert_eq!(
+        offer.negotiate_available(&default_capabilities()),
+        Err(ErrorCode::InvalidMessage)
+    );
     assert!(valid_id(&"x".repeat(128)));
 }
 
@@ -189,4 +207,8 @@ fn placeholder_event_response_and_error_have_stable_wire_shapes() {
     assert_eq!(serde_json::to_value(code).unwrap(), "not_implemented");
     assert!(!code.retryable());
     assert_eq!(code.message(), "Method is not implemented yet");
+}
+
+fn default_capabilities() -> Vec<String> {
+    CAPABILITIES.iter().map(|name| (*name).to_owned()).collect()
 }

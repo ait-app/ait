@@ -1,4 +1,4 @@
-use crate::service::workspace_automation::{ScriptType, SetupCommandSnapshot};
+use crate::ports::workspace_automation::{ScriptType, SetupCommandSnapshot};
 
 use super::*;
 

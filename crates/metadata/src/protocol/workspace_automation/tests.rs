@@ -81,7 +81,7 @@ fn script_payload_materializes_paseo_defaults() {
         public_proxy_url: None,
         proxy_url: None,
         lifecycle: WorkspaceScriptLifecycle::Stopped,
-        health: None,
+        health: (),
         exit_code: None,
         terminal_id: None,
     })
@@ -91,5 +91,6 @@ fn script_payload_materializes_paseo_defaults() {
     assert!(value["proxyUrl"].is_null());
     assert!(value["exitCode"].is_null());
     assert!(value["terminalId"].is_null());
+    assert!(value["health"].is_null());
     assert!(value.get("localProxyUrl").is_none());
 }

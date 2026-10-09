@@ -5,7 +5,7 @@ use serde::{Deserialize, Serialize};
 /// Entry Kind discriminator.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
-pub enum EntryKind {
+pub(crate) enum EntryKind {
     /// File value.
     File,
     /// Directory value.
@@ -15,7 +15,7 @@ pub enum EntryKind {
 /// Explorer Mode discriminator.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
-pub enum ExplorerMode {
+pub(crate) enum ExplorerMode {
     /// List value.
     List,
     /// File value.
@@ -25,7 +25,7 @@ pub enum ExplorerMode {
 /// Match Mode discriminator.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
-pub enum MatchMode {
+pub(crate) enum MatchMode {
     /// Fuzzy value.
     Fuzzy,
     /// Suffix value.
@@ -35,7 +35,7 @@ pub enum MatchMode {
 /// File Kind discriminator.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
-pub enum FileKind {
+pub(crate) enum FileKind {
     /// Text value.
     Text,
     /// Image value.
@@ -47,7 +47,7 @@ pub enum FileKind {
 /// Encoding discriminator.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
-pub enum Encoding {
+pub(crate) enum Encoding {
     /// Utf8 value.
     #[serde(rename = "utf-8")]
     Utf8,
@@ -60,354 +60,354 @@ pub enum Encoding {
 /// Suggestions Request payload.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
-pub struct SuggestionsRequest {
+pub(crate) struct SuggestionsRequest {
     /// query.
-    pub query: String,
+    pub(crate) query: String,
     /// cwd.
-    pub cwd: Option<String>,
+    pub(crate) cwd: Option<String>,
     /// include files.
-    pub include_files: Option<bool>,
+    pub(crate) include_files: Option<bool>,
     /// include directories.
-    pub include_directories: Option<bool>,
+    pub(crate) include_directories: Option<bool>,
     /// match mode.
-    pub match_mode: Option<MatchMode>,
+    pub(crate) match_mode: Option<MatchMode>,
     /// limit.
-    pub limit: Option<usize>,
+    pub(crate) limit: Option<usize>,
 }
 
 /// Explorer Request payload.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
-pub struct ExplorerRequest {
+pub(crate) struct ExplorerRequest {
     /// cwd.
-    pub cwd: String,
+    pub(crate) cwd: String,
     /// path.
-    pub path: Option<String>,
+    pub(crate) path: Option<String>,
     /// mode.
-    pub mode: ExplorerMode,
+    pub(crate) mode: ExplorerMode,
     /// accept binary.
-    pub accept_binary: Option<bool>,
+    pub(crate) accept_binary: Option<bool>,
     /// max bytes.
-    pub max_bytes: Option<u64>,
+    pub(crate) max_bytes: Option<u64>,
 }
 
 /// File Path Request payload.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
-pub struct FilePathRequest {
+pub(crate) struct FilePathRequest {
     /// cwd.
-    pub cwd: String,
+    pub(crate) cwd: String,
     /// path.
-    pub path: String,
+    pub(crate) path: String,
 }
 
 /// Subscribe Request payload.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
-pub struct SubscribeRequest {
+pub(crate) struct SubscribeRequest {
     /// cwd.
-    pub cwd: String,
+    pub(crate) cwd: String,
     /// path.
-    pub path: String,
+    pub(crate) path: String,
     /// subscription id.
-    pub subscription_id: Option<String>,
+    pub(crate) subscription_id: Option<String>,
 }
 
 /// Unsubscribe Request payload.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
-pub struct UnsubscribeRequest {
+pub(crate) struct UnsubscribeRequest {
     /// subscription id.
-    pub subscription_id: String,
+    pub(crate) subscription_id: String,
 }
 
 /// Write Request payload.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
-pub struct WriteRequest {
+pub(crate) struct WriteRequest {
     /// cwd.
-    pub cwd: String,
+    pub(crate) cwd: String,
     /// path.
-    pub path: String,
+    pub(crate) path: String,
     /// content.
-    pub content: String,
+    pub(crate) content: String,
     /// expected modified at.
-    pub expected_modified_at: String,
+    pub(crate) expected_modified_at: String,
     /// expected revision.
-    pub expected_revision: Option<String>,
+    pub(crate) expected_revision: Option<String>,
 }
 
 /// Create Request payload.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
-pub struct CreateRequest {
+pub(crate) struct CreateRequest {
     /// cwd.
-    pub cwd: String,
+    pub(crate) cwd: String,
     /// parent path.
-    pub parent_path: String,
+    pub(crate) parent_path: String,
     /// name.
-    pub name: String,
+    pub(crate) name: String,
     /// kind.
-    pub kind: EntryKind,
+    pub(crate) kind: EntryKind,
 }
 
 /// Rename Request payload.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
-pub struct RenameRequest {
+pub(crate) struct RenameRequest {
     /// cwd.
-    pub cwd: String,
+    pub(crate) cwd: String,
     /// path.
-    pub path: String,
+    pub(crate) path: String,
     /// name.
-    pub name: String,
+    pub(crate) name: String,
 }
 
 /// Upload Request payload.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
-pub struct UploadRequest {
+pub(crate) struct UploadRequest {
     /// file name.
-    pub file_name: String,
+    pub(crate) file_name: String,
     /// mime type.
-    pub mime_type: String,
+    pub(crate) mime_type: String,
     /// size.
-    pub size: u64,
+    pub(crate) size: u64,
     /// modified at.
-    pub modified_at: String,
+    modified_at: String,
 }
 
 /// File Entry payload.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
-pub struct FileEntry {
+pub(crate) struct FileEntry {
     /// name.
-    pub name: String,
+    pub(crate) name: String,
     /// path.
-    pub path: String,
+    pub(crate) path: String,
     /// kind.
-    pub kind: EntryKind,
+    pub(crate) kind: EntryKind,
     /// size.
-    pub size: u64,
+    pub(crate) size: u64,
     /// modified at.
-    pub modified_at: String,
+    pub(crate) modified_at: String,
 }
 
 /// Directory payload.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
-pub struct Directory {
+pub(crate) struct Directory {
     /// path.
-    pub path: String,
+    pub(crate) path: String,
     /// entries.
-    pub entries: Vec<FileEntry>,
+    pub(crate) entries: Vec<FileEntry>,
 }
 
 /// File Preview payload.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
-pub struct FilePreview {
+pub(crate) struct FilePreview {
     /// path.
-    pub path: String,
+    pub(crate) path: String,
     /// kind.
-    pub kind: FileKind,
+    pub(crate) kind: FileKind,
     /// encoding.
-    pub encoding: Encoding,
+    pub(crate) encoding: Encoding,
     /// content.
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub content: Option<String>,
+    pub(crate) content: Option<String>,
     /// mime type.
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub mime_type: Option<String>,
+    pub(crate) mime_type: Option<String>,
     /// size.
-    pub size: u64,
+    pub(crate) size: u64,
     /// modified at.
-    pub modified_at: String,
+    pub(crate) modified_at: String,
     /// revision.
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub revision: Option<String>,
+    pub(crate) revision: Option<String>,
 }
 
 /// Explorer Result payload.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
-pub struct ExplorerResult {
+pub(crate) struct ExplorerResult {
     /// cwd.
-    pub cwd: String,
+    pub(crate) cwd: String,
     /// path.
-    pub path: String,
+    pub(crate) path: String,
     /// mode.
-    pub mode: ExplorerMode,
+    pub(crate) mode: ExplorerMode,
     /// directory.
-    pub directory: Option<Directory>,
+    pub(crate) directory: Option<Directory>,
     /// file.
-    pub file: Option<FilePreview>,
+    pub(crate) file: Option<FilePreview>,
     /// error.
-    pub error: Option<String>,
+    pub(crate) error: Option<String>,
 }
 
 /// Suggestion payload.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
-pub struct Suggestion {
+pub(crate) struct Suggestion {
     /// path.
-    pub path: String,
+    pub(crate) path: String,
     /// kind.
-    pub kind: EntryKind,
+    pub(crate) kind: EntryKind,
 }
 
 /// Suggestions Result payload.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
-pub struct SuggestionsResult {
+pub(crate) struct SuggestionsResult {
     /// directories.
-    pub directories: Vec<String>,
+    pub(crate) directories: Vec<String>,
     /// entries.
-    pub entries: Vec<Suggestion>,
+    pub(crate) entries: Vec<Suggestion>,
     /// error.
-    pub error: Option<String>,
+    pub(crate) error: Option<String>,
 }
 
 /// Subscribe Result payload.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
-pub struct SubscribeResult {
+pub(crate) struct SubscribeResult {
     /// subscription id.
-    pub subscription_id: String,
+    pub(crate) subscription_id: String,
     /// initial.
-    pub initial: FileVersion,
+    pub(crate) initial: FileVersion,
 }
 
 /// File Update payload.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
-pub struct FileUpdate {
+pub(crate) struct FileUpdate {
     /// subscription id.
-    pub subscription_id: String,
+    pub(crate) subscription_id: String,
     /// version.
-    pub version: FileVersion,
+    pub(crate) version: FileVersion,
 }
 
 /// Write Result payload.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
-pub struct WriteResult {
+pub(crate) struct WriteResult {
     /// result.
-    pub result: WriteOutcome,
+    pub(crate) result: WriteOutcome,
 }
 
 /// Create Result payload.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
-pub struct CreateResult {
+pub(crate) struct CreateResult {
     /// cwd.
-    pub cwd: String,
+    pub(crate) cwd: String,
     /// parent path.
-    pub parent_path: String,
+    pub(crate) parent_path: String,
     /// path.
-    pub path: Option<String>,
+    pub(crate) path: Option<String>,
     /// success.
-    pub success: bool,
+    pub(crate) success: bool,
     /// error.
-    pub error: Option<String>,
+    pub(crate) error: Option<String>,
 }
 
 /// Rename Result payload.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
-pub struct RenameResult {
+pub(crate) struct RenameResult {
     /// cwd.
-    pub cwd: String,
+    pub(crate) cwd: String,
     /// path.
-    pub path: String,
+    pub(crate) path: String,
     /// renamed path.
-    pub renamed_path: Option<String>,
+    pub(crate) renamed_path: Option<String>,
     /// success.
-    pub success: bool,
+    pub(crate) success: bool,
     /// error.
-    pub error: Option<String>,
+    pub(crate) error: Option<String>,
 }
 
 /// Duplicate Result payload.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
-pub struct DuplicateResult {
+pub(crate) struct DuplicateResult {
     /// cwd.
-    pub cwd: String,
+    pub(crate) cwd: String,
     /// path.
-    pub path: String,
+    pub(crate) path: String,
     /// duplicated path.
-    pub duplicated_path: Option<String>,
+    pub(crate) duplicated_path: Option<String>,
     /// success.
-    pub success: bool,
+    pub(crate) success: bool,
     /// error.
-    pub error: Option<String>,
+    pub(crate) error: Option<String>,
 }
 
 /// Delete Result payload.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
-pub struct DeleteResult {
+pub(crate) struct DeleteResult {
     /// cwd.
-    pub cwd: String,
+    pub(crate) cwd: String,
     /// path.
-    pub path: String,
+    pub(crate) path: String,
     /// success.
-    pub success: bool,
+    pub(crate) success: bool,
     /// error.
-    pub error: Option<String>,
+    pub(crate) error: Option<String>,
 }
 
 /// Download Result payload.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
-pub struct DownloadResult {
+pub(crate) struct DownloadResult {
     /// cwd.
-    pub cwd: String,
+    pub(crate) cwd: String,
     /// path.
-    pub path: String,
+    pub(crate) path: String,
     /// token.
-    pub token: Option<String>,
+    pub(crate) token: Option<String>,
     /// file name.
-    pub file_name: Option<String>,
+    pub(crate) file_name: Option<String>,
     /// mime type.
-    pub mime_type: Option<String>,
+    pub(crate) mime_type: Option<String>,
     /// size.
-    pub size: Option<u64>,
+    pub(crate) size: Option<u64>,
     /// error.
-    pub error: Option<String>,
+    pub(crate) error: Option<String>,
 }
 
 /// Uploaded File payload.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
-pub struct UploadedFile {
+pub(crate) struct UploadedFile {
     /// id.
-    pub id: String,
+    pub(crate) id: String,
     /// file name.
-    pub file_name: String,
+    pub(crate) file_name: String,
     /// mime type.
-    pub mime_type: String,
+    pub(crate) mime_type: String,
     /// size.
-    pub size: u64,
+    pub(crate) size: u64,
     /// path.
-    pub path: String,
+    pub(crate) path: String,
 }
 
 /// Upload Result payload.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
-pub struct UploadResult {
+pub(crate) struct UploadResult {
     /// file.
-    pub file: Option<UploadedAttachment>,
+    pub(crate) file: Option<UploadedAttachment>,
     /// error.
-    pub error: Option<String>,
+    pub(crate) error: Option<String>,
 }
 
 /// Uploaded attachment discriminator.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(tag = "type", rename_all = "snake_case")]
-pub enum UploadedAttachment {
+pub(crate) enum UploadedAttachment {
     /// File retained in the server upload directory.
     UploadedFile(UploadedFile),
 }
@@ -419,7 +419,7 @@ pub enum UploadedAttachment {
     rename_all = "snake_case",
     rename_all_fields = "camelCase"
 )]
-pub enum FileVersion {
+pub(crate) enum FileVersion {
     /// Current metadata.
     Ready {
         /// Workspace root.
@@ -459,7 +459,7 @@ pub enum FileVersion {
     rename_all = "snake_case",
     rename_all_fields = "camelCase"
 )]
-pub enum WriteOutcome {
+pub(crate) enum WriteOutcome {
     /// Successfully persisted edit.
     Written {
         /// Modification timestamp.

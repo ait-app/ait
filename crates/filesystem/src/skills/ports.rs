@@ -1,4 +1,4 @@
 //! Blocking adapter boundaries.
 
 /// Orchestration skill installation and selection.
-pub mod skills;
+pub(crate) mod skills;

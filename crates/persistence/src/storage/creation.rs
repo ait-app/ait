@@ -11,14 +11,14 @@ use crate::registry::FileRegistry;
 
 /// File-backed creation receipts; clones share the committed cache and serialization lock.
 #[derive(Debug, Clone)]
-pub struct FileReceiptStore {
+struct FileReceiptStore {
     registry: Arc<FileRegistry<Receipt>>,
 }
 
 impl FileReceiptStore {
     /// Select the JSON array at `path` without creating or reading it.
     #[must_use]
-    pub fn new(path: PathBuf) -> Self {
+    fn new(path: PathBuf) -> Self {
         Self {
             registry: Arc::new(FileRegistry::new(path, |receipt| &receipt.id)),
         }

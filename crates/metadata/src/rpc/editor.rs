@@ -26,7 +26,7 @@ enum Mode {
 /// Validate the legacy request and return Paseo's desktop migration response.
 /// # Errors
 /// Returns invalid-message for malformed parameters, or method-not-found for other methods.
-pub fn execute(method: &str, params: Value) -> Result<Value, ErrorCode> {
+pub(crate) fn execute(method: &str, params: Value) -> Result<Value, ErrorCode> {
     match method {
         "editor.available.list.request" if params.is_object() => {
             Ok(json!({"editors":[], "error":MOVED}))

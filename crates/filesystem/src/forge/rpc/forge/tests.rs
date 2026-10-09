@@ -3,12 +3,13 @@ use serde_json::{Value, json};
 mod failures;
 
 use super::execute;
-use crate::forge::service::forge::{
-    CheckDetails, Forge, ForgeAuthState, ForgeRuntime, ForgeRuntimeError, ForgeSearch,
-    ForgeSearchItem, ForgeSearchKind, PullRequestCreated, PullRequestMergeMethod,
-    PullRequestMergeable, PullRequestStatus, PullRequestStatusRead, PullRequestTimeline,
-    PullRequestTimelineItem, TimelineReviewState,
+use crate::forge::ports::forge::{
+    CheckDetails, ForgeAuthState, ForgeRuntime, ForgeRuntimeError, ForgeSearch, ForgeSearchItem,
+    ForgeSearchKind, PullRequestCreated, PullRequestMergeMethod, PullRequestMergeable,
+    PullRequestStatus, PullRequestStatusRead, PullRequestTimeline, PullRequestTimelineItem,
+    TimelineReviewState,
 };
+use crate::forge::service::forge::Forge;
 
 #[test]
 fn timeline_projection_preserves_failure_categories_and_inline_comment_locations() {
@@ -16,7 +17,6 @@ fn timeline_projection_preserves_failure_categories_and_inline_comment_locations
     for (kind, expected) in [
         (TimelineErrorKind::NotFound, "not_found"),
         (TimelineErrorKind::Forbidden, "forbidden"),
-        (TimelineErrorKind::Unknown, "unknown"),
     ] {
         let error = super::protocol_timeline_error(TimelineError {
             kind,

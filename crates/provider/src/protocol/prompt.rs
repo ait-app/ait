@@ -11,18 +11,18 @@ use crate::ports::agent_session::AgentSessionError;
 /// An inline raster image, using the existing Paseo wire format.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
-pub struct PromptImage {
+pub(crate) struct PromptImage {
     /// Strict standard base64 bytes; data URLs belong in provider output conversion.
-    pub data: String,
+    pub(crate) data: String,
     /// Supported raster media type.
-    pub mime_type: String,
+    pub(crate) mime_type: String,
 }
 
 impl PromptImage {
     /// Decode a bounded raster payload or return a safe rejection before native admission.
     /// # Errors
     /// Rejects unsupported MIME, malformed base64, empty or oversized data.
-    pub fn decode(&self) -> Result<Vec<u8>, AgentSessionError> {
+    pub(crate) fn decode(&self) -> Result<Vec<u8>, AgentSessionError> {
         if !matches!(
             self.mime_type.as_str(),
             "image/png" | "image/jpeg" | "image/gif" | "image/webp"
@@ -40,26 +40,26 @@ impl PromptImage {
 /// One complete logical user input. Voice and schedule callers can keep using plain text.
 #[derive(Debug, Clone, Default, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
-pub struct AgentPrompt {
+pub(crate) struct AgentPrompt {
     /// User-authored text, at most 64 KiB; may be empty when attachments are present.
     #[serde(default)]
-    pub text: String,
+    pub(crate) text: String,
     /// Optional inline images, transported in acknowledged chunks for large messages.
     #[serde(default)]
-    pub images: Vec<PromptImage>,
+    pub(crate) images: Vec<PromptImage>,
     /// Existing Paseo text, review, forge and uploaded-file attachment objects.
     #[serde(default)]
-    pub attachments: Vec<Value>,
+    pub(crate) attachments: Vec<Value>,
     /// Client-supplied stable input identity, preserved independently of native turn IDs.
-    pub client_message_id: Option<String>,
+    pub(crate) client_message_id: Option<String>,
     /// Optional native structured-output constraint for this input.
-    pub output_schema: Option<Value>,
+    pub(crate) output_schema: Option<Value>,
 }
 
 impl AgentPrompt {
     /// Construct an unadorned text prompt without choosing a message identity.
     #[must_use]
-    pub fn text(text: &str) -> Self {
+    pub(crate) fn text(text: &str) -> Self {
         Self {
             text: text.to_owned(),
             ..Self::default()
@@ -69,7 +69,7 @@ impl AgentPrompt {
     /// Validate the entire input before reserving or submitting any part of it.
     /// # Errors
     /// Rejects empty, oversized or malformed input, including unsupported attachment shapes.
-    pub fn validate(&self) -> Result<(), AgentSessionError> {
+    pub(crate) fn validate(&self) -> Result<(), AgentSessionError> {
         if self.text.len() > 65536
             || self.text.contains('\0')
             || self.images.len() > 50
@@ -106,7 +106,7 @@ impl AgentPrompt {
 
     /// Whether a legacy text-only provider can receive this input without losing intent.
     #[must_use]
-    pub fn is_plain_text(&self) -> bool {
+    pub(crate) fn is_plain_text(&self) -> bool {
         self.images.is_empty()
             && self.attachments.is_empty()
             && self.output_schema.is_none()
@@ -116,7 +116,7 @@ impl AgentPrompt {
     /// Produce provider-independent ordered text/image blocks after validation.
     /// # Errors
     /// Returns malformed or oversized prompt errors.
-    pub fn blocks(&self) -> Result<Vec<Value>, AgentSessionError> {
+    pub(crate) fn blocks(&self) -> Result<Vec<Value>, AgentSessionError> {
         self.validate()?;
         let mut blocks = Vec::new();
         for attachment in self
@@ -145,7 +145,7 @@ impl AgentPrompt {
     /// Map ordered blocks to native Codex app-server input, including inline image URLs.
     /// # Errors
     /// Returns invalid rich input before submission.
-    pub fn codex_input(&self) -> Result<Vec<Value>, AgentSessionError> {
+    pub(crate) fn codex_input(&self) -> Result<Vec<Value>, AgentSessionError> {
         self.blocks()?.into_iter().map(|block| {
             Ok(if block["type"] == "image" {
                 json!({"type":"image","url":format!("data:{};base64,{}", block["mimeType"].as_str().ok_or(AgentSessionError::Rejected)?, block["data"].as_str().ok_or(AgentSessionError::Rejected)?)})
@@ -156,7 +156,7 @@ impl AgentPrompt {
     /// Map ordered blocks to Claude Code's Anthropic content representation.
     /// # Errors
     /// Returns invalid rich input before submission.
-    pub fn claude_content(&self) -> Result<Value, AgentSessionError> {
+    pub(crate) fn claude_content(&self) -> Result<Value, AgentSessionError> {
         if self.images.is_empty() && self.attachments.is_empty() {
             self.validate()?;
             return Ok(json!(self.text));

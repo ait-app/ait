@@ -25,7 +25,7 @@ const DEFAULT_PAGE_LIMIT: usize = 200;
 
 /// Sortable Agent directory fields.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum AgentSortKey {
+pub(crate) enum AgentSortKey {
     /// Attention and lifecycle priority.
     StatusPriority,
     /// Creation timestamp.
@@ -38,7 +38,7 @@ pub enum AgentSortKey {
 
 /// Sort direction.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum SortDirection {
+pub(crate) enum SortDirection {
     /// Ascending order.
     Asc,
     /// Descending order.
@@ -47,43 +47,43 @@ pub enum SortDirection {
 
 /// One ordered sort term.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub struct AgentSort {
+pub(crate) struct AgentSort {
     /// Sort field.
-    pub key: AgentSortKey,
+    pub(crate) key: AgentSortKey,
     /// Sort direction.
-    pub direction: SortDirection,
+    pub(crate) direction: SortDirection,
 }
 
 /// Application-level Agent directory query.
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
-pub struct AgentDirectoryQuery {
+pub(crate) struct AgentDirectoryQuery {
     /// Require active workspace/project placement.
-    pub active_scope: bool,
+    pub(crate) active_scope: bool,
     /// Include archived Agent records.
-    pub include_archived: bool,
+    pub(crate) include_archived: bool,
     /// Exact label filters.
-    pub labels: BTreeMap<String, String>,
+    pub(crate) labels: BTreeMap<String, String>,
     /// Allowed project keys.
-    pub project_keys: Option<BTreeSet<String>>,
+    pub(crate) project_keys: Option<BTreeSet<String>>,
     /// Allowed lifecycle statuses.
-    pub statuses: Option<BTreeSet<AgentRuntimeStatus>>,
+    pub(crate) statuses: Option<BTreeSet<AgentRuntimeStatus>>,
     /// Required attention value.
-    pub requires_attention: Option<bool>,
+    pub(crate) requires_attention: Option<bool>,
     /// Configured thinking option filter, when one was requested.
-    pub thinking_option_id: Option<ThinkingOptionFilter>,
+    pub(crate) thinking_option_id: Option<ThinkingOptionFilter>,
     /// Case-insensitive history search.
-    pub search: Option<String>,
+    pub(crate) search: Option<String>,
     /// Ordered sort fields.
-    pub sort: Vec<AgentSort>,
+    pub(crate) sort: Vec<AgentSort>,
     /// Opaque keyset boundary from the preceding page.
-    pub cursor: Option<String>,
+    pub(crate) cursor: Option<String>,
     /// Requested page size.
-    pub limit: usize,
+    pub(crate) limit: usize,
 }
 
 /// Requested thinking option for one Agent directory search.
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub enum ThinkingOptionFilter {
+pub(crate) enum ThinkingOptionFilter {
     /// Match the provider's default option.
     ProviderDefault,
     /// Match a specific option identifier.
@@ -92,63 +92,63 @@ pub enum ThinkingOptionFilter {
 
 /// Placement facts required by the Paseo Agent directory.
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub struct AgentPlacement {
+pub(crate) struct AgentPlacement {
     /// Whether both workspace and project remain active.
-    pub active: bool,
+    pub(crate) active: bool,
     /// Project key.
-    pub project_key: String,
+    pub(crate) project_key: String,
     /// Current project display name.
-    pub project_name: String,
+    pub(crate) project_name: String,
     /// Current workspace display name.
-    pub workspace_name: String,
+    pub(crate) workspace_name: String,
     /// Selected working directory.
-    pub cwd: String,
+    pub(crate) cwd: String,
     /// Whether placement is Git-backed.
-    pub is_git: bool,
+    pub(crate) is_git: bool,
     /// Stored branch identity.
-    pub current_branch: Option<String>,
+    pub(crate) current_branch: Option<String>,
     /// Stored checkout root.
-    pub worktree_root: Option<String>,
+    pub(crate) worktree_root: Option<String>,
     /// Whether Paseo owns the linked worktree.
-    pub is_paseo_owned_worktree: bool,
+    pub(crate) is_paseo_owned_worktree: bool,
     /// Main repository root for a managed worktree.
-    pub main_repo_root: Option<String>,
+    pub(crate) main_repo_root: Option<String>,
 }
 
 /// One Agent directory row before transport projection.
 #[derive(Debug, Clone, PartialEq)]
-pub struct AgentDirectoryEntry {
+pub(crate) struct AgentDirectoryEntry {
     /// Durable Agent runtime snapshot.
-    pub agent: PersistedAgentRuntimeRecord,
+    pub(crate) agent: PersistedAgentRuntimeRecord,
     /// Project/workspace placement.
-    pub placement: AgentPlacement,
+    pub(crate) placement: AgentPlacement,
 }
 
 /// One page of Agent directory rows.
 #[derive(Debug, Clone, PartialEq)]
-pub struct AgentDirectoryPage {
+pub(crate) struct AgentDirectoryPage {
     /// Matching rows.
-    pub entries: Vec<AgentDirectoryEntry>,
+    pub(crate) entries: Vec<AgentDirectoryEntry>,
     /// Keyset cursor for the next page.
-    pub next_cursor: Option<String>,
+    pub(crate) next_cursor: Option<String>,
     /// Cursor used for this page.
-    pub prev_cursor: Option<String>,
+    pub(crate) prev_cursor: Option<String>,
     /// Whether another matching page exists.
-    pub has_more: bool,
+    pub(crate) has_more: bool,
 }
 
 /// Agent lookup result with optional placement.
 #[derive(Debug, Clone, PartialEq)]
-pub struct ResolvedAgent {
+pub(crate) struct ResolvedAgent {
     /// Durable Agent runtime snapshot.
-    pub agent: PersistedAgentRuntimeRecord,
+    pub(crate) agent: PersistedAgentRuntimeRecord,
     /// Placement when its workspace and project still exist.
-    pub placement: Option<AgentPlacement>,
+    pub(crate) placement: Option<AgentPlacement>,
 }
 
 /// Return the newer valid timestamp from durable metadata and provider activity.
 #[must_use]
-pub fn resolved_updated_at(record: &PersistedAgentRuntimeRecord) -> &str {
+pub(crate) fn resolved_updated_at(record: &PersistedAgentRuntimeRecord) -> &str {
     let updated = parse_timestamp(&record.updated_at);
     let activity = record.last_activity_at.as_deref().and_then(parse_timestamp);
     if activity.is_some_and(|activity| updated.is_none_or(|updated| activity > updated)) {
@@ -163,7 +163,7 @@ pub fn resolved_updated_at(record: &PersistedAgentRuntimeRecord) -> &str {
 
 /// Agent runtime application failure.
 #[derive(Debug, Clone, PartialEq, Eq, thiserror::Error)]
-pub enum AgentRuntimeError {
+pub(crate) enum AgentRuntimeError {
     /// Query parameters are outside the supported bounds.
     #[error("invalid Agent directory request")]
     InvalidRequest,
@@ -217,7 +217,7 @@ impl AgentRuntimeDirectory {
     ///
     /// # Errors
     /// Returns invalid-query or registry failures.
-    pub fn list(
+    pub(crate) fn list(
         &self,
         query: &AgentDirectoryQuery,
     ) -> Result<AgentDirectoryPage, AgentRuntimeError> {
@@ -228,7 +228,7 @@ impl AgentRuntimeDirectory {
     ///
     /// # Errors
     /// Returns invalid-query or registry failures.
-    pub fn history(
+    pub(crate) fn history(
         &self,
         query: &AgentDirectoryQuery,
     ) -> Result<AgentDirectoryPage, AgentRuntimeError> {
@@ -239,7 +239,7 @@ impl AgentRuntimeDirectory {
     /// This creation guard does not apply user-facing prefix or title resolution.
     /// # Errors
     /// Returns a registry error when the identity cannot be checked.
-    pub fn contains_identity(&self, id: &str) -> Result<bool, AgentRuntimeError> {
+    pub(crate) fn contains_identity(&self, id: &str) -> Result<bool, AgentRuntimeError> {
         self.agents
             .get(id)
             .map(|agent| agent.is_some())
@@ -250,7 +250,7 @@ impl AgentRuntimeDirectory {
     ///
     /// # Errors
     /// Returns an explicit missing/ambiguous result or registry failure.
-    pub fn get(&self, identifier: &str) -> Result<ResolvedAgent, AgentRuntimeError> {
+    pub(crate) fn get(&self, identifier: &str) -> Result<ResolvedAgent, AgentRuntimeError> {
         let identifier = identifier.trim();
         if identifier.is_empty() {
             return Err(AgentRuntimeError::NotFound(String::new()));
@@ -282,7 +282,7 @@ impl AgentRuntimeDirectory {
     ///
     /// # Errors
     /// Returns missing-Agent, invalid-request, or persistence failures.
-    pub fn update(
+    pub(crate) fn update(
         &self,
         agent_id: &str,
         name: Option<&str>,
@@ -315,7 +315,7 @@ impl AgentRuntimeDirectory {
     ///
     /// # Errors
     /// Returns missing-Agent or persistence failures.
-    pub fn archive(
+    pub(crate) fn archive(
         &self,
         agent_id: &str,
         archived_at: &str,
@@ -326,7 +326,7 @@ impl AgentRuntimeDirectory {
     /// Archive all Agents in the selected Workspace, retaining cross-Workspace descendants.
     /// # Errors
     /// Returns registry failures after any previously committed Agent updates.
-    pub fn archive_workspaces(
+    pub(crate) fn archive_workspaces(
         &self,
         workspace_ids: &[String],
         archived_at: &str,
@@ -338,7 +338,7 @@ impl AgentRuntimeDirectory {
     ///
     /// # Errors
     /// Returns missing-Agent or persistence failures.
-    pub fn delete(&self, agent_id: &str) -> Result<(), AgentRuntimeError> {
+    pub(crate) fn delete(&self, agent_id: &str) -> Result<(), AgentRuntimeError> {
         if !self.agents.remove(agent_id).map_err(map_agent_registry)? {
             return Err(AgentRuntimeError::NotFound(agent_id.to_owned()));
         }
@@ -349,7 +349,7 @@ impl AgentRuntimeDirectory {
     ///
     /// # Errors
     /// Returns missing-Agent or persistence failures. Earlier updates may already be durable.
-    pub fn clear_attention(
+    pub(crate) fn clear_attention(
         &self,
         agent_ids: &[String],
         updated_at: &str,
@@ -376,7 +376,7 @@ impl AgentRuntimeDirectory {
     ///
     /// # Errors
     /// Returns missing-Agent or persistence failures.
-    pub fn detach(
+    pub(crate) fn detach(
         &self,
         agent_id: &str,
         updated_at: &str,
@@ -619,7 +619,7 @@ fn parse_timestamp(value: &str) -> Option<i64> {
 
 /// Resolve the normalized runtime thinking selection, falling back to stored configuration.
 #[must_use]
-pub fn effective_thinking_option_id(record: &PersistedAgentRuntimeRecord) -> Option<&str> {
+pub(crate) fn effective_thinking_option_id(record: &PersistedAgentRuntimeRecord) -> Option<&str> {
     normalize_thinking_option_id(
         record
             .runtime_info

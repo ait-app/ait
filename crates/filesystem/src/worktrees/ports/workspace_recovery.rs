@@ -6,15 +6,15 @@ use std::fmt::Debug;
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct ArchivedWorktreeRestore {
     /// Main repository that owns the linked checkout.
-    pub source_repo_root: String,
+    pub(crate) source_repo_root: String,
     /// Exact deleted worktree root retained by the Workspace record.
-    pub previous_worktree_root: String,
+    pub(crate) previous_worktree_root: String,
     /// Exact selected Workspace directory, possibly below the worktree root.
-    pub workspace_cwd: String,
+    pub(crate) workspace_cwd: String,
     /// Saved local branch to check out without inventing a replacement branch.
-    pub branch: String,
+    pub(crate) branch: String,
     /// Saved comparison base, which may no longer resolve.
-    pub base_ref: Option<String>,
+    pub(crate) base_ref: Option<String>,
 }
 
 /// Stable failures from local archived Workspace recovery.

@@ -20,18 +20,18 @@ use crate::service::workspace_state::{WorkspaceAttentionBatch, WorkspaceState};
 
 /// Completed Workspace state request.
 #[derive(Debug)]
-pub struct Dispatched {
+pub(crate) struct Dispatched {
     /// Response payload.
-    pub value: Value,
+    pub(crate) value: Value,
     /// Optional Workspace event sent after the response.
-    pub event: Option<Value>,
+    pub(crate) event: Option<Value>,
 }
 
 /// Decode and execute a business request.
 ///
 /// # Errors
 /// Returns stable business failures for invalid or unsuccessful requests.
-pub fn execute(
+pub(crate) fn execute(
     workspace_state: &mut WorkspaceState,
     method: &str,
     params: Value,

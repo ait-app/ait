@@ -30,7 +30,7 @@ filesystem 约 3.5 万行，按“层 → 功能区”组织（`service/checkout
 2. 顶层保留组装与跨组模块：`installation`、`capabilities`、`dispatch`、`connection`，以及
    组合 Git 与 Forge 缓存的 `workspace_runtime`（原 `local::workspace_runtime`）。
    `support` 为组间共享的私有工具：`budget`（响应输出预算）、`git_command`（有界 Git
-   runner）和 `error`（宿主可见的分发错误码，经 `filesystem::ErrorCode` 导出）。
+   runner）和 `error`（宿主可见的分发错误码，仅在 crate 内使用）。
 3. 组间约定：
    - 组与组之间只引用对方的 `ports` 和 `protocol`；
    - 只有顶层模块可以同时组合多个组的具体类型；

@@ -5,7 +5,7 @@ use model::ErrorCode;
 use serde_json::{Value, json};
 
 use super::State;
-use crate::git::service::checkout::{
+use crate::git::ports::checkout::{
     CheckoutDiff, CheckoutDiffCompare, CheckoutDiffMode, DiffLineKind,
 };
 

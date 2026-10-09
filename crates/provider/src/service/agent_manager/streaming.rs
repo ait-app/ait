@@ -254,7 +254,8 @@ impl AgentManager {
     /// # Errors
     /// Returns invalid input, archived state, rejected admission or provider/storage failure.
     /// An uncertain admission closes the failed session; input is never automatically retried.
-    pub async fn send_steering(
+    #[cfg(test)]
+    pub(crate) async fn send_steering(
         &mut self,
         agent_id: &str,
         text: &str,
@@ -266,7 +267,7 @@ impl AgentManager {
     /// Admit all rich content into the active turn, or start a turn if already idle.
     /// # Errors
     /// Invalid input and definitive rejection preserve the active session; uncertainty closes it.
-    pub async fn steer_input(
+    pub(crate) async fn steer_input(
         &mut self,
         agent_id: &str,
         prompt: &crate::protocol::prompt::AgentPrompt,

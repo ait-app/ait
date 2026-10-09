@@ -326,13 +326,13 @@ fn search_item(
 #[derive(Debug, Clone, Copy)]
 pub(super) struct CreateRequest<'a> {
     /// Merge request title.
-    pub title: &'a str,
+    pub(crate) title: &'a str,
     /// Merge request description.
-    pub body: &'a str,
+    pub(crate) body: &'a str,
     /// Pushed source branch.
-    pub head: &'a str,
+    pub(crate) head: &'a str,
     /// Target branch.
-    pub base: &'a str,
+    pub(crate) base: &'a str,
 }
 
 /// Create an MR with glab, preserving the full subgroup path.

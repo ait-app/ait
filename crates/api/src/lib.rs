@@ -285,12 +285,6 @@ impl Api {
         Ok(self)
     }
 
-    /// Return the composed broker for host-side browser tool execution.
-    #[must_use]
-    pub fn browser(&self) -> Option<Broker> {
-        self.shared.browser.broker.clone()
-    }
-
     /// Build routes with origin checks, bounded HTTP handling, and metadata-only tracing.
     pub fn router(&self) -> Router {
         Router::new()

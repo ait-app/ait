@@ -11,7 +11,7 @@ use super::agent_config::NullableSetting;
 /// Paseo Agent lifecycle status.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
-pub enum AgentStatus {
+pub(crate) enum AgentStatus {
     /// Provider construction has started.
     Initializing,
     /// No provider turn is active.
@@ -27,7 +27,7 @@ pub enum AgentStatus {
 /// Why a client should surface an Agent.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
-pub enum AgentAttentionReason {
+pub(crate) enum AgentAttentionReason {
     /// A turn finished.
     Finished,
     /// A turn failed.
@@ -39,142 +39,142 @@ pub enum AgentAttentionReason {
 /// Provider capability flags attached to one Agent snapshot.
 ///
 /// Paseo deliberately permits provider-specific boolean keys in addition to its common flags.
-pub type AgentCapabilityFlags = BTreeMap<String, bool>;
+pub(crate) type AgentCapabilityFlags = BTreeMap<String, bool>;
 
 /// Provider resume handle exposed only when its provider is installed.
 #[derive(Debug, Clone, PartialEq, Serialize)]
 #[serde(rename_all = "camelCase")]
-pub struct AgentPersistenceHandle {
+pub(crate) struct AgentPersistenceHandle {
     /// Provider identifier.
-    pub provider: String,
+    provider: String,
     /// Provider session identifier.
-    pub session_id: String,
+    session_id: String,
     /// Optional provider-native handle.
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub native_handle: Option<Value>,
+    native_handle: Option<Value>,
     /// Provider-owned metadata.
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub metadata: Option<BTreeMap<String, Value>>,
+    metadata: Option<BTreeMap<String, Value>>,
 }
 
 /// Last runtime facts reported by a provider.
 #[derive(Debug, Clone, PartialEq, Serialize)]
 #[serde(rename_all = "camelCase")]
-pub struct AgentRuntimeInfo {
+pub(crate) struct AgentRuntimeInfo {
     /// Provider identifier.
-    pub provider: String,
+    pub(crate) provider: String,
     /// Current provider session.
-    pub session_id: Option<String>,
+    pub(crate) session_id: Option<String>,
     /// Effective provider model.
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub model: Option<String>,
+    pub(crate) model: Option<String>,
     /// Effective thinking option.
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub thinking_option_id: Option<String>,
+    pub(crate) thinking_option_id: Option<String>,
     /// Effective provider mode.
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub mode_id: Option<String>,
+    pub(crate) mode_id: Option<String>,
     /// Provider-owned runtime values.
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub extra: Option<BTreeMap<String, Value>>,
+    pub(crate) extra: Option<BTreeMap<String, Value>>,
 }
 
 /// Paseo-compatible projection of a durable Agent snapshot.
 #[derive(Debug, Clone, PartialEq, Serialize)]
 #[serde(rename_all = "camelCase")]
-pub struct AgentSnapshotPayload {
+pub(crate) struct AgentSnapshotPayload {
     /// Stable Agent identity.
-    pub id: String,
+    pub(crate) id: String,
     /// Provider identifier.
-    pub provider: String,
+    pub(crate) provider: String,
     /// Session working directory.
-    pub cwd: String,
+    pub(crate) cwd: String,
     /// Owning workspace.
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub workspace_id: Option<String>,
+    pub(crate) workspace_id: Option<String>,
     /// Configured model.
-    pub model: Option<String>,
+    pub(crate) model: Option<String>,
     /// Provider feature descriptors.
     #[serde(skip_serializing_if = "Vec::is_empty")]
-    pub features: Vec<Value>,
+    pub(crate) features: Vec<Value>,
     /// Configured thinking option.
-    pub thinking_option_id: Option<String>,
+    pub(crate) thinking_option_id: Option<String>,
     /// Effective thinking option.
-    pub effective_thinking_option_id: Option<String>,
+    pub(crate) effective_thinking_option_id: Option<String>,
     /// Creation timestamp.
-    pub created_at: String,
+    pub(crate) created_at: String,
     /// Latest update timestamp.
-    pub updated_at: String,
+    pub(crate) updated_at: String,
     /// Latest user-message timestamp.
-    pub last_user_message_at: Option<String>,
+    pub(crate) last_user_message_at: Option<String>,
     /// Durable lifecycle state.
-    pub status: AgentStatus,
+    pub(crate) status: AgentStatus,
     /// Active turn; persisted records have no active turn.
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub active_turn: Option<Value>,
+    pub(crate) active_turn: Option<Value>,
     /// Provider capability projection.
-    pub capabilities: AgentCapabilityFlags,
+    pub(crate) capabilities: AgentCapabilityFlags,
     /// Current provider mode.
-    pub current_mode_id: Option<String>,
+    pub(crate) current_mode_id: Option<String>,
     /// Available provider modes.
-    pub available_modes: Vec<Value>,
+    pub(crate) available_modes: Vec<Value>,
     /// Pending provider permissions.
-    pub pending_permissions: Vec<Value>,
+    pub(crate) pending_permissions: Vec<Value>,
     /// Durable provider identity, if its provider is available.
-    pub persistence: Option<AgentPersistenceHandle>,
+    pub(crate) persistence: Option<AgentPersistenceHandle>,
     /// Last provider runtime facts.
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub runtime_info: Option<AgentRuntimeInfo>,
+    pub(crate) runtime_info: Option<AgentRuntimeInfo>,
     /// Latest provider-reported usage, retained across disconnects and native resume.
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub last_usage: Option<crate::protocol::usage::AgentUsage>,
+    pub(crate) last_usage: Option<crate::protocol::usage::AgentUsage>,
     /// Last provider error.
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub last_error: Option<String>,
+    pub(crate) last_error: Option<String>,
     /// User-visible title.
-    pub title: Option<String>,
+    pub(crate) title: Option<String>,
     /// String labels.
-    pub labels: BTreeMap<String, String>,
+    pub(crate) labels: BTreeMap<String, String>,
     /// Whether the Agent asks for attention.
-    pub requires_attention: bool,
+    pub(crate) requires_attention: bool,
     /// Attention category.
-    pub attention_reason: Option<AgentAttentionReason>,
+    pub(crate) attention_reason: Option<AgentAttentionReason>,
     /// Attention timestamp.
-    pub attention_timestamp: Option<String>,
+    pub(crate) attention_timestamp: Option<String>,
     /// Soft-delete timestamp.
-    pub archived_at: Option<String>,
+    pub(crate) archived_at: Option<String>,
     /// Whether the referenced provider is unavailable.
-    pub provider_unavailable: bool,
+    pub(crate) provider_unavailable: bool,
 }
 
 /// Agent directory filters.
 #[derive(Debug, Clone, Default, PartialEq, Deserialize)]
 #[serde(rename_all = "camelCase")]
-pub struct AgentDirectoryFilter {
+pub(crate) struct AgentDirectoryFilter {
     /// Require exact key/value label matches.
     #[serde(default)]
-    pub labels: Option<BTreeMap<String, String>>,
+    pub(crate) labels: Option<BTreeMap<String, String>>,
     /// Restrict placement to project keys.
     #[serde(default)]
-    pub project_keys: Option<Vec<String>>,
+    pub(crate) project_keys: Option<Vec<String>>,
     /// Restrict lifecycle states.
     #[serde(default)]
-    pub statuses: Option<Vec<AgentStatus>>,
+    pub(crate) statuses: Option<Vec<AgentStatus>>,
     /// Include soft-deleted Agents.
     #[serde(default)]
-    pub include_archived: Option<bool>,
+    pub(crate) include_archived: Option<bool>,
     /// Restrict attention state.
     #[serde(default)]
-    pub requires_attention: Option<bool>,
+    pub(crate) requires_attention: Option<bool>,
     /// Restrict configured thinking option; explicit null means provider default.
     #[serde(default)]
-    pub thinking_option_id: NullableSetting,
+    pub(crate) thinking_option_id: NullableSetting,
 }
 
 /// Sortable Agent directory fields.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Deserialize)]
 #[serde(rename_all = "snake_case")]
-pub enum AgentSortKey {
+pub(crate) enum AgentSortKey {
     /// Attention and lifecycle priority.
     StatusPriority,
     /// Creation timestamp.
@@ -188,7 +188,7 @@ pub enum AgentSortKey {
 /// Sort direction.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Deserialize)]
 #[serde(rename_all = "snake_case")]
-pub enum SortDirection {
+pub(crate) enum SortDirection {
     /// Ascending order.
     Asc,
     /// Descending order.
@@ -197,172 +197,172 @@ pub enum SortDirection {
 
 /// One Agent directory sort term.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Deserialize)]
-pub struct AgentSort {
+pub(crate) struct AgentSort {
     /// Sort field.
-    pub key: AgentSortKey,
+    pub(crate) key: AgentSortKey,
     /// Sort direction.
-    pub direction: SortDirection,
+    pub(crate) direction: SortDirection,
 }
 
 /// Cursor page request.
 #[derive(Debug, Clone, PartialEq, Eq, Deserialize)]
-pub struct AgentPageRequest {
+pub(crate) struct AgentPageRequest {
     /// Page size, from one through 200.
-    pub limit: usize,
+    pub(crate) limit: usize,
     /// Opaque continuation cursor.
     #[serde(default)]
-    pub cursor: Option<String>,
+    pub(crate) cursor: Option<String>,
 }
 
 /// Active directory read request.
 #[derive(Debug, Clone, Default, PartialEq, Deserialize)]
 #[serde(rename_all = "camelCase")]
-pub struct AgentListRequest {
+pub(crate) struct AgentListRequest {
     /// Paseo accepts only the literal `active`.
     #[serde(default)]
-    pub scope: Option<String>,
+    pub(crate) scope: Option<String>,
     /// Directory filters.
     #[serde(default)]
-    pub filter: Option<AgentDirectoryFilter>,
+    pub(crate) filter: Option<AgentDirectoryFilter>,
     /// Ordered sort terms.
     #[serde(default)]
-    pub sort: Option<Vec<AgentSort>>,
+    pub(crate) sort: Option<Vec<AgentSort>>,
     /// Cursor page.
     #[serde(default)]
-    pub page: Option<AgentPageRequest>,
+    pub(crate) page: Option<AgentPageRequest>,
     /// Connection-owned live directory subscription.
     #[serde(default)]
-    pub subscribe: Option<domain::workspace::protocol::directory::SubscriptionRequest>,
+    pub(crate) subscribe: Option<domain::workspace::protocol::directory::SubscriptionRequest>,
     /// Latest-state synchronization checkpoint.
     #[serde(default)]
-    pub sync: Option<domain::directory_sync::Cursor>,
+    pub(crate) sync: Option<domain::directory_sync::Cursor>,
 }
 
 /// Historical Agent directory request.
 #[derive(Debug, Clone, Default, PartialEq, Deserialize)]
 #[serde(rename_all = "camelCase")]
-pub struct AgentHistoryRequest {
+pub(crate) struct AgentHistoryRequest {
     /// Directory filters; archived records are included by default.
     #[serde(default)]
-    pub filter: Option<AgentDirectoryFilter>,
+    pub(crate) filter: Option<AgentDirectoryFilter>,
     /// Case-insensitive query over title and placement names.
     #[serde(default)]
-    pub search: Option<String>,
+    pub(crate) search: Option<String>,
     /// Ordered sort terms.
     #[serde(default)]
-    pub sort: Option<Vec<AgentSort>>,
+    pub(crate) sort: Option<Vec<AgentSort>>,
     /// Cursor page.
     #[serde(default)]
-    pub page: Option<AgentPageRequest>,
+    pub(crate) page: Option<AgentPageRequest>,
 }
 
 /// One directory row.
 #[derive(Debug, Clone, PartialEq, Serialize)]
 #[serde(rename_all = "camelCase")]
-pub struct AgentDirectoryEntry {
+pub(crate) struct AgentDirectoryEntry {
     /// Agent runtime snapshot.
-    pub agent: AgentSnapshotPayload,
+    pub(crate) agent: AgentSnapshotPayload,
     /// Project/workspace placement.
-    pub project: ProjectPlacementPayload,
+    pub(crate) project: ProjectPlacementPayload,
 }
 
 /// Directory page metadata.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
 #[serde(rename_all = "camelCase")]
-pub struct AgentPageInfo {
+pub(crate) struct AgentPageInfo {
     /// Next page cursor.
-    pub next_cursor: Option<String>,
+    pub(crate) next_cursor: Option<String>,
     /// Cursor used to read this page.
-    pub prev_cursor: Option<String>,
+    pub(crate) prev_cursor: Option<String>,
     /// Whether another page exists.
-    pub has_more: bool,
+    pub(crate) has_more: bool,
 }
 
 /// Agent directory or history result.
 #[derive(Debug, Clone, PartialEq, Serialize)]
 #[serde(rename_all = "camelCase")]
-pub struct AgentDirectoryResult {
+pub(crate) struct AgentDirectoryResult {
     /// Matching rows.
-    pub entries: Vec<AgentDirectoryEntry>,
+    pub(crate) entries: Vec<AgentDirectoryEntry>,
     /// Page metadata.
-    pub page_info: AgentPageInfo,
+    pub(crate) page_info: AgentPageInfo,
 }
 
 /// Resolve one Agent by full ID, unique prefix, or exact title.
 #[derive(Debug, Clone, PartialEq, Eq, Deserialize)]
 #[serde(rename_all = "camelCase")]
-pub struct AgentGetRequest {
+pub(crate) struct AgentGetRequest {
     /// Agent identifier accepted by Paseo resolution rules.
-    pub agent_id: String,
+    pub(crate) agent_id: String,
 }
 
 /// One Agent lookup result.
 #[derive(Debug, Clone, PartialEq, Serialize)]
-pub struct AgentGetResult {
+pub(crate) struct AgentGetResult {
     /// Agent snapshot, or null on lookup failure.
-    pub agent: Option<AgentSnapshotPayload>,
+    pub(crate) agent: Option<AgentSnapshotPayload>,
     /// Placement, when the Agent belongs to a known workspace.
-    pub project: Option<ProjectPlacementPayload>,
+    pub(crate) project: Option<ProjectPlacementPayload>,
     /// Safe lookup error.
-    pub error: Option<String>,
+    pub(crate) error: Option<String>,
 }
 
 /// Update Agent metadata.
 #[derive(Debug, Clone, PartialEq, Eq, Deserialize)]
 #[serde(rename_all = "camelCase")]
-pub struct AgentUpdateRequest {
+pub(crate) struct AgentUpdateRequest {
     /// Full Agent identity.
-    pub agent_id: String,
+    pub(crate) agent_id: String,
     /// Nonempty title after trimming.
     #[serde(default)]
-    pub name: Option<String>,
+    pub(crate) name: Option<String>,
     /// Replacement labels when nonempty.
     #[serde(default)]
-    pub labels: Option<BTreeMap<String, String>>,
+    pub(crate) labels: Option<BTreeMap<String, String>>,
 }
 
 /// Common metadata action result.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
 #[serde(rename_all = "camelCase")]
-pub struct AgentActionResult {
+pub(crate) struct AgentActionResult {
     /// Full Agent identity.
-    pub agent_id: String,
+    pub(crate) agent_id: String,
     /// Whether the operation was accepted.
-    pub accepted: bool,
+    pub(crate) accepted: bool,
     /// Safe business error.
-    pub error: Option<String>,
+    pub(crate) error: Option<String>,
 }
 
 /// Request targeting one full Agent identity.
 #[derive(Debug, Clone, PartialEq, Eq, Deserialize)]
 #[serde(rename_all = "camelCase")]
-pub struct AgentIdRequest {
+pub(crate) struct AgentIdRequest {
     /// Full Agent identity.
-    pub agent_id: String,
+    pub(crate) agent_id: String,
 }
 
 /// Archive result.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
 #[serde(rename_all = "camelCase")]
-pub struct AgentArchiveResult {
+pub(crate) struct AgentArchiveResult {
     /// Full Agent identity.
-    pub agent_id: String,
+    pub(crate) agent_id: String,
     /// Archive timestamp.
-    pub archived_at: String,
+    pub(crate) archived_at: String,
 }
 
 /// Permanent deletion result.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
 #[serde(rename_all = "camelCase")]
-pub struct AgentDeleteResult {
+pub(crate) struct AgentDeleteResult {
     /// Full Agent identity.
-    pub agent_id: String,
+    pub(crate) agent_id: String,
 }
 
 /// One or several Agent identities accepted by clear-attention.
 #[derive(Debug, Clone, PartialEq, Eq, Deserialize, Serialize)]
 #[serde(untagged)]
-pub enum AgentIdSelection {
+pub(crate) enum AgentIdSelection {
     /// One Agent identity.
     One(String),
     /// Several Agent identities.
@@ -372,50 +372,50 @@ pub enum AgentIdSelection {
 /// Clear attention request.
 #[derive(Debug, Clone, PartialEq, Eq, Deserialize)]
 #[serde(rename_all = "camelCase")]
-pub struct AgentAttentionClearRequest {
+pub(crate) struct AgentAttentionClearRequest {
     /// One Agent identity or an array of identities.
-    pub agent_id: AgentIdSelection,
+    pub(crate) agent_id: AgentIdSelection,
 }
 
 /// Clear attention result.
 #[derive(Debug, Clone, PartialEq, Serialize)]
 #[serde(rename_all = "camelCase")]
-pub struct AgentAttentionClearResult {
+pub(crate) struct AgentAttentionClearResult {
     /// Original selection.
-    pub agent_id: AgentIdSelection,
+    pub(crate) agent_id: AgentIdSelection,
     /// Updated snapshots.
-    pub agents: Vec<AgentSnapshotPayload>,
+    pub(crate) agents: Vec<AgentSnapshotPayload>,
 }
 
 /// Batch close request.
 #[derive(Debug, Clone, Default, PartialEq, Eq, Deserialize)]
 #[serde(rename_all = "camelCase")]
-pub struct AgentItemsCloseRequest {
+pub(crate) struct AgentItemsCloseRequest {
     /// Agents to archive independently.
     #[serde(default)]
-    pub agent_ids: Vec<String>,
+    pub(crate) agent_ids: Vec<String>,
     /// Terminal identities reserved for the terminal phase.
     #[serde(default)]
-    pub terminal_ids: Vec<String>,
+    pub(crate) terminal_ids: Vec<String>,
 }
 
 /// One successful Agent archive in a batch close.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
 #[serde(rename_all = "camelCase")]
-pub struct ClosedAgentResult {
+pub(crate) struct ClosedAgentResult {
     /// Agent identity.
-    pub agent_id: String,
+    pub(crate) agent_id: String,
     /// Archive timestamp.
-    pub archived_at: String,
+    pub(crate) archived_at: String,
 }
 
 /// Batch close result.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
-pub struct AgentItemsCloseResult {
+pub(crate) struct AgentItemsCloseResult {
     /// Successfully archived Agents; failures are omitted as in Paseo.
-    pub agents: Vec<ClosedAgentResult>,
+    pub(crate) agents: Vec<ClosedAgentResult>,
     /// Terminal results. This phase accepts only an empty terminal request.
-    pub terminals: Vec<Value>,
+    pub(crate) terminals: Vec<Value>,
 }
 
 #[cfg(test)]

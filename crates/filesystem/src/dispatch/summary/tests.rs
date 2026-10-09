@@ -1,5 +1,5 @@
 use super::*;
-use crate::git::service::checkout::{DiffHunk, DiffLine, ParsedDiffFile};
+use crate::git::ports::checkout::{DiffHunk, DiffLine, ParsedDiffFile};
 
 #[test]
 fn fills_only_missing_fields_and_preserves_explicit_wording() {

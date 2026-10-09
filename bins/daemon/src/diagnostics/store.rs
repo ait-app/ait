@@ -7,7 +7,7 @@ use std::time::SystemTime;
 use chrono::{DateTime, Utc};
 
 /// Maximum bytes in one sanitized incident report.
-pub const REPORT_LIMIT: usize = 256 * 1024;
+pub(crate) const REPORT_LIMIT: usize = 256 * 1024;
 
 const COUNT_LIMIT: usize = 20;
 const BYTE_LIMIT: u64 = 5 * 1024 * 1024;
@@ -16,7 +16,11 @@ const MAX_AGE: chrono::Duration = chrono::Duration::days(7);
 /// Save already sanitized `report` in `directory`, then enforce retention at `now`.
 /// # Errors
 /// Returns directory, file-write or retention I/O errors, or rejects oversized reports.
-pub fn save(directory: &Path, report: &str, now: DateTime<Utc>) -> Result<(), persistence::Error> {
+pub(crate) fn save(
+    directory: &Path,
+    report: &str,
+    now: DateTime<Utc>,
+) -> Result<(), persistence::Error> {
     if report.len() > REPORT_LIMIT {
         return Err(persistence::Error::TooLarge);
     }
@@ -62,7 +66,7 @@ fn files(directory: &Path) -> std::io::Result<Vec<(SystemTime, PathBuf, u64)>> {
 /// Remove expired or excess Ait-owned incidents in `directory` relative to `now`.
 /// # Errors
 /// Returns directory enumeration, metadata or removal errors.
-pub fn prune(directory: &Path, now: DateTime<Utc>) -> std::io::Result<()> {
+pub(crate) fn prune(directory: &Path, now: DateTime<Utc>) -> std::io::Result<()> {
     let mut bytes = 0;
     let mut retained = 0;
     for (modified, path, size) in files(directory)? {
@@ -82,7 +86,7 @@ pub fn prune(directory: &Path, now: DateTime<Utc>) -> std::io::Result<()> {
 /// Read at most three bounded incidents from `directory`, including unavailable markers.
 /// Returns stored text for the host to sanitize again before sharing.
 #[must_use]
-pub fn recent(directory: &Path) -> String {
+pub(crate) fn recent(directory: &Path) -> String {
     let Ok(files) = files(directory) else {
         return "\nSaved incidents unavailable\n".into();
     };

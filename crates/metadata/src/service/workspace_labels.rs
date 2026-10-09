@@ -16,16 +16,16 @@ const JOURNAL_LIMIT: usize = 256;
 
 /// Incremental synchronization cursor.
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub struct WorkspaceLabelCursor {
+pub(crate) struct WorkspaceLabelCursor {
     /// Process generation returned by an earlier synchronization.
-    pub generation: String,
+    pub(crate) generation: String,
     /// Last sequence observed by the client.
-    pub after_seq: u64,
+    pub(crate) after_seq: u64,
 }
 
 /// Whether a synchronization contains a full catalog or compacted changes.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum WorkspaceLabelSyncMode {
+pub(crate) enum WorkspaceLabelSyncMode {
     /// Complete current catalog.
     Snapshot,
     /// Changes strictly after the supplied cursor.
@@ -34,38 +34,38 @@ pub enum WorkspaceLabelSyncMode {
 
 /// One compacted removal in a catch-up response.
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub struct WorkspaceLabelRemoval {
+pub(crate) struct WorkspaceLabelRemoval {
     /// Removed display name.
-    pub name: String,
+    pub(crate) name: String,
     /// Sequence that removed or renamed the label.
-    pub seq: u64,
+    pub(crate) seq: u64,
 }
 
 /// Sequencing metadata for a label list response.
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub struct WorkspaceLabelSyncMetadata {
+pub(crate) struct WorkspaceLabelSyncMetadata {
     /// Snapshot or catch-up mode.
-    pub mode: WorkspaceLabelSyncMode,
+    pub(crate) mode: WorkspaceLabelSyncMode,
     /// Current process generation.
-    pub generation: String,
+    pub(crate) generation: String,
     /// Sequence at the synchronization boundary.
-    pub head_seq: u64,
+    pub(crate) head_seq: u64,
     /// Compacted removals for change mode.
-    pub removals: Vec<WorkspaceLabelRemoval>,
+    pub(crate) removals: Vec<WorkspaceLabelRemoval>,
 }
 
 /// Label list plus synchronization metadata.
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub struct WorkspaceLabelSync {
+pub(crate) struct WorkspaceLabelSync {
     /// Full snapshot or compacted upserts.
-    pub labels: Vec<WorkspaceLabelDefinition>,
+    pub(crate) labels: Vec<WorkspaceLabelDefinition>,
     /// Synchronization boundary.
-    pub sync: WorkspaceLabelSyncMetadata,
+    pub(crate) sync: WorkspaceLabelSyncMetadata,
 }
 
 /// Durable live label change published after storage commit.
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub enum WorkspaceLabelChange {
+pub(crate) enum WorkspaceLabelChange {
     /// Definition creation or edit.
     Upsert {
         /// Current definition.
@@ -82,31 +82,31 @@ pub enum WorkspaceLabelChange {
 
 /// Live change with process generation and monotonic sequence.
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub struct SequencedWorkspaceLabelChange {
+pub(crate) struct SequencedWorkspaceLabelChange {
     /// Process generation.
-    pub generation: String,
+    pub(crate) generation: String,
     /// Positive sequence number.
-    pub seq: u64,
+    pub(crate) seq: u64,
     /// Catalog change.
-    pub change: WorkspaceLabelChange,
+    pub(crate) change: WorkspaceLabelChange,
 }
 
 /// Successful assignment result.
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub struct WorkspaceLabelAssignment {
+pub(crate) struct WorkspaceLabelAssignment {
     /// Authoritative catalog definition.
-    pub label: WorkspaceLabelDefinition,
+    pub(crate) label: WorkspaceLabelDefinition,
     /// Complete assignment names for the workspace.
-    pub workspace_labels: Vec<String>,
+    pub(crate) workspace_labels: Vec<String>,
 }
 
 /// Successful edit result.
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub struct WorkspaceLabelEdit {
+pub(crate) struct WorkspaceLabelEdit {
     /// Updated definition.
-    pub label: WorkspaceLabelDefinition,
+    pub(crate) label: WorkspaceLabelDefinition,
     /// Workspaces whose name assignment was rewritten.
-    pub affected_workspace_count: usize,
+    pub(crate) affected_workspace_count: usize,
 }
 
 /// Business or persistence failure.
@@ -133,7 +133,7 @@ pub enum WorkspaceLabelError {
 }
 
 /// Callback invoked after one durable catalog change.
-pub type WorkspaceLabelListener = Arc<dyn Fn(SequencedWorkspaceLabelChange) + Send + Sync>;
+type WorkspaceLabelListener = Arc<dyn Fn(SequencedWorkspaceLabelChange) + Send + Sync>;
 
 struct SequenceState {
     generation: String,
@@ -157,7 +157,7 @@ impl fmt::Debug for SequenceState {
 }
 
 /// RAII connection-owned label subscription.
-pub struct WorkspaceLabelSubscription {
+pub(crate) struct WorkspaceLabelSubscription {
     sequence: Weak<Mutex<SequenceState>>,
     listener_id: u64,
 }
@@ -216,7 +216,7 @@ impl WorkspaceLabels {
     ///
     /// # Errors
     /// Returns storage failures.
-    pub fn list(
+    pub(crate) fn list(
         &self,
         cursor: Option<&WorkspaceLabelCursor>,
     ) -> Result<WorkspaceLabelSync, WorkspaceLabelError> {
@@ -229,7 +229,7 @@ impl WorkspaceLabels {
     ///
     /// # Errors
     /// Returns storage failures.
-    pub fn subscribe(
+    pub(crate) fn subscribe(
         &self,
         cursor: Option<&WorkspaceLabelCursor>,
         listener: WorkspaceLabelListener,
@@ -255,7 +255,7 @@ impl WorkspaceLabels {
     ///
     /// # Errors
     /// Returns validation, missing-workspace, or storage errors.
-    pub fn set_assignment(
+    pub(crate) fn set_assignment(
         &self,
         workspace_id: &str,
         label: &WorkspaceLabelDefinition,
@@ -316,7 +316,7 @@ impl WorkspaceLabels {
     ///
     /// # Errors
     /// Returns empty, missing, collision, or storage errors.
-    pub fn update(
+    pub(crate) fn update(
         &self,
         name: &str,
         new_name: Option<&str>,
@@ -391,7 +391,11 @@ impl WorkspaceLabels {
     ///
     /// # Errors
     /// Returns empty-name or storage errors. Missing labels are idempotent.
-    pub fn delete(&self, name: &str, updated_at: &str) -> Result<usize, WorkspaceLabelError> {
+    pub(crate) fn delete(
+        &self,
+        name: &str,
+        updated_at: &str,
+    ) -> Result<usize, WorkspaceLabelError> {
         let _operation = self.operation();
         let key = workspace_label_key(&require_name(name)?);
         let snapshot = self.store.snapshot().map_err(map_store_error)?;
@@ -429,7 +433,7 @@ impl WorkspaceLabels {
     ///
     /// # Errors
     /// Returns empty-name or storage errors.
-    pub fn inspect_delete(&self, name: &str) -> Result<usize, WorkspaceLabelError> {
+    pub(crate) fn inspect_delete(&self, name: &str) -> Result<usize, WorkspaceLabelError> {
         let _operation = self.operation();
         let key = workspace_label_key(&require_name(name)?);
         let snapshot = self.store.snapshot().map_err(map_store_error)?;

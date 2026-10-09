@@ -293,7 +293,7 @@ pub struct WorkspaceListFilter {
     pub project_id: Option<String>,
     /// Accepted Paseo compatibility field; it does not filter results.
     #[serde(default)]
-    pub id_prefix: Option<String>,
+    id_prefix: Option<String>,
 }
 
 /// Workspace sort key.

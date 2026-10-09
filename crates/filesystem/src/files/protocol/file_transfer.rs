@@ -11,7 +11,7 @@ pub enum FrameError {
 }
 
 /// Transfer chunk byte limit, matching Paseo's streaming chunk size.
-pub const CHUNK_BYTES: usize = 256 * 1024;
+pub(crate) const CHUNK_BYTES: usize = 256 * 1024;
 
 /// Metadata advertised before streaming a file.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]

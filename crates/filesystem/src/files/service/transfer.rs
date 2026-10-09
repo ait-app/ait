@@ -20,7 +20,7 @@ impl Cursor {
     ///
     /// # Errors
     /// Returns read errors or a changed-file error when final verification fails.
-    pub fn read_chunk(mut self) -> Result<(Self, Option<Vec<u8>>), FileError> {
+    pub(crate) fn read_chunk(mut self) -> Result<(Self, Option<Vec<u8>>), FileError> {
         if self.remaining == 0 {
             self.reader.verify()?;
             return Ok((self, None));

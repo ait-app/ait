@@ -81,6 +81,10 @@ impl Default for Catalog {
 }
 
 impl Catalog {
+    /// Run a catalog request and wait for discovery when the method requires a snapshot.
+    /// # Errors
+    /// Rejects invalid scopes, unsupported providers, shutdown and unavailable storage.
+    #[cfg(test)]
     pub(crate) async fn execute(
         &self,
         clients: &BTreeMap<String, Arc<dyn AgentClient>>,

@@ -1,11 +1,11 @@
 //! Transport-independent metadata request handling and safe business failures.
 
-pub mod daemon;
+pub(crate) mod daemon;
 pub mod directory;
 /// Legacy desktop editor compatibility responses.
-pub mod editor;
+pub(crate) mod editor;
 pub mod server;
-pub mod workspace_labels;
+pub(crate) mod workspace_labels;
 
 /// Stable metadata failure mapped into the host's public RPC error envelope.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, thiserror::Error)]

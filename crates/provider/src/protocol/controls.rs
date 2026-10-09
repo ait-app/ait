@@ -9,49 +9,49 @@ use super::timeline::{Cursor, Direction};
 /// A non-destructive native conversation rewind target.
 #[derive(Debug, Deserialize)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
-pub struct RewindRequest {
+pub(crate) struct RewindRequest {
     /// Registered Agent identifier.
-    pub agent_id: String,
+    pub(crate) agent_id: String,
     /// Native user message to remove together with subsequent turns.
-    pub message_id: String,
+    pub(crate) message_id: String,
     /// Only conversation is supported by Codex; files and both are explicitly rejected.
-    pub mode: String,
+    pub(crate) mode: String,
 }
 
 /// Discover commands for an existing Agent or an unregistered draft.
 #[derive(Debug, Deserialize)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
-pub struct CommandsRequest {
+pub(crate) struct CommandsRequest {
     /// Existing Agent identifier, or a UI draft identifier.
-    pub agent_id: String,
+    pub(crate) agent_id: String,
     /// Native working directory and configuration when the Agent does not exist.
-    pub draft_config: Option<SessionConfig>,
+    pub(crate) draft_config: Option<SessionConfig>,
 }
 
 /// Resolve a pending native approval scoped to one live Agent session.
 #[derive(Debug, Deserialize)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
-pub struct PermissionRequest {
+pub(crate) struct PermissionRequest {
     /// Registered Agent identifier.
-    pub agent_id: String,
+    pub(crate) agent_id: String,
     /// Permission identity from the pending request, distinct from the RPC envelope ID.
-    pub request_id: String,
+    pub(crate) request_id: String,
     /// Allow/deny decision, with optional question answers.
-    pub response: Value,
+    pub(crate) response: Value,
 }
 
 /// Query a provider-owned descendant without registering another host Agent.
 #[derive(Debug, Deserialize)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
-pub struct SubagentRequest {
+pub(crate) struct SubagentRequest {
     /// Registered root Agent identifier.
-    pub parent_agent_id: String,
+    pub(crate) parent_agent_id: String,
     /// Native descendant ID for timeline requests.
-    pub subagent_id: Option<String>,
+    pub(crate) subagent_id: Option<String>,
     /// Pagination direction.
-    pub direction: Option<Direction>,
+    pub(crate) direction: Option<Direction>,
     /// Exclusive generation/sequence boundary.
-    pub cursor: Option<Cursor>,
+    pub(crate) cursor: Option<Cursor>,
     /// Page size, with zero meaning the bounded full window.
-    pub limit: Option<usize>,
+    pub(crate) limit: Option<usize>,
 }

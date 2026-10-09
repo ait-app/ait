@@ -27,43 +27,43 @@ pub enum EntryKind {
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct FileEntry {
     /// Display name.
-    pub name: String,
+    pub(crate) name: String,
     /// Workspace-relative path.
-    pub path: String,
+    pub(crate) path: String,
     /// Entry category.
-    pub kind: EntryKind,
+    pub(crate) kind: EntryKind,
     /// Size in bytes.
-    pub size: u64,
+    pub(crate) size: u64,
     /// ISO timestamp with millisecond precision.
-    pub modified_at: String,
+    pub(crate) modified_at: String,
 }
 
 /// File metadata and opaque disk revision.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct FileInfo {
     /// Canonical scope captured while the file was opened.
-    pub root: String,
+    pub(crate) root: String,
     /// Canonical target captured while the file was opened.
-    pub absolute_path: String,
+    pub(crate) absolute_path: String,
     /// Workspace-relative path.
-    pub path: String,
+    pub(crate) path: String,
     /// Download name.
-    pub file_name: String,
+    pub(crate) file_name: String,
     /// Content type.
     pub mime_type: String,
     /// Classification.
-    pub kind: FileKind,
+    pub(crate) kind: FileKind,
     /// Size in bytes.
     pub size: u64,
     /// ISO modification timestamp.
-    pub modified_at: String,
+    pub(crate) modified_at: String,
     /// High precision identity and modification token.
-    pub revision: String,
+    pub(crate) revision: String,
 }
 
 /// Preview classification.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum FileKind {
+pub(crate) enum FileKind {
     /// UTF-8 text.
     Text,
     /// Recognized image extension.
@@ -87,15 +87,15 @@ pub enum FileVersion {
 #[derive(Debug, Clone)]
 pub struct FileWrite {
     /// Root directory.
-    pub cwd: String,
+    pub(crate) cwd: String,
     /// Scoped path.
-    pub path: String,
+    pub(crate) path: String,
     /// Replacement UTF-8 text.
-    pub content: String,
+    pub(crate) content: String,
     /// Legacy timestamp guard.
-    pub expected_modified_at: String,
+    pub(crate) expected_modified_at: String,
     /// Preferred high precision guard.
-    pub expected_revision: Option<String>,
+    pub(crate) expected_revision: Option<String>,
 }
 
 /// Result of an optimistic write.
@@ -111,17 +111,17 @@ pub enum FileWritten {
 #[derive(Debug, Clone)]
 pub struct FileSearch {
     /// Optional workspace root; absent selects the home directory.
-    pub cwd: Option<String>,
+    pub(crate) cwd: Option<String>,
     /// User query.
-    pub query: String,
+    pub(crate) query: String,
     /// Include files.
-    pub include_files: bool,
+    pub(crate) include_files: bool,
     /// Include directories.
-    pub include_directories: bool,
+    pub(crate) include_directories: bool,
     /// Match an exact path suffix rather than a fuzzy subsequence.
-    pub suffix: bool,
+    pub(crate) suffix: bool,
     /// Maximum number of results.
-    pub limit: usize,
+    pub(crate) limit: usize,
 }
 
 /// Reader bound to one open regular file and its advertised revision.
@@ -139,15 +139,15 @@ pub trait FileReader: Debug + Read + Send {
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct UploadedFile {
     /// Server-generated upload identity.
-    pub id: String,
+    pub(crate) id: String,
     /// Sanitized file name.
-    pub file_name: String,
+    pub(crate) file_name: String,
     /// Client-declared MIME type.
-    pub mime_type: String,
+    pub(crate) mime_type: String,
     /// Byte count.
-    pub size: u64,
+    pub(crate) size: u64,
     /// Absolute path of the retained upload.
-    pub path: String,
+    pub(crate) path: String,
 }
 
 /// Upload writer whose incomplete directory is removed on drop.

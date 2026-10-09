@@ -566,16 +566,7 @@ fn assert_replay(
         epoch
     );
     let (_, after) = timeline.read("agent").unwrap();
-    assert_eq!(
-        before
-            .iter()
-            .map(crate::storage::timeline::Row::value)
-            .collect::<Vec<_>>(),
-        after
-            .iter()
-            .map(crate::storage::timeline::Row::value)
-            .collect::<Vec<_>>()
-    );
+    assert_eq!(before, after);
 }
 
 #[cfg(unix)]

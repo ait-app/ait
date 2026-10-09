@@ -4,11 +4,11 @@ pub mod audio;
 pub mod capabilities;
 pub mod connection;
 pub mod dispatch;
-pub mod local;
+mod local;
 pub mod offline;
-pub mod openai;
+pub(crate) mod openai;
 pub mod ports;
-pub mod protocol;
+pub(crate) mod protocol;
 pub mod service;
 
 /// Safe speech failures; provider response bodies, paths and credentials never cross the wire.
@@ -46,7 +46,7 @@ pub enum Error {
 impl Error {
     /// Stable reason code suitable for client diagnostics.
     #[must_use]
-    pub fn reason(self) -> &'static str {
+    fn reason(self) -> &'static str {
         match self {
             Self::Invalid => "invalid_audio_or_stream",
             Self::Unavailable => "speech_backend_unavailable",
@@ -62,7 +62,7 @@ impl Error {
 
     /// Whether retrying after a transient condition may succeed.
     #[must_use]
-    pub fn retryable(self) -> bool {
+    fn retryable(self) -> bool {
         matches!(
             self,
             Self::Capacity | Self::Timeout | Self::Provider | Self::Preparing | Self::ModelDownload

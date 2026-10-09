@@ -10,7 +10,7 @@ use crate::worktrees::ports::workspace_recovery::{
 };
 /// Archived Workspace recovery action.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum WorkspaceRecoveryAction {
+pub(crate) enum WorkspaceRecoveryAction {
     /// The exact Workspace directory still exists; only registry records are reopened.
     Unarchive,
     /// A deleted managed worktree must be recreated before records are reopened.
@@ -19,7 +19,7 @@ pub enum WorkspaceRecoveryAction {
 
 /// Stable reasons an archived Workspace cannot be recovered.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum WorkspaceRecoveryUnavailableReason {
+pub(crate) enum WorkspaceRecoveryUnavailableReason {
     /// No Workspace record exists.
     WorkspaceNotFound,
     /// The Workspace is already active.
@@ -36,7 +36,7 @@ pub enum WorkspaceRecoveryUnavailableReason {
 
 /// Read-only recovery inspection result.
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub enum WorkspaceRecoveryState {
+pub(crate) enum WorkspaceRecoveryState {
     /// Recovery can proceed.
     Recoverable {
         /// Workspace identity.
@@ -61,18 +61,18 @@ pub enum WorkspaceRecoveryState {
 
 /// Successful recovered placement used by the API to publish a Workspace update.
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub struct RecoveredWorkspace {
+pub(crate) struct RecoveredWorkspace {
     /// Reopened Workspace record.
-    pub workspace: PersistedWorkspaceRecord,
+    pub(crate) workspace: PersistedWorkspaceRecord,
     /// Reopened owning Project record.
-    pub project: PersistedProjectRecord,
+    pub(crate) project: PersistedProjectRecord,
     /// Recovery action that was performed.
-    pub action: WorkspaceRecoveryAction,
+    pub(crate) action: WorkspaceRecoveryAction,
 }
 
 /// Archived Workspace recovery failure.
 #[derive(Debug, Clone, PartialEq, Eq, thiserror::Error)]
-pub enum WorkspaceRecoveryError {
+pub(crate) enum WorkspaceRecoveryError {
     /// Workspace registry persistence failed.
     #[error("Workspace registry failed")]
     WorkspaceRegistry,
@@ -124,7 +124,7 @@ impl WorkspaceRecovery {
     ///
     /// # Errors
     /// Returns registry failures; expected unavailable states are returned as values.
-    pub fn inspect_recovery(
+    pub(crate) fn inspect_recovery(
         &self,
         workspace_id: &str,
     ) -> Result<WorkspaceRecoveryState, WorkspaceRecoveryError> {
@@ -139,7 +139,7 @@ impl WorkspaceRecovery {
     /// # Errors
     /// Returns unavailable, Git/filesystem, or durable registry failures. The Workspace remains
     /// archived when worktree recreation itself fails.
-    pub fn restore(
+    pub(crate) fn restore(
         &self,
         workspace_id: &str,
         updated_at: &str,

@@ -9,7 +9,7 @@ pub mod single;
 /// Maximum incoming JSON message size, including fragmented messages.
 pub const MAX_MESSAGE_BYTES: usize = 1024 * 1024;
 /// Maximum queued outgoing messages per connection.
-pub const MAX_QUEUE_MESSAGES: usize = 256;
+pub(crate) const MAX_QUEUE_MESSAGES: usize = 256;
 /// Maximum queued outgoing bytes per connection, including the active write.
 pub const MAX_QUEUE_BYTES: usize = 4 * 1024 * 1024;
 /// Maximum simultaneous upgraded connections.
@@ -27,9 +27,9 @@ pub const CAPABILITIES: &[&str] = &[
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 pub struct Version {
     /// Incompatible protocol generation.
-    pub major: u16,
+    major: u16,
     /// Backward-compatible revision.
-    pub minor: u16,
+    minor: u16,
 }
 
 /// Current public protocol version.
@@ -49,13 +49,13 @@ pub enum Lifecycle {
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct Limits {
     /// Maximum incoming JSON message bytes.
-    pub message_bytes: usize,
+    message_bytes: usize,
     /// Maximum queued outgoing messages.
-    pub queue_messages: usize,
+    queue_messages: usize,
     /// Maximum queued outgoing bytes.
-    pub queue_bytes: usize,
+    queue_bytes: usize,
     /// Maximum simultaneous connections.
-    pub connections: usize,
+    connections: usize,
 }
 
 impl Default for Limits {
@@ -280,28 +280,28 @@ pub enum ServerMessage {
 
 /// Client's acceptable minor-version interval for one major version.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
-pub struct VersionOffer {
+struct VersionOffer {
     /// Required major version.
-    pub major: u16,
+    major: u16,
     /// Lowest acceptable minor version.
-    pub min_minor: u16,
+    min_minor: u16,
     /// Highest acceptable minor version.
-    pub max_minor: u16,
+    max_minor: u16,
 }
 
 /// First application message on every physical connection.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct Hello {
     /// Version interval to negotiate.
-    pub protocol: VersionOffer,
+    protocol: VersionOffer,
     /// Diagnostic label only; never an authenticated identity.
     pub client_id: String,
     /// Optional capabilities the client understands.
     #[serde(default)]
-    pub capabilities: Vec<String>,
+    capabilities: Vec<String>,
     /// Capabilities without which the client cannot operate.
     #[serde(default)]
-    pub required_capabilities: Vec<String>,
+    required_capabilities: Vec<String>,
 }
 
 impl Hello {
@@ -313,19 +313,6 @@ impl Hello {
         self.required_capabilities
             .iter()
             .any(|name| name == single::CAPABILITY)
-    }
-
-    /// Validate the offer and return negotiated capabilities.
-    ///
-    /// # Errors
-    /// Rejects malformed identifiers, incompatible versions, or missing required capabilities.
-    pub fn negotiate(&self) -> Result<Vec<String>, ErrorCode> {
-        self.negotiate_available(
-            &CAPABILITIES
-                .iter()
-                .map(|s| (*s).to_owned())
-                .collect::<Vec<_>>(),
-        )
     }
 
     /// Negotiate against capabilities actually installed by the composition root.

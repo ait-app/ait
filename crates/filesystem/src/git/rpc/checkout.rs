@@ -4,8 +4,9 @@ use model::methods::MethodSpec;
 use serde::Serialize;
 use serde_json::Value;
 
+use crate::git::ports::checkout as port;
 use crate::git::protocol::checkout as protocol;
-use crate::git::service::checkout::{self as port, Checkout};
+use crate::git::service::checkout::Checkout;
 use crate::support::budget::fits as fits_diff_output_budget;
 use crate::support::error::ErrorCode;
 
@@ -38,7 +39,11 @@ pub const METHODS: &[MethodSpec] = &[
 ///
 /// # Errors
 /// Rejects unknown methods, invalid parameters, or result encoding failures.
-pub fn execute(checkout: &Checkout, method: &str, params: Value) -> Result<Value, ErrorCode> {
+pub(crate) fn execute(
+    checkout: &Checkout,
+    method: &str,
+    params: Value,
+) -> Result<Value, ErrorCode> {
     match method {
         "checkout.status.get.request" => status(checkout, &decode(params)?),
         "checkout.refresh.request" => refresh(checkout, &decode(params)?),
@@ -515,8 +520,6 @@ fn protocol_diff_file(file: port::ParsedDiffFile) -> protocol::ParsedDiffFile {
             })
             .collect(),
         status: file.status.map(|status| match status {
-            port::ParsedDiffStatus::Ok => protocol::ParsedDiffStatus::Ok,
-            port::ParsedDiffStatus::TooLarge => protocol::ParsedDiffStatus::TooLarge,
             port::ParsedDiffStatus::Binary => protocol::ParsedDiffStatus::Binary,
         }),
     };
@@ -611,7 +614,7 @@ mod tests;
 
 /// Diff selection and change detection, independent of host polling and cancellation.
 #[derive(Debug)]
-pub struct DiffObservation {
+pub(crate) struct DiffObservation {
     subscription_id: String,
     cwd: String,
     compare: port::CheckoutDiffCompare,
@@ -622,7 +625,7 @@ impl DiffObservation {
     ///
     /// # Errors
     /// Returns invalid parameters or serialization failures.
-    pub fn prepare(checkout: &Checkout, params: Value) -> Result<(Self, Value), ErrorCode> {
+    pub(crate) fn prepare(checkout: &Checkout, params: Value) -> Result<(Self, Value), ErrorCode> {
         let request: protocol::CheckoutDiffSubscribeRequest = decode(params)?;
         let subscription_id = request
             .subscription_id
@@ -646,24 +649,24 @@ impl DiffObservation {
     }
     /// Connection-local subscription identity.
     #[must_use]
-    pub fn id(&self) -> &str {
+    pub(crate) fn id(&self) -> &str {
         &self.subscription_id
     }
     /// Selected checkout path.
     #[must_use]
-    pub fn cwd(&self) -> &str {
+    pub(crate) fn cwd(&self) -> &str {
         &self.cwd
     }
     /// Comparison used for every observation.
     #[must_use]
-    pub fn compare(&self) -> &port::CheckoutDiffCompare {
+    pub(crate) fn compare(&self) -> &port::CheckoutDiffCompare {
         &self.compare
     }
     /// Project a changed snapshot; identical observations produce no event.
     ///
     /// # Errors
     /// Returns serialization failures without publishing an event.
-    pub fn update(
+    pub(crate) fn update(
         &mut self,
         snapshot: Result<port::CheckoutDiff, port::CheckoutRuntimeError>,
     ) -> Result<Option<Value>, ErrorCode> {

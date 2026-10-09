@@ -8,17 +8,17 @@ use super::agent_config::NullableSetting;
 /// Fields omitted by a resume request preserve the existing durable configuration.
 #[derive(Debug, Clone, Default, PartialEq, Deserialize)]
 #[serde(rename_all = "camelCase")]
-pub struct Overrides {
+pub(crate) struct Overrides {
     /// Provider identity must agree with the persisted handle.
-    pub provider: Option<String>,
+    pub(crate) provider: Option<String>,
     /// Optional new native working directory, without changing Workspace ownership.
-    pub cwd: Option<String>,
+    pub(crate) cwd: Option<String>,
     /// Explicit null clears the display title.
     #[serde(default)]
-    pub title: NullableSetting,
+    pub(crate) title: NullableSetting,
     /// Selectively supplied native settings; each feature map replaces the previous map.
     #[serde(flatten)]
-    pub config: StoredAgentConfig,
+    pub(crate) config: StoredAgentConfig,
 }
 
 impl Overrides {

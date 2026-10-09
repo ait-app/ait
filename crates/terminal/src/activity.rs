@@ -24,7 +24,7 @@ pub enum ReportState {
 /// Public terminal activity state.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
 #[serde(rename_all = "lowercase")]
-pub enum State {
+pub(crate) enum State {
     /// Work is in progress.
     Working,
     /// No work is in progress; inspect the attention reason separately.
@@ -34,7 +34,7 @@ pub enum State {
 /// Why a terminal needs attention.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
 #[serde(rename_all = "snake_case")]
-pub enum AttentionReason {
+pub(crate) enum AttentionReason {
     /// A working process became idle.
     Finished,
     /// The process requested user input.
@@ -44,13 +44,13 @@ pub enum AttentionReason {
 /// Latest terminal hook state; unknown terminals have no activity value.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
 #[serde(rename_all = "camelCase")]
-pub struct Activity {
+pub(crate) struct Activity {
     /// Current work state.
-    pub state: State,
+    state: State,
     /// Sticky completion or input attention, if any.
-    pub attention_reason: Option<AttentionReason>,
+    pub(crate) attention_reason: Option<AttentionReason>,
     /// Last actual state transition, in Unix milliseconds.
-    pub changed_at: u64,
+    changed_at: u64,
 }
 
 #[derive(Debug)]
@@ -69,7 +69,7 @@ pub struct Activities {
 impl Activities {
     /// Wake Workspace subscribers after terminal activity changes.
     #[must_use]
-    pub fn with_changes(mut self, changes: model::changes::Changes) -> Self {
+    pub(crate) fn with_changes(mut self, changes: model::changes::Changes) -> Self {
         self.changes = Some(changes);
         self
     }

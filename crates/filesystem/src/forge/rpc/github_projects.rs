@@ -12,21 +12,22 @@ use model::methods::MethodSpec;
 use serde::Serialize;
 use serde_json::Value;
 
+use crate::forge::ports::github_projects::{
+    GithubCloneProtocol, GithubProjectsError, GithubRepositoryVisibility,
+};
 use crate::forge::protocol::github_projects::{
     GithubCloneProtocol as WireCloneProtocol, GithubRepositoryPayload,
     GithubRepositorySearchRequest, GithubRepositorySearchResult, GithubRepositorySearchStatus,
     GithubRepositoryVisibility as WireVisibility, ProjectGithubCloneRequest,
     ProjectGithubCloneResult,
 };
-use crate::forge::service::github_projects::{
-    GithubCloneProtocol, GithubProjects, GithubProjectsError, GithubRepositoryVisibility,
-};
+use crate::forge::service::github_projects::GithubProjects;
 use crate::support::error::ErrorCode;
 /// Execute a GitHub repository search or clone request.
 ///
 /// # Errors
 /// Rejects unknown methods, invalid parameters, or result encoding failures.
-pub fn execute(
+pub(crate) fn execute(
     directory: &GithubProjects,
     method: &str,
     params: Value,

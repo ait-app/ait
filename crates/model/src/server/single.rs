@@ -7,4 +7,4 @@ pub const CAPABILITY: &str = "connection.single.v1";
 pub const FEATURE: &str = "ait-rust-single-v1";
 
 /// Maximum number of distinct capabilities offered by a single-connection client.
-pub const MAX_CAPABILITIES: usize = 256;
+pub(crate) const MAX_CAPABILITIES: usize = 256;

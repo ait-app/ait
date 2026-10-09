@@ -65,7 +65,7 @@ impl Daemon {
 
     /// Return immutable process status.
     #[must_use]
-    pub fn runtime(&self) -> &DaemonRuntime {
+    pub(crate) fn runtime(&self) -> &DaemonRuntime {
         &self.runtime
     }
 
@@ -81,7 +81,7 @@ impl Daemon {
     ///
     /// # Errors
     /// Returns an error when the persisted configuration is invalid or unavailable.
-    pub fn set_config(&self, patch: &Value) -> Result<Value, DaemonError> {
+    pub(crate) fn set_config(&self, patch: &Value) -> Result<Value, DaemonError> {
         self.config.patch(patch).map_err(config_error)
     }
 
@@ -89,13 +89,13 @@ impl Daemon {
     ///
     /// # Errors
     /// Returns an error when the persisted configuration is invalid or unavailable.
-    pub fn reload_config(&self) -> Result<DaemonConfigReload, DaemonError> {
+    pub(crate) fn reload_config(&self) -> Result<DaemonConfigReload, DaemonError> {
         self.config.reload().map_err(config_error)
     }
 
     /// Build a credential-free diagnostic report from process facts and installed surfaces.
     #[must_use]
-    pub fn diagnostics(
+    pub(crate) fn diagnostics(
         &self,
         capabilities: &[String],
         lifecycle: &str,
@@ -161,7 +161,7 @@ impl Daemon {
 
     /// Return Paseo's update result shape for this installation.
     #[must_use]
-    pub fn update_result(&self) -> DaemonUpdate {
+    pub(crate) fn update_result(&self) -> DaemonUpdate {
         DaemonUpdate {
             success: false,
             error: Some(
@@ -176,15 +176,15 @@ impl Daemon {
 
 /// Installation-specific self-update result.
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub struct DaemonUpdate {
+pub(crate) struct DaemonUpdate {
     /// Whether installation succeeded.
-    pub success: bool,
+    pub(crate) success: bool,
     /// Safe error when it did not.
-    pub error: Option<String>,
+    pub(crate) error: Option<String>,
     /// Version before the attempt.
-    pub previous_version: Option<String>,
+    pub(crate) previous_version: Option<String>,
     /// New version after a successful attempt.
-    pub new_version: Option<String>,
+    pub(crate) new_version: Option<String>,
 }
 
 fn line(report: &mut String, label: &str, value: &str) {

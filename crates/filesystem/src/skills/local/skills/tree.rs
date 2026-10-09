@@ -12,8 +12,8 @@ const MAX_BYTES: usize = 32 * 1024 * 1024;
 
 #[derive(Debug, Default, PartialEq, Eq)]
 pub(super) struct Tree {
-    pub files: BTreeMap<String, Vec<u8>>,
-    pub directories: BTreeSet<String>,
+    files: BTreeMap<String, Vec<u8>>,
+    directories: BTreeSet<String>,
     permissions: BTreeMap<String, fs::Permissions>,
     root_permissions: Option<fs::Permissions>,
 }
@@ -161,7 +161,7 @@ fn owned_manifest(value: &serde_json::Value) -> bool {
 
 impl Tree {
     /// Whether this snapshot contains an explicit Ait ownership manifest.
-    pub fn is_owned(&self) -> bool {
+    pub(crate) fn is_owned(&self) -> bool {
         self.files
             .get(MANIFEST)
             .and_then(|bytes| serde_json::from_slice(bytes).ok())
@@ -169,7 +169,7 @@ impl Tree {
             .is_some_and(owned_manifest)
     }
 
-    pub fn fingerprint(&self) -> String {
+    pub(crate) fn fingerprint(&self) -> String {
         let mut hash = Sha256::new();
         for name in &self.directories {
             hash.update(b"d");
@@ -185,7 +185,7 @@ impl Tree {
         format!("{hash:x}", hash = hash.finalize())
     }
 
-    pub fn matches_bundle(&self, bundle: &Self) -> bool {
+    pub(crate) fn matches_bundle(&self, bundle: &Self) -> bool {
         bundle
             .files
             .iter()
@@ -193,7 +193,7 @@ impl Tree {
             .all(|(name, bytes)| self.files.get(name) == Some(bytes))
     }
 
-    pub fn overlay(&mut self, bundle: &Self) -> Result<(), ErrorCode> {
+    pub(crate) fn overlay(&mut self, bundle: &Self) -> Result<(), ErrorCode> {
         if let Some(bytes) = self.files.get(MANIFEST)
             && let Ok(value) = serde_json::from_slice::<serde_json::Value>(bytes)
             && owned_manifest(&value)
@@ -235,7 +235,7 @@ impl Tree {
         Ok(())
     }
 
-    pub fn write(&self, path: &Path) -> Result<(), ErrorCode> {
+    pub(crate) fn write(&self, path: &Path) -> Result<(), ErrorCode> {
         safe(path)?;
         fs::create_dir_all(path).map_err(|_| ErrorCode::RegistryIo)?;
         for directory in &self.directories {

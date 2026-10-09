@@ -10,7 +10,7 @@ use std::sync::{Arc, Mutex};
 use model::ErrorCode;
 use model::events::EventHub;
 use rusqlite::{Connection, OptionalExtension, params};
-use serde_json::{Value, json};
+use serde_json::json;
 use uuid::Uuid;
 
 use crate::protocol::timeline::NativeItem;
@@ -19,28 +19,14 @@ use crate::protocol::timeline::NativeItem;
 pub(crate) const MAX_ENTRY_BYTES: usize = 768 * 1024;
 
 /// Immutable timeline row with a stable sequence in a durable generation.
-#[derive(Debug, Clone)]
-pub struct Row {
+#[derive(Debug, Clone, PartialEq)]
+pub(crate) struct Row {
     /// Sequence assigned at the first committed observation.
-    pub seq: u64,
+    pub(crate) seq: u64,
     /// Provider that produced this display history.
-    pub provider: String,
+    pub(crate) provider: String,
     /// Original normalized native or plugin display entry.
-    pub entry: NativeItem,
-}
-
-impl Row {
-    /// Project one canonical row without modifying or merging stored history.
-    #[must_use]
-    pub fn value(&self) -> Value {
-        let mut value = json!({"provider":self.provider,"item":self.entry.item,
-            "timestamp":self.entry.timestamp,"seqStart":self.seq,"seqEnd":self.seq,
-            "sourceSeqRanges":[{"startSeq":self.seq,"endSeq":self.seq}],"collapsed":[]});
-        if let Some(turn) = &self.entry.turn_id {
-            value["turnId"] = json!(turn);
-        }
-        value
-    }
+    pub(crate) entry: NativeItem,
 }
 
 /// Shared SQLite projection and its post-commit observers.
@@ -78,7 +64,7 @@ impl Timeline {
     /// Construct isolated in-memory storage for embedded hosts and tests.
     /// # Errors
     /// Returns Agent I/O errors if SQLite cannot allocate its database.
-    pub fn memory() -> Result<Self, ErrorCode> {
+    pub(crate) fn memory() -> Result<Self, ErrorCode> {
         Self::initialize(Connection::open_in_memory().map_err(io)?)
     }
 
@@ -130,14 +116,14 @@ impl Timeline {
 
     /// Return the event producer shared by this projection's subscribers.
     #[must_use]
-    pub fn events(&self) -> EventHub {
+    pub(crate) fn events(&self) -> EventHub {
         self.events.clone()
     }
 
     /// Read the immutable generation and ordered rows, creating an empty generation if necessary.
     /// # Errors
     /// Returns storage or invalid persisted-data errors.
-    pub fn read(&self, agent: &str) -> Result<(String, Vec<Row>), ErrorCode> {
+    pub(crate) fn read(&self, agent: &str) -> Result<(String, Vec<Row>), ErrorCode> {
         let database = self.database.lock().map_err(io)?;
         let epoch = epoch(&database, agent)?;
         Ok((epoch, progress::read(&database, agent)?))
@@ -180,7 +166,7 @@ impl Timeline {
     /// a replacement event only after the transaction commits. No domain Message is changed.
     /// # Errors
     /// Returns conflicts, oversize data or storage errors without replacing the visible generation.
-    pub fn reconcile(
+    pub(crate) fn reconcile(
         &self,
         agent: &str,
         provider: &str,
@@ -248,7 +234,7 @@ impl Timeline {
     /// Existing identities must retain their payload. Timestamp differences on replay are ignored.
     /// # Errors
     /// Returns conflicts for changed payloads and storage errors before publishing any event.
-    pub fn append(
+    pub(crate) fn append(
         &self,
         agent: &str,
         provider: &str,

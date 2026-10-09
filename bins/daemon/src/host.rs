@@ -59,13 +59,13 @@ pub(super) struct Server {
 
 impl Server {
     #[cfg(test)]
-    pub async fn bind(config: Config) -> anyhow::Result<Self> {
+    pub(crate) async fn bind(config: Config) -> anyhow::Result<Self> {
         Self::bind_optional_diagnostics(config, None).await
     }
 
     /// Bind the daemon with the host's bounded evidence collector.
     /// Returns a ready server, or configuration, listener, storage or assembly errors.
-    pub async fn bind_with_diagnostics(
+    pub(crate) async fn bind_with_diagnostics(
         config: Config,
         diagnostics: Arc<dyn metadata::ports::diagnostics::DaemonDiagnostics>,
     ) -> anyhow::Result<Self> {
@@ -113,13 +113,13 @@ impl Server {
         })
     }
 
-    pub fn address(&self) -> SocketAddr {
+    pub(crate) fn address(&self) -> SocketAddr {
         self.listener
             .local_addr()
             .expect("bound TCP listener has a local address")
     }
 
-    pub async fn serve(
+    pub(crate) async fn serve(
         self,
         shutdown: impl Future<Output = ()> + Send + 'static,
     ) -> anyhow::Result<Option<LifecycleIntent>> {

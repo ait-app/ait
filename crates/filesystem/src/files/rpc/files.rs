@@ -7,8 +7,9 @@ use serde::Serialize;
 use serde_json::Value;
 use uuid::Uuid;
 
+use crate::files::ports::files as port;
 use crate::files::protocol::files as wire;
-use crate::files::service::files::{self as port, Files};
+use crate::files::service::files::Files;
 use crate::support::error::ErrorCode;
 
 const INLINE_LIMIT: u64 = 512 * 1024;
@@ -17,7 +18,7 @@ const INLINE_LIMIT: u64 = 512 * 1024;
 ///
 /// # Errors
 /// Rejects invalid parameters, unknown methods, or failed result encoding.
-pub fn dispatch(files: &mut Files, method: &str, params: Value) -> Result<Value, ErrorCode> {
+pub(crate) fn dispatch(files: &mut Files, method: &str, params: Value) -> Result<Value, ErrorCode> {
     match method {
         "directory.suggestions.request" => suggestions(files, decode(params)?),
         "fs.explorer.request" => explorer(files, decode(params)?),
@@ -272,7 +273,11 @@ fn token(files: &mut Files, request: wire::FilePathRequest) -> Result<Value, Err
 
 /// Project a file observation into the wire shape.
 #[must_use]
-pub fn project_version(cwd: &str, path: &str, version: port::FileVersion) -> wire::FileVersion {
+pub(crate) fn project_version(
+    cwd: &str,
+    path: &str,
+    version: port::FileVersion,
+) -> wire::FileVersion {
     match version {
         port::FileVersion::Ready(info) => wire::FileVersion::Ready {
             cwd: cwd.to_owned(),
@@ -320,7 +325,7 @@ mod tests;
 
 /// File snapshot comparison owned by a subscription; the host controls its lifetime.
 #[derive(Debug)]
-pub struct FileObservation {
+pub(crate) struct FileObservation {
     cwd: String,
     path: String,
     previous: port::FileVersion,
@@ -328,7 +333,7 @@ pub struct FileObservation {
 impl FileObservation {
     /// Capture the initial file observation used in the subscription response.
     #[must_use]
-    pub fn new(cwd: String, path: String, initial: port::FileVersion) -> Self {
+    pub(crate) fn new(cwd: String, path: String, initial: port::FileVersion) -> Self {
         Self {
             cwd,
             path,
@@ -336,7 +341,7 @@ impl FileObservation {
         }
     }
     /// Project a changed snapshot, suppressing duplicate file versions.
-    pub fn update(&mut self, next: port::FileVersion) -> Option<wire::FileVersion> {
+    pub(crate) fn update(&mut self, next: port::FileVersion) -> Option<wire::FileVersion> {
         if next == self.previous {
             return None;
         }
@@ -349,7 +354,7 @@ impl FileObservation {
 ///
 /// # Errors
 /// Rejects unreadable files and files larger than the requested preview limit.
-pub fn binary_preview(
+pub(crate) fn binary_preview(
     files: &Files,
     cwd: &str,
     path: &str,

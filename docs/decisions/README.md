@@ -4,6 +4,7 @@
 
 ## Daemon 与协议
 
+- [ADR-116：库 crate 只公开被其他 crate 使用的项](daemon/adr-116-crate-visibility.md)
 - [ADR-112：file 瘦身为 persistence，宿主专用文件归 daemon](daemon/adr-112-persistence-crate.md)
 - [ADR-111：纯业务数据归 domain，连接协议并入 model::server](daemon/adr-111-domain-values-and-server-protocol.md)
 - [ADR-109：本地故障证据与 Harness 日志采集](daemon/adr-109-local-incident-evidence.md)

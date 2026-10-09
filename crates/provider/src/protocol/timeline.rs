@@ -6,17 +6,17 @@ use serde_json::Value;
 /// Stable position in one timeline generation.
 #[derive(Debug, Clone, PartialEq, Eq, Deserialize, Serialize)]
 #[serde(deny_unknown_fields)]
-pub struct Cursor {
+pub(crate) struct Cursor {
     /// Opaque durable generation identity.
-    pub epoch: String,
+    pub(crate) epoch: String,
     /// Sequence position; committed rows start at one.
-    pub seq: u64,
+    pub(crate) seq: u64,
 }
 
 /// Page selection relative to a cursor.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Deserialize, Serialize)]
 #[serde(rename_all = "lowercase")]
-pub enum Direction {
+pub(crate) enum Direction {
     /// Most recent matching rows.
     Tail,
     /// Rows strictly before the cursor.
@@ -28,7 +28,7 @@ pub enum Direction {
 /// Legacy requested view; the current Paseo API always returns the display projection.
 #[derive(Debug, Clone, Copy, Default, Deserialize, Serialize)]
 #[serde(rename_all = "lowercase")]
-pub enum Projection {
+pub(crate) enum Projection {
     /// Display projection without destructive rewriting of stored items.
     #[default]
     Projected,
@@ -39,78 +39,86 @@ pub enum Projection {
 /// Bounded timeline page query.
 #[derive(Debug, Clone, Deserialize)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
-pub struct FetchRequest {
+pub(crate) struct FetchRequest {
     /// Registered Agent identifier.
-    pub agent_id: String,
+    pub(crate) agent_id: String,
     /// Defaults to after with a cursor, otherwise tail.
-    pub direction: Option<Direction>,
+    pub(crate) direction: Option<Direction>,
     /// Optional exclusive boundary.
-    pub cursor: Option<Cursor>,
+    pub(crate) cursor: Option<Cursor>,
     /// Zero requests the entire window, subject to transport budgets.
-    pub limit: Option<usize>,
+    pub(crate) limit: Option<usize>,
     /// Legacy requested view, retained for request compatibility.
     #[serde(default)]
-    pub projection: Projection,
+    #[expect(
+        dead_code,
+        reason = "validated for compatibility; responses always use the display view"
+    )]
+    pub(crate) projection: Projection,
     /// Echoed merge hint for a client loading discontiguous windows.
-    pub merge_window: Option<bool>,
+    pub(crate) merge_window: Option<bool>,
 }
 
 /// Case-insensitive text search over user and assistant display messages.
 #[derive(Debug, Clone, Deserialize)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
-pub struct SearchRequest {
+pub(crate) struct SearchRequest {
     /// Registered Agent identifier.
-    pub agent_id: String,
+    pub(crate) agent_id: String,
     /// Nonempty search text.
-    pub query: String,
+    pub(crate) query: String,
     /// Exclusive sequence boundary, defaulting to zero.
-    pub cursor: Option<usize>,
+    pub(crate) cursor: Option<usize>,
 }
 
 /// One immutable provider projection item before sequencing.
 #[derive(Debug, Clone, PartialEq, Deserialize, Serialize)]
 #[serde(rename_all = "camelCase")]
-pub struct NativeItem {
+pub(crate) struct NativeItem {
     /// Provider-native stable identity, scoped to its Agent.
-    pub key: String,
+    pub(crate) key: String,
     /// Native turn identity, when available.
-    pub turn_id: Option<String>,
+    pub(crate) turn_id: Option<String>,
     /// RFC3339 source timestamp.
-    pub timestamp: String,
+    pub(crate) timestamp: String,
     /// Paseo timeline item; never a host domain Message.
-    pub item: Value,
+    pub(crate) item: Value,
 }
 
 /// Plugin display append request; plugin identity is supplied by connection provenance.
 #[derive(Debug, Clone, Deserialize)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
-pub struct AppendRequest {
+pub(crate) struct AppendRequest {
     /// Registered Agent identifier.
-    pub agent_id: String,
+    #[expect(
+        dead_code,
+        reason = "routing resolves agentId before decoding the full request"
+    )]
+    pub(crate) agent_id: String,
     /// Display extension item, never provider prompt history.
-    pub item: PluginItem,
+    pub(crate) item: PluginItem,
 }
 
 /// Immutable plugin extension payload.
 #[derive(Debug, Clone, Deserialize, Serialize)]
 #[serde(deny_unknown_fields)]
-pub struct PluginItem {
+pub(crate) struct PluginItem {
     /// Must be `plugin`.
-    pub r#type: String,
+    pub(crate) r#type: String,
     /// Stable plugin-local identity used for idempotent append.
-    pub id: String,
+    pub(crate) id: String,
     /// Plugin-specific display kind.
-    pub kind: String,
+    pub(crate) kind: String,
     /// Positive schema version.
-    pub version: u32,
+    pub(crate) version: u32,
     /// JSON display data, capped at 64 KiB.
-    pub data: Value,
+    pub(crate) data: Value,
 }
 
 /// Agent IDs selected by one independently releasable subscription.
 #[derive(Debug, Clone, Deserialize)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
-pub struct SubscriptionRequest {
+pub(crate) struct SubscriptionRequest {
     /// At most 32 full IDs or unambiguous identifiers.
-    pub agent_ids: Vec<String>,
+    pub(crate) agent_ids: Vec<String>,
 }

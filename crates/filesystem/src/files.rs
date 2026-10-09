@@ -2,7 +2,7 @@
 
 pub mod connection;
 pub mod local;
-pub mod ports;
+mod ports;
 pub mod protocol;
-pub mod rpc;
+pub(crate) mod rpc;
 pub mod service;

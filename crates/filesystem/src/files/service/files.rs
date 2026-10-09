@@ -3,16 +3,13 @@
 use std::collections::BTreeMap;
 use std::time::{Duration, Instant};
 
-pub use crate::files::ports::files::{
-    EntryKind, FileEntry, FileError, FileInfo, FileKind, FileReader, FileSearch, FileSystem,
-    FileUpload, FileVersion, FileWrite, FileWritten, UploadedFile,
-};
+use crate::files::ports::files::{FileError, FileInfo, FileReader, FileSystem};
 
 /// Filesystem use cases and bounded, short-lived download grants.
 #[derive(Debug)]
 pub struct Files {
     /// Filesystem boundary used by the file use cases.
-    pub filesystem: Box<dyn FileSystem>,
+    pub(crate) filesystem: Box<dyn FileSystem>,
     downloads: BTreeMap<String, DownloadGrant>,
 }
 
@@ -38,7 +35,7 @@ impl Files {
     ///
     /// # Errors
     /// Rejects invalid files or exhaustion of the 256 outstanding grant limit.
-    pub fn issue_download(
+    pub(crate) fn issue_download(
         &mut self,
         token: String,
         cwd: &str,

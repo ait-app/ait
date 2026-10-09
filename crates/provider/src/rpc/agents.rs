@@ -13,15 +13,20 @@ use domain::agent::{AgentConfig, AgentSnapshot, AgentTarget, Revision};
 use model::methods::MethodSpec;
 use serde_json::Value;
 
+use crate::ports::agent::AgentError;
 use crate::protocol::agent;
 use crate::rpc::ErrorCode;
-use crate::service::agents::{AgentError, Agents};
+use crate::service::agents::Agents;
 
 /// Decode and execute a business request.
 ///
 /// # Errors
 /// Returns stable business failures for invalid or unsuccessful requests.
-pub fn execute(agents: &mut Agents, method: &str, params: Value) -> Result<Value, ErrorCode> {
+pub(crate) fn execute(
+    agents: &mut Agents,
+    method: &str,
+    params: Value,
+) -> Result<Value, ErrorCode> {
     match method {
         "agent.configure" => {
             let request: agent::Configure = decode(params)?;

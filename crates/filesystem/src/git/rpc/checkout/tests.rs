@@ -1,12 +1,13 @@
 use serde_json::json;
 
 use super::execute;
-use crate::git::service::checkout::{
-    AheadBehind, Checkout, CheckoutBranchResolution, CheckoutBranchSource,
-    CheckoutBranchSuggestion, CheckoutCommit, CheckoutCommitFile, CheckoutCommitFileStatus,
-    CheckoutCommits, CheckoutDiff, CheckoutDiffCompare, CheckoutFailureKind, CheckoutMergeStrategy,
-    CheckoutRuntime, CheckoutRuntimeError, CheckoutStashEntry, CheckoutStatus, ParsedDiffFile,
+use crate::git::ports::checkout::{
+    AheadBehind, CheckoutBranchResolution, CheckoutBranchSource, CheckoutBranchSuggestion,
+    CheckoutCommit, CheckoutCommitFile, CheckoutCommitFileStatus, CheckoutCommits, CheckoutDiff,
+    CheckoutDiffCompare, CheckoutFailureKind, CheckoutMergeStrategy, CheckoutRuntime,
+    CheckoutRuntimeError, CheckoutStashEntry, CheckoutStatus, ParsedDiffFile,
 };
+use crate::git::service::checkout::Checkout;
 
 #[test]
 fn absent_checkouts_report_inline_failures_for_reads_and_mutations() {

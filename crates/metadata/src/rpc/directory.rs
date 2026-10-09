@@ -342,7 +342,7 @@ pub struct WorkspaceCreated {
 ///
 /// # Errors
 /// Returns validation, unsupported service, receipt conflict, or persistence errors.
-pub fn workspace_creation(
+pub(crate) fn workspace_creation(
     directory: &Directory,
     params: Value,
 ) -> Result<WorkspaceCreated, ErrorCode> {

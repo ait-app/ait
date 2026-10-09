@@ -13,18 +13,21 @@ use crate::rpc::ErrorCode;
 use crate::service::daemon::{Daemon, DaemonError};
 
 /// Response and associated host lifecycle intent.
-pub struct LifecycleRequest {
+pub(crate) struct LifecycleRequest {
     /// Serialized acknowledgement.
-    pub value: Value,
+    pub(crate) value: Value,
     /// Intent to execute through the host's admission/drain path.
-    pub intent: LifecycleIntent,
+    pub(crate) intent: LifecycleIntent,
 }
 
 /// Decode a lifecycle method, returning none for ordinary daemon operations.
 ///
 /// # Errors
 /// Returns invalid-message errors for malformed lifecycle parameters.
-pub fn lifecycle(method: &str, params: &Value) -> Result<Option<LifecycleRequest>, ErrorCode> {
+pub(crate) fn lifecycle(
+    method: &str,
+    params: &Value,
+) -> Result<Option<LifecycleRequest>, ErrorCode> {
     let (intent, result) = match method {
         "server.restart.request" => {
             let request: RestartRequest = decode(params.clone())?;
@@ -64,7 +67,7 @@ pub fn lifecycle(method: &str, params: &Value) -> Result<Option<LifecycleRequest
 ///
 /// # Errors
 /// Returns validation or configuration storage errors.
-pub fn execute(
+pub(crate) fn execute(
     daemon: &mut Daemon,
     method: &str,
     params: Value,
@@ -124,7 +127,7 @@ pub fn execute(
 /// Build status or diagnostics from the availability supplied by the Provider owner.
 /// # Errors
 /// Rejects malformed parameters or methods outside the two snapshot operations.
-pub fn snapshot(
+pub(crate) fn snapshot(
     daemon: &Daemon,
     method: &str,
     params: Value,
