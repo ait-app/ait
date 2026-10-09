@@ -1,16 +1,15 @@
 {
   "measurement_date": "2026-10-09",
-  "source_revision": "b3cb2a64f7017d4ad77982e7699ea259686c771b",
-  "rust_source_fingerprint_sha256": "a676fea7618ab3be765eb806042254ab954db7d76e295501d81d7e1ec662d1d0",
+  "source_revision": "refactor/opencode-acp working tree with serialized text-budget regression; exact fingerprint below",
+  "rust_source_fingerprint_sha256": "6ea3eb85bf062475f1593d7aa0eecfac1ddb26aa76c8946c27c382454eed48e9",
   "fingerprint_scope": "Sorted tracked .rs files, Cargo.toml paths, Cargo.lock and rust-toolchain.toml; SHA-256 over path, NUL, bytes, NUL.",
   "fixture_sha256": "4f4c11f26e44d4af1d21700537faee59fbfb2d1d5be00d971934439a1286ab9c",
   "base_revision": "938a98f548e216cacf9b7caecee62383d4a27442",
-  "scope": "Cargo workspace, default features, macOS arm64, Rust 1.98.1, cargo-llvm-cov 0.8.7. Default instrumented workspace tests plus the 28 OpenCode ACP tests including 4 isolated real OpenCode 2.0.26 tests. Tool default file filtering; no additional workspace file exclusions. Doctests, Python fixtures and upstream OpenCode executables are not instrumented.",
+  "scope": "Cargo workspace, default features, macOS arm64, Rust 1.98.1, cargo-llvm-cov 0.8.7. Default instrumented workspace tests plus the 29 OpenCode ACP tests including 4 isolated real OpenCode 2.0.26 tests. Tool default file filtering; no additional workspace file exclusions. Doctests, Python fixtures and upstream OpenCode executables are not instrumented.",
   "comparable_baseline": null,
   "baseline_note": "No measurement on the exact base revision with the same test scope. Retired private HTTP/SSE adapter metrics are not treated as an ACP baseline.",
   "commands": {
-    "workspace_tests": "nix develop --command cargo test --workspace",
-    "native_and_focused_tests": "AIT_TEST_OPENCODE_BIN=/private/tmp/ait-acp-upstream/v26/package/bin/opencode nix develop --command cargo test -p provider local::opencode --lib -- --include-ignored",
+    "workspace_tests": "nix develop --command cargo test --workspace -- --test-threads=4",
     "build": "nix develop --command cargo build --workspace",
     "clippy": "nix develop --command cargo clippy --workspace --all-targets -- -D warnings",
     "format": "nix develop --command cargo fmt --all --check",
@@ -18,29 +17,31 @@
     "coverage_workspace": "CARGO_TARGET_DIR=/private/tmp/ait-opencode-acp-coverage CARGO_BUILD_JOBS=6 nix develop --command cargo llvm-cov --workspace --html -- --test-threads=4",
     "coverage_native": "CARGO_TARGET_DIR=/private/tmp/ait-opencode-acp-coverage AIT_TEST_OPENCODE_BIN=/private/tmp/ait-acp-upstream/v26/package/bin/opencode nix develop --command cargo llvm-cov --no-report -p provider --lib -- local::opencode --include-ignored",
     "coverage_merged_html": "CARGO_TARGET_DIR=/private/tmp/ait-opencode-acp-coverage nix develop --command cargo llvm-cov report --html",
-    "coverage_merged_summary": "CARGO_TARGET_DIR=/private/tmp/ait-opencode-acp-coverage nix develop --command cargo llvm-cov report --json --summary-only --output-path /private/tmp/ait-acp-upstream/coverage-summary-final.json",
-    "coverage_missing_lines": "CARGO_TARGET_DIR=/private/tmp/ait-opencode-acp-coverage nix develop --command cargo llvm-cov report --show-missing-lines"
+    "coverage_merged_summary": "CARGO_TARGET_DIR=/private/tmp/ait-opencode-acp-coverage nix develop --command cargo llvm-cov report --json --summary-only --output-path /private/tmp/ait-acp-upstream/coverage-summary-budget.json",
+    "coverage_missing_lines": "CARGO_TARGET_DIR=/private/tmp/ait-opencode-acp-coverage nix develop --command cargo llvm-cov report --show-missing-lines",
+    "streaming_budget": "nix develop --command cargo test -p provider local::opencode::streaming --lib"
   },
   "test_results": {
     "workspace-tests": {
-      "passed": 1996,
+      "passed": 1997,
       "failed": 0,
       "ignored": 13
     },
     "workspace-coverage": {
-      "passed": 1995,
+      "passed": 1996,
       "failed": 0,
       "ignored": 13
     },
-    "acp-final-focused": {
-      "passed": 28,
+    "native-coverage": {
+      "passed": 29,
       "failed": 0,
       "ignored": 0
     },
-    "native-coverage": {
-      "passed": 28,
+    "streaming-budget": {
+      "passed": 5,
       "failed": 0,
-      "ignored": 0
+      "ignored": 0,
+      "instrumented": false
     }
   },
   "checks": {
@@ -69,8 +70,8 @@
     },
     "lines": {
       "count": 58798,
-      "covered": 55664,
-      "percent": 94.66988673084118
+      "covered": 55663,
+      "percent": 94.66818599272085
     },
     "mcdc": {
       "count": 0,
@@ -80,9 +81,9 @@
     },
     "regions": {
       "count": 91573,
-      "covered": 83356,
-      "notcovered": 8217,
-      "percent": 91.02683105282125
+      "covered": 83354,
+      "notcovered": 8219,
+      "percent": 91.02464700293754
     }
   },
   "crate_lines": {
@@ -108,8 +109,8 @@
     },
     "filesystem": {
       "count": 12198,
-      "covered": 11571,
-      "percent": 94.85981308411215
+      "covered": 11572,
+      "percent": 94.86801114936875
     },
     "metadata": {
       "count": 5789,
@@ -128,8 +129,8 @@
     },
     "provider": {
       "count": 27825,
-      "covered": 26218,
-      "percent": 94.22461814914645
+      "covered": 26216,
+      "percent": 94.21743036837377
     },
     "relay": {
       "count": 503,
@@ -154,8 +155,8 @@
   },
   "opencode_production_lines": {
     "count": 2084,
-    "covered": 1898,
-    "percent": 91.07485604606526
+    "covered": 1896,
+    "percent": 90.978886756238
   },
   "shared_acp_transport_lines": {
     "count": 207,
@@ -815,8 +816,8 @@
       "path": "crates/filesystem/src/git/local/checkout.rs",
       "lines": {
         "count": 1622,
-        "covered": 1516,
-        "percent": 93.4648581997534
+        "covered": 1517,
+        "percent": 93.5265104808878
       }
     },
     {
@@ -847,8 +848,8 @@
       "path": "crates/filesystem/src/git/local/checkout/summary.rs",
       "lines": {
         "count": 118,
-        "covered": 110,
-        "percent": 93.22033898305084
+        "covered": 111,
+        "percent": 94.0677966101695
       }
     },
     {
@@ -895,8 +896,8 @@
       "path": "crates/filesystem/src/git/service/git_fetch.rs",
       "lines": {
         "count": 264,
-        "covered": 255,
-        "percent": 96.5909090909091
+        "covered": 254,
+        "percent": 96.21212121212122
       }
     },
     {
@@ -2303,8 +2304,8 @@
       "path": "crates/provider/src/local/opencode/streaming.rs",
       "lines": {
         "count": 232,
-        "covered": 211,
-        "percent": 90.94827586206895
+        "covered": 209,
+        "percent": 90.08620689655172
       }
     },
     {
@@ -3421,27 +3422,29 @@
       709
     ],
     "crates/provider/src/local/opencode/streaming.rs": [
-      65,
-      70,
-      89,
-      91,
+      66,
+      71,
+      90,
       92,
       93,
       94,
-      96,
-      99,
-      184,
-      207,
-      236,
-      254,
+      95,
+      97,
+      100,
+      138,
+      139,
+      185,
+      208,
+      237,
       255,
-      257,
-      285,
+      256,
+      258,
       286,
       287,
       288,
-      301,
-      302
+      289,
+      302,
+      303
     ],
     "crates/provider/src/local/opencode/summary.rs": [
       37,
@@ -3490,5 +3493,10 @@
       "failure": "Unchanged directory_sync websocket transport timed out while default-thread workspace test and coverage suites ran concurrently. Full normal suite passed; full coverage was rerun alone with four test threads and passed."
     }
   ],
-  "source_tree": "a94f7d3a7d9c9b4cc402e2c0ec4347530f91561d"
+  "linux_ci_validated_test_correction": {
+    "source_revision": "78ed7310",
+    "result": "success",
+    "url": "https://github.com/ait-app/ait/actions/runs/37902945996/job/113729569322",
+    "scope": "Linux Rust full CI, after process-state assertion correction and before final text-budget tightening."
+  }
 }

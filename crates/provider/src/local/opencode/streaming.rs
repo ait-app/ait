@@ -12,7 +12,8 @@ use crate::{
     protocol::{timeline::NativeItem, usage::AgentUsage},
 };
 
-const TEXT_BYTES: usize = 128 * 1024;
+// JSON can expand each control byte to six bytes; leave room for entry metadata.
+const TEXT_BYTES: usize = 96 * 1024;
 const PREVIEW_BYTES: usize = 32 * 1024;
 
 #[derive(Debug)]

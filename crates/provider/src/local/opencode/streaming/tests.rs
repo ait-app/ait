@@ -18,7 +18,7 @@ fn long_utf8_text_is_split_deterministically_without_losing_the_terminal_message
             }
         })
         .collect::<Vec<_>>();
-    assert_eq!(items.len(), 3);
+    assert_eq!(items.len(), 4);
     assert_eq!(
         items
             .iter()
@@ -122,4 +122,22 @@ fn a_user_turn_without_assistant_text_does_not_reuse_a_previous_answer() {
     stream.update(&json!({"sessionUpdate":"user_message_chunk","messageId":"new","content":{"type":"text","text":"Next input"}})).unwrap();
     stream.flush();
     assert!(stream.last_message.is_none());
+}
+
+#[test]
+fn json_escaped_text_segments_fit_the_persisted_timeline_budget() {
+    let mut stream = Stream::default();
+    stream.update(&json!({"sessionUpdate":"agent_message_chunk","messageId":"answer","content":{"type":"text","text":"\0".repeat(160_000)}})).unwrap();
+    stream.flush();
+    let timeline = crate::storage::timeline::Timeline::memory().unwrap();
+    let mut count = 0;
+    for event in stream.events {
+        if let AgentTurnEvent::Timeline(entry) = event {
+            timeline
+                .append("escaped-text", "opencode", &[entry])
+                .unwrap();
+            count += 1;
+        }
+    }
+    assert_eq!(count, 2);
 }

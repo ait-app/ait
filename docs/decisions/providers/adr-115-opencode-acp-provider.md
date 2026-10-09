@@ -36,7 +36,7 @@
    旧 Ait 句柄中的 session ID 和 client message 映射继续可读；OpenCode 自己负责原生存储版本兼容，Ait 不迁移或改写其数据库。
    已有私有协议展示历史在首次重放时按既有 timeline reconcile 规则替换展示 generation。
 6. 工具输入和结果仅保存有界展示预览，完整内容留在原生 transcript。
-   长文本按 UTF-8 边界分块，单个展示条目保持在 768 KiB 门禁以内。
+   长文本按 UTF-8 边界分为至多 96 KiB 的块，给 JSON 控制字符转义与元数据留出空间，保持单项低于 768 KiB。
    历史通知增量消费，不把完整历史挤进 128 项控制通知队列。
 7. 模型、模型专属 effort 和原生 primary agent 从 ACP config options 获取。
    因现行原生 `models` 命令在验证配置下返回空目录，发现使用无 prompt 的临时 ACP 会话。
