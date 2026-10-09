@@ -81,6 +81,7 @@
 
 ## 客户端、连接与品牌
 
+- [ADR-117：终端配色查询与外观更新生命周期](clients/adr-117-terminal-palette-and-appearance-lifetime.md)
 - [ADR-114：iOS 终端组合输入归 UIKit](clients/adr-114-ios-terminal-ime.md)
 - [ADR-097：Google Play 内部测试手动发布](clients/adr-097-google-play-internal-release.md)
 - [ADR-098：客户端消息分块与文件上传背压](clients/adr-098-acknowledged-client-chunks.md)
