@@ -9,6 +9,7 @@
 - [DSH 权限目录兼容与真实会话继承](providers/dsh-permission-catalog.md)
 
 - [OpenCode 使用问题追踪：图标与权限管理](providers/opencode-feedback-2026-10-09.md)
+- [OpenCode 原生权限图标：PR 验证](providers/opencode-permission-icons-2026-10-09.md)
 
 ## Daemon 与协议
 
