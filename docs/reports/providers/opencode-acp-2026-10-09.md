@@ -1,7 +1,7 @@
 # OpenCode 官方 ACP 迁移验证
 
 2026-10-09；基于 `938a98f5`，分支 `refactor/opencode-acp`。
-测量源码提交：`5b2145751c3332a9234b18d4f9badcb4f84b1333`；后续仅更新验证文档，不改变测量的 Rust 源码。
+测量源码版本：`refactor/opencode-acp`，包含仅测试使用的进程状态检查修正；最终提交和源码指纹见 JSON。
 边界决策见 [ADR-115](../../decisions/providers/adr-115-opencode-acp-provider.md)。
 
 ## 实现范围
@@ -29,6 +29,13 @@ OpenCode 从私有 HTTP/SSE 切换为官方 `opencode acp` 子进程，要求 Op
 离线 ACP fixture 是仓库内不可变可执行文件，所有可写状态留在每项测试的临时目录。
 并发测试直接复用该可执行文件，不在 fork/exec 前改写脚本。
 
+首次 [Linux CI](https://github.com/ait-app/ait/actions/runs/37900784280/job/113722621686)
+在 GUI workspace 创建测试的关闭检查中报告一个 helper PID 仍存在；另两项 OpenCode 进程测试通过。
+原断言使用 `kill -0`，无法区分运行中进程与已退出但尚未被新父进程回收的 zombie，日志也没有记录该 PID 的状态。
+测试现与既有 Codex shutdown 验证一致，以 `ps` 的进程状态判断是否已停止，并给信号处理最多 2 秒。
+不存在或 zombie 表示没有继续执行工作；仍可运行的进程继续使测试失败并打印其状态。
+该修正只属于测试，没有改动生产执行策略，也没有取消进程停止验证。
+
 最终命令、测试计数、源码指纹与逐文件覆盖率见 [覆盖率证据](opencode-acp-coverage-2026-10-09.json)。
 
 - `cargo test --workspace`：1996 项通过、0 失败、13 项 ignored，包含 1 项 doctest。
@@ -41,12 +48,12 @@ OpenCode 从私有 HTTP/SSE 切换为官方 `opencode acp` 子进程，要求 Op
 
 ## Test coverage
 
-当前合并测量：workspace **94.68%（55,668/58,798）**，provider **94.23%（26,220/27,825）**。
+当前合并测量：workspace **94.67%（55,664/58,798）**，provider **94.22%（26,218/27,825）**。
 OpenCode ACP 生产实现 **91.17%（1,900/2,084）**，共享 ACP transport **89.86%（186/207）**。
 没有同一基准提交、同一测试范围的可比测量；此前 HTTP adapter 的结果不作为本次 ACP 基线。
 HTML 仅在本机生成；可共享的逐文件计数和源码证据保存在上面的 JSON 文件。
 
-执行 `CARGO_TARGET_DIR=/private/tmp/ait-opencode-acp-coverage nix develop --command cargo llvm-cov --workspace --html`
+执行 `CARGO_TARGET_DIR=/private/tmp/ait-opencode-acp-coverage nix develop --command cargo llvm-cov --workspace --html -- --test-threads=4`
 后，使用同一 target 下的 `cargo llvm-cov --no-report -p provider --lib -- local::opencode --include-ignored`
 显式加入 28 项 ACP 测试，再执行 `cargo llvm-cov report --html` 和 `cargo llvm-cov report --json --summary-only`。
 完整 instrumented suite 为 1995 项通过、13 项 ignored；真实 CLI 的 4 项在后续定向命令中执行。
@@ -58,3 +65,5 @@ ACP 缺少逐消息时间戳和完整外部 writer 状态，导入使用观察�
 关闭或清理超时、失联原生进程等故障分支必须明确返回失败，不能当作成功恢复。
 未覆盖的重点包括真实进程丢失、删除临时会话的重连补救失败，以及关闭时超过结算期限。
 这些需要后续故障注入验证；正常路径的 native 清理与 future cancellation 已验证。
+
+重跑覆盖率时，一次与普通全量测试同时执行的默认并发运行在未修改的 directory_sync WebSocket 测试中超时；普通全量测试通过，覆盖率随后单独以 4 个测试线程完整重跑通过。没有修改或跳过该测试。

@@ -107,7 +107,7 @@ async fn opencode_external_session_import_survives_daemon_restart_and_continues(
         serde_json::from_slice(&std::fs::read(&native_path).unwrap()).unwrap();
     assert_eq!(native["info"]["id"], "ses_one");
     assert_eq!(native["seq"], 2);
-    assert_helpers_reaped(fixture.root.path());
+    assert_helpers_stopped(fixture.root.path()).await;
 }
 
 #[tokio::test]
@@ -198,7 +198,7 @@ async fn opencode_is_discovered_executed_and_restored_through_the_real_server() 
     .unwrap();
     assert_eq!(native["seq"], 3);
     assert_eq!(native["history"].as_array().unwrap().len(), 6);
-    assert_helpers_reaped(fixture.root.path());
+    assert_helpers_stopped(fixture.root.path()).await;
 }
 
 async fn assert_discovery(socket: &mut Socket, cwd: &std::path::Path) {
@@ -239,21 +239,30 @@ fn fixture() -> super::native::NativeFixture {
     fixture
 }
 
-fn assert_helpers_reaped(root: &std::path::Path) {
+async fn assert_helpers_stopped(root: &std::path::Path) {
     for pid in std::fs::read_to_string(root.join("pids.txt"))
         .unwrap()
         .lines()
     {
-        assert!(
-            !std::process::Command::new("/bin/kill")
-                .args(["-0", pid])
-                .stdout(std::process::Stdio::null())
-                .stderr(std::process::Stdio::null())
-                .status()
-                .unwrap()
-                .success(),
-            "OpenCode helper {pid} survived shutdown"
-        );
+        let deadline = tokio::time::Instant::now() + std::time::Duration::from_secs(2);
+        loop {
+            let output = std::process::Command::new("ps")
+                .args(["-o", "stat=", "-p", pid])
+                .output()
+                .unwrap();
+            assert!(output.status.success() || output.status.code() == Some(1));
+            let state = String::from_utf8(output.stdout).unwrap();
+            // kill -0 also succeeds for a dead orphan awaiting its Linux parent's reap.
+            // A zombie cannot execute work; any runnable helper must stop within the deadline.
+            if state.trim().is_empty() || state.trim().starts_with('Z') {
+                break;
+            }
+            assert!(
+                tokio::time::Instant::now() < deadline,
+                "OpenCode helper {pid} survived shutdown with process state {state:?}"
+            );
+            tokio::time::sleep(std::time::Duration::from_millis(20)).await;
+        }
     }
 }
 
@@ -294,5 +303,5 @@ async fn opencode_workspace_creation_returns_frontend_compatible_resume_handles(
         "{finished}"
     );
     terminate(&mut process).await;
-    assert_helpers_reaped(fixture.root.path());
+    assert_helpers_stopped(fixture.root.path()).await;
 }
