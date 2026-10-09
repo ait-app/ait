@@ -8,9 +8,7 @@ publish.workspace = true
 model.workspace = true
 domain.workspace = true
 
-# Internal OpenCode approval and progress sinks over the owned HTTP runtime.
-async-trait.workspace = true
-# Consume bounded native HTTP and event streams.
+# Consume bounded native event streams and concurrent session previews.
 futures-util.workspace = true
 # Authenticated DSH Host logical streams on an owned loopback WebSocket.
 tokio-tungstenite.workspace = true
@@ -42,9 +40,8 @@ workspace = true
 
 [dev-dependencies]
 persistence.workspace = true
-# Offline native HTTP fixtures, without provider credentials or a model API.
+# Offline native provider fixtures, without credentials or a model API.
 axum.workspace = true
-tokio-stream.workspace = true
 
 [target.'cfg(target_os = "macos")'.dependencies]
 # Match Claude Agent SDK's NFC normalization of native session directory names.

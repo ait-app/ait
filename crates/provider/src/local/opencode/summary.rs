@@ -1,125 +1,142 @@
-//! Private, tool-disabled native requests; transient native history is removed on exit.
-use std::{path::Path, time::Duration};
+//! Tool-disabled ACP metadata generation with native session deletion on every exit path.
+use std::{collections::BTreeMap, time::Duration};
 
-use reqwest::Method;
-use serde_json::Value;
+use serde_json::{Value, json};
 
-use super::runtime::Runtime;
-use crate::ports::agent_session::{AgentSessionError, AgentSessionSpec};
+use super::{OpenCodeClient, config, launcher};
+use crate::{
+    local::acp_transport::Transport,
+    ports::agent_session::{AgentSessionError, AgentSessionSpec},
+};
 
-struct Request {
-    runtime: Option<Runtime>,
-    session: Option<String>,
+/// Owned auxiliary session; deletion remains scheduled if its caller drops a pending cleanup.
+#[derive(Debug)]
+pub(super) struct Temporary {
+    client: OpenCodeClient,
+    cwd: String,
+    pub(super) transport: Option<Transport>,
+    pub(super) id: Option<String>,
+    cleanup_on_drop: bool,
 }
 
-impl Request {
-    async fn close(&mut self) -> Result<(), AgentSessionError> {
-        let Some(mut runtime) = self.runtime.take() else {
+impl Temporary {
+    /// Own this child in cwd and schedule cleanup if the calling future is dropped.
+    pub(super) fn new(client: &OpenCodeClient, cwd: &str, transport: Transport) -> Self {
+        Self {
+            client: client.clone(),
+            cwd: cwd.into(),
+            transport: Some(transport),
+            id: None,
+            cleanup_on_drop: true,
+        }
+    }
+
+    /// Delete only this temporary native session and reap its child; cleanup failures fail.
+    pub(super) async fn close(&mut self) -> Result<(), AgentSessionError> {
+        let Some(transport) = self.transport.as_mut() else {
             return Ok(());
         };
-        let result = if let Some(id) = self.session.take() {
-            let _ = runtime.api.interrupt(&id).await;
-            runtime
-                .api
-                .json(Method::DELETE, &runtime.api.path(&id, ""), None)
+        if let Some(id) = &self.id {
+            if transport
+                .request("session/delete", json!({"sessionId":id}))
                 .await
-                .map(|_| ())
-        } else {
-            Ok(())
-        };
-        let closed = runtime.close().await;
-        result.and(closed).map_err(|_| AgentSessionError::Failed)
+                .is_err()
+            {
+                let (mut cleanup, _) = launcher::spawn(
+                    &self.client,
+                    &self.cwd,
+                    &domain::agent_runtime::StoredAgentConfig::default(),
+                )
+                .await?;
+                let removed = cleanup
+                    .request("session/delete", json!({"sessionId":id}))
+                    .await;
+                cleanup.close().await?;
+                removed?;
+            }
+            self.id = None;
+        }
+        transport.close().await?;
+        self.transport = None;
+        Ok(())
     }
 }
 
-impl Drop for Request {
+impl Drop for Temporary {
     fn drop(&mut self) {
-        let Some(runtime) = self.runtime.take() else {
+        if !self.cleanup_on_drop {
+            return;
+        }
+        let Some(transport) = self.transport.take() else {
             return;
         };
-        let session = self.session.take();
-        if let Ok(handle) = tokio::runtime::Handle::try_current() {
-            handle.spawn(async move {
-                let mut request = Request {
-                    runtime: Some(runtime),
-                    session,
-                };
-                let _ = tokio::time::timeout(Duration::from_secs(5), request.close()).await;
+        let mut pending = Self {
+            client: self.client.clone(),
+            cwd: self.cwd.clone(),
+            transport: Some(transport),
+            id: self.id.take(),
+            cleanup_on_drop: false,
+        };
+        if let Ok(runtime) = tokio::runtime::Handle::try_current() {
+            runtime.spawn(async move {
+                if !matches!(
+                    tokio::time::timeout(Duration::from_secs(10), pending.close()).await,
+                    Ok(Ok(()))
+                ) {
+                    tracing::warn!("OpenCode ACP auxiliary session cleanup failed");
+                }
             });
         }
     }
 }
 
+/// Generate bounded metadata in a tool-disabled native session and delete its transcript.
+/// Invalid requests reject; native inference, output bounds and cleanup failures propagate.
 pub(super) async fn generate(
-    binary: &Path,
+    client: &OpenCodeClient,
     spec: &AgentSessionSpec,
     prompt: &str,
     schema: &Value,
 ) -> Result<String, AgentSessionError> {
-    let (provider, model) = spec
-        .config
-        .model
-        .as_deref()
-        .and_then(|model| model.split_once('/'))
-        .ok_or(AgentSessionError::Rejected)?;
-    let agent = format!("ait-metadata-{}", uuid::Uuid::new_v4().simple());
-    let runtime = Runtime::spawn_metadata(binary, Path::new(&spec.cwd), &agent)
-        .await
-        .map_err(|_| AgentSessionError::Unavailable)?;
-    let mut request = Request {
-        runtime: Some(runtime),
-        session: None,
-    };
-    let result = run(
-        &mut request,
-        spec,
-        &agent,
-        (provider, model),
-        &format!("{prompt}\nReturn only JSON matching this schema: {schema}"),
-    )
-    .await;
-    let closed = request.close().await;
-    closed?;
-    result
-}
-
-async fn run(
-    request: &mut Request,
-    spec: &AgentSessionSpec,
-    agent: &str,
-    model: (&str, &str),
-    prompt: &str,
-) -> Result<String, AgentSessionError> {
-    let api = &request
-        .runtime
-        .as_ref()
-        .ok_or(AgentSessionError::Failed)?
-        .api;
-    let parameters = api.metadata_parameters(spec, agent, model, prompt);
-    request.session = parameters.id;
-    let created = api
-        .create_native(&parameters.create)
-        .await
-        .map_err(|_| AgentSessionError::Failed)?;
-    let id = api.data(&created)["id"]
-        .as_str()
-        .filter(|id| super::session::valid_id(id))
-        .ok_or(AgentSessionError::Failed)?
-        .to_owned();
-    request.session = Some(id.clone());
-    api.submit_native(&id, &parameters.prompt)
-        .await
-        .map_err(|_| AgentSessionError::Failed)?;
-    loop {
-        let history = api
-            .history(&id)
-            .await
-            .map_err(|_| AgentSessionError::Failed)?;
-        if api.idle(&id).await.map_err(|_| AgentSessionError::Failed)?
-            && let Some(text) = api.metadata_response(&history)?
-        {
-            return Ok(text);
-        }
-        tokio::time::sleep(Duration::from_millis(100)).await;
+    config::validate_spec(spec)?;
+    if !schema.is_object() || prompt.len() > 192 * 1024 {
+        return Err(AgentSessionError::Rejected);
     }
+    let mut selected = spec.config.clone();
+    selected.mode_id = Some("build".into());
+    selected.feature_values = Some(BTreeMap::from([("permission".into(), json!("deny"))]));
+    selected.system_prompt = Some(
+        "Generate only the requested metadata from the supplied text. Return only JSON.".into(),
+    );
+    let (transport, capabilities) = launcher::auxiliary(client, &spec.cwd, &selected).await?;
+    if !capabilities["sessionCapabilities"]["delete"].is_object() {
+        return Err(AgentSessionError::Unavailable);
+    }
+    let mut temporary = Temporary::new(client, &spec.cwd, transport);
+    let result = async {
+        let transport = temporary.transport.as_mut().ok_or(AgentSessionError::Failed)?;
+        let result = transport.request("session/new", json!({"cwd":spec.cwd,"mcpServers":[]})).await?;
+        let id = config::text(&result, "sessionId")?.to_owned();
+        temporary.id = Some(id.clone());
+        let mut options = config::state(&result)?;
+        config::apply(transport, &id, &mut options, &selected).await?;
+        let mut answer = String::new();
+        let result = transport.request_with_updates("session/prompt", json!({"sessionId":id,
+            "prompt":[{"type":"text","text":format!("{prompt}\nReturn only JSON matching this schema: {schema}")}]}), |message| {
+            if message["method"] == "session/update" {
+                if message["params"]["sessionId"] != id { return Err(AgentSessionError::Failed); }
+                let update = &message["params"]["update"];
+                if update["sessionUpdate"] == "agent_message_chunk" && update["content"]["type"] == "text" {
+                    let text = update["content"]["text"].as_str().ok_or(AgentSessionError::Failed)?;
+                    if answer.len().saturating_add(text.len()) > 128 * 1024 { return Err(AgentSessionError::Failed); }
+                    answer.push_str(text);
+                }
+            }
+            Ok(())
+        }).await?;
+        if result["stopReason"] != "end_turn" || answer.is_empty() { return Err(AgentSessionError::Failed); }
+        Ok(answer)
+    }.await;
+    temporary.close().await?;
+    result
 }

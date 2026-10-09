@@ -15,6 +15,8 @@
 
 ## 架构决策
 
+- [ADR-115：OpenCode 官方 ACP Provider](decisions/providers/adr-115-opencode-acp-provider.md)：1.x / 2.x 官方 stdio 协议、按原生能力处理问答和辅助会话、审批、取消和历史重放，取代私有 HTTP/SSE adapter。
+
 - [ADR-114：iOS 终端组合输入归 UIKit](decisions/clients/adr-114-ios-terminal-ime.md)：原生组合范围识别、确认文字提交与终端控制键分离。
 - [ADR-113：filesystem 按能力组组织模块](decisions/workspace/adr-113-filesystem-capability-groups.md)：git/forge/worktrees/files/skills 五组沿用原分层，组间仅经 ports/protocol 协作，并由模块边界测试约束。
 - [ADR-112：file 瘦身为 persistence，宿主专用文件归 daemon](decisions/daemon/adr-112-persistence-crate.md)：启动配置、故障证据与 server identity 迁回 daemon，metadata 经端口定位项目配置，仅 daemon 在生产代码中依赖 persistence。
@@ -89,9 +91,11 @@
 - [语音与听写](operations/speech.md)：离线模型、后端配置和限制。
 
 - [DSH 原生交互 Host](decisions/providers/adr-082-deepseek-harness-native-host.md)：权限切换、结构化问题、用户消息持久化与原生历史恢复。
-- [OpenCode 原生 Provider](decisions/providers/adr-074-opencode-native-provider.md)：接入范围、审批、外部会话发现与导入恢复。
+- [OpenCode 原生 Provider](decisions/providers/adr-074-opencode-native-provider.md)：接入范围、审批、外部会话发现与导入恢复；当前 ACP 传输见 ADR-115。
 
 ## 工程规范与验证
+
+- [OpenCode 官方 ACP 迁移验证](reports/providers/opencode-acp-2026-10-09.md)：真实原生问答、审批、恢复、无工具摘要及覆盖率证据。
 
 - [Persistence 与 filesystem 能力边界 PR 验证](reports/daemon/persistence-filesystem-pr-validation-2026-10-09.md)：13-crate 完整测试、覆盖率与原样保留的未接入摘要草稿。
 - [Domain 数据与 Server 协议归属 PR 验证](reports/daemon/domain-values-server-protocol-pr-validation-2026-10-09.md)：13-crate workspace 测试、覆盖率与源码证据。

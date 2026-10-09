@@ -1,5 +1,54 @@
 use super::*;
 
+#[tokio::test]
+async fn controls_use_each_sessions_native_modes_and_preserve_static_fallback() {
+    let fixture = Fixture::new();
+    let (execution, registry) = worker(&fixture);
+    let created = create(&execution, &fixture).await;
+    let id = created["agentId"].as_str().unwrap();
+    let other = create(&execution, &fixture).await;
+    for modes in [
+        json!([{"id":"review","label":"Review"}]),
+        json!([]),
+        json!("malformed"),
+    ] {
+        registry
+            .update(id, &|current| {
+                let mut next = current.clone();
+                next.runtime_info = Some(
+                    serde_json::from_value(json!({
+                        "provider":"codex","extra":{"availableModes":modes}
+                    }))
+                    .unwrap(),
+                );
+                next
+            })
+            .unwrap();
+        let snapshot = execution
+            .execute("agent.get.request", json!({"agentId":id}))
+            .await
+            .unwrap();
+        assert_eq!(
+            snapshot["agent"]["availableModes"],
+            if modes.is_array() {
+                &modes
+            } else {
+                &created["agent"]["availableModes"]
+            }
+            .clone()
+        );
+        let snapshot = execution
+            .execute("agent.get.request", json!({"agentId":other["agentId"]}))
+            .await
+            .unwrap();
+        assert_eq!(
+            snapshot["agent"]["availableModes"],
+            other["agent"]["availableModes"]
+        );
+    }
+    execution.shutdown().await.unwrap();
+}
+
 pub(super) async fn pending(execution: &AgentExecution, id: &str) -> Value {
     tokio::time::timeout(Duration::from_secs(3), async {
         loop {

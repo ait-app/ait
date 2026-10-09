@@ -48,7 +48,7 @@ pub(super) async fn open(
     {
         return Err(AgentSessionError::Rejected);
     }
-    let mut transport = Transport::spawn(client, &spec.cwd)?;
+    let mut transport = transport::spawn(client, &spec.cwd)?;
     let initialized = transport
         .request(
             "initialize",

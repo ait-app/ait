@@ -66,9 +66,10 @@ Rust 依赖方向见 [当前架构](docs/architecture/README.md)，所有修改�
 
 ## OpenCode
 
-使用本机已登录的 `opencode`，可用 `AIT_SERVER_OPENCODE_BIN` 指定可执行文件。
-提供 Build 模式、模型发现、文本对话、单次审批、取消和恢复；
-协议与能力限制见 [OpenCode 适配决策](docs/decisions/providers/adr-074-opencode-native-provider.md)。
+使用本机已登录的 OpenCode 1.x / 2.x，可用 `AIT_SERVER_OPENCODE_BIN` 指定可执行文件。
+原生表单问答已验证于 2.0.26；缺少删除会话能力时，Ait 不创建查询或摘要会话。
+通过官方 `opencode acp` 提供原生模式、模型发现、对话、审批、结构化问答、取消和恢复。
+协议与能力限制见 [OpenCode ACP 适配决策](docs/decisions/providers/adr-115-opencode-acp-provider.md)。
 
 ## 验证与发布
 

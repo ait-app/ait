@@ -29,32 +29,18 @@ fn preference_order_precedes_catalog_order_and_labels_can_match() {
 
 #[test]
 fn model_family_names_do_not_match_unrelated_small_model_tokens() {
-    use crate::local::{deepseek_harness::DeepSeekHarnessClient, opencode::OpenCodeClient};
+    use crate::local::deepseek_harness::DeepSeekHarnessClient;
     use crate::ports::agent_session::AgentClient;
-    for (client, models, expected) in [
-        (
-            Box::new(DeepSeekHarnessClient::new("dsh".into())) as Box<dyn AgentClient>,
-            vec![
-                json!({"id":"[\"google\",\"gemini-2.5-pro\"]","label":"Gemini 2.5 Pro"}),
-                json!({"id":"[\"google\",\"gemini-2.5-flash\"]","label":"Gemini 2.5 Flash"}),
-            ],
-            "[\"google\",\"gemini-2.5-flash\"]",
-        ),
-        (
-            Box::new(OpenCodeClient::new("opencode".into())) as Box<dyn AgentClient>,
-            vec![
-                json!({"id":"google/gemini-2.5-pro"}),
-                json!({"id":"google/gemini-2.5-flash"}),
-            ],
-            "google/gemini-2.5-flash",
-        ),
-    ] {
-        assert_eq!(
-            client.summary_model(&models).unwrap().model.as_deref(),
-            Some(expected)
-        );
-        assert!(client.summary_model(&models[..1]).is_none());
-    }
+    let client = DeepSeekHarnessClient::new("dsh".into());
+    let models = vec![
+        json!({"id":"[\"google\",\"gemini-2.5-pro\"]","label":"Gemini 2.5 Pro"}),
+        json!({"id":"[\"google\",\"gemini-2.5-flash\"]","label":"Gemini 2.5 Flash"}),
+    ];
+    assert_eq!(
+        client.summary_model(&models).unwrap().model.as_deref(),
+        Some("[\"google\",\"gemini-2.5-flash\"]")
+    );
+    assert!(client.summary_model(&models[..1]).is_none());
     for name in ["gemini", "minimal", "minimax", "illuminate"] {
         assert!(!matches_preference(name, "mini"));
     }

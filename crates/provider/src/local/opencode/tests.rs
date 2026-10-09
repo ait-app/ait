@@ -1,397 +1,830 @@
+use std::{collections::BTreeMap, time::Duration};
+
+use domain::agent_runtime::StoredAgentConfig;
+use serde_json::{Value, json};
+use tempfile::TempDir;
+
 use super::*;
-use crate::local::opencode::types::{Content, Role};
-use crate::local::opencode::types::{DenyApprovals, Outcome, ProgressEvent};
-use async_trait::async_trait;
-use serde_json::json;
+use crate::ports::agent_session::{
+    AgentClient, AgentResumePurpose, AgentSession, AgentSessionError, AgentSessionSpec,
+    AgentTurnEvent,
+};
 
-pub(super) mod fixture;
 #[cfg(unix)]
-mod installed;
-
-#[derive(Default)]
-struct Progress(std::sync::Mutex<Vec<ProgressEvent>>);
-#[async_trait]
-impl ProgressSink for Progress {
-    async fn report(&self, event: ProgressEvent) {
-        self.0.lock().unwrap().push(event);
-    }
-}
-
-pub(super) fn invocation(cwd: PathBuf) -> Invocation {
-    Invocation {
-        driver: "opencode".into(),
-        request_id: "run-1".into(),
-        session_id: None,
-        input_id: "input-1".into(),
-        prompt: "hello".into(),
-        instructions: None,
+fn fixture(scenario: &str) -> (TempDir, OpenCodeClient, AgentSessionSpec) {
+    let root = tempfile::tempdir().unwrap();
+    let cwd = root
+        .path()
+        .canonicalize()
+        .unwrap()
+        .to_string_lossy()
+        .into_owned();
+    let binary =
+        std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("tests/fixtures/opencode_acp.py");
+    let mut client = OpenCodeClient::new(binary);
+    client.environment = BTreeMap::from([
+        ("AIT_ACP_FIXTURE_ROOT".into(), cwd.clone()),
+        ("AIT_ACP_SCENARIO".into(), scenario.into()),
+    ]);
+    let spec = AgentSessionSpec {
+        provider: "opencode".into(),
         cwd,
-        model: "local/test-model".into(),
-        reasoning_effort: None,
-        full_access: true,
-        verify_settings: true,
-        agent: "build".into(),
-        approvals: Arc::new(DenyApprovals),
-        cancellation: tokio_util::sync::CancellationToken::new(),
-        cancel_acknowledged: Arc::default(),
+        config: StoredAgentConfig {
+            model: Some("local/model".into()),
+            mode_id: Some("build".into()),
+            ..StoredAgentConfig::default()
+        },
+    };
+    (root, client, spec)
+}
+
+fn requests(root: &TempDir) -> Vec<Value> {
+    std::fs::read_to_string(root.path().join("requests.jsonl"))
+        .unwrap()
+        .lines()
+        .map(|line| serde_json::from_str(line).unwrap())
+        .collect()
+}
+
+async fn event(session: &mut dyn AgentSession) -> AgentTurnEvent {
+    tokio::time::timeout(Duration::from_secs(10), async {
+        loop {
+            if let Some(event) = session.poll_turn().unwrap() {
+                return event;
+            }
+            tokio::time::sleep(Duration::from_millis(5)).await;
+        }
+    })
+    .await
+    .unwrap()
+}
+
+async fn completed(session: &mut dyn AgentSession) -> Vec<crate::protocol::timeline::NativeItem> {
+    let mut items = Vec::new();
+    loop {
+        match event(session).await {
+            AgentTurnEvent::Timeline(entry) => items.push(entry),
+            AgentTurnEvent::Completed(text) => {
+                assert_eq!(text.as_deref(), Some("authoritative answer"));
+                return items;
+            }
+            AgentTurnEvent::Cancelled | AgentTurnEvent::Failed => {
+                panic!("unexpected terminal event")
+            }
+            _ => {}
+        }
     }
 }
 
-#[test]
-fn selects_protocol_and_rejects_unsupported_versions() {
-    for value in ["1.14.46", "opencode v1.14.46\n"] {
+#[cfg(unix)]
+#[tokio::test]
+async fn acp_multiple_turns_replay_and_legacy_resume_keep_native_identity_and_client_ids() {
+    let (root, client, spec) = fixture("normal");
+    let mut session = client.create_session(&spec).await.unwrap();
+    let mut all = Vec::new();
+    for index in 0..2 {
+        let prompt = crate::protocol::prompt::AgentPrompt {
+            text: format!("hello {index}"),
+            client_message_id: Some(format!("client-{index}")),
+            ..Default::default()
+        };
+        session.start_input(&prompt, &spec.config).await.unwrap();
         assert_eq!(
-            protocol::Version::parse(value).unwrap(),
-            protocol::Version::V1
+            session
+                .start_turn("overlap", &spec.config)
+                .await
+                .unwrap_err(),
+            AgentSessionError::Rejected
         );
+        all.extend(completed(session.as_mut()).await);
     }
-    for value in ["2.0.10", "v2.1.0-beta.1"] {
-        assert_eq!(
-            protocol::Version::parse(value).unwrap(),
-            protocol::Version::V2
-        );
-    }
-    for value in ["2.0.9", "3.0.0", "garbage", "1.1", "0.1.0"] {
-        assert!(protocol::Version::parse(value).is_err());
-    }
-}
-
-#[test]
-fn rejects_remote_loopback_lookalikes_and_credentials() {
-    for base in [
-        "http://localhost:1234/",
-        "https://127.0.0.1:1234/",
-        "http://127.0.0.1:1234/path",
-        "http://user@127.0.0.1:1234/",
-        "http://127.0.0.1:1234/?token=x",
-        "http://127.0.0.1/",
-    ] {
-        assert!(
-            http::Api::new(
-                protocol::Version::V1,
-                reqwest::Url::parse(base).unwrap(),
-                "private".into(),
-                "/tmp".into()
-            )
-            .is_err()
-        );
-    }
-}
-
-#[test]
-fn refuses_sandbox_emulation_resume_instructions_and_unsafe_session_ids() {
-    let mut request = invocation("/tmp".into());
-    {
-        request.full_access = false;
-        assert_eq!(
-            session::validate(&request).unwrap_err().code,
-            Fault::AgentCapabilityUnsupported
-        );
-    }
-    request.full_access = true;
-    request.session_id = Some("../other".into());
-    assert!(session::validate(&request).is_err());
-    request.session_id = Some("ses_one".into());
-    request.instructions = Some("replace".into());
-    assert!(session::validate(&request).is_err());
-    request.instructions = None;
-    request.cancellation.cancel();
+    let handle = session.persistence().unwrap();
+    assert_eq!(handle.session_id, "ses_one");
+    let saved: Value =
+        serde_json::from_str(handle.native_handle.as_ref().unwrap().as_str().unwrap()).unwrap();
+    assert_eq!(saved["clients"]["user1"], "client-0");
+    assert_eq!(saved["clients"]["user2"], "client-1");
+    session.close().await.unwrap();
+    let listed = client
+        .list_sessions(&crate::ports::native_history::ListOptions {
+            cwd: Some(spec.cwd.clone()),
+            scan_limit: 10,
+        })
+        .await
+        .unwrap();
+    assert_eq!(listed[0].first_prompt_preview.as_deref(), Some("hello 0"));
+    assert_eq!(listed[0].last_prompt_preview.as_deref(), Some("hello 1"));
+    let before = std::fs::read(root.path().join("native-fixture.json")).unwrap();
+    assert_replay(&all, &client.history(&handle, &spec.cwd).await.unwrap());
     assert_eq!(
-        session::validate(&request).unwrap_err().code,
-        Fault::RunCancelled
+        std::fs::read(root.path().join("native-fixture.json")).unwrap(),
+        before
+    );
+    let mut legacy = handle.clone();
+    legacy.native_handle =
+        Some(json!({"config":spec.config,"model":"local/model","clients":saved["clients"]}));
+    let mut resumed = client
+        .resume_session(&legacy, &spec, AgentResumePurpose::Interactive)
+        .await
+        .unwrap();
+    resumed
+        .start_turn("after restart", &spec.config)
+        .await
+        .unwrap();
+    assert_eq!(completed(resumed.as_mut()).await.len(), 2);
+    resumed.close().await.unwrap();
+    assert_eq!(
+        requests(&root)
+            .iter()
+            .filter(|request| request["method"] == "session/prompt")
+            .count(),
+        3
     );
 }
 
-#[test]
-fn maps_terminal_native_tools_to_native_records_and_redacts_secret_fields() {
-    let records = json!([
-        {"id":"u1","type":"user","text":"hello","metadata":{"aitInputId":"input-1"},"time":{"created":1}},
-        {"id":"a1","type":"assistant","time":{"created":2,"completed":3},"content":[
-            {"type":"text","text":"working"},
-            {"id":"call1","type":"tool","name":"shell","state":{"status":"completed","input":{"command":"pwd","token":"secret"},"content":[{"type":"text","text":"/tmp"}]}},
-            {"type":"reasoning","text":"thought","providerState":{"token":"secret"}}
-        ]}
-    ]);
-    let mapped = history::normalize(
-        protocol::Version::V2,
-        "ses_one",
-        records.as_array().unwrap(),
+#[cfg(unix)]
+#[tokio::test]
+async fn acp_replays_more_than_the_control_queue_without_truncating_history() {
+    let (root, client, spec) = fixture("normal");
+    let history = (0..160).flat_map(|index| [
+        json!({"id":format!("user{index}"),"type":"user","text":format!("user {index}")}),
+        json!({"id":format!("answer{index}"),"type":"assistant","content":[{"type":"text","text":format!("answer {index}")}]}),
+    ]).collect::<Vec<_>>();
+    std::fs::write(
+        root.path().join("native-fixture.json"),
+        json!({"seq":160,"history":history}).to_string(),
     )
     .unwrap();
-    assert_eq!(mapped.len(), 3);
-    assert_eq!(mapped[0].input_id.as_deref(), Some("input-1"));
-    assert!(
-        matches!(&mapped[1].sub_messages[1],Content::ToolCall(tool) if tool.call_id=="call1" && !tool.arguments.contains("secret"))
-    );
-    assert_eq!(mapped[2].role, Role::User);
-    assert!(mapped[2].tool_result.is_some());
-    assert!(!serde_json::to_string(&mapped).unwrap().contains("secret"));
-}
-
-#[test]
-fn rejects_duplicate_and_unfinished_history() {
-    let assistant = json!({"id":"a1","type":"assistant","time":{"created":2},"content":[]});
-    assert!(
-        history::normalize(
-            protocol::Version::V2,
-            "ses_one",
-            std::slice::from_ref(&assistant)
-        )
-        .is_err()
-    );
-    let mut complete = assistant;
-    complete["time"]["completed"] = json!(3);
-    assert!(
-        history::normalize(
-            protocol::Version::V2,
-            "ses_one",
-            &[complete.clone(), complete]
-        )
-        .is_err()
-    );
-    let wrong = json!({"info":{"id":"u1","role":"user","sessionID":"other","time":{"created":1}},"parts":[]});
-    assert!(history::normalize(protocol::Version::V1, "ses_one", &[wrong]).is_err());
-    let running = json!({"id":"a1","type":"assistant","time":{"created":1,"completed":2},"content":[{"type":"tool","id":"c","name":"shell","state":{"status":"running","input":{}}}]});
-    assert!(history::normalize(protocol::Version::V2, "ses_one", &[running]).is_err());
-}
-
-#[tokio::test]
-async fn native_v1_and_v2_prepare_send_once_read_and_resume() {
-    for version in [protocol::Version::V1, protocol::Version::V2] {
-        let fixture = fixture::Fixture::start(version).await;
-        let adapter = Driver::new(fixture.binary.clone());
-        let request = invocation(fixture.cwd.clone());
-        let mut connection = adapter.open(request.clone()).await.unwrap();
-        assert_eq!(fixture.state.lock().unwrap().submissions, 0);
-        assert!(connection.prepared().messages.is_empty());
-        if version == protocol::Version::V1 {
-            assert!(connection.prepared().input_id.starts_with("msg_"));
-        }
-        let snapshot = connection
-            .start(Arc::new(Progress::default()))
-            .await
-            .unwrap();
-        assert_eq!(snapshot.outcome, Some(Outcome::Completed));
-        assert_eq!(snapshot.messages.len(), 2);
-        assert_eq!(fixture.state.lock().unwrap().submissions, 1);
-        assert!(
-            connection
-                .start(Arc::new(Progress::default()))
-                .await
-                .is_err()
-        );
-        assert_eq!(connection.read().await.unwrap().messages, snapshot.messages);
-        connection.close().await;
-        let mut resumed = request;
-        resumed.session_id = Some(snapshot.id);
-        resumed.input_id = snapshot.input_id;
-        let mut connection = adapter.open(resumed).await.unwrap();
-        assert_eq!(connection.prepared().messages, snapshot.messages);
-        connection.close().await;
-        assert_eq!(fixture.state.lock().unwrap().submissions, 1);
-    }
-}
-
-#[tokio::test]
-async fn model_catalog_uses_connected_native_models_and_variants() {
-    for version in [protocol::Version::V1, protocol::Version::V2] {
-        let fixture = fixture::Fixture::start(version).await;
-        let models = Driver::new(fixture.binary.clone())
-            .discover_models(fixture.cwd.clone())
-            .await
-            .unwrap();
-        assert_eq!(models.len(), 1);
-        assert_eq!(models[0].id, "local/test-model");
-        assert_eq!(models[0].reasoning_efforts, vec!["high"]);
-    }
-}
-
-#[tokio::test]
-async fn v2_partial_nonempty_catalog_waits_for_initial_plugin_activation() {
-    let fixture = fixture::Fixture::start(protocol::Version::V2).await;
-    fixture.state.lock().unwrap().pending_plugin_polls = 3;
-    let driver = Driver::new(fixture.binary.clone());
-    let models = driver.discover_models(fixture.cwd.clone()).await.unwrap();
+    let handle = domain::agent_runtime::AgentPersistenceHandle {
+        provider: "opencode".into(),
+        session_id: "ses_one".into(),
+        native_handle: None,
+        metadata: None,
+    };
+    let imported = client.inspect_session(&handle, &spec.cwd).await.unwrap();
+    assert_eq!(imported.entries.len(), 320);
     assert_eq!(
-        models
+        imported.descriptor.first_prompt_preview.as_deref(),
+        Some("user 0")
+    );
+    assert_eq!(
+        imported.descriptor.last_prompt_preview.as_deref(),
+        Some("user 159")
+    );
+    assert_eq!(imported.entries.last().unwrap().item["text"], "answer 159");
+    assert!(
+        requests(&root)
             .iter()
-            .map(|model| model.id.as_str())
-            .collect::<Vec<_>>(),
-        vec!["local/test-model"]
+            .all(|request| request["method"] != "session/prompt")
     );
-    assert_eq!(fixture.state.lock().unwrap().pending_plugin_polls, 0);
-    assert_eq!(fixture.state.lock().unwrap().submissions, 0);
 }
 
+#[cfg(unix)]
 #[tokio::test]
-async fn v2_cold_model_catalog_retries_are_bounded() {
-    let fixture = fixture::Fixture::start(protocol::Version::V2).await;
-    fixture.state.lock().unwrap().empty_model_catalogs = 2;
-    let driver = Driver::new(fixture.binary.clone());
-    let models = driver.discover_models(fixture.cwd.clone()).await.unwrap();
-    assert_eq!(models[0].id, "local/test-model");
-    assert_eq!(fixture.state.lock().unwrap().empty_model_catalogs, 0);
+async fn acp_missing_preview_replay_keeps_discovered_sessions_without_prompting() {
+    let (root, client, spec) = fixture("preview-failed");
+    std::fs::write(
+        root.path().join("native-fixture.json"),
+        r#"{"seq":0,"history":[]}"#,
+    )
+    .unwrap();
+    let listed = client
+        .list_sessions(&crate::ports::native_history::ListOptions {
+            cwd: Some(spec.cwd),
+            scan_limit: 10,
+        })
+        .await
+        .unwrap();
+    assert_eq!(listed.len(), 1);
+    assert_eq!(listed[0].provider_handle_id, "ses_one");
+    assert!(listed[0].first_prompt_preview.is_none());
+    assert!(
+        requests(&root)
+            .iter()
+            .all(|request| request["method"] != "session/prompt"
+                && request["method"] != "session/new"
+                && request["method"] != "session/set_config_option")
+    );
+}
 
-    for pending_plugins in [false, true] {
-        {
-            let mut state = fixture.state.lock().unwrap();
-            state.empty_model_catalogs = if pending_plugins { 0 } else { usize::MAX };
-            state.pending_plugin_polls = if pending_plugins { usize::MAX } else { 0 };
+#[cfg(unix)]
+#[tokio::test]
+async fn acp_forms_keep_multiselect_values_custom_fields_and_single_reply() {
+    let (root, client, spec) = fixture("question");
+    let mut session = client.create_session(&spec).await.unwrap();
+    session.start_turn("ask", &spec.config).await.unwrap();
+    let request = loop {
+        if let AgentTurnEvent::PermissionRequested(request) = event(session.as_mut()).await {
+            break request;
         }
-        let result = tokio::time::timeout(
-            std::time::Duration::from_secs(8),
-            driver.discover_models(fixture.cwd.clone()),
-        )
-        .await
-        .expect("an unready native catalog must not hang or return partial models");
-        assert_eq!(result.unwrap_err().code, Fault::ProviderFailed);
-    }
-    assert_eq!(fixture.state.lock().unwrap().submissions, 0);
-}
-
-#[tokio::test]
-async fn v2_synced_log_and_idle_history_complete_without_replaying_input() {
-    for expected in [Outcome::Completed, Outcome::Failed, Outcome::Interrupted] {
-        let fixture = fixture::Fixture::start(protocol::Version::V2).await;
-        {
-            let mut state = fixture.state.lock().unwrap();
-            state.idle_completion = expected != Outcome::Interrupted;
-            state.aborted_completion = expected == Outcome::Interrupted;
-            state.early_failure = expected == Outcome::Failed;
-        }
-        let driver = Driver::new(fixture.binary.clone());
-        let mut request = invocation(fixture.cwd.clone());
-        let mut connection = driver.open(request.clone()).await.unwrap();
-        let snapshot = tokio::time::timeout(
-            std::time::Duration::from_secs(2),
-            connection.start(Arc::new(Progress::default())),
-        )
-        .await
-        .unwrap()
-        .unwrap();
-        assert_eq!(snapshot.outcome, Some(expected));
-        connection.close().await;
-        request.session_id = Some(snapshot.id);
-        let mut resumed = driver.open(request).await.unwrap();
-        assert_eq!(resumed.prepared().messages, snapshot.messages);
-        assert_eq!(fixture.state.lock().unwrap().submissions, 1);
-        resumed.close().await;
-    }
-}
-
-#[tokio::test]
-async fn response_ambiguity_reconciles_without_replaying_input() {
-    let fixture = fixture::Fixture::start(protocol::Version::V2).await;
-    fixture.state.lock().unwrap().reject_ack = true;
-    let mut connection = Driver::new(fixture.binary.clone())
-        .open(invocation(fixture.cwd.clone()))
-        .await
-        .unwrap();
-    let history = connection
-        .start(Arc::new(Progress::default()))
-        .await
-        .unwrap();
-    assert_eq!(history.outcome, Some(Outcome::Completed));
-    assert_eq!(fixture.state.lock().unwrap().submissions, 1);
-    connection.close().await;
-}
-
-#[tokio::test]
-async fn active_session_and_unknown_model_fail_before_input() {
-    let fixture = fixture::Fixture::start(protocol::Version::V2).await;
-    let adapter = Driver::new(fixture.binary.clone());
-    let mut request = invocation(fixture.cwd.clone());
-    request.model = "local/missing".into();
-    assert!(adapter.open(request).await.is_err());
-    let mut connection = adapter.open(invocation(fixture.cwd.clone())).await.unwrap();
-    let id = connection.prepared().id.clone();
-    connection.close().await;
-    fixture.state.lock().unwrap().busy = true;
-    let mut request = invocation(fixture.cwd.clone());
-    request.session_id = Some(id);
+    };
+    assert_eq!(request["kind"], "question");
     assert_eq!(
-        adapter.open(request).await.err().unwrap().code,
-        Fault::SessionBusy
+        request["input"]["questions"][0]["options"][0]["label"],
+        "Rust, stable"
     );
-    assert_eq!(fixture.state.lock().unwrap().submissions, 0);
+    assert_eq!(session.pending_permissions().len(), 1);
+    let id = request["id"].as_str().unwrap();
+    assert_eq!(
+        session
+            .respond_permission(
+                id,
+                &json!({"behavior":"allow","updatedInput":{"answers":{"language":["invalid"]}}})
+            )
+            .await
+            .unwrap_err(),
+        AgentSessionError::Rejected
+    );
+    assert_eq!(
+        session
+            .respond_permission(
+                id,
+                &json!({"behavior":"allow","updatedInput":{"content":{"language":["rust","rust"]}}})
+            )
+            .await
+            .unwrap_err(),
+        AgentSessionError::Rejected
+    );
+    session.respond_permission(id, &json!({"behavior":"allow","updatedInput":{"answers":{"language":["Rust, stable","Go"],"language_custom":"C++"}}})).await.unwrap();
+    assert!(session.pending_permissions().is_empty());
+    assert!(
+        session
+            .respond_permission(id, &json!({"behavior":"allow"}))
+            .await
+            .is_err()
+    );
+    completed(session.as_mut()).await;
+    let replies = requests(&root)
+        .into_iter()
+        .filter(|message| message["id"] == "question" && message.get("method").is_none())
+        .collect::<Vec<_>>();
+    assert_eq!(replies.len(), 1);
+    assert_eq!(
+        replies[0]["result"],
+        json!({"action":"accept","content":{"language":["rust","go"],"language_custom":"C++"}})
+    );
+    session.close().await.unwrap();
 }
 
+#[cfg(unix)]
 #[tokio::test]
-async fn history_cursor_cycles_fail_closed() {
-    let fixture = fixture::Fixture::start(protocol::Version::V2).await;
-    fixture.state.lock().unwrap().cursor_cycle = true;
-    let result = Driver::new(fixture.binary.clone())
-        .open(invocation(fixture.cwd.clone()))
-        .await;
-    assert_eq!(result.err().unwrap().code, Fault::ProviderFailed);
-    assert_eq!(fixture.state.lock().unwrap().submissions, 0);
+async fn acp_declining_a_form_continues_the_turn_without_interrupting_it() {
+    let (root, client, spec) = fixture("question");
+    let mut session = client.create_session(&spec).await.unwrap();
+    session.start_turn("ask", &spec.config).await.unwrap();
+    loop {
+        if let AgentTurnEvent::PermissionRequested(request) = event(session.as_mut()).await {
+            session
+                .respond_permission(request["id"].as_str().unwrap(), &json!({"behavior":"deny"}))
+                .await
+                .unwrap();
+            break;
+        }
+    }
+    completed(session.as_mut()).await;
+    assert!(
+        !requests(&root)
+            .iter()
+            .any(|request| request["method"] == "session/cancel")
+    );
+    session.close().await.unwrap();
 }
 
+#[cfg(unix)]
 #[tokio::test]
-async fn cancelling_an_active_execution_interrupts_without_replaying() {
-    let fixture = fixture::Fixture::start(protocol::Version::V2).await;
-    let request = invocation(fixture.cwd.clone());
-    let cancellation = request.cancellation.clone();
-    let mut connection = Driver::new(fixture.binary.clone())
-        .open(request)
-        .await
+async fn acp_native_permission_options_and_rejection_allow_a_followup_turn() {
+    let (root, client, spec) = fixture("permission");
+    let mut session = client.create_session(&spec).await.unwrap();
+    for behavior in ["deny", "allow"] {
+        session.start_turn("shell", &spec.config).await.unwrap();
+        loop {
+            if let AgentTurnEvent::PermissionRequested(request) = event(session.as_mut()).await {
+                session
+                    .respond_permission(
+                        request["id"].as_str().unwrap(),
+                        &json!({"behavior":behavior}),
+                    )
+                    .await
+                    .unwrap();
+                break;
+            }
+        }
+        completed(session.as_mut()).await;
+    }
+    let replies = requests(&root)
+        .into_iter()
+        .filter(|message| message["id"] == "permission" && message.get("method").is_none())
+        .collect::<Vec<_>>();
+    assert_eq!(replies[0]["result"]["outcome"]["optionId"], "reject");
+    assert_eq!(replies[1]["result"]["outcome"]["optionId"], "once");
+    session.close().await.unwrap();
+}
+
+#[cfg(unix)]
+#[tokio::test]
+async fn acp_cancel_waits_for_settlement_and_clears_pending_questions() {
+    let (_root, client, spec) = fixture("question");
+    let mut session = client.create_session(&spec).await.unwrap();
+    let turn = session.start_turn("ask", &spec.config).await.unwrap();
+    let request = loop {
+        if let AgentTurnEvent::PermissionRequested(request) = event(session.as_mut()).await {
+            break request;
+        }
+    };
+    session.cancel_turn(&turn).await.unwrap();
+    assert_eq!(
+        session
+            .start_turn("too early", &spec.config)
+            .await
+            .unwrap_err(),
+        AgentSessionError::Rejected
+    );
+    loop {
+        if matches!(event(session.as_mut()).await, AgentTurnEvent::Cancelled) {
+            break;
+        }
+    }
+    assert!(session.pending_permissions().is_empty());
+    assert!(
+        session
+            .respond_permission(request["id"].as_str().unwrap(), &json!({"behavior":"deny"}))
+            .await
+            .is_err()
+    );
+    session.start_turn("next", &spec.config).await.unwrap();
+    session.close().await.unwrap();
+}
+
+#[cfg(unix)]
+#[tokio::test]
+async fn acp_one_megabyte_tool_output_stays_in_native_storage_with_bounded_timeline() {
+    let (root, client, spec) = fixture("large-tool");
+    let mut session = client.create_session(&spec).await.unwrap();
+    session.start_turn("read", &spec.config).await.unwrap();
+    let items = completed(session.as_mut()).await;
+    let tool = items
+        .iter()
+        .find(|entry| entry.item["type"] == "tool_call")
         .unwrap();
-    fixture.state.lock().unwrap().busy = true;
-    let task = tokio::spawn(async move {
-        let result = connection.start(Arc::new(Progress::default())).await;
-        connection.close().await;
-        result
-    });
-    tokio::time::timeout(std::time::Duration::from_secs(3), async {
-        while fixture.state.lock().unwrap().submissions == 0 {
-            tokio::time::sleep(std::time::Duration::from_millis(10)).await;
+    assert!(serde_json::to_vec(tool).unwrap().len() < 768 * 1024);
+    assert!(
+        tool.item["detail"]["content"]
+            .as_str()
+            .unwrap()
+            .contains("Output truncated")
+    );
+    let native: Value =
+        serde_json::from_slice(&std::fs::read(root.path().join("native-fixture.json")).unwrap())
+            .unwrap();
+    assert_eq!(
+        native["history"][1]["content"][0]["output"]
+            .as_str()
+            .unwrap()
+            .len(),
+        1_048_576
+    );
+    let handle = session.persistence().unwrap();
+    session.close().await.unwrap();
+    assert_replay(&items, &client.history(&handle, &spec.cwd).await.unwrap());
+}
+
+#[cfg(unix)]
+#[tokio::test]
+async fn acp_discovery_never_prompts_and_deletes_its_native_query_session() {
+    let (root, client, spec) = fixture("normal");
+    let details = client.discover(&spec.cwd).await.unwrap();
+    assert_eq!(details.models[0]["id"], "local/model");
+    assert!(
+        client
+            .list_sessions(&crate::ports::native_history::ListOptions {
+                cwd: Some(spec.cwd),
+                scan_limit: 10
+            })
+            .await
+            .unwrap()
+            .is_empty()
+    );
+    assert!(!root.path().join("native-fixture.json").exists());
+    assert!(
+        client
+            .summary_model(&[json!({"id":"local/mini","isSelectable":true})])
+            .is_some()
+    );
+    assert!(
+        !requests(&root)
+            .iter()
+            .any(|request| request["method"] == "session/prompt")
+    );
+}
+
+#[cfg(unix)]
+#[tokio::test]
+async fn acp_exposes_native_session_capabilities_and_rejects_missing_model_before_prompting() {
+    let (_root, client, spec) = fixture("no-history");
+    assert!(client.is_available().await.unwrap());
+    assert!(!client.supports_session_import());
+    assert_eq!(
+        client.settings(&spec.config)["capabilities"]["supportsSessionListing"],
+        false
+    );
+    let (root, client, spec) = fixture("missing-model");
+    assert!(matches!(
+        client.create_session(&spec).await,
+        Err(AgentSessionError::Rejected)
+    ));
+    assert!(
+        !requests(&root)
+            .iter()
+            .any(|request| request["method"] == "session/prompt")
+    );
+    let (_root, client, spec) = fixture("normal");
+    assert!(client.is_available().await.unwrap());
+    assert_eq!(
+        client.diagnostic().await.unwrap(),
+        "OpenCode 2.0.26: ACP initialized."
+    );
+    let models = [
+        json!({"id":"google/gemini-2.5-pro"}),
+        json!({"id":"google/gemini-2.5-flash"}),
+    ];
+    assert_eq!(
+        client.summary_model(&models).unwrap().model.as_deref(),
+        Some("google/gemini-2.5-flash")
+    );
+    assert!(client.summary_model(&models[..1]).is_none());
+    assert!(client.supports_session_import());
+    assert_eq!(
+        client.settings(&spec.config)["capabilities"]["supportsSessionListing"],
+        true
+    );
+    let (_root, client, mut spec) = fixture("custom-mode");
+    spec.config.mode_id = Some("review".into());
+    let mut session = client.create_session(&spec).await.unwrap();
+    let info = session.runtime_info().await.unwrap();
+    let extra = info.extra.unwrap();
+    assert_eq!(extra["availableModes"].as_array().unwrap().len(), 1);
+    assert_eq!(extra["availableModes"][0]["id"], "review");
+    assert!(
+        client.settings(&spec.config)["availableModes"]
+            .as_array()
+            .unwrap()
+            .is_empty()
+    );
+    session.close().await.unwrap();
+}
+
+#[cfg(unix)]
+#[tokio::test]
+async fn acp_ambiguous_admission_is_never_resubmitted() {
+    let (root, client, spec) = fixture("ambiguous");
+    let mut session = client.create_session(&spec).await.unwrap();
+    session.start_turn("once", &spec.config).await.unwrap();
+    tokio::time::timeout(Duration::from_secs(5), async {
+        loop {
+            if session.poll_turn().is_err() {
+                break;
+            }
+            tokio::time::sleep(Duration::from_millis(5)).await;
         }
     })
     .await
     .unwrap();
-    cancellation.cancel();
-    let result = tokio::time::timeout(std::time::Duration::from_secs(3), task)
-        .await
-        .unwrap()
-        .unwrap();
-    assert_eq!(result.unwrap_err().code, Fault::RunCancelled);
-    let state = fixture.state.lock().unwrap();
-    assert_eq!(state.submissions, 1);
-    assert!(!state.busy);
+    assert!(session.start_turn("retry", &spec.config).await.is_err());
+    assert_eq!(
+        requests(&root)
+            .iter()
+            .filter(|message| message["method"] == "session/prompt")
+            .count(),
+        1
+    );
+    session.close().await.unwrap();
 }
 
+#[cfg(unix)]
 #[tokio::test]
-async fn native_failure_without_assistant_content_is_terminal() {
-    let fixture = fixture::Fixture::start(protocol::Version::V2).await;
-    fixture.state.lock().unwrap().early_failure = true;
-    let mut connection = Driver::new(fixture.binary.clone())
-        .open(invocation(fixture.cwd.clone()))
-        .await
-        .unwrap();
-    let history = tokio::time::timeout(
-        std::time::Duration::from_secs(3),
-        connection.start(Arc::new(Progress::default())),
-    )
-    .await
-    .unwrap()
-    .unwrap();
-    assert_eq!(history.outcome, Some(Outcome::Failed));
-    assert_eq!(history.messages.len(), 1);
-    connection.close().await;
+async fn acp_malformed_initialization_and_timeouts_fail_closed() {
+    for scenario in ["malformed", "hung"] {
+        let (_root, mut client, spec) = fixture(scenario);
+        client.deadline = Duration::from_millis(150);
+        assert!(client.create_session(&spec).await.is_err());
+    }
 }
 
+#[cfg(unix)]
 #[tokio::test]
-async fn native_budget_overrun_interrupts_execution() {
-    let fixture = fixture::Fixture::start(protocol::Version::V2).await;
-    let adapter = Driver::new(fixture.binary.clone())
-        .with_execution_limits(OpenCodeExecutionLimits {
-            max_output_bytes: 1,
+async fn acp_concurrent_immutable_executables_are_isolated() {
+    let mut tasks = tokio::task::JoinSet::new();
+    for _ in 0..32 {
+        tasks.spawn(async {
+            let (_root, client, spec) = fixture("normal");
+            let mut session = client.create_session(&spec).await.unwrap();
+            session
+                .start_turn("concurrent", &spec.config)
+                .await
+                .unwrap();
+            completed(session.as_mut()).await;
+            session.close().await.unwrap();
+        });
+    }
+    while let Some(result) = tasks.join_next().await {
+        result.unwrap();
+    }
+}
+
+#[test]
+fn acp_configuration_rejects_unsupported_policy_before_launch() {
+    for config in [
+        StoredAgentConfig {
+            mode_id: Some("bad\nmode".into()),
             ..Default::default()
-        })
+        },
+        StoredAgentConfig {
+            model: Some("missing-provider".into()),
+            ..Default::default()
+        },
+        StoredAgentConfig {
+            mcp_servers: Some(BTreeMap::new()),
+            ..Default::default()
+        },
+    ] {
+        assert_eq!(config::validate(&config), Err(AgentSessionError::Rejected));
+    }
+}
+
+#[cfg(unix)]
+mod installed;
+
+fn assert_replay(
+    items: &[crate::protocol::timeline::NativeItem],
+    replay: &[crate::protocol::timeline::NativeItem],
+) {
+    let timeline = crate::storage::timeline::Timeline::memory().unwrap();
+    let (epoch, _) = timeline.append("agent", "opencode", items).unwrap();
+    let (_, before) = timeline.read("agent").unwrap();
+    assert_eq!(
+        timeline.reconcile("agent", "opencode", replay).unwrap(),
+        epoch
+    );
+    let (_, after) = timeline.read("agent").unwrap();
+    assert_eq!(
+        before
+            .iter()
+            .map(crate::storage::timeline::Row::value)
+            .collect::<Vec<_>>(),
+        after
+            .iter()
+            .map(crate::storage::timeline::Row::value)
+            .collect::<Vec<_>>()
+    );
+}
+
+#[cfg(unix)]
+#[tokio::test]
+async fn acp_history_only_sessions_reject_writes_and_keep_native_storage_unchanged() {
+    let (root, client, spec) = fixture("normal");
+    let mut session = client.create_session(&spec).await.unwrap();
+    session.start_turn("initial", &spec.config).await.unwrap();
+    completed(session.as_mut()).await;
+    let handle = session.persistence().unwrap();
+    session.close().await.unwrap();
+    let original = std::fs::read(root.path().join("native-fixture.json")).unwrap();
+    let mut historical = client
+        .resume_session(&handle, &spec, AgentResumePurpose::History)
+        .await
         .unwrap();
-    let mut connection = adapter.open(invocation(fixture.cwd.clone())).await.unwrap();
-    let result = connection.start(Arc::new(Progress::default())).await;
-    assert_eq!(result.unwrap_err().code, Fault::RunLimitExceeded);
-    assert_eq!(fixture.state.lock().unwrap().submissions, 1);
-    connection.close().await;
+    assert_eq!(
+        historical
+            .start_turn("write", &spec.config)
+            .await
+            .unwrap_err(),
+        AgentSessionError::Rejected
+    );
+    historical.close().await.unwrap();
+    assert_eq!(
+        std::fs::read(root.path().join("native-fixture.json")).unwrap(),
+        original
+    );
+}
+
+#[cfg(unix)]
+#[tokio::test]
+async fn acp_dynamic_modes_effort_and_permission_overrides_do_not_create_a_new_session() {
+    let (root, client, mut spec) = fixture("normal");
+    let mut session = client.create_session(&spec).await.unwrap();
+    spec.config.mode_id = Some("plan".into());
+    spec.config.thinking_option_id = Some("high".into());
+    spec.config.feature_values = Some(BTreeMap::from([("permission".into(), json!("deny"))]));
+    session.start_turn("plan", &spec.config).await.unwrap();
+    completed(session.as_mut()).await;
+    let info = session.runtime_info().await.unwrap();
+    assert_eq!(info.mode_id.as_deref(), Some("plan"));
+    assert_eq!(info.thinking_option_id.as_deref(), Some("high"));
+    assert_eq!(
+        requests(&root)
+            .iter()
+            .filter(|message| message["method"] == "session/new")
+            .count(),
+        1
+    );
+    assert!(
+        requests(&root)
+            .iter()
+            .any(|message| message["method"] == "session/resume")
+    );
+    session.close().await.unwrap();
+}
+
+#[cfg(unix)]
+#[tokio::test]
+async fn acp_auxiliary_generation_cleans_up_on_success_and_future_cancellation() {
+    let (root, client, spec) = fixture("normal");
+    assert_eq!(
+        client
+            .generate_summary(&spec, "metadata", &json!({"type":"object"}))
+            .await
+            .unwrap(),
+        "authoritative answer"
+    );
+    assert!(!root.path().join("native-fixture.json").exists());
+    let (root, client, spec) = fixture("waiting");
+    let task = tokio::spawn(async move {
+        client
+            .generate_summary(&spec, "metadata", &json!({"type":"object"}))
+            .await
+    });
+    tokio::time::timeout(Duration::from_secs(5), async {
+        loop {
+            if root.path().join("requests.jsonl").exists()
+                && requests(&root)
+                    .iter()
+                    .any(|request| request["method"] == "session/prompt")
+            {
+                break;
+            }
+            tokio::time::sleep(Duration::from_millis(10)).await;
+        }
+    })
+    .await
+    .unwrap();
+    task.abort();
+    let _ = task.await;
+    tokio::time::timeout(Duration::from_secs(5), async {
+        while root.path().join("native-fixture.json").exists() {
+            tokio::time::sleep(Duration::from_millis(10)).await;
+        }
+    })
+    .await
+    .unwrap();
+}
+
+#[cfg(unix)]
+#[tokio::test]
+async fn acp_refuses_unrecognized_config_families_before_creating_sessions() {
+    for version in ["0.9.0", "3.0.0", "not-a-version"] {
+        let (root, mut client, spec) = fixture("normal");
+        client
+            .environment
+            .insert("AIT_ACP_VERSION".into(), version.into());
+        assert!(client.create_session(&spec).await.is_err());
+        assert!(!root.path().join("native-fixture.json").exists());
+    }
+}
+
+#[cfg(unix)]
+#[tokio::test]
+async fn acp_both_major_versions_keep_conversation_and_configuration_compatible() {
+    for version in ["1.18.3", "1.18.4", "2.0.20", "2.0.26"] {
+        let (root, mut client, mut spec) = fixture("normal");
+        client
+            .environment
+            .insert("AIT_ACP_VERSION".into(), version.into());
+        let legacy = version.starts_with("1.");
+        let native = if legacy {
+            json!({"agent":{"build":{"description":"preserved"}},"permission":{"edit":"deny"}})
+        } else {
+            json!({"agents":{"build":{"description":"preserved"}},"permissions":[]})
+        };
+        client
+            .environment
+            .insert("OPENCODE_CONFIG_CONTENT".into(), native.to_string());
+        spec.config.feature_values = Some(BTreeMap::from([("permission".into(), json!("ask"))]));
+        spec.config.system_prompt = Some("native prompt".into());
+        let mut session = client.create_session(&spec).await.unwrap();
+        session.start_turn("hello", &spec.config).await.unwrap();
+        completed(session.as_mut()).await;
+        let handle = session.persistence().unwrap();
+        session.close().await.unwrap();
+        let mut resumed = client
+            .resume_session(&handle, &spec, AgentResumePurpose::Interactive)
+            .await
+            .unwrap();
+        resumed.start_turn("follow up", &spec.config).await.unwrap();
+        completed(resumed.as_mut()).await;
+        resumed.close().await.unwrap();
+        let launches = std::fs::read_to_string(root.path().join("launch.jsonl")).unwrap();
+        let launch: Value = serde_json::from_str(launches.lines().next().unwrap()).unwrap();
+        if legacy {
+            assert_eq!(
+                launch["config"]["permission"],
+                json!({"*":"ask","edit":"deny"})
+            );
+            assert_eq!(
+                launch["config"]["agent"]["build"]["prompt"],
+                "native prompt"
+            );
+            assert_eq!(
+                launch["config"]["agent"]["build"]["description"],
+                "preserved"
+            );
+            assert!(launch["config"]["agents"].is_null());
+            assert_eq!(launch["question"], "false");
+        } else {
+            assert_eq!(launch["config"]["permissions"][0]["effect"], "ask");
+            assert_eq!(
+                launch["config"]["agents"]["build"]["system"],
+                "native prompt"
+            );
+            assert_eq!(
+                launch["config"]["agents"]["build"]["description"],
+                "preserved"
+            );
+            assert!(launch["config"]["agent"].is_null());
+        }
+    }
+}
+
+#[cfg(unix)]
+#[tokio::test]
+async fn acp_malformed_native_overlay_rejects_without_creating_a_session() {
+    for (version, overlay) in [
+        ("1.18.4", json!({"agent":[]})),
+        ("1.18.4", json!({"agent":{"build":"invalid"}})),
+        ("2.0.26", json!({"agents":[]})),
+        ("2.0.26", json!({"permissions":{}})),
+    ] {
+        let (root, mut client, mut spec) = fixture("normal");
+        client
+            .environment
+            .insert("AIT_ACP_VERSION".into(), version.into());
+        client
+            .environment
+            .insert("OPENCODE_CONFIG_CONTENT".into(), overlay.to_string());
+        spec.config.system_prompt = Some("configured prompt".into());
+        spec.config.feature_values = Some(BTreeMap::from([("permission".into(), json!("ask"))]));
+        assert!(matches!(
+            client.create_session(&spec).await,
+            Err(AgentSessionError::Rejected)
+        ));
+        assert!(!root.path().join("native-fixture.json").exists());
+    }
+}
+
+#[cfg(unix)]
+#[tokio::test]
+async fn acp_without_delete_discovers_without_creating_native_sessions() {
+    let (root, mut client, spec) = fixture("no-delete");
+    client
+        .environment
+        .insert("AIT_ACP_VERSION".into(), "1.18.4".into());
+    let details = client.discover(&spec.cwd).await.unwrap();
+    assert!(
+        client
+            .summary_model(&[json!({"id":"local/mini","isSelectable":true})])
+            .is_none()
+    );
+    assert_eq!(details.models[0]["id"], "local/model");
+    assert_eq!(
+        details.models[0]["thinkingOptions"],
+        json!([{"id":"high","label":"high"}])
+    );
+    assert_eq!(details.modes.len(), 3);
+    assert_eq!(details.modes[2]["id"], "custom");
+    assert!(!root.path().join("native-fixture.json").exists());
+    assert_eq!(
+        client
+            .generate_summary(&spec, "metadata", &json!({"type":"object"}))
+            .await
+            .unwrap_err(),
+        AgentSessionError::Unavailable
+    );
+    assert!(
+        !requests(&root)
+            .iter()
+            .any(|request| request["method"] == "session/new")
+    );
+    let (root, client, spec) = fixture("no-delete");
+    assert_eq!(
+        client.discover(&spec.cwd).await.unwrap_err(),
+        AgentSessionError::Unavailable
+    );
+    assert!(!root.path().join("native-fixture.json").exists());
+    assert!(client.is_available().await.unwrap());
+    let (_root, client, _spec) = fixture("malformed");
+    assert!(
+        client
+            .diagnostic()
+            .await
+            .unwrap()
+            .contains("ACP initialization")
+    );
 }
