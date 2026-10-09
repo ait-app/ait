@@ -14,8 +14,8 @@ export interface WorkspaceDraftAgentRequest {
 }
 
 /**
- * Shared by the workspace draft tab and by the new-workspace screen when it finishes creation
- * after the user has already navigated away and no draft tab will ever mount.
+ * A submission owns its creation key. Replaying it preserves the key; submitting
+ * again after failure gets a new message identity from the draft create flow.
  */
 export async function requestWorkspaceDraftAgent(
   client: DaemonClient,
@@ -23,6 +23,7 @@ export async function requestWorkspaceDraftAgent(
 ): Promise<AgentSnapshotPayload> {
   const images = await encodeImages(request.images);
   return await client.createAgent({
+    idempotencyKey: request.clientMessageId,
     config: request.config,
     workspaceId: request.workspaceId,
     clientMessageId: request.clientMessageId,

@@ -130,7 +130,7 @@ const OPENCODE_MODES: AgentProviderModeDefinition[] = [
     id: "build",
     label: "Build",
     description: "Allows edits and tool execution for implementation work",
-    icon: "Shield",
+    icon: "Hammer",
     colorTier: "moderate",
   },
   {

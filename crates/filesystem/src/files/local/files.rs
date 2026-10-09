@@ -85,6 +85,9 @@ impl LocalFiles {
         if let Some(mime) = image_mime(&extension) {
             info.kind = FileKind::Image;
             mime.clone_into(&mut info.mime_type);
+        } else if extension == "pdf" {
+            info.kind = FileKind::Binary;
+            "application/pdf".clone_into(&mut info.mime_type);
         } else if file_is_binary(&mut file, stats.len())? {
             info.kind = FileKind::Binary;
             "application/octet-stream".clone_into(&mut info.mime_type);

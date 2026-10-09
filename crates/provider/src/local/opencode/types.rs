@@ -18,9 +18,11 @@ pub(super) enum Fault {
     ToolCallDuplicate,
 }
 
-#[derive(Clone, Copy, Debug)]
+#[derive(Clone, Copy, Debug, thiserror::Error)]
+#[error("{message}")]
 pub(super) struct ProtocolError {
     pub code: Fault,
+    pub message: &'static str,
 }
 
 #[derive(Clone, Debug)]

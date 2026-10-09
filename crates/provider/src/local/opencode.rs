@@ -115,8 +115,8 @@ impl Driver {
     }
 }
 
-fn failure(code: Fault, _message: &str) -> ProtocolError {
-    ProtocolError { code }
+fn failure(code: Fault, message: &'static str) -> ProtocolError {
+    ProtocolError { code, message }
 }
 
 #[cfg(test)]

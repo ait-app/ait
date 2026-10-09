@@ -223,7 +223,10 @@ impl Session {
                         .is_some_and(|previous| previous != entry)
                     {
                         self.failed = true;
-                        return Err(AgentSessionError::Failed);
+                        return Err(client::error(super::failure(
+                            Fault::ProviderFailed,
+                            "OpenCode settled history changed a published item",
+                        )));
                     }
                 }
                 let last = entries
@@ -251,6 +254,9 @@ impl Session {
             }
             Err(error) => {
                 self.failed = true;
+                if error.code != Fault::RunCancelled {
+                    client::error(error);
+                }
                 self.queued.push_back(if error.code == Fault::RunCancelled {
                     AgentTurnEvent::Cancelled
                 } else {
@@ -354,7 +360,10 @@ impl AgentSession for Session {
                     .is_some_and(|previous| previous != entry)
                 {
                     self.failed = true;
-                    return Err(AgentSessionError::Failed);
+                    return Err(client::error(super::failure(
+                        Fault::ProviderFailed,
+                        "OpenCode stream changed a published item",
+                    )));
                 }
                 self.known.insert(entry.key.clone(), entry.clone());
             }

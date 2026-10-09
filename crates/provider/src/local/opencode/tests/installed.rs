@@ -9,6 +9,8 @@ use serde_json::{Value, json};
 use std::{os::unix::fs::PermissionsExt, path::Path, time::Duration};
 use tokio_util::task::AbortOnDropHandle;
 
+mod concurrent;
+
 #[tokio::test]
 #[ignore = "requires AIT_TEST_OPENCODE_BIN; isolated config and loopback model only"]
 async fn installed_opencode_discovers_runs_and_restores_with_local_model() {
