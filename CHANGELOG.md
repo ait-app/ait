@@ -1,5 +1,17 @@
 # Ait changelog
 
+## 0.0.24 - 2026-10-09
+
+- Add OpenCode native session permissions with Allow, Ask, and Deny controls and distinct icons.
+- Improve OpenCode v1/v2 compatibility, saved model recovery, permission denial handling, and session error diagnostics.
+- Export bounded, redacted diagnostic evidence with native Harness logs as a shareable attachment.
+- Hide uninstalled providers from model selectors while preserving loading and discovery errors.
+- Retry failed draft session creation with updated settings and recognize PDFs consistently.
+- Keep Codex asynchronous question answers in order after reloading conversation history.
+- Explain Antigravity headless permission denials and native failures, and settle affected tools.
+- Preserve Chinese IME input in iOS terminals; the native fix requires a separately rebuilt iOS app.
+- Consolidate daemon persistence, shared domain values, server protocol, and filesystem capabilities.
+
 ## 0.0.23 - 2026-10-08
 
 - Bring the 0.0.23 beta improvements to the stable desktop update channel.
