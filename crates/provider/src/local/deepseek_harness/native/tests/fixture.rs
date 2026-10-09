@@ -16,7 +16,7 @@ use domain::agent_runtime::StoredAgentConfig;
 use futures_util::{SinkExt, StreamExt};
 use serde_json::{Value, json};
 use std::{
-    os::unix::fs::PermissionsExt,
+    collections::BTreeMap,
     sync::{Arc, Mutex},
 };
 use tokio::{sync::broadcast, task::JoinHandle};
@@ -63,14 +63,17 @@ impl Fixture {
         let server = tokio::spawn(async move {
             axum::serve(listener, app).await.unwrap();
         });
-        let program = directory.path().join("dsh");
-        std::fs::write(&program,format!("#!/bin/sh\nprintf 'dsh web: http://127.0.0.1:{port}/?token=fixture\\n'\nexec sleep 120\n")).unwrap();
-        std::fs::set_permissions(&program, std::fs::Permissions::from_mode(0o700)).unwrap();
+        let program = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
+            .join("tests/fixtures/deepseek_harness_native.sh");
+        let mut client = DeepSeekHarnessClient::new(program);
+        client.environment = BTreeMap::from([("AIT_DSH_FIXTURE_PORT".into(), port.to_string())])
+            .try_into()
+            .unwrap();
         Self {
             directory,
             server,
             host,
-            client: DeepSeekHarnessClient::new(program),
+            client,
             spec: AgentSessionSpec {
                 provider: PROVIDER.into(),
                 cwd,

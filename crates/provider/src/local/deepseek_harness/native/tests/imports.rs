@@ -132,6 +132,32 @@ async fn import_preserves_explicit_model_effort_and_custom_native_permissions() 
 }
 
 #[tokio::test]
+async fn concurrent_imports_share_immutable_launcher_and_keep_native_hosts_isolated() {
+    futures_util::future::join_all((0..16).map(|index| async move {
+        let fixture = Fixture::new().await;
+        fixture.seed_records(records());
+        let title = format!("Imported session {index}");
+        fixture.set_snapshot_fields(json!({"projections":{"values":{
+            "title":title,"permissions":{"currentValue":"custom"},
+            "modelSelection":{"next":{"provider":"local","model":"test","reasoningEffort":"high"}}
+        }}}));
+        let imported = fixture
+            .client
+            .inspect_session(&handle(), &fixture.spec.cwd)
+            .await
+            .unwrap();
+        assert_eq!(imported.descriptor.cwd, fixture.spec.cwd);
+        assert_eq!(imported.descriptor.title.as_deref(), Some(title.as_str()));
+        assert_eq!(imported.config.thinking_option_id.as_deref(), Some("high"));
+        assert_eq!(imported.config.mode_id, None);
+        assert!(fixture.requests("session/create").is_empty());
+        assert!(fixture.requests("session/prompt").is_empty());
+        assert!(!std::path::Path::new(&fixture.spec.cwd).join("dsh").exists());
+    }))
+    .await;
+}
+
+#[tokio::test]
 async fn import_detects_active_turns_and_rejects_mismatched_or_incomplete_history() {
     let fixture = Fixture::new().await;
     let mut active = records();
