@@ -43,11 +43,13 @@ AgentManager 的输入接纳和 timeline 持久化。Claude Code 已通过 ADR-0
    默认保留 OpenCode 的配置及会话权限；原生 allow / ask / deny 决定是否需要审批。
    2026-10-09 补充：通过既有 feature select 接入独立的原生会话权限入口，用户可显式选择
    allow / ask / deny，设置当前原生会话的通配规则；不增加自动回复审批的策略或新的 agent 模式。
-   未选择时不改写权限，已选择时在下一轮提交前通过 native session API 应用并回读完整规则。
+   未选择时（包括复制草稿传入 permission: null）不改写权限；
+   已选择时在下一轮提交前通过 native session API 应用并回读完整规则。
    v1 PATCH permission 追加单条规则；v2 PATCH permissions 保留原数组再追加规则并替换。
    新规则按原生顺序覆盖先前匹配项；这是显式修改原生会话规则，区别于审批 always 的保存规则。
    不更改用户全局/项目配置文件；规则保存在原生会话中，Ait 的选择通过既有配置契约持久化。
    重复回合/恢复不重复追加相同尾规则；权限写入失败或回读不符时不提交 prompt，关闭该 writer。
+   原生非 idle 返回 SessionBusy，与非法权限选择的 AgentCapabilityUnsupported 分开处理。
    shell/edit 及其他原生 action/resource 请求交给现有审批接口，保留原生规则范围。
    默认允许回复 native once；仅当原生请求提供非空的可保存规则时显示 always，必须由用户
    显式选择，并展示保存范围。未知动作、修改权限/输入的响应拒绝。

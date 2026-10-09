@@ -330,7 +330,9 @@ pub(super) fn validate(config: &StoredAgentConfig) -> Result<(), AgentSessionErr
             .is_some_and(|id| id.is_empty() || id.len() > 128 || id.chars().any(char::is_control))
         || config.feature_values.as_ref().is_some_and(|map| {
             map.iter().any(|(key, value)| {
-                key != "permission" || !matches!(value.as_str(), Some("allow" | "ask" | "deny"))
+                key != "permission"
+                    || !(value.is_null()
+                        || matches!(value.as_str(), Some("allow" | "ask" | "deny")))
             })
         })
         || config

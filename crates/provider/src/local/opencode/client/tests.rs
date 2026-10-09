@@ -79,11 +79,18 @@ fn permission_control_exposes_only_native_effects_and_keeps_unselected_rules() {
         assert_eq!(super::permission(&config), Some(effect));
         assert_eq!(super::features(&config)[0]["value"], effect);
     }
+    config.feature_values = Some(std::collections::BTreeMap::from([(
+        "permission".into(),
+        Value::Null,
+    )]));
+    super::validate(&config).unwrap();
+    assert_eq!(super::permission(&config), None);
+    assert!(super::features(&config)[0]["value"].is_null());
     for (key, value) in [
         ("permission", json!(true)),
         ("permission", json!("auto")),
-        ("permission", Value::Null),
         ("auto_approve", json!(true)),
+        ("unknown", Value::Null),
     ] {
         config.feature_values = Some(std::collections::BTreeMap::from([(key.into(), value)]));
         assert!(super::validate(&config).is_err());

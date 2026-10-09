@@ -266,3 +266,119 @@ async fn malformed_native_permission_rules_prevent_submission_and_close_the_writ
         session.close().await.unwrap();
     }
 }
+
+#[tokio::test]
+async fn copied_null_permission_inherits_native_rules_on_create_and_resume() {
+    for version in [Version::V1, Version::V2] {
+        let fixture = Fixture::start(version).await;
+        let client = OpenCodeClient::new(fixture.binary.clone());
+        let mut spec = spec(&fixture);
+        let settings = client.settings(&spec.config);
+        spec.config.feature_values = Some(
+            settings["features"]
+                .as_array()
+                .unwrap()
+                .iter()
+                .map(|feature| {
+                    (
+                        feature["id"].as_str().unwrap().to_owned(),
+                        feature["value"].clone(),
+                    )
+                })
+                .collect(),
+        );
+        assert_eq!(
+            spec.config.feature_values.as_ref().unwrap()["permission"],
+            Value::Null
+        );
+        let rules = match version {
+            Version::V1 => json!([{"permission":"edit","pattern":"protected/*","action":"deny"}]),
+            Version::V2 => json!([{"action":"edit","resource":"protected/*","effect":"deny"}]),
+        };
+        fixture.state.lock().unwrap().permission = rules.clone();
+        let mut session = client.create_session(&spec).await.unwrap();
+        session
+            .start_turn("copied draft", &spec.config)
+            .await
+            .unwrap();
+        assert!(matches!(
+            drain(session.as_mut()).await.last(),
+            Some(AgentTurnEvent::Completed(_))
+        ));
+        let handle = session.persistence().unwrap();
+        session.close().await.unwrap();
+        let mut session = client
+            .resume_session(&handle, &spec, AgentResumePurpose::Interactive)
+            .await
+            .unwrap();
+        session
+            .start_turn("resume copied draft", &spec.config)
+            .await
+            .unwrap();
+        assert!(matches!(
+            drain(session.as_mut()).await.last(),
+            Some(AgentTurnEvent::Completed(_))
+        ));
+        {
+            let state = fixture.state.lock().unwrap();
+            assert_eq!(state.permission, rules);
+            assert_eq!(state.permission_updates, 0);
+            assert_eq!(state.submissions, 2);
+        }
+        session.close().await.unwrap();
+    }
+}
+
+#[tokio::test]
+async fn permission_patch_readback_mismatch_blocks_submission_and_closes_the_writer() {
+    for version in [Version::V1, Version::V2] {
+        let original = match version {
+            Version::V1 => json!({"permission":"edit","pattern":"protected/*","action":"deny"}),
+            Version::V2 => json!({"action":"edit","resource":"protected/*","effect":"deny"}),
+        };
+        let selected = match version {
+            Version::V1 => json!({"permission":"*","pattern":"*","action":"ask"}),
+            Version::V2 => json!({"action":"*","resource":"*","effect":"ask"}),
+        };
+        // Test an ignored update and a matching tail rule with lost original rules.
+        for readback in [json!([original.clone()]), json!([selected.clone()])] {
+            let fixture = Fixture::start(version).await;
+            let client = OpenCodeClient::new(fixture.binary.clone());
+            let mut spec = spec(&fixture);
+            spec.config.feature_values =
+                Some(BTreeMap::from([("permission".into(), json!("ask"))]));
+            let mut session = client.create_session(&spec).await.unwrap();
+            {
+                let mut state = fixture.state.lock().unwrap();
+                state.permission = json!([original.clone()]);
+                state.permission_after_patch = Some(readback.clone());
+            }
+            assert_eq!(
+                session
+                    .start_turn("must not submit", &spec.config)
+                    .await
+                    .unwrap_err(),
+                AgentSessionError::Failed
+            );
+            {
+                let mut state = fixture.state.lock().unwrap();
+                assert_eq!(state.permission_updates, 1);
+                assert_eq!(state.permission, readback);
+                state.permission = json!([original.clone(), selected.clone()]);
+            }
+            assert_eq!(
+                session
+                    .start_turn("must not retry", &spec.config)
+                    .await
+                    .unwrap_err(),
+                AgentSessionError::Rejected
+            );
+            {
+                let state = fixture.state.lock().unwrap();
+                assert_eq!(state.submissions, 0);
+                assert_eq!(state.permission_updates, 1);
+            }
+            session.close().await.unwrap();
+        }
+    }
+}

@@ -15,10 +15,16 @@ impl Api {
         session: &str,
         effect: &str,
     ) -> Result<(), ProtocolError> {
-        if !matches!(effect, "allow" | "ask" | "deny") || !self.idle(session).await? {
+        if !matches!(effect, "allow" | "ask" | "deny") {
             return Err(failure(
                 Fault::AgentCapabilityUnsupported,
                 "invalid permission selection",
+            ));
+        }
+        if !self.idle(session).await? {
+            return Err(failure(
+                Fault::SessionBusy,
+                "OpenCode session is active elsewhere",
             ));
         }
         let path = self.path(session, "");
@@ -120,6 +126,9 @@ impl Api {
         Ok(())
     }
 }
+
+#[cfg(test)]
+mod tests;
 
 pub(in crate::local::opencode) fn normalize(
     version: Version,
