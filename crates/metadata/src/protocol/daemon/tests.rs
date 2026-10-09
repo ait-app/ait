@@ -110,15 +110,6 @@ fn status_and_pairing_shapes_match_paseo_payload_fields() {
             "providers":[{"provider":"codex","available":false,"error":"missing"}]
         })
     );
-    assert_eq!(
-        serde_json::to_value(PairingOffer {
-            url: String::new(),
-            qr: None,
-            relay_enabled: false,
-        })
-        .unwrap(),
-        json!({"url":"","qr":null,"relayEnabled":false})
-    );
 }
 
 #[test]

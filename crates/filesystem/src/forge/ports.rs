@@ -1,4 +1,4 @@
 //! Blocking adapter boundaries.
 
-pub mod forge;
-pub mod github_projects;
+pub(crate) mod forge;
+pub(crate) mod github_projects;

@@ -23,7 +23,7 @@ pub enum AutomationEvent {
 }
 
 /// Callback installed by the host; event publication cannot fail a committed mutation.
-pub type AutomationEventSink = Arc<dyn Fn(AutomationEvent) + Send + Sync>;
+pub(crate) type AutomationEventSink = Arc<dyn Fn(AutomationEvent) + Send + Sync>;
 
 /// Configured script type.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -38,38 +38,38 @@ pub enum ScriptType {
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct ScriptSnapshot {
     /// Exact `ait.json` key.
-    pub name: String,
+    pub(crate) name: String,
     /// Plain script or service.
-    pub kind: ScriptType,
+    pub(crate) kind: ScriptType,
     /// Stable hostname projection.
-    pub hostname: String,
+    pub(crate) hostname: String,
     /// Configured service port.
-    pub port: Option<u16>,
+    pub(crate) port: Option<u16>,
     /// Whether the child is still running.
-    pub running: bool,
+    pub(crate) running: bool,
     /// Last process exit code.
-    pub exit_code: Option<i32>,
+    pub(crate) exit_code: Option<i32>,
     /// Logical child identity.
-    pub terminal_id: Option<String>,
+    pub(crate) terminal_id: Option<String>,
 }
 
 /// One setup command snapshot.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct SetupCommandSnapshot {
     /// One-based command position.
-    pub index: usize,
+    pub(crate) index: usize,
     /// Shell command.
-    pub command: String,
+    pub(crate) command: String,
     /// Execution directory.
-    pub cwd: String,
+    pub(crate) cwd: String,
     /// Bounded combined output.
-    pub log: String,
+    pub(crate) log: String,
     /// Whether the command is still running.
-    pub running: bool,
+    pub(crate) running: bool,
     /// Exit code after completion.
-    pub exit_code: Option<i32>,
+    pub(crate) exit_code: Option<i32>,
     /// Elapsed milliseconds after completion.
-    pub duration_ms: Option<u64>,
+    pub(crate) duration_ms: Option<u64>,
 }
 
 /// Setup lifecycle independent of the wire schema.
@@ -106,15 +106,15 @@ pub struct SetupSnapshot {
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct WorkspacePlacement {
     /// Durable workspace identity.
-    pub workspace_id: String,
+    pub(crate) workspace_id: String,
     /// Directory containing `ait.json` and used as command cwd.
-    pub cwd: String,
+    pub(crate) cwd: String,
     /// Backing worktree root.
-    pub worktree_path: String,
+    pub(crate) worktree_path: String,
     /// Main checkout root.
-    pub repo_root: String,
+    pub(crate) repo_root: String,
     /// Current branch.
-    pub branch_name: String,
+    pub(crate) branch_name: String,
 }
 
 /// Stable workspace automation failures.

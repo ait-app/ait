@@ -32,7 +32,7 @@ impl Skills {
     /// Handle the canonical skill operations using fresh scans and explicit deletion consent.
     /// # Errors
     /// Returns validation or safe filesystem errors; partial mutations remain recoverable.
-    pub fn execute(&mut self, method: &str, params: Value) -> Result<Value, ErrorCode> {
+    pub(crate) fn execute(&mut self, method: &str, params: Value) -> Result<Value, ErrorCode> {
         self.store.recover()?;
         match method {
             skills::SAVE_SELECTION => self.save(decode(params)?),

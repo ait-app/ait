@@ -12,11 +12,11 @@ use crate::support::error::ErrorCode;
 
 /// Connection-local pending uploads. Dropping it discards partial writers.
 #[derive(Default)]
-pub struct Uploads {
+pub(crate) struct Uploads {
     uploads: BTreeMap<String, Upload>,
 }
 /// One in-flight upload removed from the connection while a blocking job runs.
-pub struct Upload {
+pub(crate) struct Upload {
     metadata: UploadedFile,
     writer: Option<Box<dyn FileUpload>>,
     touched: Instant,
@@ -24,26 +24,26 @@ pub struct Upload {
 
 impl Uploads {
     /// Expire idle uploads and release their partial files.
-    pub fn prune(&mut self) {
+    pub(crate) fn prune(&mut self) {
         self.uploads
             .retain(|_, upload| upload.touched.elapsed() < Duration::from_secs(600));
     }
     /// Take a connection-owned upload for processing; unknown IDs return none.
-    pub fn take(&mut self, id: &str) -> Option<Upload> {
+    pub(crate) fn take(&mut self, id: &str) -> Option<Upload> {
         self.prune();
         let mut upload = self.uploads.remove(id)?;
         upload.touched = Instant::now();
         Some(upload)
     }
     /// Retain an unfinished upload after its blocking job completes.
-    pub fn resume(&mut self, id: String, upload: Upload) {
+    pub(crate) fn resume(&mut self, id: String, upload: Upload) {
         self.uploads.insert(id, upload);
     }
     /// Validate and reserve one upload; repeated IDs replace their prior partial upload.
     ///
     /// # Errors
     /// Rejects malformed metadata or exhausted per-connection limits.
-    pub fn begin(&mut self, id: &str, params: Value) -> Result<(), ErrorCode> {
+    pub(crate) fn begin(&mut self, id: &str, params: Value) -> Result<(), ErrorCode> {
         let request: wire::UploadRequest =
             serde_json::from_value(params).map_err(|_| ErrorCode::InvalidMessage)?;
         self.prune();
@@ -76,7 +76,7 @@ impl Uploads {
     }
 }
 /// Next upload state after applying a binary frame.
-pub enum UploadStep {
+pub(crate) enum UploadStep {
     /// More frames are required.
     Pending(Upload),
     /// File has been finalized.
@@ -88,7 +88,11 @@ impl Upload {
     ///
     /// # Errors
     /// Rejects invalid frame order, size, and filesystem failures.
-    pub fn apply(mut self, frame: FileFrame, files: &Files) -> Result<UploadStep, FileError> {
+    pub(crate) fn apply(
+        mut self,
+        frame: FileFrame,
+        files: &Files,
+    ) -> Result<UploadStep, FileError> {
         use std::io::Write;
         match frame {
             FileFrame::Begin(_) => {

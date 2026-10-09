@@ -23,11 +23,11 @@ use crate::ports::environment::AgentEnvironment;
 use crate::protocol::provider::Details;
 
 /// Stable provider identity used by creation, discovery and durable resume handles.
-pub const PROVIDER: &str = "deepseek-harness";
+const PROVIDER: &str = "deepseek-harness";
 
 /// Local Harness launcher; native profiles own credentials, tools and durable sessions.
 #[derive(Debug, Clone)]
-pub struct DeepSeekHarnessClient {
+pub(crate) struct DeepSeekHarnessClient {
     program: PathBuf,
     desktop: Option<launcher::Desktop>,
     interactive: bool,
@@ -40,7 +40,7 @@ impl DeepSeekHarnessClient {
     /// Launch the native interactive Web Host without a shell, inheriting Harness configuration.
     /// Control operations have a thirty-second deadline; prompts have no duration limit.
     #[must_use]
-    pub fn new(program: PathBuf) -> Self {
+    pub(crate) fn new(program: PathBuf) -> Self {
         Self {
             program,
             desktop: None,
@@ -54,14 +54,14 @@ impl DeepSeekHarnessClient {
     /// Retain the automation-only ACP profile for older Harness installations.
     /// ACP does not expose permission presets or interactive user questions.
     #[must_use]
-    pub fn with_acp_profile(mut self) -> Self {
+    pub(crate) fn with_acp_profile(mut self) -> Self {
         self.interactive = false;
         self
     }
 
     /// Materialize native image output in `directory` for live display and saved timelines.
     #[must_use]
-    pub fn with_image_directory(mut self, directory: PathBuf) -> Self {
+    pub(crate) fn with_image_directory(mut self, directory: PathBuf) -> Self {
         self.images = super::images::ImageStore::new(directory);
         self
     }

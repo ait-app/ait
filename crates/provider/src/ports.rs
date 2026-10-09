@@ -1,8 +1,8 @@
 //! Agent ports owned by the independent server.
 
 pub mod agent;
-pub mod agent_session;
-pub mod controls;
-pub mod environment;
+pub(crate) mod agent_session;
+pub(crate) mod controls;
+pub(crate) mod environment;
 /// Native history discovery and inspection facts.
-pub mod native_history;
+pub(crate) mod native_history;

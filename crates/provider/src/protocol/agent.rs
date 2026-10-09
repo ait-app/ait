@@ -5,57 +5,57 @@ use serde::{Deserialize, Serialize};
 /// Complete preset configuration. Unknown fields, including raw credential fields, are rejected.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
-pub struct Config {
+pub(crate) struct Config {
     /// Non-secret display name, 1–255 UTF-8 bytes, excluding controls or all-whitespace names.
-    pub name: String,
+    pub(crate) name: String,
     /// Configuration schema; currently only `codex`.
-    pub driver_type: String,
+    pub(crate) driver_type: String,
     /// Explicit model identifier, 1–128 restricted ASCII bytes; not discovered or validated remotely.
-    pub model: String,
+    pub(crate) model: String,
     /// Optional `env:AIT_SERVER_CREDENTIAL_<NAME>` reference; never a credential value.
     #[serde(default)]
-    pub credential_ref: Option<String>,
+    pub(crate) credential_ref: Option<String>,
     /// Eligibility for selection; does not imply an executable adapter is installed.
-    pub enabled: bool,
+    pub(crate) enabled: bool,
 }
 
 /// Create a preset or append an immutable full replacement to an existing preset.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
-pub struct Configure {
+pub(crate) struct Configure {
     /// Absent for creation; supply together with `expected_revision` for replacement.
     #[serde(default)]
-    pub agent_id: Option<String>,
+    pub(crate) agent_id: Option<String>,
     /// Observed head revision; absent for creation, positive for replacement.
     #[serde(default)]
-    pub expected_revision: Option<u64>,
+    pub(crate) expected_revision: Option<u64>,
     /// Complete replacement configuration.
-    pub config: Config,
+    pub(crate) config: Config,
     /// Method-scoped durable retry key, 1–128 visible ASCII bytes.
-    pub idempotency_key: String,
+    pub(crate) idempotency_key: String,
 }
 
 /// Read a current or historical immutable configuration.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
-pub struct Get {
+pub(crate) struct Get {
     /// Stable Agent UUID.
-    pub agent_id: String,
+    pub(crate) agent_id: String,
     /// Absent for the current head, otherwise the exact positive revision.
     #[serde(default)]
-    pub revision: Option<u64>,
+    pub(crate) revision: Option<u64>,
 }
 
 /// Stable-ID keyset pagination of current configurations.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
-pub struct List {
+pub(crate) struct List {
     /// Exclusive Agent UUID cursor.
     #[serde(default)]
-    pub after: Option<String>,
+    pub(crate) after: Option<String>,
     /// Between 1 and 50; defaults to 20.
     #[serde(default = "default_limit")]
-    pub limit: usize,
+    pub(crate) limit: usize,
 }
 
 fn default_limit() -> usize {
@@ -65,19 +65,19 @@ fn default_limit() -> usize {
 /// Empty parameters for reading the explicit catalog default.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
-pub struct GetDefault {}
+pub(crate) struct GetDefault {}
 
 /// Replace the explicit default; every field is required, including a null clear target.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
-pub struct SetDefault {
+pub(crate) struct SetDefault {
     /// Agent UUID or explicit null to clear; omission is rejected.
     #[serde(deserialize_with = "required_optional")]
-    pub agent_id: Option<String>,
+    pub(crate) agent_id: Option<String>,
     /// Last observed default version, initially zero.
-    pub expected_version: u64,
+    pub(crate) expected_version: u64,
     /// Durable key scoped to this method.
-    pub idempotency_key: String,
+    pub(crate) idempotency_key: String,
 }
 
 fn required_optional<'de, D: serde::Deserializer<'de>>(
@@ -88,51 +88,52 @@ fn required_optional<'de, D: serde::Deserializer<'de>>(
 
 /// Stable configuration receipt; later edits never rewrite it.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
-pub struct Receipt {
+pub(crate) struct Receipt {
     /// Durable operation UUID.
-    pub operation_id: String,
+    pub(crate) operation_id: String,
     /// Created or edited preset UUID.
-    pub agent_id: String,
+    pub(crate) agent_id: String,
     /// Exact immutable revision produced by the operation.
-    pub revision: u64,
+    pub(crate) revision: u64,
 }
 
 /// Immutable non-secret configuration revision.
 #[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct Agent {
+#[expect(clippy::struct_field_names, reason = "field names are the wire schema")]
+pub(crate) struct Agent {
     /// Stable preset identity.
-    pub agent_id: String,
+    pub(crate) agent_id: String,
     /// Exact revision number.
-    pub revision: u64,
+    pub(crate) revision: u64,
     /// Frozen fields, containing references only.
-    pub config: Config,
+    pub(crate) config: Config,
     /// Revision creation time in Unix epoch milliseconds.
-    pub recorded_at: u64,
+    pub(crate) recorded_at: u64,
 }
 
 /// Bounded current-configuration page.
 #[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct Page {
+pub(crate) struct Page {
     /// Current heads in stable UUID order.
-    pub agents: Vec<Agent>,
+    pub(crate) agents: Vec<Agent>,
     /// Exclusive cursor; a full last page may be followed by an empty page.
-    pub next_after: Option<String>,
+    pub(crate) next_after: Option<String>,
 }
 
 /// Current explicit catalog selection, or empty at initial version zero.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
-pub struct DefaultSelection {
+pub(crate) struct DefaultSelection {
     /// Selected Agent UUID or null.
-    pub agent_id: Option<String>,
+    pub(crate) agent_id: Option<String>,
     /// Compare-and-swap version for the next selection change.
-    pub version: u64,
+    pub(crate) version: u64,
 }
 
 /// Stable selection receipt; it is not a read of the current default.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
-pub struct DefaultReceipt {
+pub(crate) struct DefaultReceipt {
     /// Durable operation UUID.
-    pub operation_id: String,
+    pub(crate) operation_id: String,
     /// Selection committed by this operation.
-    pub selection: DefaultSelection,
+    pub(crate) selection: DefaultSelection,
 }

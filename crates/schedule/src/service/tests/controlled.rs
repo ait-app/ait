@@ -2,19 +2,19 @@
 use super::*;
 
 pub(super) struct Started {
-    pub schedule: Schedule,
-    pub progress: Progress,
-    pub complete: oneshot::Sender<Outcome>,
+    pub(crate) schedule: Schedule,
+    pub(crate) progress: Progress,
+    pub(crate) complete: oneshot::Sender<Outcome>,
 }
 
 #[derive(Debug)]
 pub(super) struct Controlled {
     started: mpsc::UnboundedSender<Started>,
-    pub calls: AtomicUsize,
+    pub(crate) calls: AtomicUsize,
 }
 
 impl Controlled {
-    pub fn new() -> (Arc<Self>, mpsc::UnboundedReceiver<Started>) {
+    pub(crate) fn new() -> (Arc<Self>, mpsc::UnboundedReceiver<Started>) {
         let (started, receive) = mpsc::unbounded_channel();
         (
             Arc::new(Self {

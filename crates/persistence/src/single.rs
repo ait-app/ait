@@ -1,11 +1,8 @@
 use std::fs;
 use std::io::{Read, Write};
 use std::path::{Path, PathBuf};
-use std::time::Duration;
 
-use crate::watch::Watch;
-
-/// Failure to access or observe a single file.
+/// Failure to access a single file.
 #[derive(Debug, thiserror::Error)]
 pub enum Error {
     /// Reading, staging, or installing the file failed.
@@ -14,18 +11,9 @@ pub enum Error {
     /// A bounded read exceeded the caller's byte limit.
     #[error("file exceeds the read limit")]
     TooLarge,
-    /// A polling interval must be positive.
-    #[error("file observation interval must be positive")]
-    InvalidInterval,
-    /// File observation requires a Tokio runtime.
-    #[error("file observation requires a Tokio runtime")]
-    RuntimeUnavailable,
-    /// The observation task stopped or its runtime shut down.
-    #[error("file observation closed")]
-    WatchClosed,
 }
 
-/// An owned path supporting blocking reads, atomic writes, and asynchronous observations.
+/// An owned path supporting blocking reads and atomic writes.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct File {
     path: PathBuf,
@@ -39,23 +27,17 @@ impl File {
         Self { path: path.into() }
     }
 
-    /// Return the selected path without resolving symlinks or creating it.
-    #[must_use]
-    pub fn path(&self) -> &Path {
-        &self.path
-    }
-
     /// Read the complete file into owned bytes.
     /// # Errors
     /// Returns filesystem errors, including `NotFound` for an absent file.
-    pub fn read(&self) -> Result<Vec<u8>, Error> {
+    pub(crate) fn read(&self) -> Result<Vec<u8>, Error> {
         fs::read(&self.path).map_err(Into::into)
     }
 
     /// Read at most `limit` bytes, rejecting larger files without loading their entire contents.
     /// # Errors
     /// Returns filesystem errors or `TooLarge` when the file exceeds `limit`.
-    pub fn read_limited(&self, limit: u64) -> Result<Vec<u8>, Error> {
+    pub(crate) fn read_limited(&self, limit: u64) -> Result<Vec<u8>, Error> {
         let file = fs::File::open(&self.path)?;
         let mut bytes = Vec::new();
         file.take(limit.saturating_add(1)).read_to_end(&mut bytes)?;
@@ -90,15 +72,6 @@ impl File {
         #[cfg(unix)]
         fs::File::open(parent)?.sync_all()?;
         Ok(())
-    }
-
-    /// Observe creation, modification, replacement, and removal at `interval` cadence.
-    /// Polling reads metadata outside the reactor; it coalesces changes to the latest observation.
-    /// Dropping the returned handle cancels its task. Intermediate edits between polls may coalesce.
-    /// # Errors
-    /// Returns `InvalidInterval`, `RuntimeUnavailable`, or an initial task failure.
-    pub async fn watch(&self, interval: Duration) -> Result<Watch, Error> {
-        Watch::start(self.clone(), interval).await
     }
 }
 

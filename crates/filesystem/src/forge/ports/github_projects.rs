@@ -4,7 +4,7 @@ use std::fmt::Debug;
 
 /// GitHub clone transport selected by the caller or host configuration.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum GithubCloneProtocol {
+pub(crate) enum GithubCloneProtocol {
     /// Clone over HTTPS.
     Https,
     /// Clone over SSH.
@@ -15,24 +15,24 @@ pub enum GithubCloneProtocol {
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct GithubRepository {
     /// GitHub GraphQL identity or CLI numeric identity as text.
-    pub id: String,
+    pub(crate) id: String,
     /// Repository name without owner.
-    pub name: String,
+    pub(crate) name: String,
     /// Full owner/repository path.
-    pub name_with_owner: String,
+    pub(crate) name_with_owner: String,
     /// Optional description.
-    pub description: Option<String>,
+    pub(crate) description: Option<String>,
     /// Public or private visibility.
-    pub visibility: GithubRepositoryVisibility,
+    pub(crate) visibility: GithubRepositoryVisibility,
     /// GitHub update timestamp.
-    pub updated_at: String,
+    pub(crate) updated_at: String,
     /// Clone URL honoring the host Git protocol setting.
-    pub clone_url: String,
+    pub(crate) clone_url: String,
 }
 
 /// Visibility reported by the available GitHub CLI repository commands.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum GithubRepositoryVisibility {
+pub(crate) enum GithubRepositoryVisibility {
     /// Public repository.
     Public,
     /// Private repository.

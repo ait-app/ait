@@ -70,10 +70,7 @@ fn committed_rows_and_epoch_survive_restart_and_replay_is_immutable() {
     let (loaded, rows) = timeline.read("agent").unwrap();
     assert_eq!(loaded, epoch);
     assert_eq!(rows.len(), 2);
-    assert_eq!(
-        rows[0].value()["sourceSeqRanges"],
-        json!([{"startSeq":1,"endSeq":1}])
-    );
+    assert_eq!((rows[0].seq, rows[1].seq), (1, 2));
     assert!(timeline.read("other").unwrap().1.is_empty());
 }
 

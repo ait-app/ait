@@ -51,7 +51,12 @@ impl WorkspaceNames {
 
     /// Queue nonempty first-prompt source material without delaying creation or foreground turns.
     /// Duplicate, oversized, draining, and full-queue requests are ignored; explicit titles stay intact.
-    pub fn schedule(&self, id: String, context: String, selection: Option<SummarySelection>) {
+    pub(crate) fn schedule(
+        &self,
+        id: String,
+        context: String,
+        selection: Option<SummarySelection>,
+    ) {
         if context.trim().is_empty() || context.len() > 1024 * 1024 {
             return;
         }

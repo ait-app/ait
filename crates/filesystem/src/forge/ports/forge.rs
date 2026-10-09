@@ -4,7 +4,7 @@ use serde_json::Value;
 
 /// Forge failure category.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum ForgeFailureKind {
+pub(crate) enum ForgeFailureKind {
     /// Directory is outside a Git repository.
     NotGitRepository,
     /// Input or path is not allowed.
@@ -32,16 +32,16 @@ pub enum ForgeFailureKind {
 #[error("{message}")]
 pub struct ForgeRuntimeError {
     /// Resolved forge when the failure happened after platform detection.
-    pub forge: Option<String>,
+    pub(crate) forge: Option<String>,
     /// Stable failure category.
-    pub kind: ForgeFailureKind,
+    pub(crate) kind: ForgeFailureKind,
     /// Human-readable diagnostic.
-    pub message: String,
+    pub(crate) message: String,
 }
 
 /// Forge availability state.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum ForgeAuthState {
+pub(crate) enum ForgeAuthState {
     /// CLI is available and authenticated.
     Authenticated,
     /// CLI has no usable credentials.
@@ -65,40 +65,40 @@ pub enum ForgeSearchKind {
 
 /// One forge search item.
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub struct ForgeSearchItem {
+pub(crate) struct ForgeSearchItem {
     /// Result category.
-    pub kind: ForgeSearchKind,
+    pub(crate) kind: ForgeSearchKind,
     /// Forge brand when resolved.
-    pub forge: Option<String>,
+    pub(crate) forge: Option<String>,
     /// Forge-local number.
-    pub number: u64,
+    pub(crate) number: u64,
     /// Title.
-    pub title: String,
+    pub(crate) title: String,
     /// Browser URL.
-    pub url: String,
+    pub(crate) url: String,
     /// Open forge state.
-    pub state: String,
+    pub(crate) state: String,
     /// Body.
-    pub body: Option<String>,
+    pub(crate) body: Option<String>,
     /// Label names.
-    pub labels: Vec<String>,
+    pub(crate) labels: Vec<String>,
     /// Full project path.
-    pub project_path: Option<String>,
+    pub(crate) project_path: Option<String>,
     /// Base branch for change requests.
-    pub base_ref_name: Option<String>,
+    pub(crate) base_ref_name: Option<String>,
     /// Head branch for change requests.
-    pub head_ref_name: Option<String>,
+    pub(crate) head_ref_name: Option<String>,
     /// Forge timestamp.
-    pub updated_at: Option<String>,
+    pub(crate) updated_at: Option<String>,
 }
 
 /// Forge search outcome, including unavailable results that are not request failures.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct ForgeSearch {
     /// Search results.
-    pub items: Vec<ForgeSearchItem>,
+    pub(crate) items: Vec<ForgeSearchItem>,
     /// Availability state.
-    pub auth_state: ForgeAuthState,
+    pub(crate) auth_state: ForgeAuthState,
 }
 
 /// Pull request merge method.
@@ -116,14 +116,14 @@ pub enum PullRequestMergeMethod {
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct PullRequestCreated {
     /// Browser URL.
-    pub url: String,
+    pub(crate) url: String,
     /// Pull request number.
-    pub number: u64,
+    pub(crate) number: u64,
 }
 
 /// Pull request mergeability.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum PullRequestMergeable {
+pub(crate) enum PullRequestMergeable {
     /// Mergeable.
     Mergeable,
     /// Conflicting.
@@ -134,82 +134,82 @@ pub enum PullRequestMergeable {
 
 /// One normalized pull request check.
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub struct PullRequestCheck {
+pub(crate) struct PullRequestCheck {
     /// Check name.
-    pub name: String,
+    pub(crate) name: String,
     /// Normalized lifecycle.
-    pub status: String,
+    pub(crate) status: String,
     /// Details URL.
-    pub url: Option<String>,
+    pub(crate) url: Option<String>,
     /// Workflow display name.
-    pub workflow: Option<String>,
+    pub(crate) workflow: Option<String>,
     /// Formatted duration.
-    pub duration: Option<String>,
+    pub(crate) duration: Option<String>,
     /// Check-run identifier.
-    pub check_run_id: Option<u64>,
+    pub(crate) check_run_id: Option<u64>,
     /// Workflow-run identifier.
-    pub workflow_run_id: Option<u64>,
+    pub(crate) workflow_run_id: Option<u64>,
     /// Open refinements.
-    pub traits: Option<Vec<String>>,
+    pub(crate) traits: Option<Vec<String>>,
 }
 
 /// Current pull request status.
 #[derive(Debug, Clone, PartialEq)]
-pub struct PullRequestStatus {
+pub(crate) struct PullRequestStatus {
     /// Forge brand.
-    pub forge: String,
+    pub(crate) forge: String,
     /// Full project path.
-    pub project_path: Option<String>,
+    pub(crate) project_path: Option<String>,
     /// Pull request number.
-    pub number: Option<u64>,
+    pub(crate) number: Option<u64>,
     /// Browser URL.
-    pub url: String,
+    pub(crate) url: String,
     /// Title.
-    pub title: String,
+    pub(crate) title: String,
     /// Forge state.
-    pub state: String,
+    pub(crate) state: String,
     /// Base branch.
-    pub base_ref_name: String,
+    pub(crate) base_ref_name: String,
     /// Head branch.
-    pub head_ref_name: String,
+    pub(crate) head_ref_name: String,
     /// Source commit recorded by this pull request, including after closure.
-    pub head_sha: Option<String>,
+    pub(crate) head_sha: Option<String>,
     /// Merged state.
-    pub is_merged: bool,
+    pub(crate) is_merged: bool,
     /// Draft state.
-    pub is_draft: bool,
+    pub(crate) is_draft: bool,
     /// Mergeability.
-    pub mergeable: PullRequestMergeable,
+    pub(crate) mergeable: PullRequestMergeable,
     /// Checks.
-    pub checks: Vec<PullRequestCheck>,
+    pub(crate) checks: Vec<PullRequestCheck>,
     /// Aggregate check state.
-    pub checks_status: String,
+    pub(crate) checks_status: String,
     /// Review decision.
-    pub review_decision: Option<String>,
+    pub(crate) review_decision: Option<String>,
     /// Repository owner.
-    pub repo_owner: Option<String>,
+    pub(crate) repo_owner: Option<String>,
     /// Repository name.
-    pub repo_name: Option<String>,
+    pub(crate) repo_name: Option<String>,
     /// Legacy GitHub facts mirror.
-    pub github: Option<Value>,
+    pub(crate) github: Option<Value>,
     /// Forge-specific facts.
-    pub forge_specific: Option<Value>,
+    pub(crate) forge_specific: Option<Value>,
 }
 
 /// Current pull request read, including forge availability.
 #[derive(Debug, Clone, PartialEq)]
 pub struct PullRequestStatusRead {
     /// Current pull request, or none.
-    pub status: Option<PullRequestStatus>,
+    pub(crate) status: Option<PullRequestStatus>,
     /// Availability state.
-    pub auth_state: ForgeAuthState,
+    pub(crate) auth_state: ForgeAuthState,
     /// Resolved forge brand.
-    pub forge: Option<String>,
+    pub(crate) forge: Option<String>,
 }
 
 /// Timeline review state.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum TimelineReviewState {
+pub(crate) enum TimelineReviewState {
     /// Approved review.
     Approved,
     /// Changes requested.
@@ -220,24 +220,24 @@ pub enum TimelineReviewState {
 
 /// Optional inline comment location.
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub struct TimelineCommentLocation {
+pub(crate) struct TimelineCommentLocation {
     /// Repository-relative path.
-    pub path: String,
+    pub(crate) path: String,
     /// Ending line.
-    pub line: Option<u64>,
+    pub(crate) line: Option<u64>,
     /// Starting line.
-    pub start_line: Option<u64>,
+    pub(crate) start_line: Option<u64>,
     /// Thread identifier.
-    pub thread_id: Option<String>,
+    pub(crate) thread_id: Option<String>,
     /// Resolution state.
-    pub is_resolved: Option<bool>,
+    pub(crate) is_resolved: Option<bool>,
     /// Outdated state.
-    pub is_outdated: Option<bool>,
+    pub(crate) is_outdated: Option<bool>,
 }
 
 /// Pull request review or comment.
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub enum PullRequestTimelineItem {
+pub(crate) enum PullRequestTimelineItem {
     /// Review.
     Review {
         /// Node identifier.
@@ -286,115 +286,113 @@ pub enum PullRequestTimelineItem {
 
 /// Timeline error category.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum TimelineErrorKind {
+pub(crate) enum TimelineErrorKind {
     /// Pull request not found.
     NotFound,
     /// Access forbidden.
     Forbidden,
-    /// Another failure.
-    Unknown,
 }
 
 /// Inline timeline error.
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub struct TimelineError {
+pub(crate) struct TimelineError {
     /// Stable category.
-    pub kind: TimelineErrorKind,
+    pub(crate) kind: TimelineErrorKind,
     /// Local diagnostic.
-    pub message: String,
+    pub(crate) message: String,
 }
 
 /// Pull request timeline.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct PullRequestTimeline {
     /// Pull request number.
-    pub pr_number: u64,
+    pub(crate) pr_number: u64,
     /// Stable items.
-    pub items: Vec<PullRequestTimelineItem>,
+    pub(crate) items: Vec<PullRequestTimelineItem>,
     /// Page truncation.
-    pub truncated: bool,
+    pub(crate) truncated: bool,
     /// Inline forge error.
-    pub error: Option<TimelineError>,
+    pub(crate) error: Option<TimelineError>,
     /// Forge availability.
-    pub auth_state: ForgeAuthState,
+    pub(crate) auth_state: ForgeAuthState,
 }
 
 /// Check annotation.
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub struct CheckAnnotation {
+pub(crate) struct CheckAnnotation {
     /// Repository-relative path.
-    pub path: Option<String>,
+    pub(crate) path: Option<String>,
     /// First line.
-    pub start_line: Option<u64>,
+    pub(crate) start_line: Option<u64>,
     /// Last line.
-    pub end_line: Option<u64>,
+    pub(crate) end_line: Option<u64>,
     /// Severity.
-    pub annotation_level: Option<String>,
+    pub(crate) annotation_level: Option<String>,
     /// Message.
-    pub message: Option<String>,
+    pub(crate) message: Option<String>,
     /// Title.
-    pub title: Option<String>,
+    pub(crate) title: Option<String>,
     /// Additional details.
-    pub raw_details: Option<String>,
+    pub(crate) raw_details: Option<String>,
 }
 
 /// Failed workflow job.
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub struct CheckFailedJob {
+pub(crate) struct CheckFailedJob {
     /// Job identifier.
-    pub job_id: u64,
+    pub(crate) job_id: u64,
     /// Job name.
-    pub name: String,
+    pub(crate) name: String,
     /// Forge state.
-    pub status: Option<String>,
+    pub(crate) status: Option<String>,
     /// Forge conclusion.
-    pub conclusion: Option<String>,
+    pub(crate) conclusion: Option<String>,
     /// Browser URL.
-    pub url: Option<String>,
+    pub(crate) url: Option<String>,
     /// Bounded log tail.
-    pub log_tail: Option<String>,
+    pub(crate) log_tail: Option<String>,
     /// Log truncation.
-    pub log_truncated: Option<bool>,
+    pub(crate) log_truncated: Option<bool>,
 }
 
 /// Check output.
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub struct CheckOutput {
+pub(crate) struct CheckOutput {
     /// Title.
-    pub title: Option<String>,
+    pub(crate) title: Option<String>,
     /// Markdown summary.
-    pub summary: Option<String>,
+    pub(crate) summary: Option<String>,
     /// Markdown detail.
-    pub text: Option<String>,
+    pub(crate) text: Option<String>,
 }
 
 /// Detailed check result.
 #[derive(Debug, Clone, PartialEq)]
 pub struct CheckDetails {
     /// Check-run identifier.
-    pub check_run_id: u64,
+    pub(crate) check_run_id: u64,
     /// Workflow-run identifier.
-    pub workflow_run_id: Option<u64>,
+    pub(crate) workflow_run_id: Option<u64>,
     /// Check name.
-    pub name: String,
+    pub(crate) name: String,
     /// Forge state.
-    pub status: Option<String>,
+    pub(crate) status: Option<String>,
     /// Forge conclusion.
-    pub conclusion: Option<String>,
+    pub(crate) conclusion: Option<String>,
     /// Browser URL.
-    pub url: Option<String>,
+    pub(crate) url: Option<String>,
     /// Details URL.
-    pub details_url: Option<String>,
+    pub(crate) details_url: Option<String>,
     /// Output.
-    pub output: Option<CheckOutput>,
+    pub(crate) output: Option<CheckOutput>,
     /// Annotations.
-    pub annotations: Vec<CheckAnnotation>,
+    pub(crate) annotations: Vec<CheckAnnotation>,
     /// Failed jobs.
-    pub failed_jobs: Vec<CheckFailedJob>,
+    pub(crate) failed_jobs: Vec<CheckFailedJob>,
     /// Truncation flag.
-    pub truncated: bool,
+    pub(crate) truncated: bool,
     /// Pipeline-oriented forge details.
-    pub pipeline: Option<Value>,
+    pub(crate) pipeline: Option<Value>,
 }
 
 /// Blocking forge runtime.
@@ -485,13 +483,13 @@ pub trait ForgeRuntime: std::fmt::Debug + Send {
 #[derive(Debug, Clone, Copy, Default)]
 pub struct CheckDetailsQuery<'a> {
     /// Repository owner when required by the forge.
-    pub repo_owner: Option<&'a str>,
+    pub(crate) repo_owner: Option<&'a str>,
     /// Repository name when required by the forge.
-    pub repo_name: Option<&'a str>,
+    pub(crate) repo_name: Option<&'a str>,
     /// Individual check run ID.
-    pub check_run_id: Option<u64>,
+    pub(crate) check_run_id: Option<u64>,
     /// Workflow run ID.
-    pub workflow_run_id: Option<u64>,
+    pub(crate) workflow_run_id: Option<u64>,
     /// Associated pull or merge request number.
-    pub change_request_number: Option<u64>,
+    pub(crate) change_request_number: Option<u64>,
 }

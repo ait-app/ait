@@ -15,6 +15,9 @@ use model::methods::MethodSpec;
 use serde::Serialize;
 use serde_json::Value;
 
+use crate::ports::workspace_automation::{
+    ScriptSnapshot, ScriptType, SetupLifecycle, SetupSnapshot,
+};
 use crate::protocol::workspace_automation::{
     WorkspaceBlockedSource, WorkspaceScript, WorkspaceScriptLifecycle, WorkspaceScriptListResult,
     WorkspaceScriptMutationResult, WorkspaceScriptRequest, WorkspaceScriptType,
@@ -23,15 +26,13 @@ use crate::protocol::workspace_automation::{
     WorkspaceSetupStatusResult,
 };
 use crate::rpc::ErrorCode;
-use crate::service::workspace_automation::{
-    ScriptSnapshot, ScriptType, SetupLifecycle, SetupSnapshot, SetupStatus, WorkspaceAutomation,
-};
+use crate::service::workspace_automation::{SetupStatus, WorkspaceAutomation};
 
 /// Decode and execute a business request.
 ///
 /// # Errors
 /// Returns stable business failures for invalid or unsuccessful requests.
-pub fn execute(
+pub(crate) fn execute(
     automation: &WorkspaceAutomation,
     method: &str,
     params: Value,
@@ -238,7 +239,7 @@ pub fn script(snapshot: ScriptSnapshot) -> WorkspaceScript {
         } else {
             WorkspaceScriptLifecycle::Stopped
         },
-        health: None,
+        health: (),
         exit_code: snapshot.exit_code,
         terminal_id: snapshot.terminal_id,
     }

@@ -23,7 +23,7 @@ use crate::{
 
 /// Native `OpenCode` ACP subprocess. The installed executable owns authentication and history.
 #[derive(Clone, Debug)]
-pub struct OpenCodeClient {
+pub(crate) struct OpenCodeClient {
     pub(super) program: PathBuf,
     pub(super) deadline: Duration,
     pub(super) environment: BTreeMap<String, String>,
@@ -43,7 +43,7 @@ impl OpenCodeClient {
     /// Launch `program acp` directly, inheriting native configuration and credentials.
     /// Control requests have a thirty-second deadline; model prompts have no duration limit.
     #[must_use]
-    pub fn new(program: PathBuf) -> Self {
+    pub(crate) fn new(program: PathBuf) -> Self {
         Self {
             program,
             deadline: Duration::from_secs(30),

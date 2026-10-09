@@ -5,25 +5,25 @@ use serde::{Deserialize, Serialize};
 /// Select one workspace.
 #[derive(Debug, Clone, PartialEq, Eq, Deserialize)]
 #[serde(rename_all = "camelCase")]
-pub struct WorkspaceSetupRequest {
+pub(crate) struct WorkspaceSetupRequest {
     /// Durable workspace identity.
-    pub workspace_id: String,
+    pub(crate) workspace_id: String,
 }
 
 /// Select one configured workspace script.
 #[derive(Debug, Clone, PartialEq, Eq, Deserialize)]
 #[serde(rename_all = "camelCase")]
-pub struct WorkspaceScriptRequest {
+pub(crate) struct WorkspaceScriptRequest {
     /// Durable workspace identity.
-    pub workspace_id: String,
+    pub(crate) workspace_id: String,
     /// Exact key under `scripts` in `ait.json`.
-    pub script_name: String,
+    pub(crate) script_name: String,
 }
 
 /// State of one setup command.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
 #[serde(rename_all = "snake_case")]
-pub enum WorkspaceSetupCommandStatus {
+pub(crate) enum WorkspaceSetupCommandStatus {
     /// The command has started but has not exited.
     Running,
     /// The command exited successfully.
@@ -35,48 +35,48 @@ pub enum WorkspaceSetupCommandStatus {
 /// Snapshot of one command in a workspace setup run.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
 #[serde(rename_all = "camelCase")]
-pub struct WorkspaceSetupCommand {
+pub(crate) struct WorkspaceSetupCommand {
     /// One-based command position.
-    pub index: usize,
+    pub(crate) index: usize,
     /// Shell command from `ait.json`.
-    pub command: String,
+    pub(crate) command: String,
     /// Directory in which the command runs.
-    pub cwd: String,
+    pub(crate) cwd: String,
     /// Bounded combined output.
-    pub log: String,
+    pub(crate) log: String,
     /// Current command state.
-    pub status: WorkspaceSetupCommandStatus,
+    pub(crate) status: WorkspaceSetupCommandStatus,
     /// Process exit code, or null while running or when terminated by a signal.
-    pub exit_code: Option<i32>,
+    pub(crate) exit_code: Option<i32>,
     /// Elapsed milliseconds after completion.
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub duration_ms: Option<u64>,
+    pub(crate) duration_ms: Option<u64>,
 }
 
 /// Paseo worktree setup detail payload.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
 #[serde(rename_all = "camelCase")]
-pub struct WorkspaceSetupDetail {
+pub(crate) struct WorkspaceSetupDetail {
     /// Fixed Paseo detail discriminator.
     #[serde(rename = "type")]
-    pub kind: String,
+    pub(crate) kind: String,
     /// Backing worktree or directory path.
-    pub worktree_path: String,
+    pub(crate) worktree_path: String,
     /// Git branch when known.
-    pub branch_name: String,
+    pub(crate) branch_name: String,
     /// Rendered bounded setup transcript.
-    pub log: String,
+    pub(crate) log: String,
     /// Per-command snapshots.
-    pub commands: Vec<WorkspaceSetupCommand>,
+    pub(crate) commands: Vec<WorkspaceSetupCommand>,
     /// Present only when output was truncated.
     #[serde(skip_serializing_if = "std::ops::Not::not")]
-    pub truncated: bool,
+    pub(crate) truncated: bool,
 }
 
 /// Overall setup lifecycle.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
 #[serde(rename_all = "snake_case")]
-pub enum WorkspaceSetupStatus {
+pub(crate) enum WorkspaceSetupStatus {
     /// Setup commands are running.
     Running,
     /// Every setup command completed.
@@ -111,42 +111,42 @@ pub enum WorkspaceBlockedSource {
 #[serde(rename_all = "camelCase")]
 pub struct WorkspaceSetupSnapshot {
     /// Overall setup lifecycle.
-    pub status: WorkspaceSetupStatus,
+    pub(crate) status: WorkspaceSetupStatus,
     /// Worktree setup transcript.
-    pub detail: WorkspaceSetupDetail,
+    pub(crate) detail: WorkspaceSetupDetail,
     /// Safe failure text.
-    pub error: Option<String>,
+    pub(crate) error: Option<String>,
     /// Present while automation is blocked for untrusted code.
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub blocked_source: Option<WorkspaceBlockedSource>,
+    pub(crate) blocked_source: Option<WorkspaceBlockedSource>,
 }
 
 /// Setup status polling result.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
 #[serde(rename_all = "camelCase")]
-pub struct WorkspaceSetupStatusResult {
+pub(crate) struct WorkspaceSetupStatusResult {
     /// Requested workspace identity.
-    pub workspace_id: String,
+    pub(crate) workspace_id: String,
     /// Last in-memory snapshot or a derived blocked snapshot.
-    pub snapshot: Option<WorkspaceSetupSnapshot>,
+    pub(crate) snapshot: Option<WorkspaceSetupSnapshot>,
 }
 
 /// Explicit setup approval/start result.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
 #[serde(rename_all = "camelCase")]
-pub struct WorkspaceSetupRunResult {
+pub(crate) struct WorkspaceSetupRunResult {
     /// Requested workspace identity.
-    pub workspace_id: String,
+    pub(crate) workspace_id: String,
     /// Whether an automation block was cleared and a setup run started.
-    pub started: bool,
+    pub(crate) started: bool,
     /// Safe failure text.
-    pub error: Option<String>,
+    pub(crate) error: Option<String>,
 }
 
 /// Script classification from `ait.json`.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
 #[serde(rename_all = "snake_case")]
-pub enum WorkspaceScriptType {
+pub(crate) enum WorkspaceScriptType {
     /// One-shot shell command.
     Script,
     /// Long-running service with an optional TCP port.
@@ -156,21 +156,11 @@ pub enum WorkspaceScriptType {
 /// Script process lifecycle.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
 #[serde(rename_all = "snake_case")]
-pub enum WorkspaceScriptLifecycle {
+pub(crate) enum WorkspaceScriptLifecycle {
     /// The child process has not exited.
     Running,
     /// The child process is absent or has exited.
     Stopped,
-}
-
-/// Service health projection.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
-#[serde(rename_all = "snake_case")]
-pub enum WorkspaceScriptHealth {
-    /// Health probing succeeded.
-    Healthy,
-    /// Health probing failed.
-    Unhealthy,
 }
 
 /// Public script state copied from Paseo's `WorkspaceScriptPayloadSchema`.
@@ -178,56 +168,56 @@ pub enum WorkspaceScriptHealth {
 #[serde(rename_all = "camelCase")]
 pub struct WorkspaceScript {
     /// Exact configuration key.
-    pub script_name: String,
+    pub(crate) script_name: String,
     /// Plain script or service.
     #[serde(rename = "type")]
-    pub kind: WorkspaceScriptType,
+    pub(crate) kind: WorkspaceScriptType,
     /// Stable service hostname; plain scripts use their script name.
-    pub hostname: String,
+    pub(crate) hostname: String,
     /// Configured or allocated service port.
-    pub port: Option<u16>,
+    pub(crate) port: Option<u16>,
     /// Loopback proxy URL when a proxy is installed.
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub local_proxy_url: Option<String>,
+    pub(crate) local_proxy_url: Option<String>,
     /// Public proxy URL when configured.
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub public_proxy_url: Option<String>,
+    pub(crate) public_proxy_url: Option<String>,
     /// Backward-compatible preferred proxy URL.
-    pub proxy_url: Option<String>,
+    pub(crate) proxy_url: Option<String>,
     /// Current process lifecycle.
-    pub lifecycle: WorkspaceScriptLifecycle,
-    /// Service health, or null when unavailable/not applicable.
-    pub health: Option<WorkspaceScriptHealth>,
+    pub(crate) lifecycle: WorkspaceScriptLifecycle,
+    /// Service health; always null because services are not health-probed.
+    pub(crate) health: (),
     /// Last exit code.
-    pub exit_code: Option<i32>,
+    pub(crate) exit_code: Option<i32>,
     /// Logical terminal/process identity.
-    pub terminal_id: Option<String>,
+    pub(crate) terminal_id: Option<String>,
 }
 
 /// Script list result.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
 #[serde(rename_all = "camelCase")]
-pub struct WorkspaceScriptListResult {
+pub(crate) struct WorkspaceScriptListResult {
     /// Requested workspace identity.
-    pub workspace_id: String,
+    pub(crate) workspace_id: String,
     /// Configured scripts plus running orphan entries.
-    pub scripts: Vec<WorkspaceScript>,
+    pub(crate) scripts: Vec<WorkspaceScript>,
     /// Safe failure text.
-    pub error: Option<String>,
+    pub(crate) error: Option<String>,
 }
 
 /// Script start/stop result.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
 #[serde(rename_all = "camelCase")]
-pub struct WorkspaceScriptMutationResult {
+pub(crate) struct WorkspaceScriptMutationResult {
     /// Requested workspace identity.
-    pub workspace_id: String,
+    pub(crate) workspace_id: String,
     /// Requested script key.
-    pub script_name: String,
+    pub(crate) script_name: String,
     /// Updated script state.
-    pub script: Option<WorkspaceScript>,
+    pub(crate) script: Option<WorkspaceScript>,
     /// Safe failure text.
-    pub error: Option<String>,
+    pub(crate) error: Option<String>,
 }
 
 #[cfg(test)]

@@ -2,7 +2,7 @@
 
 /// Categorized checkout read failure.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum CheckoutFailureKind {
+pub(crate) enum CheckoutFailureKind {
     /// Directory is not a Git checkout.
     NotGitRepository,
     /// Input or path is not allowed.
@@ -18,14 +18,14 @@ pub enum CheckoutFailureKind {
 #[error("{message}")]
 pub struct CheckoutRuntimeError {
     /// Stable error category.
-    pub kind: CheckoutFailureKind,
+    pub(crate) kind: CheckoutFailureKind,
     /// Human-readable local diagnostic.
-    pub message: String,
+    pub(crate) message: String,
 }
 
 /// Ahead/behind counts.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub struct AheadBehind {
+pub(crate) struct AheadBehind {
     /// Commits reachable only from HEAD.
     pub ahead: u64,
     /// Commits reachable only from the comparison ref.
@@ -34,53 +34,53 @@ pub struct AheadBehind {
 
 /// Facts for the workspace action button, independent of the configured upstream.
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub struct CheckoutBranchStatus {
+pub(crate) struct CheckoutBranchStatus {
     /// Current checkout commit, absent before the first commit.
-    pub head_sha: Option<String>,
+    pub(crate) head_sha: Option<String>,
     /// Whether the index contains unresolved merge conflicts.
-    pub has_conflicts: bool,
+    pub(crate) has_conflicts: bool,
     /// Same-named branch on the preferred remote, absent if it does not exist locally.
-    pub remote_ref: Option<String>,
+    pub(crate) remote_ref: Option<String>,
     /// Counts against the same-named remote branch, absent without that branch.
-    pub ahead_behind: Option<AheadBehind>,
+    pub(crate) ahead_behind: Option<AheadBehind>,
 }
 
 /// Git/non-Git checkout status.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct CheckoutStatus {
     /// Whether Git metadata was found.
-    pub is_git: bool,
+    pub(crate) is_git: bool,
     /// Worktree root.
-    pub repo_root: Option<String>,
+    pub(crate) repo_root: Option<String>,
     /// Main repository root for linked worktrees.
-    pub main_repo_root: Option<String>,
+    pub(crate) main_repo_root: Option<String>,
     /// Current branch.
-    pub current_branch: Option<String>,
+    pub(crate) current_branch: Option<String>,
     /// Working tree dirtiness.
-    pub is_dirty: Option<bool>,
+    pub(crate) is_dirty: Option<bool>,
     /// Workspace action facts, absent outside Git or from older adapters.
-    pub branch_status: Option<CheckoutBranchStatus>,
+    pub(crate) branch_status: Option<CheckoutBranchStatus>,
     /// Display comparison base.
-    pub base_ref: Option<String>,
+    pub(crate) base_ref: Option<String>,
     /// Counts against the comparison base.
-    pub ahead_behind: Option<AheadBehind>,
+    pub(crate) ahead_behind: Option<AheadBehind>,
     /// Exact configured upstream ref.
-    pub upstream_ref: Option<String>,
+    pub(crate) upstream_ref: Option<String>,
     /// Commits ahead of upstream.
-    pub ahead_of_origin: Option<u64>,
+    pub(crate) ahead_of_origin: Option<u64>,
     /// Commits behind upstream.
-    pub behind_of_origin: Option<u64>,
+    pub(crate) behind_of_origin: Option<u64>,
     /// Whether any remote exists.
-    pub has_remote: bool,
+    pub(crate) has_remote: bool,
     /// Preferred remote URL.
-    pub remote_url: Option<String>,
+    pub(crate) remote_url: Option<String>,
     /// Whether the checkout is below the server-managed worktree root.
-    pub is_managed_worktree: bool,
+    pub(crate) is_managed_worktree: bool,
 }
 
 /// Diff comparison mode.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum CheckoutDiffMode {
+pub(crate) enum CheckoutDiffMode {
     /// Working tree and index against HEAD.
     Uncommitted,
     /// HEAD against a branch merge base.
@@ -91,16 +91,16 @@ pub enum CheckoutDiffMode {
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct CheckoutDiffCompare {
     /// Comparison mode.
-    pub mode: CheckoutDiffMode,
+    pub(crate) mode: CheckoutDiffMode,
     /// Optional explicit base.
-    pub base_ref: Option<String>,
+    pub(crate) base_ref: Option<String>,
     /// Ignore whitespace-only changes.
-    pub ignore_whitespace: bool,
+    pub(crate) ignore_whitespace: bool,
 }
 
 /// Structured line category.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum DiffLineKind {
+pub(crate) enum DiffLineKind {
     /// Added line.
     Add,
     /// Removed line.
@@ -113,46 +113,42 @@ pub enum DiffLineKind {
 
 /// Theme-independent syntax token produced by a checkout adapter.
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub struct HighlightToken {
+pub(crate) struct HighlightToken {
     /// Source text without a diff marker.
-    pub text: String,
+    pub(crate) text: String,
     /// Optional syntax role understood by the client palette.
-    pub style: Option<String>,
+    pub(crate) style: Option<String>,
 }
 
 /// One structured diff line.
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub struct DiffLine {
+pub(crate) struct DiffLine {
     /// Category.
-    pub kind: DiffLineKind,
+    pub(crate) kind: DiffLineKind,
     /// Content without prefix.
-    pub content: String,
+    pub(crate) content: String,
     /// Optional syntax tokens; absent for unsupported or oversized content.
-    pub tokens: Option<Vec<HighlightToken>>,
+    pub(crate) tokens: Option<Vec<HighlightToken>>,
 }
 
 /// One structured hunk.
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub struct DiffHunk {
+pub(crate) struct DiffHunk {
     /// First old line.
-    pub old_start: u64,
+    pub(crate) old_start: u64,
     /// Old line count.
-    pub old_count: u64,
+    pub(crate) old_count: u64,
     /// First new line.
-    pub new_start: u64,
+    pub(crate) new_start: u64,
     /// New line count.
-    pub new_count: u64,
+    pub(crate) new_count: u64,
     /// Header and body lines.
-    pub lines: Vec<DiffLine>,
+    pub(crate) lines: Vec<DiffLine>,
 }
 
 /// Structured diff status.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum ParsedDiffStatus {
-    /// Ordinary text.
-    Ok,
-    /// Budget placeholder.
-    TooLarge,
+pub(crate) enum ParsedDiffStatus {
     /// Binary placeholder.
     Binary,
 }
@@ -161,35 +157,35 @@ pub enum ParsedDiffStatus {
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct ParsedDiffFile {
     /// Destination path.
-    pub path: String,
+    pub(crate) path: String,
     /// Source path for a rename.
-    pub old_path: Option<String>,
+    pub(crate) old_path: Option<String>,
     /// New-file marker.
-    pub is_new: bool,
+    pub(crate) is_new: bool,
     /// Deleted-file marker.
-    pub is_deleted: bool,
+    pub(crate) is_deleted: bool,
     /// Added lines.
-    pub additions: u64,
+    pub(crate) additions: u64,
     /// Removed lines.
-    pub deletions: u64,
+    pub(crate) deletions: u64,
     /// Parsed hunks.
-    pub hunks: Vec<DiffHunk>,
+    pub(crate) hunks: Vec<DiffHunk>,
     /// Optional placeholder status.
-    pub status: Option<ParsedDiffStatus>,
+    pub(crate) status: Option<ParsedDiffStatus>,
 }
 
 /// Checkout diff snapshot.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct CheckoutDiff {
     /// Path-sorted files.
-    pub files: Vec<ParsedDiffFile>,
+    pub(crate) files: Vec<ParsedDiffFile>,
     /// Whether the aggregate diff exceeded its budget.
-    pub diff_too_large: bool,
+    pub(crate) diff_too_large: bool,
 }
 
 /// Commit file status.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum CheckoutCommitFileStatus {
+pub(crate) enum CheckoutCommitFileStatus {
     /// Added.
     Added,
     /// Modified/type changed.
@@ -202,45 +198,45 @@ pub enum CheckoutCommitFileStatus {
 
 /// File statistics attached to a commit.
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub struct CheckoutCommitFile {
+pub(crate) struct CheckoutCommitFile {
     /// Destination path.
-    pub path: String,
+    pub(crate) path: String,
     /// Added lines.
-    pub additions: u64,
+    pub(crate) additions: u64,
     /// Removed lines.
-    pub deletions: u64,
+    pub(crate) deletions: u64,
     /// Optional Git status.
-    pub status: Option<CheckoutCommitFileStatus>,
+    pub(crate) status: Option<CheckoutCommitFileStatus>,
 }
 
 /// One checkout commit.
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub struct CheckoutCommit {
+pub(crate) struct CheckoutCommit {
     /// Full SHA.
-    pub sha: String,
+    pub(crate) sha: String,
     /// Short SHA.
-    pub short_sha: String,
+    pub(crate) short_sha: String,
     /// Subject.
-    pub subject: String,
+    pub(crate) subject: String,
     /// Author name.
-    pub author_name: String,
+    pub(crate) author_name: String,
     /// ISO timestamp.
-    pub author_date: String,
+    pub(crate) author_date: String,
     /// Reachable from a remote ref.
-    pub is_on_remote: bool,
+    pub(crate) is_on_remote: bool,
     /// Belongs to bounded base context.
-    pub is_on_base: bool,
+    pub(crate) is_on_base: bool,
     /// Changed files.
-    pub files: Vec<CheckoutCommitFile>,
+    pub(crate) files: Vec<CheckoutCommitFile>,
 }
 
 /// Commit history result.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct CheckoutCommits {
     /// Resolved comparison base.
-    pub base_ref: Option<String>,
+    pub(crate) base_ref: Option<String>,
     /// Workspace commits followed by base context.
-    pub commits: Vec<CheckoutCommit>,
+    pub(crate) commits: Vec<CheckoutCommit>,
 }
 
 /// Existing branch resolution.
@@ -272,17 +268,17 @@ pub enum CheckoutBranchSource {
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct CheckoutBranchSuggestion {
     /// Normalized local name.
-    pub name: String,
+    pub(crate) name: String,
     /// Committer Unix timestamp.
-    pub committer_date: i64,
+    pub(crate) committer_date: i64,
     /// Whether a local branch exists.
-    pub has_local: bool,
+    pub(crate) has_local: bool,
     /// Whether an origin ref exists.
-    pub has_remote: bool,
+    pub(crate) has_remote: bool,
     /// Commits present only locally.
-    pub local_ahead: Option<u64>,
+    pub(crate) local_ahead: Option<u64>,
     /// Commits present only on origin.
-    pub local_behind: Option<u64>,
+    pub(crate) local_behind: Option<u64>,
 }
 
 /// Merge-current-branch-to-base strategy.
@@ -298,13 +294,13 @@ pub enum CheckoutMergeStrategy {
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct CheckoutStashEntry {
     /// Zero-based stash index.
-    pub index: usize,
+    pub(crate) index: usize,
     /// Full Git subject.
-    pub message: String,
+    pub(crate) message: String,
     /// Ait auto-stash branch label.
-    pub branch: Option<String>,
+    pub(crate) branch: Option<String>,
     /// Whether the subject carries the Ait prefix; field name retained for wire compatibility.
-    pub is_paseo: bool,
+    pub(crate) is_paseo: bool,
 }
 
 /// Blocking Git checkout runtime.

@@ -14,14 +14,13 @@ pub mod diagnostics;
 pub mod dispatch;
 mod local;
 pub mod ports;
-pub mod protocol;
+pub(crate) mod protocol;
 pub mod rpc;
 pub mod service;
 pub mod storage;
 pub mod summary;
 
 pub use composition::Providers;
-pub use summary::{SummaryConfiguration, SummaryGenerator};
 
 #[cfg(all(test, unix))]
 mod test_support;

@@ -180,7 +180,7 @@ impl AgentExecution {
     /// Includes archived/internal Agents; callers must perform this blocking read off the reactor.
     /// # Errors
     /// Returns a registry error when the identity cannot be read.
-    pub fn contains_identity(&self, id: &str) -> Result<bool, ErrorCode> {
+    pub(crate) fn contains_identity(&self, id: &str) -> Result<bool, ErrorCode> {
         self.0
             .registry
             .get(id)
@@ -190,7 +190,7 @@ impl AgentExecution {
 
     /// Return the installed durable timeline projection and its observers.
     #[must_use]
-    pub fn timeline(&self) -> crate::storage::timeline::Timeline {
+    pub(crate) fn timeline(&self) -> crate::storage::timeline::Timeline {
         self.0.timeline.clone()
     }
 

@@ -29,7 +29,7 @@ pub struct WorkspaceAttentionBatch {
     /// True only when every Workspace succeeded.
     pub success: bool,
     /// Semicolon-separated errors, or none when the whole batch succeeded.
-    pub error: Option<String>,
+    pub(crate) error: Option<String>,
 }
 
 /// Coordinates Workspace attention without importing Agent records or Provider execution.

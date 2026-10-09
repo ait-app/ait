@@ -36,7 +36,7 @@ use crate::service::workspace_labels::{
 
 /// Ephemeral delivery failure; the host closes a connection when its budget is exhausted.
 #[derive(Debug, thiserror::Error)]
-pub enum DeliveryError {
+pub(crate) enum DeliveryError {
     /// An event could not be serialized.
     #[error("metadata event encoding failed")]
     Encode(#[from] serde_json::Error),
@@ -46,18 +46,18 @@ pub enum DeliveryError {
 }
 
 /// Host-provided connection sink; metadata never owns a socket or transport task.
-pub type EventSink = Arc<dyn Fn(Value) -> Result<(), DeliveryError> + Send + Sync>;
+type EventSink = Arc<dyn Fn(Value) -> Result<(), DeliveryError> + Send + Sync>;
 
 /// Result with a listener activated only after response admission.
-pub struct Dispatch {
+pub(crate) struct Dispatch {
     /// Serialized business response.
-    pub value: Value,
+    pub(crate) value: Value,
     /// Listener awaiting response admission.
-    pub subscription: Option<PendingSubscription>,
+    pub(crate) subscription: Option<PendingSubscription>,
 }
 
 /// Inactive listener and its buffered events, owned by one physical connection.
-pub struct PendingSubscription {
+pub(crate) struct PendingSubscription {
     subscription_id: String,
     subscription: WorkspaceLabelSubscription,
     delivery: Arc<Mutex<Delivery>>,
@@ -76,7 +76,7 @@ impl PendingSubscription {
     ///
     /// # Errors
     /// Returns a delivery error if an event cannot be sent.
-    pub fn activate(self) -> Result<(String, WorkspaceLabelSubscription), DeliveryError> {
+    pub(crate) fn activate(self) -> Result<(String, WorkspaceLabelSubscription), DeliveryError> {
         let mut delivery = self
             .delivery
             .lock()
@@ -123,7 +123,7 @@ impl Delivery {
 ///
 /// # Errors
 /// Returns validation, catalog, assignment or subscription errors.
-pub fn execute(
+pub(crate) fn execute(
     labels: &WorkspaceLabels,
     method: &str,
     params: Value,

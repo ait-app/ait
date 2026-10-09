@@ -6,7 +6,7 @@ pub mod dispatch;
 pub mod local;
 pub mod ports;
 pub mod protocol;
-pub mod rpc;
+mod rpc;
 mod screen;
 pub mod service;
 

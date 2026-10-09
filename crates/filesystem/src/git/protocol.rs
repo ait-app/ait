@@ -1,3 +1,3 @@
 //! Wire request and response schemas.
 
-pub mod checkout;
+pub(crate) mod checkout;

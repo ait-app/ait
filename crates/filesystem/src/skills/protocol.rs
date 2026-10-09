@@ -1,3 +1,3 @@
 //! Wire request and response schemas.
 
-pub mod skills;
+pub(crate) mod skills;

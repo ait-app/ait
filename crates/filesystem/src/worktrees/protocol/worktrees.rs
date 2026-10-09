@@ -8,65 +8,63 @@ use serde_json::Value;
 /// List server-managed worktrees for one repository.
 #[derive(Debug, Clone, PartialEq, Eq, Deserialize)]
 #[serde(rename_all = "camelCase")]
-pub struct WorktreeListRequest {
+pub(crate) struct WorktreeListRequest {
     /// Any directory inside the repository.
     #[serde(default)]
-    pub cwd: Option<String>,
+    pub(crate) cwd: Option<String>,
     /// Compatibility spelling that takes precedence over `cwd`.
     #[serde(default)]
-    pub repo_root: Option<String>,
+    pub(crate) repo_root: Option<String>,
 }
 
 /// One server-managed linked checkout.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
 #[serde(rename_all = "camelCase")]
-pub struct WorktreeListEntry {
+pub(crate) struct WorktreeListEntry {
     /// Absolute linked checkout root.
-    pub worktree_path: String,
+    pub(crate) worktree_path: String,
     /// Filesystem creation time, or the Unix epoch when it cannot be read.
-    pub created_at: String,
+    pub(crate) created_at: String,
     /// Checked-out local branch; detached worktrees serialize null.
-    pub branch_name: Option<String>,
+    pub(crate) branch_name: Option<String>,
     /// Checked-out commit object name.
-    pub head: Option<String>,
+    pub(crate) head: Option<String>,
 }
 
 /// Error shape used by Paseo checkout and worktree RPCs.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
 pub struct CheckoutError {
     /// Stable Paseo error category.
-    pub code: CheckoutErrorCode,
+    pub(crate) code: CheckoutErrorCode,
     /// Safe diagnostic message.
-    pub message: String,
+    pub(crate) message: String,
 }
 
 /// Paseo checkout error categories.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
 #[serde(rename_all = "SCREAMING_SNAKE_CASE")]
-pub enum CheckoutErrorCode {
+pub(crate) enum CheckoutErrorCode {
     /// The selected path does not belong to a Git repository.
     NotGitRepo,
     /// The target is outside the server-owned worktree root.
     NotAllowed,
-    /// Git reported a merge conflict.
-    MergeConflict,
     /// Another Git, filesystem, or registry error occurred.
     Unknown,
 }
 
 /// Worktree list outcome.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
-pub struct WorktreeListResult {
+pub(crate) struct WorktreeListResult {
     /// Managed worktrees, in Git's worktree-list order.
-    pub worktrees: Vec<WorktreeListEntry>,
+    pub(crate) worktrees: Vec<WorktreeListEntry>,
     /// Inline Paseo checkout error.
-    pub error: Option<CheckoutError>,
+    pub(crate) error: Option<CheckoutError>,
 }
 
 /// Archive granularity.
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Deserialize)]
 #[serde(rename_all = "snake_case")]
-pub enum WorktreeArchiveScope {
+pub(crate) enum WorktreeArchiveScope {
     /// Archive one workspace record and delete the worktree after its last active reference.
     #[default]
     Workspace,
@@ -80,41 +78,41 @@ pub enum WorktreeArchiveScope {
 pub struct WorktreeArchiveRequest {
     /// Exact worktree or descendant workspace directory.
     #[serde(default)]
-    pub worktree_path: Option<String>,
+    pub(crate) worktree_path: Option<String>,
     /// Main repository root used with `branchName`.
     #[serde(default)]
-    pub repo_root: Option<String>,
+    pub(crate) repo_root: Option<String>,
     /// Branch used to find a managed worktree.
     #[serde(default)]
-    pub branch_name: Option<String>,
+    pub(crate) branch_name: Option<String>,
     /// Exact workspace record to archive.
     #[serde(default)]
-    pub workspace_id: Option<String>,
+    pub(crate) workspace_id: Option<String>,
     /// Archive granularity; omission retains Paseo's workspace default.
     #[serde(default)]
-    pub scope: WorktreeArchiveScope,
+    pub(crate) scope: WorktreeArchiveScope,
     /// Legacy compatibility field. Removal is derived from scope and active references.
     #[serde(default)]
-    pub delete_worktree_from_disk: bool,
+    delete_worktree_from_disk: bool,
 }
 
 /// Worktree archive outcome.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
 #[serde(rename_all = "camelCase")]
-pub struct WorktreeArchiveResult {
+pub(crate) struct WorktreeArchiveResult {
     /// Whether the requested archive operation completed.
-    pub success: bool,
+    pub(crate) success: bool,
     /// Agent identities archived by Paseo; empty until the independent Agent runtime is ported.
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub removed_agents: Option<Vec<String>>,
+    pub(crate) removed_agents: Option<Vec<String>>,
     /// Inline Paseo checkout error.
-    pub error: Option<CheckoutError>,
+    pub(crate) error: Option<CheckoutError>,
 }
 
 /// Worktree creation action.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Deserialize)]
 #[serde(rename_all = "kebab-case")]
-pub enum WorktreeCreateAction {
+pub(crate) enum WorktreeCreateAction {
     /// Create a new branch from a base ref.
     BranchOff,
     /// Check out an existing branch.
@@ -123,7 +121,7 @@ pub enum WorktreeCreateAction {
 
 /// Prompt context used by the first Agent after worktree creation.
 #[derive(Debug, Clone, Default, PartialEq, Deserialize)]
-pub struct FirstAgentContext {
+pub(crate) struct FirstAgentContext {
     /// Optional initial prompt.
     #[serde(default)]
     pub prompt: Option<String>,
@@ -135,42 +133,42 @@ pub struct FirstAgentContext {
 /// Create and register one server-owned linked worktree.
 #[derive(Debug, Clone, PartialEq, Deserialize)]
 #[serde(rename_all = "camelCase")]
-pub struct WorktreeCreateRequest {
+pub(crate) struct WorktreeCreateRequest {
     /// Source checkout directory, possibly below its Git root.
-    pub cwd: String,
+    pub(crate) cwd: String,
     /// Optional active project record to own the workspace.
     #[serde(default)]
-    pub project_id: Option<String>,
+    pub(crate) project_id: Option<String>,
     /// Optional user-facing worktree directory seed.
     #[serde(default)]
-    pub worktree_slug: Option<String>,
+    pub(crate) worktree_slug: Option<String>,
     /// Legacy prompt text used when `firstAgentContext` is absent.
     #[serde(default)]
-    pub name_context: Option<String>,
+    pub(crate) name_context: Option<String>,
     /// Legacy attachments used when `firstAgentContext` is absent.
     #[serde(default, deserialize_with = "optional_attachments")]
-    pub attachments: Option<Vec<Value>>,
+    pub(crate) attachments: Option<Vec<Value>>,
     /// Current first-Agent prompt context.
     #[serde(default)]
-    pub first_agent_context: Option<FirstAgentContext>,
+    pub(crate) first_agent_context: Option<FirstAgentContext>,
     /// Base ref for branch-off, or target branch for checkout.
     #[serde(default)]
-    pub ref_name: Option<String>,
+    pub(crate) ref_name: Option<String>,
     /// Creation action; omission defaults to branch-off.
     #[serde(default)]
-    pub action: Option<WorktreeCreateAction>,
+    pub(crate) action: Option<WorktreeCreateAction>,
     /// Forge-neutral change-request checkout source.
     #[serde(default)]
-    pub checkout_source: Option<ChangeRequestCheckoutSource>,
+    pub(crate) checkout_source: Option<ChangeRequestCheckoutSource>,
     /// Legacy GitHub pull-request number.
     #[serde(default, deserialize_with = "optional_positive_u64")]
-    pub github_pr_number: Option<u64>,
+    pub(crate) github_pr_number: Option<u64>,
 }
 
 impl WorktreeCreateRequest {
     /// Resolve current and legacy first-Agent context fields as Paseo does.
     #[must_use]
-    pub fn normalized_first_agent_context(&self) -> Option<FirstAgentContext> {
+    pub(crate) fn normalized_first_agent_context(&self) -> Option<FirstAgentContext> {
         if let Some(context) = &self.first_agent_context {
             return Some(context.clone());
         }
@@ -187,19 +185,19 @@ impl WorktreeCreateRequest {
 /// Worktree creation outcome.
 #[derive(Debug, Clone, PartialEq, Serialize)]
 #[serde(rename_all = "camelCase")]
-pub struct WorktreeCreateResult {
+pub(crate) struct WorktreeCreateResult {
     /// Newly registered workspace descriptor.
-    pub workspace: Option<WorkspaceDescriptorPayload>,
+    pub(crate) workspace: Option<WorkspaceDescriptorPayload>,
     /// Inline error text.
-    pub error: Option<String>,
+    pub(crate) error: Option<String>,
     /// Stable worktree-specific error code.
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub error_code: Option<String>,
+    pub(crate) error_code: Option<String>,
     /// Setup is asynchronous in Paseo; no terminal is created by this slice.
-    pub setup_terminal_id: Option<String>,
+    pub(crate) setup_terminal_id: Option<String>,
     /// Reason automation was intentionally skipped.
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub setup_skipped_reason: Option<String>,
+    pub(crate) setup_skipped_reason: Option<String>,
 }
 
 fn optional_positive_u64<'de, D: Deserializer<'de>>(

@@ -49,7 +49,7 @@ use crate::service::agent_runtime::{
 ///
 /// # Errors
 /// Returns stable business failures for invalid or unsuccessful requests.
-pub fn execute(
+pub(crate) fn execute(
     directory: &mut AgentRuntimeDirectory,
     method: &str,
     params: Value,

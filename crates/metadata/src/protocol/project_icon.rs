@@ -5,7 +5,7 @@ use serde::{Deserialize, Serialize};
 /// Client-owned icon source. URL fetching is deliberately absent.
 #[derive(Debug, Clone, PartialEq, Eq, Deserialize)]
 #[serde(tag = "type", rename_all = "snake_case")]
-pub enum ProjectIconSource {
+pub(crate) enum ProjectIconSource {
     /// Remove custom bytes and resume automatic discovery.
     Automatic,
     /// Validate and store client-provided base64 image bytes.
@@ -18,53 +18,53 @@ pub enum ProjectIconSource {
 /// Set or clear a custom icon for a registered project.
 #[derive(Debug, Clone, PartialEq, Eq, Deserialize)]
 #[serde(rename_all = "camelCase")]
-pub struct ProjectIconSetRequest {
+pub(crate) struct ProjectIconSetRequest {
     /// Project identity.
-    pub project_id: String,
+    pub(crate) project_id: String,
     /// Automatic mode or uploaded bytes.
-    pub source: ProjectIconSource,
+    pub(crate) source: ProjectIconSource,
 }
 
 /// Read the effective custom or automatically discovered icon.
 #[derive(Debug, Clone, PartialEq, Eq, Deserialize)]
 #[serde(rename_all = "camelCase")]
-pub struct ProjectIconGetRequest {
+pub(crate) struct ProjectIconGetRequest {
     /// Project identity.
-    pub project_id: String,
+    pub(crate) project_id: String,
 }
 
 /// Base64 project icon returned to clients.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
 #[serde(rename_all = "camelCase")]
-pub struct ProjectIconPayload {
+pub(crate) struct ProjectIconPayload {
     /// Base64-encoded image bytes.
-    pub data: String,
+    pub(crate) data: String,
     /// MIME type detected by the server.
-    pub mime_type: String,
+    pub(crate) mime_type: String,
 }
 
 /// Project icon mutation outcome.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
 #[serde(rename_all = "camelCase")]
-pub struct ProjectIconSetResult {
+pub(crate) struct ProjectIconSetResult {
     /// Project identity.
-    pub project_id: String,
+    pub(crate) project_id: String,
     /// Whether the custom/automatic selection was persisted.
-    pub accepted: bool,
+    pub(crate) accepted: bool,
     /// Safe business error.
-    pub error: Option<String>,
+    pub(crate) error: Option<String>,
 }
 
 /// Effective project icon read outcome.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
 #[serde(rename_all = "camelCase")]
-pub struct ProjectIconGetResult {
+pub(crate) struct ProjectIconGetResult {
     /// Project identity.
-    pub project_id: String,
+    pub(crate) project_id: String,
     /// Effective icon, or null when automatic discovery found none.
-    pub icon: Option<ProjectIconPayload>,
+    pub(crate) icon: Option<ProjectIconPayload>,
     /// Safe business error.
-    pub error: Option<String>,
+    pub(crate) error: Option<String>,
 }
 
 #[cfg(test)]

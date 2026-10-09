@@ -9,10 +9,10 @@ use crate::ports::agent::{
     AgentCatalog, AgentReceipt, ConfigureAgent, DefaultReceipt, DefaultSelection, SelectDefault,
 };
 
-pub use crate::ports::agent::AgentError;
+use crate::ports::agent::AgentError;
 
 /// Maximum number of bounded current-revision snapshots per page.
-pub const MAX_AGENT_PAGE: usize = 50;
+const MAX_AGENT_PAGE: usize = 50;
 
 /// Serialized, blocking catalog service with no provider initialization side effects.
 #[derive(Debug)]
@@ -31,7 +31,7 @@ impl Agents {
     ///
     /// # Errors
     /// Rejects invalid keys, stale edits, default disabling, conflicting retries, or storage errors.
-    pub fn configure(
+    pub(crate) fn configure(
         &mut self,
         target: AgentTarget,
         config: AgentConfig,
@@ -57,7 +57,7 @@ impl Agents {
     ///
     /// # Errors
     /// Returns missing Agent/revision or storage errors.
-    pub fn get(
+    pub(crate) fn get(
         &mut self,
         id: AgentId,
         revision: Option<Revision>,
@@ -69,7 +69,7 @@ impl Agents {
     ///
     /// # Errors
     /// Rejects limits outside 1–50 or storage failures.
-    pub fn list(
+    pub(crate) fn list(
         &mut self,
         after: Option<AgentId>,
         limit: usize,
@@ -84,7 +84,7 @@ impl Agents {
     ///
     /// # Errors
     /// Returns storage failures.
-    pub fn get_default(&mut self) -> Result<DefaultSelection, AgentError> {
+    pub(crate) fn get_default(&mut self) -> Result<DefaultSelection, AgentError> {
         self.catalog.get_default()
     }
 
@@ -92,7 +92,7 @@ impl Agents {
     ///
     /// # Errors
     /// Rejects malformed keys/versions, stale versions, disabled/missing presets, or storage errors.
-    pub fn set_default(
+    pub(crate) fn set_default(
         &mut self,
         agent_id: Option<AgentId>,
         expected_version: u64,

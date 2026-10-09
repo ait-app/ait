@@ -5,73 +5,85 @@ use serde::Deserialize;
 /// Enable voice for a specific Agent, or disable the current connection's voice mode.
 #[derive(Debug, Deserialize)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
-pub struct Mode {
+pub(crate) struct Mode {
     /// Desired mode.
-    pub enabled: bool,
+    pub(crate) enabled: bool,
     /// Required when enabling; resolved to one canonical Agent ID.
-    pub agent_id: Option<String>,
+    pub(crate) agent_id: Option<String>,
 }
 
 /// Base64 microphone audio with an optional utterance boundary.
 #[derive(Debug, Deserialize)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
-pub struct VoiceChunk {
+pub(crate) struct VoiceChunk {
     /// Base64 bytes.
-    pub audio: String,
+    pub(crate) audio: String,
     /// Audio MIME type, including PCM sample rate where applicable.
-    pub format: String,
+    pub(crate) format: String,
     /// Explicit end of utterance; PCM also supports silence-based boundaries.
-    pub is_last: bool,
+    pub(crate) is_last: bool,
 }
 
 /// Confirm one server audio chunk has actually finished playing.
 #[derive(Debug, Deserialize)]
 #[serde(deny_unknown_fields)]
-pub struct Played {
+pub(crate) struct Played {
     /// Audio chunk ID, scoped to this physical connection.
-    pub id: String,
+    pub(crate) id: String,
 }
 
 /// Start or acknowledge an existing stream on the same connection.
 #[derive(Debug, Deserialize)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
-pub struct Start {
+pub(crate) struct Start {
     /// Connection-local stream ID.
-    pub dictation_id: String,
+    pub(crate) dictation_id: String,
     /// Immutable format for the entire stream.
-    pub format: String,
+    pub(crate) format: String,
 }
 
 /// A sequenced, replayable audio chunk.
 #[derive(Debug, Deserialize)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
-pub struct Chunk {
+pub(crate) struct Chunk {
     /// Connection-local stream ID.
-    pub dictation_id: String,
+    #[expect(
+        dead_code,
+        reason = "routing reads dictationId before decoding; deny_unknown_fields still accepts it"
+    )]
+    pub(crate) dictation_id: String,
     /// Zero-based sequence number.
-    pub seq: u32,
+    pub(crate) seq: u32,
     /// Base64 bytes.
-    pub audio: String,
+    pub(crate) audio: String,
     /// Must match the stream's start format.
-    pub format: String,
+    pub(crate) format: String,
 }
 
 /// Finish after every chunk through `final_seq` has arrived.
 #[derive(Debug, Deserialize)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
-pub struct Finish {
+pub(crate) struct Finish {
     /// Connection-local stream ID.
-    pub dictation_id: String,
+    #[expect(
+        dead_code,
+        reason = "routing reads dictationId before decoding; deny_unknown_fields still accepts it"
+    )]
+    dictation_id: String,
     /// Inclusive final sequence number.
-    pub final_seq: u32,
+    pub(crate) final_seq: u32,
 }
 
 /// Cancel a stream and any outstanding transcription work.
 #[derive(Debug, Deserialize)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
-pub struct Cancel {
+pub(crate) struct Cancel {
     /// Connection-local stream ID.
-    pub dictation_id: String,
+    #[expect(
+        dead_code,
+        reason = "routing reads dictationId before decoding; deny_unknown_fields still accepts it"
+    )]
+    dictation_id: String,
 }
 
 pub(crate) fn decode<T: serde::de::DeserializeOwned>(

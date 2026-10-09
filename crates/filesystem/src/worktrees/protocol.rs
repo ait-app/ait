@@ -1,4 +1,4 @@
 //! Wire request and response schemas.
 
-pub mod workspace_recovery;
-pub mod worktrees;
+pub(crate) mod workspace_recovery;
+pub(crate) mod worktrees;

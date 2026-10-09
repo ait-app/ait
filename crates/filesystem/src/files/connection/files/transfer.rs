@@ -1,8 +1,8 @@
+use crate::files::ports::files::FileError;
 use crate::files::protocol::{
     file_transfer::{self, FileFrame},
     files as wire,
 };
-use crate::files::service::files::FileError;
 use crate::files::service::transfer::Cursor;
 use model::ErrorCode;
 use serde_json::Value;

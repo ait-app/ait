@@ -7,19 +7,20 @@ use serde::Deserialize;
 /// Input accepted by create; unknown fields are rejected before any write.
 #[derive(Debug, Deserialize)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
-pub struct Create {
+#[expect(clippy::struct_field_names, reason = "field names are the wire schema")]
+pub(crate) struct Create {
     /// Optional display name.
-    pub name: Option<String>,
+    pub(crate) name: Option<String>,
     /// Nonempty prompt.
-    pub prompt: String,
+    pub(crate) prompt: String,
     /// Schedule cadence.
-    pub cadence: Cadence,
+    pub(crate) cadence: Cadence,
     /// Existing Agent or new-Agent configuration.
-    pub target: Target,
+    pub(crate) target: Target,
     /// Completed-run limit.
-    pub max_runs: Option<u64>,
+    pub(crate) max_runs: Option<u64>,
     /// Automatic expiry.
-    pub expires_at: Option<DateTime<Utc>>,
+    pub(crate) expires_at: Option<DateTime<Utc>>,
     /// Defaults to true for intervals and false for cron.
-    pub run_on_create: Option<bool>,
+    pub(crate) run_on_create: Option<bool>,
 }

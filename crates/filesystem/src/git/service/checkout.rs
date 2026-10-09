@@ -5,12 +5,10 @@ use std::sync::Arc;
 
 use model::workspace::registry::WorkspaceRegistry;
 
-pub use crate::git::ports::checkout::{
-    AheadBehind, CheckoutBranchResolution, CheckoutBranchSource, CheckoutBranchSuggestion,
-    CheckoutCommit, CheckoutCommitFile, CheckoutCommitFileStatus, CheckoutCommits, CheckoutDiff,
-    CheckoutDiffCompare, CheckoutDiffMode, CheckoutFailureKind, CheckoutMergeStrategy,
-    CheckoutRuntime, CheckoutRuntimeError, CheckoutStashEntry, CheckoutStatus, DiffHunk, DiffLine,
-    DiffLineKind, ParsedDiffFile, ParsedDiffStatus,
+use crate::git::ports::checkout::{
+    CheckoutBranchResolution, CheckoutBranchSource, CheckoutBranchSuggestion, CheckoutCommits,
+    CheckoutDiff, CheckoutDiffCompare, CheckoutFailureKind, CheckoutMergeStrategy, CheckoutRuntime,
+    CheckoutRuntimeError, CheckoutStashEntry, CheckoutStatus, ParsedDiffFile,
 };
 
 /// Thin application boundary over the independent blocking Git adapter.
@@ -41,7 +39,7 @@ impl Checkout {
     ///
     /// # Errors
     /// Returns categorized local Git/filesystem failures.
-    pub fn status(&self, cwd: &str) -> Result<CheckoutStatus, CheckoutRuntimeError> {
+    pub(crate) fn status(&self, cwd: &str) -> Result<CheckoutStatus, CheckoutRuntimeError> {
         self.runtime.status(cwd)
     }
 
@@ -49,7 +47,7 @@ impl Checkout {
     ///
     /// # Errors
     /// Returns categorized local Git/filesystem failures.
-    pub fn refresh(&self, cwd: &str) -> Result<(), CheckoutRuntimeError> {
+    pub(crate) fn refresh(&self, cwd: &str) -> Result<(), CheckoutRuntimeError> {
         self.runtime.refresh(cwd)
     }
 
@@ -57,7 +55,7 @@ impl Checkout {
     ///
     /// # Errors
     /// Returns categorized local Git/filesystem failures.
-    pub fn diff(
+    pub(crate) fn diff(
         &self,
         cwd: &str,
         compare: &CheckoutDiffCompare,
@@ -69,7 +67,7 @@ impl Checkout {
     ///
     /// # Errors
     /// Returns categorized local Git/filesystem failures.
-    pub fn commits(&self, cwd: &str) -> Result<CheckoutCommits, CheckoutRuntimeError> {
+    pub(crate) fn commits(&self, cwd: &str) -> Result<CheckoutCommits, CheckoutRuntimeError> {
         self.runtime.commits(cwd)
     }
 
@@ -77,7 +75,7 @@ impl Checkout {
     ///
     /// # Errors
     /// Returns categorized input, Git, or filesystem failures.
-    pub fn commit_file_diff(
+    pub(crate) fn commit_file_diff(
         &self,
         cwd: &str,
         sha: &str,
@@ -90,7 +88,7 @@ impl Checkout {
     ///
     /// # Errors
     /// Returns categorized validation or Git failures.
-    pub fn validate_branch(
+    pub(crate) fn validate_branch(
         &self,
         cwd: &str,
         branch: &str,
@@ -102,7 +100,7 @@ impl Checkout {
     ///
     /// # Errors
     /// Returns categorized validation or Git failures.
-    pub fn branch_suggestions(
+    pub(crate) fn branch_suggestions(
         &self,
         cwd: &str,
         query: Option<&str>,
@@ -115,7 +113,7 @@ impl Checkout {
     ///
     /// # Errors
     /// Returns categorized dirty-tree, validation, or Git failures.
-    pub fn switch_branch(
+    pub(crate) fn switch_branch(
         &self,
         cwd: &str,
         branch: &str,
@@ -127,7 +125,11 @@ impl Checkout {
     ///
     /// # Errors
     /// Returns categorized detached-head, validation, or Git failures.
-    pub fn rename_branch(&self, cwd: &str, branch: &str) -> Result<String, CheckoutRuntimeError> {
+    pub(crate) fn rename_branch(
+        &self,
+        cwd: &str,
+        branch: &str,
+    ) -> Result<String, CheckoutRuntimeError> {
         self.runtime.rename_branch(cwd, branch)
     }
 
@@ -135,7 +137,7 @@ impl Checkout {
     ///
     /// # Errors
     /// Returns categorized validation or Git failures.
-    pub fn commit(
+    pub(crate) fn commit(
         &self,
         cwd: &str,
         message: &str,
@@ -148,7 +150,7 @@ impl Checkout {
     ///
     /// # Errors
     /// Returns categorized preflight, conflict, or Git failures.
-    pub fn merge_to_base(
+    pub(crate) fn merge_to_base(
         &self,
         cwd: &str,
         base_ref: Option<&str>,
@@ -163,7 +165,7 @@ impl Checkout {
     ///
     /// # Errors
     /// Returns categorized preflight, conflict, or Git failures.
-    pub fn merge_from_base(
+    pub(crate) fn merge_from_base(
         &self,
         cwd: &str,
         base_ref: Option<&str>,
@@ -177,7 +179,7 @@ impl Checkout {
     ///
     /// # Errors
     /// Returns categorized local Git and remote failures.
-    pub fn reset_workspace(
+    pub(crate) fn reset_workspace(
         &self,
         cwd: &str,
         workspace_id: &str,
@@ -230,7 +232,7 @@ impl Checkout {
     ///
     /// # Errors
     /// Returns categorized remote, conflict, or Git failures.
-    pub fn pull(&self, cwd: &str) -> Result<(), CheckoutRuntimeError> {
+    pub(crate) fn pull(&self, cwd: &str) -> Result<(), CheckoutRuntimeError> {
         self.runtime.pull(cwd)
     }
 
@@ -238,7 +240,7 @@ impl Checkout {
     ///
     /// # Errors
     /// Returns categorized remote or Git failures.
-    pub fn push(&self, cwd: &str) -> Result<(), CheckoutRuntimeError> {
+    pub(crate) fn push(&self, cwd: &str) -> Result<(), CheckoutRuntimeError> {
         self.runtime.push(cwd)
     }
 
@@ -246,7 +248,11 @@ impl Checkout {
     ///
     /// # Errors
     /// Returns categorized path or Git failures.
-    pub fn discard_changes(&self, cwd: &str, paths: &[String]) -> Result<(), CheckoutRuntimeError> {
+    pub(crate) fn discard_changes(
+        &self,
+        cwd: &str,
+        paths: &[String],
+    ) -> Result<(), CheckoutRuntimeError> {
         self.runtime.discard_changes(cwd, paths)
     }
 
@@ -254,7 +260,11 @@ impl Checkout {
     ///
     /// # Errors
     /// Returns categorized Git failures.
-    pub fn stash_save(&self, cwd: &str, branch: Option<&str>) -> Result<(), CheckoutRuntimeError> {
+    pub(crate) fn stash_save(
+        &self,
+        cwd: &str,
+        branch: Option<&str>,
+    ) -> Result<(), CheckoutRuntimeError> {
         self.runtime.stash_save(cwd, branch)
     }
 
@@ -262,7 +272,7 @@ impl Checkout {
     ///
     /// # Errors
     /// Returns categorized conflict or Git failures.
-    pub fn stash_pop(&self, cwd: &str, index: usize) -> Result<(), CheckoutRuntimeError> {
+    pub(crate) fn stash_pop(&self, cwd: &str, index: usize) -> Result<(), CheckoutRuntimeError> {
         self.runtime.stash_pop(cwd, index)
     }
 
@@ -270,7 +280,7 @@ impl Checkout {
     ///
     /// # Errors
     /// Returns categorized Git failures.
-    pub fn stashes(
+    pub(crate) fn stashes(
         &self,
         cwd: &str,
         paseo_only: bool,

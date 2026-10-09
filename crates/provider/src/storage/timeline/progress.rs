@@ -10,7 +10,7 @@ impl Timeline {
     /// Text items are additive deltas; tool items are bounded running snapshots.
     /// # Errors
     /// Returns changed replay, already completed item, oversized data or storage failures.
-    pub fn progress(
+    pub(crate) fn progress(
         &self,
         agent: &str,
         provider: &str,

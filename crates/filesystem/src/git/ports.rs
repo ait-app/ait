@@ -1,4 +1,4 @@
 //! Blocking adapter boundaries.
 
-pub mod checkout;
-pub mod git_fetch;
+pub(crate) mod checkout;
+pub(crate) mod git_fetch;

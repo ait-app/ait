@@ -9,7 +9,7 @@ use model::storage::push::TokenStore;
 use serde_json::{Value, json};
 
 /// Paseo renews push subscriptions for forty-eight hours.
-pub const LEASE_MS: i64 = 48 * 60 * 60 * 1000;
+const LEASE_MS: i64 = 48 * 60 * 60 * 1000;
 const MAX_TOKENS: usize = 4096;
 
 /// Process-wide token leases. Debug output deliberately excludes token contents.
@@ -75,7 +75,7 @@ impl PushTokens {
     /// Renew a nonblank token; avoid writes while more than half of its lease remains.
     /// # Errors
     /// Returns invalid-input, capacity or storage errors; failed writes leave memory unchanged.
-    pub fn renew(&mut self, token: &str, now_ms: i64) -> Result<(), PushError> {
+    pub(crate) fn renew(&mut self, token: &str, now_ms: i64) -> Result<(), PushError> {
         let token = token.trim();
         if token.is_empty() {
             return Ok(());
@@ -102,7 +102,7 @@ impl PushTokens {
     /// Revoke a token idempotently, committing before removing it from memory.
     /// # Errors
     /// Returns storage errors without changing the active subscriptions.
-    pub fn revoke(&mut self, token: &str) -> Result<(), PushError> {
+    pub(crate) fn revoke(&mut self, token: &str) -> Result<(), PushError> {
         let token = token.trim();
         if !self.subscriptions.contains_key(token) {
             return Ok(());
@@ -113,8 +113,9 @@ impl PushTokens {
     }
 
     /// Return unexpired delivery targets; failed pruning never makes expired leases active.
+    #[cfg(test)]
     #[must_use]
-    pub fn active(&mut self, now_ms: i64) -> Vec<String> {
+    fn active(&mut self, now_ms: i64) -> Vec<String> {
         let active: BTreeMap<_, _> = self
             .subscriptions
             .iter()

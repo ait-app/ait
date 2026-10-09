@@ -4,15 +4,15 @@ use serde::{Deserialize, Serialize};
 
 /// A checkout-scoped request.
 #[derive(Debug, Clone, PartialEq, Eq, Deserialize)]
-pub struct CheckoutPathRequest {
+pub(crate) struct CheckoutPathRequest {
     /// Directory inside the checkout.
-    pub cwd: String,
+    pub(crate) cwd: String,
 }
 
 /// Stable Paseo checkout error categories.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
 #[serde(rename_all = "SCREAMING_SNAKE_CASE")]
-pub enum CheckoutErrorCode {
+pub(crate) enum CheckoutErrorCode {
     /// The directory is not in a Git repository.
     NotGitRepo,
     /// The requested read is outside the allowed checkout boundary.
@@ -25,16 +25,16 @@ pub enum CheckoutErrorCode {
 
 /// Inline checkout error used by Paseo responses and updates.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
-pub struct CheckoutError {
+pub(crate) struct CheckoutError {
     /// Stable machine-readable category.
-    pub code: CheckoutErrorCode,
+    pub(crate) code: CheckoutErrorCode,
     /// Human-readable local diagnostic.
-    pub message: String,
+    pub(crate) message: String,
 }
 
 /// Ahead/behind counts for one comparison ref.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
-pub struct AheadBehind {
+pub(crate) struct AheadBehind {
     /// Commits reachable only from the checkout.
     pub ahead: u64,
     /// Commits reachable only from the comparison ref.
@@ -44,52 +44,52 @@ pub struct AheadBehind {
 /// Workspace action facts compared with the same-named remote branch.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
 #[serde(rename_all = "camelCase")]
-pub struct CheckoutBranchStatus {
+pub(crate) struct CheckoutBranchStatus {
     /// Current commit, absent before the first commit.
-    pub head_sha: Option<String>,
+    pub(crate) head_sha: Option<String>,
     /// Whether merge conflicts remain unresolved.
-    pub has_conflicts: bool,
+    pub(crate) has_conflicts: bool,
     /// Same-named remote-tracking ref, absent when not present.
-    pub remote_ref: Option<String>,
+    pub(crate) remote_ref: Option<String>,
     /// Counts against that ref, absent without a remote branch.
-    pub ahead_behind: Option<AheadBehind>,
+    pub(crate) ahead_behind: Option<AheadBehind>,
 }
 
 /// Checkout status response, including the non-Git null projection.
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub struct CheckoutStatusResult {
+pub(crate) struct CheckoutStatusResult {
     /// Echoed request directory.
-    pub cwd: String,
+    pub(crate) cwd: String,
     /// Whether Git metadata was found.
-    pub is_git: bool,
+    pub(crate) is_git: bool,
     /// Checkout root, or null outside Git.
-    pub repo_root: Option<String>,
+    pub(crate) repo_root: Option<String>,
     /// Main repository root for linked worktrees.
-    pub main_repo_root: Option<String>,
+    pub(crate) main_repo_root: Option<String>,
     /// Current local branch, or null for detached HEAD/non-Git.
-    pub current_branch: Option<String>,
+    pub(crate) current_branch: Option<String>,
     /// Working tree dirtiness, or null outside Git.
-    pub is_dirty: Option<bool>,
+    pub(crate) is_dirty: Option<bool>,
     /// Additional facts for workspace actions.
-    pub branch_status: Option<CheckoutBranchStatus>,
+    pub(crate) branch_status: Option<CheckoutBranchStatus>,
     /// Comparison base display name.
-    pub base_ref: Option<String>,
+    pub(crate) base_ref: Option<String>,
     /// Counts against the comparison base.
-    pub ahead_behind: Option<AheadBehind>,
+    pub(crate) ahead_behind: Option<AheadBehind>,
     /// Exact upstream ref resolved by Git.
-    pub upstream_ref: Option<String>,
+    pub(crate) upstream_ref: Option<String>,
     /// Commits ahead of the exact upstream.
-    pub ahead_of_origin: Option<u64>,
+    pub(crate) ahead_of_origin: Option<u64>,
     /// Commits behind the exact upstream.
-    pub behind_of_origin: Option<u64>,
+    pub(crate) behind_of_origin: Option<u64>,
     /// Whether any remote is configured.
-    pub has_remote: bool,
+    pub(crate) has_remote: bool,
     /// Preferred remote URL.
-    pub remote_url: Option<String>,
+    pub(crate) remote_url: Option<String>,
     /// Whether the checkout is below the independent server's managed worktree root.
-    pub is_paseo_owned_worktree: bool,
+    pub(crate) is_paseo_owned_worktree: bool,
     /// Inline read error.
-    pub error: Option<CheckoutError>,
+    pub(crate) error: Option<CheckoutError>,
 }
 
 impl Serialize for CheckoutStatusResult {
@@ -125,19 +125,19 @@ impl Serialize for CheckoutStatusResult {
 /// Checkout refresh result.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
 #[serde(rename_all = "camelCase")]
-pub struct CheckoutRefreshResult {
+pub(crate) struct CheckoutRefreshResult {
     /// Echoed request directory.
-    pub cwd: String,
+    pub(crate) cwd: String,
     /// Whether the forced read completed.
-    pub success: bool,
+    pub(crate) success: bool,
     /// Inline error.
-    pub error: Option<CheckoutError>,
+    pub(crate) error: Option<CheckoutError>,
 }
 
 /// Diff comparison mode.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Deserialize, Serialize)]
 #[serde(rename_all = "snake_case")]
-pub enum CheckoutDiffMode {
+pub(crate) enum CheckoutDiffMode {
     /// Staged, unstaged, and untracked changes against HEAD.
     Uncommitted,
     /// Committed branch changes against a merge base.
@@ -147,60 +147,60 @@ pub enum CheckoutDiffMode {
 /// Diff comparison options.
 #[derive(Debug, Clone, PartialEq, Eq, Deserialize, Serialize)]
 #[serde(rename_all = "camelCase")]
-pub struct CheckoutDiffCompare {
+pub(crate) struct CheckoutDiffCompare {
     /// Comparison mode.
-    pub mode: CheckoutDiffMode,
+    pub(crate) mode: CheckoutDiffMode,
     /// Explicit base ref for base mode.
     #[serde(default)]
-    pub base_ref: Option<String>,
+    pub(crate) base_ref: Option<String>,
     /// Ignore whitespace-only changes.
     #[serde(default)]
-    pub ignore_whitespace: bool,
+    pub(crate) ignore_whitespace: bool,
 }
 
 /// One-shot checkout diff request.
 #[derive(Debug, Clone, PartialEq, Eq, Deserialize)]
-pub struct CheckoutDiffGetRequest {
+pub(crate) struct CheckoutDiffGetRequest {
     /// Directory inside the checkout.
-    pub cwd: String,
+    pub(crate) cwd: String,
     /// Comparison options.
-    pub compare: CheckoutDiffCompare,
+    pub(crate) compare: CheckoutDiffCompare,
 }
 
 /// Connection-owned checkout diff subscription request.
 #[derive(Debug, Clone, PartialEq, Eq, Deserialize)]
 #[serde(rename_all = "camelCase")]
-pub struct CheckoutDiffSubscribeRequest {
+pub(crate) struct CheckoutDiffSubscribeRequest {
     /// Optional caller-selected connection-local identity.
     #[serde(default)]
-    pub subscription_id: Option<String>,
+    pub(crate) subscription_id: Option<String>,
     /// Directory inside the checkout.
-    pub cwd: String,
+    pub(crate) cwd: String,
     /// Comparison options.
-    pub compare: CheckoutDiffCompare,
+    pub(crate) compare: CheckoutDiffCompare,
 }
 
 /// Explicit checkout diff unsubscribe request.
 #[derive(Debug, Clone, PartialEq, Eq, Deserialize)]
 #[serde(rename_all = "camelCase")]
-pub struct CheckoutDiffUnsubscribeRequest {
+pub(crate) struct CheckoutDiffUnsubscribeRequest {
     /// Connection-local subscription identity.
-    pub subscription_id: String,
+    pub(crate) subscription_id: String,
 }
 
 /// Theme-independent syntax-highlight token produced by the checkout adapter.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
-pub struct HighlightToken {
+pub(crate) struct HighlightToken {
     /// Source text.
-    pub text: String,
+    pub(crate) text: String,
     /// Optional renderer class.
-    pub style: Option<String>,
+    pub(crate) style: Option<String>,
 }
 
 /// Unified diff line category.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
 #[serde(rename_all = "snake_case")]
-pub enum DiffLineKind {
+pub(crate) enum DiffLineKind {
     /// Added content.
     Add,
     /// Removed content.
@@ -213,39 +213,37 @@ pub enum DiffLineKind {
 
 /// One structured diff line.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
-pub struct DiffLine {
+pub(crate) struct DiffLine {
     /// Line category.
     #[serde(rename = "type")]
-    pub kind: DiffLineKind,
+    pub(crate) kind: DiffLineKind,
     /// Content without the unified-diff prefix.
-    pub content: String,
+    pub(crate) content: String,
     /// Optional syntax-highlight tokens.
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub tokens: Option<Vec<HighlightToken>>,
+    pub(crate) tokens: Option<Vec<HighlightToken>>,
 }
 
 /// One unified diff hunk.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
 #[serde(rename_all = "camelCase")]
-pub struct DiffHunk {
+pub(crate) struct DiffHunk {
     /// First old-file line.
-    pub old_start: u64,
+    pub(crate) old_start: u64,
     /// Old-file line count.
-    pub old_count: u64,
+    pub(crate) old_count: u64,
     /// First new-file line.
-    pub new_start: u64,
+    pub(crate) new_start: u64,
     /// New-file line count.
-    pub new_count: u64,
+    pub(crate) new_count: u64,
     /// Header and body lines.
-    pub lines: Vec<DiffLine>,
+    pub(crate) lines: Vec<DiffLine>,
 }
 
 /// Structured diff placeholder/status.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
 #[serde(rename_all = "snake_case")]
-pub enum ParsedDiffStatus {
-    /// Textual diff is present.
-    Ok,
+pub(crate) enum ParsedDiffStatus {
     /// The file exceeded a configured diff budget.
     TooLarge,
     /// The file is binary.
@@ -255,63 +253,63 @@ pub enum ParsedDiffStatus {
 /// Structured file diff used by live diff and commit history.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
 #[serde(rename_all = "camelCase")]
-pub struct ParsedDiffFile {
+pub(crate) struct ParsedDiffFile {
     /// Destination path.
-    pub path: String,
+    pub(crate) path: String,
     /// Source path for a rename.
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub old_path: Option<String>,
+    pub(crate) old_path: Option<String>,
     /// Whether the destination is new.
-    pub is_new: bool,
+    pub(crate) is_new: bool,
     /// Whether the file was deleted.
-    pub is_deleted: bool,
+    pub(crate) is_deleted: bool,
     /// Added line count.
-    pub additions: u64,
+    pub(crate) additions: u64,
     /// Removed line count.
-    pub deletions: u64,
+    pub(crate) deletions: u64,
     /// Parsed hunks.
-    pub hunks: Vec<DiffHunk>,
+    pub(crate) hunks: Vec<DiffHunk>,
     /// Optional status; omitted for ordinary Paseo-compatible text diffs.
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub status: Option<ParsedDiffStatus>,
+    pub(crate) status: Option<ParsedDiffStatus>,
 }
 
 /// One-shot diff result and live-update body.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
 #[serde(rename_all = "camelCase")]
-pub struct CheckoutDiffResult {
+pub(crate) struct CheckoutDiffResult {
     /// Directory from the subscription/request.
-    pub cwd: String,
+    pub(crate) cwd: String,
     /// Path-sorted file diffs.
-    pub files: Vec<ParsedDiffFile>,
+    pub(crate) files: Vec<ParsedDiffFile>,
     /// Inline error.
-    pub error: Option<CheckoutError>,
+    pub(crate) error: Option<CheckoutError>,
     /// True when the total diff was not safe to return.
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub diff_too_large: Option<bool>,
+    pub(crate) diff_too_large: Option<bool>,
 }
 
 /// Initial diff subscription result.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
 #[serde(rename_all = "camelCase")]
-pub struct CheckoutDiffSubscriptionResult {
+pub(crate) struct CheckoutDiffSubscriptionResult {
     /// Connection-local subscription identity.
-    pub subscription_id: String,
+    pub(crate) subscription_id: String,
     /// Directory from the request.
-    pub cwd: String,
+    pub(crate) cwd: String,
     /// Initial files.
-    pub files: Vec<ParsedDiffFile>,
+    pub(crate) files: Vec<ParsedDiffFile>,
     /// Inline error.
-    pub error: Option<CheckoutError>,
+    pub(crate) error: Option<CheckoutError>,
     /// True when the total diff was not safe to return.
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub diff_too_large: Option<bool>,
+    pub(crate) diff_too_large: Option<bool>,
 }
 
 /// Git commit file status.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
 #[serde(rename_all = "snake_case")]
-pub enum CheckoutCommitFileStatus {
+pub(crate) enum CheckoutCommitFileStatus {
     /// Added file.
     Added,
     /// Modified or type-changed file.
@@ -324,163 +322,163 @@ pub enum CheckoutCommitFileStatus {
 
 /// Per-file commit statistics.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
-pub struct CheckoutCommitFile {
+pub(crate) struct CheckoutCommitFile {
     /// Destination path.
-    pub path: String,
+    pub(crate) path: String,
     /// Added lines; binary files use zero.
-    pub additions: u64,
+    pub(crate) additions: u64,
     /// Removed lines; binary files use zero.
-    pub deletions: u64,
+    pub(crate) deletions: u64,
     /// Optional status when Git supplies one.
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub status: Option<CheckoutCommitFileStatus>,
+    pub(crate) status: Option<CheckoutCommitFileStatus>,
 }
 
 /// One checkout history commit.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
 #[serde(rename_all = "camelCase")]
-pub struct CheckoutCommit {
+pub(crate) struct CheckoutCommit {
     /// Full object identity.
-    pub sha: String,
+    pub(crate) sha: String,
     /// Abbreviated object identity.
-    pub short_sha: String,
+    pub(crate) short_sha: String,
     /// First-line subject.
-    pub subject: String,
+    pub(crate) subject: String,
     /// Git author display name.
-    pub author_name: String,
+    pub(crate) author_name: String,
     /// ISO 8601 author timestamp.
-    pub author_date: String,
+    pub(crate) author_date: String,
     /// False when reachable from no remote ref.
-    pub is_on_remote: bool,
+    pub(crate) is_on_remote: bool,
     /// True for bounded base-history context.
-    pub is_on_base: bool,
+    pub(crate) is_on_base: bool,
     /// Changed files.
-    pub files: Vec<CheckoutCommitFile>,
+    pub(crate) files: Vec<CheckoutCommitFile>,
 }
 
 /// Checkout commit-list result.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
 #[serde(rename_all = "camelCase")]
-pub struct CheckoutCommitsListResult {
+pub(crate) struct CheckoutCommitsListResult {
     /// Echoed request directory.
-    pub cwd: String,
+    pub(crate) cwd: String,
     /// Resolved comparison ref.
-    pub base_ref: Option<String>,
+    pub(crate) base_ref: Option<String>,
     /// Workspace commits followed by up to ten base-context commits.
-    pub commits: Vec<CheckoutCommit>,
+    pub(crate) commits: Vec<CheckoutCommit>,
     /// Inline error.
-    pub error: Option<CheckoutError>,
+    pub(crate) error: Option<CheckoutError>,
 }
 
 /// Single-file commit diff request.
 #[derive(Debug, Clone, PartialEq, Eq, Deserialize)]
-pub struct CheckoutCommitFileDiffRequest {
+pub(crate) struct CheckoutCommitFileDiffRequest {
     /// Directory inside the checkout.
-    pub cwd: String,
+    pub(crate) cwd: String,
     /// Commit-ish to inspect.
-    pub sha: String,
+    pub(crate) sha: String,
     /// Safe repository-relative path.
-    pub path: String,
+    pub(crate) path: String,
 }
 
 /// Single-file commit diff result.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
-pub struct CheckoutCommitFileDiffResult {
+pub(crate) struct CheckoutCommitFileDiffResult {
     /// Echoed request directory.
-    pub cwd: String,
+    pub(crate) cwd: String,
     /// Echoed commit-ish.
-    pub sha: String,
+    pub(crate) sha: String,
     /// Echoed relative path.
-    pub path: String,
+    pub(crate) path: String,
     /// Textual diff, or null for missing/binary content.
-    pub file: Option<ParsedDiffFile>,
+    pub(crate) file: Option<ParsedDiffFile>,
     /// Inline error.
-    pub error: Option<CheckoutError>,
+    pub(crate) error: Option<CheckoutError>,
 }
 
 /// Branch existence request.
 #[derive(Debug, Clone, PartialEq, Eq, Deserialize)]
 #[serde(rename_all = "camelCase")]
-pub struct CheckoutBranchValidateRequest {
+pub(crate) struct CheckoutBranchValidateRequest {
     /// Directory inside the checkout.
-    pub cwd: String,
+    pub(crate) cwd: String,
     /// Local name or origin-qualified name to resolve.
-    pub branch_name: String,
+    pub(crate) branch_name: String,
 }
 
 /// Branch existence result. Paseo uses a plain string error for this query.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
 #[serde(rename_all = "camelCase")]
-pub struct CheckoutBranchValidateResult {
+pub(crate) struct CheckoutBranchValidateResult {
     /// Whether the branch exists locally or on origin.
-    pub exists: bool,
+    pub(crate) exists: bool,
     /// Normalized local branch name.
-    pub resolved_ref: Option<String>,
+    pub(crate) resolved_ref: Option<String>,
     /// Whether only the origin tracking ref exists.
-    pub is_remote: bool,
+    pub(crate) is_remote: bool,
     /// Inline validation or Git error.
-    pub error: Option<String>,
+    pub(crate) error: Option<String>,
 }
 
 /// Branch suggestion request.
 #[derive(Debug, Clone, PartialEq, Eq, Deserialize)]
-pub struct CheckoutBranchSuggestionsRequest {
+pub(crate) struct CheckoutBranchSuggestionsRequest {
     /// Directory inside the checkout.
-    pub cwd: String,
+    pub(crate) cwd: String,
     /// Optional case-insensitive substring query.
     #[serde(default)]
-    pub query: Option<String>,
+    pub(crate) query: Option<String>,
     /// Optional result limit in the inclusive range 1..=200.
     #[serde(default)]
-    pub limit: Option<usize>,
+    pub(crate) limit: Option<usize>,
 }
 
 /// One branch suggestion and its local/origin state.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
 #[serde(rename_all = "camelCase")]
-pub struct CheckoutBranchSuggestion {
+pub(crate) struct CheckoutBranchSuggestion {
     /// Normalized local branch name.
-    pub name: String,
+    pub(crate) name: String,
     /// Committer timestamp in Unix seconds.
-    pub committer_date: i64,
+    pub(crate) committer_date: i64,
     /// Whether a local branch exists.
-    pub has_local: bool,
+    pub(crate) has_local: bool,
     /// Whether an origin tracking ref exists.
-    pub has_remote: bool,
+    pub(crate) has_remote: bool,
     /// Commits present only on the local branch.
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub local_ahead: Option<u64>,
+    pub(crate) local_ahead: Option<u64>,
     /// Commits present only on the origin tracking ref.
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub local_behind: Option<u64>,
+    pub(crate) local_behind: Option<u64>,
 }
 
 /// Branch suggestions result. Paseo uses a plain string error for this query.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
 #[serde(rename_all = "camelCase")]
-pub struct CheckoutBranchSuggestionsResult {
+pub(crate) struct CheckoutBranchSuggestionsResult {
     /// Ordered branch names retained for compatibility.
-    pub branches: Vec<String>,
+    pub(crate) branches: Vec<String>,
     /// Ordered branch details.
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub branch_details: Option<Vec<CheckoutBranchSuggestion>>,
+    pub(crate) branch_details: Option<Vec<CheckoutBranchSuggestion>>,
     /// Inline Git error.
-    pub error: Option<String>,
+    pub(crate) error: Option<String>,
 }
 
 /// Existing-branch checkout request.
 #[derive(Debug, Clone, PartialEq, Eq, Deserialize)]
-pub struct CheckoutBranchSwitchRequest {
+pub(crate) struct CheckoutBranchSwitchRequest {
     /// Directory inside the checkout.
-    pub cwd: String,
+    pub(crate) cwd: String,
     /// Existing local or origin branch.
-    pub branch: String,
+    pub(crate) branch: String,
 }
 
 /// Existing-branch checkout source.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
 #[serde(rename_all = "lowercase")]
-pub enum CheckoutBranchSource {
+pub(crate) enum CheckoutBranchSource {
     /// Existing local branch.
     Local,
     /// Origin-only branch materialized locally.
@@ -490,61 +488,61 @@ pub enum CheckoutBranchSource {
 /// Existing-branch checkout result.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
 #[serde(rename_all = "camelCase")]
-pub struct CheckoutBranchSwitchResult {
+pub(crate) struct CheckoutBranchSwitchResult {
     /// Echoed request directory.
-    pub cwd: String,
+    pub(crate) cwd: String,
     /// Whether checkout completed.
-    pub success: bool,
+    pub(crate) success: bool,
     /// Echoed requested branch.
-    pub branch: String,
+    pub(crate) branch: String,
     /// Resolution source on success.
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub source: Option<CheckoutBranchSource>,
+    pub(crate) source: Option<CheckoutBranchSource>,
     /// Inline checkout error.
-    pub error: Option<CheckoutError>,
+    pub(crate) error: Option<CheckoutError>,
 }
 
 /// Current-branch rename request.
 #[derive(Debug, Clone, PartialEq, Eq, Deserialize)]
-pub struct CheckoutBranchRenameRequest {
+pub(crate) struct CheckoutBranchRenameRequest {
     /// Directory inside the checkout.
-    pub cwd: String,
+    pub(crate) cwd: String,
     /// New local branch name.
-    pub branch: String,
+    pub(crate) branch: String,
 }
 
 /// Current-branch rename result.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
 #[serde(rename_all = "camelCase")]
-pub struct CheckoutBranchRenameResult {
+pub(crate) struct CheckoutBranchRenameResult {
     /// Whether rename completed.
-    pub success: bool,
+    pub(crate) success: bool,
     /// Echoed request directory.
-    pub cwd: String,
+    pub(crate) cwd: String,
     /// Renamed branch on success.
-    pub current_branch: Option<String>,
+    pub(crate) current_branch: Option<String>,
     /// Inline checkout error.
-    pub error: Option<CheckoutError>,
+    pub(crate) error: Option<CheckoutError>,
 }
 
 /// Commit request.
 #[derive(Debug, Clone, PartialEq, Eq, Deserialize)]
 #[serde(rename_all = "camelCase")]
-pub struct CheckoutCommitRequest {
+pub(crate) struct CheckoutCommitRequest {
     /// Directory inside the checkout.
-    pub cwd: String,
+    pub(crate) cwd: String,
     /// Explicit commit message.
     #[serde(default)]
-    pub message: Option<String>,
+    pub(crate) message: Option<String>,
     /// Whether all changes should be staged first. Defaults to true.
     #[serde(default)]
-    pub add_all: Option<bool>,
+    pub(crate) add_all: Option<bool>,
 }
 
 /// Merge strategy for merging the current branch into its base.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Deserialize)]
 #[serde(rename_all = "lowercase")]
-pub enum CheckoutMergeStrategy {
+pub(crate) enum CheckoutMergeStrategy {
     /// Ordinary Git merge.
     Merge,
     /// Squash and commit the resulting tree.
@@ -554,120 +552,120 @@ pub enum CheckoutMergeStrategy {
 /// Merge-current-branch-to-base request.
 #[derive(Debug, Clone, PartialEq, Eq, Deserialize)]
 #[serde(rename_all = "camelCase")]
-pub struct CheckoutMergeRequest {
+pub(crate) struct CheckoutMergeRequest {
     /// Directory inside the current feature checkout.
-    pub cwd: String,
+    pub(crate) cwd: String,
     /// Optional base branch override.
     #[serde(default)]
-    pub base_ref: Option<String>,
+    pub(crate) base_ref: Option<String>,
     /// Merge strategy. Defaults to merge.
     #[serde(default)]
-    pub strategy: Option<CheckoutMergeStrategy>,
+    pub(crate) strategy: Option<CheckoutMergeStrategy>,
     /// Require the request checkout to be clean before operating.
     #[serde(default)]
-    pub require_clean_target: Option<bool>,
+    pub(crate) require_clean_target: Option<bool>,
 }
 
 /// Merge-base-into-current-branch request.
 #[derive(Debug, Clone, PartialEq, Eq, Deserialize)]
 #[serde(rename_all = "camelCase")]
-pub struct CheckoutMergeFromBaseRequest {
+pub(crate) struct CheckoutMergeFromBaseRequest {
     /// Directory inside the current feature checkout.
-    pub cwd: String,
+    pub(crate) cwd: String,
     /// Optional base branch override.
     #[serde(default)]
-    pub base_ref: Option<String>,
+    pub(crate) base_ref: Option<String>,
     /// Require a clean current checkout. Defaults to true.
     #[serde(default)]
-    pub require_clean_target: Option<bool>,
+    pub(crate) require_clean_target: Option<bool>,
 }
 
 /// Managed-workspace reset request.
 #[derive(Debug, Clone, PartialEq, Eq, Deserialize)]
 #[serde(rename_all = "camelCase")]
-pub struct CheckoutResetWorkspaceRequest {
+pub(crate) struct CheckoutResetWorkspaceRequest {
     /// Directory inside the managed worktree.
-    pub cwd: String,
+    pub(crate) cwd: String,
     /// Durable workspace identity.
-    pub workspace_id: String,
+    pub(crate) workspace_id: String,
     /// Branch name saved when the workspace was created.
-    pub initial_branch: String,
+    pub(crate) initial_branch: String,
 }
 
 /// Path-scoped discard request.
 #[derive(Debug, Clone, PartialEq, Eq, Deserialize)]
-pub struct CheckoutDiscardChangesRequest {
+pub(crate) struct CheckoutDiscardChangesRequest {
     /// Directory inside the checkout.
-    pub cwd: String,
+    pub(crate) cwd: String,
     /// Literal repository-relative paths to restore/remove.
-    pub paths: Vec<String>,
+    pub(crate) paths: Vec<String>,
 }
 
 /// Paseo stash save request.
 #[derive(Debug, Clone, PartialEq, Eq, Deserialize)]
-pub struct CheckoutStashSaveRequest {
+pub(crate) struct CheckoutStashSaveRequest {
     /// Directory inside the checkout.
-    pub cwd: String,
+    pub(crate) cwd: String,
     /// Optional branch label embedded in the stash message.
     #[serde(default)]
-    pub branch: Option<String>,
+    pub(crate) branch: Option<String>,
 }
 
 /// Paseo stash pop request.
 #[derive(Debug, Clone, PartialEq, Eq, Deserialize)]
 #[serde(rename_all = "camelCase")]
-pub struct CheckoutStashPopRequest {
+pub(crate) struct CheckoutStashPopRequest {
     /// Directory inside the checkout.
-    pub cwd: String,
+    pub(crate) cwd: String,
     /// Zero-based stash index.
-    pub stash_index: usize,
+    pub(crate) stash_index: usize,
 }
 
 /// Paseo stash list request.
 #[derive(Debug, Clone, PartialEq, Eq, Deserialize)]
 #[serde(rename_all = "camelCase")]
-pub struct CheckoutStashListRequest {
+pub(crate) struct CheckoutStashListRequest {
     /// Directory inside the checkout.
-    pub cwd: String,
+    pub(crate) cwd: String,
     /// Return only Ait-created stashes; wire name retained for compatibility. Defaults to true.
     #[serde(default)]
-    pub paseo_only: Option<bool>,
+    pub(crate) paseo_only: Option<bool>,
 }
 
 /// One stash entry.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
 #[serde(rename_all = "camelCase")]
-pub struct CheckoutStashEntry {
+pub(crate) struct CheckoutStashEntry {
     /// Zero-based stash index.
-    pub index: usize,
+    pub(crate) index: usize,
     /// Full Git stash subject.
-    pub message: String,
+    pub(crate) message: String,
     /// Ait auto-stash branch label, when present.
-    pub branch: Option<String>,
+    pub(crate) branch: Option<String>,
     /// Whether the stash uses the Ait prefix; wire name retained for compatibility.
-    pub is_paseo: bool,
+    pub(crate) is_paseo: bool,
 }
 
 /// Stash list result.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
-pub struct CheckoutStashListResult {
+pub(crate) struct CheckoutStashListResult {
     /// Echoed request directory.
-    pub cwd: String,
+    pub(crate) cwd: String,
     /// Filtered stash entries.
-    pub entries: Vec<CheckoutStashEntry>,
+    pub(crate) entries: Vec<CheckoutStashEntry>,
     /// Inline checkout error.
-    pub error: Option<CheckoutError>,
+    pub(crate) error: Option<CheckoutError>,
 }
 
 /// Shared result shape for checkout mutations without extra result fields.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
-pub struct CheckoutMutationResult {
+pub(crate) struct CheckoutMutationResult {
     /// Echoed request directory.
-    pub cwd: String,
+    pub(crate) cwd: String,
     /// Whether the mutation completed.
-    pub success: bool,
+    pub(crate) success: bool,
     /// Inline checkout error.
-    pub error: Option<CheckoutError>,
+    pub(crate) error: Option<CheckoutError>,
 }
 
 #[cfg(test)]

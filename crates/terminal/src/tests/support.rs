@@ -17,9 +17,9 @@ use crate::service::Terminals;
 
 #[derive(Debug, Clone)]
 pub(crate) struct Registries {
-    pub workspaces: Arc<Mutex<Vec<PersistedWorkspaceRecord>>>,
-    pub projects: Arc<Mutex<Vec<PersistedProjectRecord>>>,
-    pub failure: Arc<Mutex<bool>>,
+    pub(crate) workspaces: Arc<Mutex<Vec<PersistedWorkspaceRecord>>>,
+    pub(crate) projects: Arc<Mutex<Vec<PersistedProjectRecord>>>,
+    pub(crate) failure: Arc<Mutex<bool>>,
 }
 
 impl Default for Registries {
@@ -147,15 +147,15 @@ impl WorkspaceRegistry for Registries {
 
 #[derive(Debug, Default)]
 pub(crate) struct Calls {
-    pub launches: Vec<Launch>,
-    pub inputs: Vec<String>,
-    pub killed: usize,
-    pub exited: bool,
-    pub failure: bool,
-    pub send_failure: bool,
-    pub title: Option<String>,
-    pub observation: Option<Observation>,
-    pub observe_error: Option<Error>,
+    pub(crate) launches: Vec<Launch>,
+    pub(crate) inputs: Vec<String>,
+    pub(crate) killed: usize,
+    pub(crate) exited: bool,
+    pub(crate) failure: bool,
+    pub(crate) send_failure: bool,
+    pub(crate) title: Option<String>,
+    pub(crate) observation: Option<Observation>,
+    pub(crate) observe_error: Option<Error>,
 }
 
 #[derive(Debug)]

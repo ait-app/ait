@@ -18,8 +18,9 @@ use model::methods::MethodSpec;
 use serde::Serialize;
 use serde_json::Value;
 
+use crate::forge::ports::forge as port;
 use crate::forge::protocol::forge as protocol;
-use crate::forge::service::forge::{self as port, Forge};
+use crate::forge::service::forge::Forge;
 use crate::git::protocol::checkout::{CheckoutError, CheckoutErrorCode};
 use crate::support::error::ErrorCode;
 
@@ -27,7 +28,7 @@ use crate::support::error::ErrorCode;
 ///
 /// # Errors
 /// Rejects invalid parameters, unknown methods, or failed result encoding.
-pub fn execute(forge: &Forge, method: &str, params: Value) -> Result<Value, ErrorCode> {
+pub(crate) fn execute(forge: &Forge, method: &str, params: Value) -> Result<Value, ErrorCode> {
     match method {
         "forge.search.request" => search(forge, &decode(params)?, false),
         "github.search.request" => search(forge, &decode(params)?, true),
@@ -460,7 +461,6 @@ fn protocol_timeline_error(error: port::TimelineError) -> protocol::TimelineErro
         kind: match error.kind {
             port::TimelineErrorKind::NotFound => protocol::TimelineErrorKind::NotFound,
             port::TimelineErrorKind::Forbidden => protocol::TimelineErrorKind::Forbidden,
-            port::TimelineErrorKind::Unknown => protocol::TimelineErrorKind::Unknown,
         },
         message: error.message,
     }

@@ -18,7 +18,11 @@ use serde_json::Value;
 use crate::dispatch::State as Shared;
 use crate::rpc::daemon;
 
-pub async fn dispatch(method: &str, params: Value, state: &Shared) -> Result<Value, ErrorCode> {
+pub(crate) async fn dispatch(
+    method: &str,
+    params: Value,
+    state: &Shared,
+) -> Result<Value, ErrorCode> {
     if let Some(request) = daemon::lifecycle(method, &params)? {
         state.request_lifecycle(request.intent);
         return Ok(request.value);

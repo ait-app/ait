@@ -1,6 +1,7 @@
 use std::sync::{Arc, Mutex};
 
 use super::*;
+use crate::forge::ports::forge::ForgeAuthState;
 
 #[test]
 fn legacy_runtime_does_not_advertise_gitlab_without_implementing_it() {

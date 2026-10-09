@@ -82,7 +82,7 @@ pub struct EventsRequest {
 /// Source device declared by a connection heartbeat.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Deserialize)]
 #[serde(rename_all = "lowercase")]
-pub enum DeviceType {
+pub(crate) enum DeviceType {
     /// Browser or desktop web client.
     Web,
     /// Mobile client.
@@ -93,8 +93,12 @@ pub enum DeviceType {
 #[derive(Debug, Clone, Deserialize)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub struct Heartbeat {
-    /// Client device type.
-    pub device_type: DeviceType,
+    /// Client device type, validated for wire compatibility.
+    #[expect(
+        dead_code,
+        reason = "presence tracking does not distinguish device types"
+    )]
+    pub(crate) device_type: DeviceType,
     /// Currently focused Agent, or null.
     pub focused_agent_id: Option<String>,
     /// Currently focused terminal, or null for older clients.

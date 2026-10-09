@@ -7,22 +7,22 @@ use serde::Deserialize;
 #[serde(rename_all = "camelCase")]
 pub struct ChangeRequestCheckoutSource {
     /// Discriminator retained from Paseo's schema.
-    pub kind: ChangeRequestCheckoutKind,
+    kind: ChangeRequestCheckoutKind,
     /// Optional forge identifier.
     #[serde(default)]
-    pub forge: Option<String>,
+    forge: Option<String>,
     /// Positive change-request number.
     #[serde(deserialize_with = "positive_number")]
-    pub number: u64,
+    number: u64,
     /// Optional forge project path.
     #[serde(default)]
-    pub project_path: Option<String>,
+    project_path: Option<String>,
 }
 
 /// Checkout-source discriminator.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Deserialize)]
 #[serde(rename_all = "snake_case")]
-pub enum ChangeRequestCheckoutKind {
+enum ChangeRequestCheckoutKind {
     /// A pull or merge request.
     ChangeRequest,
 }

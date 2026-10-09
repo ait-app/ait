@@ -19,7 +19,7 @@ use crate::summary::{SummaryConfiguration, SummaryGenerator};
 
 /// Model-backed summary generator shared by all four wording use cases.
 #[derive(Debug)]
-pub struct Generation {
+pub(crate) struct Generation {
     config: Arc<dyn SummaryConfiguration>,
     clients: BTreeMap<String, Arc<dyn AgentClient>>,
     permits: Semaphore,
@@ -32,7 +32,10 @@ impl Generation {
     /// Use live `config` and registered `clients`, allowing two concurrent 90-second operations.
     /// Clients retain provider credentials in their native authentication stores.
     #[must_use]
-    pub fn new(config: Arc<dyn SummaryConfiguration>, clients: Vec<Arc<dyn AgentClient>>) -> Self {
+    pub(crate) fn new(
+        config: Arc<dyn SummaryConfiguration>,
+        clients: Vec<Arc<dyn AgentClient>>,
+    ) -> Self {
         Self {
             config,
             clients: clients

@@ -1,8 +1,9 @@
 use std::sync::{Arc, Mutex};
 use std::time::Duration;
 
+use crate::git::ports::checkout as port;
 use crate::git::rpc::checkout::DiffObservation;
-use crate::git::service::checkout::{self as port, Checkout};
+use crate::git::service::checkout::Checkout;
 use model::{ErrorCode, ServerMessage};
 use serde_json::Value;
 use tokio::sync::Semaphore;
@@ -15,12 +16,12 @@ use model::outbound::Outbound;
 
 const POLL_INTERVAL: Duration = Duration::from_millis(200);
 
-pub struct Dispatch {
-    pub value: Value,
-    pub subscription: Option<PendingSubscription>,
+pub(crate) struct Dispatch {
+    pub(crate) value: Value,
+    pub(crate) subscription: Option<PendingSubscription>,
 }
 
-pub struct PendingSubscription {
+pub(crate) struct PendingSubscription {
     observation: DiffObservation,
     service: Arc<Mutex<Checkout>>,
     jobs: Arc<Semaphore>,
@@ -30,7 +31,7 @@ pub struct PendingSubscription {
 }
 
 /// RAII owner for one connection-local diff polling task.
-pub struct CheckoutDiffSubscription {
+pub(crate) struct CheckoutDiffSubscription {
     cancellation: CancellationToken,
 }
 
@@ -41,7 +42,7 @@ impl Drop for CheckoutDiffSubscription {
 }
 
 impl PendingSubscription {
-    pub fn activate(self) -> (String, CheckoutDiffSubscription) {
+    pub(crate) fn activate(self) -> (String, CheckoutDiffSubscription) {
         let cancellation = CancellationToken::new();
         let task_cancellation = cancellation.clone();
         let subscription_id = self.observation.id().to_owned();
@@ -89,7 +90,7 @@ impl PendingSubscription {
     }
 }
 
-pub async fn dispatch(
+pub(crate) async fn dispatch(
     method: &str,
     params: Value,
     state: &Shared,

@@ -5,21 +5,20 @@ use domain::workspace::identity::parse_remote;
 use domain::workspace::records::PersistedProjectRecord;
 use model::workspace::lifecycle::ProjectRegistration;
 
-pub use crate::forge::ports::github_projects::{
+use crate::forge::ports::github_projects::{
     GithubCloneProtocol, GithubProjectsError, GithubProjectsRuntime, GithubRepository,
-    GithubRepositoryVisibility,
 };
 /// GitHub clone outcome, including a checkout left behind when registration fails.
 #[derive(Debug, Clone, PartialEq)]
-pub struct GithubCloneOutcome {
+pub(crate) struct GithubCloneOutcome {
     /// Normalized owner/repository path, or the original input when validation fails.
-    pub repo: String,
+    pub(crate) repo: String,
     /// Completed checkout path; present even if Project registration then fails.
-    pub checkout_path: Option<String>,
+    pub(crate) checkout_path: Option<String>,
     /// Registered Project after a successful clone.
-    pub project: Option<PersistedProjectRecord>,
+    pub(crate) project: Option<PersistedProjectRecord>,
     /// Safe business failure; no transport error is needed for an expected clone failure.
-    pub error: Option<String>,
+    pub(crate) error: Option<String>,
 }
 
 /// Coordinates GitHub provisioning and host-supplied Project registration.
@@ -45,7 +44,7 @@ impl GithubProjects {
     ///
     /// # Errors
     /// Returns CLI availability, authentication, command, or response failures.
-    pub fn search_github_repositories(
+    pub(crate) fn search_github_repositories(
         &self,
         query: &str,
         limit: usize,
@@ -58,7 +57,7 @@ impl GithubProjects {
     /// The checkout remains on disk if Project registration fails, matching Paseo's observable
     /// response with a non-null `checkoutPath` and null `project`.
     #[must_use]
-    pub fn clone_github_project(
+    pub(crate) fn clone_github_project(
         &self,
         repo: &str,
         protocol: Option<GithubCloneProtocol>,

@@ -84,6 +84,7 @@ non_upper_case_globals = "warn"     # 全局常量非全大写
 
 # 4. 严谨性（推荐在大型项目开启）
 unused_qualifications = "warn"      # 不必要的完全限定路径
+unreachable_pub = "warn"            # pub items not reachable from outside the crate
 unused_results = "allow"
 unused_import_braces = "warn"
 unused_extern_crates = "warn"

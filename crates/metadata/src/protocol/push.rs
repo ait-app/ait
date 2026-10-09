@@ -4,7 +4,7 @@ use serde::Deserialize;
 
 /// Token registration/revocation payload. Debug is omitted to prevent accidental disclosure.
 #[derive(Deserialize)]
-pub struct TokenRequest {
+pub(crate) struct TokenRequest {
     /// Opaque provider token; whitespace is normalized by the lease service.
-    pub token: String,
+    pub(crate) token: String,
 }

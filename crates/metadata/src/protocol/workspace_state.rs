@@ -5,7 +5,7 @@ use serde::{Deserialize, Serialize};
 /// One or several Workspace identities accepted by clear-attention.
 #[derive(Debug, Clone, PartialEq, Eq, Deserialize, Serialize)]
 #[serde(untagged)]
-pub enum WorkspaceIdSelection {
+pub(crate) enum WorkspaceIdSelection {
     /// One Workspace identity.
     One(String),
     /// Several independently processed Workspace identities.
@@ -15,61 +15,61 @@ pub enum WorkspaceIdSelection {
 /// Clear non-permission Agent attention for one or several Workspaces.
 #[derive(Debug, Clone, PartialEq, Eq, Deserialize)]
 #[serde(rename_all = "camelCase")]
-pub struct WorkspaceClearAttentionRequest {
+pub(crate) struct WorkspaceClearAttentionRequest {
     /// Workspace identity or batch.
-    pub workspace_id: WorkspaceIdSelection,
+    pub(crate) workspace_id: WorkspaceIdSelection,
 }
 
 /// Per-Workspace clear-attention result.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
 #[serde(rename_all = "camelCase")]
-pub struct WorkspaceClearAttentionItem {
+pub(crate) struct WorkspaceClearAttentionItem {
     /// Requested Workspace identity.
-    pub workspace_id: String,
+    pub(crate) workspace_id: String,
     /// Agents whose attention was cleared.
-    pub cleared_agent_ids: Vec<String>,
+    pub(crate) cleared_agent_ids: Vec<String>,
     /// Whether this Workspace completed without an error.
-    pub success: bool,
+    pub(crate) success: bool,
     /// Inline error text.
-    pub error: Option<String>,
+    pub(crate) error: Option<String>,
 }
 
 /// Aggregate clear-attention response payload.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
 #[serde(rename_all = "camelCase")]
-pub struct WorkspaceClearAttentionResult {
+pub(crate) struct WorkspaceClearAttentionResult {
     /// Original singular or batch selection.
-    pub workspace_id: WorkspaceIdSelection,
+    pub(crate) workspace_id: WorkspaceIdSelection,
     /// Flattened cleared Agent identities.
-    pub cleared_agent_ids: Vec<String>,
+    pub(crate) cleared_agent_ids: Vec<String>,
     /// One result per requested Workspace.
-    pub results: Vec<WorkspaceClearAttentionItem>,
+    pub(crate) results: Vec<WorkspaceClearAttentionItem>,
     /// True only when every Workspace succeeded.
-    pub success: bool,
+    pub(crate) success: bool,
     /// Aggregate inline error text.
-    pub error: Option<String>,
+    pub(crate) error: Option<String>,
 }
 
 /// Mark the newest finished root Agent in a Workspace as unread.
 #[derive(Debug, Clone, PartialEq, Eq, Deserialize)]
 #[serde(rename_all = "camelCase")]
-pub struct WorkspaceMarkUnreadRequest {
+pub(crate) struct WorkspaceMarkUnreadRequest {
     /// Active Workspace identity.
-    pub workspace_id: String,
+    pub(crate) workspace_id: String,
 }
 
 /// Mark-unread response payload.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
 #[serde(rename_all = "camelCase")]
-pub struct WorkspaceMarkUnreadResult {
+pub(crate) struct WorkspaceMarkUnreadResult {
     /// Requested Workspace identity.
-    pub workspace_id: String,
+    pub(crate) workspace_id: String,
     /// Agent marked unread, or null on rejection.
-    pub marked_agent_id: Option<String>,
+    pub(crate) marked_agent_id: Option<String>,
     /// Whether the mutation completed.
-    pub success: bool,
+    pub(crate) success: bool,
     /// Inline error text.
-    pub error: Option<String>,
+    pub(crate) error: Option<String>,
 }
 
 #[cfg(test)]

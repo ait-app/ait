@@ -9,7 +9,7 @@ use serde::{Serialize, de::DeserializeOwned};
 
 /// A registry load, validation, or commit failed.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, thiserror::Error)]
-pub enum Error {
+pub(crate) enum Error {
     /// A staged record cannot round-trip through its persisted schema.
     #[error("invalid registry record")]
     InvalidRecord,
@@ -25,32 +25,11 @@ pub enum Error {
 }
 
 /// Atomic writer supplied by a host; it must install all bytes or report failure.
-pub type Writer<E = Error> = Arc<dyn Fn(&Path, &[u8]) -> Result<(), E> + Send + Sync>;
+pub(crate) type Writer<E = Error> = Arc<dyn Fn(&Path, &[u8]) -> Result<(), E> + Send + Sync>;
 
 /// Shared atomic JSON array engine; business registries validate and publish their own records.
 /// Hosts must serialize independent writers with a data-directory lease.
-///
-/// # Examples
-///
-/// ```
-/// use persistence::registry::FileRegistry;
-/// use serde::{Deserialize, Serialize};
-///
-/// #[derive(Clone, Deserialize, Serialize)]
-/// struct Record { id: String }
-///
-/// let directory = tempfile::tempdir()?;
-/// let registry: FileRegistry<Record> =
-///     FileRegistry::new(directory.path().join("records.json"), |record| &record.id);
-/// registry.mutate(|records| {
-///     let record = Record { id: "first".to_owned() };
-///     records.insert(record.id.clone(), record);
-///     Ok(((), true))
-/// })?;
-/// assert!(registry.get("first")?.is_some());
-/// # Ok::<(), Box<dyn std::error::Error>>(())
-/// ```
-pub struct FileRegistry<R, E = Error> {
+pub(crate) struct FileRegistry<R, E = Error> {
     path: PathBuf,
     state: Mutex<State<R>>,
     writer: Writer<E>,
@@ -74,7 +53,7 @@ impl<R, E> fmt::Debug for FileRegistry<R, E> {
 impl<R: Clone + Serialize + DeserializeOwned, E: From<Error> + 'static> FileRegistry<R, E> {
     /// Create a lazy registry at `path`, keyed by the identity returned by `id`.
     #[must_use]
-    pub fn new(path: PathBuf, id: fn(&R) -> &str) -> Self {
+    pub(crate) fn new(path: PathBuf, id: fn(&R) -> &str) -> Self {
         Self {
             path,
             state: Mutex::new(State {
@@ -87,15 +66,17 @@ impl<R: Clone + Serialize + DeserializeOwned, E: From<Error> + 'static> FileRegi
         }
     }
 
-    /// Clone the atomic writer so a host can decorate it with transaction instrumentation.
+    /// Clone the atomic writer so tests can decorate it with failure injection.
+    #[cfg(test)]
     #[must_use]
-    pub fn writer(&self) -> Writer<E> {
+    pub(crate) fn writer(&self) -> Writer<E> {
         self.writer.clone()
     }
 
     /// Replace the writer with `writer` before sharing the registry with other owners.
     /// The caller must preserve atomic installation and its existing commit semantics.
-    pub fn set_writer(&mut self, writer: Writer<E>) {
+    #[cfg(test)]
+    pub(crate) fn set_writer(&mut self, writer: Writer<E>) {
         self.writer = writer;
     }
 
@@ -123,14 +104,14 @@ impl<R: Clone + Serialize + DeserializeOwned, E: From<Error> + 'static> FileRegi
     ///
     /// # Errors
     /// Returns malformed-file, lock or filesystem errors.
-    pub fn initialize(&self) -> Result<(), E> {
+    pub(crate) fn initialize(&self) -> Result<(), E> {
         drop(self.loaded()?);
         Ok(())
     }
 
     /// Return whether the selected path exists; inaccessible paths report false.
     #[must_use]
-    pub fn exists(&self) -> bool {
+    pub(crate) fn exists(&self) -> bool {
         self.path.try_exists().unwrap_or(false)
     }
 
@@ -138,7 +119,7 @@ impl<R: Clone + Serialize + DeserializeOwned, E: From<Error> + 'static> FileRegi
     ///
     /// # Errors
     /// Returns malformed-file, lock or filesystem errors.
-    pub fn list(&self) -> Result<Vec<R>, E> {
+    pub(crate) fn list(&self) -> Result<Vec<R>, E> {
         Ok(self.loaded()?.records.values().cloned().collect())
     }
 
@@ -146,14 +127,14 @@ impl<R: Clone + Serialize + DeserializeOwned, E: From<Error> + 'static> FileRegi
     ///
     /// # Errors
     /// Returns malformed-file, lock or filesystem errors.
-    pub fn get(&self, id: &str) -> Result<Option<R>, E> {
+    pub(crate) fn get(&self, id: &str) -> Result<Option<R>, E> {
         Ok(self.loaded()?.records.get(id).cloned())
     }
 
     /// Reject future mutations on this instance while keeping committed reads available.
     /// # Errors
     /// Returns loading or poisoned-lock errors.
-    pub fn freeze(&self) -> Result<(), E> {
+    pub(crate) fn freeze(&self) -> Result<(), E> {
         self.loaded()?.frozen = true;
         Ok(())
     }
@@ -166,7 +147,7 @@ impl<R: Clone + Serialize + DeserializeOwned, E: From<Error> + 'static> FileRegi
     ///
     /// # Errors
     /// Returns callback, validation, frozen-registry, lock or file-write errors.
-    pub fn mutate<T>(
+    pub(crate) fn mutate<T>(
         &self,
         update: impl FnOnce(&mut IndexMap<String, R>) -> Result<(T, bool), E>,
     ) -> Result<T, E> {
@@ -178,7 +159,7 @@ impl<R: Clone + Serialize + DeserializeOwned, E: From<Error> + 'static> FileRegi
     /// Failed hooks leave the cache unchanged; the caller owns journal recovery after a disk write.
     /// # Errors
     /// Returns loading, validation, frozen-state, writer, or hook errors.
-    pub fn mutate_with<T>(
+    pub(crate) fn mutate_with<T>(
         &self,
         update: impl FnOnce(&mut IndexMap<String, R>) -> Result<(T, bool), E>,
         before_write: impl FnOnce(&[R]) -> Result<(), E>,

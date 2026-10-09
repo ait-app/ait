@@ -2,4 +2,4 @@
 
 pub mod files;
 pub mod transfer;
-pub mod uploads;
+pub(crate) mod uploads;

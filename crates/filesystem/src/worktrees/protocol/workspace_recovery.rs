@@ -3,15 +3,15 @@ use serde::{Deserialize, Serialize};
 /// Recovery request shared by inspect and restore.
 #[derive(Debug, Clone, PartialEq, Eq, Deserialize)]
 #[serde(rename_all = "camelCase")]
-pub struct WorkspaceRecoveryRequest {
+pub(crate) struct WorkspaceRecoveryRequest {
     /// Archived Workspace identity.
-    pub workspace_id: String,
+    pub(crate) workspace_id: String,
 }
 
 /// Recovery action selected from durable placement and local filesystem state.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
 #[serde(rename_all = "snake_case")]
-pub enum WorkspaceRecoveryAction {
+pub(crate) enum WorkspaceRecoveryAction {
     /// Reopen records because the exact directory still exists.
     Unarchive,
     /// Recreate a deleted managed worktree, then reopen records.
@@ -21,7 +21,7 @@ pub enum WorkspaceRecoveryAction {
 /// Stable unavailable reason from Paseo's Workspace recovery service.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
 #[serde(rename_all = "snake_case")]
-pub enum WorkspaceRecoveryUnavailableReason {
+pub(crate) enum WorkspaceRecoveryUnavailableReason {
     /// No Workspace record exists.
     WorkspaceNotFound,
     /// The Workspace is already active.
@@ -39,7 +39,7 @@ pub enum WorkspaceRecoveryUnavailableReason {
 /// Read-only Workspace recovery state.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
 #[serde(tag = "kind", rename_all = "snake_case")]
-pub enum WorkspaceRecoveryState {
+pub(crate) enum WorkspaceRecoveryState {
     /// Recovery can proceed.
     Recoverable {
         /// Workspace identity.
@@ -67,21 +67,21 @@ pub enum WorkspaceRecoveryState {
 
 /// Recovery inspection response payload.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
-pub struct WorkspaceRecoveryInspectResult {
+pub(crate) struct WorkspaceRecoveryInspectResult {
     /// Current recoverability.
-    pub state: WorkspaceRecoveryState,
+    pub(crate) state: WorkspaceRecoveryState,
 }
 
 /// Recovery mutation response payload.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
 #[serde(rename_all = "camelCase")]
-pub struct WorkspaceRecoveryRestoreResult {
+pub(crate) struct WorkspaceRecoveryRestoreResult {
     /// Requested Workspace identity.
-    pub workspace_id: String,
+    pub(crate) workspace_id: String,
     /// Whether recovery completed.
-    pub accepted: bool,
+    pub(crate) accepted: bool,
     /// Inline error text.
-    pub error: Option<String>,
+    pub(crate) error: Option<String>,
 }
 
 #[cfg(test)]

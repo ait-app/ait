@@ -51,10 +51,10 @@ struct Listing {
 }
 
 pub(crate) struct Request {
-    pub id: String,
-    pub method: String,
-    pub params: Value,
-    pub available: usize,
+    pub(crate) id: String,
+    pub(crate) method: String,
+    pub(crate) params: Value,
+    pub(crate) available: usize,
 }
 
 impl TerminalConnection {

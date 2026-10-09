@@ -7,7 +7,7 @@ use serde_json::Value;
 use crate::dispatch::State as Shared;
 use model::outbound::Outbound;
 
-pub async fn dispatch(
+pub(crate) async fn dispatch(
     method: &str,
     params: Value,
     state: &Shared,

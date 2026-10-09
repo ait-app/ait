@@ -5,27 +5,21 @@ use serde_json::{Map, Value};
 
 /// Raw project configuration with Paseo's passthrough and normalization behavior.
 #[derive(Debug, Clone, PartialEq)]
-pub struct PaseoConfigRaw(Value);
+pub(crate) struct PaseoConfigRaw(Value);
 
 impl PaseoConfigRaw {
     /// Validate and normalize a JSON value using the source schema.
     ///
     /// # Errors
     /// Returns an error when a strict known field has the wrong shape.
-    pub fn new(value: Value) -> Result<Self, &'static str> {
+    pub(crate) fn new(value: Value) -> Result<Self, &'static str> {
         normalize_config(value).map(Self)
     }
 
     /// Borrow the normalized JSON object.
     #[must_use]
-    pub const fn value(&self) -> &Value {
+    pub(crate) const fn value(&self) -> &Value {
         &self.0
-    }
-
-    /// Consume the wrapper and return its normalized JSON object.
-    #[must_use]
-    pub fn into_value(self) -> Value {
-        self.0
     }
 }
 
@@ -44,62 +38,38 @@ impl Serialize for PaseoConfigRaw {
 /// Optimistic concurrency revision for `ait.json`.
 #[derive(Debug, Clone, Copy, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
-pub struct PaseoConfigRevision {
+pub(crate) struct PaseoConfigRevision {
     /// Last modification time in Unix milliseconds.
-    pub mtime_ms: f64,
+    pub(crate) mtime_ms: f64,
     /// File size in bytes, represented as a JSON number by Paseo.
-    pub size: f64,
+    pub(crate) size: f64,
 }
 
 /// Read the configuration of a known active project root.
 #[derive(Debug, Clone, PartialEq, Eq, Deserialize)]
 #[serde(rename_all = "camelCase")]
-pub struct ProjectConfigReadRequest {
+pub(crate) struct ProjectConfigReadRequest {
     /// Registered project root or a realpath-equivalent alias.
-    pub repo_root: String,
+    pub(crate) repo_root: String,
 }
 
 /// Write a validated configuration with an expected revision.
 #[derive(Debug, Clone, PartialEq, Deserialize)]
 #[serde(rename_all = "camelCase")]
-pub struct ProjectConfigWriteRequest {
+pub(crate) struct ProjectConfigWriteRequest {
     /// Registered project root or a realpath-equivalent alias.
-    pub repo_root: String,
+    pub(crate) repo_root: String,
     /// Validated raw configuration.
-    pub config: PaseoConfigRaw,
+    pub(crate) config: PaseoConfigRaw,
     /// Null means the file is expected not to exist.
     #[serde(deserialize_with = "required_nullable")]
-    pub expected_revision: Option<PaseoConfigRevision>,
-}
-
-/// Successful project configuration read.
-#[derive(Debug, Clone, PartialEq, Serialize)]
-#[serde(rename_all = "camelCase")]
-pub struct ProjectConfigReadSuccess {
-    /// Canonical registered root.
-    pub repo_root: String,
-    /// Missing files return null.
-    pub config: Option<PaseoConfigRaw>,
-    /// Missing files return null.
-    pub revision: Option<PaseoConfigRevision>,
-}
-
-/// Successful project configuration write.
-#[derive(Debug, Clone, PartialEq, Serialize)]
-#[serde(rename_all = "camelCase")]
-pub struct ProjectConfigWriteSuccess {
-    /// Canonical registered root.
-    pub repo_root: String,
-    /// Normalized configuration written to disk.
-    pub config: PaseoConfigRaw,
-    /// Revision of the installed file.
-    pub revision: PaseoConfigRevision,
+    pub(crate) expected_revision: Option<PaseoConfigRevision>,
 }
 
 /// Inline business error used by both configuration operations.
 #[derive(Debug, Clone, PartialEq, Serialize)]
 #[serde(tag = "code", rename_all = "snake_case")]
-pub enum ProjectConfigRpcError {
+pub(crate) enum ProjectConfigRpcError {
     /// The requested root is not an active registered project.
     ProjectNotFound,
     /// The saved or requested document violates the config schema.
@@ -116,7 +86,7 @@ pub enum ProjectConfigRpcError {
 
 /// Read response matching Paseo's boolean-discriminated result.
 #[derive(Debug, Clone, PartialEq)]
-pub enum ProjectConfigReadResult {
+pub(crate) enum ProjectConfigReadResult {
     /// The file was read, including the missing-file state.
     Success {
         /// Canonical registered root.
@@ -176,7 +146,7 @@ impl Serialize for ProjectConfigReadResult {
 
 /// Write response matching Paseo's boolean-discriminated result.
 #[derive(Debug, Clone, PartialEq)]
-pub enum ProjectConfigWriteResult {
+pub(crate) enum ProjectConfigWriteResult {
     /// The validated file was atomically installed.
     Success {
         /// Canonical registered root.

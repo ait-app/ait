@@ -1,3 +1,3 @@
 //! Blocking adapter boundaries.
 
-pub mod files;
+pub(crate) mod files;

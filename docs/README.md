@@ -15,6 +15,7 @@
 
 ## 架构决策
 
+- [ADR-116：库 crate 只公开被其他 crate 使用的项](decisions/daemon/adr-116-crate-visibility.md)：默认私有，启用 `unreachable_pub`，删除收缩后暴露的未使用代码与转发 `pub use`。
 - [ADR-115：OpenCode 官方 ACP Provider](decisions/providers/adr-115-opencode-acp-provider.md)：1.x / 2.x 官方 stdio 协议、按原生能力处理问答和辅助会话、审批、取消和历史重放，取代私有 HTTP/SSE adapter。
 
 - [ADR-114：iOS 终端组合输入归 UIKit](decisions/clients/adr-114-ios-terminal-ime.md)：原生组合范围识别、确认文字提交与终端控制键分离。
@@ -95,6 +96,7 @@
 
 ## 工程规范与验证
 
+- [Crate 可见性与最新 main 整合验证](reports/daemon/crate-visibility-pr-validation-2026-10-09.md)：PR #239 的 ACP 冲突处理、完整测试、逐 crate 覆盖率与源码证据。
 - [OpenCode 官方 ACP 迁移验证](reports/providers/opencode-acp-2026-10-09.md)：真实原生问答、审批、恢复、无工具摘要及覆盖率证据。
 
 - [Persistence 与 filesystem 能力边界 PR 验证](reports/daemon/persistence-filesystem-pr-validation-2026-10-09.md)：13-crate 完整测试、覆盖率与原样保留的未接入摘要草稿。

@@ -29,7 +29,7 @@ fn service_ports_reject_invalid_ranges_and_normalize_script_only_settings() {
             "{range}"
         );
     }
-    let config = PaseoConfigRaw::new(json!({"worktree":{"servicePorts":{"portScript":"  echo 3000  "}},"metadataGeneration":false})).unwrap().into_value();
+    let config = PaseoConfigRaw::new(json!({"worktree":{"servicePorts":{"portScript":"  echo 3000  "}},"metadataGeneration":false})).unwrap().value().clone();
     assert_eq!(
         config["worktree"]["servicePorts"]["portScript"],
         "echo 3000"

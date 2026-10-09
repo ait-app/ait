@@ -11,7 +11,7 @@ use serde_fields::{optional_positive_integer, present, required_nullable};
 
 /// Paseo `ProjectKind` values; legacy wire variants remain accepted.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
-pub enum ProjectKind {
+pub(crate) enum ProjectKind {
     /// Serialized as `git`.
     #[serde(rename = "git")]
     Git,
@@ -25,7 +25,7 @@ pub enum ProjectKind {
 
 /// Paseo `WorkspaceKind` values; legacy wire variants remain accepted.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
-pub enum WorkspaceKind {
+pub(crate) enum WorkspaceKind {
     /// Serialized as `directory`.
     #[serde(rename = "directory")]
     Directory,
@@ -40,11 +40,11 @@ pub enum WorkspaceKind {
     Worktree,
 }
 
-pub use crate::workspace::activity::WorkspaceStateBucket;
+use crate::workspace::activity::WorkspaceStateBucket;
 
 /// Paseo `WorkspaceScriptType` values; legacy wire variants remain accepted.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
-pub enum WorkspaceScriptType {
+enum WorkspaceScriptType {
     /// Serialized as `script`.
     #[serde(rename = "script")]
     Script,
@@ -55,7 +55,7 @@ pub enum WorkspaceScriptType {
 
 /// Paseo `WorkspaceScriptLifecycle` values; legacy wire variants remain accepted.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
-pub enum WorkspaceScriptLifecycle {
+enum WorkspaceScriptLifecycle {
     /// Serialized as `running`.
     #[serde(rename = "running")]
     Running,
@@ -66,7 +66,7 @@ pub enum WorkspaceScriptLifecycle {
 
 /// Paseo `WorkspaceScriptHealth` values; legacy wire variants remain accepted.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
-pub enum WorkspaceScriptHealth {
+enum WorkspaceScriptHealth {
     /// Serialized as `healthy`.
     #[serde(rename = "healthy")]
     Healthy,
@@ -156,31 +156,31 @@ pub struct WorkspaceProjectDescriptorPayload {
         deserialize_with = "present",
         skip_serializing_if = "Option::is_none"
     )]
-    pub project_key: Option<String>,
+    pub(crate) project_key: Option<String>,
     /// Paseo `projectDisplayName` field; see the pinned source schema.
-    pub project_display_name: String,
+    pub(crate) project_display_name: String,
     /// Paseo `projectCustomName` field; see the pinned source schema.
-    pub project_custom_name: Option<String>,
+    pub(crate) project_custom_name: Option<String>,
     /// Paseo `projectCustomIconRevision` field; see the pinned source schema.
-    pub project_custom_icon_revision: Option<String>,
+    pub(crate) project_custom_icon_revision: Option<String>,
     /// Paseo `projectIconRevision` field; see the pinned source schema.
     #[serde(
         default,
         deserialize_with = "present",
         skip_serializing_if = "Option::is_none"
     )]
-    pub project_icon_revision: Option<String>,
+    pub(crate) project_icon_revision: Option<String>,
     /// Paseo `projectRootPath` field; see the pinned source schema.
-    pub project_root_path: String,
+    pub(crate) project_root_path: String,
     /// Paseo `projectKind` field; see the pinned source schema.
-    pub project_kind: ProjectKind,
+    pub(crate) project_kind: ProjectKind,
     /// Paseo `syncSeq` field; see the pinned source schema.
     #[serde(
         default,
         deserialize_with = "optional_positive_integer",
         skip_serializing_if = "Option::is_none"
     )]
-    pub sync_seq: Option<u64>,
+    pub(crate) sync_seq: Option<u64>,
 }
 
 /// Rust equivalent of Paseo `ProjectPlacementPayload`, including its compatibility fields.
@@ -200,35 +200,35 @@ pub struct ProjectPlacementPayload {
 /// Rust equivalent of Paseo `WorkspaceScriptPayload`, including its compatibility fields.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
-pub struct WorkspaceScriptPayload {
+pub(crate) struct WorkspaceScriptPayload {
     /// Paseo `scriptName` field; see the pinned source schema.
-    pub script_name: String,
+    script_name: String,
     /// Paseo `type` field; see the pinned source schema.
     #[serde(rename = "type", default = "service_type")]
-    pub script_type: WorkspaceScriptType,
+    script_type: WorkspaceScriptType,
     /// Paseo `hostname` field; see the pinned source schema.
-    pub hostname: String,
+    hostname: String,
     /// Paseo `port` field; see the pinned source schema.
     #[serde(deserialize_with = "serde_fields::nullable_positive_integer")]
-    pub port: Option<u64>,
+    port: Option<u64>,
     /// Paseo `localProxyUrl` field; see the pinned source schema.
-    pub local_proxy_url: Option<String>,
+    local_proxy_url: Option<String>,
     /// Paseo `publicProxyUrl` field; see the pinned source schema.
-    pub public_proxy_url: Option<String>,
+    public_proxy_url: Option<String>,
     /// Paseo `proxyUrl` field; see the pinned source schema.
     #[serde(default)]
-    pub proxy_url: Option<String>,
+    proxy_url: Option<String>,
     /// Paseo `lifecycle` field; see the pinned source schema.
-    pub lifecycle: WorkspaceScriptLifecycle,
+    lifecycle: WorkspaceScriptLifecycle,
     /// Paseo `health` field; see the pinned source schema.
     #[serde(deserialize_with = "required_nullable")]
-    pub health: Option<WorkspaceScriptHealth>,
+    health: Option<WorkspaceScriptHealth>,
     /// Paseo `exitCode` field; see the pinned source schema.
     #[serde(default)]
-    pub exit_code: Option<Number>,
+    exit_code: Option<Number>,
     /// Paseo `terminalId` field; see the pinned source schema.
     #[serde(default)]
-    pub terminal_id: Option<String>,
+    terminal_id: Option<String>,
 }
 
 /// Rust equivalent of Paseo `AheadBehind`, including its compatibility fields.
@@ -423,13 +423,13 @@ pub struct WorkspaceDescriptorPayload {
     /// Paseo `projectId` field; see the pinned source schema.
     pub project_id: String,
     /// Paseo `projectDisplayName` field; see the pinned source schema.
-    pub project_display_name: String,
+    pub(crate) project_display_name: String,
     /// Paseo `projectCustomName` field; see the pinned source schema.
-    pub project_custom_name: Option<String>,
+    pub(crate) project_custom_name: Option<String>,
     /// Paseo `projectCustomIconRevision` field; see the pinned source schema.
-    pub project_custom_icon_revision: Option<String>,
+    pub(crate) project_custom_icon_revision: Option<String>,
     /// Paseo `projectRootPath` field; see the pinned source schema.
-    pub project_root_path: String,
+    pub(crate) project_root_path: String,
     /// Paseo `workspaceDirectory` field; see the pinned source schema.
     pub workspace_directory: String,
     /// Paseo `worktreeSlug` field; see the pinned source schema.
@@ -443,25 +443,25 @@ pub struct WorkspaceDescriptorPayload {
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub initial_branch: Option<String>,
     /// Paseo `projectKind` field; see the pinned source schema.
-    pub project_kind: ProjectKind,
+    pub(crate) project_kind: ProjectKind,
     /// Paseo `workspaceKind` field; see the pinned source schema.
-    pub workspace_kind: WorkspaceKind,
+    pub(crate) workspace_kind: WorkspaceKind,
     /// Paseo `name` field; see the pinned source schema.
     pub name: String,
     /// Paseo `title` field; see the pinned source schema.
-    pub title: Option<String>,
+    pub(crate) title: Option<String>,
     /// Paseo `pinnedAt` field; see the pinned source schema.
-    pub pinned_at: Option<String>,
+    pub(crate) pinned_at: Option<String>,
     /// Paseo `labels` field; see the pinned source schema.
     #[serde(
         default,
         deserialize_with = "present",
         skip_serializing_if = "Option::is_none"
     )]
-    pub labels: Option<Vec<String>>,
+    pub(crate) labels: Option<Vec<String>>,
     /// Paseo `archivingAt` field; see the pinned source schema.
     #[serde(default)]
-    pub archiving_at: Option<String>,
+    pub(crate) archiving_at: Option<String>,
     /// Paseo `status` field; see the pinned source schema.
     pub status: WorkspaceStateBucket,
     /// Paseo `statusEnteredAt` field; see the pinned source schema.
@@ -474,7 +474,7 @@ pub struct WorkspaceDescriptorPayload {
     pub diff_stat: Option<DiffStat>,
     /// Paseo `scripts` field; see the pinned source schema.
     #[serde(default)]
-    pub scripts: Vec<WorkspaceScriptPayload>,
+    pub(crate) scripts: Vec<WorkspaceScriptPayload>,
     /// Paseo `gitRuntime` field; see the pinned source schema.
     pub git_runtime: Option<WorkspaceGitRuntimePayload>,
     /// Paseo `githubRuntime` field; see the pinned source schema.
@@ -492,14 +492,14 @@ pub struct WorkspaceDescriptorPayload {
         deserialize_with = "present",
         skip_serializing_if = "Option::is_none"
     )]
-    pub project: Option<ProjectPlacementPayload>,
+    pub(crate) project: Option<ProjectPlacementPayload>,
     /// Paseo `syncSeq` field; see the pinned source schema.
     #[serde(
         default,
         deserialize_with = "optional_positive_integer",
         skip_serializing_if = "Option::is_none"
     )]
-    pub sync_seq: Option<u64>,
+    pub(crate) sync_seq: Option<u64>,
 }
 
 // Source shape before workspaceDirectory fallback.
@@ -507,17 +507,17 @@ pub struct WorkspaceDescriptorPayload {
 #[serde(rename_all = "camelCase")]
 struct WorkspaceDescriptorInput {
     /// Paseo `id` field; see the pinned source schema.
-    pub id: String,
+    id: String,
     /// Paseo `projectId` field; see the pinned source schema.
-    pub project_id: String,
+    project_id: String,
     /// Paseo `projectDisplayName` field; see the pinned source schema.
-    pub project_display_name: String,
+    project_display_name: String,
     /// Paseo `projectCustomName` field; see the pinned source schema.
-    pub project_custom_name: Option<String>,
+    project_custom_name: Option<String>,
     /// Paseo `projectCustomIconRevision` field; see the pinned source schema.
-    pub project_custom_icon_revision: Option<String>,
+    project_custom_icon_revision: Option<String>,
     /// Paseo `projectRootPath` field; see the pinned source schema.
-    pub project_root_path: String,
+    project_root_path: String,
     /// Paseo `workspaceDirectory` field; see the pinned source schema.
     #[serde(default, deserialize_with = "present")]
     workspace_directory: Option<String>,
@@ -527,68 +527,68 @@ struct WorkspaceDescriptorInput {
         deserialize_with = "present",
         skip_serializing_if = "Option::is_none"
     )]
-    pub worktree_slug: Option<String>,
+    worktree_slug: Option<String>,
     /// Branch name recorded when this worktree was created.
     #[serde(default)]
-    pub initial_branch: Option<String>,
+    initial_branch: Option<String>,
     /// Paseo `projectKind` field; see the pinned source schema.
-    pub project_kind: ProjectKind,
+    project_kind: ProjectKind,
     /// Paseo `workspaceKind` field; see the pinned source schema.
-    pub workspace_kind: WorkspaceKind,
+    workspace_kind: WorkspaceKind,
     /// Paseo `name` field; see the pinned source schema.
-    pub name: String,
+    name: String,
     /// Paseo `title` field; see the pinned source schema.
-    pub title: Option<String>,
+    title: Option<String>,
     /// Paseo `pinnedAt` field; see the pinned source schema.
-    pub pinned_at: Option<String>,
+    pinned_at: Option<String>,
     /// Paseo `labels` field; see the pinned source schema.
     #[serde(
         default,
         deserialize_with = "present",
         skip_serializing_if = "Option::is_none"
     )]
-    pub labels: Option<Vec<String>>,
+    labels: Option<Vec<String>>,
     /// Paseo `archivingAt` field; see the pinned source schema.
     #[serde(default)]
-    pub archiving_at: Option<String>,
+    archiving_at: Option<String>,
     /// Paseo `status` field; see the pinned source schema.
-    pub status: WorkspaceStateBucket,
+    status: WorkspaceStateBucket,
     /// Paseo `statusEnteredAt` field; see the pinned source schema.
     #[serde(default)]
-    pub status_entered_at: Option<String>,
+    status_entered_at: Option<String>,
     /// Paseo `activityAt` field; see the pinned source schema.
     #[serde(deserialize_with = "required_nullable")]
-    pub activity_at: Option<String>,
+    activity_at: Option<String>,
     /// Paseo `diffStat` field; see the pinned source schema.
-    pub diff_stat: Option<DiffStat>,
+    diff_stat: Option<DiffStat>,
     /// Paseo `scripts` field; see the pinned source schema.
     #[serde(default)]
-    pub scripts: Vec<WorkspaceScriptPayload>,
+    scripts: Vec<WorkspaceScriptPayload>,
     /// Paseo `gitRuntime` field; see the pinned source schema.
-    pub git_runtime: Option<WorkspaceGitRuntimePayload>,
+    git_runtime: Option<WorkspaceGitRuntimePayload>,
     /// Paseo `githubRuntime` field; see the pinned source schema.
-    pub github_runtime: Option<WorkspaceGitHubRuntimePayload>,
+    github_runtime: Option<WorkspaceGitHubRuntimePayload>,
     /// Paseo `forge` field; see the pinned source schema.
     #[serde(
         default,
         deserialize_with = "present",
         skip_serializing_if = "Option::is_none"
     )]
-    pub forge: Option<String>,
+    forge: Option<String>,
     /// Paseo `project` field; see the pinned source schema.
     #[serde(
         default,
         deserialize_with = "present",
         skip_serializing_if = "Option::is_none"
     )]
-    pub project: Option<ProjectPlacementPayload>,
+    project: Option<ProjectPlacementPayload>,
     /// Paseo `syncSeq` field; see the pinned source schema.
     #[serde(
         default,
         deserialize_with = "optional_positive_integer",
         skip_serializing_if = "Option::is_none"
     )]
-    pub sync_seq: Option<u64>,
+    sync_seq: Option<u64>,
 }
 
 impl From<WorkspaceDescriptorInput> for WorkspaceDescriptorPayload {

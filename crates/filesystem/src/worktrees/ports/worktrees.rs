@@ -14,13 +14,13 @@ pub trait WorktreeArchiveCleanup: Debug + Send + Sync {
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct ManagedWorktreeInfo {
     /// Absolute linked checkout root.
-    pub path: String,
+    pub(crate) path: String,
     /// Filesystem creation time in RFC 3339 form.
-    pub created_at: String,
+    pub(crate) created_at: String,
     /// Local branch, or none for detached HEAD.
-    pub branch_name: Option<String>,
+    pub(crate) branch_name: Option<String>,
     /// Checked-out commit object name.
-    pub head: Option<String>,
+    pub(crate) head: Option<String>,
 }
 
 /// How a linked checkout obtains its branch.
@@ -53,30 +53,30 @@ pub enum WorktreeCreateMode {
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct ChangeRequestCheckout {
     /// Resolved forge used for setup trust attribution.
-    pub forge: String,
+    pub(crate) forge: String,
     /// Pull request number in the selected repository.
-    pub number: u64,
+    pub(crate) number: u64,
     /// Actual source branch on the remote.
-    pub head_ref: String,
+    pub(crate) head_ref: String,
     /// Base branch used for comparisons.
-    pub base_ref: String,
+    pub(crate) base_ref: String,
     /// Local branch candidate; forks may prefix the head owner.
-    pub local_branch: String,
+    pub(crate) local_branch: String,
     /// Fork identity requiring setup approval, absent for same-repository changes.
-    pub untrusted_repository: Option<String>,
+    pub(crate) untrusted_repository: Option<String>,
     /// Fork push URL, absent for same-repository changes.
-    pub push_remote_url: Option<String>,
+    pub(crate) push_remote_url: Option<String>,
     /// Whether origin's source branch should be used for tracking.
-    pub track_origin: bool,
+    pub(crate) track_origin: bool,
     /// Ordered platform-specific refs, including any supported fallback.
-    pub checkout_refs: Vec<ChangeRequestCheckoutRef>,
+    pub(crate) checkout_refs: Vec<ChangeRequestCheckoutRef>,
 }
 
 /// A forge-provided ref to try when fetching a change request.
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub struct ChangeRequestCheckoutRef {
+pub(crate) struct ChangeRequestCheckoutRef {
     /// Named Git remote in the existing repository.
-    pub remote: String,
+    pub(crate) remote: String,
     /// Full remote ref, validated before constructing a fetch refspec.
     pub reference: String,
 }
@@ -85,9 +85,9 @@ pub struct ChangeRequestCheckoutRef {
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct ManagedWorktreeCreate {
     /// Source checkout directory, possibly below the repository root.
-    pub cwd: String,
+    pub(crate) cwd: String,
     /// Validated managed directory name.
-    pub slug: String,
+    pub(crate) slug: String,
     /// Branch creation or checkout behavior.
     pub mode: WorktreeCreateMode,
 }
@@ -96,13 +96,13 @@ pub struct ManagedWorktreeCreate {
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct CreatedManagedWorktree {
     /// Main repository root.
-    pub repo_root: String,
+    pub(crate) repo_root: String,
     /// Canonical source directory supplied by the caller.
-    pub source_cwd: String,
+    pub(crate) source_cwd: String,
     /// Source-relative directory in the linked checkout.
-    pub workspace_cwd: String,
+    pub(crate) workspace_cwd: String,
     /// Linked checkout root.
-    pub worktree_path: String,
+    pub(crate) worktree_path: String,
     /// Actual local branch, including collision suffixes.
     pub branch_name: String,
     /// Comparison base retained in the workspace registry.
@@ -115,9 +115,9 @@ pub struct CreatedManagedWorktree {
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct OwnedWorktree {
     /// Normalized managed worktree root, excluding a descendant workspace path.
-    pub path: String,
+    pub(crate) path: String,
     /// Main repository root when Git metadata is still available.
-    pub repo_root: Option<String>,
+    pub(crate) repo_root: Option<String>,
 }
 
 /// Stable worktree adapter failure categories.

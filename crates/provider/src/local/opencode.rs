@@ -11,7 +11,7 @@ mod streaming;
 mod summary;
 mod tool;
 
-pub use client::OpenCodeClient;
+pub(crate) use client::OpenCodeClient;
 
 const PROVIDER: &str = "opencode";
 

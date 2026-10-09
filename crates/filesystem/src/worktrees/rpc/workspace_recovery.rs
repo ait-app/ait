@@ -22,17 +22,17 @@ use crate::worktrees::service::workspace_recovery::{
     WorkspaceRecoveryUnavailableReason as ApplicationUnavailableReason,
 };
 /// Recovery result and update to publish after its response.
-pub struct Dispatched {
+pub(crate) struct Dispatched {
     /// Serialized response.
-    pub value: Value,
+    pub(crate) value: Value,
     /// Optional Workspace update.
-    pub event: Option<Value>,
+    pub(crate) event: Option<Value>,
 }
 /// Execute recovery inspection or restoration.
 ///
 /// # Errors
 /// Rejects invalid input, unknown methods, or registry failures.
-pub fn execute(
+pub(crate) fn execute(
     workspace_state: &WorkspaceRecovery,
     method: &str,
     params: Value,

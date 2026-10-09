@@ -15,7 +15,7 @@ const MAX_PENDING_EVENTS: usize = 64;
 const MAX_PENDING_BYTES: usize = 1024 * 1024;
 
 /// Transport-owned bounded delivery callback. Payload includes its subscription identity.
-pub type EventSink = Arc<dyn Fn(SessionEventKind, Value) -> Result<(), SessionError> + Send + Sync>;
+type EventSink = Arc<dyn Fn(SessionEventKind, Value) -> Result<(), SessionError> + Send + Sync>;
 
 #[derive(Debug, Default)]
 struct Presence {

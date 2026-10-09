@@ -5,7 +5,7 @@ use serde::{Deserialize, Serialize};
 /// Paseo's fixed workspace label palette.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
-pub enum WorkspaceLabelColor {
+pub(crate) enum WorkspaceLabelColor {
     /// Violet.
     Violet,
     /// Sky blue.
@@ -31,82 +31,82 @@ pub enum WorkspaceLabelColor {
 /// One host-wide label definition.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
-pub struct WorkspaceLabelDefinition {
+pub(crate) struct WorkspaceLabelDefinition {
     /// Display name.
     pub name: String,
     /// Palette color.
-    pub color: WorkspaceLabelColor,
+    pub(crate) color: WorkspaceLabelColor,
 }
 
 /// Optional list subscription request. The standalone server assigns the returned ID.
 #[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
-pub struct WorkspaceLabelSubscribe {
+pub(crate) struct WorkspaceLabelSubscribe {
     /// Legacy requested ID accepted by Paseo's schema; modern delivery may replace it.
     #[serde(default)]
-    pub subscription_id: Option<String>,
+    pub(crate) subscription_id: Option<String>,
 }
 
 /// Incremental synchronization cursor.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
-pub struct WorkspaceLabelSyncCursor {
+pub(crate) struct WorkspaceLabelSyncCursor {
     /// Process generation.
-    pub generation: String,
+    pub(crate) generation: String,
     /// Last sequence observed by the client.
-    pub after_seq: u64,
+    pub(crate) after_seq: u64,
 }
 
 /// List or subscribe to the host label catalog.
 #[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
-pub struct WorkspaceLabelListRequest {
+pub(crate) struct WorkspaceLabelListRequest {
     /// Subscribe after the coherent initial response.
     #[serde(default)]
-    pub subscribe: Option<WorkspaceLabelSubscribe>,
+    pub(crate) subscribe: Option<WorkspaceLabelSubscribe>,
     /// Optional incremental cursor.
     #[serde(default)]
-    pub sync: Option<WorkspaceLabelSyncCursor>,
+    pub(crate) sync: Option<WorkspaceLabelSyncCursor>,
 }
 
 /// Set one workspace assignment, creating the definition on first assignment.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
-pub struct WorkspaceLabelAssignmentSetRequest {
+pub(crate) struct WorkspaceLabelAssignmentSetRequest {
     /// Active workspace identity.
-    pub workspace_id: String,
+    pub(crate) workspace_id: String,
     /// Requested definition.
-    pub label: WorkspaceLabelDefinition,
+    pub(crate) label: WorkspaceLabelDefinition,
     /// Whether the label is assigned.
-    pub assigned: bool,
+    pub(crate) assigned: bool,
 }
 
 /// Edit a definition's name, color, or both in one operation.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
-pub struct WorkspaceLabelUpdateRequest {
+pub(crate) struct WorkspaceLabelUpdateRequest {
     /// Existing name, compared case-insensitively after normalization.
-    pub name: String,
+    pub(crate) name: String,
     /// Replacement display name.
     #[serde(default)]
-    pub new_name: Option<String>,
+    pub(crate) new_name: Option<String>,
     /// Replacement color.
     #[serde(default)]
-    pub color: Option<WorkspaceLabelColor>,
+    pub(crate) color: Option<WorkspaceLabelColor>,
 }
 
 /// Delete or inspect a definition by name.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
-pub struct WorkspaceLabelDeleteRequest {
+pub(crate) struct WorkspaceLabelDeleteRequest {
     /// Definition name.
-    pub name: String,
+    pub(crate) name: String,
 }
 
 /// Synchronization response mode.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
-pub enum WorkspaceLabelSyncMode {
+pub(crate) enum WorkspaceLabelSyncMode {
     /// Complete catalog.
     Snapshot,
     /// Compacted changes after the cursor.
@@ -116,66 +116,66 @@ pub enum WorkspaceLabelSyncMode {
 /// One removal included in a compacted catch-up response.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
-pub struct WorkspaceLabelRemoval {
+pub(crate) struct WorkspaceLabelRemoval {
     /// Removed display name.
-    pub name: String,
+    pub(crate) name: String,
     /// Removal sequence.
-    pub seq: u64,
+    pub(crate) seq: u64,
 }
 
 /// Synchronization metadata.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
-pub struct WorkspaceLabelSyncMetadata {
+pub(crate) struct WorkspaceLabelSyncMetadata {
     /// Snapshot or changes.
-    pub mode: WorkspaceLabelSyncMode,
+    pub(crate) mode: WorkspaceLabelSyncMode,
     /// Current process generation.
-    pub generation: String,
+    pub(crate) generation: String,
     /// Current sequence.
-    pub head_seq: u64,
+    pub(crate) head_seq: u64,
     /// Compacted removals.
-    pub removals: Vec<WorkspaceLabelRemoval>,
+    pub(crate) removals: Vec<WorkspaceLabelRemoval>,
 }
 
 /// Label list response.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
-pub struct WorkspaceLabelListResult {
+pub(crate) struct WorkspaceLabelListResult {
     /// Server-assigned subscription identity when requested.
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub subscription_id: Option<String>,
+    pub(crate) subscription_id: Option<String>,
     /// Full snapshot or compacted upserts.
-    pub labels: Vec<WorkspaceLabelDefinition>,
+    pub(crate) labels: Vec<WorkspaceLabelDefinition>,
     /// Synchronization boundary.
-    pub sync: WorkspaceLabelSyncMetadata,
+    pub(crate) sync: WorkspaceLabelSyncMetadata,
 }
 
 /// Assignment response.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
-pub struct WorkspaceLabelAssignmentSetResult {
+pub(crate) struct WorkspaceLabelAssignmentSetResult {
     /// Authoritative definition.
-    pub label: WorkspaceLabelDefinition,
+    pub(crate) label: WorkspaceLabelDefinition,
     /// Complete workspace assignment list.
-    pub workspace_labels: Vec<String>,
+    pub(crate) workspace_labels: Vec<String>,
 }
 
 /// Definition edit response.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
-pub struct WorkspaceLabelUpdateResult {
+pub(crate) struct WorkspaceLabelUpdateResult {
     /// Updated definition.
-    pub label: WorkspaceLabelDefinition,
+    pub(crate) label: WorkspaceLabelDefinition,
     /// Workspaces whose assignment name changed.
-    pub affected_workspace_count: usize,
+    pub(crate) affected_workspace_count: usize,
 }
 
 /// Delete inspection and deletion response.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
-pub struct WorkspaceLabelAffectedResult {
+pub(crate) struct WorkspaceLabelAffectedResult {
     /// Active and archived workspaces carrying the name.
-    pub affected_workspace_count: usize,
+    pub(crate) affected_workspace_count: usize,
 }
 
 /// Live catalog update payload.
@@ -185,7 +185,7 @@ pub struct WorkspaceLabelAffectedResult {
     rename_all = "snake_case",
     rename_all_fields = "camelCase"
 )]
-pub enum WorkspaceLabelLiveUpdate {
+pub(crate) enum WorkspaceLabelLiveUpdate {
     /// Definition creation or edit.
     Upsert {
         /// Connection-owned subscription identity.

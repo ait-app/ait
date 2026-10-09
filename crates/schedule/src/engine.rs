@@ -14,7 +14,7 @@ pub(crate) struct Engine {
     records: Vec<Schedule>,
 }
 impl Engine {
-    pub fn open(store: Box<dyn Store>, now: DateTime<Utc>) -> Result<Self, Error> {
+    pub(crate) fn open(store: Box<dyn Store>, now: DateTime<Utc>) -> Result<Self, Error> {
         let mut records = store.load()?;
         if records.len() > 1024 {
             return Err(Error::Storage);
@@ -61,14 +61,14 @@ impl Engine {
         self.records = records;
         Ok(())
     }
-    pub fn inspect(&self, id: &str) -> Result<Schedule, Error> {
+    pub(crate) fn inspect(&self, id: &str) -> Result<Schedule, Error> {
         self.records
             .iter()
             .find(|s| s.id == id)
             .cloned()
             .ok_or(Error::NotFound)
     }
-    pub fn request(
+    pub(crate) fn request(
         &mut self,
         method: &str,
         params: Value,
@@ -243,7 +243,7 @@ impl Engine {
         self.replace(record.clone())?;
         Ok(json!({"schedule":record,"error":null}))
     }
-    pub fn due(&mut self, now: DateTime<Utc>) -> Result<Vec<String>, Error> {
+    pub(crate) fn due(&mut self, now: DateTime<Utc>) -> Result<Vec<String>, Error> {
         let mut records = self.records.clone();
         let mut dirty = false;
         let mut due = Vec::new();
@@ -266,7 +266,7 @@ impl Engine {
         }
         Ok(due)
     }
-    pub fn begin(
+    pub(crate) fn begin(
         &mut self,
         id: &str,
         manual: bool,
@@ -300,7 +300,7 @@ impl Engine {
         self.replace(schedule.clone())?;
         Ok((schedule, run_id))
     }
-    pub fn checkpoint(&mut self, update: &crate::ports::Checkpoint) -> Result<(), Error> {
+    pub(crate) fn checkpoint(&mut self, update: &crate::ports::Checkpoint) -> Result<(), Error> {
         let mut schedule = self.inspect(&update.schedule_id)?;
         let run = schedule
             .runs
@@ -311,7 +311,7 @@ impl Engine {
         run.workspace_id.clone_from(&update.workspace_id);
         self.replace(schedule)
     }
-    pub fn finish(
+    pub(crate) fn finish(
         &mut self,
         id: &str,
         run_id: &str,

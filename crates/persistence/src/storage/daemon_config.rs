@@ -58,7 +58,7 @@ impl FileDaemonConfigStore {
 
     /// Create a lazy store. The file is initialized on the first operation.
     #[must_use]
-    pub fn new(path: PathBuf, default: Value) -> Self {
+    fn new(path: PathBuf, default: Value) -> Self {
         Self {
             path,
             default,
@@ -155,7 +155,7 @@ fn read(path: &Path) -> Result<Value, DaemonConfigStoreError> {
         .read_limited(MAX_CONFIG_BYTES)
         .map_err(|error| match error {
             crate::Error::TooLarge => DaemonConfigStoreError::Invalid,
-            _ => DaemonConfigStoreError::Io,
+            crate::Error::Io(_) => DaemonConfigStoreError::Io,
         })?;
     let value: Value =
         serde_json::from_slice(&bytes).map_err(|_| DaemonConfigStoreError::Invalid)?;

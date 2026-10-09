@@ -200,6 +200,7 @@ If coverage was not measured, state **not measured**, the reason, and the next s
 
 ## Imports and Dependencies
 
+- **MUST** keep items private by default. Use `pub` only for items that another workspace crate (ultimately the `daemon` binary or its integration tests) actually uses, and `pub(crate)` for crate-internal sharing. Do not add forwarding `pub use` aliases; callers import from the owning module. The workspace enables `unreachable_pub`, so `dead_code` also reports crate-private items that nothing uses.
 - **MUST** avoid wildcard imports (`use module::*`) except for preludes, test modules (`use super::*`), and prelude re-exports
 - **MUST** document dependencies in `Cargo.toml` with version constraints
 - Use `cargo` for dependency management

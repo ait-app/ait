@@ -9,8 +9,6 @@ mod installation;
 
 /// Complete crate-level service and its required composition inputs.
 pub use installation::{Dependencies, Service};
-/// Safe host-facing dispatch failure; business failures remain in typed results.
-pub use support::error::ErrorCode;
 
 pub mod capabilities;
 /// Connection-owned observers and request integration.

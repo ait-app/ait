@@ -16,17 +16,17 @@ use crate::{
 };
 
 /// Explicit speech endpoint settings. Credentials are never serialized or logged.
-pub struct Config {
+pub(crate) struct Config {
     /// API root, normally ending in `/v1`.
-    pub base_url: String,
+    pub(crate) base_url: String,
     /// Optional token for authenticated endpoints.
-    pub api_key: Option<SecretString>,
+    pub(crate) api_key: Option<SecretString>,
     /// Transcription model supported by the selected endpoint.
-    pub stt_model: String,
+    pub(crate) stt_model: String,
     /// Speech synthesis model supported by the selected endpoint.
-    pub tts_model: String,
+    pub(crate) tts_model: String,
     /// Voice identifier understood by the TTS model.
-    pub voice: String,
+    pub(crate) voice: String,
 }
 
 impl std::fmt::Debug for Config {
@@ -37,7 +37,7 @@ impl std::fmt::Debug for Config {
 
 /// HTTP speech adapter. Clones reuse one bounded connection pool.
 #[derive(Debug, Clone)]
-pub struct OpenAi {
+pub(crate) struct OpenAi {
     client: Client,
     config: std::sync::Arc<Config>,
 }
@@ -46,7 +46,7 @@ impl OpenAi {
     /// Validate configuration and construct a reusable client without making a network request.
     /// # Errors
     /// Rejects invalid endpoint URLs, empty options or client initialization failures.
-    pub fn new(config: Config) -> Result<Self, Error> {
+    pub(crate) fn new(config: Config) -> Result<Self, Error> {
         let url = Url::parse(&config.base_url).map_err(|_| Error::Invalid)?;
         if !matches!(url.scheme(), "http" | "https")
             || url.host_str().is_none()

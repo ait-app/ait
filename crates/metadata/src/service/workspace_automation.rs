@@ -4,16 +4,14 @@ use domain::workspace::records::{PersistedWorkspaceRecord, UntrustedWorkspaceSou
 use domain::workspace::registry::RegistryError;
 use model::workspace::registry::WorkspaceRegistry;
 
-use crate::ports::workspace_automation::{AutomationEvent, AutomationEventSink};
-
-pub use crate::ports::workspace_automation::{
-    ScriptSnapshot, ScriptType, SetupCommandSnapshot, SetupLifecycle, SetupSnapshot,
-    WorkspaceAutomationError, WorkspaceAutomationRuntime, WorkspacePlacement,
+use crate::ports::workspace_automation::{
+    AutomationEvent, AutomationEventSink, ScriptSnapshot, SetupSnapshot, WorkspaceAutomationError,
+    WorkspaceAutomationRuntime, WorkspacePlacement,
 };
 
 /// Setup status including a durable automation block when present.
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub enum SetupStatus {
+pub(crate) enum SetupStatus {
     /// No setup has run and the workspace is trusted.
     Absent,
     /// Setup is blocked pending explicit approval.
@@ -94,7 +92,7 @@ impl WorkspaceAutomation {
     ///
     /// # Errors
     /// Returns registry failures.
-    pub fn setup_status(
+    pub(crate) fn setup_status(
         &self,
         workspace_id: &str,
     ) -> Result<SetupStatus, WorkspaceAutomationServiceError> {
@@ -119,7 +117,7 @@ impl WorkspaceAutomation {
     ///
     /// # Errors
     /// Returns missing workspace, registry, configuration, or runtime failures.
-    pub fn approve_and_start_setup(
+    pub(crate) fn approve_and_start_setup(
         &self,
         workspace_id: &str,
         timestamp: &str,
@@ -166,7 +164,7 @@ impl WorkspaceAutomation {
     ///
     /// # Errors
     /// Returns missing workspace, registry, or runtime failures.
-    pub fn list_scripts(
+    pub(crate) fn list_scripts(
         &self,
         workspace_id: &str,
     ) -> Result<Vec<ScriptSnapshot>, WorkspaceAutomationServiceError> {
@@ -180,7 +178,7 @@ impl WorkspaceAutomation {
     ///
     /// # Errors
     /// Returns missing workspace, blocked automation, registry, or runtime failures.
-    pub fn start_script(
+    pub(crate) fn start_script(
         &self,
         workspace_id: &str,
         script_name: &str,
@@ -203,7 +201,7 @@ impl WorkspaceAutomation {
     ///
     /// # Errors
     /// Returns missing workspace, registry, or runtime failures.
-    pub fn stop_script(
+    pub(crate) fn stop_script(
         &self,
         workspace_id: &str,
         script_name: &str,

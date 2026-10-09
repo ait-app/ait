@@ -5,17 +5,17 @@ use serde::{Deserialize, Serialize};
 
 /// Repository discovery input. Empty query lists recent owned repositories.
 #[derive(Debug, Clone, PartialEq, Eq, Deserialize)]
-pub struct GithubRepositorySearchRequest {
+pub(crate) struct GithubRepositorySearchRequest {
     /// Search text, trimmed before invoking GitHub CLI.
-    pub query: String,
+    pub(crate) query: String,
     /// Maximum result count, 1–50; defaults to 20.
-    pub limit: Option<usize>,
+    pub(crate) limit: Option<usize>,
 }
 
 /// GitHub repository visibility supported by the CLI's `isPrivate` field.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
 #[serde(rename_all = "snake_case")]
-pub enum GithubRepositoryVisibility {
+pub(crate) enum GithubRepositoryVisibility {
     /// Public repository.
     Public,
     /// Private repository.
@@ -25,27 +25,27 @@ pub enum GithubRepositoryVisibility {
 /// Normalized GitHub repository in a search result.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
 #[serde(rename_all = "camelCase")]
-pub struct GithubRepositoryPayload {
+pub(crate) struct GithubRepositoryPayload {
     /// GraphQL or numeric GitHub identity as text.
-    pub id: String,
+    pub(crate) id: String,
     /// Repository name.
-    pub name: String,
+    pub(crate) name: String,
     /// Full owner/repository path.
-    pub name_with_owner: String,
+    pub(crate) name_with_owner: String,
     /// Optional description.
-    pub description: Option<String>,
+    pub(crate) description: Option<String>,
     /// Public or private visibility.
-    pub visibility: GithubRepositoryVisibility,
+    pub(crate) visibility: GithubRepositoryVisibility,
     /// GitHub update timestamp.
-    pub updated_at: String,
+    pub(crate) updated_at: String,
     /// Clone URL chosen from host GitHub CLI configuration.
-    pub clone_url: String,
+    pub(crate) clone_url: String,
 }
 
 /// GitHub repository search status.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
 #[serde(rename_all = "snake_case")]
-pub enum GithubRepositorySearchStatus {
+pub(crate) enum GithubRepositorySearchStatus {
     /// Search completed.
     Success,
     /// GitHub CLI is absent.
@@ -59,24 +59,24 @@ pub enum GithubRepositorySearchStatus {
 /// Search result with Paseo's availability and optional missing-CLI reason.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
 #[serde(rename_all = "camelCase")]
-pub struct GithubRepositorySearchResult {
+pub(crate) struct GithubRepositorySearchResult {
     /// Search status.
-    pub status: GithubRepositorySearchStatus,
+    pub(crate) status: GithubRepositorySearchStatus,
     /// Matching repositories; empty for failure states.
-    pub repositories: Vec<GithubRepositoryPayload>,
+    pub(crate) repositories: Vec<GithubRepositoryPayload>,
     /// Whether the CLI was available for this request.
-    pub available: bool,
+    pub(crate) available: bool,
     /// `gh_missing` only for the unavailable status.
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub reason: Option<&'static str>,
+    pub(crate) reason: Option<&'static str>,
     /// Null on success, otherwise a safe diagnostic.
-    pub error: Option<String>,
+    pub(crate) error: Option<String>,
 }
 
 /// Clone transport for an owner/repository input.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Deserialize)]
 #[serde(rename_all = "snake_case")]
-pub enum GithubCloneProtocol {
+pub(crate) enum GithubCloneProtocol {
     /// HTTPS remote.
     Https,
     /// SSH remote.
@@ -86,27 +86,27 @@ pub enum GithubCloneProtocol {
 /// Clone a GitHub repository into a new child of the target directory.
 #[derive(Debug, Clone, PartialEq, Eq, Deserialize)]
 #[serde(rename_all = "camelCase")]
-pub struct ProjectGithubCloneRequest {
+pub(crate) struct ProjectGithubCloneRequest {
     /// Owner/repository pair or supported GitHub clone URL.
-    pub repo: String,
+    pub(crate) repo: String,
     /// Optional transport for an owner/repository pair.
-    pub clone_protocol: Option<GithubCloneProtocol>,
+    pub(crate) clone_protocol: Option<GithubCloneProtocol>,
     /// Parent directory; `~` and relative paths follow host resolution.
-    pub target_directory: String,
+    pub(crate) target_directory: String,
 }
 
 /// Completed clone and Project registration, or an inline business error.
 #[derive(Debug, Clone, PartialEq, Serialize)]
 #[serde(rename_all = "camelCase")]
-pub struct ProjectGithubCloneResult {
+pub(crate) struct ProjectGithubCloneResult {
     /// Normalized owner/repository path when valid.
-    pub repo: String,
+    pub(crate) repo: String,
     /// Completed checkout path, even if later registration fails.
-    pub checkout_path: Option<String>,
+    pub(crate) checkout_path: Option<String>,
     /// Registered Project, if any.
-    pub project: Option<WorkspaceProjectDescriptorPayload>,
+    pub(crate) project: Option<WorkspaceProjectDescriptorPayload>,
     /// Safe business failure or null on success.
-    pub error: Option<String>,
+    pub(crate) error: Option<String>,
 }
 
 #[cfg(test)]

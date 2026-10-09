@@ -6,7 +6,7 @@ use serde_json::Value;
 /// Stable forge availability state copied from Paseo.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
 #[serde(rename_all = "snake_case")]
-pub enum ForgeAuthState {
+pub(crate) enum ForgeAuthState {
     /// The forge CLI is installed and authenticated.
     Authenticated,
     /// The CLI is installed but has no usable credentials.
@@ -21,7 +21,7 @@ pub enum ForgeAuthState {
 
 /// Search categories, including Paseo's temporary GitHub aliases.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Deserialize)]
-pub enum ForgeSearchKind {
+pub(crate) enum ForgeSearchKind {
     /// Forge-neutral issue.
     #[serde(rename = "issue")]
     Issue,
@@ -42,100 +42,100 @@ pub enum ForgeSearchKind {
 /// Forge or compatibility GitHub search request.
 #[derive(Debug, Clone, PartialEq, Eq, Deserialize)]
 #[serde(rename_all = "camelCase")]
-pub struct ForgeSearchRequest {
+pub(crate) struct ForgeSearchRequest {
     /// Checkout used to resolve the forge and repository.
-    pub cwd: String,
+    pub(crate) cwd: String,
     /// Forge search query.
-    pub query: String,
+    pub(crate) query: String,
     /// Optional result limit, from one through fifty.
-    pub limit: Option<usize>,
+    pub(crate) limit: Option<usize>,
     /// Optional result categories.
-    pub kinds: Option<Vec<ForgeSearchKind>>,
+    pub(crate) kinds: Option<Vec<ForgeSearchKind>>,
 }
 
 /// One forge search result.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
 #[serde(rename_all = "camelCase")]
-pub struct ForgeSearchItem {
+pub(crate) struct ForgeSearchItem {
     /// `issue`, `change_request`, or the legacy `pr` projection.
-    pub kind: String,
+    pub(crate) kind: String,
     /// Resolved forge brand.
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub forge: Option<String>,
+    pub(crate) forge: Option<String>,
     /// Forge-local issue or change-request number.
-    pub number: u64,
+    pub(crate) number: u64,
     /// Display title.
-    pub title: String,
+    pub(crate) title: String,
     /// Browser URL.
-    pub url: String,
+    pub(crate) url: String,
     /// Open forge state.
-    pub state: String,
+    pub(crate) state: String,
     /// Optional body.
-    pub body: Option<String>,
+    pub(crate) body: Option<String>,
     /// Label names.
-    pub labels: Vec<String>,
+    pub(crate) labels: Vec<String>,
     /// Full repository path when known.
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub project_path: Option<String>,
+    pub(crate) project_path: Option<String>,
     /// Base branch for change requests.
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub base_ref_name: Option<String>,
+    pub(crate) base_ref_name: Option<String>,
     /// Head branch for change requests.
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub head_ref_name: Option<String>,
+    pub(crate) head_ref_name: Option<String>,
     /// Forge timestamp.
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub updated_at: Option<String>,
+    pub(crate) updated_at: Option<String>,
 }
 
 /// Neutral forge search response.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
 #[serde(rename_all = "camelCase")]
-pub struct ForgeSearchResult {
+pub(crate) struct ForgeSearchResult {
     /// Matching issues and change requests.
-    pub items: Vec<ForgeSearchItem>,
+    pub(crate) items: Vec<ForgeSearchItem>,
     /// Forge availability when it is known.
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub auth_state: Option<ForgeAuthState>,
+    pub(crate) auth_state: Option<ForgeAuthState>,
     /// Non-authentication failure text.
-    pub error: Option<String>,
+    pub(crate) error: Option<String>,
 }
 
 /// GitHub compatibility search response.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
 #[serde(rename_all = "camelCase")]
-pub struct GithubSearchResult {
+pub(crate) struct GithubSearchResult {
     /// Matching issues and pull requests.
-    pub items: Vec<ForgeSearchItem>,
+    pub(crate) items: Vec<ForgeSearchItem>,
     /// Legacy availability flag.
-    pub features_enabled: bool,
+    pub(crate) features_enabled: bool,
     /// Forge availability.
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub auth_state: Option<ForgeAuthState>,
+    pub(crate) auth_state: Option<ForgeAuthState>,
     /// Older legacy availability flag.
-    pub github_features_enabled: bool,
+    pub(crate) github_features_enabled: bool,
     /// Non-authentication failure text.
-    pub error: Option<String>,
+    pub(crate) error: Option<String>,
 }
 
 /// Create a pull request for the current branch.
 #[derive(Debug, Clone, PartialEq, Eq, Deserialize)]
 #[serde(rename_all = "camelCase")]
-pub struct PullRequestCreateRequest {
+pub(crate) struct PullRequestCreateRequest {
     /// Checkout directory.
-    pub cwd: String,
+    pub(crate) cwd: String,
     /// Optional explicit title.
-    pub title: Option<String>,
+    pub(crate) title: Option<String>,
     /// Optional explicit body.
-    pub body: Option<String>,
+    pub(crate) body: Option<String>,
     /// Optional base branch or ref.
-    pub base_ref: Option<String>,
+    pub(crate) base_ref: Option<String>,
 }
 
 /// Pull request merge method.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
-pub enum PullRequestMergeMethod {
+pub(crate) enum PullRequestMergeMethod {
     /// Create a merge commit.
     Merge,
     /// Squash the pull request.
@@ -147,105 +147,105 @@ pub enum PullRequestMergeMethod {
 /// Merge the pull request associated with the current branch.
 #[derive(Debug, Clone, PartialEq, Eq, Deserialize)]
 #[serde(rename_all = "camelCase")]
-pub struct PullRequestMergeRequest {
+pub(crate) struct PullRequestMergeRequest {
     /// Checkout directory.
-    pub cwd: String,
+    pub(crate) cwd: String,
     /// Requested forge merge method.
-    pub merge_method: PullRequestMergeMethod,
+    pub(crate) merge_method: PullRequestMergeMethod,
 }
 
 /// Enable or disable auto-merge for the current pull request.
 #[derive(Debug, Clone, PartialEq, Eq, Deserialize)]
 #[serde(rename_all = "camelCase")]
-pub struct PullRequestAutoMergeRequest {
+pub(crate) struct PullRequestAutoMergeRequest {
     /// Checkout directory.
-    pub cwd: String,
+    pub(crate) cwd: String,
     /// Desired auto-merge state.
-    pub enabled: bool,
+    pub(crate) enabled: bool,
     /// Required when enabling and forbidden when disabling.
-    pub merge_method: Option<PullRequestMergeMethod>,
+    pub(crate) merge_method: Option<PullRequestMergeMethod>,
 }
 
 /// A checkout-scoped forge read request.
 #[derive(Debug, Clone, PartialEq, Eq, Deserialize)]
-pub struct ForgePathRequest {
+pub(crate) struct ForgePathRequest {
     /// Checkout directory.
-    pub cwd: String,
+    pub(crate) cwd: String,
 }
 
 /// Pull request timeline request.
 #[derive(Debug, Clone, PartialEq, Eq, Deserialize)]
 #[serde(rename_all = "camelCase")]
-pub struct PullRequestTimelineRequest {
+pub(crate) struct PullRequestTimelineRequest {
     /// Checkout directory.
-    pub cwd: String,
+    pub(crate) cwd: String,
     /// Pull request number.
-    pub pr_number: u64,
+    pub(crate) pr_number: u64,
     /// GitHub repository owner.
-    pub repo_owner: String,
+    pub(crate) repo_owner: String,
     /// GitHub repository name.
-    pub repo_name: String,
+    pub(crate) repo_name: String,
 }
 
 /// Detailed check request.
 #[derive(Debug, Clone, PartialEq, Eq, Deserialize)]
 #[serde(rename_all = "camelCase")]
-pub struct CheckDetailsRequest {
+pub(crate) struct CheckDetailsRequest {
     /// Checkout directory.
-    pub cwd: String,
+    pub(crate) cwd: String,
     /// GitHub repository owner.
-    pub repo_owner: Option<String>,
+    pub(crate) repo_owner: Option<String>,
     /// GitHub repository name.
-    pub repo_name: Option<String>,
+    pub(crate) repo_name: Option<String>,
     /// GitHub check-run identifier.
-    pub check_run_id: Option<u64>,
+    pub(crate) check_run_id: Option<u64>,
     /// GitHub Actions workflow-run identifier.
-    pub workflow_run_id: Option<u64>,
+    pub(crate) workflow_run_id: Option<u64>,
     /// Change request number used by other forge families.
-    pub change_request_number: Option<u64>,
+    pub(crate) change_request_number: Option<u64>,
 }
 
 /// Pull request creation response.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
-pub struct PullRequestCreateResult {
+pub(crate) struct PullRequestCreateResult {
     /// Echoed checkout directory.
-    pub cwd: String,
+    pub(crate) cwd: String,
     /// Browser URL on success.
-    pub url: Option<String>,
+    pub(crate) url: Option<String>,
     /// Pull request number on success.
-    pub number: Option<u64>,
+    pub(crate) number: Option<u64>,
     /// Inline checkout-shaped error.
-    pub error: Option<crate::git::protocol::checkout::CheckoutError>,
+    pub(crate) error: Option<crate::git::protocol::checkout::CheckoutError>,
 }
 
 /// Generic pull request mutation response.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
-pub struct PullRequestMutationResult {
+pub(crate) struct PullRequestMutationResult {
     /// Echoed checkout directory.
-    pub cwd: String,
+    pub(crate) cwd: String,
     /// Whether the operation completed.
-    pub success: bool,
+    pub(crate) success: bool,
     /// Inline checkout-shaped error.
-    pub error: Option<crate::git::protocol::checkout::CheckoutError>,
+    pub(crate) error: Option<crate::git::protocol::checkout::CheckoutError>,
 }
 
 /// Auto-merge mutation response.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
-pub struct PullRequestAutoMergeResult {
+pub(crate) struct PullRequestAutoMergeResult {
     /// Echoed checkout directory.
-    pub cwd: String,
+    pub(crate) cwd: String,
     /// Requested state.
-    pub enabled: bool,
+    pub(crate) enabled: bool,
     /// Whether the operation completed.
-    pub success: bool,
+    pub(crate) success: bool,
     /// Inline checkout-shaped error.
-    pub error: Option<crate::git::protocol::checkout::CheckoutError>,
+    pub(crate) error: Option<crate::git::protocol::checkout::CheckoutError>,
 }
 
 /// Pull request mergeability.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
 #[serde(rename_all = "SCREAMING_SNAKE_CASE")]
-pub enum PullRequestMergeable {
+pub(crate) enum PullRequestMergeable {
     /// Forge reports the request can merge.
     Mergeable,
     /// Forge reports conflicts.
@@ -257,105 +257,105 @@ pub enum PullRequestMergeable {
 /// One normalized CI check.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
 #[serde(rename_all = "camelCase")]
-pub struct PullRequestCheck {
+pub(crate) struct PullRequestCheck {
     /// Check name.
-    pub name: String,
+    pub(crate) name: String,
     /// Normalized lifecycle.
-    pub status: String,
+    pub(crate) status: String,
     /// Details URL.
-    pub url: Option<String>,
+    pub(crate) url: Option<String>,
     /// Workflow display name.
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub workflow: Option<String>,
+    pub(crate) workflow: Option<String>,
     /// Formatted run duration.
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub duration: Option<String>,
+    pub(crate) duration: Option<String>,
     /// Check-run identifier.
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub check_run_id: Option<u64>,
+    pub(crate) check_run_id: Option<u64>,
     /// Workflow-run identifier.
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub workflow_run_id: Option<u64>,
+    pub(crate) workflow_run_id: Option<u64>,
     /// Open forge-neutral refinements.
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub traits: Option<Vec<String>>,
+    pub(crate) traits: Option<Vec<String>>,
 }
 
 /// Current pull request status.
 #[derive(Debug, Clone, PartialEq, Serialize)]
 #[serde(rename_all = "camelCase")]
-pub struct PullRequestStatus {
+pub(crate) struct PullRequestStatus {
     /// Resolved forge brand.
-    pub forge: String,
+    pub(crate) forge: String,
     /// Full forge project path.
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub project_path: Option<String>,
+    pub(crate) project_path: Option<String>,
     /// Pull request number.
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub number: Option<u64>,
+    pub(crate) number: Option<u64>,
     /// Browser URL.
-    pub url: String,
+    pub(crate) url: String,
     /// Display title.
-    pub title: String,
+    pub(crate) title: String,
     /// Forge state.
-    pub state: String,
+    pub(crate) state: String,
     /// Base branch.
-    pub base_ref_name: String,
+    pub(crate) base_ref_name: String,
     /// Head branch.
-    pub head_ref_name: String,
+    pub(crate) head_ref_name: String,
     /// Source commit recorded by this request; absent for older forge adapters.
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub head_sha: Option<String>,
+    pub(crate) head_sha: Option<String>,
     /// Whether the request is merged.
-    pub is_merged: bool,
+    pub(crate) is_merged: bool,
     /// Whether it is a draft.
-    pub is_draft: bool,
+    pub(crate) is_draft: bool,
     /// Forge mergeability.
-    pub mergeable: PullRequestMergeable,
+    pub(crate) mergeable: PullRequestMergeable,
     /// Normalized checks.
-    pub checks: Vec<PullRequestCheck>,
+    pub(crate) checks: Vec<PullRequestCheck>,
     /// Aggregate check state.
-    pub checks_status: String,
+    pub(crate) checks_status: String,
     /// Review decision.
-    pub review_decision: Option<String>,
+    pub(crate) review_decision: Option<String>,
     /// Repository owner.
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub repo_owner: Option<String>,
+    pub(crate) repo_owner: Option<String>,
     /// Repository name.
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub repo_name: Option<String>,
+    pub(crate) repo_name: Option<String>,
     /// Legacy GitHub facts mirror.
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub github: Option<Value>,
+    pub(crate) github: Option<Value>,
     /// Open forge-specific facts envelope.
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub forge_specific: Option<Value>,
+    pub(crate) forge_specific: Option<Value>,
 }
 
 /// Current pull request status response.
 #[derive(Debug, Clone, PartialEq, Serialize)]
 #[serde(rename_all = "camelCase")]
-pub struct PullRequestStatusResult {
+pub(crate) struct PullRequestStatusResult {
     /// Echoed checkout directory.
-    pub cwd: String,
+    pub(crate) cwd: String,
     /// Current pull request, or null.
-    pub status: Option<PullRequestStatus>,
+    pub(crate) status: Option<PullRequestStatus>,
     /// Paseo compatibility availability flag.
-    pub github_features_enabled: bool,
+    pub(crate) github_features_enabled: bool,
     /// Forge availability.
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub auth_state: Option<ForgeAuthState>,
+    pub(crate) auth_state: Option<ForgeAuthState>,
     /// Resolved forge brand.
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub forge: Option<String>,
+    pub(crate) forge: Option<String>,
     /// Inline checkout-shaped error.
-    pub error: Option<crate::git::protocol::checkout::CheckoutError>,
+    pub(crate) error: Option<crate::git::protocol::checkout::CheckoutError>,
 }
 
 /// Pull request timeline review state.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
 #[serde(rename_all = "snake_case")]
-pub enum TimelineReviewState {
+pub(crate) enum TimelineReviewState {
     /// Approved review.
     Approved,
     /// Changes requested.
@@ -367,30 +367,30 @@ pub enum TimelineReviewState {
 /// Optional file position for a timeline comment.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
 #[serde(rename_all = "camelCase")]
-pub struct TimelineCommentLocation {
+pub(crate) struct TimelineCommentLocation {
     /// Repository-relative path.
-    pub path: String,
+    pub(crate) path: String,
     /// Ending line.
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub line: Option<u64>,
+    pub(crate) line: Option<u64>,
     /// Starting line.
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub start_line: Option<u64>,
+    pub(crate) start_line: Option<u64>,
     /// Forge thread identifier.
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub thread_id: Option<String>,
+    pub(crate) thread_id: Option<String>,
     /// Resolution state.
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub is_resolved: Option<bool>,
+    pub(crate) is_resolved: Option<bool>,
     /// Whether the location is stale.
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub is_outdated: Option<bool>,
+    pub(crate) is_outdated: Option<bool>,
 }
 
 /// Timeline review or comment.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
 #[serde(tag = "kind", rename_all = "snake_case")]
-pub enum PullRequestTimelineItem {
+pub(crate) enum PullRequestTimelineItem {
     /// Pull request review.
     Review {
         /// Forge node identifier.
@@ -451,7 +451,7 @@ pub enum PullRequestTimelineItem {
 /// Pull request timeline error category.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
 #[serde(rename_all = "snake_case")]
-pub enum TimelineErrorKind {
+pub(crate) enum TimelineErrorKind {
     /// Pull request not found.
     NotFound,
     /// Caller lacks permission.
@@ -462,148 +462,148 @@ pub enum TimelineErrorKind {
 
 /// Inline timeline error.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
-pub struct TimelineError {
+pub(crate) struct TimelineError {
     /// Stable category.
-    pub kind: TimelineErrorKind,
+    pub(crate) kind: TimelineErrorKind,
     /// Local diagnostic.
-    pub message: String,
+    pub(crate) message: String,
 }
 
 /// Pull request timeline response.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
 #[serde(rename_all = "camelCase")]
-pub struct PullRequestTimelineResult {
+pub(crate) struct PullRequestTimelineResult {
     /// Echoed checkout directory.
-    pub cwd: String,
+    pub(crate) cwd: String,
     /// Pull request number.
-    pub pr_number: Option<u64>,
+    pub(crate) pr_number: Option<u64>,
     /// Stable timeline items.
-    pub items: Vec<PullRequestTimelineItem>,
+    pub(crate) items: Vec<PullRequestTimelineItem>,
     /// Whether a forge page limit truncated the timeline.
-    pub truncated: bool,
+    pub(crate) truncated: bool,
     /// Inline timeline error.
-    pub error: Option<TimelineError>,
+    pub(crate) error: Option<TimelineError>,
     /// Paseo compatibility availability flag.
-    pub github_features_enabled: bool,
+    pub(crate) github_features_enabled: bool,
     /// Forge availability.
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub auth_state: Option<ForgeAuthState>,
+    pub(crate) auth_state: Option<ForgeAuthState>,
 }
 
 /// Check-run annotation.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
 #[serde(rename_all = "camelCase")]
-pub struct CheckAnnotation {
+pub(crate) struct CheckAnnotation {
     /// Repository-relative path.
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub path: Option<String>,
+    pub(crate) path: Option<String>,
     /// First annotated line.
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub start_line: Option<u64>,
+    pub(crate) start_line: Option<u64>,
     /// Last annotated line.
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub end_line: Option<u64>,
+    pub(crate) end_line: Option<u64>,
     /// Forge annotation severity.
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub annotation_level: Option<String>,
+    pub(crate) annotation_level: Option<String>,
     /// Main message.
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub message: Option<String>,
+    pub(crate) message: Option<String>,
     /// Annotation title.
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub title: Option<String>,
+    pub(crate) title: Option<String>,
     /// Additional details.
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub raw_details: Option<String>,
+    pub(crate) raw_details: Option<String>,
 }
 
 /// Failed workflow job summary.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
 #[serde(rename_all = "camelCase")]
-pub struct CheckFailedJob {
+pub(crate) struct CheckFailedJob {
     /// Job identifier.
-    pub job_id: u64,
+    pub(crate) job_id: u64,
     /// Job name.
-    pub name: String,
+    pub(crate) name: String,
     /// Forge job state.
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub status: Option<String>,
+    pub(crate) status: Option<String>,
     /// Forge conclusion.
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub conclusion: Option<String>,
+    pub(crate) conclusion: Option<String>,
     /// Browser URL.
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub url: Option<String>,
+    pub(crate) url: Option<String>,
     /// Bounded log tail.
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub log_tail: Option<String>,
+    pub(crate) log_tail: Option<String>,
     /// Whether the log was truncated.
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub log_truncated: Option<bool>,
+    pub(crate) log_truncated: Option<bool>,
 }
 
 /// GitHub check output.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
-pub struct CheckOutput {
+pub(crate) struct CheckOutput {
     /// Output title.
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub title: Option<String>,
+    pub(crate) title: Option<String>,
     /// Markdown summary.
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub summary: Option<String>,
+    pub(crate) summary: Option<String>,
     /// Markdown details.
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub text: Option<String>,
+    pub(crate) text: Option<String>,
 }
 
 /// Forge check details. `pipeline` remains an open envelope for non-GitHub adapters.
 #[derive(Debug, Clone, PartialEq, Serialize)]
 #[serde(rename_all = "camelCase")]
-pub struct CheckDetails {
+pub(crate) struct CheckDetails {
     /// Check-run identifier.
-    pub check_run_id: u64,
+    pub(crate) check_run_id: u64,
     /// Workflow-run identifier.
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub workflow_run_id: Option<u64>,
+    pub(crate) workflow_run_id: Option<u64>,
     /// Check name.
-    pub name: String,
+    pub(crate) name: String,
     /// Forge state.
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub status: Option<String>,
+    pub(crate) status: Option<String>,
     /// Forge conclusion.
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub conclusion: Option<String>,
+    pub(crate) conclusion: Option<String>,
     /// Browser URL.
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub url: Option<String>,
+    pub(crate) url: Option<String>,
     /// Additional details URL.
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub details_url: Option<String>,
+    pub(crate) details_url: Option<String>,
     /// Check output.
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub output: Option<CheckOutput>,
+    pub(crate) output: Option<CheckOutput>,
     /// Check annotations.
-    pub annotations: Vec<CheckAnnotation>,
+    pub(crate) annotations: Vec<CheckAnnotation>,
     /// Failed jobs in the workflow.
-    pub failed_jobs: Vec<CheckFailedJob>,
+    pub(crate) failed_jobs: Vec<CheckFailedJob>,
     /// Whether annotations, jobs, or logs were truncated.
-    pub truncated: bool,
+    pub(crate) truncated: bool,
     /// Structured pipeline for pipeline-oriented forges.
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub pipeline: Option<Value>,
+    pub(crate) pipeline: Option<Value>,
 }
 
 /// Check-details response.
 #[derive(Debug, Clone, PartialEq, Serialize)]
-pub struct CheckDetailsResult {
+pub(crate) struct CheckDetailsResult {
     /// Echoed checkout directory.
-    pub cwd: String,
+    pub(crate) cwd: String,
     /// Whether the read completed.
-    pub success: bool,
+    pub(crate) success: bool,
     /// Details on success.
-    pub details: Option<CheckDetails>,
+    pub(crate) details: Option<CheckDetails>,
     /// Inline checkout-shaped error.
-    pub error: Option<crate::git::protocol::checkout::CheckoutError>,
+    pub(crate) error: Option<crate::git::protocol::checkout::CheckoutError>,
 }
 
 #[cfg(test)]
