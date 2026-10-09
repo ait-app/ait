@@ -69,19 +69,23 @@ impl Fixture {
         let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
         let address = listener.local_addr().unwrap();
         let binary = directory.path().join("opencode-fixture");
-        let (release, password) = match version {
-            Version::V1 => ("1.18.33", "OPENCODE_SERVER_PASSWORD"),
-            Version::V2 => ("2.0.10", "OPENCODE_PASSWORD"),
+        let release = match version {
+            Version::V1 => "1.18.33",
+            Version::V2 => "2.0.10",
         };
-        let script = format!(
-            "#!/bin/sh\nif [ \"$1\" = '--version' ]; then echo '{release}'; exit 0; fi\n[ \"$1 $2 $3 $4 $5\" = 'serve --hostname 127.0.0.1 --port 0' ] || exit 12\n[ -n \"${password}\" ] || exit 13\necho 'opencode server listening on http://{address}'\nexec sleep 600\n"
-        );
-        std::fs::write(&binary, script).unwrap();
+        std::fs::write(
+            directory.path().join("runtime.conf"),
+            format!("{release}\n{address}\n"),
+        )
+        .unwrap();
+        let helper =
+            PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("tests/fixtures/opencode_runtime.sh");
+        // Concurrent process creation can inherit another test's still-open writable
+        // executable before exec closes it, causing Linux ETXTBSY. Only data is written.
         #[cfg(unix)]
-        {
-            use std::os::unix::fs::PermissionsExt;
-            std::fs::set_permissions(&binary, std::fs::Permissions::from_mode(0o700)).unwrap();
-        }
+        std::os::unix::fs::symlink(&helper, &binary).unwrap();
+        #[cfg(not(unix))]
+        std::fs::copy(&helper, &binary).unwrap();
         let state = Arc::new(Mutex::new(StateData {
             session_pages: Vec::new(),
             session_queries: Vec::new(),
@@ -126,6 +130,9 @@ impl Fixture {
         }
     }
 }
+
+#[cfg(test)]
+mod tests;
 
 async fn handle(State(state): State<Arc<Mutex<StateData>>>, request: Request) -> Response {
     let path = request.uri().path().to_owned();
