@@ -27,7 +27,7 @@ impl Reader {
                 .map_err(Into::into);
         }
         self.runtime
-            .run_queued(
+            .run_directory_read(
                 self.directory.clone(),
                 ErrorCode::AgentIo,
                 move |directory| {

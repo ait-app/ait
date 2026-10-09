@@ -20,8 +20,9 @@ ADR-068 的 Workspace 目录订阅每 250 ms 重读一次完整投影。Agent �
   Workspace 和 Agent registry 在成功持久化后通知；Terminal 活动状态、Git/Forge 缓存
   更新后通知。`metadata` 和 `provider` 目录订阅重读各自的投影并沿用已有差分与顺序号。
 - 目录订阅在注册唤醒后先读取一次，随后按变更读取；每 5 秒做一次低频校验，覆盖
-  外部进程写入、没有本进程通知的状态。已接纳的订阅读取等待共享任务额度，避免忙时丢失
-  唯一一次唤醒。旧的未安装信号的组合仍保留原订阅行为。
+  外部进程写入、没有本进程通知的状态。已接纳的订阅读取排队等待任务额度，避免忙时丢失
+  唯一一次唤醒（该额度后由 [ADR-037](../daemon/adr-037-daemon-model-context.md) 独立为
+  `directory_poll_jobs`，不再占用前台准入）。旧的未安装信号的组合仍保留原订阅行为。
 - Project registry 的提交后观察者发送 `project.update`。脚本启动、停止及结束发送
   `script_status_update`；脚本自然退出至多每 5 秒检查一次。设置运行时的启动、命令进展、
   完成和失败发送 `workspace_setup_progress`；不可信来源的 Workspace 注册后推送 blocked

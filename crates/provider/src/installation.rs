@@ -2,7 +2,7 @@
 
 use std::sync::Arc;
 
-use crate::summary::SummaryGenerator;
+use model::summary::SummaryGenerator;
 
 use crate::service::{agent_execution::AgentExecution, agents::Agents};
 

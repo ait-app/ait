@@ -50,7 +50,6 @@ pub(crate) async fn subscribe(
     let directory = state.directory.clone();
     let runtime = state.runtime.clone();
     let read_runtime = runtime.clone();
-    let on_changes = changes.is_some();
     let read = move || {
         let runtime = read_runtime.clone();
         let directory = directory.clone();
@@ -63,13 +62,9 @@ pub(crate) async fn subscribe(
                     .update(directory)
                     .map_err(Into::into)
             };
-            if on_changes {
-                runtime
-                    .run_queued(directory, ErrorCode::RegistryIo, update)
-                    .await
-            } else {
-                runtime.run(directory, ErrorCode::RegistryIo, update).await
-            }
+            runtime
+                .run_directory_read(directory, ErrorCode::RegistryIo, update)
+                .await
         }
     };
     let subscription = if let Some(changes) = changes {

@@ -81,6 +81,20 @@ Paseo 订阅回归暴露了多个 diff 观察者在固定周期内竞争单个�
 确定性的争用、取消、前台资源隔离及真实 Git 回归见
 [Server Paseo 测试扩展](../../reports/daemon/server-paseo-tests.md)。
 
+## 2026-10-10：目录订阅读取预算
+
+ADR-081 的变更驱动目录订阅原本等待共享的 `jobs` 许可（容量 1）。一次 Workspace 改名会
+同时唤醒 metadata 和 provider 的目录订阅；只要某个订阅读取正持有许可，同时到达的普通
+请求就在 `try_acquire` 准入时得到可重试的 `resource_exhausted`。客户端会退避重试，但
+进程测试 `websocket_directory_streams_keep_sequences_ownership_and_reconnect_checkpoints`
+不重试，约每五次失败一次。
+
+Runtime 增加容量为 1 的 `directory_poll_jobs`。metadata 与 provider 的目录订阅读取通过
+`Runtime::run_directory_read` 在该预算上排队，不再占用前台 `jobs`；同一服务的互斥锁继续
+保证读取与前台操作有序。等待可被停机取消，已开始的读取保留任务追踪。普通请求的准入
+语义、错误码与重试性保持不变。确定性回归测试覆盖读取占用预算时前台请求仍被接纳、
+第二个读取排队而非失败，以及停机取消等待中的读取。
+
 ## 验证
 
 迁移已有队列和公共 RPC 测试到 model；新增已开始的阻塞任务在响应取消后仍保留预算和追踪
