@@ -52,6 +52,8 @@
 
 ## Provider、Agent 与会话
 
+- [ADR-115：OpenCode 官方 ACP Provider](providers/adr-115-opencode-acp-provider.md)
+
 - [ADR-110：OpenCode 双版本私有协议边界](providers/adr-110-opencode-private-protocol-boundary.md)
 - [ADR-102：共享协作契约归 model，Provider 不依赖 metadata](providers/adr-102-provider-metadata-independence.md)
 - [ADR-101：Provider 拥有摘要生成能力](providers/adr-101-provider-summary-generator.md)

@@ -1,185 +1,62 @@
-use super::super::client::OpenCodeClient;
-use super::super::{protocol::Version, runtime};
-use crate::ports::agent_session::{
-    AgentClient, AgentResumePurpose, AgentSession, AgentSessionSpec, AgentTurnEvent,
+//! Real native CLI acceptance with isolated XDG directories and a loopback-only model.
+use std::sync::{
+    Arc,
+    atomic::{AtomicUsize, Ordering},
 };
-use axum::{Json, Router, routing::post};
-use domain::agent_runtime::StoredAgentConfig;
-use serde_json::{Value, json};
-use std::{os::unix::fs::PermissionsExt, path::Path, time::Duration};
+
+use axum::{Json, Router, extract::State, routing::post};
 use tokio_util::task::AbortOnDropHandle;
 
-mod concurrent;
+use super::*;
 
-#[tokio::test]
-#[ignore = "requires AIT_TEST_OPENCODE_BIN; isolated config and loopback model only"]
-async fn installed_opencode_discovers_runs_and_restores_with_local_model() {
-    let (_root, client, spec, _server) =
-        installed_fixture(Router::new().route("/v1/chat/completions", post(answer))).await;
-    let details = client.discover(&spec.cwd).await.unwrap();
-    assert!(
-        details
-            .models
-            .iter()
-            .any(|model| model["id"] == "local/test-model")
-    );
-    assert!(
-        details
-            .models
-            .iter()
-            .any(|model| model["id"] == "second/test-model")
-    );
-    let mut session = client.create_session(&spec).await.unwrap();
-    for prompt in ["first turn", "second turn"] {
-        session.start_turn(prompt, &spec.config).await.unwrap();
-        assert_completed(session.as_mut()).await;
-    }
-    let handle = session.persistence().unwrap();
-    session.close().await.unwrap();
-    let listed = client
-        .list_sessions(&crate::ports::native_history::ListOptions {
-            cwd: Some(spec.cwd.clone()),
-            scan_limit: 100,
-        })
-        .await
-        .unwrap();
-    assert!(
-        listed
-            .iter()
-            .any(|entry| entry.provider_handle_id == handle.session_id)
-    );
-    let mut imported = domain::agent_runtime::AgentPersistenceHandle {
-        provider: "opencode".into(),
-        session_id: handle.session_id.clone(),
-        native_handle: None,
-        metadata: None,
-    };
-    let inspected = client.inspect_session(&imported, &spec.cwd).await.unwrap();
-    assert_eq!(inspected.entries.len(), 4);
-    imported.metadata = Some(inspected.resume_metadata);
-    let imported_spec = AgentSessionSpec {
-        config: inspected.config,
-        ..spec.clone()
-    };
-    let mut imported_session = client
-        .resume_session(&imported, &imported_spec, AgentResumePurpose::Interactive)
-        .await
-        .unwrap();
-    assert_eq!(
-        imported_session.persistence().unwrap().session_id,
-        handle.session_id
-    );
-    imported_session
-        .start_turn("after import", &imported_spec.config)
-        .await
-        .unwrap();
-    assert_completed(imported_session.as_mut()).await;
-    imported_session.close().await.unwrap();
-    let history = client.history(&handle, &spec.cwd).await.unwrap();
-    assert_eq!(history.len(), 6);
-    let mut resumed = client
-        .resume_session(&handle, &spec, AgentResumePurpose::Interactive)
-        .await
-        .unwrap();
-    resumed
-        .start_turn("after restart", &spec.config)
-        .await
-        .unwrap();
-    assert_completed(resumed.as_mut()).await;
-    resumed.close().await.unwrap();
-    assert_eq!(client.history(&handle, &spec.cwd).await.unwrap().len(), 8);
-}
-
-fn isolated_binary(root: &Path, binary: &str) -> std::path::PathBuf {
-    let environment = json!({
-        "XDG_DATA_HOME":root.join("data"), "XDG_CONFIG_HOME":root.join("config"),
-        "XDG_CACHE_HOME":root.join("cache"), "XDG_STATE_HOME":root.join("state"),
-        "OPENCODE_DISABLE_AUTOUPDATE":"1", "OPENCODE_DISABLE_MODELS_FETCH":"1"
-    });
-    let binary = serde_json::to_string(binary).unwrap();
-    let script = format!(
-        "#!/usr/bin/env python3\nimport os, sys\nenv = dict(os.environ)\nenv.update({environment})\nos.execve({binary}, [{binary}, *sys.argv[1:]], env)\n"
-    );
-    let path = root.join("isolated-opencode");
-    std::fs::write(&path, script).unwrap();
-    std::fs::set_permissions(&path, std::fs::Permissions::from_mode(0o700)).unwrap();
-    path
-}
-
-async fn answer() -> ([(&'static str, &'static str); 1], String) {
-    let chunks = [
-        json!({"choices":[{"index":0,"delta":{"role":"assistant","content":"Local deterministic answer."},"finish_reason":null}]}),
-        json!({"choices":[{"index":0,"delta":{},"finish_reason":"stop"}],"usage":{"prompt_tokens":10,"completion_tokens":5,"total_tokens":15}}),
-    ];
-    let body = format!(
-        "data: {}\n\ndata: {}\n\ndata: [DONE]\n\n",
-        chunks[0], chunks[1]
-    );
-    ([("content-type", "text/event-stream")], body)
-}
-
-async fn assert_completed(session: &mut dyn AgentSession) {
-    tokio::time::timeout(Duration::from_secs(30), async {
-        loop {
-            match session.poll_turn().unwrap() {
-                Some(AgentTurnEvent::Completed(text)) => {
-                    assert_eq!(text.as_deref(), Some("Local deterministic answer."));
-                    return;
-                }
-                Some(AgentTurnEvent::Failed | AgentTurnEvent::Cancelled) => panic!("turn failed"),
-                _ => tokio::time::sleep(Duration::from_millis(10)).await,
-            }
-        }
-    })
-    .await
-    .unwrap();
-}
-
-async fn installed_fixture(
-    router: Router,
+async fn installed(
+    question: bool,
 ) -> (
-    tempfile::TempDir,
+    TempDir,
     OpenCodeClient,
     AgentSessionSpec,
     AbortOnDropHandle<()>,
 ) {
     let binary = std::env::var("AIT_TEST_OPENCODE_BIN").expect("set AIT_TEST_OPENCODE_BIN");
     let root = tempfile::tempdir().unwrap();
-    let cwd = root.path().join("workspace + & 测试");
-    std::fs::create_dir(&cwd).unwrap();
-    let cwd = cwd.canonicalize().unwrap();
+    let cwd = root
+        .path()
+        .canonicalize()
+        .unwrap()
+        .to_string_lossy()
+        .into_owned();
+    let mut client = OpenCodeClient::new(binary.into());
+    client.environment = BTreeMap::from([
+        ("XDG_DATA_HOME".into(), format!("{cwd}/data")),
+        ("XDG_CONFIG_HOME".into(), format!("{cwd}/config")),
+        ("XDG_CACHE_HOME".into(), format!("{cwd}/cache")),
+        ("XDG_STATE_HOME".into(), format!("{cwd}/state")),
+        ("OPENCODE_DISABLE_AUTOUPDATE".into(), "1".into()),
+        ("OPENCODE_DISABLE_MODELS_FETCH".into(), "1".into()),
+    ]);
+    let version = launcher::version(&client, &cwd).await.unwrap();
     let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
     let address = listener.local_addr().unwrap();
+    let calls = Arc::new(AtomicUsize::new(usize::from(!question)));
+    let router = Router::new()
+        .route("/v1/chat/completions", post(model))
+        .with_state(calls);
     let server = AbortOnDropHandle::new(tokio::spawn(async move {
         axum::serve(listener, router).await.unwrap();
     }));
-    let wrapper = isolated_binary(root.path(), &binary);
-    let version = runtime::probe(&wrapper, &cwd, &tokio_util::sync::CancellationToken::new())
-        .await
-        .unwrap();
-    let mut config = match version {
-        Version::V1 => json!({"provider":{"local":{
-            "name":"Local test", "npm":"@ai-sdk/openai-compatible",
+    let configuration = if version.starts_with("1.") {
+        json!({"model":"local/test-model","provider":{"local":{"name":"Local test","npm":"@ai-sdk/openai-compatible",
             "options":{"baseURL":format!("http://{address}/v1"),"apiKey":"local-only"},
-            "models":{"test-model":{"name":"Test","limit":{"context":32000,"output":2000}}}
-        }}, "permission":{"*":"ask"}}),
-        Version::V2 => json!({"providers":{"local":{
-            "name":"Local test", "package":"@opencode/ai/providers/openai-compatible",
+            "models":{"test-model":{"name":"Test","limit":{"context":32000,"output":2000}}}}}})
+    } else {
+        json!({"model":"local/test-model","providers":{"local":{"name":"Local test","package":"@opencode/ai/providers/openai-compatible",
             "settings":{"baseURL":format!("http://{address}/v1"),"apiKey":"local-only"},
-            "models":{"test-model":{"name":"Test","limit":{"context":32000,"output":2000}}}
-        }}, "permissions":[{"action":"shell", "resource":"*", "effect":"ask"}]}),
+            "models":{"test-model":{"name":"Test","limit":{"context":32000,"output":2000}}}}}})
     };
-    let providers = match version {
-        Version::V1 => "provider",
-        Version::V2 => "providers",
-    };
-    config[providers]["second"] = config[providers]["local"].clone();
-    std::fs::write(cwd.join("opencode.json"), config.to_string()).unwrap();
-    // Exercise the actual cold-start catalog, rather than warming it with a separate probe.
-    let client = OpenCodeClient::new(wrapper);
+    std::fs::write(root.path().join("opencode.json"), configuration.to_string()).unwrap();
     let spec = AgentSessionSpec {
         provider: "opencode".into(),
-        cwd: cwd.to_string_lossy().into_owned(),
+        cwd,
         config: StoredAgentConfig {
             model: Some("local/test-model".into()),
             ..Default::default()
@@ -188,282 +65,228 @@ async fn installed_fixture(
     (root, client, spec, server)
 }
 
-#[tokio::test]
-#[ignore = "requires AIT_TEST_OPENCODE_BIN; isolated config and loopback model only"]
-async fn installed_opencode_declined_tool_settles_and_accepts_next_turn() {
-    let (_root, client, spec, _server) =
-        installed_fixture(Router::new().route("/v1/chat/completions", post(tool_answer))).await;
-    let mut session = client.create_session(&spec).await.unwrap();
-    session
-        .start_turn("request a tool", &spec.config)
-        .await
-        .unwrap();
-    tokio::time::timeout(Duration::from_secs(20), async {
-        let mut denied = false;
-        loop {
-            match session.poll_turn().unwrap() {
-                Some(AgentTurnEvent::PermissionRequested(request)) => {
-                    session
-                        .respond_permission(
-                            request["id"].as_str().unwrap(),
-                            &json!({"behavior":"deny","selectedActionId":"deny"}),
-                        )
-                        .await
-                        .unwrap();
-                    denied = true;
-                }
-                Some(AgentTurnEvent::Cancelled) => {
-                    assert!(denied);
-                    break;
-                }
-                Some(event @ (AgentTurnEvent::Failed | AgentTurnEvent::Completed(_))) => {
-                    panic!("unexpected terminal event: {event:?}")
-                }
-                _ => tokio::time::sleep(Duration::from_millis(10)).await,
-            }
-        }
-    })
-    .await
-    .expect("denial must settle without manually cancelling");
-    session
-        .start_turn("after denial", &spec.config)
-        .await
-        .unwrap();
-    assert_completed(session.as_mut()).await;
-    session.close().await.unwrap();
-}
-
-async fn tool_answer(Json(body): Json<Value>) -> ([(&'static str, &'static str); 1], String) {
-    let after_denial = body["messages"]
-        .as_array()
-        .unwrap()
-        .iter()
-        .rev()
-        .find(|message| message["role"] == "user")
-        .is_some_and(|message| message["content"].to_string().contains("after denial"));
-    if after_denial {
-        return answer().await;
+async fn model(
+    State(calls): State<Arc<AtomicUsize>>,
+    Json(request): Json<Value>,
+) -> ([(&'static str, &'static str); 1], String) {
+    if request["messages"]
+        .to_string()
+        .contains("Summarize metadata")
+    {
+        assert!(request["tools"].as_array().is_none_or(Vec::is_empty));
     }
-    if body["tools"].as_array().is_none_or(Vec::is_empty) {
-        // Native metadata requests do not expose tools; permission tests below
-        // still require a real foreground request and native approval round trip.
-        return answer().await;
-    }
-    let tool = body["tools"]
+    let is_question_prompt = request["messages"]
+        .to_string()
+        .contains("Ask which language")
+        || request["messages"].to_string().contains("Request shell");
+    let tool_name = if request["messages"].to_string().contains("Request shell") {
+        "shell"
+    } else {
+        "question"
+    };
+    let has_tool_result = request["messages"]
         .as_array()
-        .unwrap()
-        .iter()
-        .filter_map(|tool| tool.pointer("/function/name").and_then(Value::as_str))
-        .find(|name| matches!(*name, "bash" | "shell"))
-        .expect("OpenCode must advertise its native command tool");
-    let delta = json!({"choices":[{"index":0,"delta":{"role":"assistant","tool_calls":[{
-        "index":0,"id":"call-denied","type":"function","function":{"name":tool,"arguments":"{\"command\":\"pwd\"}"}
-    }]},"finish_reason":null}]});
-    let finish = json!({"choices":[{"index":0,"delta":{},"finish_reason":"tool_calls"}]});
+        .is_some_and(|messages| messages.iter().any(|message| message["role"] == "tool"));
+    let has_question_tool = request["tools"].as_array().is_some_and(|tools| {
+        tools
+            .iter()
+            .any(|tool| tool["function"]["name"] == tool_name)
+    });
+    let question = has_question_tool
+        && is_question_prompt
+        && !has_tool_result
+        && calls.load(Ordering::SeqCst) == 0;
+    if is_question_prompt && has_question_tool {
+        calls.fetch_add(1, Ordering::SeqCst);
+    }
+    if tool_name == "question"
+        && !question
+        && request["messages"]
+            .as_array()
+            .is_some_and(|messages| messages.iter().any(|message| message["role"] == "tool"))
+    {
+        assert!(
+            request["messages"].to_string().contains("Rust"),
+            "native form answer must reach the model"
+        );
+    }
+    let delta = if question {
+        let arguments = if tool_name == "shell" { json!({"command":"pwd","description":"Show working directory"}) } else { json!({"questions":[{"header":"Language","question":"Which language?","options":[{"label":"Rust","description":"Use Rust"},{"label":"Go","description":"Use Go"}]}]}) }.to_string();
+        json!({"role":"assistant","tool_calls":[{"index":0,"id":"question_local","type":"function","function":{"name":tool_name,"arguments":arguments}}]})
+    } else {
+        json!({"role":"assistant","content":"authoritative answer"})
+    };
+    let chunks = [
+        json!({"choices":[{"index":0,"delta":delta,"finish_reason":null}]}),
+        json!({"choices":[{"index":0,"delta":{},"finish_reason":if question {"tool_calls"} else {"stop"}}],"usage":{"prompt_tokens":10,"completion_tokens":5,"total_tokens":15}}),
+    ];
     (
         [("content-type", "text/event-stream")],
-        format!("data: {delta}\n\ndata: {finish}\n\ndata: [DONE]\n\n"),
+        format!(
+            "data: {}\n\ndata: {}\n\ndata: [DONE]\n\n",
+            chunks[0], chunks[1]
+        ),
     )
 }
 
 #[tokio::test]
-#[ignore = "requires AIT_TEST_OPENCODE_BIN; isolated config and loopback model only"]
-async fn installed_opencode_plan_import_and_switch_use_native_agent() {
-    let (_root, client, mut spec, _server) =
-        installed_fixture(Router::new().route("/v1/chat/completions", post(answer))).await;
-    spec.config.mode_id = Some("plan".into());
+#[ignore = "requires AIT_TEST_OPENCODE_BIN; isolated XDG and deterministic loopback model"]
+async fn installed_acp_multi_turn_native_history_resume_and_discovery() {
+    let (_root, client, spec, _server) = installed(false).await;
     let mut session = client.create_session(&spec).await.unwrap();
-    session.start_turn("plan only", &spec.config).await.unwrap();
-    assert_completed(session.as_mut()).await;
+    let mut items = Vec::new();
+    for index in 0..2 {
+        session
+            .start_input(
+                &crate::protocol::prompt::AgentPrompt {
+                    text: format!("hello {index}"),
+                    client_message_id: Some(format!("client-{index}")),
+                    ..Default::default()
+                },
+                &spec.config,
+            )
+            .await
+            .unwrap();
+        items.extend(completed(session.as_mut()).await);
+    }
     let handle = session.persistence().unwrap();
-    let external = domain::agent_runtime::AgentPersistenceHandle {
-        provider: "opencode".into(),
-        session_id: handle.session_id.clone(),
-        native_handle: None,
-        metadata: None,
-    };
-    let history = client.inspect_session(&external, &spec.cwd).await.unwrap();
-    assert_eq!(history.config.mode_id.as_deref(), Some("plan"));
-    spec.config.mode_id = Some("build".into());
-    session.start_turn("build now", &spec.config).await.unwrap();
-    assert_completed(session.as_mut()).await;
-    let history = client.inspect_session(&external, &spec.cwd).await.unwrap();
-    assert_eq!(history.config.mode_id.as_deref(), Some("build"));
     session.close().await.unwrap();
+    assert_replay(&items, &client.history(&handle, &spec.cwd).await.unwrap());
+    let listed = client
+        .list_sessions(&crate::ports::native_history::ListOptions {
+            cwd: Some(spec.cwd.clone()),
+            scan_limit: 10,
+        })
+        .await
+        .unwrap();
+    assert!(
+        listed
+            .iter()
+            .any(|entry| entry.provider_handle_id == handle.session_id)
+    );
+    let models = client.discover(&spec.cwd).await.unwrap();
+    assert!(
+        models
+            .models
+            .iter()
+            .any(|model| model["id"] == "local/test-model")
+    );
+    let mut resumed = client
+        .resume_session(&handle, &spec, AgentResumePurpose::Interactive)
+        .await
+        .unwrap();
+    resumed
+        .start_turn("after restart", &spec.config)
+        .await
+        .unwrap();
+    completed(resumed.as_mut()).await;
+    resumed.close().await.unwrap();
 }
 
 #[tokio::test]
-#[ignore = "requires AIT_TEST_OPENCODE_BIN; isolated config and loopback model only"]
-async fn installed_opencode_saves_only_explicit_native_permission_rules() {
-    let (_root, client, spec, _server) =
-        installed_fixture(Router::new().route("/v1/chat/completions", post(saved_tool_answer)))
-            .await;
+#[ignore = "requires OpenCode 2.0.26+ in AIT_TEST_OPENCODE_BIN; isolated XDG and loopback model"]
+async fn installed_acp_native_question_form_reaches_user_and_model() {
+    let (_root, client, spec, _server) = installed(true).await;
     let mut session = client.create_session(&spec).await.unwrap();
     session
-        .start_turn("request a tool", &spec.config)
+        .start_turn("Ask which language to use, then continue.", &spec.config)
         .await
         .unwrap();
-    tokio::time::timeout(Duration::from_secs(20), async {
-        let mut allowed = false;
-        loop {
-            match session.poll_turn().unwrap() {
-                Some(AgentTurnEvent::PermissionRequested(request)) => {
-                    assert!(!allowed, "one tool request must not ask twice");
-                    assert!(
-                        request["actions"]
-                            .as_array()
-                            .unwrap()
-                            .iter()
-                            .any(|action| action["id"] == "always"),
-                        "{request}"
-                    );
-                    assert!(
-                        !request["input"]["saveResources"]
-                            .as_array()
-                            .unwrap()
-                            .is_empty()
-                    );
-                    session
-                        .respond_permission(
-                            request["id"].as_str().unwrap(),
-                            &json!({"behavior":"allow","selectedActionId":"always"}),
-                        )
-                        .await
-                        .unwrap();
-                    allowed = true;
-                }
-                Some(AgentTurnEvent::Completed(_)) => {
-                    assert!(allowed);
-                    break;
-                }
-                Some(AgentTurnEvent::Failed | AgentTurnEvent::Cancelled) => panic!("turn failed"),
-                _ => tokio::time::sleep(Duration::from_millis(10)).await,
+    let request = loop {
+        match event(session.as_mut()).await {
+            AgentTurnEvent::PermissionRequested(request) if request["kind"] == "question" => {
+                break request;
             }
+            AgentTurnEvent::Completed(_) | AgentTurnEvent::Cancelled | AgentTurnEvent::Failed => {
+                panic!("native question did not reach client")
+            }
+            _ => {}
         }
-    })
-    .await
-    .unwrap();
-    session.close().await.unwrap();
-}
-
-async fn saved_tool_answer(Json(body): Json<Value>) -> ([(&'static str, &'static str); 1], String) {
-    if body["messages"]
+    };
+    let question = request["input"]["questions"]
         .as_array()
         .unwrap()
         .iter()
-        .any(|message| message["role"] == "tool")
-    {
-        answer().await
-    } else {
-        tool_answer(Json(body)).await
-    }
-}
-
-#[tokio::test]
-#[ignore = "requires AIT_TEST_OPENCODE_BIN; private loopback model, no credentials"]
-async fn installed_opencode_metadata_disables_tools_and_removes_private_history() {
-    async fn metadata_answer(
-        Json(request): Json<Value>,
-    ) -> ([(&'static str, &'static str); 1], String) {
-        assert!(
-            request["tools"].as_array().is_none_or(Vec::is_empty),
-            "metadata must not advertise tools"
-        );
-        answer().await
-    }
-    let (_root, client, spec, _server) =
-        installed_fixture(Router::new().route("/v1/chat/completions", post(metadata_answer))).await;
-    let result = tokio::time::timeout(
-        Duration::from_secs(40),
-        client.generate_summary(&spec, "Generate a title", &json!({"type":"object"})),
-    )
-    .await
-    .unwrap()
-    .unwrap();
-    assert_eq!(result, "Local deterministic answer.");
-    let listed = client
-        .list_sessions(&crate::ports::native_history::ListOptions {
-            cwd: Some(spec.cwd),
-            scan_limit: 100,
+        .find(|question| {
+            question["options"]
+                .as_array()
+                .is_some_and(|options| options.iter().any(|option| option["label"] == "Rust"))
         })
+        .unwrap();
+    let key = question["header"].as_str().unwrap();
+    let answer = if question["answerFormat"] == "array" {
+        json!(["Rust"])
+    } else {
+        json!("Rust")
+    };
+    session
+        .respond_permission(
+            request["id"].as_str().unwrap(),
+            &json!({"behavior":"allow","updatedInput":{"answers":{key:answer}}}),
+        )
         .await
         .unwrap();
-    assert!(listed.is_empty());
+    completed(session.as_mut()).await;
+    assert!(session.pending_permissions().is_empty());
+    session.close().await.unwrap();
 }
 
 #[tokio::test]
-#[ignore = "requires AIT_TEST_OPENCODE_BIN; isolated native permissions and loopback model"]
-async fn installed_opencode_permission_control_uses_native_allow_ask_and_deny() {
-    let (_root, client, mut spec, _server) = installed_fixture(
-        Router::new().route("/v1/chat/completions", post(permission_control_answer)),
-    )
-    .await;
-    for effect in ["allow", "ask", "deny"] {
-        spec.config.feature_values = Some(std::collections::BTreeMap::from([(
-            "permission".into(),
-            json!(effect),
-        )]));
-        let mut session = client.create_session(&spec).await.unwrap();
-        session
-            .start_turn(&format!("permission-case-{effect}"), &spec.config)
-            .await
-            .unwrap();
-        let asks = tokio::time::timeout(Duration::from_secs(30), async {
-            let mut asks = 0;
-            loop {
-                match session.poll_turn().unwrap() {
-                    Some(AgentTurnEvent::PermissionRequested(request)) => {
-                        assert_eq!(effect, "ask");
-                        asks += 1;
-                        session
-                            .respond_permission(
-                                request["id"].as_str().unwrap(),
-                                &json!({"behavior":"allow","selectedActionId":"allow"}),
-                            )
-                            .await
-                            .unwrap();
-                    }
-                    Some(AgentTurnEvent::Completed(_)) => break asks,
-                    Some(event @ (AgentTurnEvent::Failed | AgentTurnEvent::Cancelled)) => {
-                        panic!("{effect}: {event:?}")
-                    }
-                    _ => tokio::time::sleep(Duration::from_millis(10)).await,
-                }
+#[ignore = "requires OpenCode 2.0.26+ in AIT_TEST_OPENCODE_BIN; isolated XDG and loopback model"]
+async fn installed_acp_native_permission_rejection_and_next_turn() {
+    let (_root, client, mut spec, _server) = installed(true).await;
+    spec.config.feature_values = Some(BTreeMap::from([("permission".into(), json!("ask"))]));
+    let mut session = client.create_session(&spec).await.unwrap();
+    session
+        .start_turn("Request shell tool, then continue.", &spec.config)
+        .await
+        .unwrap();
+    loop {
+        match event(session.as_mut()).await {
+            AgentTurnEvent::PermissionRequested(request) => {
+                assert_eq!(request["kind"], "tool");
+                session
+                    .respond_permission(
+                        request["id"].as_str().unwrap(),
+                        &json!({"behavior":"deny"}),
+                    )
+                    .await
+                    .unwrap();
+                break;
             }
-        })
-        .await
-        .unwrap();
-        assert_eq!(asks > 0, effect == "ask");
-        session.close().await.unwrap();
+            AgentTurnEvent::Completed(_) | AgentTurnEvent::Cancelled | AgentTurnEvent::Failed => {
+                panic!("native permission did not reach client")
+            }
+            _ => {}
+        }
     }
+    loop {
+        match event(session.as_mut()).await {
+            AgentTurnEvent::Completed(_) | AgentTurnEvent::Cancelled => break,
+            AgentTurnEvent::Failed => panic!("native rejection failed to settle"),
+            _ => {}
+        }
+    }
+    session.start_turn("follow up", &spec.config).await.unwrap();
+    completed(session.as_mut()).await;
+    session.close().await.unwrap();
 }
 
-async fn permission_control_answer(
-    Json(body): Json<Value>,
-) -> ([(&'static str, &'static str); 1], String) {
-    let has_shell = body["tools"].as_array().is_some_and(|tools| {
-        tools.iter().any(|tool| {
-            matches!(
-                tool.pointer("/function/name").and_then(Value::as_str),
-                Some("bash" | "shell")
-            )
-        })
-    });
-    let deny_case = body["messages"].as_array().unwrap().iter().any(|message| {
-        message["role"] == "user"
-            && message["content"]
-                .to_string()
-                .contains("permission-case-deny")
-    });
-    if deny_case {
-        assert!(
-            !has_shell,
-            "native deny must remove shell from available tools"
-        );
-    }
-    if has_shell {
-        saved_tool_answer(Json(body)).await
-    } else {
-        answer().await
-    }
+#[tokio::test]
+#[ignore = "requires OpenCode 2.0.26+ in AIT_TEST_OPENCODE_BIN; isolated XDG and loopback model"]
+async fn installed_acp_auxiliary_model_has_no_tools_and_removes_native_history() {
+    let (_root, client, spec, _server) = installed(false).await;
+    let options = crate::ports::native_history::ListOptions {
+        cwd: Some(spec.cwd.clone()),
+        scan_limit: 10,
+    };
+    assert!(client.list_sessions(&options).await.unwrap().is_empty());
+    assert_eq!(
+        client
+            .generate_summary(&spec, "Summarize metadata", &json!({"type":"object"}))
+            .await
+            .unwrap(),
+        "authoritative answer"
+    );
+    assert!(client.list_sessions(&options).await.unwrap().is_empty());
 }

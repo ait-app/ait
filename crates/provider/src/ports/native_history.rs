@@ -45,7 +45,7 @@ pub struct SessionHistory {
     pub parent_id: Option<String>,
     /// Native identity and display metadata.
     pub descriptor: SessionDescriptor,
-    /// Native creation timestamp in RFC3339.
+    /// Native creation timestamp in RFC3339, or observation time when the protocol omits it.
     pub created_at: String,
     /// Native model and effort, constrained by this adapter's execution policy.
     pub config: StoredAgentConfig,

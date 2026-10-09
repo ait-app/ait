@@ -1,5 +1,3 @@
-use std::os::unix::fs::PermissionsExt;
-
 use serde_json::json;
 
 use super::transport::{Socket, connect, request};
@@ -232,12 +230,12 @@ async fn assert_discovery(socket: &mut Socket, cwd: &std::path::Path) {
 fn fixture() -> super::native::NativeFixture {
     let fixture = super::native::NativeFixture::new();
     let program = fixture.root.path().join("opencode");
-    std::fs::write(
+    std::os::unix::fs::symlink(
+        std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
+            .join("../../crates/provider/tests/fixtures/opencode_acp.py"),
         &program,
-        include_str!("../../../../crates/provider/tests/fixtures/opencode_http.py"),
     )
     .unwrap();
-    std::fs::set_permissions(&program, std::fs::Permissions::from_mode(0o700)).unwrap();
     fixture
 }
 

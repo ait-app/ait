@@ -1,6 +1,7 @@
 # ADR-110：OpenCode 双版本私有协议边界
 
 - 状态：Accepted，2026-10-08。
+- 2026-10-09：传输与生命周期由 [ADR-115](adr-115-opencode-acp-provider.md) 修订为官方 ACP；下文保留当时的决策背景。
 - 范围：`crates/provider/src/local/opencode`；细化 ADR-074，不修改 Provider ports、domain、RPC 或客户端协议。
 
 ## 背景
