@@ -69,6 +69,7 @@ impl OpenCodeClient {
             let mut saved: StoredAgentConfig = serde_json::from_value(native["config"].clone())
                 .map_err(|_| AgentSessionError::Rejected)?;
             saved.mode_id.clone_from(&effective(&config, "").mode_id);
+            saved.feature_values.clone_from(&config.feature_values);
             if saved
                 != effective(
                     &config,
@@ -252,8 +253,8 @@ impl AgentClient for OpenCodeClient {
             )
         })
     }
-    fn settings(&self, _config: &StoredAgentConfig) -> Value {
-        json!({"availableModes":modes(),"features":[],"capabilities":{"supportsStreaming":true,"supportsSessionListing":true,"supportsDynamicModes":false,"supportsMcpServers":false}})
+    fn settings(&self, config: &StoredAgentConfig) -> Value {
+        json!({"availableModes":modes(),"features":features(config),"capabilities":{"supportsStreaming":true,"supportsSessionListing":true,"supportsDynamicModes":false,"supportsMcpServers":false}})
     }
     fn discover<'a>(&'a self, cwd: &'a str) -> AgentSessionFuture<'a, Details> {
         Box::pin(async move {
@@ -264,7 +265,7 @@ impl AgentClient for OpenCodeClient {
                 .await
                 .map_err(error)?;
             Ok(Details { models: models.iter().enumerate().map(|(index, model)| json!({"provider":"opencode","id":model.id,"label":model.name,"description":model.name,"isSelectable":true,"isDefault":index==0,
-                "thinkingOptions":model.reasoning_efforts.iter().map(|id|json!({"id":id,"label":id})).collect::<Vec<_>>()})).collect(), modes: modes(), features: vec![] })
+                "thinkingOptions":model.reasoning_efforts.iter().map(|id|json!({"id":id,"label":id})).collect::<Vec<_>>()})).collect(), modes: modes(), features: features(&StoredAgentConfig::default()) })
         })
     }
     fn create_session<'a>(
@@ -327,10 +328,11 @@ pub(super) fn validate(config: &StoredAgentConfig) -> Result<(), AgentSessionErr
             .thinking_option_id
             .as_ref()
             .is_some_and(|id| id.is_empty() || id.len() > 128 || id.chars().any(char::is_control))
-        || config
-            .feature_values
-            .as_ref()
-            .is_some_and(|map| !map.is_empty())
+        || config.feature_values.as_ref().is_some_and(|map| {
+            map.iter().any(|(key, value)| {
+                key != "permission" || !matches!(value.as_str(), Some("allow" | "ask" | "deny"))
+            })
+        })
         || config
             .provider_options
             .as_ref()
@@ -458,6 +460,24 @@ fn modes() -> Vec<Value> {
     vec![
         json!({"id":"build","label":"Build","description":"Use the native Build agent and OpenCode permission rules.","icon":"Hammer","colorTier":"moderate"}),
         json!({"id":"plan","label":"Plan","description":"Use the native Plan agent and its permission rules.","icon":"ShieldCheck","colorTier":"planning"}),
+    ]
+}
+
+/// Native permission effect explicitly selected for subsequent turns, or native inheritance.
+pub(super) fn permission(config: &StoredAgentConfig) -> Option<&str> {
+    config.feature_values.as_ref()?.get("permission")?.as_str()
+}
+
+fn features(config: &StoredAgentConfig) -> Vec<Value> {
+    vec![
+        json!({"id":"permission","type":"select","label":"Permissions",
+        "description":"Set OpenCode's native session-wide tool permission rule from the next turn. Unselected sessions keep their native rules.",
+        "tooltip":"Native session permissions (next turn)","icon":"shield-check","value":permission(config),
+        "options":[
+            {"id":"allow","label":"Allow"},
+            {"id":"ask","label":"Ask"},
+            {"id":"deny","label":"Deny"}
+        ]}),
     ]
 }
 

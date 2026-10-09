@@ -40,7 +40,14 @@ AgentManager 的输入接纳和 timeline 持久化。Claude Code 已通过 ADR-0
    Ait 的 OpenCode 显示键带独立投影版本；升级时通过既有 reconcile 重建显示历史，原生消息不变。
    完成条目不可覆盖已有条目。Host admission、registry 与 timeline 事务继续归属 AgentManager。
 5. Build / Plan 对应原生 agent，不再写入 Ait 固定权限策略。创建、导入、恢复和模式切换
-   均保留 OpenCode 的配置及会话权限；原生 allow / ask / deny 决定是否需要审批。
+   默认保留 OpenCode 的配置及会话权限；原生 allow / ask / deny 决定是否需要审批。
+   2026-10-09 补充：通过既有 feature select 接入独立的原生会话权限入口，用户可显式选择
+   allow / ask / deny，设置当前原生会话的通配规则；不增加自动回复审批的策略或新的 agent 模式。
+   未选择时不改写权限，已选择时在下一轮提交前通过 native session API 应用并回读完整规则。
+   v1 PATCH permission 追加单条规则；v2 PATCH permissions 保留原数组再追加规则并替换。
+   新规则按原生顺序覆盖先前匹配项；这是显式修改原生会话规则，区别于审批 always 的保存规则。
+   不更改用户全局/项目配置文件；规则保存在原生会话中，Ait 的选择通过既有配置契约持久化。
+   重复回合/恢复不重复追加相同尾规则；权限写入失败或回读不符时不提交 prompt，关闭该 writer。
    shell/edit 及其他原生 action/resource 请求交给现有审批接口，保留原生规则范围。
    默认允许回复 native once；仅当原生请求提供非空的可保存规则时显示 always，必须由用户
    显式选择，并展示保存范围。未知动作、修改权限/输入的响应拒绝。
@@ -62,8 +69,8 @@ AgentManager 的输入接纳和 timeline 持久化。Claude Code 已通过 ADR-0
    variant（原生 `default` 映射为未显式指定）；历史和模型凭据仍由 OpenCode 管理。
    既有 `resume_metadata` 保存恢复所需非秘密配置，兼容旧 Ait persistence handle。
    列表和导入不发送 prompt 或修改权限，保留原生 agent；不支持的自定义 agent 明确拒绝。
-   继续和恢复时也不追加或替换权限。升级前已写入原生会话的规则继续保留，避免误删用户规则；
-   需要修改这些规则时使用 OpenCode 原生权限配置。
+   未显式选择权限时，继续和恢复不追加或替换权限。显式权限选择按第 5 条应用。
+   已有规则保留，新选择采用原生最后匹配优先语义；细粒度配置仍由 OpenCode 原生配置管理。
 
 ## 验证
 

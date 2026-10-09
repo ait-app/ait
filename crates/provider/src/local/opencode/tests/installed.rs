@@ -390,3 +390,80 @@ async fn installed_opencode_metadata_disables_tools_and_removes_private_history(
         .unwrap();
     assert!(listed.is_empty());
 }
+
+#[tokio::test]
+#[ignore = "requires AIT_TEST_OPENCODE_BIN; isolated native permissions and loopback model"]
+async fn installed_opencode_permission_control_uses_native_allow_ask_and_deny() {
+    let (_root, client, mut spec, _server) = installed_fixture(
+        Router::new().route("/v1/chat/completions", post(permission_control_answer)),
+    )
+    .await;
+    for effect in ["allow", "ask", "deny"] {
+        spec.config.feature_values = Some(std::collections::BTreeMap::from([(
+            "permission".into(),
+            json!(effect),
+        )]));
+        let mut session = client.create_session(&spec).await.unwrap();
+        session
+            .start_turn(&format!("permission-case-{effect}"), &spec.config)
+            .await
+            .unwrap();
+        let asks = tokio::time::timeout(Duration::from_secs(30), async {
+            let mut asks = 0;
+            loop {
+                match session.poll_turn().unwrap() {
+                    Some(AgentTurnEvent::PermissionRequested(request)) => {
+                        assert_eq!(effect, "ask");
+                        asks += 1;
+                        session
+                            .respond_permission(
+                                request["id"].as_str().unwrap(),
+                                &json!({"behavior":"allow","selectedActionId":"allow"}),
+                            )
+                            .await
+                            .unwrap();
+                    }
+                    Some(AgentTurnEvent::Completed(_)) => break asks,
+                    Some(event @ (AgentTurnEvent::Failed | AgentTurnEvent::Cancelled)) => {
+                        panic!("{effect}: {event:?}")
+                    }
+                    _ => tokio::time::sleep(Duration::from_millis(10)).await,
+                }
+            }
+        })
+        .await
+        .unwrap();
+        assert_eq!(asks > 0, effect == "ask");
+        session.close().await.unwrap();
+    }
+}
+
+async fn permission_control_answer(
+    Json(body): Json<Value>,
+) -> ([(&'static str, &'static str); 1], String) {
+    let has_shell = body["tools"].as_array().is_some_and(|tools| {
+        tools.iter().any(|tool| {
+            matches!(
+                tool.pointer("/function/name").and_then(Value::as_str),
+                Some("bash" | "shell")
+            )
+        })
+    });
+    let deny_case = body["messages"].as_array().unwrap().iter().any(|message| {
+        message["role"] == "user"
+            && message["content"]
+                .to_string()
+                .contains("permission-case-deny")
+    });
+    if deny_case {
+        assert!(
+            !has_shell,
+            "native deny must remove shell from available tools"
+        );
+    }
+    if has_shell {
+        saved_tool_answer(Json(body)).await
+    } else {
+        answer().await
+    }
+}

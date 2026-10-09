@@ -107,9 +107,12 @@ impl Session {
                 .as_deref()
                 .ok_or(AgentSessionError::Failed)?,
         );
-        // Only the agent can change on this live connection; other settings require a reopen.
+        // Agent and native permissions can change between turns; other settings need a reopen.
         let mut previous = self.config.clone();
         previous.mode_id.clone_from(&effective.mode_id);
+        previous
+            .feature_values
+            .clone_from(&effective.feature_values);
         if previous != effective {
             return Err(AgentSessionError::Rejected);
         }
@@ -127,8 +130,19 @@ impl Session {
                 .map_err(client::error)?;
             connection.invocation.agent = agent.into();
             self.info.mode_id.clone_from(&effective.mode_id);
-            self.config = effective;
         }
+        if let Some(effect) = client::permission(&effective)
+            && let Err(error) = connection
+                .runtime
+                .api
+                .set_permission(&connection.prepared.id, effect)
+                .await
+        {
+            // A failed native write must not be followed by a prompt under uncertain rules.
+            self.failed = true;
+            return Err(client::error(error));
+        }
+        self.config = effective;
         Ok(())
     }
 
