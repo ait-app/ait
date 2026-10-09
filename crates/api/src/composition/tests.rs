@@ -13,7 +13,7 @@ struct Generator {
     cancelled: AtomicBool,
 }
 
-impl provider::summary::SummaryGenerator for Generator {
+impl model::summary::SummaryGenerator for Generator {
     fn generate(&self, request: SummaryRequest) -> SummaryFuture<'_> {
         Box::pin(async move {
             if self.cancelled.load(Ordering::SeqCst) {

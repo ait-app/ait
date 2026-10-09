@@ -41,10 +41,11 @@ RPC；API 聚合这些声明，并复用 model 的会话和创建记录基础设
 不预先选择 handler，详见 [ADR-093](../decisions/daemon/adr-093-consumable-request-context.md)
 与 [ADR-095](../decisions/daemon/adr-095-component-method-declarations.md)。
 
-摘要生成能力由 `provider::SummaryGenerator` 声明。
-摘要输入输出类型位于 `domain::summary`，消费端口和 future 位于 `model::summary`。
-生成器通过自己的配置端口读取偏好，daemon 连接现有存储；API 将同一生成器适配为
-model 的消费端口 `SummarySource`，见
+摘要生成接口 `SummaryGenerator`、配置端口 `SummaryConfiguration`、消费端口 `SummarySource`
+和 future 位于 `model::summary`，输入输出类型位于 `domain::summary`。provider 实现生成器，
+persistence 的 `LocalSummaryConfiguration` 读取 daemon/project 配置，daemon 注入两者；
+API 将同一生成器适配为 `SummarySource`，见
+[ADR-118](../decisions/daemon/adr-118-summary-contracts-and-persistence-configuration.md) 与
 [ADR-101](../decisions/providers/adr-101-provider-summary-generator.md)。
 
 Provider 不依赖 metadata。共享 Workspace 记录、活动值、worktree 意图、Git/Forge 快照和

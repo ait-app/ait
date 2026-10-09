@@ -8,7 +8,7 @@ use serde_json::Value;
 use tokio::task::JoinHandle;
 
 use super::AgentManager;
-use crate::summary::SummaryGenerator;
+use model::summary::SummaryGenerator;
 
 #[derive(Debug)]
 struct Pending {

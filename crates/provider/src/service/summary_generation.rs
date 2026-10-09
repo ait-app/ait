@@ -15,7 +15,7 @@ use tokio::sync::Semaphore;
 use tokio_util::sync::CancellationToken;
 
 use crate::ports::agent_session::{AgentClient, AgentSessionSpec};
-use crate::summary::{SummaryConfiguration, SummaryGenerator};
+use model::summary::{SummaryConfiguration, SummaryGenerator};
 
 /// Model-backed summary generator shared by all four wording use cases.
 #[derive(Debug)]

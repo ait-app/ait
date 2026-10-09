@@ -5,7 +5,6 @@ use std::time::Duration;
 use anyhow::Context;
 mod catalog;
 mod schedule;
-mod summary;
 mod voice;
 
 use api::{Api, LocalAddress, Services};
@@ -30,12 +29,14 @@ use metadata::service::workspace_labels::WorkspaceLabels;
 use metadata::service::workspace_names::WorkspaceNames;
 use metadata::service::workspace_state::WorkspaceState;
 use model::LifecycleIntent;
+use model::summary::SummaryGenerator;
 use model::workspace::registry::{ProjectRegistry, WorkspaceRegistry};
 use persistence::storage::agent_runtime::FileBackedAgentRuntimeRegistry;
 use persistence::storage::daemon_config::FileDaemonConfigStore;
 use persistence::storage::project_config::LocalProjectConfigStore;
 use persistence::storage::project_icon::LocalProjectIconStore;
 use persistence::storage::registry::{FileBackedProjectRegistry, FileBackedWorkspaceRegistry};
+use persistence::storage::summary_config::LocalSummaryConfiguration;
 use persistence::storage::workspace_labels::FileWorkspaceLabelStore;
 use provider::Providers;
 use provider::service::agent_execution::{AgentExecution, ExecutionDependencies};
@@ -44,7 +45,6 @@ use provider::service::agent_runtime::AgentRuntimeDirectory;
 use provider::service::agents::Agents;
 use provider::service::workspace_attention::AgentWorkspaceAttention;
 use provider::storage::SqliteCatalog;
-use provider::summary::SummaryGenerator;
 use tokio::net::TcpListener;
 
 use crate::config::Config;
@@ -392,7 +392,7 @@ fn compose_metadata(
     providers: &Providers,
 ) -> MetadataServices {
     let config_store = FileDaemonConfigStore::with_defaults(data_dir.join("config.json"));
-    let summary_generator = providers.summary_generator(Arc::new(summary::Configuration(
+    let summary_generator = providers.summary_generator(Arc::new(LocalSummaryConfiguration::new(
         Arc::new(config_store.clone()),
     )));
     let workspace_names = WorkspaceNames::new(

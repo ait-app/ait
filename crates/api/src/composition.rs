@@ -109,7 +109,7 @@ impl From<Services> for Parts {
 /// shutdown directly, without adding a queue, worker, cache, or independent lifetime.
 #[must_use]
 pub fn summary_source(
-    generator: Arc<dyn provider::summary::SummaryGenerator>,
+    generator: Arc<dyn model::summary::SummaryGenerator>,
 ) -> Arc<dyn model::summary::SummarySource> {
     Arc::new(SummarySource(generator))
 }
@@ -129,7 +129,7 @@ pub(super) fn workspace_setup(
 }
 
 #[derive(Debug)]
-struct SummarySource(Arc<dyn provider::summary::SummaryGenerator>);
+struct SummarySource(Arc<dyn model::summary::SummaryGenerator>);
 
 impl model::summary::SummarySource for SummarySource {
     fn generate(

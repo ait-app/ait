@@ -12,6 +12,7 @@ __pycache__/
 *.log
 .DS_Store
 .idea/
+.omc/
 .vscode/
 .env
 .env.*
