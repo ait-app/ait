@@ -1,11 +1,11 @@
 {
   "measurement_date": "2026-10-09",
-  "source_revision": "007220f5d5f2ba74bd0e3de8ba6c42c8cb3e7283",
-  "rust_source_fingerprint_sha256": "c2106315c13e5d7b27e8fb4e471c4e3fcae2ab5736b3ab9a6351aed5902bf6a4",
+  "source_revision": "2030e6fc5f4c433f77db53f9e580d3b4b5ed2cc7",
+  "rust_source_fingerprint_sha256": "1b07e29ad76b9210d9c7b3643051cc726b345dfcf11366d58e0ea9b056e8847b",
   "fingerprint_scope": "Sorted tracked .rs files, Cargo.toml paths, Cargo.lock and rust-toolchain.toml; SHA-256 over path, NUL, bytes, NUL.",
   "fixture_sha256": "de6ce314c729ec846e405e10000b4e624c9e27a7df06a25191fc07877b1ba469",
   "base_revision": "938a98f548e216cacf9b7caecee62383d4a27442",
-  "scope": "Cargo workspace, default features, macOS arm64, Rust 1.98.1, cargo-llvm-cov 0.8.7. Default instrumented suite plus 31 ACP regressions and isolated native OpenCode 1.18.4 (3 tests) / 2.0.26 (4 tests). Five unique external native tests run explicitly. No additional workspace file exclusions; doctests, Python fixtures and upstream executables are not instrumented.",
+  "scope": "Cargo workspace, default features, macOS arm64, Rust 1.98.1, cargo-llvm-cov 0.8.7. Workspace coverage except daemon at four test threads, then all daemon tests instrumented serially; merged scope includes every workspace crate with no final file exclusions. Native OpenCode 1.18.4 / 2.0.26 appended; five unique ignored native tests run explicitly. Doctests, shell/Python fixtures and upstream executables are not instrumented.",
   "comparable_baseline": null,
   "baseline_note": "No measurement on the exact base revision with the same test scope. Retired private HTTP/SSE adapter metrics are not treated as an ACP baseline.",
   "commands": {
@@ -14,25 +14,27 @@
     "clippy": "nix develop --command cargo clippy --workspace --all-targets -- -D warnings",
     "format": "nix develop --command cargo fmt --all --check",
     "docs": "node scripts/check-docs.mjs",
-    "coverage_workspace": "CARGO_TARGET_DIR=/private/tmp/ait-opencode-acp-coverage CARGO_BUILD_JOBS=6 nix develop --command cargo llvm-cov --workspace --html -- --test-threads=1",
+    "coverage_workspace": "CARGO_TARGET_DIR=/private/tmp/ait-opencode-acp-coverage CARGO_BUILD_JOBS=6 nix develop --command cargo llvm-cov --workspace --exclude daemon --html -- --test-threads=4",
     "coverage_merged_html": "CARGO_TARGET_DIR=/private/tmp/ait-opencode-acp-coverage nix develop --command cargo llvm-cov report --html",
-    "coverage_merged_summary": "CARGO_TARGET_DIR=/private/tmp/ait-opencode-acp-coverage nix develop --command cargo llvm-cov report --json --summary-only --output-path /private/tmp/ait-acp-upstream/compat-summary.json",
+    "coverage_merged_summary": "CARGO_TARGET_DIR=/private/tmp/ait-opencode-acp-coverage nix develop --command cargo llvm-cov report --json --summary-only --output-path /private/tmp/ait-acp-upstream/dsh-import-summary.json",
     "coverage_missing_lines": "CARGO_TARGET_DIR=/private/tmp/ait-opencode-acp-coverage nix develop --command cargo llvm-cov report --show-missing-lines",
     "native_v1": "AIT_TEST_OPENCODE_BIN=/etc/profiles/per-user/lonnetkirisame/bin/opencode nix develop --command cargo test -p provider --lib local::opencode::tests::installed -- --ignored --skip installed_acp_native_question_form --skip installed_acp_auxiliary --test-threads=1",
     "native_v2": "AIT_TEST_OPENCODE_BIN=/private/tmp/ait-acp-upstream/v26/package/bin/opencode nix develop --command cargo test -p provider --lib local::opencode::tests::installed -- --ignored --skip installed_acp_without_native_forms --test-threads=4",
     "focused_opencode": "nix develop --command cargo test -p provider --lib local::opencode -- --test-threads=4",
     "session_controls": "nix develop --command cargo test -p provider --lib service::agent_execution::tests::controls",
     "coverage_native_v2": "CARGO_TARGET_DIR=/private/tmp/ait-opencode-acp-coverage AIT_TEST_OPENCODE_BIN=/private/tmp/ait-acp-upstream/v26/package/bin/opencode nix develop --command cargo llvm-cov --no-report -p provider --lib -- local::opencode --include-ignored --skip installed_acp_without_native_forms --test-threads=4",
-    "coverage_native_v1": "CARGO_TARGET_DIR=/private/tmp/ait-opencode-acp-coverage AIT_TEST_OPENCODE_BIN=/etc/profiles/per-user/lonnetkirisame/bin/opencode nix develop --command cargo llvm-cov --no-report -p provider --lib -- local::opencode::tests::installed --ignored --skip installed_acp_native_question_form --skip installed_acp_auxiliary --test-threads=1"
+    "coverage_native_v1": "CARGO_TARGET_DIR=/private/tmp/ait-opencode-acp-coverage AIT_TEST_OPENCODE_BIN=/etc/profiles/per-user/lonnetkirisame/bin/opencode nix develop --command cargo llvm-cov --no-report -p provider --lib -- local::opencode::tests::installed --ignored --skip installed_acp_native_question_form --skip installed_acp_auxiliary --test-threads=1",
+    "coverage_daemon": "CARGO_TARGET_DIR=/private/tmp/ait-opencode-acp-coverage CARGO_BUILD_JOBS=6 nix develop --command cargo llvm-cov --no-report -p daemon -- --test-threads=1",
+    "dsh_native": "nix develop --command cargo test -p provider --lib local::deepseek_harness::native -- --test-threads=16"
   },
   "test_results": {
     "workspace-tests": {
-      "passed": 2004,
+      "passed": 2005,
       "failed": 0,
       "ignored": 14
     },
     "workspace-coverage": {
-      "passed": 2003,
+      "passed": 2004,
       "failed": 0,
       "ignored": 14
     },
@@ -65,6 +67,11 @@
       "passed": 3,
       "failed": 0,
       "ignored": 0
+    },
+    "dsh-native": {
+      "passed": 33,
+      "failed": 0,
+      "ignored": 3
     }
   },
   "checks": {
@@ -87,14 +94,14 @@
       "percent": 94.09139867671949
     },
     "instantiations": {
-      "count": 19871,
-      "covered": 11715,
-      "percent": 58.9552614362639
+      "count": 34548,
+      "covered": 12402,
+      "percent": 35.89788120875304
     },
     "lines": {
       "count": 59018,
-      "covered": 55890,
-      "percent": 94.69992205767733
+      "covered": 55863,
+      "percent": 94.65417330306009
     },
     "mcdc": {
       "count": 0,
@@ -104,9 +111,9 @@
     },
     "regions": {
       "count": 91945,
-      "covered": 83718,
-      "notcovered": 8227,
-      "percent": 91.05225950296372
+      "covered": 83656,
+      "notcovered": 8289,
+      "percent": 90.98482788623635
     }
   },
   "crate_lines": {
@@ -132,18 +139,18 @@
     },
     "filesystem": {
       "count": 12198,
-      "covered": 11570,
-      "percent": 94.85161501885555
+      "covered": 11564,
+      "percent": 94.80242662731595
     },
     "metadata": {
       "count": 5789,
-      "covered": 5449,
-      "percent": 94.12679219208844
+      "covered": 5447,
+      "percent": 94.09224391086543
     },
     "model": {
       "count": 1374,
-      "covered": 1323,
-      "percent": 96.2882096069869
+      "covered": 1319,
+      "percent": 95.99708879184861
     },
     "persistence": {
       "count": 1828,
@@ -152,8 +159,8 @@
     },
     "provider": {
       "count": 28045,
-      "covered": 26444,
-      "percent": 94.2913175254056
+      "covered": 26437,
+      "percent": 94.26635763950793
     },
     "relay": {
       "count": 503,
@@ -162,13 +169,13 @@
     },
     "schedule": {
       "count": 791,
-      "covered": 772,
-      "percent": 97.59797724399495
+      "covered": 768,
+      "percent": 97.09228824273072
     },
     "terminal": {
       "count": 1583,
-      "covered": 1527,
-      "percent": 96.46241313960834
+      "covered": 1523,
+      "percent": 96.20972836386608
     },
     "voice": {
       "count": 1963,
@@ -599,16 +606,16 @@
       "path": "crates/filesystem/src/dispatch.rs",
       "lines": {
         "count": 181,
-        "covered": 169,
-        "percent": 93.37016574585635
+        "covered": 162,
+        "percent": 89.50276243093923
       }
     },
     {
       "path": "crates/filesystem/src/dispatch/requests.rs",
       "lines": {
         "count": 143,
-        "covered": 143,
-        "percent": 100.0
+        "covered": 142,
+        "percent": 99.3006993006993
       }
     },
     {
@@ -631,8 +638,8 @@
       "path": "crates/filesystem/src/files/connection/files/connection.rs",
       "lines": {
         "count": 256,
-        "covered": 242,
-        "percent": 94.53125
+        "covered": 241,
+        "percent": 94.140625
       }
     },
     {
@@ -839,8 +846,8 @@
       "path": "crates/filesystem/src/git/local/checkout.rs",
       "lines": {
         "count": 1622,
-        "covered": 1515,
-        "percent": 93.403205918619
+        "covered": 1517,
+        "percent": 93.5265104808878
       }
     },
     {
@@ -871,8 +878,8 @@
       "path": "crates/filesystem/src/git/local/checkout/summary.rs",
       "lines": {
         "count": 118,
-        "covered": 110,
-        "percent": 93.22033898305084
+        "covered": 111,
+        "percent": 94.0677966101695
       }
     },
     {
@@ -1119,8 +1126,8 @@
       "path": "crates/metadata/src/connection/creation.rs",
       "lines": {
         "count": 121,
-        "covered": 116,
-        "percent": 95.86776859504133
+        "covered": 115,
+        "percent": 95.0413223140496
       }
     },
     {
@@ -1175,8 +1182,8 @@
       "path": "crates/metadata/src/dispatch/requests.rs",
       "lines": {
         "count": 201,
-        "covered": 199,
-        "percent": 99.00497512437812
+        "covered": 198,
+        "percent": 98.50746268656717
       }
     },
     {
@@ -1463,8 +1470,8 @@
       "path": "crates/model/src/polling.rs",
       "lines": {
         "count": 100,
-        "covered": 88,
-        "percent": 88.0
+        "covered": 87,
+        "percent": 87.0
       }
     },
     {
@@ -1479,8 +1486,8 @@
       "path": "crates/model/src/server.rs",
       "lines": {
         "count": 113,
-        "covered": 106,
-        "percent": 93.80530973451329
+        "covered": 103,
+        "percent": 91.1504424778761
       }
     },
     {
@@ -1671,32 +1678,32 @@
       "path": "crates/provider/src/dispatch/agent_execution.rs",
       "lines": {
         "count": 66,
-        "covered": 63,
-        "percent": 95.45454545454545
+        "covered": 62,
+        "percent": 93.93939393939394
       }
     },
     {
       "path": "crates/provider/src/dispatch/agent_runtime.rs",
       "lines": {
         "count": 32,
-        "covered": 28,
-        "percent": 87.5
+        "covered": 27,
+        "percent": 84.375
       }
     },
     {
       "path": "crates/provider/src/dispatch/catalog.rs",
       "lines": {
         "count": 28,
-        "covered": 23,
-        "percent": 82.14285714285714
+        "covered": 22,
+        "percent": 78.57142857142857
       }
     },
     {
       "path": "crates/provider/src/dispatch/requests.rs",
       "lines": {
         "count": 174,
-        "covered": 174,
-        "percent": 100.0
+        "covered": 171,
+        "percent": 98.27586206896551
       }
     },
     {
@@ -2207,8 +2214,8 @@
       "path": "crates/provider/src/local/deepseek_harness/session.rs",
       "lines": {
         "count": 259,
-        "covered": 242,
-        "percent": 93.43629343629344
+        "covered": 241,
+        "percent": 93.05019305019306
       }
     },
     {
@@ -3015,8 +3022,8 @@
       "path": "crates/schedule/src/dispatch.rs",
       "lines": {
         "count": 67,
-        "covered": 61,
-        "percent": 91.04477611940298
+        "covered": 57,
+        "percent": 85.07462686567165
       }
     },
     {
@@ -3063,16 +3070,16 @@
       "path": "crates/terminal/src/connection.rs",
       "lines": {
         "count": 411,
-        "covered": 383,
-        "percent": 93.18734793187348
+        "covered": 380,
+        "percent": 92.45742092457421
       }
     },
     {
       "path": "crates/terminal/src/dispatch.rs",
       "lines": {
         "count": 95,
-        "covered": 94,
-        "percent": 98.94736842105264
+        "covered": 93,
+        "percent": 97.89473684210527
       }
     },
     {
@@ -3521,6 +3528,11 @@
     {
       "scope": "Final workspace coverage at four test threads",
       "failure": "Unchanged daemon directory_sync WebSocket test timed out at its ten-second receive deadline. Normal full workspace and focused instrumented test passed. Full coverage rerun serially with one test thread; no tests changed or skipped."
+    },
+    {
+      "scope": "Linux Rust CI on 38a88cce",
+      "url": "https://github.com/ait-app/ait/actions/runs/37916822030/job/113774966677",
+      "failure": "DSH import returned Unavailable on process spawn before any Host connection. CI did not record errno, so ETXTBSY is not claimed as confirmed. Replaced freshly written executable with checked-in immutable test launcher; per-child environment carries isolated port. Added sixteen simultaneous import/isolation assertions; model, effort and custom-permission checks retained. No production behavior changed."
     }
   ],
   "linux_ci_validated_test_correction": {
@@ -3529,5 +3541,6 @@
     "url": "https://github.com/ait-app/ait/actions/runs/37906169356/job/113740083680",
     "scope": "Historical Linux Rust full CI before this native-version capability update; current revision is validated separately by PR CI."
   },
-  "source_tree": "173ca47b9aea63bc61527153185da1f714b8d6bc"
+  "source_tree": "26c87aba19d43f2c7bb895c8eb7ea5e29669e99b",
+  "dsh_fixture_sha256": "a8e9c7ea9c8b9892ffbf8bc01bef3c7f038d2780359ae024cf6bb229f2dd947d"
 }
