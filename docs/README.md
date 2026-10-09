@@ -96,6 +96,7 @@
 
 ## 工程规范与验证
 
+- [Crate 可见性与最新 main 整合验证](reports/daemon/crate-visibility-pr-validation-2026-10-09.md)：PR #239 的 ACP 冲突处理、完整测试、逐 crate 覆盖率与源码证据。
 - [OpenCode 官方 ACP 迁移验证](reports/providers/opencode-acp-2026-10-09.md)：真实原生问答、审批、恢复、无工具摘要及覆盖率证据。
 
 - [Persistence 与 filesystem 能力边界 PR 验证](reports/daemon/persistence-filesystem-pr-validation-2026-10-09.md)：13-crate 完整测试、覆盖率与原样保留的未接入摘要草稿。
