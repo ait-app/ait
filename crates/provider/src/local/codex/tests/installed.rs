@@ -1,6 +1,31 @@
 use super::*;
 
 #[tokio::test]
+#[ignore = "requires AIT_TEST_CODEX_SESSION_ID and AIT_TEST_CODEX_CWD; reads history only"]
+async fn installed_codex_history_fits_display_storage() {
+    let id = std::env::var("AIT_TEST_CODEX_SESSION_ID").unwrap();
+    let cwd = std::env::var("AIT_TEST_CODEX_CWD").unwrap();
+    let client = CodexClient::new(
+        std::env::var_os("AIT_SERVER_CODEX_BIN").map_or_else(|| "codex".into(), Into::into),
+    );
+    let handle = AgentPersistenceHandle {
+        provider: "codex".to_owned(),
+        session_id: id,
+        native_handle: None,
+        metadata: None,
+    };
+    let entries = client.history(&handle, &cwd).await.unwrap();
+    assert!(!entries.is_empty());
+    let timeline = crate::storage::timeline::Timeline::memory().unwrap();
+    let epoch = timeline.reconcile("agent", "codex", &entries).unwrap();
+    assert_eq!(
+        timeline.reconcile("agent", "codex", &entries).unwrap(),
+        epoch
+    );
+    assert_eq!(timeline.read("agent").unwrap().1.len(), entries.len());
+}
+
+#[tokio::test]
 #[ignore = "requires installed Codex authentication and makes one small model request"]
 async fn installed_codex_completes_a_native_turn_and_reopens_history() {
     let root = tempfile::tempdir().unwrap();

@@ -1,0 +1,97 @@
+{
+  "base_revision": "4631bb1006ce77fd36b4ee8abf4802dc7e37d7b5",
+  "revision": "base_revision plus changed_source_sha256",
+  "date": "2026-10-09",
+  "platform": "macOS aarch64",
+  "toolchain": "Rust 1.98.1",
+  "environment": {
+    "RUST_TEST_THREADS": "4",
+    "CARGO_TARGET_DIR": "<validation-directory>/coverage-target for instrumentation; shared target for ordinary checks"
+  },
+  "scope": {
+    "workspace": true,
+    "features": "default",
+    "explicit_file_exclusions": [],
+    "test_source_exclusions": "cargo-llvm-cov defaults",
+    "doctests": "One passing persistence doctest is included in the ordinary suite; cargo-llvm-cov defaults omit doctest execution and instrumentation",
+    "unavailable_platforms": ["Linux", "Windows"],
+    "ignored_tests": 17
+  },
+  "commands": [
+    "nix develop --command cargo test --workspace",
+    "nix develop --command cargo build --workspace",
+    "nix develop --command cargo clippy --workspace --all-targets -- -D warnings",
+    "nix develop --command cargo fmt --all --check",
+    "nix develop --command cargo llvm-cov --workspace --html --output-dir <validation-directory>/coverage-html",
+    "nix develop --command cargo llvm-cov report --json --output-path <validation-directory>/coverage-full.json"
+  ],
+  "installed_history_validation": {
+    "command": "AIT_TEST_CODEX_SESSION_ID=<existing-session> AIT_TEST_CODEX_CWD=<session-cwd> nix develop --command cargo test -p provider installed_codex_history_fits_display_storage --lib -- --ignored",
+    "passed": 1,
+    "failed": 0,
+    "model_requests": 0
+  },
+  "test_execution": {
+    "passed": 2047,
+    "failed": 0,
+    "ignored": 17
+  },
+  "coverage_test_execution": {
+    "passed": 2046,
+    "failed": 0,
+    "ignored": 17
+  },
+  "initial_validation": {
+    "result": "One git_fetch process test failed with ResourceExhausted at default concurrency; focused rerun passed and the workspace suite was rerun with RUST_TEST_THREADS=4."
+  },
+  "lines": {
+    "count": 60650,
+    "covered": 57131,
+    "percent": 94.19785655399835
+  },
+  "crate_lines": {
+    "crates/provider": {
+      "count": 29677,
+      "covered": 27685,
+      "percent": 93.28773123968057
+    }
+  },
+  "changed_source_sha256": {
+    "crates/provider/src/local/codex/discovery/tests.rs": "2bf822a911517f5f89620ffc0196efcdc8cf3a4f402d0418b95d2f03bb449a8a",
+    "crates/provider/src/local/codex/tests/installed.rs": "6b176d50d520cea3a7ee930515058d126ceb2136081725cc35ae7502d12ffdef",
+    "crates/provider/src/local/tool_detail.rs": "a6c42d77f910aac6b24729320a5f660c3b3ad008441c52c859fbf3adcfb78ea3",
+    "crates/provider/src/local/tool_detail/tests.rs": "af4f238cf3c9169bf0531829165ede912a139a8b94068b727753f3eeee67ee08"
+  },
+  "changed_production_files": [
+    {
+      "path": "crates/provider/src/local/tool_detail.rs",
+      "lines": {
+        "count": 185,
+        "covered": 174,
+        "percent": 94.05405405405406
+      }
+    }
+  ],
+  "preview_functions": [
+    {
+      "name": "structured_preview",
+      "execution_count": 23,
+      "regions": 14,
+      "covered_regions": 14
+    },
+    {
+      "name": "text_preview",
+      "execution_count": 8297,
+      "regions": 14,
+      "covered_regions": 14
+    }
+  ],
+  "baseline": {
+    "status": "No comparable measurement for this source revision; delta not reported"
+  },
+  "uncovered_behavior": [
+    "Installed-provider smoke tests are ignored by the default suite; the existing affected Codex session was separately checked read-only.",
+    "Linux and Windows specific paths are not measured on this macOS host."
+  ],
+  "artifact": "This file is the reviewable normalized LLVM coverage summary; the generated HTML is retained outside the repository."
+}

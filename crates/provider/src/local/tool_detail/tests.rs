@@ -1,6 +1,38 @@
 use super::*;
 
 #[test]
+fn structured_previews_preserve_small_values_and_bound_escaped_tool_fields() {
+    for value in [
+        Value::Null,
+        json!(false),
+        json!(42),
+        json!("text"),
+        json!({"a":[1,2]}),
+    ] {
+        assert_eq!(structured_preview(&value), value);
+    }
+    let boundary = json!("x".repeat(PREVIEW_BYTES / 2 - 2));
+    assert_eq!(structured_preview(&boundary), boundary);
+    let text = "\u{0000}\\\"界".repeat(PREVIEW_BYTES);
+    let native = json!({"id":"call","type":"mcpToolCall","server":"fixture","tool":"read",
+        "arguments":{"text":text},"result":{"content":[{"type":"text","text":text}]},
+        "error":{"message":text}});
+    let items = codex_tools(&native, "failed");
+    let item = &items[0].1;
+    for field in [
+        &item["detail"]["input"],
+        &item["detail"]["output"],
+        &item["error"],
+    ] {
+        assert!(field.as_str().unwrap().contains("Output truncated"));
+        assert!(field.to_string().len() <= PREVIEW_BYTES);
+    }
+    assert!(item.to_string().len() < crate::storage::timeline::MAX_ENTRY_BYTES);
+    assert_eq!(native["arguments"]["text"], text);
+    assert!(matches!(preview("text"), Cow::Borrowed("text")));
+}
+
+#[test]
 fn native_shell_file_web_and_delegation_tools_get_typed_details() {
     let shell = codex(
         &json!({"type":"commandExecution","command":"pwd","cwd":"/project","aggregatedOutput":"/project","exitCode":0}),
