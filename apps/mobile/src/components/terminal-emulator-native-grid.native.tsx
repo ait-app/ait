@@ -63,7 +63,7 @@ import {
 import {
   TerminalInput,
   type TerminalInputHandle,
-} from "../terminal/native-renderer/terminal-input.native";
+} from "../terminal/native-renderer/terminal-input";
 import {
   shouldClaimNativeTerminalSize,
   type NativeTerminalSizeClaimAction,

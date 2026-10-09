@@ -35,7 +35,7 @@ export interface TerminalInputHandle {
   blur: () => void;
 }
 
-interface TerminalInputProps {
+export interface TerminalInputProps {
   isKeyboardVisible: boolean;
   onFocus?: () => void;
   onInput?: (data: string) => void;
