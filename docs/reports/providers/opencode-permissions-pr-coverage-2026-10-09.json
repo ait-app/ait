@@ -1,9 +1,9 @@
 {
-  "generated_at": "2026-10-09T03:45:39.095202+00:00",
+  "generated_at": "2026-10-09T05:30:41.055781+00:00",
   "base_revision": "4631bb1006ce77fd36b4ee8abf4802dc7e37d7b5",
-  "source_revision": "f0927da0152af31b909608957c7f767f809909ad",
-  "source_tree": "e48855d4a92d1e481df51c1129ff900c23860c89",
-  "revision_note": "Measured source is identical to this source commit. The following commit adds only documentation and this review artifact.",
+  "source_revision": "0831d51e53d4a3c623f899753158779918e845ab",
+  "source_tree": "d2155a3a52a2c15ea74366bb10a78b81278315cb",
+  "revision_note": "Measured source is identical to this source commit. The following commit only refreshes documentation and this review artifact.",
   "platform": {
     "system": "Darwin",
     "machine": "arm64",
@@ -46,6 +46,7 @@
     "typescript_coverage": "not measured; 14 focused frontend tests passed"
   },
   "commands": [
+    "nix develop --command cargo test -p provider local::opencode --locked --offline -- --test-threads=4",
     "nix develop --command cargo test --workspace --locked --offline -- --test-threads=1",
     "nix develop --command cargo build --workspace --locked --offline",
     "nix develop --command cargo clippy --workspace --all-targets --locked --offline -- -D warnings",
@@ -64,13 +65,18 @@
     "git diff --cached --check"
   ],
   "tests": {
+    "focused_opencode": {
+      "passed": 79,
+      "failed": 0,
+      "ignored": 8
+    },
     "ordinary_workspace": {
-      "passed": 2048,
+      "passed": 2051,
       "failed": 0,
       "ignored": 17
     },
     "coverage_workspace": {
-      "passed": 2047,
+      "passed": 2050,
       "failed": 0,
       "ignored": 17
     },
@@ -161,24 +167,40 @@
     "frontend": {
       "passed": 14,
       "failed": 0,
-      "files": 3
+      "files": 3,
+      "source_revision": "f0927da0152af31b909608957c7f767f809909ad",
+      "note": "Previously executed tests; frontend source is unchanged by this review fix."
+    },
+    "preliminary_parallel_workspace_attempt": {
+      "command": "nix develop --command cargo test --workspace --locked --offline -- --test-threads=4",
+      "passed": 736,
+      "failed": 1,
+      "ignored": 0,
+      "complete_workspace": false,
+      "failure": "workspace_runtime::tests::workspace_runtime_refreshes_every_queued_checkout_without_repeated_snapshot_reads: queued checkouts were starved after a 10-second deadline; filesystem source is unchanged.",
+      "follow_up_result": "The affected existing test passed in isolation; the complete ordinary workspace suite was then rerun with one test thread."
+    },
+    "filesystem_isolated_rerun": {
+      "passed": 1,
+      "failed": 0,
+      "ignored": 0
     }
   },
   "coverage": {
     "workspace": {
-      "covered": 57194,
-      "total": 60722,
-      "percent": 94.18991469319192
+      "covered": 57213,
+      "total": 60730,
+      "percent": 94.20879301827763
     },
     "provider": {
-      "covered": 27748,
-      "total": 29749,
-      "percent": 93.27372348650375
+      "covered": 27763,
+      "total": 29757,
+      "percent": 93.29905568437678
     },
     "opencode": {
-      "covered": 3398,
-      "total": 3978,
-      "percent": 85.41980894922071
+      "covered": 3414,
+      "total": 3986,
+      "percent": 85.64977420973408
     },
     "crates": {
       "bins/daemon": {
@@ -202,9 +224,9 @@
         "percent": 100.0
       },
       "crates/filesystem": {
-        "covered": 11571,
+        "covered": 11573,
         "total": 12198,
-        "percent": 94.85981308411215
+        "percent": 94.87620921462535
       },
       "crates/metadata": {
         "covered": 5449,
@@ -222,9 +244,9 @@
         "percent": 95.78774617067833
       },
       "crates/provider": {
-        "covered": 27748,
-        "total": 29749,
-        "percent": 93.27372348650375
+        "covered": 27763,
+        "total": 29757,
+        "percent": 93.29905568437678
       },
       "crates/relay": {
         "covered": 462,
@@ -237,9 +259,9 @@
         "percent": 97.59797724399495
       },
       "crates/terminal": {
-        "covered": 1527,
+        "covered": 1529,
         "total": 1583,
-        "percent": 96.46241313960834
+        "percent": 96.58875552747946
       },
       "crates/voice": {
         "covered": 1868,
@@ -250,9 +272,9 @@
     "changed_production_files": [
       {
         "path": "crates/provider/src/local/opencode/client.rs",
-        "covered": 398,
-        "total": 432,
-        "percent": 92.12962962962963
+        "covered": 400,
+        "total": 434,
+        "percent": 92.16589861751152
       },
       {
         "path": "crates/provider/src/local/opencode/live.rs",
@@ -262,26 +284,44 @@
       },
       {
         "path": "crates/provider/src/local/opencode/protocol/permissions.rs",
-        "covered": 182,
-        "total": 204,
-        "percent": 89.2156862745098
+        "covered": 196,
+        "total": 210,
+        "percent": 93.33333333333333
       }
     ]
   },
-  "baseline": "No comparable paired baseline was measured; coverage change is not reported.",
+  "baseline": {
+    "source_revision": "f0927da0152af31b909608957c7f767f809909ad",
+    "artifact": "https://github.com/ait-app/ait/blob/d05911aa898930f53dbbcdc0b9246a1338addace/docs/reports/providers/opencode-permissions-pr-coverage-2026-10-09.json",
+    "workspace": {
+      "covered": 57194,
+      "total": 60722,
+      "percent": 94.18991469319192
+    },
+    "provider": {
+      "covered": 27748,
+      "total": 29749,
+      "percent": 93.27372348650375
+    },
+    "opencode": {
+      "covered": 3398,
+      "total": 3978,
+      "percent": 85.41980894922071
+    }
+  },
   "important_uncovered_behavior": [
-    "set_permission rejects invalid effects or non-idle native sessions (lines 19-22); client validation covers invalid selections before this call, but the API guard is not directly exercised.",
     "The 4096-rule cap and oversized-rule rejection are not directly exercised.",
-    "Successful writes are checked by full-array readback, but a mismatching readback after PATCH is not injected by the tests.",
-    "Desktop rendering and Linux/Windows execution remain follow-up validation."
+    "Desktop rendering and real native permission execution on Linux/Windows remain follow-up validation."
   ],
-  "follow_up": "Add focused protocol fixtures for busy sessions, rule limits and mismatching readback; verify the actual desktop permission selector and Linux/Windows compatibility.",
+  "follow_up": "Add a focused protocol fixture for rule limits; verify the actual desktop permission selector and native execution on Linux/Windows.",
   "changed_source_sha256": {
-    "crates/provider/src/local/opencode/client.rs": "209dbac6689c806d9e6fe999946e9b2d25192adb0be333f95371354d7daaf9bf",
-    "crates/provider/src/local/opencode/client/tests.rs": "2058231174a032f49972366ec4cc14fd6ed39fa116998802d031387dcb19998d",
+    "crates/provider/src/local/opencode/client.rs": "59397b0a2152414c2ba0db9557e96cca6e18139b4d7464d0eb7c860106e9ffac",
+    "crates/provider/src/local/opencode/client/tests.rs": "b755967edcc4f16b062b5c872c8d6ea762323792a799cf4c85ce412532bfa047",
     "crates/provider/src/local/opencode/live.rs": "acd4f83923a263acbe874eba8fbbf4f1832e13bcc1faff2b726b788313d60193",
-    "crates/provider/src/local/opencode/live/tests/permissions.rs": "1783ba7979c638c250e0ceb05d4ff9512a91bdeaacd1b38d8ed9a208546ef8d8",
-    "crates/provider/src/local/opencode/protocol/permissions.rs": "a968812c7e661d6a606c639ee2b6025338e8202701577d607a0dfdabb7854ab3",
+    "crates/provider/src/local/opencode/live/tests/permissions.rs": "c2de74e3d08ccf81d3294b06812d9d4eecee6eb2ce2c3c25fe96369d0a79f1f4",
+    "crates/provider/src/local/opencode/protocol/permissions.rs": "b85cc5fb775f62207f52e9e972a22293b468333e619b4ce844ef101b1be11c0c",
+    "crates/provider/src/local/opencode/protocol/permissions/tests.rs": "2843b8ff2abc2a30a6c3947792fae326f3d504d005ec2c6093823c334db027b2",
+    "crates/provider/src/local/opencode/tests/fixture.rs": "6ff68d1c138fc940ea1914480853e97801ed26b8da66daafd22c3c5c9bc804f7",
     "crates/provider/src/local/opencode/tests/installed.rs": "5dc7cf04a6695cfd04276a7dc1f43bd15dd9b3235bfc72bdeaf541004b5ebdb7",
     "apps/mobile/src/agent-controls/icons.test.ts": "b5e944057a3781f46b81c518d0495c0620f888ba73e1fdfe76bf3b3a91fcc3aa"
   },
@@ -315,9 +355,9 @@
       227,
       228,
       229,
-      380,
-      388,
-      426
+      382,
+      390,
+      428
     ],
     "crates/provider/src/local/opencode/live.rs": [
       50,
@@ -365,26 +405,18 @@
       457
     ],
     "crates/provider/src/local/opencode/protocol/permissions.rs": [
-      19,
-      20,
-      21,
-      22,
-      50,
-      51,
-      52,
-      53,
-      67,
-      68,
-      69,
-      70,
-      85,
-      86,
-      89,
-      135,
-      141,
-      153,
-      168,
-      192
+      56,
+      57,
+      58,
+      59,
+      91,
+      92,
+      95,
+      144,
+      150,
+      162,
+      177,
+      201
     ]
   },
   "files": [
@@ -876,9 +908,9 @@
     },
     {
       "path": "crates/filesystem/src/git/local/checkout.rs",
-      "covered": 1517,
+      "covered": 1519,
       "total": 1622,
-      "percent": 93.5265104808878
+      "percent": 93.6498150431566
     },
     {
       "path": "crates/filesystem/src/git/local/checkout/branch_status.rs",
@@ -1956,9 +1988,9 @@
     },
     {
       "path": "crates/provider/src/local/opencode/client.rs",
-      "covered": 398,
-      "total": 432,
-      "percent": 92.12962962962963
+      "covered": 400,
+      "total": 434,
+      "percent": 92.16589861751152
     },
     {
       "path": "crates/provider/src/local/opencode/client/native_sessions.rs",
@@ -2028,9 +2060,9 @@
     },
     {
       "path": "crates/provider/src/local/opencode/protocol/permissions.rs",
-      "covered": 182,
-      "total": 204,
-      "percent": 89.2156862745098
+      "covered": 196,
+      "total": 210,
+      "percent": 93.33333333333333
     },
     {
       "path": "crates/provider/src/local/opencode/protocol/requests.rs",
@@ -2358,9 +2390,9 @@
     },
     {
       "path": "crates/provider/src/service/agent_manager/generated_titles.rs",
-      "covered": 92,
+      "covered": 91,
       "total": 99,
-      "percent": 92.92929292929293
+      "percent": 91.91919191919192
     },
     {
       "path": "crates/provider/src/service/agent_manager/native_sessions.rs",
@@ -2610,9 +2642,9 @@
     },
     {
       "path": "crates/terminal/src/connection.rs",
-      "covered": 383,
+      "covered": 385,
       "total": 411,
-      "percent": 93.18734793187348
+      "percent": 93.67396593673966
     },
     {
       "path": "crates/terminal/src/dispatch.rs",
@@ -2776,5 +2808,10 @@
       "total": 70,
       "percent": 81.42857142857143
     }
-  ]
+  ],
+  "delta_percentage_points": {
+    "workspace": 0.018878325085708525,
+    "provider": 0.025332197873026985,
+    "opencode": 0.2299652605133673
+  }
 }
