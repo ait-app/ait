@@ -32,6 +32,13 @@ interface ProbeSnapshot {
 const snapshots: ProbeSnapshot[] = [];
 const mountCount = vi.fn();
 const unmountCount = vi.fn();
+let appearanceKey = "light";
+
+vi.mock("@/components/appearance-style-boundary", () => ({
+  AppearanceStyleBoundary: ({ children }: { children: React.ReactNode }) => (
+    <React.Fragment key={appearanceKey}>{children}</React.Fragment>
+  ),
+}));
 
 function ProbePanel() {
   const paneContextValue = usePaneContext();
@@ -88,7 +95,39 @@ describe("WorkspacePaneContent", () => {
     snapshots.length = 0;
     mountCount.mockClear();
     unmountCount.mockClear();
+    appearanceKey = "light";
   });
+
+  it.each(["agent", "terminal"] as const)(
+    "preserves terminal state while refreshing %s content on appearance changes",
+    (kind) => {
+      container = document.createElement("div");
+      document.body.appendChild(container);
+      root = createRoot(container);
+      const tab: WorkspaceTabDescriptor =
+        kind === "agent"
+          ? agentTab
+          : {
+              key: "terminal_terminal-a",
+              tabId: "terminal_terminal-a",
+              kind: "terminal",
+              target: { kind: "terminal", terminalId: "terminal-a" },
+            };
+      const content = buildContent(tab);
+      const render = () => {
+        act(() => {
+          root?.render(<WorkspacePaneContent content={content} isPaneFocused isWorkspaceFocused />);
+        });
+      };
+
+      render();
+      appearanceKey = "dark";
+      render();
+
+      expect(mountCount).toHaveBeenCalledTimes(kind === "terminal" ? 1 : 2);
+      expect(unmountCount).toHaveBeenCalledTimes(kind === "terminal" ? 0 : 1);
+    },
+  );
 
   it("updates focus without remounting panel content or replacing pane identity", () => {
     container = document.createElement("div");

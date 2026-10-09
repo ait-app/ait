@@ -525,9 +525,9 @@ export class TerminalEmulatorRuntime {
       this.fitAndEmitResize?.({ forceRefresh: true, shouldClaim: false });
     };
 
-    // Browser xterm is a renderer only; it never replies to terminal protocol queries.
-    // Replies live on the daemon (one process boundary from the PTY) so they arrive
-    // before the foreground app exits, instead of racing back over the websocket.
+    // Suppress generic protocol replies. Color queries must reach xterm: the renderer
+    // owns the displayed palette, which TUIs such as OpenCode use to detect their theme.
+    // Historical output already suppresses onData through the restore barrier.
     // Re-registered after the image addon loads so our handlers stay last in the
     // LIFO dispatch (the image addon registers its own {final:"c"} for sixel DA1).
     const registerProtocolQuerySuppression = (): void => {
@@ -535,16 +535,16 @@ export class TerminalEmulatorRuntime {
       terminal.parser.registerCsiHandler({ prefix: ">", final: "c" }, () => true);
       terminal.parser.registerCsiHandler({ prefix: "=", final: "c" }, () => true);
       terminal.parser.registerCsiHandler({ final: "n" }, () => true);
-      terminal.parser.registerCsiHandler({ prefix: "?", final: "n" }, () => true);
+      terminal.parser.registerCsiHandler(
+        { prefix: "?", final: "n" },
+        (params) => params.length !== 1 || params[0] !== 996,
+      );
       terminal.parser.registerCsiHandler({ final: "R" }, () => true);
       terminal.parser.registerCsiHandler({ intermediates: "$", final: "p" }, () => true);
       terminal.parser.registerCsiHandler(
         { prefix: "?", intermediates: "$", final: "p" },
         () => true,
       );
-      for (const code of [10, 11, 12]) {
-        terminal.parser.registerOscHandler(code, (data) => data.trim() === "?");
-      }
     };
     registerProtocolQuerySuppression();
 

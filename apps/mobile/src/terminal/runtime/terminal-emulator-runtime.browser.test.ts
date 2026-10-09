@@ -474,9 +474,6 @@ describe("terminal emulator runtime in a real browser", () => {
     { name: "DSR-?6", bytes: "\x1b[?6n" },
     { name: "DECRQM", bytes: "\x1b[1$p" },
     { name: "DECRQM-?", bytes: "\x1b[?1$p" },
-    { name: "OSC-10-foreground-color", bytes: "\x1b]10;?\x07" },
-    { name: "OSC-11-background-color", bytes: "\x1b]11;?\x07" },
-    { name: "OSC-12-cursor-color", bytes: "\x1b]12;?\x07" },
   ])("does not emit a PTY input reply for $name", async ({ bytes }) => {
     await page.viewport(900, 600);
     const mounted = createTerminalHost({ width: 720, height: 360 });
@@ -487,6 +484,73 @@ describe("terminal emulator runtime in a real browser", () => {
     await nextFrame();
     await nextFrame();
 
+    expect(mounted.inputs).toEqual([]);
+  });
+
+  it.each([
+    {
+      name: "dark",
+      background: "#181b1a",
+      foreground: "#fafafa",
+      mode: 1,
+      backgroundRgb: "1818/1b1b/1a1a",
+      foregroundRgb: "fafa/fafa/fafa",
+    },
+    {
+      name: "light",
+      background: "#ffffff",
+      foreground: "#1a1a1e",
+      mode: 2,
+      backgroundRgb: "ffff/ffff/ffff",
+      foregroundRgb: "1a1a/1a1a/1e1e",
+    },
+  ])("reports the displayed $name palette to terminal applications", async (theme) => {
+    const mounted = createTerminalHost({ width: 720, height: 360 });
+    mounted.runtime.setTheme({ theme: { ...theme, cursor: theme.foreground } });
+
+    await new Promise<void>((resolve) => {
+      mounted.runtime.write({
+        data: terminalOutput("\x1b]10;?\x07\x1b]11;?\x07\x1b]12;?\x07\x1b[?996n"),
+        onCommitted: resolve,
+      });
+    });
+
+    expect(mounted.inputs).toEqual([
+      `\x1b]10;rgb:${theme.foregroundRgb}\x1b\\`,
+      `\x1b]11;rgb:${theme.backgroundRgb}\x1b\\`,
+      `\x1b]12;rgb:${theme.foregroundRgb}\x1b\\`,
+      `\x1b[?997;${theme.mode}n`,
+    ]);
+  });
+
+  it("does not reply to color queries replayed from historical output", async () => {
+    const mounted = createTerminalHost({ width: 720, height: 360 });
+    await new Promise<void>((resolve) => {
+      mounted.runtime.restoreOutput({
+        data: terminalOutput("\x1b]10;?\x07\x1b]11;?\x07\x1b]12;?\x07\x1b[?996n"),
+        onCommitted: resolve,
+      });
+    });
+    expect(mounted.inputs).toEqual([]);
+  });
+
+  it("notifies subscribed applications when the displayed palette changes", async () => {
+    const mounted = createTerminalHost({ width: 720, height: 360 });
+    await new Promise<void>((resolve) => {
+      mounted.runtime.write({ data: terminalOutput("\x1b[?2031h"), onCommitted: resolve });
+    });
+
+    mounted.runtime.setTheme({ theme: { background: "#ffffff", foreground: "#1a1a1e" } });
+    expect(mounted.inputs).toEqual(["\x1b[?997;2n"]);
+
+    mounted.runtime.setTheme({ theme: { background: "#181b1a", foreground: "#fafafa" } });
+    expect(mounted.inputs.at(-1)).toBe("\x1b[?997;1n");
+
+    await new Promise<void>((resolve) => {
+      mounted.runtime.write({ data: terminalOutput("\x1b[?2031l"), onCommitted: resolve });
+    });
+    mounted.inputs.length = 0;
+    mounted.runtime.setTheme({ theme: { background: "#ffffff", foreground: "#1a1a1e" } });
     expect(mounted.inputs).toEqual([]);
   });
 
