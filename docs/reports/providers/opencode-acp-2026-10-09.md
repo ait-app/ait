@@ -1,6 +1,7 @@
 # OpenCode 官方 ACP 迁移验证
 
 2026-10-09；基于 `938a98f5`，分支 `refactor/opencode-acp`。
+测量源码提交：`5b2145751c3332a9234b18d4f9badcb4f84b1333`；后续仅更新验证文档，不改变测量的 Rust 源码。
 边界决策见 [ADR-115](../../decisions/providers/adr-115-opencode-acp-provider.md)。
 
 ## 实现范围
