@@ -1,7 +1,7 @@
 # OpenCode 官方 ACP 迁移验证
 
 2026-10-09；基于 `938a98f5`，分支 `refactor/opencode-acp`。
-测量源码版本：`refactor/opencode-acp`，包含仅测试使用的进程状态检查修正；最终提交和源码指纹见 JSON。
+测量源码提交：`b3cb2a64f7017d4ad77982e7699ea259686c771b`；后续仅更新验证文档，不改变测量的 Rust 源码。
 边界决策见 [ADR-115](../../decisions/providers/adr-115-opencode-acp-provider.md)。
 
 ## 实现范围
@@ -49,7 +49,7 @@ OpenCode 从私有 HTTP/SSE 切换为官方 `opencode acp` 子进程，要求 Op
 ## Test coverage
 
 当前合并测量：workspace **94.67%（55,664/58,798）**，provider **94.22%（26,218/27,825）**。
-OpenCode ACP 生产实现 **91.17%（1,900/2,084）**，共享 ACP transport **89.86%（186/207）**。
+OpenCode ACP 生产实现 **91.07%（1,898/2,084）**，共享 ACP transport **89.86%（186/207）**。
 没有同一基准提交、同一测试范围的可比测量；此前 HTTP adapter 的结果不作为本次 ACP 基线。
 HTML 仅在本机生成；可共享的逐文件计数和源码证据保存在上面的 JSON 文件。
 

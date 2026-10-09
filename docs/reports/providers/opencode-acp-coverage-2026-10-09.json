@@ -1,6 +1,6 @@
 {
   "measurement_date": "2026-10-09",
-  "source_revision": "refactor/opencode-acp working tree including the test-only process-state correction; fingerprint below",
+  "source_revision": "b3cb2a64f7017d4ad77982e7699ea259686c771b",
   "rust_source_fingerprint_sha256": "a676fea7618ab3be765eb806042254ab954db7d76e295501d81d7e1ec662d1d0",
   "fingerprint_scope": "Sorted tracked .rs files, Cargo.toml paths, Cargo.lock and rust-toolchain.toml; SHA-256 over path, NUL, bytes, NUL.",
   "fixture_sha256": "4f4c11f26e44d4af1d21700537faee59fbfb2d1d5be00d971934439a1286ab9c",
@@ -3489,5 +3489,6 @@
       "scope": "First local coverage rerun after the test-only correction",
       "failure": "Unchanged directory_sync websocket transport timed out while default-thread workspace test and coverage suites ran concurrently. Full normal suite passed; full coverage was rerun alone with four test threads and passed."
     }
-  ]
+  ],
+  "source_tree": "a94f7d3a7d9c9b4cc402e2c0ec4347530f91561d"
 }
