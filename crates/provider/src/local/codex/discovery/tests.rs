@@ -3,6 +3,32 @@ use super::*;
 mod command_actions;
 
 #[test]
+fn oversized_mcp_text_keeps_history_readable_and_replays_idempotently() {
+    let text = "界\n\"\\".repeat(128 * 1024);
+    let native = json!({"id":"call","type":"mcpToolCall","server":"fixture","tool":"read",
+        "status":"completed","arguments":{"path":"file"},
+        "result":{"content":[{"type":"text","text":text}],"isError":false}});
+    let images = crate::local::images::ImageStore::default();
+    let items = timeline_items(&native, "turn", "time", &images).unwrap();
+    let timeline = crate::storage::timeline::Timeline::memory().unwrap();
+
+    let epoch = timeline.reconcile("agent", "codex", &items).unwrap();
+    assert_eq!(timeline.reconcile("agent", "codex", &items).unwrap(), epoch);
+    let (_, rows) = timeline.read("agent").unwrap();
+    assert_eq!(rows.len(), 1);
+    assert_eq!(rows[0].entry.key, "native:turn:call");
+    assert_eq!(rows[0].entry.item["name"], "fixture.read");
+    assert_eq!(rows[0].entry.item["detail"]["input"], native["arguments"]);
+    assert!(
+        rows[0].entry.item["detail"]["output"]
+            .as_str()
+            .unwrap()
+            .contains("Output truncated")
+    );
+    assert_eq!(native["result"]["content"][0]["text"], text);
+}
+
+#[test]
 fn generated_images_and_mcp_images_have_stable_sanitized_history() {
     let root = tempfile::tempdir().unwrap();
     let images = crate::local::images::ImageStore::new(root.path().join("images"));

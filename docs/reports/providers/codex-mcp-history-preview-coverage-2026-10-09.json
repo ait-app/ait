@@ -1,0 +1,125 @@
+{
+  "base_revision": "4631bb1006ce77fd36b4ee8abf4802dc7e37d7b5",
+  "revision": "base_revision plus changed_source_sha256",
+  "date": "2026-10-09",
+  "platform": "macOS aarch64",
+  "toolchain": "Rust 1.98.1",
+  "environment": {
+    "RUST_TEST_THREADS": "4",
+    "CARGO_TARGET_DIR": "<validation-directory>/coverage-target for instrumentation; shared target for ordinary checks"
+  },
+  "scope": {
+    "workspace": true,
+    "features": "default",
+    "explicit_file_exclusions": [],
+    "test_source_exclusions": "cargo-llvm-cov defaults",
+    "doctests": "One passing persistence doctest is included in the ordinary suite; cargo-llvm-cov defaults omit doctest execution and instrumentation",
+    "unavailable_platforms": ["Linux", "Windows"],
+    "ignored_tests": 17
+  },
+  "commands": [
+    "nix develop --command cargo test --workspace",
+    "nix develop --command cargo build --workspace",
+    "nix develop --command cargo clippy --workspace --all-targets -- -D warnings",
+    "nix develop --command cargo fmt --all --check",
+    "nix develop --command cargo llvm-cov --workspace --html --output-dir <validation-directory>/coverage-html",
+    "nix develop --command cargo llvm-cov report --json --output-path <validation-directory>/coverage-full.json"
+  ],
+  "installed_history_validation": {
+    "command": "AIT_TEST_CODEX_SESSION_ID=<existing-session> AIT_TEST_CODEX_CWD=<session-cwd> nix develop --command cargo test -p provider installed_codex_history_fits_display_storage --lib -- --ignored",
+    "revision": "cd59e24c9e07033ff7d0cf2a69c5f547c382efe4",
+    "passed": 1,
+    "failed": 0,
+    "model_requests": 0
+  },
+  "test_execution": {
+    "passed": 2048,
+    "failed": 0,
+    "ignored": 17
+  },
+  "coverage_test_execution": {
+    "passed": 2047,
+    "failed": 0,
+    "ignored": 17
+  },
+  "initial_validation": {
+    "result": "One git_fetch process test failed with ResourceExhausted at default concurrency; focused rerun passed and the workspace suite was rerun with RUST_TEST_THREADS=4."
+  },
+  "lines": {
+    "count": 60650,
+    "covered": 57133,
+    "percent": 94.20115416323166
+  },
+  "crate_lines": {
+    "crates/provider": {
+      "count": 29677,
+      "covered": 27685,
+      "percent": 93.28773123968057
+    }
+  },
+  "changed_source_sha256": {
+    "crates/provider/src/local/codex/discovery/tests.rs": "2bf822a911517f5f89620ffc0196efcdc8cf3a4f402d0418b95d2f03bb449a8a",
+    "crates/provider/src/local/codex/tests/installed.rs": "6b176d50d520cea3a7ee930515058d126ceb2136081725cc35ae7502d12ffdef",
+    "crates/provider/src/local/opencode/tests/fixture.rs": "09ff5382693a09d30c85ae4ba9843cfe468cb8305f5bb2ba668628ad6404f1d9",
+    "crates/provider/src/local/opencode/tests/fixture/tests.rs": "c57a4149f29636e25191c640840a9c907871128590a7d7121dcaa7aee36c8e0e",
+    "crates/provider/src/local/tool_detail.rs": "a6c42d77f910aac6b24729320a5f660c3b3ad008441c52c859fbf3adcfb78ea3",
+    "crates/provider/src/local/tool_detail/tests.rs": "af4f238cf3c9169bf0531829165ede912a139a8b94068b727753f3eeee67ee08",
+    "crates/provider/tests/fixtures/opencode_runtime.sh": "66f08575ca502bc7c1e15bfd29dc058bbe22a881c0446878ef5ecb2b5e4ab53a"
+  },
+  "changed_production_files": [
+    {
+      "path": "crates/provider/src/local/tool_detail.rs",
+      "lines": {
+        "count": 185,
+        "covered": 174,
+        "percent": 94.05405405405406
+      }
+    }
+  ],
+  "preview_functions": [
+    {
+      "name": "structured_preview",
+      "execution_count": 23,
+      "regions": 14,
+      "covered_regions": 14
+    },
+    {
+      "name": "text_preview",
+      "execution_count": 8297,
+      "regions": 14,
+      "covered_regions": 14
+    }
+  ],
+  "baseline": {
+    "revision": "cd59e24c9e07033ff7d0cf2a69c5f547c382efe4",
+    "scope": "Same host, toolchain, features, concurrency and coverage defaults",
+    "workspace_lines": {
+      "count": 60650,
+      "covered": 57131,
+      "percent": 94.19785655399835
+    },
+    "provider_lines": {
+      "count": 29677,
+      "covered": 27685,
+      "percent": 93.28773123968057
+    },
+    "workspace_percentage_point_change": 0.003297609233314347,
+    "provider_percentage_point_change": 0.0
+  },
+  "ci_followup": {
+    "observed": "Linux CI failed while listing fixture sessions before preview assertions; the underlying OS error was not recorded.",
+    "change": "Use an immutable checked-in executable with per-instance configuration to remove the writable-executable fork/exec race.",
+    "focused_execution": {
+      "passed": 74,
+      "failed": 0,
+      "ignored": 7
+    },
+    "concurrent_regression": "16 pairs of V1/V2 startup and shutdown, 32 runtime launches"
+  },
+  "uncovered_behavior": [
+    "Installed-provider smoke tests are ignored by the default suite; the existing affected Codex session was separately checked read-only.",
+    "Linux and Windows specific paths are not measured on this macOS host.",
+    "Shell launcher is outside Rust line coverage; sh -n and the concurrent startup regression validate it."
+  ],
+  "artifact": "This file is the reviewable normalized LLVM coverage summary; the generated HTML is retained outside the repository."
+}

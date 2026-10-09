@@ -56,13 +56,14 @@ pub(super) fn codex_name(native: &Value) -> Cow<'_, str> {
 
 /// Return the error for `native` when `failed`, or null for a successful tool.
 ///
-/// MCP failures retain their native error; other failures use a generic message.
+/// MCP failures retain a bounded preview of their native error.
+/// Other failures use a generic message.
 pub(super) fn codex_error(native: &Value, failed: bool) -> Value {
     if !failed {
         return Value::Null;
     }
     if native["type"] == "mcpToolCall" && !native["error"].is_null() {
-        return native["error"].clone();
+        return structured_preview(&native["error"]);
     }
     json!("Native tool failed")
 }
@@ -156,7 +157,8 @@ pub(super) fn codex(native: &Value) -> Value {
             detail
         }
         Some("mcpToolCall") => {
-            json!({"type":"unknown","input":native["arguments"],"output":native["result"]})
+            json!({"type":"unknown","input":structured_preview(&native["arguments"]),
+                "output":structured_preview(&native["result"])})
         }
         Some("imageView" | "imageGeneration") => {
             json!({"type":"plain_text","label":"Image","text":native["path"].as_str().unwrap_or("")})
@@ -215,11 +217,26 @@ fn output_text(value: &Value) -> String {
 }
 
 fn preview(text: &str) -> Cow<'_, str> {
+    text_preview(text, PREVIEW_BYTES)
+}
+
+fn structured_preview(value: &Value) -> Value {
+    // Measure serialized bytes so control characters cannot bypass the display budget.
+    // A JSON preview is itself escaped as a string; reserve space for that expansion
+    // across the input, output and error fields of a single tool row.
+    let serialized = value.to_string();
+    if serialized.len() <= PREVIEW_BYTES / 2 {
+        return value.clone();
+    }
+    json!(text_preview(&serialized, PREVIEW_BYTES / 2))
+}
+
+fn text_preview(text: &str, limit: usize) -> Cow<'_, str> {
     const MARKER: &str = "\n[Output truncated; full output remains in the native transcript.]";
-    if text.len() <= PREVIEW_BYTES {
+    if text.len() <= limit {
         return Cow::Borrowed(text);
     }
-    let mut end = PREVIEW_BYTES - MARKER.len();
+    let mut end = limit - MARKER.len();
     while !text.is_char_boundary(end) {
         end -= 1;
     }
