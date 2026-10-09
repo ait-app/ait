@@ -24,7 +24,11 @@ import {
 import { StyleSheet, useUnistyles } from "react-native-unistyles";
 import { useShallow } from "zustand/shallow";
 import { Settings2 } from "lucide-react-native";
-import { getAgentFeatureIcon, ThinkingIcon } from "@/agent-controls/icons";
+import {
+  getAgentFeatureIcon,
+  getAgentFeatureValueIcon,
+  ThinkingIcon,
+} from "@/agent-controls/icons";
 import { formatThinkingOptionLabel } from "@/agent-controls/labels";
 import { ComboboxTrigger } from "@/components/ui/combobox-trigger";
 import { CombinedModelSelector } from "@/components/combined-model-selector";
@@ -38,7 +42,12 @@ import { useSessionStore } from "@/stores/session-store";
 import { useProvidersSnapshot } from "@/hooks/use-providers-snapshot";
 import { resolveProviderDefinition } from "@/utils/provider-definitions";
 import { mergeProviderPreferences, useFormPreferences } from "@/hooks/use-form-preferences";
-import { Combobox, ComboboxItem, type ComboboxOption } from "@/components/ui/combobox";
+import {
+  Combobox,
+  ComboboxItem,
+  type ComboboxOption,
+  type ComboboxProps,
+} from "@/components/ui/combobox";
 import {
   AgentModeControl,
   useLiveAgentModeControl,
@@ -1276,6 +1285,29 @@ function SheetAgentControlsContent(props: SheetAgentControlsContentProps) {
   ) : null;
 }
 
+function useFeatureOptionRenderer(feature: AgentFeature, iconColor: string) {
+  return useCallback(
+    ({
+      option,
+      selected,
+      active,
+      onPress,
+    }: Parameters<NonNullable<ComboboxProps["renderOption"]>>[0]) => {
+      const Icon = getAgentFeatureValueIcon(feature, option.id);
+      return (
+        <ComboboxItem
+          label={option.label}
+          selected={selected}
+          active={active}
+          onPress={onPress}
+          leadingSlot={<Icon size={16} color={iconColor} />}
+        />
+      );
+    },
+    [feature, iconColor],
+  );
+}
+
 function DesktopFeatureItem({
   feature,
   disabled,
@@ -1294,6 +1326,7 @@ function DesktopFeatureItem({
   const { theme } = useUnistyles();
   const featureSelector: AgentControlSelector = `feature-${feature.id}`;
   const featureAnchorRef = useRef<View>(null);
+  const renderFeatureOption = useFeatureOptionRenderer(feature, theme.colors.foreground);
 
   const handleFeatureOpenChange = useMemo(
     () => handleOpenChange(featureSelector),
@@ -1355,7 +1388,7 @@ function DesktopFeatureItem({
   }
 
   if (feature.type === "select") {
-    const FeatureIcon = getAgentFeatureIcon(feature.icon);
+    const FeatureIcon = getAgentFeatureValueIcon(feature, feature.value);
     const selectedOption = feature.options.find((o) => o.id === feature.value);
     return (
       <>
@@ -1386,6 +1419,7 @@ function DesktopFeatureItem({
           onOpenChange={handleFeatureOpenChange}
           anchorRef={featureAnchorRef}
           desktopPlacement="top-start"
+          renderOption={feature.id === "permission" ? renderFeatureOption : undefined}
         />
       </>
     );
@@ -1411,6 +1445,7 @@ function SheetFeatureItem({
   const { t } = useTranslation();
   const featureSelector: AgentControlSelector = `feature-${feature.id}`;
   const featureAnchorRef = useRef<View>(null);
+  const renderFeatureOption = useFeatureOptionRenderer(feature, theme.colors.foreground);
 
   const handleFeatureOpenChange = useMemo(
     () => handleOpenChange(featureSelector),
@@ -1476,7 +1511,7 @@ function SheetFeatureItem({
   }
 
   if (feature.type === "select") {
-    const FeatureIcon = getAgentFeatureIcon(feature.icon);
+    const FeatureIcon = getAgentFeatureValueIcon(feature, feature.value);
     const selectedOption = feature.options.find((o) => o.id === feature.value);
     return (
       <>
@@ -1501,6 +1536,7 @@ function SheetFeatureItem({
           anchorRef={featureAnchorRef}
           presentation="push"
           header={sheetHeader}
+          renderOption={feature.id === "permission" ? renderFeatureOption : undefined}
         />
       </>
     );

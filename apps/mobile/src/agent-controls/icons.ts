@@ -1,4 +1,5 @@
 import type { ComponentType } from "react";
+import type { AgentFeature } from "@ait/protocol/agent-types";
 import {
   Bot,
   Brain,
@@ -44,6 +45,12 @@ const FEATURE_ICONS: Record<string, AgentControlIcon> = {
   zap: Zap,
 };
 
+const PERMISSION_ICONS: Record<string, AgentControlIcon> = {
+  allow: ShieldCheck,
+  ask: ShieldQuestionMark,
+  deny: ShieldOff,
+};
+
 export function getAgentModeIcon(
   provider: string,
   modeId: string,
@@ -55,4 +62,14 @@ export function getAgentModeIcon(
 
 export function getAgentFeatureIcon(icon?: string): AgentControlIcon {
   return (icon ? FEATURE_ICONS[icon] : undefined) ?? Settings2;
+}
+
+export function getAgentFeatureValueIcon(
+  feature: Pick<AgentFeature, "id" | "icon">,
+  value: unknown,
+): AgentControlIcon {
+  if (feature.id === "permission") {
+    return (typeof value === "string" ? PERMISSION_ICONS[value] : undefined) ?? Shield;
+  }
+  return getAgentFeatureIcon(feature.icon);
 }
