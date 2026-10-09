@@ -52,6 +52,45 @@ const unavailableSuggestions: GetDirectorySuggestions = async () => {
 };
 
 describe("classifyForResolution", () => {
+  it("uses the decoded basename for daemon suggestions", () => {
+    const href = "%E9%87%87%E8%B4%AD%20%E6%96%B9%E6%A1%88.md#L12";
+    expect(classifyForResolution({ href }, CONTEXT)).toEqual({
+      kind: "needsLookup",
+      ambiguousQuery: "采购 方案.md",
+      token: href,
+      target: {
+        raw: href,
+        path: "/Users/test/project/采购 方案.md",
+        lineStart: 12,
+        lineEnd: undefined,
+      },
+    });
+  });
+
+  it.each(["inline-code", "linkify"] as const)(
+    "preserves literal percent escapes in %s text",
+    (sourceType) => {
+      for (const text of ["docs/100%20.md:12", "/tmp/100%20采购.md#L12"]) {
+        const source = {
+          href: encodeURI(text),
+          text,
+          ...(sourceType === "inline-code" ? { sourceType } : { markup: sourceType }),
+        };
+        const result = classifyForResolution(source, CONTEXT);
+        const target =
+          result.kind === "needsLookup"
+            ? result.target
+            : result.value.kind === "file"
+              ? result.value.target
+              : null;
+        expect(target?.path).toBe(
+          text.startsWith("/") ? "/tmp/100%20采购.md" : "/Users/test/project/docs/100%20.md",
+        );
+        expect(target?.lineStart).toBe(12);
+      }
+    },
+  );
+
   it("returns the directFile target synchronously", () => {
     const result = classifyForResolution({ href: "src/components/message.tsx#L33" }, CONTEXT);
 
