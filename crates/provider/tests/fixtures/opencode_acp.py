@@ -15,13 +15,28 @@ if sys.argv[1:] == ["--version"]:
     sys.exit(0)
 if sys.argv[1:2] == ["models"]:
     print("local/model")
+    if "--verbose" in sys.argv:
+        print(json.dumps({"name": "Local model", "variants": {"high": {}, "disabled": {"disabled": True}}}))
+        print("local/second")
+        print(json.dumps({"name": "Second model"}))
+    sys.exit(0)
+if sys.argv[1:] == ["agent", "list"]:
+    print('build (primary)\n  []\nplan (primary)\n  []\ncustom (all)\n  []\nsummary (primary)\n  []\nexplore (subagent)\n  []')
+    sys.exit(0)
+if sys.argv[1:3] == ["debug", "agent"]:
+    print(json.dumps({"name": sys.argv[-1], "hidden": sys.argv[-1] == "summary", "description": "Native agent"}))
     sys.exit(0)
 assert sys.argv[1:] == ["acp"], sys.argv
+with (root / "launch.jsonl").open("a") as output:
+    output.write(json.dumps({"config": json.loads(os.environ.get("OPENCODE_CONFIG_CONTENT", "{}")),
+                             "question": os.environ.get("OPENCODE_ENABLE_QUESTION_TOOL")}) + "\n")
 scenario = os.environ.get("AIT_ACP_SCENARIO", "normal")
 session_id = "ses_one"
 model = "local/model"
 effort = "default"
 mode = "build"
+if scenario == "custom-mode":
+    mode = "review"
 active = None
 
 
@@ -48,13 +63,16 @@ def update(value):
 
 
 def options():
+    if scenario == "missing-model":
+        return [{"id": "model", "name": "Model", "category": "model", "type": "select", "currentValue": "local/second",
+                 "options": [{"value": "local/second", "name": "Second model"}]}]
     return [
         {"id": "model", "name": "Model", "category": "model", "type": "select", "currentValue": model,
          "options": [{"value": "local/model", "name": "Local model"}, {"value": "local/second", "name": "Second model"}]},
         {"id": "effort", "name": "Effort", "category": "thought_level", "type": "select", "currentValue": effort,
          "options": [{"value": value, "name": value} for value in ["default", "high"]]},
         {"id": "mode", "name": "Mode", "category": "mode", "type": "select", "currentValue": mode,
-         "options": [{"value": value, "name": value} for value in ["build", "plan"]]},
+         "options": [{"value": value, "name": value} for value in (["review"] if scenario == "custom-mode" else ["build", "plan"])]},
     ]
 
 
@@ -104,8 +122,13 @@ for line in sys.stdin:
         if scenario == "malformed":
             print("not json", flush=True)
             continue
-        reply(identity, {"protocolVersion": 1, "agentCapabilities": {"loadSession": True,
-            "promptCapabilities": {"image": True}, "sessionCapabilities": {"list": {}, "resume": {}, "close": {}, "delete": {}}}})
+        capabilities = {"list": {}, "resume": {}, "close": {}}
+        if scenario == "no-history":
+            capabilities.pop("list")
+        if not os.environ.get("AIT_ACP_VERSION", "2.0.26").startswith("1.") and scenario != "no-delete":
+            capabilities["delete"] = {}
+        reply(identity, {"protocolVersion": 1, "agentCapabilities": {"loadSession": scenario != "no-history",
+            "promptCapabilities": {"image": True}, "sessionCapabilities": capabilities}})
     elif method in ["session/new", "session/resume", "session/load"]:
         assert pathlib.Path(params["cwd"]).is_absolute()
         assert params["mcpServers"] == []

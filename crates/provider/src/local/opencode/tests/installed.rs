@@ -71,6 +71,16 @@ async fn model(
 ) -> ([(&'static str, &'static str); 1], String) {
     if request["messages"]
         .to_string()
+        .contains("Legacy ACP question")
+    {
+        assert!(!request["tools"].as_array().is_some_and(|tools| {
+            tools
+                .iter()
+                .any(|tool| tool["function"]["name"] == "question")
+        }));
+    }
+    if request["messages"]
+        .to_string()
         .contains("Summarize metadata")
     {
         assert!(request["tools"].as_array().is_none_or(Vec::is_empty));
@@ -79,8 +89,22 @@ async fn model(
         .to_string()
         .contains("Ask which language")
         || request["messages"].to_string().contains("Request shell");
+    if request["messages"].to_string().contains("Request shell") {
+        assert!(
+            request["messages"]
+                .to_string()
+                .contains("Native override sentinel")
+        );
+    }
     let tool_name = if request["messages"].to_string().contains("Request shell") {
-        "shell"
+        if request["tools"]
+            .as_array()
+            .is_some_and(|tools| tools.iter().any(|tool| tool["function"]["name"] == "bash"))
+        {
+            "bash"
+        } else {
+            "shell"
+        }
     } else {
         "question"
     };
@@ -111,7 +135,7 @@ async fn model(
         );
     }
     let delta = if question {
-        let arguments = if tool_name == "shell" { json!({"command":"pwd","description":"Show working directory"}) } else { json!({"questions":[{"header":"Language","question":"Which language?","options":[{"label":"Rust","description":"Use Rust"},{"label":"Go","description":"Use Go"}]}]}) }.to_string();
+        let arguments = if matches!(tool_name, "shell" | "bash") { json!({"command":"pwd","description":"Show working directory"}) } else { json!({"questions":[{"header":"Language","question":"Which language?","options":[{"label":"Rust","description":"Use Rust"},{"label":"Go","description":"Use Go"}]}]}) }.to_string();
         json!({"role":"assistant","tool_calls":[{"index":0,"id":"question_local","type":"function","function":{"name":tool_name,"arguments":arguments}}]})
     } else {
         json!({"role":"assistant","content":"authoritative answer"})
@@ -232,10 +256,11 @@ async fn installed_acp_native_question_form_reaches_user_and_model() {
 }
 
 #[tokio::test]
-#[ignore = "requires OpenCode 2.0.26+ in AIT_TEST_OPENCODE_BIN; isolated XDG and loopback model"]
+#[ignore = "requires AIT_TEST_OPENCODE_BIN; isolated XDG and loopback model"]
 async fn installed_acp_native_permission_rejection_and_next_turn() {
     let (_root, client, mut spec, _server) = installed(true).await;
     spec.config.feature_values = Some(BTreeMap::from([("permission".into(), json!("ask"))]));
+    spec.config.system_prompt = Some("Native override sentinel".into());
     let mut session = client.create_session(&spec).await.unwrap();
     session
         .start_turn("Request shell tool, then continue.", &spec.config)
@@ -270,6 +295,40 @@ async fn installed_acp_native_permission_rejection_and_next_turn() {
     session.start_turn("follow up", &spec.config).await.unwrap();
     completed(session.as_mut()).await;
     session.close().await.unwrap();
+}
+
+#[tokio::test]
+#[ignore = "requires OpenCode 1.18.4+ in AIT_TEST_OPENCODE_BIN; isolated XDG and loopback model"]
+async fn installed_acp_without_native_forms_disables_unanswerable_questions() {
+    let (_root, mut client, spec, _server) = installed(false).await;
+    let version = launcher::version(&client, &spec.cwd).await.unwrap();
+    assert!(version.starts_with("1."));
+    client
+        .environment
+        .insert("OPENCODE_ENABLE_QUESTION_TOOL".into(), "true".into());
+    let mut session = client.create_session(&spec).await.unwrap();
+    session
+        .start_turn("Legacy ACP question: choose a language.", &spec.config)
+        .await
+        .unwrap();
+    completed(session.as_mut()).await;
+    session.close().await.unwrap();
+    let options = crate::ports::native_history::ListOptions {
+        cwd: Some(spec.cwd.clone()),
+        scan_limit: 10,
+    };
+    let before = client.list_sessions(&options).await.unwrap();
+    assert_eq!(
+        client
+            .generate_summary(&spec, "metadata", &json!({"type":"object"}))
+            .await
+            .unwrap_err(),
+        AgentSessionError::Unavailable
+    );
+    assert_eq!(
+        client.list_sessions(&options).await.unwrap().len(),
+        before.len()
+    );
 }
 
 #[tokio::test]

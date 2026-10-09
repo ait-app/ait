@@ -406,10 +406,71 @@ async fn acp_discovery_never_prompts_and_deletes_its_native_query_session() {
     );
     assert!(!root.path().join("native-fixture.json").exists());
     assert!(
+        client
+            .summary_model(&[json!({"id":"local/mini","isSelectable":true})])
+            .is_some()
+    );
+    assert!(
         !requests(&root)
             .iter()
             .any(|request| request["method"] == "session/prompt")
     );
+}
+
+#[cfg(unix)]
+#[tokio::test]
+async fn acp_exposes_native_session_capabilities_and_rejects_missing_model_before_prompting() {
+    let (_root, client, spec) = fixture("no-history");
+    assert!(client.is_available().await.unwrap());
+    assert!(!client.supports_session_import());
+    assert_eq!(
+        client.settings(&spec.config)["capabilities"]["supportsSessionListing"],
+        false
+    );
+    let (root, client, spec) = fixture("missing-model");
+    assert!(matches!(
+        client.create_session(&spec).await,
+        Err(AgentSessionError::Rejected)
+    ));
+    assert!(
+        !requests(&root)
+            .iter()
+            .any(|request| request["method"] == "session/prompt")
+    );
+    let (_root, client, spec) = fixture("normal");
+    assert!(client.is_available().await.unwrap());
+    assert_eq!(
+        client.diagnostic().await.unwrap(),
+        "OpenCode 2.0.26: ACP initialized."
+    );
+    let models = [
+        json!({"id":"google/gemini-2.5-pro"}),
+        json!({"id":"google/gemini-2.5-flash"}),
+    ];
+    assert_eq!(
+        client.summary_model(&models).unwrap().model.as_deref(),
+        Some("google/gemini-2.5-flash")
+    );
+    assert!(client.summary_model(&models[..1]).is_none());
+    assert!(client.supports_session_import());
+    assert_eq!(
+        client.settings(&spec.config)["capabilities"]["supportsSessionListing"],
+        true
+    );
+    let (_root, client, mut spec) = fixture("custom-mode");
+    spec.config.mode_id = Some("review".into());
+    let mut session = client.create_session(&spec).await.unwrap();
+    let info = session.runtime_info().await.unwrap();
+    let extra = info.extra.unwrap();
+    assert_eq!(extra["availableModes"].as_array().unwrap().len(), 1);
+    assert_eq!(extra["availableModes"][0]["id"], "review");
+    assert!(
+        client.settings(&spec.config)["availableModes"]
+            .as_array()
+            .unwrap()
+            .is_empty()
+    );
+    session.close().await.unwrap();
 }
 
 #[cfg(unix)]
@@ -618,8 +679,8 @@ async fn acp_auxiliary_generation_cleans_up_on_success_and_future_cancellation()
 
 #[cfg(unix)]
 #[tokio::test]
-async fn acp_refuses_versions_without_native_form_support_before_creating_sessions() {
-    for version in ["1.18.4", "2.0.25", "not-a-version"] {
+async fn acp_refuses_unrecognized_config_families_before_creating_sessions() {
+    for version in ["0.9.0", "3.0.0", "not-a-version"] {
         let (root, mut client, spec) = fixture("normal");
         client
             .environment
@@ -627,4 +688,143 @@ async fn acp_refuses_versions_without_native_form_support_before_creating_sessio
         assert!(client.create_session(&spec).await.is_err());
         assert!(!root.path().join("native-fixture.json").exists());
     }
+}
+
+#[cfg(unix)]
+#[tokio::test]
+async fn acp_both_major_versions_keep_conversation_and_configuration_compatible() {
+    for version in ["1.18.3", "1.18.4", "2.0.20", "2.0.26"] {
+        let (root, mut client, mut spec) = fixture("normal");
+        client
+            .environment
+            .insert("AIT_ACP_VERSION".into(), version.into());
+        let legacy = version.starts_with("1.");
+        let native = if legacy {
+            json!({"agent":{"build":{"description":"preserved"}},"permission":{"edit":"deny"}})
+        } else {
+            json!({"agents":{"build":{"description":"preserved"}},"permissions":[]})
+        };
+        client
+            .environment
+            .insert("OPENCODE_CONFIG_CONTENT".into(), native.to_string());
+        spec.config.feature_values = Some(BTreeMap::from([("permission".into(), json!("ask"))]));
+        spec.config.system_prompt = Some("native prompt".into());
+        let mut session = client.create_session(&spec).await.unwrap();
+        session.start_turn("hello", &spec.config).await.unwrap();
+        completed(session.as_mut()).await;
+        let handle = session.persistence().unwrap();
+        session.close().await.unwrap();
+        let mut resumed = client
+            .resume_session(&handle, &spec, AgentResumePurpose::Interactive)
+            .await
+            .unwrap();
+        resumed.start_turn("follow up", &spec.config).await.unwrap();
+        completed(resumed.as_mut()).await;
+        resumed.close().await.unwrap();
+        let launches = std::fs::read_to_string(root.path().join("launch.jsonl")).unwrap();
+        let launch: Value = serde_json::from_str(launches.lines().next().unwrap()).unwrap();
+        if legacy {
+            assert_eq!(
+                launch["config"]["permission"],
+                json!({"*":"ask","edit":"deny"})
+            );
+            assert_eq!(
+                launch["config"]["agent"]["build"]["prompt"],
+                "native prompt"
+            );
+            assert_eq!(
+                launch["config"]["agent"]["build"]["description"],
+                "preserved"
+            );
+            assert!(launch["config"]["agents"].is_null());
+            assert_eq!(launch["question"], "false");
+        } else {
+            assert_eq!(launch["config"]["permissions"][0]["effect"], "ask");
+            assert_eq!(
+                launch["config"]["agents"]["build"]["system"],
+                "native prompt"
+            );
+            assert_eq!(
+                launch["config"]["agents"]["build"]["description"],
+                "preserved"
+            );
+            assert!(launch["config"]["agent"].is_null());
+        }
+    }
+}
+
+#[cfg(unix)]
+#[tokio::test]
+async fn acp_malformed_native_overlay_rejects_without_creating_a_session() {
+    for (version, overlay) in [
+        ("1.18.4", json!({"agent":[]})),
+        ("1.18.4", json!({"agent":{"build":"invalid"}})),
+        ("2.0.26", json!({"agents":[]})),
+        ("2.0.26", json!({"permissions":{}})),
+    ] {
+        let (root, mut client, mut spec) = fixture("normal");
+        client
+            .environment
+            .insert("AIT_ACP_VERSION".into(), version.into());
+        client
+            .environment
+            .insert("OPENCODE_CONFIG_CONTENT".into(), overlay.to_string());
+        spec.config.system_prompt = Some("configured prompt".into());
+        spec.config.feature_values = Some(BTreeMap::from([("permission".into(), json!("ask"))]));
+        assert!(matches!(
+            client.create_session(&spec).await,
+            Err(AgentSessionError::Rejected)
+        ));
+        assert!(!root.path().join("native-fixture.json").exists());
+    }
+}
+
+#[cfg(unix)]
+#[tokio::test]
+async fn acp_without_delete_discovers_without_creating_native_sessions() {
+    let (root, mut client, spec) = fixture("no-delete");
+    client
+        .environment
+        .insert("AIT_ACP_VERSION".into(), "1.18.4".into());
+    let details = client.discover(&spec.cwd).await.unwrap();
+    assert!(
+        client
+            .summary_model(&[json!({"id":"local/mini","isSelectable":true})])
+            .is_none()
+    );
+    assert_eq!(details.models[0]["id"], "local/model");
+    assert_eq!(
+        details.models[0]["thinkingOptions"],
+        json!([{"id":"high","label":"high"}])
+    );
+    assert_eq!(details.modes.len(), 3);
+    assert_eq!(details.modes[2]["id"], "custom");
+    assert!(!root.path().join("native-fixture.json").exists());
+    assert_eq!(
+        client
+            .generate_summary(&spec, "metadata", &json!({"type":"object"}))
+            .await
+            .unwrap_err(),
+        AgentSessionError::Unavailable
+    );
+    assert!(
+        !requests(&root)
+            .iter()
+            .any(|request| request["method"] == "session/new")
+    );
+    let (root, client, spec) = fixture("no-delete");
+    assert_eq!(
+        client.discover(&spec.cwd).await.unwrap_err(),
+        AgentSessionError::Unavailable
+    );
+    assert!(!root.path().join("native-fixture.json").exists());
+    assert!(client.is_available().await.unwrap());
+    let (_root, client, _spec) = fixture("malformed");
+    assert!(
+        client
+            .diagnostic()
+            .await
+            .unwrap()
+            .contains("ACP initialization")
+    );
 }

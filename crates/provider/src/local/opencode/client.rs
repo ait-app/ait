@@ -1,5 +1,10 @@
 //! `OpenCode` factory using official ACP and read-only native model discovery.
-use std::{collections::BTreeMap, path::PathBuf, time::Duration};
+use std::{
+    collections::BTreeMap,
+    path::PathBuf,
+    sync::{Arc, RwLock},
+    time::Duration,
+};
 
 use domain::agent_runtime::{AgentPersistenceHandle, StoredAgentConfig};
 use serde_json::{Value, json};
@@ -23,6 +28,15 @@ pub struct OpenCodeClient {
     pub(super) deadline: Duration,
     pub(super) environment: BTreeMap<String, String>,
     pub(super) images: crate::local::images::ImageStore,
+    pub(super) capabilities: Arc<RwLock<Option<Capabilities>>>,
+}
+
+/// Session methods actually advertised by the installed native ACP process.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub(super) struct Capabilities {
+    pub(super) history: bool,
+    pub(super) listing: bool,
+    pub(super) deletion: bool,
 }
 
 impl OpenCodeClient {
@@ -35,6 +49,7 @@ impl OpenCodeClient {
             deadline: Duration::from_secs(30),
             environment: BTreeMap::new(),
             images: crate::local::images::ImageStore::default(),
+            capabilities: Arc::new(RwLock::new(None)),
         }
     }
 
@@ -73,13 +88,26 @@ impl AgentClient for OpenCodeClient {
         Box::pin(async {
             let cwd = std::env::current_dir().map_err(|_| AgentSessionError::Unavailable)?;
             match launcher::version(self, &cwd.to_string_lossy()).await {
-                Ok(version) => Ok(format!(
-                    "OpenCode {version}: official ACP with native question forms."
-                )),
-                Err(_) => Ok(
-                    "OpenCode ACP requires an installed OpenCode 2.x version 2.0.26 or newer."
-                        .into(),
-                ),
+                Ok(version) => {
+                    match launcher::spawn(
+                        self,
+                        &cwd.to_string_lossy(),
+                        &StoredAgentConfig::default(),
+                    )
+                    .await
+                    {
+                        Ok((mut transport, _)) => {
+                            transport.close().await?;
+                            Ok(format!("OpenCode {version}: ACP initialized."))
+                        }
+                        Err(error) => {
+                            Ok(format!("OpenCode {version}: ACP initialization {error}."))
+                        }
+                    }
+                }
+                Err(_) => {
+                    Ok("OpenCode ACP requires an installed OpenCode 1.x or 2.x release.".into())
+                }
             }
         })
     }
@@ -95,6 +123,9 @@ impl AgentClient for OpenCodeClient {
         Box::pin(super::summary::generate(self, spec, prompt, schema))
     }
     fn summary_model(&self, models: &[Value]) -> Option<domain::summary::SummarySelection> {
+        if !self.capabilities.read().ok()?.as_ref()?.deletion {
+            return None;
+        }
         crate::local::summary_model::select(
             PROVIDER,
             models,
@@ -111,7 +142,11 @@ impl AgentClient for OpenCodeClient {
         PROVIDER
     }
     fn supports_session_import(&self) -> bool {
-        true
+        self.capabilities
+            .read()
+            .ok()
+            .and_then(|caps| *caps)
+            .is_none_or(|caps| caps.history)
     }
     fn validate_config(&self, selected: &StoredAgentConfig) -> Result<(), AgentSessionError> {
         config::validate(selected)
@@ -130,8 +165,14 @@ impl AgentClient for OpenCodeClient {
         })
     }
     fn settings(&self, selected: &StoredAgentConfig) -> Value {
-        json!({"availableModes":config::modes(),"features":config::features(selected),
-            "capabilities":{"supportsStreaming":true,"supportsSessionListing":true,
+        let listing = self
+            .capabilities
+            .read()
+            .ok()
+            .and_then(|caps| *caps)
+            .is_some_and(|caps| caps.listing);
+        json!({"availableModes":[],"features":config::features(selected),
+            "capabilities":{"supportsStreaming":true,"supportsSessionListing":listing,
                 "supportsDynamicModes":true,"supportsMcpServers":false}})
     }
     fn discover<'a>(&'a self, cwd: &'a str) -> AgentSessionFuture<'a, Details> {

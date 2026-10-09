@@ -10,14 +10,18 @@ pub(super) async fn discover(
     client: &OpenCodeClient,
     cwd: &str,
 ) -> Result<Details, AgentSessionError> {
-    let (transport, capabilities) = launcher::spawn(
+    let (mut transport, capabilities) = launcher::spawn(
         client,
         cwd,
         &domain::agent_runtime::StoredAgentConfig::default(),
     )
     .await?;
     if !capabilities["sessionCapabilities"]["delete"].is_object() {
-        return Err(AgentSessionError::Unavailable);
+        transport.close().await?;
+        if !launcher::version(client, cwd).await?.starts_with("1.") {
+            return Err(AgentSessionError::Unavailable);
+        }
+        return catalog::discover(client, cwd).await;
     }
     let mut temporary = Temporary::new(client, cwd, transport);
     let result = async {
@@ -53,3 +57,5 @@ pub(super) async fn discover(
     temporary.close().await?;
     result
 }
+
+mod catalog;

@@ -1,4 +1,4 @@
-use std::path::Path;
+use std::{collections::BTreeMap, path::Path};
 
 use domain::agent_runtime::{StoredAgentConfig, StoredAgentRuntimeInfo};
 use serde_json::{Value, json};
@@ -119,7 +119,10 @@ pub(super) fn runtime(id: &str, options: &Value) -> StoredAgentRuntimeInfo {
         model: selection("model"),
         thinking_option_id: selection("thought_level"),
         mode_id: selection("mode"),
-        extra: None,
+        extra: Some(BTreeMap::from([(
+            "availableModes".into(),
+            Value::Array(modes(options)),
+        )])),
     }
 }
 
@@ -155,11 +158,21 @@ pub(super) async fn apply(
         ("mode", &config.mode_id),
     ] {
         let Some(value) = selected else { continue };
-        let option = option(options, category).ok_or(AgentSessionError::Rejected)?;
+        let option = option(options, category).ok_or_else(|| {
+            tracing::warn!(
+                category,
+                "OpenCode ACP does not advertise this configuration option"
+            );
+            AgentSessionError::Rejected
+        })?;
         if !choices(option)?
             .iter()
             .any(|choice| choice["value"] == *value)
         {
+            tracing::warn!(
+                category,
+                "OpenCode ACP does not advertise the requested configuration value"
+            );
             return Err(AgentSessionError::Rejected);
         }
         if option["currentValue"] == *value {
@@ -203,12 +216,12 @@ pub(super) fn stored(options: &Value) -> StoredAgentConfig {
     }
 }
 
-/// Return default mode presentation before directory-specific discovery completes.
-pub(super) fn modes() -> Vec<Value> {
-    vec![
-        json!({"id":"build","label":"Build","icon":"Hammer","colorTier":"moderate"}),
-        json!({"id":"plan","label":"Plan","icon":"ShieldCheck","colorTier":"planning"}),
-    ]
+/// Present only the modes offered by this native session's validated configuration.
+pub(super) fn modes(options: &Value) -> Vec<Value> {
+    option(options, "mode").and_then(|option| choices(option).ok()).unwrap_or_default()
+        .into_iter().map(|choice| json!({"id":choice["value"],"label":choice["name"],
+            "icon":if choice["value"] == "build" {"Hammer"} else if choice["value"] == "plan" {"ShieldCheck"} else {"Bot"},
+            "colorTier":if choice["value"] == "plan" {"planning"} else {"moderate"}})).collect()
 }
 
 /// Describe the explicit native permission override and its current selection.

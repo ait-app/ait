@@ -12,12 +12,15 @@
 
 [OpenCode 官方 ACP 文档](https://opencode.ai/v2/docs/cli/acp/) 提供统一的 stdio JSON-RPC、
 会话加载、列表、取消、配置选项、审批和 `elicitation/create` 表单。
-实际检查 1.18.4 / 2.0.20 的上游实现发现它们尚未提供表单回调；2.0.26 已提供。
+1.x 也提供官方 ACP。实际检查 1.18.4 / 2.0.20 的上游实现发现它们尚未提供表单回调；2.0.26 已提供。
 
 ## 决策
 
 1. OpenCode 仅通过 `opencode acp` 执行，使用 ACP protocol version 1。
-   要求 OpenCode 2.x 的 2.0.26 或更高版本，旧版明确返回不可用；没有 HTTP/SSE 回退或自动重发。
+   兼容 OpenCode 1.x / 2.x，按原生握手检查会话能力；不因缺少可选表单或删除能力拒绝普通会话。
+   版本号只用于识别原生配置格式和已验证的表单实现，不按小版本号整体拒绝。
+   模型、模式、会话加载、列表与删除按实际原生响应处理；界面仅显示当前安装的能力，不呈现与另一版的比较或兼容模式。
+   没有 HTTP/SSE 回退或自动重发。
    OpenCode 自己拥有内部 server、模型调用、原生工具、认证和原生存储。
    Ait 不连接或修改用户正在运行的原生进程，不向项目写入工具、配置或脚本。
 2. 有界 stdio transport 与 DSH 的既有 ACP profile 共用，launcher 参数保持各 provider 自有。
@@ -27,6 +30,8 @@
    原生 `session/request_permission` 的 once / always / reject 选项直接映射到既有审批。
    `elicitation/create` form 的 schema 映射到既有 question UI；保留字段 key、单选、多选、类型约束和自定义字段。
    不支持的表单返回 ACP `cancel`；不隐式批准，不替用户回答。
+   1.x 保留原生 ACP 不提供 question 工具的行为，并关闭强制启用该工具的环境开关。
+   尚无表单回调的早期 2.0.x 在该子进程内拒绝 question，不替原生实现表单协议。
    拒绝审批与主动取消分别发送各自协议；终态以原生 prompt 的 `stopReason` 为准。
 4. `session/cancel` 的写入成功不等于任务已结束。等待原生 prompt 响应，并重放持久化历史后，才发布终态和释放下一个输入。
    未知接纳结果、协议错误或重放失败使该连接失效，不重发 prompt。
@@ -42,9 +47,15 @@
    因现行原生 `models` 命令在验证配置下返回空目录，发现使用无 prompt 的临时 ACP 会话。
    查询结束后调用原生 `session/delete`；取消未来任务时仍安排清理，不保留查询会话。
    摘要也使用独立、禁用工具、单步的 ACP 会话，结束或取消后删除原生历史。
+   1.x 未声明 delete 时，发现使用该版本原生 `models --verbose`、`agent list` 和 `debug agent` 只读命令，过滤 hidden / subagent；不创建临时会话，不猜测默认模型。
+   2.x 未声明 delete 时，目录查询不可用，不套用 1.x 的 CLI 格式。
+   会话控件使用该会话返回的原生模式目录，避免静态 build / plan 或其他项目的模式污染当前会话。
+   缺少 delete 时摘要返回不可用，不向用户原生历史写入无法清理的辅助会话。
+   自动摘要选型跳过未声明 delete 的原生进程；不为另一版补造辅助通道。
 8. 用户显式选择的 permission 或 system prompt 仅通过该 ACP 子进程的内存环境配置传入。
    未选择时继承原生配置；配置改变时先关闭旧连接，再恢复同一原生 session，并在提交下一次输入前应用选项。
    不再写私有 HTTP session permission 路由，也不写用户配置文件。
+   启动配置按原生格式编码：1.x 使用 `permission` / `agent.<mode>.prompt`，2.x 使用 `permissions` / `agents.<mode>.system`。
 
 ## 协议限制
 
