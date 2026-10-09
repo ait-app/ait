@@ -13,6 +13,7 @@
 
 ## 架构决策
 
+- [ADR-114：iOS 终端组合输入归 UIKit](decisions/clients/adr-114-ios-terminal-ime.md)：原生组合范围识别、确认文字提交与终端控制键分离。
 - [ADR-113：filesystem 按能力组组织模块](decisions/workspace/adr-113-filesystem-capability-groups.md)：git/forge/worktrees/files/skills 五组沿用原分层，组间仅经 ports/protocol 协作，并由模块边界测试约束。
 - [ADR-112：file 瘦身为 persistence，宿主专用文件归 daemon](decisions/daemon/adr-112-persistence-crate.md)：启动配置、故障证据与 server identity 迁回 daemon，metadata 经端口定位项目配置，仅 daemon 在生产代码中依赖 persistence。
 - [ADR-111：纯业务数据归 domain，连接协议并入 model::server](decisions/daemon/adr-111-domain-values-and-server-protocol.md)：移除 protocol crate，数据值与运行资源分离，消费者直接依赖类型所属 crate。

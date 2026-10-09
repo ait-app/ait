@@ -78,6 +78,7 @@
 
 ## 客户端、连接与品牌
 
+- [ADR-114：iOS 终端组合输入归 UIKit](clients/adr-114-ios-terminal-ime.md)
 - [ADR-097：Google Play 内部测试手动发布](clients/adr-097-google-play-internal-release.md)
 - [ADR-098：客户端消息分块与文件上传背压](clients/adr-098-acknowledged-client-chunks.md)
 
