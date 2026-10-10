@@ -1,5 +1,9 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { AccountSessionManager, type AccountDependencies } from "./account-session.js";
+import {
+  AccountSessionManager,
+  type AccountDependencies,
+  type SavedAccount,
+} from "./account-session.js";
 import { createHash } from "node:crypto";
 
 afterEach(() => vi.useRealTimers());
@@ -370,6 +374,72 @@ describe("client-only account lifecycle", () => {
     await vi.advanceTimersByTimeAsync(1);
     expect(manager.snapshot().status).toBe("online");
     await manager.logout();
+  });
+});
+
+describe("account persistence across restarts", () => {
+  it("keeps a fourteen-day login across shutdown and an overnight restart without extending it", async () => {
+    const { manager, deps, http, login } = fixture();
+    let persisted: SavedAccount | null = null;
+    vi.mocked(deps.save).mockImplementation(async (value) => {
+      persisted = value ? { ...value } : null;
+    });
+    http.mockResolvedValueOnce(
+      Response.json({
+        access_token: "private-jwt",
+        expires_in: 14 * 86400,
+        user: { email: "me@example.test" },
+      }),
+    );
+    await login();
+    const beforeShutdown = persisted;
+    expect(beforeShutdown).toMatchObject({ token: "private-jwt", nodeSessionId: "lease" });
+    vi.mocked(deps.save).mockClear();
+
+    await manager.shutdown();
+    await manager.shutdown();
+    expect(deps.save).not.toHaveBeenCalled();
+    expect(persisted).toEqual(beforeShutdown);
+    expect(http.mock.calls).toContainEqual([
+      expect.stringContaining("/node-sessions/lease"),
+      expect.objectContaining({ method: "DELETE" }),
+    ]);
+    const requestsAfterShutdown = http.mock.calls.length;
+    await vi.advanceTimersByTimeAsync(86400_000);
+    expect(http).toHaveBeenCalledTimes(requestsAfterShutdown);
+
+    const restarted = new AccountSessionManager(deps);
+    await restarted.restore(persisted!);
+    await vi.advanceTimersByTimeAsync(1);
+    expect(restarted.snapshot()).toMatchObject({ status: "online", name: "me@example.test" });
+    expect(persisted).toEqual(beforeShutdown);
+    expect(http.mock.calls.filter(([url]) => String(url).endsWith("/auth/login"))).toHaveLength(1);
+    await restarted.logout();
+    expect(persisted).toBeNull();
+  });
+
+  it("can close without touching credentials when storage becomes unavailable", async () => {
+    const { manager, deps, login } = fixture();
+    await login();
+    vi.mocked(deps.save).mockClear().mockRejectedValue(new Error("Secure storage unavailable"));
+    await expect(manager.shutdown()).resolves.toBeUndefined();
+    expect(deps.save).not.toHaveBeenCalled();
+    expect(deps.closeTransports).toHaveBeenCalled();
+  });
+
+  it("does not restore expired credentials or prolong their validity on shutdown", async () => {
+    const { manager, deps, http } = fixture();
+    await manager.restore({
+      center: "https://example.test/api",
+      token: "expired-jwt",
+      expiresAt: Date.now(),
+      name: "Me",
+    });
+    await vi.advanceTimersByTimeAsync(1);
+    expect(manager.snapshot().status).toBe("logged_out");
+    await manager.shutdown();
+    expect(http).not.toHaveBeenCalled();
+    expect(deps.save).not.toHaveBeenCalled();
   });
 });
 

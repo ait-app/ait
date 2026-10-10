@@ -347,6 +347,10 @@ export class AccountSessionManager {
   }
 
   async logout(): Promise<void> {
+    await this.disconnectAccount(true);
+  }
+
+  private async disconnectAccount(forgetAccount: boolean): Promise<void> {
     this.cancelLogin();
     this.generation += 1;
     if (this.timer) clearTimeout(this.timer);
@@ -379,7 +383,7 @@ export class AccountSessionManager {
       for (const request of binding.requests) request.abort();
       this.publications.delete(bindingServerId);
     }
-    await this.deps.save(null);
+    if (forgetAccount) await this.deps.save(null);
     this.update({
       status: "logged_out",
       name: "",
@@ -395,14 +399,12 @@ export class AccountSessionManager {
 
   async shutdown(): Promise<void> {
     this.closing = true;
-    const saved = this.account ? { ...this.account } : null;
-    await this.logout();
+    // Credentials were persisted at login/registration. Never erase and rewrite them on exit:
+    // interruption or a failed write would otherwise turn closing the app into signing out.
+    // restore() already handles releasing the saved activation, even if it was closed here.
+    await this.disconnectAccount(false);
     for (const entry of this.publications.values())
       for (const request of entry.requests) request.abort();
-    if (saved) {
-      delete saved.nodeSessionId;
-      await this.deps.save(saved);
-    }
   }
 
   async select(hostId: string | null): Promise<AccountSnapshot> {
