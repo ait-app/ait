@@ -331,10 +331,22 @@ async fn failed_queued_admission_does_not_block_an_independent_agent() {
         .unwrap();
     let (restarted, registry) = worker(&fixture);
     let finished = restarted
-        .execute("agent.finish.wait.request", json!({"agentId":second}))
+        .execute(
+            "agent.finish.wait.request",
+            json!({"agentId":second,"timeoutMs":5000}),
+        )
         .await
         .unwrap();
     assert_eq!(finished["lastMessage"], "Echo: independent input");
+    // Independent lanes can finish in either order; observe the failed admission separately.
+    let rejected = restarted
+        .execute(
+            "agent.finish.wait.request",
+            json!({"agentId":first,"timeoutMs":5000}),
+        )
+        .await
+        .unwrap();
+    assert_eq!(rejected["status"], "error");
     let failed = registry.get(first).unwrap().unwrap();
     assert_eq!(
         failed.last_status,
