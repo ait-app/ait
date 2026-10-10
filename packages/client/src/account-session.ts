@@ -17,6 +17,13 @@ export interface AccountHost {
   relay_modes: string[];
 }
 
+interface LoginUser {
+  display_name?: string | null;
+  email?: string | null;
+  phone_number?: string | null;
+  expires_at?: string | null;
+}
+
 interface NodeSession {
   node_id: string;
   node_session_id: string;
@@ -181,7 +188,7 @@ export class AccountSessionManager {
     const result = await this.http<{
       access_token: string;
       expires_in: number;
-      user: { display_name?: string; email: string; expires_at?: string | null };
+      user: LoginUser;
     }>(center, null, "/v1/auth/login", "POST", { email, password });
     if (generation !== this.generation) throw new Error("Sign-in cancelled.");
     return this.acceptLogin(center, result);
@@ -249,7 +256,7 @@ export class AccountSessionManager {
       const result = await this.http<{
         access_token: string;
         expires_in: number;
-        user: { display_name?: string; email: string; expires_at?: string | null };
+        user: LoginUser;
       }>(
         center,
         null,
@@ -285,21 +292,27 @@ export class AccountSessionManager {
     result: {
       access_token: string;
       expires_in: number;
-      user: { display_name?: string; email: string; expires_at?: string | null };
+      user: LoginUser;
     },
   ): Promise<AccountSnapshot> {
+    const contact = [result.user?.email, result.user?.phone_number].find(
+      (value): value is string => typeof value === "string" && value.trim().length > 0,
+    );
     if (
       !result.access_token ||
       !Number.isFinite(result.expires_in) ||
       result.expires_in <= 0 ||
-      !result.user?.email
+      !contact
     )
       throw new Error("The service returned an invalid login session.");
     this.account = {
       center,
       token: result.access_token,
       expiresAt: Date.now() + result.expires_in * 1000,
-      name: result.user.display_name || result.user.email,
+      name:
+        typeof result.user.display_name === "string" && result.user.display_name.trim()
+          ? result.user.display_name.trim()
+          : contact,
       accountExpiresAt: result.user.expires_at ?? null,
     };
     await this.deps.save(this.account);
