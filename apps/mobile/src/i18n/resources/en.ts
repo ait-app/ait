@@ -2827,7 +2827,7 @@ export const en = {
       },
       notFound: "Host not found",
       badges: {
-        relay: "Relay",
+        relay: "Online relay",
         local: "Local",
         remoteSsh: "Remote SSH",
       },

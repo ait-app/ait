@@ -1,6 +1,7 @@
 # ADR-074：账户发现与按需反向中继
 
 - 状态：已实现
+- 后续主机持久化与多台访问修订：[ADR-122](adr-122-persistent-online-service-hosts.md)。
 - 日期：2026-10-01
 - 后续边界修订：[ADR-108](../daemon/adr-108-relay-rpc-and-metadata-connection-methods.md) 将控制 RPC 移入 relay，允许其仅依赖 model 的共享请求契约。
 - 修订：[ADR-061](adr-061-app-ait-e2e-remove-relay-plugin.md) 中不再提供中继连接的产品范围；旧公钥中继协议及配对格式继续停用。
@@ -10,7 +11,7 @@
 
 远程访问需要在账户登录后发现在线电脑，并在用户选择目标时建立连接。
 主机可能位于无法接受入站连接的网络中，因此通过账户中心协调主动发起的控制连接和反向数据连接。
-主机发现独立于 HostRuntime；只有用户明确选择的主机才成为远程工作连接。
+主机发现独立于 HostRuntime；用户明确添加的主机进入持久注册表并独立恢复访问，见 ADR-121。
 
 ## 决策
 

@@ -299,6 +299,43 @@ describe("hosted account login", () => {
 });
 
 describe("client-only account lifecycle", () => {
+  it("keeps existing host visits available when another host is selected or deselected", async () => {
+    const { manager, deps, login, http, host } = fixture();
+    const original = http.getMockImplementation()!;
+    http.mockImplementation((url, options) =>
+      String(url).includes("/hosts/online")
+        ? Promise.resolve(Response.json({ hosts: [host, { ...host, host_id: "another" }] }))
+        : original(url, options),
+    );
+    await login();
+    vi.mocked(deps.closeTransports).mockClear();
+    const center = manager.snapshot().center;
+    await manager.select("remote");
+    await manager.openVisit("remote", center);
+    await manager.select("another");
+    await manager.openVisit("remote", center);
+    await manager.openVisit("another", center);
+    await manager.select(null);
+    await manager.openVisit("remote", center);
+    expect(deps.closeTransports).not.toHaveBeenCalled();
+    await manager.logout();
+    expect(deps.closeTransports).toHaveBeenCalledOnce();
+  });
+
+  it("rejects saved hosts from another service before sending account credentials", async () => {
+    const { manager, login, http } = fixture();
+    await login();
+    const count = http.mock.calls.length;
+    await expect(manager.openVisit("remote", "https://other.test/api")).rejects.toThrow(
+      "Sign in to the online service used by this host.",
+    );
+    await expect(manager.openDownload("remote", "token", "https://other.test/api")).rejects.toThrow(
+      "Sign in to the online service used by this host.",
+    );
+    expect(http).toHaveBeenCalledTimes(count);
+    await manager.logout();
+  });
+
   it("registers Android without publishing a host, discovers and renews independently of visits", async () => {
     const { manager, http, deps, login, host } = fixture();
     await login();
@@ -324,18 +361,16 @@ describe("client-only account lifecycle", () => {
     await manager.logout();
   });
 
-  it("only grants visits to explicitly selected hosts and revokes them on logout", async () => {
+  it("reconnects saved hosts without a new selection and revokes visits on logout", async () => {
     const { manager, deps, login } = fixture();
     await login();
-    await expect(manager.openVisit("remote")).rejects.toThrow("not selected");
-    await manager.select("remote");
-    expect(await manager.openVisit("remote")).toMatchObject({
+    expect(await manager.openVisit("remote", manager.snapshot().center)).toMatchObject({
       url: "wss://dash.ait-app.com:8443/api/v1/relay/sessions/visit/client",
     });
     await manager.logout();
     expect(deps.closeTransports).toHaveBeenCalled();
     expect(deps.save).toHaveBeenLastCalledWith(null);
-    await expect(manager.openVisit("remote")).rejects.toThrow();
+    await expect(manager.openVisit("remote", manager.snapshot().center)).rejects.toThrow();
   });
 
   it("stops network activity in background and renews/re-registers an expired lease on resume", async () => {
@@ -346,7 +381,7 @@ describe("client-only account lifecycle", () => {
     const count = http.mock.calls.length;
     await vi.advanceTimersByTimeAsync(120_000);
     expect(http).toHaveBeenCalledTimes(count);
-    await expect(manager.openVisit("remote")).rejects.toThrow();
+    await expect(manager.openVisit("remote", manager.snapshot().center)).rejects.toThrow();
     expect(deps.closeTransports).toHaveBeenCalled();
     expireLease();
     manager.resume();

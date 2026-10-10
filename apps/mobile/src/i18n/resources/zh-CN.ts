@@ -2730,7 +2730,7 @@ export const zhCN: TranslationResources = {
       },
       notFound: "主机未找到",
       badges: {
-        relay: "中继",
+        relay: "在线中继",
         local: "本地",
         remoteSsh: "远程 SSH",
       },

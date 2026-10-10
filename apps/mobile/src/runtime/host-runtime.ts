@@ -42,6 +42,7 @@ import {
 } from "@/timeline/viewed-timeline-sync";
 import {
   connectionFromListen,
+  createAccountRelayHostConnection,
   createRemoteSshHostConnection,
   normalizeStoredHostProfile,
   registryHasConnection,
@@ -224,7 +225,7 @@ function toActiveConnection(connection: HostConnection): ActiveConnection {
     };
   }
   if (connection.type === "accountRelay") {
-    return { type: "accountRelay", endpoint: connection.hostId, display: "Account relay" };
+    return { type: "accountRelay", endpoint: connection.hostId, display: "Online relay" };
   }
   if (connection.type === "directTcp") {
     return {
@@ -657,6 +658,15 @@ export class HostRuntimeController {
       clearInterval(this.probeIntervalHandle);
       this.probeIntervalHandle = null;
     }
+    await this.closeActiveClient();
+    this.applyConnectionEvent({ type: "stopped" });
+    this.updateSnapshot({
+      ...toSnapshotConnectionPatch(this.connectionMachineState, this.connectionEpoch),
+      client: null,
+    });
+  }
+
+  private async closeActiveClient(): Promise<void> {
     if (this.unsubscribeClientStatus) {
       this.unsubscribeClientStatus();
       this.unsubscribeClientStatus = null;
@@ -670,11 +680,6 @@ export class HostRuntimeController {
       this.activeClient = null;
       await prev.close().catch(() => undefined);
     }
-    this.applyConnectionEvent({ type: "stopped" });
-    this.updateSnapshot({
-      ...toSnapshotConnectionPatch(this.connectionMachineState, this.connectionEpoch),
-      client: null,
-    });
   }
 
   async updateHost(host: HostProfile): Promise<void> {
@@ -697,6 +702,16 @@ export class HostRuntimeController {
     this.host = host;
     this.trackConnectionFirstSeen();
     const nextActiveConnection = findConnectionById(this.host, activeConnectionId);
+    if (activeConnectionId && !nextActiveConnection) {
+      const requestVersion = ++this.switchRequestVersion;
+      await this.closeActiveClient();
+      if (requestVersion !== this.switchRequestVersion || this.host !== host) return;
+      this.applyConnectionEvent({ type: "stopped" });
+      this.updateSnapshot({
+        ...toSnapshotConnectionPatch(this.connectionMachineState, this.connectionEpoch),
+        client: null,
+      });
+    }
     if (
       activeConnectionId &&
       previousActiveConnection &&
@@ -1374,8 +1389,8 @@ export class HostRuntimeStore {
   private hostRegistryLoaded = false;
   private hosts: HostProfile[] = [];
   private pendingDesktopConnections = new Set<string>();
-  private accountHostBackup: HostProfile | null = null;
-  private accountHostKey: string | null = null;
+  private accountRelayCenter: string | null = null;
+  private hostPersistenceTail: Promise<void> = Promise.resolve();
   private hostAppearanceMutationTail: Promise<void> = Promise.resolve();
   private hostRegistryStatus: HostRegistryStatus = "loading";
   private deps: HostRuntimeControllerDeps;
@@ -1485,9 +1500,8 @@ export class HostRuntimeStore {
         for (const entry of stored) {
           const profile = normalizeStoredHostProfile(entry);
           if (!profile) {
-            await this.storage.removeItem(REGISTRY_STORAGE_KEY);
-            normalizedProfiles.length = 0;
-            break;
+            shouldPersistHosts = true;
+            continue;
           }
           normalizedProfiles.push(profile);
         }
@@ -1875,19 +1889,10 @@ export class HostRuntimeStore {
   }
 
   async removeHost(serverId: string): Promise<void> {
-    if (
-      this.hosts
-        .find((host) => host.serverId === serverId)
-        ?.connections.some((connection) => connection.type === "accountRelay")
-    ) {
-      await getDesktopHost()?.invoke?.("account_select", { hostId: null });
-      this.setAccountRelayHost(null);
-      return;
-    }
     await this.revokePushNotifications({ client: this.getClient(serverId), serverId });
     const remaining = this.hosts.filter((daemon) => daemon.serverId !== serverId);
+    await this.persistHosts(remaining);
     this.setHostsAndSync(remaining);
-    await this.persistHosts();
   }
 
   async removeConnection(serverId: string, connectionId: string): Promise<void> {
@@ -1916,8 +1921,8 @@ export class HostRuntimeStore {
         } satisfies HostProfile;
       })
       .filter((entry): entry is HostProfile => entry !== null);
+    await this.persistHosts(next);
     this.setHostsAndSync(next);
-    await this.persistHosts();
   }
 
   private async upsertHostConnection(input: {
@@ -1972,51 +1977,35 @@ export class HostRuntimeStore {
   }
 
   private async persistHosts(hosts = this.hosts): Promise<void> {
-    const saved = hosts.filter(
-      (host) => !host.connections.some((connection) => connection.type === "accountRelay"),
+    const document = JSON.stringify(hosts);
+    const write = this.hostPersistenceTail.then(() =>
+      this.storage.setItem(REGISTRY_STORAGE_KEY, document),
     );
-    if (
-      this.accountHostBackup &&
-      !saved.some((host) => host.serverId === this.accountHostBackup!.serverId)
-    )
-      saved.push(this.accountHostBackup);
-    await this.storage.setItem(REGISTRY_STORAGE_KEY, JSON.stringify(saved));
+    this.hostPersistenceTail = write.catch(() => undefined);
+    await write;
   }
 
-  /** Only an explicit account selection joins HostRuntime; discovery never probes hosts. */
-  setAccountRelayHost(selected: { host_id: string; server_id: string; name: string } | null): void {
-    const key = selected ? `${selected.host_id}:${selected.server_id}` : null;
-    if (key === this.accountHostKey) return;
-    const retained = this.hosts.filter(
-      (host) => !host.connections.some((connection) => connection.type === "accountRelay"),
-    );
-    if (
-      this.accountHostBackup &&
-      !retained.some((host) => host.serverId === this.accountHostBackup!.serverId)
-    )
-      retained.push(this.accountHostBackup);
-    this.accountHostBackup = selected
-      ? (retained.find((host) => host.serverId === selected.server_id) ?? null)
-      : null;
-    this.accountHostKey = key;
-    if (selected) {
-      const now = new Date().toISOString();
-      const id = `account-relay:${selected.host_id}`;
-      const profile: HostProfile = {
-        serverId: selected.server_id,
-        label: selected.name,
-        appearance: defaultHostAppearance(),
-        lifecycle: {},
-        connections: [{ id, type: "accountRelay", hostId: selected.host_id }],
-        preferredConnectionId: id,
-        createdAt: now,
-        updatedAt: now,
-      };
-      this.setHostsAndSync([
-        ...retained.filter((host) => host.serverId !== selected.server_id),
-        profile,
-      ]);
-    } else this.setHostsAndSync(retained);
+  /** Only an explicit addition joins the persistent registry; discovery never adds hosts. */
+  async addAccountRelayHost(
+    selected: { host_id: string; server_id: string; name: string },
+    center: string,
+  ): Promise<void> {
+    const next = upsertHostConnectionInProfiles({
+      profiles: this.hosts,
+      serverId: selected.server_id,
+      label: selected.name,
+      connection: createAccountRelayHostConnection({ hostId: selected.host_id, center }),
+    });
+    if (next === this.hosts) return;
+    await this.persistHosts(next);
+    this.setHostsAndSync(next);
+  }
+
+  /** Saved hosts remain visible while signed out or connected to another service. */
+  setAccountRelayCenter(center: string | null): void {
+    if (center === this.accountRelayCenter) return;
+    this.accountRelayCenter = center;
+    this.syncHosts(this.hosts);
   }
 
   private emitHostList(): void {
@@ -2057,7 +2046,9 @@ export class HostRuntimeStore {
       const host = {
         ...storedHost,
         connections: storedHost.connections.filter(
-          (connection) => !this.pendingDesktopConnections.has(connection.id),
+          (connection) =>
+            !this.pendingDesktopConnections.has(connection.id) &&
+            (connection.type !== "accountRelay" || connection.center === this.accountRelayCenter),
         ),
       };
       const initialConnection = options?.initialConnectionByServerId?.get(host.serverId);

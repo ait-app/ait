@@ -280,6 +280,46 @@ async fn conflicting_progress_observation_fails_the_turn_without_corrupting_hist
 }
 
 #[tokio::test]
+async fn authoritative_history_repairs_observation_order_before_turn_completion() {
+    let (mut manager, registry, client) = running().await;
+    let timeline = Timeline::memory().unwrap();
+    manager = manager.with_timeline(timeline.clone());
+    let AgentTurnEvent::Progress { entry: answer, .. } = progress("first", "answer") else {
+        panic!("expected progress");
+    };
+    let mut user = answer.clone();
+    user.key = "native:native-turn:user".to_owned();
+    user.item = json!({"type":"user_message","messageId":"user","text":"Try it"});
+    {
+        let mut state = client.0.lock().unwrap();
+        state.events.push_back(progress("first", "answer"));
+        state
+            .events
+            .push_back(AgentTurnEvent::Timeline(user.clone()));
+        state
+            .events
+            .push_back(AgentTurnEvent::Timeline(answer.clone()));
+        state
+            .events
+            .push_back(AgentTurnEvent::History(vec![user, answer]));
+        state
+            .events
+            .push_back(AgentTurnEvent::Completed(Some("answer".to_owned())));
+    }
+    manager.poll().await.unwrap();
+    let rows = timeline.read("agent-1").unwrap().1;
+    assert_eq!(rows.len(), 2);
+    assert_eq!(rows[0].entry.item["type"], "user_message");
+    assert_eq!(rows[1].entry.item["text"], "answer");
+    assert_eq!(manager.active_turn("agent-1"), None);
+    assert_eq!(manager.last_message("agent-1"), Some("answer"));
+    assert_eq!(
+        registry.get("agent-1").unwrap().unwrap().last_status,
+        AgentRuntimeStatus::Idle
+    );
+}
+
+#[tokio::test]
 async fn oversized_progress_closes_the_turn_before_any_partial_publication() {
     let (mut manager, registry, client) = running().await;
     let timeline = Timeline::memory().unwrap();
