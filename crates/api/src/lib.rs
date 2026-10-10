@@ -224,12 +224,12 @@ impl Api {
             github_projects: services.github_projects.map(shared_service),
             worktrees,
             workspace_recovery: services.workspace_recovery.map(shared_service),
-            skills: services.skills.map(shared_service),
             workspace_setup: composition::workspace_setup(metadata.workspace_automation.as_ref()),
         });
         let provider = Arc::new(provider::dispatch::State {
             runtime: runtime.clone(),
             agents: services.agents.map(shared_service),
+            skills: services.skills.map(shared_service),
             agent_runtime: None,
             agent_execution: services.agent_execution,
             directory_changes,

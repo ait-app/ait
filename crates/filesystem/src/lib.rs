@@ -1,7 +1,7 @@
 //! Filesystem, Git, Forge and repository provisioning capabilities.
 //! Blocking services and adapters; the host owns connections and task scheduling.
 //!
-//! Capability groups (`git`, `forge`, `worktrees`, `files`, `skills`) each keep the
+//! Capability groups (`git`, `forge`, `worktrees`, `files`) each keep the
 //! `ports`/`protocol`/`service`/`rpc`/`connection`/`local` layering. Groups reference each
 //! other only through `ports` and `protocol`; the top-level modules compose concrete types.
 
@@ -19,7 +19,6 @@ pub mod workspace_runtime;
 pub mod files;
 pub mod forge;
 pub mod git;
-pub mod skills;
 pub mod worktrees;
 
 mod support;

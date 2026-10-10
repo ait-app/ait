@@ -57,6 +57,7 @@ ADR-074、082、083、084、122 在不同类别中各有两份，引用时以路
 
 ## Provider、Agent 与会话
 
+- [ADR-129：Agent Skills 能力组归 provider](providers/adr-129-provider-owned-skills.md)
 - [ADR-125：持久化展示投影索引与按页读取 Timeline](providers/adr-125-durable-timeline-projection-pages.md)
 - [ADR-122：Codex Auto-review 的 computer use 工具批准](providers/adr-122-codex-computer-use-approval.md)
 - [ADR-121：ACP 轮次关联与原生历史结算](providers/adr-121-acp-turn-history-reconciliation.md)

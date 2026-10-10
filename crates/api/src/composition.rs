@@ -26,7 +26,7 @@ pub(super) struct Parts {
     /// Connection-owned browser automation broker.
     pub(super) browser: Option<browser::broker::Broker>,
     /// Orchestration skill selection and installation.
-    pub(super) skills: Option<filesystem::skills::service::skills::Skills>,
+    pub(super) skills: Option<provider::skills::service::skills::Skills>,
     /// Durable push registration and lease renewal.
     pub(super) push_tokens: Option<metadata::service::push::PushTokens>,
     /// Connection-owned voice and dictation with independently selected speech engines.
@@ -84,7 +84,6 @@ impl From<Services> for Parts {
         }
         if let Some(filesystem) = services.filesystem {
             let filesystem = filesystem.into_dependencies();
-            parts.skills = Some(filesystem.skills);
             parts.workspace_recovery = Some(filesystem.workspace_recovery);
             parts.github_projects = Some(filesystem.github_projects);
             parts.checkout = Some(filesystem.checkout);
@@ -98,6 +97,7 @@ impl From<Services> for Parts {
             parts.summary_source = Some(summary_source(provider.summary_generator));
             parts.agent_execution = Some(provider.execution);
             parts.agents = Some(provider.agents);
+            parts.skills = Some(provider.skills);
         }
         parts
     }

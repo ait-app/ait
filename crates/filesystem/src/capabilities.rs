@@ -7,7 +7,6 @@ use model::methods::MethodSpec;
 /// Static names and message directions, independent of host installation or backend availability.
 pub fn implemented_methods() -> impl Iterator<Item = MethodSpec> {
     [
-        crate::skills::service::skills::METHODS,
         crate::git::rpc::checkout::METHODS,
         crate::forge::rpc::forge::METHODS,
         crate::files::connection::files::METHODS,

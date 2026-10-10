@@ -9,6 +9,11 @@ fn worker_lanes_keep_streams_and_subscriptions_with_their_connection_owner() {
         ("dictation.stream.start", 1),
         ("checkout.diff.subscribe.request", 2),
         ("file.upload.request", 2),
+        ("agent.skills.get_status.request", 2),
+        ("agent.skills.reconcile.request", 2),
+        ("agent.skills.uninstall.request", 2),
+        ("agent.skills.save_selection.request", 2),
+        ("agent.skills.import_legacy_selection.request", 2),
         ("agent.list.request", 3),
         ("agent.timeline.set_subscription.request", 3),
         ("workspace.create.request", 0),
@@ -16,6 +21,7 @@ fn worker_lanes_keep_streams_and_subscriptions_with_their_connection_owner() {
         ("browser.host.register.request", 0),
         ("relay.status.request", 0),
         ("unknown.request", 0),
+        ("agent.skills.unknown.request", 0),
     ] {
         let message = Incoming::Text(
             ClientMessage::Request {

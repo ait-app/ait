@@ -24,7 +24,7 @@ use tracing as _;
 use two_face as _;
 use uuid as _;
 
-const GROUPS: [&str; 5] = ["files", "forge", "git", "skills", "worktrees"];
+const GROUPS: [&str; 4] = ["files", "forge", "git", "worktrees"];
 const SHARED_LAYERS: [&str; 2] = ["ports", "protocol"];
 
 /// Return every boundary violation in `source`, owned by the module path `relative`.
@@ -143,10 +143,12 @@ fn guard_rejects_concrete_cross_group_layers_and_support_dependencies() {
         ["files/rpc/files.rs: files -> git::service"]
     );
     for layer in ["service", "rpc", "connection", "local"] {
-        let source = format!("crate::skills::{layer}::skills::Skills");
+        let source = format!("crate::worktrees::{layer}::worktrees::Worktrees");
         assert_eq!(
             violations(Path::new("git/service/checkout.rs"), &source),
-            [format!("git/service/checkout.rs: git -> skills::{layer}")]
+            [format!(
+                "git/service/checkout.rs: git -> worktrees::{layer}"
+            )]
         );
     }
     assert!(violations(worktrees, "crate::worktrees::local::worktrees::X").is_empty());

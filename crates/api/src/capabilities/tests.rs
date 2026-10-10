@@ -84,12 +84,16 @@ fn file_methods_use_ait_names() {
 }
 
 #[test]
-fn skill_methods_are_owned_by_filesystem_and_remain_requests() {
-    let specs: Vec<_> = ::filesystem::capabilities::implemented_methods()
+fn skill_methods_are_owned_by_provider_and_remain_requests() {
+    let specs: Vec<_> = ::provider::capabilities::implemented_methods()
         .filter(|spec| spec.name.starts_with("agent.skills."))
         .collect();
     assert_eq!(specs.len(), 5);
     assert!(specs.iter().all(|spec| spec.kind == InboundKind::Request));
+    assert!(
+        ::filesystem::capabilities::implemented_methods()
+            .all(|spec| !spec.name.starts_with("agent."))
+    );
 }
 
 #[test]

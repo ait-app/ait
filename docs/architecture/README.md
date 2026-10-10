@@ -12,8 +12,8 @@ Electron 位于 `apps/desktop`；`apps/mobile` 提供桌面、浏览器与移动
 | `persistence` | 单文件工具、通用 Registry 及具体文件持久化适配器  | `model`、`domain`                                     |
 | `model`       | 协作端口、连接协议、请求和事件资源、创建流程协调  | `domain`                                              |
 | `metadata`    | 基础连接方法、Project/Workspace 目录与配置        | `domain`、`model`；测试使用 `persistence`             |
-| `filesystem`  | 文件、Git、worktree、Forge 和技能安装             | `domain`、`model`；测试使用 `persistence`             |
-| `provider`    | 原生 Provider 会话、执行、历史和摘要生成          | `domain`、`model`；测试使用 `persistence`             |
+| `filesystem`  | 文件、Git、worktree 和 Forge                      | `domain`、`model`；测试使用 `persistence`             |
+| `provider`    | 原生 Provider 会话、执行、历史、摘要和技能安装    | `domain`、`model`；测试使用 `persistence`             |
 | `terminal`    | PTY、终端快照、活动和连接订阅                     | `domain`、`model`                                     |
 | `voice`       | 语音、听写和离线推理                              | `model`                                               |
 | `schedule`    | 定时任务服务与协议                                | `domain`、`model`；测试使用 `persistence`             |
@@ -87,13 +87,20 @@ setup 通过 `ProjectRegistration`、`WorkspaceNaming`
 Runtime 保留阻塞执行、admission 和任务跟踪。功能 crate 之间没有直接依赖；见
 [ADR-104](../decisions/workspace/adr-104-filesystem-model-collaboration.md)。
 
-filesystem 内部按能力组组织：`git`、`forge`、`worktrees`、`files` 和 `skills` 各自保留
+filesystem 内部按能力组组织：`git`、`forge`、`worktrees` 和 `files` 各自保留
 `ports`/`protocol`/`service`/`rpc`/`connection`/`local` 分层。组之间只引用对方的 `ports` 和
 `protocol`；`installation`、`capabilities`、`dispatch`、`connection` 以及组合 Git/Forge 缓存的
 `workspace_runtime` 位于顶层，可以组合多个组；组间共享的输出预算、有界 Git runner 和分发
 错误码位于不依赖任何组的 `support`。worktree 的 change request 解析通过
 `ChangeRequestResolver` 端口注入 Forge 实现。`crates/filesystem/tests/module_boundaries.rs`
 检查这些约定，见 [ADR-113](../decisions/workspace/adr-113-filesystem-capability-groups.md)。
+
+`provider::skills` 整组拥有 `agent.skills.*` 的协议、端口、服务和本地安装适配器，
+与原生执行保持独立锁，按 provider 整体安装。技能选择和安装仍是主机级能力，不需要
+Agent 身份或原生会话。daemon 注入原有 bundle、三个目标目录和 `skills-state`；安装路径、
+事务格式及删除确认保持兼容。单连接将这些已声明的方法继续分配到文件操作队列，
+避免技能文件操作阻塞同连接上的原生 Agent 请求。见
+[ADR-129](../decisions/providers/adr-129-provider-owned-skills.md)。
 
 内置 Provider 由 `provider::Providers` 组装。具体客户端列表、启动配置、安装发现与辅助
 元数据生成能力留在 provider crate 内部；daemon 提供数据目录并连接服务与进程生命周期。

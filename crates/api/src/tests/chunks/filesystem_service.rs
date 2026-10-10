@@ -9,8 +9,6 @@ use filesystem::git::local::{
     checkout::LocalCheckout, git_fetch::LocalGitFetch, provisioning::LocalDirectorySource,
 };
 use filesystem::git::service::{checkout::Checkout, git_fetch::GitFetch};
-use filesystem::skills::local::skills::LocalSkills;
-use filesystem::skills::service::skills::Skills;
 use filesystem::worktrees::local::worktrees::LocalManagedWorktrees;
 use filesystem::worktrees::service::{workspace_recovery::WorkspaceRecovery, worktrees::Worktrees};
 use metadata::service::directory::{Directory, DirectoryDependencies};
@@ -37,16 +35,6 @@ pub(super) fn service(root: &Path) -> filesystem::Service {
         Box::new(managed.clone()),
         "stable".into(),
     );
-    let skills = LocalSkills::new(
-        &root.join("skill-source"),
-        &[
-            root.join("codex-skills"),
-            root.join("claude-skills"),
-            root.join("opencode-skills"),
-        ],
-        &root.join("skill-state"),
-    )
-    .unwrap();
     filesystem::Service::new(filesystem::Dependencies {
         checkout: Checkout::new(Box::new(LocalCheckout::new(root.join("worktrees")))),
         forge: Forge::new(Box::new(LocalForge::new())),
@@ -62,6 +50,5 @@ pub(super) fn service(root: &Path) -> filesystem::Service {
             Box::new(projects),
             Box::new(managed),
         ),
-        skills: Skills::new(Box::new(skills)),
     })
 }

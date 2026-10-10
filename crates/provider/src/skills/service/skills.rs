@@ -16,7 +16,7 @@ use serde_json::{Value, json};
 use crate::skills::ports::skills::{ApplyMode, SkillStore};
 use crate::skills::protocol::skills::{self, ImportRequest, Kind, Operation, SaveRequest};
 
-/// Filesystem-owned skill coordinator; the host serializes access under its shared service lock.
+/// Provider-owned skill coordinator; the host serializes access under its shared service lock.
 #[derive(Debug)]
 pub struct Skills {
     store: Box<dyn SkillStore>,

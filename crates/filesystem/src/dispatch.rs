@@ -13,8 +13,6 @@ mod requests;
 pub struct State {
     /// Optional model-backed wording service; unavailable generation uses deterministic fallbacks.
     pub summary_source: Option<Arc<dyn model::summary::SummarySource>>,
-    /// Installed skills service.
-    pub skills: Option<Arc<Mutex<crate::skills::service::skills::Skills>>>,
     /// Shared Tokio admission, cancellation and task tracking.
     pub runtime: Arc<Runtime>,
     /// Installed checkout service.
@@ -65,13 +63,6 @@ pub async fn dispatch(
 ) -> Result<(), DispatchError> {
     if context.is_none() {
         return Ok(());
-    }
-    match requests::skills(context, state).await {
-        Ok(()) => return Ok(()),
-        Err(DispatchError::NotImplemented) => {
-            Context::assert_unhandled(context, "filesystem::skills");
-        }
-        Err(error) => return Err(error),
     }
     match checkout(context, state, connection).await {
         Ok(()) => return Ok(()),

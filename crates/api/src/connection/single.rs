@@ -276,7 +276,12 @@ fn lane(message: &Incoming) -> usize {
         return 2;
     }
     if provider::capabilities::implemented_methods().any(|spec| spec.name == method) {
-        return 3;
+        // Skill scans and installation keep the I/O lane, independent of method ownership.
+        return if method.starts_with("agent.skills.") {
+            2
+        } else {
+            3
+        };
     }
     0
 }

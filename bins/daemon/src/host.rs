@@ -258,20 +258,20 @@ fn compose_services(
         workspace_automation,
         workspace_state,
     });
-    let filesystem = compose_filesystem(
-        config,
-        &workspace_registry,
-        directory,
-        worktrees,
-        workspace_recovery,
-    )?;
     Ok(Services {
         metadata: Some(metadata),
-        filesystem: Some(filesystem),
+        filesystem: Some(compose_filesystem(
+            config,
+            &workspace_registry,
+            directory,
+            worktrees,
+            workspace_recovery,
+        )),
         provider: Some(provider::Service::new(provider::Dependencies {
             summary_generator,
             execution: agent_execution.clone(),
             agents,
+            skills: compose_skills(&config.data_dir)?,
         })),
         schedule: Some(schedules),
         browser: Some(Broker::default()),
@@ -286,10 +286,9 @@ fn compose_filesystem(
     directory: Directory,
     worktrees: Arc<Mutex<Worktrees>>,
     workspace_recovery: WorkspaceRecovery,
-) -> anyhow::Result<filesystem::Service> {
+) -> filesystem::Service {
     let (checkout, git_fetch) = compose_git(&config.data_dir, workspace_registry);
-    Ok(filesystem::Service::new(filesystem::Dependencies {
-        skills: compose_skills(&config.data_dir)?,
+    filesystem::Service::new(filesystem::Dependencies {
         workspace_recovery,
         github_projects: GithubProjects::new(
             Arc::new(directory),
@@ -300,7 +299,7 @@ fn compose_filesystem(
         forge: Forge::new(Box::new(LocalForge::new())),
         files: compose_files(config),
         worktrees,
-    }))
+    })
 }
 
 fn open_directory_registries(
@@ -546,7 +545,7 @@ fn compose_push(data_dir: &std::path::Path) -> anyhow::Result<metadata::service:
 
 fn compose_skills(
     data: &std::path::Path,
-) -> anyhow::Result<filesystem::skills::service::skills::Skills> {
+) -> anyhow::Result<provider::skills::service::skills::Skills> {
     let data = data
         .canonicalize()
         .context("resolve skills data directory")?;
@@ -556,13 +555,13 @@ fn compose_skills(
     let source = std::env::var_os("AIT_SERVER_SKILLS_BUNDLE")
         .map_or_else(|| data.join("skills-bundle"), std::path::PathBuf::from);
     let targets = [".agents/skills", ".claude/skills", ".codex/skills"].map(|path| home.join(path));
-    let store = filesystem::skills::local::skills::LocalSkills::new(
+    let store = provider::skills::local::skills::LocalSkills::new(
         &source,
         &targets,
         &data.join("skills-state"),
     )
     .map_err(|error| anyhow::anyhow!("invalid skills configuration: {error:?}"))?;
-    Ok(filesystem::skills::service::skills::Skills::new(Box::new(
+    Ok(provider::skills::service::skills::Skills::new(Box::new(
         store,
     )))
 }
