@@ -1,7 +1,19 @@
 import { Terminal } from "@xterm/xterm";
-import { afterEach, describe, expect, it } from "vitest";
+import React, { act, createElement } from "react";
+import { createRoot, type Root } from "react-dom/client";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import { applyRootUiFont } from "@/appearance/apply-root-font.web";
 import { DEFAULT_TERMINAL_FONT_FAMILY } from "@/terminal/runtime/terminal-font";
+import TerminalEmulator from "./terminal-emulator";
+
+vi.mock("expo/dom", () => ({ useDOMImperativeHandle: () => {} }));
+vi.mock("@xterm/addon-webgl", () => ({
+  WebglAddon: class {
+    constructor() {
+      throw new Error("WebGL unavailable in this DOM renderer regression test");
+    }
+  },
+}));
 
 // Regression: the app-wide interface-font rule declares a high-specificity
 // `font-family` over everything under #root. xterm's DOM renderer sets the
@@ -11,7 +23,8 @@ import { DEFAULT_TERMINAL_FONT_FAMILY } from "@/terminal/runtime/terminal-font";
 // with the proportional UI font, breaking column alignment.
 const UI_FONT = "ui-sans-serif";
 
-const mounted = new Set<{ terminal: Terminal; root: HTMLDivElement }>();
+const mounted = new Set<{ terminal: Terminal; root: HTMLElement }>();
+let reactRoot: Root | undefined;
 
 function nextFrame(): Promise<void> {
   return new Promise((resolve) => requestAnimationFrame(() => resolve()));
@@ -34,6 +47,8 @@ function mountInside(container: HTMLElement, surface: HTMLElement): Terminal {
 }
 
 afterEach(() => {
+  act(() => reactRoot?.unmount());
+  reactRoot = undefined;
   for (const { terminal, root } of mounted) {
     terminal.dispose();
     root.remove();
@@ -42,18 +57,36 @@ afterEach(() => {
   document.getElementById("root")?.remove();
   document.getElementById("paseo-ui-font")?.remove();
   document.documentElement.style.removeProperty("--paseo-ui-font");
+  vi.unstubAllGlobals();
 });
 
 describe("terminal surface font resolution", () => {
-  it("keeps the monospace font on surfaces marked with data-pmono", async () => {
+  it("keeps TerminalEmulator monospace when WebGL is unavailable", async () => {
+    // Vitest uses the classic JSX transform for this Expo DOM component.
+    vi.stubGlobal("React", React);
+    vi.stubGlobal("IS_REACT_ACT_ENVIRONMENT", true);
     const root = document.createElement("div");
     root.id = "root";
+    root.style.width = "800px";
+    root.style.height = "400px";
     document.body.appendChild(root);
     applyRootUiFont(UI_FONT);
 
-    const tagged = document.createElement("div");
-    tagged.setAttribute("data-pmono", "");
-    mountInside(root, tagged);
+    const componentHost = document.createElement("div");
+    componentHost.style.height = "200px";
+    root.appendChild(componentHost);
+    reactRoot = createRoot(componentHost);
+    act(() => {
+      reactRoot?.render(
+        createElement(TerminalEmulator, {
+          ref: null,
+          streamKey: "font-regression",
+          supportsTerminalInputModeReplay: false,
+          scrollbackLines: 100,
+          fontFamily: DEFAULT_TERMINAL_FONT_FAMILY,
+        }),
+      );
+    });
 
     const plain = document.createElement("div");
     mountInside(root, plain);
@@ -67,7 +100,7 @@ describe("terminal surface font resolution", () => {
       return getComputedStyle(rows).fontFamily;
     };
 
-    expect(fontOf(tagged)).toContain("JetBrains Mono");
+    expect(fontOf(componentHost)).toContain("JetBrains Mono");
     // Without the marker the interface-font rule wins; this is the bug the
     // terminal must keep opting out of.
     expect(fontOf(plain)).toBe(UI_FONT);
