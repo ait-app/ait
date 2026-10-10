@@ -42,9 +42,11 @@ async fn dictation_audio_budget_rejects_only_the_extra_chunk() {
     );
     finish(&mut fixture, "limit", 255);
     fixture.until("dictation.stream.final").await;
+    // A slow host may cross the two-second partial cadence while sending chunks; the final
+    // transcription is always the last engine call.
     assert_eq!(
-        fixture.engine.samples.lock().unwrap()[0].len(),
-        crate::audio::MAX_AUDIO_BYTES
+        fixture.engine.samples.lock().unwrap().last().map(Vec::len),
+        Some(crate::audio::MAX_AUDIO_BYTES)
     );
 }
 

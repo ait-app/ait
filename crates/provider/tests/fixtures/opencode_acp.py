@@ -40,6 +40,19 @@ if scenario == "custom-mode":
 active = None
 
 
+def session_path(identity):
+    return root / "native-fixture.json" if identity == "ses_one" else root / (identity + ".json")
+
+
+def claim_session():
+    # Concurrent discovery, title and agent processes share the root; only one may own ses_one.
+    try:
+        with session_path("ses_one").open("x"):
+            return "ses_one"
+    except FileExistsError:
+        return "ses_query_" + str(os.getpid())
+
+
 def state():
     if state_path.exists():
         return json.loads(state_path.read_text())
@@ -140,13 +153,12 @@ for line in sys.stdin:
         assert pathlib.Path(params["cwd"]).is_absolute()
         assert params["mcpServers"] == []
         if method == "session/new":
-            if state_path.exists():
-                session_id = "ses_query_" + str(os.getpid())
-                state_path = root / (session_id + ".json")
+            session_id = claim_session()
+            state_path = session_path(session_id)
             save({"seq": 0, "history": []})
         if method in ["session/load", "session/resume"]:
             session_id = params["sessionId"]
-            state_path = root / "native-fixture.json"
+            state_path = session_path(session_id)
         if method == "session/load":
             if scenario == "preview-failed":
                 send({"id": identity, "error": {"code": -32000, "message": "Fixture replay unavailable"}})

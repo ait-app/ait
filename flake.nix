@@ -33,6 +33,7 @@
             packages = with pkgs; [
               rustToolchain
               cargo-llvm-cov
+              cargo-nextest
               rust-analyzer
               nodejs_24
               pnpm

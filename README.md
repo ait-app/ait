@@ -85,8 +85,8 @@ npm run build:desktop-main
 npm run typecheck --workspace=@ait/desktop --workspace=@ait/mobile
 ```
 
-迭代时只运行改动代码及直接相关行为的测试；Rust 提交准备运行完整 workspace 测试与覆盖率，
-详见 [Rust 规范](docs/policy/rust.md)。
+迭代时只运行改动代码及直接相关行为的测试；Rust 提交准备用 `cargo nextest run --workspace`
+和 `cargo test --workspace --doc` 运行完整测试，并生成覆盖率，详见 [Rust 规范](docs/policy/rust.md)。
 GitHub Release 支持 Linux x86_64 和 Apple Silicon；构建、签名与移动发布见
 [发布指南](docs/operations/releasing.md)。更多资料见 [文档索引](docs/README.md)。
 

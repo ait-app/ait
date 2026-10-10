@@ -66,7 +66,9 @@ async fn read_burst(reads: usize, expect_exhaustion: bool) {
     )
     .await;
 
-    let mut rejected = 0;
+    // The worker may dequeue the binary frame before or after the router fills the queue, so the
+    // rejected subset of a burst varies; admitted reads must still complete in request order.
+    let mut rejected = Vec::new();
     loop {
         let response = receive(&mut socket).await;
         if response["request_id"] == "ping" {
@@ -74,15 +76,18 @@ async fn read_burst(reads: usize, expect_exhaustion: bool) {
             break;
         }
         assert_eq!(response["code"], "resource_exhausted", "{response}");
-        rejected += 1;
+        rejected.push(response["request_id"].clone());
     }
-    assert_eq!(rejected > 0, expect_exhaustion);
+    assert_eq!(!rejected.is_empty(), expect_exhaustion);
     drop(held);
     let ack = receive(&mut socket).await;
     assert_eq!(ack["method"], "connection.upload.ack");
-    for index in 0..reads - rejected {
+    let admitted = (0..reads)
+        .map(|index| json!(format!("read-{index}")))
+        .filter(|id| !rejected.contains(id));
+    for expected in admitted {
         let response = receive(&mut socket).await;
-        assert_eq!(response["request_id"], format!("read-{index}"));
+        assert_eq!(response["request_id"], expected);
         assert_eq!(response["type"], "response", "{response}");
     }
     socket.close(None).await.unwrap();

@@ -134,9 +134,11 @@ During local iteration, before preparing a commit, run only tests for the change
 
 Run the full Rust workspace suite when preparing a commit that changes Rust code in `bins/` or `crates/`. If the current task changes no Rust code in either directory, skip Rust tests even if the working tree contains Rust changes from other tasks. Workspace-wide coverage runs execute the full suite too and follow the same restriction.
 
+Run the full suite with `cargo nextest run --workspace` followed by `cargo test --workspace --doc`; nextest runs every test in its own process across all binaries but does not execute doctests. Do not lower test parallelism (for example `--test-threads=1` or `-j1`) to make the suite pass: a test that fails only under parallel load has a timing or shared-state bug, so fix it. `cargo test --workspace` remains a valid equivalent when nextest is unavailable.
+
 - **MUST** write unit tests for all new functions and types
 - **MUST** mock external dependencies (APIs, databases, file systems)
-- **MUST** use the built-in `#[test]` attribute and `cargo test`
+- **MUST** use the built-in `#[test]` attribute; tests must pass under both `cargo test` and `cargo nextest run`
 - Follow the Arrange-Act-Assert pattern
 - Do not commit commented-out tests
 - **MUST** put all test-related modules in separate child files, including unit tests, regression suites, fixtures, and test helpers. Do not use inline test module bodies such as `mod tests { ... }`, even for a small suite; nested test modules follow the same rule.
@@ -144,6 +146,11 @@ Run the full Rust workspace suite when preparing a commit that changes Rust code
 - For `src/lib.rs`, `src/main.rs`, or `src/foo/mod.rs`, the child file is the sibling `tests.rs`. For `src/foo.rs`, the child file is `src/foo/tests.rs`. Split larger suites into additional named child files.
 - Keep integration tests in the crate's `tests/` directory. Place shared integration-test helpers in a subdirectory such as `tests/common/mod.rs` so they are not discovered as standalone test targets.
 - When adding or modifying an existing inline test module, move that module into its child file as part of the change, preserving test coverage and behavior.
+
+### Faster local builds
+
+- A fresh worktree recompiles all ~340 dependencies and downloads the sherpa-onnx static archive. On macOS, seed its `target/` from an existing checkout of the same toolchain with an APFS clone (`cp -c -R <checkout>/target <worktree>/target`); only workspace crates rebuild and the archive is reused. Clone time grows with the source directory, so run `cargo clean` there occasionally. Other filesystems can use a shared `CARGO_TARGET_DIR` instead, but concurrent builds then serialize on its lock.
+- The dev profile keeps line tables only. For a debugger session that needs local variables, build with `CARGO_PROFILE_DEV_DEBUG=full`.
 
 Example unit-test layout:
 
@@ -181,7 +188,7 @@ fn adds_two_numbers() {
 ## Code Coverage
 
 - When measuring coverage, **MUST** use `cargo llvm-cov` (`cargo-llvm-cov`). During local iteration, any measurement must stay within the affected crates and focused tests; workspace coverage is deferred until commit preparation.
-- When preparing a commit with Rust changes, generate an HTML report with `cargo llvm-cov --workspace --html`; the report is written to `target/llvm-cov/html/index.html`. Do not run this full suite merely to populate a local progress report.
+- When preparing a commit with Rust changes, generate an HTML report with `cargo llvm-cov nextest --workspace --html`; the report is written to `target/llvm-cov/html/index.html`. Do not run this full suite merely to populate a local progress report.
 - Every new public function or behaviour change **MUST** be covered by at least one test; aim to keep line coverage above **80%** across the workspace
 - Cover both the happy path and key error/edge-case branches
 - Do not add `#[allow(dead_code)]` or dummy call sites solely to satisfy the coverage tool; fix the underlying gap with a real test
@@ -257,7 +264,7 @@ If coverage was not measured, state **not measured**, the reason, and the next s
 - **MUST** use `clippy` for linting and follow its suggestions
 - **MUST** ensure code compiles with no warnings (use `-D warnings` flag in CI, not `#![deny(warnings)]` in source)
 - Use `cargo` for building, testing, and dependency management
-- Use `cargo test` for running tests
+- Use `cargo nextest run` for full test runs and `cargo test` for doctests or a single focused target
 - Use `cargo doc` for generating documentation
 - **NEVER** build with `cargo build --features python`: this will always fail. Instead, **ALWAYS** use `maturin`.
 
@@ -265,14 +272,14 @@ If coverage was not measured, state **not measured**, the reason, and the next s
 
 Apply this checklist when preparing a commit, not during routine local edits or handoffs. The full Rust test and coverage checks apply only when the proposed commit changes Rust code in `bins/` or `crates/`; documentation-only changes do not require Rust tests or coverage.
 
-- [ ] All workspace tests pass (`cargo test --workspace`)
+- [ ] All workspace tests pass (`cargo nextest run --workspace` and `cargo test --workspace --doc`)
 - [ ] No compiler warnings (`cargo build --workspace`)
 - [ ] Clippy passes (`cargo clippy --workspace --all-targets -- -D warnings`)
 - [ ] Code is formatted (`cargo fmt --all --check`)
 - [ ] All public items have doc comments
 - [ ] No commented-out code or debug statements
 - [ ] No hardcoded credentials
-- [ ] Coverage generated and reviewed (`cargo llvm-cov --workspace --html`); new code is covered
+- [ ] Coverage generated and reviewed (`cargo llvm-cov nextest --workspace --html`); new code is covered
 - [ ] Test modules are declared in their parent and implemented in separate child files
 - [ ] Project report includes test coverage, measurement scope, results, and an artifact (or an explicit reason coverage is unavailable or not applicable)
 
