@@ -2,43 +2,44 @@
 import React from "react";
 import "@/i18n/i18next";
 import { cleanup, fireEvent, render, waitFor } from "@testing-library/react";
-import { afterEach, describe, expect, it, vi } from "vitest";
-import { accountCommand, accountLoginMethods } from "@/runtime/account-state";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { accountCommand } from "@/runtime/account-state";
 import { AccountHostPanel } from "./account-host-panel";
 
+const state = vi.hoisted(() => ({ loginPending: false }));
 vi.mock("@/runtime/account-state", () => ({
-  accountLoginMethods: vi.fn(async () => ({ hosted: false })),
   accountCommand: vi.fn(async () => ({})),
   useAccountState: () => ({
     status: "logged_out",
     center: "https://dash.ait-app.com:8443/api",
     error: null,
+    loginPending: state.loginPending,
   }),
 }));
 
+beforeEach(() => {
+  state.loginPending = false;
+});
 afterEach(() => {
   cleanup();
   vi.clearAllMocks();
 });
 
-describe("AccountHostPanel email login", () => {
-  it("offers browser registration/login when supported and retains explicit legacy login", async () => {
-    vi.mocked(accountLoginMethods).mockResolvedValueOnce({ hosted: true });
+describe("AccountHostPanel browser login", () => {
+  it("offers only browser registration/login from the first render", async () => {
     const view = render(<AccountHostPanel />);
-    await waitFor(() => expect(view.getByTestId("account-unified-login")).toBeTruthy());
+    expect(view.queryByTestId("account-email")).toBeNull();
     expect(view.queryByTestId("account-password")).toBeNull();
-    fireEvent.click(view.getByTestId("account-legacy-login"));
-    expect(view.getByTestId("account-password")).toBeTruthy();
-    expect(view.getByTestId("account-login")).toBeTruthy();
-    fireEvent.click(view.getByTestId("account-legacy-login"));
-    expect(view.queryByTestId("account-password")).toBeNull();
+    expect(view.queryByTestId("account-legacy-login")).toBeNull();
+    expect(view.queryByTestId("account-login")).toBeNull();
     fireEvent.click(view.getByTestId("account-unified-login"));
     await waitFor(() =>
-      expect(accountCommand).toHaveBeenCalledWith("account_login_hosted", {
+      expect(accountCommand).toHaveBeenCalledExactlyOnceWith("account_login_hosted", {
         center: "https://dash.ait-app.com:8443/api",
       }),
     );
   });
+
   it("keeps service settings optional and submits the edited service address", async () => {
     const cancel = vi.fn();
     const view = render(<AccountHostPanel onCancel={cancel} />);
@@ -47,14 +48,10 @@ describe("AccountHostPanel email login", () => {
     fireEvent.change(view.getByLabelText("Service URL"), {
       target: { value: "https://private.example/api" },
     });
-    fireEvent.change(view.getByLabelText("Email"), { target: { value: "owl@example.com" } });
-    fireEvent.change(view.getByLabelText("Password"), { target: { value: "password" } });
-    fireEvent.click(view.getByTestId("account-login"));
+    fireEvent.click(view.getByTestId("account-unified-login"));
     await waitFor(() =>
-      expect(accountCommand).toHaveBeenCalledWith("account_login", {
+      expect(accountCommand).toHaveBeenCalledExactlyOnceWith("account_login_hosted", {
         center: "https://private.example/api",
-        email: "owl@example.com",
-        password: "password",
       }),
     );
     await waitFor(() =>
@@ -63,21 +60,33 @@ describe("AccountHostPanel email login", () => {
     fireEvent.click(view.getByRole("button", { name: "Cancel" }));
     expect(cancel).toHaveBeenCalledOnce();
   });
-  it("submits email credentials through IPC and clears the password field", async () => {
+
+  it.each([
+    "This service does not support client browser sign-in. Update the service or choose another service URL.",
+    "Network request failed",
+  ])("shows a login failure without offering a password fallback: %s", async (message) => {
+    vi.mocked(accountCommand).mockRejectedValueOnce(new Error(message));
     const view = render(<AccountHostPanel />);
-    const email = view.getByLabelText("Email") as HTMLInputElement;
-    const password = view.getByLabelText("Password") as HTMLInputElement;
-    expect(email.getAttribute("inputmode")).toBe("email");
-    fireEvent.change(email, { target: { value: "owl@example.com" } });
-    fireEvent.change(password, { target: { value: "  private password  " } });
-    fireEvent.click(view.getByTestId("account-login"));
-    await waitFor(() => {
-      expect(accountCommand).toHaveBeenCalledExactlyOnceWith("account_login", {
-        center: "https://dash.ait-app.com:8443/api",
-        email: "owl@example.com",
-        password: "  private password  ",
-      });
-    });
-    expect(password.value).toBe("");
+    fireEvent.click(view.getByTestId("account-unified-login"));
+    await waitFor(() => expect(view.getByRole("alert").textContent).toBe(message));
+    expect(view.queryByTestId("account-email")).toBeNull();
+    expect(view.queryByTestId("account-password")).toBeNull();
+    expect(view.queryByTestId("account-legacy-login")).toBeNull();
+    fireEvent.click(view.getByTestId("account-unified-login"));
+    await waitFor(() => expect(accountCommand).toHaveBeenCalledTimes(2));
+    await waitFor(() => expect(view.queryByRole("alert")).toBeNull());
+    expect(
+      vi.mocked(accountCommand).mock.calls.every(([command]) => command === "account_login_hosted"),
+    ).toBe(true);
+  });
+
+  it("lets the user cancel a pending browser login", async () => {
+    state.loginPending = true;
+    const view = render(<AccountHostPanel />);
+    expect(view.getByTestId("account-unified-login").hasAttribute("disabled")).toBe(true);
+    fireEvent.click(view.getByTestId("account-cancel-login"));
+    await waitFor(() =>
+      expect(accountCommand).toHaveBeenCalledExactlyOnceWith("account_cancel_login"),
+    );
   });
 });

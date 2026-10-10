@@ -24,7 +24,6 @@ vi.mock("react-native", async (original) => {
   return { ...actual, Platform: { ...actual.Platform, OS: "android" } };
 });
 vi.mock("@/runtime/account-state", () => ({
-  accountLoginMethods: vi.fn(async () => ({ hosted: false })),
   useAccountState: () => state.value,
   accountCommand: state.command,
 }));

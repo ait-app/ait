@@ -86,6 +86,7 @@
 
 ## 客户端、连接与品牌
 
+- [ADR-123：客户端仅保留浏览器统一登录](clients/adr-123-browser-only-account-login.md)
 - [ADR-122：在线服务主机进入客户端持久注册表](clients/adr-122-persistent-online-service-hosts.md)
 - [ADR-117：终端配色查询与外观更新生命周期](clients/adr-117-terminal-palette-and-appearance-lifetime.md)
 - [ADR-114：iOS 终端组合输入归 UIKit](clients/adr-114-ios-terminal-ime.md)

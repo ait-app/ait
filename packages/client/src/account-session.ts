@@ -178,23 +178,7 @@ export class AccountSessionManager {
     this.deps.notify(this.snapshot());
   }
 
-  async login(center: string, email: string, password: string): Promise<AccountSnapshot> {
-    center = normalizeCenter(center);
-    email = email.trim().toLowerCase();
-    if (!email || email.length > 320 || !password || password.length > 512)
-      throw new Error("Enter your email and password.");
-    await this.logout();
-    const generation = this.generation;
-    const result = await this.http<{
-      access_token: string;
-      expires_in: number;
-      user: LoginUser;
-    }>(center, null, "/v1/auth/login", "POST", { email, password });
-    if (generation !== this.generation) throw new Error("Sign-in cancelled.");
-    return this.acceptLogin(center, result);
-  }
-
-  async loginMethods(center: string): Promise<{ hosted: boolean }> {
+  private async loginMethods(center: string): Promise<{ hosted: boolean }> {
     if (!this.deps.browserLogin) return { hosted: false };
     try {
       const options = await this.http<{
@@ -217,7 +201,7 @@ export class AccountSessionManager {
     const browser = this.deps.browserLogin;
     if (!browser || !(await this.loginMethods(center)).hosted)
       throw new Error(
-        "This service does not support client browser sign-in. Update the service or use email and password.",
+        "This service does not support client browser sign-in. Update the service or choose another service URL.",
       );
     await this.logout();
     const attempt = new AbortController();

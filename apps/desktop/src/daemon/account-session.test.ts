@@ -22,7 +22,9 @@ function fixture() {
   let discoveryFails = false;
   const http = vi.fn(async (url: string | URL | Request, _init?: RequestInit) => {
     const path = String(url);
-    if (path.endsWith("/auth/login"))
+    if (path.endsWith("/auth/providers"))
+      return Response.json({ authing_enabled: true, native_login_enabled: true });
+    if (path.endsWith("/auth/client/exchange"))
       return Response.json({
         access_token: "private-user-token",
         expires_in: 3600,
@@ -54,6 +56,14 @@ function fixture() {
     installationId: "stable-install",
     appVersion: "test",
     fetch: http as typeof fetch,
+    browserLogin: {
+      randomSecret: () => "b".repeat(64),
+      challenge: async () => "test-challenge",
+      open: async (_build, state) => ({
+        redirectUri: "http://127.0.0.1:4567/auth/callback",
+        url: `http://127.0.0.1:4567/auth/callback?state=${state}&code=${"c".repeat(64)}`,
+      }),
+    },
     runtime: () => ({
       status: "running",
       serverId: "server-a",
@@ -78,37 +88,27 @@ function fixture() {
 }
 
 describe("account activation", () => {
-  it("logs in with normalized email and preserves the password exactly", async () => {
+  it("exchanges browser credentials and keeps them out of saved state and snapshots", async () => {
     const { manager, http, deps } = fixture();
-    const password = "  a case-sensitive Password  ";
-    await manager.login("", "  Alice@Example.COM  ", password);
-    const [url, request] = http.mock.calls[0]!;
-    expect(url).toBe("https://dash.ait-app.com:8443/api/v1/auth/login");
+    await manager.loginWithBrowser("");
+    const [url, request] = http.mock.calls[1]!;
+    expect(url).toBe("https://dash.ait-app.com:8443/api/v1/auth/client/exchange");
     expect(request?.method).toBe("POST");
     expect(JSON.parse(String(request?.body))).toEqual({
-      email: "alice@example.com",
-      password,
+      code: "c".repeat(64),
+      code_verifier: "b".repeat(64),
     });
-    expect(JSON.stringify(vi.mocked(deps.save).mock.calls)).not.toContain(password);
-    expect(JSON.stringify(manager.snapshot())).not.toContain(password);
+    expect(JSON.stringify(vi.mocked(deps.save).mock.calls)).not.toContain("b".repeat(64));
+    expect(JSON.stringify(manager.snapshot())).not.toContain("private-user-token");
     await manager.logout();
-  });
-
-  it("rejects blank emails before sending credentials or clearing the session", async () => {
-    const { manager, http, deps } = fixture();
-    await expect(manager.login("", "  ", "password")).rejects.toThrow(
-      "Enter your email and password.",
-    );
-    expect(http).not.toHaveBeenCalled();
-    expect(deps.save).not.toHaveBeenCalled();
   });
 
   it("uses the default HTTPS gateway for login, registration, control and data", async () => {
     const { manager, http, deps } = fixture();
     expect(manager.snapshot().center).toBe(DEFAULT_ACCOUNT_CENTER);
-    await manager.login("", "alice@example.com", "password");
+    await manager.loginWithBrowser("");
     await vi.advanceTimersByTimeAsync(1);
-    expect(http.mock.calls[0]?.[0]).toBe("https://dash.ait-app.com:8443/api/v1/auth/login");
+    expect(http.mock.calls[0]?.[0]).toBe("https://dash.ait-app.com:8443/api/v1/auth/providers");
     expect(http.mock.calls.some(([url]) => String(url).endsWith("/relay-sessions"))).toBe(false);
     expect(deps.local).toHaveBeenCalledWith("PUT", {
       center_url: "https://dash.ait-app.com:8443/api",
@@ -143,7 +143,7 @@ describe("account activation", () => {
     await vi.advanceTimersByTimeAsync(1);
     expect(manager.snapshot().center).toBe("https://private.example:9443/ait/api");
     expect(manager.snapshot().hosts).toHaveLength(1);
-    expect(http.mock.calls.some(([url]) => String(url).endsWith("/auth/login"))).toBe(false);
+    expect(http.mock.calls.some(([url]) => String(url).includes("/auth/"))).toBe(false);
     expect(
       http.mock.calls.every(([url]) =>
         String(url).startsWith("https://private.example:9443/ait/api/v1/"),
@@ -159,7 +159,7 @@ describe("account activation", () => {
 
   it("auto-registers and discovers without opening a remote business session", async () => {
     const { manager, http, deps } = fixture();
-    await manager.login("http://127.0.0.1:3000", "alice@example.com", "password");
+    await manager.loginWithBrowser("http://127.0.0.1:3000");
     await vi.advanceTimersByTimeAsync(1);
     expect(manager.snapshot().hosts).toHaveLength(1);
     expect(http.mock.calls.some(([url]) => String(url).includes("exclude_node_id=node"))).toBe(
@@ -178,7 +178,7 @@ describe("account activation", () => {
 
   it("restores host access independently of selection and clears it on logout", async () => {
     const { manager, http, deps } = fixture();
-    await manager.login("https://center.example/api", "alice@example.com", "password");
+    await manager.loginWithBrowser("https://center.example/api");
     await vi.advanceTimersByTimeAsync(1);
     const visit = await manager.openVisit("remote", "https://center.example/api");
     expect(visit.url).toBe("wss://center.example/api/v1/relay/sessions/visit/client");
@@ -194,7 +194,7 @@ describe("account activation", () => {
 
   it("keeps the last online list and selected host when discovery fails", async () => {
     const { manager, failDiscovery } = fixture();
-    await manager.login("https://center.example", "alice@example.com", "password");
+    await manager.loginWithBrowser("https://center.example");
     await vi.advanceTimersByTimeAsync(1);
     await manager.select("remote");
     failDiscovery();
@@ -223,7 +223,7 @@ describe("account activation", () => {
       }
       return normal(url);
     });
-    await manager.login("https://center.example", "alice@example.com", "password");
+    await manager.loginWithBrowser("https://center.example");
     await vi.advanceTimersByTimeAsync(6000);
     expect(registrations).toHaveLength(2);
     expect(registrations[0]).not.toBe(registrations[1]);
