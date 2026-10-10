@@ -214,6 +214,47 @@ describe("classifyAssistantFileLink", () => {
 });
 
 describe("parseAssistantFileLink", () => {
+  it.each([
+    ["docs/%E9%87%87%E8%B4%AD.md", "/Users/test/project/docs/采购.md"],
+    ["docs/%E9%87%87%E8%B4%AD%20%E6%96%B9%E6%A1%88.md", "/Users/test/project/docs/采购 方案.md"],
+    ["~/docs/%E9%87%87%E8%B4%AD.md", "~/docs/采购.md"],
+    ["/tmp/%E9%87%87%E8%B4%AD.md", "/tmp/采购.md"],
+    ["C:/docs/%E9%87%87%E8%B4%AD.md", "C:/docs/采购.md"],
+    ["file:///tmp/%E9%87%87%E8%B4%AD.md", "/tmp/采购.md"],
+    ["docs/100%2520.md", "/Users/test/project/docs/100%20.md"],
+    ["docs/plan%23draft%3F%3A12.md", "/Users/test/project/docs/plan#draft?:12.md"],
+    ["docs/100%.md", "/Users/test/project/docs/100%.md"],
+  ])("decodes the href path once: %s", (href, path) => {
+    expect(parseAssistantFileLink(href, { workspaceRoot: "/Users/test/project" })).toEqual({
+      raw: href,
+      path,
+      lineStart: undefined,
+      lineEnd: undefined,
+    });
+  });
+
+  it.each(["docs/", "/tmp/", "C:/docs/", "~/docs/"])(
+    "decodes the filename separately from line markers under %s",
+    (prefix) => {
+      for (const suffix of [":12-20", "#L12-L20"]) {
+        const href = `${prefix}%E9%87%87%E8%B4%AD%23draft.md${suffix}`;
+        expect(parseAssistantFileLink(href, { workspaceRoot: "/Users/test/project" })).toEqual({
+          raw: href,
+          path: `${prefix === "docs/" ? "/Users/test/project/docs/" : prefix}采购#draft.md`,
+          lineStart: 12,
+          lineEnd: 20,
+        });
+      }
+    },
+  );
+
+  it.each(["%2e%2e/outside.md", "docs/%2e%2e/%2e%2e/outside.md", "%2Ftmp/outside.md"])(
+    "validates decoded relative paths before resolving them under the workspace: %s",
+    (href) => {
+      expect(parseAssistantFileLink(href, { workspaceRoot: "/Users/test/project" })).toBeNull();
+    },
+  );
+
   it("resolves bare markdown filenames against the active workspace", () => {
     expect(
       parseAssistantFileLink("dumm.md", {
