@@ -4,6 +4,8 @@
 
 日期：2026-10-08
 
+修订：证据文件存储由 [ADR-112](adr-112-persistence-crate.md) 迁至 `bins/daemon/src/diagnostics/store.rs`。
+
 ## 背景
 
 应用诊断只有状态快照和桌面日志尾部。用户复制长报告难以分享，开发者需要再次索要

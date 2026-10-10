@@ -159,6 +159,7 @@ function browserFixture() {
 describe("hosted account login", () => {
   it.each([
     { status: 404, options: {} },
+    { status: 404, options: "<html>Not Found</html>" },
     { status: 200, options: {} },
     { status: 200, options: { authing_enabled: true, native_login_enabled: false } },
     { status: 200, options: { authing_enabled: false, native_login_enabled: true } },
@@ -172,7 +173,11 @@ describe("hosted account login", () => {
         expiresAt: Date.now() + 3600_000,
         name: "Saved account",
       });
-      http.mockResolvedValueOnce(Response.json(options, { status }));
+      http.mockResolvedValueOnce(
+        typeof options === "string"
+          ? new Response(options, { status, headers: { "Content-Type": "text/html" } })
+          : Response.json(options, { status }),
+      );
       await expect(manager.loginWithBrowser("https://other.test/api")).rejects.toThrow(
         "Update the service or choose another service URL",
       );

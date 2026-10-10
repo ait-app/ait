@@ -799,7 +799,8 @@ export class AccountSessionManager {
         ...(body === undefined ? {} : { body: JSON.stringify(body) }),
       });
       if (response.status === 204) return undefined as T;
-      const value = (await response.json()) as {
+      // Gateways can answer with HTML or an empty body; keep the status for callers.
+      const value = (await response.json().catch(() => ({}))) as {
         error?: { message?: string; code?: string };
       };
       if (!response.ok)

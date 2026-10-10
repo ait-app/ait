@@ -31,6 +31,7 @@ jobs:
             rust:
               - 'bins/**'
               - 'crates/**'
+              - 'scripts/fixtures/**'
               - 'Cargo.toml'
               - 'Cargo.lock'
               - '.cargo/**'
@@ -52,7 +53,9 @@ jobs:
               - '.npmrc'
               - 'tsconfig.base.json'
               - '.oxfmtrc.json'
+              - 'crates/provider/tests/fixtures/**'
               - '.github/workflows/ci.yml'
+              - '.github/workflows/cancel-merged-pr-ci.yml'
               - '.github/workflows/release.yml'
               - '.github/workflows/release-ios-testflight.yml'
               - '.github/workflows/release-android.yml'
@@ -74,6 +77,7 @@ jobs:
     needs: changes
     if: needs.changes.outputs.rust == 'true'
     runs-on: ubuntu-latest
+    timeout-minutes: 60
     steps:
       - uses: actions/checkout@v5
       # Match rust-toolchain.toml so new stable lints cannot silently break this job.
@@ -85,15 +89,21 @@ jobs:
         with:
           tool: cargo-nextest
       - run: cargo fmt --all --check
-      - run: cargo clippy --workspace --all-targets -- -D warnings
-      - run: cargo nextest run --workspace --profile ci
+      # --locked keeps a stale Cargo.lock from passing here and failing only at release time.
+      - run: cargo clippy --locked --workspace --all-targets -- -D warnings
+      - run: cargo nextest run --locked --workspace --profile ci
       # nextest does not execute doctests.
-      - run: cargo test --workspace --doc
+      - run: cargo test --locked --workspace --doc
+      # ADR-094: client method names must match the Rust component declarations.
+      - run: python3 scripts/check-paseo-client-methods.py
+      - run: python3 scripts/rust_method_specs_test.py
+      - run: python3 scripts/check-crate-coverage.test.py
 
   ui:
     needs: changes
     if: needs.changes.outputs.ui == 'true'
     runs-on: ubuntu-24.04
+    timeout-minutes: 45
     steps:
       - uses: actions/checkout@v5
       - uses: actions/setup-node@v5
@@ -102,6 +112,7 @@ jobs:
           cache: npm
           cache-dependency-path: package-lock.json
       - run: npm ci
+      - run: npx oxlint
       - run: npm run verify:local-packages
       - run: npm run verify:release
       - run: npm run test:release
@@ -112,6 +123,8 @@ jobs:
       - run: npm run test --workspace=@ait/mobile -- src/runtime/host-runtime.test.ts
       - run: npm run typecheck --workspace=@ait/desktop --workspace=@ait/mobile
       - run: npm test --workspace=@ait/desktop
+      - run: npm run test:sdk
+      - run: npm run test --workspace=@ait/highlight
       - run: >-
           npm run test --workspace=@ait/mobile --
           src/i18n/resources.test.ts src/runtime/rust-daemon maestro/support native-release-version.test.ts
@@ -154,6 +167,11 @@ jobs:
       contents: read
     runs-on: ${{ matrix.runner }}
     timeout-minutes: 90
+    # A new push to the same PR supersedes the previous 90-minute package build;
+    # main builds keep a unique group so nightly admission stays in nightly-control.
+    concurrency:
+      group: ${{ github.event_name == 'pull_request' && format('desktop-pr-{0}-{1}', github.event.pull_request.number, matrix.platform) || format('desktop-run-{0}-{1}', github.run_id, matrix.platform) }}
+      cancel-in-progress: ${{ github.event_name == 'pull_request' }}
     strategy:
       fail-fast: false
       matrix:
@@ -264,13 +282,16 @@ jobs:
     if: >-
       ${{ !cancelled() && github.event_name != 'pull_request' && github.ref == 'refs/heads/main'
           && needs.desktop.result == 'success' && needs.docs.result == 'success'
+          && needs.changes.result == 'success'
           && contains(fromJSON('["success","skipped"]'), needs.rust.result)
           && contains(fromJSON('["success","skipped"]'), needs.ui.result) }}
-    needs: [nightly-prepare, desktop, rust, ui, docs]
+    needs: [nightly-prepare, changes, desktop, rust, ui, docs]
     env:
       NIGHTLY_BUILD_LABEL: ${{ needs.nightly-prepare.outputs.label }}
     runs-on: ubuntu-24.04
+    timeout-minutes: 30
     # Unchanged code may skip Rust/UI checks; failures must still block publication.
+    # A failed change filter also skips both checks, so it must succeed explicitly.
     # Use the admission lock while replacing and uploading the release.
     concurrency:
       group: nightly-main-control
@@ -357,7 +378,10 @@ jobs:
   nightly-cleanup:
     name: Remove temporary nightly artifacts
     needs: [desktop, nightly-publish]
-    if: ${{ always() && github.event_name != 'pull_request' && github.ref == 'refs/heads/main' }}
+    # Keep artifacts after a failed publish so "Re-run failed jobs" can still verify both platforms.
+    if: >-
+      ${{ always() && github.event_name != 'pull_request' && github.ref == 'refs/heads/main'
+          && needs.nightly-publish.result == 'success' }}
     runs-on: ubuntu-24.04
     permissions:
       actions: write

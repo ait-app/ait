@@ -107,13 +107,12 @@ class FakeDebugger {
   }
 }
 
-type ConsoleMessageListener = (
-  event: unknown,
-  level: unknown,
-  message: unknown,
-  line: unknown,
-  sourceId: unknown,
-) => void;
+type ConsoleMessageListener = (details: {
+  level: unknown;
+  message: unknown;
+  lineNumber: unknown;
+  sourceId: unknown;
+}) => void;
 
 class FakeWebContents {
   public backgroundThrottling = true;
@@ -225,7 +224,12 @@ class FakeWebContents {
     if (!this.consoleMessageListener) {
       throw new Error("Console listener was not registered");
     }
-    this.consoleMessageListener({}, input.level, input.message, input.line, input.sourceId);
+    this.consoleMessageListener({
+      level: input.level,
+      message: input.message,
+      lineNumber: input.line,
+      sourceId: input.sourceId,
+    });
   }
 
   public destroy(): void {

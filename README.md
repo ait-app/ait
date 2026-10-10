@@ -35,31 +35,27 @@ cargo run -p daemon --bin daemon -- --listen 127.0.0.1:7316
 
 ## 通过账户连接其他主机
 
-桌面和 Android 应用的默认账户服务地址为 `https://dash.ait-app.com:8443/api`。
-打开 **Settings → Host → Account and online hosts**（或 **Add Host**），使用邮箱和密码登录。
-首次启动时也可直接点击欢迎页的 **Account / Relay（账号登录 / Relay）**。
-在电脑的桌面应用中登录同一账户后，该电脑即可上线。主机列表每 10 秒刷新一次，不显示当前机器。
-选择一台主机，即可通过中继访问它的工作区、Agent、终端和文件。
+桌面、Android 和 iOS 应用的默认在线服务地址为 `https://dash.ait-app.com:8443/api`。
+在欢迎页的 **Online Service（在线服务）**、**Settings → App → Online Service** 或
+**Add Host → Online Service** 使用浏览器统一登录（邮箱、Google 或微信）。
+桌面登录后默认同步内置 daemon；选择在线主机即可通过中继访问它的工作区、Agent、终端和文件。
+浏览器仅使用直接连接。
 
-登录凭据使用操作系统的安全存储保存，有效期内可自动恢复登录。
-如果安全存储不可用，重启应用后需要重新登录。
-使用自建服务时，在 **Service settings** 中填写 API 基础地址；留空则使用默认服务。
-已保存的账户会继续使用原先配置的服务地址。`/hosts` 是管理页面，不是 API 基础地址。
-
-Android 作为客户端连接在线电脑，不发布手机为工作主机。退到后台时暂停连接，回到前台后恢复。
-浏览器和 iOS 尚未提供账户登录；Android 接入边界见
-[ADR-076](docs/decisions/clients/adr-076-android-account-relay.md)。
+登录入口与中继细节见 [移动端与 Web](apps/mobile/README.md)、
+[ADR-083](docs/decisions/clients/adr-083-online-service-host-sync.md)、
+[ADR-084](docs/decisions/clients/adr-084-ios-account-relay.md) 与
+[ADR-123](docs/decisions/clients/adr-123-browser-only-account-login.md)。
 
 ## Workspace
 
-| 目录           | 职责                                                                                          |
-| -------------- | --------------------------------------------------------------------------------------------- |
-| `bins/daemon`  | Rust 服务入口、配置和组装                                                                     |
-| `crates/`      | `domain`、`model`、`api` 及 metadata/filesystem/provider/terminal/voice/schedule/browser 能力 |
-| `apps/desktop` | `@ait/desktop` Electron 桌面和 daemon 生命周期                                                |
-| `apps/mobile`  | `@ait/mobile` 桌面、Web 与移动端共享界面                                                      |
-| `packages/`    | 本地私有 SDK、协议、高亮和音频模块                                                            |
-| `docs/`        | 当前架构、分类 ADR、运维、工程规范和验证报告                                                  |
+| 目录           | 职责                                                                                                                  |
+| -------------- | --------------------------------------------------------------------------------------------------------------------- |
+| `bins/daemon`  | Rust 服务入口、配置和组装                                                                                             |
+| `crates/`      | `domain`、`model`、`persistence`、`api`、`relay` 及 metadata/filesystem/provider/terminal/voice/schedule/browser 能力 |
+| `apps/desktop` | `@ait/desktop` Electron 桌面和 daemon 生命周期                                                                        |
+| `apps/mobile`  | `@ait/mobile` 桌面、Web 与移动端共享界面                                                                              |
+| `packages/`    | 本地私有 SDK、协议、高亮和音频模块                                                                                    |
+| `docs/`        | 当前架构、分类 ADR、运维、工程规范和验证报告                                                                          |
 
 本地包使用显式 `file:` 依赖，运行 `npm run verify:local-packages` 校验。
 Rust 依赖方向见 [当前架构](docs/architecture/README.md)，所有修改遵循 [AGENTS.md](AGENTS.md)。
@@ -75,7 +71,9 @@ Rust 依赖方向见 [当前架构](docs/architecture/README.md)，所有修改�
 
 ```bash
 cargo fmt --all --check
-cargo clippy --workspace --all-targets -- -D warnings
+cargo clippy --locked --workspace --all-targets -- -D warnings
+cargo nextest run --locked --workspace
+cargo test --locked --workspace --doc
 npm run verify:local-packages
 npm run verify:release
 npm run check:docs
@@ -83,10 +81,15 @@ npm run test:release
 npm run test:mobile-release
 npm run build:desktop-main
 npm run typecheck --workspace=@ait/desktop --workspace=@ait/mobile
+npm test --workspace=@ait/desktop
+npm run test:sdk
 ```
 
-迭代时只运行改动代码及直接相关行为的测试；Rust 提交准备用 `cargo nextest run --workspace`
-和 `cargo test --workspace --doc` 运行完整测试，并生成覆盖率，详见 [Rust 规范](docs/policy/rust.md)。
+CI 另外运行 `@ait/protocol`、`@ait/highlight` 及选定的 `@ait/mobile` 测试，
+完整列表见 [CI 配置](.github/workflows/ci.yml)。
+本地只运行改动代码及直接相关行为的测试，提交与 PR 准备也不例外；完整 Rust 测试
+（`cargo nextest run --workspace` 与 `cargo test --workspace --doc`）和覆盖率仅在明确要求时运行，
+详见 [Rust 规范](docs/policy/rust.md)。
 GitHub Release 支持 Linux x86_64 和 Apple Silicon；构建、签名与移动发布见
 [发布指南](docs/operations/releasing.md)。更多资料见 [文档索引](docs/README.md)。
 

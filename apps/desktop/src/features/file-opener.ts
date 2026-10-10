@@ -5,6 +5,7 @@ import os from "node:os";
 import path from "node:path";
 import { dialog, shell } from "electron";
 import { resolveDesktopDaemonHome } from "../daemon/rust-daemon.js";
+import { isLaunchableBundle } from "./launchable-bundle.js";
 
 /** Open a downloaded preview on this computer, falling back to an application picker. */
 export async function openPreviewFile(value: unknown): Promise<void> {
@@ -20,7 +21,7 @@ export async function openPreviewFile(value: unknown): Promise<void> {
     throw new Error("The file must be a downloaded preview.");
   }
   const executable =
-    /\.(exe|com|bat|cmd|msi|msp|ps1|psm1|vbs|vbe|js|jse|wsf|wsh|scr|pif|cpl|hta|lnk|url|reg|sh|bash|zsh|fish|run|appimage|desktop|command|scpt|jar|py|pl|rb)$/i.test(
+    /\.(exe|com|bat|cmd|msi|msp|ps1|psm1|vbs|vbe|js|jse|wsf|wsh|scr|pif|cpl|hta|lnk|url|reg|sh|bash|zsh|fish|run|appimage|desktop|command|tool|terminal|scpt|applescript|workflow|action|pkg|mpkg|dmg|fileloc|inetloc|webloc|jar|py|pl|rb)$/i.test(
       target,
     ) ||
     (process.platform !== "win32" && (entry.mode & 0o111) !== 0);
@@ -57,6 +58,10 @@ export async function openDirectoryLink(value: unknown): Promise<boolean> {
   const target = path.resolve(cwd, expanded);
   const entry = await stat(target).catch(() => null);
   if (!entry?.isDirectory()) return false;
+  if (isLaunchableBundle(target, process.platform)) {
+    shell.showItemInFolder(target);
+    return true;
+  }
   await openWithApplication(target);
   return true;
 }

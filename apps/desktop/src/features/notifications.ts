@@ -50,7 +50,9 @@ function getNotificationIcon(): Electron.NativeImage | null {
 }
 
 function focusSenderWindow(sender: Electron.WebContents): BrowserWindow | null {
-  const win = BrowserWindow.fromWebContents(sender) ?? BrowserWindow.getAllWindows()[0] ?? null;
+  // The originating window may have closed since the notification was shown.
+  const ownWindow = sender.isDestroyed() ? null : BrowserWindow.fromWebContents(sender);
+  const win = ownWindow ?? BrowserWindow.getAllWindows()[0] ?? null;
   if (!win || win.isDestroyed()) {
     return null;
   }

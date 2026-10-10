@@ -87,6 +87,9 @@ export async function openEditorTarget(
   if (!runtime.pathExists(input.workspacePath)) {
     throw new Error(`Path does not exist: ${input.workspacePath}`);
   }
+  if (!runtime.isDirectory(input.workspacePath)) {
+    throw new Error(`Editor target workspace path must be a directory: ${input.workspacePath}`);
+  }
   if (input.filePath) {
     if (!runtime.isAbsolutePath(input.filePath)) {
       throw new Error("Editor target file path must be an absolute local path");

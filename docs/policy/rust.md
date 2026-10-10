@@ -31,10 +31,6 @@ Review the code for unnecessary work and allocations before handing it off, whil
   - Add `tower` middleware (timeouts, tracing, compression) for observability and resilience.
   - Offload CPU-bound work to `tokio::task::spawn_blocking` or background services to avoid blocking the reactor.
 - When reporting errors to the console, use `tracing::error!` or `log::error!` instead of `println!`.
-- For data processing:
-  - **ALWAYS** use `polars` instead of other data frame libraries for tabular data manipulation.
-  - If a `polars` dataframe will be printed, **NEVER** simultaneously print the number of entries in the dataframe nor the schema as it is redundant.
-  - **NEVER** ingest more than 10 rows of a data frame at a time. Only analyze subsets of data to avoid overloading your memory context.
 
 ## Code Style and Formatting
 
@@ -245,9 +241,9 @@ If coverage was not measured, state **not measured**, the reason, and the next s
 
 ## Security
 
-- **NEVER** store secrets, API keys, or passwords in code. Only store them in `.env`.
-  - Ensure `.env` is declared in `.gitignore`.
-- **MUST** use environment variables for sensitive configuration via `dotenvy` or `std::env`
+- **NEVER** store secrets, API keys, or passwords in code or committed files.
+  - Keep local `.env` files out of Git; `.gitignore` already excludes `.env` and `.env.*`.
+- **MUST** read sensitive configuration from environment variables injected at runtime via `std::env`; the daemon does not load credentials from `.env`, command-line flags, URLs, or TOML (see [daemon operations](../operations/daemon.md)).
 - **NEVER** log sensitive information (passwords, tokens, PII)
 - Use `secrecy` crate for sensitive data types
 
@@ -266,7 +262,6 @@ If coverage was not measured, state **not measured**, the reason, and the next s
 - Use `cargo` for building, testing, and dependency management
 - Use `cargo nextest run` for full test runs and `cargo test` for doctests or a single focused target
 - Use `cargo doc` for generating documentation
-- **NEVER** build with `cargo build --features python`: this will always fail. Instead, **ALWAYS** use `maturin`.
 
 ## Before Committing
 
@@ -274,7 +269,7 @@ Apply this checklist when preparing a commit, not during routine local edits or 
 
 - [ ] Affected Rust tests pass; run the full workspace suite only if explicitly requested by the user
 - [ ] No compiler warnings (`cargo build --workspace`)
-- [ ] Clippy passes (`cargo clippy --workspace --all-targets -- -D warnings`)
+- [ ] Clippy passes (`cargo clippy --locked --workspace --all-targets -- -D warnings`)
 - [ ] Code is formatted (`cargo fmt --all --check`)
 - [ ] All public items have doc comments
 - [ ] No commented-out code or debug statements

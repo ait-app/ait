@@ -1,7 +1,7 @@
 # Ait 文档
 
 本文档索引只覆盖当前 Ait：Rust daemon、Electron desktop、共享 Web/移动界面和仓库内 SDK。
-源码布局与命名见 [ADR-072](decisions/daemon/adr-072-workspace-names-and-documentation.md)。
+当前源码布局与依赖见[当前架构](architecture/README.md)，目录命名规则见 [ADR-072](decisions/daemon/adr-072-workspace-names-and-documentation.md)。
 
 ## 开始使用与开发
 
@@ -12,22 +12,18 @@
 - [daemon 使用与连接协议](operations/daemon.md)：配置、鉴权、数据目录和生命周期。
 - [当前架构](architecture/README.md)：能力归属、依赖边界和数据所有权。
 
-- [OpenCode 使用问题追踪](reports/providers/opencode-feedback-2026-10-09.md)：Build 图标与原生权限管理问题。
-
 ## 架构决策
 
 - [ADR-123：客户端仅保留浏览器统一登录](decisions/clients/adr-123-browser-only-account-login.md)：删除移动端与 Desktop 的原 AIT 密码表单、命令和共享登录方法，服务能力检查失败不再回退。
-- [ADR-122：Codex Auto-review 的 computer use 工具批准](decisions/providers/adr-122-codex-computer-use-approval.md)：原生插件逐工具预批准、显式覆盖与档位切换重载。
+- [ADR-122（Provider）：Codex Auto-review 的 computer use 工具批准](decisions/providers/adr-122-codex-computer-use-approval.md)：原生插件逐工具预批准、显式覆盖与档位切换重载。
+- [ADR-122（客户端）：在线服务主机进入客户端持久注册表](decisions/clients/adr-122-persistent-online-service-hosts.md)：显式添加、多主机恢复、服务绑定及独立删除。
 - [ADR-121：ACP 轮次关联与原生历史结算](decisions/providers/adr-121-acp-turn-history-reconciliation.md)：实时与重放共享轮次身份，完整原生历史在终态前原子校正消息顺序。
-- [ADR-122：在线服务主机进入客户端持久注册表](decisions/clients/adr-122-persistent-online-service-hosts.md)：显式添加、多主机恢复、服务绑定及独立删除。
-- [在线服务主机持久保存与 OpenCode 时间线验证](reports/clients/persistent-hosts-timeline-validation-2026-10-10.md)：重启恢复、顺序与时间回归、默认并行测试及本次覆盖率证据。
 - [ADR-120：单连接启动请求的有界排队](decisions/daemon/adr-120-single-connection-startup-admission.md)：为正常启动突发保留 16 个组内槽位，维持超量拒绝、消息顺序和 Ping 可用性。
 - [ADR-119：原生账号用量与 Codex 速度目录](decisions/providers/adr-119-native-account-usage-and-codex-speed.md)：会话实际账号、只读凭据边界、主机缓存与原生速度档位。
 - [ADR-118：摘要接口归 model，配置文件适配归 persistence](decisions/daemon/adr-118-summary-contracts-and-persistence-configuration.md)：`SummaryGenerator`/`SummaryConfiguration` 移入 `model::summary`，daemon 注入 persistence 的配置适配器并删除自有实现。
 - [ADR-117：终端配色查询与外观更新生命周期](decisions/clients/adr-117-terminal-palette-and-appearance-lifetime.md)：显示端回答配色查询，workspace 和终端实例在外观变化时保持存活。
 - [ADR-116：库 crate 只公开被其他 crate 使用的项](decisions/daemon/adr-116-crate-visibility.md)：默认私有，启用 `unreachable_pub`，删除收缩后暴露的未使用代码与转发 `pub use`。
 - [ADR-115：OpenCode 官方 ACP Provider](decisions/providers/adr-115-opencode-acp-provider.md)：1.x / 2.x 官方 stdio 协议、原生会话身份与结构化元数据、按原生能力处理问答和辅助会话、审批、取消和历史重放，取代私有 HTTP/SSE adapter。
-
 - [ADR-114：iOS 终端组合输入归 UIKit](decisions/clients/adr-114-ios-terminal-ime.md)：原生组合范围识别、确认文字提交与终端控制键分离。
 - [ADR-113：filesystem 按能力组组织模块](decisions/workspace/adr-113-filesystem-capability-groups.md)：git/forge/worktrees/files/skills 五组沿用原分层，组间仅经 ports/protocol 协作，并由模块边界测试约束。
 - [ADR-112：file 瘦身为 persistence，宿主专用文件归 daemon](decisions/daemon/adr-112-persistence-crate.md)：启动配置、故障证据与 server identity 迁回 daemon，metadata 经端口定位项目配置，仅 daemon 在生产代码中依赖 persistence。
@@ -37,16 +33,15 @@
 - [ADR-108：Relay RPC 与基础连接方法归所属 crate](decisions/daemon/adr-108-relay-rpc-and-metadata-connection-methods.md)：relay 拥有控制 RPC 并仅依赖 model；metadata 声明始终可用的基础连接方法，API 保留传输与跨能力协调。
 - [ADR-107：共享组件直接从所属 crate 导入](decisions/daemon/adr-107-direct-imports-from-owning-crates.md)：删除迁移用转发模块，调用处直接引用 model/domain/file，provider 和 schedule 仅在测试中依赖 file。
 - [ADR-106：具体文件持久化归 file，model 仅声明契约](decisions/daemon/adr-106-concrete-file-persistence.md)：迁移 registry、创建回执和 JSON 文件适配器，依赖调整为 file → model/domain。
-- [ADR-105：File 工具、通用 Registry 与启动配置独立成 crate](decisions/daemon/adr-105-file-tools-and-startup-config.md)：单文件读写与监听、共享 Registry 引擎及启动配置归 file，业务服务继续拥有 schema 和事务。
+- [ADR-105：File 工具、通用 Registry 与启动配置独立成 crate](decisions/daemon/adr-105-file-tools-and-startup-config.md)：单文件读写与监听、共享 Registry 引擎及启动配置归 file（后改名 persistence，见 ADR-112），业务服务继续拥有 schema 和事务。
 - [ADR-104：Filesystem 仅通过 model 契约协作](decisions/workspace/adr-104-filesystem-model-collaboration.md)：共享观察和纯投影归 model，项目登记、命名与 setup 通过接口注入，移除最后一条功能 crate 间依赖。
 - [ADR-103：Terminal 仅依赖 model 的共享契约](decisions/daemon/adr-103-terminal-model-dependency.md)：registry、Workspace 活动和连接事件直接使用 model，移除 metadata 依赖。
 - [ADR-102：共享协作契约归 model，Provider 不依赖 metadata](decisions/providers/adr-102-provider-metadata-independence.md)：共享记录、协议、事件、创建回执和存储下沉，Workspace 业务通过接口协作。
 - [ADR-101：Provider 拥有摘要生成能力](decisions/providers/adr-101-provider-summary-generator.md)：有界生成实现归 provider；接口与配置适配归属由 ADR-118 修订。
 - [ADR-100：功能 crate 作为完整服务安装](decisions/daemon/adr-100-crate-level-service-installation.md)：各功能 crate 通过具体服务类型按 crate 整体安装；基础连接声明归属由 ADR-108 修订。
-- [ADR-097：Google Play 内部测试手动发布](decisions/clients/adr-097-google-play-internal-release.md)：签名 AAB、远端版本计数与内部测试草稿或发布。
 - [ADR-099：Provider 自选辅助小模型](decisions/providers/adr-099-provider-owned-auxiliary-models.md)：能力声明、原生认证与用户覆盖。
 - [ADR-098：客户端消息分块与文件上传背压](decisions/clients/adr-098-acknowledged-client-chunks.md)：原图消息有界重组、文件逐块确认与兼容性。
-
+- [ADR-097：Google Play 内部测试手动发布](decisions/clients/adr-097-google-play-internal-release.md)：签名 AAB、远端版本计数与内部测试草稿或发布。
 - [ADR-096：Desktop 内置 daemon 默认同步与手动下线](decisions/clients/adr-096-desktop-default-host-sync.md)：登录后默认注册本机，持久保留手动下线选择，并统一在线服务添加主机表单风格。
 - [ADR-095：组件自行声明方法元数据](decisions/daemon/adr-095-component-method-declarations.md)：移除中心目录和 `MethodGroup`，功能 crate 仅提供两种方法元数据接口，API 聚合名称并校验。
 - [ADR-094：客户端统一使用 Ait 标准方法名](decisions/clients/adr-094-canonical-ait-client-methods.md)：应用、SDK、消息校验和方法目录使用标准名称，事件订阅参数转换集中在共享协议层。
@@ -59,24 +54,25 @@
 - [ADR-087：Antigravity CLI 原生 Provider](decisions/providers/adr-087-antigravity-cli-provider.md)：官方与 Homebrew 安装发现、NDJSON 会话、权限模式与恢复边界。
 - [ADR-086：桌面、Android 与 iOS 的 Authing 浏览器登录](decisions/clients/adr-086-authing-native-login.md)：浏览器认证、手机号/邮箱账号、一次性代码与原生 PKCE 回传；[配置与验收](operations/authing-client-login.md)。
 - [ADR-085：Daemon 同步的稳定节点身份](decisions/clients/adr-085-stable-daemon-publication.md)：重复注册复用节点、旧 Host 绑定迁移、删除主机后的客户端登录及通用桌面 IPC 命名。
-- [ADR-084：iOS 在线服务账户与主机中继](decisions/clients/adr-084-ios-account-relay.md)：iOS 安全存储、原生账户会话、票据中继与下载。
-- [ADR-083：在线服务登录与逐主机同步分离](decisions/clients/adr-083-online-service-host-sync.md)：二级登录入口、应用账户设置及每台 daemon 的独立同步与租约。
+- [ADR-084（客户端）：iOS 在线服务账户与主机中继](decisions/clients/adr-084-ios-account-relay.md)：iOS 安全存储、原生账户会话、票据中继与下载。
+- [ADR-084（工作区）：工作区主按钮按提交与 PR 生命周期推进](decisions/workspace/adr-084-workspace-primary-git-action.md)：同名远端分支比较、PR 重用和归档推荐条件。
+- [ADR-083（客户端）：在线服务登录与逐主机同步分离](decisions/clients/adr-083-online-service-host-sync.md)：二级登录入口、应用账户设置及每台 daemon 的独立同步与租约。
+- [ADR-083（工作区）：工作区重置到 origin 的最新默认分支](decisions/workspace/adr-083-reset-workspace-to-origin-default.md)：重置按钮、初始分支名、已有同名分支的检出和 Git 执行顺序。
+- [ADR-082（工作区）：Workspace 可空字段使用单级 Option](decisions/workspace/adr-082-canonical-nullable-workspace-fields.md)：缺失字段规范化为 `null` 的 wire 行为。
+- [ADR-082（Provider）：DeepSeek Harness 原生交互 Host](decisions/providers/adr-082-deepseek-harness-native-host.md)：权限切换、结构化问题、用户消息持久化与原生历史恢复。
+- [ADR-081：Workspace 与 Agent 目录主动推送](decisions/workspace/adr-081-directory-change-push.md)：变更唤醒和事件推送。
 - [ADR-080：Android APK 独立手动发布](decisions/clients/adr-080-standalone-android-release.md)：统一测试与正式入口，桌面发布不再调用 Android。
 - [ADR-079：移动端统一使用 Expo EAS 构建](decisions/clients/adr-079-mobile-eas-builds.md)：沿用原有 profile，Android 发布通用 APK，iOS 提交 TestFlight。
 - [ADR-078：Android 发布改为手动可选](decisions/clients/adr-078-optional-android-release.md)：标签发布只构建桌面，Android 默认关闭。
 - [ADR-077：Android APK 的 GitHub Release 发布](decisions/clients/adr-077-android-apk-release.md)：APK 构建、安装包命名与附件职责。
 - [ADR-076：Android 账户与中继客户端](decisions/clients/adr-076-android-account-relay.md)：共享账户会话、Android 安全存储、原生认证连接与下载。
 - [ADR-075：Relay 协议定义与连接执行分离](decisions/clients/adr-075-relay-protocol-modules.md)：中继类型化消息、WebSocket 收发边界与单连接协商标识。
-- [ADR-074：账户发现与按需反向中继](decisions/clients/adr-074-account-host-relay.md)：邮箱密码登录、主机注册、独立的控制与数据 WebSocket，以及单连接调度；[初版验证与覆盖率报告](reports/clients/account-host-relay-validation.md)。
+- [ADR-074（客户端）：账户发现与按需反向中继](decisions/clients/adr-074-account-host-relay.md)：邮箱密码登录、主机注册、独立的控制与数据 WebSocket，以及单连接调度；[初版验证与覆盖率报告](reports/clients/account-host-relay-validation.md)。
+- [ADR-074（Provider）：OpenCode 原生 Provider](decisions/providers/adr-074-opencode-native-provider.md)：接入范围、审批、外部会话发现与导入恢复；当前 ACP 传输见 ADR-115。
+- [ADR-073：桌面主窗口导航边界](decisions/clients/adr-073-desktop-renderer-navigation.md)：应用 preload 的来源限制。
 
-[ADR 分类索引](decisions/README.md)按 daemon、工作区、Provider、客户端和品牌整理。
-决策文档说明具体行为及其修订关系；当前目录与依赖图以当前架构和 ADR-072 为准。
-[ADR-081：Workspace 与 Agent 目录主动推送](decisions/workspace/adr-081-directory-change-push.md)记录变更唤醒和事件推送。
-[ADR-082：Workspace 可空字段使用单级 Option](decisions/workspace/adr-082-canonical-nullable-workspace-fields.md)记录缺失字段规范化为 `null` 的 wire 行为。
-[ADR-083：工作区重置到 origin 的最新默认分支](decisions/workspace/adr-083-reset-workspace-to-origin-default.md)记录重置按钮、初始分支名、已有同名分支的检出和 Git 执行顺序。
-[ADR-084：工作区主按钮按提交与 PR 生命周期推进](decisions/workspace/adr-084-workspace-primary-git-action.md)记录同名远端分支比较、PR 重用和归档推荐条件。
-
-- [桌面主窗口导航边界](decisions/clients/adr-073-desktop-renderer-navigation.md)：应用 preload 的来源限制。
+[ADR 分类索引](decisions/README.md)按 daemon、工作区、Provider、客户端和品牌整理全部决策。
+决策文档说明具体行为及其修订关系；当前目录与依赖图以[当前架构](architecture/README.md)为准。
 
 ## 运维与发布
 
@@ -87,6 +83,7 @@
 - [发布指南](operations/releasing.md)：桌面 Release、Android Internal Testing、iOS TestFlight。
 - [Ait 0.0.26 发布说明](reports/releases/release-0.0.26.md)：终端崩溃、启动请求突发与 OpenCode 目录校验修复。
 - [Ait 0.0.25 发布说明](reports/releases/release-0.0.25.md)：OpenCode ACP、用量与 Codex 速度档位，以及桌面交互改进。
+- [Ait 0.0.24 发布说明](reports/releases/release-0.0.24.md)、[Ait 0.0.23 发布说明](reports/releases/release-0.0.23.md)；全部版本见[发布验证索引](reports/README.md#发布验证)。
 - [Ait 0.0.23-beta.1 发布说明](reports/releases/release-0.0.23-beta.1.md)：beta 通道与最新 main 修复。
 - [Ait 0.0.22 发布说明](reports/releases/release-0.0.22.md)：远端分支重置、会话并发、Antigravity 与实时 Timeline 通知修复。
 - [Ait 0.0.21 发布准备与失败记录](reports/releases/release-0.0.21.md)：成品 Timeline 门禁阻止发布。
@@ -103,11 +100,12 @@
 - [Antigravity CLI](operations/antigravity.md)：AGY 安装、登录、权限模式与会话恢复。
 - [语音与听写](operations/speech.md)：离线模型、后端配置和限制。
 
-- [DSH 原生交互 Host](decisions/providers/adr-082-deepseek-harness-native-host.md)：权限切换、结构化问题、用户消息持久化与原生历史恢复。
-- [OpenCode 原生 Provider](decisions/providers/adr-074-opencode-native-provider.md)：接入范围、审批、外部会话发现与导入恢复；当前 ACP 传输见 ADR-115。
-
 ## 工程规范与验证
 
+- [Rust style guide](policy/rust.md)：Rust 代码、测试、lint 与覆盖率规范。
+- [文档规范](policy/documentation.md)：分类、维护和历史资料清理规则。
+- [OpenCode 使用问题追踪](reports/providers/opencode-feedback-2026-10-09.md)：Build 图标与原生权限管理问题。
+- [在线服务主机持久保存与 OpenCode 时间线验证](reports/clients/persistent-hosts-timeline-validation-2026-10-10.md)：重启恢复、顺序与时间回归、默认并行测试及本次覆盖率证据。
 - [Codex computer use 请求与 Auto-review 批准验证](reports/providers/codex-computer-use-approval-2026-10-10.md)：请求处理边界、原生配置验证和定向回归。
 - [周期任务按变更驱动：PR 验证](reports/daemon/periodic-loops-pr-validation-2026-10-10.md)：Provider 调度与会话节奏、终端/定时任务/diff 轮询减负、完整测试与可比基线覆盖率。
 - [Rust 测试提速：提交验证](reports/daemon/rust-test-speed-validation-2026-10-10.md)：nextest、调试信息、CI 缓存与并发不稳定测试的修复。
@@ -126,10 +124,8 @@
 - [DSH 模型发现验证](reports/providers/dsh-readonly-discovery.md)：只读模型目录与会话初始化隔离。
 - [附件分块传输验证](reports/clients/attachment-chunks.md)：原图消息、200 MiB 文件上传、背压及覆盖率。
 
-- [Rust style guide](policy/rust.md)：Rust 代码、测试、lint 与覆盖率规范。
 - [File、共享契约与 RPC 边界 PR 验证](reports/daemon/file-and-rpc-boundaries-pr-validation-2026-10-08.md)：14-crate workspace 测试、覆盖率与源码证据。
 - [Daemon 测试扩展与覆盖率验证](reports/daemon/crate-coverage-rebase.md)：最新 rebase 验证、逐 crate 证据与历史测量索引。
-- [文档规范](policy/documentation.md)：分类、维护和历史资料清理规则。
 - [Provider 能力清单](plans/provider-parity.md)：当前能力与后续工作。
 - [Antigravity CLI 验证](reports/providers/antigravity-cli.md)：协议夹具、安装路径和真实 AGY 验证范围。
 - [Provider 装配边界验证](reports/providers/provider-composition.md)：内置注册、辅助生成、DSH 简称与覆盖率证据。
