@@ -85,14 +85,15 @@ pub(super) fn validate_handle(handle: &AgentPersistenceHandle) -> Result<(), Age
 pub(super) fn clients(
     handle: &AgentPersistenceHandle,
 ) -> Result<BTreeMap<String, String>, AgentSessionError> {
-    let native = match &handle.native_handle {
+    let payload = handle
+        .native_handle
+        .as_ref()
+        .filter(|native| native.as_str() != Some(handle.session_id.as_str()));
+    let native = match payload {
         Some(Value::String(text)) if text.len() <= 16 * 1024 * 1024 + 256 * 1024 => {
             serde_json::from_str(text).map_err(|_| AgentSessionError::Rejected)?
         }
-        Some(Value::Object(_)) => handle
-            .native_handle
-            .clone()
-            .ok_or(AgentSessionError::Rejected)?,
+        Some(native @ Value::Object(_)) => native.clone(),
         None => handle
             .metadata
             .as_ref()
@@ -615,8 +616,11 @@ impl AgentSession for Session {
         Some(AgentPersistenceHandle {
             provider: PROVIDER.into(),
             session_id: self.id.clone(),
-            native_handle: Some(json!(native.to_string())),
-            metadata: Some(BTreeMap::from([("cwd".into(), json!(self.spec.cwd))])),
+            native_handle: Some(json!(self.id)),
+            metadata: Some(BTreeMap::from([
+                ("cwd".into(), json!(self.spec.cwd)),
+                ("opencode".into(), native),
+            ])),
         })
     }
     fn start_turn<'a>(

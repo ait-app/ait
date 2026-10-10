@@ -11,6 +11,9 @@ use crate::ports::agent_session::{
 };
 
 #[cfg(unix)]
+mod ownership;
+
+#[cfg(unix)]
 fn fixture(scenario: &str) -> (TempDir, OpenCodeClient, AgentSessionSpec) {
     let root = tempfile::tempdir().unwrap();
     let cwd = root
@@ -265,8 +268,8 @@ async fn acp_multiple_turns_replay_and_legacy_resume_keep_native_identity_and_cl
     }
     let handle = session.persistence().unwrap();
     assert_eq!(handle.session_id, "ses_one");
-    let saved: Value =
-        serde_json::from_str(handle.native_handle.as_ref().unwrap().as_str().unwrap()).unwrap();
+    assert_eq!(handle.native_handle.as_ref().unwrap(), "ses_one");
+    let saved = &handle.metadata.as_ref().unwrap()["opencode"];
     assert_eq!(saved["clients"]["user1"], "client-0");
     assert_eq!(saved["clients"]["user2"], "client-1");
     session.close().await.unwrap();
@@ -281,6 +284,9 @@ async fn acp_multiple_turns_replay_and_legacy_resume_keep_native_identity_and_cl
     assert_eq!(listed[0].last_prompt_preview.as_deref(), Some("hello 1"));
     let before = std::fs::read(root.path().join("native-fixture.json")).unwrap();
     assert_replay(&all, &client.history(&handle, &spec.cwd).await.unwrap());
+    let mut encoded = handle.clone();
+    encoded.native_handle = Some(json!(saved.to_string()));
+    assert_replay(&all, &client.history(&encoded, &spec.cwd).await.unwrap());
     assert_eq!(
         std::fs::read(root.path().join("native-fixture.json")).unwrap(),
         before

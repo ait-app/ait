@@ -39,6 +39,8 @@
 5. `session/load` 是完整历史来源，加载过程不提交输入、不修改模型或权限。
    原生 `messageId` / `toolCallId` 驱动稳定的 `native:opencode:acp-v1:` 展示身份。
    旧 Ait 句柄中的 session ID 和 client message 映射继续可读；OpenCode 自己负责原生存储版本兼容，Ait 不迁移或改写其数据库。
+   `nativeHandle` 保存原生 session ID，ACP 配置与 client message 映射保存于 `metadata.opencode`；配置不参与路由身份。
+   既有 JSON 字符串与对象句柄仍可读，恢复后的句柄使用原生 session ID，避免同配置会话因相同字符串别名而冲突。
    已有私有协议展示历史在首次重放时按既有 timeline reconcile 规则替换展示 generation。
 6. 工具输入和结果仅保存有界展示预览，完整内容留在原生 transcript。
    长文本按 UTF-8 边界分为至多 96 KiB 的块，给 JSON 控制字符转义与元数据留出空间，保持单项低于 768 KiB。

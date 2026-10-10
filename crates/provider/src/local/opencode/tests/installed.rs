@@ -8,6 +8,7 @@ use axum::{Json, Router, extract::State, http::StatusCode, response::IntoRespons
 use tokio_util::task::AbortOnDropHandle;
 
 use super::*;
+use crate::service::agent_manager::ownership::Owners;
 
 async fn installed(
     question: bool,
@@ -183,8 +184,18 @@ fn model_response(
 async fn installed_acp_five_sessions_and_native_model_error_preserve_history_and_reason() {
     let (_root, client, spec, _server) = installed(false).await;
     let mut sessions = Vec::new();
-    for _ in 0..5 {
-        sessions.push(client.create_session(&spec).await.unwrap());
+    let owners = Owners::default();
+    for index in 0..5 {
+        let session = client.create_session(&spec).await.unwrap();
+        let lane = format!("agent-{index}");
+        let record = serde_json::from_value(json!({
+            "id":lane,"provider":"opencode","cwd":spec.cwd,
+            "createdAt":"2026-10-10T00:00:00Z","updatedAt":"2026-10-10T00:00:00Z",
+            "persistence":session.persistence()
+        }))
+        .unwrap();
+        owners.bind(&lane, &record).unwrap();
+        sessions.push(session);
     }
     let session = sessions.last_mut().unwrap();
     session
