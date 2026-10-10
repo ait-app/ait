@@ -357,6 +357,44 @@ async fn acp_cancel_waits_for_settlement_and_clears_pending_questions() {
 
 #[cfg(unix)]
 #[tokio::test]
+async fn native_replay_replaces_previously_invalid_wrapped_tool_projections() {
+    let (root, client, spec) = fixture("wrapped-tool");
+    let mut session = client.create_session(&spec).await.unwrap();
+    session.start_turn("inspect", &spec.config).await.unwrap();
+    let items = completed(session.as_mut()).await;
+    let tool = items
+        .iter()
+        .find(|entry| entry.item["type"] == "tool_call")
+        .unwrap();
+    assert_eq!(tool.item["detail"]["output"], "/work\n");
+    let handle = session.persistence().unwrap();
+    session.close().await.unwrap();
+    let history = client.history(&handle, &spec.cwd).await.unwrap();
+    assert_replay(&items, &history);
+
+    let mut old = tool.clone();
+    old.item["detail"]["output"] = json!({"metadata":{"exit":0},"output":"/work\n"});
+    let timeline = crate::storage::timeline::Timeline::memory().unwrap();
+    let (old_epoch, _) = timeline.append("agent", "opencode", &[old]).unwrap();
+    let epoch = timeline.reconcile("agent", "opencode", &history).unwrap();
+    assert_ne!(epoch, old_epoch);
+    let (_, repaired) = timeline.read("agent").unwrap();
+    assert!(
+        repaired
+            .iter()
+            .any(|row| row.entry.item["detail"]["output"] == "/work\n")
+    );
+    assert_eq!(
+        requests(&root)
+            .iter()
+            .filter(|request| request["method"] == "session/prompt")
+            .count(),
+        1
+    );
+}
+
+#[cfg(unix)]
+#[tokio::test]
 async fn acp_one_megabyte_tool_output_stays_in_native_storage_with_bounded_timeline() {
     let (root, client, spec) = fixture("large-tool");
     let mut session = client.create_session(&spec).await.unwrap();
@@ -607,6 +645,65 @@ async fn acp_history_only_sessions_reject_writes_and_keep_native_storage_unchang
         std::fs::read(root.path().join("native-fixture.json")).unwrap(),
         original
     );
+}
+
+#[cfg(unix)]
+#[tokio::test]
+async fn acp_rejected_configuration_keeps_the_session_available_for_a_valid_prompt() {
+    let (root, client, spec) = fixture("no-thinking");
+    let mut session = client.create_session(&spec).await.unwrap();
+    let mut invalid_model = spec.config.clone();
+    invalid_model.model = Some("local/missing".into());
+    let mut invalid_effort = spec.config.clone();
+    invalid_effort.model = Some("local/second".into());
+    invalid_effort.thinking_option_id = Some("high".into());
+    let mut invalid_replacement = spec.config.clone();
+    invalid_replacement.mode_id = Some("missing".into());
+    invalid_replacement.feature_values =
+        Some(BTreeMap::from([("permission".into(), json!("deny"))]));
+    for selected in [invalid_model, invalid_effort, invalid_replacement] {
+        assert_eq!(
+            session.start_turn("rejected", &selected).await.unwrap_err(),
+            AgentSessionError::Rejected
+        );
+        session.start_turn("valid", &spec.config).await.unwrap();
+        completed(session.as_mut()).await;
+    }
+    assert_eq!(
+        requests(&root)
+            .iter()
+            .filter(|request| request["method"] == "session/prompt")
+            .count(),
+        3
+    );
+    session.close().await.unwrap();
+}
+
+#[cfg(unix)]
+#[tokio::test]
+async fn acp_process_configuration_changes_use_native_load_when_resume_is_absent() {
+    let (root, client, mut spec) = fixture("load-only");
+    let mut session = client.create_session(&spec).await.unwrap();
+    session.start_turn("initial", &spec.config).await.unwrap();
+    completed(session.as_mut()).await;
+    spec.config.feature_values = Some(BTreeMap::from([("permission".into(), json!("deny"))]));
+    session.start_turn("next", &spec.config).await.unwrap();
+    completed(session.as_mut()).await;
+    let calls = requests(&root);
+    assert!(
+        !calls
+            .iter()
+            .any(|request| request["method"] == "session/resume")
+    );
+    assert_eq!(
+        calls
+            .iter()
+            .filter(|request| request["method"] == "session/new")
+            .count(),
+        1
+    );
+    assert_eq!(session.persistence().unwrap().session_id, "ses_one");
+    session.close().await.unwrap();
 }
 
 #[cfg(unix)]

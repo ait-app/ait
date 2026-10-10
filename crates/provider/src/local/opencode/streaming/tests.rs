@@ -1,6 +1,63 @@
 use super::*;
 
 #[test]
+fn wrapped_native_output_is_unwrapped_before_utf8_bounding() {
+    let output = "文".repeat(100_000);
+    let mut stream = Stream::default();
+    for update in [
+        json!({"sessionUpdate":"tool_call","toolCallId":"shell","kind":"execute","title":"pwd","status":"pending","rawInput":{"command":"pwd"}}),
+        json!({"sessionUpdate":"tool_call_update","toolCallId":"shell","status":"completed","rawOutput":{"metadata":{"exit":0},"output":output}}),
+    ] {
+        stream.update(&update).unwrap();
+    }
+    for event in stream.events {
+        let (AgentTurnEvent::Progress { entry, .. } | AgentTurnEvent::Timeline(entry)) = event
+        else {
+            continue;
+        };
+        if entry.item["status"] == "running" {
+            assert!(entry.item["detail"].get("output").is_none());
+        } else {
+            let text = entry.item["detail"]["output"].as_str().unwrap();
+            assert!(text.starts_with("文文"));
+            assert!(text.contains("Output truncated"));
+            assert!(!text.contains("metadata"));
+        }
+        assert!(serde_json::to_vec(&entry).unwrap().len() < 768 * 1024);
+    }
+}
+
+#[test]
+fn native_content_text_is_bounded_without_turning_it_into_json_or_hiding_failures() {
+    for (status, text) in [
+        ("completed", "文".repeat(100_000)),
+        ("failed", "Permission denied".into()),
+    ] {
+        let mut stream = Stream::default();
+        stream.update(&json!({"sessionUpdate":"tool_call","toolCallId":"shell","kind":"execute","title":"pwd","status":"pending","rawInput":{"command":"pwd"}})).unwrap();
+        stream.update(&json!({"sessionUpdate":"tool_call_update","toolCallId":"shell","status":status,
+            "rawOutput":{"metadata":{}},"content":[{"type":"content","content":{"type":"text","text":text}}]})).unwrap();
+        let entry = stream
+            .events
+            .into_iter()
+            .find_map(|event| {
+                if let AgentTurnEvent::Timeline(entry) = event {
+                    Some(entry)
+                } else {
+                    None
+                }
+            })
+            .unwrap();
+        let output = entry.item["detail"]["output"].as_str().unwrap();
+        assert!(text.starts_with(output.split('\n').next().unwrap()));
+        assert!(serde_json::to_vec(&entry).unwrap().len() < 768 * 1024);
+        if status == "failed" {
+            assert_eq!(entry.item["error"], text);
+        }
+    }
+}
+
+#[test]
 fn long_utf8_text_is_split_deterministically_without_losing_the_terminal_message() {
     let text = "文".repeat(100_000);
     let mut stream = Stream::default();

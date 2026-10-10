@@ -198,7 +198,28 @@ impl Stream {
             "rawOutput",
         ] {
             if let Some(value) = update.get(key) {
-                snapshot[key] = preview(value);
+                snapshot[key] = if key == "content"
+                    && matches!(
+                        snapshot["kind"].as_str(),
+                        Some("execute" | "read" | "search" | "fetch")
+                    )
+                    && let Some(text) = super::tool::content_text(value)
+                {
+                    preview(&json!(text))
+                } else {
+                    preview(
+                        if key == "rawOutput"
+                            && matches!(
+                                snapshot["kind"].as_str(),
+                                Some("execute" | "read" | "search" | "fetch")
+                            )
+                        {
+                            super::tool::raw_output(value)
+                        } else {
+                            value
+                        },
+                    )
+                };
             }
         }
         let status = match snapshot["status"].as_str() {
@@ -210,7 +231,11 @@ impl Stream {
         let item = json!({"type":"tool_call","callId":id,"name":snapshot["title"],"status":status,
             "detail":super::tool::detail(snapshot),
             "metadata":{"kind":snapshot["kind"],"title":snapshot["title"],"locations":snapshot["locations"]},
-            "error":if status == "failed" { json!("OpenCode tool failed") } else { Value::Null }});
+            "error":if status == "failed" {
+                json!(super::tool::content_text(&snapshot["content"])
+                    .or_else(|| snapshot["rawOutput"]["error"].as_str().map(str::to_owned))
+                    .unwrap_or_else(|| "OpenCode tool failed".into()))
+            } else { Value::Null }});
         let entry = self.entry(&format!("tool:{id}"), item);
         if status == "running" {
             self.observation += 1;
@@ -293,7 +318,9 @@ fn image(images: &ImageStore, content: &Value) -> Result<String, AgentSessionErr
 mod tests;
 
 fn preview(value: &Value) -> Value {
-    let text = value.to_string();
+    let text = value
+        .as_str()
+        .map_or_else(|| Cow::Owned(value.to_string()), Cow::Borrowed);
     if text.len() <= PREVIEW_BYTES {
         return value.clone();
     }

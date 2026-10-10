@@ -87,7 +87,7 @@ def content(row):
             if part["type"] == "text":
                 update({"sessionUpdate": "agent_message_chunk", "messageId": row["id"], "content": part})
             elif part["type"] == "tool":
-                update({"sessionUpdate": "tool_call", "toolCallId": part["id"], "title": "read", "kind": "read", "status": "pending", "rawInput": {"path": "file"}})
+                update({"sessionUpdate": "tool_call", "toolCallId": part["id"], "title": "read", "kind": part.get("kind", "read"), "status": "pending", "rawInput": part.get("input", {"path": "file"})})
                 update({"sessionUpdate": "tool_call_update", "toolCallId": part["id"], "status": "completed", "rawOutput": part["output"]})
 
 
@@ -97,6 +97,8 @@ def complete(stop="end_turn"):
     row = {"id": "answer" + str(value["seq"]), "type": "assistant", "content": [{"type": "text", "text": "authoritative answer"}]}
     if scenario == "large-tool":
         row["content"].insert(0, {"type": "tool", "id": "tool" + str(value["seq"]), "output": "x" * 1048576})
+    if scenario == "wrapped-tool":
+        row["content"].insert(0, {"type": "tool", "id": "tool" + str(value["seq"]), "kind": "execute", "input": {"command": "pwd"}, "output": {"metadata": {"exit": 0}, "output": "/work\n"}})
     value["history"].append(row)
     save(value)
     content(row)
@@ -126,6 +128,8 @@ for line in sys.stdin:
             print("not json", flush=True)
             continue
         capabilities = {"list": {}, "resume": {}, "close": {}}
+        if scenario == "load-only":
+            capabilities.pop("resume")
         if scenario == "no-history":
             capabilities.pop("list")
         if not os.environ.get("AIT_ACP_VERSION", "2.0.26").startswith("1.") and scenario != "no-delete":
