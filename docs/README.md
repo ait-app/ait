@@ -14,6 +14,7 @@
 
 ## 架构决策
 
+- [ADR-128：桌面内置 daemon 可在退出后继续运行](decisions/clients/adr-128-desktop-daemon-keep-running.md)：退出时交接 0600 记录、下次启动经认证与 PID 校验后重新接管，交接失败照常停止。
 - [ADR-127：移除 daemon 配对 offer RPC](decisions/daemon/adr-127-remove-daemon-pairing-offer.md)：删除方法清单、路由、共享协议和 SDK；旧请求返回未知方法。
 - [ADR-126：按身份读取目标 Workspace，完整目录后台同步](decisions/workspace/adr-126-workspace-target-read.md)：只读目标状态、缓存优先、连接和事件竞争保护。
 - [ADR-125：持久化展示投影索引与按页读取 Timeline](decisions/providers/adr-125-durable-timeline-projection-pages.md)：事务内增量维护、重启复用、源覆盖游标与字节回退。

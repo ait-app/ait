@@ -1423,7 +1423,7 @@ export const en = {
       },
       keepRunning: {
         title: "Keep daemon running after quit",
-        hint: "Daemon keeps running when you quit Ait",
+        hint: "Agents and terminals keep running after you quit Ait; the next launch reconnects to them.",
       },
       logs: {
         title: "Log file",

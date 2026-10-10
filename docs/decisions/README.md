@@ -88,6 +88,7 @@ ADR-074、082、083、084、122 在不同类别中各有两份，引用时以路
 
 ## 客户端、连接与品牌
 
+- [ADR-128：桌面内置 daemon 可在退出后继续运行](clients/adr-128-desktop-daemon-keep-running.md)
 - [ADR-124：登录后自动添加全部在线服务主机](clients/adr-124-automatic-online-host-import.md)
 
 - [ADR-123：客户端仅保留浏览器统一登录](clients/adr-123-browser-only-account-login.md)

@@ -1400,7 +1400,7 @@ export const zhCN: TranslationResources = {
       },
       keepRunning: {
         title: "退出后保持守护进程运行",
-        hint: "退出 Ait 后守护进程会继续运行",
+        hint: "退出 Ait 后 Agent 与终端继续运行，下次启动时自动重新连接。",
       },
       logs: {
         title: "日志文件",

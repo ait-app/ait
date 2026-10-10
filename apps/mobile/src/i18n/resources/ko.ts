@@ -1366,7 +1366,7 @@ export const ko: TranslationResources = {
       },
       keepRunning: {
         title: "종료 후에도 데몬 계속 실행",
-        hint: "Ait를 종료해도 데몬이 계속 실행됩니다",
+        hint: "Ait를 종료해도 에이전트와 터미널이 계속 실행되며, 다음 실행 시 다시 연결합니다.",
       },
       logs: {
         title: "로그 파일",

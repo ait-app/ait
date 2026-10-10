@@ -1397,7 +1397,7 @@ export const fr: TranslationResources = {
       },
       keepRunning: {
         title: "Laisser le démon fonctionner après avoir quitté",
-        hint: "Daemoncontinue de fonctionner lorsque vous quittez Ait",
+        hint: "Les agents et terminaux continuent de fonctionner après avoir quitté Ait ; le prochain lancement s'y reconnecte.",
       },
       logs: {
         title: "Fichier journal",

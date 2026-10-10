@@ -2,6 +2,7 @@
 
 - 状态：Accepted
 - 日期：2026-09-25
+- 修订：退出后继续运行与重新接管由 [ADR-128](adr-128-desktop-daemon-keep-running.md) 恢复为可选行为。
 
 ## 决策
 

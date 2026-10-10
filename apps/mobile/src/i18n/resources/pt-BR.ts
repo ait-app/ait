@@ -1387,7 +1387,7 @@ export const ptBR: TranslationResources = {
       },
       keepRunning: {
         title: "Manter daemon em execução ao sair",
-        hint: "O daemon continua em execução quando você sai do Ait",
+        hint: "Agentes e terminais continuam em execução ao sair do Ait; a próxima inicialização se reconecta a eles.",
       },
       logs: {
         title: "Arquivo de log",
