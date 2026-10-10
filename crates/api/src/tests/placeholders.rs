@@ -14,7 +14,8 @@ async fn every_catalog_placeholder_uses_its_canonical_envelope_and_explicit_erro
         .into_iter()
         .filter(|(method, _)| !implemented.iter().any(|ready| ready == method))
         .collect::<Vec<_>>();
-    assert_eq!(placeholders.len(), 167);
+    assert_eq!(placeholders.len(), 168);
+    assert!(placeholders.contains(&("workspace.get.request", InboundKind::Request)));
     for batch in placeholders.chunks(64) {
         let mut socket = fixture.socket().await;
         let mut offer = hello();
