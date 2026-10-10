@@ -2,22 +2,22 @@
 
 <img src="logo.svg" alt="Ait logo" width="96" height="96" />
 
-**本地优先的 AI 编程 Agent 工作台。**
+**在一个界面里管理多个编程 Agent。**
 
-Ait 把编程 Agent、项目工作区、Git 变更、终端和文件放在同一个界面中。
-你可以在电脑上组织多个 Agent 的工作，也可以从另一台电脑或手机连接工作主机，继续查看进度、发送任务和处理审批。
+Ait 支持 Codex、Claude Code、OpenCode、DeepSeek Harness 等编程 Agent。
+你可以在电脑上同时使用多个 Agent，查看文件和 Git 变更、操作终端，也可以从手机或另一台电脑连接，查看进度、发送消息和处理审批。
 
 [下载安装](https://github.com/ait-app/ait/releases) · [更新记录](CHANGELOG.md)
 
-## 核心能力
+## 可以做什么
 
-- **统一管理 Agent**：接入 Codex、Claude Code、OpenCode、DeepSeek Harness 等本地运行时，查看对话、工具调用与执行状态。
-- **围绕工作区开发**：管理项目与 Git worktree，在工作区内使用 Agent、浏览文件、查看 Diff 和操作终端。
-- **跨设备继续工作**：桌面端使用本机服务；桌面、Android 和 iOS 可通过在线服务连接工作主机，浏览器支持直接连接 daemon。
-- **沿用原生能力**：复用各 Agent 的认证、模型、会话与权限机制。具体功能取决于所选运行时及其版本，以应用中发现的能力为准。
+- **Agent 对话**：发送任务，查看回复、工具调用和运行状态，处理权限审批。
+- **项目与文件**：添加项目、创建 Git worktree，浏览文件、查看代码变更、使用终端。
+- **远程连接**：从另一台电脑、Android 或 iOS 设备连接运行 Agent 的电脑。浏览器也可以直接连接后台服务。
+- **Agent 设置**：选择 Agent 提供的模型和权限选项，继续已有会话。可用选项取决于安装的 Agent 及其版本。
 
-Agent 在工作主机上执行，Ait 的 Rust 后台服务（daemon）负责会话与工作区管理；桌面、Web 和移动端共用界面与连接协议。
-本地使用无需登录 Ait 在线服务；模型访问仍使用相应 Agent 的配置与认证。
+Agent 在你连接的电脑上运行。使用本机 Agent 时无需登录 Ait 账户；
+模型和账号使用各 Agent 自己的配置。
 
 ## 开始使用
 
