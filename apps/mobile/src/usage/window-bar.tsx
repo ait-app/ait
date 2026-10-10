@@ -1,10 +1,11 @@
 import { Pin } from "lucide-react-native";
 import { useMemo } from "react";
+import { useTranslation } from "react-i18next";
 import { Pressable, Text, View, type StyleProp, type ViewStyle } from "react-native";
 import { StyleSheet, withUnistyles } from "react-native-unistyles";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
-import { usageCopy } from "./copy";
-import { formatDisplayPct, formatResetLabel } from "./format";
+import { useUsageCopy } from "./copy";
+import { formatDisplayPct, formatResetLabel, formatRunOutLabel } from "./format";
 import { UsageMeter } from "./meter";
 import { displayPercent, usageWindowRowLabel } from "./model";
 import type { UsageDisplayAs } from "./preferences";
@@ -37,15 +38,16 @@ export function UsageWindowBar({
   pinLabel: string;
   pinTestID: string;
 }) {
+  const { t } = useTranslation();
   const shownPct = displayPercent(window, displayAs);
   const tone = windowTone(window);
 
   const isAtRisk = window.runsOutAt != null && window.shortfallPct != null;
   const trailing = isAtRisk
-    ? `runs out ${formatResetLabel(window.runsOutAt)?.replace("resets ", "") ?? ""}`.trim()
-    : formatResetLabel(window.resetsAt);
+    ? formatRunOutLabel(window.runsOutAt, t)
+    : formatResetLabel(window.resetsAt, t);
 
-  const value = shownPct != null ? formatDisplayPct(shownPct, displayAs) : "—";
+  const value = shownPct != null ? formatDisplayPct(shownPct, displayAs, t) : "—";
   const accessibilityState = useMemo(() => ({ checked: pinned }), [pinned]);
   const content = {
     label: window.label,
@@ -137,6 +139,7 @@ function WindowRowContent({
 const ThemedPin = withUnistyles(Pin);
 
 function UsagePinGlyph({ pinned }: { pinned: boolean }) {
+  const usageCopy = useUsageCopy();
   const iconMapping = useMemo(
     () => (theme: { colors: { foregroundMuted: string } }) => ({
       color: theme.colors.foregroundMuted,

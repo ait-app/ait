@@ -4,13 +4,14 @@ import { extraMutedIconColorMapping } from "@/components/ui/icon-button-chrome";
 import { LoadingSpinner } from "@/components/ui/loading-spinner";
 import { ToolbarButton, paneContentToolbarIconSize } from "@/components/ui/pane-content-toolbar";
 import { useIsCompactFormFactor } from "@/constants/layout";
-import { usageCopy } from "./copy";
+import { useUsageCopy } from "./copy";
 
 const ThemedRotateCw = withUnistyles(RotateCw);
 const ThemedLoadingSpinner = withUnistyles(LoadingSpinner);
 
 /** Refreshes every report on the host; spins while a refresh is in flight. */
 export function UsageRefreshButton({ busy, onRefresh }: { busy: boolean; onRefresh: () => void }) {
+  const usageCopy = useUsageCopy();
   const compact = useIsCompactFormFactor();
   const iconSize = paneContentToolbarIconSize(compact);
   return (

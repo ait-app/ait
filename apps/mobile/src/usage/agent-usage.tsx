@@ -1,7 +1,7 @@
 import { Text, View } from "react-native";
 import { StyleSheet } from "react-native-unistyles";
 import { UsageCard } from "./card";
-import { usageCopy } from "./copy";
+import { useUsageCopy } from "./copy";
 import { useUsageDisplay } from "./display";
 import { useAgentUsage } from "./queries";
 import type { UsageReportEntry } from "./types";
@@ -21,6 +21,7 @@ export function AgentUsage({
   /** Whether each card has a Refresh button; a surface that cannot be pressed hides it. */
   refreshable: boolean;
 }) {
+  const usageCopy = useUsageCopy();
   const view = useAgentUsage(serverId, agentId);
   if (view.kind === "none") return null;
   return (

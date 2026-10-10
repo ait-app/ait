@@ -8,20 +8,20 @@ import { useIsCompactFormFactor } from "@/constants/layout";
 import { SettingsRow, SettingsSwitch } from "@/components/settings";
 import { SegmentedControl, type SegmentedControlOption } from "@/components/ui/segmented-control";
 import { settingsStyles } from "@/styles/settings";
-import { usageCopy } from "./copy";
+import { useUsageCopy } from "./copy";
 import { useUsagePreferences } from "./display";
 import { useUsageInSidebar } from "./in-sidebar";
 import type { UsageDisplayAs } from "./preferences";
-
-const DISPLAY_AS_OPTIONS: SegmentedControlOption<UsageDisplayAs>[] = [
-  { value: "used", label: usageCopy.displayUsed, testID: "usage-display-used" },
-  { value: "remaining", label: usageCopy.displayRemaining, testID: "usage-display-remaining" },
-];
 
 const ThemedSettings = withUnistyles(Settings);
 
 /** The shared usage preferences, opened from a cog as a popover or compact sheet. */
 export function UsageOptions() {
+  const usageCopy = useUsageCopy();
+  const displayAsOptions: SegmentedControlOption<UsageDisplayAs>[] = [
+    { value: "used", label: usageCopy.displayUsed, testID: "usage-display-used" },
+    { value: "remaining", label: usageCopy.displayRemaining, testID: "usage-display-remaining" },
+  ];
   const compact = useIsCompactFormFactor();
   const { display } = useUsagePreferences();
   const { inSidebar, setInSidebar } = useUsageInSidebar();
@@ -55,7 +55,7 @@ export function UsageOptions() {
           <View style={settingsStyles.rowBorder}>
             <SettingsRow label={usageCopy.displayAs}>
               <SegmentedControl
-                options={DISPLAY_AS_OPTIONS}
+                options={displayAsOptions}
                 value={display.displayAs}
                 onValueChange={display.setDisplayAs}
                 size="sm"
