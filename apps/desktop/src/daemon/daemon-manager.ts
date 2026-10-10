@@ -328,7 +328,7 @@ export function registerDaemonManager(
 
   ipcMain.handle("ait:invoke", async (_event, command: string, args?: Record<string, unknown>) => {
     if (command.startsWith("account_")) return account(_event, command, args);
-    const handler = handlers[command];
+    const handler = Object.hasOwn(handlers, command) ? handlers[command] : undefined;
     if (!handler) {
       throw new Error(`Unknown desktop command: ${command}`);
     }

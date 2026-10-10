@@ -942,7 +942,12 @@ async function bootstrap(): Promise<void> {
   const appDistDir = getAppDistDir();
   protocol.handle(APP_SCHEME, (request) => {
     const { pathname, search, hash } = new URL(request.url);
-    const decodedPath = decodeURIComponent(pathname);
+    let decodedPath: string;
+    try {
+      decodedPath = decodeURIComponent(pathname);
+    } catch {
+      return new Response("Bad request", { status: 400 });
+    }
 
     // Chromium can occasionally request the exported entrypoint directly.
     // Canonicalize it back to the route URL so Expo Router sees `/`, not `/index.html`.
@@ -1000,6 +1005,12 @@ async function bootstrap(): Promise<void> {
     });
   });
 
+  app.on("activate", () => {
+    void desktopWindowOwner.restoreWhenActivated().catch((error) => {
+      console.error("Failed to restore a desktop window after activation", error);
+    });
+  });
+
   // The first window of the session restores and persists saved geometry.
   const initialAgentNavigation = pendingAgentNavigation;
   pendingAgentNavigation = null;
@@ -1017,14 +1028,11 @@ async function bootstrap(): Promise<void> {
   if (pendingAgentNavigation) {
     const target = pendingAgentNavigation;
     pendingAgentNavigation = null;
-    await desktopWindowOwner.openOrFocusAgent(target);
-  }
-
-  app.on("activate", () => {
-    void desktopWindowOwner.restoreWhenActivated().catch((error) => {
-      console.error("Failed to restore a desktop window after activation", error);
+    // The primary window exists, so a failed deep link must not exit the app.
+    await desktopWindowOwner.openOrFocusAgent(target).catch((error) => {
+      log.error("[window] failed to open queued agent navigation", error);
     });
-  });
+  }
 }
 
 void runDesktopStartup({

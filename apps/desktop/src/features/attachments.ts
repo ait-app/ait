@@ -33,18 +33,13 @@ function normalizeAttachmentId(value: unknown): string {
 }
 
 function normalizeExtension(value: unknown): string {
-  if (value == null || value === "") {
-    return ".bin";
-  }
   if (typeof value !== "string") {
-    throw new Error("Attachment extension must be a string.");
+    return ".bin";
   }
   const normalized = value.trim().toLowerCase();
   const extension = normalized.startsWith(".") ? normalized : `.${normalized}`;
-  if (!EXTENSION_PATTERN.test(extension)) {
-    throw new Error(`Invalid attachment extension: ${value}`);
-  }
-  return extension;
+  // The extension only labels the managed copy, so unusual names fall back instead of failing.
+  return EXTENSION_PATTERN.test(extension) ? extension : ".bin";
 }
 
 async function buildManagedAttachmentPath(input: {

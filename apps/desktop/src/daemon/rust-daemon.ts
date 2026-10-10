@@ -6,7 +6,7 @@ import {
 } from "@ait/protocol/server-listen";
 import { spawn, type ChildProcess } from "node:child_process";
 import { randomBytes } from "node:crypto";
-import { appendFileSync, mkdirSync } from "node:fs";
+import { appendFileSync, mkdirSync, renameSync, statSync } from "node:fs";
 import { createServer } from "node:net";
 import { hostname, homedir } from "node:os";
 import path from "node:path";
@@ -14,6 +14,19 @@ import { WebSocket } from "ws";
 
 export function resolveDesktopDaemonHome(env: NodeJS.ProcessEnv): string {
   return path.resolve(env.AIT_SERVER_DATA_DIR || path.join(homedir(), ".ait-server-desktop"));
+}
+
+const DAEMON_LOG_ROTATE_BYTES = 10 * 1024 * 1024;
+
+/** Keep one previous generation so a long-lived install cannot grow daemon.log without bound. */
+export function rotateDaemonLog(logPath: string, limitBytes = DAEMON_LOG_ROTATE_BYTES): void {
+  try {
+    if ((statSync(logPath, { throwIfNoEntry: false })?.size ?? 0) > limitBytes) {
+      renameSync(logPath, `${logPath}.1`);
+    }
+  } catch {
+    /* Rotation is best effort; appending continues on the existing file. */
+  }
 }
 
 export interface RustDaemonStatus {
@@ -182,11 +195,18 @@ export class RustDaemonManager {
       return;
     }
     await new Promise<void>((resolve) => {
-      const timer = setTimeout(() => child.kill("SIGKILL"), 15_000);
-      child.once("close", () => {
-        clearTimeout(timer);
+      // Resolve on exit, not close: a grandchild holding stderr open must not block quit.
+      let forceTimer: NodeJS.Timeout | undefined;
+      const killTimer = setTimeout(() => {
+        child.kill("SIGKILL");
+        forceTimer = setTimeout(finish, 5_000);
+      }, 15_000);
+      function finish(): void {
+        clearTimeout(killTimer);
+        clearTimeout(forceTimer);
         resolve();
-      });
+      }
+      child.once("exit", finish);
       child.kill("SIGTERM");
     });
     this.child = null;
@@ -196,6 +216,8 @@ export class RustDaemonManager {
     if (this.child && this.state.status === "running") return this.status();
     try {
       mkdirSync(this.options.home, { recursive: true, mode: 0o700 });
+      const logPath = path.join(this.options.home, "daemon.log");
+      rotateDaemonLog(logPath);
       const configuredListen = ServerListenSchema.parse(
         this.options.listen ?? (await this.options.getListen?.()) ?? DEFAULT_DESKTOP_SERVER_LISTEN,
       );
@@ -253,7 +275,7 @@ export class RustDaemonManager {
         const text = chunk.toString();
         tail = (tail + text).slice(-16384);
         try {
-          appendFileSync(path.join(this.options.home, "daemon.log"), text, { mode: 0o600 });
+          appendFileSync(logPath, text, { mode: 0o600 });
         } catch {
           /* A log write failure must not crash Electron or orphan its child. */
         }

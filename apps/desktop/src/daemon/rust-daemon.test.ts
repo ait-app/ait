@@ -1,8 +1,8 @@
-import { mkdtempSync, readFileSync, rmSync } from "node:fs";
+import { existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir, networkInterfaces } from "node:os";
 import path from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
-import { RustDaemonManager, resolveDesktopDaemonHome } from "./rust-daemon";
+import { RustDaemonManager, resolveDesktopDaemonHome, rotateDaemonLog } from "./rust-daemon";
 
 const { version: expectedVersion } = JSON.parse(
   readFileSync(new URL("../../package.json", import.meta.url), "utf8"),
@@ -34,6 +34,21 @@ it("reports spawn failure and allows stop after a failed start", async () => {
   await expect(manager.start()).rejects.toThrow();
   expect(manager.status()).toMatchObject({ status: "errored", ownedByDesktop: false });
   await expect(manager.stop()).resolves.toMatchObject({ status: "stopped" });
+});
+
+it("rotates an oversized daemon log and leaves small logs in place", () => {
+  const home = mkdtempSync(path.join(tmpdir(), "ait-desktop-log-"));
+  homes.push(home);
+  const logPath = path.join(home, "daemon.log");
+  writeFileSync(logPath, "small");
+  rotateDaemonLog(logPath, 16);
+  expect(readFileSync(logPath, "utf8")).toBe("small");
+
+  writeFileSync(logPath, "x".repeat(32));
+  rotateDaemonLog(logPath, 16);
+  expect(existsSync(logPath)).toBe(false);
+  expect(readFileSync(`${logPath}.1`, "utf8")).toBe("x".repeat(32));
+  expect(() => rotateDaemonLog(path.join(home, "missing.log"), 16)).not.toThrow();
 });
 
 describe.skipIf(!process.env.AIT_SERVER_BIN)("real Rust child lifecycle", () => {

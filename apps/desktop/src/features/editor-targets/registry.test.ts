@@ -27,6 +27,7 @@ class FakeEditorTargets implements EditorTargetRuntime {
   readonly env: NodeJS.ProcessEnv;
   readonly platform: NodeJS.Platform;
   private readonly paths = new Set<string>();
+  private readonly directories = new Set<string>();
   private readonly commands = new Map<string, string>();
   private readonly macApplications = new Set<string>();
 
@@ -39,6 +40,11 @@ class FakeEditorTargets implements EditorTargetRuntime {
     this.paths.add(targetPath);
   }
 
+  addDirectory(targetPath: string): void {
+    this.paths.add(targetPath);
+    this.directories.add(targetPath);
+  }
+
   installCommand(command: string, executable = `/bin/${command}`): void {
     this.commands.set(command, executable);
   }
@@ -49,6 +55,10 @@ class FakeEditorTargets implements EditorTargetRuntime {
 
   pathExists(targetPath: string): boolean {
     return this.paths.has(targetPath);
+  }
+
+  isDirectory(targetPath: string): boolean {
+    return this.directories.has(targetPath);
   }
 
   isAbsolutePath(targetPath: string): boolean {
@@ -132,7 +142,7 @@ describe("editor target registry", () => {
   it("opens a selected file at its position through the target implementation", async () => {
     const runtime = new FakeEditorTargets();
     runtime.installCommand("code");
-    runtime.addPath("/repo");
+    runtime.addDirectory("/repo");
     runtime.addPath("/repo/src/app.ts");
 
     await openEditorTarget(
@@ -237,7 +247,7 @@ describe("editor target registry", () => {
     const runtime = new FakeEditorTargets("darwin", { HOME: "/Users/me" });
     const bundledCommand = "/Users/me/Applications/Android Studio.app/Contents/MacOS/studio";
     runtime.installCommand(bundledCommand, bundledCommand);
-    runtime.addPath("/repo");
+    runtime.addDirectory("/repo");
     runtime.addPath("/repo/app/src/main/MainActivity.kt");
 
     const targets = await listAvailableEditorTargets(runtime);
@@ -323,5 +333,29 @@ describe("editor target registry", () => {
 
     expect(macTargets.map((target) => target.id)).toEqual(["finder"]);
     expect(windowsTargets.map((target) => target.id)).toEqual(["explorer"]);
+  });
+
+  it("refuses to open a workspace path that is a file", async () => {
+    const runtime = new FakeEditorTargets("darwin");
+    runtime.addPath("/repo/payload.command");
+
+    await expect(
+      openEditorTarget({ editorId: "finder", workspacePath: "/repo/payload.command" }, runtime, [
+        finderTarget,
+      ]),
+    ).rejects.toThrow("must be a directory");
+    expect(runtime.openedPaths).toEqual([]);
+  });
+
+  it("reveals macOS application bundles instead of launching them", async () => {
+    const runtime = new FakeEditorTargets("darwin");
+    runtime.addDirectory("/repo/Tool.app");
+
+    await openEditorTarget({ editorId: "finder", workspacePath: "/repo/Tool.app" }, runtime, [
+      finderTarget,
+    ]);
+
+    expect(runtime.openedPaths).toEqual([]);
+    expect(runtime.revealedPaths).toEqual(["/repo/Tool.app"]);
   });
 });

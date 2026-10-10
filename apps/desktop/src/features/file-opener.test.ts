@@ -1,4 +1,4 @@
-import { mkdtemp, mkdir, rm, symlink, writeFile } from "node:fs/promises";
+import { mkdtemp, mkdir, realpath, rm, symlink, writeFile } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 import { afterEach, describe, expect, it, vi } from "vitest";
@@ -6,7 +6,7 @@ import { openDirectoryLink, openPreviewFile } from "./file-opener";
 import { dialog, shell } from "electron";
 
 vi.mock("electron", () => ({
-  shell: { openPath: vi.fn(async () => "") },
+  shell: { openPath: vi.fn(async () => ""), showItemInFolder: vi.fn() },
   dialog: {
     showMessageBox: vi.fn(async () => ({ response: 0 })),
     showOpenDialog: vi.fn(async () => ({ canceled: true, filePaths: [] })),
@@ -19,7 +19,8 @@ afterEach(async () => {
   await Promise.all(roots.splice(0).map((root) => rm(root, { recursive: true, force: true })));
 });
 async function fixture() {
-  const root = await mkdtemp(path.join(os.tmpdir(), "ait-file-opener-"));
+  // Resolve symlinked temp roots (macOS /var -> /private/var) as openPreviewFile does.
+  const root = await realpath(await mkdtemp(path.join(os.tmpdir(), "ait-file-opener-")));
   roots.push(root);
   vi.stubEnv("AIT_SERVER_DATA_DIR", root);
   await mkdir(path.join(root, "desktop-attachments"));
@@ -47,6 +48,16 @@ describe("file and directory opening", () => {
     expect(shell.openPath).toHaveBeenCalledWith(path.join(root, "desktop-attachments"));
     expect(await openDirectoryLink({ path: file, cwd: root })).toBe(false);
   });
+  it.runIf(process.platform === "darwin")(
+    "reveals application bundles instead of launching them",
+    async () => {
+      const { root } = await fixture();
+      await mkdir(path.join(root, "Tool.app"));
+      expect(await openDirectoryLink({ path: "Tool.app", cwd: root })).toBe(true);
+      expect(shell.openPath).not.toHaveBeenCalled();
+      expect(shell.showItemInFolder).toHaveBeenCalledWith(path.join(root, "Tool.app"));
+    },
+  );
   it("rejects paths and symlinks outside managed preview storage", async () => {
     const { root } = await fixture();
     const outside = path.join(root, "secret");
