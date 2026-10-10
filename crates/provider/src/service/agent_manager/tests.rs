@@ -3,6 +3,8 @@ use std::sync::{Arc, Mutex};
 
 use domain::agent_runtime::registry::{AgentRuntimeRegistry, AgentRuntimeRegistryError};
 use domain::agent_runtime::{AgentPersistenceHandle, StoredAgentConfig};
+use model::ErrorCode;
+use serde_json::Value;
 
 use super::*;
 use crate::ports::agent_session::{AgentSessionFuture, AgentSessionSpec};
@@ -122,6 +124,7 @@ struct FakeState {
     steer_calls: Vec<(String, String)>,
     poll_error: Option<AgentSessionError>,
     failure_message: Option<&'static str>,
+    commands_error: AgentSessionError,
     during_resume: Option<MemoryRegistry>,
 }
 
@@ -144,6 +147,7 @@ impl Default for FakeState {
             steer_calls: Vec::new(),
             poll_error: None,
             failure_message: None,
+            commands_error: AgentSessionError::Unavailable,
             during_resume: None,
         }
     }
@@ -156,6 +160,9 @@ struct FakeClient(Arc<Mutex<FakeState>>);
 struct FakeSession(Arc<Mutex<FakeState>>);
 
 impl AgentClient for FakeClient {
+    fn commands<'a>(&'a self, _spec: &'a AgentSessionSpec) -> AgentSessionFuture<'a, Vec<Value>> {
+        Box::pin(async move { Err(self.0.lock().unwrap().commands_error) })
+    }
     fn provider(&self) -> &'static str {
         "codex"
     }
@@ -209,6 +216,22 @@ impl AgentClient for FakeClient {
             }
             Ok(Box::new(FakeSession(self.0.clone())) as Box<dyn AgentSession>)
         })
+    }
+}
+
+#[tokio::test]
+async fn unsupported_commands_are_distinct_from_rejected_requests_and_provider_failures() {
+    let (manager, _, client) = make_manager();
+    for (native, expected) in [
+        (
+            AgentSessionError::Unavailable,
+            ErrorCode::UnsupportedCapability,
+        ),
+        (AgentSessionError::Rejected, ErrorCode::InvalidMessage),
+        (AgentSessionError::Failed, ErrorCode::AgentIo),
+    ] {
+        client.0.lock().unwrap().commands_error = native;
+        assert_eq!(manager.commands(&spec()).await, Err(expected));
     }
 }
 

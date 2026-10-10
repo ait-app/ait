@@ -77,6 +77,50 @@ async fn completed(session: &mut dyn AgentSession) -> Vec<crate::protocol::timel
     }
 }
 
+#[cfg(unix)]
+#[tokio::test]
+async fn acp_model_error_preserves_native_reason_input_history_and_resume_identity() {
+    let (_root, client, spec) = fixture("model-error");
+    let mut session = client.create_session(&spec).await.unwrap();
+    let prompt = crate::protocol::prompt::AgentPrompt {
+        text: "inspect".into(),
+        client_message_id: Some("failed-input".into()),
+        ..Default::default()
+    };
+    session.start_input(&prompt, &spec.config).await.unwrap();
+    let mut history = None;
+    loop {
+        match event(session.as_mut()).await {
+            AgentTurnEvent::History(entries) => history = Some(entries),
+            AgentTurnEvent::Failed => break,
+            AgentTurnEvent::RuntimeInfo(_) | AgentTurnEvent::Timeline(_) => {}
+            unexpected => panic!("unexpected event: {unexpected:?}"),
+        }
+    }
+    let history = history.unwrap();
+    assert_eq!(history.len(), 1);
+    assert_eq!(history[0].item["clientMessageId"], "failed-input");
+    assert_eq!(history[0].turn_id.as_deref(), Some("failed-input"));
+    let handle = session.persistence().unwrap();
+    session.close().await.unwrap();
+    assert_eq!(
+        session.failure_message(),
+        Some("OpenCode's free tier can only be used from within OpenCode")
+    );
+    assert_replay(&history, &client.history(&handle, &spec.cwd).await.unwrap());
+    let mut resumed = client
+        .resume_session(&handle, &spec, AgentResumePurpose::Interactive)
+        .await
+        .unwrap();
+    resumed.start_turn("retry", &spec.config).await.unwrap();
+    let entries = completed(resumed.as_mut()).await;
+    assert_eq!(entries.len(), 3);
+    assert_eq!(entries[0].item["clientMessageId"], "failed-input");
+    assert_eq!(resumed.failure_message(), None);
+    assert_eq!(resumed.persistence().unwrap().session_id, handle.session_id);
+    resumed.close().await.unwrap();
+}
+
 async fn recorded_turn(
     session: &mut dyn AgentSession,
     timeline: &crate::storage::timeline::Timeline,

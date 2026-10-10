@@ -117,7 +117,11 @@ impl AgentManager {
             .ok_or(ErrorCode::UnsupportedCapability)?
             .commands(spec)
             .await
-            .map_err(|_| ErrorCode::AgentIo)
+            .map_err(|error| match error {
+                AgentSessionError::Unavailable => ErrorCode::UnsupportedCapability,
+                AgentSessionError::Rejected => ErrorCode::InvalidMessage,
+                AgentSessionError::Failed => ErrorCode::AgentIo,
+            })
     }
 
     pub(crate) async fn permission(
