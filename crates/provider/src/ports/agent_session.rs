@@ -65,8 +65,10 @@ pub(crate) enum AgentTurnEvent {
     PermissionRequested(serde_json::Value),
     /// The native provider withdrew or resolved a previously published permission request.
     PermissionResolved(String),
-    /// One immutable normalized item completed by the native provider.
+    /// One immutable normalized display item produced by the provider adapter.
     Timeline(crate::protocol::timeline::NativeItem),
+    /// Complete authoritative native transcript, reconciled atomically before turn settlement.
+    History(Vec<crate::protocol::timeline::NativeItem>),
     /// Complete current usage snapshot; consumers replace rather than sum repeated observations.
     Usage(crate::protocol::usage::AgentUsage),
     /// Native initialization resolved the session's actual model or runtime settings.

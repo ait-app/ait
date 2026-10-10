@@ -26,7 +26,6 @@ struct Connection {
     transport: Transport,
     options: Value,
     capabilities: Value,
-    known: BTreeMap<String, crate::protocol::timeline::NativeItem>,
     clients: BTreeMap<String, String>,
     users: BTreeSet<String>,
 }
@@ -136,12 +135,12 @@ pub(super) async fn open(
         },
     )
     .await?;
-    let (id, options, known, users, clients) = if let Some((handle, _)) = binding {
+    let (id, options, users, clients) = if let Some((handle, _)) = binding {
         validate_handle(handle)?;
         if capabilities["loadSession"] != true {
             return Err(AgentSessionError::Unavailable);
         }
-        let (options, mut stream) = history::replay(
+        let (options, stream) = history::replay(
             &mut transport,
             &handle.session_id,
             &spec.cwd,
@@ -149,17 +148,7 @@ pub(super) async fn open(
         )
         .await?;
         let clients = clients(handle)?;
-        let known = history::entries(&mut stream, &clients)
-            .into_iter()
-            .map(|entry| (entry.key.clone(), entry))
-            .collect();
-        (
-            handle.session_id.clone(),
-            options,
-            known,
-            stream.users,
-            clients,
-        )
+        (handle.session_id.clone(), options, stream.users, clients)
     } else {
         let result = transport
             .request("session/new", json!({"cwd":spec.cwd,"mcpServers":[]}))
@@ -167,7 +156,6 @@ pub(super) async fn open(
         (
             config::text(&result, "sessionId")?.to_owned(),
             config::state(&result)?,
-            BTreeMap::new(),
             Vec::new(),
             BTreeMap::new(),
         )
@@ -188,7 +176,6 @@ pub(super) async fn open(
             transport,
             options,
             capabilities,
-            known,
             clients,
             users: users.into_iter().collect(),
         }),
@@ -218,10 +205,15 @@ impl Session {
             || self.history_only
             || self.turn.is_some()
             || prompt.output_schema.is_some()
-            || (prompt.client_message_id.is_some() && self.clients.len() >= 4096)
+            || self.clients.len() >= 4096
         {
             return Err(AgentSessionError::Rejected);
         }
+        let turn = prompt
+            .client_message_id
+            .clone()
+            .unwrap_or_else(|| uuid::Uuid::new_v4().to_string());
+        let submitted = Stream::submitted(self.client.images.clone(), &turn, &blocks)?;
         let mut connection = self.connection.take().ok_or(AgentSessionError::Failed)?;
         if !prompt.images.is_empty()
             && connection.capabilities["promptCapabilities"]["image"] != true
@@ -238,7 +230,7 @@ impl Session {
             .transport
             .begin(
                 "session/prompt",
-                json!({"sessionId":self.id,"prompt":blocks}),
+                json!({"sessionId":self.id,"messageId":turn,"prompt":blocks}),
             )
             .await
         {
@@ -250,7 +242,6 @@ impl Session {
         };
         self.info = config::runtime(&self.id, &connection.options);
         self.spec.config = selected.clone();
-        let turn = uuid::Uuid::new_v4().to_string();
         let (sender, events) = mpsc::channel(128);
         self.events = events;
         let (commands, receiver) = mpsc::channel(128);
@@ -262,7 +253,8 @@ impl Session {
             id: self.id.clone(),
             cwd: self.spec.cwd.clone(),
             rpc_id,
-            client_message: prompt.client_message_id.clone(),
+            turn: turn.clone(),
+            submitted,
             pending: self.pending.clone(),
             events: sender,
             commands: receiver,
@@ -287,8 +279,6 @@ impl Session {
             let _ = finished.send(result);
         })));
         self.turn = Some(turn.clone());
-        self.queued
-            .push_back(AgentTurnEvent::RuntimeInfo(self.info.clone()));
         Ok(turn)
     }
 
@@ -363,7 +353,8 @@ struct Execution {
     id: String,
     cwd: String,
     rpc_id: String,
-    client_message: Option<String>,
+    turn: String,
+    submitted: Vec<crate::protocol::timeline::NativeItem>,
     pending: Pending,
     events: mpsc::Sender<AgentTurnEvent>,
     commands: mpsc::Receiver<Command>,
@@ -381,7 +372,15 @@ impl Execution {
         mut self,
         mut connection: Connection,
     ) -> Result<(Connection, AgentTurnEvent), AgentSessionError> {
-        let mut stream = Stream::new(self.client.images.clone());
+        let mut stream = Stream::for_turn(self.client.images.clone(), self.turn.clone());
+        self.emit(AgentTurnEvent::RuntimeInfo(config::runtime(
+            &self.id,
+            &connection.options,
+        )))
+        .await?;
+        for entry in std::mem::take(&mut self.submitted) {
+            self.emit(AgentTurnEvent::Timeline(entry)).await?;
+        }
         let result = loop {
             let message = tokio::select! {
                 command = self.commands.recv() => {
@@ -414,7 +413,9 @@ impl Execution {
                         stream.update(update)?;
                         for event in stream.events.drain(..) {
                             // Completion is published only after native replay confirms the prompt.
-                            if !matches!(event, AgentTurnEvent::Timeline(_)) {
+                            if !matches!(event, AgentTurnEvent::Timeline(_))
+                                && !matches!(&event, AgentTurnEvent::Progress { entry, .. } if entry.item["type"] == "user_message")
+                            {
                                 self.emit(event).await?;
                             }
                         }
@@ -465,29 +466,31 @@ impl Execution {
             self.client.images.clone(),
         )
         .await?;
-        if let Some(client) = &self.client_message {
-            let new = replay
-                .users
-                .iter()
-                .filter(|id| !connection.users.contains(id.as_str()))
-                .collect::<Vec<_>>();
-            if new.len() != 1 {
-                return Err(AgentSessionError::Failed);
-            }
-            connection.clients.insert(new[0].clone(), client.clone());
+        let new = replay
+            .users
+            .iter()
+            .filter(|id| !connection.users.contains(id.as_str()))
+            .collect::<Vec<_>>();
+        if new.len() > 1 {
+            return Err(AgentSessionError::Failed);
+        }
+        // Native commands such as /compact may complete without inserting a user message.
+        if let Some(user) = new.first() {
+            connection
+                .clients
+                .insert((*user).clone(), self.turn.clone());
         }
         connection.users = replay.users.iter().cloned().collect();
-        let last_message = replay.last_message.clone();
-        for entry in history::entries(&mut replay, &connection.clients) {
-            if let Some(previous) = connection.known.get(&entry.key) {
-                if previous.item != entry.item || previous.turn_id != entry.turn_id {
-                    return Err(AgentSessionError::Failed);
-                }
-            } else {
-                connection.known.insert(entry.key.clone(), entry.clone());
-                self.emit(AgentTurnEvent::Timeline(entry)).await?;
-            }
-        }
+        let last_message = if new.is_empty() {
+            None
+        } else {
+            replay.last_message.clone()
+        };
+        self.emit(AgentTurnEvent::History(history::entries(
+            &mut replay,
+            &connection.clients,
+        )))
+        .await?;
         connection.options = options;
         let event = match result["stopReason"].as_str() {
             Some("cancelled") => AgentTurnEvent::Cancelled,

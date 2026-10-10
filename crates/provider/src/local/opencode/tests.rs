@@ -64,6 +64,7 @@ async fn completed(session: &mut dyn AgentSession) -> Vec<crate::protocol::timel
     loop {
         match event(session).await {
             AgentTurnEvent::Timeline(entry) => items.push(entry),
+            AgentTurnEvent::History(entries) => items = entries,
             AgentTurnEvent::Completed(text) => {
                 assert_eq!(text.as_deref(), Some("authoritative answer"));
                 return items;
@@ -74,6 +75,126 @@ async fn completed(session: &mut dyn AgentSession) -> Vec<crate::protocol::timel
             _ => {}
         }
     }
+}
+
+async fn recorded_turn(
+    session: &mut dyn AgentSession,
+    timeline: &crate::storage::timeline::Timeline,
+    turn: &str,
+) -> Vec<crate::protocol::timeline::NativeItem> {
+    let mut history = Vec::new();
+    let mut observed = false;
+    loop {
+        match event(session).await {
+            AgentTurnEvent::Timeline(entry) => {
+                assert!(!observed);
+                assert_eq!(entry.item["type"], "user_message");
+                assert_eq!(entry.turn_id.as_deref(), Some(turn));
+                timeline.append("agent", "opencode", &[entry]).unwrap();
+            }
+            AgentTurnEvent::Progress { observation, entry } => {
+                assert_eq!(entry.turn_id.as_deref(), Some(turn));
+                timeline
+                    .progress("agent", "opencode", &observation, &entry)
+                    .unwrap();
+                observed = true;
+            }
+            AgentTurnEvent::History(entries) => {
+                assert!(observed);
+                timeline.reconcile("agent", "opencode", &entries).unwrap();
+                history = entries;
+            }
+            AgentTurnEvent::Completed(text) => {
+                assert_eq!(text.as_deref(), Some("authoritative answer"));
+                assert!(!history.is_empty());
+                return history;
+            }
+            AgentTurnEvent::RuntimeInfo(_) | AgentTurnEvent::Usage(_) => {}
+            unexpected => panic!("unexpected event: {unexpected:?}"),
+        }
+    }
+}
+
+#[cfg(unix)]
+#[tokio::test]
+async fn acp_live_and_replayed_turns_keep_each_prompt_before_its_reply_without_duplicate_tools() {
+    for scenario in ["wrapped-tool", "echo-user-tool"] {
+        let (root, client, spec) = fixture(scenario);
+        let mut session = client.create_session(&spec).await.unwrap();
+        let timeline = crate::storage::timeline::Timeline::memory().unwrap();
+        for index in 0..2 {
+            let prompt = crate::protocol::prompt::AgentPrompt {
+                text: format!("inspect {index}"),
+                client_message_id: Some(format!("client-{index}")),
+                ..Default::default()
+            };
+            let turn = session.start_input(&prompt, &spec.config).await.unwrap();
+            let history = recorded_turn(session.as_mut(), &timeline, &turn).await;
+            let (_, rows) = timeline.read("agent").unwrap();
+            assert_eq!(rows.len(), (index + 1) * 3);
+            for (group, entries) in rows.as_chunks::<3>().0.iter().enumerate() {
+                assert_eq!(
+                    entries
+                        .iter()
+                        .map(|row| row.entry.item["type"].as_str().unwrap())
+                        .collect::<Vec<_>>(),
+                    ["user_message", "tool_call", "assistant_message"]
+                );
+                assert_eq!(
+                    entries[0].entry.item["clientMessageId"],
+                    format!("client-{group}")
+                );
+                assert!(
+                    entries
+                        .iter()
+                        .all(|row| row.entry.turn_id == entries[0].entry.turn_id)
+                );
+                assert_eq!(entries[1].entry.item["status"], "completed");
+            }
+            let handle = session.persistence().unwrap();
+            assert_replay(&history, &client.history(&handle, &spec.cwd).await.unwrap());
+        }
+        assert_eq!(
+            requests(&root)
+                .iter()
+                .filter(|request| request["method"] == "session/prompt")
+                .map(|request| request["params"]["messageId"].as_str().unwrap())
+                .collect::<Vec<_>>(),
+            ["client-0", "client-1"]
+        );
+        session.close().await.unwrap();
+    }
+}
+
+#[cfg(unix)]
+#[tokio::test]
+async fn acp_native_command_without_a_user_row_keeps_history_and_does_not_repeat_the_last_answer() {
+    let (_root, client, spec) = fixture("normal");
+    let mut session = client.create_session(&spec).await.unwrap();
+    session.start_turn("initial", &spec.config).await.unwrap();
+    let previous = completed(session.as_mut()).await;
+    session.start_turn("/compact", &spec.config).await.unwrap();
+    let mut replayed = false;
+    loop {
+        match event(session.as_mut()).await {
+            AgentTurnEvent::History(entries) => {
+                assert_replay(&previous, &entries);
+                replayed = true;
+            }
+            AgentTurnEvent::Completed(text) => {
+                assert!(replayed);
+                assert_eq!(text, None);
+                break;
+            }
+            AgentTurnEvent::Timeline(entry) => {
+                assert_eq!(entry.item["type"], "user_message");
+                assert_eq!(entry.item["text"], "/compact");
+            }
+            AgentTurnEvent::RuntimeInfo(_) => {}
+            unexpected => panic!("unexpected event: {unexpected:?}"),
+        }
+    }
+    session.close().await.unwrap();
 }
 
 #[cfg(unix)]
@@ -96,7 +217,7 @@ async fn acp_multiple_turns_replay_and_legacy_resume_keep_native_identity_and_cl
                 .unwrap_err(),
             AgentSessionError::Rejected
         );
-        all.extend(completed(session.as_mut()).await);
+        all = completed(session.as_mut()).await;
     }
     let handle = session.persistence().unwrap();
     assert_eq!(handle.session_id, "ses_one");
@@ -131,7 +252,7 @@ async fn acp_multiple_turns_replay_and_legacy_resume_keep_native_identity_and_cl
         .start_turn("after restart", &spec.config)
         .await
         .unwrap();
-    assert_eq!(completed(resumed.as_mut()).await.len(), 2);
+    assert_eq!(completed(resumed.as_mut()).await.len(), 6);
     resumed.close().await.unwrap();
     assert_eq!(
         requests(&root)

@@ -193,6 +193,7 @@ impl Timeline {
             self.publish(agent, provider, &old_epoch, &appended.entries);
             return Ok(old_epoch);
         }
+        let entries = progress::retain_timestamps(&transaction, agent, &previous, entries)?;
         transaction.execute(
             "INSERT INTO retired_entries SELECT agent,?,seq,identity,provider,entry FROM entries WHERE agent=?",
             params![old_epoch,agent],
@@ -214,7 +215,7 @@ impl Timeline {
                 params![replacement, agent],
             )
             .map_err(io)?;
-        append_rows(&transaction, agent, provider, entries)?;
+        append_rows(&transaction, agent, provider, &entries)?;
         let plugins: Vec<_> = previous
             .into_iter()
             .filter(|row| row.entry.item["type"] == "plugin")

@@ -75,7 +75,7 @@ pub(crate) struct SearchRequest {
 #[derive(Debug, Clone, PartialEq, Deserialize, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub(crate) struct NativeItem {
-    /// Provider-native stable identity, scoped to its Agent.
+    /// Provider-owned stable projection identity, scoped to its Agent.
     pub(crate) key: String,
     /// Native turn identity, when available.
     pub(crate) turn_id: Option<String>,
