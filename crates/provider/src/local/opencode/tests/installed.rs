@@ -88,15 +88,22 @@ async fn model(
     let is_question_prompt = request["messages"]
         .to_string()
         .contains("Ask which language")
-        || request["messages"].to_string().contains("Request shell");
-    if request["messages"].to_string().contains("Request shell") {
+        || request["messages"].to_string().contains("Request shell")
+        || request["messages"].to_string().contains("Run shell");
+    if request["messages"].to_string().contains("Request shell")
+        && request["tools"]
+            .as_array()
+            .is_some_and(|tools| !tools.is_empty())
+    {
         assert!(
             request["messages"]
                 .to_string()
                 .contains("Native override sentinel")
         );
     }
-    let tool_name = if request["messages"].to_string().contains("Request shell") {
+    let tool_name = if request["messages"].to_string().contains("Request shell")
+        || request["messages"].to_string().contains("Run shell")
+    {
         if request["tools"]
             .as_array()
             .is_some_and(|tools| tools.iter().any(|tool| tool["function"]["name"] == "bash"))
@@ -257,6 +264,36 @@ async fn installed_acp_native_question_form_reaches_user_and_model() {
 
 #[tokio::test]
 #[ignore = "requires AIT_TEST_OPENCODE_BIN; isolated XDG and loopback model"]
+async fn installed_acp_shell_output_is_text_in_live_and_replayed_history() {
+    let (_root, client, mut spec, _server) = installed(true).await;
+    spec.config.feature_values = Some(BTreeMap::from([("permission".into(), json!("allow"))]));
+    let mut session = client.create_session(&spec).await.unwrap();
+    session
+        .start_turn("Run shell tool, then continue.", &spec.config)
+        .await
+        .unwrap();
+    let items = completed(session.as_mut()).await;
+    let tool = items
+        .iter()
+        .find(|entry| entry.item["detail"]["type"] == "shell")
+        .unwrap();
+    assert_eq!(
+        tool.item["detail"]["output"].as_str().unwrap().trim(),
+        spec.cwd
+    );
+    let handle = session.persistence().unwrap();
+    session.close().await.unwrap();
+    let history = client.history(&handle, &spec.cwd).await.unwrap();
+    assert_replay(&items, &history);
+    let replayed = history.iter().find(|entry| entry.key == tool.key).unwrap();
+    assert_eq!(
+        replayed.item["detail"]["output"],
+        tool.item["detail"]["output"]
+    );
+}
+
+#[tokio::test]
+#[ignore = "requires AIT_TEST_OPENCODE_BIN; isolated XDG and loopback model"]
 async fn installed_acp_native_permission_rejection_and_next_turn() {
     let (_root, client, mut spec, _server) = installed(true).await;
     spec.config.feature_values = Some(BTreeMap::from([("permission".into(), json!("ask"))]));
@@ -292,6 +329,13 @@ async fn installed_acp_native_permission_rejection_and_next_turn() {
             _ => {}
         }
     }
+    let mut rejected = spec.config.clone();
+    rejected.model = Some("local/missing-model".into());
+    assert_eq!(
+        session.start_turn("rejected", &rejected).await.unwrap_err(),
+        AgentSessionError::Rejected
+    );
+    spec.config.feature_values = Some(BTreeMap::from([("permission".into(), json!("deny"))]));
     session.start_turn("follow up", &spec.config).await.unwrap();
     completed(session.as_mut()).await;
     session.close().await.unwrap();

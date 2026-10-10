@@ -229,18 +229,19 @@ impl Session {
             self.connection = Some(connection);
             return Err(AgentSessionError::Rejected);
         }
-        let prepared = async {
-            self.prepare(&mut connection, selected).await?;
-            connection
-                .transport
-                .begin(
-                    "session/prompt",
-                    json!({"sessionId":self.id,"prompt":blocks}),
-                )
-                .await
+        if let Err(error) = self.prepare(&mut connection, selected).await {
+            self.info = config::runtime(&self.id, &connection.options);
+            self.connection = Some(connection);
+            return Err(error);
         }
-        .await;
-        let rpc_id = match prepared {
+        let rpc_id = match connection
+            .transport
+            .begin(
+                "session/prompt",
+                json!({"sessionId":self.id,"prompt":blocks}),
+            )
+            .await
+        {
             Ok(id) => id,
             Err(error) => {
                 self.failed = true;
@@ -300,21 +301,34 @@ impl Session {
             || selected.system_prompt != self.spec.config.system_prompt
             || (selected.system_prompt.is_some() && selected.mode_id != self.spec.config.mode_id)
         {
-            connection.transport.close().await?;
             let (mut transport, capabilities) =
                 launcher::spawn(&self.client, &self.spec.cwd, selected).await?;
-            if !capabilities["sessionCapabilities"]["resume"].is_object() {
-                return Err(AgentSessionError::Unavailable);
-            }
-            let result = transport
-                .request(
-                    "session/resume",
-                    json!({"sessionId":self.id,"cwd":self.spec.cwd,"mcpServers":[]}),
+            let mut options = if capabilities["sessionCapabilities"]["resume"].is_object() {
+                let result = transport
+                    .request(
+                        "session/resume",
+                        json!({"sessionId":self.id,"cwd":self.spec.cwd,"mcpServers":[]}),
+                    )
+                    .await?;
+                config::state(&result)?
+            } else if capabilities["loadSession"] == true {
+                history::replay(
+                    &mut transport,
+                    &self.id,
+                    &self.spec.cwd,
+                    self.client.images.clone(),
                 )
-                .await?;
-            connection.options = config::state(&result)?;
+                .await?
+                .0
+            } else {
+                return Err(AgentSessionError::Unavailable);
+            };
+            config::apply(&mut transport, &self.id, &mut options, selected).await?;
+            connection.transport.close().await?;
+            connection.options = options;
             connection.capabilities = capabilities;
             connection.transport = transport;
+            return Ok(());
         }
         config::apply(
             &mut connection.transport,
