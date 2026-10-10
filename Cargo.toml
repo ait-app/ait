@@ -67,7 +67,7 @@ vt100 = { git = "https://github.com/Junyi-99/vt100-rust", rev = "f2a4d76f9a66389
 [workspace.lints.rust]
 missing_docs = "warn"
 # 1. 内存安全与规范
-unsafe_code = "deny"                # 禁止或严格限制 unsafe 代码块
+unsafe_code = "forbid"              # 禁止 unsafe 代码块，且不允许在源码中局部放开
 
 # 2. 质量与规范
 unused_imports = "warn"             # 未使用的导入
