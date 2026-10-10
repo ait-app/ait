@@ -37,7 +37,7 @@
     "package:linux": "npm run package:linux --workspace=@ait/desktop",
     "package:mac": "npm run package:mac --workspace=@ait/desktop",
     "test:release": "node --test scripts/nightly-workflow.test.mjs scripts/release-assets.test.mjs scripts/release-layout.test.mjs scripts/prepare-desktop-daemon.test.mjs scripts/verify-packaged-resources.test.cjs",
-    "test:mobile-release": "node --test apps/mobile/scripts/eas-submit-tracks.test.cjs apps/mobile/scripts/ios-testflight-workflow.test.cjs scripts/ios-testflight-release.test.mjs scripts/android-release.test.mjs scripts/android-test-release.test.mjs scripts/android-play-release.test.mjs",
+    "test:mobile-release": "node --test apps/mobile/scripts/app-identity.test.cjs apps/mobile/scripts/eas-submit-tracks.test.cjs apps/mobile/scripts/ios-testflight-workflow.test.cjs scripts/ios-testflight-release.test.mjs scripts/android-release.test.mjs scripts/android-test-release.test.mjs scripts/android-play-release.test.mjs",
     "dev:desktop": "npm run dev --workspace=@ait/desktop",
     "build:desktop-main": "npm run build:ui-deps && npm run build:main --workspace=@ait/desktop",
     "verify:local-packages": "node scripts/verify-local-packages.mjs"

@@ -1,5 +1,7 @@
 import nativeRelease from "../apps/mobile/native-release-version.js";
 import { readFile, appendFile } from "node:fs/promises";
+import path from "node:path";
+import { pathToFileURL } from "node:url";
 import { parseArgs } from "node:util";
 
 const { getNativeReleaseVersion } = nativeRelease;
@@ -59,8 +61,8 @@ export function decideBuild({ builds, buildNumber, appVersion, buildId }) {
   return { action: "build", buildNumber: normalizedBuildNumber };
 }
 
-async function readJson(path) {
-  return JSON.parse(await readFile(path, "utf8"));
+async function readJson(file) {
+  return JSON.parse(await readFile(file, "utf8"));
 }
 
 async function main() {
@@ -134,7 +136,7 @@ async function main() {
   throw new Error(`Unknown command: ${command ?? ""}`);
 }
 
-if (process.argv[1] === new URL(import.meta.url).pathname) {
+if (process.argv[1] && import.meta.url === pathToFileURL(path.resolve(process.argv[1])).href) {
   main().catch((error) => {
     process.stderr.write(`${error.message}\n`);
     process.exitCode = 1;
