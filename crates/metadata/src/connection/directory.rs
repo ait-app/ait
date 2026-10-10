@@ -30,7 +30,7 @@ pub(crate) async fn subscribe(
         .map(|changes| changes.subscribe());
     let prepared = state
         .runtime
-        .run(
+        .run_queued(
             state.directory.clone(),
             ErrorCode::RegistryIo,
             move |directory| {

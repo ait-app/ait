@@ -118,49 +118,115 @@ function harness(
 }
 
 describe("Rust protocol adapter", () => {
-  it("delivers Rust timeline producer notifications to the owning SDK observation", async () => {
-    const h = harness();
-    h.stopHello();
-    const client = new DaemonClient({
-      url: "ws://127.0.0.1:7316/v1/ws",
-      clientId: "timeline-producer-test",
-      transportFactory: () => h.transport,
-      reconnect: { enabled: false },
-    });
-    try {
-      const connected = client.connect();
-      h.ready();
-      await connected;
-      const timeline = client.observeTimeline(["agent"]);
-      const updates = vi.fn();
-      timeline.subscribe({ snapshot: () => {}, update: updates });
-      const request = h.last(0);
-      expect(request.method).toBe("agent.timeline.set_subscription.request");
-      h.sockets[0].message({
-        type: "response",
-        request_id: request.request_id,
-        method: request.method,
-        result: { subscriptionId: "timeline-lease", agentIds: ["agent"] },
+  it.each([
+    {
+      name: "timeline producer",
+      timestamp: "2026-10-07T00:00:00Z",
+      event: {
+        type: "timeline",
+        provider: "codex",
+        item: { type: "assistant_message", text: "Live reply" },
+      },
+    },
+    {
+      name: "0.0.27 usage",
+      timestamp: undefined,
+      event: {
+        type: "usage_updated",
+        provider: "codex",
+        turnId: null,
+        usage: { inputTokens: 100 },
+      },
+    },
+    {
+      name: "timestamped usage",
+      timestamp: "2026-10-11T00:00:00Z",
+      event: {
+        type: "usage_updated",
+        provider: "codex",
+        turnId: "turn",
+        usage: { inputTokens: 100, outputTokens: 20, totalCostUsd: 0.01 },
+      },
+    },
+    {
+      name: "0.0.27 turn start",
+      timestamp: undefined,
+      event: { type: "turn_started", provider: "codex", turnId: "turn" },
+    },
+    {
+      name: "0.0.27 permission request",
+      timestamp: undefined,
+      event: {
+        type: "permission_requested",
+        provider: "codex",
+        request: { id: "permission", provider: "codex", name: "Shell", kind: "tool" },
+      },
+    },
+    {
+      name: "0.0.27 permission resolution",
+      timestamp: undefined,
+      event: {
+        type: "permission_resolved",
+        provider: "codex",
+        requestId: "permission",
+        resolution: { behavior: "allow" },
+      },
+    },
+  ] as const)(
+    "delivers $name notifications to the owning SDK observation",
+    async ({ event, timestamp }) => {
+      const h = harness();
+      h.stopHello();
+      const logger = { debug: vi.fn(), info: vi.fn(), warn: vi.fn(), error: vi.fn() };
+      const client = new DaemonClient({
+        url: "ws://127.0.0.1:7316/v1/ws",
+        clientId: "timeline-producer-test",
+        transportFactory: () => h.transport,
+        reconnect: { enabled: false },
+        logger,
       });
-      await timeline.ready;
-      const payload = {
-        subscriptionId: "timeline-lease",
-        agentId: "agent",
-        timestamp: "2026-10-07T00:00:00Z",
-        seq: 3,
-        epoch: "epoch",
-        event: {
-          type: "timeline",
-          provider: "codex",
-          item: { type: "assistant_message", text: "Live reply" },
-        },
-      };
-      h.sockets[0].message({ type: "event", method: "agent_stream", params: payload });
-      expect(updates).toHaveBeenCalledExactlyOnceWith({ type: "agent.stream", payload });
-    } finally {
-      await client.close();
-    }
-  });
+      try {
+        const connected = client.connect();
+        h.ready();
+        await connected;
+        const timeline = client.observeTimeline(["agent"]);
+        const updates = vi.fn();
+        timeline.subscribe({ snapshot: () => {}, update: updates });
+        const request = h.last(0);
+        expect(request.method).toBe("agent.timeline.set_subscription.request");
+        h.sockets[0].message({
+          type: "response",
+          request_id: request.request_id,
+          method: request.method,
+          result: { subscriptionId: "timeline-lease", agentIds: ["agent"] },
+        });
+        await timeline.ready;
+        const payload = {
+          subscriptionId: "timeline-lease",
+          agentId: "agent",
+          ...(timestamp ? { timestamp } : {}),
+          ...(event.type === "timeline" ? { seq: 3, epoch: "epoch" } : {}),
+          event,
+        };
+        h.sockets[0].message({ type: "event", method: "agent_stream", params: payload });
+        expect(updates).toHaveBeenCalledExactlyOnceWith({
+          type: "agent.stream",
+          payload: {
+            ...payload,
+            timestamp: timestamp ?? expect.any(String),
+            event:
+              event.type === "usage_updated" && event.turnId === null
+                ? { ...event, turnId: undefined }
+                : event,
+          },
+        });
+        expect(Number.isFinite(Date.parse(updates.mock.calls[0][0].payload.timestamp))).toBe(true);
+        expect(logger.warn).not.toHaveBeenCalled();
+      } finally {
+        await client.close();
+      }
+    },
+  );
 
   it("carries typed online service control through the SDK without replaying a grant", async () => {
     const h = harness();

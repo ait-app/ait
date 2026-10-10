@@ -11,6 +11,7 @@ function connection(
     broadcasts?: boolean;
     browserHost?: { hostKind: string; supportedCommands: string[] };
     acknowledgeTimelineReads?: boolean;
+    sessionEventTypes?: string[];
   } = {},
 ) {
   const sent: Array<{
@@ -21,6 +22,7 @@ function connection(
       requestId?: string;
       agentIds?: string[];
       events?: string[];
+      notifications?: boolean;
       subscriptionId?: string;
     };
   }> = [];
@@ -42,6 +44,7 @@ function connection(
                 serverId: "test",
                 hostname: null,
                 version: null,
+                sessionEventTypes: options.sessionEventTypes,
                 features: {
                   ...(options.ownedSubscriptions === false ? {} : { ownedSubscriptions: true }),
                   workspaceMultiplicity: options.workspaceMultiplicity ?? true,
@@ -147,6 +150,92 @@ test("a plain client advertises every protocol capability and no browser host", 
     expect(h.sent[0].capabilities).toEqual(
       Object.fromEntries(Object.values(protocolCapabilities).map((key) => [key, true])),
     );
+  } finally {
+    await h.client.close();
+  }
+});
+
+test.each([true, false])(
+  "supported event demand uses each handshake with ownedSubscriptions=%s",
+  async (ownedSubscriptions) => {
+    const options = { ownedSubscriptions, sessionEventTypes: ["agent.permission.request"] };
+    const h = connection(options);
+    const events = ["agent.permission.request", "agent.permission.resolved"] as const;
+    const observation = h.client.observeEvents([...events], {
+      supportedOnly: true,
+      notifications: true,
+    });
+    const requests = () =>
+      h.sent.filter((frame) => frame.message?.type === "session.events.set_subscription.request");
+    try {
+      expect(h.sent).toEqual([]);
+      const connecting = h.client.connect();
+      h.open();
+      await connecting;
+      await observation.ready;
+      expect(requests().map((frame) => frame.message?.events)).toEqual([[events[0]]]);
+      expect(requests()[0].message?.notifications).toBe(true);
+
+      for (const supported of [[events[1]], []]) {
+        const previousId = observation.subscriptionId;
+        h.disconnect();
+        options.sessionEventTypes = supported;
+        const reconnecting = h.client.connect();
+        h.open();
+        await reconnecting;
+        await expect.poll(() => observation.subscriptionId).not.toBe(previousId);
+      }
+      expect(requests().map((frame) => frame.message?.events)).toEqual([
+        [events[0]],
+        [events[1]],
+        [],
+      ]);
+      await observation.release();
+    } finally {
+      await h.client.close();
+    }
+  },
+);
+
+test.each([
+  { ownedSubscriptions: true, supportedOnly: undefined, sessionEventTypes: [] },
+  { ownedSubscriptions: true, supportedOnly: false, sessionEventTypes: [] },
+  { ownedSubscriptions: true, supportedOnly: true, sessionEventTypes: undefined },
+  { ownedSubscriptions: false, supportedOnly: true, sessionEventTypes: undefined },
+])(
+  "preserves unfiltered event demand when negotiation is unavailable or disabled: %j",
+  async (options) => {
+    const h = connection(options);
+    try {
+      const observation = h.client.observeEvents(["agent.permission.request"], {
+        supportedOnly: options.supportedOnly,
+      });
+      const connecting = h.client.connect();
+      h.open();
+      await connecting;
+      await observation.ready;
+      const request = h.sent.find(
+        (frame) => frame.message?.type === "session.events.set_subscription.request",
+      );
+      expect(request?.message?.events).toEqual(["agent.permission.request"]);
+      await observation.release();
+    } finally {
+      await h.client.close();
+    }
+  },
+);
+
+test("releasing supported event demand before the handshake creates no subscription", async () => {
+  const h = connection({ sessionEventTypes: ["agent.permission.request"] });
+  try {
+    const observation = h.client.observeEvents(["agent.permission.request"], {
+      supportedOnly: true,
+    });
+    await observation.release();
+    const connecting = h.client.connect();
+    h.open();
+    await connecting;
+    expect(h.sent.filter((frame) => frame.type === "session")).toEqual([]);
   } finally {
     await h.client.close();
   }

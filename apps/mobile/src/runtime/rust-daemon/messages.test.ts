@@ -7,6 +7,56 @@ import {
 import { METHODS } from "./methods";
 import { eventMessage, responseMessage, serverInfo } from "./messages";
 import { object } from "./types";
+import { validateWSOutboundMessage } from "@ait/protocol/validation/ws-outbound";
+
+describe("native agent stream control events", () => {
+  it.each([
+    { type: "turn_started", provider: "codex", turnId: "turn" },
+    { type: "usage_updated", provider: "codex", turnId: null, usage: { inputTokens: 100 } },
+    {
+      type: "permission_requested",
+      provider: "codex",
+      request: { id: "permission", provider: "codex", name: "Shell", kind: "tool" },
+    },
+    {
+      type: "permission_resolved",
+      provider: "codex",
+      requestId: "permission",
+      resolution: { behavior: "allow" },
+    },
+  ])("accepts 0.0.27 $type notifications without dropping the stream", (event) => {
+    const envelope = eventMessage("agent_stream", {
+      subscriptionId: "timeline-lease",
+      agentId: "agent",
+      event,
+    });
+    const parsed = validateWSOutboundMessage(envelope);
+    expect(parsed.success).toBe(true);
+    const payload = object(object(envelope.message).payload);
+    expect(Number.isFinite(Date.parse(String(payload.timestamp)))).toBe(true);
+    expect(payload.subscriptionId).toBe("timeline-lease");
+  });
+
+  it("preserves source timestamps on new host usage events", () => {
+    const payload = {
+      agentId: "agent",
+      timestamp: "2026-10-11T00:00:00Z",
+      event: { type: "usage_updated", provider: "codex", usage: { inputTokens: 100 } },
+    };
+    const envelope = eventMessage("agent_stream", payload);
+    expect(validateWSOutboundMessage(envelope).success).toBe(true);
+    expect(object(envelope.message).payload).toEqual(payload);
+  });
+
+  it.each([
+    { type: "usage_updated", provider: "codex", usage: { inputTokens: "invalid" } },
+    { type: "timeline", provider: "codex", item: { type: "assistant_message", text: "hello" } },
+    { type: "unknown_event", provider: "codex" },
+  ])("keeps malformed $type events subject to protocol validation", (event) => {
+    const envelope = eventMessage("agent_stream", { agentId: "agent", event });
+    expect(validateWSOutboundMessage(envelope).success).toBe(false);
+  });
+});
 
 it.each([
   ["agent.update", "agent.update", { agentId: "agent" }],

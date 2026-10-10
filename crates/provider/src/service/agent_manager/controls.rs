@@ -181,7 +181,20 @@ impl AgentManager {
                 .map_err(|_| ErrorCode::AgentIo)?;
         }
         if let Some(timeline) = &self.timeline {
-            timeline.events().publish(id,"agent_stream",&json!({"agentId":id,"event":{"type":"permission_resolved","provider":agent.record.provider,"requestId":request,"resolution":response}}));
+            timeline.events().publish(
+                id,
+                "agent_stream",
+                &json!({
+                    "agentId": id,
+                    "event": {
+                        "type": "permission_resolved",
+                        "provider": agent.record.provider,
+                        "requestId": request,
+                        "resolution": response
+                    },
+                    "timestamp": now_timestamp()
+                }),
+            );
         }
         self.events.publish(
             domain::session::protocol::SessionEventKind::AgentPermissionResolved,
@@ -479,7 +492,19 @@ pub(super) fn publish_permission(
         })
         .map_err(super::map_registry)?;
     if let Some(timeline) = timeline {
-        timeline.events().publish(id,"agent_stream",&json!({"agentId":id,"event":{"type":"permission_requested","provider":agent.record.provider,"request":request}}));
+        timeline.events().publish(
+            id,
+            "agent_stream",
+            &json!({
+                "agentId": id,
+                "event": {
+                    "type": "permission_requested",
+                    "provider": agent.record.provider,
+                    "request": request
+                },
+                "timestamp": now
+            }),
+        );
     }
     events.publish(
         domain::session::protocol::SessionEventKind::AgentPermissionRequest,
@@ -521,7 +546,8 @@ pub(super) fn resolve_permission(
             "agent_stream",
             &json!({"agentId":id,"event":{
             "type":"permission_resolved","provider":agent.record.provider,"requestId":request,
-            "resolution":{"behavior":"deny","message":"Resolved by native provider"}}}),
+            "resolution":{"behavior":"deny","message":"Resolved by native provider"}},
+            "timestamp":now_timestamp()}),
         );
     }
     events.publish(

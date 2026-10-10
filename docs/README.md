@@ -110,6 +110,8 @@
 
 ## 工程规范与验证
 
+- [Ait 0.0.27 安装后诊断与修复](reports/clients/release-0.0.27-installed-diagnostics-2026-10-11.md)：原生事件校验、启动订阅与更新诊断误报。
+
 - [Rust style guide](policy/rust.md)：Rust 代码、测试、lint 与覆盖率规范。
 - [文档规范](policy/documentation.md)：分类、维护和历史资料清理规则。
 - [OpenCode 使用问题追踪](reports/providers/opencode-feedback-2026-10-09.md)：Build 图标与原生权限管理问题。

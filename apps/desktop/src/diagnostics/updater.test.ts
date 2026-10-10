@@ -2,8 +2,12 @@ import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { pathToFileURL } from "node:url";
-import { afterEach, describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import { collectDesktopUpdaterDiagnostics } from "./updater";
+
+vi.mock("electron", () => ({
+  app: { getVersion: vi.fn(() => "0.0.27"), getPath: vi.fn() },
+}));
 
 let testDirectory = "";
 
@@ -15,6 +19,28 @@ afterEach(() => {
 });
 
 describe("desktop updater diagnostics", () => {
+  it("does not report a moved staging bundle as an update failure", () => {
+    testDirectory = mkdtempSync(path.join(tmpdir(), "ait-updater-diagnostics-"));
+    const shipItDirectory = path.join(testDirectory, "dev.ait.desktop.ShipIt");
+    mkdirSync(shipItDirectory, { recursive: true });
+    writeFileSync(
+      path.join(shipItDirectory, "ShipItState.plist"),
+      JSON.stringify({
+        updateBundleURL: pathToFileURL(path.join(shipItDirectory, "update.moved", "Ait.app")).href,
+      }),
+    );
+    const diagnostics = collectDesktopUpdaterDiagnostics({
+      platform: "darwin",
+      currentVersion: "0.0.27",
+      cachePath: testDirectory,
+    });
+
+    expect(diagnostics.currentVersion).toBe("0.0.27");
+    expect(diagnostics.state?.exists).toBe(true);
+    expect(diagnostics.targetVersion).toBeNull();
+    expect(diagnostics.targetVersionError).toBeNull();
+  });
+
   it("collects the staged version and existing ShipIt evidence", () => {
     testDirectory = mkdtempSync(path.join(tmpdir(), "paseo-updater-diagnostics-"));
     const shipItDirectory = path.join(testDirectory, "dev.ait.desktop.ShipIt");

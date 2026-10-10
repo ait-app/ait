@@ -746,6 +746,16 @@ export const AgentStreamEventPayloadSchema = z.discriminatedUnion("type", [
     usage: AgentUsageSchema.optional(),
   }),
   z.object({
+    type: z.literal("usage_updated"),
+    provider: AgentProviderSchema,
+    // Older Rust hosts emitted null before the native turn ID was known.
+    turnId: z
+      .string()
+      .nullish()
+      .transform((value) => value ?? undefined),
+    usage: AgentUsageSchema,
+  }),
+  z.object({
     type: z.literal("turn_failed"),
     provider: AgentProviderSchema,
     turnId: z.string().optional(),

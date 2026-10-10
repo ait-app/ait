@@ -5,6 +5,8 @@ use crate::rpc::directory::{execute, listing};
 use model::ServerMessage;
 use serde_json::{Value, json};
 
+mod subscription_admission;
+
 fn checkpoint(response: &Value) -> Value {
     json!({"generation":response["sync"]["generation"],"afterSeq":response["sync"]["headSeq"]})
 }

@@ -2,6 +2,59 @@ use super::*;
 use crate::protocol::usage::AgentUsage;
 
 #[tokio::test]
+async fn native_control_and_usage_streams_have_timestamps_and_turn_identity() {
+    let (manager, _, client) = make_manager();
+    let timeline = crate::storage::timeline::Timeline::memory().unwrap();
+    let (outbound, mut receiver) = model::outbound::Outbound::new();
+    let subscription = timeline.events().subscribe(
+        "timeline-lease".to_owned(),
+        ["agent-1".to_owned()].into(),
+        outbound,
+    );
+    subscription.activate().unwrap();
+    let mut manager = manager.with_timeline(timeline);
+    manager
+        .create("agent-1", &spec(), AgentRegistration::default())
+        .await
+        .unwrap();
+    manager.send("agent-1", "measure").await.unwrap();
+    client.0.lock().unwrap().events.extend([
+        AgentTurnEvent::Usage(AgentUsage {
+            input_tokens: Some(100),
+            ..Default::default()
+        }),
+        AgentTurnEvent::Started("native-turn".to_owned()),
+        AgentTurnEvent::PermissionRequested(json!({"id":"permission"})),
+        AgentTurnEvent::PermissionResolved("permission".to_owned()),
+    ]);
+    manager.poll().await.unwrap();
+
+    for expected in [
+        "usage_updated",
+        "turn_started",
+        "permission_requested",
+        "permission_resolved",
+    ] {
+        let queued = receiver.try_recv().unwrap();
+        let model::outbound::Frame::Text(text) = &queued.message else {
+            panic!("expected a native stream event");
+        };
+        let message: Value = serde_json::from_str(text).unwrap();
+        let payload = &message["params"];
+        assert_eq!(payload["event"]["type"], expected);
+        assert_eq!(payload["subscriptionId"], "timeline-lease");
+        chrono::DateTime::parse_from_rfc3339(payload["timestamp"].as_str().unwrap())
+            .expect("control event timestamp");
+        if expected == "usage_updated" {
+            assert_eq!(payload["event"]["usage"]["inputTokens"], 100);
+            assert_eq!(payload["event"]["turnId"], "native-turn");
+        }
+    }
+    assert!(receiver.try_recv().is_err());
+    manager.close_all().await.unwrap();
+}
+
+#[tokio::test]
 async fn provider_identity_changes_commit_before_completion_and_retry_failed_registry_writes() {
     let (mut manager, registry, client) = make_manager();
     manager

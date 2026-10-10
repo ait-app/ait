@@ -527,7 +527,6 @@ function SessionProviderInternal({ children, serverId, client }: SessionProvider
 
   // Daemon message handlers - directly update Zustand store
   useEffect(() => {
-    const availableEvents = client.getLastServerInfoMessage()?.sessionEventTypes;
     const requestedEvents: Parameters<typeof client.observeEvents>[0] = [
       "agent.attention.required",
       "terminal.attention.required",
@@ -539,12 +538,10 @@ function SessionProviderInternal({ children, serverId, client }: SessionProvider
       "activity_log",
       "status.server_info",
     ];
-    const feeds = client.observeEvents(
-      availableEvents
-        ? requestedEvents.filter((event) => availableEvents.includes(event))
-        : requestedEvents,
-      { notifications: true },
-    );
+    const feeds = client.observeEvents(requestedEvents, {
+      notifications: true,
+      supportedOnly: true,
+    });
     const onFeed = (
       type: SessionOutboundMessage["type"],
       handler: (message: SessionOutboundMessage) => void,

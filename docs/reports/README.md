@@ -2,6 +2,8 @@
 
 文档按当前能力归属分类。历史验证记录只对应各文件注明的源码提交与平台。
 
+- [Ait 0.0.27 安装后诊断与修复](clients/release-0.0.27-installed-diagnostics-2026-10-11.md)
+
 ## Daemon 与协议
 
 - [共享 model 与功能 crate 边界验证](daemon/model-capability-boundaries-2026-10-07.md)
