@@ -16,6 +16,7 @@
 
 ## 架构决策
 
+- [ADR-122：Codex Auto-review 的 computer use 工具批准](decisions/providers/adr-122-codex-computer-use-approval.md)：原生插件逐工具预批准、显式覆盖与档位切换重载。
 - [ADR-121：ACP 轮次关联与原生历史结算](decisions/providers/adr-121-acp-turn-history-reconciliation.md)：实时与重放共享轮次身份，完整原生历史在终态前原子校正消息顺序。
 - [ADR-120：单连接启动请求的有界排队](decisions/daemon/adr-120-single-connection-startup-admission.md)：为正常启动突发保留 16 个组内槽位，维持超量拒绝、消息顺序和 Ping 可用性。
 - [ADR-119：原生账号用量与 Codex 速度目录](decisions/providers/adr-119-native-account-usage-and-codex-speed.md)：会话实际账号、只读凭据边界、主机缓存与原生速度档位。
@@ -104,6 +105,7 @@
 
 ## 工程规范与验证
 
+- [Codex computer use 请求与 Auto-review 批准验证](reports/providers/codex-computer-use-approval-2026-10-10.md)：请求处理边界、原生配置验证和定向回归。
 - [周期任务按变更驱动：PR 验证](reports/daemon/periodic-loops-pr-validation-2026-10-10.md)：Provider 调度与会话节奏、终端/定时任务/diff 轮询减负、完整测试与可比基线覆盖率。
 - [Rust 测试提速：提交验证](reports/daemon/rust-test-speed-validation-2026-10-10.md)：nextest、调试信息、CI 缓存与并发不稳定测试的修复。
 - [Paseo desktop/app 选定改动移植](reports/clients/paseo-desktop-app-port-2026-10-10.md)：17 项推荐与产品增强、原生适配和定向验证。

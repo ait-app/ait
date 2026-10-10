@@ -55,6 +55,7 @@
 
 ## Provider、Agent 与会话
 
+- [ADR-122：Codex Auto-review 的 computer use 工具批准](providers/adr-122-codex-computer-use-approval.md)
 - [ADR-121：ACP 轮次关联与原生历史结算](providers/adr-121-acp-turn-history-reconciliation.md)
 - [ADR-119：原生账号用量与 Codex 速度目录](providers/adr-119-native-account-usage-and-codex-speed.md)
 - [ADR-115：OpenCode 官方 ACP Provider](providers/adr-115-opencode-acp-provider.md)

@@ -145,6 +145,7 @@ pub(super) fn codex(config: &StoredAgentConfig) -> Result<Value, AgentSessionErr
         .into_iter()
         .collect();
     let mut servers = Map::new();
+    codex_computer_use(config, &mut result);
     if let Some(approval) = result.get_mut("approval_policy") {
         complete_codex_approval(approval);
     }
@@ -183,6 +184,33 @@ pub(super) fn codex(config: &StoredAgentConfig) -> Result<Value, AgentSessionErr
         result.insert("model_reasoning_effort".to_owned(), json!(effort));
     }
     Ok(Value::Object(result))
+}
+
+/// Preapprove the bundled CUA tool for Auto-review sessions.
+/// Explicit per-tool settings take precedence over the preset.
+fn codex_computer_use(config: &StoredAgentConfig, result: &mut Map<String, Value>) {
+    if config.mode_id.as_deref() != Some("auto-review") {
+        return;
+    }
+    let mut parent = result.entry("plugins").or_insert_with(|| json!({}));
+    for key in [
+        "unified-computer-use@openai-bundled",
+        "mcp_servers",
+        "cua_repl",
+        "tools",
+        "js",
+    ] {
+        parent = parent
+            .as_object_mut()
+            .expect("validated Codex plugin settings are objects")
+            .entry(key)
+            .or_insert_with(|| json!({}));
+    }
+    parent
+        .as_object_mut()
+        .expect("validated Codex tool settings are objects")
+        .entry("approval_mode")
+        .or_insert_with(|| json!("approve"));
 }
 
 /// Native JSON-RPC requires all three granular switches, unlike the optional config schema.
