@@ -23,13 +23,13 @@ Current full workspace coverage: **not measured**, blocked by the native depende
 
 Focused provider measurement on the same implementation (default features, no extra file exclusions):
 
-| Scope | Covered/total lines | Coverage |
-| --- | --- | --- |
-| metadata_model.rs | 44/44 | 100.00% |
-| codex/metadata.rs | 82/90 | 91.11% |
-| opencode/metadata.rs | 62/198 | 31.31% |
-| deepseek_harness/native/projection.rs | 76/132 | 57.58% |
-| Provider files, focused tests only | 7943/28852 | 27.53% |
+| Scope                                 | Covered/total lines | Coverage |
+| ------------------------------------- | ------------------- | -------- |
+| metadata_model.rs                     | 44/44               | 100.00%  |
+| codex/metadata.rs                     | 82/90               | 91.11%   |
+| opencode/metadata.rs                  | 62/198              | 31.31%   |
+| deepseek_harness/native/projection.rs | 76/132              | 57.58%   |
+| Provider files, focused tests only    | 7943/28852          | 27.53%   |
 
 Commands: `cargo llvm-cov -p provider --lib --html --offline -- metadata --skip local::deepseek_harness::native::tests`; `cargo llvm-cov -p provider --lib --no-clean --html --offline -- native::projection`; `cargo llvm-cov report -p provider --json`. LLVM_COV=/usr/bin/llvm-cov, LLVM_PROFDATA=/usr/bin/llvm-profdata. The percentages are focused coverage, not full provider/workspace coverage; they apply to the combined source. The checked-in fingerprints and table are the reviewable summary; raw HTML remains local.
 

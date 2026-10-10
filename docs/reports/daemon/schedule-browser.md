@@ -4,13 +4,13 @@
 
 ## 接口结果
 
-| 范围 | 结果 |
-| --- | --- |
-| Plugin | 15 项从 Rust catalog、枚举、前端映射、可协商能力中删除；调用返回 unknown method |
-| Schedule | 9 项均有实际实现，无 `to be implemented` |
-| Browser | 注册与回调 2 项均已实现，连接 broker 与前端适配 |
-| 当前 Paseo 范围 | 205 原始名称 − 34 显式排除 − 3 别名合并 = 168 个规范方法 |
-| 生产 server | 168 个 Paseo 方法 + 7 个扩展 = 175/175 安装，无 catalog 占位 |
+| 范围            | 结果                                                                            |
+| --------------- | ------------------------------------------------------------------------------- |
+| Plugin          | 15 项从 Rust catalog、枚举、前端映射、可协商能力中删除；调用返回 unknown method |
+| Schedule        | 9 项均有实际实现，无 `to be implemented`                                        |
+| Browser         | 注册与回调 2 项均已实现，连接 broker 与前端适配                                 |
+| 当前 Paseo 范围 | 205 原始名称 − 34 显式排除 − 3 别名合并 = 168 个规范方法                        |
+| 生产 server     | 168 个 Paseo 方法 + 7 个扩展 = 175/175 安装，无 catalog 占位                    |
 
 空 host 的测试仍验证未安装服务时的占位错误：170 个可登记方法、9 个内建实现、161 个未安装。这不是生产 server 的状态，也不是功能等价百分比。
 
@@ -43,16 +43,16 @@
 
 ## 上游测试对应
 
-| 上游测试职责 | 本次 Rust / adapter 对应 |
-| --- | --- |
-| schedule cron / timezone / DST | `schedule/src/cadence/tests.rs` |
-| schedule store、CRUD、暂停/手动、上限、重启、运行中更新 | `engine/tests.rs`、`storage/tests.rs`、`service/tests.rs` |
-| schedule session response shapes | `bins/daemon/tests/process/schedule.rs` 的九个 RPC、输出与重启断言 |
-| new-agent workspace/worktree、archive、permission | 同上真实进程测试 |
-| browser broker host/affinity/fanout/timeout/disconnect | `browser/src/broker/tests.rs` |
-| browser automation schemas | `browser/src/protocol/tests.rs` |
-| WebSocket ownership、release、subscription budget | `api/src/tests/browser.rs` |
-| browser request / execute.response adapter | `apps/mobile/src/runtime/rust-daemon/transport.test.ts` |
+| 上游测试职责                                            | 本次 Rust / adapter 对应                                           |
+| ------------------------------------------------------- | ------------------------------------------------------------------ |
+| schedule cron / timezone / DST                          | `schedule/src/cadence/tests.rs`                                    |
+| schedule store、CRUD、暂停/手动、上限、重启、运行中更新 | `engine/tests.rs`、`storage/tests.rs`、`service/tests.rs`          |
+| schedule session response shapes                        | `bins/daemon/tests/process/schedule.rs` 的九个 RPC、输出与重启断言 |
+| new-agent workspace/worktree、archive、permission       | 同上真实进程测试                                                   |
+| browser broker host/affinity/fanout/timeout/disconnect  | `browser/src/broker/tests.rs`                                      |
+| browser automation schemas                              | `browser/src/protocol/tests.rs`                                    |
+| WebSocket ownership、release、subscription budget       | `api/src/tests/browser.rs`                                         |
+| browser request / execute.response adapter              | `apps/mobile/src/runtime/rust-daemon/transport.test.ts`            |
 
 没有把“覆盖了对应职责”写成逐个搬完全部上游测试；未覆盖事项与上述行为差异一并保留。
 
@@ -67,14 +67,14 @@ cargo llvm-cov report --json --summary-only --output-path /tmp/ait-schedule-brow
 
 可审阅的逐文件制品：[schedule-browser-coverage.json](schedule-browser-coverage.json)。HTML 在本地 `target/llvm-cov/html/index.html`，未发布至共享站点。没有额外文件排除，使用 llvm-cov 默认报告过滤；没有启用 nightly doctest coverage。其他平台未验证。
 
-| 修改包 | 已覆盖 / 总行数 | 行覆盖率 |
-| --- | ---: | ---: |
-| schedule | 771 / 820 | 94.02% |
-| browser | 638 / 726 | 87.88% |
-| api | 909 / 954 | 95.28% |
-| model | 293 / 309 | 94.82% |
-| protocol | 57 / 57 | 100.00% |
-| daemon | 761 / 811 | 93.83% |
+| 修改包   | 已覆盖 / 总行数 | 行覆盖率 |
+| -------- | --------------: | -------: |
+| schedule |       771 / 820 |   94.02% |
+| browser  |       638 / 726 |   87.88% |
+| api      |       909 / 954 |   95.28% |
+| model    |       293 / 309 |   94.82% |
+| protocol |         57 / 57 |  100.00% |
+| daemon   |       761 / 811 |   93.83% |
 
 同口径历史完整测量 [Skills 制品](../workspace/server-skills-coverage.json) 为 82.98%（46,917 / 56,540），本轮增加 **0.34 个百分点**。两次测量之间也包含用户的 Provider 流式输出等改动，不能把 workspace 变化完全归因于 Schedule/Browser。两个新 crate 没有自身历史基线。
 

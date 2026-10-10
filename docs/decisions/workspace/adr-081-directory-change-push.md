@@ -37,21 +37,21 @@ ADR-068 的 Workspace 目录订阅每 250 ms 重读一次完整投影。Agent �
 资源级的 `workspace.update`、`agent.update`、Agent timeline、Terminal stream、checkout
 diff、创建回执与标签订阅继续由各自的订阅接口负责。
 
-| Paseo 事件 | Ait 状态 |
-| --- | --- |
-| `project.update` | 本决策补入 Project 提交后的生产者 |
-| `providers_snapshot_update` | 已有 Provider 刷新生产者 |
-| `agent_attention_required` | 已有 Agent 完成、失败和审批生产者 |
-| `agent_permission_request`、`agent_permission_resolved` | 已有原生审批生产者 |
-| `checkout_status_update` | ADR-069 已有 Git fetch 生产者 |
-| `script_status_update` | 本决策补入脚本启动、停止、结束生产者 |
-| `workspace_setup_progress` | 本决策补入设置进度生产者 |
-| `agent.provider_subagents.update` | 已有原生子 Agent 生产者 |
-| `terminal_attention_required` | 已有 Terminal 活动生产者 |
-| `status.server_info`、`status.daemon_config_changed` | 已有服务状态生产者 |
-| `activity_log` | 本决策补入 Agent 失败事件；其余操作仍以各自的错误响应报告 |
-| `status.plugin_catalog_changed`、`status.plugin_settings_changed` | Plugin 已由 ADR-047 移除 |
-| `hub.execution.agent.update`、`hub.execution.agent.stream` | Hub 已由 ADR-045 移除 |
+| Paseo 事件                                                        | Ait 状态                                                  |
+| ----------------------------------------------------------------- | --------------------------------------------------------- |
+| `project.update`                                                  | 本决策补入 Project 提交后的生产者                         |
+| `providers_snapshot_update`                                       | 已有 Provider 刷新生产者                                  |
+| `agent_attention_required`                                        | 已有 Agent 完成、失败和审批生产者                         |
+| `agent_permission_request`、`agent_permission_resolved`           | 已有原生审批生产者                                        |
+| `checkout_status_update`                                          | ADR-069 已有 Git fetch 生产者                             |
+| `script_status_update`                                            | 本决策补入脚本启动、停止、结束生产者                      |
+| `workspace_setup_progress`                                        | 本决策补入设置进度生产者                                  |
+| `agent.provider_subagents.update`                                 | 已有原生子 Agent 生产者                                   |
+| `terminal_attention_required`                                     | 已有 Terminal 活动生产者                                  |
+| `status.server_info`、`status.daemon_config_changed`              | 已有服务状态生产者                                        |
+| `activity_log`                                                    | 本决策补入 Agent 失败事件；其余操作仍以各自的错误响应报告 |
+| `status.plugin_catalog_changed`、`status.plugin_settings_changed` | Plugin 已由 ADR-047 移除                                  |
+| `hub.execution.agent.update`、`hub.execution.agent.stream`        | Hub 已由 ADR-045 移除                                     |
 
 ## 后果与验证
 

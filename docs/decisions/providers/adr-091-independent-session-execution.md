@@ -17,16 +17,16 @@ AgentExecution 保留原有可克隆 façade，内部组合短路由器、异步
 
 ### 请求与状态所有权
 
-| 工作 | 执行位置与提交顺序 |
-| --- | --- |
-| create、resume、restore、refresh、rewind、send、steer、cancel、permission、configure | 稳定身份所属会话任务；与该 session 的事件提交保序 |
-| 原生事件、pending runtime/handle/input/terminal 重试、输入 FIFO | 所属会话独立 drain，只读本身份的首条待输入；沿用已有事件批量上限与 claim 先落盘规则 |
-| Provider snapshot.get / refresh | 当前缓存或 loading 立即返回；refresh ack 表示接纳，后台逐 Provider 推送 |
-| 模型、模式、features、available 及显式 Provider 检查 | 独立 Provider 查询预算，只等待目标发现或检查 |
-| get、目录/list/sync、批量订阅身份解析、已加载 timeline | 独立读取预算；用 durable 记录和已提交运行状态投影 |
-| 冷 timeline | 目标会话内去重；只读历史，不自动获得 writer；提交前核对身份、句柄、归档状态和 Timeline epoch |
-| finish.wait | 每身份的 watch；监听 deadline 和停机，不反复提交命令 |
-| archive、delete、items.close、Workspace 退役、自动归档 | 相关会话集合的屏障；无关会话继续执行 |
+| 工作                                                                                 | 执行位置与提交顺序                                                                           |
+| ------------------------------------------------------------------------------------ | -------------------------------------------------------------------------------------------- |
+| create、resume、restore、refresh、rewind、send、steer、cancel、permission、configure | 稳定身份所属会话任务；与该 session 的事件提交保序                                            |
+| 原生事件、pending runtime/handle/input/terminal 重试、输入 FIFO                      | 所属会话独立 drain，只读本身份的首条待输入；沿用已有事件批量上限与 claim 先落盘规则          |
+| Provider snapshot.get / refresh                                                      | 当前缓存或 loading 立即返回；refresh ack 表示接纳，后台逐 Provider 推送                      |
+| 模型、模式、features、available 及显式 Provider 检查                                 | 独立 Provider 查询预算，只等待目标发现或检查                                                 |
+| get、目录/list/sync、批量订阅身份解析、已加载 timeline                               | 独立读取预算；用 durable 记录和已提交运行状态投影                                            |
+| 冷 timeline                                                                          | 目标会话内去重；只读历史，不自动获得 writer；提交前核对身份、句柄、归档状态和 Timeline epoch |
+| finish.wait                                                                          | 每身份的 watch；监听 deadline 和停机，不反复提交命令                                         |
+| archive、delete、items.close、Workspace 退役、自动归档                               | 相关会话集合的屏障；无关会话继续执行                                                         |
 
 按 agentId 和 Provider native session ID 维护同一所有者的别名，在 durable 注册可见之前绑定。输入、生命周期和事件共用一个可变 session 所有者，Rust 不复制 Paseo 的多条 Promise tail；所有修改同一 writer 的入口仍保序。名称或前缀在入队前规范化，后续重命名不能改变请求目标。
 

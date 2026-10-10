@@ -11,14 +11,14 @@
 协议 DTO、二进制文件帧、端口和运行数据、服务、RPC 校验/投影及 Git/gh/本机文件实现。
 旧模块已删除并更新全部调用方，没有留下转发壳。
 
-| 能力 | 已实现方法 | 主要入口 |
-| --- | ---: | --- |
-| Checkout/Git | 20 | `protocol/checkout`、`rpc/checkout`、`service/checkout`、`local/checkout` |
-| Forge/PR | 10 | `protocol/forge`、`rpc/forge`、`service/forge`、`local/forge` |
-| 文件/目录、订阅、上传下载 | 11 | `protocol/files`、`protocol/file_transfer`、`rpc/files`、`service/{files,uploads,transfer}`、`local/files` |
-| Worktree | 3 | `protocol/worktrees`、`rpc/worktrees`、`service/worktrees`、`local/worktrees` |
-| Workspace recovery | 2 | `protocol/workspace_recovery`、`rpc/workspace_recovery`、`service/workspace_recovery` |
-| GitHub 仓库搜索/clone | 2 | `protocol/github_projects`、`rpc/github_projects`、`service/github_projects`、`local/github_projects` |
+| 能力                      | 已实现方法 | 主要入口                                                                                                   |
+| ------------------------- | ---------: | ---------------------------------------------------------------------------------------------------------- |
+| Checkout/Git              |         20 | `protocol/checkout`、`rpc/checkout`、`service/checkout`、`local/checkout`                                  |
+| Forge/PR                  |         10 | `protocol/forge`、`rpc/forge`、`service/forge`、`local/forge`                                              |
+| 文件/目录、订阅、上传下载 |         11 | `protocol/files`、`protocol/file_transfer`、`rpc/files`、`service/{files,uploads,transfer}`、`local/files` |
+| Worktree                  |          3 | `protocol/worktrees`、`rpc/worktrees`、`service/worktrees`、`local/worktrees`                              |
+| Workspace recovery        |          2 | `protocol/workspace_recovery`、`rpc/workspace_recovery`、`service/workspace_recovery`                      |
+| GitHub 仓库搜索/clone     |          2 | `protocol/github_projects`、`rpc/github_projects`、`service/github_projects`、`local/github_projects`      |
 
 5 个 skill 方法名归 `protocol/skills` 所有，通用方法目录引用这些声明；仍返回 `not_implemented`。
 本轮没有补建此前不存在的 skill 安装/选择实现。整体仍为 195 个可协商方法、102 个已实现能力。
@@ -74,17 +74,17 @@ Git/Forge 集成测试使用临时本地仓库、bare remote 和模拟 gh CLI，
 
 实测结果：
 
-| 范围 | 覆盖行 / 总行 | 行覆盖率 |
-| --- | ---: | ---: |
-| 整个 workspace | 37,918 / 46,931 | **80.7952%** |
+| 范围                       |   覆盖行 / 总行 |     行覆盖率 |
+| -------------------------- | --------------: | -----------: |
+| 整个 workspace             | 37,918 / 46,931 | **80.7952%** |
 | 全部 10 个 server packages | 14,490 / 16,800 | **86.2500%** |
-| filesystem | 6,049 / 7,276 | **83.1363%** |
-| metadata | 3,672 / 4,250 | 86.4000% |
-| api | 2,253 / 2,447 | 92.0719% |
-| server-application | 1,054 / 1,204 | 87.5415% |
-| protocol | 116 / 130 | 89.2308% |
-| server-workspace | 444 / 533 | 83.3021% |
-| daemon | 337 / 349 | 96.5616% |
+| filesystem                 |   6,049 / 7,276 | **83.1363%** |
+| metadata                   |   3,672 / 4,250 |     86.4000% |
+| api                        |   2,253 / 2,447 |     92.0719% |
+| server-application         |   1,054 / 1,204 |     87.5415% |
+| protocol                   |       116 / 130 |     89.2308% |
+| server-workspace           |       444 / 533 |     83.3021% |
+| daemon                     |       337 / 349 |     96.5616% |
 
 相对上一轮 metadata 基线，workspace 增加 **0.1066 个百分点**，server 总量增加
 **0.2276 个百分点**。模块移动改变了单 crate 分母；filesystem 没有同名独立基线。
