@@ -251,15 +251,14 @@ async fn agent_legacy_git_options_change_only_a_clean_source_checkout_and_replay
 }
 
 async fn assert_setup_once(directory: &std::path::Path) {
+    let marker = directory.join("setup-count.txt");
     tokio::time::timeout(Duration::from_secs(10), async {
-        while !directory.join("setup-count.txt").exists() {
+        // Shell redirection creates the marker before printf writes its content.
+        while !marker.exists() || std::fs::read_to_string(&marker).unwrap().is_empty() {
             tokio::time::sleep(Duration::from_millis(25)).await;
         }
     })
     .await
     .unwrap();
-    assert_eq!(
-        std::fs::read_to_string(directory.join("setup-count.txt")).unwrap(),
-        "x"
-    );
+    assert_eq!(std::fs::read_to_string(marker).unwrap(), "x");
 }
