@@ -419,6 +419,18 @@ async fn acp_discovery_never_prompts_and_deletes_its_native_query_session() {
 
 #[cfg(unix)]
 #[tokio::test]
+async fn acp_discovery_omits_unavailable_default_thinking_options() {
+    let (_root, client, spec) = fixture("no-thinking");
+
+    let details = client.discover(&spec.cwd).await.unwrap();
+
+    assert_eq!(details.models[0]["defaultThinkingOptionId"], "default");
+    assert_eq!(details.models[1]["thinkingOptions"], json!([]));
+    assert!(details.models[1].get("defaultThinkingOptionId").is_none());
+}
+
+#[cfg(unix)]
+#[tokio::test]
 async fn acp_exposes_native_session_capabilities_and_rejects_missing_model_before_prompting() {
     let (_root, client, spec) = fixture("no-history");
     assert!(client.is_available().await.unwrap());

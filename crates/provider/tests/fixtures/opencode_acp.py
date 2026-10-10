@@ -66,7 +66,7 @@ def options():
     if scenario == "missing-model":
         return [{"id": "model", "name": "Model", "category": "model", "type": "select", "currentValue": "local/second",
                  "options": [{"value": "local/second", "name": "Second model"}]}]
-    return [
+    choices = [
         {"id": "model", "name": "Model", "category": "model", "type": "select", "currentValue": model,
          "options": [{"value": "local/model", "name": "Local model"}, {"value": "local/second", "name": "Second model"}]},
         {"id": "effort", "name": "Effort", "category": "thought_level", "type": "select", "currentValue": effort,
@@ -74,6 +74,9 @@ def options():
         {"id": "mode", "name": "Mode", "category": "mode", "type": "select", "currentValue": mode,
          "options": [{"value": value, "name": value} for value in (["review"] if scenario == "custom-mode" else ["build", "plan"])]},
     ]
+    if scenario == "no-thinking" and model == "local/second":
+        return [choice for choice in choices if choice["category"] != "thought_level"]
+    return choices
 
 
 def content(row):

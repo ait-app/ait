@@ -1,6 +1,7 @@
 use super::*;
 
 mod filesystem_service;
+mod startup_burst;
 
 #[tokio::test]
 async fn chunks_dispatch_once_after_assembly_in_legacy_and_single_connections() {
