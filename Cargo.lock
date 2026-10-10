@@ -95,7 +95,7 @@ checksum = "330a5ed07fa54e4702c9d6c4174f74427fc0ef6e214bbd677ae50a5099946470"
 
 [[package]]
 name = "api"
-version = "0.0.25"
+version = "0.0.26"
 dependencies = [
  "axum",
  "browser",
@@ -261,7 +261,7 @@ dependencies = [
 
 [[package]]
 name = "browser"
-version = "0.0.25"
+version = "0.0.26"
 dependencies = [
  "futures-util",
  "model",
@@ -521,7 +521,7 @@ dependencies = [
 
 [[package]]
 name = "daemon"
-version = "0.0.25"
+version = "0.0.26"
 dependencies = [
  "anyhow",
  "api",
@@ -607,7 +607,7 @@ dependencies = [
 
 [[package]]
 name = "domain"
-version = "0.0.25"
+version = "0.0.26"
 dependencies = [
  "chrono",
  "getrandom 0.4.3",
@@ -681,7 +681,7 @@ dependencies = [
 
 [[package]]
 name = "filesystem"
-version = "0.0.25"
+version = "0.0.26"
 dependencies = [
  "base64",
  "chrono",
@@ -1331,7 +1331,7 @@ checksum = "cf8baf1c55e62ffcace7a9f06f4bd9cd3f0c4beb022d3b367256b91b87513d98"
 
 [[package]]
 name = "metadata"
-version = "0.0.25"
+version = "0.0.26"
 dependencies = [
  "base64",
  "chrono",
@@ -1388,7 +1388,7 @@ dependencies = [
 
 [[package]]
 name = "model"
-version = "0.0.25"
+version = "0.0.26"
 dependencies = [
  "base64",
  "chrono",
@@ -1505,7 +1505,7 @@ checksum = "9b4f627cb1b25917193a259e49bdad08f671f8d9708acfd5fe0a8c1455d87220"
 
 [[package]]
 name = "persistence"
-version = "0.0.25"
+version = "0.0.26"
 dependencies = [
  "chrono",
  "domain",
@@ -1608,7 +1608,7 @@ dependencies = [
 
 [[package]]
 name = "provider"
-version = "0.0.25"
+version = "0.0.26"
 dependencies = [
  "axum",
  "base64",
@@ -1809,7 +1809,7 @@ checksum = "d6f6ff9a378485b298a5286656da665ba74413d36db0979633275d2e708145d4"
 
 [[package]]
 name = "relay"
-version = "0.0.25"
+version = "0.0.26"
 dependencies = [
  "futures-util",
  "model",
@@ -1973,7 +1973,7 @@ dependencies = [
 
 [[package]]
 name = "schedule"
-version = "0.0.25"
+version = "0.0.26"
 dependencies = [
  "chrono",
  "chrono-tz",
@@ -2309,7 +2309,7 @@ dependencies = [
 
 [[package]]
 name = "terminal"
-version = "0.0.25"
+version = "0.0.26"
 dependencies = [
  "chrono",
  "domain",
@@ -2786,7 +2786,7 @@ checksum = "0b928f33d975fc6ad9f86c8f283853ad26bdd5b10b7f1542aa2fa15e2289105a"
 
 [[package]]
 name = "voice"
-version = "0.0.25"
+version = "0.0.26"
 dependencies = [
  "axum",
  "base64",

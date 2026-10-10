@@ -1,5 +1,11 @@
 # Ait changelog
 
+## 0.0.26 - 2026-10-10
+
+- Prevent terminal crashes when wide characters are clipped by resizing or written into single-row or single-column screens.
+- Accept normal startup request bursts with bounded per-group queues while keeping overload rejection and Ping responses available.
+- Omit absent OpenCode default thinking options so provider snapshots and host diagnostics pass client validation.
+
 ## 0.0.25 - 2026-10-10
 
 - Use the official OpenCode ACP interface for native questions, permissions, cancellation, and restored sessions.
