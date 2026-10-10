@@ -178,23 +178,7 @@ export class AccountSessionManager {
     this.deps.notify(this.snapshot());
   }
 
-  async login(center: string, email: string, password: string): Promise<AccountSnapshot> {
-    center = normalizeCenter(center);
-    email = email.trim().toLowerCase();
-    if (!email || email.length > 320 || !password || password.length > 512)
-      throw new Error("Enter your email and password.");
-    await this.logout();
-    const generation = this.generation;
-    const result = await this.http<{
-      access_token: string;
-      expires_in: number;
-      user: LoginUser;
-    }>(center, null, "/v1/auth/login", "POST", { email, password });
-    if (generation !== this.generation) throw new Error("Sign-in cancelled.");
-    return this.acceptLogin(center, result);
-  }
-
-  async loginMethods(center: string): Promise<{ hosted: boolean }> {
+  private async loginMethods(center: string): Promise<{ hosted: boolean }> {
     if (!this.deps.browserLogin) return { hosted: false };
     try {
       const options = await this.http<{
@@ -217,7 +201,7 @@ export class AccountSessionManager {
     const browser = this.deps.browserLogin;
     if (!browser || !(await this.loginMethods(center)).hosted)
       throw new Error(
-        "This service does not support client browser sign-in. Update the service or use email and password.",
+        "This service does not support client browser sign-in. Update the service or choose another service URL.",
       );
     await this.logout();
     const attempt = new AbortController();
@@ -409,7 +393,6 @@ export class AccountSessionManager {
 
   async select(hostId: string | null): Promise<AccountSnapshot> {
     if (hostId === null) {
-      this.deps.closeTransports();
       this.update({ selected: null });
       return this.snapshot();
     }
@@ -418,7 +401,6 @@ export class AccountSessionManager {
     const host = this.state.hosts.find((host) => host.host_id === hostId);
     if (!host) throw new Error("The target host is offline. Refresh the host list.");
     if (this.state.selected?.host_id !== hostId) {
-      this.deps.closeTransports();
       this.update({ selected: host });
     }
     return this.snapshot();
@@ -558,16 +540,17 @@ export class AccountSessionManager {
     await Promise.all(renewals);
   }
 
-  openVisit(hostId: string) {
-    return this.openSession(hostId, "ait-rust-single-v1");
+  openVisit(hostId: string, center: string) {
+    return this.openSession(hostId, center, "ait-rust-single-v1");
   }
 
-  openDownload(hostId: string, token: string) {
-    return this.openSession(hostId, "ait-download-v1", token);
+  openDownload(hostId: string, token: string, center: string) {
+    return this.openSession(hostId, center, "ait-download-v1", token);
   }
 
   private async openSession(
     hostId: string,
+    expectedCenter: string,
     mode: string,
     token?: string,
   ): Promise<{
@@ -577,8 +560,11 @@ export class AccountSessionManager {
     instance_id: string;
     url: string;
   }> {
-    if (this.suspended || !this.account || !this.node || this.state.selected?.host_id !== hostId) {
-      throw new Error("The host is not selected or you have signed out.");
+    if (this.suspended || !this.account || !this.node) {
+      throw new Error("Sign in and wait for this device to register.");
+    }
+    if (normalizeCenter(expectedCenter) !== this.account.center) {
+      throw new Error("Sign in to the online service used by this host.");
     }
     const generation = this.generation;
     const center = this.account.center;
@@ -597,7 +583,7 @@ export class AccountSessionManager {
         ...(token === undefined ? {} : { download_token: token }),
       },
     );
-    if (generation !== this.generation || this.state.selected?.host_id !== hostId) {
+    if (generation !== this.generation) {
       await this.closeVisit(result.relay_session_id);
       throw new Error("Connection cancelled.");
     }

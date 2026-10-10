@@ -5,6 +5,7 @@ import {
 } from "@ait/client/internal/daemon-client-websocket-transport";
 import { getNativeAccount, registerNativeAccountTransport } from "../native-account";
 import { object, type Transport, type TransportFactory } from "./types";
+import { parseAccountRelayTarget } from "./account-relay-target";
 
 interface Dependencies {
   account(): Promise<Pick<AccountSessionManager, "openVisit" | "closeVisit">>;
@@ -21,18 +22,7 @@ export function createNativeAccountRelayTransportFactory(
   },
 ): TransportFactory {
   return ({ url }) => {
-    const target = new URL(url);
-    if (
-      target.protocol !== "ait+desktop:" ||
-      target.hostname !== "account-relay" ||
-      !/^\/[0-9a-f-]{36}$/i.test(target.pathname) ||
-      target.search ||
-      target.hash ||
-      target.username ||
-      target.password
-    ) {
-      throw new Error("Invalid account relay target.");
-    }
+    const target = parseAccountRelayTarget(url);
     const opens = new Set<() => void>();
     const closes = new Set<(event?: unknown) => void>();
     const errors = new Set<(event?: unknown) => void>();
@@ -112,7 +102,7 @@ export function createNativeAccountRelayTransportFactory(
         cleanup.push(deps.register(() => finish()));
         account = await deps.account();
         if (closed) return;
-        grant = await account.openVisit(target.pathname.slice(1));
+        grant = await account.openVisit(target.hostId, target.center);
         if (closed) {
           await account.closeVisit(grant.relay_session_id);
           return;

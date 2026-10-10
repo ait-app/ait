@@ -55,6 +55,7 @@
 
 ## Provider、Agent 与会话
 
+- [ADR-122：Codex Auto-review 的 computer use 工具批准](providers/adr-122-codex-computer-use-approval.md)
 - [ADR-121：ACP 轮次关联与原生历史结算](providers/adr-121-acp-turn-history-reconciliation.md)
 - [ADR-119：原生账号用量与 Codex 速度目录](providers/adr-119-native-account-usage-and-codex-speed.md)
 - [ADR-115：OpenCode 官方 ACP Provider](providers/adr-115-opencode-acp-provider.md)
@@ -85,6 +86,8 @@
 
 ## 客户端、连接与品牌
 
+- [ADR-123：客户端仅保留浏览器统一登录](clients/adr-123-browser-only-account-login.md)
+- [ADR-122：在线服务主机进入客户端持久注册表](clients/adr-122-persistent-online-service-hosts.md)
 - [ADR-117：终端配色查询与外观更新生命周期](clients/adr-117-terminal-palette-and-appearance-lifetime.md)
 - [ADR-114：iOS 终端组合输入归 UIKit](clients/adr-114-ios-terminal-ime.md)
 - [ADR-097：Google Play 内部测试手动发布](clients/adr-097-google-play-internal-release.md)

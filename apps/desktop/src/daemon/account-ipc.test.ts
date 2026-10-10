@@ -40,7 +40,7 @@ vi.mock("./account-session.js", () => ({
     async restore() {
       this.status = "online";
     }
-    async login() {
+    async loginWithBrowser() {
       await this.deps.save({
         center: "https://example.test/api",
         token: "test-token",
@@ -49,9 +49,6 @@ vi.mock("./account-session.js", () => ({
       });
       this.status = "online";
       this.deps.notify(this.snapshot() as AccountSnapshot);
-    }
-    async loginWithBrowser() {
-      await this.login();
     }
     async logout() {
       await this.deps.save(null);
@@ -99,9 +96,9 @@ describe("desktop built-in daemon synchronization preference", () => {
     expect(mocks.deps?.publishRuntime).toBe(false);
   });
 
-  it("retains a manual stop across logout, both login methods and desktop restart", async () => {
+  it("retains a manual stop across logout, browser login and desktop restart", async () => {
     const command = invoke();
-    await command(event, "account_login", { email: "me@example.test", password: "password" });
+    await command(event, "account_login_hosted");
     await command(event, "account_host_disconnect", { serverId: "built-in" });
     expect(mocks.unpublish).toHaveBeenCalledWith("built-in");
     expect(stored()).toMatchObject({ syncBuiltInDaemon: false });
@@ -113,9 +110,6 @@ describe("desktop built-in daemon synchronization preference", () => {
     await expect(command(event, "account_login_hosted")).resolves.toMatchObject({
       syncBuiltInDaemon: false,
     });
-    await expect(
-      command(event, "account_login", { email: "me@example.test", password: "password" }),
-    ).resolves.toMatchObject({ syncBuiltInDaemon: false });
     const restarted = invoke();
     await expect(restarted(event, "account_status")).resolves.toMatchObject({
       status: "online",
@@ -179,5 +173,24 @@ describe("desktop built-in daemon synchronization preference", () => {
     await expect(command(event, "account_host_sync", host)).resolves.toBeNull();
     expect(mocks.publish).not.toHaveBeenCalled();
     expect(stored().syncBuiltInDaemon).toBe(false);
+  });
+});
+
+describe("desktop account login commands", () => {
+  it("rejects the removed password command without replacing the current account", async () => {
+    const command = invoke();
+    await command(event, "account_login_hosted");
+    const saved = stored();
+    mocks.send.mockClear();
+    await expect(
+      command(event, "account_login", {
+        center: "https://other.test/api",
+        email: "me@example.test",
+        password: "test-password",
+      }),
+    ).rejects.toThrow("Unknown account command");
+    expect(stored()).toEqual(saved);
+    expect(mocks.send).not.toHaveBeenCalled();
+    await expect(command(event, "account_status")).resolves.toMatchObject({ status: "online" });
   });
 });

@@ -3,7 +3,11 @@ import { isAgentArchiving, setAgentArchiving } from "@/hooks/use-archive-agent";
 import { defaultHostAppearance } from "@/hosts/appearance";
 import { bindHostRuntimeAppState } from "@/navigation/host-runtime-bootstrap";
 import { useSessionStore, type Agent } from "@/stores/session-store";
-import type { HostConnection, HostProfile } from "@/types/host-connection";
+import {
+  createAccountRelayHostConnection,
+  type HostConnection,
+  type HostProfile,
+} from "@/types/host-connection";
 import { normalizeAgentSnapshot } from "@/utils/agent-snapshots";
 import type {
   ConnectionState,
@@ -1600,6 +1604,223 @@ describe("HostRuntimeController", () => {
 });
 
 describe("HostRuntimeStore", () => {
+  it("retains valid saved hosts when one online-service record is corrupt", async () => {
+    useHostRuntimeClock();
+    const host = makeHost({
+      connections: [
+        createAccountRelayHostConnection({
+          hostId: "11111111-1111-4111-8111-111111111111",
+          center: "https://custom.test/api",
+        }),
+      ],
+    });
+    const storage = createMemoryHostRuntimeStorage({
+      "@paseo:daemon-registry": JSON.stringify([
+        { serverId: "broken", connections: [{ type: "accountRelay", hostId: 42 }] },
+        host,
+        {
+          serverId: "legacy",
+          connections: [
+            { type: "accountRelay", hostId: "invalid", center: "https://custom.test/api" },
+          ],
+        },
+      ]),
+      "@paseo:e2e": "1",
+    });
+    const store = new HostRuntimeStore({ storage, deps: makeDeps({}, []) });
+    try {
+      await store.boot();
+      expect(store.getHosts().map((host) => host.serverId)).toEqual([host.serverId]);
+      await vi.waitFor(async () =>
+        expect(JSON.parse((await storage.getItem("@paseo:daemon-registry"))!)).toHaveLength(1),
+      );
+    } finally {
+      store.syncHosts([]);
+    }
+  });
+  it("persists multiple explicitly added online-service hosts across restart and sign-out", async () => {
+    useHostRuntimeClock();
+    const storage = createMemoryHostRuntimeStorage({ "@paseo:e2e": "1" });
+    const deps = makeDeps({}, []);
+    const first = {
+      host_id: "11111111-1111-4111-8111-111111111111",
+      server_id: "srv_a",
+      name: "A",
+    };
+    const second = {
+      host_id: "22222222-2222-4222-8222-222222222222",
+      server_id: "srv_b",
+      name: "B",
+    };
+    const center = "https://custom.test:9443/ait/api";
+    const store = new HostRuntimeStore({ storage, deps });
+    const restarted = new HostRuntimeStore({ storage, deps });
+    try {
+      await store.boot();
+      await store.addAccountRelayHost(first, center);
+      await store.addAccountRelayHost(second, center);
+      await store.renameHost(first.server_id, "My workstation");
+      await store.setHostColor(first.server_id, "teal");
+      await store.addAccountRelayHost(first, center);
+      store.setAccountRelayCenter(null);
+      const saved = JSON.parse((await storage.getItem("@paseo:daemon-registry"))!);
+      expect(saved).toHaveLength(2);
+      expect(saved[0]).toMatchObject({
+        label: "My workstation",
+        appearance: { color: "teal" },
+        connections: [{ type: "accountRelay", hostId: first.host_id, center }],
+      });
+      store.syncHosts([]);
+      await restarted.boot();
+      expect(restarted.getHosts()).toEqual(store.getHosts());
+      expect(restarted.getSnapshot(first.server_id)?.client).toBeNull();
+      expect(restarted.getSnapshot(second.server_id)?.client).toBeNull();
+    } finally {
+      store.syncHosts([]);
+      restarted.syncHosts([]);
+    }
+  });
+
+  it("reconnects saved relay hosts only after the matching account service is restored", async () => {
+    useHostRuntimeClock();
+    const center = "https://custom.test/api";
+    const connection = createAccountRelayHostConnection({
+      hostId: "11111111-1111-4111-8111-111111111111",
+      center,
+    });
+    const host = makeHost({ connections: [connection], preferredConnectionId: connection.id });
+    const clients: FakeDaemonClient[] = [];
+    const deps = makeDeps({ [connection.id]: 1 }, clients);
+    const probe = vi.fn(deps.connectToDaemon);
+    const storage = createMemoryHostRuntimeStorage({
+      "@paseo:daemon-registry": JSON.stringify([host]),
+      "@paseo:e2e": "1",
+    });
+    const store = new HostRuntimeStore({ storage, deps: { ...deps, connectToDaemon: probe } });
+    try {
+      await store.boot();
+      store.setAccountRelayCenter("https://other.test/api");
+      await vi.advanceTimersByTimeAsync(10_000);
+      expect(probe).not.toHaveBeenCalled();
+      store.setAccountRelayCenter(center);
+      await waitForHostOnline(store, host.serverId);
+      expect(probe).toHaveBeenCalledWith(expect.objectContaining({ connection }));
+      const client = store.getClient(host.serverId);
+      expect(client).not.toBeNull();
+      const close = vi.spyOn(client!, "close");
+      store.setAccountRelayCenter(null);
+      await vi.waitFor(() => expect(store.getClient(host.serverId)).toBeNull());
+      expect(close).toHaveBeenCalled();
+      expect(store.getHosts()).toHaveLength(1);
+      expect(JSON.parse((await storage.getItem("@paseo:daemon-registry"))!)).toHaveLength(1);
+      store.setAccountRelayCenter(center);
+      await waitForHostOnline(store, host.serverId);
+    } finally {
+      store.syncHosts([]);
+    }
+  });
+
+  it("merges a saved online-service connection with existing host settings and direct access", async () => {
+    useHostRuntimeClock();
+    const host = makeHost({
+      connections: [{ ...makeHost().connections[0]!, useTls: false } as HostConnection],
+      label: "My workstation",
+      appearance: { color: "teal", badgeDisplay: "icon" },
+    });
+    const storage = createMemoryHostRuntimeStorage({
+      "@paseo:daemon-registry": JSON.stringify([host]),
+      "@paseo:e2e": "1",
+    });
+    const store = new HostRuntimeStore({ storage, deps: makeDeps({}, []) });
+    try {
+      await store.boot();
+      await store.addAccountRelayHost(
+        {
+          host_id: "11111111-1111-4111-8111-111111111111",
+          server_id: host.serverId,
+          name: "Remote",
+        },
+        "https://custom.test/api",
+      );
+      expect(store.getHosts()[0]).toMatchObject({
+        label: host.label,
+        appearance: host.appearance,
+        createdAt: host.createdAt,
+        preferredConnectionId: host.preferredConnectionId,
+        connections: [
+          host.connections[0],
+          { type: "accountRelay", center: "https://custom.test/api" },
+        ],
+      });
+      const relay = store.getHosts()[0]!.connections[1]!;
+      await store.removeConnection(host.serverId, relay.id);
+      expect(store.getHosts()[0]!.connections).toEqual(host.connections);
+      expect(JSON.parse((await storage.getItem("@paseo:daemon-registry"))!)[0].connections).toEqual(
+        host.connections,
+      );
+    } finally {
+      store.syncHosts([]);
+    }
+  });
+
+  it("permanently removes a saved online-service host without affecting the other hosts", async () => {
+    useHostRuntimeClock();
+    const storage = createMemoryHostRuntimeStorage({ "@paseo:e2e": "1" });
+    const revoke = vi.fn(async () => {});
+    const store = new HostRuntimeStore({
+      storage,
+      deps: makeDeps({}, []),
+      revokePushNotifications: revoke,
+    });
+    const restarted = new HostRuntimeStore({ storage, deps: makeDeps({}, []) });
+    try {
+      await store.boot();
+      for (const [host_id, server_id] of [
+        ["11111111-1111-4111-8111-111111111111", "srv_a"],
+        ["22222222-2222-4222-8222-222222222222", "srv_b"],
+      ]) {
+        await store.addAccountRelayHost(
+          { host_id: host_id!, server_id: server_id!, name: server_id! },
+          "https://custom.test/api",
+        );
+      }
+      await store.removeHost("srv_a");
+      store.syncHosts([]);
+      await restarted.boot();
+      expect(restarted.getHosts().map((host) => host.serverId)).toEqual(["srv_b"]);
+      expect(revoke).toHaveBeenCalledWith(expect.objectContaining({ serverId: "srv_a" }));
+    } finally {
+      store.syncHosts([]);
+      restarted.syncHosts([]);
+    }
+  });
+
+  it("reports a failed registry write before claiming an online-service host was added", async () => {
+    useHostRuntimeClock();
+    const storage = createMemoryHostRuntimeStorage({ "@paseo:e2e": "1" });
+    const store = new HostRuntimeStore({ storage, deps: makeDeps({}, []) });
+    await store.boot();
+    vi.spyOn(storage, "setItem").mockRejectedValueOnce(new Error("Disk full"));
+    const host = { host_id: "11111111-1111-4111-8111-111111111111", server_id: "srv_a", name: "A" };
+    await expect(store.addAccountRelayHost(host, "https://custom.test/api")).rejects.toThrow(
+      "Disk full",
+    );
+    expect(store.getHosts()).toEqual([]);
+    expect(await storage.getItem("@paseo:daemon-registry")).toBeNull();
+    try {
+      await store.addAccountRelayHost(host, "https://custom.test/api");
+      expect(JSON.parse((await storage.getItem("@paseo:daemon-registry"))!)).toHaveLength(1);
+      vi.spyOn(storage, "setItem").mockRejectedValueOnce(new Error("Disk full"));
+      await expect(store.removeHost(host.server_id)).rejects.toThrow("Disk full");
+      expect(store.getHosts()).toHaveLength(1);
+      expect(JSON.parse((await storage.getItem("@paseo:daemon-registry"))!)).toHaveLength(1);
+      await store.removeHost(host.server_id);
+      expect(JSON.parse((await storage.getItem("@paseo:daemon-registry"))!)).toEqual([]);
+    } finally {
+      store.syncHosts([]);
+    }
+  });
+
   it.each(["localhost:1234", "localhost:5678"])(
     "waits for managed readiness, then immediately connects to %s",
     async (listenAddress) => {
@@ -2049,8 +2270,7 @@ describe("HostRuntimeStore", () => {
 
     const color = store.setHostColor("srv_appearance", "teal");
     const display = store.setHostBadgeDisplay("srv_appearance", "icon");
-    await Promise.resolve();
-    expect(writeCount).toBe(1);
+    await vi.waitFor(() => expect(writeCount).toBe(1));
 
     firstWrite.resolve();
     await Promise.all([color, display]);

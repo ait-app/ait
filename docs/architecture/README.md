@@ -142,9 +142,10 @@ relay 拥有控制方法声明和处理，API 的 HTTP 路由与 WebSocket RPC �
 本机、TCP 和 SSH 主机使用相同同步流程，详见 [ADR-083](../decisions/clients/adr-083-online-service-host-sync.md)。Desktop 登录后默认同步内置 daemon，手动停止的选择由桌面账户存储持久保存；其他主机仍需手动启用，详见 [ADR-096](../decisions/clients/adr-096-desktop-default-host-sync.md)。
 
 账户会话状态机位于 `packages/client`，通过依赖注入获取平台身份、存储、HTTP 和运行时操作。
-Electron 主进程提供桌面适配；Android 的原生适配使用 SecureStore 保存账户令牌，注册无本地
-运行时的客户端节点。Android 通过带认证头的原生 WebSocket 建立中继连接与下载，只有选中的
-远程主机进入 HostRuntime。浏览器和 iOS 未启用账户入口。
+Electron 主进程提供桌面适配；Android 和 iOS 的原生适配使用 SecureStore 保存账户令牌，注册无本地
+运行时的客户端节点。移动端通过带认证头的原生 WebSocket 建立中继连接与下载。明确添加的
+在线服务主机进入客户端持久注册表，账户恢复后按服务地址独立连接；发现列表不自动导入。
+登出保留主机配置，显式删除移除记录，见 [ADR-122](../decisions/clients/adr-122-persistent-online-service-hosts.md)。浏览器未启用账户入口。
 前后台生命周期、配对校验与凭据边界见
 [ADR-076](../decisions/clients/adr-076-android-account-relay.md)。
 

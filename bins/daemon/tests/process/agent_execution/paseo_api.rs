@@ -85,7 +85,7 @@ async fn websocket_workspace_status_tracks_native_execution_and_attention() {
     .await;
     client.close(None).await.unwrap();
     terminate(&mut process).await;
-    assert_children_exited(&cwd);
+    assert_children_exited(&cwd).await;
 }
 
 async fn assert_workspace_status(

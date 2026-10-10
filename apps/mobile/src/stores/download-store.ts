@@ -40,6 +40,7 @@ interface DownloadState {
     fileName: string;
     path: string;
     daemonProfile: HostProfile | undefined;
+    activeConnectionId?: string | null;
     requestFileDownloadToken: (path: string) => Promise<{
       token: string | null;
       fileName: string | null;
@@ -69,6 +70,7 @@ export const useDownloadStore = create<DownloadState>()((set, get) => ({
     fileName,
     path,
     daemonProfile,
+    activeConnectionId,
     requestFileDownloadToken,
   }) => {
     const id = generateDownloadId();
@@ -87,9 +89,10 @@ export const useDownloadStore = create<DownloadState>()((set, get) => ({
     }));
 
     try {
-      const relay = daemonProfile?.connections.find(
-        (connection) => connection.type === "accountRelay",
-      );
+      const connections = activeConnectionId
+        ? daemonProfile?.connections.filter((connection) => connection.id === activeConnectionId)
+        : daemonProfile?.connections;
+      const relay = connections?.find((connection) => connection.type === "accountRelay");
       if (relay?.type === "accountRelay") {
         if (Platform.OS === "android" || Platform.OS === "ios") {
           const tokenResponse = await requestFileDownloadToken(path);
@@ -106,6 +109,7 @@ export const useDownloadStore = create<DownloadState>()((set, get) => ({
               const started = Date.now();
               await streamNativeAccountDownload({
                 hostId: relay.hostId,
+                center: relay.center,
                 token: tokenResponse.token,
                 write: (bytes) => handle.writeBytes(bytes),
                 progress: (bytesWritten, totalBytes) => {
@@ -144,6 +148,7 @@ export const useDownloadStore = create<DownloadState>()((set, get) => ({
         if (!desktop?.invoke) throw new Error("Online relay downloads require the desktop app.");
         const preparationId = await desktop.invoke("account_download_prepare", {
           hostId: relay.hostId,
+          center: relay.center,
           fileName,
           downloadId: id,
         });
@@ -190,7 +195,9 @@ export const useDownloadStore = create<DownloadState>()((set, get) => ({
         throw new Error(tokenResponse.error ?? i18n.t("downloads.requestTokenFailed"));
       }
 
-      const downloadTarget = resolveDaemonDownloadTarget(daemonProfile);
+      const downloadTarget = resolveDaemonDownloadTarget(
+        daemonProfile && connections ? { ...daemonProfile, connections } : daemonProfile,
+      );
       if (!downloadTarget.baseUrl) {
         throw new Error(i18n.t("downloads.hostUnavailable"));
       }

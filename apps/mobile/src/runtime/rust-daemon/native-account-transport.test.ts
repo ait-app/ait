@@ -3,7 +3,8 @@ import { createNativeAccountRelayTransportFactory } from "./native-account-trans
 import { nativeRelayHarness } from "./native-relay-test-harness";
 import { createRustDaemonTransportFactory } from "./transport";
 
-const url = "ait+desktop://account-relay/11111111-1111-4111-8111-111111111111";
+const url =
+  "ait+desktop://account-relay/11111111-1111-4111-8111-111111111111?center=https%3A%2F%2Fexample.test%2Fapi";
 afterEach(() => vi.useRealTimers());
 
 describe("native account relay", () => {
@@ -19,6 +20,10 @@ describe("native account relay", () => {
     transport.onError(error);
     transport.onOpen(() => transport.send(JSON.stringify({ type: "hello", clientId: "android" })));
     await h.flush();
+    expect(h.account.openVisit).toHaveBeenCalledWith(
+      "11111111-1111-4111-8111-111111111111",
+      "https://example.test/api",
+    );
     h.message({ type: "relay.ready", relay_session_id: "visit" });
     const hello = JSON.parse(String(vi.mocked(h.socket.send).mock.calls[0]![0]));
     expect(hello).toMatchObject({

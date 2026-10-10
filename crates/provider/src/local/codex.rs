@@ -583,6 +583,8 @@ impl CodexSession {
             && self.config.mcp_servers == config.mcp_servers
             && self.config.tool_policy == config.tool_policy
             && self.config.system_prompt == config.system_prompt
+            && (self.config.mode_id.as_deref() == Some("auto-review"))
+                == (config.mode_id.as_deref() == Some("auto-review"))
         {
             return Ok(());
         }

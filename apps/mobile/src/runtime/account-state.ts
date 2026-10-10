@@ -61,7 +61,30 @@ async function receiveAccountSnapshot(snapshot: AccountState): Promise<void> {
   const sequence = ++snapshotSequence;
   const store = getHostRuntimeStore();
   await store.boot();
-  if (sequence === snapshotSequence) store.setAccountRelayHost(snapshot.selected);
+  if (sequence !== snapshotSequence) return;
+  if (snapshot.status === "online") store.setAccountRelayCenter(snapshot.center);
+  else if (snapshot.status === "logged_out") store.setAccountRelayCenter(null);
+}
+
+async function persistAccountHostSelection(
+  command: string,
+  args: Record<string, unknown> | undefined,
+  snapshot: AccountState,
+  previousServerId: string | null,
+): Promise<void> {
+  if (command !== "account_select") return;
+  const store = getHostRuntimeStore();
+  await store.boot();
+  if (typeof args?.hostId === "string" && snapshot.selected) {
+    await store.addAccountRelayHost(snapshot.selected, snapshot.center);
+  } else if (previousServerId) {
+    const host = store.getHosts().find((host) => host.serverId === previousServerId);
+    for (const connection of host?.connections ?? []) {
+      if (connection.type === "accountRelay" && connection.center === snapshot.center) {
+        await store.removeConnection(previousServerId, connection.id);
+      }
+    }
+  }
 }
 
 export async function accountCommand(
@@ -77,21 +100,13 @@ export async function accountCommand(
       return manager.snapshot();
     }
     return serializeNativeAccountCommand(async () => {
+      const previousServerId = useAccountState.getState().selected?.server_id ?? null;
       const manager = await getNativeAccount();
       switch (command) {
         case "account_login_hosted":
           if (args?.center !== undefined && typeof args.center !== "string")
             throw new Error("Invalid service URL.");
           await manager.loginWithBrowser((args?.center as string) ?? "");
-          break;
-        case "account_login":
-          if (
-            typeof args?.email !== "string" ||
-            typeof args.password !== "string" ||
-            (args.center !== undefined && typeof args.center !== "string")
-          )
-            throw new Error("Invalid login.");
-          await manager.login(args.center ?? "", args.email, args.password);
           break;
         case "account_logout":
           await manager.logout();
@@ -109,22 +124,19 @@ export async function accountCommand(
       }
       const snapshot = manager.snapshot();
       await receiveAccountSnapshot(snapshot);
+      await persistAccountHostSelection(command, args, snapshot, previousServerId);
       return snapshot;
     });
   }
   if (!invoke) throw new Error("Account login is available in the native mobile and desktop apps.");
-  const snapshot = (await invoke(command, args)) as AccountState;
-  useAccountState.setState(snapshot);
-  return snapshot;
-}
-
-/** Provider discovery returns public capabilities, never credentials. */
-export async function accountLoginMethods(center: string): Promise<{ hosted: boolean }> {
-  const invoke = getDesktopHost()?.invoke;
-  if (invoke) return (await invoke("account_login_methods", { center })) as { hosted: boolean };
-  if (Platform.OS === "android" || Platform.OS === "ios")
-    return (await getNativeAccount()).loginMethods(center);
-  return { hosted: false };
+  if (command === "account_cancel_login") return (await invoke(command, args)) as AccountState;
+  return serializeNativeAccountCommand(async () => {
+    const previousServerId = useAccountState.getState().selected?.server_id ?? null;
+    const snapshot = (await invoke(command, args)) as AccountState;
+    await receiveAccountSnapshot(snapshot);
+    await persistAccountHostSelection(command, args, snapshot, previousServerId);
+    return snapshot;
+  });
 }
 
 /** Mount once next to HostRuntime bootstrap; discovery remains separate from runtime hosts. */
@@ -160,13 +172,8 @@ export function AccountRelayLifecycle() {
     let remove: (() => void) | undefined;
     const receive = (value: unknown) => {
       if (disposed) return;
-      const snapshot = value as AccountState;
-      useAccountState.setState(snapshot);
-      const current = ++sequence;
-      const store = getHostRuntimeStore();
-      void store.boot().then(() => {
-        if (!disposed && sequence === current) store.setAccountRelayHost(snapshot.selected);
-      });
+      ++sequence;
+      void receiveAccountSnapshot(value as AccountState).catch(() => undefined);
     };
     void (async () => {
       const unsubscribe = await desktop.events!.on!("account-state", receive);

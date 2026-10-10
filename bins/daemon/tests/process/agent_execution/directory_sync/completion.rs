@@ -100,5 +100,5 @@ async fn websocket_workspace_running_marker_stops_on_provider_completion_and_can
     writer.close(None).await.unwrap();
     observer.close(None).await.unwrap();
     terminate(&mut process).await;
-    assert_children_exited(&cwd);
+    assert_children_exited(&cwd).await;
 }

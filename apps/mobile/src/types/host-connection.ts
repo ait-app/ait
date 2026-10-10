@@ -14,6 +14,7 @@ import {
   validateSshHost,
 } from "@ait/protocol/ssh-transport";
 import { z } from "zod";
+import { normalizeCenter } from "@ait/client/internal/account-session";
 
 export { DirectTcpHostConnectionSchema, type DirectTcpHostConnection };
 
@@ -38,8 +39,15 @@ export interface RemoteSshHostConnection {
   password?: string;
 }
 
+export interface AccountRelayHostConnection {
+  id: string;
+  type: "accountRelay";
+  hostId: string;
+  center: string;
+}
+
 export type HostConnection =
-  | { id: string; type: "accountRelay"; hostId: string }
+  | AccountRelayHostConnection
   | DirectTcpHostConnection
   | DirectSocketHostConnection
   | DirectPipeHostConnection
@@ -114,7 +122,7 @@ function hostConnectionEquals(left: HostConnection, right: HostConnection): bool
     return false;
   }
   if (left.type === "accountRelay" && right.type === "accountRelay")
-    return left.hostId === right.hostId;
+    return left.hostId === right.hostId && left.center === right.center;
 
   if (left.type === "directTcp" && right.type === "directTcp") {
     return (
@@ -339,7 +347,28 @@ export function createRemoteSshHostConnection(input: {
   };
 }
 
+/** Persist only the service address and host identity; credentials stay with the account owner. */
+export function createAccountRelayHostConnection(input: {
+  hostId: string;
+  center: string;
+}): AccountRelayHostConnection {
+  const hostId = z.uuid().parse(input.hostId.trim());
+  const center = normalizeCenter(input.center);
+  return {
+    id: `account-relay:${encodeURIComponent(center)}:${hostId}`,
+    type: "accountRelay",
+    hostId,
+    center,
+  };
+}
+
 const StoredHostConnectionSchema = z.discriminatedUnion("type", [
+  z.strictObject({
+    id: z.string().optional(),
+    type: z.literal("accountRelay"),
+    hostId: z.string(),
+    center: z.string(),
+  }),
   z.strictObject({
     id: z.string().optional(),
     type: z.literal("directTcp"),
@@ -383,10 +412,18 @@ const StoredHostProfileSchema = z.strictObject({
   createdAt: z.string().datetime({ offset: true }).optional(),
   updatedAt: z.string().datetime({ offset: true }).optional(),
 });
-export const StoredHostRegistrySchema = z.array(StoredHostProfileSchema);
+// One malformed host must not discard the rest of the user's saved registry.
+export const StoredHostRegistrySchema = z.array(StoredHostProfileSchema.nullable().catch(null));
 type StoredHostConnection = z.infer<typeof StoredHostConnectionSchema>;
 
 function normalizeStoredConnection(connection: StoredHostConnection): HostConnection | null {
+  if (connection.type === "accountRelay") {
+    try {
+      return createAccountRelayHostConnection(connection);
+    } catch {
+      return null;
+    }
+  }
   if (connection.type === "directTcp") {
     try {
       const endpoint = normalizeLoopbackToLocalhost(normalizeHostPort(connection.endpoint));

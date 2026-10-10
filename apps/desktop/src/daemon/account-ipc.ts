@@ -126,10 +126,6 @@ export function createAccountIpc(
       switch (command) {
         case "account_status":
           return snapshot();
-        case "account_login_methods":
-          if (args.center !== undefined && typeof args.center !== "string")
-            throw new Error("Invalid service URL");
-          return manager.loginMethods((args.center as string) ?? "");
         case "account_login_hosted": {
           if (args.center !== undefined && typeof args.center !== "string")
             throw new Error("Invalid service URL");
@@ -145,16 +141,6 @@ export function createAccountIpc(
         case "account_cancel_login":
           manager.cancelLogin();
           return snapshot();
-        case "account_login": {
-          if (
-            (args.center !== undefined && typeof args.center !== "string") ||
-            typeof args.email !== "string" ||
-            typeof args.password !== "string"
-          )
-            throw new Error("Invalid login");
-          await manager.login(args.center ?? "", args.email, args.password);
-          return snapshot();
-        }
         case "account_logout":
           await manager.logout();
           return snapshot();
@@ -192,10 +178,12 @@ export function createAccountIpc(
           notify(manager.snapshot());
           return;
         case "account_transport_open":
+          if (typeof args.center !== "string") throw new Error("Invalid service URL");
           return transports.open(
             event.sender,
             id,
             typeof args.hostId === "string" ? args.hostId : "",
+            args.center,
           );
         case "account_transport_send":
           return transports.send(event.sender, id, {
@@ -211,12 +199,14 @@ export function createAccountIpc(
         case "account_download_prepare": {
           if (
             typeof args.hostId !== "string" ||
+            typeof args.center !== "string" ||
             typeof args.fileName !== "string" ||
             typeof args.downloadId !== "string"
           )
             throw new Error("Invalid download request");
           return downloads.prepare(event.sender, {
             hostId: args.hostId,
+            center: args.center,
             fileName: args.fileName,
             downloadId: args.downloadId,
           });
@@ -241,7 +231,6 @@ export function createAccountIpc(
     // Serialize account changes; data frames and status reads remain independent.
     if (
       [
-        "account_login",
         "account_login_hosted",
         "account_logout",
         "account_select",
