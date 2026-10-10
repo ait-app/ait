@@ -104,6 +104,19 @@ const CODEX: &[(&str, Rule)] = &[
         Rule::Choice(&["disabled", "cached", "indexed", "live"]),
     ),
     (
+        "plugins",
+        Rule::Map(&Rule::Object(&[(
+            "mcp_servers",
+            Rule::Map(&Rule::Object(&[(
+                "tools",
+                Rule::Map(&Rule::Object(&[(
+                    "approval_mode",
+                    Rule::Choice(&["auto", "prompt", "writes", "approve"]),
+                )])),
+            )])),
+        )])),
+    ),
+    (
         "features",
         Rule::Object(&[
             ("multi_agent_v2", Rule::Boolean),

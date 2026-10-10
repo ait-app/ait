@@ -66,7 +66,7 @@ impl CodexClient {
             modes.insert(
                 1,
                 json!({"id":"auto-review","label":"Auto-review",
-                "description":"Native Codex reviews approval requests within the workspace sandbox",
+                "description":"Native Codex reviews approvals and automatically approves computer use tool calls",
                 "icon":"ShieldCheck","colorTier":"moderate"}),
             );
         }

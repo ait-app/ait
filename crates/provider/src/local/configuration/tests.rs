@@ -45,6 +45,39 @@ fn codex_translates_transports_and_limits_preapprovals_to_named_tools() {
 }
 
 #[test]
+fn codex_auto_review_preapproves_only_the_bundled_cua_js_tool() {
+    let native = codex(&config(json!({"modeId":"auto-review"}))).unwrap();
+    assert_eq!(
+        native,
+        json!({"plugins":{"unified-computer-use@openai-bundled":{
+            "mcp_servers":{"cua_repl":{"tools":{"js":{"approval_mode":"approve"}}}}}}})
+    );
+    for value in [
+        json!({"modeId":"auto"}),
+        json!({"modeId":"full-access"}),
+        json!({"modeId":"read-only"}),
+    ] {
+        assert!(codex(&config(value)).unwrap().get("plugins").is_none());
+    }
+}
+
+#[test]
+fn codex_explicit_plugin_tool_approval_overrides_the_auto_review_preset() {
+    for mode in ["auto", "prompt", "writes", "approve"] {
+        let plugins = json!({"unified-computer-use@openai-bundled":{
+            "mcp_servers":{"cua_repl":{"tools":{"js":{"approval_mode":mode}}}}},
+            "other@local":{"mcp_servers":{"docs":{"tools":{"search":{"approval_mode":"prompt"}}}}}});
+        for mode_id in ["auto-review", "full-access"] {
+            let native = codex(&config(json!({"modeId":mode_id,
+                "providerOptions":{"plugins":plugins}})))
+            .unwrap();
+            assert_eq!(native["plugins"], plugins);
+            assert!(native.get("mcp_servers").is_none());
+        }
+    }
+}
+
+#[test]
 fn claude_merges_sandbox_settings_without_losing_permission_rules() {
     let config = config(
         json!({"featureValues":{"fast_mode":true},"providerOptions":{
@@ -88,6 +121,24 @@ fn rejects_unknown_invalid_or_overbroad_advanced_configuration() {
     for (provider, value) in [
         ("codex", json!({"providerOptions":{"unknown":true}})),
         ("codex", json!({"providerOptions":{"approval_policy":{}}})),
+        (
+            "codex",
+            json!({"providerOptions":{"plugins":{"cua":{"enabled":true}}}}),
+        ),
+        (
+            "codex",
+            json!({"providerOptions":{"plugins":{"cua":{"mcp_servers":{"cua_repl":{
+                "default_tools_approval_mode":"approve"}}}}}}),
+        ),
+        (
+            "codex",
+            json!({"providerOptions":{"plugins":{"cua":{"mcp_servers":{"cua_repl":{
+                "tools":{"js":{"approval_mode":"invalid"}}}}}}}}),
+        ),
+        (
+            "claude",
+            json!({"providerOptions":{"plugins":{"cua":{"mcp_servers":{}}}}}),
+        ),
         (
             "codex",
             json!({"providerOptions":{"features":{"network_proxy":{"domains":{"a":"maybe"}}}}}),
