@@ -147,7 +147,8 @@ Electron 主进程提供桌面适配；Android 和 iOS 的原生适配使用 Sec
 在线服务主机进入客户端持久注册表，账户恢复后按服务地址独立连接；发现列表不自动导入。
 登出保留主机配置，显式删除移除记录，见 [ADR-122](../decisions/clients/adr-122-persistent-online-service-hosts.md)。浏览器未启用账户入口。
 前后台生命周期、配对校验与凭据边界见
-[ADR-076](../decisions/clients/adr-076-android-account-relay.md)。
+[ADR-076](../decisions/clients/adr-076-android-account-relay.md) 与
+[ADR-084](../decisions/clients/adr-084-ios-account-relay.md)。
 
 Relay 的类型化消息集中在 `crates/relay/src/protocol.rs`，WebSocket 收发集中在
 `transport.rs`；单连接协商标识由 `crates/model/src/server/single.rs` 定义。
