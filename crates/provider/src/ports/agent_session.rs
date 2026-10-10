@@ -81,6 +81,15 @@ pub(crate) enum AgentTurnEvent {
 
 /// Live provider session. Closing releases resources without deleting native history.
 pub(crate) trait AgentSession: Debug + Send {
+    /// Read plan quota using this session's actual native launch environment.
+    ///
+    /// Returns safe native account facts, never authentication material.
+    /// # Errors
+    /// Returns unavailable when the adapter has no session-scoped accounting support.
+    fn account_usage(&self) -> AgentSessionFuture<'_, serde_json::Value> {
+        Box::pin(async { Err(AgentSessionError::Unavailable) })
+    }
+
     /// Return the most recent failure's user-visible explanation, if available.
     ///
     /// Adapters must exclude credentials and private diagnostics, and keep the message at most

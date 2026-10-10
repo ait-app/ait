@@ -111,15 +111,6 @@ impl AgentManager {
         Ok(json!({"provider":provider,"diagnostic":diagnostic}))
     }
 
-    pub(crate) async fn usage(&self) -> Result<Value, ErrorCode> {
-        let mut providers = Vec::new();
-        for (id, client) in &self.clients {
-            providers.push(client.usage().await.unwrap_or_else(|_|json!({"providerId":id,"displayName":id,
-                "status":"unavailable","planLabel":null,"windows":[],"error":"Provider usage is unavailable"})));
-        }
-        crate::rpc::timeline::bounded(json!({"fetchedAt":now_timestamp(),"providers":providers}))
-    }
-
     pub(crate) async fn commands(&self, spec: &AgentSessionSpec) -> Result<Vec<Value>, ErrorCode> {
         self.clients
             .get(&spec.provider)

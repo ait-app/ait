@@ -148,9 +148,9 @@ for line in sys.stdin:
         history_path().write_text(json.dumps(turns))
         result = {"thread": {**thread_metadata(thread_id), "turns": turns}}
     elif method == "account/read":
-        result = {"account": {"type": "chatgpt", "email": "private@example.test", "planType": "plus"}, "requiresOpenaiAuth": True}
+        result = {"account": {"type": "chatgpt", "email": os.environ.get("AIT_TEST_USAGE_ACCOUNT", "private@example.test"), "planType": "plus"}, "requiresOpenaiAuth": True}
     elif method == "account/rateLimits/read":
-        result = {"rateLimits": {"planType": "plus", "primary": {"usedPercent": 25, "resetsAt": 1900000000}, "secondary": {"usedPercent": 81}}}
+        result = {"rateLimits": {"planType": "plus", "primary": {"usedPercent": int(os.environ.get("AIT_TEST_USAGE_PERCENT", "25")), "resetsAt": 1900000000}, "secondary": {"usedPercent": 81}}}
     elif method == "skills/list":
         result = {"data": [{"cwd": params["cwds"][0], "errors": [], "skills": [
             {"name": "review", "description": "Offline review", "enabled": True, "path": str(root / "review" / "SKILL.md")},
@@ -174,6 +174,8 @@ for line in sys.stdin:
             while not (root / "release-discovery").exists() and time.monotonic() < deadline:
                 time.sleep(0.01)
         result = {"data": [{"id": "offline-model", "model": "offline-model", "displayName": "Offline model", "isDefault": True, "hidden": False, "description": "Offline fixture", "supportedReasoningEfforts": [{"reasoningEffort": "high", "description": "High effort"}], "defaultReasoningEffort": "high", "serviceTiers": [] if mode == "no-fast" else [{"id": "fast"}]}], "nextCursor": None}
+        if (root / "speed-models.json").exists():
+            result = json.loads((root / "speed-models.json").read_text())
     elif method == "turn/start":
         if mode == "delayed-voice-admission":
             while not (root / "release-voice-admission").exists():

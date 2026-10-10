@@ -24,8 +24,7 @@ import { isVersionMismatch } from "@/desktop/updates/desktop-updates";
 import { useDaemonConfig } from "@/hooks/use-daemon-config";
 import { useIsLocalDaemon } from "@/hooks/use-is-local-daemon";
 import { upsertDesktopDaemonConnection } from "@/runtime/daemon-start-service";
-import { ProviderUsageSettingsSection } from "@/provider-usage/settings-section";
-import { useProviderUsage } from "@/provider-usage/use-provider-usage";
+import { HostUsageSection } from "@/usage/host-usage-section";
 import {
   getHostRuntimeStore,
   isHostRuntimeConnected,
@@ -316,10 +315,6 @@ export function HostProvidersPage({ serverId }: { serverId: string }) {
 
 export function HostUsagePage({ serverId }: { serverId: string }) {
   const host = useHostProfile(serverId);
-  const { view: providerUsageView, refresh: refreshProviderUsage } = useProviderUsage(serverId);
-  const handleRefresh = useCallback(() => {
-    void refreshProviderUsage();
-  }, [refreshProviderUsage]);
 
   if (!host) {
     return <HostNotFound />;
@@ -327,7 +322,7 @@ export function HostUsagePage({ serverId }: { serverId: string }) {
 
   return (
     <View>
-      <ProviderUsageSettingsSection view={providerUsageView} onRefresh={handleRefresh} />
+      <HostUsageSection serverId={serverId} />
     </View>
   );
 }

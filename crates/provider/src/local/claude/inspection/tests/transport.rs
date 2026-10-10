@@ -39,7 +39,14 @@ async fn quota_http_is_read_only_bounded_and_refuses_auth_errors_or_redirects() 
     ] {
         let (endpoint, task) = serve(status, &body).await;
         let result = fetch(&endpoint, &token, Duration::from_secs(5)).await;
-        assert_eq!(result.is_ok(), success, "{status}");
+        if status.starts_with("200") {
+            assert_eq!(result.is_ok(), success, "{status}");
+        } else {
+            assert_eq!(
+                result.unwrap()["httpStatus"],
+                status[..3].parse::<u16>().unwrap()
+            );
+        }
         let request = task.await.unwrap().to_ascii_lowercase();
         assert!(request.starts_with("get /usage http/1.1"));
         assert!(request.contains("authorization: bearer offline-test-token"));

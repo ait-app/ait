@@ -6,7 +6,7 @@
 
 - [ADR-118：摘要接口归 model，配置文件适配归 persistence](daemon/adr-118-summary-contracts-and-persistence-configuration.md)
 - [ADR-116：库 crate 只公开被其他 crate 使用的项](daemon/adr-116-crate-visibility.md)
-- [ADR-112：file 瘦身为 persistence，宿主专用文件归 daemon](daemon/adr-112-persistence-crate.md)
+- [ADR-118：file 瘦身为 persistence，宿主专用文件归 daemon](daemon/adr-112-persistence-crate.md)
 - [ADR-111：纯业务数据归 domain，连接协议并入 model::server](daemon/adr-111-domain-values-and-server-protocol.md)
 - [ADR-109：本地故障证据与 Harness 日志采集](daemon/adr-109-local-incident-evidence.md)
 
@@ -54,6 +54,7 @@
 
 ## Provider、Agent 与会话
 
+- [ADR-119：原生账号用量与 Codex 速度目录](providers/adr-119-native-account-usage-and-codex-speed.md)
 - [ADR-115：OpenCode 官方 ACP Provider](providers/adr-115-opencode-acp-provider.md)
 
 - [ADR-110：OpenCode 双版本私有协议边界](providers/adr-110-opencode-private-protocol-boundary.md)

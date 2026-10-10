@@ -1228,6 +1228,7 @@ export const en = {
       appName: "Ait",
     },
     sections: {
+      usage: "Usage",
       workspaces: "Workspaces",
       sessions: "History",
       search: "Search",
@@ -2295,6 +2296,8 @@ export const en = {
     dismiss: "Dismiss",
   },
   contextWindow: {
+    noData: "No context usage yet",
+    accessibilityNoData: "View account usage",
     title: "Context window",
     used: "{{percentage}}% used",
     tokens: "{{used}} / {{max}} tokens",
@@ -2666,6 +2669,14 @@ export const en = {
         codeSize: "Code size",
         codeSizeHint: "Used for code, diffs, and terminal output",
         codeSizeAccessibility: "Code font size",
+      },
+      layout: {
+        title: "Layout",
+        contentWidth: "Content width",
+        contentWidthHint: "Max width of chat and Markdown files on wide screens",
+        contentWidthAccessibility: "Content width in pixels",
+        reset: "Reset",
+        resetAccessibility: "Reset content width to default",
       },
       syntax: {
         title: "Syntax",

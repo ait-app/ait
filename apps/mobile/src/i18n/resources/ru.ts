@@ -1187,6 +1187,7 @@ export const ru: TranslationResources = {
       appName: "Ait",
     },
     sections: {
+      usage: "Usage",
       workspaces: "Рабочие пространства",
       sessions: "История",
       search: "Поиск",
@@ -2002,6 +2003,8 @@ export const ru: TranslationResources = {
     dismiss: "Закрыть",
   },
   contextWindow: {
+    noData: "No context usage yet",
+    accessibilityNoData: "View account usage",
     title: "Контекстное окно",
     used: "Использовано: {{percentage}}%",
     tokens: "Токены: {{used}} / {{max}}",
@@ -2285,6 +2288,14 @@ export const ru: TranslationResources = {
         codeSize: "Размер кода",
         codeSizeHint: "Используется для кода, диффов и вывода терминала",
         codeSizeAccessibility: "Размер шрифта кода",
+      },
+      layout: {
+        title: "Макет",
+        contentWidth: "Ширина содержимого",
+        contentWidthHint: "Максимальная ширина чата и файлов Markdown на широких экранах",
+        contentWidthAccessibility: "Ширина содержимого в пикселях",
+        reset: "Сбросить",
+        resetAccessibility: "Сбросить ширину содержимого",
       },
       syntax: {
         title: "Синтаксис",

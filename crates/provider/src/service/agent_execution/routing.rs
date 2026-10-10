@@ -245,7 +245,9 @@ fn plan(
         )
     } else if matches!(method, "agent.resume.request" | "agent.import.request") {
         native_lane(&state, method, params)?
-    } else if is_read(method) {
+    } else if is_read(method)
+        && !(method == "provider.usage.list.request" && params.get("agentId").is_some())
+    {
         None
     } else {
         let nested = if method == "internal.timeline.append" {

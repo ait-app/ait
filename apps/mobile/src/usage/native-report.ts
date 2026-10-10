@@ -1,0 +1,33 @@
+import type { ProviderUsage, UsageReportEntry } from "@ait/protocol/messages";
+
+/** Keep native quota facts and safe authentication failures intact for every usage surface. */
+export function toUsageReport(provider: ProviderUsage, fetchedAt: string): UsageReportEntry {
+  const report: UsageReportEntry["report"] =
+    provider.status === "available"
+      ? {
+          status: "available",
+          ...(provider.planLabel ? { planLabel: provider.planLabel } : {}),
+          windows: provider.windows,
+          balances: provider.balances,
+          details: provider.details,
+        }
+      : provider.status === "error"
+        ? { status: "error", error: provider.error ?? "Unable to read native account usage" }
+        : {
+            status: "unavailable",
+            problem: provider.problem ?? {
+              kind: "no_quota",
+              detail:
+                provider.error ??
+                "This login does not report plan usage. Sign in with the provider CLI.",
+            },
+          };
+  return {
+    id: provider.providerId,
+    sourceId: provider.providerId,
+    sourceLabel: provider.displayName,
+    account: provider.accountLabel ? { label: provider.accountLabel } : {},
+    fetchedAt: provider.fetchedAt ?? fetchedAt,
+    report,
+  };
+}

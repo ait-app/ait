@@ -309,6 +309,7 @@ export const AgentFeatureSelectSchema = z.object({
   description: z.string().optional(),
   tooltip: z.string().optional(),
   icon: z.string().optional(),
+  desktopTrigger: z.enum(["icon", "label"]).optional(),
   value: z.string().nullable(),
   options: z.array(AgentSelectOptionSchema),
 });
@@ -1801,6 +1802,9 @@ export const ProviderDiagnosticRequestMessageSchema = z.object({
 
 export const ProviderUsageListRequestMessageSchema = z.object({
   type: z.literal("provider.usage.list.request"),
+  agentId: z.string().optional(),
+  providerId: z.string().min(1).max(256).optional(),
+  forceRefresh: z.boolean().optional(),
   requestId: z.string(),
 });
 
@@ -6230,6 +6234,8 @@ export const ProviderUsageStatusSchema = z.enum(["available", "unavailable", "er
 export const ProviderUsageWindowSchema = z.object({
   id: z.string(),
   label: z.string(),
+  shortLabel: z.string().optional(),
+  summary: z.boolean().optional(),
   usedPct: z.number().nullable().optional(),
   remainingPct: z.number().nullable().optional(),
   resetsAt: z.string().nullable().optional(),
@@ -6256,7 +6262,22 @@ export const ProviderUsageDetailSchema = z.object({
   tone: ProviderUsageToneSchema.optional(),
 });
 
+export const UsageProblemSchema = z.discriminatedUnion("kind", [
+  z.object({
+    kind: z.literal("expired"),
+    expiresAt: z.iso.datetime(),
+    refreshedBy: z.string().optional(),
+  }),
+  z.object({
+    kind: z.literal("rejected"),
+    status: z.number().int(),
+    refreshedBy: z.string().optional(),
+  }),
+  z.object({ kind: z.literal("no_quota"), detail: z.string() }),
+]);
 export const ProviderUsageSchema = z.object({
+  accountLabel: z.string().optional(),
+  problem: UsageProblemSchema.optional(),
   providerId: z.string(),
   displayName: z.string(),
   status: ProviderUsageStatusSchema,
@@ -6268,6 +6289,38 @@ export const ProviderUsageSchema = z.object({
   balances: z.array(ProviderUsageBalanceSchema).optional(),
   details: z.array(ProviderUsageDetailSchema).optional(),
   error: z.string().nullable().optional(),
+});
+
+export const UsageReportSchema = z.discriminatedUnion("status", [
+  z.object({
+    status: z.literal("available"),
+    planLabel: z.string().optional(),
+    windows: z.array(ProviderUsageWindowSchema),
+    balances: z.array(ProviderUsageBalanceSchema).optional(),
+    details: z.array(ProviderUsageDetailSchema).optional(),
+  }),
+  z.object({ status: z.literal("unavailable"), problem: UsageProblemSchema }),
+  z.object({ status: z.literal("error"), error: z.string() }),
+]);
+export const UsageReportEntrySchema = z.object({
+  id: z.string(),
+  account: z.object({ label: z.string().optional() }),
+  fetchedAt: z.string(),
+  sourceId: z.string(),
+  sourceLabel: z.string(),
+  icon: z.string().optional(),
+  report: UsageReportSchema,
+  loginErrors: z
+    .array(
+      z.object({
+        harness: z.string(),
+        report: z.discriminatedUnion("status", [
+          z.object({ status: z.literal("unavailable"), problem: UsageProblemSchema }),
+          z.object({ status: z.literal("error"), error: z.string() }),
+        ]),
+      }),
+    )
+    .optional(),
 });
 
 export const ProviderUsageListResponseMessageSchema = z.object({
@@ -7555,3 +7608,7 @@ export function parseServerInfoStatusPayload(payload: unknown): ServerInfoStatus
   }
   return parsed.data;
 }
+
+export type UsageReportEntry = z.infer<typeof UsageReportEntrySchema>;
+export type UsageReport = z.infer<typeof UsageReportSchema>;
+export type UsageProblem = z.infer<typeof UsageProblemSchema>;

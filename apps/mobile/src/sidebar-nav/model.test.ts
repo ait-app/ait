@@ -16,6 +16,7 @@ describe("built-in sidebar navigation", () => {
       { key: "history", visible: true },
       { key: "new-workspace", visible: true },
       { key: "schedules", visible: true },
+      { key: "usage", visible: true },
     ]);
   });
   it("updates visibility and reorders built-ins", () => {
@@ -37,6 +38,7 @@ describe("built-in sidebar navigation", () => {
       "search",
       "history",
       "schedules",
+      "usage",
     ]);
     expect(moved.find(({ key }) => key === "search")?.visible).toBe(false);
   });

@@ -15,6 +15,7 @@
 
 ## 架构决策
 
+- [ADR-119：原生账号用量与 Codex 速度目录](decisions/providers/adr-119-native-account-usage-and-codex-speed.md)：会话实际账号、只读凭据边界、主机缓存与原生速度档位。
 - [ADR-118：摘要接口归 model，配置文件适配归 persistence](decisions/daemon/adr-118-summary-contracts-and-persistence-configuration.md)：`SummaryGenerator`/`SummaryConfiguration` 移入 `model::summary`，daemon 注入 persistence 的配置适配器并删除自有实现。
 - [ADR-117：终端配色查询与外观更新生命周期](decisions/clients/adr-117-terminal-palette-and-appearance-lifetime.md)：显示端回答配色查询，workspace 和终端实例在外观变化时保持存活。
 - [ADR-116：库 crate 只公开被其他 crate 使用的项](decisions/daemon/adr-116-crate-visibility.md)：默认私有，启用 `unreachable_pub`，删除收缩后暴露的未使用代码与转发 `pub use`。
@@ -98,6 +99,7 @@
 
 ## 工程规范与验证
 
+- [Paseo desktop/app 选定改动移植](reports/clients/paseo-desktop-app-port-2026-10-10.md)：17 项推荐与产品增强、原生适配和定向验证。
 - [摘要契约与目录准入：提交验证](reports/daemon/summary-contracts-directory-admission-validation-2026-10-10.md)：摘要草稿接入、目录预算隔离、完整测试与可比基线覆盖率。
 - [Crate 可见性与最新 main 整合验证](reports/daemon/crate-visibility-pr-validation-2026-10-09.md)：PR #239 的 ACP 冲突处理、完整测试、逐 crate 覆盖率与源码证据。
 - [OpenCode 官方 ACP 迁移验证](reports/providers/opencode-acp-2026-10-09.md)：真实原生问答、审批、恢复、无工具摘要及覆盖率证据。

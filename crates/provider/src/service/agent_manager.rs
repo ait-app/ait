@@ -10,6 +10,7 @@ pub(crate) mod ownership;
 mod resume;
 mod streaming;
 mod titles;
+mod usage;
 
 use std::collections::BTreeMap;
 use std::sync::Arc;
@@ -117,6 +118,7 @@ pub struct AgentManager {
     generated_titles: generated_titles::Titles,
     workspace_names: Option<Arc<dyn model::workspace::lifecycle::WorkspaceNaming>>,
     auto_archives: auto_archive::AutoArchives,
+    usage_cache: usage::UsageCache,
 }
 
 impl AgentManager {
@@ -146,6 +148,7 @@ impl AgentManager {
             generated_titles: generated_titles::Titles::default(),
             workspace_names: None,
             auto_archives: auto_archive::AutoArchives::default(),
+            usage_cache: usage::UsageCache::default(),
         }
     }
 

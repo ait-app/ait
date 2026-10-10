@@ -120,12 +120,20 @@ async fn native_codex_draft_features_discover_workflows_without_opening_a_thread
         .await
         .unwrap();
     let features = response["features"].as_array().unwrap();
-    for id in ["fast_mode", "plan_mode"] {
-        assert_eq!(
-            features.iter().find(|feature| feature["id"] == id).unwrap()["value"],
-            true
-        );
-    }
+    assert_eq!(
+        features
+            .iter()
+            .find(|feature| feature["id"] == "service_tier")
+            .unwrap()["value"],
+        "fast"
+    );
+    assert_eq!(
+        features
+            .iter()
+            .find(|feature| feature["id"] == "plan_mode")
+            .unwrap()["value"],
+        true
+    );
     assert!(fixture.requests().iter().all(|request| !matches!(
         request["method"].as_str(),
         Some("thread/start" | "thread/resume" | "turn/start")
@@ -144,7 +152,7 @@ async fn native_codex_draft_features_discover_workflows_without_opening_a_thread
             .as_array()
             .unwrap()
             .iter()
-            .all(|feature| feature["id"] != "fast_mode")
+            .all(|feature| feature["id"] != "service_tier")
     );
 }
 

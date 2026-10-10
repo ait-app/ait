@@ -47,6 +47,7 @@ impl AgentManager {
             owner,
             generated_titles: super::generated_titles::Titles::default(),
             workspace_names: self.workspace_names.clone(),
+            usage_cache: self.usage_cache.clone(),
             auto_archives: super::auto_archive::AutoArchives::default(),
         }
     }

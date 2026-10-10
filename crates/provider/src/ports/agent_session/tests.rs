@@ -87,6 +87,7 @@ async fn unavailable<T>(operation: AgentSessionFuture<'_, T>) {
 #[tokio::test]
 async fn optional_session_controls_fail_without_claiming_unsupported_authority() {
     let mut session = MinimalSession;
+    unavailable(session.account_usage()).await;
     assert_eq!(session.failure_message(), None);
     assert!(!session.pending_foreground());
     assert_eq!(session.cancel_pending().await, Ok(()));

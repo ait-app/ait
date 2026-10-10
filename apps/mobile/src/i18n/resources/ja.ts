@@ -1183,6 +1183,7 @@ export const ja: TranslationResources = {
       appName: "Ait",
     },
     sections: {
+      usage: "Usage",
       workspaces: "ワークスペース",
       sessions: "履歴",
       search: "検索",
@@ -1988,6 +1989,8 @@ export const ja: TranslationResources = {
     dismiss: "閉じる",
   },
   contextWindow: {
+    noData: "No context usage yet",
+    accessibilityNoData: "View account usage",
     title: "コンテキストウィンドウ",
     used: "{{percentage}}%使用",
     tokens: "{{used}} / {{max}}トークン",
@@ -2264,6 +2267,14 @@ export const ja: TranslationResources = {
         codeSize: "コードサイズ",
         codeSizeHint: "コード、差分、ターミナル出力に使用されます",
         codeSizeAccessibility: "コードフォントサイズ",
+      },
+      layout: {
+        title: "レイアウト",
+        contentWidth: "コンテンツ幅",
+        contentWidthHint: "ワイド画面でのチャットと Markdown ファイルの最大幅",
+        contentWidthAccessibility: "コンテンツ幅 (ピクセル)",
+        reset: "リセット",
+        resetAccessibility: "コンテンツ幅をデフォルトに戻す",
       },
       syntax: {
         title: "構文ハイライト",

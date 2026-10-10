@@ -1210,6 +1210,7 @@ export const zhCN: TranslationResources = {
       appName: "Ait",
     },
     sections: {
+      usage: "用量",
       workspaces: "工作区",
       sessions: "历史",
       search: "搜索",
@@ -2262,6 +2263,8 @@ export const zhCN: TranslationResources = {
     dismiss: "关闭",
   },
   contextWindow: {
+    noData: "暂无上下文用量",
+    accessibilityNoData: "查看账户用量",
     title: "上下文窗口",
     used: "已使用 {{percentage}}%",
     tokens: "{{used}} / {{max}} tokens",
@@ -2569,6 +2572,14 @@ export const zhCN: TranslationResources = {
         codeSize: "代码字号",
         codeSizeHint: "用于代码、差异和终端输出",
         codeSizeAccessibility: "代码字号",
+      },
+      layout: {
+        title: "布局",
+        contentWidth: "内容宽度",
+        contentWidthHint: "宽屏上聊天和 Markdown 文件的最大宽度",
+        contentWidthAccessibility: "内容宽度（像素）",
+        reset: "重置",
+        resetAccessibility: "将内容宽度重置为默认值",
       },
       syntax: {
         title: "语法",

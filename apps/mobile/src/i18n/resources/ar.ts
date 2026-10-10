@@ -1168,6 +1168,7 @@ export const ar: TranslationResources = {
       appName: "Ait",
     },
     sections: {
+      usage: "Usage",
       workspaces: "مساحات العمل",
       sessions: "السجل",
       search: "بحث",
@@ -1968,6 +1969,8 @@ export const ar: TranslationResources = {
     dismiss: "رفض",
   },
   contextWindow: {
+    noData: "No context usage yet",
+    accessibilityNoData: "View account usage",
     title: "نافذة السياق",
     used: "تم استخدام{{percentage}}%",
     tokens: "رموز{{used}}/{{max}}",
@@ -2244,6 +2247,14 @@ export const ar: TranslationResources = {
         codeSize: "حجم الكود",
         codeSizeHint: "يُستخدم للكود والفروقات ومخرجات الطرفية",
         codeSizeAccessibility: "حجم خط الكود",
+      },
+      layout: {
+        title: "التخطيط",
+        contentWidth: "عرض المحتوى",
+        contentWidthHint: "أقصى عرض للمحادثة وملفات Markdown على الشاشات العريضة",
+        contentWidthAccessibility: "عرض المحتوى بالبكسل",
+        reset: "إعادة تعيين",
+        resetAccessibility: "إعادة عرض المحتوى إلى الافتراضي",
       },
       syntax: {
         title: "بناء الجملة",

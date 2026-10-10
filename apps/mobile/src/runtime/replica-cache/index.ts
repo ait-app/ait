@@ -383,6 +383,21 @@ const DirectoryCheckpointSchema = z.strictObject({
   agents: DirectoryCursorSchema.optional(),
 });
 
+// Old checkpoints could describe a baseline that an overlapping refresh had discarded.
+// Revalidate directory contents once without evicting cached rows or timelines.
+const StoredDirectoryCheckpointSchema = z.strictObject({
+  version: z.literal(1),
+  cursors: DirectoryCheckpointSchema,
+});
+
+function serializeDirectoryCheckpoint(cursors: DirectoryCheckpoint) {
+  return { version: 1 as const, cursors };
+}
+
+function deserializeDirectoryCheckpoint(payload: string): DirectoryCheckpoint {
+  return parseStoredPayload(StoredDirectoryCheckpointSchema, payload).cursors;
+}
+
 function deserializeTimeline(stored: StoredTimeline | null): CachedTimeline | null {
   if (!stored) {
     return null;
@@ -855,7 +870,7 @@ function applyDirectoryRow(
       if (row.id !== REPLICA_SINGLETON_ROW_ID) {
         throw new Error("Replica checkpoint row id mismatch");
       }
-      result.checkpoint = parseStoredPayload(DirectoryCheckpointSchema, row.payload);
+      result.checkpoint = deserializeDirectoryCheckpoint(row.payload);
       return;
     default:
       return;
@@ -989,7 +1004,11 @@ export class ReplicaCache {
     try {
       await this.prepareStore();
       while (this.activeServerIds.has(serverId)) {
-        await this.flush();
+        // A read may only answer from rows the store already holds, so it waits for this host's
+        // accepted commits to land. A store that rejects them will keep rejecting them: fail closed
+        // rather than re-attempt the write on every pass. A write rejected for another host leaves
+        // this host's stored rows readable.
+        if (!(await this.syncPending()) && this.hasPendingHostChanges(serverId)) return [];
         const revision = this.hostRevisions.get(serverId) ?? 0;
         const rows = await this.rowStore.read(serverId, kinds, ids);
         if (this.canReadHostRevision(serverId, revision)) return rows;
@@ -1017,7 +1036,7 @@ export class ReplicaCache {
     let checkpoint: DirectoryCheckpoint | undefined;
     if (checkpointRow) {
       try {
-        checkpoint = parseStoredPayload(DirectoryCheckpointSchema, checkpointRow.payload);
+        checkpoint = deserializeDirectoryCheckpoint(checkpointRow.payload);
         checkpoint = { ...checkpoint };
         delete checkpoint[invalidEntity];
       } catch {
@@ -1033,7 +1052,7 @@ export class ReplicaCache {
                 serverId: row.serverId,
                 kind: "checkpoint",
                 id: REPLICA_SINGLETON_ROW_ID,
-                payload: JSON.stringify(checkpoint),
+                payload: JSON.stringify(serializeDirectoryCheckpoint(checkpoint)),
               },
             ]
           : [],
@@ -1059,7 +1078,7 @@ export class ReplicaCache {
                 serverId,
                 kind: "checkpoint",
                 id: REPLICA_SINGLETON_ROW_ID,
-                payload: JSON.stringify(checkpoint),
+                payload: JSON.stringify(serializeDirectoryCheckpoint(checkpoint)),
               },
             ]
           : [],
@@ -1179,20 +1198,26 @@ export class ReplicaCache {
   }
 
   async flush(): Promise<void> {
-    await this.persist();
+    await this.syncPending();
+  }
+
+  /** Resolves to whether every pending change reached the store. */
+  private async syncPending(): Promise<boolean> {
+    const persisted = await this.persist();
     await this.writeQueue.catch(() => undefined);
+    return persisted;
   }
 
   private async flushPending(): Promise<void> {
     await this.persist();
   }
 
-  private async persist(): Promise<void> {
+  private async persist(): Promise<boolean> {
     if (this.persistTimer) {
       clearTimeout(this.persistTimer);
       this.persistTimer = null;
     }
-    if (!this.hasPendingChanges()) return;
+    if (!this.hasPendingChanges()) return true;
     const write = this.writeQueue
       .catch(() => undefined)
       .then(async () => {
@@ -1212,11 +1237,16 @@ export class ReplicaCache {
         } catch {
           this.restorePendingChanges(pending);
           if (this.hasPendingChanges()) this.schedulePersist();
+          return false;
         }
-        return undefined;
+        return true;
       });
-    this.writeQueue = write;
-    await write;
+    // The queue only sequences writes; every consumer decides for itself what a failure means.
+    this.writeQueue = write.then(
+      () => undefined,
+      () => undefined,
+    );
+    return write;
   }
 
   private queueEntityDelete(serverId: string, kind: ReplicaRowKind, id: string): void {
@@ -1314,7 +1344,7 @@ export class ReplicaCache {
         if (!value) return null;
         break;
       case "checkpoint":
-        value = upsert.value;
+        value = serializeDirectoryCheckpoint(upsert.value);
         break;
     }
     return {

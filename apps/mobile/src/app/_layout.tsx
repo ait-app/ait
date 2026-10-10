@@ -1,3 +1,5 @@
+import { LucideProvider } from "lucide-react-native";
+import { ICON_STROKE_WIDTH } from "@/styles/theme";
 import { AccountRelayLifecycle } from "@/runtime/account-state";
 import { OnlineServiceHostSyncLifecycle } from "@/runtime/online-service-host-sync";
 import { legacyFavoriteProfileMigration } from "@/agent-profiles/migration";
@@ -931,11 +933,13 @@ function RootAppTree() {
   return (
     <GestureHandlerRootView style={flexStyle}>
       <View style={layoutStyles.surfaceFill}>
-        <RootProviders>
-          <RuntimeProviders>
-            <AppShell />
-          </RuntimeProviders>
-        </RootProviders>
+        <LucideProvider strokeWidth={ICON_STROKE_WIDTH}>
+          <RootProviders>
+            <RuntimeProviders>
+              <AppShell />
+            </RuntimeProviders>
+          </RootProviders>
+        </LucideProvider>
       </View>
     </GestureHandlerRootView>
   );

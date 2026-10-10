@@ -2,6 +2,7 @@
 
 文档按当前能力归属分类。历史验证记录只对应各文件注明的源码提交与平台。
 
+- [Paseo desktop/app 选定改动移植](clients/paseo-desktop-app-port-2026-10-10.md)
 - [草稿重试、文件类型与 OpenCode：验证](clients/draft-files-opencode-validation-2026-10-08.md)
 
 - [桌面监听重启与原生会话导入诊断验证](clients/desktop-listen-import-2026-10-08.md)

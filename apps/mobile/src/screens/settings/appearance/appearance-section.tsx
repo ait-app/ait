@@ -7,7 +7,11 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
-import { EditingTextInput as TextInput } from "@/components/ui/text-input";
+import { Button } from "@/components/ui/button";
+import {
+  EditingTextInput as TextInput,
+  type EditingTextInputHandle,
+} from "@/components/ui/text-input";
 import { isNative } from "@/constants/platform";
 import {
   DEFAULT_THEME_PREFERENCE,
@@ -18,6 +22,8 @@ import {
   MIN_CONTENT_FONT_SIZE,
   MIN_UI_BASE_FONT_SIZE,
   parseClampedFontSize,
+  parseContentMaxWidth,
+  resolveContentMaxWidth,
   sanitizeFontFamily,
   useAppSettings,
   type AppSettings,
@@ -35,7 +41,7 @@ import {
 import { SYNTAX_THEME_OPTIONS, type SyntaxThemeId, type SyntaxThemeOption } from "@ait/highlight";
 import type { TFunction } from "i18next";
 import { ChevronDown, Monitor, Moon, Sun } from "lucide-react-native";
-import { Fragment, useCallback, useEffect, useMemo, useState } from "react";
+import { Fragment, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { Text, View, type PressableStateCallbackType } from "react-native";
 import { StyleSheet, withUnistyles } from "react-native-unistyles";
@@ -386,6 +392,74 @@ function FontSizeRow({
 }
 
 // ---------------------------------------------------------------------------
+// Content width: numeric field (commit on blur/submit) + reset to the default
+// ---------------------------------------------------------------------------
+
+interface ContentWidthRowProps {
+  value: AppSettings["contentMaxWidth"];
+  onChange: (value: AppSettings["contentMaxWidth"]) => void;
+}
+
+function ContentWidthRow({ value, onChange }: ContentWidthRowProps) {
+  const { t } = useTranslation();
+  const width = resolveContentMaxWidth({ contentMaxWidth: value });
+  // The field is uncontrolled, so a saved or reset width is written into it directly.
+  const input = useRef<EditingTextInputHandle>(null);
+
+  useEffect(() => {
+    input.current?.replaceText(String(width));
+  }, [width]);
+
+  const commit = useCallback(() => {
+    const next = parseContentMaxWidth(input.current?.getText()) ?? width;
+    input.current?.replaceText(String(next));
+    // Typing the width already in effect keeps following the default.
+    if (next !== width) {
+      onChange(next);
+    }
+  }, [onChange, width]);
+
+  const reset = useCallback(() => {
+    onChange(null);
+  }, [onChange]);
+
+  return (
+    <View style={settingsStyles.row}>
+      <View style={settingsStyles.rowContent}>
+        <Text style={settingsStyles.rowTitle}>{t("settings.appearance.layout.contentWidth")}</Text>
+        <Text style={settingsStyles.rowHint}>
+          {t("settings.appearance.layout.contentWidthHint")}
+        </Text>
+      </View>
+      <View style={styles.sizeField}>
+        {value === null ? null : (
+          <Button
+            variant="ghost"
+            size="sm"
+            onPress={reset}
+            accessibilityLabel={t("settings.appearance.layout.resetAccessibility")}
+          >
+            {t("settings.appearance.layout.reset")}
+          </Button>
+        )}
+        <TextInput
+          ref={input}
+          initialValue={String(width)}
+          onBlur={commit}
+          onSubmitEditing={commit}
+          keyboardType="number-pad"
+          inputMode="numeric"
+          selectTextOnFocus
+          style={styles.widthInput}
+          accessibilityLabel={t("settings.appearance.layout.contentWidthAccessibility")}
+        />
+        <Text style={styles.unit}>px</Text>
+      </View>
+    </View>
+  );
+}
+
+// ---------------------------------------------------------------------------
 // Syntax highlight theme picker (commits immediately)
 // ---------------------------------------------------------------------------
 
@@ -485,6 +559,13 @@ export function AppearanceSection() {
   const handleThemeChange = useCallback(
     (theme: BuiltInThemePreference) => {
       void updateSettings({ theme });
+    },
+    [updateSettings],
+  );
+
+  const handleContentMaxWidthChange = useCallback(
+    (contentMaxWidth: AppSettings["contentMaxWidth"]) => {
+      void updateSettings({ contentMaxWidth });
     },
     [updateSettings],
   );
@@ -686,6 +767,14 @@ export function AppearanceSection() {
           />
         </View>
       </SettingsSection>
+      <SettingsSection title={t("settings.appearance.layout.title")}>
+        <View style={settingsStyles.card}>
+          <ContentWidthRow
+            value={settings.contentMaxWidth}
+            onChange={handleContentMaxWidthChange}
+          />
+        </View>
+      </SettingsSection>
       <SettingsSection title={t("settings.appearance.syntax.title")}>
         <View style={settingsStyles.card}>
           <SyntaxRow value={settings.syntaxTheme} onChange={handleSyntaxThemeChange} />
@@ -757,6 +846,19 @@ const styles = StyleSheet.create((theme) => ({
   },
   sizeInput: {
     width: 64,
+    minHeight: 36,
+    paddingVertical: theme.spacing[2],
+    paddingHorizontal: theme.spacing[3],
+    borderRadius: theme.borderRadius.md,
+    borderWidth: theme.borderWidth[1],
+    borderColor: theme.colors.border,
+    backgroundColor: theme.colors.surface2,
+    color: theme.colors.foreground,
+    fontSize: theme.fontSize.base,
+    textAlign: "right",
+  },
+  widthInput: {
+    width: 80,
     minHeight: 36,
     paddingVertical: theme.spacing[2],
     paddingHorizontal: theme.spacing[3],
