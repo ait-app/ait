@@ -2,6 +2,7 @@ import React, { act } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { UsageCard } from "./card";
+import { i18n } from "@/i18n/i18next";
 import type { UsageDisplay } from "./display";
 import type { UsageReportEntry } from "./types";
 
@@ -38,7 +39,8 @@ const entry: UsageReportEntry = {
     windows: [{ id: "primary", label: "Session", usedPct: 25, remainingPct: 75 }],
   },
 };
-beforeEach(() => {
+beforeEach(async () => {
+  await i18n.changeLanguage("en");
   vi.stubGlobal("React", React);
   vi.stubGlobal("IS_REACT_ACT_ENVIRONMENT", true);
 });
@@ -53,16 +55,43 @@ function render(report = entry, mode: UsageDisplay = display) {
   );
   return container;
 }
-afterEach(() => {
+afterEach(async () => {
   act(() => root?.unmount());
   container?.remove();
   root = null;
   container = null;
   vi.clearAllMocks();
   vi.unstubAllGlobals();
+  await i18n.changeLanguage("en");
 });
 
 describe("native usage card in Chromium", () => {
+  it("updates displayed percentages and login messages when the language changes", async () => {
+    const node = render(entry, { ...display, displayAs: "remaining" });
+    expect(node.textContent).toContain("75% left");
+    await act(async () => {
+      await i18n.changeLanguage("zh-CN");
+    });
+    expect(node.textContent).toContain("剩余 75%");
+    expect(node.querySelector('[role="checkbox"]')?.getAttribute("aria-label")).toContain(
+      "固定 Codex",
+    );
+    render({
+      ...entry,
+      report: {
+        status: "unavailable",
+        problem: { kind: "rejected", status: 401, refreshedBy: "codex login" },
+      },
+    });
+    expect(node.textContent).toContain("不可用");
+    expect(node.textContent).toContain("登录被拒绝（HTTP 401）");
+    expect(node.textContent).toContain("codex login");
+    await act(async () => {
+      await i18n.changeLanguage("en");
+    });
+    expect(node.textContent).toContain("Unavailable");
+    expect(node.textContent).toContain("Login rejected (HTTP 401)");
+  });
   it("shows the selected account, changes percentage meaning, and pins the chosen window", () => {
     const node = render();
     expect(node.textContent).toContain("selected@example.test");

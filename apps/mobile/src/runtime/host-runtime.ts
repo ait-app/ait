@@ -224,7 +224,7 @@ function toActiveConnection(connection: HostConnection): ActiveConnection {
     };
   }
   if (connection.type === "accountRelay") {
-    return { type: "accountRelay", endpoint: connection.hostId, display: "Account relay" };
+    return { type: "accountRelay", endpoint: connection.hostId, display: "Online relay" };
   }
   if (connection.type === "directTcp") {
     return {

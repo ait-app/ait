@@ -1,4 +1,10 @@
 import { formatTokenCount } from "@/components/context-window-meter.utils";
+import type { TFunction } from "i18next";
+import { i18n } from "@/i18n/i18next";
+import {
+  formatResetLabel as localizedResetLabel,
+  formatRunOutLabel as localizedRunOutLabel,
+} from "@/provider-usage/format";
 import type { UsageDisplayAs } from "./preferences";
 import type { UsageBalanceUnit } from "./types";
 
@@ -11,27 +17,28 @@ export function formatPct(value: number): string {
 }
 
 /** "31%" of the window used, or "69% left" of it. */
-export function formatDisplayPct(value: number, displayAs: UsageDisplayAs): string {
-  return displayAs === "used" ? formatPct(value) : `${formatPct(value)} left`;
+export function formatDisplayPct(
+  value: number,
+  displayAs: UsageDisplayAs,
+  t: TFunction = i18n.t.bind(i18n),
+): string {
+  return displayAs === "used"
+    ? formatPct(value)
+    : t("providerUsage.remaining", { amount: formatPct(value) });
 }
 
-function relativeDuration(iso: string): string | null {
-  const diffMs = new Date(iso).getTime() - Date.now();
-  if (!Number.isFinite(diffMs)) return null;
-  if (diffMs <= 0) return "now";
-  const diffMinutes = Math.floor(diffMs / 60_000);
-  const diffHours = Math.floor(diffMinutes / 60);
-  const diffDays = Math.floor(diffHours / 24);
-  if (diffDays > 0) return `${diffDays}d`;
-  if (diffHours > 0) return `${diffHours}h`;
-  return `${diffMinutes}m`;
+export function formatResetLabel(
+  iso: string | null | undefined,
+  t: TFunction = i18n.t.bind(i18n),
+): string | null {
+  return localizedResetLabel(iso, t);
 }
 
-export function formatResetLabel(iso: string | null | undefined): string | null {
-  if (!iso) return null;
-  const rel = relativeDuration(iso);
-  if (!rel) return null;
-  return rel === "now" ? "resetting now" : `resets ${rel}`;
+export function formatRunOutLabel(
+  iso: string | null | undefined,
+  t: TFunction = i18n.t.bind(i18n),
+): string | null {
+  return localizedRunOutLabel(iso, t);
 }
 
 /** A balance amount as the app's language writes it: "$1,234.50", "12,345". */

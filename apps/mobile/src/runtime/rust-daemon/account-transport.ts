@@ -9,7 +9,7 @@ export const createAccountRelayTransportFactory: TransportFactory = ({ url }) =>
     return createNativeAccountRelayTransportFactory()({ url });
   const desktop = getDesktopHost();
   if (!desktop?.invoke || !desktop.events?.on)
-    throw new Error("Account relay requires the native mobile or desktop app.");
+    throw new Error("Online relay requires the native mobile or desktop app.");
   const parsed = new URL(url);
   if (
     parsed.protocol !== "ait+desktop:" ||

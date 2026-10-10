@@ -141,7 +141,7 @@ export const useDownloadStore = create<DownloadState>()((set, get) => ({
           return;
         }
         const desktop = getDesktopHost();
-        if (!desktop?.invoke) throw new Error("Account relay downloads require the desktop app.");
+        if (!desktop?.invoke) throw new Error("Online relay downloads require the desktop app.");
         const preparationId = await desktop.invoke("account_download_prepare", {
           hostId: relay.hostId,
           fileName,

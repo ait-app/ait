@@ -2,6 +2,7 @@ import type { ProviderUsage, UsageReportEntry } from "@ait/protocol/messages";
 
 /** Keep native quota facts and safe authentication failures intact for every usage surface. */
 export function toUsageReport(provider: ProviderUsage, fetchedAt: string): UsageReportEntry {
+  // Leave absent messages for the renderer, so cached reports follow language changes.
   const report: UsageReportEntry["report"] =
     provider.status === "available"
       ? {
@@ -12,14 +13,12 @@ export function toUsageReport(provider: ProviderUsage, fetchedAt: string): Usage
           details: provider.details,
         }
       : provider.status === "error"
-        ? { status: "error", error: provider.error ?? "Unable to read native account usage" }
+        ? { status: "error", error: provider.error ?? "" }
         : {
             status: "unavailable",
             problem: provider.problem ?? {
               kind: "no_quota",
-              detail:
-                provider.error ??
-                "This login does not report plan usage. Sign in with the provider CLI.",
+              detail: provider.error ?? "",
             },
           };
   return {
