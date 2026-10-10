@@ -546,6 +546,40 @@ test("all acknowledged agents begin catch-up independently", async () => {
   expect(membership.agentIds).toEqual(["agent-a", "agent-b"]);
 });
 
+test("established membership releases its host slot before subscribing the latest tabs", async () => {
+  const release = deferred<void>();
+  const observed: string[][] = [];
+  let leased = false;
+  const world = new TimelineWorld((agentIds) => {
+    observed.push(agentIds);
+    if (leased) throw new Error("resource_exhausted");
+    leased = true;
+    return {
+      ready: Promise.resolve(),
+      release: async () => {
+        await release.promise;
+        leased = false;
+      },
+    };
+  });
+  world.show("workspace", ["agent-a"]);
+  world.sync.setConnected(true);
+  (await world.nextFetch("agent-a")).respond({ hasNewer: false });
+  await vi.waitFor(() => expect(world.sync.getAgentTimelineStatus("agent-a")).toBe("ready"));
+
+  world.show("workspace", ["agent-b"]);
+  world.show("workspace", ["agent-c"]);
+  expect(observed).toEqual([["agent-a"]]);
+  release.resolve();
+  (await world.nextFetch("agent-c")).respond({ hasNewer: false });
+  (await world.nextFetch("agent-b")).respond({ hasNewer: false });
+  await vi.waitFor(() => expect(world.sync.getAgentTimelineStatus("agent-c")).toBe("ready"));
+
+  expect(observed).toEqual([["agent-a"], ["agent-a", "agent-b", "agent-c"]]);
+  expect(world.errors).toEqual([]);
+  world.sync.dispose();
+});
+
 test("an eviction starts and acknowledges B before A returns its late subscription ID", async () => {
   const requests: SessionInboundMessage[] = [];
   let receive!: (data: unknown, isBinary: boolean) => void;
