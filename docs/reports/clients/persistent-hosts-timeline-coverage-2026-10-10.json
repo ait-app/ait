@@ -1,0 +1,212 @@
+{
+  "source_revision": "1f755b47ec296ab195252c20528f9af2b8121d8a",
+  "base_revision": "4fecd83a97fd7fedb12e79a2ad15607f1978e3ed",
+  "rust_source_fingerprint": {
+    "sha256": "cae20e5c5f01610de9217a764f7e5d206c81c00c5ea587c93a9adfeb8fddaa7a",
+    "file_count": 997,
+    "scope": "tracked Rust, Cargo, nextest configuration and Python fixture files in bins/ and crates/"
+  },
+  "platform": {
+    "os": "macOS 27.0.1",
+    "architecture": "aarch64",
+    "rust": "1.98.1",
+    "cargo_nextest": "0.9.148",
+    "cargo_llvm_cov": "0.8.4",
+    "opencode_acceptance": "2.0.25"
+  },
+  "scope": {
+    "packages": [
+      "api",
+      "browser",
+      "daemon",
+      "domain",
+      "filesystem",
+      "metadata",
+      "model",
+      "persistence",
+      "provider",
+      "relay",
+      "schedule",
+      "terminal",
+      "voice"
+    ],
+    "features": "default",
+    "additional_file_exclusions": [],
+    "coverage_includes_doctests": false,
+    "native_ignored_tests_included_in_coverage": false,
+    "unavailable_platforms": ["Linux", "Windows", "iOS device", "Android device"],
+    "coverage_language": "Rust only; TypeScript checks do not measure coverage"
+  },
+  "commands": [
+    "cargo llvm-cov nextest --workspace --locked --offline --html",
+    "cargo llvm-cov report --json --summary-only --output-path /private/tmp/ait-submit-coverage-summary.json",
+    "cargo llvm-cov report --lcov --output-path /private/tmp/ait-submit-coverage.lcov"
+  ],
+  "tests": {
+    "workspace_nextest": {
+      "passed": 2039,
+      "skipped": 16,
+      "failed": 0
+    },
+    "coverage_nextest": {
+      "passed": 2039,
+      "skipped": 16,
+      "failed": 0
+    },
+    "doctests": {
+      "command_succeeded": true,
+      "suites": 12,
+      "tests": 0
+    },
+    "opencode_native_acceptance": {
+      "passed": 1
+    },
+    "mobile": {
+      "passed": 185,
+      "files": 12
+    },
+    "desktop": {
+      "passed": 25,
+      "files": 3
+    },
+    "client": {
+      "passed": 35,
+      "files": 1
+    }
+  },
+  "coverage": {
+    "workspace": {
+      "covered": 56524,
+      "total": 59701,
+      "percent": 94.67848109746906
+    },
+    "packages": {
+      "daemon": {
+        "covered": 1318,
+        "total": 1391,
+        "percent": 94.75197699496765
+      },
+      "api": {
+        "covered": 2132,
+        "total": 2255,
+        "percent": 94.54545454545455
+      },
+      "browser": {
+        "covered": 715,
+        "total": 733,
+        "percent": 97.5443383356071
+      },
+      "domain": {
+        "covered": 549,
+        "total": 549,
+        "percent": 100.0
+      },
+      "filesystem": {
+        "covered": 11591,
+        "total": 12210,
+        "percent": 94.93038493038493
+      },
+      "metadata": {
+        "covered": 5462,
+        "total": 5801,
+        "percent": 94.15617996897086
+      },
+      "model": {
+        "covered": 1336,
+        "total": 1388,
+        "percent": 96.25360230547551
+      },
+      "persistence": {
+        "covered": 1696,
+        "total": 1769,
+        "percent": 95.87337478801582
+      },
+      "provider": {
+        "covered": 27028,
+        "total": 28697,
+        "percent": 94.18406105167787
+      },
+      "relay": {
+        "covered": 462,
+        "total": 503,
+        "percent": 91.84890656063618
+      },
+      "schedule": {
+        "covered": 777,
+        "total": 796,
+        "percent": 97.61306532663316
+      },
+      "terminal": {
+        "covered": 1590,
+        "total": 1646,
+        "percent": 96.59781287970839
+      },
+      "voice": {
+        "covered": 1868,
+        "total": 1963,
+        "percent": 95.16046867040245
+      }
+    }
+  },
+  "comparable_baseline": {
+    "available": false,
+    "reason": "No measurement of the current main with the same nextest runner and scope was rerun; historical coverage used a different revision and runner."
+  },
+  "relevant_files": [
+    {
+      "path": "crates/provider/src/local/opencode/session.rs",
+      "lines": {
+        "covered": 568,
+        "total": 631,
+        "percent": 90.01584786053883
+      },
+      "source_sha256": "df2905f5dca342f2869e8db02258fdbb3b5be849a90d3ca7a72d5334f2b87f4b",
+      "uncovered_lines": [
+        79, 103, 118, 150, 229, 231, 232, 248, 249, 250, 287, 325, 403, 412, 425, 431, 435, 436,
+        437, 438, 439, 440, 456, 457, 458, 459, 460, 461, 462, 463, 464, 465, 466, 467, 468, 469,
+        470, 472, 473, 475, 505, 541, 547, 548, 550, 564, 594, 643, 650, 689, 700, 701, 718, 725,
+        743, 749, 764, 766, 770
+      ]
+    },
+    {
+      "path": "crates/provider/src/service/agent_manager/streaming.rs",
+      "lines": {
+        "covered": 321,
+        "total": 333,
+        "percent": 96.3963963963964
+      },
+      "source_sha256": "de8dc23650f2e6288b9507b1e45ea7aedd617a9c5e2aebea48196762227565c7",
+      "uncovered_lines": [81, 94, 122, 132, 133, 134, 135, 343, 355]
+    },
+    {
+      "path": "crates/provider/src/storage/timeline.rs",
+      "lines": {
+        "covered": 288,
+        "total": 292,
+        "percent": 98.63013698630137
+      },
+      "source_sha256": "9b2f0569db70ae73c704b6b7aa7a31d5d50ae2db28b7670c4c57840c87730dd4",
+      "uncovered_lines": [46, 58, 345, 346]
+    },
+    {
+      "path": "crates/provider/src/storage/timeline/progress.rs",
+      "lines": {
+        "covered": 246,
+        "total": 251,
+        "percent": 98.00796812749005
+      },
+      "source_sha256": "40af1b036c89c53053b9b5092cefbcbf0b5b890aad3dee25350c52181ef00fa1",
+      "uncovered_lines": [33, 34, 204, 281, 282]
+    }
+  ],
+  "important_uncovered_behavior": [
+    "OpenCode ACP session.rs lines 456-475: remote $/cancel_request handling and the unsupported-client-method response are not executed by this measurement. Add fixture-driven cancellation notifications and unknown RPC requests when changing those paths.",
+    "Client online-service ticket requests, mobile secure storage and downloads are tested with mocks; their production service and device behavior are outside Rust line coverage."
+  ],
+  "limitations": [
+    "Default llvm-cov exclusions apply; no additional filename or package exclusions.",
+    "The separately executed real OpenCode 2.0.25 test uses isolated XDG directories and a loopback model; the native binary itself is not instrumented.",
+    "No live online-service center, mobile device or packaged Electron end-to-end run was performed.",
+    "Ignored native acceptance tests and doctests are outside the workspace coverage scope; doctest discovery succeeded separately with zero tests."
+  ]
+}

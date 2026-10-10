@@ -123,6 +123,7 @@
 
 ## 客户端、连接与品牌
 
+- [在线服务主机持久保存与 OpenCode 时间线：提交验证](clients/persistent-hosts-timeline-validation-2026-10-10.md)
 - [Daemon 重复注册与旧绑定兼容验证](clients/daemon-registration-validation.md)
 - [在线服务入口与逐主机同步：PR 验证](clients/online-service-host-sync-validation.md)
 - [账户主机中继初版验证](clients/account-host-relay-validation.md)
