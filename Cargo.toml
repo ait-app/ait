@@ -61,7 +61,8 @@ two-face = { version = "0.5.2", features = ["syntect-fancy"] }
 unicode-normalization = "0.1.24"
 url = "2.5.8"
 uuid = { version = "1.26.0", features = ["v4"] }
-vt100 = "0.16.2"
+# Pin upstream PR #30 until a release includes wide-character resize and small-screen fixes.
+vt100 = { git = "https://github.com/Junyi-99/vt100-rust", rev = "f2a4d76f9a663894d7bd56355caf150c106556ca" }
 
 [workspace.lints.rust]
 missing_docs = "warn"

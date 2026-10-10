@@ -48,9 +48,13 @@ pub(super) async fn discover(
             let thinking = config::option(&options, "thought_level");
             let efforts = thinking.map(config::choices).transpose()?.unwrap_or_default().into_iter()
                 .map(|effort| json!({"id":effort["value"],"label":effort["name"],"isDefault":thinking.is_some_and(|option| option["currentValue"] == effort["value"])})).collect::<Vec<_>>();
-            models.push(json!({"provider":PROVIDER,"id":choice["value"],"label":choice["name"],
+            let mut model = json!({"provider":PROVIDER,"id":choice["value"],"label":choice["name"],
                 "description":choice["description"],"isSelectable":true,"isDefault":choice["value"] == default,
-                "thinkingOptions":efforts,"defaultThinkingOptionId":thinking.and_then(|option| option["currentValue"].as_str())}));
+                "thinkingOptions":efforts});
+            if let Some(default) = thinking.and_then(|option| option["currentValue"].as_str()) {
+                model["defaultThinkingOptionId"] = json!(default);
+            }
+            models.push(model);
         }
         Ok(Details { models, modes: available_agents, features: config::features(&domain::agent_runtime::StoredAgentConfig::default()) })
     }.await;

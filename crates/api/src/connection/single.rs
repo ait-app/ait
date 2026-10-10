@@ -16,6 +16,9 @@ use tokio_util::sync::CancellationToken;
 use super::{ConnectionSubscriptions, Incoming, chunks, error, process_message};
 use crate::Shared;
 
+// Workspace bootstrap sends several reads per group before the first response arrives.
+const WORKER_QUEUE_CAPACITY: usize = 16;
+
 enum Work {
     Message(Incoming),
     Release(String, oneshot::Sender<()>),
@@ -32,10 +35,10 @@ pub(super) async fn read(
         provider: std::mem::take(&mut subscriptions.provider),
         ..Default::default()
     };
-    let (metadata_tx, metadata_rx) = mpsc::channel(2);
-    let (terminal_tx, terminal_rx) = mpsc::channel(2);
-    let (files_tx, files_rx) = mpsc::channel(2);
-    let (provider_tx, provider_rx) = mpsc::channel(2);
+    let (metadata_tx, metadata_rx) = mpsc::channel(WORKER_QUEUE_CAPACITY);
+    let (terminal_tx, terminal_rx) = mpsc::channel(WORKER_QUEUE_CAPACITY);
+    let (files_tx, files_rx) = mpsc::channel(WORKER_QUEUE_CAPACITY);
+    let (provider_tx, provider_rx) = mpsc::channel(WORKER_QUEUE_CAPACITY);
     let cancel = CancellationToken::new();
     let contexts = lanes.each_ref().map(|outbound| WorkerContext {
         state,
