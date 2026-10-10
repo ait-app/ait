@@ -127,7 +127,9 @@ jobs:
           cache-dependency-path: package-lock.json
       - run: npm ci
       - run: npx oxlint
-      - name: Check changed UI formatting and lint
+      - run: node --test scripts/check-ui.test.mjs
+      # Formatting is already checked repository-wide by the format job.
+      - name: Check changed UI lint
         env:
           UI_DIFF_BASE: ${{ github.event.pull_request.base.sha || github.event.before }}
         run: npm run check:ui -- "$UI_DIFF_BASE"
