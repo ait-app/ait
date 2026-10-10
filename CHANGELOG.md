@@ -1,5 +1,18 @@
 # Ait changelog
 
+## 0.0.25 - 2026-10-10
+
+- Use the official OpenCode ACP interface for native questions, permissions, cancellation, and restored sessions.
+- Show native account usage with pinned windows, used or remaining balances, host selection, and refresh controls.
+- Offer Codex Normal, Fast, and Ultrafast speeds from the native model catalog and clear the previous speed when selecting Normal.
+- Keep chat reading positions stable, improve search and selection copying, and preserve streamed Markdown block identities.
+- Add configurable content width and improve image sizing, file links, Vue highlighting, and Astro parsing.
+- Unify Explorer and workspace tabs and improve subagent panes, context details, and overlay interactions.
+- Fix desktop window dragging, browser automation targets, and screenshot coordinates after zooming.
+- Restore directory, tab, and subagent synchronization after reconnecting and stop retry loops after replica cache writes fail.
+- Match OpenCode terminal colors to the desktop appearance and improve terminal editing shortcuts and external links.
+- Consolidate summary contracts, isolate directory reads from execution budgets, and remove unused persistence watching.
+
 ## 0.0.24 - 2026-10-09
 
 - Add OpenCode native session permissions with Allow, Ask, and Deny controls and distinct icons.
