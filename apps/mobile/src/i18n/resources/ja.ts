@@ -1374,7 +1374,7 @@ export const ja: TranslationResources = {
       },
       keepRunning: {
         title: "終了後もデーモンを実行し続ける",
-        hint: "Aitを終了してもデーモンは実行し続けます",
+        hint: "Aitを終了してもエージェントとターミナルは実行し続け、次回起動時に再接続します。",
       },
       logs: {
         title: "ログファイル",

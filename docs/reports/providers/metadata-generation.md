@@ -6,12 +6,12 @@
 
 `metadataGeneration` 从单纯保存配置变成真实调用链，覆盖固定版本 Paseo 的四类功能：
 
-| 入口 | 生成内容 | 保留与失败行为 |
-| --- | --- | --- |
-| 新建/导入 session 的临时标题 | 首条用户内容生成标题 | 先显示文本回退；显式/原生标题保留；失败保留临时标题 |
-| directory/worktree 的 firstAgentContext，或稍后首条 Agent 输入 | 工作区标题、独立生成的分支名 | 手工标题保留；只有 managed 随机占位分支可改名；显式、已切换、已有 upstream 的分支保留 |
-| `checkout.commit.request` 省略或空白 message | uncommitted diff 的提交主题 | 显式内容保留；模型不可用时 `Update files` |
-| `checkout.pr.create.request` 缺 title 或 body | 指定 baseRef 的提交差异生成 PR 文案 | 仅填缺失字段；失败回退到默认标题/正文；Git 读取错误不会被吞掉 |
+| 入口                                                           | 生成内容                            | 保留与失败行为                                                                        |
+| -------------------------------------------------------------- | ----------------------------------- | ------------------------------------------------------------------------------------- |
+| 新建/导入 session 的临时标题                                   | 首条用户内容生成标题                | 先显示文本回退；显式/原生标题保留；失败保留临时标题                                   |
+| directory/worktree 的 firstAgentContext，或稍后首条 Agent 输入 | 工作区标题、独立生成的分支名        | 手工标题保留；只有 managed 随机占位分支可改名；显式、已切换、已有 upstream 的分支保留 |
+| `checkout.commit.request` 省略或空白 message                   | uncommitted diff 的提交主题         | 显式内容保留；模型不可用时 `Update files`                                             |
+| `checkout.pr.create.request` 缺 title 或 body                  | 指定 baseRef 的提交差异生成 PR 文案 | 仅填缺失字段；失败回退到默认标题/正文；Git 读取错误不会被吞掉                         |
 
 配置候选按顺序优先，再试已发现的小模型，最后试当前 session 选择；禁用 Provider 不参与。
 当前可执行适配器为 Codex、Claude，未新增其他 Provider。配置 set/reload 对之后的生成生效。
@@ -68,14 +68,14 @@ Codex 的 ephemeral/outputSchema 由本机 app-server JSON schema 核对；功�
 基线与当前测量均为 macOS aarch64、默认 features、全 workspace；当前代码也包含 main
 后来合入的 Codex command-actions 修复，增量不全部归因于本次功能。
 
-| 测量范围 | 已覆盖 / 总行数 | 行覆盖率 |
-| --- | --- | --- |
-| Workspace | 58,922 / 68,902 | 85.52% |
-| provider | 15,251 / 16,415 | 92.91% |
-| metadata | 6,061 / 6,758 | 89.69% |
-| filesystem | 7,759 / 8,821 | 87.96% |
-| api | 1,104 / 1,149 | 96.08% |
-| daemon | 834 / 883 | 94.45% |
+| 测量范围   | 已覆盖 / 总行数 | 行覆盖率 |
+| ---------- | --------------- | -------- |
+| Workspace  | 58,922 / 68,902 | 85.52%   |
+| provider   | 15,251 / 16,415 | 92.91%   |
+| metadata   | 6,061 / 6,758   | 89.69%   |
+| filesystem | 7,759 / 8,821   | 87.96%   |
+| api        | 1,104 / 1,149   | 96.08%   |
+| daemon     | 834 / 883       | 94.45%   |
 
 测量快照：`b939123f33cedb5dde06b5cad2d657cfe4436bea` 加本 PR 的功能修改；
 [可审阅 JSON 制品](metadata-generation-coverage.json) 记录逐文件 SHA-256、行数、

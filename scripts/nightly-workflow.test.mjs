@@ -82,6 +82,7 @@ test("main builds run independently while admission and publication share a queu
     "rust",
     "ui",
     "docs",
+    "format",
   ]);
   assert.deepEqual(workflow.jobs["nightly-publish"].concurrency, {
     group: "nightly-main-control",
@@ -257,11 +258,12 @@ test("main publishing requires desktop and applicable CI checks to pass", () => 
     changes: { result: "success" },
     desktop: { result: "success" },
     docs: { result: "success" },
+    format: { result: "success" },
     rust: { result: "skipped" },
     ui: { result: "success" },
   };
   assert.equal(condition(workflow.jobs["nightly-publish"].if, github, needs), true);
-  for (const job of ["changes", "desktop", "docs", "rust", "ui"]) {
+  for (const job of ["changes", "desktop", "docs", "format", "rust", "ui"]) {
     assert.equal(
       condition(workflow.jobs["nightly-publish"].if, github, {
         ...needs,

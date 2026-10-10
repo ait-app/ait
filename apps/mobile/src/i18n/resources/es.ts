@@ -1397,7 +1397,7 @@ export const es: TranslationResources = {
       },
       keepRunning: {
         title: "Mantener el demonio en ejecución después de salir",
-        hint: "Daemonsigue ejecutándose cuando sales de Ait",
+        hint: "Los agentes y terminales siguen ejecutándose al salir de Ait; el próximo inicio se vuelve a conectar a ellos.",
       },
       logs: {
         title: "Archivo de registro",

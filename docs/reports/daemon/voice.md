@@ -4,16 +4,16 @@
 独立 `voice` 能力包，并在生产 server 装配。固定参考 Paseo
 `2c8e8a826810337492cc5a38bb0bbd705b6fb632`。
 
-| 方法 | 行为 |
-| --- | --- |
-| voice.mode.set.request | 连接启用/关闭语音、解析目标 Agent、独占目标租约 |
-| voice.abort.request | 取消输入、识别、Agent 等待、合成和待播放输出 |
-| voice.audio.chunk | PCM/WAV 输入、显式结束或静音分句、插话取消旧任务 |
-| voice.audio.played | 按音频 ID 确认播放，限制未确认输出并处理超时 |
-| dictation.stream.start | 校验后端和格式、连接内流创建及幂等重发 |
-| dictation.stream.chunk | 有界乱序重排、重复检测、连续序号确认和 partial |
-| dictation.stream.finish | 等待缺片、最终转写、结果缓存与重复 finish 重放 |
-| dictation.stream.cancel | 取消后台识别并丢弃该流，防止迟到结果污染重建流 |
+| 方法                    | 行为                                             |
+| ----------------------- | ------------------------------------------------ |
+| voice.mode.set.request  | 连接启用/关闭语音、解析目标 Agent、独占目标租约  |
+| voice.abort.request     | 取消输入、识别、Agent 等待、合成和待播放输出     |
+| voice.audio.chunk       | PCM/WAV 输入、显式结束或静音分句、插话取消旧任务 |
+| voice.audio.played      | 按音频 ID 确认播放，限制未确认输出并处理超时     |
+| dictation.stream.start  | 校验后端和格式、连接内流创建及幂等重发           |
+| dictation.stream.chunk  | 有界乱序重排、重复检测、连续序号确认和 partial   |
+| dictation.stream.finish | 等待缺片、最终转写、结果缓存与重复 finish 重放   |
+| dictation.stream.cancel | 取消后台识别并丢弃该流，防止迟到结果污染重建流   |
 
 生产已实现 **155/195** 个方法；Paseo 规范方法为 **148/188（78.72%）**，比 ADR-041
 增加 8 个，剩余占位 **40** 个。方法接通不表示所有音频格式、模型和延迟均与 Paseo 等价。
@@ -52,13 +52,13 @@ Provider 校验 native turn ID，避免旧语音任务取消或读取后续文�
 可比基线为 [ADR-041 制品](../providers/server-agent-controls-coverage.json)，同平台、默认 features 和
 统计范围。覆盖率与测试通过数分别统计。
 
-| 范围 | 覆盖行/总行 | 行覆盖率 | 相对 ADR-041 |
-| --- | ---: | ---: | ---: |
-| workspace | 45,938/55,523 | 82.74% | +0.28 个百分点 |
-| voice | 1,192/1,275 | 93.49% | 新增 crate，无历史基线 |
-| provider | 6,184/6,712 | 92.13% | +0.03 个百分点 |
-| api | 867/892 | 97.20% | +0.17 个百分点 |
-| daemon | 463/483 | 95.86% | -0.17 个百分点 |
+| 范围      |   覆盖行/总行 | 行覆盖率 |           相对 ADR-041 |
+| --------- | ------------: | -------: | ---------------------: |
+| workspace | 45,938/55,523 |   82.74% |         +0.28 个百分点 |
+| voice     |   1,192/1,275 |   93.49% | 新增 crate，无历史基线 |
+| provider  |   6,184/6,712 |   92.13% |         +0.03 个百分点 |
+| api       |       867/892 |   97.20% |         +0.17 个百分点 |
+| daemon    |       463/483 |   95.86% |         -0.17 个百分点 |
 
 [可审阅 JSON 制品](voice-coverage.json)包含聚合数据、逐文件行数和源码哈希、
 工具链、精确命令、基线、跳过测试原因及验证日志哈希。

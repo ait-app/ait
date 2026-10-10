@@ -73,6 +73,18 @@ jobs:
       - run: node --test scripts/check-docs.test.mjs
       - run: node scripts/check-docs.mjs
 
+  # Formatting covers Markdown, workflows and TOML as well as code, so it runs on every change.
+  format:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 24
+      # Run the pinned formatter directly instead of installing the full workspace.
+      - run: npx --yes "oxfmt@$(node -p 'require("./package.json").devDependencies.oxfmt')" --check .
+
   rust:
     needs: changes
     if: needs.changes.outputs.rust == 'true'
@@ -290,10 +302,11 @@ jobs:
     if: >-
       ${{ !cancelled() && github.event_name != 'pull_request' && github.ref == 'refs/heads/main'
           && needs.desktop.result == 'success' && needs.docs.result == 'success'
+          && needs.format.result == 'success'
           && needs.changes.result == 'success'
           && contains(fromJSON('["success","skipped"]'), needs.rust.result)
           && contains(fromJSON('["success","skipped"]'), needs.ui.result) }}
-    needs: [nightly-prepare, changes, desktop, rust, ui, docs]
+    needs: [nightly-prepare, changes, desktop, rust, ui, docs, format]
     env:
       NIGHTLY_BUILD_LABEL: ${{ needs.nightly-prepare.outputs.label }}
     runs-on: ubuntu-24.04

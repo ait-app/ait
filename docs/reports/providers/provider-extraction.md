@@ -10,12 +10,12 @@
 新增 [provider](../../../crates/provider/src/lib.rs)，集中 Agent 的协议、端口、服务、
 RPC 校验/投影、SQLite catalog 和 JSON runtime registry。纯 Agent 类型仍在 domain。
 
-| 能力 | 已实现方法数 | 当前归属 |
-| --- | ---: | --- |
-| Agent preset 配置、查询、默认选择 | 5 | provider `protocol/agent`、`rpc/agents`、`service/agents`、`storage` |
-| Agent runtime 目录与元数据生命周期 | 9 | provider `protocol/agent_lifecycle`、`rpc/agent_runtime`、`service/agent_runtime`、`storage/agent_runtime` |
-| Workspace setup/script | 5 | metadata `protocol/rpc/service/ports/local` 下的 `workspace_automation` |
-| Workspace clear_attention/mark_unread | 2 | metadata `protocol/rpc/service/ports` 下的 `workspace_state`，provider `service/workspace_attention` 适配 |
+| 能力                                  | 已实现方法数 | 当前归属                                                                                                   |
+| ------------------------------------- | -----------: | ---------------------------------------------------------------------------------------------------------- |
+| Agent preset 配置、查询、默认选择     |            5 | provider `protocol/agent`、`rpc/agents`、`service/agents`、`storage`                                       |
+| Agent runtime 目录与元数据生命周期    |            9 | provider `protocol/agent_lifecycle`、`rpc/agent_runtime`、`service/agent_runtime`、`storage/agent_runtime` |
+| Workspace setup/script                |            5 | metadata `protocol/rpc/service/ports/local` 下的 `workspace_automation`                                    |
+| Workspace clear_attention/mark_unread |            2 | metadata `protocol/rpc/service/ports` 下的 `workspace_state`，provider `service/workspace_attention` 适配  |
 
 AgentManager 与 AgentClient/AgentSession 一并迁入 provider；未启用尚未接通的 Provider 执行接口。
 协议仍公布 195 个可协商名称、102 个已实现 capability，未改变公共方法、JSON 字段或协议版本。
@@ -71,17 +71,17 @@ git diff --check
 
 本轮完整 workspace 行覆盖率为 **80.8813%（38,015 / 47,001）**。
 
-| 范围 | covered / total | 行覆盖率 |
-| --- | ---: | ---: |
-| workspace | 38,015 / 47,001 | 80.8813% |
-| server 七个 package | 14,588 / 16,870 | 86.4730% |
-| api | 1,604 / 1,689 | 94.9674% |
-| daemon | 339 / 351 | 96.5812% |
-| domain | 121 / 121 | 100.0000% |
-| filesystem | 6,049 / 7,276 | 83.1363% |
-| metadata | 4,578 / 5,286 | 86.6061% |
-| protocol | 117 / 133 | 87.9699% |
-| provider | 1,780 / 2,014 | 88.3813% |
+| 范围                | covered / total |  行覆盖率 |
+| ------------------- | --------------: | --------: |
+| workspace           | 38,015 / 47,001 |  80.8813% |
+| server 七个 package | 14,588 / 16,870 |  86.4730% |
+| api                 |   1,604 / 1,689 |  94.9674% |
+| daemon              |       339 / 351 |  96.5812% |
+| domain              |       121 / 121 | 100.0000% |
+| filesystem          |   6,049 / 7,276 |  83.1363% |
+| metadata            |   4,578 / 5,286 |  86.6061% |
+| protocol            |       117 / 133 |  87.9699% |
+| provider            |   1,780 / 2,014 |  88.3813% |
 
 相对可比基线，workspace 提升 **0.0860 个百分点**，server 总量提升 **0.2230 个百分点**。
 可评审 artifact：[provider-coverage.json](provider-coverage.json)，包含逐文件计数、
@@ -112,7 +112,6 @@ CARGO_INCREMENTAL=0 CARGO_TARGET_DIR=/tmp/ait-phase10-cov-target cargo llvm-cov 
 
 范围为全 Cargo workspace、默认 features；未显式排除生产文件，coverage 运行不含 doctest。
 平台为 macOS arm64，Linux/Windows 未执行；原有外部模型凭据/独立 worker 测试保持 ignored。
-
 
 主要未覆盖部分包括一些 SQLite/文件系统 I/O 故障、Agent 目录可选筛选/RPC 拒绝路径，
 Workspace setup 错误投影和平台相关进程失败组合；已有 Git/Forge 超时与回滚等分支也仍有缺口。

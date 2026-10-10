@@ -32,6 +32,8 @@ export interface StopOnQuitDeps {
   settingsStore: Pick<DesktopSettingsStore, "get">;
   isDesktopManagedDaemonRunning: () => boolean;
   stopDaemon: () => Promise<unknown>;
+  /** Keep the daemon for the next session; false when it cannot be handed over. */
+  retainDaemon: () => Promise<boolean>;
   showShutdownFeedback: () => void;
 }
 
@@ -56,15 +58,20 @@ export function shouldStopDesktopManagedDaemonOnQuit(settings: QuitLifecycleSett
   return !settings.daemon.keepRunningAfterQuit;
 }
 
+/**
+ * Stop the desktop-managed daemon on quit, or hand it to the next session when the user keeps
+ * it running. A daemon that cannot be handed over is stopped so it never runs unreachable.
+ * Returns whether a daemon was stopped.
+ */
 export async function stopDesktopManagedDaemonOnQuitIfNeeded(
   deps: StopOnQuitDeps,
 ): Promise<boolean> {
-  const settings = await deps.settingsStore.get();
-  if (!shouldStopDesktopManagedDaemonOnQuit(settings)) {
+  if (!deps.isDesktopManagedDaemonRunning()) {
     return false;
   }
 
-  if (!deps.isDesktopManagedDaemonRunning()) {
+  const settings = await deps.settingsStore.get();
+  if (!shouldStopDesktopManagedDaemonOnQuit(settings) && (await deps.retainDaemon())) {
     return false;
   }
 

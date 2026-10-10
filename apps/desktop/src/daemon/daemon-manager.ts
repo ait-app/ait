@@ -142,10 +142,11 @@ export function isDesktopManagedDaemonRunningSync(): boolean {
   return manager?.status().ownedByDesktop === true;
 }
 
-export async function stopDesktopDaemonViaCli(
-  reason: DesktopDaemonStopReason = DEFAULT_DESKTOP_DAEMON_STOP_REASON,
-): Promise<void> {
-  await stopDesktopDaemon(reason);
+/** Hand the running managed daemon to the next Desktop session instead of stopping it. */
+export async function retainDesktopDaemonForNextSession(): Promise<boolean> {
+  if (!manager) return false;
+  await stopAccountForExit();
+  return manager.retainForNextSession();
 }
 
 function resolveDesktopAppVersion(): string {

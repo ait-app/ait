@@ -49,6 +49,9 @@ catalog 使用 `catalog.sqlite3`。具体数据归属由能力包维护，不把
 
 SIGINT、SIGTERM 和关闭 RPC 会停止接纳新连接、释放订阅、回收所属 Provider/终端资源，
 再释放实例锁。重启 RPC 在同一进程中重新组装服务。桌面只停止自己创建的 daemon 子进程。
+开启 **Host → Daemon → Keep daemon running after quit** 后，退出时 daemon 继续运行，连接信息写入
+数据目录的 `desktop-daemon.json`（0600，含访问 token）；下次启动经认证与 PID 校验后重新接管，
+见 [ADR-128](../decisions/clients/adr-128-desktop-daemon-keep-running.md)。
 日志使用 `daemon ready listen=...` 表示监听就绪；客户端仍需通过认证握手确认服务可用。
 
 ## HTTP 与浏览器认证

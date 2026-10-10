@@ -15,6 +15,7 @@
     "*.lock",
     "**/*.gen.ts",
     "**/*.gen.tsx",
-    "scripts/fixtures/paseo/paseo-api-contracts.json"
+    "**/fixtures/**/*.json",
+    "docs/reports/**/*.json"
   ]
 }

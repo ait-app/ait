@@ -27,9 +27,9 @@ metadata 的 workspace 自动化还直接调用 `file::storage::project_config::
    - `config`（CLI、环境变量与 TOML 优先级、凭据脱敏）位于 `bins/daemon/src/config.rs`；
    - 故障证据文件的保存、清理与读取位于 `bins/daemon/src/diagnostics/store.rs`；
    - 稳定 `server-id` 的加载与不覆盖发布位于 `bins/daemon/src/instance/identity.rs`。
-   它们通过 `persistence::File` 原子写入；对应依赖 `clap`、`toml`、`secrecy`、`serde`、
-   `tempfile` 和 `thiserror` 由 daemon 声明，persistence 移除 `anyhow`、`clap`、`toml`、
-   `secrecy` 和 `uuid`。配置优先级、路径、格式和 identity 发布语义保持不变。
+     它们通过 `persistence::File` 原子写入；对应依赖 `clap`、`toml`、`secrecy`、`serde`、
+     `tempfile` 和 `thiserror` 由 daemon 声明，persistence 移除 `anyhow`、`clap`、`toml`、
+     `secrecy` 和 `uuid`。配置优先级、路径、格式和 identity 发布语义保持不变。
 3. `model::storage::project::ProjectConfigStore` 增加 `config_path(root)`：返回读取将使用的
    项目配置文件路径（存在 `ait.json` 时即使无效也优先，仅在其不存在时回退 `paseo.json`）。
    `LocalProjectConfigStore` 用原有解析实现它，原 `read_path` 自由函数不再公开。

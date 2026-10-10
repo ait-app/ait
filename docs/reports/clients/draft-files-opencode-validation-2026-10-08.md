@@ -32,10 +32,10 @@ cargo llvm-cov --no-clean --workspace --html -- --test-threads=4
 此次未改动 DSH 实现；失败原因尚未确定。覆盖率不含 doc tests，前端覆盖率未测量。
 
 | Rust 行覆盖范围 | Covered / total | 行覆盖率 |
-| --- | --- | --- |
-| Workspace | 57,093 / 60,604 | 94.21% |
-| Filesystem | 11,570 / 12,198 | 94.85% |
-| Provider | 27,646 / 29,631 | 93.30% |
+| --------------- | --------------- | -------- |
+| Workspace       | 57,093 / 60,604 | 94.21%   |
+| Filesystem      | 11,570 / 12,198 | 94.85%   |
+| Provider        | 27,646 / 29,631 | 93.30%   |
 
 [本次覆盖率摘要](draft-files-opencode-coverage-2026-10-09.json)包含完整命令和修改文件统计。
 HTML 可在 `target/diagnostics-coverage/llvm-cov/html/index.html` 重建。
@@ -60,11 +60,11 @@ cargo llvm-cov --workspace --html -- --test-threads=4
 独立空 XDG 目录隔离本机全局 Git hooksPath，未修改用户配置。所有命令通过。
 普通测试：**1,999 passed / 16 ignored**，包含 doc tests；覆盖率运行：**1,998 passed / 16 ignored**，不含 doc tests。
 
-| Rust 行覆盖范围 | Covered / total | 行覆盖率 |
-| --- | --- | --- |
-| 默认特性 workspace | 55,827 / 59,291 | 94.16% |
-| filesystem | 11,567 / 12,192 | 94.87% |
-| provider | 26,796 / 28,758 | 93.18% |
+| Rust 行覆盖范围    | Covered / total | 行覆盖率 |
+| ------------------ | --------------- | -------- |
+| 默认特性 workspace | 55,827 / 59,291 | 94.16%   |
+| filesystem         | 11,567 / 12,192 | 94.87%   |
+| provider           | 26,796 / 28,758 | 93.18%   |
 
 [覆盖率摘要](draft-files-opencode-coverage-2026-10-08.json)包含命令、逐 crate 和修改文件数据。
 完整 HTML 在本机 `target/diagnostics-coverage/llvm-cov/html/index.html`，可由上述命令重建。

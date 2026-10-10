@@ -38,10 +38,15 @@ import { AgentNavigationInbox, parseAgentDeepLinkFromArgv } from "./agent-naviga
 import {
   isDesktopManagedDaemonRunningSync,
   registerDaemonManager,
-  stopDesktopDaemonViaCli,
+  retainDesktopDaemonForNextSession,
+  stopDesktopDaemon,
 } from "./daemon/daemon-manager.js";
 import { closeAllTransportSessions } from "./daemon/local-transport.js";
-import { createQuitLifecycle, registerExternalQuitSignals } from "./daemon/quit-lifecycle.js";
+import {
+  createQuitLifecycle,
+  registerExternalQuitSignals,
+  stopDesktopManagedDaemonOnQuitIfNeeded,
+} from "./daemon/quit-lifecycle.js";
 import { runDesktopStartup } from "./desktop-startup.js";
 import { installAppUpdateOnQuit } from "./features/auto-updater.js";
 import { registerBrowserAutomationIpc } from "./features/browser-automation/ipc.js";
@@ -1053,12 +1058,14 @@ function showDaemonShutdownDialog(): void {
 const quitLifecycle = createQuitLifecycle({
   app,
   closeTransportSessions: closeAllTransportSessions,
-  stopDesktopManagedDaemonIfNeeded: async () => {
-    if (!isDesktopManagedDaemonRunningSync()) return false;
-    showDaemonShutdownDialog();
-    await stopDesktopDaemonViaCli("quit");
-    return true;
-  },
+  stopDesktopManagedDaemonIfNeeded: () =>
+    stopDesktopManagedDaemonOnQuitIfNeeded({
+      settingsStore: getDesktopSettingsStore(),
+      isDesktopManagedDaemonRunning: isDesktopManagedDaemonRunningSync,
+      stopDaemon: () => stopDesktopDaemon("quit"),
+      retainDaemon: retainDesktopDaemonForNextSession,
+      showShutdownFeedback: showDaemonShutdownDialog,
+    }),
   installAppUpdateOnQuit: async (signal) => {
     const settings = await getDesktopSettingsStore().get();
     return installAppUpdateOnQuit({

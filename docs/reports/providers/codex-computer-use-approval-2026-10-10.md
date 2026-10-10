@@ -75,10 +75,10 @@ Auto-review 原来只设置 `approvalsReviewer=auto_review`，没有配置插件
 
 ## Test coverage
 
-| 测量范围 | 行覆盖率 | 已覆盖 / 总行数 |
-| --- | --- | --- |
-| Rust workspace | 94.68% | 56552 / 59730 |
-| `provider` crate | 94.19% | 27057 / 28726 |
+| 测量范围         | 行覆盖率 | 已覆盖 / 总行数 |
+| ---------------- | -------- | --------------- |
+| Rust workspace   | 94.68%   | 56552 / 59730   |
+| `provider` crate | 94.19%   | 27057 / 28726   |
 
 精确命令：
 

@@ -23,7 +23,7 @@
 Rust 普通构建使用 `CARGO_TARGET_DIR=target`。
 测试额外设置 `XDG_CONFIG_HOME=/tmp/ait-diagnostics-test-config`，该目录为空：本机全局
 `core.hooksPath=.githooks` 会覆盖现有 Git 重置测试的临时 hook，造成两项断言失败。
-代码清理 GIT_* 子进程环境，因此仅设置 `GIT_CONFIG_GLOBAL` 不能隔离此配置。
+代码清理 GIT\_\* 子进程环境，因此仅设置 `GIT_CONFIG_GLOBAL` 不能隔离此配置。
 使用独立 XDG 配置后，16 项重置测试和完整 workspace 均通过；没有修改用户 Git 配置。
 
 ## 覆盖率

@@ -16,11 +16,11 @@ stderr 持续、有界地读取，仅保存分类结果。测试覆盖管道分�
 
 ## Test coverage
 
-| Scope | Covered/total lines | Line coverage |
-| --- | --- | --- |
-| Workspace | 56928/60463 | 94.15% |
-| provider | 27535/29540 | 93.21% |
-| AGY production | 1109/1176 | 94.30% |
+| Scope          | Covered/total lines | Line coverage |
+| -------------- | ------------------- | ------------- |
+| Workspace      | 56928/60463         | 94.15%        |
+| provider       | 27535/29540         | 93.21%        |
+| AGY production | 1109/1176           | 94.30%        |
 
 测量命令：`cargo llvm-cov --workspace --html --output-dir /private/tmp/ait-agy-pr-23zv638x/coverage -- --test-threads=4`。默认 Cargo features、默认 source filters、无额外文件排除；macOS 27.0.1 arm64，Rust 1.98.1，cargo-llvm-cov 0.8.4。构建与覆盖率使用独立 worktree 和 target 目录。
 

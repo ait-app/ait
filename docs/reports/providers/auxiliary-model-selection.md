@@ -17,15 +17,15 @@ cargo llvm-cov --workspace --html
 
 本表是从本次 LLVM HTML index 提取的可审查覆盖率摘要。HTML 生成于 `target/llvm-cov/html/index.html`，完整 HTML 未上传。
 
-| 范围 / 文件 | 覆盖行 / 总行 | 行覆盖率 |
-|---|---:|---:|
-| Workspace | 54751 / 57980 | 94.43% |
-| Provider crate | 26262 / 27973 | 93.88% |
-| provider/src/composition.rs | 54 / 54 | 100% |
-| provider/src/local/metadata_model.rs | 35 / 35 | 100% |
-| provider/src/ports/agent_session.rs | 223 / 229 | 97.38% |
-| provider/src/service/metadata_generation.rs | 75 / 77 | 97.40% |
-| provider/src/service/metadata_generation/candidates.rs | 79 / 80 | 98.75% |
+| 范围 / 文件                                            | 覆盖行 / 总行 | 行覆盖率 |
+| ------------------------------------------------------ | ------------: | -------: |
+| Workspace                                              | 54751 / 57980 |   94.43% |
+| Provider crate                                         | 26262 / 27973 |   93.88% |
+| provider/src/composition.rs                            |       54 / 54 |     100% |
+| provider/src/local/metadata_model.rs                   |       35 / 35 |     100% |
+| provider/src/ports/agent_session.rs                    |     223 / 229 |   97.38% |
+| provider/src/service/metadata_generation.rs            |       75 / 77 |   97.40% |
+| provider/src/service/metadata_generation/candidates.rs |       79 / 80 |   98.75% |
 
 无相同基线提交和测量环境下的覆盖率结果，故不报告可比增减。未覆盖部分包括部分默认 port 行为与候选覆盖分支；后续实际通道 PR 需补充安装 CLI 的验证。
 

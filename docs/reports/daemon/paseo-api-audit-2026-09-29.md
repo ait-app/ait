@@ -70,29 +70,29 @@
 
 ## 上游测试来源
 
-| 来源 | 本次验证 |
-| --- | --- |
-| `pagination/cursor.test.ts`、`pagination/sortable-pager.test.ts` | 通用游标及目录 API 回归 |
-| `workspace-directory.test.ts` | Workspace 过滤、身份归属、状态优先级及状态时间回归 |
-| `agent/timeline-projection.test.ts` | 执行原始 20 个测试，保存 18 组投影/分页对照数据 |
-| `agent/activity-curator.test.ts` | 执行原始 16 个测试，保存 6 组分叉成功/拒绝对照数据 |
-| `agent-history-search.test.ts` | 执行原始 9 个测试，保存 12 组搜索对照数据 |
-| `protocol/search/text-match.ts` | 固定生成 160 组编辑距离对照数据，验证优化后的 Rust 算法 |
-| `session.ts` wait-for-finish、原生取消/审批测试 | 离线 Provider 的审批等待、超时与取消回归 |
-| `directory-sync/index.test.ts`、`internal/versioned-collection.test.ts` | 序列、压缩、墓碑过期、generation、跨连接订阅和断线补取 |
-| `session/provider/provider-catalog-session.test.ts` | 草稿功能输入、内联失败、隐藏模型和全局作用域 |
-| `agent/agent-manager.test.ts`、`session.ts` resume | 原生覆盖配置、注册失败、归档恢复、重启与运行中拒绝 |
-| `agent/create-agent/intent.test.ts` | Workspace/caller 归属优先级、父标签与新建 Workspace |
-| `pagination/sortable-pager.ts` | 3 个 locale、33 个值的实际 Node/ICU 排序 oracle |
-| `agent/create-agent-lifecycle-dispatch.test.ts`、`worktree-session.test.ts` | Agent worktree、自动归档、原目录分支、失败清理和 setup |
-| `terminal/activity/terminal-activity-tracker.test.ts`、`terminal-activity-route.test.ts` | 活动状态、鉴权、退出撤销、真实 HTTP/PTY/Workspace |
-| `websocket-server.terminal-notifications.test.ts` | 通知去重、连接订阅及终端焦点抑制 |
-| `session.ts` permission / provider_subagent 转发 | 独立于时间线的会话事件、审批撤回、显式结果和子任务身份 |
-| `worktree-core.posix.test.ts`、`utils/worktree.test.ts` | checkout 比较基线、归档资源关闭、共享引用与失败重试 |
-| `worktree-session.test.ts`、`worktree-core.posix.test.ts` 的 PR checkout 分支 | 本地 bare Git + gh fixture、同仓库/fork、分支冲突、临时 ref 清理及信任批准 |
-| `creation/creation.e2e.test.ts`、`creation/index.ts`、`session.ts` Workspace 创建 | 初始 Agent、失败后相同身份重试、首条输入至多一次、断线与并发、实时进度和订阅释放 |
-| `creation/index.test.ts`、`websocket-server.ts::validateCompletedCreation` | 跨回执资源冲突、结果不确定标记、缺失目录/Agent 的重放和查询校验 |
-| 现有 SDK `CreationClient` 与 Rust transport 联合回归 | 真实本地 server + 离线 Codex，验证普通 Agent 和 Workspace 初始 Agent 的全部实时阶段、完成回复、分页/搜索/同步、审批事件与答复、归档恢复后继续输入，以及真实 PTY 的活动 HTTP、通知、列表、捕获和清理 |
+| 来源                                                                                     | 本次验证                                                                                                                                                                                            |
+| ---------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `pagination/cursor.test.ts`、`pagination/sortable-pager.test.ts`                         | 通用游标及目录 API 回归                                                                                                                                                                             |
+| `workspace-directory.test.ts`                                                            | Workspace 过滤、身份归属、状态优先级及状态时间回归                                                                                                                                                  |
+| `agent/timeline-projection.test.ts`                                                      | 执行原始 20 个测试，保存 18 组投影/分页对照数据                                                                                                                                                     |
+| `agent/activity-curator.test.ts`                                                         | 执行原始 16 个测试，保存 6 组分叉成功/拒绝对照数据                                                                                                                                                  |
+| `agent-history-search.test.ts`                                                           | 执行原始 9 个测试，保存 12 组搜索对照数据                                                                                                                                                           |
+| `protocol/search/text-match.ts`                                                          | 固定生成 160 组编辑距离对照数据，验证优化后的 Rust 算法                                                                                                                                             |
+| `session.ts` wait-for-finish、原生取消/审批测试                                          | 离线 Provider 的审批等待、超时与取消回归                                                                                                                                                            |
+| `directory-sync/index.test.ts`、`internal/versioned-collection.test.ts`                  | 序列、压缩、墓碑过期、generation、跨连接订阅和断线补取                                                                                                                                              |
+| `session/provider/provider-catalog-session.test.ts`                                      | 草稿功能输入、内联失败、隐藏模型和全局作用域                                                                                                                                                        |
+| `agent/agent-manager.test.ts`、`session.ts` resume                                       | 原生覆盖配置、注册失败、归档恢复、重启与运行中拒绝                                                                                                                                                  |
+| `agent/create-agent/intent.test.ts`                                                      | Workspace/caller 归属优先级、父标签与新建 Workspace                                                                                                                                                 |
+| `pagination/sortable-pager.ts`                                                           | 3 个 locale、33 个值的实际 Node/ICU 排序 oracle                                                                                                                                                     |
+| `agent/create-agent-lifecycle-dispatch.test.ts`、`worktree-session.test.ts`              | Agent worktree、自动归档、原目录分支、失败清理和 setup                                                                                                                                              |
+| `terminal/activity/terminal-activity-tracker.test.ts`、`terminal-activity-route.test.ts` | 活动状态、鉴权、退出撤销、真实 HTTP/PTY/Workspace                                                                                                                                                   |
+| `websocket-server.terminal-notifications.test.ts`                                        | 通知去重、连接订阅及终端焦点抑制                                                                                                                                                                    |
+| `session.ts` permission / provider_subagent 转发                                         | 独立于时间线的会话事件、审批撤回、显式结果和子任务身份                                                                                                                                              |
+| `worktree-core.posix.test.ts`、`utils/worktree.test.ts`                                  | checkout 比较基线、归档资源关闭、共享引用与失败重试                                                                                                                                                 |
+| `worktree-session.test.ts`、`worktree-core.posix.test.ts` 的 PR checkout 分支            | 本地 bare Git + gh fixture、同仓库/fork、分支冲突、临时 ref 清理及信任批准                                                                                                                          |
+| `creation/creation.e2e.test.ts`、`creation/index.ts`、`session.ts` Workspace 创建        | 初始 Agent、失败后相同身份重试、首条输入至多一次、断线与并发、实时进度和订阅释放                                                                                                                    |
+| `creation/index.test.ts`、`websocket-server.ts::validateCompletedCreation`               | 跨回执资源冲突、结果不确定标记、缺失目录/Agent 的重放和查询校验                                                                                                                                     |
+| 现有 SDK `CreationClient` 与 Rust transport 联合回归                                     | 真实本地 server + 离线 Codex，验证普通 Agent 和 Workspace 初始 Agent 的全部实时阶段、完成回复、分页/搜索/同步、审批事件与答复、归档恢复后继续输入，以及真实 PTY 的活动 HTTP、通知、列表、捕获和清理 |
 
 生成器：`scripts/paseo-timeline-fixtures.mjs`、`scripts/paseo-history-fixtures.mjs`、
 `scripts/paseo-collation-fixtures.mjs`。传入 Paseo checkout 和 `--check` 可只读校验已有数据。
@@ -145,10 +145,10 @@ GitHub / GHES；OpenCode/Pi 与 GitLab/Gitea 不在现有安装范围。本次�
 保存源码 SHA-256、逐文件未覆盖行、修改行命中次数、精确测试命令及日志指纹。
 测量后已核对 358 个源码指纹与当前文件一致。没有可比较的旧覆盖率基线。
 
-| 测量口径 | 覆盖率 | 已覆盖 / 总行数 |
-| --- | ---: | ---: |
-| 新增或修改的可执行行 | 95.14% | 4,657 / 4,895 |
-| 本次改动的生产文件整体 | 86.67% | 15,864 / 18,303 |
+| 测量口径                        | 覆盖率 | 已覆盖 / 总行数 |
+| ------------------------------- | -----: | --------------: |
+| 新增或修改的可执行行            | 95.14% |   4,657 / 4,895 |
+| 本次改动的生产文件整体          | 86.67% | 15,864 / 18,303 |
 | 选定 crate 的全部已插桩生产文件 | 68.95% | 26,317 / 38,168 |
 
 范围为 model、provider、metadata、filesystem、terminal、api、protocol 及 daemon 的
