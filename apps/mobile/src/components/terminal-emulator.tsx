@@ -719,6 +719,9 @@ export default function TerminalEmulator({
     <div
       ref={rootRef}
       data-testid={testId}
+      // Excludes the terminal subtree from the app-wide interface-font rule so the
+      // DOM renderer keeps the terminal's monospace font (see apply-root-font.web.ts).
+      data-pmono=""
       data-terminal-scrollbar-root="true"
       style={rootDivStyle}
       onPointerDown={handleRootPointerDown}
