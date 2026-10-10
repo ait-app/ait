@@ -108,15 +108,6 @@ export async function accountCommand(
             throw new Error("Invalid service URL.");
           await manager.loginWithBrowser((args?.center as string) ?? "");
           break;
-        case "account_login":
-          if (
-            typeof args?.email !== "string" ||
-            typeof args.password !== "string" ||
-            (args.center !== undefined && typeof args.center !== "string")
-          )
-            throw new Error("Invalid login.");
-          await manager.login(args.center ?? "", args.email, args.password);
-          break;
         case "account_logout":
           await manager.logout();
           break;
@@ -146,15 +137,6 @@ export async function accountCommand(
     await persistAccountHostSelection(command, args, snapshot, previousServerId);
     return snapshot;
   });
-}
-
-/** Provider discovery returns public capabilities, never credentials. */
-export async function accountLoginMethods(center: string): Promise<{ hosted: boolean }> {
-  const invoke = getDesktopHost()?.invoke;
-  if (invoke) return (await invoke("account_login_methods", { center })) as { hosted: boolean };
-  if (Platform.OS === "android" || Platform.OS === "ios")
-    return (await getNativeAccount()).loginMethods(center);
-  return { hosted: false };
 }
 
 /** Mount once next to HostRuntime bootstrap; discovery remains separate from runtime hosts. */

@@ -128,18 +128,12 @@ describe("native mobile account storage and lifecycle", () => {
     await manager.logout();
   });
   it.each(["android", "ios"])(
-    "persists the %s session and closes transports in the background",
+    "persists the restored %s session and closes transports in the background",
     async (platform) => {
       mocks.platform = platform;
       vi.stubGlobal(
         "fetch",
         vi.fn(async (url: string) => {
-          if (url.endsWith("/auth/login"))
-            return Response.json({
-              access_token: "private-jwt",
-              expires_in: 3600,
-              user: { email: "me@example.test" },
-            });
           if (url.endsWith("/v1/nodes/register"))
             return Response.json({
               node_id: "node",
@@ -153,7 +147,12 @@ describe("native mobile account storage and lifecycle", () => {
       const native = await import("./native-account.native");
       const manager = await native.getNativeAccount();
       expect(await native.getNativeAccount()).toBe(manager);
-      await manager.login("", "me@example.test", "private-password");
+      await manager.restore({
+        center: "https://center.test/api",
+        token: "private-jwt",
+        expiresAt: Date.now() + 3600_000,
+        name: "Me",
+      });
       await vi.advanceTimersByTimeAsync(0);
       const registration = vi
         .mocked(globalThis.fetch)
@@ -167,7 +166,6 @@ describe("native mobile account storage and lifecycle", () => {
         "ait.account.session.v1",
         expect.stringContaining("private-jwt"),
       );
-      expect(JSON.stringify(mocks.set.mock.calls)).not.toContain("private-password");
       expect(mocks.setInstallation).not.toHaveBeenCalled();
       expect(mocks.appState).toHaveBeenCalledOnce();
       const close = vi.fn();

@@ -1,16 +1,9 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import type { HostProfile } from "@/types/host-connection";
-import {
-  accountCommand,
-  accountLoginMethods,
-  supportsAccountRelay,
-  useAccountState,
-} from "./account-state";
+import { accountCommand, supportsAccountRelay, useAccountState } from "./account-state";
 
 const mocks = vi.hoisted(() => ({
   manager: {
-    login: vi.fn(),
-    loginMethods: vi.fn(),
     loginWithBrowser: vi.fn(),
     cancelLogin: vi.fn(),
     logout: vi.fn(),
@@ -127,17 +120,6 @@ describe("native mobile account commands", () => {
     expect(mocks.setHost).not.toHaveBeenCalled();
   });
   it.each(["android", "ios"])(
-    "discovers hosted login for %s through the native authority",
-    async (platform) => {
-      mocks.platform = platform;
-      mocks.manager.loginMethods.mockResolvedValueOnce({ hosted: true });
-      await expect(accountLoginMethods("https://center.test/api")).resolves.toEqual({
-        hosted: true,
-      });
-      expect(mocks.manager.loginMethods).toHaveBeenCalledExactlyOnceWith("https://center.test/api");
-    },
-  );
-  it.each(["android", "ios"])(
     "cancels %s browser login without waiting behind the native account queue",
     async (platform) => {
       mocks.platform = platform;
@@ -186,15 +168,15 @@ describe("native mobile account commands", () => {
   );
 
   it.each(["android", "ios"])(
-    "passes %s login credentials to the native authority",
+    "passes %s browser login and logout to the native authority",
     async (platform) => {
       mocks.platform = platform;
-      await expect(accountCommand("account_login", { email: "me" })).rejects.toThrow(
-        "Invalid login",
+      await expect(accountCommand("account_login_hosted", { center: 123 })).rejects.toThrow(
+        "Invalid service URL",
       );
       mocks.manager.snapshot.mockReturnValue({ status: "connecting", selected: null });
-      await accountCommand("account_login", { email: "me@example.test", password: " secret " });
-      expect(mocks.manager.login).toHaveBeenCalledWith("", "me@example.test", " secret ");
+      await accountCommand("account_login_hosted");
+      expect(mocks.manager.loginWithBrowser).toHaveBeenCalledExactlyOnceWith("");
       mocks.manager.snapshot.mockReturnValue({ status: "logged_out", selected: null });
       await accountCommand("account_logout");
       expect(mocks.manager.logout).toHaveBeenCalledOnce();
@@ -202,4 +184,18 @@ describe("native mobile account commands", () => {
       expect(mocks.removeConnection).not.toHaveBeenCalled();
     },
   );
+
+  it.each(["android", "ios"])("rejects the removed password command on %s", async (platform) => {
+    mocks.platform = platform;
+    await expect(
+      accountCommand("account_login", {
+        center: "https://center.test/api",
+        email: "me@example.test",
+        password: "test-password",
+      }),
+    ).rejects.toThrow("Unknown account command");
+    expect(mocks.manager.loginWithBrowser).not.toHaveBeenCalled();
+    expect(mocks.manager.logout).not.toHaveBeenCalled();
+    expect(mocks.setHost).not.toHaveBeenCalled();
+  });
 });

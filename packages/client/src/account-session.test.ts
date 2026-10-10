@@ -22,7 +22,9 @@ function fixture() {
   let leaseExpired = false;
   const http = vi.fn(async (url: string | URL | Request, _options?: RequestInit) => {
     const path = String(url);
-    if (path.endsWith("/auth/login"))
+    if (path.endsWith("/auth/providers"))
+      return Response.json({ authing_enabled: true, native_login_enabled: true });
+    if (path.endsWith("/auth/client/exchange"))
       return Response.json({
         access_token: "private-jwt",
         expires_in: 3600,
@@ -62,13 +64,21 @@ function fixture() {
     runtime: () => ({ status: "stopped", serverId: "" }),
     local: vi.fn(async () => undefined),
     fetch: http,
+    browserLogin: {
+      randomSecret: () => "b".repeat(64),
+      challenge: async (value) => createHash("sha256").update(value).digest("base64url"),
+      open: async (_build, state) => ({
+        redirectUri: "ait://auth/callback",
+        url: `ait://auth/callback?state=${state}&code=${"c".repeat(64)}`,
+      }),
+    },
     save: vi.fn(async () => undefined),
     notify: vi.fn(),
     closeTransports: vi.fn(),
   };
   const manager = new AccountSessionManager(deps);
   const login = async () => {
-    await manager.login("", "ME@example.test", " secret ");
+    await manager.loginWithBrowser("");
     await vi.advanceTimersByTimeAsync(1);
   };
   return {
@@ -147,6 +157,51 @@ function browserFixture() {
 }
 
 describe("hosted account login", () => {
+  it.each([
+    { status: 404, options: {} },
+    { status: 200, options: {} },
+    { status: 200, options: { authing_enabled: true, native_login_enabled: false } },
+    { status: 200, options: { authing_enabled: false, native_login_enabled: true } },
+  ])(
+    "rejects unsupported services without a password fallback: %j",
+    async ({ status, options }) => {
+      const { manager, http, deps, open } = browserFixture();
+      await manager.restore({
+        center: "https://saved.test/api",
+        token: "saved-token",
+        expiresAt: Date.now() + 3600_000,
+        name: "Saved account",
+      });
+      http.mockResolvedValueOnce(Response.json(options, { status }));
+      await expect(manager.loginWithBrowser("https://other.test/api")).rejects.toThrow(
+        "Update the service or choose another service URL",
+      );
+      expect(http).toHaveBeenCalledExactlyOnceWith(
+        "https://other.test/api/v1/auth/providers",
+        expect.objectContaining({ method: "GET" }),
+      );
+      expect(open).not.toHaveBeenCalled();
+      expect(deps.save).not.toHaveBeenCalled();
+      expect(manager.snapshot()).toMatchObject({
+        center: "https://saved.test/api",
+        name: "Saved account",
+      });
+      await manager.logout();
+    },
+  );
+
+  it("reports discovery failure and allows retrying browser login", async () => {
+    const { manager, http, deps, open } = browserFixture();
+    http.mockRejectedValueOnce(new TypeError("Network request failed"));
+    await expect(manager.loginWithBrowser("")).rejects.toThrow("Network request failed");
+    expect(open).not.toHaveBeenCalled();
+    expect(deps.save).not.toHaveBeenCalled();
+    await manager.loginWithBrowser("");
+    expect(manager.snapshot().name).toBe("browser@example.test");
+    expect(http.mock.calls.some(([url]) => String(url).endsWith("/auth/login"))).toBe(false);
+    await manager.logout();
+  });
+
   it.each(["android", "ios", "darwin"])(
     "accepts a phone-only session on %s and discovers hosts",
     async (platform) => {
@@ -419,12 +474,17 @@ describe("account persistence across restarts", () => {
     vi.mocked(deps.save).mockImplementation(async (value) => {
       persisted = value ? { ...value } : null;
     });
-    http.mockResolvedValueOnce(
-      Response.json({
-        access_token: "private-jwt",
-        expires_in: 14 * 86400,
-        user: { email: "me@example.test" },
-      }),
+    const original = http.getMockImplementation()!;
+    http.mockImplementation((url, options) =>
+      String(url).endsWith("/auth/client/exchange")
+        ? Promise.resolve(
+            Response.json({
+              access_token: "private-jwt",
+              expires_in: 14 * 86400,
+              user: { email: "me@example.test" },
+            }),
+          )
+        : original(url, options),
     );
     await login();
     const beforeShutdown = persisted;
@@ -448,7 +508,9 @@ describe("account persistence across restarts", () => {
     await vi.advanceTimersByTimeAsync(1);
     expect(restarted.snapshot()).toMatchObject({ status: "online", name: "me@example.test" });
     expect(persisted).toEqual(beforeShutdown);
-    expect(http.mock.calls.filter(([url]) => String(url).endsWith("/auth/login"))).toHaveLength(1);
+    expect(
+      http.mock.calls.filter(([url]) => String(url).endsWith("/auth/client/exchange")),
+    ).toHaveLength(1);
     await restarted.logout();
     expect(persisted).toBeNull();
   });
@@ -525,7 +587,7 @@ describe("explicit daemon publication", () => {
     await manager.shutdown();
     await vi.advanceTimersByTimeAsync(61_000);
     const next = new AccountSessionManager({ ...deps, installationId: "another-client" });
-    await next.login("", "ME@example.test", " secret ");
+    await next.loginWithBrowser("");
     await vi.advanceTimersByTimeAsync(1);
     await expect(next.publishHost(first)).resolves.toMatchObject({
       node_session_id: "lease-first",
@@ -571,7 +633,8 @@ describe("explicit daemon publication", () => {
       features: ["ait-rust-single-v1"],
     });
     await login();
-    expect(JSON.parse(String(http.mock.calls[1][1]?.body)).runtime).toBeNull();
+    const registration = http.mock.calls.find(([url]) => String(url).endsWith("/nodes/register"))!;
+    expect(JSON.parse(String(registration[1]?.body)).runtime).toBeNull();
     const grant = await manager.publishHost(first);
     expect(grant).toEqual({
       center_url: "https://dash.ait-app.com:8443/api",
@@ -682,7 +745,7 @@ describe("explicit daemon publication", () => {
     const { manager, http, login } = fixture();
     await login();
     await manager.publishHost(second);
-    await manager.login("https://other.test/api", "other@example.test", "other secret");
+    await manager.loginWithBrowser("https://other.test/api");
     await vi.advanceTimersByTimeAsync(22_000);
     expect(http.mock.calls).toContainEqual([
       "https://dash.ait-app.com:8443/api/v1/node-sessions/lease-second/renew",

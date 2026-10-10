@@ -10,7 +10,7 @@
 
 ## 决策
 
-- 共享账户管理器读取服务的 `/v1/auth/providers`。服务同时声明 `authing_enabled` 和 `native_login_enabled` 才显示统一登录入口；旧密码入口继续保留。客户端不配置 Authing App Secret。
+- 共享账户管理器读取服务的 `/v1/auth/providers`。服务同时声明 `authing_enabled` 和 `native_login_enabled` 才能发起统一登录。按 [ADR-123](adr-123-browser-only-account-login.md) 修订，客户端仅显示统一登录入口，删除旧密码入口和调用路径。客户端不配置 Authing App Secret。
 - 桌面在主进程生成随机 state 和 PKCE verifier，临时监听 `127.0.0.1` 的随机端口，再打开系统浏览器。Android 使用 Expo Crypto 生成随机值，通过系统浏览器登录，监听已注册的 `ait://auth/callback` 应用链接。iOS 使用 Expo WebBrowser 的 `ASWebAuthenticationSession` 系统认证窗口，由会话返回同一应用链接，不额外监听 Linking；共享回调解析器继续校验完整地址与 state。新增 `expo-web-browser` 原生模块，安装包需重新构建。
 - Authing 仍回调中心服务的现有 HTTPS 地址。中心验签、查找本地账号后，浏览器显示账号邮箱或手机号，由用户确认登录客户端。确认票据绑定原浏览器 Cookie；随后生成 60 秒有效的一次性代码。客户端验证回调地址和 state，并提交本次 verifier 换取 AIT 业务 JWT。JWT 不进入浏览器跳转 URL。
 - 登录尝试最多等待 10 分钟，可主动取消；移动端暂时切到浏览器或后台不会取消尝试；iOS 关闭认证窗口会结束尝试，客户端取消或超时会关闭认证窗口。verifier 只保存在进程内，应用进程被系统结束后需重新发起登录。回调只导航回账户设置，路由层不处理凭据。

@@ -1,4 +1,4 @@
-import React, { useEffect, useRef, useState } from "react";
+import React, { useRef, useState } from "react";
 import { Keyboard, Pressable, Text, View } from "react-native";
 import { useRouter } from "expo-router";
 import { StyleSheet, useUnistyles } from "react-native-unistyles";
@@ -13,12 +13,7 @@ import {
 import { useTranslation } from "react-i18next";
 import { Button } from "./ui/button";
 import { AdaptiveTextInput } from "./adaptive-text-input";
-import {
-  accountCommand,
-  accountLoginMethods,
-  useAccountState,
-  type AccountHost,
-} from "@/runtime/account-state";
+import { accountCommand, useAccountState, type AccountHost } from "@/runtime/account-state";
 
 export function AccountHostPanel({
   onConnected,
@@ -37,29 +32,8 @@ export function AccountHostPanel({
   const [centerOverride, setCenterOverride] = useState<string | null>(null);
   const center = centerOverride ?? account.center;
   const [showServiceSettings, setShowServiceSettings] = useState(false);
-  const [email, setEmail] = useState("");
-  const [password, setPassword] = useState("");
-  const [passwordReset, setPasswordReset] = useState(0);
   const [working, setBusy] = useState(false);
   const busy = working || account.loginPending === true;
-  const [hosted, setHosted] = useState(false);
-  const [legacyLogin, setLegacyLogin] = useState(false);
-  useEffect(() => {
-    let current = true;
-    setHosted(false);
-    setLegacyLogin(false);
-    if (account.status !== "logged_out") return;
-    void accountLoginMethods(center)
-      .then((methods) => {
-        if (current) setHosted(methods.hosted);
-      })
-      .catch(() => {
-        /* Keep legacy login available when discovery is unreachable. */
-      });
-    return () => {
-      current = false;
-    };
-  }, [center, account.status]);
   const busyRef = useRef(false);
   const [error, setError] = useState<string | null>(null);
   const runAccountAction = async (work: () => Promise<unknown>) => {
@@ -76,20 +50,8 @@ export function AccountHostPanel({
       setBusy(false);
     }
   };
-  const loginDisabled = busy || !email.trim() || !password;
-  const useHostedLogin = hosted && !legacyLogin;
   const ServiceSettingsIcon = showServiceSettings ? ChevronDown : ChevronRight;
 
-  const login = () => {
-    if (loginDisabled) return;
-    const secret = password;
-    Keyboard.dismiss();
-    setPassword("");
-    setPasswordReset((reset) => reset + 1);
-    void runAccountAction(() =>
-      accountCommand("account_login", { center, email, password: secret }),
-    );
-  };
   const selectHost = (host: AccountHost) => {
     void runAccountAction(async () => {
       await accountCommand("account_select", { hostId: host.host_id });
@@ -106,68 +68,7 @@ export function AccountHostPanel({
       {account.status === "logged_out" ? (
         <>
           <Text style={styles.hint}>{t("onlineService.loginDescription")}</Text>
-          {hosted ? (
-            <>
-              {useHostedLogin ? (
-                <Text style={styles.hint}>{t("onlineService.unifiedHint")}</Text>
-              ) : null}
-              <Pressable
-                accessibilityRole="button"
-                disabled={busy}
-                style={styles.disclosure}
-                onPress={() => setLegacyLogin((shown) => !shown)}
-                testID="account-legacy-login"
-              >
-                <ChevronRight size={16} color={theme.colors.foregroundMuted} />
-                <Text style={styles.disclosureText}>
-                  {t(legacyLogin ? "onlineService.unifiedLogin" : "onlineService.legacyLogin")}
-                </Text>
-              </Pressable>
-            </>
-          ) : null}
-          {!hosted || legacyLogin ? (
-            <>
-              <View style={styles.field}>
-                <Text style={styles.label}>{t("onlineService.email")}</Text>
-                <AdaptiveTextInput
-                  style={styles.input}
-                  initialValue={email}
-                  onChangeText={setEmail}
-                  placeholder={t("onlineService.email")}
-                  accessibilityLabel={t("onlineService.email")}
-                  inputMode="email"
-                  keyboardType="email-address"
-                  autoComplete="email"
-                  textContentType="emailAddress"
-                  maxLength={320}
-                  autoCapitalize="none"
-                  autoCorrect={false}
-                  editable={!busy}
-                  testID="account-email"
-                />
-              </View>
-              <View style={styles.field}>
-                <Text style={styles.label}>{t("onlineService.password")}</Text>
-                <AdaptiveTextInput
-                  style={styles.input}
-                  initialValue={password}
-                  resetKey={passwordReset}
-                  onChangeText={setPassword}
-                  placeholder={t("onlineService.password")}
-                  accessibilityLabel={t("onlineService.password")}
-                  autoCapitalize="none"
-                  autoCorrect={false}
-                  secureTextEntry
-                  autoComplete="current-password"
-                  textContentType="password"
-                  maxLength={512}
-                  editable={!busy}
-                  onSubmitEditing={login}
-                  testID="account-password"
-                />
-              </View>
-            </>
-          ) : null}
+          <Text style={styles.hint}>{t("onlineService.unifiedHint")}</Text>
           <View style={styles.field}>
             <Pressable
               accessibilityRole="button"
@@ -218,36 +119,23 @@ export function AccountHostPanel({
                 {t("common.actions.cancel")}
               </Button>
             ) : null}
-            {useHostedLogin ? (
-              <Button
-                style={styles.action}
-                variant="default"
-                leftIcon={ExternalLink}
-                disabled={busy}
-                loading={busy}
-                testID="account-unified-login"
-                onPress={() =>
-                  void runAccountAction(() => accountCommand("account_login_hosted", { center }))
-                }
-              >
-                {t(
-                  account.loginPending
-                    ? "onlineService.browserWaiting"
-                    : "onlineService.unifiedLogin",
-                )}
-              </Button>
-            ) : (
-              <Button
-                style={styles.action}
-                variant="default"
-                loading={busy}
-                disabled={loginDisabled}
-                onPress={login}
-                testID="account-login"
-              >
-                {t(busy ? "onlineService.signingIn" : "onlineService.signIn")}
-              </Button>
-            )}
+            <Button
+              style={styles.action}
+              variant="default"
+              leftIcon={ExternalLink}
+              disabled={busy}
+              loading={busy}
+              testID="account-unified-login"
+              onPress={() =>
+                void runAccountAction(() => accountCommand("account_login_hosted", { center }))
+              }
+            >
+              {t(
+                account.loginPending
+                  ? "onlineService.browserWaiting"
+                  : "onlineService.unifiedLogin",
+              )}
+            </Button>
           </View>
         </>
       ) : (
