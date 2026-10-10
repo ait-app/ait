@@ -10,16 +10,16 @@
 本阶段把 daemon/config/diagnostics 分组的 9 个 catalog 条目全部加入生产 capability。累计已接通
 24 个规范方法，剩余 167 个仍为 catalog-only。
 
-| 规范方法                           | Paseo 来源名                | 状态与行为                                                               |
-| ---------------------------------- | --------------------------- | ------------------------------------------------------------------------ |
-| `daemon.get_status.request`        | 同名                        | server/version/pid/executable/start/listen；relay null、providers 空数组 |
-| `daemon.config.reload.request`     | 同名                        | 重读 `config.json`，验证后分类 live/restart/override 路径                |
-| `daemon.update.request`            | 同名                        | 返回 Paseo update result；当前 standalone 安装明确失败                   |
-| `diagnostics.request`              | 同名                        | 返回不含凭据的进程、系统与 capability 文本报告                           |
-| `daemon.config.get.request`        | `get_daemon_config_request` | 返回 normalized mutable config                                           |
-| `daemon.config.set.request`        | `set_daemon_config_request` | 验证、深合并、provider 删除、原子持久化                                  |
-| `server.restart.request`           | `restart_server_request`    | correlated ack 后 drain，释放锁并在同进程重新 bind/组装                  |
-| `server.shutdown.request`          | `shutdown_server_request`   | correlated ack 后 drain 并正常退出                                       |
+| 规范方法                       | Paseo 来源名                | 状态与行为                                                               |
+| ------------------------------ | --------------------------- | ------------------------------------------------------------------------ |
+| `daemon.get_status.request`    | 同名                        | server/version/pid/executable/start/listen；relay null、providers 空数组 |
+| `daemon.config.reload.request` | 同名                        | 重读 `config.json`，验证后分类 live/restart/override 路径                |
+| `daemon.update.request`        | 同名                        | 返回 Paseo update result；当前 standalone 安装明确失败                   |
+| `diagnostics.request`          | 同名                        | 返回不含凭据的进程、系统与 capability 文本报告                           |
+| `daemon.config.get.request`    | `get_daemon_config_request` | 返回 normalized mutable config                                           |
+| `daemon.config.set.request`    | `set_daemon_config_request` | 验证、深合并、provider 删除、原子持久化                                  |
+| `server.restart.request`       | `restart_server_request`    | correlated ack 后 drain，释放锁并在同进程重新 bind/组装                  |
+| `server.shutdown.request`      | `shutdown_server_request`   | correlated ack 后 drain 并正常退出                                       |
 
 legacy 下划线名称仍只保留在 method catalog 中，不参与路由。配置 DTO 复制 Paseo mutable config
 的 relay、MCP、browser tools、host/CORS/proxy、Git、app、provider model、metadata generation、
