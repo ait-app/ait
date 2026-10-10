@@ -1925,7 +1925,11 @@ export const es: TranslationResources = {
       loading: "Cargando archivo...",
       noPreview: "No hay vista previa disponible",
       openWithSystem: "Abrir con una aplicación del sistema",
-      binaryPreviewUnavailable: "Vista previa binaria no disponible",
+      downloadFile: "Descargar archivo",
+      shareFile: "Compartir archivo",
+      binaryPreviewUnavailable: "Vista previa no disponible",
+      binaryPreviewDescription:
+        "No se puede obtener una vista previa de este tipo de archivo en Ait.",
       tooLargeToDisplay: "Este archivo es demasiado grande para mostrarlo",
       failedToLoad: "No se pudo cargar el archivo",
       failedToLoadPreview: "No se pudo cargar la vista previa del archivo",
