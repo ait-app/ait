@@ -143,6 +143,52 @@ function browserFixture() {
 }
 
 describe("hosted account login", () => {
+  it.each(["android", "ios", "darwin"])(
+    "accepts a phone-only session on %s and discovers hosts",
+    async (platform) => {
+      const { manager, http, deps } = browserFixture();
+      deps.platform = platform;
+      const original = http.getMockImplementation()!;
+      http.mockImplementation((url, options) =>
+        String(url).endsWith("/auth/client/exchange")
+          ? Promise.resolve(
+              Response.json({
+                access_token: "phone-jwt",
+                expires_in: 3600,
+                user: { email: null, phone_number: "+8613800138000", display_name: null },
+              }),
+            )
+          : original(url, options),
+      );
+      await manager.loginWithBrowser("");
+      await vi.advanceTimersByTimeAsync(1);
+      expect(manager.snapshot()).toMatchObject({ name: "+8613800138000", status: "online" });
+      expect(manager.snapshot().hosts).toHaveLength(1);
+      expect(deps.save).toHaveBeenCalledWith(
+        expect.objectContaining({ token: "phone-jwt", name: "+8613800138000" }),
+      );
+      await manager.logout();
+    },
+  );
+
+  it.each([
+    {},
+    { email: null },
+    { phone_number: {} },
+    { phone_number: " " },
+    { display_name: "Name only" },
+  ])("rejects a session without a usable contact: %j", async (user) => {
+    const { manager, http, deps } = browserFixture();
+    const original = http.getMockImplementation()!;
+    http.mockImplementation((url, options) =>
+      String(url).endsWith("/auth/client/exchange")
+        ? Promise.resolve(Response.json({ access_token: "jwt", expires_in: 3600, user }))
+        : original(url, options),
+    );
+    await expect(manager.loginWithBrowser("")).rejects.toThrow("invalid login session");
+    expect(vi.mocked(deps.save).mock.calls.every(([value]) => value === null)).toBe(true);
+  });
+
   it("keeps the renewal explanation after an expired account is signed out", async () => {
     const { manager, http, deps } = browserFixture();
     const original = http.getMockImplementation()!;
