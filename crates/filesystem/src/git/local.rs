@@ -3,3 +3,4 @@
 pub mod checkout;
 pub mod git_fetch;
 pub mod provisioning;
+pub mod worktrees;

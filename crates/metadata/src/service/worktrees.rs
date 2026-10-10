@@ -1,4 +1,4 @@
-//! Worktree lifecycle coordination over Git and Paseo-shaped registry ports.
+//! Managed worktree lifecycle coordinated over local Git and the shared registries.
 
 use domain::workspace::identity::{basename, derive_project_key};
 use domain::workspace::provisioning::Checkout;
@@ -9,12 +9,15 @@ use domain::workspace::registry::generate_workspace_id;
 use domain::workspace::registry::{
     ActiveProjectInput, RegistryError, WorkspaceArchiveContext, WorkspaceMutationContext,
 };
-use model::workspace::registry::{ProjectRegistry, WorkspaceRegistry};
-
-use crate::worktrees::ports::worktrees::{
-    CreatedManagedWorktree, ManagedWorktreeCreate, ManagedWorktreeInfo, ManagedWorktrees,
-    OwnedWorktree, WorktreeCreateMode, WorktreeError,
+use domain::workspace::worktrees::{
+    CreatedManagedWorktree, ManagedWorktreeCreate, ManagedWorktreeInfo, OwnedWorktree,
+    WorktreeChangeRequest, WorktreeCreateMode, WorktreeError,
 };
+use model::workspace::lifecycle::WorkspaceNaming;
+use model::workspace::registry::{ProjectRegistry, WorkspaceRegistry};
+use model::workspace::worktrees::ManagedWorktrees;
+
+use crate::ports::worktrees::WorktreeArchiveCleanup;
 
 mod provisioning;
 pub use provisioning::WorkspaceWorktrees;
@@ -50,7 +53,7 @@ pub struct CreateWorktree {
     /// Explicit or default action.
     pub action: CreateAction,
     /// Optional forge change-request checkout source.
-    pub checkout_source: Option<domain::workspace::worktrees::WorktreeChangeRequest>,
+    pub checkout_source: Option<WorktreeChangeRequest>,
     /// First-Agent prompt used as a provisional workspace title.
     pub first_agent_prompt: Option<String>,
     /// Whether the caller supplied any first-Agent context.
@@ -184,8 +187,8 @@ pub struct Worktrees {
     workspaces: Box<dyn WorkspaceRegistry>,
     managed: Box<dyn ManagedWorktrees>,
     server_id: String,
-    names: Option<std::sync::Arc<dyn model::workspace::lifecycle::WorkspaceNaming>>,
-    archive_cleanup: Option<Box<dyn crate::worktrees::ports::worktrees::WorktreeArchiveCleanup>>,
+    names: Option<std::sync::Arc<dyn WorkspaceNaming>>,
+    archive_cleanup: Option<Box<dyn WorktreeArchiveCleanup>>,
 }
 
 impl Worktrees {
@@ -208,19 +211,13 @@ impl Worktrees {
     }
 
     /// Install host resource cleanup for every explicit and automatic archive path.
-    pub fn set_archive_cleanup(
-        &mut self,
-        cleanup: Box<dyn crate::worktrees::ports::worktrees::WorktreeArchiveCleanup>,
-    ) {
+    pub fn set_archive_cleanup(&mut self, cleanup: Box<dyn WorktreeArchiveCleanup>) {
         self.archive_cleanup = Some(cleanup);
     }
 
     /// Install first-prompt workspace naming for successful creations.
     #[must_use]
-    pub fn with_workspace_names(
-        mut self,
-        names: std::sync::Arc<dyn model::workspace::lifecycle::WorkspaceNaming>,
-    ) -> Self {
+    pub fn with_workspace_names(mut self, names: std::sync::Arc<dyn WorkspaceNaming>) -> Self {
         self.names = Some(names);
         self
     }

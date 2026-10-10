@@ -5,7 +5,7 @@ use std::path::Path;
 use serde_json::Value;
 
 use super::{ForgeContext, LocalForge, integer, string, view};
-use crate::worktrees::ports::worktrees::{
+use domain::workspace::worktrees::{
     ChangeRequestCheckout, ChangeRequestCheckoutRef, WorktreeError,
 };
 

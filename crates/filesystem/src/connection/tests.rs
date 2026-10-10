@@ -50,10 +50,6 @@ impl Harness {
                 LocalCheckout::new(root.path().join("managed")),
             ))))),
             forge: None,
-            github_projects: None,
-            worktrees: None,
-            workspace_recovery: None,
-            workspace_setup: None,
         });
         let (outbound, receiver) = Outbound::new();
         Self {

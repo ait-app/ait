@@ -1,13 +1,11 @@
 //! GitHub search and clone with shared Project registration.
-use std::sync::Arc;
 
 use domain::workspace::identity::parse_remote;
+use domain::workspace::provisioning::{GithubCloneProtocol, GithubProjectsError, GithubRepository};
 use domain::workspace::records::PersistedProjectRecord;
-use model::workspace::lifecycle::ProjectRegistration;
+use model::workspace::provisioning::GithubProjectsRuntime;
 
-use crate::forge::ports::github_projects::{
-    GithubCloneProtocol, GithubProjectsError, GithubProjectsRuntime, GithubRepository,
-};
+use super::directory::Directory;
 /// GitHub clone outcome, including a checkout left behind when registration fails.
 #[derive(Debug, Clone, PartialEq)]
 pub(crate) struct GithubCloneOutcome {
@@ -21,24 +19,18 @@ pub(crate) struct GithubCloneOutcome {
     pub(crate) error: Option<String>,
 }
 
-/// Coordinates GitHub provisioning and host-supplied Project registration.
+/// Coordinates GitHub provisioning and Project registration in the shared directory.
 #[derive(Debug)]
 pub struct GithubProjects {
-    registration: Arc<dyn ProjectRegistration>,
+    directory: Directory,
     github: Box<dyn GithubProjectsRuntime>,
 }
 
 impl GithubProjects {
-    /// Compose `github` with the host's shared Project `registration` boundary.
+    /// Compose `github` with a `directory` clone sharing the host's Project registries.
     #[must_use]
-    pub fn new(
-        registration: Arc<dyn ProjectRegistration>,
-        github: Box<dyn GithubProjectsRuntime>,
-    ) -> Self {
-        Self {
-            registration,
-            github,
-        }
+    pub fn new(directory: Directory, github: Box<dyn GithubProjectsRuntime>) -> Self {
+        Self { directory, github }
     }
     /// Search GitHub repositories using the host CLI and its configured clone protocol.
     ///
@@ -89,10 +81,7 @@ impl GithubProjects {
                 };
             }
         };
-        match self
-            .registration
-            .register_project(&checkout_path, timestamp)
-        {
+        match self.directory.add_project(&checkout_path, timestamp) {
             Ok(project) => GithubCloneOutcome {
                 repo: display_name,
                 checkout_path: Some(checkout_path),

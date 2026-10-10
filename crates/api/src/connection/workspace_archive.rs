@@ -1,8 +1,6 @@
 //! Resource closure between metadata archive and owned checkout removal.
 
-use filesystem::worktrees::service::worktrees::{
-    ArchiveScope, ArchiveWorktree, PendingArchive, WorktreesError,
-};
+use metadata::service::worktrees::{ArchiveScope, ArchiveWorktree, PendingArchive, WorktreesError};
 use model::{Context, DispatchError, ErrorCode};
 use serde_json::{Value, json};
 
@@ -45,7 +43,7 @@ async fn metadata(state: &Shared, context: &mut Context<'_>) -> Result<Value, Er
         )
         .await?;
     let mut plans = Vec::new();
-    if state.filesystem.worktrees.is_some() {
+    if state.metadata.worktrees.is_some() {
         for workspace_id in &workspace_ids {
             let input = ArchiveWorktree {
                 workspace_id: Some(workspace_id.clone()),
@@ -103,12 +101,7 @@ fn prepare_metadata(
 
 async fn worktree(state: &Shared, params: Value) -> Result<Value, ErrorCode> {
     let request = serde_json::from_value(params).map_err(|_| ErrorCode::InvalidMessage)?;
-    let plan = match begin(
-        state,
-        filesystem::worktrees::rpc::worktrees::archive_input(request),
-    )
-    .await?
-    {
+    let plan = match begin(state, metadata::rpc::worktrees::archive_input(request)).await? {
         Ok(plan) => plan,
         Err(error) => return Ok(failure(&error)),
     };
@@ -126,7 +119,7 @@ async fn begin(
     state
         .runtime
         .run_queued(
-            state.filesystem.worktrees.clone(),
+            state.metadata.worktrees.clone(),
             ErrorCode::RegistryIo,
             move |worktrees| Ok(worktrees.begin_archive(&input, &chrono::Utc::now().to_rfc3339())),
         )
@@ -140,7 +133,7 @@ async fn finish(
     state
         .runtime
         .run_queued(
-            state.filesystem.worktrees.clone(),
+            state.metadata.worktrees.clone(),
             ErrorCode::RegistryIo,
             move |worktrees| Ok(worktrees.finish_archive(plan).map(|_| ())),
         )
@@ -172,7 +165,7 @@ async fn retire(state: &Shared, workspace_ids: Vec<String>) -> Result<Vec<String
 }
 
 fn failure(error: &WorktreesError) -> Value {
-    json!({"success":false,"removedAgents":[],"error":filesystem::worktrees::rpc::worktrees::checkout_error(error)})
+    json!({"success":false,"removedAgents":[],"error":metadata::rpc::worktrees::checkout_error(error)})
 }
 
 #[cfg(test)]

@@ -3,11 +3,10 @@ use domain::workspace::records::{
     PersistedProjectRecord, PersistedWorkspaceKind, PersistedWorkspaceRecord,
 };
 use domain::workspace::registry::RegistryError;
+use domain::workspace::worktrees::ArchivedWorktreeRestore;
 use model::workspace::registry::{ProjectRegistry, WorkspaceRegistry};
+use model::workspace::worktrees::WorkspaceRecoveryRuntime;
 
-use crate::worktrees::ports::workspace_recovery::{
-    ArchivedWorktreeRestore, WorkspaceRecoveryRuntime,
-};
 /// Archived Workspace recovery action.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(crate) enum WorkspaceRecoveryAction {

@@ -2,7 +2,7 @@ use super::*;
 
 #[test]
 fn archive_rpc_keeps_cleanup_failure_inline_and_a_retry_can_finish() {
-    use crate::worktrees::rpc::worktrees::execute;
+    use crate::rpc::worktrees::execute;
     let managed = Managed::default();
     let mut service = service(&Projects::default(), &Workspaces::default(), &managed);
     managed.state.lock().unwrap().fail_remove = true;
@@ -27,7 +27,7 @@ fn archive_rpc_keeps_cleanup_failure_inline_and_a_retry_can_finish() {
     assert!(retried.value["error"].is_null());
     assert!(matches!(
         execute(&mut service, "unknown", serde_json::json!({})),
-        Err(crate::support::error::ErrorCode::MethodNotFound)
+        Err(crate::rpc::ErrorCode::MethodNotFound)
     ));
 }
 
@@ -95,7 +95,7 @@ struct Cleanup {
     calls: Arc<Mutex<Vec<Vec<String>>>>,
 }
 
-impl crate::worktrees::ports::worktrees::WorktreeArchiveCleanup for Cleanup {
+impl WorktreeArchiveCleanup for Cleanup {
     fn close_workspaces(&self, ids: &[String]) -> Result<(), WorktreeError> {
         self.calls.lock().unwrap().push(ids.to_vec());
         if self.failed.load(std::sync::atomic::Ordering::SeqCst) {

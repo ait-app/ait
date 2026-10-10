@@ -14,12 +14,13 @@ use chrono::{DateTime, Utc};
 use domain::workspace::provisioning::{LEGACY_PROJECT_CONFIG_FILE_NAME, PROJECT_CONFIG_FILE_NAME};
 use sha2::{Digest, Sha256};
 
-use crate::worktrees::ports::workspace_recovery::{
-    ArchivedWorktreeRestore, WorkspaceRecoveryRuntime, WorkspaceRecoveryRuntimeError,
+use domain::workspace::worktrees::{
+    ArchivedWorktreeRestore, ChangeRequestCheckout, CreatedManagedWorktree, DirectoryGit,
+    ManagedWorktreeCreate, ManagedWorktreeInfo, OwnedWorktree, WorkspaceRecoveryRuntimeError,
+    WorktreeChangeRequest, WorktreeCreateMode, WorktreeError,
 };
-use crate::worktrees::ports::worktrees::{
-    ChangeRequestCheckout, ChangeRequestResolver, CreatedManagedWorktree, ManagedWorktreeCreate,
-    ManagedWorktreeInfo, ManagedWorktrees, OwnedWorktree, WorktreeCreateMode, WorktreeError,
+use model::workspace::worktrees::{
+    ChangeRequestResolver, ManagedWorktrees, WorkspaceRecoveryRuntime,
 };
 
 const OUTPUT_LIMIT: u64 = 64 * 1024;
@@ -104,18 +105,14 @@ impl ManagedWorktrees for LocalManagedWorktrees {
     fn resolve_change_request(
         &self,
         cwd: &str,
-        source: &domain::workspace::worktrees::WorktreeChangeRequest,
+        source: &WorktreeChangeRequest,
         head_ref: Option<&str>,
     ) -> Result<ChangeRequestCheckout, WorktreeError> {
         self.change_requests
             .resolve_change_request(cwd, source, head_ref)
     }
 
-    fn prepare_directory(
-        &self,
-        cwd: &str,
-        intent: &domain::workspace::worktrees::DirectoryGit,
-    ) -> Result<(), WorktreeError> {
+    fn prepare_directory(&self, cwd: &str, intent: &DirectoryGit) -> Result<(), WorktreeError> {
         directory::prepare(cwd, intent)
     }
 

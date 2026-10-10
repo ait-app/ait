@@ -2,7 +2,8 @@
 
 use std::sync::{Arc, Mutex};
 
-use filesystem::worktrees::ports::worktrees::{WorktreeArchiveCleanup, WorktreeError};
+use domain::workspace::worktrees::WorktreeError;
+use metadata::ports::worktrees::WorktreeArchiveCleanup;
 
 use crate::{ConfigError, Shared};
 
@@ -39,7 +40,7 @@ impl WorktreeArchiveCleanup for ResourceCleanup {
 }
 
 pub(super) fn configure(state: &Shared) -> Result<(), ConfigError> {
-    if let Some(worktrees) = &state.filesystem.worktrees {
+    if let Some(worktrees) = &state.metadata.worktrees {
         worktrees
             .lock()
             .map_err(|_| ConfigError::ServiceInitialization)?

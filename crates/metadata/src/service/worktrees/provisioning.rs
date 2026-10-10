@@ -1,16 +1,16 @@
-//! Adapter from metadata's unified creation port to the shared worktree service.
+//! Adapter from the unified Workspace creation port to the shared worktree service.
 
 use std::sync::{Arc, Mutex};
 
 use domain::workspace::worktrees::{
-    CreatedWorktreeWorkspace, DirectoryGit, WorktreeAction, WorktreeCreation, WorktreeCreationError,
+    CreatedWorktreeWorkspace, DirectoryGit, WorktreeAction, WorktreeCreation,
+    WorktreeCreationError, WorktreeError,
 };
 use model::workspace::worktrees::WorktreeProvisioning;
 
 use super::{CreateAction, CreateWorktree, Worktrees, WorktreesError, is_active_project};
-use crate::worktrees::ports::worktrees::WorktreeError;
 
-/// Metadata adapter sharing the same serialized service as the worktree RPCs.
+/// Directory adapter sharing the same serialized service as the worktree RPCs.
 #[derive(Debug, Clone)]
 pub struct WorkspaceWorktrees {
     worktrees: Arc<Mutex<Worktrees>>,

@@ -4,8 +4,13 @@ pub(crate) mod daemon;
 pub mod directory;
 /// Legacy desktop editor compatibility responses.
 pub(crate) mod editor;
+pub mod github_projects;
 pub mod server;
+pub mod workspace_automation;
 pub(crate) mod workspace_labels;
+pub mod workspace_recovery;
+pub mod workspace_state;
+pub mod worktrees;
 
 /// Stable metadata failure mapped into the host's public RPC error envelope.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, thiserror::Error)]
@@ -50,8 +55,6 @@ pub enum ErrorCode {
     #[error("WorkspaceLabelStorageUncertain")]
     WorkspaceLabelStorageUncertain,
 }
-pub mod workspace_automation;
-pub mod workspace_state;
 
 impl From<ErrorCode> for model::ErrorCode {
     fn from(error: ErrorCode) -> Self {

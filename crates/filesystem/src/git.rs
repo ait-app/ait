@@ -1,4 +1,4 @@
-//! Git checkout, background fetch and directory provisioning.
+//! Git checkout, background fetch, directory provisioning and managed worktree adapters.
 
 pub(crate) mod connection;
 pub mod local;

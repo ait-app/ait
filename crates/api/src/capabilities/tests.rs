@@ -97,6 +97,28 @@ fn skill_methods_are_owned_by_provider_and_remain_requests() {
 }
 
 #[test]
+fn workspace_and_project_methods_are_owned_by_metadata() {
+    let moved: BTreeSet<_> = ::metadata::capabilities::implemented_methods()
+        .map(|spec| spec.name)
+        .filter(|name| {
+            [
+                "workspace.worktree.",
+                "workspace.recovery.",
+                "workspace.github.",
+                "project.github.",
+            ]
+            .iter()
+            .any(|prefix| name.starts_with(prefix))
+        })
+        .collect();
+    assert_eq!(moved.len(), 7);
+    assert!(
+        ::filesystem::capabilities::implemented_methods()
+            .all(|spec| !spec.name.starts_with("workspace.") && !spec.name.starts_with("project."))
+    );
+}
+
+#[test]
 fn baseline_methods_and_heartbeat_keep_their_shared_contracts() {
     assert_eq!(model::server::CAPABILITIES, model::server::CAPABILITIES);
     let heartbeat = implemented_methods()

@@ -1,10 +1,10 @@
 //! Forge checkout facts, without mutating the source checkout.
 
 use super::{ForgeContext, ForgeKind, LocalForge, READ_TIMEOUT, Value, require_git_directory};
-use crate::worktrees::ports::worktrees::{
-    ChangeRequestCheckout, ChangeRequestCheckoutRef, ChangeRequestResolver, WorktreeError,
+use domain::workspace::worktrees::{
+    ChangeRequestCheckout, ChangeRequestCheckoutRef, WorktreeChangeRequest, WorktreeError,
 };
-use domain::workspace::worktrees::WorktreeChangeRequest;
+use model::workspace::worktrees::ChangeRequestResolver;
 
 const CHECKOUT_QUERY: &str = "query PullRequestCheckoutTarget($owner: String!, $name: String!, $number: Int!) { repository(owner: $owner, name: $name) { pullRequest(number: $number) { number baseRefName headRefName isCrossRepository headRepositoryOwner { login } headRepository { sshUrl url } } } }";
 

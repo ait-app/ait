@@ -8,7 +8,7 @@ use std::os::unix::fs::PermissionsExt;
 use crate::forge::ports::forge::{
     ForgeAuthState, ForgeRuntime, ForgeSearchKind, PullRequestMergeMethod, PullRequestTimelineItem,
 };
-use crate::worktrees::ports::worktrees::ChangeRequestResolver;
+use model::workspace::worktrees::ChangeRequestResolver;
 
 use super::*;
 

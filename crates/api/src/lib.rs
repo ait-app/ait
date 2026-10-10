@@ -22,9 +22,9 @@ use axum::response::{IntoResponse, Response};
 use axum::routing::{get, post};
 use axum::{Json, Router};
 use browser::broker::Broker;
-use filesystem::worktrees::service::worktrees::{WorkspaceWorktrees, Worktrees};
 use metadata::service::directory::Directory;
 use metadata::service::workspace_automation::WorkspaceAutomation;
+use metadata::service::worktrees::{WorkspaceWorktrees, Worktrees};
 use model::server::{Lifecycle, Limits, ServerInfo, VERSION};
 use model::{LifecycleIntent, Runtime};
 use provider::service::agent_execution::AgentExecution;
@@ -209,6 +209,9 @@ impl Api {
             workspace_labels: services.workspace_labels.map(shared_service),
             workspace_automation: services.workspace_automation,
             workspace_state: services.workspace_state.map(shared_service),
+            worktrees,
+            workspace_recovery: services.workspace_recovery.map(shared_service),
+            github_projects: services.github_projects.map(shared_service),
             session_events,
             creations,
             has_agent_execution: services.agent_execution.is_some(),
@@ -221,10 +224,6 @@ impl Api {
             checkout: services.checkout.map(shared_service),
             forge: services.forge.map(shared_service),
             files: services.files.map(shared_service),
-            github_projects: services.github_projects.map(shared_service),
-            worktrees,
-            workspace_recovery: services.workspace_recovery.map(shared_service),
-            workspace_setup: composition::workspace_setup(metadata.workspace_automation.as_ref()),
         });
         let provider = Arc::new(provider::dispatch::State {
             runtime: runtime.clone(),

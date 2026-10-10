@@ -2,7 +2,7 @@
 
 use super::{CreatePlan, Path, READ_TIMEOUT, WRITE_TIMEOUT, WorktreeError};
 use super::{default_branch, git, optional_git, unique_branch, validate_branch};
-use crate::worktrees::ports::worktrees::{ChangeRequestCheckout, ChangeRequestCheckoutRef};
+use domain::workspace::worktrees::{ChangeRequestCheckout, ChangeRequestCheckoutRef};
 
 pub(super) fn plan(
     repo: &Path,

@@ -1,11 +1,8 @@
 //! Complete filesystem service installed as one capability component.
 
-use std::sync::{Arc, Mutex};
-
 use crate::files::service::files::Files;
-use crate::forge::service::{forge::Forge, github_projects::GithubProjects};
+use crate::forge::service::forge::Forge;
 use crate::git::service::{checkout::Checkout, git_fetch::GitFetch};
-use crate::worktrees::service::{workspace_recovery::WorkspaceRecovery, worktrees::Worktrees};
 
 /// Required functional parts of the filesystem service; locks remain independently scoped.
 #[derive(Debug)]
@@ -16,12 +13,6 @@ pub struct Dependencies {
     pub forge: Forge,
     /// Scoped file operations and download grants.
     pub files: Files,
-    /// Repository discovery and cloning.
-    pub github_projects: GithubProjects,
-    /// Shared managed worktree lifecycle.
-    pub worktrees: Arc<Mutex<Worktrees>>,
-    /// Archived workspace recovery.
-    pub workspace_recovery: WorkspaceRecovery,
     /// Background fetches for observed repositories.
     pub git_fetch: GitFetch,
 }

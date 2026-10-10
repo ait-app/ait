@@ -40,7 +40,7 @@ cargo llvm-cov report --show-missing-lines
 | --------------------------------------------------------------------------------------------------------------------- | --------------: | -------: |
 | [crates/filesystem/src/local/files/search.rs](../../../crates/filesystem/src/files/local/files/search.rs)             |       184 / 193 |   95.34% |
 | [crates/filesystem/src/local/github_projects.rs](../../../crates/filesystem/src/forge/local/github_projects.rs)       |       221 / 245 |   90.20% |
-| [crates/filesystem/src/local/worktrees.rs](../../../crates/filesystem/src/worktrees/local/worktrees.rs)               |       670 / 756 |   88.62% |
+| [crates/filesystem/src/local/worktrees.rs](../../../crates/filesystem/src/git/local/worktrees.rs)                     |       670 / 756 |   88.62% |
 | [crates/metadata/src/local/workspace_automation.rs](../../../crates/metadata/src/local/workspace_automation.rs)       |       473 / 537 |   88.08% |
 | [crates/metadata/src/protocol/project_config.rs](../../../crates/metadata/src/protocol/project_config.rs)             |       137 / 156 |   87.82% |
 | [crates/metadata/src/protocol/workspace_automation.rs](../../../crates/metadata/src/protocol/workspace_automation.rs) |           3 / 3 |  100.00% |

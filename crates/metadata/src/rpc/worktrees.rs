@@ -12,13 +12,13 @@ use model::methods::MethodSpec;
 use serde::Serialize;
 use serde_json::Value;
 
-use crate::support::error::ErrorCode;
-use crate::worktrees::protocol::worktrees::{
+use crate::protocol::worktrees::{
     CheckoutError, CheckoutErrorCode, WorktreeArchiveRequest, WorktreeArchiveResult,
     WorktreeArchiveScope, WorktreeCreateAction, WorktreeCreateRequest, WorktreeCreateResult,
     WorktreeListEntry, WorktreeListRequest, WorktreeListResult,
 };
-use crate::worktrees::service::worktrees::{
+use crate::rpc::ErrorCode;
+use crate::service::worktrees::{
     ArchiveScope, ArchiveWorktree, CreateAction, CreateWorktree, WorktreeFailureKind, Worktrees,
     WorktreesError,
 };
@@ -33,7 +33,7 @@ pub(crate) struct Dispatched {
     pub(crate) created_workspace_id: Option<String>,
 }
 
-/// Execute a filesystem request.
+/// Execute a managed worktree request.
 ///
 /// # Errors
 /// Rejects invalid parameters, unknown methods, or failed result encoding.

@@ -12,9 +12,6 @@ pub enum ErrorCode {
     /// Filesystem I/O or result encoding failed.
     #[error("Project I/O failed")]
     ProjectIo,
-    /// Registry I/O or result encoding failed.
-    #[error("Registry I/O failed")]
-    RegistryIo,
     /// A connection-local resource limit was exceeded.
     #[error("Resource budget exhausted")]
     ResourceExhausted,
@@ -26,7 +23,6 @@ impl From<ErrorCode> for model::ErrorCode {
             ErrorCode::InvalidMessage => Self::InvalidMessage,
             ErrorCode::MethodNotFound => Self::MethodNotFound,
             ErrorCode::ProjectIo => Self::ProjectIo,
-            ErrorCode::RegistryIo => Self::RegistryIo,
             ErrorCode::ResourceExhausted => Self::ResourceExhausted,
         }
     }

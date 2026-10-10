@@ -114,10 +114,6 @@ fn state(root: &std::path::Path, fail: bool) -> (State, std::sync::Arc<Generator
             ))),
             forge: None,
             files: None,
-            github_projects: None,
-            worktrees: None,
-            workspace_recovery: None,
-            workspace_setup: None,
         },
         generator,
     )

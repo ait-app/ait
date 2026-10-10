@@ -3,6 +3,7 @@
 - 状态：接受
 - 日期：2026-10-09
 - 后续修订：[ADR-129](../providers/adr-129-provider-owned-skills.md) 将 skills 整组迁到 provider，filesystem 保留其余四组。
+- 后续修订：[ADR-130](adr-130-workspace-methods-owned-by-metadata.md) 将 worktrees 组的服务与协议迁到 metadata，适配器并入 `git`，filesystem 保留 git/forge/files 三组。
 - 修订：[ADR-030](adr-030-daemon-filesystem.md) 与
   [ADR-104](adr-104-filesystem-model-collaboration.md) 中 filesystem 的内部模块路径；
   crate 名称、依赖和对外服务不变。

@@ -6,7 +6,7 @@ use std::path::PathBuf;
 
 use super::*;
 use crate::forge::ports::forge::{CheckDetailsQuery, ForgeRuntime};
-use crate::worktrees::ports::worktrees::ChangeRequestResolver;
+use model::workspace::worktrees::ChangeRequestResolver;
 
 struct Fixture {
     root: tempfile::TempDir,

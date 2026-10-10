@@ -401,6 +401,6 @@ fn checkout_falls_back_to_pr_view_for_a_missing_head_and_rejects_mismatched_forg
         fixture
             .forge
             .resolve_change_request(fixture.cwd(), &other_forge, None),
-        Err(crate::worktrees::ports::worktrees::WorktreeError::ForgeUnavailable)
+        Err(domain::workspace::worktrees::WorktreeError::ForgeUnavailable)
     );
 }

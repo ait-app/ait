@@ -7,7 +7,6 @@ use base64 as _;
 use chrono as _;
 use domain as _;
 use filesystem as _;
-use getrandom as _;
 #[cfg(unix)]
 use libc as _;
 use memchr as _;
@@ -24,7 +23,7 @@ use tracing as _;
 use two_face as _;
 use uuid as _;
 
-const GROUPS: [&str; 4] = ["files", "forge", "git", "worktrees"];
+const GROUPS: [&str; 3] = ["files", "forge", "git"];
 const SHARED_LAYERS: [&str; 2] = ["ports", "protocol"];
 
 /// Return every boundary violation in `source`, owned by the module path `relative`.
@@ -123,17 +122,17 @@ fn production_groups_use_only_shared_ports_and_protocols_of_other_groups() {
 
 #[test]
 fn guard_rejects_concrete_cross_group_layers_and_support_dependencies() {
-    let worktrees = Path::new("worktrees/local/worktrees.rs");
+    let worktrees = Path::new("git/local/worktrees.rs");
     assert!(
         violations(
             worktrees,
-            "use crate::forge::ports::forge::X;\nuse crate::git::protocol::checkout::Y;"
+            "use crate::forge::ports::forge::X;\nuse crate::files::protocol::files::Y;"
         )
         .is_empty()
     );
     assert_eq!(
         violations(worktrees, "use crate::forge::local::forge::LocalForge;"),
-        ["worktrees/local/worktrees.rs: worktrees -> forge::local"]
+        ["git/local/worktrees.rs: git -> forge::local"]
     );
     assert_eq!(
         violations(
@@ -143,18 +142,16 @@ fn guard_rejects_concrete_cross_group_layers_and_support_dependencies() {
         ["files/rpc/files.rs: files -> git::service"]
     );
     for layer in ["service", "rpc", "connection", "local"] {
-        let source = format!("crate::worktrees::{layer}::worktrees::Worktrees");
+        let source = format!("crate::files::{layer}::files::Files");
         assert_eq!(
-            violations(Path::new("git/service/checkout.rs"), &source),
-            [format!(
-                "git/service/checkout.rs: git -> worktrees::{layer}"
-            )]
+            violations(Path::new("forge/service/forge.rs"), &source),
+            [format!("forge/service/forge.rs: forge -> files::{layer}")]
         );
     }
-    assert!(violations(worktrees, "crate::worktrees::local::worktrees::X").is_empty());
+    assert!(violations(worktrees, "crate::git::local::checkout::X").is_empty());
     assert!(
         violations(
-            Path::new("worktrees/local/worktrees/tests.rs"),
+            Path::new("git/local/worktrees/tests.rs"),
             "crate::forge::local::forge::LocalForge::new()"
         )
         .is_empty()

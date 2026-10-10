@@ -46,35 +46,6 @@ pub(super) async fn forge(
         .map_err(Into::into)
 }
 
-/// Try the github projects request branch and consume `pending` only on a match.
-/// `state` supplies installed services; any `connection` argument owns subscriptions.
-/// Returns the branch's completion after execution or response admission.
-/// # Errors
-/// Returns `NotImplemented` without consuming the request, or propagates delivery failure.
-pub(super) async fn github_projects(
-    pending: &mut Option<Context<'_>>,
-    state: &State,
-) -> Result<(), DispatchError> {
-    let Some(context) = pending.take_if(|context| {
-        matches!(
-            context.request.method.as_str(),
-            "workspace.github.search_repositories.request" | "project.github.clone.request"
-        )
-    }) else {
-        return Err(DispatchError::NotImplemented);
-    };
-    context
-        .rpc(
-            state.github_projects.clone(),
-            ErrorCode::RegistryIo,
-            |service, method, params| {
-                crate::forge::rpc::github_projects::execute(service, method, params)
-            },
-        )
-        .await
-        .map_err(Into::into)
-}
-
 /// Try the files request branch and consume `pending` only on a match.
 /// `state` supplies installed services; any `connection` argument owns subscriptions.
 /// Returns the branch's completion after execution or response admission.
@@ -117,37 +88,4 @@ pub(super) async fn files(
         )
         .await
         .map_err(Into::into)
-}
-
-/// Try the recovery request branch and consume `pending` only on a match.
-/// `state` supplies installed services; any `connection` argument owns subscriptions.
-/// Returns the branch's completion after execution or response admission.
-/// # Errors
-/// Returns `NotImplemented` without consuming the request, or propagates delivery failure.
-pub(super) async fn recovery(
-    pending: &mut Option<Context<'_>>,
-    state: &State,
-) -> Result<(), DispatchError> {
-    let Some(mut context) = pending.take_if(|context| {
-        matches!(
-            context.request.method.as_str(),
-            "workspace.recovery.inspect.request" | "workspace.recovery.restore.request"
-        )
-    }) else {
-        return Err(DispatchError::NotImplemented);
-    };
-    let result = context
-        .call(
-            state.workspace_recovery.clone(),
-            ErrorCode::RegistryIo,
-            |service, method, params| {
-                crate::worktrees::rpc::workspace_recovery::execute(service, method, params)
-            },
-        )
-        .await;
-    match result {
-        Ok(reply) => context.workspace(reply.value, reply.event),
-        Err(error) => context.respond(Err(error)),
-    }
-    .map_err(Into::into)
 }

@@ -10,9 +10,6 @@ pub fn implemented_methods() -> impl Iterator<Item = MethodSpec> {
         crate::git::rpc::checkout::METHODS,
         crate::forge::rpc::forge::METHODS,
         crate::files::connection::files::METHODS,
-        crate::forge::rpc::github_projects::METHODS,
-        crate::worktrees::rpc::worktrees::METHODS,
-        crate::worktrees::rpc::workspace_recovery::METHODS,
     ]
     .into_iter()
     .flat_map(|methods| methods.iter().copied())

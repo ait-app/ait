@@ -3,6 +3,7 @@
 - 状态：Accepted。
 - 日期：2026-10-07。
 - 后续：[ADR-129](../providers/adr-129-provider-owned-skills.md) 将技能安装纳入 provider 的完整服务。
+- 后续：[ADR-130](../workspace/adr-130-workspace-methods-owned-by-metadata.md) 将 worktree、恢复与 GitHub clone 服务纳入 metadata 的完整服务。
 - 范围：功能 crate 对外服务、daemon 组装、API 安装与方法声明。
 - 后续：[ADR-108](adr-108-relay-rpc-and-metadata-connection-methods.md) 将基础连接方法声明归 metadata，保留其独立于业务服务安装的行为。
 - 修订：[ADR-035](adr-035-daemon-capability-groups.md) 的细分服务安装组合与 [ADR-095](adr-095-component-method-declarations.md) 的安装筛选粒度。

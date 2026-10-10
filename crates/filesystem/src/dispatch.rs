@@ -21,15 +21,6 @@ pub struct State {
     pub forge: Option<Arc<Mutex<crate::forge::service::forge::Forge>>>,
     /// Installed files service.
     pub files: Option<Arc<Mutex<crate::files::service::files::Files>>>,
-    /// Installed github projects service.
-    pub github_projects: Option<Arc<Mutex<crate::forge::service::github_projects::GithubProjects>>>,
-    /// Installed worktrees service.
-    pub worktrees: Option<Arc<Mutex<crate::worktrees::service::worktrees::Worktrees>>>,
-    /// Installed workspace recovery service.
-    pub workspace_recovery:
-        Option<Arc<Mutex<crate::worktrees::service::workspace_recovery::WorkspaceRecovery>>>,
-    /// Host-supplied setup trigger sharing the owning service and synchronization.
-    pub workspace_setup: Option<Arc<dyn model::workspace::lifecycle::WorkspaceSetup>>,
 }
 
 impl std::ops::Deref for State {
@@ -85,71 +76,7 @@ pub async fn dispatch(
         }
         Err(error) => return Err(error),
     }
-    match requests::github_projects(context, state).await {
-        Ok(()) => return Ok(()),
-        Err(DispatchError::NotImplemented) => {
-            Context::assert_unhandled(context, "filesystem::github_projects");
-        }
-        Err(error) => return Err(error),
-    }
-    match worktrees(context, state).await {
-        Ok(()) => return Ok(()),
-        Err(DispatchError::NotImplemented) => {
-            Context::assert_unhandled(context, "filesystem::worktrees");
-        }
-        Err(error) => return Err(error),
-    }
-    match requests::recovery(context, state).await {
-        Ok(()) => return Ok(()),
-        Err(DispatchError::NotImplemented) => {
-            Context::assert_unhandled(context, "filesystem::recovery");
-        }
-        Err(error) => return Err(error),
-    }
     Err(DispatchError::NotImplemented)
-}
-
-async fn worktrees(pending: &mut Option<Context<'_>>, state: &State) -> Result<(), DispatchError> {
-    let Some(mut context) = pending.take_if(|context| {
-        matches!(
-            context.request.method.as_str(),
-            "workspace.worktree.list.request"
-                | "workspace.worktree.create.request"
-                | "workspace.worktree.archive.request"
-        )
-    }) else {
-        return Err(DispatchError::NotImplemented);
-    };
-
-    let result = context
-        .call(
-            state.worktrees.clone(),
-            ErrorCode::RegistryIo,
-            crate::worktrees::rpc::worktrees::execute,
-        )
-        .await;
-    if let Ok(reply) = &result
-        && let Some(workspace_id) = reply.created_workspace_id.clone()
-    {
-        let _ = state
-            .run_shared(
-                state.workspace_setup.clone(),
-                ErrorCode::RegistryIo,
-                move |automation| {
-                    automation
-                        .start_created_setup(&workspace_id)
-                        .map(|_| ())
-                        .map_err(|_| ErrorCode::RegistryIo)
-                },
-            )
-            .await;
-    }
-    match result {
-        Ok(reply) => context
-            .workspace(reply.value, reply.event)
-            .map_err(Into::into),
-        Err(error) => context.respond(Err(error)).map_err(Into::into),
-    }
 }
 
 async fn checkout(

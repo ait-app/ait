@@ -13,15 +13,13 @@ use model::workspace::registry::{
 };
 
 use super::*;
-use crate::worktrees::ports::workspace_recovery::{
-    ArchivedWorktreeRestore, WorkspaceRecoveryRuntimeError,
-};
+use domain::workspace::worktrees::WorkspaceRecoveryRuntimeError;
 
 #[test]
 fn recovery_rpc_exposes_restore_intent_and_failed_restores_never_publish_an_update() {
     let (service, workspaces, _, recovery) = service();
     let request = serde_json::json!({"workspaceId":"archived"});
-    let rejected = crate::worktrees::rpc::workspace_recovery::execute(
+    let rejected = crate::rpc::workspace_recovery::execute(
         &service,
         "workspace.recovery.restore.request",
         request.clone(),
@@ -45,7 +43,7 @@ fn recovery_rpc_exposes_restore_intent_and_failed_restores_never_publish_an_upda
         .lock()
         .unwrap()
         .insert("/repo".to_owned());
-    let inspection = crate::worktrees::rpc::workspace_recovery::execute(
+    let inspection = crate::rpc::workspace_recovery::execute(
         &service,
         "workspace.recovery.inspect.request",
         request,

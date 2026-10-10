@@ -8,9 +8,10 @@ use serde_json::Value;
 
 use crate::forge::local::forge::run_bounded_command;
 use crate::forge::ports::forge::ForgeFailureKind;
-use crate::forge::ports::github_projects::{
-    GithubProjectsError, GithubProjectsRuntime, GithubRepository, GithubRepositoryVisibility,
+use domain::workspace::provisioning::{
+    GithubProjectsError, GithubRepository, GithubRepositoryVisibility,
 };
+use model::workspace::provisioning::GithubProjectsRuntime;
 
 const SEARCH_TIMEOUT: Duration = Duration::from_secs(30);
 const CLONE_TIMEOUT: Duration = Duration::from_secs(300);

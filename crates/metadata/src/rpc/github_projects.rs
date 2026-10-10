@@ -12,17 +12,19 @@ use model::methods::MethodSpec;
 use serde::Serialize;
 use serde_json::Value;
 
-use crate::forge::ports::github_projects::{
+use domain::workspace::provisioning::{
     GithubCloneProtocol, GithubProjectsError, GithubRepositoryVisibility,
 };
-use crate::forge::protocol::github_projects::{
+
+use crate::protocol::github_projects::{
     GithubCloneProtocol as WireCloneProtocol, GithubRepositoryPayload,
     GithubRepositorySearchRequest, GithubRepositorySearchResult, GithubRepositorySearchStatus,
     GithubRepositoryVisibility as WireVisibility, ProjectGithubCloneRequest,
     ProjectGithubCloneResult,
 };
-use crate::forge::service::github_projects::GithubProjects;
-use crate::support::error::ErrorCode;
+use crate::rpc::ErrorCode;
+use crate::service::github_projects::GithubProjects;
+
 /// Execute a GitHub repository search or clone request.
 ///
 /// # Errors

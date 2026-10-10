@@ -5,22 +5,9 @@ use std::sync::Arc;
 
 use domain::summary::SummarySelection;
 use domain::workspace::lifecycle::{WorkspaceCreation, WorkspaceLifecycleError};
-use domain::workspace::records::{PersistedProjectRecord, PersistedWorkspaceRecord};
+use domain::workspace::records::PersistedWorkspaceRecord;
 
 use crate::workspace::worktrees::WorktreeProvisioning;
-
-/// Blocking Project registration after filesystem checkout provisioning.
-pub trait ProjectRegistration: Debug + Send + Sync {
-    /// Inspect and register the completed checkout at `path`, using `timestamp` for mutations.
-    /// Returns the active Project, retaining existing identity and user metadata on reuse.
-    /// # Errors
-    /// Returns safe inspection, validation, or registry failures.
-    fn register_project(
-        &self,
-        path: &str,
-        timestamp: &str,
-    ) -> Result<PersistedProjectRecord, WorkspaceLifecycleError>;
-}
 
 /// Blocking Workspace registration used by native Agent placement.
 pub trait WorkspaceDirectory: Debug + Send + Sync {

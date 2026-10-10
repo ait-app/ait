@@ -11,12 +11,12 @@ use model::methods::MethodSpec;
 use serde::Serialize;
 use serde_json::Value;
 
-use crate::support::error::ErrorCode;
-use crate::worktrees::protocol::workspace_recovery::{
+use crate::protocol::workspace_recovery::{
     WorkspaceRecoveryAction, WorkspaceRecoveryInspectResult, WorkspaceRecoveryRequest,
     WorkspaceRecoveryRestoreResult, WorkspaceRecoveryState, WorkspaceRecoveryUnavailableReason,
 };
-use crate::worktrees::service::workspace_recovery::{
+use crate::rpc::ErrorCode;
+use crate::service::workspace_recovery::{
     WorkspaceRecovery, WorkspaceRecoveryAction as ApplicationRecoveryAction,
     WorkspaceRecoveryState as ApplicationRecoveryState,
     WorkspaceRecoveryUnavailableReason as ApplicationUnavailableReason,
