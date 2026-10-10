@@ -80,6 +80,40 @@ async fn completed(session: &mut dyn AgentSession) -> Vec<crate::protocol::timel
     }
 }
 
+async fn projected_turn(
+    session: &mut dyn AgentSession,
+    timeline: &crate::storage::timeline::Timeline,
+) -> Vec<crate::protocol::timeline::NativeItem> {
+    let mut streamed = false;
+    let mut items = Vec::new();
+    loop {
+        match event(session).await {
+            AgentTurnEvent::Progress { observation, entry } => {
+                timeline
+                    .progress("agent", "opencode", &observation, &entry)
+                    .unwrap();
+                streamed = true;
+            }
+            AgentTurnEvent::Timeline(entry) => {
+                timeline
+                    .append("agent", "opencode", std::slice::from_ref(&entry))
+                    .unwrap();
+                items.push(entry);
+            }
+            AgentTurnEvent::History(entries) => {
+                timeline.reconcile("agent", "opencode", &entries).unwrap();
+                items = entries;
+            }
+            AgentTurnEvent::Completed(_) => {
+                assert!(streamed);
+                return items;
+            }
+            AgentTurnEvent::Cancelled | AgentTurnEvent::Failed => panic!("turn failed"),
+            _ => {}
+        }
+    }
+}
+
 #[cfg(unix)]
 #[tokio::test]
 async fn acp_model_error_preserves_native_reason_input_history_and_resume_identity() {
@@ -310,6 +344,45 @@ async fn acp_multiple_turns_replay_and_legacy_resume_keep_native_identity_and_cl
             .filter(|request| request["method"] == "session/prompt")
             .count(),
         3
+    );
+}
+
+#[cfg(unix)]
+#[tokio::test]
+async fn acp_settlement_keeps_user_messages_before_live_replies_across_turns() {
+    let (root, client, spec) = fixture("normal");
+    let mut session = client.create_session(&spec).await.unwrap();
+    let timeline = crate::storage::timeline::Timeline::memory().unwrap();
+    for index in 0..2 {
+        let prompt = crate::protocol::prompt::AgentPrompt {
+            text: format!("hello {index}"),
+            client_message_id: Some(format!("client-{index}")),
+            ..Default::default()
+        };
+        session.start_input(&prompt, &spec.config).await.unwrap();
+        projected_turn(session.as_mut(), &timeline).await;
+        let rows = timeline.read("agent").unwrap().1;
+        assert_eq!(rows.len(), (index + 1) * 2);
+        for turn in 0..=index {
+            assert_eq!(rows[turn * 2].entry.item["type"], "user_message");
+            assert_eq!(
+                rows[turn * 2].entry.item["clientMessageId"],
+                format!("client-{turn}")
+            );
+            assert_eq!(
+                rows[turn * 2 + 1].entry.item["text"],
+                "authoritative answer"
+            );
+            assert!(rows[turn * 2].entry.timestamp <= rows[turn * 2 + 1].entry.timestamp);
+        }
+    }
+    session.close().await.unwrap();
+    assert_eq!(
+        requests(&root)
+            .iter()
+            .filter(|request| request["method"] == "session/prompt")
+            .count(),
+        2
     );
 }
 

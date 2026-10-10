@@ -9,9 +9,11 @@ import { createBrowserRustTransportFactory } from "./browser-transport";
 import type { TransportFactory } from "./types";
 import { createAccountRelayTransportFactory } from "./account-transport";
 
-export function buildAccountRelayClientConfig(connection: { hostId: string }) {
+export function buildAccountRelayClientConfig(connection: { hostId: string; center: string }) {
+  const url = new URL(`ait+desktop://account-relay/${connection.hostId}`);
+  url.searchParams.set("center", connection.center);
   return {
-    url: `ait+desktop://account-relay/${connection.hostId}`,
+    url: url.toString(),
     connectTimeoutMs: 45_000,
     transportFactory: createRustDaemonTransportFactory(createAccountRelayTransportFactory),
   };

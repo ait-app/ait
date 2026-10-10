@@ -28,7 +28,7 @@ export class AccountTransportManager {
       session.owner.send("paseo:event:account-relay-transport", { sessionId: id, ...payload });
   }
 
-  async open(owner: WebContents, id: string, host: string): Promise<void> {
+  async open(owner: WebContents, id: string, host: string, center: string): Promise<void> {
     if (!/^account-[a-zA-Z0-9-]{1,80}$/.test(id) || !/^[0-9a-f-]{36}$/i.test(host))
       throw new Error("Invalid relay transport identity");
     if (this.sessions.has(id) || this.sessions.size >= 16)
@@ -55,7 +55,7 @@ export class AccountTransportManager {
     owner.once("destroyed", destroyed);
     owner.on("did-start-navigation", session.navigated);
     try {
-      const grant = await this.account.openVisit(host);
+      const grant = await this.account.openVisit(host, center);
       if (session.closed) {
         await this.account.closeVisit(grant.relay_session_id);
         return;

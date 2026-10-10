@@ -119,12 +119,12 @@ describe("account activation", () => {
       expect.objectContaining({ center: DEFAULT_ACCOUNT_CENTER }),
     );
     await manager.select("remote");
-    expect((await manager.openVisit("remote")).url).toBe(
+    expect((await manager.openVisit("remote", DEFAULT_ACCOUNT_CENTER)).url).toBe(
       "wss://dash.ait-app.com:8443/api/v1/relay/sessions/visit/client",
     );
-    expect((await manager.openDownload("remote", "download-token")).url).toBe(
-      "wss://dash.ait-app.com:8443/api/v1/relay/sessions/visit/client",
-    );
+    expect(
+      (await manager.openDownload("remote", "download-token", DEFAULT_ACCOUNT_CENTER)).url,
+    ).toBe("wss://dash.ait-app.com:8443/api/v1/relay/sessions/visit/client");
     expect(
       http.mock.calls.every(([url]) => String(url).startsWith(`${DEFAULT_ACCOUNT_CENTER}/v1/`)),
     ).toBe(true);
@@ -176,13 +176,11 @@ describe("account activation", () => {
     await manager.logout();
   });
 
-  it("requires explicit selection and clears connection intent on logout", async () => {
+  it("restores host access independently of selection and clears it on logout", async () => {
     const { manager, http, deps } = fixture();
     await manager.login("https://center.example/api", "alice@example.com", "password");
     await vi.advanceTimersByTimeAsync(1);
-    await expect(manager.openVisit("remote")).rejects.toThrow();
-    await manager.select("remote");
-    const visit = await manager.openVisit("remote");
+    const visit = await manager.openVisit("remote", "https://center.example/api");
     expect(visit.url).toBe("wss://center.example/api/v1/relay/sessions/visit/client");
     await manager.logout();
     expect(manager.snapshot().selected).toBeNull();
@@ -191,7 +189,7 @@ describe("account activation", () => {
     const count = http.mock.calls.length;
     await vi.advanceTimersByTimeAsync(120_000);
     expect(http.mock.calls).toHaveLength(count);
-    await expect(manager.openVisit("remote")).rejects.toThrow();
+    await expect(manager.openVisit("remote", "https://center.example/api")).rejects.toThrow();
   });
 
   it("keeps the last online list and selected host when discovery fails", async () => {

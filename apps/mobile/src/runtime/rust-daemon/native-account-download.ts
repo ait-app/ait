@@ -16,6 +16,7 @@ interface DownloadDependencies {
 export function streamNativeAccountDownload(
   input: {
     hostId: string;
+    center: string;
     token: string;
     write(bytes: Uint8Array): void;
     progress(bytesWritten: number, totalBytes: number): void;
@@ -116,7 +117,7 @@ export function streamNativeAccountDownload(
         cleanup.push(deps.register(() => finish(new Error("Download cancelled."))));
         account = await deps.account();
         if (closed) return;
-        grant = await account.openDownload(input.hostId, input.token);
+        grant = await account.openDownload(input.hostId, input.token, input.center);
         if (closed) {
           await account.closeVisit(grant.relay_session_id);
           return;
