@@ -10,6 +10,12 @@ export interface MethodSpec {
 
 export const METHODS: Readonly<Record<string, MethodSpec>> = {
   ...RELAY_METHODS,
+  "workspace.get.request": {
+    method: "workspace.get.request",
+    kind: "request",
+    channel: 1,
+    response: "workspace.get.response",
+  },
   "daemon.get_status.request": {
     method: "daemon.get_status.request",
     kind: "request",

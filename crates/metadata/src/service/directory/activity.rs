@@ -41,6 +41,28 @@ impl Directory {
         workspaces: &[PersistedWorkspaceRecord],
         now: &str,
     ) -> Result<BTreeMap<String, Status>, DirectoryError> {
+        self.project_statuses(workspaces, now, true)
+    }
+
+    /// Read one Workspace's activity without removing other Workspaces' transition history.
+    /// # Errors
+    /// Returns a registry failure when an activity source cannot be captured.
+    pub(crate) fn workspace_status(
+        &self,
+        workspace: &PersistedWorkspaceRecord,
+        now: &str,
+    ) -> Result<Status, DirectoryError> {
+        self.project_statuses(std::slice::from_ref(workspace), now, false)?
+            .remove(&workspace.workspace_id)
+            .ok_or(DirectoryError::Registry)
+    }
+
+    fn project_statuses(
+        &self,
+        workspaces: &[PersistedWorkspaceRecord],
+        now: &str,
+        complete: bool,
+    ) -> Result<BTreeMap<String, Status>, DirectoryError> {
         let mut contributions = Vec::new();
         for source in &self.activity.sources {
             contributions.extend(source.snapshot().map_err(|_| DirectoryError::Registry)?);
@@ -51,7 +73,11 @@ impl Directory {
             .lock()
             .unwrap_or_else(std::sync::PoisonError::into_inner);
         let current = project(workspaces, &contributions, &history, now);
-        history.clone_from(&current);
+        if complete {
+            history.clone_from(&current);
+        } else {
+            history.extend(current.clone());
+        }
         Ok(current)
     }
 }

@@ -2423,10 +2423,16 @@ export class HostRuntimeStore {
     await directory.prepareAgentRoute(agentId);
   }
 
-  async prepareWorkspaceRoute(serverId: string, workspaceId: string): Promise<void> {
+  async prepareWorkspaceRoute(serverId: string, workspaceId: string) {
     const directory = this.directorySyncByServer.get(serverId);
     if (!directory) throw new Error(`Unknown host runtime for serverId ${serverId}`);
-    await directory.prepareWorkspaceRoute(workspaceId);
+    return directory.prepareWorkspaceRoute(workspaceId);
+  }
+
+  async prepareWorkspaceAgents(serverId: string, workspaceId: string): Promise<boolean> {
+    const directory = this.directorySyncByServer.get(serverId);
+    if (!directory) throw new Error(`Unknown host runtime for serverId ${serverId}`);
+    return directory.prepareWorkspaceAgents(workspaceId);
   }
 
   async prepareAgentTimeline(serverId: string, agentId: string): Promise<void> {

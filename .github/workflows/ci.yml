@@ -106,6 +106,8 @@ jobs:
     timeout-minutes: 45
     steps:
       - uses: actions/checkout@v5
+        with:
+          fetch-depth: 0
       - uses: actions/setup-node@v5
         with:
           node-version: 24
@@ -113,6 +115,10 @@ jobs:
           cache-dependency-path: package-lock.json
       - run: npm ci
       - run: npx oxlint
+      - name: Check changed UI formatting and lint
+        env:
+          UI_DIFF_BASE: ${{ github.event.pull_request.base.sha || github.event.before }}
+        run: npm run check:ui -- "$UI_DIFF_BASE"
       - run: npm run verify:local-packages
       - run: npm run verify:release
       - run: npm run test:release
@@ -120,6 +126,7 @@ jobs:
       - run: npm run build:desktop-main
       - run: npm run test --workspace=@ait/mobile -- src/components/question-form-card-core.test.ts
       - run: npm run test --workspace=@ait/protocol
+      - run: npm run test --workspace=@ait/client
       - run: npm run test --workspace=@ait/mobile -- src/runtime/host-runtime.test.ts
       - run: npm run typecheck --workspace=@ait/desktop --workspace=@ait/mobile
       - run: npm test --workspace=@ait/desktop
@@ -129,6 +136,7 @@ jobs:
           npm run test --workspace=@ait/mobile --
           src/i18n/resources.test.ts src/runtime/rust-daemon maestro/support native-release-version.test.ts
           src/timeline src/types/stream.test.ts src/runtime/replica-cache
+          src/runtime/directory-sync src/screens/workspace/workspace-route-state.test.ts
 
   nightly-prepare:
     if: github.event_name != 'pull_request' && github.ref == 'refs/heads/main'

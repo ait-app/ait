@@ -307,6 +307,11 @@ fn query(
     search: Option<String>,
 ) -> Result<AgentDirectoryQuery, ErrorCode> {
     let filter = filter.unwrap_or_default();
+    if filter.workspace_ids.as_ref().is_some_and(|ids| {
+        ids.len() > 200 || ids.iter().any(|id| id.trim().is_empty() || id.len() > 256)
+    }) {
+        return Err(ErrorCode::InvalidMessage);
+    }
     let (cursor, limit) = match page {
         Some(page) if (1..=200).contains(&page.limit) => (page.cursor, page.limit),
         Some(_) => return Err(ErrorCode::InvalidMessage),
@@ -325,6 +330,7 @@ fn query(
                 .collect::<BTreeSet<_>>();
             (!keys.is_empty()).then_some(keys)
         }),
+        workspace_ids: filter.workspace_ids.map(|ids| ids.into_iter().collect()),
         statuses: filter.statuses.and_then(|statuses| {
             let statuses = statuses
                 .into_iter()

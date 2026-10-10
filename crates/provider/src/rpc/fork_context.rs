@@ -6,7 +6,7 @@ use serde_json::{Value, json};
 use crate::protocol::native_sessions::ForkRequest;
 use crate::storage::timeline::Row;
 
-use super::timeline::projection::{Entry, project};
+use crate::timeline_projection::{Entry, project};
 
 mod tools;
 

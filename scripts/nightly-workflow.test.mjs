@@ -17,6 +17,15 @@ const prCleanup = yaml.parse(
   await readFile(new URL("../.github/workflows/cancel-merged-pr-ci.yml", import.meta.url), "utf8"),
 );
 const AsyncFunction = Object.getPrototypeOf(async function () {}).constructor;
+
+test("UI CI checks changed formatting and lint and runs the shared client suite", () => {
+  const steps = workflow.jobs.ui.steps;
+  assert.equal(steps.find((step) => step.uses === "actions/checkout@v5").with["fetch-depth"], 0);
+  const check = steps.find((step) => step.name === "Check changed UI formatting and lint");
+  assert.equal(check.run, 'npm run check:ui -- "$UI_DIFF_BASE"');
+  assert.match(check.env.UI_DIFF_BASE, /pull_request.base.sha.*github.event.before/);
+  assert.ok(steps.some((step) => step.run === "npm run test --workspace=@ait/client"));
+});
 const context = { repo: { owner: "ait-app", repo: "ait" }, sha: "current", runId: 42 };
 
 async function runScript(step, github, outputs = {}, controller = control) {

@@ -206,8 +206,7 @@ impl ExecutionState {
             "agent.timeline.get.request" => {
                 let mut request: FetchRequest = decode(params)?;
                 request.agent_id.clone_from(&id);
-                let (epoch, rows) = timeline.read(&id)?;
-                super::timeline::fetch(&request, &epoch, &rows, &self.snapshot(&id)?)
+                super::timeline::fetch_stored(&request, &timeline, &id, &self.snapshot(&id)?)
                     .map_err(Into::into)
             }
             "agent.timeline.search.request" => {

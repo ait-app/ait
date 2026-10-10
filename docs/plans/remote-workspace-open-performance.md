@@ -1,6 +1,6 @@
 # 远程 Workspace 打开性能优化方案
 
-状态：会话与 Provider 并发隔离已实施；目标目录加载、历史分页与远程耗时验收待后续推进。日期：2026-10-06。
+状态：会话与 Provider 并发隔离、目标 Workspace 读取和持久化展示分页已实施；远程耗时验收、原生历史后台校验及完整目录分页仍待推进。更新：2026-10-11。
 分析基线：`5df233ac2f87cecda5f1a1ee99c003a15522dc49`。
 
 ## 结论与范围
@@ -15,6 +15,8 @@
 - 新建 worktree、检出 PR、安装依赖与 setup 脚本包含独立的业务等待，不计入已有 Workspace 首屏基准。
 
 本文件的调用链分析保留改造前基线；当前并发执行路径见 [ADR-091](../decisions/providers/adr-091-independent-session-execution.md) 与[验证报告](../reports/providers/paseo-concurrency-validation.md)。
+目标读取见 [ADR-126](../decisions/workspace/adr-126-workspace-target-read.md)，当前 Timeline 页级读取见
+[ADR-125](../decisions/providers/adr-125-durable-timeline-projection-pages.md)。下面的旧源码流程用于解释改造背景。
 
 ## 改造前打开路径
 
@@ -65,7 +67,7 @@ Codex 的 [history 适配](../../crates/provider/src/local/codex/discovery.rs) �
 
 1. [timeline RPC](../../crates/provider/src/rpc/agent_execution.rs) 调用 `timeline.read(agent)`。
 2. [存储读取](../../crates/provider/src/storage/timeline/progress.rs) 查询该 Agent 的 entries 和 progress，按 seq 排序，没有页级 `LIMIT`，解析全部 JSON。
-3. [投影分页](../../crates/provider/src/rpc/timeline/projection/page.rs) 先 `project(rows)`，合并工具生命周期和相邻文本，再截取 tail/before/after。
+3. 旧投影分页先 `project(rows)`，合并工具生命周期和相邻文本，再截取 tail/before/after；当前纯分页语义位于 [timeline_projection/page.rs](../../crates/provider/src/timeline_projection/page.rs)。
 
 所以 `limit: 40` 限制返回数量，没有限制服务端读取和投影成本。长会话冷开、再次取页、断线补齐都会重复支付这部分成本。查询还会持有共享时间线数据库锁；实际对流式写入的影响需要测量。
 
@@ -240,8 +242,8 @@ Codex 的 [history 适配](../../crates/provider/src/local/codex/discovery.rs) �
 - [ ] 采集远程打开瀑布与核心基线。
 - [ ] 推迟模型目录预取并独立呈现标题/Git 状态。
 - [ ] 隔离 Provider 发现与只读查询，已有历史后台校验。
-- [ ] 提供目标 ID Bootstrap 与正确的缓存/事件衔接。
-- [ ] 完成时间线投影缓存和真实页级读取。
+- [x] 提供目标 Workspace ID 读取、有界首屏 Agent 摘要与缓存/事件衔接。
+- [x] 完成持久化时间线投影索引和真实页级读取。
 - [ ] 按数据实施目录增量投影与连接优化。
 
-本次仅新增方案和索引，没有修改运行逻辑，也没有进行性能实测。
+原始方案没有进行性能实测；后续实现的定向回归不能替代上述实网测量矩阵。

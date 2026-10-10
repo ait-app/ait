@@ -100,6 +100,7 @@ export function serverInfo(info: Payload, implemented: Set<string>): Payload {
       projectList: has("project.list.request"),
       stableProjectIdentity: has("project.list.request") && has("project.add.request"),
       workspaceMultiplicity: has("workspace.list.request"),
+      workspaceTargetRead: has("workspace.get.request"),
       projectCreateDirectory: has("project.create_directory.request"),
       projectGithubClone: has("project.github.clone.request"),
       workspaceGithubRepositorySearch: has("workspace.github.search_repositories.request"),

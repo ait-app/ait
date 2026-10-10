@@ -476,9 +476,9 @@ describe("Rust protocol adapter", () => {
   });
 
   it("uses canonical names and stays within Rust's per-connection limits", () => {
-    expect(Object.keys(METHODS)).toHaveLength(171);
+    expect(Object.keys(METHODS)).toHaveLength(172);
     for (const [name, spec] of Object.entries(METHODS)) expect(spec.method).toBe(name);
-    expect(new Set(Object.values(METHODS).map((spec) => spec.method)).size).toBe(171);
+    expect(new Set(Object.values(METHODS).map((spec) => spec.method)).size).toBe(172);
     for (const capabilities of CHANNEL_CAPABILITIES) {
       expect(capabilities.length).toBeLessThanOrEqual(64);
       expect(capabilities.some((name) => /^(hub|chat|loop|plugin)[./]/.test(name))).toBe(false);

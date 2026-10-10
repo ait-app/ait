@@ -157,6 +157,9 @@ pub(crate) struct AgentDirectoryFilter {
     /// Restrict placement to project keys.
     #[serde(default)]
     pub(crate) project_keys: Option<Vec<String>>,
+    /// Restrict to exact persisted Workspace identities.
+    #[serde(default)]
+    pub(crate) workspace_ids: Option<Vec<String>>,
     /// Restrict lifecycle states.
     #[serde(default)]
     pub(crate) statuses: Option<Vec<AgentStatus>>,

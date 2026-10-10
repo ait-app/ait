@@ -16,6 +16,7 @@
     "generate:icons": "node scripts/generate-brand-assets.mjs",
     "check:icons": "node scripts/generate-brand-assets.mjs --check",
     "check:docs": "node --test scripts/check-docs.test.mjs && node scripts/check-docs.mjs",
+    "check:ui": "node scripts/check-ui.mjs",
     "build:daemon": "cargo build -p daemon --bin daemon",
     "build:ui-deps": "npm run build:sdk && npm run build:highlight && npm run build --workspace=@ait/expo-two-way-audio",
     "postinstall": "node scripts/postinstall-patches.mjs",

@@ -2389,6 +2389,14 @@ export class DaemonClient {
     });
   }
 
+  async getWorkspace(
+    workspaceId: string,
+  ): Promise<Extract<SessionOutboundMessage, { type: "workspace.get.response" }>["payload"]> {
+    return this.sendNamespacedCorrelatedSessionRequest<"workspace.get.response">({
+      message: { type: "workspace.get.request", workspaceId },
+    });
+  }
+
   listWorkspaceLabels(
     options: {
       sync?: { generation: string; afterSeq: number };

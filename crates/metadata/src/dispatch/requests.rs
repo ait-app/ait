@@ -114,6 +114,7 @@ pub(super) async fn directory(
                 | "workspace.open.request"
                 | "workspace.create.request"
                 | "workspace.list.request"
+                | "workspace.get.request"
                 | "workspace.archive.request"
                 | "workspace.title.set.request"
                 | "workspace.pin.set.request"
