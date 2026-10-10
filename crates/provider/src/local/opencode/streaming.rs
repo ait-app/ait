@@ -36,6 +36,7 @@ pub(super) struct Stream {
     segments: BTreeMap<String, usize>,
     tools: BTreeMap<String, Value>,
     turn: Option<String>,
+    foreground_turn: Option<String>,
     observation: u64,
     images: ImageStore,
 }
@@ -49,12 +50,59 @@ impl Stream {
         }
     }
 
+    /// Associate live ACP updates with the accepted input while native user IDs are unavailable.
+    pub(super) fn for_turn(images: ImageStore, turn: String) -> Self {
+        Self {
+            foreground_turn: Some(turn),
+            ..Self::new(images)
+        }
+    }
+
+    /// Project submitted input before its reply; authoritative replay replaces these display rows.
+    /// Image materialization and invalid content errors are returned before native submission.
+    pub(super) fn submitted(
+        images: ImageStore,
+        turn: &str,
+        blocks: &[Value],
+    ) -> Result<Vec<NativeItem>, AgentSessionError> {
+        let id = format!("submitted:{turn}");
+        let mut stream = Self::for_turn(images, turn.to_owned());
+        stream.clients.insert(id.clone(), turn.to_owned());
+        for block in blocks {
+            stream.chunk("user_message", &id, block)?;
+        }
+        stream.flush();
+        Ok(stream
+            .events
+            .into_iter()
+            .filter_map(|event| {
+                if let AgentTurnEvent::Timeline(entry) = event {
+                    Some(entry)
+                } else {
+                    None
+                }
+            })
+            .collect())
+    }
+
     /// Consume one ACP update; malformed supported content and resource excesses fail.
     pub(super) fn update(&mut self, update: &Value) -> Result<(), AgentSessionError> {
         match update["sessionUpdate"].as_str() {
-            Some("user_message_chunk") => self.chunk("user_message", update),
-            Some("agent_message_chunk") => self.chunk("assistant_message", update),
-            Some("agent_thought_chunk") => self.chunk("reasoning", update),
+            Some("user_message_chunk") => self.chunk(
+                "user_message",
+                super::config::text(update, "messageId")?,
+                &update["content"],
+            ),
+            Some("agent_message_chunk") => self.chunk(
+                "assistant_message",
+                super::config::text(update, "messageId")?,
+                &update["content"],
+            ),
+            Some("agent_thought_chunk") => self.chunk(
+                "reasoning",
+                super::config::text(update, "messageId")?,
+                &update["content"],
+            ),
             Some("tool_call" | "tool_call_update") => self.tool(update),
             Some("usage_update") => {
                 let usage = AgentUsage {
@@ -77,22 +125,17 @@ impl Stream {
         }
     }
 
-    fn chunk(&mut self, kind: &str, update: &Value) -> Result<(), AgentSessionError> {
-        let id = super::config::text(update, "messageId")?;
-        let delta = match update["content"]["type"].as_str() {
-            Some("text") => Cow::Borrowed(
-                update["content"]["text"]
-                    .as_str()
-                    .ok_or(AgentSessionError::Failed)?,
-            ),
-            Some("image") => Cow::Owned(image(&self.images, &update["content"])?),
+    fn chunk(&mut self, kind: &str, id: &str, content: &Value) -> Result<(), AgentSessionError> {
+        let delta = match content["type"].as_str() {
+            Some("text") => {
+                Cow::Borrowed(content["text"].as_str().ok_or(AgentSessionError::Failed)?)
+            }
+            Some("image") => Cow::Owned(image(&self.images, content)?),
             // Resource links are visible without reading user files on the client's behalf.
             Some("resource_link") => Cow::Owned(format!(
                 "[{}]({})",
-                update["content"]["name"].as_str().unwrap_or("Resource"),
-                update["content"]["uri"]
-                    .as_str()
-                    .ok_or(AgentSessionError::Failed)?
+                content["name"].as_str().unwrap_or("Resource"),
+                content["uri"].as_str().ok_or(AgentSessionError::Failed)?
             )),
             _ => return Err(AgentSessionError::Failed),
         };
@@ -166,13 +209,15 @@ impl Stream {
             .segments
             .get(&format!("{id}:{kind}"))
             .ok_or(AgentSessionError::Failed)?;
+        let mut item = json!({"type":kind,"text":"","messageId":id});
+        if kind == "user_message" {
+            item["clientMessageId"] =
+                json!(self.clients.get(&id).map_or(id.as_str(), String::as_str));
+        }
         self.current = Some(Text {
             source: id.clone(),
             segment,
-            entry: self.entry(
-                &format!("text:{id}:{kind}:{segment}"),
-                json!({"type":kind,"text":"","messageId":id}),
-            ),
+            entry: self.entry(&format!("text:{id}:{kind}:{segment}"), item),
             buffer: String::new(),
         });
         Ok(())
@@ -291,7 +336,11 @@ impl Stream {
     fn entry(&self, key: &str, item: Value) -> NativeItem {
         NativeItem {
             key: format!("native:opencode:acp-v1:{key}"),
-            turn_id: self.turn.clone(),
+            turn_id: self
+                .foreground_turn
+                .as_ref()
+                .or(self.turn.as_ref())
+                .cloned(),
             // ACP omits message timestamps. The host retains the first observation timestamp
             // when this native key is replayed; session/list supplies native activity time.
             timestamp: chrono::Utc::now().to_rfc3339(),

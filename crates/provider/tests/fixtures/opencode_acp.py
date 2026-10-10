@@ -110,7 +110,7 @@ def complete(stop="end_turn"):
     row = {"id": "answer" + str(value["seq"]), "type": "assistant", "content": [{"type": "text", "text": "authoritative answer"}]}
     if scenario == "large-tool":
         row["content"].insert(0, {"type": "tool", "id": "tool" + str(value["seq"]), "output": "x" * 1048576})
-    if scenario == "wrapped-tool":
+    if scenario in ["wrapped-tool", "echo-user-tool"]:
         row["content"].insert(0, {"type": "tool", "id": "tool" + str(value["seq"]), "kind": "execute", "input": {"command": "pwd"}, "output": {"metadata": {"exit": 0}, "output": "/work\n"}})
     value["history"].append(row)
     save(value)
@@ -182,10 +182,16 @@ for line in sys.stdin:
     elif method == "session/prompt":
         assert active is None
         active = identity
+        if params["prompt"] == [{"type": "text", "text": "/compact"}]:
+            reply(active, {"stopReason": "end_turn", "userMessageId": params["messageId"]})
+            active = None
+            continue
         value = state()
         value["seq"] += 1
         value["history"].append({"id": "user" + str(value["seq"]), "type": "user", "text": "\n".join(block.get("text", "image") for block in params["prompt"])})
         save(value)
+        if scenario == "echo-user-tool":
+            content(value["history"][-1])
         if scenario == "question":
             send({"id": "question", "method": "elicitation/create", "params": {"mode": "form", "sessionId": session_id, "toolCallId": "tool-question", "message": "Choose languages",
                 "requestedSchema": {"type": "object", "properties": {"language": {"type": "array", "uniqueItems": True, "items": {"anyOf": [{"const": "rust", "title": "Rust, stable"}, {"const": "go", "title": "Go"}]}},

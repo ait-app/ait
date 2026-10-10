@@ -115,6 +115,80 @@ fn partial_recovery_and_native_divergence_do_not_silently_duplicate_text() {
 }
 
 #[test]
+fn replay_inserts_the_native_prompt_before_already_observed_assistant_progress() {
+    let timeline = Timeline::memory().unwrap();
+    timeline
+        .progress("a", "opencode", "partial", &entry("reply"))
+        .unwrap();
+    let before = timeline.read("a").unwrap().0;
+    let user = NativeItem {
+        key: "native:t:user".into(),
+        item: json!({"type":"user_message","text":"prompt","messageId":"user"}),
+        ..entry("")
+    };
+    let history = [user, entry("reply complete")];
+    let after = timeline.reconcile("a", "opencode", &history).unwrap();
+    assert_ne!(before, after);
+    assert_eq!(
+        timeline
+            .read("a")
+            .unwrap()
+            .1
+            .into_iter()
+            .map(|row| row.entry)
+            .collect::<Vec<_>>(),
+        history
+    );
+    assert_eq!(
+        timeline.reconcile("a", "opencode", &history).unwrap(),
+        after
+    );
+}
+
+#[test]
+fn replacement_retains_submitted_input_and_first_live_output_timestamps() {
+    let timeline = Timeline::memory().unwrap();
+    let submitted = NativeItem {
+        key: "native:t:submitted".into(),
+        item: json!({"type":"user_message","text":"prompt","clientMessageId":"client"}),
+        ..entry("")
+    };
+    timeline
+        .append("a", "opencode", std::slice::from_ref(&submitted))
+        .unwrap();
+    timeline
+        .progress("a", "opencode", "partial", &entry("reply"))
+        .unwrap();
+    let mut user = submitted.clone();
+    user.key = "native:t:user".into();
+    user.timestamp = "2026-09-26T00:00:00Z".into();
+    let mut answer = entry("reply complete");
+    answer.timestamp.clone_from(&user.timestamp);
+    timeline
+        .reconcile("a", "opencode", &[user, answer])
+        .unwrap();
+    let (_, rows) = timeline.read("a").unwrap();
+    assert!(
+        rows.iter()
+            .all(|row| row.entry.timestamp == submitted.timestamp)
+    );
+    let mut refreshed = rows.iter().map(|row| row.entry.clone()).collect::<Vec<_>>();
+    refreshed[1].item["text"] = json!("native correction");
+    for entry in &mut refreshed {
+        entry.timestamp = "2026-09-27T00:00:00Z".into();
+    }
+    timeline.reconcile("a", "opencode", &refreshed).unwrap();
+    assert!(
+        timeline
+            .read("a")
+            .unwrap()
+            .1
+            .iter()
+            .all(|row| row.entry.timestamp == submitted.timestamp)
+    );
+}
+
+#[test]
 fn version_two_migration_preserves_data_and_progress_failure_is_atomic() {
     let root = tempfile::tempdir().unwrap();
     let path = root.path().join("timeline.sqlite");

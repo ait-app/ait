@@ -211,6 +211,50 @@ async fn stream_drain_budget_defers_completion_until_every_queued_item_is_commit
 }
 
 #[tokio::test]
+async fn authoritative_history_is_reconciled_before_the_turn_is_completed() {
+    let (mut manager, registry, client) = running().await;
+    let timeline = Timeline::memory().unwrap();
+    manager = manager.with_timeline(timeline.clone());
+    let AgentTurnEvent::Progress { entry: answer, .. } = progress("one", "done") else {
+        unreachable!();
+    };
+    let user = NativeItem {
+        key: "native:native-turn:user".into(),
+        item: json!({"type":"user_message","messageId":"user","text":"start"}),
+        ..answer.clone()
+    };
+    let history = vec![user, answer];
+    {
+        let mut state = client.0.lock().unwrap();
+        state.events.push_back(progress("one", "done"));
+        state
+            .events
+            .push_back(AgentTurnEvent::History(history.clone()));
+        state
+            .events
+            .push_back(AgentTurnEvent::Completed(Some("done".into())));
+    }
+    manager.poll().await.unwrap();
+    assert_eq!(
+        timeline
+            .read("agent-1")
+            .unwrap()
+            .1
+            .into_iter()
+            .map(|row| row.entry)
+            .collect::<Vec<_>>(),
+        history
+    );
+    assert_eq!(
+        registry.get("agent-1").unwrap().unwrap().last_status,
+        AgentRuntimeStatus::Idle
+    );
+    assert_eq!(manager.active_turn("agent-1"), None);
+    assert_eq!(manager.last_message("agent-1"), Some("done"));
+    assert_eq!(client.0.lock().unwrap().close_calls, 0);
+}
+
+#[tokio::test]
 async fn conflicting_progress_observation_fails_the_turn_without_corrupting_history() {
     let (mut manager, registry, client) = running().await;
     let timeline = Timeline::memory().unwrap();

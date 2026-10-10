@@ -57,6 +57,11 @@ pub(super) fn drain(
                     .append(id, &agent.record.provider, std::slice::from_ref(entry))
                     .map(|_| ())
             }),
+            Some(AgentTurnEvent::History(entries)) => timeline.map_or(Ok(()), |timeline| {
+                timeline
+                    .reconcile(id, &agent.record.provider, entries)
+                    .map(|_| ())
+            }),
             Some(
                 AgentTurnEvent::Completed(_) | AgentTurnEvent::Cancelled | AgentTurnEvent::Failed,
             )

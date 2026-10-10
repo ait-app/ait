@@ -268,11 +268,32 @@ async fn installed_acp_shell_output_is_text_in_live_and_replayed_history() {
     let (_root, client, mut spec, _server) = installed(true).await;
     spec.config.feature_values = Some(BTreeMap::from([("permission".into(), json!("allow"))]));
     let mut session = client.create_session(&spec).await.unwrap();
-    session
-        .start_turn("Run shell tool, then continue.", &spec.config)
+    let turn = session
+        .start_input(
+            &crate::protocol::prompt::AgentPrompt {
+                text: "Run shell tool, then continue.".into(),
+                client_message_id: Some("shell-input".into()),
+                ..Default::default()
+            },
+            &spec.config,
+        )
         .await
         .unwrap();
-    let items = completed(session.as_mut()).await;
+    let timeline = crate::storage::timeline::Timeline::memory().unwrap();
+    let items = recorded_turn(session.as_mut(), &timeline, &turn).await;
+    let (_, rows) = timeline.read("agent").unwrap();
+    assert_eq!(rows[0].entry.item["type"], "user_message");
+    assert_eq!(rows[0].entry.item["clientMessageId"], "shell-input");
+    assert_eq!(
+        rows.iter()
+            .filter(|row| row.entry.item["type"] == "tool_call")
+            .count(),
+        1
+    );
+    assert!(
+        rows.iter()
+            .all(|row| row.entry.turn_id.as_deref() == Some(turn.as_str()))
+    );
     let tool = items
         .iter()
         .find(|entry| entry.item["detail"]["type"] == "shell")

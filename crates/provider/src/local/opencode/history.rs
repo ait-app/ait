@@ -60,13 +60,16 @@ pub(super) async fn replay(
     Ok((config::state(&result)?, stream))
 }
 
-/// Drain immutable replay entries and restore host input correlation from saved native IDs.
+/// Restore accepted input identity for every replayed item in its native user-message group.
 pub(super) fn entries(stream: &mut Stream, clients: &BTreeMap<String, String>) -> Vec<NativeItem> {
     stream
         .events
         .drain(..)
         .filter_map(|event| {
             if let crate::ports::agent_session::AgentTurnEvent::Timeline(mut entry) = event {
+                if let Some(turn) = entry.turn_id.as_ref().and_then(|id| clients.get(id)) {
+                    entry.turn_id = Some(turn.clone());
+                }
                 if entry.item["type"] == "user_message"
                     && let Some(client) = entry.item["messageId"]
                         .as_str()
@@ -188,7 +191,8 @@ pub(super) async fn inspect(
             client.images.clone(),
         )
         .await?;
-        let entries = entries(&mut stream, &super::session::clients(handle)?);
+        let clients = super::session::clients(handle)?;
+        let entries = entries(&mut stream, &clients);
         (
             descriptor.first_prompt_preview,
             descriptor.last_prompt_preview,
@@ -197,7 +201,7 @@ pub(super) async fn inspect(
         Ok(SessionHistory {
             resume_metadata: BTreeMap::from([(
                 "opencode".into(),
-                json!({"config":config,"model":config.model,"clients":{}}),
+                json!({"config":config,"model":config.model,"clients":clients}),
             )]),
             parent_id: None,
             created_at: chrono::Utc::now().to_rfc3339(),
