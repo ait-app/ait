@@ -56,14 +56,20 @@ export function serializeNativeAccountCommand<T>(work: () => Promise<T>): Promis
   return operation;
 }
 
-async function receiveAccountSnapshot(snapshot: AccountState): Promise<void> {
+async function receiveAccountSnapshot(
+  snapshot: AccountState,
+  isActive?: () => boolean,
+): Promise<void> {
   useAccountState.setState(snapshot);
   const sequence = ++snapshotSequence;
   const store = getHostRuntimeStore();
   await store.boot();
-  if (sequence !== snapshotSequence) return;
-  if (snapshot.status === "online") store.setAccountRelayCenter(snapshot.center);
-  else if (snapshot.status === "logged_out") store.setAccountRelayCenter(null);
+  const current = () => sequence === snapshotSequence && (isActive?.() ?? true);
+  if (!current()) return;
+  if (snapshot.status === "online") {
+    store.setAccountRelayCenter(snapshot.center);
+    await store.addDiscoveredAccountRelayHosts(snapshot.hosts, snapshot.center, current);
+  } else if (snapshot.status === "logged_out") store.setAccountRelayCenter(null);
 }
 
 async function persistAccountHostSelection(
@@ -139,16 +145,16 @@ export async function accountCommand(
   });
 }
 
-/** Mount once next to HostRuntime bootstrap; discovery remains separate from runtime hosts. */
+/** Mount once next to HostRuntime bootstrap to import all discovered account hosts. */
 export function AccountRelayLifecycle() {
   useEffect(() => {
     if (Platform.OS === "android" || Platform.OS === "ios") {
       let disposed = false;
       const receive = (snapshot: AccountState) => {
         if (!disposed)
-          void receiveAccountSnapshot(snapshot).catch(() => {
+          void receiveAccountSnapshot(snapshot, () => !disposed).catch(() => {
             if (!disposed)
-              useAccountState.setState({ error: "Could not connect to the selected host." });
+              useAccountState.setState({ error: "Could not synchronize online hosts." });
           });
       };
       const remove = subscribeNativeAccount(receive);
@@ -173,7 +179,9 @@ export function AccountRelayLifecycle() {
     const receive = (value: unknown) => {
       if (disposed) return;
       ++sequence;
-      void receiveAccountSnapshot(value as AccountState).catch(() => undefined);
+      void receiveAccountSnapshot(value as AccountState, () => !disposed).catch(() => {
+        if (!disposed) useAccountState.setState({ error: "Could not synchronize online hosts." });
+      });
     };
     void (async () => {
       const unsubscribe = await desktop.events!.on!("account-state", receive);

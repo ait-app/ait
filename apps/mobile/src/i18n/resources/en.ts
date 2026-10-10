@@ -27,6 +27,7 @@ export const en = {
     emptyHosts:
       "Sign in to the same account in Desktop on another computer. Its built-in daemon comes online automatically. Enable synchronization in connection settings for other hosts.",
     disconnectRemoteHost: "Disconnect remote host",
+    hostListHint: "Online hosts are automatically added to the host list.",
     hostSettingsHint:
       "Desktop synchronizes its built-in daemon after sign-in. A manual stop keeps it offline until you enable synchronization in Host → Connections. Other hosts require manual synchronization.",
     requestFailed: "Request failed.",

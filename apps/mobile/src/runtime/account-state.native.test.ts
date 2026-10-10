@@ -13,6 +13,7 @@ const mocks = vi.hoisted(() => ({
   },
   boot: vi.fn(async () => {}),
   setHost: vi.fn(),
+  discover: vi.fn(async () => {}),
   setCenter: vi.fn(),
   removeConnection: vi.fn(),
   getHosts: vi.fn<() => HostProfile[]>(() => []),
@@ -34,6 +35,7 @@ vi.mock("./host-runtime", () => ({
   getHostRuntimeStore: () => ({
     boot: mocks.boot,
     addAccountRelayHost: mocks.setHost,
+    addDiscoveredAccountRelayHosts: mocks.discover,
     setAccountRelayCenter: mocks.setCenter,
     removeConnection: mocks.removeConnection,
     getHosts: mocks.getHosts,
@@ -47,12 +49,37 @@ beforeEach(() => {
 });
 
 describe("native mobile account commands", () => {
+  it.each(["android", "ios"])(
+    "imports all discovered %s hosts after browser login",
+    async (platform) => {
+      mocks.platform = platform;
+      const hosts = [
+        { host_id: "first", server_id: "first-server", name: "First" },
+        { host_id: "second", server_id: "second-server", name: "Second" },
+      ];
+      mocks.manager.snapshot.mockReturnValue({
+        status: "online",
+        center: "https://center.test/api",
+        selected: null,
+        hosts,
+      });
+      await accountCommand("account_login_hosted");
+      expect(mocks.discover).toHaveBeenCalledExactlyOnceWith(
+        hosts,
+        "https://center.test/api",
+        expect.any(Function),
+      );
+      expect(mocks.manager.select).not.toHaveBeenCalled();
+    },
+  );
+
   it("waits for durable host storage before completing an explicit selection", async () => {
     const host = { host_id: "remote", server_id: "server", name: "Computer" };
     mocks.manager.snapshot.mockReturnValue({
       status: "online",
       center: "https://center.test/api",
       selected: host,
+      hosts: [],
     });
     let finish!: () => void;
     mocks.setHost.mockImplementationOnce(
@@ -78,6 +105,7 @@ describe("native mobile account commands", () => {
       status: "online",
       center: "https://center.test/api",
       selected: host,
+      hosts: [],
     });
     await accountCommand("account_refresh");
     await accountCommand("account_status");
@@ -114,6 +142,7 @@ describe("native mobile account commands", () => {
       status: "online",
       center: "https://center.test/api",
       selected: null,
+      hosts: [],
     });
     await accountCommand("account_select", { hostId: null });
     expect(mocks.removeConnection).toHaveBeenCalledExactlyOnceWith("server", "relay");
@@ -149,6 +178,7 @@ describe("native mobile account commands", () => {
         status: "online",
         center: "https://center.test/api",
         selected: host,
+        hosts: [],
       });
       let finishBoot!: () => void;
       mocks.boot.mockReturnValueOnce(

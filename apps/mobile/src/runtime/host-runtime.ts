@@ -1390,6 +1390,8 @@ export class HostRuntimeStore {
   private hosts: HostProfile[] = [];
   private pendingDesktopConnections = new Set<string>();
   private accountRelayCenter: string | null = null;
+  private removedAccountRelayConnections = new Set<string>();
+  private accountDiscoveryTail: Promise<void> = Promise.resolve();
   private hostPersistenceTail: Promise<void> = Promise.resolve();
   private hostAppearanceMutationTail: Promise<void> = Promise.resolve();
   private hostRegistryStatus: HostRegistryStatus = "loading";
@@ -1892,6 +1894,10 @@ export class HostRuntimeStore {
     await this.revokePushNotifications({ client: this.getClient(serverId), serverId });
     const remaining = this.hosts.filter((daemon) => daemon.serverId !== serverId);
     await this.persistHosts(remaining);
+    for (const connection of this.hosts.find((host) => host.serverId === serverId)?.connections ??
+      [])
+      if (connection.type === "accountRelay")
+        this.removedAccountRelayConnections.add(connection.id);
     this.setHostsAndSync(remaining);
   }
 
@@ -1922,6 +1928,8 @@ export class HostRuntimeStore {
       })
       .filter((entry): entry is HostProfile => entry !== null);
     await this.persistHosts(next);
+    const removed = host?.connections.find((connection) => connection.id === connectionId);
+    if (removed?.type === "accountRelay") this.removedAccountRelayConnections.add(removed.id);
     this.setHostsAndSync(next);
   }
 
@@ -1985,7 +1993,7 @@ export class HostRuntimeStore {
     await write;
   }
 
-  /** Only an explicit addition joins the persistent registry; discovery never adds hosts. */
+  /** Persist an account host while retaining its existing connections and appearance. */
   async addAccountRelayHost(
     selected: { host_id: string; server_id: string; name: string },
     center: string,
@@ -2001,9 +2009,43 @@ export class HostRuntimeStore {
     this.setHostsAndSync(next);
   }
 
+  /** Import all discovered hosts, preserving connections deleted during this login. */
+  addDiscoveredAccountRelayHosts(
+    discovered: readonly { host_id: string; server_id: string; name: string }[],
+    center: string,
+    isCurrent: () => boolean = () => true,
+  ): Promise<void> {
+    const update = this.accountDiscoveryTail.then(async () => {
+      while (isCurrent()) {
+        const previous = this.hosts;
+        let next = previous;
+        for (const host of discovered) {
+          const connection = createAccountRelayHostConnection({ hostId: host.host_id, center });
+          if (this.removedAccountRelayConnections.has(connection.id)) continue;
+          next = upsertHostConnectionInProfiles({
+            profiles: next,
+            serverId: host.server_id,
+            label: host.name,
+            connection,
+          });
+        }
+        if (next === previous) return;
+        await this.persistHosts(next);
+        if (!isCurrent()) return;
+        // A rename or removal may have completed while storage was pending.
+        if (this.hosts !== previous) continue;
+        this.setHostsAndSync(next);
+        return;
+      }
+    });
+    this.accountDiscoveryTail = update.catch(() => undefined);
+    return update;
+  }
+
   /** Saved hosts remain visible while signed out or connected to another service. */
   setAccountRelayCenter(center: string | null): void {
     if (center === this.accountRelayCenter) return;
+    if (center === null) this.removedAccountRelayConnections.clear();
     this.accountRelayCenter = center;
     this.syncHosts(this.hosts);
   }

@@ -8,7 +8,7 @@ import { AccountHostPanel } from "./account-host-panel";
 
 const state = vi.hoisted(() => ({ loginPending: false }));
 vi.mock("@/runtime/account-state", () => ({
-  accountCommand: vi.fn(async () => ({})),
+  accountCommand: vi.fn(async () => ({ status: "connecting" })),
   useAccountState: () => ({
     status: "logged_out",
     center: "https://dash.ait-app.com:8443/api",
@@ -27,7 +27,8 @@ afterEach(() => {
 
 describe("AccountHostPanel browser login", () => {
   it("offers only browser registration/login from the first render", async () => {
-    const view = render(<AccountHostPanel />);
+    const signedIn = vi.fn();
+    const view = render(<AccountHostPanel onSignedIn={signedIn} />);
     expect(view.queryByTestId("account-email")).toBeNull();
     expect(view.queryByTestId("account-password")).toBeNull();
     expect(view.queryByTestId("account-legacy-login")).toBeNull();
@@ -38,6 +39,7 @@ describe("AccountHostPanel browser login", () => {
         center: "https://dash.ait-app.com:8443/api",
       }),
     );
+    expect(signedIn).toHaveBeenCalledOnce();
   });
 
   it("keeps service settings optional and submits the edited service address", async () => {
@@ -66,9 +68,11 @@ describe("AccountHostPanel browser login", () => {
     "Network request failed",
   ])("shows a login failure without offering a password fallback: %s", async (message) => {
     vi.mocked(accountCommand).mockRejectedValueOnce(new Error(message));
-    const view = render(<AccountHostPanel />);
+    const signedIn = vi.fn();
+    const view = render(<AccountHostPanel onSignedIn={signedIn} />);
     fireEvent.click(view.getByTestId("account-unified-login"));
     await waitFor(() => expect(view.getByRole("alert").textContent).toBe(message));
+    expect(signedIn).not.toHaveBeenCalled();
     expect(view.queryByTestId("account-email")).toBeNull();
     expect(view.queryByTestId("account-password")).toBeNull();
     expect(view.queryByTestId("account-legacy-login")).toBeNull();

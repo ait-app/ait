@@ -76,19 +76,19 @@ beforeEach(() => {
 afterEach(cleanup);
 
 describe("welcome account entry", () => {
-  it("waits for dismissal and navigates once when the selected host also comes online", async () => {
-    mocks.accountStatus = "online";
+  it("waits for login sheet dismissal before opening the shared host flow", async () => {
+    mocks.command.mockResolvedValueOnce({ status: "connecting" });
     const view = render(<WelcomeScreen />);
     fireEvent.click(view.getByTestId("welcome-account-relay"));
     mocks.online = true;
     view.rerender(<WelcomeScreen />);
     expect(mocks.replace).not.toHaveBeenCalled();
-    fireEvent.click(view.getByTestId("account-host-host"));
+    fireEvent.click(view.getByTestId("account-unified-login"));
     await waitFor(() => expect(view.queryByTestId("account-host-panel")).toBeNull());
     expect(mocks.push).not.toHaveBeenCalled();
     expect(mocks.replace).not.toHaveBeenCalled();
     act(() => mocks.dismiss());
-    expect(mocks.replace).toHaveBeenCalledExactlyOnceWith("/h/server");
+    expect(mocks.replace).toHaveBeenCalledExactlyOnceWith("/open-project");
     act(() => mocks.dismiss());
     view.rerender(<WelcomeScreen />);
     expect(mocks.replace).toHaveBeenCalledTimes(1);

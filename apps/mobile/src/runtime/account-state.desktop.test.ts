@@ -5,6 +5,7 @@ const mocks = vi.hoisted(() => ({
   invoke: vi.fn(),
   boot: vi.fn(async () => {}),
   add: vi.fn(async () => {}),
+  discover: vi.fn(async () => {}),
   setCenter: vi.fn(),
 }));
 vi.mock("react-native", () => ({ Platform: { OS: "web" } }));
@@ -14,6 +15,7 @@ vi.mock("./host-runtime", () => ({
   getHostRuntimeStore: () => ({
     boot: mocks.boot,
     addAccountRelayHost: mocks.add,
+    addDiscoveredAccountRelayHosts: mocks.discover,
     setAccountRelayCenter: mocks.setCenter,
   }),
 }));
@@ -24,12 +26,45 @@ beforeEach(() => {
 });
 
 describe("desktop account host persistence", () => {
+  it("imports all discovered hosts after browser login without selecting a target", async () => {
+    const hosts = [
+      { host_id: "first", server_id: "first-server", name: "First" },
+      { host_id: "second", server_id: "second-server", name: "Second" },
+    ];
+    mocks.invoke.mockResolvedValueOnce({
+      status: "online",
+      center: "https://custom.test/api",
+      selected: null,
+      hosts,
+    });
+    await accountCommand("account_login_hosted");
+    expect(mocks.discover).toHaveBeenCalledExactlyOnceWith(
+      hosts,
+      "https://custom.test/api",
+      expect.any(Function),
+    );
+    expect(mocks.add).not.toHaveBeenCalled();
+  });
+
+  it("surfaces failed discovery persistence and lets login be retried", async () => {
+    mocks.invoke.mockResolvedValue({
+      status: "online",
+      center: "https://custom.test/api",
+      selected: null,
+      hosts: [],
+    });
+    mocks.discover.mockRejectedValueOnce(new Error("Disk full"));
+    await expect(accountCommand("account_login_hosted")).rejects.toThrow("Disk full");
+    await accountCommand("account_login_hosted");
+    expect(mocks.discover).toHaveBeenCalledTimes(2);
+  });
   it("waits for the selected host to reach durable storage before returning to navigation", async () => {
     const host = { host_id: "remote", server_id: "server", name: "Computer" };
     mocks.invoke.mockResolvedValueOnce({
       status: "online",
       center: "https://custom.test/api",
       selected: host,
+      hosts: [],
     });
     let finish!: () => void;
     mocks.add.mockImplementationOnce(
@@ -58,6 +93,7 @@ describe("desktop account host persistence", () => {
       status: "online",
       center: "https://custom.test/api",
       selected: null,
+      hosts: [],
     });
     await accountCommand("account_status");
     expect(mocks.setCenter).toHaveBeenLastCalledWith("https://custom.test/api");
@@ -70,6 +106,7 @@ describe("desktop account host persistence", () => {
       status: "online",
       center: "https://custom.test/api",
       selected: host,
+      hosts: [],
     });
     mocks.add.mockRejectedValueOnce(new Error("Disk full"));
     await expect(accountCommand("account_select", { hostId: "remote" })).rejects.toThrow(

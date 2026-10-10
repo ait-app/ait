@@ -178,7 +178,6 @@ export function WelcomeScreen({ onHostAdded }: WelcomeScreenProps) {
   const [isRemoteSshOpen, setIsRemoteSshOpen] = useState(false);
   const [isAccountOpen, setIsAccountOpen] = useState(false);
   const [isAccountPresented, setIsAccountPresented] = useState(false);
-  const pendingAccountServerId = useRef<string | null>(null);
   const hasNavigated = useRef(false);
   const accountAvailable = supportsAccountRelay();
   const accountHeader = useMemo<SheetHeader>(() => ({ title: t("onlineService.title") }), [t]);
@@ -214,18 +213,9 @@ export function WelcomeScreen({ onHostAdded }: WelcomeScreenProps) {
     setIsAccountOpen(true);
   }, []);
   const handleCloseAccount = useCallback(() => setIsAccountOpen(false), []);
-  const handleAccountConnected = useCallback((serverId: string) => {
-    pendingAccountServerId.current = serverId;
-    setIsAccountOpen(false);
-  }, []);
   const handleAccountDismissed = useCallback(() => {
     setIsAccountPresented(false);
-    const serverId = pendingAccountServerId.current;
-    pendingAccountServerId.current = null;
-    if (!serverId || hasNavigated.current) return;
-    hasNavigated.current = true;
-    router.replace(`/h/${serverId}`);
-  }, [router]);
+  }, []);
 
   const handleHostSaved = useCallback(
     ({ profile }: { profile: HostProfile; serverId: string }) => {
@@ -333,7 +323,7 @@ export function WelcomeScreen({ onHostAdded }: WelcomeScreenProps) {
           onDismiss={handleAccountDismissed}
           testID="welcome-account-sheet"
         >
-          <AccountHostPanel onConnected={handleAccountConnected} onCancel={handleCloseAccount} />
+          <AccountHostPanel onSignedIn={handleCloseAccount} onCancel={handleCloseAccount} />
         </AdaptiveModalSheet>
       ) : null}
     </View>
