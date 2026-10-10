@@ -244,24 +244,28 @@ impl Engine {
         Ok(json!({"schedule":record,"error":null}))
     }
     pub(crate) fn due(&mut self, now: DateTime<Utc>) -> Result<Vec<String>, Error> {
-        let mut records = self.records.clone();
-        let mut dirty = false;
+        let schedulable = |schedule: &Schedule| {
+            schedule.status == Status::Active
+                && schedule.next_run_at.is_some()
+                && !schedule.runs.iter().any(|r| r.status == RunStatus::Running)
+        };
         let mut due = Vec::new();
-        for schedule in &mut records {
-            if schedule.status != Status::Active
-                || schedule.next_run_at.is_none()
-                || schedule.runs.iter().any(|r| r.status == RunStatus::Running)
-            {
-                continue;
-            }
+        let mut expired = false;
+        for schedule in self.records.iter().filter(|schedule| schedulable(schedule)) {
             if complete_due(schedule, now) {
-                complete(schedule, now);
-                dirty = true;
+                expired = true;
             } else if schedule.next_run_at.is_some_and(|at| at <= now) {
                 due.push(schedule.id.clone());
             }
         }
-        if dirty {
+        // Copy the records only when one must be committed as completed.
+        if expired {
+            let mut records = self.records.clone();
+            for schedule in &mut records {
+                if schedulable(schedule) && complete_due(schedule, now) {
+                    complete(schedule, now);
+                }
+            }
             self.commit(records)?;
         }
         Ok(due)

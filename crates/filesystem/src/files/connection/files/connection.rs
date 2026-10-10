@@ -258,8 +258,9 @@ fn start_polling(observation: Observation, state: &Shared, outbound: &Outbound) 
     let tracker = state.tasks.clone();
     let jobs = state.jobs.clone();
     state.tasks.spawn(async move {
-        let mut observation =
-            crate::files::rpc::files::FileObservation::new(cwd.clone(), path.clone(), initial);
+        let failure = outbound.failure();
+        let target: Arc<(String, String)> = Arc::new((cwd.clone(), path.clone()));
+        let mut observation = crate::files::rpc::files::FileObservation::new(cwd, path, initial);
         let period = Duration::from_millis(200);
         let mut interval = tokio::time::interval_at(tokio::time::Instant::now() + period, period);
         interval.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Skip);
@@ -267,21 +268,19 @@ fn start_polling(observation: Observation, state: &Shared, outbound: &Outbound) 
             tokio::select! { biased;
                 () = cancel.cancelled() => break,
                 () = server_cancel.cancelled() => break,
-                () = outbound.failure().cancelled_owned() => break,
+                () = failure.cancelled() => break,
                 _ = interval.tick() => {},
             }
-            let Some(permit) = poll_permit(jobs.clone(), &cancel, &server_cancel, &outbound).await
-            else {
+            let Some(permit) = poll_permit(&jobs, &cancel, &server_cancel, &failure).await else {
                 break;
             };
             let service = service.clone();
-            let cwd_read = cwd.clone();
-            let path_read = path.clone();
+            let target = target.clone();
             let tracking = tracker.token();
             let next = tokio::task::spawn_blocking(move || {
                 let (_permit, _tracking) = (permit, tracking);
                 let files = service.lock().ok()?;
-                Some(files.filesystem.version(&cwd_read, &path_read))
+                Some(files.filesystem.version(&target.0, &target.1))
             })
             .await;
             let Ok(Some(next)) = next else {
@@ -317,18 +316,18 @@ fn start_polling(observation: Observation, state: &Shared, outbound: &Outbound) 
 }
 
 async fn poll_permit(
-    jobs: Arc<Semaphore>,
+    jobs: &Arc<Semaphore>,
     cancel: &CancellationToken,
     server_cancel: &CancellationToken,
-    outbound: &Outbound,
+    failure: &CancellationToken,
 ) -> Option<OwnedSemaphorePermit> {
     // Queue behind the current read: aligned polling intervals must not starve one observer.
     tokio::select! {
         biased;
         () = cancel.cancelled() => None,
         () = server_cancel.cancelled() => None,
-        () = outbound.failure().cancelled_owned() => None,
-        permit = jobs.acquire_owned() => permit.ok(),
+        () = failure.cancelled() => None,
+        permit = jobs.clone().acquire_owned() => permit.ok(),
     }
 }
 

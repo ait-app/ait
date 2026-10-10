@@ -35,7 +35,6 @@ pub struct TerminalConnection {
     next_slot: u8,
 }
 
-#[derive(Clone)]
 struct Stream {
     terminal: String,
     slot: u8,
@@ -44,7 +43,6 @@ struct Stream {
     restore: Option<wire::Restore>,
 }
 
-#[derive(Clone)]
 struct Listing {
     filter: wire::ListRequest,
     previous: Vec<wire::TerminalInfo>,
@@ -295,24 +293,37 @@ impl TerminalConnection {
         if self.is_empty() {
             return Ok(());
         }
-        let streams = self.streams.clone();
-        let lists = self.lists.clone();
+        // Only identities and cursors cross into the blocking job; previous listings stay here.
+        let streams: Vec<_> = self
+            .streams
+            .iter()
+            .map(|(id, stream)| {
+                (
+                    id.clone(),
+                    stream.terminal.clone(),
+                    stream.revision,
+                    stream.restore.clone(),
+                )
+            })
+            .collect();
+        let lists: Vec<_> = self
+            .lists
+            .iter()
+            .map(|(id, listing)| (id.clone(), listing.filter.clone()))
+            .collect();
         let observed = run(state, move |service| {
             let streams: Vec<_> = streams
                 .into_iter()
-                .map(|(id, stream)| {
-                    let result = service.observe(
-                        &stream.terminal,
-                        Some(stream.revision),
-                        stream.restore.as_ref(),
-                    );
+                .map(|(id, terminal, revision, restore)| {
+                    let result = service.observe(&terminal, Some(revision), restore.as_ref());
                     (id, result)
                 })
                 .collect();
-            let lists: Vec<_> = lists
-                .into_iter()
-                .map(|(id, listing)| (id, service.list(&listing.filter)))
-                .collect();
+            let (ids, filters): (Vec<_>, Vec<_>) = lists.into_iter().unzip();
+            let lists = service
+                .list_many(&filters)
+                .map(|listed| ids.into_iter().zip(listed).collect::<Vec<_>>())
+                .unwrap_or_default();
             Ok((streams, lists))
         })
         .await;

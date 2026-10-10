@@ -195,7 +195,6 @@ async fn read(
     terminal_poll.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Skip);
     let mut upload_expiry = tokio::time::interval(Duration::from_secs(30));
     loop {
-        subscriptions.filesystem.files.prune_uploads();
         let message = tokio::select! {
             biased;
             () = state.cancellation.cancelled() => {

@@ -289,23 +289,6 @@ pub(crate) struct CheckoutDiffResult {
     pub(crate) diff_too_large: Option<bool>,
 }
 
-/// Initial diff subscription result.
-#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
-#[serde(rename_all = "camelCase")]
-pub(crate) struct CheckoutDiffSubscriptionResult {
-    /// Connection-local subscription identity.
-    pub(crate) subscription_id: String,
-    /// Directory from the request.
-    pub(crate) cwd: String,
-    /// Initial files.
-    pub(crate) files: Vec<ParsedDiffFile>,
-    /// Inline error.
-    pub(crate) error: Option<CheckoutError>,
-    /// True when the total diff was not safe to return.
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub(crate) diff_too_large: Option<bool>,
-}
-
 /// Git commit file status.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
 #[serde(rename_all = "snake_case")]
