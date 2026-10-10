@@ -31,6 +31,13 @@ struct Connection {
 }
 
 #[derive(Debug)]
+struct Finished {
+    connection: Connection,
+    event: AgentTurnEvent,
+    failure: Option<String>,
+}
+
+#[derive(Debug)]
 enum Command {
     Reply(
         String,
@@ -52,13 +59,14 @@ pub(super) struct Session {
     pending: Pending,
     commands: Option<mpsc::Sender<Command>>,
     events: mpsc::Receiver<AgentTurnEvent>,
-    finished: Option<oneshot::Receiver<Result<(Connection, AgentTurnEvent), AgentSessionError>>>,
+    finished: Option<oneshot::Receiver<Result<Finished, AgentSessionError>>>,
     task: Option<AbortOnDropHandle<()>>,
     queued: VecDeque<AgentTurnEvent>,
     turn: Option<String>,
     history_only: bool,
     closed: bool,
     failed: bool,
+    failure: Option<String>,
 }
 
 /// Reject handles with a different provider or malformed native session identity.
@@ -189,6 +197,7 @@ pub(super) async fn open(
         history_only,
         closed: false,
         failed: false,
+        failure: None,
     })
 }
 
@@ -242,6 +251,7 @@ impl Session {
         };
         self.info = config::runtime(&self.id, &connection.options);
         self.spec.config = selected.clone();
+        self.failure = None;
         let (sender, events) = mpsc::channel(128);
         self.events = events;
         let (commands, receiver) = mpsc::channel(128);
@@ -368,10 +378,7 @@ impl Execution {
             .map_err(|_| AgentSessionError::Failed)
     }
 
-    async fn run(
-        mut self,
-        mut connection: Connection,
-    ) -> Result<(Connection, AgentTurnEvent), AgentSessionError> {
+    async fn run(mut self, mut connection: Connection) -> Result<Finished, AgentSessionError> {
         let mut stream = Stream::for_turn(self.client.images.clone(), self.turn.clone());
         self.emit(AgentTurnEvent::RuntimeInfo(config::runtime(
             &self.id,
@@ -381,7 +388,7 @@ impl Execution {
         for entry in std::mem::take(&mut self.submitted) {
             self.emit(AgentTurnEvent::Timeline(entry)).await?;
         }
-        let result = loop {
+        let (terminal, failure) = loop {
             let message = tokio::select! {
                 command = self.commands.recv() => {
                     let command = command.ok_or(AgentSessionError::Failed)?;
@@ -394,7 +401,28 @@ impl Execution {
                 if message["id"] != self.rpc_id {
                     return Err(AgentSessionError::Failed);
                 }
-                break acp_transport::response(&message)?;
+                break match acp_transport::response(&message) {
+                    Ok(result) => (
+                        match result["stopReason"].as_str() {
+                            Some("cancelled") => AgentTurnEvent::Cancelled,
+                            Some("end_turn" | "max_tokens" | "max_turn_requests" | "refusal") => {
+                                AgentTurnEvent::Completed(None)
+                            }
+                            _ => return Err(AgentSessionError::Failed),
+                        },
+                        None,
+                    ),
+                    Err(AgentSessionError::Rejected) => (
+                        AgentTurnEvent::Failed,
+                        // OpenCode's ACP error message is its native user-facing explanation.
+                        // Diagnostic data can include HTTP bodies and headers; retain none of it.
+                        message["error"]["message"]
+                            .as_str()
+                            .filter(|text| !text.trim().is_empty() && text.len() <= 4096)
+                            .map(str::to_owned),
+                    ),
+                    Err(error) => return Err(error),
+                };
             }
             match message["method"].as_str() {
                 Some("session/update") => {
@@ -446,14 +474,15 @@ impl Execution {
                 _ => {}
             }
         };
-        self.settle(connection, &result).await
+        self.settle(connection, terminal, failure).await
     }
 
     async fn settle(
         &self,
         mut connection: Connection,
-        result: &Value,
-    ) -> Result<(Connection, AgentTurnEvent), AgentSessionError> {
+        mut event: AgentTurnEvent,
+        failure: Option<String>,
+    ) -> Result<Finished, AgentSessionError> {
         let pending =
             std::mem::take(&mut *self.pending.lock().map_err(|_| AgentSessionError::Failed)?);
         for id in pending.into_keys() {
@@ -492,14 +521,14 @@ impl Execution {
         )))
         .await?;
         connection.options = options;
-        let event = match result["stopReason"].as_str() {
-            Some("cancelled") => AgentTurnEvent::Cancelled,
-            Some("end_turn" | "max_tokens" | "max_turn_requests" | "refusal") => {
-                AgentTurnEvent::Completed(last_message)
-            }
-            _ => return Err(AgentSessionError::Failed),
-        };
-        Ok((connection, event))
+        if matches!(event, AgentTurnEvent::Completed(_)) {
+            event = AgentTurnEvent::Completed(last_message);
+        }
+        Ok(Finished {
+            connection,
+            event,
+            failure,
+        })
     }
 
     async fn capture(
@@ -572,6 +601,9 @@ impl Execution {
 }
 
 impl AgentSession for Session {
+    fn failure_message(&self) -> Option<&str> {
+        self.failure.as_deref()
+    }
     fn provider(&self) -> &'static str {
         PROVIDER
     }
@@ -636,13 +668,18 @@ impl AgentSession for Session {
         }
         if let Some(receiver) = &mut self.finished {
             match receiver.try_recv() {
-                Ok(Ok((connection, event))) => {
+                Ok(Ok(Finished {
+                    connection,
+                    event,
+                    failure,
+                })) => {
                     self.info = config::runtime(&self.id, &connection.options);
                     self.clients = connection.clients.clone();
                     self.connection = Some(connection);
                     self.finished = None;
                     self.commands = None;
                     self.task = None;
+                    self.failure = failure;
                     self.queued.push_back(event);
                     if let Ok(event) = self.events.try_recv() {
                         return Ok(Some(event));
@@ -695,7 +732,10 @@ impl AgentSession for Session {
                 })
                 .await;
                 match settled {
-                    Ok(Ok(Ok((connection, _)))) => self.connection = Some(connection),
+                    Ok(Ok(Ok(finished))) => {
+                        self.connection = Some(finished.connection);
+                        self.failure = finished.failure;
+                    }
                     _ => uncertain = true,
                 }
             }

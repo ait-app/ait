@@ -4,7 +4,7 @@ use std::sync::{
     atomic::{AtomicUsize, Ordering},
 };
 
-use axum::{Json, Router, extract::State, routing::post};
+use axum::{Json, Router, extract::State, http::StatusCode, response::IntoResponse, routing::post};
 use tokio_util::task::AbortOnDropHandle;
 
 use super::*;
@@ -68,6 +68,24 @@ async fn installed(
 async fn model(
     State(calls): State<Arc<AtomicUsize>>,
     Json(request): Json<Value>,
+) -> axum::response::Response {
+    if request["messages"]
+        .to_string()
+        .contains("Reject model request")
+    {
+        return (
+            StatusCode::FORBIDDEN,
+            Json(json!({"error":{"type":"FreeTierError",
+                "message":"OpenCode's free tier can only be used from within OpenCode"}})),
+        )
+            .into_response();
+    }
+    model_response(&calls, &request).into_response()
+}
+
+fn model_response(
+    calls: &AtomicUsize,
+    request: &Value,
 ) -> ([(&'static str, &'static str); 1], String) {
     if request["messages"]
         .to_string()
@@ -158,6 +176,62 @@ async fn model(
             chunks[0], chunks[1]
         ),
     )
+}
+
+#[tokio::test]
+#[ignore = "requires AIT_TEST_OPENCODE_BIN; isolated XDG and loopback model"]
+async fn installed_acp_five_sessions_and_native_model_error_preserve_history_and_reason() {
+    let (_root, client, spec, _server) = installed(false).await;
+    let mut sessions = Vec::new();
+    for _ in 0..5 {
+        sessions.push(client.create_session(&spec).await.unwrap());
+    }
+    let session = sessions.last_mut().unwrap();
+    session
+        .start_input(
+            &crate::protocol::prompt::AgentPrompt {
+                text: "Reject model request".into(),
+                client_message_id: Some("model-error-input".into()),
+                ..Default::default()
+            },
+            &spec.config,
+        )
+        .await
+        .unwrap();
+    let mut history = None;
+    loop {
+        match event(session.as_mut()).await {
+            AgentTurnEvent::History(entries) => history = Some(entries),
+            AgentTurnEvent::Failed => break,
+            AgentTurnEvent::RuntimeInfo(_)
+            | AgentTurnEvent::Timeline(_)
+            | AgentTurnEvent::Usage(_) => {}
+            unexpected => panic!("unexpected event: {unexpected:?}"),
+        }
+    }
+    let history = history.unwrap();
+    assert_eq!(history.len(), 1);
+    assert_eq!(history[0].item["clientMessageId"], "model-error-input");
+    let handle = session.persistence().unwrap();
+    session.close().await.unwrap();
+    let expected = if launcher::version(&client, &spec.cwd)
+        .await
+        .unwrap()
+        .starts_with("1.")
+    {
+        "OpenCode's free tier can only be used from within OpenCode"
+    } else {
+        "Authentication required: provider authentication required"
+    };
+    assert!(
+        session.failure_message().unwrap().contains(expected),
+        "native failure: {:?}",
+        session.failure_message()
+    );
+    assert_replay(&history, &client.history(&handle, &spec.cwd).await.unwrap());
+    for session in &mut sessions {
+        session.close().await.unwrap();
+    }
 }
 
 #[tokio::test]

@@ -192,7 +192,12 @@ for line in sys.stdin:
         save(value)
         if scenario == "echo-user-tool":
             content(value["history"][-1])
-        if scenario == "question":
+        if scenario == "model-error" and value["seq"] == 1:
+            send({"id": active, "error": {"code": -32603,
+                "message": "OpenCode's free tier can only be used from within OpenCode",
+                "data": {"service": "session", "errorName": "APIError", "responseBody": "private diagnostic"}}})
+            active = None
+        elif scenario == "question":
             send({"id": "question", "method": "elicitation/create", "params": {"mode": "form", "sessionId": session_id, "toolCallId": "tool-question", "message": "Choose languages",
                 "requestedSchema": {"type": "object", "properties": {"language": {"type": "array", "uniqueItems": True, "items": {"anyOf": [{"const": "rust", "title": "Rust, stable"}, {"const": "go", "title": "Go"}]}},
                     "language_custom": {"type": "string"}}, "required": ["language"]}}})
