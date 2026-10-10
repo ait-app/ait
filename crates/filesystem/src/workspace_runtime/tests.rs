@@ -178,10 +178,14 @@ fn workspace_runtime_refreshes_every_queued_checkout_without_repeated_snapshot_r
     }
     let deadline = Instant::now() + Duration::from_secs(10);
     loop {
-        let cache = source.inner.cache.lock().unwrap();
+        let mut cache = source.inner.cache.lock().unwrap();
         if cache.values().all(|entry| entry.value.git.is_some()) {
             assert_eq!(cache.len(), repos.len());
             break;
+        }
+        // Keep demand alive without enqueueing reads; a loaded host can exceed DEMAND_TTL.
+        for entry in cache.values_mut() {
+            entry.accessed_at = Instant::now();
         }
         drop(cache);
         assert!(Instant::now() < deadline, "queued checkouts were starved");
