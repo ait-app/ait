@@ -22,12 +22,6 @@ export const METHODS: Readonly<Record<string, MethodSpec>> = {
     channel: 1,
     response: "daemon.get_status.response",
   },
-  "daemon.get_pairing_offer.request": {
-    method: "daemon.get_pairing_offer.request",
-    kind: "request",
-    channel: 1,
-    response: "daemon.get_pairing_offer.response",
-  },
   "daemon.config.reload.request": {
     method: "daemon.config.reload.request",
     kind: "request",

@@ -119,7 +119,8 @@ Hub / Chat / Loop / Plugin、relay 的既有移除决定不变。Ait 的 Bearer/
 GitHub / GHES；OpenCode/Pi 与 GitLab/Gitea 不在现有安装范围。本次没有调用付费模型、远端账号
 或真实 push 服务，GitHub/GHES PR 测试使用本地 Git 和 gh 协议 fixture。
 
-以下兼容差异仍未完成，不能将 168 个已路由方法等同于 168 个已完全兼容方法：
+以下兼容差异仍未完成，不能将当前 167 个已路由方法等同于 167 个已完全兼容方法。
+配对 offer RPC 已按 [ADR-127](../../decisions/daemon/adr-127-remove-daemon-pairing-offer.md) 删除。
 
 - `checkout_status_update`、`script_status_update`、`workspace_setup_progress`、`project.update`
   和 `activity_log` 等全局 session event 生产者未全部接入；已实现的按资源查询/订阅接口继续有效。

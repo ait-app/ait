@@ -165,7 +165,6 @@ pub(super) async fn daemon(
         matches!(
             context.request.method.as_str(),
             "daemon.get_status.request"
-                | "daemon.get_pairing_offer.request"
                 | "daemon.config.reload.request"
                 | "daemon.update.request"
                 | "diagnostics.request"

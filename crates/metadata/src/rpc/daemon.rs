@@ -78,10 +78,6 @@ pub(crate) fn execute(
         "daemon.get_status.request" | "diagnostics.request" => {
             snapshot(daemon, method, params, &[], (capabilities, lifecycle))
         }
-        "daemon.get_pairing_offer.request" => {
-            let _: EmptyRequest = decode(params)?;
-            Err(ErrorCode::UnsupportedCapability)
-        }
         "daemon.config.get.request" => {
             let _: EmptyRequest = decode(params)?;
             encode(DaemonConfigResult {

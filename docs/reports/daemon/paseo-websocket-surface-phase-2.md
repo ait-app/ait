@@ -3,6 +3,7 @@
 - 日期：2026-09-22；分支：`new`。
 - 基线：`2b7f428`；Paseo 来源：`2c8e8a826810337492cc5a38bb0bbd705b6fb632`。
 - 决策：[ADR-026](../../decisions/daemon/adr-026-canonical-paseo-websocket-surface.md)。
+- 后续修订：配对 offer RPC 已按 [ADR-127](../../decisions/daemon/adr-127-remove-daemon-pairing-offer.md) 删除。
 
 ## 已接通方法
 
@@ -12,7 +13,6 @@
 | 规范方法                           | Paseo 来源名                | 状态与行为                                                               |
 | ---------------------------------- | --------------------------- | ------------------------------------------------------------------------ |
 | `daemon.get_status.request`        | 同名                        | server/version/pid/executable/start/listen；relay null、providers 空数组 |
-| `daemon.get_pairing_offer.request` | 同名                        | 无 relay 时返回 Paseo 的空 offer 形状                                    |
 | `daemon.config.reload.request`     | 同名                        | 重读 `config.json`，验证后分类 live/restart/override 路径                |
 | `daemon.update.request`            | 同名                        | 返回 Paseo update result；当前 standalone 安装明确失败                   |
 | `diagnostics.request`              | 同名                        | 返回不含凭据的进程、系统与 capability 文本报告                           |

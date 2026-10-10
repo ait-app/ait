@@ -476,9 +476,9 @@ describe("Rust protocol adapter", () => {
   });
 
   it("uses canonical names and stays within Rust's per-connection limits", () => {
-    expect(Object.keys(METHODS)).toHaveLength(172);
+    expect(Object.keys(METHODS)).toHaveLength(171);
     for (const [name, spec] of Object.entries(METHODS)) expect(spec.method).toBe(name);
-    expect(new Set(Object.values(METHODS).map((spec) => spec.method)).size).toBe(172);
+    expect(new Set(Object.values(METHODS).map((spec) => spec.method)).size).toBe(171);
     for (const capabilities of CHANNEL_CAPABILITIES) {
       expect(capabilities.length).toBeLessThanOrEqual(64);
       expect(capabilities.some((name) => /^(hub|chat|loop|plugin)[./]/.test(name))).toBe(false);
@@ -486,6 +486,22 @@ describe("Rust protocol adapter", () => {
     expect(Object.keys(METHODS).some((name) => /^(hub|chat|loop|plugin)[./]/.test(name))).toBe(
       false,
     );
+  });
+
+  it("rejects the retired pairing offer even when an older host implements it", () => {
+    const method = "daemon.get_pairing_offer.request";
+    const h = harness([...Object.values(METHODS).map((spec) => spec.method), method]);
+    try {
+      h.ready();
+      for (const capabilities of CHANNEL_CAPABILITIES) expect(capabilities).not.toContain(method);
+      const sent = h.sockets.map((socket) => socket.send.mock.calls.length);
+      expect(() => h.send({ type: method, requestId: "retired-pairing" })).toThrow(
+        `No Rust daemon method mapping for ${method}`,
+      );
+      expect(h.sockets.map((socket) => socket.send.mock.calls.length)).toEqual(sent);
+    } finally {
+      h.transport.close();
+    }
   });
 
   it("routes the local workspace reset method on the Git channel", () => {
