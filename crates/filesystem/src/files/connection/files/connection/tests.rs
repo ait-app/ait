@@ -19,18 +19,9 @@ async fn file_pollers_queue_fairly_instead_of_losing_contended_ticks() {
     let cancel = CancellationToken::new();
     let server_cancel = CancellationToken::new();
     let (outbound, _receiver) = Outbound::new();
-    let mut first = Box::pin(poll_permit(
-        jobs.clone(),
-        &cancel,
-        &server_cancel,
-        &outbound,
-    ));
-    let mut second = Box::pin(poll_permit(
-        jobs.clone(),
-        &cancel,
-        &server_cancel,
-        &outbound,
-    ));
+    let failure = outbound.failure();
+    let mut first = Box::pin(poll_permit(&jobs, &cancel, &server_cancel, &failure));
+    let mut second = Box::pin(poll_permit(&jobs, &cancel, &server_cancel, &failure));
     assert_waiting(first.as_mut()).await;
     assert_waiting(second.as_mut()).await;
     drop(held);
@@ -51,12 +42,8 @@ async fn released_shutdown_and_disconnected_file_pollers_leave_the_permit_queue(
         let cancel = CancellationToken::new();
         let server_cancel = CancellationToken::new();
         let (outbound, _receiver) = Outbound::new();
-        let mut pending = Box::pin(poll_permit(
-            jobs.clone(),
-            &cancel,
-            &server_cancel,
-            &outbound,
-        ));
+        let failure = outbound.failure();
+        let mut pending = Box::pin(poll_permit(&jobs, &cancel, &server_cancel, &failure));
         assert_waiting(pending.as_mut()).await;
         match cancellation {
             "subscription" => cancel.cancel(),

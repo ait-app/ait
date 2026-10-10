@@ -348,11 +348,14 @@ async fn serve(
     mut commands: mpsc::Receiver<Command>,
     cancellation: CancellationToken,
 ) {
+    let owners = template
+        .lock()
+        .unwrap_or_else(std::sync::PoisonError::into_inner)
+        .owners
+        .clone();
     let mut router = routing::Router::new(template);
     let mut interval = tokio::time::interval(Duration::from_secs(1));
     interval.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Skip);
-    let mut retirements = tokio::time::interval(Duration::from_millis(25));
-    retirements.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Skip);
     let mut shutdown = None;
     loop {
         tokio::select! {
@@ -367,8 +370,14 @@ async fn serve(
                 Some(command) => router.dispatch(command).await,
                 None => break,
             },
-            _ = interval.tick() => router.maintenance().await,
-            _ = retirements.tick() => router.retirements().await,
+            _ = interval.tick() => {
+                router.maintenance().await;
+                // Failed or budget-limited retirements retry at the maintenance cadence.
+                if owners.has_idle_retirements() {
+                    router.retirements().await;
+                }
+            },
+            () = owners.retired() => router.retirements().await,
         }
     }
     cancellation.cancel();

@@ -187,3 +187,47 @@ fn closed_terminal_keeps_tail_only_for_existing_observers() {
     assert!(service.entries.is_empty());
 }
 mod activity;
+
+#[test]
+fn batched_listings_share_one_registry_snapshot_and_keep_per_filter_results() {
+    let (mut service, registry, _) = fixture();
+    let terminal = service.create(&request()).unwrap();
+    let by_root = ListRequest {
+        cwd: Some("/repo".to_owned()),
+        workspace_id: None,
+    };
+    let by_workspace = ListRequest {
+        cwd: None,
+        workspace_id: Some("w".to_owned()),
+    };
+    let relative = ListRequest {
+        cwd: Some("relative".to_owned()),
+        workspace_id: None,
+    };
+    let listed = service
+        .list_many([&by_root, &by_workspace, &relative])
+        .unwrap();
+    assert_eq!(listed[0].as_deref(), Ok(std::slice::from_ref(&terminal)));
+    assert_eq!(listed[1].as_deref(), Ok(std::slice::from_ref(&terminal)));
+    assert_eq!(listed[2], Err(Error::Invalid));
+    // Workspace-identity filters never consult the registry.
+    *registry.failure.lock().unwrap() = true;
+    assert_eq!(
+        service.list(&by_workspace).unwrap(),
+        std::slice::from_ref(&terminal)
+    );
+    assert!(service.list_many([&by_workspace]).unwrap()[0].is_ok());
+    assert_eq!(service.list_many([&by_root]), Err(Error::Registry));
+    assert_eq!(service.list(&by_root), Err(Error::Registry));
+}
+
+#[test]
+fn reconciliation_without_terminals_skips_registry_reads() {
+    let (mut service, registry, _) = fixture();
+    *registry.failure.lock().unwrap() = true;
+    service.reconcile().unwrap();
+    *registry.failure.lock().unwrap() = false;
+    service.create(&request()).unwrap();
+    *registry.failure.lock().unwrap() = true;
+    assert_eq!(service.reconcile(), Err(Error::Registry));
+}

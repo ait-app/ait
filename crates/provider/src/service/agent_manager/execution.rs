@@ -136,6 +136,13 @@ impl AgentManager {
     pub(crate) fn has_sessions(&self) -> bool {
         !self.live.is_empty()
     }
+
+    /// Whether a live session has accepted native work whose events need low-latency draining.
+    pub(crate) fn has_active_turns(&self) -> bool {
+        self.live.values().any(|agent| {
+            agent.turn.is_some() || agent.pending.is_some() || agent.session.pending_foreground()
+        })
+    }
 }
 
 pub(super) async fn native<T>(

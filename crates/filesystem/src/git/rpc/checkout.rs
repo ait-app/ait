@@ -618,7 +618,7 @@ pub(crate) struct DiffObservation {
     subscription_id: String,
     cwd: String,
     compare: port::CheckoutDiffCompare,
-    fingerprint: String,
+    previous: protocol::CheckoutDiffResult,
 }
 impl DiffObservation {
     /// Validate a subscription and capture its initial response before the host activates polling.
@@ -635,14 +635,13 @@ impl DiffObservation {
         }
         let compare = port_compare(request.compare);
         let initial = protocol_diff_result(&request.cwd, checkout.diff(&request.cwd, &compare));
-        let fingerprint = serde_json::to_string(&initial).map_err(|_| ErrorCode::ProjectIo)?;
-        let value = diff_update(&subscription_id, initial)?;
+        let value = diff_update(&subscription_id, &initial)?;
         Ok((
             Self {
                 subscription_id,
                 cwd: request.cwd,
                 compare,
-                fingerprint,
+                previous: initial,
             },
             value,
         ))
@@ -671,24 +670,19 @@ impl DiffObservation {
         snapshot: Result<port::CheckoutDiff, port::CheckoutRuntimeError>,
     ) -> Result<Option<Value>, ErrorCode> {
         let next = protocol_diff_result(&self.cwd, snapshot);
-        let fingerprint = serde_json::to_string(&next).map_err(|_| ErrorCode::ProjectIo)?;
-        if fingerprint == self.fingerprint {
+        if next == self.previous {
             return Ok(None);
         }
-        let value = diff_update(&self.subscription_id, next)?;
-        self.fingerprint = fingerprint;
+        let value = diff_update(&self.subscription_id, &next)?;
+        self.previous = next;
         Ok(Some(value))
     }
 }
 fn diff_update(
     subscription_id: &str,
-    next: protocol::CheckoutDiffResult,
+    next: &protocol::CheckoutDiffResult,
 ) -> Result<Value, ErrorCode> {
-    encode(protocol::CheckoutDiffSubscriptionResult {
-        subscription_id: subscription_id.to_owned(),
-        cwd: next.cwd,
-        files: next.files,
-        error: next.error,
-        diff_too_large: next.diff_too_large,
-    })
+    let mut value = encode(next)?;
+    value["subscriptionId"] = Value::String(subscription_id.to_owned());
+    Ok(value)
 }

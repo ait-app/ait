@@ -4,6 +4,13 @@ use tokio::sync::{mpsc, oneshot};
 
 use super::{Command, ErrorCode, ExecutionState, voice};
 
+/// Drain cadence while a native turn may emit events that clients are waiting for.
+const ACTIVE_POLL: Duration = Duration::from_millis(25);
+/// Retry and audit cadence for idle sessions and lanes without native resources.
+const IDLE_POLL: Duration = Duration::from_millis(250);
+/// Lanes without native resources or queued work are reclaimed after this quiet period.
+const IDLE_EXPIRY: Duration = Duration::from_secs(30);
+
 pub(super) struct Fence {
     pub(super) ready: oneshot::Sender<()>,
     pub(super) resume: oneshot::Receiver<()>,
@@ -25,13 +32,12 @@ pub(super) async fn serve(
     for barrier in barriers {
         barrier.cancelled().await;
     }
-    let mut interval = tokio::time::interval(Duration::from_millis(25));
-    interval.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Skip);
     let mut activity = Instant::now();
-    let mut idle_poll = Instant::now();
+    // The first poll is immediate so a lane woken for queued input dispatches it at once.
+    let mut next_poll = tokio::time::Instant::now();
     loop {
-        let step = tokio::select! {
-            message = commands.recv() => match message {
+        let (step, polled) = tokio::select! {
+            message = commands.recv() => (match message {
                 Some(Message::Fence(fence)) => {
                     let _ = state.owners.pending(&state.manager.owned_agents());
                     let _ = fence.ready.send(());
@@ -55,25 +61,28 @@ pub(super) async fn serve(
                     break;
                 }
                 None => { let _ = close(state).await; break; }
-            },
-            _ = interval.tick() => {
-                if commands.is_empty() && !state.manager.has_sessions() && activity.elapsed() > Duration::from_secs(30) {
+            }, false),
+            () = tokio::time::sleep_until(next_poll) => {
+                if commands.is_empty() && !state.manager.has_sessions() && activity.elapsed() > IDLE_EXPIRY {
                     commands.close();
                     let _ = close(state).await;
                     break;
                 }
-                if !state.manager.has_sessions() && Instant::now() < idle_poll {
-                    Ok(state)
-                } else {
-                    idle_poll = Instant::now() + Duration::from_millis(250);
-                    poll(state).await
-                }
+                (poll(state).await, true)
             }
         };
         match step {
             Ok(next) => state = next,
             Err(_) => break,
         }
+        let cadence = if state.manager.has_active_turns() {
+            ACTIVE_POLL
+        } else {
+            IDLE_POLL
+        };
+        // A request that starts a turn brings the next drain forward; it never postpones one.
+        let due = tokio::time::Instant::now() + cadence;
+        next_poll = if polled { due } else { next_poll.min(due) };
     }
 }
 

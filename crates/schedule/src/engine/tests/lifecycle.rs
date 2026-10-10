@@ -228,3 +228,35 @@ fn output_and_error_limits_preserve_utf8_and_completed_history() {
     }
     assert_eq!(json!(store.0.lock().unwrap().0[0].runs), json!(record.runs));
 }
+
+#[test]
+fn due_scan_is_read_only_until_an_expired_schedule_must_complete() {
+    let (mut engine, store) = fixture();
+    let expiring = create(&mut engine);
+    let ongoing = create(&mut engine);
+    engine
+        .request(
+            "schedule.update.request",
+            json!({"scheduleId":expiring,"expiresAt":now() + chrono::Duration::seconds(30)}),
+            now(),
+        )
+        .unwrap();
+    // A failing store proves that ordinary due checks perform no write.
+    store.0.lock().unwrap().1 = true;
+    let mut due = engine.due(now()).unwrap();
+    due.sort();
+    let mut expected = vec![expiring.clone(), ongoing.clone()];
+    expected.sort();
+    assert_eq!(due, expected);
+    let expired = now() + chrono::Duration::minutes(1);
+    assert_eq!(engine.due(expired).unwrap_err(), Error::Storage);
+    assert_eq!(engine.inspect(&expiring).unwrap().status, Status::Active);
+    store.0.lock().unwrap().1 = false;
+    assert_eq!(engine.due(expired).unwrap(), vec![ongoing]);
+    let completed = engine.inspect(&expiring).unwrap();
+    assert_eq!(completed.status, Status::Completed);
+    assert!(completed.next_run_at.is_none());
+    let persisted = store.0.lock().unwrap().0.clone();
+    let stored = persisted.iter().find(|s| s.id == expiring).unwrap();
+    assert_eq!(stored.status, Status::Completed);
+}

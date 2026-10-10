@@ -614,3 +614,26 @@ fn diff_observation_suppresses_duplicates_and_preserves_inline_errors() {
         .is_err()
     );
 }
+
+#[test]
+fn diff_subscription_payload_keeps_its_wire_fields_and_compares_structurally() {
+    let checkout = checkout();
+    let (mut observation, initial) = super::DiffObservation::prepare(
+        &checkout,
+        json!({"cwd":"/repo","compare":{"mode":"uncommitted"},"subscriptionId":"diff-wire"}),
+    )
+    .unwrap();
+    let mut keys: Vec<_> = initial.as_object().unwrap().keys().cloned().collect();
+    keys.sort();
+    assert_eq!(keys, ["cwd", "error", "files", "subscriptionId"]);
+    assert_eq!(initial["cwd"], "/repo");
+    assert!(initial["error"].is_null());
+    let large = CheckoutDiff {
+        files: vec![plain_file(50_000), plain_file(50_000)],
+        diff_too_large: false,
+    };
+    let update = observation.update(Ok(large)).unwrap().unwrap();
+    assert_eq!(update["subscriptionId"], "diff-wire");
+    assert_eq!(update["diffTooLarge"], true);
+    assert_eq!(update["files"], json!([]));
+}

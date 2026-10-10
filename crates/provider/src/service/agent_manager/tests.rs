@@ -904,3 +904,27 @@ async fn live_session_admission_is_bounded() {
     assert_eq!(client.0.lock().unwrap().create_calls, 32);
     manager.close_all().await.unwrap();
 }
+
+#[tokio::test]
+async fn active_turn_cadence_tracks_accepted_native_work_only() {
+    let (mut manager, _, client) = make_manager();
+    assert!(!manager.has_active_turns());
+    manager
+        .create("agent-1", &spec(), AgentRegistration::default())
+        .await
+        .unwrap();
+    assert!(manager.has_sessions());
+    assert!(!manager.has_active_turns());
+    manager.send("agent-1", "hello").await.unwrap();
+    assert!(manager.has_active_turns());
+    client
+        .0
+        .lock()
+        .unwrap()
+        .events
+        .push_back(AgentTurnEvent::Completed(None));
+    manager.poll().await.unwrap();
+    assert!(manager.has_sessions());
+    assert!(!manager.has_active_turns());
+    manager.close_all().await.unwrap();
+}

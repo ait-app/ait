@@ -14,6 +14,7 @@
 
 ## Daemon 与协议
 
+- [周期任务按变更驱动：PR 验证](daemon/periodic-loops-pr-validation-2026-10-10.md)
 - [Rust 测试提速：提交验证](daemon/rust-test-speed-validation-2026-10-10.md)
 - [本机终端 panic、模型目录与启动请求拒绝修复](daemon/daemon-startup-panic-fix-2026-10-10.md)
 - [摘要契约与目录准入：提交验证](daemon/summary-contracts-directory-admission-validation-2026-10-10.md)

@@ -102,6 +102,7 @@
 
 ## 工程规范与验证
 
+- [周期任务按变更驱动：PR 验证](reports/daemon/periodic-loops-pr-validation-2026-10-10.md)：Provider 调度与会话节奏、终端/定时任务/diff 轮询减负、完整测试与可比基线覆盖率。
 - [Rust 测试提速：提交验证](reports/daemon/rust-test-speed-validation-2026-10-10.md)：nextest、调试信息、CI 缓存与并发不稳定测试的修复。
 - [Paseo desktop/app 选定改动移植](reports/clients/paseo-desktop-app-port-2026-10-10.md)：17 项推荐与产品增强、原生适配和定向验证。
 - [摘要契约与目录准入：提交验证](reports/daemon/summary-contracts-directory-admission-validation-2026-10-10.md)：摘要草稿接入、目录预算隔离、完整测试与可比基线覆盖率。
