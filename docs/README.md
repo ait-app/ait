@@ -79,6 +79,7 @@
 - [Android APK 发布](operations/android-releases.md)：独立手动构建测试或正式通用 APK。
 - [Google Play 内部测试](operations/google-play-internal-testing.md)：首次账号配置、测试者安装与手动 AAB 发布 CI。
 - [发布指南](operations/releasing.md)：桌面 Release、Android Internal Testing、iOS TestFlight。
+- [Ait 0.0.26 发布说明](reports/releases/release-0.0.26.md)：终端崩溃、启动请求突发与 OpenCode 目录校验修复。
 - [Ait 0.0.25 发布说明](reports/releases/release-0.0.25.md)：OpenCode ACP、用量与 Codex 速度档位，以及桌面交互改进。
 - [Ait 0.0.23-beta.1 发布说明](reports/releases/release-0.0.23-beta.1.md)：beta 通道与最新 main 修复。
 - [Ait 0.0.22 发布说明](reports/releases/release-0.0.22.md)：远端分支重置、会话并发、Antigravity 与实时 Timeline 通知修复。
