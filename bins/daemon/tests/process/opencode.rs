@@ -283,11 +283,14 @@ async fn opencode_workspace_creation_returns_frontend_compatible_resume_handles(
     assert!(result["error"].is_null(), "{created}");
     assert_eq!(result["creation"]["phase"], "completed");
     for agent in [&result["agent"], &result["creation"]["agent"]] {
-        let encoded = agent["persistence"]["nativeHandle"]
+        let native = agent["persistence"]["nativeHandle"]
             .as_str()
             .expect("frontend requires an opaque string handle");
-        let decoded: serde_json::Value = serde_json::from_str(encoded).unwrap();
-        assert_eq!(decoded["model"], "local/model");
+        assert_eq!(native, agent["persistence"]["sessionId"]);
+        assert_eq!(
+            agent["persistence"]["metadata"]["opencode"]["model"],
+            "local/model"
+        );
     }
     let mut finished = request(
         &mut socket,
