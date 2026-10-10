@@ -1409,11 +1409,6 @@ export const DaemonGetStatusRequestSchema = z.object({
   requestId: z.string(),
 });
 
-export const DaemonGetPairingOfferRequestSchema = z.object({
-  type: z.literal("daemon.get_pairing_offer.request"),
-  requestId: z.string(),
-});
-
 export const DaemonConfigReloadRequestSchema = z.object({
   type: z.literal("daemon.config.reload.request"),
   requestId: z.string(),
@@ -3231,7 +3226,6 @@ export const SessionInboundMessageSchema = z.discriminatedUnion("type", [
   RelayStatusRequestSchema,
   RelayStartRequestSchema,
   RelayStopRequestSchema,
-  DaemonGetPairingOfferRequestSchema,
   DaemonConfigReloadRequestSchema,
   HubManagementDaemonConnectRequestSchema,
   HubManagementDaemonGetStatusRequestSchema,
@@ -5053,18 +5047,6 @@ export const HubManagementDaemonDisconnectResponseSchema = z.object({
 export const HubManagementDaemonPermissionsUpdateResponseSchema = z.object({
   type: z.literal("hub.management.daemon.permissions.update.response"),
   payload: z.object({ requestId: z.string(), status: HubRelationshipStatusSchema }),
-});
-
-export const DaemonGetPairingOfferResponseSchema = z.object({
-  type: z.literal("daemon.get_pairing_offer.response"),
-  payload: z
-    .object({
-      requestId: z.string(),
-      url: z.string(),
-      qr: z.string().nullable().optional(),
-      relayEnabled: z.boolean(),
-    })
-    .passthrough(),
 });
 
 export const DaemonConfigReloadResponseSchema = z.object({
@@ -6951,7 +6933,6 @@ export const SessionOutboundMessageSchema = z.discriminatedUnion("type", [
   RelayStatusResponseSchema,
   RelayStartResponseSchema,
   RelayStopResponseSchema,
-  DaemonGetPairingOfferResponseSchema,
   DaemonConfigReloadResponseSchema,
   HubManagementDaemonConnectResponseSchema,
   HubManagementDaemonGetStatusResponseSchema,
@@ -7204,7 +7185,6 @@ export type ListProviderFeaturesResponseMessage = z.infer<
 >;
 export type ListAvailableProvidersResponse = z.infer<typeof ListAvailableProvidersResponseSchema>;
 export type DaemonGetStatusResponse = z.infer<typeof DaemonGetStatusResponseSchema>;
-export type DaemonGetPairingOfferResponse = z.infer<typeof DaemonGetPairingOfferResponseSchema>;
 export type DaemonConfigReloadResponse = z.infer<typeof DaemonConfigReloadResponseSchema>;
 export type DiagnosticsResponse = z.infer<typeof DiagnosticsResponseSchema>;
 export type GetProvidersSnapshotResponseMessage = z.infer<

@@ -25,8 +25,8 @@ async fn production_installs_every_in_scope_method_without_placeholders() {
         .implemented_capabilities
         .into_iter()
         .collect::<BTreeSet<_>>();
-    assert_eq!(published.len(), 181);
-    assert_eq!(implemented.len(), 180);
+    assert_eq!(published.len(), 180);
+    assert_eq!(implemented.len(), 179);
     assert!(implemented.contains("workspace.get.request"));
     assert!(implemented.is_subset(&published));
     assert!(!published.iter().any(|name| {
@@ -52,7 +52,7 @@ async fn production_installs_every_in_scope_method_without_placeholders() {
         .chain(terminal::capabilities::implemented_methods())
         .map(|spec| (spec.name, spec.kind))
         .collect::<BTreeMap<_, _>>();
-    assert_eq!(catalog.len(), 168);
+    assert_eq!(catalog.len(), 167);
     assert_eq!(
         catalog.get("workspace.get.request"),
         Some(&model::methods::InboundKind::Request)

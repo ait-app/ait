@@ -1,7 +1,7 @@
 # Paseo Server 逐接口索引
 
 由 `scripts/paseo-api-audit.mjs` 从本地 Paseo `30178c4f58b67f8472901356e1484022bd835de0` 的真实 Zod union 生成。
-205 个入站名称，34 个已明确移除，171 个有效名称归并为 168 个 canonical 方法。
+205 个入站名称，35 个已明确移除，170 个有效名称归并为 167 个 canonical 方法。
 完整嵌套字段、每项 schema 指纹、上游分派位置和关联 Rust 测试保存在
 [契约快照](../../../scripts/fixtures/paseo/paseo-api-contracts.json)；测试索引不是逐项语义覆盖率。
 
@@ -70,7 +70,7 @@
 | `create_terminal_request` | `terminal.create.request` | cwd, workspaceId, name, agentId, command, args, size | `crates/terminal/src/rpc.rs:33` | 名称、输入字段与实现入口已核对；语义证据见关联测试及主报告 |
 | `creation.subscribe.request` | `creation.subscribe.request` | kind, idempotencyKey, subscribe | `crates/api/src/connection/dispatch.rs:14` | 连接所有权观察、断线恢复；完成回执查询校验目录和 Agent 仍存在 |
 | `daemon.config.reload.request` | `daemon.config.reload.request` | — | `crates/metadata/src/connection/daemon.rs:21`<br>`crates/metadata/src/rpc/daemon.rs:100` | 名称、输入字段与实现入口已核对；语义证据见关联测试及主报告 |
-| `daemon.get_pairing_offer.request` | `daemon.get_pairing_offer.request` | — | `crates/metadata/src/rpc/daemon.rs:78` | 按 ADR-061 保留禁用配对/relay 的响应 |
+| `daemon.get_pairing_offer.request` | 已移除 | — | — | 已按 ADR-127 移除，不重新接入 |
 | `daemon.get_status.request` | `daemon.get_status.request` | — | `crates/metadata/src/dispatch.rs:155`<br>`crates/metadata/src/rpc/daemon.rs:75` | 名称、输入字段与实现入口已核对；语义证据见关联测试及主报告 |
 | `daemon.update.request` | `daemon.update.request` | — | `crates/metadata/src/rpc/daemon.rs:110` | 名称、输入字段与实现入口已核对；语义证据见关联测试及主报告 |
 | `delete_agent_request` | `agent.delete.request` | agentId | `crates/provider/src/rpc/agent_runtime.rs:45` | 名称、输入字段与实现入口已核对；语义证据见关联测试及主报告 |

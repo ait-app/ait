@@ -14,6 +14,7 @@
 
 ## 架构决策
 
+- [ADR-127：移除 daemon 配对 offer RPC](decisions/daemon/adr-127-remove-daemon-pairing-offer.md)：删除方法清单、路由、共享协议和 SDK；旧请求返回未知方法。
 - [ADR-126：按身份读取目标 Workspace，完整目录后台同步](decisions/workspace/adr-126-workspace-target-read.md)：只读目标状态、缓存优先、连接和事件竞争保护。
 - [ADR-125：持久化展示投影索引与按页读取 Timeline](decisions/providers/adr-125-durable-timeline-projection-pages.md)：事务内增量维护、重启复用、源覆盖游标与字节回退。
 - [ADR-124：登录后自动添加全部在线服务主机](decisions/clients/adr-124-automatic-online-host-import.md)：移除账户主机选择，统一浏览器登录后导入全部主机，并保留已有连接与持久主机记录。

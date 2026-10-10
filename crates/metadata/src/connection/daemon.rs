@@ -1,7 +1,6 @@
 /// Client methods implemented by this component; consumed by capability discovery.
 pub(crate) const METHODS: &[MethodSpec] = &[
     MethodSpec::request("daemon.get_status.request"),
-    MethodSpec::request("daemon.get_pairing_offer.request"),
     MethodSpec::request("daemon.config.reload.request"),
     MethodSpec::request("daemon.update.request"),
     MethodSpec::request("diagnostics.request"),
