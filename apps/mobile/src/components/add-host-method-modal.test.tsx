@@ -8,7 +8,12 @@ import { AddHostMethodModal } from "./add-host-method-modal";
 vi.mock("@/desktop/host", () => ({ isElectronRuntime: () => true }));
 vi.mock("@/runtime/account-state", () => ({ supportsAccountRelay: () => true }));
 vi.mock("./account-host-panel", () => ({
-  AccountHostPanel: () => <input aria-label="Account login" />,
+  AccountHostPanel: ({ onSignedIn }: { onSignedIn: () => void }) => (
+    <>
+      <input aria-label="Account login" />
+      <button onClick={onSignedIn}>Complete login</button>
+    </>
+  ),
 }));
 vi.mock("./adaptive-modal-sheet", () => ({
   AdaptiveModalSheet: ({
@@ -31,6 +36,20 @@ vi.mock("./adaptive-modal-sheet", () => ({
 afterEach(() => cleanup());
 
 describe("online service connection method", () => {
+  it("closes the sheet after sign-in without selecting a host", () => {
+    const onClose = vi.fn();
+    const view = render(
+      <AddHostMethodModal
+        visible
+        onClose={onClose}
+        onDirectConnection={vi.fn()}
+        onRemoteSsh={vi.fn()}
+      />,
+    );
+    fireEvent.click(view.getByTestId("add-host-method-online-service"));
+    fireEvent.click(view.getByText("Complete login"));
+    expect(onClose).toHaveBeenCalledOnce();
+  });
   it("keeps login in a second level and resets the sheet when it closes", async () => {
     await i18n.changeLanguage("zh-CN");
     const props = {

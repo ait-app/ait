@@ -29,6 +29,7 @@ export const zhCN: TranslationResources = {
     emptyHosts:
       "在另一台电脑的 Desktop 上登录同一账户，内置 daemon 会默认上线。其他主机可在连接设置中开启同步。",
     disconnectRemoteHost: "断开远程主机",
+    hostListHint: "在线主机会自动加入主机列表。",
     hostSettingsHint:
       "Desktop 登录后默认同步内置 daemon。手动停止后将保持下线，可在主机的「连接」设置中重新开启；其他主机需手动开启同步。",
     requestFailed: "请求失败。",

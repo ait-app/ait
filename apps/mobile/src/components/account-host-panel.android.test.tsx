@@ -17,7 +17,6 @@ const state = vi.hoisted(() => ({
     hosts: [{ host_id: "host", server_id: "server", name: "My computer", platform: "linux" }],
   },
   command: vi.fn(async () => ({})),
-  push: vi.fn(),
 }));
 vi.mock("react-native", async (original) => {
   const actual = await original<typeof import("react-native")>();
@@ -27,30 +26,27 @@ vi.mock("@/runtime/account-state", () => ({
   useAccountState: () => state.value,
   accountCommand: state.command,
 }));
-vi.mock("expo-router", () => ({ useRouter: () => ({ push: state.push }) }));
 afterEach(() => {
   cleanup();
   vi.clearAllMocks();
 });
 
 describe("Android account panel", () => {
-  it("shows a client connection and lets the user select an online computer", async () => {
-    const connected = vi.fn();
-    const view = render(<AccountHostPanel onConnected={connected} />);
+  it("shows account controls without a separate online host picker", async () => {
+    const view = render(<AccountHostPanel />);
     expect(view.getByText(/Connected to account/)).toBeTruthy();
     expect(view.queryByText(/Waiting for this host/)).toBeNull();
-    fireEvent.click(view.getByTestId("account-host-host"));
-    await waitFor(() =>
-      expect(state.command).toHaveBeenCalledWith("account_select", { hostId: "host" }),
-    );
-    expect(connected).toHaveBeenCalledExactlyOnceWith("server");
-    expect(state.push).not.toHaveBeenCalled();
+    expect(view.queryByTestId("account-host-host")).toBeNull();
+    expect(view.queryByText("My computer")).toBeNull();
+    expect(view.queryByText("Disconnect remote host")).toBeNull();
+    expect(view.getByText("Online hosts are automatically added to the host list.")).toBeTruthy();
+    fireEvent.click(view.getByRole("button", { name: "Refresh" }));
+    await waitFor(() => expect(state.command).toHaveBeenCalledExactlyOnceWith("account_refresh"));
   });
 
-  it("navigates directly when the panel is outside a sheet", async () => {
+  it("keeps sign out available", async () => {
     const view = render(<AccountHostPanel />);
-    fireEvent.click(view.getByTestId("account-host-host"));
-    await waitFor(() => expect(state.push).toHaveBeenCalledWith("/h/server"));
-    expect(state.push).toHaveBeenCalledWith("/h/server");
+    fireEvent.click(view.getByRole("button", { name: "Sign out" }));
+    await waitFor(() => expect(state.command).toHaveBeenCalledExactlyOnceWith("account_logout"));
   });
 });

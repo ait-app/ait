@@ -1604,6 +1604,45 @@ describe("HostRuntimeController", () => {
 });
 
 describe("HostRuntimeStore", () => {
+  it("automatically connects and persists every discovered account host independently", async () => {
+    useHostRuntimeClock();
+    const center = "https://center.test/api";
+    const discovered = [
+      { host_id: "11111111-1111-4111-8111-111111111111", server_id: "first-server", name: "First" },
+      {
+        host_id: "22222222-2222-4222-8222-222222222222",
+        server_id: "second-server",
+        name: "Second",
+      },
+    ];
+    const connections = discovered.map((host) =>
+      createAccountRelayHostConnection({ hostId: host.host_id, center }),
+    );
+    const clients: FakeDaemonClient[] = [];
+    const storage = createMemoryHostRuntimeStorage({ "@paseo:e2e": "1" });
+    const store = new HostRuntimeStore({
+      storage,
+      deps: makeDeps(
+        Object.fromEntries(connections.map((connection, index) => [connection.id, index + 1])),
+        clients,
+      ),
+    });
+    try {
+      await store.boot();
+      store.setAccountRelayCenter(center);
+      await store.addDiscoveredAccountRelayHosts(discovered, center);
+      await Promise.all(discovered.map((host) => waitForHostOnline(store, host.server_id)));
+      expect(store.getClient("first-server")).not.toBe(store.getClient("second-server"));
+      expect(clients).toHaveLength(2);
+      const saved = JSON.parse((await storage.getItem("@paseo:daemon-registry"))!);
+      expect(saved).toHaveLength(2);
+      await store.addDiscoveredAccountRelayHosts(discovered, center);
+      expect(clients).toHaveLength(2);
+    } finally {
+      store.syncHosts([]);
+    }
+  });
+
   it("retains valid saved hosts when one online-service record is corrupt", async () => {
     useHostRuntimeClock();
     const host = makeHost({

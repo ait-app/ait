@@ -14,6 +14,8 @@
 
 ## 架构决策
 
+- [ADR-124：登录后自动添加全部在线服务主机](decisions/clients/adr-124-automatic-online-host-import.md)：移除账户主机选择，统一浏览器登录后导入全部主机，并保留已有连接与持久主机记录。
+
 - [ADR-123：客户端仅保留浏览器统一登录](decisions/clients/adr-123-browser-only-account-login.md)：删除移动端与 Desktop 的原 AIT 密码表单、命令和共享登录方法，服务能力检查失败不再回退。
 - [ADR-122（Provider）：Codex Auto-review 的 computer use 工具批准](decisions/providers/adr-122-codex-computer-use-approval.md)：原生插件逐工具预批准、显式覆盖与档位切换重载。
 - [ADR-122（客户端）：在线服务主机进入客户端持久注册表](decisions/clients/adr-122-persistent-online-service-hosts.md)：显式添加、多主机恢复、服务绑定及独立删除。

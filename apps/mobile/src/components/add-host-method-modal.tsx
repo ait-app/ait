@@ -3,8 +3,7 @@ import { AccountHostPanel } from "./account-host-panel";
 import { supportsAccountRelay } from "@/runtime/account-state";
 import type { Theme } from "@/styles/theme";
 import { Globe, Link2, Terminal } from "lucide-react-native";
-import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { useRouter } from "expo-router";
+import React, { useCallback, useEffect, useMemo, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { Pressable, Text, View } from "react-native";
 import { StyleSheet, withUnistyles } from "react-native-unistyles";
@@ -55,24 +54,10 @@ export function AddHostMethodModal({
   onRemoteSsh,
 }: AddHostMethodModalProps) {
   const { t } = useTranslation();
-  const router = useRouter();
   const [showOnlineService, setShowOnlineService] = useState(false);
   useEffect(() => {
     if (!visible) setShowOnlineService(false);
   }, [visible]);
-  const pendingAccountServerId = useRef<string | null>(null);
-  const handleAccountConnected = useCallback(
-    (serverId: string) => {
-      pendingAccountServerId.current = serverId;
-      onClose();
-    },
-    [onClose],
-  );
-  const handleDismiss = useCallback(() => {
-    const serverId = pendingAccountServerId.current;
-    pendingAccountServerId.current = null;
-    if (serverId) router.push(`/h/${serverId}`);
-  }, [router]);
   const header = useMemo<SheetHeader>(
     () =>
       showOnlineService
@@ -100,11 +85,10 @@ export function AddHostMethodModal({
       header={header}
       visible={visible}
       onClose={onClose}
-      onDismiss={handleDismiss}
       testID="add-host-method-modal"
     >
       {showOnlineService ? (
-        <AccountHostPanel onConnected={handleAccountConnected} onCancel={onClose} />
+        <AccountHostPanel onSignedIn={onClose} onCancel={onClose} />
       ) : (
         <>
           <Pressable
