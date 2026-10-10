@@ -8,6 +8,37 @@ use super::{QueryScope, project, query, snapshot};
 use crate::service::agent_runtime::{AgentPlacement, ThinkingOptionFilter};
 
 #[test]
+fn workspace_target_filter_keeps_exact_identities_and_rejects_invalid_bounds() {
+    for (ids, valid) in [
+        (json!(["wks-a"]), true),
+        (json!([]), true),
+        (json!([""]), false),
+        (json!([" "]), false),
+        (json!(["x".repeat(257)]), false),
+        (json!(vec!["wks"; 201]), false),
+    ] {
+        let request: AgentListRequest =
+            serde_json::from_value(json!({"filter":{"workspaceIds":ids}, "page":{"limit":40}}))
+                .unwrap();
+        let result = query(
+            request.filter,
+            request.sort,
+            request.page,
+            QueryScope::Active,
+            None,
+        );
+        assert_eq!(result.is_ok(), valid);
+        if let Ok(query) = result {
+            assert_eq!(query.limit, 40);
+            assert_eq!(
+                query.workspace_ids.unwrap().len(),
+                ids.as_array().unwrap().len()
+            );
+        }
+    }
+}
+
+#[test]
 fn history_defaults_to_archived_while_active_list_does_not() {
     let list: AgentListRequest = serde_json::from_value(json!({})).expect("list request");
     let history: AgentHistoryRequest = serde_json::from_value(json!({})).expect("history request");

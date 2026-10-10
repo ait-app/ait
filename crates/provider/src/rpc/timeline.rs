@@ -13,14 +13,60 @@ use model::ErrorCode;
 use model::methods::MethodSpec;
 use serde_json::{Value, json};
 
-use crate::protocol::timeline::{Direction, FetchRequest, SearchRequest};
+#[cfg(test)]
+use crate::protocol::timeline::Direction;
+use crate::protocol::timeline::{FetchRequest, SearchRequest};
 use crate::storage::timeline::Row;
+use crate::storage::timeline::Timeline;
+#[cfg(test)]
+use crate::timeline_projection::page;
+use crate::timeline_projection::project;
 
-pub(super) mod projection;
 mod text_search;
 
 const MAX_RESPONSE_BYTES: usize = 900 * 1024;
 
+/// Fetch `request` from the indexed `timeline` scope with `agent` metadata in the wire envelope.
+/// Returns a projected response or storage, cursor validation and response-budget errors.
+pub(crate) fn fetch_stored(
+    request: &FetchRequest,
+    timeline: &Timeline,
+    scope: &str,
+    agent: &Value,
+) -> Result<Value, ErrorCode> {
+    let mut value = Value::Null;
+    let page = timeline.page(request, scope, |header| {
+        let reset = header.stale || header.gap;
+        value = json!({"agentId":request.agent_id,"agent":agent,"direction":header.direction,
+            "projection":"projected","epoch":header.epoch,"reset":reset,
+            "staleCursor":header.stale,"gap":header.gap,
+            "window":{"minSeq":header.min_seq,"maxSeq":header.max_seq,
+                "nextSeq":header.max_seq.saturating_add(1)},
+            "startCursor":{"epoch":header.epoch,"seq":header.max_seq},
+            "endCursor":{"epoch":header.epoch,"seq":header.max_seq},
+            "hasOlder":false,"hasNewer":false,"entries":[],"error":null});
+        if request.merge_window == Some(true) {
+            value["mergeWindow"] = json!(true);
+        }
+        let envelope = serde_json::to_vec(&value)
+            .map_err(|_| ErrorCode::AgentIo)?
+            .len();
+        Ok(MAX_RESPONSE_BYTES.saturating_sub(envelope + 40))
+    })?;
+    let epoch = value["epoch"].clone();
+    value["entries"] = serde_json::to_value(page.entries).map_err(|_| ErrorCode::AgentIo)?;
+    value["startCursor"] = page
+        .start_seq
+        .map_or(Value::Null, |seq| json!({"epoch":epoch,"seq":seq}));
+    value["endCursor"] = page
+        .end_seq
+        .map_or(Value::Null, |seq| json!({"epoch":epoch,"seq":seq}));
+    value["hasOlder"] = json!(page.has_older);
+    value["hasNewer"] = json!(page.has_newer);
+    bounded(value)
+}
+
+#[cfg(test)]
 pub(crate) fn fetch(
     request: &FetchRequest,
     epoch: &str,
@@ -51,7 +97,7 @@ pub(crate) fn fetch(
         200
     });
     let selection = if reset { Direction::Tail } else { direction };
-    let page = projection::select(
+    let page = page::select(
         rows,
         selection,
         request.cursor.as_ref().map(|cursor| cursor.seq),
@@ -72,7 +118,7 @@ pub(crate) fn fetch(
         .len();
     // A narrower source window can increase the digit count of either cursor's sequence.
     let entry_bytes = MAX_RESPONSE_BYTES.saturating_sub(envelope_bytes + 40);
-    let page = projection::fit(rows, page, selection, entry_bytes)?;
+    let page = page::fit(rows, page, selection, entry_bytes)?;
     value["entries"] = serde_json::to_value(page.entries).map_err(|_| ErrorCode::AgentIo)?;
     value["startCursor"] = page
         .start_seq
@@ -95,7 +141,7 @@ pub(crate) fn search(
             "locations":[],"nextCursor":null,"error":null}));
     };
     let offset = request.cursor.unwrap_or(0);
-    let messages = projection::project(rows);
+    let messages = project(rows);
     let mut matching = messages
         .iter()
         .filter(|row| row.seq_end > offset as u64)

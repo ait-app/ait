@@ -66,11 +66,21 @@ impl Timeline {
         if completed {
             return Err(ErrorCode::IdempotencyConflict);
         }
+        super::projection::ensure(&transaction, agent)?;
         let seq = next(&transaction, agent)?;
         transaction.execute(
             "INSERT INTO progress(agent,seq,identity,native_key,provider,entry) VALUES(?,?,?,?,?,?)",
             params![agent,seq,identity,entry.key,provider,bytes],
         ).map_err(io)?;
+        super::projection::append(
+            &transaction,
+            agent,
+            &Row {
+                seq,
+                provider: provider.to_owned(),
+                entry: entry.clone(),
+            },
+        )?;
         transaction.commit().map_err(io)?;
         self.publish(agent, provider, &epoch, &[(seq, entry.clone())]);
         Ok(())

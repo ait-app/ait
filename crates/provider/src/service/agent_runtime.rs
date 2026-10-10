@@ -65,6 +65,8 @@ pub(crate) struct AgentDirectoryQuery {
     pub(crate) labels: BTreeMap<String, String>,
     /// Allowed project keys.
     pub(crate) project_keys: Option<BTreeSet<String>>,
+    /// Allowed exact Workspace identities.
+    pub(crate) workspace_ids: Option<BTreeSet<String>>,
     /// Allowed lifecycle statuses.
     pub(crate) statuses: Option<BTreeSet<AgentRuntimeStatus>>,
     /// Required attention value.
@@ -555,6 +557,12 @@ fn matches_query(
         .project_keys
         .as_ref()
         .is_some_and(|keys| !keys.contains(&entry.placement.project_key))
+        || query.workspace_ids.as_ref().is_some_and(|ids| {
+            agent
+                .workspace_id
+                .as_ref()
+                .is_none_or(|id| !ids.contains(id))
+        })
         || query
             .statuses
             .as_ref()

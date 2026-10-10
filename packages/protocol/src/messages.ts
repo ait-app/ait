@@ -931,6 +931,7 @@ export const AudioPlayedMessageSchema = z.object({
 });
 
 const AgentDirectoryFilterSchema = z.object({
+  workspaceIds: z.array(z.string().min(1).max(256)).max(200).optional(),
   labels: z.record(z.string(), z.string()).optional(),
   projectKeys: z.array(z.string()).optional(),
   statuses: z.array(AgentStatusSchema).optional(),
@@ -1328,6 +1329,12 @@ export const FetchWorkspacesRequestMessageSchema = z.object({
     .optional(),
   // COMPAT(directorySync): added in v0.3.x, remove optional after 2027-02-12.
   sync: DirectorySyncRequestSchema.optional(),
+});
+
+export const WorkspaceGetRequestMessageSchema = z.object({
+  type: z.literal("workspace.get.request"),
+  requestId: z.string(),
+  workspaceId: z.string().min(1).max(256),
 });
 
 export const ProjectListRequestMessageSchema = z.object({
@@ -3198,6 +3205,7 @@ export const SessionInboundMessageSchema = z.discriminatedUnion("type", [
   FetchAgentHistoryRequestMessageSchema,
   FetchRecentProviderSessionsRequestMessageSchema,
   FetchWorkspacesRequestMessageSchema,
+  WorkspaceGetRequestMessageSchema,
   ProjectListRequestMessageSchema,
   FetchAgentRequestMessageSchema,
   DeleteAgentRequestMessageSchema,
@@ -3650,6 +3658,7 @@ export const ServerInfoStatusPayloadSchema = z
         checkoutRefresh: z.boolean().optional(),
         // COMPAT(workspaceMultiplicity): added in v0.1.97, drop the gate when floor >= v0.1.97
         workspaceMultiplicity: z.boolean().optional(),
+        workspaceTargetRead: z.boolean().optional(),
         // COMPAT(projectRemove): added in v0.1.97, drop the gate when floor >= v0.1.97.
         projectRemove: z.boolean().optional(),
         // COMPAT(projectAdd): added in v0.1.97, drop the gate when floor >= v0.1.97.
@@ -4237,6 +4246,17 @@ export const FetchWorkspacesResponseMessageSchema = z.object({
       hasMore: z.boolean(),
     }),
     sync: DirectorySyncMetadataSchema.optional(),
+  }),
+});
+
+export const WorkspaceGetResponseMessageSchema = z.object({
+  type: z.literal("workspace.get.response"),
+  payload: z.object({
+    requestId: z.string(),
+    workspaceId: z.string(),
+    state: z.enum(["ready", "archived", "missing"]),
+    workspace: WorkspaceDescriptorPayloadSchema.nullable(),
+    project: WorkspaceProjectDescriptorPayloadSchema.nullable(),
   }),
 });
 
@@ -6893,6 +6913,7 @@ export const SessionOutboundMessageSchema = z.discriminatedUnion("type", [
   FetchAgentHistoryResponseMessageSchema,
   FetchRecentProviderSessionsResponseMessageSchema,
   FetchWorkspacesResponseMessageSchema,
+  WorkspaceGetResponseMessageSchema,
   ProjectAddResponseSchema,
   ProjectCreateDirectoryResponseSchema,
   OpenProjectResponseMessageSchema,

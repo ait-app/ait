@@ -10,6 +10,7 @@ pub const METHODS: &[MethodSpec] = &[
     MethodSpec::request("workspace.open.request"),
     MethodSpec::request("workspace.create.request"),
     MethodSpec::request("workspace.list.request"),
+    MethodSpec::request("workspace.get.request"),
     MethodSpec::request("workspace.archive.request"),
     MethodSpec::request("workspace.title.set.request"),
     MethodSpec::request("workspace.pin.set.request"),
@@ -61,6 +62,7 @@ use crate::service::directory::{Directory, DirectoryError};
 pub(crate) mod listing;
 mod pagination;
 mod runtime;
+mod target;
 
 /// Decode and execute one metadata directory request.
 ///
@@ -82,6 +84,7 @@ pub fn execute(directory: &mut Directory, method: &str, params: Value) -> Result
             workspace_creation(directory, params).map(|reply| reply.value)
         }
         "workspace.list.request" => workspace_list(directory, &decode(params)?),
+        "workspace.get.request" => target::get(directory, decode(params)?),
         "workspace.archive.request" => workspace_archive(directory, decode(params)?),
         "workspace.title.set.request" => workspace_title_set(directory, decode(params)?),
         "workspace.pin.set.request" => workspace_pin_set(directory, decode(params)?),

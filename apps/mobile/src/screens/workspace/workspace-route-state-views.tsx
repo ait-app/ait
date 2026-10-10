@@ -20,6 +20,7 @@ interface WorkspaceRouteStateActions {
   onDismissMissingWorkspace: () => void;
   onRecoverWorkspace: () => void;
   onRetryRecoveryInspection: () => void;
+  onRetryLoading: () => void;
 }
 
 export function renderWorkspaceRouteGate(input: {
@@ -69,10 +70,15 @@ export function renderWorkspaceRouteGate(input: {
         />
       );
     case "recoveryInspectionFailed":
+    case "loadingFailed":
       return (
         <WorkspaceRecoveryInspectionFailed
           state={input.state}
-          onRetry={input.actions.onRetryRecoveryInspection}
+          onRetry={
+            input.state.kind === "loadingFailed"
+              ? input.actions.onRetryLoading
+              : input.actions.onRetryRecoveryInspection
+          }
           onDismiss={input.actions.onDismissMissingWorkspace}
         />
       );
@@ -175,7 +181,7 @@ function WorkspaceRecoveryInspectionFailed({
   onRetry,
   onDismiss,
 }: {
-  state: Extract<WorkspaceRouteState, { kind: "recoveryInspectionFailed" }>;
+  state: Extract<WorkspaceRouteState, { kind: "recoveryInspectionFailed" | "loadingFailed" }>;
   onRetry: () => void;
   onDismiss: () => void;
 }) {

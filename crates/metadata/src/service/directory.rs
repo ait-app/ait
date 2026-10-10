@@ -534,6 +534,24 @@ impl Directory {
         self.workspaces.list().map_err(map_error)
     }
 
+    /// Read exactly one Workspace and its Project, retaining archive information.
+    /// # Errors
+    /// Returns a registry failure without enumerating the host's directory.
+    pub(crate) fn workspace_target(
+        &self,
+        id: &str,
+    ) -> Result<Option<(PersistedWorkspaceRecord, Option<PersistedProjectRecord>)>, DirectoryError>
+    {
+        let Some(workspace) = self.workspaces.get(id).map_err(map_error)? else {
+            return Ok(None);
+        };
+        let project = self
+            .projects
+            .get(&workspace.project_id)
+            .map_err(map_error)?;
+        Ok(Some((workspace, project)))
+    }
+
     /// Check a completed creation's exact Workspace record and directory, including archived records.
     /// Returns false when either was removed, without reopening or recreating anything.
     /// # Errors

@@ -51,6 +51,23 @@ const recoverable = {
 } as const satisfies WorkspaceRecoveryModel;
 
 describe("resolveWorkspaceRouteState", () => {
+  it("makes a target read failure retryable before the sidebar baseline completes", () => {
+    expect(
+      resolveWorkspaceRouteState({
+        hostName: "Laptop",
+        connectionStatus: "online",
+        lastError: null,
+        workspace: null,
+        hasHydratedWorkspaces: false,
+        recovery: { kind: "idle" },
+        loadingError: "Lookup timed out",
+      }),
+    ).toEqual({
+      kind: "loadingFailed",
+      hostName: "Laptop",
+      error: "Lookup timed out",
+    });
+  });
   it("keeps a missing route unreachable while its host is offline", () => {
     expect(resolve({ connectionStatus: "offline" })).toEqual({
       kind: "unreachable",

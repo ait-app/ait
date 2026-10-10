@@ -106,6 +106,12 @@ workspace 包与普通、开发、构建、optional 和平台条件依赖，拒�
 
 ## 数据与进程所有权
 
+metadata 的 `workspace.get.request` 按身份读取一个 Workspace 与所属 Project；客户端目标缓存和
+定向读取独立于完整侧栏快照，不标记全局 hydrated 或完整 checkpoint，见
+[ADR-126](../decisions/workspace/adr-126-workspace-target-read.md)。provider 在 Timeline SQLite 内维护
+可重建的展示组与源覆盖索引，写入和原始事件共享事务；分页读取所需窗口，见
+[ADR-125](../decisions/providers/adr-125-durable-timeline-projection-pages.md)。
+
 daemon 持有数据目录的 OS 文件锁及稳定 `server-id`，同一目录只能有一个活动实例。
 Project/Workspace 和 Agent runtime 目录、配置、时间线由当前文件存储与 Provider adapter
 管理；Agent preset catalog 的 SQLite 存储位于 `provider`。这些职责不能合并成一个通用数据库入口。

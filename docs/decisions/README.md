@@ -34,6 +34,7 @@ ADR-074、082、083、084、122 在不同类别中各有两份，引用时以路
 
 ## 工作区、文件与 Git
 
+- [ADR-126：按身份读取目标 Workspace，完整目录后台同步](workspace/adr-126-workspace-target-read.md)
 - [ADR-113：filesystem 按能力组组织模块](workspace/adr-113-filesystem-capability-groups.md)
 - [ADR-104：Filesystem 仅通过 model 契约协作](workspace/adr-104-filesystem-model-collaboration.md)
 - [ADR-092：工作区重置同步 origin 同名分支](workspace/adr-092-reset-same-named-remote-branch.md)
@@ -55,6 +56,7 @@ ADR-074、082、083、084、122 在不同类别中各有两份，引用时以路
 
 ## Provider、Agent 与会话
 
+- [ADR-125：持久化展示投影索引与按页读取 Timeline](providers/adr-125-durable-timeline-projection-pages.md)
 - [ADR-122：Codex Auto-review 的 computer use 工具批准](providers/adr-122-codex-computer-use-approval.md)
 - [ADR-121：ACP 轮次关联与原生历史结算](providers/adr-121-acp-turn-history-reconciliation.md)
 - [ADR-119：原生账号用量与 Codex 速度目录](providers/adr-119-native-account-usage-and-codex-speed.md)

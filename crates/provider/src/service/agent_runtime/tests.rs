@@ -588,6 +588,44 @@ fn default_query() -> AgentDirectoryQuery {
     }
 }
 
+#[test]
+fn target_workspace_agent_pages_preserve_exact_scope_and_continuation() {
+    let (service, agents) = service();
+    agents
+        .upsert(&agent("other", "wks-two", "Other", false))
+        .unwrap();
+    let mut query = AgentDirectoryQuery {
+        workspace_ids: Some(BTreeSet::from(["wks-one".into()])),
+        limit: 1,
+        sort: vec![AgentSort {
+            key: AgentSortKey::Title,
+            direction: SortDirection::Asc,
+        }],
+        ..AgentDirectoryQuery::default()
+    };
+    let first = service.list(&query).unwrap();
+    assert_eq!(first.entries.len(), 1);
+    assert_eq!(first.entries[0].agent.id, "agent-a");
+    assert!(first.has_more);
+    query.cursor = first.next_cursor;
+    let next = service.list(&query).unwrap();
+    assert_eq!(next.entries[0].agent.id, "agent-b");
+    assert!(!next.has_more);
+    for id in [None, Some("missing")] {
+        let ids = id.map_or_else(BTreeSet::new, |id| BTreeSet::from([id.into()]));
+        assert!(
+            service
+                .list(&AgentDirectoryQuery {
+                    workspace_ids: Some(ids),
+                    ..default_query()
+                })
+                .unwrap()
+                .entries
+                .is_empty()
+        );
+    }
+}
+
 fn service() -> (AgentRuntimeDirectory, Agents) {
     let agents = Agents::default();
     agents
