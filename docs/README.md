@@ -8,6 +8,7 @@
 - [项目说明](../README.md)：开发入口、workspace 和验证命令。
 - [桌面端](../apps/desktop/README.md)：Electron 启动、构建和打包。
 - [移动端与 Web](../apps/mobile/README.md)：Expo、浏览器连接与原生构建。
+- [Relay 客户端登录保持](plans/relay-client-session-persistence.md)：14 天登录、退出凭据保护、网页重开恢复与待实施的自动续期方案。
 - [daemon 使用与连接协议](operations/daemon.md)：配置、鉴权、数据目录和生命周期。
 - [当前架构](architecture/README.md)：能力归属、依赖边界和数据所有权。
 

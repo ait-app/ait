@@ -180,6 +180,54 @@ describe("native mobile account storage and lifecycle", () => {
     },
   );
 
+  it.each(["android", "ios"])(
+    "restores a saved %s session after a process restart and retries an offline startup",
+    async (platform) => {
+      mocks.platform = platform;
+      const saved = JSON.stringify({
+        center: "https://center.test/api",
+        token: "saved-jwt",
+        expiresAt: Date.now() + 3_600_000,
+        name: "Me",
+        nodeSessionId: "previous-session",
+      });
+      mocks.get.mockResolvedValue(saved);
+      let offline = true;
+      const http = vi.fn(async (url: string) => {
+        if (offline) throw new TypeError("Network request failed");
+        if (url.endsWith("/v1/nodes/register"))
+          return Response.json({
+            node_id: "node",
+            node_session_id: "new-session",
+            host_id: null,
+            control_required: false,
+          });
+        return Response.json({ hosts: [], count: 0 });
+      });
+      vi.stubGlobal("fetch", http);
+      const { getNativeAccount } = await import("./native-account.native");
+      const manager = await getNativeAccount();
+      await vi.advanceTimersByTimeAsync(1);
+      expect(manager.snapshot()).toMatchObject({ status: "error", name: "Me" });
+      expect(mocks.remove).not.toHaveBeenCalled();
+      expect(http.mock.calls[0]?.[0]).toBe(
+        "https://center.test/api/v1/node-sessions/previous-session",
+      );
+
+      offline = false;
+      await vi.advanceTimersByTimeAsync(6_000);
+      expect(manager.snapshot()).toMatchObject({ status: "online", name: "Me" });
+      expect(http.mock.calls.some(([url]) => url.includes("/auth/"))).toBe(false);
+      expect(mocks.remove).not.toHaveBeenCalled();
+      expect(mocks.set).toHaveBeenCalledWith(
+        "ait.account.session.v1",
+        expect.stringContaining('"nodeSessionId":"new-session"'),
+      );
+      await manager.shutdown();
+      expect(mocks.remove).not.toHaveBeenCalled();
+    },
+  );
+
   it.each([
     "bad-json",
     JSON.stringify({ token: "expired", expiresAt: 0 }),
