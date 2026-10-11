@@ -148,13 +148,23 @@ fn huge_lines_files_and_sparse_hunks_fall_back_without_unbounded_allocation() {
     assert!(reconstruct(&sparse, DiffLineKind::Add).is_none());
 
     let mut unknown = parsed("a.unknownext", "@@ -1 +1 @@\n+a\n");
-    highlighter.highlight(&mut unknown, Path::new("/unavailable"), "HEAD", None);
+    highlighter.highlight_files(
+        std::slice::from_mut(&mut unknown),
+        Path::new("/unavailable"),
+        "HEAD",
+        None,
+    );
     assert!(unknown.hunks[0].lines[1].tokens.is_none());
     let mut huge = parsed(
         "a.ts",
         &format!("@@ -1 +1 @@\n+{}\n", "x".repeat(MAX_LINE_CHARS + 1)),
     );
-    highlighter.highlight(&mut huge, Path::new("/unavailable"), "HEAD", None);
+    highlighter.highlight_files(
+        std::slice::from_mut(&mut huge),
+        Path::new("/unavailable"),
+        "HEAD",
+        None,
+    );
     assert!(huge.hunks[0].lines[1].tokens.is_none());
     assert!(highlighter.cache.read().unwrap().is_empty());
 }
@@ -163,7 +173,12 @@ fn huge_lines_files_and_sparse_hunks_fall_back_without_unbounded_allocation() {
 fn unavailable_snapshots_use_hunks_and_invalid_paths_are_rejected() {
     let highlighter = DiffHighlighter::default();
     let mut file = parsed("a.ts", "@@ -1 +1 @@\n-const a = 1;\n+const a = 2;\n");
-    highlighter.highlight(&mut file, Path::new("/unavailable"), "HEAD", Some("HEAD"));
+    highlighter.highlight_files(
+        std::slice::from_mut(&mut file),
+        Path::new("/unavailable"),
+        "HEAD",
+        Some("HEAD"),
+    );
     assert!(roles(file.hunks[0].lines[1].tokens.as_ref().unwrap()).contains(&"keyword"));
     assert!(roles(file.hunks[0].lines[2].tokens.as_ref().unwrap()).contains(&"keyword"));
     assert!(read_content(Path::new("/unavailable"), "../outside", None).is_none());

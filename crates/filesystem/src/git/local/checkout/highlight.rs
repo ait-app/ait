@@ -1,4 +1,6 @@
-//! Paseo-style server highlighting using both comparison snapshots and hunk fallback.
+//! Server highlighting using per-side languages, comparison snapshots, and hunk fallback.
+
+mod language;
 
 use std::collections::{BTreeMap, VecDeque};
 use std::fs::File;
@@ -89,6 +91,13 @@ struct TokenLookup {
     lines: TokenLines,
 }
 
+struct DiffSide<'a> {
+    path: &'a str,
+    revision: Option<&'a str>,
+    kind: DiffLineKind,
+    language: Option<&'a str>,
+}
+
 impl TokenLookup {
     fn get(&self, line_number: u64) -> Option<&Vec<HighlightToken>> {
         let index = usize::try_from(line_number.checked_sub(self.first_line)?).ok()?;
@@ -99,39 +108,88 @@ impl TokenLookup {
 impl DiffHighlighter {
     /// Populate syntax roles from old/new snapshots; failures leave plain diff text intact.
     /// `new_ref: None` denotes the working tree, while commit/base diffs use an explicit ref.
-    pub(super) fn highlight(
+    pub(super) fn highlight_files(
         &self,
-        file: &mut ParsedDiffFile,
+        files: &mut [ParsedDiffFile],
         cwd: &Path,
         old_ref: &str,
         new_ref: Option<&str>,
     ) {
+        let old_languages = language::overrides(cwd, files, Some(old_ref), DiffLineKind::Remove);
+        let new_languages = language::overrides(cwd, files, new_ref, DiffLineKind::Add);
+        for file in files {
+            let old_path = file.old_path.as_deref().unwrap_or(&file.path);
+            let old = DiffSide {
+                path: old_path,
+                revision: Some(old_ref),
+                kind: DiffLineKind::Remove,
+                language: old_languages.get(old_path).map(String::as_str),
+            };
+            let new = DiffSide {
+                path: &file.path,
+                revision: new_ref,
+                kind: DiffLineKind::Add,
+                language: new_languages.get(&file.path).map(String::as_str),
+            };
+            let (old_tokens, new_tokens) = self.highlight(file, cwd, &old, &new);
+            apply_tokens(file, old_tokens.as_ref(), new_tokens.as_ref());
+        }
+    }
+
+    fn highlight(
+        &self,
+        file: &ParsedDiffFile,
+        cwd: &Path,
+        old: &DiffSide<'_>,
+        new: &DiffSide<'_>,
+    ) -> (Option<TokenLookup>, Option<TokenLookup>) {
         if file.hunks.is_empty()
             || file.hunks.iter().flat_map(|hunk| &hunk.lines).any(|line| {
                 line.content.len() > MAX_LINE_CHARS && line.content.chars().count() > MAX_LINE_CHARS
             })
         {
-            return;
+            return (None, None);
         }
-        let Some(syntax) = syntax_for_path(&file.path) else {
-            return;
-        };
-        let old_path = file.old_path.as_deref().unwrap_or(&file.path);
         let old_tokens = (!file.is_new)
-            .then(|| self.snapshot(cwd, old_path, old_ref, syntax))
+            .then(|| self.side_tokens(file, cwd, old))
             .flatten();
-        let new_tokens = if file.is_deleted {
-            None
-        } else if let Some(revision) = new_ref {
-            self.snapshot(cwd, &file.path, revision, syntax)
-        } else {
-            let content = read_content(cwd, &file.path, None);
-            self.lookup(file, syntax, content.as_deref(), DiffLineKind::Add)
-        };
-        let old_tokens =
-            old_tokens.or_else(|| self.lookup(file, syntax, None, DiffLineKind::Remove));
-        let new_tokens = new_tokens.or_else(|| self.lookup(file, syntax, None, DiffLineKind::Add));
-        apply_tokens(file, old_tokens.as_ref(), new_tokens.as_ref());
+        let new_tokens = (!file.is_deleted)
+            .then(|| self.side_tokens(file, cwd, new))
+            .flatten();
+        (old_tokens, new_tokens)
+    }
+
+    fn side_tokens(
+        &self,
+        file: &ParsedDiffFile,
+        cwd: &Path,
+        side: &DiffSide<'_>,
+    ) -> Option<TokenLookup> {
+        if let Some(revision) = side.revision
+            && let Some(tokens) = self.snapshot(cwd, side.path, revision, side.language)
+        {
+            return Some(tokens);
+        }
+        let content = side
+            .revision
+            .is_none()
+            .then(|| read_content(cwd, side.path, None))
+            .flatten();
+        let first_line = file.hunks.iter().find_map(|hunk| {
+            let first = if side.kind == DiffLineKind::Remove {
+                hunk.old_start
+            } else {
+                hunk.new_start
+            };
+            (first == 1).then(|| {
+                hunk.lines
+                    .iter()
+                    .find(|line| line.kind == side.kind || line.kind == DiffLineKind::Context)
+                    .map(|line| line.content.as_str())
+            })?
+        });
+        let syntax = language::detect(side.path, content.as_deref().or(first_line), side.language)?;
+        self.lookup(file, syntax, content.as_deref(), side.kind)
     }
 
     fn snapshot(
@@ -139,18 +197,25 @@ impl DiffHighlighter {
         cwd: &Path,
         path: &str,
         revision: &str,
-        syntax: &SyntaxReference,
+        language: Option<&str>,
     ) -> Option<TokenLookup> {
         let mut digest = Sha256::new();
-        for part in [cwd.to_str()?, path, revision] {
+        for part in [cwd.to_str()?, path, revision, language.unwrap_or("")] {
             digest.update(part.as_bytes());
             digest.update([0]);
         }
         let key = CacheKey::Snapshot(digest.finalize().into());
-        let lines = if let Some(lines) = self.cached(syntax, &key) {
+        let cached = self.cache.read().ok().and_then(|cache| {
+            cache
+                .iter()
+                .find(|entry| entry.key == key)
+                .map(|entry| entry.lines.clone())
+        });
+        let lines = if let Some(lines) = cached {
             lines
         } else {
             let content = read_content(cwd, path, Some(revision))?;
+            let syntax = language::detect(path, Some(&content), language)?;
             self.tokenize_with_key(&content, syntax, key)?
         };
         Some(TokenLookup {
@@ -246,6 +311,9 @@ impl DiffHighlighter {
 }
 
 fn syntax_for_path(path: &str) -> Option<&'static SyntaxReference> {
+    if let Some(syntax) = language::syntax_for_filename(path) {
+        return Some(syntax);
+    }
     let extension = Path::new(path).extension()?.to_str()?.to_ascii_lowercase();
     let extension = match extension.as_str() {
         "mjs" | "cjs" | "jsx" => "js",

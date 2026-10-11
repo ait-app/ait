@@ -13,6 +13,8 @@ use crate::support::budget::fits as fits_diff_output_budget;
 use crate::support::error::ErrorCode;
 use crate::support::rpc::{decode, encode};
 
+mod diff_budget;
+
 /// Client methods implemented by this component; consumed by capability discovery.
 pub const METHODS: &[MethodSpec] = &[
     MethodSpec::request("checkout.status.get.request"),
@@ -462,14 +464,12 @@ fn protocol_diff_result(
                 error: None,
                 diff_too_large: result.diff_too_large.then_some(true),
             };
-            if !fits_diff_output_budget(&result) {
-                for file in &mut result.files {
-                    clear_diff_tokens(file);
-                }
-                if !fits_diff_output_budget(&result) {
-                    result.files.clear();
-                    result.diff_too_large = Some(true);
-                }
+            if !fits_diff_output_budget(&result)
+                && (diff_budget::fit_result(&mut result).is_err()
+                    || !fits_diff_output_budget(&result))
+            {
+                result.files.clear();
+                result.diff_too_large = Some(true);
             }
             result
         }
@@ -529,11 +529,15 @@ fn protocol_diff_file(file: port::ParsedDiffFile) -> protocol::ParsedDiffFile {
     if !fits_diff_output_budget(&file) {
         clear_diff_tokens(&mut file);
         if !fits_diff_output_budget(&file) {
-            file.hunks.clear();
-            file.status = Some(protocol::ParsedDiffStatus::TooLarge);
+            clear_diff_hunks(&mut file);
         }
     }
     file
+}
+
+fn clear_diff_hunks(file: &mut protocol::ParsedDiffFile) {
+    file.hunks.clear();
+    file.status = Some(protocol::ParsedDiffStatus::TooLarge);
 }
 
 fn clear_diff_tokens(file: &mut protocol::ParsedDiffFile) {

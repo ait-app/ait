@@ -120,7 +120,7 @@ fn highlight_output_budget_keeps_large_file_diff_readable() {
 }
 
 #[test]
-fn highlight_output_budget_applies_to_the_entire_subscription_snapshot() {
+fn highlight_output_budget_drops_only_enough_file_tokens_to_fit_the_snapshot() {
     let file = highlighted_file(4000);
     assert!(
         super::protocol_diff_file(file.clone()).hunks[0].lines[0]
@@ -134,16 +134,40 @@ fn highlight_output_budget_applies_to_the_entire_subscription_snapshot() {
             diff_too_large: false,
         }),
     );
-    assert!(
-        result
-            .files
-            .iter()
-            .flat_map(|file| &file.hunks)
-            .flat_map(|hunk| &hunk.lines)
-            .all(|line| line.tokens.is_none())
-    );
+    assert!(result.files[0].hunks[0].lines[0].tokens.is_none());
+    assert!(result.files[1].hunks[0].lines[0].tokens.is_some());
     assert!(super::fits_diff_output_budget(&result));
     assert!(result.diff_too_large.is_none());
+}
+
+#[test]
+fn aggregate_budget_preserves_small_file_highlights_regardless_of_file_order() {
+    for small_first in [false, true] {
+        let mut small = highlighted_file(1);
+        small.path = "small.rs".to_owned();
+        let large = highlighted_file(4000);
+        let mut second = large.clone();
+        second.path = "second.rs".to_owned();
+        let mut files = vec![large, second];
+        files.insert(if small_first { 0 } else { 2 }, small);
+
+        let result = super::protocol_diff_result(
+            "/repo",
+            Ok(CheckoutDiff {
+                files,
+                diff_too_large: false,
+            }),
+        );
+
+        let small = result
+            .files
+            .iter()
+            .find(|file| file.path == "small.rs")
+            .unwrap();
+        assert!(small.hunks[0].lines[0].tokens.is_some());
+        assert!(result.files.iter().all(|file| !file.hunks.is_empty()));
+        assert!(super::fits_diff_output_budget(&result));
+    }
 }
 
 fn plain_file(line_count: usize) -> ParsedDiffFile {
@@ -183,7 +207,7 @@ fn plain_diff_output_budget_counts_json_escaping() {
 }
 
 #[test]
-fn plain_diff_output_budget_applies_to_the_entire_snapshot() {
+fn plain_diff_output_budget_limits_large_files_instead_of_hiding_the_snapshot() {
     let mut second = plain_file(50_000);
     second.path = "second.rs".to_owned();
     let result = super::protocol_diff_result(
@@ -193,8 +217,14 @@ fn plain_diff_output_budget_applies_to_the_entire_snapshot() {
             diff_too_large: false,
         }),
     );
-    assert_eq!(result.diff_too_large, Some(true));
-    assert!(result.files.is_empty());
+    assert!(result.diff_too_large.is_none());
+    assert_eq!(result.files.len(), 2);
+    assert!(result.files[0].hunks.is_empty());
+    assert_eq!(
+        result.files[0].status,
+        Some(crate::git::protocol::ParsedDiffStatus::TooLarge)
+    );
+    assert!(!result.files[1].hunks.is_empty());
     assert!(result.error.is_none());
     assert!(super::fits_diff_output_budget(&result));
 }
@@ -211,7 +241,8 @@ fn plain_diff_output_budget_subscription_recovers_after_oversized_update() {
         diff_too_large: false,
     };
     let update = observation.update(Ok(large.clone())).unwrap().unwrap();
-    assert_eq!(update["diffTooLarge"], true);
+    assert!(update.get("diffTooLarge").is_none());
+    assert_eq!(update["files"][0]["status"], "too_large");
     assert_eq!(update["subscriptionId"], "large-diff");
     assert!(super::fits_diff_output_budget(&update));
     assert!(observation.update(Ok(large)).unwrap().is_none());
@@ -227,6 +258,24 @@ fn plain_diff_output_budget_subscription_recovers_after_oversized_update() {
         recovered["files"][0]["hunks"][0]["lines"][0]["content"],
         "a".repeat(20)
     );
+}
+
+#[test]
+fn oversized_plain_text_keeps_small_file_tokens_and_statistics() {
+    let mut small = highlighted_file(1);
+    small.path = "small.rs".to_owned();
+    let result = super::protocol_diff_result(
+        "/repo",
+        Ok(CheckoutDiff {
+            files: vec![plain_file(50_000), plain_file(50_000), small],
+            diff_too_large: false,
+        }),
+    );
+
+    assert_eq!(result.files.len(), 3);
+    assert_eq!(result.files[0].additions, 50_000);
+    assert!(result.files[2].hunks[0].lines[0].tokens.is_some());
+    assert!(super::fits_diff_output_budget(&result));
 }
 
 #[test]
@@ -634,6 +683,7 @@ fn diff_subscription_payload_keeps_its_wire_fields_and_compares_structurally() {
     };
     let update = observation.update(Ok(large)).unwrap().unwrap();
     assert_eq!(update["subscriptionId"], "diff-wire");
-    assert_eq!(update["diffTooLarge"], true);
-    assert_eq!(update["files"], json!([]));
+    assert!(update.get("diffTooLarge").is_none());
+    assert_eq!(update["files"][0]["status"], "too_large");
+    assert_eq!(update["files"].as_array().unwrap().len(), 2);
 }

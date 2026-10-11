@@ -1,3 +1,4 @@
+import { resolveSyntaxColors } from "@ait/highlight";
 import type { Theme } from "@/styles/theme";
 import { hexColorWithAlpha } from "@/utils/color";
 import type { DiffCell, DiffPalette } from "./types";
@@ -20,7 +21,7 @@ export function createDiffPalette(theme: Theme): DiffPalette {
     statusSuccess: theme.colors.statusSuccess,
     statusDanger: theme.colors.statusDanger,
     statusWarning: theme.colors.statusWarning,
-    syntax: theme.colors.syntax,
+    syntax: resolveSyntaxColors("github", theme.colorScheme),
   };
 }
 

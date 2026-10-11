@@ -204,3 +204,116 @@ fn cached_snapshots_follow_head_and_working_tree_changes() {
     assert_role(&next.files[0], DiffLineKind::Remove, "keyword");
     assert_role(&next.files[0], DiffLineKind::Add, "comment");
 }
+
+#[test]
+fn working_attributes_can_change_the_language_of_unchanged_file_extensions() {
+    let fixture = Fixture::new();
+    commit(
+        &fixture,
+        ".gitattributes",
+        "*.custom linguist-language=Rust\n",
+    );
+    commit(&fixture, "source.custom", "// old comment\n");
+    fs::write(fixture.repo.join("source.custom"), "# new comment\n").unwrap();
+    let runtime = LocalCheckout::new(fixture.temp.path().join("managed"));
+    let compare = CheckoutDiffCompare {
+        mode: CheckoutDiffMode::Uncommitted,
+        base_ref: None,
+        ignore_whitespace: false,
+    };
+    let first = runtime
+        .diff(fixture.repo.to_str().unwrap(), &compare)
+        .unwrap();
+    assert_role(&first.files[0], DiffLineKind::Remove, "comment");
+
+    fs::write(
+        fixture.repo.join(".gitattributes"),
+        "*.custom linguist-language=Python\n",
+    )
+    .unwrap();
+    let next = runtime
+        .diff(fixture.repo.to_str().unwrap(), &compare)
+        .unwrap();
+    let file = next
+        .files
+        .iter()
+        .find(|file| file.path == "source.custom")
+        .unwrap();
+    assert_role(file, DiffLineKind::Remove, "comment");
+    assert_role(file, DiffLineKind::Add, "comment");
+}
+
+#[test]
+fn historical_attributes_follow_each_revision_and_ignore_the_working_tree() {
+    let fixture = Fixture::new();
+    commit(
+        &fixture,
+        ".gitattributes",
+        "*.custom linguist-language=Rust\n",
+    );
+    commit(&fixture, "source.custom", "// old comment\n");
+    git(&fixture.repo, &["checkout", "-b", "feature"]);
+    fs::write(
+        fixture.repo.join(".gitattributes"),
+        "*.custom linguist-language=Python\n",
+    )
+    .unwrap();
+    git(&fixture.repo, &["add", ".gitattributes"]);
+    let sha = commit(&fixture, "source.custom", "# new comment\n");
+    fs::write(
+        fixture.repo.join(".gitattributes"),
+        "*.custom linguist-language=Text\n",
+    )
+    .unwrap();
+    let runtime = LocalCheckout::new(fixture.temp.path().join("managed"));
+
+    let committed = runtime
+        .commit_file_diff(fixture.repo.to_str().unwrap(), &sha, "source.custom")
+        .unwrap()
+        .unwrap();
+    let base = runtime
+        .diff(
+            fixture.repo.to_str().unwrap(),
+            &CheckoutDiffCompare {
+                mode: CheckoutDiffMode::Base,
+                base_ref: Some("main".to_owned()),
+                ignore_whitespace: false,
+            },
+        )
+        .unwrap();
+    let base_file = base
+        .files
+        .iter()
+        .find(|file| file.path == "source.custom")
+        .unwrap();
+    for file in [&committed, base_file] {
+        assert_role(file, DiffLineKind::Remove, "comment");
+        assert_role(file, DiffLineKind::Add, "comment");
+    }
+}
+
+#[test]
+fn extensionless_scripts_detect_each_sides_shebang_from_complete_content() {
+    let fixture = Fixture::new();
+    commit(
+        &fixture,
+        "script",
+        "#!/usr/bin/env python3\n# old comment\n",
+    );
+    fs::write(fixture.repo.join("script"), "#!/bin/bash\n# new comment\n").unwrap();
+    let runtime = LocalCheckout::new(fixture.temp.path().join("managed"));
+
+    let result = runtime
+        .diff(
+            fixture.repo.to_str().unwrap(),
+            &CheckoutDiffCompare {
+                mode: CheckoutDiffMode::Uncommitted,
+                base_ref: None,
+                ignore_whitespace: false,
+            },
+        )
+        .unwrap();
+
+    assert_role(&result.files[0], DiffLineKind::Remove, "comment");
+    assert_role(&result.files[0], DiffLineKind::Add, "comment");
+}

@@ -36,6 +36,7 @@ ADR-074、082、083、084、122 在不同类别中各有两份，引用时以路
 
 ## 工作区、文件与 Git
 
+- [ADR-137：Diff 的 GitHub 语言提示、配色与按文件降级](workspace/adr-137-github-style-diff-highlighting.md)
 - [ADR-132：Checkout 刷新独立准入与有界输出背压](workspace/adr-132-checkout-refresh-admission-and-backpressure.md)：隔离前台 Git 任务，diff 拥堵时等待输出额度并保持连接。
 
 - [ADR-136：拍平单功能区层并收口重复助手](workspace/adr-136-single-area-layer-flattening.md)

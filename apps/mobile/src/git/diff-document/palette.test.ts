@@ -1,4 +1,5 @@
 import { describe, expect, it } from "vitest";
+import { resolveSyntaxColors } from "@ait/highlight";
 import { darkTheme, lightTheme } from "@/styles/theme";
 import { hexColorWithAlpha } from "@/utils/color";
 import { codeLineNumberTone, codeTextColor, createDiffPalette, retainDiffPalette } from "./palette";
@@ -37,6 +38,17 @@ describe("diff palette retention", () => {
 });
 
 describe.each([lightTheme, darkTheme])("semantic diff colors", (theme) => {
+  it("uses GitHub syntax colors even when the app has another syntax theme", () => {
+    const syntax = resolveSyntaxColors("one", theme.colorScheme);
+    const created = createDiffPalette(
+      theme.colorScheme === "light"
+        ? { ...theme, colors: { ...theme.colors, syntax } }
+        : { ...theme, colors: { ...theme.colors, syntax } },
+    );
+
+    expect(created.syntax).toEqual(resolveSyntaxColors("github", theme.colorScheme));
+  });
+
   it("uses the app status palette for gutter text and derived row tints", () => {
     const created = createDiffPalette(theme);
 

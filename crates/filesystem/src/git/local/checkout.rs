@@ -243,10 +243,8 @@ impl CheckoutRuntime for LocalCheckout {
             }
         }
         let mut files = parse_diff(&text);
-        for file in &mut files {
-            self.highlighter
-                .highlight(file, &cwd, &old_ref, new_ref.as_deref());
-        }
+        self.highlighter
+            .highlight_files(&mut files, &cwd, &old_ref, new_ref.as_deref());
         files.sort_by(|left, right| left.path.cmp(&right.path));
         Ok(CheckoutDiff {
             files,
@@ -355,8 +353,12 @@ impl CheckoutRuntime for LocalCheckout {
             .into_iter()
             .find(|file| file.path == path && !file.hunks.is_empty());
         if let Some(file) = &mut file {
-            self.highlighter
-                .highlight(file, &cwd, &format!("{sha}^"), Some(sha));
+            self.highlighter.highlight_files(
+                std::slice::from_mut(file),
+                &cwd,
+                &format!("{sha}^"),
+                Some(sha),
+            );
         }
         Ok(file)
     }

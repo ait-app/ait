@@ -2,6 +2,9 @@
 
 状态：Accepted（2026-10-02）
 
+语言选择、Diff 配色和完整快照预算策略由
+[ADR-137](adr-137-github-style-diff-highlighting.md) 修订（2026-10-11）。
+
 ## 背景
 
 Diff 画布已经根据 line `tokens` 和客户端语法主题着色，但 Rust checkout RPC 一直把
