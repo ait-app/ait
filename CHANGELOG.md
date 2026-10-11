@@ -1,5 +1,15 @@
 # Ait changelog
 
+## 0.0.29 - 2026-10-11
+
+- Stabilize OpenCode model catalogs, retain model-specific options, and confirm model, effort, and mode changes through native ACP responses and notifications.
+- Require OpenCode 2.x version 2.0.26 or newer and show an upgrade diagnostic for earlier versions while retaining OpenCode 1.x support.
+- Coordinate Ait-owned OpenCode ACP initialization to reduce concurrent cold-start database contention while keeping active sessions and prompts concurrent.
+- Wait for shared execution capacity after admitting bounded RPCs, preserve handshake-specific event negotiation, and add actionable, bounded, redacted RPC and schema diagnostics.
+- Remove avoidable desktop notification, deleted-route, and animation warnings, plus the obsolete daemon status hint.
+- Migrate the official service default and saved legacy official endpoints to aitapp.cn while preserving credentials, expiry, preferred host selection, and custom service addresses.
+- Run PR quality checks without desktop packaging, and keep both platform builds and nightly publication on main.
+
 ## 0.0.28 - 2026-10-11
 
 - Preserve native usage and permission events, carry source timestamps, and accept older hosts' supported control-event formats.
