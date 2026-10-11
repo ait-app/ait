@@ -6,6 +6,7 @@ ADR-074、082、083、084、122 在不同类别中各有两份，引用时以路
 
 ## Daemon 与协议
 
+- [ADR-134：已接纳的普通 RPC 等待共享任务额度](daemon/adr-134-admitted-rpc-job-waiting.md)
 - [ADR-127：移除 daemon 配对 offer RPC](daemon/adr-127-remove-daemon-pairing-offer.md)
 - [ADR-120：单连接启动请求的有界排队](daemon/adr-120-single-connection-startup-admission.md)
 - [ADR-118：摘要接口归 model，配置文件适配归 persistence](daemon/adr-118-summary-contracts-and-persistence-configuration.md)

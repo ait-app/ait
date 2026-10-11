@@ -16,6 +16,7 @@
 
 ## 架构决策
 
+- [ADR-134：已接纳的普通 RPC 等待共享任务额度](decisions/daemon/adr-134-admitted-rpc-job-waiting.md)：并发能力组共享许可、停机取消与 RPC 拒绝上下文。
 - [ADR-133：先显示持久 Timeline 页面，后台校验原生历史](decisions/providers/adr-133-cached-timeline-first.md)：尾页优先、有界上翻、原生校验去重与旧主机回退。
 - [ADR-132：Checkout 刷新独立准入与有界输出背压](decisions/workspace/adr-132-checkout-refresh-admission-and-backpressure.md)：隔离前台 Git 任务，diff 拥堵时等待输出额度并保持连接。
 
@@ -117,6 +118,7 @@
 
 ## 工程规范与验证
 
+- [Ait 0.0.28 客户端告警修复与诊断验证](reports/clients/release-0.0.28-warning-fixes-2026-10-11.md)：共享许可等待、事件协商、界面告警与错误上下文。
 - [本机 Changes 刷新断线：修复验证](reports/workspace/changes-refresh-transport-2026-10-11.md)：Git 任务额度隔离、有界 diff 输出等待与控制响应回归。
 - [Ait 0.0.27 安装后诊断与修复](reports/clients/release-0.0.27-installed-diagnostics-2026-10-11.md)：原生事件校验、启动订阅与更新诊断误报。
 

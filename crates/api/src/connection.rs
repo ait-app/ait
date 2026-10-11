@@ -9,6 +9,7 @@ use model::outbound::{Frame, Outbound, QueueError};
 use model::server::{ClientMessage, ErrorCode, Hello, ServerMessage, valid_id};
 use model::{Context, Request};
 use tokio::time::timeout;
+use tracing::Instrument;
 
 use crate::Shared;
 
@@ -441,12 +442,29 @@ async fn process_request(
     capabilities: &[String],
     subscriptions: &mut ConnectionSubscriptions,
 ) -> Result<(), QueueError> {
+    let span = tracing::info_span!(
+        "rpc",
+        method = %request.method,
+        request_id = %request.id,
+        agent_id = request.params.get("agentId")
+            .and_then(serde_json::Value::as_str)
+            .filter(|id| valid_id(id)),
+        terminal_id = request.params.get("terminalId")
+            .and_then(serde_json::Value::as_str)
+            .filter(|id| valid_id(id)),
+        workspace_id = request.params.get("workspaceId")
+            .and_then(serde_json::Value::as_str)
+            .filter(|id| valid_id(id)),
+        subscription_slots = MAX_SUBSCRIPTIONS.saturating_sub(subscriptions.len()),
+        short_jobs_available = state.jobs.available_permits(),
+        terminal_jobs_available = state.terminal_jobs.available_permits(),
+    );
     if let Err(code) = validation::request(
         &request.method,
         &state.info.implemented_capabilities,
         capabilities,
     ) {
-        return error(outbound, Some(request.id), code);
+        return span.in_scope(|| error(outbound, Some(request.id), code));
     }
     dispatch::request(
         Context {
@@ -458,6 +476,7 @@ async fn process_request(
         state,
         subscriptions,
     )
+    .instrument(span)
     .await
 }
 

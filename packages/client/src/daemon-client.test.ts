@@ -28,6 +28,50 @@ expectTypeOf<
   "exploreFileSystem" extends keyof DaemonClient ? true : false
 >().toEqualTypeOf<false>();
 
+test("subscription failures identify the host and requested event categories", async () => {
+  const logger = createMockLogger();
+  const mock = createMockTransport();
+  const client = new DaemonClient({
+    url: "ws://test",
+    clientId: "subscription-diagnostics",
+    logger,
+    reconnect: { enabled: false },
+    transportFactory: () => mock.transport,
+  });
+  clients.push(client);
+  const connected = client.connect();
+  mock.triggerOpen();
+  await connected;
+  const events = ["project.update", "script_status_update"] as const;
+  const subscription = client.observeEvents([...events]);
+  await vi.waitFor(() => expect(mock.sent).toHaveLength(1));
+  const request = parseSentFrame(mock.sent[0]);
+  mock.triggerMessage(
+    wrapSessionMessage({
+      type: "rpc_error",
+      payload: {
+        requestId: request.requestId,
+        error: "Capability was not negotiated",
+        code: "unsupported_capability",
+      },
+    }),
+  );
+  await expect(subscription.ready).rejects.toMatchObject({
+    requestType: "session.events.set_subscription.request",
+    eventTypes: events,
+    code: "unsupported_capability",
+  });
+  await vi.waitFor(() =>
+    expect(logger.error).toHaveBeenCalledWith(
+      expect.objectContaining({
+        serverId: "srv_test_1",
+        err: expect.objectContaining({ eventTypes: events, requestId: request.requestId }),
+      }),
+      "Subscription failed",
+    ),
+  );
+});
+
 test("reads Workspace targets with independent correlated responses", async () => {
   const mock = createMockTransport();
   const client = new DaemonClient({
@@ -6301,12 +6345,51 @@ test("parses canonical agent.timeline.get.response payloads without crashing", a
   expect(logger.warn).not.toHaveBeenCalled();
 });
 
+test("validation warnings identify uncorrelated stream messages without recording their payloads", async () => {
+  const mock = createMockTransport();
+  const logger = createMockLogger();
+  const client = new DaemonClient({
+    url: "ws://test",
+    clientId: "stream-diagnostics",
+    logger,
+    reconnect: { enabled: false },
+    transportFactory: () => mock.transport,
+  });
+  clients.push(client);
+  const connected = client.connect();
+  mock.triggerOpen();
+  await connected;
+  mock.triggerMessage(
+    wrapSessionMessage({
+      type: "agent_stream",
+      payload: {
+        agentId: "agent",
+        timestamp: "2026-10-11T00:00:00Z",
+        event: {
+          type: "usage_updated",
+          provider: "codex",
+          usage: { inputTokens: "private-content" },
+        },
+      },
+    }),
+  );
+  expect(logger.warn).toHaveBeenCalledWith(
+    expect.objectContaining({
+      msgType: "agent_stream",
+      envelopeType: "session",
+      serverId: "srv_test_1",
+    }),
+    "Message validation failed",
+  );
+  expect(JSON.stringify(logger.warn.mock.calls)).not.toContain("private-content");
+});
+
 test("rejects and logs a correlated response that violates the protocol schema", async () => {
   const mock = createMockTransport();
-  const warnings: string[] = [];
+  const warnings: { fields: object; message: string }[] = [];
   const logger: Logger = {
     ...noopLogger,
-    warn: (_fields, message) => warnings.push(message ?? ""),
+    warn: (fields, message) => warnings.push({ fields, message: message ?? "" }),
   };
 
   const client = new DaemonClient({
@@ -6375,7 +6458,21 @@ test("rejects and logs a correlated response that violates the protocol schema",
     requestId: "req-invalid",
     message: expect.stringMatching(/validation/i),
   });
-  expect(warnings).toEqual(["Message validation failed"]);
+  expect(warnings).toEqual([
+    {
+      message: "Message validation failed",
+      fields: expect.objectContaining({
+        msgType: "agent.timeline.get.response",
+        requestId: "req-invalid",
+        bytes: expect.any(Number),
+        issueCount: expect.any(Number),
+        issues: expect.arrayContaining([
+          expect.objectContaining({ code: expect.any(String), path: expect.any(Array) }),
+        ]),
+      }),
+    },
+  ]);
+  expect(JSON.stringify(warnings)).not.toContain('"command"');
 });
 
 test("does not reject a request for an invalid correlated progress event", async () => {

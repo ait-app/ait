@@ -134,6 +134,22 @@ describe("Ait host capabilities", () => {
       }
     }
   });
+  it("advertises directory and script events only with their installed producers", () => {
+    const read = (features: string[], methods: string[]) =>
+      parseServerInfoStatusPayload(
+        object(
+          object(serverInfo({ server_id: "ait", features }, new Set(methods)).message).payload,
+        ),
+      )?.sessionEventTypes;
+    const methods = ["project.list.request", "workspace.script.list.request"];
+    expect(read(["directory-subscriptions-v1"], methods)).toEqual(
+      expect.arrayContaining(["project.update", "script_status_update"]),
+    );
+    expect(read([], methods)).not.toContain("project.update");
+    expect(read(["directory-subscriptions-v1"], [])).not.toContain("project.update");
+    expect(read(["directory-subscriptions-v1"], [])).not.toContain("script_status_update");
+  });
+
   it("advertises checkout status events only with the Git producer and checkout method", () => {
     const read = (features: string[], methods: string[]) =>
       parseServerInfoStatusPayload(
@@ -272,6 +288,7 @@ describe("Ait host capabilities", () => {
     expect(value?.features?.plugins).not.toBe(true);
     expect(value?.sessionEventTypes).toEqual([
       "status.server_info",
+      "script_status_update",
       "status.daemon_config_changed",
       "provider.snapshot.update",
       "agent.attention.required",

@@ -1,5 +1,5 @@
 import { LucideProvider } from "lucide-react-native";
-import { ICON_STROKE_WIDTH } from "@/styles/theme";
+import { getNextThemePreference, ICON_STROKE_WIDTH } from "@/styles/theme";
 import { AccountRelayLifecycle } from "@/runtime/account-state";
 import { OnlineServiceHostSyncLifecycle } from "@/runtime/online-service-host-sync";
 import { legacyFavoriteProfileMigration } from "@/agent-profiles/migration";
@@ -95,7 +95,6 @@ import { flushDraftPersistStorage } from "@/stores/draft-store";
 import { usePanelStore } from "@/stores/panel-store";
 import { useSessionStore } from "@/stores/session-store";
 import { installWebScrollbarStyles } from "@/styles/install-web-scrollbar-styles";
-import { getNextThemePreference } from "@/styles/theme";
 import "@/styles/unistyles";
 import type { HostProfile } from "@/types/host-connection";
 import {
@@ -118,7 +117,7 @@ import {
 import { resolveExplorerSidebarPresentation } from "@/workspace-tabs/explorer-sidebar";
 import { BottomSheetModalProvider } from "@gorhom/bottom-sheet";
 import { PortalProvider } from "@gorhom/portal";
-import * as Notifications from "expo-notifications";
+import type * as Notifications from "expo-notifications";
 import { Stack, useNavigationContainerRef, usePathname, useRouter } from "expo-router";
 import {
   createContext,
@@ -222,41 +221,55 @@ function PushNotificationRouter() {
       };
     }
 
-    Notifications.setNotificationHandler({
-      handleNotification: async () => ({
-        // When the app is open, don't show OS banners.
-        shouldShowAlert: false,
-        shouldShowBanner: false,
-        shouldShowList: false,
-        shouldPlaySound: false,
-        shouldSetBadge: false,
-      }),
-    });
+    let cancelled = false;
+    let removeNativeListener: (() => void) | undefined;
+    void import("expo-notifications")
+      .then((notifications) => {
+        if (cancelled) return;
+        notifications.setNotificationHandler({
+          handleNotification: async () => ({
+            // When the app is open, don't show OS banners.
+            shouldShowAlert: false,
+            shouldShowBanner: false,
+            shouldShowList: false,
+            shouldPlaySound: false,
+            shouldSetBadge: false,
+          }),
+        });
 
-    const openFromResponse = (response: Notifications.NotificationResponse) => {
-      const identifier = response.notification.request.identifier;
-      if (lastHandledIdRef.current === identifier) {
-        return;
-      }
-      lastHandledIdRef.current = identifier;
+        const openFromResponse = (response: Notifications.NotificationResponse) => {
+          if (cancelled) return;
+          const identifier = response.notification.request.identifier;
+          if (lastHandledIdRef.current === identifier) {
+            return;
+          }
+          lastHandledIdRef.current = identifier;
 
-      const data = response.notification.request.content.data as
-        | Record<string, unknown>
-        | undefined;
-      openNotification(data);
-    };
+          const data = response.notification.request.content.data as
+            | Record<string, unknown>
+            | undefined;
+          openNotification(data);
+        };
 
-    const subscription = Notifications.addNotificationResponseReceivedListener(openFromResponse);
+        const subscription =
+          notifications.addNotificationResponseReceivedListener(openFromResponse);
+        removeNativeListener = () => subscription.remove();
 
-    void Notifications.getLastNotificationResponseAsync().then((response) => {
-      if (response) {
-        openFromResponse(response);
-      }
-      return;
-    });
+        void notifications
+          .getLastNotificationResponseAsync()
+          .then((response) => {
+            if (!cancelled && response) {
+              openFromResponse(response);
+            }
+            return;
+          })
+          .catch((error) => console.warn("[Notifications] Last response lookup failed", error));
+      })
+      .catch((error) => console.warn("[Notifications] Native response listener failed", error));
 
     return () => {
-      subscription.remove();
+      cancelled = true;
+      removeNativeListener?.();
     };
   }, [openNotification]);
 
