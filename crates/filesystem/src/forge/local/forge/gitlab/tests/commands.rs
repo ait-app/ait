@@ -5,7 +5,7 @@ use std::os::unix::fs::PermissionsExt;
 use std::path::PathBuf;
 
 use super::*;
-use crate::forge::ports::forge::{CheckDetailsQuery, ForgeRuntime};
+use crate::forge::ports::{CheckDetailsQuery, ForgeRuntime};
 use model::workspace::worktrees::ChangeRequestResolver;
 
 struct Fixture {

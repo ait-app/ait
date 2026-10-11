@@ -11,7 +11,7 @@ use tokio::sync::mpsc;
 
 use super::Connection;
 use crate::dispatch::{State, dispatch};
-use crate::files::local::files::LocalFiles;
+use crate::files::local::LocalFiles;
 use crate::files::service::files::Files;
 use crate::git::local::checkout::LocalCheckout;
 use crate::git::service::checkout::Checkout;

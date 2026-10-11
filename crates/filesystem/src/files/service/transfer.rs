@@ -1,7 +1,7 @@
 //! Bounded synchronous file reads shared by WebSocket and HTTP delivery.
 use std::io::Read;
 
-use crate::files::ports::files::{FileError, FileReader};
+use crate::files::ports::{FileError, FileReader};
 use crate::files::protocol::file_transfer;
 /// Reader pinned to the file's advertised size and revision.
 #[derive(Debug)]

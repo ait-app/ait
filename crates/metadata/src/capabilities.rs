@@ -26,13 +26,13 @@ pub fn connection_methods() -> impl Iterator<Item = MethodSpec> {
 /// Static names and message directions, independent of host installation or backend availability.
 pub fn implemented_methods() -> impl Iterator<Item = MethodSpec> {
     [
-        crate::push::connection::push::METHODS,
+        crate::push::connection::METHODS,
         crate::directory::rpc::directory::METHODS,
         crate::directory::rpc::directory::PROJECT_CONFIG_METHODS,
         crate::directory::rpc::directory::PROJECT_ICON_METHODS,
-        crate::daemon::connection::daemon::METHODS,
-        crate::labels::rpc::workspace_labels::METHODS,
-        crate::automation::rpc::workspace_automation::METHODS,
+        crate::daemon::connection::METHODS,
+        crate::labels::rpc::METHODS,
+        crate::automation::rpc::METHODS,
         crate::directory::rpc::workspace_state::METHODS,
         crate::worktrees::rpc::worktrees::METHODS,
         crate::worktrees::rpc::workspace_recovery::METHODS,

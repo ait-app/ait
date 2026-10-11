@@ -5,7 +5,7 @@ use serde_json::{Value, json};
 use super::{
     ForgeContext, ForgeRuntimeError, integer, optional_string, pipeline, project_path, string,
 };
-use crate::forge::ports::forge::{PullRequestMergeable, PullRequestStatus};
+use crate::forge::ports::{PullRequestMergeable, PullRequestStatus};
 
 /// Project GitLab's status without inferring merge readiness from CI alone.
 /// Uses MR JSON and resolved project context, with optional approval/job enrichment.

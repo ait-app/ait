@@ -3,16 +3,14 @@
 use std::sync::{Arc, Mutex};
 
 use domain::workspace::worktrees::WorktreeError;
-use metadata::worktrees::ports::worktrees::WorktreeArchiveCleanup;
+use metadata::worktrees::ports::WorktreeArchiveCleanup;
 
 use crate::{ConfigError, Shared};
 
 #[derive(Debug)]
 struct ResourceCleanup {
     terminals: Option<Arc<Mutex<terminal::service::Terminals>>>,
-    automation: Option<
-        Arc<Mutex<metadata::automation::service::workspace_automation::WorkspaceAutomation>>,
-    >,
+    automation: Option<Arc<Mutex<metadata::automation::service::WorkspaceAutomation>>>,
 }
 
 impl WorktreeArchiveCleanup for ResourceCleanup {

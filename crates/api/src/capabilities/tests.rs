@@ -122,7 +122,7 @@ fn workspace_and_project_methods_are_owned_by_metadata() {
 fn baseline_methods_and_heartbeat_keep_their_shared_contracts() {
     assert_eq!(model::server::CAPABILITIES, model::server::CAPABILITIES);
     let heartbeat = implemented_methods()
-        .find(|spec| spec.name == ::metadata::server::protocol::server::HEARTBEAT_METHOD)
+        .find(|spec| spec.name == ::metadata::server::protocol::HEARTBEAT_METHOD)
         .expect("heartbeat must be declared by metadata");
     assert_eq!(heartbeat.kind, InboundKind::Event);
 }

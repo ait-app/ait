@@ -7,7 +7,7 @@ use std::time::Duration;
 use serde_json::Value;
 
 use crate::forge::local::forge::run_bounded_command;
-use crate::forge::ports::forge::ForgeFailureKind;
+use crate::forge::ports::ForgeFailureKind;
 use domain::workspace::provisioning::{
     GithubProjectsError, GithubRepository, GithubRepositoryVisibility,
 };
@@ -303,7 +303,7 @@ fn valid_segment(value: &str) -> bool {
             .all(|byte| byte.is_ascii_alphanumeric() || matches!(byte, b'.' | b'_' | b'-'))
 }
 
-fn map_search_error(error: &crate::forge::ports::forge::ForgeRuntimeError) -> GithubProjectsError {
+fn map_search_error(error: &crate::forge::ports::ForgeRuntimeError) -> GithubProjectsError {
     match error.kind {
         ForgeFailureKind::CliMissing => GithubProjectsError::CliMissing,
         ForgeFailureKind::Unauthenticated => GithubProjectsError::Unauthenticated,

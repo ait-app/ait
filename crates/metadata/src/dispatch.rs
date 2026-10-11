@@ -11,19 +11,17 @@ mod requests;
 #[derive(Debug)]
 pub struct State {
     /// Installed persistent push token leases.
-    pub push_tokens: Option<Arc<Mutex<crate::push::service::push::PushTokens>>>,
+    pub push_tokens: Option<Arc<Mutex<crate::push::service::PushTokens>>>,
     /// Shared Tokio admission, cancellation and task tracking.
     pub runtime: Arc<Runtime>,
     /// Installed daemon service.
-    pub daemon: Option<Arc<Mutex<crate::daemon::service::daemon::Daemon>>>,
+    pub daemon: Option<Arc<Mutex<crate::daemon::service::Daemon>>>,
     /// Installed directory service.
     pub directory: Option<Arc<Mutex<crate::directory::service::directory::Directory>>>,
     /// Installed workspace labels service.
-    pub workspace_labels:
-        Option<Arc<Mutex<crate::labels::service::workspace_labels::WorkspaceLabels>>>,
+    pub workspace_labels: Option<Arc<Mutex<crate::labels::service::WorkspaceLabels>>>,
     /// Installed workspace automation service.
-    pub workspace_automation:
-        Option<Arc<Mutex<crate::automation::service::workspace_automation::WorkspaceAutomation>>>,
+    pub workspace_automation: Option<Arc<Mutex<crate::automation::service::WorkspaceAutomation>>>,
     /// Installed workspace state service.
     pub workspace_state:
         Option<Arc<Mutex<crate::directory::service::workspace_state::WorkspaceState>>>,
@@ -259,7 +257,7 @@ async fn labels(
             .map_err(Into::into);
     }
     let params = std::mem::take(&mut context.request.params);
-    let reply = crate::labels::connection::workspace_labels::dispatch(
+    let reply = crate::labels::connection::dispatch(
         &context.request.method,
         params,
         state,
@@ -271,10 +269,8 @@ async fn labels(
             context.respond(Ok(reply.value))?;
             if let Some(pending) = reply.subscription {
                 let (id, subscription) = pending.activate().map_err(|error| match error {
-                    crate::labels::rpc::workspace_labels::DeliveryError::Encode(error) => {
-                        QueueError::Encode(error)
-                    }
-                    crate::labels::rpc::workspace_labels::DeliveryError::Closed => QueueError::Full,
+                    crate::labels::rpc::DeliveryError::Encode(error) => QueueError::Encode(error),
+                    crate::labels::rpc::DeliveryError::Closed => QueueError::Full,
                 })?;
                 connection.labels.insert(id, subscription);
             }
@@ -365,13 +361,13 @@ pub async fn daemon_snapshot(
     state: &State,
     method: String,
     params: Value,
-    providers: Vec<crate::daemon::protocol::daemon::ProviderAvailability>,
+    providers: Vec<crate::daemon::protocol::ProviderAvailability>,
 ) -> Result<Value, ErrorCode> {
     let capabilities = state.info.implemented_capabilities.clone();
     let lifecycle = state.info().lifecycle;
     state
         .run(state.daemon.clone(), ErrorCode::DaemonIo, move |daemon| {
-            crate::daemon::rpc::daemon::snapshot(
+            crate::daemon::rpc::snapshot(
                 daemon,
                 &method,
                 params,

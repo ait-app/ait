@@ -9,7 +9,7 @@ use super::{
     ForgeContext, ForgeRuntimeError, LocalForge, array, integer, malformed, optional_string, read,
     string, strings,
 };
-use crate::forge::ports::forge::{CheckDetails, CheckDetailsQuery, PullRequestCheck};
+use crate::forge::ports::{CheckDetails, CheckDetailsQuery, PullRequestCheck};
 
 /// Fetch the MR pipeline in its source project, including fork/detached pipelines.
 /// For `cwd`/`context`, prefers `mr` to the fallback `pipeline` ID and returns JSON.

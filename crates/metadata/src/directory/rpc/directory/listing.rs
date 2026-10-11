@@ -7,10 +7,13 @@ use domain::workspace::protocol::projection::{project_descriptor, workspace_desc
 use model::ServerMessage;
 use serde_json::{Value, json};
 
+use crate::support::rpc::encode;
+use crate::support::time::now_timestamp;
+
 use super::{
     Directory, ErrorCode, WorkspaceDescriptorPayload, WorkspaceListRequest, WorkspaceListResult,
-    WorkspaceProjectDescriptorPayload, active_project, active_workspace, directory_error, encode,
-    matches_filter, pagination, project_matches_filter, timestamp,
+    WorkspaceProjectDescriptorPayload, active_project, active_workspace, directory_error,
+    matches_filter, pagination, project_matches_filter,
 };
 
 struct Snapshot {
@@ -106,7 +109,12 @@ impl Observation {
         let empty: BTreeMap<_, _> = snapshot
             .empty
             .iter()
-            .map(|project| Ok((project.project_id.clone(), encode(project)?)))
+            .map(|project| {
+                Ok((
+                    project.project_id.clone(),
+                    encode(project, ErrorCode::RegistryIo)?,
+                ))
+            })
             .collect::<Result<_, ErrorCode>>()?;
         let mut updates = Vec::new();
         if let Some(cursor) = &self.request.sync {
@@ -191,7 +199,7 @@ fn wire_entries(
 ) -> Result<BTreeMap<String, Value>, ErrorCode> {
     entries
         .iter()
-        .map(|entry| Ok((entry.id.clone(), encode(entry)?)))
+        .map(|entry| Ok((entry.id.clone(), encode(entry, ErrorCode::RegistryIo)?)))
         .collect()
 }
 
@@ -222,7 +230,7 @@ fn snapshot(directory: &Directory, request: &WorkspaceListRequest) -> Result<Sna
         })
         .collect();
     let statuses = directory
-        .workspace_statuses(&all_active, &timestamp())
+        .workspace_statuses(&all_active, &now_timestamp())
         .map_err(directory_error)?;
     let mut runtimes = BTreeMap::new();
     let entries = all_active
@@ -290,11 +298,14 @@ fn response(
         .as_ref()
         .and_then(|page| page.cursor.as_deref())
         .is_none_or(str::is_empty);
-    encode(WorkspaceListResult {
-        entries,
-        page_info,
-        empty_projects: if first { snapshot.empty } else { Vec::new() },
-    })
+    encode(
+        WorkspaceListResult {
+            entries,
+            page_info,
+            empty_projects: if first { snapshot.empty } else { Vec::new() },
+        },
+        ErrorCode::RegistryIo,
+    )
 }
 
 fn checkpoint(value: &Value) -> Result<Cursor, ErrorCode> {

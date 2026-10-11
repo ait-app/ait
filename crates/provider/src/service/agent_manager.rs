@@ -15,7 +15,6 @@ mod usage;
 use std::collections::BTreeMap;
 use std::sync::Arc;
 
-use chrono::{SecondsFormat, Utc};
 use domain::agent_runtime::registry::AgentRuntimeRegistry;
 use domain::agent_runtime::{
     AgentRuntimeStatus, PersistedAgentRuntimeRecord, StoredAgentConfig, StoredAgentRuntimeInfo,
@@ -29,6 +28,7 @@ use crate::ports::agent_session::{
     AgentTurnEvent,
 };
 use crate::protocol::agent_config::ConfigPatch;
+use crate::support::time::now_timestamp;
 
 enum Registration<'a> {
     Create,
@@ -1084,10 +1084,6 @@ fn validate_identity(agent_id: &str, spec: &AgentSessionSpec) -> Result<(), Agen
         return Err(AgentManagerError::InvalidRequest);
     }
     Ok(())
-}
-
-fn now_timestamp() -> String {
-    Utc::now().to_rfc3339_opts(SecondsFormat::Millis, true)
 }
 
 fn publish_failure_activity(

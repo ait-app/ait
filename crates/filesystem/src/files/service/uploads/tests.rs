@@ -51,7 +51,7 @@ fn upload_expiration_and_invalid_sizes_do_not_retain_pending_state() {
 
 #[test]
 fn frames_are_ordered_connection_owned_and_partial_writers_are_removed_on_drop() {
-    use crate::files::local::files::LocalFiles;
+    use crate::files::local::LocalFiles;
     use crate::files::protocol::file_transfer::FileBegin;
     let temp = tempfile::tempdir().unwrap();
     let files = Files::new(Box::new(LocalFiles::new(

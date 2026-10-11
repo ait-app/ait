@@ -1,7 +1,7 @@
 //! Complete filesystem service installed as one capability component.
 
 use crate::files::service::files::Files;
-use crate::forge::service::forge::Forge;
+use crate::forge::service::Forge;
 use crate::git::service::{checkout::Checkout, git_fetch::GitFetch};
 
 /// Required functional parts of the filesystem service; locks remain independently scoped.

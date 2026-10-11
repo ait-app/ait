@@ -5,7 +5,7 @@ use std::sync::Arc;
 use model::summary::SummaryGenerator;
 
 use crate::service::{agent_execution::AgentExecution, agents::Agents};
-use crate::skills::service::skills::Skills;
+use crate::skills::service::Skills;
 
 /// Required functional parts of the provider service.
 #[derive(Debug)]

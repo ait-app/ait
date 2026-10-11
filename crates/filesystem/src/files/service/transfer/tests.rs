@@ -1,5 +1,5 @@
 use super::*;
-use crate::files::ports::files::{FileInfo, FileKind};
+use crate::files::ports::{FileInfo, FileKind};
 
 #[derive(Debug)]
 struct Reader {

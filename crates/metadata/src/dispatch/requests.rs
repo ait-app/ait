@@ -20,7 +20,7 @@ pub(super) async fn push(
     else {
         return Err(DispatchError::NotImplemented);
     };
-    crate::push::connection::push::unregister(context, state, connection)
+    crate::push::connection::unregister(context, state, connection)
         .await
         .map_err(Into::into)
 }
@@ -191,8 +191,7 @@ pub(super) async fn daemon(
         }));
     }
     let params = std::mem::take(&mut context.request.params);
-    let result =
-        crate::daemon::connection::daemon::dispatch(&context.request.method, params, state).await;
+    let result = crate::daemon::connection::dispatch(&context.request.method, params, state).await;
     context.respond(result)?;
     Ok(None)
 }
@@ -222,9 +221,7 @@ pub(super) async fn automation(
         .rpc(
             state.workspace_automation.clone(),
             ErrorCode::RegistryIo,
-            |service, method, params| {
-                crate::automation::rpc::workspace_automation::execute(service, method, params)
-            },
+            |service, method, params| crate::automation::rpc::execute(service, method, params),
         )
         .await
         .map_err(Into::into)

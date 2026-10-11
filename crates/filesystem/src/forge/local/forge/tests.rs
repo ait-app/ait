@@ -5,7 +5,7 @@ use std::process::Command;
 #[cfg(unix)]
 use std::os::unix::fs::PermissionsExt;
 
-use crate::forge::ports::forge::{
+use crate::forge::ports::{
     ForgeAuthState, ForgeRuntime, ForgeSearchKind, PullRequestMergeMethod, PullRequestTimelineItem,
 };
 use model::workspace::worktrees::ChangeRequestResolver;
@@ -79,7 +79,7 @@ fn github_cli_adapter_parses_search_status_timeline_checks_and_mutations() {
     let details = forge
         .check_details(
             repository.to_str().unwrap(),
-            crate::forge::ports::forge::CheckDetailsQuery {
+            crate::forge::ports::CheckDetailsQuery {
                 repo_owner: Some("acme"),
                 repo_name: Some("app"),
                 check_run_id: Some(9),

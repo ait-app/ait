@@ -91,7 +91,7 @@ Filesystem 的生产代码依赖 domain/model，相关测试使用 persistence �
 `GithubProjectsRuntime` 端口注入，交换的值归 domain；daemon 将 filesystem 的
 `LocalManagedWorktrees`、`LocalForge` 与 `LocalGithubProjects` 注入 metadata。同一份
 `Arc<Mutex<Worktrees>>` 由 worktree RPC、`Directory` 和 schedule 共享，创建后的 setup 直接
-使用 metadata 的自动化服务，归档前的资源关闭经 `metadata::worktrees::ports::worktrees` 由 API 注入。
+使用 metadata 的自动化服务，归档前的资源关闭经 `metadata::worktrees::ports` 由 API 注入。
 单连接仍把这些长耗时方法分配到文件操作队列。见
 [ADR-130](../decisions/workspace/adr-130-workspace-methods-owned-by-metadata.md)。
 

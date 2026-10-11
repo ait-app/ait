@@ -4,7 +4,7 @@ use domain::workspace::runtime::{
     WorkspaceCheckSnapshot, WorkspaceForgeSnapshot, WorkspacePullRequestSnapshot,
 };
 
-use crate::forge::ports::forge::{
+use crate::forge::ports::{
     ForgeAuthState, ForgeFailureKind, ForgeRuntimeError, PullRequestMergeable, PullRequestStatus,
     PullRequestStatusRead,
 };

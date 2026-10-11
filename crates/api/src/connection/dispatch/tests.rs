@@ -23,7 +23,7 @@ const OWNED_METHODS: &[&str] = &[
 #[tokio::test]
 async fn provider_handles_host_skills_without_filesystem_or_native_execution() {
     let root = tempfile::tempdir().unwrap();
-    let store = provider::skills::local::skills::LocalSkills::new(
+    let store = provider::skills::local::LocalSkills::new(
         &root.path().join("bundle"),
         &[
             root.path().join("agents"),
@@ -37,7 +37,7 @@ async fn provider_handles_host_skills_without_filesystem_or_native_execution() {
     let state = provider::dispatch::State {
         runtime: api.shared.runtime.clone(),
         skills: Some(Arc::new(Mutex::new(
-            provider::skills::service::skills::Skills::new(Box::new(store)),
+            provider::skills::service::Skills::new(Box::new(store)),
         ))),
         agents: None,
         agent_runtime: None,

@@ -1,6 +1,6 @@
 use super::super::resolver::ForgeKind;
 use super::*;
-use crate::forge::ports::forge::{PullRequestMergeable, PullRequestTimelineItem};
+use crate::forge::ports::{PullRequestMergeable, PullRequestTimelineItem};
 use serde_json::json;
 
 fn context() -> ForgeContext {

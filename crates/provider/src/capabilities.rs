@@ -8,7 +8,7 @@ use model::methods::MethodSpec;
 pub fn implemented_methods() -> impl Iterator<Item = MethodSpec> {
     [
         crate::rpc::agents::METHODS,
-        crate::skills::service::skills::METHODS,
+        crate::skills::service::METHODS,
         crate::rpc::agent_runtime::METHODS,
         crate::dispatch::agent_execution::METHODS,
         crate::rpc::timeline::METHODS,

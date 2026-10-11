@@ -25,6 +25,7 @@ use crate::protocol::agent_lifecycle::AgentIdRequest;
 use crate::rpc::ErrorCode;
 use crate::service::agent_manager::{AgentManager, AgentManagerError, AgentRegistration};
 use crate::service::agent_runtime::AgentRuntimeDirectory;
+use crate::support::rpc::decode;
 
 pub(crate) struct ExecutionState {
     pub(crate) manager: AgentManager,
@@ -616,10 +617,6 @@ pub(crate) fn only(params: &Value, allowed: &[&str]) -> Result<(), ErrorCode> {
         return Err(ErrorCode::UnsupportedCapability);
     }
     Ok(())
-}
-
-fn decode<T: serde::de::DeserializeOwned>(params: Value) -> Result<T, ErrorCode> {
-    serde_json::from_value(params).map_err(|_| ErrorCode::InvalidMessage)
 }
 
 const fn map_manager(error: &AgentManagerError) -> ErrorCode {

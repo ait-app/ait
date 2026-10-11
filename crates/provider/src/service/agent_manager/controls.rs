@@ -4,10 +4,11 @@ use domain::agent_runtime::{AgentPersistenceHandle, PersistedAgentRuntimeRecord}
 use model::ErrorCode;
 use serde_json::{Value, json};
 
-use super::{AgentManager, now_timestamp};
+use super::AgentManager;
 use crate::ports::agent_session::{AgentSessionError, AgentSessionSpec, AgentTurnEvent};
 use crate::ports::controls::NativeSubagent;
 use crate::ports::native_history::SessionHistory;
+use crate::support::time::now_timestamp;
 
 pub(super) const REPLACEMENT_MARKER: &str = "aitTimelineReplacement";
 

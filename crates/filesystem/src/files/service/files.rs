@@ -3,7 +3,7 @@
 use std::collections::BTreeMap;
 use std::time::{Duration, Instant};
 
-use crate::files::ports::files::{FileError, FileInfo, FileReader, FileSystem};
+use crate::files::ports::{FileError, FileInfo, FileReader, FileSystem};
 
 /// Filesystem use cases and bounded, short-lived download grants.
 #[derive(Debug)]

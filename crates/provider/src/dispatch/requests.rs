@@ -29,7 +29,7 @@ pub(super) async fn skills(
         .rpc(
             state.skills.clone(),
             ErrorCode::RegistryIo,
-            crate::skills::service::skills::Skills::execute,
+            crate::skills::service::Skills::execute,
         )
         .await
         .map_err(Into::into)

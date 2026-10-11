@@ -17,6 +17,7 @@ use crate::ports::agent::AgentError;
 use crate::protocol::agent;
 use crate::rpc::ErrorCode;
 use crate::service::agents::Agents;
+use crate::support::rpc::{decode, encode};
 
 /// Decode and execute a business request.
 ///
@@ -28,42 +29,7 @@ pub(crate) fn execute(
     params: Value,
 ) -> Result<Value, ErrorCode> {
     match method {
-        "agent.configure" => {
-            let request: agent::Configure = decode(params)?;
-            let target = match (request.agent_id, request.expected_revision) {
-                (None, None) => AgentTarget::Create,
-                (Some(id), Some(expected)) => AgentTarget::Update {
-                    id: id.parse().map_err(|_| ErrorCode::InvalidMessage)?,
-                    expected: Revision::new(expected).map_err(|_| ErrorCode::InvalidMessage)?,
-                },
-                _ => return Err(ErrorCode::InvalidMessage),
-            };
-            let config = request.config;
-            let config = AgentConfig::new(
-                config.name,
-                config
-                    .driver_type
-                    .parse()
-                    .map_err(|_| ErrorCode::InvalidMessage)?,
-                config.model,
-                config
-                    .credential_ref
-                    .as_deref()
-                    .map(str::parse)
-                    .transpose()
-                    .map_err(|_| ErrorCode::InvalidMessage)?,
-                config.enabled,
-            )
-            .map_err(|_| ErrorCode::InvalidMessage)?;
-            let receipt = agents
-                .configure(target, config, &request.idempotency_key)
-                .map_err(error)?;
-            encode(agent::Receipt {
-                operation_id: receipt.operation_id.to_string(),
-                agent_id: receipt.agent_id.to_string(),
-                revision: receipt.revision.value(),
-            })
-        }
+        "agent.configure" => configure(agents, params),
         "agent.get" => {
             let request: agent::Get = decode(params)?;
             let id = request
@@ -75,7 +41,10 @@ pub(crate) fn execute(
                 .map(Revision::new)
                 .transpose()
                 .map_err(|_| ErrorCode::InvalidMessage)?;
-            encode(view(&agents.get(id, revision).map_err(error)?))
+            encode(
+                view(&agents.get(id, revision).map_err(error)?),
+                ErrorCode::AgentIo,
+            )
         }
         "agent.list" => {
             let request: agent::List = decode(params)?;
@@ -89,18 +58,24 @@ pub(crate) fn execute(
             let next_after = (agents.len() == request.limit)
                 .then(|| agents.last().map(|agent| agent.id().to_string()))
                 .flatten();
-            encode(agent::Page {
-                agents: agents.iter().map(view).collect(),
-                next_after,
-            })
+            encode(
+                agent::Page {
+                    agents: agents.iter().map(view).collect(),
+                    next_after,
+                },
+                ErrorCode::AgentIo,
+            )
         }
         "agent.default.get" => {
             let _: agent::GetDefault = decode(params)?;
             let selection = agents.get_default().map_err(error)?;
-            encode(agent::DefaultSelection {
-                agent_id: selection.agent_id.map(|id| id.to_string()),
-                version: selection.version,
-            })
+            encode(
+                agent::DefaultSelection {
+                    agent_id: selection.agent_id.map(|id| id.to_string()),
+                    version: selection.version,
+                },
+                ErrorCode::AgentIo,
+            )
         }
         "agent.default.set" => {
             let request: agent::SetDefault = decode(params)?;
@@ -113,23 +88,63 @@ pub(crate) fn execute(
             let receipt = agents
                 .set_default(id, request.expected_version, &request.idempotency_key)
                 .map_err(error)?;
-            encode(agent::DefaultReceipt {
-                operation_id: receipt.operation_id.to_string(),
-                selection: agent::DefaultSelection {
-                    agent_id: receipt.selection.agent_id.map(|id| id.to_string()),
-                    version: receipt.selection.version,
+            encode(
+                agent::DefaultReceipt {
+                    operation_id: receipt.operation_id.to_string(),
+                    selection: agent::DefaultSelection {
+                        agent_id: receipt.selection.agent_id.map(|id| id.to_string()),
+                        version: receipt.selection.version,
+                    },
                 },
-            })
+                ErrorCode::AgentIo,
+            )
         }
         _ => Err(ErrorCode::MethodNotFound),
     }
 }
 
-fn decode<T: serde::de::DeserializeOwned>(params: Value) -> Result<T, ErrorCode> {
-    serde_json::from_value(params).map_err(|_| ErrorCode::InvalidMessage)
-}
-fn encode(value: impl serde::Serialize) -> Result<Value, ErrorCode> {
-    serde_json::to_value(value).map_err(|_| ErrorCode::AgentIo)
+/// Create or update one Agent from its canonical configure request.
+///
+/// # Errors
+/// Returns validation or storage failures without changing unrelated Agents.
+fn configure(agents: &mut Agents, params: Value) -> Result<Value, ErrorCode> {
+    let request: agent::Configure = decode(params)?;
+    let target = match (request.agent_id, request.expected_revision) {
+        (None, None) => AgentTarget::Create,
+        (Some(id), Some(expected)) => AgentTarget::Update {
+            id: id.parse().map_err(|_| ErrorCode::InvalidMessage)?,
+            expected: Revision::new(expected).map_err(|_| ErrorCode::InvalidMessage)?,
+        },
+        _ => return Err(ErrorCode::InvalidMessage),
+    };
+    let config = request.config;
+    let config = AgentConfig::new(
+        config.name,
+        config
+            .driver_type
+            .parse()
+            .map_err(|_| ErrorCode::InvalidMessage)?,
+        config.model,
+        config
+            .credential_ref
+            .as_deref()
+            .map(str::parse)
+            .transpose()
+            .map_err(|_| ErrorCode::InvalidMessage)?,
+        config.enabled,
+    )
+    .map_err(|_| ErrorCode::InvalidMessage)?;
+    let receipt = agents
+        .configure(target, config, &request.idempotency_key)
+        .map_err(error)?;
+    encode(
+        agent::Receipt {
+            operation_id: receipt.operation_id.to_string(),
+            agent_id: receipt.agent_id.to_string(),
+            revision: receipt.revision.value(),
+        },
+        ErrorCode::AgentIo,
+    )
 }
 
 fn view(snapshot: &AgentSnapshot) -> agent::Agent {

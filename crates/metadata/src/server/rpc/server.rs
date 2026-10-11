@@ -2,7 +2,7 @@
 
 use serde_json::Value;
 
-use crate::server::protocol::server::Ping;
+use crate::server::protocol::Ping;
 use crate::support::error::ErrorCode;
 
 /// Validate and echo an application ping nonce.

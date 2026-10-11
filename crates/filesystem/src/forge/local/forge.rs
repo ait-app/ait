@@ -13,7 +13,7 @@ use std::time::{Duration, Instant};
 use chrono::DateTime;
 use serde_json::Value;
 
-use crate::forge::ports::forge::{
+use crate::forge::ports::{
     CheckAnnotation, CheckDetails, CheckFailedJob, CheckOutput, ForgeAuthState, ForgeFailureKind,
     ForgeRuntime, ForgeRuntimeError, ForgeSearch, ForgeSearchItem, ForgeSearchKind,
     PullRequestCheck, PullRequestCreated, PullRequestMergeMethod, PullRequestMergeable,
@@ -449,14 +449,14 @@ impl ForgeRuntime for LocalForge {
     fn check_details(
         &self,
         cwd: &str,
-        query: crate::forge::ports::forge::CheckDetailsQuery<'_>,
+        query: crate::forge::ports::CheckDetailsQuery<'_>,
     ) -> Result<CheckDetails, ForgeRuntimeError> {
         let cwd = require_git_directory(cwd)?;
         let context = self.forge_context(&cwd)?;
         if context.kind == ForgeKind::Gitlab {
             return gitlab::check_details(self, &cwd, &context, query);
         }
-        let crate::forge::ports::forge::CheckDetailsQuery {
+        let crate::forge::ports::CheckDetailsQuery {
             repo_owner,
             repo_name,
             check_run_id,

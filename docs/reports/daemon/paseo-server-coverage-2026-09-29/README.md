@@ -89,8 +89,8 @@ cargo llvm-cov report --html --ignore-filename-regex '/(tests|test_support)(/|\.
 | [crates/metadata/src/connection/directory.rs](../../../../crates/metadata/src/directory/connection/directory.rs)                                           |         49 / 52 |                     49 / 52 |
 | [crates/metadata/src/connection/session.rs](../../../../crates/metadata/src/server/connection/session.rs)                                                  |         81 / 85 |                       6 / 6 |
 | [crates/metadata/src/dispatch.rs](../../../../crates/metadata/src/dispatch.rs)                                                                             |       104 / 210 |                       8 / 8 |
-| [crates/metadata/src/local/workspace_automation.rs](../../../../crates/metadata/src/automation/local/workspace_automation.rs)                              |       478 / 534 |                     23 / 29 |
-| [crates/metadata/src/local/workspace_automation/retirement.rs](../../../../crates/metadata/src/automation/local/workspace_automation/retirement.rs)        |         52 / 61 |                     52 / 61 |
+| [crates/metadata/src/local/workspace_automation.rs](../../../../crates/metadata/src/automation/local.rs)                                                   |       478 / 534 |                     23 / 29 |
+| [crates/metadata/src/local/workspace_automation/retirement.rs](../../../../crates/metadata/src/automation/local/retirement.rs)                             |         52 / 61 |                     52 / 61 |
 | [crates/metadata/src/model/workspace_activity.rs](../../../../crates/domain/src/workspace/activity.rs)                                                     |           8 / 8 |                       8 / 8 |
 | [crates/metadata/src/protocol/directory.rs](../../../../crates/domain/src/workspace/protocol/directory.rs)                                                 |         37 / 37 |                       0 / 0 |
 | [crates/metadata/src/protocol/session.rs](../../../../crates/domain/src/session/protocol.rs)                                                               |         11 / 11 |                       4 / 4 |
@@ -103,7 +103,7 @@ cargo llvm-cov report --html --ignore-filename-regex '/(tests|test_support)(/|\.
 | [crates/metadata/src/service/directory.rs](../../../../crates/metadata/src/directory/service/directory.rs)                                                 |       718 / 778 |                     37 / 38 |
 | [crates/metadata/src/service/directory/activity.rs](../../../../crates/metadata/src/directory/service/directory/activity.rs)                               |         61 / 61 |                     61 / 61 |
 | [crates/metadata/src/service/session.rs](../../../../crates/model/src/session.rs)                                                                          |       207 / 212 |                     10 / 10 |
-| [crates/metadata/src/service/workspace_automation.rs](../../../../crates/metadata/src/automation/service/workspace_automation.rs)                          |       129 / 134 |                       8 / 8 |
+| [crates/metadata/src/service/workspace_automation.rs](../../../../crates/metadata/src/automation/service.rs)                                               |       129 / 134 |                       8 / 8 |
 | [crates/model/src/directory_sync.rs](../../../../crates/model/src/directory_sync.rs)                                                                       |         88 / 88 |                     88 / 88 |
 | [crates/model/src/events.rs](../../../../crates/model/src/events.rs)                                                                                       |       108 / 112 |                     16 / 16 |
 | [crates/model/src/lib.rs](../../../../crates/model/src/lib.rs)                                                                                             |           3 / 3 |                       0 / 0 |

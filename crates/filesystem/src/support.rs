@@ -3,3 +3,4 @@
 pub(crate) mod budget;
 pub(crate) mod error;
 pub(crate) mod git_command;
+pub(crate) mod rpc;

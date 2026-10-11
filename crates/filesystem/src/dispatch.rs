@@ -18,7 +18,7 @@ pub struct State {
     /// Installed checkout service.
     pub checkout: Option<Arc<Mutex<crate::git::service::checkout::Checkout>>>,
     /// Installed forge service.
-    pub forge: Option<Arc<Mutex<crate::forge::service::forge::Forge>>>,
+    pub forge: Option<Arc<Mutex<crate::forge::service::Forge>>>,
     /// Installed files service.
     pub files: Option<Arc<Mutex<crate::files::service::files::Files>>>,
 }
@@ -119,9 +119,9 @@ async fn checkout(
     }
 
     if context.request.method == "checkout.diff.unsubscribe.request" {
-        let request = serde_json::from_value::<
-            crate::git::protocol::checkout::CheckoutDiffUnsubscribeRequest,
-        >(std::mem::take(&mut context.request.params));
+        let request = serde_json::from_value::<crate::git::protocol::CheckoutDiffUnsubscribeRequest>(
+            std::mem::take(&mut context.request.params),
+        );
         let request = match request {
             Ok(request) if valid_id(&request.subscription_id) => request,
             _ => {
@@ -153,7 +153,7 @@ async fn checkout(
         }
     }
     let params = std::mem::take(&mut context.request.params);
-    let reply = crate::git::connection::checkout::dispatch(
+    let reply = crate::git::connection::dispatch(
         &context.request.method,
         params,
         state,

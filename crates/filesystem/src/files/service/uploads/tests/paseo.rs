@@ -3,7 +3,7 @@
 use std::fs;
 
 use super::*;
-use crate::files::local::files::LocalFiles;
+use crate::files::local::LocalFiles;
 use crate::files::protocol::file_transfer::FileBegin;
 
 fn fixture() -> (tempfile::TempDir, Files) {
