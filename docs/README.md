@@ -16,6 +16,7 @@
 
 ## 架构决策
 
+- [ADR-133：先显示持久 Timeline 页面，后台校验原生历史](decisions/providers/adr-133-cached-timeline-first.md)：尾页优先、有界上翻、原生校验去重与旧主机回退。
 - [ADR-132：Checkout 刷新独立准入与有界输出背压](decisions/workspace/adr-132-checkout-refresh-admission-and-backpressure.md)：隔离前台 Git 任务，diff 拥堵时等待输出额度并保持连接。
 
 - [ADR-131：metadata 按能力组组织模块](decisions/workspace/adr-131-metadata-capability-groups.md)：server/daemon/push/directory/labels/automation/worktrees 七组沿用分层，组间仅经 ports/protocol 协作，并由模块边界测试约束。

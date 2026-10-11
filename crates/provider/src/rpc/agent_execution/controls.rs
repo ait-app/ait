@@ -261,9 +261,10 @@ impl ExecutionState {
             limit: request.limit,
             projection: Projection::Projected,
             merge_window: None,
+            allow_cached: None,
         };
         let mut value =
-            crate::rpc::timeline::fetch_stored(&fetch, &timeline, &scope, &Value::Null)?;
+            crate::rpc::timeline::fetch_stored(&fetch, &timeline, &scope, &Value::Null, None)?;
         let object = value.as_object_mut().ok_or(ErrorCode::AgentIo)?;
         object.remove("agent");
         object.remove("agentId");

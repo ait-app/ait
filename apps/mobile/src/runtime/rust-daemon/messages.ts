@@ -89,6 +89,8 @@ export function serverInfo(info: Payload, implemented: Set<string>): Payload {
       agentForkContext: has("agent.fork_context.request"),
       agentDetach: has("agent.detach.request"),
       agentTimelinePromptIndex: has("agent.timeline.list_prompts.request"),
+      agentTimelineCachedReads:
+        has("agent.timeline.get.request") && features.has("agent-timeline-cached-reads-v1"),
       rewind: has("agent.rewind.request"),
       directorySync: supportsDirectories && features.has("directory-sync-v1"),
       directorySubscriptions:

@@ -57,6 +57,9 @@ pub(crate) struct FetchRequest {
     pub(crate) projection: Projection,
     /// Echoed merge hint for a client loading discontiguous windows.
     pub(crate) merge_window: Option<bool>,
+    /// Permit an existing durable page before native history is reconciled in this process.
+    /// The response reports `historyNeedsRefresh`; callers must then request a fresh page.
+    pub(crate) allow_cached: Option<bool>,
 }
 
 /// Case-insensitive text search over user and assistant display messages.

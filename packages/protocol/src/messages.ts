@@ -1884,6 +1884,8 @@ export const FetchAgentTimelineRequestMessageSchema = z.object({
   projection: z.enum(["projected", "canonical"]).optional(),
   // Allow the client to merge this bounded page outside its contiguous loaded range.
   mergeWindow: z.boolean().optional(),
+  // Return committed history promptly; historyNeedsRefresh requests native revalidation.
+  allowCached: z.boolean().optional(),
 });
 
 export const AgentTimelineSearchRequestMessageSchema = z.object({
@@ -3724,6 +3726,7 @@ export const ServerInfoStatusPayloadSchema = z
         forgeProviders: z.boolean().optional(),
         // COMPAT(selectiveAgentTimeline): added in v0.1.106, remove after 2027-01-12.
         selectiveAgentTimeline: z.boolean().optional(),
+        agentTimelineCachedReads: z.boolean().optional(),
         explicitEventSubscriptions: z.boolean().optional(),
         ownedSubscriptions: z.boolean().optional(),
         // COMPAT(canonicalSubmittedPrompts): added in v0.2.6, remove gate after 2027-01-30.
@@ -4646,6 +4649,7 @@ export const FetchAgentTimelineResponseMessageSchema = z.object({
     hasOlder: z.boolean(),
     hasNewer: z.boolean(),
     mergeWindow: z.boolean().optional(),
+    historyNeedsRefresh: z.boolean().optional(),
     entries: z.array(AgentTimelineEntryPayloadSchema),
     error: z.string().nullable(),
   }),

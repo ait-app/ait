@@ -75,6 +75,29 @@ impl AgentManager {
         self.histories().contains(id)
     }
 
+    /// Whether `id` has a committed page that may be served before native revalidation.
+    /// Returns missing Agent or storage errors; unfinished native replacement is excluded.
+    pub(crate) fn can_read_cached_timeline(&self, id: &str) -> Result<bool, ErrorCode> {
+        let record = self
+            .registry
+            .get(id)
+            .map_err(|_| ErrorCode::AgentIo)?
+            .ok_or(ErrorCode::AgentNotFound)?;
+        if record
+            .persistence
+            .as_ref()
+            .and_then(|handle| handle.metadata.as_ref())
+            .and_then(|metadata| metadata.get(super::controls::REPLACEMENT_MARKER))
+            == Some(&Value::Bool(true))
+        {
+            return Ok(false);
+        }
+        self.timeline
+            .as_ref()
+            .ok_or(ErrorCode::UnsupportedCapability)?
+            .has_entries(id)
+    }
+
     pub(super) fn mark_history_loaded(&self, id: &str) {
         self.histories().insert(id.to_owned());
     }

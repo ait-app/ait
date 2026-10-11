@@ -27,6 +27,7 @@ async fn websocket_directory_streams_keep_sequences_ownership_and_reconnect_chec
     )
     .await;
     assert_eq!(created["type"], "response", "{created}");
+    assert_cached_timeline(&mut writer, &created["result"]["agentId"]).await;
     let mut observer = connect(&address, &methods).await;
     let workspaces = ask(
         &mut observer,
@@ -105,10 +106,27 @@ async fn websocket_directory_streams_keep_sequences_ownership_and_reconnect_chec
     assert_children_exited(&cwd).await;
 }
 
+async fn assert_cached_timeline(writer: &mut Socket, agent_id: &Value) {
+    let timeline = request(
+        writer,
+        "agent.timeline.get.request",
+        json!({"agentId":agent_id,"direction":"tail","limit":40,"allowCached":true}),
+    )
+    .await;
+    assert_eq!(
+        timeline["result"]["historyNeedsRefresh"], false,
+        "{timeline}"
+    );
+}
+
 async fn assert_directory_features(writer: &mut Socket) {
     let info = request(writer, "server.info", json!({})).await;
     let features = info["result"]["features"].as_array().unwrap();
-    for feature in ["directory-sync-v1", "directory-subscriptions-v1"] {
+    for feature in [
+        "directory-sync-v1",
+        "directory-subscriptions-v1",
+        "agent-timeline-cached-reads-v1",
+    ] {
         assert!(features.contains(&json!(feature)), "{info}");
     }
 }
@@ -117,6 +135,7 @@ fn directory_methods() -> Vec<&'static str> {
     let mut methods = METHODS.to_vec();
     methods.extend([
         "server.info",
+        "agent.timeline.get.request",
         "workspace.list.request",
         "agent.list.request",
         "project.list.request",
