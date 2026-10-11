@@ -6,6 +6,7 @@ import {
   DEFAULT_CLIENT_CAPABILITIES,
   type TimelineSubscription,
 } from "./connection/index.js";
+import type { ObservationRequest } from "./connection/legacy.js";
 import { CreationClient } from "./creation/index.js";
 import type { CreationSnapshot } from "@ait/protocol/messages";
 import type { z } from "zod";
@@ -2150,7 +2151,7 @@ export class DaemonClient {
 
   private observe<T extends CorrelatedResponseType>(
     responseType: T,
-    message: { type: SessionInboundMessage["type"] } & Record<string, unknown>,
+    message: ObservationRequest | (() => ObservationRequest),
     options?: { requestId?: string; timeout?: number; signal?: AbortSignal },
   ): OwnedSubscription<CorrelatedResponsePayload<T>> {
     let resetSource = false;
@@ -2171,7 +2172,7 @@ export class DaemonClient {
               if ("error" in payload && typeof payload.error === "string")
                 throw new DaemonRpcError({
                   requestId: payload.requestId,
-                  requestType: message.type,
+                  requestType: query.type,
                   error: payload.error,
                 });
               accept(payload);
@@ -2209,16 +2210,25 @@ export class DaemonClient {
     );
   }
 
+  /**
+   * supportedOnly filters against each handshake, including reconnects.
+   * Hosts without an event catalog retain the requested set; filtering is opt-in.
+   */
   observeEvents(
     events: SessionEventSubscription[],
-    options?: { signal?: AbortSignal; notifications?: boolean },
+    options?: { signal?: AbortSignal; notifications?: boolean; supportedOnly?: boolean },
   ): OwnedSubscription<CorrelatedResponsePayload<"session.events.set_subscription.response">> {
     return this.observe(
       "session.events.set_subscription.response",
-      {
-        type: "session.events.set_subscription.request",
-        events,
-        notifications: options?.notifications,
+      () => {
+        const supported = options?.supportedOnly
+          ? this.lastServerInfoMessage?.sessionEventTypes
+          : undefined;
+        return {
+          type: "session.events.set_subscription.request",
+          events: supported ? events.filter((event) => supported.includes(event)) : events,
+          notifications: options?.notifications,
+        };
       },
       options,
     );

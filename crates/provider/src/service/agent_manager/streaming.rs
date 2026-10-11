@@ -143,7 +143,8 @@ fn persist_started(
             id,
             "agent_stream",
             &json!({"agentId":id,"event":{
-            "type":"turn_started","provider":agent.record.provider,"turnId":turn}}),
+            "type":"turn_started","provider":agent.record.provider,"turnId":turn},
+            "timestamp":now_timestamp()}),
         );
     }
     Ok(())
@@ -175,8 +176,16 @@ fn persist_usage(
         .map_err(|_| ErrorCode::AgentIo)?
         .ok_or(ErrorCode::AgentNotFound)?;
     if let Some(timeline) = timeline {
-        timeline.events().publish(id, "agent_stream", &json!({"agentId":id,"event":{
-            "type":"usage_updated","provider":agent.record.provider,"turnId":agent.turn,"usage":usage}}));
+        let mut event = json!({"type":"usage_updated","provider":agent.record.provider,
+            "usage":usage});
+        if let Some(turn) = &agent.turn {
+            event["turnId"] = json!(turn);
+        }
+        timeline.events().publish(
+            id,
+            "agent_stream",
+            &json!({"agentId":id,"event":event,"timestamp":now_timestamp()}),
+        );
     }
     Ok(())
 }

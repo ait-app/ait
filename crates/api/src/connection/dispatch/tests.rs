@@ -7,6 +7,8 @@ use serde_json::{Value, json};
 use super::*;
 use crate::{Api, Services};
 
+mod subscription_admission;
+
 const OWNED_METHODS: &[&str] = &[
     "relay.status.request",
     "schedule.list.request",

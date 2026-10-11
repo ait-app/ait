@@ -23,7 +23,7 @@ pub(crate) async fn dispatch(
             .map_err(|_| DeliveryError::Closed)
     });
     state
-        .run(
+        .run_queued(
             state.workspace_labels.clone(),
             ErrorCode::RegistryIo,
             move |labels| {

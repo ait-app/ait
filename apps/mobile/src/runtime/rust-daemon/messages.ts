@@ -143,6 +143,19 @@ function providerSnapshot(payload: Payload): Payload {
 export function eventMessage(method: string, params: unknown): Payload {
   method = sessionEventMethod(method);
   const payload = object(params);
+  if (method === "agent.stream") {
+    // 0.0.27 omitted timestamps on native control and usage notifications.
+    // Use receipt time for those legacy events while preserving source timestamps.
+    const event = object(payload.event);
+    if (
+      payload.timestamp === undefined &&
+      ["turn_started", "usage_updated", "permission_requested", "permission_resolved"].includes(
+        String(event.type),
+      )
+    ) {
+      return session(method, { ...payload, timestamp: new Date().toISOString() });
+    }
+  }
   if (method === "checkout.status.update") {
     // The SDK reuses the correlated status schema for unsolicited updates.
     return session("checkout.status.update", { requestId: "", ...payload });
