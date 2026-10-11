@@ -33,7 +33,11 @@ fn child_command_actions_drain_all_progress_and_match_completed_history() {
         .collect::<Vec<_>>();
     assert_eq!(
         keys,
-        ["native:child-turn:tool:0", "native:child-turn:tool:1"]
+        [
+            "native:child-turn:tool:0",
+            "native:child-turn:tool:1",
+            "native:child-turn:tool:output"
+        ]
     );
     let updates = live
         .observe(
@@ -45,7 +49,7 @@ fn child_command_actions_drain_all_progress_and_match_completed_history() {
             &images,
         )
         .unwrap();
-    assert_eq!(updates.len(), 2);
+    assert_eq!(updates.len(), 1);
     assert!(updates.iter().all(|event| matches!(event,
         AgentTurnEvent::Subagent(SubagentEvent::Progress {entry,..}) if entry.item["detail"]["output"] == "output")));
     native["item"]["status"] = json!("completed");

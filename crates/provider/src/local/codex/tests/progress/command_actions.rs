@@ -32,21 +32,29 @@ async fn parsed_actions_survive_native_stdio_progress_completion_and_history_rel
     session.close().await.unwrap();
 
     assert_eq!(progress.len(), 4);
-    assert_eq!(completed.len(), 2);
+    assert_eq!(completed.len(), 3);
     assert_eq!(completed[0].item["detail"]["type"], "read");
     assert_eq!(completed[0].item["detail"]["filePath"], "file");
     assert_eq!(completed[1].item["detail"]["command"], "echo done");
     for (index, entry) in completed.iter().enumerate() {
-        assert_eq!(entry.item["callId"], format!("command:{index}"));
+        let call_id = if index == 2 {
+            "command:output".to_owned()
+        } else {
+            format!("command:{index}")
+        };
+        assert_eq!(entry.item["callId"], call_id);
         assert_eq!(entry.item["status"], "completed");
         assert_eq!(progress[index].key, entry.key);
-        assert_eq!(progress[index + 2].key, entry.key);
         assert_eq!(progress[index].item["status"], "running");
         let field = if index == 0 { "content" } else { "output" };
         assert_eq!(progress[index].item["detail"][field], "");
-        assert_eq!(progress[index + 2].item["detail"][field], "offline output");
-        assert_eq!(entry.item["detail"][field], "offline output");
+        assert_eq!(
+            entry.item["detail"][field],
+            if index == 2 { "offline output" } else { "" }
+        );
     }
+    assert_eq!(progress[3].key, completed[2].key);
+    assert_eq!(progress[3].item["detail"]["output"], "offline output");
     let history = client.history(&handle, &spec.cwd).await.unwrap();
     let tools: Vec<_> = history
         .into_iter()

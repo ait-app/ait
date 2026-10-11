@@ -21,7 +21,7 @@ fn live_actions_keep_the_same_keys_and_details_as_completed_history() {
     ]});
     let started = json!({"turnId":"turn","item":native});
     let running = progress(&mut stream, "item/started", &started);
-    assert_eq!(running.len(), 3);
+    assert_eq!(running.len(), 4);
     assert!(
         running
             .iter()
@@ -34,11 +34,8 @@ fn live_actions_keep_the_same_keys_and_details_as_completed_history() {
             "item/commandExecution/outputDelta",
             &params("tool", delta),
         );
-        assert_eq!(updates.len(), 3);
-        assert_eq!(
-            updates.iter().map(|entry| &entry.key).collect::<Vec<_>>(),
-            running.iter().map(|entry| &entry.key).collect::<Vec<_>>()
-        );
+        assert_eq!(updates.len(), 1);
+        assert_eq!(updates[0].key, running[3].key);
     }
     let updates = progress(
         &mut stream,
@@ -54,11 +51,15 @@ fn live_actions_keep_the_same_keys_and_details_as_completed_history() {
         &crate::local::images::ImageStore::default(),
     )
     .unwrap();
-    for (live, finished) in updates.iter().zip(&completed) {
+    assert_eq!(completed.len(), running.len());
+    for (live, finished) in running.iter().zip(&completed) {
         assert_eq!(live.key, finished.key);
-        assert_eq!(live.item["detail"], finished.item["detail"]);
         assert_eq!(finished.item["status"], "completed");
     }
+    assert_eq!(updates[0].item["detail"], completed[3].item["detail"]);
+    assert_eq!(completed[0].item["detail"]["content"], "");
+    assert_eq!(completed[1].item["detail"]["content"], "");
+    assert_eq!(completed[2].item["detail"]["output"], "");
     assert!(stream.complete(&native).unwrap());
     assert!(!stream.complete(&native).unwrap());
     assert!(
@@ -72,7 +73,7 @@ fn live_actions_keep_the_same_keys_and_details_as_completed_history() {
 }
 
 #[test]
-fn every_action_receives_the_same_bounded_unicode_output_tail() {
+fn only_the_combined_command_receives_the_bounded_unicode_output_tail() {
     let mut stream = Stream::default();
     progress(
         &mut stream,
@@ -90,17 +91,20 @@ fn every_action_receives_the_same_bounded_unicode_output_tail() {
         "item/commandExecution/outputDelta",
         &params("tool", &output),
     );
-    assert_eq!(updates.len(), 2);
-    let content = updates[0].item["detail"]["content"].as_str().unwrap();
+    assert_eq!(updates.len(), 1);
+    assert_eq!(updates[0].key, "native:turn:tool:output");
+    let content = updates[0].item["detail"]["output"].as_str().unwrap();
     assert!(content.len() <= MAX_OUTPUT);
     assert!(output.ends_with(content));
-    assert_eq!(updates[1].item["detail"]["output"], content);
+    let stored = stream.tools.get("tool").unwrap();
+    assert_eq!(stored[0].1["detail"]["content"], "");
+    assert_eq!(stored[1].1["detail"]["output"], "");
 }
 
 #[test]
 fn action_rows_share_the_existing_stream_capacity_and_release_it_on_completion() {
     let mut stream = Stream::default();
-    for index in 0..MAX_ITEMS - 1 {
+    for index in 0..MAX_ITEMS - 2 {
         progress(
             &mut stream,
             "item/started",
@@ -121,8 +125,65 @@ fn action_rows_share_the_existing_stream_capacity_and_release_it_on_completion()
     );
     assert!(stream.events.is_empty());
     assert!(stream.complete(&json!({"id":"0"})).unwrap());
-    assert_eq!(progress(&mut stream, "item/started", &multiple).len(), 2);
+    assert_eq!(progress(&mut stream, "item/started", &multiple).len(), 3);
     assert!(stream.complete(&multiple["item"]).unwrap());
     assert!(!stream.complete(&multiple["item"]).unwrap());
-    assert_eq!(stream.tool_rows, MAX_ITEMS - 2);
+    assert_eq!(stream.tool_rows, MAX_ITEMS - 3);
+}
+
+#[test]
+fn streamed_batch_stdout_does_not_overwrite_an_independent_read() {
+    let mut stream = Stream::default();
+    let running = progress(
+        &mut stream,
+        "item/started",
+        &json!({"turnId":"turn","item":{
+            "type":"commandExecution","id":"batch","command":"cat a.rs && cat b.ts",
+            "commandActions":[
+                {"type":"read","command":"cat a.rs","path":"a.rs"},
+                {"type":"read","command":"cat b.ts","path":"b.ts"}
+            ]
+        }}),
+    );
+    progress(
+        &mut stream,
+        "item/started",
+        &json!({"turnId":"turn","item":{
+            "type":"commandExecution","id":"single","command":"cat c.ts",
+            "commandActions":[{"type":"read","command":"cat c.ts","path":"c.ts"}]
+        }}),
+    );
+
+    let first = progress(
+        &mut stream,
+        "item/commandExecution/outputDelta",
+        &params("batch", "use std::sync::Arc;\n"),
+    );
+    let independent = progress(
+        &mut stream,
+        "item/commandExecution/outputDelta",
+        &params("single", "export const value = 1;\n"),
+    );
+    let second = progress(
+        &mut stream,
+        "item/commandExecution/outputDelta",
+        &params("batch", "import type { WebContents } from 'electron';\n"),
+    );
+
+    assert_eq!(running.len(), 3);
+    assert_eq!(first.len(), 1);
+    assert_eq!(second.len(), 1);
+    assert_eq!(second[0].key, "native:turn:batch:output");
+    assert_eq!(
+        second[0].item["detail"]["output"],
+        "use std::sync::Arc;\nimport type { WebContents } from 'electron';\n"
+    );
+    for (_, action) in &stream.tools.get("batch").unwrap()[..2] {
+        assert_eq!(action["detail"]["content"], "");
+    }
+    assert_eq!(independent[0].key, "native:turn:single");
+    assert_eq!(
+        stream.tools.get("single").unwrap()[0].1["detail"]["content"],
+        "export const value = 1;\n"
+    );
 }
