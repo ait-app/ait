@@ -7,7 +7,7 @@
 
 本次 PR 将原始改动整合到 `main` 的 `8cdeff9baac82495e1cef45c3cb9752c66a45a28`，
 保留主分支新增的原生错误、五会话所有权和持久化 Timeline 测试，并将冲突的 ADR 编号改为 134。
-以下结果对应包含本报告的 PR 提交源码，macOS arm64 / Rust 1.98.1，默认 features。
+以下初次验证结果对应 `a9c03d15b0e7afa1aa3b01ab620476e239c7d19d`，macOS arm64 / Rust 1.98.1，默认 features。
 
 - `cargo test --locked -p provider --lib local::opencode`：55 passed，14 ignored，0 failed。
 - `cargo test --locked -p provider --lib service::provider_catalog`：25 passed，0 failed。
@@ -19,6 +19,24 @@
 共 96 项 Rust 定向测试通过；14 项 ignored 安装用例中，12 项在 2.0.26 运行，1 项在 2.0.20 运行。
 原生 1.x 安装用例、Windows 和真实付费模型未运行。原生测试使用临时隔离配置与 loopback 模型，
 未使用用户凭据。没有运行完整 Rust workspace 测试。
+
+## Rust CI 断言修正（2026-10-11）
+
+初次 [Rust CI](https://github.com/ait-app/ait/actions/runs/38138998001/job/114468766116)
+在 Ubuntu / Rust 1.98.1 完成编译和 Clippy，nextest 执行 2087 项测试：2086 passed、1 failed、23 skipped。
+唯一失败是 `daemon_status_config_diagnostics_and_update_match_canonical_contract`：
+Provider 目录开始显示适配器诊断后，daemon 状态测试仍期待统一的旧错误文案。
+本地定向运行复现了相同断言差异。
+
+修正仅更新测试中四个不可用 Provider 的预期诊断文案，继续精确校验 Provider 顺序、可用性和完整诊断，
+没有修改生产行为。修正后的直接相关 daemon 模块使用 CI 相同配置验证：
+`cargo nextest run --locked -p daemon --test process --profile ci -E 'test(unix::daemon::)'`，
+3 passed、93 skipped。
+`cargo test --locked -p daemon --test process daemon_status_config_diagnostics_and_update_match_canonical_contract`
+另行确认同一用例通过；`cargo clippy --locked -p daemon --test process -- -D warnings`、
+`cargo fmt --all --check`、`npm run check:docs` 和 `git diff --check` 通过。
+此前的 96 项验证仍对应上面注明的初次提交。
+本次覆盖率状态仍为 **not measured**；未请求覆盖率，也未在本地运行完整 workspace 测试。
 
 ## 诊断与结果
 
