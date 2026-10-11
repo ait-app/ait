@@ -285,7 +285,7 @@ describe("Ait host capabilities", () => {
       directorySubscriptions: false,
       daemonPairing: false,
     });
-    expect(value?.features?.plugins).not.toBe(true);
+    expect(value?.features).not.toHaveProperty("plugins");
     expect(value?.sessionEventTypes).toEqual([
       "status.server_info",
       "script_status_update",
