@@ -8,8 +8,9 @@ use futures_util::{StreamExt, stream};
 use model::ErrorCode;
 use serde_json::{Value, json};
 
-use super::{AgentManager, now_timestamp};
+use super::AgentManager;
 use crate::ports::agent_session::AgentSessionError;
+use crate::support::time::now_timestamp;
 
 /// Bounded, ephemeral host quota snapshots shared by independent execution lanes.
 #[derive(Debug, Clone, Default)]

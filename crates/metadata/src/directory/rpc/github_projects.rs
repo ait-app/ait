@@ -6,10 +6,8 @@ pub const METHODS: &[MethodSpec] = &[
     MethodSpec::request("project.github.clone.request"),
 ];
 
-use chrono::{SecondsFormat, Utc};
 use domain::workspace::protocol::projection::project_descriptor;
 use model::methods::MethodSpec;
-use serde::Serialize;
 use serde_json::Value;
 
 use domain::workspace::provisioning::{
@@ -24,6 +22,8 @@ use crate::directory::protocol::github_projects::{
 };
 use crate::directory::service::github_projects::GithubProjects;
 use crate::support::error::ErrorCode;
+use crate::support::rpc::{decode, encode};
+use crate::support::time::now_timestamp;
 
 /// Execute a GitHub repository search or clone request.
 ///
@@ -51,27 +51,30 @@ fn github_repository_search(
         return Err(ErrorCode::InvalidMessage);
     }
     match directory.search_github_repositories(&request.query, limit) {
-        Ok(repositories) => encode(GithubRepositorySearchResult {
-            status: GithubRepositorySearchStatus::Success,
-            repositories: repositories
-                .into_iter()
-                .map(|repository| GithubRepositoryPayload {
-                    id: repository.id,
-                    name: repository.name,
-                    name_with_owner: repository.name_with_owner,
-                    description: repository.description,
-                    visibility: match repository.visibility {
-                        GithubRepositoryVisibility::Public => WireVisibility::Public,
-                        GithubRepositoryVisibility::Private => WireVisibility::Private,
-                    },
-                    updated_at: repository.updated_at,
-                    clone_url: repository.clone_url,
-                })
-                .collect(),
-            available: true,
-            reason: None,
-            error: None,
-        }),
+        Ok(repositories) => encode(
+            GithubRepositorySearchResult {
+                status: GithubRepositorySearchStatus::Success,
+                repositories: repositories
+                    .into_iter()
+                    .map(|repository| GithubRepositoryPayload {
+                        id: repository.id,
+                        name: repository.name,
+                        name_with_owner: repository.name_with_owner,
+                        description: repository.description,
+                        visibility: match repository.visibility {
+                            GithubRepositoryVisibility::Public => WireVisibility::Public,
+                            GithubRepositoryVisibility::Private => WireVisibility::Private,
+                        },
+                        updated_at: repository.updated_at,
+                        clone_url: repository.clone_url,
+                    })
+                    .collect(),
+                available: true,
+                reason: None,
+                error: None,
+            },
+            ErrorCode::RegistryIo,
+        ),
         Err(error) => {
             let (status, available, reason) = match error {
                 GithubProjectsError::CliMissing => (
@@ -89,13 +92,16 @@ fn github_repository_search(
                     (GithubRepositorySearchStatus::Error, true, None)
                 }
             };
-            encode(GithubRepositorySearchResult {
-                status,
-                repositories: Vec::new(),
-                available,
-                reason,
-                error: Some(error.to_string()),
-            })
+            encode(
+                GithubRepositorySearchResult {
+                    status,
+                    repositories: Vec::new(),
+                    available,
+                    reason,
+                    error: Some(error.to_string()),
+                },
+                ErrorCode::RegistryIo,
+            )
         }
     }
 }
@@ -115,22 +121,15 @@ fn project_github_clone(
         &request.repo,
         protocol,
         &request.target_directory,
-        &timestamp(),
+        &now_timestamp(),
     );
-    encode(ProjectGithubCloneResult {
-        repo: outcome.repo,
-        checkout_path: outcome.checkout_path,
-        project: outcome.project.as_ref().map(project_descriptor),
-        error: outcome.error,
-    })
-}
-
-fn decode<T: serde::de::DeserializeOwned>(value: Value) -> Result<T, ErrorCode> {
-    serde_json::from_value(value).map_err(|_| ErrorCode::InvalidMessage)
-}
-fn encode(value: impl Serialize) -> Result<Value, ErrorCode> {
-    serde_json::to_value(value).map_err(|_| ErrorCode::RegistryIo)
-}
-fn timestamp() -> String {
-    Utc::now().to_rfc3339_opts(SecondsFormat::Millis, true)
+    encode(
+        ProjectGithubCloneResult {
+            repo: outcome.repo,
+            checkout_path: outcome.checkout_path,
+            project: outcome.project.as_ref().map(project_descriptor),
+            error: outcome.error,
+        },
+        ErrorCode::RegistryIo,
+    )
 }

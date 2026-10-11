@@ -130,7 +130,7 @@ fn guard_rejects_concrete_cross_group_layers_and_support_dependencies() {
     assert!(
         violations(
             creation,
-            "use crate::directory::protocol::directory::X;\nuse crate::worktrees::ports::worktrees::Y;"
+            "use crate::directory::protocol::directory::X;\nuse crate::worktrees::ports::Y;"
         )
         .is_empty()
     );
@@ -168,7 +168,7 @@ fn guard_rejects_concrete_cross_group_layers_and_support_dependencies() {
         assert!(
             violations(
                 Path::new(&format!("{module}.rs")),
-                "crate::automation::service::workspace_automation::WorkspaceAutomation"
+                "crate::automation::service::WorkspaceAutomation"
             )
             .is_empty()
         );
@@ -176,7 +176,7 @@ fn guard_rejects_concrete_cross_group_layers_and_support_dependencies() {
     assert_eq!(
         violations(
             Path::new("support/error.rs"),
-            "crate::labels::service::workspace_labels::X; crate::dispatch::State; crate::support::error::E"
+            "crate::labels::service::X; crate::dispatch::State; crate::support::error::E"
         ),
         [
             "support/error.rs: support -> labels",

@@ -11,7 +11,10 @@ use tokio_util::task::AbortOnDropHandle;
 
 use super::{OpenCodeClient, PROVIDER, config, history, interactions, launcher, streaming::Stream};
 use crate::{
-    local::acp_transport::{self, Transport},
+    local::{
+        acp_permissions,
+        acp_transport::{self, Transport},
+    },
     ports::agent_session::{
         AgentResumePurpose, AgentSession, AgentSessionError, AgentSessionFuture, AgentSessionSpec,
         AgentTurnEvent,
@@ -19,7 +22,7 @@ use crate::{
     protocol::prompt::AgentPrompt,
 };
 
-type Pending = Arc<Mutex<BTreeMap<String, interactions::Pending>>>;
+type Pending = Arc<Mutex<BTreeMap<String, acp_permissions::Pending>>>;
 
 #[derive(Debug)]
 struct Connection {
@@ -550,7 +553,7 @@ impl Execution {
                 Err(error) => return Err(error),
             }
         } else {
-            interactions::capture(message)?
+            acp_permissions::capture(message, PROVIDER)?
         };
         let id = config::text(&pending.request, "id")?.to_owned();
         let request = pending.request.clone();

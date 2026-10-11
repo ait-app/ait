@@ -19,6 +19,7 @@ pub mod rpc;
 pub mod service;
 pub mod skills;
 pub mod storage;
+pub(crate) mod support;
 mod timeline_projection;
 
 pub use composition::Providers;

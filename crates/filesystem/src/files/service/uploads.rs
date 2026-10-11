@@ -5,7 +5,7 @@ use std::time::{Duration, Instant};
 use serde_json::Value;
 use uuid::Uuid;
 
-use crate::files::ports::files::{FileError, FileUpload, UploadedFile};
+use crate::files::ports::{FileError, FileUpload, UploadedFile};
 use crate::files::protocol::{file_transfer::FileFrame, files as wire};
 use crate::files::service::files::Files;
 use crate::support::error::ErrorCode;

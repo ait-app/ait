@@ -14,7 +14,7 @@ pub struct State {
     /// Installed agents service.
     pub agents: Option<Arc<Mutex<crate::service::agents::Agents>>>,
     /// Installed host-wide skills service, synchronized independently of native execution.
-    pub skills: Option<Arc<Mutex<crate::skills::service::skills::Skills>>>,
+    pub skills: Option<Arc<Mutex<crate::skills::service::Skills>>>,
     /// Installed agent runtime service.
     pub agent_runtime: Option<Arc<Mutex<crate::service::agent_runtime::AgentRuntimeDirectory>>>,
     /// Installed native Agent executor.

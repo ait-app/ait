@@ -4,7 +4,7 @@ use std::collections::{BTreeMap, BTreeSet};
 
 use model::session::{SessionConnection, SessionSubscription};
 
-use crate::labels::service::workspace_labels::WorkspaceLabelSubscription;
+use crate::labels::service::WorkspaceLabelSubscription;
 
 /// Metadata subscriptions belonging to one physical connection.
 #[derive(Default)]

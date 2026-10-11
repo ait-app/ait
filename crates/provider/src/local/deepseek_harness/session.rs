@@ -5,10 +5,11 @@ use serde_json::{Value, json};
 use uuid::Uuid;
 
 use super::{
-    DeepSeekHarnessClient, PROVIDER, config, permissions,
+    DeepSeekHarnessClient, PROVIDER, config,
     streaming::Stream,
     transport::{self, Transport},
 };
+use crate::local::acp_permissions;
 use crate::ports::agent_session::{
     AgentSession, AgentSessionError, AgentSessionFuture, AgentSessionSpec, AgentTurnEvent,
 };
@@ -24,7 +25,7 @@ pub(super) struct Session {
     capabilities: Value,
     active: Option<(String, String)>,
     stream: Stream,
-    permissions: BTreeMap<String, permissions::Pending>,
+    permissions: BTreeMap<String, acp_permissions::Pending>,
     closed: bool,
 }
 
@@ -168,7 +169,7 @@ impl Session {
                 {
                     return Err(AgentSessionError::Failed);
                 }
-                let pending = permissions::capture(message)?;
+                let pending = acp_permissions::capture(message, PROVIDER)?;
                 let id = config::text(&pending.request, "id")?.to_owned();
                 self.stream
                     .events
@@ -282,7 +283,7 @@ impl AgentSession for Session {
                 .permissions
                 .get(id)
                 .ok_or(AgentSessionError::Rejected)?;
-            let reply = permissions::resolve(pending, response)?;
+            let reply = acp_permissions::resolve_tool(pending, response)?;
             self.transport.send(&reply).await?;
             self.permissions.remove(id);
             self.stream

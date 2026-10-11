@@ -6,11 +6,10 @@ use serde_json::Value;
 use crate::directory::protocol::directory::{
     WorkspaceGetRequest, WorkspaceGetResult, WorkspaceGetState,
 };
+use crate::support::rpc::encode;
+use crate::support::time::now_timestamp;
 
-use super::{
-    Directory, ErrorCode, active_project, active_workspace, directory_error, encode, runtime,
-    timestamp,
-};
+use super::{Directory, ErrorCode, active_project, active_workspace, directory_error, runtime};
 
 /// Project the exact `request` target from `directory` without creating or restoring records.
 /// Returns safe validation, registry, activity-source or encoding errors.
@@ -28,7 +27,7 @@ pub(super) fn get(directory: &Directory, request: WorkspaceGetRequest) -> Result
         .workspace_target(&result.workspace_id)
         .map_err(directory_error)?
     else {
-        return encode(result);
+        return encode(result, ErrorCode::RegistryIo);
     };
     if !active_workspace(&workspace)
         || project
@@ -36,19 +35,19 @@ pub(super) fn get(directory: &Directory, request: WorkspaceGetRequest) -> Result
             .is_some_and(|project| !active_project(project))
     {
         result.state = WorkspaceGetState::Archived;
-        return encode(result);
+        return encode(result, ErrorCode::RegistryIo);
     }
     let mut descriptor = workspace_descriptor(&workspace, project.as_ref());
     if let Some(snapshot) = directory.runtime_snapshot(&workspace.cwd) {
         runtime::apply(&mut descriptor, &snapshot);
     }
     let status = directory
-        .workspace_status(&workspace, &timestamp())
+        .workspace_status(&workspace, &now_timestamp())
         .map_err(directory_error)?;
     descriptor.status = status.bucket;
     descriptor.status_entered_at = Some(status.entered_at);
     result.state = WorkspaceGetState::Ready;
     result.workspace = Some(descriptor);
     result.project = project.as_ref().map(project_descriptor);
-    encode(result)
+    encode(result, ErrorCode::RegistryIo)
 }

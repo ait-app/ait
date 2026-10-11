@@ -7,7 +7,7 @@ use std::sync::{Arc, Mutex};
 use std::time::Duration;
 
 use super::{Identity, Inner, Permit, forge};
-use crate::forge::ports::forge::ForgeRuntime;
+use crate::forge::ports::ForgeRuntime;
 
 const DEMAND_TTL: Duration = Duration::from_secs(5);
 

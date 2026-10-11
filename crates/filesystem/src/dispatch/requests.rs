@@ -40,7 +40,7 @@ pub(super) async fn forge(
         .rpc(
             state.forge.clone(),
             ErrorCode::ProjectIo,
-            |service, method, params| crate::forge::rpc::forge::execute(service, method, params),
+            |service, method, params| crate::forge::rpc::execute(service, method, params),
         )
         .await
         .map_err(Into::into)
@@ -77,7 +77,7 @@ pub(super) async fn files(
     connection
         .files
         .request(
-            crate::files::connection::files::FileRequest {
+            crate::files::connection::FileRequest {
                 id: context.request.id,
                 method: context.request.method,
                 params: context.request.params,

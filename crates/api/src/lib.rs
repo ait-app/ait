@@ -22,7 +22,7 @@ use axum::response::{IntoResponse, Response};
 use axum::routing::{get, post};
 use axum::{Json, Router};
 use browser::broker::Broker;
-use metadata::automation::service::workspace_automation::WorkspaceAutomation;
+use metadata::automation::service::WorkspaceAutomation;
 use metadata::directory::service::directory::Directory;
 use metadata::worktrees::service::worktrees::{WorkspaceWorktrees, Worktrees};
 use model::server::{Lifecycle, Limits, ServerInfo, VERSION};
@@ -619,7 +619,7 @@ fn compose_automation_events(
     events: &model::session::SessionEvents,
 ) -> Result<(), ConfigError> {
     use domain::session::protocol::SessionEventKind;
-    use metadata::automation::ports::workspace_automation::AutomationEvent;
+    use metadata::automation::ports::AutomationEvent;
 
     let Some(automation) = automation else {
         return Ok(());
@@ -639,7 +639,7 @@ fn compose_automation_events(
                         "workspaceId": workspace_id,
                         "scripts": scripts
                             .into_iter()
-                            .map(metadata::automation::rpc::workspace_automation::script)
+                            .map(metadata::automation::rpc::script)
                             .collect::<Vec<_>>(),
                     }),
                 ),
@@ -648,9 +648,7 @@ fn compose_automation_events(
                     snapshot,
                 } => {
                     let mut payload = serde_json::to_value(
-                        metadata::automation::rpc::workspace_automation::setup_snapshot(
-                            snapshot, None,
-                        ),
+                        metadata::automation::rpc::setup_snapshot(snapshot, None),
                     )
                     .unwrap_or_default();
                     payload["workspaceId"] = serde_json::json!(workspace_id);

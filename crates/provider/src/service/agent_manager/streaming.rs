@@ -1,5 +1,6 @@
-use super::{AgentManager, AgentManagerError, AgentTurnEvent, now_timestamp};
+use super::{AgentManager, AgentManagerError, AgentTurnEvent};
 use crate::ports::agent_session::AgentSessionError;
+use crate::support::time::now_timestamp;
 
 pub(super) fn failure_message(agent: &super::LiveAgent) -> &str {
     agent

@@ -7,12 +7,13 @@ pub const METHODS: &[MethodSpec] = &[
     MethodSpec::request("workspace.worktree.archive.request"),
 ];
 
-use chrono::{SecondsFormat, Utc};
 use model::methods::MethodSpec;
 use serde::Serialize;
 use serde_json::Value;
 
 use crate::support::error::ErrorCode;
+use crate::support::rpc::{decode, encode};
+use crate::support::time::now_timestamp;
 use crate::worktrees::protocol::worktrees::{
     CheckoutError, CheckoutErrorCode, WorktreeArchiveRequest, WorktreeArchiveResult,
     WorktreeArchiveScope, WorktreeCreateAction, WorktreeCreateRequest, WorktreeCreateResult,
@@ -110,7 +111,7 @@ fn create(worktrees: &Worktrees, request: WorktreeCreateRequest) -> Result<Dispa
         first_agent_prompt: context.as_ref().and_then(|context| context.prompt.clone()),
         expects_initial_agent: context.is_some(),
     };
-    match worktrees.create(&input, &timestamp()) {
+    match worktrees.create(&input, &now_timestamp()) {
         Ok(created) => {
             if let Some(context) = context
                 && let Some(source) = domain::workspace::naming::first_agent_source(
@@ -159,7 +160,7 @@ fn archive(
     request: WorktreeArchiveRequest,
 ) -> Result<Dispatched, ErrorCode> {
     let input = archive_input(request);
-    match worktrees.archive(&input, &timestamp()) {
+    match worktrees.archive(&input, &now_timestamp()) {
         Ok(_) => value(WorktreeArchiveResult {
             success: true,
             removed_agents: Some(Vec::new()),
@@ -220,10 +221,6 @@ const fn create_error_code_for_kind(kind: WorktreeFailureKind) -> &'static str {
     }
 }
 
-fn decode<T: serde::de::DeserializeOwned>(value: Value) -> Result<T, ErrorCode> {
-    serde_json::from_value(value).map_err(|_| ErrorCode::InvalidMessage)
-}
-
 fn value(value: impl Serialize) -> Result<Dispatched, ErrorCode> {
     dispatched(value, None, None)
 }
@@ -234,14 +231,10 @@ fn dispatched(
     created_workspace_id: Option<String>,
 ) -> Result<Dispatched, ErrorCode> {
     Ok(Dispatched {
-        value: serde_json::to_value(value).map_err(|_| ErrorCode::RegistryIo)?,
+        value: encode(value, ErrorCode::RegistryIo)?,
         event,
         created_workspace_id,
     })
-}
-
-fn timestamp() -> String {
-    Utc::now().to_rfc3339_opts(SecondsFormat::Millis, true)
 }
 
 #[cfg(test)]

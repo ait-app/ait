@@ -8,7 +8,7 @@ use domain::workspace::records::PersistedWorkspaceRecord;
 use model::workspace::lifecycle::{WorkspaceDirectory, WorkspaceNaming, WorkspaceSetup};
 use model::workspace::worktrees::WorktreeProvisioning;
 
-use crate::automation::service::workspace_automation::WorkspaceAutomation;
+use crate::automation::service::WorkspaceAutomation;
 use crate::directory::service::directory::Directory;
 use crate::directory::service::workspace_names::WorkspaceNames;
 

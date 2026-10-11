@@ -195,7 +195,7 @@ fn workspace_runtime_refreshes_every_queued_checkout_without_repeated_snapshot_r
 
 #[test]
 fn workspace_runtime_forge_availability_does_not_fabricate_a_pull_request() {
-    use crate::forge::ports::forge::{
+    use crate::forge::ports::{
         ForgeAuthState, ForgeFailureKind, ForgeRuntimeError, PullRequestStatusRead,
     };
     for auth_state in [

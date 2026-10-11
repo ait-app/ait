@@ -6,8 +6,8 @@ use std::collections::BTreeMap;
 #[derive(Default)]
 pub struct Connection {
     /// File subscriptions and unfinished uploads.
-    pub files: crate::files::connection::files::FileConnection,
-    pub(crate) diffs: BTreeMap<String, crate::git::connection::checkout::CheckoutDiffSubscription>,
+    pub files: crate::files::connection::FileConnection,
+    pub(crate) diffs: BTreeMap<String, crate::git::connection::CheckoutDiffSubscription>,
 }
 
 impl Connection {

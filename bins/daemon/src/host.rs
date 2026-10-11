@@ -13,20 +13,20 @@ use chrono::{SecondsFormat, Utc};
 use domain::agent_runtime::registry::AgentRuntimeRegistry;
 use filesystem::files::service::files::Files;
 use filesystem::forge::local::{forge::LocalForge, github_projects::LocalGithubProjects};
-use filesystem::forge::service::forge::Forge;
+use filesystem::forge::service::Forge;
 use filesystem::git::local::{
     checkout::LocalCheckout, provisioning::LocalDirectorySource, worktrees::LocalManagedWorktrees,
 };
 use filesystem::git::service::checkout::Checkout;
 use filesystem::workspace_runtime::LocalWorkspaceRuntime;
-use metadata::automation::local::workspace_automation::LocalWorkspaceAutomation;
-use metadata::automation::service::workspace_automation::WorkspaceAutomation;
-use metadata::daemon::service::daemon::{Daemon, DaemonRuntime};
+use metadata::automation::local::LocalWorkspaceAutomation;
+use metadata::automation::service::WorkspaceAutomation;
+use metadata::daemon::service::{Daemon, DaemonRuntime};
 use metadata::directory::service::directory::{Directory, DirectoryDependencies};
 use metadata::directory::service::github_projects::GithubProjects;
 use metadata::directory::service::workspace_names::WorkspaceNames;
 use metadata::directory::service::workspace_state::WorkspaceState;
-use metadata::labels::service::workspace_labels::WorkspaceLabels;
+use metadata::labels::service::WorkspaceLabels;
 use metadata::worktrees::service::workspace_recovery::WorkspaceRecovery;
 use metadata::worktrees::service::worktrees::{WorkspaceWorktrees, Worktrees};
 use model::LifecycleIntent;
@@ -68,14 +68,14 @@ impl Server {
     /// Returns a ready server, or configuration, listener, storage or assembly errors.
     pub(crate) async fn bind_with_diagnostics(
         config: Config,
-        diagnostics: Arc<dyn metadata::daemon::ports::diagnostics::DaemonDiagnostics>,
+        diagnostics: Arc<dyn metadata::daemon::ports::DaemonDiagnostics>,
     ) -> anyhow::Result<Self> {
         Self::bind_optional_diagnostics(config, Some(diagnostics)).await
     }
 
     async fn bind_optional_diagnostics(
         config: Config,
-        diagnostics: Option<Arc<dyn metadata::daemon::ports::diagnostics::DaemonDiagnostics>>,
+        diagnostics: Option<Arc<dyn metadata::daemon::ports::DaemonDiagnostics>>,
     ) -> anyhow::Result<Self> {
         let listener = TcpListener::bind(config.listen)
             .await
@@ -523,10 +523,8 @@ fn compose_provider(
 #[cfg(test)]
 mod tests;
 
-fn compose_push(
-    data_dir: &std::path::Path,
-) -> anyhow::Result<metadata::push::service::push::PushTokens> {
-    metadata::push::service::push::PushTokens::open(
+fn compose_push(data_dir: &std::path::Path) -> anyhow::Result<metadata::push::service::PushTokens> {
+    metadata::push::service::PushTokens::open(
         Box::new(persistence::storage::push::FileTokenStore::new(
             data_dir.join("push-tokens.json"),
         )),
@@ -535,9 +533,7 @@ fn compose_push(
     .map_err(|_| anyhow::anyhow!("initialize push token leases"))
 }
 
-fn compose_skills(
-    data: &std::path::Path,
-) -> anyhow::Result<provider::skills::service::skills::Skills> {
+fn compose_skills(data: &std::path::Path) -> anyhow::Result<provider::skills::service::Skills> {
     let data = data
         .canonicalize()
         .context("resolve skills data directory")?;
@@ -547,19 +543,14 @@ fn compose_skills(
     let source = std::env::var_os("AIT_SERVER_SKILLS_BUNDLE")
         .map_or_else(|| data.join("skills-bundle"), std::path::PathBuf::from);
     let targets = [".agents/skills", ".claude/skills", ".codex/skills"].map(|path| home.join(path));
-    let store = provider::skills::local::skills::LocalSkills::new(
-        &source,
-        &targets,
-        &data.join("skills-state"),
-    )
-    .map_err(|error| anyhow::anyhow!("invalid skills configuration: {error:?}"))?;
-    Ok(provider::skills::service::skills::Skills::new(Box::new(
-        store,
-    )))
+    let store =
+        provider::skills::local::LocalSkills::new(&source, &targets, &data.join("skills-state"))
+            .map_err(|error| anyhow::anyhow!("invalid skills configuration: {error:?}"))?;
+    Ok(provider::skills::service::Skills::new(Box::new(store)))
 }
 
 fn compose_files(config: &Config) -> Files {
-    Files::new(Box::new(filesystem::files::local::files::LocalFiles::new(
+    Files::new(Box::new(filesystem::files::local::LocalFiles::new(
         std::env::var_os("HOME").map_or_else(|| config.data_dir.clone(), std::path::PathBuf::from),
         &config.data_dir,
     )))

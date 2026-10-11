@@ -341,7 +341,7 @@ fn fetch_snapshots(
         .take_while(|_| !cancellation.is_cancelled())
         .filter_map(|path| {
             let status = backend.status(&path).ok()?;
-            let payload = crate::git::rpc::checkout::protocol_status(&path, Ok(status));
+            let payload = crate::git::rpc::protocol_status(&path, Ok(status));
             serde_json::to_value(payload)
                 .ok()
                 .map(|payload| (path, payload))

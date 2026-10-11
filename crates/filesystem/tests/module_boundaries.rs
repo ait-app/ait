@@ -126,7 +126,7 @@ fn guard_rejects_concrete_cross_group_layers_and_support_dependencies() {
     assert!(
         violations(
             worktrees,
-            "use crate::forge::ports::forge::X;\nuse crate::files::protocol::files::Y;"
+            "use crate::forge::ports::X;\nuse crate::files::protocol::files::Y;"
         )
         .is_empty()
     );
@@ -168,7 +168,7 @@ fn guard_rejects_concrete_cross_group_layers_and_support_dependencies() {
     assert_eq!(
         violations(
             Path::new("support/budget.rs"),
-            "crate::files::ports::files::X; crate::dispatch::State; crate::support::error::E"
+            "crate::files::ports::X; crate::dispatch::State; crate::support::error::E"
         ),
         [
             "support/budget.rs: support -> files",

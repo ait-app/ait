@@ -12,7 +12,7 @@ use crate::git::ports::checkout::{
 pub(super) async fn fill(state: &State, method: &str, params: &mut Value) -> Result<(), ErrorCode> {
     let (kind, cwd, base_ref) = match method {
         "checkout.commit.request" => {
-            let request: crate::git::protocol::checkout::CheckoutCommitRequest =
+            let request: crate::git::protocol::CheckoutCommitRequest =
                 serde_json::from_value(params.clone()).map_err(|_| ErrorCode::InvalidMessage)?;
             if !blank(request.message.as_deref()) {
                 return Ok(());
@@ -20,7 +20,7 @@ pub(super) async fn fill(state: &State, method: &str, params: &mut Value) -> Res
             (SummaryKind::CommitMessage, request.cwd, None)
         }
         "checkout.pr.create.request" => {
-            let request: crate::forge::protocol::forge::PullRequestCreateRequest =
+            let request: crate::forge::protocol::PullRequestCreateRequest =
                 serde_json::from_value(params.clone()).map_err(|_| ErrorCode::InvalidMessage)?;
             if !blank(request.title.as_deref()) && !blank(request.body.as_deref()) {
                 return Ok(());

@@ -6,12 +6,13 @@ pub const METHODS: &[MethodSpec] = &[
     MethodSpec::request("workspace.recovery.restore.request"),
 ];
 
-use chrono::{SecondsFormat, Utc};
 use model::methods::MethodSpec;
 use serde::Serialize;
 use serde_json::Value;
 
 use crate::support::error::ErrorCode;
+use crate::support::rpc::{decode, encode};
+use crate::support::time::now_timestamp;
 use crate::worktrees::protocol::workspace_recovery::{
     WorkspaceRecoveryAction, WorkspaceRecoveryInspectResult, WorkspaceRecoveryRequest,
     WorkspaceRecoveryRestoreResult, WorkspaceRecoveryState, WorkspaceRecoveryUnavailableReason,
@@ -59,7 +60,7 @@ fn recovery_restore(
     workspace_state: &WorkspaceRecovery,
     request: WorkspaceRecoveryRequest,
 ) -> Result<Dispatched, ErrorCode> {
-    match workspace_state.restore(&request.workspace_id, &timestamp()) {
+    match workspace_state.restore(&request.workspace_id, &now_timestamp()) {
         Ok(recovered) => {
             let descriptor = domain::workspace::protocol::projection::workspace_descriptor(
                 &recovered.workspace,
@@ -132,23 +133,15 @@ fn recovery_state(state: ApplicationRecoveryState) -> WorkspaceRecoveryState {
     }
 }
 
-fn decode<T: serde::de::DeserializeOwned>(value: Value) -> Result<T, ErrorCode> {
-    serde_json::from_value(value).map_err(|_| ErrorCode::InvalidMessage)
-}
-
 fn value(value: impl Serialize) -> Result<Dispatched, ErrorCode> {
     dispatched(value, None)
 }
 
 fn dispatched(value: impl Serialize, event: Option<Value>) -> Result<Dispatched, ErrorCode> {
     Ok(Dispatched {
-        value: serde_json::to_value(value).map_err(|_| ErrorCode::RegistryIo)?,
+        value: encode(value, ErrorCode::RegistryIo)?,
         event,
     })
-}
-
-fn timestamp() -> String {
-    Utc::now().to_rfc3339_opts(SecondsFormat::Millis, true)
 }
 
 #[cfg(test)]

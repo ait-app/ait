@@ -2,6 +2,8 @@
 
 - 状态：接受
 - 日期：2026-10-11
+- 后续修订：[ADR-136](adr-136-single-area-layer-flattening.md) 去掉只承载一个功能区的
+  `<layer>::<area>` 中间段。
 - 修订：[ADR-130](adr-130-workspace-methods-owned-by-metadata.md) 中 metadata 的内部模块路径；
   crate 名称、依赖、对外服务和方法集合不变。沿用
   [ADR-113](adr-113-filesystem-capability-groups.md) 的组织方式与边界约定。

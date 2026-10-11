@@ -4,7 +4,6 @@ mod config;
 mod launcher;
 mod metadata;
 mod native;
-mod permissions;
 mod session;
 mod streaming;
 mod transport;

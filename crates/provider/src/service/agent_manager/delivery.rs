@@ -4,6 +4,7 @@ use super::{AgentManager, AgentManagerError};
 use crate::protocol::{agent_execution::ActiveTurnBehavior, prompt::AgentPrompt};
 use crate::storage::timeline::Timeline;
 use crate::storage::timeline::inbox::{QueuedInput, Receipt};
+use crate::support::time::now_timestamp;
 use model::ErrorCode;
 
 impl AgentManager {
@@ -275,7 +276,7 @@ impl AgentManager {
                     };
                     timeline.finish_input(&input.agent, &input.message, state)?;
                     let queued = timeline.has_queued_input(&input.agent)?;
-                    let now = super::now_timestamp();
+                    let now = now_timestamp();
                     let committed = self
                         .registry
                         .update(&input.agent, &|current| {

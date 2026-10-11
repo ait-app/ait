@@ -29,7 +29,6 @@ pub const PROJECT_ICON_METHODS: &[MethodSpec] = &[
 ];
 
 use base64::Engine;
-use chrono::{SecondsFormat, Utc};
 use domain::workspace::protocol::directory::{
     ProjectAddRequest, ProjectAddResult, ProjectCreateDirectoryRequest,
     ProjectCreateDirectoryResult, ProjectListRequest, ProjectListResult, ProjectRemoveRequest,
@@ -45,7 +44,6 @@ use domain::workspace::protocol::workspace::{
 };
 use domain::workspace::records::{PersistedProjectRecord, PersistedWorkspaceRecord};
 use model::methods::MethodSpec;
-use serde::Serialize;
 use serde_json::Value;
 
 use crate::directory::protocol::project_config::{
@@ -58,6 +56,8 @@ use crate::directory::protocol::project_icon::{
 };
 use crate::directory::service::directory::{Directory, DirectoryError};
 use crate::support::error::ErrorCode;
+use crate::support::rpc::{decode, encode};
+use crate::support::time::now_timestamp;
 
 pub(crate) mod listing;
 mod pagination;
@@ -100,33 +100,45 @@ fn project_icon_set(
         ProjectIconSource::Automatic => None,
         ProjectIconSource::Upload { data } => {
             let Ok(bytes) = base64::engine::general_purpose::STANDARD.decode(data) else {
-                return encode(ProjectIconSetResult {
-                    project_id: request.project_id,
-                    accepted: false,
-                    error: Some("Unsupported or invalid icon file".to_owned()),
-                });
+                return encode(
+                    ProjectIconSetResult {
+                        project_id: request.project_id,
+                        accepted: false,
+                        error: Some("Unsupported or invalid icon file".to_owned()),
+                    },
+                    ErrorCode::RegistryIo,
+                );
             };
             Some(bytes)
         }
     };
-    let timestamp = timestamp();
+    let timestamp = now_timestamp();
     match directory.set_project_icon(&request.project_id, upload.as_deref(), &timestamp) {
-        Ok(Some(_)) => encode(ProjectIconSetResult {
-            project_id: request.project_id,
-            accepted: true,
-            error: None,
-        }),
-        Ok(None) | Err(DirectoryError::UnknownProject) => encode(ProjectIconSetResult {
-            project_id: request.project_id,
-            accepted: false,
-            error: Some("Project not found".to_owned()),
-        }),
+        Ok(Some(_)) => encode(
+            ProjectIconSetResult {
+                project_id: request.project_id,
+                accepted: true,
+                error: None,
+            },
+            ErrorCode::RegistryIo,
+        ),
+        Ok(None) | Err(DirectoryError::UnknownProject) => encode(
+            ProjectIconSetResult {
+                project_id: request.project_id,
+                accepted: false,
+                error: Some("Project not found".to_owned()),
+            },
+            ErrorCode::RegistryIo,
+        ),
         Err(DirectoryError::Registry) => Err(ErrorCode::RegistryIo),
-        Err(error) => encode(ProjectIconSetResult {
-            project_id: request.project_id,
-            accepted: false,
-            error: Some(error.to_string()),
-        }),
+        Err(error) => encode(
+            ProjectIconSetResult {
+                project_id: request.project_id,
+                accepted: false,
+                error: Some(error.to_string()),
+            },
+            ErrorCode::RegistryIo,
+        ),
     }
 }
 
@@ -135,25 +147,34 @@ fn project_icon_get(
     request: ProjectIconGetRequest,
 ) -> Result<Value, ErrorCode> {
     match directory.get_project_icon(&request.project_id) {
-        Ok(icon) => encode(ProjectIconGetResult {
-            project_id: request.project_id,
-            icon: icon.map(|icon| ProjectIconPayload {
-                data: base64::engine::general_purpose::STANDARD.encode(icon.bytes),
-                mime_type: icon.mime_type,
-            }),
-            error: None,
-        }),
-        Err(DirectoryError::UnknownProject) => encode(ProjectIconGetResult {
-            project_id: request.project_id,
-            icon: None,
-            error: Some("Project not found".to_owned()),
-        }),
+        Ok(icon) => encode(
+            ProjectIconGetResult {
+                project_id: request.project_id,
+                icon: icon.map(|icon| ProjectIconPayload {
+                    data: base64::engine::general_purpose::STANDARD.encode(icon.bytes),
+                    mime_type: icon.mime_type,
+                }),
+                error: None,
+            },
+            ErrorCode::RegistryIo,
+        ),
+        Err(DirectoryError::UnknownProject) => encode(
+            ProjectIconGetResult {
+                project_id: request.project_id,
+                icon: None,
+                error: Some("Project not found".to_owned()),
+            },
+            ErrorCode::RegistryIo,
+        ),
         Err(DirectoryError::Registry) => Err(ErrorCode::RegistryIo),
-        Err(error) => encode(ProjectIconGetResult {
-            project_id: request.project_id,
-            icon: None,
-            error: Some(error.to_string()),
-        }),
+        Err(error) => encode(
+            ProjectIconGetResult {
+                project_id: request.project_id,
+                icon: None,
+                error: Some(error.to_string()),
+            },
+            ErrorCode::RegistryIo,
+        ),
     }
 }
 
@@ -167,24 +188,33 @@ fn project_config_read(
                 Some(config) => match PaseoConfigRaw::new(config) {
                     Ok(config) => Some(config),
                     Err(_) => {
-                        return encode(ProjectConfigReadResult::Failure {
-                            repo_root: result.repo_root,
-                            error: ProjectConfigRpcError::InvalidProjectConfig,
-                        });
+                        return encode(
+                            ProjectConfigReadResult::Failure {
+                                repo_root: result.repo_root,
+                                error: ProjectConfigRpcError::InvalidProjectConfig,
+                            },
+                            ErrorCode::RegistryIo,
+                        );
                     }
                 },
                 None => None,
             };
-            encode(ProjectConfigReadResult::Success {
-                repo_root: result.repo_root,
-                config,
-                revision: result.revision.map(protocol_revision),
-            })
+            encode(
+                ProjectConfigReadResult::Success {
+                    repo_root: result.repo_root,
+                    config,
+                    revision: result.revision.map(protocol_revision),
+                },
+                ErrorCode::RegistryIo,
+            )
         }
-        Err(DirectoryError::UnknownProject) => encode(ProjectConfigReadResult::Failure {
-            repo_root: request.repo_root,
-            error: ProjectConfigRpcError::ProjectNotFound,
-        }),
+        Err(DirectoryError::UnknownProject) => encode(
+            ProjectConfigReadResult::Failure {
+                repo_root: request.repo_root,
+                error: ProjectConfigRpcError::ProjectNotFound,
+            },
+            ErrorCode::RegistryIo,
+        ),
         Err(DirectoryError::Registry) => Err(ErrorCode::RegistryIo),
         Err(
             DirectoryError::DirectoryNotFound
@@ -201,10 +231,13 @@ fn project_config_read(
             | DirectoryError::ProjectConfigWriteFailed
             | DirectoryError::InvalidProjectIcon
             | DirectoryError::ProjectIconStorage,
-        ) => encode(ProjectConfigReadResult::Failure {
-            repo_root: request.repo_root,
-            error: ProjectConfigRpcError::InvalidProjectConfig,
-        }),
+        ) => encode(
+            ProjectConfigReadResult::Failure {
+                repo_root: request.repo_root,
+                error: ProjectConfigRpcError::InvalidProjectConfig,
+            },
+            ErrorCode::RegistryIo,
+        ),
     }
 }
 
@@ -218,60 +251,76 @@ fn project_config_write(
         request.config.value(),
         expected_revision,
     ) {
-        Ok(result) => encode(ProjectConfigWriteResult::Success {
-            repo_root: result.repo_root,
-            config: PaseoConfigRaw::new(result.config).map_err(|_| ErrorCode::RegistryIo)?,
-            revision: protocol_revision(result.revision),
-        }),
-        Err(DirectoryError::UnknownProject) => encode(ProjectConfigWriteResult::Failure {
-            repo_root: request.repo_root,
-            error: ProjectConfigRpcError::ProjectNotFound,
-        }),
-        Err(DirectoryError::StaleProjectConfig { current_revision }) => {
-            encode(ProjectConfigWriteResult::Failure {
+        Ok(result) => encode(
+            ProjectConfigWriteResult::Success {
+                repo_root: result.repo_root,
+                config: PaseoConfigRaw::new(result.config).map_err(|_| ErrorCode::RegistryIo)?,
+                revision: protocol_revision(result.revision),
+            },
+            ErrorCode::RegistryIo,
+        ),
+        Err(DirectoryError::UnknownProject) => encode(
+            ProjectConfigWriteResult::Failure {
+                repo_root: request.repo_root,
+                error: ProjectConfigRpcError::ProjectNotFound,
+            },
+            ErrorCode::RegistryIo,
+        ),
+        Err(DirectoryError::StaleProjectConfig { current_revision }) => encode(
+            ProjectConfigWriteResult::Failure {
                 repo_root: request.repo_root,
                 error: ProjectConfigRpcError::StaleProjectConfig {
                     current_revision: current_revision.map(protocol_revision),
                 },
-            })
-        }
-        Err(DirectoryError::InvalidProjectConfig) => encode(ProjectConfigWriteResult::Failure {
-            repo_root: request.repo_root,
-            error: ProjectConfigRpcError::InvalidProjectConfig,
-        }),
-        Err(DirectoryError::ProjectConfigWriteFailed) => {
-            encode(ProjectConfigWriteResult::Failure {
+            },
+            ErrorCode::RegistryIo,
+        ),
+        Err(DirectoryError::InvalidProjectConfig) => encode(
+            ProjectConfigWriteResult::Failure {
+                repo_root: request.repo_root,
+                error: ProjectConfigRpcError::InvalidProjectConfig,
+            },
+            ErrorCode::RegistryIo,
+        ),
+        Err(DirectoryError::Registry) => Err(ErrorCode::RegistryIo),
+        Err(_) => encode(
+            ProjectConfigWriteResult::Failure {
                 repo_root: request.repo_root,
                 error: ProjectConfigRpcError::WriteFailed,
-            })
-        }
-        Err(DirectoryError::Registry) => Err(ErrorCode::RegistryIo),
-        Err(_) => encode(ProjectConfigWriteResult::Failure {
-            repo_root: request.repo_root,
-            error: ProjectConfigRpcError::WriteFailed,
-        }),
+            },
+            ErrorCode::RegistryIo,
+        ),
     }
 }
 
 fn project_add(directory: &Directory, request: &ProjectAddRequest) -> Result<Value, ErrorCode> {
-    let timestamp = timestamp();
+    let timestamp = now_timestamp();
     match directory.add_project(&request.cwd, &timestamp) {
-        Ok(project) => encode(ProjectAddResult {
-            project: Some(project_descriptor(&project)),
-            error: None,
-            error_code: None,
-        }),
-        Err(DirectoryError::DirectoryNotFound) => encode(ProjectAddResult {
-            project: None,
-            error: Some(format!("Directory not found: {}", request.cwd)),
-            error_code: Some("directory_not_found".to_owned()),
-        }),
+        Ok(project) => encode(
+            ProjectAddResult {
+                project: Some(project_descriptor(&project)),
+                error: None,
+                error_code: None,
+            },
+            ErrorCode::RegistryIo,
+        ),
+        Err(DirectoryError::DirectoryNotFound) => encode(
+            ProjectAddResult {
+                project: None,
+                error: Some(format!("Directory not found: {}", request.cwd)),
+                error_code: Some("directory_not_found".to_owned()),
+            },
+            ErrorCode::RegistryIo,
+        ),
         Err(DirectoryError::Registry) => Err(ErrorCode::RegistryIo),
-        Err(error) => encode(ProjectAddResult {
-            project: None,
-            error: Some(error.to_string()),
-            error_code: None,
-        }),
+        Err(error) => encode(
+            ProjectAddResult {
+                project: None,
+                error: Some(error.to_string()),
+                error_code: None,
+            },
+            ErrorCode::RegistryIo,
+        ),
     }
 }
 
@@ -279,14 +328,17 @@ fn project_create_directory(
     directory: &Directory,
     request: &ProjectCreateDirectoryRequest,
 ) -> Result<Value, ErrorCode> {
-    let timestamp = timestamp();
+    let timestamp = now_timestamp();
     match directory.create_project_directory(&request.parent_path, &request.name, &timestamp) {
-        Ok((directory_path, project)) => encode(ProjectCreateDirectoryResult {
-            directory_path: Some(directory_path),
-            project: Some(project_descriptor(&project)),
-            error: None,
-            error_code: None,
-        }),
+        Ok((directory_path, project)) => encode(
+            ProjectCreateDirectoryResult {
+                directory_path: Some(directory_path),
+                project: Some(project_descriptor(&project)),
+                error: None,
+                error_code: None,
+            },
+            ErrorCode::RegistryIo,
+        ),
         Err(DirectoryError::Registry) => Err(ErrorCode::RegistryIo),
         Err(error) => {
             let directory_path = match &error {
@@ -295,12 +347,15 @@ fn project_create_directory(
                 }
                 _ => None,
             };
-            encode(ProjectCreateDirectoryResult {
-                directory_path,
-                project: None,
-                error: Some(error.to_string()),
-                error_code: Some(directory_create_error_code(&error).to_owned()),
-            })
+            encode(
+                ProjectCreateDirectoryResult {
+                    directory_path,
+                    project: None,
+                    error: Some(error.to_string()),
+                    error_code: Some(directory_create_error_code(&error).to_owned()),
+                },
+                ErrorCode::RegistryIo,
+            )
         }
     }
 }
@@ -309,24 +364,33 @@ fn workspace_open(
     directory: &Directory,
     request: &WorkspaceOpenRequest,
 ) -> Result<Value, ErrorCode> {
-    let timestamp = timestamp();
+    let timestamp = now_timestamp();
     match directory.open_workspace(&request.cwd, &timestamp) {
-        Ok(workspace) => encode(WorkspaceOpenResult {
-            workspace: Some(describe_workspace(directory, &workspace)?),
-            error: None,
-            error_code: None,
-        }),
-        Err(DirectoryError::DirectoryNotFound) => encode(WorkspaceOpenResult {
-            workspace: None,
-            error: Some(format!("Directory not found: {}", request.cwd)),
-            error_code: Some("directory_not_found".to_owned()),
-        }),
+        Ok(workspace) => encode(
+            WorkspaceOpenResult {
+                workspace: Some(describe_workspace(directory, &workspace)?),
+                error: None,
+                error_code: None,
+            },
+            ErrorCode::RegistryIo,
+        ),
+        Err(DirectoryError::DirectoryNotFound) => encode(
+            WorkspaceOpenResult {
+                workspace: None,
+                error: Some(format!("Directory not found: {}", request.cwd)),
+                error_code: Some("directory_not_found".to_owned()),
+            },
+            ErrorCode::RegistryIo,
+        ),
         Err(DirectoryError::Registry) => Err(ErrorCode::RegistryIo),
-        Err(error) => encode(WorkspaceOpenResult {
-            workspace: None,
-            error: Some(error.to_string()),
-            error_code: None,
-        }),
+        Err(error) => encode(
+            WorkspaceOpenResult {
+                workspace: None,
+                error: Some(error.to_string()),
+                error_code: None,
+            },
+            ErrorCode::RegistryIo,
+        ),
     }
 }
 
@@ -475,7 +539,7 @@ fn workspace_create(
             return workspace_create_worktree(directory, request, source);
         }
     };
-    let timestamp = timestamp();
+    let timestamp = now_timestamp();
     match directory.create_workspace(domain::workspace::lifecycle::WorkspaceCreation {
         path: &path,
         title: request.title,
@@ -493,20 +557,26 @@ fn workspace_create(
             {
                 directory.name_workspace(workspace.workspace_id.clone(), source);
             }
-            encode(WorkspaceCreateResult {
-                workspace: Some(describe_workspace(directory, &workspace)?),
-                setup_terminal_id: None,
-                error: None,
-                error_code: None,
-            })
+            encode(
+                WorkspaceCreateResult {
+                    workspace: Some(describe_workspace(directory, &workspace)?),
+                    setup_terminal_id: None,
+                    error: None,
+                    error_code: None,
+                },
+                ErrorCode::RegistryIo,
+            )
         }
         Err(DirectoryError::Registry) => Err(ErrorCode::RegistryIo),
-        Err(error) => encode(WorkspaceCreateResult {
-            workspace: None,
-            setup_terminal_id: None,
-            error: Some(error.to_string()),
-            error_code: workspace_create_error_code(&error).map(str::to_owned),
-        }),
+        Err(error) => encode(
+            WorkspaceCreateResult {
+                workspace: None,
+                setup_terminal_id: None,
+                error: Some(error.to_string()),
+                error_code: workspace_create_error_code(&error).map(str::to_owned),
+            },
+            ErrorCode::RegistryIo,
+        ),
     }
 }
 
@@ -552,36 +622,39 @@ fn workspace_create_worktree(
                 .and_then(|context| context.prompt.clone()),
             expects_initial_agent: request.first_agent_context.is_some(),
         },
-        &timestamp(),
+        &now_timestamp(),
     );
-    encode(match result {
-        Ok(created) => {
-            if let Some(context) = request.first_agent_context
-                && let Some(source) = domain::workspace::naming::first_agent_source(
-                    context.prompt.as_deref(),
-                    &context.attachments,
-                )
-            {
-                directory.name_workspace(created.workspace.workspace_id.clone(), source);
+    encode(
+        match result {
+            Ok(created) => {
+                if let Some(context) = request.first_agent_context
+                    && let Some(source) = domain::workspace::naming::first_agent_source(
+                        context.prompt.as_deref(),
+                        &context.attachments,
+                    )
+                {
+                    directory.name_workspace(created.workspace.workspace_id.clone(), source);
+                }
+                WorkspaceCreateResult {
+                    workspace: Some(runtime_workspace_descriptor(
+                        directory,
+                        &created.workspace,
+                        Some(&created.project),
+                    )),
+                    setup_terminal_id: None,
+                    error: None,
+                    error_code: None,
+                }
             }
-            WorkspaceCreateResult {
-                workspace: Some(runtime_workspace_descriptor(
-                    directory,
-                    &created.workspace,
-                    Some(&created.project),
-                )),
+            Err(error) => WorkspaceCreateResult {
+                workspace: None,
                 setup_terminal_id: None,
-                error: None,
-                error_code: None,
-            }
-        }
-        Err(error) => WorkspaceCreateResult {
-            workspace: None,
-            setup_terminal_id: None,
-            error_code: Some(error.code.to_owned()),
-            error: Some(error.message),
+                error_code: Some(error.code.to_owned()),
+                error: Some(error.message),
+            },
         },
-    })
+        ErrorCode::RegistryIo,
+    )
 }
 
 fn project_list(directory: &Directory, request: &ProjectListRequest) -> Result<Value, ErrorCode> {
@@ -593,7 +666,7 @@ fn project_list(directory: &Directory, request: &ProjectListRequest) -> Result<V
         .map(|project| project_descriptor(&project))
         .collect();
     if let Some(cursor) = &request.sync {
-        let value = encode(ProjectListResult { projects })?;
+        let value = encode(ProjectListResult { projects }, ErrorCode::RegistryIo)?;
         let rows = value["projects"].as_array().ok_or(ErrorCode::RegistryIo)?;
         let read = directory.directory_sync().synchronize(
             "projects",
@@ -607,7 +680,7 @@ fn project_list(directory: &Directory, request: &ProjectListRequest) -> Result<V
         );
         return Ok(serde_json::json!({"projects":read.values,"sync":read.sync}));
     }
-    encode(ProjectListResult { projects })
+    encode(ProjectListResult { projects }, ErrorCode::RegistryIo)
 }
 
 fn project_rename(
@@ -615,40 +688,46 @@ fn project_rename(
     request: ProjectRenameRequest,
 ) -> Result<Value, ErrorCode> {
     let custom_name = normalize_optional_text(request.custom_name);
-    let timestamp = timestamp();
+    let timestamp = now_timestamp();
     let updated = directory
         .rename_project(&request.project_id, custom_name.as_deref(), &timestamp)
         .map_err(directory_error)?;
-    encode(match updated {
-        Some(_) => ProjectRenameResult {
-            project_id: request.project_id,
-            accepted: true,
-            custom_name,
-            error: None,
+    encode(
+        match updated {
+            Some(_) => ProjectRenameResult {
+                project_id: request.project_id,
+                accepted: true,
+                custom_name,
+                error: None,
+            },
+            None => ProjectRenameResult {
+                project_id: request.project_id,
+                accepted: false,
+                custom_name: None,
+                error: Some("Project not found".to_owned()),
+            },
         },
-        None => ProjectRenameResult {
-            project_id: request.project_id,
-            accepted: false,
-            custom_name: None,
-            error: Some("Project not found".to_owned()),
-        },
-    })
+        ErrorCode::RegistryIo,
+    )
 }
 
 fn project_remove(
     directory: &Directory,
     request: ProjectRemoveRequest,
 ) -> Result<Value, ErrorCode> {
-    let timestamp = timestamp();
+    let timestamp = now_timestamp();
     let active_workspace_ids = directory
         .remove_project(&request.project_id, &timestamp)
         .map_err(directory_error)?;
-    encode(ProjectRemoveResult {
-        project_id: request.project_id,
-        accepted: true,
-        removed_workspace_ids: active_workspace_ids,
-        error: None,
-    })
+    encode(
+        ProjectRemoveResult {
+            project_id: request.project_id,
+            accepted: true,
+            removed_workspace_ids: active_workspace_ids,
+            error: None,
+        },
+        ErrorCode::RegistryIo,
+    )
 }
 
 fn workspace_list(
@@ -665,23 +744,29 @@ fn workspace_archive(
     directory: &Directory,
     request: WorkspaceArchiveRequest,
 ) -> Result<Value, ErrorCode> {
-    let archived_at = timestamp();
+    let archived_at = now_timestamp();
     if directory
         .archive_workspace(&request.workspace_id, &archived_at)
         .map_err(directory_error)?
         .is_none()
     {
-        return encode(WorkspaceArchiveResult {
-            workspace_id: request.workspace_id.clone(),
-            archived_at: None,
-            error: Some(format!("Workspace not found: {}", request.workspace_id)),
-        });
+        return encode(
+            WorkspaceArchiveResult {
+                workspace_id: request.workspace_id.clone(),
+                archived_at: None,
+                error: Some(format!("Workspace not found: {}", request.workspace_id)),
+            },
+            ErrorCode::RegistryIo,
+        );
     }
-    encode(WorkspaceArchiveResult {
-        workspace_id: request.workspace_id,
-        archived_at: Some(archived_at),
-        error: None,
-    })
+    encode(
+        WorkspaceArchiveResult {
+            workspace_id: request.workspace_id,
+            archived_at: Some(archived_at),
+            error: None,
+        },
+        ErrorCode::RegistryIo,
+    )
 }
 
 fn workspace_title_set(
@@ -689,49 +774,55 @@ fn workspace_title_set(
     request: WorkspaceTitleSetRequest,
 ) -> Result<Value, ErrorCode> {
     let title = normalize_optional_text(request.title);
-    let timestamp = timestamp();
+    let timestamp = now_timestamp();
     let updated = directory
         .set_workspace_title(&request.workspace_id, title.as_deref(), &timestamp)
         .map_err(directory_error)?;
-    encode(match updated {
-        Some(_) => WorkspaceTitleSetResult {
-            workspace_id: request.workspace_id,
-            accepted: true,
-            title,
-            error: None,
+    encode(
+        match updated {
+            Some(_) => WorkspaceTitleSetResult {
+                workspace_id: request.workspace_id,
+                accepted: true,
+                title,
+                error: None,
+            },
+            None => WorkspaceTitleSetResult {
+                workspace_id: request.workspace_id,
+                accepted: false,
+                title: None,
+                error: Some("Workspace not found".to_owned()),
+            },
         },
-        None => WorkspaceTitleSetResult {
-            workspace_id: request.workspace_id,
-            accepted: false,
-            title: None,
-            error: Some("Workspace not found".to_owned()),
-        },
-    })
+        ErrorCode::RegistryIo,
+    )
 }
 
 fn workspace_pin_set(
     directory: &Directory,
     request: WorkspacePinSetRequest,
 ) -> Result<Value, ErrorCode> {
-    let timestamp = timestamp();
+    let timestamp = now_timestamp();
     let pinned_at = request.pinned.then(|| timestamp.clone());
     let updated = directory
         .set_workspace_pin(&request.workspace_id, pinned_at.as_deref(), &timestamp)
         .map_err(directory_error)?;
-    encode(match updated {
-        Some(_) => WorkspacePinSetResult {
-            workspace_id: request.workspace_id,
-            accepted: true,
-            pinned_at,
-            error: None,
+    encode(
+        match updated {
+            Some(_) => WorkspacePinSetResult {
+                workspace_id: request.workspace_id,
+                accepted: true,
+                pinned_at,
+                error: None,
+            },
+            None => WorkspacePinSetResult {
+                workspace_id: request.workspace_id,
+                accepted: false,
+                pinned_at: None,
+                error: Some("Workspace not found".to_owned()),
+            },
         },
-        None => WorkspacePinSetResult {
-            workspace_id: request.workspace_id,
-            accepted: false,
-            pinned_at: None,
-            error: Some("Workspace not found".to_owned()),
-        },
-    })
+        ErrorCode::RegistryIo,
+    )
 }
 
 fn describe_workspace(
@@ -822,10 +913,6 @@ fn normalize_optional_text(value: Option<String>) -> Option<String> {
         .filter(|value| !value.is_empty())
 }
 
-fn timestamp() -> String {
-    Utc::now().to_rfc3339_opts(SecondsFormat::Millis, true)
-}
-
 const fn directory_create_error_code(error: &DirectoryError) -> &'static str {
     match error {
         DirectoryError::InvalidDirectoryName => "invalid_name",
@@ -885,14 +972,6 @@ const fn port_revision(
         mtime_ms: revision.mtime_ms,
         size: revision.size,
     }
-}
-
-fn decode<T: serde::de::DeserializeOwned>(value: Value) -> Result<T, ErrorCode> {
-    serde_json::from_value(value).map_err(|_| ErrorCode::InvalidMessage)
-}
-
-fn encode(value: impl Serialize) -> Result<Value, ErrorCode> {
-    serde_json::to_value(value).map_err(|_| ErrorCode::RegistryIo)
 }
 
 fn directory_error(_error: DirectoryError) -> ErrorCode {

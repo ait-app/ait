@@ -27,11 +27,7 @@ async fn binary_runs_canonical_workspace_setup_and_script_methods() {
     let log = root.path().join("server.log");
     let mut process = start(&state, &log);
     let address = ready(&mut process, &log).await;
-    let mut client = connect(
-        &address,
-        &method_names(metadata::automation::rpc::workspace_automation::METHODS),
-    )
-    .await;
+    let mut client = connect(&address, &method_names(metadata::automation::rpc::METHODS)).await;
 
     assert_blocked_and_approve(&mut client, &workspace).await;
     assert_script_lifecycle(&mut client, &workspace).await;

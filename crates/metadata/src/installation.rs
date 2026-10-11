@@ -2,14 +2,14 @@
 
 use std::sync::{Arc, Mutex};
 
-use crate::automation::service::workspace_automation::WorkspaceAutomation;
-use crate::daemon::service::daemon::Daemon;
+use crate::automation::service::WorkspaceAutomation;
+use crate::daemon::service::Daemon;
 use crate::directory::service::{
     directory::Directory, github_projects::GithubProjects, workspace_names::WorkspaceNames,
     workspace_state::WorkspaceState,
 };
-use crate::labels::service::workspace_labels::WorkspaceLabels;
-use crate::push::service::push::PushTokens;
+use crate::labels::service::WorkspaceLabels;
+use crate::push::service::PushTokens;
 use crate::worktrees::service::{workspace_recovery::WorkspaceRecovery, worktrees::Worktrees};
 
 /// Required functional parts of the metadata service, sharing the composed Workspace registries.

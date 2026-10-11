@@ -1,6 +1,6 @@
 use std::sync::{Arc, Mutex};
 
-use metadata::labels::service::workspace_labels::WorkspaceLabels;
+use metadata::labels::service::WorkspaceLabels;
 use persistence::storage::registry::FileBackedWorkspaceRegistry;
 use persistence::storage::workspace_labels::FileWorkspaceLabelStore;
 

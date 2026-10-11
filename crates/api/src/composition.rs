@@ -3,14 +3,14 @@
 use std::sync::{Arc, Mutex};
 
 use filesystem::files::service::files::Files;
-use filesystem::forge::service::forge::Forge;
+use filesystem::forge::service::Forge;
 use filesystem::git::service::checkout::Checkout;
-use metadata::automation::service::workspace_automation::WorkspaceAutomation;
-use metadata::daemon::service::daemon::Daemon;
+use metadata::automation::service::WorkspaceAutomation;
+use metadata::daemon::service::Daemon;
 use metadata::directory::service::{
     directory::Directory, github_projects::GithubProjects, workspace_state::WorkspaceState,
 };
-use metadata::labels::service::workspace_labels::WorkspaceLabels;
+use metadata::labels::service::WorkspaceLabels;
 use metadata::worktrees::service::{workspace_recovery::WorkspaceRecovery, worktrees::Worktrees};
 use provider::service::{agent_execution::AgentExecution, agents::Agents};
 
@@ -29,9 +29,9 @@ pub(super) struct Parts {
     /// Connection-owned browser automation broker.
     pub(super) browser: Option<browser::broker::Broker>,
     /// Orchestration skill selection and installation.
-    pub(super) skills: Option<provider::skills::service::skills::Skills>,
+    pub(super) skills: Option<provider::skills::service::Skills>,
     /// Durable push registration and lease renewal.
-    pub(super) push_tokens: Option<metadata::push::service::push::PushTokens>,
+    pub(super) push_tokens: Option<metadata::push::service::PushTokens>,
     /// Connection-owned voice and dictation with independently selected speech engines.
     pub(super) speech: Option<voice::service::Speech>,
     /// Local PTY terminal lifecycle, input, capture, and streaming.

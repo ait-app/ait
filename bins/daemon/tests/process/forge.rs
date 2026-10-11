@@ -4,7 +4,7 @@ use std::os::unix::fs::PermissionsExt;
 use std::path::Path;
 use std::process::Command;
 
-use filesystem::forge::rpc::forge::METHODS as FORGE_METHODS;
+use filesystem::forge::rpc::METHODS as FORGE_METHODS;
 use serde_json::json;
 
 use super::transport::{connect, method_names, request};

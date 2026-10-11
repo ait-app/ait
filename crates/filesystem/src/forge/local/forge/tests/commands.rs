@@ -245,7 +245,7 @@ fn detached_checkout_has_no_current_pull_request_and_never_invokes_the_cli() {
 
 #[test]
 fn check_identity_is_validated_before_requesting_remote_data() {
-    use crate::forge::ports::forge::CheckDetailsQuery;
+    use crate::forge::ports::CheckDetailsQuery;
     let fixture = Fixture::new("exit 99");
     for query in [
         CheckDetailsQuery::default(),
@@ -277,7 +277,7 @@ fn standalone_checks_do_not_request_an_unrelated_workflow() {
         .forge
         .check_details(
             fixture.cwd(),
-            crate::forge::ports::forge::CheckDetailsQuery {
+            crate::forge::ports::CheckDetailsQuery {
                 repo_owner: Some("acme"),
                 repo_name: Some("app"),
                 check_run_id: Some(9),

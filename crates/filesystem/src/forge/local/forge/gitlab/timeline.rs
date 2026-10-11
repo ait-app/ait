@@ -9,7 +9,7 @@ use super::{
     mr_endpoint, optional_string, read, strings, view,
 };
 use crate::forge::local::forge::{parse_time, timeline_key};
-use crate::forge::ports::forge::{
+use crate::forge::ports::{
     PullRequestTimeline, PullRequestTimelineItem, TimelineCommentLocation, TimelineError,
     TimelineErrorKind,
 };

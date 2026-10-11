@@ -58,7 +58,7 @@ async fn filesystem_requests_preserve_edits_and_connection_owned_versions() {
     let log = temp.path().join("log");
     let mut process = start(&temp.path().join("state"), &log);
     let address = ready(&mut process, &log).await;
-    let mut methods = method_names(filesystem::files::connection::files::METHODS);
+    let mut methods = method_names(filesystem::files::connection::METHODS);
     methods.push("subscription.release.request");
     let mut socket = connect(&address, &methods).await;
     let created = request(
@@ -145,7 +145,7 @@ async fn binary_preview_streams_bounded_chunks_and_honors_max_bytes() {
     let address = ready(&mut process, &log).await;
     let mut socket = connect(
         &address,
-        &method_names(filesystem::files::connection::files::METHODS),
+        &method_names(filesystem::files::connection::METHODS),
     )
     .await;
     send_request(
@@ -209,12 +209,12 @@ async fn upload_frames_are_connection_owned_and_failures_remove_partial_files() 
     let address = ready(&mut process, &log).await;
     let mut first = connect(
         &address,
-        &method_names(filesystem::files::connection::files::METHODS),
+        &method_names(filesystem::files::connection::METHODS),
     )
     .await;
     let mut other = connect(
         &address,
-        &method_names(filesystem::files::connection::files::METHODS),
+        &method_names(filesystem::files::connection::METHODS),
     )
     .await;
     let request_params =
@@ -400,7 +400,7 @@ async fn file_errors_and_inline_content_preserve_paseo_shapes() {
     let address = ready(&mut process, &log).await;
     let mut socket = connect(
         &address,
-        &method_names(filesystem::files::connection::files::METHODS),
+        &method_names(filesystem::files::connection::METHODS),
     )
     .await;
     let image = request(

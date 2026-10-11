@@ -17,7 +17,7 @@ use model::workspace::lifecycle::WorkspaceNaming;
 use model::workspace::registry::{ProjectRegistry, WorkspaceRegistry};
 use model::workspace::worktrees::ManagedWorktrees;
 
-use crate::worktrees::ports::worktrees::WorktreeArchiveCleanup;
+use crate::worktrees::ports::WorktreeArchiveCleanup;
 
 mod provisioning;
 pub use provisioning::WorkspaceWorktrees;

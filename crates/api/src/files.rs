@@ -51,7 +51,7 @@ pub(crate) async fn download(
             if cancel.is_cancelled() {
                 return None;
             }
-            match filesystem::files::connection::files::transfer::chunk(cursor, &tasks).await {
+            match filesystem::files::connection::transfer::chunk(cursor, &tasks).await {
                 Ok((next, Some(bytes))) => Some((Ok::<_, std::io::Error>(bytes), Some(next))),
                 Ok((_, None)) => None,
                 Err(error) => Some((Err(std::io::Error::other(error.0)), None)),

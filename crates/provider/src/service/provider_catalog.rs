@@ -7,6 +7,7 @@ use std::time::{Duration, Instant};
 use chrono::Utc;
 use domain::session::protocol::SessionEventKind;
 use model::ErrorCode;
+use model::rpc::decode;
 use model::session::SessionEvents;
 use serde_json::{Value, json};
 use sha2::{Digest, Sha256};
@@ -270,10 +271,6 @@ async fn discover(client: &dyn AgentClient, cwd: &str) -> Entry {
         loading: None,
         refresh_again: false,
     }
-}
-
-fn decode<T: serde::de::DeserializeOwned>(value: Value) -> Result<T, ErrorCode> {
-    serde_json::from_value(value).map_err(|_| ErrorCode::InvalidMessage)
 }
 
 #[cfg(test)]

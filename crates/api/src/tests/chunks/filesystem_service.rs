@@ -1,10 +1,10 @@
 use std::path::Path;
 use std::sync::Arc;
 
-use filesystem::files::local::files::LocalFiles;
+use filesystem::files::local::LocalFiles;
 use filesystem::files::service::files::Files;
 use filesystem::forge::local::forge::LocalForge;
-use filesystem::forge::service::forge::Forge;
+use filesystem::forge::service::Forge;
 use filesystem::git::local::{checkout::LocalCheckout, git_fetch::LocalGitFetch};
 use filesystem::git::service::{checkout::Checkout, git_fetch::GitFetch};
 

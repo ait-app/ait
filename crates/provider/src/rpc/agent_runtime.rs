@@ -44,6 +44,8 @@ use crate::service::agent_runtime::{
     SortDirection as ApplicationSortDirection, ThinkingOptionFilter, effective_thinking_option_id,
     resolved_updated_at,
 };
+use crate::support::rpc::{decode, encode};
+use crate::support::time::now_timestamp;
 
 /// Decode and execute a business request.
 ///
@@ -94,9 +96,10 @@ fn list(directory: &AgentRuntimeDirectory, request: AgentListRequest) -> Result<
         },
         None,
     )?;
-    encode(page(
-        &directory.list(&query).map_err(|error| map_error(&error))?,
-    ))
+    encode(
+        page(&directory.list(&query).map_err(|error| map_error(&error))?),
+        ErrorCode::AgentIo,
+    )
 }
 
 pub(crate) fn sync_snapshot(
@@ -117,14 +120,17 @@ pub(crate) fn sync_snapshot(
     let entries = directory
         .matching_entries(&query)
         .map_err(|error| map_error(&error))?;
-    encode(AgentDirectoryResult {
-        entries: entries.iter().map(entry).collect(),
-        page_info: AgentPageInfo {
-            next_cursor: None,
-            prev_cursor: None,
-            has_more: false,
+    encode(
+        AgentDirectoryResult {
+            entries: entries.iter().map(entry).collect(),
+            page_info: AgentPageInfo {
+                next_cursor: None,
+                prev_cursor: None,
+                has_more: false,
+            },
         },
-    })
+        ErrorCode::AgentIo,
+    )
 }
 
 pub(crate) fn synchronize(
@@ -141,7 +147,7 @@ pub(crate) fn synchronize(
     });
     let read = directory.sync.synchronize("agents", rows, cursor);
     snapshot["entries"] = Value::Array(read.values);
-    snapshot["sync"] = encode(read.sync)?;
+    snapshot["sync"] = encode(read.sync, ErrorCode::AgentIo)?;
     Ok(snapshot)
 }
 
@@ -156,11 +162,14 @@ fn history(
         QueryScope::History,
         request.search,
     )?;
-    encode(page(
-        &directory
-            .history(&query)
-            .map_err(|error| map_error(&error))?,
-    ))
+    encode(
+        page(
+            &directory
+                .history(&query)
+                .map_err(|error| map_error(&error))?,
+        ),
+        ErrorCode::AgentIo,
+    )
 }
 
 fn get(directory: &AgentRuntimeDirectory, request: &AgentGetRequest) -> Result<Value, ErrorCode> {
@@ -175,7 +184,7 @@ fn get(directory: &AgentRuntimeDirectory, request: &AgentGetRequest) -> Result<V
         }
         Err(error) => return Err(map_error(&error)),
     };
-    encode(result)
+    encode(result, ErrorCode::AgentIo)
 }
 
 fn update(
@@ -187,7 +196,7 @@ fn update(
         &agent_id,
         request.name.as_deref(),
         request.labels.as_ref(),
-        &timestamp(),
+        &now_timestamp(),
     ) {
         Ok(_) => AgentActionResult {
             agent_id,
@@ -203,32 +212,38 @@ fn update(
         }
         Err(error) => return Err(map_error(&error)),
     };
-    encode(result)
+    encode(result, ErrorCode::AgentIo)
 }
 
 fn archive(directory: &AgentRuntimeDirectory, request: AgentIdRequest) -> Result<Value, ErrorCode> {
     let agent_id = request.agent_id;
     let record = directory
-        .archive(&agent_id, &timestamp())
+        .archive(&agent_id, &now_timestamp())
         .map_err(|error| map_error(&error))?;
-    encode(AgentArchiveResult {
-        agent_id,
-        archived_at: record.archived_at.ok_or(ErrorCode::AgentIo)?,
-    })
+    encode(
+        AgentArchiveResult {
+            agent_id,
+            archived_at: record.archived_at.ok_or(ErrorCode::AgentIo)?,
+        },
+        ErrorCode::AgentIo,
+    )
 }
 
 fn delete(directory: &AgentRuntimeDirectory, request: AgentIdRequest) -> Result<Value, ErrorCode> {
     directory
         .delete(&request.agent_id)
         .map_err(|error| map_error(&error))?;
-    encode(AgentDeleteResult {
-        agent_id: request.agent_id,
-    })
+    encode(
+        AgentDeleteResult {
+            agent_id: request.agent_id,
+        },
+        ErrorCode::AgentIo,
+    )
 }
 
 fn detach(directory: &AgentRuntimeDirectory, request: AgentIdRequest) -> Result<Value, ErrorCode> {
     let agent_id = request.agent_id;
-    let result = match directory.detach(&agent_id, &timestamp()) {
+    let result = match directory.detach(&agent_id, &now_timestamp()) {
         Ok(_) => AgentActionResult {
             agent_id,
             accepted: true,
@@ -240,7 +255,7 @@ fn detach(directory: &AgentRuntimeDirectory, request: AgentIdRequest) -> Result<
             error: Some(error.to_string()),
         },
     };
-    encode(result)
+    encode(result, ErrorCode::AgentIo)
 }
 
 fn clear_attention(
@@ -255,12 +270,15 @@ fn clear_attention(
         return Err(ErrorCode::InvalidMessage);
     }
     let records = directory
-        .clear_attention(&ids, &timestamp())
+        .clear_attention(&ids, &now_timestamp())
         .map_err(|error| map_error(&error))?;
-    encode(AgentAttentionClearResult {
-        agent_id: request.agent_id,
-        agents: records.iter().map(snapshot).collect(),
-    })
+    encode(
+        AgentAttentionClearResult {
+            agent_id: request.agent_id,
+            agents: records.iter().map(snapshot).collect(),
+        },
+        ErrorCode::AgentIo,
+    )
 }
 
 fn close_items(
@@ -270,7 +288,7 @@ fn close_items(
     if !request.terminal_ids.is_empty() {
         return Err(ErrorCode::UnsupportedCapability);
     }
-    let archived_at = timestamp();
+    let archived_at = now_timestamp();
     let agents = request
         .agent_ids
         .iter()
@@ -286,10 +304,13 @@ fn close_items(
                 })
         })
         .collect();
-    encode(AgentItemsCloseResult {
-        agents,
-        terminals: Vec::new(),
-    })
+    encode(
+        AgentItemsCloseResult {
+            agents,
+            terminals: Vec::new(),
+        },
+        ErrorCode::AgentIo,
+    )
 }
 
 #[derive(Debug, Clone, Copy)]
@@ -537,10 +558,6 @@ const fn map_error(error: &AgentRuntimeError) -> ErrorCode {
     }
 }
 
-fn timestamp() -> String {
-    Utc::now().to_rfc3339_opts(SecondsFormat::Millis, true)
-}
-
 fn wire_timestamp(value: &str) -> String {
     chrono::DateTime::parse_from_rfc3339(value).map_or_else(
         |_| value.to_owned(),
@@ -550,14 +567,6 @@ fn wire_timestamp(value: &str) -> String {
                 .to_rfc3339_opts(SecondsFormat::Millis, true)
         },
     )
-}
-
-fn decode<T: serde::de::DeserializeOwned>(params: Value) -> Result<T, ErrorCode> {
-    serde_json::from_value(params).map_err(|_| ErrorCode::InvalidMessage)
-}
-
-fn encode(value: impl serde::Serialize) -> Result<Value, ErrorCode> {
-    serde_json::to_value(value).map_err(|_| ErrorCode::AgentIo)
 }
 
 #[cfg(test)]
