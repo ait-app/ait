@@ -1415,7 +1415,6 @@ export const zhCN: TranslationResources = {
       fullStatus: {
         title: "完整状态",
         modalTitle: "守护进程状态",
-        hint: "运行 `paseo daemon status` 并显示输出",
         view: "查看状态",
         copied: "状态已复制到剪贴板。",
         fetchFailed: "获取守护进程状态失败：{{message}}",
