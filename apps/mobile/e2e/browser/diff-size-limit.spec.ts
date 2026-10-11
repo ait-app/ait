@@ -1,6 +1,8 @@
 import { writeFile } from "node:fs/promises";
 import path from "node:path";
 import type { Page } from "@playwright/test";
+import { resolveSyntaxColors } from "@ait/highlight";
+import { APP_SETTINGS_KEY } from "../../src/hooks/use-settings/keys";
 import { buildHostWorkspaceRoute } from "../../src/utils/host-routes";
 import { test, expect } from "../support/fixtures";
 import { getServerId } from "../support/helpers/server-id";
@@ -15,17 +17,21 @@ test("an oversized file shows a warning while sibling diffs remain usable", asyn
   try {
     await writeFile(path.join(workspace.repoPath, "large.txt"), "a\n".repeat(150_000));
     await writeFile(path.join(workspace.repoPath, "small.rs"), "fn small_sibling_change() {}\n");
-    await page.addInitScript(() => {
-      const painted = new Set<string>();
-      const syntaxColors = new Set<string>();
-      Object.assign(window, { diffPaintedText: painted, diffSyntaxColors: syntaxColors });
-      const original = CanvasRenderingContext2D.prototype.fillText;
-      CanvasRenderingContext2D.prototype.fillText = function (text, ...args) {
-        painted.add(text);
-        if (text.includes("small_sibling_change")) syntaxColors.add(String(this.fillStyle));
-        return original.call(this, text, ...args);
-      };
-    });
+    await page.addInitScript(
+      ({ settingsKey }) => {
+        localStorage.setItem(settingsKey, JSON.stringify({ theme: "light", syntaxTheme: "one" }));
+        const painted = new Set<string>();
+        const syntaxColors = new Set<string>();
+        Object.assign(window, { diffPaintedText: painted, diffSyntaxColors: syntaxColors });
+        const original = CanvasRenderingContext2D.prototype.fillText;
+        CanvasRenderingContext2D.prototype.fillText = function (text, ...args) {
+          painted.add(text);
+          if (text.includes("small_sibling_change")) syntaxColors.add(String(this.fillStyle));
+          return original.call(this, text, ...args);
+        };
+      },
+      { settingsKey: APP_SETTINGS_KEY },
+    );
     await page.setViewportSize({ width: 1400, height: 900 });
     await page.goto(buildHostWorkspaceRoute(getServerId(), workspace.workspaceId));
     await waitForWorkspaceTabsVisible(page);
@@ -33,15 +39,15 @@ test("an oversized file shows a warning while sibling diffs remain usable", asyn
     await expect(page.getByTestId("git-diff-canvas")).toBeVisible();
     await expect
       .poll(() =>
-        page.evaluate(() => {
+        page.evaluate((keywordColor) => {
           const text = (window as unknown as { diffPaintedText: Set<string> }).diffPaintedText;
           const colors = (window as unknown as { diffSyntaxColors: Set<string> }).diffSyntaxColors;
           return (
             text.has("Diff too large to display") &&
             text.has("fn small_sibling_change() {}") &&
-            (colors.has("#cf222e") || colors.has("#ff7b72"))
+            colors.has(keywordColor)
           );
-        }),
+        }, resolveSyntaxColors("one", "light").keyword),
       )
       .toBe(true);
     await expect(page.getByTestId("diff-too-large")).toHaveCount(0);

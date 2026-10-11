@@ -38,15 +38,15 @@ describe("diff palette retention", () => {
 });
 
 describe.each([lightTheme, darkTheme])("semantic diff colors", (theme) => {
-  it("uses GitHub syntax colors even when the app has another syntax theme", () => {
-    const syntax = resolveSyntaxColors("one", theme.colorScheme);
+  it.each(["one", "github"] as const)("uses the selected %s syntax theme", (syntaxTheme) => {
+    const syntax = resolveSyntaxColors(syntaxTheme, theme.colorScheme);
     const created = createDiffPalette(
       theme.colorScheme === "light"
         ? { ...theme, colors: { ...theme.colors, syntax } }
         : { ...theme, colors: { ...theme.colors, syntax } },
     );
 
-    expect(created.syntax).toEqual(resolveSyntaxColors("github", theme.colorScheme));
+    expect(created.syntax).toBe(syntax);
   });
 
   it("uses the app status palette for gutter text and derived row tints", () => {

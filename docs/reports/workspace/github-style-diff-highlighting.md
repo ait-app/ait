@@ -5,7 +5,7 @@
 
 ## 改动与可见行为
 
-Diff 使用已有 GitHub 明暗语法色，不再被默认 One 语法主题覆盖。
+Diff 配色继续跟随用户选择的全局语法主题，GitHub 和 One 等已有主题均按选择生效。
 Rust 分别选择旧、新文件的语言；新增 `.gitattributes` 的 `linguist-language`、文件前后五行
 Vim/Emacs modeline、完整文件名和 shebang 提示。旧版本读取旧树 attributes，工作树与
 base/commit 比较读取各自目标侧，避免未提交 attributes 改动污染历史高亮。
@@ -29,17 +29,21 @@ GitHub 的 Linguist 语言库、歧义语言识别、token 边界或大小限制
   JSON 计数预算 2 项，共 41 项通过。包含跨行语法、缓存、rename、历史 attributes、
   未提交 attributes 更新、未知语言、超长文本、必要文件降级、订阅去重与恢复。
 - 较早的 `checkout` 名称过滤回归：156 项通过；没有执行全 Rust workspace 测试。
-- 客户端 palette、model、Web/Native paint 和 Diff sharing：5 个文件、63 项通过。
+- 客户端 palette、model、Web/Native paint 和 Diff sharing：5 个文件、65 项通过。
+  palette 回归覆盖 One/GitHub 所选语法主题与明暗模式；本次恢复主题跟随行为只涉及
+  TypeScript 与文档，按仓库规则没有重跑 Rust 测试。
 - `cargo clippy --offline -p filesystem --all-targets -- -D warnings` 通过。
 - `cargo check --offline --workspace` 通过。
-- App 的 `npx tsgo --noEmit` 通过。
+- App 的 `npx tsgo --noEmit` 通过；补齐浏览器 seed client 已使用的
+  `getCheckoutDiff` 类型声明，直接复用 SDK 的方法类型。
 - 变更 Rust 文件的 rustfmt、TypeScript/文档 Oxfmt、TypeScript Oxlint 与
   `git diff --check` 通过。
 - 浏览器两个用例通过：单文件超限时，小 Rust 文件的代码仍可见，Canvas 实际绘制的
-  关键字色为 GitHub 明暗主题之一；完整快照跨限时保留文件列表和普通文件，跳转到
+  关键字色符合所选语法主题；完整快照跨限时保留文件列表和普通文件，跳转到
   受限文件能看到提示，缩小 Diff 后恢复，WebSocket 连接数与关闭数不变。
-  适配最新 main 的 RPC 模块路径后，两个用例在同一次最终运行中通过
-  （分别 4.8 秒、6.1 秒；含隔离测试服务构建和启动共 54.0 秒）。
+  恢复所选语法主题后，单文件用例设置 One 浅色主题并重新验证实际绘制的关键字色，
+  通过（4.8 秒；含隔离测试服务构建和启动共 25.9 秒）。完整快照恢复用例在
+  `2113a502` 上通过（6.1 秒），本次未修改该用例的运行行为。
 - 浏览器初次尝试被沙箱临时端口限制阻挡，获得隔离测试运行权限后继续。原有用例的
   Explorer 标签选择器已过时，改为当前 Diff tab 入口；原有 75,000 行样本在当前 JSON
   格式下未跨限，增加为每文件 100,000 行。受限文件可能排在仍有大量内容的文件后面，
@@ -63,6 +67,8 @@ npx vitest run --project unit src/git/diff-document/palette.test.ts \
   src/git/diff-document/model.test.ts src/git/diff-document/paint.web.test.ts \
   src/git/diff-document/paint.native.test.ts src/git/diff-sharing.test.ts
 npx playwright test --project=browser e2e/browser/diff-size-limit.spec.ts
+npx playwright test --project=browser e2e/browser/diff-size-limit.spec.ts \
+  --grep 'an oversized file'
 npx playwright test --project=browser e2e/browser/diff-size-limit.spec.ts \
   --grep 'oversized snapshots recover'
 npx tsgo --noEmit

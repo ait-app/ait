@@ -1,3 +1,4 @@
+import type { DaemonClient } from "@ait/client/internal/daemon-client";
 import type { TerminalActivity } from "@ait/protocol/terminal-activity";
 import { readFileSync } from "node:fs";
 import path from "node:path";
@@ -78,6 +79,8 @@ export interface SeedDaemonClient {
    * of racing the filesystem watcher's debounce.
    */
   checkoutRefresh(cwd: string): Promise<{ success: boolean; error: unknown }>;
+  /** Read a checkout diff snapshot without creating a subscription. */
+  getCheckoutDiff: DaemonClient["getCheckoutDiff"];
   createTerminal(
     cwd: string,
     name?: string,
