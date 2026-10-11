@@ -3,6 +3,7 @@ import type { WorkspaceComposerAttachment } from "@/attachments/types";
 import { useWorkspaceAttachmentScopeKey } from "@/attachments/workspace-attachments-store";
 import { buildDraftAgentSetup, type ClientSlashCommand } from "@/client-slash-commands";
 import { ArchivedAgentCallout } from "@/components/archived-agent-callout";
+import { AgentErrorCallout } from "@/components/agent-error-callout";
 import { FileDropZone } from "@/components/file-drop/file-drop-zone";
 import { getProviderIcon } from "@/components/provider-icons";
 import { useRetainedPanelActive } from "@/components/retained-panel";
@@ -1266,6 +1267,8 @@ const ChatAgentReadyContent = memo(function ChatAgentReadyContent({
   const dockContent = (
     <View style={styles.contentContainer}>
       {streamContent}
+
+      <AgentErrorCallout status={effectiveAgent.status} lastError={effectiveAgent.lastError} />
 
       {showHistorySyncError ? (
         <TimelineSyncErrorCallout isRetrying={isRetryingHistorySync} onRetry={retryTimelineSync} />
