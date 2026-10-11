@@ -2,6 +2,7 @@ use super::*;
 use serde_json::json;
 
 mod physical;
+mod waiting;
 
 fn message(length: usize) -> ServerMessage {
     ServerMessage::Response {

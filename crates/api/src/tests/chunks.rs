@@ -1,5 +1,6 @@
 use super::*;
 
+mod checkout_refresh;
 mod filesystem_service;
 mod startup_burst;
 

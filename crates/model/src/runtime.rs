@@ -34,6 +34,8 @@ pub struct Runtime {
     pub lifecycle_intent: Mutex<Option<LifecycleIntent>>,
     /// Shared short catalog/project job budget.
     pub jobs: Arc<Semaphore>,
+    /// Serializes admitted foreground Git work without occupying the short job budget.
+    checkout_jobs: Arc<Semaphore>,
     /// Independent terminal I/O budget.
     pub terminal_jobs: Arc<Semaphore>,
     /// Serializes background checkout reads without consuming foreground admission.
@@ -55,6 +57,7 @@ impl Runtime {
             admission: Mutex::new(()),
             lifecycle_intent: Mutex::new(None),
             jobs: Arc::new(Semaphore::new(1)),
+            checkout_jobs: Arc::new(Semaphore::new(1)),
             terminal_jobs: Arc::new(Semaphore::new(4)),
             checkout_poll_jobs: Arc::new(Semaphore::new(1)),
             directory_poll_jobs: Arc::new(Semaphore::new(1)),
@@ -143,6 +146,29 @@ impl Runtime {
         execute: impl FnOnce(&mut S) -> Result<R, ErrorCode> + Send + 'static,
     ) -> Result<R, ErrorCode> {
         self.run_waiting(&self.directory_poll_jobs, service, failure, execute)
+            .await
+    }
+
+    /// Run an admitted Checkout operation on its own serialized foreground budget.
+    ///
+    /// # Arguments
+    /// * `service` - Installed Checkout service with its existing synchronization.
+    /// * `failure` - Safe error returned when its lock or blocking task fails.
+    /// * `execute` - Git operation executed off the reactor after admission.
+    ///
+    /// # Returns
+    /// Returns the operation's result after preceding Checkout work finishes.
+    ///
+    /// # Errors
+    /// Returns missing services, shutdown, poisoned service locks or business failures.
+    /// An admitted blocking job remains tracked after its response future is dropped.
+    pub async fn run_checkout<S: Send + 'static, R: Send + 'static>(
+        &self,
+        service: Option<Arc<Mutex<S>>>,
+        failure: ErrorCode,
+        execute: impl FnOnce(&mut S) -> Result<R, ErrorCode> + Send + 'static,
+    ) -> Result<R, ErrorCode> {
+        self.run_waiting(&self.checkout_jobs, service, failure, execute)
             .await
     }
 

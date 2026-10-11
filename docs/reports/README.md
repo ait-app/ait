@@ -64,6 +64,7 @@
 
 ## 工作区、文件与 Git
 
+- [本机 Changes 刷新断线：修复验证](workspace/changes-refresh-transport-2026-10-11.md)
 - [Filesystem 移除 metadata 依赖的验证](workspace/filesystem-model-independence-2026-10-07.md)
 - [工作区重置同步远端分支：PR 验证](workspace/workspace-reset-remote-pr-validation-2026-10-07.md)
 - [工作区重置复用同名分支：PR 验证](workspace/workspace-reset-existing-branch-pr-validation-2026-10-05.md)
