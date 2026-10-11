@@ -183,17 +183,16 @@ jobs:
 
   desktop:
     needs: nightly-prepare
-    if: ${{ !cancelled() && (github.event_name == 'pull_request' || needs.nightly-prepare.outputs.admitted == 'true') }}
+    if: ${{ !cancelled() && github.event_name != 'pull_request' && github.ref == 'refs/heads/main' && needs.nightly-prepare.outputs.admitted == 'true' }}
     name: Desktop ${{ matrix.label }}
     permissions:
       contents: read
     runs-on: ${{ matrix.runner }}
     timeout-minutes: 90
-    # A new push to the same PR supersedes the previous 90-minute package build;
-    # main builds keep a unique group so nightly admission stays in nightly-control.
+    # Only admitted main pushes package desktop; nightly admission stays in nightly-control.
     concurrency:
-      group: ${{ github.event_name == 'pull_request' && format('desktop-pr-{0}-{1}', github.event.pull_request.number, matrix.platform) || format('desktop-run-{0}-{1}', github.run_id, matrix.platform) }}
-      cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+      group: ${{ format('desktop-run-{0}-{1}', github.run_id, matrix.platform) }}
+      cancel-in-progress: false
     strategy:
       fail-fast: false
       matrix:

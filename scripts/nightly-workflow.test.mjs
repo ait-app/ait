@@ -62,12 +62,11 @@ test("main builds run independently while admission and publication share a queu
   assert.equal(workflow.jobs.desktop.needs, "nightly-prepare");
   assert.equal(
     workflow.jobs.desktop.if,
-    "${{ !cancelled() && (github.event_name == 'pull_request' || needs.nightly-prepare.outputs.admitted == 'true') }}",
+    "${{ !cancelled() && github.event_name != 'pull_request' && github.ref == 'refs/heads/main' && needs.nightly-prepare.outputs.admitted == 'true' }}",
   );
   assert.deepEqual(workflow.jobs.desktop.concurrency, {
-    group:
-      "${{ github.event_name == 'pull_request' && format('desktop-pr-{0}-{1}', github.event.pull_request.number, matrix.platform) || format('desktop-run-{0}-{1}', github.run_id, matrix.platform) }}",
-    "cancel-in-progress": "${{ github.event_name == 'pull_request' }}",
+    group: "${{ format('desktop-run-{0}-{1}', github.run_id, matrix.platform) }}",
+    "cancel-in-progress": false,
   });
   assert.deepEqual(
     workflow.jobs["nightly-prepare"].concurrency,
@@ -124,16 +123,17 @@ function condition(expression, github, needs = {}, cancelled = false) {
   );
 }
 
-test("PR merge builds are read-only and never schedule, publish, or clean up nightly", () => {
+test("PR CI skips desktop packaging and every nightly job", () => {
   assert.ok(Object.hasOwn(workflow.on, "pull_request"));
   assert.equal(workflow.on.pull_request_target, undefined);
   assert.deepEqual(workflow.permissions, { contents: "read" });
   assert.deepEqual(workflow.jobs.desktop.permissions, { contents: "read" });
-  const github = { event_name: "pull_request", ref: "refs/pull/123/merge" };
-  assert.equal(condition(workflow.jobs.desktop.if, github), true);
-  for (const job of ["nightly-prepare", "nightly-publish", "nightly-cleanup"])
-    assert.equal(condition(workflow.jobs[job].if, github), false);
-  assert.equal(condition(workflow.jobs.desktop.if, github, {}, true), false);
+  for (const ref of ["refs/pull/123/merge", "refs/heads/main"]) {
+    const github = { event_name: "pull_request", ref };
+    const needs = { "nightly-prepare": { outputs: { admitted: "true" } } };
+    for (const job of ["desktop", "nightly-prepare", "nightly-publish", "nightly-cleanup"])
+      assert.equal(condition(workflow.jobs[job].if, github, needs), false, job);
+  }
   const upload = workflow.jobs.desktop.steps.find((step) =>
     step.uses?.startsWith("actions/upload-artifact@"),
   );
@@ -151,6 +151,20 @@ test("PR merge builds are read-only and never schedule, publish, or clean up nig
   assert.doesNotMatch(
     JSON.stringify(workflow.jobs.desktop),
     /secrets\.|GH_TOKEN|EXPO_TOKEN|eas build/,
+  );
+});
+
+test("desktop packaging requires an admitted main push that has not been cancelled", () => {
+  const github = { event_name: "push", ref: "refs/heads/main" };
+  for (const admitted of ["true", "false", undefined]) {
+    const needs = { "nightly-prepare": { outputs: { admitted } } };
+    assert.equal(condition(workflow.jobs.desktop.if, github, needs), admitted === "true");
+  }
+  const needs = { "nightly-prepare": { outputs: { admitted: "true" } } };
+  assert.equal(condition(workflow.jobs.desktop.if, github, needs, true), false);
+  assert.equal(
+    condition(workflow.jobs.desktop.if, { ...github, ref: "refs/heads/dev" }, needs),
+    false,
   );
 });
 
@@ -299,7 +313,7 @@ test("mobile publishing remains manual only", async () => {
   }
 });
 
-test("packaging shell passes nightly names literally while PR builds keep release names", async (t) => {
+test("packaging shell passes nightly names literally and keeps default names without a label", async (t) => {
   const directory = await mkdtemp(path.join(tmpdir(), "ait-nightly-args-"));
   t.after(() => rm(directory, { recursive: true, force: true }));
   await writeFile(
