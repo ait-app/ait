@@ -14,6 +14,8 @@
 
 ## 架构决策
 
+- [ADR-132：Checkout 刷新独立准入与有界输出背压](decisions/workspace/adr-132-checkout-refresh-admission-and-backpressure.md)：隔离前台 Git 任务，diff 拥堵时等待输出额度并保持连接。
+
 - [ADR-131：metadata 按能力组组织模块](decisions/workspace/adr-131-metadata-capability-groups.md)：server/daemon/push/directory/labels/automation/worktrees 七组沿用分层，组间仅经 ports/protocol 协作，并由模块边界测试约束。
 - [ADR-130：Workspace 与 Project 方法归 metadata](decisions/workspace/adr-130-workspace-methods-owned-by-metadata.md)：worktree、恢复与 GitHub clone 的服务和协议迁入 metadata，filesystem 只保留本地适配器，端口下沉 model/domain。
 - [ADR-129：Agent Skills 能力组归 provider](decisions/providers/adr-129-provider-owned-skills.md)：整组迁移、主机级安装与事务兼容，保留文件操作队列。
@@ -111,6 +113,7 @@
 
 ## 工程规范与验证
 
+- [本机 Changes 刷新断线：修复验证](reports/workspace/changes-refresh-transport-2026-10-11.md)：Git 任务额度隔离、有界 diff 输出等待与控制响应回归。
 - [Ait 0.0.27 安装后诊断与修复](reports/clients/release-0.0.27-installed-diagnostics-2026-10-11.md)：原生事件校验、启动订阅与更新诊断误报。
 
 - [Rust style guide](policy/rust.md)：Rust 代码、测试、lint 与覆盖率规范。

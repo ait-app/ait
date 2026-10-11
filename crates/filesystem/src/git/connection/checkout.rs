@@ -74,14 +74,17 @@ impl PendingSubscription {
                     Ok(None) => continue,
                     Err(_) => break,
                 };
-                if self
-                    .outbound
-                    .send(&ServerMessage::Event {
-                        method: "checkout.diff.update".to_owned(),
-                        params,
-                    })
-                    .is_err()
-                {
+                let event = ServerMessage::Event {
+                    method: "checkout.diff.update".to_owned(),
+                    params,
+                };
+                let delivered = tokio::select! {
+                    biased;
+                    () = task_cancellation.cancelled() => break,
+                    () = self.server_cancel.cancelled() => break,
+                    result = self.outbound.send_waiting(&event) => result,
+                };
+                if delivered.is_err() {
                     break;
                 }
             }
@@ -101,7 +104,7 @@ pub(crate) async fn dispatch(
     }
     let method = method.to_owned();
     state
-        .run(
+        .run_checkout(
             state.checkout.clone(),
             ErrorCode::ProjectIo,
             move |checkout| {
@@ -121,7 +124,7 @@ async fn subscribe(
     outbound: Outbound,
 ) -> Result<Dispatch, ErrorCode> {
     let (observation, value) = state
-        .run(
+        .run_checkout(
             state.checkout.clone(),
             ErrorCode::ProjectIo,
             move |checkout| DiffObservation::prepare(checkout, params).map_err(Into::into),

@@ -162,7 +162,13 @@ async fn checkout(
     .await;
     match reply {
         Ok(reply) => {
-            context.respond(Ok(reply.value))?;
+            context
+                .outbound
+                .send_waiting(&model::ServerMessage::Response {
+                    request_id: context.request.id,
+                    result: reply.value,
+                })
+                .await?;
             if let Some(pending) = reply.subscription {
                 let (id, subscription) = pending.activate();
                 connection.diffs.insert(id, subscription);

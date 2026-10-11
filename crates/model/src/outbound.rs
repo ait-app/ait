@@ -4,7 +4,7 @@ use std::sync::Arc;
 
 use crate::ServerMessage;
 use crate::server::{MAX_QUEUE_BYTES, MAX_QUEUE_MESSAGES};
-use tokio::sync::{OwnedSemaphorePermit, Semaphore, mpsc};
+use tokio::sync::{Notify, OwnedSemaphorePermit, Semaphore, mpsc};
 use tokio_util::sync::CancellationToken;
 
 #[derive(Debug, thiserror::Error)]
@@ -24,8 +24,22 @@ pub struct Queued {
     /// Encoded frame to write.
     pub message: Frame,
     // Budget remains reserved until the active socket write completes or is dropped.
-    _bytes: OwnedSemaphorePermit,
-    _messages: Option<OwnedSemaphorePermit>,
+    _reservation: OutputReservation,
+}
+
+#[derive(Debug)]
+struct OutputReservation {
+    bytes: Option<OwnedSemaphorePermit>,
+    messages: Option<OwnedSemaphorePermit>,
+    released: Arc<Notify>,
+}
+
+impl Drop for OutputReservation {
+    fn drop(&mut self) {
+        drop(self.bytes.take());
+        drop(self.messages.take());
+        self.released.notify_waiters();
+    }
 }
 
 #[derive(Clone, Debug)]
@@ -35,6 +49,7 @@ pub struct Outbound {
     bytes: Arc<Semaphore>,
     failed: CancellationToken,
     messages: Option<Arc<Semaphore>>,
+    released: Arc<Notify>,
 }
 
 impl Outbound {
@@ -48,6 +63,7 @@ impl Outbound {
                 bytes: Arc::new(Semaphore::new(MAX_QUEUE_BYTES)),
                 failed: CancellationToken::new(),
                 messages: None,
+                released: Arc::new(Notify::new()),
             },
             receiver,
         )
@@ -61,6 +77,7 @@ impl Outbound {
         let bytes = Arc::new(Semaphore::new(MAX_QUEUE_BYTES));
         let messages = Arc::new(Semaphore::new(MAX_QUEUE_MESSAGES));
         let failed = CancellationToken::new();
+        let released = Arc::new(Notify::new());
         let mut receivers = Vec::with_capacity(4);
         let lanes = std::array::from_fn(|_| {
             let (sender, receiver) = mpsc::channel(MAX_QUEUE_MESSAGES);
@@ -69,6 +86,7 @@ impl Outbound {
                 sender,
                 bytes: bytes.clone(),
                 messages: Some(messages.clone()),
+                released: released.clone(),
                 failed: failed.clone(),
             }
         });
@@ -96,6 +114,21 @@ impl Outbound {
             self.failed.cancel();
         }
         result
+    }
+
+    /// Enqueue JSON while waiting for the existing connection output budget.
+    ///
+    /// # Arguments
+    /// * `message` - Response or event whose encoded frame must fit the existing output limit.
+    ///
+    /// # Returns
+    /// Completes when the encoded frame has been queued; its permits survive the active write.
+    ///
+    /// # Errors
+    /// Returns encoding failures, oversized messages, or interrupted/closed delivery.
+    pub async fn send_waiting(&self, message: &ServerMessage) -> Result<(), QueueError> {
+        self.send_frame(Frame::Text(serde_json::to_string(message)?))
+            .await
     }
 
     /// Return the token cancelled when delivery fails or the connection ends.
@@ -140,8 +173,11 @@ impl Outbound {
         self.sender
             .try_send(Queued {
                 message: Frame::Text(text),
-                _bytes: bytes,
-                _messages: messages,
+                _reservation: OutputReservation {
+                    bytes: Some(bytes),
+                    messages,
+                    released: self.released.clone(),
+                },
             })
             .map_err(|_| QueueError::Full)
     }
@@ -150,25 +186,54 @@ impl Outbound {
     /// # Errors
     /// Rejects oversized data and interrupted or closed delivery.
     pub async fn binary(&self, data: Vec<u8>) -> Result<(), QueueError> {
-        let count = u32::try_from(data.len()).map_err(|_| QueueError::Full)?;
-        if data.len() > MAX_QUEUE_BYTES {
+        self.send_frame(Frame::Binary(data)).await
+    }
+
+    async fn send_frame(&self, message: Frame) -> Result<(), QueueError> {
+        let size = match &message {
+            Frame::Text(text) => text.len(),
+            Frame::Binary(bytes) => bytes.len(),
+        };
+        let count = u32::try_from(size).map_err(|_| QueueError::Full)?;
+        if size > MAX_QUEUE_BYTES {
             return Err(QueueError::Full);
         }
-        let messages = if let Some(budget) = &self.messages {
-            Some(tokio::select! {
+        loop {
+            // Register before checking credits so a completed write cannot be missed. Acquiring
+            // many permits asynchronously would reserve the remaining bytes while waiting and
+            // make unrelated small control responses fail on the shared physical connection.
+            let released = self.released.notified();
+            tokio::pin!(released);
+            released.as_mut().enable();
+            if self.failed.is_cancelled() || self.sender.is_closed() {
+                return Err(QueueError::Full);
+            }
+            if let Ok(slot) = self.sender.try_reserve()
+                && let Ok(bytes) = self.bytes.clone().try_acquire_many_owned(count)
+            {
+                let messages = self
+                    .messages
+                    .as_ref()
+                    .map(|budget| budget.clone().try_acquire_owned())
+                    .transpose();
+                if let Ok(messages) = messages {
+                    slot.send(Queued {
+                        message,
+                        _reservation: OutputReservation {
+                            bytes: Some(bytes),
+                            messages,
+                            released: self.released.clone(),
+                        },
+                    });
+                    return Ok(());
+                }
+            }
+            tokio::select! {
+                biased;
                 () = self.failed.cancelled() => return Err(QueueError::Full),
-                permit = budget.clone().acquire_owned() => permit.map_err(|_| QueueError::Full)?,
-            })
-        } else {
-            None
-        };
-        let bytes = tokio::select! {
-            () = self.failed.cancelled() => return Err(QueueError::Full),
-            permit = self.bytes.clone().acquire_many_owned(count) => permit.map_err(|_| QueueError::Full)?,
-        };
-        tokio::select! {
-            () = self.failed.cancelled() => Err(QueueError::Full),
-            result = self.sender.send(Queued { message: Frame::Binary(data), _bytes: bytes, _messages:messages }) => result.map_err(|_| QueueError::Full),
+                () = self.sender.closed() => return Err(QueueError::Full),
+                () = &mut released => {},
+            }
         }
     }
 }

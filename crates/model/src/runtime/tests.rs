@@ -1,6 +1,7 @@
 use super::*;
 use crate::tests::runtime;
 
+mod checkout;
 mod polling;
 mod shared;
 

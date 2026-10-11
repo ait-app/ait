@@ -58,7 +58,7 @@ async fn cancelled_binary_waiter_releases_permits_and_never_enqueues_late_output
 }
 
 #[tokio::test]
-async fn dropping_a_pending_binary_send_returns_its_reserved_budget() {
+async fn dropping_a_pending_binary_send_keeps_control_response_budget_available() {
     let (queue, mut receiver) = Outbound::new();
     for _ in 0..MAX_QUEUE_MESSAGES {
         queue.send(&message(1)).unwrap();
@@ -71,7 +71,7 @@ async fn dropping_a_pending_binary_send_returns_its_reserved_budget() {
             Poll::Ready(())
         })
         .await;
-        assert_eq!(queue.bytes.available_permits(), available - 1024);
+        assert_eq!(queue.bytes.available_permits(), available);
     }
     assert_eq!(queue.bytes.available_permits(), available);
     for _ in 0..MAX_QUEUE_MESSAGES {
