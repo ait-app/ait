@@ -86,6 +86,7 @@
 
 ## Provider、Agent 与会话
 
+- [OpenCode 模型目录与执行失败修复](providers/opencode-catalog-readiness-2026-10-10.md)
 - [Codex computer use 请求处理与 Auto-review 批准](providers/codex-computer-use-approval-2026-10-10.md)
 - [OpenCode 原生权限图标：PR 验证](providers/opencode-permission-icons-2026-10-09.md)
 - [OpenCode 使用问题追踪：图标与权限管理](providers/opencode-feedback-2026-10-09.md)

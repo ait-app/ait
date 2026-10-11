@@ -145,14 +145,14 @@ async fn daemon_status_config_diagnostics_and_update_match_canonical_contract() 
         status["result"]["providers"],
         json!([
             { "provider":"antigravity", "available":false,
-                "error":"Provider executable is unavailable" },
+                "error":"Antigravity CLI (agy) executable is unavailable" },
             { "provider":"claude", "available":false,
-                "error":"Provider executable is unavailable" },
+                "error":"Claude Code executable: unavailable" },
             { "provider":"codex", "available":true, "error":null },
             { "provider":"deepseek-harness", "available":false,
-                "error":"Provider executable is unavailable" },
+                "error":"DeepSeek Harness executable is unavailable" },
             { "provider":"opencode", "available":false,
-                "error":"Provider executable is unavailable" }
+                "error":"OpenCode ACP requires an installed OpenCode 1.x or 2.x release." }
         ])
     );
 

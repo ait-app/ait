@@ -358,6 +358,7 @@ pub(crate) trait AgentClient: Debug + Send + Sync {
     }
 
     /// Inspect launch and authentication availability without exposing credentials.
+    /// Unavailable catalog snapshots may display this guidance; keep it within 4096 bytes.
     /// # Errors
     /// Returns unsupported diagnostics or an inspection failure.
     fn diagnostic(&self) -> AgentSessionFuture<'_, String> {

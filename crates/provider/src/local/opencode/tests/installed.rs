@@ -4,20 +4,37 @@ use std::sync::{
     atomic::{AtomicUsize, Ordering},
 };
 
-use axum::{Json, Router, extract::State, http::StatusCode, response::IntoResponse, routing::post};
+use axum::{
+    Json, Router,
+    extract::State,
+    http::StatusCode,
+    response::{IntoResponse, Response},
+    routing::post,
+};
+use tokio::sync::mpsc;
 use tokio_util::task::AbortOnDropHandle;
 
 use super::*;
 use crate::service::agent_manager::ownership::Owners;
 
-async fn installed(
-    question: bool,
-) -> (
-    TempDir,
-    OpenCodeClient,
-    AgentSessionSpec,
-    AbortOnDropHandle<()>,
-) {
+mod workflows;
+
+#[derive(Debug)]
+struct Installed {
+    root: TempDir,
+    client: OpenCodeClient,
+    spec: AgentSessionSpec,
+    _server: AbortOnDropHandle<()>,
+    requests: mpsc::UnboundedReceiver<Value>,
+}
+
+#[derive(Debug)]
+struct Model {
+    calls: AtomicUsize,
+    requests: mpsc::UnboundedSender<Value>,
+}
+
+async fn installed(question: bool) -> Installed {
     let binary = std::env::var("AIT_TEST_OPENCODE_BIN").expect("set AIT_TEST_OPENCODE_BIN");
     let root = tempfile::tempdir().unwrap();
     let cwd = root
@@ -32,16 +49,25 @@ async fn installed(
         ("XDG_CONFIG_HOME".into(), format!("{cwd}/config")),
         ("XDG_CACHE_HOME".into(), format!("{cwd}/cache")),
         ("XDG_STATE_HOME".into(), format!("{cwd}/state")),
-        ("OPENCODE_DISABLE_AUTOUPDATE".into(), "1".into()),
-        ("OPENCODE_DISABLE_MODELS_FETCH".into(), "1".into()),
+        ("OPENCODE_TEST_HOME".into(), cwd.clone()),
+        ("OPENCODE_DB".into(), format!("{cwd}/opencode.db")),
+        ("OPENCODE_CLI_CONFIG_CONTENT".into(), "{}".into()),
+        ("OPENCODE_CONFIG_DIR".into(), format!("{cwd}/config")),
+        ("OPENCODE_CONFIG_CONTENT".into(), "{}".into()),
+        ("OPENCODE_DISABLE_AUTOUPDATE".into(), "true".into()),
+        ("OPENCODE_DISABLE_MODELS_FETCH".into(), "true".into()),
     ]);
     let version = launcher::version(&client, &cwd).await.unwrap();
     let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
     let address = listener.local_addr().unwrap();
-    let calls = Arc::new(AtomicUsize::new(usize::from(!question)));
+    let (sender, requests) = mpsc::unbounded_channel();
+    let state = Arc::new(Model {
+        calls: AtomicUsize::new(usize::from(!question)),
+        requests: sender,
+    });
     let router = Router::new()
         .route("/v1/chat/completions", post(model))
-        .with_state(calls);
+        .with_state(state);
     let server = AbortOnDropHandle::new(tokio::spawn(async move {
         axum::serve(listener, router).await.unwrap();
     }));
@@ -63,31 +89,21 @@ async fn installed(
             ..Default::default()
         },
     };
-    (root, client, spec, server)
-}
-
-async fn model(
-    State(calls): State<Arc<AtomicUsize>>,
-    Json(request): Json<Value>,
-) -> axum::response::Response {
-    if request["messages"]
-        .to_string()
-        .contains("Reject model request")
-    {
-        return (
-            StatusCode::FORBIDDEN,
-            Json(json!({"error":{"type":"FreeTierError",
-                "message":"OpenCode's free tier can only be used from within OpenCode"}})),
-        )
-            .into_response();
+    Installed {
+        root,
+        client,
+        spec,
+        _server: server,
+        requests,
     }
-    model_response(&calls, &request).into_response()
 }
 
-fn model_response(
-    calls: &AtomicUsize,
-    request: &Value,
-) -> ([(&'static str, &'static str); 1], String) {
+async fn model(State(state): State<Arc<Model>>, Json(request): Json<Value>) -> Response {
+    let _ = state.requests.send(request.clone());
+    if let Some(response) = controlled_response(&request).await {
+        return response;
+    }
+    let calls = &state.calls;
     if request["messages"]
         .to_string()
         .contains("Legacy ACP question")
@@ -177,12 +193,76 @@ fn model_response(
             chunks[0], chunks[1]
         ),
     )
+        .into_response()
+}
+
+fn is_user_message(request: &Value, text: &str) -> bool {
+    // Native title generation repeats the user text, but omits attachments and tools.
+    // Observe only the primary agent request when checking a user workflow.
+    if request["messages"].as_array().is_some_and(|messages| {
+        messages.iter().any(|message| {
+            message["role"] == "system"
+                && message["content"]
+                    .as_str()
+                    .is_some_and(|text| text.starts_with("You are a title generator."))
+        })
+    }) {
+        return false;
+    }
+    let matches_text = |content: &Value| {
+        content
+            .as_str()
+            .and_then(|content| content.strip_prefix(text))
+            .is_some_and(|remaining| remaining.is_empty() || remaining.starts_with('\n'))
+    };
+    request["messages"]
+        .as_array()
+        .and_then(|messages| {
+            messages
+                .iter()
+                .rev()
+                .find(|message| message["role"] == "user")
+        })
+        .is_some_and(|message| {
+            matches_text(&message["content"])
+                || message["content"].as_array().is_some_and(|blocks| {
+                    blocks
+                        .iter()
+                        .any(|block| block["type"] == "text" && matches_text(&block["text"]))
+                })
+        })
+}
+
+async fn controlled_response(request: &Value) -> Option<Response> {
+    if is_user_message(request, "Reject model request") {
+        return Some(
+            (
+                StatusCode::FORBIDDEN,
+                Json(json!({"error":{"type":"FreeTierError",
+                "message":"OpenCode's free tier can only be used from within OpenCode"}})),
+            )
+                .into_response(),
+        );
+    }
+    if is_user_message(request, "Hold native request") {
+        return std::future::pending().await;
+    }
+    if is_user_message(request, "Reject native authentication") {
+        return Some((StatusCode::UNAUTHORIZED, Json(json!({"error":{"message":"local authentication rejected","type":"authentication_error"}}))).into_response());
+    }
+    None
 }
 
 #[tokio::test]
 #[ignore = "requires AIT_TEST_OPENCODE_BIN; isolated XDG and loopback model"]
 async fn installed_acp_five_sessions_and_native_model_error_preserve_history_and_reason() {
-    let (_root, client, spec, _server) = installed(false).await;
+    let Installed {
+        root: _root,
+        client,
+        spec,
+        _server,
+        ..
+    } = installed(false).await;
     let mut sessions = Vec::new();
     let owners = Owners::default();
     for index in 0..5 {
@@ -248,7 +328,13 @@ async fn installed_acp_five_sessions_and_native_model_error_preserve_history_and
 #[tokio::test]
 #[ignore = "requires AIT_TEST_OPENCODE_BIN; isolated XDG and deterministic loopback model"]
 async fn installed_acp_multi_turn_native_history_resume_and_discovery() {
-    let (_root, client, spec, _server) = installed(false).await;
+    let Installed {
+        root: _root,
+        client,
+        spec,
+        _server,
+        ..
+    } = installed(false).await;
     let mut session = client.create_session(&spec).await.unwrap();
     let mut items = Vec::new();
     let timeline = crate::storage::timeline::Timeline::memory().unwrap();
@@ -316,7 +402,13 @@ async fn installed_acp_multi_turn_native_history_resume_and_discovery() {
 #[tokio::test]
 #[ignore = "requires OpenCode 2.0.26+ in AIT_TEST_OPENCODE_BIN; isolated XDG and loopback model"]
 async fn installed_acp_native_question_form_reaches_user_and_model() {
-    let (_root, client, spec, _server) = installed(true).await;
+    let Installed {
+        root: _root,
+        client,
+        spec,
+        _server,
+        ..
+    } = installed(true).await;
     let mut session = client.create_session(&spec).await.unwrap();
     session
         .start_turn("Ask which language to use, then continue.", &spec.config)
@@ -364,7 +456,13 @@ async fn installed_acp_native_question_form_reaches_user_and_model() {
 #[tokio::test]
 #[ignore = "requires AIT_TEST_OPENCODE_BIN; isolated XDG and loopback model"]
 async fn installed_acp_shell_output_is_text_in_live_and_replayed_history() {
-    let (_root, client, mut spec, _server) = installed(true).await;
+    let Installed {
+        root: _root,
+        client,
+        mut spec,
+        _server,
+        ..
+    } = installed(true).await;
     spec.config.feature_values = Some(BTreeMap::from([("permission".into(), json!("allow"))]));
     let mut session = client.create_session(&spec).await.unwrap();
     let turn = session
@@ -415,7 +513,13 @@ async fn installed_acp_shell_output_is_text_in_live_and_replayed_history() {
 #[tokio::test]
 #[ignore = "requires AIT_TEST_OPENCODE_BIN; isolated XDG and loopback model"]
 async fn installed_acp_native_permission_rejection_and_next_turn() {
-    let (_root, client, mut spec, _server) = installed(true).await;
+    let Installed {
+        root: _root,
+        client,
+        mut spec,
+        _server,
+        ..
+    } = installed(true).await;
     spec.config.feature_values = Some(BTreeMap::from([("permission".into(), json!("ask"))]));
     spec.config.system_prompt = Some("Native override sentinel".into());
     let mut session = client.create_session(&spec).await.unwrap();
@@ -464,7 +568,13 @@ async fn installed_acp_native_permission_rejection_and_next_turn() {
 #[tokio::test]
 #[ignore = "requires OpenCode 1.18.4+ in AIT_TEST_OPENCODE_BIN; isolated XDG and loopback model"]
 async fn installed_acp_without_native_forms_disables_unanswerable_questions() {
-    let (_root, mut client, spec, _server) = installed(false).await;
+    let Installed {
+        root: _root,
+        mut client,
+        spec,
+        _server,
+        ..
+    } = installed(false).await;
     let version = launcher::version(&client, &spec.cwd).await.unwrap();
     assert!(version.starts_with("1."));
     client
@@ -498,7 +608,13 @@ async fn installed_acp_without_native_forms_disables_unanswerable_questions() {
 #[tokio::test]
 #[ignore = "requires OpenCode 2.0.26+ in AIT_TEST_OPENCODE_BIN; isolated XDG and loopback model"]
 async fn installed_acp_auxiliary_model_has_no_tools_and_removes_native_history() {
-    let (_root, client, spec, _server) = installed(false).await;
+    let Installed {
+        root: _root,
+        client,
+        spec,
+        _server,
+        ..
+    } = installed(false).await;
     let options = crate::ports::native_history::ListOptions {
         cwd: Some(spec.cwd.clone()),
         scan_limit: 10,
@@ -512,4 +628,32 @@ async fn installed_acp_auxiliary_model_has_no_tools_and_removes_native_history()
         "authoritative answer"
     );
     assert!(client.list_sessions(&options).await.unwrap().is_empty());
+}
+
+#[tokio::test]
+#[ignore = "requires a broken OpenCode 2.0.0-2.0.25 in AIT_TEST_OPENCODE_BIN"]
+async fn installed_acp_broken_v2_catalog_reports_an_upgrade_without_creating_a_session() {
+    let Installed {
+        root: _root,
+        client,
+        spec,
+        _server,
+        ..
+    } = installed(false).await;
+    let version = launcher::version(&client, &spec.cwd).await.unwrap();
+    assert!(version.starts_with("2."));
+    assert!(!launcher::supported(&version));
+
+    assert!(!client.is_available().await.unwrap());
+    assert!(
+        client
+            .diagnostic()
+            .await
+            .unwrap()
+            .contains("Upgrade OpenCode to 2.0.26 or newer")
+    );
+    assert!(matches!(
+        client.create_session(&spec).await,
+        Err(AgentSessionError::Unavailable)
+    ));
 }

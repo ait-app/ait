@@ -29,6 +29,7 @@ pub(crate) struct OpenCodeClient {
     pub(super) environment: BTreeMap<String, String>,
     pub(super) images: crate::local::images::ImageStore,
     pub(super) capabilities: Arc<RwLock<Option<Capabilities>>>,
+    pub(super) startup: Arc<tokio::sync::Mutex<()>>,
 }
 
 /// Session methods actually advertised by the installed native ACP process.
@@ -50,6 +51,7 @@ impl OpenCodeClient {
             environment: BTreeMap::new(),
             images: crate::local::images::ImageStore::default(),
             capabilities: Arc::new(RwLock::new(None)),
+            startup: Arc::default(),
         }
     }
 
@@ -88,6 +90,10 @@ impl AgentClient for OpenCodeClient {
         Box::pin(async {
             let cwd = std::env::current_dir().map_err(|_| AgentSessionError::Unavailable)?;
             match launcher::version(self, &cwd.to_string_lossy()).await {
+                Ok(version) if !launcher::supported(&version) => Ok(format!(
+                    "OpenCode {version} has an ACP model catalog initialization bug. \
+                     Upgrade OpenCode to 2.0.26 or newer, then refresh the provider."
+                )),
                 Ok(version) => {
                     match launcher::spawn(
                         self,

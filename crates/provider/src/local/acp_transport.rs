@@ -86,6 +86,12 @@ impl Transport {
         })
     }
 
+    /// Return the configured deadline for one control operation, including its confirmation.
+    /// Prompt execution uses unbounded reads and does not use this duration.
+    pub(crate) const fn control_deadline(&self) -> Duration {
+        self.deadline
+    }
+
     /// Write and flush one bounded frame; closes uncertain transports on write failure.
     pub(crate) async fn send(&mut self, message: &Value) -> Result<(), AgentSessionError> {
         if self.closed {
