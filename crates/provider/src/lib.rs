@@ -17,6 +17,7 @@ pub mod ports;
 pub(crate) mod protocol;
 pub mod rpc;
 pub mod service;
+pub mod skills;
 pub mod storage;
 mod timeline_projection;
 

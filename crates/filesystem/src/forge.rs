@@ -1,4 +1,4 @@
-//! GitHub and GitLab forge operations and repository discovery.
+//! GitHub and GitLab forge operations and repository discovery adapters.
 
 pub mod local;
 pub(crate) mod ports;

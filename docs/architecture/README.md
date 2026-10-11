@@ -6,21 +6,21 @@ Electron 位于 `apps/desktop`；`apps/mobile` 提供桌面、浏览器与移动
 
 ## Rust 能力边界
 
-| Crate         | 职责                                              | 允许的内部依赖                                        |
-| ------------- | ------------------------------------------------- | ----------------------------------------------------- |
-| `domain`      | Agent/Project/Workspace 值、记录、不变量与纯投影  | 无                                                    |
-| `persistence` | 单文件工具、通用 Registry 及具体文件持久化适配器  | `model`、`domain`                                     |
-| `model`       | 协作端口、连接协议、请求和事件资源、创建流程协调  | `domain`                                              |
-| `metadata`    | 基础连接方法、Project/Workspace 目录与配置        | `domain`、`model`；测试使用 `persistence`             |
-| `filesystem`  | 文件、Git、worktree、Forge 和技能安装             | `domain`、`model`；测试使用 `persistence`             |
-| `provider`    | 原生 Provider 会话、执行、历史和摘要生成          | `domain`、`model`；测试使用 `persistence`             |
-| `terminal`    | PTY、终端快照、活动和连接订阅                     | `domain`、`model`                                     |
-| `voice`       | 语音、听写和离线推理                              | `model`                                               |
-| `schedule`    | 定时任务服务与协议                                | `domain`、`model`；测试使用 `persistence`             |
-| `browser`     | 浏览器自动化请求与回传                            | `model`                                               |
-| `relay`       | 控制 RPC、主动连接与反向数据通道                  | `model`                                               |
-| `api`         | HTTP/WebSocket 鉴权、连接与跨能力协调             | 上述能力包、`domain`、`model`；测试使用 `persistence` |
-| `daemon`      | 启动配置、进程锁、server identity、服务组装和停机 | API、领域、`model`、`persistence` 及能力包            |
+| Crate         | 职责                                                 | 允许的内部依赖                                        |
+| ------------- | ---------------------------------------------------- | ----------------------------------------------------- |
+| `domain`      | Agent/Project/Workspace 值、记录、不变量与纯投影     | 无                                                    |
+| `persistence` | 单文件工具、通用 Registry 及具体文件持久化适配器     | `model`、`domain`                                     |
+| `model`       | 协作端口、连接协议、请求和事件资源、创建流程协调     | `domain`                                              |
+| `metadata`    | 基础连接方法、Project/Workspace 目录、配置与生命周期 | `domain`、`model`；测试使用 `persistence`             |
+| `filesystem`  | 文件、Git、Forge 及 worktree/clone 本地适配器        | `domain`、`model`；测试使用 `persistence`             |
+| `provider`    | 原生 Provider 会话、执行、历史、摘要和技能安装       | `domain`、`model`；测试使用 `persistence`             |
+| `terminal`    | PTY、终端快照、活动和连接订阅                        | `domain`、`model`                                     |
+| `voice`       | 语音、听写和离线推理                                 | `model`                                               |
+| `schedule`    | 定时任务服务与协议                                   | `domain`、`model`；测试使用 `persistence`             |
+| `browser`     | 浏览器自动化请求与回传                               | `model`                                               |
+| `relay`       | 控制 RPC、主动连接与反向数据通道                     | `model`                                               |
+| `api`         | HTTP/WebSocket 鉴权、连接与跨能力协调                | 上述能力包、`domain`、`model`；测试使用 `persistence` |
+| `daemon`      | 启动配置、进程锁、server identity、服务组装和停机    | API、领域、`model`、`persistence` 及能力包            |
 
 各实现组件自己声明方法，功能 crate 对外提供一个完整的 `Service`，API 按 crate 整体安装。
 `implemented_methods()` 返回业务方法声明，`installed_methods(bool)` 返回全部或空集合。
@@ -81,19 +81,33 @@ persistence 适配器；见 [ADR-107](../decisions/daemon/adr-107-direct-imports
 Terminal 同样直接使用 model 的 Workspace registry、活动契约和连接事件资源，以及 domain
 的记录和活动值，不依赖 metadata；见 [ADR-103](../decisions/daemon/adr-103-terminal-model-dependency.md)。
 Filesystem 的生产代码依赖 domain/model，相关测试使用 persistence 适配器：共享目录观察与摘要
-消费端口归 model，Git/Forge 快照、身份与 descriptor 纯函数归 domain；Project 登记、命名和
-setup 通过 `ProjectRegistration`、`WorkspaceNaming`
-与 `WorkspaceSetup` 注入 metadata 的现有服务。API 的 setup 适配器继续使用原有自动化锁，
-Runtime 保留阻塞执行、admission 和任务跟踪。功能 crate 之间没有直接依赖；见
-[ADR-104](../decisions/workspace/adr-104-filesystem-model-collaboration.md)。
+消费端口归 model，Git/Forge 快照、身份与 descriptor 纯函数归 domain。功能 crate 之间没有
+直接依赖；见 [ADR-104](../decisions/workspace/adr-104-filesystem-model-collaboration.md)。
 
-filesystem 内部按能力组组织：`git`、`forge`、`worktrees`、`files` 和 `skills` 各自保留
+`workspace.worktree.*`、`workspace.recovery.*`、`workspace.github.*` 与 `project.github.*`
+的服务、RPC 和协议归 metadata，与其余 Project/Workspace 方法一起安装。它们依赖的本地 Git、
+`gh` 与目录操作通过 `model::workspace::worktrees` 的 `ManagedWorktrees`、
+`WorkspaceRecoveryRuntime`、`ChangeRequestResolver` 和 `model::workspace::provisioning` 的
+`GithubProjectsRuntime` 端口注入，交换的值归 domain；daemon 将 filesystem 的
+`LocalManagedWorktrees`、`LocalForge` 与 `LocalGithubProjects` 注入 metadata。同一份
+`Arc<Mutex<Worktrees>>` 由 worktree RPC、`Directory` 和 schedule 共享，创建后的 setup 直接
+使用 metadata 的自动化服务，归档前的资源关闭经 `metadata::ports::worktrees` 由 API 注入。
+单连接仍把这些长耗时方法分配到文件操作队列。见
+[ADR-130](../decisions/workspace/adr-130-workspace-methods-owned-by-metadata.md)。
+
+filesystem 内部按能力组组织：`git`、`forge` 和 `files` 各自保留
 `ports`/`protocol`/`service`/`rpc`/`connection`/`local` 分层。组之间只引用对方的 `ports` 和
 `protocol`；`installation`、`capabilities`、`dispatch`、`connection` 以及组合 Git/Forge 缓存的
 `workspace_runtime` 位于顶层，可以组合多个组；组间共享的输出预算、有界 Git runner 和分发
-错误码位于不依赖任何组的 `support`。worktree 的 change request 解析通过
-`ChangeRequestResolver` 端口注入 Forge 实现。`crates/filesystem/tests/module_boundaries.rs`
+错误码位于不依赖任何组的 `support`。`crates/filesystem/tests/module_boundaries.rs`
 检查这些约定，见 [ADR-113](../decisions/workspace/adr-113-filesystem-capability-groups.md)。
+
+`provider::skills` 整组拥有 `agent.skills.*` 的协议、端口、服务和本地安装适配器，
+与原生执行保持独立锁，按 provider 整体安装。技能选择和安装仍是主机级能力，不需要
+Agent 身份或原生会话。daemon 注入原有 bundle、三个目标目录和 `skills-state`；安装路径、
+事务格式及删除确认保持兼容。单连接将这些已声明的方法继续分配到文件操作队列，
+避免技能文件操作阻塞同连接上的原生 Agent 请求。见
+[ADR-129](../decisions/providers/adr-129-provider-owned-skills.md)。
 
 内置 Provider 由 `provider::Providers` 组装。具体客户端列表、启动配置、安装发现与辅助
 元数据生成能力留在 provider crate 内部；daemon 提供数据目录并连接服务与进程生命周期。

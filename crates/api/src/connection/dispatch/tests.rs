@@ -1,3 +1,5 @@
+use std::sync::{Arc, Mutex};
+
 use model::outbound::Frame;
 use model::{DispatchError, Request};
 use serde_json::{Value, json};
@@ -15,6 +17,77 @@ const OWNED_METHODS: &[&str] = &[
     "agent.list.request",
     "terminal.list.request",
 ];
+
+#[tokio::test]
+async fn provider_handles_host_skills_without_filesystem_or_native_execution() {
+    let root = tempfile::tempdir().unwrap();
+    let store = provider::skills::local::skills::LocalSkills::new(
+        &root.path().join("bundle"),
+        &[
+            root.path().join("agents"),
+            root.path().join("claude"),
+            root.path().join("codex"),
+        ],
+        &root.path().join("state"),
+    )
+    .unwrap();
+    let api = api();
+    let state = provider::dispatch::State {
+        runtime: api.shared.runtime.clone(),
+        skills: Some(Arc::new(Mutex::new(
+            provider::skills::service::skills::Skills::new(Box::new(store)),
+        ))),
+        agents: None,
+        agent_runtime: None,
+        agent_execution: None,
+        directory_changes: None,
+        has_terminals: false,
+    };
+    for (method, params) in [
+        (
+            "agent.skills.import_legacy_selection.request",
+            json!({"selection":{"mode":"all"}}),
+        ),
+        ("agent.skills.get_status.request", json!({})),
+        ("agent.skills.reconcile.request", json!({})),
+        (
+            "agent.skills.save_selection.request",
+            json!({"selection":{"mode":"all"}}),
+        ),
+        ("agent.skills.uninstall.request", json!({})),
+    ] {
+        let (outbound, mut receiver) = Outbound::new();
+        let mut subscriptions = ConnectionSubscriptions::default();
+        let mut context = context(method, &api.shared, &outbound);
+        context.request.params = params;
+        let mut pending = Some(context);
+
+        assert!(matches!(
+            filesystem::dispatch::dispatch(
+                &mut pending,
+                &api.shared.filesystem,
+                &mut subscriptions.filesystem,
+            )
+            .await,
+            Err(DispatchError::NotImplemented)
+        ));
+        assert!(pending.is_some(), "{method}");
+        assert!(receiver.try_recv().is_err(), "{method}");
+        assert!(
+            provider::dispatch::dispatch(&mut pending, &state, &mut subscriptions.provider)
+                .await
+                .unwrap()
+                .is_none()
+        );
+
+        assert!(pending.is_none(), "{method}");
+        let response = decode(receiver.try_recv().unwrap().message);
+        assert_eq!(response["type"], "response", "{method}: {response}");
+        assert_eq!(response["request_id"], "request-1");
+        assert_eq!(response["result"]["selection"], json!({"mode":"all"}));
+        assert!(receiver.try_recv().is_err(), "{method}");
+    }
+}
 
 fn api() -> Api {
     Api::new(

@@ -32,6 +32,7 @@ async fn directory_only_hosts_check_identity_and_retire_only_the_requested_works
     let mut state = crate::dispatch::State {
         runtime: runtime.clone(),
         agents: None,
+        skills: None,
         agent_runtime: Some(Arc::new(Mutex::new(directory))),
         agent_execution: None,
         directory_changes: None,

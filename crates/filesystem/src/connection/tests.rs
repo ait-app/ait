@@ -49,12 +49,7 @@ impl Harness {
             checkout: Some(Arc::new(Mutex::new(Checkout::new(Box::new(
                 LocalCheckout::new(root.path().join("managed")),
             ))))),
-            skills: None,
             forge: None,
-            github_projects: None,
-            worktrees: None,
-            workspace_recovery: None,
-            workspace_setup: None,
         });
         let (outbound, receiver) = Outbound::new();
         Self {

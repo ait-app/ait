@@ -3,12 +3,12 @@
 use std::sync::{Arc, Mutex};
 
 use filesystem::files::service::files::Files;
-use filesystem::forge::service::{forge::Forge, github_projects::GithubProjects};
+use filesystem::forge::service::forge::Forge;
 use filesystem::git::service::checkout::Checkout;
-use filesystem::worktrees::service::{workspace_recovery::WorkspaceRecovery, worktrees::Worktrees};
 use metadata::service::{
-    daemon::Daemon, directory::Directory, workspace_automation::WorkspaceAutomation,
-    workspace_labels::WorkspaceLabels, workspace_state::WorkspaceState,
+    daemon::Daemon, directory::Directory, github_projects::GithubProjects,
+    workspace_automation::WorkspaceAutomation, workspace_labels::WorkspaceLabels,
+    workspace_recovery::WorkspaceRecovery, workspace_state::WorkspaceState, worktrees::Worktrees,
 };
 use provider::service::{agent_execution::AgentExecution, agents::Agents};
 
@@ -26,7 +26,7 @@ pub(super) struct Parts {
     /// Connection-owned browser automation broker.
     pub(super) browser: Option<browser::broker::Broker>,
     /// Orchestration skill selection and installation.
-    pub(super) skills: Option<filesystem::skills::service::skills::Skills>,
+    pub(super) skills: Option<provider::skills::service::skills::Skills>,
     /// Durable push registration and lease renewal.
     pub(super) push_tokens: Option<metadata::service::push::PushTokens>,
     /// Connection-owned voice and dictation with independently selected speech engines.
@@ -35,9 +35,9 @@ pub(super) struct Parts {
     pub(super) terminals: Option<terminal::service::Terminals>,
     /// Native Provider execution and coordinated Agent runtime metadata.
     pub(super) agent_execution: Option<AgentExecution>,
-    /// Filesystem workspace recovery operations.
+    /// Archived Workspace recovery.
     pub(super) workspace_recovery: Option<WorkspaceRecovery>,
-    /// Filesystem github projects operations.
+    /// GitHub repository discovery and Project cloning.
     pub(super) github_projects: Option<GithubProjects>,
     /// Versioned Agent presets and explicit default selection.
     pub(super) agents: Option<Agents>,
@@ -81,23 +81,23 @@ impl From<Services> for Parts {
             parts.workspace_labels = Some(metadata.workspace_labels);
             parts.workspace_automation = Some(metadata.workspace_automation);
             parts.workspace_state = Some(metadata.workspace_state);
+            parts.worktrees = Some(metadata.worktrees);
+            parts.workspace_recovery = Some(metadata.workspace_recovery);
+            parts.github_projects = Some(metadata.github_projects);
         }
         if let Some(filesystem) = services.filesystem {
             let filesystem = filesystem.into_dependencies();
-            parts.skills = Some(filesystem.skills);
-            parts.workspace_recovery = Some(filesystem.workspace_recovery);
-            parts.github_projects = Some(filesystem.github_projects);
             parts.checkout = Some(filesystem.checkout);
             parts.git_fetch = Some(filesystem.git_fetch);
             parts.forge = Some(filesystem.forge);
             parts.files = Some(filesystem.files);
-            parts.worktrees = Some(filesystem.worktrees);
         }
         if let Some(provider) = services.provider {
             let provider = provider.into_dependencies();
             parts.summary_source = Some(summary_source(provider.summary_generator));
             parts.agent_execution = Some(provider.execution);
             parts.agents = Some(provider.agents);
+            parts.skills = Some(provider.skills);
         }
         parts
     }
@@ -112,20 +112,6 @@ pub fn summary_source(
     generator: Arc<dyn model::summary::SummaryGenerator>,
 ) -> Arc<dyn model::summary::SummarySource> {
     Arc::new(SummarySource(generator))
-}
-
-/// Adapt installed `automation` to setup requests sharing its existing lock and task owner.
-/// Returns none when automation is absent; no independent runtime or lock is created.
-pub(super) fn workspace_setup(
-    automation: Option<&Arc<Mutex<WorkspaceAutomation>>>,
-) -> Option<Arc<dyn model::workspace::lifecycle::WorkspaceSetup>> {
-    automation.map(|automation| {
-        Arc::new(
-            metadata::service::workspace_collaboration::SharedWorkspaceSetup::new(
-                automation.clone(),
-            ),
-        ) as Arc<dyn model::workspace::lifecycle::WorkspaceSetup>
-    })
 }
 
 #[derive(Debug)]

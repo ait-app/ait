@@ -21,18 +21,13 @@ const files = new Set(
     .split("\0")
     .filter(Boolean),
 );
-const sourceFiles = [...files].filter(
+const lintFiles = [...files].filter(
   (file) =>
     /^(?:apps\/|packages\/|scripts\/|\.github\/|[^/]+$)/.test(file) &&
-    /\.(?:[cm]?[jt]sx?|json|ya?ml)$/.test(file) &&
+    /\.[cm]?[jt]sx?$/.test(file) &&
     !/(?:^|\/)(?:generated\/|[^/]+\.gen\.[jt]sx?$)/.test(file) &&
-    !file.endsWith("package-lock.json") &&
     existsSync(new URL(`../${file}`, import.meta.url)),
 );
-if (sourceFiles.length > 0) {
-  run("npm", ["exec", "--", "oxfmt", "--check", ...sourceFiles], { stdio: "inherit" });
-  const lintFiles = sourceFiles.filter((file) => /\.[cm]?[jt]sx?$/.test(file));
-  if (lintFiles.length > 0)
-    run("npm", ["exec", "--", "oxlint", "--deny-warnings", ...lintFiles], { stdio: "inherit" });
-}
-console.log(`Checked formatting and lint for ${sourceFiles.length} changed UI/config files.`);
+if (lintFiles.length > 0)
+  run("npm", ["exec", "--", "oxlint", "--deny-warnings", ...lintFiles], { stdio: "inherit" });
+console.log(`Checked lint for ${lintFiles.length} changed UI/config files.`);

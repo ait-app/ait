@@ -14,20 +14,21 @@ use domain::agent_runtime::registry::AgentRuntimeRegistry;
 use filesystem::files::service::files::Files;
 use filesystem::forge::local::{forge::LocalForge, github_projects::LocalGithubProjects};
 use filesystem::forge::service::forge::Forge;
-use filesystem::forge::service::github_projects::GithubProjects;
-use filesystem::git::local::{checkout::LocalCheckout, provisioning::LocalDirectorySource};
+use filesystem::git::local::{
+    checkout::LocalCheckout, provisioning::LocalDirectorySource, worktrees::LocalManagedWorktrees,
+};
 use filesystem::git::service::checkout::Checkout;
 use filesystem::workspace_runtime::LocalWorkspaceRuntime;
-use filesystem::worktrees::local::worktrees::LocalManagedWorktrees;
-use filesystem::worktrees::service::workspace_recovery::WorkspaceRecovery;
-use filesystem::worktrees::service::worktrees::{WorkspaceWorktrees, Worktrees};
 use metadata::local::workspace_automation::LocalWorkspaceAutomation;
 use metadata::service::daemon::{Daemon, DaemonRuntime};
 use metadata::service::directory::{Directory, DirectoryDependencies};
+use metadata::service::github_projects::GithubProjects;
 use metadata::service::workspace_automation::WorkspaceAutomation;
 use metadata::service::workspace_labels::WorkspaceLabels;
 use metadata::service::workspace_names::WorkspaceNames;
+use metadata::service::workspace_recovery::WorkspaceRecovery;
 use metadata::service::workspace_state::WorkspaceState;
+use metadata::service::worktrees::{WorkspaceWorktrees, Worktrees};
 use model::LifecycleIntent;
 use model::summary::SummaryGenerator;
 use model::workspace::registry::{ProjectRegistry, WorkspaceRegistry};
@@ -253,25 +254,25 @@ fn compose_services(
         workspace_names,
         push_tokens: compose_push(&config.data_dir)?,
         daemon,
-        directory: directory.clone(),
+        github_projects: GithubProjects::new(
+            directory.clone(),
+            Box::new(LocalGithubProjects::new()),
+        ),
+        directory,
         workspace_labels,
         workspace_automation,
         workspace_state,
-    });
-    let filesystem = compose_filesystem(
-        config,
-        &workspace_registry,
-        directory,
         worktrees,
         workspace_recovery,
-    )?;
+    });
     Ok(Services {
         metadata: Some(metadata),
-        filesystem: Some(filesystem),
+        filesystem: Some(compose_filesystem(config, &workspace_registry)),
         provider: Some(provider::Service::new(provider::Dependencies {
             summary_generator,
             execution: agent_execution.clone(),
             agents,
+            skills: compose_skills(&config.data_dir)?,
         })),
         schedule: Some(schedules),
         browser: Some(Broker::default()),
@@ -283,24 +284,14 @@ fn compose_services(
 fn compose_filesystem(
     config: &Config,
     workspace_registry: &FileBackedWorkspaceRegistry,
-    directory: Directory,
-    worktrees: Arc<Mutex<Worktrees>>,
-    workspace_recovery: WorkspaceRecovery,
-) -> anyhow::Result<filesystem::Service> {
+) -> filesystem::Service {
     let (checkout, git_fetch) = compose_git(&config.data_dir, workspace_registry);
-    Ok(filesystem::Service::new(filesystem::Dependencies {
-        skills: compose_skills(&config.data_dir)?,
-        workspace_recovery,
-        github_projects: GithubProjects::new(
-            Arc::new(directory),
-            Box::new(LocalGithubProjects::new()),
-        ),
+    filesystem::Service::new(filesystem::Dependencies {
         checkout,
         git_fetch,
         forge: Forge::new(Box::new(LocalForge::new())),
         files: compose_files(config),
-        worktrees,
-    }))
+    })
 }
 
 fn open_directory_registries(
@@ -546,7 +537,7 @@ fn compose_push(data_dir: &std::path::Path) -> anyhow::Result<metadata::service:
 
 fn compose_skills(
     data: &std::path::Path,
-) -> anyhow::Result<filesystem::skills::service::skills::Skills> {
+) -> anyhow::Result<provider::skills::service::skills::Skills> {
     let data = data
         .canonicalize()
         .context("resolve skills data directory")?;
@@ -556,13 +547,13 @@ fn compose_skills(
     let source = std::env::var_os("AIT_SERVER_SKILLS_BUNDLE")
         .map_or_else(|| data.join("skills-bundle"), std::path::PathBuf::from);
     let targets = [".agents/skills", ".claude/skills", ".codex/skills"].map(|path| home.join(path));
-    let store = filesystem::skills::local::skills::LocalSkills::new(
+    let store = provider::skills::local::skills::LocalSkills::new(
         &source,
         &targets,
         &data.join("skills-state"),
     )
     .map_err(|error| anyhow::anyhow!("invalid skills configuration: {error:?}"))?;
-    Ok(filesystem::skills::service::skills::Skills::new(Box::new(
+    Ok(provider::skills::service::skills::Skills::new(Box::new(
         store,
     )))
 }

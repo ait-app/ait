@@ -5736,12 +5736,12 @@
       },
       "handlers": [
         {
-          "file": "crates/filesystem/src/worktrees/rpc/worktrees.rs",
-          "line": 39
+          "file": "crates/metadata/src/rpc/worktrees.rs",
+          "line": 6
         }
       ],
       "tests": [
-        "crates/filesystem/src/worktrees/protocol/worktrees/tests.rs",
+        "crates/metadata/src/protocol/worktrees/tests.rs",
         "bins/daemon/tests/process/agent_execution/worktrees/pr_checkout.rs",
         "bins/daemon/tests/process/metadata_generation.rs",
         "bins/daemon/tests/process/worktrees.rs"
@@ -9752,15 +9752,15 @@
       "handlers": [
         {
           "file": "crates/api/src/connection/workspace_archive.rs",
-          "line": 17
+          "line": 21
         },
         {
-          "file": "crates/filesystem/src/worktrees/rpc/worktrees.rs",
-          "line": 40
+          "file": "crates/metadata/src/rpc/worktrees.rs",
+          "line": 7
         }
       ],
       "tests": [
-        "crates/filesystem/src/worktrees/protocol/worktrees/tests.rs",
+        "crates/metadata/src/protocol/worktrees/tests.rs",
         "bins/daemon/tests/process/agent_execution/archive.rs",
         "bins/daemon/tests/process/worktrees.rs"
       ],
@@ -9826,14 +9826,14 @@
       },
       "handlers": [
         {
-          "file": "crates/filesystem/src/worktrees/rpc/worktrees.rs",
-          "line": 38
+          "file": "crates/metadata/src/rpc/worktrees.rs",
+          "line": 5
         }
       ],
       "tests": [
-        "crates/api/src/connection/routing/tests.rs",
-        "crates/filesystem/src/capabilities/tests.rs",
-        "crates/filesystem/src/worktrees/protocol/worktrees/tests.rs",
+        "crates/api/src/connection/single/tests.rs",
+        "crates/metadata/src/capabilities/tests.rs",
+        "crates/metadata/src/protocol/worktrees/tests.rs",
         "bins/daemon/tests/process/agent_execution/worktrees.rs",
         "bins/daemon/tests/process/worktrees.rs",
         "bins/daemon/tests/process/worktrees/creation.rs"
@@ -10843,8 +10843,8 @@
       },
       "handlers": [
         {
-          "file": "crates/filesystem/src/forge/rpc/github_projects.rs",
-          "line": 27
+          "file": "crates/metadata/src/rpc/github_projects.rs",
+          "line": 6
         }
       ],
       "tests": [
@@ -15812,13 +15812,13 @@
       },
       "handlers": [
         {
-          "file": "crates/filesystem/src/forge/rpc/github_projects.rs",
-          "line": 28
+          "file": "crates/metadata/src/rpc/github_projects.rs",
+          "line": 5
         }
       ],
       "tests": [
-        "crates/api/src/connection/routing/tests.rs",
-        "crates/filesystem/src/capabilities/tests.rs",
+        "crates/api/src/connection/single/tests.rs",
+        "crates/metadata/src/capabilities/tests.rs",
         "bins/daemon/tests/process/github_projects.rs"
       ],
       "assessment": "名称、输入字段与实现入口已核对；语义证据见关联测试及主报告",
@@ -16295,8 +16295,8 @@
       },
       "handlers": [
         {
-          "file": "crates/filesystem/src/worktrees/rpc/workspace_recovery.rs",
-          "line": 33
+          "file": "crates/metadata/src/rpc/workspace_recovery.rs",
+          "line": 5
         }
       ],
       "tests": [
@@ -16345,8 +16345,8 @@
       },
       "handlers": [
         {
-          "file": "crates/filesystem/src/worktrees/rpc/workspace_recovery.rs",
-          "line": 34
+          "file": "crates/metadata/src/rpc/workspace_recovery.rs",
+          "line": 6
         }
       ],
       "tests": [

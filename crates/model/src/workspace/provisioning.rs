@@ -2,7 +2,9 @@
 
 use std::fmt::Debug;
 
-use domain::workspace::provisioning::{Checkout, DirectorySourceError};
+use domain::workspace::provisioning::{
+    Checkout, DirectorySourceError, GithubProjectsError, GithubRepository,
+};
 
 /// Blocking adapter for local directory and lightweight Git inspection.
 pub trait DirectorySource: Debug + Send + Sync {
@@ -32,4 +34,43 @@ pub trait DirectorySource: Debug + Send + Sync {
     /// # Errors
     /// Returns a categorized filesystem error for missing or unreadable paths.
     fn canonical(&self, path: &str) -> Result<String, DirectorySourceError>;
+}
+
+/// Blocking GitHub CLI and Git clone operations for Project provisioning; callers run this outside
+/// the async reactor.
+pub trait GithubProjectsRuntime: Debug + Send + Sync {
+    /// List recent owned repositories for an empty query, otherwise search accessible repos.
+    ///
+    /// # Errors
+    /// Returns a categorized CLI, authentication, or parsing failure.
+    fn search_repositories(
+        &self,
+        query: &str,
+        limit: usize,
+    ) -> Result<Vec<GithubRepository>, GithubProjectsError>;
+
+    /// Resolve the checkout path before cloning, so failures can report the intended path.
+    ///
+    /// # Errors
+    /// Returns an invalid-target error when the parent path or child name cannot be resolved.
+    fn checkout_path(
+        &self,
+        target_directory: &str,
+        name: &str,
+    ) -> Result<String, GithubProjectsError>;
+
+    /// Clone one validated GitHub URL into a new child under `target_directory`.
+    ///
+    /// The adapter creates missing parent directories, stages the clone, and atomically renames
+    /// the completed checkout. It checks for an existing target before the rename; simultaneous
+    /// cross-process creation still needs a future no-replace primitive.
+    ///
+    /// # Errors
+    /// Returns a categorized path, collision, or clone failure.
+    fn clone_repository(
+        &self,
+        clone_url: &str,
+        target_directory: &str,
+        name: &str,
+    ) -> Result<String, GithubProjectsError>;
 }

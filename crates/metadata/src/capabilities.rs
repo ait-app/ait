@@ -34,6 +34,9 @@ pub fn implemented_methods() -> impl Iterator<Item = MethodSpec> {
         crate::rpc::workspace_labels::METHODS,
         crate::rpc::workspace_automation::METHODS,
         crate::rpc::workspace_state::METHODS,
+        crate::rpc::worktrees::METHODS,
+        crate::rpc::workspace_recovery::METHODS,
+        crate::rpc::github_projects::METHODS,
     ]
     .into_iter()
     .flat_map(|methods| methods.iter().copied())

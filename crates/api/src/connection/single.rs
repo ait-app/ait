@@ -276,9 +276,27 @@ fn lane(message: &Incoming) -> usize {
         return 2;
     }
     if provider::capabilities::implemented_methods().any(|spec| spec.name == method) {
-        return 3;
+        return if file_operation(method) { 2 } else { 3 };
+    }
+    if metadata::capabilities::implemented_methods().any(|spec| spec.name == method)
+        && file_operation(method)
+    {
+        return 2;
     }
     0
+}
+
+/// Owner-declared methods that run long checkout, clone or skill installation work keep the
+/// file-operation lane, so they cannot block ordinary directory reads or native Agent requests.
+fn file_operation(method: &str) -> bool {
+    const PREFIXES: [&str; 5] = [
+        "agent.skills.",
+        "workspace.worktree.",
+        "workspace.recovery.",
+        "workspace.github.",
+        "project.github.",
+    ];
+    PREFIXES.iter().any(|prefix| method.starts_with(prefix))
 }
 
 #[cfg(test)]

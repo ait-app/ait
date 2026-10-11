@@ -25,6 +25,13 @@ pub struct State {
         Option<Arc<Mutex<crate::service::workspace_automation::WorkspaceAutomation>>>,
     /// Installed workspace state service.
     pub workspace_state: Option<Arc<Mutex<crate::service::workspace_state::WorkspaceState>>>,
+    /// Installed managed worktree service, shared with directory creation.
+    pub worktrees: Option<Arc<Mutex<crate::service::worktrees::Worktrees>>>,
+    /// Installed archived Workspace recovery service.
+    pub workspace_recovery:
+        Option<Arc<Mutex<crate::service::workspace_recovery::WorkspaceRecovery>>>,
+    /// Installed GitHub repository discovery and cloning service.
+    pub github_projects: Option<Arc<Mutex<crate::service::github_projects::GithubProjects>>>,
     /// Durable progress of Workspace and native Agent creation.
     pub creations: model::creation::Creations,
     /// Shared ephemeral session event hub.
@@ -191,6 +198,27 @@ pub async fn dispatch(
         Ok(()) => return Ok(None),
         Err(DispatchError::NotImplemented) => {
             Context::assert_unhandled(context, "metadata::workspace_state");
+        }
+        Err(error) => return Err(error),
+    }
+    match requests::worktrees(context, state).await {
+        Ok(()) => return Ok(None),
+        Err(DispatchError::NotImplemented) => {
+            Context::assert_unhandled(context, "metadata::worktrees");
+        }
+        Err(error) => return Err(error),
+    }
+    match requests::workspace_recovery(context, state).await {
+        Ok(()) => return Ok(None),
+        Err(DispatchError::NotImplemented) => {
+            Context::assert_unhandled(context, "metadata::workspace_recovery");
+        }
+        Err(error) => return Err(error),
+    }
+    match requests::github_projects(context, state).await {
+        Ok(()) => return Ok(None),
+        Err(DispatchError::NotImplemented) => {
+            Context::assert_unhandled(context, "metadata::github_projects");
         }
         Err(error) => return Err(error),
     }

@@ -18,12 +18,14 @@ const prCleanup = yaml.parse(
 );
 const AsyncFunction = Object.getPrototypeOf(async function () {}).constructor;
 
-test("UI CI checks changed formatting and lint and runs the shared client suite", () => {
+test("UI CI checks changed lint, delegates formatting and runs the shared client suite", () => {
   const steps = workflow.jobs.ui.steps;
   assert.equal(steps.find((step) => step.uses === "actions/checkout@v5").with["fetch-depth"], 0);
-  const check = steps.find((step) => step.name === "Check changed UI formatting and lint");
+  const check = steps.find((step) => step.name === "Check changed UI lint");
   assert.equal(check.run, 'npm run check:ui -- "$UI_DIFF_BASE"');
   assert.match(check.env.UI_DIFF_BASE, /pull_request.base.sha.*github.event.before/);
+  assert.ok(steps.some((step) => step.run === "node --test scripts/check-ui.test.mjs"));
+  assert.match(workflow.jobs.format.steps.at(-1).run, /oxfmt@.*--check \./);
   assert.ok(steps.some((step) => step.run === "npm run test --workspace=@ait/client"));
 });
 const context = { repo: { owner: "ait-app", repo: "ait" }, sha: "current", runId: 42 };

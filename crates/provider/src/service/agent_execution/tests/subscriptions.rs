@@ -40,6 +40,7 @@ impl Peer {
                     limits: Limits::default(),
                 })),
                 agents: None,
+                skills: None,
                 agent_runtime: None,
                 agent_execution: Some(execution.clone()),
                 directory_changes: None,

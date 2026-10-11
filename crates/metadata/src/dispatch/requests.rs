@@ -259,3 +259,107 @@ pub(super) async fn workspace_state(
     }
     .map_err(Into::into)
 }
+
+/// Try the managed worktree request branch and consume `pending` only on a match.
+/// A successful creation starts Workspace setup before the response and update are sent.
+/// # Errors
+/// Returns `NotImplemented` without consuming the request, or propagates delivery failure.
+pub(super) async fn worktrees(
+    pending: &mut Option<Context<'_>>,
+    state: &State,
+) -> Result<(), DispatchError> {
+    let Some(mut context) = pending.take_if(|context| {
+        matches!(
+            context.request.method.as_str(),
+            "workspace.worktree.list.request"
+                | "workspace.worktree.create.request"
+                | "workspace.worktree.archive.request"
+        )
+    }) else {
+        return Err(DispatchError::NotImplemented);
+    };
+    let result = context
+        .call(
+            state.worktrees.clone(),
+            ErrorCode::RegistryIo,
+            crate::rpc::worktrees::execute,
+        )
+        .await;
+    if let Ok(reply) = &result
+        && let Some(workspace_id) = reply.created_workspace_id.clone()
+    {
+        let _ = state
+            .run(
+                state.workspace_automation.clone(),
+                ErrorCode::RegistryIo,
+                move |automation| {
+                    automation
+                        .start_created_setup(&workspace_id)
+                        .map(|_| ())
+                        .map_err(|_| ErrorCode::RegistryIo)
+                },
+            )
+            .await;
+    }
+    match result {
+        Ok(reply) => context.workspace(reply.value, reply.event),
+        Err(error) => context.respond(Err(error)),
+    }
+    .map_err(Into::into)
+}
+
+/// Try the archived Workspace recovery request branch and consume `pending` only on a match.
+/// # Errors
+/// Returns `NotImplemented` without consuming the request, or propagates delivery failure.
+pub(super) async fn workspace_recovery(
+    pending: &mut Option<Context<'_>>,
+    state: &State,
+) -> Result<(), DispatchError> {
+    let Some(mut context) = pending.take_if(|context| {
+        matches!(
+            context.request.method.as_str(),
+            "workspace.recovery.inspect.request" | "workspace.recovery.restore.request"
+        )
+    }) else {
+        return Err(DispatchError::NotImplemented);
+    };
+    let result = context
+        .call(
+            state.workspace_recovery.clone(),
+            ErrorCode::RegistryIo,
+            |service, method, params| {
+                crate::rpc::workspace_recovery::execute(service, method, params)
+            },
+        )
+        .await;
+    match result {
+        Ok(reply) => context.workspace(reply.value, reply.event),
+        Err(error) => context.respond(Err(error)),
+    }
+    .map_err(Into::into)
+}
+
+/// Try the GitHub project request branch and consume `pending` only on a match.
+/// # Errors
+/// Returns `NotImplemented` without consuming the request, or propagates delivery failure.
+pub(super) async fn github_projects(
+    pending: &mut Option<Context<'_>>,
+    state: &State,
+) -> Result<(), DispatchError> {
+    let Some(context) = pending.take_if(|context| {
+        matches!(
+            context.request.method.as_str(),
+            "workspace.github.search_repositories.request" | "project.github.clone.request"
+        )
+    }) else {
+        return Err(DispatchError::NotImplemented);
+    };
+    context
+        .rpc(
+            state.github_projects.clone(),
+            ErrorCode::RegistryIo,
+            |service, method, params| crate::rpc::github_projects::execute(service, method, params),
+        )
+        .await
+        .map_err(Into::into)
+}

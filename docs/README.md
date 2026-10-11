@@ -14,6 +14,8 @@
 
 ## 架构决策
 
+- [ADR-130：Workspace 与 Project 方法归 metadata](decisions/workspace/adr-130-workspace-methods-owned-by-metadata.md)：worktree、恢复与 GitHub clone 的服务和协议迁入 metadata，filesystem 只保留本地适配器，端口下沉 model/domain。
+- [ADR-129：Agent Skills 能力组归 provider](decisions/providers/adr-129-provider-owned-skills.md)：整组迁移、主机级安装与事务兼容，保留文件操作队列。
 - [ADR-128：桌面内置 daemon 可在退出后继续运行](decisions/clients/adr-128-desktop-daemon-keep-running.md)：退出时交接 0600 记录、下次启动经认证与 PID 校验后重新接管，交接失败照常停止。
 - [ADR-127：移除 daemon 配对 offer RPC](decisions/daemon/adr-127-remove-daemon-pairing-offer.md)：删除方法清单、路由、共享协议和 SDK；旧请求返回未知方法。
 - [ADR-126：按身份读取目标 Workspace，完整目录后台同步](decisions/workspace/adr-126-workspace-target-read.md)：只读目标状态、缓存优先、连接和事件竞争保护。
@@ -30,7 +32,7 @@
 - [ADR-116：库 crate 只公开被其他 crate 使用的项](decisions/daemon/adr-116-crate-visibility.md)：默认私有，启用 `unreachable_pub`，删除收缩后暴露的未使用代码与转发 `pub use`。
 - [ADR-115：OpenCode 官方 ACP Provider](decisions/providers/adr-115-opencode-acp-provider.md)：1.x / 2.x 官方 stdio 协议、原生会话身份与结构化元数据、按原生能力处理问答和辅助会话、审批、取消和历史重放，取代私有 HTTP/SSE adapter。
 - [ADR-114：iOS 终端组合输入归 UIKit](decisions/clients/adr-114-ios-terminal-ime.md)：原生组合范围识别、确认文字提交与终端控制键分离。
-- [ADR-113：filesystem 按能力组组织模块](decisions/workspace/adr-113-filesystem-capability-groups.md)：git/forge/worktrees/files/skills 五组沿用原分层，组间仅经 ports/protocol 协作，并由模块边界测试约束。
+- [ADR-113：filesystem 按能力组组织模块](decisions/workspace/adr-113-filesystem-capability-groups.md)：能力组沿用原分层，组间仅经 ports/protocol 协作，并由模块边界测试约束；skills 与 worktrees 归属由 ADR-129、ADR-130 修订。
 - [ADR-112：file 瘦身为 persistence，宿主专用文件归 daemon](decisions/daemon/adr-112-persistence-crate.md)：启动配置、故障证据与 server identity 迁回 daemon，metadata 经端口定位项目配置，仅 daemon 在生产代码中依赖 persistence。
 - [ADR-111：纯业务数据归 domain，连接协议并入 model::server](decisions/daemon/adr-111-domain-values-and-server-protocol.md)：移除 protocol crate，数据值与运行资源分离，消费者直接依赖类型所属 crate。
 - [ADR-110：OpenCode 双版本私有协议边界](decisions/providers/adr-110-opencode-private-protocol-boundary.md)：协议差异收口、统一文本身份，以及原生权限拒绝与主动取消的独立结算。

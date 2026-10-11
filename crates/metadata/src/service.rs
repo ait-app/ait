@@ -2,9 +2,12 @@
 
 pub mod daemon;
 pub mod directory;
+pub mod github_projects;
 pub mod workspace_automation;
 pub mod workspace_labels;
+pub mod workspace_recovery;
 pub mod workspace_state;
+pub mod worktrees;
 
 /// Leased push token management.
 pub mod push;

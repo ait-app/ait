@@ -3,9 +3,10 @@
 use std::sync::{Arc, Mutex};
 
 use crate::service::{
-    daemon::Daemon, directory::Directory, push::PushTokens,
+    daemon::Daemon, directory::Directory, github_projects::GithubProjects, push::PushTokens,
     workspace_automation::WorkspaceAutomation, workspace_labels::WorkspaceLabels,
-    workspace_names::WorkspaceNames, workspace_state::WorkspaceState,
+    workspace_names::WorkspaceNames, workspace_recovery::WorkspaceRecovery,
+    workspace_state::WorkspaceState, worktrees::Worktrees,
 };
 
 /// Required functional parts of the metadata service, sharing the composed Workspace registries.
@@ -25,6 +26,12 @@ pub struct Dependencies {
     pub workspace_state: WorkspaceState,
     /// Shared background title and branch naming.
     pub workspace_names: WorkspaceNames,
+    /// Shared managed worktree lifecycle, also used by directory creation and schedules.
+    pub worktrees: Arc<Mutex<Worktrees>>,
+    /// Archived Workspace recovery.
+    pub workspace_recovery: WorkspaceRecovery,
+    /// GitHub repository discovery and Project cloning.
+    pub github_projects: GithubProjects,
 }
 
 /// One complete metadata service; connection protocol helpers remain available to the API.

@@ -10,8 +10,8 @@ use std::{
 use anyhow::Context;
 use domain::schedule::{RunStatus, Schedule, Target};
 use domain::workspace::lifecycle::WorkspaceCreation;
-use filesystem::worktrees::service::worktrees::{CreateAction, CreateWorktree, Worktrees};
 use metadata::service::directory::Directory;
+use metadata::service::worktrees::{CreateAction, CreateWorktree, Worktrees};
 use model::storage::schedule::Store;
 use persistence::storage::schedule::FileStore;
 use provider::service::agent_execution::AgentExecution;

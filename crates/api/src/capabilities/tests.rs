@@ -84,12 +84,38 @@ fn file_methods_use_ait_names() {
 }
 
 #[test]
-fn skill_methods_are_owned_by_filesystem_and_remain_requests() {
-    let specs: Vec<_> = ::filesystem::capabilities::implemented_methods()
+fn skill_methods_are_owned_by_provider_and_remain_requests() {
+    let specs: Vec<_> = ::provider::capabilities::implemented_methods()
         .filter(|spec| spec.name.starts_with("agent.skills."))
         .collect();
     assert_eq!(specs.len(), 5);
     assert!(specs.iter().all(|spec| spec.kind == InboundKind::Request));
+    assert!(
+        ::filesystem::capabilities::implemented_methods()
+            .all(|spec| !spec.name.starts_with("agent."))
+    );
+}
+
+#[test]
+fn workspace_and_project_methods_are_owned_by_metadata() {
+    let moved: BTreeSet<_> = ::metadata::capabilities::implemented_methods()
+        .map(|spec| spec.name)
+        .filter(|name| {
+            [
+                "workspace.worktree.",
+                "workspace.recovery.",
+                "workspace.github.",
+                "project.github.",
+            ]
+            .iter()
+            .any(|prefix| name.starts_with(prefix))
+        })
+        .collect();
+    assert_eq!(moved.len(), 7);
+    assert!(
+        ::filesystem::capabilities::implemented_methods()
+            .all(|spec| !spec.name.starts_with("workspace.") && !spec.name.starts_with("project."))
+    );
 }
 
 #[test]
