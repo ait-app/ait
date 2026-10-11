@@ -158,41 +158,99 @@ pub(super) async fn apply(
         ("mode", &config.mode_id),
     ] {
         let Some(value) = selected else { continue };
-        let option = option(options, category).ok_or_else(|| {
-            tracing::warn!(
-                category,
-                "OpenCode ACP does not advertise this configuration option"
-            );
-            AgentSessionError::Rejected
-        })?;
-        if !choices(option)?
-            .iter()
-            .any(|choice| choice["value"] == *value)
-        {
-            tracing::warn!(
-                category,
-                "OpenCode ACP does not advertise the requested configuration value"
-            );
-            return Err(AgentSessionError::Rejected);
-        }
-        if option["currentValue"] == *value {
-            continue;
-        }
-        let result = transport
-            .request(
-                "session/set_config_option",
-                json!({
-            "sessionId":id,"configId":text(option, "id")?,"value":value}),
-            )
-            .await?;
-        *options = state(&result)?;
-        if self::option(options, category)
-            .is_none_or(|confirmed| confirmed["currentValue"] != *value)
-        {
-            return Err(AgentSessionError::Failed);
-        }
+        select(transport, id, options, category, value).await?;
     }
     Ok(())
+}
+
+/// Select a native value and await its confirmed state, including asynchronous option updates.
+/// Unavailable choices reject before mutation; timeout or inconsistent protocol fails the connection.
+pub(super) async fn select(
+    transport: &mut Transport,
+    id: &str,
+    options: &mut Value,
+    category: &str,
+    value: &str,
+) -> Result<(), AgentSessionError> {
+    let native = option(options, category).ok_or_else(|| {
+        tracing::warn!(
+            category,
+            "OpenCode ACP does not advertise this configuration option"
+        );
+        AgentSessionError::Rejected
+    })?;
+    if !choices(native)?
+        .iter()
+        .any(|choice| choice["value"] == value)
+    {
+        tracing::warn!(
+            category,
+            "OpenCode ACP does not advertise the requested configuration value"
+        );
+        return Err(AgentSessionError::Rejected);
+    }
+    if native["currentValue"] == value {
+        return Ok(());
+    }
+    let params = json!({"sessionId":id,"configId":text(native, "id")?,"value":value});
+    let deadline = tokio::time::Instant::now() + transport.control_deadline();
+    let mut confirmed = None;
+    let result = transport
+        .request_with_updates("session/set_config_option", params, |message| {
+            if let Some(update) = confirmation(message, id, category, value)? {
+                confirmed = Some(update);
+            }
+            Ok(())
+        })
+        .await?;
+    *options = state(&result)?;
+    if let Some(confirmed) = confirmed {
+        *options = confirmed;
+        return Ok(());
+    }
+    if option(options, category).is_some_and(|native| native["currentValue"] == value) {
+        return Ok(());
+    }
+    // Native model.updated can race the set response. Await the confirmation without
+    // repeating the mutation or submitting a prompt against the previous model.
+    let result = tokio::time::timeout_at(deadline, async {
+        loop {
+            let message = transport.receive().await?;
+            if let Some(confirmed) = confirmation(&message, id, category, value)? {
+                *options = confirmed;
+                return Ok(());
+            }
+            if message.get("id").is_some() {
+                return Err(AgentSessionError::Failed);
+            }
+        }
+    })
+    .await;
+    if let Ok(Ok(())) = result {
+        return Ok(());
+    }
+    transport.close().await?;
+    Err(AgentSessionError::Failed)
+}
+
+fn confirmation(
+    message: &Value,
+    id: &str,
+    category: &str,
+    value: &str,
+) -> Result<Option<Value>, AgentSessionError> {
+    if message["method"] != "session/update"
+        || message["params"]["update"]["sessionUpdate"] != "config_option_update"
+    {
+        return Ok(None);
+    }
+    if message["params"]["sessionId"] != id {
+        return Err(AgentSessionError::Failed);
+    }
+    let options = state(&message["params"]["update"])?;
+    Ok(option(&options, category)
+        .is_some_and(|native| native["currentValue"] == value)
+        .then_some(options))
 }
 
 /// Borrow a nonempty native string field; missing, oversized or control text is a failure.
@@ -219,7 +277,7 @@ pub(super) fn stored(options: &Value) -> StoredAgentConfig {
 /// Present only the modes offered by this native session's validated configuration.
 pub(super) fn modes(options: &Value) -> Vec<Value> {
     option(options, "mode").and_then(|option| choices(option).ok()).unwrap_or_default()
-        .into_iter().map(|choice| json!({"id":choice["value"],"label":choice["name"],
+        .into_iter().map(|choice| json!({"id":choice["value"],"label":choice["name"],"description":choice["description"],
             "icon":if choice["value"] == "build" {"Hammer"} else if choice["value"] == "plan" {"ShieldCheck"} else {"Bot"},
             "colorTier":if choice["value"] == "plan" {"planning"} else {"moderate"}})).collect()
 }
@@ -234,3 +292,6 @@ pub(super) fn features(config: &StoredAgentConfig) -> Vec<Value> {
         "options":[{"id":"allow","label":"Allow"},{"id":"ask","label":"Ask"},{"id":"deny","label":"Deny"}]}),
     ]
 }
+
+#[cfg(test)]
+mod tests;

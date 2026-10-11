@@ -1037,7 +1037,7 @@ async fn acp_refuses_unrecognized_config_families_before_creating_sessions() {
 #[cfg(unix)]
 #[tokio::test]
 async fn acp_both_major_versions_keep_conversation_and_configuration_compatible() {
-    for version in ["1.18.3", "1.18.4", "2.0.20", "2.0.26"] {
+    for version in ["1.18.3", "1.18.4", "2.0.26", "2.1.0"] {
         let (root, mut client, mut spec) = fixture("normal");
         client
             .environment
@@ -1172,3 +1172,5 @@ async fn acp_without_delete_discovers_without_creating_native_sessions() {
             .contains("ACP initialization")
     );
 }
+
+mod compatibility;

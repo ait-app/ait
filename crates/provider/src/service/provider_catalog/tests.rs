@@ -7,6 +7,7 @@ use crate::ports::agent_session::{
 use domain::agent_runtime::AgentPersistenceHandle;
 
 mod concurrency;
+mod diagnostics;
 mod paseo;
 
 #[derive(Debug)]

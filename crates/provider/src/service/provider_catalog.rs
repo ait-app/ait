@@ -211,20 +211,31 @@ async fn discover(client: &dyn AgentClient, cwd: &str) -> Entry {
             Ok(details) => ("ready", None, details),
             Err(_) => (
                 "error",
-                Some("Provider discovery failed"),
+                Some("Provider discovery failed".to_owned()),
                 Details::default(),
             ),
         }
     } else if available.is_err() {
         (
             "error",
-            Some("Provider availability check failed"),
+            Some("Provider availability check failed".to_owned()),
             Details::default(),
         )
     } else {
         (
             "unavailable",
-            Some("Provider executable is unavailable"),
+            Some(
+                client
+                    .diagnostic()
+                    .await
+                    .ok()
+                    .filter(|message| {
+                        !message.trim().is_empty()
+                            && message.len() <= 4096
+                            && !message.contains('\0')
+                    })
+                    .unwrap_or_else(|| "Provider executable is unavailable".to_owned()),
+            ),
             Details::default(),
         )
     };

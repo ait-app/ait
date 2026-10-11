@@ -31,6 +31,20 @@ pub(super) async fn version(
     Ok(version.to_owned())
 }
 
+/// Whether the native release avoids the 2.x cold catalog and missing form regressions.
+pub(super) fn supported(version: &str) -> bool {
+    let mut numbers = version
+        .split(['.', '-', '+'])
+        .take(3)
+        .map(str::parse::<u32>);
+    matches!(
+        (numbers.next(), numbers.next(), numbers.next()),
+        (Some(Ok(1)), Some(Ok(_)), Some(Ok(_)))
+            | (Some(Ok(2)), Some(Ok(0)), Some(Ok(26..)))
+            | (Some(Ok(2)), Some(Ok(1..)), Some(Ok(_)))
+    )
+}
+
 /// Initialize an owned ACP child in cwd; propagate launch and protocol failures.
 pub(super) async fn spawn(
     client: &OpenCodeClient,
@@ -56,26 +70,20 @@ async fn launch(
     auxiliary: bool,
 ) -> Result<(Transport, Value), AgentSessionError> {
     let version = version(client, cwd).await?;
+    if !supported(&version) {
+        tracing::warn!(version, "OpenCode 2.x ACP requires version 2.0.26 or newer");
+        return Err(AgentSessionError::Unavailable);
+    }
     let legacy = version.starts_with("1.");
-    let unsupported_forms = legacy
-        || version
-            .strip_prefix("2.0.")
-            .and_then(|patch| patch.split(['-', '+']).next()?.parse::<u32>().ok())
-            .is_some_and(|patch| patch < 26);
     let mut command = Command::new(&client.program);
     command.arg("acp").envs(&client.environment);
     if legacy {
         // Native 1.x excludes question in ACP. Do not enable an unanswerable native question.
         command.env("OPENCODE_ENABLE_QUESTION_TOOL", "false");
     }
-    if auxiliary
-        || (!legacy && unsupported_forms)
-        || config::permission(selected).is_some()
-        || selected.system_prompt.is_some()
-    {
-        let mut overlay: Value =
-            serde_json::from_str(&overlay(client, selected, legacy, unsupported_forms)?)
-                .map_err(|_| AgentSessionError::Rejected)?;
+    if auxiliary || config::permission(selected).is_some() || selected.system_prompt.is_some() {
+        let mut overlay: Value = serde_json::from_str(&overlay(client, selected, legacy)?)
+            .map_err(|_| AgentSessionError::Rejected)?;
         if auxiliary {
             let agents = if legacy { "agent" } else { "agents" };
             let agent = native_agent(&mut overlay, agents, "build")?;
@@ -92,6 +100,17 @@ async fn launch(
         }
         command.env("OPENCODE_CONFIG_CONTENT", overlay.to_string());
     }
+    // Native 2.x standalone processes can race the shared SQLite schema bootstrap.
+    // Hold the clone-shared gate only through initialization, never through a session or prompt.
+    let _startup = if legacy {
+        None
+    } else {
+        Some(
+            tokio::time::timeout(client.deadline, client.startup.lock())
+                .await
+                .map_err(|_| AgentSessionError::Failed)?,
+        )
+    };
     let mut transport = Transport::spawn(command, cwd, client.deadline)?;
     let initialized = transport
         .request(
@@ -120,7 +139,6 @@ fn overlay(
     client: &OpenCodeClient,
     selected: &StoredAgentConfig,
     legacy: bool,
-    unsupported_forms: bool,
 ) -> Result<String, AgentSessionError> {
     let inherited = client
         .environment
@@ -164,16 +182,6 @@ fn overlay(
             if legacy { "prompt" } else { "system" }.into(),
             json!(prompt),
         );
-    }
-    if unsupported_forms && !legacy {
-        let rules = value
-            .as_object_mut()
-            .ok_or(AgentSessionError::Rejected)?
-            .entry("permissions")
-            .or_insert_with(|| json!([]))
-            .as_array_mut()
-            .ok_or(AgentSessionError::Rejected)?;
-        rules.push(json!({"action":"question","resource":"*","effect":"deny"}));
     }
     Ok(value.to_string())
 }
@@ -245,3 +253,6 @@ pub(super) async fn read(
     .await
     .map_err(|_| AgentSessionError::Failed)?
 }
+
+#[cfg(test)]
+mod tests;

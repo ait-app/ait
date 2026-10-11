@@ -16,6 +16,7 @@
 
 ## 架构决策
 
+- [ADR-134：OpenCode 目录就绪与配置确认](decisions/providers/adr-134-opencode-catalog-readiness.md)：2.x 最低 2.0.26、明确升级提示、异步配置确认、动态目录发现与并发冷启动协调。
 - [ADR-133：先显示持久 Timeline 页面，后台校验原生历史](decisions/providers/adr-133-cached-timeline-first.md)：尾页优先、有界上翻、原生校验去重与旧主机回退。
 - [ADR-132：Checkout 刷新独立准入与有界输出背压](decisions/workspace/adr-132-checkout-refresh-admission-and-backpressure.md)：隔离前台 Git 任务，diff 拥堵时等待输出额度并保持连接。
 
@@ -117,6 +118,7 @@
 
 ## 工程规范与验证
 
+- [OpenCode 模型目录与执行失败修复](reports/providers/opencode-catalog-readiness-2026-10-10.md)：2.0.20 复现、配置确认、数据库冷启动竞争修复与原生流程验证。
 - [本机 Changes 刷新断线：修复验证](reports/workspace/changes-refresh-transport-2026-10-11.md)：Git 任务额度隔离、有界 diff 输出等待与控制响应回归。
 - [Ait 0.0.27 安装后诊断与修复](reports/clients/release-0.0.27-installed-diagnostics-2026-10-11.md)：原生事件校验、启动订阅与更新诊断误报。
 

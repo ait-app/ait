@@ -4,6 +4,7 @@ import json
 import os
 import pathlib
 import sys
+import time
 
 root = pathlib.Path(os.environ.get("AIT_ACP_FIXTURE_ROOT", pathlib.Path(sys.argv[0]).parent))
 state_path = root / "native-fixture.json"
@@ -38,6 +39,7 @@ mode = "build"
 if scenario == "custom-mode":
     mode = "review"
 active = None
+catalog_changed = False
 
 
 def session_path(identity):
@@ -87,6 +89,10 @@ def options():
         {"id": "mode", "name": "Mode", "category": "mode", "type": "select", "currentValue": mode,
          "options": [{"value": value, "name": value} for value in (["review"] if scenario == "custom-mode" else ["build", "plan"])]},
     ]
+    if scenario.startswith("changing-catalog") and catalog_changed:
+        choices[0]["options"] = [{"value": "local/model", "name": "Renamed model"},
+                                 {"value": "local/third", "name": "Third model"}]
+        choices[2]["options"] = [{"value": "review", "name": "Review"}]
     if scenario == "no-thinking" and model == "local/second":
         return [choice for choice in choices if choice["category"] != "thought_level"]
     return choices
@@ -135,6 +141,16 @@ for line in sys.stdin:
         complete()
     elif method == "initialize":
         assert params["clientCapabilities"]["elicitation"]["form"] == {}
+        if scenario == "startup-overlap":
+            # Reject concurrent schema bootstrap, but release before keeping ACP alive.
+            try:
+                guard = (root / "startup.lock").open("x")
+            except FileExistsError:
+                send({"id": identity, "error": {"code": -32603, "message": "database is locked"}})
+                continue
+            with guard:
+                time.sleep(0.1)
+            (root / "startup.lock").unlink()
         if scenario == "hung":
             continue
         if scenario == "malformed":
@@ -172,13 +188,30 @@ for line in sys.stdin:
             "cwd": params.get("cwd", str(pathlib.Path.cwd())), "title": "External session", "updatedAt": "2026-10-09T06:00:00Z"}]
         reply(identity, {"sessions": rows})
     elif method == "session/set_config_option":
+        previous = options()
         if params["configId"] == "model":
             model = params["value"]
+            if scenario.startswith("changing-catalog"):
+                catalog_changed = True
         elif params["configId"] == "mode":
             mode = params["value"]
         else:
             effort = params["value"]
-        reply(identity, {"configOptions": options()})
+        if scenario == "changing-catalog-notification":
+            update({"sessionUpdate": "config_option_update", "configOptions": options()})
+            previous[0]["currentValue"] = model
+            reply(identity, {"configOptions": previous})
+        elif scenario in ["stale-selection-before", "stale-selection-after", "stale-selection-missing", "stale-selection-wrong"]:
+            if scenario == "stale-selection-before":
+                update({"sessionUpdate": "config_option_update", "configOptions": options()})
+            reply(identity, {"configOptions": previous})
+            if scenario == "stale-selection-after":
+                update({"sessionUpdate": "config_option_update", "configOptions": options()})
+            elif scenario == "stale-selection-wrong":
+                send({"method": "session/update", "params": {"sessionId": "wrong", "update": {
+                    "sessionUpdate": "config_option_update", "configOptions": options()}}})
+        else:
+            reply(identity, {"configOptions": options()})
     elif method == "session/prompt":
         assert active is None
         active = identity
