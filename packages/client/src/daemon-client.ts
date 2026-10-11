@@ -114,14 +114,6 @@ import type {
   PaseoConfigRevision,
   WorkspaceCreateRequest,
   WorkspaceRecoveryState,
-  PluginListItem,
-  PluginLogEntry,
-  PluginSourceStatusItem,
-  PluginSourceUpdateItem,
-  PluginUpdateSelection,
-  PluginUpdateProposal,
-  PluginUpdatePreview,
-  PluginUpdateResult,
   AgentSkillSelection,
   AgentSkillsStatus,
   AgentSkillsSaveResult,
@@ -326,7 +318,7 @@ export interface DaemonClientConfig {
   providerSnapshots?: "wire";
   url: string;
   clientId: string;
-  clientType?: "mobile" | "browser" | "cli" | "mcp" | "hub";
+  clientType?: "mobile" | "browser" | "cli" | "mcp";
   appVersion?: string;
   runtimeGeneration?: number | null;
   password?: string;
@@ -5135,54 +5127,6 @@ export class DaemonClient {
     });
   }
 
-  async connectHub(
-    hubUrl: string,
-    token: string,
-    permissions: readonly string[] = [],
-    requestId?: string,
-  ) {
-    this.requireHubRelationshipSupport();
-    return this.sendCorrelatedSessionRequest({
-      requestId,
-      message: { type: "hub.management.daemon.connect.request", hubUrl, token, permissions },
-      responseType: "hub.management.daemon.connect.response",
-    });
-  }
-
-  async updateHubPermissions(
-    input: { grant?: readonly string[]; revoke?: readonly string[] },
-    requestId?: string,
-  ) {
-    this.requireHubRelationshipSupport();
-    return this.sendCorrelatedSessionRequest({
-      requestId,
-      message: {
-        type: "hub.management.daemon.permissions.update.request",
-        grant: input.grant ?? [],
-        revoke: input.revoke ?? [],
-      },
-      responseType: "hub.management.daemon.permissions.update.response",
-    });
-  }
-
-  async getHubStatus(requestId?: string) {
-    this.requireHubRelationshipSupport();
-    return this.sendCorrelatedSessionRequest({
-      requestId,
-      message: { type: "hub.management.daemon.get_status.request" },
-      responseType: "hub.management.daemon.get_status.response",
-    });
-  }
-
-  async disconnectHub(force = false, requestId?: string) {
-    this.requireHubRelationshipSupport();
-    return this.sendCorrelatedSessionRequest({
-      requestId,
-      message: { type: "hub.management.daemon.disconnect.request", force },
-      responseType: "hub.management.daemon.disconnect.response",
-    });
-  }
-
   async collectDiagnostics(requestId?: string): Promise<DiagnosticsPayload> {
     return this.sendNamespacedCorrelatedSessionRequest({
       requestId,
@@ -5322,36 +5266,6 @@ export class DaemonClient {
     });
   }
 
-  async getPluginCatalog() {
-    const requestId = this.createRequestId();
-    const payload = await this.sendCorrelatedSessionRequest({
-      requestId,
-      message: { type: "plugin.catalog.get.request", requestId },
-      responseType: "plugin.catalog.get.response",
-    });
-    return payload.plugins;
-  }
-
-  async listPlugins(): Promise<PluginListItem[]> {
-    const requestId = this.createRequestId();
-    const payload = await this.sendCorrelatedSessionRequest({
-      requestId,
-      message: { type: "plugin.list.request", requestId },
-      responseType: "plugin.list.response",
-    });
-    return payload.plugins;
-  }
-
-  async getPluginLogs(pluginId: string): Promise<PluginLogEntry[]> {
-    const requestId = this.createRequestId();
-    const payload = await this.sendCorrelatedSessionRequest({
-      requestId,
-      message: { type: "plugin.logs.get.request", requestId, pluginId },
-      responseType: "plugin.logs.get.response",
-    });
-    return payload.entries;
-  }
-
   async getAgentSkillsStatus(): Promise<AgentSkillsStatus> {
     const requestId = this.createRequestId();
     return this.sendCorrelatedSessionRequest({
@@ -5405,165 +5319,6 @@ export class DaemonClient {
       },
       responseType: "agent.skills.import_legacy_selection.response",
     });
-  }
-
-  async installDirectoryPlugin(path: string, id?: string): Promise<PluginListItem> {
-    const requestId = this.createRequestId();
-    const payload = await this.sendCorrelatedSessionRequest({
-      requestId,
-      message: {
-        type: "plugin.directory.install.request",
-        requestId,
-        path,
-        ...(id ? { id } : {}),
-      },
-      responseType: "plugin.directory.install.response",
-    });
-    return payload.plugin;
-  }
-
-  async installPluginSource(input: {
-    source: string;
-    id?: string;
-    ref?: string;
-  }): Promise<PluginListItem> {
-    const requestId = this.createRequestId();
-    // COMPAT(pluginSourceInstallation): added in v0.8.0; remove after 2027-03-16 once daemon floor supports source identifiers.
-    if (this.getLastServerInfoMessage()?.features?.pluginSourceInstallation !== true) {
-      throw new Error("Update the host to install plugin sources.");
-    }
-    const payload = await this.sendCorrelatedSessionRequest({
-      requestId,
-      message: {
-        type: "plugin.source.install.request",
-        requestId,
-        source: input.source,
-        ...(input.id ? { id: input.id } : {}),
-        ...(input.ref ? { ref: input.ref } : {}),
-      },
-      responseType: "plugin.source.install.response",
-      timeout: 5 * 60 * 1000,
-    });
-    return payload.plugin;
-  }
-
-  async getPluginSourceStatus(pluginId?: string): Promise<PluginSourceStatusItem[]> {
-    const requestId = this.createRequestId();
-    const payload = await this.sendCorrelatedSessionRequest({
-      requestId,
-      message: {
-        type: "plugin.source.status.request",
-        requestId,
-        ...(pluginId ? { pluginId } : {}),
-      },
-      responseType: "plugin.source.status.response",
-    });
-    return payload.plugins;
-  }
-
-  private requirePluginUpdates(): void {
-    // COMPAT(pluginSourceUpdates): added in v0.8.0; remove after 2027-03-16 once daemon floor supports reviewed updates.
-    if (this.getLastServerInfoMessage()?.features?.pluginSourceUpdates !== true)
-      throw new Error("Update the host to review plugin updates.");
-  }
-
-  async previewPluginUpdates(
-    input: { pluginId?: string; target?: PluginUpdateSelection } = {},
-  ): Promise<PluginUpdatePreview[]> {
-    this.requirePluginUpdates();
-    const requestId = this.createRequestId();
-    const payload = await this.sendCorrelatedSessionRequest({
-      requestId,
-      message: { type: "plugin.source.update.preview.request", requestId, ...input },
-      responseType: "plugin.source.update.preview.response",
-      timeout: 300_000,
-    });
-    return payload.plugins;
-  }
-
-  async applyPluginUpdates(proposals: PluginUpdateProposal[]): Promise<PluginUpdateResult[]> {
-    this.requirePluginUpdates();
-    const requestId = this.createRequestId();
-    const payload = await this.sendCorrelatedSessionRequest({
-      requestId,
-      message: { type: "plugin.source.update.apply.request", requestId, proposals },
-      responseType: "plugin.source.update.apply.response",
-      timeout: 300_000,
-    });
-    return payload.plugins;
-  }
-
-  async updatePluginSources(pluginId?: string): Promise<PluginSourceUpdateItem[]> {
-    const requestId = this.createRequestId();
-    const payload = await this.sendCorrelatedSessionRequest({
-      requestId,
-      message: {
-        type: "plugin.source.update.request",
-        requestId,
-        ...(pluginId ? { pluginId } : {}),
-      },
-      responseType: "plugin.source.update.response",
-    });
-    return payload.plugins;
-  }
-
-  async inspectDirectoryPlugin(path: string): Promise<{ id: string }> {
-    const requestId = this.createRequestId();
-    return this.sendCorrelatedSessionRequest({
-      requestId,
-      message: { type: "plugin.directory.inspect.request", requestId, path },
-      responseType: "plugin.directory.inspect.response",
-    });
-  }
-
-  async reloadPlugin(pluginId: string): Promise<PluginListItem> {
-    return this.managePlugin("reload", pluginId);
-  }
-
-  async enablePlugin(pluginId: string): Promise<PluginListItem> {
-    return this.managePlugin("enable", pluginId);
-  }
-
-  async disablePlugin(pluginId: string): Promise<PluginListItem> {
-    return this.managePlugin("disable", pluginId);
-  }
-
-  async removePlugin(pluginId: string): Promise<void> {
-    const requestId = this.createRequestId();
-    await this.sendCorrelatedSessionRequest({
-      requestId,
-      message: { type: "plugin.remove.request", requestId, pluginId },
-      responseType: "plugin.remove.response",
-    });
-  }
-
-  private async managePlugin(
-    action: "reload" | "enable" | "disable",
-    pluginId: string,
-  ): Promise<PluginListItem> {
-    const requestId = this.createRequestId();
-    const payload = await this.sendCorrelatedSessionRequest({
-      requestId,
-      message: { type: `plugin.${action}.request`, requestId, pluginId },
-      responseType: `plugin.${action}.response`,
-    });
-    return payload.plugin;
-  }
-
-  async invokePluginRpc(pluginId: string, method: string, input: unknown): Promise<unknown> {
-    const requestId = this.createRequestId();
-    const payload = await this.sendCorrelatedSessionRequest({
-      requestId,
-      message: {
-        type: "plugin.rpc.invoke.request",
-        requestId,
-        pluginId,
-        method,
-        input,
-      },
-      responseType: "plugin.rpc.invoke.response",
-    });
-    return payload.output;
   }
 
   async respondToPermissionAndWait(
@@ -6101,13 +5856,6 @@ export class DaemonClient {
 
   getLastServerInfoMessage(): ServerInfoStatusPayload | null {
     return this.lastServerInfoMessage;
-  }
-
-  private requireHubRelationshipSupport(): void {
-    // COMPAT(hubRelationship): added in v0.1.X, drop the gate when floor >= v0.1.X.
-    if (this.lastServerInfoMessage?.features?.hubRelationship !== true) {
-      throw new Error("Update the host to use Hub relationship management.");
-    }
   }
 
   private requireDaemonConfigReloadSupport(): void {

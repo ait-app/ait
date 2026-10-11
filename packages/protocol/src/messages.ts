@@ -5,15 +5,6 @@ export {
   type AgentProfile,
   type AgentSkillSelection,
 } from "./agent-profile.js";
-import { PluginIdSchema, PluginRequirementsSchema, PluginSourceSchema } from "./plugin-config.js";
-export {
-  PluginIdSchema,
-  PluginRequirementsSchema,
-  DirectoryPluginSourceSchema,
-  PluginSourceSchema,
-  type PluginRequirements,
-  type PluginSource,
-} from "./plugin-config.js";
 import { TerminalProfileSchema } from "./terminal-profile.js";
 export { TerminalProfileSchema, type TerminalProfile } from "./terminal-profile.js";
 import { z } from "zod";
@@ -34,22 +25,6 @@ import { ProviderPaseoToolsPolicySchema } from "./provider-config.js";
 import { TOOL_CALL_ICON_NAMES } from "./agent-types.js";
 import { WORKSPACE_LABEL_COLORS } from "./workspace-labels.js";
 import {
-  ChatCreateRequestSchema,
-  ChatListRequestSchema,
-  ChatInspectRequestSchema,
-  ChatDeleteRequestSchema,
-  ChatPostRequestSchema,
-  ChatReadRequestSchema,
-  ChatWaitRequestSchema,
-  ChatCreateResponseSchema,
-  ChatListResponseSchema,
-  ChatInspectResponseSchema,
-  ChatDeleteResponseSchema,
-  ChatPostResponseSchema,
-  ChatReadResponseSchema,
-  ChatWaitResponseSchema,
-} from "./chat/rpc-schemas.js";
-import {
   ScheduleCreateRequestSchema,
   ScheduleListRequestSchema,
   ScheduleInspectRequestSchema,
@@ -69,18 +44,6 @@ import {
   ScheduleRunOnceResponseSchema,
   ScheduleUpdateResponseSchema,
 } from "./schedule/rpc-schemas.js";
-import {
-  LoopRunRequestSchema,
-  LoopListRequestSchema,
-  LoopInspectRequestSchema,
-  LoopLogsRequestSchema,
-  LoopStopRequestSchema,
-  LoopRunResponseSchema,
-  LoopListResponseSchema,
-  LoopInspectResponseSchema,
-  LoopLogsResponseSchema,
-  LoopStopResponseSchema,
-} from "./loop/rpc-schemas.js";
 import {
   BROWSER_AUTOMATION_COMMAND_NAMES,
   BrowserAutomationExecuteRequestSchema,
@@ -130,7 +93,6 @@ export const DAEMON_PERMISSIONS = [
   "workspace.write",
   "workspace.manage",
   "automation.manage",
-  "hub.execute",
 ] as const;
 export const DaemonPermissionSchema = z.enum(DAEMON_PERMISSIONS);
 export type DaemonPermission = z.infer<typeof DaemonPermissionSchema>;
@@ -212,8 +174,6 @@ export const MutableDaemonConfigSchema = z
     terminalProfiles: z.array(TerminalProfileSchema).optional(),
     agentProfiles: z.array(AgentProfileSchema).optional(),
     skills: z.object({ selection: AgentSkillSelectionSchema.optional() }).strict().optional(),
-    pluginsEnabled: z.boolean().optional(),
-    plugins: z.record(PluginIdSchema, PluginSourceSchema).optional(),
   })
   .passthrough();
 
@@ -232,8 +192,6 @@ export const MutableDaemonConfigPatchSchema = z
     appendSystemPrompt: z.string().optional(),
     terminalProfiles: z.array(TerminalProfileSchema).optional(),
     agentProfiles: z.array(AgentProfileSchema).optional(),
-    pluginsEnabled: z.boolean().optional(),
-    plugins: z.record(PluginIdSchema, PluginSourceSchema).optional(),
   })
   .partial()
   .passthrough();
@@ -721,7 +679,7 @@ export const AgentTimelineItemPayloadSchema: z.ZodType<AgentTimelineItem, unknow
   z.object({
     type: z.literal("plugin"),
     id: z.string(),
-    pluginId: PluginIdSchema,
+    pluginId: z.string().regex(/^[a-z][a-z0-9-]*$/),
     kind: z.string(),
     version: z.number(),
     data: JsonWireValueSchema,
@@ -1424,147 +1382,9 @@ export const DaemonConfigReloadRequestSchema = z.object({
   requestId: z.string(),
 });
 
-export const HubManagementDaemonConnectRequestSchema = z.object({
-  type: z.literal("hub.management.daemon.connect.request"),
-  requestId: z.string(),
-  hubUrl: z.string(),
-  token: z.string(),
-  permissions: z.array(DaemonPermissionSchema).default([]),
-});
-export const HubManagementDaemonGetStatusRequestSchema = z.object({
-  type: z.literal("hub.management.daemon.get_status.request"),
-  requestId: z.string(),
-});
-export const HubManagementDaemonDisconnectRequestSchema = z.object({
-  type: z.literal("hub.management.daemon.disconnect.request"),
-  requestId: z.string(),
-  force: z.boolean().optional(),
-});
-export const HubManagementDaemonPermissionsUpdateRequestSchema = z.object({
-  type: z.literal("hub.management.daemon.permissions.update.request"),
-  requestId: z.string(),
-  grant: z.array(DaemonPermissionSchema).default([]),
-  revoke: z.array(DaemonPermissionSchema).default([]),
-});
-
 export const DiagnosticsRequestSchema = z.object({
   type: z.literal("diagnostics.request"),
   requestId: z.string(),
-});
-
-export const PluginCatalogGetRequestSchema = z.object({
-  type: z.literal("plugin.catalog.get.request"),
-  requestId: z.string(),
-});
-
-export const PluginListRequestSchema = z.object({
-  type: z.literal("plugin.list.request"),
-  requestId: z.string(),
-});
-
-export const PluginLogsGetRequestSchema = z.object({
-  type: z.literal("plugin.logs.get.request"),
-  requestId: z.string(),
-  pluginId: PluginIdSchema,
-});
-
-export const PluginDirectoryInstallRequestSchema = z.object({
-  type: z.literal("plugin.directory.install.request"),
-  requestId: z.string(),
-  path: z.string().min(1),
-  id: PluginIdSchema.optional(),
-});
-
-export const PluginDirectoryInspectRequestSchema = z.object({
-  type: z.literal("plugin.directory.inspect.request"),
-  requestId: z.string(),
-  path: z.string().min(1),
-});
-
-export const PluginSourceInstallRequestSchema = z.object({
-  type: z.literal("plugin.source.install.request"),
-  requestId: z.string(),
-  source: z.string().min(1),
-  id: PluginIdSchema.optional(),
-  ref: z.string().min(1).optional(),
-  // COMPAT(plugin-source-path): accepted for v0.7 clients; remove after 2027-09-01.
-  pluginPath: z.string().min(1).optional(),
-});
-
-export const PluginSourceIdentitySchema = z.discriminatedUnion("kind", [
-  z.object({ kind: z.literal("directory"), path: z.string() }),
-  z.object({ kind: z.literal("git"), remote: z.string(), pluginPath: z.string() }),
-  z.object({ kind: z.literal("npm"), packageName: z.string(), pluginPath: z.string() }),
-]);
-export const PluginInstallationSchema = z.object({
-  identity: PluginSourceIdentitySchema,
-  currentRevision: z.string().optional(),
-});
-export type PluginInstallation = z.infer<typeof PluginInstallationSchema>;
-export const PluginUpdateTargetSchema = z.discriminatedUnion("kind", [
-  z.object({ kind: z.literal("git"), commit: z.string().regex(/^[0-9a-f]{40,64}$/) }),
-  z.object({
-    kind: z.literal("npm"),
-    version: z.string().min(1),
-    resolved: z.string().url(),
-    integrity: z.string().min(1),
-  }),
-]);
-export type PluginUpdateTarget = z.infer<typeof PluginUpdateTargetSchema>;
-export const PluginUpdateProposalSchema = z.object({
-  id: PluginIdSchema,
-  expected: z.object({
-    identity: PluginSourceIdentitySchema,
-    installationRoot: z.string(),
-    revision: z.string(),
-  }),
-  target: PluginUpdateTargetSchema,
-});
-export type PluginUpdateProposal = z.infer<typeof PluginUpdateProposalSchema>;
-export const PluginUpdateSelectionSchema = z.discriminatedUnion("kind", [
-  z.object({ kind: z.literal("git"), ref: z.string().min(1) }),
-  z.object({ kind: z.literal("npm"), version: z.string().min(1) }),
-]);
-export type PluginUpdateSelection = z.infer<typeof PluginUpdateSelectionSchema>;
-export const PluginUpdatePreviewRequestSchema = z.object({
-  type: z.literal("plugin.source.update.preview.request"),
-  requestId: z.string(),
-  pluginId: PluginIdSchema.optional(),
-  target: PluginUpdateSelectionSchema.optional(),
-});
-export const PluginUpdateApplyRequestSchema = z.object({
-  type: z.literal("plugin.source.update.apply.request"),
-  requestId: z.string(),
-  proposals: z.array(PluginUpdateProposalSchema).min(1),
-});
-
-export const PluginSourceStatusRequestSchema = z.object({
-  type: z.literal("plugin.source.status.request"),
-  requestId: z.string(),
-  pluginId: PluginIdSchema.optional(),
-});
-
-export const PluginSourceUpdateRequestSchema = z.object({
-  type: z.literal("plugin.source.update.request"),
-  requestId: z.string(),
-  pluginId: PluginIdSchema.optional(),
-});
-
-function pluginIdRequest<const Type extends string>(type: Type) {
-  return z.object({ type: z.literal(type), requestId: z.string(), pluginId: PluginIdSchema });
-}
-
-export const PluginReloadRequestSchema = pluginIdRequest("plugin.reload.request");
-export const PluginEnableRequestSchema = pluginIdRequest("plugin.enable.request");
-export const PluginDisableRequestSchema = pluginIdRequest("plugin.disable.request");
-export const PluginRemoveRequestSchema = pluginIdRequest("plugin.remove.request");
-
-export const PluginRpcInvokeRequestSchema = z.object({
-  type: z.literal("plugin.rpc.invoke.request"),
-  requestId: z.string(),
-  pluginId: PluginIdSchema,
-  method: z.string().min(1),
-  input: z.unknown(),
 });
 
 export const AgentTimelineAppendRequestSchema = z.object({
@@ -3071,79 +2891,6 @@ export const CaptureTerminalRequestSchema = z.object({
   requestId: z.string(),
 });
 
-export const HubExecutionAgentCreateRequestSchema = z.object({
-  type: z.literal("hub.execution.agent.create.request"),
-  requestId: z.string(),
-  executionId: z.string(),
-  provider: z.string(),
-  cwd: z.string(),
-  prompt: z.string(),
-  // COMPAT(hubExecutionWorkspaceSelection): semantics retired in v0.3.1; remove after 2027-08-08 once the Hub floor no longer sends it.
-  workspaceId: z.string().optional(),
-  model: z.string().optional(),
-  modeId: z.string().optional(),
-  thinkingOptionId: z.string().optional(),
-  featureValues: z.record(z.string(), z.unknown()).optional(),
-  providerOptions: ProviderOptionsSchema.optional(),
-  toolPolicy: ToolPolicySchema.optional(),
-  env: z.record(z.string(), z.string()).optional(),
-  mcpServers: z.record(z.string(), McpServerConfigSchema).optional(),
-  worktree: CreateAgentWorktreeTargetSchema.optional(),
-});
-
-export type HubExecutionAgentCreateRequest = z.infer<typeof HubExecutionAgentCreateRequestSchema>;
-
-export const HubExecutionAgentValidateRequestSchema = z.object({
-  type: z.literal("hub.execution.agent.validate.request"),
-  requestId: z.string(),
-  provider: z.string(),
-  model: z.string().optional(),
-  modeId: z.string().optional(),
-  thinkingOptionId: z.string().optional(),
-  providerOptions: ProviderOptionsSchema.optional(),
-});
-
-export type HubExecutionAgentValidateRequest = z.infer<
-  typeof HubExecutionAgentValidateRequestSchema
->;
-
-const HubExecutionAgentCreateErrorSchema = z.discriminatedUnion("code", [
-  z.object({
-    code: z.literal("provider_options_invalid"),
-    provider: z.string(),
-    issues: z.array(
-      z.object({
-        path: z.array(z.union([z.string(), z.number()])),
-        message: z.string(),
-      }),
-    ),
-    message: z.string(),
-  }),
-  z.object({
-    code: z.literal("tool_policy_unsupported"),
-    provider: z.string(),
-    message: z.string(),
-  }),
-  z.object({
-    code: z.literal("create_failed"),
-    message: z.string(),
-  }),
-]);
-
-export type HubExecutionAgentCreateError = z.infer<typeof HubExecutionAgentCreateErrorSchema>;
-
-export const HubExecutionControlActionSchema = z.enum(["interrupt", "archive"]);
-export type HubExecutionControlAction = z.infer<typeof HubExecutionControlActionSchema>;
-
-export const HubExecutionControlRequestSchema = z.object({
-  type: z.literal("hub.execution.control.request"),
-  requestId: z.string(),
-  executionId: z.string(),
-  action: HubExecutionControlActionSchema,
-});
-
-export type HubExecutionControlRequest = z.infer<typeof HubExecutionControlRequestSchema>;
-
 // These connection event streams have no directory bootstrap or timeline membership.
 export const SessionEventSubscriptionSchema = z.enum([
   "project.update",
@@ -3158,11 +2905,7 @@ export const SessionEventSubscriptionSchema = z.enum([
   "terminal.attention.required",
   "status.server_info",
   "status.daemon_config_changed",
-  "status.plugin_catalog_changed",
-  "status.plugin_settings_changed",
   "activity_log",
-  "hub.execution.agent.update",
-  "hub.execution.agent.stream",
 ]);
 export type SessionEventSubscription = z.infer<typeof SessionEventSubscriptionSchema>;
 export const SessionEventsSetSubscriptionRequestSchema = z.object({
@@ -3201,9 +2944,6 @@ export const SessionInboundMessageSchema = z.discriminatedUnion("type", [
   BrowserHostRegisterRequestSchema,
   SubscriptionReleaseRequestSchema,
   SessionEventsSetSubscriptionRequestSchema,
-  HubExecutionAgentCreateRequestSchema,
-  HubExecutionAgentValidateRequestSchema,
-  HubExecutionControlRequestSchema,
   BrowserAutomationExecuteResponseSchema,
   VoiceAudioChunkMessageSchema,
   AbortRequestMessageSchema,
@@ -3239,26 +2979,7 @@ export const SessionInboundMessageSchema = z.discriminatedUnion("type", [
   RelayStartRequestSchema,
   RelayStopRequestSchema,
   DaemonConfigReloadRequestSchema,
-  HubManagementDaemonConnectRequestSchema,
-  HubManagementDaemonGetStatusRequestSchema,
-  HubManagementDaemonDisconnectRequestSchema,
-  HubManagementDaemonPermissionsUpdateRequestSchema,
   DiagnosticsRequestSchema,
-  PluginCatalogGetRequestSchema,
-  PluginListRequestSchema,
-  PluginLogsGetRequestSchema,
-  PluginDirectoryInstallRequestSchema,
-  PluginDirectoryInspectRequestSchema,
-  PluginSourceInstallRequestSchema,
-  PluginSourceStatusRequestSchema,
-  PluginSourceUpdateRequestSchema,
-  PluginUpdatePreviewRequestSchema,
-  PluginUpdateApplyRequestSchema,
-  PluginReloadRequestSchema,
-  PluginEnableRequestSchema,
-  PluginDisableRequestSchema,
-  PluginRemoveRequestSchema,
-  PluginRpcInvokeRequestSchema,
   AgentTimelineAppendRequestSchema,
   AgentSkillsGetStatusRequestSchema,
   AgentSkillsReconcileRequestSchema,
@@ -3383,13 +3104,6 @@ export const SessionInboundMessageSchema = z.discriminatedUnion("type", [
   TerminalInputSchema,
   KillTerminalRequestSchema,
   CaptureTerminalRequestSchema,
-  ChatCreateRequestSchema,
-  ChatListRequestSchema,
-  ChatInspectRequestSchema,
-  ChatDeleteRequestSchema,
-  ChatPostRequestSchema,
-  ChatReadRequestSchema,
-  ChatWaitRequestSchema,
   ScheduleCreateRequestSchema,
   ScheduleListRequestSchema,
   ScheduleInspectRequestSchema,
@@ -3399,11 +3113,6 @@ export const SessionInboundMessageSchema = z.discriminatedUnion("type", [
   ScheduleDeleteRequestSchema,
   ScheduleRunOnceRequestSchema,
   ScheduleUpdateRequestSchema,
-  LoopRunRequestSchema,
-  LoopListRequestSchema,
-  LoopInspectRequestSchema,
-  LoopLogsRequestSchema,
-  LoopStopRequestSchema,
 ]);
 
 export type SessionInboundMessage = z.infer<typeof SessionInboundMessageSchema>;
@@ -3580,8 +3289,6 @@ export const ServerInfoStatusPayloadSchema = z
         // COMPAT(workspaceRequestReceipts): added in v0.8.0; remove gate after 2027-03-07.
         workspaceRequestReceipts: z.boolean().optional(),
         creationLifecycle: z.boolean().optional(),
-        // COMPAT(hubAgentRpc): added in v0.8.0; remove gate after 2027-03-05.
-        hubAgentRpc: z.boolean().optional(),
         providersSnapshot: z.boolean().optional(),
         // COMPAT(providersSnapshotCwd): added in v0.3.2, remove gate after 2027-02-10.
         providersSnapshotCwd: z.boolean().optional(),
@@ -3628,23 +3335,6 @@ export const ServerInfoStatusPayloadSchema = z
         relayConfig: z.boolean().optional(),
         // COMPAT(pushTokenRevocation): added in v0.3.2, remove gate after 2027-02-10.
         pushTokenRevocation: z.boolean().optional(),
-        // COMPAT(plugins): added in v0.3.0, remove gate after 2027-08-07.
-        plugins: z.boolean().optional(),
-        // COMPAT(pluginManagement): added in v0.4.0, remove gate after 2027-08-14.
-        pluginManagement: z.boolean().optional(),
-        // COMPAT(pluginLogs): added in v0.4.0, remove gate after 2027-08-16.
-        pluginLogs: z.boolean().optional(),
-        // COMPAT(pluginGitManagement): added in v0.7.0, remove gate after 2027-08-26.
-        pluginGitManagement: z.boolean().optional(),
-        // COMPAT(pluginSourceInstallation): added in v0.8.0; remove gate after 2027-03-16 once daemon floor supports source identifiers.
-        pluginSourceInstallation: z.boolean().optional(),
-        // COMPAT(pluginSourceUpdates): added in v0.8.0; remove gate after 2027-03-16 once daemon floor supports reviewed updates.
-        pluginSourceUpdates: z.boolean().optional(),
-        // COMPAT(pluginThemes): added in v0.5.0, remove gate after 2027-08-20.
-        // A daemon that predates this flag keeps `addTheme` in the server bundle it compiles,
-        // so a theme plugin cannot start there at all.
-        pluginThemes: z.boolean().optional(),
-        pluginSettings: z.boolean().optional(),
         pluginTimelineItems: z.boolean().optional(),
         // COMPAT(skillManagement): added in v0.4.0, remove gate after 2027-08-16.
         skillManagement: z.boolean().optional(),
@@ -3699,8 +3389,6 @@ export const ServerInfoStatusPayloadSchema = z
         workspacePinning: z.boolean().optional(),
         // COMPAT(workspaceMarkUnread): added in v0.5.0, remove after 2027-08-20.
         workspaceMarkUnread: z.boolean().optional(),
-        // COMPAT(hubRelationship): added in v0.1.X, drop the gate when floor >= v0.1.X.
-        hubRelationship: z.boolean().optional(),
         // COMPAT(projectGithubClone): added in v0.1.108, remove gate after 2027-01-15.
         projectGithubClone: z.boolean().optional(),
         // COMPAT(workspaceGithubRepositorySearch): added in v0.1.108, remove gate after 2027-01-15.
@@ -3847,17 +3535,6 @@ export const DaemonConfigChangedStatusPayloadSchema = z
   })
   .passthrough();
 
-export const PluginCatalogChangedStatusPayloadSchema = z.object({
-  status: z.literal("plugin_catalog_changed"),
-  pluginId: PluginIdSchema,
-});
-
-export const PluginSettingsChangedStatusPayloadSchema = z.object({
-  status: z.literal("plugin_settings_changed"),
-  pluginId: PluginIdSchema,
-  settingsId: z.string(),
-});
-
 export const KnownStatusPayloadSchema = z.discriminatedUnion("status", [
   AgentCreatedStatusPayloadSchema,
   AgentCreateFailedStatusPayloadSchema,
@@ -3866,8 +3543,6 @@ export const KnownStatusPayloadSchema = z.discriminatedUnion("status", [
   ShutdownRequestedStatusPayloadSchema,
   RestartRequestedStatusPayloadSchema,
   DaemonConfigChangedStatusPayloadSchema,
-  PluginCatalogChangedStatusPayloadSchema,
-  PluginSettingsChangedStatusPayloadSchema,
 ]);
 
 export type KnownStatusPayload = z.infer<typeof KnownStatusPayloadSchema>;
@@ -5025,42 +4700,6 @@ export const DaemonGetStatusResponseSchema = z.object({
       ),
     })
     .passthrough(),
-});
-
-export const HubRelationshipStatusSchema = z.object({
-  state: z.enum([
-    "not_connected",
-    "connecting",
-    "connected",
-    "reconnecting",
-    "disconnecting",
-    "revoked",
-  ]),
-  daemonId: z.string().nullable(),
-  hubOrigin: z.string().nullable(),
-  permissions: z.array(DaemonPermissionSchema),
-  connectedAt: z.string().nullable(),
-  lastError: z.string().nullable(),
-});
-export const HubManagementDaemonConnectResponseSchema = z.object({
-  type: z.literal("hub.management.daemon.connect.response"),
-  payload: z.object({ requestId: z.string(), status: HubRelationshipStatusSchema }),
-});
-export const HubManagementDaemonGetStatusResponseSchema = z.object({
-  type: z.literal("hub.management.daemon.get_status.response"),
-  payload: z.object({ requestId: z.string(), status: HubRelationshipStatusSchema }),
-});
-export const HubManagementDaemonDisconnectResponseSchema = z.object({
-  type: z.literal("hub.management.daemon.disconnect.response"),
-  payload: z.object({
-    requestId: z.string(),
-    status: HubRelationshipStatusSchema,
-    warning: z.string().optional(),
-  }),
-});
-export const HubManagementDaemonPermissionsUpdateResponseSchema = z.object({
-  type: z.literal("hub.management.daemon.permissions.update.response"),
-  payload: z.object({ requestId: z.string(), status: HubRelationshipStatusSchema }),
 });
 
 export const DaemonConfigReloadResponseSchema = z.object({
@@ -6539,271 +6178,7 @@ export const DaemonUpdateProgressMessageSchema = z.object({
   }),
 });
 
-export const HubExecutionAgentCreateResponseSchema = z.object({
-  type: z.literal("hub.execution.agent.create.response"),
-  payload: z.object({
-    requestId: z.string(),
-    executionId: z.string(),
-    agentId: z.string().nullable(),
-    agent: AgentSnapshotPayloadSchema.nullable(),
-    success: z.boolean(),
-    toolPolicyApplied: z.literal(true).optional(),
-    error: HubExecutionAgentCreateErrorSchema.nullable(),
-  }),
-});
-
-export const HubExecutionAgentValidationIssueSchema = z.object({
-  path: z.array(z.union([z.string(), z.number()])),
-  message: z.string(),
-});
-
-export type HubExecutionAgentValidationIssue = z.infer<
-  typeof HubExecutionAgentValidationIssueSchema
->;
-
-export const HubExecutionAgentValidateResponseSchema = z.object({
-  type: z.literal("hub.execution.agent.validate.response"),
-  payload: z.object({
-    requestId: z.string(),
-    valid: z.boolean(),
-    issues: z.array(HubExecutionAgentValidationIssueSchema),
-    error: z.string().nullable(),
-  }),
-});
-
-export const HubExecutionControlResponseSchema = z.object({
-  type: z.literal("hub.execution.control.response"),
-  payload: z.object({
-    requestId: z.string(),
-    executionId: z.string(),
-    action: HubExecutionControlActionSchema,
-    success: z.boolean(),
-    error: z.string().nullable(),
-  }),
-});
-
-export const HubExecutionAgentUpdateSchema = z.object({
-  type: z.literal("hub.execution.agent.update"),
-  payload: z.object({
-    subscriptionId: z.string().optional(),
-    executionId: z.string(),
-    agentId: z.string(),
-    agent: AgentSnapshotPayloadSchema,
-  }),
-});
-
-export const HubExecutionAgentStreamSchema = z.object({
-  type: z.literal("hub.execution.agent.stream"),
-  payload: z.object({
-    subscriptionId: z.string().optional(),
-    executionId: z.string(),
-    agentId: z.string(),
-    event: AgentStreamEventPayloadSchema,
-  }),
-});
-
-export type HubExecutionAgentCreateResponse = z.infer<typeof HubExecutionAgentCreateResponseSchema>;
-export type HubExecutionAgentValidateResponse = z.infer<
-  typeof HubExecutionAgentValidateResponseSchema
->;
-export type HubExecutionControlResponse = z.infer<typeof HubExecutionControlResponseSchema>;
-export type HubExecutionAgentUpdate = z.infer<typeof HubExecutionAgentUpdateSchema>;
-export type HubExecutionAgentStream = z.infer<typeof HubExecutionAgentStreamSchema>;
-
-export const HubExecutionOutboundMessageSchema = z.discriminatedUnion("type", [
-  HubExecutionAgentCreateResponseSchema,
-  HubExecutionAgentValidateResponseSchema,
-  HubExecutionControlResponseSchema,
-  HubExecutionAgentUpdateSchema,
-  HubExecutionAgentStreamSchema,
-]);
-
-export type HubExecutionOutboundMessage = z.infer<typeof HubExecutionOutboundMessageSchema>;
-
-export class HubMessageCorrelationError extends Error {
-  constructor(messageType: HubExecutionOutboundMessage["type"]) {
-    super(`Hub message ${messageType} has mismatched agent correlation`);
-    this.name = "HubMessageCorrelationError";
-  }
-}
-
-export function parseHubExecutionOutboundMessage(value: unknown): HubExecutionOutboundMessage {
-  const message = HubExecutionOutboundMessageSchema.parse(value);
-  const payload = message.payload;
-  if (
-    "agent" in payload &&
-    payload.agent !== null &&
-    "agentId" in payload &&
-    payload.agentId !== null &&
-    payload.agent.id !== payload.agentId
-  ) {
-    throw new HubMessageCorrelationError(message.type);
-  }
-  return message;
-}
-
 export type DaemonUpdateProgressMessage = z.infer<typeof DaemonUpdateProgressMessageSchema>;
-
-export const PluginCatalogGetResponseSchema = z.object({
-  type: z.literal("plugin.catalog.get.response"),
-  payload: z.object({
-    requestId: z.string(),
-    plugins: z.array(
-      z.object({
-        id: PluginIdSchema,
-        clientBundle: z.string(),
-        requirements: PluginRequirementsSchema.optional(),
-      }),
-    ),
-  }),
-});
-
-export const PluginStatusSchema = z.enum(["running", "disabled", "failed"]);
-export type PluginStatus = z.infer<typeof PluginStatusSchema>;
-
-export const PluginNpmInstallationSchema = z.object({
-  packageName: z.string(),
-  requestedSpec: z.string(),
-  version: z.string(),
-  integrity: z.string(),
-});
-
-export const PluginListItemSchema = z.object({
-  id: PluginIdSchema,
-  description: z.string().optional(),
-  path: z.string(),
-  enabled: z.boolean(),
-  status: PluginStatusSchema,
-  source: z.enum(["directory", "git"]).optional(),
-  npm: PluginNpmInstallationSchema.optional(),
-  installation: PluginInstallationSchema.optional(),
-  remote: z.string().optional(),
-  ref: z.string().optional(),
-  commit: z.string().optional(),
-  error: z.string().optional(),
-});
-export type PluginListItem = z.infer<typeof PluginListItemSchema>;
-
-export const PluginLogEntrySchema = z.object({
-  sequence: z.number().int().nonnegative(),
-  timestamp: z.string().datetime(),
-  stream: z.enum(["stdout", "stderr"]),
-  message: z.string(),
-});
-export type PluginLogEntry = z.infer<typeof PluginLogEntrySchema>;
-
-export const PluginListResponseSchema = z.object({
-  type: z.literal("plugin.list.response"),
-  payload: z.object({ requestId: z.string(), plugins: z.array(PluginListItemSchema) }),
-});
-
-export const PluginLogsGetResponseSchema = z.object({
-  type: z.literal("plugin.logs.get.response"),
-  payload: z.object({
-    requestId: z.string(),
-    pluginId: PluginIdSchema,
-    entries: z.array(PluginLogEntrySchema),
-  }),
-});
-
-export const PluginDirectoryInstallResponseSchema = z.object({
-  type: z.literal("plugin.directory.install.response"),
-  payload: z.object({ requestId: z.string(), plugin: PluginListItemSchema }),
-});
-
-export const PluginDirectoryInspectResponseSchema = z.object({
-  type: z.literal("plugin.directory.inspect.response"),
-  payload: z.object({ requestId: z.string(), id: PluginIdSchema }),
-});
-
-export const PluginSourceInstallResponseSchema = z.object({
-  type: z.literal("plugin.source.install.response"),
-  payload: z.object({ requestId: z.string(), plugin: PluginListItemSchema }),
-});
-
-export const PluginSourceStatusItemSchema = z.object({
-  id: PluginIdSchema,
-  source: z.enum(["directory", "git"]),
-  npm: PluginNpmInstallationSchema.optional(),
-  installation: PluginInstallationSchema.optional(),
-  path: z.string(),
-  remote: z.string().optional(),
-  ref: z.string().optional(),
-  currentCommit: z.string().optional(),
-  latestCommit: z.string().optional(),
-  commitsBehind: z.number().int().nonnegative().optional(),
-  updateAvailable: z.boolean().optional(),
-});
-export type PluginSourceStatusItem = z.infer<typeof PluginSourceStatusItemSchema>;
-
-export const PluginSourceStatusResponseSchema = z.object({
-  type: z.literal("plugin.source.status.response"),
-  payload: z.object({ requestId: z.string(), plugins: z.array(PluginSourceStatusItemSchema) }),
-});
-
-export const PluginSourceUpdateItemSchema = z.object({
-  id: PluginIdSchema,
-  previousCommit: z.string(),
-  currentCommit: z.string(),
-  commits: z.number().int().nonnegative(),
-  updated: z.boolean(),
-});
-export type PluginSourceUpdateItem = z.infer<typeof PluginSourceUpdateItemSchema>;
-
-export const PluginSourceUpdateResponseSchema = z.object({
-  type: z.literal("plugin.source.update.response"),
-  payload: z.object({ requestId: z.string(), plugins: z.array(PluginSourceUpdateItemSchema) }),
-});
-
-export const PluginUpdatePreviewSchema = z.object({
-  id: PluginIdSchema,
-  outcome: z.enum(["update", "current", "installed-newer", "local", "error"]),
-  current: PluginInstallationSchema.optional(),
-  target: PluginUpdateTargetSchema.optional(),
-  links: z.array(z.string()),
-  proposal: PluginUpdateProposalSchema.optional(),
-  error: z.string().optional(),
-});
-export type PluginUpdatePreview = z.infer<typeof PluginUpdatePreviewSchema>;
-export const PluginUpdateResultSchema = z.object({
-  id: PluginIdSchema,
-  outcome: z.enum(["updated", "error"]),
-  plugin: PluginListItemSchema.optional(),
-  error: z.string().optional(),
-  warning: z.string().optional(),
-});
-export type PluginUpdateResult = z.infer<typeof PluginUpdateResultSchema>;
-export const PluginUpdatePreviewResponseSchema = z.object({
-  type: z.literal("plugin.source.update.preview.response"),
-  payload: z.object({ requestId: z.string(), plugins: z.array(PluginUpdatePreviewSchema) }),
-});
-export const PluginUpdateApplyResponseSchema = z.object({
-  type: z.literal("plugin.source.update.apply.response"),
-  payload: z.object({ requestId: z.string(), plugins: z.array(PluginUpdateResultSchema) }),
-});
-
-function pluginActionResponse<const Type extends string>(type: Type) {
-  return z.object({
-    type: z.literal(type),
-    payload: z.object({ requestId: z.string(), plugin: PluginListItemSchema }),
-  });
-}
-
-export const PluginReloadResponseSchema = pluginActionResponse("plugin.reload.response");
-export const PluginEnableResponseSchema = pluginActionResponse("plugin.enable.response");
-export const PluginDisableResponseSchema = pluginActionResponse("plugin.disable.response");
-export const PluginRemoveResponseSchema = z.object({
-  type: z.literal("plugin.remove.response"),
-  payload: z.object({ requestId: z.string() }).strict(),
-});
-
-export const PluginRpcInvokeResponseSchema = z.object({
-  type: z.literal("plugin.rpc.invoke.response"),
-  payload: z.object({
-    requestId: z.string(),
-    output: z.unknown(),
-  }),
-});
 
 export const AgentTimelineAppendResponseSchema = z.object({
   type: z.literal("agent.timeline.append.response"),
@@ -6847,27 +6222,7 @@ export const SessionOutboundMessageSchema = z.discriminatedUnion("type", [
   BrowserHostRegisterResponseSchema,
   SubscriptionReleaseResponseSchema,
   SessionEventsSetSubscriptionResponseSchema,
-  HubExecutionAgentCreateResponseSchema,
-  HubExecutionAgentValidateResponseSchema,
-  HubExecutionControlResponseSchema,
-  HubExecutionAgentUpdateSchema,
-  HubExecutionAgentStreamSchema,
   BrowserAutomationExecuteRequestSchema,
-  PluginCatalogGetResponseSchema,
-  PluginListResponseSchema,
-  PluginLogsGetResponseSchema,
-  PluginDirectoryInstallResponseSchema,
-  PluginDirectoryInspectResponseSchema,
-  PluginSourceInstallResponseSchema,
-  PluginSourceStatusResponseSchema,
-  PluginSourceUpdateResponseSchema,
-  PluginUpdatePreviewResponseSchema,
-  PluginUpdateApplyResponseSchema,
-  PluginReloadResponseSchema,
-  PluginEnableResponseSchema,
-  PluginDisableResponseSchema,
-  PluginRemoveResponseSchema,
-  PluginRpcInvokeResponseSchema,
   AgentTimelineAppendResponseSchema,
   AgentSkillsGetStatusResponseSchema,
   AgentSkillsReconcileResponseSchema,
@@ -6948,10 +6303,6 @@ export const SessionOutboundMessageSchema = z.discriminatedUnion("type", [
   RelayStartResponseSchema,
   RelayStopResponseSchema,
   DaemonConfigReloadResponseSchema,
-  HubManagementDaemonConnectResponseSchema,
-  HubManagementDaemonGetStatusResponseSchema,
-  HubManagementDaemonDisconnectResponseSchema,
-  HubManagementDaemonPermissionsUpdateResponseSchema,
   DiagnosticsResponseSchema,
   GetDaemonConfigResponseMessageSchema,
   SetDaemonConfigResponseMessageSchema,
@@ -7045,13 +6396,6 @@ export const SessionOutboundMessageSchema = z.discriminatedUnion("type", [
   CaptureTerminalResponseSchema,
   TerminalStreamExitSchema,
   TerminalAttentionRequiredSchema,
-  ChatCreateResponseSchema,
-  ChatListResponseSchema,
-  ChatInspectResponseSchema,
-  ChatDeleteResponseSchema,
-  ChatPostResponseSchema,
-  ChatReadResponseSchema,
-  ChatWaitResponseSchema,
   ScheduleCreateResponseSchema,
   ScheduleListResponseSchema,
   ScheduleInspectResponseSchema,
@@ -7061,11 +6405,6 @@ export const SessionOutboundMessageSchema = z.discriminatedUnion("type", [
   ScheduleDeleteResponseSchema,
   ScheduleRunOnceResponseSchema,
   ScheduleUpdateResponseSchema,
-  LoopRunResponseSchema,
-  LoopListResponseSchema,
-  LoopInspectResponseSchema,
-  LoopLogsResponseSchema,
-  LoopStopResponseSchema,
   DaemonUpdateProgressMessageSchema,
   DaemonUpdateResponseSchema,
 ]);
@@ -7220,13 +6559,6 @@ export type ProviderUsageDetail = z.infer<typeof ProviderUsageDetailSchema>;
 export type ProviderUsageListResponseMessage = z.infer<
   typeof ProviderUsageListResponseMessageSchema
 >;
-export type ChatCreateResponse = z.infer<typeof ChatCreateResponseSchema>;
-export type ChatListResponse = z.infer<typeof ChatListResponseSchema>;
-export type ChatInspectResponse = z.infer<typeof ChatInspectResponseSchema>;
-export type ChatDeleteResponse = z.infer<typeof ChatDeleteResponseSchema>;
-export type ChatPostResponse = z.infer<typeof ChatPostResponseSchema>;
-export type ChatReadResponse = z.infer<typeof ChatReadResponseSchema>;
-export type ChatWaitResponse = z.infer<typeof ChatWaitResponseSchema>;
 export type ScheduleCreateResponse = z.infer<typeof ScheduleCreateResponseSchema>;
 export type ScheduleListResponse = z.infer<typeof ScheduleListResponseSchema>;
 export type ScheduleInspectResponse = z.infer<typeof ScheduleInspectResponseSchema>;
@@ -7236,11 +6568,6 @@ export type ScheduleResumeResponse = z.infer<typeof ScheduleResumeResponseSchema
 export type ScheduleDeleteResponse = z.infer<typeof ScheduleDeleteResponseSchema>;
 export type ScheduleRunOnceResponse = z.infer<typeof ScheduleRunOnceResponseSchema>;
 export type ScheduleUpdateResponse = z.infer<typeof ScheduleUpdateResponseSchema>;
-export type LoopRunResponse = z.infer<typeof LoopRunResponseSchema>;
-export type LoopListResponse = z.infer<typeof LoopListResponseSchema>;
-export type LoopInspectResponse = z.infer<typeof LoopInspectResponseSchema>;
-export type LoopLogsResponse = z.infer<typeof LoopLogsResponseSchema>;
-export type LoopStopResponse = z.infer<typeof LoopStopResponseSchema>;
 
 // Type exports for payload types
 export type ActivityLogPayload = z.infer<typeof ActivityLogPayloadSchema>;
@@ -7288,13 +6615,6 @@ export type RefreshProvidersSnapshotRequestMessage = z.infer<
 export type ProviderDiagnosticRequestMessage = z.infer<
   typeof ProviderDiagnosticRequestMessageSchema
 >;
-export type ChatCreateRequest = z.infer<typeof ChatCreateRequestSchema>;
-export type ChatListRequest = z.infer<typeof ChatListRequestSchema>;
-export type ChatInspectRequest = z.infer<typeof ChatInspectRequestSchema>;
-export type ChatDeleteRequest = z.infer<typeof ChatDeleteRequestSchema>;
-export type ChatPostRequest = z.infer<typeof ChatPostRequestSchema>;
-export type ChatReadRequest = z.infer<typeof ChatReadRequestSchema>;
-export type ChatWaitRequest = z.infer<typeof ChatWaitRequestSchema>;
 export type ScheduleCreateRequest = z.infer<typeof ScheduleCreateRequestSchema>;
 export type ScheduleListRequest = z.infer<typeof ScheduleListRequestSchema>;
 export type ScheduleInspectRequest = z.infer<typeof ScheduleInspectRequestSchema>;
@@ -7304,11 +6624,6 @@ export type ScheduleResumeRequest = z.infer<typeof ScheduleResumeRequestSchema>;
 export type ScheduleDeleteRequest = z.infer<typeof ScheduleDeleteRequestSchema>;
 export type ScheduleRunOnceRequest = z.infer<typeof ScheduleRunOnceRequestSchema>;
 export type ScheduleUpdateRequest = z.infer<typeof ScheduleUpdateRequestSchema>;
-export type LoopRunRequest = z.infer<typeof LoopRunRequestSchema>;
-export type LoopListRequest = z.infer<typeof LoopListRequestSchema>;
-export type LoopInspectRequest = z.infer<typeof LoopInspectRequestSchema>;
-export type LoopLogsRequest = z.infer<typeof LoopLogsRequestSchema>;
-export type LoopStopRequest = z.infer<typeof LoopStopRequestSchema>;
 export type ResumeAgentRequestMessage = z.infer<typeof ResumeAgentRequestMessageSchema>;
 export type DeleteAgentRequestMessage = z.infer<typeof DeleteAgentRequestMessageSchema>;
 export type UpdateAgentRequestMessage = z.infer<typeof UpdateAgentRequestMessageSchema>;
@@ -7532,7 +6847,7 @@ export const WSPongMessageSchema = z.object({
 export const WSHelloMessageSchema = z.object({
   type: z.literal("hello"),
   clientId: z.string().min(1),
-  clientType: z.enum(["mobile", "browser", "cli", "mcp", "hub"]),
+  clientType: z.enum(["mobile", "browser", "cli", "mcp"]),
   protocolVersion: z.number().int(),
   appVersion: z.string().optional(),
   capabilities: z
