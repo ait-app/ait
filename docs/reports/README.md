@@ -171,6 +171,7 @@
 
 ## 发布验证
 
+- [Ait 0.0.28 发布说明](releases/release-0.0.28.md)
 - [Ait 0.0.27 发布说明](releases/release-0.0.27.md)
 - [Ait 0.0.26 发布说明](releases/release-0.0.26.md)
 - [Ait 0.0.25 发布说明](releases/release-0.0.25.md)
