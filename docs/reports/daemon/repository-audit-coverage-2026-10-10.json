@@ -1,0 +1,201 @@
+{
+  "generated_at": "2026-10-11",
+  "source_revision": "b697d6749dee2d9d2a89dd16502e06f7fea9acfc",
+  "measured_tree": "repository audit changes on top of source_revision",
+  "platform": {
+    "system": "Darwin",
+    "machine": "arm64",
+    "rustc": "rustc 1.98.1 (48a229cea 2026-09-01)"
+  },
+  "scope": {
+    "packages": [
+      "api",
+      "browser",
+      "daemon",
+      "domain",
+      "filesystem",
+      "metadata",
+      "model",
+      "persistence",
+      "provider",
+      "relay",
+      "schedule",
+      "terminal",
+      "voice"
+    ],
+    "features": "default",
+    "additional_file_exclusions": [],
+    "coverage_includes_doctests": false,
+    "native_ignored_tests_run": false,
+    "unavailable_platforms": ["Linux", "Windows"]
+  },
+  "commands": [
+    "cargo llvm-cov nextest --locked --workspace --html",
+    "cargo llvm-cov report --json --summary-only"
+  ],
+  "tests": {
+    "current": "2044 passed, 16 skipped",
+    "baseline": "2043 passed, 16 skipped"
+  },
+  "coverage": {
+    "workspace": {
+      "covered": 56539,
+      "total": 59723,
+      "percent": 94.6687
+    },
+    "packages": {
+      "api": {
+        "covered": 2132,
+        "total": 2255,
+        "percent": 94.5455
+      },
+      "browser": {
+        "covered": 715,
+        "total": 733,
+        "percent": 97.5443
+      },
+      "daemon": {
+        "covered": 1318,
+        "total": 1391,
+        "percent": 94.752
+      },
+      "domain": {
+        "covered": 549,
+        "total": 549,
+        "percent": 100.0
+      },
+      "filesystem": {
+        "covered": 11583,
+        "total": 12210,
+        "percent": 94.8649
+      },
+      "metadata": {
+        "covered": 5462,
+        "total": 5801,
+        "percent": 94.1562
+      },
+      "model": {
+        "covered": 1336,
+        "total": 1388,
+        "percent": 96.2536
+      },
+      "persistence": {
+        "covered": 1696,
+        "total": 1769,
+        "percent": 95.8734
+      },
+      "provider": {
+        "covered": 27058,
+        "total": 28726,
+        "percent": 94.1934
+      },
+      "relay": {
+        "covered": 462,
+        "total": 503,
+        "percent": 91.8489
+      },
+      "schedule": {
+        "covered": 777,
+        "total": 796,
+        "percent": 97.6131
+      },
+      "terminal": {
+        "covered": 1583,
+        "total": 1639,
+        "percent": 96.5833
+      },
+      "voice": {
+        "covered": 1868,
+        "total": 1963,
+        "percent": 95.1605
+      }
+    }
+  },
+  "comparable_baseline": {
+    "description": "Same command, platform and tree with the three changed Rust files restored to source_revision",
+    "workspace": {
+      "covered": 56545,
+      "total": 59730,
+      "percent": 94.6677
+    },
+    "packages": {
+      "api": {
+        "covered": 2132,
+        "total": 2255,
+        "percent": 94.5455
+      },
+      "browser": {
+        "covered": 715,
+        "total": 733,
+        "percent": 97.5443
+      },
+      "daemon": {
+        "covered": 1318,
+        "total": 1391,
+        "percent": 94.752
+      },
+      "domain": {
+        "covered": 549,
+        "total": 549,
+        "percent": 100.0
+      },
+      "filesystem": {
+        "covered": 11582,
+        "total": 12210,
+        "percent": 94.8567
+      },
+      "metadata": {
+        "covered": 5462,
+        "total": 5801,
+        "percent": 94.1562
+      },
+      "model": {
+        "covered": 1336,
+        "total": 1388,
+        "percent": 96.2536
+      },
+      "persistence": {
+        "covered": 1696,
+        "total": 1769,
+        "percent": 95.8734
+      },
+      "provider": {
+        "covered": 27058,
+        "total": 28726,
+        "percent": 94.1934
+      },
+      "relay": {
+        "covered": 462,
+        "total": 503,
+        "percent": 91.8489
+      },
+      "schedule": {
+        "covered": 777,
+        "total": 796,
+        "percent": 97.6131
+      },
+      "terminal": {
+        "covered": 1590,
+        "total": 1646,
+        "percent": 96.5978
+      },
+      "voice": {
+        "covered": 1868,
+        "total": 1963,
+        "percent": 95.1605
+      }
+    }
+  },
+  "changed_files": {
+    "crates/terminal/src/activity.rs": {
+      "covered": 121,
+      "total": 121,
+      "percent": 100.0
+    },
+    "crates/provider/src/protocol/agent.rs": {
+      "covered": 8,
+      "total": 8,
+      "percent": 100.0
+    }
+  }
+}

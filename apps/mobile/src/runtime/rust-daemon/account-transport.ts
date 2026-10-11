@@ -2,6 +2,7 @@ import { getDesktopHost } from "@/desktop/host";
 import { Platform } from "react-native";
 import { createNativeAccountRelayTransportFactory } from "./native-account-transport";
 import type { TransportFactory } from "./types";
+import { parseAccountRelayTarget } from "./account-relay-target";
 
 /** Each platform owns its account authority and one-use relay tickets. */
 export const createAccountRelayTransportFactory: TransportFactory = ({ url }) => {
@@ -9,16 +10,8 @@ export const createAccountRelayTransportFactory: TransportFactory = ({ url }) =>
     return createNativeAccountRelayTransportFactory()({ url });
   const desktop = getDesktopHost();
   if (!desktop?.invoke || !desktop.events?.on)
-    throw new Error("Account relay requires the native mobile or desktop app.");
-  const parsed = new URL(url);
-  if (
-    parsed.protocol !== "ait+desktop:" ||
-    parsed.hostname !== "account-relay" ||
-    !/^\/[0-9a-f-]{36}$/i.test(parsed.pathname) ||
-    parsed.search ||
-    parsed.hash
-  )
-    throw new Error("Invalid account relay target");
+    throw new Error("Online relay requires the native mobile or desktop app.");
+  const target = parseAccountRelayTarget(url);
   const invoke = desktop.invoke;
   const sessionId = `account-${crypto.randomUUID()}`;
   const opens = new Set<() => void>();
@@ -67,7 +60,7 @@ export const createAccountRelayTransportFactory: TransportFactory = ({ url }) =>
       return;
     }
     cleanup = remove;
-    await invoke("account_transport_open", { sessionId, hostId: parsed.pathname.slice(1) });
+    await invoke("account_transport_open", { sessionId, ...target });
   })().catch(fail);
   return {
     send(data) {

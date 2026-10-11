@@ -1,5 +1,6 @@
 use super::*;
 use serde_json::json;
+use std::collections::BTreeSet;
 
 mod paseo;
 
@@ -198,7 +199,7 @@ fn version_two_migration_preserves_data_and_progress_failure_is_atomic() {
         .database
         .lock()
         .unwrap()
-        .execute_batch("DROP TABLE progress; DROP TABLE input_receipts; DROP TABLE provider_subagents; PRAGMA user_version=2;")
+        .execute_batch("DROP TABLE progress; DROP TABLE input_receipts; DROP TABLE provider_subagents; DROP TABLE projection_heads; DROP TABLE display_entries; DROP TABLE display_ranges; DROP TABLE display_sources; PRAGMA user_version=2;")
         .unwrap();
     drop(timeline);
     let timeline = Timeline::open(&path).unwrap();

@@ -1,5 +1,6 @@
 import { RotateCw } from "lucide-react-native";
 import { useCallback, useMemo } from "react";
+import { useTranslation } from "react-i18next";
 import { Text, View, type StyleProp, type TextStyle } from "react-native";
 import { StyleSheet, withUnistyles } from "react-native-unistyles";
 import {
@@ -14,7 +15,7 @@ import { useIsCompactFormFactor } from "@/constants/layout";
 import { isNative } from "@/constants/platform";
 import { useCompactTimeAgo } from "@/hooks/use-compact-time-ago";
 import { UsageBalanceBar } from "./balance-bar";
-import { usageCopy } from "./copy";
+import { useUsageCopy, type UsageCopy } from "./copy";
 import type { UsageDisplay } from "./display";
 import { formatUsageFreshness, type UsageRefresh } from "./model";
 import { useReportRefresh } from "./queries";
@@ -22,12 +23,12 @@ import { UsageSourceIcon } from "./source-icon";
 import type { UsageReport, UsageReportEntry, UsageWindow } from "./types";
 import { UsageWindowBar } from "./window-bar";
 
-function statusText(report: UsageReport): string | null {
+function statusText(report: UsageReport, usageCopy: UsageCopy): string | null {
   if (report.status === "available") return null;
-  return report.status === "error" ? "Error" : "Unavailable";
+  return report.status === "error" ? usageCopy.error : usageCopy.unavailable;
 }
 
-function reportContent(report: UsageReport) {
+function reportContent(report: UsageReport, usageCopy: UsageCopy) {
   if (report.status === "available")
     return {
       windows: report.windows,
@@ -36,19 +37,23 @@ function reportContent(report: UsageReport) {
       message: undefined,
     };
   const message =
-    report.status === "unavailable" ? usageCopy.problem(report.problem) : report.error;
+    report.status === "unavailable"
+      ? usageCopy.problem(report.problem)
+      : report.error || usageCopy.nativeReadFailed;
   return { windows: [], balances: [], details: [], message };
 }
 
-function reportMessages(entry: UsageReportEntry): string[] {
+function reportMessages(entry: UsageReportEntry, usageCopy: UsageCopy): string[] {
   if (entry.report.status === "available") return [];
   if (entry.loginErrors)
     return entry.loginErrors.map(
-      (login) => `${login.harness}: ${reportContent(login.report).message}`,
+      (login) => `${login.harness}: ${reportContent(login.report, usageCopy).message}`,
     );
   // COMPAT(usageLoginErrors): added in v0.11.0, remove after 2027-04-05 once daemon floor >= v0.11.0.
   return [
-    entry.report.status === "error" ? entry.report.error : usageCopy.problem(entry.report.problem),
+    entry.report.status === "error"
+      ? entry.report.error || usageCopy.nativeReadFailed
+      : usageCopy.problem(entry.report.problem),
   ];
 }
 
@@ -74,15 +79,16 @@ export function UsageCard({
   refreshable: boolean;
   compact?: boolean;
 }) {
+  const usageCopy = useUsageCopy();
   const isCompact = useIsCompactFormFactor();
   const { refresh, refreshState } = useReportRefresh(serverId, entry.id, agentId);
   // Where there is no hover the freshness is printed on the card; elsewhere the Refresh tooltip.
   const showsFreshnessInline = isNative || isCompact || !refreshable;
   const usage = entry.report;
-  const status = statusText(usage);
+  const status = statusText(usage, usageCopy);
   const footer = entry.account.label ?? null;
-  const { windows, balances, details } = reportContent(usage);
-  const messages = reportMessages(entry);
+  const { windows, balances, details } = reportContent(usage, usageCopy);
+  const messages = reportMessages(entry, usageCopy);
 
   const containerStyle = useMemo(
     () => [styles.container, compact ? styles.containerCompact : styles.containerPadded],
@@ -198,6 +204,7 @@ function CardWindowBar({
   display: UsageDisplay;
   pinnable: boolean;
 }) {
+  const usageCopy = useUsageCopy();
   const pin = useMemo(
     () => ({ sourceId: entry.sourceId, windowId: window.id }),
     [entry.sourceId, window.id],
@@ -211,7 +218,7 @@ function CardWindowBar({
       pinnable={pinnable}
       pinned={display.isPinned(pin)}
       onTogglePin={toggle}
-      pinLabel={`${usageCopy.pin} ${entry.sourceLabel} ${window.label}`}
+      pinLabel={usageCopy.pinWindow(entry.sourceLabel, window.label)}
       pinTestID={`usage-pin-${entry.sourceId}-${window.id}`}
     />
   );
@@ -231,6 +238,7 @@ function UsageRefreshButton({
   onRefresh: () => void;
   compact: boolean;
 }) {
+  const usageCopy = useUsageCopy();
   const isPending = refreshState === "pending";
   const iconSize = paneContentToolbarIconSize(compact);
   const freshness = useMemo(
@@ -245,7 +253,7 @@ function UsageRefreshButton({
   );
   return (
     <ToolbarButton
-      label={`${usageCopy.refresh} ${sourceLabel}`}
+      label={usageCopy.refreshSource(sourceLabel)}
       tooltip={freshness}
       tooltipSide="top"
       compact={compact}
@@ -273,10 +281,11 @@ function UsageFreshness({
   style: StyleProp<TextStyle>;
   testID: string;
 }) {
+  const { t } = useTranslation();
   const elapsed = useCompactTimeAgo(new Date(fetchedAt));
   return (
     <Text style={style} numberOfLines={1} testID={testID}>
-      {formatUsageFreshness(elapsed)}
+      {formatUsageFreshness(elapsed, fetchedAt, t)}
     </Text>
   );
 }

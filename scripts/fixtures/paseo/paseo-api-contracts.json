@@ -6036,10 +6036,7 @@
     },
     {
       "name": "daemon.get_pairing_offer.request",
-      "kind": "request",
-      "group": "Daemon",
-      "canonical": "daemon.get_pairing_offer.request",
-      "excluded": false,
+      "excluded": true,
       "schemaSources": [
         {
           "file": "packages/protocol/src/messages.ts",
@@ -6050,16 +6047,9 @@
         "file": "packages/server/src/server/session.ts",
         "line": 2764
       },
-      "handlers": [
-        {
-          "file": "crates/metadata/src/rpc/daemon.rs",
-          "line": 78
-        }
-      ],
-      "tests": [
-        "bins/daemon/tests/process/daemon.rs"
-      ],
-      "assessment": "按 ADR-061 保留禁用配对/relay 的响应",
+      "handlers": [],
+      "tests": [],
+      "assessment": "已按 ADR-127 移除，不重新接入",
       "schemaSha256": "42fecf9eee3f87c478ea2efe5c9c056493dbfd5f9b6bb76e4825c8d6079f6120",
       "schema": {
         "$schema": "https://json-schema.org/draft/2020-12/schema",

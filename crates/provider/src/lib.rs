@@ -18,6 +18,7 @@ pub(crate) mod protocol;
 pub mod rpc;
 pub mod service;
 pub mod storage;
+mod timeline_projection;
 
 pub use composition::Providers;
 

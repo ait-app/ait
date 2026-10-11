@@ -4,23 +4,76 @@ use model::ErrorCode;
 use serde::Serialize;
 
 use crate::protocol::timeline::Direction;
+use crate::protocol::timeline::FetchRequest;
 use crate::storage::timeline::Row;
 
 use super::{Entry, project};
 
+/// A stable source window and the requested cursor's disposition.
+#[derive(Debug)]
+pub(crate) struct Header {
+    pub(crate) epoch: String,
+    pub(crate) min_seq: u64,
+    pub(crate) max_seq: u64,
+    pub(crate) direction: Direction,
+    pub(crate) selection: Direction,
+    pub(crate) limit: usize,
+    pub(crate) stale: bool,
+    pub(crate) gap: bool,
+}
+
+impl Header {
+    /// Resolve request defaults and cursor resets for `epoch` and inclusive source `bounds`.
+    /// Empty bounds are `(0, 0)`; returns metadata without reading or projecting source rows.
+    pub(crate) fn new(request: &FetchRequest, epoch: String, bounds: (u64, u64)) -> Self {
+        let direction = request.direction.unwrap_or(if request.cursor.is_some() {
+            Direction::After
+        } else {
+            Direction::Tail
+        });
+        let stale = request
+            .cursor
+            .as_ref()
+            .is_some_and(|cursor| cursor.epoch != epoch);
+        let gap = direction == Direction::After
+            && request.cursor.as_ref().is_some_and(|cursor| {
+                !stale && bounds.0 > 0 && cursor.seq < bounds.0.saturating_sub(1)
+            });
+        Self {
+            epoch,
+            min_seq: bounds.0,
+            max_seq: bounds.1,
+            direction,
+            selection: if stale || gap {
+                Direction::Tail
+            } else {
+                direction
+            },
+            limit: request.limit.unwrap_or(if direction == Direction::After {
+                0
+            } else {
+                200
+            }),
+            stale,
+            gap,
+        }
+    }
+}
+
 #[derive(Debug, Serialize)]
 #[serde(rename_all = "camelCase")]
 /// Projected page with source cursors that certify contiguous coverage.
-pub(in crate::rpc::timeline) struct Page {
-    pub(in crate::rpc::timeline) entries: Vec<Entry>,
-    pub(in crate::rpc::timeline) start_seq: Option<u64>,
-    pub(in crate::rpc::timeline) end_seq: Option<u64>,
-    pub(in crate::rpc::timeline) has_older: bool,
-    pub(in crate::rpc::timeline) has_newer: bool,
+pub(crate) struct Page {
+    pub(crate) entries: Vec<Entry>,
+    pub(crate) start_seq: Option<u64>,
+    pub(crate) end_seq: Option<u64>,
+    pub(crate) has_older: bool,
+    pub(crate) has_newer: bool,
 }
 
 /// Select up to `limit` display entries relative to `cursor`; zero selects the full window.
-pub(in crate::rpc::timeline) fn select(
+#[cfg(test)]
+pub(crate) fn select(
     rows: &[Row],
     direction: Direction,
     cursor: Option<u64>,
@@ -47,7 +100,7 @@ pub(in crate::rpc::timeline) fn select(
 /// Oversized projections are split at source rows so interleaved tool lifecycles remain pageable.
 /// # Errors
 /// Returns a resource error when even one source row cannot fit, or an I/O serialization error.
-pub(in crate::rpc::timeline) fn fit(
+pub(crate) fn fit(
     rows: &[Row],
     mut page: Page,
     direction: Direction,
@@ -108,7 +161,8 @@ pub(in crate::rpc::timeline) fn fit(
     Ok(page)
 }
 
-fn tail(mut entries: Vec<Entry>, max_seq: u64, limit: usize) -> Page {
+#[cfg(test)]
+pub(crate) fn tail(mut entries: Vec<Entry>, max_seq: u64, limit: usize) -> Page {
     let mut start = if limit == 0 {
         0
     } else {
@@ -129,7 +183,8 @@ fn tail(mut entries: Vec<Entry>, max_seq: u64, limit: usize) -> Page {
     }
 }
 
-fn before(
+#[cfg(test)]
+pub(crate) fn before(
     mut entries: Vec<Entry>,
     min_seq: u64,
     max_seq: u64,
@@ -153,7 +208,7 @@ fn before(
     }
 }
 
-fn after(
+pub(crate) fn after(
     entries: Vec<Entry>,
     min_seq: u64,
     max_seq: u64,

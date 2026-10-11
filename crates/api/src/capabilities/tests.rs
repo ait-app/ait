@@ -30,6 +30,21 @@ fn empty_host_keeps_only_builtin_api_methods() {
     );
     let registered = crate::registered_capabilities();
     assert_eq!(registered.len(), 180);
+    assert!(
+        !registered
+            .iter()
+            .any(|method| method == "daemon.get_pairing_offer.request")
+    );
+    assert!(
+        registered
+            .iter()
+            .any(|method| method == "workspace.get.request")
+    );
+    assert!(
+        !methods
+            .iter()
+            .any(|method| method == "workspace.get.request")
+    );
     assert!(registered.iter().any(|method| method == "terminal.input"));
     assert!(!methods.iter().any(|method| method == "terminal.input"));
     assert!(
@@ -47,6 +62,7 @@ fn merged_components_have_one_owner_per_method_and_keep_placeholders_separate() 
     let unique: BTreeSet<_> = names.iter().copied().collect();
     assert_eq!(names.len(), unique.len());
     assert_eq!(names.len(), 179);
+    assert!(unique.contains("workspace.get.request"));
     assert!(unique.contains("schedule.list.request"));
     assert!(!unique.contains("server.status.unsubscribe"));
     let registered = crate::registered_capabilities();

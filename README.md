@@ -32,11 +32,15 @@ Agent 在你连接的电脑上运行。使用本机 Agent 时无需登录 Ait �
 
 ### 从其他设备连接
 
-在工作电脑的桌面应用中登录 **Online Service（在线服务）**，再在另一台电脑或手机上登录同一账户，选择在线主机，即可通过中央中继连接。
+1. 在工作电脑的桌面应用中打开 **Online Service（在线服务）**，通过浏览器统一登录（邮箱、Google 或微信）。入口位于欢迎页、**Settings → App → Online Service** 或 **Add Host → Online Service**。
+2. 在另一台电脑、Android 或 iOS 应用中登录同一账户，选择在线主机，即可通过中央中继连接。
+
+应用默认使用 `https://dash.ait-app.com:8443/api` 作为在线服务地址。
 两端只需能访问在线服务，无需处于同一局域网，也无需开放工作电脑的入站端口。中继负责转发连接，Agent 和项目文件仍在工作电脑上。
 桌面登录后默认同步内置 daemon；如果之前手动停止了同步，可在主机连接设置中重新启用。远程访问时，工作电脑及其服务需要保持运行。
 
-Android 和 iOS 作为客户端连接电脑，不在手机上运行 daemon。
+Android 和 iOS 作为客户端连接电脑，不在手机上运行 daemon。浏览器客户端仅使用直接连接。
+登录入口与连接细节见 [客户端开发指南](apps/mobile/README.md)。
 
 ## 本地开发
 
@@ -64,6 +68,7 @@ cargo run -p daemon --bin daemon -- --listen 127.0.0.1:7316
 
 移动端与 Web 的开发方式见 [客户端开发指南](apps/mobile/README.md)；
 更多配置、架构和发布资料见 [文档索引](docs/README.md)。
+参与开发时请遵循 [仓库规范](AGENTS.md)和 [Rust 规范](docs/policy/rust.md)；CI 检查列表见 [CI 配置](.github/workflows/ci.yml)。
 
 ## 许可证与致谢
 

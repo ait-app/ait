@@ -5,7 +5,7 @@ import { Alert } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
 import { settingsStyles } from "@/styles/settings";
 import { SettingsSection } from "@/components/settings/headings/settings-section";
-import { usageCopy } from "./copy";
+import { useUsageCopy } from "./copy";
 import type { UsageDisplay } from "./display";
 import { UsageControls } from "./controls";
 import { UsageList } from "./list";
@@ -50,6 +50,7 @@ export function UsageBody({
   display: UsageDisplay;
   onRefresh: () => void;
 }) {
+  const usageCopy = useUsageCopy();
   if (view.kind === "unavailable") {
     return <UsageMessage text={view.message} />;
   }

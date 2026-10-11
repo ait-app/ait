@@ -1,4 +1,5 @@
 # Explicitly out of scope: Hub, Chat, Loop and Plugin (user decision 2026-09-25).
+# Removed daemon pairing offer RPC (ADR-127, user decision 2026-10-11).
 chat/create
 chat/delete
 chat/inspect
@@ -6,6 +7,7 @@ chat/list
 chat/post
 chat/read
 chat/wait
+daemon.get_pairing_offer.request
 hub.execution.agent.create.request
 hub.execution.agent.validate.request
 hub.execution.control.request

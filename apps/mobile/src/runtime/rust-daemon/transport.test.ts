@@ -488,6 +488,22 @@ describe("Rust protocol adapter", () => {
     );
   });
 
+  it("rejects the retired pairing offer even when an older host implements it", () => {
+    const method = "daemon.get_pairing_offer.request";
+    const h = harness([...Object.values(METHODS).map((spec) => spec.method), method]);
+    try {
+      h.ready();
+      for (const capabilities of CHANNEL_CAPABILITIES) expect(capabilities).not.toContain(method);
+      const sent = h.sockets.map((socket) => socket.send.mock.calls.length);
+      expect(() => h.send({ type: method, requestId: "retired-pairing" })).toThrow(
+        `No Rust daemon method mapping for ${method}`,
+      );
+      expect(h.sockets.map((socket) => socket.send.mock.calls.length)).toEqual(sent);
+    } finally {
+      h.transport.close();
+    }
+  });
+
   it("routes the local workspace reset method on the Git channel", () => {
     const method = "checkout.reset_workspace.request";
     const h = harness([...Object.values(METHODS).map((spec) => spec.method), method]);

@@ -3,7 +3,7 @@ members = ["bins/daemon", "crates/*"]
 resolver = "3"
 
 [workspace.package]
-version = "0.0.26"
+version = "0.0.27"
 edition = "2024"
 publish = false
 
@@ -50,7 +50,18 @@ subtle = "2.6.1"
 tar = "0.4"
 tempfile = "3.27.0"
 thiserror = "2.0.20"
-tokio = { version = "1.53.1", features = ["macros", "rt", "sync", "time", "net", "rt-multi-thread", "signal", "process", "io-util", "fs"] }
+tokio = { version = "1.53.1", features = [
+  "macros",
+  "rt",
+  "sync",
+  "time",
+  "net",
+  "rt-multi-thread",
+  "signal",
+  "process",
+  "io-util",
+  "fs",
+] }
 tokio-tungstenite = "0.29"
 tokio-util = { version = "0.7.19", features = ["rt"] }
 toml = "1.1.6"
@@ -67,25 +78,25 @@ vt100 = { git = "https://github.com/Junyi-99/vt100-rust", rev = "f2a4d76f9a66389
 [workspace.lints.rust]
 missing_docs = "warn"
 # 1. 内存安全与规范
-unsafe_code = "deny"                # 禁止或严格限制 unsafe 代码块
+unsafe_code = "forbid" # 禁止 unsafe 代码块，且不允许在源码中局部放开
 
 # 2. 质量与规范
-unused_imports = "warn"             # 未使用的导入
-unused_variables = "warn"           # 未使用的变量
-dead_code = "warn"                  # 未使用的函数/结构体（可设为 allow，适合开发中）
-unreachable_code = "warn"           # 无法到达的代码
+unused_imports = "warn" # 未使用的导入
+unused_variables = "warn" # 未使用的变量
+dead_code = "warn" # 未使用的函数/结构体（可设为 allow，适合开发中）
+unreachable_code = "warn" # 无法到达的代码
 unused_crate_dependencies = "warn"
 unused_lifetimes = "warn"
 unused_macro_rules = "warn"
 
 # 3. 命名与风格
-non_snake_case = "warn"             # 变量/函数名非蛇形命名
-non_camel_case_types = "warn"       # 类型名非驼峰命名
-non_upper_case_globals = "warn"     # 全局常量非全大写
+non_snake_case = "warn" # 变量/函数名非蛇形命名
+non_camel_case_types = "warn" # 类型名非驼峰命名
+non_upper_case_globals = "warn" # 全局常量非全大写
 
 # 4. 严谨性（推荐在大型项目开启）
-unused_qualifications = "warn"      # 不必要的完全限定路径
-unreachable_pub = "warn"            # pub items not reachable from outside the crate
+unused_qualifications = "warn" # 不必要的完全限定路径
+unreachable_pub = "warn" # pub items not reachable from outside the crate
 unused_results = "allow"
 unused_import_braces = "warn"
 unused_extern_crates = "warn"

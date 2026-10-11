@@ -95,7 +95,6 @@ import type {
   ProviderDiagnosticResponseMessage,
   ProviderUsageListResponseMessage,
   DaemonGetStatusResponse,
-  DaemonGetPairingOfferResponse,
   DaemonConfigReloadResponse,
   DiagnosticsResponse,
   AgentRewindResponseMessage,
@@ -492,7 +491,6 @@ type RefreshProvidersSnapshotPayload = RefreshProvidersSnapshotResponseMessage["
 type ProviderDiagnosticPayload = ProviderDiagnosticResponseMessage["payload"];
 type ProviderUsageListPayload = ProviderUsageListResponseMessage["payload"];
 type DaemonStatusPayload = DaemonGetStatusResponse["payload"];
-type DaemonPairingOfferPayload = DaemonGetPairingOfferResponse["payload"];
 type DiagnosticsPayload = DiagnosticsResponse["payload"];
 type ReadProjectConfigPayload = Extract<
   SessionOutboundMessage,
@@ -667,10 +665,6 @@ export interface ShutdownServerOptions {
   timeout?: number;
 }
 export interface DaemonStatusOptions {
-  requestId?: string;
-  timeout?: number;
-}
-export interface DaemonPairingOfferOptions {
   requestId?: string;
   timeout?: number;
 }
@@ -2386,6 +2380,14 @@ export class DaemonClient {
         }
         return msg.payload;
       },
+    });
+  }
+
+  async getWorkspace(
+    workspaceId: string,
+  ): Promise<Extract<SessionOutboundMessage, { type: "workspace.get.response" }>["payload"]> {
+    return this.sendNamespacedCorrelatedSessionRequest<"workspace.get.response">({
+      message: { type: "workspace.get.request", workspaceId },
     });
   }
 
@@ -5144,19 +5146,6 @@ export class DaemonClient {
       requestId,
       message: { type: "hub.management.daemon.disconnect.request", force },
       responseType: "hub.management.daemon.disconnect.response",
-    });
-  }
-
-  async getDaemonPairingOffer(
-    options?: DaemonPairingOfferOptions,
-  ): Promise<DaemonPairingOfferPayload> {
-    return this.sendCorrelatedSessionRequest({
-      requestId: options?.requestId,
-      message: {
-        type: "daemon.get_pairing_offer.request",
-      },
-      responseType: "daemon.get_pairing_offer.response",
-      timeout: options?.timeout,
     });
   }
 

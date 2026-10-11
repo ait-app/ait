@@ -15,13 +15,13 @@ cargo llvm-cov --workspace --html
 
 下表是此次 HTML index 的可审查摘要。完整 HTML 已生成并保留本地副本，未上传。
 
-| 范围 | 覆盖行 / 总行 | 行覆盖率 |
-|---|---:|---:|
-| Workspace | 54825 / 58244 | 94.13% |
-| Provider crate | 26336 / 28237 | 93.27% |
-| OpenCode client | 383 / 418 | 91.63% |
-| OpenCode metadata | 49 / 188 | 26.06% |
-| OpenCode runtime | 174 / 256 | 67.97% |
+| 范围              | 覆盖行 / 总行 | 行覆盖率 |
+| ----------------- | ------------: | -------: |
+| Workspace         | 54825 / 58244 |   94.13% |
+| Provider crate    | 26336 / 28237 |   93.27% |
+| OpenCode client   |     383 / 418 |   91.63% |
+| OpenCode metadata |      49 / 188 |   26.06% |
+| OpenCode runtime  |     174 / 256 |   67.97% |
 
 无同修订、同环境的可比基线。实际 CLI 通道验证单独运行，不计入上述比例；因此 metadata 的启动、请求和清理路径覆盖率较低。后续 CI 应固定安装 V1/V2 CLI 并加入取消时清理与异常退出测试。
 

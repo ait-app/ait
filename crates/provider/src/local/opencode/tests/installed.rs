@@ -251,6 +251,7 @@ async fn installed_acp_multi_turn_native_history_resume_and_discovery() {
     let (_root, client, spec, _server) = installed(false).await;
     let mut session = client.create_session(&spec).await.unwrap();
     let mut items = Vec::new();
+    let timeline = crate::storage::timeline::Timeline::memory().unwrap();
     for index in 0..2 {
         session
             .start_input(
@@ -263,7 +264,14 @@ async fn installed_acp_multi_turn_native_history_resume_and_discovery() {
             )
             .await
             .unwrap();
-        items.extend(completed(session.as_mut()).await);
+        items = projected_turn(session.as_mut(), &timeline).await;
+        let rows = timeline.read("agent").unwrap().1;
+        assert_eq!(rows.len(), (index + 1) * 2);
+        for pair in rows.as_chunks::<2>().0 {
+            assert_eq!(pair[0].entry.item["type"], "user_message");
+            assert_eq!(pair[1].entry.item["text"], "authoritative answer");
+            assert!(pair[0].entry.timestamp <= pair[1].entry.timestamp);
+        }
     }
     let handle = session.persistence().unwrap();
     session.close().await.unwrap();
@@ -291,11 +299,17 @@ async fn installed_acp_multi_turn_native_history_resume_and_discovery() {
         .resume_session(&handle, &spec, AgentResumePurpose::Interactive)
         .await
         .unwrap();
+    let before = timeline.read("agent").unwrap().1;
     resumed
         .start_turn("after restart", &spec.config)
         .await
         .unwrap();
-    completed(resumed.as_mut()).await;
+    projected_turn(resumed.as_mut(), &timeline).await;
+    let after = timeline.read("agent").unwrap().1;
+    assert_eq!(after.len(), 6);
+    for (before, after) in before.iter().zip(&after) {
+        assert_eq!(before.entry.timestamp, after.entry.timestamp);
+    }
     resumed.close().await.unwrap();
 }
 

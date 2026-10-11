@@ -17,6 +17,13 @@ export interface AccountHost {
   relay_modes: string[];
 }
 
+interface LoginUser {
+  display_name?: string | null;
+  email?: string | null;
+  phone_number?: string | null;
+  expires_at?: string | null;
+}
+
 interface NodeSession {
   node_id: string;
   node_session_id: string;
@@ -171,23 +178,7 @@ export class AccountSessionManager {
     this.deps.notify(this.snapshot());
   }
 
-  async login(center: string, email: string, password: string): Promise<AccountSnapshot> {
-    center = normalizeCenter(center);
-    email = email.trim().toLowerCase();
-    if (!email || email.length > 320 || !password || password.length > 512)
-      throw new Error("Enter your email and password.");
-    await this.logout();
-    const generation = this.generation;
-    const result = await this.http<{
-      access_token: string;
-      expires_in: number;
-      user: { display_name?: string; email: string; expires_at?: string | null };
-    }>(center, null, "/v1/auth/login", "POST", { email, password });
-    if (generation !== this.generation) throw new Error("Sign-in cancelled.");
-    return this.acceptLogin(center, result);
-  }
-
-  async loginMethods(center: string): Promise<{ hosted: boolean }> {
+  private async loginMethods(center: string): Promise<{ hosted: boolean }> {
     if (!this.deps.browserLogin) return { hosted: false };
     try {
       const options = await this.http<{
@@ -210,7 +201,7 @@ export class AccountSessionManager {
     const browser = this.deps.browserLogin;
     if (!browser || !(await this.loginMethods(center)).hosted)
       throw new Error(
-        "This service does not support client browser sign-in. Update the service or use email and password.",
+        "This service does not support client browser sign-in. Update the service or choose another service URL.",
       );
     await this.logout();
     const attempt = new AbortController();
@@ -249,7 +240,7 @@ export class AccountSessionManager {
       const result = await this.http<{
         access_token: string;
         expires_in: number;
-        user: { display_name?: string; email: string; expires_at?: string | null };
+        user: LoginUser;
       }>(
         center,
         null,
@@ -285,21 +276,27 @@ export class AccountSessionManager {
     result: {
       access_token: string;
       expires_in: number;
-      user: { display_name?: string; email: string; expires_at?: string | null };
+      user: LoginUser;
     },
   ): Promise<AccountSnapshot> {
+    const contact = [result.user?.email, result.user?.phone_number].find(
+      (value): value is string => typeof value === "string" && value.trim().length > 0,
+    );
     if (
       !result.access_token ||
       !Number.isFinite(result.expires_in) ||
       result.expires_in <= 0 ||
-      !result.user?.email
+      !contact
     )
       throw new Error("The service returned an invalid login session.");
     this.account = {
       center,
       token: result.access_token,
       expiresAt: Date.now() + result.expires_in * 1000,
-      name: result.user.display_name || result.user.email,
+      name:
+        typeof result.user.display_name === "string" && result.user.display_name.trim()
+          ? result.user.display_name.trim()
+          : contact,
       accountExpiresAt: result.user.expires_at ?? null,
     };
     await this.deps.save(this.account);
@@ -334,6 +331,10 @@ export class AccountSessionManager {
   }
 
   async logout(): Promise<void> {
+    await this.disconnectAccount(true);
+  }
+
+  private async disconnectAccount(forgetAccount: boolean): Promise<void> {
     this.cancelLogin();
     this.generation += 1;
     if (this.timer) clearTimeout(this.timer);
@@ -366,7 +367,7 @@ export class AccountSessionManager {
       for (const request of binding.requests) request.abort();
       this.publications.delete(bindingServerId);
     }
-    await this.deps.save(null);
+    if (forgetAccount) await this.deps.save(null);
     this.update({
       status: "logged_out",
       name: "",
@@ -382,19 +383,16 @@ export class AccountSessionManager {
 
   async shutdown(): Promise<void> {
     this.closing = true;
-    const saved = this.account ? { ...this.account } : null;
-    await this.logout();
+    // Credentials were persisted at login/registration. Never erase and rewrite them on exit:
+    // interruption or a failed write would otherwise turn closing the app into signing out.
+    // restore() already handles releasing the saved activation, even if it was closed here.
+    await this.disconnectAccount(false);
     for (const entry of this.publications.values())
       for (const request of entry.requests) request.abort();
-    if (saved) {
-      delete saved.nodeSessionId;
-      await this.deps.save(saved);
-    }
   }
 
   async select(hostId: string | null): Promise<AccountSnapshot> {
     if (hostId === null) {
-      this.deps.closeTransports();
       this.update({ selected: null });
       return this.snapshot();
     }
@@ -403,7 +401,6 @@ export class AccountSessionManager {
     const host = this.state.hosts.find((host) => host.host_id === hostId);
     if (!host) throw new Error("The target host is offline. Refresh the host list.");
     if (this.state.selected?.host_id !== hostId) {
-      this.deps.closeTransports();
       this.update({ selected: host });
     }
     return this.snapshot();
@@ -543,16 +540,17 @@ export class AccountSessionManager {
     await Promise.all(renewals);
   }
 
-  openVisit(hostId: string) {
-    return this.openSession(hostId, "ait-rust-single-v1");
+  openVisit(hostId: string, center: string) {
+    return this.openSession(hostId, center, "ait-rust-single-v1");
   }
 
-  openDownload(hostId: string, token: string) {
-    return this.openSession(hostId, "ait-download-v1", token);
+  openDownload(hostId: string, token: string, center: string) {
+    return this.openSession(hostId, center, "ait-download-v1", token);
   }
 
   private async openSession(
     hostId: string,
+    expectedCenter: string,
     mode: string,
     token?: string,
   ): Promise<{
@@ -562,8 +560,11 @@ export class AccountSessionManager {
     instance_id: string;
     url: string;
   }> {
-    if (this.suspended || !this.account || !this.node || this.state.selected?.host_id !== hostId) {
-      throw new Error("The host is not selected or you have signed out.");
+    if (this.suspended || !this.account || !this.node) {
+      throw new Error("Sign in and wait for this device to register.");
+    }
+    if (normalizeCenter(expectedCenter) !== this.account.center) {
+      throw new Error("Sign in to the online service used by this host.");
     }
     const generation = this.generation;
     const center = this.account.center;
@@ -582,7 +583,7 @@ export class AccountSessionManager {
         ...(token === undefined ? {} : { download_token: token }),
       },
     );
-    if (generation !== this.generation || this.state.selected?.host_id !== hostId) {
+    if (generation !== this.generation) {
       await this.closeVisit(result.relay_session_id);
       throw new Error("Connection cancelled.");
     }
@@ -798,7 +799,8 @@ export class AccountSessionManager {
         ...(body === undefined ? {} : { body: JSON.stringify(body) }),
       });
       if (response.status === 204) return undefined as T;
-      const value = (await response.json()) as {
+      // Gateways can answer with HTML or an empty body; keep the status for callers.
+      const value = (await response.json().catch(() => ({}))) as {
         error?: { message?: string; code?: string };
       };
       if (!response.ok)

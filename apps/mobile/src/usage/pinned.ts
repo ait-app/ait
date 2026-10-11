@@ -1,4 +1,6 @@
 import { formatPct } from "./format";
+import { i18n } from "@/i18n/i18next";
+import type { TFunction } from "i18next";
 import { displayPercent } from "./model";
 import { effectiveUsagePins, type UsagePreferences } from "./preferences";
 import { windowTone } from "./tone";
@@ -68,9 +70,13 @@ function groupBySource(reports: readonly UsageReportEntry[]): UsageReportEntry[]
 export function resolvePinnedUsage(
   reports: readonly UsageReportEntry[],
   preferences: UsagePreferences,
+  t: TFunction = i18n.t.bind(i18n),
 ): PinnedUsageSource[] {
   const pins = effectiveUsagePins(preferences, reports);
-  const meaning = preferences.displayAs === "remaining" ? "left" : "used";
+  const labelKey =
+    preferences.displayAs === "remaining"
+      ? "providerUsage.summaryRemaining"
+      : "providerUsage.summaryUsed";
   return groupBySource(reports).flatMap((entry) => {
     if (entry.report.status !== "available") return [];
     const windows = entry.report.windows
@@ -84,7 +90,7 @@ export function resolvePinnedUsage(
         const percentText = formatPct(percent);
         return {
           key: `${entry.id}/${window.id}`,
-          label: `${describe(entry, window.label)} ${percentText} ${meaning}`,
+          label: t(labelKey, { source: describe(entry, window.label), amount: percentText }),
           shortLabel: window.shortLabel ?? window.label,
           percent,
           percentText,

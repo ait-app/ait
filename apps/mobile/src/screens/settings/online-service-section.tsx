@@ -11,7 +11,7 @@ export function OnlineServiceSection() {
       info={t("onlineService.loginDescription")}
       testID="settings-online-service"
     >
-      <AccountHostPanel showHosts={false} />
+      <AccountHostPanel />
     </SettingsSection>
   );
 }

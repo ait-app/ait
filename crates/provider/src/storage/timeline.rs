@@ -2,6 +2,7 @@
 
 pub(crate) mod inbox;
 mod progress;
+mod projection;
 mod subagents;
 
 use std::path::Path;
@@ -82,6 +83,7 @@ impl Timeline {
             || version == 3 && application == 0x4154_544C && tables == 4)
             && !(version == 4 && application == 0x4154_544C && tables == 5)
             && !(version == 5 && application == 0x4154_544C && tables == 6)
+            && !(version == 6 && application == 0x4154_544C && tables == 10)
         {
             return Err(ErrorCode::UnsupportedFormat);
         }
@@ -105,7 +107,18 @@ impl Timeline {
             CREATE INDEX IF NOT EXISTS queued_inputs ON input_receipts(state,agent,seq);
             CREATE TABLE IF NOT EXISTS provider_subagents(agent TEXT NOT NULL, child TEXT NOT NULL,
                 descriptor TEXT NOT NULL, PRIMARY KEY(agent,child));
-            PRAGMA user_version=5; PRAGMA application_id=1096045644; COMMIT;",
+            CREATE TABLE IF NOT EXISTS projection_heads(agent TEXT PRIMARY KEY, epoch TEXT NOT NULL);
+            CREATE TABLE IF NOT EXISTS display_entries(agent TEXT NOT NULL, seq_start INTEGER NOT NULL,
+                seq_end INTEGER NOT NULL, identity TEXT, entry TEXT NOT NULL, bytes INTEGER NOT NULL,
+                PRIMARY KEY(agent,seq_start));
+            CREATE INDEX IF NOT EXISTS display_identity ON display_entries(agent,identity,seq_start);
+            CREATE INDEX IF NOT EXISTS display_end ON display_entries(agent,seq_end,seq_start);
+            CREATE TABLE IF NOT EXISTS display_ranges(agent TEXT NOT NULL, start_seq INTEGER NOT NULL,
+                end_seq INTEGER NOT NULL, entry_seq INTEGER NOT NULL, PRIMARY KEY(agent,start_seq));
+            CREATE TABLE IF NOT EXISTS display_sources(agent TEXT NOT NULL, seq INTEGER NOT NULL,
+                provider TEXT NOT NULL, entry TEXT NOT NULL, bytes INTEGER NOT NULL,
+                PRIMARY KEY(agent,seq));
+            PRAGMA user_version=6; PRAGMA application_id=1096045644; COMMIT;",
             )
             .map_err(io)?;
         Ok(Self {
@@ -135,6 +148,22 @@ impl Timeline {
     pub(crate) fn generation(&self, agent: &str) -> Result<String, ErrorCode> {
         let database = self.database.lock().map_err(io)?;
         epoch(&database, agent)
+    }
+
+    /// Check for committed or incremental rows without loading the history or creating a generation.
+    /// # Errors
+    /// Returns storage errors when the source tables cannot be queried.
+    pub(crate) fn has_entries(&self, agent: &str) -> Result<bool, ErrorCode> {
+        self.database
+            .lock()
+            .map_err(io)?
+            .query_row(
+                "SELECT EXISTS(SELECT 1 FROM entries WHERE agent=?1)
+             OR EXISTS(SELECT 1 FROM progress WHERE agent=?1)",
+                [agent],
+                |row| row.get(0),
+            )
+            .map_err(io)
     }
 
     /// Read the first nonempty user text for `agent` from the current durable generation.
@@ -208,6 +237,7 @@ impl Timeline {
         transaction
             .execute("DELETE FROM entries WHERE agent=?", [agent])
             .map_err(io)?;
+        projection::clear(&transaction, agent)?;
         let replacement = Uuid::new_v4().to_string();
         transaction
             .execute(
@@ -317,6 +347,7 @@ fn append_rows(
     provider: &str,
     entries: &[NativeItem],
 ) -> Result<Appended, ErrorCode> {
+    projection::ensure(transaction, agent)?;
     let mut next = progress::next(transaction, agent)?;
     let mut positions = Vec::with_capacity(entries.len());
     let mut appended = Vec::new();
@@ -356,6 +387,15 @@ fn append_rows(
                 params![agent, next, entry.key, provider, bytes],
             )
             .map_err(io)?;
+        projection::append(
+            transaction,
+            agent,
+            &Row {
+                seq: next,
+                provider: provider.to_owned(),
+                entry: projected.clone(),
+            },
+        )?;
         positions.push(next);
         appended.push((next, projected));
         next = next.checked_add(1).ok_or(ErrorCode::ResourceExhausted)?;

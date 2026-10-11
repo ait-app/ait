@@ -4,7 +4,7 @@ import { View } from "react-native";
 import { AdaptiveModalSheet } from "@/components/adaptive-modal-sheet";
 import { builtinSidebarNavLabelKey } from "@/sidebar-nav/model";
 import { useHostUsageWithControls } from "./controls";
-import { usageCopy } from "./copy";
+import { useUsageCopy } from "./copy";
 import { useUsagePreferences } from "./display";
 import { useUsageHostSelection } from "./hosts";
 import type { UsageHost } from "./model";
@@ -22,6 +22,7 @@ interface UsageModalProps {
  * title row.
  */
 export function UsageModal(props: UsageModalProps) {
+  const usageCopy = useUsageCopy();
   const { serverId, connectedHosts, select } = useUsageHostSelection();
   if (!serverId) {
     return (

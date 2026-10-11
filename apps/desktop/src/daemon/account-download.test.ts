@@ -49,7 +49,12 @@ function webContents() {
   }) as unknown as WebContents;
 }
 
-const input = { hostId: "host", fileName: "report.txt", downloadId: "download" };
+const input = {
+  hostId: "host",
+  center: "https://center.example/api",
+  fileName: "report.txt",
+  downloadId: "download",
+};
 let manager: AccountDownloadManager;
 let owner: WebContents;
 const openDownload = vi.fn(async () => ({
@@ -67,7 +72,7 @@ beforeEach(() => {
   });
   owner = webContents();
   manager = new AccountDownloadManager({
-    snapshot: () => ({ selected: { host_id: "host" } }),
+    snapshot: () => ({ status: "online", center: input.center, selected: null }),
     openDownload,
     closeVisit: vi.fn(async () => undefined),
   } as unknown as AccountSessionManager);
@@ -78,6 +83,13 @@ afterEach(() => {
 });
 
 describe("account download preparations", () => {
+  it("rejects a saved host from a different service before opening the save dialog", async () => {
+    await expect(
+      manager.prepare(owner, { ...input, center: "https://other.test/api" }),
+    ).rejects.toThrow("Sign in to the online service used by this host.");
+    expect(dialog.showSaveDialog).not.toHaveBeenCalled();
+    expect(openDownload).not.toHaveBeenCalled();
+  });
   it("keeps the selected path in main and starts a one-use transfer after a long save dialog", async () => {
     let confirm!: (result: Electron.SaveDialogReturnValue) => void;
     vi.mocked(dialog.showSaveDialog).mockReturnValueOnce(
@@ -94,7 +106,7 @@ describe("account download preparations", () => {
     const preparationId = await preparing;
     expect(preparationId).not.toContain("/chosen");
     await manager.download(owner, { preparationId, token: "fresh-token" });
-    expect(openDownload).toHaveBeenCalledExactlyOnceWith("host", "fresh-token");
+    expect(openDownload).toHaveBeenCalledExactlyOnceWith("host", "fresh-token", input.center);
     expect(dialog.showSaveDialog).toHaveBeenCalledOnce();
     expect(rename).toHaveBeenCalledWith(
       expect.stringMatching(/^\/chosen\/report\.txt\.ait-.*\.part$/),

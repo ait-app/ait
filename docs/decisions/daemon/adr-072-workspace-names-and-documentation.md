@@ -4,6 +4,9 @@
 - 日期：2026-10-03
 - 授权：统一 daemon 名称、移除 crate 的 server 前缀、重命名应用目录并清理旧文档。
 - 修订：此前 ADR 中的源码位置与包名统一遵循本决策；既有能力行为与依赖方向保持不变。
+- 后续：crate 集合由 [ADR-111](adr-111-domain-values-and-server-protocol.md)（移除 protocol）与
+  [ADR-112](adr-112-persistence-crate.md)（file 改名 persistence）修订，并新增 relay；
+  当前 crate 列表以[当前架构](../../architecture/README.md)为准。
 
 ## 背景
 

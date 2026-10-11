@@ -1,6 +1,6 @@
 {
   "name": "ait-workspace",
-  "version": "0.0.26",
+  "version": "0.0.27",
   "private": true,
   "license": "Apache-2.0",
   "workspaces": [
@@ -16,6 +16,9 @@
     "generate:icons": "node scripts/generate-brand-assets.mjs",
     "check:icons": "node scripts/generate-brand-assets.mjs --check",
     "check:docs": "node --test scripts/check-docs.test.mjs && node scripts/check-docs.mjs",
+    "check:ui": "node scripts/check-ui.mjs",
+    "format": "oxfmt .",
+    "check:format": "oxfmt --check .",
     "build:daemon": "cargo build -p daemon --bin daemon",
     "build:ui-deps": "npm run build:sdk && npm run build:highlight && npm run build --workspace=@ait/expo-two-way-audio",
     "postinstall": "node scripts/postinstall-patches.mjs",
@@ -37,7 +40,7 @@
     "package:linux": "npm run package:linux --workspace=@ait/desktop",
     "package:mac": "npm run package:mac --workspace=@ait/desktop",
     "test:release": "node --test scripts/nightly-workflow.test.mjs scripts/release-assets.test.mjs scripts/release-layout.test.mjs scripts/prepare-desktop-daemon.test.mjs scripts/verify-packaged-resources.test.cjs",
-    "test:mobile-release": "node --test apps/mobile/scripts/eas-submit-tracks.test.cjs apps/mobile/scripts/ios-testflight-workflow.test.cjs scripts/ios-testflight-release.test.mjs scripts/android-release.test.mjs scripts/android-test-release.test.mjs scripts/android-play-release.test.mjs",
+    "test:mobile-release": "node --test apps/mobile/scripts/app-identity.test.cjs apps/mobile/scripts/eas-submit-tracks.test.cjs apps/mobile/scripts/ios-testflight-workflow.test.cjs scripts/ios-testflight-release.test.mjs scripts/android-release.test.mjs scripts/android-test-release.test.mjs scripts/android-play-release.test.mjs",
     "dev:desktop": "npm run dev --workspace=@ait/desktop",
     "build:desktop-main": "npm run build:ui-deps && npm run build:main --workspace=@ait/desktop",
     "verify:local-packages": "node scripts/verify-local-packages.mjs"

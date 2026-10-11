@@ -6,12 +6,12 @@
 
 共享 UI 按原生 permission 值解析当前按钮及菜单选项的图标，桌面工具栏与移动端选择器保持一致。
 
-| 原生值 | Lucide 图标 |
-| --- | --- |
-| allow | ShieldCheck（对勾盾牌） |
-| ask | ShieldQuestionMark（问号盾牌） |
-| deny | ShieldOff（关闭盾牌） |
-| null（原生继承） | Shield（中性盾牌） |
+| 原生值           | Lucide 图标                    |
+| ---------------- | ------------------------------ |
+| allow            | ShieldCheck（对勾盾牌）        |
+| ask              | ShieldQuestionMark（问号盾牌） |
+| deny             | ShieldOff（关闭盾牌）          |
+| null（原生继承） | Shield（中性盾牌）             |
 
 OpenCode v1 / v2 通过同一个 feature select 展示这些原生值，本次仅修改 UI 呈现。
 

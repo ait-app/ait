@@ -53,5 +53,5 @@ async fn websocket_agent_creation_resolves_fresh_explicit_and_caller_workspaces(
     assert_eq!(workspaces["result"]["entries"].as_array().unwrap().len(), 2);
     client.close(None).await.unwrap();
     terminate(&mut process).await;
-    assert_children_exited(&cwd);
+    assert_children_exited(&cwd).await;
 }

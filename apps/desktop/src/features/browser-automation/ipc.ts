@@ -76,17 +76,15 @@ interface WebContentsDebugger {
   on?(event: "detach", listener: () => void): void;
 }
 
+interface ConsoleMessageDetails {
+  level?: unknown;
+  message?: unknown;
+  lineNumber?: unknown;
+  sourceId?: unknown;
+}
+
 interface ConsoleMessageEmitter {
-  on(
-    event: "console-message",
-    listener: (
-      event: unknown,
-      level: unknown,
-      message: unknown,
-      line: unknown,
-      sourceId: unknown,
-    ) => void,
-  ): void;
+  on(event: "console-message", listener: (details: ConsoleMessageDetails) => void): void;
   once(event: "destroyed", listener: () => void): void;
 }
 
@@ -207,8 +205,14 @@ function observeConsoleMessages(contents: BrowserAutomationWebContents, contents
     return;
   }
   observedContentsIds.add(contentsId);
-  contents.on("console-message", (_event, level, message, line, sourceId) => {
-    const entry = normalizeConsoleMessage({ level, message, line, sourceId });
+  // Electron's positional level is a deprecated 0-3 number; the details object carries names.
+  contents.on("console-message", (details) => {
+    const entry = normalizeConsoleMessage({
+      level: details.level,
+      message: details.message,
+      line: details.lineNumber,
+      sourceId: details.sourceId,
+    });
     const messages = consoleMessagesByContentsId.get(contentsId) ?? [];
     messages.push(entry);
     consoleMessagesByContentsId.set(contentsId, messages.slice(-MAX_CONSOLE_MESSAGES_PER_TAB));

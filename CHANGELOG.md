@@ -1,5 +1,19 @@
 # Ait changelog
 
+## 0.0.27 - 2026-10-11
+
+- Keep the built-in daemon running after desktop quit when enabled, and reconnect to the same authenticated daemon on the next launch.
+- Restore OpenCode ACP tool projections, configuration recovery, native failure reasons, and input order across live turns and history reloads.
+- Keep session metadata separate from native routing aliases and reconcile native history before settling completed turns.
+- Use browser-based unified sign-in, support phone-only accounts, and preserve relay credentials and online hosts across restarts.
+- Import all online-service hosts after sign-in while retaining existing local connections and persistent host records.
+- Load the target workspace immediately and synchronize the complete host directory in the background.
+- Read timeline pages from a persistent projection index instead of scanning the full conversation history.
+- Preapprove Codex computer-use tools in Auto-review while preserving explicit tool policy overrides.
+- Decode Markdown file-link paths, improve unsupported-file previews, and keep terminal fonts monospace with the DOM renderer.
+- Localize usage controls, remove obsolete help links and pairing RPCs, and reduce periodic daemon work.
+- Repair CI quality gates and enforce repository-wide formatting alongside shared client, directory, and workspace regressions.
+
 ## 0.0.26 - 2026-10-10
 
 - Prevent terminal crashes when wide characters are clipped by resizing or written into single-row or single-column screens.

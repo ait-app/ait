@@ -245,16 +245,15 @@ impl ExecutionState {
             .timeline()
             .ok_or(ErrorCode::UnsupportedCapability)?;
         let scope = format!("subagent:{id}:{child_id}");
-        let (_, existing) = timeline.read(&scope)?;
+        let existing = timeline.has_entries(&scope)?;
         match history {
-            Ok(history) if !self.manager.live_child(&id, &child_id) || existing.is_empty() => {
+            Ok(history) if !self.manager.live_child(&id, &child_id) || !existing => {
                 timeline.reconcile(&scope, &record.provider, &history.entries)?;
             }
             Ok(_) => {}
-            Err(_) if self.manager.live_child(&id, &child_id) || !existing.is_empty() => {}
+            Err(_) if self.manager.live_child(&id, &child_id) || existing => {}
             Err(error) => return Err(error.into()),
         }
-        let (epoch, rows) = timeline.read(&scope)?;
         let fetch = FetchRequest {
             agent_id: id.clone(),
             direction: request.direction,
@@ -263,7 +262,8 @@ impl ExecutionState {
             projection: Projection::Projected,
             merge_window: None,
         };
-        let mut value = crate::rpc::timeline::fetch(&fetch, &epoch, &rows, &Value::Null)?;
+        let mut value =
+            crate::rpc::timeline::fetch_stored(&fetch, &timeline, &scope, &Value::Null)?;
         let object = value.as_object_mut().ok_or(ErrorCode::AgentIo)?;
         object.remove("agent");
         object.remove("agentId");

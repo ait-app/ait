@@ -116,7 +116,7 @@ function formatHostConnectionLabel(connection: HostConnection, t: TFunction): st
   if (connection.type === "remoteSsh") {
     return `${t("settings.host.badges.remoteSsh")} (${connection.host})`;
   }
-  if (connection.type === "accountRelay") return "Account relay";
+  if (connection.type === "accountRelay") return t("settings.host.badges.relay");
   return `TCP (${connection.endpoint})`;
 }
 
@@ -136,6 +136,12 @@ function formatActiveConnectionBadge(
     return {
       icon: <Globe size={theme.iconSize.sm} color={theme.colors.foregroundMuted} />,
       text: t("settings.host.badges.remoteSsh"),
+    };
+  }
+  if (activeConnection.type === "accountRelay") {
+    return {
+      icon: <Monitor size={theme.iconSize.sm} color={theme.colors.foregroundMuted} />,
+      text: t("settings.host.badges.relay"),
     };
   }
   return {

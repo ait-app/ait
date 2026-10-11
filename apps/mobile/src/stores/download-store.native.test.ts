@@ -71,7 +71,9 @@ async function download() {
     fileName: "report.txt",
     path: "report.txt",
     daemonProfile: {
-      connections: [{ id: "relay", type: "accountRelay", hostId: "host" }],
+      connections: [
+        { id: "relay", type: "accountRelay", hostId: "host", center: "https://center.test/api" },
+      ],
     } as HostProfile,
     requestFileDownloadToken: async () => ({
       token: "once",

@@ -931,6 +931,7 @@ export const AudioPlayedMessageSchema = z.object({
 });
 
 const AgentDirectoryFilterSchema = z.object({
+  workspaceIds: z.array(z.string().min(1).max(256)).max(200).optional(),
   labels: z.record(z.string(), z.string()).optional(),
   projectKeys: z.array(z.string()).optional(),
   statuses: z.array(AgentStatusSchema).optional(),
@@ -1330,6 +1331,12 @@ export const FetchWorkspacesRequestMessageSchema = z.object({
   sync: DirectorySyncRequestSchema.optional(),
 });
 
+export const WorkspaceGetRequestMessageSchema = z.object({
+  type: z.literal("workspace.get.request"),
+  requestId: z.string(),
+  workspaceId: z.string().min(1).max(256),
+});
+
 export const ProjectListRequestMessageSchema = z.object({
   type: z.literal("project.list.request"),
   requestId: z.string(),
@@ -1399,11 +1406,6 @@ export const WaitForFinishRequestSchema = z.object({
 
 export const DaemonGetStatusRequestSchema = z.object({
   type: z.literal("daemon.get_status.request"),
-  requestId: z.string(),
-});
-
-export const DaemonGetPairingOfferRequestSchema = z.object({
-  type: z.literal("daemon.get_pairing_offer.request"),
   requestId: z.string(),
 });
 
@@ -3198,6 +3200,7 @@ export const SessionInboundMessageSchema = z.discriminatedUnion("type", [
   FetchAgentHistoryRequestMessageSchema,
   FetchRecentProviderSessionsRequestMessageSchema,
   FetchWorkspacesRequestMessageSchema,
+  WorkspaceGetRequestMessageSchema,
   ProjectListRequestMessageSchema,
   FetchAgentRequestMessageSchema,
   DeleteAgentRequestMessageSchema,
@@ -3223,7 +3226,6 @@ export const SessionInboundMessageSchema = z.discriminatedUnion("type", [
   RelayStatusRequestSchema,
   RelayStartRequestSchema,
   RelayStopRequestSchema,
-  DaemonGetPairingOfferRequestSchema,
   DaemonConfigReloadRequestSchema,
   HubManagementDaemonConnectRequestSchema,
   HubManagementDaemonGetStatusRequestSchema,
@@ -3650,6 +3652,7 @@ export const ServerInfoStatusPayloadSchema = z
         checkoutRefresh: z.boolean().optional(),
         // COMPAT(workspaceMultiplicity): added in v0.1.97, drop the gate when floor >= v0.1.97
         workspaceMultiplicity: z.boolean().optional(),
+        workspaceTargetRead: z.boolean().optional(),
         // COMPAT(projectRemove): added in v0.1.97, drop the gate when floor >= v0.1.97.
         projectRemove: z.boolean().optional(),
         // COMPAT(projectAdd): added in v0.1.97, drop the gate when floor >= v0.1.97.
@@ -4237,6 +4240,17 @@ export const FetchWorkspacesResponseMessageSchema = z.object({
       hasMore: z.boolean(),
     }),
     sync: DirectorySyncMetadataSchema.optional(),
+  }),
+});
+
+export const WorkspaceGetResponseMessageSchema = z.object({
+  type: z.literal("workspace.get.response"),
+  payload: z.object({
+    requestId: z.string(),
+    workspaceId: z.string(),
+    state: z.enum(["ready", "archived", "missing"]),
+    workspace: WorkspaceDescriptorPayloadSchema.nullable(),
+    project: WorkspaceProjectDescriptorPayloadSchema.nullable(),
   }),
 });
 
@@ -5033,18 +5047,6 @@ export const HubManagementDaemonDisconnectResponseSchema = z.object({
 export const HubManagementDaemonPermissionsUpdateResponseSchema = z.object({
   type: z.literal("hub.management.daemon.permissions.update.response"),
   payload: z.object({ requestId: z.string(), status: HubRelationshipStatusSchema }),
-});
-
-export const DaemonGetPairingOfferResponseSchema = z.object({
-  type: z.literal("daemon.get_pairing_offer.response"),
-  payload: z
-    .object({
-      requestId: z.string(),
-      url: z.string(),
-      qr: z.string().nullable().optional(),
-      relayEnabled: z.boolean(),
-    })
-    .passthrough(),
 });
 
 export const DaemonConfigReloadResponseSchema = z.object({
@@ -6893,6 +6895,7 @@ export const SessionOutboundMessageSchema = z.discriminatedUnion("type", [
   FetchAgentHistoryResponseMessageSchema,
   FetchRecentProviderSessionsResponseMessageSchema,
   FetchWorkspacesResponseMessageSchema,
+  WorkspaceGetResponseMessageSchema,
   ProjectAddResponseSchema,
   ProjectCreateDirectoryResponseSchema,
   OpenProjectResponseMessageSchema,
@@ -6930,7 +6933,6 @@ export const SessionOutboundMessageSchema = z.discriminatedUnion("type", [
   RelayStatusResponseSchema,
   RelayStartResponseSchema,
   RelayStopResponseSchema,
-  DaemonGetPairingOfferResponseSchema,
   DaemonConfigReloadResponseSchema,
   HubManagementDaemonConnectResponseSchema,
   HubManagementDaemonGetStatusResponseSchema,
@@ -7183,7 +7185,6 @@ export type ListProviderFeaturesResponseMessage = z.infer<
 >;
 export type ListAvailableProvidersResponse = z.infer<typeof ListAvailableProvidersResponseSchema>;
 export type DaemonGetStatusResponse = z.infer<typeof DaemonGetStatusResponseSchema>;
-export type DaemonGetPairingOfferResponse = z.infer<typeof DaemonGetPairingOfferResponseSchema>;
 export type DaemonConfigReloadResponse = z.infer<typeof DaemonConfigReloadResponseSchema>;
 export type DiagnosticsResponse = z.infer<typeof DiagnosticsResponseSchema>;
 export type GetProvidersSnapshotResponseMessage = z.infer<

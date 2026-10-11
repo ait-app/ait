@@ -3,11 +3,12 @@ import { randomUUID } from "node:crypto";
 import { open, rename, unlink } from "node:fs/promises";
 import path from "node:path";
 import { WebSocket } from "ws";
-import type { AccountSessionManager } from "./account-session.js";
+import { normalizeCenter, type AccountSessionManager } from "./account-session.js";
 
 interface PreparedDownload {
   owner: WebContents;
   hostId: string;
+  center: string;
   downloadId: string;
   destination: string | null;
   started: boolean;
@@ -28,17 +29,20 @@ export class AccountDownloadManager {
 
   async prepare(
     owner: WebContents,
-    input: { hostId: string; fileName: string; downloadId: string },
+    input: { hostId: string; center: string; fileName: string; downloadId: string },
   ): Promise<string> {
     if (this.active.size >= 4) throw new Error("Too many concurrent downloads.");
     const window = BrowserWindow.fromWebContents(owner);
     if (!window) throw new Error("The download window has closed.");
-    if (this.account.snapshot().selected?.host_id !== input.hostId)
-      throw new Error("Connect to the target host first.");
+    const account = this.account.snapshot();
+    const center = normalizeCenter(input.center);
+    if (account.status === "logged_out" || account.center !== center)
+      throw new Error("Sign in to the online service used by this host.");
     const id = randomUUID();
     const download: PreparedDownload = {
       owner,
       hostId: input.hostId,
+      center,
       downloadId: input.downloadId,
       destination: null,
       started: false,
@@ -104,7 +108,12 @@ export class AccountDownloadManager {
     try {
       await this.transfer(
         owner,
-        { hostId: download.hostId, token: input.token, downloadId: download.downloadId },
+        {
+          hostId: download.hostId,
+          center: download.center,
+          token: input.token,
+          downloadId: download.downloadId,
+        },
         download.destination,
         () => download.aborted,
         (value) => {
@@ -118,15 +127,13 @@ export class AccountDownloadManager {
 
   private async transfer(
     owner: WebContents,
-    input: { hostId: string; token: string; downloadId: string },
+    input: { hostId: string; center: string; token: string; downloadId: string },
     destination: string,
     isAborted: () => boolean,
     setCancel: (cancel: () => void) => void,
   ): Promise<void> {
     if (isAborted() || owner.isDestroyed()) throw new Error("Download cancelled.");
-    const selected = this.account.snapshot().selected?.host_id;
-    if (selected !== input.hostId) throw new Error("Connect to the target host first.");
-    const grant = await this.account.openDownload(input.hostId, input.token);
+    const grant = await this.account.openDownload(input.hostId, input.token, input.center);
     const temporary = `${destination}.ait-${randomUUID()}.part`;
     if (isAborted()) {
       await this.account.closeVisit(grant.relay_session_id);

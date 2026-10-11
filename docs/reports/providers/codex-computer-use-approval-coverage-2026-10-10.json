@@ -1,0 +1,166 @@
+{
+  "baseRevision": "4fecd83a97fd7fedb12e79a2ad15607f1978e3ed",
+  "sourceSha256": "debbac2c7575c03d74be30d1bb4636fd9f13d8069378ea70e58c9b93135cefa0",
+  "measuredAt": "2026-10-10T15:43:00.226033+00:00",
+  "scope": {
+    "workspace": true,
+    "features": "default",
+    "platform": "macOS aarch64",
+    "explicitFileExclusions": [],
+    "sourceFiltering": "cargo-llvm-cov defaults",
+    "skippedTests": 16,
+    "doctests": "checked separately; not instrumented",
+    "unavailablePlatforms": [
+      "Linux",
+      "Windows"
+    ]
+  },
+  "commands": [
+    "cargo llvm-cov clean --workspace",
+    "cargo llvm-cov nextest --workspace --html",
+    "cargo llvm-cov report --json --output-path /tmp/ait-cua-pr-coverage-full.json"
+  ],
+  "testExecution": {
+    "ordinary": {
+      "passed": 2039,
+      "failed": 0,
+      "skipped": 16
+    },
+    "instrumented": {
+      "passed": 2039,
+      "failed": 0,
+      "skipped": 16
+    }
+  },
+  "workspaceLines": {
+    "count": 59730,
+    "covered": 56552,
+    "percent": 94.6793905909928
+  },
+  "packageLines": {
+    "bins/daemon": {
+      "count": 1391,
+      "covered": 1318,
+      "percent": 94.75197699496765
+    },
+    "crates/api": {
+      "count": 2255,
+      "covered": 2132,
+      "percent": 94.54545454545455
+    },
+    "crates/browser": {
+      "count": 733,
+      "covered": 715,
+      "percent": 97.5443383356071
+    },
+    "crates/domain": {
+      "count": 549,
+      "covered": 549,
+      "percent": 100.0
+    },
+    "crates/filesystem": {
+      "count": 12210,
+      "covered": 11588,
+      "percent": 94.9058149058149
+    },
+    "crates/metadata": {
+      "count": 5801,
+      "covered": 5462,
+      "percent": 94.15617996897086
+    },
+    "crates/model": {
+      "count": 1388,
+      "covered": 1336,
+      "percent": 96.25360230547551
+    },
+    "crates/persistence": {
+      "count": 1769,
+      "covered": 1696,
+      "percent": 95.87337478801582
+    },
+    "crates/provider": {
+      "count": 28726,
+      "covered": 27057,
+      "percent": 94.18993246536239
+    },
+    "crates/relay": {
+      "count": 503,
+      "covered": 462,
+      "percent": 91.84890656063618
+    },
+    "crates/schedule": {
+      "count": 796,
+      "covered": 777,
+      "percent": 97.61306532663316
+    },
+    "crates/terminal": {
+      "count": 1646,
+      "covered": 1592,
+      "percent": 96.71931956257595
+    },
+    "crates/voice": {
+      "count": 1963,
+      "covered": 1868,
+      "percent": 95.16046867040245
+    }
+  },
+  "changedProductionFiles": {
+    "crates/provider/src/local/codex.rs": {
+      "count": 934,
+      "covered": 902,
+      "percent": 96.57387580299786
+    },
+    "crates/provider/src/local/codex/workflows.rs": {
+      "count": 151,
+      "covered": 148,
+      "percent": 98.01324503311258
+    },
+    "crates/provider/src/local/configuration.rs": {
+      "count": 314,
+      "covered": 300,
+      "percent": 95.54140127388536
+    },
+    "crates/provider/src/local/configuration/options.rs": {
+      "count": 50,
+      "covered": 48,
+      "percent": 96.0
+    }
+  },
+  "newFunctionExecutions": [
+    {
+      "name": "_RNvNtNtCs9P5t6dDMOWE_8provider5local13configuration18codex_computer_use",
+      "count": 52
+    },
+    {
+      "name": "_RNCNvNtNtCs9P5t6dDMOWE_8provider5local13configuration18codex_computer_use0B7_",
+      "count": 0
+    },
+    {
+      "name": "_RNCNvNtNtCs9P5t6dDMOWE_8provider5local13configuration18codex_computer_uses0_0B7_",
+      "count": 0
+    },
+    {
+      "name": "_RNCNvNtNtCs9P5t6dDMOWE_8provider5local13configuration18codex_computer_uses_0B7_",
+      "count": 0
+    },
+    {
+      "name": "_RNCNvNtNtCsj95jl09HCTw_8provider5local13configuration18codex_computer_use0B7_",
+      "count": 8
+    },
+    {
+      "name": "_RNCNvNtNtCsj95jl09HCTw_8provider5local13configuration18codex_computer_uses0_0B7_",
+      "count": 8
+    },
+    {
+      "name": "_RNCNvNtNtCsj95jl09HCTw_8provider5local13configuration18codex_computer_uses_0B7_",
+      "count": 40
+    },
+    {
+      "name": "_RNvNtNtCsj95jl09HCTw_8provider5local13configuration18codex_computer_use",
+      "count": 195
+    }
+  ],
+  "baseline": null,
+  "baselineNote": "No comparable measurement for this exact base revision was available.",
+  "limits": "No live browser/desktop operations or independent app/site access authorization were exercised."
+}

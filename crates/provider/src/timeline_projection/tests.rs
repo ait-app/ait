@@ -1,5 +1,6 @@
 //! Recorded outputs from the real Paseo projection and paging test suite.
 
+use super::page::select;
 use super::*;
 use crate::protocol::timeline::{Direction, NativeItem};
 
@@ -23,7 +24,7 @@ fn rows(input: &Value) -> Vec<Row> {
 
 fn cases() -> Vec<Value> {
     let fixture: Value = serde_json::from_str(include_str!(
-        "../../../../tests/fixtures/paseo-timeline-projection.json"
+        "../../tests/fixtures/paseo-timeline-projection.json"
     ))
     .unwrap();
     assert_eq!(

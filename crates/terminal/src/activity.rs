@@ -1,7 +1,7 @@
 //! Paseo terminal activity transitions and the read-only Workspace projection.
 
 use std::collections::BTreeMap;
-use std::sync::{Arc, Mutex};
+use std::sync::{Arc, Mutex, MutexGuard, PoisonError};
 use std::time::{SystemTime, UNIX_EPOCH};
 
 use domain::workspace::activity::WorkspaceStateBucket;
@@ -75,7 +75,7 @@ impl Activities {
     }
 
     pub(crate) fn register(&self, id: String, workspace: String) {
-        self.entries.lock().expect("terminal activity lock").insert(
+        self.lock().insert(
             id,
             Entry {
                 workspace,
@@ -85,22 +85,14 @@ impl Activities {
     }
 
     pub(crate) fn remove(&self, id: &str) {
-        let removed = self
-            .entries
-            .lock()
-            .expect("terminal activity lock")
-            .remove(id);
+        let removed = self.lock().remove(id);
         if removed.is_some() {
             self.notify();
         }
     }
 
     pub(crate) fn get(&self, id: &str) -> Option<Activity> {
-        self.entries
-            .lock()
-            .expect("terminal activity lock")
-            .get(id)
-            .and_then(|entry| entry.activity.clone())
+        self.lock().get(id).and_then(|entry| entry.activity.clone())
     }
 
     pub(crate) fn report(&self, id: &str, state: ReportState) {
@@ -126,7 +118,7 @@ impl Activities {
     }
 
     fn change(&self, id: &str, change: impl FnOnce(Option<Activity>) -> Option<Activity>) -> bool {
-        let mut entries = self.entries.lock().expect("terminal activity lock");
+        let mut entries = self.lock();
         let Some(entry) = entries.get_mut(id) else {
             return false;
         };
@@ -141,6 +133,12 @@ impl Activities {
         changed
     }
 
+    /// Any stored value (including `None`) is a valid projection, so a guard poisoned by a
+    /// panic elsewhere is recovered instead of cascading the panic into every caller.
+    fn lock(&self) -> MutexGuard<'_, BTreeMap<String, Entry>> {
+        self.entries.lock().unwrap_or_else(PoisonError::into_inner)
+    }
+
     fn notify(&self) {
         if let Some(changes) = &self.changes {
             changes.notify();
@@ -151,9 +149,7 @@ impl Activities {
 impl WorkspaceActivitySource for Activities {
     fn snapshot(&self) -> Result<Vec<WorkspaceActivity>, WorkspaceStateError> {
         Ok(self
-            .entries
             .lock()
-            .expect("terminal activity lock")
             .values()
             .filter_map(|entry| {
                 let activity = entry.activity.as_ref()?;

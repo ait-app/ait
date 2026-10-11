@@ -102,7 +102,7 @@ async fn websocket_directory_streams_keep_sequences_ownership_and_reconnect_chec
     writer.close(None).await.unwrap();
     reconnected.close(None).await.unwrap();
     terminate(&mut process).await;
-    assert_children_exited(&cwd);
+    assert_children_exited(&cwd).await;
 }
 
 async fn assert_directory_features(writer: &mut Socket) {

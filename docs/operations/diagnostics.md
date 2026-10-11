@@ -20,13 +20,13 @@ Ait 版本、系统架构、请求 ID／安全错误类别、Harness 版本与�
 
 ## Harness 日志来源
 
-| Harness | 默认来源 | 覆盖变量 |
-| --- | --- | --- |
-| OpenCode | 使用已配置的 executable 执行 `debug paths log` | `AIT_DIAGNOSTICS_OPENCODE_LOG_DIR` |
-| Codex | `CODEX_HOME/log`，未设置时 `$HOME/.codex/log` | `AIT_DIAGNOSTICS_CODEX_LOG_DIR` |
-| Claude | `CLAUDE_CONFIG_DIR/debug`，未设置时 `$HOME/.claude/debug` | `AIT_DIAGNOSTICS_CLAUDE_LOG_DIR` |
-| DeepSeek Harness | 无默认目录，明确显示 unavailable | `AIT_DIAGNOSTICS_DEEPSEEK_HARNESS_LOG_DIR` |
-| Antigravity | 无默认目录，明确显示 unavailable | `AIT_DIAGNOSTICS_ANTIGRAVITY_LOG_DIR` |
+| Harness          | 默认来源                                                  | 覆盖变量                                   |
+| ---------------- | --------------------------------------------------------- | ------------------------------------------ |
+| OpenCode         | 使用已配置的 executable 执行 `debug paths log`            | `AIT_DIAGNOSTICS_OPENCODE_LOG_DIR`         |
+| Codex            | `CODEX_HOME/log`，未设置时 `$HOME/.codex/log`             | `AIT_DIAGNOSTICS_CODEX_LOG_DIR`            |
+| Claude           | `CLAUDE_CONFIG_DIR/debug`，未设置时 `$HOME/.claude/debug` | `AIT_DIAGNOSTICS_CLAUDE_LOG_DIR`           |
+| DeepSeek Harness | 无默认目录，明确显示 unavailable                          | `AIT_DIAGNOSTICS_DEEPSEEK_HARNESS_LOG_DIR` |
+| Antigravity      | 无默认目录，明确显示 unavailable                          | `AIT_DIAGNOSTICS_ANTIGRAVITY_LOG_DIR`      |
 
 `AIT_SERVER_<PROVIDER>_BIN` 同时控制相应 CLI 版本探测；未设置时使用 PATH 中的
 `opencode`、`codex`、`claude`、`dsh`、`agy`。环境变量在 daemon 启动时读取，修改后重启。

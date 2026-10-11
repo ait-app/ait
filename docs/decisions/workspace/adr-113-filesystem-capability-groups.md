@@ -19,13 +19,13 @@ filesystem 约 3.5 万行，按“层 → 功能区”组织（`service/checkout
 1. 目录改为“能力组 → 层 → 功能区”，即 `crate::<group>::<layer>::<area>`，组内沿用原有
    `ports`/`protocol`/`service`/`rpc`/`connection`/`local` 分层，子树内部文件结构不变：
 
-   | 组          | 功能区                                     |
-   | ----------- | ------------------------------------------ |
-   | `git`       | checkout、git_fetch、provisioning          |
-   | `forge`     | forge、github_projects                     |
-   | `worktrees` | worktrees、workspace_recovery              |
-   | `files`     | files、uploads、transfer、file_transfer    |
-   | `skills`    | skills                                     |
+   | 组          | 功能区                                  |
+   | ----------- | --------------------------------------- |
+   | `git`       | checkout、git_fetch、provisioning       |
+   | `forge`     | forge、github_projects                  |
+   | `worktrees` | worktrees、workspace_recovery           |
+   | `files`     | files、uploads、transfer、file_transfer |
+   | `skills`    | skills                                  |
 
 2. 顶层保留组装与跨组模块：`installation`、`capabilities`、`dispatch`、`connection`，以及
    组合 Git 与 Forge 缓存的 `workspace_runtime`（原 `local::workspace_runtime`）。
@@ -35,7 +35,7 @@ filesystem 约 3.5 万行，按“层 → 功能区”组织（`service/checkout
    - 组与组之间只引用对方的 `ports` 和 `protocol`；
    - 只有顶层模块可以同时组合多个组的具体类型；
    - `support` 不依赖任何组或顶层模块。
-   组内的测试可以构造其他组的具体适配器作为夹具。
+     组内的测试可以构造其他组的具体适配器作为夹具。
 4. 为满足约定：`worktrees::ports::worktrees` 新增 `ChangeRequestResolver`，`LocalForge`
    实现它，`LocalManagedWorktrees::new` 接收 `Arc<dyn ChangeRequestResolver>`，由 daemon
    注入；checkout 方法声明移到 `git::rpc::checkout::METHODS`，与其他组一致；

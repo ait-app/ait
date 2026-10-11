@@ -5,6 +5,7 @@ import type {
   FetchAgentsOptions,
 } from "@ait/client/internal/daemon-client";
 import { fetchAgentTimelineOnce } from "@/timeline/fetch-agent-timeline-once";
+import { resolveProjectPlacement } from "@/utils/project-placement";
 import {
   normalizeProjectDescriptor,
   normalizeWorkspaceDescriptor,
@@ -37,6 +38,8 @@ import type { TurnLivenessTransition } from "@/timeline/turn-liveness";
 
 type FetchAgentsPayload = Awaited<ReturnType<DaemonClient["fetchAgents"]>>;
 type FetchWorkspacesPayload = Awaited<ReturnType<DaemonClient["fetchWorkspaces"]>>;
+type WorkspaceTargetPayload = Awaited<ReturnType<DaemonClient["getWorkspace"]>>;
+export type WorkspaceRoutePreparation = WorkspaceTargetPayload["state"] | null;
 
 const PAGE_LIMIT = 200;
 const AGENT_SORT: NonNullable<FetchAgentsOptions["sort"]> = [
@@ -161,6 +164,9 @@ export class DirectorySync {
   private snapshotRefreshTimer: ReturnType<typeof setTimeout> | null = null;
   private satisfiedDemandSource: DirectorySourceToken | null = null;
   private cursors: DirectoryCheckpoint = {};
+  private readonly workspaceReads = new Map<string, Promise<WorkspaceRoutePreparation>>();
+  private readonly agentReads = new Map<string, Promise<void>>();
+  private readonly workspaceAgentReads = new Map<string, Promise<boolean>>();
 
   constructor(
     private readonly serverId: string,
@@ -192,6 +198,9 @@ export class DirectorySync {
     this.releaseSubscriptions();
     workspaceLabels.disconnect(this.serverId);
     this.connection = connection;
+    this.workspaceReads.clear();
+    this.agentReads.clear();
+    this.workspaceAgentReads.clear();
     this.abortPendingSessionWaits();
     if (!connection.client || connection.status !== "online") return true;
     // Reattach labels here because route-only demand can satisfy the epoch before full demand requests them.
@@ -375,12 +384,144 @@ export class DirectorySync {
 
   async prepareAgentRoute(agentId: string): Promise<void> {
     await this.loadCachedAgent(agentId);
-    const agent = useSessionStore.getState().sessions[this.serverId]?.agents.get(agentId);
+    let agent = useSessionStore.getState().sessions[this.serverId]?.agents.get(agentId);
+    if (!agent && this.supportsWorkspaceTargetRead() && this.getOnlineConnection()) {
+      let read = this.agentReads.get(agentId);
+      if (!read) {
+        read = this.readTargetAgent(agentId).finally(() => {
+          if (this.agentReads.get(agentId) === read) this.agentReads.delete(agentId);
+        });
+        this.agentReads.set(agentId, read);
+      }
+      await read;
+      agent = useSessionStore.getState().sessions[this.serverId]?.agents.get(agentId);
+    }
     if (agent?.workspaceId) await this.loadCachedWorkspace(agent.workspaceId);
   }
 
-  async prepareWorkspaceRoute(workspaceId: string): Promise<void> {
+  async prepareWorkspaceRoute(workspaceId: string): Promise<WorkspaceRoutePreparation> {
     await this.loadCachedWorkspace(workspaceId);
+    if (useSessionStore.getState().sessions[this.serverId]?.workspaces.has(workspaceId))
+      return "ready";
+    if (!this.supportsWorkspaceTargetRead() || !this.getOnlineConnection()) return null;
+    let read = this.workspaceReads.get(workspaceId);
+    if (!read) {
+      read = this.readTargetWorkspace(workspaceId).finally(() => {
+        if (this.workspaceReads.get(workspaceId) === read) this.workspaceReads.delete(workspaceId);
+      });
+      this.workspaceReads.set(workspaceId, read);
+    }
+    return read;
+  }
+
+  private supportsWorkspaceTargetRead(): boolean {
+    return (
+      this.connection.client?.getLastServerInfoMessage()?.features?.workspaceTargetRead === true
+    );
+  }
+
+  private async readTargetAgent(agentId: string): Promise<void> {
+    const { client, source } = this.requireOnline();
+    await this.waitForSession(client, source);
+    for (let attempt = 0; attempt < 3; attempt += 1) {
+      const token = this.agents.captureTimeline(agentId);
+      const revision = this.revision;
+      const result = await client.fetchAgent(agentId);
+      if (!this.isCurrent(client, source)) return;
+      if (this.revision !== revision) continue;
+      if (!result) return;
+      if (result.agent.id !== agentId) throw new Error("Agent lookup identity mismatch");
+      const entry = {
+        ...result,
+        project: resolveProjectPlacement({
+          projectPlacement: result.project,
+          cwd: result.agent.cwd,
+        }),
+      };
+      if (this.agents.submitDirectoryAgent(token, entry)) {
+        this.agentTransactions.record(source, { kind: "upsert", ...entry });
+        this.revision += 1;
+      }
+      return;
+    }
+    throw new Error("Agent changed during loading. Please retry.");
+  }
+
+  prepareWorkspaceAgents(workspaceId: string): Promise<boolean> {
+    if (!this.supportsWorkspaceTargetRead() || !this.getOnlineConnection())
+      return Promise.resolve(false);
+    let read = this.workspaceAgentReads.get(workspaceId);
+    if (!read) {
+      read = this.readWorkspaceAgents(workspaceId).finally(() => {
+        if (this.workspaceAgentReads.get(workspaceId) === read)
+          this.workspaceAgentReads.delete(workspaceId);
+      });
+      this.workspaceAgentReads.set(workspaceId, read);
+    }
+    return read;
+  }
+
+  private async readWorkspaceAgents(workspaceId: string): Promise<boolean> {
+    const { client, source } = this.requireOnline();
+    await this.waitForSession(client, source);
+    for (let attempt = 0; attempt < 3; attempt += 1) {
+      const revision = this.revision;
+      const payload = await client.fetchAgents({
+        scope: "active",
+        filter: { workspaceIds: [workspaceId] },
+        sort: AGENT_SORT,
+        page: { limit: 40 },
+      });
+      if (!this.isCurrent(client, source)) return false;
+      if (this.revision !== revision) continue;
+      if (
+        payload.entries.length > 40 ||
+        payload.entries.some(({ agent }) => agent.workspaceId !== workspaceId)
+      )
+        throw new Error("Workspace agent lookup returned an invalid scope");
+      for (const entry of payload.entries) {
+        if (this.agents.submitDirectoryAgent(this.agents.captureTimeline(entry.agent.id), entry))
+          this.agentTransactions.record(source, { kind: "upsert", ...entry });
+      }
+      this.revision += 1;
+      return true;
+    }
+    throw new Error("Workspace agents changed during loading. Please retry.");
+  }
+
+  private async readTargetWorkspace(workspaceId: string): Promise<WorkspaceRoutePreparation> {
+    const { client, source } = this.requireOnline();
+    await this.waitForSessionMetadata(client, source);
+    for (let attempt = 0; attempt < 3; attempt += 1) {
+      const revision = this.workspaceRevision;
+      const payload = await client.getWorkspace(workspaceId);
+      if (!this.isCurrent(client, source)) return null;
+      if (this.workspaceRevision !== revision) continue;
+      if (payload.workspaceId !== workspaceId)
+        throw new Error("Workspace lookup identity mismatch");
+      const mutations: DirectoryReplicaMutation[] = [];
+      if (payload.state === "ready") {
+        if (!payload.workspace || payload.workspace.id !== workspaceId)
+          throw new Error("Workspace lookup did not return its descriptor");
+        if (payload.project) {
+          mutations.push(
+            ...this.workspaces.acceptProject(normalizeProjectDescriptor(payload.project)),
+          );
+          this.workspaceTransactions.record(source, { kind: "upsert", project: payload.project });
+        }
+        mutations.push(
+          ...this.workspaces.acceptWorkspaces([normalizeWorkspaceDescriptor(payload.workspace)]),
+        );
+        this.workspaceTransactions.record(source, { kind: "upsert", workspace: payload.workspace });
+      } else {
+        mutations.push(...this.workspaces.removeWorkspaceSnapshot(workspaceId));
+        this.workspaceTransactions.record(source, { kind: "remove", id: workspaceId });
+      }
+      this.checkpoints?.commitDirectoryMutations(this.serverId, mutations);
+      this.workspaceRevision += 1;
+      return payload.state;
+    }
+    throw new Error("Workspace changed during loading. Please retry.");
   }
 
   private async loadCachedWorkspace(workspaceId: string): Promise<void> {

@@ -3,23 +3,23 @@
 - 日期：2026-09-22；分支：`new`。
 - 基线：`2b7f428`；Paseo 来源：`2c8e8a826810337492cc5a38bb0bbd705b6fb632`。
 - 决策：[ADR-026](../../decisions/daemon/adr-026-canonical-paseo-websocket-surface.md)。
+- 后续修订：配对 offer RPC 已按 [ADR-127](../../decisions/daemon/adr-127-remove-daemon-pairing-offer.md) 删除。
 
 ## 已接通方法
 
 本阶段把 daemon/config/diagnostics 分组的 9 个 catalog 条目全部加入生产 capability。累计已接通
 24 个规范方法，剩余 167 个仍为 catalog-only。
 
-| 规范方法                           | Paseo 来源名                | 状态与行为                                                               |
-| ---------------------------------- | --------------------------- | ------------------------------------------------------------------------ |
-| `daemon.get_status.request`        | 同名                        | server/version/pid/executable/start/listen；relay null、providers 空数组 |
-| `daemon.get_pairing_offer.request` | 同名                        | 无 relay 时返回 Paseo 的空 offer 形状                                    |
-| `daemon.config.reload.request`     | 同名                        | 重读 `config.json`，验证后分类 live/restart/override 路径                |
-| `daemon.update.request`            | 同名                        | 返回 Paseo update result；当前 standalone 安装明确失败                   |
-| `diagnostics.request`              | 同名                        | 返回不含凭据的进程、系统与 capability 文本报告                           |
-| `daemon.config.get.request`        | `get_daemon_config_request` | 返回 normalized mutable config                                           |
-| `daemon.config.set.request`        | `set_daemon_config_request` | 验证、深合并、provider 删除、原子持久化                                  |
-| `server.restart.request`           | `restart_server_request`    | correlated ack 后 drain，释放锁并在同进程重新 bind/组装                  |
-| `server.shutdown.request`          | `shutdown_server_request`   | correlated ack 后 drain 并正常退出                                       |
+| 规范方法                       | Paseo 来源名                | 状态与行为                                                               |
+| ------------------------------ | --------------------------- | ------------------------------------------------------------------------ |
+| `daemon.get_status.request`    | 同名                        | server/version/pid/executable/start/listen；relay null、providers 空数组 |
+| `daemon.config.reload.request` | 同名                        | 重读 `config.json`，验证后分类 live/restart/override 路径                |
+| `daemon.update.request`        | 同名                        | 返回 Paseo update result；当前 standalone 安装明确失败                   |
+| `diagnostics.request`          | 同名                        | 返回不含凭据的进程、系统与 capability 文本报告                           |
+| `daemon.config.get.request`    | `get_daemon_config_request` | 返回 normalized mutable config                                           |
+| `daemon.config.set.request`    | `set_daemon_config_request` | 验证、深合并、provider 删除、原子持久化                                  |
+| `server.restart.request`       | `restart_server_request`    | correlated ack 后 drain，释放锁并在同进程重新 bind/组装                  |
+| `server.shutdown.request`      | `shutdown_server_request`   | correlated ack 后 drain 并正常退出                                       |
 
 legacy 下划线名称仍只保留在 method catalog 中，不参与路由。配置 DTO 复制 Paseo mutable config
 的 relay、MCP、browser tools、host/CORS/proxy、Git、app、provider model、metadata generation、

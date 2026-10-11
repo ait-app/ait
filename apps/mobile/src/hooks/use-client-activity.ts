@@ -1,4 +1,4 @@
-import { useEffect, useRef } from "react";
+import { useEffect, useMemo, useRef } from "react";
 import { AppState } from "react-native";
 import type { DaemonClient } from "@ait/client/internal/daemon-client";
 import { getIsElectron, isWeb, isNative } from "@/constants/platform";
@@ -32,20 +32,23 @@ export function useClientActivity({
 }: ClientActivityOptions): void {
   const onAppResumedRef = useRef(onAppResumed);
   onAppResumedRef.current = onAppResumed;
+  const focusRef = useRef({ focusedAgentId, focusedTerminalId });
+  focusRef.current = { focusedAgentId, focusedTerminalId };
 
-  const trackerRef = useRef<ClientActivityTracker | null>(null);
-  if (!trackerRef.current) {
-    trackerRef.current = createClientActivityTracker({
-      client,
-      deviceType: isWeb ? "web" : "mobile",
-      initialFocusedAgentId: focusedAgentId,
-      initialFocusedTerminalId: focusedTerminalId,
-      initialAppVisible: AppState.currentState === "active",
-      now: () => Date.now(),
-      onAppResumed: (awayMs) => onAppResumedRef.current?.(awayMs),
-    });
-  }
-  const tracker = trackerRef.current;
+  // A connection switch replaces the client, so the tracker must follow it.
+  const tracker = useMemo<ClientActivityTracker>(
+    () =>
+      createClientActivityTracker({
+        client,
+        deviceType: isWeb ? "web" : "mobile",
+        initialFocusedAgentId: focusRef.current.focusedAgentId,
+        initialFocusedTerminalId: focusRef.current.focusedTerminalId,
+        initialAppVisible: AppState.currentState === "active",
+        now: () => Date.now(),
+        onAppResumed: (awayMs) => onAppResumedRef.current?.(awayMs),
+      }),
+    [client],
+  );
 
   // Track app visibility via AppState (native).
   useEffect(() => {

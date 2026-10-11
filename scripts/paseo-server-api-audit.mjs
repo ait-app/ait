@@ -105,7 +105,6 @@ const notes = new Map([
     "修复 checkout 默认目录名及比较基线；支持 GitHub/GHES PR、fork 推送配置与 setup 信任门控",
   ],
   ["agent.timeline.append.request", "仅接受带受信插件来源的显示项；不恢复已移除的 Plugin 产品能力"],
-  ["daemon.get_pairing_offer.request", "按 ADR-061 保留禁用配对/relay 的响应"],
   ["editor.open.request", "与当前上游一致：提示改由桌面端打开编辑器"],
   [
     "session.events.set_subscription.request",
@@ -160,17 +159,19 @@ const entries = SessionInboundMessageSchema.options
       tests,
       assessment: mapped
         ? assessment(mapped.canonical, mapped.group)
-        : "已按 ADR-045/047/061 移除，不重新接入",
+        : name === "daemon.get_pairing_offer.request"
+          ? "已按 ADR-127 移除，不重新接入"
+          : "已按 ADR-045/047/061 移除，不重新接入",
       schemaSha256: sha(JSON.stringify(schema)),
       schema,
     };
   })
   .sort((a, b) => a.name.localeCompare(b.name, "en"));
 assert.equal(entries.length, 205);
-assert.equal(entries.filter((entry) => entry.excluded).length, 34);
+assert.equal(entries.filter((entry) => entry.excluded).length, 35);
 assert.equal(
   new Set(entries.filter((entry) => !entry.excluded).map((entry) => entry.canonical)).size,
-  168,
+  167,
 );
 const source = {
   revision,
@@ -203,13 +204,13 @@ const rows = entries.map((entry) => {
 });
 write(
   "docs/reports/daemon/paseo-api-matrix-2026-09-29.md",
-  `# Paseo Server 逐接口索引\n\n由 \`scripts/paseo-server-api-audit.mjs\` 从本地 Paseo \`${revision}\` 的真实 Zod union 生成。\n205 个入站名称，34 个已明确移除，171 个有效名称归并为 168 个 canonical 方法。\n完整嵌套字段、每项 schema 指纹、上游分派位置和关联 Rust 测试保存在\n[契约快照](../../../${fixture})；测试索引不是逐项语义覆盖率。\n\n[修复、验证与未覆盖范围](paseo-api-audit-2026-09-29.md)。表格不以“有路由”推断完全兼容。\n\n| Paseo 入站名称 | Ait 方法 | 上游输入字段 | Rust 入口 | 对照结果 / 限制 |\n| --- | --- | --- | --- | --- |\n${rows.join("\n")}\n`,
+  `# Paseo Server 逐接口索引\n\n由 \`scripts/paseo-server-api-audit.mjs\` 从本地 Paseo \`${revision}\` 的真实 Zod union 生成。\n205 个入站名称，35 个已明确移除，170 个有效名称归并为 167 个 canonical 方法。\n完整嵌套字段、每项 schema 指纹、上游分派位置和关联 Rust 测试保存在\n[契约快照](../../../${fixture})；测试索引不是逐项语义覆盖率。\n\n[修复、验证与未覆盖范围](paseo-api-audit-2026-09-29.md)。表格不以“有路由”推断完全兼容。\n\n| Paseo 入站名称 | Ait 方法 | 上游输入字段 | Rust 入口 | 对照结果 / 限制 |\n| --- | --- | --- | --- | --- |\n${rows.join("\n")}\n`,
 );
 console.log(
   JSON.stringify({
     entries: entries.length,
     scoped: entries.length - excluded.size,
-    canonical: 168,
+    canonical: 167,
     fixture,
     check,
   }),

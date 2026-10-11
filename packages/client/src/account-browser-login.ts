@@ -38,6 +38,8 @@ export function accountLoginError(code: string): string {
   switch (code) {
     case "account_expired":
       return "Your account has expired. Contact your administrator to renew access.";
+    case "contact_verification_required":
+      return "Bind and verify your phone number or email in the account center, then sign in again.";
     case "email_verification_required":
       return "Bind and verify your email in the account center, then sign in again.";
     case "account_link_required":

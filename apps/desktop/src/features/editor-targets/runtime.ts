@@ -1,6 +1,6 @@
 import type { ChildProcess, SpawnOptions } from "node:child_process";
 import { spawn as nodeSpawn } from "node:child_process";
-import { existsSync as nodeExistsSync } from "node:fs";
+import { existsSync as nodeExistsSync, statSync } from "node:fs";
 import { readFile } from "node:fs/promises";
 import os from "node:os";
 import path, { posix, win32 } from "node:path";
@@ -24,6 +24,7 @@ export interface EditorTargetRuntimeOptions {
   platform?: NodeJS.Platform;
   env?: NodeJS.ProcessEnv;
   pathExists?: (path: string) => boolean;
+  isDirectory?: (path: string) => boolean;
   spawn?: (command: string, args: string[], options: SpawnOptions) => SpawnedProcess;
   openPath?: (path: string) => Promise<string>;
   revealPath?: (path: string) => void;
@@ -54,6 +55,10 @@ function createExternalProcessEnv(baseEnv: NodeJS.ProcessEnv): NodeJS.ProcessEnv
 
 function isAbsolutePath(value: string, platform: NodeJS.Platform): boolean {
   return platform === "win32" ? win32.isAbsolute(value) : posix.isAbsolute(value);
+}
+
+function nodeIsDirectory(targetPath: string): boolean {
+  return statSync(targetPath, { throwIfNoEntry: false })?.isDirectory() ?? false;
 }
 
 function resolveExecutable(
@@ -129,6 +134,7 @@ export function createEditorTargetRuntime(
   const platform = options.platform ?? process.platform;
   const env = options.env ?? process.env;
   const pathExists = options.pathExists ?? nodeExistsSync;
+  const isDirectory = options.isDirectory ?? nodeIsDirectory;
   const spawn = options.spawn ?? spawnProcess;
   const openPath = options.openPath ?? ((targetPath) => shell.openPath(targetPath));
   const revealPath = options.revealPath ?? ((targetPath) => shell.showItemInFolder(targetPath));
@@ -139,6 +145,7 @@ export function createEditorTargetRuntime(
     platform,
     env,
     pathExists,
+    isDirectory,
     isAbsolutePath: (targetPath) => isAbsolutePath(targetPath, platform),
     resolveCommand: (commands) => resolveExecutable(commands, { env, pathExists, platform }),
     async spawnDetached({ command, args }) {

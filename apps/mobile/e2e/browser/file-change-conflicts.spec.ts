@@ -315,9 +315,7 @@ test.describe("Workspace file change conflicts", () => {
       content: binaryContent,
     });
     await gate.waitForFileSubscription(relativePath);
-    await expect(
-      filePane(page).getByText("Binary preview unavailable", { exact: true }),
-    ).toBeVisible();
+    await expect(filePane(page).getByText("Preview unavailable", { exact: true })).toBeVisible();
 
     await unlink(filePath);
     await mkdir(filePath);
@@ -338,9 +336,7 @@ test.describe("Workspace file change conflicts", () => {
     ).toHaveCount(0);
     gate.releaseHeldFileRead();
 
-    await expect(
-      filePane(page).getByText("Binary preview unavailable", { exact: true }),
-    ).toBeVisible();
+    await expect(filePane(page).getByText("Preview unavailable", { exact: true })).toBeVisible();
     await expect(
       filePane(page).getByText("Requested path is not a file", { exact: true }),
     ).toHaveCount(0);

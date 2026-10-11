@@ -13,7 +13,7 @@ import {
   normalizeWorkspaceDescriptor,
   useSessionStore,
 } from "@/stores/session-store";
-import { normalizeAgentSnapshot } from "@/utils/agent-snapshots";
+import { normalizeAgentSnapshot, projectAgentSnapshot } from "@/utils/agent-snapshots";
 import { selectWorkspaceDirectoryServerIds } from "@/stores/session-store-hooks/selectors";
 import { useWorkspaceLabels } from "@/workspace-labels";
 import type { DirectoryReplicaMutation } from "@/runtime/replica-cache";
@@ -28,9 +28,14 @@ import { subscriptionFixture } from "../subscription-fixture";
 type WorkspaceFetchResult = Awaited<ReturnType<DaemonClient["fetchWorkspaces"]>>;
 type ProjectListResult = Awaited<ReturnType<DaemonClient["listProjects"]>>;
 type AgentFetchResult = Awaited<ReturnType<DaemonClient["fetchAgents"]>>;
+type WorkspaceTargetResult = Awaited<ReturnType<DaemonClient["getWorkspace"]>>;
 
 class FakeDirectoryClient {
   supportsWorkspaceLabels = false;
+  supportsWorkspaceTargetRead = false;
+  getWorkspaceCalls = 0;
+  getWorkspaceResult: WorkspaceTargetResult | null = null;
+  private pendingWorkspaceTarget: Promise<WorkspaceTargetResult> | null = null;
   listWorkspaceLabelsCalls = 0;
   fetchAgentsCalls = 0;
   lastAgentOptions: unknown;
@@ -70,6 +75,32 @@ class FakeDirectoryClient {
       complete = resolve;
     });
     return complete;
+  }
+
+  holdWorkspaceTarget(): (result: WorkspaceTargetResult) => void {
+    let complete!: (result: WorkspaceTargetResult) => void;
+    this.pendingWorkspaceTarget = new Promise((resolve) => {
+      complete = resolve;
+    });
+    return complete;
+  }
+
+  async getWorkspace(workspaceId: string): Promise<WorkspaceTargetResult> {
+    this.getWorkspaceCalls += 1;
+    if (this.pendingWorkspaceTarget) {
+      const pending = this.pendingWorkspaceTarget;
+      this.pendingWorkspaceTarget = null;
+      return pending;
+    }
+    return (
+      this.getWorkspaceResult ?? {
+        requestId: "target",
+        workspaceId,
+        state: "missing",
+        workspace: null,
+        project: null,
+      }
+    );
   }
 
   holdAgentFetch(): (result: AgentFetchResult) => void {
@@ -175,7 +206,12 @@ class FakeDirectoryClient {
   }
 
   getLastServerInfoMessage() {
-    return this.supportsWorkspaceLabels ? { features: { workspaceLabels: true } } : null;
+    return {
+      features: {
+        workspaceLabels: this.supportsWorkspaceLabels,
+        workspaceTargetRead: this.supportsWorkspaceTargetRead,
+      },
+    };
   }
 }
 
@@ -183,7 +219,11 @@ const serverIds = new Set<string>();
 
 function createDirectory(
   serverId: string,
-  options?: { workspaceLabels?: boolean },
+  options?: {
+    workspaceLabels?: boolean;
+    workspaceTargetRead?: boolean;
+    checkpoints?: DirectoryCheckpointStorage;
+  },
 ): {
   client: FakeDirectoryClient;
   directory: DirectorySync;
@@ -191,12 +231,17 @@ function createDirectory(
   serverIds.add(serverId);
   const client = new FakeDirectoryClient();
   client.supportsWorkspaceLabels = options?.workspaceLabels === true;
-  const directory = new DirectorySync(serverId, {
-    onAgentStoppedRunning: () => undefined,
-    markAgentLoading: () => undefined,
-    markAgentReady: () => undefined,
-    markAgentError: () => undefined,
-  });
+  client.supportsWorkspaceTargetRead = options?.workspaceTargetRead === true;
+  const directory = new DirectorySync(
+    serverId,
+    {
+      onAgentStoppedRunning: () => undefined,
+      markAgentLoading: () => undefined,
+      markAgentReady: () => undefined,
+      markAgentError: () => undefined,
+    },
+    options?.checkpoints,
+  );
   directory.connectionChanged({
     client: client as unknown as DaemonClient,
     status: "online",
@@ -261,6 +306,237 @@ afterEach(() => {
   for (const serverId of serverIds) useSessionStore.getState().clearSession(serverId);
   serverIds.clear();
   useWorkspaceLabels.setState({ hosts: {} });
+});
+
+function targetDirectory(serverId: string, checkpoints?: DirectoryCheckpointStorage) {
+  const context = createDirectory(serverId, { workspaceTargetRead: true, checkpoints });
+  useSessionStore
+    .getState()
+    .initializeSession(serverId, context.client as unknown as DaemonClient, 1);
+  useSessionStore.getState().updateSessionServerInfo(serverId, {
+    serverId,
+    hostname: null,
+    version: "test",
+    features: { workspaceTargetRead: true, projectList: true },
+  });
+  return context;
+}
+
+function targetResult(id: string): WorkspaceTargetResult {
+  return {
+    requestId: "target",
+    workspaceId: id,
+    state: "ready",
+    workspace: createWorkspaceEntry(id),
+    project: {
+      projectId: "snapshot-project",
+      projectDisplayName: "Snapshot project",
+      projectRootPath: "/repo",
+      projectKind: "git",
+    },
+  };
+}
+
+describe("target workspace reads", () => {
+  it("opens and persists a target while the full directory is blocked, coalescing reads", async () => {
+    const serverId = "target-before-directory";
+    const commit = vi.fn();
+    const { client, directory } = targetDirectory(serverId, {
+      readAgent: async () => undefined,
+      readWorkspace: async () => undefined,
+      readDirectory: async () => ({
+        agents: new Map(),
+        workspaces: new Map(),
+        projects: new Map(),
+      }),
+      commitDirectoryMutations: commit,
+    });
+    const finishProjects = client.holdProjectFetch();
+    const finishAgents = client.holdAgentFetch();
+    const finishTarget = client.holdWorkspaceTarget();
+    directory.setDemand({}, true);
+    await vi.waitFor(() => expect(client.listProjectsCalls).toBe(1));
+    const first = directory.prepareWorkspaceRoute("target");
+    const second = directory.prepareWorkspaceRoute("target");
+    await vi.waitFor(() => expect(client.getWorkspaceCalls).toBe(1));
+    finishTarget(targetResult("target"));
+    expect(await Promise.all([first, second])).toEqual(["ready", "ready"]);
+    const session = useSessionStore.getState().sessions[serverId];
+    expect(session.workspaces.get("target")?.name).toBe("target");
+    expect(session.hasHydratedWorkspaces).toBe(false);
+    expect(session.hasHydratedAgents).toBe(false);
+    expect(commit).toHaveBeenCalledWith(
+      serverId,
+      expect.arrayContaining([
+        expect.objectContaining({ kind: "workspace", type: "upsert", id: "target" }),
+      ]),
+    );
+    expect(commit.mock.calls.every((call) => call[2] === undefined)).toBe(true);
+    finishProjects({ requestId: "projects", projects: [] });
+    finishAgents({
+      requestId: "agents",
+      entries: [],
+      pageInfo: { hasMore: false, nextCursor: null, prevCursor: null },
+    });
+    await directory.refreshDemand();
+    expect(useSessionStore.getState().sessions[serverId].workspaces.has("target")).toBe(true);
+    directory.dispose();
+  });
+
+  it("rejects replies from an old connection epoch", async () => {
+    const serverId = "target-reconnect";
+    const { client, directory } = targetDirectory(serverId);
+    const finishOld = client.holdWorkspaceTarget();
+    const old = directory.prepareWorkspaceRoute("target");
+    await vi.waitFor(() => expect(client.getWorkspaceCalls).toBe(1));
+    directory.connectionChanged({
+      client: client as unknown as DaemonClient,
+      status: "online",
+      source: { clientGeneration: 1, connectionEpoch: 2 },
+    });
+    expect(await directory.prepareWorkspaceRoute("target")).toBe("missing");
+    finishOld(targetResult("target"));
+    expect(await old).toBeNull();
+    expect(useSessionStore.getState().sessions[serverId].workspaces.has("target")).toBe(false);
+    directory.dispose();
+  });
+
+  it("re-reads after a buffered Project remove instead of resurrecting the old target", async () => {
+    const serverId = "target-delete-race";
+    const { client, directory } = targetDirectory(serverId);
+    const finishWorkspaces = client.holdWorkspaceFetch();
+    directory.setDemand({}, true);
+    await vi.waitFor(() => expect(client.fetchWorkspacesCalls).toBe(1));
+    const finishTarget = client.holdWorkspaceTarget();
+    const pending = directory.prepareWorkspaceRoute("target");
+    await vi.waitFor(() => expect(client.getWorkspaceCalls).toBe(1));
+    client.emit({
+      type: "project.update",
+      payload: { kind: "remove", projectId: "snapshot-project" },
+    });
+    finishTarget(targetResult("target"));
+    expect(await pending).toBe("missing");
+    expect(client.getWorkspaceCalls).toBe(2);
+    finishWorkspaces({
+      requestId: "workspaces",
+      entries: [
+        createWorkspaceEntry("target"),
+        { ...createWorkspaceEntry("other"), projectId: "other-project" },
+      ],
+      emptyProjects: [],
+      pageInfo: { hasMore: false, nextCursor: null, prevCursor: null },
+    });
+    await directory.refreshDemand();
+    const session = useSessionStore.getState().sessions[serverId];
+    expect(session.workspaces.has("target")).toBe(false);
+    expect(session.workspaces.has("other")).toBe(true);
+    directory.dispose();
+  });
+
+  it("distinguishes archived and missing targets without declaring a complete baseline", async () => {
+    const serverId = "target-archived";
+    const { client, directory } = targetDirectory(serverId);
+    client.getWorkspaceResult = {
+      requestId: "target",
+      workspaceId: "target",
+      state: "archived",
+      workspace: null,
+      project: null,
+    };
+    expect(await directory.prepareWorkspaceRoute("target")).toBe("archived");
+    client.getWorkspaceResult = null;
+    expect(await directory.prepareWorkspaceRoute("absent")).toBe("missing");
+    expect(useSessionStore.getState().sessions[serverId].hasHydratedWorkspaces).toBe(false);
+    directory.dispose();
+  });
+
+  it("uses a cached target immediately and preserves the legacy host fallback", async () => {
+    const serverId = "target-cache";
+    const { client, directory } = targetDirectory(serverId);
+    useSessionStore
+      .getState()
+      .mergeWorkspaces(serverId, [normalizeWorkspaceDescriptor(createWorkspaceEntry("cached"))]);
+    expect(await directory.prepareWorkspaceRoute("cached")).toBe("ready");
+    expect(client.getWorkspaceCalls).toBe(0);
+    client.supportsWorkspaceTargetRead = false;
+    expect(await directory.prepareWorkspaceRoute("uncached")).toBeNull();
+    expect(client.getWorkspaceCalls).toBe(0);
+    directory.dispose();
+  });
+
+  it("loads a visible agent by identity without awaiting a directory snapshot", async () => {
+    const serverId = "target-agent";
+    const { client, directory } = targetDirectory(serverId);
+    const snapshot = projectAgentSnapshot(createAgent(serverId, "visible"));
+    const fetchAgent = vi.fn(async () => ({ agent: snapshot, project: null }));
+    Object.assign(client, { fetchAgent });
+    await Promise.all([
+      directory.prepareAgentRoute("visible"),
+      directory.prepareAgentRoute("visible"),
+    ]);
+    expect(fetchAgent).toHaveBeenCalledTimes(1);
+    expect(useSessionStore.getState().sessions[serverId].agents.has("visible")).toBe(true);
+    expect(useSessionStore.getState().sessions[serverId].hasHydratedAgents).toBe(false);
+    expect(client.fetchAgentsCalls).toBe(0);
+    directory.dispose();
+  });
+
+  it("reports malformed target responses without poisoning the replica", async () => {
+    const serverId = "target-invalid";
+    const { client, directory } = targetDirectory(serverId);
+    client.getWorkspaceResult = targetResult("different");
+    await expect(directory.prepareWorkspaceRoute("target")).rejects.toThrow("identity mismatch");
+    expect(useSessionStore.getState().sessions[serverId].workspaces.size).toBe(0);
+    directory.dispose();
+  });
+
+  it("loads only a bounded Workspace agent page without marking a complete directory", async () => {
+    const serverId = "target-agent-page";
+    const { client, directory } = targetDirectory(serverId);
+    const finish = client.holdAgentFetch();
+    const pending = directory.prepareWorkspaceAgents("target");
+    await vi.waitFor(() => expect(client.fetchAgentsCalls).toBe(1));
+    expect(client.lastAgentOptions).toMatchObject({
+      scope: "active",
+      filter: { workspaceIds: ["target"] },
+      page: { limit: 40 },
+    });
+    const cached = createAgent(serverId, "cached-tab");
+    useSessionStore.getState().setAgents(serverId, new Map([[cached.id, cached]]));
+    const snapshot = {
+      ...projectAgentSnapshot(createAgent(serverId, "first")),
+      workspaceId: "target",
+    };
+    finish({
+      requestId: "agents",
+      entries: [
+        {
+          agent: snapshot,
+          project: {
+            projectKey: "/repo",
+            projectName: "Repo",
+            checkout: {
+              cwd: "/repo",
+              isGit: false,
+              currentBranch: null,
+              remoteUrl: null,
+              worktreeRoot: null,
+              isPaseoOwnedWorktree: false,
+              mainRepoRoot: null,
+            },
+          },
+        },
+      ],
+      pageInfo: { hasMore: true, nextCursor: "next", prevCursor: null },
+    });
+    expect(await pending).toBe(true);
+    const session = useSessionStore.getState().sessions[serverId];
+    expect(session.agents.has("first")).toBe(true);
+    expect(session.agents.has("cached-tab")).toBe(true);
+    expect(session.hasHydratedAgents).toBe(false);
+    expect(session.hasHydratedWorkspaces).toBe(false);
+    directory.dispose();
+  });
 });
 
 describe("DirectorySync session readiness", () => {

@@ -1,12 +1,21 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { getDesktopHost } from "@/desktop/host";
+import { buildDaemonWebSocketUrl } from "@/utils/daemon-endpoints";
 import type { HostProfile } from "@/types/host-connection";
 import { useDownloadStore } from "./download-store";
 
 vi.mock("@/desktop/host", () => ({ getDesktopHost: vi.fn() }));
-vi.mock("expo-file-system", () => ({ File: class {}, Paths: {} }));
-vi.mock("expo-file-system/legacy", () => ({}));
-vi.mock("expo-sharing", () => ({}));
+vi.mock("expo-file-system", () => ({
+  File: class {
+    uri = "file:///report.txt";
+    exists = false;
+  },
+  Paths: { cache: "file:///cache" },
+}));
+vi.mock("expo-file-system/legacy", () => ({
+  createDownloadResumable: () => ({ downloadAsync: async () => ({ uri: "file:///report.txt" }) }),
+}));
+vi.mock("expo-sharing", () => ({ isAvailableAsync: async () => false }));
 vi.mock("@/utils/daemon-endpoints", () => ({ buildDaemonWebSocketUrl: vi.fn() }));
 vi.mock("@/utils/open-external-url", () => ({ openExternalUrl: vi.fn() }));
 vi.mock("@/constants/platform", () => ({ isWeb: false }));
@@ -18,7 +27,7 @@ beforeEach(() => {
 });
 afterEach(() => vi.useRealTimers());
 
-function fixture() {
+function fixture(activeConnectionId?: string) {
   const invoke = vi.fn(
     async (command: string, _args?: Record<string, unknown>): Promise<unknown> =>
       command === "account_download_prepare" ? "prepared-download" : undefined,
@@ -37,8 +46,12 @@ function fixture() {
     fileName: "report.txt",
     path: "report.txt",
     daemonProfile: {
-      connections: [{ id: "relay", type: "accountRelay", hostId: "host" }],
+      connections: [
+        { id: "direct", type: "directTcp", endpoint: "remote.test:6767" },
+        { id: "relay", type: "accountRelay", hostId: "host", center: "https://center.test/api" },
+      ],
     } as HostProfile,
+    activeConnectionId,
     requestFileDownloadToken,
   };
   return {
@@ -51,6 +64,14 @@ function fixture() {
 }
 
 describe("relay download preparation", () => {
+  it("uses the active direct connection when the host also has a saved online-service connection", async () => {
+    const { invoke, start, result } = fixture("direct");
+    vi.mocked(buildDaemonWebSocketUrl).mockReturnValue("ws://remote.test:6767/v1/ws");
+    await start();
+    expect(invoke).not.toHaveBeenCalled();
+    expect(buildDaemonWebSocketUrl).toHaveBeenCalledWith("remote.test:6767", { useTls: false });
+    expect(result().status).toBe("complete");
+  });
   it("requests a fresh token only after a save dialog lasting longer than the token lifetime", async () => {
     vi.useFakeTimers();
     const { invoke, requestFileDownloadToken, start, result, remove } = fixture();
@@ -66,6 +87,7 @@ describe("relay download preparation", () => {
     expect(requestFileDownloadToken).not.toHaveBeenCalled();
     expect(invoke).toHaveBeenCalledExactlyOnceWith("account_download_prepare", {
       hostId: "host",
+      center: "https://center.test/api",
       fileName: "report.txt",
       downloadId: expect.any(String),
     });

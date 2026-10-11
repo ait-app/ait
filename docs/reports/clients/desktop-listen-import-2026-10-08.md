@@ -47,12 +47,12 @@ the ordinary test run additionally includes one doctest. Ignored native-provider
 require installed CLIs, existing sessions or credentials. Linux/Windows and TypeScript
 coverage were not measured. No comparable pre-change measurement exists for this revision.
 
-| Scope | Covered / total lines | Line coverage |
-| --- | ---: | ---: |
-| Workspace | 55838 / 59314 | 94.14% |
-| provider | 26811 / 28784 | 93.15% |
-| model | 1679 / 1735 | 96.77% |
-| daemon | 881 / 919 | 95.87% |
+| Scope     | Covered / total lines | Line coverage |
+| --------- | --------------------: | ------------: |
+| Workspace |         55838 / 59314 |        94.14% |
+| provider  |         26811 / 28784 |        93.15% |
+| model     |           1679 / 1735 |        96.77% |
+| daemon    |             881 / 919 |        95.87% |
 
 HTML was generated at `target/llvm-cov/html/index.html`; runtime profiles and HTML are
 not committed. The JSON is the shared review artifact. Remaining gaps include native

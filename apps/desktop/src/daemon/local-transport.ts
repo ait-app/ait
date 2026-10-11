@@ -273,6 +273,9 @@ function createSshProxy(target: SshTransportTarget): Promise<TransportEndpoint> 
           child.kill();
         }
       });
+      // An ssh exit mid-write raises EPIPE on its pipes; close the tunnel instead of crashing.
+      child.stdin.on("error", () => acceptedSocket.destroy());
+      child.stdout.on("error", () => acceptedSocket.destroy());
       acceptedSocket.pipe(child.stdin);
       child.stdout.pipe(acceptedSocket);
     });

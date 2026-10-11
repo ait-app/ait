@@ -42,6 +42,7 @@ import {
 } from "@/timeline/viewed-timeline-sync";
 import {
   connectionFromListen,
+  createAccountRelayHostConnection,
   createRemoteSshHostConnection,
   normalizeStoredHostProfile,
   registryHasConnection,
@@ -224,7 +225,7 @@ function toActiveConnection(connection: HostConnection): ActiveConnection {
     };
   }
   if (connection.type === "accountRelay") {
-    return { type: "accountRelay", endpoint: connection.hostId, display: "Account relay" };
+    return { type: "accountRelay", endpoint: connection.hostId, display: "Online relay" };
   }
   if (connection.type === "directTcp") {
     return {
@@ -657,6 +658,15 @@ export class HostRuntimeController {
       clearInterval(this.probeIntervalHandle);
       this.probeIntervalHandle = null;
     }
+    await this.closeActiveClient();
+    this.applyConnectionEvent({ type: "stopped" });
+    this.updateSnapshot({
+      ...toSnapshotConnectionPatch(this.connectionMachineState, this.connectionEpoch),
+      client: null,
+    });
+  }
+
+  private async closeActiveClient(): Promise<void> {
     if (this.unsubscribeClientStatus) {
       this.unsubscribeClientStatus();
       this.unsubscribeClientStatus = null;
@@ -670,11 +680,6 @@ export class HostRuntimeController {
       this.activeClient = null;
       await prev.close().catch(() => undefined);
     }
-    this.applyConnectionEvent({ type: "stopped" });
-    this.updateSnapshot({
-      ...toSnapshotConnectionPatch(this.connectionMachineState, this.connectionEpoch),
-      client: null,
-    });
   }
 
   async updateHost(host: HostProfile): Promise<void> {
@@ -697,6 +702,16 @@ export class HostRuntimeController {
     this.host = host;
     this.trackConnectionFirstSeen();
     const nextActiveConnection = findConnectionById(this.host, activeConnectionId);
+    if (activeConnectionId && !nextActiveConnection) {
+      const requestVersion = ++this.switchRequestVersion;
+      await this.closeActiveClient();
+      if (requestVersion !== this.switchRequestVersion || this.host !== host) return;
+      this.applyConnectionEvent({ type: "stopped" });
+      this.updateSnapshot({
+        ...toSnapshotConnectionPatch(this.connectionMachineState, this.connectionEpoch),
+        client: null,
+      });
+    }
     if (
       activeConnectionId &&
       previousActiveConnection &&
@@ -1374,8 +1389,10 @@ export class HostRuntimeStore {
   private hostRegistryLoaded = false;
   private hosts: HostProfile[] = [];
   private pendingDesktopConnections = new Set<string>();
-  private accountHostBackup: HostProfile | null = null;
-  private accountHostKey: string | null = null;
+  private accountRelayCenter: string | null = null;
+  private removedAccountRelayConnections = new Set<string>();
+  private accountDiscoveryTail: Promise<void> = Promise.resolve();
+  private hostPersistenceTail: Promise<void> = Promise.resolve();
   private hostAppearanceMutationTail: Promise<void> = Promise.resolve();
   private hostRegistryStatus: HostRegistryStatus = "loading";
   private deps: HostRuntimeControllerDeps;
@@ -1485,9 +1502,8 @@ export class HostRuntimeStore {
         for (const entry of stored) {
           const profile = normalizeStoredHostProfile(entry);
           if (!profile) {
-            await this.storage.removeItem(REGISTRY_STORAGE_KEY);
-            normalizedProfiles.length = 0;
-            break;
+            shouldPersistHosts = true;
+            continue;
           }
           normalizedProfiles.push(profile);
         }
@@ -1875,19 +1891,14 @@ export class HostRuntimeStore {
   }
 
   async removeHost(serverId: string): Promise<void> {
-    if (
-      this.hosts
-        .find((host) => host.serverId === serverId)
-        ?.connections.some((connection) => connection.type === "accountRelay")
-    ) {
-      await getDesktopHost()?.invoke?.("account_select", { hostId: null });
-      this.setAccountRelayHost(null);
-      return;
-    }
     await this.revokePushNotifications({ client: this.getClient(serverId), serverId });
     const remaining = this.hosts.filter((daemon) => daemon.serverId !== serverId);
+    await this.persistHosts(remaining);
+    for (const connection of this.hosts.find((host) => host.serverId === serverId)?.connections ??
+      [])
+      if (connection.type === "accountRelay")
+        this.removedAccountRelayConnections.add(connection.id);
     this.setHostsAndSync(remaining);
-    await this.persistHosts();
   }
 
   async removeConnection(serverId: string, connectionId: string): Promise<void> {
@@ -1916,8 +1927,10 @@ export class HostRuntimeStore {
         } satisfies HostProfile;
       })
       .filter((entry): entry is HostProfile => entry !== null);
+    await this.persistHosts(next);
+    const removed = host?.connections.find((connection) => connection.id === connectionId);
+    if (removed?.type === "accountRelay") this.removedAccountRelayConnections.add(removed.id);
     this.setHostsAndSync(next);
-    await this.persistHosts();
   }
 
   private async upsertHostConnection(input: {
@@ -1972,51 +1985,69 @@ export class HostRuntimeStore {
   }
 
   private async persistHosts(hosts = this.hosts): Promise<void> {
-    const saved = hosts.filter(
-      (host) => !host.connections.some((connection) => connection.type === "accountRelay"),
+    const document = JSON.stringify(hosts);
+    const write = this.hostPersistenceTail.then(() =>
+      this.storage.setItem(REGISTRY_STORAGE_KEY, document),
     );
-    if (
-      this.accountHostBackup &&
-      !saved.some((host) => host.serverId === this.accountHostBackup!.serverId)
-    )
-      saved.push(this.accountHostBackup);
-    await this.storage.setItem(REGISTRY_STORAGE_KEY, JSON.stringify(saved));
+    this.hostPersistenceTail = write.catch(() => undefined);
+    await write;
   }
 
-  /** Only an explicit account selection joins HostRuntime; discovery never probes hosts. */
-  setAccountRelayHost(selected: { host_id: string; server_id: string; name: string } | null): void {
-    const key = selected ? `${selected.host_id}:${selected.server_id}` : null;
-    if (key === this.accountHostKey) return;
-    const retained = this.hosts.filter(
-      (host) => !host.connections.some((connection) => connection.type === "accountRelay"),
-    );
-    if (
-      this.accountHostBackup &&
-      !retained.some((host) => host.serverId === this.accountHostBackup!.serverId)
-    )
-      retained.push(this.accountHostBackup);
-    this.accountHostBackup = selected
-      ? (retained.find((host) => host.serverId === selected.server_id) ?? null)
-      : null;
-    this.accountHostKey = key;
-    if (selected) {
-      const now = new Date().toISOString();
-      const id = `account-relay:${selected.host_id}`;
-      const profile: HostProfile = {
-        serverId: selected.server_id,
-        label: selected.name,
-        appearance: defaultHostAppearance(),
-        lifecycle: {},
-        connections: [{ id, type: "accountRelay", hostId: selected.host_id }],
-        preferredConnectionId: id,
-        createdAt: now,
-        updatedAt: now,
-      };
-      this.setHostsAndSync([
-        ...retained.filter((host) => host.serverId !== selected.server_id),
-        profile,
-      ]);
-    } else this.setHostsAndSync(retained);
+  /** Persist an account host while retaining its existing connections and appearance. */
+  async addAccountRelayHost(
+    selected: { host_id: string; server_id: string; name: string },
+    center: string,
+  ): Promise<void> {
+    const next = upsertHostConnectionInProfiles({
+      profiles: this.hosts,
+      serverId: selected.server_id,
+      label: selected.name,
+      connection: createAccountRelayHostConnection({ hostId: selected.host_id, center }),
+    });
+    if (next === this.hosts) return;
+    await this.persistHosts(next);
+    this.setHostsAndSync(next);
+  }
+
+  /** Import all discovered hosts, preserving connections deleted during this login. */
+  addDiscoveredAccountRelayHosts(
+    discovered: readonly { host_id: string; server_id: string; name: string }[],
+    center: string,
+    isCurrent: () => boolean = () => true,
+  ): Promise<void> {
+    const update = this.accountDiscoveryTail.then(async () => {
+      while (isCurrent()) {
+        const previous = this.hosts;
+        let next = previous;
+        for (const host of discovered) {
+          const connection = createAccountRelayHostConnection({ hostId: host.host_id, center });
+          if (this.removedAccountRelayConnections.has(connection.id)) continue;
+          next = upsertHostConnectionInProfiles({
+            profiles: next,
+            serverId: host.server_id,
+            label: host.name,
+            connection,
+          });
+        }
+        if (next === previous) return;
+        await this.persistHosts(next);
+        if (!isCurrent()) return;
+        // A rename or removal may have completed while storage was pending.
+        if (this.hosts !== previous) continue;
+        this.setHostsAndSync(next);
+        return;
+      }
+    });
+    this.accountDiscoveryTail = update.catch(() => undefined);
+    return update;
+  }
+
+  /** Saved hosts remain visible while signed out or connected to another service. */
+  setAccountRelayCenter(center: string | null): void {
+    if (center === this.accountRelayCenter) return;
+    if (center === null) this.removedAccountRelayConnections.clear();
+    this.accountRelayCenter = center;
+    this.syncHosts(this.hosts);
   }
 
   private emitHostList(): void {
@@ -2057,7 +2088,9 @@ export class HostRuntimeStore {
       const host = {
         ...storedHost,
         connections: storedHost.connections.filter(
-          (connection) => !this.pendingDesktopConnections.has(connection.id),
+          (connection) =>
+            !this.pendingDesktopConnections.has(connection.id) &&
+            (connection.type !== "accountRelay" || connection.center === this.accountRelayCenter),
         ),
       };
       const initialConnection = options?.initialConnectionByServerId?.get(host.serverId);
@@ -2390,10 +2423,16 @@ export class HostRuntimeStore {
     await directory.prepareAgentRoute(agentId);
   }
 
-  async prepareWorkspaceRoute(serverId: string, workspaceId: string): Promise<void> {
+  async prepareWorkspaceRoute(serverId: string, workspaceId: string) {
     const directory = this.directorySyncByServer.get(serverId);
     if (!directory) throw new Error(`Unknown host runtime for serverId ${serverId}`);
-    await directory.prepareWorkspaceRoute(workspaceId);
+    return directory.prepareWorkspaceRoute(workspaceId);
+  }
+
+  async prepareWorkspaceAgents(serverId: string, workspaceId: string): Promise<boolean> {
+    const directory = this.directorySyncByServer.get(serverId);
+    if (!directory) throw new Error(`Unknown host runtime for serverId ${serverId}`);
+    return directory.prepareWorkspaceAgents(workspaceId);
   }
 
   async prepareAgentTimeline(serverId: string, agentId: string): Promise<void> {

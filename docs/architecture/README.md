@@ -106,6 +106,12 @@ workspace 包与普通、开发、构建、optional 和平台条件依赖，拒�
 
 ## 数据与进程所有权
 
+metadata 的 `workspace.get.request` 按身份读取一个 Workspace 与所属 Project；客户端目标缓存和
+定向读取独立于完整侧栏快照，不标记全局 hydrated 或完整 checkpoint，见
+[ADR-126](../decisions/workspace/adr-126-workspace-target-read.md)。provider 在 Timeline SQLite 内维护
+可重建的展示组与源覆盖索引，写入和原始事件共享事务；分页读取所需窗口，见
+[ADR-125](../decisions/providers/adr-125-durable-timeline-projection-pages.md)。
+
 daemon 持有数据目录的 OS 文件锁及稳定 `server-id`，同一目录只能有一个活动实例。
 Project/Workspace 和 Agent runtime 目录、配置、时间线由当前文件存储与 Provider adapter
 管理；Agent preset catalog 的 SQLite 存储位于 `provider`。这些职责不能合并成一个通用数据库入口。
@@ -142,11 +148,13 @@ relay 拥有控制方法声明和处理，API 的 HTTP 路由与 WebSocket RPC �
 本机、TCP 和 SSH 主机使用相同同步流程，详见 [ADR-083](../decisions/clients/adr-083-online-service-host-sync.md)。Desktop 登录后默认同步内置 daemon，手动停止的选择由桌面账户存储持久保存；其他主机仍需手动启用，详见 [ADR-096](../decisions/clients/adr-096-desktop-default-host-sync.md)。
 
 账户会话状态机位于 `packages/client`，通过依赖注入获取平台身份、存储、HTTP 和运行时操作。
-Electron 主进程提供桌面适配；Android 的原生适配使用 SecureStore 保存账户令牌，注册无本地
-运行时的客户端节点。Android 通过带认证头的原生 WebSocket 建立中继连接与下载，只有选中的
-远程主机进入 HostRuntime。浏览器和 iOS 未启用账户入口。
+Electron 主进程提供桌面适配；Android 和 iOS 的原生适配使用 SecureStore 保存账户令牌，注册无本地
+运行时的客户端节点。移动端通过带认证头的原生 WebSocket 建立中继连接与下载。明确添加的
+在线服务主机进入客户端持久注册表，账户恢复后按服务地址独立连接；发现列表不自动导入。
+登出保留主机配置，显式删除移除记录，见 [ADR-122](../decisions/clients/adr-122-persistent-online-service-hosts.md)。浏览器未启用账户入口。
 前后台生命周期、配对校验与凭据边界见
-[ADR-076](../decisions/clients/adr-076-android-account-relay.md)。
+[ADR-076](../decisions/clients/adr-076-android-account-relay.md) 与
+[ADR-084](../decisions/clients/adr-084-ios-account-relay.md)。
 
 Relay 的类型化消息集中在 `crates/relay/src/protocol.rs`，WebSocket 收发集中在
 `transport.rs`；单连接协商标识由 `crates/model/src/server/single.rs` 定义。

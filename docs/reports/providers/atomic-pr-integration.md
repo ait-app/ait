@@ -13,12 +13,12 @@ LLVM_COV=/usr/bin/llvm-cov LLVM_PROFDATA=/usr/bin/llvm-profdata \
 cargo llvm-cov --workspace --html
 ```
 
-| Scope | Covered / total lines | Line coverage |
-|---|---:|---:|
-| Workspace | 55314 / 58815 | 94.05% |
-| Provider | 26696 / 28682 | 93.08% |
-| API | 2093 / 2251 | 92.98% |
-| Filesystem | 11562 / 12187 | 94.87% |
+| Scope      | Covered / total lines | Line coverage |
+| ---------- | --------------------: | ------------: |
+| Workspace  |         55314 / 58815 |        94.05% |
+| Provider   |         26696 / 28682 |        93.08% |
+| API        |           2093 / 2251 |        92.98% |
+| Filesystem |         11562 / 12187 |        94.87% |
 
 This checked-in HTML-index summary is the shared reviewable artifact. Full HTML remains local and is not uploaded. Native installed-process paths are not covered by the default suite; the separate installed checks below do not contribute to these percentages. A later lint-only change replaced intermediate strings in the ignored Messages API fixture with direct writes; both installed-version checks and clippy were rerun, while the table remains the measurement of the tree named above. Production sources are unchanged by that fixture edit.
 

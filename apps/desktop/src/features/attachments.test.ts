@@ -62,4 +62,19 @@ describe("desktop attachment files", () => {
     });
     await expect(readFile(result.path, "utf8")).resolves.toBe("# Report\n");
   });
+
+  it("labels copies with unusual extensions as binary instead of failing", async () => {
+    const paseoHome = await useTempPaseoHome();
+    const sourcePath = path.join(paseoHome, "notes.backup_old");
+    await writeFile(sourcePath, "kept");
+
+    const result = await copyAttachmentFileToManagedStorage({
+      attachmentId: "att_unusual",
+      sourcePath,
+      extension: ".backup_old",
+    });
+
+    expect(result.path).toBe(path.join(paseoHome, "desktop-attachments", "att_unusual.bin"));
+    await expect(readFile(result.path, "utf8")).resolves.toBe("kept");
+  });
 });

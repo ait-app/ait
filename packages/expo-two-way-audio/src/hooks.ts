@@ -12,15 +12,15 @@ export const useMicrophonePermissions = createPermissionHook({
   requestMethod: requestMicrophonePermissionsAsync,
 });
 
-export function useIsRecording() {
-  const subscribe = (cb: () => void) => {
-    const sub = addExpoTwoWayAudioEventListener("onRecordingChange", cb);
-    return () => sub.remove();
-  };
-  const getSnapshot = () => isRecording();
-  const getServerSnapshot = () => false;
+function subscribeToRecordingChange(onChange: () => void) {
+  const subscription = addExpoTwoWayAudioEventListener("onRecordingChange", onChange);
+  return () => subscription.remove();
+}
 
-  return useSyncExternalStore(subscribe, getSnapshot, getServerSnapshot);
+const getServerRecordingSnapshot = () => false;
+
+export function useIsRecording() {
+  return useSyncExternalStore(subscribeToRecordingChange, isRecording, getServerRecordingSnapshot);
 }
 
 export function useExpoTwoWayAudioEventListener<K extends keyof ExpoTwoWayAudioEventMap>(

@@ -17,7 +17,7 @@ import {
   useHosts,
 } from "@/runtime/host-runtime";
 import { useSessionStore, type SessionState } from "@/stores/session-store";
-import { usageCopy } from "./copy";
+import { useUsageCopy, usageCopy } from "./copy";
 import {
   replaceReport,
   resolveAgentUsageView,
@@ -153,6 +153,7 @@ function toQueryState(query: {
 
 /** Usage reports for one host, as shown on its settings page. */
 export function useHostUsage(serverId: string): { view: UsageView; refresh: () => void } {
+  const usageCopy = useUsageCopy();
   const queryClient = useQueryClient();
   const isConnected = useHostRuntimeIsConnected(serverId);
   const isSupported = useSessionStore((state) => supportsUsage(state.sessions[serverId]));
@@ -167,12 +168,15 @@ export function useHostUsage(serverId: string): { view: UsageView; refresh: () =
     void refreshReports(queryClient, serverId).catch(() => undefined);
   }, [queryClient, serverId]);
   const hostLabel = useHosts().find((host) => host.serverId === serverId)?.label ?? serverId;
-  const view = resolveUsageView({
-    hostLabel,
-    isConnected,
-    supportsUsage: isSupported,
-    query: toQueryState(query),
-  });
+  const view = resolveUsageView(
+    {
+      hostLabel,
+      isConnected,
+      supportsUsage: isSupported,
+      query: toQueryState(query),
+    },
+    usageCopy,
+  );
   return { view, refresh };
 }
 
@@ -198,6 +202,7 @@ export function useUsageHostReports(serverId: string | null): UsageReportEntry[]
  * Fetched while either is mounted, so only while it is open.
  */
 export function useAgentUsage(serverId: string, agentId: string): AgentUsageView {
+  const usageCopy = useUsageCopy();
   const queryClient = useQueryClient();
   const canReport = useHostReportsUsage(serverId);
   const queryKey = agentUsageQueryKey(serverId, agentId);
@@ -217,7 +222,7 @@ export function useAgentUsage(serverId: string, agentId: string): AgentUsageView
     retry: false,
     staleTimeMs: REPORTS_STALE_TIME_MS,
   });
-  return resolveAgentUsageView({ canReport, query: toQueryState(query) });
+  return resolveAgentUsageView({ canReport, query: toQueryState(query) }, usageCopy);
 }
 
 /** Whether a host is connected and reports usage, read without fetching anything. */

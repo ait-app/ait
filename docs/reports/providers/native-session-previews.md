@@ -13,12 +13,12 @@ LLVM_COV=/usr/bin/llvm-cov LLVM_PROFDATA=/usr/bin/llvm-profdata \
 cargo llvm-cov --workspace --html
 ```
 
-| Scope | Covered / total lines | Line coverage |
-|---|---:|---:|
-| Workspace | 54942 / 58177 | 94.44% |
-| Provider | 26454 / 28170 | 93.91% |
-| DSH history preview fallback | 110 / 119 | 92.44% |
-| Shared preview formatting | 18 / 20 | 90.00% |
+| Scope                        | Covered / total lines | Line coverage |
+| ---------------------------- | --------------------: | ------------: |
+| Workspace                    |         54942 / 58177 |        94.44% |
+| Provider                     |         26454 / 28170 |        93.91% |
+| DSH history preview fallback |             110 / 119 |        92.44% |
+| Shared preview formatting    |               18 / 20 |        90.00% |
 
 This checked-in summary is the reviewable coverage artifact. Full HTML remains local under the specified target directory and is not uploaded. Remaining uncovered paths include timeout/transport failures; real provider versions and macOS need follow-up validation.
 

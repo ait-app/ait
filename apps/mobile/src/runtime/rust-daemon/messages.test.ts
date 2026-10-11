@@ -154,6 +154,19 @@ describe("Ait host capabilities", () => {
     });
   });
 
+  it("enables Workspace target reads only when the host implements the method", () => {
+    for (const supported of [false, true]) {
+      const info = serverInfo(
+        { server_id: "ait" },
+        new Set(supported ? ["workspace.get.request"] : []),
+      );
+      expect(
+        parseServerInfoStatusPayload(object(object(info.message).payload))?.features
+          ?.workspaceTargetRead,
+      ).toBe(supported);
+    }
+  });
+
   it("enables GitLab panels only when the server advertises its installed adapter", () => {
     const methods = new Set([
       "checkout.pr.status.request",

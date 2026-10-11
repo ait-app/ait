@@ -26,6 +26,7 @@ mod paseo_api;
 mod rpc_failures;
 mod runtime;
 mod synchronization;
+mod target;
 
 #[test]
 fn committed_registry_mutations_wake_directory_and_publish_project_updates() {

@@ -28,6 +28,48 @@ expectTypeOf<
   "exploreFileSystem" extends keyof DaemonClient ? true : false
 >().toEqualTypeOf<false>();
 
+test("reads Workspace targets with independent correlated responses", async () => {
+  const mock = createMockTransport();
+  const client = new DaemonClient({
+    url: "ws://test",
+    clientId: "workspace-target",
+    transportFactory: () => mock.transport,
+    reconnect: { enabled: false },
+    logger: createMockLogger(),
+  });
+  clients.push(client);
+  const connected = client.connect();
+  mock.triggerOpen({ features: { workspaceTargetRead: true } });
+  await connected;
+  const first = client.getWorkspace("first");
+  const second = client.getWorkspace("second");
+  const requests = mock.sent.map(parseSentFrame);
+  expect(requests.map((request) => [request.type, request.workspaceId])).toEqual([
+    ["workspace.get.request", "first"],
+    ["workspace.get.request", "second"],
+  ]);
+  for (const [index, state] of [
+    [1, "archived"],
+    [0, "missing"],
+  ] as const) {
+    const request = requests[index];
+    mock.triggerMessage(
+      wrapSessionMessage({
+        type: "workspace.get.response",
+        payload: {
+          requestId: request.requestId,
+          workspaceId: request.workspaceId,
+          state,
+          workspace: null,
+          project: null,
+        },
+      }),
+    );
+  }
+  expect(await first).toMatchObject({ workspaceId: "first", state: "missing" });
+  expect(await second).toMatchObject({ workspaceId: "second", state: "archived" });
+});
+
 function createMockLogger() {
   return {
     debug: vi.fn(),
@@ -1723,52 +1765,6 @@ test("honors explicit getDaemonStatus timeout below the session RPC default", as
   expect(parseSentFrame(mock.sent[0])).toEqual({
     type: "daemon.get_status.request",
     requestId: "req-daemon-status-1",
-  });
-
-  await vi.advanceTimersByTimeAsync(1_499);
-  expect(settled).toBe(false);
-
-  await vi.advanceTimersByTimeAsync(1);
-  await expect(responsePromise).rejects.toThrow("Timeout waiting for message (1500ms)");
-});
-
-test("honors explicit getDaemonPairingOffer timeout below the session RPC default", async () => {
-  useHeartbeatClock();
-  const logger = createMockLogger();
-  const mock = createMockTransport();
-
-  const client = new DaemonClient({
-    url: "ws://test",
-    clientId: "clsk_unit_test",
-    logger,
-    reconnect: { enabled: false },
-    transportFactory: () => mock.transport,
-  });
-  clients.push(client);
-
-  const connectPromise = client.connect();
-  mock.triggerOpen();
-  await connectPromise;
-
-  const responsePromise = client.getDaemonPairingOffer({
-    requestId: "req-pairing-offer-1",
-    timeout: 1_500,
-  });
-  let settled = false;
-  void responsePromise.then(
-    () => {
-      settled = true;
-      return undefined;
-    },
-    () => {
-      settled = true;
-      return undefined;
-    },
-  );
-
-  expect(parseSentFrame(mock.sent[0])).toEqual({
-    type: "daemon.get_pairing_offer.request",
-    requestId: "req-pairing-offer-1",
   });
 
   await vi.advanceTimersByTimeAsync(1_499);
@@ -4806,7 +4802,7 @@ test("fetches agents via RPC with filters, sort, and pagination", async () => {
   await connectPromise;
 
   const promise = client.fetchAgents({
-    filter: { labels: { surface: "workspace" } },
+    filter: { labels: { surface: "workspace" }, workspaceIds: ["workspace-1"] },
     sort: [
       { key: "status_priority", direction: "asc" },
       { key: "created_at", direction: "desc" },
@@ -4818,6 +4814,10 @@ test("fetches agents via RPC with filters, sort, and pagination", async () => {
   await vi.waitFor(() => expect(mock.sent).toHaveLength(1));
   const request = parseSentFrame(mock.sent[0]);
   expect(request.type).toBe("agent.list.request");
+  expect(request.filter).toEqual({
+    labels: { surface: "workspace" },
+    workspaceIds: ["workspace-1"],
+  });
   expect(request.sort).toEqual([
     { key: "status_priority", direction: "asc" },
     { key: "created_at", direction: "desc" },

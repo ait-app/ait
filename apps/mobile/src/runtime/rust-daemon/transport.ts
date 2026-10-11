@@ -60,7 +60,7 @@ export function createRustDaemonTransportFactory(baseFactory: TransportFactory):
       (!ssh && !single && parsed.pathname !== "/v1/ws") ||
       parsed.username ||
       parsed.password ||
-      (!ssh && parsed.search) ||
+      (!ssh && !single && parsed.search) ||
       parsed.hash
     ) {
       throw new Error("Invalid Rust daemon WebSocket endpoint");

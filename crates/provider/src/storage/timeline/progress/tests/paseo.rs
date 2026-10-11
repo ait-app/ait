@@ -208,6 +208,63 @@ fn recovery_of_matching_native_history_keeps_the_epoch_and_committed_prefix() {
 }
 
 #[test]
+fn replay_repairs_a_user_message_observed_after_its_streamed_reply_once() {
+    let root = tempfile::tempdir().unwrap();
+    let path = root.path().join("timeline.sqlite");
+    let timeline = Timeline::open(&path).unwrap();
+    let user = text_item("user", "user_message", "Try it");
+    let answer = assistant("answer", "Hello world");
+    timeline
+        .progress("a", "opencode", "first", &assistant("answer", "Hello "))
+        .unwrap();
+    timeline
+        .progress("a", "opencode", "second", &assistant("answer", "world"))
+        .unwrap();
+    let history = [user, answer];
+    let (before, _) = timeline.append("a", "opencode", &history).unwrap();
+    drop(timeline);
+
+    let reopened = Timeline::open(&path).unwrap();
+    let mut replayed = history.clone();
+    for item in &mut replayed {
+        item.timestamp = "2026-10-10T00:00:00Z".to_owned();
+    }
+    let after = reopened.reconcile("a", "opencode", &replayed).unwrap();
+    assert_ne!(before, after);
+    let rows = reopened.read("a").unwrap().1;
+    assert_eq!(rows.len(), 2);
+    assert_eq!(rows[0].entry.item["type"], "user_message");
+    assert_eq!(rows[1].entry.item["text"], "Hello world");
+    assert_eq!(rows[0].entry.timestamp, history[0].timestamp);
+    assert_eq!(rows[1].entry.timestamp, history[1].timestamp);
+    assert_eq!(
+        reopened.reconcile("a", "opencode", &replayed).unwrap(),
+        after
+    );
+}
+
+#[test]
+fn replay_keeps_a_correct_user_and_streamed_reply_prefix_in_the_same_generation() {
+    let timeline = Timeline::memory().unwrap();
+    let user = text_item("user", "user_message", "Try it");
+    let (before, _) = timeline
+        .append("a", "opencode", std::slice::from_ref(&user))
+        .unwrap();
+    timeline
+        .progress("a", "opencode", "first", &assistant("answer", "Hello"))
+        .unwrap();
+    let after = timeline
+        .reconcile("a", "opencode", &[user, assistant("answer", "Hello world")])
+        .unwrap();
+    assert_eq!(before, after);
+    let rows = timeline.read("a").unwrap().1;
+    assert_eq!(rows.len(), 3);
+    assert_eq!(rows[0].entry.item["type"], "user_message");
+    assert_eq!(rows[1].entry.item["text"], "Hello");
+    assert_eq!(rows[2].entry.item["text"], " world");
+}
+
+#[test]
 fn changed_native_history_retires_progress_and_preserves_plugin_rows() {
     let timeline = Timeline::memory().unwrap();
     timeline

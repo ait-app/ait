@@ -32,20 +32,22 @@ jobs:
       CI: "1"
     steps:
       - name: Check out release source
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
         with:
           ref: refs/tags/${{ inputs.tag }}
+          persist-credentials: false
 
       - name: Check out release tooling
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
         with:
           ref: ${{ github.workflow_sha }}
           path: .tmp/release-tools
+          persist-credentials: false
 
       - name: Verify checked out tag
         run: test "$(git rev-parse HEAD)" = "$(git rev-list -n1 "refs/tags/$TAG")"
 
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@v5
         with:
           node-version: 24
           cache: npm

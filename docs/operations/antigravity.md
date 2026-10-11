@@ -39,12 +39,12 @@ export AIT_SERVER_ANTIGRAVITY_BIN="/custom/path/agy"
 
 ## 执行模式与会话
 
-| 模式 | 原生行为 |
-| --- | --- |
-| Local Permissions（默认） | 保留本机 AGY 权限规则；headless 中无法询问的工具会被原生拒绝 |
-| Accept Edits | `--mode accept-edits`，允许编辑；需要审批的命令仍会在 headless 中被拒绝 |
-| Plan | `--mode plan` |
-| Full Access | `--dangerously-skip-permissions`，全部工具调用自动批准 |
+| 模式                      | 原生行为                                                                |
+| ------------------------- | ----------------------------------------------------------------------- |
+| Local Permissions（默认） | 保留本机 AGY 权限规则；headless 中无法询问的工具会被原生拒绝            |
+| Accept Edits              | `--mode accept-edits`，允许编辑；需要审批的命令仍会在 headless 中被拒绝 |
+| Plan                      | `--mode plan`                                                           |
+| Full Access               | `--dangerously-skip-permissions`，全部工具调用自动批准                  |
 
 Google 的 headless 接口没有交互审批回传。需要运行特定命令时，可按
 [官方 Headless 文档](https://antigravity.google/docs/cli/headless)配置 AGY 自己的权限规则，

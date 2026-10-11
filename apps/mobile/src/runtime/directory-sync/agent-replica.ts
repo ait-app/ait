@@ -97,6 +97,12 @@ export class AgentDirectoryReplica {
     return true;
   }
 
+  submitDirectoryAgent(token: AgentLifecycleToken, entry: FetchAgentsEntry): boolean {
+    if (token.version !== (this.lifecycleVersions.get(token.agentId) ?? 0)) return false;
+    this.applyDelta({ kind: "upsert", ...entry });
+    return true;
+  }
+
   applyDelta(delta: AgentDirectoryDelta): void {
     const before = this.members.has(delta.kind === "remove" ? delta.agentId : delta.agent.id);
     const result = this.storeProjection.applyDelta(delta);

@@ -17,6 +17,15 @@ const prCleanup = yaml.parse(
   await readFile(new URL("../.github/workflows/cancel-merged-pr-ci.yml", import.meta.url), "utf8"),
 );
 const AsyncFunction = Object.getPrototypeOf(async function () {}).constructor;
+
+test("UI CI checks changed formatting and lint and runs the shared client suite", () => {
+  const steps = workflow.jobs.ui.steps;
+  assert.equal(steps.find((step) => step.uses === "actions/checkout@v5").with["fetch-depth"], 0);
+  const check = steps.find((step) => step.name === "Check changed UI formatting and lint");
+  assert.equal(check.run, 'npm run check:ui -- "$UI_DIFF_BASE"');
+  assert.match(check.env.UI_DIFF_BASE, /pull_request.base.sha.*github.event.before/);
+  assert.ok(steps.some((step) => step.run === "npm run test --workspace=@ait/client"));
+});
 const context = { repo: { owner: "ait-app", repo: "ait" }, sha: "current", runId: 42 };
 
 async function runScript(step, github, outputs = {}, controller = control) {
@@ -53,7 +62,11 @@ test("main builds run independently while admission and publication share a queu
     workflow.jobs.desktop.if,
     "${{ !cancelled() && (github.event_name == 'pull_request' || needs.nightly-prepare.outputs.admitted == 'true') }}",
   );
-  assert.equal(workflow.jobs.desktop.concurrency, undefined);
+  assert.deepEqual(workflow.jobs.desktop.concurrency, {
+    group:
+      "${{ github.event_name == 'pull_request' && format('desktop-pr-{0}-{1}', github.event.pull_request.number, matrix.platform) || format('desktop-run-{0}-{1}', github.run_id, matrix.platform) }}",
+    "cancel-in-progress": "${{ github.event_name == 'pull_request' }}",
+  });
   assert.deepEqual(
     workflow.jobs["nightly-prepare"].concurrency,
     workflow.jobs["nightly-publish"].concurrency,
@@ -64,10 +77,12 @@ test("main builds run independently while admission and publication share a queu
   assert.equal(new Set(platforms).size, platforms.length);
   assert.deepEqual(workflow.jobs["nightly-publish"].needs, [
     "nightly-prepare",
+    "changes",
     "desktop",
     "rust",
     "ui",
     "docs",
+    "format",
   ]);
   assert.deepEqual(workflow.jobs["nightly-publish"].concurrency, {
     group: "nightly-main-control",
@@ -240,13 +255,15 @@ test("PR CI cleanup tolerates runs completing during cancellation and continues"
 test("main publishing requires desktop and applicable CI checks to pass", () => {
   const github = { event_name: "push", ref: "refs/heads/main" };
   const needs = {
+    changes: { result: "success" },
     desktop: { result: "success" },
     docs: { result: "success" },
+    format: { result: "success" },
     rust: { result: "skipped" },
     ui: { result: "success" },
   };
   assert.equal(condition(workflow.jobs["nightly-publish"].if, github, needs), true);
-  for (const job of ["desktop", "docs", "rust", "ui"]) {
+  for (const job of ["changes", "desktop", "docs", "format", "rust", "ui"]) {
     assert.equal(
       condition(workflow.jobs["nightly-publish"].if, github, {
         ...needs,
@@ -255,6 +272,16 @@ test("main publishing requires desktop and applicable CI checks to pass", () => 
       false,
     );
   }
+  // A failed change filter skips both checks; publication must not treat that as a pass.
+  assert.equal(
+    condition(workflow.jobs["nightly-publish"].if, github, {
+      ...needs,
+      changes: { result: "failure" },
+      rust: { result: "skipped" },
+      ui: { result: "skipped" },
+    }),
+    false,
+  );
   assert.equal(
     condition(workflow.jobs["nightly-publish"].if, { ...github, ref: "refs/heads/dev" }, needs),
     false,

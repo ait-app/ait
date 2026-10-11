@@ -17,6 +17,7 @@ export type WorkspaceRouteState =
       lastError: string | null;
     }
   | { kind: "loading"; hostName: string }
+  | { kind: "loadingFailed"; hostName: string; error: string }
   | { kind: "missing"; hostName: string }
   | { kind: "needsHostUpgrade"; hostName: string }
   | {
@@ -34,6 +35,7 @@ export function resolveWorkspaceRouteState(input: {
   workspace: WorkspaceDescriptor | null;
   hasHydratedWorkspaces: boolean;
   recovery: WorkspaceRecoveryModel;
+  loadingError?: string | null;
 }): WorkspaceRouteState {
   if (input.workspace) {
     if (input.connectionStatus === "online") {
@@ -60,6 +62,9 @@ export function resolveWorkspaceRouteState(input: {
     };
   }
 
+  if (input.loadingError && !input.hasHydratedWorkspaces) {
+    return { kind: "loadingFailed", hostName: input.hostName, error: input.loadingError };
+  }
   if (!input.hasHydratedWorkspaces) {
     return { kind: "loading", hostName: input.hostName };
   }

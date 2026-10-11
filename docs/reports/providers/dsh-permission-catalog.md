@@ -13,12 +13,12 @@ LLVM_COV=/usr/bin/llvm-cov LLVM_PROFDATA=/usr/bin/llvm-profdata \
 cargo llvm-cov --workspace --html
 ```
 
-| Scope | Covered / total lines | Line coverage |
-|---|---:|---:|
-| Workspace | 54748 / 57971 | 94.44% |
-| Provider | 26258 / 27964 | 93.90% |
-| Native selection configuration | 174 / 184 | 94.57% |
-| Native session | 353 / 401 | 88.03% |
+| Scope                          | Covered / total lines | Line coverage |
+| ------------------------------ | --------------------: | ------------: |
+| Workspace                      |         54748 / 57971 |        94.44% |
+| Provider                       |         26258 / 27964 |        93.90% |
+| Native selection configuration |             174 / 184 |        94.57% |
+| Native session                 |             353 / 401 |        88.03% |
 
 This checked-in HTML-index summary is the reviewable coverage artifact. Full HTML remains local under the target directory, not uploaded. Real installation tests are separate and do not contribute to the percentage. Remaining gaps include native process/platform failures and dynamic catalog changes after session attachment.
 

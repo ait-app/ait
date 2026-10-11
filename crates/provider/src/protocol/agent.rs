@@ -58,7 +58,7 @@ pub(crate) struct List {
     pub(crate) limit: usize,
 }
 
-fn default_limit() -> usize {
+const fn default_limit() -> usize {
     20
 }
 

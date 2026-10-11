@@ -1,5 +1,6 @@
-import { formatCompactTimeAgoAsProse } from "@/utils/time";
-import { usageCopy } from "./copy";
+import type { TFunction } from "i18next";
+import { i18n } from "@/i18n/i18next";
+import { formatUsageTimeAgo, usageCopy, type UsageCopy } from "./copy";
 import type { UsageDisplayAs } from "./preferences";
 import type { UsageReportEntry, UsageView, UsageWindow } from "./types";
 
@@ -32,8 +33,13 @@ export function usageWindowRowLabel(input: {
 }
 
 /** When a report was fetched, from its compact relative time: "Updated 3m ago". */
-export function formatUsageFreshness(compactTimeAgo: string): string {
-  return `${usageCopy.updated} ${formatCompactTimeAgoAsProse(compactTimeAgo)}`;
+export function formatUsageFreshness(
+  compactTimeAgo: string,
+  fetchedAt?: string,
+  t: TFunction = i18n.t.bind(i18n),
+): string {
+  const time = formatUsageTimeAgo(compactTimeAgo, fetchedAt ? new Date(fetchedAt) : undefined, t);
+  return t("providerUsage.updated", { time });
 }
 
 /** A user-requested refresh of one report. The previous report stays on screen throughout. */
@@ -101,16 +107,19 @@ export interface UsageQueryState {
   isFetching: boolean;
 }
 
-export function resolveUsageView(input: {
-  hostLabel: string;
-  isConnected: boolean;
-  supportsUsage: boolean;
-  query: UsageQueryState | undefined;
-}): UsageView {
+export function resolveUsageView(
+  input: {
+    hostLabel: string;
+    isConnected: boolean;
+    supportsUsage: boolean;
+    query: UsageQueryState | undefined;
+  },
+  copy: UsageCopy = usageCopy,
+): UsageView {
   const { hostLabel, isConnected, supportsUsage, query } = input;
-  if (!isConnected) return { kind: "unavailable", message: usageCopy.hostUnavailable(hostLabel) };
+  if (!isConnected) return { kind: "unavailable", message: copy.hostUnavailable(hostLabel) };
   if (!supportsUsage) {
-    return { kind: "unavailable", message: usageCopy.hostUpgradeRequired(hostLabel) };
+    return { kind: "unavailable", message: copy.hostUpgradeRequired(hostLabel) };
   }
   if (query?.data) {
     return { kind: "ready", reports: query.data, isRefreshing: query.isFetching };
@@ -131,17 +140,20 @@ export type AgentUsageView =
   | { kind: "error"; message: string }
   | { kind: "ready"; reports: UsageReportEntry[] };
 
-export function resolveAgentUsageView(input: {
-  canReport: boolean;
-  query: UsageQueryState;
-}): AgentUsageView {
+export function resolveAgentUsageView(
+  input: {
+    canReport: boolean;
+    query: UsageQueryState;
+  },
+  copy: UsageCopy = usageCopy,
+): AgentUsageView {
   const { canReport, query } = input;
   if (!canReport) return { kind: "none" };
   // A failed request keeps the reports from before it, or those that streamed in before it failed;
   // shown alone they would pass for the agent's complete, current usage.
   if (query.error) {
     const reason = query.error instanceof Error ? query.error.message : String(query.error);
-    return { kind: "error", message: usageCopy.agentError(reason) };
+    return { kind: "error", message: copy.agentError(reason) };
   }
   if (query.data) {
     return query.data.length === 0 ? { kind: "none" } : { kind: "ready", reports: query.data };

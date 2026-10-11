@@ -1,6 +1,7 @@
 //! Metadata protocol owned by the independent server.
 
 pub(crate) mod daemon;
+pub(crate) mod directory;
 pub(crate) mod project_config;
 pub(crate) mod project_icon;
 pub mod server;

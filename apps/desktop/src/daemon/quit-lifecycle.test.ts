@@ -54,58 +54,68 @@ describe("quit-lifecycle", () => {
     expect(shouldStopDesktopManagedDaemonOnQuit(SETTINGS_KEEP_RUNNING)).toBe(false);
   });
 
-  it("short-circuits without inspecting the daemon when keep-running is on", async () => {
-    const events: string[] = [];
-
-    const stopped = await stopDesktopManagedDaemonOnQuitIfNeeded({
-      settingsStore: { get: async () => SETTINGS_KEEP_RUNNING },
-      isDesktopManagedDaemonRunning: () => {
-        events.push("inspect");
-        return true;
-      },
+  function quitDeps(input: {
+    settings: typeof SETTINGS_STOP_ON_QUIT;
+    running: boolean;
+    retained?: boolean;
+    events: string[];
+  }) {
+    return {
+      settingsStore: { get: async () => input.settings },
+      isDesktopManagedDaemonRunning: () => input.running,
       stopDaemon: async () => {
-        events.push("stop");
+        input.events.push("stop");
+      },
+      retainDaemon: async () => {
+        input.events.push("retain");
+        return input.retained ?? true;
       },
       showShutdownFeedback: () => {
-        events.push("feedback");
+        input.events.push("feedback");
       },
-    });
+    };
+  }
+
+  it("hands the running daemon to the next session when keep-running is on", async () => {
+    const events: string[] = [];
+
+    const stopped = await stopDesktopManagedDaemonOnQuitIfNeeded(
+      quitDeps({ settings: SETTINGS_KEEP_RUNNING, running: true, events }),
+    );
 
     expect(stopped).toBe(false);
-    expect(events).toEqual([]);
+    expect(events).toEqual(["retain"]);
+  });
+
+  it("stops a daemon that cannot be handed over instead of leaving it unreachable", async () => {
+    const events: string[] = [];
+
+    const stopped = await stopDesktopManagedDaemonOnQuitIfNeeded(
+      quitDeps({ settings: SETTINGS_KEEP_RUNNING, running: true, retained: false, events }),
+    );
+
+    expect(stopped).toBe(true);
+    expect(events).toEqual(["retain", "feedback", "stop"]);
   });
 
   it("does not stop a manually started daemon on quit", async () => {
     const events: string[] = [];
 
-    const stopped = await stopDesktopManagedDaemonOnQuitIfNeeded({
-      settingsStore: { get: async () => SETTINGS_STOP_ON_QUIT },
-      isDesktopManagedDaemonRunning: () => false,
-      stopDaemon: async () => {
-        events.push("stop");
-      },
-      showShutdownFeedback: () => {
-        events.push("feedback");
-      },
-    });
-
-    expect(stopped).toBe(false);
+    for (const settings of [SETTINGS_STOP_ON_QUIT, SETTINGS_KEEP_RUNNING]) {
+      const stopped = await stopDesktopManagedDaemonOnQuitIfNeeded(
+        quitDeps({ settings, running: false, events }),
+      );
+      expect(stopped).toBe(false);
+    }
     expect(events).toEqual([]);
   });
 
   it("shows feedback then stops a desktop-managed daemon", async () => {
     const events: string[] = [];
 
-    const stopped = await stopDesktopManagedDaemonOnQuitIfNeeded({
-      settingsStore: { get: async () => SETTINGS_STOP_ON_QUIT },
-      isDesktopManagedDaemonRunning: () => true,
-      stopDaemon: async () => {
-        events.push("stop");
-      },
-      showShutdownFeedback: () => {
-        events.push("feedback");
-      },
-    });
+    const stopped = await stopDesktopManagedDaemonOnQuitIfNeeded(
+      quitDeps({ settings: SETTINGS_STOP_ON_QUIT, running: true, events }),
+    );
 
     expect(stopped).toBe(true);
     expect(events).toEqual(["feedback", "stop"]);

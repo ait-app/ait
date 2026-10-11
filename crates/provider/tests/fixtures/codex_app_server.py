@@ -287,11 +287,20 @@ for line in sys.stdin:
             continue
         if text == "approval":
             emit({"id": "approval-1", "method": "item/commandExecution/requestApproval", "params": {}})
-        elif text in ("permit-command", "permit-file", "permit-question"):
-            approval_method = {"permit-command": "item/commandExecution/requestApproval", "permit-file": "item/fileChange/requestApproval", "permit-question": "item/tool/requestUserInput"}[text]
+        elif text in ("permit-command", "permit-file", "permit-question", "permit-cua"):
+            approval_method = {"permit-command": "item/commandExecution/requestApproval", "permit-file": "item/fileChange/requestApproval", "permit-question": "item/tool/requestUserInput", "permit-cua": "item/tool/requestUserInput"}[text]
             approval = {"threadId": thread_id, "turnId": pending, "itemId": "approval-item", "command": "offline command", "cwd": str(root)}
             if text == "permit-question":
                 approval["questions"] = [{"id": "choice", "header": "Choice", "question": "Select one", "options": [{"label": "first", "description": "First choice"}]}]
+            elif text == "permit-cua":
+                approval = {"threadId": thread_id, "turnId": pending, "itemId": "cua-call",
+                    "isBlocking": True, "autoResolutionMs": None, "questions": [{
+                        "id": "cua-approval", "header": "cua_repl.js",
+                        "question": "Allow this computer use operation?", "isOther": False,
+                        "isSecret": False, "options": [
+                            {"label": "Accept", "description": "Run this operation"},
+                            {"label": "Decline", "description": "Skip this operation"},
+                            {"label": "Cancel", "description": "Cancel this operation"}]}]}
             emit({"id": "approval-1", "method": approval_method, "params": approval})
         elif text == "child":
             child = subprocess.Popen([sys.executable, "-c", "import time; time.sleep(60)"],

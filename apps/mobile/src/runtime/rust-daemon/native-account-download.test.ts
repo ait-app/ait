@@ -8,11 +8,21 @@ describe("native relay downloads", () => {
     const write = vi.fn();
     const progress = vi.fn();
     const finished = streamNativeAccountDownload(
-      { hostId: "host", token: "download-once", write, progress },
+      {
+        hostId: "host",
+        center: "https://example.test/api",
+        token: "download-once",
+        write,
+        progress,
+      },
       h.deps,
     );
     await h.flush();
-    expect(h.account.openDownload).toHaveBeenCalledWith("host", "download-once");
+    expect(h.account.openDownload).toHaveBeenCalledWith(
+      "host",
+      "download-once",
+      "https://example.test/api",
+    );
     h.message({ type: "relay.ready", relay_session_id: "visit" });
     h.message({ type: "download.headers", status: 200, content_length: 3 });
     const chunk = new Uint8Array([1, 2, 3]);
@@ -30,7 +40,13 @@ describe("native relay downloads", () => {
     async (mode) => {
       const h = nativeRelayHarness();
       const finished = streamNativeAccountDownload(
-        { hostId: "host", token: "once", write: vi.fn(), progress: vi.fn() },
+        {
+          hostId: "host",
+          center: "https://example.test/api",
+          token: "once",
+          write: vi.fn(),
+          progress: vi.fn(),
+        },
         h.deps,
       );
       const failed = expect(finished).rejects.toBeInstanceOf(Error);

@@ -1,4 +1,5 @@
-import { describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it } from "vitest";
+import { i18n } from "@/i18n/i18next";
 import type { UsagePreferences } from "./preferences";
 import {
   choosePinnedUsageLayout,
@@ -7,6 +8,10 @@ import {
   type PinnedUsageWindow,
 } from "./pinned";
 import type { UsageReportEntry, UsageWindow } from "./types";
+
+afterEach(async () => {
+  await i18n.changeLanguage("en");
+});
 
 function report(input: {
   sourceId: string;
@@ -73,6 +78,18 @@ describe("choosePinnedUsageLayout", () => {
 });
 
 describe("resolvePinnedUsage", () => {
+  it("localizes the percentage meaning in the sidebar accessible description", async () => {
+    await i18n.changeLanguage("zh-CN");
+    expect(
+      windows([claude], preferences([{ sourceId: "claude", windowId: "five-hour" }]))[0]?.label,
+    ).toBe("Claude Session 已使用 31%");
+    expect(
+      windows(
+        [claude],
+        preferences([{ sourceId: "claude", windowId: "five-hour" }], "remaining"),
+      )[0]?.label,
+    ).toBe("Claude Session 剩余 69%");
+  });
   it("defaults to source-wide pins collected from each account", () => {
     const work = report({
       sourceId: "claude",
