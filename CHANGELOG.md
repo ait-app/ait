@@ -1,5 +1,10 @@
 # Ait changelog
 
+## 0.1.0 - 2026-10-11
+
+- Publish the existing 0.0.29 functionality as the 0.1.0 stable desktop release; no additional application behavior changes are introduced in this release.
+- Synchronize Rust, npm workspace, lockfile, and local Arch source-package versions to 0.1.0, with fresh desktop installers and stable-channel updater metadata.
+
 ## 0.0.29 - 2026-10-11
 
 - Stabilize OpenCode model catalogs, retain model-specific options, and confirm model, effort, and mode changes through native ACP responses and notifications.
