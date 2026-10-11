@@ -23,7 +23,7 @@ fn compare(timeline: &Timeline) {
                     "direction":direction,"limit":limit,"cursor":{"epoch":epoch,"seq":cursor}}))
                 .unwrap();
                 assert_eq!(
-                    fetch_stored(&request, timeline, "agent", &Value::Null),
+                    fetch_stored(&request, timeline, "agent", &Value::Null, None),
                     fetch(&request, &epoch, &rows, &Value::Null),
                     "{direction}, {limit}, {cursor}"
                 );
@@ -91,7 +91,7 @@ fn incremental_groups_match_the_reference_through_progress_completion_and_replac
     .unwrap();
     let (epoch, rows) = timeline.read("agent").unwrap();
     assert_eq!(
-        fetch_stored(&stale, &timeline, "agent", &Value::Null),
+        fetch_stored(&stale, &timeline, "agent", &Value::Null, None),
         fetch(&stale, &epoch, &rows, &Value::Null)
     );
 }
@@ -138,7 +138,7 @@ fn durable_index_reads_only_the_requested_window_after_reopening() {
             serde_json::from_value(json!({"agentId":"agent","direction":direction,
             "limit":3,"cursor":{"epoch":epoch,"seq":cursor}}))
             .unwrap();
-        let response = fetch_stored(&request, &reopened, "agent", &Value::Null).unwrap();
+        let response = fetch_stored(&request, &reopened, "agent", &Value::Null, None).unwrap();
         assert_eq!(response["entries"][0]["seqStart"], expected);
         assert_eq!(response["entries"].as_array().unwrap().len(), 3);
         assert_eq!(response["window"]["maxSeq"], 5000);
@@ -187,7 +187,7 @@ fn version_five_builds_once_and_failed_appends_leave_the_index_unchanged() {
     compare(&timeline);
     let request: FetchRequest =
         serde_json::from_value(json!({"agentId":"agent","limit":3})).unwrap();
-    let before = fetch_stored(&request, &timeline, "agent", &Value::Null).unwrap();
+    let before = fetch_stored(&request, &timeline, "agent", &Value::Null, None).unwrap();
     assert_eq!(
         timeline.append(
             "agent",
@@ -200,7 +200,7 @@ fn version_five_builds_once_and_failed_appends_leave_the_index_unchanged() {
         Err(ErrorCode::IdempotencyConflict)
     );
     assert_eq!(
-        fetch_stored(&request, &timeline, "agent", &Value::Null).unwrap(),
+        fetch_stored(&request, &timeline, "agent", &Value::Null, None).unwrap(),
         before
     );
 }

@@ -33,6 +33,7 @@ import {
 } from "@/stores/session-store";
 import { useWorkspaceSetupStore } from "@/stores/workspace-setup-store";
 import type { TurnLivenessTransition } from "@/timeline/turn-liveness";
+import { fetchAgentTimelinePage } from "@/timeline/fetch-agent-timeline-page";
 import {
   createTimelineReplica,
   createViewedTimelineOwner,
@@ -2449,12 +2450,27 @@ export class HostRuntimeStore {
     const directory = this.directorySyncByServer.get(serverId);
     if (!directory) throw new Error(`Unknown host runtime for serverId ${serverId}`);
     const owner = useSessionStore.getState().sessions[serverId]?.viewedTimelineSync;
-    const page = await directory.fetchTimeline(agentId, request);
-    if (owner && useSessionStore.getState().sessions[serverId]?.viewedTimelineSync === owner) {
-      owner.flushStreamAgent(agentId);
-      owner.applyTimelineResponse(page);
-    }
-    return page;
+    const client = this.getClient(serverId);
+    const connectionEpoch = this.getSnapshot(serverId)?.connectionEpoch;
+    return fetchAgentTimelinePage(agentId, request, {
+      scope: client ?? directory,
+      supportsCachedReads:
+        useSessionStore.getState().sessions[serverId]?.serverInfo?.features
+          ?.agentTimelineCachedReads === true,
+      fetch: (pageRequest) => directory.fetchTimeline(agentId, pageRequest),
+      isCurrent: () =>
+        this.directorySyncByServer.get(serverId) === directory &&
+        this.getClient(serverId) === client &&
+        this.getSnapshot(serverId)?.connectionEpoch === connectionEpoch &&
+        useSessionStore.getState().sessions[serverId]?.viewedTimelineSync === owner,
+      apply: (page) => {
+        owner?.flushStreamAgent(agentId);
+        owner?.applyTimelineResponse(page);
+      },
+      reportError: (error) => {
+        console.warn("[Timeline] native history revalidation failed", { serverId, agentId, error });
+      },
+    });
   }
 
   createViewedTimelineOwner(

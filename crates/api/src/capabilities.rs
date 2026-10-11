@@ -66,6 +66,7 @@ pub(super) fn features(services: &Services) -> Vec<String> {
     }
     if services.provider.is_some() {
         features.push("agent-session-events-v1".to_owned());
+        features.push("agent-timeline-cached-reads-v1".to_owned());
         if services.metadata.is_some() {
             features.push("creation-lifecycle-v1".to_owned());
         }

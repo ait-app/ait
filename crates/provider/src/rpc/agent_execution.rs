@@ -178,6 +178,20 @@ impl ExecutionState {
         super::agent_runtime::synchronize(&self.directory, value, &cursor)
     }
 
+    /// Whether an opted-in page can use committed history without owning native hydration.
+    /// Returns request, identity or storage errors; unfinished native replacement stays strict.
+    pub(crate) fn can_read_cached_timeline(
+        &self,
+        method: &str,
+        params: &Value,
+    ) -> Result<bool, ErrorCode> {
+        if method != "agent.timeline.get.request" || params["allowCached"] != true {
+            return Ok(false);
+        }
+        let request: crate::protocol::timeline::FetchRequest = decode(params.clone())?;
+        Ok(self.manager.can_read_cached_timeline(&request.agent_id)?)
+    }
+
     async fn timeline(&mut self, method: &str, params: Value) -> Result<Value, ErrorCode> {
         use crate::protocol::timeline::{AppendRequest, FetchRequest, SearchRequest};
         let plugin = params
@@ -206,8 +220,18 @@ impl ExecutionState {
             "agent.timeline.get.request" => {
                 let mut request: FetchRequest = decode(params)?;
                 request.agent_id.clone_from(&id);
-                super::timeline::fetch_stored(&request, &timeline, &id, &self.snapshot(&id)?)
-                    .map_err(Into::into)
+                let history_needs_refresh = request
+                    .allow_cached
+                    .filter(|allowed| *allowed)
+                    .map(|_| !self.manager.history_loaded(&id));
+                super::timeline::fetch_stored(
+                    &request,
+                    &timeline,
+                    &id,
+                    &self.snapshot(&id)?,
+                    history_needs_refresh,
+                )
+                .map_err(Into::into)
             }
             "agent.timeline.search.request" => {
                 let mut request: SearchRequest = decode(params)?;

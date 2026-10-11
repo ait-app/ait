@@ -1589,6 +1589,64 @@ test("honors explicit fetchAgentTimeline timeout below the session RPC default",
   await expect(responsePromise).rejects.toThrow("Timeout waiting for message (2000ms)");
 });
 
+test("sends cached timeline preference only when enabled and preserves revalidation hints", async () => {
+  const mock = createMockTransport();
+  const client = new DaemonClient({
+    url: "ws://test",
+    clientId: "clsk_unit_test",
+    logger: createMockLogger(),
+    reconnect: { enabled: false },
+    transportFactory: () => mock.transport,
+  });
+  clients.push(client);
+  const connected = client.connect();
+  mock.triggerOpen();
+  await connected;
+
+  for (const allowCached of [true, false]) {
+    const requestId = `cached-${allowCached}`;
+    const read = client.fetchAgentTimeline("agent-1", {
+      requestId,
+      direction: "tail",
+      limit: 40,
+      allowCached,
+    });
+    expect(parseSentFrame(mock.sent.at(-1)!)).toEqual({
+      type: "agent.timeline.get.request",
+      agentId: "agent-1",
+      requestId,
+      direction: "tail",
+      limit: 40,
+      ...(allowCached ? { allowCached: true } : {}),
+    });
+    mock.triggerMessage(
+      wrapSessionMessage({
+        type: "agent.timeline.get.response",
+        payload: {
+          requestId,
+          agentId: "agent-1",
+          agent: null,
+          direction: "tail",
+          projection: "projected",
+          epoch: "epoch",
+          reset: false,
+          staleCursor: false,
+          gap: false,
+          window: { minSeq: 0, maxSeq: 0, nextSeq: 1 },
+          startCursor: null,
+          endCursor: null,
+          hasOlder: false,
+          hasNewer: false,
+          historyNeedsRefresh: allowCached,
+          entries: [],
+          error: null,
+        },
+      }),
+    );
+    await expect(read).resolves.toMatchObject({ historyNeedsRefresh: allowCached });
+  }
+});
+
 test("lists the full agent prompt index", async () => {
   const logger = createMockLogger();
   const mock = createMockTransport();

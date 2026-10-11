@@ -27,12 +27,14 @@ mod text_search;
 const MAX_RESPONSE_BYTES: usize = 900 * 1024;
 
 /// Fetch `request` from the indexed `timeline` scope with `agent` metadata in the wire envelope.
+/// Optional `history_needs_refresh` is reserved in the response byte budget before selecting rows.
 /// Returns a projected response or storage, cursor validation and response-budget errors.
 pub(crate) fn fetch_stored(
     request: &FetchRequest,
     timeline: &Timeline,
     scope: &str,
     agent: &Value,
+    history_needs_refresh: Option<bool>,
 ) -> Result<Value, ErrorCode> {
     let mut value = Value::Null;
     let page = timeline.page(request, scope, |header| {
@@ -47,6 +49,9 @@ pub(crate) fn fetch_stored(
             "hasOlder":false,"hasNewer":false,"entries":[],"error":null});
         if request.merge_window == Some(true) {
             value["mergeWindow"] = json!(true);
+        }
+        if let Some(history_needs_refresh) = history_needs_refresh {
+            value["historyNeedsRefresh"] = json!(history_needs_refresh);
         }
         let envelope = serde_json::to_vec(&value)
             .map_err(|_| ErrorCode::AgentIo)?

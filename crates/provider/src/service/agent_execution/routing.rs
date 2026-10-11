@@ -257,7 +257,10 @@ fn plan(
         };
         if let Some(identifier) = nested["agentId"].as_str() {
             let id = state.resolve(identifier)?;
-            if method.starts_with("agent.timeline.") && state.manager.history_loaded(&id) {
+            if method.starts_with("agent.timeline.")
+                && (state.manager.history_loaded(&id)
+                    || state.can_read_cached_timeline(method, params)?)
+            {
                 None
             } else {
                 let lane = state.owners.agent(&id)?;

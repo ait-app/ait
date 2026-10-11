@@ -4,6 +4,8 @@ use domain::agent_runtime::{AgentPersistenceHandle, StoredAgentConfig};
 use tokio::sync::{Notify, Semaphore};
 
 use super::*;
+
+mod cached_timeline;
 use crate::ports::agent_session::{
     AgentClient, AgentResumePurpose, AgentSession, AgentSessionFuture, AgentSessionSpec,
 };

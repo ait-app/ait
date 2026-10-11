@@ -117,6 +117,23 @@ it("preserves Rust timeline search counts in the SDK response envelope", () => {
 });
 
 describe("Ait host capabilities", () => {
+  it("enables cached timeline reads only with the versioned feature and timeline method", () => {
+    for (const supported of [false, true]) {
+      for (const implemented of [false, true]) {
+        const envelope = serverInfo(
+          {
+            server_id: "ait",
+            features: supported ? ["agent-timeline-cached-reads-v1"] : [],
+          },
+          new Set(implemented ? ["agent.timeline.get.request"] : []),
+        );
+        expect(
+          parseServerInfoStatusPayload(object(object(envelope.message).payload))?.features
+            ?.agentTimelineCachedReads,
+        ).toBe(supported && implemented);
+      }
+    }
+  });
   it("advertises checkout status events only with the Git producer and checkout method", () => {
     const read = (features: string[], methods: string[]) =>
       parseServerInfoStatusPayload(

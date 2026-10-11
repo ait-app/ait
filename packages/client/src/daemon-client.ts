@@ -589,6 +589,8 @@ export interface FetchAgentTimelineOptions {
   limit?: number;
   projection?: FetchAgentTimelineProjection;
   mergeWindow?: boolean;
+  /** Permit a durable page before native hydration; revalidate if historyNeedsRefresh is true. */
+  allowCached?: boolean;
   requestId?: string;
   timeout?: number;
 }
@@ -3136,6 +3138,7 @@ export class DaemonClient {
       ...(typeof options.limit === "number" ? { limit: options.limit } : {}),
       ...(options.projection ? { projection: options.projection } : {}),
       ...(options.mergeWindow === true ? { mergeWindow: true } : {}),
+      ...(options.allowCached === true ? { allowCached: true } : {}),
     });
 
     const payload = await this.sendRequest({
