@@ -66,7 +66,8 @@ impl Context<'_> {
         );
     }
 
-    /// Execute `operation` with the owned method and parameters using the shared job budget.
+    /// Execute an admitted `operation` after preceding shared-budget work completes.
+    /// The API bounds pending requests; waiting here avoids rejecting a concurrent capability lane.
     /// # Errors
     /// Returns admission, service-lock, task or converted business errors.
     pub async fn call<S, R, E>(
@@ -83,7 +84,7 @@ impl Context<'_> {
         let method = std::mem::take(&mut self.request.method);
         let params = std::mem::take(&mut self.request.params);
         self.runtime
-            .run(service, failure, move |service| {
+            .run_queued(service, failure, move |service| {
                 operation(service, &method, params).map_err(Into::into)
             })
             .await

@@ -2,6 +2,7 @@
 
 文档按当前能力归属分类。历史验证记录只对应各文件注明的源码提交与平台。
 
+- [Ait 0.0.28 客户端告警修复与诊断验证](clients/release-0.0.28-warning-fixes-2026-10-11.md)
 - [Ait 0.0.27 安装后诊断与修复](clients/release-0.0.27-installed-diagnostics-2026-10-11.md)
 
 ## Daemon 与协议

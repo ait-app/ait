@@ -151,7 +151,7 @@ async fn route(
                 return error(context.outbound, None, ErrorCode::InvalidMessage);
             }
             if let Err(code) = validate_request(method, context) {
-                error(context.outbound, Some(request_id.clone()), code)?;
+                reject_negotiation(context, request_id, method, code)?;
                 continue;
             }
             if method == "connection.ping" {
@@ -231,6 +231,28 @@ fn validate_request(method: &str, context: &WorkerContext<'_>) -> Result<(), Err
     )
 }
 
+fn reject_negotiation(
+    context: &WorkerContext<'_>,
+    request_id: &str,
+    method: &str,
+    code: ErrorCode,
+) -> Result<(), QueueError> {
+    tracing::info_span!(
+        "rpc",
+        method,
+        request_id,
+        resource = "capability_negotiation",
+        installed = context
+            .state
+            .info
+            .capabilities
+            .iter()
+            .any(|name| name == method),
+        negotiated = context.capabilities.iter().any(|name| name == method),
+    )
+    .in_scope(|| error(context.outbound, Some(request_id.to_owned()), code))
+}
+
 fn admit(
     senders: &[mpsc::Sender<Work>; 4],
     message: Incoming,
@@ -238,10 +260,22 @@ fn admit(
 ) -> Result<(), QueueError> {
     let lane = lane(&message);
     if let Err(failure) = senders[lane].try_send(Work::Message(message)) {
-        if let Work::Message(Incoming::Text(ClientMessage::Request { request_id, .. }, _)) =
-            failure.into_inner()
+        if let Work::Message(Incoming::Text(
+            ClientMessage::Request {
+                request_id, method, ..
+            },
+            _,
+        )) = failure.into_inner()
         {
-            error(outbound, Some(request_id), ErrorCode::ResourceExhausted)?;
+            tracing::info_span!(
+                "rpc",
+                method = %method,
+                request_id = %request_id,
+                capability_lane = lane,
+                resource = "capability_queue",
+                queue_capacity = WORKER_QUEUE_CAPACITY,
+            )
+            .in_scope(|| error(outbound, Some(request_id), ErrorCode::ResourceExhausted))?;
         } else {
             // Binary/event loss cannot be repaired by retrying an RPC.
             return Err(QueueError::Full);

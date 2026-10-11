@@ -1324,10 +1324,10 @@ describe("DirectorySync session readiness", () => {
     const serverId = "project-list-sequence";
     serverIds.add(serverId);
     const client = new FakeDirectoryClient();
-    const writes: Array<{
+    const writes: {
       mutations: readonly DirectoryReplicaMutation[];
       checkpoint: unknown;
-    }> = [];
+    }[] = [];
     const cachedProjects = [
       normalizeProjectDescriptor({
         projectId: "project-1",
@@ -1738,6 +1738,31 @@ it("fills every cached workspace beneath live updates received during the SQLite
 });
 
 describe("snapshot-only host directories", () => {
+  it("negotiates live directory events against the connected host's catalog", async () => {
+    const serverId = "directory-event-negotiation";
+    const { client, directory } = createDirectory(serverId);
+    const store = useSessionStore.getState();
+    store.initializeSession(serverId, client as unknown as DaemonClient, 1);
+    store.updateSessionServerInfo(serverId, {
+      serverId,
+      hostname: null,
+      version: "test",
+      features: { workspaceMultiplicity: true },
+    });
+    const observeEvents = vi.spyOn(client, "observeEvents");
+    const demand = {};
+    try {
+      directory.setDemand(demand, true);
+      await directory.refreshDemand();
+      expect(observeEvents).toHaveBeenCalledWith(["project.update", "script_status_update"], {
+        supportedOnly: true,
+      });
+    } finally {
+      directory.setDemand(demand, false);
+      directory.dispose();
+    }
+  });
+
   it("loads and polls snapshots without unsupported subscriptions, then stops without demand", async () => {
     vi.useFakeTimers();
     const serverId = "snapshot-only-host";
