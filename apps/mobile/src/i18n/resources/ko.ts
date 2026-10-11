@@ -2049,6 +2049,7 @@ export const ko: TranslationResources = {
     },
     groupInfo: "{{title}} 정보",
     sections: {
+      management: "관리",
       general: "일반",
       appearance: "모양",
       layout: en.settings.sections.layout,

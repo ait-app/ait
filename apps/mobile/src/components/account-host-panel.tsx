@@ -1,3 +1,4 @@
+import { supportsBrowserAccount } from "@/runtime/browser-account";
 import React, { useRef, useState } from "react";
 import { Keyboard, Pressable, Text, View } from "react-native";
 import { StyleSheet, useUnistyles } from "react-native-unistyles";
@@ -54,37 +55,39 @@ export function AccountHostPanel({
         <>
           <Text style={styles.hint}>{t("onlineService.loginDescription")}</Text>
           <Text style={styles.hint}>{t("onlineService.unifiedHint")}</Text>
-          <View style={styles.field}>
-            <Pressable
-              accessibilityRole="button"
-              accessibilityState={{ expanded: showServiceSettings }}
-              style={styles.disclosure}
-              disabled={busy}
-              onPress={() => setShowServiceSettings((shown) => !shown)}
-              testID="account-service-settings"
-            >
-              <ServiceSettingsIcon size={16} color={theme.colors.foregroundMuted} />
-              <Text style={styles.disclosureText}>{t("onlineService.serviceSettings")}</Text>
-            </Pressable>
-            {showServiceSettings ? (
-              <View style={styles.field}>
-                <Text style={styles.label}>{t("onlineService.serviceUrl")}</Text>
-                <AdaptiveTextInput
-                  style={styles.input}
-                  initialValue={center}
-                  resetKey={account.center}
-                  onChangeText={setCenterOverride}
-                  placeholder="https://your-server.example/api"
-                  accessibilityLabel={t("onlineService.serviceUrl")}
-                  autoCapitalize="none"
-                  autoCorrect={false}
-                  editable={!busy}
-                  testID="account-center"
-                />
-                <Text style={styles.hint}>{t("onlineService.serviceUrlHint")}</Text>
-              </View>
-            ) : null}
-          </View>
+          {!supportsBrowserAccount() ? (
+            <View style={styles.field}>
+              <Pressable
+                accessibilityRole="button"
+                accessibilityState={{ expanded: showServiceSettings }}
+                style={styles.disclosure}
+                disabled={busy}
+                onPress={() => setShowServiceSettings((shown) => !shown)}
+                testID="account-service-settings"
+              >
+                <ServiceSettingsIcon size={16} color={theme.colors.foregroundMuted} />
+                <Text style={styles.disclosureText}>{t("onlineService.serviceSettings")}</Text>
+              </Pressable>
+              {showServiceSettings ? (
+                <View style={styles.field}>
+                  <Text style={styles.label}>{t("onlineService.serviceUrl")}</Text>
+                  <AdaptiveTextInput
+                    style={styles.input}
+                    initialValue={center}
+                    resetKey={account.center}
+                    onChangeText={setCenterOverride}
+                    placeholder="https://your-server.example/api"
+                    accessibilityLabel={t("onlineService.serviceUrl")}
+                    autoCapitalize="none"
+                    autoCorrect={false}
+                    editable={!busy}
+                    testID="account-center"
+                  />
+                  <Text style={styles.hint}>{t("onlineService.serviceUrlHint")}</Text>
+                </View>
+              ) : null}
+            </View>
+          ) : null}
           {error || account.error ? (
             <Text style={styles.error} accessibilityRole="alert">
               {error ?? account.error}
@@ -148,7 +151,7 @@ export function AccountHostPanel({
               {t("onlineService.signOut")}
             </Button>
           </View>
-          <Text style={styles.hint}>{account.center}</Text>
+          {!supportsBrowserAccount() ? <Text style={styles.hint}>{account.center}</Text> : null}
           {account.accountExpiresAt ? (
             <Text style={styles.hint}>
               {t("onlineService.expiresAt", {

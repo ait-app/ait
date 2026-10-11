@@ -1,3 +1,5 @@
+import { supportsBrowserAccount } from "@/runtime/browser-account";
+import { downloadBrowserAccountFile } from "@/runtime/rust-daemon/browser-account-relay";
 import { create } from "zustand";
 import { getDesktopHost } from "@/desktop/host";
 import { File as FSFile, Paths } from "expo-file-system";
@@ -94,6 +96,31 @@ export const useDownloadStore = create<DownloadState>()((set, get) => ({
         : daemonProfile?.connections;
       const relay = connections?.find((connection) => connection.type === "accountRelay");
       if (relay?.type === "accountRelay") {
+        if (!getDesktopHost()?.invoke && supportsBrowserAccount()) {
+          const result = await requestFileDownloadToken(path);
+          if (result.error || !result.token)
+            throw new Error(result.error ?? i18n.t("downloads.requestTokenFailed"));
+          const started = Date.now();
+          await downloadBrowserAccountFile({
+            hostId: relay.hostId,
+            center: relay.center,
+            token: result.token,
+            fileName: result.fileName ?? fileName,
+            mimeType: result.mimeType,
+            progress(bytesWritten, totalBytes) {
+              const speed = bytesWritten / Math.max((Date.now() - started) / 1000, 0.001);
+              get().updateProgress(id, {
+                bytesWritten,
+                totalBytes,
+                percent: totalBytes > 0 ? bytesWritten / totalBytes : 0,
+                speed,
+                eta: speed > 0 ? Math.max(0, totalBytes - bytesWritten) / speed : 0,
+              });
+            },
+          });
+          get().completeDownload(id);
+          return;
+        }
         if (Platform.OS === "android" || Platform.OS === "ios") {
           const tokenResponse = await requestFileDownloadToken(path);
           if (tokenResponse.error || !tokenResponse.token) {

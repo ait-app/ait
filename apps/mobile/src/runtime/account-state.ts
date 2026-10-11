@@ -4,6 +4,11 @@ import { create } from "zustand";
 import { getDesktopHost } from "@/desktop/host";
 import { getHostRuntimeStore } from "./host-runtime";
 import { getNativeAccount, subscribeNativeAccount } from "./native-account";
+import {
+  supportsBrowserAccount,
+  getBrowserAccount,
+  subscribeBrowserAccount,
+} from "./browser-account";
 import { DEFAULT_ACCOUNT_CENTER } from "@ait/client/internal/account-session";
 
 export interface AccountHost {
@@ -33,7 +38,10 @@ export interface AccountState {
 
 export const useAccountState = create<AccountState>(() => ({
   status: "logged_out",
-  center: DEFAULT_ACCOUNT_CENTER,
+  center:
+    supportsBrowserAccount() && typeof window !== "undefined"
+      ? `${window.location.origin}/api`
+      : DEFAULT_ACCOUNT_CENTER,
   name: "",
   hostOnline: false,
   hosts: [],
@@ -43,7 +51,12 @@ export const useAccountState = create<AccountState>(() => ({
 }));
 
 export function supportsAccountRelay(): boolean {
-  return Platform.OS === "android" || Platform.OS === "ios" || Boolean(getDesktopHost()?.invoke);
+  return (
+    Platform.OS === "android" ||
+    Platform.OS === "ios" ||
+    Boolean(getDesktopHost()?.invoke) ||
+    supportsBrowserAccount()
+  );
 }
 
 let commandTail = Promise.resolve<unknown>(undefined);
@@ -98,16 +111,16 @@ export async function accountCommand(
   args?: Record<string, unknown>,
 ): Promise<AccountState> {
   const invoke = getDesktopHost()?.invoke;
-  if (!invoke && (Platform.OS === "android" || Platform.OS === "ios")) {
+  if (!invoke && (Platform.OS === "android" || Platform.OS === "ios" || supportsBrowserAccount())) {
     // Cancellation must not queue behind the browser operation it is cancelling.
     if (command === "account_cancel_login") {
-      const manager = await getNativeAccount();
+      const manager = await (supportsBrowserAccount() ? getBrowserAccount() : getNativeAccount());
       manager.cancelLogin();
       return manager.snapshot();
     }
     return serializeNativeAccountCommand(async () => {
       const previousServerId = useAccountState.getState().selected?.server_id ?? null;
-      const manager = await getNativeAccount();
+      const manager = await (supportsBrowserAccount() ? getBrowserAccount() : getNativeAccount());
       switch (command) {
         case "account_login_hosted":
           if (args?.center !== undefined && typeof args.center !== "string")
@@ -148,7 +161,10 @@ export async function accountCommand(
 /** Mount once next to HostRuntime bootstrap to import all discovered account hosts. */
 export function AccountRelayLifecycle() {
   useEffect(() => {
-    if (Platform.OS === "android" || Platform.OS === "ios") {
+    if (
+      !getDesktopHost()?.invoke &&
+      (Platform.OS === "android" || Platform.OS === "ios" || supportsBrowserAccount())
+    ) {
       let disposed = false;
       const receive = (snapshot: AccountState) => {
         if (!disposed)
@@ -157,8 +173,10 @@ export function AccountRelayLifecycle() {
               useAccountState.setState({ error: "Could not synchronize online hosts." });
           });
       };
-      const remove = subscribeNativeAccount(receive);
-      void getNativeAccount()
+      const remove = (supportsBrowserAccount() ? subscribeBrowserAccount : subscribeNativeAccount)(
+        receive,
+      );
+      void (supportsBrowserAccount() ? getBrowserAccount() : getNativeAccount())
         .then((manager) => receive(manager.snapshot()))
         .catch(() => {
           if (!disposed)

@@ -1,3 +1,4 @@
+import { supportsBrowserAccount } from "@/runtime/browser-account";
 import { AgentProfilesSection } from "@/agent-profiles";
 import { AgentSkillsSection } from "@/agent-skills";
 import { OnlineServiceHostSection } from "./online-service-host-section";
@@ -246,7 +247,9 @@ export function HostConnectionsPage({ serverId }: { serverId: string }) {
     <View>
       <HostConnectionError serverId={serverId} />
       <ConnectionsSection host={host} />
-      {supportsAccountRelay() ? <OnlineServiceHostSection host={host} /> : null}
+      {supportsAccountRelay() && !supportsBrowserAccount() ? (
+        <OnlineServiceHostSection host={host} />
+      ) : null}
     </View>
   );
 }
