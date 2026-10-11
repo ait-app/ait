@@ -19,16 +19,16 @@ use filesystem::git::local::{
 };
 use filesystem::git::service::checkout::Checkout;
 use filesystem::workspace_runtime::LocalWorkspaceRuntime;
-use metadata::local::workspace_automation::LocalWorkspaceAutomation;
-use metadata::service::daemon::{Daemon, DaemonRuntime};
-use metadata::service::directory::{Directory, DirectoryDependencies};
-use metadata::service::github_projects::GithubProjects;
-use metadata::service::workspace_automation::WorkspaceAutomation;
-use metadata::service::workspace_labels::WorkspaceLabels;
-use metadata::service::workspace_names::WorkspaceNames;
-use metadata::service::workspace_recovery::WorkspaceRecovery;
-use metadata::service::workspace_state::WorkspaceState;
-use metadata::service::worktrees::{WorkspaceWorktrees, Worktrees};
+use metadata::automation::local::workspace_automation::LocalWorkspaceAutomation;
+use metadata::automation::service::workspace_automation::WorkspaceAutomation;
+use metadata::daemon::service::daemon::{Daemon, DaemonRuntime};
+use metadata::directory::service::directory::{Directory, DirectoryDependencies};
+use metadata::directory::service::github_projects::GithubProjects;
+use metadata::directory::service::workspace_names::WorkspaceNames;
+use metadata::directory::service::workspace_state::WorkspaceState;
+use metadata::labels::service::workspace_labels::WorkspaceLabels;
+use metadata::worktrees::service::workspace_recovery::WorkspaceRecovery;
+use metadata::worktrees::service::worktrees::{WorkspaceWorktrees, Worktrees};
 use model::LifecycleIntent;
 use model::summary::SummaryGenerator;
 use model::workspace::registry::{ProjectRegistry, WorkspaceRegistry};
@@ -68,14 +68,14 @@ impl Server {
     /// Returns a ready server, or configuration, listener, storage or assembly errors.
     pub(crate) async fn bind_with_diagnostics(
         config: Config,
-        diagnostics: Arc<dyn metadata::ports::diagnostics::DaemonDiagnostics>,
+        diagnostics: Arc<dyn metadata::daemon::ports::diagnostics::DaemonDiagnostics>,
     ) -> anyhow::Result<Self> {
         Self::bind_optional_diagnostics(config, Some(diagnostics)).await
     }
 
     async fn bind_optional_diagnostics(
         config: Config,
-        diagnostics: Option<Arc<dyn metadata::ports::diagnostics::DaemonDiagnostics>>,
+        diagnostics: Option<Arc<dyn metadata::daemon::ports::diagnostics::DaemonDiagnostics>>,
     ) -> anyhow::Result<Self> {
         let listener = TcpListener::bind(config.listen)
             .await
@@ -513,9 +513,7 @@ fn compose_provider(
         lifetime: instance.clone(),
         import_directory: Some(Arc::new(directory)),
         workspace_automation: Some(Arc::new(
-            metadata::service::workspace_collaboration::SharedWorkspaceSetup::new(
-                workspace_automation,
-            ),
+            metadata::collaboration::SharedWorkspaceSetup::new(workspace_automation),
         )),
         projects: Box::new(project_registry.clone()),
     })
@@ -525,8 +523,10 @@ fn compose_provider(
 #[cfg(test)]
 mod tests;
 
-fn compose_push(data_dir: &std::path::Path) -> anyhow::Result<metadata::service::push::PushTokens> {
-    metadata::service::push::PushTokens::open(
+fn compose_push(
+    data_dir: &std::path::Path,
+) -> anyhow::Result<metadata::push::service::push::PushTokens> {
+    metadata::push::service::push::PushTokens::open(
         Box::new(persistence::storage::push::FileTokenStore::new(
             data_dir.join("push-tokens.json"),
         )),

@@ -35,6 +35,7 @@ ADR-074、082、083、084、122 在不同类别中各有两份，引用时以路
 
 ## 工作区、文件与 Git
 
+- [ADR-131：metadata 按能力组组织模块](workspace/adr-131-metadata-capability-groups.md)
 - [ADR-130：Workspace 与 Project 方法归 metadata，filesystem 只保留本地适配器](workspace/adr-130-workspace-methods-owned-by-metadata.md)
 - [ADR-126：按身份读取目标 Workspace，完整目录后台同步](workspace/adr-126-workspace-target-read.md)
 - [ADR-113：filesystem 按能力组组织模块](workspace/adr-113-filesystem-capability-groups.md)

@@ -12,7 +12,7 @@ use std::sync::{Arc, Mutex, mpsc};
 use std::time::{Duration, Instant};
 
 use chrono::{DateTime, Utc};
-use metadata::ports::diagnostics::DaemonDiagnostics;
+use metadata::daemon::ports::diagnostics::DaemonDiagnostics;
 use tracing::field::{Field, Visit};
 use tracing_subscriber::Layer;
 

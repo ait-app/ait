@@ -2,6 +2,8 @@
 
 - 状态：接受
 - 日期：2026-10-11
+- 后续修订：[ADR-131](adr-131-metadata-capability-groups.md) 将 metadata 改为能力组布局，本文的
+  `service::`/`rpc::`/`protocol::`/`ports::` 路径移至对应组下，例如 `worktrees::ports::worktrees`。
 - 修订：[ADR-113](adr-113-filesystem-capability-groups.md) 的 filesystem 能力组集合、
   [ADR-104](adr-104-filesystem-model-collaboration.md) 中 `ProjectRegistration` 与
   worktree setup 的注入方式、[ADR-028](adr-028-github-project-provisioning.md) 的服务归属，

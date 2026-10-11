@@ -4,16 +4,7 @@ use std::collections::{BTreeMap, BTreeSet};
 
 use model::session::{SessionConnection, SessionSubscription};
 
-use crate::service::workspace_labels::WorkspaceLabelSubscription;
-
-pub(crate) mod creation;
-pub(crate) mod daemon;
-pub(crate) mod directory;
-/// Persistent push registration and heartbeat renewal.
-pub mod push;
-/// Session presence and event subscription handling.
-pub mod session;
-pub(crate) mod workspace_labels;
+use crate::labels::service::workspace_labels::WorkspaceLabelSubscription;
 
 /// Metadata subscriptions belonging to one physical connection.
 #[derive(Default)]
@@ -25,7 +16,7 @@ pub struct Connection {
     pub(crate) labels: BTreeMap<String, WorkspaceLabelSubscription>,
     pub(crate) events: BTreeMap<String, SessionSubscription>,
     /// Presence connection created during the API handshake.
-    session: Option<SessionConnection>,
+    pub(crate) session: Option<SessionConnection>,
 }
 
 impl Connection {

@@ -1,0 +1,35 @@
+use std::sync::Arc;
+
+use crate::labels::rpc::workspace_labels::{DeliveryError, Dispatch};
+use model::{ErrorCode, ServerMessage};
+use serde_json::Value;
+
+use crate::dispatch::State as Shared;
+use model::outbound::Outbound;
+
+pub(crate) async fn dispatch(
+    method: &str,
+    params: Value,
+    state: &Shared,
+    outbound: Outbound,
+) -> Result<Dispatch, ErrorCode> {
+    let method = method.to_owned();
+    let sink = Arc::new(move |params| {
+        outbound
+            .send(&ServerMessage::Event {
+                method: "workspace.label.update".to_owned(),
+                params,
+            })
+            .map_err(|_| DeliveryError::Closed)
+    });
+    state
+        .run_queued(
+            state.workspace_labels.clone(),
+            ErrorCode::RegistryIo,
+            move |labels| {
+                crate::labels::rpc::workspace_labels::execute(labels, &method, params, sink)
+                    .map_err(Into::into)
+            },
+        )
+        .await
+}

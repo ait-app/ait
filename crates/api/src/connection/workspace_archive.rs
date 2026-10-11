@@ -1,6 +1,8 @@
 //! Resource closure between metadata archive and owned checkout removal.
 
-use metadata::service::worktrees::{ArchiveScope, ArchiveWorktree, PendingArchive, WorktreesError};
+use metadata::worktrees::service::worktrees::{
+    ArchiveScope, ArchiveWorktree, PendingArchive, WorktreesError,
+};
 use model::{Context, DispatchError, ErrorCode};
 use serde_json::{Value, json};
 
@@ -70,7 +72,7 @@ async fn metadata(state: &Shared, context: &mut Context<'_>) -> Result<Value, Er
 }
 
 fn prepare_metadata(
-    directory: &mut metadata::service::directory::Directory,
+    directory: &mut metadata::directory::service::directory::Directory,
     method: &str,
     params: Value,
 ) -> Result<(Value, Vec<String>), ErrorCode> {
@@ -89,7 +91,7 @@ fn prepare_metadata(
     } else {
         Vec::new()
     };
-    let value = metadata::rpc::directory::execute(directory, method, params)?;
+    let value = metadata::directory::rpc::directory::execute(directory, method, params)?;
     if method == "workspace.archive.request"
         && value["archivedAt"].is_string()
         && let Some(id) = value["workspaceId"].as_str()
@@ -101,7 +103,12 @@ fn prepare_metadata(
 
 async fn worktree(state: &Shared, params: Value) -> Result<Value, ErrorCode> {
     let request = serde_json::from_value(params).map_err(|_| ErrorCode::InvalidMessage)?;
-    let plan = match begin(state, metadata::rpc::worktrees::archive_input(request)).await? {
+    let plan = match begin(
+        state,
+        metadata::worktrees::rpc::worktrees::archive_input(request),
+    )
+    .await?
+    {
         Ok(plan) => plan,
         Err(error) => return Ok(failure(&error)),
     };
@@ -165,7 +172,7 @@ async fn retire(state: &Shared, workspace_ids: Vec<String>) -> Result<Vec<String
 }
 
 fn failure(error: &WorktreesError) -> Value {
-    json!({"success":false,"removedAgents":[],"error":metadata::rpc::worktrees::checkout_error(error)})
+    json!({"success":false,"removedAgents":[],"error":metadata::worktrees::rpc::worktrees::checkout_error(error)})
 }
 
 #[cfg(test)]

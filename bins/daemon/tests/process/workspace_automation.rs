@@ -29,7 +29,7 @@ async fn binary_runs_canonical_workspace_setup_and_script_methods() {
     let address = ready(&mut process, &log).await;
     let mut client = connect(
         &address,
-        &method_names(metadata::rpc::workspace_automation::METHODS),
+        &method_names(metadata::automation::rpc::workspace_automation::METHODS),
     )
     .await;
 

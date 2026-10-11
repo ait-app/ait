@@ -22,9 +22,9 @@ use axum::response::{IntoResponse, Response};
 use axum::routing::{get, post};
 use axum::{Json, Router};
 use browser::broker::Broker;
-use metadata::service::directory::Directory;
-use metadata::service::workspace_automation::WorkspaceAutomation;
-use metadata::service::worktrees::{WorkspaceWorktrees, Worktrees};
+use metadata::automation::service::workspace_automation::WorkspaceAutomation;
+use metadata::directory::service::directory::Directory;
+use metadata::worktrees::service::worktrees::{WorkspaceWorktrees, Worktrees};
 use model::server::{Lifecycle, Limits, ServerInfo, VERSION};
 use model::{LifecycleIntent, Runtime};
 use provider::service::agent_execution::AgentExecution;
@@ -80,7 +80,7 @@ struct Shared {
     voice: Arc<voice::dispatch::State>,
     schedule: schedule::dispatch::State,
     browser: browser::dispatch::State,
-    workspace_names: Option<metadata::service::workspace_names::WorkspaceNames>,
+    workspace_names: Option<metadata::directory::service::workspace_names::WorkspaceNames>,
 }
 
 impl std::ops::Deref for Shared {
@@ -619,7 +619,7 @@ fn compose_automation_events(
     events: &model::session::SessionEvents,
 ) -> Result<(), ConfigError> {
     use domain::session::protocol::SessionEventKind;
-    use metadata::ports::workspace_automation::AutomationEvent;
+    use metadata::automation::ports::workspace_automation::AutomationEvent;
 
     let Some(automation) = automation else {
         return Ok(());
@@ -639,7 +639,7 @@ fn compose_automation_events(
                         "workspaceId": workspace_id,
                         "scripts": scripts
                             .into_iter()
-                            .map(metadata::rpc::workspace_automation::script)
+                            .map(metadata::automation::rpc::workspace_automation::script)
                             .collect::<Vec<_>>(),
                     }),
                 ),
@@ -648,7 +648,9 @@ fn compose_automation_events(
                     snapshot,
                 } => {
                     let mut payload = serde_json::to_value(
-                        metadata::rpc::workspace_automation::setup_snapshot(snapshot, None),
+                        metadata::automation::rpc::workspace_automation::setup_snapshot(
+                            snapshot, None,
+                        ),
                     )
                     .unwrap_or_default();
                     payload["workspaceId"] = serde_json::json!(workspace_id);

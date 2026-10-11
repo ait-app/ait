@@ -14,6 +14,7 @@
 
 ## 架构决策
 
+- [ADR-131：metadata 按能力组组织模块](decisions/workspace/adr-131-metadata-capability-groups.md)：server/daemon/push/directory/labels/automation/worktrees 七组沿用分层，组间仅经 ports/protocol 协作，并由模块边界测试约束。
 - [ADR-130：Workspace 与 Project 方法归 metadata](decisions/workspace/adr-130-workspace-methods-owned-by-metadata.md)：worktree、恢复与 GitHub clone 的服务和协议迁入 metadata，filesystem 只保留本地适配器，端口下沉 model/domain。
 - [ADR-129：Agent Skills 能力组归 provider](decisions/providers/adr-129-provider-owned-skills.md)：整组迁移、主机级安装与事务兼容，保留文件操作队列。
 - [ADR-128：桌面内置 daemon 可在退出后继续运行](decisions/clients/adr-128-desktop-daemon-keep-running.md)：退出时交接 0600 记录、下次启动经认证与 PID 校验后重新接管，交接失败照常停止。

@@ -2276,7 +2276,7 @@
           "line": 15
         },
         {
-          "file": "crates/metadata/src/rpc/directory.rs",
+          "file": "crates/metadata/src/directory/rpc/directory.rs",
           "line": 59
         }
       ],
@@ -5736,12 +5736,12 @@
       },
       "handlers": [
         {
-          "file": "crates/metadata/src/rpc/worktrees.rs",
+          "file": "crates/metadata/src/worktrees/rpc/worktrees.rs",
           "line": 6
         }
       ],
       "tests": [
-        "crates/metadata/src/protocol/worktrees/tests.rs",
+        "crates/metadata/src/worktrees/protocol/worktrees/tests.rs",
         "bins/daemon/tests/process/agent_execution/worktrees/pr_checkout.rs",
         "bins/daemon/tests/process/metadata_generation.rs",
         "bins/daemon/tests/process/worktrees.rs"
@@ -6002,11 +6002,11 @@
       },
       "handlers": [
         {
-          "file": "crates/metadata/src/connection/daemon.rs",
+          "file": "crates/metadata/src/daemon/connection/daemon.rs",
           "line": 21
         },
         {
-          "file": "crates/metadata/src/rpc/daemon.rs",
+          "file": "crates/metadata/src/daemon/rpc/daemon.rs",
           "line": 100
         }
       ],
@@ -6091,13 +6091,13 @@
           "line": 155
         },
         {
-          "file": "crates/metadata/src/rpc/daemon.rs",
+          "file": "crates/metadata/src/daemon/rpc/daemon.rs",
           "line": 75
         }
       ],
       "tests": [
         "crates/metadata/src/capabilities/tests.rs",
-        "crates/metadata/src/service/daemon/tests.rs",
+        "crates/metadata/src/daemon/service/daemon/tests.rs",
         "bins/daemon/tests/process/daemon.rs"
       ],
       "assessment": "名称、输入字段与实现入口已核对；语义证据见关联测试及主报告",
@@ -6138,7 +6138,7 @@
       },
       "handlers": [
         {
-          "file": "crates/metadata/src/rpc/daemon.rs",
+          "file": "crates/metadata/src/daemon/rpc/daemon.rs",
           "line": 110
         }
       ],
@@ -6241,12 +6241,12 @@
           "line": 155
         },
         {
-          "file": "crates/metadata/src/rpc/daemon.rs",
+          "file": "crates/metadata/src/daemon/rpc/daemon.rs",
           "line": 75
         }
       ],
       "tests": [
-        "crates/metadata/src/service/daemon/tests.rs",
+        "crates/metadata/src/daemon/service/daemon/tests.rs",
         "bins/daemon/tests/process/daemon.rs"
       ],
       "assessment": "名称、输入字段与实现入口已核对；语义证据见关联测试及主报告",
@@ -7164,13 +7164,13 @@
           "line": 134
         },
         {
-          "file": "crates/metadata/src/rpc/directory.rs",
+          "file": "crates/metadata/src/directory/rpc/directory.rs",
           "line": 58
         }
       ],
       "tests": [
-        "crates/metadata/src/service/directory/tests/paseo_api.rs",
-        "crates/metadata/src/service/directory/tests/synchronization.rs",
+        "crates/metadata/src/directory/service/directory/tests/paseo_api.rs",
+        "crates/metadata/src/directory/service/directory/tests/synchronization.rs",
         "crates/protocol/src/methods/tests.rs",
         "bins/daemon/tests/process/agent_execution/archive.rs",
         "bins/daemon/tests/process/agent_execution/directory_sync.rs",
@@ -7976,16 +7976,16 @@
       },
       "handlers": [
         {
-          "file": "crates/metadata/src/connection/daemon.rs",
+          "file": "crates/metadata/src/daemon/connection/daemon.rs",
           "line": 28
         },
         {
-          "file": "crates/metadata/src/rpc/daemon.rs",
+          "file": "crates/metadata/src/daemon/rpc/daemon.rs",
           "line": 82
         }
       ],
       "tests": [
-        "crates/metadata/src/rpc/daemon/tests.rs",
+        "crates/metadata/src/daemon/rpc/daemon/tests.rs",
         "bins/daemon/tests/process/daemon.rs"
       ],
       "assessment": "名称、输入字段与实现入口已核对；语义证据见关联测试及主报告",
@@ -8931,7 +8931,7 @@
       },
       "handlers": [
         {
-          "file": "crates/metadata/src/rpc/editor.rs",
+          "file": "crates/metadata/src/server/rpc/editor.rs",
           "line": 31
         }
       ],
@@ -9621,7 +9621,7 @@
       },
       "handlers": [
         {
-          "file": "crates/metadata/src/rpc/editor.rs",
+          "file": "crates/metadata/src/server/rpc/editor.rs",
           "line": 35
         }
       ],
@@ -9687,7 +9687,7 @@
       },
       "handlers": [
         {
-          "file": "crates/metadata/src/rpc/directory.rs",
+          "file": "crates/metadata/src/directory/rpc/directory.rs",
           "line": 54
         }
       ],
@@ -9755,12 +9755,12 @@
           "line": 21
         },
         {
-          "file": "crates/metadata/src/rpc/worktrees.rs",
+          "file": "crates/metadata/src/worktrees/rpc/worktrees.rs",
           "line": 7
         }
       ],
       "tests": [
-        "crates/metadata/src/protocol/worktrees/tests.rs",
+        "crates/metadata/src/worktrees/protocol/worktrees/tests.rs",
         "bins/daemon/tests/process/agent_execution/archive.rs",
         "bins/daemon/tests/process/worktrees.rs"
       ],
@@ -9826,14 +9826,14 @@
       },
       "handlers": [
         {
-          "file": "crates/metadata/src/rpc/worktrees.rs",
+          "file": "crates/metadata/src/worktrees/rpc/worktrees.rs",
           "line": 5
         }
       ],
       "tests": [
         "crates/api/src/connection/single/tests.rs",
         "crates/metadata/src/capabilities/tests.rs",
-        "crates/metadata/src/protocol/worktrees/tests.rs",
+        "crates/metadata/src/worktrees/protocol/worktrees/tests.rs",
         "bins/daemon/tests/process/agent_execution/worktrees.rs",
         "bins/daemon/tests/process/worktrees.rs",
         "bins/daemon/tests/process/worktrees/creation.rs"
@@ -10687,7 +10687,7 @@
       },
       "handlers": [
         {
-          "file": "crates/metadata/src/rpc/directory.rs",
+          "file": "crates/metadata/src/directory/rpc/directory.rs",
           "line": 50
         }
       ],
@@ -10738,7 +10738,7 @@
       },
       "handlers": [
         {
-          "file": "crates/metadata/src/rpc/directory.rs",
+          "file": "crates/metadata/src/directory/rpc/directory.rs",
           "line": 45
         }
       ],
@@ -10789,7 +10789,7 @@
       },
       "handlers": [
         {
-          "file": "crates/metadata/src/rpc/directory.rs",
+          "file": "crates/metadata/src/directory/rpc/directory.rs",
           "line": 46
         }
       ],
@@ -10843,7 +10843,7 @@
       },
       "handlers": [
         {
-          "file": "crates/metadata/src/rpc/github_projects.rs",
+          "file": "crates/metadata/src/directory/rpc/github_projects.rs",
           "line": 6
         }
       ],
@@ -10905,7 +10905,7 @@
       },
       "handlers": [
         {
-          "file": "crates/metadata/src/rpc/directory.rs",
+          "file": "crates/metadata/src/directory/rpc/directory.rs",
           "line": 50
         }
       ],
@@ -10956,7 +10956,7 @@
       },
       "handlers": [
         {
-          "file": "crates/metadata/src/rpc/directory.rs",
+          "file": "crates/metadata/src/directory/rpc/directory.rs",
           "line": 49
         }
       ],
@@ -11038,14 +11038,14 @@
       },
       "handlers": [
         {
-          "file": "crates/metadata/src/rpc/directory.rs",
+          "file": "crates/metadata/src/directory/rpc/directory.rs",
           "line": 51
         }
       ],
       "tests": [
         "crates/api/src/connection/routing/tests.rs",
         "crates/metadata/src/capabilities/tests.rs",
-        "crates/metadata/src/service/directory/tests/synchronization.rs",
+        "crates/metadata/src/directory/service/directory/tests/synchronization.rs",
         "bins/daemon/tests/process/agent_execution/directory_sync.rs",
         "bins/daemon/tests/process/directory.rs",
         "bins/daemon/tests/process/metadata.rs"
@@ -11105,7 +11105,7 @@
           "line": 16
         },
         {
-          "file": "crates/metadata/src/rpc/directory.rs",
+          "file": "crates/metadata/src/directory/rpc/directory.rs",
           "line": 53
         }
       ],
@@ -11154,7 +11154,7 @@
       },
       "handlers": [
         {
-          "file": "crates/metadata/src/rpc/directory.rs",
+          "file": "crates/metadata/src/directory/rpc/directory.rs",
           "line": 52
         }
       ],
@@ -11423,7 +11423,7 @@
       },
       "handlers": [
         {
-          "file": "crates/metadata/src/rpc/directory.rs",
+          "file": "crates/metadata/src/directory/rpc/directory.rs",
           "line": 47
         }
       ],
@@ -11636,12 +11636,12 @@
       },
       "handlers": [
         {
-          "file": "crates/metadata/src/rpc/daemon.rs",
+          "file": "crates/metadata/src/daemon/rpc/daemon.rs",
           "line": 29
         }
       ],
       "tests": [
-        "crates/metadata/src/rpc/daemon/tests.rs",
+        "crates/metadata/src/daemon/rpc/daemon/tests.rs",
         "bins/daemon/tests/process/daemon.rs"
       ],
       "assessment": "名称、输入字段与实现入口已核对；语义证据见关联测试及主报告",
@@ -13218,11 +13218,11 @@
       },
       "handlers": [
         {
-          "file": "crates/metadata/src/connection/daemon.rs",
+          "file": "crates/metadata/src/daemon/connection/daemon.rs",
           "line": 21
         },
         {
-          "file": "crates/metadata/src/rpc/daemon.rs",
+          "file": "crates/metadata/src/daemon/rpc/daemon.rs",
           "line": 88
         }
       ],
@@ -13581,12 +13581,12 @@
       },
       "handlers": [
         {
-          "file": "crates/metadata/src/rpc/daemon.rs",
+          "file": "crates/metadata/src/daemon/rpc/daemon.rs",
           "line": 45
         }
       ],
       "tests": [
-        "crates/metadata/src/rpc/daemon/tests.rs",
+        "crates/metadata/src/daemon/rpc/daemon/tests.rs",
         "bins/daemon/tests/process/daemon.rs"
       ],
       "assessment": "名称、输入字段与实现入口已核对；语义证据见关联测试及主报告",
@@ -13627,12 +13627,12 @@
       },
       "handlers": [
         {
-          "file": "crates/metadata/src/rpc/workspace_automation.rs",
+          "file": "crates/metadata/src/automation/rpc/workspace_automation.rs",
           "line": 33
         }
       ],
       "tests": [
-        "crates/metadata/src/protocol/workspace_automation/tests.rs",
+        "crates/metadata/src/automation/protocol/workspace_automation/tests.rs",
         "crates/protocol/src/methods/tests.rs",
         "bins/daemon/tests/process/agent_execution/archive.rs",
         "bins/daemon/tests/process/workspace_automation.rs"
@@ -14718,13 +14718,13 @@
       "upstreamDispatch": null,
       "handlers": [
         {
-          "file": "crates/metadata/src/rpc/workspace_automation.rs",
+          "file": "crates/metadata/src/automation/rpc/workspace_automation.rs",
           "line": 30
         }
       ],
       "tests": [
         "crates/metadata/src/capabilities/tests.rs",
-        "crates/metadata/src/protocol/workspace_automation/tests.rs",
+        "crates/metadata/src/automation/protocol/workspace_automation/tests.rs",
         "bins/daemon/tests/process/agent_execution/worktrees/pr_checkout.rs",
         "bins/daemon/tests/process/workspace_automation.rs",
         "bins/daemon/tests/process/worktrees/creation.rs"
@@ -14771,12 +14771,12 @@
       },
       "handlers": [
         {
-          "file": "crates/metadata/src/rpc/workspace_state.rs",
+          "file": "crates/metadata/src/directory/rpc/workspace_state.rs",
           "line": 33
         }
       ],
       "tests": [
-        "crates/metadata/src/protocol/workspace_state/tests.rs",
+        "crates/metadata/src/directory/protocol/workspace_state/tests.rs",
         "bins/daemon/tests/process/agent_execution/paseo_api.rs",
         "bins/daemon/tests/process/workspace_state.rs"
       ],
@@ -14840,7 +14840,7 @@
           "line": 129
         },
         {
-          "file": "crates/metadata/src/rpc/directory.rs",
+          "file": "crates/metadata/src/directory/rpc/directory.rs",
           "line": 55
         }
       ],
@@ -15812,7 +15812,7 @@
       },
       "handlers": [
         {
-          "file": "crates/metadata/src/rpc/github_projects.rs",
+          "file": "crates/metadata/src/directory/rpc/github_projects.rs",
           "line": 5
         }
       ],
@@ -15868,7 +15868,7 @@
       },
       "handlers": [
         {
-          "file": "crates/metadata/src/rpc/workspace_labels.rs",
+          "file": "crates/metadata/src/labels/rpc/workspace_labels.rs",
           "line": 123
         }
       ],
@@ -15949,7 +15949,7 @@
       },
       "handlers": [
         {
-          "file": "crates/metadata/src/rpc/workspace_labels.rs",
+          "file": "crates/metadata/src/labels/rpc/workspace_labels.rs",
           "line": 125
         }
       ],
@@ -15998,7 +15998,7 @@
       },
       "handlers": [
         {
-          "file": "crates/metadata/src/rpc/workspace_labels.rs",
+          "file": "crates/metadata/src/labels/rpc/workspace_labels.rs",
           "line": 126
         }
       ],
@@ -16051,14 +16051,14 @@
           "line": 208
         },
         {
-          "file": "crates/metadata/src/rpc/workspace_labels.rs",
+          "file": "crates/metadata/src/labels/rpc/workspace_labels.rs",
           "line": 122
         }
       ],
       "tests": [
         "crates/api/src/connection/routing/tests.rs",
         "crates/metadata/src/capabilities/tests.rs",
-        "crates/metadata/src/rpc/workspace_labels/tests.rs",
+        "crates/metadata/src/labels/rpc/workspace_labels/tests.rs",
         "bins/daemon/tests/process/workspace_labels.rs"
       ],
       "assessment": "名称、输入字段与实现入口已核对；语义证据见关联测试及主报告",
@@ -16124,7 +16124,7 @@
       },
       "handlers": [
         {
-          "file": "crates/metadata/src/rpc/workspace_labels.rs",
+          "file": "crates/metadata/src/labels/rpc/workspace_labels.rs",
           "line": 124
         }
       ],
@@ -16191,13 +16191,13 @@
       },
       "handlers": [
         {
-          "file": "crates/metadata/src/rpc/workspace_state.rs",
+          "file": "crates/metadata/src/directory/rpc/workspace_state.rs",
           "line": 34
         }
       ],
       "tests": [
         "crates/metadata/src/capabilities/tests.rs",
-        "crates/metadata/src/protocol/workspace_state/tests.rs",
+        "crates/metadata/src/directory/protocol/workspace_state/tests.rs",
         "bins/daemon/tests/process/workspace_state.rs"
       ],
       "assessment": "名称、输入字段与实现入口已核对；语义证据见关联测试及主报告",
@@ -16242,7 +16242,7 @@
       },
       "handlers": [
         {
-          "file": "crates/metadata/src/rpc/directory.rs",
+          "file": "crates/metadata/src/directory/rpc/directory.rs",
           "line": 61
         }
       ],
@@ -16295,7 +16295,7 @@
       },
       "handlers": [
         {
-          "file": "crates/metadata/src/rpc/workspace_recovery.rs",
+          "file": "crates/metadata/src/worktrees/rpc/workspace_recovery.rs",
           "line": 5
         }
       ],
@@ -16345,7 +16345,7 @@
       },
       "handlers": [
         {
-          "file": "crates/metadata/src/rpc/workspace_recovery.rs",
+          "file": "crates/metadata/src/worktrees/rpc/workspace_recovery.rs",
           "line": 6
         }
       ],
@@ -16394,12 +16394,12 @@
       },
       "handlers": [
         {
-          "file": "crates/metadata/src/rpc/workspace_automation.rs",
+          "file": "crates/metadata/src/automation/rpc/workspace_automation.rs",
           "line": 32
         }
       ],
       "tests": [
-        "crates/metadata/src/protocol/workspace_automation/tests.rs",
+        "crates/metadata/src/automation/protocol/workspace_automation/tests.rs",
         "bins/daemon/tests/process/workspace_automation.rs"
       ],
       "assessment": "名称、输入字段与实现入口已核对；语义证据见关联测试及主报告",
@@ -16444,12 +16444,12 @@
       },
       "handlers": [
         {
-          "file": "crates/metadata/src/rpc/workspace_automation.rs",
+          "file": "crates/metadata/src/automation/rpc/workspace_automation.rs",
           "line": 33
         }
       ],
       "tests": [
-        "crates/metadata/src/protocol/workspace_automation/tests.rs",
+        "crates/metadata/src/automation/protocol/workspace_automation/tests.rs",
         "crates/protocol/src/methods/tests.rs",
         "bins/daemon/tests/process/agent_execution/archive.rs",
         "bins/daemon/tests/process/workspace_automation.rs"
@@ -16500,12 +16500,12 @@
       },
       "handlers": [
         {
-          "file": "crates/metadata/src/rpc/workspace_automation.rs",
+          "file": "crates/metadata/src/automation/rpc/workspace_automation.rs",
           "line": 34
         }
       ],
       "tests": [
-        "crates/metadata/src/protocol/workspace_automation/tests.rs",
+        "crates/metadata/src/automation/protocol/workspace_automation/tests.rs",
         "bins/daemon/tests/process/workspace_automation.rs"
       ],
       "assessment": "名称、输入字段与实现入口已核对；语义证据见关联测试及主报告",
@@ -16551,12 +16551,12 @@
       "upstreamDispatch": null,
       "handlers": [
         {
-          "file": "crates/metadata/src/rpc/workspace_automation.rs",
+          "file": "crates/metadata/src/automation/rpc/workspace_automation.rs",
           "line": 31
         }
       ],
       "tests": [
-        "crates/metadata/src/protocol/workspace_automation/tests.rs",
+        "crates/metadata/src/automation/protocol/workspace_automation/tests.rs",
         "bins/daemon/tests/process/agent_execution/worktrees/pr_checkout.rs",
         "bins/daemon/tests/process/workspace_automation.rs"
       ],
@@ -16602,7 +16602,7 @@
       },
       "handlers": [
         {
-          "file": "crates/metadata/src/rpc/directory.rs",
+          "file": "crates/metadata/src/directory/rpc/directory.rs",
           "line": 60
         }
       ],
@@ -16663,7 +16663,7 @@
       },
       "handlers": [
         {
-          "file": "crates/metadata/src/rpc/directory.rs",
+          "file": "crates/metadata/src/directory/rpc/directory.rs",
           "line": 48
         }
       ],

@@ -3,7 +3,7 @@
 use std::sync::{Arc, Mutex};
 
 use domain::creation::protocol::Kind;
-use metadata::rpc::directory::WorkspaceCreated;
+use metadata::directory::rpc::directory::WorkspaceCreated;
 use model::events::Subscription;
 use model::{Context, DispatchError, ErrorCode};
 use serde_json::{Value, json};
@@ -132,8 +132,10 @@ async fn create(
             state.metadata.directory.clone(),
             ErrorCode::RegistryIo,
             move |directory| {
-                metadata::rpc::directory::workspace_creation_with_agent(directory, params, intent)
-                    .map_err(Into::into)
+                metadata::directory::rpc::directory::workspace_creation_with_agent(
+                    directory, params, intent,
+                )
+                .map_err(Into::into)
             },
         )
         .await?;
