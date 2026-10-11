@@ -2089,6 +2089,7 @@ export const es: TranslationResources = {
     },
     groupInfo: "Acerca de{{title}}",
     sections: {
+      management: "Administración",
       general: "General",
       appearance: "Apariencia",
       layout: en.settings.sections.layout,

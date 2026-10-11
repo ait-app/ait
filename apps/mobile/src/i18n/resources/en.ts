@@ -2362,6 +2362,7 @@ export const en = {
     },
     groupInfo: "About {{title}}",
     sections: {
+      management: "Management",
       general: "General",
       appearance: "Appearance",
       layout: "Layout",
