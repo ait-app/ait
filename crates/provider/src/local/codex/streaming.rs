@@ -222,17 +222,17 @@ impl Stream {
     fn tool_output(&mut self, params: &Value) -> Result<Option<AgentTurnEvent>, AgentSessionError> {
         let id = text(params, "itemId")?;
         let delta = params["delta"].as_str().ok_or(AgentSessionError::Failed)?;
-        let Some(items) = self.tools.get_mut(id) else {
+        // Compound actions append one command result; a single action owns its own output.
+        let Some((call_id, item)) = self.tools.get_mut(id).and_then(|items| items.last_mut())
+        else {
             return Ok(None);
         };
         if delta.is_empty() {
             return Ok(None);
         }
         let turn = text(params, "turnId")?;
-        let output = items
-            .first()
-            .and_then(|(_, item)| item["detail"][output_field(item)].as_str())
-            .unwrap_or_default();
+        let field = output_field(item);
+        let output = item["detail"][field].as_str().unwrap_or_default();
         // The live preview is a bounded tail. Complete native output remains in the final item.
         let mut tail = String::with_capacity(MAX_OUTPUT.min(output.len() + delta.len()));
         if delta.len() < MAX_OUTPUT {
@@ -250,12 +250,9 @@ impl Stream {
         if start > 0 {
             tail.drain(..start);
         }
-        for (_, item) in items.iter_mut() {
-            let field = output_field(item);
-            item["detail"][field] = json!(tail);
-        }
-        let items = items.clone();
-        Ok(self.tool_events(turn, items))
+        item["detail"][field] = json!(tail);
+        let item = (call_id.clone(), item.clone());
+        Ok(self.tool_events(turn, vec![item]))
     }
 
     fn tool_events(&mut self, turn: &str, items: Vec<(String, Value)>) -> Option<AgentTurnEvent> {

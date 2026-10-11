@@ -2,14 +2,16 @@ use serde_json::{Value, json};
 
 use super::preview;
 
-// Each action receives the shared output preview. Bound that amplification without
-// dropping the command: excessive or malformed action lists use the raw shell row.
+// Bound action metadata without dropping the command: excessive or malformed lists
+// use the raw shell row. Compound stdout belongs only to the original command.
 const MAX_ACTIONS: usize = 256;
 
-/// Return display details for all valid actions, or `None` to retain the raw command.
+/// Return action details and one shared command result, or `None` to retain the raw command.
 ///
 /// `native` is a Codex thread item. Non-command items, declined commands, and absent,
 /// malformed, or excessive action lists return `None` without partially projecting.
+/// Single actions own the native output; multiple actions retain metadata only and
+/// append the original command as the sole owner of stdout and exit status.
 pub(super) fn details(native: &Value) -> Option<Vec<Value>> {
     if native["type"] != "commandExecution" || native["status"] == "declined" {
         return None;
@@ -18,13 +20,22 @@ pub(super) fn details(native: &Value) -> Option<Vec<Value>> {
     if actions.is_empty() || actions.len() > MAX_ACTIONS {
         return None;
     }
-    actions
+    let single = actions.len() == 1;
+    let mut details = actions
         .iter()
-        .map(|action| detail(native, action))
-        .collect()
+        .map(|action| detail(native, action, single))
+        .collect::<Option<Vec<_>>>()?;
+    if !single {
+        details.push(shell(
+            native,
+            native["command"].as_str().unwrap_or(""),
+            true,
+        ));
+    }
+    Some(details)
 }
 
-fn detail(native: &Value, action: &Value) -> Option<Value> {
+fn detail(native: &Value, action: &Value, owns_output: bool) -> Option<Value> {
     let command = action["command"].as_str()?.trim();
     let mut detail = match action["type"].as_str()? {
         "read" => json!({"type":"read","filePath":action["path"].as_str()?}),
@@ -38,24 +49,31 @@ fn detail(native: &Value, action: &Value) -> Option<Value> {
             }
             detail
         }
-        _ => return Some(shell(native, command)),
+        _ => return Some(shell(native, command, owns_output)),
     };
-    detail["content"] = json!(preview(native["aggregatedOutput"].as_str().unwrap_or("")));
+    detail["content"] = if owns_output {
+        json!(preview(native["aggregatedOutput"].as_str().unwrap_or("")))
+    } else {
+        json!("")
+    };
     Some(detail)
 }
 
 /// Keep the selected command together with its native working directory and output.
 ///
 /// `native` supplies optional cwd, output, and exit status; `command` is either the
-/// authoritative parsed action or the raw fallback. Returns a shell detail object.
-pub(super) fn shell(native: &Value, command: &str) -> Value {
-    let mut detail = json!({"type":"shell","command":command,
-        "output":preview(native["aggregatedOutput"].as_str().unwrap_or(""))});
+/// authoritative parsed action or the raw fallback. `owns_output` distinguishes a
+/// command result from a compound action summary. Returns a shell detail object.
+pub(super) fn shell(native: &Value, command: &str, owns_output: bool) -> Value {
+    let mut detail = json!({"type":"shell","command":command,"output":""});
     if let Some(cwd) = native["cwd"].as_str() {
         detail["cwd"] = json!(cwd);
     }
-    if let Some(exit) = native["exitCode"].as_i64() {
-        detail["exitCode"] = json!(exit);
+    if owns_output {
+        detail["output"] = json!(preview(native["aggregatedOutput"].as_str().unwrap_or("")));
+        if let Some(exit) = native["exitCode"].as_i64() {
+            detail["exitCode"] = json!(exit);
+        }
     }
     detail
 }
