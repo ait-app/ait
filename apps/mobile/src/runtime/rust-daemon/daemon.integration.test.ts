@@ -62,6 +62,7 @@ it.runIf(Boolean(process.env.AIT_TEST_RUST_SERVER) && process.platform !== "win3
         transportFactory: createRustDaemonTransportFactory(base),
       });
       await client.connect();
+      await verifyStartupEventSubscriptions(client);
       const agentPhases: string[] = [];
       const agent = await client.createAgent({
         idempotencyKey: "sdk-agent",
@@ -110,6 +111,32 @@ it.runIf(Boolean(process.env.AIT_TEST_RUST_SERVER) && process.platform !== "win3
   },
   30000,
 );
+
+async function verifyStartupEventSubscriptions(client: DaemonClient) {
+  for (const events of [
+    ["provider.snapshot.update", "status.daemon_config_changed"],
+    ["project.update", "script_status_update"],
+    [
+      "agent.attention.required",
+      "terminal.attention.required",
+      "agent.permission.request",
+      "agent.permission.resolved",
+      "agent.provider_subagents.update",
+      "checkout.status.update",
+      "status.server_info",
+    ],
+  ] as const) {
+    expect(client.getLastServerInfoMessage()?.sessionEventTypes).toEqual(
+      expect.arrayContaining([...events]),
+    );
+    const subscription = client.observeEvents([...events], { supportedOnly: true });
+    try {
+      await subscription.ready;
+    } finally {
+      await subscription.release();
+    }
+  }
+}
 
 async function verifyReadInterfaces(client: DaemonClient, agentId: string, cwd: string) {
   const first = await client.fetchAgents({ page: { limit: 1 } });

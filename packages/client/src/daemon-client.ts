@@ -160,6 +160,7 @@ import {
   type WebSocketFactory,
 } from "./daemon-client-transport.js";
 import { DaemonClientRuntimeMetrics } from "./daemon-client-runtime-metrics.js";
+import { describeValidationIssues, formatDiagnosticFields } from "./diagnostic-log.js";
 import {
   normalizeListProviderModelsPayload,
   normalizeProviderSnapshotUpdateMessage,
@@ -180,9 +181,9 @@ export interface Logger {
 
 const consoleLogger: Logger = {
   debug: () => {},
-  info: (obj, msg) => console.log(msg, obj),
-  warn: (obj, msg) => console.warn(msg, obj),
-  error: (obj, msg) => console.error(msg, obj),
+  info: (obj, msg) => console.log(msg, formatDiagnosticFields(obj)),
+  warn: (obj, msg) => console.warn(msg, formatDiagnosticFields(obj)),
+  error: (obj, msg) => console.error(msg, formatDiagnosticFields(obj)),
 };
 
 const perfNow: () => number =
@@ -923,8 +924,15 @@ class DaemonRpcError extends Error {
   readonly requestId: string;
   readonly requestType?: string;
   readonly code?: string;
+  readonly eventTypes?: SessionEventSubscription[];
 
-  constructor(params: { requestId: string; error: string; requestType?: string; code?: string }) {
+  constructor(params: {
+    requestId: string;
+    error: string;
+    requestType?: string;
+    code?: string;
+    eventTypes?: SessionEventSubscription[];
+  }) {
     const parts = [params.error];
     if (params.requestType) parts.push(`requestType=${params.requestType}`);
     if (params.code) parts.push(`code=${params.code}`);
@@ -933,6 +941,7 @@ class DaemonRpcError extends Error {
     this.requestId = params.requestId;
     this.requestType = params.requestType;
     this.code = params.code;
+    this.eventTypes = params.eventTypes;
   }
 }
 
@@ -1140,7 +1149,15 @@ export class DaemonClient {
         throw error;
       }
     },
-    failed: (error) => this.logger.error({ err: error }, "Subscription failed"),
+    failed: (error) =>
+      this.logger.error(
+        {
+          err: error,
+          serverId: this.lastServerInfoMessage?.serverId,
+          serverVersion: this.lastServerInfoMessage?.version,
+        },
+        "Subscription failed",
+      ),
   });
   private transport: DaemonTransport | null = null;
   private uploadTail: Promise<void> = Promise.resolve();
@@ -1791,8 +1808,12 @@ export class DaemonClient {
             error: new DaemonRpcError({
               requestId: msg.payload.requestId,
               error: msg.payload.error,
-              requestType: msg.payload.requestType,
+              requestType: msg.payload.requestType ?? params.message.type,
               code: msg.payload.code,
+              eventTypes:
+                params.message.type === "session.events.set_subscription.request"
+                  ? params.message.events
+                  : undefined,
             }),
           };
         }
@@ -6238,8 +6259,30 @@ export class DaemonClient {
         typeof parsedJson.type === "string"
           ? parsedJson.type
           : "unknown";
-      const msgType = responseIdentity?.responseType ?? envelopeType;
-      this.logger.warn({ msgType, error: parsed.error.message }, "Message validation failed");
+      const message =
+        parsedJson != null && typeof parsedJson === "object" && "message" in parsedJson
+          ? parsedJson.message
+          : undefined;
+      const msgType =
+        message != null &&
+        typeof message === "object" &&
+        "type" in message &&
+        typeof message.type === "string"
+          ? message.type.slice(0, 128)
+          : envelopeType;
+      this.logger.warn(
+        {
+          msgType,
+          envelopeType,
+          requestId: responseIdentity?.requestId,
+          serverId: this.lastServerInfoMessage?.serverId,
+          serverVersion: this.lastServerInfoMessage?.version,
+          bytes,
+          issueCount: parsed.error.issues.length,
+          issues: describeValidationIssues(parsed.error),
+        },
+        "Message validation failed",
+      );
       if (responseIdentity) {
         this.rejectWaitersForRequestId(
           responseIdentity.requestId,

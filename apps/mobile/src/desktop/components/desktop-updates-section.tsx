@@ -293,7 +293,6 @@ function DaemonInfoCard(props: DaemonInfoCardProps) {
       <View style={[settingsStyles.row, settingsStyles.rowBorder]}>
         <View style={settingsStyles.rowContent}>
           <Text style={settingsStyles.rowTitle}>{t("desktop.daemon.fullStatus.title")}</Text>
-          <Text style={settingsStyles.rowHint}>{t("desktop.daemon.fullStatus.hint")}</Text>
         </View>
         <Button
           variant="outline"

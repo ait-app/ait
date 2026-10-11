@@ -34,6 +34,10 @@ export function serverInfo(info: Payload, implemented: Set<string>): Payload {
     desktopManaged: false,
     sessionEventTypes: [
       "status.server_info",
+      ...(features.has("directory-subscriptions-v1") && has("project.list.request")
+        ? ["project.update"]
+        : []),
+      ...(has("workspace.script.list.request") ? ["script_status_update"] : []),
       ...(features.has("checkout-git-events-v1") && has("checkout.status.get.request")
         ? ["checkout.status.update"]
         : []),

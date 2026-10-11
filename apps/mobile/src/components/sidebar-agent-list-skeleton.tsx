@@ -2,6 +2,7 @@ import { useEffect, useMemo, useRef } from "react";
 import { Animated, View, type StyleProp, type ViewStyle } from "react-native";
 import { StyleSheet } from "react-native-unistyles";
 import { projectIconRadius } from "@/components/project-icon-view";
+import { isNative } from "@/constants/platform";
 
 const PROJECT_ICON_SIZE = 16;
 
@@ -65,12 +66,12 @@ export function SidebarAgentListSkeleton() {
         Animated.timing(pulse, {
           toValue: 1,
           duration: 1000,
-          useNativeDriver: true,
+          useNativeDriver: isNative,
         }),
         Animated.timing(pulse, {
           toValue: 0,
           duration: 1000,
-          useNativeDriver: true,
+          useNativeDriver: isNative,
         }),
       ]),
     );

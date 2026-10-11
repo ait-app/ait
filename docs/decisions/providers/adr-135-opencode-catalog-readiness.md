@@ -1,4 +1,4 @@
-# ADR-134：OpenCode 目录就绪与配置确认
+# ADR-135：OpenCode 目录就绪与配置确认
 
 - 状态：Accepted。
 - 日期：2026-10-10。

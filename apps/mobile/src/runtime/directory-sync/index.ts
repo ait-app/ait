@@ -61,7 +61,7 @@ interface AgentSnapshot {
   subscriptionId: string | null;
   syncMode?: "snapshot" | "changes";
   syncCursor?: DirectoryCursor;
-  syncRemovals: Array<{ id: string; seq: number }>;
+  syncRemovals: { id: string; seq: number }[];
 }
 
 interface WorkspaceRefreshSnapshot extends WorkspaceDirectorySnapshot {
@@ -288,7 +288,9 @@ export class DirectorySync {
   private observeDirectoryEvents(): void {
     if (this.eventSubscription || !this.supportsDirectorySubscriptions()) return;
     const { client, source } = this.requireOnline();
-    this.eventSubscription = client.observeEvents(["project.update", "script_status_update"]);
+    this.eventSubscription = client.observeEvents(["project.update", "script_status_update"], {
+      supportedOnly: true,
+    });
     this.eventSubscription.subscribe({
       snapshot: () => {},
       update: (message) => {

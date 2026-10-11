@@ -1,12 +1,12 @@
 # OpenCode 模型目录与执行失败修复验证
 
 2026-10-10；基于 `dfcbb49f3a68be567ffa9dc6a378a3176cbed8a3` 的未提交工作树。
-边界决策见 [ADR-134](../../decisions/providers/adr-134-opencode-catalog-readiness.md)。
+边界决策见 [ADR-135](../../decisions/providers/adr-135-opencode-catalog-readiness.md)。
 
 ## PR 整理验证（2026-10-11）
 
 本次 PR 将原始改动整合到 `main` 的 `8cdeff9baac82495e1cef45c3cb9752c66a45a28`，
-保留主分支新增的原生错误、五会话所有权和持久化 Timeline 测试，并将冲突的 ADR 编号改为 134。
+保留主分支新增的原生错误、五会话所有权和持久化 Timeline 测试，决策最终记录在 ADR-135。
 以下初次验证结果对应 `a9c03d15b0e7afa1aa3b01ab620476e239c7d19d`，macOS arm64 / Rust 1.98.1，默认 features。
 
 - `cargo test --locked -p provider --lib local::opencode`：55 passed，14 ignored，0 failed。
@@ -28,8 +28,8 @@
 Provider 目录开始显示适配器诊断后，daemon 状态测试仍期待统一的旧错误文案。
 本地定向运行复现了相同断言差异。
 
-修正仅更新测试中四个不可用 Provider 的预期诊断文案，继续精确校验 Provider 顺序、可用性和完整诊断，
-没有修改生产行为。修正后的直接相关 daemon 模块使用 CI 相同配置验证：
+修正提交 `05d151e2e268f098daba7eb4025a3203fb121222` 仅更新测试中四个不可用 Provider 的预期诊断文案，
+继续精确校验 Provider 顺序、可用性和完整诊断，没有修改生产行为。直接相关 daemon 模块使用 CI 相同配置验证：
 `cargo nextest run --locked -p daemon --test process --profile ci -E 'test(unix::daemon::)'`，
 3 passed、93 skipped。
 `cargo test --locked -p daemon --test process daemon_status_config_diagnostics_and_update_match_canonical_contract`
@@ -37,6 +37,12 @@ Provider 目录开始显示适配器诊断后，daemon 状态测试仍期待统�
 `cargo fmt --all --check`、`npm run check:docs` 和 `git diff --check` 通过。
 此前的 96 项验证仍对应上面注明的初次提交。
 本次覆盖率状态仍为 **not measured**；未请求覆盖率，也未在本地运行完整 workspace 测试。
+
+随后同步 `main` 的 `a8434de30cbb927fbe8550cb5a19ded28b347659`：保留主分支的 RPC 许可等待实现，
+解决文档索引冲突，并将 OpenCode 决策改为唯一编号 ADR-135。合并后的本报告提交源码再次验证：
+`cargo nextest run --locked -p daemon --test process --profile ci -E 'test(unix::daemon::) | test(unix::opencode::)'`，
+6 passed、90 skipped。`cargo clippy --locked --workspace --all-targets -- -D warnings`、
+`cargo build --locked --workspace`、文档链接和格式检查通过。
 
 ## 诊断与结果
 

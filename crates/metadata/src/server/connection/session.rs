@@ -1,7 +1,7 @@
 use std::sync::Arc;
 
 use domain::session::SessionError;
-use domain::session::protocol::{EventsRequest, Heartbeat};
+use domain::session::protocol::{EventsRequest, Heartbeat, SessionEventKind};
 use model::Context;
 use model::outbound::QueueError;
 use model::{ErrorCode, ServerMessage};
@@ -37,6 +37,22 @@ pub(crate) fn subscribe(
     } = context;
     let request_id = request.id;
     let params = request.params;
+    let span = tracing::info_span!(
+        "event_subscription",
+        agent_execution = state.has_agent_execution,
+        terminals = state.has_terminals,
+        git_fetch = state.has_git_fetch,
+        directory = state.directory.is_some(),
+        workspace_automation = state.workspace_automation.is_some(),
+        daemon_configuration = state.daemon.is_some(),
+        event_count = params["events"].as_array().map_or(0, Vec::len),
+        event_kinds = ?params["events"].as_array().map(|events| {
+            events.iter().take(32).map(|event| {
+                serde_json::from_value::<SessionEventKind>(event.clone()).ok()
+            }).collect::<Vec<_>>()
+        }),
+    );
+    let _entered = span.enter();
     let prepared = (|| {
         let request: EventsRequest =
             serde_json::from_value(params).map_err(|_| ErrorCode::InvalidMessage)?;
