@@ -73,9 +73,21 @@ beforeEach(() => {
   mocks.accountStatus = "logged_out";
   vi.clearAllMocks();
 });
-afterEach(cleanup);
+afterEach(() => {
+  cleanup();
+  vi.unstubAllEnvs();
+});
 
 describe("welcome account entry", () => {
+  it("offers only online service in the website client", () => {
+    Platform.OS = "web";
+    vi.stubEnv("EXPO_PUBLIC_AIT_CONSOLE", "1");
+    const view = render(<WelcomeScreen />);
+    expect(view.queryByTestId("welcome-direct-connection")).toBeNull();
+    expect(view.queryByTestId("welcome-remote-ssh")).toBeNull();
+    fireEvent.click(view.getByTestId("welcome-account-relay"));
+    expect(view.getByTestId("account-host-panel")).toBeTruthy();
+  });
   it("waits for login sheet dismissal before opening the shared host flow", async () => {
     mocks.command.mockResolvedValueOnce({ status: "connecting" });
     const view = render(<WelcomeScreen />);

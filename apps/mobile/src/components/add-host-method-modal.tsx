@@ -1,3 +1,4 @@
+import { supportsBrowserAccount } from "@/runtime/browser-account";
 import { isElectronRuntime } from "@/desktop/host";
 import { AccountHostPanel } from "./account-host-panel";
 import { supportsAccountRelay } from "@/runtime/account-state";
@@ -54,22 +55,27 @@ export function AddHostMethodModal({
   onRemoteSsh,
 }: AddHostMethodModalProps) {
   const { t } = useTranslation();
+  const accountOnly = supportsBrowserAccount();
   const [showOnlineService, setShowOnlineService] = useState(false);
   useEffect(() => {
     if (!visible) setShowOnlineService(false);
   }, [visible]);
   const header = useMemo<SheetHeader>(
     () =>
-      showOnlineService
+      showOnlineService || accountOnly
         ? {
             title: t("onlineService.title"),
-            back: {
-              onPress: () => setShowOnlineService(false),
-              accessibilityLabel: t("common.back"),
-            },
+            ...(accountOnly
+              ? {}
+              : {
+                  back: {
+                    onPress: () => setShowOnlineService(false),
+                    accessibilityLabel: t("common.back"),
+                  },
+                }),
           }
         : { title: t("pairing.connectionMethods.title") },
-    [showOnlineService, t],
+    [showOnlineService, accountOnly, t],
   );
 
   const handleDirect = useCallback(() => {
@@ -87,7 +93,7 @@ export function AddHostMethodModal({
       onClose={onClose}
       testID="add-host-method-modal"
     >
-      {showOnlineService ? (
+      {showOnlineService || accountOnly ? (
         <AccountHostPanel onSignedIn={onClose} onCancel={onClose} />
       ) : (
         <>

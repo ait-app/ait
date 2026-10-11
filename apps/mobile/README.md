@@ -53,7 +53,7 @@ Android 和 iOS 支持账户登录与中继：首次启动点击欢迎页的 **O
 登录凭据保存在系统安全存储中，退到后台暂停连接，回到前台重新验证账户节点。
 使用自建服务时，在 **Service settings** 中填写 API 基础地址；留空则使用默认服务
 `https://dash.ait-app.com:8443/api`。已保存的账户继续使用原先配置的地址，`/hosts` 是管理页面，不是 API 基础地址。
-手机不运行 daemon，也不作为工作主机出现在列表里。浏览器仍使用直接连接。
+手机不运行 daemon，也不作为工作主机出现在列表里。独立 Web 开发默认仍使用直接连接；管理网站的 Web 构建启用账号中继，见下文。
 要让电脑上线，在其 **Host → Connections → Sync with online service（主机 → 连接 → 与在线服务同步）** 点击连接。
 停止同步只影响当前主机。客户端退出账户只释放自身节点与绑定 daemon 的租约，其他 daemon 保留原账户授权并继续续租，退出登录后仍可在对应主机中主动停止。
 应用运行期间负责这些主机的续租；关闭应用不主动撤销远程租约，但进程停止或授权失效后无法续租。重新启动应用后需再次启用同步；旧 daemon 需更新后才能使用此入口。
@@ -90,3 +90,10 @@ APP_BROWSER_UI=1 node scripts/validate-app-rust-browser.mjs
 [ADR-084](../../docs/decisions/clients/adr-084-ios-account-relay.md)。
 直接连接边界见 [ADR-049](../../docs/decisions/clients/adr-049-app-rust-browser-transport.md) 和
 [实施报告](../../docs/reports/clients/app-rust-daemon.md)。
+
+## 管理网站的客户端入口
+
+由相邻 ait-server 执行 `npm --prefix web run build:client`，将本界面导出至网站 `/client/`。
+构建使用 `AIT_WEB_BASE_PATH=/client EXPO_PUBLIC_AIT_CONSOLE=1`，共享网站登录和同源 `/api`，
+网页仅提供在线服务连接。刷新与浏览器重启保留有效登录，退出或会话失效时清理。
+完整边界见 [ADR-132](../../docs/decisions/clients/adr-132-web-console-client.md)。

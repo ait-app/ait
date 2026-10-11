@@ -1,3 +1,5 @@
+import { supportsBrowserAccount } from "../browser-account";
+import { createBrowserAccountRelayTransportFactory } from "./browser-account-relay";
 import { getDesktopHost } from "@/desktop/host";
 import { Platform } from "react-native";
 import { createNativeAccountRelayTransportFactory } from "./native-account-transport";
@@ -9,6 +11,8 @@ export const createAccountRelayTransportFactory: TransportFactory = ({ url }) =>
   if (Platform.OS === "android" || Platform.OS === "ios")
     return createNativeAccountRelayTransportFactory()({ url });
   const desktop = getDesktopHost();
+  if (!desktop?.invoke && supportsBrowserAccount())
+    return createBrowserAccountRelayTransportFactory({ url });
   if (!desktop?.invoke || !desktop.events?.on)
     throw new Error("Online relay requires the native mobile or desktop app.");
   const target = parseAccountRelayTarget(url);

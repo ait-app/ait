@@ -1,5 +1,7 @@
 # Ait 文档
 
+- [ADR-132：管理网站中的浏览器客户端](decisions/clients/adr-132-web-console-client.md)：同源会话、浏览器中继、Web 导出与客户端入口。
+
 本文档索引只覆盖当前 Ait：Rust daemon、Electron desktop、共享 Web/移动界面和仓库内 SDK。
 当前源码布局与依赖见[当前架构](architecture/README.md)，目录命名规则见 [ADR-072](decisions/daemon/adr-072-workspace-names-and-documentation.md)。
 

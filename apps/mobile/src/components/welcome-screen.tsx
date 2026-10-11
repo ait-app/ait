@@ -1,3 +1,4 @@
+import { supportsBrowserAccount } from "@/runtime/browser-account";
 import { AitLogo } from "@/components/icons/ait-logo";
 import { Button } from "@/components/ui/button";
 import { isNative } from "@/constants/platform";
@@ -225,16 +226,16 @@ export function WelcomeScreen({ onHostAdded }: WelcomeScreenProps) {
     [onHostAdded, finishOnboarding],
   );
 
-  const actions: WelcomeAction[] = [
-    {
+  const actions: WelcomeAction[] = [];
+  if (!supportsBrowserAccount())
+    actions.push({
       key: "direct-connection",
       label: t("pairing.connectionMethods.direct.title"),
       testID: "welcome-direct-connection",
       primary: !accountAvailable,
       icon: Link2,
       onPress: handleOpenDirect,
-    },
-  ];
+    });
 
   if (isElectronRuntime()) {
     actions.splice(1, 0, {
