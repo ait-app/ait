@@ -481,11 +481,17 @@ export function normalizeStoredHostProfile(entry: unknown): HostProfile | null {
 
   const now = new Date().toISOString();
   const label = normalizeHostLabel(record.label, serverId);
+  const storedPreferred = record.connections.find(
+    (connection) => connection.id !== undefined && connection.id === record.preferredConnectionId,
+  );
+  const normalizedPreferredId = storedPreferred
+    ? normalizeStoredConnection(storedPreferred)?.id
+    : record.preferredConnectionId;
   const preferredConnectionId =
-    record.preferredConnectionId !== null &&
-    record.preferredConnectionId !== undefined &&
-    connections.some((connection) => connection.id === record.preferredConnectionId)
-      ? record.preferredConnectionId
+    normalizedPreferredId !== null &&
+    normalizedPreferredId !== undefined &&
+    connections.some((connection) => connection.id === normalizedPreferredId)
+      ? normalizedPreferredId
       : (connections[0]?.id ?? null);
 
   return {

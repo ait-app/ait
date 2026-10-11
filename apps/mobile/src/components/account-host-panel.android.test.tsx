@@ -8,7 +8,7 @@ import { AccountHostPanel } from "./account-host-panel";
 const state = vi.hoisted(() => ({
   value: {
     status: "online",
-    center: "https://dash.ait-app.com:8443/api",
+    center: "https://aitapp.cn:8443/api",
     name: "Me",
     hostOnline: false,
     stale: false,

@@ -7,7 +7,7 @@
 检查实际服务地址：
 
 ```sh
-curl https://dash.ait-app.com:8443/api/v1/auth/providers
+curl https://aitapp.cn:8443/api/v1/auth/providers
 ```
 
 响应须包含 `authing_enabled: true`、`native_login_enabled: true`。客户端不填写 App ID 或 App Secret，开发环境可在「在线服务 → 服务设置」填写对应 API 地址，例如 `https://ait.h.stdin.in:8443/api`。
