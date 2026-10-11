@@ -868,6 +868,7 @@ const styles = StyleSheet.create((theme) => ({
     color: theme.colors.foregroundMuted,
     fontSize: theme.fontSize.sm,
     fontWeight: theme.fontWeight.normal,
+    userSelect: "none",
   },
   workspacesSectionActions: {
     flexDirection: "row",
