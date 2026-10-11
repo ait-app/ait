@@ -92,7 +92,7 @@ describe("account activation", () => {
     const { manager, http, deps } = fixture();
     await manager.loginWithBrowser("");
     const [url, request] = http.mock.calls[1]!;
-    expect(url).toBe("https://dash.ait-app.com:8443/api/v1/auth/client/exchange");
+    expect(url).toBe("https://aitapp.cn:8443/api/v1/auth/client/exchange");
     expect(request?.method).toBe("POST");
     expect(JSON.parse(String(request?.body))).toEqual({
       code: "c".repeat(64),
@@ -108,10 +108,10 @@ describe("account activation", () => {
     expect(manager.snapshot().center).toBe(DEFAULT_ACCOUNT_CENTER);
     await manager.loginWithBrowser("");
     await vi.advanceTimersByTimeAsync(1);
-    expect(http.mock.calls[0]?.[0]).toBe("https://dash.ait-app.com:8443/api/v1/auth/providers");
+    expect(http.mock.calls[0]?.[0]).toBe("https://aitapp.cn:8443/api/v1/auth/providers");
     expect(http.mock.calls.some(([url]) => String(url).endsWith("/relay-sessions"))).toBe(false);
     expect(deps.local).toHaveBeenCalledWith("PUT", {
-      center_url: "https://dash.ait-app.com:8443/api",
+      center_url: "https://aitapp.cn:8443/api",
       control_ticket: "short-lived-control-ticket",
       node_session_id: "activation",
     });
@@ -120,11 +120,11 @@ describe("account activation", () => {
     );
     await manager.select("remote");
     expect((await manager.openVisit("remote", DEFAULT_ACCOUNT_CENTER)).url).toBe(
-      "wss://dash.ait-app.com:8443/api/v1/relay/sessions/visit/client",
+      "wss://aitapp.cn:8443/api/v1/relay/sessions/visit/client",
     );
     expect(
       (await manager.openDownload("remote", "download-token", DEFAULT_ACCOUNT_CENTER)).url,
-    ).toBe("wss://dash.ait-app.com:8443/api/v1/relay/sessions/visit/client");
+    ).toBe("wss://aitapp.cn:8443/api/v1/relay/sessions/visit/client");
     expect(
       http.mock.calls.every(([url]) => String(url).startsWith(`${DEFAULT_ACCOUNT_CENTER}/v1/`)),
     ).toBe(true);

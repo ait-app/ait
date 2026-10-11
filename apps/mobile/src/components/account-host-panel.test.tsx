@@ -11,7 +11,7 @@ vi.mock("@/runtime/account-state", () => ({
   accountCommand: vi.fn(async () => ({ status: "connecting" })),
   useAccountState: () => ({
     status: "logged_out",
-    center: "https://dash.ait-app.com:8443/api",
+    center: "https://aitapp.cn:8443/api",
     error: null,
     loginPending: state.loginPending,
   }),
@@ -36,7 +36,7 @@ describe("AccountHostPanel browser login", () => {
     fireEvent.click(view.getByTestId("account-unified-login"));
     await waitFor(() =>
       expect(accountCommand).toHaveBeenCalledExactlyOnceWith("account_login_hosted", {
-        center: "https://dash.ait-app.com:8443/api",
+        center: "https://aitapp.cn:8443/api",
       }),
     );
     expect(signedIn).toHaveBeenCalledOnce();

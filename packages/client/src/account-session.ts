@@ -5,7 +5,7 @@ import {
 } from "./account-browser-login.js";
 
 /** API base includes the management gateway prefix; all relay URLs derive from it. */
-export const DEFAULT_ACCOUNT_CENTER = "https://dash.ait-app.com:8443/api";
+export const DEFAULT_ACCOUNT_CENTER = "https://aitapp.cn:8443/api";
 
 export interface AccountHost {
   host_id: string;
@@ -117,7 +117,9 @@ export function normalizeCenter(value: string): string {
   ) {
     throw new Error("The service URL must use HTTPS. HTTP is allowed only for local development.");
   }
-  return url.toString().replace(/\/+$/, "");
+  const center = url.toString().replace(/\/+$/, "");
+  // Migrate the former official endpoint, including saved accounts and relay hosts.
+  return center === "https://dash.ait-app.com:8443/api" ? DEFAULT_ACCOUNT_CENTER : center;
 }
 
 function retryDelay(failures: number): number {

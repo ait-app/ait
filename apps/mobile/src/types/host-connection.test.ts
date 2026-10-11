@@ -51,6 +51,27 @@ describe("orderHostsLocalFirst", () => {
 });
 
 describe("normalizeStoredHostProfile", () => {
+  it("migrates a saved official relay host while retaining its preferred connection", () => {
+    const hostId = "11111111-1111-4111-8111-111111111111";
+    const center = "https://dash.ait-app.com:8443/api";
+    const oldId = `account-relay:${encodeURIComponent(center)}:${hostId}`;
+    const migrated = createAccountRelayHostConnection({
+      hostId,
+      center: "https://aitapp.cn:8443/api",
+    });
+    const profile = normalizeStoredHostProfile({
+      serverId: "srv_account",
+      label: "Workstation",
+      connections: [
+        { type: "directTcp", endpoint: "localhost:6767" },
+        { id: oldId, type: "accountRelay", hostId, center },
+      ],
+      preferredConnectionId: oldId,
+    });
+    expect(profile?.connections[1]).toEqual(migrated);
+    expect(profile?.preferredConnectionId).toBe(migrated.id);
+  });
+
   it("restores saved online-service hosts with their service binding and appearance", () => {
     const connection = createAccountRelayHostConnection({
       hostId: "11111111-1111-4111-8111-111111111111",
