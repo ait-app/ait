@@ -1,5 +1,17 @@
 # Ait changelog
 
+## 0.0.28 - 2026-10-11
+
+- Preserve native usage and permission events, carry source timestamps, and accept older hosts' supported control-event formats.
+- Restore startup and reconnect subscriptions using the current host's advertised capabilities, and queue workspace directory and label initialization when background tasks are busy.
+- Release established timeline subscriptions before requesting replacements to avoid exhausting subscription slots during tab changes.
+- Display persisted agent history before native replay, reconcile it in the background, and keep older history available through bounded cursor pages.
+- Keep Changes refresh connected under contention by isolating foreground checkout work and waiting for output capacity while allowing small control responses to proceed.
+- Support the hosted browser client with shared website login, persistent account sessions, online hosts, browser downloads, and an embedded management tab.
+- Treat a moved ShipIt staging bundle as an unknown staged version instead of reporting a failed update diagnostic.
+- Group metadata modules by capability, move Workspace lifecycle RPCs into metadata, and keep Agent Skills owned by the provider component.
+- Refresh the product guide and keep changed-file UI lint independent of the repository-wide formatting check.
+
 ## 0.0.27 - 2026-10-11
 
 - Keep the built-in daemon running after desktop quit when enabled, and reconnect to the same authenticated daemon on the next launch.
