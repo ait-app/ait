@@ -2,98 +2,76 @@
 
 <img src="logo.svg" alt="Ait logo" width="96" height="96" />
 
-Ait 是一个本地优先的多 Agent 管理器，统一在线协作平台、本地 Agent 运行时和任务界面。
-本机服务使用 Rust，Electron 桌面与 Expo 界面共用当前 daemon、客户端 SDK 和连接协议。
+**在一个界面里管理多个编程 Agent。**
 
-## 开始开发
+Ait 支持 Codex、Claude Code、OpenCode、DeepSeek Harness 等编程 Agent。
+你可以在电脑上同时使用多个 Agent，查看文件和 Git 变更、操作终端，也可以从手机或另一台电脑连接，查看进度、发送消息和处理审批。
+Ait 提供中央中继服务：设备不在同一网络时，登录同一账户即可连接在线工作电脑，无需为工作电脑配置公网 IP 或路由器端口转发。
 
-可选使用 Nix/direnv 进入包含 Rust、Clippy、LLVM coverage、Node.js 和构建工具的开发环境：
+[下载安装](https://github.com/ait-app/ait/releases) · [更新记录](CHANGELOG.md)
 
-```bash
-nix develop
-# 或使用已审阅的 .envrc
-direnv allow
-```
+## 可以做什么
+
+- **Agent 对话**：发送任务，查看回复、工具调用和运行状态，处理权限审批。
+- **项目与文件**：添加项目、创建 Git worktree，浏览文件、查看代码变更、使用终端。
+- **中央中继与远程连接**：通过中央中继，从另一台电脑、Android 或 iOS 设备跨网络访问运行 Agent 的电脑，继续对话、查看文件和操作终端。浏览器也可以直接连接后台服务。
+- **Agent 设置**：选择 Agent 提供的模型和权限选项，继续已有会话。可用选项取决于安装的 Agent 及其版本。
+
+Agent 在你连接的电脑上运行。使用本机 Agent 时无需登录 Ait 账户；
+模型和账号使用各 Agent 自己的配置。
+
+## 开始使用
+
+### 在电脑上使用
+
+1. 从 [GitHub Releases](https://github.com/ait-app/ait/releases) 下载适合系统的桌面安装包：macOS Apple Silicon 或 Linux x86_64。
+2. 在工作电脑上安装并完成所需编程 Agent 的认证，确保其可独立运行。
+3. 启动 Ait，添加项目、进入工作区，选择可用的 Agent 开始任务。
+
+桌面安装包内置 daemon，由应用自动启动。
+
+### 从其他设备连接
+
+1. 在工作电脑的桌面应用中打开 **Online Service（在线服务）**，通过浏览器统一登录（邮箱、Google 或微信）。入口位于欢迎页、**Settings → App → Online Service** 或 **Add Host → Online Service**。
+2. 在另一台电脑、Android 或 iOS 应用中登录同一账户，选择在线主机，即可通过中央中继连接。
+
+应用默认使用 `https://dash.ait-app.com:8443/api` 作为在线服务地址。
+两端只需能访问在线服务，无需处于同一局域网，也无需开放工作电脑的入站端口。中继负责转发连接，Agent 和项目文件仍在工作电脑上。
+桌面登录后默认同步内置 daemon；如果之前手动停止了同步，可在主机连接设置中重新启用。远程访问时，工作电脑及其服务需要保持运行。
+
+Android 和 iOS 作为客户端连接电脑，不在手机上运行 daemon。浏览器客户端仅使用直接连接。
+登录入口与连接细节见 [客户端开发指南](apps/mobile/README.md)。
+
+## 本地开发
+
+准备 Git、Node.js 24、npm，以及 [rust-toolchain.toml](rust-toolchain.toml) 指定的 Rust 工具链。
+仓库提供可选的 Nix 开发环境，运行 `nix develop` 可进入包含 Rust、Node.js 和构建工具的环境。
+
+在仓库根目录运行：
 
 ```bash
 npm ci
 npm run dev:desktop
 ```
 
-桌面入口会构建共享包、daemon 和 Electron 主进程，启动 Expo 与桌面应用。
-移动端与 Web 的启动方式见 [apps/mobile](apps/mobile/README.md)。
+开发入口会构建共享包、Rust daemon 和 Electron 主进程，再启动界面与桌面应用。
 
-独立运行 daemon：
+需要单独运行后台服务时：
 
 ```bash
 export AIT_SERVER_TOKEN="$(openssl rand -hex 32)"
 cargo run -p daemon --bin daemon -- --listen 127.0.0.1:7316
 ```
 
-配置、认证、数据目录和协议见 [daemon 手册](docs/operations/daemon.md)。
-已有 `AIT_SERVER_*` 配置保持兼容，桌面安装包携带 `resources/bin/daemon`。
+客户端连接时填写主机地址、端口 `7316` 和上述 `AIT_SERVER_TOKEN` 的值。
+`127.0.0.1` 仅允许本机连接。
 
-## 通过账户连接其他主机
+移动端与 Web 的开发方式见 [客户端开发指南](apps/mobile/README.md)；
+更多配置、架构和发布资料见 [文档索引](docs/README.md)。
+参与开发时请遵循 [仓库规范](AGENTS.md)和 [Rust 规范](docs/policy/rust.md)；CI 检查列表见 [CI 配置](.github/workflows/ci.yml)。
 
-桌面、Android 和 iOS 应用的默认在线服务地址为 `https://dash.ait-app.com:8443/api`。
-在欢迎页的 **Online Service（在线服务）**、**Settings → App → Online Service** 或
-**Add Host → Online Service** 使用浏览器统一登录（邮箱、Google 或微信）。
-桌面登录后默认同步内置 daemon；选择在线主机即可通过中继访问它的工作区、Agent、终端和文件。
-浏览器仅使用直接连接。
+## 许可证与致谢
 
-登录入口与中继细节见 [移动端与 Web](apps/mobile/README.md)、
-[ADR-083](docs/decisions/clients/adr-083-online-service-host-sync.md)、
-[ADR-084](docs/decisions/clients/adr-084-ios-account-relay.md) 与
-[ADR-123](docs/decisions/clients/adr-123-browser-only-account-login.md)。
-
-## Workspace
-
-| 目录           | 职责                                                                                                                  |
-| -------------- | --------------------------------------------------------------------------------------------------------------------- |
-| `bins/daemon`  | Rust 服务入口、配置和组装                                                                                             |
-| `crates/`      | `domain`、`model`、`persistence`、`api`、`relay` 及 metadata/filesystem/provider/terminal/voice/schedule/browser 能力 |
-| `apps/desktop` | `@ait/desktop` Electron 桌面和 daemon 生命周期                                                                        |
-| `apps/mobile`  | `@ait/mobile` 桌面、Web 与移动端共享界面                                                                              |
-| `packages/`    | 本地私有 SDK、协议、高亮和音频模块                                                                                    |
-| `docs/`        | 当前架构、分类 ADR、运维、工程规范和验证报告                                                                          |
-
-本地包使用显式 `file:` 依赖，运行 `npm run verify:local-packages` 校验。
-Rust 依赖方向见 [当前架构](docs/architecture/README.md)，所有修改遵循 [AGENTS.md](AGENTS.md)。
-
-## OpenCode
-
-使用本机已登录的 OpenCode 1.x / 2.x，可用 `AIT_SERVER_OPENCODE_BIN` 指定可执行文件。
-原生表单问答已验证于 2.0.26；缺少删除会话能力时，Ait 不创建查询或摘要会话。
-通过官方 `opencode acp` 提供原生模式、模型发现、对话、审批、结构化问答、取消和恢复。
-协议与能力限制见 [OpenCode ACP 适配决策](docs/decisions/providers/adr-115-opencode-acp-provider.md)。
-
-## 验证与发布
-
-```bash
-cargo fmt --all --check
-cargo clippy --locked --workspace --all-targets -- -D warnings
-cargo nextest run --locked --workspace
-cargo test --locked --workspace --doc
-npm run verify:local-packages
-npm run verify:release
-npm run check:docs
-npm run test:release
-npm run test:mobile-release
-npm run build:desktop-main
-npm run typecheck --workspace=@ait/desktop --workspace=@ait/mobile
-npm test --workspace=@ait/desktop
-npm run test:sdk
-```
-
-CI 另外运行 `@ait/protocol`、`@ait/highlight` 及选定的 `@ait/mobile` 测试，
-完整列表见 [CI 配置](.github/workflows/ci.yml)。
-本地只运行改动代码及直接相关行为的测试，提交与 PR 准备也不例外；完整 Rust 测试
-（`cargo nextest run --workspace` 与 `cargo test --workspace --doc`）和覆盖率仅在明确要求时运行，
-详见 [Rust 规范](docs/policy/rust.md)。
-GitHub Release 支持 Linux x86_64 和 Apple Silicon；构建、签名与移动发布见
-[发布指南](docs/operations/releasing.md)。更多资料见 [文档索引](docs/README.md)。
-
-## 许可证
-
-Ait 以 [Apache License 2.0](LICENSE) 开源，与 Paseo 一致。第三方代码保留其原有许可证和版权声明，
-Paseo 来源与许可证见 [paseo](paseo/README.md)。
+Ait 采用 [Apache License 2.0](LICENSE)。客户端最初基于 [Paseo](paseo/README.md)，并在此基础上持续开发；
+来源、修改范围与版权声明见 [Paseo 来源说明](paseo/README.md)及 [NOTICE](third-party/paseo/NOTICE)。
+第三方代码保留各自的许可证与版权声明。
