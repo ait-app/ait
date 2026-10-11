@@ -1,7 +1,7 @@
 use std::sync::Arc;
 
 use filesystem::git::local::provisioning::LocalDirectorySource;
-use metadata::service::directory::{Directory, DirectoryDependencies};
+use metadata::directory::service::directory::{Directory, DirectoryDependencies};
 use model::{Request, outbound::Outbound};
 use persistence::storage::project_config::LocalProjectConfigStore;
 use persistence::storage::project_icon::LocalProjectIconStore;

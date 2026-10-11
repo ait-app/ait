@@ -5,11 +5,13 @@ use std::sync::{Arc, Mutex};
 use filesystem::files::service::files::Files;
 use filesystem::forge::service::forge::Forge;
 use filesystem::git::service::checkout::Checkout;
-use metadata::service::{
-    daemon::Daemon, directory::Directory, github_projects::GithubProjects,
-    workspace_automation::WorkspaceAutomation, workspace_labels::WorkspaceLabels,
-    workspace_recovery::WorkspaceRecovery, workspace_state::WorkspaceState, worktrees::Worktrees,
+use metadata::automation::service::workspace_automation::WorkspaceAutomation;
+use metadata::daemon::service::daemon::Daemon;
+use metadata::directory::service::{
+    directory::Directory, github_projects::GithubProjects, workspace_state::WorkspaceState,
 };
+use metadata::labels::service::workspace_labels::WorkspaceLabels;
+use metadata::worktrees::service::{workspace_recovery::WorkspaceRecovery, worktrees::Worktrees};
 use provider::service::{agent_execution::AgentExecution, agents::Agents};
 
 use crate::Services;
@@ -20,7 +22,8 @@ pub(super) struct Parts {
     /// Bounded model-backed wording generation shared by title and Git use cases.
     pub(super) summary_source: Option<Arc<dyn model::summary::SummarySource>>,
     /// First-prompt workspace naming with independently drained background work.
-    pub(super) workspace_names: Option<metadata::service::workspace_names::WorkspaceNames>,
+    pub(super) workspace_names:
+        Option<metadata::directory::service::workspace_names::WorkspaceNames>,
     /// Persistent timed Agent executions.
     pub(super) schedules: Option<schedule::service::Schedules>,
     /// Connection-owned browser automation broker.
@@ -28,7 +31,7 @@ pub(super) struct Parts {
     /// Orchestration skill selection and installation.
     pub(super) skills: Option<provider::skills::service::skills::Skills>,
     /// Durable push registration and lease renewal.
-    pub(super) push_tokens: Option<metadata::service::push::PushTokens>,
+    pub(super) push_tokens: Option<metadata::push::service::push::PushTokens>,
     /// Connection-owned voice and dictation with independently selected speech engines.
     pub(super) speech: Option<voice::service::Speech>,
     /// Local PTY terminal lifecycle, input, capture, and streaming.

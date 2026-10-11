@@ -13,7 +13,7 @@ use domain::workspace::registry::RegistryError;
 use domain::workspace::registry::{
     WorkspaceArchiveContext, WorkspaceMutation, WorkspaceMutationContext,
 };
-use metadata::service::workspace_state::WorkspaceState;
+use metadata::directory::service::workspace_state::WorkspaceState;
 use model::workspace::attention::WorkspaceAttention;
 use model::workspace::registry::WorkspaceRegistry;
 use model::workspace::registry::{MutationListener, MutationSubscription};

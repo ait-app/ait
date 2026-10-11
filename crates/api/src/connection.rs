@@ -379,7 +379,7 @@ async fn process_event(
         && state.metadata.push_tokens.is_some()
         && capabilities.iter().any(|capability| capability == &method)
     {
-        if let Err(code) = metadata::connection::push::register(
+        if let Err(code) = metadata::push::connection::push::register(
             params,
             &state.metadata,
             &mut subscriptions.metadata,
@@ -390,7 +390,7 @@ async fn process_event(
         }
         return Ok(());
     }
-    if method == metadata::protocol::server::HEARTBEAT_METHOD
+    if method == metadata::server::protocol::server::HEARTBEAT_METHOD
         && capabilities.iter().any(|capability| capability == &method)
     {
         let focused_terminal = params["appVisible"]
@@ -400,12 +400,14 @@ async fn process_event(
             .map(str::trim)
             .filter(|id| !id.is_empty())
             .map(str::to_owned);
-        if let Err(code) = metadata::connection::session::heartbeat(params, &subscriptions.metadata)
+        if let Err(code) =
+            metadata::server::connection::session::heartbeat(params, &subscriptions.metadata)
         {
             error(outbound, None, code)?;
             return Ok(());
         } else if let Err(code) =
-            metadata::connection::push::heartbeat(&state.metadata, &subscriptions.metadata).await
+            metadata::push::connection::push::heartbeat(&state.metadata, &subscriptions.metadata)
+                .await
         {
             error(outbound, None, code)?;
             return Ok(());

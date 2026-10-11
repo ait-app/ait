@@ -34,10 +34,10 @@ async fn binary_serves_canonical_project_workspace_directory_methods() {
     let log = root.path().join("server.log");
     let mut process = start(&state, &log);
     let address = ready(&mut process, &log).await;
-    let capabilities = metadata::rpc::directory::METHODS
+    let capabilities = metadata::directory::rpc::directory::METHODS
         .iter()
-        .chain(metadata::rpc::directory::PROJECT_CONFIG_METHODS)
-        .chain(metadata::rpc::directory::PROJECT_ICON_METHODS)
+        .chain(metadata::directory::rpc::directory::PROJECT_CONFIG_METHODS)
+        .chain(metadata::directory::rpc::directory::PROJECT_ICON_METHODS)
         .map(|method| method.name)
         .collect::<Vec<_>>();
     let mut client = connect(&address, &capabilities).await;

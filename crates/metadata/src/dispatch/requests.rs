@@ -20,7 +20,7 @@ pub(super) async fn push(
     else {
         return Err(DispatchError::NotImplemented);
     };
-    crate::connection::push::unregister(context, state, connection)
+    crate::push::connection::push::unregister(context, state, connection)
         .await
         .map_err(Into::into)
 }
@@ -42,7 +42,7 @@ pub(super) fn editor(
     }) else {
         return Err(DispatchError::NotImplemented);
     };
-    let result = crate::rpc::editor::execute(
+    let result = crate::server::rpc::editor::execute(
         &context.request.method,
         std::mem::take(&mut context.request.params),
     );
@@ -67,7 +67,7 @@ pub(super) async fn creation(
     }) else {
         return Err(DispatchError::NotImplemented);
     };
-    crate::connection::creation::dispatch(context, state, connection)
+    crate::server::connection::creation::dispatch(context, state, connection)
         .await
         .map_err(Into::into)
 }
@@ -90,7 +90,7 @@ pub(super) fn session(
     }) else {
         return Err(DispatchError::NotImplemented);
     };
-    crate::connection::session::subscribe(context, state, connection).map_err(Into::into)
+    crate::server::connection::session::subscribe(context, state, connection).map_err(Into::into)
 }
 
 /// Try the directory request branch and consume `pending` only on a match.
@@ -127,7 +127,7 @@ pub(super) async fn directory(
         return Err(DispatchError::NotImplemented);
     };
     if context.request.method == "workspace.create.request" {
-        return crate::connection::creation::create(context, state)
+        return crate::directory::connection::workspace_creation::create(context, state)
             .await
             .map_err(Into::into);
     }
@@ -138,7 +138,7 @@ pub(super) async fn directory(
             .get("subscribe")
             .is_some_and(|value| !value.is_null())
     {
-        return crate::connection::directory::subscribe(context, state, connection)
+        return crate::directory::connection::directory::subscribe(context, state, connection)
             .await
             .map_err(Into::into);
     }
@@ -146,7 +146,7 @@ pub(super) async fn directory(
         .rpc(
             state.directory.clone(),
             ErrorCode::RegistryIo,
-            crate::rpc::directory::execute,
+            crate::directory::rpc::directory::execute,
         )
         .await
         .map_err(Into::into)
@@ -191,7 +191,8 @@ pub(super) async fn daemon(
         }));
     }
     let params = std::mem::take(&mut context.request.params);
-    let result = crate::connection::daemon::dispatch(&context.request.method, params, state).await;
+    let result =
+        crate::daemon::connection::daemon::dispatch(&context.request.method, params, state).await;
     context.respond(result)?;
     Ok(None)
 }
@@ -222,7 +223,7 @@ pub(super) async fn automation(
             state.workspace_automation.clone(),
             ErrorCode::RegistryIo,
             |service, method, params| {
-                crate::rpc::workspace_automation::execute(service, method, params)
+                crate::automation::rpc::workspace_automation::execute(service, method, params)
             },
         )
         .await
@@ -250,7 +251,7 @@ pub(super) async fn workspace_state(
         .call(
             state.workspace_state.clone(),
             ErrorCode::RegistryIo,
-            crate::rpc::workspace_state::execute,
+            crate::directory::rpc::workspace_state::execute,
         )
         .await;
     match result {
@@ -282,7 +283,7 @@ pub(super) async fn worktrees(
         .call(
             state.worktrees.clone(),
             ErrorCode::RegistryIo,
-            crate::rpc::worktrees::execute,
+            crate::worktrees::rpc::worktrees::execute,
         )
         .await;
     if let Ok(reply) = &result
@@ -328,7 +329,7 @@ pub(super) async fn workspace_recovery(
             state.workspace_recovery.clone(),
             ErrorCode::RegistryIo,
             |service, method, params| {
-                crate::rpc::workspace_recovery::execute(service, method, params)
+                crate::worktrees::rpc::workspace_recovery::execute(service, method, params)
             },
         )
         .await;
@@ -358,7 +359,9 @@ pub(super) async fn github_projects(
         .rpc(
             state.github_projects.clone(),
             ErrorCode::RegistryIo,
-            |service, method, params| crate::rpc::github_projects::execute(service, method, params),
+            |service, method, params| {
+                crate::directory::rpc::github_projects::execute(service, method, params)
+            },
         )
         .await
         .map_err(Into::into)

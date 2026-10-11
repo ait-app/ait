@@ -77,7 +77,7 @@ Codex 的 [history 适配](../../crates/provider/src/local/codex/discovery.rs) �
 
 [DirectorySync](../../apps/mobile/src/runtime/directory-sync/index.ts) 有目标 ID 的本地缓存读取，但没有对应的目标 Workspace 远程读取。缓存没有目标时，Project 与 Workspace 是先后请求，Workspace 快照事务完成后才提交。
 
-客户端会传 `page.limit: 200`，但当前 [Workspace listing](../../crates/metadata/src/rpc/directory/listing.rs) 与 [Agent listing](../../crates/provider/src/rpc/agent_runtime/listing.rs) 在 `sync` 分支返回完整快照或全部变更，`hasMore: false`，不执行普通分页。因此当前支持目录同步的 Rust daemon 首次连接仍会传整份目录；不能把客户端常量视为响应规模上限。
+客户端会传 `page.limit: 200`，但当前 [Workspace listing](../../crates/metadata/src/directory/rpc/directory/listing.rs) 与 [Agent listing](../../crates/provider/src/rpc/agent_runtime/listing.rs) 在 `sync` 分支返回完整快照或全部变更，`hasMore: false`，不执行普通分页。因此当前支持目录同步的 Rust daemon 首次连接仍会传整份目录；不能把客户端常量视为响应规模上限。
 
 而且 [DirectorySync 服务端](../../crates/model/src/directory_sync.rs) 的同步是“调用方构造完整投影 → replace_all 比较 → 返回变更”，增量传输并不等于增量计算。每次重新构造 Workspace 快照还会读取所有活动记录、聚合活动状态、获取各目录的 runtime 缓存。
 

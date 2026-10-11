@@ -157,7 +157,7 @@ async fn route(
             if method == "connection.ping" {
                 context.outbound.respond(
                     request_id.clone(),
-                    metadata::rpc::server::ping(params.clone())
+                    metadata::server::rpc::server::ping(params.clone())
                         .map_err(|_| ErrorCode::InvalidMessage),
                 )?;
                 continue;

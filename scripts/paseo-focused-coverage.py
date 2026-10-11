@@ -28,7 +28,8 @@ SCOPES = [
         "workspace::", "storage::", "session::", "creation::", "server::", "methods::",
     ]),
     ("metadata", ["--lib"], [
-        "service::directory::", "workspace_automation::", "rpc::directory::", "worktrees::",
+        "directory::service::directory::", "workspace_automation::",
+        "directory::rpc::directory::", "worktrees::",
     ]),
     ("filesystem", ["--lib"], ["git::local::worktrees::", "worktree_checkout::"]),
     ("terminal", ["--lib"], ["service::", "activity::"]),
