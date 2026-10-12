@@ -106,3 +106,7 @@ fn authorization_commands_are_explicit_and_status_never_requires_or_displays_sec
         assert!(!data.exists());
     }
 }
+
+#[cfg(any(target_os = "linux", target_os = "macos"))]
+#[path = "process/headless_token.rs"]
+mod headless_token;

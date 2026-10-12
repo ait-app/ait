@@ -1,5 +1,6 @@
 # Ait 文档
 
+- [ADR-140：Headless 本地 API 凭据](decisions/daemon/adr-140-headless-local-api-token.md)：启动自动生成、持久化与环境覆盖。
 - [ADR-132：管理网站中的浏览器客户端](decisions/clients/adr-132-web-console-client.md)：同源会话、浏览器中继、Web 导出与客户端入口。
 
 本文档索引只覆盖当前 Ait：Rust daemon、Electron desktop、共享 Web/移动界面和仓库内 SDK。

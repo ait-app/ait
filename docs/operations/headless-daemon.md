@@ -32,7 +32,8 @@ daemon login --token-stdin --name build-linux
 stdin 读取到 EOF。脚本可以把已有秘密输入流连接到该命令。也支持 `--token '<JWT>'`，参数可能进入
 shell 历史或进程列表，脚本优先使用 stdin。两种 token 参数互斥；错误 token 不触发网页登录。
 
-服务仍需要本地 API 的 `AIT_SERVER_TOKEN`，由安装脚本的受保护环境配置提供，长度/字符规则与
+首次 `run --headless` 在未设置 `AIT_SERVER_TOKEN` 时自动生成 `<data-dir>/local-api.token`，
+权限为 `0600`，后续启动复用。显式环境变量优先，但不会覆盖文件；长度/字符规则与
 [普通 daemon](daemon.md) 相同。这是本地连接凭据，不是网页接入 JWT 或机器 access JWT。
 既有脚本的启动命令改为：
 
@@ -88,4 +89,4 @@ logout 尝试中心撤销并清除本地凭据。中心不可达、或初次领�
 Linux 上报 `linux`，macOS 上报 `darwin`，与桌面端一致。
 
 此版本需要先部署支持注册字段 `hostname` 和 `ait-daemon` client_id 的中心版本；中心
-仍接受旧的 `ait-linux-daemon`。
+只接受 `ait-daemon`，旧版 daemon 需要升级。

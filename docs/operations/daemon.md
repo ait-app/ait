@@ -10,7 +10,7 @@ export AIT_SERVER_TOKEN="$(openssl rand -hex 32)"
 cargo run -p daemon --bin daemon -- --listen 127.0.0.1:7316
 ```
 
-凭据只从 `AIT_SERVER_TOKEN` 读取，要求 32–256 字节可见 ASCII、无空格。
+普通启动的凭据从 `AIT_SERVER_TOKEN` 读取，要求 32–256 字节可见 ASCII、无空格。
 不从命令行、URL、TOML 或 `.env` 自动加载服务凭据。
 
 | 参数                   | 环境变量               | 默认值                                 |
@@ -139,3 +139,7 @@ npm run dev:mobile
 
 Linux 无人值守运行支持 `daemon login` 和 `daemon run --headless`，
 接入条件与命令见 [无人值守 daemon](headless-daemon.md)。
+
+## Headless 本地 API 凭据
+
+`daemon login` 后可以直接运行 `daemon run --headless`。未设置 `AIT_SERVER_TOKEN` 时，首次启动自动生成 `<data-dir>/local-api.token`（权限 0600），重启复用；默认路径为 `~/.ait-server/local-api.token`。显式环境变量优先，但不会覆盖已保存文件。该令牌与中心机器登录凭据独立，不放入 TOML，也不输出到日志。普通启动仍要求环境变量。

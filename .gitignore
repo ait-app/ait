@@ -40,3 +40,6 @@ packages/expo-two-way-audio/build/
 .tmp/
 apps/desktop/release-resources/
 packages/protocol/src/generated/validation/*.ts
+
+# Persisted headless local API credential.
+local-api.token

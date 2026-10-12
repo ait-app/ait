@@ -7,8 +7,11 @@ use std::path::PathBuf;
 use anyhow::{Context, bail};
 use clap::{Args, Parser, Subcommand};
 use persistence::File;
-use secrecy::SecretString;
+use secrecy::{ExposeSecret, SecretString};
+
 use serde::Deserialize;
+
+mod local_token;
 
 /// Daemon startup arguments; CLI values override environment and TOML settings.
 #[derive(Debug, Parser)]
@@ -107,7 +110,7 @@ pub(crate) struct Config {
     pub data_dir: PathBuf,
     /// Resolved socket address.
     pub listen: SocketAddr,
-    /// Credential supplied through the environment, never the TOML file.
+    /// Environment override or a private persisted headless credential; never in TOML.
     pub token: SecretString,
     /// Resolved logging threshold.
     pub log_level: tracing::level_filters::LevelFilter,
@@ -118,34 +121,31 @@ pub(crate) struct Config {
 
 impl Config {
     /// Resolve `cli`, values from `env`, and the selected TOML file into startup settings.
-    /// `validate_token` runs before file I/O; `validate_origin` checks every resolved origin.
+    /// Explicit credentials are validated before file I/O; headless credentials are restored or created.
+    /// `validate_origin` checks every resolved origin.
     /// Both policies are injected by the host, keeping transport dependencies outside this crate.
     /// # Errors
     /// Returns missing credentials, validation, file, TOML, address, or logging errors.
     pub(crate) fn load(
         cli: Cli,
         env: impl Fn(&str) -> Option<OsString>,
-        validate_token: impl FnOnce(&str) -> anyhow::Result<()>,
+        validate_token: impl Fn(&str) -> anyhow::Result<()>,
         validate_origin: impl Fn(&str) -> anyhow::Result<()>,
     ) -> anyhow::Result<Self> {
         let headless = matches!(cli.command, Some(Command::Run { headless: true }));
         if headless && !cfg!(any(target_os = "linux", target_os = "macos")) {
             bail!("headless runtime requires Linux or macOS");
         }
-        // Validate credentials before touching disk or opening the listener.
-        let token = env("AIT_SERVER_TOKEN")
-            .context("set AIT_SERVER_TOKEN before starting daemon")?
-            .into_string()
+        let explicit_token = env("AIT_SERVER_TOKEN")
+            .map(|value| value.into_string().map(SecretString::from))
+            .transpose()
             .map_err(|_| anyhow::anyhow!("AIT_SERVER_TOKEN must be UTF-8"))?;
-        validate_token(&token)?;
-        let token = SecretString::from(token);
-        let data_dir = cli
-            .data_dir
-            .or_else(|| env("AIT_SERVER_DATA_DIR").map(PathBuf::from))
-            .or_else(|| env("HOME").map(|home| PathBuf::from(home).join(".ait-server")))
-            .context("set --data-dir or AIT_SERVER_DATA_DIR when HOME is unavailable")?;
-        if data_dir.as_os_str().is_empty() {
-            bail!("data directory must not be empty");
+        if explicit_token.is_none() && !headless {
+            bail!("set AIT_SERVER_TOKEN before starting daemon");
+        }
+        let data_dir = data_directory(&cli, &env)?;
+        if let Some(token) = &explicit_token {
+            validate_token(token.expose_secret())?;
         }
         let explicit_config = cli.config.is_some();
         let config_path = cli.config.unwrap_or_else(|| data_dir.join("config.toml"));
@@ -192,6 +192,14 @@ impl Config {
         for origin in &web_origins {
             validate_origin(origin)?;
         }
+        // Persist credentials only after all non-secret startup settings have been validated.
+        let token = if let Some(token) = explicit_token {
+            token
+        } else {
+            let token = local_token::load_or_create(&data_dir)?;
+            validate_token(token.expose_secret())?;
+            token
+        };
         Ok(Self {
             data_dir,
             listen,
