@@ -15,6 +15,7 @@ use uuid::Uuid;
 pub(crate) struct HttpCenter {
     client: reqwest::Client,
     base: String,
+    pub(super) hostname: Option<String>,
 }
 
 #[derive(Debug)]
@@ -49,6 +50,7 @@ impl HttpCenter {
         Ok(Self {
             client,
             base: CENTER.to_owned(),
+            hostname: super::system_hostname(),
         })
     }
 
@@ -116,7 +118,7 @@ impl HttpCenter {
                 reqwest::Method::POST,
                 "/v1/auth/device/authorize",
                 None,
-                json!({"client_id":"ait-linux-daemon", "machine":machine}),
+                json!({"client_id":"ait-daemon", "machine":machine}),
             )
             .await?;
         let code = value["device_code"].as_str().ok_or(Error::Protocol)?;
@@ -245,7 +247,7 @@ impl Center for HttpCenter {
     ) -> Result<Session, Error> {
         let value = self.request(reqwest::Method::POST, "/v1/nodes/register", Some(&tokens.access_token), json!({
             "registration_id":registration, "installation_id":machine.server_id,
-            "display_name":machine.display_name, "platform":machine.platform, "app_version":machine.app_version,
+            "hostname":self.hostname, "display_name":machine.display_name, "platform":machine.platform, "app_version":machine.app_version,
             "runtime":{"server_id":machine.server_id,"instance_id":instance,"relay_modes":["ait-rust-single-v1"]}
         })).await?;
         let binding = &tokens.credential.binding;

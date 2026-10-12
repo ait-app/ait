@@ -19,8 +19,8 @@ pub(super) use http::HttpCenter;
 pub(super) use store::Store;
 
 pub(super) async fn login(data: &Path, options: Login) -> anyhow::Result<()> {
-    if !cfg!(target_os = "linux") {
-        bail!("unattended device authorization currently requires Linux");
+    if !cfg!(any(target_os = "linux", target_os = "macos")) {
+        bail!("unattended device authorization requires Linux or macOS");
     }
     login_with_center(data, options, HttpCenter::new()?).await
 }
@@ -30,67 +30,53 @@ async fn login_with_center(data: &Path, options: Login, center: HttpCenter) -> a
     let instance = InstanceLease::acquire(data)?;
     let store = Store::open(data)?;
     let previous = store.load()?;
-    let name = options.name.unwrap_or_else(default_name);
+    let explicit_name = options.name.is_some();
+    let name = options.name.unwrap_or_else(|| {
+        previous.as_ref().map_or_else(
+            || {
+                center
+                    .hostname
+                    .as_deref()
+                    .unwrap_or("ait-daemon")
+                    .to_owned()
+            },
+            |state| state.machine.display_name.clone(),
+        )
+    });
     if name.trim().is_empty() || name.len() > 128 || name.chars().any(char::is_control) {
         bail!("machine name must contain 1–128 bytes without control characters");
     }
     let machine = Machine {
         server_id: instance.server_id,
         display_name: name,
-        platform: "linux".to_owned(),
+        platform: PLATFORM.to_owned(),
         app_version: env!("CARGO_PKG_VERSION").to_owned(),
     };
-    let mut state = match (supplied, previous) {
-        (None, Some(state))
-            if state.pending.is_some() && !matches!(state.pending, Some(Pending::Refresh(_))) =>
-        {
+    let mut state = match previous {
+        Some(mut state) => {
+            if state.pending.is_none() || options.force {
+                if explicit_name {
+                    state.machine.display_name = machine.display_name;
+                }
+                state.machine.platform = machine.platform;
+                state.machine.app_version = machine.app_version;
+            }
             state
         }
-        (supplied, previous) => {
-            if previous.as_ref().is_some_and(|s| s.pending.is_some()) {
-                bail!(
-                    "an unfinished operation exists; recover it or run daemon logout before replacing it"
-                );
-            }
-            let pending = if let Some(token) = supplied {
-                Pending::Enrollment {
-                    token,
-                    request_id: Uuid::new_v4(),
-                }
-            } else {
-                let authorization = center.authorize(&machine).await?;
-                Pending::Web {
-                    device_code: authorization.device_code,
-                    user_code: authorization.user_code,
-                    request_id: Uuid::new_v4(),
-                    expires_at: Utc::now()
-                        + chrono::Duration::seconds(i64::try_from(authorization.expires_in)?),
-                    interval: authorization.interval,
-                }
-            };
-            State {
-                machine,
-                credential: previous.and_then(|s| s.credential),
-                pending: Some(pending),
-            }
-        }
+        None => State {
+            machine,
+            credential: None,
+            pending: None,
+        },
     };
     if state.machine.server_id != instance.server_id {
         bail!("device state belongs to another daemon installation");
     }
-    store.save(&state)?;
-    if let Some(Pending::Web { user_code, .. }) = &state.pending {
-        writeln!(
-            std::io::stdout(),
-            "Open {VERIFICATION_URI}\nEnter code: {user_code}"
-        )?;
-    }
     let cancel = CancellationToken::new();
-    let result = tokio::select! {
-        () = crate::shutdown_signal()? => Err(anyhow::anyhow!("authorization interrupted; rerun daemon login to recover")),
-        result = complete_login(&center, &store, &mut state, &cancel) => result.map_err(Into::into),
-    };
-    result?;
+    tokio::select! {
+        () = crate::shutdown_signal()? => bail!("authorization interrupted; rerun daemon login to recover"),
+        result = authenticate(&center, &store, &mut state, (supplied, options.force), &cancel) => result?,
+    }
     let binding = &state
         .credential
         .as_ref()
@@ -101,6 +87,83 @@ async fn login_with_center(data: &Path, options: Login, center: HttpCenter) -> a
         "Authorized Host {}. Start with daemon run --headless.",
         binding.host_id
     )?;
+    Ok(())
+}
+
+async fn authenticate(
+    center: &HttpCenter,
+    store: &Store,
+    state: &mut State,
+    authorization: (Option<SecretString>, bool),
+    cancel: &CancellationToken,
+) -> anyhow::Result<()> {
+    let (supplied, force) = authorization;
+    if supplied.is_none() && !force {
+        match restore_login(center, store, state, cancel).await {
+            Ok(true) => return Ok(()),
+            Ok(false) | Err(Error::Unauthorized | Error::Denied) => {}
+            Err(error) => return Err(error.into()),
+        }
+    } else if state.pending.is_some() && !force {
+        bail!(
+            "an unfinished operation exists; rerun daemon login to recover or use daemon login --force to start a new authorization"
+        );
+    }
+    state.pending = Some(if let Some(token) = supplied {
+        Pending::Enrollment {
+            token,
+            request_id: Uuid::new_v4(),
+        }
+    } else {
+        let authorization = center.authorize(&state.machine).await?;
+        Pending::Web {
+            device_code: authorization.device_code,
+            user_code: authorization.user_code,
+            request_id: Uuid::new_v4(),
+            expires_at: Utc::now()
+                + chrono::Duration::seconds(i64::try_from(authorization.expires_in)?),
+            interval: authorization.interval,
+        }
+    });
+    store.save(state)?;
+    show_approval(state)?;
+    complete_login(center, store, state, cancel).await?;
+    Ok(())
+}
+
+async fn restore_login(
+    center: &HttpCenter,
+    store: &Store,
+    state: &mut State,
+    cancel: &CancellationToken,
+) -> Result<bool, Error> {
+    if matches!(
+        state.pending,
+        Some(Pending::Web { .. } | Pending::Enrollment { .. })
+    ) {
+        show_approval(state).map_err(|_| Error::Unavailable)?;
+        complete_login(center, store, state, cancel).await?;
+        return Ok(true);
+    }
+    if state.credential.is_none() {
+        return Ok(false);
+    }
+    loop {
+        let tokens = host_link::authorization::restore(center, store, state).await?;
+        if tokens.access_expires_at > Utc::now() {
+            return Ok(true);
+        }
+        // A replayed receipt keeps its original expiry. Rotate its committed successor.
+    }
+}
+
+fn show_approval(state: &State) -> std::io::Result<()> {
+    if let Some(Pending::Web { user_code, .. }) = &state.pending {
+        writeln!(
+            std::io::stdout(),
+            "Open {VERIFICATION_URI}\nEnter code: {user_code}"
+        )?;
+    }
     Ok(())
 }
 
@@ -277,15 +340,27 @@ pub(super) fn read_token(
     Ok(token)
 }
 
-fn default_name() -> String {
-    std::fs::read_to_string("/etc/hostname")
-        .ok()
-        .map(|s| s.trim().to_owned())
-        .filter(|s| !s.is_empty())
-        .unwrap_or_else(|| "linux-daemon".to_owned())
+/// Platform spelling shared with desktop node registration.
+pub(super) const PLATFORM: &str = if cfg!(target_os = "macos") {
+    "darwin"
+} else {
+    std::env::consts::OS
+};
+
+#[cfg(unix)]
+fn system_hostname() -> Option<String> {
+    let system = rustix::system::uname();
+    let name = system.nodename().to_str().ok()?.trim();
+    (!name.is_empty() && name.len() <= 255 && !name.chars().any(char::is_control))
+        .then(|| name.to_owned())
 }
 
-#[cfg(all(test, target_os = "linux"))]
+#[cfg(not(unix))]
+fn system_hostname() -> Option<String> {
+    None
+}
+
+#[cfg(all(test, any(target_os = "linux", target_os = "macos")))]
 mod tests;
 
 /// Daemon-owned adapter writes a non-secret snapshot for CLI status without taking the credential lock.

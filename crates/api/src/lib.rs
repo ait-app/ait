@@ -170,6 +170,14 @@ fn runtime_info(
     }))
 }
 
+fn validate_listener(address: SocketAddr, token: &SecretString) -> Result<(), ConfigError> {
+    use secrecy::ExposeSecret;
+    if address.port() == 0 {
+        return Err(ConfigError::InvalidAddress);
+    }
+    validate_token(token.expose_secret())
+}
+
 impl Api {
     /// Claim exclusive Relay control before sharing or serving the API.
     ///
@@ -210,11 +218,7 @@ impl Api {
         token: SecretString,
         services: Services,
     ) -> Result<Self, ConfigError> {
-        use secrecy::ExposeSecret;
-        if address.port() == 0 {
-            return Err(ConfigError::InvalidAddress);
-        }
-        validate_token(token.expose_secret())?;
+        validate_listener(address, &token)?;
         let relay = relay::Connector::new(
             address,
             token.clone(),

@@ -1,4 +1,4 @@
-# ADR-087：中心设备管理与 Linux daemon 的 JWT 授权
+# ADR-087：中心设备管理与 Linux/macOS daemon 的 JWT 授权
 
 - 状态：已采纳；本分支实现，待两端发布
 - 日期：2026-10-06
@@ -10,7 +10,7 @@
 
 ## 背景
 
-Linux 服务器需要在没有桌面界面、用户退出 SSH、客户端关闭及机器重启后，独立保持到
+Linux/macOS 机器需要在没有桌面界面、用户退出 SSH、客户端关闭及机器重启后，独立保持到
 relay 的连接。当前 Rust daemon 已有运行时和 relay 通道，但注册与租约续期由客户端账户
 管理器负责。现有 Authing 登录最终取得用户 JWT，其 OIDC 会话最长 8 小时，不能直接作为
 长期设备授权。
@@ -44,7 +44,7 @@ relay 的连接。当前 Rust daemon 已有运行时和 relay 通道，但注册
 7. relay 增加 `external` 和 `managed` 所有权模式。无人值守 daemon 由内部管理器持有
    控制权，外部客户端不能再次发布或覆盖控制授权；旧桌面管理模式继续保留。
 8. 沿用 `daemon` 二进制，只增加授权、运行和状态相关命令。既有安装脚本负责安装二进制、
-   配置服务、启停和卸载；daemon 不提供服务安装子命令。systemd 托管进程，Rust 负责
+   配置服务、启停和卸载；daemon 不提供服务安装子命令。systemd / launchd 托管进程，Rust 负责
    网络恢复；后台进程不自动发起交互登录。本地默认只监听 loopback。
 9. 无人值守模式所有认证、续期和 relay 地址从固定中心派生，不提供 `--center`、环境变量
    或配置文件覆盖，不接受 token 或响应指定其他中心。测试使用内部依赖注入；已存在的
@@ -61,9 +61,16 @@ relay 的连接。当前 Rust daemon 已有运行时和 relay 通道，但注册
 和 Web 设备页面，并与既有安装脚本对接。JWT 的引入不会免除中心数据库状态校验；轮换的
 持久化与失败恢复属于首版要求。中心与 daemon 的接口已对齐；上线需要合并两端并开启中心功能，不能视为当前已部署功能。
 
-完整流程、中心契约、恢复规则和发布验收见[Linux 无人值守设备授权设计](../../plans/linux-headless-device-auth.md)。
+完整流程、中心契约、恢复规则和发布验收见[Linux/macOS 无人值守设备授权设计](../../plans/linux-headless-device-auth.md)。
 
 ## Test coverage
 
-实现测试与覆盖率在本分支 PR 中记录；提交前测量 workspace 并提供可 review 的 HTML artifact。
-真实固定中心、systemd 与跨设备浏览器验收待两端部署；不能用模拟中心测试替代。
+实现测试与覆盖率状态在本分支 PR 中记录；仅在明确请求时测量覆盖率。
+真实固定中心、systemd / launchd 与跨设备浏览器验收待两端部署；不能用模拟中心测试替代。
+
+## 机器名称与跨平台补充
+
+无人值守模式同时支持 Linux 与 macOS。注册平台沿用桌面端 `linux` / `darwin`。
+中心 Host.name 是管理页与在线发现的名称来源；节点声明和系统 hostname 不覆盖已有 Host 名称。
+CLI 首次登录采用 hostname，后续采用已保存名称，显式 `--name` 仅更新本地声明。
+注册单独上报 hostname、系统和版本元数据。身份关联继续使用 server_id，绝不依名称合并。

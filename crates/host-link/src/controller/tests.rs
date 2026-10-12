@@ -5,7 +5,7 @@ use chrono::{DateTime, Utc};
 use secrecy::{ExposeSecret, SecretString};
 
 use super::*;
-use crate::{Binding, Credential, Machine, Session};
+use crate::{Binding, Credential, Machine, Pending, Session};
 
 #[derive(Default)]
 struct Observed {

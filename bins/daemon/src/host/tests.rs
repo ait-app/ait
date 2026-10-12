@@ -165,7 +165,7 @@ async fn each_composite_service_installs_all_its_methods_without_other_component
 
 mod workspace_attention;
 
-#[cfg(target_os = "linux")]
+#[cfg(any(target_os = "linux", target_os = "macos"))]
 #[tokio::test]
 async fn headless_host_composes_exclusive_internal_control_without_contacting_center() {
     use host_link::{Binding, Credential, CredentialStore, Machine, State};

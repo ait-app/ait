@@ -1,4 +1,4 @@
-# Linux 无人值守设备授权
+# Linux/macOS 无人值守设备授权
 
 本方案已在 AIT daemon 分支实现，中心配套为
 [ait-server PR #9](https://github.com/ait-app/ait-server/pull/9)。上线仍需要合并两端、开启中心功能，
@@ -60,22 +60,22 @@ daemon logout
 ## 已实现的中心契约
 
 以下路径相对于固定 `/api`，请求为 JSON。`machine` 包含稳定 UUID `server_id`、
-`display_name`、`platform=linux` 和 `app_version`。
+`display_name`、`platform=linux/darwin` 和 `app_version`。
 
-| 路径                                           | 请求 / 结果                                                                                                         |
-| ---------------------------------------------- | ------------------------------------------------------------------------------------------------------------------- |
-| `POST /v1/auth/device/authorize`               | `{client_id:"ait-linux-daemon",machine}`；返回 device code、user code、固定验证 URL、600 秒期限和至少 5 秒 interval |
-| `POST /v1/auth/device/preview`                 | 用户 JWT + `{user_code}`；展示机器声明                                                                              |
-| `POST /v1/auth/device/approve`                 | 用户 JWT + `{user_code,host_id?}`；批准绑定                                                                         |
-| `POST /v1/auth/device/deny`                    | 用户 JWT + `{user_code}`；拒绝                                                                                      |
-| `POST /v1/auth/device/token`                   | `{device_code,request_id}`；批准后领取机器凭据                                                                      |
-| `POST /v1/hosts/{host}/enrollment`             | 用户 JWT；签发 15 分钟的一次性接入 token                                                                            |
-| `DELETE /v1/hosts/{host}/enrollment`           | 用户 JWT；取消未消费 token                                                                                          |
-| `POST /v1/auth/device/enroll`                  | `{token,request_id,machine}`；兑换机器凭据                                                                          |
-| `POST /v1/auth/device/refresh`                 | `{refresh_token,request_id}`；轮换                                                                                  |
-| `POST /v1/auth/device/revoke`                  | `{refresh_token}`；撤销自身 grant                                                                                   |
-| `GET /v1/hosts/{host}/device-authorization`    | 用户 JWT；查看非秘密授权状态                                                                                        |
-| `DELETE /v1/hosts/{host}/device-authorization` | 用户 JWT；撤销 Host 授权及未消费审批                                                                                |
+| 路径                                           | 请求 / 结果                                                                                                   |
+| ---------------------------------------------- | ------------------------------------------------------------------------------------------------------------- |
+| `POST /v1/auth/device/authorize`               | `{client_id:"ait-daemon",machine}`；返回 device code、user code、固定验证 URL、600 秒期限和至少 5 秒 interval |
+| `POST /v1/auth/device/preview`                 | 用户 JWT + `{user_code}`；展示机器声明                                                                        |
+| `POST /v1/auth/device/approve`                 | 用户 JWT + `{user_code,host_id?}`；批准绑定                                                                   |
+| `POST /v1/auth/device/deny`                    | 用户 JWT + `{user_code}`；拒绝                                                                                |
+| `POST /v1/auth/device/token`                   | `{device_code,request_id}`；批准后领取机器凭据                                                                |
+| `POST /v1/hosts/{host}/enrollment`             | 用户 JWT；签发 15 分钟的一次性接入 token                                                                      |
+| `DELETE /v1/hosts/{host}/enrollment`           | 用户 JWT；取消未消费 token                                                                                    |
+| `POST /v1/auth/device/enroll`                  | `{token,request_id,machine}`；兑换机器凭据                                                                    |
+| `POST /v1/auth/device/refresh`                 | `{refresh_token,request_id}`；轮换                                                                            |
+| `POST /v1/auth/device/revoke`                  | `{refresh_token}`；撤销自身 grant                                                                             |
+| `GET /v1/hosts/{host}/device-authorization`    | 用户 JWT；查看非秘密授权状态                                                                                  |
+| `DELETE /v1/hosts/{host}/device-authorization` | 用户 JWT；撤销 Host 授权及未消费审批                                                                          |
 
 领取/兑换/刷新返回相同字段：`token_type=Bearer`、`access_token`、`expires_in`、
 `access_expires_at`、`refresh_token`、`refresh_expires_at`、`node_id`、`host_id`、
@@ -152,7 +152,7 @@ Web/接入 token 请求还受原始过期时间约束。恢复窗口结束且新
 - 合并并启用中心功能，配置独立签名及回执密钥。
 - 既有脚本安装的新二进制，以同一用户/数据目录运行 headless；无需新增 service install。
 - 在真实固定中心完成 Web 授权和网页接入 JWT 两种登录，包含跨设备浏览器登录。
-- systemd 重启、网络断开/恢复、超过 JWT 寿命的长时间运行和网页撤销。
+- systemd / launchd 重启、网络断开/恢复、超过 JWT 寿命的长时间运行和网页撤销。
 - 在安装目标 filesystem 验证 fsync、权限和崩溃恢复；本地测试不替代真实机器故障演练。
 - 不自动批准 Provider 权限，不创建 GUI 自动化宿主，不改变本地 API 默认 loopback 与 token 鉴权。
 

@@ -31,6 +31,11 @@ fn fixed_center_and_login_modes_are_unambiguous_and_redacted() {
     ] {
         assert!(crate::config::Cli::try_parse_from(args).is_err());
     }
+    let cli = crate::config::Cli::try_parse_from(["daemon", "login", "--force"]).unwrap();
+    assert!(matches!(
+        cli.command,
+        Some(crate::config::Command::Login(Login { force: true, .. }))
+    ));
     assert_eq!(host_link::CENTER, "https://aitapp.cn:8443/api");
     assert!(read_token(Some("".into()), false).is_err());
     assert!(read_token(Some("invalid token".into()), false).is_err());
@@ -147,6 +152,7 @@ async fn complete_token_login_and_online_logout_use_same_installation_and_clear_
     login_with_center(
         data.path(),
         Login {
+            force: false,
             name: Some(machine.display_name),
             token: Some("single.use.jwt".into()),
             token_stdin: false,
@@ -183,6 +189,7 @@ async fn web_login_polls_then_preserves_slowdown_and_recovers_after_interruption
     login_with_center(
         data.path(),
         Login {
+            force: false,
             name: Some(machine.display_name),
             token: None,
             token_stdin: false,
@@ -213,6 +220,7 @@ async fn web_login_polls_then_preserves_slowdown_and_recovers_after_interruption
     login_with_center(
         data.path(),
         Login {
+            force: false,
             name: None,
             token: None,
             token_stdin: false,
@@ -246,11 +254,13 @@ async fn rejects_competing_or_invalid_logins_and_clears_local_state_when_center_
     drop(store);
     for options in [
         Login {
+            force: false,
             name: Some(String::new()),
             token: None,
             token_stdin: false,
         },
         Login {
+            force: false,
             name: None,
             token: Some("replacement.jwt.secret".into()),
             token_stdin: false,
@@ -269,3 +279,5 @@ async fn rejects_competing_or_invalid_logins_and_clears_local_state_when_center_
     assert!(!data.path().join("device/.env").exists());
     status(data.path(), false).unwrap();
 }
+
+mod restoration;

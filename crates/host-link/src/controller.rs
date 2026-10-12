@@ -4,7 +4,7 @@ use chrono::Utc;
 use tokio_util::sync::CancellationToken;
 use uuid::Uuid;
 
-use crate::{Center, CredentialStore, Error, ManagedRelay, Pending, Session, State, Tokens};
+use crate::{Center, CredentialStore, Error, ManagedRelay, Session, State, Tokens};
 
 /// Serializes refresh rotation and maintains runtime leases independently of a GUI.
 pub struct Controller<C, S, R> {
@@ -74,32 +74,7 @@ impl<C: Center, S: CredentialStore, R: ManagedRelay> Controller<C, S, R> {
     }
 
     async fn refresh(&mut self) -> Result<Tokens, Error> {
-        let credential = self.state.credential.as_ref().ok_or(Error::Unauthorized)?;
-        let request_id = match self.state.pending {
-            // A saved request may have committed before expiry. Only the center can decide
-            // whether its bounded receipt is still recoverable after the source expired.
-            Some(Pending::Refresh(id)) => id,
-            None if credential.refresh_expires_at <= Utc::now() => {
-                return Err(Error::Unauthorized);
-            }
-            None => Uuid::new_v4(),
-            Some(_) => return Err(Error::Unauthorized),
-        };
-        self.state.pending = Some(Pending::Refresh(request_id));
-        self.store.save(&self.state)?;
-        let tokens = self
-            .center
-            .refresh(&credential.refresh_token, request_id)
-            .await?;
-        if tokens.credential.binding != credential.binding {
-            return Err(Error::Protocol);
-        }
-        let mut next = self.state.clone();
-        next.credential = Some(tokens.credential.clone());
-        next.pending = None;
-        self.store.save(&next)?;
-        self.state = next;
-        Ok(tokens)
+        crate::authorization::restore(&self.center, &self.store, &mut self.state).await
     }
 
     async fn initial_tokens(&mut self, cancel: &CancellationToken) -> Result<Tokens, Error> {

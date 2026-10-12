@@ -36,7 +36,7 @@ async fn exchanges_poll_enrollment_and_refresh_without_user_api_access() {
         .unwrap();
     let seen = fixture.seen.lock().unwrap();
     assert_eq!(seen.calls.len(), 5);
-    assert_eq!(seen.calls[0].1["client_id"], "ait-linux-daemon");
+    assert_eq!(seen.calls[0].1["client_id"], "ait-daemon");
     assert_eq!(seen.calls[1].1["request_id"], request_id.to_string());
     assert!(seen.calls.iter().all(|(_, _, auth)| auth.is_none()));
 }
@@ -82,6 +82,7 @@ async fn validates_runtime_binding_and_uses_latest_access_token_for_lease_and_ti
             .iter()
             .all(|(_, _, auth)| auth.as_deref() == Some("Bearer jwt.device.secret"))
     );
+    assert_eq!(seen.calls[0].1["hostname"], json!(fixture.center.hostname));
     assert_eq!(tokens.credential.binding, binding(&wire));
 }
 

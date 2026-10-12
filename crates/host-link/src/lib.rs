@@ -1,4 +1,5 @@
 //! Center-managed Host publication. Adapters own HTTP, private storage and Relay transport.
+pub mod authorization;
 mod controller;
 mod ports;
 mod types;

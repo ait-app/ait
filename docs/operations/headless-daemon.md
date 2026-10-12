@@ -1,8 +1,8 @@
-# Linux 无人值守 daemon
+# Linux/macOS 无人值守 daemon
 
 此功能需要配套 [ait-server PR #9](https://github.com/ait-app/ait-server/pull/9) 已部署，且中心开启
 `DEVICE_AUTH_ENABLED` 并配置独立签名/回执密钥。生产中心固定为
-`https://aitapp.cn:8443/api`，不能修改。安装与 systemd 管理由既有脚本负责。
+`https://aitapp.cn:8443/api`，不能修改。Linux 的 systemd、macOS 的 launchd 安装与管理由外部脚本负责。
 
 ## 登录与运行
 
@@ -13,7 +13,14 @@
 daemon login --name build-linux
 ```
 
-终端显示固定网页地址和验证码。在任意设备的浏览器登录原有账号，输入验证码，核对机器并确认。
+`daemon login` 优先读取本机保存的机器凭据并向中心续期，成功时无需再次打开浏览器。
+只有没有凭据、凭据已过期或中心明确拒绝授权时，才发起新的网页授权。网络或服务故障
+保留凭据及恢复请求，可稍后重试；不会因为暂时断网而清除登录。
+
+需要主动重新授权时执行 `daemon login --force`；配合 `--token-stdin` 可替换旧的未完成授权。
+该选项放弃旧请求的恢复并开始新授权，不删除机器身份或工作区数据。
+
+需要网页授权时，终端显示固定网页地址和验证码。在任意设备的浏览器登录原有账号，输入验证码，核对机器并确认。
 可以新建 Host，也可以显式选择已有未绑定 Host；不会按名字合并机器。
 
 也可在网页 Host 详情签发一次性接入 JWT，通过 stdin 输入：
@@ -32,6 +39,10 @@ shell 历史或进程列表，脚本优先使用 stdin。两种 token 参数互�
 ```sh
 daemon run --headless
 ```
+
+再次启动 `daemon run --headless` 会读取已保存的 refresh token，恢复未完成的刷新并自动连接，
+不需要再次登录。若授权确实失效，状态变为 `reauthorization_required`；先停止服务，执行
+`daemon login` 完成重新授权，再启动服务。后台运行不会自动打开交互登录。
 
 默认监听 `127.0.0.1:7316`，无需显示器、桌面应用或持续的 SSH 会话。没有 `service install` 子命令。
 旧的直接 `daemon` 启动和 `daemon run` 保留客户端管理模式；headless 只在显式传入参数时开启。
@@ -67,3 +78,14 @@ logout 尝试中心撤销并清除本地凭据。中心不可达、或初次领�
 桌面/手机连接到这种 Host 时只读取同步状态，不能用客户端的“停止同步”覆盖其授权。
 
 协议、数据库差异与部署验收见 [设计与实施记录](../plans/linux-headless-device-auth.md)。
+
+## 机器名称与平台
+
+首次登录默认使用系统 hostname，读取失败回退为 `ait-daemon`。后续登录（包括 `--force`）
+保留本地名称，只有显式 `--name` 才修改授权请求的名称。恢复未完成请求时保持原请求内容。
+网页和在线发现统一使用中心 Host 名称；已有 Host 的名称由网页修改，不会被重启或本地
+`--name` 覆盖。系统 hostname 单独记录为主机元数据，稳定身份仍是 server_id。
+Linux 上报 `linux`，macOS 上报 `darwin`，与桌面端一致。
+
+此版本需要先部署支持注册字段 `hostname` 和 `ait-daemon` client_id 的中心版本；中心
+仍接受旧的 `ait-linux-daemon`。

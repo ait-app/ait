@@ -126,6 +126,7 @@ impl Server {
                 anyhow::bail!("device state belongs to another installation");
             }
             env!("CARGO_PKG_VERSION").clone_into(&mut state.machine.app_version);
+            crate::device::PLATFORM.clone_into(&mut state.machine.platform);
             let relay = crate::device::StatusRelay::new(
                 api.claim_managed_relay()?,
                 &data_dir,

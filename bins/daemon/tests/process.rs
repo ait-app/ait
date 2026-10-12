@@ -7,6 +7,8 @@ use base64 as _;
 use host_link as _;
 #[cfg(unix)]
 use libc as _;
+#[cfg(unix)]
+use rustix as _;
 // Cargo passes the complete package dependency set to this integration test.
 use anyhow as _;
 use api as _;

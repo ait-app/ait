@@ -85,6 +85,20 @@ jobs:
       # Run the pinned formatter directly instead of installing the full workspace.
       - run: npx --yes "oxfmt@$(node -p 'require("./package.json").devDependencies.oxfmt')" --check .
 
+  headless-macos:
+    needs: changes
+    if: needs.changes.outputs.rust == 'true'
+    runs-on: macos-15
+    timeout-minutes: 40
+    steps:
+      - uses: actions/checkout@v5
+      - uses: dtolnay/rust-toolchain@1.98.1
+      - uses: Swatinem/rust-cache@v2
+      - run: "cargo test --locked -p daemon --bin daemon device::"
+      - run: "cargo test --locked -p daemon --bin daemon config::"
+      - run: cargo test --locked -p daemon --bin daemon host::tests::headless
+      - run: cargo test --locked -p host-link
+
   rust:
     needs: changes
     if: needs.changes.outputs.rust == 'true'

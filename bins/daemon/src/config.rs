@@ -35,7 +35,7 @@ pub(crate) struct Cli {
 
 #[derive(Debug, Subcommand)]
 pub(super) enum Command {
-    /// Authorize this Linux daemon through Web approval or a single-use enrollment token.
+    /// Authorize this Linux or macOS daemon through Web approval or a single-use enrollment token.
     Login(Login),
     /// Revoke the machine grant and clear private local credentials (stop the service first).
     Logout,
@@ -55,7 +55,10 @@ pub(super) enum Command {
 
 #[derive(Debug, Args)]
 pub(super) struct Login {
-    /// Host display label; defaults to the machine hostname.
+    /// Start a new authorization instead of restoring saved machine credentials.
+    #[arg(long)]
+    pub force: bool,
+    /// Initial Host display label; preserves the saved name unless explicitly supplied.
     #[arg(long)]
     pub name: Option<String>,
     /// Single-use enrollment JWT from the Host page (prefer stdin for scripts).
@@ -126,8 +129,8 @@ impl Config {
         validate_origin: impl Fn(&str) -> anyhow::Result<()>,
     ) -> anyhow::Result<Self> {
         let headless = matches!(cli.command, Some(Command::Run { headless: true }));
-        if headless && !cfg!(target_os = "linux") {
-            bail!("headless runtime currently requires Linux");
+        if headless && !cfg!(any(target_os = "linux", target_os = "macos")) {
+            bail!("headless runtime requires Linux or macOS");
         }
         // Validate credentials before touching disk or opening the listener.
         let token = env("AIT_SERVER_TOKEN")

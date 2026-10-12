@@ -8,8 +8,8 @@ use anyhow as _;
 use api as _;
 use async_trait as _;
 use axum as _;
-use bot as _;
 use base64 as _;
+use bot as _;
 use browser as _;
 use chrono as _;
 use clap as _;
@@ -24,6 +24,8 @@ use model as _;
 use persistence as _;
 use provider as _;
 use reqwest as _;
+#[cfg(unix)]
+use rustix as _;
 use schedule as _;
 use secrecy as _;
 use serde as _;

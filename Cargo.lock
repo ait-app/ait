@@ -582,6 +582,7 @@ dependencies = [
  "persistence",
  "provider",
  "reqwest",
+ "rustix",
  "schedule",
  "secrecy",
  "serde",

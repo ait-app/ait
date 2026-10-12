@@ -231,7 +231,7 @@ fn host_validation_runs_before_file_io_and_uses_the_resolved_origins() {
     assert_eq!(config.web_origins, ["http://127.0.0.1:8082"]);
 }
 
-#[cfg(target_os = "linux")]
+#[cfg(any(target_os = "linux", target_os = "macos"))]
 #[test]
 fn headless_is_explicit_and_center_cannot_be_configured() {
     let configuration = load(
