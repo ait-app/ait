@@ -19,6 +19,7 @@ import { AdaptiveTextInput } from "@/components/adaptive-modal-sheet";
 import { LoadingSpinner } from "@/components/ui/loading-spinner";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import type { Theme } from "@/styles/theme";
+import { isWeb } from "@/constants/platform";
 import { MenuDepthProvider, useMenuContext } from "./menu-context";
 import { MENU_ITEM_HEIGHT } from "./menu-geometry";
 
@@ -313,7 +314,7 @@ export function MenuItem({
       active ? styles.itemActive : null,
       isDisabled ? styles.itemDisabled : null,
       muted && !isDisabled ? styles.itemMuted : null,
-      hovered && !pressed && !isDisabled ? styles.itemHovered : null,
+      hovered && !isWeb && !pressed && !isDisabled ? styles.itemHovered : null,
       focused && !isDisabled ? styles.itemHovered : null,
       pressed && !isDisabled ? styles.itemPressed : null,
     ],
@@ -334,6 +335,17 @@ export function MenuItem({
     [isDisabled],
   );
 
+  // Share one highlight between pointer and keyboard navigation. Pointer movement also
+  // restores focus after arrow keys move it away from a stationary pointer.
+  const handlePointerFocus = useCallback(
+    ({ currentTarget }: { currentTarget: unknown }) => {
+      if (isWeb && !isDisabled && currentTarget instanceof HTMLElement) {
+        currentTarget.focus({ preventScroll: true });
+      }
+    },
+    [isDisabled],
+  );
+
   const content = (
     <Pressable
       testID={testID}
@@ -344,6 +356,8 @@ export function MenuItem({
       dataSet={itemDataSet}
       disabled={isDisabled}
       onPress={handleItemPress}
+      onHoverIn={handlePointerFocus}
+      onPointerMove={handlePointerFocus}
       style={itemPressableStyle}
     >
       {showSelectedCheck ? (
