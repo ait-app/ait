@@ -11,7 +11,7 @@ use tokio_tungstenite::tungstenite::{
 };
 use tokio_tungstenite::{MaybeTlsStream, WebSocketStream, connect_async_with_config};
 
-use crate::{Error, protocol};
+use crate::{Error, diagnostics, protocol};
 
 /// Connected relay or fixed local daemon WebSocket.
 pub(super) type Socket = WebSocketStream<MaybeTlsStream<TcpStream>>;
@@ -38,9 +38,20 @@ pub(super) async fn connect(url: &str, ticket: &str, max: usize) -> Result<Socke
         connect_async_with_config(request, Some(config), false),
     )
     .await
-    .map_err(|_| Error::Transport)?
+    .map_err(|_| {
+        tracing::warn!(
+            operation = "connect",
+            reason = "timeout",
+            timeout_ms = 5000,
+            "Relay socket failed"
+        );
+        Error::Transport
+    })?
     .map(|(socket, _)| socket)
-    .map_err(|_| Error::Transport)
+    .map_err(|error| {
+        diagnostics::socket_error("connect", &error);
+        Error::Transport
+    })
 }
 
 /// Send one frame, bounding blocked writes to five seconds.
@@ -50,8 +61,19 @@ pub(super) async fn connect(url: &str, ticket: &str, max: usize) -> Result<Socke
 pub(super) async fn send(socket: &mut Socket, message: Message) -> Result<(), Error> {
     timeout(Duration::from_secs(5), socket.send(message))
         .await
-        .map_err(|_| Error::Transport)?
-        .map_err(|_| Error::Transport)
+        .map_err(|_| {
+            tracing::warn!(
+                operation = "send",
+                reason = "timeout",
+                timeout_ms = 5000,
+                "Relay socket failed"
+            );
+            Error::Transport
+        })?
+        .map_err(|error| {
+            diagnostics::socket_error("send", &error);
+            Error::Transport
+        })
 }
 
 /// Read a text frame while answering hop-local WebSocket pings.
@@ -64,7 +86,27 @@ pub(super) async fn text(socket: &mut Socket) -> Result<Utf8Bytes, Error> {
             Some(Ok(Message::Text(text))) => return Ok(text),
             Some(Ok(Message::Ping(bytes))) => send(socket, Message::Pong(bytes)).await?,
             Some(Ok(Message::Pong(_))) => {}
-            _ => return Err(Error::Transport),
+            Some(Err(error)) => {
+                diagnostics::socket_error("setup_read", &error);
+                return Err(Error::Transport);
+            }
+            Some(Ok(Message::Close(frame))) => {
+                tracing::info!(
+                    close_code = frame.as_ref().map(|f| u16::from(f.code)),
+                    reason = "close_frame",
+                    "Relay setup read stopped"
+                );
+                return Err(Error::Transport);
+            }
+            other => {
+                let reason = if other.is_none() {
+                    "eof"
+                } else {
+                    "unexpected_frame"
+                };
+                tracing::warn!(reason, "Relay setup read stopped");
+                return Err(Error::Transport);
+            }
         }
     }
 }

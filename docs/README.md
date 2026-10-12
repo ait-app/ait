@@ -99,6 +99,7 @@
 ## 运维与发布
 
 - [故障诊断与证据导出](operations/diagnostics.md)：日志来源、保留策略和附件分享。
+- [Relay 重连诊断](operations/relay-diagnostics.md)：会话关联、断连方向、错误分类及排查证据。
 
 - [Android APK 发布](operations/android-releases.md)：独立手动构建测试或正式通用 APK。
 - [Google Play 内部测试](operations/google-play-internal-testing.md)：首次账号配置、测试者安装与手动 AAB 发布 CI。
