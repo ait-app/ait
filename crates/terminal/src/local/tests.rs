@@ -41,6 +41,59 @@ fn until(process: &dyn Process, predicate: impl Fn(&str) -> bool) -> String {
 
 #[cfg(unix)]
 #[test]
+fn startup_device_query_completes_before_the_first_subscription() {
+    let temp = tempfile::tempdir().unwrap();
+    let config = launch(
+        temp.path(),
+        r#"stty raw -echo min 0 time 10
+printf '\033[c'
+reply=$(dd bs=1 count=7 2>/dev/null)
+if [ "$reply" = "$(printf '\033[?1;0c')" ]; then
+    printf 'QUERY_READY'
+else
+    printf 'QUERY_FAILED'
+fi"#,
+    );
+    let mut process = LocalRuntime.spawn(&config).unwrap();
+    let output = until(process.as_ref(), |output| {
+        output.contains("QUERY_READY") || output.contains("QUERY_FAILED")
+    });
+    assert!(output.contains("QUERY_READY"), "{output}");
+    // Observers attach only after the child received its reply.
+    process.observe(None, None).unwrap();
+    process.observe(None, None).unwrap();
+    process.kill().unwrap();
+}
+
+#[cfg(unix)]
+#[test]
+#[ignore = "requires fish 4 on PATH; run explicitly for shell compatibility validation"]
+fn fish_interactive_startup_does_not_wait_for_a_display() {
+    let temp = tempfile::tempdir().unwrap();
+    let mut config = launch(temp.path(), "");
+    config.command = Some("fish".to_owned());
+    config.args = vec![
+        "--no-config".to_owned(),
+        "--interactive".to_owned(),
+        "--init-command".to_owned(),
+        "function fish_prompt; printf FISH_READY; end".to_owned(),
+    ];
+    let mut process = LocalRuntime.spawn(&config).unwrap();
+    let deadline = Instant::now() + Duration::from_secs(3);
+    loop {
+        let output = process.capture().unwrap().join("\n");
+        assert!(!output.contains("could not read response"), "{output}");
+        if output.contains("FISH_READY") {
+            break;
+        }
+        assert!(Instant::now() < deadline, "fish startup stalled: {output}");
+        thread::sleep(Duration::from_millis(10));
+    }
+    process.kill().unwrap();
+}
+
+#[cfg(unix)]
+#[test]
 fn native_pty_supports_tty_input_resize_capture_and_drop_cleanup() {
     let temp = tempfile::tempdir().unwrap();
     let config = launch(

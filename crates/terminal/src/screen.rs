@@ -12,9 +12,29 @@ const OUTPUT_BYTES: usize = 256 * 1024;
 #[derive(Default)]
 struct Callbacks {
     title: Option<String>,
+    replies: Vec<u8>,
 }
 
 impl vt100::Callbacks for Callbacks {
+    fn unhandled_csi(
+        &mut self,
+        _: &mut vt100::Screen,
+        prefix: Option<u8>,
+        intermediate: Option<u8>,
+        params: &[&[u16]],
+        final_byte: char,
+    ) {
+        if prefix.is_none()
+            && intermediate.is_none()
+            && final_byte == 'c'
+            && (params.is_empty() || params == [&[0][..]])
+        {
+            // Identify the host terminal conservatively: VT100, no optional features.
+            // Answer before any display subscribes; a screen snapshot cannot retain queries.
+            self.replies.extend_from_slice(b"\x1b[?1;0c");
+        }
+    }
+
     fn set_window_title(&mut self, _: &mut vt100::Screen, title: &[u8]) {
         self.title = Some(
             String::from_utf8_lossy(title)
@@ -55,7 +75,8 @@ impl Screen {
         }
     }
 
-    pub(super) fn process(&mut self, bytes: &[u8]) {
+    /// Parse live PTY output and return protocol replies for the PTY input writer.
+    pub(super) fn process(&mut self, bytes: &[u8]) -> Vec<u8> {
         self.parser.process(bytes);
         self.revision += 1;
         self.output.push_back((self.revision, bytes.to_vec()));
@@ -66,6 +87,7 @@ impl Screen {
                 self.floor = revision;
             }
         }
+        std::mem::take(&mut self.parser.callbacks_mut().replies)
     }
 
     /// Return the current screen dimensions in character cells.
