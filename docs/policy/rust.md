@@ -243,7 +243,7 @@ If coverage was not measured, state **not measured**, the reason, and the next s
 
 - **NEVER** store secrets, API keys, or passwords in code or committed files.
   - Keep local `.env` files out of Git; `.gitignore` already excludes `.env` and `.env.*`.
-- **MUST** read sensitive configuration from environment variables injected at runtime via `std::env`; the daemon does not load credentials from `.env`, command-line flags, URLs, or TOML (see [daemon operations](../operations/daemon.md)).
+- **MUST** read sensitive configuration from environment variables injected at runtime via `std::env`; headless startup may generate and restore its private local API token as specified in ADR-140; the daemon does not load local API credentials from `.env`, command-line flags, URLs, or TOML (see [daemon operations](../operations/daemon.md)).
 - **NEVER** log sensitive information (passwords, tokens, PII)
 - Use `secrecy` crate for sensitive data types
 

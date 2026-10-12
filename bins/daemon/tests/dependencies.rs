@@ -6,7 +6,9 @@ use std::process::Command;
 // Cargo passes the complete package dependency set to this integration test.
 use anyhow as _;
 use api as _;
+use async_trait as _;
 use axum as _;
+use base64 as _;
 use bot as _;
 use browser as _;
 use chrono as _;
@@ -14,11 +16,16 @@ use clap as _;
 use domain as _;
 use filesystem as _;
 use futures_util as _;
+use host_link as _;
+#[cfg(unix)]
+use libc as _;
 use metadata as _;
 use model as _;
 use persistence as _;
 use provider as _;
 use reqwest as _;
+#[cfg(unix)]
+use rustix as _;
 use schedule as _;
 use secrecy as _;
 use serde as _;
@@ -47,6 +54,7 @@ fn violations(packages: &[Value]) -> Vec<String> {
             "daemon" => &[
                 "bot",
                 "persistence",
+                "host-link",
                 "voice",
                 "schedule",
                 "browser",
@@ -61,6 +69,7 @@ fn violations(packages: &[Value]) -> Vec<String> {
             "api" => &[
                 "bot",
                 "persistence",
+                "host-link",
                 "relay",
                 "voice",
                 "schedule",
@@ -80,7 +89,7 @@ fn violations(packages: &[Value]) -> Vec<String> {
             "terminal" => &["domain", "model"],
             "voice" | "browser" | "relay" => &["model"],
             "model" => &["domain"],
-            "domain" => &[],
+            "domain" | "host-link" => &[],
             _ => {
                 violations.push(format!("unregistered workspace package: {name}"));
                 continue;

@@ -108,6 +108,8 @@ pub enum ErrorCode {
     BotConflict,
     /// Local Bot persistence or channel I/O failed.
     BotIo,
+    /// Relay control belongs to the unattended device manager.
+    RelayManaged,
     /// Schedule request validation, persistence or execution failed.
     ScheduleRequestFailed,
     /// Speech backend configuration, processing or I/O failed.
@@ -193,6 +195,7 @@ impl ErrorCode {
             Self::IncompatibleVersion => "Incompatible protocol version",
             Self::UnsupportedCapability => "Capability was not negotiated",
             Self::MethodNotFound => "Unknown method",
+            Self::RelayManaged => "Relay is controlled by the unattended device manager",
             Self::NotImplemented => "Method is not implemented yet",
             Self::SubscriptionNotFound => "Unknown connection subscription",
             Self::ResourceExhausted => "Resource budget exhausted",

@@ -31,6 +31,9 @@ export const en = {
     hostSettingsHint:
       "Desktop synchronizes its built-in daemon after sign-in. A manual stop keeps it offline until you enable synchronization in Host → Connections. Other hosts require manual synchronization.",
     requestFailed: "Request failed.",
+    managedHost: "Unattended host",
+    managedHostHint:
+      "This host keeps its own authorization. Manage or revoke it on the Host web page.",
     syncTitle: "Sync with online service",
     syncDescription:
       "Connect this host to your online service so you can access it from your other devices.",

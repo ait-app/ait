@@ -33,6 +33,8 @@ export const zhCN: TranslationResources = {
     hostSettingsHint:
       "Desktop 登录后默认同步内置 daemon。手动停止后将保持下线，可在主机的「连接」设置中重新开启；其他主机需手动开启同步。",
     requestFailed: "请求失败。",
+    managedHost: "无人值守主机",
+    managedHostHint: "此主机独立保持授权，请在网页的主机页面管理或撤销。",
     syncTitle: "与在线服务同步",
     syncDescription: "将此主机接入在线服务，即可从其他设备远程访问。",
     signInFirst: "请先在「应用 → 在线服务」中登录。",

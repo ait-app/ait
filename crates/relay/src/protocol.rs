@@ -12,11 +12,11 @@ use crate::Error;
 #[serde(deny_unknown_fields)]
 pub struct ControlGrant {
     /// HTTPS center base URL; HTTP is accepted only for loopback development.
-    pub(crate) center_url: String,
+    pub center_url: String,
     /// One-use control ticket, never a user JWT.
-    pub(crate) control_ticket: String,
+    pub control_ticket: String,
     /// Node activation associated with this ticket.
-    pub(crate) node_session_id: Uuid,
+    pub node_session_id: Uuid,
 }
 
 /// Non-secret connector state exposed to the account manager.
@@ -25,7 +25,7 @@ pub struct Status {
     /// Whether a control attempt is still in progress.
     pub connecting: bool,
     /// Whether the center accepted this host's control hello.
-    pub(crate) online: bool,
+    pub online: bool,
     /// Last accepted routing generation, used only to replace the same instance.
     pub(crate) epoch: Option<Uuid>,
     /// Non-secret machine-readable failure category.

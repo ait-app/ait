@@ -85,6 +85,26 @@ jobs:
       # Run the pinned formatter directly instead of installing the full workspace.
       - run: npx --yes "oxfmt@$(node -p 'require("./package.json").devDependencies.oxfmt')" --check .
 
+  headless-macos:
+    needs: changes
+    if: needs.changes.outputs.rust == 'true'
+    runs-on: macos-15
+    timeout-minutes: 40
+    steps:
+      - uses: actions/checkout@v5
+      - uses: dtolnay/rust-toolchain@1.98.1
+      - uses: Swatinem/rust-cache@v2
+      # rust-cache prunes non-Cargo files under target, leaving empty prebuilt lib directories.
+      # sherpa checks only whether lib/ exists; reset both its build record and partial download.
+      - name: Reset cached sherpa native artifacts
+        run: |
+          cargo clean --package sherpa-onnx-sys
+          rm -rf target/sherpa-onnx-prebuilt
+      - run: "cargo test --locked -p daemon --bin daemon device::"
+      - run: "cargo test --locked -p daemon --bin daemon config::"
+      - run: cargo test --locked -p daemon --bin daemon host::tests::headless
+      - run: cargo test --locked -p host-link
+
   rust:
     needs: changes
     if: needs.changes.outputs.rust == 'true'
@@ -97,6 +117,12 @@ jobs:
         with:
           components: clippy,rustfmt
       - uses: Swatinem/rust-cache@v2
+      # rust-cache prunes non-Cargo files under target, leaving empty prebuilt lib directories.
+      # sherpa checks only whether lib/ exists; reset both its build record and partial download.
+      - name: Reset cached sherpa native artifacts
+        run: |
+          cargo clean --package sherpa-onnx-sys
+          rm -rf target/sherpa-onnx-prebuilt
       - uses: taiki-e/install-action@v2
         with:
           tool: cargo-nextest

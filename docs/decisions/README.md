@@ -117,6 +117,7 @@ ADR-074、082、083、084、122 在不同类别中各有两份，引用时以路
 - [ADR-097：Google Play 内部测试手动发布](clients/adr-097-google-play-internal-release.md)
 - [ADR-096：Desktop 内置 daemon 默认同步与手动下线](clients/adr-096-desktop-default-host-sync.md)
 - [ADR-094：客户端统一使用 Ait 标准方法名](clients/adr-094-canonical-ait-client-methods.md)
+- [ADR-087：中心设备管理与 Linux/macOS daemon 的 JWT 授权](clients/adr-087-headless-device-authorization.md)
 - [ADR-086：桌面、Android 与 iOS 的 Authing 浏览器登录](clients/adr-086-authing-native-login.md)
 - [ADR-085：Daemon 同步的稳定节点身份](clients/adr-085-stable-daemon-publication.md)
 - [ADR-084：iOS 在线服务账户与主机中继](clients/adr-084-ios-account-relay.md)

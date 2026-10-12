@@ -22,6 +22,7 @@ Electron 位于 `apps/desktop`；`apps/mobile` 提供桌面、浏览器与移动
 | `relay`       | 控制 RPC、主动连接与反向数据通道                     | `model`                                               |
 | `api`         | HTTP/WebSocket 鉴权、连接与跨能力协调                | 上述能力包、`domain`、`model`；测试使用 `persistence` |
 | `daemon`      | 启动配置、进程锁、server identity、服务组装和停机    | API、领域、`model`、`persistence` 及能力包            |
+| `host-link`   | 无人值守机器认证、租约和连接协调                     | 无（通过 ports 调用 adapters）                        |
 
 `bot → provider` 是用户指定的单向协作边，Provider 不反向依赖 Bot，见
 [ADR-139](../decisions/bot/adr-139-workspace-bots-and-owned-channels.md)。
@@ -184,6 +185,11 @@ Electron 主进程提供桌面适配；Android 和 iOS 的原生适配使用 Sec
 Relay 的类型化消息集中在 `crates/relay/src/protocol.rs`，WebSocket 收发集中在
 `transport.rs`；单连接协商标识由 `crates/model/src/server/single.rs` 定义。
 模块职责见 [ADR-075](../decisions/clients/adr-075-relay-protocol-modules.md)。
+
+Linux headless 的 `daemon` 组装 `host-link` 的 HTTP/凭据 adapter，`api` 实现其
+`ManagedRelay` port 并独占 Relay 控制权。机器复用中心 Host/node 身份，长期授权是 node grant。
+普通客户端只读取 managed 状态；刷新 token 不进入传输模块或本地 RPC。
+详细边界见 [ADR-087](../decisions/clients/adr-087-headless-device-authorization.md)。
 
 ## 定时任务归属
 

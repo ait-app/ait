@@ -8,6 +8,7 @@ pub use composition::summary_source;
 mod connection;
 mod files;
 mod listener;
+pub mod managed_relay;
 mod terminal_activity;
 mod workspace_cleanup;
 
@@ -67,6 +68,8 @@ pub enum ConfigError {
 #[derive(Debug)]
 struct Shared {
     relay: relay::Connector,
+    managed_relay: bool,
+    managed_status: Arc<Mutex<serde_json::Value>>,
     runtime: Arc<Runtime>,
     token: SecretString,
     browser_auth: browser_auth::BrowserAuth,
@@ -115,6 +118,12 @@ pub struct Services {
 }
 
 impl Shared {
+    fn relay_management(&self) -> serde_json::Value {
+        self.managed_status
+            .lock()
+            .map_or(serde_json::Value::Null, |status| status.clone())
+    }
+
     fn start_draining(&self) {
         if let Some(bots) = &self.bot.bots {
             bots.stop();
@@ -161,7 +170,39 @@ fn runtime_info(
     }))
 }
 
+fn validate_listener(address: SocketAddr, token: &SecretString) -> Result<(), ConfigError> {
+    use secrecy::ExposeSecret;
+    if address.port() == 0 {
+        return Err(ConfigError::InvalidAddress);
+    }
+    validate_token(token.expose_secret())
+}
+
 impl Api {
+    /// Claim exclusive Relay control before sharing or serving the API.
+    ///
+    /// External HTTP/RPC start and stop operations then return conflict errors.
+    /// # Errors
+    /// Rejects an already shared API or a duplicate claim.
+    pub fn claim_managed_relay(
+        &mut self,
+    ) -> Result<managed_relay::ManagedRelayHandle, ConfigError> {
+        let shared = Arc::get_mut(&mut self.shared).ok_or(ConfigError::SharedConfiguration)?;
+        if shared.managed_relay {
+            return Err(ConfigError::SharedConfiguration);
+        }
+        shared.managed_relay = true;
+        *shared
+            .managed_status
+            .lock()
+            .map_err(|_| ConfigError::SharedConfiguration)? =
+            serde_json::json!({"mode":"managed", "phase":"starting"});
+        Ok(managed_relay::ManagedRelayHandle {
+            relay: shared.relay.clone(),
+            status: shared.managed_status.clone(),
+        })
+    }
+
     /// Construct transport state for an already-bound TCP listener.
     ///
     /// `server_id` is persisted by the host; `instance_id` is unique to this process start.
@@ -177,11 +218,7 @@ impl Api {
         token: SecretString,
         services: Services,
     ) -> Result<Self, ConfigError> {
-        use secrecy::ExposeSecret;
-        if address.port() == 0 {
-            return Err(ConfigError::InvalidAddress);
-        }
-        validate_token(token.expose_secret())?;
+        validate_listener(address, &token)?;
         let relay = relay::Connector::new(
             address,
             token.clone(),
@@ -249,6 +286,8 @@ impl Api {
         let api = Self {
             shared: Arc::new(Shared {
                 relay,
+                managed_relay: false,
+                managed_status: Arc::new(Mutex::new(serde_json::json!({"mode":"external"}))),
                 schedule: schedule::dispatch::State {
                     schedules: services.schedules,
                 },
@@ -472,8 +511,14 @@ async fn health() -> Result<Response, ApiError> {
     Ok(Json(serde_json::json!({"status":"alive"})).into_response())
 }
 
-async fn relay_status(State(state): State<Arc<Shared>>) -> Json<relay::Status> {
-    Json(state.relay.status().await)
+async fn relay_status(State(state): State<Arc<Shared>>) -> Json<serde_json::Value> {
+    let status = state.relay.status().await;
+    let mut value = serde_json::to_value(status).unwrap_or_default();
+    value["management"] = state
+        .managed_status
+        .lock()
+        .map_or(serde_json::Value::Null, |s| s.clone());
+    Json(value)
 }
 
 async fn relay_start(
@@ -483,6 +528,9 @@ async fn relay_start(
     if state.cancellation.is_cancelled() {
         return Err(ApiError(StatusCode::SERVICE_UNAVAILABLE));
     }
+    if state.managed_relay {
+        return Err(ApiError(StatusCode::CONFLICT));
+    }
     state
         .relay
         .start(grant)
@@ -491,9 +539,12 @@ async fn relay_start(
     Ok(StatusCode::ACCEPTED)
 }
 
-async fn relay_stop(State(state): State<Arc<Shared>>) -> StatusCode {
+async fn relay_stop(State(state): State<Arc<Shared>>) -> Result<StatusCode, ApiError> {
+    if state.managed_relay {
+        return Err(ApiError(StatusCode::CONFLICT));
+    }
     state.relay.stop().await;
-    StatusCode::NO_CONTENT
+    Ok(StatusCode::NO_CONTENT)
 }
 
 async fn ready(State(state): State<Arc<Shared>>) -> Result<Response, ApiError> {

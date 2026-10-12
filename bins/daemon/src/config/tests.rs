@@ -230,3 +230,105 @@ fn host_validation_runs_before_file_io_and_uses_the_resolved_origins() {
     assert_eq!(*origins.borrow(), config.web_origins);
     assert_eq!(config.web_origins, ["http://127.0.0.1:8082"]);
 }
+
+#[cfg(any(target_os = "linux", target_os = "macos"))]
+#[test]
+fn headless_is_explicit_and_center_cannot_be_configured() {
+    let configuration = load(
+        Cli::parse_from(["daemon", "run", "--headless", "--listen", "127.0.0.1:0"]),
+        environment,
+    )
+    .unwrap();
+    assert!(configuration.headless);
+    assert_eq!(configuration.listen.port(), 0);
+    assert!(
+        !load(Cli::parse_from(["daemon", "run"]), environment)
+            .unwrap()
+            .headless
+    );
+    let root = tempfile::tempdir().unwrap();
+    std::fs::write(
+        root.path().join("config.toml"),
+        "center = 'https://elsewhere.test/api'",
+    )
+    .unwrap();
+    assert!(
+        load(
+            Cli::parse_from([
+                "daemon",
+                "run",
+                "--headless",
+                "--data-dir",
+                root.path().to_str().unwrap()
+            ]),
+            environment
+        )
+        .is_err()
+    );
+}
+
+#[cfg(any(target_os = "linux", target_os = "macos"))]
+#[test]
+fn headless_restores_local_token_and_environment_override_does_not_replace_it() {
+    use secrecy::ExposeSecret;
+    let directory = tempfile::tempdir().unwrap();
+    let args = [
+        "daemon",
+        "--data-dir",
+        directory.path().to_str().unwrap(),
+        "run",
+        "--headless",
+    ];
+    let generated = load(Cli::parse_from(args), |_| None).unwrap();
+    let restored = load(Cli::parse_from(args), |_| None).unwrap();
+    assert_eq!(
+        generated.token.expose_secret(),
+        restored.token.expose_secret()
+    );
+    let overridden = load(Cli::parse_from(args), environment).unwrap();
+    assert_eq!(overridden.token.expose_secret(), TOKEN);
+    assert_eq!(
+        load(Cli::parse_from(args), |_| None)
+            .unwrap()
+            .token
+            .expose_secret(),
+        generated.token.expose_secret()
+    );
+    assert!(
+        load(Cli::parse_from(args), |name| (name == "AIT_SERVER_TOKEN")
+            .then(|| "".into()))
+        .is_err()
+    );
+}
+
+#[cfg(any(target_os = "linux", target_os = "macos"))]
+#[test]
+fn invalid_headless_configuration_does_not_create_credentials() {
+    let directory = tempfile::tempdir().unwrap();
+    let data = directory.path().join("missing");
+    let args = [
+        "daemon",
+        "--data-dir",
+        data.to_str().unwrap(),
+        "run",
+        "--headless",
+    ];
+    for extra in [
+        ["--log-level", "invalid-level"],
+        ["--config", "/missing/ait-config.toml"],
+        ["--web-origin", "invalid-origin"],
+    ] {
+        assert!(load(Cli::parse_from(args.into_iter().chain(extra)), |_| None).is_err());
+        assert!(!data.exists());
+    }
+    assert!(
+        load(Cli::parse_from(args), |name| (name == "AIT_SERVER_LISTEN")
+            .then(|| "invalid".into()))
+        .is_err()
+    );
+    assert!(!data.exists());
+    std::fs::create_dir(&data).unwrap();
+    std::fs::write(data.join("config.toml"), "not valid toml").unwrap();
+    assert!(load(Cli::parse_from(args), |_| None).is_err());
+    assert!(!data.join("local-api.token").exists());
+}

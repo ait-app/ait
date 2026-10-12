@@ -39,8 +39,33 @@ Agent 在你连接的电脑上运行。使用本机 Agent 时无需登录 Ait �
 两端只需能访问在线服务，无需处于同一局域网，也无需开放工作电脑的入站端口。中继负责转发连接，Agent 和项目文件仍在工作电脑上。
 桌面登录后默认同步内置 daemon；如果之前手动停止了同步，可在主机连接设置中重新启用。远程访问时，工作电脑及其服务需要保持运行。
 
-Android 和 iOS 作为客户端连接电脑，不在手机上运行 daemon。浏览器客户端仅使用直接连接。
+Android 和 iOS 作为客户端连接电脑，不在手机上运行 daemon。
+也可以在 [网页客户端](https://aitapp.cn:8443/client/) 登录同一账户，通过中央中继连接在线主机。
 登录入口与连接细节见 [客户端开发指南](apps/mobile/README.md)。
+
+### 在 Linux/macOS 上独立运行 daemon
+
+没有桌面环境的服务器或需要长期在线的工作电脑，可以单独运行 daemon。先在这台机器上安装并认证需要使用的编程 Agent。
+
+在仓库根目录使用 [rust-toolchain.toml](rust-toolchain.toml) 指定的 Rust 工具链及系统 C/C++ 构建工具编译：
+
+```sh
+cargo build --locked --release -p daemon --bin daemon
+./target/release/daemon login
+./target/release/daemon run --headless
+```
+
+首次登录会显示网页地址和验证码。在任意设备浏览器中完成登录并批准机器接入，再运行启动命令。
+另一台设备登录同一 Ait 账户后，即可选择这台在线主机。机器名默认取系统 hostname，也可在首次登录时用 `login --name build-server` 指定；后续显示名称在网页 Host 管理中修改。
+
+- **重启**：直接执行 `daemon run --headless`，自动恢复已保存的机器授权，无需每次登录。
+- **本地令牌**：不需要手动设置 `AIT_SERVER_TOKEN`；headless 首次启动会自动生成私有令牌，后续复用。显式设置该环境变量时优先使用它。
+- **数据目录**：默认为 `~/.ait-server`。使用同一系统用户运行登录与服务；自定义目录时，各命令均传入 `--data-dir /path/to/data`。
+- **查看与退出**：`daemon status --json` 查看状态。需要重新授权或退出时，先停止服务，再执行 `daemon login` 或 `daemon logout`。
+- **后台常驻**：`run --headless` 在前台运行；长期运行可交给 Linux systemd 或 macOS launchd 管理。无需开放入站端口，默认本地监听为 `127.0.0.1:7316`。
+
+以上 `daemon` 指编译产物或已放入 PATH 的程序。Linux 默认构建依赖 glibc，复制到其他机器前需确认 CPU 架构及系统库兼容；macOS 需在对应平台编译。离线语音引擎包含在构建中，模型另行下载。
+完整的授权恢复、一次性 token 接入和凭据说明见 [无人值守 daemon 操作指南](docs/operations/headless-daemon.md)。
 
 ## 本地开发
 
