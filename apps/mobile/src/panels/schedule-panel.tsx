@@ -13,15 +13,14 @@ import { resolveScheduleTitle } from "@/utils/schedule-format";
 const ThemedCalendarClock = withUnistyles(CalendarClock);
 const schedulePanelPresentation = {
   label: (t) => t("schedules.product.schedule"),
-  subtitle: (t) => t("schedules.new"),
-  tooltip: (t) => t("schedules.new"),
+  subtitle: (t) => t("schedules.browse"),
+  tooltip: (t) => t("schedules.browse"),
   icon: ThemedCalendarClock,
 } satisfies PanelPresentation;
 
 function SchedulePanel() {
   const { t } = useTranslation();
-  const { serverId, workspaceId, target, closeCurrentTab, retargetCurrentTab, openTab } =
-    usePaneContext();
+  const { serverId, workspaceId, target, retargetCurrentTab, openTab } = usePaneContext();
   const { isInteractive } = usePaneFocus();
   invariant(target.kind === "schedule", "SchedulePanel requires schedule target");
   const workspace = useWorkspaceFields(serverId, workspaceId, (descriptor) => ({
@@ -40,16 +39,42 @@ function SchedulePanel() {
 
   return (
     <WorkspaceScheduleTab
-      key={`${serverId}:${workspace.id}:${target.scheduleId ?? target.view ?? "new"}`}
+      key={`${serverId}:${workspace.id}`}
       serverId={serverId}
       workspace={workspace}
-      onClose={closeCurrentTab}
       scheduleId={target.scheduleId}
       view={target.view}
-      onBrowse={() => retargetCurrentTab({ kind: "schedule", view: "list" })}
+      filter={target.filter}
+      onBrowse={(filter = target.filter ?? "upcoming") =>
+        retargetCurrentTab({
+          kind: "schedule",
+          view: "list",
+          ...(filter !== "upcoming" ? { filter } : {}),
+        })
+      }
       interactive={isInteractive}
-      onOpen={(scheduleId) => retargetCurrentTab({ kind: "schedule", scheduleId })}
-      onCreate={() => retargetCurrentTab({ kind: "schedule" })}
+      onOpen={(scheduleId) =>
+        retargetCurrentTab({
+          kind: "schedule",
+          scheduleId,
+          ...(target.filter ? { filter: target.filter } : {}),
+        })
+      }
+      onCreate={() =>
+        retargetCurrentTab({
+          kind: "schedule",
+          view: "create",
+          ...(target.filter ? { filter: target.filter } : {}),
+        })
+      }
+      onEditTask={(scheduleId) =>
+        retargetCurrentTab({
+          kind: "schedule",
+          scheduleId,
+          view: "edit",
+          ...(target.filter ? { filter: target.filter } : {}),
+        })
+      }
       onOpenAgent={(agentId) => openTab({ kind: "agent", agentId })}
     />
   );
@@ -66,9 +91,9 @@ export const schedulePanelRegistration = definePanel("schedule", {
       : t(
           target.scheduleId
             ? "schedules.product.schedule"
-            : target.view === "list"
-              ? "schedules.browse"
-              : "schedules.new",
+            : target.view === "create"
+              ? "schedules.new"
+              : "schedules.browse",
         );
     return {
       label,

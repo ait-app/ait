@@ -2,6 +2,8 @@ import type { TFunction } from "i18next";
 import { i18n } from "@/i18n/i18next";
 import type { ScheduleCadence } from "@ait/protocol/schedule/types";
 
+export type ScheduleFormCadence = Exclude<ScheduleCadence, { type: "once" }>;
+
 type CronCadence = Extract<ScheduleCadence, { type: "cron" }>;
 
 export interface CadencePresetOption {
@@ -49,6 +51,7 @@ export function resolveCronPresetDisplay(
 export function normalizeScheduleFormCadence(
   cadence: ScheduleCadence,
   timezone: string,
-): ScheduleCadence {
+): ScheduleFormCadence {
+  if (cadence.type === "once") return { type: "every", everyMs: 3_600_000 };
   return cadence.type === "cron" ? { ...cadence, timezone: cadence.timezone ?? timezone } : cadence;
 }

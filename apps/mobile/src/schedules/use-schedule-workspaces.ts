@@ -8,6 +8,7 @@ import type { ScheduleFormWorkspace } from "./schedule-form-model";
 export interface ScheduleWorkspaceOption extends ScheduleFormWorkspace {
   serverId: string;
   serverName: string;
+  projectId: string;
 }
 
 /** Request the active Workspace directory and keep schedule placement independent of project roots. */
@@ -30,6 +31,7 @@ export function useScheduleWorkspaces(): ScheduleWorkspaceOption[] {
               id: workspace.id,
               serverId: host.serverId,
               serverName: host.label,
+              projectId: workspace.projectId,
               name: workspace.title?.trim() || workspace.name,
               cwd: workspace.workspaceDirectory,
             })),

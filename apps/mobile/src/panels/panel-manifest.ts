@@ -86,9 +86,9 @@ const manifests = {
     resourceKey: (target) =>
       target.scheduleId
         ? `schedule_${target.scheduleId}`
-        : target.view === "list"
-          ? "schedule_list"
-          : "schedule",
+        : target.view === "create"
+          ? "schedule_create"
+          : "schedule_list",
   },
   file: {
     kind: "file",

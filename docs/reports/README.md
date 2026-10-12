@@ -138,6 +138,7 @@
 
 ## 客户端、连接与品牌
 
+- [Workspace 定时任务列表与统一创建流程：验证](clients/workspace-schedule-timeline-2026-10-12.md)
 - [桌面监听重启与原生会话导入诊断验证](clients/desktop-listen-import-2026-10-08.md)
 - [草稿重试、文件类型与 OpenCode：验证](clients/draft-files-opencode-validation-2026-10-08.md)
 - [Paseo desktop/app 选定改动移植](clients/paseo-desktop-app-port-2026-10-10.md)

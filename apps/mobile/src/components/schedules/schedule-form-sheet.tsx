@@ -11,7 +11,7 @@ import {
   type ReactNode,
 } from "react";
 import { ScrollView, Text, View } from "react-native";
-import { Brain, Folder, GitBranch } from "lucide-react-native";
+import { Brain, Folder, GitBranch, Plus } from "lucide-react-native";
 import { StyleSheet } from "react-native-unistyles";
 import type { AgentProvider } from "@ait/protocol/agent-types";
 import type { ScheduleSummary } from "@ait/protocol/schedule/types";
@@ -259,26 +259,138 @@ export function ScheduleFormSheet(props: ScheduleFormSheetProps): ReactElement |
 
 function ScheduleFormScope(props: ScheduleFormSheetProps & { onDismiss?: () => void }) {
   const { t } = useTranslation();
+  const controlSize: FieldControlSize = useIsCompactFormFactor() ? "md" : "sm";
+  const hosts = useHosts();
   const workspaces = useScheduleWorkspaces();
-  const [selectedKey, setSelectedKey] = useState<string | null>(null);
   const ownedId = props.schedule?.workspaceId;
-  const options = useMemo(
+  const { projects, isLoading } = useProjects({ enabled: !ownedId });
+  const [placement, setPlacement] = useState<{
+    serverId: string | null;
+    projectId: string | null;
+    workspaceId: string | null;
+  }>({
+    serverId: props.serverId ?? null,
+    projectId: null,
+    workspaceId: null,
+  });
+  const hostOptions = useMemo(
     () =>
-      workspaces
-        .filter((workspace) => !props.serverId || workspace.serverId === props.serverId)
-        .map((workspace) => ({
-          id: `${workspace.serverId}:${workspace.id}`,
-          value: `${workspace.serverId}:${workspace.id}`,
-          label: workspace.name,
-          description: `${workspace.serverName} · ${workspace.cwd}`,
-          testID: `schedule-workspace-option-${workspace.serverId}-${workspace.id}`,
+      hosts
+        .filter((host) => props.mode !== "edit" || host.serverId === props.serverId)
+        .map((host) => ({
+          id: host.serverId,
+          value: host.serverId,
+          label: host.label,
+          testID: buildScheduleHostOptionTestId(host.serverId),
         })),
-    [props.serverId, workspaces],
+    [hosts, props.mode, props.serverId],
   );
-  const workspace = workspaces.find((workspace) =>
-    ownedId
-      ? workspace.id === ownedId && workspace.serverId === props.serverId
-      : `${workspace.serverId}:${workspace.id}` === selectedKey,
+  const host = hostOptions.find((option) => option.value === placement.serverId);
+  const projectOptions = useMemo(
+    () =>
+      projects.flatMap((project) =>
+        project.hosts
+          .filter((entry) => entry.serverId === host?.value && entry.isOnline)
+          .map((entry) => ({
+            id: entry.projectId,
+            value: entry.projectId,
+            label: entry.projectName,
+            description: entry.repoRoot,
+            testID: `schedule-project-option-${entry.serverId}-${entry.projectId}`,
+          })),
+      ),
+    [host?.value, projects],
+  );
+  const project = projectOptions.find((option) => option.value === placement.projectId);
+  const eligibleWorkspaces = useMemo(
+    () =>
+      workspaces.filter(
+        (workspace) => workspace.serverId === host?.value && workspace.projectId === project?.value,
+      ),
+    [host?.value, project?.value, workspaces],
+  );
+  const workspaceOptions = useMemo(
+    () =>
+      eligibleWorkspaces.map((workspace) => ({
+        id: workspace.id,
+        value: workspace.id,
+        label: workspace.name,
+        description: workspace.cwd,
+        testID: `schedule-workspace-option-${workspace.serverId}-${workspace.id}`,
+      })),
+    [eligibleWorkspaces],
+  );
+  const workspace = ownedId
+    ? workspaces.find((item) => item.id === ownedId && item.serverId === props.serverId)
+    : eligibleWorkspaces.find((item) => item.id === placement.workspaceId);
+  const selectHost = useCallback((serverId: string) => {
+    setPlacement((current) =>
+      current.serverId === serverId ? current : { serverId, projectId: null, workspaceId: null },
+    );
+  }, []);
+  const selectProject = useCallback((projectId: string) => {
+    setPlacement((current) =>
+      current.projectId === projectId ? current : { ...current, projectId, workspaceId: null },
+    );
+  }, []);
+  const selectWorkspace = useCallback((workspaceId: string) => {
+    setPlacement((current) =>
+      current.workspaceId === workspaceId ? current : { ...current, workspaceId },
+    );
+  }, []);
+  const renderPlacementFields = (disabled: boolean): ReactNode => (
+    <>
+      <SelectField
+        label={t("schedules.form.host")}
+        value={host?.value ?? null}
+        selectedDisplay={host ?? null}
+        options={hostOptions}
+        onChange={selectHost}
+        placeholder={t("schedules.form.selectHost")}
+        emptyText={t("schedules.form.noHosts")}
+        disabled={disabled || props.mode === "edit"}
+        size={controlSize}
+        triggerTestID="schedule-host-trigger"
+        renderOption={renderScheduleHostOption}
+        searchable
+      />
+      <SelectField
+        label={t("schedules.form.project")}
+        value={project?.value ?? null}
+        selectedDisplay={project ?? null}
+        options={projectOptions}
+        onChange={selectProject}
+        placeholder={t("schedules.form.selectProject")}
+        emptyText={t("schedules.form.noProjects")}
+        hint={!host ? t("schedules.form.chooseHost") : undefined}
+        disabled={disabled || !host}
+        loading={Boolean(host) && isLoading}
+        size={controlSize}
+        triggerTestID="schedule-project-trigger"
+        searchable
+      />
+      <SelectField
+        label={t("schedules.form.workspace")}
+        value={workspace?.id ?? null}
+        selectedDisplay={workspaceOptions.find((option) => option.value === workspace?.id) ?? null}
+        options={workspaceOptions}
+        onChange={selectWorkspace}
+        placeholder={t("schedules.form.selectWorkspace")}
+        emptyText={t("schedules.form.noWorkspaces")}
+        hint={
+          !project
+            ? t("schedules.form.chooseProject")
+            : props.mode === "edit"
+              ? t("schedules.legacy")
+              : t("schedules.form.workspaceHint")
+        }
+        disabled={disabled || !project}
+        loading={Boolean(project) && isLoading}
+        size={controlSize}
+        triggerTestID="schedule-workspace-trigger"
+        searchable
+      />
+    </>
   );
   return (
     <AdaptiveModalSheet
@@ -299,23 +411,13 @@ function ScheduleFormScope(props: ScheduleFormSheetProps & { onDismiss?: () => v
           {...props}
           serverId={workspace.serverId}
           workspace={workspace}
+          renderPlacementFields={ownedId ? undefined : renderPlacementFields}
           embedded
         />
       ) : ownedId ? (
         <Text style={styles.submitError}>{t("schedules.workspaceUnavailable")}</Text>
       ) : (
-        <SelectField
-          label={t("schedules.form.workspace")}
-          value={selectedKey}
-          selectedDisplay={null}
-          options={options}
-          onChange={setSelectedKey}
-          placeholder={t("schedules.form.selectWorkspace")}
-          emptyText={t("schedules.form.noWorkspaces")}
-          hint={props.mode === "edit" ? t("schedules.legacy") : t("schedules.form.workspaceHint")}
-          searchable
-          triggerTestID="schedule-workspace-trigger"
-        />
+        <View style={styles.inlineFields}>{renderPlacementFields(false)}</View>
       )}
     </AdaptiveModalSheet>
   );
@@ -332,12 +434,14 @@ function ScheduleFormContent({
   inline = false,
   embedded = false,
   onSaved,
+  renderPlacementFields,
 }: ScheduleFormSheetProps & {
   onDismiss?: () => void;
   workspace?: ScheduleFormWorkspace;
   inline?: boolean;
   embedded?: boolean;
   onSaved?: (schedule: ScheduleSummary) => void;
+  renderPlacementFields?: (disabled: boolean) => ReactNode;
 }): ReactElement {
   const { t } = useTranslation();
   const controlSize: FieldControlSize = useIsCompactFormFactor() ? "md" : "sm";
@@ -406,33 +510,32 @@ function ScheduleFormContent({
         (isValidScheduleTimezone(state.cadence.timezone ?? timezone)
           ? null
           : t("schedules.cadence.invalidTimezone")))
-      : state.cadence.type === "once"
-        ? !Number.isFinite(Date.parse(state.cadence.at))
-          ? t("schedules.form.invalidDateTime")
-          : Date.parse(state.cadence.at) <= now
-            ? t("schedules.form.futureTime")
-            : null
-        : !Number.isSafeInteger(state.cadence.everyMs) || state.cadence.everyMs <= 0
-          ? t("schedules.cadence.invalidInterval")
-          : null;
-  const startAt = state.startAt.trim() ? parseLocalDateTime(state.startAt) : null;
+      : !Number.isSafeInteger(state.cadence.everyMs) || state.cadence.everyMs <= 0
+        ? t("schedules.cadence.invalidInterval")
+        : null;
+  const convertingLegacyOnce = schedule?.cadence.type === "once" && Boolean(state.submitCadence);
+  const originalStartAt =
+    schedule?.cadence.type === "once" ? schedule.cadence.at : schedule?.startAt;
+  const startAt =
+    state.startAt === formatLocalDateTime(originalStartAt)
+      ? (originalStartAt ?? null)
+      : state.startAt.trim()
+        ? parseLocalDateTime(state.startAt)
+        : null;
   const expiresAt = state.expiresAt.trim() ? parseLocalDateTime(state.expiresAt) : null;
   const startAtError =
     state.startAt.trim() && !startAt
       ? t("schedules.form.invalidDateTime")
       : startAt &&
-          state.startAt !== formatLocalDateTime(schedule?.startAt) &&
+          (convertingLegacyOnce || state.startAt !== formatLocalDateTime(originalStartAt)) &&
           Date.parse(startAt) <= now
         ? t("schedules.form.futureTime")
         : null;
-  const firstAt =
-    state.cadence.type === "once"
-      ? Date.parse(state.cadence.at)
-      : startAt
-        ? Date.parse(startAt)
-        : state.cadence.type === "every" && mode === "create"
-          ? now + state.cadence.everyMs
-          : now;
+  const firstAt = startAt
+    ? Date.parse(startAt)
+    : state.cadence.type === "every" && mode === "create"
+      ? now + state.cadence.everyMs
+      : now;
   const expiresAtError =
     state.expiresAt.trim() && !expiresAt
       ? t("schedules.form.invalidDateTime")
@@ -473,7 +576,12 @@ function ScheduleFormContent({
       if (!state.workspace) throw new Error(t("schedules.form.selectWorkspace"));
       if (!isValidMaxRuns(state.maxRuns)) throw new Error(t("schedules.form.invalidMaxRuns"));
       const maxRuns = state.maxRuns.trim() ? Number(state.maxRuns) : null;
-      const startAt = state.startAt.trim() ? parseLocalDateTime(state.startAt) : null;
+      const startAt =
+        state.startAt === formatLocalDateTime(originalStartAt)
+          ? (originalStartAt ?? null)
+          : state.startAt.trim()
+            ? parseLocalDateTime(state.startAt)
+            : null;
       const expiresAt = state.expiresAt.trim() ? parseLocalDateTime(state.expiresAt) : null;
       const config = {
         ...(schedule?.target.type === "new-agent" ? schedule.target.config : {}),
@@ -504,7 +612,9 @@ function ScheduleFormContent({
           target,
           ...(!schedule.workspaceId ? { workspaceId: state.workspace.id } : {}),
           ...(state.submitCadence ? { cadence: state.submitCadence } : {}),
-          ...(state.startAt !== formatLocalDateTime(schedule.startAt) ? { startAt } : {}),
+          ...(convertingLegacyOnce || state.startAt !== formatLocalDateTime(originalStartAt)
+            ? { startAt }
+            : {}),
         });
         if (onSaved) onSaved(schedule);
         else onClose();
@@ -528,6 +638,8 @@ function ScheduleFormContent({
     }
   }, [
     canSubmit,
+    convertingLegacyOnce,
+    originalStartAt,
     createSchedule,
     mode,
     model,
@@ -589,12 +701,14 @@ function ScheduleFormContent({
       startAtError={startAtError}
       expiresAtError={expiresAtError}
       mutationServerId={mutationServerId}
+      showWorkspace={!renderPlacementFields}
     />
   );
 
   if (embedded)
     return (
       <View style={styles.inlineFields}>
+        {renderPlacementFields?.(isSubmitting)}
         {fields}
         {footer}
       </View>
@@ -634,6 +748,7 @@ interface ScheduleFormFieldsProps {
   startAtError: string | null;
   expiresAtError: string | null;
   mutationServerId: string;
+  showWorkspace: boolean;
 }
 
 function ScheduleFormFields({
@@ -645,12 +760,38 @@ function ScheduleFormFields({
   startAtError,
   expiresAtError,
   mutationServerId,
+  showWorkspace,
 }: ScheduleFormFieldsProps): ReactElement {
   const { t } = useTranslation();
+  const agentOptions = useMemo<SelectFieldOption<string>[]>(
+    () => [
+      {
+        id: "new-agent",
+        value: "new-agent",
+        label: t("schedules.form.newAgent"),
+        testID: "schedule-target-new-agent",
+      },
+      ...state.agentOptions.map((agent) => ({
+        id: agent.id,
+        value: agent.id,
+        label: agent.title,
+        testID: `schedule-agent-option-${agent.id}`,
+      })),
+    ],
+    [state.agentOptions, t],
+  );
+  const selectedAgent = state.targetKind === "new-agent" ? "new-agent" : state.selectedAgentId;
+  const handleSelectAgent = useCallback(
+    (value: string) => {
+      if (value === "new-agent") model.setTargetKind("new-agent");
+      else model.setAgent(value);
+    },
+    [model],
+  );
 
   return (
     <>
-      {state.workspace ? (
+      {state.workspace && showWorkspace ? (
         <Field label={t("schedules.form.workspace")}>
           <View style={styles.workspaceField} testID="schedule-workspace-target">
             <Text style={styles.workspaceName} numberOfLines={1}>
@@ -663,35 +804,19 @@ function ScheduleFormFields({
         </Field>
       ) : null}
       <SelectField
-        label={t("schedules.form.target")}
-        value={state.targetKind}
-        selectedDisplay={{
-          label: t(
-            state.targetKind === "agent"
-              ? "schedules.form.existingAgent"
-              : "schedules.form.newAgent",
-          ),
-        }}
-        options={[
-          {
-            id: "new-agent",
-            value: "new-agent",
-            label: t("schedules.form.newAgent"),
-            testID: "schedule-target-new-agent",
-          },
-          {
-            id: "agent",
-            value: "agent",
-            label: t("schedules.form.existingAgent"),
-            testID: "schedule-target-agent",
-          },
-        ]}
-        onChange={model.setTargetKind}
-        searchable={false}
+        label={t("schedules.form.executionAgent")}
+        value={selectedAgent || null}
+        selectedDisplay={agentOptions.find((option) => option.value === selectedAgent) ?? null}
+        options={agentOptions}
+        onChange={handleSelectAgent}
+        searchable
+        searchPlaceholder={t("schedules.form.searchAgents")}
         size={controlSize}
-        placeholder={t("schedules.form.target")}
-        emptyText={t("schedules.form.noAgents")}
-        triggerTestID="schedule-target-kind-trigger"
+        placeholder={t("schedules.form.executionAgent")}
+        emptyText={t("schedules.form.noMatchingAgents")}
+        hint={t("schedules.form.executionAgentHint")}
+        renderOption={renderExecutionAgentOption}
+        triggerTestID="schedule-execution-agent-trigger"
       />
       <Field label={t("schedules.form.name")}>
         <FormTextInput
@@ -721,13 +846,15 @@ function ScheduleFormFields({
         />
       </Field>
 
-      <ScheduleTargetFields
-        model={model}
-        state={state}
-        providerSnapshot={providerSnapshot}
-        controlSize={controlSize}
-        mutationServerId={mutationServerId}
-      />
+      {state.targetKind === "new-agent" ? (
+        <ScheduleNewAgentFields
+          model={model}
+          state={state}
+          providerSnapshot={providerSnapshot}
+          controlSize={controlSize}
+          mutationServerId={mutationServerId}
+        />
+      ) : null}
 
       <CadenceEditor
         value={state.cadence}
@@ -736,24 +863,22 @@ function ScheduleFormFields({
         size={controlSize}
       />
 
-      {state.cadence.type !== "once" ? (
-        <Field
-          label={t("schedules.form.startAt")}
-          error={startAtError ?? undefined}
-          hint={t("schedules.cadence.localTime", { timezone: getDeviceTimeZone() })}
-        >
-          <FormTextInput
-            size={controlSize}
-            initialValue={state.startAt}
-            onChangeText={model.setStartAt}
-            placeholder={t("schedules.form.startAtPlaceholder")}
-            testID="schedule-start-at-input"
-            accessibilityLabel={t("schedules.form.startAt")}
-            autoCapitalize="none"
-            autoCorrect={false}
-          />
-        </Field>
-      ) : null}
+      <Field
+        label={t("schedules.form.startAt")}
+        error={startAtError ?? undefined}
+        hint={t("schedules.cadence.localTime", { timezone: getDeviceTimeZone() })}
+      >
+        <FormTextInput
+          size={controlSize}
+          initialValue={state.startAt}
+          onChangeText={model.setStartAt}
+          placeholder={t("schedules.form.startAtPlaceholder")}
+          testID="schedule-start-at-input"
+          accessibilityLabel={t("schedules.form.startAt")}
+          autoCapitalize="none"
+          autoCorrect={false}
+        />
+      </Field>
       <Field
         label={t("schedules.form.expiresAt")}
         error={expiresAtError ?? undefined}
@@ -791,7 +916,28 @@ function ScheduleFormFields({
   );
 }
 
-interface ScheduleTargetFieldsProps {
+function renderExecutionAgentOption({
+  option,
+  selected,
+  active,
+  onPress,
+}: SelectFieldRenderOptionInput<string>): ReactElement {
+  const isNewAgent = option.value === "new-agent";
+  return (
+    <View style={isNewAgent ? styles.newAgentOption : undefined}>
+      <ComboboxItem
+        testID={option.testID}
+        label={option.label}
+        selected={selected}
+        active={active}
+        onPress={onPress}
+        leadingSlot={isNewAgent ? <Plus size={16} color={styles.providerIcon.color} /> : undefined}
+      />
+    </View>
+  );
+}
+
+interface ScheduleNewAgentFieldsProps {
   model: ScheduleFormModel;
   state: ScheduleFormState;
   providerSnapshot: ReturnType<typeof useScheduleFormProviderSnapshot>;
@@ -799,13 +945,13 @@ interface ScheduleTargetFieldsProps {
   mutationServerId: string;
 }
 
-function ScheduleTargetFields({
+function ScheduleNewAgentFields({
   model,
   state,
   providerSnapshot,
   controlSize,
   mutationServerId,
-}: ScheduleTargetFieldsProps): ReactElement {
+}: ScheduleNewAgentFieldsProps): ReactElement {
   const { t } = useTranslation();
   const hostOptions = useMemo<SelectFieldOption<string>[]>(
     () =>
@@ -933,30 +1079,6 @@ function ScheduleTargetFields({
     },
     [controlSize, modelTriggerLeading, state.selectedModel, state.selectedModelDisplay],
   );
-
-  if (state.targetKind === "agent") {
-    const options = state.agentOptions.map((agent) => ({
-      id: agent.id,
-      value: agent.id,
-      label: agent.title,
-      testID: `schedule-agent-option-${agent.id}`,
-    }));
-    return (
-      <SelectField
-        label={t("schedules.form.existingAgent")}
-        value={state.selectedAgentId || null}
-        selectedDisplay={options.find((option) => option.value === state.selectedAgentId) ?? null}
-        options={options}
-        onChange={model.setAgent}
-        placeholder={t("schedules.form.selectAgent")}
-        emptyText={t("schedules.form.noAgents")}
-        hint={t("schedules.form.agentHint")}
-        searchable
-        size={controlSize}
-        triggerTestID="schedule-agent-trigger"
-      />
-    );
-  }
 
   return (
     <>
@@ -1225,6 +1347,10 @@ function HostOptionItem({
   );
 }
 
+function renderScheduleHostOption(input: SelectFieldRenderOptionInput<string>): ReactElement {
+  return <HostOptionItem {...input} />;
+}
+
 function ProjectOptionItem({
   option,
   selected,
@@ -1352,6 +1478,12 @@ const styles = StyleSheet.create((theme) => {
       height: 18,
       alignItems: "center",
       justifyContent: "center",
+    },
+    newAgentOption: {
+      borderBottomWidth: 1,
+      borderBottomColor: theme.colors.border,
+      paddingBottom: theme.spacing[1],
+      marginBottom: theme.spacing[1],
     },
     footer: {
       flex: 1,

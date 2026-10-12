@@ -9,6 +9,7 @@ import { WorkspaceScheduleTab } from "@/components/schedules/workspace-schedule-
 const mocks = vi.hoisted(() => ({
   run: vi.fn(),
   pause: vi.fn(),
+  list: [] as StoredSchedule[],
   detail: {
     data: null as StoredSchedule | null,
     isPending: false,
@@ -18,7 +19,7 @@ const mocks = vi.hoisted(() => ({
 }));
 vi.mock("@/schedules/use-workspace-schedules", () => ({
   useScheduleDetail: () => mocks.detail,
-  useWorkspaceSchedules: () => ({ data: [], isPending: false, isError: false }),
+  useWorkspaceSchedules: () => ({ data: mocks.list, isPending: false, isError: false }),
 }));
 vi.mock("@/hooks/use-schedule-mutations", () => ({
   useScheduleMutations: () => ({ runScheduleNow: mocks.run, pauseSchedule: mocks.pause }),
@@ -46,7 +47,7 @@ const task: StoredSchedule = {
   expiresAt: null,
 };
 const clients: QueryClient[] = [];
-function open() {
+function open(list = false) {
   const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
   clients.push(client);
   return render(
@@ -54,11 +55,11 @@ function open() {
       <WorkspaceScheduleTab
         serverId="host-a"
         workspace={{ id: "workspace-a", cwd: "/repo", name: "Feature" }}
-        scheduleId="task-a"
+        scheduleId={list ? undefined : "task-a"}
         interactive
         onBrowse={vi.fn()}
         onOpen={vi.fn()}
-        onClose={vi.fn()}
+        onEditTask={vi.fn()}
         onCreate={vi.fn()}
         onOpenAgent={vi.fn()}
       />
@@ -69,6 +70,7 @@ beforeEach(() => {
   vi.clearAllMocks();
   vi.stubGlobal("React", React);
   mocks.detail.data = task;
+  mocks.list = [];
   mocks.run.mockResolvedValue(undefined);
   mocks.pause.mockResolvedValue(undefined);
 });
@@ -110,4 +112,23 @@ it("shows failed actions without discarding task details", async () => {
   fireEvent.click(screen.getByTestId("schedule-toggle-status"));
   await waitFor(() => expect(screen.getByText("Host unavailable")).toBeTruthy());
   expect(screen.getByTestId("workspace-schedule-details")).toBeTruthy();
+});
+
+it("opens the time list by default and excludes other workspaces", () => {
+  const nextRunAt = new Date(Date.now() + 3_600_000).toISOString();
+  mocks.list = [
+    { ...task, nextRunAt },
+    { ...task, id: "foreign", workspaceId: "workspace-b", nextRunAt },
+  ];
+  open(true);
+  expect(screen.getByTestId("workspace-schedules-list")).toBeTruthy();
+  expect(screen.getByTestId("workspace-schedule-task-a")).toBeTruthy();
+  expect(screen.queryByTestId("workspace-schedule-foreign")).toBeNull();
+});
+
+it("displays a legacy single trigger as one run rather than unlimited", () => {
+  const at = new Date(Date.now() + 3_600_000).toISOString();
+  mocks.list = [{ ...task, cadence: { type: "once", at }, nextRunAt: at, maxRuns: null }];
+  open(true);
+  expect(screen.getByTestId("workspace-schedule-task-a").textContent).toContain("1 run");
 });

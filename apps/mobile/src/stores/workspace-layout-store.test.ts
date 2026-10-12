@@ -233,7 +233,7 @@ function expectGroup(node: SplitNode): Extract<SplitNode, { kind: "group" }> {
 }
 
 describe("workspace-layout-store helpers", () => {
-  it("opens separate schedule drafts in a workspace and restores their tabs", async () => {
+  it("restores schedule list filters and creation navigation in a workspace", async () => {
     const source = createWorkspaceLayoutStore(createDeterministicWorkspaceLayoutIds());
     const workspaceKey = "host-a:workspace-a";
     const first = source.getState().openTab({
@@ -247,6 +247,10 @@ describe("workspace-layout-store helpers", () => {
       intent: "new",
     });
     expect(first).not.toBe(second);
+    source
+      .getState()
+      .replaceTab(workspaceKey, first!, { kind: "schedule", view: "list", filter: "paused" });
+    source.getState().replaceTab(workspaceKey, second!, { kind: "schedule", view: "create" });
 
     const restored = createWorkspaceLayoutStore(createDeterministicWorkspaceLayoutIds());
     await restored.persist.rehydrate();
@@ -255,6 +259,15 @@ describe("workspace-layout-store helpers", () => {
       first,
       second,
     ]);
+    expect(tabs.find((tab) => tab.tabId === first)?.target).toEqual({
+      kind: "schedule",
+      view: "list",
+      filter: "paused",
+    });
+    expect(tabs.find((tab) => tab.tabId === second)?.target).toEqual({
+      kind: "schedule",
+      view: "create",
+    });
   });
 
   it("seeds Files and Changes in the default Explorer sidebar", () => {

@@ -61,11 +61,14 @@ function normalizeSimpleWorkspaceTabTarget(value: WorkspaceTabTarget): Workspace
       return { kind: value.kind };
     case "schedule": {
       const scheduleId = trimNonEmpty(value.scheduleId);
-      return scheduleId
-        ? { kind: "schedule", scheduleId }
-        : value.view === "list"
-          ? { kind: "schedule", view: "list" }
-          : { kind: "schedule" };
+      const filter =
+        value.filter === "paused" || value.filter === "completed" ? { filter: value.filter } : {};
+      if (scheduleId)
+        return value.view === "edit"
+          ? { kind: "schedule", scheduleId, view: "edit", ...filter }
+          : { kind: "schedule", scheduleId, ...filter };
+      if (value.view === "create") return { kind: "schedule", view: "create", ...filter };
+      return { kind: "schedule", view: "list", ...filter };
     }
     case "setup": {
       const workspaceId = trimNonEmpty(value.workspaceId);
@@ -158,7 +161,13 @@ function secondaryWorkspaceTabTargetsEqual(
     return true;
   }
   if (left.kind === "schedule" && right.kind === "schedule") {
-    return left.scheduleId === right.scheduleId && left.view === right.view;
+    const view = (target: Extract<WorkspaceTabTarget, { kind: "schedule" }>) =>
+      target.scheduleId ? (target.view ?? "detail") : target.view === "create" ? "create" : "list";
+    return (
+      left.scheduleId === right.scheduleId &&
+      view(left) === view(right) &&
+      (left.filter ?? "upcoming") === (right.filter ?? "upcoming")
+    );
   }
   if (left.kind === "setup" && right.kind === "setup") {
     return left.workspaceId === right.workspaceId;
@@ -230,9 +239,9 @@ export function buildDeterministicWorkspaceTabId(target: WorkspaceTabTarget): st
   if (target.kind === "schedule") {
     return target.scheduleId
       ? `schedule_${target.scheduleId}`
-      : target.view === "list"
-        ? "schedule_list"
-        : "schedule";
+      : target.view === "create"
+        ? "schedule_create"
+        : "schedule_list";
   }
   if (target.kind === "working_diff") {
     return "working_diff";

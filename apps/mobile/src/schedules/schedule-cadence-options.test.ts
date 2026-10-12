@@ -24,9 +24,12 @@ describe("schedule cadence form options", () => {
       });
     }
   });
-  it("preserves single triggers and supplies a timezone only for cron", () => {
+  it("maps legacy single triggers to the shared interval editor and supplies cron timezones", () => {
     const once = { type: "once" as const, at: "2030-01-01T00:00:00Z" };
-    expect(normalizeScheduleFormCadence(once, "Europe/Madrid")).toEqual(once);
+    expect(normalizeScheduleFormCadence(once, "Europe/Madrid")).toEqual({
+      type: "every",
+      everyMs: 3_600_000,
+    });
     expect(
       normalizeScheduleFormCadence({ type: "cron", expression: "0 9 * * *" }, "Europe/Madrid"),
     ).toEqual({ type: "cron", expression: "0 9 * * *", timezone: "Europe/Madrid" });
