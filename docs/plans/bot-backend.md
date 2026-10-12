@@ -2,7 +2,7 @@
 
 Bot 是 Workspace 内长期存在的对话实体。每个 Channel 属于一个 Bot，入站消息直接通过
 Channel 找到归属；Conversation 管理隐藏 Provider session，普通 Agent 目录不展示它。
-边界决策见 [ADR-137](../decisions/bot/adr-137-workspace-bots-and-owned-channels.md)。
+边界决策见 [ADR-138](../decisions/bot/adr-138-workspace-bots-and-owned-channels.md)。
 
 本次实现后端服务与接口。前端 Bot tab 尚未接入，Telegram、飞书使用本地模拟服务验证；
 真实账号需要配置凭据和平台应用后验收。Email 仅完成可行性设计。
@@ -205,6 +205,10 @@ cargo test --locked -p daemon --bin daemon host::tests::each_composite_service_i
 cargo test --locked -p daemon --bin daemon host::tests::shutdown_releases_lock_and_restart_keeps_only_stable_identity # 1
 cargo test --locked -p daemon --test process production_installs_every_in_scope_method_without_placeholders # 1
 ```
+
+创建 PR 前合并 main（`32df46ae`），并再次验证上述 Bot 全 crate、Provider 隐藏会话/恢复/
+并发、API Bot 集成、生产装配及依赖守卫子集，共 61 项通过。Bot 决策调整为 ADR-138，
+与 main 的 ADR-137 保持独立。
 
 以下静态检查与构建均通过：
 

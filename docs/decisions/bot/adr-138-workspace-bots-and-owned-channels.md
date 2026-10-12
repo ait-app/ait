@@ -1,4 +1,4 @@
-# ADR-137：Workspace Bot 与独占 Channel
+# ADR-138：Workspace Bot 与独占 Channel
 
 - 状态：接受
 - 日期：2026-10-12

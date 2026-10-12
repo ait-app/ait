@@ -28,6 +28,36 @@ expectTypeOf<
   "exploreFileSystem" extends keyof DaemonClient ? true : false
 >().toEqualTypeOf<false>();
 
+const retiredSdkMethods = [
+  "connectHub",
+  "updateHubPermissions",
+  "getHubStatus",
+  "disconnectHub",
+  "getPluginCatalog",
+  "listPlugins",
+  "getPluginLogs",
+  "installDirectoryPlugin",
+  "installPluginSource",
+  "getPluginSourceStatus",
+  "previewPluginUpdates",
+  "applyPluginUpdates",
+  "updatePluginSources",
+  "inspectDirectoryPlugin",
+  "reloadPlugin",
+  "enablePlugin",
+  "disablePlugin",
+  "removePlugin",
+  "invokePluginRpc",
+] as const;
+
+expectTypeOf<
+  Extract<(typeof retiredSdkMethods)[number], keyof DaemonClient>
+>().toEqualTypeOf<never>();
+
+test.each(retiredSdkMethods)("no longer exposes the retired SDK method %s", (method) => {
+  expect(method in DaemonClient.prototype).toBe(false);
+});
+
 test("subscription failures identify the host and requested event categories", async () => {
   const logger = createMockLogger();
   const mock = createMockTransport();
@@ -563,25 +593,6 @@ test.each(["agent", "workspace"] as const)(
     expect(transport.sent).toEqual([]);
   },
 );
-
-test("Hub management requires daemon support before dispatching requests", async () => {
-  const mock = createMockTransport();
-  const client = new DaemonClient({
-    url: "ws://test",
-    clientId: "hub_feature_gate_unit_test",
-    transportFactory: () => mock.transport,
-    reconnect: { enabled: false },
-  });
-  clients.push(client);
-  const connecting = client.connect();
-  mock.triggerOpen();
-  await connecting;
-
-  await expect(client.getHubStatus()).rejects.toThrow(
-    "Update the host to use Hub relationship management.",
-  );
-  expect(mock.sent).toEqual([]);
-});
 
 test("timeline observation consumes broadcasts from a host without selective delivery", async () => {
   const mock = createMockTransport();
@@ -1935,51 +1946,6 @@ test("sends and parses daemon config reload", async () => {
   });
 });
 
-test("gets a structured plugin log snapshot", async () => {
-  const mock = createMockTransport();
-  const client = new DaemonClient({
-    url: "ws://test",
-    clientId: "clsk_unit_test",
-    logger: createMockLogger(),
-    reconnect: { enabled: false },
-    transportFactory: () => mock.transport,
-  });
-  clients.push(client);
-  const connectPromise = client.connect();
-  mock.triggerOpen({ features: { pluginLogs: true } });
-  await connectPromise;
-
-  const response = client.getPluginLogs("example");
-  const request = parseSentFrame(mock.sent[0]);
-  expect(request).toMatchObject({ type: "plugin.logs.get.request", pluginId: "example" });
-  mock.triggerMessage(
-    wrapSessionMessage({
-      type: "plugin.logs.get.response",
-      payload: {
-        requestId: request.requestId,
-        pluginId: "example",
-        entries: [
-          {
-            sequence: 3,
-            timestamp: "2026-08-16T12:00:00.000Z",
-            stream: "stdout",
-            message: "ready",
-          },
-        ],
-      },
-    }),
-  );
-
-  await expect(response).resolves.toEqual([
-    {
-      sequence: 3,
-      timestamp: "2026-08-16T12:00:00.000Z",
-      stream: "stdout",
-      message: "ready",
-    },
-  ]);
-});
-
 test("keeps waitForAgentUpsert initial fetch inside the requested deadline", async () => {
   useHeartbeatClock();
   const logger = createMockLogger();
@@ -2495,48 +2461,6 @@ test("file context action RPCs correlate success and error responses", async () 
     success: false,
     error: { code: "NOT_GIT_REPO", message: "Not a git repository" },
   });
-});
-
-test("sends plugin source identifiers unchanged for daemon-host resolution", async () => {
-  const mock = createMockTransport();
-  const client = new DaemonClient({
-    url: "ws://test",
-    clientId: "clsk_plugin_source",
-    logger: createMockLogger(),
-    reconnect: { enabled: false },
-    transportFactory: () => mock.transport,
-  });
-  clients.push(client);
-
-  const connectPromise = client.connect();
-  mock.triggerOpen({ features: { pluginSourceInstallation: true } });
-  await connectPromise;
-
-  const installPromise = client.installPluginSource({
-    source: "owner/repository:plugins/review",
-  });
-  const request = parseSentFrame(mock.sent.at(-1));
-  expect(request).toEqual({
-    type: "plugin.source.install.request",
-    requestId: expect.any(String),
-    source: "owner/repository:plugins/review",
-  });
-  mock.triggerMessage(
-    wrapSessionMessage({
-      type: "plugin.source.install.response",
-      payload: {
-        requestId: request.requestId,
-        plugin: {
-          id: "review",
-          path: "/plugins/review",
-          enabled: true,
-          status: "running",
-        },
-      },
-    }),
-  );
-
-  await expect(installPromise).resolves.toMatchObject({ id: "review", status: "running" });
 });
 
 test("a connection loss rejects an in-flight file context action", async () => {
@@ -7073,103 +6997,6 @@ test("uploadFile stops sending chunks when the connection closes between sends",
       .map(decodeFileTransferFrame)
       .some((frame) => frame.opcode === FileTransferOpcode.FileEnd),
   ).toBe(false);
-});
-
-test("rejects source installation on an older host before sending a request", async () => {
-  const transport = createMockTransport();
-  const client = new DaemonClient({
-    url: "ws://test",
-    clientId: "source-gate",
-    logger: createMockLogger(),
-    reconnect: { enabled: false },
-    transportFactory: () => transport.transport,
-  });
-  clients.push(client);
-  const connecting = client.connect();
-  transport.triggerOpen({ features: { pluginGitManagement: true } });
-  await connecting;
-  const sentBefore = transport.sent.length;
-  await expect(client.installPluginSource({ source: "npm:review" })).rejects.toThrow(
-    "Update the host",
-  );
-  expect(transport.sent.length).toBe(sentBefore);
-});
-
-test("reviewed plugin updates gate before requests and preserve exact proposal data", async () => {
-  for (const supported of [false, true]) {
-    const transport = createMockTransport();
-    const client = new DaemonClient({
-      url: "ws://test",
-      clientId: "reviewed-updates",
-      logger: createMockLogger(),
-      reconnect: { enabled: false },
-      transportFactory: () => transport.transport,
-    });
-    clients.push(client);
-    const connecting = client.connect();
-    transport.triggerOpen({
-      features: {
-        pluginGitManagement: true,
-        pluginSourceInstallation: true,
-        pluginSourceUpdates: supported,
-      },
-    });
-    await connecting;
-    const proposal = {
-      id: "review",
-      expected: {
-        identity: { kind: "npm" as const, packageName: "review", pluginPath: "." },
-        installationRoot: "/plugins/review/version-root",
-        revision: "1.0.0",
-      },
-      target: {
-        kind: "npm" as const,
-        version: "1.1.0",
-        resolved: "https://registry.npmjs.org/review/-/review-1.1.0.tgz",
-        integrity: "sha512-test",
-      },
-    };
-    if (!supported) {
-      const sent = transport.sent.length;
-      await expect(client.previewPluginUpdates()).rejects.toThrow("Update the host");
-      await expect(client.applyPluginUpdates([proposal])).rejects.toThrow("Update the host");
-      expect(transport.sent.length).toBe(sent);
-      continue;
-    }
-    const checking = client.previewPluginUpdates({ pluginId: "review" });
-    const check = parseSentFrame(transport.sent.at(-1));
-    expect(check).toMatchObject({
-      type: "plugin.source.update.preview.request",
-      pluginId: "review",
-    });
-    const preview = { id: "review", outcome: "update", links: [], proposal };
-    transport.triggerMessage(
-      wrapSessionMessage({
-        type: "plugin.source.update.preview.response",
-        payload: { requestId: check.requestId, plugins: [preview] },
-      }),
-    );
-    await expect(checking).resolves.toEqual([preview]);
-    const applying = client.applyPluginUpdates([proposal]);
-    const apply = parseSentFrame(transport.sent.at(-1));
-    expect(apply).toEqual({
-      type: "plugin.source.update.apply.request",
-      requestId: expect.any(String),
-      proposals: [proposal],
-    });
-    transport.triggerMessage(
-      wrapSessionMessage({
-        type: "plugin.source.update.apply.response",
-        payload: {
-          requestId: apply.requestId,
-          plugins: [{ id: "review", outcome: "error", error: "changed since review" }],
-        },
-      }),
-    );
-    await expect(applying).resolves.toEqual([
-      { id: "review", outcome: "error", error: "changed since review" },
-    ]);
-  }
 });
 
 test("uploadFile waits for transport acknowledgements before sending another frame", async () => {

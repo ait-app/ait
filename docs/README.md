@@ -17,7 +17,8 @@
 
 ## 架构决策
 
-- [ADR-137：Workspace Bot 与独占 Channel](decisions/bot/adr-137-workspace-bots-and-owned-channels.md)：独立 bot crate、单向依赖 provider、会话隔离与本地记忆。
+- [ADR-138：Workspace Bot 与独占 Channel](decisions/bot/adr-138-workspace-bots-and-owned-channels.md)：独立 bot crate、单向依赖 provider、会话隔离与本地记忆。
+- [ADR-137：清理已移除功能的共享协议与 SDK](decisions/clients/adr-137-remove-retired-feature-protocol.md)：移除 Hub、Plugin 管理、Chat 与 Loop 的旧消息和 SDK 方法，保留有效订阅与时间线显示项。
 - [ADR-136：拍平单功能区层并收口重复助手](decisions/workspace/adr-136-single-area-layer-flattening.md)：去掉只承载一个功能区的 `<layer>::<area>` 中间段，并收口重复的 RPC/ACP 助手。
 - [ADR-135：OpenCode 目录就绪与配置确认](decisions/providers/adr-135-opencode-catalog-readiness.md)：2.x 最低 2.0.26、明确升级提示、异步配置确认、动态目录发现与并发冷启动协调。
 - [ADR-134：已接纳的普通 RPC 等待共享任务额度](decisions/daemon/adr-134-admitted-rpc-job-waiting.md)：并发能力组共享许可、停机取消与 RPC 拒绝上下文。
