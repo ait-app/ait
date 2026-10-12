@@ -2163,6 +2163,49 @@ test("an obsolete foreground probe cannot close a replacement connection", async
   expect(second.closesFromClient()).toEqual([]);
 });
 
+test.each([true, false])(
+  "foreground verification sends a fresh ping with its own deadline during a pending latency probe (healthy=%s)",
+  async (healthy) => {
+    useHeartbeatClock();
+    const first = new FakeDaemon();
+    const second = new FakeDaemon();
+    first.daemonGoesSilent();
+    let attempts = 0;
+    const client = new DaemonClient({
+      url: "ws://test",
+      clientId: "independent-foreground-probe",
+      logger: noopLogger,
+      transportFactory: () => (++attempts === 1 ? first : second).transport,
+    });
+    clients.push(client);
+    const connection = client.connect();
+    first.openConnection();
+    await connection;
+    const latency = client.measureLatency({ timeoutMs: 15_000 }).then(
+      (rttMs) => ({ rttMs }),
+      (error: Error) => ({ error: error.message }),
+    );
+    await vi.advanceTimersByTimeAsync(1_000);
+    if (healthy) first.daemonAnswersPingsAfter("0.1s");
+
+    client.ensureConnected({ verify: true });
+    await vi.advanceTimersByTimeAsync(3_000);
+
+    expect(first.pingTimestamps()).toEqual(["0s", "1s"]);
+    if (healthy) {
+      expect(attempts).toBe(1);
+      expect(client.isConnected).toBe(true);
+      expect(first.closesFromClient()).toEqual([]);
+      await expect(latency).resolves.toEqual({ rttMs: 1_100 });
+    } else {
+      expect(attempts).toBe(2);
+      second.openConnection();
+      expect(client.isConnected).toBe(true);
+      await expect(latency).resolves.toMatchObject({ error: expect.any(String) });
+    }
+  },
+);
+
 test("stays online through ten minutes of pongs that arrive five seconds late", async () => {
   useHeartbeatClock();
   const session = new DaemonClientSession();

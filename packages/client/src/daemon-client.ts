@@ -1161,7 +1161,7 @@ export class DaemonClient {
   private lastServerInfoMessage: ServerInfoStatusPayload | null = null;
   private runtimeMetricsInterval: ReturnType<typeof setInterval> | null = null;
   private runtimeMetrics: DaemonClientRuntimeMetrics | null = null;
-  private pingProbe: PingProbe | null = null;
+  private readonly pingProbes = new Map<"shared" | "verification", PingProbe>();
   private connectionVerification: DaemonTransport | null = null;
   private livenessHeartbeatTimer: ReturnType<typeof setTimeout> | null = null;
   private lastLivenessRttMs: number | null = null;
@@ -1464,9 +1464,13 @@ export class DaemonClient {
     const transport = this.transport;
     if (!transport || this.connectionVerification === transport) return;
     this.connectionVerification = transport;
-    // A session probe has its own deadline, independent of a heartbeat that the OS
-    // may have suspended. A successful response also proves the session can serve RPCs.
-    void this.ping({ timeoutMs: 3_000 })
+    // Send a fresh probe with its own deadline, independent of a suspended heartbeat.
+    // Raw pongs verify liveness without requiring server-side clock timestamps.
+    void this.sendPingAwaitRtt({
+      timeoutMs: 3_000,
+      drivesLivenessFailure: false,
+      kind: "verification",
+    })
       .catch((error: unknown) => {
         if (this.transport !== transport || this.connectionState.status !== "connected") return;
         this.disposeTransport(1001, "Connection verification failed");
@@ -2053,6 +2057,7 @@ export class DaemonClient {
   private sendPingAwaitRtt(params: {
     timeoutMs: number;
     drivesLivenessFailure: boolean;
+    kind?: "shared" | "verification";
   }): Promise<number> {
     if (this.connectionState.status !== "connected" || !this.transport) {
       return Promise.reject(
@@ -2060,8 +2065,10 @@ export class DaemonClient {
       );
     }
 
-    if (this.pingProbe) {
-      return this.pingProbe.promise;
+    const kind = params.kind ?? "shared";
+    const pending = this.pingProbes.get(kind);
+    if (pending) {
+      return pending.promise;
     }
 
     const startedAt = perfNow();
@@ -2077,10 +2084,10 @@ export class DaemonClient {
       resolve: (value) => resolveProbe?.(value),
       reject: (error) => rejectProbe?.(error),
       timeoutHandle: setTimeout(() => {
-        if (this.pingProbe !== probe) {
+        if (this.pingProbes.get(kind) !== probe) {
           return;
         }
-        this.pingProbe = null;
+        this.pingProbes.delete(kind);
         const error = new PingTimeoutError(timeoutMs);
         probe.reject(error);
         if (probe.drivesLivenessFailure) {
@@ -2090,12 +2097,13 @@ export class DaemonClient {
       startedAt,
       drivesLivenessFailure: params.drivesLivenessFailure,
     };
-    this.pingProbe = probe;
+    this.pingProbes.set(kind, probe);
 
     try {
       this.sendJsonMessage("connection.ping", "connection.ping", { type: "connection.ping" });
     } catch (error) {
-      this.clearPingProbe();
+      this.pingProbes.delete(kind);
+      clearTimeout(probe.timeoutHandle);
       const sendError = error instanceof Error ? error : new Error(String(error));
       if (probe.drivesLivenessFailure) {
         this.recordLivenessFailure(sendError);
@@ -6281,32 +6289,20 @@ export class DaemonClient {
   }
 
   private resolvePingProbe(): void {
-    const probe = this.pingProbe;
-    if (!probe) {
-      return;
+    const receivedAt = perfNow();
+    for (const probe of this.pingProbes.values()) {
+      clearTimeout(probe.timeoutHandle);
+      probe.resolve(receivedAt - probe.startedAt);
     }
-    this.pingProbe = null;
-    clearTimeout(probe.timeoutHandle);
-    probe.resolve(perfNow() - probe.startedAt);
-  }
-
-  private clearPingProbe(): void {
-    const probe = this.pingProbe;
-    if (!probe) {
-      return;
-    }
-    this.pingProbe = null;
-    clearTimeout(probe.timeoutHandle);
+    this.pingProbes.clear();
   }
 
   private rejectPingProbe(error: Error): void {
-    const probe = this.pingProbe;
-    if (!probe) {
-      return;
+    for (const probe of this.pingProbes.values()) {
+      clearTimeout(probe.timeoutHandle);
+      probe.reject(error);
     }
-    this.pingProbe = null;
-    clearTimeout(probe.timeoutHandle);
-    probe.reject(error);
+    this.pingProbes.clear();
   }
 
   private recordLivenessFailure(error: Error): void {
