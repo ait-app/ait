@@ -59,6 +59,14 @@ function normalizeSimpleWorkspaceTabTarget(value: WorkspaceTabTarget): Workspace
     case "files":
     case "pull_request":
       return { kind: value.kind };
+    case "schedule": {
+      const scheduleId = trimNonEmpty(value.scheduleId);
+      return scheduleId
+        ? { kind: "schedule", scheduleId }
+        : value.view === "list"
+          ? { kind: "schedule", view: "list" }
+          : { kind: "schedule" };
+    }
     case "setup": {
       const workspaceId = trimNonEmpty(value.workspaceId);
       return workspaceId ? { kind: "setup", workspaceId } : null;
@@ -149,6 +157,9 @@ function secondaryWorkspaceTabTargetsEqual(
   if (left.kind === "pull_request" && right.kind === "pull_request") {
     return true;
   }
+  if (left.kind === "schedule" && right.kind === "schedule") {
+    return left.scheduleId === right.scheduleId && left.view === right.view;
+  }
   if (left.kind === "setup" && right.kind === "setup") {
     return left.workspaceId === right.workspaceId;
   }
@@ -215,6 +226,13 @@ export function buildDeterministicWorkspaceTabId(target: WorkspaceTabTarget): st
   }
   if (target.kind === "commit_diff") {
     return `commit_diff_${target.sha}`;
+  }
+  if (target.kind === "schedule") {
+    return target.scheduleId
+      ? `schedule_${target.scheduleId}`
+      : target.view === "list"
+        ? "schedule_list"
+        : "schedule";
   }
   if (target.kind === "working_diff") {
     return "working_diff";

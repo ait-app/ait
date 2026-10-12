@@ -16,41 +16,20 @@ describe("schedule cadence form options", () => {
     ]);
   });
 
-  it("maps interval cadences to cron cadences for the form", () => {
-    expect(
-      normalizeScheduleFormCadence({ type: "every", everyMs: 60_000 }, "Europe/Madrid"),
-    ).toEqual({
-      type: "cron",
-      expression: "* * * * *",
-      timezone: "Europe/Madrid",
-    });
-    expect(
-      normalizeScheduleFormCadence({ type: "every", everyMs: 60 * 60_000 }, "Europe/Madrid"),
-    ).toEqual({
-      type: "cron",
-      expression: "0 * * * *",
-      timezone: "Europe/Madrid",
-    });
-    expect(
-      normalizeScheduleFormCadence({ type: "every", everyMs: 24 * 60 * 60_000 }, "Europe/Madrid"),
-    ).toEqual({
-      type: "cron",
-      expression: "0 9 * * *",
-      timezone: "Europe/Madrid",
-    });
+  it("preserves fixed intervals instead of approximating them with cron", () => {
+    for (const everyMs of [60_000, 5 * 60_000, 60 * 60_000, 24 * 60 * 60_000, 90_000]) {
+      expect(normalizeScheduleFormCadence({ type: "every", everyMs }, "Europe/Madrid")).toEqual({
+        type: "every",
+        everyMs,
+      });
+    }
   });
-
-  it("maps unsupported intervals to the closest custom cron expression", () => {
-    const cadence = normalizeScheduleFormCadence(
-      { type: "every", everyMs: 5 * 60_000 },
-      "Europe/Madrid",
-    );
-
-    expect(cadence).toEqual({
-      type: "cron",
-      expression: "*/5 * * * *",
-      timezone: "Europe/Madrid",
-    });
-    expect(resolveCronPresetId(cadence)).toBe("custom");
+  it("preserves single triggers and supplies a timezone only for cron", () => {
+    const once = { type: "once" as const, at: "2030-01-01T00:00:00Z" };
+    expect(normalizeScheduleFormCadence(once, "Europe/Madrid")).toEqual(once);
+    expect(
+      normalizeScheduleFormCadence({ type: "cron", expression: "0 9 * * *" }, "Europe/Madrid"),
+    ).toEqual({ type: "cron", expression: "0 9 * * *", timezone: "Europe/Madrid" });
+    expect(resolveCronPresetId({ type: "cron", expression: "*/5 * * * *" })).toBe("custom");
   });
 });

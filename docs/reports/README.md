@@ -7,6 +7,8 @@
 
 ## Daemon 与协议
 
+- [Workspace 定时任务设计与验证](daemon/workspace-schedules-verification-2026-10-12.md)
+
 - [共享 model 与功能 crate 边界验证](daemon/model-capability-boundaries-2026-10-07.md)
 - [上游同步与 OpenCode 兼容验证](daemon/upstream-merge-2026-10-02.md)
 - [周期任务按变更驱动：PR 验证](daemon/periodic-loops-pr-validation-2026-10-10.md)

@@ -1,3 +1,4 @@
+import type { ScheduleCadence, ScheduleTarget } from "@ait/protocol/schedule/types";
 import { subscribeTimeline, type TimelineMessage } from "./timeline-subscription/index.js";
 import { ProviderSnapshotUpdates } from "./provider-snapshots/index.js";
 import {
@@ -745,38 +746,12 @@ export type ProjectListOptions = Omit<ProjectListRequest, "type" | "requestId"> 
   requestId?: string;
 };
 export interface CreateScheduleOptions {
+  workspaceId: string;
+  startAt?: string;
   prompt: string;
   name?: string | null;
-  cadence: {
-    type: "cron";
-    expression: string;
-    timezone?: string;
-  };
-  target:
-    | {
-        type: "self";
-        agentId: string;
-      }
-    | {
-        type: "agent";
-        agentId: string;
-      }
-    | {
-        type: "new-agent";
-        config: {
-          provider: AgentProvider;
-          cwd: string;
-          modeId?: string;
-          model?: string;
-          thinkingOptionId?: string;
-          archiveOnFinish?: boolean;
-          isolation?: "local" | "worktree";
-          title?: string | null;
-          providerOptions?: AgentSessionConfig["providerOptions"];
-          systemPrompt?: string;
-          mcpServers?: AgentSessionConfig["mcpServers"];
-        };
-      };
+  cadence: ScheduleCadence;
+  target: ScheduleTarget | { type: "self"; agentId: string };
   maxRuns?: number;
   expiresAt?: string;
   runOnCreate?: boolean;
@@ -796,14 +771,13 @@ export interface UpdateScheduleNewAgentConfig {
   cwd?: string;
 }
 export interface UpdateScheduleOptions {
+  workspaceId?: string;
+  target?: ScheduleTarget;
+  startAt?: string | null;
   id: string;
   name?: string | null;
   prompt?: string;
-  cadence?: {
-    type: "cron";
-    expression: string;
-    timezone?: string;
-  };
+  cadence?: ScheduleCadence;
   newAgentConfig?: UpdateScheduleNewAgentConfig;
   maxRuns?: number | null;
   expiresAt?: string | null;
@@ -5716,6 +5690,8 @@ export class DaemonClient {
       requestId: options.requestId,
       message: {
         type: "schedule.create.request",
+        workspaceId: options.workspaceId,
+        ...(options.startAt ? { startAt: options.startAt } : {}),
         prompt: options.prompt,
         cadence: options.cadence,
         target: options.target,
@@ -5728,11 +5704,17 @@ export class DaemonClient {
     });
   }
 
-  async scheduleList(requestId?: string): Promise<ScheduleListPayload> {
+  async scheduleList(
+    options?: string | { requestId?: string; workspaceId?: string },
+  ): Promise<ScheduleListPayload> {
+    const requestId = typeof options === "string" ? options : options?.requestId;
     return this.sendCorrelatedSessionRequest({
       requestId,
       message: {
         type: "schedule.list.request",
+        ...(typeof options === "object" && options.workspaceId
+          ? { workspaceId: options.workspaceId }
+          : {}),
       },
       responseType: "schedule.list.response",
     });
@@ -5809,6 +5791,9 @@ export class DaemonClient {
       requestId: options.requestId,
       message: {
         type: "schedule.update.request",
+        ...(options.workspaceId !== undefined ? { workspaceId: options.workspaceId } : {}),
+        ...(options.target !== undefined ? { target: options.target } : {}),
+        ...(options.startAt !== undefined ? { startAt: options.startAt } : {}),
         scheduleId: options.id,
         ...(options.name !== undefined ? { name: options.name } : {}),
         ...(options.prompt !== undefined ? { prompt: options.prompt } : {}),

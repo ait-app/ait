@@ -4,6 +4,7 @@ import { useRouter, type Href } from "expo-router";
 import { useTranslation } from "react-i18next";
 import {
   Copy,
+  CalendarClock,
   Ellipsis,
   Globe,
   Import as ImportIcon,
@@ -33,6 +34,7 @@ import type { Theme } from "@/styles/theme";
 
 const ThemedEllipsis = withUnistyles(Ellipsis);
 const ThemedCopy = withUnistyles(Copy);
+const ThemedCalendarClock = withUnistyles(CalendarClock);
 const ThemedSquarePen = withUnistyles(SquarePen);
 const ThemedGlobe = withUnistyles(Globe);
 const ThemedImport = withUnistyles(ImportIcon);
@@ -42,6 +44,7 @@ const mutedColorMapping = (theme: Theme) => ({ color: theme.colors.foregroundMut
 
 const MENU_NEW_AGENT_ICON = <ThemedSquarePen size={16} uniProps={mutedColorMapping} />;
 const MENU_NEW_BROWSER_ICON = <ThemedGlobe size={16} uniProps={mutedColorMapping} />;
+const MENU_NEW_SCHEDULE_ICON = <ThemedCalendarClock size={16} uniProps={mutedColorMapping} />;
 const MENU_NEW_TERMINAL_ICON = <TerminalProfileIcon iconKey={undefined} size={16} />;
 const MENU_IMPORT_ICON = <ThemedImport size={16} uniProps={mutedColorMapping} />;
 const MENU_COPY_ICON = <ThemedCopy size={16} uniProps={mutedColorMapping} />;
@@ -204,6 +207,7 @@ export interface WorkspaceHeaderMenuMobileProps extends WorkspaceHeaderWorkspace
   onCreateTerminal: () => void;
   onCreateTerminalWithProfile: (profile: TerminalProfile) => void;
   onCreateBrowser: () => void;
+  onCreateSchedule: () => void;
 }
 
 /**
@@ -218,6 +222,7 @@ export function WorkspaceHeaderMenuMobile({
   onCreateTerminal,
   onCreateTerminalWithProfile,
   onCreateBrowser,
+  onCreateSchedule,
   ...workspaceActions
 }: WorkspaceHeaderMenuMobileProps) {
   const { t } = useTranslation();
@@ -265,6 +270,13 @@ export function WorkspaceHeaderMenuMobile({
             {t("workspace.header.actions.newBrowser")}
           </DropdownMenuItem>
         ) : null}
+        <DropdownMenuItem
+          testID="workspace-header-new-schedule"
+          leading={MENU_NEW_SCHEDULE_ICON}
+          onSelect={onCreateSchedule}
+        >
+          {t("schedules.new")}
+        </DropdownMenuItem>
         <WorkspaceHeaderWorkspaceActionItems {...workspaceActions} />
         <DropdownMenuSeparator />
         <DropdownMenuLabel>{t("workspace.tabs.actions.terminalProfilesMenu")}</DropdownMenuLabel>

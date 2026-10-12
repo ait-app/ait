@@ -23,7 +23,7 @@ export type CreateScheduleInput = Omit<CreateScheduleOptions, "requestId">;
 export type UpdateScheduleInput = Omit<UpdateScheduleOptions, "requestId">;
 
 export interface UseScheduleMutationsResult {
-  createSchedule: (input: CreateScheduleInput) => Promise<void>;
+  createSchedule: (input: CreateScheduleInput) => Promise<ScheduleSummary>;
   updateSchedule: (input: UpdateScheduleInput) => Promise<void>;
   pauseSchedule: (id: string) => Promise<void>;
   resumeSchedule: (id: string) => Promise<void>;
@@ -38,7 +38,7 @@ export interface UseScheduleMutationsResult {
 }
 
 interface ScheduleListSnapshot {
-  previous: Array<[QueryKey, FetchAggregatedSchedulesState | undefined]>;
+  previous: [QueryKey, FetchAggregatedSchedulesState | undefined][];
 }
 
 export function updateAggregatedSchedulesData(
@@ -115,15 +115,19 @@ export function useScheduleMutations({
 
   const invalidate = useCallback(() => {
     void queryClient.invalidateQueries({ queryKey: schedulesQueryBaseKey });
+    void queryClient.invalidateQueries({ queryKey: ["workspace-schedules"] });
+    void queryClient.invalidateQueries({ queryKey: ["schedule-detail"] });
   }, [queryClient]);
 
   const createMutation = useMutation({
-    mutationFn: async (input: CreateScheduleInput): Promise<void> => {
+    mutationFn: async (input: CreateScheduleInput): Promise<ScheduleSummary> => {
       const client = requireClient(serverId, t("common.errors.daemonClientUnavailable"));
       const payload = await client.scheduleCreate(input);
       if (payload.error) {
         throw new Error(payload.error);
       }
+      if (!payload.schedule) throw new Error(t("schedules.loadError"));
+      return payload.schedule;
     },
     onSettled: invalidate,
   });
@@ -217,8 +221,8 @@ export function useScheduleMutations({
   });
 
   const createSchedule = useCallback(
-    async (input: CreateScheduleInput): Promise<void> => {
-      await createMutation.mutateAsync(input);
+    async (input: CreateScheduleInput): Promise<ScheduleSummary> => {
+      return await createMutation.mutateAsync(input);
     },
     [createMutation],
   );

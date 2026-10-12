@@ -1,5 +1,4 @@
-import type { AgentProvider } from "@ait/protocol/agent-types";
-import type { JsonValue } from "@ait/protocol/agent-types";
+import type { AgentProvider, JsonValue } from "@ait/protocol/agent-types";
 import type { WorkspaceFileTabTarget } from "@/workspace/file-open";
 
 export interface WorkspaceDraftTabSetup {
@@ -42,6 +41,7 @@ export type WorkspaceTabTarget =
   | { kind: "changes_tree" }
   | { kind: "files" }
   | { kind: "pull_request" }
+  | { kind: "schedule"; scheduleId?: string; view?: "list" }
   | WorkspaceFileTabTarget
   | WorkspaceWorkingDiffTabTarget
   | PluginWorkspaceTabTarget

@@ -5,6 +5,7 @@ use domain::storage::schedule::Error;
 
 pub(crate) fn next(cadence: &Cadence, after: DateTime<Utc>) -> Result<DateTime<Utc>, Error> {
     match cadence {
+        Cadence::Once { at } => Ok(*at),
         Cadence::Every { every_ms } if *every_ms > 0 => after
             .checked_add_signed(Duration::milliseconds(*every_ms))
             .ok_or(Error::Invalid),

@@ -1,20 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
-vi.mock("@react-native-async-storage/async-storage", () => {
-  const storage = new Map<string, string>();
-  return {
-    default: {
-      getItem: vi.fn(async (key: string) => storage.get(key) ?? null),
-      setItem: vi.fn(async (key: string, value: string) => {
-        storage.set(key, value);
-      }),
-      removeItem: vi.fn(async (key: string) => {
-        storage.delete(key);
-      }),
-    },
-  };
-});
-
 import { defaultChangesState, type ChangesState } from "@/panels/changes/state";
 import { defaultFileState, type FileState } from "@/panels/file/state";
 import {
@@ -41,6 +26,21 @@ import {
 import { createViewedTimelineSync } from "@/timeline/viewed-timeline-sync";
 import { buildWorkspaceTabPersistenceKey, type WorkspaceTab } from "@/workspace-tabs/model";
 import AsyncStorage from "@react-native-async-storage/async-storage";
+
+vi.mock("@react-native-async-storage/async-storage", () => {
+  const storage = new Map<string, string>();
+  return {
+    default: {
+      getItem: vi.fn(async (key: string) => storage.get(key) ?? null),
+      setItem: vi.fn(async (key: string, value: string) => {
+        storage.set(key, value);
+      }),
+      removeItem: vi.fn(async (key: string) => {
+        storage.delete(key);
+      }),
+    },
+  };
+});
 
 const SERVER_ID = "server-1";
 const WORKSPACE_ID = "ws-main";
@@ -233,6 +233,30 @@ function expectGroup(node: SplitNode): Extract<SplitNode, { kind: "group" }> {
 }
 
 describe("workspace-layout-store helpers", () => {
+  it("opens separate schedule drafts in a workspace and restores their tabs", async () => {
+    const source = createWorkspaceLayoutStore(createDeterministicWorkspaceLayoutIds());
+    const workspaceKey = "host-a:workspace-a";
+    const first = source.getState().openTab({
+      workspaceKey,
+      target: { kind: "schedule" },
+      intent: "new",
+    });
+    const second = source.getState().openTab({
+      workspaceKey,
+      target: { kind: "schedule" },
+      intent: "new",
+    });
+    expect(first).not.toBe(second);
+
+    const restored = createWorkspaceLayoutStore(createDeterministicWorkspaceLayoutIds());
+    await restored.persist.rehydrate();
+    const tabs = collectAllTabs(restored.getState().layoutByWorkspace[workspaceKey]!.root);
+    expect(tabs.filter((tab) => tab.target.kind === "schedule").map((tab) => tab.tabId)).toEqual([
+      first,
+      second,
+    ]);
+  });
+
   it("seeds Files and Changes in the default Explorer sidebar", () => {
     const layout = createWorkspaceLayoutWithExplorerSidebar();
     const tabs = collectAllTabs(layout.root);

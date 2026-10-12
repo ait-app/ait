@@ -13,13 +13,14 @@ import { buildSchedulesRoute } from "../../src/utils/host-routes";
 
 interface ScheduleSeedClient {
   scheduleCreate(input: {
+    workspaceId: string;
     prompt: string;
     name?: string;
     cadence: { type: "cron"; expression: string };
     target: {
       type: "new-agent";
       config: {
-        provider: "mock";
+        provider: "codex";
         cwd: string;
         model: string;
         modeId: string;
@@ -34,20 +35,21 @@ interface ScheduleSeedClient {
 async function seedMockSchedule(
   workspace: SeededWorkspace,
   name: string,
-  model = "ten-second-stream",
+  model = "offline-model",
 ): Promise<string> {
   const client = workspace.client as unknown as ScheduleSeedClient;
   const result = await client.scheduleCreate({
+    workspaceId: workspace.workspaceId,
     prompt: "Say hello from the scheduled agent.",
     name,
     cadence: { type: "cron", expression: "0 9 * * *" },
     target: {
       type: "new-agent",
       config: {
-        provider: "mock",
+        provider: "codex",
         cwd: workspace.repoPath,
         model,
-        modeId: "load-test",
+        modeId: "full-access",
         title: name,
       },
     },
@@ -70,9 +72,10 @@ async function deleteSeededSchedule(workspace: SeededWorkspace, id: string): Pro
 }
 
 test.describe("Schedules", () => {
-  const cleanupTasks: Array<() => Promise<void>> = [];
+  const cleanupTasks: (() => Promise<void>)[] = [];
 
-  test.afterEach(async () => {
+  test.afterEach(async ({ page }, testInfo) => {
+    if (testInfo.error) console.error(testInfo.error.message, "at", page.url());
     for (const cleanup of cleanupTasks.toReversed()) {
       await cleanup();
     }
@@ -89,33 +92,31 @@ test.describe("Schedules", () => {
     await page.goto(buildSchedulesRoute());
     const row = page.getByTestId(`schedule-row-${scheduleId}`);
     await expect(row).toBeVisible({ timeout: 30_000 });
-    await expect(row).toContainText(workspace.projectDisplayName, { timeout: 30_000 });
+    await expect(row).toContainText(workspace.workspaceName, { timeout: 30_000 });
 
     await row.click();
     const formSheet = page.getByTestId("schedule-form-sheet");
     await expect(formSheet).toBeVisible({ timeout: 10_000 });
     await expectStableHeight(formSheet);
-    const hostTrigger = page.getByTestId("schedule-host-trigger");
-    const projectTrigger = page.getByTestId("schedule-project-trigger");
+    const workspaceTarget = page.getByTestId("schedule-workspace-target");
     const modelTrigger = page.getByTestId("schedule-model-trigger");
     const thinkingTrigger = page.getByTestId("schedule-thinking-trigger");
     const modeTrigger = page.getByTestId("schedule-mode-trigger");
-    await expect(hostTrigger).toBeVisible({ timeout: 30_000 });
-    await expect(hostTrigger).toBeDisabled();
-    await expectSettled(hostTrigger);
-    await expect(projectTrigger).toContainText(workspace.projectDisplayName, { timeout: 30_000 });
-    await expectSettled(projectTrigger);
-    await expect(modelTrigger).toContainText("Ten second stream", { timeout: 30_000 });
+    await expect(workspaceTarget).toContainText(workspace.workspaceName);
+    await expectSettled(workspaceTarget);
+    await expect(modelTrigger).toContainText("Offline model", { timeout: 30_000 });
     await expectSettled(modelTrigger);
-    await expect(thinkingTrigger).toContainText("Low");
+    await expect(thinkingTrigger).toContainText("High");
     await expectSettled(thinkingTrigger);
     await expect(modeTrigger).toBeVisible({ timeout: 30_000 });
     await expectSettled(modeTrigger);
     await expect(page.getByTestId("cadence-mode")).toHaveCount(0);
     await expect(page.getByTestId("cadence-interval-value")).toHaveCount(0);
     await expect(page.getByTestId("schedule-cadence-preset-trigger")).toContainText("Daily 9:00");
-    await expect(page.getByText(/Times are in/)).toHaveCount(0);
-    await expect(formSheet.getByText("Cron", { exact: true })).toHaveCount(0);
+    await expect(page.getByTestId("cadence-timezone")).not.toBeEmpty();
+    await expect(page.getByTestId("schedule-cadence-kind-trigger")).toContainText(
+      "Calendar / Cron",
+    );
   });
 
   test("edit form hydrates a non-default host schedule after reload", async ({ page }) => {
@@ -148,19 +149,15 @@ test.describe("Schedules", () => {
     const formSheet = page.getByTestId("schedule-form-sheet");
     await expect(formSheet).toBeVisible({ timeout: 10_000 });
     await expectStableHeight(formSheet);
-    const hostTrigger = page.getByTestId("schedule-host-trigger");
-    const projectTrigger = page.getByTestId("schedule-project-trigger");
+    const workspaceTarget = page.getByTestId("schedule-workspace-target");
     const modelTrigger = page.getByTestId("schedule-model-trigger");
     const modeTrigger = page.getByTestId("schedule-mode-trigger");
 
-    await expect(hostTrigger).toContainText(secondary.label, { timeout: 30_000 });
-    await expect(hostTrigger).toBeDisabled();
-    await expectSettled(hostTrigger);
-    await expect(projectTrigger).toContainText(secondary.projectDisplayName, { timeout: 30_000 });
-    await expectSettled(projectTrigger);
+    await expect(workspaceTarget).toContainText(secondary.workspaceName);
+    await expectSettled(workspaceTarget);
     await expect(modelTrigger).toContainText(SECONDARY_MODEL_LABEL, { timeout: 30_000 });
     await expectSettled(modelTrigger);
-    await expect(modeTrigger).toContainText("Load Test", { timeout: 30_000 });
+    await expect(modeTrigger).toContainText("Full Access", { timeout: 30_000 });
     await expectSettled(modeTrigger);
     await expect(page.getByTestId("cadence-mode")).toHaveCount(0);
     await expect(page.getByTestId("schedule-cadence-preset-trigger")).toContainText("Daily 9:00");
@@ -184,10 +181,10 @@ test.describe("Schedules", () => {
     await expect(formSheet).toHaveCount(0, { timeout: 30_000 });
 
     await page.getByTestId("schedules-new").click();
-    await expect(formSheet).toBeVisible({ timeout: 10_000 });
-    const projectTrigger = page.getByTestId("schedule-project-trigger");
-    await expect(projectTrigger).toContainText(/select project/i);
-    await expectSettled(projectTrigger);
+    await expect(page.getByTestId("schedule-workspace-sheet")).toBeVisible();
+    await expect(page.getByTestId("schedule-workspace-trigger")).toContainText(
+      /select a workspace/i,
+    );
     await expect(page.getByTestId("schedule-model-trigger")).toHaveCount(0);
     await expect(page.getByTestId("schedule-thinking-trigger")).toHaveCount(0);
     await expect(page.getByTestId("schedule-mode-trigger")).toHaveCount(0);

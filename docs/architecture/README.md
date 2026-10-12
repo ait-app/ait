@@ -90,7 +90,7 @@ Filesystem 的生产代码依赖 domain/model，相关测试使用 persistence �
 `WorkspaceRecoveryRuntime`、`ChangeRequestResolver` 和 `model::workspace::provisioning` 的
 `GithubProjectsRuntime` 端口注入，交换的值归 domain；daemon 将 filesystem 的
 `LocalManagedWorktrees`、`LocalForge` 与 `LocalGithubProjects` 注入 metadata。同一份
-`Arc<Mutex<Worktrees>>` 由 worktree RPC、`Directory` 和 schedule 共享，创建后的 setup 直接
+`Arc<Mutex<Worktrees>>` 由 worktree RPC、`Directory` 和旧版未绑定的 schedule 执行共享，创建后的 setup 直接
 使用 metadata 的自动化服务，归档前的资源关闭经 `metadata::worktrees::ports` 由 API 注入。
 单连接仍把这些长耗时方法分配到文件操作队列。见
 [ADR-130](../decisions/workspace/adr-130-workspace-methods-owned-by-metadata.md)。
@@ -180,3 +180,11 @@ Electron 主进程提供桌面适配；Android 和 iOS 的原生适配使用 Sec
 Relay 的类型化消息集中在 `crates/relay/src/protocol.rs`，WebSocket 收发集中在
 `transport.rs`；单连接协商标识由 `crates/model/src/server/single.rs` 定义。
 模块职责见 [ADR-075](../decisions/clients/adr-075-relay-protocol-modules.md)。
+
+## 定时任务归属
+
+新定时任务在 `domain::schedule::Schedule.workspace_id` 保存固定 Workspace 身份，
+`run.workspace_id` 表示实际执行位置。schedule 经 `Runner::resolve` 校验归属并规范化目录；
+daemon 连接 metadata/provider，在已有 Workspace 内选择或创建 Agent。新 Agent 的结束
+清理只归档 Agent，不归档所属 Workspace。版本 1 的未绑定任务保留旧执行分支，编辑时
+明确选择 Workspace 后绑定。见 [ADR-138](../decisions/workspace/adr-138-workspace-owned-schedules.md)。

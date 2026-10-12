@@ -11,6 +11,7 @@ describe("getBuiltInLaunchOrder", () => {
       "files",
       "browser",
       "pullRequest",
+      "schedule",
     ]);
   });
 
@@ -23,6 +24,7 @@ describe("getBuiltInLaunchOrder", () => {
       "agent",
       "browser",
       "pullRequest",
+      "schedule",
     ]);
   });
 });
