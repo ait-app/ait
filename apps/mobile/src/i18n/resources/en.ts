@@ -1592,6 +1592,23 @@ export const en = {
     workspaceUnavailable:
       "The owning workspace is unavailable. Restore it before editing this schedule.",
     browse: "Workspace schedules",
+    timeline: {
+      back: "Back to task list",
+      hint: "Tasks are ordered by their next trigger. Select a task to edit it.",
+      filters: { upcoming: "Upcoming", paused: "Paused", completed: "Finished" },
+      today: "Today",
+      tomorrow: "Tomorrow",
+      due: "Due now",
+      paused: "Paused tasks",
+      editTask: "Edit {{title}}",
+      limit_one: "{{count}} run",
+      limit_other: "{{count}} runs",
+      empty: {
+        upcoming: "No upcoming tasks. Create a schedule to get started.",
+        paused: "No paused tasks.",
+        completed: "No finished tasks.",
+      },
+    },
     history: "Run history",
     noRuns: "This schedule has not run yet.",
     back: "Back to schedule",
@@ -1702,7 +1719,8 @@ export const en = {
       startAtPlaceholder: "YYYY-MM-DD HH:mm — defaults to one interval from now",
       expiresAt: "Stop after (optional)",
       invalidMaxRuns: "Enter a positive whole number or leave empty.",
-      maxRunsHint: "Successful, failed and manual runs all count towards this limit.",
+      maxRunsHint:
+        "Defaults to 1 for one run; leave empty for unlimited runs. Successful, failed and manual runs count.",
       invalidDateTime: "Use YYYY-MM-DD HH:mm with a valid local time.",
       futureTime: "Choose a time in the future.",
       expiryAfterStart: "The stop time must be later than the first trigger.",

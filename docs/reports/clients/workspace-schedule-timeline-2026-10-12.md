@@ -1,0 +1,53 @@
+# Workspace 定时任务列表与默认运行一次：验证
+
+本次改动基于 `main` 的 `4ab7e7be`，是已合并 Workspace 定时任务功能的界面修订。
+实现与验证对应本报告所在提交；没有修改 Rust、调度协议或持久化数据结构。
+设计见 [ADR-138](../../decisions/workspace/adr-138-workspace-owned-schedules.md)，使用方式见
+[定时任务](../../operations/schedules.md)。
+
+## 行为
+
+- Workspace 新建菜单中的定时任务入口默认打开列表，按服务器返回的下一次触发时间升序排列，
+  分为今天、明天与具体日期；已到期但尚未执行的任务仍显示在待触发分组。
+- 点击任务行直接进入编辑；新建、编辑保存或取消后返回列表。运行历史入口保留手动运行、
+  暂停、恢复、删除和 Agent 跳转。暂停与已完成任务可独立筛选，筛选及编辑视图随布局恢复。
+- 表单只提供固定间隔和 Cron 周期。新任务的运行次数预填 `1`，更大的值表示重复执行，
+  清空表示不限次数；已有不限次数任务不会因为打开编辑而变成一次。
+- 旧 `Once` 数据仍可显示、运行与编辑；仅修改名称或提示词时保留原触发规则。
+  修改时间、周期或次数时转为周期任务，未修改的原始触发时间保持精度。
+- 列表只展示当前 Workspace 的任务，使用服务器的真实下一次触发时间，未在客户端推演
+  Cron 或补造后续事件。
+
+## 定向验证
+
+验证平台为本机 macOS，浏览器为 Playwright Chromium。
+
+| 检查                                                         | 结果                  |
+| ------------------------------------------------------------ | --------------------- |
+| 定时任务模型、表单、列表、布局恢复与标签页身份的 Vitest 测试 | 12 个文件、229 项通过 |
+| 定时任务创建、编辑与模型恢复的浏览器 E2E                     | 7 项通过              |
+| 移动端 TypeScript 检查                                       | 通过                  |
+| 修改文件的 ESLint、UI lint、格式与文档链接检查               | 通过                  |
+
+测试命令：
+
+```sh
+npm exec --workspace=@ait/mobile -- vitest run src/schedules src/stores/workspace-layout-store.test.ts src/workspace-tabs/identity.test.ts
+npm run test:e2e --workspace=@ait/mobile -- e2e/browser/schedules-project-target.spec.ts e2e/browser/schedules-edit-model-hydration.spec.ts
+npm run typecheck --workspace=@ait/mobile
+npm run check:ui
+npm run check:docs
+```
+
+浏览器用例通过真实本地 daemon、SDK 与持久化路径验证当前 Workspace 的已有 Agent
+及新建 Agent 目标，确认默认一次、保存后的列表导航、时间顺序、直接编辑与刷新恢复。
+Provider 使用仓库的离线 Codex 原生协议夹具，没有调用真实模型服务。
+桌面与 390px 窄屏列表截图已人工检查，无横向溢出，时间、任务名及新建入口可见。
+本次未验证原生 iOS/Android 设备或新的安装包。
+
+## Test coverage
+
+未测量代码覆盖率；测试通过数量不代表行或分支覆盖率。
+用户未请求覆盖率测量，本次只运行改动代码及直接相关行为的定向测试。
+没有修改 `bins/` 或 `crates/` 中的 Rust 代码，按仓库要求跳过 Rust 测试。
+浏览器夹具构建并启动本地 daemon 属于端到端运行验证，不属于 Rust 单元测试或全工作区测试。

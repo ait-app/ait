@@ -406,33 +406,32 @@ function ScheduleFormContent({
         (isValidScheduleTimezone(state.cadence.timezone ?? timezone)
           ? null
           : t("schedules.cadence.invalidTimezone")))
-      : state.cadence.type === "once"
-        ? !Number.isFinite(Date.parse(state.cadence.at))
-          ? t("schedules.form.invalidDateTime")
-          : Date.parse(state.cadence.at) <= now
-            ? t("schedules.form.futureTime")
-            : null
-        : !Number.isSafeInteger(state.cadence.everyMs) || state.cadence.everyMs <= 0
-          ? t("schedules.cadence.invalidInterval")
-          : null;
-  const startAt = state.startAt.trim() ? parseLocalDateTime(state.startAt) : null;
+      : !Number.isSafeInteger(state.cadence.everyMs) || state.cadence.everyMs <= 0
+        ? t("schedules.cadence.invalidInterval")
+        : null;
+  const convertingLegacyOnce = schedule?.cadence.type === "once" && Boolean(state.submitCadence);
+  const originalStartAt =
+    schedule?.cadence.type === "once" ? schedule.cadence.at : schedule?.startAt;
+  const startAt =
+    state.startAt === formatLocalDateTime(originalStartAt)
+      ? (originalStartAt ?? null)
+      : state.startAt.trim()
+        ? parseLocalDateTime(state.startAt)
+        : null;
   const expiresAt = state.expiresAt.trim() ? parseLocalDateTime(state.expiresAt) : null;
   const startAtError =
     state.startAt.trim() && !startAt
       ? t("schedules.form.invalidDateTime")
       : startAt &&
-          state.startAt !== formatLocalDateTime(schedule?.startAt) &&
+          (convertingLegacyOnce || state.startAt !== formatLocalDateTime(originalStartAt)) &&
           Date.parse(startAt) <= now
         ? t("schedules.form.futureTime")
         : null;
-  const firstAt =
-    state.cadence.type === "once"
-      ? Date.parse(state.cadence.at)
-      : startAt
-        ? Date.parse(startAt)
-        : state.cadence.type === "every" && mode === "create"
-          ? now + state.cadence.everyMs
-          : now;
+  const firstAt = startAt
+    ? Date.parse(startAt)
+    : state.cadence.type === "every" && mode === "create"
+      ? now + state.cadence.everyMs
+      : now;
   const expiresAtError =
     state.expiresAt.trim() && !expiresAt
       ? t("schedules.form.invalidDateTime")
@@ -473,7 +472,12 @@ function ScheduleFormContent({
       if (!state.workspace) throw new Error(t("schedules.form.selectWorkspace"));
       if (!isValidMaxRuns(state.maxRuns)) throw new Error(t("schedules.form.invalidMaxRuns"));
       const maxRuns = state.maxRuns.trim() ? Number(state.maxRuns) : null;
-      const startAt = state.startAt.trim() ? parseLocalDateTime(state.startAt) : null;
+      const startAt =
+        state.startAt === formatLocalDateTime(originalStartAt)
+          ? (originalStartAt ?? null)
+          : state.startAt.trim()
+            ? parseLocalDateTime(state.startAt)
+            : null;
       const expiresAt = state.expiresAt.trim() ? parseLocalDateTime(state.expiresAt) : null;
       const config = {
         ...(schedule?.target.type === "new-agent" ? schedule.target.config : {}),
@@ -504,7 +508,9 @@ function ScheduleFormContent({
           target,
           ...(!schedule.workspaceId ? { workspaceId: state.workspace.id } : {}),
           ...(state.submitCadence ? { cadence: state.submitCadence } : {}),
-          ...(state.startAt !== formatLocalDateTime(schedule.startAt) ? { startAt } : {}),
+          ...(convertingLegacyOnce || state.startAt !== formatLocalDateTime(originalStartAt)
+            ? { startAt }
+            : {}),
         });
         if (onSaved) onSaved(schedule);
         else onClose();
@@ -528,6 +534,8 @@ function ScheduleFormContent({
     }
   }, [
     canSubmit,
+    convertingLegacyOnce,
+    originalStartAt,
     createSchedule,
     mode,
     model,
@@ -736,24 +744,22 @@ function ScheduleFormFields({
         size={controlSize}
       />
 
-      {state.cadence.type !== "once" ? (
-        <Field
-          label={t("schedules.form.startAt")}
-          error={startAtError ?? undefined}
-          hint={t("schedules.cadence.localTime", { timezone: getDeviceTimeZone() })}
-        >
-          <FormTextInput
-            size={controlSize}
-            initialValue={state.startAt}
-            onChangeText={model.setStartAt}
-            placeholder={t("schedules.form.startAtPlaceholder")}
-            testID="schedule-start-at-input"
-            accessibilityLabel={t("schedules.form.startAt")}
-            autoCapitalize="none"
-            autoCorrect={false}
-          />
-        </Field>
-      ) : null}
+      <Field
+        label={t("schedules.form.startAt")}
+        error={startAtError ?? undefined}
+        hint={t("schedules.cadence.localTime", { timezone: getDeviceTimeZone() })}
+      >
+        <FormTextInput
+          size={controlSize}
+          initialValue={state.startAt}
+          onChangeText={model.setStartAt}
+          placeholder={t("schedules.form.startAtPlaceholder")}
+          testID="schedule-start-at-input"
+          accessibilityLabel={t("schedules.form.startAt")}
+          autoCapitalize="none"
+          autoCorrect={false}
+        />
+      </Field>
       <Field
         label={t("schedules.form.expiresAt")}
         error={expiresAtError ?? undefined}

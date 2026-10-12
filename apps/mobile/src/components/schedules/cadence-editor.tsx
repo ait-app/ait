@@ -12,6 +12,7 @@ import {
   getCadencePresetOptions,
   resolveCronPresetDisplay,
   resolveCronPresetId,
+  type ScheduleFormCadence,
 } from "@/schedules/schedule-cadence-options";
 import { getDeviceTimeZone } from "@/utils/device-timezone";
 import {
@@ -22,13 +23,11 @@ import {
   validateCron,
 } from "@/utils/schedule-format";
 
-import { formatLocalDateTime, parseLocalDateTime } from "@/schedules/schedule-date-time";
-
 type CronCadence = Extract<ScheduleCadence, { type: "cron" }>;
 
 export interface CadenceEditorProps {
-  value: ScheduleCadence;
-  onChange: (next: ScheduleCadence) => void;
+  value: ScheduleFormCadence;
+  onChange: (next: ScheduleFormCadence) => void;
   error?: string;
   size?: FieldControlSize;
 }
@@ -161,14 +160,8 @@ function CronCadenceEditor({
 export function CadenceEditor({ value, onChange, error, size = "md" }: CadenceEditorProps) {
   const { t } = useTranslation();
   const timezone = useMemo(getDeviceTimeZone, []);
-  const options = useMemo<SelectFieldOption<ScheduleCadence["type"]>[]>(
+  const options = useMemo<SelectFieldOption<ScheduleFormCadence["type"]>[]>(
     () => [
-      {
-        id: "once",
-        value: "once",
-        label: t("schedules.cadence.once"),
-        testID: "schedule-cadence-kind-once",
-      },
       {
         id: "every",
         value: "every",
@@ -185,14 +178,12 @@ export function CadenceEditor({ value, onChange, error, size = "md" }: CadenceEd
     [t],
   );
   const selectKind = useCallback(
-    (kind: ScheduleCadence["type"]) => {
+    (kind: ScheduleFormCadence["type"]) => {
       if (kind === value.type) return;
       onChange(
-        kind === "once"
-          ? { type: "once", at: new Date(Date.now() + 60 * 60 * 1000).toISOString() }
-          : kind === "every"
-            ? { type: "every", everyMs: 60 * 60 * 1000 }
-            : { type: "cron", expression: "0 9 * * *", timezone },
+        kind === "every"
+          ? { type: "every", everyMs: 60 * 60 * 1000 }
+          : { type: "cron", expression: "0 9 * * *", timezone },
       );
     },
     [onChange, timezone, value.type],
@@ -213,25 +204,8 @@ export function CadenceEditor({ value, onChange, error, size = "md" }: CadenceEd
       />
       {value.type === "cron" ? (
         <CronCadenceEditor value={value} onChange={onChange} error={error} size={size} />
-      ) : value.type === "every" ? (
-        <IntervalCadenceEditor value={value} onChange={onChange} error={error} size={size} />
       ) : (
-        <Field
-          label={t("schedules.cadence.triggerAt")}
-          hint={t("schedules.cadence.localTime", { timezone })}
-          error={error}
-        >
-          <FormTextInput
-            size={size}
-            initialValue={formatLocalDateTime(value.at)}
-            onChangeText={(text) => onChange({ type: "once", at: parseLocalDateTime(text) ?? "" })}
-            placeholder="YYYY-MM-DD HH:mm"
-            testID="cadence-once-at"
-            accessibilityLabel={t("schedules.cadence.triggerAt")}
-            autoCapitalize="none"
-            autoCorrect={false}
-          />
-        </Field>
+        <IntervalCadenceEditor value={value} onChange={onChange} error={error} size={size} />
       )}
     </View>
   );

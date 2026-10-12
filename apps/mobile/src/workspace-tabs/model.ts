@@ -41,7 +41,12 @@ export type WorkspaceTabTarget =
   | { kind: "changes_tree" }
   | { kind: "files" }
   | { kind: "pull_request" }
-  | { kind: "schedule"; scheduleId?: string; view?: "list" }
+  | {
+      kind: "schedule";
+      scheduleId?: string;
+      view?: "list" | "create" | "edit";
+      filter?: "upcoming" | "paused" | "completed";
+    }
   | WorkspaceFileTabTarget
   | WorkspaceWorkingDiffTabTarget
   | PluginWorkspaceTabTarget

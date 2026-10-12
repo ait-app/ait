@@ -14,7 +14,7 @@ async function openScheduleTab(page: Page) {
   const menu = page.getByTestId("workspace-new-tab-menu-schedule").filter({ visible: true });
   await expect(menu).toBeVisible();
   await menu.click();
-  await expect(page.getByTestId("workspace-schedule-form")).toBeVisible();
+  await expect(page.getByTestId("workspace-schedules-list")).toBeVisible();
 }
 
 async function selectExistingAgent(page: Page, agentId: string) {
@@ -66,6 +66,8 @@ test.describe("Workspace scheduled tasks", () => {
     });
     await gotoWorkspace(page, workspace.workspaceId);
     await openScheduleTab(page);
+    await page.getByTestId("workspace-schedules-new").click();
+    await expect(page.getByTestId("schedule-max-runs-input")).toHaveValue("1");
     await expect(page.getByTestId("schedule-workspace-target")).toContainText(
       workspace.workspaceName,
     );
@@ -81,7 +83,7 @@ test.describe("Workspace scheduled tasks", () => {
     await page.getByTestId("schedule-max-runs-input").fill("2");
     await page.getByTestId("schedule-form-submit").click();
     const detail = page.getByTestId("workspace-schedule-details");
-    await expect(detail).toContainText("Workspace review");
+    await expect(page.getByTestId("workspace-schedules-list")).toContainText("Workspace review");
     const list = await schedules(workspace).scheduleList({ workspaceId: workspace.workspaceId });
     const schedule = list.schedules.find((item) => item.name === "Workspace review");
     expect(schedule).toMatchObject({
@@ -95,6 +97,7 @@ test.describe("Workspace scheduled tasks", () => {
     cleanupTasks.push(async () => {
       await schedules(workspace).scheduleDelete({ id: schedule.id });
     });
+    await page.getByTestId(`workspace-schedule-history-${schedule.id}`).click();
     await page.getByTestId("schedule-toggle-status").click();
     await expect(detail).toContainText("Paused");
     await page.getByTestId("schedule-edit").click();
@@ -103,6 +106,10 @@ test.describe("Workspace scheduled tasks", () => {
     );
     await page.getByTestId("schedule-prompt-input").fill("Review the workspace again.");
     await page.getByTestId("schedule-form-submit").click();
+    await expect(page.getByTestId(`workspace-schedule-${schedule.id}`)).toContainText(
+      "Review the workspace again.",
+    );
+    await page.getByTestId(`workspace-schedule-history-${schedule.id}`).click();
     await expect(detail).toContainText("Review the workspace again.");
     await page.getByTestId("schedule-run-now").click();
     const runCard = detail
@@ -122,12 +129,16 @@ test.describe("Workspace scheduled tasks", () => {
     await expect(detail).toContainText("Workspace review", { timeout: 30_000 });
     await expect(detail).toContainText("Succeeded");
     await page.getByTestId("workspace-schedules-browse").click();
+    await expect(page.getByTestId("workspace-schedules-filter-paused")).toHaveAttribute(
+      "aria-selected",
+      "true",
+    );
     await expect(page.getByTestId(`workspace-schedule-${schedule.id}`)).toBeVisible();
     await page.reload();
     await expect(page.getByTestId(`workspace-schedule-${schedule.id}`)).toBeVisible({
       timeout: 30_000,
     });
-    await page.getByTestId(`workspace-schedule-${schedule.id}`).click();
+    await page.getByTestId(`workspace-schedule-history-${schedule.id}`).click();
     await page.getByTestId("schedule-run-now").click();
     await expect(detail).toContainText("Finished", { timeout: 30_000 });
     await expect(page.getByTestId("schedule-run-now")).toHaveCount(0);
@@ -150,27 +161,31 @@ test.describe("Workspace scheduled tasks", () => {
     cleanupTasks.push(workspace.cleanup);
     await gotoWorkspace(page, workspace.workspaceId);
     await openScheduleTab(page);
+    await page.getByTestId("workspace-schedules-new").click();
+    await expect(page.getByTestId("schedule-max-runs-input")).toHaveValue("1");
     await selectModel(page);
     await page.getByTestId("schedule-name-input").fill("New agent review");
     await page.getByTestId("schedule-prompt-input").fill("Say hello from a new scheduled agent.");
     await page.getByTestId("schedule-cadence-kind-trigger").click();
-    await page.getByTestId("schedule-cadence-kind-once").click();
-    await expect(page.getByTestId("cadence-once-at")).toBeVisible();
-    await expect(page.getByTestId("schedule-start-at-input")).toHaveCount(0);
+    await expect(page.getByTestId("schedule-cadence-kind-once")).toHaveCount(0);
+    await page.getByTestId("schedule-cadence-kind-every").click();
+    await expect(page.getByTestId("schedule-start-at-input")).toBeVisible();
     await page.getByTestId("schedule-form-submit").click();
     const detail = page.getByTestId("workspace-schedule-details");
-    await expect(detail).toContainText("New agent review");
+    await expect(page.getByTestId("workspace-schedules-list")).toContainText("New agent review");
     const list = await schedules(workspace).scheduleList({ workspaceId: workspace.workspaceId });
     const schedule = list.schedules.find((item) => item.name === "New agent review");
     expect(schedule).toMatchObject({
       workspaceId: workspace.workspaceId,
-      cadence: { type: "once" },
+      cadence: { type: "every", everyMs: 3_600_000 },
+      maxRuns: 1,
       target: { type: "new-agent", config: { provider: "codex", archiveOnFinish: true } },
     });
     if (!schedule) throw new Error("Created task is missing");
     cleanupTasks.push(async () => {
       await schedules(workspace).scheduleDelete({ id: schedule.id });
     });
+    await page.getByTestId(`workspace-schedule-history-${schedule.id}`).click();
     await page.getByTestId("schedule-run-now").click();
     await expect(detail).toContainText("Succeeded", { timeout: 30_000 });
     await expect(detail).toContainText("Finished");
@@ -227,5 +242,68 @@ test.describe("Workspace scheduled tasks", () => {
     await expect(page.getByTestId("schedule-workspace-sheet")).toBeVisible();
     await page.getByRole("button", { name: "Close", exact: true }).last().click();
     await expect(page.getByTestId("schedule-workspace-sheet")).toHaveCount(0);
+  });
+  test("opens an upcoming timeline ordered by trigger time and edits directly from it", async ({
+    page,
+  }) => {
+    const workspace = await seedWorkspace({
+      repoPrefix: "schedule-timeline-",
+      title: "Future tasks",
+    });
+    cleanupTasks.push(workspace.cleanup);
+    const agent = await workspace.client.createAgent({
+      provider: "codex",
+      cwd: workspace.repoPath,
+      workspaceId: workspace.workspaceId,
+      model: "offline-model",
+    });
+    const create = async (name: string, hours: number) => {
+      const result = await schedules(workspace).scheduleCreate({
+        workspaceId: workspace.workspaceId,
+        name,
+        prompt: name,
+        cadence: { type: "every", everyMs: 3_600_000 },
+        startAt: new Date(Date.now() + hours * 3_600_000).toISOString(),
+        target: { type: "agent", agentId: agent.id },
+        maxRuns: 1,
+        runOnCreate: false,
+      });
+      if (!result.schedule) throw new Error(result.error ?? "Missing task");
+      const id = result.schedule.id;
+      cleanupTasks.push(async () => {
+        await schedules(workspace).scheduleDelete({ id });
+      });
+      return id;
+    };
+    const earlier = await create("Earlier review", 2);
+    const later = await create("Later review", 6);
+    await gotoWorkspace(page, workspace.workspaceId);
+    await openScheduleTab(page);
+    await expect(page.getByTestId("workspace-schedule-form")).toHaveCount(0);
+    const rows = page
+      .getByTestId("workspace-schedules-list")
+      .locator(
+        '[data-testid^="workspace-schedule-"]:not([data-testid^="workspace-schedule-history-"])',
+      );
+    await expect(rows).toHaveCount(2);
+    await expect(rows.nth(0)).toHaveAttribute("data-testid", `workspace-schedule-${earlier}`);
+    await expect(rows.nth(1)).toHaveAttribute("data-testid", `workspace-schedule-${later}`);
+    await expect(page.getByTestId(`schedule-next-trigger-${earlier}`)).not.toBeEmpty();
+    await page.screenshot({ path: "/tmp/schedule-timeline-desktop.png", fullPage: true });
+    await page.getByTestId(`workspace-schedule-${earlier}`).click();
+    await expect(page.getByTestId("schedule-prompt-input")).toHaveValue("Earlier review");
+    await expect(page.getByTestId("schedule-max-runs-input")).toHaveValue("1");
+    await page.getByTestId("schedule-name-input").fill("Edited earlier review");
+    await page.getByTestId("schedule-form-submit").click();
+    await expect(page.getByTestId(`workspace-schedule-${earlier}`)).toContainText(
+      "Edited earlier review",
+    );
+    await page.reload();
+    await expect(page.getByTestId(`workspace-schedule-${earlier}`)).toBeVisible({
+      timeout: 30_000,
+    });
+    await page.setViewportSize({ width: 390, height: 844 });
+    await expect(page.getByTestId(`workspace-schedule-${earlier}`)).toBeVisible();
+    await page.screenshot({ path: "/tmp/schedule-timeline-mobile.png", fullPage: true });
   });
 });

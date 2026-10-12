@@ -190,21 +190,30 @@ describe("plugin panel tab identity", () => {
   });
 });
 
-it("separates schedule drafts, lists and details while normalizing navigation", () => {
+it("normalizes and separates schedule list, creation and edit navigation", () => {
   expect(
     normalizeWorkspaceTabTarget({ kind: "schedule", scheduleId: " task-1 ", view: "list" }),
   ).toEqual({ kind: "schedule", scheduleId: "task-1" });
   expect(normalizeWorkspaceTabTarget({ kind: "schedule", scheduleId: " " })).toEqual({
     kind: "schedule",
+    view: "list",
   });
   const targets = [
     { kind: "schedule" as const },
-    { kind: "schedule" as const, view: "list" as const },
+    { kind: "schedule" as const, view: "create" as const },
     { kind: "schedule" as const, scheduleId: "task-1" },
   ];
   expect(new Set(targets.map(buildDeterministicWorkspaceTabId)).size).toBe(3);
-  expect(workspaceTabTargetsEqual(targets[0], targets[1])).toBe(false);
-  expect(workspaceTabTargetsEqual(targets[2], { kind: "schedule", scheduleId: "task-2" })).toBe(
-    false,
-  );
+  expect(workspaceTabTargetsEqual(targets[0], { kind: "schedule", view: "list" })).toBe(true);
+  expect(
+    workspaceTabTargetsEqual(targets[2], { kind: "schedule", scheduleId: "task-1", view: "edit" }),
+  ).toBe(false);
+  expect(normalizeWorkspaceTabTarget({ kind: "schedule", filter: "paused" })).toEqual({
+    kind: "schedule",
+    view: "list",
+    filter: "paused",
+  });
+  expect(
+    workspaceTabTargetsEqual(targets[0], { kind: "schedule", view: "list", filter: "paused" }),
+  ).toBe(false);
 });

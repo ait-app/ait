@@ -1,16 +1,19 @@
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import { Pressable, ScrollView, Text, View } from "react-native";
+import { History } from "lucide-react-native";
 import { StyleSheet } from "react-native-unistyles";
 import { useTranslation } from "react-i18next";
 import { useQueryClient } from "@tanstack/react-query";
 import type { ScheduleRun, StoredSchedule } from "@ait/protocol/schedule/types";
 import { Button } from "@/components/ui/button";
+import { SegmentedControl } from "@/components/ui/segmented-control";
 import { StatusBadge } from "@/components/ui/status-badge";
 import { LoadingSpinner } from "@/components/ui/loading-spinner";
 import { WorkspaceScheduleForm } from "./schedule-form-sheet";
 import { useAggregatedAgents } from "@/hooks/use-aggregated-agents";
 import { useScheduleMutations } from "@/hooks/use-schedule-mutations";
 import { useScheduleDetail, useWorkspaceSchedules } from "@/schedules/use-workspace-schedules";
+import { buildScheduleTimeline, type ScheduleTimelineFilter } from "@/schedules/schedule-timeline";
 import type { ScheduleFormWorkspace } from "@/schedules/schedule-form-model";
 import { formatCadence, resolveScheduleTitle } from "@/utils/schedule-format";
 import { confirmDialog } from "@/utils/confirm-dialog";
@@ -20,19 +23,25 @@ interface WorkspaceScheduleTabProps {
   serverId: string;
   workspace: ScheduleFormWorkspace;
   scheduleId?: string;
-  view?: "list";
-  onBrowse: () => void;
+  view?: "list" | "create" | "edit";
+  filter?: ScheduleTimelineFilter;
+  onBrowse: (filter?: ScheduleTimelineFilter) => void;
   interactive: boolean;
   onOpen: (scheduleId: string) => void;
-  onClose: () => void;
+  onEditTask: (scheduleId: string) => void;
   onCreate: () => void;
   onOpenAgent: (agentId: string) => void;
 }
 
 export function WorkspaceScheduleTab(props: WorkspaceScheduleTabProps) {
   const { t } = useTranslation();
-  const view = props.view === "list" ? "list" : "form";
-  const [editing, setEditing] = useState(false);
+  const view = props.scheduleId
+    ? props.view === "edit"
+      ? "edit"
+      : "detail"
+    : props.view === "create"
+      ? "create"
+      : "list";
   const detail = useScheduleDetail(props.serverId, props.scheduleId, props.interactive);
   const list = useWorkspaceSchedules(
     props.serverId,
@@ -41,57 +50,15 @@ export function WorkspaceScheduleTab(props: WorkspaceScheduleTabProps) {
   );
   let content;
   if (view === "list") {
-    content = (
-      <ScrollView contentContainerStyle={styles.content} testID="workspace-schedules-list">
-        <Text style={styles.title}>{props.workspace.name}</Text>
-        {list.isPending ? (
-          <LoadingSpinner color={styles.muted.color} />
-        ) : list.isError ? (
-          <QueryError
-            message={t("schedules.loadError")}
-            onRetry={() => {
-              void list.refetch();
-            }}
-          />
-        ) : list.data?.length ? (
-          list.data.map((schedule) => (
-            <Pressable
-              key={schedule.id}
-              style={styles.card}
-              accessibilityRole="button"
-              accessibilityLabel={resolveScheduleTitle(schedule, t)}
-              testID={`workspace-schedule-${schedule.id}`}
-              onPress={() => props.onOpen(schedule.id)}
-            >
-              <View style={styles.row}>
-                <Text style={styles.cardTitle}>{resolveScheduleTitle(schedule, t)}</Text>
-                <StatusBadge
-                  label={t(
-                    schedule.status === "completed"
-                      ? "schedules.status.finished"
-                      : `schedules.status.${schedule.status}`,
-                  )}
-                  variant={schedule.status === "active" ? "success" : "muted"}
-                />
-              </View>
-              <Text style={styles.muted}>{formatCadence(schedule.cadence, t)}</Text>
-              <Text style={styles.body} numberOfLines={2}>
-                {schedule.prompt}
-              </Text>
-            </Pressable>
-          ))
-        ) : (
-          <Text style={styles.muted}>{t("schedules.empty")}</Text>
-        )}
-      </ScrollView>
-    );
-  } else if (!props.scheduleId) {
+    content = <ScheduleTimelineList {...props} query={list} />;
+  } else if (view === "create") {
     content = (
       <WorkspaceScheduleForm
+        key="create"
         serverId={props.serverId}
         workspace={props.workspace}
-        onClose={props.onClose}
-        onSaved={(schedule) => props.onOpen(schedule.id)}
+        onClose={() => props.onBrowse()}
+        onSaved={() => props.onBrowse("upcoming")}
       />
     );
   } else if (detail.isPending) {
@@ -111,24 +78,27 @@ export function WorkspaceScheduleTab(props: WorkspaceScheduleTabProps) {
     );
   } else if (detail.data.workspaceId !== props.workspace.id) {
     content = <QueryError message={t("schedules.taskMissing")} />;
-  } else if (editing) {
+  } else if (view === "edit") {
     content = (
       <WorkspaceScheduleForm
         key={`edit:${props.scheduleId}`}
         serverId={props.serverId}
         workspace={props.workspace}
         schedule={detail.data}
-        onClose={() => setEditing(false)}
-        onSaved={() => setEditing(false)}
+        onClose={() => props.onBrowse()}
+        onSaved={(schedule) =>
+          props.onBrowse(schedule.status === "active" ? "upcoming" : schedule.status)
+        }
       />
     );
   } else {
     content = (
       <ScheduleDetails
+        key={props.scheduleId}
         {...props}
         schedule={detail.data}
-        onEdit={() => setEditing(true)}
-        onDeleted={props.onBrowse}
+        onEdit={() => props.onEditTask(detail.data.id)}
+        onDeleted={() => props.onBrowse()}
         refresh={() => {
           void detail.refetch();
         }}
@@ -138,25 +108,159 @@ export function WorkspaceScheduleTab(props: WorkspaceScheduleTabProps) {
   return (
     <View style={styles.container}>
       <View style={styles.toolbar}>
-        <Button
-          size="sm"
-          variant={view === "list" ? "secondary" : "ghost"}
-          onPress={props.onBrowse}
-          testID="workspace-schedules-browse"
-        >
-          {t("schedules.browse")}
-        </Button>
-        <Button
-          size="sm"
-          variant="outline"
-          onPress={props.onCreate}
-          testID="workspace-schedules-new"
-        >
-          {t("schedules.new")}
-        </Button>
+        {view === "list" ? (
+          <Text style={styles.cardTitle}>{t("schedules.browse")}</Text>
+        ) : (
+          <Button
+            size="sm"
+            variant="ghost"
+            onPress={() => props.onBrowse()}
+            testID="workspace-schedules-browse"
+          >
+            {t("schedules.timeline.back")}
+          </Button>
+        )}
+        {view !== "create" ? (
+          <Button
+            size="sm"
+            variant="outline"
+            onPress={props.onCreate}
+            testID="workspace-schedules-new"
+          >
+            {t("schedules.new")}
+          </Button>
+        ) : null}
       </View>
       {content}
     </View>
+  );
+}
+
+function ScheduleTimelineList(
+  props: WorkspaceScheduleTabProps & { query: ReturnType<typeof useWorkspaceSchedules> },
+) {
+  const { t, i18n } = useTranslation();
+  const filter = props.filter ?? "upcoming";
+  const groups = useMemo(
+    () =>
+      buildScheduleTimeline(
+        (props.query.data ?? []).filter((schedule) => schedule.workspaceId === props.workspace.id),
+        filter,
+        props.query.dataUpdatedAt || Date.now(),
+      ),
+    [props.query.data, props.query.dataUpdatedAt, props.workspace.id, filter],
+  );
+  const filters = useMemo(
+    () =>
+      (["upcoming", "paused", "completed"] as const).map((value) => ({
+        value,
+        label: t(`schedules.timeline.filters.${value}`),
+        testID: `workspace-schedules-filter-${value}`,
+      })),
+    [t],
+  );
+  return (
+    <ScrollView contentContainerStyle={styles.content} testID="workspace-schedules-list">
+      <View style={styles.listHeading}>
+        <Text style={styles.title}>{props.workspace.name}</Text>
+        <Text style={styles.muted}>{t("schedules.timeline.hint")}</Text>
+        <SegmentedControl
+          options={filters}
+          value={filter}
+          onValueChange={(filter) => props.onBrowse(filter)}
+          size="sm"
+        />
+      </View>
+      {props.query.isPending ? (
+        <LoadingSpinner color={styles.muted.color} />
+      ) : props.query.isError ? (
+        <QueryError
+          message={t("schedules.loadError")}
+          onRetry={() => {
+            void props.query.refetch();
+          }}
+        />
+      ) : groups.length ? (
+        groups.map((group) => (
+          <View key={group.key} style={styles.timelineGroup}>
+            <View style={styles.groupHeading}>
+              <Text style={styles.cardTitle}>
+                {group.kind === "date" && group.date
+                  ? new Date(group.date).toLocaleDateString(i18n.resolvedLanguage, {
+                      year: "numeric",
+                      month: "long",
+                      day: "numeric",
+                      weekday: "short",
+                    })
+                  : t(`schedules.timeline.${group.kind === "date" ? "today" : group.kind}`)}
+              </Text>
+            </View>
+            {group.events.map(({ schedule, occursAt }) => (
+              <View key={schedule.id} style={styles.eventRow}>
+                <Pressable
+                  accessibilityRole="button"
+                  accessibilityLabel={t("schedules.timeline.editTask", {
+                    title: resolveScheduleTitle(schedule, t),
+                  })}
+                  style={({ pressed }) => [
+                    styles.eventButton,
+                    pressed ? styles.pressedEvent : null,
+                  ]}
+                  testID={`workspace-schedule-${schedule.id}`}
+                  onPress={() => props.onEditTask(schedule.id)}
+                >
+                  <View style={styles.eventTime}>
+                    <Text style={styles.timeLabel} testID={`schedule-next-trigger-${schedule.id}`}>
+                      {occursAt
+                        ? new Date(occursAt).toLocaleTimeString(i18n.resolvedLanguage, {
+                            hour: "2-digit",
+                            minute: "2-digit",
+                          })
+                        : "—"}
+                    </Text>
+                    <View style={styles.eventDot} />
+                  </View>
+                  <View style={styles.eventBody}>
+                    <Text style={styles.cardTitle} numberOfLines={1}>
+                      {resolveScheduleTitle(schedule, t)}
+                    </Text>
+                    <Text style={styles.muted} numberOfLines={1}>
+                      {formatCadence(schedule.cadence, t)} ·{" "}
+                      {schedule.maxRuns == null && schedule.cadence.type !== "once"
+                        ? t("schedules.form.unlimited")
+                        : t("schedules.timeline.limit", {
+                            count: schedule.cadence.type === "once" ? 1 : (schedule.maxRuns ?? 1),
+                          })}
+                    </Text>
+                    <Text style={styles.body} numberOfLines={1}>
+                      {schedule.prompt}
+                    </Text>
+                  </View>
+                </Pressable>
+                <Button
+                  size="sm"
+                  variant="ghost"
+                  accessibilityLabel={t("schedules.history")}
+                  testID={`workspace-schedule-history-${schedule.id}`}
+                  onPress={() => props.onOpen(schedule.id)}
+                >
+                  <History size={18} color={styles.muted.color} />
+                </Button>
+              </View>
+            ))}
+          </View>
+        ))
+      ) : (
+        <View style={styles.emptyList}>
+          <Text style={styles.muted}>{t(`schedules.timeline.empty.${filter}`)}</Text>
+          {filter === "upcoming" ? (
+            <Button variant="outline" onPress={props.onCreate}>
+              {t("schedules.new")}
+            </Button>
+          ) : null}
+        </View>
+      )}
+    </ScrollView>
   );
 }
 
@@ -316,7 +420,8 @@ function ScheduleDetails({
         <Text style={styles.muted}>
           {t("schedules.runCount", {
             count: schedule.runs.filter((run) => run.status !== "running").length,
-            limit: schedule.maxRuns ?? t("schedules.unlimited"),
+            limit:
+              schedule.cadence.type === "once" ? 1 : (schedule.maxRuns ?? t("schedules.unlimited")),
           })}
         </Text>
         {schedule.nextRunAt ? (
@@ -445,6 +550,40 @@ const styles = StyleSheet.create((theme) => ({
     padding: theme.spacing[4],
     gap: theme.spacing[3],
   },
+  listHeading: { gap: theme.spacing[3] },
+  timelineGroup: { gap: theme.spacing[2] },
+  groupHeading: {
+    paddingVertical: theme.spacing[2],
+    borderBottomWidth: 1,
+    borderBottomColor: theme.colors.border,
+  },
+  eventRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    borderBottomWidth: 1,
+    borderBottomColor: theme.colors.border,
+    paddingVertical: theme.spacing[2],
+    gap: theme.spacing[1],
+  },
+  eventButton: {
+    flex: 1,
+    minWidth: 0,
+    flexDirection: "row",
+    alignItems: "center",
+    gap: theme.spacing[3],
+    paddingVertical: theme.spacing[2],
+    borderRadius: theme.borderRadius.md,
+  },
+  pressedEvent: { backgroundColor: theme.colors.surface1 },
+  eventTime: { width: 88, alignItems: "center", gap: theme.spacing[2] },
+  timeLabel: {
+    color: theme.colors.foreground,
+    fontSize: theme.fontSize.sm,
+    fontWeight: theme.fontWeight.medium,
+  },
+  eventDot: { width: 6, height: 6, borderRadius: 3, backgroundColor: theme.colors.foregroundMuted },
+  eventBody: { flex: 1, minWidth: 0, gap: theme.spacing[1] },
+  emptyList: { alignItems: "center", gap: theme.spacing[4], paddingVertical: theme.spacing[8] },
   row: {
     flexDirection: "row",
     alignItems: "center",

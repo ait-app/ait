@@ -796,3 +796,36 @@ describe("schedule form model", () => {
     });
   });
 });
+
+it("defaults new tasks to one run while preserving an existing unlimited limit", () => {
+  const defaults = { projectTargets: PROJECT_TARGETS, serverId: "host-a" };
+  expect(openScheduleForm({ mode: "create", hosts: HOSTS, defaults }).getState().maxRuns).toBe("1");
+  expect(
+    openScheduleForm({
+      mode: "edit",
+      hosts: HOSTS,
+      defaults,
+      schedule: { ...heartbeatOnHost({ type: "every", everyMs: 60_000 }), maxRuns: null },
+    }).getState().maxRuns,
+  ).toBe("");
+});
+it("edits legacy single triggers through the shared time and count controls", () => {
+  const once = {
+    ...heartbeatOnHost({ type: "once", at: "2030-01-01T09:00:45.123Z" }),
+    maxRuns: null,
+  };
+  const model = openScheduleForm({
+    mode: "edit",
+    schedule: once,
+    hosts: HOSTS,
+    defaults: { projectTargets: PROJECT_TARGETS },
+  });
+  expect(model.getState()).toMatchObject({
+    cadence: { type: "every", everyMs: 3_600_000 },
+    maxRuns: "1",
+    submitCadence: undefined,
+  });
+  expect(model.getState().startAt).not.toBe("");
+  model.setMaxRuns("2");
+  expect(model.getState().submitCadence).toEqual({ type: "every", everyMs: 3_600_000 });
+});

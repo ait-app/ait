@@ -192,6 +192,7 @@ describe("workspace schedule form", () => {
         prompt: "Check this workspace",
         workspaceId: "workspace-a",
         runOnCreate: false,
+        maxRuns: 1,
         cadence: { type: "every", everyMs: 3_600_000 },
         target: {
           type: "new-agent",
@@ -289,6 +290,64 @@ describe("workspace schedule form", () => {
     await waitFor(() => expect(createSchedule).toHaveBeenCalledOnce());
     expect(createSchedule).toHaveBeenCalledWith(
       expect.objectContaining({ startAt: expect.any(String), expiresAt: expect.any(String) }),
+    );
+  });
+  it("keeps unlimited editable and sends no limit when a new task clears the default", async () => {
+    render(
+      <WorkspaceScheduleForm
+        serverId="host-a"
+        workspace={{ id: "workspace-a", name: "Feature", cwd: "/worktrees/feature" }}
+        onClose={vi.fn()}
+      />,
+    );
+    fireEvent.click(screen.getByRole("button", { name: "Choose model" }));
+    fireEvent.change(screen.getByRole("textbox", { name: "Prompt" }), {
+      target: { value: "Repeat checks" },
+    });
+    expect((screen.getByRole("textbox", { name: "Max runs" }) as HTMLInputElement).value).toBe("1");
+    fireEvent.change(screen.getByRole("textbox", { name: "Max runs" }), { target: { value: "" } });
+    fireEvent.click(screen.getByRole("button", { name: "Create schedule" }));
+    await waitFor(() =>
+      expect(createSchedule).toHaveBeenCalledWith(expect.objectContaining({ maxRuns: undefined })),
+    );
+  });
+  it("preserves the exact stored time when a legacy single trigger becomes recurring", async () => {
+    const at = "2035-01-01T09:00:45.123Z";
+    const schedule = {
+      id: "legacy-once",
+      workspaceId: "workspace-a",
+      name: "Legacy",
+      prompt: "Review",
+      cadence: { type: "once" as const, at },
+      target: { type: "agent" as const, agentId },
+      status: "paused" as const,
+      createdAt: at,
+      updatedAt: at,
+      nextRunAt: null,
+      lastRunAt: null,
+      pausedAt: at,
+      maxRuns: null,
+      expiresAt: null,
+    };
+    render(
+      <WorkspaceScheduleForm
+        serverId="host-a"
+        workspace={{ id: "workspace-a", name: "Feature", cwd: "/worktrees/feature" }}
+        schedule={schedule}
+        onClose={vi.fn()}
+      />,
+    );
+    expect((screen.getByRole("textbox", { name: "Max runs" }) as HTMLInputElement).value).toBe("1");
+    fireEvent.change(screen.getByRole("textbox", { name: "Max runs" }), { target: { value: "2" } });
+    fireEvent.click(screen.getByRole("button", { name: /save/i }));
+    await waitFor(() =>
+      expect(updateSchedule).toHaveBeenCalledWith(
+        expect.objectContaining({
+          cadence: { type: "every", everyMs: 3_600_000 },
+          startAt: at,
+          maxRuns: 2,
+        }),
+      ),
     );
   });
 });

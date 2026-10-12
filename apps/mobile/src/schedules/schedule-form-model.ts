@@ -4,7 +4,7 @@ import type {
   AgentProvider,
   ProviderSnapshotEntry,
 } from "@ait/protocol/agent-types";
-import type { ScheduleCadence, ScheduleSummary } from "@ait/protocol/schedule/types";
+import type { ScheduleSummary } from "@ait/protocol/schedule/types";
 import type { FormPreferences } from "@/create-agent-preferences/preferences";
 import { formatThinkingOptionLabel } from "@/agent-controls/labels";
 import {
@@ -27,7 +27,7 @@ import {
 import { buildProviderDefinitions } from "@/utils/provider-definitions";
 import { shortenPath } from "@/utils/shorten-path";
 import { formatLocalDateTime, isValidMaxRuns, parseLocalDateTime } from "./schedule-date-time";
-import { normalizeScheduleFormCadence } from "./schedule-cadence-options";
+import { normalizeScheduleFormCadence, type ScheduleFormCadence } from "./schedule-cadence-options";
 import { PROJECT_OPTION_PREFIX, type ScheduleProjectTarget } from "./schedule-project-targets";
 
 export interface ScheduleFormDisplay {
@@ -105,8 +105,8 @@ export interface ScheduleFormState {
   name: string;
   prompt: string;
   maxRuns: string;
-  cadence: ScheduleCadence;
-  submitCadence: ScheduleCadence | undefined;
+  cadence: ScheduleFormCadence;
+  submitCadence: ScheduleFormCadence | undefined;
   hosts: ScheduleFormHost[];
   projectOptions: ScheduleFormProjectOption[];
   selectedServerId: string | null;
@@ -157,13 +157,13 @@ export interface ScheduleFormModel {
   setName: (value: string) => void;
   setPrompt: (value: string) => void;
   setMaxRuns: (value: string) => void;
-  setCadence: (value: ScheduleCadence) => void;
+  setCadence: (value: ScheduleFormCadence) => void;
   setIsolation: (value: "local" | "worktree") => void;
   setArchiveOnFinish: (value: boolean) => void;
   setSubmitError: (value: string | null) => void;
 }
 
-const DEFAULT_CADENCE: ScheduleCadence = { type: "every", everyMs: 60 * 60 * 1000 };
+const DEFAULT_CADENCE: ScheduleFormCadence = { type: "every", everyMs: 60 * 60 * 1000 };
 const DEFAULT_TIMEZONE = "UTC";
 
 type ThinkingOption = NonNullable<AgentModelDefinition["thinkingOptions"]>[number];
@@ -451,7 +451,8 @@ function buildInitialThinkingDisplay(thinkingOptionId: string): ScheduleFormDisp
 }
 
 function formatInitialMaxRuns(schedule: ScheduleFormSnapshot["schedule"]): string {
-  if (schedule?.maxRuns == null) {
+  if (!schedule || schedule.cadence.type === "once") return "1";
+  if (schedule.maxRuns == null) {
     return "";
   }
   return String(schedule.maxRuns);
@@ -459,8 +460,8 @@ function formatInitialMaxRuns(schedule: ScheduleFormSnapshot["schedule"]): strin
 
 function resolveInitialSubmitCadence(
   schedule: ScheduleFormSnapshot["schedule"],
-  initialCadence: ScheduleCadence,
-): ScheduleCadence | undefined {
+  initialCadence: ScheduleFormCadence,
+): ScheduleFormCadence | undefined {
   return schedule ? undefined : initialCadence;
 }
 
@@ -572,11 +573,6 @@ function resolveCanSubmit(state: ScheduleFormState): boolean {
   if (
     state.cadence.type === "every" &&
     (!Number.isSafeInteger(state.cadence.everyMs) || state.cadence.everyMs <= 0)
-  )
-    return false;
-  if (
-    state.cadence.type === "once" &&
-    (!Number.isFinite(Date.parse(state.cadence.at)) || Date.parse(state.cadence.at) <= Date.now())
   )
     return false;
   for (const input of [state.startAt, state.expiresAt]) {
@@ -706,7 +702,11 @@ function buildInitialState(snapshot: ScheduleFormSnapshot): ScheduleFormState {
     selectedAgentId:
       snapshot.schedule?.target.type === "agent" ? snapshot.schedule.target.agentId : "",
     agentOptions: snapshot.defaults.agents ?? [],
-    startAt: formatLocalDateTime(snapshot.schedule?.startAt),
+    startAt: formatLocalDateTime(
+      snapshot.schedule?.cadence.type === "once"
+        ? snapshot.schedule.cadence.at
+        : snapshot.schedule?.startAt,
+    ),
     expiresAt: formatLocalDateTime(snapshot.schedule?.expiresAt),
     name: snapshot.schedule?.name ?? "",
     prompt: snapshot.schedule?.prompt ?? "",
@@ -1019,7 +1019,14 @@ export function openScheduleForm(snapshot: ScheduleFormSnapshot): ScheduleFormMo
       publish({ ...state, selectedAgentId });
     },
     setStartAt(startAt) {
-      publish({ ...state, startAt });
+      publish({
+        ...state,
+        startAt,
+        ...(snapshot.schedule?.cadence.type === "once" &&
+        startAt !== formatLocalDateTime(snapshot.schedule.cadence.at)
+          ? { submitCadence: state.cadence }
+          : {}),
+      });
     },
     setExpiresAt(expiresAt) {
       publish({ ...state, expiresAt });
@@ -1181,7 +1188,13 @@ export function openScheduleForm(snapshot: ScheduleFormSnapshot): ScheduleFormMo
       publish({ ...state, prompt: value });
     },
     setMaxRuns(value) {
-      publish({ ...state, maxRuns: value });
+      publish({
+        ...state,
+        maxRuns: value,
+        ...(snapshot.schedule?.cadence.type === "once" && value.trim() !== "1"
+          ? { submitCadence: state.cadence }
+          : {}),
+      });
     },
     setCadence(value) {
       const cadence = normalizeScheduleFormCadence(value, timezone);
@@ -1189,7 +1202,6 @@ export function openScheduleForm(snapshot: ScheduleFormSnapshot): ScheduleFormMo
         ...state,
         cadence,
         submitCadence: cadence,
-        startAt: cadence.type === "once" ? "" : state.startAt,
       });
     },
     setIsolation(value) {

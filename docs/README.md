@@ -11,7 +11,7 @@
 - [桌面端](../apps/desktop/README.md)：Electron 启动、构建和打包。
 - [移动端与 Web](../apps/mobile/README.md)：Expo、浏览器连接与原生构建。
 - [Relay 客户端登录保持](plans/relay-client-session-persistence.md)：14 天登录、退出凭据保护、网页重开恢复与待实施的自动续期方案。
-- [Workspace 定时任务](operations/schedules.md)：任务归属、目标、触发规则、运行历史与旧任务兼容；[设计与验证报告](reports/daemon/workspace-schedules-verification-2026-10-12.md)。
+- [Workspace 定时任务](operations/schedules.md)：任务归属、目标、触发规则、运行历史与旧任务兼容；[设计与验证报告](reports/daemon/workspace-schedules-verification-2026-10-12.md)、[时间列表与默认一次验证](reports/clients/workspace-schedule-timeline-2026-10-12.md)。
 - [daemon 使用与连接协议](operations/daemon.md)：配置、鉴权、数据目录和生命周期。
 - [当前架构](architecture/README.md)：能力归属、依赖边界和数据所有权。
 - [Bot 后端设计](plans/bot-backend.md)：Workspace Bot、独占 Channel、隐藏 session、内置 tab 对话与 Telegram、飞书、Email 接入方案。
