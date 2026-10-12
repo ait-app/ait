@@ -174,7 +174,21 @@ git push origin v0.0.20
 3. 导出界面、编译 Electron 主进程，验证 daemon 版本并暂存单个可执行文件。
 4. 检查打包内容；macOS 签名、公证；隔离启动成品应用并验证真实 daemon 生命周期。
 5. 收集桌面安装包和自动更新资产，核对更新摘要。
-6. 桌面构建成功后汇总资产并生成 SHA256SUMS，再创建或修复 GitHub Release。
+6. 桌面构建成功后汇总资产并生成 SHA256SUMS，再创建 Draft Release 或补齐既有 Release 的资产。
+
+新建 Release 使用 [`gh release create --draft`](https://cli.github.com/manual/gh_release_create)，
+上传安装包后仍保持草稿，停止等待 review；工作流不会将新草稿转为正式发布。
+推送标签不代表 Release 已公开，公开 Latest 和正式通道自动更新继续使用上一正式版。
+重跑可补齐既有草稿，包括首次上传失败后没有任何附件的空草稿；既有正式版的修复保持原发布状态。
+
+Review 时检查变更说明、`BUILD-INFO.json` 的源码与工作流提交、`SHA256SUMS`、更新元数据，
+以及两平台构建、macOS 签名、公证和成品生命周期门禁。得到明确的发布确认后，才人工发布稳定版：
+
+```bash
+gh release edit vX.Y.Z --repo OWNER/REPO --draft=false --latest
+```
+
+Beta 仍需保持 `--prerelease --latest=false`。发布命令不属于创建 Draft Release 的工作流步骤。
 
 macOS 需要 GitHub Secrets：`MAC_CSC_LINK`、`MAC_CSC_KEY_PASSWORD`、`APPLE_ID`、
 `APPLE_BUILD_APP_SECRET`、`APPLE_TEAM_ID`。缺失签名、公证凭据会阻止发布；不会降级为未签名包。
