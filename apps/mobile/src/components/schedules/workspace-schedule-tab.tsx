@@ -343,7 +343,7 @@ function ScheduleDetails({
         {workspace.name} · {formatCadence(schedule.cadence, t)}
       </Text>
       <Text style={styles.body}>
-        {t("schedules.form.target")}:{" "}
+        {t("schedules.form.executionAgent")}:{" "}
         {schedule.target.type === "new-agent"
           ? t("schedules.form.newAgent")
           : targetAgent?.title?.trim() || t("schedules.agentUnavailable")}

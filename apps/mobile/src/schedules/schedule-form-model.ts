@@ -1016,7 +1016,7 @@ export function openScheduleForm(snapshot: ScheduleFormSnapshot): ScheduleFormMo
         requestProviderSnapshot(state.selectedServerId, state.workingDir);
     },
     setAgent(selectedAgentId) {
-      publish({ ...state, selectedAgentId });
+      publish({ ...state, targetKind: "agent", selectedAgentId, submitError: null });
     },
     setStartAt(startAt) {
       publish({

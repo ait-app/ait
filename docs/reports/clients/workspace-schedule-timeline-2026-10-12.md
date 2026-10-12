@@ -1,7 +1,8 @@
 # Workspace 定时任务列表与默认运行一次：验证
 
 本次改动基于 `main` 的 `4ab7e7be`，是已合并 Workspace 定时任务功能的界面修订。
-实现与验证对应本报告所在提交；没有修改 Rust、调度协议或持久化数据结构。
+列表与次数的首轮验证对应 `989bde4a`；单一执行 Agent 选择器的后续验证对应本报告所在提交。
+没有修改 Rust、调度协议或持久化数据结构。
 设计见 [ADR-138](../../decisions/workspace/adr-138-workspace-owned-schedules.md)，使用方式见
 [定时任务](../../operations/schedules.md)。
 
@@ -13,6 +14,8 @@
   暂停、恢复、删除和 Agent 跳转。暂停与已完成任务可独立筛选，筛选及编辑视图随布局恢复。
 - 表单只提供固定间隔和 Cron 周期。新任务的运行次数预填 `1`，更大的值表示重复执行，
   清空表示不限次数；已有不限次数任务不会因为打开编辑而变成一次。
+- 单个执行 Agent 选择器同时提供每次新建入口和当前 Workspace 的未归档 Agent，支持搜索。
+  选择现存 Agent 直接绑定并收起创建配置，切回新建会保留之前的模型选择及提示词。
 - 旧 `Once` 数据仍可显示、运行与编辑；仅修改名称或提示词时保留原触发规则。
   修改时间、周期或次数时转为周期任务，未修改的原始触发时间保持精度。
 - 列表只展示当前 Workspace 的任务，使用服务器的真实下一次触发时间，未在客户端推演
@@ -22,17 +25,24 @@
 
 验证平台为本机 macOS，浏览器为 Playwright Chromium。
 
-| 检查                                                         | 结果                  |
-| ------------------------------------------------------------ | --------------------- |
-| 定时任务模型、表单、列表、布局恢复与标签页身份的 Vitest 测试 | 12 个文件、229 项通过 |
-| 定时任务创建、编辑与模型恢复的浏览器 E2E                     | 7 项通过              |
-| 移动端 TypeScript 检查                                       | 通过                  |
-| 修改文件的 ESLint、UI lint、格式与文档链接检查               | 通过                  |
+| 检查                                                                      | 结果                                |
+| ------------------------------------------------------------------------- | ----------------------------------- |
+| 列表与次数首轮：模型、表单、列表、布局恢复与标签页身份的 Vitest 测试      | 12 个文件、229 项通过（`989bde4a`） |
+| 单一选择器后续：表单模型、模型 Hook、创建编辑表单与任务详情的 Vitest 测试 | 4 个文件、31 项通过                 |
+| 定时任务创建、编辑与模型恢复的浏览器 E2E                                  | 7 项通过                            |
+| 移动端 TypeScript 检查                                                    | 通过                                |
+| 修改文件的 ESLint、UI lint、格式与文档链接检查                            | 通过                                |
 
-测试命令：
+首轮测试命令：
 
 ```sh
 npm exec --workspace=@ait/mobile -- vitest run src/schedules src/stores/workspace-layout-store.test.ts src/workspace-tabs/identity.test.ts
+```
+
+单一选择器修改后的定向验证命令：
+
+```sh
+npm exec --workspace=@ait/mobile -- vitest run src/schedules/schedule-form-model.test.ts src/schedules/use-schedule-form-model.test.tsx src/schedules/workspace-schedule-form.test.tsx src/schedules/workspace-schedule-tab.test.tsx
 npm run test:e2e --workspace=@ait/mobile -- e2e/browser/schedules-project-target.spec.ts e2e/browser/schedules-edit-model-hydration.spec.ts
 npm run typecheck --workspace=@ait/mobile
 npm run check:ui
@@ -41,6 +51,9 @@ npm run check:docs
 
 浏览器用例通过真实本地 daemon、SDK 与持久化路径验证当前 Workspace 的已有 Agent
 及新建 Agent 目标，确认默认一次、保存后的列表导航、时间顺序、直接编辑与刷新恢复。
+后续用例通过单一选择器搜索和选择已有 Agent，再切回新建并检查原模型与提示词保留，
+编辑时检查已绑定的 Agent 正确回填；跨 Workspace、已归档及其他主机候选的排除另由定向表单测试检查。
+桌面下拉菜单和已有 Agent 表单截图已检查，执行方式和具体 Agent 共用一个控件。
 Provider 使用仓库的离线 Codex 原生协议夹具，没有调用真实模型服务。
 桌面与 390px 窄屏列表截图已人工检查，无横向溢出，时间、任务名及新建入口可见。
 本次未验证原生 iOS/Android 设备或新的安装包。

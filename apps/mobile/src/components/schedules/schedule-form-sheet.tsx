@@ -11,7 +11,7 @@ import {
   type ReactNode,
 } from "react";
 import { ScrollView, Text, View } from "react-native";
-import { Brain, Folder, GitBranch } from "lucide-react-native";
+import { Brain, Folder, GitBranch, Plus } from "lucide-react-native";
 import { StyleSheet } from "react-native-unistyles";
 import type { AgentProvider } from "@ait/protocol/agent-types";
 import type { ScheduleSummary } from "@ait/protocol/schedule/types";
@@ -655,6 +655,31 @@ function ScheduleFormFields({
   mutationServerId,
 }: ScheduleFormFieldsProps): ReactElement {
   const { t } = useTranslation();
+  const agentOptions = useMemo<SelectFieldOption<string>[]>(
+    () => [
+      {
+        id: "new-agent",
+        value: "new-agent",
+        label: t("schedules.form.newAgent"),
+        testID: "schedule-target-new-agent",
+      },
+      ...state.agentOptions.map((agent) => ({
+        id: agent.id,
+        value: agent.id,
+        label: agent.title,
+        testID: `schedule-agent-option-${agent.id}`,
+      })),
+    ],
+    [state.agentOptions, t],
+  );
+  const selectedAgent = state.targetKind === "new-agent" ? "new-agent" : state.selectedAgentId;
+  const handleSelectAgent = useCallback(
+    (value: string) => {
+      if (value === "new-agent") model.setTargetKind("new-agent");
+      else model.setAgent(value);
+    },
+    [model],
+  );
 
   return (
     <>
@@ -671,35 +696,19 @@ function ScheduleFormFields({
         </Field>
       ) : null}
       <SelectField
-        label={t("schedules.form.target")}
-        value={state.targetKind}
-        selectedDisplay={{
-          label: t(
-            state.targetKind === "agent"
-              ? "schedules.form.existingAgent"
-              : "schedules.form.newAgent",
-          ),
-        }}
-        options={[
-          {
-            id: "new-agent",
-            value: "new-agent",
-            label: t("schedules.form.newAgent"),
-            testID: "schedule-target-new-agent",
-          },
-          {
-            id: "agent",
-            value: "agent",
-            label: t("schedules.form.existingAgent"),
-            testID: "schedule-target-agent",
-          },
-        ]}
-        onChange={model.setTargetKind}
-        searchable={false}
+        label={t("schedules.form.executionAgent")}
+        value={selectedAgent || null}
+        selectedDisplay={agentOptions.find((option) => option.value === selectedAgent) ?? null}
+        options={agentOptions}
+        onChange={handleSelectAgent}
+        searchable
+        searchPlaceholder={t("schedules.form.searchAgents")}
         size={controlSize}
-        placeholder={t("schedules.form.target")}
-        emptyText={t("schedules.form.noAgents")}
-        triggerTestID="schedule-target-kind-trigger"
+        placeholder={t("schedules.form.executionAgent")}
+        emptyText={t("schedules.form.noMatchingAgents")}
+        hint={t("schedules.form.executionAgentHint")}
+        renderOption={renderExecutionAgentOption}
+        triggerTestID="schedule-execution-agent-trigger"
       />
       <Field label={t("schedules.form.name")}>
         <FormTextInput
@@ -729,13 +738,15 @@ function ScheduleFormFields({
         />
       </Field>
 
-      <ScheduleTargetFields
-        model={model}
-        state={state}
-        providerSnapshot={providerSnapshot}
-        controlSize={controlSize}
-        mutationServerId={mutationServerId}
-      />
+      {state.targetKind === "new-agent" ? (
+        <ScheduleNewAgentFields
+          model={model}
+          state={state}
+          providerSnapshot={providerSnapshot}
+          controlSize={controlSize}
+          mutationServerId={mutationServerId}
+        />
+      ) : null}
 
       <CadenceEditor
         value={state.cadence}
@@ -797,7 +808,28 @@ function ScheduleFormFields({
   );
 }
 
-interface ScheduleTargetFieldsProps {
+function renderExecutionAgentOption({
+  option,
+  selected,
+  active,
+  onPress,
+}: SelectFieldRenderOptionInput<string>): ReactElement {
+  const isNewAgent = option.value === "new-agent";
+  return (
+    <View style={isNewAgent ? styles.newAgentOption : undefined}>
+      <ComboboxItem
+        testID={option.testID}
+        label={option.label}
+        selected={selected}
+        active={active}
+        onPress={onPress}
+        leadingSlot={isNewAgent ? <Plus size={16} color={styles.providerIcon.color} /> : undefined}
+      />
+    </View>
+  );
+}
+
+interface ScheduleNewAgentFieldsProps {
   model: ScheduleFormModel;
   state: ScheduleFormState;
   providerSnapshot: ReturnType<typeof useScheduleFormProviderSnapshot>;
@@ -805,13 +837,13 @@ interface ScheduleTargetFieldsProps {
   mutationServerId: string;
 }
 
-function ScheduleTargetFields({
+function ScheduleNewAgentFields({
   model,
   state,
   providerSnapshot,
   controlSize,
   mutationServerId,
-}: ScheduleTargetFieldsProps): ReactElement {
+}: ScheduleNewAgentFieldsProps): ReactElement {
   const { t } = useTranslation();
   const hostOptions = useMemo<SelectFieldOption<string>[]>(
     () =>
@@ -939,30 +971,6 @@ function ScheduleTargetFields({
     },
     [controlSize, modelTriggerLeading, state.selectedModel, state.selectedModelDisplay],
   );
-
-  if (state.targetKind === "agent") {
-    const options = state.agentOptions.map((agent) => ({
-      id: agent.id,
-      value: agent.id,
-      label: agent.title,
-      testID: `schedule-agent-option-${agent.id}`,
-    }));
-    return (
-      <SelectField
-        label={t("schedules.form.existingAgent")}
-        value={state.selectedAgentId || null}
-        selectedDisplay={options.find((option) => option.value === state.selectedAgentId) ?? null}
-        options={options}
-        onChange={model.setAgent}
-        placeholder={t("schedules.form.selectAgent")}
-        emptyText={t("schedules.form.noAgents")}
-        hint={t("schedules.form.agentHint")}
-        searchable
-        size={controlSize}
-        triggerTestID="schedule-agent-trigger"
-      />
-    );
-  }
 
   return (
     <>
@@ -1358,6 +1366,12 @@ const styles = StyleSheet.create((theme) => {
       height: 18,
       alignItems: "center",
       justifyContent: "center",
+    },
+    newAgentOption: {
+      borderBottomWidth: 1,
+      borderBottomColor: theme.colors.border,
+      paddingBottom: theme.spacing[1],
+      marginBottom: theme.spacing[1],
     },
     footer: {
       flex: 1,

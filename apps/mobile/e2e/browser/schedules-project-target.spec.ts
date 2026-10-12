@@ -18,9 +18,7 @@ async function openScheduleTab(page: Page) {
 }
 
 async function selectExistingAgent(page: Page, agentId: string) {
-  await page.getByTestId("schedule-target-kind-trigger").click();
-  await page.getByTestId("schedule-target-agent").click();
-  await page.getByTestId("schedule-agent-trigger").click();
+  await page.getByTestId("schedule-execution-agent-trigger").click();
   await page.getByTestId(`schedule-agent-option-${agentId}`).click();
   await expect(page.getByTestId(`schedule-agent-option-${agentId}`)).not.toBeVisible();
 }
@@ -71,13 +69,36 @@ test.describe("Workspace scheduled tasks", () => {
     await expect(page.getByTestId("schedule-workspace-target")).toContainText(
       workspace.workspaceName,
     );
-    await page.getByTestId("schedule-target-kind-trigger").click();
-    await page.getByTestId("schedule-target-agent").click();
-    await page.getByTestId("schedule-agent-trigger").click();
+    await selectModel(page);
+    await expect(page.getByTestId("schedule-target-kind-trigger")).toHaveCount(0);
+    await expect(page.getByTestId("schedule-agent-trigger")).toHaveCount(0);
+    await page.getByTestId("schedule-execution-agent-trigger").click();
+    await expect(page.getByTestId("schedule-target-new-agent")).toBeVisible();
     await expect(page.getByTestId(`schedule-agent-option-${foreignAgent.id}`)).toHaveCount(0);
+    await page.screenshot({
+      path: "/tmp/schedule-execution-agent-picker-desktop.png",
+      fullPage: true,
+    });
+    await page.getByPlaceholder("Search agents...").fill("Scheduled agent");
+    await expect(page.getByTestId(`schedule-agent-option-${agent.id}`)).toBeVisible();
     await page.getByTestId(`schedule-agent-option-${agent.id}`).click();
+    await expect(page.getByTestId("schedule-execution-agent-trigger")).toContainText(
+      "Scheduled agent",
+    );
+    await expect(page.getByTestId("schedule-model-trigger")).toHaveCount(0);
     await page.getByTestId("schedule-name-input").fill("Workspace review");
     await page.getByTestId("schedule-prompt-input").fill("Review the current workspace.");
+    await page.screenshot({
+      path: "/tmp/schedule-existing-agent-form-desktop.png",
+      fullPage: true,
+    });
+    await page.getByTestId("schedule-execution-agent-trigger").click();
+    await page.getByTestId("schedule-target-new-agent").click();
+    await expect(page.getByTestId("schedule-model-trigger")).toContainText("Offline model");
+    await expect(page.getByTestId("schedule-prompt-input")).toHaveValue(
+      "Review the current workspace.",
+    );
+    await selectExistingAgent(page, agent.id);
     await page.getByTestId("schedule-max-runs-input").fill("1.5");
     await expect(page.getByTestId("schedule-form-submit")).toBeDisabled();
     await page.getByTestId("schedule-max-runs-input").fill("2");
@@ -101,6 +122,9 @@ test.describe("Workspace scheduled tasks", () => {
     await page.getByTestId("schedule-toggle-status").click();
     await expect(detail).toContainText("Paused");
     await page.getByTestId("schedule-edit").click();
+    await expect(page.getByTestId("schedule-execution-agent-trigger")).toContainText(
+      "Scheduled agent",
+    );
     await expect(page.getByTestId("schedule-prompt-input")).toHaveValue(
       "Review the current workspace.",
     );
@@ -224,7 +248,14 @@ test.describe("Workspace scheduled tasks", () => {
       .getByTestId(`schedule-workspace-option-${getServerId()}-${workspace.workspaceId}`)
       .click();
     await expect(page.getByTestId("schedule-form-sheet")).toBeVisible();
-    await selectExistingAgent(page, agent.id);
+    await page.getByTestId("schedule-execution-agent-trigger").click();
+    await expect(page.getByPlaceholder("Search agents...")).toBeVisible();
+    await expect(page.getByTestId(`schedule-agent-option-${agent.id}`)).toBeInViewport();
+    await page.screenshot({
+      path: "/tmp/schedule-execution-agent-picker-mobile.png",
+      fullPage: true,
+    });
+    await page.getByTestId(`schedule-agent-option-${agent.id}`).click();
     await page.getByTestId("schedule-name-input").fill("Mobile review");
     await page.getByTestId("schedule-prompt-input").fill("Review on mobile.");
     await page.screenshot({ path: "/tmp/workspace-schedule-mobile.png", fullPage: true });

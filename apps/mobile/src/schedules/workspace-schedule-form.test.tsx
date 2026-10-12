@@ -39,6 +39,13 @@ const agents = [
     title: "Archived agent",
     archivedAt: "now",
   },
+  {
+    id: "other-host",
+    serverId: "host-b",
+    workspaceId: "workspace-a",
+    title: "Other host agent",
+    archivedAt: null,
+  },
 ];
 const preferences = {};
 
@@ -214,10 +221,14 @@ describe("workspace schedule form", () => {
         onClose={vi.fn()}
       />,
     );
-    fireEvent.change(screen.getByLabelText("Target"), { target: { value: "agent" } });
+    const selector = screen.getByLabelText("Execution agent");
     expect(screen.queryByText("Foreign agent")).toBeNull();
     expect(screen.queryByText("Archived agent")).toBeNull();
-    fireEvent.change(screen.getByLabelText("Existing agent"), { target: { value: agentId } });
+    expect(screen.queryByText("Other host agent")).toBeNull();
+    expect(screen.queryByTestId("schedule-target-kind-trigger")).toBeNull();
+    expect(screen.queryByTestId("schedule-agent-trigger")).toBeNull();
+    fireEvent.change(selector, { target: { value: agentId } });
+    expect(screen.queryByRole("button", { name: "Choose model" })).toBeNull();
     fireEvent.change(screen.getByRole("textbox", { name: "Prompt" }), {
       target: { value: "Review the changes" },
     });
@@ -239,6 +250,41 @@ describe("workspace schedule form", () => {
       }),
     );
     expect(updatePreferences).not.toHaveBeenCalled();
+  });
+
+  it("keeps the prompt and new-agent configuration when switching the unified selector", async () => {
+    render(
+      <WorkspaceScheduleForm
+        serverId="host-a"
+        workspace={{ id: "workspace-a", name: "Feature", cwd: "/worktrees/feature" }}
+        onClose={vi.fn()}
+      />,
+    );
+    const selector = screen.getByLabelText("Execution agent") as HTMLSelectElement;
+    expect(selector.value).toBe("new-agent");
+    fireEvent.click(screen.getByRole("button", { name: "Choose model" }));
+    fireEvent.change(screen.getByRole("textbox", { name: "Prompt" }), {
+      target: { value: "Keep my review instructions" },
+    });
+    fireEvent.change(selector, { target: { value: agentId } });
+    expect(screen.queryByRole("button", { name: "Choose model" })).toBeNull();
+    fireEvent.change(selector, { target: { value: "new-agent" } });
+    expect(screen.getByRole("button", { name: "Choose model" })).toBeTruthy();
+    expect((screen.getByRole("textbox", { name: "Prompt" }) as HTMLInputElement).value).toBe(
+      "Keep my review instructions",
+    );
+    fireEvent.click(screen.getByRole("button", { name: "Create schedule" }));
+    await waitFor(() =>
+      expect(createSchedule).toHaveBeenCalledWith(
+        expect.objectContaining({
+          prompt: "Keep my review instructions",
+          target: {
+            type: "new-agent",
+            config: expect.objectContaining({ provider: "mock", model: "model-a" }),
+          },
+        }),
+      ),
+    );
   });
 
   it("keeps the created task in the workspace tab through the saved callback", async () => {
@@ -269,8 +315,7 @@ describe("workspace schedule form", () => {
         onClose={vi.fn()}
       />,
     );
-    fireEvent.change(screen.getByLabelText("Target"), { target: { value: "agent" } });
-    fireEvent.change(screen.getByLabelText("Existing agent"), { target: { value: agentId } });
+    fireEvent.change(screen.getByLabelText("Execution agent"), { target: { value: agentId } });
     fireEvent.change(screen.getByRole("textbox", { name: "Prompt" }), {
       target: { value: "Review changes" },
     });
@@ -338,6 +383,8 @@ describe("workspace schedule form", () => {
       />,
     );
     expect((screen.getByRole("textbox", { name: "Max runs" }) as HTMLInputElement).value).toBe("1");
+    expect((screen.getByLabelText("Execution agent") as HTMLSelectElement).value).toBe(agentId);
+    expect(screen.queryByRole("button", { name: "Choose model" })).toBeNull();
     fireEvent.change(screen.getByRole("textbox", { name: "Max runs" }), { target: { value: "2" } });
     fireEvent.click(screen.getByRole("button", { name: /save/i }));
     await waitFor(() =>
