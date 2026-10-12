@@ -84,6 +84,19 @@ npm run test:e2e --workspace=@ait/mobile -- \
 Rust 进程与浏览器测试需要本机监听端口；在授权的隔离本机环境执行。未运行全 Rust
 workspace 测试，也没有运行不相关的前端用例。
 
+## PR 同步后的验证
+
+创建 PR 前同步至 `32df46ae`（main 的已移除功能协议清理）。以下追加验证针对实现提交
+`9c6ceb99c326bd90c2790a921807114843b65286`；ADR 编号调整为 138，文档索引保留双方条目。
+同步前后 `bins/` 和 `crates/` 的本功能 Rust 文件完全一致，因此沿用上述 91 项 Rust
+定向测试结果，没有再次运行 Rust 测试或扩展到全 workspace。
+
+- `npm run build:ui-deps`、Mobile 和 SDK 的 typecheck 均通过。
+- SDK 定时任务测试 5 通过，156 个不相关用例跳过；协议 schema 4 通过。
+- 两个定时任务浏览器文件的 6 项用例全部通过，仍使用隔离 daemon 与离线原生协议夹具。
+- `node scripts/check-ui.mjs origin/main` 检查 46 个 PR 变更文件，0 错误、0 警告。
+- PR 的 53 个 TS/TSX/Markdown 文件格式检查、Rust 格式、补丁空白和文档链接检查通过。
+
 ## Test coverage
 
 **Not measured**：用户未要求测量覆盖率；测试执行数量不代表覆盖率。没有与本次变更可比
