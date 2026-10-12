@@ -18,9 +18,13 @@ tokio.workspace = true
 tokio-tungstenite.workspace = true
 tokio-tungstenite.features = ["rustls-tls-webpki-roots"]
 tokio-util.workspace = true
+tracing.workspace = true
 url.workspace = true
 uuid.workspace = true
 uuid.features = ["serde"]
+
+[dev-dependencies]
+tracing-subscriber.workspace = true
 
 [lints]
 workspace = true
