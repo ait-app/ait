@@ -409,7 +409,7 @@ export function QuestionFormCard({ permission, onRespond, isResponding }: Questi
   ]);
 
   const handleDeny = useCallback(() => {
-    if (!questions) return;
+    if (!questions || isResponding) return;
     setRespondingAction("dismiss");
     if (shouldSubmitEmptyOnDismiss(questions)) {
       onRespond({
@@ -425,7 +425,7 @@ export function QuestionFormCard({ permission, onRespond, isResponding }: Questi
       behavior: "deny",
       message: "Dismissed by user",
     });
-  }, [questions, onRespond, otherTexts, permission.request.input, selections]);
+  }, [questions, isResponding, onRespond, otherTexts, permission.request.input, selections]);
 
   const handleSelectQuestion = useCallback((index: number) => {
     setActiveQuestionIndex(index);
@@ -583,7 +583,7 @@ export function QuestionFormCard({ permission, onRespond, isResponding }: Questi
           accessibilityLabel={dismissLabel}
           testID="question-form-dismiss"
         >
-          {respondingAction === "dismiss" ? (
+          {isResponding && respondingAction === "dismiss" ? (
             <LoadingSpinner size="small" color={theme.colors.foregroundMuted} />
           ) : (
             <View style={styles.actionContent}>
@@ -601,7 +601,7 @@ export function QuestionFormCard({ permission, onRespond, isResponding }: Questi
           accessibilityLabel={primaryActionLabel}
           testID="question-form-primary-action"
         >
-          {respondingAction === "submit" ? (
+          {isResponding && respondingAction === "submit" ? (
             <LoadingSpinner size="small" color={theme.colors.accentForeground} />
           ) : (
             <View style={styles.actionContent}>
