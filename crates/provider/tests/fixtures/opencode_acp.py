@@ -12,7 +12,7 @@ log_path = root / "requests.jsonl"
 with (root / "pids.txt").open("a") as output:
     output.write(str(os.getpid()) + "\n")
 if sys.argv[1:] == ["--version"]:
-    print(os.environ.get("AIT_ACP_VERSION", "2.0.26"))
+    print(os.environ.get("AIT_ACP_VERSION", "2.0.25"))
     sys.exit(0)
 if sys.argv[1:2] == ["models"]:
     print("local/model")
@@ -161,7 +161,7 @@ for line in sys.stdin:
             capabilities.pop("resume")
         if scenario == "no-history":
             capabilities.pop("list")
-        if not os.environ.get("AIT_ACP_VERSION", "2.0.26").startswith("1.") and scenario != "no-delete":
+        if not os.environ.get("AIT_ACP_VERSION", "2.0.25").startswith("1.") and scenario != "no-delete":
             capabilities["delete"] = {}
         reply(identity, {"protocolVersion": 1, "agentCapabilities": {"loadSession": scenario != "no-history",
             "promptCapabilities": {"image": True}, "sessionCapabilities": capabilities}})

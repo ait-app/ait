@@ -22,6 +22,8 @@
 
 ## 架构决策
 
+- [ADR-143：OpenCode 2.0.25 兼容与 ACP 审批边界](decisions/providers/adr-143-opencode-2-0-25-compatibility.md)：修正最低版本、多行命令与大文件审批、创建失败清理；[验证报告](reports/providers/opencode-2.0.25-compatibility-2026-10-13.md)。
+
 - [ADR-141：客户端测试功能开关与 Workspace Bot](decisions/clients/adr-141-experimental-workspace-bots.md)：默认关闭的全局客户端设置、Bot 创建／对话／配置、持久回执与标签页恢复。
 
 - [ADR-140：Codex MCP 超大字段使用展示预览](decisions/providers/adr-140-codex-mcp-display-previews.md)：按 JSON 字节预算生成明确标记的预览，保留原生完整结果与实时／历史一致性。
@@ -29,7 +31,7 @@
 - [ADR-138：定时任务固定归属于 Workspace](decisions/workspace/adr-138-workspace-owned-schedules.md)：固定归属、Agent 目标校验、独立执行与版本兼容。
 - [ADR-137：清理已移除功能的共享协议与 SDK](decisions/clients/adr-137-remove-retired-feature-protocol.md)：移除 Hub、Plugin 管理、Chat 与 Loop 的旧消息和 SDK 方法，保留有效订阅与时间线显示项。
 - [ADR-136：拍平单功能区层并收口重复助手](decisions/workspace/adr-136-single-area-layer-flattening.md)：去掉只承载一个功能区的 `<layer>::<area>` 中间段，并收口重复的 RPC/ACP 助手。
-- [ADR-135：OpenCode 目录就绪与配置确认](decisions/providers/adr-135-opencode-catalog-readiness.md)：2.x 最低 2.0.26、明确升级提示、异步配置确认、动态目录发现与并发冷启动协调。
+- [ADR-135：OpenCode 目录就绪与配置确认](decisions/providers/adr-135-opencode-catalog-readiness.md)：异步配置确认、动态目录发现与并发冷启动协调；最低版本由 ADR-143 修正为 2.0.25。
 - [ADR-134：已接纳的普通 RPC 等待共享任务额度](decisions/daemon/adr-134-admitted-rpc-job-waiting.md)：并发能力组共享许可、停机取消与 RPC 拒绝上下文。
 - [ADR-133：先显示持久 Timeline 页面，后台校验原生历史](decisions/providers/adr-133-cached-timeline-first.md)：尾页优先、有界上翻、原生校验去重与旧主机回退。
 - [ADR-132：Checkout 刷新独立准入与有界输出背压](decisions/workspace/adr-132-checkout-refresh-admission-and-backpressure.md)：隔离前台 Git 任务，diff 拥堵时等待输出额度并保持连接。

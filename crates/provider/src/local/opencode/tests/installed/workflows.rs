@@ -25,7 +25,7 @@ async fn request(fixture: &mut Installed, text: &str) -> Value {
 }
 
 #[tokio::test]
-#[ignore = "requires OpenCode 2.0.26+; isolated native model, effort and mode selection"]
+#[ignore = "requires OpenCode 2.0.25+; isolated native model, effort and mode selection"]
 async fn installed_acp_model_effort_mode_switch_survives_reconnection_and_resume() {
     let mut fixture = installed(false).await;
     let mut config = configuration(&fixture);
@@ -123,7 +123,7 @@ async fn installed_acp_model_effort_mode_switch_survives_reconnection_and_resume
 }
 
 #[tokio::test]
-#[ignore = "requires OpenCode 2.0.26+; native large catalog with loopback-only execution"]
+#[ignore = "requires OpenCode 2.0.25+; native large catalog with loopback-only execution"]
 async fn installed_acp_large_catalog_is_complete_prompt_free_and_selectable() {
     let mut fixture = installed(false).await;
     let mut config = configuration(&fixture);
@@ -178,7 +178,7 @@ async fn installed_acp_large_catalog_is_complete_prompt_free_and_selectable() {
 }
 
 #[tokio::test]
-#[ignore = "requires OpenCode 2.0.26+; concurrent discovery in isolated project directories"]
+#[ignore = "requires OpenCode 2.0.25+; concurrent discovery in isolated project directories"]
 async fn installed_acp_project_catalogs_and_defaults_do_not_leak_between_directories() {
     let mut fixture = installed(false).await;
     let original = configuration(&fixture);
@@ -244,7 +244,7 @@ async fn installed_acp_project_catalogs_and_defaults_do_not_leak_between_directo
 }
 
 #[tokio::test]
-#[ignore = "requires OpenCode 2.0.26+; native attachments, images and replay"]
+#[ignore = "requires OpenCode 2.0.25+; native attachments, images and replay"]
 async fn installed_acp_rich_input_reaches_model_and_preserves_client_identity() {
     let mut fixture = installed(false).await;
     let mut config = configuration(&fixture);
@@ -289,7 +289,7 @@ async fn installed_acp_rich_input_reaches_model_and_preserves_client_identity() 
 }
 
 #[tokio::test]
-#[ignore = "requires OpenCode 2.0.26+; cancel a model request already admitted by native CLI"]
+#[ignore = "requires OpenCode 2.0.25+; cancel a model request already admitted by native CLI"]
 async fn installed_acp_inflight_cancellation_settles_and_allows_followup() {
     let mut fixture = installed(false).await;
     let mut session = fixture.client.create_session(&fixture.spec).await.unwrap();
@@ -323,7 +323,7 @@ async fn installed_acp_inflight_cancellation_settles_and_allows_followup() {
 }
 
 #[tokio::test]
-#[ignore = "requires OpenCode 2.0.26+; deterministic native model authentication failure"]
+#[ignore = "requires OpenCode 2.0.25+; deterministic native model authentication failure"]
 async fn installed_acp_model_authentication_error_settles_without_false_success() {
     let mut fixture = installed(false).await;
     let mut session = fixture.client.create_session(&fixture.spec).await.unwrap();

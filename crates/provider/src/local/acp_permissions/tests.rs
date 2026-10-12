@@ -78,3 +78,47 @@ fn records_the_owning_provider_and_retains_no_elicitation_schema() {
     assert!(pending.schema.is_none());
     assert!(pending.unique_fields.is_empty());
 }
+
+#[test]
+fn display_titles_preserve_multiline_scripts_without_relaxing_identity_validation() {
+    for title in ["printf 'hello\\n'\npwd".to_owned(), "# 注释\n".repeat(300)] {
+        let mut message = request();
+        message["params"]["toolCall"]["title"] = json!(title);
+        let pending = capture(&message, "opencode").unwrap();
+        assert_eq!(pending.request["title"], title);
+        assert_eq!(pending.request["name"], title);
+        message["params"]["toolCall"]["toolCallId"] = json!("invalid\nidentity");
+        assert!(capture(&message, "opencode").is_err());
+    }
+    for title in [json!(""), json!(" \n\t"), json!("bad\0title"), Value::Null] {
+        let mut message = request();
+        message["params"]["toolCall"]["title"] = title;
+        assert!(capture(&message, "opencode").is_err());
+    }
+}
+
+#[test]
+fn native_full_file_previews_do_not_exhaust_the_retained_approval_budget() {
+    let mut message = request();
+    message["params"]["toolCall"]["content"] = json!([{
+        "type":"diff", "path":"large.txt", "oldText":"a".repeat(100_000),
+        "newText":"b".repeat(100_000)
+    }]);
+    let pending = capture(&message, "opencode").unwrap();
+    assert_eq!(pending.request["input"], json!({"command":"pwd"}));
+    assert!(pending.request.to_string().len() < 65536);
+    assert_eq!(
+        resolve_tool(&pending, &json!({"behavior":"deny"})).unwrap()["result"]["outcome"]["optionId"],
+        "deny"
+    );
+
+    message["params"]["toolCall"]["rawInput"] = json!({"command":"x".repeat(50_000)});
+    let pending = capture(&message, "opencode").unwrap();
+    assert_eq!(
+        pending.request["input"],
+        message["params"]["toolCall"]["rawInput"]
+    );
+    assert!(pending.request.to_string().len() < 192 * 1024);
+    message["params"]["toolCall"]["rawInput"] = json!({"command":"x".repeat(65536)});
+    assert!(capture(&message, "opencode").is_err());
+}

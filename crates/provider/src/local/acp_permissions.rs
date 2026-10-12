@@ -34,7 +34,7 @@ pub(crate) struct Pending {
 /// # Errors
 ///
 /// Returns `AgentSessionError::Failed` for a missing identity, an empty or oversized
-/// option list, duplicate option identities, unknown option kinds or oversized parameters.
+/// option list, duplicate option identities, unknown option kinds or oversized retained fields.
 pub(crate) fn capture(message: &Value, provider: &str) -> Result<Pending, AgentSessionError> {
     let params = &message["params"];
     let rpc_id = message
@@ -47,7 +47,12 @@ pub(crate) fn capture(message: &Value, provider: &str) -> Result<Pending, AgentS
         .filter(|options| !options.is_empty() && options.len() <= 128)
         .ok_or(AgentSessionError::Failed)?;
     text(&params["toolCall"], "toolCallId")?;
-    let title = text(&params["toolCall"], "title")?;
+    // Native shell approvals use the full command as their display title, including newlines.
+    // The identifier validator would reject ordinary scripts and long commands as protocol errors.
+    let title = params["toolCall"]["title"]
+        .as_str()
+        .filter(|title| !title.trim().is_empty() && !title.contains('\0'))
+        .ok_or(AgentSessionError::Failed)?;
     let mut ids = std::collections::BTreeSet::new();
     let actions = options
         .iter()
@@ -64,7 +69,19 @@ pub(crate) fn capture(message: &Value, provider: &str) -> Result<Pending, AgentS
             Ok(json!({"id":id,"label":text(option, "name")?,"behavior":behavior}))
         })
         .collect::<Result<Vec<_>, AgentSessionError>>()?;
-    if params.to_string().len() > 65536 {
+    // OpenCode includes full-file diff previews in toolCall.content. Those unretained fields
+    // are already bounded by the transport frame limit. Bound the fields we retain before
+    // cloning them into the UI's repeated title/input fields.
+    if serde_json::to_vec(&(
+        &params["toolCall"]["toolCallId"],
+        title,
+        &params["toolCall"]["rawInput"],
+        options,
+    ))
+    .map_err(|_| AgentSessionError::Failed)?
+    .len()
+        > 65536
+    {
         return Err(AgentSessionError::Failed);
     }
     Ok(Pending {
