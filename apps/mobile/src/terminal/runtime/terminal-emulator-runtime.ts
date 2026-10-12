@@ -557,7 +557,8 @@ export class TerminalEmulatorRuntime {
       this.fitAndEmitResize?.({ forceRefresh: true, shouldClaim: false });
     };
 
-    // Suppress generic protocol replies. Color queries must reach xterm: the renderer
+    // The daemon answers DA1 even before a display subscribes; suppress duplicate replies.
+    // Other generic queries remain suppressed. Color queries must reach xterm: the renderer
     // owns the displayed palette, which TUIs such as OpenCode use to detect their theme.
     // Historical output already suppresses onData through the restore barrier.
     // Re-registered after the image addon loads so our handlers stay last in the

@@ -56,7 +56,8 @@ fn interrupted_pty_reads_preserve_split_utf8_and_drain_after_eof() {
         Ok(Vec::new()),
     ]));
     let screen = Mutex::new(Screen::new(Size::default()));
-    read_output(Box::new(reader), &screen);
+    let (input, _incoming) = mpsc::sync_channel(16);
+    read_output(Box::new(reader), &screen, &input);
     let mut screen = screen.lock().unwrap();
     assert!(screen.drained);
     assert_eq!(screen.capture()[0], "中🦀");
@@ -77,10 +78,46 @@ fn terminal_read_error_preserves_preceding_output_and_marks_the_reader_drained()
         Ok(b"must not read".to_vec()),
     ]));
     let screen = Mutex::new(Screen::new(Size::default()));
-    read_output(Box::new(reader), &screen);
+    let (input, _incoming) = mpsc::sync_channel(16);
+    read_output(Box::new(reader), &screen, &input);
     let screen = screen.lock().unwrap();
     assert!(screen.drained);
     assert_eq!(screen.capture()[0], "before failure");
+}
+
+#[test]
+fn query_replies_use_the_input_queue_without_a_display_subscription() {
+    let reader = Reader(VecDeque::from([
+        Ok(b"\x1b[".to_vec()),
+        Ok(b"c\x1b[0c".to_vec()),
+    ]));
+    let screen = Mutex::new(Screen::new(Size::default()));
+    let (input, incoming) = mpsc::sync_channel(16);
+    read_output(Box::new(reader), &screen, &input);
+    assert_eq!(incoming.try_recv().unwrap(), b"\x1b[?1;0c\x1b[?1;0c");
+    assert!(incoming.try_recv().is_err());
+    assert!(screen.lock().unwrap().drained);
+}
+
+#[test]
+fn full_or_closed_reply_queues_do_not_block_output_drainage() {
+    for closed in [false, true] {
+        let reader = Reader(VecDeque::from([
+            Ok(b"\x1b[c".to_vec()),
+            Ok(b"still draining".to_vec()),
+        ]));
+        let screen = Mutex::new(Screen::new(Size::default()));
+        let (input, incoming) = mpsc::sync_channel(1);
+        input.try_send(b"queued input".to_vec()).unwrap();
+        let incoming = if closed { None } else { Some(incoming) };
+        read_output(Box::new(reader), &screen, &input);
+        let screen = screen.lock().unwrap();
+        assert!(screen.drained);
+        assert_eq!(screen.capture()[0], "still draining");
+        if let Some(incoming) = incoming {
+            assert_eq!(incoming.try_recv().unwrap(), b"queued input");
+        }
+    }
 }
 
 fn write_chunks(limit: usize, flush_error: bool) -> Arc<Mutex<Written>> {

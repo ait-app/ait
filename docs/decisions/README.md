@@ -10,6 +10,8 @@ ADR-074、082、083、084、122 在不同类别中各有两份，引用时以路
 
 ## Daemon 与协议
 
+- [ADR-142：PTY 拥有基础终端设备属性回复](daemon/adr-142-terminal-primary-device-attributes.md)
+
 - [ADR-134：已接纳的普通 RPC 等待共享任务额度](daemon/adr-134-admitted-rpc-job-waiting.md)
 - [ADR-127：移除 daemon 配对 offer RPC](daemon/adr-127-remove-daemon-pairing-offer.md)
 - [ADR-120：单连接启动请求的有界排队](daemon/adr-120-single-connection-startup-admission.md)

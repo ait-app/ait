@@ -1,5 +1,7 @@
 # Ait 文档
 
+- [ADR-142：PTY 拥有基础终端设备属性回复](decisions/daemon/adr-142-terminal-primary-device-attributes.md)：节点直接完成 DA1 握手，避免 fish 启动等待客户端订阅。
+
 - [ADR-140：Headless 本地 API 凭据](decisions/daemon/adr-140-headless-local-api-token.md)：启动自动生成、持久化与环境覆盖。
 - [ADR-132：管理网站中的浏览器客户端](decisions/clients/adr-132-web-console-client.md)：同源会话、浏览器中继、Web 导出与客户端入口。
 
