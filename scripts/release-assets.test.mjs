@@ -370,6 +370,9 @@ test("desktop reruns preserve a checksum-verified Android APK", async (t) => {
 const fs = require('node:fs');
 const path = require('node:path');
 const args = process.argv.slice(2);
+if (args[0] === 'release' && args[1] === 'view' && args.includes('--json')) {
+  console.log(fs.readdirSync(process.env.PUBLISHED_ASSETS).length);
+}
 if (args[0] === 'release' && args[1] === 'download') {
   const destination = args[args.indexOf('--dir') + 1];
   for (const name of fs.readdirSync(process.env.PUBLISHED_ASSETS)) {

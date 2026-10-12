@@ -1,6 +1,6 @@
 {
   "name": "@ait/desktop",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "private": true,
   "description": "Ait desktop app (Electron wrapper)",
   "homepage": "https://github.com/ait-app/ait",

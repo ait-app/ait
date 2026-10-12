@@ -1,0 +1,125 @@
+import assert from "node:assert/strict";
+import { spawnSync } from "node:child_process";
+import { chmodSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { tmpdir } from "node:os";
+import path from "node:path";
+import test from "node:test";
+import { parse } from "yaml";
+
+const workflow = parse(
+  readFileSync(new URL("../.github/workflows/release.yml", import.meta.url), "utf8"),
+);
+
+function runStep(t, name, state, tag = "v0.1.1") {
+  const step = workflow.jobs.release.steps.find((candidate) => candidate.name === name);
+  assert(step, `Missing release step: ${name}`);
+  const directory = mkdtempSync(path.join(tmpdir(), "ait-release-workflow-"));
+  t.after(() => rmSync(directory, { recursive: true, force: true }));
+  const stateFile = path.join(directory, "state.json");
+  const logFile = path.join(directory, "calls.jsonl");
+  writeFileSync(stateFile, JSON.stringify({ tagExists: true, assets: [], ...state }));
+  writeFileSync(logFile, "");
+  mkdirSync(path.join(directory, "release-assets"));
+  writeFileSync(path.join(directory, "release-assets", "artifact.bin"), "installer");
+  const executable = path.join(directory, "gh");
+  writeFileSync(
+    executable,
+    `#!/usr/bin/env node
+const fs = require("node:fs");
+const args = process.argv.slice(2);
+fs.appendFileSync(process.env.AIT_RELEASE_TEST_LOG, JSON.stringify(args) + "\\n");
+const file = process.env.AIT_RELEASE_TEST_STATE;
+const state = JSON.parse(fs.readFileSync(file, "utf8"));
+if (args[0] !== "release") process.exit(9);
+switch (args[1]) {
+  case "view":
+    if (!state.release) process.exit(1);
+    if (args.includes("--json")) console.log(state.assets.length);
+    process.exit(0);
+  case "create":
+    if (state.release) process.exit(2);
+    if (args.includes("--verify-tag") && !state.tagExists) process.exit(3);
+    state.release = { draft: args.includes("--draft"), prerelease: args.includes("--prerelease") };
+    state.assets = ["artifact.bin"];
+    break;
+  case "edit":
+    if (!state.release) process.exit(4);
+    if (args.includes("--draft=false")) state.release.draft = false;
+    if (args.includes("--draft")) state.release.draft = true;
+    break;
+  case "upload":
+    if (!state.release) process.exit(5);
+    state.uploaded = true;
+    break;
+  case "download":
+    if (state.assets.length === 0) process.exit(6);
+    break;
+  default:
+    process.exit(7);
+}
+fs.writeFileSync(file, JSON.stringify(state));
+`,
+  );
+  chmodSync(executable, 0o755);
+  const result = spawnSync("bash", ["-e", "-o", "pipefail", "-c", step.run], {
+    cwd: directory,
+    encoding: "utf8",
+    env: {
+      PATH: `${directory}${path.delimiter}${process.env.PATH}`,
+      RELEASE_TAG: tag,
+      GITHUB_REPOSITORY: "ait-app/ait",
+      AIT_RELEASE_TEST_STATE: stateFile,
+      AIT_RELEASE_TEST_LOG: logFile,
+    },
+  });
+  return {
+    result,
+    state: JSON.parse(readFileSync(stateFile, "utf8")),
+    calls: readFileSync(logFile, "utf8").trim().split("\n").filter(Boolean).map(JSON.parse),
+  };
+}
+
+const publishStep = "Create or repair GitHub Release";
+
+test("a new stable release stops as a draft with uploaded installers", (t) => {
+  const { result, state } = runStep(t, publishStep, { release: null });
+  assert.equal(result.status, 0, result.stderr);
+  assert.deepEqual(state.release, { draft: true, prerelease: false });
+  assert.deepEqual(state.assets, ["artifact.bin"]);
+});
+
+test("a new beta remains a draft and cannot become the latest stable release", (t) => {
+  const { result, state, calls } = runStep(t, publishStep, { release: null }, "v0.1.1-beta.1");
+  assert.equal(result.status, 0, result.stderr);
+  assert.deepEqual(state.release, { draft: true, prerelease: true });
+  assert(calls.find((args) => args[1] === "create").includes("--latest=false"));
+});
+
+test("rerunning asset upload keeps an existing release draft awaiting review", (t) => {
+  const { result, state, calls } = runStep(t, publishStep, { release: { draft: true } });
+  assert.equal(result.status, 0, result.stderr);
+  assert.equal(state.release.draft, true);
+  assert.equal(state.uploaded, true);
+  assert(!calls.some((args) => args[1] === "create"));
+});
+
+test("repairing an existing published release preserves its publication state", (t) => {
+  const { result, state } = runStep(t, publishStep, { release: { draft: false } });
+  assert.equal(result.status, 0, result.stderr);
+  assert.equal(state.release.draft, false);
+  assert.equal(state.uploaded, true);
+});
+
+test("release creation fails before uploading when the verified tag is absent", (t) => {
+  const { result, state } = runStep(t, publishStep, { release: null, tagExists: false });
+  assert.notEqual(result.status, 0);
+  assert.equal(state.release, null);
+});
+
+test("an empty draft can be retried without attempting to download missing assets", (t) => {
+  const { result, calls } = runStep(t, "Preserve previously published Android APK", {
+    release: { draft: true },
+  });
+  assert.equal(result.status, 0, result.stderr);
+  assert(!calls.some((args) => args[1] === "download"));
+});

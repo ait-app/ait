@@ -1,5 +1,14 @@
 # Ait changelog
 
+## 0.1.1 - 2026-10-12
+
+- Add Workspace-owned scheduled tasks, ordered task timelines, and a unified Host → Project → Workspace creation flow with a default of one run.
+- Add experimental Workspace Bots behind a default-off setting, with persistent conversations, configuration and shared memory; support Telegram and Feishu channels in the backend.
+- Support unattended Linux/macOS Hosts with persistent machine authorization, credential recovery and a generated local API token.
+- Keep oversized Codex MCP results from closing sessions by displaying bounded previews while preserving full values in native transcripts.
+- Keep GitHub clones connected during foreground verification and prevent duplicate output in batched Read cards.
+- Add correlated Relay disconnect diagnostics, remove retired protocol methods, and simplify internal module organization.
+
 ## 0.1.0 - 2026-10-11
 
 - Publish the existing 0.0.29 functionality as the 0.1.0 stable desktop release; no additional application behavior changes are introduced in this release.
