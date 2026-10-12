@@ -401,7 +401,25 @@ test.describe("Workspace scheduled tasks", () => {
     });
     const localList = await schedules(local).scheduleList({ workspaceId: local.workspaceId });
     expect(localList.schedules.some((item) => item.name === "Global worktree task")).toBe(false);
-    await expect(page.getByTestId(`schedule-row-${schedule.id}`)).toBeVisible();
+    const row = page.getByTestId(`schedule-row-${schedule.id}`);
+    await expect(row).toBeVisible();
+    await expect(row).toContainText(remote.label);
+    const filter = page.getByTestId("schedules-host-filter-trigger");
+    await filter.click();
+    await page
+      .getByTestId("combobox-desktop-container")
+      .getByText(remote.label, { exact: true })
+      .click();
+    await expect(filter).toContainText(remote.label);
+    await expect(row).toBeVisible();
+    await expect(row).not.toContainText(remote.label);
+    await expect(row).toContainText("Scheduled worktree");
+    await filter.click();
+    await page
+      .getByTestId("combobox-desktop-container")
+      .getByText("All hosts", { exact: true })
+      .click();
+    await expect(row).toContainText(remote.label);
   });
   test("opens an upcoming timeline ordered by trigger time and edits directly from it", async ({
     page,

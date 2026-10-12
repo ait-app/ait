@@ -152,7 +152,7 @@ function SchedulesScreenContent(): ReactElement {
   }, [schedules, agentsByKey, projectNameByCwd, workspaceNameByKey, agentDirReadyHosts, t]);
 
   const visibleRows = useMemo<ScheduleRowView[]>(() => {
-    const singleHost = hosts.length <= 1;
+    const singleHost = hosts.length <= 1 || selectedHost !== ALL_HOSTS_OPTION_ID;
     return resolvedRows
       .filter(
         ({ schedule, resolved }) =>
