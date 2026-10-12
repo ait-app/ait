@@ -10,7 +10,10 @@ use tokio::sync::{Mutex, mpsc};
 use tokio::task::JoinHandle;
 
 use super::ClaudeClient;
+use crate::local::diagnostics::{self, Diagnostics};
 use crate::ports::agent_session::{AgentSessionError, AgentSessionSpec};
+use crate::ports::diagnostics::{Category, Diagnostic};
+use tokio_util::task::AbortOnDropHandle;
 
 const MAX_FRAME: usize = 2 * 1024 * 1024;
 const MAX_EVENTS: usize = 128;
@@ -18,6 +21,8 @@ const MAX_EVENTS: usize = 128;
 #[derive(Debug)]
 pub(super) struct Transport {
     child: Child,
+    pub(super) diagnostics: Diagnostics,
+    _stderr: AbortOnDropHandle<()>,
     input: Arc<Mutex<ChildStdin>>,
     messages: mpsc::Receiver<Value>,
     reader: JoinHandle<()>,
@@ -75,13 +80,17 @@ impl Transport {
         if let Some(schema) = output_schema {
             command.arg(format!("--json-schema={schema}"));
         }
+        let diagnostics = Diagnostics::new("claude");
         let mut child = command
             .spawn()
-            .map_err(|_| AgentSessionError::Unavailable)?;
+            .map_err(|error| diagnostics.spawn_error(&error))?;
         let input = Arc::new(Mutex::new(
             child.stdin.take().ok_or(AgentSessionError::Failed)?,
         ));
         let output = child.stdout.take().ok_or(AgentSessionError::Failed)?;
+        let stderr = child.stderr.take().ok_or(AgentSessionError::Failed)?;
+        let stderr_task = AbortOnDropHandle::new(tokio::spawn(diagnostics.clone().drain(stderr)));
+        let reader_diagnostics = diagnostics.clone();
         let (sender, messages) = mpsc::channel(MAX_EVENTS);
         let reader_input = input.clone();
         let deadline = client.deadline;
@@ -94,12 +103,20 @@ impl Transport {
                     .read_until(b'\n', &mut bytes)
                     .await;
                 if !matches!(read, Ok(1..)) || bytes.last() != Some(&b'\n') {
+                    let category = if matches!(read, Ok(0)) {
+                        Category::Closed
+                    } else {
+                        Category::Protocol
+                    };
+                    reader_diagnostics.observe(Diagnostic::new(category, "stdout"), "read");
                     break;
                 }
                 if bytes.iter().all(u8::is_ascii_whitespace) {
                     continue;
                 }
                 let Ok(message) = serde_json::from_slice::<Value>(&bytes) else {
+                    reader_diagnostics
+                        .observe(Diagnostic::new(Category::Protocol, "stdout"), "decode");
                     break;
                 };
                 if message["type"] == "control_request"
@@ -117,6 +134,8 @@ impl Transport {
         });
         Ok(Self {
             child,
+            diagnostics,
+            _stderr: stderr_task,
             input,
             messages,
             reader,
@@ -160,7 +179,13 @@ impl Transport {
                             .get("response")
                             .cloned()
                             .unwrap_or_else(|| json!({}))),
-                        Some("error") => Err(AgentSessionError::Rejected),
+                        Some("error") => {
+                            self.diagnostics.observe(
+                                diagnostics::native(&message["response"]["error"], "rpc"),
+                                "control",
+                            );
+                            Err(AgentSessionError::Rejected)
+                        }
                         _ => Err(AgentSessionError::Failed),
                     };
                 }
@@ -174,7 +199,16 @@ impl Transport {
         match result {
             Ok(Ok(value)) => Ok(value),
             Ok(Err(AgentSessionError::Rejected)) => Err(AgentSessionError::Rejected),
-            _ => {
+            result => {
+                let category = if result.is_err() {
+                    Category::Timeout
+                } else {
+                    Category::Network
+                };
+                if self.diagnostics.failure().is_none() {
+                    self.diagnostics
+                        .observe(Diagnostic::new(category, "transport"), "control");
+                }
                 let _ = self.close().await;
                 Err(AgentSessionError::Failed)
             }
@@ -206,6 +240,7 @@ impl Transport {
     }
 
     pub(super) async fn close(&mut self) -> Result<(), AgentSessionError> {
+        self.diagnostics.flush();
         self.closed = true;
         self.reader.abort();
         #[cfg(unix)]
@@ -282,7 +317,7 @@ fn launch_command(
         .current_dir(&spec.cwd)
         .stdin(Stdio::piped())
         .stdout(Stdio::piped())
-        .stderr(Stdio::null())
+        .stderr(Stdio::piped())
         .kill_on_drop(true);
     command.args(crate::local::configuration::claude(&spec.config)?);
     if let Some(path) = &client.config_dir {

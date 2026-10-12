@@ -83,6 +83,10 @@ pub(crate) enum AgentTurnEvent {
 
 /// Live provider session. Closing releases resources without deleting native history.
 pub(crate) trait AgentSession: Debug + Send {
+    /// Return safe classified failure facts before the failed native connection is closed.
+    fn failure_diagnostic(&self) -> Option<super::diagnostics::Diagnostic> {
+        None
+    }
     /// Read plan quota using this session's actual native launch environment.
     ///
     /// Returns safe native account facts, never authentication material.

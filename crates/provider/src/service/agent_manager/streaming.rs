@@ -4,8 +4,10 @@ use crate::support::time::now_timestamp;
 
 pub(super) fn failure_message(agent: &super::LiveAgent) -> &str {
     agent
-        .session
-        .failure_message()
+        .failure_entry
+        .as_ref()
+        .and_then(|entry| entry.item["message"].as_str())
+        .or_else(|| agent.session.failure_message())
         .filter(|message| {
             !message.trim().is_empty()
                 && message.len() <= 4096
@@ -13,7 +15,66 @@ pub(super) fn failure_message(agent: &super::LiveAgent) -> &str {
                     .chars()
                     .any(|character| character.is_control() && !matches!(character, '\n' | '\t'))
         })
-        .unwrap_or("Provider execution failed")
+        .unwrap_or_else(|| {
+            agent
+                .failure_diagnostic
+                .map_or("Provider execution failed", |diagnostic| {
+                    diagnostic.category.message()
+                })
+        })
+}
+
+/// Capture safe failure facts and a stable notice before closing the native session.
+pub(super) fn prepare_failure(agent: &mut super::LiveAgent) {
+    if agent.failure_entry.is_some() {
+        return;
+    }
+    if agent.failure_diagnostic.is_none() {
+        agent.failure_diagnostic = agent
+            .session
+            .failure_diagnostic()
+            .filter(|diagnostic| diagnostic.will_retry != Some(true));
+    }
+    let message = failure_message(agent).to_owned();
+    agent.failure_entry = Some(crate::protocol::timeline::NativeItem {
+        key: format!("host:provider-failure:{}", uuid::Uuid::new_v4()),
+        turn_id: agent.turn.clone(),
+        timestamp: now_timestamp(),
+        item: serde_json::json!({"type":"error","message":message}),
+    });
+}
+
+/// Commit the prepared notice using its retry-stable identity and timestamp.
+/// # Errors
+/// Returns registry failure when the notice cannot be committed.
+pub(super) fn persist_failure(
+    timeline: Option<&crate::storage::timeline::Timeline>,
+    id: &str,
+    agent: &super::LiveAgent,
+) -> Result<(), AgentManagerError> {
+    if let Some(timeline) = timeline
+        && let Some(entry) = &agent.failure_entry
+    {
+        timeline
+            .append(id, &agent.record.provider, std::slice::from_ref(entry))
+            .map_err(|_| AgentManagerError::Registry)?;
+    }
+    Ok(())
+}
+
+/// Close the failed writer and commit its child updates and prepared failure notice.
+/// # Errors
+/// Returns native close or storage failures; pending settlement remains retryable.
+pub(super) async fn settle_failure(
+    timeline: Option<&crate::storage::timeline::Timeline>,
+    events: &model::session::SessionEvents,
+    id: &str,
+    agent: &mut super::LiveAgent,
+) -> Result<(), AgentManagerError> {
+    prepare_failure(agent);
+    agent.session.close().await.map_err(super::map_session)?;
+    super::controls::publish_children(timeline, events, agent)?;
+    persist_failure(timeline, id, agent)
 }
 
 pub(super) fn drain(
@@ -27,7 +88,11 @@ pub(super) fn drain(
         if agent.pending.is_none() {
             agent.pending = match agent.session.poll_turn() {
                 Ok(event) => event,
-                Err(_) => Some(AgentTurnEvent::Failed),
+                Err(error) => {
+                    tracing::warn!(provider = %agent.record.provider, agent_id = %id,
+                        operation = "poll", error_kind = %error, "Native provider observation failed");
+                    Some(AgentTurnEvent::Failed)
+                }
             };
         }
         let result = match &agent.pending {
@@ -231,9 +296,6 @@ pub(super) fn publish_terminal(
     {
         observer.send_replace(message.clone());
     }
-    let Some(timeline) = timeline else {
-        return;
-    };
     let failed = matches!(terminal, AgentTurnEvent::Failed);
     let cancelled = matches!(terminal, AgentTurnEvent::Cancelled);
     let mut event = json!({"type":if failed {"turn_failed"} else if cancelled {
@@ -242,13 +304,26 @@ pub(super) fn publish_terminal(
         event["turnId"] = json!(turn);
     }
     if failed {
-        tracing::warn!(provider = %agent.record.provider, agent_id = %agent.record.id, "Native provider turn failed");
+        let diagnostic = agent.failure_diagnostic.unwrap_or_else(|| {
+            crate::ports::diagnostics::Diagnostic::new(
+                crate::ports::diagnostics::Category::Unknown,
+                "session",
+            )
+        });
+        tracing::error!(provider = %agent.record.provider, agent_id = %agent.record.id,
+            turn_id = agent.turn.as_deref(), category = diagnostic.category.code(),
+            source = diagnostic.source, native_code = diagnostic.native_code,
+            http_status = diagnostic.http_status, message = diagnostic.category.message(),
+            "Native provider turn failed");
         event["error"] = json!(
             committed
                 .and_then(|record| record.last_error.as_deref())
                 .unwrap_or_else(|| failure_message(agent))
         );
     }
+    let Some(timeline) = timeline else {
+        return;
+    };
     if cancelled {
         event["reason"] = json!("interrupted");
     }

@@ -402,13 +402,13 @@ function canonicalToolTimeline(params: {
 }
 
 function todoTimeline(
-  items: Array<{
+  items: {
     id?: string;
     text: string;
     completed: boolean;
     status?: "pending" | "in_progress" | "completed";
     activeForm?: string;
-  }>,
+  }[],
   provider: AgentProvider = "codex",
 ): AgentStreamEventPayload {
   return {
@@ -2214,6 +2214,34 @@ describe("turn lifecycle events", () => {
 });
 
 describe("notification timeline items", () => {
+  it.each(["codex", "claude", "opencode", "antigravity", "deepseek-harness"])(
+    "shows a durable %s failure once when followed by its terminal event",
+    (provider) => {
+      const timestamp = new Date("2026-10-13T10:00:00.000Z");
+      const message = "Provider quota is exhausted. Check your account usage before retrying.";
+      const state = hydrateStreamState(
+        [
+          {
+            event: {
+              type: "timeline",
+              provider,
+              turnId: "failed-turn",
+              item: { type: "error", message },
+            },
+            timestamp,
+          },
+          {
+            event: { type: "turn_failed", provider, turnId: "failed-turn", error: message },
+            timestamp,
+          },
+        ],
+        { source: "canonical" },
+      );
+      expect(state).toHaveLength(1);
+      expect(state[0]).toMatchObject({ kind: "notification", level: "error", message });
+    },
+  );
+
   it("maps notification items to activity log entries with the matching level", () => {
     const timestamp = new Date("2026-07-26T10:00:00.000Z");
     const state = hydrateStreamState(

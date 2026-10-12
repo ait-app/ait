@@ -183,6 +183,26 @@ impl Session {
 }
 
 impl AgentSession for Session {
+    fn failure_diagnostic(&self) -> Option<crate::ports::diagnostics::Diagnostic> {
+        use crate::ports::diagnostics::{Category, Diagnostic};
+        let failure = self
+            .stream
+            .failure
+            .into_iter()
+            .chain(self.transport.as_ref().and_then(Transport::failure))
+            .max()?;
+        let category = match failure {
+            Failure::Exit => Category::Closed,
+            Failure::Protocol => Category::Protocol,
+            Failure::Timeout => Category::Timeout,
+            Failure::Native => Category::Unknown,
+            Failure::Authentication => Category::Authentication,
+            Failure::Quota => Category::Quota,
+            Failure::Permission => Category::Permission,
+        };
+        Some(Diagnostic::new(category, "result"))
+    }
+
     fn failure_message(&self) -> Option<&str> {
         self.stream
             .failure

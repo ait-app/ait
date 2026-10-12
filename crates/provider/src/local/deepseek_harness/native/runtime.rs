@@ -23,6 +23,8 @@ type Writer = SplitSink<WebSocketStream<MaybeTlsStream<TcpStream>>, Message>;
 #[derive(Debug)]
 pub(super) struct Runtime {
     pub(super) api: Api,
+    pub(super) diagnostics: crate::local::diagnostics::Diagnostics,
+    _stderr: tokio_util::task::AbortOnDropHandle<()>,
     pub(super) client_id: String,
     child: Child,
     reader: JoinHandle<()>,
@@ -37,6 +39,7 @@ impl Runtime {
         client: &DeepSeekHarnessClient,
         cwd: &str,
     ) -> Result<Self, AgentSessionError> {
+        let diagnostics = crate::local::diagnostics::Diagnostics::new("deepseek-harness");
         let mut command = client.command();
         command
             .args([
@@ -51,18 +54,27 @@ impl Runtime {
             .current_dir(cwd)
             .stdin(Stdio::null())
             .stdout(Stdio::piped())
-            .stderr(Stdio::null())
+            .stderr(Stdio::piped())
             .kill_on_drop(true);
         #[cfg(unix)]
         command.process_group(0);
         let mut child = command
             .spawn()
-            .map_err(|_| AgentSessionError::Unavailable)?;
-        let result =
-            tokio::time::timeout(client.deadline, Self::connect(&mut child, client.deadline)).await;
+            .map_err(|error| diagnostics.spawn_error(&error))?;
+        let stderr = child.stderr.take().ok_or(AgentSessionError::Failed)?;
+        let stderr_task = tokio_util::task::AbortOnDropHandle::new(tokio::spawn(
+            diagnostics.clone().drain(stderr),
+        ));
+        let result = tokio::time::timeout(
+            client.deadline,
+            Self::connect(&mut child, client.deadline, diagnostics.clone()),
+        )
+        .await;
         if let Ok(Ok((api, writer, events, reader, client_id))) = result {
             Ok(Self {
                 api,
+                diagnostics,
+                _stderr: stderr_task,
                 writer,
                 events,
                 reader,
@@ -71,6 +83,15 @@ impl Runtime {
                 closed: false,
             })
         } else {
+            let category = if result.is_err() {
+                crate::ports::diagnostics::Category::Timeout
+            } else {
+                crate::ports::diagnostics::Category::Protocol
+            };
+            diagnostics.observe(
+                crate::ports::diagnostics::Diagnostic::new(category, "transport"),
+                "connect",
+            );
             kill_group(&child);
             let _ = child.kill().await;
             Err(AgentSessionError::Failed)
@@ -80,6 +101,7 @@ impl Runtime {
     async fn connect(
         child: &mut Child,
         deadline: Duration,
+        diagnostics: crate::local::diagnostics::Diagnostics,
     ) -> Result<(Api, Writer, mpsc::Receiver<Value>, JoinHandle<()>, String), AgentSessionError>
     {
         let output = child.stdout.take().ok_or(AgentSessionError::Failed)?;
@@ -101,7 +123,7 @@ impl Runtime {
                 break url.trim().to_owned();
             }
         };
-        let api = Api::connect(&launch, deadline).await?;
+        let api = Api::connect(&launch, deadline, diagnostics.clone()).await?;
         let mut url = api
             .base
             .join("api/remote.mux")
@@ -155,6 +177,13 @@ impl Runtime {
                     break;
                 }
             }
+            diagnostics.observe(
+                crate::ports::diagnostics::Diagnostic::new(
+                    crate::ports::diagnostics::Category::Closed,
+                    "transport",
+                ),
+                "events",
+            );
             drain.abort();
         });
         Ok((api, writer, events, reader, client_id))
@@ -209,6 +238,7 @@ impl Runtime {
         if self.closed {
             return Ok(());
         }
+        self.diagnostics.flush();
         self.closed = true;
         self.reader.abort();
         #[cfg(unix)]

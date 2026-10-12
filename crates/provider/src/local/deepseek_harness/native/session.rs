@@ -155,6 +155,7 @@ impl Session {
         {
             return Err(AgentSessionError::Rejected);
         }
+        self.runtime.diagnostics.clear();
         let content = super::content::prompt(prompt)?;
         self.selection
             .apply(&self.runtime.api, &self.id, config)
@@ -326,6 +327,15 @@ impl Session {
                         .events
                         .push_back(AgentTurnEvent::PermissionResolved(id));
                 }
+                if !matches!(
+                    data["reason"]["kind"].as_str(),
+                    Some("completed" | "max-tokens" | "aborted" | "interrupted")
+                ) {
+                    self.runtime.diagnostics.observe(
+                        crate::local::diagnostics::native(&data["reason"], "result"),
+                        "turn",
+                    );
+                }
                 self.stream
                     .events
                     .push_back(match data["reason"]["kind"].as_str() {
@@ -345,6 +355,10 @@ impl Session {
 }
 
 impl AgentSession for Session {
+    fn failure_diagnostic(&self) -> Option<crate::ports::diagnostics::Diagnostic> {
+        self.runtime.diagnostics.failure()
+    }
+
     fn provider(&self) -> &'static str {
         PROVIDER
     }

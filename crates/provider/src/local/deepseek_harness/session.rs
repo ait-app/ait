@@ -119,6 +119,7 @@ impl Session {
             return Err(AgentSessionError::Rejected);
         }
         let blocks = prompt.blocks()?;
+        self.transport.diagnostics.clear();
         config::apply(&mut self.transport, &self.id, &mut self.options, config).await?;
         let turn = Uuid::new_v4().to_string();
         let rpc_id = self
@@ -182,6 +183,12 @@ impl Session {
                     return Err(AgentSessionError::Failed);
                 }
                 self.stream.flush();
+                if let Some(error) = message.get("error") {
+                    self.transport.diagnostics.observe(
+                        crate::local::diagnostics::native(error, "rpc"),
+                        "session/prompt",
+                    );
+                }
                 let event = match transport::response(message) {
                     Ok(result) => match result["stopReason"].as_str() {
                         Some("cancelled") => AgentTurnEvent::Cancelled,
@@ -208,6 +215,10 @@ impl Session {
 }
 
 impl AgentSession for Session {
+    fn failure_diagnostic(&self) -> Option<crate::ports::diagnostics::Diagnostic> {
+        self.transport.diagnostics.failure()
+    }
+
     fn provider(&self) -> &'static str {
         PROVIDER
     }

@@ -190,7 +190,7 @@ impl Timeline {
         Ok(None)
     }
 
-    /// Atomically reconcile a complete native history, retaining plugin rows and retired generations.
+    /// Reconcile native history, retaining host diagnostics, plugin rows and retired generations.
     /// An unchanged native prefix keeps its cursor; rewrites retire the old generation and publish
     /// a replacement event only after the transaction commits. No domain Message is changed.
     /// # Errors
@@ -207,7 +207,7 @@ impl Timeline {
         let previous = read_rows(&transaction, agent)?;
         let native: Vec<_> = previous
             .iter()
-            .filter(|row| row.entry.item["type"] != "plugin")
+            .filter(|row| row.entry.item["type"] != "plugin" && !host_diagnostic(&row.entry))
             .collect();
         let prefix = progress::covered(&transaction, agent, entries)?
             && native.len() <= entries.len()
@@ -223,6 +223,7 @@ impl Timeline {
             return Ok(old_epoch);
         }
         let entries = progress::retain_timestamps(&transaction, agent, &previous, entries)?;
+        let entries = retain_diagnostics(entries, &previous);
         transaction.execute(
             "INSERT INTO retired_entries SELECT agent,?,seq,identity,provider,entry FROM entries WHERE agent=?",
             params![old_epoch,agent],
@@ -308,6 +309,57 @@ impl Timeline {
             );
         }
     }
+}
+
+fn host_diagnostic(entry: &NativeItem) -> bool {
+    entry.key.starts_with("host:provider-failure:") && entry.item["type"] == "error"
+}
+
+fn retain_diagnostics(entries: Vec<NativeItem>, previous: &[Row]) -> Vec<NativeItem> {
+    use std::collections::BTreeMap;
+    if !previous.iter().any(|row| host_diagnostic(&row.entry)) {
+        return entries;
+    }
+    let mut keys = BTreeMap::new();
+    let mut turns = BTreeMap::new();
+    for (index, entry) in entries.iter().enumerate() {
+        keys.insert(entry.key.as_str(), index + 1);
+        if let Some(turn) = entry.turn_id.as_deref() {
+            turns.insert(turn, index + 1);
+        }
+    }
+    let mut retained: BTreeMap<usize, Vec<NativeItem>> = BTreeMap::new();
+    let mut predecessor = None;
+    for row in previous {
+        if host_diagnostic(&row.entry) {
+            let position = row
+                .entry
+                .turn_id
+                .as_deref()
+                .and_then(|turn| turns.get(turn).copied())
+                .or_else(|| predecessor.and_then(|key| keys.get(key).copied()))
+                .unwrap_or(entries.len());
+            retained
+                .entry(position)
+                .or_default()
+                .push(row.entry.clone());
+        } else if row.entry.item["type"] != "plugin" {
+            predecessor = Some(row.entry.key.as_str());
+        }
+    }
+    if retained.is_empty() {
+        return entries;
+    }
+    let count = retained.values().map(Vec::len).sum::<usize>();
+    let mut merged = Vec::with_capacity(entries.len() + count);
+    for (index, entry) in entries.into_iter().enumerate() {
+        if let Some(diagnostics) = retained.remove(&index) {
+            merged.extend(diagnostics);
+        }
+        merged.push(entry);
+    }
+    merged.extend(retained.into_values().flatten());
+    merged
 }
 
 fn read_rows(database: &Connection, agent: &str) -> Result<Vec<Row>, ErrorCode> {

@@ -22,6 +22,7 @@
 
 ## 架构决策
 
+- [ADR-144：Provider 安全诊断与持久失败提示](decisions/providers/adr-144-provider-error-reporting.md)：所有内置 Provider 的结构化错误日志、公共安全分类与刷新后保留的聊天失败通知。
 - [ADR-143：OpenCode 2.0.25 兼容与 ACP 审批边界](decisions/providers/adr-143-opencode-2-0-25-compatibility.md)：修正最低版本、多行命令与大文件审批、创建失败清理；[验证报告](reports/providers/opencode-2.0.25-compatibility-2026-10-13.md)。
 
 - [ADR-141：客户端测试功能开关与 Workspace Bot](decisions/clients/adr-141-experimental-workspace-bots.md)：默认关闭的全局客户端设置、Bot 创建／对话／配置、持久回执与标签页恢复。

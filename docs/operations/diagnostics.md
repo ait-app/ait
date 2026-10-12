@@ -20,6 +20,16 @@ Ait 版本、系统架构、请求 ID／安全错误类别、Harness 版本与�
 
 ## Harness 日志来源
 
+Provider 的错误回报进入 daemon 日志。`Native provider diagnostic` 记录 Provider、操作、
+来源、公共错误分类、数字原生错误码、HTTP 状态和可空的原生重试标记；
+`Native provider turn failed` 记录最终失败及 Agent、turn 标识。
+相同诊断每个原生连接最多每 30 秒记录一次，重复次数通过 `suppressed` 汇总。
+日志和界面使用安全分类文案，不写入任意原生错误包或 stderr 原文。
+
+最终失败会在聊天中保留错误通知，与 `lastError` 和失败事件使用相同文案。
+原生正在重试的错误只记录诊断，不误报为最终失败；取消和正常操作拒绝不会生成失败通知。
+错误通知在原生历史刷新和 daemon 重启后继续保留。未识别错误仍需结合原生日志排查。
+
 | Harness          | 默认来源                                                  | 覆盖变量                                   |
 | ---------------- | --------------------------------------------------------- | ------------------------------------------ |
 | OpenCode         | 使用已配置的 executable 执行 `debug paths log`            | `AIT_DIAGNOSTICS_OPENCODE_LOG_DIR`         |

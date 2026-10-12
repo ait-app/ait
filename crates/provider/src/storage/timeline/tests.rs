@@ -39,6 +39,68 @@ fn item(key: &str, text: &str) -> NativeItem {
 }
 
 #[test]
+fn host_failure_notices_survive_append_rewrite_and_restart_at_their_turn_boundary() {
+    let root = tempfile::tempdir().unwrap();
+    let path = root.path().join("timeline.sqlite3");
+    let timeline = Timeline::open(&path).unwrap();
+    let first = item("one", "first");
+    let mut failure = item("host:provider-failure:test", "");
+    failure.item = json!({"type":"error","message":"Provider execution failed"});
+    let mut next = item("two", "next");
+    next.turn_id = Some("next-turn".to_owned());
+    let (epoch, _) = timeline
+        .append("agent", "claude", &[first.clone(), failure.clone()])
+        .unwrap();
+    assert_eq!(
+        timeline
+            .reconcile("agent", "claude", &[first.clone(), next.clone()])
+            .unwrap(),
+        epoch
+    );
+    let mut rewritten = first;
+    rewritten.item["text"] = json!("rewritten");
+    let changed = timeline
+        .reconcile("agent", "claude", &[rewritten.clone(), next.clone()])
+        .unwrap();
+    assert_ne!(changed, epoch);
+    let rows = timeline.read("agent").unwrap().1;
+    assert_eq!(
+        rows.iter()
+            .map(|row| row.entry.key.as_str())
+            .collect::<Vec<_>>(),
+        ["one", "host:provider-failure:test", "two"]
+    );
+    assert_eq!(rows[1].entry, failure);
+    drop(timeline);
+    let timeline = Timeline::open(&path).unwrap();
+    assert_eq!(
+        timeline
+            .reconcile("agent", "claude", &[rewritten, next])
+            .unwrap(),
+        changed
+    );
+    assert_eq!(timeline.read("agent").unwrap().1.len(), 3);
+    assert_eq!(timeline.read("agent").unwrap().1[1].entry, failure);
+}
+
+#[test]
+fn orphan_and_admission_failure_notices_are_retained_without_a_native_turn() {
+    let timeline = Timeline::memory().unwrap();
+    let mut failure = item("host:provider-failure:admission", "");
+    failure.turn_id = None;
+    failure.item = json!({"type":"error","message":"Provider unavailable"});
+    timeline
+        .append("agent", "opencode", &[item("one", "old"), failure.clone()])
+        .unwrap();
+    timeline
+        .reconcile("agent", "opencode", &[item("new", "replacement")])
+        .unwrap();
+    assert_eq!(timeline.read("agent").unwrap().1[1].entry, failure);
+    timeline.reconcile("agent", "opencode", &[]).unwrap();
+    assert_eq!(timeline.read("agent").unwrap().1[0].entry, failure);
+}
+
+#[test]
 fn committed_rows_and_epoch_survive_restart_and_replay_is_immutable() {
     let root = tempfile::tempdir().unwrap();
     let path = root.path().join("timeline.sqlite3");

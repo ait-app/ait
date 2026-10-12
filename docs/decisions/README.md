@@ -71,6 +71,8 @@ ADR-074、082、083、084、122 在不同类别中各有两份，引用时以路
 
 ## Provider、Agent 与会话
 
+- [ADR-144：Provider 安全诊断与持久失败提示](providers/adr-144-provider-error-reporting.md)
+- [ADR-143：OpenCode 2.0.25 兼容与 ACP 审批边界](providers/adr-143-opencode-2-0-25-compatibility.md)
 - [ADR-140：Codex MCP 超大字段使用展示预览](providers/adr-140-codex-mcp-display-previews.md)
 - [ADR-135：OpenCode 目录就绪与配置确认](providers/adr-135-opencode-catalog-readiness.md)
 - [ADR-133：先显示持久 Timeline 页面，后台校验原生历史](providers/adr-133-cached-timeline-first.md)

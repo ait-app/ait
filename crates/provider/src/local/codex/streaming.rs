@@ -11,25 +11,6 @@ const MAX_ITEMS: usize = 4096;
 const MAX_TEXT: usize = 192 * 1024;
 const MAX_OUTPUT: usize = 16 * 1024;
 
-pub(super) fn capacity_error(params: &Value, turn: &str) -> Option<NativeItem> {
-    if params["willRetry"] == true {
-        return None;
-    }
-    let message = params.pointer("/error/message")?.as_str()?;
-    if !message
-        .to_ascii_lowercase()
-        .contains("model is at capacity")
-    {
-        return None;
-    }
-    Some(NativeItem {
-        key: format!("native:{turn}:model-capacity"),
-        turn_id: Some(turn.to_owned()),
-        timestamp: discovery::timestamp(),
-        item: json!({"type":"error","message":"Selected model is at capacity. Please try a different model."}),
-    })
-}
-
 pub(super) fn steer_rejected(error: &Value) -> bool {
     if error["code"] == -32601 {
         return true;

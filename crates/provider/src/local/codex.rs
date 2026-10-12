@@ -509,6 +509,15 @@ struct CodexSession {
 
 impl CodexSession {
     fn finish_turn(&mut self, params: &Value) -> Result<Option<AgentTurnEvent>, AgentSessionError> {
+        if params["turn"]["status"] == "failed"
+            && !params["turn"]["error"].is_null()
+            && let Some(transport) = &self.transport
+        {
+            transport.diagnostics.observe(
+                crate::local::diagnostics::native(&params["turn"]["error"], "result"),
+                "turn",
+            );
+        }
         self.last_anchor.clone_from(&self.active_turn);
         self.active_turn = None;
         self.permissions
@@ -625,6 +634,12 @@ impl CodexSession {
 }
 
 impl AgentSession for CodexSession {
+    fn failure_diagnostic(&self) -> Option<crate::ports::diagnostics::Diagnostic> {
+        self.transport
+            .as_ref()
+            .and_then(|transport| transport.diagnostics.failure())
+    }
+
     fn account_usage(&self) -> AgentSessionFuture<'_, Value> {
         Box::pin(self.client.native_usage_in(&self.cwd))
     }
@@ -770,6 +785,10 @@ impl AgentSession for CodexSession {
                 return Err(AgentSessionError::Failed);
             }
             self.preflight_plan(prompt)?;
+            if let Some(transport) = &self.transport {
+                transport.diagnostics.clear();
+            }
+
             self.apply_configuration(config).await?;
             let (approval, _, sandbox) = controls::policy(config);
             let transport = self.transport.as_mut().ok_or(AgentSessionError::Failed)?;
@@ -940,10 +959,11 @@ impl AgentSession for CodexSession {
                 continue;
             }
             if method == "error" {
-                if let Some(entry) =
-                    streaming::capacity_error(params, turn_id.expect("active turn"))
-                {
-                    return Ok(Some(AgentTurnEvent::Timeline(entry)));
+                let mut diagnostic =
+                    crate::local::diagnostics::native(&params["error"], "notification");
+                diagnostic.will_retry = params["willRetry"].as_bool();
+                if let Some(transport) = &self.transport {
+                    transport.diagnostics.observe(diagnostic, "turn");
                 }
                 continue;
             }

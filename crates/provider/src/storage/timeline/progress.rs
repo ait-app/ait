@@ -181,6 +181,7 @@ pub(super) fn covered(
     let mut query = database
         .prepare("SELECT identity FROM (
             SELECT seq,identity FROM entries WHERE agent=?1 AND json_extract(entry,'$.item.type')!='plugin'
+            AND NOT (identity LIKE 'host:provider-failure:%' AND json_extract(entry,'$.item.type')='error')
             UNION ALL SELECT seq,native_key FROM progress WHERE agent=?1) ORDER BY seq")
         .map_err(io)?;
     let rows = query
