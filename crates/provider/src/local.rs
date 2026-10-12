@@ -8,6 +8,7 @@ pub(crate) mod claude;
 pub(crate) mod codex;
 mod configuration;
 pub(crate) mod deepseek_harness;
+pub(crate) mod diagnostics;
 mod elicitation;
 mod images;
 mod metadata_process;

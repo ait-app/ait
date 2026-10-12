@@ -70,6 +70,7 @@ pub(super) struct Session {
     closed: bool,
     failed: bool,
     failure: Option<String>,
+    diagnostics: crate::local::diagnostics::Diagnostics,
 }
 
 /// Reject handles with a different provider or malformed native session identity.
@@ -178,7 +179,9 @@ pub(super) async fn open(
     }
     let info = config::runtime(&id, &options);
     let (_, events) = mpsc::channel(1);
+    let diagnostics = transport.diagnostics.clone();
     Ok(Session {
+        diagnostics,
         client: client.clone(),
         spec: spec.clone(),
         id,
@@ -239,6 +242,8 @@ impl Session {
             self.connection = Some(connection);
             return Err(error);
         }
+        self.diagnostics = connection.transport.diagnostics.clone();
+        self.diagnostics.clear();
         let rpc_id = match connection
             .transport
             .begin(
@@ -382,6 +387,21 @@ impl Execution {
             .map_err(|_| AgentSessionError::Failed)
     }
 
+    fn failure(connection: &Connection, error: &Value) -> String {
+        let diagnostic = crate::local::diagnostics::native(error, "rpc");
+        connection
+            .transport
+            .diagnostics
+            .observe(diagnostic, "session/prompt");
+        let explanation = match error["message"].as_str() {
+            Some("OpenCode's free tier can only be used from within OpenCode") => {
+                "OpenCode's free tier can only be used from within OpenCode"
+            }
+            _ => diagnostic.category.message(),
+        };
+        explanation.to_owned()
+    }
+
     async fn run(mut self, mut connection: Connection) -> Result<Finished, AgentSessionError> {
         let mut stream = Stream::for_turn(self.client.images.clone(), self.turn.clone());
         self.emit(AgentTurnEvent::RuntimeInfo(config::runtime(
@@ -418,12 +438,9 @@ impl Execution {
                     ),
                     Err(AgentSessionError::Rejected) => (
                         AgentTurnEvent::Failed,
-                        // OpenCode's ACP error message is its native user-facing explanation.
-                        // Diagnostic data can include HTTP bodies and headers; retain none of it.
-                        message["error"]["message"]
-                            .as_str()
-                            .filter(|text| !text.trim().is_empty() && text.len() <= 4096)
-                            .map(str::to_owned),
+                        // Native error payloads may include prompts, HTTP bodies and headers.
+                        // Only fixed classified explanations cross the application boundary.
+                        Some(Self::failure(&connection, &message["error"])),
                     ),
                     Err(error) => return Err(error),
                 };
@@ -605,6 +622,10 @@ impl Execution {
 }
 
 impl AgentSession for Session {
+    fn failure_diagnostic(&self) -> Option<crate::ports::diagnostics::Diagnostic> {
+        self.diagnostics.failure()
+    }
+
     fn failure_message(&self) -> Option<&str> {
         self.failure.as_deref()
     }

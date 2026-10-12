@@ -231,6 +231,16 @@ for line in sys.stdin:
         save_turn(pending, None, "inProgress")
         emit({"method": "item/completed", "params": {"threadId": thread_id, "turnId": pending,
             "item": {"type": "userMessage", "id": pending + "-user", "content": [{"type": "text", "text": text}]}}})
+        if text in ("auth-error", "quota-error", "retry-success"):
+            message = {"auth-error": "invalid_api_key token=secret", "quota-error": "insufficient_quota secret", "retry-success": "stream disconnected secret"}[text]
+            emit({"method":"error","params":{"threadId":thread_id,"turnId":pending,
+                "error":{"message":message},"willRetry":text == "retry-success"}})
+            if text == "retry-success":
+                complete(pending, "recovered")
+            else:
+                emit({"method":"turn/completed","params":{"threadId":thread_id,"turn":{"id":pending,"status":"failed"}}})
+            pending = None
+            continue
         if text == "capacity":
             emit({"method":"error","params":{"threadId":thread_id,"turnId":pending,
                 "error":{"message":"Selected model is at capacity. Please try a different model."},

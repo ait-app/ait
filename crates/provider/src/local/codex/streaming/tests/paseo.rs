@@ -14,32 +14,6 @@ fn start(stream: &mut Stream, id: &str, kind: &str) -> NativeItem {
 }
 
 #[test]
-fn capacity_error_becomes_a_visible_notification_without_exposing_other_errors() {
-    let params = json!({"error":{"message":"Selected model is at capacity. Please try a different model."},"willRetry":false});
-    let item = capacity_error(&params, "turn").unwrap();
-    assert_eq!(item.item["type"], "error");
-    assert_eq!(
-        item.item["message"],
-        "Selected model is at capacity. Please try a different model."
-    );
-    assert_eq!(item.turn_id.as_deref(), Some("turn"));
-    assert!(
-        capacity_error(
-            &json!({"error":{"message":"sensitive native error"}}),
-            "turn"
-        )
-        .is_none()
-    );
-    assert!(
-        capacity_error(
-            &json!({"error":{"message":"model is at capacity"},"willRetry":true}),
-            "turn"
-        )
-        .is_none()
-    );
-}
-
-#[test]
 fn distinct_assistant_messages_keep_independent_text_limits_and_identity() {
     let mut stream = Stream::default();
     let first = item(

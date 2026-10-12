@@ -8,7 +8,10 @@ use tokio::process::{Child, ChildStdin};
 use tokio::sync::mpsc;
 use tokio::task::JoinHandle;
 
+use crate::local::diagnostics::{self, Diagnostics};
 use crate::ports::agent_session::AgentSessionError;
+use crate::ports::diagnostics::{Category, Diagnostic};
+use tokio_util::task::AbortOnDropHandle;
 
 const MAX_FRAME: usize = 8 * 1024 * 1024;
 const MAX_EVENTS: usize = 128;
@@ -17,6 +20,8 @@ const MAX_EVENTS: usize = 128;
 #[derive(Debug)]
 pub(crate) struct Transport {
     child: Child,
+    pub(crate) diagnostics: Diagnostics,
+    _stderr: AbortOnDropHandle<()>,
     input: ChildStdin,
     messages: mpsc::Receiver<Value>,
     reader: JoinHandle<()>,
@@ -32,25 +37,25 @@ impl Transport {
         mut command: tokio::process::Command,
         cwd: &str,
         deadline: Duration,
+        provider: &'static str,
     ) -> Result<Self, AgentSessionError> {
+        let diagnostics = Diagnostics::new(provider);
         command
             .current_dir(cwd)
             .stdin(Stdio::piped())
             .stdout(Stdio::piped())
-            .stderr(Stdio::null())
+            .stderr(Stdio::piped())
             .kill_on_drop(true);
         #[cfg(unix)]
         command.process_group(0);
-        let mut child = command.spawn().map_err(|error| {
-            tracing::warn!(
-                error_kind = ?error.kind(),
-                os_error = error.raw_os_error(),
-                "failed to spawn ACP process"
-            );
-            AgentSessionError::Unavailable
-        })?;
+        let mut child = command
+            .spawn()
+            .map_err(|error| diagnostics.spawn_error(&error))?;
         let input = child.stdin.take().ok_or(AgentSessionError::Failed)?;
         let output = child.stdout.take().ok_or(AgentSessionError::Failed)?;
+        let stderr = child.stderr.take().ok_or(AgentSessionError::Failed)?;
+        let stderr_task = AbortOnDropHandle::new(tokio::spawn(diagnostics.clone().drain(stderr)));
+        let reader_diagnostics = diagnostics.clone();
         let (sender, messages) = mpsc::channel(MAX_EVENTS);
         let reader = tokio::spawn(async move {
             let mut output = BufReader::new(output);
@@ -61,12 +66,20 @@ impl Transport {
                     .read_until(b'\n', &mut bytes)
                     .await;
                 if !matches!(read, Ok(1..)) || bytes.last() != Some(&b'\n') {
+                    let category = if matches!(read, Ok(0)) {
+                        Category::Closed
+                    } else {
+                        Category::Protocol
+                    };
+                    reader_diagnostics.observe(Diagnostic::new(category, "stdout"), "read");
                     break;
                 }
                 if bytes.iter().all(u8::is_ascii_whitespace) {
                     continue;
                 }
                 let Ok(message) = serde_json::from_slice::<Value>(&bytes) else {
+                    reader_diagnostics
+                        .observe(Diagnostic::new(Category::Protocol, "stdout"), "decode");
                     break;
                 };
                 if message["jsonrpc"] != "2.0" || sender.send(message).await.is_err() {
@@ -76,6 +89,8 @@ impl Transport {
         });
         Ok(Self {
             child,
+            diagnostics,
+            _stderr: stderr_task,
             input,
             messages,
             reader,
@@ -142,6 +157,10 @@ impl Transport {
                     .await
                     .ok_or(AgentSessionError::Failed)?;
                 if message.get("method").is_none() && message["id"] == id {
+                    if let Some(error) = message.get("error") {
+                        self.diagnostics
+                            .observe(diagnostics::native(error, "rpc"), method);
+                    }
                     return response(&message);
                 }
                 // No prompt runs during configuration/discovery. Reject unsupported callbacks
@@ -162,7 +181,16 @@ impl Transport {
         match result {
             Ok(Ok(value)) => Ok(value),
             Ok(Err(AgentSessionError::Rejected)) => Err(AgentSessionError::Rejected),
-            _ => {
+            result => {
+                let category = if result.is_err() {
+                    Category::Timeout
+                } else {
+                    Category::Network
+                };
+                if self.diagnostics.failure().is_none() {
+                    self.diagnostics
+                        .observe(Diagnostic::new(category, "transport"), method);
+                }
                 let _ = self.close().await;
                 Err(AgentSessionError::Failed)
             }
@@ -186,6 +214,10 @@ impl Transport {
                     .await
                     .ok_or(AgentSessionError::Failed)?;
                 if message.get("method").is_none() && message["id"] == id {
+                    if let Some(error) = message.get("error") {
+                        self.diagnostics
+                            .observe(diagnostics::native(error, "rpc"), method);
+                    }
                     return response(&message);
                 }
                 if message.get("id").is_some() {
@@ -201,7 +233,16 @@ impl Transport {
         match result {
             Ok(Ok(value)) => Ok(value),
             Ok(Err(AgentSessionError::Rejected)) => Err(AgentSessionError::Rejected),
-            _ => {
+            result => {
+                let category = if result.is_err() {
+                    Category::Timeout
+                } else {
+                    Category::Network
+                };
+                if self.diagnostics.failure().is_none() {
+                    self.diagnostics
+                        .observe(Diagnostic::new(category, "transport"), method);
+                }
                 let _ = self.close().await;
                 Err(AgentSessionError::Failed)
             }
@@ -234,6 +275,7 @@ impl Transport {
         if self.closed {
             return Ok(());
         }
+        self.diagnostics.flush();
         self.closed = true;
         self.reader.abort();
         kill_group(&self.child);

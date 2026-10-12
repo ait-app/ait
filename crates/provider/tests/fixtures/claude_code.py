@@ -102,6 +102,10 @@ for line in sys.stdin:
         if prompt == "wrong-session":
             emit({"type":"result", "session_id":"wrong", "subtype":"success"})
             continue
+        if prompt == "auth-error":
+            emit({"type":"result", "session_id":session, "subtype":"error_during_execution", "is_error":True,
+                "errors":["authentication failed token=secret"]})
+            continue
         if prompt == "error-result":
             emit({"type":"result", "session_id":session, "subtype":"error_during_execution", "is_error":True})
             continue

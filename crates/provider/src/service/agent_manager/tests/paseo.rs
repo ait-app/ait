@@ -269,8 +269,9 @@ async fn conflicting_progress_observation_fails_the_turn_without_corrupting_hist
     }
     manager.poll().await.unwrap();
     let rows = timeline.read("agent-1").unwrap().1;
-    assert_eq!(rows.len(), 1);
+    assert_eq!(rows.len(), 2);
     assert_eq!(rows[0].entry.item["text"], "accepted");
+    assert_eq!(rows[1].entry.item["type"], "error");
     assert_eq!(
         registry.get("agent-1").unwrap().unwrap().last_status,
         AgentRuntimeStatus::Error
@@ -329,7 +330,9 @@ async fn oversized_progress_closes_the_turn_before_any_partial_publication() {
         &"x".repeat(crate::storage::timeline::MAX_ENTRY_BYTES),
     ));
     manager.poll().await.unwrap();
-    assert!(timeline.read("agent-1").unwrap().1.is_empty());
+    let rows = timeline.read("agent-1").unwrap().1;
+    assert_eq!(rows.len(), 1);
+    assert_eq!(rows[0].entry.item["type"], "error");
     assert_eq!(
         registry.get("agent-1").unwrap().unwrap().last_status,
         AgentRuntimeStatus::Error
@@ -466,6 +469,61 @@ async fn provider_poll_failure_is_terminal_and_keeps_safe_error_metadata() {
         record.last_error.as_deref(),
         Some("Provider execution failed")
     );
+}
+
+#[tokio::test]
+async fn classified_failures_are_durable_visible_and_not_duplicated_on_cleanup_retry() {
+    use crate::ports::diagnostics::{Category, Diagnostic};
+    let (mut manager, registry, client) = running().await;
+    let timeline = Timeline::memory().unwrap();
+    manager = manager.with_timeline(timeline.clone());
+    {
+        let mut state = client.0.lock().unwrap();
+        state.failure_diagnostic = Some(Diagnostic::new(Category::Quota, "result"));
+        state.events.push_back(AgentTurnEvent::Failed);
+        state.fail_close = true;
+    }
+    assert_eq!(manager.poll().await, Err(AgentManagerError::Session));
+    assert!(timeline.read("agent-1").unwrap().1.is_empty());
+    client.0.lock().unwrap().fail_close = false;
+    manager.poll().await.unwrap();
+    manager.poll().await.unwrap();
+    let rows = timeline.read("agent-1").unwrap().1;
+    assert_eq!(rows.len(), 1);
+    assert_eq!(rows[0].entry.item["type"], "error");
+    assert_eq!(rows[0].entry.item["message"], Category::Quota.message());
+    assert_eq!(rows[0].entry.turn_id.as_deref(), Some("native-turn"));
+    assert_eq!(
+        registry
+            .get("agent-1")
+            .unwrap()
+            .unwrap()
+            .last_error
+            .as_deref(),
+        Some(Category::Quota.message())
+    );
+    timeline.reconcile("agent-1", "codex", &[]).unwrap();
+    assert_eq!(timeline.read("agent-1").unwrap().1[0].entry, rows[0].entry);
+}
+
+#[tokio::test]
+async fn successful_and_cancelled_turns_do_not_publish_failure_notices() {
+    for terminal in [AgentTurnEvent::Completed(None), AgentTurnEvent::Cancelled] {
+        let (mut manager, registry, client) = running().await;
+        let timeline = Timeline::memory().unwrap();
+        manager = manager.with_timeline(timeline.clone());
+        client.0.lock().unwrap().events.push_back(terminal);
+        manager.poll().await.unwrap();
+        assert!(timeline.read("agent-1").unwrap().1.is_empty());
+        assert!(
+            registry
+                .get("agent-1")
+                .unwrap()
+                .unwrap()
+                .last_error
+                .is_none()
+        );
+    }
 }
 
 #[tokio::test]

@@ -257,7 +257,7 @@ async fn failed_turn_exit_and_permission_requests_have_explicit_terminal_outcome
 }
 
 #[tokio::test]
-async fn capacity_failure_is_visible_before_the_failed_terminal() {
+async fn capacity_failure_is_classified_for_one_manager_owned_terminal_notice() {
     let fixture = Fixture::new();
     let client = fixture.client();
     let mut session = client.create_session(&fixture.spec()).await.unwrap();
@@ -265,26 +265,70 @@ async fn capacity_failure_is_visible_before_the_failed_terminal() {
         .start_turn("capacity", &fixture.spec().config)
         .await
         .unwrap();
-    let mut errors = Vec::new();
-    tokio::time::timeout(Duration::from_secs(3), async {
-        loop {
-            match session.poll_turn().unwrap() {
-                Some(AgentTurnEvent::Timeline(entry)) if entry.item["type"] == "error" => {
-                    errors.push(entry);
+    loop {
+        match tokio::time::timeout(Duration::from_secs(3), async {
+            loop {
+                if let Some(event) = session.poll_turn().unwrap() {
+                    break event;
                 }
-                Some(AgentTurnEvent::Failed) => break,
-                _ => tokio::time::sleep(Duration::from_millis(5)).await,
+                tokio::time::sleep(Duration::from_millis(5)).await;
             }
+        })
+        .await
+        .unwrap()
+        {
+            AgentTurnEvent::Failed => break,
+            AgentTurnEvent::Timeline(entry) => assert_ne!(entry.item["type"], "error"),
+            _ => {}
         }
-    })
-    .await
-    .unwrap();
-    assert_eq!(errors.len(), 1);
+    }
     assert_eq!(
-        errors[0].item["message"],
-        "Selected model is at capacity. Please try a different model."
+        session.failure_diagnostic().unwrap().category,
+        crate::ports::diagnostics::Category::Capacity
     );
     session.close().await.unwrap();
+}
+
+#[tokio::test]
+async fn classified_native_errors_are_safe_and_recovered_retries_are_not_failures() {
+    use crate::ports::diagnostics::Category;
+    for (text, expected) in [
+        ("auth-error", Some(Category::Authentication)),
+        ("quota-error", Some(Category::Quota)),
+        ("retry-success", None),
+    ] {
+        let fixture = Fixture::new();
+        let client = fixture.client();
+        let mut session = client.create_session(&fixture.spec()).await.unwrap();
+        session
+            .start_turn(text, &fixture.spec().config)
+            .await
+            .unwrap();
+        let terminal = tokio::time::timeout(Duration::from_secs(3), async {
+            loop {
+                match session.poll_turn().unwrap() {
+                    Some(event @ (AgentTurnEvent::Failed | AgentTurnEvent::Completed(_))) => {
+                        break event;
+                    }
+                    _ => tokio::time::sleep(Duration::from_millis(5)).await,
+                }
+            }
+        })
+        .await
+        .unwrap();
+        assert_eq!(
+            session
+                .failure_diagnostic()
+                .map(|diagnostic| diagnostic.category),
+            expected
+        );
+        assert_eq!(
+            matches!(terminal, AgentTurnEvent::Failed),
+            expected.is_some()
+        );
+        assert!(!format!("{:?}", session.failure_diagnostic()).contains("secret"));
+        session.close().await.unwrap();
+    }
 }
 
 #[tokio::test]

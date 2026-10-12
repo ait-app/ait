@@ -111,7 +111,7 @@ async fn launch(
                 .map_err(|_| AgentSessionError::Failed)?,
         )
     };
-    let mut transport = Transport::spawn(command, cwd, client.deadline)?;
+    let mut transport = Transport::spawn(command, cwd, client.deadline, "opencode")?;
     let initialized = transport
         .request(
             "initialize",

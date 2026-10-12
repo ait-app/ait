@@ -96,6 +96,8 @@ struct LiveAgent {
     pending: Option<AgentTurnEvent>,
     pending_runtime: Option<StoredAgentRuntimeInfo>,
     pending_input_at: Option<String>,
+    failure_diagnostic: Option<crate::ports::diagnostics::Diagnostic>,
+    failure_entry: Option<crate::protocol::timeline::NativeItem>,
     exclusive: bool,
     interruption_requested: bool,
 }
@@ -799,13 +801,12 @@ impl AgentManager {
                 agent,
             )?;
             streaming::persist_handle(self.registry.as_ref(), &id, agent)?;
+            if matches!(agent.pending, Some(AgentTurnEvent::Failed)) {
+                streaming::settle_failure(self.timeline.as_ref(), &self.events, &id, agent).await?;
+            }
             let Some(event) = &agent.pending else {
                 continue;
             };
-            if matches!(event, AgentTurnEvent::Failed) {
-                agent.session.close().await.map_err(map_session)?;
-                controls::publish_children(self.timeline.as_ref(), &self.events, agent)?;
-            }
             let failed = matches!(event, AgentTurnEvent::Failed);
             let cancelled = matches!(event, AgentTurnEvent::Cancelled);
             let permission = !agent.session.pending_permissions().is_empty();
@@ -1008,6 +1009,8 @@ impl AgentManager {
                         pending: None,
                         pending_runtime: None,
                         pending_input_at: None,
+                        failure_diagnostic: None,
+                        failure_entry: None,
                         exclusive: false,
                         interruption_requested: false,
                     },
@@ -1030,6 +1033,8 @@ impl AgentManager {
                 pending: None,
                 pending_runtime: None,
                 pending_input_at: None,
+                failure_diagnostic: None,
+                failure_entry: None,
                 exclusive: false,
                 interruption_requested: false,
             },
@@ -1059,6 +1064,8 @@ impl AgentManager {
                     pending: None,
                     pending_runtime: None,
                     pending_input_at: None,
+                    failure_diagnostic: None,
+                    failure_entry: None,
                     exclusive: false,
                     interruption_requested: false,
                 },

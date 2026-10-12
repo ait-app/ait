@@ -124,6 +124,7 @@ struct FakeState {
     steer_calls: Vec<(String, String)>,
     poll_error: Option<AgentSessionError>,
     failure_message: Option<&'static str>,
+    failure_diagnostic: Option<crate::ports::diagnostics::Diagnostic>,
     commands_error: AgentSessionError,
     during_resume: Option<MemoryRegistry>,
 }
@@ -147,6 +148,7 @@ impl Default for FakeState {
             steer_calls: Vec::new(),
             poll_error: None,
             failure_message: None,
+            failure_diagnostic: None,
             commands_error: AgentSessionError::Unavailable,
             during_resume: None,
         }
@@ -236,6 +238,10 @@ async fn unsupported_commands_are_distinct_from_rejected_requests_and_provider_f
 }
 
 impl AgentSession for FakeSession {
+    fn failure_diagnostic(&self) -> Option<crate::ports::diagnostics::Diagnostic> {
+        self.0.lock().unwrap().failure_diagnostic
+    }
+
     fn failure_message(&self) -> Option<&str> {
         self.0.lock().unwrap().failure_message
     }

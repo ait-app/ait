@@ -10,5 +10,5 @@ pub(super) fn spawn(
 ) -> Result<Transport, AgentSessionError> {
     let mut command = client.command();
     command.args(["--profile", "acp"]);
-    Transport::spawn(command, cwd, client.deadline)
+    Transport::spawn(command, cwd, client.deadline, "deepseek-harness")
 }

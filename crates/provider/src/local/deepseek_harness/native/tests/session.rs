@@ -3,6 +3,32 @@ use crate::ports::agent_session::{AgentClient, AgentResumePurpose, AgentTurnEven
 use serde_json::json;
 
 #[tokio::test]
+async fn failed_native_turns_preserve_safe_classified_reasons() {
+    let fixture = Fixture::new().await;
+    let mut session = fixture.client.create_session(&fixture.spec).await.unwrap();
+    session
+        .start_turn("test", &fixture.spec.config)
+        .await
+        .unwrap();
+    fixture.history(1, "turn/start", json!({"turn":1}));
+    fixture.history(
+        2,
+        "turn/end",
+        json!({"turn":1,"reason":{"kind":"error","message":"insufficient_quota secret"}}),
+    );
+    loop {
+        if next(session.as_mut()).await == AgentTurnEvent::Failed {
+            break;
+        }
+    }
+    assert_eq!(
+        session.failure_diagnostic().unwrap().category,
+        crate::ports::diagnostics::Category::Quota
+    );
+    session.close().await.unwrap();
+}
+
+#[tokio::test]
 async fn native_permissions_questions_order_and_resume_use_exact_session() {
     let mut fixture = Fixture::new().await;
     fixture.spec.config.mode_id = Some("read-only".into());

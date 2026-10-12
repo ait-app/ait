@@ -22,6 +22,7 @@
 
 ## 架构决策
 
+- [ADR-143：Provider 安全诊断与持久失败提示](decisions/providers/adr-143-provider-error-reporting.md)：所有内置 Provider 的结构化错误日志、公共安全分类与刷新后保留的聊天失败通知。
 - [ADR-141：客户端测试功能开关与 Workspace Bot](decisions/clients/adr-141-experimental-workspace-bots.md)：默认关闭的全局客户端设置、Bot 创建／对话／配置、持久回执与标签页恢复。
 
 - [ADR-140：Codex MCP 超大字段使用展示预览](decisions/providers/adr-140-codex-mcp-display-previews.md)：按 JSON 字节预算生成明确标记的预览，保留原生完整结果与实时／历史一致性。
