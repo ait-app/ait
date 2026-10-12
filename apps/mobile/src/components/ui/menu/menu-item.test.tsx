@@ -7,9 +7,26 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { MenuItem } from "./menu-item";
 import { MenuRoot } from "./menu-root";
 
-beforeEach(() => vi.stubGlobal("React", React));
+let pointerQuery: MediaQueryList;
+
+beforeEach(() => {
+  vi.stubGlobal("React", React);
+  pointerQuery = Object.assign(new window.EventTarget(), {
+    matches: true,
+    media: "(hover: hover) and (pointer: fine)",
+    onchange: null,
+    addListener: vi.fn(),
+    removeListener: vi.fn(),
+  });
+  vi.spyOn(window, "matchMedia").mockImplementation((query) =>
+    query === pointerQuery.media
+      ? pointerQuery
+      : Object.assign(new window.EventTarget(), pointerQuery, { matches: false, media: query }),
+  );
+});
 afterEach(() => {
   cleanup();
+  vi.restoreAllMocks();
   vi.unstubAllGlobals();
 });
 
@@ -57,6 +74,32 @@ describe("MenuItem highlighting", () => {
     expect(document.activeElement).toBe(second);
     expect(background(second)).toBe(highlight);
     expect(background(first)).not.toBe(highlight);
+  });
+
+  it("does not move focus on coarse-pointer devices", () => {
+    Object.assign(pointerQuery, { matches: false });
+    const { first, second } = renderMenu();
+    fireEvent.mouseEnter(second);
+    fireEvent.pointerMove(second);
+    expect(document.activeElement).toBe(first);
+  });
+
+  it("updates pointer focus behavior when pointer capability changes", () => {
+    const { first, second } = renderMenu();
+    act(() => {
+      Object.assign(pointerQuery, { matches: false });
+      pointerQuery.dispatchEvent(new Event("change"));
+    });
+    fireEvent.pointerMove(second);
+    expect(document.activeElement).toBe(first);
+
+    act(() => {
+      Object.assign(pointerQuery, { matches: true });
+      pointerQuery.dispatchEvent(new Event("change"));
+    });
+    fireEvent.pointerMove(second);
+    expect(document.activeElement).toBe(second);
+    expect(background(first)).not.toBe(background(second));
   });
 
   it("does not move focus to a disabled item", () => {
