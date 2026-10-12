@@ -4,7 +4,7 @@ Bot 是 Workspace 内长期存在的对话实体。每个 Channel 属于一个 B
 Channel 找到归属；Conversation 管理隐藏 Provider session，普通 Agent 目录不展示它。
 边界决策见 [ADR-139](../decisions/bot/adr-139-workspace-bots-and-owned-channels.md)。
 
-本次实现后端服务与接口。前端 Bot tab 尚未接入，Telegram、飞书使用本地模拟服务验证；
+后端服务与接口已实现，前端 Bot tab 通过 [ADR-141](../decisions/clients/adr-141-experimental-workspace-bots.md) 接入。Telegram、飞书使用本地模拟服务验证；
 真实账号需要配置凭据和平台应用后验收。Email 仅完成可行性设计。
 
 ## 数据与边界
@@ -141,7 +141,7 @@ memory.update 使用内容摘要 revision 防止 Ait 客户端覆盖过期内容
 ```
 
 随后 open 获取 conversationId，send 使用稳定 messageId，turn.get 或 history.get 读取
-后台结果。首版提供持久查询，尚未实现流式事件订阅与前端 tab 渲染。安全错误使用
+后台结果。首版提供持久查询与前端 tab 渲染，尚未实现流式事件订阅。安全错误使用
 bot_not_found/bot_conflict/bot_io 及既有通用错误码。
 
 ## Telegram 与飞书
@@ -231,7 +231,7 @@ npm run check:docs
 git diff --check
 ```
 
-本次修改的五份 Markdown 通过 oxfmt 格式检查。真实 Telegram/飞书账号、前端 Bot tab、
+本次修改的五份 Markdown 通过 oxfmt 格式检查。真实 Telegram/飞书账号、外部 Channel 配置界面、
 流式事件及 Email 收发不在这些测试范围内。
 
 ## Test coverage

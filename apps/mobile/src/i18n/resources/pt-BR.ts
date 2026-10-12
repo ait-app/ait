@@ -3,6 +3,7 @@ import { pluginSettings } from "./plugin-settings";
 
 export const ptBR: TranslationResources = {
   onlineService: en.onlineService,
+  bots: en.bots,
   paneFind: {
     searchFailed:
       "Não foi possível pesquisar nesta conversa. Verifique a conexão com o host e tente novamente.",
@@ -2242,6 +2243,7 @@ export const ptBR: TranslationResources = {
       connectedHosts: "Hosts conectados",
       offline: "Offline",
       versionDiffers: "A versão é diferente da deste dispositivo",
+      experimentalFeatures: en.settings.about.experimentalFeatures,
       releaseChannel: {
         label: "Canal de lançamento",
         description: "Troque para Beta para receber atualizações antes e ajudar a moldá-las",

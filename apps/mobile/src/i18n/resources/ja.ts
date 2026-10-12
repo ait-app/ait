@@ -3,6 +3,7 @@ import { pluginSettings } from "./plugin-settings";
 
 export const ja: TranslationResources = {
   onlineService: en.onlineService,
+  bots: en.bots,
   paneFind: {
     searchFailed:
       "このチャットを検索できませんでした。ホストへの接続を確認して再試行してください。",
@@ -2226,6 +2227,7 @@ export const ja: TranslationResources = {
       connectedHosts: "接続されているホスト",
       offline: "オフライン",
       versionDiffers: "このデバイスとバージョンが異なります",
+      experimentalFeatures: en.settings.about.experimentalFeatures,
       releaseChannel: {
         label: "リリースチャンネル",
         description: "ベータに切り替えると早期に更新を取得してフィードバックを提供できます",

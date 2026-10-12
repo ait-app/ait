@@ -1,3 +1,4 @@
+import { BOT_METHODS } from "@ait/protocol/bot/rpc-schemas";
 import { ProviderSnapshotEntrySchema } from "@ait/protocol/messages";
 import { compactProviderSnapshot } from "@ait/protocol/provider-snapshot-codec";
 import { sessionEventMethod } from "@ait/protocol/session-event-kinds";
@@ -57,6 +58,7 @@ export function serverInfo(info: Payload, implemented: Set<string>): Payload {
         : []),
     ],
     features: {
+      workspaceBots: features.has("workspace-bots-v1") && BOT_METHODS.every(has),
       ownedSubscriptions: has("subscription.release.request"),
       explicitEventSubscriptions: has("session.events.set_subscription.request"),
       providersSnapshot: has("provider.snapshot.get.request"),

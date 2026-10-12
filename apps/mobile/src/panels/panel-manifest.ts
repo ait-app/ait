@@ -78,6 +78,14 @@ const manifests = {
     singleton: false,
     resourceKey: () => "pull_request",
   },
+  bot: {
+    kind: "bot",
+    supportedHosts: ["main", "explorer"],
+    showCloseButton: true,
+    singleton: false,
+    resourceKey: (target) =>
+      target.botId ? `bot_${target.botId}` : target.view === "create" ? "bot_create" : "bot_list",
+  },
   schedule: {
     kind: "schedule",
     supportedHosts: ["main", "explorer"],

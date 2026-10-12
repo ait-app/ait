@@ -3,6 +3,7 @@ import { pluginSettings } from "./plugin-settings";
 
 export const ru: TranslationResources = {
   onlineService: en.onlineService,
+  bots: en.bots,
   paneFind: {
     searchFailed:
       "Не удалось выполнить поиск в чате. Проверьте подключение к хосту и повторите попытку.",
@@ -2245,6 +2246,7 @@ export const ru: TranslationResources = {
       connectedHosts: "Подключенные хосты",
       offline: "Оффлайн",
       versionDiffers: "Версия отличается от версии на этом устройстве",
+      experimentalFeatures: en.settings.about.experimentalFeatures,
       releaseChannel: {
         label: "Канал выпуска",
         description:

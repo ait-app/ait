@@ -74,6 +74,7 @@ export const MIN_CONTENT_MAX_WIDTH = 600;
 export const MAX_CONTENT_MAX_WIDTH = 4000;
 
 export interface AppSettings {
+  experimentalFeatures: boolean;
   usage: UsagePreferences;
   theme: ThemePreference;
   /** Which contributed theme `theme: "plugin"` selects. */
@@ -132,6 +133,7 @@ export interface Settings extends AppSettings {
 }
 
 export const DEFAULT_CLIENT_SETTINGS: AppSettings = {
+  experimentalFeatures: false,
   usage: DEFAULT_USAGE_PREFERENCES,
   theme: DEFAULT_THEME_PREFERENCE,
   pluginThemeId: null,
@@ -207,6 +209,7 @@ const DEFAULT_STORED_APP_SETTINGS = {
 
 const StoredAppSettingsSchema = z
   .looseObject({
+    experimentalFeatures: z.boolean().catch(false),
     usage: UsagePreferencesSchema,
     theme: ThemePreferenceSchema.catch(DEFAULT_THEME_PREFERENCE),
     pluginThemeId: z.string().nullable().catch(null),

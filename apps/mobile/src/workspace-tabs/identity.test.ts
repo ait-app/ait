@@ -217,3 +217,26 @@ it("normalizes and separates schedule list, creation and edit navigation", () =>
     workspaceTabTargetsEqual(targets[0], { kind: "schedule", view: "list", filter: "paused" }),
   ).toBe(false);
 });
+
+describe("Bot tab identity", () => {
+  it("restores list, create and settings without private session identities", () => {
+    expect(normalizeWorkspaceTabTarget({ kind: "bot" })).toEqual({ kind: "bot", view: "list" });
+    expect(normalizeWorkspaceTabTarget({ kind: "bot", view: "create" })).toEqual({
+      kind: "bot",
+      view: "create",
+    });
+    expect(
+      normalizeWorkspaceTabTarget({ kind: "bot", botId: " bot-a ", view: "settings" }),
+    ).toEqual({ kind: "bot", botId: "bot-a", view: "settings" });
+    expect(buildDeterministicWorkspaceTabId({ kind: "bot", botId: "bot-a" })).toBe(
+      buildDeterministicWorkspaceTabId({ kind: "bot", botId: "bot-a", view: "settings" }),
+    );
+    expect(
+      workspaceTabTargetsEqual(
+        { kind: "bot", botId: "bot-a" },
+        { kind: "bot", botId: "bot-a", view: "settings" },
+      ),
+    ).toBe(false);
+    expect(workspaceTabTargetsEqual({ kind: "bot" }, { kind: "bot", view: "list" })).toBe(true);
+  });
+});

@@ -20,6 +20,8 @@
 
 ## 架构决策
 
+- [ADR-141：客户端测试功能开关与 Workspace Bot](decisions/clients/adr-141-experimental-workspace-bots.md)：默认关闭的全局客户端设置、Bot 创建／对话／配置、持久回执与标签页恢复。
+
 - [ADR-140：Codex MCP 超大字段使用展示预览](decisions/providers/adr-140-codex-mcp-display-previews.md)：按 JSON 字节预算生成明确标记的预览，保留原生完整结果与实时／历史一致性。
 - [ADR-139：Workspace Bot 与独占 Channel](decisions/bot/adr-139-workspace-bots-and-owned-channels.md)：独立 bot crate、单向依赖 provider、会话隔离与本地记忆。
 - [ADR-138：定时任务固定归属于 Workspace](decisions/workspace/adr-138-workspace-owned-schedules.md)：固定归属、Agent 目标校验、独立执行与版本兼容。
