@@ -182,6 +182,9 @@ test.describe("Schedules", () => {
 
     await page.getByTestId("schedules-new").click();
     await expect(page.getByTestId("schedule-workspace-sheet")).toBeVisible();
+    await expect(page.getByTestId("schedule-host-trigger")).toContainText(/select host/i);
+    await expect(page.getByTestId("schedule-project-trigger")).toBeDisabled();
+    await expect(page.getByTestId("schedule-workspace-trigger")).toBeDisabled();
     await expect(page.getByTestId("schedule-workspace-trigger")).toContainText(
       /select a workspace/i,
     );

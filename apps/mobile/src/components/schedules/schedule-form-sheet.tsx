@@ -259,26 +259,138 @@ export function ScheduleFormSheet(props: ScheduleFormSheetProps): ReactElement |
 
 function ScheduleFormScope(props: ScheduleFormSheetProps & { onDismiss?: () => void }) {
   const { t } = useTranslation();
+  const controlSize: FieldControlSize = useIsCompactFormFactor() ? "md" : "sm";
+  const hosts = useHosts();
   const workspaces = useScheduleWorkspaces();
-  const [selectedKey, setSelectedKey] = useState<string | null>(null);
   const ownedId = props.schedule?.workspaceId;
-  const options = useMemo(
+  const { projects, isLoading } = useProjects({ enabled: !ownedId });
+  const [placement, setPlacement] = useState<{
+    serverId: string | null;
+    projectId: string | null;
+    workspaceId: string | null;
+  }>({
+    serverId: props.serverId ?? null,
+    projectId: null,
+    workspaceId: null,
+  });
+  const hostOptions = useMemo(
     () =>
-      workspaces
-        .filter((workspace) => !props.serverId || workspace.serverId === props.serverId)
-        .map((workspace) => ({
-          id: `${workspace.serverId}:${workspace.id}`,
-          value: `${workspace.serverId}:${workspace.id}`,
-          label: workspace.name,
-          description: `${workspace.serverName} · ${workspace.cwd}`,
-          testID: `schedule-workspace-option-${workspace.serverId}-${workspace.id}`,
+      hosts
+        .filter((host) => props.mode !== "edit" || host.serverId === props.serverId)
+        .map((host) => ({
+          id: host.serverId,
+          value: host.serverId,
+          label: host.label,
+          testID: buildScheduleHostOptionTestId(host.serverId),
         })),
-    [props.serverId, workspaces],
+    [hosts, props.mode, props.serverId],
   );
-  const workspace = workspaces.find((workspace) =>
-    ownedId
-      ? workspace.id === ownedId && workspace.serverId === props.serverId
-      : `${workspace.serverId}:${workspace.id}` === selectedKey,
+  const host = hostOptions.find((option) => option.value === placement.serverId);
+  const projectOptions = useMemo(
+    () =>
+      projects.flatMap((project) =>
+        project.hosts
+          .filter((entry) => entry.serverId === host?.value && entry.isOnline)
+          .map((entry) => ({
+            id: entry.projectId,
+            value: entry.projectId,
+            label: entry.projectName,
+            description: entry.repoRoot,
+            testID: `schedule-project-option-${entry.serverId}-${entry.projectId}`,
+          })),
+      ),
+    [host?.value, projects],
+  );
+  const project = projectOptions.find((option) => option.value === placement.projectId);
+  const eligibleWorkspaces = useMemo(
+    () =>
+      workspaces.filter(
+        (workspace) => workspace.serverId === host?.value && workspace.projectId === project?.value,
+      ),
+    [host?.value, project?.value, workspaces],
+  );
+  const workspaceOptions = useMemo(
+    () =>
+      eligibleWorkspaces.map((workspace) => ({
+        id: workspace.id,
+        value: workspace.id,
+        label: workspace.name,
+        description: workspace.cwd,
+        testID: `schedule-workspace-option-${workspace.serverId}-${workspace.id}`,
+      })),
+    [eligibleWorkspaces],
+  );
+  const workspace = ownedId
+    ? workspaces.find((item) => item.id === ownedId && item.serverId === props.serverId)
+    : eligibleWorkspaces.find((item) => item.id === placement.workspaceId);
+  const selectHost = useCallback((serverId: string) => {
+    setPlacement((current) =>
+      current.serverId === serverId ? current : { serverId, projectId: null, workspaceId: null },
+    );
+  }, []);
+  const selectProject = useCallback((projectId: string) => {
+    setPlacement((current) =>
+      current.projectId === projectId ? current : { ...current, projectId, workspaceId: null },
+    );
+  }, []);
+  const selectWorkspace = useCallback((workspaceId: string) => {
+    setPlacement((current) =>
+      current.workspaceId === workspaceId ? current : { ...current, workspaceId },
+    );
+  }, []);
+  const renderPlacementFields = (disabled: boolean): ReactNode => (
+    <>
+      <SelectField
+        label={t("schedules.form.host")}
+        value={host?.value ?? null}
+        selectedDisplay={host ?? null}
+        options={hostOptions}
+        onChange={selectHost}
+        placeholder={t("schedules.form.selectHost")}
+        emptyText={t("schedules.form.noHosts")}
+        disabled={disabled || props.mode === "edit"}
+        size={controlSize}
+        triggerTestID="schedule-host-trigger"
+        renderOption={renderScheduleHostOption}
+        searchable
+      />
+      <SelectField
+        label={t("schedules.form.project")}
+        value={project?.value ?? null}
+        selectedDisplay={project ?? null}
+        options={projectOptions}
+        onChange={selectProject}
+        placeholder={t("schedules.form.selectProject")}
+        emptyText={t("schedules.form.noProjects")}
+        hint={!host ? t("schedules.form.chooseHost") : undefined}
+        disabled={disabled || !host}
+        loading={Boolean(host) && isLoading}
+        size={controlSize}
+        triggerTestID="schedule-project-trigger"
+        searchable
+      />
+      <SelectField
+        label={t("schedules.form.workspace")}
+        value={workspace?.id ?? null}
+        selectedDisplay={workspaceOptions.find((option) => option.value === workspace?.id) ?? null}
+        options={workspaceOptions}
+        onChange={selectWorkspace}
+        placeholder={t("schedules.form.selectWorkspace")}
+        emptyText={t("schedules.form.noWorkspaces")}
+        hint={
+          !project
+            ? t("schedules.form.chooseProject")
+            : props.mode === "edit"
+              ? t("schedules.legacy")
+              : t("schedules.form.workspaceHint")
+        }
+        disabled={disabled || !project}
+        loading={Boolean(project) && isLoading}
+        size={controlSize}
+        triggerTestID="schedule-workspace-trigger"
+        searchable
+      />
+    </>
   );
   return (
     <AdaptiveModalSheet
@@ -299,23 +411,13 @@ function ScheduleFormScope(props: ScheduleFormSheetProps & { onDismiss?: () => v
           {...props}
           serverId={workspace.serverId}
           workspace={workspace}
+          renderPlacementFields={ownedId ? undefined : renderPlacementFields}
           embedded
         />
       ) : ownedId ? (
         <Text style={styles.submitError}>{t("schedules.workspaceUnavailable")}</Text>
       ) : (
-        <SelectField
-          label={t("schedules.form.workspace")}
-          value={selectedKey}
-          selectedDisplay={null}
-          options={options}
-          onChange={setSelectedKey}
-          placeholder={t("schedules.form.selectWorkspace")}
-          emptyText={t("schedules.form.noWorkspaces")}
-          hint={props.mode === "edit" ? t("schedules.legacy") : t("schedules.form.workspaceHint")}
-          searchable
-          triggerTestID="schedule-workspace-trigger"
-        />
+        <View style={styles.inlineFields}>{renderPlacementFields(false)}</View>
       )}
     </AdaptiveModalSheet>
   );
@@ -332,12 +434,14 @@ function ScheduleFormContent({
   inline = false,
   embedded = false,
   onSaved,
+  renderPlacementFields,
 }: ScheduleFormSheetProps & {
   onDismiss?: () => void;
   workspace?: ScheduleFormWorkspace;
   inline?: boolean;
   embedded?: boolean;
   onSaved?: (schedule: ScheduleSummary) => void;
+  renderPlacementFields?: (disabled: boolean) => ReactNode;
 }): ReactElement {
   const { t } = useTranslation();
   const controlSize: FieldControlSize = useIsCompactFormFactor() ? "md" : "sm";
@@ -597,12 +701,14 @@ function ScheduleFormContent({
       startAtError={startAtError}
       expiresAtError={expiresAtError}
       mutationServerId={mutationServerId}
+      showWorkspace={!renderPlacementFields}
     />
   );
 
   if (embedded)
     return (
       <View style={styles.inlineFields}>
+        {renderPlacementFields?.(isSubmitting)}
         {fields}
         {footer}
       </View>
@@ -642,6 +748,7 @@ interface ScheduleFormFieldsProps {
   startAtError: string | null;
   expiresAtError: string | null;
   mutationServerId: string;
+  showWorkspace: boolean;
 }
 
 function ScheduleFormFields({
@@ -653,6 +760,7 @@ function ScheduleFormFields({
   startAtError,
   expiresAtError,
   mutationServerId,
+  showWorkspace,
 }: ScheduleFormFieldsProps): ReactElement {
   const { t } = useTranslation();
   const agentOptions = useMemo<SelectFieldOption<string>[]>(
@@ -683,7 +791,7 @@ function ScheduleFormFields({
 
   return (
     <>
-      {state.workspace ? (
+      {state.workspace && showWorkspace ? (
         <Field label={t("schedules.form.workspace")}>
           <View style={styles.workspaceField} testID="schedule-workspace-target">
             <Text style={styles.workspaceName} numberOfLines={1}>
@@ -1237,6 +1345,10 @@ function HostOptionItem({
       leadingSlot={leadingSlot}
     />
   );
+}
+
+function renderScheduleHostOption(input: SelectFieldRenderOptionInput<string>): ReactElement {
+  return <HostOptionItem {...input} />;
 }
 
 function ProjectOptionItem({

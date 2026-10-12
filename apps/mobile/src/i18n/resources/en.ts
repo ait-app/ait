@@ -1740,6 +1740,7 @@ export const en = {
       noProjects: "No projects found",
       workspace: "Workspace",
       chooseHost: "Choose a host first.",
+      chooseProject: "Choose a project first.",
       searchProjects: "Search projects...",
       model: "Model",
       thinking: "Thinking",

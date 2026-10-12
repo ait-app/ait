@@ -9,6 +9,11 @@
 当前主机、当前 Workspace 内未归档的 Agent，可按名称搜索。点击现存 Agent 即完成绑定；
 选择新建时才显示模型等创建配置。在两种方式间切换会保留提示词和已选择的新 Agent 配置。
 
+左侧 Schedules 页的新建入口先选择 Host，再选择该 Host 的 Project，最后选择项目内的 Workspace。
+位置确定后显示与 Workspace 标签页相同的任务表单，运行次数仍默认 1。位置选择保留在表单顶部；
+更换 Host 会清空 Project、Workspace 和任务草稿，更换 Project 会清空 Workspace 和任务草稿。
+提交期间锁定位置选择。任务使用所选 Workspace 的实际目录，包括 Worktree 目录。
+
 ## 时间和限制
 
 - 固定间隔：填写正整数与毫秒、秒、分钟、小时或天。默认在一个间隔后首次运行；可指定首次触发时间。

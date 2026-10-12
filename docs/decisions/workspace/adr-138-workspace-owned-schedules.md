@@ -40,6 +40,9 @@
    截止时间和次数。单个可搜索的执行 Agent 选择器提供新建入口和已有 Agent 候选；
    选择现存 Agent 直接绑定，选择新建才显示创建配置。详情保留运行状态、输出、Agent 跳转、
    手动运行、暂停/恢复和删除。
+   全局 Schedules 创建入口依次选择 Host、Project、Workspace，再使用同一表单。
+   Project 和 Workspace 按主机身份及 `projectId` 筛选；更换上级选择清空下级和任务草稿。
+   已绑定任务的编辑保留固定归属。
 8. 文件适配器读取版本 1 和 2，写入版本 2。旧记录缺失 `workspaceId` 时保留 null，不根据
    `cwd` 猜测归属；同一路径可能对应多个 Workspace。旧任务仍可从全局任务页管理并按原方式
    执行。编辑时明确选择 Workspace 后绑定一次；已有历史中的执行 Workspace 身份保留。

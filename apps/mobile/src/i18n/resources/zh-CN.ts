@@ -1709,6 +1709,7 @@ export const zhCN: TranslationResources = {
       noProjects: "未找到项目",
       workspace: "工作区",
       chooseHost: "请先选择主机。",
+      chooseProject: "请先选择项目。",
       searchProjects: "搜索项目...",
       model: "模型",
       thinking: "思考强度",
