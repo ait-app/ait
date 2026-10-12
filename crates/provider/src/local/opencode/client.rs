@@ -91,8 +91,8 @@ impl AgentClient for OpenCodeClient {
             let cwd = std::env::current_dir().map_err(|_| AgentSessionError::Unavailable)?;
             match launcher::version(self, &cwd.to_string_lossy()).await {
                 Ok(version) if !launcher::supported(&version) => Ok(format!(
-                    "OpenCode {version} has an ACP model catalog initialization bug. \
-                     Upgrade OpenCode to 2.0.26 or newer, then refresh the provider."
+                    "OpenCode {version} predates the supported ACP catalog and form implementation. \
+                     Upgrade OpenCode to 2.0.25 or newer, then refresh the provider."
                 )),
                 Ok(version) => {
                     match launcher::spawn(

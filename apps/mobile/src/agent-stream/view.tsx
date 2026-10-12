@@ -96,6 +96,7 @@ import { createStreamPresentation, getStreamItemMessageId } from "./presentation
 import { type StreamSegmentRenderers, type StreamViewportHandle } from "./strategy";
 import { resolveStreamRenderStrategy } from "./strategy-resolver";
 import { returnToTimelineTail } from "./timeline-tail-navigation";
+import { respondToQuestionWithTimeout } from "./question-response";
 import {
   CompletedTurnFooterRow,
   TURN_FOOTER_BOTTOM_SPACING,
@@ -1377,7 +1378,7 @@ function PermissionActionButton({
       onPress={handlePress}
       disabled={isResponding}
     >
-      {isRespondingAction ? (
+      {isResponding && isRespondingAction ? (
         <ThemedLoadingSpinner size="small" uniProps={colorMapping} />
       ) : (
         <View style={permissionStyles.optionContent}>
@@ -1457,6 +1458,8 @@ function PermissionRequestCard({
   }, [request]);
 
   const permissionMutation = useMutation({
+    networkMode: "always",
+    retry: false,
     mutationFn: async (input: {
       agentId: string;
       requestId: string;
@@ -1464,6 +1467,9 @@ function PermissionRequestCard({
     }) => {
       if (!client) {
         throw new Error(t("common.errors.daemonClientUnavailable"));
+      }
+      if (request.kind === "question") {
+        return respondToQuestionWithTimeout(client, input);
       }
       return client.respondToPermissionAndWait(
         input.agentId,

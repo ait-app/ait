@@ -1,4 +1,4 @@
-# ADR-143：Provider 安全诊断与持久失败提示
+# ADR-144：Provider 安全诊断与持久失败提示
 
 - 状态：Accepted
 - 日期：2026-10-13

@@ -17,6 +17,7 @@ use tokio_util::task::AbortOnDropHandle;
 use super::*;
 use crate::service::agent_manager::ownership::Owners;
 
+mod robustness;
 mod workflows;
 
 #[derive(Debug)]
@@ -177,14 +178,27 @@ async fn model(State(state): State<Arc<Model>>, Json(request): Json<Value>) -> R
         );
     }
     let delta = if question {
-        let arguments = if matches!(tool_name, "shell" | "bash") { json!({"command":"pwd","description":"Show working directory"}) } else { json!({"questions":[{"header":"Language","question":"Which language?","options":[{"label":"Rust","description":"Use Rust"},{"label":"Go","description":"Use Go"}]}]}) }.to_string();
+        let arguments = if matches!(tool_name, "shell" | "bash") {
+            let command = if is_user_message(&request, "Run shell multiline approval") {
+                format!("# {}\npwd", "approval comment ".repeat(80))
+            } else {
+                "pwd".into()
+            };
+            json!({"command":command,"description":"Show working directory"})
+        } else {
+            json!({"questions":[{"header":"Language","question":"Which language?","options":[{"label":"Rust","description":"Use Rust"},{"label":"Go","description":"Use Go"}]}]})
+        }.to_string();
         json!({"role":"assistant","tool_calls":[{"index":0,"id":"question_local","type":"function","function":{"name":tool_name,"arguments":arguments}}]})
     } else {
         json!({"role":"assistant","content":"authoritative answer"})
     };
+    streamed_response(&delta, question)
+}
+
+fn streamed_response(delta: &Value, tool_call: bool) -> Response {
     let chunks = [
         json!({"choices":[{"index":0,"delta":delta,"finish_reason":null}]}),
-        json!({"choices":[{"index":0,"delta":{},"finish_reason":if question {"tool_calls"} else {"stop"}}],"usage":{"prompt_tokens":10,"completion_tokens":5,"total_tokens":15}}),
+        json!({"choices":[{"index":0,"delta":{},"finish_reason":if tool_call {"tool_calls"} else {"stop"}}],"usage":{"prompt_tokens":10,"completion_tokens":5,"total_tokens":15}}),
     ];
     (
         [("content-type", "text/event-stream")],
@@ -234,6 +248,9 @@ fn is_user_message(request: &Value, text: &str) -> bool {
 }
 
 async fn controlled_response(request: &Value) -> Option<Response> {
+    if let Some(response) = robustness::model_response(request) {
+        return Some(response);
+    }
     if is_user_message(request, "Reject model request") {
         return Some(
             (
@@ -400,7 +417,7 @@ async fn installed_acp_multi_turn_native_history_resume_and_discovery() {
 }
 
 #[tokio::test]
-#[ignore = "requires OpenCode 2.0.26+ in AIT_TEST_OPENCODE_BIN; isolated XDG and loopback model"]
+#[ignore = "requires OpenCode 2.0.25+ in AIT_TEST_OPENCODE_BIN; isolated XDG and loopback model"]
 async fn installed_acp_native_question_form_reaches_user_and_model() {
     let Installed {
         root: _root,
@@ -606,7 +623,7 @@ async fn installed_acp_without_native_forms_disables_unanswerable_questions() {
 }
 
 #[tokio::test]
-#[ignore = "requires OpenCode 2.0.26+ in AIT_TEST_OPENCODE_BIN; isolated XDG and loopback model"]
+#[ignore = "requires OpenCode 2.0.25+ in AIT_TEST_OPENCODE_BIN; isolated XDG and loopback model"]
 async fn installed_acp_auxiliary_model_has_no_tools_and_removes_native_history() {
     let Installed {
         root: _root,
@@ -631,7 +648,7 @@ async fn installed_acp_auxiliary_model_has_no_tools_and_removes_native_history()
 }
 
 #[tokio::test]
-#[ignore = "requires a broken OpenCode 2.0.0-2.0.25 in AIT_TEST_OPENCODE_BIN"]
+#[ignore = "requires a broken OpenCode 2.0.0-2.0.24 in AIT_TEST_OPENCODE_BIN"]
 async fn installed_acp_broken_v2_catalog_reports_an_upgrade_without_creating_a_session() {
     let Installed {
         root: _root,
@@ -650,7 +667,7 @@ async fn installed_acp_broken_v2_catalog_reports_an_upgrade_without_creating_a_s
             .diagnostic()
             .await
             .unwrap()
-            .contains("Upgrade OpenCode to 2.0.26 or newer")
+            .contains("Upgrade OpenCode to 2.0.25 or newer")
     );
     assert!(matches!(
         client.create_session(&spec).await,

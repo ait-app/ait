@@ -31,7 +31,7 @@ pub(super) async fn version(
     Ok(version.to_owned())
 }
 
-/// Whether the native release avoids the 2.x cold catalog and missing form regressions.
+/// Whether the native release has the validated ACP catalog and form implementation.
 pub(super) fn supported(version: &str) -> bool {
     let mut numbers = version
         .split(['.', '-', '+'])
@@ -40,7 +40,7 @@ pub(super) fn supported(version: &str) -> bool {
     matches!(
         (numbers.next(), numbers.next(), numbers.next()),
         (Some(Ok(1)), Some(Ok(_)), Some(Ok(_)))
-            | (Some(Ok(2)), Some(Ok(0)), Some(Ok(26..)))
+            | (Some(Ok(2)), Some(Ok(0)), Some(Ok(25..)))
             | (Some(Ok(2)), Some(Ok(1..)), Some(Ok(_)))
     )
 }
@@ -71,7 +71,7 @@ async fn launch(
 ) -> Result<(Transport, Value), AgentSessionError> {
     let version = version(client, cwd).await?;
     if !supported(&version) {
-        tracing::warn!(version, "OpenCode 2.x ACP requires version 2.0.26 or newer");
+        tracing::warn!(version, "OpenCode 2.x ACP requires version 2.0.25 or newer");
         return Err(AgentSessionError::Unavailable);
     }
     let legacy = version.starts_with("1.");

@@ -2,7 +2,7 @@
 
 - 状态：Accepted，2026-10-09。
 - 范围：`crates/provider` 的 OpenCode adapter；修订 [ADR-074](adr-074-opencode-native-provider.md) 和 [ADR-110](adr-110-opencode-private-protocol-boundary.md) 的传输与生命周期实现。
-- 后续修订：[ADR-135](adr-135-opencode-catalog-readiness.md) 要求 2.x 最低 2.0.26，并更新目录就绪与异步配置确认规则。
+- 后续修订：[ADR-135](adr-135-opencode-catalog-readiness.md) 更新目录就绪与异步配置确认规则；[ADR-143](adr-143-opencode-2-0-25-compatibility.md) 将已验证的 2.x 最低版本修正为 2.0.25。
 - 约束：Rust、现有 `AgentClient` / `AgentSession` ports、原生认证与原生历史所有权保持不变。
 
 ## 背景

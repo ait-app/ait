@@ -3,7 +3,7 @@ use super::*;
 #[cfg(unix)]
 #[tokio::test]
 async fn broken_v2_catalog_releases_report_an_upgrade_before_creating_native_sessions() {
-    for version in ["2.0.20", "2.0.25"] {
+    for version in ["2.0.20", "2.0.24"] {
         let (root, mut client, spec) = fixture("normal");
         client
             .environment
@@ -12,7 +12,7 @@ async fn broken_v2_catalog_releases_report_an_upgrade_before_creating_native_ses
         assert!(!client.is_available().await.unwrap());
         let diagnostic = client.diagnostic().await.unwrap();
         assert!(diagnostic.contains(version));
-        assert!(diagnostic.contains("Upgrade OpenCode to 2.0.26 or newer"));
+        assert!(diagnostic.contains("Upgrade OpenCode to 2.0.25 or newer"));
         assert!(matches!(
             client.create_session(&spec).await,
             Err(AgentSessionError::Unavailable)
@@ -90,7 +90,7 @@ async fn broken_opencode_release_is_unavailable_with_upgrade_guidance_in_snapsho
         entry["error"]
             .as_str()
             .unwrap()
-            .contains("Upgrade OpenCode to 2.0.26 or newer")
+            .contains("Upgrade OpenCode to 2.0.25 or newer")
     );
     assert_eq!(entry["models"], json!([]));
     assert!(!root.path().join("launch.jsonl").exists());

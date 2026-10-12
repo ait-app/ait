@@ -731,11 +731,12 @@ async fn acp_exposes_native_session_capabilities_and_rejects_missing_model_befor
             .iter()
             .any(|request| request["method"] == "session/prompt")
     );
+    assert!(!root.path().join("native-fixture.json").exists());
     let (_root, client, spec) = fixture("normal");
     assert!(client.is_available().await.unwrap());
     assert_eq!(
         client.diagnostic().await.unwrap(),
-        "OpenCode 2.0.26: ACP initialized."
+        "OpenCode 2.0.25: ACP initialized."
     );
     let models = [
         json!({"id":"google/gemini-2.5-pro"}),
@@ -1037,7 +1038,7 @@ async fn acp_refuses_unrecognized_config_families_before_creating_sessions() {
 #[cfg(unix)]
 #[tokio::test]
 async fn acp_both_major_versions_keep_conversation_and_configuration_compatible() {
-    for version in ["1.18.3", "1.18.4", "2.0.26", "2.1.0"] {
+    for version in ["1.18.3", "1.18.4", "2.0.25", "2.0.26", "2.1.0"] {
         let (root, mut client, mut spec) = fixture("normal");
         client
             .environment

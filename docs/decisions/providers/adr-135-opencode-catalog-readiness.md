@@ -1,5 +1,7 @@
 # ADR-135：OpenCode 目录就绪与配置确认
 
+> 后续修订：[ADR-143](adr-143-opencode-2-0-25-compatibility.md) 经真实 2.0.25 验证，将最低版本修正为 2.0.25，并补充审批与生命周期修复。下文保留当时的决策依据。
+
 - 状态：Accepted。
 - 日期：2026-10-10。
 - 修订：[ADR-115](adr-115-opencode-acp-provider.md) 的 2.x 最低版本与配置响应处理；Rust、官方 ACP、原生认证和历史所有权保持不变。
