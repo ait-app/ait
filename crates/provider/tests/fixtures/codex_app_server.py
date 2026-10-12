@@ -251,6 +251,20 @@ for line in sys.stdin:
                 "threadId": thread_id, "turnId": pending, "item": image}})
             complete(pending, text)
             continue
+        if text == "large-mcp-result":
+            tool = {"type": "mcpToolCall", "id": pending + "-mcp", "status": "inProgress",
+                    "server": "codex_apps", "tool": "github.fetch", "arguments": {"url": "https://example.test/compare"},
+                    "result": None}
+            emit({"method": "item/started", "params": {
+                "threadId": thread_id, "turnId": pending, "item": tool}})
+            tool = {**tool, "status": "completed", "result": {
+                "content": [{"type": "text", "text": "Success"}],
+                "structuredContent": {"diff": "x" * (1024 * 1024)}, "isError": False}}
+            stream_items.append(tool)
+            emit({"method": "item/completed", "params": {
+                "threadId": thread_id, "turnId": pending, "item": tool}})
+            complete(pending, text)
+            continue
         if text == "propose-plan":
             plan = {"type":"plan","id":pending+"-plan","text":"1. Implement the fix\n2. Verify the result"}
             stream_items.append(plan)

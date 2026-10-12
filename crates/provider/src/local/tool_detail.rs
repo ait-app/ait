@@ -6,6 +6,7 @@ use std::borrow::Cow;
 const PREVIEW_BYTES: usize = 128 * 1024;
 
 mod command_actions;
+mod mcp;
 
 /// Project a native tool into display rows, keeping parsed command actions in source order.
 ///
@@ -66,7 +67,7 @@ pub(super) fn codex_error(native: &Value, failed: bool) -> Value {
         return Value::Null;
     }
     if native["type"] == "mcpToolCall" && !native["error"].is_null() {
-        return native["error"].clone();
+        return mcp::error(&native["error"]);
     }
     json!("Native tool failed")
 }
@@ -159,9 +160,7 @@ pub(super) fn codex(native: &Value) -> Value {
             }
             detail
         }
-        Some("mcpToolCall") => {
-            json!({"type":"unknown","input":native["arguments"],"output":native["result"]})
-        }
+        Some("mcpToolCall") => mcp::detail(native),
         Some("imageView" | "imageGeneration") => {
             json!({"type":"plain_text","label":"Image","text":native["path"].as_str().unwrap_or("")})
         }

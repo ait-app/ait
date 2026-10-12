@@ -69,6 +69,7 @@ ADR-074、082、083、084、122 在不同类别中各有两份，引用时以路
 
 ## Provider、Agent 与会话
 
+- [ADR-140：Codex MCP 超大字段使用展示预览](providers/adr-140-codex-mcp-display-previews.md)
 - [ADR-135：OpenCode 目录就绪与配置确认](providers/adr-135-opencode-catalog-readiness.md)
 - [ADR-133：先显示持久 Timeline 页面，后台校验原生历史](providers/adr-133-cached-timeline-first.md)
 - [ADR-129：Agent Skills 能力组归 provider](providers/adr-129-provider-owned-skills.md)

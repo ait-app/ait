@@ -369,6 +369,91 @@ async fn large_completed_tool_result_is_saved_without_closing_the_native_session
 }
 
 #[tokio::test]
+async fn oversized_codex_mcp_result_preserves_the_session_history_and_next_turn() {
+    use crate::ports::agent_session::AgentClient;
+
+    let fixture = crate::test_support::Fixture::new();
+    let client = fixture.client();
+    let registry = MemoryRegistry::default();
+    let timeline = Timeline::memory().unwrap();
+    let mut manager = AgentManager::new(Box::new(registry.clone())).with_timeline(timeline.clone());
+    manager.register_client(Box::new(client.clone())).unwrap();
+    manager
+        .create("agent", &fixture.spec(), AgentRegistration::default())
+        .await
+        .unwrap();
+    let handle = registry.get("agent").unwrap().unwrap().persistence.unwrap();
+
+    for prompt in ["large-mcp-result", "continue"] {
+        manager.send("agent", prompt).await.unwrap();
+        tokio::time::timeout(std::time::Duration::from_secs(3), async {
+            loop {
+                manager.poll().await.unwrap();
+                if manager.active_turn("agent").is_none() {
+                    break;
+                }
+                tokio::time::sleep(std::time::Duration::from_millis(5)).await;
+            }
+        })
+        .await
+        .unwrap();
+        let record = registry.get("agent").unwrap().unwrap();
+        assert_eq!(record.last_status, AgentRuntimeStatus::Idle);
+        assert!(record.last_error.is_none());
+        assert_eq!(record.persistence.as_ref(), Some(&handle));
+        assert!(manager.live_snapshot("agent").is_some());
+    }
+
+    let rows = timeline.read("agent").unwrap().1;
+    let tool = rows
+        .iter()
+        .find(|row| {
+            row.entry.item["type"] == "tool_call" && row.entry.item["status"] == "completed"
+        })
+        .unwrap();
+    assert_eq!(tool.entry.item["status"], "completed");
+    assert!(
+        tool.entry.item["detail"]["output"]
+            .as_str()
+            .unwrap()
+            .contains("Output truncated")
+    );
+    let history = client.history(&handle, &fixture.spec().cwd).await.unwrap();
+    let restored = history
+        .iter()
+        .find(|entry| entry.key == tool.entry.key)
+        .unwrap();
+    assert_eq!(restored.item, tool.entry.item);
+    timeline.reconcile("agent", "codex", &history).unwrap();
+    assert_eq!(manager.last_message("agent"), Some("Echo: continue"));
+
+    let starts: Vec<_> = fixture
+        .requests()
+        .into_iter()
+        .filter(|request| request["method"] == "turn/start")
+        .collect();
+    assert_eq!(starts.len(), 2);
+    assert_eq!(starts[0]["pid"], starts[1]["pid"]);
+    let raw: Value = serde_json::from_str(
+        &std::fs::read_to_string(
+            fixture
+                .cwd
+                .join(format!("native-history-{}.json", handle.session_id)),
+        )
+        .unwrap(),
+    )
+    .unwrap();
+    assert_eq!(
+        raw[0]["items"][1]["result"]["structuredContent"]["diff"]
+            .as_str()
+            .unwrap()
+            .len(),
+        1024 * 1024
+    );
+    manager.close("agent").await.unwrap();
+}
+
+#[tokio::test]
 async fn provider_poll_failure_is_terminal_and_keeps_safe_error_metadata() {
     let (mut manager, registry, client) = running().await;
     client.0.lock().unwrap().poll_error = Some(AgentSessionError::Failed);
