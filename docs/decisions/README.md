@@ -6,7 +6,7 @@ ADR-074、082、083、084、122 在不同类别中各有两份，引用时以路
 
 ## Bot
 
-- [ADR-138：Workspace Bot 与独占 Channel](bot/adr-138-workspace-bots-and-owned-channels.md)
+- [ADR-139：Workspace Bot 与独占 Channel](bot/adr-139-workspace-bots-and-owned-channels.md)
 
 ## Daemon 与协议
 
@@ -39,6 +39,8 @@ ADR-074、082、083、084、122 在不同类别中各有两份，引用时以路
 - [ADR-026：规范化 Paseo WebSocket 接口并按能力分期接入](daemon/adr-026-canonical-paseo-websocket-surface.md)
 
 ## 工作区、文件与 Git
+
+- [ADR-138：定时任务固定归属于 Workspace](workspace/adr-138-workspace-owned-schedules.md)
 
 - [ADR-132：Checkout 刷新独立准入与有界输出背压](workspace/adr-132-checkout-refresh-admission-and-backpressure.md)：隔离前台 Git 任务，diff 拥堵时等待输出额度并保持连接。
 

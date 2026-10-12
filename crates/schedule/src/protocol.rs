@@ -9,12 +9,16 @@ use serde::Deserialize;
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
 #[expect(clippy::struct_field_names, reason = "field names are the wire schema")]
 pub(crate) struct Create {
+    /// Existing Workspace that owns the task and its execution.
+    pub(crate) workspace_id: String,
     /// Optional display name.
     pub(crate) name: Option<String>,
     /// Nonempty prompt.
     pub(crate) prompt: String,
     /// Schedule cadence.
     pub(crate) cadence: Cadence,
+    /// First eligible trigger for a recurring task.
+    pub(crate) start_at: Option<DateTime<Utc>>,
     /// Existing Agent or new-Agent configuration.
     pub(crate) target: Target,
     /// Completed-run limit.

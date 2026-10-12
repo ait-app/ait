@@ -24,7 +24,7 @@ Electron 位于 `apps/desktop`；`apps/mobile` 提供桌面、浏览器与移动
 | `daemon`      | 启动配置、进程锁、server identity、服务组装和停机    | API、领域、`model`、`persistence` 及能力包            |
 
 `bot → provider` 是用户指定的单向协作边，Provider 不反向依赖 Bot，见
-[ADR-138](../decisions/bot/adr-138-workspace-bots-and-owned-channels.md)。
+[ADR-139](../decisions/bot/adr-139-workspace-bots-and-owned-channels.md)。
 
 各实现组件自己声明方法，功能 crate 对外提供一个完整的 `Service`，API 按 crate 整体安装。
 `implemented_methods()` 返回业务方法声明，`installed_methods(bool)` 返回全部或空集合。
@@ -86,7 +86,7 @@ Terminal 同样直接使用 model 的 Workspace registry、活动契约和连接
 的记录和活动值，不依赖 metadata；见 [ADR-103](../decisions/daemon/adr-103-terminal-model-dependency.md)。
 Filesystem 的生产代码依赖 domain/model，相关测试使用 persistence 适配器：共享目录观察与摘要
 消费端口归 model，Git/Forge 快照、身份与 descriptor 纯函数归 domain。功能 crate 之间没有
-直接依赖，`bot → provider` 例外见 ADR-138；见 [ADR-104](../decisions/workspace/adr-104-filesystem-model-collaboration.md)。
+直接依赖，`bot → provider` 例外见 ADR-139；见 [ADR-104](../decisions/workspace/adr-104-filesystem-model-collaboration.md)。
 
 `workspace.worktree.*`、`workspace.recovery.*`、`workspace.github.*` 与 `project.github.*`
 的服务、RPC 和协议归 metadata，与其余 Project/Workspace 方法一起安装。它们依赖的本地 Git、
@@ -94,7 +94,7 @@ Filesystem 的生产代码依赖 domain/model，相关测试使用 persistence �
 `WorkspaceRecoveryRuntime`、`ChangeRequestResolver` 和 `model::workspace::provisioning` 的
 `GithubProjectsRuntime` 端口注入，交换的值归 domain；daemon 将 filesystem 的
 `LocalManagedWorktrees`、`LocalForge` 与 `LocalGithubProjects` 注入 metadata。同一份
-`Arc<Mutex<Worktrees>>` 由 worktree RPC、`Directory` 和 schedule 共享，创建后的 setup 直接
+`Arc<Mutex<Worktrees>>` 由 worktree RPC、`Directory` 和旧版未绑定的 schedule 执行共享，创建后的 setup 直接
 使用 metadata 的自动化服务，归档前的资源关闭经 `metadata::worktrees::ports` 由 API 注入。
 单连接仍把这些长耗时方法分配到文件操作队列。见
 [ADR-130](../decisions/workspace/adr-130-workspace-methods-owned-by-metadata.md)。
@@ -184,3 +184,11 @@ Electron 主进程提供桌面适配；Android 和 iOS 的原生适配使用 Sec
 Relay 的类型化消息集中在 `crates/relay/src/protocol.rs`，WebSocket 收发集中在
 `transport.rs`；单连接协商标识由 `crates/model/src/server/single.rs` 定义。
 模块职责见 [ADR-075](../decisions/clients/adr-075-relay-protocol-modules.md)。
+
+## 定时任务归属
+
+新定时任务在 `domain::schedule::Schedule.workspace_id` 保存固定 Workspace 身份，
+`run.workspace_id` 表示实际执行位置。schedule 经 `Runner::resolve` 校验归属并规范化目录；
+daemon 连接 metadata/provider，在已有 Workspace 内选择或创建 Agent。新 Agent 的结束
+清理只归档 Agent，不归档所属 Workspace。版本 1 的未绑定任务保留旧执行分支，编辑时
+明确选择 Workspace 后绑定。见 [ADR-138](../decisions/workspace/adr-138-workspace-owned-schedules.md)。

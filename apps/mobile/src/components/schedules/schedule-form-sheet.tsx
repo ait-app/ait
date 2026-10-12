@@ -1,5 +1,4 @@
 import { useTranslation } from "react-i18next";
-import type { TFunction } from "i18next";
 import equal from "fast-deep-equal";
 import {
   useCallback,
@@ -11,11 +10,11 @@ import {
   type ReactElement,
   type ReactNode,
 } from "react";
-import { Text, View } from "react-native";
+import { ScrollView, Text, View } from "react-native";
 import { Brain, Folder, GitBranch } from "lucide-react-native";
 import { StyleSheet } from "react-native-unistyles";
 import type { AgentProvider } from "@ait/protocol/agent-types";
-import type { ScheduleCadence, ScheduleSummary } from "@ait/protocol/schedule/types";
+import type { ScheduleSummary } from "@ait/protocol/schedule/types";
 import { useStoreWithEqualityFn } from "zustand/traditional";
 import { AdaptiveModalSheet, type SheetHeader } from "@/components/adaptive-modal-sheet";
 import { ComboboxItem } from "@/components/ui/combobox";
@@ -55,7 +54,15 @@ import type {
   ScheduleFormModel,
   ScheduleFormSnapshot,
   ScheduleFormState,
+  ScheduleFormWorkspace,
 } from "@/schedules/schedule-form-model";
+import {
+  formatLocalDateTime,
+  isValidMaxRuns,
+  isValidScheduleTimezone,
+  parseLocalDateTime,
+} from "@/schedules/schedule-date-time";
+import { useScheduleWorkspaces } from "@/schedules/use-schedule-workspaces";
 import { validateCron } from "@/utils/schedule-format";
 import { toErrorMessage } from "@/utils/error-messages";
 import { getDeviceTimeZone } from "@/utils/device-timezone";
@@ -68,19 +75,31 @@ export interface ScheduleFormSheetProps {
   schedule?: ScheduleSummary;
 }
 
-function parseMaxRuns(raw: string): number | null {
-  const parsed = Number.parseInt(raw, 10);
-  return Number.isFinite(parsed) && parsed > 0 ? parsed : null;
-}
-
-function requireCronCadence(
-  cadence: Extract<ScheduleCadence, { type: "cron" }> | undefined,
-  t: TFunction,
-): Extract<ScheduleCadence, { type: "cron" }> {
-  if (!cadence) {
-    throw new Error(t("schedules.cronErrors.choose"));
-  }
-  return cadence;
+export function WorkspaceScheduleForm({
+  serverId,
+  workspace,
+  onClose,
+  schedule,
+  onSaved,
+}: {
+  serverId: string;
+  workspace: ScheduleFormWorkspace;
+  onClose: () => void;
+  schedule?: ScheduleSummary;
+  onSaved?: (schedule: ScheduleSummary) => void;
+}): ReactElement {
+  return (
+    <ScheduleFormContent
+      serverId={serverId}
+      workspace={workspace}
+      mode={schedule ? "edit" : "create"}
+      schedule={schedule}
+      onSaved={onSaved}
+      visible
+      inline
+      onClose={onClose}
+    />
+  );
 }
 
 function resolveCreateServerId(input: {
@@ -135,6 +154,8 @@ function buildSnapshot(input: {
   projectTargets: ReturnType<typeof buildScheduleProjectTargets>;
   preferences: FormPreferences;
   timezone: string;
+  workspace?: ScheduleFormWorkspace;
+  agents: ScheduleFormSnapshot["defaults"]["agents"];
 }): ScheduleFormSnapshot {
   const schedule = input.schedule
     ? { ...input.schedule, serverId: input.serverId, serverName: undefined }
@@ -152,6 +173,8 @@ function buildSnapshot(input: {
       projectTargets: input.projectTargets,
       preferences: input.preferences,
       timezone: input.timezone,
+      workspace: input.workspace,
+      agents: input.agents,
     },
   };
 }
@@ -224,7 +247,7 @@ export function ScheduleFormSheet(props: ScheduleFormSheetProps): ReactElement |
   }
 
   return (
-    <OpenScheduleFormSheet
+    <ScheduleFormScope
       key={openKey(renderedProps)}
       {...renderedProps}
       visible={sheetVisible}
@@ -234,14 +257,88 @@ export function ScheduleFormSheet(props: ScheduleFormSheetProps): ReactElement |
   );
 }
 
-function OpenScheduleFormSheet({
+function ScheduleFormScope(props: ScheduleFormSheetProps & { onDismiss?: () => void }) {
+  const { t } = useTranslation();
+  const workspaces = useScheduleWorkspaces();
+  const [selectedKey, setSelectedKey] = useState<string | null>(null);
+  const ownedId = props.schedule?.workspaceId;
+  const options = useMemo(
+    () =>
+      workspaces
+        .filter((workspace) => !props.serverId || workspace.serverId === props.serverId)
+        .map((workspace) => ({
+          id: `${workspace.serverId}:${workspace.id}`,
+          value: `${workspace.serverId}:${workspace.id}`,
+          label: workspace.name,
+          description: `${workspace.serverName} · ${workspace.cwd}`,
+          testID: `schedule-workspace-option-${workspace.serverId}-${workspace.id}`,
+        })),
+    [props.serverId, workspaces],
+  );
+  const workspace = workspaces.find((workspace) =>
+    ownedId
+      ? workspace.id === ownedId && workspace.serverId === props.serverId
+      : `${workspace.serverId}:${workspace.id}` === selectedKey,
+  );
+  return (
+    <AdaptiveModalSheet
+      visible={props.visible}
+      onClose={props.onClose}
+      onDismiss={props.onDismiss}
+      header={{
+        title:
+          props.mode === "edit"
+            ? t("schedules.edit", { product: t("schedules.product.schedule").toLowerCase() })
+            : t("schedules.new"),
+      }}
+      testID={workspace ? "schedule-form-sheet" : "schedule-workspace-sheet"}
+    >
+      {workspace ? (
+        <ScheduleFormContent
+          key={`${workspace.serverId}:${workspace.id}`}
+          {...props}
+          serverId={workspace.serverId}
+          workspace={workspace}
+          embedded
+        />
+      ) : ownedId ? (
+        <Text style={styles.submitError}>{t("schedules.workspaceUnavailable")}</Text>
+      ) : (
+        <SelectField
+          label={t("schedules.form.workspace")}
+          value={selectedKey}
+          selectedDisplay={null}
+          options={options}
+          onChange={setSelectedKey}
+          placeholder={t("schedules.form.selectWorkspace")}
+          emptyText={t("schedules.form.noWorkspaces")}
+          hint={props.mode === "edit" ? t("schedules.legacy") : t("schedules.form.workspaceHint")}
+          searchable
+          triggerTestID="schedule-workspace-trigger"
+        />
+      )}
+    </AdaptiveModalSheet>
+  );
+}
+
+function ScheduleFormContent({
   serverId,
   visible,
   onClose,
   onDismiss,
   mode,
   schedule,
-}: ScheduleFormSheetProps & { onDismiss: () => void }): ReactElement {
+  workspace,
+  inline = false,
+  embedded = false,
+  onSaved,
+}: ScheduleFormSheetProps & {
+  onDismiss?: () => void;
+  workspace?: ScheduleFormWorkspace;
+  inline?: boolean;
+  embedded?: boolean;
+  onSaved?: (schedule: ScheduleSummary) => void;
+}): ReactElement {
   const { t } = useTranslation();
   const controlSize: FieldControlSize = useIsCompactFormFactor() ? "md" : "sm";
   const { projects } = useProjects();
@@ -254,6 +351,20 @@ function OpenScheduleFormSheet({
   const { preferences, updatePreferences } = useFormPreferences();
   const projectTargets = useMemo(() => buildScheduleProjectTargets(projects), [projects]);
   const timezone = useMemo(getDeviceTimeZone, []);
+  const { agents } = useAggregatedAgents({ includeArchived: true });
+  const agentOptions = useMemo(
+    () =>
+      agents
+        .filter(
+          (agent) =>
+            agent.serverId === serverId && agent.workspaceId === workspace?.id && !agent.archivedAt,
+        )
+        .map((agent) => ({
+          id: agent.id,
+          title: agent.title?.trim() || t("schedules.untitledAgent"),
+        })),
+    [agents, serverId, t, workspace?.id],
+  );
   const snapshot = useMemo(
     () =>
       buildSnapshot({
@@ -264,35 +375,72 @@ function OpenScheduleFormSheet({
         projectTargets,
         preferences,
         timezone,
+        workspace,
+        agents: agentOptions,
       }),
-    [hosts, mode, preferences, projectTargets, schedule, serverId, timezone],
+    [
+      hosts,
+      mode,
+      preferences,
+      projectTargets,
+      schedule,
+      serverId,
+      timezone,
+      workspace,
+      agentOptions,
+    ],
   );
   const model = useScheduleFormModel(snapshot);
   const state = useSyncExternalStore(model.subscribe, model.getState, model.getState);
   const providerSnapshot = useScheduleFormProviderSnapshot(model, state);
-  const { agents } = useAggregatedAgents({ includeArchived: true });
   const mutationServerId = state.selectedServerId ?? serverId ?? "";
   const { createSchedule, updateSchedule, isCreating, isUpdating } = useScheduleMutations({
     serverId: mutationServerId,
   });
 
   const isSubmitting = isCreating || isUpdating;
+  const now = Date.now();
   const cadenceError =
-    state.cadence.type === "cron" ? validateCron(state.cadence.expression, t) : null;
-  const canSubmit = state.canSubmit && cadenceError === null && !isSubmitting;
-  const agentTargetLabel = useMemo(() => {
-    if (!schedule || schedule.target.type !== "agent") {
-      return null;
-    }
-    const { agentId } = schedule.target;
-    const agent = agents.find(
-      (entry) => entry.serverId === (state.selectedServerId ?? serverId) && entry.id === agentId,
-    );
-    if (!agent) {
-      return t("schedules.agentUnavailable");
-    }
-    return agent.title?.trim() || t("schedules.untitledAgent");
-  }, [agents, schedule, serverId, state.selectedServerId, t]);
+    state.cadence.type === "cron"
+      ? (validateCron(state.cadence.expression, t) ??
+        (isValidScheduleTimezone(state.cadence.timezone ?? timezone)
+          ? null
+          : t("schedules.cadence.invalidTimezone")))
+      : state.cadence.type === "once"
+        ? !Number.isFinite(Date.parse(state.cadence.at))
+          ? t("schedules.form.invalidDateTime")
+          : Date.parse(state.cadence.at) <= now
+            ? t("schedules.form.futureTime")
+            : null
+        : !Number.isSafeInteger(state.cadence.everyMs) || state.cadence.everyMs <= 0
+          ? t("schedules.cadence.invalidInterval")
+          : null;
+  const startAt = state.startAt.trim() ? parseLocalDateTime(state.startAt) : null;
+  const expiresAt = state.expiresAt.trim() ? parseLocalDateTime(state.expiresAt) : null;
+  const startAtError =
+    state.startAt.trim() && !startAt
+      ? t("schedules.form.invalidDateTime")
+      : startAt &&
+          state.startAt !== formatLocalDateTime(schedule?.startAt) &&
+          Date.parse(startAt) <= now
+        ? t("schedules.form.futureTime")
+        : null;
+  const firstAt =
+    state.cadence.type === "once"
+      ? Date.parse(state.cadence.at)
+      : startAt
+        ? Date.parse(startAt)
+        : state.cadence.type === "every" && mode === "create"
+          ? now + state.cadence.everyMs
+          : now;
+  const expiresAtError =
+    state.expiresAt.trim() && !expiresAt
+      ? t("schedules.form.invalidDateTime")
+      : expiresAt && Date.parse(expiresAt) <= firstAt
+        ? t("schedules.form.expiryAfterStart")
+        : null;
+  const canSubmit =
+    state.canSubmit && !cadenceError && !startAtError && !expiresAtError && !isSubmitting;
 
   const persistPreferences = useCallback(async () => {
     const provider = state.selectedProvider;
@@ -318,87 +466,79 @@ function OpenScheduleFormSheet({
     updatePreferences,
   ]);
 
-  const submitAgentTarget = useCallback(async (): Promise<boolean> => {
-    if (!schedule || !state.submitCadence) {
-      return false;
-    }
-    await updateSchedule({
-      id: schedule.id,
-      cadence: state.submitCadence,
-    });
-    return true;
-  }, [schedule, state.submitCadence, updateSchedule]);
-
-  const submitNewAgent = useCallback(async (): Promise<boolean> => {
-    const provider = state.selectedProvider;
-    const cwd = state.workingDir.trim();
-    if (!provider || !cwd) {
-      return false;
-    }
-
-    await persistPreferences();
-    const maxRuns = parseMaxRuns(state.maxRuns);
-    if (mode === "edit" && schedule) {
-      await updateSchedule({
-        id: schedule.id,
-        name: state.name.trim() || null,
-        prompt: state.prompt.trim(),
-        ...(state.submitCadence ? { cadence: state.submitCadence } : {}),
-        newAgentConfig: {
-          provider,
-          model: state.selectedModel || null,
-          modeId: state.selectedMode || null,
-          thinkingOptionId: state.selectedThinkingOptionId || null,
-          cwd,
-          ...(state.submitArchiveOnFinish !== undefined
-            ? { archiveOnFinish: state.submitArchiveOnFinish }
-            : {}),
-          ...(state.submitIsolation !== undefined ? { isolation: state.submitIsolation } : {}),
-        },
-        maxRuns,
-      });
-      return true;
-    }
-
-    await createSchedule({
-      prompt: state.prompt.trim(),
-      name: state.name.trim() || undefined,
-      cadence: requireCronCadence(state.submitCadence, t),
-      target: {
-        type: "new-agent",
-        config: {
-          provider,
-          cwd,
-          model: state.selectedModel || undefined,
-          modeId: state.selectedMode || undefined,
-          thinkingOptionId: state.selectedThinkingOptionId || undefined,
-          ...(state.submitArchiveOnFinish !== undefined
-            ? { archiveOnFinish: state.submitArchiveOnFinish }
-            : {}),
-          ...(state.submitIsolation !== undefined ? { isolation: state.submitIsolation } : {}),
-          title: state.name.trim() || undefined,
-        },
-      },
-      ...(maxRuns != null ? { maxRuns } : {}),
-    });
-    return true;
-  }, [createSchedule, mode, persistPreferences, schedule, state, updateSchedule, t]);
-
   const handleSubmit = useCallback(async () => {
-    if (!canSubmit) {
-      return;
-    }
+    if (!canSubmit) return;
     model.setSubmitError(null);
     try {
-      const submitted =
-        state.targetKind === "agent" ? await submitAgentTarget() : await submitNewAgent();
-      if (submitted) {
-        onClose();
+      if (!state.workspace) throw new Error(t("schedules.form.selectWorkspace"));
+      if (!isValidMaxRuns(state.maxRuns)) throw new Error(t("schedules.form.invalidMaxRuns"));
+      const maxRuns = state.maxRuns.trim() ? Number(state.maxRuns) : null;
+      const startAt = state.startAt.trim() ? parseLocalDateTime(state.startAt) : null;
+      const expiresAt = state.expiresAt.trim() ? parseLocalDateTime(state.expiresAt) : null;
+      const config = {
+        ...(schedule?.target.type === "new-agent" ? schedule.target.config : {}),
+        provider: state.selectedProvider!,
+        cwd: state.workspace.cwd,
+        model: state.selectedModel || undefined,
+        modeId: state.selectedMode || undefined,
+        thinkingOptionId: state.selectedThinkingOptionId || undefined,
+        archiveOnFinish: state.archiveOnFinish,
+        title: state.name.trim() || undefined,
+      };
+      delete config.isolation;
+      const target =
+        state.targetKind === "agent"
+          ? { type: "agent" as const, agentId: state.selectedAgentId }
+          : { type: "new-agent" as const, config };
+      if (state.targetKind === "new-agent") await persistPreferences();
+      const fields = {
+        name: state.name.trim() || null,
+        prompt: state.prompt.trim(),
+        maxRuns,
+        expiresAt,
+      };
+      if (mode === "edit" && schedule) {
+        await updateSchedule({
+          id: schedule.id,
+          ...fields,
+          target,
+          ...(!schedule.workspaceId ? { workspaceId: state.workspace.id } : {}),
+          ...(state.submitCadence ? { cadence: state.submitCadence } : {}),
+          ...(state.startAt !== formatLocalDateTime(schedule.startAt) ? { startAt } : {}),
+        });
+        if (onSaved) onSaved(schedule);
+        else onClose();
+      } else {
+        const created = await createSchedule({
+          ...fields,
+          name: fields.name ?? undefined,
+          workspaceId: state.workspace.id,
+          cadence: state.cadence,
+          target,
+          runOnCreate: false,
+          maxRuns: maxRuns ?? undefined,
+          expiresAt: expiresAt ?? undefined,
+          ...(startAt ? { startAt } : {}),
+        });
+        if (onSaved) onSaved(created);
+        else onClose();
       }
     } catch (error) {
       model.setSubmitError(t("schedules.form.submitError", { message: toErrorMessage(error) }));
     }
-  }, [canSubmit, model, onClose, state.targetKind, submitAgentTarget, submitNewAgent, t]);
+  }, [
+    canSubmit,
+    createSchedule,
+    mode,
+    model,
+    onClose,
+    onSaved,
+    persistPreferences,
+    schedule,
+    state,
+    t,
+    updateSchedule,
+  ]);
 
   const handleSubmitPress = useCallback(() => {
     void handleSubmit();
@@ -409,15 +549,9 @@ function OpenScheduleFormSheet({
       return { title: t("schedules.new") };
     }
     return {
-      title: t("schedules.edit", {
-        product: t(
-          schedule?.target.type === "agent"
-            ? "schedules.product.heartbeat"
-            : "schedules.product.schedule",
-        ).toLowerCase(),
-      }),
+      title: t("schedules.edit", { product: t("schedules.product.schedule").toLowerCase() }),
     };
-  }, [mode, schedule?.target.type, t]);
+  }, [mode, t]);
 
   const footer = useMemo(
     () => (
@@ -445,6 +579,38 @@ function OpenScheduleFormSheet({
     [canSubmit, handleSubmitPress, isSubmitting, mode, onClose, t],
   );
 
+  const fields = (
+    <ScheduleFormFields
+      model={model}
+      state={state}
+      providerSnapshot={providerSnapshot}
+      controlSize={controlSize}
+      cadenceError={cadenceError}
+      startAtError={startAtError}
+      expiresAtError={expiresAtError}
+      mutationServerId={mutationServerId}
+    />
+  );
+
+  if (embedded)
+    return (
+      <View style={styles.inlineFields}>
+        {fields}
+        {footer}
+      </View>
+    );
+
+  if (inline) {
+    return (
+      <ScrollView style={styles.inlineContainer} contentContainerStyle={styles.inlineContent}>
+        <View style={styles.inlineFields} testID="workspace-schedule-form">
+          {fields}
+          {footer}
+        </View>
+      </ScrollView>
+    );
+  }
+
   return (
     <AdaptiveModalSheet
       header={header}
@@ -454,15 +620,7 @@ function OpenScheduleFormSheet({
       footer={footer}
       testID="schedule-form-sheet"
     >
-      <ScheduleFormFields
-        model={model}
-        state={state}
-        providerSnapshot={providerSnapshot}
-        agentTargetLabel={agentTargetLabel}
-        controlSize={controlSize}
-        cadenceError={cadenceError}
-        mutationServerId={mutationServerId}
-      />
+      {fields}
     </AdaptiveModalSheet>
   );
 }
@@ -471,9 +629,10 @@ interface ScheduleFormFieldsProps {
   model: ScheduleFormModel;
   state: ScheduleFormState;
   providerSnapshot: ReturnType<typeof useScheduleFormProviderSnapshot>;
-  agentTargetLabel: string | null;
   controlSize: FieldControlSize;
   cadenceError: string | null;
+  startAtError: string | null;
+  expiresAtError: string | null;
   mutationServerId: string;
 }
 
@@ -481,29 +640,59 @@ function ScheduleFormFields({
   model,
   state,
   providerSnapshot,
-  agentTargetLabel,
   controlSize,
   cadenceError,
+  startAtError,
+  expiresAtError,
   mutationServerId,
 }: ScheduleFormFieldsProps): ReactElement {
   const { t } = useTranslation();
-  if (state.targetKind === "agent") {
-    return (
-      <>
-        <ScheduleAgentTargetField label={agentTargetLabel} size={controlSize} />
-        <CadenceEditor
-          value={state.cadence}
-          onChange={model.setCadence}
-          error={cadenceError ?? undefined}
-          size={controlSize}
-        />
-        {state.submitError ? <Text style={styles.submitError}>{state.submitError}</Text> : null}
-      </>
-    );
-  }
 
   return (
     <>
+      {state.workspace ? (
+        <Field label={t("schedules.form.workspace")}>
+          <View style={styles.workspaceField} testID="schedule-workspace-target">
+            <Text style={styles.workspaceName} numberOfLines={1}>
+              {state.workspace.name}
+            </Text>
+            <Text style={styles.workspacePath} numberOfLines={1}>
+              {state.workspace.cwd}
+            </Text>
+          </View>
+        </Field>
+      ) : null}
+      <SelectField
+        label={t("schedules.form.target")}
+        value={state.targetKind}
+        selectedDisplay={{
+          label: t(
+            state.targetKind === "agent"
+              ? "schedules.form.existingAgent"
+              : "schedules.form.newAgent",
+          ),
+        }}
+        options={[
+          {
+            id: "new-agent",
+            value: "new-agent",
+            label: t("schedules.form.newAgent"),
+            testID: "schedule-target-new-agent",
+          },
+          {
+            id: "agent",
+            value: "agent",
+            label: t("schedules.form.existingAgent"),
+            testID: "schedule-target-agent",
+          },
+        ]}
+        onChange={model.setTargetKind}
+        searchable={false}
+        size={controlSize}
+        placeholder={t("schedules.form.target")}
+        emptyText={t("schedules.form.noAgents")}
+        triggerTestID="schedule-target-kind-trigger"
+      />
       <Field label={t("schedules.form.name")}>
         <FormTextInput
           size={controlSize}
@@ -536,7 +725,6 @@ function ScheduleFormFields({
         model={model}
         state={state}
         providerSnapshot={providerSnapshot}
-        agentTargetLabel={null}
         controlSize={controlSize}
         mutationServerId={mutationServerId}
       />
@@ -548,7 +736,45 @@ function ScheduleFormFields({
         size={controlSize}
       />
 
-      <Field label={t("schedules.form.maxRuns")}>
+      {state.cadence.type !== "once" ? (
+        <Field
+          label={t("schedules.form.startAt")}
+          error={startAtError ?? undefined}
+          hint={t("schedules.cadence.localTime", { timezone: getDeviceTimeZone() })}
+        >
+          <FormTextInput
+            size={controlSize}
+            initialValue={state.startAt}
+            onChangeText={model.setStartAt}
+            placeholder={t("schedules.form.startAtPlaceholder")}
+            testID="schedule-start-at-input"
+            accessibilityLabel={t("schedules.form.startAt")}
+            autoCapitalize="none"
+            autoCorrect={false}
+          />
+        </Field>
+      ) : null}
+      <Field
+        label={t("schedules.form.expiresAt")}
+        error={expiresAtError ?? undefined}
+        hint={t("schedules.cadence.localTime", { timezone: getDeviceTimeZone() })}
+      >
+        <FormTextInput
+          size={controlSize}
+          initialValue={state.expiresAt}
+          onChangeText={model.setExpiresAt}
+          placeholder="YYYY-MM-DD HH:mm"
+          testID="schedule-expires-at-input"
+          accessibilityLabel={t("schedules.form.expiresAt")}
+          autoCapitalize="none"
+          autoCorrect={false}
+        />
+      </Field>
+      <Field
+        label={t("schedules.form.maxRuns")}
+        hint={t("schedules.form.maxRunsHint")}
+        error={!isValidMaxRuns(state.maxRuns) ? t("schedules.form.invalidMaxRuns") : undefined}
+      >
         <FormTextInput
           size={controlSize}
           testID="schedule-max-runs-input"
@@ -569,7 +795,6 @@ interface ScheduleTargetFieldsProps {
   model: ScheduleFormModel;
   state: ScheduleFormState;
   providerSnapshot: ReturnType<typeof useScheduleFormProviderSnapshot>;
-  agentTargetLabel: string | null;
   controlSize: FieldControlSize;
   mutationServerId: string;
 }
@@ -578,7 +803,6 @@ function ScheduleTargetFields({
   model,
   state,
   providerSnapshot,
-  agentTargetLabel,
   controlSize,
   mutationServerId,
 }: ScheduleTargetFieldsProps): ReactElement {
@@ -711,12 +935,32 @@ function ScheduleTargetFields({
   );
 
   if (state.targetKind === "agent") {
-    return <ScheduleAgentTargetField label={agentTargetLabel} size={controlSize} />;
+    const options = state.agentOptions.map((agent) => ({
+      id: agent.id,
+      value: agent.id,
+      label: agent.title,
+      testID: `schedule-agent-option-${agent.id}`,
+    }));
+    return (
+      <SelectField
+        label={t("schedules.form.existingAgent")}
+        value={state.selectedAgentId || null}
+        selectedDisplay={options.find((option) => option.value === state.selectedAgentId) ?? null}
+        options={options}
+        onChange={model.setAgent}
+        placeholder={t("schedules.form.selectAgent")}
+        emptyText={t("schedules.form.noAgents")}
+        hint={t("schedules.form.agentHint")}
+        searchable
+        size={controlSize}
+        triggerTestID="schedule-agent-trigger"
+      />
+    );
   }
 
   return (
     <>
-      {state.mode === "edit" || state.hosts.length > 1 ? (
+      {!state.workspace && (state.mode === "edit" || state.hosts.length > 1) ? (
         <SelectField
           label={t("schedules.form.host")}
           value={state.selectedServerId}
@@ -930,34 +1174,6 @@ function ScheduleIsolationField({
   );
 }
 
-function ScheduleAgentTargetField({
-  label,
-  size,
-}: {
-  label: string | null;
-  size: FieldControlSize;
-}): ReactElement {
-  const { t } = useTranslation();
-  const fieldStyle = useMemo(
-    () => [styles.readonlyField, size === "sm" ? styles.readonlyFieldSm : styles.readonlyFieldMd],
-    [size],
-  );
-  const textStyle = useMemo(
-    () => [styles.readonlyText, size === "sm" ? styles.readonlyTextSm : styles.readonlyTextMd],
-    [size],
-  );
-
-  return (
-    <Field label={t("schedules.form.target")}>
-      <View style={fieldStyle} testID="schedule-agent-target">
-        <Text style={textStyle} numberOfLines={1}>
-          {label}
-        </Text>
-      </View>
-    </Field>
-  );
-}
-
 function IsolationOptionItem({
   option,
   selected,
@@ -1081,6 +1297,29 @@ const styles = StyleSheet.create((theme) => {
   const geometry = createControlGeometry(theme);
 
   return {
+    inlineContainer: {
+      flex: 1,
+    },
+    inlineContent: {
+      padding: theme.spacing[4],
+      alignItems: "center",
+    },
+    inlineFields: {
+      width: "100%",
+      maxWidth: 640,
+      gap: theme.spacing[4],
+    },
+    workspaceField: {
+      gap: theme.spacing[1],
+    },
+    workspaceName: {
+      color: theme.colors.foreground,
+      fontSize: theme.fontSize.base,
+    },
+    workspacePath: {
+      color: theme.colors.foregroundMuted,
+      fontSize: theme.fontSize.sm,
+    },
     multilineInput: {
       minHeight: 96,
     },

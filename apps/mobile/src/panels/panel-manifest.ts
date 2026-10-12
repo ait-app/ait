@@ -78,6 +78,18 @@ const manifests = {
     singleton: false,
     resourceKey: () => "pull_request",
   },
+  schedule: {
+    kind: "schedule",
+    supportedHosts: ["main", "explorer"],
+    showCloseButton: true,
+    singleton: false,
+    resourceKey: (target) =>
+      target.scheduleId
+        ? `schedule_${target.scheduleId}`
+        : target.view === "list"
+          ? "schedule_list"
+          : "schedule",
+  },
   file: {
     kind: "file",
     supportedHosts: ["main", "explorer"],

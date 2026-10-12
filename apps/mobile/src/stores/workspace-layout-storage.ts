@@ -28,6 +28,11 @@ const WorkspaceTabTargetStorageSchema = z.discriminatedUnion("kind", [
   z.strictObject({ kind: z.literal("files") }),
   z.strictObject({ kind: z.literal("pull_request") }),
   z.strictObject({
+    kind: z.literal("schedule"),
+    scheduleId: z.string().trim().min(1).optional(),
+    view: z.literal("list").optional(),
+  }),
+  z.strictObject({
     kind: z.literal("file"),
     path: z.string(),
     lineStart: z.number().int().positive().optional(),

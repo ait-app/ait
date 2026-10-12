@@ -29,6 +29,9 @@ impl Engine {
                 return Err(Error::Storage);
             }
             validate(&schedule.prompt, &schedule.target, schedule.max_runs)?;
+            if let Some(id) = &schedule.workspace_id {
+                validate_workspace_id(id)?;
+            }
             cadence::next(&schedule.cadence, now)?;
             for run in &mut schedule.runs {
                 if run.status == RunStatus::Running {
@@ -39,7 +42,13 @@ impl Engine {
                     dirty = true;
                 }
             }
-            if schedule.status == Status::Active && schedule.next_run_at.is_some_and(|at| at <= now)
+            if schedule.status != Status::Completed && complete_due(schedule, now) {
+                complete(schedule, now);
+                dirty = true;
+            }
+            if schedule.status == Status::Active
+                && schedule.next_run_at.is_some_and(|at| at <= now)
+                && !matches!(schedule.cadence, Cadence::Once { .. })
             {
                 schedule.next_run_at = Some(advance(
                     &schedule.cadence,
@@ -75,40 +84,19 @@ impl Engine {
         now: DateTime<Utc>,
     ) -> Result<Value, Error> {
         if method == "schedule.create.request" {
-            let request: Create = serde_json::from_value(params).map_err(|_| Error::Invalid)?;
-            validate(&request.prompt, &request.target, request.max_runs)?;
-            let next = cadence::next(&request.cadence, now)?;
-            if self.records.len() >= 1024 {
-                return Err(Error::Conflict);
-            }
-            let immediate = request
-                .run_on_create
-                .unwrap_or(matches!(request.cadence, Cadence::Every { .. }));
-            let record = Schedule {
-                id: Uuid::new_v4().to_string(),
-                name: normalize_name(request.name),
-                prompt: request.prompt.trim().to_owned(),
-                cadence: request.cadence,
-                target: request.target,
-                status: Status::Active,
-                created_at: now,
-                updated_at: now,
-                next_run_at: Some(if immediate { now } else { next }),
-                last_run_at: None,
-                paused_at: None,
-                expires_at: request.expires_at,
-                max_runs: request.max_runs,
-                runs: vec![],
-            };
-            let value = summary(&record)?;
-            let mut records = self.records.clone();
-            records.push(record);
-            self.commit(records)?;
-            return Ok(json!({"schedule":value,"error":null}));
+            return self.create(params, now);
         }
         if method == "schedule.list.request" {
-            only(&params, &[])?;
+            only(&params, &["workspaceId"])?;
+            let workspace_id = params
+                .get("workspaceId")
+                .map(|value| value.as_str().ok_or(Error::Invalid))
+                .transpose()?;
             let mut records = self.records.clone();
+            if let Some(id) = workspace_id {
+                validate_workspace_id(id)?;
+                records.retain(|record| record.workspace_id.as_deref() == Some(id));
+            }
             records.sort_by_key(|s| std::cmp::Reverse(s.created_at));
             return Ok(
                 json!({"schedules":records.iter().map(summary).collect::<Result<Vec<_>,_>>()?,"error":null}),
@@ -120,6 +108,15 @@ impl Engine {
         only(&params, &["scheduleId"])?;
         let id = params["scheduleId"].as_str().ok_or(Error::Invalid)?;
         if method == "schedule.delete.request" {
+            if self.records.iter().any(|record| {
+                record.id == id
+                    && record
+                        .runs
+                        .iter()
+                        .any(|run| run.status == RunStatus::Running)
+            }) {
+                return Err(Error::Conflict);
+            }
             let mut records = self.records.clone();
             records.retain(|s| s.id != id);
             self.commit(records)?;
@@ -149,7 +146,7 @@ impl Engine {
                     record.next_run_at = if desired == Status::Paused {
                         None
                     } else {
-                        Some(cadence::next(&record.cadence, now)?)
+                        Some(first_trigger(&record.cadence, record.start_at, now)?.max(now))
                     };
                     self.replace(record.clone())?;
                 }
@@ -157,6 +154,53 @@ impl Engine {
             _ => return Err(Error::Invalid),
         }
         Ok(json!({"schedule":summary(&record)?,"error":null}))
+    }
+    fn create(&mut self, params: Value, now: DateTime<Utc>) -> Result<Value, Error> {
+        let request: Create = serde_json::from_value(params).map_err(|_| Error::Invalid)?;
+        validate(&request.prompt, &request.target, request.max_runs)?;
+        validate_workspace_id(&request.workspace_id)?;
+        validate_trigger(&request.cadence, request.start_at, now)?;
+        if request.start_at.is_some_and(|at| at < now) {
+            return Err(Error::Invalid);
+        }
+        let next = first_trigger(&request.cadence, request.start_at, now)?;
+        let immediate = request.run_on_create.unwrap_or(
+            request.start_at.is_none() && matches!(request.cadence, Cadence::Every { .. }),
+        );
+        let next = if immediate { now } else { next };
+        if request.expires_at.is_some_and(|at| at <= now || at <= next)
+            || (request.start_at.is_some() && request.run_on_create == Some(true))
+            || (matches!(request.cadence, Cadence::Once { .. })
+                && request.run_on_create == Some(true))
+        {
+            return Err(Error::Invalid);
+        }
+        if self.records.len() >= 1024 {
+            return Err(Error::Conflict);
+        }
+        let record = Schedule {
+            id: Uuid::new_v4().to_string(),
+            workspace_id: Some(request.workspace_id),
+            name: normalize_name(request.name),
+            prompt: request.prompt.trim().to_owned(),
+            cadence: request.cadence,
+            start_at: request.start_at,
+            target: request.target,
+            status: Status::Active,
+            created_at: now,
+            updated_at: now,
+            next_run_at: Some(next),
+            last_run_at: None,
+            paused_at: None,
+            expires_at: request.expires_at,
+            max_runs: request.max_runs,
+            runs: vec![],
+        };
+        let value = summary(&record)?;
+        let mut records = self.records.clone();
+        records.push(record);
+        self.commit(records)?;
+        Ok(json!({"schedule":value,"error":null}))
     }
     fn replace(&mut self, record: Schedule) -> Result<(), Error> {
         let mut records = self.records.clone();
@@ -168,6 +212,15 @@ impl Engine {
         self.commit(records)
     }
     fn update(&mut self, params: &Value, now: DateTime<Utc>) -> Result<Value, Error> {
+        let record = self.preview_update(params, now)?;
+        self.replace(record.clone())?;
+        Ok(json!({"schedule":record,"error":null}))
+    }
+    pub(crate) fn preview_update(
+        &self,
+        params: &Value,
+        now: DateTime<Utc>,
+    ) -> Result<Schedule, Error> {
         only(
             params,
             &[
@@ -178,9 +231,46 @@ impl Engine {
                 "newAgentConfig",
                 "maxRuns",
                 "expiresAt",
+                "workspaceId",
+                "target",
+                "startAt",
             ],
         )?;
         let mut record = self.inspect(params["scheduleId"].as_str().ok_or(Error::Invalid)?)?;
+        if ["target", "newAgentConfig", "workspaceId"]
+            .iter()
+            .any(|field| params.get(field).is_some())
+            && record
+                .runs
+                .iter()
+                .any(|run| run.status == RunStatus::Running)
+        {
+            return Err(Error::Conflict);
+        }
+        if let Some(value) = params.get("workspaceId") {
+            let id = value.as_str().ok_or(Error::Invalid)?;
+            validate_workspace_id(id)?;
+            if record
+                .workspace_id
+                .as_deref()
+                .is_some_and(|current| current != id)
+            {
+                return Err(Error::Invalid);
+            }
+            record.workspace_id = Some(id.to_owned());
+        }
+        if let Some(value) = params.get("target") {
+            if params.get("newAgentConfig").is_some() {
+                return Err(Error::Invalid);
+            }
+            record.target = serde_json::from_value(value.clone()).map_err(|_| Error::Invalid)?;
+        }
+        if let Some(value) = params.get("startAt") {
+            record.start_at = serde_json::from_value(value.clone()).map_err(|_| Error::Invalid)?;
+            if record.start_at.is_some_and(|at| at < now) {
+                return Err(Error::Invalid);
+            }
+        }
         if let Some(value) = params.get("name") {
             record.name =
                 normalize_name(serde_json::from_value(value.clone()).map_err(|_| Error::Invalid)?);
@@ -201,35 +291,21 @@ impl Engine {
             {
                 next.clone_from(old);
             }
-            let at = cadence::next(&next, now)?;
+            validate_trigger(&next, record.start_at, now)?;
+            let at = first_trigger(&next, record.start_at, now)?;
             record.cadence = next;
             record.next_run_at = (record.status == Status::Active).then_some(at);
         }
+        if params.get("startAt").is_some() && params.get("cadence").is_none() {
+            validate_trigger(&record.cadence, record.start_at, now)?;
+            record.next_run_at = (record.status == Status::Active).then_some(first_trigger(
+                &record.cadence,
+                record.start_at,
+                now,
+            )?);
+        }
         if let Some(value) = params.get("newAgentConfig") {
-            only(
-                value,
-                &[
-                    "provider",
-                    "cwd",
-                    "model",
-                    "modeId",
-                    "thinkingOptionId",
-                    "archiveOnFinish",
-                    "isolation",
-                ],
-            )?;
-            let Target::NewAgent { config } = &mut record.target else {
-                return Err(Error::Invalid);
-            };
-            for (key, value) in value.as_object().ok_or(Error::Invalid)? {
-                if ["model", "modeId", "thinkingOptionId"].contains(&key.as_str())
-                    && (value.is_null() || value.as_str().is_some_and(|s| s.trim().is_empty()))
-                {
-                    config.as_object_mut().ok_or(Error::Invalid)?.remove(key);
-                } else {
-                    config[key] = value.clone();
-                }
-            }
+            patch_new_agent_config(&mut record.target, value)?;
         }
         if let Some(value) = params.get("maxRuns") {
             record.max_runs = serde_json::from_value(value.clone()).map_err(|_| Error::Invalid)?;
@@ -240,8 +316,7 @@ impl Engine {
         }
         validate(&record.prompt, &record.target, record.max_runs)?;
         record.updated_at = now;
-        self.replace(record.clone())?;
-        Ok(json!({"schedule":record,"error":null}))
+        Ok(record)
     }
     pub(crate) fn due(&mut self, now: DateTime<Utc>) -> Result<Vec<String>, Error> {
         let schedulable = |schedule: &Schedule| {
@@ -277,6 +352,11 @@ impl Engine {
         now: DateTime<Utc>,
     ) -> Result<(Schedule, String), Error> {
         let mut schedule = self.inspect(id)?;
+        if complete_due(&schedule, now) && schedule.status != Status::Completed {
+            complete(&mut schedule, now);
+            self.replace(schedule)?;
+            return Err(Error::Conflict);
+        }
         if schedule.status == Status::Completed
             || (!manual && schedule.status != Status::Active)
             || schedule.runs.len() >= 4096
@@ -296,7 +376,7 @@ impl Engine {
             ended_at: None,
             status: RunStatus::Running,
             agent_id: None,
-            workspace_id: None,
+            workspace_id: schedule.workspace_id.clone(),
             output: None,
             error: None,
         });
@@ -349,10 +429,7 @@ impl Engine {
         run.error = outcome.error.map(|s| limit_text(&s));
         schedule.last_run_at = Some(now);
         schedule.updated_at = now;
-        if outcome.target_gone
-            || schedule.runs.len() >= 4096
-            || (!manual && complete_due(&schedule, now))
-        {
+        if outcome.target_gone || schedule.runs.len() >= 4096 || complete_due(&schedule, now) {
             complete(&mut schedule, now);
         } else if !manual && schedule.status == Status::Active {
             schedule.next_run_at = Some(advance(
@@ -397,6 +474,11 @@ fn normalize_name(name: Option<String>) -> Option<String> {
 }
 fn complete_due(schedule: &Schedule, now: DateTime<Utc>) -> bool {
     schedule.expires_at.is_some_and(|at| at <= now)
+        || (matches!(schedule.cadence, Cadence::Once { .. })
+            && schedule
+                .runs
+                .iter()
+                .any(|run| run.status != RunStatus::Running))
         || schedule.max_runs.is_some_and(|max| {
             schedule
                 .runs
@@ -447,12 +529,12 @@ fn validate(prompt: &str, target: &Target, max_runs: Option<u64>) -> Result<(), 
                     "mcpServers",
                 ],
             )?;
-            for key in ["provider", "cwd"] {
+            for key in ["provider"] {
                 if config[key].as_str().is_none_or(|s| s.trim().is_empty()) {
                     return Err(Error::Invalid);
                 }
             }
-            for key in ["model", "modeId", "thinkingOptionId", "isolation"] {
+            for key in ["cwd", "model", "modeId", "thinkingOptionId", "isolation"] {
                 if let Some(value) = config.get(key)
                     && value.as_str().is_none_or(|s| s.trim().is_empty())
                 {
@@ -471,6 +553,72 @@ fn validate(prompt: &str, target: &Target, max_runs: Option<u64>) -> Result<(), 
         }
     }
     Ok(())
+}
+fn patch_new_agent_config(target: &mut Target, value: &Value) -> Result<(), Error> {
+    only(
+        value,
+        &[
+            "provider",
+            "cwd",
+            "model",
+            "modeId",
+            "thinkingOptionId",
+            "archiveOnFinish",
+            "isolation",
+        ],
+    )?;
+    let Target::NewAgent { config } = target else {
+        return Err(Error::Invalid);
+    };
+    for (key, value) in value.as_object().ok_or(Error::Invalid)? {
+        if ["model", "modeId", "thinkingOptionId"].contains(&key.as_str())
+            && (value.is_null() || value.as_str().is_some_and(|s| s.trim().is_empty()))
+        {
+            config.as_object_mut().ok_or(Error::Invalid)?.remove(key);
+        } else {
+            config[key] = value.clone();
+        }
+    }
+    Ok(())
+}
+
+fn validate_workspace_id(id: &str) -> Result<(), Error> {
+    if id.trim().is_empty() || id.trim() != id || id.len() > 256 {
+        return Err(Error::Invalid);
+    }
+    Ok(())
+}
+fn validate_trigger(
+    cadence: &Cadence,
+    start_at: Option<DateTime<Utc>>,
+    now: DateTime<Utc>,
+) -> Result<(), Error> {
+    if let Cadence::Once { at } = cadence
+        && (*at <= now || start_at.is_some())
+    {
+        return Err(Error::Invalid);
+    }
+    cadence::next(cadence, now).map(|_| ())
+}
+fn first_trigger(
+    cadence: &Cadence,
+    start_at: Option<DateTime<Utc>>,
+    now: DateTime<Utc>,
+) -> Result<DateTime<Utc>, Error> {
+    match cadence {
+        Cadence::Every { .. } if start_at.is_some_and(|at| at >= now) => {
+            start_at.ok_or(Error::Invalid)
+        }
+        Cadence::Cron { .. } => cadence::next(
+            cadence,
+            start_at.map_or(now, |at| {
+                at.checked_sub_signed(chrono::Duration::milliseconds(1))
+                    .unwrap_or(at)
+                    .max(now)
+            }),
+        ),
+        _ => cadence::next(cadence, now),
+    }
 }
 fn limit_text(text: &str) -> String {
     let end = text.floor_char_boundary((64 * 1024).min(text.len()));

@@ -1107,6 +1107,8 @@ test("sends new-agent run options when creating schedules", async () => {
   await connectPromise;
 
   const createPromise = client.scheduleCreate({
+    workspaceId: "wks-example",
+    startAt: "2030-01-01T09:00:00.000Z",
     requestId: "request-1",
     prompt: "Run the task",
     cadence: { type: "cron", expression: "* * * * *" },
@@ -1125,6 +1127,8 @@ test("sends new-agent run options when creating schedules", async () => {
   const request = parseSentFrame(mock.sent[0]);
   expect(request).toEqual({
     type: "schedule.create.request",
+    workspaceId: "wks-example",
+    startAt: "2030-01-01T09:00:00.000Z",
     requestId: "request-1",
     prompt: "Run the task",
     cadence: { type: "cron", expression: "* * * * *" },
@@ -1193,6 +1197,57 @@ test("sends new-agent run options when updating schedules", async () => {
     schedule: null,
     error: null,
   });
+});
+
+test("preserves schedule scope and trigger fields across the transport", async () => {
+  const mock = createMockTransport();
+  const client = new DaemonClient({
+    url: "ws://test",
+    clientId: "clsk_unit_test",
+    reconnect: { enabled: false },
+    transportFactory: () => mock.transport,
+  });
+  clients.push(client);
+  const connected = client.connect();
+  mock.triggerOpen();
+  await connected;
+  const cadence = { type: "once" as const, at: "2030-01-01T09:00:00.000Z" };
+  const target = { type: "agent" as const, agentId: "11111111-1111-4111-8111-111111111111" };
+  const create = client.scheduleCreate({
+    workspaceId: "wks-1",
+    requestId: "create-1",
+    prompt: "Review",
+    cadence,
+    target,
+  });
+  const created = parseSentFrame(mock.sent[0]);
+  expect(created).toMatchObject({ workspaceId: "wks-1", cadence, target });
+  respondToScheduleRequest(mock, created);
+  await create;
+  const update = client.scheduleUpdate({
+    id: "schedule-1",
+    requestId: "update-1",
+    workspaceId: "wks-1",
+    target,
+    startAt: null,
+  });
+  const updated = parseSentFrame(mock.sent[1]);
+  expect(updated).toMatchObject({ workspaceId: "wks-1", target, startAt: null });
+  respondToScheduleRequest(mock, updated);
+  await update;
+  const list = client.scheduleList({ requestId: "list-1", workspaceId: "wks-1" });
+  expect(parseSentFrame(mock.sent[2])).toEqual({
+    type: "schedule.list.request",
+    requestId: "list-1",
+    workspaceId: "wks-1",
+  });
+  mock.triggerMessage(
+    wrapSessionMessage({
+      type: "schedule.list.response",
+      payload: { requestId: "list-1", schedules: [], error: null },
+    }),
+  );
+  await expect(list).resolves.toMatchObject({ schedules: [], error: null });
 });
 
 test("sends typed browser automation execute responses", async () => {

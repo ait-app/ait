@@ -6,6 +6,10 @@ export type ScheduleStatus = z.infer<typeof ScheduleStatusSchema>;
 
 export const ScheduleCadenceSchema = z.discriminatedUnion("type", [
   z.object({
+    type: z.literal("once"),
+    at: z.iso.datetime({ offset: true }),
+  }),
+  z.object({
     type: z.literal("every"),
     everyMs: z.number().int().positive(),
   }),
@@ -26,7 +30,7 @@ export const ScheduleTargetSchema = z.discriminatedUnion("type", [
     type: z.literal("new-agent"),
     config: z.object({
       provider: AgentProviderSchema,
-      cwd: z.string().trim().min(1),
+      cwd: z.string().trim().min(1).optional(),
       modeId: z.string().trim().min(1).optional(),
       model: z.string().trim().min(1).optional(),
       thinkingOptionId: z.string().trim().min(1).optional(),
@@ -57,9 +61,11 @@ export type ScheduleRun = z.infer<typeof ScheduleRunSchema>;
 
 export const StoredScheduleSchema = z.object({
   id: z.string(),
+  workspaceId: z.string().min(1).nullable().optional(),
   name: z.string().nullable(),
   prompt: z.string().min(1),
   cadence: ScheduleCadenceSchema,
+  startAt: z.string().nullable().optional(),
   target: ScheduleTargetSchema,
   status: ScheduleStatusSchema,
   createdAt: z.string(),
@@ -79,9 +85,11 @@ export const ScheduleSummarySchema = StoredScheduleSchema.omit({
 export type ScheduleSummary = z.infer<typeof ScheduleSummarySchema>;
 
 export interface CreateScheduleInput {
+  workspaceId: string;
   name?: string | null;
   prompt: string;
   cadence: ScheduleCadence;
+  startAt?: string | null;
   target: ScheduleTarget;
   maxRuns?: number | null;
   expiresAt?: string | null;
@@ -100,9 +108,12 @@ export interface UpdateScheduleNewAgentConfig {
 
 export interface UpdateScheduleInput {
   id: string;
+  workspaceId?: string;
+  target?: ScheduleTarget;
   name?: string | null;
   prompt?: string;
   cadence?: ScheduleCadence;
+  startAt?: string | null;
   newAgentConfig?: UpdateScheduleNewAgentConfig;
   maxRuns?: number | null;
   expiresAt?: string | null;

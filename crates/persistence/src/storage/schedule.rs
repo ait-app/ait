@@ -54,7 +54,7 @@ impl Store for FileStore {
             return Err(Error::Storage);
         }
         let doc: Document = serde_json::from_slice(&bytes).map_err(|_| Error::Storage)?;
-        if doc.version != 1 {
+        if !matches!(doc.version, 1 | 2) {
             return Err(Error::Storage);
         }
         Ok(doc.schedules)
@@ -63,7 +63,7 @@ impl Store for FileStore {
         use std::io::Write;
         self.check()?;
         let bytes = serde_json::to_vec(&Document {
-            version: 1,
+            version: 2,
             schedules: schedules.to_vec(),
         })
         .map_err(|_| Error::Storage)?;

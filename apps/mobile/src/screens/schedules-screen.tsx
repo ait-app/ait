@@ -35,6 +35,7 @@ import {
   type ScheduleTargetAgent,
 } from "@/schedules/schedule-derivation";
 import { resolveSchedulesScreenBodyState } from "./schedules-screen-state";
+import { useScheduleWorkspaces } from "@/schedules/use-schedule-workspaces";
 import {
   buildProjectNameByCwd,
   buildScheduleProjectTargets,
@@ -64,6 +65,14 @@ function SchedulesScreenContent(): ReactElement {
   const schedules = loadState.status === "loaded" ? loadState.data : EMPTY_SCHEDULES;
   const { agents } = useAggregatedAgents({ includeArchived: true });
   const { projects } = useProjects();
+  const workspaces = useScheduleWorkspaces();
+  const workspaceNameByKey = useMemo(
+    () =>
+      new Map(
+        workspaces.map((workspace) => [`${workspace.serverId}:${workspace.id}`, workspace.name]),
+      ),
+    [workspaces],
+  );
   const hosts = useHosts();
   const runtime = getHostRuntimeStore();
   const runtimeVersion = useSyncExternalStore(
@@ -134,12 +143,13 @@ function SchedulesScreenContent(): ReactElement {
           now,
           agentsByKey,
           projectNameByCwd,
+          workspaceNameByKey,
           agentDataLoaded: agentDirReadyHosts.has(schedule.serverId),
         },
         t,
       ),
     }));
-  }, [schedules, agentsByKey, projectNameByCwd, agentDirReadyHosts, t]);
+  }, [schedules, agentsByKey, projectNameByCwd, workspaceNameByKey, agentDirReadyHosts, t]);
 
   const visibleRows = useMemo<ScheduleRowView[]>(() => {
     const singleHost = hosts.length <= 1;

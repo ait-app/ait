@@ -26,6 +26,7 @@ import {
 } from "@/provider-selection/resolve-agent-form";
 import { buildProviderDefinitions } from "@/utils/provider-definitions";
 import { shortenPath } from "@/utils/shorten-path";
+import { formatLocalDateTime, isValidMaxRuns, parseLocalDateTime } from "./schedule-date-time";
 import { normalizeScheduleFormCadence } from "./schedule-cadence-options";
 import { PROJECT_OPTION_PREFIX, type ScheduleProjectTarget } from "./schedule-project-targets";
 
@@ -40,6 +41,17 @@ export interface ScheduleFormHost {
   supportsWorkspaceMultiplicity?: boolean;
 }
 
+export interface ScheduleFormAgent {
+  id: string;
+  title: string;
+}
+
+export interface ScheduleFormWorkspace {
+  id: string;
+  name: string;
+  cwd: string;
+}
+
 export interface ScheduleFormSnapshot {
   mode: "create" | "edit";
   schedule?: ScheduleSummary & { serverId?: string; serverName?: string };
@@ -49,6 +61,8 @@ export interface ScheduleFormSnapshot {
     projectTargets: readonly ScheduleProjectTarget[];
     preferences?: FormPreferences;
     timezone?: string;
+    workspace?: ScheduleFormWorkspace;
+    agents?: readonly ScheduleFormAgent[];
   };
 }
 
@@ -78,17 +92,21 @@ export interface ScheduleFormProjectOption {
 }
 
 export type ScheduleFormTargetKind = "agent" | "new-agent";
-type CronCadence = Extract<ScheduleCadence, { type: "cron" }>;
 type ProviderResolutionStatus = "idle" | "pending" | "complete";
 
 export interface ScheduleFormState {
   mode: "create" | "edit";
+  workspace: ScheduleFormWorkspace | null;
   targetKind: ScheduleFormTargetKind;
+  selectedAgentId: string;
+  agentOptions: readonly ScheduleFormAgent[];
+  startAt: string;
+  expiresAt: string;
   name: string;
   prompt: string;
   maxRuns: string;
   cadence: ScheduleCadence;
-  submitCadence: CronCadence | undefined;
+  submitCadence: ScheduleCadence | undefined;
   hosts: ScheduleFormHost[];
   projectOptions: ScheduleFormProjectOption[];
   selectedServerId: string | null;
@@ -123,6 +141,11 @@ export interface ScheduleFormModel {
   subscribe: (listener: () => void) => () => void;
   close: () => void;
   applyHosts: (hosts: readonly ScheduleFormHost[]) => void;
+  applyAgents: (agents: readonly ScheduleFormAgent[]) => void;
+  setTargetKind: (kind: ScheduleFormTargetKind) => void;
+  setAgent: (id: string) => void;
+  setStartAt: (value: string) => void;
+  setExpiresAt: (value: string) => void;
   applyProjectTargets: (targets: readonly ScheduleProjectTarget[]) => void;
   applyPreferences: (preferences: FormPreferences | undefined) => void;
   applyProviderSnapshot: (serverId: string, snapshot: ScheduleFormProviderSnapshot) => void;
@@ -402,7 +425,7 @@ function buildInitialProjectDisplay(input: {
   return resolveProjectDisplay({
     targets: input.targets,
     serverId: input.selectedServerId,
-    cwd: input.config.cwd,
+    cwd: input.config.cwd ?? "",
   });
 }
 
@@ -436,8 +459,8 @@ function formatInitialMaxRuns(schedule: ScheduleFormSnapshot["schedule"]): strin
 
 function resolveInitialSubmitCadence(
   schedule: ScheduleFormSnapshot["schedule"],
-  initialCadence: CronCadence,
-): CronCadence | undefined {
+  initialCadence: ScheduleCadence,
+): ScheduleCadence | undefined {
   return schedule ? undefined : initialCadence;
 }
 
@@ -524,7 +547,8 @@ function resolveDisclosure(state: ScheduleFormState): ScheduleDisclosureState {
   const hasProject = state.workingDir.trim().length > 0;
   const hasSelectedProvider = Boolean(state.selectedProvider);
   const hasSelectedModel = Boolean(state.selectedProvider && state.selectedModel.trim());
-  const showProjectField = state.mode === "edit" || Boolean(state.selectedServerId);
+  const showProjectField =
+    !state.workspace && (state.mode === "edit" || Boolean(state.selectedServerId));
   const showModelField = hasProject;
   return {
     showProjectField,
@@ -532,31 +556,47 @@ function resolveDisclosure(state: ScheduleFormState): ScheduleDisclosureState {
     showThinkingField:
       showModelField && hasSelectedModel && state.availableThinkingOptions.length > 0,
     showModeField: showModelField && hasSelectedProvider && state.modeOptions.length > 0,
-    showIsolationField: hasProject && state.canUseWorktreeIsolation,
+    showIsolationField: !state.workspace && hasProject && state.canUseWorktreeIsolation,
     showArchiveOnFinishField:
       hasProject &&
-      selectedHostSupportsWorkspaceMultiplicity({
-        hosts: state.hosts,
-        selectedServerId: state.selectedServerId,
-      }),
+      (Boolean(state.workspace) ||
+        selectedHostSupportsWorkspaceMultiplicity({
+          hosts: state.hosts,
+          selectedServerId: state.selectedServerId,
+        })),
   };
 }
 
 function resolveCanSubmit(state: ScheduleFormState): boolean {
+  if (!state.prompt.trim() || !isValidMaxRuns(state.maxRuns)) return false;
+  if (
+    state.cadence.type === "every" &&
+    (!Number.isSafeInteger(state.cadence.everyMs) || state.cadence.everyMs <= 0)
+  )
+    return false;
+  if (
+    state.cadence.type === "once" &&
+    (!Number.isFinite(Date.parse(state.cadence.at)) || Date.parse(state.cadence.at) <= Date.now())
+  )
+    return false;
+  for (const input of [state.startAt, state.expiresAt]) {
+    if (input.trim() && !parseLocalDateTime(input)) return false;
+  }
+  if (
+    state.startAt.trim() &&
+    state.expiresAt.trim() &&
+    Date.parse(parseLocalDateTime(state.expiresAt)!) <=
+      Date.parse(parseLocalDateTime(state.startAt)!)
+  )
+    return false;
   if (state.targetKind === "agent") {
-    return state.submitCadence !== undefined;
+    return state.agentOptions.some((agent) => agent.id === state.selectedAgentId);
   }
-  if (state.prompt.trim().length === 0) {
+  if (
+    !state.workingDir.trim() ||
+    (state.mode === "create" && !state.workspace && !state.selectedProjectOptionId.trim())
+  )
     return false;
-  }
-  const hasWorkingDir = state.workingDir.trim().length > 0;
-  const hasMatchedProject = state.selectedProjectOptionId.trim().length > 0;
-  if (state.mode === "create" && !hasMatchedProject) {
-    return false;
-  }
-  if (!hasWorkingDir) {
-    return false;
-  }
   return isSelectedModelValidForProviders({
     providers: state.modelSelectorProviders,
     selectedProvider: state.selectedProvider,
@@ -576,21 +616,27 @@ function updateDerivedState(input: {
     input.state.selectedProvider,
     input.state.selectedModel,
   );
-  const canUseWorktreeIsolation = resolveCanUseWorktreeIsolation({
-    state: input.state,
-    hosts: input.hosts,
-    targets: input.targets,
-  });
-  const canSubmitWorkspaceLifecycleOptions = selectedHostSupportsWorkspaceMultiplicity({
-    hosts: input.hosts,
-    selectedServerId: input.state.selectedServerId,
-  });
-  const effectiveIsolation = resolveEffectiveIsolation({
-    isolation: input.state.isolation,
-    canUseWorktreeIsolation,
-    selectedServerId: input.state.selectedServerId,
-    providerResolutionByServerId: input.state.providerResolutionByServerId,
-  });
+  const canUseWorktreeIsolation =
+    !input.state.workspace &&
+    resolveCanUseWorktreeIsolation({
+      state: input.state,
+      hosts: input.hosts,
+      targets: input.targets,
+    });
+  const canSubmitWorkspaceLifecycleOptions =
+    Boolean(input.state.workspace) ||
+    selectedHostSupportsWorkspaceMultiplicity({
+      hosts: input.hosts,
+      selectedServerId: input.state.selectedServerId,
+    });
+  const effectiveIsolation = input.state.workspace
+    ? "local"
+    : resolveEffectiveIsolation({
+        isolation: input.state.isolation,
+        canUseWorktreeIsolation,
+        selectedServerId: input.state.selectedServerId,
+        providerResolutionByServerId: input.state.providerResolutionByServerId,
+      });
   const projectTarget = resolveProjectTarget({
     targets: input.targets,
     serverId: input.state.selectedServerId,
@@ -623,7 +669,8 @@ function updateDerivedState(input: {
     submitArchiveOnFinish: canSubmitWorkspaceLifecycleOptions
       ? input.state.archiveOnFinish
       : undefined,
-    submitIsolation: canSubmitWorkspaceLifecycleOptions ? effectiveIsolation : undefined,
+    submitIsolation:
+      !input.state.workspace && canSubmitWorkspaceLifecycleOptions ? effectiveIsolation : undefined,
   };
   const disclosure = resolveDisclosure(nextState);
   return { ...nextState, disclosure, canSubmit: resolveCanSubmit({ ...nextState, disclosure }) };
@@ -633,7 +680,8 @@ function buildInitialState(snapshot: ScheduleFormSnapshot): ScheduleFormState {
   const selectedServerId = resolveInitialServerId(snapshot);
   const config = newAgentConfig(snapshot.schedule);
   const targetKind = resolveTargetKind(snapshot);
-  const workingDir = config?.cwd ?? "";
+  const workspace = snapshot.defaults.workspace ?? null;
+  const workingDir = workspace?.cwd ?? config?.cwd ?? "";
   const selectedProjectTarget = resolveProjectTarget({
     targets: snapshot.defaults.projectTargets,
     serverId: selectedServerId,
@@ -653,7 +701,13 @@ function buildInitialState(snapshot: ScheduleFormSnapshot): ScheduleFormState {
   const initialThinking = config?.thinkingOptionId ?? "";
   const state: ScheduleFormState = {
     mode: snapshot.mode,
+    workspace,
     targetKind,
+    selectedAgentId:
+      snapshot.schedule?.target.type === "agent" ? snapshot.schedule.target.agentId : "",
+    agentOptions: snapshot.defaults.agents ?? [],
+    startAt: formatLocalDateTime(snapshot.schedule?.startAt),
+    expiresAt: formatLocalDateTime(snapshot.schedule?.expiresAt),
     name: snapshot.schedule?.name ?? "",
     prompt: snapshot.schedule?.prompt ?? "",
     maxRuns: formatInitialMaxRuns(snapshot.schedule),
@@ -951,6 +1005,25 @@ export function openScheduleForm(snapshot: ScheduleFormSnapshot): ScheduleFormMo
       closed = true;
       listeners.clear();
     },
+    applyAgents(agents) {
+      if (closed || state.agentOptions === agents) return;
+      publish({ ...state, agentOptions: agents });
+    },
+    setTargetKind(targetKind) {
+      if (closed || state.targetKind === targetKind) return;
+      publish({ ...state, targetKind, submitError: null });
+      if (targetKind === "new-agent" && providerEntries.length === 0)
+        requestProviderSnapshot(state.selectedServerId, state.workingDir);
+    },
+    setAgent(selectedAgentId) {
+      publish({ ...state, selectedAgentId });
+    },
+    setStartAt(startAt) {
+      publish({ ...state, startAt });
+    },
+    setExpiresAt(expiresAt) {
+      publish({ ...state, expiresAt });
+    },
     applyHosts(nextHosts) {
       if (closed || hosts === nextHosts) {
         return;
@@ -1006,7 +1079,7 @@ export function openScheduleForm(snapshot: ScheduleFormSnapshot): ScheduleFormMo
       });
     },
     setHost(serverId) {
-      if (closed || state.selectedServerId === serverId) {
+      if (closed || state.workspace || state.selectedServerId === serverId) {
         return;
       }
       publish(
@@ -1021,7 +1094,7 @@ export function openScheduleForm(snapshot: ScheduleFormSnapshot): ScheduleFormMo
       );
     },
     setProject(optionId, display) {
-      if (closed) {
+      if (closed || state.workspace) {
         return;
       }
       const target = findProjectTargetByOptionId(projectTargets, optionId);
@@ -1112,7 +1185,12 @@ export function openScheduleForm(snapshot: ScheduleFormSnapshot): ScheduleFormMo
     },
     setCadence(value) {
       const cadence = normalizeScheduleFormCadence(value, timezone);
-      publish({ ...state, cadence, submitCadence: cadence });
+      publish({
+        ...state,
+        cadence,
+        submitCadence: cadence,
+        startAt: cadence.type === "once" ? "" : state.startAt,
+      });
     },
     setIsolation(value) {
       userModified = { ...userModified, isolation: true };

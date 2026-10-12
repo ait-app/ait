@@ -2,7 +2,7 @@
 
 Bot 是 Workspace 内长期存在的对话实体。每个 Channel 属于一个 Bot，入站消息直接通过
 Channel 找到归属；Conversation 管理隐藏 Provider session，普通 Agent 目录不展示它。
-边界决策见 [ADR-138](../decisions/bot/adr-138-workspace-bots-and-owned-channels.md)。
+边界决策见 [ADR-139](../decisions/bot/adr-139-workspace-bots-and-owned-channels.md)。
 
 本次实现后端服务与接口。前端 Bot tab 尚未接入，Telegram、飞书使用本地模拟服务验证；
 真实账号需要配置凭据和平台应用后验收。Email 仅完成可行性设计。
@@ -182,7 +182,7 @@ UIDVALIDITY 和 UID。自动回复使用 Auto-Submitted: auto-replied，过滤�
 
 ## 验证
 
-本次定向测试共 87 项通过，使用默认 features，在 macOS 本机运行。范围为新增 Bot、
+实现阶段定向测试共 87 项通过，使用默认 features，在 macOS 本机运行。范围为新增 Bot、
 身份与存储、Provider 隐藏所有权及恢复/并发、API 协商和连接、daemon 装配与生产入口。
 平台网络验证使用本地模拟服务，不使用生产凭据；没有运行完整 Rust Workspace 测试。
 
@@ -207,14 +207,25 @@ cargo test --locked -p daemon --test process production_installs_every_in_scope_
 ```
 
 创建 PR 前合并 main（`32df46ae`），并再次验证上述 Bot 全 crate、Provider 隐藏会话/恢复/
-并发、API Bot 集成、生产装配及依赖守卫子集，共 61 项通过。Bot 决策调整为 ADR-138，
-与 main 的 ADR-137 保持独立。
+并发、API Bot 集成、生产装配及依赖守卫子集，共 61 项通过。后续同步 Workspace 定时任务时，
+Bot 决策调整为 ADR-139，与 main 的 ADR-138 定时任务决策保持独立。
+
+修复 PR 与 main（`de2696a1`）的文档冲突后，复核 Bot API、共同服务装配与停机、生产能力
+目录及定时任务归属，共 7 项集成测试通过。未扩大到完整 Rust Workspace 测试：
+
+```sh
+cargo test --locked -p api tests::bot # 1
+cargo test --locked -p daemon --bin daemon host::tests::shutdown_releases_lock_and_restart_keeps_only_stable_identity # 1
+cargo test --locked -p daemon --bin daemon host::tests::each_composite_service_installs_all_its_methods_without_other_components # 1
+cargo test --locked -p daemon --test process production_installs_every_in_scope_method_without_placeholders # 1
+cargo test --locked -p daemon --test process schedule::ownership # 3
+```
 
 以下静态检查与构建均通过：
 
 ```sh
 cargo fmt --all --check
-cargo clippy --locked -p bot -p api -p daemon -p persistence -p domain -p model -p provider --all-targets -- -D warnings
+cargo clippy --locked --workspace --all-targets -- -D warnings
 cargo build --locked --workspace
 npm run check:docs
 git diff --check
