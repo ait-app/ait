@@ -129,6 +129,7 @@
 
 ## 工程规范与验证
 
+- [定时任务列表 Host 展示去重](reports/clients/schedule-host-filter-2026-10-12.md)：按主机筛选后省略重复主机名，以及返回全部主机视图的浏览器回归。
 - [OpenCode 模型目录与执行失败修复](reports/providers/opencode-catalog-readiness-2026-10-10.md)：2.0.20 复现、配置确认、数据库冷启动竞争修复与原生流程验证。
 - [Ait 0.0.28 客户端告警修复与诊断验证](reports/clients/release-0.0.28-warning-fixes-2026-10-11.md)：共享许可等待、事件协商、界面告警与错误上下文。
 - [本机 Changes 刷新断线：修复验证](reports/workspace/changes-refresh-transport-2026-10-11.md)：Git 任务额度隔离、有界 diff 输出等待与控制响应回归。

@@ -71,7 +71,7 @@ interface ScheduleRowProps extends ScheduleRowActions {
   state: ScheduleDerivedState;
   /** Host name, rendered when the list spans more than one host. */
   serverName?: string;
-  /** True when only one host exists and the host name would be redundant. */
+  /** True when a sole configured host or a specific filter already identifies the host. */
   singleHost?: boolean;
   pending?: ScheduleRowPending;
   isFirst: boolean;
