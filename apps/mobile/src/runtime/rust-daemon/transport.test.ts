@@ -908,6 +908,64 @@ describe("Rust protocol adapter", () => {
     expect(() => h.send({ type: "project.list.request" })).toThrow("closed");
   });
 
+  it("keeps a GitHub clone pending through foreground verification on a nonce-only daemon", async () => {
+    vi.useFakeTimers();
+    const h = harness();
+    h.stopHello();
+    const client = new DaemonClient({
+      url: "ws://127.0.0.1:7316/v1/ws",
+      clientId: "clone-foreground",
+      transportFactory: () => h.transport,
+      reconnect: { enabled: false },
+    });
+    try {
+      const connected = client.connect();
+      h.ready();
+      await connected;
+      const clone = client.cloneGithubProject(
+        { repo: "https://github.com/acme/app.git", targetDirectory: "/repo/app" },
+        "clone",
+      );
+      const outcome = clone.then(
+        (value) => ({ value }),
+        (error: Error) => ({ error: error.message }),
+      );
+      await vi.advanceTimersByTimeAsync(0);
+      const cloneRequest = h.last(1);
+      expect(cloneRequest.method).toBe("project.github.clone.request");
+
+      client.ensureConnected({ verify: true });
+      await vi.advanceTimersByTimeAsync(0);
+      const ping = h.last(0);
+      expect(ping).toMatchObject({ type: "request", method: "connection.ping" });
+      expect(ping.params).toEqual({ nonce: ping.request_id });
+      h.sockets[0].message({
+        type: "response",
+        request_id: ping.request_id,
+        result: { nonce: ping.params.nonce },
+      });
+      await vi.advanceTimersByTimeAsync(3_000);
+
+      const project = {
+        projectId: "app",
+        projectDisplayName: "app",
+        projectRootPath: "/repo/app",
+        projectKind: "git",
+      };
+      h.sockets[1].message({
+        type: "response",
+        request_id: cloneRequest.request_id,
+        result: { repo: "acme/app", checkoutPath: "/repo/app", project, error: null },
+      });
+      await expect(outcome).resolves.toMatchObject({ value: { project, error: null } });
+      expect(client.isConnected).toBe(true);
+      expect(h.sockets.every((socket) => socket.close.mock.calls.length === 0)).toBe(true);
+    } finally {
+      await client.close();
+      vi.useRealTimers();
+    }
+  });
+
   it("rejects mixed server instances and never reports a successful connection", () => {
     const h = harness();
     for (const socket of h.sockets) socket.open();
