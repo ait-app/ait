@@ -36,6 +36,8 @@ export interface ResolveScheduleInput {
   agentsByKey: ReadonlyMap<string, ScheduleTargetAgent>;
   /** Known project roots keyed by `${serverId}:${cwd}`. */
   projectNameByCwd: ReadonlyMap<string, string>;
+  /** Active Workspace names keyed by `${serverId}:${workspaceId}`. */
+  workspaceNameByKey?: ReadonlyMap<string, string>;
   /**
    * Whether the agent directory has finished its first load. While false we do
    * not claim an agent target is gone — absence would just be a cold cache.
@@ -76,7 +78,11 @@ function resolveTarget(input: ResolveScheduleInput, t: TFunction): ScheduleTarge
     return { label: t("schedules.agentUnavailable"), provider: null };
   }
   return {
-    label: describeScheduleCwd({ serverId, cwd: schedule.target.config.cwd, projectNameByCwd }),
+    label: describeScheduleCwd({
+      serverId,
+      cwd: schedule.target.config.cwd ?? "",
+      projectNameByCwd,
+    }),
     provider: schedule.target.config.provider,
   };
 }
@@ -109,9 +115,21 @@ export function resolveSchedule(
   t: TFunction = i18n.t,
 ): ResolvedSchedule {
   const state = deriveState(input);
+  const target = resolveTarget(input, t);
+  const workspaceName = input.schedule.workspaceId
+    ? input.workspaceNameByKey?.get(`${input.serverId}:${input.schedule.workspaceId}`)
+    : undefined;
   return {
     state,
     bucket: scheduleBucket(state),
-    target: resolveTarget(input, t),
+    target: workspaceName
+      ? {
+          ...target,
+          label:
+            input.schedule.target.type === "agent"
+              ? `${workspaceName} · ${target.label}`
+              : workspaceName,
+        }
+      : target,
   };
 }

@@ -189,3 +189,22 @@ describe("plugin panel tab identity", () => {
     expect(agent).toBe("plugin_agent_6_review_7_details_7_agent-1");
   });
 });
+
+it("separates schedule drafts, lists and details while normalizing navigation", () => {
+  expect(
+    normalizeWorkspaceTabTarget({ kind: "schedule", scheduleId: " task-1 ", view: "list" }),
+  ).toEqual({ kind: "schedule", scheduleId: "task-1" });
+  expect(normalizeWorkspaceTabTarget({ kind: "schedule", scheduleId: " " })).toEqual({
+    kind: "schedule",
+  });
+  const targets = [
+    { kind: "schedule" as const },
+    { kind: "schedule" as const, view: "list" as const },
+    { kind: "schedule" as const, scheduleId: "task-1" },
+  ];
+  expect(new Set(targets.map(buildDeterministicWorkspaceTabId)).size).toBe(3);
+  expect(workspaceTabTargetsEqual(targets[0], targets[1])).toBe(false);
+  expect(workspaceTabTargetsEqual(targets[2], { kind: "schedule", scheduleId: "task-2" })).toBe(
+    false,
+  );
+});

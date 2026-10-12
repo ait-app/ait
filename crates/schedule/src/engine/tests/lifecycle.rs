@@ -25,7 +25,7 @@ fn interval_opt_out_waits_the_full_interval_before_first_run() {
 }
 
 #[test]
-fn manual_active_run_preserves_next_slot_even_after_count_limit() {
+fn manual_active_run_completes_at_count_limit() {
     let (mut engine, _) = fixture();
     let id = create(&mut engine);
     engine
@@ -35,15 +35,14 @@ fn manual_active_run_preserves_next_slot_even_after_count_limit() {
             now(),
         )
         .unwrap();
-    let original_next = engine.inspect(&id).unwrap().next_run_at;
     let later = now() + chrono::Duration::seconds(10);
     let (_, run) = engine.begin(&id, true, later).unwrap();
     engine
         .finish(&id, &run, true, Outcome::default(), later)
         .unwrap();
     let record = engine.inspect(&id).unwrap();
-    assert_eq!(record.status, Status::Active);
-    assert_eq!(record.next_run_at, original_next);
+    assert_eq!(record.status, Status::Completed);
+    assert_eq!(record.next_run_at, None);
     assert_eq!(record.runs[0].scheduled_for, later);
     assert_eq!(record.last_run_at, Some(later));
     assert!(engine.due(later).unwrap().is_empty());

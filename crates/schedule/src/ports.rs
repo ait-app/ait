@@ -1,7 +1,7 @@
 //! Host execution and durable storage boundaries.
 use std::{future::Future, pin::Pin};
 
-use domain::schedule::Schedule;
+use domain::schedule::{Schedule, Target};
 use domain::storage::schedule::Error;
 use tokio_util::sync::CancellationToken;
 
@@ -10,7 +10,7 @@ use tokio_util::sync::CancellationToken;
 pub struct Outcome {
     /// Agent that ran.
     pub agent_id: Option<String>,
-    /// Workspace created for this occurrence.
+    /// Workspace in which this occurrence executed.
     pub workspace_id: Option<String>,
     /// Final output.
     pub output: Option<String>,
@@ -22,6 +22,17 @@ pub struct Outcome {
 
 /// Asynchronous host execution, isolated from persistence and transport.
 pub trait Runner: Send + Sync + std::fmt::Debug {
+    /// Check active Workspace ownership and target membership before accepting a task change.
+    /// `workspace_id` identifies the owner; `target` selects an existing Agent or its creation config.
+    /// Returns the validated target, with new-Agent placement set to the current canonical directory.
+    ///
+    /// # Errors
+    /// Returns validation or storage errors when the owner or target is unavailable or incompatible.
+    fn resolve(
+        &self,
+        workspace_id: String,
+        target: Target,
+    ) -> Pin<Box<dyn Future<Output = Result<Target, Error>> + Send + '_>>;
     /// Execute an occurrence; honor cancellation and release owned resources before returning.
     fn run(
         &self,

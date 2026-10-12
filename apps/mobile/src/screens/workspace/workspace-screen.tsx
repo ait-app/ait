@@ -312,6 +312,7 @@ function getFallbackTabOptionLabel(
     changes: string;
     files: string;
     pullRequest: string;
+    schedule: string;
   },
 ): string {
   if (tab.target.kind === "new_tab") {
@@ -341,6 +342,9 @@ function getFallbackTabOptionLabel(
   if (tab.target.kind === "pull_request") {
     return labels.pullRequest;
   }
+  if (tab.target.kind === "schedule") {
+    return labels.schedule;
+  }
   if (tab.target.kind === "commit_diff") {
     return tab.target.sha.slice(0, 7);
   }
@@ -359,6 +363,7 @@ function getFallbackTabOptionDescription(
     changes: string;
     files: string;
     pullRequest: string;
+    schedule: string;
   },
 ): string {
   if (tab.target.kind === "new_tab") {
@@ -393,6 +398,9 @@ function getFallbackTabOptionDescription(
   }
   if (tab.target.kind === "pull_request") {
     return labels.pullRequest;
+  }
+  if (tab.target.kind === "schedule") {
+    return labels.schedule;
   }
   if (tab.target.kind === "plugin") {
     return tab.target.panelId;
@@ -596,6 +604,7 @@ function MobileWorkspaceTabOption({
       changes: t("panels.diff.changesLabel"),
       files: t("panels.files.label"),
       pullRequest: t("panels.pullRequest.label"),
+      schedule: t("schedules.product.schedule"),
     }),
     [t],
   );
@@ -962,6 +971,7 @@ interface WorkspaceHeaderTitleBarProps {
   onCreateTerminal: () => void;
   onCreateTerminalWithProfile: (profile: TerminalProfile) => void;
   onCreateBrowser: () => void;
+  onCreateSchedule: () => void;
   onOpenImportSheet: () => void;
   onCopyWorkspacePath: () => void;
   onCopyBranchName: () => void;
@@ -991,6 +1001,7 @@ function WorkspaceHeaderTitleBar({
   onCreateTerminal,
   onCreateTerminalWithProfile,
   onCreateBrowser,
+  onCreateSchedule,
   onOpenImportSheet,
   onCopyWorkspacePath,
   onCopyBranchName,
@@ -1029,6 +1040,7 @@ function WorkspaceHeaderTitleBar({
             onCreateTerminal={onCreateTerminal}
             onCreateTerminalWithProfile={onCreateTerminalWithProfile}
             onCreateBrowser={onCreateBrowser}
+            onCreateSchedule={onCreateSchedule}
             onOpenImportSheet={onOpenImportSheet}
             onCopyWorkspacePath={onCopyWorkspacePath}
             onCopyBranchName={onCopyBranchName}
@@ -2399,6 +2411,7 @@ function WorkspaceScreenContent({
       changes: t("panels.diff.changesLabel"),
       files: t("panels.files.label"),
       pullRequest: t("panels.pullRequest.label"),
+      schedule: t("schedules.product.schedule"),
     }),
     [t],
   );
@@ -2457,6 +2470,13 @@ function WorkspaceScreenContent({
     },
     [createWorkspaceTab, persistenceKey],
   );
+
+  const handleCreateScheduleTab = useCallback(() => {
+    if (!persistenceKey) {
+      return;
+    }
+    createWorkspaceTab(persistenceKey, { kind: "schedule" }, FOCUSED_PANE_PLACEMENT);
+  }, [createWorkspaceTab, persistenceKey]);
 
   const launchWorkspaceTab = useCallback(
     (selection: NewTabSelection, destination: WorkspaceTabLaunchDestination) => {
@@ -3941,6 +3961,7 @@ function WorkspaceScreenContent({
                 onCreateTerminal={handleCreateTerminal}
                 onCreateTerminalWithProfile={handleCreateTerminalWithProfile}
                 onCreateBrowser={handleCreateBrowserTab}
+                onCreateSchedule={handleCreateScheduleTab}
                 onOpenImportSheet={openImportSheet}
                 onCopyWorkspacePath={handleCopyWorkspacePath}
                 onCopyBranchName={handleCopyBranchName}
@@ -3962,6 +3983,7 @@ function WorkspaceScreenContent({
       handleCopyWorkspacePath,
       handleCreateBrowserTab,
       handleCreateDraftTab,
+      handleCreateScheduleTab,
       handleCreateTerminal,
       handleCreateTerminalWithProfile,
       handleOpenSetupTab,

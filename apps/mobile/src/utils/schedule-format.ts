@@ -3,7 +3,7 @@ import { i18n } from "@/i18n/i18next";
 import type { ScheduleCadence, ScheduleSummary } from "@ait/protocol/schedule/types";
 import { validateCronExpression } from "@ait/protocol/schedule/cron-expression";
 
-export type IntervalUnit = "minutes" | "hours" | "days";
+export type IntervalUnit = "milliseconds" | "seconds" | "minutes" | "hours" | "days";
 type CronCadence = Extract<ScheduleCadence, { type: "cron" }>;
 
 const MS_PER_MINUTE = 60_000;
@@ -11,6 +11,8 @@ const MS_PER_HOUR = MS_PER_MINUTE * 60;
 const MS_PER_DAY = MS_PER_HOUR * 24;
 
 const UNIT_MS: Record<IntervalUnit, number> = {
+  milliseconds: 1,
+  seconds: 1_000,
   minutes: MS_PER_MINUTE,
   hours: MS_PER_HOUR,
   days: MS_PER_DAY,
@@ -30,10 +32,8 @@ export function isNewAgentSchedule(schedule: ScheduleSummary): boolean {
   return schedule.target.type === "new-agent";
 }
 
-export function scheduleProductName(schedule: ScheduleSummary, t: TFunction = i18n.t): string {
-  return t(
-    schedule.target.type === "agent" ? "schedules.product.heartbeat" : "schedules.product.schedule",
-  );
+export function scheduleProductName(_schedule: ScheduleSummary, t: TFunction = i18n.t): string {
+  return t("schedules.product.schedule");
 }
 
 export function resolveScheduleTitle(schedule: ScheduleSummary, t: TFunction = i18n.t): string {
@@ -67,7 +67,9 @@ export function everyMsToParts(ms: number): { value: number; unit: IntervalUnit 
   if (ms % MS_PER_HOUR === 0) {
     return { value: ms / MS_PER_HOUR, unit: "hours" };
   }
-  return { value: Math.max(1, Math.round(ms / MS_PER_MINUTE)), unit: "minutes" };
+  if (ms % MS_PER_MINUTE === 0) return { value: ms / MS_PER_MINUTE, unit: "minutes" };
+  if (ms % 1_000 === 0) return { value: ms / 1_000, unit: "seconds" };
+  return { value: ms, unit: "milliseconds" };
 }
 
 export function partsToEveryMs(value: number, unit: IntervalUnit): number {
@@ -81,6 +83,11 @@ function formatEvery(everyMs: number, t: TFunction): string {
 }
 
 export function formatCadence(cadence: ScheduleCadence, t: TFunction = i18n.t): string {
+  if (cadence.type === "once") {
+    return t("schedules.cadence.onceAt", {
+      time: new Date(cadence.at).toLocaleString(i18n.resolvedLanguage),
+    });
+  }
   if (cadence.type === "every") {
     return formatEvery(cadence.everyMs, t);
   }

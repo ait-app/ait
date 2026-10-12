@@ -27,8 +27,8 @@ function makeSchedule(overrides: Partial<ScheduleSummary>): ScheduleSummary {
 function resolve(
   schedule: ScheduleSummary,
   options?: {
-    agents?: Array<[string, ScheduleTargetAgent]>;
-    projects?: Array<[string, string]>;
+    agents?: [string, ScheduleTargetAgent][];
+    projects?: [string, string][];
     agentDataLoaded?: boolean;
   },
 ) {
@@ -130,4 +130,27 @@ describe("resolveSchedule target line", () => {
     });
     expect(resolve(unmatched).target).toEqual({ label: "~/work/api", provider: "codex" });
   });
+});
+
+it("labels scoped tasks with their owning workspace and existing agent", () => {
+  const input = {
+    serverId: "host-1",
+    now: NOW,
+    agentsByKey: new Map([[`host-1:${AGENT_ID}`, { title: "Reviewer", provider: "codex" }]]),
+    projectNameByCwd: new Map<string, string>(),
+    workspaceNameByKey: new Map([["host-1:wks-1", "Feature workspace"]]),
+    agentDataLoaded: true,
+  };
+  expect(
+    resolveSchedule({ ...input, schedule: makeSchedule({ workspaceId: "wks-1" }) }).target.label,
+  ).toBe("Feature workspace");
+  expect(
+    resolveSchedule({
+      ...input,
+      schedule: makeSchedule({
+        workspaceId: "wks-1",
+        target: { type: "agent", agentId: AGENT_ID },
+      }),
+    }).target.label,
+  ).toBe("Feature workspace · Reviewer");
 });
