@@ -18,6 +18,7 @@
 
 ## 架构决策
 
+- [ADR-140：Codex MCP 超大字段使用展示预览](decisions/providers/adr-140-codex-mcp-display-previews.md)：按 JSON 字节预算生成明确标记的预览，保留原生完整结果与实时／历史一致性。
 - [ADR-139：Workspace Bot 与独占 Channel](decisions/bot/adr-139-workspace-bots-and-owned-channels.md)：独立 bot crate、单向依赖 provider、会话隔离与本地记忆。
 - [ADR-138：定时任务固定归属于 Workspace](decisions/workspace/adr-138-workspace-owned-schedules.md)：固定归属、Agent 目标校验、独立执行与版本兼容。
 - [ADR-137：清理已移除功能的共享协议与 SDK](decisions/clients/adr-137-remove-retired-feature-protocol.md)：移除 Hub、Plugin 管理、Chat 与 Loop 的旧消息和 SDK 方法，保留有效订阅与时间线显示项。
