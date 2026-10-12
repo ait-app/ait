@@ -47,6 +47,7 @@ export type WorkspaceTabTarget =
       view?: "list" | "create" | "edit";
       filter?: "upcoming" | "paused" | "completed";
     }
+  | { kind: "bot"; botId?: string; view?: "list" | "create" | "settings" }
   | WorkspaceFileTabTarget
   | WorkspaceWorkingDiffTabTarget
   | PluginWorkspaceTabTarget

@@ -7155,3 +7155,48 @@ test("setAgentModel returns the provider notice for a deferred switch", async ()
   );
   await expect(switching).resolves.toEqual(notice);
 });
+
+test("Bot requests validate params, correlate results and release errors", async () => {
+  const mock = createMockTransport();
+  const client = new DaemonClient({
+    url: "ws://test",
+    clientId: "bot-test",
+    logger: createMockLogger(),
+    reconnect: { enabled: false },
+    transportFactory: () => mock.transport,
+  });
+  clients.push(client);
+  const connected = client.connect();
+  mock.triggerOpen();
+  await connected;
+  const pending = client.botRequest("bot.list.request", { workspaceId: "workspace-a" });
+  const request = parseSentFrame(mock.sent[0]);
+  expect(request).toMatchObject({ type: "bot.list.request", workspaceId: "workspace-a" });
+  mock.triggerMessage(
+    wrapSessionMessage({
+      type: "bot.list.response",
+      payload: { requestId: "other-request", bots: [] },
+    }),
+  );
+  mock.triggerMessage(
+    wrapSessionMessage({
+      type: "bot.list.response",
+      payload: { requestId: request.requestId, bots: [] },
+    }),
+  );
+  await expect(pending).resolves.toMatchObject({ bots: [] });
+  await expect(client.botRequest("bot.get.request", { botId: "invalid" })).rejects.toThrow();
+  expect(mock.sent).toHaveLength(1);
+  const failed = client.botRequest("bot.memory.get.request", {
+    botId: "11111111-1111-4111-8111-111111111111",
+  });
+  const failure = parseSentFrame(mock.sent[1]);
+  const rejection = expect(failed).rejects.toThrow("Bot not found");
+  mock.triggerMessage(
+    wrapSessionMessage({
+      type: "rpc_error",
+      payload: { requestId: failure.requestId, error: "Bot not found", code: "not_found" },
+    }),
+  );
+  await rejection;
+});

@@ -1,3 +1,4 @@
+import { useAppSettings } from "@/hooks/use-settings";
 import { useDaemonConfig } from "@/hooks/use-daemon-config";
 import { panelCanLaunchInPane, panelSupportsHost, type PaneHost } from "@/panels/panel-manifest";
 import {
@@ -73,6 +74,7 @@ export function NewTabLauncherProvider({
 
 const BUILT_IN_SELECTIONS = {
   agent: { kind: "agent" },
+  bot: { kind: "target", target: { kind: "bot", view: "list" } },
   terminal: { kind: "terminal" },
   changes: { kind: "target", target: { kind: "changes_tree" } },
   diff: { kind: "target", target: { kind: "working_diff" } },
@@ -97,6 +99,9 @@ export function useWorkspaceTabLaunchCatalog(input: {
 }): readonly WorkspaceTabLaunchGroup[] {
   const { serverId, purpose, host, surface, panePanelKinds = EMPTY_PANE_PANEL_KINDS } = input;
   const { t } = useTranslation();
+  const {
+    settings: { experimentalFeatures },
+  } = useAppSettings();
   const router = useRouter();
   const launcher = useContext(NewTabLauncherContext);
   invariant(launcher, "NewTabLauncherProvider is required");
@@ -130,6 +135,15 @@ export function useWorkspaceTabLaunchCatalog(input: {
         panelKind: "draft",
         hidden: isExplorerMenu,
         launch: launchSelection(BUILT_IN_SELECTIONS.agent),
+      },
+      bot: {
+        id: "bot",
+        label: "Bot",
+        Icon: getLaunchPresentation("bot").icon,
+        disabled: false,
+        hidden: !experimentalFeatures,
+        panelKind: "bot",
+        launch: launchSelection(BUILT_IN_SELECTIONS.bot),
       },
       terminal: {
         id: "terminal",
@@ -230,6 +244,7 @@ export function useWorkspaceTabLaunchCatalog(input: {
       return items.length > 0 ? [{ ...group, items }] : [];
     });
   }, [
+    experimentalFeatures,
     config?.terminalProfiles,
     editTerminalProfiles,
     launchSelection,

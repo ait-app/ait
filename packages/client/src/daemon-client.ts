@@ -1,3 +1,4 @@
+import type { BotMethod, BotParams, BotResult } from "@ait/protocol/bot/rpc-schemas";
 import type { ScheduleCadence, ScheduleTarget } from "@ait/protocol/schedule/types";
 import { subscribeTimeline, type TimelineMessage } from "./timeline-subscription/index.js";
 import { ProviderSnapshotUpdates } from "./provider-snapshots/index.js";
@@ -5701,6 +5702,23 @@ export class DaemonClient {
         ...(typeof options.runOnCreate === "boolean" ? { runOnCreate: options.runOnCreate } : {}),
       },
       responseType: "schedule.create.response",
+    });
+  }
+
+  /** Workspace Bot RPCs use the same validated transport and request ownership as other requests. */
+  async botRequest<M extends BotMethod>(method: M, params: BotParams<M>): Promise<BotResult<M>> {
+    const requestId = this.createRequestId();
+    const responseType = method.replace(/\.request$/, ".response");
+    return this.sendRequest<BotResult<M>>({
+      requestId,
+      message: SessionInboundMessageSchema.parse({ ...params, type: method, requestId }),
+      select: (message) => {
+        if (message.type !== responseType || !("payload" in message)) return null;
+        const payload = message.payload;
+        if (!("requestId" in payload) || payload.requestId !== requestId) return null;
+        // The schemas validate both sides; the method supplies their type correlation.
+        return payload as BotResult<M>;
+      },
     });
   }
 

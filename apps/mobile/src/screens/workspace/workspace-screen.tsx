@@ -313,6 +313,7 @@ function getFallbackTabOptionLabel(
     files: string;
     pullRequest: string;
     schedule: string;
+    bot: string;
   },
 ): string {
   if (tab.target.kind === "new_tab") {
@@ -342,6 +343,7 @@ function getFallbackTabOptionLabel(
   if (tab.target.kind === "pull_request") {
     return labels.pullRequest;
   }
+  if (tab.target.kind === "bot") return labels.bot;
   if (tab.target.kind === "schedule") {
     return labels.schedule;
   }
@@ -364,6 +366,7 @@ function getFallbackTabOptionDescription(
     files: string;
     pullRequest: string;
     schedule: string;
+    bot: string;
   },
 ): string {
   if (tab.target.kind === "new_tab") {
@@ -399,6 +402,7 @@ function getFallbackTabOptionDescription(
   if (tab.target.kind === "pull_request") {
     return labels.pullRequest;
   }
+  if (tab.target.kind === "bot") return labels.bot;
   if (tab.target.kind === "schedule") {
     return labels.schedule;
   }
@@ -605,6 +609,7 @@ function MobileWorkspaceTabOption({
       files: t("panels.files.label"),
       pullRequest: t("panels.pullRequest.label"),
       schedule: t("schedules.product.schedule"),
+      bot: t("bots.title"),
     }),
     [t],
   );
@@ -2412,6 +2417,7 @@ function WorkspaceScreenContent({
       files: t("panels.files.label"),
       pullRequest: t("panels.pullRequest.label"),
       schedule: t("schedules.product.schedule"),
+      bot: t("bots.title"),
     }),
     [t],
   );

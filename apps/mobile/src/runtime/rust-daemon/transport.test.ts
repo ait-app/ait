@@ -7,7 +7,7 @@ import {
 } from "@ait/protocol/binary-frames/index";
 import { CHANNEL_CAPABILITIES, createRustDaemonTransportFactory } from "./transport";
 import { METHODS } from "./methods";
-import type { Payload, TransportFactory } from "./types";
+import { object, type Payload, type TransportFactory } from "./types";
 
 function harness(
   implemented = Object.values(METHODS).map((spec) => spec.method),
@@ -118,6 +118,25 @@ function harness(
 }
 
 describe("Rust protocol adapter", () => {
+  it("negotiates Bot capabilities and maps their requests and results on the execution channel", () => {
+    const h = harness();
+    h.ready(undefined, ["workspace-bots-v1"]);
+    const info = h.received.find((message) => object(message.message).type === "status");
+    expect(object(object(info?.message).payload).features).toMatchObject({ workspaceBots: true });
+    h.send({ type: "bot.list.request", requestId: "bot-list", workspaceId: "workspace-a" });
+    expect(h.last(3)).toMatchObject({
+      type: "request",
+      method: "bot.list.request",
+      request_id: "bot-list",
+      params: { workspaceId: "workspace-a" },
+    });
+    h.sockets[3].message({ type: "response", request_id: "bot-list", result: { bots: [] } });
+    expect(h.received.at(-1)).toEqual({
+      type: "session",
+      message: { type: "bot.list.response", payload: { requestId: "bot-list", bots: [] } },
+    });
+  });
+
   it.each([
     {
       name: "timeline producer",
@@ -578,9 +597,9 @@ describe("Rust protocol adapter", () => {
   });
 
   it("uses canonical names and stays within Rust's per-connection limits", () => {
-    expect(Object.keys(METHODS)).toHaveLength(171);
+    expect(Object.keys(METHODS)).toHaveLength(192);
     for (const [name, spec] of Object.entries(METHODS)) expect(spec.method).toBe(name);
-    expect(new Set(Object.values(METHODS).map((spec) => spec.method)).size).toBe(171);
+    expect(new Set(Object.values(METHODS).map((spec) => spec.method)).size).toBe(192);
     for (const capabilities of CHANNEL_CAPABILITIES) {
       expect(capabilities.length).toBeLessThanOrEqual(64);
       expect(capabilities.some((name) => /^(hub|chat|loop|plugin)[./]/.test(name))).toBe(false);

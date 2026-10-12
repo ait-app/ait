@@ -597,7 +597,7 @@ function AboutSection({ appVersion, appVersionText, isDesktopApp }: AboutSection
             <Text style={styles.aboutValue}>{appVersionText}</Text>
           </View>
           <WhatsNewRow />
-          {isDesktopApp ? <DesktopAppUpdateRow /> : null}
+          {isDesktopApp ? <DesktopAppUpdateRow /> : <ExperimentalFeaturesRow />}
         </View>
       </SettingsSection>
       <ConnectedHostsSection clientVersion={appVersion} />
@@ -605,6 +605,44 @@ function AboutSection({ appVersion, appVersionText, isDesktopApp }: AboutSection
         <CommunityLinks />
       </View>
     </>
+  );
+}
+
+function ExperimentalFeaturesRow() {
+  const { t } = useTranslation();
+  const { settings, updateSettings } = useAppSettings();
+  const [error, setError] = useState<string | null>(null);
+  const [saving, setSaving] = useState(false);
+  async function onChange(experimentalFeatures: boolean) {
+    setSaving(true);
+    setError(null);
+    try {
+      await updateSettings({ experimentalFeatures });
+    } catch (cause) {
+      setError(cause instanceof Error ? cause.message : String(cause));
+    } finally {
+      setSaving(false);
+    }
+  }
+  return (
+    <View style={[settingsStyles.row, settingsStyles.rowBorder]}>
+      <View style={settingsStyles.rowContent}>
+        <Text style={settingsStyles.rowTitle}>
+          {t("settings.about.experimentalFeatures.label")}
+        </Text>
+        <Text style={settingsStyles.rowHint}>
+          {t("settings.about.experimentalFeatures.description")}
+        </Text>
+        {error ? <Text style={styles.aboutErrorText}>{error}</Text> : null}
+      </View>
+      <Switch
+        value={settings.experimentalFeatures}
+        onValueChange={onChange}
+        disabled={saving}
+        accessibilityLabel={t("settings.about.experimentalFeatures.label")}
+        testID="settings-experimental-features"
+      />
+    </View>
   );
 }
 
@@ -826,6 +864,7 @@ function DesktopAppUpdateRow() {
           options={releaseChannelOptions}
         />
       </View>
+      <ExperimentalFeaturesRow />
       <View style={[settingsStyles.row, settingsStyles.rowBorder]}>
         <View style={settingsStyles.rowContent}>
           <Text style={settingsStyles.rowTitle}>{t("settings.about.updates.label")}</Text>

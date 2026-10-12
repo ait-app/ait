@@ -51,7 +51,7 @@ Workspace 需要长期存在的对话机器人，既能从 Ait 的独立 tab 对
 ## 后果与验证
 
 实施同步 Cargo 声明、daemon 依赖守卫、API 方法安装与停机及 Workspace tab 接入契约。
-前端 tab 渲染与流式订阅单独接入，当前通过持久查询观察 Bot。功能细节及实施范围见 [Bot 后端设计](../../plans/bot-backend.md)。
+前端 tab 已通过 [ADR-141](../clients/adr-141-experimental-workspace-bots.md) 接入，使用持久查询观察 Bot；流式订阅尚未实现。功能细节及实施范围见 [Bot 后端设计](../../plans/bot-backend.md)。
 
 定向验证覆盖独占 Channel、会话隔离、创建即隐藏、重复输入、重启恢复、确定目标回复、
 平台确认顺序、凭据脱敏、暂停与归档。运行受影响检查，不执行完整 Workspace 测试。

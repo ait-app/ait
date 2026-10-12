@@ -3,6 +3,7 @@ import { pluginSettings } from "./plugin-settings";
 
 export const ko: TranslationResources = {
   onlineService: en.onlineService,
+  bots: en.bots,
   paneFind: {
     searchFailed: "이 채팅을 검색할 수 없습니다. 호스트 연결을 확인하고 다시 시도하세요.",
     searching: "검색 중…",
@@ -2218,6 +2219,7 @@ export const ko: TranslationResources = {
       connectedHosts: "연결된 호스트",
       offline: "오프라인",
       versionDiffers: "이 기기와 버전이 다릅니다",
+      experimentalFeatures: en.settings.about.experimentalFeatures,
       releaseChannel: {
         label: "릴리스 채널",
         description: "Beta로 전환하면 업데이트를 더 빨리 받고 개선에 참여할 수 있습니다",

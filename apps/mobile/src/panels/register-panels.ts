@@ -1,3 +1,4 @@
+import { botPanelRegistration } from "@/panels/bot-panel";
 import { browserPanelRegistration } from "@/desktop/browser/panel";
 import { agentPanelRegistration } from "@/panels/agent-panel";
 import {
@@ -33,6 +34,7 @@ export function ensurePanelsRegistered(): void {
   registerPanel(filesPanelRegistration);
   registerPanel(pullRequestPanelRegistration);
   registerPanel(schedulePanelRegistration);
+  registerPanel(botPanelRegistration);
   registerPanel(commitDiffPanelRegistration);
   registerPanel(workingDiffPanelRegistration);
   registerPanel(changesTreePanelRegistration);

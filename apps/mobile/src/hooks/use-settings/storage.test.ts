@@ -42,6 +42,34 @@ function makeDeps(
   };
 }
 
+describe("experimental features", () => {
+  it.each([undefined, null, "true", 1, false])(
+    "defaults to off for %j",
+    async (experimentalFeatures) => {
+      const deps = makeDeps({
+        storage: createInMemoryKeyValueStorage({
+          [APP_SETTINGS_KEY]: JSON.stringify({ experimentalFeatures }),
+        }),
+      });
+      expect((await loadAppSettingsFromStorage(deps)).experimentalFeatures).toBe(false);
+    },
+  );
+  it("persists toggles and exposes them through the shared settings cache", async () => {
+    const deps = makeDeps();
+    const queryClient = new QueryClient();
+    for (const enabled of [true, false]) {
+      await saveAppSettings({ queryClient, deps, updates: { experimentalFeatures: enabled } });
+      expect((await loadAppSettingsFromStorage(deps)).experimentalFeatures).toBe(enabled);
+      expect(queryClient.getQueryData(APP_SETTINGS_QUERY_KEY)).toMatchObject({
+        experimentalFeatures: enabled,
+      });
+      expect(JSON.parse(deps.storage.entries.get(APP_SETTINGS_KEY)!)).toMatchObject({
+        experimentalFeatures: enabled,
+      });
+    }
+  });
+});
+
 describe("loadAppSettingsFromStorage", () => {
   it("preserves a persisted steer send behavior", async () => {
     const deps = makeDeps({
