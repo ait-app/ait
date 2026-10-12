@@ -1082,6 +1082,45 @@ describe("Rust protocol adapter", () => {
     }
   });
 
+  it("releases a permission ID after five seconds so the response can be retried", () => {
+    vi.useFakeTimers();
+    const h = harness();
+    try {
+      h.ready();
+      const request = {
+        type: "agent.permission.resolve.request",
+        requestId: "permission",
+        agentId: "agent",
+        response: { behavior: "deny" },
+      };
+      h.send(request);
+      vi.advanceTimersByTime(4_999);
+      expect(h.received.at(-1)?.message).not.toMatchObject({ type: "rpc_error" });
+      vi.advanceTimersByTime(1);
+      expect(h.received.at(-1)).toMatchObject({
+        message: {
+          type: "rpc_error",
+          payload: { requestId: "permission", code: "timeout" },
+        },
+      });
+      expect(() => h.send(request)).not.toThrow();
+      expect(h.last(0)).toMatchObject({
+        method: request.type,
+        request_id: "permission",
+        params: { agentId: "agent", requestId: "permission" },
+      });
+      h.sockets[0].message({ type: "response", request_id: "permission", result: {} });
+      vi.advanceTimersByTime(5_000);
+      expect(h.received.filter((value) => object(value.message).type === "rpc_error")).toHaveLength(
+        1,
+      );
+    } finally {
+      h.transport.close();
+      expect(vi.getTimerCount()).toBe(0);
+      vi.useRealTimers();
+    }
+  });
+
   it("preserves server identity and ownership in lifecycle status events", () => {
     const h = harness();
     try {
