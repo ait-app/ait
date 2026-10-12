@@ -1,6 +1,7 @@
 //! Concrete file persistence adapters implementing shared model and domain contracts.
 
 pub mod agent_runtime;
+pub mod bot;
 pub mod creation;
 pub mod daemon_config;
 pub mod project_config;

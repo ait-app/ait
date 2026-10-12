@@ -1,5 +1,6 @@
 //! Shared collaboration ports, server transport definitions and runtime resources.
 
+pub mod bot;
 pub mod changes;
 mod context;
 pub mod creation;

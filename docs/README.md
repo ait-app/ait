@@ -14,9 +14,11 @@
 - [Workspace 定时任务](operations/schedules.md)：任务归属、目标、触发规则、运行历史与旧任务兼容；[设计与验证报告](reports/daemon/workspace-schedules-verification-2026-10-12.md)。
 - [daemon 使用与连接协议](operations/daemon.md)：配置、鉴权、数据目录和生命周期。
 - [当前架构](architecture/README.md)：能力归属、依赖边界和数据所有权。
+- [Bot 后端设计](plans/bot-backend.md)：Workspace Bot、独占 Channel、隐藏 session、内置 tab 对话与 Telegram、飞书、Email 接入方案。
 
 ## 架构决策
 
+- [ADR-139：Workspace Bot 与独占 Channel](decisions/bot/adr-139-workspace-bots-and-owned-channels.md)：独立 bot crate、单向依赖 provider、会话隔离与本地记忆。
 - [ADR-138：定时任务固定归属于 Workspace](decisions/workspace/adr-138-workspace-owned-schedules.md)：固定归属、Agent 目标校验、独立执行与版本兼容。
 - [ADR-137：清理已移除功能的共享协议与 SDK](decisions/clients/adr-137-remove-retired-feature-protocol.md)：移除 Hub、Plugin 管理、Chat 与 Loop 的旧消息和 SDK 方法，保留有效订阅与时间线显示项。
 - [ADR-136：拍平单功能区层并收口重复助手](decisions/workspace/adr-136-single-area-layer-flattening.md)：去掉只承载一个功能区的 `<layer>::<area>` 中间段，并收口重复的 RPC/ACP 助手。

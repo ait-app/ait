@@ -151,6 +151,9 @@ async fn retire(state: &Shared, workspace_ids: Vec<String>) -> Result<Vec<String
     if workspace_ids.is_empty() {
         return Ok(Vec::new());
     }
+    if let Some(bots) = &state.bot.bots {
+        bots.retire(&workspace_ids).await?;
+    }
     let agents =
         provider::dispatch::retire_workspaces(&state.provider, workspace_ids.clone()).await?;
     terminal::dispatch::reconcile_workspaces(&state.terminal, workspace_ids.clone()).await?;

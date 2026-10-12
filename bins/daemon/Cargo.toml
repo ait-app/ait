@@ -9,6 +9,7 @@ name = "daemon"
 path = "src/main.rs"
 
 [dependencies]
+bot.workspace = true
 persistence.workspace = true
 schedule.workspace = true
 browser.workspace = true

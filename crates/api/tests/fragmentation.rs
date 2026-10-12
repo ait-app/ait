@@ -1,6 +1,7 @@
 //! Fragmentation must not bypass the cumulative input message budget.
 
 // Cargo passes the complete package dependency set to this integration test.
+use bot as _;
 use browser as _;
 use chrono as _;
 use domain as _;

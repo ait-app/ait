@@ -16,11 +16,15 @@ Electron 位于 `apps/desktop`；`apps/mobile` 提供桌面、浏览器与移动
 | `provider`    | 原生 Provider 会话、执行、历史、摘要和技能安装       | `domain`、`model`；测试使用 `persistence`             |
 | `terminal`    | PTY、终端快照、活动和连接订阅                        | `domain`、`model`                                     |
 | `voice`       | 语音、听写和离线推理                                 | `model`                                               |
+| `bot`         | Workspace Bot、独占 Channel、隐藏对话和消息协调      | `domain`、`model`、`provider`；测试使用 `persistence` |
 | `schedule`    | 定时任务服务与协议                                   | `domain`、`model`；测试使用 `persistence`             |
 | `browser`     | 浏览器自动化请求与回传                               | `model`                                               |
 | `relay`       | 控制 RPC、主动连接与反向数据通道                     | `model`                                               |
 | `api`         | HTTP/WebSocket 鉴权、连接与跨能力协调                | 上述能力包、`domain`、`model`；测试使用 `persistence` |
 | `daemon`      | 启动配置、进程锁、server identity、服务组装和停机    | API、领域、`model`、`persistence` 及能力包            |
+
+`bot → provider` 是用户指定的单向协作边，Provider 不反向依赖 Bot，见
+[ADR-139](../decisions/bot/adr-139-workspace-bots-and-owned-channels.md)。
 
 各实现组件自己声明方法，功能 crate 对外提供一个完整的 `Service`，API 按 crate 整体安装。
 `implemented_methods()` 返回业务方法声明，`installed_methods(bool)` 返回全部或空集合。
@@ -82,7 +86,7 @@ Terminal 同样直接使用 model 的 Workspace registry、活动契约和连接
 的记录和活动值，不依赖 metadata；见 [ADR-103](../decisions/daemon/adr-103-terminal-model-dependency.md)。
 Filesystem 的生产代码依赖 domain/model，相关测试使用 persistence 适配器：共享目录观察与摘要
 消费端口归 model，Git/Forge 快照、身份与 descriptor 纯函数归 domain。功能 crate 之间没有
-直接依赖；见 [ADR-104](../decisions/workspace/adr-104-filesystem-model-collaboration.md)。
+直接依赖，`bot → provider` 例外见 ADR-139；见 [ADR-104](../decisions/workspace/adr-104-filesystem-model-collaboration.md)。
 
 `workspace.worktree.*`、`workspace.recovery.*`、`workspace.github.*` 与 `project.github.*`
 的服务、RPC 和协议归 metadata，与其余 Project/Workspace 方法一起安装。它们依赖的本地 Git、

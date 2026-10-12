@@ -7,6 +7,7 @@ use std::process::Command;
 use anyhow as _;
 use api as _;
 use axum as _;
+use bot as _;
 use browser as _;
 use chrono as _;
 use clap as _;
@@ -44,6 +45,7 @@ fn violations(packages: &[Value]) -> Vec<String> {
         let name = package["name"].as_str().unwrap();
         let allowed: &[&str] = match name {
             "daemon" => &[
+                "bot",
                 "persistence",
                 "voice",
                 "schedule",
@@ -57,6 +59,7 @@ fn violations(packages: &[Value]) -> Vec<String> {
                 "domain",
             ],
             "api" => &[
+                "bot",
                 "persistence",
                 "relay",
                 "voice",
@@ -70,6 +73,7 @@ fn violations(packages: &[Value]) -> Vec<String> {
                 "filesystem",
             ],
             "persistence" => &["model", "domain"],
+            "bot" => &["domain", "model", "provider", "persistence"],
             "provider" | "metadata" | "schedule" | "filesystem" => {
                 &["domain", "model", "persistence"]
             }
@@ -380,7 +384,14 @@ fn persistence_adapters_depend_on_shared_contracts_without_reverse_or_transport_
 
 #[test]
 fn only_the_daemon_injects_persistence_adapters_outside_tests() {
-    for owner in ["api", "metadata", "filesystem", "provider", "schedule"] {
+    for owner in [
+        "api",
+        "bot",
+        "metadata",
+        "filesystem",
+        "provider",
+        "schedule",
+    ] {
         for kind in [Value::Null, json!("dev"), json!("build")] {
             let packages = [json!({"name":owner,"dependencies":[{
                 "name":"persistence","path":"../persistence","rename":"storage",
@@ -399,6 +410,22 @@ fn only_the_daemon_injects_persistence_adapters_outside_tests() {
             "name":"persistence","path":"../persistence","kind":kind
         }]})];
         assert!(violations(&packages).is_empty());
+    }
+}
+
+#[test]
+fn bot_can_use_provider_execution_without_a_reverse_dependency() {
+    let allowed = [json!({"name":"bot","dependencies":[
+        {"name":"provider","path":"../provider"},
+        {"name":"domain","path":"../domain"},
+        {"name":"model","path":"../model"}
+    ]})];
+    assert!(violations(&allowed).is_empty());
+    for owner in ["provider", "model", "domain", "persistence", "schedule"] {
+        let reversed = [json!({"name":owner,"dependencies":[
+            {"name":"bot","path":"../bot"}
+        ]})];
+        assert_eq!(violations(&reversed), [format!("{owner} -> bot")]);
     }
 }
 

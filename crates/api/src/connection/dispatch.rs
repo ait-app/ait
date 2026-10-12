@@ -40,6 +40,11 @@ pub(super) async fn request(
         Err(DispatchError::NotImplemented) => Context::assert_unhandled(&context, "schedule"),
         Err(DispatchError::Delivery(error)) => return Err(error),
     }
+    match bot::dispatch::dispatch(&mut context, &state.bot).await {
+        Ok(()) => return Ok(()),
+        Err(DispatchError::NotImplemented) => Context::assert_unhandled(&context, "bot"),
+        Err(DispatchError::Delivery(error)) => return Err(error),
+    }
     match browser::dispatch::dispatch(&mut context, &state.browser, &mut subscriptions.browser) {
         Ok(()) => return Ok(()),
         Err(DispatchError::NotImplemented) => Context::assert_unhandled(&context, "browser"),

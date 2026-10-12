@@ -1,3 +1,4 @@
+use bot::capabilities as bot;
 use browser::capabilities as browser;
 use filesystem::capabilities as filesystem;
 use metadata::capabilities as metadata;
@@ -11,6 +12,7 @@ use crate::Services;
 /// Merge crate-owned method declarations for negotiation and envelope validation.
 pub(super) fn implemented_methods() -> impl Iterator<Item = model::methods::MethodSpec> {
     schedule::implemented_methods()
+        .chain(bot::implemented_methods())
         .chain(browser::implemented_methods())
         .chain(voice::implemented_methods())
         .chain(metadata::connection_methods())
@@ -30,6 +32,7 @@ pub(super) fn installed_capabilities(services: &Services) -> Vec<String> {
         .chain(terminal::installed_methods(services.terminal.is_some()))
         .chain(voice::installed_methods(services.voice.is_some()))
         .chain(schedule::installed_methods(services.schedule.is_some()))
+        .chain(bot::installed_methods(services.bot.is_some()))
         .chain(browser::installed_methods(services.browser.is_some()))
         .chain(relay::rpc::METHODS.iter().copied())
         .map(|method| method.name.to_owned())
@@ -42,6 +45,9 @@ pub(super) fn features(services: &Services) -> Vec<String> {
         model::server::single::FEATURE.to_owned(),
         "client-message-chunks-v1".to_owned(),
     ];
+    if services.bot.is_some() {
+        features.push("workspace-bots-v1".to_owned());
+    }
     if services.filesystem.is_some() && services.metadata.is_some() {
         features.push("checkout-git-events-v1".to_owned());
     }
