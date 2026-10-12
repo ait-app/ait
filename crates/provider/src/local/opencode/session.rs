@@ -173,8 +173,17 @@ pub(super) async fn open(
         )
     };
     let mut options = options;
-    if !history_only {
-        config::apply(&mut transport, &id, &mut options, &spec.config).await?;
+    if !history_only
+        && let Err(error) = config::apply(&mut transport, &id, &mut options, &spec.config).await
+    {
+        if binding.is_none() && capabilities["sessionCapabilities"]["delete"].is_object() {
+            // A rejected initial selection must not leave an empty native session behind.
+            // Loaded sessions belong to the user and are never deleted on a configuration error.
+            let mut temporary = super::summary::Temporary::new(client, &spec.cwd, transport);
+            temporary.id = Some(id);
+            temporary.close().await?;
+        }
+        return Err(error);
     }
     let info = config::runtime(&id, &options);
     let (_, events) = mpsc::channel(1);

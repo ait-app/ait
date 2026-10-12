@@ -35,7 +35,7 @@ impl AgentClient for UnavailableClient {
 
 #[tokio::test]
 async fn unavailable_snapshot_exposes_bounded_native_guidance_and_falls_back_for_invalid_text() {
-    let guidance = "OpenCode 2.0.20: upgrade to 2.0.26 or newer.";
+    let guidance = "OpenCode 2.0.20: upgrade to 2.0.25 or newer.";
     for (message, expected) in [
         (guidance.to_owned(), guidance),
         (String::new(), "Provider executable is unavailable"),
