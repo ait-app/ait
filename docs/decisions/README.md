@@ -4,6 +4,10 @@
 ADR-001–024 已随旧架构删除，可从 Git 历史查阅；旧 ADR 中对这些编号的引用指向历史版本。
 ADR-074、082、083、084、122 在不同类别中各有两份，引用时以路径区分。
 
+## Bot
+
+- [ADR-137：Workspace Bot 与独占 Channel](bot/adr-137-workspace-bots-and-owned-channels.md)
+
 ## Daemon 与协议
 
 - [ADR-134：已接纳的普通 RPC 等待共享任务额度](daemon/adr-134-admitted-rpc-job-waiting.md)

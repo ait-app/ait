@@ -102,6 +102,12 @@ pub struct ServerInfo {
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub enum ErrorCode {
+    /// Bot, channel, conversation or receipt does not exist in the requested scope.
+    BotNotFound,
+    /// Bot ownership, lifecycle or active conversation conflicts with this operation.
+    BotConflict,
+    /// Local Bot persistence or channel I/O failed.
+    BotIo,
     /// Schedule request validation, persistence or execution failed.
     ScheduleRequestFailed,
     /// Speech backend configuration, processing or I/O failed.
@@ -173,6 +179,9 @@ impl ErrorCode {
     #[must_use]
     pub fn message(self) -> &'static str {
         match self {
+            Self::BotNotFound => "Bot resource was not found",
+            Self::BotConflict => "Bot resource conflicts with this operation",
+            Self::BotIo => "Bot I/O failed; inspect its durable receipt before retrying",
             Self::ScheduleRequestFailed => "Schedule request failed",
             Self::SpeechIo => "Speech processing failed",
             Self::TerminalIo => "Terminal I/O failed",
@@ -217,7 +226,8 @@ impl ErrorCode {
     pub fn retryable(self) -> bool {
         matches!(
             self,
-            Self::ResourceExhausted
+            Self::BotIo
+                | Self::ResourceExhausted
                 | Self::ServerDraining
                 | Self::ProjectIo
                 | Self::CatalogBusy

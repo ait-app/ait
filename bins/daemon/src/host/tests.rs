@@ -91,6 +91,13 @@ async fn each_composite_service_installs_all_its_methods_without_other_component
         ),
         (
             Services {
+                bot: services.bot.take(),
+                ..Services::default()
+            },
+            ::bot::capabilities::implemented_methods().collect::<Vec<_>>(),
+        ),
+        (
+            Services {
                 provider: services.provider.take(),
                 ..Services::default()
             },
@@ -135,7 +142,7 @@ async fn each_composite_service_installs_all_its_methods_without_other_component
                 .iter()
                 .any(|name| name == method.name)
         }));
-        assert_eq!(info.capabilities.len(), 180);
+        assert_eq!(info.capabilities.len(), 201);
         stop.send(()).unwrap();
         tokio::time::timeout(Duration::from_secs(5), task)
             .await

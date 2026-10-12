@@ -79,6 +79,8 @@ pub(crate) struct AgentRegistration {
     pub(crate) labels: BTreeMap<String, String>,
     /// Whether this is an internal runtime Agent.
     pub(crate) internal: bool,
+    /// Durable owner of an internal session; set before registration is published.
+    pub(crate) owner: Option<serde_json::Value>,
 }
 
 #[derive(Debug)]
@@ -493,7 +495,7 @@ impl AgentManager {
             attention_timestamp: None,
             internal: registration.internal,
             archived_at: None,
-            owner: None,
+            owner: registration.owner,
         };
         let record = self
             .register_session(agent_id, session, record, Registration::Create, permit)

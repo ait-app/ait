@@ -3,6 +3,7 @@ use std::sync::{Arc, Mutex};
 use std::time::Duration;
 
 use anyhow::Context;
+mod bot;
 mod catalog;
 mod schedule;
 mod voice;
@@ -185,10 +186,7 @@ fn compose_services(
         FileBackedAgentRuntimeRegistry::new(config.data_dir.join("agents/agents.json"))
             .with_changes(changes.clone());
     agent_runtime_registry.initialize()?;
-    let workspace_labels = WorkspaceLabels::new(Box::new(FileWorkspaceLabelStore::new(
-        &config.data_dir,
-        workspace_registry.clone(),
-    )))?;
+    let workspace_labels = compose_workspace_labels(config, &workspace_registry)?;
     let agents = Agents::new(Box::new(catalog::OwnedCatalog {
         catalog: SqliteCatalog::open(&config.data_dir)?,
         _instance: instance.clone(),
@@ -244,11 +242,12 @@ fn compose_services(
             workspace_automation.clone(),
         ),
     )?;
-    let schedules = schedule::compose(
-        &config.data_dir,
-        agent_execution.clone(),
-        directory.clone(),
-        worktrees.clone(),
+    let (schedules, bots) = compose_background(
+        config,
+        &agent_execution,
+        (&workspace_registry, &project_registry),
+        &directory,
+        &worktrees,
     )?;
     let metadata = metadata::Service::new(metadata::Dependencies {
         workspace_names,
@@ -266,19 +265,65 @@ fn compose_services(
         workspace_recovery,
     });
     Ok(Services {
+        bot: Some(bots),
         metadata: Some(metadata),
         filesystem: Some(compose_filesystem(config, &workspace_registry)),
-        provider: Some(provider::Service::new(provider::Dependencies {
+        provider: Some(compose_provider_service(
+            agent_execution.clone(),
             summary_generator,
-            execution: agent_execution.clone(),
             agents,
-            skills: compose_skills(&config.data_dir)?,
-        })),
+            &config.data_dir,
+        )?),
         schedule: Some(schedules),
         browser: Some(Broker::default()),
         voice: Some(voice::compose(agent_execution, &config.data_dir)?),
         terminal: Some(terminals),
     })
+}
+
+fn compose_workspace_labels(
+    config: &Config,
+    workspaces: &FileBackedWorkspaceRegistry,
+) -> anyhow::Result<WorkspaceLabels> {
+    Ok(WorkspaceLabels::new(Box::new(
+        FileWorkspaceLabelStore::new(&config.data_dir, workspaces.clone()),
+    ))?)
+}
+
+fn compose_provider_service(
+    execution: AgentExecution,
+    summary_generator: Arc<dyn SummaryGenerator>,
+    agents: Agents,
+    data: &std::path::Path,
+) -> anyhow::Result<provider::Service> {
+    Ok(provider::Service::new(provider::Dependencies {
+        summary_generator,
+        execution,
+        agents,
+        skills: compose_skills(data)?,
+    }))
+}
+
+fn compose_background(
+    config: &Config,
+    execution: &AgentExecution,
+    registries: (&FileBackedWorkspaceRegistry, &FileBackedProjectRegistry),
+    directory: &Directory,
+    worktrees: &Arc<Mutex<Worktrees>>,
+) -> anyhow::Result<(::schedule::service::Schedules, ::bot::service::Bots)> {
+    let bots = bot::compose(
+        &config.data_dir,
+        registries.0,
+        registries.1,
+        execution.clone(),
+    )?;
+    let schedules = schedule::compose(
+        &config.data_dir,
+        execution.clone(),
+        directory.clone(),
+        worktrees.clone(),
+    )?;
+    Ok((schedules, bots))
 }
 
 fn compose_filesystem(

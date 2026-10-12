@@ -5,6 +5,7 @@ edition.workspace = true
 publish.workspace = true
 
 [dependencies]
+bot.workspace = true
 domain.workspace = true
 relay.workspace = true
 schedule.workspace = true

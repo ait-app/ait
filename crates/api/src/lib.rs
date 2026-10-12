@@ -79,6 +79,7 @@ struct Shared {
     terminal: Arc<terminal::dispatch::State>,
     voice: Arc<voice::dispatch::State>,
     schedule: schedule::dispatch::State,
+    bot: bot::dispatch::State,
     browser: browser::dispatch::State,
     workspace_names: Option<metadata::directory::service::workspace_names::WorkspaceNames>,
 }
@@ -95,6 +96,8 @@ impl std::ops::Deref for Shared {
 /// Each present service supplies every method owned by its crate; API connection methods are built in.
 #[derive(Debug, Default)]
 pub struct Services {
+    /// Workspace Bots, owned channels and private conversations.
+    pub bot: Option<bot::service::Bots>,
     /// Project and Workspace metadata, configuration, labels, and automation.
     pub metadata: Option<metadata::Service>,
     /// File, Git, Forge, worktree, recovery, and skill operations.
@@ -113,6 +116,9 @@ pub struct Services {
 
 impl Shared {
     fn start_draining(&self) {
+        if let Some(bots) = &self.bot.bots {
+            bots.stop();
+        }
         self.relay.begin_shutdown();
         if let Some(schedules) = &self.schedule.schedules {
             schedules.stop();
@@ -246,6 +252,7 @@ impl Api {
                 schedule: schedule::dispatch::State {
                     schedules: services.schedules,
                 },
+                bot: services.bots,
                 browser: browser::dispatch::State {
                     broker: services.browser,
                 },
@@ -342,6 +349,11 @@ impl Api {
             && schedules.shutdown().await.is_err()
         {
             tracing::error!("schedule shutdown failed");
+        }
+        if let Some(bots) = &self.shared.bot.bots
+            && bots.shutdown().await.is_err()
+        {
+            tracing::error!("Bot shutdown failed");
         }
         if let Some(terminals) = self.shared.terminal.terminals.clone() {
             let result = tokio::task::spawn_blocking(move || {

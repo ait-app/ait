@@ -115,7 +115,7 @@ impl AgentManager {
             .list()
             .map_err(|_| ErrorCode::AgentIo)?
             .into_iter()
-            .filter(|record| record.archived_at.is_none())
+            .filter(|record| record.internal || record.archived_at.is_none())
             .filter_map(|record| record.persistence)
             .flat_map(|handle| {
                 let mut keys = vec![(handle.provider.clone(), handle.session_id)];

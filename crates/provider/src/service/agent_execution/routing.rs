@@ -224,6 +224,20 @@ fn plan(
 ) -> Result<(ExecutionState, Option<String>), ErrorCode> {
     let lane = if mutation::is_mutation(method) {
         None
+    } else if method == "internal.bot" {
+        let id = params["operation"]["agent_id"]
+            .as_str()
+            .ok_or(ErrorCode::InvalidMessage)?;
+        let lane = state.owners.agent(id)?;
+        if let Some(record) = state.registry.get(id).map_err(|_| ErrorCode::AgentIo)? {
+            state.owners.bind(&lane, &record)?;
+        }
+        if let Some(workspace) = params["owner"]["workspaceId"].as_str() {
+            state
+                .owners
+                .place(&lane, format!("workspace:{workspace}"))?;
+        }
+        Some(lane)
     } else if method == "agent.create.request" {
         if let Some(id) = params["agentId"].as_str() {
             Some(state.owners.agent(id)?)
@@ -333,6 +347,9 @@ fn native_lane(
         return Err(ErrorCode::InvalidMessage);
     }
     if let Some(record) = record {
+        if record.internal {
+            return Err(ErrorCode::AgentNotFound);
+        }
         let lane = state.owners.agent(&record.id)?;
         state.owners.bind(&lane, record)?;
         Ok(Some(lane))
@@ -360,7 +377,7 @@ fn canonicalize(state: &ExecutionState, method: &str, params: &mut Value) -> Res
     }
     if matches!(
         method,
-        "agent.create.request" | "internal.workspace.agent.create"
+        "agent.create.request" | "internal.workspace.agent.create" | "internal.bot"
     ) {
         return Ok(());
     }

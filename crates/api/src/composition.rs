@@ -19,6 +19,7 @@ use crate::Services;
 /// Internal transport handles; only complete crate services can populate these fields.
 #[derive(Default)]
 pub(super) struct Parts {
+    pub(super) bots: bot::dispatch::State,
     /// Bounded model-backed wording generation shared by title and Git use cases.
     pub(super) summary_source: Option<Arc<dyn model::summary::SummarySource>>,
     /// First-prompt workspace naming with independently drained background work.
@@ -69,6 +70,7 @@ pub(super) struct Parts {
 impl From<Services> for Parts {
     fn from(services: Services) -> Self {
         let mut parts = Self {
+            bots: bot::dispatch::State { bots: services.bot },
             schedules: services.schedule,
             browser: services.browser,
             speech: services.voice,

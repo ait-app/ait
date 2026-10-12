@@ -345,7 +345,7 @@ fn make_manager() -> (AgentManager, MemoryRegistry, FakeClient) {
     (manager, registry, client)
 }
 
-fn stored_record() -> PersistedAgentRuntimeRecord {
+pub(super) fn stored_record() -> PersistedAgentRuntimeRecord {
     PersistedAgentRuntimeRecord {
         id: "agent-1".to_owned(),
         provider: "codex".to_owned(),

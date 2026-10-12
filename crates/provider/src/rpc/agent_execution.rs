@@ -1,5 +1,6 @@
 //! Provider worker request decoding and response projections.
 
+mod bot;
 mod controls;
 mod native_sessions;
 mod placement;
@@ -49,6 +50,7 @@ impl ExecutionState {
         params: Value,
     ) -> Result<Value, ErrorCode> {
         match method {
+            "internal.bot" => self.bot(params).await,
             "internal.workspace.agent.create" => self.create_workspace_agent(params).await,
             "internal.workspace.retire" => self.retire_workspaces(params).await,
             "internal.agent.directory.prepare" => self.prepare_agent_directory(params),
@@ -289,6 +291,14 @@ impl ExecutionState {
             .map_err(|error| map_manager(&error))?;
         if let Some(id) = &request.agent_id {
             Uuid::parse_str(id).map_err(|_| ErrorCode::InvalidMessage)?;
+            if self
+                .registry
+                .get(id)
+                .map_err(|_| ErrorCode::AgentIo)?
+                .is_some_and(|record| record.internal)
+            {
+                return Err(ErrorCode::AgentNotFound);
+            }
         }
         let key = request
             .idempotency_key
@@ -365,6 +375,7 @@ impl ExecutionState {
                     title: request.config.title.map(|title| title.trim().to_owned()),
                     labels: request.labels,
                     internal: false,
+                    owner: None,
                 },
                 &request.env,
             )

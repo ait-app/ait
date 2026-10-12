@@ -1,6 +1,7 @@
 use super::*;
 
 mod auto_archive;
+mod bot;
 mod concurrency;
 mod environment;
 mod placement;

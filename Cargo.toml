@@ -9,6 +9,7 @@ publish = false
 
 [workspace.dependencies]
 api = { path = "crates/api" }
+bot = { path = "crates/bot" }
 browser = { path = "crates/browser" }
 domain = { path = "crates/domain" }
 filesystem = { path = "crates/filesystem" }
@@ -37,6 +38,7 @@ libc = "0.2"
 memchr = "2.8.3"
 nix = "0.31.3"
 portable-pty = "0.9.0"
+prost = "0.14.4"
 pulldown-cmark = { version = "0.13.4", default-features = false }
 regex = "1.13.1"
 reqwest = { version = "0.12.28", default-features = false }
