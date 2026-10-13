@@ -64,8 +64,11 @@ export function buildToolCallPresentation(
     detail: input.detail,
     status: input.status,
     error: input.error,
+    toolName: input.toolName,
   });
-  const hasDetails = Boolean(input.error) || hasMeaningfulToolCallDetail(input.detail);
+  const hasDetails =
+    Boolean(displayModel.errorText?.trim()) ||
+    hasMeaningfulToolCallDetail(input.detail, input.toolName);
 
   return {
     displayName: displayModel.displayName,
@@ -74,7 +77,7 @@ export function buildToolCallPresentation(
     icon: input.resolveIcon(input.toolName, input.detail),
     isLoadingDetails,
     hasDetails,
-    canOpenDetails: hasDetails || isLoadingDetails,
+    canOpenDetails: hasDetails,
     openFilePath: extractToolCallFilePath(input.detail),
     isPlan: input.detail?.type === "plan",
     planOutcome: input.detail?.type === "plan" ? resolvePlanOutcome(input) : undefined,
