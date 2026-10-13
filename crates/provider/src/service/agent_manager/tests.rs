@@ -10,6 +10,7 @@ use super::*;
 use crate::ports::agent_session::{AgentSessionFuture, AgentSessionSpec};
 
 mod auto_archive;
+mod bot_permissions;
 mod environment;
 mod generated_titles;
 mod paseo;
@@ -126,6 +127,8 @@ struct FakeState {
     failure_message: Option<&'static str>,
     failure_diagnostic: Option<crate::ports::diagnostics::Diagnostic>,
     commands_error: AgentSessionError,
+    permission_responses: Vec<(String, Value)>,
+    permission_result: Result<(), AgentSessionError>,
     during_resume: Option<MemoryRegistry>,
 }
 
@@ -150,6 +153,8 @@ impl Default for FakeState {
             failure_message: None,
             failure_diagnostic: None,
             commands_error: AgentSessionError::Unavailable,
+            permission_responses: Vec::new(),
+            permission_result: Ok(()),
             during_resume: None,
         }
     }
@@ -240,6 +245,20 @@ async fn unsupported_commands_are_distinct_from_rejected_requests_and_provider_f
 impl AgentSession for FakeSession {
     fn failure_diagnostic(&self) -> Option<crate::ports::diagnostics::Diagnostic> {
         self.0.lock().unwrap().failure_diagnostic
+    }
+
+    fn respond_permission<'a>(
+        &'a mut self,
+        id: &'a str,
+        response: &'a Value,
+    ) -> AgentSessionFuture<'a, ()> {
+        Box::pin(async move {
+            let mut state = self.0.lock().unwrap();
+            state
+                .permission_responses
+                .push((id.to_owned(), response.clone()));
+            state.permission_result
+        })
     }
 
     fn failure_message(&self) -> Option<&str> {

@@ -131,6 +131,14 @@ impl AgentManager {
         request: &str,
         response: &Value,
     ) -> Result<(), ErrorCode> {
+        let record = self
+            .registry
+            .get(id)
+            .map_err(|_| ErrorCode::AgentIo)?
+            .ok_or(ErrorCode::AgentNotFound)?;
+        if record.internal && record.owner.is_some() && response != &json!({"behavior":"deny"}) {
+            return Err(ErrorCode::InvalidMessage);
+        }
         self.resume(id).await.map_err(|_| ErrorCode::AgentIo)?;
         let follow_up = self
             .live

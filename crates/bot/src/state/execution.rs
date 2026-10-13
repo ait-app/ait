@@ -208,23 +208,14 @@ impl State {
         }
         Ok(json!({"turn":self.turn(turn.id)?}))
     }
-    pub(crate) fn permissions(&mut self, id: BotTurnId, value: Value) -> Result<(), ErrorCode> {
-        let mut turn = self.turn(id)?;
-        if turn.status != TurnStatus::NeedsApproval {
-            return Ok(());
-        }
-        let permissions = serde_json::from_value(value).map_err(|_| ErrorCode::BotIo)?;
-        if turn.pending_permissions == permissions {
-            return Ok(());
-        }
-        turn.pending_permissions = permissions;
-        self.commit_turn(&turn)
-    }
     pub(crate) fn permission(
         &self,
         request: DecisionRequest,
     ) -> Result<(domain::bot::SessionOwner, Action), ErrorCode> {
         self.ensure_writable()?;
+        if request.response != json!({"behavior":"deny"}) {
+            return Err(ErrorCode::InvalidMessage);
+        }
         self.workspace(self.bot(request.bot_id)?)?;
         let turn = self.owned_turn(request.bot_id, request.turn_id)?;
         if !matches!(turn.status, TurnStatus::NeedsApproval | TurnStatus::Running)

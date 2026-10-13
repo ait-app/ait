@@ -11,7 +11,6 @@ import { MarkdownRenderer } from "@/components/markdown/renderer";
 import { useHostRuntimeClient } from "@/runtime/host-runtime";
 import { confirmDialog } from "@/utils/confirm-dialog";
 import { botKeys, isBotTurnPending, useBotHistory } from "./queries";
-import { BotPermission } from "./bot-permission";
 import { botStyles as styles } from "./styles";
 
 function BotMessage({
@@ -49,18 +48,6 @@ function BotMessage({
           {turn.error}
         </Text>
       ) : null}
-      {(turn.status === "needs_approval" ? turn.pendingPermissions : []).map(
-        (permission, index) => (
-          <BotPermission
-            key={index}
-            serverId={serverId}
-            botId={bot.id}
-            turnId={turn.id}
-            permission={permission}
-            onResolved={onRefresh}
-          />
-        ),
-      )}
       {isBotTurnPending(turn) ? (
         <Button
           size="sm"

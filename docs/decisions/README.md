@@ -6,6 +6,7 @@ ADR-074、082、083、084、122 在不同类别中各有两份，引用时以路
 
 ## Bot
 
+- [ADR-145：Bot 执行期间自动拒绝权限请求](bot/adr-145-bot-permission-denial.md)
 - [ADR-139：Workspace Bot 与独占 Channel](bot/adr-139-workspace-bots-and-owned-channels.md)
 
 ## Daemon 与协议

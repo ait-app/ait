@@ -791,15 +791,14 @@ impl AgentManager {
                 continue;
             }
             persist_runtime(self.registry.as_ref(), &id, agent)?;
-            streaming::persist_handle(self.registry.as_ref(), &id, agent)?;
-            streaming::persist_input(self.registry.as_ref(), &id, agent)?;
             streaming::drain(
                 self.registry.as_ref(),
                 self.timeline.as_ref(),
                 &self.events,
                 &id,
                 agent,
-            )?;
+            )
+            .await?;
             streaming::persist_handle(self.registry.as_ref(), &id, agent)?;
             if matches!(agent.pending, Some(AgentTurnEvent::Failed)) {
                 streaming::settle_failure(self.timeline.as_ref(), &self.events, &id, agent).await?;

@@ -65,10 +65,11 @@ Provider 在首次登记前同时设置 `internal` 和 Bot/Conversation/Workspac
 16 KiB，最终回复 256 KiB，历史每页最多 50 条且 JSON 总量不超过 2 MiB。
 
 `messageId` 在 Channel 内去重。相同目标和内容重发返回原回执，目标或内容改变则冲突。
-平台确认发生在接纳落盘之后，不等待模型完成。权限等待通过 Turn 的 pendingPermissions
-呈现，由认证的 Ait 客户端调用审批接口，第三方正文不能直接批准工具执行。
+平台确认发生在接纳落盘之后，不等待模型完成。执行期间所有 Provider 权限请求自动拒绝，
+不等待客户端审批；拒绝失败则终止当前执行。原生自动审核在 Bot 中关闭，详见
+[ADR-145](../decisions/bot/adr-145-bot-permission-denial.md)。
 
-执行状态为 queued/sending/running/needs_approval/completed/failed/uncertain/cancelled；
+执行状态为 queued/sending/running/completed/failed/uncertain/cancelled；needs_approval 仅保留旧记录兼容。
 投递状态为 pending/sending/delivered/uncertain。重启时 sending、running 或权限等待的
 执行标记为 uncertain，阻止同 generation 的后续输入执行，需显式 reset；不会自动重做
 可能包含副作用的输入。完成且尚未发送的回复继续投递，正在发送的回复恢复为 uncertain。
@@ -99,29 +100,29 @@ memory.update 使用内容摘要 revision 防止 Ait 客户端覆盖过期内容
 通过现有认证 WebSocket 的 request envelope 调用。安装后广告 `workspace-bots-v1` 和
 以下方法，bot.channel.types 返回 supported 与 Email 的未支持声明。
 
-| 方法                             | 参数与行为                                                     |
-| -------------------------------- | -------------------------------------------------------------- |
-| `bot.create.request`             | botId、workspaceId、name、instructions（可省略）、execution    |
-| `bot.list.request`               | workspaceId；返回轻量 Bot 列表                                 |
-| `bot.get.request`                | botId；返回完整配置                                            |
-| `bot.update.request`             | botId；可选 name/instructions/execution/enabled                |
-| `bot.archive.request`            | botId；停止工作，保留记录                                      |
-| `bot.channel.types.request`      | 空对象；支持 builtin/telegram/feishu，Email 未支持             |
-| `bot.channel.list.request`       | botId                                                          |
-| `bot.channel.create.request`     | botId、channelId、config、enabled（默认 false）                |
-| `bot.channel.update.request`     | botId、channelId、enabled、可选 config；账号身份与类型不可迁移 |
-| `bot.channel.delete.request`     | botId、channelId；保留历史                                     |
-| `bot.channel.status.request`     | botId、channelId；连接状态与安全错误                           |
-| `bot.conversation.open.request`  | botId；打开或复用内置 owner 对话                               |
-| `bot.conversation.list.request`  | botId；公开映射不含 Provider session ID                        |
-| `bot.conversation.reset.request` | botId、conversationId；显式开始新 generation                   |
-| `bot.message.send.request`       | botId、conversationId、messageId、text；只允许内置 Channel     |
-| `bot.history.get.request`        | botId、conversationId、可选 afterSequence/limit                |
-| `bot.turn.get.request`           | botId、turnId；读取执行、审批与投递回执                        |
-| `bot.turn.cancel.request`        | botId、turnId；取消排队输入或请求取消当前轮次                  |
-| `bot.permission.resolve.request` | botId、turnId、permissionId、原生 response                     |
-| `bot.memory.get.request`         | botId；返回 text/revision                                      |
-| `bot.memory.update.request`      | botId、text、expected（上次 revision）                         |
+| 方法                             | 参数与行为                                                                   |
+| -------------------------------- | ---------------------------------------------------------------------------- |
+| `bot.create.request`             | botId、workspaceId、name、instructions（可省略）、execution                  |
+| `bot.list.request`               | workspaceId；返回轻量 Bot 列表                                               |
+| `bot.get.request`                | botId；返回完整配置                                                          |
+| `bot.update.request`             | botId；可选 name/instructions/execution/enabled                              |
+| `bot.archive.request`            | botId；停止工作，保留记录                                                    |
+| `bot.channel.types.request`      | 空对象；支持 builtin/telegram/feishu，Email 未支持                           |
+| `bot.channel.list.request`       | botId                                                                        |
+| `bot.channel.create.request`     | botId、channelId、config、enabled（默认 false）                              |
+| `bot.channel.update.request`     | botId、channelId、enabled、可选 config；账号身份与类型不可迁移               |
+| `bot.channel.delete.request`     | botId、channelId；保留历史                                                   |
+| `bot.channel.status.request`     | botId、channelId；连接状态与安全错误                                         |
+| `bot.conversation.open.request`  | botId；打开或复用内置 owner 对话                                             |
+| `bot.conversation.list.request`  | botId；公开映射不含 Provider session ID                                      |
+| `bot.conversation.reset.request` | botId、conversationId；显式开始新 generation                                 |
+| `bot.message.send.request`       | botId、conversationId、messageId、text；只允许内置 Channel                   |
+| `bot.history.get.request`        | botId、conversationId、可选 afterSequence/limit                              |
+| `bot.turn.get.request`           | botId、turnId；读取执行、审批与投递回执                                      |
+| `bot.turn.cancel.request`        | botId、turnId；取消排队输入或请求取消当前轮次                                |
+| `bot.permission.resolve.request` | 兼容接口；botId、turnId、permissionId，response 只接受 `{"behavior":"deny"}` |
+| `bot.memory.get.request`         | botId；返回 text/revision                                                    |
+| `bot.memory.update.request`      | botId、text、expected（上次 revision）                                       |
 
 内置对话示例：
 

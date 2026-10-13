@@ -14,6 +14,63 @@ use crate::ports::agent_session::{
 mod ownership;
 
 #[cfg(unix)]
+#[tokio::test]
+async fn bot_denies_acp_permissions_and_completes_without_interactive_approval() {
+    use crate::service::agent_manager::{AgentManager, AgentRegistration};
+    use domain::agent_runtime::registry::AgentRuntimeRegistry;
+    use persistence::storage::agent_runtime::FileBackedAgentRuntimeRegistry;
+
+    let (root, client, spec) = fixture("permission");
+    let registry = FileBackedAgentRuntimeRegistry::new(root.path().join("agents.json"));
+    registry.initialize().unwrap();
+    let mut manager = AgentManager::new(Box::new(registry.clone()));
+    manager.register_client(Box::new(client)).unwrap();
+    manager
+        .create(
+            "bot-agent",
+            &spec,
+            AgentRegistration {
+                internal: true,
+                owner: Some(json!(domain::bot::SessionOwner {
+                    bot_id: domain::BotId::generate(),
+                    conversation_id: domain::ConversationId::generate(),
+                    workspace_id: "workspace-1".into(),
+                })),
+                ..AgentRegistration::default()
+            },
+        )
+        .await
+        .unwrap();
+    manager.send("bot-agent", "execute").await.unwrap();
+    tokio::time::timeout(Duration::from_secs(5), async {
+        loop {
+            manager.poll().await.unwrap();
+            let record = registry.get("bot-agent").unwrap().unwrap();
+            assert_ne!(
+                record.attention_reason,
+                Some(domain::agent_runtime::AgentAttentionReason::Permission)
+            );
+            if manager.active_turn("bot-agent").is_none() {
+                assert_eq!(
+                    record.last_status,
+                    domain::agent_runtime::AgentRuntimeStatus::Idle
+                );
+                break;
+            }
+            tokio::time::sleep(Duration::from_millis(10)).await;
+        }
+    })
+    .await
+    .unwrap();
+    let callback = requests(&root)
+        .into_iter()
+        .find(|request| request["id"] == "permission")
+        .unwrap();
+    assert_eq!(callback["result"]["outcome"]["optionId"], "reject");
+    manager.close_all().await.unwrap();
+}
+
+#[cfg(unix)]
 fn fixture(scenario: &str) -> (TempDir, OpenCodeClient, AgentSessionSpec) {
     let root = tempfile::tempdir().unwrap();
     let cwd = root

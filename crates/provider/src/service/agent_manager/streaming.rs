@@ -77,13 +77,15 @@ pub(super) async fn settle_failure(
     persist_failure(timeline, id, agent)
 }
 
-pub(super) fn drain(
+pub(super) async fn drain(
     registry: &dyn domain::agent_runtime::registry::AgentRuntimeRegistry,
     timeline: Option<&crate::storage::timeline::Timeline>,
     events: &model::session::SessionEvents,
     id: &str,
     agent: &mut super::LiveAgent,
 ) -> Result<(), AgentManagerError> {
+    persist_handle(registry, id, agent)?;
+    persist_input(registry, id, agent)?;
     for _ in 0..128 {
         if agent.pending.is_none() {
             agent.pending = match agent.session.poll_turn() {
@@ -107,6 +109,25 @@ pub(super) fn drain(
                 persist_usage(registry, timeline, id, agent, usage)
             }
             Some(AgentTurnEvent::PermissionRequested(request)) => {
+                if agent.record.internal && agent.record.owner.is_some() {
+                    let Some(request_id) = request["id"].as_str() else {
+                        agent.pending = Some(AgentTurnEvent::Failed);
+                        break;
+                    };
+                    // Bot turns cannot acquire permissions or wait for interactive approval.
+                    if agent
+                        .session
+                        .respond_permission(request_id, &serde_json::json!({"behavior":"deny"}))
+                        .await
+                        .is_err()
+                    {
+                        agent.pending = Some(AgentTurnEvent::Failed);
+                        break;
+                    }
+                    agent.pending = None;
+                    persist_handle(registry, id, agent)?;
+                    continue;
+                }
                 super::controls::publish_permission(registry, timeline, events, agent, request)?;
                 Ok(())
             }

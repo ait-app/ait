@@ -1,6 +1,63 @@
 use super::*;
 use crate::local::claude::permissions;
 
+#[cfg(unix)]
+#[tokio::test]
+async fn bot_denies_native_tools_and_questions() {
+    use crate::service::agent_manager::{AgentManager, AgentRegistration};
+    use domain::agent_runtime::registry::AgentRuntimeRegistry;
+    use persistence::storage::agent_runtime::FileBackedAgentRuntimeRegistry;
+
+    for prompt in ["permission", "question"] {
+        let (root, client, spec) = fixture();
+        let registry = FileBackedAgentRuntimeRegistry::new(root.path().join("agents.json"));
+        registry.initialize().unwrap();
+        let mut manager = AgentManager::new(Box::new(registry.clone()));
+        manager.register_client(Box::new(client)).unwrap();
+        manager
+            .create(
+                "bot-agent",
+                &spec,
+                AgentRegistration {
+                    internal: true,
+                    owner: Some(json!(domain::bot::SessionOwner {
+                        bot_id: domain::BotId::generate(),
+                        conversation_id: domain::ConversationId::generate(),
+                        workspace_id: "workspace-1".into(),
+                    })),
+                    ..AgentRegistration::default()
+                },
+            )
+            .await
+            .unwrap();
+        for (input, expected) in [(prompt, "Denied"), ("next", "Claude: next")] {
+            manager.send("bot-agent", input).await.unwrap();
+            tokio::time::timeout(Duration::from_secs(5), async {
+                loop {
+                    manager.poll().await.unwrap();
+                    let record = registry.get("bot-agent").unwrap().unwrap();
+                    assert_ne!(
+                        record.attention_reason,
+                        Some(domain::agent_runtime::AgentAttentionReason::Permission)
+                    );
+                    if manager.active_turn("bot-agent").is_none() {
+                        assert_eq!(
+                            record.last_status,
+                            domain::agent_runtime::AgentRuntimeStatus::Idle
+                        );
+                        assert_eq!(manager.last_message("bot-agent"), Some(expected));
+                        break;
+                    }
+                    tokio::time::sleep(Duration::from_millis(10)).await;
+                }
+            })
+            .await
+            .unwrap();
+        }
+        manager.close_all().await.unwrap();
+    }
+}
+
 fn request(name: &str, input: &Value) -> permissions::Pending {
     permissions::capture(&json!({"type":"control_request","request_id":"native",
         "request":{"subtype":"can_use_tool","tool_name":name,"input":input}}))
