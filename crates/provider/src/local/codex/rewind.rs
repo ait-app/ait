@@ -36,8 +36,7 @@ async fn rewind(
     let history = native_sessions::history_with_images(&source["thread"], images)?;
     if history.active
         || history.descriptor.provider_handle_id != id
-        || std::fs::canonicalize(&history.descriptor.cwd).ok()
-            != std::fs::canonicalize(&spec.cwd).ok()
+        || !same_directory(&history.descriptor.cwd, &spec.cwd).await
     {
         return Err(AgentSessionError::Rejected);
     }
@@ -98,8 +97,7 @@ async fn rewind(
     let result = native_sessions::history_with_images(&response["thread"], images)?;
     if result.active
         || result.descriptor.provider_handle_id != fork
-        || std::fs::canonicalize(&result.descriptor.cwd).ok()
-            != std::fs::canonicalize(&spec.cwd).ok()
+        || !same_directory(&result.descriptor.cwd, &spec.cwd).await
     {
         return Err(AgentSessionError::Failed);
     }
@@ -116,6 +114,14 @@ async fn rewind(
         return Err(AgentSessionError::Failed);
     }
     Ok(result)
+}
+
+/// Compare two working directories by their canonical path.
+///
+/// Paths that cannot be resolved at all compare equal, matching the previous
+/// `canonicalize(..).ok()` comparison and keeping unresolvable input non-fatal here.
+async fn same_directory(left: &str, right: &str) -> bool {
+    tokio::fs::canonicalize(left).await.ok() == tokio::fs::canonicalize(right).await.ok()
 }
 
 #[cfg(test)]

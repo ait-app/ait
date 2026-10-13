@@ -88,3 +88,19 @@ async fn rewind_forks_exclusive_prefix_and_never_modifies_the_source() {
             .is_err()
     );
 }
+
+#[tokio::test]
+async fn directory_comparison_uses_the_canonical_path_and_tolerates_unresolvable_input() {
+    let root = tempfile::tempdir().unwrap();
+    let nested = root.path().join("nested");
+    std::fs::create_dir(&nested).unwrap();
+    let root = root.path().to_string_lossy().into_owned();
+    let nested = nested.to_string_lossy().into_owned();
+
+    assert!(same_directory(&nested, &nested).await);
+    assert!(same_directory(&nested, &format!("{nested}/.")).await);
+    assert!(!same_directory(&nested, &root).await);
+    // Canonicalization failing on both sides keeps the previous `.ok()` equality.
+    assert!(same_directory("/nonexistent/left", "/nonexistent/right").await);
+    assert!(!same_directory(&nested, "/nonexistent/right").await);
+}
