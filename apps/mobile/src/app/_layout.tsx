@@ -33,7 +33,6 @@ import { WorkspacePinShortcutHandler } from "@/components/workspace-pin-shortcut
 import { WorkspaceRenameHost } from "@/components/workspace-rename-host";
 import { WorkspaceSetupDialog } from "@/components/workspace-setup-dialog";
 import { WorkspaceShortcutTargetsSubscriber } from "@/components/workspace-shortcut-targets-subscriber";
-import { WorktreeSetupCalloutSource } from "@/components/worktree-setup-callout-source";
 import {
   getIsElectronRuntime,
   HEADER_INNER_HEIGHT,
@@ -609,7 +608,6 @@ function AppContainer({ children, chromeEnabled: chromeEnabledOverride }: AppCon
         <RosettaCalloutSource />
         <UpdateCalloutSource />
         <LegacyAgentSkillsMigration />
-        <WorktreeSetupCalloutSource />
         <CommandCenterRootActions />
         <CommandCenterWorkspaceActions />
 

@@ -1194,12 +1194,6 @@ export const ru: TranslationResources = {
       search: "Поиск",
       schedules: "Расписания",
     },
-    worktreeSetup: {
-      title: "Настроить скрипты worktree",
-      description:
-        "Добавьте команды настройки для автоматической установки зависимостей и подготовки новых worktree.",
-      openProjectSettings: "Открыть настройки проекта",
-    },
     project: {
       actions: {
         menu: "Действия проекта",
