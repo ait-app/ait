@@ -558,6 +558,30 @@ impl CheckoutRuntime for LocalCheckout {
                 )
             })?;
         }
+        git_write(
+            &cwd,
+            &[
+                "config",
+                "--local",
+                &format!("branch.{initial_branch}.ait-reset-at"),
+                &chrono::Utc::now().to_rfc3339_opts(chrono::SecondsFormat::Millis, true),
+            ],
+        )?;
+        // Renaming a branch preserves its old PR upstream and fork push target.
+        // A reset workspace must resolve and publish its initial branch independently.
+        for setting in ["remote", "merge", "pushRemote", "gh-merge-base"] {
+            run_git(
+                &cwd,
+                &[
+                    "config",
+                    "--local",
+                    "--unset-all",
+                    &format!("branch.{initial_branch}.{setting}"),
+                ],
+                &[0, 5],
+                SMALL_OUTPUT_LIMIT,
+            )?;
+        }
         Ok(())
     }
 

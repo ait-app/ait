@@ -188,8 +188,11 @@ fn current(
         ]),
     )?;
     let candidates = array(&value)?;
-    let matches_branch =
-        |mr: &&Value| mr.get("source_branch").and_then(Value::as_str) == Some(head.as_str());
+    let reset_at = super::workspace_reset_at(cwd, &head)?;
+    let matches_branch = |mr: &&Value| {
+        mr.get("source_branch").and_then(Value::as_str) == Some(head.as_str())
+            && !super::predates_reset(mr["created_at"].as_str(), reset_at)
+    };
     let candidate = candidates
         .iter()
         .filter(matches_branch)

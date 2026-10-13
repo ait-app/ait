@@ -351,7 +351,7 @@ impl AgentRunner {
                     },
                 );
                 format!(
-                    "<paseo-system>\n{heading}\n{}\n</paseo-system>",
+                    "<ait-system>\n{heading}\n{}\n</ait-system>",
                     schedule.prompt
                 )
             }

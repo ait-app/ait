@@ -13,11 +13,7 @@ fn incomplete_and_missing_forge_objects_remain_absent_instead_of_fabricated() {
         json!({}),
         json!({"url":"https://github.com/acme/app/pull/1"}),
     ] {
-        assert!(
-            parse_status(&value.to_string(), "main", &context)
-                .unwrap()
-                .is_none()
-        );
+        assert!(parse_status(&value, "main", &context).is_none());
     }
     for value in [
         json!({}),
@@ -65,7 +61,7 @@ fn status(fields: Value) -> PullRequestStatus {
     };
     value.as_object_mut().unwrap().extend(fields);
     parse_status(
-        &value.to_string(),
+        &value,
         "local-head",
         &ForgeContext {
             kind: ForgeKind::Github,
@@ -73,7 +69,6 @@ fn status(fields: Value) -> PullRequestStatus {
             project_path: "fork/project".into(),
         },
     )
-    .unwrap()
     .unwrap()
 }
 

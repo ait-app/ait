@@ -404,3 +404,47 @@ fn checkout_falls_back_to_pr_view_for_a_missing_head_and_rejects_mismatched_forg
         Err(domain::workspace::worktrees::WorktreeError::ForgeUnavailable)
     );
 }
+
+#[test]
+fn reset_detaches_existing_prs_and_allows_new_prs_on_the_same_branch() {
+    let fixture = Fixture::new("cat \"$root/status.json\"");
+    let branch = git_optional(
+        &fixture.repository,
+        &["branch", "--show-current"],
+        READ_TIMEOUT,
+    )
+    .unwrap()
+    .unwrap();
+    run(
+        &fixture.repository,
+        &[
+            "config",
+            &format!("branch.{branch}.ait-reset-at"),
+            "2026-10-13T00:00:00Z",
+        ],
+    );
+    for state in ["OPEN", "CLOSED", "MERGED"] {
+        for (created_at, expected) in [
+            (Some("2026-10-12T00:00:00Z"), false),
+            (Some("2026-10-13T00:00:00Z"), false),
+            (Some("2026-10-14T00:00:00Z"), true),
+            (None, false),
+        ] {
+            fixture.payload(
+                "status.json",
+                &json!({
+                    "number": 42,
+                    "url": "https://github.com/acme/app/pull/42",
+                    "title": "Work",
+                    "state": state,
+                    "createdAt": created_at,
+                }),
+            );
+            let read = fixture
+                .forge
+                .current_pull_request_status(fixture.cwd())
+                .unwrap();
+            assert_eq!(read.status.is_some(), expected, "{state}: {created_at:?}");
+        }
+    }
+}
