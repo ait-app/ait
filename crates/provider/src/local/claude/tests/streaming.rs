@@ -3,6 +3,54 @@ use crate::local::claude::streaming;
 use crate::ports::agent_session::AgentTurnEvent;
 
 #[test]
+fn compaction_status_emits_one_loading_marker_for_each_boundary() {
+    let mut stream = streaming::Stream::default();
+    stream
+        .record(&json!({"type":"system","subtype":"status","status":null}))
+        .unwrap();
+    stream
+        .record(&json!({
+            "type":"system", "subtype":"status", "status":"compacting",
+            "uuid":"child", "parent_tool_use_id":"child-tool"
+        }))
+        .unwrap();
+    assert!(stream.events.is_empty());
+
+    let timeline = crate::storage::timeline::Timeline::memory().unwrap();
+    for (index, with_uuid) in [(0, true), (1, false)] {
+        let mut status = json!({"type":"system","subtype":"status","status":"compacting"});
+        if with_uuid {
+            status["uuid"] = json!("status");
+        }
+        stream.record(&status).unwrap();
+        stream.record(&status).unwrap();
+        stream
+            .record(&json!({
+                "type":"system", "subtype":"status", "status":"compacting",
+                "uuid":"duplicate"
+            }))
+            .unwrap();
+        assert_eq!(stream.events.len(), 1);
+        stream
+            .record(&json!({
+                "type":"system", "subtype":"compact_boundary",
+                "uuid":format!("boundary-{index}")
+            }))
+            .unwrap();
+        assert_eq!(stream.events.len(), 2);
+        for expected in ["loading", "completed"] {
+            let AgentTurnEvent::Timeline(entry) = stream.events.pop_front().unwrap() else {
+                panic!("compaction must emit durable timeline markers");
+            };
+            assert_eq!(entry.item["type"], "compaction");
+            assert_eq!(entry.item["status"], expected);
+            timeline.append("agent", "claude", &[entry]).unwrap();
+        }
+    }
+    assert_eq!(timeline.read("agent").unwrap().1.len(), 4);
+}
+
+#[test]
 fn structured_outputs_and_result_only_commands_are_visible_without_duplicating_streamed_text() {
     let mut stream = streaming::Stream::default();
     let structured = json!({"uuid":"result","structured_output":{"answer":42}});
