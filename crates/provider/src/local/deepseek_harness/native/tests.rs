@@ -12,6 +12,7 @@ mod fixture;
 mod imports;
 mod installed_history;
 mod interactions;
+mod quota;
 mod recovery;
 mod session;
 mod sources;

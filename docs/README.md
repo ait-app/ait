@@ -138,11 +138,14 @@
 - [Ait 0.0.14 发布说明](reports/releases/release-0.0.14.md)：Diff 语法高亮、侧边栏统计与 Codex 推理等级。
 - [Apple 本机构建](operations/apple-builds.md)：DMG、模拟器和 IPA。
 - [Claude Code](operations/claude-code.md)：认证、原生会话与审批。
-- [DeepSeek Harness](operations/deepseek-harness.md)：原生 Host、会话导入、权限模式、question 与 ACP 兼容配置。
-- [Antigravity CLI](operations/antigravity.md)：AGY 安装、登录、权限模式与会话恢复。
+- [DeepSeek Harness](operations/deepseek-harness.md)：原生 Host、DeepSeek 账号余额、会话导入、权限模式、question 与 ACP 兼容配置。
+- [Antigravity CLI](operations/antigravity.md)：AGY 安装、登录、权限模式、会话恢复与账号额度查询。
 - [语音与听写](operations/speech.md)：离线模型、后端配置和限制。
 
 ## 工程规范与验证
+
+- [Antigravity 账号额度接入](reports/providers/antigravity-account-quota-2026-10-14.md)：已登录仍不可用的复现、原生 `/usage` 接入、主机与会话账号隔离和失败回归。
+- [DSH DeepSeek 余额接入](reports/providers/dsh-deepseek-balance-2026-10-14.md)：API Key 与原生账号登录的区别、DeepSeek 官方余额查询、人民币展示及本机验证。
 
 - [提问弹层响应超时与重试](reports/clients/question-response-timeout-2026-10-13.md)：5 秒恢复按钮、保留填写内容、清理权限请求占用，以及真实丢包重试验证。
 - [定时任务列表 Host 展示去重](reports/clients/schedule-host-filter-2026-10-12.md)：按主机筛选后省略重复主机名，以及返回全部主机视图的浏览器回归。

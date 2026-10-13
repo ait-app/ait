@@ -33,6 +33,7 @@ pub(in crate::local::deepseek_harness) struct Session {
     closed: bool,
     images: crate::local::images::ImageStore,
     hydration: JoinSet<Result<Value, AgentSessionError>>,
+    account: Result<super::quota::credentials::Context, AgentSessionError>,
 }
 
 /// Open or adopt one durable native session and verify its cwd before admitting work.
@@ -61,6 +62,7 @@ pub(in crate::local::deepseek_harness) async fn open(
     {
         return Err(AgentSessionError::Rejected);
     }
+    let account = super::quota::credentials::Context::capture(client, &spec.cwd).await;
     let mut runtime = Runtime::open(client, &spec.cwd).await?;
     let catalog = runtime.api.call("session/modelCatalog", json!({})).await?;
     let mut request = json!({"cwd":spec.cwd});
@@ -135,6 +137,7 @@ pub(in crate::local::deepseek_harness) async fn open(
         closed: false,
         images: client.images.clone(),
         hydration: JoinSet::new(),
+        account,
     })
 }
 
@@ -355,6 +358,15 @@ impl Session {
 }
 
 impl AgentSession for Session {
+    fn account_usage(&self) -> AgentSessionFuture<'_, Value> {
+        Box::pin(async move {
+            if self.closed {
+                return Err(AgentSessionError::Unavailable);
+            }
+            super::quota::query(&self.runtime.api, &self.account).await
+        })
+    }
+
     fn failure_diagnostic(&self) -> Option<crate::ports::diagnostics::Diagnostic> {
         self.runtime.diagnostics.failure()
     }
