@@ -33,7 +33,7 @@ const STDERR_LIMIT: u64 = 64 * 1024;
 const CHECK_ANNOTATION_LIMIT: usize = 20;
 const CHECK_JOB_LIMIT: usize = 100;
 const FAILED_JOB_LIMIT: usize = 5;
-const STATUS_FIELDS: &str = "number,url,title,state,isDraft,baseRefName,headRefName,headRefOid,mergedAt,reviewDecision,mergeable,statusCheckRollup";
+const STATUS_FIELDS: &str = "number,url,title,state,isDraft,baseRefName,headRefName,headRefOid,createdAt,mergedAt,reviewDecision,mergeable,statusCheckRollup";
 
 const TIMELINE_QUERY: &str = r"
 query PullRequestTimeline($owner: String!, $name: String!, $number: Int!) {
@@ -145,11 +145,20 @@ impl LocalForge {
         };
         let arguments = strings(&["pr", "view", "--json", STATUS_FIELDS]);
         match self.gh(cwd, context, &arguments, READ_TIMEOUT) {
-            Ok(output) => Ok(PullRequestStatusRead {
-                status: parse_status(&output, &branch, context)?,
-                auth_state: ForgeAuthState::Authenticated,
-                forge: Some("github".to_owned()),
-            }),
+            Ok(output) => {
+                let value = parse_json(&output)?;
+                let reset_at = workspace_reset_at(cwd, &branch)?;
+                let status = if predates_reset(value["createdAt"].as_str(), reset_at) {
+                    None
+                } else {
+                    parse_status(&value, &branch, context)
+                };
+                Ok(PullRequestStatusRead {
+                    status,
+                    auth_state: ForgeAuthState::Authenticated,
+                    forge: Some("github".to_owned()),
+                })
+            }
             Err(error) if error.kind == ForgeFailureKind::NotFound => Ok(PullRequestStatusRead {
                 status: None,
                 auth_state: ForgeAuthState::Authenticated,
@@ -916,23 +925,50 @@ fn parse_search_items(
         .collect()
 }
 
+fn workspace_reset_at(
+    cwd: &Path,
+    branch: &str,
+) -> Result<Option<DateTime<chrono::FixedOffset>>, ForgeRuntimeError> {
+    git_optional(
+        cwd,
+        &[
+            "config",
+            "--local",
+            "--get",
+            &format!("branch.{branch}.ait-reset-at"),
+        ],
+        READ_TIMEOUT,
+    )?
+    .map(|value| {
+        DateTime::parse_from_rfc3339(&value)
+            .map_err(|_| malformed("Invalid workspace reset timestamp"))
+    })
+    .transpose()
+}
+
+fn predates_reset(
+    created_at: Option<&str>,
+    reset_at: Option<DateTime<chrono::FixedOffset>>,
+) -> bool {
+    reset_at.is_some_and(|reset_at| {
+        created_at
+            .and_then(|value| DateTime::parse_from_rfc3339(value).ok())
+            .is_none_or(|created_at| created_at <= reset_at)
+    })
+}
+
 fn parse_status(
-    output: &str,
+    value: &Value,
     fallback_head: &str,
     context: &ForgeContext,
-) -> Result<Option<PullRequestStatus>, ForgeRuntimeError> {
-    let value = parse_json(output)?;
-    let Some(url) = optional_string(&value, "url") else {
-        return Ok(None);
-    };
-    let Some(title) = optional_string(&value, "title") else {
-        return Ok(None);
-    };
-    let merged = optional_string(&value, "mergedAt").is_some();
+) -> Option<PullRequestStatus> {
+    let url = optional_string(value, "url")?;
+    let title = optional_string(value, "title")?;
+    let merged = optional_string(value, "mergedAt").is_some();
     let state = if merged {
         "merged".to_owned()
     } else {
-        optional_string(&value, "state")
+        optional_string(value, "state")
             .unwrap_or_default()
             .to_ascii_lowercase()
     };
@@ -948,17 +984,17 @@ fn parse_status(
     };
     let (repo_owner, repo_name) = parse_repo_from_pull_url(&url)
         .map_or((None, None), |(owner, name)| (Some(owner), Some(name)));
-    Ok(Some(PullRequestStatus {
+    Some(PullRequestStatus {
         forge: "github".to_owned(),
         project_path: Some(context.project_path.clone()),
         number: value.get("number").and_then(Value::as_u64),
         url,
         title,
         state,
-        base_ref_name: optional_string(&value, "baseRefName").unwrap_or_default(),
-        head_ref_name: optional_string(&value, "headRefName")
+        base_ref_name: optional_string(value, "baseRefName").unwrap_or_default(),
+        head_ref_name: optional_string(value, "headRefName")
             .unwrap_or_else(|| fallback_head.to_owned()),
-        head_sha: optional_string(&value, "headRefOid"),
+        head_sha: optional_string(value, "headRefOid"),
         is_merged: merged,
         is_draft: value
             .get("isDraft")
@@ -985,7 +1021,7 @@ fn parse_status(
         repo_name,
         github: None,
         forge_specific: None,
-    }))
+    })
 }
 
 fn parse_checks(value: Option<&Value>) -> Vec<PullRequestCheck> {

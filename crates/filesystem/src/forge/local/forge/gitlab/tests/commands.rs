@@ -588,3 +588,33 @@ fn timeline_keeps_human_threads_inline_locations_and_exact_pagination() {
             .is_some()
     );
 }
+
+#[test]
+fn reset_detaches_existing_mrs_and_allows_new_mrs_on_the_same_branch() {
+    let fixture = Fixture::new();
+    fixture.git(&[
+        "config",
+        "branch.feature.ait-reset-at",
+        "2026-10-13T00:00:00Z",
+    ]);
+    for (created_at, expected) in [
+        (Some("2026-10-12T00:00:00Z"), false),
+        (Some("2026-10-13T00:00:00Z"), false),
+        (Some("2026-10-14T00:00:00Z"), true),
+        (None, false),
+    ] {
+        let mut request = mr();
+        request["created_at"] = json!(created_at);
+        fixture.payload("list", &json!([request]));
+        assert_eq!(
+            fixture.status().status.is_some(),
+            expected,
+            "{created_at:?}"
+        );
+    }
+    fixture.git(&["switch", "-c", "another-workspace"]);
+    let mut request = mr();
+    request["source_branch"] = json!("another-workspace");
+    fixture.payload("list", &json!([request]));
+    assert!(fixture.status().status.is_some());
+}

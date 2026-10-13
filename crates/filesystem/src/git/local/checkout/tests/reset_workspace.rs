@@ -27,12 +27,50 @@ fn reset_workspace_from_default_branch(
     initial_branch_exists: bool,
 ) {
     let fixture = ResetFixture::new(default_branch, workspace_branch, initial_branch_exists);
+    for branch in [workspace_branch, "initial-workspace"] {
+        for (setting, value) in [
+            ("remote", "origin"),
+            ("merge", "refs/heads/old-pr"),
+            ("pushRemote", "paseo-pr-42"),
+            ("gh-merge-base", "old-base"),
+        ] {
+            git(
+                &fixture.linked,
+                &["config", &format!("branch.{branch}.{setting}"), value],
+            );
+        }
+    }
     fixture
         .runtime
         .reset_workspace(fixture.linked.to_str().unwrap(), "initial-workspace")
         .unwrap();
 
     fixture.assert_reset();
+    let reset_at = git_output(
+        &fixture.linked,
+        &[
+            "config",
+            "--local",
+            "--get",
+            "branch.initial-workspace.ait-reset-at",
+        ],
+    );
+    let reset_at = chrono::DateTime::parse_from_rfc3339(&reset_at).unwrap();
+    assert!((chrono::Utc::now() - reset_at.with_timezone(&chrono::Utc)).num_seconds() < 30);
+    for setting in ["remote", "merge", "pushRemote", "gh-merge-base"] {
+        let output = std::process::Command::new("git")
+            .args([
+                "config",
+                "--local",
+                "--get-all",
+                &format!("branch.initial-workspace.{setting}"),
+            ])
+            .current_dir(&fixture.linked)
+            .output()
+            .unwrap();
+        assert_eq!(output.status.code(), Some(1), "{setting}");
+        assert!(output.stdout.is_empty(), "{setting}");
+    }
     if initial_branch_exists && workspace_branch != "initial-workspace" {
         assert_eq!(
             git_output(&fixture.linked, &["rev-parse", workspace_branch]),

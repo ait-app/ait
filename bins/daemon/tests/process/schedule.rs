@@ -14,6 +14,7 @@ const METHODS: &[&str] = &[
     "schedule.delete.request",
     "schedule.run_once.request",
     "agent.get.request",
+    "agent.timeline.get.request",
     "agent.create.request",
     "agent.archive.request",
     "workspace.open.request",
@@ -140,6 +141,25 @@ async fn assert_automatic_existing_run(socket: &mut Socket, agent: &Value, works
     assert_eq!(
         record["schedule"]["runs"][0]["status"], "succeeded",
         "{record}"
+    );
+    let timeline = success(
+        socket,
+        "agent.timeline.get.request",
+        json!({"agentId": agent}),
+    )
+    .await;
+    let schedule_id = existing_id.as_str().unwrap();
+    let run_id = record["schedule"]["runs"][0]["id"].as_str().unwrap();
+    let expected = format!(
+        "<ait-system>\nSchedule \"Named existing agent job\" fired (id={schedule_id}, run={run_id}).\nexisting scheduled hello\n</ait-system>"
+    );
+    assert!(
+        timeline["entries"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .any(|entry| entry["item"]["text"] == expected),
+        "{timeline}"
     );
 }
 
