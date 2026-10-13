@@ -58,6 +58,17 @@ pub(crate) enum WorkspaceRecoveryState {
     },
 }
 
+/// Why an archived Workspace cannot be recovered.
+///
+/// Returned by recovery resolution so callers cannot observe a recoverable state as an error.
+#[derive(Debug, Clone, PartialEq, Eq)]
+struct WorkspaceRecoveryUnavailable {
+    /// Stable unavailable category.
+    reason: WorkspaceRecoveryUnavailableReason,
+    /// User-facing explanation aligned with Paseo.
+    message: String,
+}
+
 /// Successful recovered placement used by the API to publish a Workspace update.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub(crate) struct RecoveredWorkspace {
@@ -129,7 +140,11 @@ impl WorkspaceRecovery {
     ) -> Result<WorkspaceRecoveryState, WorkspaceRecoveryError> {
         match self.resolve_recovery(workspace_id)? {
             Ok(plan) => Ok(recovery_state(&plan)),
-            Err(state) => Ok(state),
+            Err(unavailable) => Ok(WorkspaceRecoveryState::Unavailable {
+                workspace_id: workspace_id.to_owned(),
+                reason: unavailable.reason,
+                message: unavailable.message,
+            }),
         }
     }
 
@@ -145,11 +160,8 @@ impl WorkspaceRecovery {
     ) -> Result<RecoveredWorkspace, WorkspaceRecoveryError> {
         let plan = self
             .resolve_recovery(workspace_id)?
-            .map_err(|state| match state {
-                WorkspaceRecoveryState::Unavailable { message, .. } => {
-                    WorkspaceRecoveryError::RecoveryUnavailable(message)
-                }
-                WorkspaceRecoveryState::Recoverable { .. } => unreachable!(),
+            .map_err(|unavailable| {
+                WorkspaceRecoveryError::RecoveryUnavailable(unavailable.message)
             })?;
         let (workspace, project, action) = match plan {
             RecoveryPlan::Unarchive { workspace, project } => {
@@ -214,21 +226,19 @@ impl WorkspaceRecovery {
     fn resolve_recovery(
         &self,
         workspace_id: &str,
-    ) -> Result<Result<RecoveryPlan, WorkspaceRecoveryState>, WorkspaceRecoveryError> {
+    ) -> Result<Result<RecoveryPlan, WorkspaceRecoveryUnavailable>, WorkspaceRecoveryError> {
         let Some(workspace) = self
             .workspaces
             .get(workspace_id)
             .map_err(map_workspace_error)?
         else {
             return Ok(Err(unavailable(
-                workspace_id,
                 WorkspaceRecoveryUnavailableReason::WorkspaceNotFound,
                 "This workspace is no longer known to the host.",
             )));
         };
         if !is_archived(workspace.archived_at.as_deref()) {
             return Ok(Err(unavailable(
-                workspace_id,
                 WorkspaceRecoveryUnavailableReason::WorkspaceNotArchived,
                 "This workspace is not archived, but it is unavailable from the host.",
             )));
@@ -239,7 +249,6 @@ impl WorkspaceRecovery {
             .map_err(map_project_error)?
         else {
             return Ok(Err(unavailable(
-                workspace_id,
                 WorkspaceRecoveryUnavailableReason::ProjectNotFound,
                 "The project for this archived workspace no longer exists.",
             )));
@@ -249,14 +258,12 @@ impl WorkspaceRecovery {
         }
         if workspace.kind != PersistedWorkspaceKind::Worktree {
             return Ok(Err(unavailable(
-                workspace_id,
                 WorkspaceRecoveryUnavailableReason::WorkspaceDirectoryMissing,
                 "The archived workspace directory no longer exists and cannot be recreated.",
             )));
         }
         if workspace.branch.as_deref().is_none_or(str::is_empty) {
             return Ok(Err(unavailable(
-                workspace_id,
                 WorkspaceRecoveryUnavailableReason::WorktreeBranchMissing,
                 "The archived worktree has no branch recorded, so it cannot be restored.",
             )));
@@ -267,7 +274,6 @@ impl WorkspaceRecovery {
             .unwrap_or_else(|| project.root_path.clone());
         if !self.recovery.is_directory(&source_repo_root) {
             return Ok(Err(unavailable(
-                workspace_id,
                 WorkspaceRecoveryUnavailableReason::ProjectDirectoryMissing,
                 "The source repository needed to restore this worktree no longer exists.",
             )));
@@ -280,12 +286,10 @@ impl WorkspaceRecovery {
     }
 }
 fn unavailable(
-    workspace_id: &str,
     reason: WorkspaceRecoveryUnavailableReason,
     message: &str,
-) -> WorkspaceRecoveryState {
-    WorkspaceRecoveryState::Unavailable {
-        workspace_id: workspace_id.to_owned(),
+) -> WorkspaceRecoveryUnavailable {
+    WorkspaceRecoveryUnavailable {
         reason,
         message: message.to_owned(),
     }
