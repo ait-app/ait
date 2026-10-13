@@ -6,6 +6,9 @@ import { getCompactionMarkerLabel } from "./message-compaction-label";
 describe("getCompactionMarkerLabel", () => {
   it("renders loading, automatic, manual, tokenized, and fallback labels", () => {
     expect(getCompactionMarkerLabel({ status: "loading" })).toBe("Compacting...");
+    expect(getCompactionMarkerLabel({ status: "failed", trigger: "auto" })).toBe(
+      "Context compaction failed",
+    );
     expect(getCompactionMarkerLabel({ status: "completed", trigger: "auto" })).toBe(
       "Context automatically compacted",
     );
@@ -22,6 +25,7 @@ describe("getCompactionMarkerLabel", () => {
     await i18n.changeLanguage("zh-CN");
     try {
       expect(getCompactionMarkerLabel({ status: "loading" })).toBe("正在压缩...");
+      expect(getCompactionMarkerLabel({ status: "failed" })).toBe("上下文压缩失败");
     } finally {
       await i18n.changeLanguage("en");
     }

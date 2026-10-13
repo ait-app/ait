@@ -22,6 +22,7 @@
 
 ## 架构决策
 
+- [ADR-147：所有 Provider 的上下文压缩生命周期提示](decisions/providers/adr-147-provider-compaction-lifecycle.md)：原生开始／结束映射、稳定身份配对、失败提示与历史回放。
 - [ADR-146：Workspace 重置清除变更请求关联](decisions/workspace/adr-146-reset-workspace-change-request-association.md)：本地分支重置标记、旧 PR/MR 过滤与远程跟踪清理。
 
 - [ADR-145：Bot 执行期间自动拒绝权限请求](decisions/bot/adr-145-bot-permission-denial.md)：统一原生拒绝、禁止手动批准、关闭原生自动审核与移除 Bot 审批界面。

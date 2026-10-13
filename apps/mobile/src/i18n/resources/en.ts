@@ -481,6 +481,7 @@ export const en = {
       },
     },
     compaction: {
+      failed: "Context compaction failed",
       loading: "Compacting...",
       auto: "Context automatically compacted",
       manual: "Context manually compacted",

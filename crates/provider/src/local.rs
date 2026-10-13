@@ -6,6 +6,7 @@ mod acp_transport;
 pub(crate) mod antigravity;
 pub(crate) mod claude;
 pub(crate) mod codex;
+mod compaction;
 mod configuration;
 pub(crate) mod deepseek_harness;
 pub(crate) mod diagnostics;

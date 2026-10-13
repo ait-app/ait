@@ -2178,7 +2178,7 @@ export const Notification = memo(function Notification({
 });
 
 interface CompactionMarkerProps {
-  status: "loading" | "completed";
+  status: "loading" | "completed" | "failed";
   trigger?: "auto" | "manual";
   preTokens?: number;
 }

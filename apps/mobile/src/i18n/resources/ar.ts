@@ -382,6 +382,7 @@ export const ar: TranslationResources = {
       },
     },
     compaction: {
+      failed: "فشل ضغط السياق",
       loading: "الضغط...",
       auto: "يتم ضغط السياق تلقائيًا",
       manual: "تم ضغط السياق يدويًا",

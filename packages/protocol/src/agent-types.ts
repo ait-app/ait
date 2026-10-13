@@ -350,7 +350,8 @@ export type ToolCallTimelineItem =
 export interface CompactionTimelineItem {
   [key: string]: unknown;
   type: "compaction";
-  status: "loading" | "completed";
+  status: "loading" | "completed" | "failed";
+  compactionId?: string;
   trigger?: "auto" | "manual";
   preTokens?: number;
 }

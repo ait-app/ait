@@ -29,6 +29,7 @@ pub(super) struct Stream {
     observation: usize,
     bytes: usize,
     assistant_seen: bool,
+    compactions: crate::local::compaction::Compactions,
     pub(super) failure: Option<Failure>,
 }
 
@@ -40,6 +41,7 @@ impl Stream {
         self.observation = 0;
         self.bytes = 0;
         self.assistant_seen = false;
+        self.compactions = crate::local::compaction::Compactions::default();
         self.failure = None;
     }
 
@@ -55,6 +57,7 @@ impl Stream {
         let kind = match update["step_type"].as_str() {
             Some("agent_response") => "assistant_message",
             Some("tool") => "tool_call",
+            Some("checkpoint") => return self.compaction(update, done),
             // Native user/checkpoint and new categories do not change the host's lifecycle.
             Some(_) => return Ok(()),
             None => return Err(AgentSessionError::Failed),
@@ -132,6 +135,23 @@ impl Stream {
         Ok(())
     }
 
+    fn compaction(&mut self, update: &Value, done: bool) -> Result<(), AgentSessionError> {
+        let index = update["step_index"]
+            .as_u64()
+            .ok_or(AgentSessionError::Failed)?;
+        let id = format!("{}:{}:checkpoint:{index}", self.conversation, self.turn);
+        let status = if done { "completed" } else { "loading" };
+        if let Some(item) = self.compactions.marker(&id, status, Some("auto"))? {
+            self.events.push_back(AgentTurnEvent::Timeline(NativeItem {
+                key: format!("native:antigravity:{id}:{status}"),
+                turn_id: Some(self.turn.clone()),
+                timestamp: Utc::now().to_rfc3339(),
+                item,
+            }));
+        }
+        Ok(())
+    }
+
     pub(super) fn finish(&mut self, result: &Value) -> Result<(), AgentSessionError> {
         if result["conversation_id"] != self.conversation {
             return Err(AgentSessionError::Failed);
@@ -145,6 +165,7 @@ impl Stream {
         if response.len() > MAX_TEXT {
             return Err(AgentSessionError::Failed);
         }
+        self.finish_compactions();
         if let Some(usage) = result.get("usage") {
             let snapshot = AgentUsage {
                 input_tokens: counter(usage, "input_tokens")?,
@@ -227,6 +248,7 @@ impl Stream {
     }
 
     pub(super) fn abort(&mut self, failure: Failure) {
+        self.finish_compactions();
         self.failure = Some(self.failure.map_or(failure, |current| current.max(failure)));
         let failure = self.failure.expect("failure assigned above");
         for step in self.steps.values_mut().filter(|step| !step.published) {
@@ -239,6 +261,20 @@ impl Stream {
                 .push_back(AgentTurnEvent::Timeline(step.entry.clone()));
         }
         self.events.push_back(AgentTurnEvent::Failed);
+    }
+
+    fn finish_compactions(&mut self) {
+        for item in self.compactions.fail_pending() {
+            let id = item["compactionId"]
+                .as_str()
+                .expect("native compaction identity");
+            self.events.push_back(AgentTurnEvent::Timeline(NativeItem {
+                key: format!("native:antigravity:{id}:failed"),
+                turn_id: Some(self.turn.clone()),
+                timestamp: Utc::now().to_rfc3339(),
+                item,
+            }));
+        }
     }
 }
 

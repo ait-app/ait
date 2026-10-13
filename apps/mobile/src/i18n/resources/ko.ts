@@ -383,6 +383,7 @@ export const ko: TranslationResources = {
       },
     },
     compaction: {
+      failed: "컨텍스트 압축 실패",
       loading: "압축하는 중...",
       auto: "컨텍스트가 자동으로 압축되었습니다",
       manual: "컨텍스트가 수동으로 압축되었습니다",
