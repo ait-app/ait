@@ -84,6 +84,16 @@ impl DeepSeekHarnessClient {
 }
 
 impl AgentClient for DeepSeekHarnessClient {
+    fn usage(&self) -> AgentSessionFuture<'_, Value> {
+        Box::pin(async move {
+            if !self.interactive {
+                return Ok(native::quota::acp_unavailable());
+            }
+            let cwd = std::env::current_dir().map_err(|_| AgentSessionError::Failed)?;
+            native::quota::read(self, cwd.to_str().ok_or(AgentSessionError::Failed)?).await
+        })
+    }
+
     fn supports_summary_generation(&self) -> bool {
         true
     }

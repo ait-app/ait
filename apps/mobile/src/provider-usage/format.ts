@@ -52,6 +52,8 @@ export function formatAmount(value: number, unit: ProviderUsageBalanceUnit): str
   switch (unit) {
     case "usd":
       return `$${value.toFixed(2)}`;
+    case "cny":
+      return `CN¥${value.toFixed(2)}`;
     case "tokens":
       return formatTokenCount(value);
     default:

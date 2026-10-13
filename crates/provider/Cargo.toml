@@ -14,7 +14,7 @@ futures-util.workspace = true
 tokio-tungstenite.workspace = true
 # Validate image payloads before native prompt admission and decode provider image artifacts.
 base64.workspace = true
-# Read-only Claude OAuth quota inspection; credentials never enter public snapshots.
+# Read-only native account balance/quota inspection; credentials never enter public snapshots.
 reqwest.workspace = true
 reqwest.features = ["rustls-tls", "json", "stream"]
 secrecy.workspace = true
@@ -23,6 +23,8 @@ rusqlite.workspace = true
 rusqlite.features = ["bundled", "backup"]
 serde.workspace = true
 serde_json.workspace = true
+# Read DSH's native credential/configuration YAML without modifying its owned files.
+serde_yaml_ng.workspace = true
 sha2.workspace = true
 tempfile.workspace = true
 thiserror.workspace = true

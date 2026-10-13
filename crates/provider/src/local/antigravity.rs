@@ -3,6 +3,7 @@
 mod config;
 mod diagnostics;
 mod discovery;
+mod quota;
 mod session;
 mod streaming;
 mod transport;
@@ -87,6 +88,13 @@ impl AgentClient for AntigravityClient {
             let models =
                 discovery::models(self, cwd.to_str().ok_or(AgentSessionError::Failed)?).await?;
             Ok(format!("Antigravity CLI ready; {} models", models.len()))
+        })
+    }
+
+    fn usage(&self) -> AgentSessionFuture<'_, Value> {
+        Box::pin(async move {
+            let cwd = std::env::current_dir().map_err(|_| AgentSessionError::Failed)?;
+            quota::read(self, &cwd).await
         })
     }
 

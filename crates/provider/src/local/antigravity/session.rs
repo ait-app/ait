@@ -183,6 +183,13 @@ impl Session {
 }
 
 impl AgentSession for Session {
+    fn account_usage(&self) -> AgentSessionFuture<'_, Value> {
+        Box::pin(super::quota::read(
+            &self.client,
+            std::path::Path::new(&self.cwd),
+        ))
+    }
+
     fn failure_diagnostic(&self) -> Option<crate::ports::diagnostics::Diagnostic> {
         use crate::ports::diagnostics::{Category, Diagnostic};
         let failure = self

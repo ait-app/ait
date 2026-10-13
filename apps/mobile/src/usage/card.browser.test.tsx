@@ -66,6 +66,30 @@ afterEach(async () => {
 });
 
 describe("native usage card in Chromium", () => {
+  it("renders DeepSeek yuan balances without a made-up percentage or login error", async () => {
+    await i18n.changeLanguage("zh-CN");
+    const node = render({
+      id: "deepseek-harness",
+      sourceId: "deepseek-harness",
+      sourceLabel: "DeepSeek Harness",
+      account: {},
+      fetchedAt: entry.fetchedAt,
+      report: {
+        status: "available",
+        windows: [],
+        balances: [
+          { id: "total-cny", label: "DeepSeek total balance", remaining: 12.01, unit: "cny" },
+          { id: "recharge-cny", label: "DeepSeek recharge balance", remaining: 9.33, unit: "cny" },
+          { id: "bonus-cny", label: "DeepSeek bonus balance", remaining: 2.67, unit: "cny" },
+        ],
+      },
+    });
+    expect(node.textContent).toContain("剩余 ¥12.01");
+    expect(node.textContent).toContain("剩余 ¥9.33");
+    expect(node.textContent).toContain("剩余 ¥2.67");
+    expect(node.textContent).not.toContain("%");
+    expect(node.querySelector('[data-testid="usage-login-error"]')).toBeNull();
+  });
   it("updates displayed percentages and login messages when the language changes", async () => {
     const node = render(entry, { ...display, displayAs: "remaining" });
     expect(node.textContent).toContain("75% left");

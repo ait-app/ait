@@ -45,7 +45,11 @@ export function formatRunOutLabel(
 export function formatAmount(value: number, unit: UsageBalanceUnit, locale: string): string {
   switch (unit) {
     case "usd":
-      return new Intl.NumberFormat(locale, { style: "currency", currency: "USD" }).format(value);
+    case "cny":
+      return new Intl.NumberFormat(locale, {
+        style: "currency",
+        currency: unit === "cny" ? "CNY" : "USD",
+      }).format(value);
     case "tokens":
       return formatTokenCount(value);
     default:

@@ -3,9 +3,21 @@ import {
   ProviderUsageListRequestMessageSchema,
   ProviderUsageSchema,
   UsageReportEntrySchema,
+  ProviderUsageBalanceSchema,
 } from "./messages.js";
 
 describe("native usage report compatibility", () => {
+  it("preserves DeepSeek CNY balances without inventing usage or a limit", () => {
+    const balance = ProviderUsageBalanceSchema.parse({
+      id: "total-cny",
+      label: "DeepSeek total balance",
+      remaining: 12.01,
+      unit: "cny",
+    });
+    expect(balance.unit).toBe("cny");
+    expect(balance.used).toBeUndefined();
+    expect(balance.limit).toBeUndefined();
+  });
   it("accepts legacy host requests and session-scoped forced refresh", () => {
     expect(
       ProviderUsageListRequestMessageSchema.parse({

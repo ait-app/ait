@@ -7,6 +7,7 @@ mod http;
 mod interactions;
 pub(super) mod native_sessions;
 mod projection;
+pub(super) mod quota;
 mod runtime;
 mod session;
 mod usage;
