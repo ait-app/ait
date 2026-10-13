@@ -1,6 +1,7 @@
 # Relay 连接加速验证
 
-日期：2026-10-13。分支 `perf/relay-connect-latency`，基线 `d3be3ca3` 加本次工作区改动。
+日期：2026-10-13。分支 `perf/relay-connect-latency`，实现验证版本 `de8880d8`，
+基于主分支 `13ce800c`；验证后仅更新本报告。
 范围为 Host 连接复用与恢复、Host 侧 TLS 会话缓存、TCP_NODELAY、Relay 客户端重连退避。
 未修改中心协议、票据权限、配对/hello 超时或领域边界。
 
@@ -36,7 +37,8 @@ Rust 网络用例在允许监听回环端口的环境运行；外部服务、客
 
 ## 构建与静态检查
 
-- `cargo check --workspace --locked`、`cargo clippy -p relay --all-targets --locked -- -D warnings` 通过。
+- 初版通过 `cargo check --workspace --locked`、`cargo clippy -p relay --all-targets --locked -- -D warnings`。
+- 更新主分支基线后，`cargo build --workspace --locked`、`cargo clippy --locked --workspace --all-targets -- -D warnings` 通过；上述 390 项定向测试重新通过。
 - `cargo fmt --all --check`、`git diff --check` 通过。
 - `npm run build:sdk`、`npm run typecheck --workspace=@ait/client --workspace=@ait/mobile` 通过。
 - 修改的 12 个 TypeScript 文件通过 `npm exec -- oxlint <文件列表>`；修改的 TypeScript/Markdown 文件通过 `oxfmt --check`。
