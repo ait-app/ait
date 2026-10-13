@@ -97,7 +97,7 @@ fn source_sequence_gap_interrupts_fragment_coalescing() {
 
 #[test]
 fn complete_attachment_at_the_byte_limit_is_accepted() {
-    let wrapper = "<chat-history-summary>\nChat history from a previous Paseo agent.\n\n[User] \n</chat-history-summary>";
+    let wrapper = "<chat-history-summary>\nChat history from a previous Ait agent.\n\n[User] \n</chat-history-summary>";
     let body = "x".repeat(512 * 1024 - wrapper.len());
     let text = attachment(&[row(1, json!({"type":"user_message","text":body}))]);
     assert_eq!(text.len(), 512 * 1024);
@@ -106,7 +106,7 @@ fn complete_attachment_at_the_byte_limit_is_accepted() {
 
 #[test]
 fn complete_attachment_one_byte_over_the_limit_is_rejected() {
-    let wrapper = "<chat-history-summary>\nChat history from a previous Paseo agent.\n\n[User] \n</chat-history-summary>";
+    let wrapper = "<chat-history-summary>\nChat history from a previous Ait agent.\n\n[User] \n</chat-history-summary>";
     let body = "x".repeat(512 * 1024 - wrapper.len() + 1);
     let rows = [row(1, json!({"type":"user_message","text":body}))];
     assert_eq!(

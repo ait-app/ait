@@ -47,7 +47,15 @@ fn fork_context_matches_recorded_upstream_cases() {
             let object = actual.as_object_mut().unwrap();
             object.remove("agentId");
             object.remove("error");
-            assert_eq!(actual, case["expected"], "{}", case["name"]);
+            // Keep the recorded upstream fixture intact while expecting Ait's branding.
+            let mut expected = case["expected"].clone();
+            let text = expected["attachment"]["text"].as_str().unwrap();
+            expected["attachment"]["text"] = json!(text.replacen(
+                "Chat history from a previous Paseo agent.",
+                "Chat history from a previous Ait agent.",
+                1,
+            ));
+            assert_eq!(actual, expected, "{}", case["name"]);
         }
     }
 }
