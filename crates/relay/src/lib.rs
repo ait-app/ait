@@ -24,7 +24,7 @@ use uuid::Uuid;
 
 use protocol::{ControlCommand, ControlHello, ControlWelcome, DataMode};
 pub use protocol::{ControlGrant, Status};
-use transport::{Socket, connect, receive, send};
+use transport::{Dialer, Socket, receive, send};
 
 #[derive(Debug)]
 struct State {
@@ -43,6 +43,7 @@ pub struct Connector {
 
 #[derive(Debug)]
 struct Local {
+    dialer: Dialer,
     url: String,
     token: SecretString,
     server_id: String,
@@ -94,6 +95,7 @@ impl Connector {
                 cancel: CancellationToken::new(),
             })),
             local: Arc::new(Local {
+                dialer: Dialer::default(),
                 url: format!("ws://{address}/v1/ws"),
                 token,
                 server_id,
@@ -179,12 +181,15 @@ impl Connector {
         generation: Uuid,
         resume: Option<Uuid>,
     ) -> Result<(), Error> {
-        let mut control = connect(
-            &endpoint(&center, "v1/relay/control"),
-            &grant.control_ticket,
-            16 * 1024,
-        )
-        .await?;
+        let mut control = self
+            .local
+            .dialer
+            .connect(
+                &endpoint(&center, "v1/relay/control"),
+                &grant.control_ticket,
+                16 * 1024,
+            )
+            .await?;
         send(
             &mut control,
             Message::Text(

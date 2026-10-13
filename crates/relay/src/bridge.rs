@@ -12,7 +12,7 @@ use uuid::Uuid;
 
 use crate::diagnostics;
 use crate::protocol::{ClientHello, Pairing};
-use crate::transport::{MAX_MESSAGE, Socket, connect, receive, send, text};
+use crate::transport::{MAX_MESSAGE, Socket, receive, send, text};
 use crate::{Error, Local, protocol};
 
 /// Pair `session` at `url` using `ticket`, then forward frames to the fixed local daemon.
@@ -25,7 +25,9 @@ pub(super) async fn data(
     local: Arc<Local>,
     session: Uuid,
 ) -> Result<(), Error> {
-    let mut remote = connect(&url, ticket.expose_secret(), MAX_MESSAGE)
+    let mut remote = local
+        .dialer
+        .connect(&url, ticket.expose_secret(), MAX_MESSAGE)
         .await
         .inspect_err(|error| diagnostics::setup_error("remote_connect", error))?;
     let ready: Pairing = timeout(Duration::from_secs(30), receive(&mut remote))
@@ -61,7 +63,9 @@ pub(super) async fn data(
         .inspect_err(|error| diagnostics::setup_error("client_hello", error))?;
     let _: ClientHello = protocol::decode(&hello)
         .inspect_err(|error| diagnostics::setup_error("client_hello_decode", error))?;
-    let mut host = connect(&local.url, local.token.expose_secret(), MAX_MESSAGE)
+    let mut host = local
+        .dialer
+        .connect(&local.url, local.token.expose_secret(), MAX_MESSAGE)
         .await
         .inspect_err(|error| diagnostics::setup_error("local_connect", error))?;
     send(&mut host, Message::Text(hello))

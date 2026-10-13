@@ -51,3 +51,30 @@ an application close, bridge error, or network interruption. Existing Host logs
 had no corresponding close reason, and the bridge discarded transport errors.
 The instrumentation supplies the missing evidence for a subsequent reproduction;
 it is not a confirmed fix for that incident.
+
+## Connection reuse and recovery
+
+Relay Host runtimes connect saved hosts when their account becomes available and
+retain their active client across page subscriptions and host metadata updates.
+Fresh account discovery warms a host once when it becomes available again; repeated
+unchanged discovery does not restart its connection. A failed initial probe can be
+retried immediately on recovery, even when no active client exists. Concurrent
+recovery signals share the in-flight probe.
+
+Foregrounding and visible browser/Electron `online` events bypass pending reconnect
+backoff. Healthy sockets are verified and retained. Native account suspension marks
+discovery stale; successful discovery after resume or account recovery wakes existing
+relay hosts. This does not add a native OS network listener or keep native relay
+sockets alive while the account is suspended.
+
+Active relay clients retry after 500 ms, then 1, 2, 4, 8, 16 and at most 30 seconds
+on consecutive failures. One-shot host probes still disable automatic retries.
+The 45-second setup deadline and pairing/hello deadlines are unchanged.
+
+The Rust relay connector shares one TLS configuration and bounded session cache
+across control, data, download and subsequent reconnect sockets. Certificate and
+hostname verification remain enabled; TLS early data remains disabled. TLS session
+resumption requires support from the center's TLS endpoint. Outbound relay and
+loopback WebSockets enable `TCP_NODELAY`.
+
+See the [implementation validation](../reports/clients/relay-connect-latency.md).

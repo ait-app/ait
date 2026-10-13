@@ -21,7 +21,8 @@ async fn close_frame_logs_side_session_and_code_without_reason_text() {
             .unwrap();
         let _ = socket.next().await;
     });
-    let socket = connect(&format!("ws://{address}"), "private-ticket", MAX_MESSAGE)
+    let socket = crate::transport::Dialer::default()
+        .connect(&format!("ws://{address}"), "private-ticket", MAX_MESSAGE)
         .await
         .unwrap();
     let (peer, _peer_rx) = mpsc::channel(2);
@@ -58,7 +59,8 @@ async fn blocked_forwarding_reports_queue_timeout_and_cancels_pair() {
             .unwrap();
         let _ = socket.next().await;
     });
-    let socket = connect(&format!("ws://{address}"), "private-ticket", MAX_MESSAGE)
+    let socket = crate::transport::Dialer::default()
+        .connect(&format!("ws://{address}"), "private-ticket", MAX_MESSAGE)
         .await
         .unwrap();
     let (peer, _peer_rx) = mpsc::channel(1);
@@ -89,7 +91,8 @@ async fn abrupt_socket_loss_reports_read_error_and_cancels_pair() {
         let socket = accept_async(tcp).await.unwrap();
         drop(socket);
     });
-    let socket = connect(&format!("ws://{address}"), "private-ticket", MAX_MESSAGE)
+    let socket = crate::transport::Dialer::default()
+        .connect(&format!("ws://{address}"), "private-ticket", MAX_MESSAGE)
         .await
         .unwrap();
     let (peer, _peer_rx) = mpsc::channel(2);

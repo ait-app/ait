@@ -7,6 +7,7 @@ const mocks = vi.hoisted(() => ({
   add: vi.fn(async () => {}),
   discover: vi.fn(async () => {}),
   setCenter: vi.fn(),
+  setAvailable: vi.fn(),
 }));
 vi.mock("react-native", () => ({ Platform: { OS: "web" } }));
 vi.mock("@/desktop/host", () => ({ getDesktopHost: () => ({ invoke: mocks.invoke }) }));
@@ -17,6 +18,7 @@ vi.mock("./host-runtime", () => ({
     addAccountRelayHost: mocks.add,
     addDiscoveredAccountRelayHosts: mocks.discover,
     setAccountRelayCenter: mocks.setCenter,
+    setAvailableAccountRelayHosts: mocks.setAvailable,
   }),
 }));
 
@@ -26,6 +28,28 @@ beforeEach(() => {
 });
 
 describe("desktop account host persistence", () => {
+  it("announces usable hosts after discovery and clears availability when the account is stale", async () => {
+    const snapshot = {
+      status: "online",
+      center: "https://center.test/api",
+      selected: null,
+      stale: false,
+      hosts: [{ host_id: "remote", server_id: "server", name: "Remote" }],
+    };
+    mocks.invoke.mockResolvedValue(snapshot);
+    await accountCommand("account_status");
+    expect(mocks.setAvailable).toHaveBeenLastCalledWith(["server"]);
+    mocks.invoke.mockResolvedValue({ ...snapshot, stale: true });
+    await accountCommand("account_status");
+    expect(mocks.setAvailable).toHaveBeenLastCalledWith([]);
+    mocks.invoke.mockResolvedValue({ ...snapshot, status: "error" });
+    await accountCommand("account_status");
+    expect(mocks.setAvailable).toHaveBeenLastCalledWith([]);
+    mocks.invoke.mockResolvedValue(snapshot);
+    await accountCommand("account_status");
+    expect(mocks.setAvailable).toHaveBeenLastCalledWith(["server"]);
+  });
+
   it("imports all discovered hosts after browser login without selecting a target", async () => {
     const hosts = [
       { host_id: "first", server_id: "first-server", name: "First" },

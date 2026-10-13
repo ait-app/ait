@@ -726,7 +726,16 @@ export class HostRuntimeController {
   }
 
   ensureConnected(options?: { verify?: boolean }): void {
-    this.activeClient?.ensureConnected(options);
+    if (!this.started) return;
+    if (this.activeClient) {
+      this.activeClient.ensureConnected(options);
+      return;
+    }
+    // A failed initial probe has no client to reconnect. Recovery signals should
+    // bypass the probe interval, while concurrent signals share the same attempt.
+    if (this.probeCycleInFlight) return;
+    this.connectionLastProbedAt.clear();
+    void this.runProbeCycleNow();
   }
 
   markAgentDirectorySyncLoading(): void {
@@ -859,7 +868,7 @@ export class HostRuntimeController {
       connectionId: string,
       client: DaemonClient,
     ): Promise<boolean> => {
-      while (!this.snapshot.activeConnectionId) {
+      while (!this.activeClient) {
         if (!activationLock) {
           activationLock = this.switchToConnection({
             connectionId,
@@ -869,7 +878,7 @@ export class HostRuntimeController {
             activationLock = null;
           });
           await activationLock;
-          return this.snapshot.activeConnectionId === connectionId;
+          return this.activeClient === client;
         }
         await activationLock;
       }
@@ -1265,6 +1274,7 @@ export class HostRuntimeController {
       this.unsubscribeClientHandlers?.();
       this.unsubscribeClientHandlers = null;
       client.setReconnectEnabled(false);
+      this.activeClient = null;
       this.applyConnectionEvent({ type: "connect_failed", message: toErrorMessage(error) });
       this.updateSnapshot({
         ...toSnapshotConnectionPatch(this.connectionMachineState, this.connectionEpoch),
@@ -1391,6 +1401,7 @@ export class HostRuntimeStore {
   private hosts: HostProfile[] = [];
   private pendingDesktopConnections = new Set<string>();
   private accountRelayCenter: string | null = null;
+  private availableAccountRelayServers = new Set<string>();
   private removedAccountRelayConnections = new Set<string>();
   private accountDiscoveryTail: Promise<void> = Promise.resolve();
   private hostPersistenceTail: Promise<void> = Promise.resolve();
@@ -2048,6 +2059,7 @@ export class HostRuntimeStore {
     if (center === this.accountRelayCenter) return;
     if (center === null) this.removedAccountRelayConnections.clear();
     this.accountRelayCenter = center;
+    this.availableAccountRelayServers.clear();
     this.syncHosts(this.hosts);
   }
 
@@ -2367,6 +2379,25 @@ export class HostRuntimeStore {
   ensureConnectedAll(options?: { verify?: boolean }): void {
     for (const controller of this.controllers.values()) {
       controller.ensureConnected(options);
+    }
+  }
+
+  /** Warm existing relay hosts once as their account or remote presence recovers. */
+  setAvailableAccountRelayHosts(serverIds: readonly string[]): void {
+    const available = new Set(serverIds);
+    const previous = this.availableAccountRelayServers;
+    this.availableAccountRelayServers = available;
+    for (const host of this.hosts) {
+      if (
+        available.has(host.serverId) &&
+        !previous.has(host.serverId) &&
+        host.connections.some(
+          (connection) =>
+            connection.type === "accountRelay" && connection.center === this.accountRelayCenter,
+        )
+      ) {
+        this.controllers.get(host.serverId)?.ensureConnected();
+      }
     }
   }
 

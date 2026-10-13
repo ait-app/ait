@@ -83,6 +83,13 @@ async function receiveAccountSnapshot(
     store.setAccountRelayCenter(snapshot.center);
     await store.addDiscoveredAccountRelayHosts(snapshot.hosts, snapshot.center, current);
   } else if (snapshot.status === "logged_out") store.setAccountRelayCenter(null);
+  if (current()) {
+    store.setAvailableAccountRelayHosts(
+      snapshot.status === "online" && !snapshot.stale
+        ? snapshot.hosts.map((host) => host.server_id)
+        : [],
+    );
+  }
 }
 
 async function persistAccountHostSelection(
