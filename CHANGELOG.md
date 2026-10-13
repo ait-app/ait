@@ -1,5 +1,17 @@
 # Ait changelog
 
+## 0.1.2 - 2026-10-13
+
+- Accept valid large image prompts within the shared input budget; preserve original image bytes unless the request exceeds its size limits, then compress or split readable images without replacing the saved originals.
+- Support OpenCode 2.0.25 and preserve long shell and large file-edit permission requests through ACP.
+- Show safe Provider error explanations and persist failure notices in conversation history.
+- Restore question actions after five-second response timeouts so users can retry without losing their answers.
+- Deny permission requests during automated Bot turns and report the denial instead of leaving the Bot waiting for interactive approval.
+- Reuse Relay TLS sessions, reduce reconnect delay, and retain native mobile account connections for two background minutes before closing them.
+- Answer terminal device-attribute queries before a client subscribes, avoiding delayed fish startup.
+- Detach stale pull-request associations when resetting a Workspace, clarify scheduled-task system labels, and remove the Worktree setup reminder.
+- Move blocking filesystem work off the async reactor and remove a forced panic during Workspace recovery.
+
 ## 0.1.1 - 2026-10-12
 
 - Add Workspace-owned scheduled tasks, ordered task timelines, and a unified Host → Project → Workspace creation flow with a default of one run.
