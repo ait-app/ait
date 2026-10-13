@@ -8,6 +8,9 @@ use serde_json::{Value, json};
 
 use crate::ports::agent_session::AgentSessionError;
 
+/// Maximum serialized rich input, leaving room in the 64 MiB request envelope.
+pub(crate) const MAX_PROMPT_BYTES: usize = 63 * 1024 * 1024;
+
 /// An inline raster image, using the existing Paseo wire format.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
@@ -87,7 +90,7 @@ impl AgentPrompt {
             || serde_json::to_vec(self)
                 .map_err(|_| AgentSessionError::Rejected)?
                 .len()
-                > 63 * 1024 * 1024
+                > MAX_PROMPT_BYTES
         {
             return Err(AgentSessionError::Rejected);
         }

@@ -1,4 +1,147 @@
 use super::*;
+use base64::Engine;
+
+#[test]
+fn screenshot_input_survives_restart_and_retries_without_duplicate_delivery() {
+    let root = tempfile::tempdir().unwrap();
+    let path = root.path().join("timeline.sqlite3");
+    let timeline = Timeline::open(&path).unwrap();
+    let prompt = AgentPrompt {
+        text: "Inspect this screenshot".to_owned(),
+        images: vec![crate::protocol::prompt::PromptImage {
+            data: base64::engine::general_purpose::STANDARD.encode(vec![0; 3_886_681]),
+            mime_type: "image/png".to_owned(),
+        }],
+        client_message_id: Some("screenshot".to_owned()),
+        ..AgentPrompt::default()
+    };
+    prompt.validate().unwrap();
+    assert!(serde_json::to_vec(&prompt).unwrap().len() > 4 * 1024 * 1024);
+    assert_eq!(
+        timeline.reserve_input("agent", "screenshot", &prompt, "interrupt"),
+        Ok(Receipt::New)
+    );
+    drop(timeline);
+
+    let timeline = Timeline::open(&path).unwrap();
+    timeline.recover_inputs().unwrap();
+    assert_eq!(
+        timeline.reserve_input("agent", "screenshot", &prompt, "interrupt"),
+        Ok(Receipt::Accepted)
+    );
+    let queued = timeline.queued_inputs().unwrap();
+    assert_eq!(queued.len(), 1);
+    assert_eq!(queued[0].prompt, prompt);
+    timeline.claim_input("agent", "screenshot").unwrap();
+    timeline
+        .finish_input("agent", "screenshot", Receipt::Accepted)
+        .unwrap();
+    assert!(!timeline.has_queued_input("agent").unwrap());
+    assert_eq!(
+        timeline.reserve_input("agent", "screenshot", &prompt, "interrupt"),
+        Ok(Receipt::Accepted)
+    );
+}
+
+#[test]
+fn maximum_valid_input_fits_and_queue_byte_budgets_are_released_after_delivery() {
+    let timeline = Timeline::memory().unwrap();
+    let mut prompt = AgentPrompt {
+        text: "Inspect".to_owned(),
+        images: vec![
+            crate::protocol::prompt::PromptImage {
+                data: "AAAA".repeat(8 * 1024 * 1024),
+                mime_type: "image/png".to_owned(),
+            },
+            crate::protocol::prompt::PromptImage {
+                data: "AAAA".repeat(7 * 1024 * 1024),
+                mime_type: "image/png".to_owned(),
+            },
+        ],
+        output_schema: Some(serde_json::json!({"padding":""})),
+        ..AgentPrompt::default()
+    };
+    let encoded_size = serde_json::to_vec(&prompt).unwrap().len();
+    prompt.output_schema = Some(serde_json::json!({
+        "padding":"x".repeat(MAX_PROMPT_BYTES - encoded_size)
+    }));
+    assert_eq!(serde_json::to_vec(&prompt).unwrap().len(), MAX_PROMPT_BYTES);
+    prompt.validate().unwrap();
+    assert_eq!(
+        timeline.reserve_input("one", "large", &prompt, "interrupt"),
+        Ok(Receipt::New)
+    );
+    // Reuse the admitted payload to fill the global budget without repeatedly
+    // decoding and serializing a maximum-size rich input during fixture setup.
+    {
+        let database = timeline.database.lock().unwrap();
+        for agent in ["two", "three", "four"] {
+            database
+                .execute(
+                    "INSERT INTO input_receipts(agent,message,fingerprint,prompt,state) \
+                     SELECT ?,message,fingerprint,prompt,state FROM input_receipts WHERE agent='one'",
+                    [agent],
+                )
+                .unwrap();
+        }
+    }
+    // Duplicates do not consume capacity even when both byte budgets are full.
+    assert_eq!(
+        timeline.reserve_input("one", "large", &prompt, "interrupt"),
+        Ok(Receipt::Accepted)
+    );
+    let small = AgentPrompt::text("next");
+    for agent in ["one", "five"] {
+        assert_eq!(
+            timeline.reserve_input(agent, "small", &small, "interrupt"),
+            Err(ErrorCode::ResourceExhausted)
+        );
+        assert_eq!(
+            timeline.input_receipt(agent, "small", &small, "interrupt"),
+            Ok(None)
+        );
+    }
+    timeline.claim_input("one", "large").unwrap();
+    timeline
+        .finish_input("one", "large", Receipt::Accepted)
+        .unwrap();
+    for agent in ["one", "five"] {
+        assert_eq!(
+            timeline.reserve_input(agent, "small", &small, "interrupt"),
+            Ok(Receipt::New)
+        );
+    }
+}
+
+#[test]
+fn input_byte_budget_counts_utf8_bytes_in_existing_prompts() {
+    let timeline = Timeline::memory().unwrap();
+    let prompt = AgentPrompt::text("\u{754c}");
+    let encoded = serde_json::to_string(&prompt).unwrap();
+    // The next prompt exceeds the byte limit by one byte. SQLite's text length()
+    // would undercount the multibyte body and incorrectly admit it.
+    let small_size = encoded.len();
+    let mut large = AgentPrompt {
+        output_schema: Some(serde_json::json!({"padding":""})),
+        ..AgentPrompt::text("\u{754c}")
+    };
+    let overhead = serde_json::to_vec(&large).unwrap().len();
+    large.output_schema = Some(serde_json::json!({
+        "padding":"x".repeat(MAX_PROMPT_BYTES - small_size - overhead + 1)
+    }));
+    timeline
+        .reserve_input("agent", "large", &large, "interrupt")
+        .unwrap();
+    assert_eq!(
+        timeline.reserve_input("agent", "small", &prompt, "interrupt"),
+        Err(ErrorCode::ResourceExhausted)
+    );
+    timeline.cancel_inputs("agent").unwrap();
+    assert_eq!(
+        timeline.reserve_input("agent", "small", &prompt, "interrupt"),
+        Ok(Receipt::New)
+    );
+}
 
 #[test]
 fn owner_queries_read_only_its_first_fifo_input_and_scheduler_reads_only_ids() {
