@@ -4,7 +4,12 @@ use rusqlite::{OptionalExtension, params};
 use sha2::{Digest, Sha256};
 
 use super::{ErrorCode, Timeline, io};
-use crate::protocol::prompt::AgentPrompt;
+use crate::protocol::prompt::{AgentPrompt, MAX_PROMPT_BYTES};
+
+const MAX_QUEUED_INPUTS: u64 = 32;
+// An empty queue must accept one input that passed the shared prompt validation.
+const MAX_AGENT_INPUT_BYTES: u64 = MAX_PROMPT_BYTES as u64;
+const MAX_TOTAL_INPUT_BYTES: u64 = 4 * MAX_AGENT_INPUT_BYTES;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(crate) enum Receipt {
@@ -138,20 +143,37 @@ impl Timeline {
                 _ => return Err(ErrorCode::UnsupportedFormat),
             });
         }
-        let (count, bytes): (u64,u64) = tx.query_row(
-            "SELECT count(*),coalesce(sum(length(prompt)),0) FROM input_receipts WHERE state='queued' AND agent=?",
-            [agent], |row|Ok((row.get(0)?,row.get(1)?))).map_err(io)?;
+        let (count, bytes): (u64, u64) = tx
+            .query_row(
+                "SELECT count(*), coalesce(sum(length(CAST(prompt AS BLOB))), 0) \
+                 FROM input_receipts WHERE state='queued' AND agent=?",
+                [agent],
+                |row| Ok((row.get(0)?, row.get(1)?)),
+            )
+            .map_err(io)?;
         let total: u64 = tx
             .query_row(
-                "SELECT coalesce(sum(length(prompt)),0) FROM input_receipts WHERE state='queued'",
+                "SELECT coalesce(sum(length(CAST(prompt AS BLOB))), 0) \
+                 FROM input_receipts WHERE state='queued'",
                 [],
                 |row| row.get(0),
             )
             .map_err(io)?;
-        if count >= 32
-            || bytes.saturating_add(encoded.len() as u64) > 4 * 1024 * 1024
-            || total.saturating_add(encoded.len() as u64) > 32 * 1024 * 1024
+        let prompt_bytes = encoded.len() as u64;
+        if count >= MAX_QUEUED_INPUTS
+            || bytes.saturating_add(prompt_bytes) > MAX_AGENT_INPUT_BYTES
+            || total.saturating_add(prompt_bytes) > MAX_TOTAL_INPUT_BYTES
         {
+            tracing::warn!(
+                queued_inputs = count,
+                queued_agent_bytes = bytes,
+                queued_total_bytes = total,
+                prompt_bytes,
+                limit_inputs = MAX_QUEUED_INPUTS,
+                limit_agent_bytes = MAX_AGENT_INPUT_BYTES,
+                limit_total_bytes = MAX_TOTAL_INPUT_BYTES,
+                "Agent input queue capacity exhausted"
+            );
             return Err(ErrorCode::ResourceExhausted);
         }
         tx.execute("INSERT INTO input_receipts(agent,message,fingerprint,prompt,state) VALUES(?,?,?,?,'queued')",

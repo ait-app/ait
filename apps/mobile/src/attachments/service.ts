@@ -1,6 +1,18 @@
 import { collectRetainedAttachmentIds } from "@/attachments/gc-retention";
 import { getAttachmentStore } from "@/attachments/store";
 import type { AttachmentMetadata, SaveAttachmentInput } from "@/attachments/types";
+import {
+  imagePartsError,
+  imagePromptBytes,
+  isAnimatedSendImage,
+  MAX_IMAGE_PROMPT_BYTES,
+  MAX_ORIGINAL_IMAGE_BASE64,
+  MAX_SEND_IMAGES,
+  prepareImageForSend,
+  supportsSendImage,
+  type EncodedSendImage,
+  type ImageSendContext,
+} from "./image-send";
 
 const activePersistence = new Set<Promise<AttachmentMetadata>>();
 const persistedDuringGarbageCollection = new Set<string>();
@@ -94,34 +106,68 @@ export async function persistAttachmentFromFileUri(input: {
 
 export async function encodeAttachmentsForSend(
   attachments: readonly AttachmentMetadata[] | undefined,
-): Promise<Array<{ data: string; mimeType: string }> | undefined> {
+  context: ImageSendContext = {},
+): Promise<EncodedSendImage[] | undefined> {
   if (!attachments || attachments.length === 0) {
     return undefined;
   }
 
   const store = await getAttachmentStore();
-  const encoded = await Promise.all(
-    attachments.map(async (attachment) => {
-      try {
-        const data = await store.encodeBase64({ attachment });
-        return {
-          data,
-          mimeType: attachment.mimeType,
-        };
-      } catch (error) {
-        console.error("[attachments] Failed to encode attachment for send", {
-          id: attachment.id,
-          error,
-        });
-        return null;
+  if (attachments.length > MAX_SEND_IMAGES) throw imagePartsError();
+  const originals = new Map<number, EncodedSendImage>();
+  const groups: EncodedSendImage[][] = attachments.map(() => []);
+  let unreadOriginals = attachments.length;
+  const prepare = async (index: number, byteLimit = MAX_ORIGINAL_IMAGE_BASE64) => {
+    const maxParts =
+      MAX_SEND_IMAGES -
+      unreadOriginals -
+      groups.reduce((count, group) => count + group.length, 0) +
+      groups[index].length;
+    const parts = await prepareImageForSend(originals.get(index)!, maxParts, undefined, byteLimit);
+    originals.delete(index);
+    return parts.map((part) => ({
+      ...part,
+      ...(part.description
+        ? { description: `original image ${index + 1}: ${part.description}` }
+        : {}),
+    }));
+  };
+  const fitRequest = async () => {
+    // A prefix over the request limit also makes the full set oversized. Reduce
+    // it now so many large originals do not all remain resident in memory.
+    const candidates = [...originals.entries()].sort(
+      ([, a], [, b]) => b.data.length - a.data.length,
+    );
+    for (const [index, original] of candidates) {
+      if (imagePromptBytes(groups.flat(), context) <= MAX_IMAGE_PROMPT_BYTES) break;
+      if (isAnimatedSendImage(original)) continue;
+      const parts = await prepare(
+        index,
+        Math.min(MAX_ORIGINAL_IMAGE_BASE64, original.data.length - 1),
+      );
+      if (parts.reduce((bytes, part) => bytes + part.data.length, 0) < original.data.length) {
+        groups[index] = parts;
       }
-    }),
-  );
-
-  const valid = encoded.filter(
-    (entry): entry is { data: string; mimeType: string } => entry !== null,
-  );
-  return valid.length > 0 ? valid : undefined;
+    }
+    if (imagePromptBytes(groups.flat(), context) > MAX_IMAGE_PROMPT_BYTES) {
+      throw new Error("These images are too large to send together. Send fewer images.");
+    }
+  };
+  // Read sequentially and decode only one bitmap at a time. Byte limits alone
+  // trigger reduction; normalization of unsupported formats is separate.
+  for (const [index, attachment] of attachments.entries()) {
+    const data = await store.encodeBase64({ attachment });
+    const original = { data, mimeType: attachment.mimeType };
+    unreadOriginals -= 1;
+    originals.set(index, original);
+    groups[index] = [original];
+    if (data.length > MAX_ORIGINAL_IMAGE_BASE64 || !supportsSendImage(original.mimeType)) {
+      groups[index] = await prepare(index);
+    }
+    if (imagePromptBytes(groups.flat(), context) > MAX_IMAGE_PROMPT_BYTES) await fitRequest();
+  }
+  const encoded = groups.flat();
+  return encoded;
 }
 
 export async function resolveAttachmentPreviewUrl(attachment: AttachmentMetadata): Promise<string> {

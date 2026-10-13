@@ -18,6 +18,11 @@ import { createUserMessage, generateMessageId, type UserMessageItem } from "@/ty
 import type { MessageSubmissionRejectionOutcome } from "@/composer/submission/model";
 import type { PickedImageAttachmentInput } from "@/hooks/image-attachment-picker";
 import { i18n } from "@/i18n/i18next";
+import {
+  imageSendPayload,
+  type EncodedSendImage,
+  type ImageSendContext,
+} from "@/attachments/image-send";
 
 export interface QueuedComposerMessage {
   id: string;
@@ -192,7 +197,8 @@ export interface DispatchComposerAgentMessageInput {
   attachmentSubmitFormat?: ComposerAttachmentSubmitFormat;
   encodeImages: (
     images: AttachmentMetadata[],
-  ) => Promise<Array<{ data: string; mimeType: string }> | undefined>;
+    context?: ImageSendContext,
+  ) => Promise<EncodedSendImage[] | undefined>;
   submission: MessageSubmissionWriter;
   activeTurnBehavior?: ActiveTurnBehavior;
   activeTurnId?: string;
@@ -217,12 +223,17 @@ export async function dispatchComposerAgentMessage(
   });
   input.submission.begin(input.agentId, userMessage);
   try {
-    const imagesData = await input.encodeImages(wirePayload.images);
+    const imagesData = await input.encodeImages(wirePayload.images, {
+      text: input.text,
+      attachments: wirePayload.attachments,
+      clientMessageId,
+    });
+    const prepared = imageSendPayload(imagesData, wirePayload.attachments);
     await input.client.sendAgentMessage(input.agentId, input.text, {
       messageId: clientMessageId,
       ...(input.activeTurnBehavior ? { activeTurnBehavior: input.activeTurnBehavior } : {}),
-      images: imagesData ?? [],
-      attachments: wirePayload.attachments,
+      images: prepared.images ?? [],
+      attachments: prepared.attachments ?? [],
     });
     input.submission.accept(input.agentId, clientMessageId);
   } catch (error) {
