@@ -255,10 +255,22 @@ export function resolveStartupRoute(input: ResolveStartupRouteInput): StartupRou
 export function bindHostRuntimeAppState(
   store: { setAppVisible: (visible: boolean) => void },
   appState: Pick<typeof AppState, "currentState" | "addEventListener">,
+  networkEvents:
+    | Pick<EventTarget, "addEventListener" | "removeEventListener">
+    | undefined = typeof window !== "undefined" && typeof window.addEventListener === "function"
+    ? window
+    : undefined,
 ): () => void {
   const subscription = appState.addEventListener("change", (state) => {
     store.setAppVisible(state === "active");
   });
   store.setAppVisible(appState.currentState === "active");
-  return () => subscription.remove();
+  const recoverNetwork = () => {
+    if (appState.currentState === "active") store.setAppVisible(true);
+  };
+  networkEvents?.addEventListener("online", recoverNetwork);
+  return () => {
+    subscription.remove();
+    networkEvents?.removeEventListener("online", recoverNetwork);
+  };
 }

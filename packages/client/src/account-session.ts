@@ -606,6 +606,7 @@ export class AccountSessionManager {
     this.timer = null;
     for (const request of this.requests) request.abort();
     this.deps.closeTransports();
+    this.update({ stale: true });
     this.schedule(0);
   }
 

@@ -1,15 +1,19 @@
 //! WebSocket framing, authorization and bounded I/O for the relay adapter.
 
+use std::sync::Arc;
 use std::time::Duration;
 
 use futures_util::{SinkExt, StreamExt};
+use rustls::{ClientConfig, RootCertStore};
 use serde::de::DeserializeOwned;
 use tokio::net::TcpStream;
 use tokio::time::timeout;
 use tokio_tungstenite::tungstenite::{
     Message, Utf8Bytes, client::IntoClientRequest, protocol::WebSocketConfig,
 };
-use tokio_tungstenite::{MaybeTlsStream, WebSocketStream, connect_async_with_config};
+use tokio_tungstenite::{
+    Connector, MaybeTlsStream, WebSocketStream, connect_async_tls_with_config,
+};
 
 use crate::{Error, diagnostics, protocol};
 
@@ -18,40 +22,73 @@ pub(super) type Socket = WebSocketStream<MaybeTlsStream<TcpStream>>;
 /// Maximum size of one application frame on a data connection.
 pub(super) const MAX_MESSAGE: usize = 1024 * 1024;
 
-/// Connect to the supplied fixed endpoint using a one-use ticket or local bearer token.
-///
-/// # Errors
-/// Rejects invalid upgrade parameters, connection failures and a five-second setup timeout.
-pub(super) async fn connect(url: &str, ticket: &str, max: usize) -> Result<Socket, Error> {
-    let mut request = url.into_client_request().map_err(|_| Error::InvalidGrant)?;
-    request.headers_mut().insert(
-        "authorization",
-        format!("Bearer {ticket}")
-            .parse()
-            .map_err(|_| Error::InvalidGrant)?,
-    );
-    let config = WebSocketConfig::default()
-        .max_message_size(Some(max))
-        .max_frame_size(Some(max));
-    timeout(
-        Duration::from_secs(5),
-        connect_async_with_config(request, Some(config), false),
-    )
-    .await
-    .map_err(|_| {
-        tracing::warn!(
-            operation = "connect",
-            reason = "timeout",
-            timeout_ms = 5000,
-            "Relay socket failed"
+/// Shares trust configuration and the bounded TLS session cache across relay sockets.
+#[derive(Clone, Debug)]
+pub(super) struct Dialer {
+    tls: Arc<ClientConfig>,
+}
+
+impl Default for Dialer {
+    fn default() -> Self {
+        let roots = RootCertStore::from_iter(webpki_roots::TLS_SERVER_ROOTS.iter().cloned());
+        let config =
+            ClientConfig::builder_with_provider(Arc::new(rustls::crypto::ring::default_provider()))
+                .with_safe_default_protocol_versions()
+                .expect("ring supports the default TLS protocol versions")
+                .with_root_certificates(roots)
+                .with_no_client_auth();
+        Self {
+            tls: Arc::new(config),
+        }
+    }
+}
+
+impl Dialer {
+    /// Connect to the supplied fixed endpoint using a one-use ticket or local bearer token.
+    ///
+    /// # Errors
+    /// Rejects invalid upgrade parameters, connection failures and a five-second setup timeout.
+    pub(super) async fn connect(
+        &self,
+        url: &str,
+        ticket: &str,
+        max: usize,
+    ) -> Result<Socket, Error> {
+        let mut request = url.into_client_request().map_err(|_| Error::InvalidGrant)?;
+        request.headers_mut().insert(
+            "authorization",
+            format!("Bearer {ticket}")
+                .parse()
+                .map_err(|_| Error::InvalidGrant)?,
         );
-        Error::Transport
-    })?
-    .map(|(socket, _)| socket)
-    .map_err(|error| {
-        diagnostics::socket_error("connect", &error);
-        Error::Transport
-    })
+        let config = WebSocketConfig::default()
+            .max_message_size(Some(max))
+            .max_frame_size(Some(max));
+        timeout(
+            Duration::from_secs(5),
+            connect_async_tls_with_config(
+                request,
+                Some(config),
+                true,
+                Some(Connector::Rustls(self.tls.clone())),
+            ),
+        )
+        .await
+        .map_err(|_| {
+            tracing::warn!(
+                operation = "connect",
+                reason = "timeout",
+                timeout_ms = 5000,
+                "Relay socket failed"
+            );
+            Error::Transport
+        })?
+        .map(|(socket, _)| socket)
+        .map_err(|error| {
+            diagnostics::socket_error("connect", &error);
+            Error::Transport
+        })
+    }
 }
 
 /// Send one frame, bounding blocked writes to five seconds.

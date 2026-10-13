@@ -554,6 +554,75 @@ class BrowserClientLifecycle {
 }
 
 describe("HostRuntimeController", () => {
+  it("replaces a rejected active client with a fresh probe on recovery", async () => {
+    const connection = createAccountRelayHostConnection({
+      hostId: "11111111-1111-4111-8111-111111111111",
+      center: "https://center.test/api",
+    });
+    const clients: FakeDaemonClient[] = [];
+    const mountClientHandlers = vi
+      .fn()
+      .mockImplementationOnce(() => {
+        throw new Error("handshake rejected");
+      })
+      .mockReturnValue(() => {});
+    const controller = new HostRuntimeController({
+      host: makeHost({ connections: [connection] }),
+      deps: { ...makeDeps({ [connection.id]: 20 }, clients), mountClientHandlers },
+    });
+    await controller.start({ autoProbe: false });
+    expect(controller.getClient()).toBeNull();
+    expect(clients[0]?.isDisposed()).toBe(true);
+    controller.ensureConnected();
+    await controller.runProbeCycleNow();
+    expect(clients).toHaveLength(2);
+    expect(controller.getClient()).toBe(clients[1]);
+    expect(controller.getSnapshot().connectionStatus).toBe("online");
+    await controller.stop();
+  });
+
+  it("warms a failed initial relay immediately and shares repeated recovery signals", async () => {
+    const connection = createAccountRelayHostConnection({
+      hostId: "11111111-1111-4111-8111-111111111111",
+      center: "https://center.test/api",
+    });
+    const host = makeHost({ connections: [connection] });
+    const client = makeConnectedProbeClient(20);
+    const ready = createDeferred<{ client: DaemonClient; serverId: string; hostname: null }>();
+    const connectToDaemon = vi
+      .fn()
+      .mockRejectedValueOnce(new Error("offline"))
+      .mockReturnValueOnce(ready.promise);
+    const controller = new HostRuntimeController({
+      host,
+      deps: { ...makeDeps({}, []), connectToDaemon },
+    });
+    await controller.start({ autoProbe: false });
+    expect(connectToDaemon).toHaveBeenCalledTimes(1);
+    controller.ensureConnected();
+    controller.ensureConnected();
+    expect(connectToDaemon).toHaveBeenCalledTimes(2);
+    ready.resolve({
+      client: client as unknown as DaemonClient,
+      serverId: host.serverId,
+      hostname: null,
+    });
+    await controller.runProbeCycleNow();
+    expect(controller.getClient()).toBe(client);
+    expect(client.connectCalls).toBe(1);
+    const unsubscribe = controller.subscribe(() => {});
+    unsubscribe();
+    controller.subscribe(() => {})();
+    controller.ensureConnected({ verify: true });
+    await controller.updateHost({ ...host, label: "Renamed" });
+    expect(controller.getClient()).toBe(client);
+    expect(connectToDaemon).toHaveBeenCalledTimes(2);
+    expect(client.isDisposed()).toBe(false);
+    await controller.stop();
+    controller.ensureConnected();
+    expect(connectToDaemon).toHaveBeenCalledTimes(2);
+  });
+
   it("retries unchanged pending endpoints when another connection invalidates their cycle", async () => {
     const host = makeHost();
     const pending =
@@ -1604,6 +1673,47 @@ describe("HostRuntimeController", () => {
 });
 
 describe("HostRuntimeStore", () => {
+  it("warms recovered account hosts once and retains their connection across presence refreshes", async () => {
+    const center = "https://center.test/api";
+    const host = makeHost({
+      connections: [
+        createAccountRelayHostConnection({
+          hostId: "11111111-1111-4111-8111-111111111111",
+          center,
+        }),
+      ],
+    });
+    const clients: FakeDaemonClient[] = [];
+    const store = new HostRuntimeStore({
+      storage: createMemoryHostRuntimeStorage({
+        "@paseo:daemon-registry": JSON.stringify([host]),
+        "@paseo:e2e": "1",
+      }),
+      deps: makeDeps({ [host.connections[0]!.id]: 20 }, clients),
+    });
+    try {
+      await store.boot();
+      store.setAccountRelayCenter(center);
+      await waitForHostOnline(store, host.serverId);
+      const client = clients[0]!;
+      store.setAvailableAccountRelayHosts([host.serverId]);
+      expect(client.ensureConnectedCalls).toBe(1);
+      store.setAvailableAccountRelayHosts([host.serverId]);
+      expect(client.ensureConnectedCalls).toBe(1);
+      store.setAvailableAccountRelayHosts([]);
+      expect(client.isDisposed()).toBe(false);
+      store.setAvailableAccountRelayHosts([host.serverId]);
+      expect(client.ensureConnectedCalls).toBe(2);
+      expect(store.getClient(host.serverId)).toBe(client);
+      expect(clients).toHaveLength(1);
+      store.setAccountRelayCenter(null);
+      store.setAvailableAccountRelayHosts([host.serverId]);
+      expect(client.ensureConnectedCalls).toBe(2);
+    } finally {
+      store.syncHosts([]);
+    }
+  });
+
   it("automatically connects and persists every discovered account host independently", async () => {
     useHostRuntimeClock();
     const center = "https://center.test/api";

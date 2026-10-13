@@ -1,4 +1,4 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import {
   resolveStartupBlocker,
   resolveStartupNavigationReady,
@@ -396,6 +396,44 @@ describe("resolveHostIndexRoute", () => {
 });
 
 describe("host runtime app lifecycle", () => {
+  it("supports native window globals without browser event methods", () => {
+    vi.stubGlobal("window", {});
+    try {
+      const setAppVisible = vi.fn();
+      const dispose = bindHostRuntimeAppState(
+        { setAppVisible },
+        { currentState: "active", addEventListener: () => ({ remove() {} }) },
+      );
+      expect(setAppVisible).toHaveBeenCalledWith(true);
+      dispose();
+    } finally {
+      vi.unstubAllGlobals();
+    }
+  });
+
+  it("recovers on browser network restoration only while visible and removes its listener", () => {
+    const networkEvents = new EventTarget();
+    const visibility: boolean[] = [];
+    const appState = {
+      currentState: "active" as "active" | "background",
+      addEventListener: () => ({ remove() {} }),
+    };
+    const dispose = bindHostRuntimeAppState(
+      { setAppVisible: (visible) => visibility.push(visible) },
+      appState,
+      networkEvents,
+    );
+    networkEvents.dispatchEvent(new Event("online"));
+    expect(visibility).toEqual([true, true]);
+    appState.currentState = "background";
+    networkEvents.dispatchEvent(new Event("online"));
+    expect(visibility).toEqual([true, true]);
+    dispose();
+    appState.currentState = "active";
+    networkEvents.dispatchEvent(new Event("online"));
+    expect(visibility).toEqual([true, true]);
+  });
+
   it.each(["inactive", "background"] as const)(
     "applies initial visibility and forwards lifecycle changes when mounted %s",
     (currentState) => {

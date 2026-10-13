@@ -15,6 +15,7 @@ export function buildAccountRelayClientConfig(connection: { hostId: string; cent
   return {
     url: url.toString(),
     connectTimeoutMs: 45_000,
+    reconnect: { baseDelayMs: 500, maxDelayMs: 30_000 },
     transportFactory: createRustDaemonTransportFactory(createAccountRelayTransportFactory),
   };
 }

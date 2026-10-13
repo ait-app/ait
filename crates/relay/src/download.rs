@@ -11,7 +11,7 @@ use url::Url;
 use uuid::Uuid;
 
 use crate::protocol::{DownloadAck, DownloadMessage, Pairing};
-use crate::transport::{MAX_MESSAGE, Socket, connect, receive};
+use crate::transport::{MAX_MESSAGE, Socket, receive};
 use crate::{Error, Local, protocol};
 
 /// Pair `session` using its relay ticket and stream the local file authorized by `token`.
@@ -26,7 +26,10 @@ pub(super) async fn run(
     session: Uuid,
 ) -> Result<(), Error> {
     protocol::validate_download_token(token.expose_secret())?;
-    let mut socket = connect(&url, ticket.expose_secret(), MAX_MESSAGE).await?;
+    let mut socket = local
+        .dialer
+        .connect(&url, ticket.expose_secret(), MAX_MESSAGE)
+        .await?;
     let ready: Pairing = timeout(Duration::from_secs(30), receive(&mut socket))
         .await
         .map_err(|_| Error::Transport)??;

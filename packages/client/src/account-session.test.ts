@@ -500,7 +500,9 @@ describe("client-only account lifecycle", () => {
     const { manager, http, deps, login, expireLease } = fixture();
     await login();
     await manager.select("remote");
+    expect(manager.snapshot().stale).toBe(false);
     manager.suspend();
+    expect(manager.snapshot().stale).toBe(true);
     const count = http.mock.calls.length;
     await vi.advanceTimersByTimeAsync(120_000);
     expect(http).toHaveBeenCalledTimes(count);
@@ -512,7 +514,11 @@ describe("client-only account lifecycle", () => {
     expect(http.mock.calls.filter(([url]) => String(url).endsWith("/nodes/register"))).toHaveLength(
       2,
     );
-    expect(manager.snapshot()).toMatchObject({ status: "online", selected: { host_id: "remote" } });
+    expect(manager.snapshot()).toMatchObject({
+      status: "online",
+      stale: false,
+      selected: { host_id: "remote" },
+    });
     await manager.logout();
   });
 
