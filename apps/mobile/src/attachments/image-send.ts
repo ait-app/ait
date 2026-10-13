@@ -3,8 +3,11 @@ import type { AgentAttachment } from "@ait/protocol/messages";
 import { openSendImage } from "./image-send-codec";
 
 export const MAX_SEND_IMAGES = 50;
+// Wire admission limits, measured after base64 encoding / JSON serialization.
+export const MAX_ORIGINAL_IMAGE_BASE64 = 32 * 1024 * 1024;
+export const MAX_IMAGE_PROMPT_BYTES = 63 * 1024 * 1024;
+// Encoding target only after the original exceeds a wire budget.
 export const MAX_IMAGE_BASE64 = 4 * Math.ceil((1024 * 1024) / 3);
-export const MAX_SEND_IMAGE_BASE64 = 60 * 1024 * 1024;
 const TILE_EDGE = 2048;
 const OVERLAP = 128;
 
@@ -12,6 +15,17 @@ export interface EncodedSendImage {
   data: string;
   mimeType: string;
   description?: string;
+}
+
+export interface ImageSendContext {
+  text?: string;
+  attachments?: AgentAttachment[];
+  clientMessageId?: string;
+  outputSchema?: unknown;
+}
+
+export function supportsSendImage(mimeType: string): boolean {
+  return ["image/png", "image/jpeg", "image/gif", "image/webp"].includes(mimeType);
 }
 
 export interface ImageRegion {
@@ -173,18 +187,19 @@ async function encodeRegion(
   source: SendImageSource,
   region: ImageRegion,
   originalMimeType: string,
+  maxBase64Bytes: number,
 ): Promise<EncodedSendImage> {
   let best: EncodedSendImage | undefined;
   // PNG preserves screenshot text and alpha when its lossless encoding already fits.
   if (originalMimeType !== "image/jpeg") {
     best = await source.encode(region, "image/png", 1);
-    if (best.data.length <= MAX_IMAGE_BASE64) return best;
+    if (best.data.length <= maxBase64Bytes) return best;
   }
   const mimeType = originalMimeType === "image/jpeg" ? "image/jpeg" : "image/webp";
   for (const quality of [0.94, 0.88, 0.82]) {
     const candidate = await source.encode(region, mimeType, quality);
     if (!best || candidate.data.length < best.data.length) best = candidate;
-    if (best.data.length <= MAX_IMAGE_BASE64 || candidate.mimeType !== mimeType) break;
+    if (best.data.length <= maxBase64Bytes || candidate.mimeType !== mimeType) break;
   }
   return best!;
 }
@@ -216,10 +231,15 @@ export async function prepareImageForSend(
   original: EncodedSendImage,
   maxParts: number,
   open: (uri: string) => Promise<SendImageSource> = openSendImage,
+  maxBase64Bytes: number = MAX_ORIGINAL_IMAGE_BASE64,
 ): Promise<EncodedSendImage[]> {
   if (maxParts < 1) throw imagePartsError();
+  const oversized = original.data.length > maxBase64Bytes;
+  // Geometry never starts compression. Supported files within their byte budget
+  // bypass even header parsing and bitmap decoding, including very long images.
+  if (!oversized && supportsSendImage(original.mimeType)) return [original];
   if (isAnimatedSendImage(original)) {
-    if (original.data.length > 32 * 1024 * 1024) {
+    if (oversized) {
       throw new Error("This animated image is too large. Send a smaller file.");
     }
     return [original];
@@ -228,25 +248,32 @@ export async function prepareImageForSend(
   // the actual codec dimensions still own the final crop plan.
   const dimensions = headerDimensions(original);
   if (dimensions) {
-    planSendImage(dimensions.width, dimensions.height, maxParts);
+    if (oversized) planSendImage(dimensions.width, dimensions.height, maxParts);
     if (dimensions.width * dimensions.height > 80 * 1024 * 1024) {
       throw new Error("This image is too large to process safely. Crop it or send it in parts.");
     }
   }
   const source = await open(`data:${original.mimeType};base64,${original.data}`);
   try {
-    const queue = planSendImage(source.width, source.height, maxParts);
-    if (
-      queue.length === 1 &&
-      original.data.length <= MAX_IMAGE_BASE64 &&
-      ["image/png", "image/jpeg", "image/webp"].includes(original.mimeType)
-    )
-      return [original];
+    // Format conversion alone also keeps the full original dimensions.
+    const queue: ImageRegion[] = oversized
+      ? planSendImage(source.width, source.height, maxParts)
+      : [
+          {
+            x: 0,
+            y: 0,
+            width: source.width,
+            height: source.height,
+            outputWidth: source.width,
+            outputHeight: source.height,
+          },
+        ];
     const result: EncodedSendImage[] = [];
+    const outputLimit = oversized ? MAX_IMAGE_BASE64 : maxBase64Bytes;
     while (queue.length > 0) {
       const region = queue.shift()!;
-      const encoded = await encodeRegion(source, region, original.mimeType);
-      if (encoded.data.length > MAX_IMAGE_BASE64) {
+      const encoded = await encodeRegion(source, region, original.mimeType, outputLimit);
+      if (encoded.data.length > outputLimit) {
         if (region.overview) {
           region.outputWidth = Math.max(1, Math.floor(region.outputWidth / 2));
           region.outputHeight = Math.max(1, Math.floor(region.outputHeight / 2));
@@ -272,6 +299,34 @@ export async function prepareImageForSend(
   } finally {
     source.release();
   }
+}
+
+/** Count the actual prompt JSON, including UTF-8 context and crop grouping notes.
+ * Standard base64 needs no JSON escaping, so avoid duplicating large data strings.
+ */
+export function imagePromptBytes(images: EncodedSendImage[], context: ImageSendContext): number {
+  const payload = imageSendPayload(images, context.attachments);
+  const envelope = Buffer.byteLength(
+    JSON.stringify({
+      text: context.text ?? "",
+      images: [],
+      attachments: payload.attachments ?? [],
+      clientMessageId: context.clientMessageId ?? null,
+      outputSchema: context.outputSchema ?? null,
+    }),
+    "utf8",
+  );
+  return (
+    envelope +
+    images.reduce(
+      (bytes, image, index) =>
+        bytes +
+        image.data.length +
+        Buffer.byteLength(JSON.stringify({ data: "", mimeType: image.mimeType }), "utf8") +
+        (index > 0 ? 1 : 0),
+      0,
+    )
+  );
 }
 
 /** Strip client-only layout metadata and provide one model-facing grouping note. */

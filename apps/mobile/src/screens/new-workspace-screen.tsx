@@ -961,7 +961,11 @@ async function createWorkspaceChatAgent(input: CreateChatAgentInput): Promise<Su
   const wirePayload = splitComposerAttachmentsForSubmit(attachments, {
     format: attachmentSubmitFormat,
   });
-  const images = await encodeImages(wirePayload.images);
+  const images = await encodeImages(wirePayload.images, {
+    text,
+    attachments: wirePayload.attachments,
+    clientMessageId: `${input.draftId}:initial-message`,
+  });
   const prepared = imageSendPayload(images, wirePayload.attachments);
   let navigated = false;
   let outcome: SubmitOutcome = "background";

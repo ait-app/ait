@@ -330,9 +330,13 @@ export function WorkspaceSetupDialog() {
             supportsForgeAttachments: supportsForgeSearch,
           }),
         });
-        const encodedImages = await encodeImages(wirePayload.images);
-        const prepared = imageSendPayload(encodedImages, wirePayload.attachments);
         if (!pendingWorkspaceSetup) throw new Error(t("workspaceSetup.errors.pendingRequired"));
+        const encodedImages = await encodeImages(wirePayload.images, {
+          text,
+          attachments: wirePayload.attachments,
+          clientMessageId: `${pendingWorkspaceSetup.creationId}:initial-message`,
+        });
+        const prepared = imageSendPayload(encodedImages, wirePayload.attachments);
         let createdAgent: AgentSnapshotPayload | undefined;
         const { workspaceId: _workspaceId, ...agentInput } = buildCreateAgentOptions({
           composerState,

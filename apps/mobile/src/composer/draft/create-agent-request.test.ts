@@ -20,6 +20,11 @@ it("prepares image grouping for a new Agent as well as subsequent messages", asy
     text: "Read this image",
     attachments: [{ type: "text", mimeType: "text/plain", text: "Context" }],
   });
+  expect(encodeImages).toHaveBeenCalledWith(undefined, {
+    text: "Read this image",
+    clientMessageId: "message",
+    attachments: [{ type: "text", mimeType: "text/plain", text: "Context" }],
+  });
   expect(createAgent).toHaveBeenCalledWith(
     expect.objectContaining({
       images: [

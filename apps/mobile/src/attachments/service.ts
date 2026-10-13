@@ -3,10 +3,15 @@ import { getAttachmentStore } from "@/attachments/store";
 import type { AttachmentMetadata, SaveAttachmentInput } from "@/attachments/types";
 import {
   imagePartsError,
+  imagePromptBytes,
+  isAnimatedSendImage,
+  MAX_IMAGE_PROMPT_BYTES,
+  MAX_ORIGINAL_IMAGE_BASE64,
   MAX_SEND_IMAGES,
-  MAX_SEND_IMAGE_BASE64,
   prepareImageForSend,
+  supportsSendImage,
   type EncodedSendImage,
+  type ImageSendContext,
 } from "./image-send";
 
 const activePersistence = new Set<Promise<AttachmentMetadata>>();
@@ -101,6 +106,7 @@ export async function persistAttachmentFromFileUri(input: {
 
 export async function encodeAttachmentsForSend(
   attachments: readonly AttachmentMetadata[] | undefined,
+  context: ImageSendContext = {},
 ): Promise<EncodedSendImage[] | undefined> {
   if (!attachments || attachments.length === 0) {
     return undefined;
@@ -108,28 +114,59 @@ export async function encodeAttachmentsForSend(
 
   const store = await getAttachmentStore();
   if (attachments.length > MAX_SEND_IMAGES) throw imagePartsError();
-  const encoded: EncodedSendImage[] = [];
-  let totalBytes = 0;
-  // Decode one original at a time to avoid simultaneous large native bitmaps.
+  const originals = new Map<number, EncodedSendImage>();
+  const groups: EncodedSendImage[][] = attachments.map(() => []);
+  let unreadOriginals = attachments.length;
+  const prepare = async (index: number, byteLimit = MAX_ORIGINAL_IMAGE_BASE64) => {
+    const maxParts =
+      MAX_SEND_IMAGES -
+      unreadOriginals -
+      groups.reduce((count, group) => count + group.length, 0) +
+      groups[index].length;
+    const parts = await prepareImageForSend(originals.get(index)!, maxParts, undefined, byteLimit);
+    originals.delete(index);
+    return parts.map((part) => ({
+      ...part,
+      ...(part.description
+        ? { description: `original image ${index + 1}: ${part.description}` }
+        : {}),
+    }));
+  };
+  const fitRequest = async () => {
+    // A prefix over the request limit also makes the full set oversized. Reduce
+    // it now so many large originals do not all remain resident in memory.
+    const candidates = [...originals.entries()].sort(
+      ([, a], [, b]) => b.data.length - a.data.length,
+    );
+    for (const [index, original] of candidates) {
+      if (imagePromptBytes(groups.flat(), context) <= MAX_IMAGE_PROMPT_BYTES) break;
+      if (isAnimatedSendImage(original)) continue;
+      const parts = await prepare(
+        index,
+        Math.min(MAX_ORIGINAL_IMAGE_BASE64, original.data.length - 1),
+      );
+      if (parts.reduce((bytes, part) => bytes + part.data.length, 0) < original.data.length) {
+        groups[index] = parts;
+      }
+    }
+    if (imagePromptBytes(groups.flat(), context) > MAX_IMAGE_PROMPT_BYTES) {
+      throw new Error("These images are too large to send together. Send fewer images.");
+    }
+  };
+  // Read sequentially and decode only one bitmap at a time. Byte limits alone
+  // trigger reduction; normalization of unsupported formats is separate.
   for (const [index, attachment] of attachments.entries()) {
     const data = await store.encodeBase64({ attachment });
-    const maxParts = MAX_SEND_IMAGES - encoded.length - (attachments.length - index - 1);
-    const parts = await prepareImageForSend({ data, mimeType: attachment.mimeType }, maxParts);
-    for (const part of parts) {
-      totalBytes += part.data.length;
-      if (totalBytes > MAX_SEND_IMAGE_BASE64) {
-        throw new Error("These images are too large to send together. Send fewer images.");
-      }
-      encoded.push({
-        ...part,
-        ...(part.description
-          ? {
-              description: `original image ${index + 1}: ${part.description}`,
-            }
-          : {}),
-      });
+    const original = { data, mimeType: attachment.mimeType };
+    unreadOriginals -= 1;
+    originals.set(index, original);
+    groups[index] = [original];
+    if (data.length > MAX_ORIGINAL_IMAGE_BASE64 || !supportsSendImage(original.mimeType)) {
+      groups[index] = await prepare(index);
     }
+    if (imagePromptBytes(groups.flat(), context) > MAX_IMAGE_PROMPT_BYTES) await fitRequest();
   }
+  const encoded = groups.flat();
   return encoded;
 }
 

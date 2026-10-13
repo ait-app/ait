@@ -22,7 +22,11 @@ export async function requestWorkspaceDraftAgent(
   client: DaemonClient,
   request: WorkspaceDraftAgentRequest,
 ): Promise<AgentSnapshotPayload> {
-  const images = await encodeImages(request.images);
+  const images = await encodeImages(request.images, {
+    text: request.text,
+    attachments: request.attachments,
+    clientMessageId: request.clientMessageId,
+  });
   const prepared = imageSendPayload(images, request.attachments);
   return await client.createAgent({
     idempotencyKey: request.clientMessageId,

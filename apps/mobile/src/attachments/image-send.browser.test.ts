@@ -38,7 +38,12 @@ describe("real browser image send", () => {
     context.fillStyle = "black";
     context.font = "16px monospace";
     context.fillText("Readable screenshot text", 10, 25);
-    const result = await prepareImageForSend(await original(input), 50);
+    const raw = await original(input);
+    // Production limits preserve even extreme aspect ratios byte-for-byte.
+    const unchanged = await prepareImageForSend(raw, 1);
+    expect(unchanged[0]).toBe(raw);
+    // Simulate a smaller transport budget to exercise the oversize-only crop path.
+    const result = await prepareImageForSend(raw, 50, undefined, raw.data.length - 1);
     expect(result.length).toBeGreaterThan(2);
     expect(result[0].description).toContain("overview");
     const last = await decode(result.at(-1)!.data, result.at(-1)!.mimeType);
@@ -70,7 +75,8 @@ describe("real browser image send", () => {
     context.clearRect(0, 0, 20, 20);
     const raw = await original(input);
     expect(raw.data.length).toBeGreaterThan(MAX_IMAGE_BASE64);
-    const result = await prepareImageForSend(raw, 50);
+    expect((await prepareImageForSend(raw, 50))[0]).toBe(raw);
+    const result = await prepareImageForSend(raw, 50, undefined, MAX_IMAGE_BASE64);
     expect(result.reduce((sum, item) => sum + item.data.length, 0)).toBeLessThan(raw.data.length);
     const image = await decode(result[0].data, result[0].mimeType);
     const output = canvas(image.naturalWidth, image.naturalHeight);
