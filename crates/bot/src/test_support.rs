@@ -21,6 +21,7 @@ pub(crate) struct Native {
     messages: Mutex<BTreeMap<String, String>>,
     pub(crate) hold: AtomicBool,
     pub(crate) approval: AtomicBool,
+    pub(crate) fail_denial: AtomicBool,
 }
 impl Executor for Native {
     fn execute(
@@ -40,6 +41,9 @@ impl Executor for Native {
                     json!({"accepted":true})
                 }
                 Action::Permission { .. } => {
+                    if self.fail_denial.load(Ordering::SeqCst) {
+                        return Err(ErrorCode::AgentIo);
+                    }
                     self.approval.store(false, Ordering::SeqCst);
                     json!({"resolved":true})
                 }

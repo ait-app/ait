@@ -48,13 +48,13 @@ pub enum Action {
         /// Owner's hidden runtime.
         agent_id: String,
     },
-    /// Resolve a native permission request from the authenticated Ait UI.
+    /// Deny a pending native permission request. Bot turns cannot grant permissions.
     Permission {
         /// Owner's hidden runtime.
         agent_id: String,
         /// Native permission identity.
         permission_id: String,
-        /// Native decision, validated by the provider permission handler.
+        /// Must be exactly `{"behavior":"deny"}`; additional permissions are forbidden.
         response: Value,
     },
 }

@@ -5,6 +5,7 @@ use serde_json::{Value, json};
 
 use super::{ErrorCode, ExecutionState, map_manager};
 use crate::ports::agent_session::AgentSessionSpec;
+use crate::protocol::agent_config::{ConfigPatch, NullableSetting};
 use crate::protocol::agent_execution::ActiveTurnBehavior;
 use crate::protocol::prompt::AgentPrompt;
 use crate::service::agent_manager::AgentRegistration;
@@ -32,7 +33,7 @@ impl ExecutionState {
                     if record.archived_at.is_some() {
                         return Err(ErrorCode::InvalidMessage);
                     }
-                    self.refresh_bot_instructions(&record, instructions).await?;
+                    self.refresh_bot_config(&record, instructions).await?;
                     return Ok(json!({"created":false}));
                 }
                 self.create_bot_session(request.owner, agent_id, config, instructions)
@@ -105,27 +106,30 @@ impl ExecutionState {
         }
     }
 
-    async fn refresh_bot_instructions(
+    async fn refresh_bot_config(
         &self,
         record: &PersistedAgentRuntimeRecord,
         instructions: String,
     ) -> Result<(), ErrorCode> {
-        if record
-            .config
-            .as_ref()
-            .and_then(|config| config.system_prompt.as_ref())
-            == Some(&instructions)
+        let config = record.config.as_ref();
+        let mode = bot_mode_override(
+            &record.provider,
+            config.and_then(|config| config.mode_id.as_deref()),
+        );
+        if mode.is_none()
+            && config.and_then(|config| config.system_prompt.as_ref()) == Some(&instructions)
         {
             return Ok(());
         }
         self.manager
             .configure(
                 &record.id,
-                &crate::protocol::agent_config::ConfigPatch {
-                    system_prompt: crate::protocol::agent_config::NullableSetting::Set(
-                        instructions,
-                    ),
-                    ..crate::protocol::agent_config::ConfigPatch::default()
+                &ConfigPatch {
+                    system_prompt: NullableSetting::Set(instructions),
+                    mode_id: mode.map_or(NullableSetting::Unchanged, |mode| {
+                        NullableSetting::Set(mode.into())
+                    }),
+                    ..ConfigPatch::default()
                 },
             )
             .await
@@ -171,9 +175,14 @@ impl ExecutionState {
         &mut self,
         owner: SessionOwner,
         agent: String,
-        config: ExecutionConfig,
+        mut config: ExecutionConfig,
         instructions: String,
     ) -> Result<Value, ErrorCode> {
+        // Native auto-review can grant requests before they reach our permission callback.
+        // Route new requests through Bot denial instead of native automatic reviewers.
+        if let Some(mode) = bot_mode_override(&config.provider, config.mode_id.as_deref()) {
+            config.mode_id = Some(mode.into());
+        }
         let workspace = self
             .workspaces
             .get(&owner.workspace_id)
@@ -225,3 +234,14 @@ impl ExecutionState {
         Ok(())
     }
 }
+
+fn bot_mode_override(provider: &str, mode: Option<&str>) -> Option<&'static str> {
+    match (provider, mode) {
+        ("codex", Some("auto-review")) => Some("auto"),
+        ("claude", Some("auto")) => Some("default"),
+        _ => None,
+    }
+}
+
+#[cfg(test)]
+mod tests;

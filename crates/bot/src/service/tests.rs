@@ -8,6 +8,36 @@ use serde_json::{Value, json};
 use crate::service::Bots;
 use crate::test_support::{Fixture, creation};
 
+#[tokio::test]
+async fn failed_permission_denial_cancels_native_execution_and_fails_the_turn() {
+    let fixture = Fixture::new();
+    fixture.native.approval.store(true, Ordering::SeqCst);
+    fixture.native.fail_denial.store(true, Ordering::SeqCst);
+    let bots = fixture.bots();
+    let bot = BotId::generate();
+    let conversation = setup(&bots, bot).await;
+    let turn = bots.execute("bot.message.send.request", json!({
+        "botId":bot,"conversationId":conversation,"messageId":"denial-failure","text":"request"
+    })).await.unwrap()["turn"]["id"].clone();
+    let failed = wait(&bots, bot, &turn, "failed").await;
+    assert_eq!(failed["turn"]["pendingPermissions"], json!([]));
+    assert!(
+        fixture
+            .native
+            .calls
+            .lock()
+            .unwrap()
+            .iter()
+            .any(|(_, action)| {
+                matches!(
+                    action,
+                    provider::service::bot_execution::Action::Cancel { .. }
+                )
+            })
+    );
+    bots.shutdown().await.unwrap();
+}
+
 async fn setup(bots: &Bots, id: BotId) -> Value {
     bots.execute("bot.create.request", creation(id))
         .await
@@ -122,9 +152,10 @@ async fn builtin_turns_are_durable_idempotent_isolated_and_recoverable() {
 }
 
 #[tokio::test]
-async fn permissions_queue_cancellation_memory_and_workspace_retirement() {
+async fn automatic_denial_queue_cancellation_memory_and_workspace_retirement() {
     let fixture = Fixture::new();
     fixture.native.approval.store(true, Ordering::SeqCst);
+    fixture.native.hold.store(true, Ordering::SeqCst);
     let bots = fixture.bots();
     let bot = BotId::generate();
     let conversation = setup(&bots, bot).await;
@@ -136,30 +167,10 @@ async fn permissions_queue_cancellation_memory_and_workspace_retirement() {
         .await
         .unwrap()["turn"]["id"]
         .clone();
-    let pending = wait(&bots, bot, &first, "needs_approval").await;
-    // Permission state and the native request are committed independently; wait for both.
-    let permissions = tokio::time::timeout(Duration::from_secs(3), async {
-        loop {
-            let value = bots
-                .execute("bot.turn.get.request", json!({"botId":bot,"turnId":first}))
-                .await
-                .unwrap();
-            if !value["turn"]["pendingPermissions"]
-                .as_array()
-                .unwrap()
-                .is_empty()
-            {
-                break value;
-            }
-            tokio::time::sleep(Duration::from_millis(10)).await;
-        }
-    })
-    .await
-    .unwrap();
-    assert_eq!(pending["turn"]["status"], "needs_approval");
+    wait(&bots, bot, &first, "running").await;
     assert_eq!(
-        permissions["turn"]["pendingPermissions"][0]["id"],
-        "approval-1"
+        bots.execute("bot.permission.resolve.request", json!({"botId":bot,"turnId":first,"permissionId":"approval-1","response":{"behavior":"allow"}})).await,
+        Err(ErrorCode::InvalidMessage),
     );
     let queued = bots
         .execute(
@@ -176,8 +187,24 @@ async fn permissions_queue_cancellation_memory_and_workspace_retirement() {
     .await
     .unwrap();
     wait(&bots, bot, &queued, "cancelled").await;
-    bots.execute("bot.permission.resolve.request", json!({"botId":bot,"turnId":first,"permissionId":"approval-1","response":{"behavior":"allow"}})).await.unwrap();
-    wait(&bots, bot, &first, "completed").await;
+    fixture.native.hold.store(false, Ordering::SeqCst);
+    let completed = wait(&bots, bot, &first, "completed").await;
+    assert_eq!(completed["turn"]["pendingPermissions"], json!([]));
+    let responses: Vec<_> = fixture
+        .native
+        .calls
+        .lock()
+        .unwrap()
+        .iter()
+        .filter_map(|(_, action)| {
+            if let provider::service::bot_execution::Action::Permission { response, .. } = action {
+                Some(response.clone())
+            } else {
+                None
+            }
+        })
+        .collect();
+    assert_eq!(responses, [json!({"behavior":"deny"})]);
     let memory = bots
         .execute("bot.memory.get.request", json!({"botId":bot}))
         .await

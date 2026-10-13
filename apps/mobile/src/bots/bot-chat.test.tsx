@@ -11,7 +11,6 @@ vi.mock("@/runtime/host-runtime", () => ({ useHostRuntimeClient: () => ({ botReq
 vi.mock("react-i18next", () => ({ useTranslation: () => ({ t: (key: string) => key }) }));
 vi.mock("./styles", () => ({ botStyles: {} }));
 vi.mock("./loading", () => ({ BotLoadingSpinner: () => null }));
-vi.mock("./bot-permission", () => ({ BotPermission: () => null }));
 vi.mock("@/utils/confirm-dialog", () => ({ confirmDialog: vi.fn(async () => true) }));
 vi.mock("@/components/markdown/renderer", () => ({
   MarkdownRenderer: ({ text }: { text: string }) => <span>{text}</span>,

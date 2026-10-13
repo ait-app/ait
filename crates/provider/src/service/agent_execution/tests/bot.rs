@@ -4,6 +4,113 @@ use domain::bot::{ExecutionConfig, SessionOwner};
 use domain::{BotId, ConversationId};
 
 #[tokio::test]
+async fn codex_bot_denies_commands_files_questions_and_computer_use() {
+    for prompt in [
+        "permit-command",
+        "permit-file",
+        "permit-question",
+        "permit-cua",
+    ] {
+        let fixture = Fixture::new();
+        let (execution, registry) = worker(&fixture);
+        let (owner, id) = create_permission_bot(&execution, "codex", Some("auto-review")).await;
+        assert_eq!(
+            registry
+                .get(&id)
+                .unwrap()
+                .unwrap()
+                .config
+                .unwrap()
+                .mode_id
+                .as_deref(),
+            Some("auto")
+        );
+        assert_bot_reply(&execution, &owner, &id, prompt, "Echo: denied").await;
+        assert_bot_reply(&execution, &owner, &id, "next", "Echo: next").await;
+        for request in fixture
+            .requests()
+            .iter()
+            .filter(|request| request["method"] == "turn/start")
+        {
+            assert_eq!(request["params"]["approvalsReviewer"], "user");
+        }
+        execution.shutdown().await.unwrap();
+    }
+}
+
+async fn create_permission_bot(
+    execution: &AgentExecution,
+    provider: &str,
+    mode: Option<&str>,
+) -> (SessionOwner, String) {
+    let owner = SessionOwner {
+        bot_id: BotId::generate(),
+        conversation_id: ConversationId::generate(),
+        workspace_id: "wks_0123456789abcdef".into(),
+    };
+    let id = uuid::Uuid::new_v4().to_string();
+    execution
+        .bot(
+            &owner,
+            Action::Create {
+                agent_id: id.clone(),
+                config: ExecutionConfig {
+                    provider: provider.into(),
+                    model: None,
+                    mode_id: mode.map(str::to_owned),
+                    thinking: None,
+                },
+                instructions: "Bot test".into(),
+            },
+        )
+        .await
+        .unwrap();
+    (owner, id)
+}
+
+async fn assert_bot_reply(
+    execution: &AgentExecution,
+    owner: &SessionOwner,
+    id: &str,
+    prompt: &str,
+    reply: &str,
+) {
+    execution
+        .bot(
+            owner,
+            Action::Send {
+                agent_id: id.into(),
+                message_id: uuid::Uuid::new_v4().to_string(),
+                text: prompt.into(),
+            },
+        )
+        .await
+        .unwrap();
+    tokio::time::timeout(Duration::from_secs(5), async {
+        loop {
+            let status = execution
+                .bot(
+                    owner,
+                    Action::Status {
+                        agent_id: id.into(),
+                    },
+                )
+                .await
+                .unwrap();
+            assert_ne!(status["status"], "permission", "{status}");
+            assert_ne!(status["status"], "error", "{status}");
+            if status["status"] == "idle" {
+                assert_eq!(status["lastMessage"], reply);
+                break;
+            }
+            tokio::time::sleep(Duration::from_millis(10)).await;
+        }
+    })
+    .await
+    .unwrap();
+}
+
+#[tokio::test]
 async fn bot_session_is_hidden_from_birth_owner_checked_and_idempotent() {
     let fixture = Fixture::new();
     let (execution, registry) = worker(&fixture);
@@ -174,6 +281,14 @@ async fn assert_release_and_resume(
         .await
         .unwrap();
     assert!(registry.get(id).unwrap().unwrap().archived_at.is_none());
+    // An existing Bot created before automatic denial must lose its native reviewer on resume.
+    registry
+        .update(id, &|record| {
+            let mut record = record.clone();
+            record.config.as_mut().unwrap().mode_id = Some("auto-review".into());
+            record
+        })
+        .unwrap();
     execution
         .bot(
             owner,
@@ -200,6 +315,17 @@ async fn assert_release_and_resume(
             .system_prompt
             .as_deref(),
         Some("Updated workspace memory")
+    );
+    assert_eq!(
+        registry
+            .get(id)
+            .unwrap()
+            .unwrap()
+            .config
+            .unwrap()
+            .mode_id
+            .as_deref(),
+        Some("auto")
     );
     execution
         .bot(

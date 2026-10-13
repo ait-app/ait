@@ -63,7 +63,6 @@ enum Operation {
     ChannelStatus(ChannelId, Value),
     Account(ChannelId, String),
     Progress(BotTurnId, TurnStatus, Option<String>, Option<String>),
-    Permissions(BotTurnId, Value),
     Finished(ConversationId),
     DeliveryNext(ChannelId),
     Delivery(BotTurnId, DeliveryStatus),
@@ -209,15 +208,6 @@ impl Bots {
             .await
             .map(|_| ())
     }
-    pub(crate) async fn permissions(
-        &self,
-        turn: BotTurnId,
-        permissions: Value,
-    ) -> Result<(), ErrorCode> {
-        self.send(Operation::Permissions(turn, permissions))
-            .await
-            .map(|_| ())
-    }
     pub(crate) async fn delivery_next(
         &self,
         channel: ChannelId,
@@ -354,9 +344,6 @@ fn apply(
         Operation::Progress(turn, status, reply, error) => state
             .progress(turn, status, reply, error)
             .map(|()| Value::Null),
-        Operation::Permissions(turn, permissions) => {
-            state.permissions(turn, permissions).map(|()| Value::Null)
-        }
         Operation::Finished(conversation) => {
             state.finished(conversation);
             Ok(Value::Null)

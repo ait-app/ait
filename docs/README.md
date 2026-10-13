@@ -22,6 +22,7 @@
 
 ## 架构决策
 
+- [ADR-145：Bot 执行期间自动拒绝权限请求](decisions/bot/adr-145-bot-permission-denial.md)：统一原生拒绝、禁止手动批准、关闭原生自动审核与移除 Bot 审批界面。
 - [ADR-144：Provider 安全诊断与持久失败提示](decisions/providers/adr-144-provider-error-reporting.md)：所有内置 Provider 的结构化错误日志、公共安全分类与刷新后保留的聊天失败通知。
 - [ADR-143：OpenCode 2.0.25 兼容与 ACP 审批边界](decisions/providers/adr-143-opencode-2-0-25-compatibility.md)：修正最低版本、多行命令与大文件审批、创建失败清理；[验证报告](reports/providers/opencode-2.0.25-compatibility-2026-10-13.md)。
 

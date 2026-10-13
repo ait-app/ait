@@ -81,7 +81,9 @@ test("experimental Bot creation, conversation, settings and persistence", async 
   }
 });
 
-test("Bot answers approvals and protects memory from stale edits", async ({ page }) => {
+test("Bot denies approvals automatically and protects memory from stale edits", async ({
+  page,
+}) => {
   const workspace = await seedWorkspace({ repoPrefix: "bot-approval-" });
   const client = workspace.client as unknown as DaemonClient;
   const botId = randomUUID();
@@ -101,12 +103,13 @@ test("Bot answers approvals and protects memory from stale edits", async ({ page
     await page.getByTestId(`bot-open-${botId}`).click();
     await page.getByTestId("bot-message-input").fill("permit-question");
     await page.getByTestId("bot-message-send").click();
-    const question = page.getByTestId("question-form-card");
-    await expect(question).toBeVisible({ timeout: 20_000 });
-    await question.getByText("first", { exact: true }).click();
-    await question.getByTestId("question-form-primary-action").click();
-    await expect(page.getByTestId("bot-chat")).toContainText("Echo: approved", { timeout: 20_000 });
-    await expect(question).toHaveCount(0);
+    await expect(page.getByTestId("bot-chat")).toContainText("Echo: denied", { timeout: 20_000 });
+    await expect(page.getByTestId("question-form-card")).toHaveCount(0);
+    await page.getByTestId("bot-message-input").fill("continue after denial");
+    await page.getByTestId("bot-message-send").click();
+    await expect(page.getByTestId("bot-chat")).toContainText("Echo: continue after denial", {
+      timeout: 20_000,
+    });
 
     await page.getByTestId("bot-show-settings").click();
     const editor = page.getByTestId("bot-memory");
