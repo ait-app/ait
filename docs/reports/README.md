@@ -180,6 +180,7 @@
 
 ## 发布验证
 
+- [Ait 0.1.2 Draft 发布说明](releases/release-0.1.2.md)
 - [Ait 0.1.1 Draft 发布说明](releases/release-0.1.1.md)
 - [Ait 0.1.0 发布说明](releases/release-0.1.0.md)
 - [Ait 0.0.29 发布说明](releases/release-0.0.29.md)
