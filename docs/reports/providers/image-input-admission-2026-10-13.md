@@ -1,4 +1,4 @@
-# 图片输入发送时的资源预算冲突
+# 图片输入自动压缩、分片与接纳预算修复
 
 日期：2026-10-13。修复基于拉取上游后的 `origin/main`
 `13ce800ccb31d60a492338047a3c2f83d1c694c9`。平台：macOS arm64。
@@ -53,6 +53,49 @@ node scripts/check-docs.mjs
 
 没有替换安装版 daemon 或重启桌面应用；安装版需要包含本修复的后续构建才能生效。
 离线原生 fixture 已验证输入传递；真实模型调用、Electron 重打包和 Linux/Windows 未验证。
+
+## 客户端自动压缩与可读分片
+
+在服务端修复提交 `2c452656` 的基础上，发送前统一处理桌面、Web 和移动端图片，
+覆盖已有 Agent、新建 Agent、新建 Workspace 与 Workspace setup 的初始输入。
+原始附件继续保存并用于预览；发送使用临时编码结果，不覆盖原图。
+
+- 服务端支持的普通小图保留原始字节；AVIF 等可解码但不支持的静态输入格式转为 PNG/WebP。
+  需要压缩时，非 JPEG 图片先尝试无损 PNG；随后使用保留透明度
+  的 WebP，JPEG 输入沿用 JPEG。质量依次为 0.94、0.88、0.82，达到约 1 MiB 编码目标即停止。
+- 超长、超宽以及大型二维图片生成全图概览和有重叠的细节分片。概览最长边为 1024 像素；
+  细节分片最长边不超过 2048 像素，保持原始像素分辨率，常规邻接分片重叠 128 像素。
+  编码仍超限的区域继续裁成更小的重叠区域，避免无限降低质量或把细节缩成不可读缩略图。
+- 分片携带原图编号和裁剪坐标，通过既有 text attachment 提供给模型；发送的 image 对象
+  仍只有 `data` 和 `mimeType`。浏览器不支持 WebP 编码时按真实 PNG MIME 返回并继续分片。
+- GIF、动画 WebP 和 APNG 保留动画，不转换成单帧。过大的动画明确拒绝。
+- 静态 PNG/JPEG/WebP 先读取文件头，超过分片容量或 80 Mi 像素时在解码前拒绝。
+  一次只处理一张原图；浏览器 Canvas 只分配概览或分片的尺寸，原生临时文件与引用及时释放。
+- 每条消息仍最多 50 张发送图片，base64 图片总量限制为 60 MiB，为文本和封装预留空间。
+  处理失败或无法在可读质量下满足上限时，整个发送失败并保留草稿与原图，不静默丢弃附件。
+
+保留服务端接纳修复：SDK 输入仍需与已有校验上限一致，多个可读分片的合计也可能超过旧
+4 MiB 上限。没有新增依赖、协议字段或数据库 schema。
+
+编码 API 沿用现有 Expo 14.0.8 的 context/render/save 生命周期，参见
+[Expo SDK 54 ImageManipulator](https://docs.expo.dev/versions/v54.0.0/sdk/imagemanipulator/)。
+
+客户端定向验证：81 项单元测试与 4 项真实 Chromium 测试通过；后续调整分片重叠、创建
+夹具及输入格式后，18 项直接相关单元测试再次通过。移动端类型检查、变更文件 lint、格式检查与
+桌面 Web 资源导出通过。
+真实浏览器验证长宽图的最后像素完整保留、细节像素尺寸、透明通道及大 PNG 体积下降。
+原生适配器使用离线 mock 验证裁剪顺序、编码选项、引用释放和临时文件删除；未做 iOS/Android 真机验证。
+
+```sh
+npm ci
+npm run test --workspace=@ait/mobile -- --project unit src/attachments/image-send.test.ts src/attachments/image-send-codec.native.test.ts src/attachments/service.test.ts src/composer/actions.test.ts src/composer/draft/create-flow.test.ts src/composer/draft/create-agent-request.test.ts
+npm run test --workspace=@ait/mobile -- --project browser src/attachments/image-send.browser.test.ts
+npm run typecheck --workspace=@ait/mobile
+node scripts/check-ui.mjs
+npm run build:desktop-assets
+```
+
+本次补充只改客户端与说明文档，按仓库规定没有重新运行 Rust 测试。
 
 ## Test coverage
 

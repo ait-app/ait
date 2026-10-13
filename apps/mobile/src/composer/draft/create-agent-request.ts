@@ -3,6 +3,7 @@ import type { AgentSnapshotPayload, CreateAgentRequestMessage } from "@ait/proto
 import type { DaemonClient } from "@ait/client/internal/daemon-client";
 import { encodeImages } from "@/utils/encode-images";
 import type { UserMessageImageAttachment } from "@/types/stream";
+import { imageSendPayload } from "@/attachments/image-send";
 
 export interface WorkspaceDraftAgentRequest {
   workspaceId: string;
@@ -22,15 +23,14 @@ export async function requestWorkspaceDraftAgent(
   request: WorkspaceDraftAgentRequest,
 ): Promise<AgentSnapshotPayload> {
   const images = await encodeImages(request.images);
+  const prepared = imageSendPayload(images, request.attachments);
   return await client.createAgent({
     idempotencyKey: request.clientMessageId,
     config: request.config,
     workspaceId: request.workspaceId,
     clientMessageId: request.clientMessageId,
     ...(request.text ? { initialPrompt: request.text } : {}),
-    ...(images && images.length > 0 ? { images } : {}),
-    ...(request.attachments && request.attachments.length > 0
-      ? { attachments: request.attachments }
-      : {}),
+    ...(prepared.images?.length ? { images: prepared.images } : {}),
+    ...(prepared.attachments?.length ? { attachments: prepared.attachments } : {}),
   });
 }

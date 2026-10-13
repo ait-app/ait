@@ -1,4 +1,4 @@
-import { afterEach, describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import type { AttachmentMetadata, AttachmentStore, SaveAttachmentInput } from "@/attachments/types";
 import { __setAttachmentStoreForTests } from "./store";
 import {
@@ -6,6 +6,15 @@ import {
   garbageCollectAttachments,
   persistAttachmentFromBytes,
 } from "./service";
+
+vi.mock("./image-send-codec", () => ({
+  openSendImage: async (uri: string) => ({
+    width: 800,
+    height: uri.includes("att_long") ? 6000 : 500,
+    encode: async () => ({ data: "part", mimeType: "image/png" }),
+    release() {},
+  }),
+}));
 
 function createAttachment(input: Partial<AttachmentMetadata> = {}): AttachmentMetadata {
   return {
@@ -97,6 +106,51 @@ describe("attachment service", () => {
     await expect(encodeAttachmentsForSend([attachment])).resolves.toEqual([
       { data: "att_send:base64", mimeType: "image/jpeg" },
     ]);
+  });
+
+  it("expands a long screenshot in order while preserving original storage metadata", async () => {
+    const store = createRecordingStore();
+    __setAttachmentStoreForTests(store);
+    const original = createAttachment({ id: "att_long", byteSize: 4000000 });
+    const before = { ...original };
+    const result = await encodeAttachmentsForSend([original]);
+    expect(result?.length).toBeGreaterThan(1);
+    expect(result?.[0].description).toContain("original image 1: overview");
+    expect(result?.[1].description).toContain("original image 1: detail crop");
+    expect(original).toEqual(before);
+    expect(store.savedSources).toEqual([]);
+  });
+
+  it("fails the whole send if an attachment cannot be read instead of silently omitting it", async () => {
+    const store = createRecordingStore();
+    __setAttachmentStoreForTests(store);
+    vi.spyOn(store, "encodeBase64").mockImplementation(async ({ attachment }) => {
+      if (attachment.id === "missing") throw new Error("missing attachment");
+      return "base64";
+    });
+    await expect(
+      encodeAttachmentsForSend([createAttachment(), createAttachment({ id: "missing" })]),
+    ).rejects.toThrow("missing attachment");
+  });
+
+  it("reserves space for every selected original when expanding images", async () => {
+    const store = createRecordingStore();
+    __setAttachmentStoreForTests(store);
+    const attachments = Array.from({ length: 50 }, (_, index) =>
+      createAttachment({ id: index === 0 ? "att_long" : `att_${index}` }),
+    );
+    await expect(encodeAttachmentsForSend(attachments)).rejects.toThrow("too many readable parts");
+  });
+
+  it("rejects an oversized aggregate instead of sending a partial set", async () => {
+    const store = createRecordingStore();
+    __setAttachmentStoreForTests(store);
+    vi.spyOn(store, "encodeBase64").mockResolvedValue("A".repeat(16 * 1024 * 1024));
+    const originals = Array.from({ length: 4 }, (_, index) =>
+      createAttachment({ id: `animated_${index}`, mimeType: "image/gif" }),
+    );
+    await expect(encodeAttachmentsForSend(originals)).rejects.toThrow("too large to send together");
+    expect(store.savedSources).toEqual([]);
   });
 
   it("does not collect an attachment persisted while garbage collection is starting", async () => {

@@ -1,6 +1,13 @@
 import { collectRetainedAttachmentIds } from "@/attachments/gc-retention";
 import { getAttachmentStore } from "@/attachments/store";
 import type { AttachmentMetadata, SaveAttachmentInput } from "@/attachments/types";
+import {
+  imagePartsError,
+  MAX_SEND_IMAGES,
+  MAX_SEND_IMAGE_BASE64,
+  prepareImageForSend,
+  type EncodedSendImage,
+} from "./image-send";
 
 const activePersistence = new Set<Promise<AttachmentMetadata>>();
 const persistedDuringGarbageCollection = new Set<string>();
@@ -94,34 +101,36 @@ export async function persistAttachmentFromFileUri(input: {
 
 export async function encodeAttachmentsForSend(
   attachments: readonly AttachmentMetadata[] | undefined,
-): Promise<Array<{ data: string; mimeType: string }> | undefined> {
+): Promise<EncodedSendImage[] | undefined> {
   if (!attachments || attachments.length === 0) {
     return undefined;
   }
 
   const store = await getAttachmentStore();
-  const encoded = await Promise.all(
-    attachments.map(async (attachment) => {
-      try {
-        const data = await store.encodeBase64({ attachment });
-        return {
-          data,
-          mimeType: attachment.mimeType,
-        };
-      } catch (error) {
-        console.error("[attachments] Failed to encode attachment for send", {
-          id: attachment.id,
-          error,
-        });
-        return null;
+  if (attachments.length > MAX_SEND_IMAGES) throw imagePartsError();
+  const encoded: EncodedSendImage[] = [];
+  let totalBytes = 0;
+  // Decode one original at a time to avoid simultaneous large native bitmaps.
+  for (const [index, attachment] of attachments.entries()) {
+    const data = await store.encodeBase64({ attachment });
+    const maxParts = MAX_SEND_IMAGES - encoded.length - (attachments.length - index - 1);
+    const parts = await prepareImageForSend({ data, mimeType: attachment.mimeType }, maxParts);
+    for (const part of parts) {
+      totalBytes += part.data.length;
+      if (totalBytes > MAX_SEND_IMAGE_BASE64) {
+        throw new Error("These images are too large to send together. Send fewer images.");
       }
-    }),
-  );
-
-  const valid = encoded.filter(
-    (entry): entry is { data: string; mimeType: string } => entry !== null,
-  );
-  return valid.length > 0 ? valid : undefined;
+      encoded.push({
+        ...part,
+        ...(part.description
+          ? {
+              description: `original image ${index + 1}: ${part.description}`,
+            }
+          : {}),
+      });
+    }
+  }
+  return encoded;
 }
 
 export async function resolveAttachmentPreviewUrl(attachment: AttachmentMetadata): Promise<string> {

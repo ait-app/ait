@@ -419,6 +419,44 @@ describe("pickAndPersistImages", () => {
 });
 
 describe("dispatchComposerAgentMessage", () => {
+  it("sends prepared crops with layout context while the optimistic preview keeps the original", async () => {
+    const client = createFakeSendClient();
+    const stream = createFakeStream();
+    const metadata = {
+      id: "original",
+      mimeType: "image/png",
+      storageType: "web-indexeddb",
+      storageKey: "original",
+      createdAt: 123,
+    } as const;
+    await dispatchComposerAgentMessage({
+      client,
+      agentId: "agent",
+      text: "Read the whole screenshot",
+      attachments: [{ kind: "image", metadata }],
+      submission: stream,
+      encodeImages: async () => [
+        { data: "overview", mimeType: "image/png", description: "original image 1: overview" },
+        {
+          data: "crop",
+          mimeType: "image/webp",
+          description: "original image 1: detail crop x=0, y=1920",
+        },
+      ],
+    });
+    expect(client.calls[0].options.images).toEqual([
+      { data: "overview", mimeType: "image/png" },
+      { data: "crop", mimeType: "image/webp" },
+    ]);
+    expect(client.calls[0].options.attachments).toEqual([
+      expect.objectContaining({
+        type: "text",
+        text: expect.stringContaining("Image 2: original image 1: detail crop"),
+      }),
+    ]);
+    expect(stream.tail.get("agent")?.[0]).toMatchObject({ images: [metadata] });
+  });
+
   it("forwards the configured active-turn intent without provider capability checks", async () => {
     const client = createFakeSendClient();
     const stream = createFakeStream();
