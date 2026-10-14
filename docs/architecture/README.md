@@ -154,6 +154,10 @@ Tokio reactor，级联归档与 worktree 清理用相关会话屏障协调，全
 
 ## 名称与兼容
 
+`api` 的 `/mcp/agents` 将无状态 Streamable HTTP 工具调用适配到同一 Rust RPC 分发链。
+MCP 复用鉴权与生命周期，不拥有业务服务或新增持久化；见
+[ADR-148](../decisions/daemon/adr-148-daemon-mcp.md) 和 [MCP 手册](../operations/mcp.md)。
+
 源码、构建产物和运行日志使用 daemon 名称。WebSocket `server_info`、`server.*` 方法、
 `/v1/server/info`、稳定身份文件、`AIT_SERVER_*` 配置与已有数据目录保持兼容。
 当前客户端 API 使用这些字段；目录重命名不迁移或删除用户数据。

@@ -9,6 +9,7 @@ mod connection;
 mod files;
 mod listener;
 pub mod managed_relay;
+mod mcp;
 mod terminal_activity;
 mod workspace_cleanup;
 
@@ -345,11 +346,12 @@ impl Api {
             .route("/api/files/download", get(files::download))
             .route(terminal_activity::PATH, post(terminal_activity::report))
             .fallback(|| async { ApiError(StatusCode::NOT_FOUND) })
-            .layer(middleware::from_fn_with_state(self.shared.clone(), guard))
             .layer(TimeoutLayer::with_status_code(
                 StatusCode::REQUEST_TIMEOUT,
                 Duration::from_secs(10),
             ))
+            .merge(mcp::router())
+            .layer(middleware::from_fn_with_state(self.shared.clone(), guard))
             .layer(TraceLayer::new_for_http().make_span_with(
                 |request: &Request| tracing::info_span!("server_http", method = %request.method()),
             ))

@@ -7,6 +7,7 @@
 
 ## Daemon 与协议
 
+- [Rust workspace 每 crate 95% 覆盖率验证](daemon/crate-coverage-95-2026-10-14.md)
 - [Workspace 定时任务设计与验证](daemon/workspace-schedules-verification-2026-10-12.md)
 
 - [共享 model 与功能 crate 边界验证](daemon/model-capability-boundaries-2026-10-07.md)
@@ -180,6 +181,7 @@
 
 ## 发布验证
 
+- [Ait 0.1.3 Draft 发布说明](releases/release-0.1.3.md)
 - [Ait 0.1.2 Draft 发布说明](releases/release-0.1.2.md)
 - [Ait 0.1.1 Draft 发布说明](releases/release-0.1.1.md)
 - [Ait 0.1.0 发布说明](releases/release-0.1.0.md)

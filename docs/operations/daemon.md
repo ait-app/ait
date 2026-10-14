@@ -2,6 +2,7 @@
 
 `daemon` 是 Ait 唯一的 Rust 服务入口。它负责 Project/Workspace、原生 Provider 会话、
 Git/文件、终端、语音、调度和浏览器能力。源码边界见 [当前架构](../architecture/README.md)。
+标准 MCP 客户端通过 `/mcp/agents` 使用编排工具，配置和用法见 [MCP 手册](mcp.md)。
 
 ## 启动与配置
 

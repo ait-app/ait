@@ -48,6 +48,29 @@ fn registry_outages_fail_reads_and_mutations_without_claiming_success() {
     assert_eq!(directory.workspaces.list().unwrap().len(), 1);
 }
 
+#[test]
+fn uncoordinated_creation_and_list_subscriptions_require_the_owning_capability() {
+    let mut directory = directory();
+    for (method, params) in [
+        ("workspace.list.request", json!({"subscribe":{}})),
+        (
+            "workspace.create.request",
+            json!({"source":{"kind":"directory","path":"/tmp/alpha"},"agent":{"provider":"fixture"}}),
+        ),
+        (
+            "workspace.create.request",
+            json!({"source":{"kind":"worktree","cwd":"/tmp/alpha"}}),
+        ),
+    ] {
+        assert_eq!(
+            execute(&mut directory, method, params),
+            Err(crate::support::error::ErrorCode::UnsupportedCapability),
+            "{method}"
+        );
+    }
+    assert_eq!(directory.workspaces.list().unwrap().len(), 1);
+}
+
 #[derive(Debug)]
 struct BrokenConfig(ProjectConfigStoreError);
 

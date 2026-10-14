@@ -16,6 +16,7 @@ use crate::Shared;
 mod chunks;
 mod creation_receipts;
 mod dispatch;
+pub(super) mod rpc;
 mod single;
 mod validation;
 mod workspace_archive;

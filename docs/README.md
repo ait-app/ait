@@ -10,6 +10,7 @@
 
 ## 开始使用与开发
 
+- [daemon MCP 接口](operations/mcp.md)：Streamable HTTP、40 个编排工具、鉴权与 Workspace 上下文。
 - [项目说明](../README.md)：开发入口、workspace 和验证命令。
 - [桌面端](../apps/desktop/README.md)：Electron 启动、构建和打包。
 - [移动端与 Web](../apps/mobile/README.md)：Expo、浏览器连接与原生构建。
@@ -24,6 +25,7 @@
 
 - [ADR-149：Codex 高权限档位自动批准 computer use 访问](decisions/providers/adr-149-codex-computer-use-access-auto-approval.md)：Auto-review / Full Access 的原生访问批准、显式覆盖与档位切换。
 
+- [ADR-148：daemon 的无状态 MCP 编排接口](decisions/daemon/adr-148-daemon-mcp.md)：Rust RPC 复用与 Paseo 适配；[验证报告](reports/daemon/mcp-implementation-2026-10-14.md)。
 - [ADR-147：DSH 原生插件情景模式与权限分离](decisions/providers/adr-147-dsh-native-plugin-presets.md)：动态预设目录、用户插件、profile 隔离及会话专属控件。
 
 - [ADR-146：Workspace 重置清除变更请求关联](decisions/workspace/adr-146-reset-workspace-change-request-association.md)：本地分支重置标记、旧 PR/MR 过滤与远程跟踪清理。
@@ -121,6 +123,7 @@
 - [Android APK 发布](operations/android-releases.md)：独立手动构建测试或正式通用 APK。
 - [Google Play 内部测试](operations/google-play-internal-testing.md)：首次账号配置、测试者安装与手动 AAB 发布 CI。
 - [发布指南](operations/releasing.md)：桌面 Release、Android Internal Testing、iOS TestFlight。
+- [Ait 0.1.3 Draft 发布说明](reports/releases/release-0.1.3.md)：daemon MCP 编排、DeepSeek Harness 插件情景模式和原生配额／余额，完成 Draft 后停下等待 review。
 - [Ait 0.1.2 Draft 发布说明](reports/releases/release-0.1.2.md)：图片输入、OpenCode 2.0.25、连接和 Bot 权限修复，完成 Draft 后停下等待 review。
 - [Ait 0.1.1 Draft 发布说明](reports/releases/release-0.1.1.md)：Workspace 定时任务、实验性 Bot、无人值守 Host 和 Draft review 门禁。
 - [Ait 0.1.0 发布说明](reports/releases/release-0.1.0.md)：沿用 0.0.29 功能的版本升级与正式安装包发布。
@@ -184,7 +187,8 @@
 - [附件分块传输验证](reports/clients/attachment-chunks.md)：原图消息、200 MiB 文件上传、背压及覆盖率。
 
 - [File、共享契约与 RPC 边界 PR 验证](reports/daemon/file-and-rpc-boundaries-pr-validation-2026-10-08.md)：14-crate workspace 测试、覆盖率与源码证据。
-- [Daemon 测试扩展与覆盖率验证](reports/daemon/crate-coverage-rebase.md)：最新 rebase 验证、逐 crate 证据与历史测量索引。
+- [Rust workspace 每 crate 95% 覆盖率验证](reports/daemon/crate-coverage-95-2026-10-14.md)：15 个 crate 的可比基线、最终计数与未覆盖行证据。
+- [Daemon 测试扩展与覆盖率验证（历史）](reports/daemon/crate-coverage-rebase.md)：rebase 验证、逐 crate 证据与历史测量索引。
 - [Provider 能力清单](plans/provider-parity.md)：当前能力与后续工作。
 - [Antigravity CLI 验证](reports/providers/antigravity-cli.md)：协议夹具、安装路径和真实 AGY 验证范围。
 - [Provider 装配边界验证](reports/providers/provider-composition.md)：内置注册、辅助生成、DSH 简称与覆盖率证据。

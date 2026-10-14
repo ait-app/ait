@@ -7,6 +7,50 @@ use serde_json::json;
 use crate::channels::Incoming;
 use crate::test_support::{Fixture, creation};
 
+mod catalog_validation;
+
+#[test]
+fn channel_capabilities_status_and_conversations_are_scoped_to_the_bot() {
+    let fixture = Fixture::new();
+    let mut state = fixture.state();
+    let bot = BotId::generate();
+    let created = state.execute("bot.create.request", creation(bot)).unwrap();
+    let channel = created["bot"]["builtinChannelId"].clone();
+    let opened = state
+        .execute("bot.conversation.open.request", json!({"botId":bot}))
+        .unwrap();
+
+    assert_eq!(
+        state
+            .execute("bot.channel.types.request", json!({}))
+            .unwrap(),
+        json!({"supported":["builtin","telegram","feishu"],"email":{"supported":false,"planned":true}})
+    );
+    let status = state
+        .execute(
+            "bot.channel.status.request",
+            json!({"botId":bot,"channelId":channel}),
+        )
+        .unwrap();
+    assert_eq!(status["enabled"], true);
+    assert_eq!(status["connection"], serde_json::Value::Null);
+    let conversations = state
+        .execute("bot.conversation.list.request", json!({"botId":bot}))
+        .unwrap();
+    assert_eq!(conversations["conversations"].as_array().unwrap().len(), 1);
+    assert_eq!(
+        conversations["conversations"][0]["id"],
+        opened["conversation"]["id"]
+    );
+    assert!(!conversations.to_string().contains("sessionId"));
+    assert_eq!(
+        state.execute(
+            "bot.conversation.list.request",
+            json!({"botId":BotId::generate()})
+        ),
+        Err(ErrorCode::BotNotFound)
+    );
+}
 mod lifecycle;
 
 fn external(channel: ChannelId, sender: &str, message: &str) -> Incoming {

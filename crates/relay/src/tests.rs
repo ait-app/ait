@@ -4,6 +4,7 @@ const CLIENT_HELLO: &str =
     r#"{ "type": "hello", "client_id": "test", "future": {"extension": true} }"#;
 use futures_util::SinkExt;
 use serde_json::json;
+mod lifecycle;
 
 #[test]
 fn center_urls_require_tls_and_preserve_proxy_prefix() {

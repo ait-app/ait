@@ -180,3 +180,6 @@ impl Api {
         }
     }
 }
+
+#[cfg(test)]
+mod tests;
