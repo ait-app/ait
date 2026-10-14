@@ -1,12 +1,13 @@
 use serde_json::{Value, json};
 
 use super::{ErrorCode, ExecutionState, map_manager, only};
+use crate::support::rpc::decode;
 
 impl ExecutionState {
     pub(super) async fn voice(&mut self, method: &str, params: Value) -> Result<Value, ErrorCode> {
         if method == "internal.voice.send" {
             only(&params, &["agentId", "text"])?;
-            let request: crate::protocol::agent_execution::SendRequest = super::decode(params)?;
+            let request: crate::protocol::agent_execution::SendRequest = decode(params)?;
             let id = self.resolve(&request.agent_id)?;
             let record = self
                 .registry

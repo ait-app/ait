@@ -7,7 +7,7 @@ import {
 } from "@ait/protocol/binary-frames/index";
 import { CHANNEL_CAPABILITIES, createRustDaemonTransportFactory } from "./transport";
 import { METHODS } from "./methods";
-import type { Payload, TransportFactory } from "./types";
+import { object, type Payload, type TransportFactory } from "./types";
 
 function harness(
   implemented = Object.values(METHODS).map((spec) => spec.method),
@@ -118,12 +118,140 @@ function harness(
 }
 
 describe("Rust protocol adapter", () => {
-  it("delivers Rust timeline producer notifications to the owning SDK observation", async () => {
+  it("negotiates Bot capabilities and maps their requests and results on the execution channel", () => {
+    const h = harness();
+    h.ready(undefined, ["workspace-bots-v1"]);
+    const info = h.received.find((message) => object(message.message).type === "status");
+    expect(object(object(info?.message).payload).features).toMatchObject({ workspaceBots: true });
+    h.send({ type: "bot.list.request", requestId: "bot-list", workspaceId: "workspace-a" });
+    expect(h.last(3)).toMatchObject({
+      type: "request",
+      method: "bot.list.request",
+      request_id: "bot-list",
+      params: { workspaceId: "workspace-a" },
+    });
+    h.sockets[3].message({ type: "response", request_id: "bot-list", result: { bots: [] } });
+    expect(h.received.at(-1)).toEqual({
+      type: "session",
+      message: { type: "bot.list.response", payload: { requestId: "bot-list", bots: [] } },
+    });
+  });
+
+  it.each([
+    {
+      name: "timeline producer",
+      timestamp: "2026-10-07T00:00:00Z",
+      event: {
+        type: "timeline",
+        provider: "codex",
+        item: { type: "assistant_message", text: "Live reply" },
+      },
+    },
+    {
+      name: "0.0.27 usage",
+      timestamp: undefined,
+      event: {
+        type: "usage_updated",
+        provider: "codex",
+        turnId: null,
+        usage: { inputTokens: 100 },
+      },
+    },
+    {
+      name: "timestamped usage",
+      timestamp: "2026-10-11T00:00:00Z",
+      event: {
+        type: "usage_updated",
+        provider: "codex",
+        turnId: "turn",
+        usage: { inputTokens: 100, outputTokens: 20, totalCostUsd: 0.01 },
+      },
+    },
+    {
+      name: "0.0.27 turn start",
+      timestamp: undefined,
+      event: { type: "turn_started", provider: "codex", turnId: "turn" },
+    },
+    {
+      name: "0.0.27 permission request",
+      timestamp: undefined,
+      event: {
+        type: "permission_requested",
+        provider: "codex",
+        request: { id: "permission", provider: "codex", name: "Shell", kind: "tool" },
+      },
+    },
+    {
+      name: "0.0.27 permission resolution",
+      timestamp: undefined,
+      event: {
+        type: "permission_resolved",
+        provider: "codex",
+        requestId: "permission",
+        resolution: { behavior: "allow" },
+      },
+    },
+  ] as const)(
+    "delivers $name notifications to the owning SDK observation",
+    async ({ event, timestamp }) => {
+      const h = harness();
+      h.stopHello();
+      const logger = { debug: vi.fn(), info: vi.fn(), warn: vi.fn(), error: vi.fn() };
+      const client = new DaemonClient({
+        url: "ws://127.0.0.1:7316/v1/ws",
+        clientId: "timeline-producer-test",
+        transportFactory: () => h.transport,
+        reconnect: { enabled: false },
+        logger,
+      });
+      try {
+        const connected = client.connect();
+        h.ready();
+        await connected;
+        const timeline = client.observeTimeline(["agent"]);
+        const updates = vi.fn();
+        timeline.subscribe({ snapshot: () => {}, update: updates });
+        const request = h.last(0);
+        expect(request.method).toBe("agent.timeline.set_subscription.request");
+        h.sockets[0].message({
+          type: "response",
+          request_id: request.request_id,
+          method: request.method,
+          result: { subscriptionId: "timeline-lease", agentIds: ["agent"] },
+        });
+        await timeline.ready;
+        const payload = {
+          subscriptionId: "timeline-lease",
+          agentId: "agent",
+          ...(timestamp ? { timestamp } : {}),
+          ...(event.type === "timeline" ? { seq: 3, epoch: "epoch" } : {}),
+          event,
+        };
+        h.sockets[0].message({ type: "event", method: "agent_stream", params: payload });
+        expect(updates).toHaveBeenCalledExactlyOnceWith({
+          type: "agent.stream",
+          payload: {
+            ...payload,
+            timestamp: timestamp ?? expect.any(String),
+            event:
+              event.type === "usage_updated" && event.turnId === null
+                ? { ...event, turnId: undefined }
+                : event,
+          },
+        });
+        expect(Number.isFinite(Date.parse(updates.mock.calls[0][0].payload.timestamp))).toBe(true);
+        expect(logger.warn).not.toHaveBeenCalled();
+      } finally {
+        await client.close();
+      }
+    },
+  );
+  it("preserves managed Host ownership from Rust through the SDK status response", async () => {
     const h = harness();
     h.stopHello();
     const client = new DaemonClient({
       url: "ws://127.0.0.1:7316/v1/ws",
-      clientId: "timeline-producer-test",
+      clientId: "managed-host-test",
       transportFactory: () => h.transport,
       reconnect: { enabled: false },
     });
@@ -131,32 +259,25 @@ describe("Rust protocol adapter", () => {
       const connected = client.connect();
       h.ready();
       await connected;
-      const timeline = client.observeTimeline(["agent"]);
-      const updates = vi.fn();
-      timeline.subscribe({ snapshot: () => {}, update: updates });
-      const request = h.last(0);
-      expect(request.method).toBe("agent.timeline.set_subscription.request");
-      h.sockets[0].message({
+      const status = client.getOnlineServiceStatus();
+      const request = h.last(1);
+      h.sockets[1].message({
         type: "response",
         request_id: request.request_id,
         method: request.method,
-        result: { subscriptionId: "timeline-lease", agentIds: ["agent"] },
-      });
-      await timeline.ready;
-      const payload = {
-        subscriptionId: "timeline-lease",
-        agentId: "agent",
-        timestamp: "2026-10-07T00:00:00Z",
-        seq: 3,
-        epoch: "epoch",
-        event: {
-          type: "timeline",
-          provider: "codex",
-          item: { type: "assistant_message", text: "Live reply" },
+        result: {
+          serverId: "stable",
+          instanceId: "instance",
+          platform: "linux",
+          status: { online: true, connecting: false, epoch: null, error: null },
+          management: { mode: "managed", phase: "running", binding: null },
         },
-      };
-      h.sockets[0].message({ type: "event", method: "agent_stream", params: payload });
-      expect(updates).toHaveBeenCalledExactlyOnceWith({ type: "agent.stream", payload });
+      });
+      expect((await status).management).toEqual({
+        mode: "managed",
+        phase: "running",
+        binding: null,
+      });
     } finally {
       await client.close();
     }
@@ -476,9 +597,9 @@ describe("Rust protocol adapter", () => {
   });
 
   it("uses canonical names and stays within Rust's per-connection limits", () => {
-    expect(Object.keys(METHODS)).toHaveLength(171);
+    expect(Object.keys(METHODS)).toHaveLength(192);
     for (const [name, spec] of Object.entries(METHODS)) expect(spec.method).toBe(name);
-    expect(new Set(Object.values(METHODS).map((spec) => spec.method)).size).toBe(171);
+    expect(new Set(Object.values(METHODS).map((spec) => spec.method)).size).toBe(192);
     for (const capabilities of CHANNEL_CAPABILITIES) {
       expect(capabilities.length).toBeLessThanOrEqual(64);
       expect(capabilities.some((name) => /^(hub|chat|loop|plugin)[./]/.test(name))).toBe(false);
@@ -486,6 +607,22 @@ describe("Rust protocol adapter", () => {
     expect(Object.keys(METHODS).some((name) => /^(hub|chat|loop|plugin)[./]/.test(name))).toBe(
       false,
     );
+  });
+
+  it("rejects the retired pairing offer even when an older host implements it", () => {
+    const method = "daemon.get_pairing_offer.request";
+    const h = harness([...Object.values(METHODS).map((spec) => spec.method), method]);
+    try {
+      h.ready();
+      for (const capabilities of CHANNEL_CAPABILITIES) expect(capabilities).not.toContain(method);
+      const sent = h.sockets.map((socket) => socket.send.mock.calls.length);
+      expect(() => h.send({ type: method, requestId: "retired-pairing" })).toThrow(
+        `No Rust daemon method mapping for ${method}`,
+      );
+      expect(h.sockets.map((socket) => socket.send.mock.calls.length)).toEqual(sent);
+    } finally {
+      h.transport.close();
+    }
   });
 
   it("routes the local workspace reset method on the Git channel", () => {
@@ -826,6 +963,64 @@ describe("Rust protocol adapter", () => {
     expect(() => h.send({ type: "project.list.request" })).toThrow("closed");
   });
 
+  it("keeps a GitHub clone pending through foreground verification on a nonce-only daemon", async () => {
+    vi.useFakeTimers();
+    const h = harness();
+    h.stopHello();
+    const client = new DaemonClient({
+      url: "ws://127.0.0.1:7316/v1/ws",
+      clientId: "clone-foreground",
+      transportFactory: () => h.transport,
+      reconnect: { enabled: false },
+    });
+    try {
+      const connected = client.connect();
+      h.ready();
+      await connected;
+      const clone = client.cloneGithubProject(
+        { repo: "https://github.com/acme/app.git", targetDirectory: "/repo/app" },
+        "clone",
+      );
+      const outcome = clone.then(
+        (value) => ({ value }),
+        (error: Error) => ({ error: error.message }),
+      );
+      await vi.advanceTimersByTimeAsync(0);
+      const cloneRequest = h.last(1);
+      expect(cloneRequest.method).toBe("project.github.clone.request");
+
+      client.ensureConnected({ verify: true });
+      await vi.advanceTimersByTimeAsync(0);
+      const ping = h.last(0);
+      expect(ping).toMatchObject({ type: "request", method: "connection.ping" });
+      expect(ping.params).toEqual({ nonce: ping.request_id });
+      h.sockets[0].message({
+        type: "response",
+        request_id: ping.request_id,
+        result: { nonce: ping.params.nonce },
+      });
+      await vi.advanceTimersByTimeAsync(3_000);
+
+      const project = {
+        projectId: "app",
+        projectDisplayName: "app",
+        projectRootPath: "/repo/app",
+        projectKind: "git",
+      };
+      h.sockets[1].message({
+        type: "response",
+        request_id: cloneRequest.request_id,
+        result: { repo: "acme/app", checkoutPath: "/repo/app", project, error: null },
+      });
+      await expect(outcome).resolves.toMatchObject({ value: { project, error: null } });
+      expect(client.isConnected).toBe(true);
+      expect(h.sockets.every((socket) => socket.close.mock.calls.length === 0)).toBe(true);
+    } finally {
+      await client.close();
+      vi.useRealTimers();
+    }
+  });
+
   it("rejects mixed server instances and never reports a successful connection", () => {
     const h = harness();
     for (const socket of h.sockets) socket.open();
@@ -883,6 +1078,45 @@ describe("Rust protocol adapter", () => {
       expect(h.received).toHaveLength(count);
     } finally {
       h.transport.close();
+      vi.useRealTimers();
+    }
+  });
+
+  it("releases a permission ID after five seconds so the response can be retried", () => {
+    vi.useFakeTimers();
+    const h = harness();
+    try {
+      h.ready();
+      const request = {
+        type: "agent.permission.resolve.request",
+        requestId: "permission",
+        agentId: "agent",
+        response: { behavior: "deny" },
+      };
+      h.send(request);
+      vi.advanceTimersByTime(4_999);
+      expect(h.received.at(-1)?.message).not.toMatchObject({ type: "rpc_error" });
+      vi.advanceTimersByTime(1);
+      expect(h.received.at(-1)).toMatchObject({
+        message: {
+          type: "rpc_error",
+          payload: { requestId: "permission", code: "timeout" },
+        },
+      });
+      expect(() => h.send(request)).not.toThrow();
+      expect(h.last(0)).toMatchObject({
+        method: request.type,
+        request_id: "permission",
+        params: { agentId: "agent", requestId: "permission" },
+      });
+      h.sockets[0].message({ type: "response", request_id: "permission", result: {} });
+      vi.advanceTimersByTime(5_000);
+      expect(h.received.filter((value) => object(value.message).type === "rpc_error")).toHaveLength(
+        1,
+      );
+    } finally {
+      h.transport.close();
+      expect(vi.getTimerCount()).toBe(0);
       vi.useRealTimers();
     }
   });

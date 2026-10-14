@@ -11,7 +11,7 @@ use crate::service::Terminals;
 ///
 /// # Errors
 /// Returns `Error::Invalid` for an invalid payload.
-pub fn decode<T: DeserializeOwned>(params: Value) -> Result<T, Error> {
+pub(crate) fn decode<T: DeserializeOwned>(params: Value) -> Result<T, Error> {
     serde_json::from_value(params).map_err(|_| Error::Invalid)
 }
 
@@ -19,7 +19,11 @@ pub fn decode<T: DeserializeOwned>(params: Value) -> Result<T, Error> {
 ///
 /// # Errors
 /// Returns malformed payloads, unknown methods, registry failures, or process errors.
-pub fn execute(service: &mut Terminals, method: &str, params: Value) -> Result<Value, Error> {
+pub(crate) fn execute(
+    service: &mut Terminals,
+    method: &str,
+    params: Value,
+) -> Result<Value, Error> {
     match method {
         "terminal.list.request" => {
             let request: ListRequest = decode(params)?;

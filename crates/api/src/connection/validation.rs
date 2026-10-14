@@ -4,7 +4,7 @@ use std::collections::BTreeMap;
 use std::sync::OnceLock;
 
 use model::methods::InboundKind;
-use protocol::ErrorCode;
+use model::server::ErrorCode;
 
 use crate::capabilities::implemented_methods;
 

@@ -13,6 +13,15 @@ const METHODS: &[&str] = &[
 
 #[tokio::test]
 async fn skills_are_installed_confirmed_and_persisted_through_websocket() {
+    skills_workflow(false).await;
+}
+
+#[tokio::test]
+async fn skills_are_installed_confirmed_and_persisted_through_single_connection() {
+    skills_workflow(true).await;
+}
+
+async fn skills_workflow(single: bool) {
     let root = tempfile::tempdir().unwrap();
     let data = root.path().join("state");
     let bundle = data.join("skills-bundle/example");
@@ -21,7 +30,11 @@ async fn skills_are_installed_confirmed_and_persisted_through_websocket() {
     let log = root.path().join("server.log");
     let mut process = start(&data, &log);
     let address = ready(&mut process, &log).await;
-    let mut socket = connect(&address, METHODS).await;
+    let mut capabilities = METHODS.to_vec();
+    if single {
+        capabilities.push("connection.single.v1");
+    }
+    let mut socket = connect(&address, &capabilities).await;
     let status = request(&mut socket, METHODS[0], json!({})).await;
     assert_eq!(status["result"]["state"], "not-installed", "{status}");
     assert_eq!(status["result"]["available"], json!(["example"]));
@@ -64,7 +77,7 @@ async fn skills_are_installed_confirmed_and_persisted_through_websocket() {
     terminate(&mut process).await;
     let mut process = start(&data, &log);
     let address = ready(&mut process, &log).await;
-    let mut socket = connect(&address, METHODS).await;
+    let mut socket = connect(&address, &capabilities).await;
     assert_eq!(
         request(&mut socket, METHODS[0], json!({})).await["result"]["selection"],
         json!({"mode":"custom","skills":[]})

@@ -11,6 +11,8 @@ interface ThemedStackBaseProps {
   // Screens whose content is another navigator. That navigator owns its own screens' appearance
   // boundary; wrapping it here would remount it.
   nestedNavigatorScreens?: readonly string[];
+  // Stateful screens place appearance boundaries around their own content.
+  persistentScreens?: readonly string[];
 }
 
 interface ScreenContent {
@@ -23,6 +25,7 @@ function ThemedStackBase({
   children,
   screenOptions,
   nestedNavigatorScreens,
+  persistentScreens,
 }: ThemedStackBaseProps) {
   const themedScreenOptions = useMemo<NativeStackNavigationOptions>(
     () => ({
@@ -35,10 +38,14 @@ function ThemedStackBase({
   // and its screen containers keep their identity. See docs/unistyles.md.
   const screenLayout = useCallback(
     ({ route, children: content }: ScreenContent): ReactElement => {
-      if (nestedNavigatorScreens?.includes(route.name) && isValidElement(content)) return content;
+      if (
+        (nestedNavigatorScreens?.includes(route.name) || persistentScreens?.includes(route.name)) &&
+        isValidElement(content)
+      )
+        return content;
       return <AppearanceStyleBoundary>{content}</AppearanceStyleBoundary>;
     },
-    [nestedNavigatorScreens],
+    [nestedNavigatorScreens, persistentScreens],
   );
 
   return (

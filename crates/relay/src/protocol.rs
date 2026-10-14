@@ -27,9 +27,9 @@ pub struct Status {
     /// Whether the center accepted this host's control hello.
     pub online: bool,
     /// Last accepted routing generation, used only to replace the same instance.
-    pub epoch: Option<Uuid>,
+    pub(crate) epoch: Option<Uuid>,
     /// Non-secret machine-readable failure category.
-    pub error: Option<String>,
+    pub(crate) error: Option<String>,
 }
 
 /// Initial declaration of the local daemon's identity to the center.
@@ -86,14 +86,14 @@ pub(super) enum ControlCommand {
 #[derive(Debug, Deserialize)]
 pub(super) struct OpenData {
     /// Connection identity assigned by the center.
-    pub relay_session_id: Uuid,
+    pub(crate) relay_session_id: Uuid,
     /// Control generation that authorized this grant.
-    pub epoch: Uuid,
+    pub(crate) epoch: Uuid,
     /// One-use credential for the daemon side of the data connection.
-    pub daemon_ticket: SecretString,
+    pub(crate) daemon_ticket: SecretString,
     /// Business forwarding or a scoped file download.
     #[serde(flatten)]
-    pub mode: DataMode,
+    pub(crate) mode: DataMode,
 }
 
 /// Supported data modes and their mode-specific parameters.

@@ -1,5 +1,6 @@
 use super::*;
 
+mod bot;
 mod browser_auth;
 mod chunks;
 mod paseo;
@@ -10,7 +11,7 @@ mod single;
 mod voice;
 
 use futures_util::{SinkExt, StreamExt};
-use protocol::CAPABILITIES;
+use model::server::CAPABILITIES;
 use serde_json::{Value, json};
 use tokio::net::{TcpListener, TcpStream};
 use tokio::task::JoinHandle;
@@ -36,6 +37,10 @@ impl Fixture {
     }
 
     async fn with_origins(services: Services, origins: Vec<String>) -> Self {
+        Self::with_policy(services, origins, false).await
+    }
+
+    async fn with_policy(services: Services, origins: Vec<String>, managed: bool) -> Self {
         let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
         let address = listener.local_addr().unwrap();
         let api = Api::new(
@@ -46,7 +51,10 @@ impl Fixture {
             services,
         )
         .unwrap();
-        let api = api.with_browser_origins(origins).unwrap();
+        let mut api = api.with_browser_origins(origins).unwrap();
+        if managed {
+            api.claim_managed_relay().unwrap();
+        }
         let shutdown = api.clone();
         let router = api.router();
         let task = tokio::spawn(async move {
@@ -180,7 +188,7 @@ fn assert_default_capabilities(info: &ServerInfo) {
         .chain(relay::rpc::METHODS.iter().map(|method| method.name))
         .collect();
     assert_eq!(info.implemented_capabilities, expected);
-    assert_eq!(info.capabilities.len(), 180);
+    assert_eq!(info.capabilities.len(), 201);
     assert!(
         info.capabilities
             .contains(&"connection.single.v1".to_owned())
@@ -402,7 +410,7 @@ async fn rejects_oversized_frames_binary_and_malformed_messages() {
     }
     let mut socket = fixture.socket().await;
     let mut oversized = hello();
-    oversized["future"] = json!("x".repeat(protocol::MAX_MESSAGE_BYTES));
+    oversized["future"] = json!("x".repeat(model::server::MAX_MESSAGE_BYTES));
     let sent = socket
         .send(Message::Text(oversized.to_string().into()))
         .await;
@@ -440,7 +448,7 @@ async fn unauthenticated_upgrade_and_connection_budget_are_rejected() {
         matches!(error, tokio_tungstenite::tungstenite::Error::Http(response) if response.status() == StatusCode::UNAUTHORIZED)
     );
     let mut sockets = Vec::new();
-    for _ in 0..protocol::MAX_CONNECTIONS {
+    for _ in 0..model::server::MAX_CONNECTIONS {
         sockets.push(fixture.socket().await);
     }
     let mut request = format!("ws://{}/v1/ws", fixture.address)

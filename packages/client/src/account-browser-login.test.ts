@@ -41,5 +41,6 @@ describe("native account callbacks", () => {
     expect(accountLoginError("account_expired")).toContain("renew");
     expect(accountLoginError("account_link_required")).toContain("original password");
     expect(accountLoginError("email_verification_required")).toContain("verify");
+    expect(accountLoginError("contact_verification_required")).toContain("phone number or email");
   });
 });

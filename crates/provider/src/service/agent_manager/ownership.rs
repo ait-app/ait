@@ -6,7 +6,7 @@ use std::sync::{Arc, Mutex};
 use crate::rpc::ErrorCode;
 use domain::agent_runtime::PersistedAgentRuntimeRecord;
 use serde_json::{Value, json};
-use tokio::sync::watch;
+use tokio::sync::{Notify, watch};
 use tokio_util::sync::CancellationToken;
 
 use super::auto_archive::Retirement;
@@ -31,6 +31,7 @@ pub(crate) struct Owners {
     observations: Arc<Mutex<BTreeMap<String, watch::Sender<Value>>>>,
     barriers: Arc<Mutex<BTreeMap<String, Vec<CancellationToken>>>>,
     retirements: Arc<Mutex<BTreeMap<String, PendingRetirement>>>,
+    retired: Arc<Notify>,
     changes: Option<model::changes::Changes>,
 }
 
@@ -87,6 +88,18 @@ impl Owners {
                 Some(pending.action.clone())
             })
             .collect())
+    }
+
+    /// Whether an unstarted automatic retirement is waiting for the scheduler.
+    pub(crate) fn has_idle_retirements(&self) -> bool {
+        self.retirements
+            .lock()
+            .is_ok_and(|retirements| retirements.values().any(|pending| !pending.running))
+    }
+
+    /// Resolve after an owner queues a retirement; a wakeup sent before awaiting is retained.
+    pub(crate) async fn retired(&self) {
+        self.retired.notified().await;
     }
 
     /// Complete a retirement or make its close/cleanup failure eligible for retry.
@@ -346,6 +359,7 @@ impl Owner {
                 action,
                 running: false,
             });
+        self.shared.retired.notify_one();
         Ok(())
     }
     /// Fence observations before publishing a newly registered native writer.

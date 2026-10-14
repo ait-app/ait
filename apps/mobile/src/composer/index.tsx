@@ -72,7 +72,7 @@ import { resolveComposerInputMode, type ComposerInputMode } from "@/composer/inp
 import { ComposerKeyboardScopeProvider, useComposerKeyboardScope } from "@/composer/keyboard-scope";
 import { createMessageSubmissionWriter } from "@/composer/submission/writer";
 import { submitAgentInput } from "@/composer/submit";
-import { FOOTER_HEIGHT, MAX_CONTENT_WIDTH, useIsCompactFormFactor } from "@/constants/layout";
+import { FOOTER_HEIGHT, useIsCompactFormFactor } from "@/constants/layout";
 import { isNative, isWeb } from "@/constants/platform";
 import { useToast } from "@/contexts/toast-context";
 import { useVoiceOptional } from "@/contexts/voice-context";
@@ -279,7 +279,7 @@ function renderContextWindowMeter(
   totalCostUsd: number | null,
   showPercentage: boolean,
   serverId: string,
-  provider: string | null,
+  agentId: string | null,
   pending: boolean,
   glyphSize: number,
 ): ReactElement | null {
@@ -294,8 +294,7 @@ function renderContextWindowMeter(
       totalCostUsd={totalCostUsd}
       showPercentage={showPercentage}
       serverId={serverId}
-      provider={provider}
-      pending={pending}
+      agentId={agentId ?? ""}
       glyphSize={glyphSize}
     />
   );
@@ -2032,7 +2031,7 @@ function ComposerContentImpl({
         agentState.totalCostUsd,
         false,
         serverId,
-        agentState.provider,
+        agentId,
         contextWindowPending,
         contextWindowMeterGlyphSize,
       ),
@@ -2041,7 +2040,7 @@ function ComposerContentImpl({
       contextWindowUsedTokens,
       agentState.totalCostUsd,
       serverId,
-      agentState.provider,
+      agentId,
       contextWindowPending,
       contextWindowMeterGlyphSize,
     ],
@@ -2489,7 +2488,7 @@ const styles = StyleSheet.create((theme: Theme) => ({
   inputAreaContent: {
     flexShrink: 1,
     width: "100%",
-    maxWidth: MAX_CONTENT_WIDTH,
+    maxWidth: theme.contentMaxWidth,
     gap: theme.spacing[3],
   },
   messageInputContainer: {

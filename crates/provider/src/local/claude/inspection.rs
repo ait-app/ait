@@ -9,7 +9,7 @@ use std::time::Duration;
 
 use secrecy::{ExposeSecret, SecretString};
 use serde::Deserialize;
-use serde_json::Value;
+use serde_json::{Value, json};
 use tokio::io::AsyncReadExt;
 
 use super::{ClaudeClient, config};
@@ -19,6 +19,7 @@ use crate::ports::agent_session::AgentSessionError;
 struct Credentials {
     token: SecretString,
     plan: Option<String>,
+    expires_at: Option<i64>,
 }
 
 #[derive(Deserialize)]
@@ -33,6 +34,7 @@ struct OAuth {
     access_token: String,
     subscription_type: Option<String>,
     rate_limit_tier: Option<String>,
+    expires_at: Option<i64>,
 }
 
 impl ClaudeClient {
@@ -55,18 +57,58 @@ impl ClaudeClient {
     pub(super) async fn native_usage(&self) -> Result<Value, AgentSessionError> {
         let credentials = self.credentials().await?;
         let Some(credentials) = credentials else {
-            return Err(AgentSessionError::Unavailable);
+            return Ok(unavailable(
+                &json!({"kind":"no_quota","detail":"This login does not report plan usage. Run claude /login to sign in."}),
+            ));
         };
+        if let Some(expiry) = credentials
+            .expires_at
+            .and_then(chrono::DateTime::from_timestamp_millis)
+            .filter(|expiry| *expiry <= chrono::Utc::now())
+        {
+            return Ok(unavailable(
+                &json!({"kind":"expired","expiresAt":expiry.to_rfc3339_opts(chrono::SecondsFormat::Millis, true),"refreshedBy":"claude /login"}),
+            ));
+        }
         let response = fetch(
             "https://api.anthropic.com/api/oauth/usage",
             &credentials.token,
             self.deadline,
         )
         .await?;
+        if let Some(status) = response["httpStatus"].as_u64() {
+            if matches!(status, 401 | 403) {
+                return Ok(unavailable(
+                    &json!({"kind":"rejected","status":status,"refreshedBy":"claude /login"}),
+                ));
+            }
+            return Err(AgentSessionError::Failed);
+        }
         quota::project(&response, credentials.plan.as_deref())
     }
 
     async fn credentials(&self) -> Result<Option<Credentials>, AgentSessionError> {
+        if let Some(token) = self
+            .environment_value("CLAUDE_CODE_OAUTH_TOKEN")
+            .filter(|token| !token.expose_secret().is_empty())
+        {
+            if token.expose_secret().len() > 16384
+                || token.expose_secret().chars().any(char::is_control)
+            {
+                return Err(AgentSessionError::Rejected);
+            }
+            return Ok(Some(Credentials {
+                token,
+                plan: None,
+                expires_at: None,
+            }));
+        }
+        if self
+            .environment_value("ANTHROPIC_API_KEY")
+            .is_some_and(|token| !token.expose_secret().is_empty())
+        {
+            return Ok(None);
+        }
         let directory = self
             .config_dir
             .clone()
@@ -82,6 +124,19 @@ impl ClaudeClient {
         }
         keychain().await
     }
+
+    fn environment_value(&self, key: &str) -> Option<SecretString> {
+        self.environment
+            .entries()
+            .find(|(name, _)| *name == key)
+            .map(|(_, value)| SecretString::from(value.to_owned()))
+            .or_else(|| std::env::var(key).ok().map(SecretString::from))
+    }
+}
+
+fn unavailable(problem: &Value) -> Value {
+    json!({"providerId":"claude","displayName":"Claude","status":"unavailable",
+        "planLabel":null,"windows":[],"problem":problem,"fetchedAt":chrono::Utc::now().to_rfc3339()})
 }
 
 fn diagnostic(status: Option<&Value>) -> String {
@@ -137,6 +192,7 @@ fn decode(raw: &SecretString) -> Option<Credentials> {
     Some(Credentials {
         token: SecretString::from(oauth.access_token),
         plan,
+        expires_at: oauth.expires_at,
     })
 }
 
@@ -255,7 +311,7 @@ async fn fetch(
         .redirect(reqwest::redirect::Policy::none())
         .timeout(deadline)
         .build()
-        .map_err(|_| AgentSessionError::Unavailable)?;
+        .map_err(|_| AgentSessionError::Failed)?;
     let mut response = client
         .get(endpoint)
         .bearer_auth(token.expose_secret())
@@ -263,15 +319,15 @@ async fn fetch(
         .header("anthropic-beta", "oauth-2025-04-20")
         .send()
         .await
-        .map_err(|_| AgentSessionError::Unavailable)?;
+        .map_err(|_| AgentSessionError::Failed)?;
     if !response.status().is_success() {
-        return Err(AgentSessionError::Unavailable);
+        return Ok(json!({"httpStatus":response.status().as_u16()}));
     }
     let mut bytes = Vec::new();
     while let Some(chunk) = response
         .chunk()
         .await
-        .map_err(|_| AgentSessionError::Unavailable)?
+        .map_err(|_| AgentSessionError::Failed)?
     {
         if bytes.len().saturating_add(chunk.len()) > 256 * 1024 {
             return Err(AgentSessionError::Failed);

@@ -1,6 +1,10 @@
 import type { DaemonClientConfig } from "@ait/client/internal/daemon-client";
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import type { DaemonConnectionDependencies, DaemonProbeClient } from "./test-daemon-connection";
+import {
+  connectToDaemon,
+  type DaemonConnectionDependencies,
+  type DaemonProbeClient,
+} from "./test-daemon-connection";
 
 class FakeDaemonClient implements DaemonProbeClient {
   readonly lastError: string | null;
@@ -77,7 +81,6 @@ describe("test-daemon-connection connectToDaemon", () => {
   });
 
   it("reuses the app clientId for direct connections", async () => {
-    const { connectToDaemon } = await import("./test-daemon-connection");
     const first = await connectToDaemon(
       {
         id: "direct:lan:6767",
@@ -107,8 +110,6 @@ describe("test-daemon-connection connectToDaemon", () => {
   });
 
   it("adapts direct TCP probes to the Rust protocol", async () => {
-    const { connectToDaemon } = await import("./test-daemon-connection");
-
     const result = await connectToDaemon(
       {
         id: "direct:lan:6767",
@@ -124,8 +125,22 @@ describe("test-daemon-connection connectToDaemon", () => {
     expect(probe.createdConfigs()[0]?.url).toBe("ws://lan:6767/v1/ws");
   });
 
+  it("uses faster relay backoff without enabling retries during a one-shot probe", async () => {
+    const result = await connectToDaemon(
+      { id: "account", type: "accountRelay", hostId: "remote", center: "https://center.test/api" },
+      undefined,
+      probe.deps,
+    );
+    expect(probe.createdConfigs()[0]?.reconnect).toEqual({
+      enabled: false,
+      baseDelayMs: 500,
+      maxDelayMs: 30_000,
+    });
+    expect(probe.createdConfigs()[0]?.connectTimeoutMs).toBe(45_000);
+    await result.client.close();
+  });
+
   it("encodes the local socket target into the client config", async () => {
-    const { connectToDaemon } = await import("./test-daemon-connection");
     const result = await connectToDaemon(
       {
         id: "socket:/tmp/ait.sock",
@@ -141,7 +156,6 @@ describe("test-daemon-connection connectToDaemon", () => {
   });
 
   it("uses the desktop transport for Remote SSH connections", async () => {
-    const { connectToDaemon } = await import("./test-daemon-connection");
     const transportFactory = vi.fn();
     const result = await connectToDaemon(
       {
@@ -168,7 +182,6 @@ describe("test-daemon-connection connectToDaemon", () => {
   });
 
   it("passes direct TCP connection passwords into the client config", async () => {
-    const { connectToDaemon } = await import("./test-daemon-connection");
     const result = await connectToDaemon(
       {
         id: "direct:lan:6767",
@@ -185,7 +198,6 @@ describe("test-daemon-connection connectToDaemon", () => {
   });
 
   it("passes performance tracing into the connected client", async () => {
-    const { connectToDaemon } = await import("./test-daemon-connection");
     const trace = {
       isEnabled: () => true,
       beginSection: vi.fn(),
@@ -206,7 +218,6 @@ describe("test-daemon-connection connectToDaemon", () => {
   });
 
   it("surfaces auth rejection as an incorrect password", async () => {
-    const { connectToDaemon } = await import("./test-daemon-connection");
     probe.failNextConnection(
       new Error("Transport closed (code 4001)"),
       "Transport closed (code 4001)",
@@ -229,7 +240,6 @@ describe("test-daemon-connection connectToDaemon", () => {
   });
 
   it("keeps generic transport failures generic when a password was supplied", async () => {
-    const { connectToDaemon } = await import("./test-daemon-connection");
     probe.failNextConnection(new Error("Transport error"), "Transport error");
 
     await expect(

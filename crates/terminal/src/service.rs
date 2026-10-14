@@ -3,7 +3,7 @@
 use std::collections::{BTreeMap, BTreeSet};
 use std::path::Path;
 
-use model::workspace::records::PersistedWorkspaceRecord;
+use domain::workspace::records::PersistedWorkspaceRecord;
 use model::workspace::registry::{ProjectRegistry, WorkspaceRegistry};
 use secrecy::{ExposeSecret, SecretString};
 use subtle::ConstantTimeEq;
@@ -85,7 +85,7 @@ impl Terminals {
     /// Unknown terminals and wrong tokens both return false. Native inspection errors propagate.
     /// # Errors
     /// Returns a process inspection failure.
-    pub fn report_activity(
+    pub(crate) fn report_activity(
         &mut self,
         id: &str,
         token: &str,
@@ -115,7 +115,7 @@ impl Terminals {
                 crate::activity::AttentionReason::Finished => "Terminal finished",
                 crate::activity::AttentionReason::NeedsInput => "Terminal needs input",
             };
-            self.events.publish(model::session::protocol::SessionEventKind::TerminalAttention,
+            self.events.publish(domain::session::protocol::SessionEventKind::TerminalAttention,
                 &serde_json::json!({"serverId":self.server_id,"terminalId":id,"cwd":entry.info.cwd,
                     "workspaceId":entry.info.workspace_id,"reason":reason,"title":title,"body":entry.info.name}));
         }
@@ -123,7 +123,7 @@ impl Terminals {
     }
 
     /// Clear attention for a visible client's focused terminal; missing terminals return false.
-    pub fn clear_attention(&mut self, id: &str) -> bool {
+    pub(crate) fn clear_attention(&mut self, id: &str) -> bool {
         self.activities.clear_attention(id)
     }
 
@@ -131,7 +131,7 @@ impl Terminals {
     ///
     /// # Errors
     /// Returns invalid options, inactive/mismatched placement, registry errors, or spawn failures.
-    pub fn create(&mut self, request: &CreateRequest) -> Result<TerminalInfo, Error> {
+    pub(crate) fn create(&mut self, request: &CreateRequest) -> Result<TerminalInfo, Error> {
         request.size.validate()?;
         if request.agent_id.as_ref().is_some_and(|id| !id.is_empty())
             || request
@@ -244,8 +244,48 @@ impl Terminals {
     ///
     /// # Errors
     /// Returns path, registry, or process inspection failures.
-    pub fn list(&mut self, filter: &ListRequest) -> Result<Vec<TerminalInfo>, Error> {
-        let workspaces = self.active_workspaces()?;
+    pub(crate) fn list(&mut self, filter: &ListRequest) -> Result<Vec<TerminalInfo>, Error> {
+        let workspaces = self.list_workspaces(filter)?;
+        self.list_with(filter, workspaces.as_deref())
+    }
+
+    /// Answer several list filters with at most one registry read.
+    ///
+    /// # Errors
+    /// Returns the shared registry failure; each filter keeps its own path or process result.
+    pub(crate) fn list_many<'a>(
+        &mut self,
+        filters: impl IntoIterator<Item = &'a ListRequest>,
+    ) -> Result<Vec<Result<Vec<TerminalInfo>, Error>>, Error> {
+        let mut workspaces = None;
+        let mut listed = Vec::new();
+        for filter in filters {
+            if workspaces.is_none() && Self::needs_workspaces(filter) {
+                workspaces = Some(self.active_workspaces()?);
+            }
+            listed.push(self.list_with(filter, workspaces.as_deref()));
+        }
+        Ok(listed)
+    }
+
+    fn needs_workspaces(filter: &ListRequest) -> bool {
+        filter.workspace_id.is_none() && filter.cwd.is_some()
+    }
+
+    fn list_workspaces(
+        &self,
+        filter: &ListRequest,
+    ) -> Result<Option<Vec<PersistedWorkspaceRecord>>, Error> {
+        Self::needs_workspaces(filter)
+            .then(|| self.active_workspaces())
+            .transpose()
+    }
+
+    fn list_with(
+        &mut self,
+        filter: &ListRequest,
+        workspaces: Option<&[PersistedWorkspaceRecord]>,
+    ) -> Result<Vec<TerminalInfo>, Error> {
         let root = filter
             .cwd
             .as_ref()
@@ -265,6 +305,7 @@ impl Terminals {
                 &entry.info.workspace_id == workspace_id
             } else if let Some(root) = &root {
                 let owner = workspaces
+                    .unwrap_or_default()
                     .iter()
                     .filter(|workspace| Path::new(&entry.info.cwd).starts_with(&workspace.cwd))
                     .max_by_key(|workspace| workspace.cwd.len());
@@ -286,7 +327,7 @@ impl Terminals {
     ///
     /// # Errors
     /// Returns an invalid title or a missing terminal.
-    pub fn rename(&mut self, id: &str, title: &str) -> Result<(), Error> {
+    pub(crate) fn rename(&mut self, id: &str, title: &str) -> Result<(), Error> {
         let title = title.trim();
         if title.is_empty()
             || title.encode_utf16().count() > 200
@@ -307,7 +348,7 @@ impl Terminals {
     ///
     /// # Errors
     /// Returns invalid input, missing terminal, full queue, or native I/O failures.
-    pub fn input(&mut self, id: &str, owner: &str, input: &Input) -> Result<(), Error> {
+    pub(crate) fn input(&mut self, id: &str, owner: &str, input: &Input) -> Result<(), Error> {
         let entry = self.entries.get_mut(id).ok_or(Error::NotFound)?;
         if entry.closed || entry.process.exited()? {
             return Err(Error::NotFound);
@@ -334,7 +375,7 @@ impl Terminals {
     ///
     /// # Errors
     /// Returns a missing terminal or snapshot/native failures.
-    pub fn observe(
+    pub(crate) fn observe(
         &mut self,
         id: &str,
         revision: Option<u64>,
@@ -356,7 +397,7 @@ impl Terminals {
     ///
     /// # Errors
     /// Returns a native screen access error.
-    pub fn capture(&self, id: &str) -> Result<Vec<String>, Error> {
+    pub(crate) fn capture(&self, id: &str) -> Result<Vec<String>, Error> {
         self.entries
             .get(id)
             .filter(|entry| !entry.closed)
@@ -367,7 +408,7 @@ impl Terminals {
     ///
     /// # Errors
     /// Returns native termination/reaping failures and retains the entry for retry.
-    pub fn kill(&mut self, id: &str) -> Result<(), Error> {
+    pub(crate) fn kill(&mut self, id: &str) -> Result<(), Error> {
         if let Some(entry) = self.entries.get_mut(id)
             && !entry.closed
         {
@@ -399,17 +440,17 @@ impl Terminals {
     ///
     /// # Errors
     /// Returns registry or process cleanup failures; failed entries remain retryable.
-    pub fn reconcile(&mut self) -> Result<(), Error> {
+    pub(crate) fn reconcile(&mut self) -> Result<(), Error> {
+        if self.entries.is_empty() {
+            return Ok(());
+        }
         for (id, entry) in &mut self.entries {
             if entry.closed || entry.process.exited()? {
                 self.activities.remove(id);
             }
         }
-        let active: BTreeSet<_> = self
-            .active_workspaces()?
-            .into_iter()
-            .map(|workspace| workspace.workspace_id)
-            .collect();
+        // Identity comparison only: skip the per-workspace path canonicalization.
+        let active = self.active_workspace_ids()?;
         let removed: Vec<_> = self
             .entries
             .iter()
@@ -439,6 +480,28 @@ impl Terminals {
     }
 
     fn active_workspaces(&self) -> Result<Vec<PersistedWorkspaceRecord>, Error> {
+        Ok(self
+            .active_workspace_records()?
+            .map(|mut workspace| {
+                // Registry paths preserve the user's spelling; PTYs use canonical paths.
+                if let Ok(cwd) = self.runtime.directory(&workspace.cwd) {
+                    workspace.cwd = cwd;
+                }
+                workspace
+            })
+            .collect())
+    }
+
+    fn active_workspace_ids(&self) -> Result<BTreeSet<String>, Error> {
+        Ok(self
+            .active_workspace_records()?
+            .map(|workspace| workspace.workspace_id)
+            .collect())
+    }
+
+    fn active_workspace_records(
+        &self,
+    ) -> Result<impl Iterator<Item = PersistedWorkspaceRecord>, Error> {
         let projects: BTreeSet<_> = self
             .projects
             .list()
@@ -452,18 +515,10 @@ impl Terminals {
             .list()
             .map_err(|_| Error::Registry)?
             .into_iter()
-            .filter(|workspace| {
+            .filter(move |workspace| {
                 workspace.archived_at.as_ref().is_none_or(String::is_empty)
                     && projects.contains(&workspace.project_id)
-            })
-            .map(|mut workspace| {
-                // Registry paths preserve the user's spelling; PTYs use canonical paths.
-                if let Ok(cwd) = self.runtime.directory(&workspace.cwd) {
-                    workspace.cwd = cwd;
-                }
-                workspace
-            })
-            .collect())
+            }))
     }
 }
 

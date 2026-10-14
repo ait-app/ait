@@ -46,11 +46,11 @@ executes the full workspace unit and integration suites under instrumentation:
 `nix develop --command cargo test --workspace --doc` additionally passed the
 1 workspace doctest. These are execution counts, separate from coverage.
 
-| Scope | Covered / total lines | Line coverage |
-| --- | ---: | ---: |
-| Workspace | 55847 / 59325 | 94.1374% |
-| provider | 26821 / 28795 | 93.1446% |
-| Codex rewind | 108 / 113 | 95.5752% |
+| Scope        | Covered / total lines | Line coverage |
+| ------------ | --------------------: | ------------: |
+| Workspace    |         55847 / 59325 |      94.1374% |
+| provider     |         26821 / 28795 |      93.1446% |
+| Codex rewind |             108 / 113 |      95.5752% |
 
 Same-scope baseline: [listener/import validation](../clients/desktop-listen-import-2026-10-08.md),
 94.1397% (55838/59314); change **-0.0023 percentage points**.

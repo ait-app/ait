@@ -7,6 +7,7 @@ import {
   type PaneContextValue,
 } from "@/panels/pane-context";
 import { useStableEvent } from "@/hooks/use-stable-event";
+import { AppearanceStyleBoundary } from "@/components/appearance-style-boundary";
 import { getPanelRegistration } from "@/panels/panel-registry";
 import { ensurePanelsRegistered } from "@/panels/register-panels";
 import type { WorkspaceTabDescriptor } from "@/screens/workspace/workspace-tabs-types";
@@ -149,15 +150,22 @@ export function WorkspacePaneContent({
       }),
     [isPaneFocused, isWorkspaceFocused, onFocusPane],
   );
+  const panel = <Component key={key} />;
+  // Terminal palette updates must keep xterm and the TUI's DEC 2031 subscription alive.
+  // Parsed and memoized content in other panels still refreshes on appearance changes.
+  const themedPanel =
+    paneContextValue.target.kind === "terminal" ? (
+      panel
+    ) : (
+      <AppearanceStyleBoundary>{panel}</AppearanceStyleBoundary>
+    );
 
   return (
     <RenderProfile
       id={`WorkspacePaneContent:${paneContextValue.target.kind}:${paneContextValue.tabId}`}
     >
       <PaneProvider value={stablePaneContextValue}>
-        <PaneFocusProvider value={paneFocusValue}>
-          <Component key={key} />
-        </PaneFocusProvider>
+        <PaneFocusProvider value={paneFocusValue}>{themedPanel}</PaneFocusProvider>
       </PaneProvider>
     </RenderProfile>
   );

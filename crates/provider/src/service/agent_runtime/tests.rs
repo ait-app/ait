@@ -2,10 +2,11 @@ use std::collections::{BTreeMap, BTreeSet};
 use std::sync::{Arc, Mutex};
 
 use domain::agent_runtime::registry::{AgentRuntimeRegistry, AgentRuntimeRegistryError};
-use model::workspace::registry::{
-    ActiveProjectInput, MutationListener, MutationSubscription, ProjectMutation,
-    WorkspaceArchiveContext, WorkspaceMutation, WorkspaceMutationContext,
+use domain::workspace::registry::{
+    ActiveProjectInput, ProjectMutation, WorkspaceArchiveContext, WorkspaceMutation,
+    WorkspaceMutationContext,
 };
+use model::workspace::registry::{MutationListener, MutationSubscription};
 
 use super::*;
 
@@ -31,6 +32,7 @@ async fn directory_only_hosts_check_identity_and_retire_only_the_requested_works
     let mut state = crate::dispatch::State {
         runtime: runtime.clone(),
         agents: None,
+        skills: None,
         agent_runtime: Some(Arc::new(Mutex::new(directory))),
         agent_execution: None,
         directory_changes: None,
@@ -584,6 +586,44 @@ fn default_query() -> AgentDirectoryQuery {
     AgentDirectoryQuery {
         limit: 200,
         ..AgentDirectoryQuery::default()
+    }
+}
+
+#[test]
+fn target_workspace_agent_pages_preserve_exact_scope_and_continuation() {
+    let (service, agents) = service();
+    agents
+        .upsert(&agent("other", "wks-two", "Other", false))
+        .unwrap();
+    let mut query = AgentDirectoryQuery {
+        workspace_ids: Some(BTreeSet::from(["wks-one".into()])),
+        limit: 1,
+        sort: vec![AgentSort {
+            key: AgentSortKey::Title,
+            direction: SortDirection::Asc,
+        }],
+        ..AgentDirectoryQuery::default()
+    };
+    let first = service.list(&query).unwrap();
+    assert_eq!(first.entries.len(), 1);
+    assert_eq!(first.entries[0].agent.id, "agent-a");
+    assert!(first.has_more);
+    query.cursor = first.next_cursor;
+    let next = service.list(&query).unwrap();
+    assert_eq!(next.entries[0].agent.id, "agent-b");
+    assert!(!next.has_more);
+    for id in [None, Some("missing")] {
+        let ids = id.map_or_else(BTreeSet::new, |id| BTreeSet::from([id.into()]));
+        assert!(
+            service
+                .list(&AgentDirectoryQuery {
+                    workspace_ids: Some(ids),
+                    ..default_query()
+                })
+                .unwrap()
+                .entries
+                .is_empty()
+        );
     }
 }
 

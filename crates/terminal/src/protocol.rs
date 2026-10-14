@@ -6,11 +6,11 @@ use serde::{Deserialize, Serialize};
 
 /// PTY dimensions in character cells.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Deserialize, Serialize)]
-pub struct Size {
+pub(crate) struct Size {
     /// Visible rows.
-    pub rows: u16,
+    pub(crate) rows: u16,
     /// Visible columns.
-    pub cols: u16,
+    pub(crate) cols: u16,
 }
 
 impl Default for Size {
@@ -24,7 +24,7 @@ impl Size {
     ///
     /// # Errors
     /// Returns `Error::Invalid` above 500 columns, 200 rows, or 50,000 visible cells.
-    pub fn validate(self) -> Result<Self, crate::Error> {
+    pub(crate) fn validate(self) -> Result<Self, crate::Error> {
         if self.rows == 0
             || self.cols == 0
             || self.rows > 200
@@ -40,68 +40,75 @@ impl Size {
 /// Optional workspace or directory filter; workspace identity takes precedence.
 #[derive(Debug, Clone, Default, PartialEq, Eq, Deserialize, Serialize)]
 #[serde(rename_all = "camelCase")]
-pub struct ListRequest {
+pub(crate) struct ListRequest {
     /// Absolute directory, including owned descendants.
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub cwd: Option<String>,
+    pub(crate) cwd: Option<String>,
     /// Stable workspace identity.
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub workspace_id: Option<String>,
+    pub(crate) workspace_id: Option<String>,
 }
 
 /// Create a local PTY process in an active workspace.
 #[derive(Debug, Clone, Deserialize)]
 #[serde(rename_all = "camelCase")]
-pub struct CreateRequest {
+pub(crate) struct CreateRequest {
     /// Absolute process working directory.
-    pub cwd: String,
+    pub(crate) cwd: String,
     /// Active workspace; omitted values resolve the deepest matching workspace root.
-    pub workspace_id: Option<String>,
+    pub(crate) workspace_id: Option<String>,
     /// Display name; defaults to the next directory-local terminal number.
-    pub name: Option<String>,
+    pub(crate) name: Option<String>,
     /// Retired Paseo option; nonempty values are rejected.
-    pub agent_id: Option<String>,
+    pub(crate) agent_id: Option<String>,
     /// Executable, or the host's default shell.
-    pub command: Option<String>,
+    pub(crate) command: Option<String>,
     /// Executable arguments, without shell interpolation.
     #[serde(default)]
-    pub args: Vec<String>,
+    pub(crate) args: Vec<String>,
     /// Initial character dimensions.
     #[serde(default)]
-    pub size: Size,
+    pub(crate) size: Size,
 }
 
 /// Address one terminal.
 #[derive(Debug, Clone, Deserialize)]
 #[serde(rename_all = "camelCase")]
-pub struct TerminalRequest {
+pub(crate) struct TerminalRequest {
     /// Terminal identity.
-    pub terminal_id: String,
+    pub(crate) terminal_id: String,
 }
 
 /// Rename the terminal title without changing the process name.
 #[derive(Debug, Clone, Deserialize)]
 #[serde(rename_all = "camelCase")]
-pub struct RenameRequest {
+pub(crate) struct RenameRequest {
     /// Terminal identity.
-    pub terminal_id: String,
+    pub(crate) terminal_id: String,
     /// Trimmed title, from one to 200 UTF-16 code units.
-    pub title: String,
+    pub(crate) title: String,
 }
 
 /// Capture rendered rows, with inclusive indices and negative indexing from the end.
 #[derive(Debug, Clone, Deserialize)]
 #[serde(rename_all = "camelCase")]
-pub struct CaptureRequest {
+pub(crate) struct CaptureRequest {
     /// Terminal identity.
-    pub terminal_id: String,
+    pub(crate) terminal_id: String,
     /// Inclusive first row; defaults to zero.
-    pub start: Option<i64>,
+    pub(crate) start: Option<i64>,
     /// Inclusive last row; defaults to the final visible row.
-    pub end: Option<i64>,
+    pub(crate) end: Option<i64>,
     /// Compatibility flag; rendered cells contain no ANSI control sequences.
     #[serde(default = "default_true")]
-    pub strip_ansi: bool,
+    #[cfg_attr(
+        not(test),
+        expect(
+            dead_code,
+            reason = "accepted for client compatibility; output never contains ANSI"
+        )
+    )]
+    strip_ansi: bool,
 }
 
 const fn default_true() -> bool {
@@ -111,30 +118,30 @@ const fn default_true() -> bool {
 /// Terminal metadata, including activity reported by local shell or Agent hooks.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
 #[serde(rename_all = "camelCase")]
-pub struct TerminalInfo {
+pub(crate) struct TerminalInfo {
     /// Process identity.
-    pub id: String,
+    pub(crate) id: String,
     /// Creation name.
-    pub name: String,
+    pub(crate) name: String,
     /// Canonical process directory.
-    pub cwd: String,
+    pub(crate) cwd: String,
     /// Owning active workspace.
-    pub workspace_id: String,
+    pub(crate) workspace_id: String,
     /// Explicit or OSC title.
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub title: Option<String>,
+    pub(crate) title: Option<String>,
     /// Hook activity, or null before the first report and after an interrupt.
-    pub activity: Option<crate::activity::Activity>,
+    pub(crate) activity: Option<crate::activity::Activity>,
 }
 
 /// Subscribe to a terminal output stream.
 #[derive(Debug, Clone, Deserialize)]
 #[serde(rename_all = "camelCase")]
-pub struct SubscribeRequest {
+pub(crate) struct SubscribeRequest {
     /// Terminal identity.
-    pub terminal_id: String,
+    pub(crate) terminal_id: String,
     /// Restore policy; absent means a legacy JSON state snapshot.
-    pub restore: Option<Restore>,
+    pub(crate) restore: Option<Restore>,
 }
 
 /// Restore policy and optional initial resize claim.
@@ -142,17 +149,17 @@ pub struct SubscribeRequest {
 #[serde(rename_all = "camelCase")]
 pub struct Restore {
     /// Live-only, bounded visible restore, or the full retained screen.
-    pub mode: RestoreMode,
+    pub(crate) mode: RestoreMode,
     /// Visible restore history; defaults to 200, clamped to 500.
-    pub scrollback_lines: Option<usize>,
+    pub(crate) scrollback_lines: Option<usize>,
     /// Initial resize claim.
-    pub size: Option<Size>,
+    pub(crate) size: Option<Size>,
 }
 
 /// Initial stream representation.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Deserialize)]
 #[serde(rename_all = "kebab-case")]
-pub enum RestoreMode {
+pub(crate) enum RestoreMode {
     /// Start at the current output cursor.
     Live,
     /// Restore the screen and at most 500 history rows.
@@ -164,7 +171,7 @@ pub enum RestoreMode {
 /// A resize can claim control or update only the current owner's dimensions.
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Deserialize)]
 #[serde(rename_all = "snake_case")]
-pub enum ResizeIntent {
+pub(crate) enum ResizeIntent {
     /// Take size ownership; also the legacy default.
     #[default]
     Claim,
@@ -177,10 +184,10 @@ pub enum ResizeIntent {
 pub struct Resize {
     /// New dimensions.
     #[serde(flatten)]
-    pub size: Size,
+    pub(crate) size: Size,
     /// Ownership intent.
     #[serde(default)]
-    pub intent: ResizeIntent,
+    pub(crate) intent: ResizeIntent,
 }
 
 /// Pointer transition requested by a terminal client.
@@ -222,11 +229,11 @@ pub enum Input {
 /// Uncorrelated terminal input event.
 #[derive(Debug, Clone, Deserialize)]
 #[serde(rename_all = "camelCase")]
-pub struct InputRequest {
+pub(crate) struct InputRequest {
     /// Terminal identity.
-    pub terminal_id: String,
+    pub(crate) terminal_id: String,
     /// Input, size, or pointer transition.
-    pub message: Input,
+    pub(crate) message: Input,
 }
 
 /// Binary terminal stream opcode.
@@ -258,7 +265,7 @@ pub fn frame(opcode: Opcode, slot: u8, payload: &[u8]) -> Vec<u8> {
 ///
 /// # Errors
 /// Returns `Error::Invalid` for a short frame or a server-only/unknown opcode.
-pub fn client_frame(bytes: &[u8]) -> Result<(u8, Input), crate::Error> {
+pub(crate) fn client_frame(bytes: &[u8]) -> Result<(u8, Input), crate::Error> {
     let [opcode, slot, payload @ ..] = bytes else {
         return Err(crate::Error::Invalid);
     };

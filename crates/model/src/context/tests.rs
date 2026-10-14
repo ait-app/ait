@@ -20,6 +20,73 @@ fn decode(message: Frame) -> Value {
 }
 
 #[tokio::test]
+async fn admitted_rpc_waits_for_the_shared_job_instead_of_rejecting_another_lane() {
+    let runtime = runtime();
+    let held = runtime.jobs.clone().acquire_owned().await.unwrap();
+    let service = Arc::new(Mutex::new(4_u64));
+    let (outbound, mut receiver) = Outbound::new();
+    let context = Context {
+        request: request(),
+        runtime: &runtime,
+        outbound: &outbound,
+        available_subscriptions: 16,
+    };
+    let mut queued = Box::pin(context.rpc(
+        Some(service.clone()),
+        ErrorCode::RegistryIo,
+        |value, _, _| {
+            *value += 1;
+            Ok::<_, ErrorCode>(json!({"value": value}))
+        },
+    ));
+
+    std::future::poll_fn(|context| {
+        assert!(queued.as_mut().poll(context).is_pending());
+        std::task::Poll::Ready(())
+    })
+    .await;
+    assert!(receiver.try_recv().is_err());
+    assert_eq!(*service.lock().unwrap(), 4);
+    drop(held);
+    queued.await.unwrap();
+
+    let response = decode(receiver.recv().await.unwrap().message);
+    assert_eq!(response["result"]["value"], 5);
+    assert_eq!(runtime.jobs.available_permits(), 1);
+}
+
+#[tokio::test]
+async fn shutdown_cancels_an_admitted_rpc_waiting_for_the_shared_job() {
+    let runtime = runtime();
+    let _held = runtime.jobs.clone().acquire_owned().await.unwrap();
+    let service = Arc::new(Mutex::new(()));
+    let (outbound, mut receiver) = Outbound::new();
+    let context = Context {
+        request: request(),
+        runtime: &runtime,
+        outbound: &outbound,
+        available_subscriptions: 16,
+    };
+    let mut queued = Box::pin(context.rpc(
+        Some(service),
+        ErrorCode::RegistryIo,
+        |(), _, _| -> Result<Value, ErrorCode> { panic!("shutdown prevents execution") },
+    ));
+    std::future::poll_fn(|context| {
+        assert!(queued.as_mut().poll(context).is_pending());
+        std::task::Poll::Ready(())
+    })
+    .await;
+
+    runtime.cancellation.cancel();
+    queued.await.unwrap();
+
+    let response = decode(receiver.recv().await.unwrap().message);
+    assert_eq!(response["code"], "server_draining");
+    assert!(runtime.tasks.is_empty());
+}
+
+#[tokio::test]
 async fn rpc_runs_the_selected_operation_with_the_owned_request() {
     let runtime = runtime();
     let service = Arc::new(Mutex::new(4_u64));

@@ -148,9 +148,9 @@ for line in sys.stdin:
         history_path().write_text(json.dumps(turns))
         result = {"thread": {**thread_metadata(thread_id), "turns": turns}}
     elif method == "account/read":
-        result = {"account": {"type": "chatgpt", "email": "private@example.test", "planType": "plus"}, "requiresOpenaiAuth": True}
+        result = {"account": {"type": "chatgpt", "email": os.environ.get("AIT_TEST_USAGE_ACCOUNT", "private@example.test"), "planType": "plus"}, "requiresOpenaiAuth": True}
     elif method == "account/rateLimits/read":
-        result = {"rateLimits": {"planType": "plus", "primary": {"usedPercent": 25, "resetsAt": 1900000000}, "secondary": {"usedPercent": 81}}}
+        result = {"rateLimits": {"planType": "plus", "primary": {"usedPercent": int(os.environ.get("AIT_TEST_USAGE_PERCENT", "25")), "resetsAt": 1900000000}, "secondary": {"usedPercent": 81}}}
     elif method == "skills/list":
         result = {"data": [{"cwd": params["cwds"][0], "errors": [], "skills": [
             {"name": "review", "description": "Offline review", "enabled": True, "path": str(root / "review" / "SKILL.md")},
@@ -174,6 +174,8 @@ for line in sys.stdin:
             while not (root / "release-discovery").exists() and time.monotonic() < deadline:
                 time.sleep(0.01)
         result = {"data": [{"id": "offline-model", "model": "offline-model", "displayName": "Offline model", "isDefault": True, "hidden": False, "description": "Offline fixture", "supportedReasoningEfforts": [{"reasoningEffort": "high", "description": "High effort"}], "defaultReasoningEffort": "high", "serviceTiers": [] if mode == "no-fast" else [{"id": "fast"}]}], "nextCursor": None}
+        if (root / "speed-models.json").exists():
+            result = json.loads((root / "speed-models.json").read_text())
     elif method == "turn/start":
         if mode == "delayed-voice-admission":
             while not (root / "release-voice-admission").exists():
@@ -229,6 +231,16 @@ for line in sys.stdin:
         save_turn(pending, None, "inProgress")
         emit({"method": "item/completed", "params": {"threadId": thread_id, "turnId": pending,
             "item": {"type": "userMessage", "id": pending + "-user", "content": [{"type": "text", "text": text}]}}})
+        if text in ("auth-error", "quota-error", "retry-success"):
+            message = {"auth-error": "invalid_api_key token=secret", "quota-error": "insufficient_quota secret", "retry-success": "stream disconnected secret"}[text]
+            emit({"method":"error","params":{"threadId":thread_id,"turnId":pending,
+                "error":{"message":message},"willRetry":text == "retry-success"}})
+            if text == "retry-success":
+                complete(pending, "recovered")
+            else:
+                emit({"method":"turn/completed","params":{"threadId":thread_id,"turn":{"id":pending,"status":"failed"}}})
+            pending = None
+            continue
         if text == "capacity":
             emit({"method":"error","params":{"threadId":thread_id,"turnId":pending,
                 "error":{"message":"Selected model is at capacity. Please try a different model."},
@@ -247,6 +259,20 @@ for line in sys.stdin:
             emit({"method": "codex/event/item_completed", "params": {"item": image}})
             emit({"method": "item/completed", "params": {
                 "threadId": thread_id, "turnId": pending, "item": image}})
+            complete(pending, text)
+            continue
+        if text == "large-mcp-result":
+            tool = {"type": "mcpToolCall", "id": pending + "-mcp", "status": "inProgress",
+                    "server": "codex_apps", "tool": "github.fetch", "arguments": {"url": "https://example.test/compare"},
+                    "result": None}
+            emit({"method": "item/started", "params": {
+                "threadId": thread_id, "turnId": pending, "item": tool}})
+            tool = {**tool, "status": "completed", "result": {
+                "content": [{"type": "text", "text": "Success"}],
+                "structuredContent": {"diff": "x" * (1024 * 1024)}, "isError": False}}
+            stream_items.append(tool)
+            emit({"method": "item/completed", "params": {
+                "threadId": thread_id, "turnId": pending, "item": tool}})
             complete(pending, text)
             continue
         if text == "propose-plan":
@@ -285,11 +311,20 @@ for line in sys.stdin:
             continue
         if text == "approval":
             emit({"id": "approval-1", "method": "item/commandExecution/requestApproval", "params": {}})
-        elif text in ("permit-command", "permit-file", "permit-question"):
-            approval_method = {"permit-command": "item/commandExecution/requestApproval", "permit-file": "item/fileChange/requestApproval", "permit-question": "item/tool/requestUserInput"}[text]
+        elif text in ("permit-command", "permit-file", "permit-question", "permit-cua"):
+            approval_method = {"permit-command": "item/commandExecution/requestApproval", "permit-file": "item/fileChange/requestApproval", "permit-question": "item/tool/requestUserInput", "permit-cua": "item/tool/requestUserInput"}[text]
             approval = {"threadId": thread_id, "turnId": pending, "itemId": "approval-item", "command": "offline command", "cwd": str(root)}
             if text == "permit-question":
                 approval["questions"] = [{"id": "choice", "header": "Choice", "question": "Select one", "options": [{"label": "first", "description": "First choice"}]}]
+            elif text == "permit-cua":
+                approval = {"threadId": thread_id, "turnId": pending, "itemId": "cua-call",
+                    "isBlocking": True, "autoResolutionMs": None, "questions": [{
+                        "id": "cua-approval", "header": "cua_repl.js",
+                        "question": "Allow this computer use operation?", "isOther": False,
+                        "isSecret": False, "options": [
+                            {"label": "Accept", "description": "Run this operation"},
+                            {"label": "Decline", "description": "Skip this operation"},
+                            {"label": "Cancel", "description": "Cancel this operation"}]}]}
             emit({"id": "approval-1", "method": approval_method, "params": approval})
         elif text == "child":
             child = subprocess.Popen([sys.executable, "-c", "import time; time.sleep(60)"],

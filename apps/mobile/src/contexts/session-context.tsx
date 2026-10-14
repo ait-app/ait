@@ -49,7 +49,7 @@ import { useToast } from "@/contexts/toast-context";
 import { toErrorMessage } from "@/utils/error-messages";
 import { showProviderNoticeToast } from "@/utils/provider-notice-toast";
 import { applyCheckoutStatusUpdateFromEvent } from "@/git/checkout-status-cache";
-import { useProviderSubagentStore } from "@/subagents/provider-store";
+import { resyncProviderSubagents, useProviderSubagentStore } from "@/subagents/provider-store";
 
 // Re-export types from session-store and draft-store for backward compatibility
 export type { DraftInput } from "@/stores/draft-store";
@@ -527,7 +527,6 @@ function SessionProviderInternal({ children, serverId, client }: SessionProvider
 
   // Daemon message handlers - directly update Zustand store
   useEffect(() => {
-    const availableEvents = client.getLastServerInfoMessage()?.sessionEventTypes;
     const requestedEvents: Parameters<typeof client.observeEvents>[0] = [
       "agent.attention.required",
       "terminal.attention.required",
@@ -539,12 +538,10 @@ function SessionProviderInternal({ children, serverId, client }: SessionProvider
       "activity_log",
       "status.server_info",
     ];
-    const feeds = client.observeEvents(
-      availableEvents
-        ? requestedEvents.filter((event) => availableEvents.includes(event))
-        : requestedEvents,
-      { notifications: true },
-    );
+    const feeds = client.observeEvents(requestedEvents, {
+      notifications: true,
+      supportedOnly: true,
+    });
     const onFeed = (
       type: SessionOutboundMessage["type"],
       handler: (message: SessionOutboundMessage) => void,
@@ -564,9 +561,14 @@ function SessionProviderInternal({ children, serverId, client }: SessionProvider
       }
     });
 
-    const unsubProviderSubagentUpdate = onFeed("agent.provider_subagents.update", (message) => {
-      if (message.type !== "agent.provider_subagents.update") return;
-      useProviderSubagentStore.getState().applyUpdate(serverId, message.payload);
+    const unsubProviderSubagentUpdate = feeds.subscribe({
+      snapshot: () => {
+        void resyncProviderSubagents(client, serverId);
+      },
+      update: (message) => {
+        if (message.type !== "agent.provider_subagents.update") return;
+        useProviderSubagentStore.getState().applyUpdate(serverId, message.payload);
+      },
     });
 
     const unsubCheckoutStatusUpdate = onFeed("checkout.status.update", (message) => {

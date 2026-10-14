@@ -1,408 +1,487 @@
+import type { DaemonClient } from "@ait/client/internal/daemon-client";
 import { expect, test, type Page } from "../support/fixtures";
-import { gotoAppShell } from "../support/helpers/app";
-import { addScheduleHostAndReload, createScheduleHost } from "../support/helpers/schedule-host";
+import { gotoWorkspace } from "../support/helpers/launcher";
 import { seedWorkspace, type SeededWorkspace } from "../support/helpers/seed-client";
 import { getServerId } from "../support/helpers/server-id";
-import { projectEquivalenceViewKey } from "../support/helpers/project-view-key";
-import { escapeRegex } from "../support/helpers/regex";
-import { expectNoTruncation } from "../support/helpers/no-truncation";
-import { expectSettled, expectStableHeight } from "../support/helpers/settled";
-import { waitForSidebarHydration } from "../support/helpers/workspace-ui";
 import { buildSchedulesRoute } from "../../src/utils/host-routes";
+import {
+  addScheduleHostAndReload,
+  createScheduleHost,
+  SECONDARY_MODEL_LABEL,
+} from "../support/helpers/schedule-host";
 
-const MOBILE_SHEET_VIEWPORT = { width: 390, height: 844 };
-
-interface ScheduleListItem {
-  id: string;
-  name: string | null;
-  cadence?: { type: "cron"; expression: string };
-  target: {
-    type: string;
-    config?: {
-      cwd?: string;
-      archiveOnFinish?: boolean;
-      isolation?: "local" | "worktree";
-    };
-  };
+function schedules(workspace: SeededWorkspace): DaemonClient {
+  return workspace.client as unknown as DaemonClient;
 }
 
-interface ScheduleSeedClient {
-  scheduleList(): Promise<{ schedules: ScheduleListItem[]; error: string | null }>;
-  scheduleDelete(input: { id: string }): Promise<{ error: string | null }>;
+async function openScheduleTab(page: Page) {
+  await page.getByTestId("workspace-new-tab-button").filter({ visible: true }).first().click();
+  const menu = page.getByTestId("workspace-new-tab-menu-schedule").filter({ visible: true });
+  await expect(menu).toBeVisible();
+  await menu.click();
+  await expect(page.getByTestId("workspace-schedules-list")).toBeVisible();
 }
 
-async function selectModelByLabel(page: Page, label: string): Promise<void> {
-  await page.getByRole("button", { name: /select model/i }).click();
+async function selectExistingAgent(page: Page, agentId: string) {
+  await page.getByTestId("schedule-execution-agent-trigger").click();
+  await page.getByTestId(`schedule-agent-option-${agentId}`).click();
+  await expect(page.getByTestId(`schedule-agent-option-${agentId}`)).not.toBeVisible();
+}
+
+async function selectModel(page: Page, label = "Offline model") {
+  await page.getByTestId("schedule-model-trigger").click();
   const popup = page.getByTestId("combobox-desktop-container");
-  await expect(popup).toBeVisible({ timeout: 30_000 });
-  const searchInput = page.getByTestId("model-search-input").first();
-  await expect(searchInput).toBeVisible({ timeout: 30_000 });
-  await searchInput.fill(label);
-  const option = popup.getByText(new RegExp(`^${escapeRegex(label)}$`, "i")).first();
-  await expect(option).toBeVisible({ timeout: 30_000 });
-  await option.click();
-  await expect(popup).toHaveCount(0, { timeout: 30_000 });
+  await expect(popup).toBeVisible();
+  await page.getByTestId("model-search-input").first().fill(label);
+  await popup.getByText(label, { exact: true }).click();
 }
 
-async function deleteScheduleByName(workspace: SeededWorkspace, name: string): Promise<void> {
-  const client = workspace.client as unknown as ScheduleSeedClient;
-  const list = await client.scheduleList();
-  const schedule = list.schedules.find((candidate) => candidate.name === name);
-  if (schedule) {
-    await client.scheduleDelete({ id: schedule.id }).catch(() => undefined);
-  }
+async function selectPlacement(page: Page, workspace: SeededWorkspace, serverId = getServerId()) {
+  await page.getByTestId("schedule-host-trigger").click();
+  await page.getByTestId(`schedule-host-option-${serverId}`).click();
+  await page.getByTestId("schedule-project-trigger").click();
+  await page.getByTestId(`schedule-project-option-${serverId}-${workspace.projectId}`).click();
+  await page.getByTestId("schedule-workspace-trigger").click();
+  await page.getByTestId(`schedule-workspace-option-${serverId}-${workspace.workspaceId}`).click();
 }
 
-async function expectScheduleCreatedForProject(input: {
-  workspace: SeededWorkspace;
-  name: string;
-  cadenceExpression: string;
-}): Promise<void> {
-  const client = input.workspace.client as unknown as ScheduleSeedClient;
-  const list = await client.scheduleList();
-  const schedule = list.schedules.find((candidate) => candidate.name === input.name);
-  expect(schedule).toEqual(
-    expect.objectContaining({
-      name: input.name,
-      cadence: expect.objectContaining({
-        type: "cron",
-        expression: input.cadenceExpression,
-      }),
-      target: expect.objectContaining({
-        type: "new-agent",
-        config: expect.objectContaining({
-          cwd: input.workspace.repoPath,
-        }),
-      }),
-    }),
-  );
-}
-
-async function expectScheduleKnobs(input: {
-  workspace: SeededWorkspace;
-  name: string;
-  archiveOnFinish: boolean;
-  isolation: "local" | "worktree";
-}): Promise<void> {
-  const client = input.workspace.client as unknown as ScheduleSeedClient;
-  const list = await client.scheduleList();
-  const schedule = list.schedules.find((candidate) => candidate.name === input.name);
-  expect(schedule).toEqual(
-    expect.objectContaining({
-      name: input.name,
-      target: expect.objectContaining({
-        type: "new-agent",
-        config: expect.objectContaining({
-          archiveOnFinish: input.archiveOnFinish,
-          isolation: input.isolation,
-        }),
-      }),
-    }),
-  );
-}
-
-async function openNewScheduleSheet(page: Page): Promise<void> {
-  await page.getByTestId("schedules-empty-new").click();
-  const formSheet = page.getByTestId("schedule-form-sheet");
-  await expect(formSheet).toBeVisible({ timeout: 10_000 });
-  await expectStableHeight(formSheet);
-}
-
-function bottomSheetBackdrop(page: Page) {
-  return page.getByRole("button", { name: "Bottom sheet backdrop" }).first();
-}
-
-async function dismissScheduleSheetWithBackdrop(page: Page): Promise<void> {
-  const backdrop = bottomSheetBackdrop(page);
-  await expect(backdrop).toBeVisible({ timeout: 10_000 });
-  await expect(async () => {
-    const box = await backdrop.boundingBox();
-    if (box) {
-      await page.mouse.click(box.x + box.width / 2, box.y + 24);
-    }
-    await expect(backdrop).not.toBeVisible({ timeout: 1_000 });
-  }).toPass({ timeout: 15_000 });
-}
-
-async function expectScheduleSheetClosedAndStable(page: Page): Promise<void> {
-  const formSheet = page.getByTestId("schedule-form-sheet");
-  await expect(formSheet).toHaveCount(0, { timeout: 30_000 });
-  await page.waitForTimeout(500);
-  await expect(formSheet).toHaveCount(0, { timeout: 1_000 });
-}
-
-async function findScheduleIdByName(workspace: SeededWorkspace, name: string): Promise<string> {
-  const client = workspace.client as unknown as ScheduleSeedClient;
-  const list = await client.scheduleList();
-  const schedule = list.schedules.find((candidate) => candidate.name === name);
-  if (!schedule) {
-    throw new Error(`Expected schedule named ${name} to exist`);
-  }
-  return schedule.id;
-}
-
-test.describe("Schedules project target", () => {
-  const cleanupTasks: Array<() => Promise<void>> = [];
-
-  test.afterEach(async () => {
-    for (const cleanup of cleanupTasks.toReversed()) {
-      await cleanup();
-    }
+test.describe("Workspace scheduled tasks", () => {
+  const cleanupTasks: (() => Promise<void>)[] = [];
+  test.afterEach(async ({ page }, testInfo) => {
+    if (testInfo.error) console.error(testInfo.error.message, "at", page.url());
+    for (const cleanup of cleanupTasks.toReversed()) await cleanup();
     cleanupTasks.length = 0;
   });
 
-  test("dismisses the new schedule sheet without reopening", async ({ page }) => {
-    const workspace = await seedWorkspace({ repoPrefix: "schedule-sheet-dismiss-", git: false });
-    cleanupTasks.push(() => workspace.cleanup());
-
-    await gotoAppShell(page);
-    await waitForSidebarHydration(page);
-    await page.goto(buildSchedulesRoute());
-    await page.setViewportSize(MOBILE_SHEET_VIEWPORT);
-    await expect(page.getByTestId("schedules-empty-new")).toBeVisible({ timeout: 30_000 });
-
-    await openNewScheduleSheet(page);
-    await dismissScheduleSheetWithBackdrop(page);
-    await expectScheduleSheetClosedAndStable(page);
-    await expect(page.getByTestId("schedules-empty-new")).toBeVisible({ timeout: 30_000 });
-
-    await openNewScheduleSheet(page);
-    await page.getByRole("button", { name: "Cancel" }).click();
-    await expectScheduleSheetClosedAndStable(page);
-  });
-
-  test("creates a schedule from a project picker instead of a raw CWD selector", async ({
+  test("existing-agent task stays in its workspace through edit, run, reload and history", async ({
     page,
   }) => {
-    const workspace = await seedWorkspace({ repoPrefix: "schedule-project-target-", git: false });
-    cleanupTasks.push(() => workspace.cleanup());
-    const scheduleName = `Project schedule ${Date.now()}`;
-    cleanupTasks.push(() => deleteScheduleByName(workspace, scheduleName));
-
-    await gotoAppShell(page);
-    await waitForSidebarHydration(page);
-
-    await page.getByRole("button", { name: "Schedules" }).click();
-    await expect(page).toHaveURL(/\/schedules$/);
-    await expect(page).not.toHaveURL(/\/h\//);
-    await expect(page.getByTestId("schedules-empty")).toBeVisible();
-
-    await page.getByTestId("schedules-empty-new").click();
-    const formSheet = page.getByTestId("schedule-form-sheet");
-    await expect(formSheet).toBeVisible({ timeout: 10_000 });
-    await expectStableHeight(formSheet);
-    await expect(page.getByTestId("schedule-host-trigger")).toHaveCount(0);
-    await expect(page.getByTestId("schedule-project-trigger")).toBeVisible();
+    const workspace = await seedWorkspace({
+      repoPrefix: "schedule-owned-",
+      title: "Scheduled workspace",
+    });
+    const foreign = await seedWorkspace({ repoPrefix: "schedule-foreign-" });
+    cleanupTasks.push(workspace.cleanup, foreign.cleanup);
+    const agent = await workspace.client.createAgent({
+      provider: "codex",
+      cwd: workspace.repoPath,
+      workspaceId: workspace.workspaceId,
+      title: "Scheduled agent",
+      model: "offline-model",
+    });
+    const foreignAgent = await foreign.client.createAgent({
+      provider: "codex",
+      cwd: foreign.repoPath,
+      workspaceId: foreign.workspaceId,
+      title: "Foreign agent",
+      model: "offline-model",
+    });
+    await gotoWorkspace(page, workspace.workspaceId);
+    await openScheduleTab(page);
+    await page.getByTestId("workspace-schedules-new").click();
+    await expect(page.getByTestId("schedule-max-runs-input")).toHaveValue("1");
+    await expect(page.getByTestId("schedule-workspace-target")).toContainText(
+      workspace.workspaceName,
+    );
+    await selectModel(page);
+    await expect(page.getByTestId("schedule-target-kind-trigger")).toHaveCount(0);
+    await expect(page.getByTestId("schedule-agent-trigger")).toHaveCount(0);
+    await page.getByTestId("schedule-execution-agent-trigger").click();
+    await expect(page.getByTestId("schedule-target-new-agent")).toBeVisible();
+    await expect(page.getByTestId(`schedule-agent-option-${foreignAgent.id}`)).toHaveCount(0);
+    await page.screenshot({
+      path: "/tmp/schedule-execution-agent-picker-desktop.png",
+      fullPage: true,
+    });
+    await page.getByPlaceholder("Search agents...").fill("Scheduled agent");
+    await expect(page.getByTestId(`schedule-agent-option-${agent.id}`)).toBeVisible();
+    await page.getByTestId(`schedule-agent-option-${agent.id}`).click();
+    await expect(page.getByTestId("schedule-execution-agent-trigger")).toContainText(
+      "Scheduled agent",
+    );
     await expect(page.getByTestId("schedule-model-trigger")).toHaveCount(0);
-    await expect(page.getByTestId("schedule-thinking-trigger")).toHaveCount(0);
-    await expect(page.getByTestId("schedule-mode-trigger")).toHaveCount(0);
-    await expect(page.getByTestId("cadence-mode")).toHaveCount(0);
-    await expect(page.getByTestId("cadence-interval-value")).toHaveCount(0);
-    await expect(page.getByText(/Times are in/)).toHaveCount(0);
-    await expect(formSheet.getByText("Cron", { exact: true })).toHaveCount(0);
-
-    await page.getByRole("button", { name: /select project/i }).click();
-    await page
-      .getByTestId(`schedule-project-option-${projectEquivalenceViewKey(workspace.projectKey)}`)
-      .click();
-    const projectTrigger = page.getByTestId("schedule-project-trigger");
-    await expect(projectTrigger).toContainText(workspace.projectDisplayName);
-    await expectSettled(projectTrigger);
-
-    await selectModelByLabel(page, "Ten second stream");
-    const modelTrigger = page.getByTestId("schedule-model-trigger");
-    await expect(modelTrigger).toContainText("Ten second stream");
-    await expectSettled(modelTrigger);
-    await expect(page.getByTestId("schedule-thinking-trigger")).toContainText("Low");
-    await expectSettled(page.getByTestId("schedule-thinking-trigger"));
-    await expect(page.getByTestId("schedule-mode-trigger")).toBeVisible();
-    await expectSettled(page.getByTestId("schedule-mode-trigger"));
-    await expect(page.getByTestId("schedule-isolation-trigger")).toHaveCount(0);
-    await expect(page.getByText("Worktree isolation is available for git projects.")).toHaveCount(
-      0,
+    await page.getByTestId("schedule-name-input").fill("Workspace review");
+    await page.getByTestId("schedule-prompt-input").fill("Review the current workspace.");
+    await page.screenshot({
+      path: "/tmp/schedule-existing-agent-form-desktop.png",
+      fullPage: true,
+    });
+    await page.getByTestId("schedule-execution-agent-trigger").click();
+    await page.getByTestId("schedule-target-new-agent").click();
+    await expect(page.getByTestId("schedule-model-trigger")).toContainText("Offline model");
+    await expect(page.getByTestId("schedule-prompt-input")).toHaveValue(
+      "Review the current workspace.",
     );
-
-    await page.getByTestId("schedule-cadence-preset-trigger").click();
-    await page.getByTestId("schedule-cadence-preset-daily-9").click();
-    await expect(page.getByTestId("schedule-cadence-preset-trigger")).toContainText("Daily 9:00");
-    await expect(page.getByTestId("cadence-cron-expression")).toHaveValue("0 9 * * *");
-
-    await page.getByLabel("Schedule name").fill(scheduleName);
-    await page.getByLabel("Prompt").fill("Summarize the project status.");
-    await page.getByRole("button", { name: "Create schedule" }).click();
-
-    await expect(page.getByTestId("schedule-form-sheet")).toHaveCount(0, { timeout: 30_000 });
-    await expectScheduleCreatedForProject({
-      workspace,
-      name: scheduleName,
-      cadenceExpression: "0 9 * * *",
+    await selectExistingAgent(page, agent.id);
+    await page.getByTestId("schedule-max-runs-input").fill("1.5");
+    await expect(page.getByTestId("schedule-form-submit")).toBeDisabled();
+    await page.getByTestId("schedule-max-runs-input").fill("2");
+    await page.getByTestId("schedule-form-submit").click();
+    const detail = page.getByTestId("workspace-schedule-details");
+    await expect(page.getByTestId("workspace-schedules-list")).toContainText("Workspace review");
+    const list = await schedules(workspace).scheduleList({ workspaceId: workspace.workspaceId });
+    const schedule = list.schedules.find((item) => item.name === "Workspace review");
+    expect(schedule).toMatchObject({
+      workspaceId: workspace.workspaceId,
+      target: { type: "agent", agentId: agent.id },
+      cadence: { type: "every", everyMs: 3_600_000 },
+      maxRuns: 2,
+      status: "active",
     });
-
-    const secondary = await createScheduleHost();
-    cleanupTasks.push(() => secondary.cleanup());
-    await addScheduleHostAndReload({
-      page,
-      serverId: secondary.serverId,
-      label: secondary.label,
-      port: secondary.port,
+    if (!schedule) throw new Error("Created task is missing");
+    cleanupTasks.push(async () => {
+      await schedules(workspace).scheduleDelete({ id: schedule.id });
     });
-
-    const hostFilterTrigger = page.getByTestId("schedules-host-filter-trigger");
-    await expect(hostFilterTrigger).toBeVisible({ timeout: 30_000 });
-    await hostFilterTrigger.click();
-    const hostFilterPopup = page.getByTestId("combobox-desktop-container").last();
-    await expect(hostFilterPopup).toBeVisible({ timeout: 30_000 });
-    await expectNoTruncation(hostFilterPopup);
-    await page.keyboard.press("Escape");
-    await expect(page.getByTestId("combobox-desktop-container")).toHaveCount(0, {
-      timeout: 5_000,
+    await page.getByTestId(`workspace-schedule-history-${schedule.id}`).click();
+    await page.getByTestId("schedule-toggle-status").click();
+    await expect(detail).toContainText("Paused");
+    await page.getByTestId("schedule-edit").click();
+    await expect(page.getByTestId("schedule-execution-agent-trigger")).toContainText(
+      "Scheduled agent",
+    );
+    await expect(page.getByTestId("schedule-prompt-input")).toHaveValue(
+      "Review the current workspace.",
+    );
+    await page.getByTestId("schedule-prompt-input").fill("Review the workspace again.");
+    await page.getByTestId("schedule-form-submit").click();
+    await expect(page.getByTestId(`workspace-schedule-${schedule.id}`)).toContainText(
+      "Review the workspace again.",
+    );
+    await page.getByTestId(`workspace-schedule-history-${schedule.id}`).click();
+    await expect(detail).toContainText("Review the workspace again.");
+    await page.getByTestId("schedule-run-now").click();
+    const runCard = detail
+      .locator('[data-testid^="schedule-run-"]')
+      .filter({ has: page.getByText("Succeeded", { exact: true }) });
+    await expect(runCard).toBeVisible({ timeout: 30_000 });
+    const inspected = await schedules(workspace).scheduleInspect({ id: schedule.id });
+    expect(inspected.schedule?.runs).toHaveLength(1);
+    expect(inspected.schedule?.runs[0]).toMatchObject({
+      agentId: agent.id,
+      workspaceId: workspace.workspaceId,
+      status: "succeeded",
     });
+    await runCard.getByRole("button").first().click();
+    await expect(detail.locator('[data-testid^="schedule-run-output-"]')).not.toBeEmpty();
+    await page.reload();
+    await expect(detail).toContainText("Workspace review", { timeout: 30_000 });
+    await expect(detail).toContainText("Succeeded");
+    await page.getByTestId("workspace-schedules-browse").click();
+    await expect(page.getByTestId("workspace-schedules-filter-paused")).toHaveAttribute(
+      "aria-selected",
+      "true",
+    );
+    await expect(page.getByTestId(`workspace-schedule-${schedule.id}`)).toBeVisible();
+    await page.reload();
+    await expect(page.getByTestId(`workspace-schedule-${schedule.id}`)).toBeVisible({
+      timeout: 30_000,
+    });
+    await page.getByTestId(`workspace-schedule-history-${schedule.id}`).click();
+    await page.getByTestId("schedule-run-now").click();
+    await expect(detail).toContainText("Finished", { timeout: 30_000 });
+    await expect(page.getByTestId("schedule-run-now")).toHaveCount(0);
+    await page.screenshot({ path: "/tmp/workspace-schedule-desktop.png", fullPage: true });
+    page.once("dialog", (dialog) => {
+      void dialog.accept();
+    });
+    await page.getByTestId("schedule-delete").click();
+    await expect(page.getByTestId("workspace-schedules-list")).toBeVisible();
+    await expect(page.getByTestId(`workspace-schedule-${schedule.id}`)).toHaveCount(0);
   });
 
-  test("clears the selected project and model when the host changes", async ({ page }) => {
-    const workspace = await seedWorkspace({ repoPrefix: "schedule-project-host-model-" });
-    cleanupTasks.push(() => workspace.cleanup());
-    const serverId = getServerId();
-    const secondary = await createScheduleHost();
-    cleanupTasks.push(() => secondary.cleanup());
+  test("new-agent task creates in the owning workspace and preserves its workspace on completion", async ({
+    page,
+  }) => {
+    const workspace = await seedWorkspace({
+      repoPrefix: "schedule-new-agent-",
+      title: "New agent owner",
+    });
+    cleanupTasks.push(workspace.cleanup);
+    await gotoWorkspace(page, workspace.workspaceId);
+    await openScheduleTab(page);
+    await page.getByTestId("workspace-schedules-new").click();
+    await expect(page.getByTestId("schedule-max-runs-input")).toHaveValue("1");
+    await selectModel(page);
+    await page.getByTestId("schedule-name-input").fill("New agent review");
+    await page.getByTestId("schedule-prompt-input").fill("Say hello from a new scheduled agent.");
+    await page.getByTestId("schedule-cadence-kind-trigger").click();
+    await expect(page.getByTestId("schedule-cadence-kind-once")).toHaveCount(0);
+    await page.getByTestId("schedule-cadence-kind-every").click();
+    await expect(page.getByTestId("schedule-start-at-input")).toBeVisible();
+    await page.getByTestId("schedule-form-submit").click();
+    const detail = page.getByTestId("workspace-schedule-details");
+    await expect(page.getByTestId("workspace-schedules-list")).toContainText("New agent review");
+    const list = await schedules(workspace).scheduleList({ workspaceId: workspace.workspaceId });
+    const schedule = list.schedules.find((item) => item.name === "New agent review");
+    expect(schedule).toMatchObject({
+      workspaceId: workspace.workspaceId,
+      cadence: { type: "every", everyMs: 3_600_000 },
+      maxRuns: 1,
+      target: { type: "new-agent", config: { provider: "codex", archiveOnFinish: true } },
+    });
+    if (!schedule) throw new Error("Created task is missing");
+    cleanupTasks.push(async () => {
+      await schedules(workspace).scheduleDelete({ id: schedule.id });
+    });
+    await page.getByTestId(`workspace-schedule-history-${schedule.id}`).click();
+    await page.getByTestId("schedule-run-now").click();
+    await expect(detail).toContainText("Succeeded", { timeout: 30_000 });
+    await expect(detail).toContainText("Finished");
+    const inspected = await schedules(workspace).scheduleInspect({ id: schedule.id });
+    expect(inspected.schedule?.runs[0]).toMatchObject({
+      workspaceId: workspace.workspaceId,
+      status: "succeeded",
+    });
+    const workspaces = await workspace.client.fetchWorkspaces();
+    expect(workspaces.entries.map((item) => item.id)).toContain(workspace.workspaceId);
+    await page.reload();
+    await expect(detail).toContainText("Finished", { timeout: 30_000 });
+  });
 
-    await gotoAppShell(page);
-    await waitForSidebarHydration(page);
+  test("global creation selects host, project and workspace on narrow screens and dismisses cleanly", async ({
+    page,
+  }) => {
+    const workspace = await seedWorkspace({
+      repoPrefix: "schedule-mobile-",
+      title: "Mobile scheduled workspace",
+    });
+    cleanupTasks.push(workspace.cleanup);
+    const agent = await workspace.client.createAgent({
+      provider: "codex",
+      cwd: workspace.repoPath,
+      workspaceId: workspace.workspaceId,
+      title: "Mobile scheduled agent",
+      model: "offline-model",
+    });
+    await page.setViewportSize({ width: 390, height: 844 });
+    await page.goto(buildSchedulesRoute());
+    await page.getByTestId("schedules-empty-new").click();
+    await expect(page.getByTestId("schedule-workspace-sheet")).toBeVisible();
+    await expect(page.getByTestId("schedule-project-trigger")).toBeDisabled();
+    await expect(page.getByTestId("schedule-workspace-trigger")).toBeDisabled();
+    await expect(page.getByTestId("schedule-execution-agent-trigger")).toHaveCount(0);
+    await expect(page.getByTestId("schedule-host-trigger")).toBeInViewport({ ratio: 1 });
+    await page.screenshot({ path: "/tmp/schedule-global-placement-mobile.png", fullPage: true });
+    await selectPlacement(page, workspace);
+    await expect(page.getByTestId("schedule-form-sheet")).toBeVisible();
+    await page.getByTestId("schedule-execution-agent-trigger").click();
+    await expect(page.getByPlaceholder("Search agents...")).toBeVisible();
+    await expect(page.getByTestId(`schedule-agent-option-${agent.id}`)).toBeInViewport();
+    await page.screenshot({
+      path: "/tmp/schedule-execution-agent-picker-mobile.png",
+      fullPage: true,
+    });
+    await page.getByTestId(`schedule-agent-option-${agent.id}`).click();
+    await page.getByTestId("schedule-name-input").fill("Mobile review");
+    await page.getByTestId("schedule-prompt-input").fill("Review on mobile.");
+    await page.screenshot({ path: "/tmp/workspace-schedule-mobile.png", fullPage: true });
+    await page.getByTestId("schedule-form-submit").click();
+    await expect(page.getByTestId("schedule-form-sheet")).toHaveCount(0);
+    const list = await schedules(workspace).scheduleList({ workspaceId: workspace.workspaceId });
+    const schedule = list.schedules.find((item) => item.name === "Mobile review");
+    expect(schedule?.workspaceId).toBe(workspace.workspaceId);
+    if (!schedule) throw new Error("Created task is missing");
+    cleanupTasks.push(async () => {
+      await schedules(workspace).scheduleDelete({ id: schedule.id });
+    });
+    await expect(page.getByTestId(`schedule-row-${schedule.id}`)).toBeVisible();
+    await page.getByTestId("schedules-new").click();
+    await expect(page.getByTestId("schedule-workspace-sheet")).toBeVisible();
+    await expect(page.getByTestId("schedule-host-trigger")).toContainText("Select host");
+    await page.getByRole("button", { name: "Close", exact: true }).last().click();
+    await expect(page.getByTestId("schedule-workspace-sheet")).toHaveCount(0);
+  });
+
+  test("global creation resets its placement and targets the selected host's worktree", async ({
+    page,
+  }) => {
+    test.setTimeout(120_000);
+    const local = await seedWorkspace({
+      repoPrefix: "schedule-global-local-",
+      title: "Local workspace",
+    });
+    const otherProject = await seedWorkspace({
+      repoPrefix: "schedule-global-other-",
+      title: "Other project workspace",
+    });
+    cleanupTasks.push(local.cleanup, otherProject.cleanup);
+    const remote = await createScheduleHost();
+    cleanupTasks.push(remote.cleanup);
+    const created = await remote.client.createWorkspace({
+      source: {
+        kind: "worktree",
+        projectId: remote.projectId,
+        baseBranch: "main",
+        worktreeSlug: "scheduled-worktree",
+      },
+      title: "Scheduled worktree",
+    });
+    if (!created.workspace) throw new Error(created.error ?? "Missing worktree");
+    const worktree = created.workspace;
+    const agent = await local.client.createAgent({
+      provider: "codex",
+      cwd: local.workspaceDirectory,
+      workspaceId: local.workspaceId,
+      title: "Local existing agent",
+      model: "offline-model",
+    });
     await page.goto(buildSchedulesRoute());
     await addScheduleHostAndReload({
       page,
-      serverId: secondary.serverId,
-      label: secondary.label,
-      port: secondary.port,
+      serverId: remote.serverId,
+      port: remote.port,
+      label: remote.label,
     });
-    await expect(page.getByTestId("schedules-empty")).toBeVisible({ timeout: 30_000 });
     await page.getByTestId("schedules-empty-new").click();
-    const formSheet = page.getByTestId("schedule-form-sheet");
-    await expect(formSheet).toBeVisible({ timeout: 10_000 });
-    await expectStableHeight(formSheet);
+    await selectPlacement(page, local);
+    await selectExistingAgent(page, agent.id);
+    await page.getByTestId("schedule-prompt-input").fill("Local draft");
 
-    const hostTrigger = page.getByTestId("schedule-host-trigger");
-    const projectTrigger = page.getByTestId("schedule-project-trigger");
-    const modelTrigger = page.getByTestId("schedule-model-trigger");
-    const thinkingTrigger = page.getByTestId("schedule-thinking-trigger");
-    const modeTrigger = page.getByTestId("schedule-mode-trigger");
-    await expect(hostTrigger).toBeVisible({ timeout: 30_000 });
-    await expect(projectTrigger).toHaveCount(0);
-    await expect(modelTrigger).toHaveCount(0);
-    await expect(thinkingTrigger).toHaveCount(0);
-    await expect(modeTrigger).toHaveCount(0);
-    await hostTrigger.click();
-    await page.getByTestId(`schedule-host-option-${serverId}`).click();
-    await expect(projectTrigger).toBeVisible();
-    await expect(modelTrigger).toHaveCount(0);
-    await expect(thinkingTrigger).toHaveCount(0);
-    await expect(modeTrigger).toHaveCount(0);
-    await expectSettled(hostTrigger);
-
-    await projectTrigger.click();
-    await page
-      .getByTestId(`schedule-project-option-${projectEquivalenceViewKey(workspace.projectKey)}`)
-      .click();
-    await expect(projectTrigger).toContainText(workspace.projectDisplayName);
-    await expectSettled(projectTrigger);
-
-    await selectModelByLabel(page, "Ten second stream");
-    await expect(modelTrigger).toContainText("Ten second stream");
-    await expectSettled(modelTrigger);
-    await expect(thinkingTrigger).toContainText("Low");
-    await expectSettled(thinkingTrigger);
-    await expect(modeTrigger).toBeVisible();
-    await expectSettled(modeTrigger);
-
-    await hostTrigger.click();
-    await page.getByTestId(`schedule-host-option-${secondary.serverId}`).click();
-    await expect(hostTrigger).toContainText(secondary.label);
-    await expect(projectTrigger).toContainText(/select project/i);
-    await expect(modelTrigger).toHaveCount(0);
-    await expect(thinkingTrigger).toHaveCount(0);
-    await expect(modeTrigger).toHaveCount(0);
-    await expectSettled(hostTrigger);
-    await expectSettled(projectTrigger);
-
-    await projectTrigger.click();
-    await page
-      .getByTestId(`schedule-project-option-${projectEquivalenceViewKey(secondary.projectKey)}`)
-      .click();
-    await expect(projectTrigger).toContainText(secondary.projectDisplayName);
-    await expectSettled(projectTrigger);
-    await expect(modelTrigger).toContainText(/select model/i);
-    await expectSettled(modelTrigger);
-    await expect(thinkingTrigger).toHaveCount(0);
-    await expect(modeTrigger).toHaveCount(0);
-
-    await page.getByLabel("Schedule name").fill(`Cross host model ${Date.now()}`);
-    await page.getByLabel("Prompt").fill("Run on the secondary host project.");
-    await expect(page.getByRole("button", { name: "Create schedule" })).toBeDisabled();
-  });
-
-  test("creates and edits schedule isolation and archive cleanup knobs", async ({ page }) => {
-    const workspace = await seedWorkspace({ repoPrefix: "schedule-knobs-" });
-    cleanupTasks.push(() => workspace.cleanup());
-    const scheduleName = `Knob schedule ${Date.now()}`;
-    cleanupTasks.push(() => deleteScheduleByName(workspace, scheduleName));
-
-    await gotoAppShell(page);
-    await waitForSidebarHydration(page);
-    await page.goto(buildSchedulesRoute());
-    await expect(page.getByTestId("schedules-empty-new")).toBeVisible({ timeout: 30_000 });
-    await page.getByTestId("schedules-empty-new").click();
-
-    await page.getByRole("button", { name: /select project/i }).click();
-    await page
-      .getByTestId(`schedule-project-option-${projectEquivalenceViewKey(workspace.projectKey)}`)
-      .click();
-    await selectModelByLabel(page, "Ten second stream");
+    await page.getByTestId("schedule-project-trigger").click();
     await expect(
-      page.getByText("Off keeps each run's workspace in the sidebar for inspection."),
+      page.getByTestId(`schedule-project-option-${remote.serverId}-${remote.projectId}`),
     ).toHaveCount(0);
-    await page.getByTestId("schedule-isolation-trigger").click();
-    await page.getByTestId("schedule-isolation-worktree").click();
-    await expect(page.getByTestId("schedule-isolation-trigger")).toContainText("Worktree");
-    await page.getByTestId("schedule-archive-on-finish-switch").click();
-    await page.getByLabel("Schedule name").fill(scheduleName);
-    await page.getByLabel("Prompt").fill("Run with custom workspace cleanup.");
-    await page.getByTestId("schedule-cadence-preset-trigger").click();
-    await page.getByTestId("schedule-cadence-preset-every-hour").click();
-    await page.getByRole("button", { name: "Create schedule" }).click();
-
-    await expect(page.getByTestId("schedule-form-sheet")).toHaveCount(0, { timeout: 30_000 });
-    await expectScheduleKnobs({
-      workspace,
-      name: scheduleName,
-      archiveOnFinish: false,
-      isolation: "worktree",
-    });
-
-    const scheduleId = await findScheduleIdByName(workspace, scheduleName);
-    await page.getByTestId(`schedule-row-${scheduleId}`).click();
-    const formSheet = page.getByTestId("schedule-form-sheet");
-    await expect(formSheet).toBeVisible({ timeout: 10_000 });
-    await expectStableHeight(formSheet);
-    await expect(page.getByTestId("schedule-isolation-trigger")).toContainText("Worktree");
-    await expect(page.getByTestId("schedule-archive-on-finish-switch")).toHaveAttribute(
-      "aria-checked",
-      "false",
+    await page
+      .getByTestId(`schedule-project-option-${getServerId()}-${otherProject.projectId}`)
+      .click();
+    await expect(page.getByTestId("schedule-workspace-trigger")).toContainText(
+      "Select a workspace",
     );
+    await expect(page.getByTestId("schedule-execution-agent-trigger")).toHaveCount(0);
+    await page.getByTestId("schedule-workspace-trigger").click();
     await expect(
-      page.getByText("Off keeps each run's workspace in the sidebar for inspection."),
+      page.getByTestId(`schedule-workspace-option-${getServerId()}-${local.workspaceId}`),
     ).toHaveCount(0);
+    await page
+      .getByTestId(`schedule-workspace-option-${getServerId()}-${otherProject.workspaceId}`)
+      .click();
+    await expect(page.getByTestId("schedule-prompt-input")).toHaveValue("");
 
-    await page.getByTestId("schedule-isolation-trigger").click();
-    await page.getByTestId("schedule-isolation-local").click();
-    await page.getByTestId("schedule-archive-on-finish-switch").click();
-    await page.getByRole("button", { name: "Save changes" }).click();
-
-    await expect(page.getByTestId("schedule-form-sheet")).toHaveCount(0, { timeout: 30_000 });
-    await expectScheduleKnobs({
-      workspace,
-      name: scheduleName,
-      archiveOnFinish: true,
-      isolation: "local",
+    await page.getByTestId("schedule-host-trigger").click();
+    await page.getByTestId(`schedule-host-option-${remote.serverId}`).click();
+    await expect(page.getByTestId("schedule-project-trigger")).toContainText("Select project");
+    await expect(page.getByTestId("schedule-workspace-trigger")).toBeDisabled();
+    await expect(page.getByTestId("schedule-execution-agent-trigger")).toHaveCount(0);
+    await page.getByTestId("schedule-project-trigger").click();
+    await expect(
+      page.getByTestId(`schedule-project-option-${getServerId()}-${local.projectId}`),
+    ).toHaveCount(0);
+    await page
+      .getByTestId(`schedule-project-option-${remote.serverId}-${remote.projectId}`)
+      .click();
+    await page.getByTestId("schedule-workspace-trigger").click();
+    await page.getByTestId(`schedule-workspace-option-${remote.serverId}-${worktree.id}`).click();
+    await expect(page.getByTestId("schedule-workspace-trigger")).toContainText(
+      "Scheduled worktree",
+    );
+    await expect(page.getByTestId("schedule-max-runs-input")).toHaveValue("1");
+    await page.getByTestId("schedule-execution-agent-trigger").click();
+    await expect(page.getByTestId(`schedule-agent-option-${agent.id}`)).toHaveCount(0);
+    await page.getByTestId("schedule-target-new-agent").click();
+    await selectModel(page, SECONDARY_MODEL_LABEL);
+    await page.getByTestId("schedule-name-input").fill("Global worktree task");
+    await page.getByTestId("schedule-prompt-input").fill("Review the selected worktree.");
+    await page.getByTestId("schedule-host-trigger").scrollIntoViewIfNeeded();
+    await page.screenshot({ path: "/tmp/schedule-global-placement-desktop.png", fullPage: true });
+    await page.getByTestId("schedule-form-submit").click();
+    await expect(page.getByTestId("schedule-form-sheet")).toHaveCount(0);
+    const list = await schedules(remote).scheduleList({ workspaceId: worktree.id });
+    const schedule = list.schedules.find((item) => item.name === "Global worktree task");
+    expect(schedule).toMatchObject({
+      workspaceId: worktree.id,
+      maxRuns: 1,
+      target: {
+        type: "new-agent",
+        config: { cwd: worktree.workspaceDirectory, model: "secondary-offline-model" },
+      },
     });
+    if (!schedule) throw new Error("Created worktree task is missing");
+    cleanupTasks.push(async () => {
+      await schedules(remote).scheduleDelete({ id: schedule.id });
+    });
+    const localList = await schedules(local).scheduleList({ workspaceId: local.workspaceId });
+    expect(localList.schedules.some((item) => item.name === "Global worktree task")).toBe(false);
+    const row = page.getByTestId(`schedule-row-${schedule.id}`);
+    await expect(row).toBeVisible();
+    await expect(row).toContainText(remote.label);
+    const filter = page.getByTestId("schedules-host-filter-trigger");
+    await filter.click();
+    await page
+      .getByTestId("combobox-desktop-container")
+      .getByText(remote.label, { exact: true })
+      .click();
+    await expect(filter).toContainText(remote.label);
+    await expect(row).toBeVisible();
+    await expect(row).not.toContainText(remote.label);
+    await expect(row).toContainText("Scheduled worktree");
+    await filter.click();
+    await page
+      .getByTestId("combobox-desktop-container")
+      .getByText("All hosts", { exact: true })
+      .click();
+    await expect(row).toContainText(remote.label);
+  });
+  test("opens an upcoming timeline ordered by trigger time and edits directly from it", async ({
+    page,
+  }) => {
+    const workspace = await seedWorkspace({
+      repoPrefix: "schedule-timeline-",
+      title: "Future tasks",
+    });
+    cleanupTasks.push(workspace.cleanup);
+    const agent = await workspace.client.createAgent({
+      provider: "codex",
+      cwd: workspace.repoPath,
+      workspaceId: workspace.workspaceId,
+      model: "offline-model",
+    });
+    const create = async (name: string, hours: number) => {
+      const result = await schedules(workspace).scheduleCreate({
+        workspaceId: workspace.workspaceId,
+        name,
+        prompt: name,
+        cadence: { type: "every", everyMs: 3_600_000 },
+        startAt: new Date(Date.now() + hours * 3_600_000).toISOString(),
+        target: { type: "agent", agentId: agent.id },
+        maxRuns: 1,
+        runOnCreate: false,
+      });
+      if (!result.schedule) throw new Error(result.error ?? "Missing task");
+      const id = result.schedule.id;
+      cleanupTasks.push(async () => {
+        await schedules(workspace).scheduleDelete({ id });
+      });
+      return id;
+    };
+    const earlier = await create("Earlier review", 2);
+    const later = await create("Later review", 6);
+    await gotoWorkspace(page, workspace.workspaceId);
+    await openScheduleTab(page);
+    await expect(page.getByTestId("workspace-schedule-form")).toHaveCount(0);
+    const rows = page
+      .getByTestId("workspace-schedules-list")
+      .locator(
+        '[data-testid^="workspace-schedule-"]:not([data-testid^="workspace-schedule-history-"])',
+      );
+    await expect(rows).toHaveCount(2);
+    await expect(rows.nth(0)).toHaveAttribute("data-testid", `workspace-schedule-${earlier}`);
+    await expect(rows.nth(1)).toHaveAttribute("data-testid", `workspace-schedule-${later}`);
+    await expect(page.getByTestId(`schedule-next-trigger-${earlier}`)).not.toBeEmpty();
+    await page.screenshot({ path: "/tmp/schedule-timeline-desktop.png", fullPage: true });
+    await page.getByTestId(`workspace-schedule-${earlier}`).click();
+    await expect(page.getByTestId("schedule-prompt-input")).toHaveValue("Earlier review");
+    await expect(page.getByTestId("schedule-max-runs-input")).toHaveValue("1");
+    await page.getByTestId("schedule-name-input").fill("Edited earlier review");
+    await page.getByTestId("schedule-form-submit").click();
+    await expect(page.getByTestId(`workspace-schedule-${earlier}`)).toContainText(
+      "Edited earlier review",
+    );
+    await page.reload();
+    await expect(page.getByTestId(`workspace-schedule-${earlier}`)).toBeVisible({
+      timeout: 30_000,
+    });
+    await page.setViewportSize({ width: 390, height: 844 });
+    await expect(page.getByTestId(`workspace-schedule-${earlier}`)).toBeVisible();
+    await page.screenshot({ path: "/tmp/schedule-timeline-mobile.png", fullPage: true });
   });
 });

@@ -3,6 +3,7 @@ import type { AgentSnapshotPayload, CreateAgentRequestMessage } from "@ait/proto
 import type { DaemonClient } from "@ait/client/internal/daemon-client";
 import { encodeImages } from "@/utils/encode-images";
 import type { UserMessageImageAttachment } from "@/types/stream";
+import { imageSendPayload } from "@/attachments/image-send";
 
 export interface WorkspaceDraftAgentRequest {
   workspaceId: string;
@@ -14,22 +15,26 @@ export interface WorkspaceDraftAgentRequest {
 }
 
 /**
- * Shared by the workspace draft tab and by the new-workspace screen when it finishes creation
- * after the user has already navigated away and no draft tab will ever mount.
+ * A submission owns its creation key. Replaying it preserves the key; submitting
+ * again after failure gets a new message identity from the draft create flow.
  */
 export async function requestWorkspaceDraftAgent(
   client: DaemonClient,
   request: WorkspaceDraftAgentRequest,
 ): Promise<AgentSnapshotPayload> {
-  const images = await encodeImages(request.images);
+  const images = await encodeImages(request.images, {
+    text: request.text,
+    attachments: request.attachments,
+    clientMessageId: request.clientMessageId,
+  });
+  const prepared = imageSendPayload(images, request.attachments);
   return await client.createAgent({
+    idempotencyKey: request.clientMessageId,
     config: request.config,
     workspaceId: request.workspaceId,
     clientMessageId: request.clientMessageId,
     ...(request.text ? { initialPrompt: request.text } : {}),
-    ...(images && images.length > 0 ? { images } : {}),
-    ...(request.attachments && request.attachments.length > 0
-      ? { attachments: request.attachments }
-      : {}),
+    ...(prepared.images?.length ? { images: prepared.images } : {}),
+    ...(prepared.attachments?.length ? { attachments: prepared.attachments } : {}),
   });
 }

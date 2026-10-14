@@ -4,6 +4,8 @@
 - 日期：2026-10-06。
 - 范围：Provider 展示投影与 Timeline 查询；修订 ADR-039 的单项预算。
 
+Codex MCP 超大字段的预览策略由 [ADR-140](adr-140-codex-mcp-display-previews.md) 修订。
+
 ## 背景
 
 正常的 GitHub CI 日志工具结果序列化为 358,522 字节，超过原先 256 KiB 的展示条目

@@ -1,8 +1,9 @@
 //! File-backed counterparts of Paseo schedule/store.test.ts.
 use std::{fs, path::PathBuf};
 
-use file::storage::schedule::FileStore;
-use model::storage::schedule::{Error, Store};
+use domain::storage::schedule::Error;
+use model::storage::schedule::Store;
+use persistence::storage::schedule::FileStore;
 use serde_json::json;
 
 use crate::{engine::Engine, engine::tests::input, ports::Outcome};

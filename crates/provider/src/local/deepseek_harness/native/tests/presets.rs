@@ -210,3 +210,27 @@ async fn selection_validation_checks_catalogs_without_creating_probe_sessions() 
     assert!(fixture.requests("session/create").is_empty());
     assert!(fixture.requests("commands/execute").is_empty());
 }
+
+#[tokio::test]
+async fn plugin_mode_keeps_native_balance_and_failure_diagnostics() {
+    let mut fixture = Fixture::new().await;
+    fixture.spec.config.mode_id = Some("agent-preset:team/review.v2".into());
+    let mut session = fixture.client.create_session(&fixture.spec).await.unwrap();
+    let balance = session.account_usage().await.unwrap();
+    assert_eq!(balance["status"], "available");
+    assert_eq!(balance["balances"][0]["remaining"], 12.34);
+    assert_eq!(
+        session.runtime_info().await.unwrap().mode_id,
+        fixture.spec.config.mode_id
+    );
+
+    fixture.fail("session/prompt", "500");
+    assert!(
+        session
+            .start_turn("review", &fixture.spec.config)
+            .await
+            .is_err()
+    );
+    assert!(session.failure_diagnostic().is_some());
+    session.close().await.unwrap();
+}

@@ -2,6 +2,7 @@
 
 pub(crate) mod inbox;
 mod progress;
+mod projection;
 mod subagents;
 
 use std::path::Path;
@@ -10,7 +11,7 @@ use std::sync::{Arc, Mutex};
 use model::ErrorCode;
 use model::events::EventHub;
 use rusqlite::{Connection, OptionalExtension, params};
-use serde_json::{Value, json};
+use serde_json::json;
 use uuid::Uuid;
 
 use crate::protocol::timeline::NativeItem;
@@ -19,28 +20,14 @@ use crate::protocol::timeline::NativeItem;
 pub(crate) const MAX_ENTRY_BYTES: usize = 768 * 1024;
 
 /// Immutable timeline row with a stable sequence in a durable generation.
-#[derive(Debug, Clone)]
-pub struct Row {
+#[derive(Debug, Clone, PartialEq)]
+pub(crate) struct Row {
     /// Sequence assigned at the first committed observation.
-    pub seq: u64,
+    pub(crate) seq: u64,
     /// Provider that produced this display history.
-    pub provider: String,
+    pub(crate) provider: String,
     /// Original normalized native or plugin display entry.
-    pub entry: NativeItem,
-}
-
-impl Row {
-    /// Project one canonical row without modifying or merging stored history.
-    #[must_use]
-    pub fn value(&self) -> Value {
-        let mut value = json!({"provider":self.provider,"item":self.entry.item,
-            "timestamp":self.entry.timestamp,"seqStart":self.seq,"seqEnd":self.seq,
-            "sourceSeqRanges":[{"startSeq":self.seq,"endSeq":self.seq}],"collapsed":[]});
-        if let Some(turn) = &self.entry.turn_id {
-            value["turnId"] = json!(turn);
-        }
-        value
-    }
+    pub(crate) entry: NativeItem,
 }
 
 /// Shared SQLite projection and its post-commit observers.
@@ -78,7 +65,7 @@ impl Timeline {
     /// Construct isolated in-memory storage for embedded hosts and tests.
     /// # Errors
     /// Returns Agent I/O errors if SQLite cannot allocate its database.
-    pub fn memory() -> Result<Self, ErrorCode> {
+    pub(crate) fn memory() -> Result<Self, ErrorCode> {
         Self::initialize(Connection::open_in_memory().map_err(io)?)
     }
 
@@ -96,6 +83,7 @@ impl Timeline {
             || version == 3 && application == 0x4154_544C && tables == 4)
             && !(version == 4 && application == 0x4154_544C && tables == 5)
             && !(version == 5 && application == 0x4154_544C && tables == 6)
+            && !(version == 6 && application == 0x4154_544C && tables == 10)
         {
             return Err(ErrorCode::UnsupportedFormat);
         }
@@ -119,7 +107,18 @@ impl Timeline {
             CREATE INDEX IF NOT EXISTS queued_inputs ON input_receipts(state,agent,seq);
             CREATE TABLE IF NOT EXISTS provider_subagents(agent TEXT NOT NULL, child TEXT NOT NULL,
                 descriptor TEXT NOT NULL, PRIMARY KEY(agent,child));
-            PRAGMA user_version=5; PRAGMA application_id=1096045644; COMMIT;",
+            CREATE TABLE IF NOT EXISTS projection_heads(agent TEXT PRIMARY KEY, epoch TEXT NOT NULL);
+            CREATE TABLE IF NOT EXISTS display_entries(agent TEXT NOT NULL, seq_start INTEGER NOT NULL,
+                seq_end INTEGER NOT NULL, identity TEXT, entry TEXT NOT NULL, bytes INTEGER NOT NULL,
+                PRIMARY KEY(agent,seq_start));
+            CREATE INDEX IF NOT EXISTS display_identity ON display_entries(agent,identity,seq_start);
+            CREATE INDEX IF NOT EXISTS display_end ON display_entries(agent,seq_end,seq_start);
+            CREATE TABLE IF NOT EXISTS display_ranges(agent TEXT NOT NULL, start_seq INTEGER NOT NULL,
+                end_seq INTEGER NOT NULL, entry_seq INTEGER NOT NULL, PRIMARY KEY(agent,start_seq));
+            CREATE TABLE IF NOT EXISTS display_sources(agent TEXT NOT NULL, seq INTEGER NOT NULL,
+                provider TEXT NOT NULL, entry TEXT NOT NULL, bytes INTEGER NOT NULL,
+                PRIMARY KEY(agent,seq));
+            PRAGMA user_version=6; PRAGMA application_id=1096045644; COMMIT;",
             )
             .map_err(io)?;
         Ok(Self {
@@ -130,14 +129,14 @@ impl Timeline {
 
     /// Return the event producer shared by this projection's subscribers.
     #[must_use]
-    pub fn events(&self) -> EventHub {
+    pub(crate) fn events(&self) -> EventHub {
         self.events.clone()
     }
 
     /// Read the immutable generation and ordered rows, creating an empty generation if necessary.
     /// # Errors
     /// Returns storage or invalid persisted-data errors.
-    pub fn read(&self, agent: &str) -> Result<(String, Vec<Row>), ErrorCode> {
+    pub(crate) fn read(&self, agent: &str) -> Result<(String, Vec<Row>), ErrorCode> {
         let database = self.database.lock().map_err(io)?;
         let epoch = epoch(&database, agent)?;
         Ok((epoch, progress::read(&database, agent)?))
@@ -149,6 +148,22 @@ impl Timeline {
     pub(crate) fn generation(&self, agent: &str) -> Result<String, ErrorCode> {
         let database = self.database.lock().map_err(io)?;
         epoch(&database, agent)
+    }
+
+    /// Check for committed or incremental rows without loading the history or creating a generation.
+    /// # Errors
+    /// Returns storage errors when the source tables cannot be queried.
+    pub(crate) fn has_entries(&self, agent: &str) -> Result<bool, ErrorCode> {
+        self.database
+            .lock()
+            .map_err(io)?
+            .query_row(
+                "SELECT EXISTS(SELECT 1 FROM entries WHERE agent=?1)
+             OR EXISTS(SELECT 1 FROM progress WHERE agent=?1)",
+                [agent],
+                |row| row.get(0),
+            )
+            .map_err(io)
     }
 
     /// Read the first nonempty user text for `agent` from the current durable generation.
@@ -175,12 +190,12 @@ impl Timeline {
         Ok(None)
     }
 
-    /// Atomically reconcile a complete native history, retaining plugin rows and retired generations.
+    /// Reconcile native history, retaining host diagnostics, plugin rows and retired generations.
     /// An unchanged native prefix keeps its cursor; rewrites retire the old generation and publish
     /// a replacement event only after the transaction commits. No domain Message is changed.
     /// # Errors
     /// Returns conflicts, oversize data or storage errors without replacing the visible generation.
-    pub fn reconcile(
+    pub(crate) fn reconcile(
         &self,
         agent: &str,
         provider: &str,
@@ -192,7 +207,7 @@ impl Timeline {
         let previous = read_rows(&transaction, agent)?;
         let native: Vec<_> = previous
             .iter()
-            .filter(|row| row.entry.item["type"] != "plugin")
+            .filter(|row| row.entry.item["type"] != "plugin" && !host_diagnostic(&row.entry))
             .collect();
         let prefix = progress::covered(&transaction, agent, entries)?
             && native.len() <= entries.len()
@@ -207,6 +222,8 @@ impl Timeline {
             self.publish(agent, provider, &old_epoch, &appended.entries);
             return Ok(old_epoch);
         }
+        let entries = progress::retain_timestamps(&transaction, agent, &previous, entries)?;
+        let entries = retain_diagnostics(entries, &previous);
         transaction.execute(
             "INSERT INTO retired_entries SELECT agent,?,seq,identity,provider,entry FROM entries WHERE agent=?",
             params![old_epoch,agent],
@@ -221,6 +238,7 @@ impl Timeline {
         transaction
             .execute("DELETE FROM entries WHERE agent=?", [agent])
             .map_err(io)?;
+        projection::clear(&transaction, agent)?;
         let replacement = Uuid::new_v4().to_string();
         transaction
             .execute(
@@ -228,7 +246,7 @@ impl Timeline {
                 params![replacement, agent],
             )
             .map_err(io)?;
-        append_rows(&transaction, agent, provider, entries)?;
+        append_rows(&transaction, agent, provider, &entries)?;
         let plugins: Vec<_> = previous
             .into_iter()
             .filter(|row| row.entry.item["type"] == "plugin")
@@ -248,7 +266,7 @@ impl Timeline {
     /// Existing identities must retain their payload. Timestamp differences on replay are ignored.
     /// # Errors
     /// Returns conflicts for changed payloads and storage errors before publishing any event.
-    pub fn append(
+    pub(crate) fn append(
         &self,
         agent: &str,
         provider: &str,
@@ -293,6 +311,57 @@ impl Timeline {
     }
 }
 
+fn host_diagnostic(entry: &NativeItem) -> bool {
+    entry.key.starts_with("host:provider-failure:") && entry.item["type"] == "error"
+}
+
+fn retain_diagnostics(entries: Vec<NativeItem>, previous: &[Row]) -> Vec<NativeItem> {
+    use std::collections::BTreeMap;
+    if !previous.iter().any(|row| host_diagnostic(&row.entry)) {
+        return entries;
+    }
+    let mut keys = BTreeMap::new();
+    let mut turns = BTreeMap::new();
+    for (index, entry) in entries.iter().enumerate() {
+        keys.insert(entry.key.as_str(), index + 1);
+        if let Some(turn) = entry.turn_id.as_deref() {
+            turns.insert(turn, index + 1);
+        }
+    }
+    let mut retained: BTreeMap<usize, Vec<NativeItem>> = BTreeMap::new();
+    let mut predecessor = None;
+    for row in previous {
+        if host_diagnostic(&row.entry) {
+            let position = row
+                .entry
+                .turn_id
+                .as_deref()
+                .and_then(|turn| turns.get(turn).copied())
+                .or_else(|| predecessor.and_then(|key| keys.get(key).copied()))
+                .unwrap_or(entries.len());
+            retained
+                .entry(position)
+                .or_default()
+                .push(row.entry.clone());
+        } else if row.entry.item["type"] != "plugin" {
+            predecessor = Some(row.entry.key.as_str());
+        }
+    }
+    if retained.is_empty() {
+        return entries;
+    }
+    let count = retained.values().map(Vec::len).sum::<usize>();
+    let mut merged = Vec::with_capacity(entries.len() + count);
+    for (index, entry) in entries.into_iter().enumerate() {
+        if let Some(diagnostics) = retained.remove(&index) {
+            merged.extend(diagnostics);
+        }
+        merged.push(entry);
+    }
+    merged.extend(retained.into_values().flatten());
+    merged
+}
+
 fn read_rows(database: &Connection, agent: &str) -> Result<Vec<Row>, ErrorCode> {
     let mut query = database
         .prepare("SELECT seq, provider, entry FROM entries WHERE agent=? ORDER BY seq")
@@ -330,6 +399,7 @@ fn append_rows(
     provider: &str,
     entries: &[NativeItem],
 ) -> Result<Appended, ErrorCode> {
+    projection::ensure(transaction, agent)?;
     let mut next = progress::next(transaction, agent)?;
     let mut positions = Vec::with_capacity(entries.len());
     let mut appended = Vec::new();
@@ -369,6 +439,15 @@ fn append_rows(
                 params![agent, next, entry.key, provider, bytes],
             )
             .map_err(io)?;
+        projection::append(
+            transaction,
+            agent,
+            &Row {
+                seq: next,
+                provider: provider.to_owned(),
+                entry: projected.clone(),
+            },
+        )?;
         positions.push(next);
         appended.push((next, projected));
         next = next.checked_add(1).ok_or(ErrorCode::ResourceExhausted)?;

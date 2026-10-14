@@ -9,17 +9,20 @@ pub use installation::{Dependencies, Service};
 
 pub mod capabilities;
 mod composition;
+/// Bounded read-only native harness evidence collection.
+pub mod diagnostics;
 pub mod dispatch;
 mod local;
 pub mod ports;
-pub mod protocol;
+pub(crate) mod protocol;
 pub mod rpc;
 pub mod service;
+pub mod skills;
 pub mod storage;
-pub mod summary;
+pub(crate) mod support;
+mod timeline_projection;
 
 pub use composition::Providers;
-pub use summary::{SummaryConfiguration, SummaryGenerator};
 
 #[cfg(all(test, unix))]
 mod test_support;

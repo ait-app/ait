@@ -1,11 +1,48 @@
 # DSH 插件情景模式接入验证
 
+## 2026-10-14：合入 main 并解决 PR #229 冲突
+
+测量前父提交：PR `747af15d5d272b62789da2541aee2e01137eda28`，
+合入 main `8a4f8b9c99ececd99153fb4d99893a1e61aa2e18`；
+本节对应本次合并提交的工作树，Linux x86_64、默认 features。
+
+保留 main 的 DSH 账号余额、错误诊断、crate 内部可见性和不可变测试启动器，
+同时保留情景模式/权限独立目录与会话配置校验。新增插件模式下余额与失败诊断共存的回归测试。
+测试参数通过 `AIT_DSH_FIXTURE_ARGS` 写入每项测试的临时目录；不改写共享启动脚本。
+原 ADR-109 与 main 冲突，DSH 决策文档改为 ADR-147 并更新所有本地链接。
+
+### Tests
+
+以下命令均设置 `CARGO_TARGET_DIR=/home/lonnet/Developers/ait/target` 复用构建缓存；
+没有降低测试并行度。nextest 在本机不可用，使用 Cargo 的定向测试。
+
+| 命令 | 结果 |
+| --- | --- |
+| `cargo test --locked -p provider local::deepseek_harness --lib` | 78 通过，6 个安装相关测试默认忽略 |
+| `cargo test --locked -p provider plugin_mode_keeps_native_balance_and_failure_diagnostics --lib` | 新增回归测试 1 通过 |
+| `cargo test --locked -p provider service::provider_catalog --lib` | 25 通过 |
+| `cargo test --locked -p provider service::agent_execution::tests::controls --lib` | 8 通过 |
+| `cargo test --locked -p provider composition::tests --lib` | 4 通过 |
+| `cargo clippy --locked -p provider --all-targets -- -D warnings` | 通过 |
+| `cargo build --locked --workspace` | 通过 |
+| `cargo fmt --all --check`、`npm run check:docs`、`git diff --check` | 通过 |
+| `sh -n crates/provider/tests/fixtures/deepseek_harness_native.sh` | 通过 |
+
+### Test coverage
+
+**Not measured**：本次是冲突整合与定向回归验证，依照最新 AGENTS.md 未执行全量测试或
+workspace 覆盖率；116 项相关测试通过不代表覆盖率。没有本轮覆盖/总行数或新增覆盖率产物。
+下面的 94.18% 与 JSON 产物仅属于 `747af15d` 的历史测量，不能当作合入新 main 后的结果。
+未重新验证真实模型、安装版 DSH、macOS/Windows 和 GUI；后续有需要时针对这些范围验证。
+
+## 2026-10-08：初始 PR 历史验证
+
 日期：2026-10-08。提交准备基于 main `4794dbc4` 的独立分支
 `fix/dsh-native-plugin-presets`；平台 Linux x86_64，Rust 1.98.1 / LLVM 23.1.1。
 本 PR 的 Rust 源码就是测量范围；[统计产物](dsh-plugin-presets-coverage.json)
 记录完整 base commit 和 staged Rust patch 的 SHA-256，可用
 `git diff --binary <base> <PR commit> -- crates bins Cargo.toml Cargo.lock` 校验。
-设计与官方源码依据见 [ADR-109](../../decisions/providers/adr-109-dsh-native-plugin-presets.md)。
+设计与官方源码依据见 [ADR-147](../../decisions/providers/adr-147-dsh-native-plugin-presets.md)。
 
 ## 行为
 

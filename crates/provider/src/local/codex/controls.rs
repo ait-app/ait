@@ -46,7 +46,7 @@ impl CodexClient {
             transport.close().await?;
             result?;
         }
-        if !fast(&spec.config) {
+        if super::speed::selected(&spec.config) == "default" {
             return Ok(());
         }
         let details = self.discover_native(&spec.cwd).await?;
@@ -56,11 +56,10 @@ impl CodexClient {
                 .as_ref()
                 .map_or(model["isDefault"] == true, |id| model["id"] == *id)
         });
-        if model.is_some_and(|model| model["supportsFastMode"] == true) {
-            Ok(())
-        } else {
-            Err(AgentSessionError::Rejected)
-        }
+        let options = model
+            .and_then(|model| model["speedOptions"].as_array())
+            .ok_or(AgentSessionError::Rejected)?;
+        super::speed::validate(&spec.config, options)
     }
 
     pub(super) async fn native_commands(&self, cwd: &str) -> Result<Vec<Value>, AgentSessionError> {
@@ -216,12 +215,6 @@ pub(super) fn modes() -> Vec<Value> {
             "description":"Run without sandbox restrictions or approval prompts",
             "icon":"ShieldOff","colorTier":"dangerous","isUnattended":true}),
     ]
-}
-
-pub(super) fn features(config: &StoredAgentConfig) -> Vec<Value> {
-    vec![json!({"id":"fast_mode","type":"toggle","label":"Fast",
-            "description":"Priority inference at increased usage",
-            "tooltip":"Toggle fast mode","icon":"zap","value":fast(config)})]
 }
 
 pub(super) fn policy(config: &StoredAgentConfig) -> (Value, &str, Value) {

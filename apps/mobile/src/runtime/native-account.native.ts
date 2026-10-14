@@ -14,6 +14,7 @@ import { androidBrowserLogin, iosBrowserLogin } from "./account-browser-login.na
 
 const INSTALLATION_KEY = "@ait:account-installation-v1";
 const CREDENTIAL_KEY = "ait.account.session.v1";
+const BACKGROUND_CONNECTION_GRACE_MS = 2 * 60 * 1000;
 const listeners = new Set<(state: AccountSnapshot) => void>();
 const transports = new Set<() => void>();
 let ready: Promise<AccountSessionManager> | undefined;
@@ -48,7 +49,8 @@ async function createAccount(): Promise<AccountSessionManager> {
       for (const close of [...transports]) close();
     },
   });
-  if (AppState.currentState !== "active") manager.suspend();
+  // A cold background launch has no live connection to retain.
+  if (AppState.currentState === "background") manager.suspend();
   const saved = await SecureStore.getItemAsync(CREDENTIAL_KEY);
   if (saved) {
     let account: SavedAccount | undefined;
@@ -77,10 +79,25 @@ async function createAccount(): Promise<AccountSessionManager> {
     else await SecureStore.deleteItemAsync(CREDENTIAL_KEY);
   }
   // This manager is a process singleton; keep exactly one native lifecycle subscription.
-  AppState.addEventListener("change", (state) => {
-    if (state === "active") manager.resume();
-    else manager.suspend();
-  });
+  let backgroundTimer: ReturnType<typeof setTimeout> | undefined;
+  const onAppState = (state: string) => {
+    if (state === "active") {
+      clearTimeout(backgroundTimer);
+      backgroundTimer = undefined;
+      manager.resume();
+    } else if (state === "background" && backgroundTimer === undefined) {
+      // Brief app switches retain relay sockets and in-progress downloads. An
+      // inactive transition alone (e.g. a system dialog) must not disconnect them.
+      backgroundTimer = setTimeout(() => {
+        // Keep the timer marker until foregrounding so repeated background
+        // events cannot restart the grace period or suspend the account twice.
+        manager.suspend();
+      }, BACKGROUND_CONNECTION_GRACE_MS);
+    }
+  };
+  AppState.addEventListener("change", onAppState);
+  // Reconcile transitions that happened while restoring saved credentials.
+  onAppState(AppState.currentState);
   return manager;
 }
 

@@ -1,5 +1,6 @@
 //! Outbound control and reverse data transport. Local destinations are fixed at construction.
 mod bridge;
+mod diagnostics;
 mod download;
 mod protocol;
 pub mod rpc;
@@ -17,12 +18,13 @@ use tokio::task::JoinSet;
 use tokio::time::timeout;
 use tokio_tungstenite::tungstenite::Message;
 use tokio_util::sync::CancellationToken;
+use tracing::Instrument;
 use url::Url;
 use uuid::Uuid;
 
 use protocol::{ControlCommand, ControlHello, ControlWelcome, DataMode};
 pub use protocol::{ControlGrant, Status};
-use transport::{Socket, connect, receive, send};
+use transport::{Dialer, Socket, receive, send};
 
 #[derive(Debug)]
 struct State {
@@ -41,6 +43,7 @@ pub struct Connector {
 
 #[derive(Debug)]
 struct Local {
+    dialer: Dialer,
     url: String,
     token: SecretString,
     server_id: String,
@@ -92,6 +95,7 @@ impl Connector {
                 cancel: CancellationToken::new(),
             })),
             local: Arc::new(Local {
+                dialer: Dialer::default(),
                 url: format!("ws://{address}/v1/ws"),
                 token,
                 server_id,
@@ -127,10 +131,19 @@ impl Connector {
             state.status.epoch
         };
         let connector = self.clone();
+        let span = tracing::info_span!("relay_control", %generation, node_session_id = %grant.node_session_id);
         tokio::spawn(async move {
             let result = tokio::select! {
-                () = cancel.cancelled() => Ok(()),
-                result = connector.run(center, grant, generation, resume) => result,
+                () = cancel.cancelled() => {
+                    tracing::info!(%generation, reason = "cancelled", "Relay control stopped");
+                    Ok(())
+                },
+                result = connector.run(center, grant, generation, resume) => {
+                    if let Err(error) = &result {
+                        tracing::warn!(%generation, %error, "Relay control failed; active data sessions will close");
+                    }
+                    result
+                },
             };
             cancel.cancel();
             let mut state = connector.state.lock().await;
@@ -139,7 +152,7 @@ impl Connector {
                 state.status.online = false;
                 state.status.error = result.err().map(|error| error.to_string());
             }
-        });
+        }.instrument(span));
         Ok(())
     }
 
@@ -168,12 +181,15 @@ impl Connector {
         generation: Uuid,
         resume: Option<Uuid>,
     ) -> Result<(), Error> {
-        let mut control = connect(
-            &endpoint(&center, "v1/relay/control"),
-            &grant.control_ticket,
-            16 * 1024,
-        )
-        .await?;
+        let mut control = self
+            .local
+            .dialer
+            .connect(
+                &endpoint(&center, "v1/relay/control"),
+                &grant.control_ticket,
+                16 * 1024,
+            )
+            .await?;
         send(
             &mut control,
             Message::Text(
@@ -217,14 +233,34 @@ impl Connector {
         loop {
             let message = tokio::select! {
                 result = tasks.join_next(), if !tasks.is_empty() => {
-                    if let Some(Ok(id)) = result { active.remove(&id); }
+                    match result {
+                        Some(Ok(id)) => { active.remove(&id); },
+                        Some(Err(error)) => tracing::warn!(panicked = error.is_panic(), "Relay data task did not complete"),
+                        None => {},
+                    }
                     continue;
                 },
                 message = timeout(Duration::from_secs(65), control.next()) => match message {
                     Ok(Some(Ok(Message::Text(value)))) => protocol::decode::<ControlCommand>(&value)?,
                     Ok(Some(Ok(Message::Ping(value)))) => { send(control, Message::Pong(value)).await?; continue; },
                     Ok(Some(Ok(Message::Pong(_)))) => continue,
-                    _ => return Err(Error::Transport),
+                    Ok(Some(Ok(Message::Close(frame)))) => {
+                        tracing::info!(close_code = frame.as_ref().map(|f| u16::from(f.code)), reason = "close_frame", "Relay control closed");
+                        return Err(Error::Transport);
+                    },
+                    Ok(Some(Err(error))) => {
+                        diagnostics::socket_error("control_read", &error);
+                        return Err(Error::Transport);
+                    },
+                    other => {
+                        let reason = match other {
+                            Err(_) => "read_timeout",
+                            Ok(None) => "eof",
+                            _ => "unexpected_frame",
+                        };
+                        tracing::warn!(reason, "Relay control stopped");
+                        return Err(Error::Transport);
+                    },
                 },
             };
             match message {
@@ -237,19 +273,28 @@ impl Connector {
                     let local = self.local.clone();
                     let cancel = CancellationToken::new();
                     active.insert(id, cancel.clone());
+                    let span = tracing::info_span!("relay_session", relay_session_id = %id, %epoch);
                     tasks.spawn(async move {
+                        let started = std::time::Instant::now();
                         tokio::select! {
-                            () = cancel.cancelled() => {},
-                            _ = async {
+                            () = cancel.cancelled() => {
+                                tracing::info!(reason = "center_cancelled", "Relay session cancelled");
+                            },
+                            result = async {
                                 match grant.mode {
                                     DataMode::Download { download_token } =>
                                         download::run(url, grant.daemon_ticket, download_token, local, id).await,
                                     DataMode::RustSingle => bridge::data(url, grant.daemon_ticket, local, id).await,
                                 }
-                            } => {},
+                            } => {
+                                if let Err(error) = result {
+                                    tracing::warn!(%error, "Relay session failed");
+                                }
+                            },
                         }
+                        tracing::info!(elapsed_ms = started.elapsed().as_millis(), "Relay session finished");
                         id
-                    });
+                    }.instrument(span));
                 }
                 ControlCommand::CancelSession {
                     relay_session_id: id,

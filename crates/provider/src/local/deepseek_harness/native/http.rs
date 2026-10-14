@@ -13,6 +13,7 @@ pub(super) struct Api {
     pub(super) base: Url,
     pub(super) cookie: header::HeaderValue,
     client: Client,
+    pub(super) diagnostics: crate::local::diagnostics::Diagnostics,
 }
 
 impl std::fmt::Debug for Api {
@@ -29,6 +30,7 @@ impl Api {
     pub(super) async fn connect(
         launch: &str,
         deadline: Duration,
+        diagnostics: crate::local::diagnostics::Diagnostics,
     ) -> Result<Self, AgentSessionError> {
         let mut base = Url::parse(launch).map_err(|_| AgentSessionError::Failed)?;
         if base.scheme() != "http"
@@ -74,6 +76,7 @@ impl Api {
             base,
             cookie,
             client,
+            diagnostics,
         })
     }
 
@@ -83,6 +86,24 @@ impl Api {
         endpoint: &str,
         args: Value,
     ) -> Result<Value, AgentSessionError> {
+        self.optional_call(endpoint, args).await?.ok_or_else(|| {
+            let mut diagnostic = crate::ports::diagnostics::Diagnostic::new(
+                crate::ports::diagnostics::Category::Unknown,
+                "http",
+            );
+            diagnostic.http_status = Some(404);
+            self.diagnostics.observe(diagnostic, endpoint);
+            AgentSessionError::Failed
+        })
+    }
+
+    /// Query an optional native endpoint; only HTTP 404 means the Host lacks this capability.
+    /// All other transport, HTTP and envelope failures remain errors, with no raw response text.
+    pub(super) async fn optional_call(
+        &self,
+        endpoint: &str,
+        args: Value,
+    ) -> Result<Option<Value>, AgentSessionError> {
         let id = uuid::Uuid::new_v4().to_string();
         let body =
             json!({"type":"client-request","rpcId":id,"method":endpoint,"payload":{"args":args}});
@@ -100,8 +121,32 @@ impl Api {
             .json(&body)
             .send()
             .await
-            .map_err(|_| AgentSessionError::Failed)?;
+            .map_err(|error| {
+                let category = if error.is_timeout() {
+                    crate::ports::diagnostics::Category::Timeout
+                } else {
+                    crate::ports::diagnostics::Category::Network
+                };
+                self.diagnostics.observe(
+                    crate::ports::diagnostics::Diagnostic::new(category, "http"),
+                    endpoint,
+                );
+                AgentSessionError::Failed
+            })?;
+        if response.status() == reqwest::StatusCode::NOT_FOUND {
+            return Ok(None);
+        }
         if !response.status().is_success() {
+            let status = response.status().as_u16();
+            let category = match status {
+                401 => crate::ports::diagnostics::Category::Authentication,
+                403 => crate::ports::diagnostics::Category::Permission,
+                429 => crate::ports::diagnostics::Category::RateLimit,
+                _ => crate::ports::diagnostics::Category::Unknown,
+            };
+            let mut diagnostic = crate::ports::diagnostics::Diagnostic::new(category, "http");
+            diagnostic.http_status = Some(status);
+            self.diagnostics.observe(diagnostic, endpoint);
             return Err(AgentSessionError::Failed);
         }
         let mut chunks = response.bytes_stream();
@@ -119,8 +164,18 @@ impl Api {
             return Err(AgentSessionError::Failed);
         }
         match response["result"]["ok"].as_bool() {
-            Some(true) => Ok(response["result"]["value"].clone()),
-            Some(false) => Err(AgentSessionError::Rejected),
+            Some(true) => response["result"]
+                .get("value")
+                .cloned()
+                .map(Some)
+                .ok_or(AgentSessionError::Failed),
+            Some(false) => {
+                self.diagnostics.observe(
+                    crate::local::diagnostics::native(&response["result"]["error"], "rpc"),
+                    endpoint,
+                );
+                Err(AgentSessionError::Rejected)
+            }
             None => Err(AgentSessionError::Failed),
         }
     }

@@ -224,6 +224,20 @@ fn plan(
 ) -> Result<(ExecutionState, Option<String>), ErrorCode> {
     let lane = if mutation::is_mutation(method) {
         None
+    } else if method == "internal.bot" {
+        let id = params["operation"]["agent_id"]
+            .as_str()
+            .ok_or(ErrorCode::InvalidMessage)?;
+        let lane = state.owners.agent(id)?;
+        if let Some(record) = state.registry.get(id).map_err(|_| ErrorCode::AgentIo)? {
+            state.owners.bind(&lane, &record)?;
+        }
+        if let Some(workspace) = params["owner"]["workspaceId"].as_str() {
+            state
+                .owners
+                .place(&lane, format!("workspace:{workspace}"))?;
+        }
+        Some(lane)
     } else if method == "agent.create.request" {
         if let Some(id) = params["agentId"].as_str() {
             Some(state.owners.agent(id)?)
@@ -245,7 +259,9 @@ fn plan(
         )
     } else if matches!(method, "agent.resume.request" | "agent.import.request") {
         native_lane(&state, method, params)?
-    } else if is_read(method) {
+    } else if is_read(method)
+        && !(method == "provider.usage.list.request" && params.get("agentId").is_some())
+    {
         None
     } else {
         let nested = if method == "internal.timeline.append" {
@@ -255,7 +271,10 @@ fn plan(
         };
         if let Some(identifier) = nested["agentId"].as_str() {
             let id = state.resolve(identifier)?;
-            if method.starts_with("agent.timeline.") && state.manager.history_loaded(&id) {
+            if method.starts_with("agent.timeline.")
+                && (state.manager.history_loaded(&id)
+                    || state.can_read_cached_timeline(method, params)?)
+            {
                 None
             } else {
                 let lane = state.owners.agent(&id)?;
@@ -328,6 +347,9 @@ fn native_lane(
         return Err(ErrorCode::InvalidMessage);
     }
     if let Some(record) = record {
+        if record.internal {
+            return Err(ErrorCode::AgentNotFound);
+        }
         let lane = state.owners.agent(&record.id)?;
         state.owners.bind(&lane, record)?;
         Ok(Some(lane))
@@ -355,7 +377,7 @@ fn canonicalize(state: &ExecutionState, method: &str, params: &mut Value) -> Res
     }
     if matches!(
         method,
-        "agent.create.request" | "internal.workspace.agent.create"
+        "agent.create.request" | "internal.workspace.agent.create" | "internal.bot"
     ) {
         return Ok(());
     }

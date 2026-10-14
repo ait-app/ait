@@ -8,12 +8,13 @@ use std::{
 };
 
 use anyhow::Context;
-use file::storage::schedule::FileStore;
-use filesystem::service::worktrees::{CreateAction, CreateWorktree, Worktrees};
-use metadata::service::directory::Directory;
-use model::schedule::{RunStatus, Schedule, Target};
+use domain::schedule::{RunStatus, Schedule, Target};
+use domain::workspace::lifecycle::WorkspaceCreation;
+use domain::workspace::records::PersistedWorkspaceRecord;
+use metadata::directory::service::directory::Directory;
+use metadata::worktrees::service::worktrees::{CreateAction, CreateWorktree, Worktrees};
 use model::storage::schedule::Store;
-use model::workspace::lifecycle::WorkspaceCreation;
+use persistence::storage::schedule::FileStore;
 use provider::service::agent_execution::AgentExecution;
 use schedule::ports::{Outcome, Progress, Runner};
 use schedule::service::Schedules;
@@ -25,6 +26,11 @@ struct AgentRunner {
     execution: AgentExecution,
     directory: Directory,
     worktrees: Arc<Mutex<Worktrees>>,
+}
+struct Occurrence<'a> {
+    run_id: &'a str,
+    progress: &'a Progress,
+    cancel: &'a CancellationToken,
 }
 
 pub(super) fn compose(
@@ -48,7 +54,9 @@ pub(super) fn compose(
                         // No live provider process exists during composition; archive through its owner.
                         futures_recover(&execution, id)?;
                     }
-                    if let Some(id) = &run.workspace_id {
+                    if schedule.workspace_id.is_none()
+                        && let Some(id) = &run.workspace_id
+                    {
                         directory.archive_workspace(id, &chrono::Utc::now().to_rfc3339())?;
                     }
                 }
@@ -78,6 +86,44 @@ fn futures_recover(execution: &AgentExecution, id: &str) -> anyhow::Result<()> {
     })
 }
 impl Runner for AgentRunner {
+    fn resolve(
+        &self,
+        workspace_id: String,
+        mut target: Target,
+    ) -> Pin<Box<dyn Future<Output = Result<Target, domain::storage::schedule::Error>> + Send + '_>>
+    {
+        Box::pin(async move {
+            use domain::storage::schedule::Error;
+            let workspace = self
+                .workspace(&workspace_id)
+                .await
+                .map_err(|_| Error::Invalid)?;
+            match &mut target {
+                Target::Agent { agent_id } => {
+                    let value = self
+                        .execution
+                        .execute("agent.get.request", json!({"agentId":agent_id}))
+                        .await
+                        .map_err(|_| Error::Invalid)?;
+                    if value["agent"].is_null()
+                        || !value["agent"]["archivedAt"].is_null()
+                        || value["agent"]["workspaceId"].as_str() != Some(&workspace_id)
+                    {
+                        return Err(Error::Invalid);
+                    }
+                }
+                Target::NewAgent { config } => {
+                    if config["isolation"] == "worktree" {
+                        return Err(Error::Invalid);
+                    }
+                    let object = config.as_object_mut().ok_or(Error::Invalid)?;
+                    object.insert("cwd".into(), json!(workspace.cwd));
+                    object.remove("isolation");
+                }
+            }
+            Ok(target)
+        })
+    }
     fn run(
         &self,
         schedule: Schedule,
@@ -87,9 +133,12 @@ impl Runner for AgentRunner {
     ) -> Pin<Box<dyn Future<Output = Outcome> + Send + '_>> {
         Box::pin(async move {
             let mut outcome = Outcome::default();
-            let result = self
-                .perform(&schedule, &run_id, &progress, &cancel, &mut outcome)
-                .await;
+            let occurrence = Occurrence {
+                run_id: &run_id,
+                progress: &progress,
+                cancel: &cancel,
+            };
+            let result = self.perform(&schedule, &occurrence, &mut outcome).await;
             if let Err(error) = result {
                 outcome.error = Some(error.to_owned());
             }
@@ -102,7 +151,9 @@ impl Runner for AgentRunner {
                         .execute("agent.archive.request", json!({"agentId":id}))
                         .await;
                 }
-                if let Some(id) = outcome.workspace_id.clone() {
+                if schedule.workspace_id.is_none()
+                    && let Some(id) = outcome.workspace_id.clone()
+                {
                     let directory = self.directory.clone();
                     let archived = tokio::task::spawn_blocking(move || {
                         directory.archive_workspace(&id, &chrono::Utc::now().to_rfc3339())
@@ -120,73 +171,101 @@ impl Runner for AgentRunner {
     }
 }
 impl AgentRunner {
+    async fn workspace(&self, id: &str) -> Result<PersistedWorkspaceRecord, &'static str> {
+        let directory = self.directory.clone();
+        let id = id.to_owned();
+        tokio::task::spawn_blocking(move || {
+            let workspace = directory
+                .list_workspaces()
+                .map_err(|_| "Cannot load scheduled workspace")?
+                .into_iter()
+                .find(|workspace| workspace.workspace_id == id && workspace.archived_at.is_none())
+                .ok_or("Scheduled workspace is missing or archived")?;
+            if !Path::new(&workspace.cwd).is_dir() {
+                return Err("Scheduled workspace directory no longer exists");
+            }
+            Ok(workspace)
+        })
+        .await
+        .map_err(|_| "Cannot load scheduled workspace")?
+    }
     async fn create_agent(
         &self,
         schedule: &Schedule,
         config: &serde_json::Value,
-        run_id: &str,
-        progress: &Progress,
-        cancel: &CancellationToken,
+        occurrence: &Occurrence<'_>,
         outcome: &mut Outcome,
     ) -> Result<(), &'static str> {
-        let cwd = config["cwd"]
-            .as_str()
-            .ok_or("Invalid scheduled directory")?
-            .to_owned();
-        if !Path::new(&cwd).is_dir() {
-            outcome.target_gone = true;
-            return Err("Scheduled directory no longer exists");
-        }
-        let worktree = config["isolation"] == "worktree";
-        let directory = self.directory.clone();
-        let worktrees = self.worktrees.clone();
-        let prompt = schedule.prompt.clone();
-        let workspace = tokio::task::spawn_blocking(move || {
-            let now = chrono::Utc::now().to_rfc3339();
-            if worktree {
-                worktrees
-                    .lock()
-                    .map_err(|_| "Workspace lock failed")?
-                    .create(
-                        &CreateWorktree {
-                            workspace_id: None,
-                            title: None,
-                            branch_name: None,
-                            base_branch: None,
-                            cwd,
-                            project_id: None,
-                            worktree_slug: None,
-                            ref_name: None,
-                            action: CreateAction::BranchOff,
-                            checkout_source: None,
-                            first_agent_prompt: Some(prompt),
-                            expects_initial_agent: true,
-                        },
-                        &now,
-                    )
-                    .map(|result| result.workspace)
-                    .map_err(|_| "Scheduled worktree creation failed")
-            } else {
-                directory
-                    .create_workspace(WorkspaceCreation {
-                        path: &cwd,
-                        title: Some(prompt),
-                        project_id: None,
-                        workspace_id: None,
-                        expects_initial_agent: true,
-                        timestamp: &now,
-                    })
-                    .map_err(|_| "Scheduled workspace creation failed")
+        let workspace = if let Some(id) = &schedule.workspace_id {
+            match self.workspace(id).await {
+                Ok(workspace) => workspace,
+                Err(error) => {
+                    outcome.target_gone = true;
+                    return Err(error);
+                }
             }
-        })
-        .await
-        .map_err(|_| "Scheduled workspace creation failed")??;
+        } else {
+            // Version-one tasks retain their original dedicated-Workspace execution until explicitly bound.
+            let cwd = config["cwd"]
+                .as_str()
+                .ok_or("Invalid scheduled directory")?
+                .to_owned();
+            if !Path::new(&cwd).is_dir() {
+                outcome.target_gone = true;
+                return Err("Scheduled directory no longer exists");
+            }
+            let worktree = config["isolation"] == "worktree";
+            let directory = self.directory.clone();
+            let worktrees = self.worktrees.clone();
+            let prompt = schedule.prompt.clone();
+            tokio::task::spawn_blocking(move || {
+                let now = chrono::Utc::now().to_rfc3339();
+                if worktree {
+                    worktrees
+                        .lock()
+                        .map_err(|_| "Workspace lock failed")?
+                        .create(
+                            &CreateWorktree {
+                                workspace_id: None,
+                                title: None,
+                                branch_name: None,
+                                base_branch: None,
+                                cwd,
+                                project_id: None,
+                                worktree_slug: None,
+                                ref_name: None,
+                                action: CreateAction::BranchOff,
+                                checkout_source: None,
+                                first_agent_prompt: Some(prompt),
+                                expects_initial_agent: true,
+                            },
+                            &now,
+                        )
+                        .map(|result| result.workspace)
+                        .map_err(|_| "Scheduled worktree creation failed")
+                } else {
+                    directory
+                        .create_workspace(WorkspaceCreation {
+                            path: &cwd,
+                            title: Some(prompt),
+                            project_id: None,
+                            workspace_id: None,
+                            expects_initial_agent: true,
+                            timestamp: &now,
+                        })
+                        .map_err(|_| "Scheduled workspace creation failed")
+                }
+            })
+            .await
+            .map_err(|_| "Scheduled workspace creation failed")??
+        };
         outcome.workspace_id = Some(workspace.workspace_id.clone());
-        progress
+        occurrence
+            .progress
             .record(None, outcome.workspace_id.clone())
             .await
             .map_err(|_| "Cannot persist scheduled workspace")?;
-        if cancel.is_cancelled() {
+        if occurrence.cancel.is_cancelled() {
             return Err("Scheduled run canceled");
         }
         let mut config = config.clone();
@@ -196,12 +275,13 @@ impl AgentRunner {
         object.remove("archiveOnFinish");
         object.remove("isolation");
         config["cwd"] = json!(workspace.cwd);
-        let created=self.execution.execute("agent.create.request",json!({"config":config,"workspaceId":workspace.workspace_id,"idempotencyKey":run_id,"labels":{"paseo.schedule-id":schedule.id,"paseo.schedule-run":run_id}})).await.map_err(|_|"Scheduled agent creation failed")?;
+        let created=self.execution.execute("agent.create.request",json!({"config":config,"workspaceId":workspace.workspace_id,"idempotencyKey":occurrence.run_id,"labels":{"paseo.schedule-id":schedule.id,"paseo.schedule-run":occurrence.run_id}})).await.map_err(|_|"Scheduled agent creation failed")?;
         outcome.agent_id = created["agentId"].as_str().map(str::to_owned);
         if outcome.agent_id.is_none() {
             return Err("Scheduled agent creation failed");
         }
-        progress
+        occurrence
+            .progress
             .record(outcome.agent_id.clone(), outcome.workspace_id.clone())
             .await
             .map_err(|_| "Cannot persist scheduled agent")?;
@@ -210,16 +290,28 @@ impl AgentRunner {
     async fn perform(
         &self,
         schedule: &Schedule,
-        run_id: &str,
-        progress: &Progress,
-        cancel: &CancellationToken,
+        occurrence: &Occurrence<'_>,
         outcome: &mut Outcome,
     ) -> Result<(), &'static str> {
+        let Occurrence {
+            run_id,
+            progress,
+            cancel,
+        } = occurrence;
         if cancel.is_cancelled() {
             return Err("Scheduled run canceled");
         }
         let text = match &schedule.target {
             Target::Agent { agent_id } => {
+                if let Some(id) = &schedule.workspace_id {
+                    match self.workspace(id).await {
+                        Ok(_) => outcome.workspace_id = Some(id.clone()),
+                        Err(error) => {
+                            outcome.target_gone = true;
+                            return Err(error);
+                        }
+                    }
+                }
                 let value = self
                     .execution
                     .execute("agent.get.request", json!({"agentId":agent_id}))
@@ -236,9 +328,17 @@ impl AgentRunner {
                     outcome.target_gone = true;
                     return Err("Scheduled agent is missing or archived");
                 }
+                if schedule
+                    .workspace_id
+                    .as_deref()
+                    .is_some_and(|id| value["agent"]["workspaceId"].as_str() != Some(id))
+                {
+                    outcome.target_gone = true;
+                    return Err("Scheduled agent no longer belongs to this workspace");
+                }
                 outcome.agent_id = Some(agent_id.clone());
                 progress
-                    .record(outcome.agent_id.clone(), None)
+                    .record(outcome.agent_id.clone(), outcome.workspace_id.clone())
                     .await
                     .map_err(|_| "Cannot persist scheduled agent")?;
                 let heading = schedule.name.as_ref().map_or_else(
@@ -251,12 +351,12 @@ impl AgentRunner {
                     },
                 );
                 format!(
-                    "<paseo-system>\n{heading}\n{}\n</paseo-system>",
+                    "<ait-system>\n{heading}\n{}\n</ait-system>",
                     schedule.prompt
                 )
             }
             Target::NewAgent { config } => {
-                self.create_agent(schedule, config, run_id, progress, cancel, outcome)
+                self.create_agent(schedule, config, occurrence, outcome)
                     .await?;
                 schedule.prompt.clone()
             }
@@ -264,7 +364,18 @@ impl AgentRunner {
         let id = outcome
             .agent_id
             .as_deref()
-            .ok_or("Scheduled agent missing")?;
+            .ok_or("Scheduled agent missing")?
+            .to_owned();
+        self.send_and_wait(&id, text, cancel, outcome).await
+    }
+
+    async fn send_and_wait(
+        &self,
+        id: &str,
+        text: String,
+        cancel: &CancellationToken,
+        outcome: &mut Outcome,
+    ) -> Result<(), &'static str> {
         if cancel.is_cancelled() {
             return Err("Scheduled run canceled");
         }

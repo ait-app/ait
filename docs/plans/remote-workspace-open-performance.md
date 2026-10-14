@@ -1,6 +1,6 @@
 # 远程 Workspace 打开性能优化方案
 
-状态：会话与 Provider 并发隔离已实施；目标目录加载、历史分页与远程耗时验收待后续推进。日期：2026-10-06。
+状态：会话与 Provider 并发隔离、目标 Workspace 读取和持久化展示分页已实施；远程耗时验收、原生历史后台校验及完整目录分页仍待推进。更新：2026-10-11。
 分析基线：`5df233ac2f87cecda5f1a1ee99c003a15522dc49`。
 
 ## 结论与范围
@@ -15,6 +15,8 @@
 - 新建 worktree、检出 PR、安装依赖与 setup 脚本包含独立的业务等待，不计入已有 Workspace 首屏基准。
 
 本文件的调用链分析保留改造前基线；当前并发执行路径见 [ADR-091](../decisions/providers/adr-091-independent-session-execution.md) 与[验证报告](../reports/providers/paseo-concurrency-validation.md)。
+目标读取见 [ADR-126](../decisions/workspace/adr-126-workspace-target-read.md)，当前 Timeline 页级读取见
+[ADR-125](../decisions/providers/adr-125-durable-timeline-projection-pages.md)。下面的旧源码流程用于解释改造背景。
 
 ## 改造前打开路径
 
@@ -65,7 +67,7 @@ Codex 的 [history 适配](../../crates/provider/src/local/codex/discovery.rs) �
 
 1. [timeline RPC](../../crates/provider/src/rpc/agent_execution.rs) 调用 `timeline.read(agent)`。
 2. [存储读取](../../crates/provider/src/storage/timeline/progress.rs) 查询该 Agent 的 entries 和 progress，按 seq 排序，没有页级 `LIMIT`，解析全部 JSON。
-3. [投影分页](../../crates/provider/src/rpc/timeline/projection/page.rs) 先 `project(rows)`，合并工具生命周期和相邻文本，再截取 tail/before/after。
+3. 旧投影分页先 `project(rows)`，合并工具生命周期和相邻文本，再截取 tail/before/after；当前纯分页语义位于 [timeline_projection/page.rs](../../crates/provider/src/timeline_projection/page.rs)。
 
 所以 `limit: 40` 限制返回数量，没有限制服务端读取和投影成本。长会话冷开、再次取页、断线补齐都会重复支付这部分成本。查询还会持有共享时间线数据库锁；实际对流式写入的影响需要测量。
 
@@ -75,7 +77,7 @@ Codex 的 [history 适配](../../crates/provider/src/local/codex/discovery.rs) �
 
 [DirectorySync](../../apps/mobile/src/runtime/directory-sync/index.ts) 有目标 ID 的本地缓存读取，但没有对应的目标 Workspace 远程读取。缓存没有目标时，Project 与 Workspace 是先后请求，Workspace 快照事务完成后才提交。
 
-客户端会传 `page.limit: 200`，但当前 [Workspace listing](../../crates/metadata/src/rpc/directory/listing.rs) 与 [Agent listing](../../crates/provider/src/rpc/agent_runtime/listing.rs) 在 `sync` 分支返回完整快照或全部变更，`hasMore: false`，不执行普通分页。因此当前支持目录同步的 Rust daemon 首次连接仍会传整份目录；不能把客户端常量视为响应规模上限。
+客户端会传 `page.limit: 200`，但当前 [Workspace listing](../../crates/metadata/src/directory/rpc/directory/listing.rs) 与 [Agent listing](../../crates/provider/src/rpc/agent_runtime/listing.rs) 在 `sync` 分支返回完整快照或全部变更，`hasMore: false`，不执行普通分页。因此当前支持目录同步的 Rust daemon 首次连接仍会传整份目录；不能把客户端常量视为响应规模上限。
 
 而且 [DirectorySync 服务端](../../crates/model/src/directory_sync.rs) 的同步是“调用方构造完整投影 → replace_all 比较 → 返回变更”，增量传输并不等于增量计算。每次重新构造 Workspace 快照还会读取所有活动记录、聚合活动状态、获取各目录的 runtime 缓存。
 
@@ -98,8 +100,8 @@ Codex 的 [history 适配](../../crates/provider/src/local/codex/discovery.rs) �
 
 ### 6. 已有优化与局部等待
 
-- [Workspace runtime](../../crates/filesystem/src/local/workspace_runtime.rs) 已将 Git/Forge 命令放到后台缓存，Git 与 Forge 分别限流；不要把目录列表描述为同步等待所有 GitHub 请求。目录 canonicalize 和完整投影仍有本地成本。
-- [文件 registry](../../crates/file/src/registry.rs) 首次加载后保留内存记录，不能假设每次 list 都重新读 JSON 文件。
+- [Workspace runtime](../../crates/filesystem/src/workspace_runtime.rs) 已将 Git/Forge 命令放到后台缓存，Git 与 Forge 分别限流；不要把目录列表描述为同步等待所有 GitHub 请求。目录 canonicalize 和完整投影仍有本地成本。
+- [文件 registry](../../crates/persistence/src/registry.rs) 首次加载后保留内存记录，不能假设每次 list 都重新读 JSON 文件。
 - [客户端缓存](../../apps/mobile/src/runtime/replica-cache/index.ts) 已保存目录和最近最多 50 个时间线展示项；[ViewedTimelineSync](../../apps/mobile/src/timeline/viewed-timeline-sync.ts) 已优先补齐可见 Agent，并在普通恢复溢出时退回最新 tail。优化应扩展这些机制。
 - [Workspace 保留](../../apps/mobile/src/screens/workspace/workspace-deck-retention.ts) 在桌面/Web 最多 10 个、闲置 TTL 10 分钟，原生端最多 1 个。移动端切换会更频繁重新挂载，但数据缓存与 UI 挂载需要分开测。
 - [标题栏](../../apps/mobile/src/screens/workspace/use-workspace-checkout-status.ts) 会额外读取 checkout status；[header 派生](../../apps/mobile/src/screens/workspace/workspace-screen.tsx) 在其 pending 时显示 loading。它是局部等待，不能与整页、会话等待合并归因。
@@ -240,8 +242,8 @@ Codex 的 [history 适配](../../crates/provider/src/local/codex/discovery.rs) �
 - [ ] 采集远程打开瀑布与核心基线。
 - [ ] 推迟模型目录预取并独立呈现标题/Git 状态。
 - [ ] 隔离 Provider 发现与只读查询，已有历史后台校验。
-- [ ] 提供目标 ID Bootstrap 与正确的缓存/事件衔接。
-- [ ] 完成时间线投影缓存和真实页级读取。
+- [x] 提供目标 Workspace ID 读取、有界首屏 Agent 摘要与缓存/事件衔接。
+- [x] 完成持久化时间线投影索引和真实页级读取。
 - [ ] 按数据实施目录增量投影与连接优化。
 
-本次仅新增方案和索引，没有修改运行逻辑，也没有进行性能实测。
+原始方案没有进行性能实测；后续实现的定向回归不能替代上述实网测量矩阵。

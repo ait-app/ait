@@ -5,6 +5,28 @@ mod environment;
 mod parity;
 
 #[tokio::test]
+async fn native_authentication_failures_expose_only_classified_diagnostics() {
+    let (_root, client, spec) = fixture();
+    let mut session = client.create_session(&spec).await.unwrap();
+    session
+        .start_turn("auth-error", &spec.config)
+        .await
+        .unwrap();
+    loop {
+        if next(session.as_mut()).await.unwrap() == AgentTurnEvent::Failed {
+            break;
+        }
+    }
+    let diagnostic = session.failure_diagnostic().unwrap();
+    assert_eq!(
+        diagnostic.category,
+        crate::ports::diagnostics::Category::Authentication
+    );
+    assert!(!format!("{diagnostic:?}").contains("secret"));
+    session.close().await.unwrap();
+}
+
+#[tokio::test]
 async fn withdrawn_native_permissions_disappear_once_and_reject_late_approval() {
     let (_root, client, spec) = fixture();
     let mut session = client.create_session(&spec).await.unwrap();

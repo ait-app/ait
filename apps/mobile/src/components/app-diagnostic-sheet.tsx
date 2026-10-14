@@ -1,7 +1,7 @@
 import * as Clipboard from "expo-clipboard";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Platform, Pressable, Text, View, type PressableStateCallbackType } from "react-native";
-import { Copy, RotateCw } from "lucide-react-native";
+import { Copy, Download, RotateCw } from "lucide-react-native";
 import { StyleSheet, withUnistyles } from "react-native-unistyles";
 import { useTranslation } from "react-i18next";
 
@@ -16,6 +16,7 @@ import {
   formatServerInfoSection,
   redactAppDiagnosticReport,
 } from "@/diagnostics/app-diagnostic-report";
+import { exportDiagnosticReport } from "@/diagnostics/export-diagnostic-report";
 import { collectDesktopDiagnosticSections } from "@/diagnostics/desktop-diagnostic-report";
 import { getHostRuntimeStore, useHosts, type HostRuntimeSnapshot } from "@/runtime/host-runtime";
 import { ICON_SIZE, type Theme } from "@/styles/theme";
@@ -42,6 +43,7 @@ interface DiagnosticCollectionResult {
 }
 
 const SNAP_POINTS = ["55%", "88%"];
+const ThemedDownload = withUnistyles(Download);
 const ThemedCopy = withUnistyles(Copy);
 const ThemedRotateCw = withUnistyles(RotateCw);
 const ThemedLoadingSpinner = withUnistyles(LoadingSpinner);
@@ -60,6 +62,7 @@ export function AppDiagnosticSheet({
   const hosts = useHosts();
   const [diagnostic, setDiagnostic] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
+  const [exporting, setExporting] = useState(false);
   const [progress, setProgress] = useState<ProgressRow[]>([]);
   const runIdRef = useRef(0);
 
@@ -150,6 +153,18 @@ export function AppDiagnosticSheet({
       .catch(() => toast.error(t("settings.diagnostics.app.copyFailed")));
   }, [diagnostic, t, toast]);
 
+  const handleExportPress = useCallback(async () => {
+    if (!diagnostic || exporting) return;
+    setExporting(true);
+    try {
+      await exportDiagnosticReport(diagnostic);
+    } catch {
+      toast.error(t("settings.diagnostics.app.exportFailed"));
+    } finally {
+      setExporting(false);
+    }
+  }, [diagnostic, exporting, t, toast]);
+
   const iconButtonStyle = useCallback(
     ({ hovered, pressed }: PressableStateCallbackType & { hovered?: boolean }) => [
       styles.iconButton,
@@ -172,6 +187,16 @@ export function AppDiagnosticSheet({
       title: t("settings.diagnostics.app.title"),
       actions: (
         <View style={styles.headerActions}>
+          <Pressable
+            onPress={() => void handleExportPress()}
+            disabled={!diagnostic || exporting}
+            hitSlop={8}
+            style={disabledIconButtonStyle}
+            accessibilityRole="button"
+            accessibilityLabel={t("settings.diagnostics.app.exportAccessibility")}
+          >
+            <ThemedDownload size={ICON_SIZE.sm} uniProps={foregroundMutedColorMapping} />
+          </Pressable>
           <Pressable
             onPress={handleCopyPress}
             disabled={!diagnostic}
@@ -207,6 +232,8 @@ export function AppDiagnosticSheet({
       diagnostic,
       disabledIconButtonStyle,
       handleCopyPress,
+      handleExportPress,
+      exporting,
       handleRefreshPress,
       iconButtonStyle,
       loading,
@@ -280,12 +307,20 @@ async function collectHostDiagnosticSections(
     const serverInfo = client.getLastServerInfoMessage();
     sections.push(formatServerInfoSection(serverInfo));
 
-    const rttMs = await client.measureLatency({ timeoutMs: 5000 });
-    sections.push(
-      formatDiagnosticSection(`Host latency: ${host.label}`, [
-        { label: "Active RTT", value: `${Math.round(rttMs)}ms` },
-      ]),
-    );
+    try {
+      const rttMs = await client.measureLatency({ timeoutMs: 5000 });
+      sections.push(
+        formatDiagnosticSection(`Host latency: ${host.label}`, [
+          { label: "Active RTT", value: `${Math.round(rttMs)}ms` },
+        ]),
+      );
+    } catch (error) {
+      sections.push(
+        formatDiagnosticSection(`Host latency: ${host.label}`, [
+          { label: "Error", value: toMessage(error) },
+        ]),
+      );
+    }
 
     if (serverInfo?.features?.daemonDiagnostics === true) {
       const result = await client.collectDiagnostics();

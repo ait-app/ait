@@ -11,20 +11,28 @@ mod requests;
 #[derive(Debug)]
 pub struct State {
     /// Installed persistent push token leases.
-    pub push_tokens: Option<Arc<Mutex<crate::service::push::PushTokens>>>,
+    pub push_tokens: Option<Arc<Mutex<crate::push::service::PushTokens>>>,
     /// Shared Tokio admission, cancellation and task tracking.
     pub runtime: Arc<Runtime>,
     /// Installed daemon service.
-    pub daemon: Option<Arc<Mutex<crate::service::daemon::Daemon>>>,
+    pub daemon: Option<Arc<Mutex<crate::daemon::service::Daemon>>>,
     /// Installed directory service.
-    pub directory: Option<Arc<Mutex<crate::service::directory::Directory>>>,
+    pub directory: Option<Arc<Mutex<crate::directory::service::directory::Directory>>>,
     /// Installed workspace labels service.
-    pub workspace_labels: Option<Arc<Mutex<crate::service::workspace_labels::WorkspaceLabels>>>,
+    pub workspace_labels: Option<Arc<Mutex<crate::labels::service::WorkspaceLabels>>>,
     /// Installed workspace automation service.
-    pub workspace_automation:
-        Option<Arc<Mutex<crate::service::workspace_automation::WorkspaceAutomation>>>,
+    pub workspace_automation: Option<Arc<Mutex<crate::automation::service::WorkspaceAutomation>>>,
     /// Installed workspace state service.
-    pub workspace_state: Option<Arc<Mutex<crate::service::workspace_state::WorkspaceState>>>,
+    pub workspace_state:
+        Option<Arc<Mutex<crate::directory::service::workspace_state::WorkspaceState>>>,
+    /// Installed managed worktree service, shared with directory creation.
+    pub worktrees: Option<Arc<Mutex<crate::worktrees::service::worktrees::Worktrees>>>,
+    /// Installed archived Workspace recovery service.
+    pub workspace_recovery:
+        Option<Arc<Mutex<crate::worktrees::service::workspace_recovery::WorkspaceRecovery>>>,
+    /// Installed GitHub repository discovery and cloning service.
+    pub github_projects:
+        Option<Arc<Mutex<crate::directory::service::github_projects::GithubProjects>>>,
     /// Durable progress of Workspace and native Agent creation.
     pub creations: model::creation::Creations,
     /// Shared ephemeral session event hub.
@@ -45,7 +53,7 @@ impl std::ops::Deref for State {
     }
 }
 
-use model::subscription::SubscriptionReleaseRequest;
+use model::server::SubscriptionReleaseRequest;
 use model::{Lifecycle, LifecycleIntent, ServerMessage, valid_id};
 use serde_json::{Value, json};
 use uuid::Uuid;
@@ -74,7 +82,7 @@ pub enum Completion {
 
 impl State {
     /// Request a process lifecycle transition under the common admission lock.
-    pub fn request_lifecycle(&self, intent: LifecycleIntent) {
+    pub(crate) fn request_lifecycle(&self, intent: LifecycleIntent) {
         let admission = self
             .admission
             .lock()
@@ -97,7 +105,7 @@ impl State {
             let mut info = self.info();
             info.lifecycle = Lifecycle::Draining;
             self.session_events.publish(
-                model::session::protocol::SessionEventKind::ServerInfo,
+                domain::session::protocol::SessionEventKind::ServerInfo,
                 &json!({"status":"server_info","info":info}),
             );
         }
@@ -194,6 +202,27 @@ pub async fn dispatch(
         }
         Err(error) => return Err(error),
     }
+    match requests::worktrees(context, state).await {
+        Ok(()) => return Ok(None),
+        Err(DispatchError::NotImplemented) => {
+            Context::assert_unhandled(context, "metadata::worktrees");
+        }
+        Err(error) => return Err(error),
+    }
+    match requests::workspace_recovery(context, state).await {
+        Ok(()) => return Ok(None),
+        Err(DispatchError::NotImplemented) => {
+            Context::assert_unhandled(context, "metadata::workspace_recovery");
+        }
+        Err(error) => return Err(error),
+    }
+    match requests::github_projects(context, state).await {
+        Ok(()) => return Ok(None),
+        Err(DispatchError::NotImplemented) => {
+            Context::assert_unhandled(context, "metadata::github_projects");
+        }
+        Err(error) => return Err(error),
+    }
     Err(DispatchError::NotImplemented)
 }
 
@@ -228,7 +257,7 @@ async fn labels(
             .map_err(Into::into);
     }
     let params = std::mem::take(&mut context.request.params);
-    let reply = crate::connection::workspace_labels::dispatch(
+    let reply = crate::labels::connection::dispatch(
         &context.request.method,
         params,
         state,
@@ -240,10 +269,8 @@ async fn labels(
             context.respond(Ok(reply.value))?;
             if let Some(pending) = reply.subscription {
                 let (id, subscription) = pending.activate().map_err(|error| match error {
-                    crate::rpc::workspace_labels::DeliveryError::Encode(error) => {
-                        QueueError::Encode(error)
-                    }
-                    crate::rpc::workspace_labels::DeliveryError::Closed => QueueError::Full,
+                    crate::labels::rpc::DeliveryError::Encode(error) => QueueError::Encode(error),
+                    crate::labels::rpc::DeliveryError::Closed => QueueError::Full,
                 })?;
                 connection.labels.insert(id, subscription);
             }
@@ -291,7 +318,7 @@ fn base(
             "server.info" => {
                 serde_json::to_value(state.info()).map_err(|_| ErrorCode::InvalidMessage)?
             }
-            "connection.ping" => crate::rpc::server::ping(context.request.params.clone())?,
+            "connection.ping" => crate::server::rpc::server::ping(context.request.params.clone())?,
             "server.status.subscribe" => {
                 if context.available_subscriptions == 0 {
                     return Err(ErrorCode::ResourceExhausted);
@@ -334,13 +361,13 @@ pub async fn daemon_snapshot(
     state: &State,
     method: String,
     params: Value,
-    providers: Vec<crate::protocol::daemon::ProviderAvailability>,
+    providers: Vec<crate::daemon::protocol::ProviderAvailability>,
 ) -> Result<Value, ErrorCode> {
     let capabilities = state.info.implemented_capabilities.clone();
     let lifecycle = state.info().lifecycle;
     state
         .run(state.daemon.clone(), ErrorCode::DaemonIo, move |daemon| {
-            crate::rpc::daemon::snapshot(
+            crate::daemon::rpc::snapshot(
                 daemon,
                 &method,
                 params,

@@ -8,10 +8,11 @@ use domain::agent_runtime::{
 use model::ErrorCode;
 use serde_json::{Value, json};
 
-use super::{AgentManager, now_timestamp};
+use super::AgentManager;
 use crate::ports::agent_session::{AgentClient, AgentSessionError};
 use crate::ports::native_history::{ListOptions, SessionDescriptor, SessionHistory};
 use crate::protocol::native_sessions::RecentRequest;
+use crate::support::time::now_timestamp;
 
 impl AgentManager {
     pub(crate) async fn recent_sessions(&self, request: RecentRequest) -> Result<Value, ErrorCode> {
@@ -114,7 +115,7 @@ impl AgentManager {
             .list()
             .map_err(|_| ErrorCode::AgentIo)?
             .into_iter()
-            .filter(|record| record.archived_at.is_none())
+            .filter(|record| record.internal || record.archived_at.is_none())
             .filter_map(|record| record.persistence)
             .flat_map(|handle| {
                 let mut keys = vec![(handle.provider.clone(), handle.session_id)];

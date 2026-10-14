@@ -157,11 +157,11 @@ async fn dropped_connections_return_their_admission_permit() {
     let socket = event_socket(&fixture).await;
     assert_eq!(
         fixture.api.shared.connections.available_permits(),
-        protocol::MAX_CONNECTIONS - 1
+        model::server::MAX_CONNECTIONS - 1
     );
     drop(socket);
     tokio::time::timeout(Duration::from_secs(3), async {
-        while fixture.api.shared.connections.available_permits() != protocol::MAX_CONNECTIONS {
+        while fixture.api.shared.connections.available_permits() != model::server::MAX_CONNECTIONS {
             tokio::task::yield_now().await;
         }
     })

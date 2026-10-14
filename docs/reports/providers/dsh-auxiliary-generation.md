@@ -15,13 +15,13 @@ cargo llvm-cov --workspace --html
 
 本表由此次 HTML index 提取，作为可审查摘要；完整 HTML 仅在本地生成，未上传。
 
-| 范围 | 覆盖行 / 总行 | 行覆盖率 |
-|---|---:|---:|
-| Workspace | 54860 / 58161 | 94.32% |
-| Provider crate | 26372 / 28154 | 93.67% |
-| DSH adapter | 158 / 198 | 79.80% |
-| DSH metadata | 57 / 103 | 55.34% |
-| Metadata process | 48 / 48 | 100% |
+| 范围             | 覆盖行 / 总行 | 行覆盖率 |
+| ---------------- | ------------: | -------: |
+| Workspace        | 54860 / 58161 |   94.32% |
+| Provider crate   | 26372 / 28154 |   93.67% |
+| DSH adapter      |     158 / 198 |   79.80% |
+| DSH metadata     |      57 / 103 |   55.34% |
+| Metadata process |       48 / 48 |     100% |
 
 无同修订、同环境的可比基线。11 个安装 CLI 测试在覆盖率运行中 ignored，因此 metadata 的实际进程生成路径未计入该覆盖率；该路径另行通过真实安装 CLI 和本地模型服务验证。未验证 macOS/Windows；后续 CI 应提供固定 DSH 安装，纳入真实生成与取消测试。
 

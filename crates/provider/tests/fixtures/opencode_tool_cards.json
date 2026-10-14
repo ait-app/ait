@@ -1,0 +1,133 @@
+[
+  {
+    "name": "wrapped shell output",
+    "snapshot": {
+      "kind": "execute",
+      "rawInput": { "command": "pwd", "cwd": "/work" },
+      "rawOutput": { "metadata": { "exit": 0 }, "output": "/work\n" }
+    },
+    "detail": { "type": "shell", "command": "pwd", "cwd": "/work", "output": "/work\n" }
+  },
+  {
+    "name": "native shell metadata does not hide ACP text content",
+    "snapshot": {
+      "kind": "execute",
+      "rawInput": { "command": "pwd" },
+      "rawOutput": { "metadata": { "exit": 0 } },
+      "content": [{ "type": "content", "content": { "type": "text", "text": "/work\n" } }]
+    },
+    "detail": { "type": "shell", "command": "pwd", "output": "/work\n" }
+  },
+  {
+    "name": "ACP text content without raw output",
+    "snapshot": {
+      "kind": "read",
+      "rawInput": { "path": "file", "offset": 3 },
+      "content": [
+        { "type": "content", "content": { "type": "text", "text": "first" } },
+        { "type": "content", "content": { "type": "text", "text": "second" } }
+      ]
+    },
+    "detail": { "type": "read", "filePath": "file", "offset": 3, "content": "first\nsecond" }
+  },
+  {
+    "name": "wrapped fetch output",
+    "snapshot": {
+      "kind": "fetch",
+      "rawInput": { "url": "https://example.com" },
+      "rawOutput": { "output": "page", "metadata": {} }
+    },
+    "detail": { "type": "fetch", "url": "https://example.com", "result": "page" }
+  },
+  {
+    "name": "native search title is not a tool name enum",
+    "snapshot": {
+      "kind": "search",
+      "title": "Find matching files",
+      "rawInput": { "pattern": "needle" },
+      "rawOutput": { "output": "file:3:needle", "metadata": {} }
+    },
+    "detail": {
+      "type": "search",
+      "toolName": "search",
+      "query": "needle",
+      "content": "file:3:needle"
+    }
+  },
+  {
+    "name": "pending tools omit unavailable optional fields",
+    "snapshot": {
+      "kind": "read",
+      "rawInput": { "filePath": "file", "offset": null, "limit": "all" },
+      "rawOutput": null
+    },
+    "detail": { "type": "read", "filePath": "file" }
+  },
+  {
+    "name": "pending shell does not emit null output",
+    "snapshot": { "kind": "execute", "rawInput": { "command": "pwd", "cwd": null } },
+    "detail": { "type": "shell", "command": "pwd" }
+  },
+  {
+    "name": "search without a text query uses a generic card",
+    "snapshot": { "kind": "search", "rawInput": { "query": null }, "rawOutput": { "matches": 2 } },
+    "detail": { "type": "unknown", "input": { "query": null }, "output": { "matches": 2 } }
+  },
+  {
+    "name": "ACP display content takes precedence over native raw output",
+    "snapshot": {
+      "kind": "read",
+      "rawInput": { "filePath": "file" },
+      "rawOutput": { "output": "raw native wrapper", "metadata": {} },
+      "content": [{ "type": "content", "content": { "type": "text", "text": "display text" } }]
+    },
+    "detail": { "type": "read", "filePath": "file", "content": "display text" }
+  },
+  {
+    "name": "native write preserves file content",
+    "snapshot": { "kind": "edit", "rawInput": { "filePath": "new.md", "content": "# New file" } },
+    "detail": { "type": "write", "filePath": "new.md", "content": "# New file" }
+  },
+  {
+    "name": "ACP diff supplies the complete edit preview",
+    "snapshot": {
+      "kind": "edit",
+      "rawInput": {},
+      "content": [
+        { "type": "diff", "path": "/work/file", "oldText": "old file", "newText": "new file" }
+      ]
+    },
+    "detail": {
+      "type": "edit",
+      "filePath": "/work/file",
+      "oldString": "old file",
+      "newString": "new file"
+    }
+  },
+  {
+    "name": "generic wrapped output retains native metadata",
+    "snapshot": {
+      "kind": "other",
+      "rawInput": {},
+      "rawOutput": { "output": "result", "metadata": { "native": true } }
+    },
+    "detail": {
+      "type": "unknown",
+      "input": {},
+      "output": { "output": "result", "metadata": { "native": true } }
+    }
+  },
+  {
+    "name": "generic structured output stays structured",
+    "snapshot": {
+      "kind": "other",
+      "rawInput": { "key": "value" },
+      "rawOutput": { "output": { "result": true }, "metadata": {} }
+    },
+    "detail": {
+      "type": "unknown",
+      "input": { "key": "value" },
+      "output": { "output": { "result": true }, "metadata": {} }
+    }
+  }
+]

@@ -70,10 +70,12 @@ active workspace、恢复最早且 Project 仍 active 的 archived workspace，�
 
 ## 第二阶段能力
 
-第二阶段生产组装公开 9 个 daemon 方法：`daemon.get_status.request`、
-`daemon.get_pairing_offer.request`、`daemon.config.reload.request`、`daemon.update.request`、
+当前生产组装公开 8 个 daemon 方法：`daemon.get_status.request`、
+`daemon.config.reload.request`、`daemon.update.request`、
 `diagnostics.request`、`daemon.config.get.request`、`daemon.config.set.request`、
 `server.restart.request` 和 `server.shutdown.request`。
+
+配对 offer RPC 已按 [ADR-127](adr-127-remove-daemon-pairing-offer.md) 从方法清单、路由和 SDK 删除。
 
 配置使用 `<data-dir>/config.json`、同目录原子替换和内存发布顺序；patch 只采纳 Paseo mutable
 config 的可写字段，未知 passthrough 字段不成为隐式设置入口。reload 对外部修改做 live/restart

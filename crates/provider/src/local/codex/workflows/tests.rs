@@ -69,7 +69,7 @@ async fn plan_selection_uses_native_presets_and_can_return_to_default_workflow()
             .map(|feature| (feature["id"].as_str(), feature["icon"].as_str()))
             .collect::<Vec<_>>(),
         vec![
-            (Some("fast_mode"), Some("zap")),
+            (Some("service_tier"), Some("zap")),
             (Some("plan_mode"), Some("list-todo")),
         ]
     );

@@ -11,6 +11,7 @@ import { AssistantFileLinkResolverProvider } from "./provider";
 import type { DirectorySuggestionResult } from "./resolver";
 import { useFileLink } from "./use-file-link";
 import type { OpenFileDisposition } from "@/workspace/file-open";
+import { createAssistantMarkdownParser } from "@/utils/assistant-markdown-parser";
 
 vi.mock("@/utils/open-external-url", () => ({
   openExternalUrl: vi.fn(async () => {}),
@@ -109,6 +110,38 @@ function createWrapper(input: { client: TestClient; openedFiles: OpenedFile[]; t
 }
 
 describe("useFileLink", () => {
+  it("opens a Unicode Markdown link using the filesystem name rather than its encoded href", async () => {
+    const parser = createAssistantMarkdownParser();
+    const href = parser
+      .parse("[采购方案](<docs/采购 与云资源.md#L12>)", {})
+      .flatMap((token) => token.children ?? [])
+      .find((token) => token.type === "link_open")
+      ?.attrGet("href");
+    expect(href).toContain("%E9%87%87");
+    const getDirectorySuggestions = vi.fn(async () => resolvedSuggestions([]));
+    const openedFiles: OpenedFile[] = [];
+    const { result } = renderHook(() => useFileLink({ href: href! }), {
+      wrapper: createWrapper({ client: { getDirectorySuggestions }, openedFiles }),
+    });
+
+    await act(async () => {
+      await result.current.onPress();
+    });
+
+    expect(openedFiles).toEqual([
+      {
+        target: {
+          raw: href,
+          path: "/Users/test/project/docs/采购 与云资源.md",
+          lineStart: 12,
+          lineEnd: undefined,
+        },
+        disposition: "preferred",
+      },
+    ]);
+    expect(getDirectorySuggestions).not.toHaveBeenCalled();
+  });
+
   it("returns the same object across no-op parent rerenders", () => {
     const getDirectorySuggestions = vi.fn(async () => resolvedSuggestions([]));
     const queryClient = createQueryClient();

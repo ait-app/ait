@@ -1,15 +1,19 @@
 //! Native Provider adapters owned by the independent server.
 
-pub mod antigravity;
-pub mod claude;
-pub mod codex;
+mod acp_config;
+mod acp_permissions;
+mod acp_transport;
+pub(crate) mod antigravity;
+pub(crate) mod claude;
+pub(crate) mod codex;
 mod configuration;
-pub mod deepseek_harness;
+pub(crate) mod deepseek_harness;
+pub(crate) mod diagnostics;
 mod elicitation;
 mod images;
 mod metadata_process;
 mod notes;
-pub mod opencode;
+pub(crate) mod opencode;
 mod summary_model;
 mod tool_detail;
 mod usage;

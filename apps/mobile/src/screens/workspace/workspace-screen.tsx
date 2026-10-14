@@ -184,7 +184,7 @@ import { getOpenAgentTabLabel } from "@ait/protocol/agent-labels";
 import type { JsonValue } from "@ait/protocol/agent-types";
 import type { TerminalProfile } from "@ait/protocol/messages";
 import { useIsFocused } from "@react-navigation/native";
-import { useQueryClient } from "@tanstack/react-query";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import * as Clipboard from "expo-clipboard";
 import { useRouter, type Href } from "expo-router";
 import { ChevronDown } from "lucide-react-native";
@@ -312,6 +312,8 @@ function getFallbackTabOptionLabel(
     changes: string;
     files: string;
     pullRequest: string;
+    schedule: string;
+    bot: string;
   },
 ): string {
   if (tab.target.kind === "new_tab") {
@@ -341,6 +343,10 @@ function getFallbackTabOptionLabel(
   if (tab.target.kind === "pull_request") {
     return labels.pullRequest;
   }
+  if (tab.target.kind === "bot") return labels.bot;
+  if (tab.target.kind === "schedule") {
+    return labels.schedule;
+  }
   if (tab.target.kind === "commit_diff") {
     return tab.target.sha.slice(0, 7);
   }
@@ -359,6 +365,8 @@ function getFallbackTabOptionDescription(
     changes: string;
     files: string;
     pullRequest: string;
+    schedule: string;
+    bot: string;
   },
 ): string {
   if (tab.target.kind === "new_tab") {
@@ -393,6 +401,10 @@ function getFallbackTabOptionDescription(
   }
   if (tab.target.kind === "pull_request") {
     return labels.pullRequest;
+  }
+  if (tab.target.kind === "bot") return labels.bot;
+  if (tab.target.kind === "schedule") {
+    return labels.schedule;
   }
   if (tab.target.kind === "plugin") {
     return tab.target.panelId;
@@ -596,6 +608,8 @@ function MobileWorkspaceTabOption({
       changes: t("panels.diff.changesLabel"),
       files: t("panels.files.label"),
       pullRequest: t("panels.pullRequest.label"),
+      schedule: t("schedules.product.schedule"),
+      bot: t("bots.title"),
     }),
     [t],
   );
@@ -962,6 +976,7 @@ interface WorkspaceHeaderTitleBarProps {
   onCreateTerminal: () => void;
   onCreateTerminalWithProfile: (profile: TerminalProfile) => void;
   onCreateBrowser: () => void;
+  onCreateSchedule: () => void;
   onOpenImportSheet: () => void;
   onCopyWorkspacePath: () => void;
   onCopyBranchName: () => void;
@@ -991,6 +1006,7 @@ function WorkspaceHeaderTitleBar({
   onCreateTerminal,
   onCreateTerminalWithProfile,
   onCreateBrowser,
+  onCreateSchedule,
   onOpenImportSheet,
   onCopyWorkspacePath,
   onCopyBranchName,
@@ -1029,6 +1045,7 @@ function WorkspaceHeaderTitleBar({
             onCreateTerminal={onCreateTerminal}
             onCreateTerminalWithProfile={onCreateTerminalWithProfile}
             onCreateBrowser={onCreateBrowser}
+            onCreateSchedule={onCreateSchedule}
             onOpenImportSheet={onOpenImportSheet}
             onCopyWorkspacePath={onCopyWorkspacePath}
             onCopyBranchName={onCopyBranchName}
@@ -1252,6 +1269,7 @@ function useResolvedWorkspaceRouteState(input: {
   workspace: WorkspaceDescriptor | null;
   hasHydratedWorkspaces: boolean;
   recovery: WorkspaceRecoveryModel;
+  loadingError: string | null;
 }): WorkspaceRouteState {
   const hosts = useHosts();
   const host = useMemo(
@@ -1269,6 +1287,7 @@ function useResolvedWorkspaceRouteState(input: {
         workspace: input.workspace,
         hasHydratedWorkspaces: input.hasHydratedWorkspaces,
         recovery: input.recovery,
+        loadingError: input.loadingError,
       }),
     [
       hostName,
@@ -1277,6 +1296,7 @@ function useResolvedWorkspaceRouteState(input: {
       input.workspace,
       input.hasHydratedWorkspaces,
       input.recovery,
+      input.loadingError,
     ],
   );
 }
@@ -1554,12 +1574,46 @@ function WorkspaceScreenContent({
     [workspaceId],
   );
   const workspaceDescriptor = useWorkspace(normalizedServerId, normalizedWorkspaceId);
-  useEffect(() => {
-    if (!normalizedServerId || !normalizedWorkspaceId || workspaceDescriptor) return;
-    void getHostRuntimeStore()
-      .prepareWorkspaceRoute(normalizedServerId, normalizedWorkspaceId)
-      .catch(() => undefined);
-  }, [normalizedServerId, normalizedWorkspaceId, workspaceDescriptor]);
+  const routeHostSnapshot = useHostRuntimeSnapshot(normalizedServerId);
+  const hasHydratedAgents = useSessionStore(
+    (state) => state.sessions[normalizedServerId]?.hasHydratedAgents ?? false,
+  );
+  const supportsWorkspaceTargetRead = useSessionStore(
+    (state) =>
+      state.sessions[normalizedServerId]?.serverInfo?.features?.workspaceTargetRead === true,
+  );
+  const workspaceAgentsQuery = useQuery({
+    queryKey: [
+      "workspace-route-agents",
+      normalizedServerId,
+      normalizedWorkspaceId,
+      routeHostSnapshot?.clientGeneration,
+      routeHostSnapshot?.connectionEpoch,
+    ],
+    queryFn: () =>
+      getHostRuntimeStore().prepareWorkspaceAgents(normalizedServerId, normalizedWorkspaceId),
+    enabled:
+      Boolean(normalizedServerId && normalizedWorkspaceId) &&
+      supportsWorkspaceTargetRead &&
+      routeHostSnapshot?.connectionStatus === "online" &&
+      !hasHydratedAgents,
+    staleTime: Infinity,
+  });
+  const workspaceTargetQuery = useQuery({
+    queryKey: [
+      "workspace-route",
+      normalizedServerId,
+      normalizedWorkspaceId,
+      routeHostSnapshot?.clientGeneration,
+      routeHostSnapshot?.connectionEpoch,
+      routeHostSnapshot?.connectionStatus,
+    ],
+    queryFn: () =>
+      getHostRuntimeStore().prepareWorkspaceRoute(normalizedServerId, normalizedWorkspaceId),
+    enabled: Boolean(normalizedServerId && normalizedWorkspaceId) && !workspaceDescriptor,
+    retry: false,
+    staleTime: Infinity,
+  });
   const workspaceScripts = getWorkspaceScripts(workspaceDescriptor);
   const { handleRetryHost, handleManageHost, handleDismissMissingWorkspace } =
     useWorkspaceRouteActions(normalizedServerId);
@@ -1660,9 +1714,9 @@ function WorkspaceScreenContent({
     serverId: normalizedServerId,
     workspaceId: normalizedWorkspaceId,
     enabled: shouldInspectWorkspaceRecovery(
-      hasHydratedWorkspaces,
+      hasHydratedWorkspaces || workspaceTargetQuery.data != null,
       workspaceDescriptor,
-      recoveryRequested,
+      recoveryRequested || workspaceTargetQuery.data === "archived",
     ),
   });
 
@@ -1734,14 +1788,12 @@ function WorkspaceScreenContent({
     normalizedWorkspaceId,
     workspaceDirectory,
   });
-  const hasHydratedAgents = useSessionStore(
-    (state) => state.sessions[normalizedServerId]?.hasHydratedAgents ?? false,
-  );
   const workspaceRouteState = useResolvedWorkspaceRouteState({
     serverId: normalizedServerId,
     workspace: workspaceDescriptor,
-    hasHydratedWorkspaces,
+    hasHydratedWorkspaces: hasHydratedWorkspaces || workspaceTargetQuery.data != null,
     recovery: workspaceRecovery.state,
+    loadingError: workspaceTargetQuery.error?.message ?? null,
   });
   const workspaceHeaderCheckoutState = buildWorkspaceHeaderCheckoutState({
     isCheckoutStatusLoading,
@@ -2364,6 +2416,8 @@ function WorkspaceScreenContent({
       changes: t("panels.diff.changesLabel"),
       files: t("panels.files.label"),
       pullRequest: t("panels.pullRequest.label"),
+      schedule: t("schedules.product.schedule"),
+      bot: t("bots.title"),
     }),
     [t],
   );
@@ -2422,6 +2476,13 @@ function WorkspaceScreenContent({
     },
     [createWorkspaceTab, persistenceKey],
   );
+
+  const handleCreateScheduleTab = useCallback(() => {
+    if (!persistenceKey) {
+      return;
+    }
+    createWorkspaceTab(persistenceKey, { kind: "schedule" }, FOCUSED_PANE_PLACEMENT);
+  }, [createWorkspaceTab, persistenceKey]);
 
   const launchWorkspaceTab = useCallback(
     (selection: NewTabSelection, destination: WorkspaceTabLaunchDestination) => {
@@ -3647,7 +3708,7 @@ function WorkspaceScreenContent({
   const content = renderWorkspaceContent({
     isMissingWorkspaceDirectory,
     activeTabDescriptor,
-    hasHydratedAgents,
+    hasHydratedAgents: hasHydratedAgents || workspaceAgentsQuery.data === true,
     hasLoadedTerminals: terminalsQuery.isSuccess,
     mountedFocusedPaneTabIds,
     focusedPaneTabDescriptorMap,
@@ -3747,6 +3808,9 @@ function WorkspaceScreenContent({
       onDismissMissingWorkspace: handleDismissMissingWorkspace,
       onRecoverWorkspace: workspaceRecovery.restore,
       onRetryRecoveryInspection: workspaceRecovery.retryInspection,
+      onRetryLoading: () => {
+        void workspaceTargetQuery.refetch();
+      },
     },
   });
   const gatedWorkspaceScreen = renderWorkspaceScreenGateShell({
@@ -3903,6 +3967,7 @@ function WorkspaceScreenContent({
                 onCreateTerminal={handleCreateTerminal}
                 onCreateTerminalWithProfile={handleCreateTerminalWithProfile}
                 onCreateBrowser={handleCreateBrowserTab}
+                onCreateSchedule={handleCreateScheduleTab}
                 onOpenImportSheet={openImportSheet}
                 onCopyWorkspacePath={handleCopyWorkspacePath}
                 onCopyBranchName={handleCopyBranchName}
@@ -3924,6 +3989,7 @@ function WorkspaceScreenContent({
       handleCopyWorkspacePath,
       handleCreateBrowserTab,
       handleCreateDraftTab,
+      handleCreateScheduleTab,
       handleCreateTerminal,
       handleCreateTerminalWithProfile,
       handleOpenSetupTab,

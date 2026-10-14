@@ -4,10 +4,11 @@ use domain::agent_runtime::{AgentPersistenceHandle, PersistedAgentRuntimeRecord}
 use model::ErrorCode;
 use serde_json::{Value, json};
 
-use super::{AgentManager, now_timestamp};
+use super::AgentManager;
 use crate::ports::agent_session::{AgentSessionError, AgentSessionSpec, AgentTurnEvent};
 use crate::ports::controls::NativeSubagent;
 use crate::ports::native_history::SessionHistory;
+use crate::support::time::now_timestamp;
 
 pub(super) const REPLACEMENT_MARKER: &str = "aitTimelineReplacement";
 
@@ -67,7 +68,14 @@ impl AgentManager {
     ) {
         if let Some(client) = self.clients.get(&record.provider) {
             let settings = client.settings(&record.config.clone().unwrap_or_default());
-            snapshot["availableModes"] = settings["availableModes"].clone();
+            snapshot["availableModes"] = record
+                .runtime_info
+                .as_ref()
+                .and_then(|info| info.extra.as_ref())
+                .and_then(|extra| extra.get("availableModes"))
+                .filter(|modes| modes.is_array())
+                .unwrap_or(&settings["availableModes"])
+                .clone();
             snapshot["features"] = settings["features"].clone();
             if let Some(controls) = self.live.get(&record.id).and_then(|agent| {
                 agent
@@ -112,22 +120,17 @@ impl AgentManager {
         Ok(json!({"provider":provider,"diagnostic":diagnostic}))
     }
 
-    pub(crate) async fn usage(&self) -> Result<Value, ErrorCode> {
-        let mut providers = Vec::new();
-        for (id, client) in &self.clients {
-            providers.push(client.usage().await.unwrap_or_else(|_|json!({"providerId":id,"displayName":id,
-                "status":"unavailable","planLabel":null,"windows":[],"error":"Provider usage is unavailable"})));
-        }
-        crate::rpc::timeline::bounded(json!({"fetchedAt":now_timestamp(),"providers":providers}))
-    }
-
     pub(crate) async fn commands(&self, spec: &AgentSessionSpec) -> Result<Vec<Value>, ErrorCode> {
         self.clients
             .get(&spec.provider)
             .ok_or(ErrorCode::UnsupportedCapability)?
             .commands(spec)
             .await
-            .map_err(|_| ErrorCode::AgentIo)
+            .map_err(|error| match error {
+                AgentSessionError::Unavailable => ErrorCode::UnsupportedCapability,
+                AgentSessionError::Rejected => ErrorCode::InvalidMessage,
+                AgentSessionError::Failed => ErrorCode::AgentIo,
+            })
     }
 
     pub(crate) async fn permission(
@@ -136,6 +139,14 @@ impl AgentManager {
         request: &str,
         response: &Value,
     ) -> Result<(), ErrorCode> {
+        let record = self
+            .registry
+            .get(id)
+            .map_err(|_| ErrorCode::AgentIo)?
+            .ok_or(ErrorCode::AgentNotFound)?;
+        if record.internal && record.owner.is_some() && response != &json!({"behavior":"deny"}) {
+            return Err(ErrorCode::InvalidMessage);
+        }
         self.resume(id).await.map_err(|_| ErrorCode::AgentIo)?;
         let follow_up = self
             .live
@@ -187,10 +198,23 @@ impl AgentManager {
                 .map_err(|_| ErrorCode::AgentIo)?;
         }
         if let Some(timeline) = &self.timeline {
-            timeline.events().publish(id,"agent_stream",&json!({"agentId":id,"event":{"type":"permission_resolved","provider":agent.record.provider,"requestId":request,"resolution":response}}));
+            timeline.events().publish(
+                id,
+                "agent_stream",
+                &json!({
+                    "agentId": id,
+                    "event": {
+                        "type": "permission_resolved",
+                        "provider": agent.record.provider,
+                        "requestId": request,
+                        "resolution": response
+                    },
+                    "timestamp": now_timestamp()
+                }),
+            );
         }
         self.events.publish(
-            model::session::protocol::SessionEventKind::AgentPermissionResolved,
+            domain::session::protocol::SessionEventKind::AgentPermissionResolved,
             &json!({"agentId":id,"requestId":request,"resolution":response}),
         );
         Ok(())
@@ -485,14 +509,26 @@ pub(super) fn publish_permission(
         })
         .map_err(super::map_registry)?;
     if let Some(timeline) = timeline {
-        timeline.events().publish(id,"agent_stream",&json!({"agentId":id,"event":{"type":"permission_requested","provider":agent.record.provider,"request":request}}));
+        timeline.events().publish(
+            id,
+            "agent_stream",
+            &json!({
+                "agentId": id,
+                "event": {
+                    "type": "permission_requested",
+                    "provider": agent.record.provider,
+                    "request": request
+                },
+                "timestamp": now
+            }),
+        );
     }
     events.publish(
-        model::session::protocol::SessionEventKind::AgentPermissionRequest,
+        domain::session::protocol::SessionEventKind::AgentPermissionRequest,
         &json!({"agentId":id,"request":request}),
     );
     events.publish(
-        model::session::protocol::SessionEventKind::AgentAttention,
+        domain::session::protocol::SessionEventKind::AgentAttention,
         &json!({"agentId":id,"reason":"permission","timestamp":now}),
     );
     Ok(())
@@ -527,11 +563,12 @@ pub(super) fn resolve_permission(
             "agent_stream",
             &json!({"agentId":id,"event":{
             "type":"permission_resolved","provider":agent.record.provider,"requestId":request,
-            "resolution":{"behavior":"deny","message":"Resolved by native provider"}}}),
+            "resolution":{"behavior":"deny","message":"Resolved by native provider"}},
+            "timestamp":now_timestamp()}),
         );
     }
     events.publish(
-        model::session::protocol::SessionEventKind::AgentPermissionResolved,
+        domain::session::protocol::SessionEventKind::AgentPermissionResolved,
         &json!({"agentId":id,"requestId":request,
             "resolution":{"behavior":"deny","message":"Resolved by native provider"}}),
     );
@@ -572,7 +609,7 @@ pub(super) fn publish_subagent(
                 &json!({"kind":"upsert","subagent":descriptor}),
             );
             events.publish(
-                model::session::protocol::SessionEventKind::ProviderSubagents,
+                domain::session::protocol::SessionEventKind::ProviderSubagents,
                 &json!({"kind":"upsert","subagent":descriptor}),
             );
             Ok(())

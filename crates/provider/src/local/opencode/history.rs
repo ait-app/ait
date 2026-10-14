@@ -1,355 +1,218 @@
-//! Version-specific records become transport-free content, without assigning Ait identities.
-use std::collections::HashSet;
+//! ACP replay is the sole authoritative transcript; list/load never submit model input.
+mod previews;
 
-use crate::local::opencode::types::Record;
-use crate::local::opencode::types::{
-    Content, Fault, NativeContent, ProtocolError, Role, ToolCall, ToolOutput, ToolStatus,
-};
+use std::collections::{BTreeMap, BTreeSet, VecDeque};
+
+use domain::agent_runtime::{AgentPersistenceHandle, StoredAgentConfig};
 use serde_json::{Value, json};
 
-use super::{
-    failure,
-    http::{Version, required_string},
+pub(super) use previews::populate;
+
+use super::{OpenCodeClient, PROVIDER, config, launcher, streaming::Stream};
+use crate::{
+    local::acp_transport::Transport,
+    ports::{
+        agent_session::AgentSessionError,
+        native_history::{ListOptions, SessionDescriptor, SessionHistory},
+    },
+    protocol::timeline::NativeItem,
 };
 
-pub(super) fn normalize(
-    version: Version,
-    session: &str,
-    messages: &[Value],
-) -> Result<Vec<Record>, ProtocolError> {
-    normalize_messages(version, session, messages, false)
-}
-
-fn normalize_messages(
-    version: Version,
-    session: &str,
-    messages: &[Value],
-    partial_last: bool,
-) -> Result<Vec<Record>, ProtocolError> {
-    let mut output = Vec::with_capacity(messages.len());
-    let mut ids = HashSet::with_capacity(messages.len());
-    let mut calls = HashSet::new();
-    for (index, message) in messages.iter().enumerate() {
-        let info = match version {
-            Version::V1 => message.get("info").unwrap_or(&Value::Null),
-            Version::V2 => message,
-        };
-        let id = required_string(info, "id")?;
-        if !ids.insert(id.to_owned())
-            || (version == Version::V1
-                && info.get("sessionID").and_then(Value::as_str) != Some(session))
-        {
-            return Err(failure(
-                Fault::ProviderFailed,
-                "OpenCode history identity mismatch",
-            ));
-        }
-        let mut record = new_record(
-            version,
-            session,
-            info,
-            partial_last && index + 1 == messages.len(),
-        )?;
-        let kind = required_string(
-            info,
-            if version == Version::V1 {
-                "role"
-            } else {
-                "type"
+/// Incrementally load this native transcript; fail on RPC, identity or projection errors.
+pub(super) async fn replay(
+    transport: &mut Transport,
+    id: &str,
+    cwd: &str,
+    images: crate::local::images::ImageStore,
+) -> Result<(Value, Stream), AgentSessionError> {
+    let mut stream = Stream::new(images);
+    let mut completed = VecDeque::new();
+    let result = transport
+        .request_with_updates(
+            "session/load",
+            json!({"sessionId":id,"cwd":cwd,"mcpServers":[]}),
+            |message| {
+                if message["method"] == "session/update" {
+                    if message["params"]["sessionId"] != id {
+                        return Err(AgentSessionError::Failed);
+                    }
+                    stream.update(&message["params"]["update"])?;
+                    // Progress does not belong in a complete history replay.
+                    completed.extend(stream.events.drain(..).filter(|event| {
+                        matches!(
+                            event,
+                            crate::ports::agent_session::AgentTurnEvent::Timeline(_)
+                        )
+                    }));
+                }
+                Ok(())
             },
-        )?;
-        let role = record.role;
-        if let Some(text) = info.get("text").and_then(Value::as_str) {
-            record.sub_messages.push(Content::Text {
-                text: text.to_owned(),
-            });
-        }
-        let parts = match version {
-            Version::V1 => message.get("parts").and_then(Value::as_array),
-            Version::V2 => info.get("content").and_then(Value::as_array),
-        };
-        let mut results = Vec::new();
-        if version == Version::V1 {
-            record.metadata["part_ids"] = json!(
-                parts
-                    .into_iter()
-                    .flatten()
-                    .map(|part| part["id"].clone())
-                    .collect::<Vec<_>>()
-            );
-        }
-        let mut part_ids = HashSet::new();
-        if let Some(parts) = parts {
-            for (ordinal, part) in parts.iter().enumerate() {
-                if version == Version::V1
-                    && (part.get("sessionID").and_then(Value::as_str) != Some(session)
-                        || part.get("messageID").and_then(Value::as_str) != Some(id)
-                        || !part_ids.insert(required_string(part, "id")?.to_owned()))
+        )
+        .await?;
+    stream.flush();
+    completed.extend(stream.events.drain(..).filter(|event| {
+        matches!(
+            event,
+            crate::ports::agent_session::AgentTurnEvent::Timeline(_)
+        )
+    }));
+    stream.events = completed;
+    Ok((config::state(&result)?, stream))
+}
+
+/// Restore accepted input identity for every replayed item in its native user-message group.
+pub(super) fn entries(stream: &mut Stream, clients: &BTreeMap<String, String>) -> Vec<NativeItem> {
+    stream
+        .events
+        .drain(..)
+        .filter_map(|event| {
+            if let crate::ports::agent_session::AgentTurnEvent::Timeline(mut entry) = event {
+                if let Some(turn) = entry.turn_id.as_ref().and_then(|id| clients.get(id)) {
+                    entry.turn_id = Some(turn.clone());
+                }
+                if entry.item["type"] == "user_message"
+                    && let Some(client) = entry.item["messageId"]
+                        .as_str()
+                        .and_then(|id| clients.get(id))
                 {
-                    return Err(failure(
-                        Fault::ProviderFailed,
-                        "OpenCode history part identity mismatch",
-                    ));
+                    entry.item["clientMessageId"] = json!(client);
                 }
-                normalize_part(
-                    version,
-                    &mut record,
-                    (ordinal, part),
-                    &mut results,
-                    &mut calls,
-                )?;
+                Some(entry)
+            } else {
+                None
             }
-        } else if version == Version::V1 || kind == "assistant" {
-            return Err(failure(
-                Fault::ProviderFailed,
-                "OpenCode history omitted message content",
-            ));
-        }
-        if record.sub_messages.is_empty() {
-            record.sub_messages.push(native_item(id, kind, 0, info));
-        }
-        if role != Role::Assistant {
-            for part in &mut record.sub_messages {
-                if let Content::NativeContent(item) = part {
-                    *part = Content::StructuredData {
-                        media_type: "application/vnd.opencode+json".into(),
-                        value: item.payload.to_string(),
-                    };
-                }
-            }
-        }
-        output.push(record);
-        output.extend(results);
-    }
-    Ok(output)
+        })
+        .collect()
 }
 
-fn normalize_part(
-    version: Version,
-    record: &mut Record,
-    indexed_part: (usize, &Value),
-    results: &mut Vec<Record>,
-    calls: &mut HashSet<String>,
-) -> Result<(), ProtocolError> {
-    let (ordinal, part) = indexed_part;
-    let kind = required_string(part, "type")?;
-    match kind {
-        "text" => record.sub_messages.push(Content::Text {
-            text: part
-                .get("text")
-                .and_then(Value::as_str)
-                .ok_or_else(|| failure(Fault::ProviderFailed, "OpenCode text content missing"))?
-                .to_owned(),
-        }),
-        "tool" => {
-            if record.role != Role::Assistant {
-                return Err(failure(
-                    Fault::ToolUseRequiresAssistant,
-                    "OpenCode tool appeared in a non-assistant message",
-                ));
+/// Read bounded native pages for the exact cwd; reject invalid limits or malformed pages.
+pub(super) async fn list(
+    transport: &mut Transport,
+    options: &ListOptions,
+) -> Result<Vec<SessionDescriptor>, AgentSessionError> {
+    if !(1..=4096).contains(&options.scan_limit) {
+        return Err(AgentSessionError::Rejected);
+    }
+    let mut results = Vec::new();
+    let mut cursors = BTreeSet::new();
+    let mut identities = BTreeSet::new();
+    let mut cursor = Value::Null;
+    loop {
+        let mut params = json!({});
+        if let Some(cwd) = &options.cwd {
+            params["cwd"] = json!(cwd);
+        }
+        if !cursor.is_null() {
+            params["cursor"] = cursor;
+        }
+        let response = transport.request("session/list", params).await?;
+        let rows = response["sessions"]
+            .as_array()
+            .ok_or(AgentSessionError::Failed)?;
+        for row in rows.iter().take(options.scan_limit - results.len()) {
+            let id = config::text(row, "sessionId")?;
+            if !identities.insert(id.to_owned()) {
+                return Err(AgentSessionError::Failed);
             }
-            let call_id = required_string(
-                part,
-                match version {
-                    Version::V1 => "callID",
-                    Version::V2 => "id",
-                },
-            )?;
-            if !calls.insert(call_id.to_owned()) {
-                return Err(failure(
-                    Fault::ToolCallDuplicate,
-                    "duplicate OpenCode tool call identity",
-                ));
+            let cwd = row["cwd"]
+                .as_str()
+                .filter(|cwd| std::path::Path::new(cwd).is_absolute())
+                .ok_or(AgentSessionError::Failed)?;
+            if options
+                .cwd
+                .as_deref()
+                .is_some_and(|expected| expected != cwd)
+            {
+                return Err(AgentSessionError::Failed);
             }
-            let tool = required_string(
-                part,
-                match version {
-                    Version::V1 => "tool",
-                    Version::V2 => "name",
-                },
-            )?;
-            let state = part
-                .get("state")
-                .ok_or_else(|| failure(Fault::ProviderFailed, "OpenCode tool state missing"))?;
-            let status = match required_string(state, "status")? {
-                "completed" => ToolStatus::Succeeded,
-                "error" => ToolStatus::Failed,
-                "pending" | "streaming" | "running" => {
-                    return Err(failure(
-                        Fault::RunRecoveryFailed,
-                        "OpenCode history contains an unfinished tool",
-                    ));
-                }
-                _ => {
-                    return Err(failure(
-                        Fault::AgentCapabilityUnsupported,
-                        "unknown OpenCode tool status",
-                    ));
-                }
-            };
-            let input = state
-                .get("input")
-                .filter(|input| input.is_object())
-                .ok_or_else(|| failure(Fault::ProviderFailed, "invalid OpenCode tool input"))?;
-            record.sub_messages.push(Content::ToolCall(ToolCall {
-                call_id: call_id.to_owned(),
-                tool_name: tool.to_owned(),
-                arguments: safe_value(input, 0).to_string(),
-                provider_metadata: None,
-            }));
-            let output = match version {
-                Version::V1 => state
-                    .get("output")
-                    .and_then(Value::as_str)
-                    .map(str::to_owned),
-                Version::V2 => state
-                    .get("content")
-                    .map(|content| safe_value(content, 0).to_string()),
-            };
-            results.push(Record {
-                id: format!("{}#result:{call_id}", record.id),
-                role: Role::User,
-                sub_messages: Vec::new(),
-                tool_result: Some(ToolOutput {
-                    call_id: call_id.to_owned(),
-                    status,
-                    output,
-                    error: (status == ToolStatus::Failed)
-                        .then(|| "OpenCode tool failed".to_owned()),
-                }),
-                input_id: None,
-                created_at: record.created_at,
-                metadata: record.metadata.clone(),
+            let updated = config::text(row, "updatedAt")?;
+            chrono::DateTime::parse_from_rfc3339(updated).map_err(|_| AgentSessionError::Failed)?;
+            results.push(SessionDescriptor {
+                provider_id: PROVIDER.into(),
+                provider_label: "OpenCode".into(),
+                provider_handle_id: id.into(),
+                cwd: cwd.into(),
+                title: row["title"].as_str().map(str::to_owned),
+                first_prompt_preview: None,
+                last_prompt_preview: None,
+                last_activity_at: updated.into(),
             });
         }
-        _ => record
-            .sub_messages
-            .push(native_item(&record.id, kind, ordinal, part)),
-    }
-    Ok(())
-}
-
-fn native_item(id: &str, kind: &str, ordinal: usize, value: &Value) -> Content {
-    Content::NativeContent(NativeContent {
-        provider_kind: "opencode".into(),
-        external_item_id: format!("{id}:{ordinal}"),
-        item_type: kind.to_owned(),
-        ordinal: u32::try_from(ordinal).unwrap_or(u32::MAX),
-        payload: safe_value(value, 0),
-        payload_schema_version: 1,
-    })
-}
-
-fn safe_value(value: &Value, depth: usize) -> Value {
-    if depth >= 16 {
-        return Value::Null;
-    }
-    match value {
-        Value::Object(object) => Value::Object(
-            object
-                .iter()
-                .take(256)
-                .map(|(key, value)| {
-                    let sensitive = matches!(
-                        key.to_ascii_lowercase().as_str(),
-                        "authorization"
-                            | "password"
-                            | "token"
-                            | "api_key"
-                            | "apikey"
-                            | "secret"
-                            | "environment"
-                            | "env"
-                            | "headers"
-                            | "providerstate"
-                            | "providerresultstate"
-                    );
-                    (
-                        key.clone(),
-                        if sensitive {
-                            Value::String("[REDACTED]".into())
-                        } else {
-                            safe_value(value, depth + 1)
-                        },
-                    )
-                })
-                .collect(),
-        ),
-        Value::Array(array) => Value::Array(
-            array
-                .iter()
-                .take(256)
-                .map(|value| safe_value(value, depth + 1))
-                .collect(),
-        ),
-        Value::String(text) => Value::String(text[..text.floor_char_boundary(262_144)].to_owned()),
-        Value::Null | Value::Bool(_) | Value::Number(_) => value.clone(),
-    }
-}
-
-fn new_record(
-    version: Version,
-    session: &str,
-    info: &Value,
-    partial: bool,
-) -> Result<Record, ProtocolError> {
-    let id = required_string(info, "id")?;
-    let kind = required_string(
-        info,
-        match version {
-            Version::V1 => "role",
-            Version::V2 => "type",
-        },
-    )?;
-    let role = match kind {
-        "user" => Role::User,
-        "system" => Role::System,
-        "assistant" | "synthetic" | "skill" | "shell" | "compaction" | "idle"
-        | "agent-switched" | "model-switched" | "location-switched" => Role::Assistant,
-        _ => {
-            return Err(failure(
-                Fault::AgentCapabilityUnsupported,
-                "unsupported OpenCode history message type",
-            ));
+        if results.len() >= options.scan_limit {
+            break;
         }
-    };
-    if kind == "assistant"
-        && !partial
-        && info
-            .pointer("/time/completed")
-            .and_then(Value::as_i64)
-            .is_none()
-    {
-        return Err(failure(
-            Fault::RunRecoveryFailed,
-            "OpenCode history contains an unfinished assistant",
-        ));
+        cursor = response["nextCursor"].clone();
+        if cursor.is_null() {
+            break;
+        }
+        let next = cursor
+            .as_str()
+            .filter(|cursor| !cursor.is_empty() && cursor.len() <= 1024)
+            .ok_or(AgentSessionError::Failed)?;
+        if !cursors.insert(next.to_owned()) {
+            return Err(AgentSessionError::Failed);
+        }
     }
-    let created_at = info
-        .pointer("/time/created")
-        .and_then(Value::as_i64)
-        .ok_or_else(|| failure(Fault::ProviderFailed, "invalid OpenCode message timestamp"))?;
-    Ok(Record {
-        id: id.to_owned(),
-        role,
-        sub_messages: Vec::new(),
-        tool_result: None,
-        input_id: if kind == "user" {
-            match version {
-                Version::V1 => Some(id.to_owned()),
-                Version::V2 => info
-                    .pointer("/metadata/aitInputId")
-                    .and_then(Value::as_str)
-                    .map(str::to_owned),
-            }
-        } else {
-            None
-        },
-        created_at,
-        metadata: json!({"native_message_id": id, "native_session_id": session,
-                "protocol_version": if version == Version::V1 {1} else {2}, "native_type":kind}),
-    })
+    Ok(results)
 }
 
-mod prefix;
-pub(super) use prefix::before_text;
+/// Read native session metadata and full history without prompting or applying overrides.
+/// Invalid handles are rejected; child, protocol and replay failures are propagated.
+pub(super) async fn inspect(
+    client: &OpenCodeClient,
+    handle: &AgentPersistenceHandle,
+    cwd: &str,
+) -> Result<SessionHistory, AgentSessionError> {
+    super::session::validate_handle(handle)?;
+    let spec = crate::ports::agent_session::AgentSessionSpec {
+        provider: PROVIDER.into(),
+        cwd: cwd.into(),
+        config: StoredAgentConfig::default(),
+    };
+    config::validate_spec(&spec)?;
+    let (mut transport, _) = launcher::spawn(client, cwd, &spec.config).await?;
+    let result = async {
+        let descriptors = list(
+            &mut transport,
+            &ListOptions {
+                cwd: Some(cwd.into()),
+                scan_limit: 4096,
+            },
+        )
+        .await?;
+        let mut descriptor = descriptors
+            .into_iter()
+            .find(|entry| entry.provider_handle_id == handle.session_id)
+            .ok_or(AgentSessionError::Rejected)?;
+        let (options, mut stream) = replay(
+            &mut transport,
+            &handle.session_id,
+            cwd,
+            client.images.clone(),
+        )
+        .await?;
+        let clients = super::session::clients(handle)?;
+        let entries = entries(&mut stream, &clients);
+        (
+            descriptor.first_prompt_preview,
+            descriptor.last_prompt_preview,
+        ) = previews::from_entries(&entries);
+        let config = config::stored(&options);
+        Ok(SessionHistory {
+            resume_metadata: BTreeMap::from([(
+                "opencode".into(),
+                json!({"config":config,"model":config.model,"clients":clients}),
+            )]),
+            parent_id: None,
+            created_at: chrono::Utc::now().to_rfc3339(),
+            descriptor,
+            config,
+            active: false,
+            entries,
+        })
+    }
+    .await;
+    let closed = transport.close().await;
+    closed?;
+    result
+}

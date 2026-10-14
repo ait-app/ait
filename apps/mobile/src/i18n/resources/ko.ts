@@ -3,6 +3,7 @@ import { pluginSettings } from "./plugin-settings";
 
 export const ko: TranslationResources = {
   onlineService: en.onlineService,
+  bots: en.bots,
   paneFind: {
     searchFailed: "이 채팅을 검색할 수 없습니다. 호스트 연결을 확인하고 다시 시도하세요.",
     searching: "검색 중…",
@@ -1176,16 +1177,11 @@ export const ko: TranslationResources = {
       appName: "Ait",
     },
     sections: {
+      usage: "Usage",
       workspaces: "워크스페이스",
       sessions: "기록",
       search: "검색",
       schedules: "일정",
-    },
-    worktreeSetup: {
-      title: "워크트리 스크립트 설정",
-      description:
-        "새 워크트리가 의존성을 설치하고 자동으로 준비될 수 있도록 설정 명령을 추가하세요.",
-      openProjectSettings: "프로젝트 설정 열기",
     },
     project: {
       actions: {
@@ -1365,7 +1361,7 @@ export const ko: TranslationResources = {
       },
       keepRunning: {
         title: "종료 후에도 데몬 계속 실행",
-        hint: "Ait를 종료해도 데몬이 계속 실행됩니다",
+        hint: "Ait를 종료해도 에이전트와 터미널이 계속 실행되며, 다음 실행 시 다시 연결합니다.",
       },
       logs: {
         title: "로그 파일",
@@ -1380,7 +1376,6 @@ export const ko: TranslationResources = {
       fullStatus: {
         title: "전체 상태",
         modalTitle: "데몬 상태",
-        hint: "`paseo daemon status`를 실행하고 출력을 표시합니다",
         view: "상태 보기",
         copied: "상태가 클립보드에 복사되었습니다.",
         fetchFailed: "데몬 상태를 가져오지 못했습니다: {{message}}",
@@ -1655,6 +1650,31 @@ export const ko: TranslationResources = {
     },
   },
   providerUsage: {
+    summaryUsed: "{{source}} {{amount}} 사용됨",
+    summaryRemaining: "{{source}} {{amount}} 남음",
+    options: "설정",
+    refreshAll: "모두 새로고침",
+    refreshFailed: "사용량을 새로고침할 수 없습니다",
+    noHosts: "연결된 호스트가 없습니다",
+    agentError: "사용량을 불러올 수 없습니다: {{reason}}",
+    hostUnavailableNamed: "사용량을 보려면 {{host}}에 연결하세요",
+    hostUpgradeRequiredNamed: "사용량을 보려면 {{host}}을 업데이트하세요",
+    pin: "고정",
+    unpin: "고정 해제",
+    pinWindow: "{{source}} {{window}} 고정",
+    refreshSource: "{{source}} 새로고침",
+    displayAs: "백분율",
+    displayUsed: "사용됨",
+    displayRemaining: "남음",
+    showInSidebar: "사이드바에 요약 표시",
+    showInSidebarHint: "고정한 사용량 창이 사이드바 하단에 표시됩니다",
+    loginRejected: "로그인이 거부되었습니다(HTTP {{status}}). {{remedy}}",
+    loginExpired: "로그인이 {{time}}에 만료되었습니다. {{remedy}}",
+    loginRefreshCommand: "{{command}}을 실행하여 로그인을 갱신하세요.",
+    loginSignInAgain: "다시 로그인하세요.",
+    nativeReadFailed: "네이티브 계정 사용량을 읽을 수 없습니다",
+    nativePlanUnavailable:
+      "이 로그인 방식은 요금제 사용량을 제공하지 않습니다. 제공업체 CLI로 로그인하세요.",
     error: "오류",
     unavailable: "사용 불가",
     updated: "{{time}} 업데이트",
@@ -1885,7 +1905,10 @@ export const ko: TranslationResources = {
       loading: "파일 불러오는 중...",
       noPreview: "사용 가능한 미리보기가 없습니다",
       openWithSystem: "시스템 앱으로 열기",
-      binaryPreviewUnavailable: "바이너리 미리보기를 사용할 수 없습니다",
+      downloadFile: "파일 다운로드",
+      shareFile: "파일 공유",
+      binaryPreviewUnavailable: "미리보기를 사용할 수 없습니다",
+      binaryPreviewDescription: "Ait에서는 이 파일 형식을 미리 볼 수 없습니다.",
       tooLargeToDisplay: "이 파일은 너무 커서 표시할 수 없습니다",
       failedToLoad: "파일을 불러오지 못했습니다",
       failedToLoadPreview: "파일 미리보기를 불러오지 못했습니다",
@@ -1978,6 +2001,8 @@ export const ko: TranslationResources = {
     dismiss: "닫기",
   },
   contextWindow: {
+    noData: "No context usage yet",
+    accessibilityNoData: "View account usage",
     title: "컨텍스트 윈도우",
     used: "{{percentage}}% 사용됨",
     tokens: "{{used}} / {{max}} 토큰",
@@ -2018,6 +2043,7 @@ export const ko: TranslationResources = {
     },
     groupInfo: "{{title}} 정보",
     sections: {
+      management: "관리",
       general: "일반",
       appearance: "모양",
       layout: en.settings.sections.layout,
@@ -2166,6 +2192,8 @@ export const ko: TranslationResources = {
         rowHint: "연결, 데몬, 프로바이더, 데스크톱 및 로그 세부 정보를 수집합니다.",
         run: "실행",
         running: "진단 실행 중...",
+        exportAccessibility: "진단 파일 내보내기",
+        exportFailed: "진단 파일을 내보내지 못했습니다",
         copyLabel: "진단",
         copyAccessibility: "진단 복사",
         copyFailed: "진단을 복사하지 못했습니다.",
@@ -2185,6 +2213,7 @@ export const ko: TranslationResources = {
       connectedHosts: "연결된 호스트",
       offline: "오프라인",
       versionDiffers: "이 기기와 버전이 다릅니다",
+      experimentalFeatures: en.settings.about.experimentalFeatures,
       releaseChannel: {
         label: "릴리스 채널",
         description: "Beta로 전환하면 업데이트를 더 빨리 받고 개선에 참여할 수 있습니다",
@@ -2253,6 +2282,14 @@ export const ko: TranslationResources = {
         codeSize: "코드 크기",
         codeSizeHint: "코드, diff 및 터미널 출력에 사용됩니다",
         codeSizeAccessibility: "코드 글꼴 크기",
+      },
+      layout: {
+        title: "레이아웃",
+        contentWidth: "콘텐츠 너비",
+        contentWidthHint: "와이드 화면에서 채팅과 Markdown 파일의 최대 너비",
+        contentWidthAccessibility: "콘텐츠 너비(픽셀)",
+        reset: "재설정",
+        resetAccessibility: "콘텐츠 너비를 기본값으로 재설정",
       },
       syntax: {
         title: "구문",

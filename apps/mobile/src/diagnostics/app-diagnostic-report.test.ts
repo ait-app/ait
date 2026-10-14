@@ -135,3 +135,13 @@ describe("app diagnostics report", () => {
     expect(redacted).toContain("ait://[redacted]");
   });
 });
+
+test("redacts quoted native credentials and complete authorization headers", () => {
+  const report = redactAppDiagnosticReport(
+    'Authorization: Bearer secret-one\n{"api_key":"secret-two","refresh_token":"secret-three"}\nauthorization=Basic c2VjcmV0',
+    [],
+  );
+  for (const secret of ["secret-one", "secret-two", "secret-three", "c2VjcmV0"]) {
+    expect(report).not.toContain(secret);
+  }
+});

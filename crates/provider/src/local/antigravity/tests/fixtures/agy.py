@@ -22,7 +22,8 @@ def log(value):
         with open(path, 'a') as output:
             output.write(json.dumps(value) + '\n')
 
-log({'args': args, 'hasEnvironment': os.environ.get('AGY_TEST_ENV') == 'test-only-value'})
+log({'args': args, 'hasEnvironment': os.environ.get('AGY_TEST_ENV') == 'test-only-value',
+     'cwd': os.getcwd()})
 if scenario == 'hung':
     time.sleep(600)
 if scenario == 'malformed':
@@ -39,6 +40,31 @@ if args == ['models']:
     print('claude-test-high\tClaude Test (High)')
     sys.exit(0)
 
+if args == ['--print', '/usage', '--output-format', 'json']:
+    if scenario == 'quota-auth-error':
+        sys.stderr.write('authentication required; token=fixture-secret\n')
+        sys.exit(1)
+    if scenario == 'quota-error':
+        emit({'status': 'ERROR', 'error': 'fixture-secret'})
+        sys.exit(0)
+    if scenario == 'quota-empty':
+        emit({'status': 'SUCCESS', 'num_turns': 0,
+              'command': {'name': 'usage', 'data': {'groups': []}}})
+        sys.exit(0)
+    remaining = float(os.environ.get('AGY_FIXTURE_REMAINING', '0.75'))
+    emit({'status': 'SUCCESS', 'num_turns': 0, 'conversation_id': '',
+          'command': {'name': 'usage', 'data': {'groups': [
+              {'name': name, 'buckets': [
+                  {'id': prefix + '-weekly', 'name': 'Weekly Limit Remaining',
+                   'window': 'weekly', 'remaining_fraction': remaining,
+                   'reset_time': '2026-10-20T12:00:00Z'},
+                  {'id': prefix + '-5h', 'name': 'Five Hour Limit Remaining',
+                   'window': '5h', 'remaining_fraction': remaining / 2,
+                   'reset_time': '2026-10-14T12:00:00Z'}]}
+              for prefix, name in [('gemini', 'Gemini Models'), ('3p', 'Claude and GPT models')]
+          ]}}})
+    sys.exit(0)
+
 init = {'cwd': os.getcwd(), 'permission_mode': 'request-review', 'tools': ['run_command']}
 if model is not None:
     init['model'] = model
@@ -47,10 +73,10 @@ if scenario == 'wrong-model':
 turns = 0
 step_index = 0
 
-def terminal(status, response):
+def terminal(status, response, **fields):
     emit({'event': 'result', 'result': {'conversation_id': conversation, 'status': status,
         'response': response, 'num_turns': turns, 'usage': {'input_tokens': turns * 100,
-            'output_tokens': turns * 10, 'cache_read_tokens': turns * 50}}})
+            'output_tokens': turns * 10, 'cache_read_tokens': turns * 50}, **fields}})
 
 def interrupted(signum, frame):
     terminal('INTERRUPTED', '')
@@ -80,6 +106,33 @@ for line in sys.stdin:
     def step(kind, state, **fields):
         emit({'event': 'step_update', 'step_update': {'conversation_id': conversation,
             'step_index': step_index, 'state': state, 'step_type': kind, **fields}})
+    if scenario in ('denied', 'denied-unfinished', 'denied-response', 'stderr-failure',
+                    'stderr-flood', 'turn-malformed', 'empty-tool'):
+        step('agent_response', 'DONE')
+        step_index += 1
+        step('tool', 'ACTIVE', tool_name='run_command', tool_info={
+            'name': 'run_command', 'parameters': {'CommandLine': 'printf agy_diagnostic'}})
+        if scenario == 'turn-malformed':
+            print('{', flush=True)
+            continue
+        if scenario in ('stderr-failure', 'stderr-flood'):
+            if scenario == 'stderr-flood':
+                sys.stderr.write('x' * (512 * 1024) + '\n')
+            sys.stderr.write('AGY_ERROR: {"message":"quota exceeded","token":"fixture-secret"}\n')
+            sys.stderr.flush()
+            sys.exit(3)
+        if scenario != 'denied-unfinished':
+            step('tool', 'DONE', tool_name='run_command', tool_info={
+                'name': 'run_command', 'parameters': {'CommandLine': 'printf agy_diagnostic'}})
+        step_index += 1
+        if scenario == 'empty-tool':
+            terminal('SUCCESS', 'Tool completed')
+        else:
+            sys.stderr.write('jetski: a tool required the "command" permission and was auto-denied.\n')
+            sys.stderr.flush()
+            terminal('SUCCESS', 'Command was denied' if scenario == 'denied-response' else '',
+                     denied_actions=[{'action': 'command', 'display_name': 'RunCommand'}])
+        continue
     step('user_input', 'DONE')
     step_index += 1
     step('tool', 'ACTIVE', tool_name='run_command', tool_info={

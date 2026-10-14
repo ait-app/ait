@@ -59,6 +59,25 @@ function normalizeSimpleWorkspaceTabTarget(value: WorkspaceTabTarget): Workspace
     case "files":
     case "pull_request":
       return { kind: value.kind };
+    case "bot": {
+      const botId = trimNonEmpty(value.botId);
+      if (botId)
+        return value.view === "settings"
+          ? { kind: "bot", botId, view: "settings" }
+          : { kind: "bot", botId };
+      return { kind: "bot", view: value.view === "create" ? "create" : "list" };
+    }
+    case "schedule": {
+      const scheduleId = trimNonEmpty(value.scheduleId);
+      const filter =
+        value.filter === "paused" || value.filter === "completed" ? { filter: value.filter } : {};
+      if (scheduleId)
+        return value.view === "edit"
+          ? { kind: "schedule", scheduleId, view: "edit", ...filter }
+          : { kind: "schedule", scheduleId, ...filter };
+      if (value.view === "create") return { kind: "schedule", view: "create", ...filter };
+      return { kind: "schedule", view: "list", ...filter };
+    }
     case "setup": {
       const workspaceId = trimNonEmpty(value.workspaceId);
       return workspaceId ? { kind: "setup", workspaceId } : null;
@@ -149,6 +168,26 @@ function secondaryWorkspaceTabTargetsEqual(
   if (left.kind === "pull_request" && right.kind === "pull_request") {
     return true;
   }
+  if (left.kind === "bot" && right.kind === "bot") {
+    const view = (target: Extract<WorkspaceTabTarget, { kind: "bot" }>) =>
+      target.botId
+        ? target.view === "settings"
+          ? "settings"
+          : "chat"
+        : target.view === "create"
+          ? "create"
+          : "list";
+    return left.botId === right.botId && view(left) === view(right);
+  }
+  if (left.kind === "schedule" && right.kind === "schedule") {
+    const view = (target: Extract<WorkspaceTabTarget, { kind: "schedule" }>) =>
+      target.scheduleId ? (target.view ?? "detail") : target.view === "create" ? "create" : "list";
+    return (
+      left.scheduleId === right.scheduleId &&
+      view(left) === view(right) &&
+      (left.filter ?? "upcoming") === (right.filter ?? "upcoming")
+    );
+  }
   if (left.kind === "setup" && right.kind === "setup") {
     return left.workspaceId === right.workspaceId;
   }
@@ -215,6 +254,20 @@ export function buildDeterministicWorkspaceTabId(target: WorkspaceTabTarget): st
   }
   if (target.kind === "commit_diff") {
     return `commit_diff_${target.sha}`;
+  }
+  if (target.kind === "bot") {
+    return target.botId
+      ? `bot_${target.botId}`
+      : target.view === "create"
+        ? "bot_create"
+        : "bot_list";
+  }
+  if (target.kind === "schedule") {
+    return target.scheduleId
+      ? `schedule_${target.scheduleId}`
+      : target.view === "create"
+        ? "schedule_create"
+        : "schedule_list";
   }
   if (target.kind === "working_diff") {
     return "working_diff";

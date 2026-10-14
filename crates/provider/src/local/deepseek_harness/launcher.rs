@@ -16,7 +16,7 @@ impl DeepSeekHarnessClient {
     /// Prefer the installed CLI, falling back to the runtime bundled with the desktop app.
     /// Returns an unavailable `dsh` launcher when neither installation can be resolved.
     #[must_use]
-    pub fn installed() -> Self {
+    pub(crate) fn installed() -> Self {
         let paths: Vec<_> = std::env::var_os("PATH")
             .as_deref()
             .map(std::env::split_paths)

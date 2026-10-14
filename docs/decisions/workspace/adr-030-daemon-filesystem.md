@@ -2,6 +2,8 @@
 
 > Tokio 依赖限制已由 [ADR-037](../daemon/adr-037-daemon-model-context.md) 修订；filesystem 可按需要使用 Tokio。
 
+> 内部模块布局已由 [ADR-113](adr-113-filesystem-capability-groups.md) 改为按能力组组织。
+
 > 后续边界更新：[ADR-031](../providers/adr-031-daemon-provider.md) 将 Workspace 自动化迁入 metadata，
 > Agent 能力迁入 provider，并删除四个空横向 crate；当前依赖表以 ADR-031 为准。
 

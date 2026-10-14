@@ -4,6 +4,8 @@ use domain::agent_runtime::{AgentPersistenceHandle, StoredAgentConfig};
 use tokio::sync::{Notify, Semaphore};
 
 use super::*;
+
+mod cached_timeline;
 use crate::ports::agent_session::{
     AgentClient, AgentResumePurpose, AgentSession, AgentSessionFuture, AgentSessionSpec,
 };
@@ -585,7 +587,7 @@ async fn creation_revalidates_workspace_after_a_delayed_native_factory() {
     workspaces
         .upsert(
             &workspace,
-            model::workspace::registry::WorkspaceMutationContext::default(),
+            domain::workspace::registry::WorkspaceMutationContext::default(),
         )
         .unwrap();
     gate.release.add_permits(1);

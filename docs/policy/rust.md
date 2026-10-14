@@ -31,10 +31,6 @@ Review the code for unnecessary work and allocations before handing it off, whil
   - Add `tower` middleware (timeouts, tracing, compression) for observability and resilience.
   - Offload CPU-bound work to `tokio::task::spawn_blocking` or background services to avoid blocking the reactor.
 - When reporting errors to the console, use `tracing::error!` or `log::error!` instead of `println!`.
-- For data processing:
-  - **ALWAYS** use `polars` instead of other data frame libraries for tabular data manipulation.
-  - If a `polars` dataframe will be printed, **NEVER** simultaneously print the number of entries in the dataframe nor the schema as it is redundant.
-  - **NEVER** ingest more than 10 rows of a data frame at a time. Only analyze subsets of data to avoid overloading your memory context.
 
 ## Code Style and Formatting
 
@@ -130,13 +126,15 @@ You could find long and complicated functions when working with some code. Do no
 
 ## Testing
 
-During local iteration, before preparing a commit, run only tests for the changed code and directly related behavior. Select the relevant module, test filter, integration target, or affected crate; do not run full test suites such as `cargo test --workspace`. Expand focused testing only when the change or a failure affects related code. A routine local handoff is not commit preparation.
+Run only tests for the changed code and directly related behavior, including during commit and PR preparation. Select the relevant module, test filter, integration target, or affected crate. Expand focused testing only when the change or a failure affects related code.
 
-Run the full Rust workspace suite when preparing a commit that changes Rust code in `bins/` or `crates/`. If the current task changes no Rust code in either directory, skip Rust tests even if the working tree contains Rust changes from other tasks. Workspace-wide coverage runs execute the full suite too and follow the same restriction.
+Run the full Rust workspace suite only when explicitly requested by the user. A request to commit changes, update a PR, or complete a handoff does not imply a request for full tests. Workspace-wide coverage runs execute the full suite too and require the same explicit request. If the current task changes no Rust code in `bins/` or `crates/`, skip Rust tests unless the user explicitly requests them, even if the working tree contains Rust changes from other tasks.
+
+When the user explicitly requests the full suite, run `cargo nextest run --workspace` followed by `cargo test --workspace --doc`; nextest runs every test in its own process across all binaries but does not execute doctests. Do not lower test parallelism (for example `--test-threads=1` or `-j1`) to make the suite pass: a test that fails only under parallel load has a timing or shared-state bug, so fix it. `cargo test --workspace` remains a valid equivalent when nextest is unavailable.
 
 - **MUST** write unit tests for all new functions and types
 - **MUST** mock external dependencies (APIs, databases, file systems)
-- **MUST** use the built-in `#[test]` attribute and `cargo test`
+- **MUST** use the built-in `#[test]` attribute; tests must pass under both `cargo test` and `cargo nextest run`
 - Follow the Arrange-Act-Assert pattern
 - Do not commit commented-out tests
 - **MUST** put all test-related modules in separate child files, including unit tests, regression suites, fixtures, and test helpers. Do not use inline test module bodies such as `mod tests { ... }`, even for a small suite; nested test modules follow the same rule.
@@ -144,6 +142,11 @@ Run the full Rust workspace suite when preparing a commit that changes Rust code
 - For `src/lib.rs`, `src/main.rs`, or `src/foo/mod.rs`, the child file is the sibling `tests.rs`. For `src/foo.rs`, the child file is `src/foo/tests.rs`. Split larger suites into additional named child files.
 - Keep integration tests in the crate's `tests/` directory. Place shared integration-test helpers in a subdirectory such as `tests/common/mod.rs` so they are not discovered as standalone test targets.
 - When adding or modifying an existing inline test module, move that module into its child file as part of the change, preserving test coverage and behavior.
+
+### Faster local builds
+
+- A fresh worktree recompiles all ~340 dependencies and downloads the sherpa-onnx static archive. On macOS, seed its `target/` from an existing checkout of the same toolchain with an APFS clone (`cp -c -R <checkout>/target <worktree>/target`); only workspace crates rebuild and the archive is reused. Clone time grows with the source directory, so run `cargo clean` there occasionally. Other filesystems can use a shared `CARGO_TARGET_DIR` instead, but concurrent builds then serialize on its lock.
+- The dev profile keeps line tables only. For a debugger session that needs local variables, build with `CARGO_PROFILE_DEV_DEBUG=full`.
 
 Example unit-test layout:
 
@@ -180,26 +183,27 @@ fn adds_two_numbers() {
 
 ## Code Coverage
 
-- When measuring coverage, **MUST** use `cargo llvm-cov` (`cargo-llvm-cov`). During local iteration, any measurement must stay within the affected crates and focused tests; workspace coverage is deferred until commit preparation.
-- When preparing a commit with Rust changes, generate an HTML report with `cargo llvm-cov --workspace --html`; the report is written to `target/llvm-cov/html/index.html`. Do not run this full suite merely to populate a local progress report.
+- When measuring coverage, **MUST** use `cargo llvm-cov` (`cargo-llvm-cov`). Keep measurements within the affected crates and focused tests unless the user explicitly requests workspace-wide coverage, including during commit and PR preparation.
+- Coverage measurement is not mandatory for a commit or PR. When the user explicitly requests workspace-wide coverage, generate an HTML report with `cargo llvm-cov nextest --workspace --html`; the report is written to `target/llvm-cov/html/index.html`. Do not run this full suite merely to populate a report or satisfy the commit checklist.
 - Every new public function or behaviour change **MUST** be covered by at least one test; aim to keep line coverage above **80%** across the workspace
 - Cover both the happy path and key error/edge-case branches
 - Do not add `#[allow(dead_code)]` or dummy call sites solely to satisfy the coverage tool; fix the underlying gap with a real test
-- Add coverage generation to the pre-commit checklist (see below)
+- Record coverage measurement status in the pre-commit checklist (see below)
 
 ### Project Reports
 
 Every project progress or delivery report, including PR descriptions and issue completion reports, **MUST** include a **Test coverage** section with:
 
-- The measured line coverage percentage and covered/total line counts for the actual measurement scope. During local iteration, report focused results when measured and state that workspace coverage is deferred until commit preparation. For commit preparation, include workspace and relevant crate results. Include the change from a comparable baseline when one exists; if none exists, say so.
+- The measured line coverage percentage and covered/total line counts for the actual measurement scope, when measured. Report focused results by default; include workspace results only when the user explicitly requested that measurement. Include the change from a comparable baseline when one exists; if none exists, say so.
 - The exact command, revision, and measurement scope: workspace or selected crates, enabled features, and any excluded files, skipped tests, or unavailable platforms.
 - A reviewable coverage artifact (for example, an attached report or CI artifact link), plus the important uncovered behavior and follow-up needed. The generated local report is at `target/llvm-cov/html/index.html`; a local path alone is not a shared artifact.
 - Test execution results separately from coverage. A passing test count is not a coverage percentage.
 
-If coverage was not measured, state **not measured**, the reason, and the next step; never invent a percentage or present an older result as current. Local iteration with focused tests is a valid reason to defer coverage; reporting requirements must not expand the test scope. For documentation-only changes, the section may state **not applicable — no Rust behavior changed**, with the validation performed. An unavailable or deferred measurement does not waive the requirement to report its status.
+If coverage was not measured, state **not measured**, the reason, and the next step if measurement is later requested; never invent a percentage or present an older result as current. Coverage not being requested is a valid reason to omit measurement, including during commit and PR preparation; reporting requirements must not expand the test scope. For documentation-only changes, the section may state **not applicable — no Rust behavior changed**, with the validation performed. An unavailable or omitted measurement does not waive the requirement to report its status.
 
 ## Imports and Dependencies
 
+- **MUST** keep items private by default. Use `pub` only for items that another workspace crate (ultimately the `daemon` binary or its integration tests) actually uses, and `pub(crate)` for crate-internal sharing. Do not add forwarding `pub use` aliases; callers import from the owning module. The workspace enables `unreachable_pub`, so `dead_code` also reports crate-private items that nothing uses.
 - **MUST** avoid wildcard imports (`use module::*`) except for preludes, test modules (`use super::*`), and prelude re-exports
 - **MUST** document dependencies in `Cargo.toml` with version constraints
 - Use `cargo` for dependency management
@@ -237,9 +241,9 @@ If coverage was not measured, state **not measured**, the reason, and the next s
 
 ## Security
 
-- **NEVER** store secrets, API keys, or passwords in code. Only store them in `.env`.
-  - Ensure `.env` is declared in `.gitignore`.
-- **MUST** use environment variables for sensitive configuration via `dotenvy` or `std::env`
+- **NEVER** store secrets, API keys, or passwords in code or committed files.
+  - Keep local `.env` files out of Git; `.gitignore` already excludes `.env` and `.env.*`.
+- **MUST** read sensitive configuration from environment variables injected at runtime via `std::env`; headless startup may generate and restore its private local API token as specified in ADR-140; the daemon does not load local API credentials from `.env`, command-line flags, URLs, or TOML (see [daemon operations](../operations/daemon.md)).
 - **NEVER** log sensitive information (passwords, tokens, PII)
 - Use `secrecy` crate for sensitive data types
 
@@ -256,24 +260,23 @@ If coverage was not measured, state **not measured**, the reason, and the next s
 - **MUST** use `clippy` for linting and follow its suggestions
 - **MUST** ensure code compiles with no warnings (use `-D warnings` flag in CI, not `#![deny(warnings)]` in source)
 - Use `cargo` for building, testing, and dependency management
-- Use `cargo test` for running tests
+- Use `cargo nextest run` for full test runs and `cargo test` for doctests or a single focused target
 - Use `cargo doc` for generating documentation
-- **NEVER** build with `cargo build --features python`: this will always fail. Instead, **ALWAYS** use `maturin`.
 
 ## Before Committing
 
-Apply this checklist when preparing a commit, not during routine local edits or handoffs. The full Rust test and coverage checks apply only when the proposed commit changes Rust code in `bins/` or `crates/`; documentation-only changes do not require Rust tests or coverage.
+Apply this checklist when preparing a commit, not during routine local edits or handoffs. For Rust changes in `bins/` or `crates/`, run affected tests and applicable format, lint, and build checks. Full Rust workspace tests and workspace-wide coverage require an explicit user request; preparing a commit does not make them mandatory. Documentation-only changes do not require Rust tests or coverage unless the user explicitly requests them.
 
-- [ ] All workspace tests pass (`cargo test --workspace`)
+- [ ] Affected Rust tests pass; run the full workspace suite only if explicitly requested by the user
 - [ ] No compiler warnings (`cargo build --workspace`)
-- [ ] Clippy passes (`cargo clippy --workspace --all-targets -- -D warnings`)
+- [ ] Clippy passes (`cargo clippy --locked --workspace --all-targets -- -D warnings`)
 - [ ] Code is formatted (`cargo fmt --all --check`)
 - [ ] All public items have doc comments
 - [ ] No commented-out code or debug statements
 - [ ] No hardcoded credentials
-- [ ] Coverage generated and reviewed (`cargo llvm-cov --workspace --html`); new code is covered
+- [ ] New behavior is covered by focused tests; coverage measurement status is reported, with an artifact if measured. Run workspace-wide coverage only if explicitly requested by the user
 - [ ] Test modules are declared in their parent and implemented in separate child files
-- [ ] Project report includes test coverage, measurement scope, results, and an artifact (or an explicit reason coverage is unavailable or not applicable)
+- [ ] Project report includes test coverage status, measurement scope and results when measured, and an artifact (or an explicit reason coverage was not measured or is not applicable)
 
 ---
 

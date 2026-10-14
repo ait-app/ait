@@ -35,7 +35,7 @@ impl Connection {
     /// Register a host and return its subscription identity.
     /// # Errors
     /// Returns validation or broker capacity errors before publishing a lease.
-    pub fn register(
+    pub(crate) fn register(
         &mut self,
         broker: &Broker,
         params: Value,

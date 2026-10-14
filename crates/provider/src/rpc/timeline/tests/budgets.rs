@@ -126,6 +126,32 @@ fn response_budget_accounts_for_agent_metadata_and_stale_cursor_resets() {
 }
 
 #[test]
+fn stored_pages_budget_the_native_revalidation_hint_with_large_metadata_and_results() {
+    let timeline = Timeline::memory().unwrap();
+    let entries = [
+        tool(1, "one", 700 * 1024, "completed").entry,
+        tool(2, "two", 700 * 1024, "completed").entry,
+    ];
+    timeline.append("a", "codex", &entries).unwrap();
+    let request = request(json!({"agentId":"a","direction":"tail","limit":40,
+        "allowCached":true}));
+    for needs_refresh in [true, false] {
+        let response = fetch_stored(
+            &request,
+            &timeline,
+            "a",
+            &json!({"metadata":"x".repeat(100 * 1024)}),
+            Some(needs_refresh),
+        )
+        .unwrap();
+        assert!(serde_json::to_vec(&response).unwrap().len() <= MAX_RESPONSE_BYTES);
+        assert_eq!(response["historyNeedsRefresh"], needs_refresh);
+        assert_eq!(response["startCursor"]["seq"], 2);
+        assert_eq!(response["hasOlder"], true);
+    }
+}
+
+#[test]
 fn merged_text_is_split_into_complete_source_rows_instead_of_truncated() {
     let rows = (1..=3)
         .map(|seq| {

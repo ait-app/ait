@@ -211,6 +211,50 @@ async fn stream_drain_budget_defers_completion_until_every_queued_item_is_commit
 }
 
 #[tokio::test]
+async fn authoritative_history_is_reconciled_before_the_turn_is_completed() {
+    let (mut manager, registry, client) = running().await;
+    let timeline = Timeline::memory().unwrap();
+    manager = manager.with_timeline(timeline.clone());
+    let AgentTurnEvent::Progress { entry: answer, .. } = progress("one", "done") else {
+        unreachable!();
+    };
+    let user = NativeItem {
+        key: "native:native-turn:user".into(),
+        item: json!({"type":"user_message","messageId":"user","text":"start"}),
+        ..answer.clone()
+    };
+    let history = vec![user, answer];
+    {
+        let mut state = client.0.lock().unwrap();
+        state.events.push_back(progress("one", "done"));
+        state
+            .events
+            .push_back(AgentTurnEvent::History(history.clone()));
+        state
+            .events
+            .push_back(AgentTurnEvent::Completed(Some("done".into())));
+    }
+    manager.poll().await.unwrap();
+    assert_eq!(
+        timeline
+            .read("agent-1")
+            .unwrap()
+            .1
+            .into_iter()
+            .map(|row| row.entry)
+            .collect::<Vec<_>>(),
+        history
+    );
+    assert_eq!(
+        registry.get("agent-1").unwrap().unwrap().last_status,
+        AgentRuntimeStatus::Idle
+    );
+    assert_eq!(manager.active_turn("agent-1"), None);
+    assert_eq!(manager.last_message("agent-1"), Some("done"));
+    assert_eq!(client.0.lock().unwrap().close_calls, 0);
+}
+
+#[tokio::test]
 async fn conflicting_progress_observation_fails_the_turn_without_corrupting_history() {
     let (mut manager, registry, client) = running().await;
     let timeline = Timeline::memory().unwrap();
@@ -225,14 +269,55 @@ async fn conflicting_progress_observation_fails_the_turn_without_corrupting_hist
     }
     manager.poll().await.unwrap();
     let rows = timeline.read("agent-1").unwrap().1;
-    assert_eq!(rows.len(), 1);
+    assert_eq!(rows.len(), 2);
     assert_eq!(rows[0].entry.item["text"], "accepted");
+    assert_eq!(rows[1].entry.item["type"], "error");
     assert_eq!(
         registry.get("agent-1").unwrap().unwrap().last_status,
         AgentRuntimeStatus::Error
     );
     assert!(manager.live_snapshot("agent-1").is_none());
     assert_eq!(client.0.lock().unwrap().close_calls, 1);
+}
+
+#[tokio::test]
+async fn authoritative_history_repairs_observation_order_before_turn_completion() {
+    let (mut manager, registry, client) = running().await;
+    let timeline = Timeline::memory().unwrap();
+    manager = manager.with_timeline(timeline.clone());
+    let AgentTurnEvent::Progress { entry: answer, .. } = progress("first", "answer") else {
+        panic!("expected progress");
+    };
+    let mut user = answer.clone();
+    user.key = "native:native-turn:user".to_owned();
+    user.item = json!({"type":"user_message","messageId":"user","text":"Try it"});
+    {
+        let mut state = client.0.lock().unwrap();
+        state.events.push_back(progress("first", "answer"));
+        state
+            .events
+            .push_back(AgentTurnEvent::Timeline(user.clone()));
+        state
+            .events
+            .push_back(AgentTurnEvent::Timeline(answer.clone()));
+        state
+            .events
+            .push_back(AgentTurnEvent::History(vec![user, answer]));
+        state
+            .events
+            .push_back(AgentTurnEvent::Completed(Some("answer".to_owned())));
+    }
+    manager.poll().await.unwrap();
+    let rows = timeline.read("agent-1").unwrap().1;
+    assert_eq!(rows.len(), 2);
+    assert_eq!(rows[0].entry.item["type"], "user_message");
+    assert_eq!(rows[1].entry.item["text"], "answer");
+    assert_eq!(manager.active_turn("agent-1"), None);
+    assert_eq!(manager.last_message("agent-1"), Some("answer"));
+    assert_eq!(
+        registry.get("agent-1").unwrap().unwrap().last_status,
+        AgentRuntimeStatus::Idle
+    );
 }
 
 #[tokio::test]
@@ -245,7 +330,9 @@ async fn oversized_progress_closes_the_turn_before_any_partial_publication() {
         &"x".repeat(crate::storage::timeline::MAX_ENTRY_BYTES),
     ));
     manager.poll().await.unwrap();
-    assert!(timeline.read("agent-1").unwrap().1.is_empty());
+    let rows = timeline.read("agent-1").unwrap().1;
+    assert_eq!(rows.len(), 1);
+    assert_eq!(rows[0].entry.item["type"], "error");
     assert_eq!(
         registry.get("agent-1").unwrap().unwrap().last_status,
         AgentRuntimeStatus::Error
@@ -285,6 +372,91 @@ async fn large_completed_tool_result_is_saved_without_closing_the_native_session
 }
 
 #[tokio::test]
+async fn oversized_codex_mcp_result_preserves_the_session_history_and_next_turn() {
+    use crate::ports::agent_session::AgentClient;
+
+    let fixture = crate::test_support::Fixture::new();
+    let client = fixture.client();
+    let registry = MemoryRegistry::default();
+    let timeline = Timeline::memory().unwrap();
+    let mut manager = AgentManager::new(Box::new(registry.clone())).with_timeline(timeline.clone());
+    manager.register_client(Box::new(client.clone())).unwrap();
+    manager
+        .create("agent", &fixture.spec(), AgentRegistration::default())
+        .await
+        .unwrap();
+    let handle = registry.get("agent").unwrap().unwrap().persistence.unwrap();
+
+    for prompt in ["large-mcp-result", "continue"] {
+        manager.send("agent", prompt).await.unwrap();
+        tokio::time::timeout(std::time::Duration::from_secs(3), async {
+            loop {
+                manager.poll().await.unwrap();
+                if manager.active_turn("agent").is_none() {
+                    break;
+                }
+                tokio::time::sleep(std::time::Duration::from_millis(5)).await;
+            }
+        })
+        .await
+        .unwrap();
+        let record = registry.get("agent").unwrap().unwrap();
+        assert_eq!(record.last_status, AgentRuntimeStatus::Idle);
+        assert!(record.last_error.is_none());
+        assert_eq!(record.persistence.as_ref(), Some(&handle));
+        assert!(manager.live_snapshot("agent").is_some());
+    }
+
+    let rows = timeline.read("agent").unwrap().1;
+    let tool = rows
+        .iter()
+        .find(|row| {
+            row.entry.item["type"] == "tool_call" && row.entry.item["status"] == "completed"
+        })
+        .unwrap();
+    assert_eq!(tool.entry.item["status"], "completed");
+    assert!(
+        tool.entry.item["detail"]["output"]
+            .as_str()
+            .unwrap()
+            .contains("Output truncated")
+    );
+    let history = client.history(&handle, &fixture.spec().cwd).await.unwrap();
+    let restored = history
+        .iter()
+        .find(|entry| entry.key == tool.entry.key)
+        .unwrap();
+    assert_eq!(restored.item, tool.entry.item);
+    timeline.reconcile("agent", "codex", &history).unwrap();
+    assert_eq!(manager.last_message("agent"), Some("Echo: continue"));
+
+    let starts: Vec<_> = fixture
+        .requests()
+        .into_iter()
+        .filter(|request| request["method"] == "turn/start")
+        .collect();
+    assert_eq!(starts.len(), 2);
+    assert_eq!(starts[0]["pid"], starts[1]["pid"]);
+    let raw: Value = serde_json::from_str(
+        &std::fs::read_to_string(
+            fixture
+                .cwd
+                .join(format!("native-history-{}.json", handle.session_id)),
+        )
+        .unwrap(),
+    )
+    .unwrap();
+    assert_eq!(
+        raw[0]["items"][1]["result"]["structuredContent"]["diff"]
+            .as_str()
+            .unwrap()
+            .len(),
+        1024 * 1024
+    );
+    manager.close("agent").await.unwrap();
+}
+
+#[tokio::test]
 async fn provider_poll_failure_is_terminal_and_keeps_safe_error_metadata() {
     let (mut manager, registry, client) = running().await;
     client.0.lock().unwrap().poll_error = Some(AgentSessionError::Failed);
@@ -297,6 +469,90 @@ async fn provider_poll_failure_is_terminal_and_keeps_safe_error_metadata() {
         record.last_error.as_deref(),
         Some("Provider execution failed")
     );
+}
+
+#[tokio::test]
+async fn classified_failures_are_durable_visible_and_not_duplicated_on_cleanup_retry() {
+    use crate::ports::diagnostics::{Category, Diagnostic};
+    let (mut manager, registry, client) = running().await;
+    let timeline = Timeline::memory().unwrap();
+    manager = manager.with_timeline(timeline.clone());
+    {
+        let mut state = client.0.lock().unwrap();
+        state.failure_diagnostic = Some(Diagnostic::new(Category::Quota, "result"));
+        state.events.push_back(AgentTurnEvent::Failed);
+        state.fail_close = true;
+    }
+    assert_eq!(manager.poll().await, Err(AgentManagerError::Session));
+    assert!(timeline.read("agent-1").unwrap().1.is_empty());
+    client.0.lock().unwrap().fail_close = false;
+    manager.poll().await.unwrap();
+    manager.poll().await.unwrap();
+    let rows = timeline.read("agent-1").unwrap().1;
+    assert_eq!(rows.len(), 1);
+    assert_eq!(rows[0].entry.item["type"], "error");
+    assert_eq!(rows[0].entry.item["message"], Category::Quota.message());
+    assert_eq!(rows[0].entry.turn_id.as_deref(), Some("native-turn"));
+    assert_eq!(
+        registry
+            .get("agent-1")
+            .unwrap()
+            .unwrap()
+            .last_error
+            .as_deref(),
+        Some(Category::Quota.message())
+    );
+    timeline.reconcile("agent-1", "codex", &[]).unwrap();
+    assert_eq!(timeline.read("agent-1").unwrap().1[0].entry, rows[0].entry);
+}
+
+#[tokio::test]
+async fn successful_and_cancelled_turns_do_not_publish_failure_notices() {
+    for terminal in [AgentTurnEvent::Completed(None), AgentTurnEvent::Cancelled] {
+        let (mut manager, registry, client) = running().await;
+        let timeline = Timeline::memory().unwrap();
+        manager = manager.with_timeline(timeline.clone());
+        client.0.lock().unwrap().events.push_back(terminal);
+        manager.poll().await.unwrap();
+        assert!(timeline.read("agent-1").unwrap().1.is_empty());
+        assert!(
+            registry
+                .get("agent-1")
+                .unwrap()
+                .unwrap()
+                .last_error
+                .is_none()
+        );
+    }
+}
+
+#[tokio::test]
+async fn uses_adapter_failure_explanations_and_rejects_invalid_display_messages() {
+    for (message, expected) in [
+        (
+            "AGY denied a tool requiring approval.",
+            "AGY denied a tool requiring approval.",
+        ),
+        ("  ", "Provider execution failed"),
+        ("invalid\0message", "Provider execution failed"),
+    ] {
+        let (mut manager, registry, client) = running().await;
+        {
+            let mut state = client.0.lock().unwrap();
+            state.failure_message = Some(message);
+            state.events.push_back(AgentTurnEvent::Failed);
+        }
+        manager.poll().await.unwrap();
+        assert_eq!(
+            registry
+                .get("agent-1")
+                .unwrap()
+                .unwrap()
+                .last_error
+                .as_deref(),
+            Some(expected)
+        );
+    }
 }
 
 #[tokio::test]

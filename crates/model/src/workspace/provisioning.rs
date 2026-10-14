@@ -2,46 +2,9 @@
 
 use std::fmt::Debug;
 
-/// Preferred project setup and script configuration file.
-pub const PROJECT_CONFIG_FILE_NAME: &str = "ait.json";
-/// Read-only fallback for projects created before the Ait filename migration.
-pub const LEGACY_PROJECT_CONFIG_FILE_NAME: &str = "paseo.json";
-
-/// A normalized directory and its lightweight Git placement.
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub struct Checkout {
-    /// Absolute selected directory. It can be below the Git worktree root.
-    pub cwd: String,
-    /// Whether the directory belongs to a Git checkout.
-    pub is_git: bool,
-    /// Current branch, or none for detached HEAD and non-Git directories.
-    pub current_branch: Option<String>,
-    /// Preferred remote URL, when one is configured.
-    pub remote_url: Option<String>,
-    /// Git worktree root. Non-Git directories have no root.
-    pub worktree_root: Option<String>,
-    /// Whether Paseo created and owns this linked worktree.
-    pub is_paseo_owned_worktree: bool,
-    /// Main checkout root for a linked worktree.
-    pub main_repo_root: Option<String>,
-}
-
-/// Safe filesystem failure categories used by provisioning use cases.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, thiserror::Error)]
-pub enum DirectorySourceError {
-    /// The requested path is absent or is not a directory.
-    #[error("directory not found")]
-    NotFound,
-    /// The requested directory already exists.
-    #[error("directory already exists")]
-    AlreadyExists,
-    /// The operation was denied by filesystem permissions.
-    #[error("permission denied")]
-    PermissionDenied,
-    /// Another filesystem or Git inspection operation failed.
-    #[error("filesystem inspection failed")]
-    Io,
-}
+use domain::workspace::provisioning::{
+    Checkout, DirectorySourceError, GithubProjectsError, GithubRepository,
+};
 
 /// Blocking adapter for local directory and lightweight Git inspection.
 pub trait DirectorySource: Debug + Send + Sync {
@@ -71,4 +34,43 @@ pub trait DirectorySource: Debug + Send + Sync {
     /// # Errors
     /// Returns a categorized filesystem error for missing or unreadable paths.
     fn canonical(&self, path: &str) -> Result<String, DirectorySourceError>;
+}
+
+/// Blocking GitHub CLI and Git clone operations for Project provisioning; callers run this outside
+/// the async reactor.
+pub trait GithubProjectsRuntime: Debug + Send + Sync {
+    /// List recent owned repositories for an empty query, otherwise search accessible repos.
+    ///
+    /// # Errors
+    /// Returns a categorized CLI, authentication, or parsing failure.
+    fn search_repositories(
+        &self,
+        query: &str,
+        limit: usize,
+    ) -> Result<Vec<GithubRepository>, GithubProjectsError>;
+
+    /// Resolve the checkout path before cloning, so failures can report the intended path.
+    ///
+    /// # Errors
+    /// Returns an invalid-target error when the parent path or child name cannot be resolved.
+    fn checkout_path(
+        &self,
+        target_directory: &str,
+        name: &str,
+    ) -> Result<String, GithubProjectsError>;
+
+    /// Clone one validated GitHub URL into a new child under `target_directory`.
+    ///
+    /// The adapter creates missing parent directories, stages the clone, and atomically renames
+    /// the completed checkout. It checks for an existing target before the rename; simultaneous
+    /// cross-process creation still needs a future no-replace primitive.
+    ///
+    /// # Errors
+    /// Returns a categorized path, collision, or clone failure.
+    fn clone_repository(
+        &self,
+        clone_url: &str,
+        target_directory: &str,
+        name: &str,
+    ) -> Result<String, GithubProjectsError>;
 }

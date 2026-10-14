@@ -1,0 +1,13 @@
+# Workspace test runner settings; see docs/policy/rust.md for the commit-preparation commands.
+[store]
+dir = "target/nextest"
+
+[profile.default]
+# Report every failure in one run instead of stopping at the first failing binary.
+fail-fast = false
+slow-timeout = { period = "30s", terminate-after = 4 }
+
+[profile.ci]
+fail-fast = false
+slow-timeout = { period = "30s", terminate-after = 4 }
+failure-output = "immediate-final"

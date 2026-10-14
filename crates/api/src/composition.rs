@@ -2,14 +2,16 @@
 
 use std::sync::{Arc, Mutex};
 
-use filesystem::service::{
-    checkout::Checkout, files::Files, forge::Forge, github_projects::GithubProjects,
-    workspace_recovery::WorkspaceRecovery, worktrees::Worktrees,
+use filesystem::files::service::files::Files;
+use filesystem::forge::service::Forge;
+use filesystem::git::service::checkout::Checkout;
+use metadata::automation::service::WorkspaceAutomation;
+use metadata::daemon::service::Daemon;
+use metadata::directory::service::{
+    directory::Directory, github_projects::GithubProjects, workspace_state::WorkspaceState,
 };
-use metadata::service::{
-    daemon::Daemon, directory::Directory, workspace_automation::WorkspaceAutomation,
-    workspace_labels::WorkspaceLabels, workspace_state::WorkspaceState,
-};
+use metadata::labels::service::WorkspaceLabels;
+use metadata::worktrees::service::{workspace_recovery::WorkspaceRecovery, worktrees::Worktrees};
 use provider::service::{agent_execution::AgentExecution, agents::Agents};
 
 use crate::Services;
@@ -17,34 +19,36 @@ use crate::Services;
 /// Internal transport handles; only complete crate services can populate these fields.
 #[derive(Default)]
 pub(super) struct Parts {
+    pub(super) bots: bot::dispatch::State,
     /// Bounded model-backed wording generation shared by title and Git use cases.
     pub(super) summary_source: Option<Arc<dyn model::summary::SummarySource>>,
     /// First-prompt workspace naming with independently drained background work.
-    pub(super) workspace_names: Option<metadata::service::workspace_names::WorkspaceNames>,
+    pub(super) workspace_names:
+        Option<metadata::directory::service::workspace_names::WorkspaceNames>,
     /// Persistent timed Agent executions.
     pub(super) schedules: Option<schedule::service::Schedules>,
     /// Connection-owned browser automation broker.
     pub(super) browser: Option<browser::broker::Broker>,
     /// Orchestration skill selection and installation.
-    pub(super) skills: Option<filesystem::service::skills::Skills>,
+    pub(super) skills: Option<provider::skills::service::Skills>,
     /// Durable push registration and lease renewal.
-    pub(super) push_tokens: Option<metadata::service::push::PushTokens>,
+    pub(super) push_tokens: Option<metadata::push::service::PushTokens>,
     /// Connection-owned voice and dictation with independently selected speech engines.
     pub(super) speech: Option<voice::service::Speech>,
     /// Local PTY terminal lifecycle, input, capture, and streaming.
     pub(super) terminals: Option<terminal::service::Terminals>,
     /// Native Provider execution and coordinated Agent runtime metadata.
     pub(super) agent_execution: Option<AgentExecution>,
-    /// Filesystem workspace recovery operations.
+    /// Archived Workspace recovery.
     pub(super) workspace_recovery: Option<WorkspaceRecovery>,
-    /// Filesystem github projects operations.
+    /// GitHub repository discovery and Project cloning.
     pub(super) github_projects: Option<GithubProjects>,
     /// Versioned Agent presets and explicit default selection.
     pub(super) agents: Option<Agents>,
     /// Git checkout status, diff, refresh, and history use cases.
     pub(super) checkout: Option<Checkout>,
     /// Background origin fetches for actively observed workspace repositories.
-    pub(super) git_fetch: Option<filesystem::service::git_fetch::GitFetch>,
+    pub(super) git_fetch: Option<filesystem::git::service::git_fetch::GitFetch>,
     /// Daemon status, mutable configuration, diagnostics, and update boundary.
     pub(super) daemon: Option<Daemon>,
     /// Project and workspace registries.
@@ -66,6 +70,7 @@ pub(super) struct Parts {
 impl From<Services> for Parts {
     fn from(services: Services) -> Self {
         let mut parts = Self {
+            bots: bot::dispatch::State { bots: services.bot },
             schedules: services.schedule,
             browser: services.browser,
             speech: services.voice,
@@ -81,23 +86,23 @@ impl From<Services> for Parts {
             parts.workspace_labels = Some(metadata.workspace_labels);
             parts.workspace_automation = Some(metadata.workspace_automation);
             parts.workspace_state = Some(metadata.workspace_state);
+            parts.worktrees = Some(metadata.worktrees);
+            parts.workspace_recovery = Some(metadata.workspace_recovery);
+            parts.github_projects = Some(metadata.github_projects);
         }
         if let Some(filesystem) = services.filesystem {
             let filesystem = filesystem.into_dependencies();
-            parts.skills = Some(filesystem.skills);
-            parts.workspace_recovery = Some(filesystem.workspace_recovery);
-            parts.github_projects = Some(filesystem.github_projects);
             parts.checkout = Some(filesystem.checkout);
             parts.git_fetch = Some(filesystem.git_fetch);
             parts.forge = Some(filesystem.forge);
             parts.files = Some(filesystem.files);
-            parts.worktrees = Some(filesystem.worktrees);
         }
         if let Some(provider) = services.provider {
             let provider = provider.into_dependencies();
             parts.summary_source = Some(summary_source(provider.summary_generator));
             parts.agent_execution = Some(provider.execution);
             parts.agents = Some(provider.agents);
+            parts.skills = Some(provider.skills);
         }
         parts
     }
@@ -109,32 +114,18 @@ impl From<Services> for Parts {
 /// shutdown directly, without adding a queue, worker, cache, or independent lifetime.
 #[must_use]
 pub fn summary_source(
-    generator: Arc<dyn provider::summary::SummaryGenerator>,
+    generator: Arc<dyn model::summary::SummaryGenerator>,
 ) -> Arc<dyn model::summary::SummarySource> {
     Arc::new(SummarySource(generator))
 }
 
-/// Adapt installed `automation` to setup requests sharing its existing lock and task owner.
-/// Returns none when automation is absent; no independent runtime or lock is created.
-pub(super) fn workspace_setup(
-    automation: Option<&Arc<Mutex<WorkspaceAutomation>>>,
-) -> Option<Arc<dyn model::workspace::lifecycle::WorkspaceSetup>> {
-    automation.map(|automation| {
-        Arc::new(
-            metadata::service::workspace_collaboration::SharedWorkspaceSetup::new(
-                automation.clone(),
-            ),
-        ) as Arc<dyn model::workspace::lifecycle::WorkspaceSetup>
-    })
-}
-
 #[derive(Debug)]
-struct SummarySource(Arc<dyn provider::summary::SummaryGenerator>);
+struct SummarySource(Arc<dyn model::summary::SummaryGenerator>);
 
 impl model::summary::SummarySource for SummarySource {
     fn generate(
         &self,
-        request: model::summary::SummaryRequest,
+        request: domain::summary::SummaryRequest,
     ) -> model::summary::SummaryFuture<'_> {
         self.0.generate(request)
     }

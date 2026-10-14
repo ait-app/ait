@@ -1,3 +1,5 @@
+mod identity;
+
 use std::fs::{File, OpenOptions};
 use std::path::Path;
 
@@ -13,7 +15,7 @@ pub(super) struct InstanceLease {
 }
 
 impl InstanceLease {
-    pub fn acquire(directory: &Path) -> anyhow::Result<Self> {
+    pub(crate) fn acquire(directory: &Path) -> anyhow::Result<Self> {
         create_directory(directory)?;
         let directory = directory
             .canonicalize()
@@ -29,8 +31,8 @@ impl InstanceLease {
             .context("open server instance lock")?;
         lock.try_lock()
             .context("server data directory is already in use or cannot be locked")?;
-        let server_id = file::storage::server_identity::load_or_create(&directory)
-            .context("load stable server identity")?;
+        let server_id =
+            identity::load_or_create(&directory).context("load stable server identity")?;
         Ok(Self {
             _lock: lock,
             server_id,

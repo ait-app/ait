@@ -5,7 +5,7 @@ use std::time::Duration;
 use axum::extract::ws::WebSocket;
 use futures_util::stream::SplitStream;
 use model::outbound::Outbound;
-use protocol::ErrorCode;
+use model::server::ErrorCode;
 use tokio::sync::{OwnedSemaphorePermit, Semaphore};
 use tokio::time::{Instant, timeout_at};
 
@@ -129,7 +129,7 @@ pub(super) async fn next(
             }
         };
         if outbound
-            .send(&protocol::ServerMessage::Event {
+            .send(&model::server::ServerMessage::Event {
                 method: "connection.chunk.ack".to_owned(),
                 params: ack,
             })

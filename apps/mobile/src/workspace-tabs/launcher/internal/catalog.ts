@@ -1,21 +1,25 @@
 export const PRIMARY_LAUNCH_ORDER = [
   "agent",
+  "bot",
   "terminal",
   "changes",
   "diff",
   "files",
   "browser",
   "pullRequest",
+  "schedule",
 ] as const;
 
 export const SUPPORTING_LAUNCH_ORDER = [
   "changes",
+  "terminal",
   "diff",
   "files",
-  "terminal",
   "agent",
+  "bot",
   "browser",
   "pullRequest",
+  "schedule",
 ] as const;
 
 export type BuiltInLaunchItemId = (typeof PRIMARY_LAUNCH_ORDER)[number];

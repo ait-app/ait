@@ -3,6 +3,7 @@ import { pluginSettings } from "./plugin-settings";
 
 export const es: TranslationResources = {
   onlineService: en.onlineService,
+  bots: en.bots,
   paneFind: {
     searchFailed:
       "No se pudo buscar en este chat. Comprueba la conexión con el host y vuelve a intentarlo.",
@@ -1205,16 +1206,11 @@ export const es: TranslationResources = {
       appName: "Ait",
     },
     sections: {
+      usage: "Usage",
       workspaces: "Espacios de trabajo",
       sessions: "Historial",
       search: "Buscar",
       schedules: "Horarios",
-    },
-    worktreeSetup: {
-      title: "Configurar secuencias de comandos del árbol de trabajo",
-      description:
-        "Agregue comandos de configuración para que los nuevos árboles de trabajo puedan instalar dependencias y prepararse automáticamente.",
-      openProjectSettings: "Abrir la configuración del proyecto",
     },
     project: {
       actions: {
@@ -1396,7 +1392,7 @@ export const es: TranslationResources = {
       },
       keepRunning: {
         title: "Mantener el demonio en ejecución después de salir",
-        hint: "Daemonsigue ejecutándose cuando sales de Ait",
+        hint: "Los agentes y terminales siguen ejecutándose al salir de Ait; el próximo inicio se vuelve a conectar a ellos.",
       },
       logs: {
         title: "Archivo de registro",
@@ -1411,7 +1407,6 @@ export const es: TranslationResources = {
       fullStatus: {
         title: "Estado completo",
         modalTitle: "EstadoDaemon",
-        hint: "Ejecuta`paseo daemon status`y muestra la salida.",
         view: "Ver estado",
         copied: "Estado copiado al portapapeles.",
         fetchFailed: "No se pudo recuperar el estado del demonio:{{message}}",
@@ -1692,6 +1687,31 @@ export const es: TranslationResources = {
     },
   },
   providerUsage: {
+    summaryUsed: "{{source}} {{amount}} usado",
+    summaryRemaining: "{{source}} {{amount}} restante",
+    options: "Configuración",
+    refreshAll: "Actualizar todo",
+    refreshFailed: "No se pudo actualizar el uso",
+    noHosts: "No hay hosts conectados",
+    agentError: "No se pudo cargar el uso: {{reason}}",
+    hostUnavailableNamed: "Conéctate a {{host}} para ver el uso",
+    hostUpgradeRequiredNamed: "Actualiza {{host}} para ver el uso",
+    pin: "Fijar",
+    unpin: "Desfijar",
+    pinWindow: "Fijar {{source}} {{window}}",
+    refreshSource: "Actualizar {{source}}",
+    displayAs: "Porcentajes",
+    displayUsed: "Usado",
+    displayRemaining: "Restante",
+    showInSidebar: "Resumen en la barra lateral",
+    showInSidebarHint: "Las ventanas fijadas se muestran al pie de la barra lateral",
+    loginRejected: "Inicio de sesión rechazado (HTTP {{status}}). {{remedy}}",
+    loginExpired: "La sesión caducó {{time}}. {{remedy}}",
+    loginRefreshCommand: "Ejecuta {{command}} para renovarla.",
+    loginSignInAgain: "Vuelve a iniciar sesión.",
+    nativeReadFailed: "No se pudo leer el uso de la cuenta nativa",
+    nativePlanUnavailable:
+      "Este inicio de sesión no informa del uso del plan. Inicia sesión con la CLI del proveedor.",
     error: "Error",
     unavailable: "No disponible",
     updated: "Actualizado {{time}}",
@@ -1924,7 +1944,11 @@ export const es: TranslationResources = {
       loading: "Cargando archivo...",
       noPreview: "No hay vista previa disponible",
       openWithSystem: "Abrir con una aplicación del sistema",
-      binaryPreviewUnavailable: "Vista previa binaria no disponible",
+      downloadFile: "Descargar archivo",
+      shareFile: "Compartir archivo",
+      binaryPreviewUnavailable: "Vista previa no disponible",
+      binaryPreviewDescription:
+        "No se puede obtener una vista previa de este tipo de archivo en Ait.",
       tooLargeToDisplay: "Este archivo es demasiado grande para mostrarlo",
       failedToLoad: "No se pudo cargar el archivo",
       failedToLoadPreview: "No se pudo cargar la vista previa del archivo",
@@ -2017,6 +2041,8 @@ export const es: TranslationResources = {
     dismiss: "Despedir",
   },
   contextWindow: {
+    noData: "No context usage yet",
+    accessibilityNoData: "View account usage",
     title: "ventana contextual",
     used: "{{percentage}}% utilizado",
     tokens: "Fichas{{used}}/{{max}}",
@@ -2057,6 +2083,7 @@ export const es: TranslationResources = {
     },
     groupInfo: "Acerca de{{title}}",
     sections: {
+      management: "Administración",
       general: "General",
       appearance: "Apariencia",
       layout: en.settings.sections.layout,
@@ -2208,6 +2235,8 @@ export const es: TranslationResources = {
         rowHint: "Collect connection, daemon, provider, desktop, and log details",
         run: "Run",
         running: "Running diagnostic...",
+        exportAccessibility: "Exportar archivo de diagnóstico",
+        exportFailed: "No se pudo exportar el archivo de diagnóstico",
         copyLabel: "diagnostic",
         copyAccessibility: "Copy diagnostic",
         copyFailed: "Failed to copy diagnostic",
@@ -2227,6 +2256,7 @@ export const es: TranslationResources = {
       connectedHosts: "Anfitriones conectados",
       offline: "Desconectado",
       versionDiffers: "La versión difiere de este dispositivo.",
+      experimentalFeatures: en.settings.about.experimentalFeatures,
       releaseChannel: {
         label: "Canal de lanzamiento",
         description: "Cambie aBetapara recibir actualizaciones antes y ayudar a darles forma",
@@ -2297,6 +2327,14 @@ export const es: TranslationResources = {
         codeSize: "Tamaño del código",
         codeSizeHint: "Se usa en código, diferencias y la salida del terminal",
         codeSizeAccessibility: "Tamaño de fuente del código",
+      },
+      layout: {
+        title: "Diseño",
+        contentWidth: "Ancho del contenido",
+        contentWidthHint: "Ancho máximo del chat y de los archivos Markdown en pantallas anchas",
+        contentWidthAccessibility: "Ancho del contenido en píxeles",
+        reset: "Restablecer",
+        resetAccessibility: "Restablecer el ancho del contenido",
       },
       syntax: {
         title: "Sintaxis",

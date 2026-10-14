@@ -99,13 +99,13 @@ async fn websocket_executes_native_turns_waits_concurrently_and_resumes_after_re
     )
     .await;
     terminate(&mut process).await;
-    assert_children_exited(&cwd);
+    assert_children_exited(&cwd).await;
     let mut restarted = start_with_path(&state, &log, Some(&path));
     let address = ready(&mut restarted, &log).await;
     let mut client = connect(&address, METHODS).await;
     assert_restored_lifecycle(&mut client, &id, &handle).await;
     terminate(&mut restarted).await;
-    assert_children_exited(&cwd);
+    assert_children_exited(&cwd).await;
     let stored: Value =
         serde_json::from_slice(&std::fs::read(state.join("agents/agents.json")).unwrap()).unwrap();
     assert_eq!(stored, json!([]));
@@ -184,30 +184,45 @@ async fn assert_restored_lifecycle(
     request(client, "agent.delete.request", json!({"agentId":id})).await;
 }
 
-fn assert_children_exited(cwd: &std::path::Path) {
+async fn assert_children_exited(cwd: &std::path::Path) {
     let records = std::fs::read_to_string(cwd.join("native-requests.jsonl")).unwrap();
-    assert_native_pids_exited(&records);
+    // The daemon reaps owned sessions, but dropped discovery helpers can briefly await
+    // the operating system's orphan reaper after the daemon itself has exited.
+    let deadline = tokio::time::Instant::now() + std::time::Duration::from_secs(2);
+    for pid in native_pids(&records) {
+        while native_pid_exists(pid) {
+            assert!(
+                tokio::time::Instant::now() < deadline,
+                "native child still alive: {pid}"
+            );
+            tokio::time::sleep(std::time::Duration::from_millis(20)).await;
+        }
+    }
 }
 
 fn assert_native_pids_exited(records: &str) {
-    let pids = records
+    for pid in native_pids(records) {
+        assert!(!native_pid_exists(pid), "native child still alive: {pid}");
+    }
+}
+
+fn native_pids(records: &str) -> std::collections::BTreeSet<u64> {
+    records
         .lines()
         .map(|line| {
             serde_json::from_str::<Value>(line).unwrap()["pid"]
                 .as_u64()
                 .unwrap()
         })
-        .collect::<std::collections::BTreeSet<_>>();
-    for pid in pids {
-        assert!(
-            !std::process::Command::new("kill")
-                .args(["-0", &pid.to_string()])
-                .stdout(std::process::Stdio::null())
-                .stderr(std::process::Stdio::null())
-                .status()
-                .unwrap()
-                .success(),
-            "native child still alive: {pid}"
-        );
-    }
+        .collect()
+}
+
+fn native_pid_exists(pid: u64) -> bool {
+    std::process::Command::new("kill")
+        .args(["-0", &pid.to_string()])
+        .stdout(std::process::Stdio::null())
+        .stderr(std::process::Stdio::null())
+        .status()
+        .unwrap()
+        .success()
 }

@@ -26,6 +26,7 @@ jobs:
   build:
     name: Build ${{ matrix.label }}
     runs-on: ${{ matrix.runner }}
+    timeout-minutes: 120
     strategy:
       fail-fast: false
       matrix:
@@ -85,7 +86,7 @@ jobs:
         run: npm ci
 
       - name: Validate release tooling
-        run: node --test .tmp/release-tools/scripts/release-assets.test.mjs .tmp/release-tools/scripts/release-layout.test.mjs .tmp/release-tools/scripts/prepare-desktop-daemon.test.mjs .tmp/release-tools/scripts/verify-packaged-resources.test.cjs
+        run: node --test .tmp/release-tools/scripts/release-assets.test.mjs .tmp/release-tools/scripts/release-layout.test.mjs .tmp/release-tools/scripts/release-workflow.test.mjs .tmp/release-tools/scripts/prepare-desktop-daemon.test.mjs .tmp/release-tools/scripts/verify-packaged-resources.test.cjs
 
       - name: Install Linux packaging and smoke-test dependencies
         if: matrix.platform == 'linux'
@@ -146,10 +147,11 @@ jobs:
           retention-days: 7
 
   release:
-    name: Publish GitHub Release
+    name: Prepare GitHub Release
     needs: build
     if: ${{ !cancelled() && needs.build.result == 'success' }}
     runs-on: ubuntu-24.04
+    timeout-minutes: 30
     permissions:
       contents: write
     env:
@@ -192,11 +194,14 @@ jobs:
       - name: Preserve previously published Android APK
         run: |
           if gh release view "$RELEASE_TAG" --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
-            mkdir -p previous-assets
-            gh release download "$RELEASE_TAG" --dir previous-assets --repo "$GITHUB_REPOSITORY"
-            if test -f "previous-assets/Ait-${RELEASE_TAG#v}-android.apk"; then
-              (cd previous-assets && sha256sum --check SHA256SUMS)
-              cp "previous-assets/Ait-${RELEASE_TAG#v}-android.apk" release-assets/
+            asset_count=$(gh release view "$RELEASE_TAG" --repo "$GITHUB_REPOSITORY" --json assets --jq '.assets | length')
+            if [ "$asset_count" -gt 0 ]; then
+              mkdir -p previous-assets
+              gh release download "$RELEASE_TAG" --dir previous-assets --repo "$GITHUB_REPOSITORY"
+              if test -f "previous-assets/Ait-${RELEASE_TAG#v}-android.apk"; then
+                (cd previous-assets && sha256sum --check SHA256SUMS)
+                cp "previous-assets/Ait-${RELEASE_TAG#v}-android.apk" release-assets/
+              fi
             fi
           fi
 
@@ -223,6 +228,7 @@ jobs:
             gh release upload "$RELEASE_TAG" release-assets/* --clobber --repo "$GITHUB_REPOSITORY"
           else
             gh release create "$RELEASE_TAG" release-assets/* \
+              --draft \
               --generate-notes \
               --title "Ait ${RELEASE_TAG}" \
               --verify-tag \

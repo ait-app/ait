@@ -1,3 +1,4 @@
+import { supportsBrowserAccount } from "@/runtime/browser-account";
 import { AgentProfilesSection } from "@/agent-profiles";
 import { AgentSkillsSection } from "@/agent-skills";
 import { OnlineServiceHostSection } from "./online-service-host-section";
@@ -24,8 +25,7 @@ import { isVersionMismatch } from "@/desktop/updates/desktop-updates";
 import { useDaemonConfig } from "@/hooks/use-daemon-config";
 import { useIsLocalDaemon } from "@/hooks/use-is-local-daemon";
 import { upsertDesktopDaemonConnection } from "@/runtime/daemon-start-service";
-import { ProviderUsageSettingsSection } from "@/provider-usage/settings-section";
-import { useProviderUsage } from "@/provider-usage/use-provider-usage";
+import { HostUsageSection } from "@/usage/host-usage-section";
 import {
   getHostRuntimeStore,
   isHostRuntimeConnected,
@@ -117,7 +117,7 @@ function formatHostConnectionLabel(connection: HostConnection, t: TFunction): st
   if (connection.type === "remoteSsh") {
     return `${t("settings.host.badges.remoteSsh")} (${connection.host})`;
   }
-  if (connection.type === "accountRelay") return "Account relay";
+  if (connection.type === "accountRelay") return t("settings.host.badges.relay");
   return `TCP (${connection.endpoint})`;
 }
 
@@ -137,6 +137,12 @@ function formatActiveConnectionBadge(
     return {
       icon: <Globe size={theme.iconSize.sm} color={theme.colors.foregroundMuted} />,
       text: t("settings.host.badges.remoteSsh"),
+    };
+  }
+  if (activeConnection.type === "accountRelay") {
+    return {
+      icon: <Monitor size={theme.iconSize.sm} color={theme.colors.foregroundMuted} />,
+      text: t("settings.host.badges.relay"),
     };
   }
   return {
@@ -241,7 +247,9 @@ export function HostConnectionsPage({ serverId }: { serverId: string }) {
     <View>
       <HostConnectionError serverId={serverId} />
       <ConnectionsSection host={host} />
-      {supportsAccountRelay() ? <OnlineServiceHostSection host={host} /> : null}
+      {supportsAccountRelay() && !supportsBrowserAccount() ? (
+        <OnlineServiceHostSection host={host} />
+      ) : null}
     </View>
   );
 }
@@ -316,10 +324,6 @@ export function HostProvidersPage({ serverId }: { serverId: string }) {
 
 export function HostUsagePage({ serverId }: { serverId: string }) {
   const host = useHostProfile(serverId);
-  const { view: providerUsageView, refresh: refreshProviderUsage } = useProviderUsage(serverId);
-  const handleRefresh = useCallback(() => {
-    void refreshProviderUsage();
-  }, [refreshProviderUsage]);
 
   if (!host) {
     return <HostNotFound />;
@@ -327,7 +331,7 @@ export function HostUsagePage({ serverId }: { serverId: string }) {
 
   return (
     <View>
-      <ProviderUsageSettingsSection view={providerUsageView} onRefresh={handleRefresh} />
+      <HostUsageSection serverId={serverId} />
     </View>
   );
 }

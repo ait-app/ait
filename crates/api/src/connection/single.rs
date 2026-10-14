@@ -8,13 +8,16 @@ use futures_util::{
     stream::{FuturesUnordered, SplitStream},
 };
 use model::outbound::{Outbound, QueueError};
-use model::subscription::SubscriptionReleaseRequest;
-use protocol::{ClientMessage, ErrorCode, valid_id};
+use model::server::SubscriptionReleaseRequest;
+use model::server::{ClientMessage, ErrorCode, valid_id};
 use tokio::sync::{mpsc, oneshot};
 use tokio_util::sync::CancellationToken;
 
 use super::{ConnectionSubscriptions, Incoming, chunks, error, process_message};
 use crate::Shared;
+
+// Workspace bootstrap sends several reads per group before the first response arrives.
+const WORKER_QUEUE_CAPACITY: usize = 16;
 
 enum Work {
     Message(Incoming),
@@ -32,10 +35,10 @@ pub(super) async fn read(
         provider: std::mem::take(&mut subscriptions.provider),
         ..Default::default()
     };
-    let (metadata_tx, metadata_rx) = mpsc::channel(2);
-    let (terminal_tx, terminal_rx) = mpsc::channel(2);
-    let (files_tx, files_rx) = mpsc::channel(2);
-    let (provider_tx, provider_rx) = mpsc::channel(2);
+    let (metadata_tx, metadata_rx) = mpsc::channel(WORKER_QUEUE_CAPACITY);
+    let (terminal_tx, terminal_rx) = mpsc::channel(WORKER_QUEUE_CAPACITY);
+    let (files_tx, files_rx) = mpsc::channel(WORKER_QUEUE_CAPACITY);
+    let (provider_tx, provider_rx) = mpsc::channel(WORKER_QUEUE_CAPACITY);
     let cancel = CancellationToken::new();
     let contexts = lanes.each_ref().map(|outbound| WorkerContext {
         state,
@@ -148,13 +151,13 @@ async fn route(
                 return error(context.outbound, None, ErrorCode::InvalidMessage);
             }
             if let Err(code) = validate_request(method, context) {
-                error(context.outbound, Some(request_id.clone()), code)?;
+                reject_negotiation(context, request_id, method, code)?;
                 continue;
             }
             if method == "connection.ping" {
                 context.outbound.respond(
                     request_id.clone(),
-                    metadata::rpc::server::ping(params.clone())
+                    metadata::server::rpc::server::ping(params.clone())
                         .map_err(|_| ErrorCode::InvalidMessage),
                 )?;
                 continue;
@@ -228,6 +231,28 @@ fn validate_request(method: &str, context: &WorkerContext<'_>) -> Result<(), Err
     )
 }
 
+fn reject_negotiation(
+    context: &WorkerContext<'_>,
+    request_id: &str,
+    method: &str,
+    code: ErrorCode,
+) -> Result<(), QueueError> {
+    tracing::info_span!(
+        "rpc",
+        method,
+        request_id,
+        resource = "capability_negotiation",
+        installed = context
+            .state
+            .info
+            .capabilities
+            .iter()
+            .any(|name| name == method),
+        negotiated = context.capabilities.iter().any(|name| name == method),
+    )
+    .in_scope(|| error(context.outbound, Some(request_id.to_owned()), code))
+}
+
 fn admit(
     senders: &[mpsc::Sender<Work>; 4],
     message: Incoming,
@@ -235,10 +260,22 @@ fn admit(
 ) -> Result<(), QueueError> {
     let lane = lane(&message);
     if let Err(failure) = senders[lane].try_send(Work::Message(message)) {
-        if let Work::Message(Incoming::Text(ClientMessage::Request { request_id, .. }, _)) =
-            failure.into_inner()
+        if let Work::Message(Incoming::Text(
+            ClientMessage::Request {
+                request_id, method, ..
+            },
+            _,
+        )) = failure.into_inner()
         {
-            error(outbound, Some(request_id), ErrorCode::ResourceExhausted)?;
+            tracing::info_span!(
+                "rpc",
+                method = %method,
+                request_id = %request_id,
+                capability_lane = lane,
+                resource = "capability_queue",
+                queue_capacity = WORKER_QUEUE_CAPACITY,
+            )
+            .in_scope(|| error(outbound, Some(request_id), ErrorCode::ResourceExhausted))?;
         } else {
             // Binary/event loss cannot be repaired by retrying an RPC.
             return Err(QueueError::Full);
@@ -273,9 +310,27 @@ fn lane(message: &Incoming) -> usize {
         return 2;
     }
     if provider::capabilities::implemented_methods().any(|spec| spec.name == method) {
-        return 3;
+        return if file_operation(method) { 2 } else { 3 };
+    }
+    if metadata::capabilities::implemented_methods().any(|spec| spec.name == method)
+        && file_operation(method)
+    {
+        return 2;
     }
     0
+}
+
+/// Owner-declared methods that run long checkout, clone or skill installation work keep the
+/// file-operation lane, so they cannot block ordinary directory reads or native Agent requests.
+fn file_operation(method: &str) -> bool {
+    const PREFIXES: [&str; 5] = [
+        "agent.skills.",
+        "workspace.worktree.",
+        "workspace.recovery.",
+        "workspace.github.",
+        "project.github.",
+    ];
+    PREFIXES.iter().any(|prefix| method.starts_with(prefix))
 }
 
 #[cfg(test)]

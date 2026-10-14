@@ -1,5 +1,54 @@
 use super::*;
 
+#[tokio::test]
+async fn controls_use_each_sessions_native_modes_and_preserve_static_fallback() {
+    let fixture = Fixture::new();
+    let (execution, registry) = worker(&fixture);
+    let created = create(&execution, &fixture).await;
+    let id = created["agentId"].as_str().unwrap();
+    let other = create(&execution, &fixture).await;
+    for modes in [
+        json!([{"id":"review","label":"Review"}]),
+        json!([]),
+        json!("malformed"),
+    ] {
+        registry
+            .update(id, &|current| {
+                let mut next = current.clone();
+                next.runtime_info = Some(
+                    serde_json::from_value(json!({
+                        "provider":"codex","extra":{"availableModes":modes}
+                    }))
+                    .unwrap(),
+                );
+                next
+            })
+            .unwrap();
+        let snapshot = execution
+            .execute("agent.get.request", json!({"agentId":id}))
+            .await
+            .unwrap();
+        assert_eq!(
+            snapshot["agent"]["availableModes"],
+            if modes.is_array() {
+                &modes
+            } else {
+                &created["agent"]["availableModes"]
+            }
+            .clone()
+        );
+        let snapshot = execution
+            .execute("agent.get.request", json!({"agentId":other["agentId"]}))
+            .await
+            .unwrap();
+        assert_eq!(
+            snapshot["agent"]["availableModes"],
+            other["agent"]["availableModes"]
+        );
+    }
+    execution.shutdown().await.unwrap();
+}
+
 pub(super) async fn pending(execution: &AgentExecution, id: &str) -> Value {
     tokio::time::timeout(Duration::from_secs(3), async {
         loop {
@@ -120,22 +169,28 @@ async fn native_permissions_are_agent_scoped_ephemeral_and_support_questions() {
     execution.shutdown().await.unwrap();
 }
 
+fn assert_created_controls(created: &Value) {
+    let modes = created["agent"]["availableModes"].as_array().unwrap();
+    assert_eq!(modes.len(), 2);
+    assert_eq!(modes[0]["id"], "auto");
+    assert_eq!(modes[1]["id"], "full-access");
+    assert_eq!(modes[1]["icon"], "ShieldOff");
+    assert_eq!(created["agent"]["features"][0]["id"], "service_tier");
+    assert_eq!(created["agent"]["features"][0]["icon"], "zap");
+    assert_eq!(created["agent"]["features"][0]["value"], "default");
+    assert_eq!(
+        created["agent"]["capabilities"]["supportsRewindConversation"],
+        true
+    );
+}
+
 #[tokio::test]
 async fn controls_validate_atomically_apply_next_turn_and_persist() {
     let fixture = Fixture::new();
     let (execution, registry) = worker(&fixture);
     let created = create(&execution, &fixture).await;
     let id = created["agentId"].as_str().unwrap();
-    let modes = created["agent"]["availableModes"].as_array().unwrap();
-    assert_eq!(modes.len(), 2);
-    assert_eq!(modes[0]["id"], "auto");
-    assert_eq!(modes[1]["id"], "full-access");
-    assert_eq!(modes[1]["icon"], "ShieldOff");
-    assert_eq!(created["agent"]["features"][0]["icon"], "zap");
-    assert_eq!(
-        created["agent"]["capabilities"]["supportsRewindConversation"],
-        true
-    );
+    assert_created_controls(&created);
     let commands = execution
         .execute("agent.commands.list.request", json!({"agentId":id}))
         .await

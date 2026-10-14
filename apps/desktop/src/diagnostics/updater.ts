@@ -31,13 +31,18 @@ interface DesktopUpdaterDiagnosticEnvironment {
   platform: NodeJS.Platform;
   currentVersion: string;
   cachePath: string;
-  readBundleVersion(bundlePath: string): string | null;
+  readBundleVersion?: (bundlePath: string) => string | null;
 }
 
 export function collectDesktopUpdaterDiagnostics(
   environment: DesktopUpdaterDiagnosticEnvironment,
 ): DesktopUpdaterDiagnostics {
-  const { platform, currentVersion, cachePath, readBundleVersion } = environment;
+  const {
+    platform,
+    currentVersion,
+    cachePath,
+    readBundleVersion = readMacBundleVersion,
+  } = environment;
   if (platform !== "darwin") {
     return {
       platform,
@@ -70,7 +75,6 @@ export function getDesktopUpdaterDiagnostics(): DesktopUpdaterDiagnostics {
     platform: process.platform,
     currentVersion: app.getVersion(),
     cachePath: path.join(app.getPath("home"), "Library", "Caches"),
-    readBundleVersion: readMacBundleVersion,
   });
 }
 
@@ -127,14 +131,13 @@ function readTargetVersion(
 }
 
 function readMacBundleVersion(bundlePath: string): string | null {
+  const infoPath = path.join(bundlePath, "Contents", "Info.plist");
+  // ShipIt moves the staged bundle into Applications after a successful update.
+  // Its retained state still points at that now-missing staging directory.
+  if (!statSync(infoPath, { throwIfNoEntry: false })) return null;
   return execFileSync(
     "/usr/bin/plutil",
-    [
-      "-extract",
-      "CFBundleShortVersionString",
-      "raw",
-      path.join(bundlePath, "Contents", "Info.plist"),
-    ],
+    ["-extract", "CFBundleShortVersionString", "raw", infoPath],
     { encoding: "utf8" },
   ).trim();
 }

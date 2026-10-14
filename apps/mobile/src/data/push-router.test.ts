@@ -11,7 +11,7 @@ import { buildTerminalsQueryKey } from "@/screens/workspace/terminals/state";
 import type { OwnedSubscription, SubscriptionObserver } from "@ait/client";
 import type { MutableDaemonConfig, SessionOutboundMessage } from "@ait/protocol/messages";
 import { QueryClient, QueryObserver, skipToken } from "@tanstack/react-query";
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 
 type ProvidersSnapshotUpdateMessage = Extract<
   SessionOutboundMessage,
@@ -48,14 +48,14 @@ const daemonConfig: MutableDaemonConfig = {
 function createFakeClient(config: { rejectCheckoutDiffSubscribe?: boolean } = {}): {
   client: RouterClient;
   emit: <K extends RouterMessageType>(message: Extract<RouterMessage, { type: K }>) => void;
-  subscribeCheckoutDiffCalls: Array<{
+  subscribeCheckoutDiffCalls: {
     cwd: string;
     compare: { mode: "uncommitted" | "base"; baseRef?: string; ignoreWhitespace?: boolean };
     subscriptionId: string;
-  }>;
+  }[];
   unsubscribeCheckoutDiffCalls: string[];
-  subscribeTerminalCalls: Array<{ cwd: string; workspaceId?: string }>;
-  unsubscribeTerminalCalls: Array<{ cwd: string; workspaceId?: string }>;
+  subscribeTerminalCalls: { cwd: string; workspaceId?: string }[];
+  unsubscribeTerminalCalls: { cwd: string; workspaceId?: string }[];
 } {
   const handlers: Record<RouterMessageType, RouterHandler[]> = {
     "provider.snapshot.update": [],
@@ -64,14 +64,14 @@ function createFakeClient(config: { rejectCheckoutDiffSubscribe?: boolean } = {}
     status: [],
     "terminal.list.changed": [],
   };
-  const subscribeCheckoutDiffCalls: Array<{
+  const subscribeCheckoutDiffCalls: {
     cwd: string;
     compare: { mode: "uncommitted" | "base"; baseRef?: string; ignoreWhitespace?: boolean };
     subscriptionId: string;
-  }> = [];
+  }[] = [];
   const unsubscribeCheckoutDiffCalls: string[] = [];
-  const subscribeTerminalCalls: Array<{ cwd: string; workspaceId?: string }> = [];
-  const unsubscribeTerminalCalls: Array<{ cwd: string; workspaceId?: string }> = [];
+  const subscribeTerminalCalls: { cwd: string; workspaceId?: string }[] = [];
+  const unsubscribeTerminalCalls: { cwd: string; workspaceId?: string }[] = [];
 
   function on<K extends RouterMessageType>(
     type: K,
@@ -205,6 +205,26 @@ function providerUpdate(generatedAt: string): ProvidersSnapshotUpdateMessage {
 }
 
 describe("server data push router", () => {
+  it("negotiates bootstrap events against each connected host's catalog", () => {
+    const queryClient = new QueryClient();
+    const fake = createFakeClient();
+    const observeEvents = vi.spyOn(fake.client, "observeEvents");
+    const unmount = mountServerDataPushRouter({
+      client: fake.client,
+      queryClient,
+      serverId: "host",
+    });
+    try {
+      expect(observeEvents).toHaveBeenCalledWith(
+        ["provider.snapshot.update", "status.daemon_config_changed"],
+        { supportedOnly: true },
+      );
+    } finally {
+      unmount();
+      queryClient.clear();
+    }
+  });
+
   it("retains equal diff files without reconstructing changed file bodies", () => {
     const queryClient = new QueryClient();
     const fake = createFakeClient();

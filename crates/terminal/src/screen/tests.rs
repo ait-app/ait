@@ -2,6 +2,53 @@ use super::*;
 
 mod paseo;
 
+#[test]
+fn primary_device_queries_are_answered_once_even_when_split_across_reads() {
+    let mut screen = screen();
+    assert!(screen.process(b"before\x1b[").is_empty());
+    assert_eq!(screen.process(b"c\x1b[0cafter"), b"\x1b[?1;0c\x1b[?1;0c");
+    assert!(
+        screen
+            .process(b"\x1b[>c\x1b[=c\x1b[1c\x1b[0;0c\x1b[0:0c")
+            .is_empty()
+    );
+    assert!(screen.process(b"\x1b[?1;0c\x1b]11;?\x07").is_empty());
+    // Bootstrap and repeated observation must not enqueue another input reply.
+    screen.observe(None, None).unwrap();
+    screen
+        .observe(None, Some(&restore(RestoreMode::VisibleSnapshot)))
+        .unwrap();
+    assert!(screen.process(b"done").is_empty());
+}
+
+#[test]
+fn shrinking_through_a_wide_character_keeps_writes_and_erase_in_bounds() {
+    for output in [b"\x1b[1;3HX".as_slice(), b"\x1b[1;3H\x1b[K"] {
+        let mut screen = Screen::new(Size { rows: 2, cols: 4 });
+        screen.process("ab界".as_bytes());
+
+        screen.resize(Size { rows: 2, cols: 3 });
+        screen.process(output);
+
+        assert_eq!(
+            screen.capture()[0],
+            if output.ends_with(b"X") { "abX" } else { "ab" }
+        );
+        assert!(screen.observe(None, None).is_ok());
+        assert!(!screen.ansi(0).is_empty());
+    }
+}
+
+#[test]
+fn one_cell_screens_accept_output_after_wide_characters_and_wrapping() {
+    let mut screen = Screen::new(Size { rows: 1, cols: 1 });
+
+    screen.process("界abc".as_bytes());
+
+    assert_eq!(screen.capture(), ["a", "b", "c"]);
+    assert!(screen.observe(None, None).is_ok());
+}
+
 fn screen() -> Screen {
     Screen::new(Size { rows: 3, cols: 12 })
 }

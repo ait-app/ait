@@ -6,7 +6,7 @@ use serde_json::{Value, json};
 use crate::protocol::native_sessions::ForkRequest;
 use crate::storage::timeline::Row;
 
-use super::timeline::projection::{Entry, project};
+use crate::timeline_projection::{Entry, project};
 
 mod tools;
 
@@ -56,7 +56,7 @@ pub(crate) fn export(
         selected.retain(|entry| entry.seq_end <= boundary);
     }
     let mut text =
-        String::from("<chat-history-summary>\nChat history from a previous Paseo agent.\n");
+        String::from("<chat-history-summary>\nChat history from a previous Ait agent.\n");
     for (field, label) in [("title", "Source agent"), ("cwd", "Source directory")] {
         if let Some(value) = agent[field]
             .as_str()

@@ -1,6 +1,6 @@
 # 附件分块传输验证
 
-超过 1 MiB 的客户端规范 JSON 消息按 256 KiB 分块，daemon 完整组装后分发。文件流逐帧确认并等待工作槽，避免单连接队列溢出或与后台任务竞争导致上传丢失。见 [ADR-096](../../decisions/clients/adr-098-acknowledged-client-chunks.md)。
+超过 1 MiB 的客户端规范 JSON 消息按 256 KiB 分块，daemon 完整组装后分发。文件流逐帧确认并等待工作槽，避免单连接队列溢出或与后台任务竞争导致上传丢失。见 [ADR-098](../../decisions/clients/adr-098-acknowledged-client-chunks.md)。
 
 ## Test coverage
 
@@ -15,16 +15,16 @@ cargo llvm-cov --workspace --html
 
 以下为本次 HTML index 的可审查摘要。完整 HTML 生成于独立 target 的 `llvm-cov/html/index.html`，尚未上传。
 
-| 范围 | 覆盖行 / 总行 | 行覆盖率 |
-|---|---:|---:|
-| Workspace | 54869 / 58092 | 94.45% |
-| API crate | 2109 / 2267 | 93.03% |
-| Filesystem crate | 11560 / 12187 | 94.86% |
-| Provider crate | 26243 / 27949 | 93.90% |
-| API chunk assembly | 98 / 106 | 92.45% |
-| File connection | 242 / 256 | 94.53% |
-| Upload state | 63 / 63 | 100% |
-| Provider prompt | 101 / 102 | 99.02% |
+| 范围               | 覆盖行 / 总行 | 行覆盖率 |
+| ------------------ | ------------: | -------: |
+| Workspace          | 54869 / 58092 |   94.45% |
+| API crate          |   2109 / 2267 |   93.03% |
+| Filesystem crate   | 11560 / 12187 |   94.86% |
+| Provider crate     | 26243 / 27949 |   93.90% |
+| API chunk assembly |      98 / 106 |   92.45% |
+| File connection    |     242 / 256 |   94.53% |
+| Upload state       |       63 / 63 |     100% |
+| Provider prompt    |     101 / 102 |   99.02% |
 
 没有相同基线提交和测量环境的可比结果。剩余缺口包括全局预算耗尽和部分 socket 关闭时机；尚未实测公网 relay 吞吐、真实模型服务的最大图片数或跨平台文件选择器。TypeScript 行覆盖率未测量；已有定向行为测试，后续可在 CI 中补充客户端覆盖率。
 

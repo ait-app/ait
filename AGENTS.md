@@ -7,6 +7,6 @@ Before changing domain boundaries, read `docs/README.md`.
 - Dependencies point inward: adapters implement ports; application coordinates domain behavior.
 - Never commit credentials, provider tokens, local SQLite databases, or runtime artifacts.
 - Run format and lint checks appropriate to the changed files before handing off changes.
-- During local iteration, run only tests for the changed code and directly related behavior. Run full test suites only when preparing a commit; workspace-wide coverage also counts as a full test run.
-- If the current task changes no Rust code in `bins/` or `crates/`, skip Rust tests.
+- Run only tests for the changed code and directly related behavior, including when preparing commits or updating PRs. Run full Rust workspace tests only when explicitly requested by the user; workspace-wide coverage counts as a full test run and requires the same explicit request. A request to commit changes or update a PR does not imply a request for full tests or coverage.
+- If the current task changes no Rust code in `bins/` or `crates/`, skip Rust tests unless the user explicitly requests them.
 - Record durable boundary changes as an ADR and update `docs/README.md`.

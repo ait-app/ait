@@ -1,0 +1,506 @@
+{
+  "generated_at": "2026-10-09T17:09:00.713077+00:00",
+  "source_revision": "c5dc75fd4a398038bbc5749d50edce94f265c761",
+  "measured_tree": "229b18e65b82e732a41e8cf4d76f62d884fa4bec",
+  "base_revision": "b2dba057f90abc5f5f0fdd6b740a52fbaa5b31dd",
+  "rust_source_fingerprint_sha256": "4bbab07fbdea2999838383261c7f4bc8e5e643cac68c7b3e05c01951d1120f06",
+  "fingerprint_scope": "Sorted tracked .rs files, Cargo.toml files, Cargo.lock and rust-toolchain.toml; SHA-256 over path, NUL, bytes, NUL.",
+  "platform": {
+    "system": "Darwin",
+    "machine": "arm64",
+    "rustc": "rustc 1.98.1 (48a229cea 2026-09-01)",
+    "cargo_llvm_cov": "0.8.4"
+  },
+  "scope": {
+    "packages": [
+      "api",
+      "browser",
+      "daemon",
+      "domain",
+      "filesystem",
+      "metadata",
+      "model",
+      "persistence",
+      "provider",
+      "relay",
+      "schedule",
+      "terminal",
+      "voice"
+    ],
+    "features": "default",
+    "additional_file_exclusions": [],
+    "coverage_includes_doctests": false,
+    "native_ignored_tests_run": false,
+    "unavailable_platforms": [
+      "Linux",
+      "Windows"
+    ],
+    "summary_configuration_draft_now_compiled": true
+  },
+  "commands": [
+    "cargo fmt --all --check",
+    "cargo clippy --workspace --all-targets -- -D warnings",
+    "cargo build --workspace",
+    "cargo test --workspace -- --test-threads=4",
+    "cargo llvm-cov --workspace --html -- --test-threads=1",
+    "cargo llvm-cov report --json --summary-only --output-path target/summary-directory-coverage-raw-2026-10-10.json",
+    "cargo llvm-cov report --lcov --output-path target/summary-directory-coverage-2026-10-10.lcov",
+    "node scripts/check-docs.mjs",
+    "Python ast.parse on scripts/paseo-focused-coverage.py",
+    "git diff --cached --check"
+  ],
+  "tests": {
+    "ordinary_workspace": {
+      "passed": 2002,
+      "failed": 0,
+      "ignored": 14,
+      "ignored_tests": [
+        "local::antigravity::tests::installed::authenticated_multi_turn_and_resume ... ignored, requires authenticated AGY and explicitly consumes three model turns",
+        "local::claude::tests::process::installed_claude_control_protocol_discovers_models_without_inference ... ignored, requires a locally installed Claude Code CLI; sends no model request",
+        "local::claude::tests::process::parity::installed_claude_completes_a_native_turn_and_reopens_history ... ignored, requires installed Claude authentication and makes one small model request",
+        "local::codex::tests::installed::installed_codex_completes_a_native_turn_and_reopens_history ... ignored, requires installed Codex authentication and makes one small model request",
+        "local::deepseek_harness::launcher::tests::installed_launcher_runs_native_cli_without_a_wrapper ... ignored, requires an installed DSH CLI or desktop bundle; does not open a session",
+        "local::deepseek_harness::metadata::tests::installed_dsh_metadata_has_no_tools_or_persisted_session ... ignored, requires AIT_TEST_DSH_BIN; loopback model and temporary native profile only",
+        "local::deepseek_harness::native::tests::installed_history::installed_existing_session_import_and_resume_preserve_history ... ignored, requires AIT_TEST_DSH_BIN and an idle, released AIT_TEST_DSH_SESSION_ID; no prompt",
+        "local::deepseek_harness::native::tests::installed_history::installed_existing_session_is_importable_without_writes ... ignored, requires AIT_TEST_DSH_BIN and AIT_TEST_DSH_SESSION_ID; read-only existing history",
+        "local::deepseek_harness::native::tests::installed_host_discovers_switches_permissions_and_adopts_legacy_sessions ... ignored, requires an installed DSH CLI via AIT_TEST_DSH_BIN; no model request",
+        "local::opencode::tests::installed::installed_acp_auxiliary_model_has_no_tools_and_removes_native_history ... ignored, requires OpenCode 2.0.26+ in AIT_TEST_OPENCODE_BIN; isolated XDG and loopback model",
+        "local::opencode::tests::installed::installed_acp_multi_turn_native_history_resume_and_discovery ... ignored, requires AIT_TEST_OPENCODE_BIN; isolated XDG and deterministic loopback model",
+        "local::opencode::tests::installed::installed_acp_native_permission_rejection_and_next_turn ... ignored, requires AIT_TEST_OPENCODE_BIN; isolated XDG and loopback model",
+        "local::opencode::tests::installed::installed_acp_native_question_form_reaches_user_and_model ... ignored, requires OpenCode 2.0.26+ in AIT_TEST_OPENCODE_BIN; isolated XDG and loopback model",
+        "local::opencode::tests::installed::installed_acp_without_native_forms_disables_unanswerable_questions ... ignored, requires OpenCode 1.18.4+ in AIT_TEST_OPENCODE_BIN; isolated XDG and loopback model"
+      ]
+    },
+    "instrumented_workspace": {
+      "passed": 2002,
+      "failed": 0,
+      "ignored": 14,
+      "ignored_tests": [
+        "local::antigravity::tests::installed::authenticated_multi_turn_and_resume ... ignored, requires authenticated AGY and explicitly consumes three model turns",
+        "local::claude::tests::process::installed_claude_control_protocol_discovers_models_without_inference ... ignored, requires a locally installed Claude Code CLI; sends no model request",
+        "local::claude::tests::process::parity::installed_claude_completes_a_native_turn_and_reopens_history ... ignored, requires installed Claude authentication and makes one small model request",
+        "local::codex::tests::installed::installed_codex_completes_a_native_turn_and_reopens_history ... ignored, requires installed Codex authentication and makes one small model request",
+        "local::deepseek_harness::launcher::tests::installed_launcher_runs_native_cli_without_a_wrapper ... ignored, requires an installed DSH CLI or desktop bundle; does not open a session",
+        "local::deepseek_harness::metadata::tests::installed_dsh_metadata_has_no_tools_or_persisted_session ... ignored, requires AIT_TEST_DSH_BIN; loopback model and temporary native profile only",
+        "local::deepseek_harness::native::tests::installed_history::installed_existing_session_import_and_resume_preserve_history ... ignored, requires AIT_TEST_DSH_BIN and an idle, released AIT_TEST_DSH_SESSION_ID; no prompt",
+        "local::deepseek_harness::native::tests::installed_history::installed_existing_session_is_importable_without_writes ... ignored, requires AIT_TEST_DSH_BIN and AIT_TEST_DSH_SESSION_ID; read-only existing history",
+        "local::deepseek_harness::native::tests::installed_host_discovers_switches_permissions_and_adopts_legacy_sessions ... ignored, requires an installed DSH CLI via AIT_TEST_DSH_BIN; no model request",
+        "local::opencode::tests::installed::installed_acp_auxiliary_model_has_no_tools_and_removes_native_history ... ignored, requires OpenCode 2.0.26+ in AIT_TEST_OPENCODE_BIN; isolated XDG and loopback model",
+        "local::opencode::tests::installed::installed_acp_multi_turn_native_history_resume_and_discovery ... ignored, requires AIT_TEST_OPENCODE_BIN; isolated XDG and deterministic loopback model",
+        "local::opencode::tests::installed::installed_acp_native_permission_rejection_and_next_turn ... ignored, requires AIT_TEST_OPENCODE_BIN; isolated XDG and loopback model",
+        "local::opencode::tests::installed::installed_acp_native_question_form_reaches_user_and_model ... ignored, requires OpenCode 2.0.26+ in AIT_TEST_OPENCODE_BIN; isolated XDG and loopback model",
+        "local::opencode::tests::installed::installed_acp_without_native_forms_disables_unanswerable_questions ... ignored, requires OpenCode 1.18.4+ in AIT_TEST_OPENCODE_BIN; isolated XDG and loopback model"
+      ]
+    }
+  },
+  "coverage": {
+    "workspace": {
+      "covered": 55880,
+      "total": 59002,
+      "percent": 94.70865394393412
+    },
+    "packages": {
+      "api": {
+        "covered": 2130,
+        "total": 2256,
+        "percent": 94.41489361702128
+      },
+      "browser": {
+        "covered": 715,
+        "total": 733,
+        "percent": 97.5443383356071
+      },
+      "daemon": {
+        "covered": 1318,
+        "total": 1391,
+        "percent": 94.75197699496765
+      },
+      "domain": {
+        "covered": 549,
+        "total": 549,
+        "percent": 100.0
+      },
+      "filesystem": {
+        "covered": 11596,
+        "total": 12216,
+        "percent": 94.92468893254748
+      },
+      "metadata": {
+        "covered": 5462,
+        "total": 5801,
+        "percent": 94.15617996897086
+      },
+      "model": {
+        "covered": 1336,
+        "total": 1388,
+        "percent": 96.25360230547551
+      },
+      "persistence": {
+        "covered": 1696,
+        "total": 1769,
+        "percent": 95.87337478801582
+      },
+      "provider": {
+        "covered": 26445,
+        "total": 28055,
+        "percent": 94.26127250044556
+      },
+      "relay": {
+        "covered": 462,
+        "total": 503,
+        "percent": 91.84890656063618
+      },
+      "schedule": {
+        "covered": 772,
+        "total": 791,
+        "percent": 97.59797724399495
+      },
+      "terminal": {
+        "covered": 1531,
+        "total": 1587,
+        "percent": 96.471329552615
+      },
+      "voice": {
+        "covered": 1868,
+        "total": 1963,
+        "percent": 95.16046867040245
+      }
+    },
+    "runtime_production": {
+      "covered": 114,
+      "total": 117,
+      "percent": 97.43589743589743
+    },
+    "summary_configuration_production": {
+      "covered": 19,
+      "total": 19,
+      "percent": 100.0
+    }
+  },
+  "comparable_baseline": {
+    "source_revision": "fa5fc947a95a18bf0a95b606c8312b172e875d1f",
+    "artifact": "crate-visibility-pr-coverage-2026-10-09.json",
+    "rust_source_fingerprint_sha256": "d3a1bf41e98ca65b7dcdef66dd2a6a9d5a91693c0595780af6a35b26737c0e2f",
+    "base_fingerprint_matches": true,
+    "workspace": {
+      "covered": 55854,
+      "total": 58980,
+      "percent": 94.6998982706002
+    },
+    "packages": {
+      "api": {
+        "covered": 2130,
+        "total": 2256,
+        "percent": 94.41489361702128
+      },
+      "browser": {
+        "covered": 715,
+        "total": 733,
+        "percent": 97.5443383356071
+      },
+      "daemon": {
+        "covered": 1334,
+        "total": 1407,
+        "percent": 94.81165600568586
+      },
+      "domain": {
+        "covered": 549,
+        "total": 549,
+        "percent": 100.0
+      },
+      "filesystem": {
+        "covered": 11595,
+        "total": 12216,
+        "percent": 94.91650294695481
+      },
+      "metadata": {
+        "covered": 5464,
+        "total": 5804,
+        "percent": 94.14197105444521
+      },
+      "model": {
+        "covered": 1314,
+        "total": 1366,
+        "percent": 96.19326500732065
+      },
+      "persistence": {
+        "covered": 1675,
+        "total": 1750,
+        "percent": 95.71428571428571
+      },
+      "provider": {
+        "covered": 26445,
+        "total": 28055,
+        "percent": 94.26127250044556
+      },
+      "relay": {
+        "covered": 462,
+        "total": 503,
+        "percent": 91.84890656063618
+      },
+      "schedule": {
+        "covered": 772,
+        "total": 791,
+        "percent": 97.59797724399495
+      },
+      "terminal": {
+        "covered": 1531,
+        "total": 1587,
+        "percent": 96.471329552615
+      },
+      "voice": {
+        "covered": 1868,
+        "total": 1963,
+        "percent": 95.16046867040245
+      }
+    },
+    "workspace_change_percentage_points": 0.008755673333922687,
+    "note": "Latest main changes only client TypeScript and documentation. Its Rust source fingerprint was verified equal to the recorded baseline. Coverage command, default features, macOS arm64, toolchain and ignored native-test scope match."
+  },
+  "changed_files": [
+    {
+      "path": "bins/daemon/src/host.rs",
+      "lines": {
+        "covered": 454,
+        "total": 466,
+        "percent": 97.42489270386267
+      },
+      "source_sha256": "b515b5820432b6c2ec2e04022b47b6e27fb7f60ebb43422cdbfdef48b0e2000f",
+      "uncovered_lines": [
+        107,
+        226,
+        245,
+        251,
+        267
+      ],
+      "baseline_lines": {
+        "covered": 454,
+        "total": 466,
+        "percent": 97.42489270386267
+      }
+    },
+    {
+      "path": "crates/api/src/composition.rs",
+      "lines": {
+        "covered": 63,
+        "total": 63,
+        "percent": 100.0
+      },
+      "source_sha256": "3ebdd5a62c74d541bc27ff767e6cfd4ff3cd25f9562fdb33529ec7f16a9fcfa2",
+      "uncovered_lines": [],
+      "baseline_lines": {
+        "covered": 63,
+        "total": 63,
+        "percent": 100.0
+      }
+    },
+    {
+      "path": "crates/metadata/src/connection/directory.rs",
+      "lines": {
+        "covered": 63,
+        "total": 67,
+        "percent": 94.02985074626868
+      },
+      "source_sha256": "a7374f73fe8206e39d91de1146864bea4672c6bb56653c922327c5fde72e846b",
+      "uncovered_lines": [
+        17,
+        22,
+        44,
+        73
+      ],
+      "baseline_lines": {
+        "covered": 65,
+        "total": 70,
+        "percent": 92.85714285714286
+      }
+    },
+    {
+      "path": "crates/model/src/runtime.rs",
+      "lines": {
+        "covered": 114,
+        "total": 117,
+        "percent": 97.43589743589743
+      },
+      "source_sha256": "7e1b20305f6702b77783823183a50c8b900084aea31d5c978261845802015ed7",
+      "uncovered_lines": [
+        169,
+        184
+      ],
+      "baseline_lines": {
+        "covered": 92,
+        "total": 95,
+        "percent": 96.84210526315788
+      }
+    },
+    {
+      "path": "crates/persistence/src/storage/summary_config.rs",
+      "lines": {
+        "covered": 19,
+        "total": 19,
+        "percent": 100.0
+      },
+      "source_sha256": "6711a7e9a4bf07fce1f1c9603fbc40fc385e24a554a3e0c1cd37cf9dfaa9dde4",
+      "uncovered_lines": [],
+      "baseline_lines": null
+    },
+    {
+      "path": "crates/provider/src/composition.rs",
+      "lines": {
+        "covered": 58,
+        "total": 58,
+        "percent": 100.0
+      },
+      "source_sha256": "4de04ddd4270c19832dc85191b920524dd9a0390163de0323e47f5f5983f4102",
+      "uncovered_lines": [],
+      "baseline_lines": {
+        "covered": 58,
+        "total": 58,
+        "percent": 100.0
+      }
+    },
+    {
+      "path": "crates/provider/src/connection/directory.rs",
+      "lines": {
+        "covered": 129,
+        "total": 149,
+        "percent": 86.5771812080537
+      },
+      "source_sha256": "c84451cdc3a03e1c1609852e0cc362868d6511171d94a72dd7d82e3448626fef",
+      "uncovered_lines": [
+        28,
+        29,
+        30,
+        31,
+        32,
+        33,
+        34,
+        35,
+        36,
+        37,
+        38,
+        39,
+        41,
+        57,
+        71,
+        75,
+        106,
+        117,
+        138
+      ],
+      "baseline_lines": {
+        "covered": 129,
+        "total": 149,
+        "percent": 86.5771812080537
+      }
+    },
+    {
+      "path": "crates/provider/src/installation.rs",
+      "lines": {
+        "covered": 6,
+        "total": 6,
+        "percent": 100.0
+      },
+      "source_sha256": "1cbbad9aed8fdaa42ee7fdd1a8fdf4dcae5d501e1b72bb9f5f6a2dc2c8cb2130",
+      "uncovered_lines": [],
+      "baseline_lines": {
+        "covered": 6,
+        "total": 6,
+        "percent": 100.0
+      }
+    },
+    {
+      "path": "crates/provider/src/service/agent_manager.rs",
+      "lines": {
+        "covered": 884,
+        "total": 907,
+        "percent": 97.46416758544653
+      },
+      "source_sha256": "cf7b28dcbb2e4f84f937ca631c1e99b785f5e37f21d7d8840f10ba407bf69cf8",
+      "uncovered_lines": [
+        291,
+        539,
+        540,
+        541,
+        542,
+        543,
+        544,
+        545,
+        546,
+        753,
+        781,
+        784,
+        795,
+        911,
+        968
+      ],
+      "baseline_lines": {
+        "covered": 884,
+        "total": 907,
+        "percent": 97.46416758544653
+      }
+    },
+    {
+      "path": "crates/provider/src/service/agent_manager/generated_titles.rs",
+      "lines": {
+        "covered": 91,
+        "total": 99,
+        "percent": 91.91919191919192
+      },
+      "source_sha256": "9568db43fad261ae36c1cdbaa6f7662c5d85646dcfd1230c18758803ed45734d",
+      "uncovered_lines": [
+        40,
+        41,
+        67,
+        97,
+        101,
+        110
+      ],
+      "baseline_lines": {
+        "covered": 90,
+        "total": 99,
+        "percent": 90.9090909090909
+      }
+    },
+    {
+      "path": "crates/provider/src/service/summary_generation.rs",
+      "lines": {
+        "covered": 78,
+        "total": 80,
+        "percent": 97.5
+      },
+      "source_sha256": "0acdfc5f184ee978063859a20561c561adca1d1ca12bbe01632fd9c676a71b16",
+      "uncovered_lines": [
+        63,
+        79
+      ],
+      "baseline_lines": {
+        "covered": 78,
+        "total": 80,
+        "percent": 97.5
+      }
+    },
+    {
+      "path": "crates/provider/src/service/summary_generation/test_config.rs",
+      "lines": {
+        "covered": 26,
+        "total": 27,
+        "percent": 96.29629629629629
+      },
+      "source_sha256": "68cd489437f8476974e9f2f950999c1162ca1b7adfa97b62f9f206b593df3398",
+      "uncovered_lines": [
+        32
+      ],
+      "baseline_lines": {
+        "covered": 26,
+        "total": 27,
+        "percent": 96.29629629629629
+      }
+    }
+  ],
+  "uncovered_lines_source": "Zero-hit DA lines exported by llvm-cov LCOV; LLVM summary counts remain authoritative, including macro instantiations.",
+  "important_uncovered_behavior": [
+    "Runtime cancellation racing after budget acquisition but before tracked admission remains untested, matching the baseline gap; add deterministic race injection when changing admission",
+    "Some native ACP configuration/cancellation callbacks and protocol/process I/O failure branches remain untested; add callback regressions and fault injection when changing these paths",
+    "Native Provider acceptance and Linux/Windows execution were not part of local coverage"
+  ]
+}

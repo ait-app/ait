@@ -13,6 +13,8 @@ pub struct State {
     pub runtime: Arc<Runtime>,
     /// Installed agents service.
     pub agents: Option<Arc<Mutex<crate::service::agents::Agents>>>,
+    /// Installed host-wide skills service, synchronized independently of native execution.
+    pub skills: Option<Arc<Mutex<crate::skills::service::Skills>>>,
     /// Installed agent runtime service.
     pub agent_runtime: Option<Arc<Mutex<crate::service::agent_runtime::AgentRuntimeDirectory>>>,
     /// Installed native Agent executor.
@@ -131,6 +133,13 @@ pub async fn dispatch(
 ) -> Result<Option<Completion>, DispatchError> {
     if context.is_none() {
         return Ok(None);
+    }
+    match requests::skills(context, state).await {
+        Ok(()) => return Ok(None),
+        Err(DispatchError::NotImplemented) => {
+            Context::assert_unhandled(context, "provider::skills");
+        }
+        Err(error) => return Err(error),
     }
     match requests::agents(context, state).await {
         Ok(()) => return Ok(None),

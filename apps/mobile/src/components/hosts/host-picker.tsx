@@ -46,11 +46,13 @@ function formatConnectionEndpoint(endpoint: string): string {
 }
 
 // Socket/pipe transports have no host:port — their endpoint is a filesystem
-// path, so they read as "Local". TCP and relay show the address being used.
+// path, so they read as "Local". Online relays show their connection type;
+// other transports show the address being used.
 function formatActiveConnectionLabel(connection: ActiveConnection, t: TFunction): string {
   if (connection.type === "directSocket" || connection.type === "directPipe") {
     return t("hostPicker.local");
   }
+  if (connection.type === "accountRelay") return t("settings.host.badges.relay");
   return formatConnectionEndpoint(connection.endpoint);
 }
 

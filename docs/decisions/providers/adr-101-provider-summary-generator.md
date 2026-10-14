@@ -9,7 +9,8 @@
 不再依赖 metadata，共享契约与基础设施归 model。以下保留摘要生成迁移阶段的决策背景。
 
 后续 [ADR-107](../daemon/adr-107-direct-imports-from-owning-crates.md) 移除 summary 的共享类型
-重导出；生成接口继续归 provider，请求和结果类型直接从 model 导入。
+重导出；[ADR-118](../daemon/adr-118-summary-contracts-and-persistence-configuration.md) 将生成与
+配置接口移入 `model::summary`，配置文件适配归 persistence。
 
 ## 背景
 

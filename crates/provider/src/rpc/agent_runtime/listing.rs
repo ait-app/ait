@@ -1,11 +1,13 @@
 //! Coherent Agent directory bootstrap for connection-owned observers.
 
-use model::directory_sync::Cursor;
+use domain::directory_sync::Cursor;
 use serde_json::{Value, json};
 
+use crate::support::rpc::encode;
+
 use super::{
-    AgentListRequest, AgentRuntimeDirectory, ErrorCode, QueryScope, encode, entry, map_error, page,
-    query, synchronize,
+    AgentListRequest, AgentRuntimeDirectory, ErrorCode, QueryScope, entry, map_error, page, query,
+    synchronize,
 };
 
 pub(crate) struct Listing {
@@ -44,14 +46,17 @@ pub(crate) fn prepare(
         json!({"entries":entries.iter().map(entry).collect::<Vec<_>>(),
             "pageInfo":{"nextCursor":null,"prevCursor":null,"hasMore":false}})
     } else {
-        encode(page(
-            &AgentRuntimeDirectory::paginate(entries.clone(), &query)
-                .map_err(|error| map_error(&error))?,
-        ))?
+        encode(
+            page(
+                &AgentRuntimeDirectory::paginate(entries.clone(), &query)
+                    .map_err(|error| map_error(&error))?,
+            ),
+            ErrorCode::AgentIo,
+        )?
     };
     let entries = entries
         .iter()
-        .map(|row| encode(entry(row)))
+        .map(|row| encode(entry(row), ErrorCode::AgentIo))
         .collect::<Result<_, _>>()?;
     Ok(Listing {
         response,

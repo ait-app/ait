@@ -1,0 +1,206 @@
+{
+  "source_revision": "e6d7df97b54c73bf97024985179dacdb8cdd69bc",
+  "base_revision": "4794dbc493aee9926f37438f8f2d5f9085e3d835",
+  "source_tree": "1c57fda51a6b40d929ae9503cac616a0f7d2267d",
+  "measurement_date": "2026-10-08",
+  "scope": "Rust Cargo workspace; default features; macOS arm64; rustc 1.98.1; cargo-llvm-cov 0.8.7; tool default file filtering; no additional file exclusions. Doctests run by cargo test but are not instrumented by this coverage command.",
+  "commands": {
+    "tests": "cargo test --workspace -- --test-threads=1",
+    "build": "cargo build --workspace",
+    "clippy": "cargo clippy --workspace --all-targets -- -D warnings",
+    "format": "cargo fmt --all --check",
+    "coverage": "cargo llvm-cov --workspace --html -- --test-threads=4",
+    "coverage_export": "cargo llvm-cov report --json --summary-only --output-path /tmp/ait-opencode-pr.qNM4id/coverage-summary.json",
+    "missing_lines": "cargo llvm-cov report --show-missing-lines",
+    "native_opencode": "AIT_TEST_OPENCODE_BIN=/etc/profiles/per-user/lonnetkirisame/bin/opencode cargo test -p provider --lib local::opencode::tests::installed -- --ignored --test-threads=1",
+    "frontend_tests": "npm run test --workspace=@ait/mobile -- --project unit src/provider-selection/resolve-agent-form.test.ts",
+    "frontend_typecheck": "npm run build:sdk; npm run build:highlight; npm run postinstall; npm run typecheck --workspace=@ait/mobile",
+    "frontend_lint": "npx --no-install oxlint apps/mobile/src/provider-selection/resolve-agent-form.ts apps/mobile/src/provider-selection/resolve-agent-form.test.ts",
+    "frontend_format": "npx --no-install oxfmt --check apps/mobile/src/provider-selection/resolve-agent-form.ts apps/mobile/src/provider-selection/resolve-agent-form.test.ts",
+    "docs": "npm run check:docs"
+  },
+  "environment": {
+    "toolchain_path_prefix": "/nix/store/8y714xd10svzhbw35p1m7xvm166g9k0v-rust-minimal-1.98.1/bin",
+    "coverage_tool_path_prefix": "/nix/store/vkq6sjzwy657lxb3r3a1pm63d2yqw52s-cargo-llvm-cov-0.8.7/bin",
+    "LLVM_COV": "/nix/store/8f8k4hg7f5039lll8r2frm9jw4ys5nhg-llvm-tools-preview-1.98.1-aarch64-apple-darwin/lib/rustlib/aarch64-apple-darwin/bin/llvm-cov",
+    "LLVM_PROFDATA": "/nix/store/8f8k4hg7f5039lll8r2frm9jw4ys5nhg-llvm-tools-preview-1.98.1-aarch64-apple-darwin/lib/rustlib/aarch64-apple-darwin/bin/llvm-profdata",
+    "SHERPA_ONNX_LIB_DIR": "target/sherpa-onnx-prebuilt/sherpa-onnx-v1.13.8-osx-arm64-static-lib/lib (absolute repository path supplied to coverage command)",
+    "installed_opencode_version": "1.18.4",
+    "node": "22.23.1"
+  },
+  "rust_source_fingerprint_sha256": "07dcc6b5f7474a7dc1653c28142fa13bedf1b5c0887003fae4e6d31a38a3145d",
+  "fingerprint_scope": "Sorted tracked Rust files, Cargo manifests, Cargo.lock and rust-toolchain.toml; SHA-256 over path, NUL, bytes, NUL.",
+  "changed_source_sha256": {
+    "apps/mobile/src/provider-selection/resolve-agent-form.test.ts": "3be2a37ab222bfd3cd01c7799cc7b612af93821599cb8c37fc84a1da07fa5dd3",
+    "apps/mobile/src/provider-selection/resolve-agent-form.ts": "95b3e7507e26cd62de8e804f4c75b20de7a67701ef6227f0f3378c402d04b1f0",
+    "crates/provider/src/local/opencode/approvals.rs": "3d3efbf0325fe88c31f056003d79a7f576f360f8de9b0340f7bad73687dea71a",
+    "crates/provider/src/local/opencode/approvals/tests.rs": "28317688cb026e123db55000f03c138f90b37ebe3280127d33b6318ef84bff4e",
+    "crates/provider/src/local/opencode/live/tests.rs": "401f667145e4893bfad1a02f41694c331a108548b9edfef213e5cc7b3d1d9c7b",
+    "crates/provider/src/local/opencode/live/tests/permissions.rs": "c3cd970b098016b0bfb971871458a9e07c68b9085424dbb4a4848e146b6b7aca",
+    "crates/provider/src/local/opencode/live/tests/tool_ordering.rs": "9aa130abb699da710cfda2afa71ee53c12a6967bc59ce342ff331840df78c0fc",
+    "crates/provider/src/local/opencode/session.rs": "db6fbf28944d4894dc48570e1b27e554c06485b7735fec280a37c485231b5eb4",
+    "crates/provider/src/local/opencode/tests/fixture.rs": "29dbc032d1528888862fe5d142688b0913d2c8c8f238c4fb8c461e10984397ba",
+    "crates/provider/src/local/opencode/tests/installed.rs": "53885b2aae608812d010e6140f4b7656822e15558907d3ffa0f124d4e2e9855c",
+    "crates/provider/src/rpc/agent_execution.rs": "746998cafd08a03d6b91a731b22a679f02d9a8cfd944df0c35f53b277b761ffa",
+    "crates/provider/src/rpc/agent_execution/tests.rs": "8524e1f633098a7213fa4f6967e5ea8ca0d1f159e755fa08726f1a4727143739",
+    "crates/provider/src/service/agent_manager.rs": "4af3b442fdcbb76c826e2543871bb6c1b65ac9998a791303884830f608d1c23a",
+    "crates/provider/src/service/agent_manager/tests.rs": "9bbc4e8e87a780116427bda258cf200bc3a6a368b30ec4a952dba8838c212eb8",
+    "crates/provider/src/service/agent_manager/tests/environment.rs": "fc6d76dc80a206ee1bd0f349b94211c6ec15df35a3191cd0fcaca973f42fa52c"
+  },
+  "workspace_lines": {
+    "count": 59344,
+    "covered": 55870,
+    "percent": 94.14599622539768
+  },
+  "crate_lines": {
+    "bins/daemon": {
+      "count": 919,
+      "covered": 881,
+      "percent": 95.86507072905331
+    },
+    "crates/api": {
+      "count": 2255,
+      "covered": 2126,
+      "percent": 94.27937915742794
+    },
+    "crates/browser": {
+      "count": 733,
+      "covered": 715,
+      "percent": 97.5443383356071
+    },
+    "crates/domain": {
+      "count": 121,
+      "covered": 121,
+      "percent": 100
+    },
+    "crates/file": {
+      "count": 1924,
+      "covered": 1837,
+      "percent": 95.47817047817048
+    },
+    "crates/filesystem": {
+      "count": 12189,
+      "covered": 11567,
+      "percent": 94.89703831323324
+    },
+    "crates/metadata": {
+      "count": 5751,
+      "covered": 5411,
+      "percent": 94.08798469831333
+    },
+    "crates/model": {
+      "count": 1735,
+      "covered": 1679,
+      "percent": 96.77233429394812
+    },
+    "crates/protocol": {
+      "count": 63,
+      "covered": 63,
+      "percent": 100
+    },
+    "crates/provider": {
+      "count": 28814,
+      "covered": 26841,
+      "percent": 93.1526341361838
+    },
+    "crates/relay": {
+      "count": 503,
+      "covered": 462,
+      "percent": 91.84890656063618
+    },
+    "crates/schedule": {
+      "count": 791,
+      "covered": 772,
+      "percent": 97.59797724399495
+    },
+    "crates/terminal": {
+      "count": 1583,
+      "covered": 1527,
+      "percent": 96.46241313960834
+    },
+    "crates/voice": {
+      "count": 1963,
+      "covered": 1868,
+      "percent": 95.16046867040245
+    }
+  },
+  "changed_file_lines": {
+    "crates/provider/src/local/opencode/approvals.rs": {
+      "count": 238,
+      "covered": 213,
+      "percent": 89.49579831932773
+    },
+    "crates/provider/src/local/opencode/session.rs": {
+      "count": 434,
+      "covered": 371,
+      "percent": 85.48387096774194
+    },
+    "crates/provider/src/rpc/agent_execution.rs": {
+      "count": 598,
+      "covered": 566,
+      "percent": 94.64882943143813
+    },
+    "crates/provider/src/service/agent_manager.rs": {
+      "count": 895,
+      "covered": 872,
+      "percent": 97.43016759776536
+    }
+  },
+  "test_execution": {
+    "passed": 2004,
+    "failed": 0,
+    "ignored": 15
+  },
+  "coverage_test_execution": {
+    "passed": 2003,
+    "failed": 0,
+    "ignored": 15
+  },
+  "native_test_execution": {
+    "passed": 5,
+    "failed": 0,
+    "ignored": 0
+  },
+  "frontend_test_execution": {
+    "passed": 61,
+    "failed": 0
+  },
+  "validation": {
+    "build": "passed",
+    "clippy": "passed",
+    "rustfmt": "passed",
+    "frontend_typecheck": "passed",
+    "frontend_lint": "passed",
+    "frontend_format": "passed"
+  },
+  "llvm_cov_missing_lines": {
+    "crates/provider/src/local/opencode/approvals.rs": [
+      68, 69, 70, 72, 76, 97, 111, 112, 113, 114, 117, 120, 121, 122, 123, 141, 142, 146, 194, 200,
+      212, 227, 251
+    ],
+    "crates/provider/src/local/opencode/session.rs": [
+      125, 126, 127, 128, 133, 134, 135, 192, 193, 194, 195, 207, 208, 209, 210, 220, 221, 222, 223,
+      226, 227, 228, 229, 233, 234, 235, 236, 273, 274, 275, 276, 290, 293, 320, 321, 322, 323, 324,
+      331, 348, 351, 352, 418, 419, 425, 426, 430, 431, 432, 445, 475, 476, 477, 479, 483, 493
+    ],
+    "crates/provider/src/rpc/agent_execution.rs": [
+      58, 116, 117, 118, 166, 173, 236, 257, 300, 328, 358, 378, 426, 512, 515, 518, 604, 637, 653,
+      663
+    ],
+    "crates/provider/src/service/agent_manager.rs": [
+      290, 537, 538, 539, 540, 541, 542, 543, 544, 746, 774, 777, 788, 901, 958
+    ]
+  },
+  "coverage_artifact": "This checked-in JSON contains the exported line metrics, source fingerprints and missing-line lists. Full generated HTML was reviewed locally at target/llvm-cov/html/index.html and is not committed.",
+  "baseline": "No baseline measured for the same source and scope; no coverage delta claimed.",
+  "limitations": [
+    "Default workspace runs ignore 15 external-provider tests. Five isolated installed OpenCode tests were run separately and are not part of this coverage measurement.",
+    "Installed OpenCode v2 binary, real desktop UI, Linux and Windows were not tested. V1 and V2 native protocols are exercised by fixtures.",
+    "Frontend line coverage was not measured; the 61 passing frontend tests are execution results only.",
+    "OpenCode approval malformed payload/limit paths, permission-task cancellation, interrupted transport reconnection and several native-history failure paths remain uncovered. Follow up with fault-injection cases and installed v2 validation."
+  ],
+  "intermediate_validation_notes": [
+    "Initial concurrent build/coverage setup raced the shared sherpa-onnx archive extraction. The final coverage run used the populated native library directory and passed.",
+    "An initial workspace run under concurrent compilation exceeded the unchanged filesystem queue test's 10-second deadline. Its isolated retry and the final serial full workspace run both passed; no filesystem source was changed."
+  ]
+}

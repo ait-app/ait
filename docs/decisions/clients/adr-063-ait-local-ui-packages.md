@@ -15,7 +15,7 @@
 
 ## 兼容与范围
 
-`apps/desktop` 是现有桌面源码目录，本次不移动目录；`dev:desktop` / `build:desktop-main` 作为旧命令别名转发到 `dev:desktop` / `build:desktop-main`。客户端高层兼容符号、IPC 和持久化键不随包名机械替换。真实 Rust API 仍是服务端边界；App transport 负责映射兼容消息。
+`apps/desktop` 是现有桌面源码目录，本次不移动目录；当时保留的 `dev:paseo` / `build:paseo` 作为旧命令别名转发到 `dev:desktop` / `build:desktop-main`，之后已删除。客户端高层兼容符号、IPC 和持久化键不随包名机械替换。真实 Rust API 仍是服务端边界；App transport 负责映射兼容消息。
 
 ## Test coverage
 

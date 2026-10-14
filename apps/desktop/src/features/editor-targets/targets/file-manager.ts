@@ -1,8 +1,13 @@
+import { isLaunchableBundle } from "../../launchable-bundle.js";
 import type { EditorTarget } from "../target.js";
 
 const launchFileManager: EditorTarget["launch"] = async (input, runtime) => {
   if (input.filePath) {
     runtime.revealPath(input.filePath);
+    return;
+  }
+  if (isLaunchableBundle(input.workspacePath, runtime.platform)) {
+    runtime.revealPath(input.workspacePath);
     return;
   }
   await runtime.openPath(input.workspacePath);

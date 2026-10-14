@@ -3,6 +3,10 @@ use std::path::Path;
 use domain::agent_runtime::{StoredAgentConfig, StoredAgentRuntimeInfo};
 use serde_json::{Value, json};
 
+// The adapter's ACP configuration surface: shared helpers stay owned by `acp_config`,
+// while this facade keeps adapter-local call sites on one path.
+pub(super) use crate::local::acp_config::{choices, option, state, text};
+
 use super::{PROVIDER, transport::Transport};
 use crate::ports::agent_session::{AgentSessionError, AgentSessionSpec};
 use crate::protocol::provider::Details;
@@ -78,38 +82,6 @@ pub(super) fn mcp_servers(config: &StoredAgentConfig) -> Vec<Value> {
         .collect()
 }
 
-pub(super) fn option<'a>(options: &'a Value, category: &str) -> Option<&'a Value> {
-    options
-        .as_array()?
-        .iter()
-        .find(|option| option["category"] == category && option["type"] == "select")
-}
-
-fn choices(option: &Value) -> Result<Vec<&Value>, AgentSessionError> {
-    let options = option["options"]
-        .as_array()
-        .ok_or(AgentSessionError::Failed)?;
-    let mut choices = Vec::new();
-    for entry in options {
-        if let Some(group) = entry["options"].as_array() {
-            choices.extend(group);
-        } else {
-            choices.push(entry);
-        }
-        if choices.len() > 4096 {
-            return Err(AgentSessionError::Failed);
-        }
-    }
-    for choice in &choices {
-        choice["value"]
-            .as_str()
-            .filter(|value| value.len() <= 1024)
-            .ok_or(AgentSessionError::Failed)?;
-        text(choice, "name")?;
-    }
-    Ok(choices)
-}
-
 pub(super) fn details(options: &Value) -> Result<Details, AgentSessionError> {
     let Some(models) = option(options, "model") else {
         return Ok(Details::default());
@@ -166,23 +138,6 @@ pub(super) fn runtime(id: &str, options: &Value) -> StoredAgentRuntimeInfo {
     }
 }
 
-pub(super) fn state(response: &Value) -> Result<Value, AgentSessionError> {
-    let options = response["configOptions"]
-        .as_array()
-        .filter(|options| options.len() <= 128)
-        .ok_or(AgentSessionError::Failed)?;
-    for option in options {
-        text(option, "id")?;
-        if option["type"] == "select" {
-            choices(option)?;
-            option["currentValue"]
-                .as_str()
-                .ok_or(AgentSessionError::Failed)?;
-        }
-    }
-    Ok(Value::Array(options.clone()))
-}
-
 pub(super) async fn apply(
     transport: &mut Transport,
     id: &str,
@@ -215,15 +170,6 @@ pub(super) async fn apply(
         *options = state(&result)?;
     }
     Ok(())
-}
-
-pub(super) fn text<'a>(value: &'a Value, key: &str) -> Result<&'a str, AgentSessionError> {
-    value[key]
-        .as_str()
-        .filter(|text| {
-            !text.is_empty() && text.len() <= 1024 && !text.chars().any(char::is_control)
-        })
-        .ok_or(AgentSessionError::Failed)
 }
 
 #[cfg(test)]

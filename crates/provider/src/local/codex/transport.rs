@@ -10,7 +10,10 @@ use tokio::process::{Child, ChildStdin, Command};
 use tokio::sync::{Mutex, mpsc};
 use tokio::task::JoinHandle;
 
+use crate::local::diagnostics::{self, Diagnostics};
 use crate::ports::agent_session::AgentSessionError;
+use crate::ports::diagnostics::{Category, Diagnostic};
+use tokio_util::task::AbortOnDropHandle;
 
 const MAX_OUTBOUND_FRAME: usize = 64 * 1024 * 1024;
 const MAX_EVENTS: usize = 128;
@@ -18,6 +21,8 @@ const MAX_EVENTS: usize = 128;
 #[derive(Debug)]
 pub(super) struct Transport {
     child: Child,
+    pub(super) diagnostics: Diagnostics,
+    _stderr: AbortOnDropHandle<()>,
     input: Arc<Mutex<ChildStdin>>,
     messages: mpsc::Receiver<Value>,
     reader: JoinHandle<()>,
@@ -69,17 +74,21 @@ impl Transport {
             .stdin(Stdio::piped())
             .stdout(Stdio::piped())
             // Native diagnostics may contain prompts, paths or authentication data.
-            .stderr(Stdio::null())
+            .stderr(Stdio::piped())
             .kill_on_drop(true);
         #[cfg(unix)]
         command.process_group(0);
+        let diagnostics = Diagnostics::new("codex");
         let mut child = command
             .spawn()
-            .map_err(|_| AgentSessionError::Unavailable)?;
+            .map_err(|error| diagnostics.spawn_error(&error))?;
         let input = Arc::new(Mutex::new(
             child.stdin.take().ok_or(AgentSessionError::Failed)?,
         ));
         let output = child.stdout.take().ok_or(AgentSessionError::Failed)?;
+        let stderr = child.stderr.take().ok_or(AgentSessionError::Failed)?;
+        let stderr_task = AbortOnDropHandle::new(tokio::spawn(diagnostics.clone().drain(stderr)));
+        let reader_diagnostics = diagnostics.clone();
         let (sender, messages) = mpsc::channel(MAX_EVENTS);
         let request_input = input.clone();
         let reader = tokio::spawn(async move {
@@ -90,9 +99,17 @@ impl Transport {
                 // images and thread/read history can exceed the client request budget.
                 let read = output.read_until(b'\n', &mut bytes).await;
                 if !matches!(read, Ok(1..)) || bytes.last() != Some(&b'\n') {
+                    let category = if matches!(read, Ok(0)) {
+                        Category::Closed
+                    } else {
+                        Category::Protocol
+                    };
+                    reader_diagnostics.observe(Diagnostic::new(category, "stdout"), "read");
                     break;
                 }
                 let Ok(value) = serde_json::from_slice::<Value>(&bytes) else {
+                    reader_diagnostics
+                        .observe(Diagnostic::new(Category::Protocol, "stdout"), "decode");
                     break;
                 };
                 if value["method"] == "mcpServer/elicitation/request"
@@ -141,6 +158,8 @@ impl Transport {
         });
         Ok(Self {
             child,
+            diagnostics,
+            _stderr: stderr_task,
             input,
             messages,
             reader,
@@ -200,6 +219,16 @@ impl Transport {
                         return Err(AgentSessionError::Failed);
                     }
                     if let Some(error) = message.get("error") {
+                        if method == "turn/steer" && super::streaming::steer_rejected(error) {
+                            tracing::debug!(
+                                provider = "codex",
+                                operation = method,
+                                "Native provider rejected steering"
+                            );
+                        } else {
+                            self.diagnostics
+                                .observe(diagnostics::native(error, "rpc"), method);
+                        }
                         return Err(
                             if method != "turn/steer" || super::streaming::steer_rejected(error) {
                                 AgentSessionError::Rejected
@@ -230,6 +259,15 @@ impl Transport {
         } else if matches!(result, Ok(Err(AgentSessionError::Rejected))) {
             Err(AgentSessionError::Rejected)
         } else {
+            let category = if result.is_err() {
+                Category::Timeout
+            } else {
+                Category::Network
+            };
+            if self.diagnostics.failure().is_none() {
+                self.diagnostics
+                    .observe(Diagnostic::new(category, "transport"), method);
+            }
             let _ = self.close().await;
             Err(AgentSessionError::Failed)
         }
@@ -270,6 +308,7 @@ impl Transport {
     }
 
     pub(super) async fn close(&mut self) -> Result<(), AgentSessionError> {
+        self.diagnostics.flush();
         self.closed = true;
         self.reader.abort();
         #[cfg(unix)]

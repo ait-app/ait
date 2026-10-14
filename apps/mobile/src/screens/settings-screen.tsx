@@ -54,6 +54,8 @@ import {
 import { returnFromSettings, type SettingsView } from "@/navigation/settings-navigation";
 import { useHostRuntimeIsConnected, useHosts } from "@/runtime/host-runtime";
 import { supportsAccountRelay } from "@/runtime/account-state";
+import { supportsBrowserAccount } from "@/runtime/browser-account";
+import { ManagementSection } from "@/screens/settings/management-section";
 import { OnlineServiceSection } from "@/screens/settings/online-service-section";
 import ProjectSettingsScreen from "@/screens/project-settings-screen";
 import ProjectsScreen from "@/screens/projects-screen";
@@ -141,11 +143,13 @@ interface SidebarSectionItem {
   desktopOnly?: boolean;
   webOnly?: boolean;
   accountOnly?: boolean;
+  consoleOnly?: boolean;
 }
 
 const SIDEBAR_SECTION_ITEMS: SidebarSectionItem[] = [
   { id: "general", labelKey: "settings.sections.general", icon: Settings },
   { id: "online-service", labelKey: "onlineService.title", icon: Globe, accountOnly: true },
+  { id: "management", labelKey: "settings.sections.management", icon: Shield, consoleOnly: true },
   { id: "appearance", labelKey: "settings.sections.appearance", icon: Palette },
   {
     id: "layout",
@@ -593,7 +597,7 @@ function AboutSection({ appVersion, appVersionText, isDesktopApp }: AboutSection
             <Text style={styles.aboutValue}>{appVersionText}</Text>
           </View>
           <WhatsNewRow />
-          {isDesktopApp ? <DesktopAppUpdateRow /> : null}
+          {isDesktopApp ? <DesktopAppUpdateRow /> : <ExperimentalFeaturesRow />}
         </View>
       </SettingsSection>
       <ConnectedHostsSection clientVersion={appVersion} />
@@ -601,6 +605,44 @@ function AboutSection({ appVersion, appVersionText, isDesktopApp }: AboutSection
         <CommunityLinks />
       </View>
     </>
+  );
+}
+
+function ExperimentalFeaturesRow() {
+  const { t } = useTranslation();
+  const { settings, updateSettings } = useAppSettings();
+  const [error, setError] = useState<string | null>(null);
+  const [saving, setSaving] = useState(false);
+  async function onChange(experimentalFeatures: boolean) {
+    setSaving(true);
+    setError(null);
+    try {
+      await updateSettings({ experimentalFeatures });
+    } catch (cause) {
+      setError(cause instanceof Error ? cause.message : String(cause));
+    } finally {
+      setSaving(false);
+    }
+  }
+  return (
+    <View style={[settingsStyles.row, settingsStyles.rowBorder]}>
+      <View style={settingsStyles.rowContent}>
+        <Text style={settingsStyles.rowTitle}>
+          {t("settings.about.experimentalFeatures.label")}
+        </Text>
+        <Text style={settingsStyles.rowHint}>
+          {t("settings.about.experimentalFeatures.description")}
+        </Text>
+        {error ? <Text style={styles.aboutErrorText}>{error}</Text> : null}
+      </View>
+      <Switch
+        value={settings.experimentalFeatures}
+        onValueChange={onChange}
+        disabled={saving}
+        accessibilityLabel={t("settings.about.experimentalFeatures.label")}
+        testID="settings-experimental-features"
+      />
+    </View>
   );
 }
 
@@ -822,6 +864,7 @@ function DesktopAppUpdateRow() {
           options={releaseChannelOptions}
         />
       </View>
+      <ExperimentalFeaturesRow />
       <View style={[settingsStyles.row, settingsStyles.rowBorder]}>
         <View style={settingsStyles.rowContent}>
           <Text style={settingsStyles.rowTitle}>{t("settings.about.updates.label")}</Text>
@@ -1069,7 +1112,8 @@ function SettingsSidebar({
     (item) =>
       (!item.desktopOnly || isDesktopApp) &&
       (!item.webOnly || isWeb) &&
-      (!item.accountOnly || supportsAccountRelay()),
+      (!item.accountOnly || supportsAccountRelay()) &&
+      (!item.consoleOnly || supportsBrowserAccount()),
   );
   const insets = useSafeAreaInsets();
   const isDesktop = layout === "desktop";
@@ -1449,6 +1493,8 @@ export default function SettingsScreen({ view, openAddHostIntent = null }: Setti
     return null;
   })();
 
+  const isManagement =
+    view.kind === "section" && view.section === "management" && supportsBrowserAccount();
   let content: ReactNode;
   if (view.kind === "section" && view.section === "layout") {
     content = isDesktopApp ? <LayoutSection /> : null;
@@ -1487,6 +1533,8 @@ export default function SettingsScreen({ view, openAddHostIntent = null }: Setti
             return <AppearanceSection />;
           case "online-service":
             return supportsAccountRelay() ? <OnlineServiceSection /> : null;
+          case "management":
+            return isManagement ? <ManagementSection /> : null;
           case "editor":
             return isWeb ? <EditorSection /> : null;
           case "shortcuts":
@@ -1591,9 +1639,13 @@ export default function SettingsScreen({ view, openAddHostIntent = null }: Setti
           titleAccessory={detailHeader?.titleAccessory}
           onBack={handleBackFromDetail}
         />
-        <ScrollView style={styles.scrollView} contentContainerStyle={insetBottomStyle}>
-          <View style={styles.content}>{content}</View>
-        </ScrollView>
+        {isManagement ? (
+          content
+        ) : (
+          <ScrollView style={styles.scrollView} contentContainerStyle={insetBottomStyle}>
+            <View style={styles.content}>{content}</View>
+          </ScrollView>
+        )}
         {addHostModals}
       </View>
     );
@@ -1624,9 +1676,13 @@ export default function SettingsScreen({ view, openAddHostIntent = null }: Setti
               left={desktopDetailHeaderLeft}
               leftStyle={desktopStyles.detailLeft}
             />
-            <ScrollView style={styles.scrollView} contentContainerStyle={insetBottomStyle}>
-              <View style={styles.content}>{content}</View>
-            </ScrollView>
+            {isManagement ? (
+              content
+            ) : (
+              <ScrollView style={styles.scrollView} contentContainerStyle={insetBottomStyle}>
+                <View style={styles.content}>{content}</View>
+              </ScrollView>
+            )}
           </View>
         </WindowChromeRegion>
       </View>

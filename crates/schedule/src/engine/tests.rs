@@ -23,7 +23,7 @@ fn fixture() -> (Engine, Memory) {
     (Engine::open(Box::new(store.clone()), now()).unwrap(), store)
 }
 pub(crate) fn input() -> Value {
-    json!({"name":" test ","prompt":" hello ","cadence":{"type":"every","everyMs":60_000},"target":{"type":"self","agentId":"11111111-1111-4111-8111-111111111111"}})
+    json!({"workspaceId":"wks-test","name":" test ","prompt":" hello ","cadence":{"type":"every","everyMs":60_000},"target":{"type":"self","agentId":"11111111-1111-4111-8111-111111111111"}})
 }
 fn create(engine: &mut Engine) -> String {
     engine
@@ -92,7 +92,7 @@ fn failed_writes_do_not_publish_mutation() {
     assert!(engine.inspect(&id).unwrap().runs.is_empty());
 }
 #[test]
-fn manual_paused_execution_preserves_cadence_and_ignores_limits() {
+fn manual_paused_execution_obeys_run_limits_and_expiry() {
     let (mut engine, _) = fixture();
     let id = create(&mut engine);
     engine
@@ -101,7 +101,7 @@ fn manual_paused_execution_preserves_cadence_and_ignores_limits() {
     engine
         .request(
             "schedule.update.request",
-            json!({"scheduleId":id,"maxRuns":1,"expiresAt":now()}),
+            json!({"scheduleId":id,"maxRuns":1}),
             now(),
         )
         .unwrap();
@@ -110,10 +110,29 @@ fn manual_paused_execution_preserves_cadence_and_ignores_limits() {
     engine
         .finish(&id, &run, true, Outcome::default(), now())
         .unwrap();
-    let record = engine.inspect(&id).unwrap();
-    assert_eq!(record.status, Status::Paused);
-    assert!(record.next_run_at.is_none());
-    assert!(engine.begin(&id, true, now()).is_ok());
+    assert_eq!(engine.inspect(&id).unwrap().status, Status::Completed);
+    assert!(engine.inspect(&id).unwrap().next_run_at.is_none());
+    assert_eq!(engine.begin(&id, true, now()).unwrap_err(), Error::Conflict);
+    let expired = create(&mut engine);
+    engine
+        .request(
+            "schedule.pause.request",
+            json!({"scheduleId":expired}),
+            now(),
+        )
+        .unwrap();
+    engine
+        .request(
+            "schedule.update.request",
+            json!({"scheduleId":expired,"expiresAt":now()}),
+            now(),
+        )
+        .unwrap();
+    assert_eq!(
+        engine.begin(&expired, true, now()).unwrap_err(),
+        Error::Conflict
+    );
+    assert!(engine.inspect(&expired).unwrap().runs.is_empty());
 }
 #[test]
 fn failures_count_towards_max_runs_and_target_gone_completes() {
@@ -168,11 +187,13 @@ fn expiry_and_cron_defaults() {
     let (mut engine, _) = fixture();
     let mut params = input();
     params["expiresAt"] = json!(now());
-    engine
-        .request("schedule.create.request", params, now())
-        .unwrap();
-    assert!(engine.due(now()).unwrap().is_empty());
-    assert_eq!(engine.records[0].status, Status::Completed);
+    assert_eq!(
+        engine
+            .request("schedule.create.request", params, now())
+            .unwrap_err(),
+        Error::Invalid
+    );
+    assert!(engine.records.is_empty());
     let mut params = input();
     params["cadence"] = json!({"type":"cron","expression":"* * * * *"});
     let created = engine
@@ -189,7 +210,7 @@ fn expiry_and_cron_defaults() {
     assert_eq!(created["schedule"]["nextRunAt"], json!(now()));
 }
 #[test]
-fn in_flight_edits_pause_and_deletion_survive_completion() {
+fn in_flight_edits_and_pause_survive_completion_and_deletion_waits() {
     let (mut engine, _) = fixture();
     let id = create(&mut engine);
     let (_, run) = engine.begin(&id, false, now()).unwrap();
@@ -209,11 +230,17 @@ fn in_flight_edits_pause_and_deletion_survive_completion() {
     assert_eq!(engine.inspect(&id).unwrap().status, Status::Paused);
     assert_eq!(engine.inspect(&id).unwrap().name.as_deref(), Some("new"));
     let (_, run) = engine.begin(&id, true, now()).unwrap();
-    engine
-        .request("schedule.delete.request", json!({"scheduleId":id}), now())
-        .unwrap();
+    assert_eq!(
+        engine
+            .request("schedule.delete.request", json!({"scheduleId":id}), now())
+            .unwrap_err(),
+        Error::Conflict
+    );
     engine
         .finish(&id, &run, true, Outcome::default(), now())
+        .unwrap();
+    engine
+        .request("schedule.delete.request", json!({"scheduleId":id}), now())
         .unwrap();
     assert!(engine.records.is_empty());
 }
@@ -297,3 +324,5 @@ fn invalid_inputs_never_write() {
 mod lifecycle;
 mod mutation;
 mod recovery;
+
+mod workspace;

@@ -5,6 +5,7 @@
 - 来源：`getpaseo/paseo@2c8e8a826810337492cc5a38bb0bbd705b6fb632` 的
   `session.ts`、`github-service.ts`、protocol schemas 与对应测试。
 - 范围：新 `server` binary 和独立 `server-*` crate；不复用旧 Ait 组件。
+- 后续：[ADR-130](adr-130-workspace-methods-owned-by-metadata.md) 将服务与协议归 metadata，本地 `gh`/Git 适配器留在 filesystem。
 
 ## 决策
 

@@ -10,12 +10,12 @@ use std::pin::Pin;
 use domain::agent_runtime::{AgentPersistenceHandle, StoredAgentConfig, StoredAgentRuntimeInfo};
 
 /// A sendable provider operation borrowing its client or session.
-pub type AgentSessionFuture<'a, T> =
+pub(crate) type AgentSessionFuture<'a, T> =
     Pin<Box<dyn Future<Output = Result<T, AgentSessionError>> + Send + 'a>>;
 
 /// Provider failure safe to expose at the application boundary.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, thiserror::Error)]
-pub enum AgentSessionError {
+pub(crate) enum AgentSessionError {
     /// The provider cannot currently start or resume a session.
     #[error("provider is unavailable")]
     Unavailable,
@@ -29,18 +29,18 @@ pub enum AgentSessionError {
 
 /// Provider-independent inputs required to construct or resume a native session.
 #[derive(Debug, Clone, PartialEq)]
-pub struct AgentSessionSpec {
+pub(crate) struct AgentSessionSpec {
     /// Provider identity.
-    pub provider: String,
+    pub(crate) provider: String,
     /// Native session working directory.
-    pub cwd: String,
+    pub(crate) cwd: String,
     /// Persistable provider configuration.
-    pub config: StoredAgentConfig,
+    pub(crate) config: StoredAgentConfig,
 }
 
 /// Whether a resumed native session may accept a new foreground turn.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum AgentResumePurpose {
+pub(crate) enum AgentResumePurpose {
     /// Resume an active Agent for interaction.
     Interactive,
     /// Read the history of an archived Agent without claiming an interactive writer.
@@ -49,7 +49,7 @@ pub enum AgentResumePurpose {
 
 /// Native foreground-turn progress or result. This is not a host Run or Message tree.
 #[derive(Debug, Clone, PartialEq)]
-pub enum AgentTurnEvent {
+pub(crate) enum AgentTurnEvent {
     /// A native autonomous foreground turn started, for example while pursuing a Codex goal.
     Started(String),
     /// Native child progress or lifecycle, independent of the foreground turn's completion.
@@ -65,8 +65,10 @@ pub enum AgentTurnEvent {
     PermissionRequested(serde_json::Value),
     /// The native provider withdrew or resolved a previously published permission request.
     PermissionResolved(String),
-    /// One immutable normalized item completed by the native provider.
+    /// One immutable normalized display item produced by the provider adapter.
     Timeline(crate::protocol::timeline::NativeItem),
+    /// Complete authoritative native transcript, reconciled atomically before turn settlement.
+    History(Vec<crate::protocol::timeline::NativeItem>),
     /// Complete current usage snapshot; consumers replace rather than sum repeated observations.
     Usage(crate::protocol::usage::AgentUsage),
     /// Native initialization resolved the session's actual model or runtime settings.
@@ -80,7 +82,7 @@ pub enum AgentTurnEvent {
 }
 
 /// Live provider session. Closing releases resources without deleting native history.
-pub trait AgentSession: Debug + Send {
+pub(crate) trait AgentSession: Debug + Send {
     /// Return session-scoped controls when native composition owns the available choices.
     /// `config` includes pending user selections; `None` retains client-level controls.
     fn control_settings(&self, _config: &StoredAgentConfig) -> Option<serde_json::Value> {
@@ -93,6 +95,27 @@ pub trait AgentSession: Debug + Send {
     /// Returns rejection before persisting a change that cannot apply to this session.
     fn validate_config_update(&self, _config: &StoredAgentConfig) -> Result<(), AgentSessionError> {
         Ok(())
+    }
+
+    /// Return safe classified failure facts before the failed native connection is closed.
+    fn failure_diagnostic(&self) -> Option<super::diagnostics::Diagnostic> {
+        None
+    }
+    /// Read plan quota using this session's actual native launch environment.
+    ///
+    /// Returns safe native account facts, never authentication material.
+    /// # Errors
+    /// Returns unavailable when the adapter has no session-scoped accounting support.
+    fn account_usage(&self) -> AgentSessionFuture<'_, serde_json::Value> {
+        Box::pin(async { Err(AgentSessionError::Unavailable) })
+    }
+
+    /// Return the most recent failure's user-visible explanation, if available.
+    ///
+    /// Adapters must exclude credentials and private diagnostics, and keep the message at most
+    /// 4096 bytes. The explanation remains available after closing a failed session.
+    fn failure_message(&self) -> Option<&str> {
+        None
     }
 
     /// Native foreground work was accepted but its start notification has not arrived yet.
@@ -253,7 +276,7 @@ pub trait AgentSession: Debug + Send {
 }
 
 /// Factory and availability boundary for one independent provider adapter.
-pub trait AgentClient: Debug + Send + Sync {
+pub(crate) trait AgentClient: Debug + Send + Sync {
     /// Whether this adapter implements native session listing and import inspection.
     fn supports_session_import(&self) -> bool {
         false
@@ -295,7 +318,7 @@ pub trait AgentClient: Debug + Send + Sync {
     fn summary_model(
         &self,
         _models: &[serde_json::Value],
-    ) -> Option<model::summary::SummarySelection> {
+    ) -> Option<domain::summary::SummarySelection> {
         None
     }
 
@@ -353,6 +376,7 @@ pub trait AgentClient: Debug + Send + Sync {
     }
 
     /// Inspect launch and authentication availability without exposing credentials.
+    /// Unavailable catalog snapshots may display this guidance; keep it within 4096 bytes.
     /// # Errors
     /// Returns unsupported diagnostics or an inspection failure.
     fn diagnostic(&self) -> AgentSessionFuture<'_, String> {

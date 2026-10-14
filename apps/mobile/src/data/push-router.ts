@@ -272,10 +272,10 @@ export function mountServerDataPushRouter(input: PushRouterInput): () => void {
     }
     reconcileSubscriptions();
   });
-  const events = input.client.observeEvents([
-    "provider.snapshot.update",
-    "status.daemon_config_changed",
-  ]);
+  const events = input.client.observeEvents(
+    ["provider.snapshot.update", "status.daemon_config_changed"],
+    { supportedOnly: true },
+  );
   events.subscribe({
     snapshot: () => {},
     update: (message) => {

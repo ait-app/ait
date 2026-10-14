@@ -1,12 +1,16 @@
 //! Fragmentation must not bypass the cumulative input message budget.
 
+use async_trait as _;
+use host_link as _;
 // Cargo passes the complete package dependency set to this integration test.
+use bot as _;
 use browser as _;
 use chrono as _;
-use file as _;
+use domain as _;
 use filesystem as _;
 use metadata as _;
 use model as _;
+use persistence as _;
 use provider as _;
 use relay as _;
 use reqwest as _;
@@ -25,7 +29,7 @@ use voice as _;
 
 use api::Api;
 use futures_util::{SinkExt, StreamExt};
-use protocol::MAX_MESSAGE_BYTES;
+use model::server::MAX_MESSAGE_BYTES;
 use tokio_tungstenite::tungstenite::client::IntoClientRequest;
 use tokio_tungstenite::tungstenite::protocol::frame::Frame;
 use tokio_tungstenite::tungstenite::protocol::frame::coding::{Data, OpCode};

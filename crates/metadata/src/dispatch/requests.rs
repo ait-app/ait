@@ -20,7 +20,7 @@ pub(super) async fn push(
     else {
         return Err(DispatchError::NotImplemented);
     };
-    crate::connection::push::unregister(context, state, connection)
+    crate::push::connection::unregister(context, state, connection)
         .await
         .map_err(Into::into)
 }
@@ -42,7 +42,7 @@ pub(super) fn editor(
     }) else {
         return Err(DispatchError::NotImplemented);
     };
-    let result = crate::rpc::editor::execute(
+    let result = crate::server::rpc::editor::execute(
         &context.request.method,
         std::mem::take(&mut context.request.params),
     );
@@ -67,7 +67,7 @@ pub(super) async fn creation(
     }) else {
         return Err(DispatchError::NotImplemented);
     };
-    crate::connection::creation::dispatch(context, state, connection)
+    crate::server::connection::creation::dispatch(context, state, connection)
         .await
         .map_err(Into::into)
 }
@@ -90,7 +90,7 @@ pub(super) fn session(
     }) else {
         return Err(DispatchError::NotImplemented);
     };
-    crate::connection::session::subscribe(context, state, connection).map_err(Into::into)
+    crate::server::connection::session::subscribe(context, state, connection).map_err(Into::into)
 }
 
 /// Try the directory request branch and consume `pending` only on a match.
@@ -114,6 +114,7 @@ pub(super) async fn directory(
                 | "workspace.open.request"
                 | "workspace.create.request"
                 | "workspace.list.request"
+                | "workspace.get.request"
                 | "workspace.archive.request"
                 | "workspace.title.set.request"
                 | "workspace.pin.set.request"
@@ -126,7 +127,7 @@ pub(super) async fn directory(
         return Err(DispatchError::NotImplemented);
     };
     if context.request.method == "workspace.create.request" {
-        return crate::connection::creation::create(context, state)
+        return crate::directory::connection::workspace_creation::create(context, state)
             .await
             .map_err(Into::into);
     }
@@ -137,7 +138,7 @@ pub(super) async fn directory(
             .get("subscribe")
             .is_some_and(|value| !value.is_null())
     {
-        return crate::connection::directory::subscribe(context, state, connection)
+        return crate::directory::connection::directory::subscribe(context, state, connection)
             .await
             .map_err(Into::into);
     }
@@ -145,7 +146,7 @@ pub(super) async fn directory(
         .rpc(
             state.directory.clone(),
             ErrorCode::RegistryIo,
-            crate::rpc::directory::execute,
+            crate::directory::rpc::directory::execute,
         )
         .await
         .map_err(Into::into)
@@ -164,7 +165,6 @@ pub(super) async fn daemon(
         matches!(
             context.request.method.as_str(),
             "daemon.get_status.request"
-                | "daemon.get_pairing_offer.request"
                 | "daemon.config.reload.request"
                 | "daemon.update.request"
                 | "diagnostics.request"
@@ -191,7 +191,7 @@ pub(super) async fn daemon(
         }));
     }
     let params = std::mem::take(&mut context.request.params);
-    let result = crate::connection::daemon::dispatch(&context.request.method, params, state).await;
+    let result = crate::daemon::connection::dispatch(&context.request.method, params, state).await;
     context.respond(result)?;
     Ok(None)
 }
@@ -221,9 +221,7 @@ pub(super) async fn automation(
         .rpc(
             state.workspace_automation.clone(),
             ErrorCode::RegistryIo,
-            |service, method, params| {
-                crate::rpc::workspace_automation::execute(service, method, params)
-            },
+            |service, method, params| crate::automation::rpc::execute(service, method, params),
         )
         .await
         .map_err(Into::into)
@@ -250,7 +248,7 @@ pub(super) async fn workspace_state(
         .call(
             state.workspace_state.clone(),
             ErrorCode::RegistryIo,
-            crate::rpc::workspace_state::execute,
+            crate::directory::rpc::workspace_state::execute,
         )
         .await;
     match result {
@@ -258,4 +256,110 @@ pub(super) async fn workspace_state(
         Err(error) => context.respond(Err(error)),
     }
     .map_err(Into::into)
+}
+
+/// Try the managed worktree request branch and consume `pending` only on a match.
+/// A successful creation starts Workspace setup before the response and update are sent.
+/// # Errors
+/// Returns `NotImplemented` without consuming the request, or propagates delivery failure.
+pub(super) async fn worktrees(
+    pending: &mut Option<Context<'_>>,
+    state: &State,
+) -> Result<(), DispatchError> {
+    let Some(mut context) = pending.take_if(|context| {
+        matches!(
+            context.request.method.as_str(),
+            "workspace.worktree.list.request"
+                | "workspace.worktree.create.request"
+                | "workspace.worktree.archive.request"
+        )
+    }) else {
+        return Err(DispatchError::NotImplemented);
+    };
+    let result = context
+        .call(
+            state.worktrees.clone(),
+            ErrorCode::RegistryIo,
+            crate::worktrees::rpc::worktrees::execute,
+        )
+        .await;
+    if let Ok(reply) = &result
+        && let Some(workspace_id) = reply.created_workspace_id.clone()
+    {
+        let _ = state
+            .run(
+                state.workspace_automation.clone(),
+                ErrorCode::RegistryIo,
+                move |automation| {
+                    automation
+                        .start_created_setup(&workspace_id)
+                        .map(|_| ())
+                        .map_err(|_| ErrorCode::RegistryIo)
+                },
+            )
+            .await;
+    }
+    match result {
+        Ok(reply) => context.workspace(reply.value, reply.event),
+        Err(error) => context.respond(Err(error)),
+    }
+    .map_err(Into::into)
+}
+
+/// Try the archived Workspace recovery request branch and consume `pending` only on a match.
+/// # Errors
+/// Returns `NotImplemented` without consuming the request, or propagates delivery failure.
+pub(super) async fn workspace_recovery(
+    pending: &mut Option<Context<'_>>,
+    state: &State,
+) -> Result<(), DispatchError> {
+    let Some(mut context) = pending.take_if(|context| {
+        matches!(
+            context.request.method.as_str(),
+            "workspace.recovery.inspect.request" | "workspace.recovery.restore.request"
+        )
+    }) else {
+        return Err(DispatchError::NotImplemented);
+    };
+    let result = context
+        .call(
+            state.workspace_recovery.clone(),
+            ErrorCode::RegistryIo,
+            |service, method, params| {
+                crate::worktrees::rpc::workspace_recovery::execute(service, method, params)
+            },
+        )
+        .await;
+    match result {
+        Ok(reply) => context.workspace(reply.value, reply.event),
+        Err(error) => context.respond(Err(error)),
+    }
+    .map_err(Into::into)
+}
+
+/// Try the GitHub project request branch and consume `pending` only on a match.
+/// # Errors
+/// Returns `NotImplemented` without consuming the request, or propagates delivery failure.
+pub(super) async fn github_projects(
+    pending: &mut Option<Context<'_>>,
+    state: &State,
+) -> Result<(), DispatchError> {
+    let Some(context) = pending.take_if(|context| {
+        matches!(
+            context.request.method.as_str(),
+            "workspace.github.search_repositories.request" | "project.github.clone.request"
+        )
+    }) else {
+        return Err(DispatchError::NotImplemented);
+    };
+    context
+        .rpc(
+            state.github_projects.clone(),
+            ErrorCode::RegistryIo,
+            |service, method, params| {
+                crate::directory::rpc::github_projects::execute(service, method, params)
+            },
+        )
+        .await
+        .map_err(Into::into)
 }

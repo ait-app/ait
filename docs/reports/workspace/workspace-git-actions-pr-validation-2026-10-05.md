@@ -10,19 +10,19 @@
 
 ## 构建、测试与静态检查
 
-| 命令或范围 | 结果 |
-| --- | --- |
-| `cargo llvm-cov --workspace --html --offline` | 通过；1,797 passed，0 failed，3 ignored |
-| `cargo build --workspace --offline` | 通过 |
-| `cargo clippy --workspace --all-targets --offline -- -D warnings` | 通过 |
-| `cargo fmt --all -- --check`、`git diff --check` | 通过 |
-| 移动端 Git 操作、状态和文案相关测试 | 126 passed |
-| 移动端 Rust daemon transport 测试 | 29 passed |
-| 客户端 daemon-client 测试 | 141 passed |
-| 协议 checkout/PR schema 测试 | 38 passed |
-| `npm run build --workspace=@ait/client` | 通过 |
-| 变更的 TypeScript 文件 `oxfmt --check`、`oxlint` | 通过 |
-| `node scripts/check-docs.mjs`、`python3 scripts/check-paseo-client-methods.py` | 通过 |
+| 命令或范围                                                                     | 结果                                    |
+| ------------------------------------------------------------------------------ | --------------------------------------- |
+| `cargo llvm-cov --workspace --html --offline`                                  | 通过；1,797 passed，0 failed，3 ignored |
+| `cargo build --workspace --offline`                                            | 通过                                    |
+| `cargo clippy --workspace --all-targets --offline -- -D warnings`              | 通过                                    |
+| `cargo fmt --all -- --check`、`git diff --check`                               | 通过                                    |
+| 移动端 Git 操作、状态和文案相关测试                                            | 126 passed                              |
+| 移动端 Rust daemon transport 测试                                              | 29 passed                               |
+| 客户端 daemon-client 测试                                                      | 141 passed                              |
+| 协议 checkout/PR schema 测试                                                   | 38 passed                               |
+| `npm run build --workspace=@ait/client`                                        | 通过                                    |
+| 变更的 TypeScript 文件 `oxfmt --check`、`oxlint`                               | 通过                                    |
+| `node scripts/check-docs.mjs`、`python3 scripts/check-paseo-client-methods.py` | 通过                                    |
 
 移动端全量 `tsgo --noEmit` 未通过：当前本地依赖树缺少 `expo-clipboard`、`react-native-keyboard-controller`、`htmlparser2`、`@xterm/xterm` 等包；输出中没有本次变更文件的报错。安装完整移动端依赖后仍需重跑全量类型检查。
 
@@ -30,13 +30,13 @@
 
 完整 Rust workspace 测试在 `cargo llvm-cov --workspace --html --offline` 中执行通过。测试结果为 1,797 passed、0 failed、3 ignored；这与下面的行覆盖率分别统计。
 
-| 范围 | 已覆盖 / 总行数 | 行覆盖率 |
-| --- | ---: | ---: |
+| 范围           | 已覆盖 / 总行数 |   行覆盖率 |
+| -------------- | --------------: | ---------: |
 | Rust workspace | 49,427 / 52,321 | **94.47%** |
-| filesystem | 11,338 / 11,959 | 94.81% |
-| api | 1,975 / 2,134 | 92.55% |
-| metadata | 7,541 / 7,955 | 94.80% |
-| daemon | 922 / 967 | 95.35% |
+| filesystem     | 11,338 / 11,959 |     94.81% |
+| api            |   1,975 / 2,134 |     92.55% |
+| metadata       |   7,541 / 7,955 |     94.80% |
+| daemon         |       922 / 967 |     95.35% |
 
 [可审查的覆盖率产物](workspace-git-actions-pr-coverage-2026-10-05.json)包含 workspace、各 crate 和 338 个源码文件的行统计。测量范围为上述源码提交的 Rust workspace、默认 features；使用工具默认过滤，无额外文件排除。本地 HTML 报告位于 `target/llvm-cov/html/index.html`。
 

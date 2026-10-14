@@ -9,12 +9,12 @@
 
 ## 构建、测试与静态检查
 
-| 命令 | 结果 |
-| --- | --- |
-| `cargo build --workspace --all-targets --locked --offline` | 通过，0 warning |
-| `cargo clippy --workspace --all-targets --locked --offline -- -D warnings` | 通过 |
-| `cargo fmt --all --check`、`git diff --check` | 通过 |
-| `cargo test --workspace --locked --offline` | 1,769 passed，0 failed，3 ignored |
+| 命令                                                                       | 结果                              |
+| -------------------------------------------------------------------------- | --------------------------------- |
+| `cargo build --workspace --all-targets --locked --offline`                 | 通过，0 warning                   |
+| `cargo clippy --workspace --all-targets --locked --offline -- -D warnings` | 通过                              |
+| `cargo fmt --all --check`、`git diff --check`                              | 通过                              |
+| `cargo test --workspace --locked --offline`                                | 1,769 passed，0 failed，3 ignored |
 
 完整测试在允许本机监听的环境中运行。沙箱内首次运行的 API 监听测试因 `Operation not permitted` 失败；解除该环境限制后全部通过。3 项 ignored 用例需要本机 Claude/Codex CLI 或认证，其中两项会发起真实模型请求。
 
@@ -22,14 +22,14 @@
 
 `cargo llvm-cov --workspace --html --locked --offline -- --test-threads=1` 插桩运行：1,769 passed，0 failed，3 ignored。`cargo llvm-cov report --json --summary-only --output-path /private/tmp/ait-pr-coverage-summary.json` 提取行统计。
 
-| 范围 | 已覆盖 / 总行数 | 行覆盖率 |
-| --- | ---: | ---: |
+| 范围           | 已覆盖 / 总行数 |   行覆盖率 |
+| -------------- | --------------: | ---------: |
 | Rust workspace | 49,024 / 51,879 | **94.50%** |
-| daemon | 918 / 963 | 95.33% |
-| api | 1,945 / 2,101 | 92.58% |
-| filesystem | 11,143 / 11,735 | 94.96% |
-| metadata | 7,523 / 7,938 | 94.77% |
-| provider | 21,301 / 22,675 | 93.94% |
+| daemon         |       918 / 963 |     95.33% |
+| api            |   1,945 / 2,101 |     92.58% |
+| filesystem     | 11,143 / 11,735 |     94.96% |
+| metadata       |   7,523 / 7,938 |     94.77% |
+| provider       | 21,301 / 22,675 |     93.94% |
 
 [可审查的覆盖率产物](cargo-workspace-pr-coverage-2026-10-04.json)包含所有 13 个 workspace 包和 336 个源文件的行统计，文件路径均相对仓库根目录。范围为上述源码提交的 Rust workspace、默认 features，使用工具默认过滤，无额外文件排除；不包括 TypeScript、Kotlin 或 doctest 插桩。本地 HTML 报告位于 `target/llvm-cov/html/index.html`。
 

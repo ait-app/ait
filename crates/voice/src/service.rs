@@ -68,7 +68,7 @@ impl Speech {
 
     /// Report whether dictation and full voice conversations are configured.
     #[must_use]
-    pub fn availability(&self) -> (bool, bool) {
+    pub(crate) fn availability(&self) -> (bool, bool) {
         (
             self.stt.is_some(),
             self.stt.is_some() && self.tts.is_some() && self.agents.is_some(),

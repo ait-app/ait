@@ -1,3 +1,5 @@
+import type { BotMethod, BotParams, BotResult } from "@ait/protocol/bot/rpc-schemas";
+import type { ScheduleCadence, ScheduleTarget } from "@ait/protocol/schedule/types";
 import { subscribeTimeline, type TimelineMessage } from "./timeline-subscription/index.js";
 import { ProviderSnapshotUpdates } from "./provider-snapshots/index.js";
 import {
@@ -6,6 +8,7 @@ import {
   DEFAULT_CLIENT_CAPABILITIES,
   type TimelineSubscription,
 } from "./connection/index.js";
+import type { ObservationRequest } from "./connection/legacy.js";
 import { CreationClient } from "./creation/index.js";
 import type { CreationSnapshot } from "@ait/protocol/messages";
 import type { z } from "zod";
@@ -95,7 +98,6 @@ import type {
   ProviderDiagnosticResponseMessage,
   ProviderUsageListResponseMessage,
   DaemonGetStatusResponse,
-  DaemonGetPairingOfferResponse,
   DaemonConfigReloadResponse,
   DiagnosticsResponse,
   AgentRewindResponseMessage,
@@ -114,14 +116,6 @@ import type {
   PaseoConfigRevision,
   WorkspaceCreateRequest,
   WorkspaceRecoveryState,
-  PluginListItem,
-  PluginLogEntry,
-  PluginSourceStatusItem,
-  PluginSourceUpdateItem,
-  PluginUpdateSelection,
-  PluginUpdateProposal,
-  PluginUpdatePreview,
-  PluginUpdateResult,
   AgentSkillSelection,
   AgentSkillsStatus,
   AgentSkillsSaveResult,
@@ -160,6 +154,7 @@ import {
   type WebSocketFactory,
 } from "./daemon-client-transport.js";
 import { DaemonClientRuntimeMetrics } from "./daemon-client-runtime-metrics.js";
+import { describeValidationIssues, formatDiagnosticFields } from "./diagnostic-log.js";
 import {
   normalizeListProviderModelsPayload,
   normalizeProviderSnapshotUpdateMessage,
@@ -180,9 +175,9 @@ export interface Logger {
 
 const consoleLogger: Logger = {
   debug: () => {},
-  info: (obj, msg) => console.log(msg, obj),
-  warn: (obj, msg) => console.warn(msg, obj),
-  error: (obj, msg) => console.error(msg, obj),
+  info: (obj, msg) => console.log(msg, formatDiagnosticFields(obj)),
+  warn: (obj, msg) => console.warn(msg, formatDiagnosticFields(obj)),
+  error: (obj, msg) => console.error(msg, formatDiagnosticFields(obj)),
 };
 
 const perfNow: () => number =
@@ -325,7 +320,7 @@ export interface DaemonClientConfig {
   providerSnapshots?: "wire";
   url: string;
   clientId: string;
-  clientType?: "mobile" | "browser" | "cli" | "mcp" | "hub";
+  clientType?: "mobile" | "browser" | "cli" | "mcp";
   appVersion?: string;
   runtimeGeneration?: number | null;
   password?: string;
@@ -492,7 +487,6 @@ type RefreshProvidersSnapshotPayload = RefreshProvidersSnapshotResponseMessage["
 type ProviderDiagnosticPayload = ProviderDiagnosticResponseMessage["payload"];
 type ProviderUsageListPayload = ProviderUsageListResponseMessage["payload"];
 type DaemonStatusPayload = DaemonGetStatusResponse["payload"];
-type DaemonPairingOfferPayload = DaemonGetPairingOfferResponse["payload"];
 type DiagnosticsPayload = DiagnosticsResponse["payload"];
 type ReadProjectConfigPayload = Extract<
   SessionOutboundMessage,
@@ -590,6 +584,8 @@ export interface FetchAgentTimelineOptions {
   limit?: number;
   projection?: FetchAgentTimelineProjection;
   mergeWindow?: boolean;
+  /** Permit a durable page before native hydration; revalidate if historyNeedsRefresh is true. */
+  allowCached?: boolean;
   requestId?: string;
   timeout?: number;
 }
@@ -667,10 +663,6 @@ export interface ShutdownServerOptions {
   timeout?: number;
 }
 export interface DaemonStatusOptions {
-  requestId?: string;
-  timeout?: number;
-}
-export interface DaemonPairingOfferOptions {
   requestId?: string;
   timeout?: number;
 }
@@ -755,38 +747,12 @@ export type ProjectListOptions = Omit<ProjectListRequest, "type" | "requestId"> 
   requestId?: string;
 };
 export interface CreateScheduleOptions {
+  workspaceId: string;
+  startAt?: string;
   prompt: string;
   name?: string | null;
-  cadence: {
-    type: "cron";
-    expression: string;
-    timezone?: string;
-  };
-  target:
-    | {
-        type: "self";
-        agentId: string;
-      }
-    | {
-        type: "agent";
-        agentId: string;
-      }
-    | {
-        type: "new-agent";
-        config: {
-          provider: AgentProvider;
-          cwd: string;
-          modeId?: string;
-          model?: string;
-          thinkingOptionId?: string;
-          archiveOnFinish?: boolean;
-          isolation?: "local" | "worktree";
-          title?: string | null;
-          providerOptions?: AgentSessionConfig["providerOptions"];
-          systemPrompt?: string;
-          mcpServers?: AgentSessionConfig["mcpServers"];
-        };
-      };
+  cadence: ScheduleCadence;
+  target: ScheduleTarget | { type: "self"; agentId: string };
   maxRuns?: number;
   expiresAt?: string;
   runOnCreate?: boolean;
@@ -806,14 +772,13 @@ export interface UpdateScheduleNewAgentConfig {
   cwd?: string;
 }
 export interface UpdateScheduleOptions {
+  workspaceId?: string;
+  target?: ScheduleTarget;
+  startAt?: string | null;
   id: string;
   name?: string | null;
   prompt?: string;
-  cadence?: {
-    type: "cron";
-    expression: string;
-    timezone?: string;
-  };
+  cadence?: ScheduleCadence;
   newAgentConfig?: UpdateScheduleNewAgentConfig;
   maxRuns?: number | null;
   expiresAt?: string | null;
@@ -926,8 +891,15 @@ class DaemonRpcError extends Error {
   readonly requestId: string;
   readonly requestType?: string;
   readonly code?: string;
+  readonly eventTypes?: SessionEventSubscription[];
 
-  constructor(params: { requestId: string; error: string; requestType?: string; code?: string }) {
+  constructor(params: {
+    requestId: string;
+    error: string;
+    requestType?: string;
+    code?: string;
+    eventTypes?: SessionEventSubscription[];
+  }) {
     const parts = [params.error];
     if (params.requestType) parts.push(`requestType=${params.requestType}`);
     if (params.code) parts.push(`code=${params.code}`);
@@ -936,6 +908,7 @@ class DaemonRpcError extends Error {
     this.requestId = params.requestId;
     this.requestType = params.requestType;
     this.code = params.code;
+    this.eventTypes = params.eventTypes;
   }
 }
 
@@ -1143,7 +1116,15 @@ export class DaemonClient {
         throw error;
       }
     },
-    failed: (error) => this.logger.error({ err: error }, "Subscription failed"),
+    failed: (error) =>
+      this.logger.error(
+        {
+          err: error,
+          serverId: this.lastServerInfoMessage?.serverId,
+          serverVersion: this.lastServerInfoMessage?.version,
+        },
+        "Subscription failed",
+      ),
   });
   private transport: DaemonTransport | null = null;
   private uploadTail: Promise<void> = Promise.resolve();
@@ -1181,7 +1162,7 @@ export class DaemonClient {
   private lastServerInfoMessage: ServerInfoStatusPayload | null = null;
   private runtimeMetricsInterval: ReturnType<typeof setInterval> | null = null;
   private runtimeMetrics: DaemonClientRuntimeMetrics | null = null;
-  private pingProbe: PingProbe | null = null;
+  private readonly pingProbes = new Map<"shared" | "verification", PingProbe>();
   private connectionVerification: DaemonTransport | null = null;
   private livenessHeartbeatTimer: ReturnType<typeof setTimeout> | null = null;
   private lastLivenessRttMs: number | null = null;
@@ -1484,9 +1465,13 @@ export class DaemonClient {
     const transport = this.transport;
     if (!transport || this.connectionVerification === transport) return;
     this.connectionVerification = transport;
-    // A session probe has its own deadline, independent of a heartbeat that the OS
-    // may have suspended. A successful response also proves the session can serve RPCs.
-    void this.ping({ timeoutMs: 3_000 })
+    // Send a fresh probe with its own deadline, independent of a suspended heartbeat.
+    // Raw pongs verify liveness without requiring server-side clock timestamps.
+    void this.sendPingAwaitRtt({
+      timeoutMs: 3_000,
+      drivesLivenessFailure: false,
+      kind: "verification",
+    })
       .catch((error: unknown) => {
         if (this.transport !== transport || this.connectionState.status !== "connected") return;
         this.disposeTransport(1001, "Connection verification failed");
@@ -1794,8 +1779,12 @@ export class DaemonClient {
             error: new DaemonRpcError({
               requestId: msg.payload.requestId,
               error: msg.payload.error,
-              requestType: msg.payload.requestType,
+              requestType: msg.payload.requestType ?? params.message.type,
               code: msg.payload.code,
+              eventTypes:
+                params.message.type === "session.events.set_subscription.request"
+                  ? params.message.events
+                  : undefined,
             }),
           };
         }
@@ -2069,6 +2058,7 @@ export class DaemonClient {
   private sendPingAwaitRtt(params: {
     timeoutMs: number;
     drivesLivenessFailure: boolean;
+    kind?: "shared" | "verification";
   }): Promise<number> {
     if (this.connectionState.status !== "connected" || !this.transport) {
       return Promise.reject(
@@ -2076,8 +2066,10 @@ export class DaemonClient {
       );
     }
 
-    if (this.pingProbe) {
-      return this.pingProbe.promise;
+    const kind = params.kind ?? "shared";
+    const pending = this.pingProbes.get(kind);
+    if (pending) {
+      return pending.promise;
     }
 
     const startedAt = perfNow();
@@ -2093,10 +2085,10 @@ export class DaemonClient {
       resolve: (value) => resolveProbe?.(value),
       reject: (error) => rejectProbe?.(error),
       timeoutHandle: setTimeout(() => {
-        if (this.pingProbe !== probe) {
+        if (this.pingProbes.get(kind) !== probe) {
           return;
         }
-        this.pingProbe = null;
+        this.pingProbes.delete(kind);
         const error = new PingTimeoutError(timeoutMs);
         probe.reject(error);
         if (probe.drivesLivenessFailure) {
@@ -2106,12 +2098,13 @@ export class DaemonClient {
       startedAt,
       drivesLivenessFailure: params.drivesLivenessFailure,
     };
-    this.pingProbe = probe;
+    this.pingProbes.set(kind, probe);
 
     try {
       this.sendJsonMessage("connection.ping", "connection.ping", { type: "connection.ping" });
     } catch (error) {
-      this.clearPingProbe();
+      this.pingProbes.delete(kind);
+      clearTimeout(probe.timeoutHandle);
       const sendError = error instanceof Error ? error : new Error(String(error));
       if (probe.drivesLivenessFailure) {
         this.recordLivenessFailure(sendError);
@@ -2156,7 +2149,7 @@ export class DaemonClient {
 
   private observe<T extends CorrelatedResponseType>(
     responseType: T,
-    message: { type: SessionInboundMessage["type"] } & Record<string, unknown>,
+    message: ObservationRequest | (() => ObservationRequest),
     options?: { requestId?: string; timeout?: number; signal?: AbortSignal },
   ): OwnedSubscription<CorrelatedResponsePayload<T>> {
     let resetSource = false;
@@ -2177,7 +2170,7 @@ export class DaemonClient {
               if ("error" in payload && typeof payload.error === "string")
                 throw new DaemonRpcError({
                   requestId: payload.requestId,
-                  requestType: message.type,
+                  requestType: query.type,
                   error: payload.error,
                 });
               accept(payload);
@@ -2215,16 +2208,25 @@ export class DaemonClient {
     );
   }
 
+  /**
+   * supportedOnly filters against each handshake, including reconnects.
+   * Hosts without an event catalog retain the requested set; filtering is opt-in.
+   */
   observeEvents(
     events: SessionEventSubscription[],
-    options?: { signal?: AbortSignal; notifications?: boolean },
+    options?: { signal?: AbortSignal; notifications?: boolean; supportedOnly?: boolean },
   ): OwnedSubscription<CorrelatedResponsePayload<"session.events.set_subscription.response">> {
     return this.observe(
       "session.events.set_subscription.response",
-      {
-        type: "session.events.set_subscription.request",
-        events,
-        notifications: options?.notifications,
+      () => {
+        const supported = options?.supportedOnly
+          ? this.lastServerInfoMessage?.sessionEventTypes
+          : undefined;
+        return {
+          type: "session.events.set_subscription.request",
+          events: supported ? events.filter((event) => supported.includes(event)) : events,
+          notifications: options?.notifications,
+        };
       },
       options,
     );
@@ -2386,6 +2388,14 @@ export class DaemonClient {
         }
         return msg.payload;
       },
+    });
+  }
+
+  async getWorkspace(
+    workspaceId: string,
+  ): Promise<Extract<SessionOutboundMessage, { type: "workspace.get.response" }>["payload"]> {
+    return this.sendNamespacedCorrelatedSessionRequest<"workspace.get.response">({
+      message: { type: "workspace.get.request", workspaceId },
     });
   }
 
@@ -3124,6 +3134,7 @@ export class DaemonClient {
       ...(typeof options.limit === "number" ? { limit: options.limit } : {}),
       ...(options.projection ? { projection: options.projection } : {}),
       ...(options.mergeWindow === true ? { mergeWindow: true } : {}),
+      ...(options.allowCached === true ? { allowCached: true } : {}),
     });
 
     const payload = await this.sendRequest({
@@ -5099,67 +5110,6 @@ export class DaemonClient {
     });
   }
 
-  async connectHub(
-    hubUrl: string,
-    token: string,
-    permissions: readonly string[] = [],
-    requestId?: string,
-  ) {
-    this.requireHubRelationshipSupport();
-    return this.sendCorrelatedSessionRequest({
-      requestId,
-      message: { type: "hub.management.daemon.connect.request", hubUrl, token, permissions },
-      responseType: "hub.management.daemon.connect.response",
-    });
-  }
-
-  async updateHubPermissions(
-    input: { grant?: readonly string[]; revoke?: readonly string[] },
-    requestId?: string,
-  ) {
-    this.requireHubRelationshipSupport();
-    return this.sendCorrelatedSessionRequest({
-      requestId,
-      message: {
-        type: "hub.management.daemon.permissions.update.request",
-        grant: input.grant ?? [],
-        revoke: input.revoke ?? [],
-      },
-      responseType: "hub.management.daemon.permissions.update.response",
-    });
-  }
-
-  async getHubStatus(requestId?: string) {
-    this.requireHubRelationshipSupport();
-    return this.sendCorrelatedSessionRequest({
-      requestId,
-      message: { type: "hub.management.daemon.get_status.request" },
-      responseType: "hub.management.daemon.get_status.response",
-    });
-  }
-
-  async disconnectHub(force = false, requestId?: string) {
-    this.requireHubRelationshipSupport();
-    return this.sendCorrelatedSessionRequest({
-      requestId,
-      message: { type: "hub.management.daemon.disconnect.request", force },
-      responseType: "hub.management.daemon.disconnect.response",
-    });
-  }
-
-  async getDaemonPairingOffer(
-    options?: DaemonPairingOfferOptions,
-  ): Promise<DaemonPairingOfferPayload> {
-    return this.sendCorrelatedSessionRequest({
-      requestId: options?.requestId,
-      message: {
-        type: "daemon.get_pairing_offer.request",
-      },
-      responseType: "daemon.get_pairing_offer.response",
-      timeout: options?.timeout,
-    });
-  }
-
   async collectDiagnostics(requestId?: string): Promise<DiagnosticsPayload> {
     return this.sendNamespacedCorrelatedSessionRequest({
       requestId,
@@ -5243,11 +5193,19 @@ export class DaemonClient {
     });
   }
 
-  async listProviderUsage(options?: { requestId?: string }): Promise<ProviderUsageListPayload> {
+  async listProviderUsage(options?: {
+    requestId?: string;
+    agentId?: string;
+    providerId?: string;
+    forceRefresh?: boolean;
+  }): Promise<ProviderUsageListPayload> {
     return this.sendNamespacedCorrelatedSessionRequest({
       requestId: options?.requestId,
       message: {
         type: "provider.usage.list.request",
+        ...(options?.agentId ? { agentId: options.agentId } : {}),
+        ...(options?.providerId ? { providerId: options.providerId } : {}),
+        ...(options?.forceRefresh ? { forceRefresh: true } : {}),
       },
     });
   }
@@ -5289,36 +5247,6 @@ export class DaemonClient {
       requestId,
       response,
     });
-  }
-
-  async getPluginCatalog() {
-    const requestId = this.createRequestId();
-    const payload = await this.sendCorrelatedSessionRequest({
-      requestId,
-      message: { type: "plugin.catalog.get.request", requestId },
-      responseType: "plugin.catalog.get.response",
-    });
-    return payload.plugins;
-  }
-
-  async listPlugins(): Promise<PluginListItem[]> {
-    const requestId = this.createRequestId();
-    const payload = await this.sendCorrelatedSessionRequest({
-      requestId,
-      message: { type: "plugin.list.request", requestId },
-      responseType: "plugin.list.response",
-    });
-    return payload.plugins;
-  }
-
-  async getPluginLogs(pluginId: string): Promise<PluginLogEntry[]> {
-    const requestId = this.createRequestId();
-    const payload = await this.sendCorrelatedSessionRequest({
-      requestId,
-      message: { type: "plugin.logs.get.request", requestId, pluginId },
-      responseType: "plugin.logs.get.response",
-    });
-    return payload.entries;
   }
 
   async getAgentSkillsStatus(): Promise<AgentSkillsStatus> {
@@ -5374,165 +5302,6 @@ export class DaemonClient {
       },
       responseType: "agent.skills.import_legacy_selection.response",
     });
-  }
-
-  async installDirectoryPlugin(path: string, id?: string): Promise<PluginListItem> {
-    const requestId = this.createRequestId();
-    const payload = await this.sendCorrelatedSessionRequest({
-      requestId,
-      message: {
-        type: "plugin.directory.install.request",
-        requestId,
-        path,
-        ...(id ? { id } : {}),
-      },
-      responseType: "plugin.directory.install.response",
-    });
-    return payload.plugin;
-  }
-
-  async installPluginSource(input: {
-    source: string;
-    id?: string;
-    ref?: string;
-  }): Promise<PluginListItem> {
-    const requestId = this.createRequestId();
-    // COMPAT(pluginSourceInstallation): added in v0.8.0; remove after 2027-03-16 once daemon floor supports source identifiers.
-    if (this.getLastServerInfoMessage()?.features?.pluginSourceInstallation !== true) {
-      throw new Error("Update the host to install plugin sources.");
-    }
-    const payload = await this.sendCorrelatedSessionRequest({
-      requestId,
-      message: {
-        type: "plugin.source.install.request",
-        requestId,
-        source: input.source,
-        ...(input.id ? { id: input.id } : {}),
-        ...(input.ref ? { ref: input.ref } : {}),
-      },
-      responseType: "plugin.source.install.response",
-      timeout: 5 * 60 * 1000,
-    });
-    return payload.plugin;
-  }
-
-  async getPluginSourceStatus(pluginId?: string): Promise<PluginSourceStatusItem[]> {
-    const requestId = this.createRequestId();
-    const payload = await this.sendCorrelatedSessionRequest({
-      requestId,
-      message: {
-        type: "plugin.source.status.request",
-        requestId,
-        ...(pluginId ? { pluginId } : {}),
-      },
-      responseType: "plugin.source.status.response",
-    });
-    return payload.plugins;
-  }
-
-  private requirePluginUpdates(): void {
-    // COMPAT(pluginSourceUpdates): added in v0.8.0; remove after 2027-03-16 once daemon floor supports reviewed updates.
-    if (this.getLastServerInfoMessage()?.features?.pluginSourceUpdates !== true)
-      throw new Error("Update the host to review plugin updates.");
-  }
-
-  async previewPluginUpdates(
-    input: { pluginId?: string; target?: PluginUpdateSelection } = {},
-  ): Promise<PluginUpdatePreview[]> {
-    this.requirePluginUpdates();
-    const requestId = this.createRequestId();
-    const payload = await this.sendCorrelatedSessionRequest({
-      requestId,
-      message: { type: "plugin.source.update.preview.request", requestId, ...input },
-      responseType: "plugin.source.update.preview.response",
-      timeout: 300_000,
-    });
-    return payload.plugins;
-  }
-
-  async applyPluginUpdates(proposals: PluginUpdateProposal[]): Promise<PluginUpdateResult[]> {
-    this.requirePluginUpdates();
-    const requestId = this.createRequestId();
-    const payload = await this.sendCorrelatedSessionRequest({
-      requestId,
-      message: { type: "plugin.source.update.apply.request", requestId, proposals },
-      responseType: "plugin.source.update.apply.response",
-      timeout: 300_000,
-    });
-    return payload.plugins;
-  }
-
-  async updatePluginSources(pluginId?: string): Promise<PluginSourceUpdateItem[]> {
-    const requestId = this.createRequestId();
-    const payload = await this.sendCorrelatedSessionRequest({
-      requestId,
-      message: {
-        type: "plugin.source.update.request",
-        requestId,
-        ...(pluginId ? { pluginId } : {}),
-      },
-      responseType: "plugin.source.update.response",
-    });
-    return payload.plugins;
-  }
-
-  async inspectDirectoryPlugin(path: string): Promise<{ id: string }> {
-    const requestId = this.createRequestId();
-    return this.sendCorrelatedSessionRequest({
-      requestId,
-      message: { type: "plugin.directory.inspect.request", requestId, path },
-      responseType: "plugin.directory.inspect.response",
-    });
-  }
-
-  async reloadPlugin(pluginId: string): Promise<PluginListItem> {
-    return this.managePlugin("reload", pluginId);
-  }
-
-  async enablePlugin(pluginId: string): Promise<PluginListItem> {
-    return this.managePlugin("enable", pluginId);
-  }
-
-  async disablePlugin(pluginId: string): Promise<PluginListItem> {
-    return this.managePlugin("disable", pluginId);
-  }
-
-  async removePlugin(pluginId: string): Promise<void> {
-    const requestId = this.createRequestId();
-    await this.sendCorrelatedSessionRequest({
-      requestId,
-      message: { type: "plugin.remove.request", requestId, pluginId },
-      responseType: "plugin.remove.response",
-    });
-  }
-
-  private async managePlugin(
-    action: "reload" | "enable" | "disable",
-    pluginId: string,
-  ): Promise<PluginListItem> {
-    const requestId = this.createRequestId();
-    const payload = await this.sendCorrelatedSessionRequest({
-      requestId,
-      message: { type: `plugin.${action}.request`, requestId, pluginId },
-      responseType: `plugin.${action}.response`,
-    });
-    return payload.plugin;
-  }
-
-  async invokePluginRpc(pluginId: string, method: string, input: unknown): Promise<unknown> {
-    const requestId = this.createRequestId();
-    const payload = await this.sendCorrelatedSessionRequest({
-      requestId,
-      message: {
-        type: "plugin.rpc.invoke.request",
-        requestId,
-        pluginId,
-        method,
-        input,
-      },
-      responseType: "plugin.rpc.invoke.response",
-    });
-    return payload.output;
   }
 
   async respondToPermissionAndWait(
@@ -5930,6 +5699,8 @@ export class DaemonClient {
       requestId: options.requestId,
       message: {
         type: "schedule.create.request",
+        workspaceId: options.workspaceId,
+        ...(options.startAt ? { startAt: options.startAt } : {}),
         prompt: options.prompt,
         cadence: options.cadence,
         target: options.target,
@@ -5942,11 +5713,34 @@ export class DaemonClient {
     });
   }
 
-  async scheduleList(requestId?: string): Promise<ScheduleListPayload> {
+  /** Workspace Bot RPCs use the same validated transport and request ownership as other requests. */
+  async botRequest<M extends BotMethod>(method: M, params: BotParams<M>): Promise<BotResult<M>> {
+    const requestId = this.createRequestId();
+    const responseType = method.replace(/\.request$/, ".response");
+    return this.sendRequest<BotResult<M>>({
+      requestId,
+      message: SessionInboundMessageSchema.parse({ ...params, type: method, requestId }),
+      select: (message) => {
+        if (message.type !== responseType || !("payload" in message)) return null;
+        const payload = message.payload;
+        if (!("requestId" in payload) || payload.requestId !== requestId) return null;
+        // The schemas validate both sides; the method supplies their type correlation.
+        return payload as BotResult<M>;
+      },
+    });
+  }
+
+  async scheduleList(
+    options?: string | { requestId?: string; workspaceId?: string },
+  ): Promise<ScheduleListPayload> {
+    const requestId = typeof options === "string" ? options : options?.requestId;
     return this.sendCorrelatedSessionRequest({
       requestId,
       message: {
         type: "schedule.list.request",
+        ...(typeof options === "object" && options.workspaceId
+          ? { workspaceId: options.workspaceId }
+          : {}),
       },
       responseType: "schedule.list.response",
     });
@@ -6023,6 +5817,9 @@ export class DaemonClient {
       requestId: options.requestId,
       message: {
         type: "schedule.update.request",
+        ...(options.workspaceId !== undefined ? { workspaceId: options.workspaceId } : {}),
+        ...(options.target !== undefined ? { target: options.target } : {}),
+        ...(options.startAt !== undefined ? { startAt: options.startAt } : {}),
         scheduleId: options.id,
         ...(options.name !== undefined ? { name: options.name } : {}),
         ...(options.prompt !== undefined ? { prompt: options.prompt } : {}),
@@ -6070,13 +5867,6 @@ export class DaemonClient {
 
   getLastServerInfoMessage(): ServerInfoStatusPayload | null {
     return this.lastServerInfoMessage;
-  }
-
-  private requireHubRelationshipSupport(): void {
-    // COMPAT(hubRelationship): added in v0.1.X, drop the gate when floor >= v0.1.X.
-    if (this.lastServerInfoMessage?.features?.hubRelationship !== true) {
-      throw new Error("Update the host to use Hub relationship management.");
-    }
   }
 
   private requireDaemonConfigReloadSupport(): void {
@@ -6228,8 +6018,30 @@ export class DaemonClient {
         typeof parsedJson.type === "string"
           ? parsedJson.type
           : "unknown";
-      const msgType = responseIdentity?.responseType ?? envelopeType;
-      this.logger.warn({ msgType, error: parsed.error.message }, "Message validation failed");
+      const message =
+        parsedJson != null && typeof parsedJson === "object" && "message" in parsedJson
+          ? parsedJson.message
+          : undefined;
+      const msgType =
+        message != null &&
+        typeof message === "object" &&
+        "type" in message &&
+        typeof message.type === "string"
+          ? message.type.slice(0, 128)
+          : envelopeType;
+      this.logger.warn(
+        {
+          msgType,
+          envelopeType,
+          requestId: responseIdentity?.requestId,
+          serverId: this.lastServerInfoMessage?.serverId,
+          serverVersion: this.lastServerInfoMessage?.version,
+          bytes,
+          issueCount: parsed.error.issues.length,
+          issues: describeValidationIssues(parsed.error),
+        },
+        "Message validation failed",
+      );
       if (responseIdentity) {
         this.rejectWaitersForRequestId(
           responseIdentity.requestId,
@@ -6495,32 +6307,20 @@ export class DaemonClient {
   }
 
   private resolvePingProbe(): void {
-    const probe = this.pingProbe;
-    if (!probe) {
-      return;
+    const receivedAt = perfNow();
+    for (const probe of this.pingProbes.values()) {
+      clearTimeout(probe.timeoutHandle);
+      probe.resolve(receivedAt - probe.startedAt);
     }
-    this.pingProbe = null;
-    clearTimeout(probe.timeoutHandle);
-    probe.resolve(perfNow() - probe.startedAt);
-  }
-
-  private clearPingProbe(): void {
-    const probe = this.pingProbe;
-    if (!probe) {
-      return;
-    }
-    this.pingProbe = null;
-    clearTimeout(probe.timeoutHandle);
+    this.pingProbes.clear();
   }
 
   private rejectPingProbe(error: Error): void {
-    const probe = this.pingProbe;
-    if (!probe) {
-      return;
+    for (const probe of this.pingProbes.values()) {
+      clearTimeout(probe.timeoutHandle);
+      probe.reject(error);
     }
-    this.pingProbe = null;
-    clearTimeout(probe.timeoutHandle);
-    probe.reject(error);
+    this.pingProbes.clear();
   }
 
   private recordLivenessFailure(error: Error): void {

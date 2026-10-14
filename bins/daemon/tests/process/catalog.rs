@@ -8,7 +8,7 @@ async fn production_installs_every_in_scope_method_without_placeholders() {
     let log = root.path().join("server.log");
     let mut server = start(&root.path().join("state"), &log);
     let address = ready(&mut server, &log).await;
-    let info: protocol::ServerInfo = reqwest::Client::builder()
+    let info: model::server::ServerInfo = reqwest::Client::builder()
         .no_proxy()
         .build()
         .unwrap()
@@ -25,8 +25,10 @@ async fn production_installs_every_in_scope_method_without_placeholders() {
         .implemented_capabilities
         .into_iter()
         .collect::<BTreeSet<_>>();
-    assert_eq!(published.len(), 180);
-    assert_eq!(implemented.len(), 179);
+    assert_eq!(published.len(), 201);
+    assert_eq!(implemented.len(), 200);
+    assert!(implemented.contains("bot.message.send.request"));
+    assert!(implemented.contains("workspace.get.request"));
     assert!(implemented.is_subset(&published));
     assert!(!published.iter().any(|name| {
         ["hub.", "chat.", "loop.", "plugin."]
@@ -43,6 +45,7 @@ async fn production_installs_every_in_scope_method_without_placeholders() {
         assert!(!implemented.contains(retired));
     }
     let catalog = schedule::capabilities::implemented_methods()
+        .chain(bot::capabilities::implemented_methods())
         .chain(browser::capabilities::implemented_methods())
         .chain(voice::capabilities::implemented_methods())
         .chain(metadata::capabilities::implemented_methods())
@@ -51,7 +54,11 @@ async fn production_installs_every_in_scope_method_without_placeholders() {
         .chain(terminal::capabilities::implemented_methods())
         .map(|spec| (spec.name, spec.kind))
         .collect::<BTreeMap<_, _>>();
-    assert_eq!(catalog.len(), 167);
+    assert_eq!(catalog.len(), 188);
+    assert_eq!(
+        catalog.get("workspace.get.request"),
+        Some(&model::methods::InboundKind::Request)
+    );
     for method in [
         "server.info",
         "connection.ping",

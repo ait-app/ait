@@ -1,5 +1,5 @@
 //! Actor counterparts of Paseo concurrent updates and in-flight lifecycle tests.
-use model::schedule::{RunStatus, Status};
+use domain::schedule::{RunStatus, Status};
 
 use super::{controlled::*, *};
 
@@ -152,19 +152,26 @@ async fn dropped_manual_rpc_waiter_does_not_cancel_an_admitted_run() {
 }
 
 #[tokio::test]
-async fn deleting_inflight_schedule_does_not_recreate_it_after_completion() {
+async fn deletion_waits_for_inflight_schedule_to_settle() {
     let (runner, mut receive) = Controlled::new();
     let store = Memory::default();
     let service = Schedules::spawn(Box::new(store.clone()), runner).unwrap();
     let id = create(&service).await;
     let pending = run(&service, &id);
     let accepted = started(&mut receive).await;
+    assert_eq!(
+        service
+            .execute("schedule.delete.request", json!({"scheduleId":id}))
+            .await
+            .unwrap_err(),
+        Error::Conflict
+    );
+    accepted.complete.send(Outcome::default()).unwrap();
+    assert!(settled(pending).await.is_ok());
     service
         .execute("schedule.delete.request", json!({"scheduleId":id}))
         .await
         .unwrap();
-    accepted.complete.send(Outcome::default()).unwrap();
-    assert_eq!(settled(pending).await.unwrap_err(), Error::NotFound);
     assert!(store.0.lock().unwrap().0.is_empty());
     service.shutdown().await.unwrap();
 }
@@ -205,6 +212,13 @@ struct CheckpointOnCancel {
 }
 
 impl Runner for CheckpointOnCancel {
+    fn resolve(
+        &self,
+        _: String,
+        target: domain::schedule::Target,
+    ) -> Pin<Box<dyn Future<Output = Result<domain::schedule::Target, Error>> + Send + '_>> {
+        Box::pin(async move { Ok(target) })
+    }
     fn run(
         &self,
         _: Schedule,

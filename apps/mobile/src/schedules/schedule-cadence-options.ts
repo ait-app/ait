@@ -1,7 +1,8 @@
 import type { TFunction } from "i18next";
 import { i18n } from "@/i18n/i18next";
 import type { ScheduleCadence } from "@ait/protocol/schedule/types";
-import { everyMsToParts } from "@/utils/schedule-format";
+
+export type ScheduleFormCadence = Exclude<ScheduleCadence, { type: "once" }>;
 
 type CronCadence = Extract<ScheduleCadence, { type: "cron" }>;
 
@@ -50,25 +51,7 @@ export function resolveCronPresetDisplay(
 export function normalizeScheduleFormCadence(
   cadence: ScheduleCadence,
   timezone: string,
-): CronCadence {
-  if (cadence.type === "cron") {
-    return { ...cadence, timezone: cadence.timezone ?? timezone };
-  }
-
-  return {
-    type: "cron",
-    expression: everyMsToCronExpression(cadence.everyMs),
-    timezone,
-  };
-}
-
-function everyMsToCronExpression(everyMs: number): string {
-  const { value, unit } = everyMsToParts(everyMs);
-  if (unit === "minutes") {
-    return value === 1 ? "* * * * *" : `*/${Math.min(value, 59)} * * * *`;
-  }
-  if (unit === "hours") {
-    return value === 1 ? "0 * * * *" : `0 */${Math.min(value, 23)} * * *`;
-  }
-  return value === 1 ? "0 9 * * *" : `0 9 */${Math.min(value, 31)} * *`;
+): ScheduleFormCadence {
+  if (cadence.type === "once") return { type: "every", everyMs: 3_600_000 };
+  return cadence.type === "cron" ? { ...cadence, timezone: cadence.timezone ?? timezone } : cadence;
 }

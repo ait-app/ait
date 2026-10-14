@@ -8,17 +8,18 @@ use std::sync::Arc;
 use std::time::Duration;
 
 use domain::agent_runtime::StoredAgentConfig;
-use model::summary::{SummaryError, SummaryFuture, SummaryRequest};
+use domain::summary::{SummaryError, SummaryRequest};
+use model::summary::SummaryFuture;
 use serde_json::Value;
 use tokio::sync::Semaphore;
 use tokio_util::sync::CancellationToken;
 
 use crate::ports::agent_session::{AgentClient, AgentSessionSpec};
-use crate::summary::{SummaryConfiguration, SummaryGenerator};
+use model::summary::{SummaryConfiguration, SummaryGenerator};
 
 /// Model-backed summary generator shared by all four wording use cases.
 #[derive(Debug)]
-pub struct Generation {
+pub(crate) struct Generation {
     config: Arc<dyn SummaryConfiguration>,
     clients: BTreeMap<String, Arc<dyn AgentClient>>,
     permits: Semaphore,
@@ -31,7 +32,10 @@ impl Generation {
     /// Use live `config` and registered `clients`, allowing two concurrent 90-second operations.
     /// Clients retain provider credentials in their native authentication stores.
     #[must_use]
-    pub fn new(config: Arc<dyn SummaryConfiguration>, clients: Vec<Arc<dyn AgentClient>>) -> Self {
+    pub(crate) fn new(
+        config: Arc<dyn SummaryConfiguration>,
+        clients: Vec<Arc<dyn AgentClient>>,
+    ) -> Self {
         Self {
             config,
             clients: clients

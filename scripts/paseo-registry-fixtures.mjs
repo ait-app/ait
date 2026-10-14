@@ -303,8 +303,8 @@ const meta = {
   sourceFiles,
 };
 for (const [destination, isRecord] of [
-  ["crates/metadata/tests/fixtures/paseo-registry.json", true],
-  ["crates/metadata/tests/fixtures/paseo-workspace.json", false],
+  ["crates/domain/tests/fixtures/paseo-registry.json", true],
+  ["crates/domain/tests/fixtures/paseo-workspace.json", false],
 ]) {
   fs.writeFileSync(
     destination,

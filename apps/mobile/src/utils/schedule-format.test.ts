@@ -57,7 +57,7 @@ describe("schedule title helpers", () => {
 
   it("labels engine records by product meaning", () => {
     expect(scheduleProductName(createSchedule({ targetType: "new-agent" }))).toBe("Schedule");
-    expect(scheduleProductName(createSchedule({ targetType: "agent" }))).toBe("Heartbeat");
+    expect(scheduleProductName(createSchedule({ targetType: "agent" }))).toBe("Schedule");
   });
 
   it("resolves display titles by name, config title, prompt, then fallback", () => {
@@ -80,7 +80,9 @@ describe("interval formatting", () => {
   it("round-trips interval parts and formats cadence labels", () => {
     expect(everyMsToParts(2 * 24 * 60 * 60_000)).toEqual({ value: 2, unit: "days" });
     expect(everyMsToParts(3 * 60 * 60_000)).toEqual({ value: 3, unit: "hours" });
-    expect(everyMsToParts(90_000)).toEqual({ value: 2, unit: "minutes" });
+    expect(everyMsToParts(90_000)).toEqual({ value: 90, unit: "seconds" });
+    expect(everyMsToParts(1_234)).toEqual({ value: 1_234, unit: "milliseconds" });
+    expect(formatCadence({ type: "every", everyMs: 90_000 })).toBe("Every 90 seconds");
     expect(everyMsToParts(0)).toEqual({ value: 1, unit: "hours" });
 
     expect(partsToEveryMs(2, "hours")).toBe(2 * 60 * 60_000);

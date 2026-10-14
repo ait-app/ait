@@ -67,7 +67,7 @@ impl AgentManager {
     ///
     /// # Errors
     /// Returns missing identity, busy input, invalid settings, provider or persistence failures.
-    pub async fn restore(
+    pub(crate) async fn restore(
         &mut self,
         agent_id: &str,
         overrides: &Overrides,

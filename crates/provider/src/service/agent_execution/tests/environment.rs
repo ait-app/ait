@@ -5,7 +5,7 @@ async fn create_environment_reaches_only_its_codex_process_and_is_not_persisted_
     let fixture = Fixture::new();
     std::fs::write(fixture.cwd.join("capture-environment"), "").unwrap();
     let receipt_path = fixture.root.path().join("creations.json");
-    let creations = file::creation::open(receipt_path.clone()).unwrap();
+    let creations = persistence::storage::creation::open(receipt_path.clone()).unwrap();
     let (execution, registry) = worker_with_creations(&fixture, creations);
     let request = json!({"idempotencyKey":"environment-create","config":{"provider":"codex","cwd":fixture.cwd},"env":{"AIT_TEST_AGENT_ENV":"private-fixture-value"}});
     let created = execution
@@ -51,7 +51,7 @@ async fn create_environment_reaches_only_its_codex_process_and_is_not_persisted_
 async fn invalid_environment_is_rejected_before_creation_receipts_or_native_launch() {
     let fixture = Fixture::new();
     let receipts = fixture.root.path().join("creations.json");
-    let creations = file::creation::open(receipts.clone()).unwrap();
+    let creations = persistence::storage::creation::open(receipts.clone()).unwrap();
     let (execution, registry) = worker_with_creations(&fixture, creations);
     let initial = std::fs::read(&receipts).ok();
     for env in [

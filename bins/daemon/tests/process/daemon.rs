@@ -8,7 +8,6 @@ use super::{Process, TOKEN, ready, start, start_with_path, terminate};
 
 const READ_CAPABILITIES: &[&str] = &[
     "daemon.get_status.request",
-    "daemon.get_pairing_offer.request",
     "daemon.config.reload.request",
     "daemon.update.request",
     "diagnostics.request",
@@ -49,6 +48,10 @@ async fn missing_provider_is_reported_and_editors_return_migration_responses() {
     assert!(report.contains("Total: 5"));
     assert!(report.contains("Available: 0"));
     assert!(report.contains("codex: unavailable"));
+    assert!(report.contains("Ait incident evidence v1"));
+    assert!(report.contains("Harness: opencode"));
+    assert!(report.contains("UTC window:"));
+    assert!(!report.contains(TOKEN));
     let editors = request(&mut socket, "editor.available.list.request", json!({})).await;
     assert_eq!(editors["result"]["editors"], json!([]));
     let opened = request(
@@ -121,6 +124,16 @@ async fn daemon_status_config_diagnostics_and_update_match_canonical_contract() 
     let mut process = start_with_path(&directory, &log, Some(&fixture.path));
     let address = ready(&mut process, &log).await;
     let mut socket = connect(&address, READ_CAPABILITIES).await;
+    let published = info(&address).await;
+    for field in ["capabilities", "implemented_capabilities"] {
+        assert!(
+            !published[field]
+                .as_array()
+                .unwrap()
+                .iter()
+                .any(|method| method == "daemon.get_pairing_offer.request")
+        );
+    }
 
     let status = request(&mut socket, "daemon.get_status.request", json!({})).await;
     assert_eq!(status["type"], "response");
@@ -132,19 +145,19 @@ async fn daemon_status_config_diagnostics_and_update_match_canonical_contract() 
         status["result"]["providers"],
         json!([
             { "provider":"antigravity", "available":false,
-                "error":"Provider executable is unavailable" },
+                "error":"Antigravity CLI (agy) executable is unavailable" },
             { "provider":"claude", "available":false,
-                "error":"Provider executable is unavailable" },
+                "error":"Claude Code executable: unavailable" },
             { "provider":"codex", "available":true, "error":null },
             { "provider":"deepseek-harness", "available":false,
-                "error":"Provider executable is unavailable" },
+                "error":"DeepSeek Harness executable is unavailable" },
             { "provider":"opencode", "available":false,
-                "error":"Provider executable is unavailable" }
+                "error":"OpenCode ACP requires an installed OpenCode 1.x or 2.x release." }
         ])
     );
 
     let pairing = request(&mut socket, "daemon.get_pairing_offer.request", json!({})).await;
-    assert_eq!(pairing["code"], "unsupported_capability");
+    assert_eq!(pairing["code"], "method_not_found");
     let config = request(&mut socket, "daemon.config.get.request", json!({})).await;
     assert_eq!(config["result"]["config"]["relay"]["enabled"], false);
     assert_eq!(config["result"]["config"]["mcp"]["injectIntoAgents"], false);

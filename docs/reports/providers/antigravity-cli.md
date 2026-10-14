@@ -12,20 +12,20 @@
 设计与操作范围见 [ADR-087](../../decisions/providers/adr-087-antigravity-cli-provider.md)
 和 [操作手册](../../operations/antigravity.md)。
 
-| 验证 | 结果 |
-| --- | --- |
-| 新 adapter 针对性 Rust 测试 | 22 通过，0 失败，1 个在线测试默认 ignored |
-| Provider catalog 直接相关回归 | 20 通过，0 失败 |
-| 本机 AGY 在线测试（初版 `8d3d8b8a`） | 1 通过，0 失败；三轮短文本，不请求工具 |
-| 协议包完整回归 | 765 通过，0 失败；69 个测试文件 |
-| 客户端图标与恢复命令回归 | 13 通过，0 失败 |
-| Rust workspace 完整测试 | 1857 通过，0 失败，7 个原生 CLI 测试默认 ignored；串行运行 |
-| workspace 覆盖率插桩测试 | 1857 通过，0 失败，7 ignored；HTML 已生成 |
-| workspace 严格 Clippy | 通过，`--all-targets -- -D warnings` |
-| workspace 构建 | 通过，`cargo build --workspace`，无警告 |
-| Rust 格式、TypeScript 格式/lint、协议包构建 | 通过 |
-| 桌面类型检查 | 重建本地 SDK 后通过 |
-| 移动端类型检查 | 65 项诊断，与同依赖环境的 `main` 基线完全一致；没有新增诊断 |
+| 验证                                        | 结果                                                        |
+| ------------------------------------------- | ----------------------------------------------------------- |
+| 新 adapter 针对性 Rust 测试                 | 22 通过，0 失败，1 个在线测试默认 ignored                   |
+| Provider catalog 直接相关回归               | 20 通过，0 失败                                             |
+| 本机 AGY 在线测试（初版 `8d3d8b8a`）        | 1 通过，0 失败；三轮短文本，不请求工具                      |
+| 协议包完整回归                              | 765 通过，0 失败；69 个测试文件                             |
+| 客户端图标与恢复命令回归                    | 13 通过，0 失败                                             |
+| Rust workspace 完整测试                     | 1857 通过，0 失败，7 个原生 CLI 测试默认 ignored；串行运行  |
+| workspace 覆盖率插桩测试                    | 1857 通过，0 失败，7 ignored；HTML 已生成                   |
+| workspace 严格 Clippy                       | 通过，`--all-targets -- -D warnings`                        |
+| workspace 构建                              | 通过，`cargo build --workspace`，无警告                     |
+| Rust 格式、TypeScript 格式/lint、协议包构建 | 通过                                                        |
+| 桌面类型检查                                | 重建本地 SDK 后通过                                         |
+| 移动端类型检查                              | 65 项诊断，与同依赖环境的 `main` 基线完全一致；没有新增诊断 |
 
 离线夹具覆盖官方/Homebrew 路径选择及显式错误路径、动态模型格式、多轮和模式切换、
 resume identity、Unix 原生中断确认、环境值不持久化、异常协议/EOF/超限/超时、
@@ -80,12 +80,12 @@ daemon 首次 lint 需要下载项目已有的 sherpa-onnx 1.13.8 静态库；�
 
 ## Test coverage
 
-| 测量范围 | 覆盖行 / 总行 | 行覆盖率 |
-| --- | ---: | ---: |
-| Cargo workspace | 51874 / 54974 | **94.36%** |
-| `provider` | 23884 / 25472 | **93.77%** |
-| `daemon` | 928 / 973 | **95.38%** |
-| Antigravity 生产 adapter | 869 / 911 | **95.39%** |
+| 测量范围                 | 覆盖行 / 总行 |   行覆盖率 |
+| ------------------------ | ------------: | ---------: |
+| Cargo workspace          | 51874 / 54974 | **94.36%** |
+| `provider`               | 23884 / 25472 | **93.77%** |
+| `daemon`                 |     928 / 973 | **95.38%** |
+| Antigravity 生产 adapter |     869 / 911 | **95.39%** |
 
 测量使用 Rust 1.98.1、LLVM 22.1.8 和 cargo-llvm-cov 0.8.4，
 平台为 macOS 27.0.1 (26A434) arm64；源码 revision 与哈希见本文开头及工件。

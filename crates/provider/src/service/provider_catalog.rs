@@ -5,9 +5,10 @@ use std::sync::{Arc, Mutex};
 use std::time::{Duration, Instant};
 
 use chrono::Utc;
+use domain::session::protocol::SessionEventKind;
 use model::ErrorCode;
+use model::rpc::decode;
 use model::session::SessionEvents;
-use model::session::protocol::SessionEventKind;
 use serde_json::{Value, json};
 use sha2::{Digest, Sha256};
 use tokio::sync::{Semaphore, watch};
@@ -81,6 +82,10 @@ impl Default for Catalog {
 }
 
 impl Catalog {
+    /// Run a catalog request and wait for discovery when the method requires a snapshot.
+    /// # Errors
+    /// Rejects invalid scopes, unsupported providers, shutdown and unavailable storage.
+    #[cfg(test)]
     pub(crate) async fn execute(
         &self,
         clients: &BTreeMap<String, Arc<dyn AgentClient>>,
@@ -207,20 +212,31 @@ async fn discover(client: &dyn AgentClient, cwd: &str) -> Entry {
             Ok(details) => ("ready", None, details),
             Err(_) => (
                 "error",
-                Some("Provider discovery failed"),
+                Some("Provider discovery failed".to_owned()),
                 Details::default(),
             ),
         }
     } else if available.is_err() {
         (
             "error",
-            Some("Provider availability check failed"),
+            Some("Provider availability check failed".to_owned()),
             Details::default(),
         )
     } else {
         (
             "unavailable",
-            Some("Provider executable is unavailable"),
+            Some(
+                client
+                    .diagnostic()
+                    .await
+                    .ok()
+                    .filter(|message| {
+                        !message.trim().is_empty()
+                            && message.len() <= 4096
+                            && !message.contains('\0')
+                    })
+                    .unwrap_or_else(|| "Provider executable is unavailable".to_owned()),
+            ),
             Details::default(),
         )
     };
@@ -258,10 +274,6 @@ async fn discover(client: &dyn AgentClient, cwd: &str) -> Entry {
         loading: None,
         refresh_again: false,
     }
-}
-
-fn decode<T: serde::de::DeserializeOwned>(value: Value) -> Result<T, ErrorCode> {
-    serde_json::from_value(value).map_err(|_| ErrorCode::InvalidMessage)
 }
 
 #[cfg(test)]

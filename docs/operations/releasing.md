@@ -26,7 +26,7 @@ Release 标题为 `Ait Nightly 38fb6054-2026-10-08`，安装包名例如
 ZIP、tar.gz、blockmap、CI 产物和 `BUILD-INFO.json` 使用同一标识；两平台及重跑均取同一提交日期。
 更新元数据沿用更新器识别的 `latest` / `beta` 入口文件名，内部引用对应的新安装包名。
 Electron、daemon 及更新协议内部仍保留必需的 SemVer 兼容字段，在构建信息中记作 `packagedVersion`。
-固定下载地址仍使用 `nightly` 标签；正式版本和 PR 测试包继续使用各自的命名方式。
+固定下载地址仍使用 `nightly` 标签；正式版本继续使用版本命名。
 
 最多保留最新两次 main CI 并行运行，以整个工作流为单位（每次包含检查及 Linux、macOS 构建）；
 取消旧构建也会取消该次旧 CI 中尚未完成的检查，PR 不参与这个调度窗口：
@@ -46,19 +46,14 @@ Electron、daemon 及更新协议内部仍保留必需的 SemVer 兼容字段，
 新提交编译期间或编译失败时仍保留上一版。
 macOS nightly 使用 ad-hoc 签名，未公证。
 
-## PR 测试安装包
+## PR CI
 
-创建或更新 PR 会在同一个 CI 中构建 Linux x86_64 和 macOS Apple Silicon 测试包，无需合并到 main。
-PR 构建使用合并预览提交，检查 PR 与目标分支组合后的行为。
+创建或更新 PR 会运行适用的 Rust、UI、文档和格式检查。Linux x86_64 与 macOS Apple Silicon
+桌面打包，以及 nightly 的准入、发布和产物清理任务均跳过。
 
-在 PR 的 **Checks → CI → Details** 打开工作流，点击 Summary 中的 **Download test package**，
-或下载 **Artifacts** 下的 `pr-<编号>-<平台>-<PR提交SHA>`，解压后安装 DMG/AppImage 或使用 tar.gz。
-AppImage 解压后需执行 `chmod +x Ait-linux-x86_64.AppImage` 再运行；tar.gz 内保留可执行权限。
-测试包保留 14 天；同次 CI 重跑会替换同名产物。`BUILD-INFO.json` 分别记录 PR 提交、目标分支提交和实际构建的合并提交，
-`SHA256SUMS` 可校验包内文件。
+合并到 `main` 后，由 main CI 构建并发布 nightly 安装包；合并前如需验证安装包，
+可按[桌面端构建说明](../../apps/desktop/README.md)在本地打包。
 
-PR 打包任务只有仓库读取权限，不使用发布凭据，也不更新 nightly Release；fork PR 可能需维护者批准运行。
-macOS 测试包同样使用 ad-hoc 签名、未公证。当前没有 Windows 打包链路。
 Android APK、Google Play 和 iOS TestFlight 继续仅由各自的 `workflow_dispatch` 手动触发，
 main/PR CI 不调用 EAS 构建或提交，不消耗移动端发布配额。
 
@@ -179,7 +174,35 @@ git push origin v0.0.20
 3. 导出界面、编译 Electron 主进程，验证 daemon 版本并暂存单个可执行文件。
 4. 检查打包内容；macOS 签名、公证；隔离启动成品应用并验证真实 daemon 生命周期。
 5. 收集桌面安装包和自动更新资产，核对更新摘要。
-6. 桌面构建成功后汇总资产并生成 SHA256SUMS，再创建或修复 GitHub Release。
+6. 桌面构建成功后汇总资产并生成 SHA256SUMS，再创建 Draft Release 或补齐既有 Release 的资产。
+
+新建 Release 使用 [`gh release create --draft`](https://cli.github.com/manual/gh_release_create)，
+上传安装包后仍保持草稿，停止等待 review；工作流不会将新草稿转为正式发布。
+推送标签不代表 Release 已公开，公开 Latest 和正式通道自动更新继续使用上一正式版。
+重跑可补齐既有草稿，包括首次上传失败后没有任何附件的空草稿；既有正式版的修复保持原发布状态。
+
+### Draft 后必须停下等待人工 review
+
+用户说“开始 release”“准备新版本”或“发布新版本”时，代理默认只执行到 Draft Release。
+即使没有再次强调 review，也必须先完成适用的 CI、资产校验与说明整理，再停下来等待用户 review，
+不能把最初的 release 请求、CI 通过或等待时间视为正式发布确认。这是代理与用户的协作规则，
+使用现有 Draft 工作流，不增加 CI 审批任务或 GitHub environment 审核要求。
+
+1. Draft 准备完成后，向用户提供可访问的草稿链接、版本号、构建源码提交、CI 与资产校验结果，
+   并列出需要 review 的重要变更和限制。此时停止发布操作，公开 Latest 仍为上一正式版。
+2. 用户 review 变更说明、`BUILD-INFO.json` 的源码与工作流提交、`SHA256SUMS`、更新元数据，
+   以及两平台构建、macOS 签名、公证和成品生命周期门禁。
+3. 用户要求修改时，代理处理修改并保持 Draft，完成后再次停下等待 review。
+4. 用户随后明确说“最终发布 0.1.1”等、确认发布该草稿版本后，代理复核源码、CI 和资产完整性，
+   再正式发布；已有明确确认时不重复索要批准。确认仅适用于本次对应版本，不能沿用到下一个 release。
+
+收到上述明确发布确认后，稳定版使用：
+
+```bash
+gh release edit vX.Y.Z --repo OWNER/REPO --draft=false --latest
+```
+
+Beta 仍需保持 `--prerelease --latest=false`。发布命令不属于创建 Draft Release 的工作流步骤。
 
 macOS 需要 GitHub Secrets：`MAC_CSC_LINK`、`MAC_CSC_KEY_PASSWORD`、`APPLE_ID`、
 `APPLE_BUILD_APP_SECRET`、`APPLE_TEAM_ID`。缺失签名、公证凭据会阻止发布；不会降级为未签名包。

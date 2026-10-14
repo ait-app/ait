@@ -1,5 +1,6 @@
 use super::*;
 use crate::ports::native_history::SessionDescriptor;
+use domain::agent_runtime::registry::AgentRuntimeRegistry;
 
 #[test]
 fn recent_query_matches_all_display_fields_and_paths_are_canonical_directories() {
@@ -37,6 +38,54 @@ fn recent_query_matches_all_display_fields_and_paths_are_canonical_directories()
     assert!(
         !missing.exists(),
         "validation must not recreate a workspace"
+    );
+}
+
+#[tokio::test]
+async fn archived_internal_sessions_stay_hidden_from_native_rediscovery() {
+    let registry = super::super::tests::MemoryRegistry::default();
+    let mut sessions = Vec::new();
+    for (internal, archived) in [(false, false), (false, true), (true, false), (true, true)] {
+        let mut record = super::super::tests::stored_record();
+        record.id = format!("internal-{internal}-archived-{archived}");
+        record.internal = internal;
+        record.archived_at = archived.then(|| "2026-10-12T00:00:00Z".into());
+        record.persistence = Some(AgentPersistenceHandle {
+            provider: "working".into(),
+            session_id: record.id.clone(),
+            native_handle: None,
+            metadata: None,
+        });
+        registry.upsert(&record).unwrap();
+        sessions.push(SessionDescriptor {
+            provider_id: "working".into(),
+            provider_label: "Working".into(),
+            provider_handle_id: record.id,
+            cwd: "/project".into(),
+            title: None,
+            first_prompt_preview: None,
+            last_prompt_preview: None,
+            last_activity_at: "2026-10-07T00:00:00Z".into(),
+        });
+    }
+    let mut manager = AgentManager::new(Box::new(registry));
+    manager
+        .register_client(Box::new(ImportClient {
+            provider: "working",
+            supported: true,
+            available: Ok(true),
+            sessions: Ok(sessions),
+        }))
+        .unwrap();
+    let result = manager
+        .recent_sessions(serde_json::from_value(json!({})).unwrap())
+        .await
+        .unwrap();
+    assert_eq!(result["filteredAlreadyImportedCount"], 3);
+    assert_eq!(result["entries"].as_array().unwrap().len(), 1);
+    assert_eq!(
+        result["entries"][0]["providerHandleId"],
+        "internal-false-archived-true"
     );
 }
 

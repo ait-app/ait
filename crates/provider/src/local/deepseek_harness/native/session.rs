@@ -34,6 +34,7 @@ pub(in crate::local::deepseek_harness) struct Session {
     closed: bool,
     images: crate::local::images::ImageStore,
     hydration: JoinSet<Result<Value, AgentSessionError>>,
+    account: Result<super::quota::credentials::Context, AgentSessionError>,
 }
 
 /// Open or adopt one durable native session and verify its cwd before admitting work.
@@ -43,6 +44,7 @@ pub(in crate::local::deepseek_harness) async fn open(
     handle: Option<&AgentPersistenceHandle>,
 ) -> Result<Session, AgentSessionError> {
     validate_identity(spec, handle)?;
+    let account = super::quota::credentials::Context::capture(client, &spec.cwd).await;
     let mut runtime = Runtime::open(client, &spec.cwd).await?;
     let catalog = runtime.api.call("session/modelCatalog", json!({})).await?;
     let presets = runtime.api.call("agentPresets/list", json!({})).await?;
@@ -135,6 +137,7 @@ pub(in crate::local::deepseek_harness) async fn open(
         closed: false,
         images: client.images.clone(),
         hydration: JoinSet::new(),
+        account,
     })
 }
 
@@ -182,6 +185,7 @@ impl Session {
         {
             return Err(AgentSessionError::Rejected);
         }
+        self.runtime.diagnostics.clear();
         let content = super::content::prompt(prompt)?;
         self.selection
             .apply(&self.runtime.api, &self.id, config)
@@ -353,6 +357,15 @@ impl Session {
                         .events
                         .push_back(AgentTurnEvent::PermissionResolved(id));
                 }
+                if !matches!(
+                    data["reason"]["kind"].as_str(),
+                    Some("completed" | "max-tokens" | "aborted" | "interrupted")
+                ) {
+                    self.runtime.diagnostics.observe(
+                        crate::local::diagnostics::native(&data["reason"], "result"),
+                        "turn",
+                    );
+                }
                 self.stream
                     .events
                     .push_back(match data["reason"]["kind"].as_str() {
@@ -393,6 +406,19 @@ impl AgentSession for Session {
             feature["value"] = value.clone();
         }
         Some(json!({"availableModes":details.modes,"features":details.features}))
+    }
+
+    fn account_usage(&self) -> AgentSessionFuture<'_, Value> {
+        Box::pin(async move {
+            if self.closed {
+                return Err(AgentSessionError::Unavailable);
+            }
+            super::quota::query(&self.runtime.api, &self.account).await
+        })
+    }
+
+    fn failure_diagnostic(&self) -> Option<crate::ports::diagnostics::Diagnostic> {
+        self.runtime.diagnostics.failure()
     }
 
     fn provider(&self) -> &'static str {

@@ -6,22 +6,27 @@ use std::borrow::Cow;
 const PREVIEW_BYTES: usize = 128 * 1024;
 
 mod command_actions;
+mod mcp;
 
 /// Project a native tool into display rows, keeping parsed command actions in source order.
 ///
 /// `native` is a Codex thread item with a validated ID; `status` is its canonical
 /// running, completed, or failed state. Returns stable call IDs paired with timeline
-/// items, falling back to one generic detail row when no usable command actions exist.
+/// items. Compound actions share one command result identified by an `:output` suffix;
+/// absent usable actions fall back to one generic detail row.
 pub(super) fn codex_tools(native: &Value, status: &str) -> Vec<(String, Value)> {
     let details = command_actions::details(native).unwrap_or_else(|| vec![codex(native)]);
     let multiple = details.len() > 1;
+    let output_index = details.len() - 1;
     let native_id = native["id"].as_str().unwrap_or_default();
     let name = codex_name(native);
     details
         .into_iter()
         .enumerate()
         .map(|(index, detail)| {
-            let id = if multiple {
+            let id = if multiple && index == output_index {
+                format!("{native_id}:output")
+            } else if multiple {
                 format!("{native_id}:{index}")
             } else {
                 native_id.to_owned()
@@ -62,7 +67,7 @@ pub(super) fn codex_error(native: &Value, failed: bool) -> Value {
         return Value::Null;
     }
     if native["type"] == "mcpToolCall" && !native["error"].is_null() {
-        return native["error"].clone();
+        return mcp::error(&native["error"]);
     }
     json!("Native tool failed")
 }
@@ -133,7 +138,7 @@ pub(super) fn claude_result(detail: &mut Value, result: &Value) {
 pub(super) fn codex(native: &Value) -> Value {
     match native["type"].as_str() {
         Some("commandExecution") => {
-            command_actions::shell(native, native["command"].as_str().unwrap_or(""))
+            command_actions::shell(native, native["command"].as_str().unwrap_or(""), true)
         }
         Some("fileChange") => file_change(native).unwrap_or_else(|| unknown(native)),
         Some("webSearch") => {
@@ -155,9 +160,7 @@ pub(super) fn codex(native: &Value) -> Value {
             }
             detail
         }
-        Some("mcpToolCall") => {
-            json!({"type":"unknown","input":native["arguments"],"output":native["result"]})
-        }
+        Some("mcpToolCall") => mcp::detail(native),
         Some("imageView" | "imageGeneration") => {
             json!({"type":"plain_text","label":"Image","text":native["path"].as_str().unwrap_or("")})
         }

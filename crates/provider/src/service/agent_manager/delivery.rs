@@ -4,6 +4,7 @@ use super::{AgentManager, AgentManagerError};
 use crate::protocol::{agent_execution::ActiveTurnBehavior, prompt::AgentPrompt};
 use crate::storage::timeline::Timeline;
 use crate::storage::timeline::inbox::{QueuedInput, Receipt};
+use crate::support::time::now_timestamp;
 use model::ErrorCode;
 
 impl AgentManager {
@@ -275,7 +276,7 @@ impl AgentManager {
                     };
                     timeline.finish_input(&input.agent, &input.message, state)?;
                     let queued = timeline.has_queued_input(&input.agent)?;
-                    let now = super::now_timestamp();
+                    let now = now_timestamp();
                     let committed = self
                         .registry
                         .update(&input.agent, &|current| {
@@ -296,7 +297,7 @@ impl AgentManager {
                         .map_err(|_| ErrorCode::AgentIo)?;
                     if let Some(committed) = committed {
                         if !queued && !committed.internal {
-                            self.events.publish(model::session::protocol::SessionEventKind::AgentAttention,
+                            self.events.publish(domain::session::protocol::SessionEventKind::AgentAttention,
                                 &serde_json::json!({"agentId":input.agent,"reason":"error","timestamp":now}));
                             timeline.events().publish(&input.agent,"agent_stream",&serde_json::json!({"agentId":input.agent,
                                 "event":{"type":"turn_failed","provider":committed.provider,"error":"Queued input could not be admitted"},"timestamp":now}));

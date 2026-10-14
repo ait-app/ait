@@ -40,8 +40,8 @@ if (process.argv[1] && import.meta.url === pathToFileURL(path.resolve(process.ar
   const files = [
     path.join(repository, "README.md"),
     path.join(repository, "AGENTS.md"),
-    ...["docs", "apps", "packages", "assets/brand", "paseo"].flatMap((directory) =>
-      markdownFiles(path.join(repository, directory)),
+    ...["docs", "apps", "packages", "crates", "bins", "assets/brand", "paseo"].flatMap(
+      (directory) => markdownFiles(path.join(repository, directory)),
     ),
   ];
   const problems = checkDocumentationLinks(files);

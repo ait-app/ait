@@ -8,6 +8,7 @@ pub use composition::summary_source;
 mod connection;
 mod files;
 mod listener;
+pub mod managed_relay;
 mod terminal_activity;
 mod workspace_cleanup;
 
@@ -22,11 +23,11 @@ use axum::response::{IntoResponse, Response};
 use axum::routing::{get, post};
 use axum::{Json, Router};
 use browser::broker::Broker;
-use filesystem::service::worktrees::{WorkspaceWorktrees, Worktrees};
-use metadata::service::directory::Directory;
-use metadata::service::workspace_automation::WorkspaceAutomation;
-use model::Runtime;
-use protocol::{Lifecycle, Limits, ServerInfo, VERSION};
+use metadata::automation::service::WorkspaceAutomation;
+use metadata::directory::service::directory::Directory;
+use metadata::worktrees::service::worktrees::{WorkspaceWorktrees, Worktrees};
+use model::server::{Lifecycle, Limits, ServerInfo, VERSION};
+use model::{LifecycleIntent, Runtime};
 use provider::service::agent_execution::AgentExecution;
 use schedule::service::Schedules;
 use secrecy::SecretString;
@@ -67,6 +68,8 @@ pub enum ConfigError {
 #[derive(Debug)]
 struct Shared {
     relay: relay::Connector,
+    managed_relay: bool,
+    managed_status: Arc<Mutex<serde_json::Value>>,
     runtime: Arc<Runtime>,
     token: SecretString,
     browser_auth: browser_auth::BrowserAuth,
@@ -79,8 +82,9 @@ struct Shared {
     terminal: Arc<terminal::dispatch::State>,
     voice: Arc<voice::dispatch::State>,
     schedule: schedule::dispatch::State,
+    bot: bot::dispatch::State,
     browser: browser::dispatch::State,
-    workspace_names: Option<metadata::service::workspace_names::WorkspaceNames>,
+    workspace_names: Option<metadata::directory::service::workspace_names::WorkspaceNames>,
 }
 
 impl std::ops::Deref for Shared {
@@ -95,6 +99,8 @@ impl std::ops::Deref for Shared {
 /// Each present service supplies every method owned by its crate; API connection methods are built in.
 #[derive(Debug, Default)]
 pub struct Services {
+    /// Workspace Bots, owned channels and private conversations.
+    pub bot: Option<bot::service::Bots>,
     /// Project and Workspace metadata, configuration, labels, and automation.
     pub metadata: Option<metadata::Service>,
     /// File, Git, Forge, worktree, recovery, and skill operations.
@@ -111,10 +117,17 @@ pub struct Services {
     pub voice: Option<Speech>,
 }
 
-pub use model::LifecycleIntent;
-
 impl Shared {
+    fn relay_management(&self) -> serde_json::Value {
+        self.managed_status
+            .lock()
+            .map_or(serde_json::Value::Null, |status| status.clone())
+    }
+
     fn start_draining(&self) {
+        if let Some(bots) = &self.bot.bots {
+            bots.stop();
+        }
         self.relay.begin_shutdown();
         if let Some(schedules) = &self.schedule.schedules {
             schedules.stop();
@@ -157,7 +170,39 @@ fn runtime_info(
     }))
 }
 
+fn validate_listener(address: SocketAddr, token: &SecretString) -> Result<(), ConfigError> {
+    use secrecy::ExposeSecret;
+    if address.port() == 0 {
+        return Err(ConfigError::InvalidAddress);
+    }
+    validate_token(token.expose_secret())
+}
+
 impl Api {
+    /// Claim exclusive Relay control before sharing or serving the API.
+    ///
+    /// External HTTP/RPC start and stop operations then return conflict errors.
+    /// # Errors
+    /// Rejects an already shared API or a duplicate claim.
+    pub fn claim_managed_relay(
+        &mut self,
+    ) -> Result<managed_relay::ManagedRelayHandle, ConfigError> {
+        let shared = Arc::get_mut(&mut self.shared).ok_or(ConfigError::SharedConfiguration)?;
+        if shared.managed_relay {
+            return Err(ConfigError::SharedConfiguration);
+        }
+        shared.managed_relay = true;
+        *shared
+            .managed_status
+            .lock()
+            .map_err(|_| ConfigError::SharedConfiguration)? =
+            serde_json::json!({"mode":"managed", "phase":"starting"});
+        Ok(managed_relay::ManagedRelayHandle {
+            relay: shared.relay.clone(),
+            status: shared.managed_status.clone(),
+        })
+    }
+
     /// Construct transport state for an already-bound TCP listener.
     ///
     /// `server_id` is persisted by the host; `instance_id` is unique to this process start.
@@ -173,11 +218,7 @@ impl Api {
         token: SecretString,
         services: Services,
     ) -> Result<Self, ConfigError> {
-        use secrecy::ExposeSecret;
-        if address.port() == 0 {
-            return Err(ConfigError::InvalidAddress);
-        }
-        validate_token(token.expose_secret())?;
+        validate_listener(address, &token)?;
         let relay = relay::Connector::new(
             address,
             token.clone(),
@@ -211,6 +252,9 @@ impl Api {
             workspace_labels: services.workspace_labels.map(shared_service),
             workspace_automation: services.workspace_automation,
             workspace_state: services.workspace_state.map(shared_service),
+            worktrees,
+            workspace_recovery: services.workspace_recovery.map(shared_service),
+            github_projects: services.github_projects.map(shared_service),
             session_events,
             creations,
             has_agent_execution: services.agent_execution.is_some(),
@@ -223,15 +267,11 @@ impl Api {
             checkout: services.checkout.map(shared_service),
             forge: services.forge.map(shared_service),
             files: services.files.map(shared_service),
-            github_projects: services.github_projects.map(shared_service),
-            worktrees,
-            workspace_recovery: services.workspace_recovery.map(shared_service),
-            skills: services.skills.map(shared_service),
-            workspace_setup: composition::workspace_setup(metadata.workspace_automation.as_ref()),
         });
         let provider = Arc::new(provider::dispatch::State {
             runtime: runtime.clone(),
             agents: services.agents.map(shared_service),
+            skills: services.skills.map(shared_service),
             agent_runtime: None,
             agent_execution: services.agent_execution,
             directory_changes,
@@ -246,9 +286,12 @@ impl Api {
         let api = Self {
             shared: Arc::new(Shared {
                 relay,
+                managed_relay: false,
+                managed_status: Arc::new(Mutex::new(serde_json::json!({"mode":"external"}))),
                 schedule: schedule::dispatch::State {
                     schedules: services.schedules,
                 },
+                bot: services.bots,
                 browser: browser::dispatch::State {
                     broker: services.browser,
                 },
@@ -266,7 +309,7 @@ impl Api {
                 browser_auth: browser_auth::BrowserAuth::default(),
                 authorities: allowed_authorities(address),
                 wildcard_listener: address.ip().is_unspecified(),
-                connections: Arc::new(Semaphore::new(protocol::MAX_CONNECTIONS)),
+                connections: Arc::new(Semaphore::new(model::server::MAX_CONNECTIONS)),
             }),
         };
         workspace_cleanup::configure(&api.shared)?;
@@ -285,12 +328,6 @@ impl Api {
             .ok_or(ConfigError::SharedConfiguration)?
             .browser_auth = browser_auth;
         Ok(self)
-    }
-
-    /// Return the composed broker for host-side browser tool execution.
-    #[must_use]
-    pub fn browser(&self) -> Option<Broker> {
-        self.shared.browser.broker.clone()
     }
 
     /// Build routes with origin checks, bounded HTTP handling, and metadata-only tracing.
@@ -352,6 +389,11 @@ impl Api {
         {
             tracing::error!("schedule shutdown failed");
         }
+        if let Some(bots) = &self.shared.bot.bots
+            && bots.shutdown().await.is_err()
+        {
+            tracing::error!("Bot shutdown failed");
+        }
         if let Some(terminals) = self.shared.terminal.terminals.clone() {
             let result = tokio::task::spawn_blocking(move || {
                 terminals
@@ -380,7 +422,9 @@ impl Api {
 fn registered_capabilities() -> Vec<String> {
     capabilities::implemented_methods()
         .map(|method| method.name.to_owned())
-        .chain(std::iter::once(protocol::single::CAPABILITY.to_owned()))
+        .chain(std::iter::once(
+            model::server::single::CAPABILITY.to_owned(),
+        ))
         .collect()
 }
 
@@ -467,8 +511,14 @@ async fn health() -> Result<Response, ApiError> {
     Ok(Json(serde_json::json!({"status":"alive"})).into_response())
 }
 
-async fn relay_status(State(state): State<Arc<Shared>>) -> Json<relay::Status> {
-    Json(state.relay.status().await)
+async fn relay_status(State(state): State<Arc<Shared>>) -> Json<serde_json::Value> {
+    let status = state.relay.status().await;
+    let mut value = serde_json::to_value(status).unwrap_or_default();
+    value["management"] = state
+        .managed_status
+        .lock()
+        .map_or(serde_json::Value::Null, |s| s.clone());
+    Json(value)
 }
 
 async fn relay_start(
@@ -478,6 +528,9 @@ async fn relay_start(
     if state.cancellation.is_cancelled() {
         return Err(ApiError(StatusCode::SERVICE_UNAVAILABLE));
     }
+    if state.managed_relay {
+        return Err(ApiError(StatusCode::CONFLICT));
+    }
     state
         .relay
         .start(grant)
@@ -486,9 +539,12 @@ async fn relay_start(
     Ok(StatusCode::ACCEPTED)
 }
 
-async fn relay_stop(State(state): State<Arc<Shared>>) -> StatusCode {
+async fn relay_stop(State(state): State<Arc<Shared>>) -> Result<StatusCode, ApiError> {
+    if state.managed_relay {
+        return Err(ApiError(StatusCode::CONFLICT));
+    }
     state.relay.stop().await;
-    StatusCode::NO_CONTENT
+    Ok(StatusCode::NO_CONTENT)
 }
 
 async fn ready(State(state): State<Arc<Shared>>) -> Result<Response, ApiError> {
@@ -527,10 +583,10 @@ async fn upgrade(
         .filter(|value| value.starts_with(browser_auth::TICKET_PROTOCOL));
     Ok(ws
         .protocols(protocol.map(str::to_owned))
-        .max_message_size(protocol::MAX_MESSAGE_BYTES)
-        .max_frame_size(protocol::MAX_MESSAGE_BYTES)
+        .max_message_size(model::server::MAX_MESSAGE_BYTES)
+        .max_frame_size(model::server::MAX_MESSAGE_BYTES)
         .write_buffer_size(0)
-        .max_write_buffer_size(protocol::MAX_QUEUE_BYTES)
+        .max_write_buffer_size(model::server::MAX_QUEUE_BYTES)
         .on_upgrade(move |socket| async move {
             let (_tracking, _permit) = (tracking, permit);
             Box::pin(connection::serve(socket, state)).await;
@@ -543,7 +599,7 @@ mod tests;
 fn compose_directory(
     directory: Option<Directory>,
     worktrees: Option<&Arc<Mutex<Worktrees>>>,
-    git_fetch: Option<filesystem::service::git_fetch::GitFetch>,
+    git_fetch: Option<filesystem::git::service::git_fetch::GitFetch>,
     runtime: &Arc<Runtime>,
     events: &model::session::SessionEvents,
     has_automation: bool,
@@ -552,14 +608,14 @@ fn compose_directory(
     let directory = directory.map(|directory| {
         let project_events = events.clone();
         let directory = directory.with_project_updates(Arc::new(move |mutation| {
-            use model::workspace::registry::MutationKind;
-            use model::session::protocol::SessionEventKind;
+            use domain::workspace::registry::MutationKind;
+            use domain::session::protocol::SessionEventKind;
 
             let payload = if mutation.kind == MutationKind::Upsert {
                 mutation.project.as_ref().map(|project| {
                     serde_json::json!({
                         "kind": "upsert",
-                        "project": model::workspace::protocol::projection::project_descriptor(project),
+                        "project": domain::workspace::protocol::projection::project_descriptor(project),
                     })
                 })
             } else {
@@ -575,8 +631,8 @@ fn compose_directory(
         let directory = if has_automation {
             let setup_events = events.clone();
             directory.with_workspace_updates(Arc::new(move |mutation| {
-                use model::workspace::registry::MutationKind;
-                use model::session::protocol::SessionEventKind;
+                use domain::workspace::registry::MutationKind;
+                use domain::session::protocol::SessionEventKind;
 
                 if mutation.kind != MutationKind::Upsert {
                     return;
@@ -625,8 +681,8 @@ fn compose_automation_events(
     automation: Option<&Arc<Mutex<WorkspaceAutomation>>>,
     events: &model::session::SessionEvents,
 ) -> Result<(), ConfigError> {
-    use metadata::ports::workspace_automation::AutomationEvent;
-    use model::session::protocol::SessionEventKind;
+    use domain::session::protocol::SessionEventKind;
+    use metadata::automation::ports::AutomationEvent;
 
     let Some(automation) = automation else {
         return Ok(());
@@ -646,7 +702,7 @@ fn compose_automation_events(
                         "workspaceId": workspace_id,
                         "scripts": scripts
                             .into_iter()
-                            .map(metadata::rpc::workspace_automation::script)
+                            .map(metadata::automation::rpc::script)
                             .collect::<Vec<_>>(),
                     }),
                 ),
@@ -655,7 +711,7 @@ fn compose_automation_events(
                     snapshot,
                 } => {
                     let mut payload = serde_json::to_value(
-                        metadata::rpc::workspace_automation::setup_snapshot(snapshot, None),
+                        metadata::automation::rpc::setup_snapshot(snapshot, None),
                     )
                     .unwrap_or_default();
                     payload["workspaceId"] = serde_json::json!(workspace_id);

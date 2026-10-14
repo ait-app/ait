@@ -8,15 +8,13 @@ publish.workspace = true
 model.workspace = true
 domain.workspace = true
 
-# Internal OpenCode approval and progress sinks over the owned HTTP runtime.
-async-trait.workspace = true
-# Consume bounded native HTTP and event streams.
+# Consume bounded native event streams and concurrent session previews.
 futures-util.workspace = true
 # Authenticated DSH Host logical streams on an owned loopback WebSocket.
 tokio-tungstenite.workspace = true
 # Validate image payloads before native prompt admission and decode provider image artifacts.
 base64.workspace = true
-# Read-only Claude OAuth quota inspection; credentials never enter public snapshots.
+# Read-only native account balance/quota inspection; credentials never enter public snapshots.
 reqwest.workspace = true
 reqwest.features = ["rustls-tls", "json", "stream"]
 secrecy.workspace = true
@@ -25,6 +23,8 @@ rusqlite.workspace = true
 rusqlite.features = ["bundled", "backup"]
 serde.workspace = true
 serde_json.workspace = true
+# Read DSH's native credential/configuration YAML without modifying its owned files.
+serde_yaml_ng.workspace = true
 sha2.workspace = true
 tempfile.workspace = true
 thiserror.workspace = true
@@ -41,10 +41,9 @@ regex.workspace = true
 workspace = true
 
 [dev-dependencies]
-file.workspace = true
-# Offline native HTTP fixtures, without provider credentials or a model API.
+persistence.workspace = true
+# Offline native provider fixtures, without credentials or a model API.
 axum.workspace = true
-tokio-stream.workspace = true
 
 [target.'cfg(target_os = "macos")'.dependencies]
 # Match Claude Agent SDK's NFC normalization of native session directory names.

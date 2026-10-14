@@ -4,7 +4,6 @@ mod config;
 mod launcher;
 mod metadata;
 mod native;
-mod permissions;
 mod session;
 mod streaming;
 mod transport;
@@ -23,11 +22,11 @@ use crate::ports::environment::AgentEnvironment;
 use crate::protocol::provider::Details;
 
 /// Stable provider identity used by creation, discovery and durable resume handles.
-pub const PROVIDER: &str = "deepseek-harness";
+const PROVIDER: &str = "deepseek-harness";
 
 /// Local Harness launcher; native profiles own credentials, tools and durable sessions.
 #[derive(Debug, Clone)]
-pub struct DeepSeekHarnessClient {
+pub(crate) struct DeepSeekHarnessClient {
     program: PathBuf,
     desktop: Option<launcher::Desktop>,
     interactive: bool,
@@ -41,7 +40,7 @@ impl DeepSeekHarnessClient {
     /// Launch the native interactive Web Host without a shell, inheriting Harness configuration.
     /// Control operations have a thirty-second deadline; prompts have no duration limit.
     #[must_use]
-    pub fn new(program: PathBuf) -> Self {
+    pub(crate) fn new(program: PathBuf) -> Self {
         Self {
             program,
             desktop: None,
@@ -57,7 +56,7 @@ impl DeepSeekHarnessClient {
     /// `profile` is passed as one CLI argument; DSH validates the profile and its Host support.
     /// Returns this configured client without initializing or changing the native profile.
     #[must_use]
-    pub fn with_native_profile(mut self, profile: std::ffi::OsString) -> Self {
+    pub(crate) fn with_native_profile(mut self, profile: std::ffi::OsString) -> Self {
         self.native_profile = profile;
         self
     }
@@ -65,14 +64,14 @@ impl DeepSeekHarnessClient {
     /// Retain the automation-only ACP profile for older Harness installations.
     /// ACP does not expose permission presets or interactive user questions.
     #[must_use]
-    pub fn with_acp_profile(mut self) -> Self {
+    pub(crate) fn with_acp_profile(mut self) -> Self {
         self.interactive = false;
         self
     }
 
     /// Materialize native image output in `directory` for live display and saved timelines.
     #[must_use]
-    pub fn with_image_directory(mut self, directory: PathBuf) -> Self {
+    pub(crate) fn with_image_directory(mut self, directory: PathBuf) -> Self {
         self.images = super::images::ImageStore::new(directory);
         self
     }
@@ -96,11 +95,21 @@ impl DeepSeekHarnessClient {
 }
 
 impl AgentClient for DeepSeekHarnessClient {
+    fn usage(&self) -> AgentSessionFuture<'_, Value> {
+        Box::pin(async move {
+            if !self.interactive {
+                return Ok(native::quota::acp_unavailable());
+            }
+            let cwd = std::env::current_dir().map_err(|_| AgentSessionError::Failed)?;
+            native::quota::read(self, cwd.to_str().ok_or(AgentSessionError::Failed)?).await
+        })
+    }
+
     fn supports_summary_generation(&self) -> bool {
         true
     }
 
-    fn summary_model(&self, models: &[Value]) -> Option<model::summary::SummarySelection> {
+    fn summary_model(&self, models: &[Value]) -> Option<domain::summary::SummarySelection> {
         let mut selection = super::summary_model::select(
             self.provider(),
             models,

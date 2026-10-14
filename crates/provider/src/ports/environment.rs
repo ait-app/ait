@@ -10,7 +10,7 @@ use super::agent_session::AgentSessionError;
 /// Bounded environment overrides whose values are redacted from debug output.
 #[derive(Debug, Clone, Default, Deserialize)]
 #[serde(try_from = "BTreeMap<String, String>")]
-pub struct AgentEnvironment(BTreeMap<String, SecretString>);
+pub(crate) struct AgentEnvironment(BTreeMap<String, SecretString>);
 
 impl TryFrom<BTreeMap<String, String>> for AgentEnvironment {
     type Error = AgentSessionError;
@@ -44,12 +44,12 @@ impl TryFrom<BTreeMap<String, String>> for AgentEnvironment {
 impl AgentEnvironment {
     /// Whether native launch requires no explicit environment overrides.
     #[must_use]
-    pub fn is_empty(&self) -> bool {
+    pub(crate) fn is_empty(&self) -> bool {
         self.0.is_empty()
     }
 
     /// Expose values only while configuring a child process; callers must not log them.
-    pub fn entries(&self) -> impl Iterator<Item = (&str, &str)> {
+    pub(crate) fn entries(&self) -> impl Iterator<Item = (&str, &str)> {
         self.0
             .iter()
             .map(|(key, value)| (key.as_str(), value.expose_secret()))

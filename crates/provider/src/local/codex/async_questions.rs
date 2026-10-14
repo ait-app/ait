@@ -1,8 +1,9 @@
 //! Session-scoped questions are messages, not blocking native JSON-RPC requests.
 
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, HashMap};
 use std::fmt::Write as _;
 
+use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
 use serde_json::{Value, json};
 use sha2::{Digest, Sha256};
@@ -22,10 +23,28 @@ struct Record {
     item: Value,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     resolution: Option<Value>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    position: Option<AnswerPosition>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+struct Anchor {
+    key: String,
+    turn_id: Option<String>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+struct AnswerPosition {
+    anchor: Option<Anchor>,
+    timestamp: String,
+    order: u64,
 }
 
 #[derive(Debug, Clone, Default)]
-pub(super) struct Questions(BTreeMap<String, Record>);
+pub(super) struct Questions {
+    records: BTreeMap<String, Record>,
+    anchor: Option<Anchor>,
+}
 
 impl Questions {
     pub(super) fn restore(saved: Option<&Value>) -> Result<Self, AgentSessionError> {
@@ -53,37 +72,49 @@ impl Questions {
                     return Err(AgentSessionError::Failed);
                 }
             }
-            questions.0.insert(id, record);
+            if record.position.as_ref().is_some_and(|position| {
+                record.resolution.is_none()
+                    || position.order == 0
+                    || DateTime::parse_from_rfc3339(&position.timestamp).is_err()
+                    || position.anchor.as_ref().is_some_and(|anchor| {
+                        anchor.key.is_empty()
+                            || anchor.turn_id.as_ref().is_some_and(String::is_empty)
+                    })
+            }) {
+                return Err(AgentSessionError::Failed);
+            }
+            questions.records.insert(id, record);
         }
         questions.check_size()?;
         Ok(questions)
     }
 
     pub(super) fn saved(&self) -> Option<Value> {
-        (!self.0.is_empty()).then(|| json!(self.0.values().collect::<Vec<_>>()))
+        (!self.records.is_empty()).then(|| json!(self.records.values().collect::<Vec<_>>()))
     }
 
     pub(super) fn receive(&mut self, item: &Value) -> Result<Option<Value>, AgentSessionError> {
         parse(item)?;
         let id = request_id(item)?;
-        if let Some(record) = self.0.get(&id) {
+        if let Some(record) = self.records.get(&id) {
             return if record.item == *item {
                 Ok(None)
             } else {
                 Err(AgentSessionError::Failed)
             };
         }
-        if self.0.len() >= 128 || self.pending().len() >= 32 {
+        if self.records.len() >= 128 || self.pending().len() >= 32 {
             return Err(AgentSessionError::Failed);
         }
         let record = Record {
             item: item.clone(),
             resolution: None,
+            position: None,
         };
         let permission = permission(&record)?;
-        self.0.insert(id.clone(), record);
+        self.records.insert(id.clone(), record);
         if let Err(error) = self.check_size() {
-            self.0.remove(&id);
+            self.records.remove(&id);
             return Err(error);
         }
         Ok(Some(permission))
@@ -101,7 +132,7 @@ impl Questions {
     }
 
     pub(super) fn pending(&self) -> Vec<Value> {
-        self.0
+        self.records
             .values()
             .filter(|record| record.resolution.is_none())
             .filter_map(|record| permission(record).ok())
@@ -109,7 +140,16 @@ impl Questions {
     }
 
     pub(super) fn contains(&self, id: &str) -> bool {
-        self.0.contains_key(id)
+        self.records.contains_key(id)
+    }
+
+    /// Remember the latest native display item as an anchor for subsequent answers.
+    /// `entry` supplies its stable identity and turn; its payload is not retained.
+    pub(super) fn observe(&mut self, entry: &NativeItem) {
+        self.anchor = Some(Anchor {
+            key: entry.key.clone(),
+            turn_id: entry.turn_id.clone(),
+        });
     }
 
     pub(super) fn prepare(
@@ -118,7 +158,7 @@ impl Questions {
         response: &Value,
     ) -> Result<Option<AgentPrompt>, AgentSessionError> {
         let record = self
-            .0
+            .records
             .get(id)
             .filter(|record| record.resolution.is_none())
             .ok_or(AgentSessionError::Rejected)?;
@@ -143,7 +183,7 @@ impl Questions {
         }
         let prompt = AgentPrompt {
             text,
-            client_message_id: Some(format!("async-answer:{:x}", Sha256::digest(id))),
+            client_message_id: Some(answer_message_id(id)),
             ..AgentPrompt::default()
         };
         prompt.validate()?;
@@ -155,16 +195,33 @@ impl Questions {
         id: &str,
         response: &Value,
     ) -> Result<NativeItem, AgentSessionError> {
-        let record = self.0.get_mut(id).ok_or(AgentSessionError::Rejected)?;
+        let order = self
+            .records
+            .values()
+            .filter_map(|record| record.position.as_ref().map(|position| position.order))
+            .max()
+            .unwrap_or_default()
+            .checked_add(1)
+            .ok_or(AgentSessionError::Failed)?;
+        let record = self
+            .records
+            .get_mut(id)
+            .ok_or(AgentSessionError::Rejected)?;
         if record.resolution.is_some() {
             return Err(AgentSessionError::Rejected);
         }
         let answer = resolution(record, response)?;
         record.resolution = Some(answer);
-        let entry = answer_entry(record)?;
+        record.position = Some(AnswerPosition {
+            anchor: self.anchor.clone(),
+            timestamp: Utc::now().to_rfc3339(),
+            order,
+        });
+        let entry = answer_entry(record, None)?;
         if let Err(error) = self.check_size() {
-            if let Some(record) = self.0.get_mut(id) {
+            if let Some(record) = self.records.get_mut(id) {
                 record.resolution = None;
+                record.position = None;
             }
             return Err(error);
         }
@@ -172,24 +229,91 @@ impl Questions {
     }
 
     pub(super) fn history(&self, entries: &mut Vec<NativeItem>) -> Result<(), AgentSessionError> {
-        for record in self.0.values().filter(|record| record.resolution.is_some()) {
-            if entries
-                .iter()
-                .any(|entry| entry.item["callId"] == record.item["id"])
-            {
-                entries.push(answer_entry(record)?);
-            }
+        if !self
+            .records
+            .values()
+            .any(|record| record.resolution.is_some())
+        {
+            return Ok(());
         }
+        let keys: HashMap<_, _> = entries
+            .iter()
+            .enumerate()
+            .map(|(index, entry)| (entry.key.as_str(), index))
+            .collect();
+        let calls: HashMap<_, _> = entries
+            .iter()
+            .enumerate()
+            .filter_map(|(index, entry)| entry.item["callId"].as_str().map(|id| (id, index)))
+            .collect();
+        let prompts: HashMap<_, _> = entries
+            .iter()
+            .enumerate()
+            .filter_map(|(index, entry)| {
+                entry.item["clientMessageId"].as_str().map(|id| (id, index))
+            })
+            .collect();
+        let mut insertions = BTreeMap::<usize, Vec<_>>::new();
+        for (id, record) in self
+            .records
+            .iter()
+            .filter(|(_, record)| record.resolution.is_some())
+        {
+            let Some(question) = record.item["id"].as_str().and_then(|id| calls.get(id)) else {
+                continue;
+            };
+            let answer = answer_entry(record, Some(&entries[*question]))?;
+            if keys.contains_key(answer.key.as_str()) {
+                continue;
+            }
+            let index = record
+                .position
+                .as_ref()
+                .and_then(|position| position.anchor.as_ref())
+                .and_then(|anchor| keys.get(anchor.key.as_str()))
+                .map(|index| index + 1)
+                .or_else(|| prompts.get(answer_message_id(id).as_str()).copied())
+                .unwrap_or(question + 1)
+                .max(question + 1);
+            insertions.entry(index).or_default().push((
+                record.position.as_ref().map(|position| position.order),
+                answer,
+            ));
+        }
+        merge_answers(entries, insertions);
         Ok(())
     }
 
     pub(super) fn retain(&mut self, entries: &[NativeItem]) {
-        self.0.retain(|_, record| {
+        self.records.retain(|_, record| {
             entries
                 .iter()
                 .any(|entry| entry.item["callId"] == record.item["id"])
         });
     }
+}
+
+fn answer_message_id(id: &str) -> String {
+    format!("async-answer:{:x}", Sha256::digest(id))
+}
+
+fn merge_answers(
+    entries: &mut Vec<NativeItem>,
+    insertions: BTreeMap<usize, Vec<(Option<u64>, NativeItem)>>,
+) {
+    if insertions.is_empty() {
+        return;
+    }
+    let mut source = std::mem::take(entries).into_iter();
+    entries.reserve(source.len() + insertions.values().map(Vec::len).sum::<usize>());
+    let mut offset = 0;
+    for (index, mut answers) in insertions {
+        entries.extend(source.by_ref().take(index - offset));
+        offset = index;
+        answers.sort_by_key(|(order, _)| *order);
+        entries.extend(answers.into_iter().map(|(_, entry)| entry));
+    }
+    entries.extend(source);
 }
 
 fn request_id(item: &Value) -> Result<String, AgentSessionError> {
@@ -281,7 +405,10 @@ pub(super) fn timeline(item: &Value) -> Result<Value, AgentSessionError> {
     )
 }
 
-fn answer_entry(record: &Record) -> Result<NativeItem, AgentSessionError> {
+fn answer_entry(
+    record: &Record,
+    question: Option<&NativeItem>,
+) -> Result<NativeItem, AgentSessionError> {
     let mut item = timeline(&record.item)?;
     let text = if record.resolution.as_ref() == Some(&json!("dismissed")) {
         "Question dismissed".to_owned()
@@ -313,8 +440,20 @@ fn answer_entry(record: &Record) -> Result<NativeItem, AgentSessionError> {
     item["detail"]["text"] = json!(text);
     Ok(NativeItem {
         key: format!("native:async-answer:{}", request_id(&record.item)?),
-        turn_id: None,
-        timestamp: super::discovery::timestamp(),
+        turn_id: if let Some(position) = &record.position {
+            position
+                .anchor
+                .as_ref()
+                .and_then(|anchor| anchor.turn_id.clone())
+        } else {
+            question.and_then(|entry| entry.turn_id.clone())
+        },
+        timestamp: record
+            .position
+            .as_ref()
+            .map(|position| position.timestamp.clone())
+            .or_else(|| question.map(|entry| entry.timestamp.clone()))
+            .ok_or(AgentSessionError::Failed)?,
         item,
     })
 }

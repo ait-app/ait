@@ -19,10 +19,10 @@ The first high-concurrency ordinary run failed `failed_queued_admission_does_not
 
 ## Test coverage
 
-| Scope | Covered / total lines | Line coverage |
-| --- | --- | --- |
-| Workspace | 55526 / 59015 | 94.09% |
-| Provider | 26879 / 28852 | 93.16% |
+| Scope     | Covered / total lines | Line coverage |
+| --------- | --------------------- | ------------- |
+| Workspace | 55526 / 59015         | 94.09%        |
+| Provider  | 26879 / 28852         | 93.16%        |
 
 [Current per-file coverage and exact Rust source fingerprints](main-sync-coverage.json). Linux, default features, no additional source exclusions, 15 configured ignored tests. Coverage reflects the final successful run only: raw profiles from the failed attempt were removed before it. No comparable baseline delta is claimed. Full HTML generated at `target/followup/llvm-cov/html/index.html` and retained locally; the JSON is the shared reviewable artifact.
 

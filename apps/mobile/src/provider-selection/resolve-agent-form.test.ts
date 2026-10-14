@@ -55,6 +55,14 @@ const TEST_PI_DEFINITION: AgentProviderDefinition = {
   modes: [],
 };
 
+const TEST_OPENCODE_DEFINITION: AgentProviderDefinition = {
+  id: "opencode",
+  label: "OpenCode",
+  description: "OpenCode test provider",
+  defaultModeId: "build",
+  modes: [{ id: "build", label: "Build", icon: "Hammer", colorTier: "moderate" }],
+};
+
 const CODEX_MODELS: AgentModelDefinition[] = [
   {
     provider: "codex",
@@ -431,6 +439,66 @@ describe("resolveFormState", () => {
 
     expect(resolved.model).toBe("gpt-5.3-codex");
     expect(resolved.thinkingOptionId).toBe("xhigh");
+  });
+
+  it("falls back to the OpenCode default when the saved model is no longer available", () => {
+    const models = [{ ...CODEX_MODELS[0], provider: "opencode" }];
+    const resolved = resolveFormState(
+      undefined,
+      {
+        provider: "opencode",
+        providerPreferences: { opencode: { model: "retired-model" } },
+      },
+      models,
+      INITIAL_USER_MODIFIED,
+      makeState({ provider: "opencode" }).form,
+
+      makeProviderMap(TEST_OPENCODE_DEFINITION),
+    );
+
+    expect(resolved.model).toBe("gpt-5.3-codex");
+    expect(resolved.thinkingOptionId).toBe("xhigh");
+  });
+
+  it.each([null, []])(
+    "preserves a remembered OpenCode model without a usable catalogue (%s)",
+    (models) => {
+      const resolved = resolveFormState(
+        undefined,
+        {
+          provider: "opencode",
+          providerPreferences: { opencode: { model: "saved-model" } },
+        },
+        models,
+        INITIAL_USER_MODIFIED,
+        makeState().form,
+        makeProviderMap(TEST_OPENCODE_DEFINITION),
+      );
+      expect(resolved.model).toBe("saved-model");
+    },
+  );
+
+  it("does not replace an explicit or edited OpenCode model with the catalogue default", () => {
+    const models = [{ ...CODEX_MODELS[0], provider: "opencode" }];
+    const providerMap = makeProviderMap(TEST_OPENCODE_DEFINITION);
+    const explicit = resolveFormState(
+      { provider: "opencode", model: "explicit-model" },
+      null,
+      models,
+      INITIAL_USER_MODIFIED,
+      makeState().form,
+      providerMap,
+    );
+    expect(explicit.model).toBe("explicit-model");
+    const edited = resolveFormState(
+      undefined,
+      { provider: "opencode" },
+      models,
+      { ...INITIAL_USER_MODIFIED, model: true },
+      makeState({ model: "edited-model" }).form,
+      providerMap,
+    );
+    expect(edited.model).toBe("edited-model");
   });
 
   it("falls back to model default when saved thinking preference is invalid", () => {

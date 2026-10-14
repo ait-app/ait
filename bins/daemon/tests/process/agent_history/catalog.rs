@@ -157,6 +157,7 @@ async fn assert_disconnected_refresh(
     gate: &DiscoveryGate,
     mut socket: Socket,
 ) {
+    let previous_probes = model_probe_count(cwd);
     gate.reset();
     send(
         &mut socket,
@@ -192,14 +193,18 @@ async fn assert_disconnected_refresh(
     )
     .await;
     assert_eq!(snapshot["type"], "response");
-    let count = std::fs::read_to_string(cwd.join("native-requests.jsonl"))
+    assert_eq!(
+        model_probe_count(cwd),
+        previous_probes + 1,
+        "disconnected refresh completes and later reads reuse its cache"
+    );
+}
+
+fn model_probe_count(cwd: &Path) -> usize {
+    std::fs::read_to_string(cwd.join("native-requests.jsonl"))
         .unwrap()
         .lines()
         .map(|line| serde_json::from_str::<Value>(line).unwrap())
         .filter(|request| request["method"] == "model/list")
-        .count();
-    assert_eq!(
-        count, 2,
-        "disconnected refresh completes and later reads reuse its cache"
-    );
+        .count()
 }

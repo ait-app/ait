@@ -1,8 +1,8 @@
 //! Host execution and durable storage boundaries.
 use std::{future::Future, pin::Pin};
 
-use model::schedule::Schedule;
-use model::storage::schedule::Error;
+use domain::schedule::{Schedule, Target};
+use domain::storage::schedule::Error;
 use tokio_util::sync::CancellationToken;
 
 /// Completed execution, including identities allocated before an error.
@@ -10,7 +10,7 @@ use tokio_util::sync::CancellationToken;
 pub struct Outcome {
     /// Agent that ran.
     pub agent_id: Option<String>,
-    /// Workspace created for this occurrence.
+    /// Workspace in which this occurrence executed.
     pub workspace_id: Option<String>,
     /// Final output.
     pub output: Option<String>,
@@ -22,6 +22,17 @@ pub struct Outcome {
 
 /// Asynchronous host execution, isolated from persistence and transport.
 pub trait Runner: Send + Sync + std::fmt::Debug {
+    /// Check active Workspace ownership and target membership before accepting a task change.
+    /// `workspace_id` identifies the owner; `target` selects an existing Agent or its creation config.
+    /// Returns the validated target, with new-Agent placement set to the current canonical directory.
+    ///
+    /// # Errors
+    /// Returns validation or storage errors when the owner or target is unavailable or incompatible.
+    fn resolve(
+        &self,
+        workspace_id: String,
+        target: Target,
+    ) -> Pin<Box<dyn Future<Output = Result<Target, Error>> + Send + '_>>;
     /// Execute an occurrence; honor cancellation and release owned resources before returning.
     fn run(
         &self,
@@ -41,11 +52,11 @@ pub struct Progress {
 }
 #[derive(Debug)]
 pub(crate) struct Checkpoint {
-    pub schedule_id: String,
-    pub run_id: String,
-    pub agent_id: Option<String>,
-    pub workspace_id: Option<String>,
-    pub reply: tokio::sync::oneshot::Sender<Result<(), Error>>,
+    pub(crate) schedule_id: String,
+    pub(crate) run_id: String,
+    pub(crate) agent_id: Option<String>,
+    pub(crate) workspace_id: Option<String>,
+    pub(crate) reply: tokio::sync::oneshot::Sender<Result<(), Error>>,
 }
 impl Progress {
     /// Persist allocated identities before further side effects.

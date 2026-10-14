@@ -24,7 +24,11 @@ import {
 import { StyleSheet, useUnistyles } from "react-native-unistyles";
 import { useShallow } from "zustand/shallow";
 import { Settings2 } from "lucide-react-native";
-import { getAgentFeatureIcon, ThinkingIcon } from "@/agent-controls/icons";
+import {
+  getAgentFeatureIcon,
+  getAgentFeatureValueIcon,
+  ThinkingIcon,
+} from "@/agent-controls/icons";
 import { formatThinkingOptionLabel } from "@/agent-controls/labels";
 import { ComboboxTrigger } from "@/components/ui/combobox-trigger";
 import { CombinedModelSelector } from "@/components/combined-model-selector";
@@ -38,7 +42,12 @@ import { useSessionStore } from "@/stores/session-store";
 import { useProvidersSnapshot } from "@/hooks/use-providers-snapshot";
 import { resolveProviderDefinition } from "@/utils/provider-definitions";
 import { mergeProviderPreferences, useFormPreferences } from "@/hooks/use-form-preferences";
-import { Combobox, ComboboxItem, type ComboboxOption } from "@/components/ui/combobox";
+import {
+  Combobox,
+  ComboboxItem,
+  type ComboboxOption,
+  type ComboboxProps,
+} from "@/components/ui/combobox";
 import {
   AgentModeControl,
   useLiveAgentModeControl,
@@ -55,6 +64,7 @@ import type {
 import type { AgentProviderDefinition } from "@ait/protocol/provider-manifest";
 import {
   getFeatureHighlightColor,
+  isFeatureActive,
   getFeatureTooltip,
   getAgentControlHintKey,
   resolveAgentModelSelection,
@@ -211,8 +221,7 @@ function getModeProviderDefinitions(modeControl: AgentModeControlValue | null) {
 }
 
 function getFeatureIconColor(
-  featureId: string,
-  enabled: boolean,
+  feature: AgentFeature,
   palette: {
     blue: { 400: string };
     green: { 400: string };
@@ -220,11 +229,11 @@ function getFeatureIconColor(
   },
   foregroundMuted: string,
 ): string {
-  if (!enabled) {
+  if (!isFeatureActive(feature)) {
     return foregroundMuted;
   }
 
-  switch (getFeatureHighlightColor(featureId)) {
+  switch (getFeatureHighlightColor(feature.id)) {
     case "blue":
       return palette.blue[400];
     case "green":
@@ -1276,6 +1285,29 @@ function SheetAgentControlsContent(props: SheetAgentControlsContentProps) {
   ) : null;
 }
 
+function useFeatureOptionRenderer(feature: AgentFeature, iconColor: string) {
+  return useCallback(
+    ({
+      option,
+      selected,
+      active,
+      onPress,
+    }: Parameters<NonNullable<ComboboxProps["renderOption"]>>[0]) => {
+      const Icon = getAgentFeatureValueIcon(feature, option.id);
+      return (
+        <ComboboxItem
+          label={option.label}
+          selected={selected}
+          active={active}
+          onPress={onPress}
+          leadingSlot={<Icon size={16} color={iconColor} />}
+        />
+      );
+    },
+    [feature, iconColor],
+  );
+}
+
 function DesktopFeatureItem({
   feature,
   disabled,
@@ -1294,6 +1326,7 @@ function DesktopFeatureItem({
   const { theme } = useUnistyles();
   const featureSelector: AgentControlSelector = `feature-${feature.id}`;
   const featureAnchorRef = useRef<View>(null);
+  const renderFeatureOption = useFeatureOptionRenderer(feature, theme.colors.foreground);
 
   const handleFeatureOpenChange = useMemo(
     () => handleOpenChange(featureSelector),
@@ -1333,8 +1366,7 @@ function DesktopFeatureItem({
           <AgentControlTrigger
             icon={FeatureIcon}
             iconColor={getFeatureIconColor(
-              feature.id,
-              feature.value,
+              feature,
               theme.colors.palette,
               theme.colors.foregroundMuted,
             )}
@@ -1355,8 +1387,12 @@ function DesktopFeatureItem({
   }
 
   if (feature.type === "select") {
-    const FeatureIcon = getAgentFeatureIcon(feature.icon);
+    const FeatureIcon = getAgentFeatureValueIcon(feature, feature.value);
     const selectedOption = feature.options.find((o) => o.id === feature.value);
+    const iconOnly = feature.desktopTrigger === "icon";
+    const tooltip = iconOnly
+      ? `${feature.label}: ${selectedOption?.label ?? feature.label}`
+      : getFeatureTooltip(feature);
     return (
       <>
         <Tooltip delayDuration={0} enabledOnDesktop enabledOnMobile={false}>
@@ -1364,18 +1400,24 @@ function DesktopFeatureItem({
             <AgentControlTrigger
               ref={featureAnchorRef}
               icon={FeatureIcon}
+              iconColor={getFeatureIconColor(
+                feature,
+                theme.colors.palette,
+                theme.colors.foregroundMuted,
+              )}
               surface="toolbar"
               label={feature.label}
               value={selectedOption?.label ?? feature.label}
+              showToolbarLabel={!iconOnly}
               open={openSelector === featureSelector}
               disabled={disabled}
               onPress={handleSelectPress}
-              accessibilityLabel={getFeatureTooltip(feature)}
+              accessibilityLabel={tooltip}
               testID={`agent-feature-${feature.id}`}
             />
           </TooltipTrigger>
           <TooltipContent side="top" align="center" offset={8}>
-            <Text style={styles.tooltipText}>{getFeatureTooltip(feature)}</Text>
+            <Text style={styles.tooltipText}>{tooltip}</Text>
           </TooltipContent>
         </Tooltip>
         <Combobox
@@ -1386,6 +1428,7 @@ function DesktopFeatureItem({
           onOpenChange={handleFeatureOpenChange}
           anchorRef={featureAnchorRef}
           desktopPlacement="top-start"
+          renderOption={feature.id === "permission" ? renderFeatureOption : undefined}
         />
       </>
     );
@@ -1411,6 +1454,7 @@ function SheetFeatureItem({
   const { t } = useTranslation();
   const featureSelector: AgentControlSelector = `feature-${feature.id}`;
   const featureAnchorRef = useRef<View>(null);
+  const renderFeatureOption = useFeatureOptionRenderer(feature, theme.colors.foreground);
 
   const handleFeatureOpenChange = useMemo(
     () => handleOpenChange(featureSelector),
@@ -1446,8 +1490,7 @@ function SheetFeatureItem({
           ref={featureAnchorRef}
           icon={FeatureIcon}
           iconColor={getFeatureIconColor(
-            feature.id,
-            feature.value,
+            feature,
             theme.colors.palette,
             theme.colors.foregroundMuted,
           )}
@@ -1476,13 +1519,18 @@ function SheetFeatureItem({
   }
 
   if (feature.type === "select") {
-    const FeatureIcon = getAgentFeatureIcon(feature.icon);
+    const FeatureIcon = getAgentFeatureValueIcon(feature, feature.value);
     const selectedOption = feature.options.find((o) => o.id === feature.value);
     return (
       <>
         <AgentControlTrigger
           ref={featureAnchorRef}
           icon={FeatureIcon}
+          iconColor={getFeatureIconColor(
+            feature,
+            theme.colors.palette,
+            theme.colors.foregroundMuted,
+          )}
           surface="sheet"
           label={feature.label}
           value={selectedOption?.label ?? feature.label}
@@ -1501,6 +1549,7 @@ function SheetFeatureItem({
           anchorRef={featureAnchorRef}
           presentation="push"
           header={sheetHeader}
+          renderOption={feature.id === "permission" ? renderFeatureOption : undefined}
         />
       </>
     );

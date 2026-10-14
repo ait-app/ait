@@ -21,11 +21,14 @@ export const RASTER_IMAGE_FILE_EXTENSIONS = Object.keys(RASTER_IMAGE_MIME_TYPE_B
 
 export function getFileExtension(path: string): string {
   const normalizedPath = path.split("#", 1)[0]?.split("?", 1)[0] ?? path;
-  const extensionIndex = normalizedPath.lastIndexOf(".");
+  const fileName = normalizedPath.slice(
+    Math.max(normalizedPath.lastIndexOf("/"), normalizedPath.lastIndexOf("\\")) + 1,
+  );
+  const extensionIndex = fileName.lastIndexOf(".");
   if (extensionIndex < 0) {
     return "";
   }
-  return normalizedPath.slice(extensionIndex).toLowerCase();
+  return fileName.slice(extensionIndex).toLowerCase();
 }
 
 export function getFileTypeLabel(path: string): string | null {

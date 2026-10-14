@@ -53,53 +53,53 @@ impl From<domain::InvalidValue> for AgentError {
 #[derive(Debug, Clone)]
 pub struct ConfigureAgent {
     /// Creation or conditional edit.
-    pub target: AgentTarget,
+    pub(crate) target: AgentTarget,
     /// Validated non-secret fields.
-    pub config: AgentConfig,
+    pub(crate) config: AgentConfig,
     /// Method-scoped durable retry key.
-    pub key: String,
+    pub(crate) key: String,
     /// Server time; excluded from the business fingerprint.
-    pub recorded_at: u64,
+    pub(crate) recorded_at: u64,
 }
 
 /// Stable completion, which may identify a historical revision after later edits.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct AgentReceipt {
     /// Durable operation UUID.
-    pub operation_id: OperationId,
+    pub(crate) operation_id: OperationId,
     /// Stable preset identity.
-    pub agent_id: AgentId,
+    pub(crate) agent_id: AgentId,
     /// Revision published by this operation.
-    pub revision: Revision,
+    pub(crate) revision: Revision,
 }
 
 /// Explicit global default, initially empty at version zero.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct DefaultSelection {
     /// Selected preset; no implicit first-Agent fallback.
-    pub agent_id: Option<AgentId>,
+    pub(crate) agent_id: Option<AgentId>,
     /// Monotonic compare-and-swap version within SQLite's integer range.
-    pub version: u64,
+    pub(crate) version: u64,
 }
 
 /// Conditional replacement of the global default.
 #[derive(Debug, Clone)]
 pub struct SelectDefault {
     /// Desired preset or an explicit clear.
-    pub agent_id: Option<AgentId>,
+    pub(crate) agent_id: Option<AgentId>,
     /// Observed selection version.
-    pub expected_version: u64,
+    pub(crate) expected_version: u64,
     /// Durable method-scoped retry key.
-    pub key: String,
+    pub(crate) key: String,
 }
 
 /// Stable default-change completion; query current selection separately.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct DefaultReceipt {
     /// Durable operation UUID.
-    pub operation_id: OperationId,
+    pub(crate) operation_id: OperationId,
     /// Selection as committed by this operation.
-    pub selection: DefaultSelection,
+    pub(crate) selection: DefaultSelection,
 }
 
 /// Blocking catalog port. Every write checks receipts before current-state preconditions.

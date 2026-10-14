@@ -3,6 +3,15 @@ import { executeAutomationCommand, type BrowserRegistry, type TabImage } from ".
 import { adaptWebContents, HostSnapshotEngineRegistry } from "./ipc.js";
 import type { IsolatedKeyboardInputEvent } from "./trusted-input.js";
 
+vi.mock("electron", () => ({ ipcMain: { handle: vi.fn() } }));
+vi.mock("../browser-webviews/index.js", () => ({
+  listRegisteredPaseoBrowserIds: () => [],
+  listRegisteredPaseoBrowserIdsForWorkspace: () => [],
+  getPaseoBrowserWebContentsForHostWindow: () => null,
+  getWorkspaceActivePaseoBrowserIdForHostWindow: () => null,
+  getPaseoBrowserWorkspaceId: () => null,
+}));
+
 class FakeImage implements TabImage {
   public toPNG(): Uint8Array {
     return new Uint8Array([137, 80, 78, 71]);
@@ -98,13 +107,12 @@ class FakeDebugger {
   }
 }
 
-type ConsoleMessageListener = (
-  event: unknown,
-  level: unknown,
-  message: unknown,
-  line: unknown,
-  sourceId: unknown,
-) => void;
+type ConsoleMessageListener = (details: {
+  level: unknown;
+  message: unknown;
+  lineNumber: unknown;
+  sourceId: unknown;
+}) => void;
 
 class FakeWebContents {
   public backgroundThrottling = true;
@@ -190,6 +198,8 @@ class FakeWebContents {
     this.inputEvents.push(event);
   }
 
+  public async insertText(_text: string): Promise<void> {}
+
   public on(event: "console-message", listener: ConsoleMessageListener): void {
     expect(event).toBe("console-message");
     this.consoleMessageListener = listener;
@@ -214,7 +224,12 @@ class FakeWebContents {
     if (!this.consoleMessageListener) {
       throw new Error("Console listener was not registered");
     }
-    this.consoleMessageListener({}, input.level, input.message, input.line, input.sourceId);
+    this.consoleMessageListener({
+      level: input.level,
+      message: input.message,
+      lineNumber: input.line,
+      sourceId: input.sourceId,
+    });
   }
 
   public destroy(): void {

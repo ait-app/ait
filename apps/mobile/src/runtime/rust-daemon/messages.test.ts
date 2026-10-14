@@ -7,6 +7,56 @@ import {
 import { METHODS } from "./methods";
 import { eventMessage, responseMessage, serverInfo } from "./messages";
 import { object } from "./types";
+import { validateWSOutboundMessage } from "@ait/protocol/validation/ws-outbound";
+
+describe("native agent stream control events", () => {
+  it.each([
+    { type: "turn_started", provider: "codex", turnId: "turn" },
+    { type: "usage_updated", provider: "codex", turnId: null, usage: { inputTokens: 100 } },
+    {
+      type: "permission_requested",
+      provider: "codex",
+      request: { id: "permission", provider: "codex", name: "Shell", kind: "tool" },
+    },
+    {
+      type: "permission_resolved",
+      provider: "codex",
+      requestId: "permission",
+      resolution: { behavior: "allow" },
+    },
+  ])("accepts 0.0.27 $type notifications without dropping the stream", (event) => {
+    const envelope = eventMessage("agent_stream", {
+      subscriptionId: "timeline-lease",
+      agentId: "agent",
+      event,
+    });
+    const parsed = validateWSOutboundMessage(envelope);
+    expect(parsed.success).toBe(true);
+    const payload = object(object(envelope.message).payload);
+    expect(Number.isFinite(Date.parse(String(payload.timestamp)))).toBe(true);
+    expect(payload.subscriptionId).toBe("timeline-lease");
+  });
+
+  it("preserves source timestamps on new host usage events", () => {
+    const payload = {
+      agentId: "agent",
+      timestamp: "2026-10-11T00:00:00Z",
+      event: { type: "usage_updated", provider: "codex", usage: { inputTokens: 100 } },
+    };
+    const envelope = eventMessage("agent_stream", payload);
+    expect(validateWSOutboundMessage(envelope).success).toBe(true);
+    expect(object(envelope.message).payload).toEqual(payload);
+  });
+
+  it.each([
+    { type: "usage_updated", provider: "codex", usage: { inputTokens: "invalid" } },
+    { type: "timeline", provider: "codex", item: { type: "assistant_message", text: "hello" } },
+    { type: "unknown_event", provider: "codex" },
+  ])("keeps malformed $type events subject to protocol validation", (event) => {
+    const envelope = eventMessage("agent_stream", { agentId: "agent", event });
+    expect(validateWSOutboundMessage(envelope).success).toBe(false);
+  });
+});
 
 it.each([
   ["agent.update", "agent.update", { agentId: "agent" }],
@@ -67,6 +117,39 @@ it("preserves Rust timeline search counts in the SDK response envelope", () => {
 });
 
 describe("Ait host capabilities", () => {
+  it("enables cached timeline reads only with the versioned feature and timeline method", () => {
+    for (const supported of [false, true]) {
+      for (const implemented of [false, true]) {
+        const envelope = serverInfo(
+          {
+            server_id: "ait",
+            features: supported ? ["agent-timeline-cached-reads-v1"] : [],
+          },
+          new Set(implemented ? ["agent.timeline.get.request"] : []),
+        );
+        expect(
+          parseServerInfoStatusPayload(object(object(envelope.message).payload))?.features
+            ?.agentTimelineCachedReads,
+        ).toBe(supported && implemented);
+      }
+    }
+  });
+  it("advertises directory and script events only with their installed producers", () => {
+    const read = (features: string[], methods: string[]) =>
+      parseServerInfoStatusPayload(
+        object(
+          object(serverInfo({ server_id: "ait", features }, new Set(methods)).message).payload,
+        ),
+      )?.sessionEventTypes;
+    const methods = ["project.list.request", "workspace.script.list.request"];
+    expect(read(["directory-subscriptions-v1"], methods)).toEqual(
+      expect.arrayContaining(["project.update", "script_status_update"]),
+    );
+    expect(read([], methods)).not.toContain("project.update");
+    expect(read(["directory-subscriptions-v1"], [])).not.toContain("project.update");
+    expect(read(["directory-subscriptions-v1"], [])).not.toContain("script_status_update");
+  });
+
   it("advertises checkout status events only with the Git producer and checkout method", () => {
     const read = (features: string[], methods: string[]) =>
       parseServerInfoStatusPayload(
@@ -154,6 +237,19 @@ describe("Ait host capabilities", () => {
     });
   });
 
+  it("enables Workspace target reads only when the host implements the method", () => {
+    for (const supported of [false, true]) {
+      const info = serverInfo(
+        { server_id: "ait" },
+        new Set(supported ? ["workspace.get.request"] : []),
+      );
+      expect(
+        parseServerInfoStatusPayload(object(object(info.message).payload))?.features
+          ?.workspaceTargetRead,
+      ).toBe(supported);
+    }
+  });
+
   it("enables GitLab panels only when the server advertises its installed adapter", () => {
     const methods = new Set([
       "checkout.pr.status.request",
@@ -189,9 +285,10 @@ describe("Ait host capabilities", () => {
       directorySubscriptions: false,
       daemonPairing: false,
     });
-    expect(value?.features?.plugins).not.toBe(true);
+    expect(value?.features).not.toHaveProperty("plugins");
     expect(value?.sessionEventTypes).toEqual([
       "status.server_info",
+      "script_status_update",
       "status.daemon_config_changed",
       "provider.snapshot.update",
       "agent.attention.required",

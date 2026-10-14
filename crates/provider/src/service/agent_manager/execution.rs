@@ -47,6 +47,7 @@ impl AgentManager {
             owner,
             generated_titles: super::generated_titles::Titles::default(),
             workspace_names: self.workspace_names.clone(),
+            usage_cache: self.usage_cache.clone(),
             auto_archives: super::auto_archive::AutoArchives::default(),
         }
     }
@@ -72,6 +73,29 @@ impl AgentManager {
     /// Whether the native history has been reconciled in this daemon generation.
     pub(crate) fn history_loaded(&self, id: &str) -> bool {
         self.histories().contains(id)
+    }
+
+    /// Whether `id` has a committed page that may be served before native revalidation.
+    /// Returns missing Agent or storage errors; unfinished native replacement is excluded.
+    pub(crate) fn can_read_cached_timeline(&self, id: &str) -> Result<bool, ErrorCode> {
+        let record = self
+            .registry
+            .get(id)
+            .map_err(|_| ErrorCode::AgentIo)?
+            .ok_or(ErrorCode::AgentNotFound)?;
+        if record
+            .persistence
+            .as_ref()
+            .and_then(|handle| handle.metadata.as_ref())
+            .and_then(|metadata| metadata.get(super::controls::REPLACEMENT_MARKER))
+            == Some(&Value::Bool(true))
+        {
+            return Ok(false);
+        }
+        self.timeline
+            .as_ref()
+            .ok_or(ErrorCode::UnsupportedCapability)?
+            .has_entries(id)
     }
 
     pub(super) fn mark_history_loaded(&self, id: &str) {
@@ -135,6 +159,13 @@ impl AgentManager {
     pub(crate) fn has_sessions(&self) -> bool {
         !self.live.is_empty()
     }
+
+    /// Whether a live session has accepted native work whose events need low-latency draining.
+    pub(crate) fn has_active_turns(&self) -> bool {
+        self.live.values().any(|agent| {
+            agent.turn.is_some() || agent.pending.is_some() || agent.session.pending_foreground()
+        })
+    }
 }
 
 pub(super) async fn native<T>(
@@ -144,6 +175,9 @@ pub(super) async fn native<T>(
 ) -> Result<T, crate::ports::agent_session::AgentSessionError> {
     let started = std::time::Instant::now();
     let result = future.await;
+    if let Err(error) = &result {
+        tracing::warn!(provider, operation, error = ?error, "Native provider operation failed");
+    }
     tracing::debug!(
         provider,
         operation,

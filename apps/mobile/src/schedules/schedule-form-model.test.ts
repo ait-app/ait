@@ -186,6 +186,39 @@ function applyPreferences(form: ReturnType<typeof open>, preferences: FormPrefer
 }
 
 describe("schedule form model", () => {
+  it("creates from a workspace directory without substituting its project root or another host", () => {
+    const workspace = { id: "workspace-a", name: "Feature branch", cwd: "/worktrees/feature" };
+    const form = open({
+      mode: "create",
+      defaults: { serverId: "host-a", workspace, projectTargets: PROJECT_TARGETS },
+    });
+
+    expect(form.getState()).toMatchObject({
+      workspace,
+      selectedServerId: "host-a",
+      workingDir: "/worktrees/feature",
+      providerSnapshotRequest: { serverId: "host-a", cwd: "/worktrees/feature" },
+      disclosure: { showProjectField: false, showModelField: true },
+      canSubmit: false,
+    });
+
+    form.setHost("host-b");
+    form.setProject(buildProjectOptionId("host-a", "project-a"), { label: "Project A" });
+    form.applyProjectTargets([...PROJECT_TARGETS]);
+    form.applyProviderSnapshot("host-a", providerSnapshot(HOST_A_MODELS));
+    form.setModel("mock", "model-a");
+    form.setPrompt("Check this workspace");
+
+    expect(form.getState()).toMatchObject({
+      selectedServerId: "host-a",
+      workingDir: "/worktrees/feature",
+      selectedProvider: "mock",
+      selectedModel: "model-a",
+      canSubmit: true,
+    });
+    form.close();
+  });
+
   it("opens edit from the schedule host snapshot and completes that host resolution", () => {
     const previous = open({
       mode: "edit",
@@ -510,11 +543,7 @@ describe("schedule form model", () => {
       },
     });
 
-    expect(form.getState().cadence).toEqual({
-      type: "cron",
-      expression: "* * * * *",
-      timezone: "Europe/Madrid",
-    });
+    expect(form.getState().cadence).toEqual({ type: "every", everyMs: 60_000 });
     form.setName("Renamed without touching cadence");
 
     expect(form.getState().submitCadence).toBeUndefined();
@@ -539,11 +568,7 @@ describe("schedule form model", () => {
       },
     });
 
-    expect(form.getState().cadence).toEqual({
-      type: "cron",
-      expression: "*/59 * * * *",
-      timezone: "Europe/Madrid",
-    });
+    expect(form.getState().cadence).toEqual(originalCadence);
 
     form.setName("Renamed without touching cadence");
 
@@ -562,7 +587,7 @@ describe("schedule form model", () => {
     });
   });
 
-  it("requires a cron choice before updating a legacy heartbeat", () => {
+  it("requires an available workspace agent before updating an existing-agent schedule", () => {
     const form = open({
       mode: "edit",
       schedule: heartbeatOnHost({ type: "every", everyMs: 90 * 60_000 }),
@@ -576,6 +601,17 @@ describe("schedule form model", () => {
 
     expect(form.getState()).toMatchObject({ targetKind: "agent", canSubmit: false });
 
+    const heartbeat = heartbeatOnHost({ type: "every", everyMs: 90 * 60_000 });
+    if (heartbeat.target.type !== "agent") throw new Error("agent fixture");
+    form.applyAgents([{ id: heartbeat.target.agentId, title: "Existing agent" }]);
+    expect(form.getState().canSubmit).toBe(true);
+    form.setPrompt("Changed prompt");
+    form.setMaxRuns("3");
+    expect(form.getState()).toMatchObject({
+      prompt: "Changed prompt",
+      maxRuns: "3",
+      canSubmit: true,
+    });
     form.setCadence({ type: "cron", expression: "0 9 * * *", timezone: "Europe/Madrid" });
 
     expect(form.getState()).toMatchObject({
@@ -759,4 +795,37 @@ describe("schedule form model", () => {
       isolation: "worktree",
     });
   });
+});
+
+it("defaults new tasks to one run while preserving an existing unlimited limit", () => {
+  const defaults = { projectTargets: PROJECT_TARGETS, serverId: "host-a" };
+  expect(openScheduleForm({ mode: "create", hosts: HOSTS, defaults }).getState().maxRuns).toBe("1");
+  expect(
+    openScheduleForm({
+      mode: "edit",
+      hosts: HOSTS,
+      defaults,
+      schedule: { ...heartbeatOnHost({ type: "every", everyMs: 60_000 }), maxRuns: null },
+    }).getState().maxRuns,
+  ).toBe("");
+});
+it("edits legacy single triggers through the shared time and count controls", () => {
+  const once = {
+    ...heartbeatOnHost({ type: "once", at: "2030-01-01T09:00:45.123Z" }),
+    maxRuns: null,
+  };
+  const model = openScheduleForm({
+    mode: "edit",
+    schedule: once,
+    hosts: HOSTS,
+    defaults: { projectTargets: PROJECT_TARGETS },
+  });
+  expect(model.getState()).toMatchObject({
+    cadence: { type: "every", everyMs: 3_600_000 },
+    maxRuns: "1",
+    submitCadence: undefined,
+  });
+  expect(model.getState().startAt).not.toBe("");
+  model.setMaxRuns("2");
+  expect(model.getState().submitCadence).toEqual({ type: "every", everyMs: 3_600_000 });
 });

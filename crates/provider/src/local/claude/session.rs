@@ -195,6 +195,23 @@ impl ClaudeSession {
         }
     }
 
+    fn observe_failure(&self, message: &Value) {
+        if let Some(transport) = &self.transport {
+            if let Some(errors) = message["errors"].as_array() {
+                for error in errors.iter().take(32) {
+                    transport
+                        .diagnostics
+                        .observe(crate::local::diagnostics::native(error, "result"), "turn");
+                }
+            } else {
+                transport.diagnostics.observe(
+                    crate::local::diagnostics::native(&message["error"], "result"),
+                    "turn",
+                );
+            }
+        }
+    }
+
     fn consume(&mut self, message: &Value) -> Result<(), AgentSessionError> {
         self.capture_identity(message)?;
         self.stream
@@ -277,6 +294,7 @@ impl ClaudeSession {
                     }
                     AgentTurnEvent::Completed(text)
                 } else {
+                    self.observe_failure(message);
                     self.stream.events.extend(self.children.stopped(true, true));
                     AgentTurnEvent::Failed
                 };
@@ -430,6 +448,16 @@ impl ClaudeSession {
 }
 
 impl AgentSession for ClaudeSession {
+    fn failure_diagnostic(&self) -> Option<crate::ports::diagnostics::Diagnostic> {
+        self.transport
+            .as_ref()
+            .and_then(|transport| transport.diagnostics.failure())
+    }
+
+    fn account_usage(&self) -> AgentSessionFuture<'_, Value> {
+        Box::pin(self.client.native_usage())
+    }
+
     fn subagents(&self) -> Vec<crate::ports::controls::NativeSubagent> {
         self.children.children()
     }
@@ -516,6 +544,9 @@ impl AgentSession for ClaudeSession {
             // intentional empty branch. Never silently recreate a lost accepted conversation.
             if let Some(metadata) = &mut self.metadata {
                 metadata.remove(super::rewind::FRESH);
+            }
+            if let Some(transport) = &self.transport {
+                transport.diagnostics.clear();
             }
             self.transport
                 .as_mut()

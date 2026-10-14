@@ -65,10 +65,17 @@ fn discovery_uses_cli_models_efforts_and_commands() {
 
 #[tokio::test]
 async fn missing_executable_reports_safe_availability_and_diagnostic() {
-    let client = ClaudeClient::new("/does-not-exist/claude".into());
+    let mut client = ClaudeClient::new("/does-not-exist/claude".into());
+    client.environment = serde_json::from_value(json!({
+        "CLAUDE_CODE_OAUTH_TOKEN":"", "ANTHROPIC_API_KEY":"offline-fixture-key"
+    }))
+    .unwrap();
     assert!(!client.is_available().await.unwrap());
     assert!(client.diagnostic().await.unwrap().contains("unavailable"));
-    assert!(client.usage().await.is_err());
+    let usage = client.usage().await.unwrap();
+    assert_eq!(usage["status"], "unavailable");
+    assert_eq!(usage["problem"]["kind"], "no_quota");
+    assert!(!usage.to_string().contains("offline-fixture-key"));
 }
 
 #[test]

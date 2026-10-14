@@ -6,7 +6,11 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import { useCreateFlowStore } from "@/stores/create-flow-store";
 import type { UserMessageImageAttachment } from "@/types/stream";
 import type { AgentAttachment } from "@ait/protocol/messages";
+import type { DaemonClient } from "@ait/client/internal/daemon-client";
 import { useDraftAgentCreateFlow, type DraftCreateAttempt } from "./create-flow";
+import { requestWorkspaceDraftAgent } from "./create-agent-request";
+
+vi.mock("@/utils/encode-images", () => ({ encodeImages: vi.fn(async () => undefined) }));
 
 describe("useDraftAgentCreateFlow", () => {
   beforeEach(() => {
@@ -144,7 +148,16 @@ describe("useDraftAgentCreateFlow", () => {
     const request = new Promise<never>((_resolve, reject) => {
       failRequest = reject;
     });
-    let requestCount = 0;
+    const seenKeys = new Set<string>();
+    const createAgent = vi.fn(async (options) => {
+      if (seenKeys.has(options.idempotencyKey)) {
+        throw new Error("Key was already used with different parameters");
+      }
+      seenKeys.add(options.idempotencyKey);
+      if (seenKeys.size === 1) return await request;
+      return { id: "agent-1" };
+    });
+    const client = { createAgent } as unknown as DaemonClient;
     const { result, rerender } = renderHook(
       ({ provider }: { provider: string | null }) =>
         useDraftAgentCreateFlow({
@@ -154,10 +167,14 @@ describe("useDraftAgentCreateFlow", () => {
             if (!provider) throw new Error("Select a model");
             return { provider };
           },
-          createRequest: async () => {
-            requestCount++;
-            if (requestCount === 1) return await request;
-            return { agentId: "agent-1", result: { id: "agent-1" } };
+          createRequest: async ({ attempt, text, cwd }) => {
+            const agent = await requestWorkspaceDraftAgent(client, {
+              workspaceId: "workspace-1",
+              config: { provider: provider!, cwd },
+              clientMessageId: attempt.clientMessageId,
+              text,
+            });
+            return { agentId: agent.id, result: agent };
           },
           onCreateSuccess: () => undefined,
         }),
@@ -189,7 +206,54 @@ describe("useDraftAgentCreateFlow", () => {
     });
     expect(result.current.draftAgent).toEqual({ provider: "claude" });
     expect(result.current.formErrorMessage).toBe("");
-    expect(requestCount).toBe(2);
+    expect(createAgent).toHaveBeenCalledTimes(2);
+    const [first, second] = createAgent.mock.calls.map(([options]) => options);
+    expect(first.idempotencyKey).toBe(first.clientMessageId);
+    expect(second.idempotencyKey).toBe(second.clientMessageId);
+    expect(second.idempotencyKey).not.toBe(first.idempotencyKey);
+    expect(second.initialPrompt).toBe("try again");
+    expect(second.config.provider).toBe("claude");
+  });
+
+  it("keeps the creation and message identities when continuing the same attempt", async () => {
+    const createAgent = vi.fn(async () => ({ id: "agent-1" }));
+    const client = { createAgent } as unknown as DaemonClient;
+    const attempt: DraftCreateAttempt = {
+      clientMessageId: "draft-1:original-message",
+      text: "build this",
+      timestamp: new Date(0),
+    };
+    const { result } = renderHook(() =>
+      useDraftAgentCreateFlow({
+        draftId: "draft-1",
+        getPendingServerId: () => "server-1",
+        initialAttempt: attempt,
+        buildDraftAgent: () => ({}),
+        createRequest: async ({ attempt: current, text, cwd }) => {
+          const agent = await requestWorkspaceDraftAgent(client, {
+            workspaceId: "workspace-1",
+            config: { provider: "opencode", cwd },
+            clientMessageId: current.clientMessageId,
+            text,
+          });
+          return { agentId: agent.id, result: agent };
+        },
+        onCreateSuccess: () => undefined,
+      }),
+    );
+    await act(async () => {
+      await result.current.continueCreateFromAttempt({ attempt, cwd: "/repo" });
+      await result.current.continueCreateFromAttempt({ attempt, cwd: "/repo" });
+    });
+    expect(createAgent).toHaveBeenCalledTimes(2);
+    expect(createAgent).toHaveBeenNthCalledWith(
+      1,
+      expect.objectContaining({
+        idempotencyKey: attempt.clientMessageId,
+        clientMessageId: attempt.clientMessageId,
+      }),
+    );
+    expect(createAgent.mock.calls[0]).toEqual(createAgent.mock.calls[1]);
   });
 
   it("allows retrying an empty prompt when the draft still has context attachments", async () => {

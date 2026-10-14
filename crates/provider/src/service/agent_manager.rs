@@ -10,17 +10,17 @@ pub(crate) mod ownership;
 mod resume;
 mod streaming;
 mod titles;
+mod usage;
 
 use std::collections::BTreeMap;
 use std::sync::Arc;
 
-use chrono::{SecondsFormat, Utc};
 use domain::agent_runtime::registry::AgentRuntimeRegistry;
 use domain::agent_runtime::{
     AgentRuntimeStatus, PersistedAgentRuntimeRecord, StoredAgentConfig, StoredAgentRuntimeInfo,
 };
+use domain::session::protocol::SessionEventKind;
 use model::session::SessionEvents;
-use model::session::protocol::SessionEventKind;
 use serde_json::json;
 
 use crate::ports::agent_session::{
@@ -28,6 +28,7 @@ use crate::ports::agent_session::{
     AgentTurnEvent,
 };
 use crate::protocol::agent_config::ConfigPatch;
+use crate::support::time::now_timestamp;
 
 enum Registration<'a> {
     Create,
@@ -56,6 +57,9 @@ pub enum AgentManagerError {
     /// The provider adapter failed or returned inconsistent facts.
     #[error("provider session failed")]
     Session,
+    /// The provider rejected the requested session operation or configuration.
+    #[error("provider rejected the Agent session operation or configuration")]
+    SessionRejected,
     /// Durable Agent state could not be read or written.
     #[error("Agent runtime registry failed")]
     Registry,
@@ -66,15 +70,17 @@ pub enum AgentManagerError {
 
 /// Metadata added when a new provider session is registered.
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
-pub struct AgentRegistration {
+pub(crate) struct AgentRegistration {
     /// Workspace placement, if any.
-    pub workspace_id: Option<String>,
+    pub(crate) workspace_id: Option<String>,
     /// Initial user-visible title.
-    pub title: Option<String>,
+    pub(crate) title: Option<String>,
     /// Public and delegation labels.
-    pub labels: BTreeMap<String, String>,
+    pub(crate) labels: BTreeMap<String, String>,
     /// Whether this is an internal runtime Agent.
-    pub internal: bool,
+    pub(crate) internal: bool,
+    /// Durable owner of an internal session; set before registration is published.
+    pub(crate) owner: Option<serde_json::Value>,
 }
 
 #[derive(Debug)]
@@ -90,6 +96,8 @@ struct LiveAgent {
     pending: Option<AgentTurnEvent>,
     pending_runtime: Option<StoredAgentRuntimeInfo>,
     pending_input_at: Option<String>,
+    failure_diagnostic: Option<crate::ports::diagnostics::Diagnostic>,
+    failure_entry: Option<crate::protocol::timeline::NativeItem>,
     exclusive: bool,
     interruption_requested: bool,
 }
@@ -114,6 +122,7 @@ pub struct AgentManager {
     generated_titles: generated_titles::Titles,
     workspace_names: Option<Arc<dyn model::workspace::lifecycle::WorkspaceNaming>>,
     auto_archives: auto_archive::AutoArchives,
+    usage_cache: usage::UsageCache,
 }
 
 impl AgentManager {
@@ -143,6 +152,7 @@ impl AgentManager {
             generated_titles: generated_titles::Titles::default(),
             workspace_names: None,
             auto_archives: auto_archive::AutoArchives::default(),
+            usage_cache: usage::UsageCache::default(),
         }
     }
 
@@ -155,7 +165,7 @@ impl AgentManager {
 
     /// Return the shared creation coordinator shared with this manager.
     #[must_use]
-    pub fn creations(&self) -> model::creation::Creations {
+    pub(crate) fn creations(&self) -> model::creation::Creations {
         self.creations.clone()
     }
 
@@ -170,7 +180,7 @@ impl AgentManager {
     #[must_use]
     pub fn with_summary_generation(
         mut self,
-        generator: Arc<dyn crate::summary::SummaryGenerator>,
+        generator: Arc<dyn model::summary::SummaryGenerator>,
     ) -> Self {
         self.generated_titles.generator = Some(generator);
         self
@@ -188,14 +198,15 @@ impl AgentManager {
 
     /// Return the installed display projection, independent of live session ownership.
     #[must_use]
-    pub fn timeline(&self) -> Option<crate::storage::timeline::Timeline> {
+    pub(crate) fn timeline(&self) -> Option<crate::storage::timeline::Timeline> {
         self.timeline.clone()
     }
 
     /// Discover models and capabilities through the registered native adapters.
     /// # Errors
     /// Returns invalid requests, unavailable adapter or safe discovery/cache errors.
-    pub async fn providers(
+    #[cfg(test)]
+    pub(crate) async fn providers(
         &mut self,
         method: &str,
         params: serde_json::Value,
@@ -208,7 +219,7 @@ impl AgentManager {
     /// Load native history without claiming a writer, once per Agent in this process.
     /// # Errors
     /// Returns unavailable history, missing Agent, or durable projection failures.
-    pub async fn load_timeline(&mut self, agent_id: &str) -> Result<(), model::ErrorCode> {
+    pub(crate) async fn load_timeline(&mut self, agent_id: &str) -> Result<(), model::ErrorCode> {
         use model::ErrorCode;
         if self.history_loaded(agent_id) {
             return Ok(());
@@ -270,7 +281,7 @@ impl AgentManager {
 
     /// Return the shared connection event service used for committed attention notifications.
     #[must_use]
-    pub fn events(&self) -> SessionEvents {
+    pub(crate) fn events(&self) -> SessionEvents {
         self.events.clone()
     }
 
@@ -278,7 +289,7 @@ impl AgentManager {
     ///
     /// # Errors
     /// Returns `InvalidRequest` for an empty identity and `AlreadyExists` for a duplicate.
-    pub fn register_client(
+    pub(crate) fn register_client(
         &mut self,
         client: Box<dyn AgentClient>,
     ) -> Result<(), AgentManagerError> {
@@ -295,7 +306,7 @@ impl AgentManager {
 
     /// Return the live session's latest registered snapshot, if this process owns it.
     #[must_use]
-    pub fn live_snapshot(&self, agent_id: &str) -> Option<&PersistedAgentRuntimeRecord> {
+    pub(crate) fn live_snapshot(&self, agent_id: &str) -> Option<&PersistedAgentRuntimeRecord> {
         self.live
             .get(agent_id)
             .filter(|agent| agent.registered)
@@ -304,7 +315,7 @@ impl AgentManager {
 
     /// Return the currently accepted native turn identity, when one is active.
     #[must_use]
-    pub fn active_turn(&self, agent_id: &str) -> Option<&str> {
+    pub(crate) fn active_turn(&self, agent_id: &str) -> Option<&str> {
         self.live
             .get(agent_id)
             .and_then(|agent| agent.turn.as_deref())
@@ -320,7 +331,7 @@ impl AgentManager {
     /// Return the most recently accepted native turn, including after it finishes.
     /// Used to fence connection-owned cancellation and completion reads against later turns.
     #[must_use]
-    pub fn latest_turn(&self, agent_id: &str) -> Option<&str> {
+    pub(crate) fn latest_turn(&self, agent_id: &str) -> Option<&str> {
         self.live
             .get(agent_id)
             .and_then(|agent| agent.latest_turn.as_deref())
@@ -328,7 +339,7 @@ impl AgentManager {
 
     /// Return the final assistant text from this process's latest completed turn.
     #[must_use]
-    pub fn last_message(&self, agent_id: &str) -> Option<&str> {
+    pub(crate) fn last_message(&self, agent_id: &str) -> Option<&str> {
         self.live
             .get(agent_id)
             .and_then(|agent| agent.last_message.as_deref())
@@ -351,7 +362,7 @@ impl AgentManager {
     /// # Errors
     /// Returns validation, unavailable-provider, archived-Agent, or registry errors. All supplied
     /// fields commit together; failed writes leave the running session and durable config intact.
-    pub async fn configure(
+    pub(crate) async fn configure(
         &self,
         agent_id: &str,
         patch: &ConfigPatch,
@@ -421,7 +432,8 @@ impl AgentManager {
     /// # Errors
     /// Rejects invalid or duplicate IDs, unavailable providers, session failures, and storage
     /// failures. If registration fails after creation, the new session is closed.
-    pub async fn create(
+    #[cfg(test)]
+    pub(crate) async fn create(
         &mut self,
         agent_id: &str,
         spec: &AgentSessionSpec,
@@ -441,7 +453,7 @@ impl AgentManager {
     /// Environment values remain in the native adapter's memory and are never put in the registry.
     /// # Errors
     /// Returns identity, admission, native launch or registration failures with cleanup.
-    pub async fn create_with_environment(
+    pub(crate) async fn create_with_environment(
         &mut self,
         agent_id: &str,
         spec: &AgentSessionSpec,
@@ -491,7 +503,7 @@ impl AgentManager {
             attention_timestamp: None,
             internal: registration.internal,
             archived_at: None,
-            owner: None,
+            owner: registration.owner,
         };
         let record = self
             .register_session(agent_id, session, record, Registration::Create, permit)
@@ -507,7 +519,7 @@ impl AgentManager {
     ///
     /// # Errors
     /// Returns missing-state, unavailable-provider, provider, or registry failures.
-    pub async fn resume(
+    pub(crate) async fn resume(
         &mut self,
         agent_id: &str,
     ) -> Result<PersistedAgentRuntimeRecord, AgentManagerError> {
@@ -583,7 +595,7 @@ impl AgentManager {
     ///
     /// # Errors
     /// Returns provider or registry failure.
-    pub async fn close(&mut self, agent_id: &str) -> Result<(), AgentManagerError> {
+    pub(crate) async fn close(&mut self, agent_id: &str) -> Result<(), AgentManagerError> {
         let Some(agent) = self.live.get_mut(agent_id) else {
             return Ok(());
         };
@@ -636,7 +648,12 @@ impl AgentManager {
     ///
     /// # Errors
     /// Returns resume, provider, storage, or busy/read-only failures.
-    pub async fn send(&mut self, agent_id: &str, text: &str) -> Result<(), AgentManagerError> {
+    #[cfg(test)]
+    pub(crate) async fn send(
+        &mut self,
+        agent_id: &str,
+        text: &str,
+    ) -> Result<(), AgentManagerError> {
         self.send_input(agent_id, &crate::protocol::prompt::AgentPrompt::text(text))
             .await
     }
@@ -644,7 +661,7 @@ impl AgentManager {
     /// Submit one complete rich prompt while retaining exclusive native-turn admission.
     /// # Errors
     /// Returns invalid input, busy ownership, native admission or persistence failures.
-    pub async fn send_input(
+    pub(crate) async fn send_input(
         &mut self,
         agent_id: &str,
         prompt: &crate::protocol::prompt::AgentPrompt,
@@ -702,7 +719,7 @@ impl AgentManager {
             names.schedule(
                 workspace,
                 context,
-                Some(model::summary::SummarySelection {
+                Some(domain::summary::SummarySelection {
                     provider: record.provider.clone(),
                     model: record
                         .config
@@ -735,7 +752,7 @@ impl AgentManager {
     ///
     /// # Errors
     /// Returns native interruption failures. An idle Agent is an idempotent success.
-    pub async fn cancel(&mut self, agent_id: &str) -> Result<(), AgentManagerError> {
+    pub(crate) async fn cancel(&mut self, agent_id: &str) -> Result<(), AgentManagerError> {
         if let Some(timeline) = &self.timeline {
             timeline
                 .cancel_inputs(agent_id)
@@ -770,7 +787,7 @@ impl AgentManager {
     ///
     /// # Errors
     /// Returns the first storage or close failure; later calls retry pending work.
-    pub async fn poll(&mut self) -> Result<(), AgentManagerError> {
+    pub(crate) async fn poll(&mut self) -> Result<(), AgentManagerError> {
         let ids = self.live.keys().cloned().collect::<Vec<_>>();
         for id in ids {
             let Some(agent) = self.live.get_mut(&id) else {
@@ -780,23 +797,21 @@ impl AgentManager {
                 continue;
             }
             persist_runtime(self.registry.as_ref(), &id, agent)?;
-            streaming::persist_handle(self.registry.as_ref(), &id, agent)?;
-            streaming::persist_input(self.registry.as_ref(), &id, agent)?;
             streaming::drain(
                 self.registry.as_ref(),
                 self.timeline.as_ref(),
                 &self.events,
                 &id,
                 agent,
-            )?;
+            )
+            .await?;
             streaming::persist_handle(self.registry.as_ref(), &id, agent)?;
+            if matches!(agent.pending, Some(AgentTurnEvent::Failed)) {
+                streaming::settle_failure(self.timeline.as_ref(), &self.events, &id, agent).await?;
+            }
             let Some(event) = &agent.pending else {
                 continue;
             };
-            if matches!(event, AgentTurnEvent::Failed) {
-                agent.session.close().await.map_err(map_session)?;
-                controls::publish_children(self.timeline.as_ref(), &self.events, agent)?;
-            }
             let failed = matches!(event, AgentTurnEvent::Failed);
             let cancelled = matches!(event, AgentTurnEvent::Cancelled);
             let permission = !agent.session.pending_permissions().is_empty();
@@ -819,7 +834,7 @@ impl AgentManager {
                     } else {
                         AgentRuntimeStatus::Idle
                     };
-                    next.last_error = failed.then(|| "Provider execution failed".to_owned());
+                    next.last_error = failed.then(|| streaming::failure_message(agent).to_owned());
                     next.updated_at.clone_from(&now);
                     next.last_activity_at = Some(now.clone());
                     next.requires_attention = permission || (!cancelled && !queued);
@@ -857,8 +872,11 @@ impl AgentManager {
             {
                 publish_terminal_attention(&self.events, &id, &now, failed);
             }
-            if failed && committed.as_ref().is_some_and(|record| !record.internal) {
-                publish_failure_activity(&self.events, &id, &now);
+            if let Some(record) = committed
+                .as_ref()
+                .filter(|record| failed && !record.internal)
+            {
+                publish_failure_activity(&self.events, &id, &now, record);
             }
             if failed {
                 self.live.remove(&id);
@@ -872,7 +890,7 @@ impl AgentManager {
     ///
     /// # Errors
     /// Returns registry or native-close errors; ownership remains available for retry.
-    pub async fn reconcile(&mut self) -> Result<(), AgentManagerError> {
+    pub(crate) async fn reconcile(&mut self) -> Result<(), AgentManagerError> {
         let mut close = Vec::new();
         for (id, live) in &self.live {
             let current = self.registry.get(id).map_err(map_registry)?;
@@ -895,7 +913,7 @@ impl AgentManager {
     ///
     /// # Errors
     /// Returns the first provider or registry failure after attempting every close.
-    pub async fn close_all(&mut self) -> Result<(), AgentManagerError> {
+    pub(crate) async fn close_all(&mut self) -> Result<(), AgentManagerError> {
         self.generated_titles.close().await;
         let ids = self.live.keys().cloned().collect::<Vec<_>>();
         let mut first_error = None;
@@ -996,6 +1014,8 @@ impl AgentManager {
                         pending: None,
                         pending_runtime: None,
                         pending_input_at: None,
+                        failure_diagnostic: None,
+                        failure_entry: None,
                         exclusive: false,
                         interruption_requested: false,
                     },
@@ -1018,6 +1038,8 @@ impl AgentManager {
                 pending: None,
                 pending_runtime: None,
                 pending_input_at: None,
+                failure_diagnostic: None,
+                failure_entry: None,
                 exclusive: false,
                 interruption_requested: false,
             },
@@ -1047,6 +1069,8 @@ impl AgentManager {
                     pending: None,
                     pending_runtime: None,
                     pending_input_at: None,
+                    failure_diagnostic: None,
+                    failure_entry: None,
                     exclusive: false,
                     interruption_requested: false,
                 },
@@ -1076,18 +1100,19 @@ fn validate_identity(agent_id: &str, spec: &AgentSessionSpec) -> Result<(), Agen
     Ok(())
 }
 
-fn now_timestamp() -> String {
-    Utc::now().to_rfc3339_opts(SecondsFormat::Millis, true)
-}
-
-fn publish_failure_activity(events: &SessionEvents, agent_id: &str, timestamp: &str) {
+fn publish_failure_activity(
+    events: &SessionEvents,
+    agent_id: &str,
+    timestamp: &str,
+    record: &PersistedAgentRuntimeRecord,
+) {
     events.publish(
         SessionEventKind::ActivityLog,
         &json!({
             "id": uuid::Uuid::new_v4().to_string(),
             "timestamp": timestamp,
             "type": "error",
-            "content": "Provider execution failed",
+            "content": record.last_error.as_deref().unwrap_or("Provider execution failed"),
             "metadata": {"agentId": agent_id},
         }),
     );
@@ -1115,8 +1140,11 @@ const fn map_registry(
     AgentManagerError::Registry
 }
 
-const fn map_session(_: AgentSessionError) -> AgentManagerError {
-    AgentManagerError::Session
+const fn map_session(error: AgentSessionError) -> AgentManagerError {
+    match error {
+        AgentSessionError::Rejected => AgentManagerError::SessionRejected,
+        AgentSessionError::Unavailable | AgentSessionError::Failed => AgentManagerError::Session,
+    }
 }
 
 #[cfg(test)]

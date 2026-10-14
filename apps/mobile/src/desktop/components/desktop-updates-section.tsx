@@ -190,6 +190,9 @@ interface DaemonInfoCardProps {
   activityIcon: ReactElement;
   handleToggleDaemonManagement: () => void;
   isUpdatingDaemonManagement: boolean;
+  keepRunningAfterQuit: boolean;
+  handleToggleKeepRunning: () => void;
+  isSavingSettings: boolean;
   daemonLogs: { logPath?: string } | null;
   handleCopyLogPath: () => void;
   handleOpenLogs: () => void;
@@ -210,6 +213,9 @@ function DaemonInfoCard(props: DaemonInfoCardProps) {
     activityIcon,
     handleToggleDaemonManagement,
     isUpdatingDaemonManagement,
+    keepRunningAfterQuit,
+    handleToggleKeepRunning,
+    isSavingSettings,
     daemonLogs,
     handleCopyLogPath,
     handleOpenLogs,
@@ -249,6 +255,19 @@ function DaemonInfoCard(props: DaemonInfoCardProps) {
       </View>
       <View style={[settingsStyles.row, settingsStyles.rowBorder]}>
         <View style={settingsStyles.rowContent}>
+          <Text style={settingsStyles.rowTitle}>{t("desktop.daemon.keepRunning.title")}</Text>
+          <Text style={settingsStyles.rowHint}>{t("desktop.daemon.keepRunning.hint")}</Text>
+        </View>
+        <Switch
+          value={keepRunningAfterQuit}
+          onValueChange={handleToggleKeepRunning}
+          disabled={isDaemonManagementPaused || isSavingSettings}
+          accessibilityLabel={t("desktop.daemon.keepRunning.title")}
+          testID="daemon-keep-running-switch"
+        />
+      </View>
+      <View style={[settingsStyles.row, settingsStyles.rowBorder]}>
+        <View style={settingsStyles.rowContent}>
           <Text style={settingsStyles.rowTitle}>{t("desktop.daemon.logs.title")}</Text>
           <Text style={settingsStyles.rowHint}>
             {daemonLogs?.logPath ?? t("desktop.daemon.logs.unavailable")}
@@ -274,7 +293,6 @@ function DaemonInfoCard(props: DaemonInfoCardProps) {
       <View style={[settingsStyles.row, settingsStyles.rowBorder]}>
         <View style={settingsStyles.rowContent}>
           <Text style={settingsStyles.rowTitle}>{t("desktop.daemon.fullStatus.title")}</Text>
-          <Text style={settingsStyles.rowHint}>{t("desktop.daemon.fullStatus.hint")}</Text>
         </View>
         <Button
           variant="outline"
@@ -299,6 +317,7 @@ export function LocalDaemonSection() {
     settings,
     updateSettings,
     isLoading: isLoadingSettings,
+    isSaving: isSavingSettings,
     error: settingsError,
   } = useDesktopSettings();
   const daemonSettings = settings.daemon;
@@ -310,6 +329,9 @@ export function LocalDaemonSection() {
     (listen: string) => updateDaemonSettings({ listen }),
     [updateDaemonSettings],
   );
+  const handleToggleKeepRunning = useCallback(() => {
+    void updateDaemonSettings({ keepRunningAfterQuit: !daemonSettings.keepRunningAfterQuit });
+  }, [daemonSettings.keepRunningAfterQuit, updateDaemonSettings]);
   const { data, isLoading, error: statusError, setStatus, refetch } = useDaemonStatus();
 
   const daemonStatus = data?.status ?? null;
@@ -397,6 +419,9 @@ export function LocalDaemonSection() {
             activityIcon={activityIcon}
             handleToggleDaemonManagement={handleToggleDaemonManagement}
             isUpdatingDaemonManagement={isUpdatingDaemonManagement}
+            keepRunningAfterQuit={daemonSettings.keepRunningAfterQuit}
+            handleToggleKeepRunning={handleToggleKeepRunning}
+            isSavingSettings={isSavingSettings || Boolean(settingsError)}
             daemonLogs={daemonLogs}
             handleCopyLogPath={handleCopyLogPath}
             handleOpenLogs={handleOpenLogs}

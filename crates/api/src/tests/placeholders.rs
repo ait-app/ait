@@ -14,7 +14,8 @@ async fn every_catalog_placeholder_uses_its_canonical_envelope_and_explicit_erro
         .into_iter()
         .filter(|(method, _)| !implemented.iter().any(|ready| ready == method))
         .collect::<Vec<_>>();
-    assert_eq!(placeholders.len(), 167);
+    assert_eq!(placeholders.len(), 188);
+    assert!(placeholders.contains(&("workspace.get.request", InboundKind::Request)));
     for batch in placeholders.chunks(64) {
         let mut socket = fixture.socket().await;
         let mut offer = hello();
@@ -115,7 +116,10 @@ async fn removed_groups_are_not_negotiable_and_requests_are_unknown() {
     .lines()
     .filter(|line| !line.starts_with('#') && !line.is_empty())
     .flat_map(|name| {
-        let canonical = if name.starts_with("hub.") || name.starts_with("plugin.") {
+        let canonical = if name.starts_with("hub.")
+            || name.starts_with("plugin.")
+            || name.ends_with(".request")
+        {
             name.to_owned()
         } else {
             format!("{}.request", name.replace('/', "."))

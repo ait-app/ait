@@ -60,7 +60,7 @@ export function createRustDaemonTransportFactory(baseFactory: TransportFactory):
       (!ssh && !single && parsed.pathname !== "/v1/ws") ||
       parsed.username ||
       parsed.password ||
-      (!ssh && parsed.search) ||
+      (!ssh && !single && parsed.search) ||
       parsed.hash
     ) {
       throw new Error("Invalid Rust daemon WebSocket endpoint");
@@ -340,7 +340,12 @@ export function createRustDaemonTransportFactory(baseFactory: TransportFactory):
           clearTimeout(timedOut?.retryTimer);
           emit(rpcError(id, name, "timeout", "Rust daemon request timed out"));
         },
-        spec.method === "file.upload.request" ? 30 * 60_000 : 300_000,
+        // Release the permission ID when its UI deadline expires so a user can retry.
+        spec.method === "agent.permission.resolve.request"
+          ? 5_000
+          : spec.method === "file.upload.request"
+            ? 30 * 60_000
+            : 300_000,
       );
       pending.set(id, {
         request: message,

@@ -11,6 +11,7 @@ mod permissions;
 mod plans;
 mod prompts;
 mod rewind;
+mod speed;
 mod streaming;
 mod subagents;
 mod transport;
@@ -30,12 +31,13 @@ use crate::ports::agent_session::{
 
 /// A native Codex executable. Authentication remains in Codex's own environment and storage.
 #[derive(Debug, Clone)]
-pub struct CodexClient {
+pub(crate) struct CodexClient {
     program: PathBuf,
     deadline: Duration,
     capabilities: std::sync::Arc<std::sync::atomic::AtomicU8>,
     images: super::images::ImageStore,
     environment: crate::ports::environment::AgentEnvironment,
+    speed_catalog: std::sync::Arc<std::sync::RwLock<Vec<Value>>>,
 }
 
 impl CodexClient {
@@ -58,19 +60,20 @@ impl CodexClient {
 
     /// Use `program` directly without invoking a shell. Requests have a ten-second deadline.
     #[must_use]
-    pub fn new(program: PathBuf) -> Self {
+    pub(crate) fn new(program: PathBuf) -> Self {
         Self {
             program,
             deadline: Duration::from_secs(10),
             capabilities: std::sync::Arc::default(),
             images: super::images::ImageStore::default(),
             environment: crate::ports::environment::AgentEnvironment::default(),
+            speed_catalog: std::sync::Arc::default(),
         }
     }
 
     /// Store decoded native image output in a private, persistent directory.
     #[must_use]
-    pub fn with_image_directory(mut self, directory: PathBuf) -> Self {
+    pub(crate) fn with_image_directory(mut self, directory: PathBuf) -> Self {
         self.images = super::images::ImageStore::new(directory);
         self
     }
@@ -98,6 +101,7 @@ impl CodexClient {
         let result = async {
             transport.initialize().await?;
             self.inspect_workflows(&mut transport).await?;
+            self.ensure_models(&mut transport).await?;
             if self.goals() {
                 transport.close().await?;
                 transport = self.launch_transport(&spec.cwd, true)?;
@@ -206,7 +210,7 @@ impl AgentClient for CodexClient {
         Box::pin(async move { client.open(spec, None).await })
     }
 
-    fn summary_model(&self, models: &[Value]) -> Option<model::summary::SummarySelection> {
+    fn summary_model(&self, models: &[Value]) -> Option<domain::summary::SummarySelection> {
         super::summary_model::select(
             self.provider(),
             models,
@@ -260,20 +264,15 @@ impl AgentClient for CodexClient {
         spec: &'a AgentSessionSpec,
     ) -> AgentSessionFuture<'a, Vec<Value>> {
         Box::pin(async move {
-            let Some(model) = &spec.config.model else {
+            if spec.config.model.is_none() {
                 return Ok(Vec::new());
-            };
+            }
             if !self.is_available().await? {
                 return Err(AgentSessionError::Unavailable);
             }
             let catalog = self.discover_native(&spec.cwd).await?;
-            let fast_available = catalog
-                .models
-                .iter()
-                .any(|entry| entry["id"] == *model && entry["supportsFastMode"] == true);
-            let mut features = self.features(&spec.config);
-            features.retain(|feature| feature["id"] != "fast_mode" || fast_available);
-            Ok(features)
+            let _ = catalog;
+            Ok(self.features(&spec.config))
         })
     }
 
@@ -510,6 +509,15 @@ struct CodexSession {
 
 impl CodexSession {
     fn finish_turn(&mut self, params: &Value) -> Result<Option<AgentTurnEvent>, AgentSessionError> {
+        if params["turn"]["status"] == "failed"
+            && !params["turn"]["error"].is_null()
+            && let Some(transport) = &self.transport
+        {
+            transport.diagnostics.observe(
+                crate::local::diagnostics::native(&params["turn"]["error"], "result"),
+                "turn",
+            );
+        }
         self.last_anchor.clone_from(&self.active_turn);
         self.active_turn = None;
         self.permissions
@@ -560,6 +568,22 @@ impl CodexSession {
         Ok(())
     }
 
+    fn queue_completed_item(&mut self, item: &Value, turn: &str) -> Result<(), AgentSessionError> {
+        if item["type"] == "agentMessage" {
+            self.last_message = item["text"].as_str().map(str::to_owned);
+        }
+        self.observe_interaction(item, turn)?;
+        let entries =
+            discovery::timeline_items(item, turn, &discovery::timestamp(), &self.client.images)?;
+        if let Some(entry) = entries.last() {
+            self.questions.observe(entry);
+        }
+        self.stream
+            .events
+            .extend(entries.into_iter().map(AgentTurnEvent::Timeline));
+        Ok(())
+    }
+
     async fn apply_configuration(
         &mut self,
         config: &StoredAgentConfig,
@@ -568,6 +592,8 @@ impl CodexSession {
             && self.config.mcp_servers == config.mcp_servers
             && self.config.tool_policy == config.tool_policy
             && self.config.system_prompt == config.system_prompt
+            && (self.config.mode_id.as_deref() == Some("auto-review"))
+                == (config.mode_id.as_deref() == Some("auto-review"))
         {
             return Ok(());
         }
@@ -608,6 +634,16 @@ impl CodexSession {
 }
 
 impl AgentSession for CodexSession {
+    fn failure_diagnostic(&self) -> Option<crate::ports::diagnostics::Diagnostic> {
+        self.transport
+            .as_ref()
+            .and_then(|transport| transport.diagnostics.failure())
+    }
+
+    fn account_usage(&self) -> AgentSessionFuture<'_, Value> {
+        Box::pin(self.client.native_usage_in(&self.cwd))
+    }
+
     fn pending_foreground(&self) -> bool {
         self.pending_goal_start || self.manual_compactions > 0
     }
@@ -749,6 +785,10 @@ impl AgentSession for CodexSession {
                 return Err(AgentSessionError::Failed);
             }
             self.preflight_plan(prompt)?;
+            if let Some(transport) = &self.transport {
+                transport.diagnostics.clear();
+            }
+
             self.apply_configuration(config).await?;
             let (approval, _, sandbox) = controls::policy(config);
             let transport = self.transport.as_mut().ok_or(AgentSessionError::Failed)?;
@@ -767,7 +807,7 @@ impl AgentSession for CodexSession {
                 "model":config.model,"effort":config.thinking_option_id,"approvalPolicy":approval,
                 "clientUserMessageId":prompt.client_message_id,"outputSchema":prompt.output_schema,
                 "approvalsReviewer":workflows::reviewer(config),
-                "sandboxPolicy":sandbox,"serviceTier":if controls::fast(config){Some("fast")}else{None}});
+                "sandboxPolicy":sandbox,"serviceTier":self.client.service_tier(config)});
             if let Some(collaboration) = collaboration {
                 params["collaborationMode"] = collaboration;
             }
@@ -919,39 +959,26 @@ impl AgentSession for CodexSession {
                 continue;
             }
             if method == "error" {
-                if let Some(entry) =
-                    streaming::capacity_error(params, turn_id.expect("active turn"))
-                {
-                    return Ok(Some(AgentTurnEvent::Timeline(entry)));
+                let mut diagnostic =
+                    crate::local::diagnostics::native(&params["error"], "notification");
+                diagnostic.will_retry = params["willRetry"].as_bool();
+                if let Some(transport) = &self.transport {
+                    transport.diagnostics.observe(diagnostic, "turn");
                 }
                 continue;
             }
             if let Some(event) = self.stream.progress(method, params)? {
+                if let AgentTurnEvent::Progress { entry, .. } = &event {
+                    self.questions.observe(entry);
+                }
                 return Ok(Some(event));
             }
             if method == "item/completed" && !self.stream.complete(&params["item"])? {
                 continue;
             }
-            if method == "item/completed"
-                && params.pointer("/item/type").and_then(Value::as_str) == Some("agentMessage")
-            {
-                self.last_message = params
-                    .pointer("/item/text")
-                    .and_then(Value::as_str)
-                    .map(str::to_owned);
-            }
             if method == "item/completed" {
                 let turn = turn_id.ok_or(AgentSessionError::Failed)?;
-                self.observe_interaction(&params["item"], turn)?;
-                let entries = discovery::timeline_items(
-                    &params["item"],
-                    turn,
-                    &discovery::timestamp(),
-                    &self.client.images,
-                )?;
-                self.stream
-                    .events
-                    .extend(entries.into_iter().map(AgentTurnEvent::Timeline));
+                self.queue_completed_item(&params["item"], turn)?;
                 if let Some(event) = self.stream.events.pop_front() {
                     return Ok(Some(event));
                 }
@@ -1021,8 +1048,12 @@ fn validate_config(config: &StoredAgentConfig) -> Result<(), AgentSessionError> 
         .as_deref()
         .is_some_and(|mode| !matches!(mode, "read-only" | "auto" | "auto-review" | "full-access"))
         || config.feature_values.as_ref().is_some_and(|map| {
-            map.iter().any(|(id, value)| {
-                !matches!(id.as_str(), "fast_mode" | "plan_mode") || !value.is_boolean()
+            map.iter().any(|(id, value)| match id.as_str() {
+                "service_tier" => !value
+                    .as_str()
+                    .is_some_and(|tier| !tier.is_empty() && tier.len() <= 128),
+                "fast_mode" | "plan_mode" => !value.is_boolean(),
+                _ => true,
             })
         })
     {

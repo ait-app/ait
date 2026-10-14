@@ -2,12 +2,13 @@
 
 use std::path::Path;
 
-use model::creation::protocol::Snapshot;
-use model::workspace::protocol::directory::WorkspaceCreateSource;
+use domain::creation::protocol::Snapshot;
+use domain::workspace::protocol::directory::WorkspaceCreateSource;
 use serde::Deserialize;
 use serde_json::Value;
 
 use super::{CreateRequest, ErrorCode, ExecutionState, parse_creation};
+use crate::support::rpc::decode;
 
 /// Validate an embedded Agent before Workspace side effects and return its secret-free intent.
 /// # Errors
@@ -45,7 +46,7 @@ impl ExecutionState {
         &mut self,
         params: Value,
     ) -> Result<Value, ErrorCode> {
-        let input: Input = super::decode(params)?;
+        let input: Input = decode(params)?;
         let request = self.workspace_agent_request(&input);
         let result = match request {
             Ok((request, workspace)) => {

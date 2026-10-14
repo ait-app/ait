@@ -10,6 +10,7 @@ import { handoffCreatedAgentMessageSubmission } from "@/composer/submission/writ
 import { useSessionStore } from "@/stores/session-store";
 import {
   createUserMessage,
+  generateMessageId,
   type StreamItem,
   type UserMessageImageAttachment,
 } from "@/types/stream";
@@ -313,7 +314,7 @@ export function useDraftAgentCreateFlow<TDraftAgent, TCreateResult>({
       }
 
       const attempt: CreateAttempt = {
-        clientMessageId: `${draftId}:initial-message`,
+        clientMessageId: `${draftId}:${generateMessageId()}`,
         text: trimmedPrompt,
         timestamp: new Date(),
         ...(images.length > 0 ? { images } : {}),

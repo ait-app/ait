@@ -14,6 +14,13 @@ const METHODS: &[&str] = &[
     "schedule.delete.request",
     "schedule.run_once.request",
     "agent.get.request",
+    "agent.timeline.get.request",
+    "agent.create.request",
+    "agent.archive.request",
+    "workspace.open.request",
+    "workspace.get.request",
+    "workspace.list.request",
+    "workspace.archive.request",
 ];
 async fn success(socket: &mut Socket, method: &str, params: Value) -> Value {
     let reply = request(socket, method, params).await;
@@ -28,8 +35,10 @@ async fn production_schedule_runs_real_provider_turn_and_preserves_state_across_
     let mut process = start_with_path(&state, &log, Some(&fixture.path));
     let address = ready(&mut process, &log).await;
     let mut socket = connect(&address, METHODS).await;
-    let created=success(&mut socket,"schedule.create.request",json!({"prompt":"scheduled hello","cadence":{"type":"every","everyMs":3_600_000},"target":{"type":"new-agent","config":{"provider":"codex","cwd":fixture.cwd,"archiveOnFinish":false}},"runOnCreate":false})).await;
+    let workspace = open_workspace(&mut socket, &fixture.cwd).await;
+    let created=success(&mut socket,"schedule.create.request",json!({"workspaceId":workspace,"prompt":"scheduled hello","cadence":{"type":"every","everyMs":3_600_000},"target":{"type":"new-agent","config":{"provider":"codex","cwd":fixture.cwd,"archiveOnFinish":false}},"runOnCreate":false})).await;
     let id = created["schedule"]["id"].clone();
+    assert_eq!(created["schedule"]["workspaceId"], workspace);
     assert_eq!(
         success(&mut socket, "schedule.list.request", json!({})).await["schedules"]
             .as_array()
@@ -53,7 +62,8 @@ async fn production_schedule_runs_real_provider_turn_and_preserves_state_across_
     assert_eq!(ran["schedule"]["runs"][0]["status"], "succeeded", "{ran}");
     assert!(ran["schedule"]["runs"][0]["output"].is_string());
     let agent = ran["schedule"]["runs"][0]["agentId"].clone();
-    assert_automatic_existing_run(&mut socket, &agent).await;
+    assert_eq!(ran["schedule"]["runs"][0]["workspaceId"], workspace);
+    assert_automatic_existing_run(&mut socket, &agent, &workspace).await;
     success(
         &mut socket,
         "schedule.update.request",
@@ -109,8 +119,8 @@ async fn production_schedule_runs_real_provider_turn_and_preserves_state_across_
     terminate(&mut process).await;
 }
 
-async fn assert_automatic_existing_run(socket: &mut Socket, agent: &Value) {
-    let existing=success(socket,"schedule.create.request",json!({"name":"Named existing agent job","prompt":"existing scheduled hello","cadence":{"type":"every","everyMs":3_600_000},"target":{"type":"agent","agentId":agent},"maxRuns":1})).await;
+async fn assert_automatic_existing_run(socket: &mut Socket, agent: &Value, workspace: &Value) {
+    let existing=success(socket,"schedule.create.request",json!({"workspaceId":workspace,"name":"Named existing agent job","prompt":"existing scheduled hello","cadence":{"type":"every","everyMs":3_600_000},"target":{"type":"agent","agentId":agent},"maxRuns":1})).await;
     let existing_id = existing["schedule"]["id"].clone();
     let record = tokio::time::timeout(std::time::Duration::from_secs(10), async {
         loop {
@@ -132,6 +142,31 @@ async fn assert_automatic_existing_run(socket: &mut Socket, agent: &Value) {
         record["schedule"]["runs"][0]["status"], "succeeded",
         "{record}"
     );
+    let timeline = success(
+        socket,
+        "agent.timeline.get.request",
+        json!({"agentId": agent}),
+    )
+    .await;
+    let schedule_id = existing_id.as_str().unwrap();
+    let run_id = record["schedule"]["runs"][0]["id"].as_str().unwrap();
+    let expected = format!(
+        "<ait-system>\nSchedule \"Named existing agent job\" fired (id={schedule_id}, run={run_id}).\nexisting scheduled hello\n</ait-system>"
+    );
+    assert!(
+        timeline["entries"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .any(|entry| entry["item"]["text"] == expected),
+        "{timeline}"
+    );
+}
+
+async fn open_workspace(socket: &mut Socket, cwd: &std::path::Path) -> Value {
+    let result = success(socket, "workspace.open.request", json!({"cwd":cwd})).await;
+    assert!(result["workspace"]["id"].is_string(), "{result}");
+    result["workspace"]["id"].clone()
 }
 
 #[tokio::test]
@@ -142,78 +177,61 @@ async fn vanished_schedule_targets_settle_without_creating_agents() {
     let mut process = start_with_path(&state, &log, Some(&fixture.path));
     let address = ready(&mut process, &log).await;
     let mut socket = connect(&address, METHODS).await;
+    let workspace = open_workspace(&mut socket, &fixture.cwd).await;
+    let agent = success(
+        &mut socket,
+        "agent.create.request",
+        json!({"workspaceId":workspace,"config":{"provider":"codex","cwd":fixture.cwd}}),
+    )
+    .await["agentId"]
+        .clone();
+    let created = success(&mut socket, "schedule.create.request", json!({"workspaceId":workspace,"prompt":"must not execute","cadence":{"type":"every","everyMs":3_600_000},"target":{"type":"agent","agentId":agent},"runOnCreate":false})).await;
+    success(
+        &mut socket,
+        "agent.archive.request",
+        json!({"agentId":agent}),
+    )
+    .await;
+    let ran = success(
+        &mut socket,
+        "schedule.run_once.request",
+        json!({"scheduleId":created["schedule"]["id"]}),
+    )
+    .await;
+    assert_eq!(ran["schedule"]["runs"][0]["status"], "failed", "{ran}");
+    assert_eq!(ran["schedule"]["status"], "completed");
     let removed = fixture.root.path().join("removed-workspace");
     std::fs::create_dir(&removed).unwrap();
-    for (target, expected) in [
-        (
-            json!({"type":"agent","agentId":"11111111-1111-4111-8111-111111111111"}),
-            "Scheduled agent is missing or archived",
-        ),
-        (
-            json!({"type":"new-agent","config":{"provider":"codex","cwd":removed}}),
-            "Scheduled directory no longer exists",
-        ),
-    ] {
-        let created = success(
-            &mut socket,
-            "schedule.create.request",
-            json!({
-                "prompt":"must not execute", "cadence":{"type":"every","everyMs":3_600_000},
-                "target":target, "runOnCreate":false
-            }),
-        )
-        .await;
-        if removed.exists() {
-            std::fs::remove_dir(&removed).unwrap();
-        }
-        let ran = success(
-            &mut socket,
-            "schedule.run_once.request",
-            json!({"scheduleId":created["schedule"]["id"]}),
-        )
-        .await;
-        assert_eq!(ran["schedule"]["runs"][0]["status"], "failed", "{ran}");
-        assert_eq!(ran["schedule"]["runs"][0]["error"], expected, "{ran}");
-        assert!(ran["schedule"]["runs"][0]["agentId"].is_null());
-        assert!(ran["schedule"]["runs"][0]["workspaceId"].is_null());
-        assert_eq!(ran["schedule"]["status"], "completed");
-    }
+    let workspace = open_workspace(&mut socket, &removed).await;
+    let created = success(&mut socket, "schedule.create.request", json!({"workspaceId":workspace,"prompt":"must not execute","cadence":{"type":"every","everyMs":3_600_000},"target":{"type":"new-agent","config":{"provider":"codex"}},"runOnCreate":false})).await;
+    std::fs::remove_dir(&removed).unwrap();
+    let ran = success(
+        &mut socket,
+        "schedule.run_once.request",
+        json!({"scheduleId":created["schedule"]["id"]}),
+    )
+    .await;
+    assert_eq!(ran["schedule"]["runs"][0]["status"], "failed", "{ran}");
+    assert_eq!(
+        ran["schedule"]["runs"][0]["error"], "Scheduled workspace directory no longer exists",
+        "{ran}"
+    );
+    assert!(ran["schedule"]["runs"][0]["agentId"].is_null());
+    assert_eq!(ran["schedule"]["runs"][0]["workspaceId"], workspace);
+    assert_eq!(ran["schedule"]["status"], "completed");
     terminate(&mut process).await;
 }
 
 #[tokio::test]
-async fn scheduled_worktree_is_isolated_and_archived_after_execution() {
+async fn schedule_archives_created_agent_and_preserves_owning_workspace() {
     let fixture = super::native::NativeFixture::new();
-    for args in [
-        vec!["init", "-b", "main"],
-        vec![
-            "-c",
-            "user.name=Fixture",
-            "-c",
-            "user.email=fixture@example.test",
-            "commit",
-            "--allow-empty",
-            "-m",
-            "initial",
-        ],
-    ] {
-        let result = std::process::Command::new("git")
-            .current_dir(&fixture.cwd)
-            .args(args)
-            .output()
-            .unwrap();
-        assert!(
-            result.status.success(),
-            "{}",
-            String::from_utf8_lossy(&result.stderr)
-        );
-    }
     let state = fixture.root.path().join("state");
     let log = fixture.root.path().join("server.log");
     let mut process = start_with_path(&state, &log, Some(&fixture.path));
     let address = ready(&mut process, &log).await;
     let mut socket = connect(&address, METHODS).await;
-    let created=success(&mut socket,"schedule.create.request",json!({"prompt":"worktree job","cadence":{"type":"every","everyMs":3_600_000},"target":{"type":"new-agent","config":{"provider":"codex","cwd":fixture.cwd,"isolation":"worktree"}},"runOnCreate":false})).await;
+    let workspace = open_workspace(&mut socket, &fixture.cwd).await;
+    let created=success(&mut socket,"schedule.create.request",json!({"workspaceId":workspace,"prompt":"workspace job","cadence":{"type":"every","everyMs":3_600_000},"target":{"type":"new-agent","config":{"provider":"codex","cwd":"/ignored-client-directory"}},"runOnCreate":false})).await;
     let ran = success(
         &mut socket,
         "schedule.run_once.request",
@@ -228,19 +246,40 @@ async fn scheduled_worktree_is_isolated_and_archived_after_execution() {
     )
     .await;
     assert!(agent["agent"]["archivedAt"].is_string(), "{agent}");
-    assert_ne!(agent["agent"]["cwd"], json!(fixture.cwd));
+    assert_eq!(
+        agent["agent"]["cwd"],
+        json!(fixture.cwd.canonicalize().unwrap())
+    );
+    assert_eq!(agent["agent"]["workspaceId"], workspace);
+    assert_eq!(
+        success(
+            &mut socket,
+            "workspace.get.request",
+            json!({"workspaceId":workspace})
+        )
+        .await["state"],
+        "ready"
+    );
+    assert_eq!(
+        success(&mut socket, "workspace.list.request", json!({})).await["entries"]
+            .as_array()
+            .unwrap()
+            .len(),
+        1
+    );
     terminate(&mut process).await;
 }
 
 #[tokio::test]
-async fn permission_wait_fails_and_restart_recovers_interrupted_workspace() {
+async fn permission_wait_fails_and_restart_recovers_agent_without_archiving_owner() {
     let fixture = super::native::NativeFixture::new();
     let state = fixture.root.path().join("state");
     let log = fixture.root.path().join("server.log");
     let mut process = start_with_path(&state, &log, Some(&fixture.path));
     let address = ready(&mut process, &log).await;
     let mut socket = connect(&address, METHODS).await;
-    let created=success(&mut socket,"schedule.create.request",json!({"prompt":"permit-command","cadence":{"type":"every","everyMs":3_600_000},"target":{"type":"new-agent","config":{"provider":"codex","cwd":fixture.cwd,"archiveOnFinish":false}},"runOnCreate":false})).await;
+    let workspace = open_workspace(&mut socket, &fixture.cwd).await;
+    let created=success(&mut socket,"schedule.create.request",json!({"workspaceId":workspace,"prompt":"permit-command","cadence":{"type":"every","everyMs":3_600_000},"target":{"type":"new-agent","config":{"provider":"codex","cwd":fixture.cwd,"archiveOnFinish":false}},"runOnCreate":false})).await;
     let id = created["schedule"]["id"].clone();
     let ran = success(
         &mut socket,
@@ -288,5 +327,17 @@ async fn permission_wait_fails_and_restart_recovers_interrupted_workspace() {
     )
     .await;
     assert!(agent["agent"]["archivedAt"].is_string());
+    assert_eq!(
+        success(
+            &mut socket,
+            "workspace.get.request",
+            json!({"workspaceId":workspace})
+        )
+        .await["state"],
+        "ready"
+    );
     terminate(&mut process).await;
 }
+
+#[path = "schedule/ownership.rs"]
+mod ownership;

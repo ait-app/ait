@@ -74,9 +74,35 @@ ACP 没有权限模式、question 和外部会话导入。默认不会因原生 
 ## 导入列表预览
 
 导入列表保留 DSH 原生标题、目录与活动时间，优先使用 turnOutline 的首尾用户 prompt。旧会话没有缓存摘要时，通过只读历史快照及分页补齐；不会提交消息或创建 Agent。预览规范化空白并限制为 300 个 Unicode 字符。单会话读取最多两秒、8 MiB / 100 页，全列表额外预算十秒；超限、损坏或只有图片而没有用户文本时保留原列表项，不伪造 prompt。
+
 ## 模型发现
 
 Provider 模型菜单直接读取原生 Host 的 `session/modelCatalog`，不会为读取目录创建原生会话、选择模型或发送输入。情景模式、默认模式和权限选项也来自只读原生目录，创建/恢复时仍由原生状态校验选择。目录读取不再依赖默认会话能否成功初始化。CLI 启动、原生目录或认证错误仍可能使 Provider 显示错误，应结合展开后的错误文字和 DSH 版本诊断。
+
+## DeepSeek 账号余额
+
+DSH 用量卡片只查询 DeepSeek。内置 DeepSeek API Key 路由已配置时，Ait 从原生 Host 的
+`settings/describe` 与 `credentials/describe` 确认凭据引用和实际来源，再调用官方只读
+`GET https://api.deepseek.com/user/balance`。显示官方返回的总余额、充值余额、未过期赠金与
+API 余额可用状态，保留 CNY/USD 币种；不从余额反推已消费金额、套餐比例或累计 token。
+官方总额与分项可能各自舍入，Ait 不重新相加计算总额。
+
+凭据来源遵循 DSH 的启动环境、原生凭据文件、项目 `.env`、DSH home `.env`。
+支持自定义 `apiKeyEnv` 引用、`DSH_HOME` 与原生 credentials-local 的静态 `path`/`dshHome`。
+会话查询保留该会话启动时的环境与 `.env` 快照，原生凭据文件的更新在后续查询生效；
+不能读取某一已选来源时，不换用其他来源的 Key。主机查询使用 daemon 的环境和工作目录，
+保留五分钟内存缓存；强制刷新绕过缓存。停止的会话不会改查主机账号。
+
+API Key 未配置时，读取 DSH 的 `account/getBalance`，展示账号登录对应的充值和赠送余额。
+二者同时存在时优先展示 API Key 余额，不合并不同认证身份。仅配置 API Key 的用户无需额外登录
+DSH 的账号界面。认证、余额为零、缺少接口、网络失败分别处理，原始错误正文和凭据不进入 RPC。
+
+查询不创建原生会话、不发送 prompt、不写入 Ait 凭据存储或账号余额文件。
+自定义非官方端点、未知凭据后端、可执行凭据路径配置以及显式 ACP 传输返回明确不可用原因；
+不会将这些场景当成已登录账号的零余额。旧版本缺少账号 API 时同样明确提示能力缺失。
+本机已验证 DSH `0.2.0-rc.2` 的 API Key 路径；原生账号登录余额使用模拟 Host 验证，详见
+[复现与验证报告](../reports/providers/dsh-deepseek-balance-2026-10-14.md)。
+
 ## DSH 0.2 权限目录
 
 新版 Host 从 `permissionPresets/catalog` 提供可选权限，历史投影只保留当前值；Ait 兼容此协议及旧版内嵌选项。恢复桌面中打开的原生会话前，应先让 DSH 释放该会话的写入所有权；即使没有运行中的回合，桌面仍可能持有写入锁。只读导入不需要抢占写入所有权。验证范围见[权限目录兼容报告](../reports/providers/dsh-permission-catalog.md)。
@@ -105,4 +131,4 @@ CLI 不能直接启动 Electron 专属 `desktop` profile；桌面安装包内的
 
 安装或更新插件后刷新 Provider 目录可发现新预设；现有会话仍受原生组合生命周期约束。
 插件管理工具若由所选模式提供，会通过 DSH 的普通工具和审批通道运行。
-Ait 不托管插件专属 Web 界面或插件安装面板。详见 [ADR-109](../decisions/providers/adr-109-dsh-native-plugin-presets.md)。
+Ait 不托管插件专属 Web 界面或插件安装面板。详见 [ADR-147](../decisions/providers/adr-147-dsh-native-plugin-presets.md)。

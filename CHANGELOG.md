@@ -1,5 +1,98 @@
 # Ait changelog
 
+## 0.1.2 - 2026-10-13
+
+- Accept valid large image prompts within the shared input budget; preserve original image bytes unless the request exceeds its size limits, then compress or split readable images without replacing the saved originals.
+- Support OpenCode 2.0.25 and preserve long shell and large file-edit permission requests through ACP.
+- Show safe Provider error explanations and persist failure notices in conversation history.
+- Restore question actions after five-second response timeouts so users can retry without losing their answers.
+- Deny permission requests during automated Bot turns and report the denial instead of leaving the Bot waiting for interactive approval.
+- Reuse Relay TLS sessions, reduce reconnect delay, and retain native mobile account connections for two background minutes before closing them.
+- Answer terminal device-attribute queries before a client subscribes, avoiding delayed fish startup.
+- Detach stale pull-request associations when resetting a Workspace, clarify scheduled-task system labels, and remove the Worktree setup reminder.
+- Move blocking filesystem work off the async reactor and remove a forced panic during Workspace recovery.
+
+## 0.1.1 - 2026-10-12
+
+- Add Workspace-owned scheduled tasks, ordered task timelines, and a unified Host → Project → Workspace creation flow with a default of one run.
+- Add experimental Workspace Bots behind a default-off setting, with persistent conversations, configuration and shared memory; support Telegram and Feishu channels in the backend.
+- Support unattended Linux/macOS Hosts with persistent machine authorization, credential recovery and a generated local API token.
+- Keep oversized Codex MCP results from closing sessions by displaying bounded previews while preserving full values in native transcripts.
+- Keep GitHub clones connected during foreground verification and prevent duplicate output in batched Read cards.
+- Add correlated Relay disconnect diagnostics, remove retired protocol methods, and simplify internal module organization.
+
+## 0.1.0 - 2026-10-11
+
+- Publish the existing 0.0.29 functionality as the 0.1.0 stable desktop release; no additional application behavior changes are introduced in this release.
+- Synchronize Rust, npm workspace, lockfile, and local Arch source-package versions to 0.1.0, with fresh desktop installers and stable-channel updater metadata.
+
+## 0.0.29 - 2026-10-11
+
+- Stabilize OpenCode model catalogs, retain model-specific options, and confirm model, effort, and mode changes through native ACP responses and notifications.
+- Require OpenCode 2.x version 2.0.26 or newer and show an upgrade diagnostic for earlier versions while retaining OpenCode 1.x support.
+- Coordinate Ait-owned OpenCode ACP initialization to reduce concurrent cold-start database contention while keeping active sessions and prompts concurrent.
+- Wait for shared execution capacity after admitting bounded RPCs, preserve handshake-specific event negotiation, and add actionable, bounded, redacted RPC and schema diagnostics.
+- Remove avoidable desktop notification, deleted-route, and animation warnings, plus the obsolete daemon status hint.
+- Migrate the official service default and saved legacy official endpoints to aitapp.cn while preserving credentials, expiry, preferred host selection, and custom service addresses.
+- Run PR quality checks without desktop packaging, and keep both platform builds and nightly publication on main.
+
+## 0.0.28 - 2026-10-11
+
+- Preserve native usage and permission events, carry source timestamps, and accept older hosts' supported control-event formats.
+- Restore startup and reconnect subscriptions using the current host's advertised capabilities, and queue workspace directory and label initialization when background tasks are busy.
+- Release established timeline subscriptions before requesting replacements to avoid exhausting subscription slots during tab changes.
+- Display persisted agent history before native replay, reconcile it in the background, and keep older history available through bounded cursor pages.
+- Keep Changes refresh connected under contention by isolating foreground checkout work and waiting for output capacity while allowing small control responses to proceed.
+- Support the hosted browser client with shared website login, persistent account sessions, online hosts, browser downloads, and an embedded management tab.
+- Treat a moved ShipIt staging bundle as an unknown staged version instead of reporting a failed update diagnostic.
+- Group metadata modules by capability, move Workspace lifecycle RPCs into metadata, and keep Agent Skills owned by the provider component.
+- Refresh the product guide and keep changed-file UI lint independent of the repository-wide formatting check.
+
+## 0.0.27 - 2026-10-11
+
+- Keep the built-in daemon running after desktop quit when enabled, and reconnect to the same authenticated daemon on the next launch.
+- Restore OpenCode ACP tool projections, configuration recovery, native failure reasons, and input order across live turns and history reloads.
+- Keep session metadata separate from native routing aliases and reconcile native history before settling completed turns.
+- Use browser-based unified sign-in, support phone-only accounts, and preserve relay credentials and online hosts across restarts.
+- Import all online-service hosts after sign-in while retaining existing local connections and persistent host records.
+- Load the target workspace immediately and synchronize the complete host directory in the background.
+- Read timeline pages from a persistent projection index instead of scanning the full conversation history.
+- Preapprove Codex computer-use tools in Auto-review while preserving explicit tool policy overrides.
+- Decode Markdown file-link paths, improve unsupported-file previews, and keep terminal fonts monospace with the DOM renderer.
+- Localize usage controls, remove obsolete help links and pairing RPCs, and reduce periodic daemon work.
+- Repair CI quality gates and enforce repository-wide formatting alongside shared client, directory, and workspace regressions.
+
+## 0.0.26 - 2026-10-10
+
+- Prevent terminal crashes when wide characters are clipped by resizing or written into single-row or single-column screens.
+- Accept normal startup request bursts with bounded per-group queues while keeping overload rejection and Ping responses available.
+- Omit absent OpenCode default thinking options so provider snapshots and host diagnostics pass client validation.
+
+## 0.0.25 - 2026-10-10
+
+- Use the official OpenCode ACP interface for native questions, permissions, cancellation, and restored sessions.
+- Show native account usage with pinned windows, used or remaining balances, host selection, and refresh controls.
+- Offer Codex Normal, Fast, and Ultrafast speeds from the native model catalog and clear the previous speed when selecting Normal.
+- Keep chat reading positions stable, improve search and selection copying, and preserve streamed Markdown block identities.
+- Add configurable content width and improve image sizing, file links, Vue highlighting, and Astro parsing.
+- Unify Explorer and workspace tabs and improve subagent panes, context details, and overlay interactions.
+- Fix desktop window dragging, browser automation targets, and screenshot coordinates after zooming.
+- Restore directory, tab, and subagent synchronization after reconnecting and stop retry loops after replica cache writes fail.
+- Match OpenCode terminal colors to the desktop appearance and improve terminal editing shortcuts and external links.
+- Consolidate summary contracts, isolate directory reads from execution budgets, and remove unused persistence watching.
+
+## 0.0.24 - 2026-10-09
+
+- Add OpenCode native session permissions with Allow, Ask, and Deny controls and distinct icons.
+- Improve OpenCode v1/v2 compatibility, saved model recovery, permission denial handling, and session error diagnostics.
+- Export bounded, redacted diagnostic evidence with native Harness logs as a shareable attachment.
+- Hide uninstalled providers from model selectors while preserving loading and discovery errors.
+- Retry failed draft session creation with updated settings and recognize PDFs consistently.
+- Keep Codex asynchronous question answers in order after reloading conversation history.
+- Explain Antigravity headless permission denials and native failures, and settle affected tools.
+- Preserve Chinese IME input in iOS terminals; the native fix requires a separately rebuilt iOS app.
+- Consolidate daemon persistence, shared domain values, server protocol, and filesystem capabilities.
+
 ## 0.0.23 - 2026-10-08
 
 - Bring the 0.0.23 beta improvements to the stable desktop update channel.

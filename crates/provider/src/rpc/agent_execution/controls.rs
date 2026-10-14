@@ -26,8 +26,30 @@ impl ExecutionState {
                 self.manager.diagnostic(provider).await.map_err(Into::into)
             }
             "provider.usage.list.request" => {
-                only(&params, &[])?;
-                self.manager.usage().await.map_err(Into::into)
+                only(&params, &["agentId", "providerId", "forceRefresh"])?;
+                let agent = match params.get("agentId") {
+                    None => None,
+                    Some(value) => {
+                        Some(self.resolve(value.as_str().ok_or(ErrorCode::InvalidMessage)?)?)
+                    }
+                };
+                let force = match params.get("forceRefresh") {
+                    None => false,
+                    Some(value) => value.as_bool().ok_or(ErrorCode::InvalidMessage)?,
+                };
+                let provider = match params.get("providerId") {
+                    None => None,
+                    Some(value) => Some(
+                        value
+                            .as_str()
+                            .filter(|id| !id.is_empty() && id.len() <= 256)
+                            .ok_or(ErrorCode::InvalidMessage)?,
+                    ),
+                };
+                self.manager
+                    .usage(agent.as_deref(), provider, force)
+                    .await
+                    .map_err(Into::into)
             }
             "agent.commands.list.request" => self.commands(params).await,
             "agent.rewind.request" => {
@@ -223,16 +245,15 @@ impl ExecutionState {
             .timeline()
             .ok_or(ErrorCode::UnsupportedCapability)?;
         let scope = format!("subagent:{id}:{child_id}");
-        let (_, existing) = timeline.read(&scope)?;
+        let existing = timeline.has_entries(&scope)?;
         match history {
-            Ok(history) if !self.manager.live_child(&id, &child_id) || existing.is_empty() => {
+            Ok(history) if !self.manager.live_child(&id, &child_id) || !existing => {
                 timeline.reconcile(&scope, &record.provider, &history.entries)?;
             }
             Ok(_) => {}
-            Err(_) if self.manager.live_child(&id, &child_id) || !existing.is_empty() => {}
+            Err(_) if self.manager.live_child(&id, &child_id) || existing => {}
             Err(error) => return Err(error.into()),
         }
-        let (epoch, rows) = timeline.read(&scope)?;
         let fetch = FetchRequest {
             agent_id: id.clone(),
             direction: request.direction,
@@ -240,8 +261,10 @@ impl ExecutionState {
             limit: request.limit,
             projection: Projection::Projected,
             merge_window: None,
+            allow_cached: None,
         };
-        let mut value = crate::rpc::timeline::fetch(&fetch, &epoch, &rows, &Value::Null)?;
+        let mut value =
+            crate::rpc::timeline::fetch_stored(&fetch, &timeline, &scope, &Value::Null, None)?;
         let object = value.as_object_mut().ok_or(ErrorCode::AgentIo)?;
         object.remove("agent");
         object.remove("agentId");

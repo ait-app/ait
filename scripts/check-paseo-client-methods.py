@@ -50,7 +50,8 @@ files = subprocess.check_output(
 violations = []
 for file in files:
     path = ROOT / file
-    if path.suffix not in {".ts", ".tsx", ".js", ".mjs", ".cjs"}:
+    # The index can still list a file deleted in the working tree before it is committed.
+    if path.suffix not in {".ts", ".tsx", ".js", ".mjs", ".cjs"} or not path.is_file():
         continue
     content = path.read_text()
     present = {name for name in legacy - {"ping"} if name in content}

@@ -1,35 +1,9 @@
 //! Concrete service state and crate-owned request dispatch.
 
-/// Client methods implemented by this component; consumed by capability discovery.
-pub const CHECKOUT_METHODS: &[MethodSpec] = &[
-    MethodSpec::request("checkout.status.get.request"),
-    MethodSpec::request("checkout.refresh.request"),
-    MethodSpec::request("checkout.diff.get.request"),
-    MethodSpec::request("checkout.diff.subscribe.request"),
-    MethodSpec::request("checkout.diff.unsubscribe.request"),
-    MethodSpec::request("checkout.commits.list.request"),
-    MethodSpec::request("checkout.commits.file_diff.request"),
-    MethodSpec::request("checkout.branch.validate.request"),
-    MethodSpec::request("checkout.branch.suggestions.request"),
-    MethodSpec::request("checkout.branch.switch.request"),
-    MethodSpec::request("checkout.rename_branch.request"),
-    MethodSpec::request("checkout.commit.request"),
-    MethodSpec::request("checkout.merge.request"),
-    MethodSpec::request("checkout.merge_from_base.request"),
-    MethodSpec::request("checkout.reset_workspace.request"),
-    MethodSpec::request("checkout.pull.request"),
-    MethodSpec::request("checkout.push.request"),
-    MethodSpec::request("checkout.discard_changes.request"),
-    MethodSpec::request("checkout.stash.save.request"),
-    MethodSpec::request("checkout.stash.pop.request"),
-    MethodSpec::request("checkout.stash.list.request"),
-];
-
 mod summary;
 
 use std::sync::{Arc, Mutex};
 
-use model::methods::MethodSpec;
 use model::{Context, DispatchError, ErrorCode, Runtime};
 
 mod requests;
@@ -39,25 +13,14 @@ mod requests;
 pub struct State {
     /// Optional model-backed wording service; unavailable generation uses deterministic fallbacks.
     pub summary_source: Option<Arc<dyn model::summary::SummarySource>>,
-    /// Installed skills service.
-    pub skills: Option<Arc<Mutex<crate::service::skills::Skills>>>,
     /// Shared Tokio admission, cancellation and task tracking.
     pub runtime: Arc<Runtime>,
     /// Installed checkout service.
-    pub checkout: Option<Arc<Mutex<crate::service::checkout::Checkout>>>,
+    pub checkout: Option<Arc<Mutex<crate::git::service::checkout::Checkout>>>,
     /// Installed forge service.
-    pub forge: Option<Arc<Mutex<crate::service::forge::Forge>>>,
+    pub forge: Option<Arc<Mutex<crate::forge::service::Forge>>>,
     /// Installed files service.
-    pub files: Option<Arc<Mutex<crate::service::files::Files>>>,
-    /// Installed github projects service.
-    pub github_projects: Option<Arc<Mutex<crate::service::github_projects::GithubProjects>>>,
-    /// Installed worktrees service.
-    pub worktrees: Option<Arc<Mutex<crate::service::worktrees::Worktrees>>>,
-    /// Installed workspace recovery service.
-    pub workspace_recovery:
-        Option<Arc<Mutex<crate::service::workspace_recovery::WorkspaceRecovery>>>,
-    /// Host-supplied setup trigger sharing the owning service and synchronization.
-    pub workspace_setup: Option<Arc<dyn model::workspace::lifecycle::WorkspaceSetup>>,
+    pub files: Option<Arc<Mutex<crate::files::service::files::Files>>>,
 }
 
 impl std::ops::Deref for State {
@@ -92,13 +55,6 @@ pub async fn dispatch(
     if context.is_none() {
         return Ok(());
     }
-    match requests::skills(context, state).await {
-        Ok(()) => return Ok(()),
-        Err(DispatchError::NotImplemented) => {
-            Context::assert_unhandled(context, "filesystem::skills");
-        }
-        Err(error) => return Err(error),
-    }
     match checkout(context, state, connection).await {
         Ok(()) => return Ok(()),
         Err(DispatchError::NotImplemented) => {
@@ -120,71 +76,7 @@ pub async fn dispatch(
         }
         Err(error) => return Err(error),
     }
-    match requests::github_projects(context, state).await {
-        Ok(()) => return Ok(()),
-        Err(DispatchError::NotImplemented) => {
-            Context::assert_unhandled(context, "filesystem::github_projects");
-        }
-        Err(error) => return Err(error),
-    }
-    match worktrees(context, state).await {
-        Ok(()) => return Ok(()),
-        Err(DispatchError::NotImplemented) => {
-            Context::assert_unhandled(context, "filesystem::worktrees");
-        }
-        Err(error) => return Err(error),
-    }
-    match requests::recovery(context, state).await {
-        Ok(()) => return Ok(()),
-        Err(DispatchError::NotImplemented) => {
-            Context::assert_unhandled(context, "filesystem::recovery");
-        }
-        Err(error) => return Err(error),
-    }
     Err(DispatchError::NotImplemented)
-}
-
-async fn worktrees(pending: &mut Option<Context<'_>>, state: &State) -> Result<(), DispatchError> {
-    let Some(mut context) = pending.take_if(|context| {
-        matches!(
-            context.request.method.as_str(),
-            "workspace.worktree.list.request"
-                | "workspace.worktree.create.request"
-                | "workspace.worktree.archive.request"
-        )
-    }) else {
-        return Err(DispatchError::NotImplemented);
-    };
-
-    let result = context
-        .call(
-            state.worktrees.clone(),
-            ErrorCode::RegistryIo,
-            crate::rpc::worktrees::execute,
-        )
-        .await;
-    if let Ok(reply) = &result
-        && let Some(workspace_id) = reply.created_workspace_id.clone()
-    {
-        let _ = state
-            .run_shared(
-                state.workspace_setup.clone(),
-                ErrorCode::RegistryIo,
-                move |automation| {
-                    automation
-                        .start_created_setup(&workspace_id)
-                        .map(|_| ())
-                        .map_err(|_| ErrorCode::RegistryIo)
-                },
-            )
-            .await;
-    }
-    match result {
-        Ok(reply) => context
-            .workspace(reply.value, reply.event)
-            .map_err(Into::into),
-        Err(error) => context.respond(Err(error)).map_err(Into::into),
-    }
 }
 
 async fn checkout(
@@ -227,9 +119,9 @@ async fn checkout(
     }
 
     if context.request.method == "checkout.diff.unsubscribe.request" {
-        let request = serde_json::from_value::<
-            crate::protocol::checkout::CheckoutDiffUnsubscribeRequest,
-        >(std::mem::take(&mut context.request.params));
+        let request = serde_json::from_value::<crate::git::protocol::CheckoutDiffUnsubscribeRequest>(
+            std::mem::take(&mut context.request.params),
+        );
         let request = match request {
             Ok(request) if valid_id(&request.subscription_id) => request,
             _ => {
@@ -261,7 +153,7 @@ async fn checkout(
         }
     }
     let params = std::mem::take(&mut context.request.params);
-    let reply = crate::connection::checkout::dispatch(
+    let reply = crate::git::connection::dispatch(
         &context.request.method,
         params,
         state,
@@ -270,7 +162,13 @@ async fn checkout(
     .await;
     match reply {
         Ok(reply) => {
-            context.respond(Ok(reply.value))?;
+            context
+                .outbound
+                .send_waiting(&model::ServerMessage::Response {
+                    request_id: context.request.id,
+                    result: reply.value,
+                })
+                .await?;
             if let Some(pending) = reply.subscription {
                 let (id, subscription) = pending.activate();
                 connection.diffs.insert(id, subscription);

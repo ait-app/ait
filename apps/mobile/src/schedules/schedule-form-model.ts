@@ -4,7 +4,7 @@ import type {
   AgentProvider,
   ProviderSnapshotEntry,
 } from "@ait/protocol/agent-types";
-import type { ScheduleCadence, ScheduleSummary } from "@ait/protocol/schedule/types";
+import type { ScheduleSummary } from "@ait/protocol/schedule/types";
 import type { FormPreferences } from "@/create-agent-preferences/preferences";
 import { formatThinkingOptionLabel } from "@/agent-controls/labels";
 import {
@@ -26,7 +26,8 @@ import {
 } from "@/provider-selection/resolve-agent-form";
 import { buildProviderDefinitions } from "@/utils/provider-definitions";
 import { shortenPath } from "@/utils/shorten-path";
-import { normalizeScheduleFormCadence } from "./schedule-cadence-options";
+import { formatLocalDateTime, isValidMaxRuns, parseLocalDateTime } from "./schedule-date-time";
+import { normalizeScheduleFormCadence, type ScheduleFormCadence } from "./schedule-cadence-options";
 import { PROJECT_OPTION_PREFIX, type ScheduleProjectTarget } from "./schedule-project-targets";
 
 export interface ScheduleFormDisplay {
@@ -40,6 +41,17 @@ export interface ScheduleFormHost {
   supportsWorkspaceMultiplicity?: boolean;
 }
 
+export interface ScheduleFormAgent {
+  id: string;
+  title: string;
+}
+
+export interface ScheduleFormWorkspace {
+  id: string;
+  name: string;
+  cwd: string;
+}
+
 export interface ScheduleFormSnapshot {
   mode: "create" | "edit";
   schedule?: ScheduleSummary & { serverId?: string; serverName?: string };
@@ -49,6 +61,8 @@ export interface ScheduleFormSnapshot {
     projectTargets: readonly ScheduleProjectTarget[];
     preferences?: FormPreferences;
     timezone?: string;
+    workspace?: ScheduleFormWorkspace;
+    agents?: readonly ScheduleFormAgent[];
   };
 }
 
@@ -78,17 +92,21 @@ export interface ScheduleFormProjectOption {
 }
 
 export type ScheduleFormTargetKind = "agent" | "new-agent";
-type CronCadence = Extract<ScheduleCadence, { type: "cron" }>;
 type ProviderResolutionStatus = "idle" | "pending" | "complete";
 
 export interface ScheduleFormState {
   mode: "create" | "edit";
+  workspace: ScheduleFormWorkspace | null;
   targetKind: ScheduleFormTargetKind;
+  selectedAgentId: string;
+  agentOptions: readonly ScheduleFormAgent[];
+  startAt: string;
+  expiresAt: string;
   name: string;
   prompt: string;
   maxRuns: string;
-  cadence: ScheduleCadence;
-  submitCadence: CronCadence | undefined;
+  cadence: ScheduleFormCadence;
+  submitCadence: ScheduleFormCadence | undefined;
   hosts: ScheduleFormHost[];
   projectOptions: ScheduleFormProjectOption[];
   selectedServerId: string | null;
@@ -123,6 +141,11 @@ export interface ScheduleFormModel {
   subscribe: (listener: () => void) => () => void;
   close: () => void;
   applyHosts: (hosts: readonly ScheduleFormHost[]) => void;
+  applyAgents: (agents: readonly ScheduleFormAgent[]) => void;
+  setTargetKind: (kind: ScheduleFormTargetKind) => void;
+  setAgent: (id: string) => void;
+  setStartAt: (value: string) => void;
+  setExpiresAt: (value: string) => void;
   applyProjectTargets: (targets: readonly ScheduleProjectTarget[]) => void;
   applyPreferences: (preferences: FormPreferences | undefined) => void;
   applyProviderSnapshot: (serverId: string, snapshot: ScheduleFormProviderSnapshot) => void;
@@ -134,13 +157,13 @@ export interface ScheduleFormModel {
   setName: (value: string) => void;
   setPrompt: (value: string) => void;
   setMaxRuns: (value: string) => void;
-  setCadence: (value: ScheduleCadence) => void;
+  setCadence: (value: ScheduleFormCadence) => void;
   setIsolation: (value: "local" | "worktree") => void;
   setArchiveOnFinish: (value: boolean) => void;
   setSubmitError: (value: string | null) => void;
 }
 
-const DEFAULT_CADENCE: ScheduleCadence = { type: "every", everyMs: 60 * 60 * 1000 };
+const DEFAULT_CADENCE: ScheduleFormCadence = { type: "every", everyMs: 60 * 60 * 1000 };
 const DEFAULT_TIMEZONE = "UTC";
 
 type ThinkingOption = NonNullable<AgentModelDefinition["thinkingOptions"]>[number];
@@ -402,7 +425,7 @@ function buildInitialProjectDisplay(input: {
   return resolveProjectDisplay({
     targets: input.targets,
     serverId: input.selectedServerId,
-    cwd: input.config.cwd,
+    cwd: input.config.cwd ?? "",
   });
 }
 
@@ -428,7 +451,8 @@ function buildInitialThinkingDisplay(thinkingOptionId: string): ScheduleFormDisp
 }
 
 function formatInitialMaxRuns(schedule: ScheduleFormSnapshot["schedule"]): string {
-  if (schedule?.maxRuns == null) {
+  if (!schedule || schedule.cadence.type === "once") return "1";
+  if (schedule.maxRuns == null) {
     return "";
   }
   return String(schedule.maxRuns);
@@ -436,8 +460,8 @@ function formatInitialMaxRuns(schedule: ScheduleFormSnapshot["schedule"]): strin
 
 function resolveInitialSubmitCadence(
   schedule: ScheduleFormSnapshot["schedule"],
-  initialCadence: CronCadence,
-): CronCadence | undefined {
+  initialCadence: ScheduleFormCadence,
+): ScheduleFormCadence | undefined {
   return schedule ? undefined : initialCadence;
 }
 
@@ -524,7 +548,8 @@ function resolveDisclosure(state: ScheduleFormState): ScheduleDisclosureState {
   const hasProject = state.workingDir.trim().length > 0;
   const hasSelectedProvider = Boolean(state.selectedProvider);
   const hasSelectedModel = Boolean(state.selectedProvider && state.selectedModel.trim());
-  const showProjectField = state.mode === "edit" || Boolean(state.selectedServerId);
+  const showProjectField =
+    !state.workspace && (state.mode === "edit" || Boolean(state.selectedServerId));
   const showModelField = hasProject;
   return {
     showProjectField,
@@ -532,31 +557,42 @@ function resolveDisclosure(state: ScheduleFormState): ScheduleDisclosureState {
     showThinkingField:
       showModelField && hasSelectedModel && state.availableThinkingOptions.length > 0,
     showModeField: showModelField && hasSelectedProvider && state.modeOptions.length > 0,
-    showIsolationField: hasProject && state.canUseWorktreeIsolation,
+    showIsolationField: !state.workspace && hasProject && state.canUseWorktreeIsolation,
     showArchiveOnFinishField:
       hasProject &&
-      selectedHostSupportsWorkspaceMultiplicity({
-        hosts: state.hosts,
-        selectedServerId: state.selectedServerId,
-      }),
+      (Boolean(state.workspace) ||
+        selectedHostSupportsWorkspaceMultiplicity({
+          hosts: state.hosts,
+          selectedServerId: state.selectedServerId,
+        })),
   };
 }
 
 function resolveCanSubmit(state: ScheduleFormState): boolean {
+  if (!state.prompt.trim() || !isValidMaxRuns(state.maxRuns)) return false;
+  if (
+    state.cadence.type === "every" &&
+    (!Number.isSafeInteger(state.cadence.everyMs) || state.cadence.everyMs <= 0)
+  )
+    return false;
+  for (const input of [state.startAt, state.expiresAt]) {
+    if (input.trim() && !parseLocalDateTime(input)) return false;
+  }
+  if (
+    state.startAt.trim() &&
+    state.expiresAt.trim() &&
+    Date.parse(parseLocalDateTime(state.expiresAt)!) <=
+      Date.parse(parseLocalDateTime(state.startAt)!)
+  )
+    return false;
   if (state.targetKind === "agent") {
-    return state.submitCadence !== undefined;
+    return state.agentOptions.some((agent) => agent.id === state.selectedAgentId);
   }
-  if (state.prompt.trim().length === 0) {
+  if (
+    !state.workingDir.trim() ||
+    (state.mode === "create" && !state.workspace && !state.selectedProjectOptionId.trim())
+  )
     return false;
-  }
-  const hasWorkingDir = state.workingDir.trim().length > 0;
-  const hasMatchedProject = state.selectedProjectOptionId.trim().length > 0;
-  if (state.mode === "create" && !hasMatchedProject) {
-    return false;
-  }
-  if (!hasWorkingDir) {
-    return false;
-  }
   return isSelectedModelValidForProviders({
     providers: state.modelSelectorProviders,
     selectedProvider: state.selectedProvider,
@@ -576,21 +612,27 @@ function updateDerivedState(input: {
     input.state.selectedProvider,
     input.state.selectedModel,
   );
-  const canUseWorktreeIsolation = resolveCanUseWorktreeIsolation({
-    state: input.state,
-    hosts: input.hosts,
-    targets: input.targets,
-  });
-  const canSubmitWorkspaceLifecycleOptions = selectedHostSupportsWorkspaceMultiplicity({
-    hosts: input.hosts,
-    selectedServerId: input.state.selectedServerId,
-  });
-  const effectiveIsolation = resolveEffectiveIsolation({
-    isolation: input.state.isolation,
-    canUseWorktreeIsolation,
-    selectedServerId: input.state.selectedServerId,
-    providerResolutionByServerId: input.state.providerResolutionByServerId,
-  });
+  const canUseWorktreeIsolation =
+    !input.state.workspace &&
+    resolveCanUseWorktreeIsolation({
+      state: input.state,
+      hosts: input.hosts,
+      targets: input.targets,
+    });
+  const canSubmitWorkspaceLifecycleOptions =
+    Boolean(input.state.workspace) ||
+    selectedHostSupportsWorkspaceMultiplicity({
+      hosts: input.hosts,
+      selectedServerId: input.state.selectedServerId,
+    });
+  const effectiveIsolation = input.state.workspace
+    ? "local"
+    : resolveEffectiveIsolation({
+        isolation: input.state.isolation,
+        canUseWorktreeIsolation,
+        selectedServerId: input.state.selectedServerId,
+        providerResolutionByServerId: input.state.providerResolutionByServerId,
+      });
   const projectTarget = resolveProjectTarget({
     targets: input.targets,
     serverId: input.state.selectedServerId,
@@ -623,7 +665,8 @@ function updateDerivedState(input: {
     submitArchiveOnFinish: canSubmitWorkspaceLifecycleOptions
       ? input.state.archiveOnFinish
       : undefined,
-    submitIsolation: canSubmitWorkspaceLifecycleOptions ? effectiveIsolation : undefined,
+    submitIsolation:
+      !input.state.workspace && canSubmitWorkspaceLifecycleOptions ? effectiveIsolation : undefined,
   };
   const disclosure = resolveDisclosure(nextState);
   return { ...nextState, disclosure, canSubmit: resolveCanSubmit({ ...nextState, disclosure }) };
@@ -633,7 +676,8 @@ function buildInitialState(snapshot: ScheduleFormSnapshot): ScheduleFormState {
   const selectedServerId = resolveInitialServerId(snapshot);
   const config = newAgentConfig(snapshot.schedule);
   const targetKind = resolveTargetKind(snapshot);
-  const workingDir = config?.cwd ?? "";
+  const workspace = snapshot.defaults.workspace ?? null;
+  const workingDir = workspace?.cwd ?? config?.cwd ?? "";
   const selectedProjectTarget = resolveProjectTarget({
     targets: snapshot.defaults.projectTargets,
     serverId: selectedServerId,
@@ -653,7 +697,17 @@ function buildInitialState(snapshot: ScheduleFormSnapshot): ScheduleFormState {
   const initialThinking = config?.thinkingOptionId ?? "";
   const state: ScheduleFormState = {
     mode: snapshot.mode,
+    workspace,
     targetKind,
+    selectedAgentId:
+      snapshot.schedule?.target.type === "agent" ? snapshot.schedule.target.agentId : "",
+    agentOptions: snapshot.defaults.agents ?? [],
+    startAt: formatLocalDateTime(
+      snapshot.schedule?.cadence.type === "once"
+        ? snapshot.schedule.cadence.at
+        : snapshot.schedule?.startAt,
+    ),
+    expiresAt: formatLocalDateTime(snapshot.schedule?.expiresAt),
     name: snapshot.schedule?.name ?? "",
     prompt: snapshot.schedule?.prompt ?? "",
     maxRuns: formatInitialMaxRuns(snapshot.schedule),
@@ -951,6 +1005,32 @@ export function openScheduleForm(snapshot: ScheduleFormSnapshot): ScheduleFormMo
       closed = true;
       listeners.clear();
     },
+    applyAgents(agents) {
+      if (closed || state.agentOptions === agents) return;
+      publish({ ...state, agentOptions: agents });
+    },
+    setTargetKind(targetKind) {
+      if (closed || state.targetKind === targetKind) return;
+      publish({ ...state, targetKind, submitError: null });
+      if (targetKind === "new-agent" && providerEntries.length === 0)
+        requestProviderSnapshot(state.selectedServerId, state.workingDir);
+    },
+    setAgent(selectedAgentId) {
+      publish({ ...state, targetKind: "agent", selectedAgentId, submitError: null });
+    },
+    setStartAt(startAt) {
+      publish({
+        ...state,
+        startAt,
+        ...(snapshot.schedule?.cadence.type === "once" &&
+        startAt !== formatLocalDateTime(snapshot.schedule.cadence.at)
+          ? { submitCadence: state.cadence }
+          : {}),
+      });
+    },
+    setExpiresAt(expiresAt) {
+      publish({ ...state, expiresAt });
+    },
     applyHosts(nextHosts) {
       if (closed || hosts === nextHosts) {
         return;
@@ -1006,7 +1086,7 @@ export function openScheduleForm(snapshot: ScheduleFormSnapshot): ScheduleFormMo
       });
     },
     setHost(serverId) {
-      if (closed || state.selectedServerId === serverId) {
+      if (closed || state.workspace || state.selectedServerId === serverId) {
         return;
       }
       publish(
@@ -1021,7 +1101,7 @@ export function openScheduleForm(snapshot: ScheduleFormSnapshot): ScheduleFormMo
       );
     },
     setProject(optionId, display) {
-      if (closed) {
+      if (closed || state.workspace) {
         return;
       }
       const target = findProjectTargetByOptionId(projectTargets, optionId);
@@ -1108,11 +1188,21 @@ export function openScheduleForm(snapshot: ScheduleFormSnapshot): ScheduleFormMo
       publish({ ...state, prompt: value });
     },
     setMaxRuns(value) {
-      publish({ ...state, maxRuns: value });
+      publish({
+        ...state,
+        maxRuns: value,
+        ...(snapshot.schedule?.cadence.type === "once" && value.trim() !== "1"
+          ? { submitCadence: state.cadence }
+          : {}),
+      });
     },
     setCadence(value) {
       const cadence = normalizeScheduleFormCadence(value, timezone);
-      publish({ ...state, cadence, submitCadence: cadence });
+      publish({
+        ...state,
+        cadence,
+        submitCadence: cadence,
+      });
     },
     setIsolation(value) {
       userModified = { ...userModified, isolation: true };

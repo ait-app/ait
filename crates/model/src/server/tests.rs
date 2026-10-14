@@ -28,3 +28,5 @@ fn server_info_accepts_older_servers_without_a_software_version() {
             .is_none()
     );
 }
+
+mod negotiation;

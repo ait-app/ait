@@ -14,14 +14,14 @@ use crate::{
 use super::Completion;
 
 pub(super) struct DictationJob {
-    pub id: String,
-    pub generation: String,
-    pub final_result: bool,
-    pub audio: Audio,
-    pub stt: Arc<dyn Transcriber>,
-    pub cancel: CancellationToken,
-    pub sender: mpsc::Sender<Completion>,
-    pub permit: OwnedSemaphorePermit,
+    pub(crate) id: String,
+    pub(crate) generation: String,
+    pub(crate) final_result: bool,
+    pub(crate) audio: Audio,
+    pub(crate) stt: Arc<dyn Transcriber>,
+    pub(crate) cancel: CancellationToken,
+    pub(crate) sender: mpsc::Sender<Completion>,
+    pub(crate) permit: OwnedSemaphorePermit,
 }
 
 pub(super) fn dictation(runtime: &Arc<Runtime>, job: DictationJob) {
@@ -49,13 +49,13 @@ pub(super) fn dictation(runtime: &Arc<Runtime>, job: DictationJob) {
 }
 
 pub(super) struct VoiceJob {
-    pub generation: String,
-    pub audio: Audio,
-    pub target: Option<Arc<Target>>,
-    pub service: Speech,
-    pub cancel: CancellationToken,
-    pub sender: mpsc::Sender<Completion>,
-    pub permit: OwnedSemaphorePermit,
+    pub(crate) generation: String,
+    pub(crate) audio: Audio,
+    pub(crate) target: Option<Arc<Target>>,
+    pub(crate) service: Speech,
+    pub(crate) cancel: CancellationToken,
+    pub(crate) sender: mpsc::Sender<Completion>,
+    pub(crate) permit: OwnedSemaphorePermit,
 }
 
 pub(super) fn voice(runtime: &Arc<Runtime>, mut job: VoiceJob) {

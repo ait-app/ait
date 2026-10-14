@@ -142,8 +142,10 @@ export async function buildClientConfig(
     };
   }
 
-  if (connection.type === "accountRelay")
-    return { ...base, ...buildAccountRelayClientConfig(connection) };
+  if (connection.type === "accountRelay") {
+    const relay = buildAccountRelayClientConfig(connection);
+    return { ...base, ...relay, reconnect: { ...relay.reconnect, ...base.reconnect } };
+  }
   if (connection.type === "directTcp") {
     return {
       ...base,

@@ -4,7 +4,7 @@ use std::{
     sync::atomic::{AtomicUsize, Ordering},
 };
 
-use model::schedule::Schedule;
+use domain::schedule::Schedule;
 
 use super::*;
 use crate::engine::tests::{Memory, input};
@@ -16,6 +16,13 @@ struct Fake {
     panic: bool,
 }
 impl Runner for Fake {
+    fn resolve(
+        &self,
+        _: String,
+        target: domain::schedule::Target,
+    ) -> Pin<Box<dyn Future<Output = Result<domain::schedule::Target, Error>> + Send + '_>> {
+        Box::pin(async move { Ok(target) })
+    }
     fn run(
         &self,
         _: Schedule,
@@ -123,7 +130,7 @@ async fn manual_run_does_not_hold_lane_and_shutdown_cancels_it() {
     assert!(run.await.unwrap().is_ok());
     assert_eq!(
         store.0.lock().unwrap().0[0].runs[0].status,
-        model::schedule::RunStatus::Failed
+        domain::schedule::RunStatus::Failed
     );
 }
 #[tokio::test]
@@ -154,3 +161,5 @@ async fn panic_is_recorded_as_failed_instead_of_losing_running_state() {
 mod concurrency;
 mod controlled;
 mod durability;
+
+mod validation;

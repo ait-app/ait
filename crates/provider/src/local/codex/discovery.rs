@@ -14,42 +14,9 @@ impl CodexClient {
         let result = async {
             transport.initialize().await?;
             self.inspect_workflows(&mut transport).await?;
-            let mut models = BTreeMap::new();
-            let mut cursor: Option<String> = None;
-            let mut seen = BTreeSet::new();
-            loop {
-                let page = transport
-                    .request(
-                        "model/list",
-                        json!({"cursor":cursor,"limit":100,"includeHidden":false}),
-                    )
-                    .await?;
-                let entries = page["data"].as_array().ok_or(AgentSessionError::Failed)?;
-                for entry in entries {
-                    let model = model(entry)?;
-                    let id = model["id"]
-                        .as_str()
-                        .ok_or(AgentSessionError::Failed)?
-                        .to_owned();
-                    models.insert(id, model);
-                }
-                if models.len() > 4096 || seen.len() > 64 {
-                    return Err(AgentSessionError::Failed);
-                }
-                cursor = match &page["nextCursor"] {
-                    Value::Null => None,
-                    Value::String(cursor) if !cursor.is_empty() => Some(cursor.clone()),
-                    _ => return Err(AgentSessionError::Failed),
-                };
-                let Some(cursor) = &cursor else {
-                    break;
-                };
-                if !seen.insert(cursor.clone()) {
-                    return Err(AgentSessionError::Failed);
-                }
-            }
+            let models = self.inspect_models(&mut transport).await?;
             Ok(Details {
-                models: models.into_values().collect(),
+                models,
                 modes: self.modes(),
                 features: self.features(&domain::agent_runtime::StoredAgentConfig::default()),
             })
@@ -58,6 +25,73 @@ impl CodexClient {
         let closed = transport.close().await;
         closed?;
         result
+    }
+
+    /// Populate missing speed facts using the session's initialized native transport.
+    /// # Errors
+    /// Returns a native discovery failure or unavailable catalog cache.
+    pub(super) async fn ensure_models(
+        &self,
+        transport: &mut super::Transport,
+    ) -> Result<(), AgentSessionError> {
+        let catalog_empty = self
+            .speed_catalog
+            .read()
+            .map_err(|_| AgentSessionError::Failed)?
+            .is_empty();
+        if catalog_empty {
+            self.inspect_models(transport).await?;
+        }
+        Ok(())
+    }
+
+    /// Read bounded model pages from an initialized native transport and cache speed facts.
+    /// # Errors
+    /// Returns a native protocol failure, cyclic/oversized catalog or unavailable cache.
+    pub(super) async fn inspect_models(
+        &self,
+        transport: &mut super::Transport,
+    ) -> Result<Vec<Value>, AgentSessionError> {
+        let mut models = BTreeMap::new();
+        let mut cursor: Option<String> = None;
+        let mut seen = BTreeSet::new();
+        loop {
+            let page = transport
+                .request(
+                    "model/list",
+                    json!({"cursor":cursor,"limit":100,"includeHidden":false}),
+                )
+                .await?;
+            let entries = page["data"].as_array().ok_or(AgentSessionError::Failed)?;
+            for entry in entries {
+                let model = model(entry)?;
+                let id = model["id"]
+                    .as_str()
+                    .ok_or(AgentSessionError::Failed)?
+                    .to_owned();
+                models.insert(id, model);
+            }
+            if models.len() > 4096 || seen.len() > 64 {
+                return Err(AgentSessionError::Failed);
+            }
+            cursor = match &page["nextCursor"] {
+                Value::Null => None,
+                Value::String(cursor) if !cursor.is_empty() => Some(cursor.clone()),
+                _ => return Err(AgentSessionError::Failed),
+            };
+            let Some(cursor) = &cursor else {
+                break;
+            };
+            if !seen.insert(cursor.clone()) {
+                return Err(AgentSessionError::Failed);
+            }
+        }
+        let models: Vec<_> = models.into_values().collect();
+        self.speed_catalog
+            .write()
+            .map_err(|_| AgentSessionError::Failed)?
+            .clone_from(&models);
+        Ok(models)
     }
 
     pub(super) async fn read_history(
@@ -98,14 +132,13 @@ fn model(native: &Value) -> Result<Value, AgentSessionError> {
     let mut value = json!({"provider":"codex","id":id,"label":label,
         "isSelectable":native["hidden"].as_bool()!=Some(true),
         "isDefault":native["isDefault"].as_bool().unwrap_or(false),"thinkingOptions":options});
+    let speeds = super::speed::options(native);
     value["supportsFastMode"] = json!(
-        native["serviceTiers"]
-            .as_array()
-            .is_some_and(|tiers| tiers.iter().any(|tier| tier["id"] == "fast"))
-            || native["additionalSpeedTiers"]
-                .as_array()
-                .is_some_and(|tiers| tiers.iter().any(|tier| tier == "fast"))
+        speeds
+            .iter()
+            .any(|tier| matches!(tier["id"].as_str(), Some("fast" | "priority")))
     );
+    value["speedOptions"] = json!(speeds);
     if let Some(description) = native["description"].as_str() {
         value["description"] = json!(description);
     }

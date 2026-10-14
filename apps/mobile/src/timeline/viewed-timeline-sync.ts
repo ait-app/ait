@@ -257,9 +257,6 @@ function finalizeProcessedTimeline(input: {
     clearAgentInitializingFlag(input.serverId, input.agentId);
   }
   if (input.synchronized) {
-    useCreateFlowStore
-      .getState()
-      .clearByAgent({ serverId: input.serverId, agentId: input.agentId });
     const session = useSessionStore.getState().sessions[input.serverId];
     const agent = session?.agents.get(input.agentId) ?? session?.agentDetails.get(input.agentId);
     if (agent && agent.turn.phase === "idle") input.drainQueuedAgentMessage(input.agentId);
@@ -327,6 +324,11 @@ export interface ViewedTimelineSyncPorts {
     request: ProjectedTimelineForwardFetchPlan,
   ): Promise<TimelinePageResult>;
   fetchLatestTail(agentId: string): Promise<TimelinePageResult>;
+  /**
+   * The sync no longer owes this chat a catch-up: it reached current, or it left the
+   * demanded set. Disconnect and backgrounding keep the obligation and do not report here.
+   */
+  onCatchUpEnded(agentId: string): void;
   reportError(error: unknown): void;
   schedule(task: () => void, delayMs: number): () => void;
 }
@@ -356,7 +358,7 @@ export interface ViewedTimelineSync extends ViewedTimelineUiBridge {
 
 export type ViewedTimelineOwnerPorts = Omit<
   ViewedTimelineSyncPorts,
-  "prepare" | "replaceDemandedAgentIds"
+  "prepare" | "replaceDemandedAgentIds" | "onCatchUpEnded"
 >;
 
 export interface ViewedTimelineOwner extends ViewedTimelineSync {
@@ -386,6 +388,8 @@ export function createViewedTimelineOwner(input: {
     prepare: (agentId) => input.replica.prepare(agentId),
     readCursor: (agentId) => input.replica.readCursor(agentId) ?? input.ports.readCursor(agentId),
     replaceDemandedAgentIds: input.replaceDemandedAgentIds,
+    onCatchUpEnded: (agentId) =>
+      useCreateFlowStore.getState().clearByAgent({ serverId: input.serverId, agentId }),
   });
   const streamQueue = createSessionAgentStreamReducerQueue({
     serverId: input.serverId,
@@ -502,7 +506,9 @@ export function createViewedTimelineSync(ports: ViewedTimelineSyncPorts): Viewed
   let observation: {
     handle: ReturnType<ViewedTimelineSyncPorts["observe"]>;
     agentIds: string[];
+    ready: boolean;
   } | null = null;
+  let membershipRelease: Promise<void> | null = null;
   let disposed = false;
   let desired: string[] = [];
   let acknowledged: string[] = [];
@@ -540,6 +546,7 @@ export function createViewedTimelineSync(ports: ViewedTimelineSyncPorts): Viewed
     const wasPending = visibilityCatchUpPending.delete(agentId);
     const hadError = visibilityCatchUpErrors.delete(agentId);
     const wasRetrying = manualRetries.delete(agentId);
+    ports.onCatchUpEnded(agentId);
     if (wasPending || hadError || wasRetrying) notifyListeners();
   };
 
@@ -725,15 +732,41 @@ export function createViewedTimelineSync(ports: ViewedTimelineSyncPorts): Viewed
     if (disposed || !connected) return;
     const generation = membershipGeneration;
     const requested = desired;
-    if (!membershipNeedsRetry && sameAgentIds(requested, observation?.agentIds ?? acknowledged))
+    if (
+      !membershipNeedsRetry &&
+      !membershipRelease &&
+      sameAgentIds(requested, observation?.agentIds ?? acknowledged)
+    )
       return;
     membershipNeedsRetry = false;
     try {
       const previous = observation;
+      observation = null;
+      if (previous) {
+        const release = previous.handle.release();
+        if (previous.ready) {
+          // Replace an established lease without temporarily consuming another host slot.
+          membershipRelease = release;
+        } else {
+          // A pending bootstrap may be hydrating a different chat. Its late ID is released
+          // independently so it cannot prevent the newly visible chat from subscribing.
+          void release.catch(ports.reportError);
+        }
+      }
+      const release = membershipRelease;
+      if (release) {
+        try {
+          await release;
+        } finally {
+          if (membershipRelease === release) membershipRelease = null;
+        }
+      }
+      if (disposed || !connected || generation !== membershipGeneration) return;
       const handle = ports.observe(requested);
-      observation = { handle, agentIds: requested };
-      void previous?.handle.release().catch(ports.reportError);
+      const current = { handle, agentIds: requested, ready: false };
+      observation = current;
       await handle.ready;
+      current.ready = true;
     } catch (error) {
       if (disposed || !connected || generation !== membershipGeneration) return;
       membershipNeedsRetry = true;
@@ -795,12 +828,14 @@ export function createViewedTimelineSync(ports: ViewedTimelineSyncPorts): Viewed
       return;
     }
 
+    const released: string[] = [];
     for (const agentId of desired) {
       if (!nextDesired.includes(agentId)) {
         cancelCatchUp(agentId);
         visibilityCatchUpPending.delete(agentId);
         visibilityCatchUpErrors.delete(agentId);
         manualRetries.delete(agentId);
+        released.push(agentId);
       }
     }
     for (const agentId of nextDesired) {
@@ -816,6 +851,7 @@ export function createViewedTimelineSync(ports: ViewedTimelineSyncPorts): Viewed
     desired = nextDesired;
     ports.replaceDemandedAgentIds(desired);
     membershipGeneration += 1;
+    for (const agentId of released) ports.onCatchUpEnded(agentId);
     notifyListeners();
     void reconcileMembership();
   };

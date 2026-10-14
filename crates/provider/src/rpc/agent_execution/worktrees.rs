@@ -1,4 +1,4 @@
-use model::workspace::worktrees::{DirectoryGit, WorktreeAction, WorktreeCreation};
+use domain::workspace::worktrees::{DirectoryGit, WorktreeAction, WorktreeCreation};
 
 use crate::protocol::creation::{GitAction, GitOptions, WorktreeTarget};
 
@@ -44,7 +44,7 @@ pub(super) fn intent(request: &CreateRequest) -> Result<Option<WorktreeCreation>
                 return Err(ErrorCode::InvalidMessage);
             }
             input.action = WorktreeAction::Checkout;
-            input.checkout_source = Some(model::workspace::worktrees::WorktreeChangeRequest {
+            input.checkout_source = Some(domain::workspace::worktrees::WorktreeChangeRequest {
                 forge: Some("github".into()),
                 number: *pr_number,
                 project_path: None,
@@ -106,10 +106,10 @@ fn legacy(input: &mut WorktreeCreation, git: &GitOptions) -> Result<bool, ErrorC
     input.checkout_source = git
         .checkout_source
         .clone()
-        .map(model::workspace::protocol::worktree_source::ChangeRequestCheckoutSource::into_intent)
+        .map(domain::workspace::protocol::worktree_source::ChangeRequestCheckoutSource::into_intent)
         .or_else(|| {
             git.github_pr_number.map(
-                |number| model::workspace::worktrees::WorktreeChangeRequest {
+                |number| domain::workspace::worktrees::WorktreeChangeRequest {
                     forge: Some("github".into()),
                     number,
                     project_path: None,

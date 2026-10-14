@@ -7,6 +7,11 @@ fn usage_preserves_buckets_reports_missing_windows_and_rejects_malformed_metrics
     assert_eq!(result["windows"][0]["tone"], "danger");
     assert_eq!(result["windows"][1]["tone"], "warning");
     assert_eq!(result["planLabel"], "plus");
+    assert!(result["windows"][0].get("shortLabel").is_none());
+    assert_eq!(
+        usage(&json!({"rateLimits":{"primary":{"usedPercent":25,"windowDurationMins":300},"secondary":{"usedPercent":30,"windowDurationMins":10080}}})).unwrap()["windows"][0]["shortLabel"],
+        "5h"
+    );
     assert_eq!(
         usage(&json!({"rateLimits":{}})).unwrap()["status"],
         "unavailable"

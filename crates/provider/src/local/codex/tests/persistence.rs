@@ -2,6 +2,63 @@ use super::*;
 use std::collections::BTreeMap;
 
 #[tokio::test]
+async fn history_and_inspection_restore_answers_inside_the_original_turn() {
+    let fixture = Fixture::new();
+    let client = fixture.client();
+    let question = json!({"type":"agentMessage","id":"question","delivery":"async",
+        "questions":[{"title":"Which runtime?"}]});
+    let anchor = json!({"type":"agentMessage","id":"working","text":"Still working"});
+    let original = json!([
+        {"id":"t1","status":"completed","items":[question,anchor,
+            {"id":"done","type":"agentMessage","text":"All done"}]},
+        {"id":"t2","status":"completed","items":[
+            {"id":"later","type":"userMessage","content":[{"type":"text","text":"Next task"}]}]}
+    ]);
+    std::fs::write(
+        fixture.cwd.join("native-history-source.json"),
+        original.to_string(),
+    )
+    .unwrap();
+    let mut questions = async_questions::Questions::default();
+    questions.receive(&question).unwrap();
+    questions.observe(
+        &discovery::timeline_item(&anchor, "t1", "2026-01-01T00:00:00Z")
+            .unwrap()
+            .unwrap(),
+    );
+    let answer = questions
+        .resolve(
+            "permission-question",
+            &json!({"behavior":"allow","updatedInput":{"answers":{"Question 1":"Rust"}}}),
+        )
+        .unwrap();
+    let handle = AgentPersistenceHandle {
+        provider: "codex".into(),
+        session_id: "source".into(),
+        native_handle: None,
+        metadata: Some(BTreeMap::from([(
+            "asyncQuestions".into(),
+            questions.saved().unwrap(),
+        )])),
+    };
+
+    let history = client.history(&handle, &fixture.spec().cwd).await.unwrap();
+    let inspected = client
+        .inspect_session(&handle, &fixture.spec().cwd)
+        .await
+        .unwrap();
+
+    assert_eq!(history[2], answer);
+    assert_eq!(history[3].key, "native:t1:done");
+    assert_eq!(history[4].key, "native:t2:later");
+    assert_eq!(inspected.entries, history);
+    assert_eq!(
+        client.history(&handle, &fixture.spec().cwd).await.unwrap(),
+        history
+    );
+}
+
+#[tokio::test]
 async fn inspect_and_rewind_preserve_only_controls_belonging_to_retained_history() {
     let fixture = Fixture::new();
     let client = fixture.client();

@@ -5,15 +5,15 @@ use base64::{Engine, engine::general_purpose::STANDARD};
 use crate::Error;
 
 /// Maximum buffered audio for a single utterance or dictation.
-pub const MAX_AUDIO_BYTES: usize = 16 * 1024 * 1024;
+pub(crate) const MAX_AUDIO_BYTES: usize = 16 * 1024 * 1024;
 /// Maximum decoded client audio chunk.
-pub const MAX_CHUNK_BYTES: usize = 512 * 1024;
+pub(crate) const MAX_CHUNK_BYTES: usize = 512 * 1024;
 /// Maximum transcript or generated speech text in bytes.
-pub const MAX_TEXT_BYTES: usize = 64 * 1024;
+pub(crate) const MAX_TEXT_BYTES: usize = 64 * 1024;
 
 /// Supported input representations.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum Format {
+pub(crate) enum Format {
     /// Signed 16-bit little-endian, mono samples at the given rate.
     Pcm(u32),
     /// A complete mono PCM16 WAV file.
@@ -24,7 +24,7 @@ impl Format {
     /// Parse the supported MIME spelling and validate the PCM parameters.
     /// # Errors
     /// Rejects unsupported formats, rates, channel counts and malformed parameters.
-    pub fn parse(value: &str) -> Result<Self, Error> {
+    pub(crate) fn parse(value: &str) -> Result<Self, Error> {
         if matches!(value, "audio/wav" | "audio/x-wav" | "wav") {
             return Ok(Self::Wav);
         }
@@ -62,7 +62,7 @@ impl Format {
 
     /// Canonical MIME type, including rate and sample representation.
     #[must_use]
-    pub fn mime(self) -> String {
+    pub(crate) fn mime(self) -> String {
         match self {
             Self::Pcm(rate) => format!("audio/pcm;rate={rate};bits=16;channels=1"),
             Self::Wav => "audio/wav".to_owned(),
@@ -76,14 +76,14 @@ pub struct Audio {
     /// Encoded audio or PCM bytes.
     pub bytes: Vec<u8>,
     /// Representation of the bytes.
-    pub format: Format,
+    pub(crate) format: Format,
 }
 
 impl Audio {
     /// Decode complete audio into mono PCM16 samples.
     /// # Errors
     /// Rejects empty/oversized data, invalid alignment or unsupported WAV encodings.
-    pub fn pcm(self) -> Result<Self, Error> {
+    pub(crate) fn pcm(self) -> Result<Self, Error> {
         if self.bytes.is_empty() || self.bytes.len() > MAX_AUDIO_BYTES {
             return Err(Error::Invalid);
         }
@@ -97,7 +97,7 @@ impl Audio {
     /// Encode audio as a WAV file accepted by speech providers.
     /// # Errors
     /// Returns an error for invalid audio.
-    pub fn wav(self) -> Result<Vec<u8>, Error> {
+    pub(crate) fn wav(self) -> Result<Vec<u8>, Error> {
         let pcm = self.pcm()?;
         let Format::Pcm(rate) = pcm.format else {
             return Err(Error::Invalid);

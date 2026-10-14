@@ -183,6 +183,7 @@ export default {
     ],
     experiments: {
       typedRoutes: true,
+      ...(process.env.AIT_WEB_BASE_PATH ? { baseUrl: process.env.AIT_WEB_BASE_PATH } : {}),
       reactCompiler: true,
       autolinkingModuleResolution: true,
     },

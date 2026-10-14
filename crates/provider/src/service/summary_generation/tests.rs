@@ -2,7 +2,7 @@ use std::collections::VecDeque;
 use std::sync::Mutex;
 
 use domain::agent_runtime::AgentPersistenceHandle;
-use model::summary::{SummaryKind, SummarySelection};
+use domain::summary::{SummaryKind, SummarySelection};
 use serde_json::json;
 
 use super::*;

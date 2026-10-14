@@ -1,8 +1,9 @@
 use super::*;
 
-use model::workspace::worktrees::{
-    CreatedWorktreeWorkspace, WorktreeCreation, WorktreeCreationError, WorktreeProvisioning,
+use domain::workspace::worktrees::{
+    CreatedWorktreeWorkspace, WorktreeCreation, WorktreeCreationError,
 };
+use model::workspace::worktrees::WorktreeProvisioning;
 
 #[derive(Debug)]
 struct WorktreeCleanup {
@@ -14,7 +15,7 @@ impl WorktreeProvisioning for WorktreeCleanup {
     fn prepare_directory(
         &self,
         _: &str,
-        _: &model::workspace::worktrees::DirectoryGit,
+        _: &domain::workspace::worktrees::DirectoryGit,
     ) -> Result<(), WorktreeCreationError> {
         panic!("cleanup must not change the source branch");
     }
@@ -196,4 +197,38 @@ async fn deleting_an_armed_agent_removes_the_pending_action_without_resurrection
     manager.poll().await.unwrap();
     assert!(registry.list().unwrap().is_empty());
     assert!(manager.live.is_empty());
+}
+
+#[tokio::test]
+async fn queued_retirement_wakes_the_scheduler_once_and_failures_stay_retryable() {
+    let owners = ownership::Owners::default();
+    let (mut manager, _, client) = make_manager();
+    manager.owner = Some(owners.owner(owners.agent("agent-1").unwrap()));
+    manager
+        .create("agent-1", &spec(), AgentRegistration::default())
+        .await
+        .unwrap();
+    manager.auto_archive_on_finish("agent-1".into());
+    assert!(!owners.has_idle_retirements());
+    manager.send("agent-1", "hello").await.unwrap();
+    client
+        .0
+        .lock()
+        .unwrap()
+        .events
+        .push_back(AgentTurnEvent::Completed(None));
+    manager.poll().await.unwrap();
+    // The wakeup is retained until the scheduler awaits it.
+    tokio::time::timeout(std::time::Duration::from_secs(1), owners.retired())
+        .await
+        .unwrap();
+    assert!(owners.has_idle_retirements());
+    let taken = owners.retirements().unwrap();
+    assert_eq!(taken.len(), 1);
+    assert!(!owners.has_idle_retirements());
+    owners.finish_retirement("agent-1", false);
+    assert!(owners.has_idle_retirements());
+    owners.retirements().unwrap();
+    owners.finish_retirement("agent-1", true);
+    assert!(!owners.has_idle_retirements());
 }

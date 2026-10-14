@@ -10,26 +10,26 @@
 
 ## 测试与静态验证
 
-| 命令 | 结果 |
-| --- | --- |
-| `cargo test --workspace --locked --offline -- --test-threads=1` | 1,894 passed，0 failed，7 ignored |
+| 命令                                                                       | 结果                              |
+| -------------------------------------------------------------------------- | --------------------------------- |
+| `cargo test --workspace --locked --offline -- --test-threads=1`            | 1,894 passed，0 failed，7 ignored |
 | `cargo llvm-cov --workspace --html --locked --offline -- --test-threads=1` | 1,894 passed，0 failed，7 ignored |
-| `cargo build --workspace --locked --offline` | 通过，无编译警告 |
-| `cargo clippy --workspace --all-targets --locked --offline -- -D warnings` | 通过 |
-| `cargo fmt --all --check`、`git diff --check` | 通过 |
-| `npm run test --workspace=@ait/mobile -- src/i18n/resources.test.ts` | 36 passed，0 failed |
-| `oxfmt --check`、`oxlint`（语言资源文件） | 通过，0 lint warning/error |
-| `npm run check:docs` | 通过 |
+| `cargo build --workspace --locked --offline`                               | 通过，无编译警告                  |
+| `cargo clippy --workspace --all-targets --locked --offline -- -D warnings` | 通过                              |
+| `cargo fmt --all --check`、`git diff --check`                              | 通过                              |
+| `npm run test --workspace=@ait/mobile -- src/i18n/resources.test.ts`       | 36 passed，0 failed               |
+| `oxfmt --check`、`oxlint`（语言资源文件）                                  | 通过，0 lint warning/error        |
+| `npm run check:docs`                                                       | 通过                              |
 
 七项 ignored 沿用原配置，要求本机安装或认证 AGY、Claude、Codex、DSH 或 OpenCode；没有增加忽略项。完整测试允许启动本机 HTTP/WebSocket 监听和子进程，未执行真实模型请求。
 
 ## Test coverage
 
-| 范围 | 已覆盖 / 总行数 | 行覆盖率 |
-| --- | ---: | ---: |
-| Rust workspace | 53,569 / 56,802 | **94.3083%** |
-| filesystem | 11,366 / 11,988 | **94.8115%** |
-| 改动的 local checkout 文件 | 1,515 / 1,622 | 93.4032% |
+| 范围                       | 已覆盖 / 总行数 |     行覆盖率 |
+| -------------------------- | --------------: | -----------: |
+| Rust workspace             | 53,569 / 56,802 | **94.3083%** |
+| filesystem                 | 11,366 / 11,988 | **94.8115%** |
+| 改动的 local checkout 文件 |   1,515 / 1,622 |     93.4032% |
 
 测量范围为上述源码提交的完整 Rust workspace、默认 features，使用 cargo-llvm-cov 默认文件过滤，没有额外排除文件或筛选测试。Doctests 由普通完整测试执行，未纳入覆盖率插桩；原生 C/C++ 依赖未插桩。未验证 Linux 和 Windows。
 

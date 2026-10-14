@@ -35,7 +35,7 @@
 发送消息的具体入口见
 [agent_execution.rs](../../../crates/provider/src/rpc/agent_execution.rs) 的 `send()` 和 `only()`；
 目录订阅分别见 [agent_runtime.rs](../../../crates/provider/src/rpc/agent_runtime.rs) 和
-[directory.rs](../../../crates/metadata/src/rpc/directory.rs)。服务端返回的
+[directory.rs](../../../crates/metadata/src/directory/rpc/directory.rs)。服务端返回的
 `unsupported_capability` 文案是通用的 “Capability was not negotiated”；在上述测试中
 方法已经协商成功，实际拒绝的是处理器尚未支持的参数或事件种类。
 

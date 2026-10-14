@@ -30,7 +30,7 @@ pub(super) async fn request(
         }
         Err(DispatchError::Delivery(error)) => return Err(error),
     }
-    match relay::rpc::request(&mut context, &state.relay).await {
+    match relay::rpc::request(&mut context, &state.relay, Some(state.relay_management())).await {
         Ok(()) => return Ok(()),
         Err(DispatchError::NotImplemented) => Context::assert_unhandled(&context, "relay"),
         Err(DispatchError::Delivery(error)) => return Err(error),
@@ -38,6 +38,11 @@ pub(super) async fn request(
     match schedule::dispatch::dispatch(&mut context, &state.schedule).await {
         Ok(()) => return Ok(()),
         Err(DispatchError::NotImplemented) => Context::assert_unhandled(&context, "schedule"),
+        Err(DispatchError::Delivery(error)) => return Err(error),
+    }
+    match bot::dispatch::dispatch(&mut context, &state.bot).await {
+        Ok(()) => return Ok(()),
+        Err(DispatchError::NotImplemented) => Context::assert_unhandled(&context, "bot"),
         Err(DispatchError::Delivery(error)) => return Err(error),
     }
     match browser::dispatch::dispatch(&mut context, &state.browser, &mut subscriptions.browser) {
@@ -123,10 +128,9 @@ async fn complete_metadata(
             subscription_id,
         } => {
             subscriptions.release(&subscription_id);
-            let value = serde_json::to_value(model::subscription::SubscriptionReleaseResult {
-                subscription_id,
-            })
-            .map_err(|_| ErrorCode::InvalidMessage);
+            let value =
+                serde_json::to_value(model::server::SubscriptionReleaseResult { subscription_id })
+                    .map_err(|_| ErrorCode::InvalidMessage);
             outbound.respond(request_id, value)
         }
     }

@@ -27,9 +27,11 @@ const ScheduleCreateTargetSchema = z.discriminatedUnion("type", [
 export const ScheduleCreateRequestSchema = z.object({
   type: z.literal("schedule.create.request"),
   requestId: z.string(),
+  workspaceId: z.string().trim().min(1),
   prompt: z.string().min(1),
   name: z.string().optional(),
   cadence: ScheduleCadenceSchema,
+  startAt: z.iso.datetime({ offset: true }).optional(),
   target: ScheduleCreateTargetSchema,
   maxRuns: z.number().int().positive().optional(),
   expiresAt: z.string().optional(),
@@ -39,6 +41,7 @@ export const ScheduleCreateRequestSchema = z.object({
 export const ScheduleListRequestSchema = z.object({
   type: z.literal("schedule.list.request"),
   requestId: z.string(),
+  workspaceId: z.string().trim().min(1).optional(),
 });
 
 export const ScheduleInspectRequestSchema = z.object({
@@ -91,9 +94,12 @@ export const ScheduleUpdateRequestSchema = z.object({
   type: z.literal("schedule.update.request"),
   requestId: z.string(),
   scheduleId: z.string(),
+  workspaceId: z.string().trim().min(1).optional(),
+  target: ScheduleTargetSchema.optional(),
   name: z.string().nullable().optional(),
   prompt: z.string().min(1).optional(),
   cadence: ScheduleCadenceSchema.optional(),
+  startAt: z.iso.datetime({ offset: true }).nullable().optional(),
   newAgentConfig: ScheduleUpdateNewAgentConfigSchema.optional(),
   maxRuns: z.number().int().positive().nullable().optional(),
   expiresAt: z.string().nullable().optional(),

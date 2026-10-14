@@ -10,6 +10,7 @@ const mocks = vi.hoisted(() => ({
   authSession: vi.fn(),
   dismissAuthSession: vi.fn(),
   platform: "android",
+  currentState: "active",
 }));
 vi.mock("expo-secure-store", () => ({
   getItemAsync: mocks.get,
@@ -32,7 +33,12 @@ vi.mock("expo-web-browser", () => ({
 }));
 vi.mock("expo/fetch", () => ({ fetch: (...args: Parameters<typeof fetch>) => fetch(...args) }));
 vi.mock("react-native", () => ({
-  AppState: { currentState: "active", addEventListener: mocks.appState },
+  AppState: {
+    get currentState() {
+      return mocks.currentState;
+    },
+    addEventListener: mocks.appState,
+  },
   Platform: {
     get OS() {
       return mocks.platform;
@@ -46,6 +52,7 @@ beforeEach(() => {
   vi.clearAllMocks();
   vi.useFakeTimers();
   mocks.platform = "android";
+  mocks.currentState = "active";
   mocks.get.mockResolvedValue(null);
 });
 afterEach(() => {
@@ -128,18 +135,12 @@ describe("native mobile account storage and lifecycle", () => {
     await manager.logout();
   });
   it.each(["android", "ios"])(
-    "persists the %s session and closes transports in the background",
+    "retains the restored %s connection for two background minutes, then pauses until foregrounded",
     async (platform) => {
       mocks.platform = platform;
       vi.stubGlobal(
         "fetch",
         vi.fn(async (url: string) => {
-          if (url.endsWith("/auth/login"))
-            return Response.json({
-              access_token: "private-jwt",
-              expires_in: 3600,
-              user: { email: "me@example.test" },
-            });
           if (url.endsWith("/v1/nodes/register"))
             return Response.json({
               node_id: "node",
@@ -153,7 +154,12 @@ describe("native mobile account storage and lifecycle", () => {
       const native = await import("./native-account.native");
       const manager = await native.getNativeAccount();
       expect(await native.getNativeAccount()).toBe(manager);
-      await manager.login("", "me@example.test", "private-password");
+      await manager.restore({
+        center: "https://center.test/api",
+        token: "private-jwt",
+        expiresAt: Date.now() + 3600_000,
+        name: "Me",
+      });
       await vi.advanceTimersByTimeAsync(0);
       const registration = vi
         .mocked(globalThis.fetch)
@@ -167,16 +173,183 @@ describe("native mobile account storage and lifecycle", () => {
         "ait.account.session.v1",
         expect.stringContaining("private-jwt"),
       );
-      expect(JSON.stringify(mocks.set.mock.calls)).not.toContain("private-password");
       expect(mocks.setInstallation).not.toHaveBeenCalled();
       expect(mocks.appState).toHaveBeenCalledOnce();
       const close = vi.fn();
       native.registerNativeAccountTransport(close);
       const onState = mocks.appState.mock.calls[0]![1];
       onState("background");
+      await vi.advanceTimersByTimeAsync(119_999);
+      expect(close).not.toHaveBeenCalled();
+      expect(manager.snapshot().stale).toBe(false);
+      await vi.advanceTimersByTimeAsync(1);
+      expect(close).toHaveBeenCalledOnce();
+      expect(manager.snapshot().stale).toBe(true);
+      const requestCount = vi.mocked(globalThis.fetch).mock.calls.length;
+      onState("background");
+      await vi.advanceTimersByTimeAsync(120_000);
+      expect(globalThis.fetch).toHaveBeenCalledTimes(requestCount);
+      expect(close).toHaveBeenCalledOnce();
+      onState("active");
+      await vi.advanceTimersByTimeAsync(0);
+      expect(manager.snapshot()).toMatchObject({ status: "online", stale: false });
       expect(close).toHaveBeenCalledOnce();
       await manager.logout();
       expect(mocks.remove).toHaveBeenLastCalledWith("ait.account.session.v1");
+    },
+  );
+
+  describe.each(["android", "ios"])("%s background connection grace period", (platform) => {
+    beforeEach(() => {
+      mocks.platform = platform;
+    });
+
+    it("keeps connections across inactive transitions and cancels disconnection on a quick return", async () => {
+      const native = await import("./native-account.native");
+      const manager = await native.getNativeAccount();
+      const close = vi.fn();
+      native.registerNativeAccountTransport(close);
+      const onState = mocks.appState.mock.calls[0]![1];
+
+      onState("inactive");
+      await vi.advanceTimersByTimeAsync(120_000);
+      expect(close).not.toHaveBeenCalled();
+      onState("active");
+      onState("background");
+      await vi.advanceTimersByTimeAsync(119_999);
+      onState("inactive");
+      onState("active");
+      await vi.advanceTimersByTimeAsync(120_000);
+      expect(close).not.toHaveBeenCalled();
+
+      // A later app switch gets its own full window; the cancelled timer
+      // cannot close this connection in the middle of that window.
+      onState("background");
+      await vi.advanceTimersByTimeAsync(119_999);
+      expect(close).not.toHaveBeenCalled();
+      await vi.advanceTimersByTimeAsync(1);
+      expect(close).toHaveBeenCalledOnce();
+      onState("active");
+      await manager.shutdown();
+    });
+
+    it("does not extend the deadline on repeated background or inactive events", async () => {
+      const native = await import("./native-account.native");
+      const manager = await native.getNativeAccount();
+      const close = vi.fn();
+      native.registerNativeAccountTransport(close);
+      const onState = mocks.appState.mock.calls[0]![1];
+
+      onState("background");
+      await vi.advanceTimersByTimeAsync(60_000);
+      onState("background");
+      onState("inactive");
+      await vi.advanceTimersByTimeAsync(59_999);
+      expect(close).not.toHaveBeenCalled();
+      await vi.advanceTimersByTimeAsync(1);
+      expect(close).toHaveBeenCalledOnce();
+      onState("active");
+      await manager.shutdown();
+    });
+
+    it("still closes connections immediately on explicit logout during the grace period", async () => {
+      const native = await import("./native-account.native");
+      const manager = await native.getNativeAccount();
+      const close = vi.fn();
+      native.registerNativeAccountTransport(close);
+      const onState = mocks.appState.mock.calls[0]![1];
+      onState("background");
+      await manager.logout();
+      expect(close).toHaveBeenCalledOnce();
+      onState("active");
+    });
+
+    it("does not suspend a cold inactive launch", async () => {
+      mocks.currentState = "inactive";
+      const native = await import("./native-account.native");
+      const close = vi.fn();
+      native.registerNativeAccountTransport(close);
+      const manager = await native.getNativeAccount();
+      await vi.advanceTimersByTimeAsync(120_000);
+      expect(close).not.toHaveBeenCalled();
+      await manager.shutdown();
+    });
+
+    it("resumes if the app foregrounds while saved credentials are loading", async () => {
+      mocks.currentState = "background";
+      mocks.get.mockImplementationOnce(async () => {
+        mocks.currentState = "active";
+        return JSON.stringify({
+          center: "https://center.test/api",
+          token: "saved-jwt",
+          expiresAt: Date.now() + 3_600_000,
+          name: "Me",
+        });
+      });
+      vi.stubGlobal(
+        "fetch",
+        vi.fn(async (url: string) =>
+          Response.json(
+            url.endsWith("/v1/nodes/register")
+              ? { node_id: "node", node_session_id: "session", control_required: false }
+              : { hosts: [], count: 0 },
+          ),
+        ),
+      );
+      const native = await import("./native-account.native");
+      const manager = await native.getNativeAccount();
+      await vi.advanceTimersByTimeAsync(0);
+      expect(manager.snapshot()).toMatchObject({ status: "online", stale: false });
+      expect(mocks.appState).toHaveBeenCalledOnce();
+      await manager.shutdown();
+    });
+  });
+
+  it.each(["android", "ios"])(
+    "restores a saved %s session after a process restart and retries an offline startup",
+    async (platform) => {
+      mocks.platform = platform;
+      const saved = JSON.stringify({
+        center: "https://center.test/api",
+        token: "saved-jwt",
+        expiresAt: Date.now() + 3_600_000,
+        name: "Me",
+        nodeSessionId: "previous-session",
+      });
+      mocks.get.mockResolvedValue(saved);
+      let offline = true;
+      const http = vi.fn(async (url: string) => {
+        if (offline) throw new TypeError("Network request failed");
+        if (url.endsWith("/v1/nodes/register"))
+          return Response.json({
+            node_id: "node",
+            node_session_id: "new-session",
+            host_id: null,
+            control_required: false,
+          });
+        return Response.json({ hosts: [], count: 0 });
+      });
+      vi.stubGlobal("fetch", http);
+      const { getNativeAccount } = await import("./native-account.native");
+      const manager = await getNativeAccount();
+      await vi.advanceTimersByTimeAsync(1);
+      expect(manager.snapshot()).toMatchObject({ status: "error", name: "Me" });
+      expect(mocks.remove).not.toHaveBeenCalled();
+      expect(http.mock.calls[0]?.[0]).toBe(
+        "https://center.test/api/v1/node-sessions/previous-session",
+      );
+
+      offline = false;
+      await vi.advanceTimersByTimeAsync(6_000);
+      expect(manager.snapshot()).toMatchObject({ status: "online", name: "Me" });
+      expect(http.mock.calls.some(([url]) => url.includes("/auth/"))).toBe(false);
+      expect(mocks.remove).not.toHaveBeenCalled();
+      expect(mocks.set).toHaveBeenCalledWith(
+        "ait.account.session.v1",
+        expect.stringContaining('"nodeSessionId":"new-session"'),
+      );
+      await manager.shutdown();
+      expect(mocks.remove).not.toHaveBeenCalled();
     },
   );
 

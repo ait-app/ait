@@ -3,17 +3,36 @@ use std::sync::{Arc, Mutex};
 
 use domain::agent_runtime::registry::{AgentRuntimeRegistry, AgentRuntimeRegistryError};
 use domain::agent_runtime::{AgentPersistenceHandle, StoredAgentConfig};
+use model::ErrorCode;
+use serde_json::Value;
 
 use super::*;
 use crate::ports::agent_session::{AgentSessionFuture, AgentSessionSpec};
 
 mod auto_archive;
+mod bot_permissions;
 mod environment;
 mod generated_titles;
 mod paseo;
 mod resume;
 mod titles;
 mod usage;
+
+#[test]
+fn provider_rejections_remain_distinct_from_provider_failures() {
+    assert_eq!(
+        map_session(AgentSessionError::Rejected),
+        AgentManagerError::SessionRejected
+    );
+    assert_eq!(
+        map_session(AgentSessionError::Unavailable),
+        AgentManagerError::Session
+    );
+    assert_eq!(
+        map_session(AgentSessionError::Failed),
+        AgentManagerError::Session
+    );
+}
 
 #[derive(Debug, Default)]
 struct RegistryState {
@@ -95,6 +114,7 @@ struct FakeState {
     fail_close: bool,
     handle_session_id: String,
     create_calls: usize,
+    create_error: Option<AgentSessionError>,
     resume_purposes: Vec<AgentResumePurpose>,
     resume_specs: Vec<AgentSessionSpec>,
     close_calls: usize,
@@ -104,6 +124,11 @@ struct FakeState {
     steer_result: Result<(), AgentSessionError>,
     steer_calls: Vec<(String, String)>,
     poll_error: Option<AgentSessionError>,
+    failure_message: Option<&'static str>,
+    failure_diagnostic: Option<crate::ports::diagnostics::Diagnostic>,
+    commands_error: AgentSessionError,
+    permission_responses: Vec<(String, Value)>,
+    permission_result: Result<(), AgentSessionError>,
     during_resume: Option<MemoryRegistry>,
 }
 
@@ -115,6 +140,7 @@ impl Default for FakeState {
             fail_close: false,
             handle_session_id: "native-1".to_owned(),
             create_calls: 0,
+            create_error: None,
             resume_purposes: Vec::new(),
             resume_specs: Vec::new(),
             close_calls: 0,
@@ -124,6 +150,11 @@ impl Default for FakeState {
             steer_result: Err(AgentSessionError::Rejected),
             steer_calls: Vec::new(),
             poll_error: None,
+            failure_message: None,
+            failure_diagnostic: None,
+            commands_error: AgentSessionError::Unavailable,
+            permission_responses: Vec::new(),
+            permission_result: Ok(()),
             during_resume: None,
         }
     }
@@ -136,6 +167,9 @@ struct FakeClient(Arc<Mutex<FakeState>>);
 struct FakeSession(Arc<Mutex<FakeState>>);
 
 impl AgentClient for FakeClient {
+    fn commands<'a>(&'a self, _spec: &'a AgentSessionSpec) -> AgentSessionFuture<'a, Vec<Value>> {
+        Box::pin(async move { Err(self.0.lock().unwrap().commands_error) })
+    }
     fn provider(&self) -> &'static str {
         "codex"
     }
@@ -153,7 +187,13 @@ impl AgentClient for FakeClient {
         _spec: &'a AgentSessionSpec,
     ) -> AgentSessionFuture<'a, Box<dyn AgentSession>> {
         Box::pin(async move {
-            self.0.lock().expect("state").create_calls += 1;
+            {
+                let mut state = self.0.lock().expect("state");
+                state.create_calls += 1;
+                if let Some(error) = state.create_error {
+                    return Err(error);
+                }
+            }
             Ok(Box::new(FakeSession(self.0.clone())) as Box<dyn AgentSession>)
         })
     }
@@ -186,7 +226,45 @@ impl AgentClient for FakeClient {
     }
 }
 
+#[tokio::test]
+async fn unsupported_commands_are_distinct_from_rejected_requests_and_provider_failures() {
+    let (manager, _, client) = make_manager();
+    for (native, expected) in [
+        (
+            AgentSessionError::Unavailable,
+            ErrorCode::UnsupportedCapability,
+        ),
+        (AgentSessionError::Rejected, ErrorCode::InvalidMessage),
+        (AgentSessionError::Failed, ErrorCode::AgentIo),
+    ] {
+        client.0.lock().unwrap().commands_error = native;
+        assert_eq!(manager.commands(&spec()).await, Err(expected));
+    }
+}
+
 impl AgentSession for FakeSession {
+    fn failure_diagnostic(&self) -> Option<crate::ports::diagnostics::Diagnostic> {
+        self.0.lock().unwrap().failure_diagnostic
+    }
+
+    fn respond_permission<'a>(
+        &'a mut self,
+        id: &'a str,
+        response: &'a Value,
+    ) -> AgentSessionFuture<'a, ()> {
+        Box::pin(async move {
+            let mut state = self.0.lock().unwrap();
+            state
+                .permission_responses
+                .push((id.to_owned(), response.clone()));
+            state.permission_result
+        })
+    }
+
+    fn failure_message(&self) -> Option<&str> {
+        self.0.lock().unwrap().failure_message
+    }
+
     fn start_turn<'a>(
         &'a mut self,
         _text: &'a str,
@@ -292,7 +370,7 @@ fn make_manager() -> (AgentManager, MemoryRegistry, FakeClient) {
     (manager, registry, client)
 }
 
-fn stored_record() -> PersistedAgentRuntimeRecord {
+pub(super) fn stored_record() -> PersistedAgentRuntimeRecord {
     PersistedAgentRuntimeRecord {
         id: "agent-1".to_owned(),
         provider: "codex".to_owned(),
@@ -386,6 +464,30 @@ async fn unavailable_provider_does_not_create_session() {
         Err(AgentManagerError::ProviderUnavailable("codex".to_owned()))
     );
     assert_eq!(client.0.lock().expect("state").create_calls, 0);
+}
+
+#[tokio::test]
+async fn rejected_creation_preserves_reason_without_registering_session() {
+    let (mut manager, registry, client) = make_manager();
+    client.0.lock().unwrap().create_error = Some(AgentSessionError::Rejected);
+
+    assert_eq!(
+        manager
+            .create("agent-1", &spec(), AgentRegistration::default())
+            .await,
+        Err(AgentManagerError::SessionRejected)
+    );
+    assert!(manager.live_snapshot("agent-1").is_none());
+    assert!(registry.get("agent-1").unwrap().is_none());
+    assert_eq!(client.0.lock().unwrap().create_calls, 1);
+
+    client.0.lock().unwrap().create_error = None;
+    assert!(
+        manager
+            .create("agent-1", &spec(), AgentRegistration::default())
+            .await
+            .is_ok()
+    );
 }
 
 #[tokio::test]
@@ -583,7 +685,7 @@ async fn terminal_write_failures_retain_work_and_close_preserves_concurrent_meta
     let sink = notifications.clone();
     let subscription = connection
         .subscribe(
-            model::session::protocol::EventsRequest {
+            domain::session::protocol::EventsRequest {
                 events: vec!["agent_attention_required".to_owned()],
                 notifications: false,
             },
@@ -661,7 +763,7 @@ async fn accepted_turn_survives_runtime_write_failure_and_reports_inspection_fai
     let captured = activities.clone();
     let subscription = connection
         .subscribe(
-            model::session::protocol::EventsRequest {
+            domain::session::protocol::EventsRequest {
                 events: vec!["activity_log".to_owned()],
                 notifications: false,
             },
@@ -713,7 +815,7 @@ async fn cancelled_internal_archived_and_deleted_agents_do_not_publish_attention
         let captured = events.clone();
         let subscription = connection
             .subscribe(
-                model::session::protocol::EventsRequest {
+                domain::session::protocol::EventsRequest {
                     events: vec!["agent_attention_required".to_owned()],
                     notifications: false,
                 },
@@ -848,5 +950,29 @@ async fn live_session_admission_is_bounded() {
         Err(AgentManagerError::Busy)
     );
     assert_eq!(client.0.lock().unwrap().create_calls, 32);
+    manager.close_all().await.unwrap();
+}
+
+#[tokio::test]
+async fn active_turn_cadence_tracks_accepted_native_work_only() {
+    let (mut manager, _, client) = make_manager();
+    assert!(!manager.has_active_turns());
+    manager
+        .create("agent-1", &spec(), AgentRegistration::default())
+        .await
+        .unwrap();
+    assert!(manager.has_sessions());
+    assert!(!manager.has_active_turns());
+    manager.send("agent-1", "hello").await.unwrap();
+    assert!(manager.has_active_turns());
+    client
+        .0
+        .lock()
+        .unwrap()
+        .events
+        .push_back(AgentTurnEvent::Completed(None));
+    manager.poll().await.unwrap();
+    assert!(manager.has_sessions());
+    assert!(!manager.has_active_turns());
     manager.close_all().await.unwrap();
 }

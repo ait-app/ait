@@ -1,7 +1,7 @@
 use std::ffi::OsStr;
 use std::path::Path;
 use std::process::Stdio;
-use std::time::Duration;
+use std::time::{Duration, Instant};
 
 use serde_json::Value;
 use tokio::io::{AsyncBufReadExt, AsyncReadExt, AsyncWriteExt, BufReader};
@@ -9,7 +9,10 @@ use tokio::process::{Child, ChildStdin, Command};
 use tokio::sync::mpsc;
 use tokio::task::JoinHandle;
 
-use super::AntigravityClient;
+use super::{
+    AntigravityClient,
+    diagnostics::{Diagnostics, Failure},
+};
 use crate::ports::agent_session::AgentSessionError;
 
 const MAX_FRAME: usize = 2 * 1024 * 1024;
@@ -19,6 +22,8 @@ const MAX_EVENTS: usize = 128;
 struct Process {
     child: Child,
     group: Option<u32>,
+    diagnostics: Diagnostics,
+    stderr_reader: JoinHandle<()>,
 }
 
 impl Process {
@@ -26,12 +31,21 @@ impl Process {
         command.kill_on_drop(true);
         #[cfg(unix)]
         command.process_group(0);
-        let child = command
-            .spawn()
-            .map_err(|_| AgentSessionError::Unavailable)?;
+        let mut child = command.spawn().map_err(|error| {
+            tracing::warn!(kind = ?error.kind(), "could not start AGY");
+            AgentSessionError::Unavailable
+        })?;
+        let stderr = child.stderr.take().ok_or(AgentSessionError::Failed)?;
+        let diagnostics = Diagnostics::default();
+        let reader_diagnostics = diagnostics.clone();
+        let stderr_reader = tokio::spawn(async move {
+            reader_diagnostics.drain(stderr).await;
+        });
         Ok(Self {
             group: child.id(),
             child,
+            diagnostics,
+            stderr_reader,
         })
     }
 
@@ -42,13 +56,24 @@ impl Process {
             .await
             .map_err(|_| AgentSessionError::Failed)?
             .map_err(|_| AgentSessionError::Failed)?;
+        self.finish_diagnostics().await;
         Ok(())
+    }
+
+    async fn finish_diagnostics(&mut self) {
+        if tokio::time::timeout(Duration::from_secs(2), &mut self.stderr_reader)
+            .await
+            .is_err()
+        {
+            self.stderr_reader.abort();
+        }
     }
 }
 
 impl Drop for Process {
     fn drop(&mut self) {
         kill_group(self.group);
+        self.stderr_reader.abort();
     }
 }
 
@@ -59,7 +84,7 @@ fn command(client: &AntigravityClient, cwd: &Path) -> Command {
         .envs(client.environment.entries())
         .env("AGY_CLI_DISABLE_AUTO_UPDATE", "true")
         .stdout(Stdio::piped())
-        .stderr(Stdio::null());
+        .stderr(Stdio::piped());
     command
 }
 
@@ -90,6 +115,9 @@ pub(super) async fn query(
             .await
             .map_err(|_| AgentSessionError::Failed)?;
         if !status.success() {
+            process.finish_diagnostics().await;
+            tracing::warn!(%status, message = process.diagnostics.failure()
+                .unwrap_or(Failure::Exit).message(), "AGY query failed");
             return Err(AgentSessionError::Failed);
         }
         Ok(bytes)
@@ -98,7 +126,9 @@ pub(super) async fn query(
     if let Ok(result) = result {
         result
     } else {
+        process.diagnostics.observe(Failure::Timeout);
         let _ = process.stop().await;
+        tracing::warn!(message = Failure::Timeout.message(), "AGY query failed");
         Err(AgentSessionError::Failed)
     }
 }
@@ -111,6 +141,7 @@ pub(super) struct Transport {
     reader: JoinHandle<()>,
     deadline: Duration,
     closed: bool,
+    failure_since: Option<Instant>,
 }
 
 impl Transport {
@@ -135,6 +166,7 @@ impl Transport {
             .take()
             .ok_or(AgentSessionError::Failed)?;
         let (sender, messages) = mpsc::channel(MAX_EVENTS);
+        let diagnostics = process.diagnostics.clone();
         let reader = tokio::spawn(async move {
             let mut output = BufReader::new(output);
             loop {
@@ -144,15 +176,25 @@ impl Transport {
                     .read_until(b'\n', &mut bytes)
                     .await;
                 if !matches!(read, Ok(1..)) || bytes.last() != Some(&b'\n') {
+                    diagnostics.observe(if matches!(read, Ok(0)) {
+                        Failure::Exit
+                    } else {
+                        Failure::Protocol
+                    });
                     break;
                 }
                 if bytes.iter().all(u8::is_ascii_whitespace) {
                     continue;
                 }
                 let Ok(message) = serde_json::from_slice::<Value>(&bytes) else {
+                    diagnostics.observe(Failure::Protocol);
                     break;
                 };
-                if !message["event"].is_string() || sender.send(message).await.is_err() {
+                if !message["event"].is_string() {
+                    diagnostics.observe(Failure::Protocol);
+                    break;
+                }
+                if sender.send(message).await.is_err() {
                     break;
                 }
             }
@@ -164,11 +206,16 @@ impl Transport {
             reader,
             deadline: client.deadline,
             closed: false,
+            failure_since: None,
         })
     }
 
     pub(super) async fn receive(&mut self) -> Result<Value, AgentSessionError> {
         self.messages.recv().await.ok_or(AgentSessionError::Failed)
+    }
+
+    pub(super) fn failure(&self) -> Option<Failure> {
+        self.process.diagnostics.failure()
     }
 
     pub(super) async fn send(&mut self, message: &Value) -> Result<(), AgentSessionError> {
@@ -177,6 +224,8 @@ impl Transport {
             return Err(AgentSessionError::Rejected);
         }
         bytes.push(b'\n');
+        self.process.diagnostics.clear();
+        self.failure_since = None;
         let input = self.input.as_mut().ok_or(AgentSessionError::Failed)?;
         let result = tokio::time::timeout(self.deadline, async {
             input.write_all(&bytes).await?;
@@ -194,6 +243,22 @@ impl Transport {
         match self.messages.try_recv() {
             Ok(message) => Ok(Some(message)),
             Err(mpsc::error::TryRecvError::Empty) if !self.closed => Ok(None),
+            Err(mpsc::error::TryRecvError::Disconnected)
+                if !self.closed && !self.process.stderr_reader.is_finished() =>
+            {
+                // stdout and stderr have independent readers. Give the final notice a bounded
+                // chance to arrive before the session seals its failed tool entries.
+                if self
+                    .failure_since
+                    .get_or_insert_with(Instant::now)
+                    .elapsed()
+                    < Duration::from_millis(100)
+                {
+                    Ok(None)
+                } else {
+                    Err(AgentSessionError::Failed)
+                }
+            }
             Err(_) => Err(AgentSessionError::Failed),
         }
     }
@@ -232,6 +297,7 @@ impl Transport {
             tokio::time::timeout(Duration::from_secs(2), self.process.child.wait()).await,
             Ok(Ok(_))
         ) {
+            self.process.finish_diagnostics().await;
             return Ok(());
         }
         self.process.stop().await

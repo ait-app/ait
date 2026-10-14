@@ -490,7 +490,7 @@ describe("translation resources", () => {
     expect(en.branchSwitcher.title).toBe("Switch branch");
     expect(en.panels.file.loading).toBe("Loading file...");
     expect(en.panels.file.noPreview).toBe("No preview available");
-    expect(en.panels.file.binaryPreviewUnavailable).toBe("Binary preview unavailable");
+    expect(en.panels.file.binaryPreviewUnavailable).toBe("Preview unavailable");
     expect(en.panels.file.failedToLoad).toBe("Failed to load file");
     expect(en.toolCallDetails.error).toBe("Error");
     expect(en.toolCallDetails.empty).toBe("No additional details available");
@@ -568,11 +568,6 @@ describe("translation resources", () => {
       "All recent sessions are already imported.",
     );
     expect(en.importSession.empty.noProviderSessions).toBe("No {{provider}} sessions found.");
-    expect(en.sidebar.worktreeSetup.title).toBe("Set up worktree scripts");
-    expect(en.sidebar.worktreeSetup.description).toBe(
-      "Add setup commands so new worktrees can install dependencies and prepare themselves automatically.",
-    );
-    expect(en.sidebar.worktreeSetup.openProjectSettings).toBe("Open project settings");
   });
 
   it("includes remaining small utility chrome keys for the Batch 4O migration", () => {

@@ -4,6 +4,37 @@ use model::{Context, DispatchError, ErrorCode};
 
 use super::{Completion, State};
 
+/// Try the skills request branch and consume `pending` only on a match.
+/// `state` supplies installed services; any `connection` argument owns subscriptions.
+/// Returns the branch's completion after execution or response admission.
+/// # Errors
+/// Returns `NotImplemented` without consuming the request, or propagates delivery failure.
+pub(super) async fn skills(
+    pending: &mut Option<Context<'_>>,
+    state: &State,
+) -> Result<(), DispatchError> {
+    let Some(context) = pending.take_if(|context| {
+        matches!(
+            context.request.method.as_str(),
+            "agent.skills.get_status.request"
+                | "agent.skills.reconcile.request"
+                | "agent.skills.uninstall.request"
+                | "agent.skills.save_selection.request"
+                | "agent.skills.import_legacy_selection.request"
+        )
+    }) else {
+        return Err(DispatchError::NotImplemented);
+    };
+    context
+        .rpc(
+            state.skills.clone(),
+            ErrorCode::RegistryIo,
+            crate::skills::service::Skills::execute,
+        )
+        .await
+        .map_err(Into::into)
+}
+
 /// Try the agents request branch and consume `pending` only on a match.
 /// `state` supplies installed services; any `connection` argument owns subscriptions.
 /// Returns the branch's completion after execution or response admission.

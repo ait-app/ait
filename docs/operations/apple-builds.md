@@ -52,11 +52,11 @@ npm run build:ios:simulator
 
 流程：共享包 → Terminal WebView bundle → Expo prebuild → CocoaPods → Xcode Release build。
 不依赖 EAS 云构建，也不需要 Apple 账号或 Metro 开发服务。
-默认产物：`apps/mobile/release/ios/simulator/DerivedData/Build/Products/Release-iphonesimulator/Paseo.app`。
+默认产物：`apps/mobile/release/ios/simulator/DerivedData/Build/Products/Release-iphonesimulator/Ait.app`（scheme 取自 prebuild 生成的 `.xcworkspace` 名称，脚本结束时会打印实际路径）。
 
 ```sh
 xcrun simctl boot 'iPhone 17 Pro'  # 使用本机已有的模拟器名称
-xcrun simctl install booted apps/mobile/release/ios/simulator/DerivedData/Build/Products/Release-iphonesimulator/Paseo.app
+xcrun simctl install booted apps/mobile/release/ios/simulator/DerivedData/Build/Products/Release-iphonesimulator/Ait.app
 xcrun simctl launch booted dev.ait.mobile
 ```
 
@@ -68,7 +68,7 @@ xcrun simctl launch booted dev.ait.mobile
 npm run build:ios
 ```
 
-生成 arm64 真机 Release 归档：`apps/mobile/release/ios/unsigned/Paseo.xcarchive`。
+生成 arm64 真机 Release 归档：`apps/mobile/release/ios/unsigned/Ait.xcarchive`。
 该命令关闭签名，可验证原生编译和 JS 打包，但未经签名的归档不能直接安装或提交 App Store。
 手机端只包含客户端，Rust daemon 运行在电脑/服务器上。
 
@@ -95,7 +95,7 @@ npm run build:ios:ipa
 密码和 API key 不得提交到仓库。
 
 `IOS_BUILD_JOBS` 默认 4，Metro 默认 2 个 worker，可降低以控制内存；
-`EXTRA_PACKAGER_ARGS` 可覆盖 Metro 参数；`APP_VARIANT=development` 生成 Paseo Debug。
+`EXTRA_PACKAGER_ARGS` 可覆盖 Metro 参数；`APP_VARIANT=development` 生成 Ait Debug。
 脚本每次重新应用 Expo 配置，不使用 `prebuild --clean`。原生目录是生成物，请把持久配置
 放在 `app.config.js` 或 Expo config plugin 中。
 

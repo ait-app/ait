@@ -11,8 +11,10 @@ use tokio::sync::mpsc;
 
 use super::Connection;
 use crate::dispatch::{State, dispatch};
-use crate::local::{checkout::LocalCheckout, files::LocalFiles};
-use crate::service::{checkout::Checkout, files::Files};
+use crate::files::local::LocalFiles;
+use crate::files::service::files::Files;
+use crate::git::local::checkout::LocalCheckout;
+use crate::git::service::checkout::Checkout;
 
 struct Harness {
     root: Arc<tempfile::TempDir>,
@@ -47,12 +49,7 @@ impl Harness {
             checkout: Some(Arc::new(Mutex::new(Checkout::new(Box::new(
                 LocalCheckout::new(root.path().join("managed")),
             ))))),
-            skills: None,
             forge: None,
-            github_projects: None,
-            worktrees: None,
-            workspace_recovery: None,
-            workspace_setup: None,
         });
         let (outbound, receiver) = Outbound::new();
         Self {

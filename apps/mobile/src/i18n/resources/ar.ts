@@ -3,6 +3,7 @@ import { pluginSettings } from "./plugin-settings";
 
 export const ar: TranslationResources = {
   onlineService: en.onlineService,
+  bots: en.bots,
   paneFind: {
     searchFailed: "تعذر البحث في هذه المحادثة. تحقق من الاتصال بالمضيف وأعد المحاولة.",
     searching: "جارٍ البحث…",
@@ -1168,16 +1169,11 @@ export const ar: TranslationResources = {
       appName: "Ait",
     },
     sections: {
+      usage: "Usage",
       workspaces: "مساحات العمل",
       sessions: "السجل",
       search: "بحث",
       schedules: "الجداول",
-    },
-    worktreeSetup: {
-      title: "إعداد البرامج النصية لشجرة العمل",
-      description:
-        "أضف أوامر الإعداد حتى تتمكن أشجار العمل الجديدة من تثبيت التبعيات وإعداد نفسها تلقائيًا.",
-      openProjectSettings: "افتح إعدادات المشروع",
     },
     project: {
       actions: {
@@ -1358,8 +1354,8 @@ export const ar: TranslationResources = {
         updateFailed: "غير قادر على تحديث إدارة البرنامج الخفي المضمنة.",
       },
       keepRunning: {
-        title: "استمر في تشغيل البرنامج الخفي بعد الإقلاع عن التدخين",
-        hint: "يستمر تشغيل Daemon عند إنهاء Ait",
+        title: "إبقاء البرنامج الخفي قيد التشغيل بعد الخروج",
+        hint: "تستمر الوكلاء والطرفيات في العمل بعد الخروج من Ait، ويعيد التشغيل التالي الاتصال بها.",
       },
       logs: {
         title: "ملف السجل",
@@ -1374,7 +1370,6 @@ export const ar: TranslationResources = {
       fullStatus: {
         title: "الوضع الكامل",
         modalTitle: "حالة Daemon",
-        hint: "يقوم بتشغيل`paseo daemon status`ويظهر الإخراج",
         view: "عرض الحالة",
         copied: "تم نسخ الحالة إلى الحافظة.",
         fetchFailed: "فشل جلب حالة البرنامج الخفي:{{message}}",
@@ -1645,6 +1640,31 @@ export const ar: TranslationResources = {
     },
   },
   providerUsage: {
+    summaryUsed: "{{source}}، المستخدم {{amount}}",
+    summaryRemaining: "{{source}}، المتبقي {{amount}}",
+    options: "الإعدادات",
+    refreshAll: "تحديث الكل",
+    refreshFailed: "تعذر تحديث الاستخدام",
+    noHosts: "لا توجد مضيفات متصلة",
+    agentError: "تعذر تحميل الاستخدام: {{reason}}",
+    hostUnavailableNamed: "اتصل بـ {{host}} لعرض الاستخدام",
+    hostUpgradeRequiredNamed: "حدّث {{host}} لعرض الاستخدام",
+    pin: "تثبيت",
+    unpin: "إلغاء التثبيت",
+    pinWindow: "تثبيت {{source}} {{window}}",
+    refreshSource: "تحديث {{source}}",
+    displayAs: "النسب المئوية",
+    displayUsed: "المستخدم",
+    displayRemaining: "المتبقي",
+    showInSidebar: "ملخص في الشريط الجانبي",
+    showInSidebarHint: "تظهر نوافذ الاستخدام المثبتة أسفل الشريط الجانبي",
+    loginRejected: "رُفض تسجيل الدخول (HTTP {{status}}). {{remedy}}",
+    loginExpired: "انتهت صلاحية تسجيل الدخول {{time}}. {{remedy}}",
+    loginRefreshCommand: "شغّل {{command}} لتحديث تسجيل الدخول.",
+    loginSignInAgain: "سجّل الدخول مجددًا.",
+    nativeReadFailed: "تعذر قراءة استخدام الحساب الأصلي",
+    nativePlanUnavailable:
+      "طريقة تسجيل الدخول هذه لا تعرض استخدام الخطة. سجّل الدخول باستخدام واجهة سطر أوامر المزوّد.",
     error: "خطأ",
     unavailable: "غير متاح",
     updated: "تم التحديث {{time}}",
@@ -1875,7 +1895,10 @@ export const ar: TranslationResources = {
       loading: "جارٍ تحميل الملف...",
       noPreview: "لا تتوفر معاينة",
       openWithSystem: "فتح باستخدام تطبيق النظام",
-      binaryPreviewUnavailable: "المعاينة الثنائية غير متاحة",
+      downloadFile: "تنزيل الملف",
+      shareFile: "مشاركة الملف",
+      binaryPreviewUnavailable: "المعاينة غير متاحة",
+      binaryPreviewDescription: "لا يمكن معاينة هذا النوع من الملفات في Ait.",
       tooLargeToDisplay: "هذا الملف كبير جدًا بحيث لا يمكن عرضه",
       failedToLoad: "فشل تحميل الملف",
       failedToLoadPreview: "فشل تحميل معاينة الملف",
@@ -1968,6 +1991,8 @@ export const ar: TranslationResources = {
     dismiss: "رفض",
   },
   contextWindow: {
+    noData: "No context usage yet",
+    accessibilityNoData: "View account usage",
     title: "نافذة السياق",
     used: "تم استخدام{{percentage}}%",
     tokens: "رموز{{used}}/{{max}}",
@@ -2008,6 +2033,7 @@ export const ar: TranslationResources = {
     },
     groupInfo: "حول{{title}}",
     sections: {
+      management: "الإدارة",
       general: "عام",
       appearance: "مظهر",
       layout: en.settings.sections.layout,
@@ -2155,6 +2181,8 @@ export const ar: TranslationResources = {
         rowHint: "Collect connection, daemon, provider, desktop, and log details",
         run: "Run",
         running: "Running diagnostic...",
+        exportAccessibility: "تصدير ملف التشخيص",
+        exportFailed: "تعذر تصدير ملف التشخيص",
         copyLabel: "diagnostic",
         copyAccessibility: "Copy diagnostic",
         copyFailed: "Failed to copy diagnostic",
@@ -2174,6 +2202,7 @@ export const ar: TranslationResources = {
       connectedHosts: "المضيفين المتصلين",
       offline: "غير متصل",
       versionDiffers: "الإصدار يختلف عن هذا الجهاز",
+      experimentalFeatures: en.settings.about.experimentalFeatures,
       releaseChannel: {
         label: "الافراج عن القناة",
         description: "قم بالتبديل إلى Beta للحصول على التحديثات عاجلاً والمساعدة في تشكيلها",
@@ -2242,6 +2271,14 @@ export const ar: TranslationResources = {
         codeSize: "حجم الكود",
         codeSizeHint: "يُستخدم للكود والفروقات ومخرجات الطرفية",
         codeSizeAccessibility: "حجم خط الكود",
+      },
+      layout: {
+        title: "التخطيط",
+        contentWidth: "عرض المحتوى",
+        contentWidthHint: "أقصى عرض للمحادثة وملفات Markdown على الشاشات العريضة",
+        contentWidthAccessibility: "عرض المحتوى بالبكسل",
+        reset: "إعادة تعيين",
+        resetAccessibility: "إعادة عرض المحتوى إلى الافتراضي",
       },
       syntax: {
         title: "بناء الجملة",

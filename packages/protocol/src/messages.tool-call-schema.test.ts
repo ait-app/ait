@@ -1,4 +1,5 @@
 import { describe, expect, it } from "vitest";
+import { readFileSync } from "node:fs";
 
 import { AgentTimelineItemPayloadSchema } from "./messages.js";
 
@@ -15,6 +16,24 @@ function canonicalBase() {
 }
 
 describe("shared messages tool_call schema", () => {
+  it("accepts the OpenCode Rust adapter's shared tool card projections", () => {
+    const cases = JSON.parse(
+      readFileSync(
+        new URL(
+          "../../../crates/provider/tests/fixtures/opencode_tool_cards.json",
+          import.meta.url,
+        ),
+        "utf8",
+      ),
+    ) as Array<{ name: string; detail: unknown }>;
+    for (const fixture of cases) {
+      for (const status of ["running", "completed"] as const) {
+        const item = { ...canonicalBase(), status, error: null, detail: fixture.detail };
+        expect(AgentTimelineItemPayloadSchema.safeParse(item).success, fixture.name).toBe(true);
+      }
+    }
+  });
+
   it("parses each status-discriminated tool_call variant at runtime", () => {
     const running = AgentTimelineItemPayloadSchema.parse({
       ...canonicalBase(),

@@ -1,3 +1,7 @@
+import path from "node:path";
+import { mkdtemp, readFile, writeFile, chmod, rm } from "node:fs/promises";
+import { tmpdir } from "node:os";
+import { repoRoot } from "./ait-daemon";
 import { type Page } from "@playwright/test";
 import { buildSeededHost } from "./daemon-registry";
 import { startIsolatedHostDaemon } from "./isolated-host-daemon";
@@ -6,11 +10,32 @@ import { seedWorkspace, type SeededWorkspace } from "./seed-client";
 const REGISTRY_KEY = "@paseo:daemon-registry";
 const SEED_NONCE_KEY = "@paseo:e2e-seed-nonce";
 const EXTRA_HOSTS_KEY = "@paseo:e2e-extra-hosts";
-export const SECONDARY_MODEL_ID = "one-minute-stream";
-export const SECONDARY_MODEL_LABEL = "One minute stream";
+export const SECONDARY_MODEL_ID = "secondary-offline-model";
+export const SECONDARY_MODEL_LABEL = "Secondary offline model";
 
 export async function createScheduleHost() {
-  const daemon = await startIsolatedHostDaemon("schedule-secondary-host");
+  const dataDir = await mkdtemp(path.join(tmpdir(), "schedule-secondary-"));
+  const fixturePath = path.join(dataDir, "codex-offline");
+  const fixture = await readFile(
+    path.join(repoRoot, "crates/provider/tests/fixtures/codex_app_server.py"),
+    "utf8",
+  );
+  await writeFile(
+    fixturePath,
+    fixture
+      .replaceAll("offline-model", SECONDARY_MODEL_ID)
+      .replaceAll("Offline model", SECONDARY_MODEL_LABEL),
+  );
+  await chmod(fixturePath, 0o755);
+  await writeFile(`${fixturePath}.cwd`, dataDir);
+  await writeFile(path.join(dataDir, "behavior"), "workflows");
+  const daemon = await startIsolatedHostDaemon("schedule-secondary-host", {
+    dataDir,
+    environment: { NODE_ENV: "development", AIT_SERVER_CODEX_BIN: fixturePath },
+  }).catch(async (error) => {
+    await rm(dataDir, { recursive: true, force: true });
+    throw error;
+  });
   let workspace: SeededWorkspace | undefined;
   try {
     workspace = await seedWorkspace({ repoPrefix: "schedule-secondary-", port: daemon.port });
@@ -54,15 +79,13 @@ export async function addScheduleHostAndReload(input: {
         throw new Error("Expected the e2e seed nonce before overriding the host registry.");
       }
       const raw = localStorage.getItem(keys.registry);
-      const registry: Array<{ serverId: string }> = raw ? JSON.parse(raw) : [];
+      const registry: { serverId: string }[] = raw ? JSON.parse(raw) : [];
       const nextRegistry = registry.filter((entry) => entry.serverId !== seededHost.serverId);
       nextRegistry.push(seededHost);
       localStorage.setItem(keys.registry, JSON.stringify(nextRegistry));
 
       const rawExtraHosts = localStorage.getItem(keys.extraHosts);
-      const extraHosts: Array<{ serverId: string }> = rawExtraHosts
-        ? JSON.parse(rawExtraHosts)
-        : [];
+      const extraHosts: { serverId: string }[] = rawExtraHosts ? JSON.parse(rawExtraHosts) : [];
       const nextExtraHosts = extraHosts.filter((entry) => entry.serverId !== seededHost.serverId);
       nextExtraHosts.push(seededHost);
       localStorage.setItem(keys.extraHosts, JSON.stringify(nextExtraHosts));

@@ -4,7 +4,7 @@ use std::ffi::OsString;
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
 
-use crate::summary::{SummaryConfiguration, SummaryGenerator};
+use model::summary::{SummaryConfiguration, SummaryGenerator};
 
 use crate::local::antigravity::AntigravityClient;
 use crate::local::claude::ClaudeClient;

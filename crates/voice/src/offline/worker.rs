@@ -22,8 +22,8 @@ const CONTROL_LIMIT: u64 = 32 * 1024;
 
 #[derive(Debug, Serialize, Deserialize)]
 pub(super) struct Init {
-    pub model: Model,
-    pub directory: PathBuf,
+    pub(crate) model: Model,
+    pub(crate) directory: PathBuf,
 }
 
 #[derive(Debug, Serialize, Deserialize)]

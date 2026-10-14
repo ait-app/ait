@@ -1,3 +1,4 @@
+import { BOT_METHODS } from "@ait/protocol/bot/rpc-schemas";
 import { ProviderSnapshotEntrySchema } from "@ait/protocol/messages";
 import { compactProviderSnapshot } from "@ait/protocol/provider-snapshot-codec";
 import { sessionEventMethod } from "@ait/protocol/session-event-kinds";
@@ -34,6 +35,10 @@ export function serverInfo(info: Payload, implemented: Set<string>): Payload {
     desktopManaged: false,
     sessionEventTypes: [
       "status.server_info",
+      ...(features.has("directory-subscriptions-v1") && has("project.list.request")
+        ? ["project.update"]
+        : []),
+      ...(has("workspace.script.list.request") ? ["script_status_update"] : []),
       ...(features.has("checkout-git-events-v1") && has("checkout.status.get.request")
         ? ["checkout.status.update"]
         : []),
@@ -53,6 +58,7 @@ export function serverInfo(info: Payload, implemented: Set<string>): Payload {
         : []),
     ],
     features: {
+      workspaceBots: features.has("workspace-bots-v1") && BOT_METHODS.every(has),
       ownedSubscriptions: has("subscription.release.request"),
       explicitEventSubscriptions: has("session.events.set_subscription.request"),
       providersSnapshot: has("provider.snapshot.get.request"),
@@ -89,6 +95,8 @@ export function serverInfo(info: Payload, implemented: Set<string>): Payload {
       agentForkContext: has("agent.fork_context.request"),
       agentDetach: has("agent.detach.request"),
       agentTimelinePromptIndex: has("agent.timeline.list_prompts.request"),
+      agentTimelineCachedReads:
+        has("agent.timeline.get.request") && features.has("agent-timeline-cached-reads-v1"),
       rewind: has("agent.rewind.request"),
       directorySync: supportsDirectories && features.has("directory-sync-v1"),
       directorySubscriptions:
@@ -100,6 +108,7 @@ export function serverInfo(info: Payload, implemented: Set<string>): Payload {
       projectList: has("project.list.request"),
       stableProjectIdentity: has("project.list.request") && has("project.add.request"),
       workspaceMultiplicity: has("workspace.list.request"),
+      workspaceTargetRead: has("workspace.get.request"),
       projectCreateDirectory: has("project.create_directory.request"),
       projectGithubClone: has("project.github.clone.request"),
       workspaceGithubRepositorySearch: has("workspace.github.search_repositories.request"),
@@ -142,6 +151,19 @@ function providerSnapshot(payload: Payload): Payload {
 export function eventMessage(method: string, params: unknown): Payload {
   method = sessionEventMethod(method);
   const payload = object(params);
+  if (method === "agent.stream") {
+    // 0.0.27 omitted timestamps on native control and usage notifications.
+    // Use receipt time for those legacy events while preserving source timestamps.
+    const event = object(payload.event);
+    if (
+      payload.timestamp === undefined &&
+      ["turn_started", "usage_updated", "permission_requested", "permission_resolved"].includes(
+        String(event.type),
+      )
+    ) {
+      return session(method, { ...payload, timestamp: new Date().toISOString() });
+    }
+  }
   if (method === "checkout.status.update") {
     // The SDK reuses the correlated status schema for unsolicited updates.
     return session("checkout.status.update", { requestId: "", ...payload });

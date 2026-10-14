@@ -1,5 +1,7 @@
 # ADR-038：protocol 仅依赖公共 model
 
+> 已由 [ADR-111](adr-111-domain-values-and-server-protocol.md) 取代：protocol crate 已并入 `model::server`，本文仅保留历史依赖决策。
+
 - 状态：Accepted。
 - 日期：2026-09-25。
 - 授权：清理 protocol 对四个能力包的依赖，并绘制 server 内部依赖图。

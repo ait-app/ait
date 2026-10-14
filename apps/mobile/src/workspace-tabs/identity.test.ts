@@ -189,3 +189,54 @@ describe("plugin panel tab identity", () => {
     expect(agent).toBe("plugin_agent_6_review_7_details_7_agent-1");
   });
 });
+
+it("normalizes and separates schedule list, creation and edit navigation", () => {
+  expect(
+    normalizeWorkspaceTabTarget({ kind: "schedule", scheduleId: " task-1 ", view: "list" }),
+  ).toEqual({ kind: "schedule", scheduleId: "task-1" });
+  expect(normalizeWorkspaceTabTarget({ kind: "schedule", scheduleId: " " })).toEqual({
+    kind: "schedule",
+    view: "list",
+  });
+  const targets = [
+    { kind: "schedule" as const },
+    { kind: "schedule" as const, view: "create" as const },
+    { kind: "schedule" as const, scheduleId: "task-1" },
+  ];
+  expect(new Set(targets.map(buildDeterministicWorkspaceTabId)).size).toBe(3);
+  expect(workspaceTabTargetsEqual(targets[0], { kind: "schedule", view: "list" })).toBe(true);
+  expect(
+    workspaceTabTargetsEqual(targets[2], { kind: "schedule", scheduleId: "task-1", view: "edit" }),
+  ).toBe(false);
+  expect(normalizeWorkspaceTabTarget({ kind: "schedule", filter: "paused" })).toEqual({
+    kind: "schedule",
+    view: "list",
+    filter: "paused",
+  });
+  expect(
+    workspaceTabTargetsEqual(targets[0], { kind: "schedule", view: "list", filter: "paused" }),
+  ).toBe(false);
+});
+
+describe("Bot tab identity", () => {
+  it("restores list, create and settings without private session identities", () => {
+    expect(normalizeWorkspaceTabTarget({ kind: "bot" })).toEqual({ kind: "bot", view: "list" });
+    expect(normalizeWorkspaceTabTarget({ kind: "bot", view: "create" })).toEqual({
+      kind: "bot",
+      view: "create",
+    });
+    expect(
+      normalizeWorkspaceTabTarget({ kind: "bot", botId: " bot-a ", view: "settings" }),
+    ).toEqual({ kind: "bot", botId: "bot-a", view: "settings" });
+    expect(buildDeterministicWorkspaceTabId({ kind: "bot", botId: "bot-a" })).toBe(
+      buildDeterministicWorkspaceTabId({ kind: "bot", botId: "bot-a", view: "settings" }),
+    );
+    expect(
+      workspaceTabTargetsEqual(
+        { kind: "bot", botId: "bot-a" },
+        { kind: "bot", botId: "bot-a", view: "settings" },
+      ),
+    ).toBe(false);
+    expect(workspaceTabTargetsEqual({ kind: "bot" }, { kind: "bot", view: "list" })).toBe(true);
+  });
+});

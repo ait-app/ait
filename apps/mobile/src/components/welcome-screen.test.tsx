@@ -30,11 +30,10 @@ vi.mock("@/runtime/host-runtime", () => ({
 }));
 vi.mock("@/runtime/account-state", async (original) => ({
   ...(await original<typeof import("@/runtime/account-state")>()),
-  accountLoginMethods: vi.fn(async () => ({ hosted: false })),
   useAccountState: () => ({
     status: mocks.accountStatus,
     hosts: [{ host_id: "host", server_id: "server", name: "My computer", platform: "linux" }],
-    center: "https://dash.ait-app.com:8443/api",
+    center: "https://aitapp.cn:8443/api",
     error: null,
   }),
   accountCommand: mocks.command,
@@ -74,29 +73,41 @@ beforeEach(() => {
   mocks.accountStatus = "logged_out";
   vi.clearAllMocks();
 });
-afterEach(cleanup);
+afterEach(() => {
+  cleanup();
+  vi.unstubAllEnvs();
+});
 
 describe("welcome account entry", () => {
-  it("waits for dismissal and navigates once when the selected host also comes online", async () => {
-    mocks.accountStatus = "online";
+  it("offers only online service in the website client", () => {
+    Platform.OS = "web";
+    vi.stubEnv("EXPO_PUBLIC_AIT_CONSOLE", "1");
+    const view = render(<WelcomeScreen />);
+    expect(view.queryByTestId("welcome-direct-connection")).toBeNull();
+    expect(view.queryByTestId("welcome-remote-ssh")).toBeNull();
+    fireEvent.click(view.getByTestId("welcome-account-relay"));
+    expect(view.getByTestId("account-host-panel")).toBeTruthy();
+  });
+  it("waits for login sheet dismissal before opening the shared host flow", async () => {
+    mocks.command.mockResolvedValueOnce({ status: "connecting" });
     const view = render(<WelcomeScreen />);
     fireEvent.click(view.getByTestId("welcome-account-relay"));
     mocks.online = true;
     view.rerender(<WelcomeScreen />);
     expect(mocks.replace).not.toHaveBeenCalled();
-    fireEvent.click(view.getByTestId("account-host-host"));
+    fireEvent.click(view.getByTestId("account-unified-login"));
     await waitFor(() => expect(view.queryByTestId("account-host-panel")).toBeNull());
     expect(mocks.push).not.toHaveBeenCalled();
     expect(mocks.replace).not.toHaveBeenCalled();
     act(() => mocks.dismiss());
-    expect(mocks.replace).toHaveBeenCalledExactlyOnceWith("/h/server");
+    expect(mocks.replace).toHaveBeenCalledExactlyOnceWith("/open-project");
     act(() => mocks.dismiss());
     view.rerender(<WelcomeScreen />);
     expect(mocks.replace).toHaveBeenCalledTimes(1);
   });
 
   it.each(["android", "ios"] as const)(
-    "lets a %s user with no hosts submit the login form",
+    "lets a %s user with no hosts start browser login",
     async (platform) => {
       Platform.OS = platform;
       const view = render(<WelcomeScreen />);
@@ -109,16 +120,13 @@ describe("welcome account entry", () => {
       expect(account.textContent).toBe("onlineService.title");
       fireEvent.click(account);
       expect(view.getByTestId("account-host-panel")).toBeTruthy();
-      fireEvent.change(view.getByTestId("account-email"), { target: { value: "me@example.test" } });
-      fireEvent.change(view.getByTestId("account-password"), {
-        target: { value: "test-password" },
-      });
-      fireEvent.click(view.getByTestId("account-login"));
+      expect(view.queryByTestId("account-email")).toBeNull();
+      expect(view.queryByTestId("account-password")).toBeNull();
+      expect(view.queryByTestId("account-legacy-login")).toBeNull();
+      fireEvent.click(view.getByTestId("account-unified-login"));
       await waitFor(() =>
-        expect(mocks.command).toHaveBeenCalledWith("account_login", {
-          center: "https://dash.ait-app.com:8443/api",
-          email: "me@example.test",
-          password: "test-password",
+        expect(mocks.command).toHaveBeenCalledWith("account_login_hosted", {
+          center: "https://aitapp.cn:8443/api",
         }),
       );
       expect(mocks.push).not.toHaveBeenCalled();
@@ -139,7 +147,7 @@ describe("welcome account entry", () => {
     expect(view.getByTestId("welcome-direct-connection")).toBeTruthy();
   });
 
-  it("also exposes the account entry in Electron", () => {
+  it("also starts browser login from the account entry in Electron", async () => {
     Platform.OS = "web";
     mocks.desktop = true;
     const view = render(<WelcomeScreen />);
@@ -151,5 +159,15 @@ describe("welcome account entry", () => {
         .slice(0, 3)
         .map((button) => button.getAttribute("data-testid")),
     ).toEqual(["welcome-direct-connection", "welcome-account-relay", "welcome-remote-ssh"]);
+    fireEvent.click(view.getByTestId("welcome-account-relay"));
+    expect(view.queryByTestId("account-email")).toBeNull();
+    expect(view.queryByTestId("account-password")).toBeNull();
+    expect(view.queryByTestId("account-legacy-login")).toBeNull();
+    fireEvent.click(view.getByTestId("account-unified-login"));
+    await waitFor(() =>
+      expect(mocks.command).toHaveBeenCalledExactlyOnceWith("account_login_hosted", {
+        center: "https://aitapp.cn:8443/api",
+      }),
+    );
   });
 });

@@ -57,13 +57,14 @@ export class ConnectionSubscriptions extends OwnedSubscriptions {
   }
 
   observeRequest<T>(
-    query: ObservationRequest,
+    input: ObservationRequest | (() => ObservationRequest),
     request: (query: ObservationRequest, accept: (snapshot: T) => void) => Promise<T>,
     signal?: AbortSignal,
     failed?: () => void,
   ): OwnedSubscription<T> {
     return super.observe(
       async (accept) => {
+        const query = typeof input === "function" ? input() : input;
         const legacy = this.legacy;
         if (!legacy) return request(query, accept);
         const interest = legacy.start(query);

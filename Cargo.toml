@@ -3,19 +3,21 @@ members = ["bins/daemon", "crates/*"]
 resolver = "3"
 
 [workspace.package]
-version = "0.0.23"
+version = "0.1.2"
 edition = "2024"
 publish = false
 
 [workspace.dependencies]
+async-trait = "0.1.89"
+host-link = { path = "crates/host-link" }
 api = { path = "crates/api" }
+bot = { path = "crates/bot" }
 browser = { path = "crates/browser" }
 domain = { path = "crates/domain" }
-file = { path = "crates/file" }
 filesystem = { path = "crates/filesystem" }
 metadata = { path = "crates/metadata" }
 model = { path = "crates/model" }
-protocol = { path = "crates/protocol" }
+persistence = { path = "crates/persistence" }
 provider = { path = "crates/provider" }
 relay = { path = "crates/relay" }
 schedule = { path = "crates/schedule" }
@@ -23,7 +25,6 @@ terminal = { path = "crates/terminal" }
 voice = { path = "crates/voice" }
 
 anyhow = "1.0.104"
-async-trait = "0.1.89"
 axum = { version = "0.8.9", features = ["ws"] }
 base64 = "0.22.1"
 bzip2 = "0.6"
@@ -39,21 +40,34 @@ libc = "0.2"
 memchr = "2.8.3"
 nix = "0.31.3"
 portable-pty = "0.9.0"
+prost = "0.14.4"
 pulldown-cmark = { version = "0.13.4", default-features = false }
 regex = "1.13.1"
 reqwest = { version = "0.12.28", default-features = false }
+rustls = { version = "0.23.43", default-features = false, features = ["ring", "std", "tls12"] }
 rusqlite = "0.37"
 secrecy = "0.10.3"
 serde = { version = "1.0.229", features = ["derive"] }
 serde_json = "1.0.151"
+serde_yaml_ng = "0.10.0"
 sha2 = "0.10.9"
 sherpa-onnx = "=1.13.8"
 subtle = "2.6.1"
 tar = "0.4"
 tempfile = "3.27.0"
 thiserror = "2.0.20"
-tokio = { version = "1.53.1", features = ["macros", "rt", "sync", "time", "net", "rt-multi-thread", "signal", "process", "io-util", "fs"] }
-tokio-stream = "0.1.17"
+tokio = { version = "1.53.1", features = [
+  "macros",
+  "rt",
+  "sync",
+  "time",
+  "net",
+  "rt-multi-thread",
+  "signal",
+  "process",
+  "io-util",
+  "fs",
+] }
 tokio-tungstenite = "0.29"
 tokio-util = { version = "0.7.19", features = ["rt"] }
 toml = "1.1.6"
@@ -64,29 +78,32 @@ two-face = { version = "0.5.2", features = ["syntect-fancy"] }
 unicode-normalization = "0.1.24"
 url = "2.5.8"
 uuid = { version = "1.26.0", features = ["v4"] }
-vt100 = "0.16.2"
+# Pin upstream PR #30 until a release includes wide-character resize and small-screen fixes.
+vt100 = { git = "https://github.com/Junyi-99/vt100-rust", rev = "f2a4d76f9a663894d7bd56355caf150c106556ca" }
+webpki-roots = "1.0.9"
 
 [workspace.lints.rust]
 missing_docs = "warn"
 # 1. 内存安全与规范
-unsafe_code = "deny"                # 禁止或严格限制 unsafe 代码块
+unsafe_code = "forbid" # 禁止 unsafe 代码块，且不允许在源码中局部放开
 
 # 2. 质量与规范
-unused_imports = "warn"             # 未使用的导入
-unused_variables = "warn"           # 未使用的变量
-dead_code = "warn"                  # 未使用的函数/结构体（可设为 allow，适合开发中）
-unreachable_code = "warn"           # 无法到达的代码
+unused_imports = "warn" # 未使用的导入
+unused_variables = "warn" # 未使用的变量
+dead_code = "warn" # 未使用的函数/结构体（可设为 allow，适合开发中）
+unreachable_code = "warn" # 无法到达的代码
 unused_crate_dependencies = "warn"
 unused_lifetimes = "warn"
 unused_macro_rules = "warn"
 
 # 3. 命名与风格
-non_snake_case = "warn"             # 变量/函数名非蛇形命名
-non_camel_case_types = "warn"       # 类型名非驼峰命名
-non_upper_case_globals = "warn"     # 全局常量非全大写
+non_snake_case = "warn" # 变量/函数名非蛇形命名
+non_camel_case_types = "warn" # 类型名非驼峰命名
+non_upper_case_globals = "warn" # 全局常量非全大写
 
 # 4. 严谨性（推荐在大型项目开启）
-unused_qualifications = "warn"      # 不必要的完全限定路径
+unused_qualifications = "warn" # 不必要的完全限定路径
+unreachable_pub = "warn" # pub items not reachable from outside the crate
 unused_results = "allow"
 unused_import_braces = "warn"
 unused_extern_crates = "warn"
@@ -94,3 +111,7 @@ unused_extern_crates = "warn"
 [workspace.lints.clippy]
 all = "warn"
 pedantic = "warn"
+
+[profile.dev]
+# Keep file:line backtraces; dropping variable debuginfo cuts cold-build CPU time and target size.
+debug = "line-tables-only"

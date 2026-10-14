@@ -18,6 +18,7 @@ pub const METHODS: &[MethodSpec] = &[
 /// # Arguments
 /// * `context` - Negotiated, authenticated request; retained when its method is not recognized.
 /// * `connector` - The host-owned connector shared with other control transports.
+/// * `management` - Optional non-secret host ownership status; managed hosts reject external control.
 /// # Returns
 /// Delivers the public connector status and its runtime identity once, consuming the request.
 /// An already consumed context requires no further work.
@@ -26,6 +27,7 @@ pub const METHODS: &[MethodSpec] = &[
 pub async fn request(
     context: &mut Option<Context<'_>>,
     connector: &Connector,
+    management: Option<Value>,
 ) -> Result<(), DispatchError> {
     if context.is_none() {
         return Ok(());
@@ -38,11 +40,25 @@ pub async fn request(
     }) else {
         return Err(DispatchError::NotImplemented);
     };
-    let result = execute(&context.request, connector).await;
+    let result = execute(&context.request, connector, management).await;
     context.respond(result).map_err(Into::into)
 }
 
-async fn execute(request: &model::Request, connector: &Connector) -> Result<Value, ErrorCode> {
+async fn execute(
+    request: &model::Request,
+    connector: &Connector,
+    management: Option<Value>,
+) -> Result<Value, ErrorCode> {
+    if management
+        .as_ref()
+        .is_some_and(|status| status["mode"] == "managed")
+        && matches!(
+            request.method.as_str(),
+            "relay.start.request" | "relay.stop.request"
+        )
+    {
+        return Err(ErrorCode::RelayManaged);
+    }
     match request.method.as_str() {
         "relay.start.request" => {
             let grant = serde_json::from_value(request.params.clone())
@@ -61,6 +77,7 @@ async fn execute(request: &model::Request, connector: &Connector) -> Result<Valu
         "instanceId": connector.local.instance_id,
         "platform": std::env::consts::OS,
         "status": connector.status().await,
+        "management": management.unwrap_or_else(|| json!({"mode":"external"})),
     }))
 }
 

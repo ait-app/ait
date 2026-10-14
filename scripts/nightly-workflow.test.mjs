@@ -13,7 +13,21 @@ import { nightlyBuilderArgs } from "./nightly-build.mjs";
 const workflow = yaml.parse(
   await readFile(new URL("../.github/workflows/ci.yml", import.meta.url), "utf8"),
 );
+const prCleanup = yaml.parse(
+  await readFile(new URL("../.github/workflows/cancel-merged-pr-ci.yml", import.meta.url), "utf8"),
+);
 const AsyncFunction = Object.getPrototypeOf(async function () {}).constructor;
+
+test("UI CI checks changed lint, delegates formatting and runs the shared client suite", () => {
+  const steps = workflow.jobs.ui.steps;
+  assert.equal(steps.find((step) => step.uses === "actions/checkout@v5").with["fetch-depth"], 0);
+  const check = steps.find((step) => step.name === "Check changed UI lint");
+  assert.equal(check.run, 'npm run check:ui -- "$UI_DIFF_BASE"');
+  assert.match(check.env.UI_DIFF_BASE, /pull_request.base.sha.*github.event.before/);
+  assert.ok(steps.some((step) => step.run === "node --test scripts/check-ui.test.mjs"));
+  assert.match(workflow.jobs.format.steps.at(-1).run, /oxfmt@.*--check \./);
+  assert.ok(steps.some((step) => step.run === "npm run test --workspace=@ait/client"));
+});
 const context = { repo: { owner: "ait-app", repo: "ait" }, sha: "current", runId: 42 };
 
 async function runScript(step, github, outputs = {}, controller = control) {
@@ -48,9 +62,12 @@ test("main builds run independently while admission and publication share a queu
   assert.equal(workflow.jobs.desktop.needs, "nightly-prepare");
   assert.equal(
     workflow.jobs.desktop.if,
-    "${{ !cancelled() && (github.event_name == 'pull_request' || needs.nightly-prepare.outputs.admitted == 'true') }}",
+    "${{ !cancelled() && github.event_name != 'pull_request' && github.ref == 'refs/heads/main' && needs.nightly-prepare.outputs.admitted == 'true' }}",
   );
-  assert.equal(workflow.jobs.desktop.concurrency, undefined);
+  assert.deepEqual(workflow.jobs.desktop.concurrency, {
+    group: "${{ format('desktop-run-{0}-{1}', github.run_id, matrix.platform) }}",
+    "cancel-in-progress": false,
+  });
   assert.deepEqual(
     workflow.jobs["nightly-prepare"].concurrency,
     workflow.jobs["nightly-publish"].concurrency,
@@ -61,10 +78,12 @@ test("main builds run independently while admission and publication share a queu
   assert.equal(new Set(platforms).size, platforms.length);
   assert.deepEqual(workflow.jobs["nightly-publish"].needs, [
     "nightly-prepare",
+    "changes",
     "desktop",
     "rust",
     "ui",
     "docs",
+    "format",
   ]);
   assert.deepEqual(workflow.jobs["nightly-publish"].concurrency, {
     group: "nightly-main-control",
@@ -104,16 +123,17 @@ function condition(expression, github, needs = {}, cancelled = false) {
   );
 }
 
-test("PR merge builds are read-only and never schedule, publish, or clean up nightly", () => {
+test("PR CI skips desktop packaging and every nightly job", () => {
   assert.ok(Object.hasOwn(workflow.on, "pull_request"));
   assert.equal(workflow.on.pull_request_target, undefined);
   assert.deepEqual(workflow.permissions, { contents: "read" });
   assert.deepEqual(workflow.jobs.desktop.permissions, { contents: "read" });
-  const github = { event_name: "pull_request", ref: "refs/pull/123/merge" };
-  assert.equal(condition(workflow.jobs.desktop.if, github), true);
-  for (const job of ["nightly-prepare", "nightly-publish", "nightly-cleanup"])
-    assert.equal(condition(workflow.jobs[job].if, github), false);
-  assert.equal(condition(workflow.jobs.desktop.if, github, {}, true), false);
+  for (const ref of ["refs/pull/123/merge", "refs/heads/main"]) {
+    const github = { event_name: "pull_request", ref };
+    const needs = { "nightly-prepare": { outputs: { admitted: "true" } } };
+    for (const job of ["desktop", "nightly-prepare", "nightly-publish", "nightly-cleanup"])
+      assert.equal(condition(workflow.jobs[job].if, github, needs), false, job);
+  }
   const upload = workflow.jobs.desktop.steps.find((step) =>
     step.uses?.startsWith("actions/upload-artifact@"),
   );
@@ -134,16 +154,132 @@ test("PR merge builds are read-only and never schedule, publish, or clean up nig
   );
 });
 
+test("desktop packaging requires an admitted main push that has not been cancelled", () => {
+  const github = { event_name: "push", ref: "refs/heads/main" };
+  for (const admitted of ["true", "false", undefined]) {
+    const needs = { "nightly-prepare": { outputs: { admitted } } };
+    assert.equal(condition(workflow.jobs.desktop.if, github, needs), admitted === "true");
+  }
+  const needs = { "nightly-prepare": { outputs: { admitted: "true" } } };
+  assert.equal(condition(workflow.jobs.desktop.if, github, needs, true), false);
+  assert.equal(
+    condition(workflow.jobs.desktop.if, { ...github, ref: "refs/heads/dev" }, needs),
+    false,
+  );
+});
+
+test("PR CI cleanup runs only after a merge to main and never executes PR code", () => {
+  assert.deepEqual(prCleanup.on, {
+    pull_request_target: { branches: ["main"], types: ["closed"] },
+  });
+  assert.deepEqual(prCleanup.permissions, { actions: "write" });
+  const job = prCleanup.jobs.cancel;
+  assert.equal(condition(job.if, { event: { pull_request: { merged: true } } }), true);
+  assert.equal(condition(job.if, { event: { pull_request: { merged: false } } }), false);
+  assert.equal(job.steps.length, 1);
+  assert.equal(job.steps[0].uses, "actions/github-script@v8");
+  assert.equal(job.steps[0].run, undefined);
+  assert.equal(job.steps[0].with.script.includes("require("), false);
+  assert.deepEqual(workflow.on.push.branches, ["main"]);
+  assert.equal(workflow.concurrency, undefined);
+});
+
+async function cancelPrRuns(runs, errors = {}) {
+  const pr = { number: 123, head: { ref: "feature", repo: { id: 7 } } };
+  const endpoint = Symbol("list workflow runs");
+  const listed = [];
+  const cancelled = [];
+  const notices = [];
+  await new AsyncFunction("github", "context", "core", prCleanup.jobs.cancel.steps[0].with.script)(
+    {
+      async paginate(method, params) {
+        assert.equal(method, endpoint);
+        assert.deepEqual(params, {
+          ...context.repo,
+          workflow_id: "ci.yml",
+          event: "pull_request",
+          branch: pr.head.ref,
+          status: params.status,
+          per_page: 100,
+        });
+        listed.push(params.status);
+        return runs.filter((run) => run.status === params.status);
+      },
+      rest: {
+        actions: {
+          listWorkflowRuns: endpoint,
+          async cancelWorkflowRun(params) {
+            // All statuses and pages must be collected before cancellation starts.
+            assert.deepEqual(listed, ["queued", "in_progress", "waiting", "pending", "requested"]);
+            assert.deepEqual(params, { ...context.repo, run_id: params.run_id });
+            cancelled.push(params.run_id);
+            if (errors[params.run_id]) throw errors[params.run_id];
+          },
+        },
+      },
+    },
+    { ...context, payload: { pull_request: pr } },
+    { notice: (message) => notices.push(message) },
+  );
+  return { cancelled, notices };
+}
+
+test("merging cancels every unfinished PR revision while preserving main and other PRs", async () => {
+  const run = (id, overrides = {}) => ({
+    id,
+    event: "pull_request",
+    status: "in_progress",
+    head_branch: "feature",
+    head_repository: { id: 7 },
+    head_sha: `revision-${id}`,
+    pull_requests: [{ number: 123 }],
+    ...overrides,
+  });
+  const { cancelled } = await cancelPrRuns([
+    run(1, { status: "queued" }),
+    run(2),
+    run(3, { status: "waiting" }),
+    run(4, { status: "pending" }),
+    run(5, { status: "requested" }),
+    run(6, { status: "completed" }),
+    run(7, { event: "push", head_branch: "main" }),
+    run(8, { pull_requests: [{ number: 456 }] }),
+    run(9, { pull_requests: [] }),
+    run(10, { pull_requests: [], head_repository: { id: 8 } }),
+    run(11, { pull_requests: [], head_branch: "other-feature" }),
+    run(12, { pull_requests: [], head_repository: null }),
+  ]);
+  assert.deepEqual(cancelled, [1, 2, 9, 3, 4, 5]);
+});
+
+test("PR CI cleanup tolerates runs completing during cancellation and continues", async () => {
+  const runs = [1, 2].map((id) => ({
+    id,
+    event: "pull_request",
+    status: "in_progress",
+    pull_requests: [{ number: 123 }],
+  }));
+  const { cancelled, notices } = await cancelPrRuns(runs, { 1: { status: 409 } });
+  assert.deepEqual(cancelled, [1, 2]);
+  assert.match(notices[0], /no longer cancellable/);
+  assert.match(notices[1], /Cancelled CI run 2/);
+  const error = new Error("Actions permission denied");
+  error.status = 403;
+  await assert.rejects(cancelPrRuns(runs, { 1: error }), { message: error.message });
+});
+
 test("main publishing requires desktop and applicable CI checks to pass", () => {
   const github = { event_name: "push", ref: "refs/heads/main" };
   const needs = {
+    changes: { result: "success" },
     desktop: { result: "success" },
     docs: { result: "success" },
+    format: { result: "success" },
     rust: { result: "skipped" },
     ui: { result: "success" },
   };
   assert.equal(condition(workflow.jobs["nightly-publish"].if, github, needs), true);
-  for (const job of ["desktop", "docs", "rust", "ui"]) {
+  for (const job of ["changes", "desktop", "docs", "format", "rust", "ui"]) {
     assert.equal(
       condition(workflow.jobs["nightly-publish"].if, github, {
         ...needs,
@@ -152,6 +288,16 @@ test("main publishing requires desktop and applicable CI checks to pass", () => 
       false,
     );
   }
+  // A failed change filter skips both checks; publication must not treat that as a pass.
+  assert.equal(
+    condition(workflow.jobs["nightly-publish"].if, github, {
+      ...needs,
+      changes: { result: "failure" },
+      rust: { result: "skipped" },
+      ui: { result: "skipped" },
+    }),
+    false,
+  );
   assert.equal(
     condition(workflow.jobs["nightly-publish"].if, { ...github, ref: "refs/heads/dev" }, needs),
     false,
@@ -167,7 +313,7 @@ test("mobile publishing remains manual only", async () => {
   }
 });
 
-test("packaging shell passes nightly names literally while PR builds keep release names", async (t) => {
+test("packaging shell passes nightly names literally and keeps default names without a label", async (t) => {
   const directory = await mkdtemp(path.join(tmpdir(), "ait-nightly-args-"));
   t.after(() => rm(directory, { recursive: true, force: true }));
   await writeFile(

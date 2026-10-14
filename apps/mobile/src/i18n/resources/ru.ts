@@ -3,6 +3,7 @@ import { pluginSettings } from "./plugin-settings";
 
 export const ru: TranslationResources = {
   onlineService: en.onlineService,
+  bots: en.bots,
   paneFind: {
     searchFailed:
       "Не удалось выполнить поиск в чате. Проверьте подключение к хосту и повторите попытку.",
@@ -1187,16 +1188,11 @@ export const ru: TranslationResources = {
       appName: "Ait",
     },
     sections: {
+      usage: "Usage",
       workspaces: "Рабочие пространства",
       sessions: "История",
       search: "Поиск",
       schedules: "Расписания",
-    },
-    worktreeSetup: {
-      title: "Настроить скрипты worktree",
-      description:
-        "Добавьте команды настройки для автоматической установки зависимостей и подготовки новых worktree.",
-      openProjectSettings: "Открыть настройки проекта",
     },
     project: {
       actions: {
@@ -1379,7 +1375,7 @@ export const ru: TranslationResources = {
       },
       keepRunning: {
         title: "Продолжать работу демона после выхода",
-        hint: "Демон продолжит работать после выхода из Ait",
+        hint: "Агенты и терминалы продолжают работать после выхода из Ait; при следующем запуске Ait подключится к ним снова.",
       },
       logs: {
         title: "Файл журнала",
@@ -1394,7 +1390,6 @@ export const ru: TranslationResources = {
       fullStatus: {
         title: "Полный статус",
         modalTitle: "Статус демона",
-        hint: "Выполняет команду `paseo daemon status` и показывает результат",
         view: "Посмотреть статус",
         copied: "Статус скопирован в буфер обмена.",
         fetchFailed: "Не удалось получить статус демона: {{message}}",
@@ -1675,6 +1670,31 @@ export const ru: TranslationResources = {
     },
   },
   providerUsage: {
+    summaryUsed: "{{source}}: использовано {{amount}}",
+    summaryRemaining: "{{source}}: осталось {{amount}}",
+    options: "Настройки",
+    refreshAll: "Обновить всё",
+    refreshFailed: "Не удалось обновить использование",
+    noHosts: "Нет подключённых хостов",
+    agentError: "Не удалось загрузить использование: {{reason}}",
+    hostUnavailableNamed: "Подключитесь к {{host}}, чтобы увидеть использование",
+    hostUpgradeRequiredNamed: "Обновите {{host}}, чтобы увидеть использование",
+    pin: "Закрепить",
+    unpin: "Открепить",
+    pinWindow: "Закрепить {{source}} {{window}}",
+    refreshSource: "Обновить {{source}}",
+    displayAs: "Проценты",
+    displayUsed: "Использовано",
+    displayRemaining: "Осталось",
+    showInSidebar: "Сводка на боковой панели",
+    showInSidebarHint: "Закреплённые окна отображаются внизу боковой панели",
+    loginRejected: "Вход отклонён (HTTP {{status}}). {{remedy}}",
+    loginExpired: "Срок входа истёк {{time}}. {{remedy}}",
+    loginRefreshCommand: "Выполните {{command}}, чтобы обновить вход.",
+    loginSignInAgain: "Войдите снова.",
+    nativeReadFailed: "Не удалось прочитать использование исходной учётной записи",
+    nativePlanUnavailable:
+      "Этот способ входа не предоставляет использование плана. Войдите через CLI провайдера.",
     error: "Ошибка",
     unavailable: "Недоступно",
     updated: "Обновлено {{time}}",
@@ -1908,7 +1928,10 @@ export const ru: TranslationResources = {
       loading: "Загрузка файла...",
       noPreview: "Предварительный просмотр недоступен",
       openWithSystem: "Открыть системным приложением",
-      binaryPreviewUnavailable: "Предварительный просмотр двоичного файла недоступен.",
+      downloadFile: "Скачать файл",
+      shareFile: "Поделиться файлом",
+      binaryPreviewUnavailable: "Предварительный просмотр недоступен",
+      binaryPreviewDescription: "Ait не поддерживает предварительный просмотр этого типа файлов.",
       tooLargeToDisplay: "Этот файл слишком велик для отображения",
       failedToLoad: "Не удалось загрузить файл",
       failedToLoadPreview: "Не удалось загрузить предварительный просмотр файла.",
@@ -2002,6 +2025,8 @@ export const ru: TranslationResources = {
     dismiss: "Закрыть",
   },
   contextWindow: {
+    noData: "No context usage yet",
+    accessibilityNoData: "View account usage",
     title: "Контекстное окно",
     used: "Использовано: {{percentage}}%",
     tokens: "Токены: {{used}} / {{max}}",
@@ -2042,6 +2067,7 @@ export const ru: TranslationResources = {
     },
     groupInfo: "О разделе «{{title}}»",
     sections: {
+      management: "Управление",
       general: "Основные",
       appearance: "Оформление",
       layout: en.settings.sections.layout,
@@ -2193,6 +2219,8 @@ export const ru: TranslationResources = {
           "Собрать сведения о подключениях, демоне, провайдерах, настольном приложении и журналах",
         run: "Запустить",
         running: "Выполняется диагностика...",
+        exportAccessibility: "Экспорт файла диагностики",
+        exportFailed: "Не удалось экспортировать файл диагностики",
         copyLabel: "результаты диагностики",
         copyAccessibility: "Скопировать результаты диагностики",
         copyFailed: "Не удалось скопировать результаты диагностики",
@@ -2212,6 +2240,7 @@ export const ru: TranslationResources = {
       connectedHosts: "Подключенные хосты",
       offline: "Оффлайн",
       versionDiffers: "Версия отличается от версии на этом устройстве",
+      experimentalFeatures: en.settings.about.experimentalFeatures,
       releaseChannel: {
         label: "Канал выпуска",
         description:
@@ -2283,6 +2312,14 @@ export const ru: TranslationResources = {
         codeSize: "Размер кода",
         codeSizeHint: "Используется для кода, диффов и вывода терминала",
         codeSizeAccessibility: "Размер шрифта кода",
+      },
+      layout: {
+        title: "Макет",
+        contentWidth: "Ширина содержимого",
+        contentWidthHint: "Максимальная ширина чата и файлов Markdown на широких экранах",
+        contentWidthAccessibility: "Ширина содержимого в пикселях",
+        reset: "Сбросить",
+        resetAccessibility: "Сбросить ширину содержимого",
       },
       syntax: {
         title: "Синтаксис",

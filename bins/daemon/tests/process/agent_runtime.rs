@@ -3,7 +3,7 @@ use std::collections::BTreeMap;
 use domain::agent_runtime::{
     AgentAttentionReason, AgentRuntimeStatus, PersistedAgentRuntimeRecord,
 };
-use model::workspace::records::{
+use domain::workspace::records::{
     PersistedProjectKind, PersistedProjectRecord, PersistedWorkspaceKind, PersistedWorkspaceRecord,
 };
 use serde_json::json;

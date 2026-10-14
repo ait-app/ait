@@ -3,7 +3,8 @@ use super::*;
 use std::sync::Mutex;
 use std::sync::atomic::{AtomicBool, Ordering};
 
-use model::summary::{SummaryError, SummaryFuture, SummaryKind, SummaryRequest, SummarySelection};
+use domain::summary::{SummaryError, SummaryKind, SummaryRequest, SummarySelection};
+use model::summary::SummaryFuture;
 use serde_json::json;
 
 #[derive(Debug, Default)]
@@ -12,7 +13,7 @@ struct Generator {
     cancelled: AtomicBool,
 }
 
-impl provider::summary::SummaryGenerator for Generator {
+impl model::summary::SummaryGenerator for Generator {
     fn generate(&self, request: SummaryRequest) -> SummaryFuture<'_> {
         Box::pin(async move {
             if self.cancelled.load(Ordering::SeqCst) {

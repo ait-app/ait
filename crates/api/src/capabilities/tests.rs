@@ -29,7 +29,22 @@ fn empty_host_keeps_only_builtin_api_methods() {
         ]
     );
     let registered = crate::registered_capabilities();
-    assert_eq!(registered.len(), 180);
+    assert_eq!(registered.len(), 201);
+    assert!(
+        !registered
+            .iter()
+            .any(|method| method == "daemon.get_pairing_offer.request")
+    );
+    assert!(
+        registered
+            .iter()
+            .any(|method| method == "workspace.get.request")
+    );
+    assert!(
+        !methods
+            .iter()
+            .any(|method| method == "workspace.get.request")
+    );
     assert!(registered.iter().any(|method| method == "terminal.input"));
     assert!(!methods.iter().any(|method| method == "terminal.input"));
     assert!(
@@ -46,11 +61,13 @@ fn merged_components_have_one_owner_per_method_and_keep_placeholders_separate() 
     let names: Vec<_> = specs.iter().map(|spec| spec.name).collect();
     let unique: BTreeSet<_> = names.iter().copied().collect();
     assert_eq!(names.len(), unique.len());
-    assert_eq!(names.len(), 179);
+    assert_eq!(names.len(), 200);
+    assert!(unique.contains("workspace.get.request"));
     assert!(unique.contains("schedule.list.request"));
     assert!(!unique.contains("server.status.unsubscribe"));
     let registered = crate::registered_capabilities();
-    assert_eq!(registered.len(), 180);
+    assert_eq!(registered.len(), 201);
+    assert!(unique.contains("bot.message.send.request"));
 }
 
 #[test]
@@ -68,19 +85,45 @@ fn file_methods_use_ait_names() {
 }
 
 #[test]
-fn skill_methods_are_owned_by_filesystem_and_remain_requests() {
-    let specs: Vec<_> = ::filesystem::capabilities::implemented_methods()
+fn skill_methods_are_owned_by_provider_and_remain_requests() {
+    let specs: Vec<_> = ::provider::capabilities::implemented_methods()
         .filter(|spec| spec.name.starts_with("agent.skills."))
         .collect();
     assert_eq!(specs.len(), 5);
     assert!(specs.iter().all(|spec| spec.kind == InboundKind::Request));
+    assert!(
+        ::filesystem::capabilities::implemented_methods()
+            .all(|spec| !spec.name.starts_with("agent."))
+    );
+}
+
+#[test]
+fn workspace_and_project_methods_are_owned_by_metadata() {
+    let moved: BTreeSet<_> = ::metadata::capabilities::implemented_methods()
+        .map(|spec| spec.name)
+        .filter(|name| {
+            [
+                "workspace.worktree.",
+                "workspace.recovery.",
+                "workspace.github.",
+                "project.github.",
+            ]
+            .iter()
+            .any(|prefix| name.starts_with(prefix))
+        })
+        .collect();
+    assert_eq!(moved.len(), 7);
+    assert!(
+        ::filesystem::capabilities::implemented_methods()
+            .all(|spec| !spec.name.starts_with("workspace.") && !spec.name.starts_with("project."))
+    );
 }
 
 #[test]
 fn baseline_methods_and_heartbeat_keep_their_shared_contracts() {
-    assert_eq!(protocol::CAPABILITIES, model::server::CAPABILITIES);
+    assert_eq!(model::server::CAPABILITIES, model::server::CAPABILITIES);
     let heartbeat = implemented_methods()
-        .find(|spec| spec.name == ::metadata::protocol::server::HEARTBEAT_METHOD)
+        .find(|spec| spec.name == ::metadata::server::protocol::HEARTBEAT_METHOD)
         .expect("heartbeat must be declared by metadata");
     assert_eq!(heartbeat.kind, InboundKind::Event);
 }

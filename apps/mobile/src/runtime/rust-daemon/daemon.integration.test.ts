@@ -62,6 +62,7 @@ it.runIf(Boolean(process.env.AIT_TEST_RUST_SERVER) && process.platform !== "win3
         transportFactory: createRustDaemonTransportFactory(base),
       });
       await client.connect();
+      await verifyStartupEventSubscriptions(client);
       const agentPhases: string[] = [];
       const agent = await client.createAgent({
         idempotencyKey: "sdk-agent",
@@ -96,8 +97,11 @@ it.runIf(Boolean(process.env.AIT_TEST_RUST_SERVER) && process.platform !== "win3
       expect((await client.waitForFinish(workspace.agent!.id, 10000)).lastMessage).toBe(
         "Echo: SDK workspace creation",
       );
+      await verifyWorkspaceTarget(client, workspace.workspace!.id);
       await verifyReadInterfaces(client, agent.id, cwd);
-      await verifyPermissionAndResume(client, agent.id);
+      if (!agent.persistence)
+        throw new Error("Creation did not return a native persistence handle");
+      await verifyPermissionAndResume(client, agent.id, agent.persistence);
       await verifyTerminalActivity(client, cwd, workspace.workspace!.id);
     } finally {
       await client?.close().catch(() => {});
@@ -107,6 +111,32 @@ it.runIf(Boolean(process.env.AIT_TEST_RUST_SERVER) && process.platform !== "win3
   },
   30000,
 );
+
+async function verifyStartupEventSubscriptions(client: DaemonClient) {
+  for (const events of [
+    ["provider.snapshot.update", "status.daemon_config_changed"],
+    ["project.update", "script_status_update"],
+    [
+      "agent.attention.required",
+      "terminal.attention.required",
+      "agent.permission.request",
+      "agent.permission.resolved",
+      "agent.provider_subagents.update",
+      "checkout.status.update",
+      "status.server_info",
+    ],
+  ] as const) {
+    expect(client.getLastServerInfoMessage()?.sessionEventTypes).toEqual(
+      expect.arrayContaining([...events]),
+    );
+    const subscription = client.observeEvents([...events], { supportedOnly: true });
+    try {
+      await subscription.ready;
+    } finally {
+      await subscription.release();
+    }
+  }
+}
 
 async function verifyReadInterfaces(client: DaemonClient, agentId: string, cwd: string) {
   const first = await client.fetchAgents({ page: { limit: 1 } });
@@ -181,7 +211,27 @@ async function verifyReadInterfaces(client: DaemonClient, agentId: string, cwd: 
   }
 }
 
-async function verifyPermissionAndResume(client: DaemonClient, agentId: string) {
+async function verifyWorkspaceTarget(client: DaemonClient, workspaceId: string) {
+  expect(client.getLastServerInfoMessage()?.features?.workspaceTargetRead).toBe(true);
+  const target = await client.getWorkspace(workspaceId);
+  expect(target.state).toBe("ready");
+  expect(target.workspace?.id).toBe(workspaceId);
+  expect(target.project?.projectId).toBe(target.workspace?.projectId);
+  const agents = await client.fetchAgents({
+    scope: "active",
+    filter: { workspaceIds: [workspaceId] },
+    page: { limit: 40 },
+  });
+  expect(agents.entries.length).toBeGreaterThan(0);
+  expect(agents.entries.every(({ agent }) => agent.workspaceId === workspaceId)).toBe(true);
+  expect((await client.getWorkspace("not-a-workspace")).state).toBe("missing");
+}
+
+async function verifyPermissionAndResume(
+  client: DaemonClient,
+  agentId: string,
+  handle: Parameters<DaemonClient["resumeAgent"]>[0],
+) {
   const events = client.observeEvents(["agent.permission.request", "agent.permission.resolved"]);
   let permissionId: string | undefined;
   const unsubscribe = client.on("agent.permission.request", (message) => {
@@ -204,10 +254,9 @@ async function verifyPermissionAndResume(client: DaemonClient, agentId: string) 
     unsubscribe();
     await events.release();
   }
-  const before = await client.fetchAgent({ agentId });
-  if (!before?.agent.persistence) throw new Error("Missing native persistence handle");
+  // The readonly directory projection has no native handle; use the creation receipt.
   expect((await client.archiveAgent(agentId)).archivedAt).toEqual(expect.any(String));
-  const resumed = await client.resumeAgent(before.agent.persistence!, { title: "SDK resumed" });
+  const resumed = await client.resumeAgent(handle, { title: "SDK resumed" });
   expect(resumed.id).toBe(agentId);
   expect(resumed.title).toBe("SDK resumed");
   expect(resumed.archivedAt).toBeNull();

@@ -26,7 +26,7 @@ import { toErrorMessage } from "@/utils/error-messages";
 import { showProviderNoticeToast } from "@/utils/provider-notice-toast";
 import type { AgentMode } from "@ait/protocol/agent-types";
 import type { AgentProviderDefinition } from "@ait/protocol/provider-manifest";
-import { getAgentModeIcon, getAgentModeOptionIcon } from "@/agent-controls/icons";
+import { getAgentModeIcon } from "@/agent-controls/icons";
 interface ModeComboboxOptionProps {
   option: ComboboxOption;
   selected: boolean;
@@ -46,9 +46,9 @@ function ModeComboboxOption({
   providerDefinitions,
   iconColor,
 }: ModeComboboxOptionProps) {
-  const IconComponent = getAgentModeOptionIcon(provider, option.id, providerDefinitions);
+  const IconComponent = getAgentModeIcon(provider, option.id, providerDefinitions);
   const leadingSlot = useMemo(
-    () => (IconComponent ? <IconComponent size={16} color={iconColor} /> : null),
+    () => <IconComponent size={16} color={iconColor} />,
     [IconComponent, iconColor],
   );
   return (

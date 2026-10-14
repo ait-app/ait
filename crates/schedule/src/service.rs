@@ -21,8 +21,9 @@ use std::{
 };
 
 use chrono::Utc;
+use domain::storage::schedule::Error;
 use model::methods::MethodSpec;
-use model::storage::schedule::{Error, Store};
+use model::storage::schedule::Store;
 use serde_json::{Value, json};
 use tokio::{
     sync::{mpsc, oneshot},
@@ -32,6 +33,7 @@ use tokio_util::sync::CancellationToken;
 
 use crate::engine::{Engine, only};
 use crate::ports::{Checkpoint, Outcome, Progress, Runner};
+use crate::protocol::Create;
 
 type Reply = oneshot::Sender<Result<Value, Error>>;
 enum Command {
@@ -81,7 +83,7 @@ impl Schedules {
     /// Execute one canonical schedule request without holding the scheduler lane during a run.
     /// # Errors
     /// Returns admission, validation, storage, or missing-schedule errors.
-    pub async fn execute(&self, method: &str, params: Value) -> Result<Value, Error> {
+    pub(crate) async fn execute(&self, method: &str, params: Value) -> Result<Value, Error> {
         if self.0.cancel.is_cancelled() {
             return Err(Error::Conflict);
         }
@@ -193,6 +195,108 @@ fn settle(engine: &mut Engine, mut finished: Finished) -> Result<(), Box<Finishe
     }
     Ok(())
 }
+struct PreparedRequest {
+    method: String,
+    params: Result<Value, Error>,
+    reply: Reply,
+    revision: Option<(String, chrono::DateTime<Utc>)>,
+}
+fn prepare_binding(
+    engine: &Engine,
+    method: &str,
+    params: &Value,
+) -> Result<Option<(String, domain::schedule::Target)>, Error> {
+    match method {
+        "schedule.create.request" => {
+            let request: Create =
+                serde_json::from_value(params.clone()).map_err(|_| Error::Invalid)?;
+            Ok(Some((request.workspace_id, request.target)))
+        }
+        "schedule.update.request" => {
+            let record = engine.preview_update(params, Utc::now())?;
+            if ["target", "newAgentConfig", "workspaceId"]
+                .iter()
+                .any(|field| params.get(field).is_some())
+            {
+                Ok(record.workspace_id.map(|id| (id, record.target)))
+            } else {
+                Ok(None)
+            }
+        }
+        _ => Ok(None),
+    }
+}
+async fn resolve_params(
+    runner: &Arc<dyn Runner>,
+    mut params: Value,
+    binding: (String, domain::schedule::Target),
+) -> Result<Value, Error> {
+    let target = tokio::time::timeout(Duration::from_secs(5), runner.resolve(binding.0, binding.1))
+        .await
+        .map_err(|_| Error::Conflict)??;
+    params["target"] = serde_json::to_value(target).map_err(|_| Error::Invalid)?;
+    params
+        .as_object_mut()
+        .ok_or(Error::Invalid)?
+        .remove("newAgentConfig");
+    Ok(params)
+}
+fn accept_request(
+    engine: &mut Engine,
+    runner: &Arc<dyn Runner>,
+    validations: &mut JoinSet<PreparedRequest>,
+    request: (String, Value, Reply),
+) {
+    let (method, params, reply) = request;
+    match prepare_binding(engine, &method, &params) {
+        Ok(Some(binding)) if validations.len() < 8 => {
+            let revision = if method == "schedule.update.request" {
+                match params["scheduleId"]
+                    .as_str()
+                    .ok_or(Error::Invalid)
+                    .and_then(|id| engine.inspect(id))
+                {
+                    Ok(record) => Some((record.id, record.updated_at)),
+                    Err(error) => {
+                        let _ = reply.send(Err(error));
+                        return;
+                    }
+                }
+            } else {
+                None
+            };
+            let runner = runner.clone();
+            validations.spawn(async move {
+                PreparedRequest {
+                    method,
+                    params: resolve_params(&runner, params, binding).await,
+                    reply,
+                    revision,
+                }
+            });
+        }
+        Ok(Some(_)) => {
+            let _ = reply.send(Err(Error::Conflict));
+        }
+        Ok(None) => {
+            let _ = reply.send(engine.request(&method, params, Utc::now()));
+        }
+        Err(error) => {
+            let _ = reply.send(Err(error));
+        }
+    }
+}
+fn apply_prepared(engine: &mut Engine, prepared: PreparedRequest) {
+    let result = prepared.params.and_then(|params| {
+        if let Some((id, revision)) = prepared.revision
+            && engine.inspect(&id)?.updated_at != revision
+        {
+            return Err(Error::Conflict);
+        }
+        engine.request(&prepared.method, params, Utc::now())
+    });
+    let _ = prepared.reply.send(result);
+}
 async fn serve(
     mut engine: Engine,
     runner: Arc<dyn Runner>,
@@ -203,6 +307,7 @@ async fn serve(
     tick.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Skip);
     let (progress, mut updates) = mpsc::channel::<Checkpoint>(64);
     let mut jobs = JoinSet::new();
+    let mut validations = JoinSet::new();
     let mut pending = Vec::new();
     loop {
         tokio::select! {
@@ -214,10 +319,13 @@ async fn serve(
                         if !pending.is_empty() { let _ = reply.send(Err(Error::Storage)); continue; }
                         let id=only(&params,&["scheduleId"]).and_then(|()|params["scheduleId"].as_str().map(str::to_owned).ok_or(Error::Invalid));
                         match id {Ok(id)=>launch(&mut engine,&mut jobs,&runner,&cancel,&progress,(id,true,Some(reply))),Err(error)=>{let _=reply.send(Err(error));}}
-                    } else {let _=reply.send(engine.request(&method,params,Utc::now()));}
+                    } else {
+                        accept_request(&mut engine, &runner, &mut validations, (method, params, reply));
+                    }
                 },
                 None=>break,
             },
+            Some(result) = validations.join_next(), if !validations.is_empty() => { if let Ok(prepared) = result { apply_prepared(&mut engine, prepared); } },
             Some(result)=jobs.join_next(),if !jobs.is_empty()=>{if let Ok(finished)=result&& let Err(finished)=settle(&mut engine,finished){pending.push(*finished);}},
             _=tick.tick()=>{
                 pending=pending.into_iter().filter_map(|finished|settle(&mut engine,finished).err().map(|entry|*entry)).collect();
@@ -226,6 +334,7 @@ async fn serve(
         }
     }
     cancel.cancel();
+    drop(validations);
     let drained = async {
         while !jobs.is_empty() {
             tokio::select! {

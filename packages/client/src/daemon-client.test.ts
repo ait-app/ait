@@ -28,6 +28,122 @@ expectTypeOf<
   "exploreFileSystem" extends keyof DaemonClient ? true : false
 >().toEqualTypeOf<false>();
 
+const retiredSdkMethods = [
+  "connectHub",
+  "updateHubPermissions",
+  "getHubStatus",
+  "disconnectHub",
+  "getPluginCatalog",
+  "listPlugins",
+  "getPluginLogs",
+  "installDirectoryPlugin",
+  "installPluginSource",
+  "getPluginSourceStatus",
+  "previewPluginUpdates",
+  "applyPluginUpdates",
+  "updatePluginSources",
+  "inspectDirectoryPlugin",
+  "reloadPlugin",
+  "enablePlugin",
+  "disablePlugin",
+  "removePlugin",
+  "invokePluginRpc",
+] as const;
+
+expectTypeOf<
+  Extract<(typeof retiredSdkMethods)[number], keyof DaemonClient>
+>().toEqualTypeOf<never>();
+
+test.each(retiredSdkMethods)("no longer exposes the retired SDK method %s", (method) => {
+  expect(method in DaemonClient.prototype).toBe(false);
+});
+
+test("subscription failures identify the host and requested event categories", async () => {
+  const logger = createMockLogger();
+  const mock = createMockTransport();
+  const client = new DaemonClient({
+    url: "ws://test",
+    clientId: "subscription-diagnostics",
+    logger,
+    reconnect: { enabled: false },
+    transportFactory: () => mock.transport,
+  });
+  clients.push(client);
+  const connected = client.connect();
+  mock.triggerOpen();
+  await connected;
+  const events = ["project.update", "script_status_update"] as const;
+  const subscription = client.observeEvents([...events]);
+  await vi.waitFor(() => expect(mock.sent).toHaveLength(1));
+  const request = parseSentFrame(mock.sent[0]);
+  mock.triggerMessage(
+    wrapSessionMessage({
+      type: "rpc_error",
+      payload: {
+        requestId: request.requestId,
+        error: "Capability was not negotiated",
+        code: "unsupported_capability",
+      },
+    }),
+  );
+  await expect(subscription.ready).rejects.toMatchObject({
+    requestType: "session.events.set_subscription.request",
+    eventTypes: events,
+    code: "unsupported_capability",
+  });
+  await vi.waitFor(() =>
+    expect(logger.error).toHaveBeenCalledWith(
+      expect.objectContaining({
+        serverId: "srv_test_1",
+        err: expect.objectContaining({ eventTypes: events, requestId: request.requestId }),
+      }),
+      "Subscription failed",
+    ),
+  );
+});
+
+test("reads Workspace targets with independent correlated responses", async () => {
+  const mock = createMockTransport();
+  const client = new DaemonClient({
+    url: "ws://test",
+    clientId: "workspace-target",
+    transportFactory: () => mock.transport,
+    reconnect: { enabled: false },
+    logger: createMockLogger(),
+  });
+  clients.push(client);
+  const connected = client.connect();
+  mock.triggerOpen({ features: { workspaceTargetRead: true } });
+  await connected;
+  const first = client.getWorkspace("first");
+  const second = client.getWorkspace("second");
+  const requests = mock.sent.map(parseSentFrame);
+  expect(requests.map((request) => [request.type, request.workspaceId])).toEqual([
+    ["workspace.get.request", "first"],
+    ["workspace.get.request", "second"],
+  ]);
+  for (const [index, state] of [
+    [1, "archived"],
+    [0, "missing"],
+  ] as const) {
+    const request = requests[index];
+    mock.triggerMessage(
+      wrapSessionMessage({
+        type: "workspace.get.response",
+        payload: {
+          requestId: request.requestId,
+          workspaceId: request.workspaceId,
+          state,
+          workspace: null,
+          project: null,
+        },
+      }),
+    );
+  }
+  expect(await first).toMatchObject({ workspaceId: "first", state: "missing" });
+  expect(await second).toMatchObject({ workspaceId: "second", state: "archived" });
+});
+
 function createMockLogger() {
   return {
     debug: vi.fn(),
@@ -477,25 +593,6 @@ test.each(["agent", "workspace"] as const)(
     expect(transport.sent).toEqual([]);
   },
 );
-
-test("Hub management requires daemon support before dispatching requests", async () => {
-  const mock = createMockTransport();
-  const client = new DaemonClient({
-    url: "ws://test",
-    clientId: "hub_feature_gate_unit_test",
-    transportFactory: () => mock.transport,
-    reconnect: { enabled: false },
-  });
-  clients.push(client);
-  const connecting = client.connect();
-  mock.triggerOpen();
-  await connecting;
-
-  await expect(client.getHubStatus()).rejects.toThrow(
-    "Update the host to use Hub relationship management.",
-  );
-  expect(mock.sent).toEqual([]);
-});
 
 test("timeline observation consumes broadcasts from a host without selective delivery", async () => {
   const mock = createMockTransport();
@@ -1010,6 +1107,8 @@ test("sends new-agent run options when creating schedules", async () => {
   await connectPromise;
 
   const createPromise = client.scheduleCreate({
+    workspaceId: "wks-example",
+    startAt: "2030-01-01T09:00:00.000Z",
     requestId: "request-1",
     prompt: "Run the task",
     cadence: { type: "cron", expression: "* * * * *" },
@@ -1028,6 +1127,8 @@ test("sends new-agent run options when creating schedules", async () => {
   const request = parseSentFrame(mock.sent[0]);
   expect(request).toEqual({
     type: "schedule.create.request",
+    workspaceId: "wks-example",
+    startAt: "2030-01-01T09:00:00.000Z",
     requestId: "request-1",
     prompt: "Run the task",
     cadence: { type: "cron", expression: "* * * * *" },
@@ -1096,6 +1197,57 @@ test("sends new-agent run options when updating schedules", async () => {
     schedule: null,
     error: null,
   });
+});
+
+test("preserves schedule scope and trigger fields across the transport", async () => {
+  const mock = createMockTransport();
+  const client = new DaemonClient({
+    url: "ws://test",
+    clientId: "clsk_unit_test",
+    reconnect: { enabled: false },
+    transportFactory: () => mock.transport,
+  });
+  clients.push(client);
+  const connected = client.connect();
+  mock.triggerOpen();
+  await connected;
+  const cadence = { type: "once" as const, at: "2030-01-01T09:00:00.000Z" };
+  const target = { type: "agent" as const, agentId: "11111111-1111-4111-8111-111111111111" };
+  const create = client.scheduleCreate({
+    workspaceId: "wks-1",
+    requestId: "create-1",
+    prompt: "Review",
+    cadence,
+    target,
+  });
+  const created = parseSentFrame(mock.sent[0]);
+  expect(created).toMatchObject({ workspaceId: "wks-1", cadence, target });
+  respondToScheduleRequest(mock, created);
+  await create;
+  const update = client.scheduleUpdate({
+    id: "schedule-1",
+    requestId: "update-1",
+    workspaceId: "wks-1",
+    target,
+    startAt: null,
+  });
+  const updated = parseSentFrame(mock.sent[1]);
+  expect(updated).toMatchObject({ workspaceId: "wks-1", target, startAt: null });
+  respondToScheduleRequest(mock, updated);
+  await update;
+  const list = client.scheduleList({ requestId: "list-1", workspaceId: "wks-1" });
+  expect(parseSentFrame(mock.sent[2])).toEqual({
+    type: "schedule.list.request",
+    requestId: "list-1",
+    workspaceId: "wks-1",
+  });
+  mock.triggerMessage(
+    wrapSessionMessage({
+      type: "schedule.list.response",
+      payload: { requestId: "list-1", schedules: [], error: null },
+    }),
+  );
+  await expect(list).resolves.toMatchObject({ schedules: [], error: null });
 });
 
 test("sends typed browser automation execute responses", async () => {
@@ -1547,6 +1699,64 @@ test("honors explicit fetchAgentTimeline timeout below the session RPC default",
   await expect(responsePromise).rejects.toThrow("Timeout waiting for message (2000ms)");
 });
 
+test("sends cached timeline preference only when enabled and preserves revalidation hints", async () => {
+  const mock = createMockTransport();
+  const client = new DaemonClient({
+    url: "ws://test",
+    clientId: "clsk_unit_test",
+    logger: createMockLogger(),
+    reconnect: { enabled: false },
+    transportFactory: () => mock.transport,
+  });
+  clients.push(client);
+  const connected = client.connect();
+  mock.triggerOpen();
+  await connected;
+
+  for (const allowCached of [true, false]) {
+    const requestId = `cached-${allowCached}`;
+    const read = client.fetchAgentTimeline("agent-1", {
+      requestId,
+      direction: "tail",
+      limit: 40,
+      allowCached,
+    });
+    expect(parseSentFrame(mock.sent.at(-1)!)).toEqual({
+      type: "agent.timeline.get.request",
+      agentId: "agent-1",
+      requestId,
+      direction: "tail",
+      limit: 40,
+      ...(allowCached ? { allowCached: true } : {}),
+    });
+    mock.triggerMessage(
+      wrapSessionMessage({
+        type: "agent.timeline.get.response",
+        payload: {
+          requestId,
+          agentId: "agent-1",
+          agent: null,
+          direction: "tail",
+          projection: "projected",
+          epoch: "epoch",
+          reset: false,
+          staleCursor: false,
+          gap: false,
+          window: { minSeq: 0, maxSeq: 0, nextSeq: 1 },
+          startCursor: null,
+          endCursor: null,
+          hasOlder: false,
+          hasNewer: false,
+          historyNeedsRefresh: allowCached,
+          entries: [],
+          error: null,
+        },
+      }),
+    );
+    await expect(read).resolves.toMatchObject({ historyNeedsRefresh: allowCached });
+  }
+});
+
 test("lists the full agent prompt index", async () => {
   const logger = createMockLogger();
   const mock = createMockTransport();
@@ -1732,52 +1942,6 @@ test("honors explicit getDaemonStatus timeout below the session RPC default", as
   await expect(responsePromise).rejects.toThrow("Timeout waiting for message (1500ms)");
 });
 
-test("honors explicit getDaemonPairingOffer timeout below the session RPC default", async () => {
-  useHeartbeatClock();
-  const logger = createMockLogger();
-  const mock = createMockTransport();
-
-  const client = new DaemonClient({
-    url: "ws://test",
-    clientId: "clsk_unit_test",
-    logger,
-    reconnect: { enabled: false },
-    transportFactory: () => mock.transport,
-  });
-  clients.push(client);
-
-  const connectPromise = client.connect();
-  mock.triggerOpen();
-  await connectPromise;
-
-  const responsePromise = client.getDaemonPairingOffer({
-    requestId: "req-pairing-offer-1",
-    timeout: 1_500,
-  });
-  let settled = false;
-  void responsePromise.then(
-    () => {
-      settled = true;
-      return undefined;
-    },
-    () => {
-      settled = true;
-      return undefined;
-    },
-  );
-
-  expect(parseSentFrame(mock.sent[0])).toEqual({
-    type: "daemon.get_pairing_offer.request",
-    requestId: "req-pairing-offer-1",
-  });
-
-  await vi.advanceTimersByTimeAsync(1_499);
-  expect(settled).toBe(false);
-
-  await vi.advanceTimersByTimeAsync(1);
-  await expect(responsePromise).rejects.toThrow("Timeout waiting for message (1500ms)");
-});
-
 test("gates config reload on the daemon capability", async () => {
   const mock = createMockTransport();
   const client = new DaemonClient({
@@ -1835,51 +1999,6 @@ test("sends and parses daemon config reload", async () => {
     restartRequiredPaths: ["daemon.listen"],
     overrideControlledPaths: [],
   });
-});
-
-test("gets a structured plugin log snapshot", async () => {
-  const mock = createMockTransport();
-  const client = new DaemonClient({
-    url: "ws://test",
-    clientId: "clsk_unit_test",
-    logger: createMockLogger(),
-    reconnect: { enabled: false },
-    transportFactory: () => mock.transport,
-  });
-  clients.push(client);
-  const connectPromise = client.connect();
-  mock.triggerOpen({ features: { pluginLogs: true } });
-  await connectPromise;
-
-  const response = client.getPluginLogs("example");
-  const request = parseSentFrame(mock.sent[0]);
-  expect(request).toMatchObject({ type: "plugin.logs.get.request", pluginId: "example" });
-  mock.triggerMessage(
-    wrapSessionMessage({
-      type: "plugin.logs.get.response",
-      payload: {
-        requestId: request.requestId,
-        pluginId: "example",
-        entries: [
-          {
-            sequence: 3,
-            timestamp: "2026-08-16T12:00:00.000Z",
-            stream: "stdout",
-            message: "ready",
-          },
-        ],
-      },
-    }),
-  );
-
-  await expect(response).resolves.toEqual([
-    {
-      sequence: 3,
-      timestamp: "2026-08-16T12:00:00.000Z",
-      stream: "stdout",
-      message: "ready",
-    },
-  ]);
 });
 
 test("keeps waitForAgentUpsert initial fetch inside the requested deadline", async () => {
@@ -2043,6 +2162,49 @@ test("an obsolete foreground probe cannot close a replacement connection", async
   expect(client.getConnectionState()).toEqual({ status: "connected" });
   expect(second.closesFromClient()).toEqual([]);
 });
+
+test.each([true, false])(
+  "foreground verification sends a fresh ping with its own deadline during a pending latency probe (healthy=%s)",
+  async (healthy) => {
+    useHeartbeatClock();
+    const first = new FakeDaemon();
+    const second = new FakeDaemon();
+    first.daemonGoesSilent();
+    let attempts = 0;
+    const client = new DaemonClient({
+      url: "ws://test",
+      clientId: "independent-foreground-probe",
+      logger: noopLogger,
+      transportFactory: () => (++attempts === 1 ? first : second).transport,
+    });
+    clients.push(client);
+    const connection = client.connect();
+    first.openConnection();
+    await connection;
+    const latency = client.measureLatency({ timeoutMs: 15_000 }).then(
+      (rttMs) => ({ rttMs }),
+      (error: Error) => ({ error: error.message }),
+    );
+    await vi.advanceTimersByTimeAsync(1_000);
+    if (healthy) first.daemonAnswersPingsAfter("0.1s");
+
+    client.ensureConnected({ verify: true });
+    await vi.advanceTimersByTimeAsync(3_000);
+
+    expect(first.pingTimestamps()).toEqual(["0s", "1s"]);
+    if (healthy) {
+      expect(attempts).toBe(1);
+      expect(client.isConnected).toBe(true);
+      expect(first.closesFromClient()).toEqual([]);
+      await expect(latency).resolves.toEqual({ rttMs: 1_100 });
+    } else {
+      expect(attempts).toBe(2);
+      second.openConnection();
+      expect(client.isConnected).toBe(true);
+      await expect(latency).resolves.toMatchObject({ error: expect.any(String) });
+    }
+  },
+);
 
 test("stays online through ten minutes of pongs that arrive five seconds late", async () => {
   useHeartbeatClock();
@@ -2397,48 +2559,6 @@ test("file context action RPCs correlate success and error responses", async () 
     success: false,
     error: { code: "NOT_GIT_REPO", message: "Not a git repository" },
   });
-});
-
-test("sends plugin source identifiers unchanged for daemon-host resolution", async () => {
-  const mock = createMockTransport();
-  const client = new DaemonClient({
-    url: "ws://test",
-    clientId: "clsk_plugin_source",
-    logger: createMockLogger(),
-    reconnect: { enabled: false },
-    transportFactory: () => mock.transport,
-  });
-  clients.push(client);
-
-  const connectPromise = client.connect();
-  mock.triggerOpen({ features: { pluginSourceInstallation: true } });
-  await connectPromise;
-
-  const installPromise = client.installPluginSource({
-    source: "owner/repository:plugins/review",
-  });
-  const request = parseSentFrame(mock.sent.at(-1));
-  expect(request).toEqual({
-    type: "plugin.source.install.request",
-    requestId: expect.any(String),
-    source: "owner/repository:plugins/review",
-  });
-  mock.triggerMessage(
-    wrapSessionMessage({
-      type: "plugin.source.install.response",
-      payload: {
-        requestId: request.requestId,
-        plugin: {
-          id: "review",
-          path: "/plugins/review",
-          enabled: true,
-          status: "running",
-        },
-      },
-    }),
-  );
-
-  await expect(installPromise).resolves.toMatchObject({ id: "review", status: "running" });
 });
 
 test("a connection loss rejects an in-flight file context action", async () => {
@@ -4806,7 +4926,7 @@ test("fetches agents via RPC with filters, sort, and pagination", async () => {
   await connectPromise;
 
   const promise = client.fetchAgents({
-    filter: { labels: { surface: "workspace" } },
+    filter: { labels: { surface: "workspace" }, workspaceIds: ["workspace-1"] },
     sort: [
       { key: "status_priority", direction: "asc" },
       { key: "created_at", direction: "desc" },
@@ -4818,6 +4938,10 @@ test("fetches agents via RPC with filters, sort, and pagination", async () => {
   await vi.waitFor(() => expect(mock.sent).toHaveLength(1));
   const request = parseSentFrame(mock.sent[0]);
   expect(request.type).toBe("agent.list.request");
+  expect(request.filter).toEqual({
+    labels: { surface: "workspace" },
+    workspaceIds: ["workspace-1"],
+  });
   expect(request.sort).toEqual([
     { key: "status_priority", direction: "asc" },
     { key: "created_at", direction: "desc" },
@@ -6243,12 +6367,51 @@ test("parses canonical agent.timeline.get.response payloads without crashing", a
   expect(logger.warn).not.toHaveBeenCalled();
 });
 
+test("validation warnings identify uncorrelated stream messages without recording their payloads", async () => {
+  const mock = createMockTransport();
+  const logger = createMockLogger();
+  const client = new DaemonClient({
+    url: "ws://test",
+    clientId: "stream-diagnostics",
+    logger,
+    reconnect: { enabled: false },
+    transportFactory: () => mock.transport,
+  });
+  clients.push(client);
+  const connected = client.connect();
+  mock.triggerOpen();
+  await connected;
+  mock.triggerMessage(
+    wrapSessionMessage({
+      type: "agent_stream",
+      payload: {
+        agentId: "agent",
+        timestamp: "2026-10-11T00:00:00Z",
+        event: {
+          type: "usage_updated",
+          provider: "codex",
+          usage: { inputTokens: "private-content" },
+        },
+      },
+    }),
+  );
+  expect(logger.warn).toHaveBeenCalledWith(
+    expect.objectContaining({
+      msgType: "agent_stream",
+      envelopeType: "session",
+      serverId: "srv_test_1",
+    }),
+    "Message validation failed",
+  );
+  expect(JSON.stringify(logger.warn.mock.calls)).not.toContain("private-content");
+});
+
 test("rejects and logs a correlated response that violates the protocol schema", async () => {
   const mock = createMockTransport();
-  const warnings: string[] = [];
+  const warnings: { fields: object; message: string }[] = [];
   const logger: Logger = {
     ...noopLogger,
-    warn: (_fields, message) => warnings.push(message ?? ""),
+    warn: (fields, message) => warnings.push({ fields, message: message ?? "" }),
   };
 
   const client = new DaemonClient({
@@ -6317,7 +6480,21 @@ test("rejects and logs a correlated response that violates the protocol schema",
     requestId: "req-invalid",
     message: expect.stringMatching(/validation/i),
   });
-  expect(warnings).toEqual(["Message validation failed"]);
+  expect(warnings).toEqual([
+    {
+      message: "Message validation failed",
+      fields: expect.objectContaining({
+        msgType: "agent.timeline.get.response",
+        requestId: "req-invalid",
+        bytes: expect.any(Number),
+        issueCount: expect.any(Number),
+        issues: expect.arrayContaining([
+          expect.objectContaining({ code: expect.any(String), path: expect.any(Array) }),
+        ]),
+      }),
+    },
+  ]);
+  expect(JSON.stringify(warnings)).not.toContain('"command"');
 });
 
 test("does not reject a request for an invalid correlated progress event", async () => {
@@ -6486,13 +6663,21 @@ test("sends provider.usage.list.request and resolves provider.usage.list.respons
   mock.triggerOpen();
   await connectPromise;
 
-  const usagePromise = client.listProviderUsage({ requestId: "usage-1" });
+  const usagePromise = client.listProviderUsage({
+    requestId: "usage-1",
+    agentId: "agent-usage",
+    providerId: "glm",
+    forceRefresh: true,
+  });
 
   expect(JSON.parse(assertStr(mock.sent[0]))).toEqual({
     type: "session",
     message: {
       type: "provider.usage.list.request",
       requestId: "usage-1",
+      agentId: "agent-usage",
+      providerId: "glm",
+      forceRefresh: true,
     },
   });
 
@@ -6912,103 +7097,6 @@ test("uploadFile stops sending chunks when the connection closes between sends",
   ).toBe(false);
 });
 
-test("rejects source installation on an older host before sending a request", async () => {
-  const transport = createMockTransport();
-  const client = new DaemonClient({
-    url: "ws://test",
-    clientId: "source-gate",
-    logger: createMockLogger(),
-    reconnect: { enabled: false },
-    transportFactory: () => transport.transport,
-  });
-  clients.push(client);
-  const connecting = client.connect();
-  transport.triggerOpen({ features: { pluginGitManagement: true } });
-  await connecting;
-  const sentBefore = transport.sent.length;
-  await expect(client.installPluginSource({ source: "npm:review" })).rejects.toThrow(
-    "Update the host",
-  );
-  expect(transport.sent.length).toBe(sentBefore);
-});
-
-test("reviewed plugin updates gate before requests and preserve exact proposal data", async () => {
-  for (const supported of [false, true]) {
-    const transport = createMockTransport();
-    const client = new DaemonClient({
-      url: "ws://test",
-      clientId: "reviewed-updates",
-      logger: createMockLogger(),
-      reconnect: { enabled: false },
-      transportFactory: () => transport.transport,
-    });
-    clients.push(client);
-    const connecting = client.connect();
-    transport.triggerOpen({
-      features: {
-        pluginGitManagement: true,
-        pluginSourceInstallation: true,
-        pluginSourceUpdates: supported,
-      },
-    });
-    await connecting;
-    const proposal = {
-      id: "review",
-      expected: {
-        identity: { kind: "npm" as const, packageName: "review", pluginPath: "." },
-        installationRoot: "/plugins/review/version-root",
-        revision: "1.0.0",
-      },
-      target: {
-        kind: "npm" as const,
-        version: "1.1.0",
-        resolved: "https://registry.npmjs.org/review/-/review-1.1.0.tgz",
-        integrity: "sha512-test",
-      },
-    };
-    if (!supported) {
-      const sent = transport.sent.length;
-      await expect(client.previewPluginUpdates()).rejects.toThrow("Update the host");
-      await expect(client.applyPluginUpdates([proposal])).rejects.toThrow("Update the host");
-      expect(transport.sent.length).toBe(sent);
-      continue;
-    }
-    const checking = client.previewPluginUpdates({ pluginId: "review" });
-    const check = parseSentFrame(transport.sent.at(-1));
-    expect(check).toMatchObject({
-      type: "plugin.source.update.preview.request",
-      pluginId: "review",
-    });
-    const preview = { id: "review", outcome: "update", links: [], proposal };
-    transport.triggerMessage(
-      wrapSessionMessage({
-        type: "plugin.source.update.preview.response",
-        payload: { requestId: check.requestId, plugins: [preview] },
-      }),
-    );
-    await expect(checking).resolves.toEqual([preview]);
-    const applying = client.applyPluginUpdates([proposal]);
-    const apply = parseSentFrame(transport.sent.at(-1));
-    expect(apply).toEqual({
-      type: "plugin.source.update.apply.request",
-      requestId: expect.any(String),
-      proposals: [proposal],
-    });
-    transport.triggerMessage(
-      wrapSessionMessage({
-        type: "plugin.source.update.apply.response",
-        payload: {
-          requestId: apply.requestId,
-          plugins: [{ id: "review", outcome: "error", error: "changed since review" }],
-        },
-      }),
-    );
-    await expect(applying).resolves.toEqual([
-      { id: "review", outcome: "error", error: "changed since review" },
-    ]);
-  }
-});
-
 test("uploadFile waits for transport acknowledgements before sending another frame", async () => {
   const mock = createMockTransport();
   const acknowledgements: (() => void)[] = [];
@@ -7109,4 +7197,49 @@ test("setAgentModel returns the provider notice for a deferred switch", async ()
     }),
   );
   await expect(switching).resolves.toEqual(notice);
+});
+
+test("Bot requests validate params, correlate results and release errors", async () => {
+  const mock = createMockTransport();
+  const client = new DaemonClient({
+    url: "ws://test",
+    clientId: "bot-test",
+    logger: createMockLogger(),
+    reconnect: { enabled: false },
+    transportFactory: () => mock.transport,
+  });
+  clients.push(client);
+  const connected = client.connect();
+  mock.triggerOpen();
+  await connected;
+  const pending = client.botRequest("bot.list.request", { workspaceId: "workspace-a" });
+  const request = parseSentFrame(mock.sent[0]);
+  expect(request).toMatchObject({ type: "bot.list.request", workspaceId: "workspace-a" });
+  mock.triggerMessage(
+    wrapSessionMessage({
+      type: "bot.list.response",
+      payload: { requestId: "other-request", bots: [] },
+    }),
+  );
+  mock.triggerMessage(
+    wrapSessionMessage({
+      type: "bot.list.response",
+      payload: { requestId: request.requestId, bots: [] },
+    }),
+  );
+  await expect(pending).resolves.toMatchObject({ bots: [] });
+  await expect(client.botRequest("bot.get.request", { botId: "invalid" })).rejects.toThrow();
+  expect(mock.sent).toHaveLength(1);
+  const failed = client.botRequest("bot.memory.get.request", {
+    botId: "11111111-1111-4111-8111-111111111111",
+  });
+  const failure = parseSentFrame(mock.sent[1]);
+  const rejection = expect(failed).rejects.toThrow("Bot not found");
+  mock.triggerMessage(
+    wrapSessionMessage({
+      type: "rpc_error",
+      payload: { requestId: failure.requestId, error: "Bot not found", code: "not_found" },
+    }),
+  );
+  await rejection;
 });

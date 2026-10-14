@@ -65,18 +65,18 @@ impl Runtime for LocalRuntime {
             stopped: false,
         };
         // Construct the owner before starting threads so every failure kills and reaps the child.
-        process.reader = Some(
-            thread::Builder::new()
-                .name("terminal-output".to_owned())
-                .spawn(move || read_output(reader, &screen))
-                .map_err(|_| Error::Io)?,
-        );
         let (input, incoming) = mpsc::sync_channel::<Vec<u8>>(16);
-        process.input = Some(input);
+        process.input = Some(input.clone());
         process.writer = Some(
             thread::Builder::new()
                 .name("terminal-input".to_owned())
                 .spawn(move || write_input(writer, &incoming))
+                .map_err(|_| Error::Io)?,
+        );
+        process.reader = Some(
+            thread::Builder::new()
+                .name("terminal-output".to_owned())
+                .spawn(move || read_output(reader, &screen, &input))
                 .map_err(|_| Error::Io)?,
         );
         Ok(Box::new(process))
@@ -261,12 +261,23 @@ impl Drop for LocalProcess {
     }
 }
 
-fn read_output(mut reader: Box<dyn Read + Send>, screen: &Mutex<Screen>) {
+fn read_output(
+    mut reader: Box<dyn Read + Send>,
+    screen: &Mutex<Screen>,
+    input: &mpsc::SyncSender<Vec<u8>>,
+) {
     let mut buffer = [0; 16 * 1024];
     loop {
         match reader.read(&mut buffer) {
             Ok(0) => break,
-            Ok(count) => lock(screen).process(&buffer[..count]),
+            Ok(count) => {
+                let replies = lock(screen).process(&buffer[..count]);
+                // Never block output drainage on a full input queue or hold the screen lock
+                // while writing. Replies share the existing bounded, ordered PTY writer.
+                if !replies.is_empty() && input.try_send(replies).is_err() {
+                    tracing::warn!("Terminal protocol reply could not be queued");
+                }
+            }
             Err(error) if error.kind() == std::io::ErrorKind::Interrupted => {}
             Err(_) => break,
         }

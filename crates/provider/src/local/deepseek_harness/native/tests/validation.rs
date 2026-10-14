@@ -41,9 +41,13 @@ async fn authentication_rejects_foreign_hosts_credentials_and_unexpected_launch_
         "http://127.0.0.1:123/?token=x#part",
     ] {
         assert!(
-            Api::connect(url, std::time::Duration::from_millis(1))
-                .await
-                .is_err()
+            Api::connect(
+                url,
+                std::time::Duration::from_millis(1),
+                crate::local::diagnostics::Diagnostics::new("deepseek-harness")
+            )
+            .await
+            .is_err()
         );
     }
 }

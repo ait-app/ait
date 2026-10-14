@@ -1,194 +1,200 @@
-use super::{Fault, OpenCodeExecutionLimits, ProgressEvent, Stream, Version};
-use serde_json::{Value, json};
-
-fn stream() -> Stream {
-    Stream::new("ses_one", "msg_input", OpenCodeExecutionLimits::default())
-}
-
-fn message(role: &str) -> Value {
-    json!({"type":"message.updated","properties":{"info":{"id":"msg_a","sessionID":"ses_one","role":role}}})
-}
-
-fn part(text: Value) -> Value {
-    let mut event = json!({"type":"message.part.updated","properties":{"part":{"id":"prt_a","messageID":"msg_a","sessionID":"ses_one","type":"text"}}});
-    event["properties"]["part"]["text"] = text;
-    event
-}
-
-fn delta(text: &str) -> Value {
-    json!({"type":"message.part.delta","properties":{"sessionID":"ses_one","messageID":"msg_a","partID":"prt_a","field":"text","delta":text}})
-}
-
-fn texts(stream: &mut Stream, event: &Value) -> Vec<String> {
-    stream
-        .observe(event, Version::V1)
-        .unwrap()
-        .into_iter()
-        .map(|event| match event {
-            ProgressEvent::TextDelta { delta, .. } => delta,
-            ProgressEvent::Timeline(_) => panic!("text materialization does not emit history"),
-        })
-        .collect()
-}
+use super::*;
 
 #[test]
-fn legal_empty_placeholders_deltas_and_final_snapshots_emit_each_byte_once() {
-    let mut stream = stream();
-    assert!(texts(&mut stream, &message("assistant")).is_empty());
-    assert!(texts(&mut stream, &part(json!(""))).is_empty());
-    assert!(texts(&mut stream, &delta("")).is_empty());
-    assert_eq!(texts(&mut stream, &delta("你好")), ["你好"]);
-    assert!(texts(&mut stream, &part(json!(""))).is_empty());
-    assert_eq!(texts(&mut stream, &delta(" world")), [" world"]);
-    assert!(texts(&mut stream, &part(json!("你好 world"))).is_empty());
-    assert!(texts(&mut stream, &message("assistant")).is_empty());
-}
-
-#[test]
-fn out_of_order_roles_buffer_assistant_text_and_discard_user_text() {
-    for role in ["assistant", "user"] {
-        let mut stream = stream();
-        assert!(texts(&mut stream, &part(json!(""))).is_empty());
-        assert!(texts(&mut stream, &delta("answer")).is_empty());
-        let output = texts(&mut stream, &message(role));
-        if role == "assistant" {
-            assert_eq!(output, ["answer"]);
-            assert!(texts(&mut stream, &part(json!("answer"))).is_empty());
+fn wrapped_native_output_is_unwrapped_before_utf8_bounding() {
+    let output = "文".repeat(100_000);
+    let mut stream = Stream::default();
+    for update in [
+        json!({"sessionUpdate":"tool_call","toolCallId":"shell","kind":"execute","title":"pwd","status":"pending","rawInput":{"command":"pwd"}}),
+        json!({"sessionUpdate":"tool_call_update","toolCallId":"shell","status":"completed","rawOutput":{"metadata":{"exit":0},"output":output}}),
+    ] {
+        stream.update(&update).unwrap();
+    }
+    for event in stream.events {
+        let (AgentTurnEvent::Progress { entry, .. } | AgentTurnEvent::Timeline(entry)) = event
+        else {
+            continue;
+        };
+        if entry.item["status"] == "running" {
+            assert!(entry.item["detail"].get("output").is_none());
         } else {
-            assert!(output.is_empty());
-            assert!(texts(&mut stream, &part(json!("answer"))).is_empty());
-            assert_eq!(stream.bytes, 0);
-            assert!(stream.parts.is_empty());
+            let text = entry.item["detail"]["output"].as_str().unwrap();
+            assert!(text.starts_with("文文"));
+            assert!(text.contains("Output truncated"));
+            assert!(!text.contains("metadata"));
+        }
+        assert!(serde_json::to_vec(&entry).unwrap().len() < 768 * 1024);
+    }
+}
+
+#[test]
+fn native_content_text_is_bounded_without_turning_it_into_json_or_hiding_failures() {
+    for (status, text) in [
+        ("completed", "文".repeat(100_000)),
+        ("failed", "Permission denied".into()),
+    ] {
+        let mut stream = Stream::default();
+        stream.update(&json!({"sessionUpdate":"tool_call","toolCallId":"shell","kind":"execute","title":"pwd","status":"pending","rawInput":{"command":"pwd"}})).unwrap();
+        stream.update(&json!({"sessionUpdate":"tool_call_update","toolCallId":"shell","status":status,
+            "rawOutput":{"metadata":{}},"content":[{"type":"content","content":{"type":"text","text":text}}]})).unwrap();
+        let entry = stream
+            .events
+            .into_iter()
+            .find_map(|event| {
+                if let AgentTurnEvent::Timeline(entry) = event {
+                    Some(entry)
+                } else {
+                    None
+                }
+            })
+            .unwrap();
+        let output = entry.item["detail"]["output"].as_str().unwrap();
+        assert!(text.starts_with(output.split('\n').next().unwrap()));
+        assert!(serde_json::to_vec(&entry).unwrap().len() < 768 * 1024);
+        if status == "failed" {
+            assert_eq!(entry.item["error"], text);
         }
     }
-    let mut stream = stream();
-    let mut input = part(json!("hello"));
-    input["properties"]["part"]["messageID"] = json!("msg_input");
-    assert!(texts(&mut stream, &input).is_empty());
 }
 
 #[test]
-fn text_still_requires_a_string_and_nonempty_native_identities() {
-    for invalid in [Value::Null, json!(42), json!({})] {
-        let mut stream = stream();
-        texts(&mut stream, &message("assistant"));
-        assert_eq!(
-            stream
-                .observe(&part(invalid), Version::V1)
-                .unwrap_err()
-                .code,
-            Fault::ProviderFailed
-        );
+fn long_utf8_text_is_split_deterministically_without_losing_the_terminal_message() {
+    let text = "文".repeat(100_000);
+    let mut stream = Stream::default();
+    stream.update(&json!({"sessionUpdate":"agent_message_chunk","messageId":"answer","content":{"type":"text","text":text}})).unwrap();
+    stream.flush();
+    assert_eq!(stream.last_message.as_deref(), Some(text.as_str()));
+    let items = stream
+        .events
+        .into_iter()
+        .filter_map(|event| {
+            if let AgentTurnEvent::Timeline(entry) = event {
+                Some(entry)
+            } else {
+                None
+            }
+        })
+        .collect::<Vec<_>>();
+    assert_eq!(items.len(), 4);
+    assert_eq!(
+        items
+            .iter()
+            .map(|entry| entry.item["text"].as_str().unwrap())
+            .collect::<String>(),
+        text
+    );
+    for item in &items {
+        assert!(serde_json::to_vec(item).unwrap().len() < 768 * 1024);
     }
-    let mut stream = stream();
-    let mut missing = part(json!(""));
-    missing["properties"]["part"]
-        .as_object_mut()
-        .unwrap()
-        .remove("text");
-    assert!(stream.observe(&missing, Version::V1).is_err());
-    let mut invalid = part(json!("text"));
-    invalid["properties"]["part"]["id"] = json!("");
-    assert!(stream.observe(&invalid, Version::V1).is_err());
-}
-
-#[test]
-fn unknown_part_types_and_foreign_sessions_cannot_become_assistant_deltas() {
-    let mut stream = stream();
-    texts(&mut stream, &message("assistant"));
-    assert!(texts(&mut stream, &delta("unknown type")).is_empty());
-    let mut reasoning = part(json!("thought"));
-    reasoning["properties"]["part"]["type"] = json!("reasoning");
-    assert!(texts(&mut stream, &reasoning).is_empty());
-    assert!(texts(&mut stream, &delta("reasoning")).is_empty());
-    let mut foreign = part(json!("foreign"));
-    foreign["properties"]["part"]["sessionID"] = json!("ses_other");
-    assert!(texts(&mut stream, &foreign).is_empty());
-    let mut unknown = message("system");
-    assert!(texts(&mut stream, &unknown).is_empty());
-    unknown["type"] = json!("server.heartbeat");
-    assert!(texts(&mut stream, &unknown).is_empty());
+    let mut chunked = Stream::default();
+    for chunk in ["文".repeat(30_000), "文".repeat(70_000)] {
+        chunked.update(&json!({"sessionUpdate":"agent_message_chunk","messageId":"answer","content":{"type":"text","text":chunk}})).unwrap();
+    }
+    chunked.flush();
+    let replay = chunked
+        .events
+        .into_iter()
+        .filter_map(|event| {
+            if let AgentTurnEvent::Timeline(entry) = event {
+                Some(entry)
+            } else {
+                None
+            }
+        })
+        .collect::<Vec<_>>();
     assert_eq!(
-        texts(&mut stream, &json!({"payload":part(json!("answer"))})),
-        ["answer"]
+        items
+            .iter()
+            .map(|entry| (&entry.key, &entry.item))
+            .collect::<Vec<_>>(),
+        replay
+            .iter()
+            .map(|entry| (&entry.key, &entry.item))
+            .collect::<Vec<_>>()
     );
 }
 
 #[test]
-fn changed_roles_parents_and_published_text_fail_without_relabeling_history() {
-    let mut stream = stream();
-    texts(&mut stream, &message("assistant"));
-    texts(&mut stream, &part(json!("answer")));
-    assert_eq!(
-        stream
-            .observe(&message("user"), Version::V1)
-            .unwrap_err()
-            .code,
-        Fault::RunRecoveryFailed
-    );
-    assert_eq!(
-        stream
-            .observe(&part(json!("changed")), Version::V1)
-            .unwrap_err()
-            .code,
-        Fault::RunRecoveryFailed
-    );
-    let mut wrong = part(json!("answer more"));
-    wrong["properties"]["part"]["messageID"] = json!("msg_other");
-    assert_eq!(
-        stream.observe(&wrong, Version::V1).unwrap_err().code,
-        Fault::ProviderFailed
-    );
-    let mut wrong = delta("more");
-    wrong["properties"]["messageID"] = json!("msg_other");
-    assert_eq!(
-        stream.observe(&wrong, Version::V1).unwrap_err().code,
-        Fault::ProviderFailed
-    );
-}
-
-#[test]
-fn observation_limits_allow_updates_at_capacity_and_reject_new_resources() {
-    let limits = OpenCodeExecutionLimits {
-        max_steps: 1,
-        max_output_bytes: 6,
-        ..Default::default()
-    };
-    let mut stream = Stream::new("ses_one", "msg_input", limits);
-    texts(&mut stream, &message("assistant"));
-    texts(&mut stream, &part(json!("")));
-    assert_eq!(texts(&mut stream, &delta("answer")), ["answer"]);
-    assert!(texts(&mut stream, &part(json!("answer"))).is_empty());
-    assert_eq!(
-        stream.observe(&delta("!"), Version::V1).unwrap_err().code,
-        Fault::RunLimitExceeded
-    );
-    let mut another = part(json!(""));
-    another["properties"]["part"]["id"] = json!("prt_other");
-    assert_eq!(
-        stream.observe(&another, Version::V1).unwrap_err().code,
-        Fault::RunLimitExceeded
-    );
-    let mut another = message("assistant");
-    another["properties"]["info"]["id"] = json!("msg_other");
-    assert_eq!(
-        stream.observe(&another, Version::V1).unwrap_err().code,
-        Fault::RunLimitExceeded
-    );
-}
-
-#[test]
-fn v2_empty_text_deltas_are_noops_but_missing_or_nonstring_text_is_rejected() {
-    let mut stream = stream();
-    let mut event = json!({"type":"session.text.delta","data":{"sessionID":"ses_one","assistantMessageID":"a1","delta":""}});
-    assert!(stream.observe(&event, Version::V2).unwrap().is_empty());
-    event["data"]["delta"] = json!("answer");
+fn image_uri_replay_preserves_native_links_without_reading_project_files() {
+    let mut stream = Stream::default();
+    stream.update(&json!({"sessionUpdate":"user_message_chunk","messageId":"user","content":{"type":"image","mimeType":"image/png","uri":"file:///work/image.png"}})).unwrap();
+    stream.flush();
+    let item = stream
+        .events
+        .into_iter()
+        .find_map(|event| {
+            if let AgentTurnEvent::Timeline(entry) = event {
+                Some(entry)
+            } else {
+                None
+            }
+        })
+        .unwrap();
     assert!(
-        matches!(stream.observe(&event, Version::V2).unwrap().as_slice(), [ProgressEvent::TextDelta {delta, ..}] if delta == "answer")
+        item.item["text"]
+            .as_str()
+            .unwrap()
+            .contains("/work/image.png")
     );
-    event["data"]["delta"] = Value::Null;
+}
+
+#[test]
+fn acp_tools_keep_native_order_between_commentary_and_final_text() {
+    let mut stream = Stream::default();
+    for update in [
+        json!({"sessionUpdate":"agent_message_chunk","messageId":"before","content":{"type":"text","text":"Before"}}),
+        json!({"sessionUpdate":"tool_call","toolCallId":"tool","title":"read","kind":"read","status":"pending","rawInput":{"path":"file"}}),
+        json!({"sessionUpdate":"tool_call_update","toolCallId":"tool","status":"completed","rawOutput":"Output"}),
+        json!({"sessionUpdate":"agent_message_chunk","messageId":"after","content":{"type":"text","text":"After"}}),
+    ] {
+        stream.update(&update).unwrap();
+    }
+    stream.flush();
+    assert!(stream.events.iter().any(|event| matches!(event, AgentTurnEvent::Progress { entry, .. } if entry.item["type"] == "tool_call" && entry.item["status"] == "completed")));
+    let items = stream
+        .events
+        .into_iter()
+        .filter_map(|event| {
+            if let AgentTurnEvent::Timeline(entry) = event {
+                Some(entry)
+            } else {
+                None
+            }
+        })
+        .collect::<Vec<_>>();
     assert_eq!(
-        stream.observe(&event, Version::V2).unwrap_err().code,
-        Fault::ProviderFailed
+        items
+            .iter()
+            .map(|entry| entry.item["type"].as_str().unwrap())
+            .collect::<Vec<_>>(),
+        ["assistant_message", "tool_call", "assistant_message"]
     );
+    assert_eq!(stream.last_message.as_deref(), Some("After"));
+}
+
+#[test]
+fn a_user_turn_without_assistant_text_does_not_reuse_a_previous_answer() {
+    let mut stream = Stream::default();
+    stream.update(&json!({"sessionUpdate":"agent_message_chunk","messageId":"old","content":{"type":"text","text":"Previous answer"}})).unwrap();
+    stream.update(&json!({"sessionUpdate":"user_message_chunk","messageId":"new","content":{"type":"text","text":"Next input"}})).unwrap();
+    stream.flush();
+    assert!(stream.last_message.is_none());
+}
+
+#[test]
+fn json_escaped_text_segments_fit_the_persisted_timeline_budget() {
+    let mut stream = Stream::default();
+    stream.update(&json!({"sessionUpdate":"agent_message_chunk","messageId":"answer","content":{"type":"text","text":"\0".repeat(160_000)}})).unwrap();
+    stream.flush();
+    let timeline = crate::storage::timeline::Timeline::memory().unwrap();
+    let mut count = 0;
+    for event in stream.events {
+        if let AgentTurnEvent::Timeline(entry) = event {
+            timeline
+                .append("escaped-text", "opencode", &[entry])
+                .unwrap();
+            count += 1;
+        }
+    }
+    assert_eq!(count, 2);
 }

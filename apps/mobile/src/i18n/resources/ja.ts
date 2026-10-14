@@ -3,6 +3,7 @@ import { pluginSettings } from "./plugin-settings";
 
 export const ja: TranslationResources = {
   onlineService: en.onlineService,
+  bots: en.bots,
   paneFind: {
     searchFailed:
       "このチャットを検索できませんでした。ホストへの接続を確認して再試行してください。",
@@ -1183,16 +1184,11 @@ export const ja: TranslationResources = {
       appName: "Ait",
     },
     sections: {
+      usage: "Usage",
       workspaces: "ワークスペース",
       sessions: "履歴",
       search: "検索",
       schedules: "スケジュール",
-    },
-    worktreeSetup: {
-      title: "ワークツリースクリプトを設定",
-      description:
-        "新しいワークツリーが依存関係をインストールして自動的に準備できるようにセットアップコマンドを追加してください。",
-      openProjectSettings: "プロジェクト設定を開く",
     },
     project: {
       actions: {
@@ -1373,7 +1369,7 @@ export const ja: TranslationResources = {
       },
       keepRunning: {
         title: "終了後もデーモンを実行し続ける",
-        hint: "Aitを終了してもデーモンは実行し続けます",
+        hint: "Aitを終了してもエージェントとターミナルは実行し続け、次回起動時に再接続します。",
       },
       logs: {
         title: "ログファイル",
@@ -1388,7 +1384,6 @@ export const ja: TranslationResources = {
       fullStatus: {
         title: "詳細ステータス",
         modalTitle: "デーモンのステータス",
-        hint: "`paseo daemon status`を実行して出力を表示します",
         view: "ステータスを表示",
         copied: "ステータスをクリップボードにコピーしました。",
         fetchFailed: "デーモンのステータスの取得に失敗しました: {{message}}",
@@ -1662,6 +1657,31 @@ export const ja: TranslationResources = {
     },
   },
   providerUsage: {
+    summaryUsed: "{{source}}：{{amount}} 使用済み",
+    summaryRemaining: "{{source}}：残り {{amount}}",
+    options: "設定",
+    refreshAll: "すべて更新",
+    refreshFailed: "使用量を更新できません",
+    noHosts: "接続中のホストがありません",
+    agentError: "使用量を読み込めません：{{reason}}",
+    hostUnavailableNamed: "使用量を確認するには {{host}} に接続してください",
+    hostUpgradeRequiredNamed: "使用量を確認するには {{host}} を更新してください",
+    pin: "固定",
+    unpin: "固定解除",
+    pinWindow: "{{source}} の {{window}} を固定",
+    refreshSource: "{{source}} を更新",
+    displayAs: "パーセント表示",
+    displayUsed: "使用済み",
+    displayRemaining: "残り",
+    showInSidebar: "サイドバーに概要を表示",
+    showInSidebarHint: "固定した使用量ウィンドウをサイドバー下部に表示します",
+    loginRejected: "ログインが拒否されました（HTTP {{status}}）。{{remedy}}",
+    loginExpired: "ログインは {{time}} に期限切れになりました。{{remedy}}",
+    loginRefreshCommand: "{{command}} を実行してログインを更新してください。",
+    loginSignInAgain: "再度ログインしてください。",
+    nativeReadFailed: "ネイティブアカウントの使用量を読み取れません",
+    nativePlanUnavailable:
+      "このログイン方法ではプランの使用量を取得できません。プロバイダーの CLI でログインしてください。",
     error: "エラー",
     unavailable: "利用不可",
     updated: "{{time}}に更新",
@@ -1894,7 +1914,10 @@ export const ja: TranslationResources = {
       loading: "ファイルを読み込み中...",
       noPreview: "プレビューが利用できません",
       openWithSystem: "システムのアプリで開く",
-      binaryPreviewUnavailable: "バイナリプレビューが利用できません",
+      downloadFile: "ファイルをダウンロード",
+      shareFile: "ファイルを共有",
+      binaryPreviewUnavailable: "プレビューできません",
+      binaryPreviewDescription: "Ait ではこの種類のファイルをプレビューできません。",
       tooLargeToDisplay: "このファイルは大きすぎて表示できません",
       failedToLoad: "ファイルの読み込みに失敗しました",
       failedToLoadPreview: "ファイルプレビューの読み込みに失敗しました",
@@ -1988,6 +2011,8 @@ export const ja: TranslationResources = {
     dismiss: "閉じる",
   },
   contextWindow: {
+    noData: "No context usage yet",
+    accessibilityNoData: "View account usage",
     title: "コンテキストウィンドウ",
     used: "{{percentage}}%使用",
     tokens: "{{used}} / {{max}}トークン",
@@ -2028,6 +2053,7 @@ export const ja: TranslationResources = {
     },
     groupInfo: "{{title}}について",
     sections: {
+      management: "管理",
       general: "一般",
       appearance: "外観",
       layout: en.settings.sections.layout,
@@ -2174,6 +2200,8 @@ export const ja: TranslationResources = {
         rowHint: "Collect connection, daemon, provider, desktop, and log details",
         run: "Run",
         running: "Running diagnostic...",
+        exportAccessibility: "診断ファイルをエクスポート",
+        exportFailed: "診断ファイルのエクスポートに失敗しました",
         copyLabel: "diagnostic",
         copyAccessibility: "Copy diagnostic",
         copyFailed: "Failed to copy diagnostic",
@@ -2193,6 +2221,7 @@ export const ja: TranslationResources = {
       connectedHosts: "接続されているホスト",
       offline: "オフライン",
       versionDiffers: "このデバイスとバージョンが異なります",
+      experimentalFeatures: en.settings.about.experimentalFeatures,
       releaseChannel: {
         label: "リリースチャンネル",
         description: "ベータに切り替えると早期に更新を取得してフィードバックを提供できます",
@@ -2262,6 +2291,14 @@ export const ja: TranslationResources = {
         codeSize: "コードサイズ",
         codeSizeHint: "コード、差分、ターミナル出力に使用されます",
         codeSizeAccessibility: "コードフォントサイズ",
+      },
+      layout: {
+        title: "レイアウト",
+        contentWidth: "コンテンツ幅",
+        contentWidthHint: "ワイド画面でのチャットと Markdown ファイルの最大幅",
+        contentWidthAccessibility: "コンテンツ幅 (ピクセル)",
+        reset: "リセット",
+        resetAccessibility: "コンテンツ幅をデフォルトに戻す",
       },
       syntax: {
         title: "構文ハイライト",

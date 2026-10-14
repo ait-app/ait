@@ -37,6 +37,9 @@ fn quota_reconciles_legacy_models_with_scoped_windows_without_losing_zero_or_sur
     let windows = result["windows"].as_array().unwrap();
     assert_eq!(windows.len(), 6);
     assert_eq!(windows[2]["usedPct"], 0.0);
+    assert_eq!(windows[0]["shortLabel"], "5h");
+    assert_eq!(windows[1]["shortLabel"], "wk");
+    assert!(windows[2].get("shortLabel").is_none());
     assert_eq!(windows[3]["tone"], "danger");
     assert_ne!(windows[4]["id"], windows[5]["id"]);
     assert_eq!(result["details"][0]["value"], "Enabled");
@@ -48,4 +51,46 @@ fn quota_reconciles_legacy_models_with_scoped_windows_without_losing_zero_or_sur
     .unwrap();
     assert!(unknown["windows"][0]["usedPct"].is_null());
     assert_eq!(unknown["windows"][0]["tone"], "default");
+}
+
+#[tokio::test]
+async fn native_quota_respects_session_credentials_and_reports_expiry_without_network() {
+    let root = tempfile::tempdir().unwrap();
+    std::fs::write(root.path().join(".credentials.json"),
+        json!({"claudeAiOauth":{"accessToken":"offline-expired-token","expiresAt":1_700_000_000_000_i64}}).to_string()).unwrap();
+    let mut client = ClaudeClient::new(root.path().join("unused-cli"));
+    client.config_dir = Some(root.path().to_owned());
+    client.environment = serde_json::from_value(json!({
+        "CLAUDE_CODE_OAUTH_TOKEN":"", "ANTHROPIC_API_KEY":""
+    }))
+    .unwrap();
+    let expired = client.native_usage().await.unwrap();
+    assert_eq!(expired["problem"]["kind"], "expired");
+    assert_eq!(expired["problem"]["expiresAt"], "2023-11-14T22:13:20.000Z");
+    assert_eq!(expired["problem"]["refreshedBy"], "claude /login");
+    assert!(!expired.to_string().contains("offline-expired-token"));
+
+    client.environment = serde_json::from_value(json!({
+        "CLAUDE_CODE_OAUTH_TOKEN":"", "ANTHROPIC_API_KEY":"offline-api-token"
+    }))
+    .unwrap();
+    assert_eq!(
+        client.native_usage().await.unwrap()["problem"]["kind"],
+        "no_quota"
+    );
+    client.environment = serde_json::from_value(json!({
+        "CLAUDE_CODE_OAUTH_TOKEN":"offline-session-token", "ANTHROPIC_API_KEY":""
+    }))
+    .unwrap();
+    let credentials = client.credentials().await.unwrap().unwrap();
+    assert_eq!(credentials.token.expose_secret(), "offline-session-token");
+    assert!(credentials.expires_at.is_none());
+    client.environment = serde_json::from_value(json!({
+        "CLAUDE_CODE_OAUTH_TOKEN":"bad\nheader"
+    }))
+    .unwrap();
+    assert!(matches!(
+        client.credentials().await,
+        Err(AgentSessionError::Rejected)
+    ));
 }

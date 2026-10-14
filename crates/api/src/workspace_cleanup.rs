@@ -2,14 +2,15 @@
 
 use std::sync::{Arc, Mutex};
 
-use filesystem::ports::worktrees::{WorktreeArchiveCleanup, WorktreeError};
+use domain::workspace::worktrees::WorktreeError;
+use metadata::worktrees::ports::WorktreeArchiveCleanup;
 
 use crate::{ConfigError, Shared};
 
 #[derive(Debug)]
 struct ResourceCleanup {
     terminals: Option<Arc<Mutex<terminal::service::Terminals>>>,
-    automation: Option<Arc<Mutex<metadata::service::workspace_automation::WorkspaceAutomation>>>,
+    automation: Option<Arc<Mutex<metadata::automation::service::WorkspaceAutomation>>>,
 }
 
 impl WorktreeArchiveCleanup for ResourceCleanup {
@@ -39,7 +40,7 @@ impl WorktreeArchiveCleanup for ResourceCleanup {
 }
 
 pub(super) fn configure(state: &Shared) -> Result<(), ConfigError> {
-    if let Some(worktrees) = &state.filesystem.worktrees {
+    if let Some(worktrees) = &state.metadata.worktrees {
         worktrees
             .lock()
             .map_err(|_| ConfigError::ServiceInitialization)?

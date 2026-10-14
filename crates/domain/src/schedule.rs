@@ -1,0 +1,138 @@
+//! Paseo-compatible durable schedule, cadence and run records.
+use chrono::{DateTime, Utc};
+use serde::{Deserialize, Serialize};
+use serde_json::Value;
+
+/// One-time trigger, fixed interval or five-field cron cadence.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(
+    tag = "type",
+    rename_all = "lowercase",
+    rename_all_fields = "camelCase"
+)]
+pub enum Cadence {
+    /// Execute once at an absolute instant.
+    Once {
+        /// Trigger time, serialized with its UTC offset.
+        at: DateTime<Utc>,
+    },
+    /// Rolling interval, retained for upstream compatibility.
+    Every {
+        /// Positive interval in milliseconds.
+        every_ms: i64,
+    },
+    /// Calendar cadence; day-of-month and weekday must both match.
+    Cron {
+        /// Five numeric cron fields.
+        expression: String,
+        /// IANA timezone; omitted means UTC.
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        timezone: Option<String>,
+    },
+}
+
+/// Existing Agent or a new Agent for each occurrence.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(tag = "type", rename_all_fields = "camelCase")]
+pub enum Target {
+    /// Persist self targets as explicit Agent targets, matching the upstream WS adapter.
+    #[serde(rename = "agent", alias = "self")]
+    Agent {
+        /// Registered Agent UUID.
+        agent_id: String,
+    },
+    /// Create an Agent in the owning Workspace for every execution.
+    #[serde(rename = "new-agent")]
+    NewAgent {
+        /// Provider configuration supplied to the independent host adapter.
+        config: Value,
+    },
+}
+
+/// Schedule admission state.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "lowercase")]
+pub enum Status {
+    /// Eligible for automatic ticks.
+    Active,
+    /// Only explicit manual runs may start.
+    Paused,
+    /// Terminal; cannot resume or run manually.
+    Completed,
+}
+
+/// Durable run state.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "lowercase")]
+pub enum RunStatus {
+    /// Accepted but not settled.
+    Running,
+    /// Runner finished successfully.
+    Succeeded,
+    /// Runner failed or was interrupted.
+    Failed,
+}
+
+/// One occurrence and its final output.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct Run {
+    /// Unique occurrence UUID.
+    pub id: String,
+    /// Intended fire time.
+    pub scheduled_for: DateTime<Utc>,
+    /// Actual admission time.
+    pub started_at: DateTime<Utc>,
+    /// Settlement time.
+    pub ended_at: Option<DateTime<Utc>>,
+    /// Execution state.
+    pub status: RunStatus,
+    /// Actual Agent, if created or selected.
+    pub agent_id: Option<String>,
+    /// Workspace in which this occurrence executed.
+    pub workspace_id: Option<String>,
+    /// Final textual output.
+    pub output: Option<String>,
+    /// Safe failure explanation.
+    pub error: Option<String>,
+}
+
+/// Persistent upstream-shaped schedule document.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct Schedule {
+    /// Stable schedule UUID.
+    pub id: String,
+    /// Immutable owning Workspace. Absent only in documents created before Workspace ownership.
+    #[serde(default)]
+    pub workspace_id: Option<String>,
+    /// Optional display name.
+    pub name: Option<String>,
+    /// Prompt submitted for every occurrence.
+    pub prompt: String,
+    /// Trigger cadence.
+    pub cadence: Cadence,
+    /// Earliest automatic trigger for a recurring cadence; absent means creation time.
+    #[serde(default)]
+    pub start_at: Option<DateTime<Utc>>,
+    /// Execution destination.
+    pub target: Target,
+    /// Admission state.
+    pub status: Status,
+    /// Creation time.
+    pub created_at: DateTime<Utc>,
+    /// Last persisted change.
+    pub updated_at: DateTime<Utc>,
+    /// Next automatic occurrence.
+    pub next_run_at: Option<DateTime<Utc>>,
+    /// Last settlement time.
+    pub last_run_at: Option<DateTime<Utc>>,
+    /// Most recent pause time.
+    pub paused_at: Option<DateTime<Utc>>,
+    /// Optional automatic expiry.
+    pub expires_at: Option<DateTime<Utc>>,
+    /// Optional completed-run limit.
+    pub max_runs: Option<u64>,
+    /// Append-and-settle occurrence history.
+    pub runs: Vec<Run>,
+}

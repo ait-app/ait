@@ -1,243 +1,142 @@
-//! Private, tool-disabled native requests; transient native history is removed on exit.
-use std::{path::Path, time::Duration};
+//! Tool-disabled ACP metadata generation with native session deletion on every exit path.
+use std::{collections::BTreeMap, time::Duration};
 
-use reqwest::Method;
 use serde_json::{Value, json};
 
-use super::{http::Version, runtime::Runtime};
-use crate::ports::agent_session::{AgentSessionError, AgentSessionSpec};
+use super::{OpenCodeClient, config, launcher};
+use crate::{
+    local::acp_transport::Transport,
+    ports::agent_session::{AgentSessionError, AgentSessionSpec},
+};
 
-pub(super) fn configuration(version: Version, agent: &str) -> Value {
-    let instruction =
-        "Generate only the requested metadata from the supplied text. Return only JSON.";
-    match version {
-        Version::V1 => json!({"agent":{agent:{"mode":"primary","steps":1,"prompt":instruction,
-            "tools":{"*":false},"permission":{"*":"deny"}}},"permission":{"*":"deny"}}),
-        Version::V2 => json!({"agents":{agent:{"mode":"primary","steps":1,"system":instruction,
-            "permissions":[{"action":"*","resource":"*","effect":"deny"}]}},
-            "permissions":[{"action":"*","resource":"*","effect":"deny"}]}),
+/// Owned auxiliary session; deletion remains scheduled if its caller drops a pending cleanup.
+#[derive(Debug)]
+pub(super) struct Temporary {
+    client: OpenCodeClient,
+    cwd: String,
+    pub(super) transport: Option<Transport>,
+    pub(super) id: Option<String>,
+    cleanup_on_drop: bool,
+}
+
+impl Temporary {
+    /// Own this child in cwd and schedule cleanup if the calling future is dropped.
+    pub(super) fn new(client: &OpenCodeClient, cwd: &str, transport: Transport) -> Self {
+        Self {
+            client: client.clone(),
+            cwd: cwd.into(),
+            transport: Some(transport),
+            id: None,
+            cleanup_on_drop: true,
+        }
     }
-}
 
-struct Request {
-    runtime: Option<Runtime>,
-    session: Option<String>,
-}
-
-impl Request {
-    async fn close(&mut self) -> Result<(), AgentSessionError> {
-        let Some(mut runtime) = self.runtime.take() else {
+    /// Delete only this temporary native session and reap its child; cleanup failures fail.
+    pub(super) async fn close(&mut self) -> Result<(), AgentSessionError> {
+        let Some(transport) = self.transport.as_mut() else {
             return Ok(());
         };
-        let result = if let Some(id) = self.session.take() {
-            let _ = runtime
-                .api
-                .json(
-                    Method::POST,
-                    &runtime.api.path(&id, "/abort"),
-                    Some(&json!({})),
-                )
-                .await;
-            runtime
-                .api
-                .json(Method::DELETE, &runtime.api.path(&id, ""), None)
+        if let Some(id) = &self.id {
+            if transport
+                .request("session/delete", json!({"sessionId":id}))
                 .await
-                .map(|_| ())
-        } else {
-            Ok(())
-        };
-        let closed = runtime.close().await;
-        result.and(closed).map_err(|_| AgentSessionError::Failed)
+                .is_err()
+            {
+                let (mut cleanup, _) = launcher::spawn(
+                    &self.client,
+                    &self.cwd,
+                    &domain::agent_runtime::StoredAgentConfig::default(),
+                )
+                .await?;
+                let removed = cleanup
+                    .request("session/delete", json!({"sessionId":id}))
+                    .await;
+                cleanup.close().await?;
+                removed?;
+            }
+            self.id = None;
+        }
+        transport.close().await?;
+        self.transport = None;
+        Ok(())
     }
 }
 
-impl Drop for Request {
+impl Drop for Temporary {
     fn drop(&mut self) {
-        let Some(runtime) = self.runtime.take() else {
+        if !self.cleanup_on_drop {
+            return;
+        }
+        let Some(transport) = self.transport.take() else {
             return;
         };
-        let session = self.session.take();
-        if let Ok(handle) = tokio::runtime::Handle::try_current() {
-            handle.spawn(async move {
-                let mut request = Request {
-                    runtime: Some(runtime),
-                    session,
-                };
-                let _ = tokio::time::timeout(Duration::from_secs(5), request.close()).await;
+        let mut pending = Self {
+            client: self.client.clone(),
+            cwd: self.cwd.clone(),
+            transport: Some(transport),
+            id: self.id.take(),
+            cleanup_on_drop: false,
+        };
+        if let Ok(runtime) = tokio::runtime::Handle::try_current() {
+            runtime.spawn(async move {
+                if !matches!(
+                    tokio::time::timeout(Duration::from_secs(10), pending.close()).await,
+                    Ok(Ok(()))
+                ) {
+                    tracing::warn!("OpenCode ACP auxiliary session cleanup failed");
+                }
             });
         }
     }
 }
 
+/// Generate bounded metadata in a tool-disabled native session and delete its transcript.
+/// Invalid requests reject; native inference, output bounds and cleanup failures propagate.
 pub(super) async fn generate(
-    binary: &Path,
+    client: &OpenCodeClient,
     spec: &AgentSessionSpec,
     prompt: &str,
     schema: &Value,
 ) -> Result<String, AgentSessionError> {
-    let (provider, model) = spec
-        .config
-        .model
-        .as_deref()
-        .and_then(|model| model.split_once('/'))
-        .ok_or(AgentSessionError::Rejected)?;
-    let agent = format!("ait-metadata-{}", uuid::Uuid::new_v4().simple());
-    let runtime = Runtime::spawn_metadata(binary, Path::new(&spec.cwd), &agent)
-        .await
-        .map_err(|_| AgentSessionError::Unavailable)?;
-    let mut request = Request {
-        runtime: Some(runtime),
-        session: None,
-    };
-    let result = run(
-        &mut request,
-        spec,
-        &agent,
-        (provider, model),
-        &format!("{prompt}\nReturn only JSON matching this schema: {schema}"),
-    )
-    .await;
-    let closed = request.close().await;
-    closed?;
+    config::validate_spec(spec)?;
+    if !schema.is_object() || prompt.len() > 192 * 1024 {
+        return Err(AgentSessionError::Rejected);
+    }
+    let mut selected = spec.config.clone();
+    selected.mode_id = Some("build".into());
+    selected.feature_values = Some(BTreeMap::from([("permission".into(), json!("deny"))]));
+    selected.system_prompt = Some(
+        "Generate only the requested metadata from the supplied text. Return only JSON.".into(),
+    );
+    let (transport, capabilities) = launcher::auxiliary(client, &spec.cwd, &selected).await?;
+    if !capabilities["sessionCapabilities"]["delete"].is_object() {
+        return Err(AgentSessionError::Unavailable);
+    }
+    let mut temporary = Temporary::new(client, &spec.cwd, transport);
+    let result = async {
+        let transport = temporary.transport.as_mut().ok_or(AgentSessionError::Failed)?;
+        let result = transport.request("session/new", json!({"cwd":spec.cwd,"mcpServers":[]})).await?;
+        let id = config::text(&result, "sessionId")?.to_owned();
+        temporary.id = Some(id.clone());
+        let mut options = config::state(&result)?;
+        config::apply(transport, &id, &mut options, &selected).await?;
+        let mut answer = String::new();
+        let result = transport.request_with_updates("session/prompt", json!({"sessionId":id,
+            "prompt":[{"type":"text","text":format!("{prompt}\nReturn only JSON matching this schema: {schema}")}]}), |message| {
+            if message["method"] == "session/update" {
+                if message["params"]["sessionId"] != id { return Err(AgentSessionError::Failed); }
+                let update = &message["params"]["update"];
+                if update["sessionUpdate"] == "agent_message_chunk" && update["content"]["type"] == "text" {
+                    let text = update["content"]["text"].as_str().ok_or(AgentSessionError::Failed)?;
+                    if answer.len().saturating_add(text.len()) > 128 * 1024 { return Err(AgentSessionError::Failed); }
+                    answer.push_str(text);
+                }
+            }
+            Ok(())
+        }).await?;
+        if result["stopReason"] != "end_turn" || answer.is_empty() { return Err(AgentSessionError::Failed); }
+        Ok(answer)
+    }.await;
+    temporary.close().await?;
     result
 }
-
-async fn run(
-    request: &mut Request,
-    spec: &AgentSessionSpec,
-    agent: &str,
-    model: (&str, &str),
-    prompt: &str,
-) -> Result<String, AgentSessionError> {
-    let api = &request
-        .runtime
-        .as_ref()
-        .ok_or(AgentSessionError::Failed)?
-        .api;
-    let mut selected = match api.version {
-        Version::V1 => json!({"providerID":model.0,"modelID":model.1}),
-        Version::V2 => json!({"providerID":model.0,"id":model.1}),
-    };
-    if api.version == Version::V2
-        && let Some(effort) = &spec.config.thinking_option_id
-    {
-        selected["variant"] = json!(effort);
-    }
-    let create = create_parameters(api.version, spec, agent, &selected);
-    if api.version == Version::V2 {
-        request.session = create["id"].as_str().map(str::to_owned);
-    }
-    let created = api
-        .json(
-            Method::POST,
-            &format!("{}/session", api.version.prefix()),
-            Some(&create),
-        )
-        .await
-        .map_err(|_| AgentSessionError::Failed)?;
-    let id = api.data(&created)["id"]
-        .as_str()
-        .filter(|id| super::session::valid_id(id))
-        .ok_or(AgentSessionError::Failed)?
-        .to_owned();
-    request.session = Some(id.clone());
-    let (suffix, mut body) = match api.version {
-        Version::V1 => (
-            "/prompt_async",
-            json!({"agent":agent,"model":selected,"parts":[{"type":"text","text":prompt}],"tools":{"*":false}}),
-        ),
-        Version::V2 => ("/prompt", json!({"text":prompt,"files":[]})),
-    };
-    if api.version == Version::V1
-        && let Some(effort) = &spec.config.thinking_option_id
-    {
-        body["variant"] = json!(effort);
-    }
-    api.json(Method::POST, &api.path(&id, suffix), Some(&body))
-        .await
-        .map_err(|_| AgentSessionError::Failed)?;
-    loop {
-        let history = api
-            .history(&id)
-            .await
-            .map_err(|_| AgentSessionError::Failed)?;
-        if api.idle(&id).await.map_err(|_| AgentSessionError::Failed)?
-            && let Some(text) = response(api.version, &history)?
-        {
-            return Ok(text);
-        }
-        tokio::time::sleep(Duration::from_millis(100)).await;
-    }
-}
-
-fn create_parameters(
-    version: Version,
-    spec: &AgentSessionSpec,
-    agent: &str,
-    model: &Value,
-) -> Value {
-    match version {
-        // V1 validates a different schema. The private server configuration denies tools;
-        // agent/model/variant are selected on prompt_async, as in the foreground adapter.
-        Version::V1 => json!({}),
-        Version::V2 => json!({
-            "id":format!("ses_{}", uuid::Uuid::new_v4().simple()),
-            "agent":agent,"model":model,"location":{"directory":spec.cwd},
-            "permission":[{"permission":"*","pattern":"*","action":"deny"}]
-        }),
-    }
-}
-
-fn response(version: Version, history: &[Value]) -> Result<Option<String>, AgentSessionError> {
-    let mut text = String::new();
-    for message in history {
-        match version {
-            Version::V1 if message["info"]["role"] == "assistant" => {
-                if !message["info"]["error"].is_null() {
-                    return Err(AgentSessionError::Failed);
-                }
-                if message
-                    .pointer("/info/time/completed")
-                    .is_none_or(Value::is_null)
-                {
-                    return Ok(None);
-                }
-                for part in message["parts"].as_array().into_iter().flatten() {
-                    if part["type"] == "tool" {
-                        return Err(AgentSessionError::Rejected);
-                    }
-                    if part["type"] == "text" {
-                        text.push_str(part["text"].as_str().unwrap_or_default());
-                    }
-                }
-            }
-            Version::V2 if message["type"] == "assistant" => {
-                if !message["error"].is_null() {
-                    return Err(AgentSessionError::Failed);
-                }
-                if message
-                    .pointer("/time/completed")
-                    .is_none_or(Value::is_null)
-                {
-                    return Ok(None);
-                }
-                for part in message["content"].as_array().into_iter().flatten() {
-                    if part["type"] == "tool" {
-                        return Err(AgentSessionError::Rejected);
-                    }
-                    if part["type"] == "text" {
-                        text.push_str(part["text"].as_str().unwrap_or_default());
-                    }
-                }
-            }
-            Version::V2 | Version::V1 => {}
-        }
-        if text.len() > 128 * 1024 {
-            return Err(AgentSessionError::Failed);
-        }
-    }
-    Ok((!text.is_empty()).then_some(text))
-}
-
-#[cfg(test)]
-mod tests;

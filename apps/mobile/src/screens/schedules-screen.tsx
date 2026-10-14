@@ -12,7 +12,6 @@ import { useIsFocused } from "@react-navigation/native";
 import { CalendarClock, Plus } from "lucide-react-native";
 import { StyleSheet } from "react-native-unistyles";
 import { MenuHeader } from "@/components/headers/menu-header";
-import { ExternalLink } from "@/components/ui/external-link";
 import { HostFilter } from "@/components/hosts/host-filter";
 import { ALL_HOSTS_OPTION_ID } from "@/components/hosts/host-picker";
 import { ScheduleFormSheet } from "@/components/schedules/schedule-form-sheet";
@@ -35,6 +34,7 @@ import {
   type ScheduleTargetAgent,
 } from "@/schedules/schedule-derivation";
 import { resolveSchedulesScreenBodyState } from "./schedules-screen-state";
+import { useScheduleWorkspaces } from "@/schedules/use-schedule-workspaces";
 import {
   buildProjectNameByCwd,
   buildScheduleProjectTargets,
@@ -64,6 +64,14 @@ function SchedulesScreenContent(): ReactElement {
   const schedules = loadState.status === "loaded" ? loadState.data : EMPTY_SCHEDULES;
   const { agents } = useAggregatedAgents({ includeArchived: true });
   const { projects } = useProjects();
+  const workspaces = useScheduleWorkspaces();
+  const workspaceNameByKey = useMemo(
+    () =>
+      new Map(
+        workspaces.map((workspace) => [`${workspace.serverId}:${workspace.id}`, workspace.name]),
+      ),
+    [workspaces],
+  );
   const hosts = useHosts();
   const runtime = getHostRuntimeStore();
   const runtimeVersion = useSyncExternalStore(
@@ -134,15 +142,16 @@ function SchedulesScreenContent(): ReactElement {
           now,
           agentsByKey,
           projectNameByCwd,
+          workspaceNameByKey,
           agentDataLoaded: agentDirReadyHosts.has(schedule.serverId),
         },
         t,
       ),
     }));
-  }, [schedules, agentsByKey, projectNameByCwd, agentDirReadyHosts, t]);
+  }, [schedules, agentsByKey, projectNameByCwd, workspaceNameByKey, agentDirReadyHosts, t]);
 
   const visibleRows = useMemo<ScheduleRowView[]>(() => {
-    const singleHost = hosts.length <= 1;
+    const singleHost = hosts.length <= 1 || selectedHost !== ALL_HOSTS_OPTION_ID;
     return resolvedRows
       .filter(
         ({ schedule, resolved }) =>
@@ -335,7 +344,6 @@ function SchedulesEmptyState({
       <View style={styles.emptyTextStack}>
         <Text style={styles.emptyTitle}>{t("schedules.empty")}</Text>
         <Text style={styles.emptyDescription}>{t("schedules.emptyDescription")}</Text>
-        <ExternalLink href="https://paseo.sh/docs/schedules" label={t("schedules.docs")} />
       </View>
       <Button variant="outline" leftIcon={Plus} onPress={onCreate} testID="schedules-empty-new">
         {t("schedules.new")}

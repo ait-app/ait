@@ -91,3 +91,25 @@ fn workspace_projection_tracks_explicit_ownership_and_excludes_unknown_idle_remo
     activities.remove("two");
     assert!(activities.snapshot().unwrap().is_empty());
 }
+
+#[test]
+fn activity_tracking_survives_a_panic_while_the_lock_was_held() {
+    let activities = Activities::default();
+    activities.register("terminal".to_owned(), "workspace".to_owned());
+    let entries = Arc::clone(&activities.entries);
+    let poisoned = std::thread::spawn(move || {
+        let _guard = entries.lock().expect("lock is not yet poisoned");
+        panic!("poison the activity lock");
+    })
+    .join();
+    assert!(poisoned.is_err());
+    assert!(activities.entries.is_poisoned());
+
+    activities.report("terminal", ReportState::Running);
+
+    assert_eq!(
+        activities.get("terminal").map(|activity| activity.state),
+        Some(State::Working)
+    );
+    assert_eq!(activities.snapshot().unwrap().len(), 1);
+}

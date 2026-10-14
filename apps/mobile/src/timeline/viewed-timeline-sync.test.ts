@@ -6,6 +6,7 @@ import {
   consumeForcedTimelineTailReplacement,
   createViewedTimelineSync,
   type TimelineResponsePayload,
+  type ViewedTimelineStatus,
   type ViewedTimelineSyncPorts,
 } from "./viewed-timeline-sync";
 
@@ -29,6 +30,11 @@ interface MembershipRequest {
   agentIds: string[];
   succeed(): void;
   fail(message: string): void;
+}
+
+interface TimelineCurrentReport {
+  agentId: string;
+  status: ViewedTimelineStatus;
 }
 
 interface TimelineFetch {
@@ -126,9 +132,16 @@ class TimelineWorld {
   readonly cursors = new Map<string, { epoch: string; endSeq: number }>();
   readonly cacheRequests: string[] = [];
   readonly forcedTimelineTailReplacements = new Set<string>();
+  readonly reportedCurrent: TimelineCurrentReport[] = [];
   cacheGate: Deferred<void> | null = null;
   readonly sync = createViewedTimelineSync({
     replaceDemandedAgentIds: () => undefined,
+    onCatchUpEnded: (agentId) => {
+      this.reportedCurrent.push({
+        agentId,
+        status: this.sync.getAgentTimelineStatus(agentId),
+      });
+    },
     prepare: async (agentId) => {
       this.cacheRequests.push(agentId);
       this.cacheRequestWaiters.shift()?.(agentId);
@@ -436,6 +449,60 @@ test("a gap absorbed by a running tail is recovered after the tail completes", a
   await vi.waitFor(() => expect(world.sync.getAgentTimelineStatus("agent-a")).toBe("ready"));
 });
 
+test("reports a chat current only once its parked follow-up page completes", async () => {
+  const world = new TimelineWorld();
+  world.sync.setConnected(true);
+  world.sync.replaceVisibleAgentIds("workspace", ["agent-a"]);
+  (await world.nextMembership()).succeed();
+  const tail = await world.nextFetch("agent-a");
+
+  world.sync.recoverGap("agent-a", { epoch: "epoch-agent-a", endSeq: 9 });
+  tail.respond({ hasNewer: false });
+
+  const recovery = await world.nextFetch("agent-a");
+  expect(world.reportedCurrent).toEqual([]);
+  expect(world.sync.getAgentTimelineStatus("agent-a")).toBe("pending");
+
+  recovery.respond({ hasNewer: false });
+  await vi.waitFor(() => expect(world.sync.getAgentTimelineStatus("agent-a")).toBe("ready"));
+  expect(world.reportedCurrent).toEqual([{ agentId: "agent-a", status: "ready" }]);
+  world.sync.dispose();
+});
+
+test("reports a chat current once the latest-tail fallback replaces an overflowing catch-up", async () => {
+  const world = new TimelineWorld();
+  world.cursors.set("agent-a", { epoch: "epoch-agent-a", endSeq: 42 });
+  world.sync.setConnected(true);
+  world.sync.replaceVisibleAgentIds("workspace", ["agent-a"]);
+  (await world.nextMembership()).succeed();
+
+  const probe = await world.nextFetch("agent-a");
+  probe.respond({ hasNewer: true, seq: 82 });
+
+  const fallback = await world.nextFetch("agent-a");
+  expect(world.reportedCurrent).toEqual([]);
+
+  fallback.respond({ hasNewer: false });
+  await vi.waitFor(() => expect(world.sync.getAgentTimelineStatus("agent-a")).toBe("ready"));
+  expect(world.reportedCurrent).toEqual([{ agentId: "agent-a", status: "ready" }]);
+  world.sync.dispose();
+});
+
+test("stops owing a chat a catch-up when its tab closes mid-fetch", async () => {
+  const world = new TimelineWorld();
+  world.sync.setConnected(true);
+  world.sync.replaceVisibleAgentIds("pane", ["agent-a"]);
+  (await world.nextMembership()).succeed();
+  await world.nextFetch("agent-a");
+  expect(world.reportedCurrent).toEqual([]);
+
+  world.sync.replaceVisibleAgentIds("pane", []);
+  world.sync.replaceOpenTabAgentIds([]);
+
+  expect(world.reportedCurrent).toEqual([{ agentId: "agent-a", status: "pending" }]);
+  world.sync.dispose();
+});
+
 test("unchanged visible-set publication does not cancel paged catch-up", async () => {
   const world = new TimelineWorld();
   world.sync.setConnected(true);
@@ -477,6 +544,40 @@ test("all acknowledged agents begin catch-up independently", async () => {
   agentA.respond({ hasNewer: false });
 
   expect(membership.agentIds).toEqual(["agent-a", "agent-b"]);
+});
+
+test("established membership releases its host slot before subscribing the latest tabs", async () => {
+  const release = deferred<void>();
+  const observed: string[][] = [];
+  let leased = false;
+  const world = new TimelineWorld((agentIds) => {
+    observed.push(agentIds);
+    if (leased) throw new Error("resource_exhausted");
+    leased = true;
+    return {
+      ready: Promise.resolve(),
+      release: async () => {
+        await release.promise;
+        leased = false;
+      },
+    };
+  });
+  world.show("workspace", ["agent-a"]);
+  world.sync.setConnected(true);
+  (await world.nextFetch("agent-a")).respond({ hasNewer: false });
+  await vi.waitFor(() => expect(world.sync.getAgentTimelineStatus("agent-a")).toBe("ready"));
+
+  world.show("workspace", ["agent-b"]);
+  world.show("workspace", ["agent-c"]);
+  expect(observed).toEqual([["agent-a"]]);
+  release.resolve();
+  (await world.nextFetch("agent-c")).respond({ hasNewer: false });
+  (await world.nextFetch("agent-b")).respond({ hasNewer: false });
+  await vi.waitFor(() => expect(world.sync.getAgentTimelineStatus("agent-c")).toBe("ready"));
+
+  expect(observed).toEqual([["agent-a"], ["agent-a", "agent-b", "agent-c"]]);
+  expect(world.errors).toEqual([]);
+  world.sync.dispose();
 });
 
 test("an eviction starts and acknowledges B before A returns its late subscription ID", async () => {

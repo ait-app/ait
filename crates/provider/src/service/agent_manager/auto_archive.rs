@@ -1,6 +1,7 @@
 use std::collections::BTreeMap;
 
-use super::{AgentManager, AgentManagerError, now_timestamp};
+use super::{AgentManager, AgentManagerError};
+use crate::support::time::now_timestamp;
 
 #[derive(Debug, Default)]
 pub(super) struct AutoArchives {

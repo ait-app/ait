@@ -10,15 +10,15 @@ use crate::protocol::{Input, Restore, Size};
 #[derive(Clone)]
 pub struct Launch {
     /// Canonical working directory.
-    pub cwd: String,
+    pub(crate) cwd: String,
     /// Optional executable; defaults to the host shell.
-    pub command: Option<String>,
+    pub(crate) command: Option<String>,
     /// Literal executable arguments.
-    pub args: Vec<String>,
+    pub(crate) args: Vec<String>,
     /// Initial dimensions.
-    pub size: Size,
+    pub(crate) size: Size,
     /// Workspace-specific environment overrides.
-    pub env: BTreeMap<String, String>,
+    pub(crate) env: BTreeMap<String, String>,
 }
 
 impl Debug for Launch {
@@ -36,11 +36,11 @@ impl Debug for Launch {
 #[derive(Debug, Clone)]
 pub struct Observation {
     /// Cursor to use on the next observation.
-    pub revision: u64,
+    pub(crate) revision: u64,
     /// Current screen dimensions.
-    pub size: Size,
+    pub(crate) size: Size,
     /// Ordered binary payloads without their connection-specific slot headers.
-    pub frames: Vec<(crate::protocol::Opcode, Vec<u8>)>,
+    pub(crate) frames: Vec<(crate::protocol::Opcode, Vec<u8>)>,
     /// The reader has drained and the process has exited.
     pub exited: bool,
 }

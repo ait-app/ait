@@ -4,7 +4,7 @@ use serde::Deserialize;
 use serde_json::{Value, json};
 
 /// Commands supported by the upstream browser protocol.
-pub const COMMANDS: &[&str] = &[
+pub(crate) const COMMANDS: &[&str] = &[
     "list_tabs",
     "new_tab",
     "snapshot",
@@ -31,15 +31,15 @@ pub const COMMANDS: &[&str] = &[
 /// Explicit browser-host registration.
 #[derive(Debug, Deserialize)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
-pub struct Register {
+pub(crate) struct Register {
     /// Client implementation kind, used for diagnostics only.
-    pub host_kind: String,
+    pub(crate) host_kind: String,
     /// Commands implemented by this host.
-    pub supported_commands: Vec<String>,
+    pub(crate) supported_commands: Vec<String>,
 }
 /// Return whether a tab identity has the upstream UUID-v4 or legacy desktop shape.
 #[must_use]
-pub fn browser_id(value: &str) -> bool {
+fn browser_id(value: &str) -> bool {
     if value.len() == 36
         && uuid::Uuid::parse_str(value)
             .is_ok_and(|id| id.get_version_num() == 4 && id.get_variant() == uuid::Variant::RFC4122)
@@ -74,7 +74,7 @@ fn url(value: &Value, key: &str) -> bool {
 /// Validate a server-originated command and add upstream defaults.
 /// # Errors
 /// Returns invalid-message for malformed arguments or unknown commands.
-pub fn command(mut value: Value) -> Result<Value, ErrorCode> {
+pub(crate) fn command(mut value: Value) -> Result<Value, ErrorCode> {
     let name = value["command"]
         .as_str()
         .filter(|s| COMMANDS.contains(s))
@@ -215,7 +215,7 @@ fn validate_fields(name: &str, args: &Value) -> Result<(), ErrorCode> {
 }
 /// Validate a reply's success/error union and command-specific identity/result fields.
 #[must_use]
-pub fn response(value: &Value, expected: &str) -> bool {
+pub(crate) fn response(value: &Value, expected: &str) -> bool {
     if value.get("dialogs").is_some_and(|dialogs| {
         !dialogs
             .as_array()

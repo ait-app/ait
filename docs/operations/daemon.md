@@ -10,7 +10,7 @@ export AIT_SERVER_TOKEN="$(openssl rand -hex 32)"
 cargo run -p daemon --bin daemon -- --listen 127.0.0.1:7316
 ```
 
-凭据只从 `AIT_SERVER_TOKEN` 读取，要求 32–256 字节可见 ASCII、无空格。
+普通启动的凭据从 `AIT_SERVER_TOKEN` 读取，要求 32–256 字节可见 ASCII、无空格。
 不从命令行、URL、TOML 或 `.env` 自动加载服务凭据。
 
 | 参数                   | 环境变量               | 默认值                                 |
@@ -49,6 +49,9 @@ catalog 使用 `catalog.sqlite3`。具体数据归属由能力包维护，不把
 
 SIGINT、SIGTERM 和关闭 RPC 会停止接纳新连接、释放订阅、回收所属 Provider/终端资源，
 再释放实例锁。重启 RPC 在同一进程中重新组装服务。桌面只停止自己创建的 daemon 子进程。
+开启 **Host → Daemon → Keep daemon running after quit** 后，退出时 daemon 继续运行，连接信息写入
+数据目录的 `desktop-daemon.json`（0600，含访问 token）；下次启动经认证与 PID 校验后重新接管，
+见 [ADR-128](../decisions/clients/adr-128-desktop-daemon-keep-running.md)。
 日志使用 `daemon ready listen=...` 表示监听就绪；客户端仍需通过认证握手确认服务可用。
 
 ## HTTP 与浏览器认证
@@ -125,8 +128,18 @@ npm run dev:mobile
 - Codex 使用本机 `codex app-server`；`AIT_SERVER_CODEX_BIN` 覆盖程序路径。
 - [Claude Code](claude-code.md)使用本机认证与原生会话；`AIT_SERVER_CLAUDE_BIN` 覆盖路径。
 - [DeepSeek Harness](deepseek-harness.md)使用 stdio ACP 与动态模型目录。
+- OpenCode 使用官方 `opencode acp`；`AIT_SERVER_OPENCODE_BIN` 覆盖程序路径，见
+  [ADR-115](../decisions/providers/adr-115-opencode-acp-provider.md)。
+- [Antigravity CLI](antigravity.md)使用官方或 Homebrew 安装的 AGY；`AIT_SERVER_ANTIGRAVITY_BIN` 覆盖路径。
 - [语音与听写](speech.md)默认使用离线模型，也支持文档列出的远端后端。
 - GitHub/Forge 操作使用当前机器上的 Git、`gh` 或 `glab`。
 
 原生 Provider 凭据由对应程序保存。Ait 连接 token 与 Provider 凭据用途不同。
 更多行为边界见 [分类 ADR](../decisions/README.md)，验证范围见 [报告索引](../reports/README.md)。
+
+Linux 无人值守运行支持 `daemon login` 和 `daemon run --headless`，
+接入条件与命令见 [无人值守 daemon](headless-daemon.md)。
+
+## Headless 本地 API 凭据
+
+`daemon login` 后可以直接运行 `daemon run --headless`。未设置 `AIT_SERVER_TOKEN` 时，首次启动自动生成 `<data-dir>/local-api.token`（权限 0600），重启复用；默认路径为 `~/.ait-server/local-api.token`。显式环境变量优先，但不会覆盖已保存文件。该令牌与中心机器登录凭据独立，不放入 TOML，也不输出到日志。普通启动仍要求环境变量。

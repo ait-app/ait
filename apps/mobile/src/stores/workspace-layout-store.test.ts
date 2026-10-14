@@ -1,20 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
-vi.mock("@react-native-async-storage/async-storage", () => {
-  const storage = new Map<string, string>();
-  return {
-    default: {
-      getItem: vi.fn(async (key: string) => storage.get(key) ?? null),
-      setItem: vi.fn(async (key: string, value: string) => {
-        storage.set(key, value);
-      }),
-      removeItem: vi.fn(async (key: string) => {
-        storage.delete(key);
-      }),
-    },
-  };
-});
-
 import { defaultChangesState, type ChangesState } from "@/panels/changes/state";
 import { defaultFileState, type FileState } from "@/panels/file/state";
 import {
@@ -41,6 +26,21 @@ import {
 import { createViewedTimelineSync } from "@/timeline/viewed-timeline-sync";
 import { buildWorkspaceTabPersistenceKey, type WorkspaceTab } from "@/workspace-tabs/model";
 import AsyncStorage from "@react-native-async-storage/async-storage";
+
+vi.mock("@react-native-async-storage/async-storage", () => {
+  const storage = new Map<string, string>();
+  return {
+    default: {
+      getItem: vi.fn(async (key: string) => storage.get(key) ?? null),
+      setItem: vi.fn(async (key: string, value: string) => {
+        storage.set(key, value);
+      }),
+      removeItem: vi.fn(async (key: string) => {
+        storage.delete(key);
+      }),
+    },
+  };
+});
 
 const SERVER_ID = "server-1";
 const WORKSPACE_ID = "ws-main";
@@ -134,6 +134,7 @@ it("feeds restored layout to timeline sync as a release signal, not a subscripti
     readCursor: () => undefined,
     fetchPage: async () => ({ hasNewer: false, endCursor: null }),
     fetchLatestTail: async () => ({ hasNewer: false, endCursor: null }),
+    onCatchUpEnded: () => undefined,
     reportError: () => undefined,
     schedule: () => () => undefined,
   });
@@ -232,6 +233,43 @@ function expectGroup(node: SplitNode): Extract<SplitNode, { kind: "group" }> {
 }
 
 describe("workspace-layout-store helpers", () => {
+  it("restores schedule list filters and creation navigation in a workspace", async () => {
+    const source = createWorkspaceLayoutStore(createDeterministicWorkspaceLayoutIds());
+    const workspaceKey = "host-a:workspace-a";
+    const first = source.getState().openTab({
+      workspaceKey,
+      target: { kind: "schedule" },
+      intent: "new",
+    });
+    const second = source.getState().openTab({
+      workspaceKey,
+      target: { kind: "schedule" },
+      intent: "new",
+    });
+    expect(first).not.toBe(second);
+    source
+      .getState()
+      .replaceTab(workspaceKey, first!, { kind: "schedule", view: "list", filter: "paused" });
+    source.getState().replaceTab(workspaceKey, second!, { kind: "schedule", view: "create" });
+
+    const restored = createWorkspaceLayoutStore(createDeterministicWorkspaceLayoutIds());
+    await restored.persist.rehydrate();
+    const tabs = collectAllTabs(restored.getState().layoutByWorkspace[workspaceKey]!.root);
+    expect(tabs.filter((tab) => tab.target.kind === "schedule").map((tab) => tab.tabId)).toEqual([
+      first,
+      second,
+    ]);
+    expect(tabs.find((tab) => tab.tabId === first)?.target).toEqual({
+      kind: "schedule",
+      view: "list",
+      filter: "paused",
+    });
+    expect(tabs.find((tab) => tab.tabId === second)?.target).toEqual({
+      kind: "schedule",
+      view: "create",
+    });
+  });
+
   it("seeds Files and Changes in the default Explorer sidebar", () => {
     const layout = createWorkspaceLayoutWithExplorerSidebar();
     const tabs = collectAllTabs(layout.root);

@@ -3,6 +3,83 @@ use super::*;
 mod command_actions;
 
 #[test]
+fn oversized_mcp_structured_result_has_a_durable_replayable_preview() {
+    let native = json!({"id":"call","type":"mcpToolCall","server":"codex_apps",
+        "tool":"github.fetch","status":"completed","arguments":{"url":"https://example.test/compare"},
+        "result":{"content":[{"type":"text","text":"Success"}],
+            "structuredContent":{"diff":"界\n\"\\".repeat(160 * 1024)},"isError":false}});
+    let images = crate::local::images::ImageStore::default();
+    let entries = timeline_items(&native, "turn", "time", &images).unwrap();
+    let output = &entries[0].item["detail"]["output"];
+    assert!(output.as_str().unwrap().contains("Output truncated"));
+    assert_eq!(entries[0].item["status"], "completed");
+    assert_eq!(entries[0].item["name"], "codex_apps.github.fetch");
+    assert_eq!(entries[0].item["detail"]["input"], native["arguments"]);
+    assert!(
+        serde_json::to_vec(&entries[0]).unwrap().len() < crate::storage::timeline::MAX_ENTRY_BYTES
+    );
+    assert!(native["result"]["structuredContent"]["diff"].is_string());
+
+    let timeline = crate::storage::timeline::Timeline::memory().unwrap();
+    let (epoch, positions) = timeline.append("agent", "codex", &entries).unwrap();
+    let replay = timeline_items(&native, "turn", "time", &images).unwrap();
+    assert_eq!(entries, replay);
+    assert_eq!(
+        timeline.reconcile("agent", "codex", &replay).unwrap(),
+        epoch
+    );
+    assert_eq!(timeline.read("agent").unwrap().1[0].seq, positions[0]);
+}
+
+#[test]
+fn oversized_mcp_arguments_and_errors_fit_running_and_failed_cards() {
+    let mut native = json!({"id":"call","type":"mcpToolCall","server":"offline",
+        "tool":"test","status":"inProgress","arguments":{"text":"界\n".repeat(128 * 1024)},
+        "result":null});
+    let timeline = crate::storage::timeline::Timeline::memory().unwrap();
+    let running = crate::local::tool_detail::codex_tools(&native, "running")
+        .remove(0)
+        .1;
+    let mut entry = NativeItem {
+        key: "native:turn:call".to_owned(),
+        turn_id: Some("turn".to_owned()),
+        timestamp: "time".to_owned(),
+        item: running,
+    };
+    timeline
+        .progress("agent", "codex", "started", &entry)
+        .unwrap();
+    assert!(
+        entry.item["detail"]["input"]
+            .as_str()
+            .unwrap()
+            .contains("Output truncated")
+    );
+
+    native["status"] = json!("failed");
+    native["error"] = json!({"message":"Access denied. ".repeat(64 * 1024)});
+    native["result"] = json!({"content":"x".repeat(512 * 1024 - 64)});
+    entry = timeline_items(
+        &native,
+        "turn",
+        "time",
+        &crate::local::images::ImageStore::default(),
+    )
+    .unwrap()
+    .remove(0);
+    assert_eq!(entry.item["status"], "failed");
+    assert!(
+        entry.item["error"]
+            .as_str()
+            .unwrap()
+            .contains("Output truncated")
+    );
+    assert!(entry.item["detail"]["output"].is_object());
+    assert!(serde_json::to_vec(&entry).unwrap().len() < crate::storage::timeline::MAX_ENTRY_BYTES);
+    timeline.append("agent", "codex", &[entry]).unwrap();
+}
+
+#[test]
 fn generated_images_and_mcp_images_have_stable_sanitized_history() {
     let root = tempfile::tempdir().unwrap();
     let images = crate::local::images::ImageStore::new(root.path().join("images"));
@@ -154,7 +231,7 @@ async fn native_discovery_and_read_only_history_use_real_stdio_without_model_cal
         ]
     );
     assert_eq!(details.features[0]["icon"], "zap");
-    assert_eq!(details.features[0]["tooltip"], "Toggle fast mode");
+    assert_eq!(details.features[0]["tooltip"], "Select speed");
     let mut session = client.create_session(&fixture.spec()).await.unwrap();
     let handle = session.persistence().unwrap();
     session

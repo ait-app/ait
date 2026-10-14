@@ -1,9 +1,10 @@
 use domain::agent_runtime::TitleOrigin;
-use model::summary::{SummaryFuture, SummaryRequest};
+use domain::summary::SummaryRequest;
+use model::summary::SummaryFuture;
 use serde_json::json;
 
 use super::*;
-use crate::summary::SummaryGenerator;
+use model::summary::SummaryGenerator;
 
 #[derive(Debug, Default)]
 struct Generator {

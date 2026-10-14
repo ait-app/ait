@@ -1,0 +1,422 @@
+{
+  "measurement_date": "2026-10-09",
+  "source_revision": "23d332cc327c416d2947d6f6d9333bdf27f95df7",
+  "base_revision": "fdd6ce6375b9f40c9f5d5eb22216f11e238bf736",
+  "rust_source_fingerprint_sha256": "141f2c960ae02adc6783417ea6df6e8fe3df887aac1eb20d47dc38c2a2f0ed3d",
+  "fingerprint_scope": "Sorted tracked .rs files, paths ending Cargo.toml, Cargo.lock and rust-toolchain.toml; SHA-256 over path, NUL, bytes, NUL.",
+  "changed_source_hashes": {
+    "crates/provider/src/diagnostics/tests.rs": "a0543a60f2c6bc8759183424c116e082d340a4b6a15c45f59e21deb4c7510511",
+    "crates/provider/src/local/antigravity.rs": "849f668ee595375eb5044e51719702c81e0b5d95a210aa19575e0196c8b22073",
+    "crates/provider/src/local/antigravity/config.rs": "98a1e53d6ff16238694f14c8d4cd381b8f26b74967fa1c662333088b35bdf1dc",
+    "crates/provider/src/local/antigravity/diagnostics.rs": "74c0008424b30d7dd12fcead176f3141d8efb9c29ae96741d6f2e886285ea4b0",
+    "crates/provider/src/local/antigravity/diagnostics/tests.rs": "ea64e4c842726640a432c06b3df44d4f37f6082e448dd069efd6dd17dbc66ef8",
+    "crates/provider/src/local/antigravity/session.rs": "243a885dc55c87d934d958a5234cfec294710ccf84d6e04e502c14f651091a75",
+    "crates/provider/src/local/antigravity/streaming.rs": "1f0306e674e1f3434902d739049078e9fbffb15ce0b409a58dc9e0fcbbb1507e",
+    "crates/provider/src/local/antigravity/streaming/tests.rs": "4a34c5dbec82234baf6974b14d3d37afb447539791819dec0a781c26fa77fd97",
+    "crates/provider/src/local/antigravity/tests.rs": "aa5739fb0a4dac53703d543a45364832d3c46777fc3f5ad5696ecd171d0eac03",
+    "crates/provider/src/local/antigravity/tests/diagnostics.rs": "1e8e0ee258df03bf04ed9931ad6def8b5069783a3ab224bb6cec83bf91542c0a",
+    "crates/provider/src/local/antigravity/tests/fixtures/agy.py": "22faac37dd284595dfe62de3f14793644d457f1c6b6dfbd8d4243f7ec1db3744",
+    "crates/provider/src/local/antigravity/transport.rs": "7e639caa6fd3ad1ec4d512c725615cfdc32d08b7616cfbf29900e5cb8634cb02",
+    "crates/provider/src/ports/agent_session.rs": "6814cf60d319dcb47c9150e79ff0f338537425d42bc41548d695c2a1076feecb",
+    "crates/provider/src/ports/agent_session/tests.rs": "abacb42714a72b089d8026ccf71201462a98e0ac4b6992e8acf7f47229c8fadb",
+    "crates/provider/src/service/agent_manager.rs": "3f13a88d07b39cac013e4a43b2ade0f07da8312395f3212d5bf213aeaea84f09",
+    "crates/provider/src/service/agent_manager/streaming.rs": "36991481580733a35b70985cebb4a5efe55bb6ffdb49c9c0c2e940cf14c435c8",
+    "crates/provider/src/service/agent_manager/tests.rs": "b8199b79b0659f8f9f4cb73fac696367ef3e259cdc899ed03aa78e1a046b8f2d",
+    "crates/provider/src/service/agent_manager/tests/paseo.rs": "e3269e0e4ad90bbfbdea8c519a568c68de43ac83401fc59b08fd7ef09bc88348",
+    "docs/operations/antigravity.md": "9ac91d70c7cd5641e12c38c3403082118cf511dd166ec9f98411f403a8ec8ee4",
+    "packages/protocol/src/provider-manifest.ts": "60de9e89500135352dbaa28b6b21a4279d4dfff8a30850daec21ccb95046116e"
+  },
+  "scope": {
+    "packages": "entire Cargo workspace",
+    "features": "default Cargo features; no additional features",
+    "platform": "macOS 27.0.1 (26A434), aarch64-apple-darwin",
+    "rustc": "1.98.1 (48a229cea 2026-09-01)",
+    "cargo_llvm_cov": "0.8.4",
+    "source_filters": "cargo-llvm-cov defaults; no additional exclusions",
+    "skipped_tests": "Fifteen default-ignored installed-provider tests require native CLIs, provider authentication or explicit isolated installation settings. They were not included in this measurement.",
+    "excluded_measurements": [
+      "doctest instrumentation",
+      "TypeScript/UI coverage",
+      "Linux execution",
+      "Windows execution"
+    ],
+    "build_isolation": "Independent PR worktree and Cargo target directory; AGY changes and one macOS diagnostic-test path correction applied over main.",
+    "cargo_target_dir": "/private/tmp/ait-agy-pr-23zv638x/target"
+  },
+  "commands": [
+    "cargo test --workspace --no-fail-fast -- --test-threads=4",
+    "cargo test --workspace --test process -- --test-threads=1",
+    "cargo build --workspace",
+    "cargo clippy --workspace --all-targets -- -D warnings",
+    "cargo fmt --all --check",
+    "cargo llvm-cov --workspace --html --output-dir /private/tmp/ait-agy-pr-23zv638x/coverage -- --test-threads=4",
+    "cargo llvm-cov report --json --summary-only --output-path /private/tmp/ait-agy-pr-23zv638x/coverage-summary.json",
+    "cargo llvm-cov report --lcov --output-path /private/tmp/ait-agy-pr-23zv638x/coverage.lcov",
+    "npm exec --workspace=@ait/protocol -- vitest run src/provider-manifest.antigravity.test.ts",
+    "node_modules/.bin/oxfmt --check packages/protocol/src/provider-manifest.ts",
+    "node_modules/.bin/oxlint packages/protocol/src/provider-manifest.ts",
+    "node scripts/check-docs.mjs",
+    "git diff --check"
+  ],
+  "results": {
+    "workspace_attempt": {
+      "passed": 2032,
+      "failed": 1,
+      "ignored": 15,
+      "test_targets": 30
+    },
+    "workspace_after_target_retry": {
+      "passed": 2033,
+      "failed": 0,
+      "ignored": 15,
+      "note": "Aggregate unique outcomes after the entire daemon process target was rerun serially; not a second complete ordinary workspace invocation."
+    },
+    "process_suite_retry": {
+      "passed": 95,
+      "failed": 0,
+      "ignored": 0,
+      "test_targets": 1
+    },
+    "workspace_instrumented": {
+      "passed": 2032,
+      "failed": 0,
+      "ignored": 15,
+      "test_targets": 17
+    },
+    "protocol": {
+      "passed": 1,
+      "failed": 0
+    },
+    "build": "passed",
+    "clippy": "passed",
+    "format": "passed",
+    "docs": "passed",
+    "initial_workspace_attempt": {
+      "passed": 260,
+      "failed": 1,
+      "ignored": 0,
+      "test_targets": 6
+    },
+    "initial_failure": "unix::agent_execution::directory_sync::websocket_directory_streams_keep_sequences_ownership_and_reconnect_checkpoints timed out at the existing 10-second receive deadline, initially and in the complete parallel ordinary workspace run. The single test passed twice and a serial full-workspace attempt passed this target. After the fixture correction, the entire daemon process target was rerun serially and passed. The complete instrumented workspace also passed. No directory-subscription source changes were made.",
+    "directory_sync_isolated_retry": {
+      "passed": 1,
+      "failed": 0,
+      "ignored": 0,
+      "test_targets": 1
+    },
+    "workspace_before_fixture_fix": {
+      "passed": 2032,
+      "failed": 1,
+      "ignored": 15,
+      "test_targets": 30
+    },
+    "fixture_correction": "A main-branch diagnostic test assumed /bin/false, which does not exist on macOS. The assertion received Unavailable instead of Failed. Corrected the test to /usr/bin/false, available on macOS and Ubuntu CI, and reran it and the entire workspace.",
+    "diagnostic_probe_retry": {
+      "passed": 1,
+      "failed": 0,
+      "ignored": 0,
+      "test_targets": 1
+    }
+  },
+  "workspace_lines": {
+    "count": 60463,
+    "covered": 56928,
+    "percent": 94.15344921687644
+  },
+  "crate_lines": {
+    "bins/daemon": {
+      "covered": 1165,
+      "count": 1225,
+      "percent": 95.10204081632654
+    },
+    "crates/api": {
+      "covered": 2126,
+      "count": 2255,
+      "percent": 94.27937915742794
+    },
+    "crates/browser": {
+      "covered": 715,
+      "count": 733,
+      "percent": 97.5443383356071
+    },
+    "crates/domain": {
+      "covered": 121,
+      "count": 121,
+      "percent": 100.0
+    },
+    "crates/file": {
+      "covered": 1901,
+      "count": 1992,
+      "percent": 95.43172690763052
+    },
+    "crates/filesystem": {
+      "covered": 11564,
+      "count": 12189,
+      "percent": 94.87242595783083
+    },
+    "crates/metadata": {
+      "covered": 5426,
+      "count": 5766,
+      "percent": 94.10336455081513
+    },
+    "crates/model": {
+      "covered": 1683,
+      "count": 1739,
+      "percent": 96.77975848188615
+    },
+    "crates/protocol": {
+      "covered": 63,
+      "count": 63,
+      "percent": 100.0
+    },
+    "crates/provider": {
+      "covered": 27535,
+      "count": 29540,
+      "percent": 93.21259309410968
+    },
+    "crates/relay": {
+      "covered": 462,
+      "count": 503,
+      "percent": 91.84890656063618
+    },
+    "crates/schedule": {
+      "covered": 772,
+      "count": 791,
+      "percent": 97.59797724399495
+    },
+    "crates/terminal": {
+      "covered": 1527,
+      "count": 1583,
+      "percent": 96.46241313960834
+    },
+    "crates/voice": {
+      "covered": 1868,
+      "count": 1963,
+      "percent": 95.16046867040245
+    }
+  },
+  "antigravity_production_lines": {
+    "covered": 1109,
+    "count": 1176,
+    "percent": 94.30272108843538
+  },
+  "antigravity_production_files": {
+    "crates/provider/src/local/antigravity.rs": {
+      "lines": {
+        "count": 99,
+        "covered": 96,
+        "percent": 96.96969696969698
+      },
+      "uncovered_lines": [
+        65,
+        66,
+        67
+      ]
+    },
+    "crates/provider/src/local/antigravity/config.rs": {
+      "lines": {
+        "count": 121,
+        "covered": 120,
+        "percent": 99.17355371900827
+      },
+      "uncovered_lines": [
+        53
+      ]
+    },
+    "crates/provider/src/local/antigravity/diagnostics.rs": {
+      "lines": {
+        "count": 63,
+        "covered": 60,
+        "percent": 95.23809523809523
+      },
+      "uncovered_lines": [
+        21,
+        26,
+        27
+      ]
+    },
+    "crates/provider/src/local/antigravity/discovery.rs": {
+      "lines": {
+        "count": 90,
+        "covered": 84,
+        "percent": 93.33333333333333
+      },
+      "uncovered_lines": [
+        53,
+        54,
+        55,
+        72
+      ]
+    },
+    "crates/provider/src/local/antigravity/session.rs": {
+      "lines": {
+        "count": 267,
+        "covered": 247,
+        "percent": 92.50936329588015
+      },
+      "uncovered_lines": [
+        77,
+        78,
+        79,
+        80,
+        82,
+        84,
+        147,
+        148,
+        149,
+        150,
+        151,
+        152,
+        153,
+        170,
+        179,
+        180,
+        233,
+        285,
+        292,
+        297
+      ]
+    },
+    "crates/provider/src/local/antigravity/streaming.rs": {
+      "lines": {
+        "count": 291,
+        "covered": 278,
+        "percent": 95.53264604810997
+      },
+      "uncovered_lines": [
+        53,
+        60,
+        66,
+        107,
+        137,
+        146,
+        156,
+        160,
+        203,
+        266,
+        267,
+        268
+      ]
+    },
+    "crates/provider/src/local/antigravity/transport.rs": {
+      "lines": {
+        "count": 245,
+        "covered": 224,
+        "percent": 91.42857142857143
+      },
+      "uncovered_lines": [
+        67,
+        68,
+        110,
+        118,
+        119,
+        120,
+        121,
+        129,
+        130,
+        131,
+        132,
+        187,
+        194,
+        195,
+        198,
+        224,
+        237,
+        238,
+        239,
+        280,
+        291
+      ]
+    }
+  },
+  "failure_propagation_files": {
+    "crates/provider/src/ports/agent_session.rs": {
+      "lines": {
+        "count": 232,
+        "covered": 226,
+        "percent": 97.41379310344828
+      },
+      "uncovered_lines": [
+        289,
+        290,
+        291,
+        292,
+        293,
+        294
+      ]
+    },
+    "crates/provider/src/service/agent_manager.rs": {
+      "lines": {
+        "count": 903,
+        "covered": 880,
+        "percent": 97.452934662237
+      },
+      "uncovered_lines": [
+        290,
+        537,
+        538,
+        539,
+        540,
+        541,
+        542,
+        543,
+        544,
+        746,
+        774,
+        777,
+        788,
+        904,
+        961
+      ]
+    },
+    "crates/provider/src/service/agent_manager/streaming.rs": {
+      "lines": {
+        "count": 327,
+        "covered": 315,
+        "percent": 96.3302752293578
+      },
+      "uncovered_lines": [
+        76,
+        89,
+        117,
+        127,
+        128,
+        129,
+        130,
+        337,
+        349
+      ]
+    }
+  },
+  "historical_reference": {
+    "source_revision": "04131368e540beb3f0d89b125078b1274ef1fa83",
+    "artifact": "opencode-private-protocol-coverage-2026-10-08.json",
+    "workspace_lines": {
+      "count": 59536,
+      "covered": 56070,
+      "percent": 94.17831228164472
+    },
+    "provider_lines": {
+      "count": 29006,
+      "covered": 27042,
+      "percent": 93.22898710611598
+    },
+    "workspace_percentage_point_delta": -0.02486306476828304,
+    "provider_percentage_point_delta": -0.01639401200630175,
+    "note": "Both use default workspace tests, default features and default source filters on macOS arm64 with Rust 1.98.1. Historical cargo-llvm-cov was 0.8.7, this measurement uses 0.8.4. Sources differ from the exact PR base; deltas include intervening main changes and are not an isolated AGY patch comparison. No exact-base coverage run was performed."
+  },
+  "native_diagnostic_reproduction": {
+    "date": "2026-10-08",
+    "cli": "AGY 1.3.0",
+    "scope": "One read-only printf agy_diagnostic turn in an isolated temporary directory, before the fix; user permissions and global AGY configuration were unchanged.",
+    "observed": "Exit 0; SUCCESS with empty response and denied_actions(command, RunCommand); DONE tool with no output/error; stderr auto-denial notice. Offline fixtures reproduce this wire shape for the fixed adapter and manager.",
+    "not_covered": "No authenticated installed-provider smoke suite or live model turn after the fix."
+  },
+  "gaps": [
+    "The existing directory-subscription process test intermittently hit its 10-second receive deadline in ordinary full-workspace runs; serial target retry and the complete instrumented workspace passed. Directory subscription timing needs separate investigation if CI reproduces it.",
+    "LLVM line coverage is not branch coverage; uncovered physical lines are exported separately and not used to recompute percentages.",
+    "Installed-provider authentication and a successful live Full Access command remain outside default tests; the fix is verified with offline AGY-shaped fixtures.",
+    "Process spawn/kill errors, two-second stderr-drain timeout, failed writes and reconnect/initialization error branches remain partially uncovered. Follow up with deterministic fault-injection fixtures if those paths change.",
+    "Linux and Windows execution, desktop UI end-to-end behavior, doctest instrumentation and TypeScript coverage were not measured."
+  ]
+}

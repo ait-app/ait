@@ -25,7 +25,7 @@ fn interval_opt_out_waits_the_full_interval_before_first_run() {
 }
 
 #[test]
-fn manual_active_run_preserves_next_slot_even_after_count_limit() {
+fn manual_active_run_completes_at_count_limit() {
     let (mut engine, _) = fixture();
     let id = create(&mut engine);
     engine
@@ -35,15 +35,14 @@ fn manual_active_run_preserves_next_slot_even_after_count_limit() {
             now(),
         )
         .unwrap();
-    let original_next = engine.inspect(&id).unwrap().next_run_at;
     let later = now() + chrono::Duration::seconds(10);
     let (_, run) = engine.begin(&id, true, later).unwrap();
     engine
         .finish(&id, &run, true, Outcome::default(), later)
         .unwrap();
     let record = engine.inspect(&id).unwrap();
-    assert_eq!(record.status, Status::Active);
-    assert_eq!(record.next_run_at, original_next);
+    assert_eq!(record.status, Status::Completed);
+    assert_eq!(record.next_run_at, None);
     assert_eq!(record.runs[0].scheduled_for, later);
     assert_eq!(record.last_run_at, Some(later));
     assert!(engine.due(later).unwrap().is_empty());
@@ -227,4 +226,36 @@ fn output_and_error_limits_preserve_utf8_and_completed_history() {
         assert_eq!(text.chars().count(), 21_845);
     }
     assert_eq!(json!(store.0.lock().unwrap().0[0].runs), json!(record.runs));
+}
+
+#[test]
+fn due_scan_is_read_only_until_an_expired_schedule_must_complete() {
+    let (mut engine, store) = fixture();
+    let expiring = create(&mut engine);
+    let ongoing = create(&mut engine);
+    engine
+        .request(
+            "schedule.update.request",
+            json!({"scheduleId":expiring,"expiresAt":now() + chrono::Duration::seconds(30)}),
+            now(),
+        )
+        .unwrap();
+    // A failing store proves that ordinary due checks perform no write.
+    store.0.lock().unwrap().1 = true;
+    let mut due = engine.due(now()).unwrap();
+    due.sort();
+    let mut expected = vec![expiring.clone(), ongoing.clone()];
+    expected.sort();
+    assert_eq!(due, expected);
+    let expired = now() + chrono::Duration::minutes(1);
+    assert_eq!(engine.due(expired).unwrap_err(), Error::Storage);
+    assert_eq!(engine.inspect(&expiring).unwrap().status, Status::Active);
+    store.0.lock().unwrap().1 = false;
+    assert_eq!(engine.due(expired).unwrap(), vec![ongoing]);
+    let completed = engine.inspect(&expiring).unwrap();
+    assert_eq!(completed.status, Status::Completed);
+    assert!(completed.next_run_at.is_none());
+    let persisted = store.0.lock().unwrap().0.clone();
+    let stored = persisted.iter().find(|s| s.id == expiring).unwrap();
+    assert_eq!(stored.status, Status::Completed);
 }

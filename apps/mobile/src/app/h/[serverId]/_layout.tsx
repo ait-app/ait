@@ -11,6 +11,7 @@ const HOST_STACK_SCREEN_OPTIONS = {
 };
 
 const AGENT_SCREEN_OPTIONS = { gestureEnabled: false };
+const PERSISTENT_SCREENS = ["workspace/[workspaceId]/index"] as const;
 
 export default function HostRouteLayout() {
   return <KnownHostRoute />;
@@ -34,15 +35,13 @@ function KnownHostRoute() {
   }
 
   const stack = (
-    <ThemedStack screenOptions={HOST_STACK_SCREEN_OPTIONS}>
+    <ThemedStack screenOptions={HOST_STACK_SCREEN_OPTIONS} persistentScreens={PERSISTENT_SCREENS}>
       <Stack.Screen name="index" />
       <Stack.Screen name="workspace/[workspaceId]/index" />
       <Stack.Screen name="agent/[agentId]" options={AGENT_SCREEN_OPTIONS} />
       <Stack.Screen name="sessions" />
       <Stack.Screen name="open-project" />
       <Stack.Screen name="settings" />
-      <Stack.Screen name="plugin/[pluginId]/[surfaceId]" />
-      <Stack.Screen name="plugin/[pluginId]/[contributionKind]/[contributionId]" />
     </ThemedStack>
   );
 

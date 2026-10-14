@@ -26,15 +26,15 @@ Catalog 普通快照立即返回缓存或 loading，发现按 Provider/scope 合
 
 ## 初期定向测试（5df233ac 基线）
 
-| 命令 | 范围 | 结果 |
-| --- | --- | --- |
-| `cargo test -p provider service::agent_execution -- --test-threads=4` | 执行器、输入、控制、订阅、wait 与并发竞态 | 76 通过 |
-| `cargo test -p provider service::provider_catalog -- --test-threads=4` | 快照、缓存、发现、失败隔离及并发预算 | 23 通过 |
-| `cargo test -p provider service::agent_manager -- --test-threads=4` | writer 所有权、别名/屏障、持久化失败与清理 | 59 通过 |
-| `cargo test -p provider storage::timeline -- --test-threads=4` | epoch、历史替换、进度和输入存储 | 27 通过 |
-| `cargo test -p provider connection::directory -- --test-threads=4` | 目录序列与订阅 checkpoint | 3 通过 |
-| `npm run test --workspace @ait/mobile -- --project unit src/data/providers-snapshot.test.ts src/hooks/use-providers-snapshot.test.ts src/runtime/rust-daemon/messages.test.ts` | 快照、刷新、版本与 Rust transport 转换 | 60 通过 |
-| `npm run test --workspace @ait/protocol -- src/messages.providers-snapshot.test.ts` | schema、兼容字段及生成的 validator | 10 通过 |
+| 命令                                                                                                                                                                           | 范围                                       | 结果    |
+| ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ | ------------------------------------------ | ------- |
+| `cargo test -p provider service::agent_execution -- --test-threads=4`                                                                                                          | 执行器、输入、控制、订阅、wait 与并发竞态  | 76 通过 |
+| `cargo test -p provider service::provider_catalog -- --test-threads=4`                                                                                                         | 快照、缓存、发现、失败隔离及并发预算       | 23 通过 |
+| `cargo test -p provider service::agent_manager -- --test-threads=4`                                                                                                            | writer 所有权、别名/屏障、持久化失败与清理 | 59 通过 |
+| `cargo test -p provider storage::timeline -- --test-threads=4`                                                                                                                 | epoch、历史替换、进度和输入存储            | 27 通过 |
+| `cargo test -p provider connection::directory -- --test-threads=4`                                                                                                             | 目录序列与订阅 checkpoint                  | 3 通过  |
+| `npm run test --workspace @ait/mobile -- --project unit src/data/providers-snapshot.test.ts src/hooks/use-providers-snapshot.test.ts src/runtime/rust-daemon/messages.test.ts` | 快照、刷新、版本与 Rust transport 转换     | 60 通过 |
+| `npm run test --workspace @ait/protocol -- src/messages.providers-snapshot.test.ts`                                                                                            | schema、兼容字段及生成的 validator         | 10 通过 |
 
 测试使用内存/临时存储、可控制的 Provider gate 和原生协议 fixture，未连接真实模型服务或使用账户凭据。新并发测试通过通知和 semaphore 控制阻塞点，timeout 只作测试保险或验证 wait deadline；没有用固定 sleep 推断提速。
 
@@ -65,10 +65,10 @@ Catalog 普通快照立即返回缓存或 loading，发现按 Provider/scope 合
 
 ## Test coverage
 
-| 范围 | 已覆盖 / 总行数 | 行覆盖率 |
-| --- | --- | --- |
+| 范围                       | 已覆盖 / 总行数 | 行覆盖率 |
+| -------------------------- | --------------- | -------- |
 | Rust workspace（13 crate） | 53,543 / 56,775 | 94.3074% |
-| provider | 25,581 / 27,305 | 93.6861% |
+| provider                   | 25,581 / 27,305 | 93.6861% |
 
 普通与 coverage 插桩全量运行均为 **1,888 passed、0 failed、7 ignored**，测试数量与行覆盖率分别统计。HTML 已生成并审阅于 `target/llvm-cov/html/index.html`；[可审查 JSON 证据](paseo-concurrency-coverage-2026-10-07.json)随 PR 提交，包含逐 crate、逐文件、修改模块统计、原始报告 hash、精确命令、源码指纹及忽略清单。源码指纹为 `9e9fc42dc56bf8fa3f14bc943a6e7974b34969136d7567e2f0fe82b32f2c7683`。
 

@@ -23,6 +23,7 @@ export interface EditorTargetRuntime {
   readonly env: NodeJS.ProcessEnv;
 
   pathExists(path: string): boolean;
+  isDirectory(path: string): boolean;
   isAbsolutePath(path: string): boolean;
   resolveCommand(commands: readonly string[]): string | null;
   spawnDetached(input: { command: string; args: readonly string[] }): Promise<void>;

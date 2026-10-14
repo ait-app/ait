@@ -1,5 +1,6 @@
 //! Provider worker request decoding and response projections.
 
+mod bot;
 mod controls;
 mod native_sessions;
 mod placement;
@@ -9,6 +10,9 @@ mod voice;
 /// Initial Agent validation and placement for the composite Workspace creation operation.
 pub mod workspace_creation;
 mod worktrees;
+
+#[cfg(test)]
+mod tests;
 
 use domain::agent_runtime::PersistedAgentRuntimeRecord;
 use domain::agent_runtime::registry::AgentRuntimeRegistry;
@@ -22,6 +26,7 @@ use crate::protocol::agent_lifecycle::AgentIdRequest;
 use crate::rpc::ErrorCode;
 use crate::service::agent_manager::{AgentManager, AgentManagerError, AgentRegistration};
 use crate::service::agent_runtime::AgentRuntimeDirectory;
+use crate::support::rpc::decode;
 
 pub(crate) struct ExecutionState {
     pub(crate) manager: AgentManager,
@@ -45,6 +50,7 @@ impl ExecutionState {
         params: Value,
     ) -> Result<Value, ErrorCode> {
         match method {
+            "internal.bot" => self.bot(params).await,
             "internal.workspace.agent.create" => self.create_workspace_agent(params).await,
             "internal.workspace.retire" => self.retire_workspaces(params).await,
             "internal.agent.directory.prepare" => self.prepare_agent_directory(params),
@@ -175,6 +181,20 @@ impl ExecutionState {
         super::agent_runtime::synchronize(&self.directory, value, &cursor)
     }
 
+    /// Whether an opted-in page can use committed history without owning native hydration.
+    /// Returns request, identity or storage errors; unfinished native replacement stays strict.
+    pub(crate) fn can_read_cached_timeline(
+        &self,
+        method: &str,
+        params: &Value,
+    ) -> Result<bool, ErrorCode> {
+        if method != "agent.timeline.get.request" || params["allowCached"] != true {
+            return Ok(false);
+        }
+        let request: crate::protocol::timeline::FetchRequest = decode(params.clone())?;
+        Ok(self.manager.can_read_cached_timeline(&request.agent_id)?)
+    }
+
     async fn timeline(&mut self, method: &str, params: Value) -> Result<Value, ErrorCode> {
         use crate::protocol::timeline::{AppendRequest, FetchRequest, SearchRequest};
         let plugin = params
@@ -203,9 +223,18 @@ impl ExecutionState {
             "agent.timeline.get.request" => {
                 let mut request: FetchRequest = decode(params)?;
                 request.agent_id.clone_from(&id);
-                let (epoch, rows) = timeline.read(&id)?;
-                super::timeline::fetch(&request, &epoch, &rows, &self.snapshot(&id)?)
-                    .map_err(Into::into)
+                let history_needs_refresh = request
+                    .allow_cached
+                    .filter(|allowed| *allowed)
+                    .map(|_| !self.manager.history_loaded(&id));
+                super::timeline::fetch_stored(
+                    &request,
+                    &timeline,
+                    &id,
+                    &self.snapshot(&id)?,
+                    history_needs_refresh,
+                )
+                .map_err(Into::into)
             }
             "agent.timeline.search.request" => {
                 let mut request: SearchRequest = decode(params)?;
@@ -262,13 +291,21 @@ impl ExecutionState {
             .map_err(|error| map_manager(&error))?;
         if let Some(id) = &request.agent_id {
             Uuid::parse_str(id).map_err(|_| ErrorCode::InvalidMessage)?;
+            if self
+                .registry
+                .get(id)
+                .map_err(|_| ErrorCode::AgentIo)?
+                .is_some_and(|record| record.internal)
+            {
+                return Err(ErrorCode::AgentNotFound);
+            }
         }
         let key = request
             .idempotency_key
             .take()
             .unwrap_or_else(|| Uuid::new_v4().to_string());
         let creations = self.manager.creations();
-        let admission = creations.begin(model::creation::protocol::Kind::Agent, &key, intent)?;
+        let admission = creations.begin(domain::creation::protocol::Kind::Agent, &key, intent)?;
         if !admission.execute {
             if admission.snapshot.phase == "completed"
                 && let Some(id) = &admission.snapshot.agent_id
@@ -311,7 +348,7 @@ impl ExecutionState {
     async fn register_creation(
         &mut self,
         request: CreateRequest,
-        admission: &model::creation::protocol::Snapshot,
+        admission: &domain::creation::protocol::Snapshot,
         workspace_id: String,
         created_worktree: bool,
     ) -> Result<Value, ErrorCode> {
@@ -338,6 +375,7 @@ impl ExecutionState {
                     title: request.config.title.map(|title| title.trim().to_owned()),
                     labels: request.labels,
                     internal: false,
+                    owner: None,
                 },
                 &request.env,
             )
@@ -401,7 +439,7 @@ impl ExecutionState {
     async fn finish_creation(
         &mut self,
         id: &str,
-        admission: &model::creation::protocol::Snapshot,
+        admission: &domain::creation::protocol::Snapshot,
         prompt: Option<crate::protocol::prompt::AgentPrompt>,
     ) -> Result<Value, ErrorCode> {
         let creations = self.manager.creations();
@@ -592,19 +630,15 @@ pub(crate) fn only(params: &Value, allowed: &[&str]) -> Result<(), ErrorCode> {
     Ok(())
 }
 
-fn decode<T: serde::de::DeserializeOwned>(params: Value) -> Result<T, ErrorCode> {
-    serde_json::from_value(params).map_err(|_| ErrorCode::InvalidMessage)
-}
-
 const fn map_manager(error: &AgentManagerError) -> ErrorCode {
     match error {
         AgentManagerError::NotFound(_) => ErrorCode::AgentNotFound,
         AgentManagerError::ProviderUnavailable(_)
         | AgentManagerError::MissingPersistence(_)
         | AgentManagerError::Busy => ErrorCode::UnsupportedCapability,
-        AgentManagerError::InvalidRequest | AgentManagerError::AlreadyExists(_) => {
-            ErrorCode::InvalidMessage
-        }
+        AgentManagerError::InvalidRequest
+        | AgentManagerError::AlreadyExists(_)
+        | AgentManagerError::SessionRejected => ErrorCode::InvalidMessage,
         AgentManagerError::Session | AgentManagerError::Registry => ErrorCode::AgentIo,
     }
 }

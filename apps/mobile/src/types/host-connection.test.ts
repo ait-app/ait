@@ -2,6 +2,7 @@ import { defaultHostAppearance } from "@/hosts/appearance";
 import { describe, expect, it } from "vitest";
 import {
   createRemoteSshHostConnection,
+  createAccountRelayHostConnection,
   normalizeStoredHostProfile,
   orderHostsLocalFirst,
   resolveActiveHostServerId,
@@ -50,6 +51,58 @@ describe("orderHostsLocalFirst", () => {
 });
 
 describe("normalizeStoredHostProfile", () => {
+  it("migrates a saved official relay host while retaining its preferred connection", () => {
+    const hostId = "11111111-1111-4111-8111-111111111111";
+    const center = "https://dash.ait-app.com:8443/api";
+    const oldId = `account-relay:${encodeURIComponent(center)}:${hostId}`;
+    const migrated = createAccountRelayHostConnection({
+      hostId,
+      center: "https://aitapp.cn:8443/api",
+    });
+    const profile = normalizeStoredHostProfile({
+      serverId: "srv_account",
+      label: "Workstation",
+      connections: [
+        { type: "directTcp", endpoint: "localhost:6767" },
+        { id: oldId, type: "accountRelay", hostId, center },
+      ],
+      preferredConnectionId: oldId,
+    });
+    expect(profile?.connections[1]).toEqual(migrated);
+    expect(profile?.preferredConnectionId).toBe(migrated.id);
+  });
+
+  it("restores saved online-service hosts with their service binding and appearance", () => {
+    const connection = createAccountRelayHostConnection({
+      hostId: "11111111-1111-4111-8111-111111111111",
+      center: "https://custom.test:9443/ait/api/",
+    });
+    const profile = normalizeStoredHostProfile({
+      serverId: "srv_account",
+      label: "Workstation",
+      appearance: { color: "teal", badgeDisplay: "icon" },
+      connections: [connection],
+      preferredConnectionId: connection.id,
+    });
+    expect(profile).toMatchObject({
+      label: "Workstation",
+      appearance: { color: "teal", badgeDisplay: "icon" },
+      connections: [{ ...connection, center: "https://custom.test:9443/ait/api" }],
+      preferredConnectionId: connection.id,
+    });
+  });
+
+  it.each([
+    { hostId: "invalid", center: "https://custom.test/api" },
+    { hostId: "11111111-1111-4111-8111-111111111111", center: "http://remote.test" },
+  ])("rejects an invalid saved online-service connection: %j", (connection) => {
+    expect(
+      normalizeStoredHostProfile({
+        serverId: "srv_account",
+        connections: [{ type: "accountRelay", ...connection }],
+      }),
+    ).toBeNull();
+  });
   it("loads direct TCP connections stored before TLS and password fields existed", () => {
     const profile = normalizeStoredHostProfile({
       serverId: "srv_old",

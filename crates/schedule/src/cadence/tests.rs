@@ -163,3 +163,17 @@ fn interval_and_cron_report_calendar_overflow_instead_of_panicking() {
 }
 
 mod calendar_model;
+
+#[test]
+fn timezone_less_cron_omits_absent_zone_in_protocol_output() {
+    let cadence: Cadence = serde_json::from_value(serde_json::json!({
+        "type": "cron", "expression": "0 9 * * *", "timezone": null
+    }))
+    .unwrap();
+    assert_eq!(
+        serde_json::to_value(cadence).unwrap(),
+        serde_json::json!({
+            "type": "cron", "expression": "0 9 * * *"
+        })
+    );
+}

@@ -1,7 +1,9 @@
 //! Google Antigravity's official `agy` CLI over its headless NDJSON protocol.
 
 mod config;
+mod diagnostics;
 mod discovery;
+mod quota;
 mod session;
 mod streaming;
 mod transport;
@@ -20,11 +22,11 @@ use crate::ports::environment::AgentEnvironment;
 use crate::protocol::provider::Details;
 
 /// Stable provider identity, independent of the executable's `agy` name.
-pub const PROVIDER: &str = "antigravity";
+const PROVIDER: &str = "antigravity";
 
 /// Installed native CLI; credentials, permissions and conversation storage remain AGY-owned.
 #[derive(Debug, Clone)]
-pub struct AntigravityClient {
+pub(crate) struct AntigravityClient {
     program: PathBuf,
     deadline: Duration,
     environment: AgentEnvironment,
@@ -35,7 +37,7 @@ impl AntigravityClient {
     ///
     /// Startup and discovery are bounded to thirty seconds; foreground turns have no timeout.
     #[must_use]
-    pub fn new(program: PathBuf) -> Self {
+    pub(crate) fn new(program: PathBuf) -> Self {
         Self {
             program,
             deadline: Duration::from_secs(30),
@@ -47,7 +49,7 @@ impl AntigravityClient {
     ///
     /// Returns an unavailable launcher when no executable exists. Does not install software.
     #[must_use]
-    pub fn installed() -> Self {
+    pub(crate) fn installed() -> Self {
         Self::new(discovery::installed_program())
     }
 }
@@ -86,6 +88,13 @@ impl AgentClient for AntigravityClient {
             let models =
                 discovery::models(self, cwd.to_str().ok_or(AgentSessionError::Failed)?).await?;
             Ok(format!("Antigravity CLI ready; {} models", models.len()))
+        })
+    }
+
+    fn usage(&self) -> AgentSessionFuture<'_, Value> {
+        Box::pin(async move {
+            let cwd = std::env::current_dir().map_err(|_| AgentSessionError::Failed)?;
+            quota::read(self, &cwd).await
         })
     }
 

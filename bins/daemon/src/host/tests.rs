@@ -1,6 +1,6 @@
 use super::*;
+use crate::config::Cli;
 use clap::Parser;
-use file::config::Cli;
 
 fn config(directory: &std::path::Path) -> Config {
     Config::load(
@@ -91,6 +91,13 @@ async fn each_composite_service_installs_all_its_methods_without_other_component
         ),
         (
             Services {
+                bot: services.bot.take(),
+                ..Services::default()
+            },
+            ::bot::capabilities::implemented_methods().collect::<Vec<_>>(),
+        ),
+        (
+            Services {
                 provider: services.provider.take(),
                 ..Services::default()
             },
@@ -113,11 +120,12 @@ async fn each_composite_service_installs_all_its_methods_without_other_component
             listener,
             api,
             instance: instance.clone(),
+            managed: None,
         };
         let task = tokio::spawn(server.serve(async move {
             let _ = signal.await;
         }));
-        let info: protocol::ServerInfo = reqwest::Client::builder()
+        let info: model::server::ServerInfo = reqwest::Client::builder()
             .no_proxy()
             .build()
             .unwrap()
@@ -135,7 +143,7 @@ async fn each_composite_service_installs_all_its_methods_without_other_component
                 .iter()
                 .any(|name| name == method.name)
         }));
-        assert_eq!(info.capabilities.len(), 180);
+        assert_eq!(info.capabilities.len(), 201);
         stop.send(()).unwrap();
         tokio::time::timeout(Duration::from_secs(5), task)
             .await
@@ -156,3 +164,46 @@ async fn each_composite_service_installs_all_its_methods_without_other_component
 }
 
 mod workspace_attention;
+
+#[cfg(any(target_os = "linux", target_os = "macos"))]
+#[tokio::test]
+async fn headless_host_composes_exclusive_internal_control_without_contacting_center() {
+    use host_link::{Binding, Credential, CredentialStore, Machine, State};
+    let root = tempfile::tempdir().unwrap();
+    let lease = InstanceLease::acquire(root.path()).unwrap();
+    let server_id = lease.server_id;
+    drop(lease);
+    let store = crate::device::Store::open(root.path()).unwrap();
+    store
+        .save(&State {
+            machine: Machine {
+                server_id,
+                display_name: "build-linux".into(),
+                platform: "linux".into(),
+                app_version: "previous".into(),
+            },
+            credential: Some(Credential {
+                refresh_token: "test-private-refresh".into(),
+                refresh_expires_at: Utc::now() + chrono::Duration::days(30),
+                binding: Binding {
+                    node_id: uuid::Uuid::new_v4(),
+                    host_id: uuid::Uuid::new_v4(),
+                    server_id,
+                    grant_id: uuid::Uuid::new_v4(),
+                },
+            }),
+            pending: None,
+        })
+        .unwrap();
+    drop(store);
+    let mut configuration = config(root.path());
+    configuration.headless = true;
+    let mut server = Server::bind(configuration).await.unwrap();
+    assert!(server.managed.is_some());
+    assert!(server.api.claim_managed_relay().is_err());
+    assert!(crate::device::Store::open(root.path()).is_err());
+    server.api.begin_shutdown();
+    server.api.wait_closed().await;
+    drop(server);
+    assert!(crate::device::Store::open(root.path()).is_ok());
+}

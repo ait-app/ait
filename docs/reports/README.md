@@ -2,11 +2,24 @@
 
 文档按当前能力归属分类。历史验证记录只对应各文件注明的源码提交与平台。
 
-- [桌面监听重启与原生会话导入诊断验证](clients/desktop-listen-import-2026-10-08.md)
-- [Codex 首轮回退兼容与远程归档诊断](providers/codex-first-turn-rewind-2026-10-08.md)
-- [DSH 权限目录兼容与真实会话继承](providers/dsh-permission-catalog.md)
+- [Ait 0.0.28 客户端告警修复与诊断验证](clients/release-0.0.28-warning-fixes-2026-10-11.md)
+- [Ait 0.0.27 安装后诊断与修复](clients/release-0.0.27-installed-diagnostics-2026-10-11.md)
 
 ## Daemon 与协议
+
+- [Workspace 定时任务设计与验证](daemon/workspace-schedules-verification-2026-10-12.md)
+
+- [共享 model 与功能 crate 边界验证](daemon/model-capability-boundaries-2026-10-07.md)
+- [上游同步与 OpenCode 兼容验证](daemon/upstream-merge-2026-10-02.md)
+- [周期任务按变更驱动：PR 验证](daemon/periodic-loops-pr-validation-2026-10-10.md)
+- [Rust 测试提速：提交验证](daemon/rust-test-speed-validation-2026-10-10.md)
+- [本机终端 panic、模型目录与启动请求拒绝修复](daemon/daemon-startup-panic-fix-2026-10-10.md)
+- [摘要契约与目录准入：提交验证](daemon/summary-contracts-directory-admission-validation-2026-10-10.md)
+- [Crate 可见性与最新 main 整合验证](daemon/crate-visibility-pr-validation-2026-10-09.md)
+- [Persistence 与 filesystem 能力边界：PR 验证](daemon/persistence-filesystem-pr-validation-2026-10-09.md)
+- [Domain 数据与 Server 协议归属：PR 验证](daemon/domain-values-server-protocol-pr-validation-2026-10-09.md)
+
+- [本地诊断证据：PR 验证](daemon/diagnostic-evidence-pr-validation-2026-10-08.md)
 
 - [File、共享契约与 RPC 边界：PR 验证](daemon/file-and-rpc-boundaries-pr-validation-2026-10-08.md)
 - [Crate 边界整合到最新 main 的验证](daemon/crate-boundaries-main-rebase-2026-10-07.md)
@@ -16,6 +29,7 @@
 - [Cargo workspace 依赖整理与警告清理：PR 验证](daemon/cargo-workspace-pr-validation-2026-10-04.md)
 - [Daemon 测试分支 rebase 验证](daemon/crate-coverage-rebase.md)
 - [Daemon 每 crate 95% 行覆盖率（历史测量）](daemon/crate-coverage-95.md)
+- [2026-10-10 仓库审计与修复](daemon/repository-audit-2026-10-10.md)
 - [2026-10-03 仓库审计与修复](daemon/repository-audit-2026-10-03.md)
 - [Workspace 重命名与文档整理](daemon/workspace-rename.md)
 
@@ -53,6 +67,8 @@
 
 ## 工作区、文件与 Git
 
+- [本机 Changes 刷新断线：修复验证](workspace/changes-refresh-transport-2026-10-11.md)
+- [Filesystem 移除 metadata 依赖的验证](workspace/filesystem-model-independence-2026-10-07.md)
 - [工作区重置同步远端分支：PR 验证](workspace/workspace-reset-remote-pr-validation-2026-10-07.md)
 - [工作区重置复用同名分支：PR 验证](workspace/workspace-reset-existing-branch-pr-validation-2026-10-05.md)
 - [工作区重置路径校验：PR 验证](workspace/workspace-reset-path-pr-validation-2026-10-05.md)
@@ -72,6 +88,26 @@
 
 ## Provider、Agent 与会话
 
+- [图片输入自动压缩、分片与接纳预算修复](providers/image-input-admission-2026-10-13.md)
+- [Codex MCP 结构化大结果导致会话失败](providers/codex-mcp-large-structured-results-2026-10-12.md)
+- [OpenCode 模型目录与执行失败修复](providers/opencode-catalog-readiness-2026-10-10.md)
+- [Codex computer use 请求处理与 Auto-review 批准](providers/codex-computer-use-approval-2026-10-10.md)
+- [OpenCode 原生权限图标：PR 验证](providers/opencode-permission-icons-2026-10-09.md)
+- [OpenCode 使用问题追踪：图标与权限管理](providers/opencode-feedback-2026-10-09.md)
+- [DSH 权限目录兼容与真实会话继承](providers/dsh-permission-catalog.md)
+- [Codex 首轮回退兼容与远程归档诊断](providers/codex-first-turn-rewind-2026-10-08.md)
+- [DSH 辅助生成验证](providers/dsh-auxiliary-generation.md)
+- [OpenCode 辅助生成验证](providers/opencode-auxiliary-generation.md)
+- [Provider 辅助模型选择验证](providers/auxiliary-model-selection.md)
+- [原生会话预览验证](providers/native-session-previews.md)
+- [DSH 模型发现验证](providers/dsh-readonly-discovery.md)
+- [Atomic PR 整合验证](providers/atomic-pr-integration.md)
+- [合并 PR 验证（2026-10-07）](providers/consolidated-qa-validation.md)
+- [#206、#209、#212 之后的剩余 PR 同步](providers/main-sync-validation.md)
+- [OpenCode 官方 ACP 迁移验证](providers/opencode-acp-2026-10-09.md)
+
+- [AGY headless 拒绝与错误诊断：PR 验证](providers/antigravity-headless-errors-validation-2026-10-09.md)
+- [Codex 异步提问历史排序：PR 覆盖率证据](providers/codex-async-question-history-pr-coverage-2026-10-09.json)
 - [Timeline 单项 768 KiB：PR 覆盖率证据](providers/timeline-entry-768k-pr-coverage-2026-10-06.json)
 - [Provider 装配边界验证](providers/provider-composition.md)
 - [Antigravity CLI 原生 Provider 验证](providers/antigravity-cli.md)
@@ -80,6 +116,8 @@
 - [OpenCode 工具与结论顺序修复](providers/opencode-tool-order.md)
 - [OpenCode 上游 PR 验证](providers/opencode-upstream-pr.md)
 - [OpenCode 时间线顺序与工具历史](providers/opencode-history-order-and-tools.md)
+- [OpenCode 模型偏好、权限拒绝与会话错误分类：PR 覆盖率证据](providers/opencode-session-regressions-coverage-2026-10-08.json)
+- [OpenCode v1/v2 私有协议隔离与真实双版本验证：PR 覆盖率证据](providers/opencode-private-protocol-coverage-2026-10-08.json)
 - [OpenCode 原生流式与会话恢复](providers/opencode-native-streaming.md)
 - [OpenCode 1.18.33 兼容性](providers/opencode-1.18.33-compatibility.md)
 - [OpenCode Provider 迁移](providers/opencode-server-migration.md)
@@ -101,6 +139,20 @@
 
 ## 客户端、连接与品牌
 
+- [提问弹层响应超时与重试：验证](clients/question-response-timeout-2026-10-13.md)
+- [定时任务列表 Host 展示去重：验证](clients/schedule-host-filter-2026-10-12.md)
+- [Workspace 定时任务列表与统一创建流程：验证](clients/workspace-schedule-timeline-2026-10-12.md)
+- [桌面监听重启与原生会话导入诊断验证](clients/desktop-listen-import-2026-10-08.md)
+- [草稿重试、文件类型与 OpenCode：验证](clients/draft-files-opencode-validation-2026-10-08.md)
+- [Paseo desktop/app 选定改动移植](clients/paseo-desktop-app-port-2026-10-10.md)
+- [附件分块传输验证](clients/attachment-chunks.md)
+- [PR #204 整合与 QA 跟进](clients/pr-204-consolidation.md)
+- [PR #205 整合与 QA 跟进](clients/pr-205-consolidation.md)
+- [PR #206 整合与 QA 跟进](clients/pr-206-consolidation.md)
+- [PR #208 整合与 QA 跟进](clients/pr-208-consolidation.md)
+- [PR #209 整合与 QA 跟进](clients/pr-209-consolidation.md)
+- [PR #212 整合与 QA 跟进](clients/pr-212-consolidation.md)
+- [在线服务主机持久保存与 OpenCode 时间线：提交验证](clients/persistent-hosts-timeline-validation-2026-10-10.md)
 - [Daemon 重复注册与旧绑定兼容验证](clients/daemon-registration-validation.md)
 - [在线服务入口与逐主机同步：PR 验证](clients/online-service-host-sync-validation.md)
 - [账户主机中继初版验证](clients/account-host-relay-validation.md)
@@ -128,6 +180,15 @@
 
 ## 发布验证
 
+- [Ait 0.1.2 Draft 发布说明](releases/release-0.1.2.md)
+- [Ait 0.1.1 Draft 发布说明](releases/release-0.1.1.md)
+- [Ait 0.1.0 发布说明](releases/release-0.1.0.md)
+- [Ait 0.0.29 发布说明](releases/release-0.0.29.md)
+- [Ait 0.0.28 发布说明](releases/release-0.0.28.md)
+- [Ait 0.0.27 发布说明](releases/release-0.0.27.md)
+- [Ait 0.0.26 发布说明](releases/release-0.0.26.md)
+- [Ait 0.0.25 发布说明](releases/release-0.0.25.md)
+- [Ait 0.0.24 发布说明](releases/release-0.0.24.md)
 - [Ait 0.0.23 发布说明](releases/release-0.0.23.md)
 - [Ait 0.0.23-beta.1 发布说明](releases/release-0.0.23-beta.1.md)
 - [Ait 0.0.22 发布说明](releases/release-0.0.22.md)
@@ -135,14 +196,15 @@
 - [Ait 0.0.20 发布说明](releases/release-0.0.20.md)
 - [Ait 0.0.19 发布说明](releases/release-0.0.19.md)
 - [Ait 0.0.18 发布说明](releases/release-0.0.18.md)
+- [Ait 0.0.17 发布说明](releases/release-0.0.17.md)
 - [Ait 0.0.16 发布说明](releases/release-0.0.16.md)
 - [Ait 0.0.15 发布说明](releases/release-0.0.15.md)
-- [Ait 0.0.10 发布说明](releases/release-0.0.10.md)
-- [Ait 0.0.11 发布说明](releases/release-0.0.11.md)
-- [Ait 0.0.12 发布说明](releases/release-0.0.12.md)
-- [Ait 0.0.13 发布说明](releases/release-0.0.13.md)
 - [Ait 0.0.14 发布说明](releases/release-0.0.14.md)
+- [Ait 0.0.13 发布说明](releases/release-0.0.13.md)
+- [Ait 0.0.12 发布说明](releases/release-0.0.12.md)
+- [Ait 0.0.11 发布说明](releases/release-0.0.11.md)
+- [Ait 0.0.10 发布说明](releases/release-0.0.10.md)
+- [Ait 0.0.9 发布说明](releases/release-0.0.9.md)
+- [Ait 0.0.8 发布准备](releases/release-0.0.8.md)
 - [Ait 0.0.7 同版本重建发布](releases/release-0.0.7-rebuild-2026-09-28.md)
 - [Ait 0.0.7 发布准备](releases/release-0.0.7.md)
-- [Ait 0.0.8 发布准备](releases/release-0.0.8.md)
-- [Ait 0.0.9 发布说明](releases/release-0.0.9.md)

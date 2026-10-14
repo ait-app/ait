@@ -6,9 +6,10 @@ use axum::extract::ws::{CloseFrame, Message, WebSocket, close_code};
 use futures_util::{SinkExt, StreamExt, stream::SplitStream};
 use model::methods::InboundKind;
 use model::outbound::{Frame, Outbound, QueueError};
+use model::server::{ClientMessage, ErrorCode, Hello, ServerMessage, valid_id};
 use model::{Context, Request};
-use protocol::{ClientMessage, ErrorCode, Hello, ServerMessage, valid_id};
 use tokio::time::timeout;
+use tracing::Instrument;
 
 use crate::Shared;
 
@@ -195,7 +196,6 @@ async fn read(
     terminal_poll.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Skip);
     let mut upload_expiry = tokio::time::interval(Duration::from_secs(30));
     loop {
-        subscriptions.filesystem.files.prune_uploads();
         let message = tokio::select! {
             biased;
             () = state.cancellation.cancelled() => {
@@ -234,7 +234,7 @@ async fn process_file_frame(
     if acknowledged {
         bytes[0] -= 0x30;
     }
-    let Some((id, frame)) = filesystem::protocol::file_transfer::decode(&bytes) else {
+    let Some((id, frame)) = filesystem::files::protocol::file_transfer::decode(&bytes) else {
         error(outbound, None, ErrorCode::InvalidMessage)?;
         return Ok(ControlFlow::Break(()));
     };
@@ -380,7 +380,7 @@ async fn process_event(
         && state.metadata.push_tokens.is_some()
         && capabilities.iter().any(|capability| capability == &method)
     {
-        if let Err(code) = metadata::connection::push::register(
+        if let Err(code) = metadata::push::connection::register(
             params,
             &state.metadata,
             &mut subscriptions.metadata,
@@ -391,7 +391,7 @@ async fn process_event(
         }
         return Ok(());
     }
-    if method == metadata::protocol::server::HEARTBEAT_METHOD
+    if method == metadata::server::protocol::HEARTBEAT_METHOD
         && capabilities.iter().any(|capability| capability == &method)
     {
         let focused_terminal = params["appVisible"]
@@ -401,12 +401,13 @@ async fn process_event(
             .map(str::trim)
             .filter(|id| !id.is_empty())
             .map(str::to_owned);
-        if let Err(code) = metadata::connection::session::heartbeat(params, &subscriptions.metadata)
+        if let Err(code) =
+            metadata::server::connection::session::heartbeat(params, &subscriptions.metadata)
         {
             error(outbound, None, code)?;
             return Ok(());
         } else if let Err(code) =
-            metadata::connection::push::heartbeat(&state.metadata, &subscriptions.metadata).await
+            metadata::push::connection::heartbeat(&state.metadata, &subscriptions.metadata).await
         {
             error(outbound, None, code)?;
             return Ok(());
@@ -440,12 +441,29 @@ async fn process_request(
     capabilities: &[String],
     subscriptions: &mut ConnectionSubscriptions,
 ) -> Result<(), QueueError> {
+    let span = tracing::info_span!(
+        "rpc",
+        method = %request.method,
+        request_id = %request.id,
+        agent_id = request.params.get("agentId")
+            .and_then(serde_json::Value::as_str)
+            .filter(|id| valid_id(id)),
+        terminal_id = request.params.get("terminalId")
+            .and_then(serde_json::Value::as_str)
+            .filter(|id| valid_id(id)),
+        workspace_id = request.params.get("workspaceId")
+            .and_then(serde_json::Value::as_str)
+            .filter(|id| valid_id(id)),
+        subscription_slots = MAX_SUBSCRIPTIONS.saturating_sub(subscriptions.len()),
+        short_jobs_available = state.jobs.available_permits(),
+        terminal_jobs_available = state.terminal_jobs.available_permits(),
+    );
     if let Err(code) = validation::request(
         &request.method,
         &state.info.implemented_capabilities,
         capabilities,
     ) {
-        return error(outbound, Some(request.id), code);
+        return span.in_scope(|| error(outbound, Some(request.id), code));
     }
     dispatch::request(
         Context {
@@ -457,6 +475,7 @@ async fn process_request(
         state,
         subscriptions,
     )
+    .instrument(span)
     .await
 }
 

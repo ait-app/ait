@@ -1,7 +1,9 @@
 import type { ComponentType } from "react";
+import type { AgentFeature } from "@ait/protocol/agent-types";
 import {
   Bot,
   Brain,
+  Hammer,
   ListTodo,
   Settings2,
   Shield,
@@ -27,6 +29,7 @@ export const PlanModeIcon = ListTodo;
 
 const MODE_ICONS: Record<string, AgentControlIcon> = {
   Bot,
+  Hammer,
   Shield,
   ShieldAlert,
   ShieldCheck,
@@ -42,6 +45,12 @@ const FEATURE_ICONS: Record<string, AgentControlIcon> = {
   zap: Zap,
 };
 
+const PERMISSION_ICONS: Record<string, AgentControlIcon> = {
+  allow: ShieldCheck,
+  ask: ShieldQuestionMark,
+  deny: ShieldOff,
+};
+
 export function getAgentModeIcon(
   provider: string,
   modeId: string,
@@ -51,15 +60,16 @@ export function getAgentModeIcon(
   return (icon ? MODE_ICONS[icon] : undefined) ?? Bot;
 }
 
-export function getAgentModeOptionIcon(
-  provider: string,
-  modeId: string,
-  providerDefinitions: AgentProviderDefinition[],
-): AgentControlIcon | undefined {
-  const icon = getModeVisuals(provider, modeId, providerDefinitions)?.icon;
-  return icon ? MODE_ICONS[icon] : undefined;
-}
-
 export function getAgentFeatureIcon(icon?: string): AgentControlIcon {
   return (icon ? FEATURE_ICONS[icon] : undefined) ?? Settings2;
+}
+
+export function getAgentFeatureValueIcon(
+  feature: Pick<AgentFeature, "id" | "icon">,
+  value: unknown,
+): AgentControlIcon {
+  if (feature.id === "permission") {
+    return (typeof value === "string" ? PERMISSION_ICONS[value] : undefined) ?? Shield;
+  }
+  return getAgentFeatureIcon(feature.icon);
 }

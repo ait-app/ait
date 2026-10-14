@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import {
+  getFileExtension,
   getMimeTypeFromPath,
   getRasterImageMimeTypeFromPath,
   isRasterImageFile,
@@ -31,6 +32,13 @@ describe("attachment file types", () => {
     expect(getMimeTypeFromPath("/tmp/report.docx")).toBe("application/octet-stream");
     expect(getMimeTypeFromPath("/tmp/runtime.log")).toBe("application/octet-stream");
     expect(getMimeTypeFromPath("/tmp/export.anything")).toBe("application/octet-stream");
+  });
+
+  it("reads the extension from the file name, not dotted parent directories", () => {
+    expect(getFileExtension("/Users/me/my.project/Makefile")).toBe("");
+    expect(getFileExtension("C:\\Users\\john.doe\\README")).toBe("");
+    expect(getFileExtension("C:\\Users\\john.doe\\Report.PDF")).toBe(".pdf");
+    expect(getMimeTypeFromPath("/Users/me/shots.png/notes")).toBe("application/octet-stream");
   });
 
   it("does not offer SVG in the image picker extension list", () => {
