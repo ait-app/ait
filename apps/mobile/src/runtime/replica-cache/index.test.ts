@@ -178,6 +178,19 @@ function workspacePayload(): WorkspaceDescriptorPayload {
   };
 }
 
+function managedWorkspacePayload(): WorkspaceDescriptorPayload {
+  return {
+    ...workspacePayload(),
+    workspaceKind: "worktree",
+    workspaceDirectory: "/worktrees/original-slug",
+    worktreeSlug: "original-slug",
+    initialBranch: "feature/initial-branch",
+    name: "Renamed workspace",
+    title: "Renamed workspace",
+    gitRuntime: { currentBranch: "feature/renamed", isPaseoOwnedWorktree: true },
+  };
+}
+
 function timelineItem(text = "Cached"): StreamItem {
   return {
     kind: "assistant_message",
@@ -317,6 +330,96 @@ describe("ReplicaCache", () => {
     expect(restoredDirectory.projects.get("project-1")?.projectDisplayName).toBe("Paseo");
     expect(restoredDirectory.checkpoint).toEqual({ agents: { generation: "g", afterSeq: 12 } });
     expect(restoredTimeline).toEqual(timeline());
+  });
+
+  it.each(["directory", "workspace"] as const)(
+    "preserves the initial branch needed to reset a cached workspace through %s reads",
+    async (readMode) => {
+      const storage = new MemoryStorage();
+      const writer = createCache(storage);
+      const workspace = normalizeWorkspaceDescriptor(managedWorkspacePayload());
+      writer.commitDirectoryMutations(SERVER_ID, [
+        { kind: "workspace", type: "upsert", id: workspace.id, value: workspace },
+      ]);
+      await writer.flush();
+
+      const reader = createCache(storage);
+      const restored =
+        readMode === "directory"
+          ? (await reader.readDirectory(SERVER_ID)).workspaces.get(workspace.id)
+          : (await reader.readWorkspace(SERVER_ID, workspace.id))?.workspace;
+
+      expect(restored?.initialBranch).toBe("feature/initial-branch");
+      expect(restored).toEqual(workspace);
+    },
+  );
+
+  it.each(["directory", "workspace"] as const)(
+    "refetches old workspace projections and their cursor through %s reads",
+    async (readMode) => {
+      const storage = new MemoryStorage();
+      const writer = createCache(storage);
+      const checkpoint = {
+        agents: { generation: "agents", afterSeq: 12 },
+        projects: { generation: "projects", afterSeq: 4 },
+        workspaces: { generation: "workspaces", afterSeq: 8 },
+      };
+      const baseline = directory(checkpoint);
+      const workspace = normalizeWorkspaceDescriptor(managedWorkspacePayload());
+      baseline.workspaces.set(workspace.id, workspace);
+      commitDirectory(writer, SERVER_ID, baseline);
+      writer.commitTimeline(SERVER_ID, "agent-1", timeline());
+      await writer.flush();
+
+      const key = `${SERVER_ID}:workspace:${workspace.id}`;
+      const row = storage.rows.get(key)!;
+      const payload = JSON.parse(row.payload);
+      delete payload.projectionVersion;
+      delete payload.initialBranch;
+      storage.rows.set(key, { ...row, payload: JSON.stringify(payload) });
+
+      const reader = createCache(storage);
+      if (readMode === "workspace") {
+        expect(await reader.readWorkspace(SERVER_ID, workspace.id)).toBeUndefined();
+      }
+      const restored = await reader.readDirectory(SERVER_ID);
+
+      expect(restored.workspaces.size).toBe(0);
+      expect(restored.checkpoint).toEqual({
+        agents: checkpoint.agents,
+        projects: checkpoint.projects,
+      });
+      expect(restored.agents).toEqual(baseline.agents);
+      expect(restored.projects).toEqual(baseline.projects);
+      expect(await reader.readTimeline(SERVER_ID, "agent-1")).toEqual(timeline());
+      expect(storage.rows.has(key)).toBe(false);
+      expect((await createCache(storage).readDirectory(SERVER_ID)).checkpoint).toEqual(
+        restored.checkpoint,
+      );
+
+      commitDirectory(reader, SERVER_ID, baseline);
+      await reader.flush();
+      const refreshed = await createCache(storage).readDirectory(SERVER_ID);
+      expect(refreshed.workspaces.get(workspace.id)).toEqual(workspace);
+      expect(refreshed.checkpoint).toEqual(checkpoint);
+    },
+  );
+
+  it("keeps current workspace projections when an older daemon omits the initial branch", async () => {
+    const storage = new MemoryStorage();
+    const writer = createCache(storage);
+    const workspace = normalizeWorkspaceDescriptor({
+      ...managedWorkspacePayload(),
+      initialBranch: undefined,
+    });
+    writer.commitDirectoryMutations(SERVER_ID, [
+      { kind: "workspace", type: "upsert", id: workspace.id, value: workspace },
+    ]);
+    await writer.flush();
+
+    const reader = createCache(storage);
+    expect((await reader.readWorkspace(SERVER_ID, workspace.id))?.workspace).toEqual(workspace);
+    expect((await reader.readDirectory(SERVER_ID)).workspaces.get(workspace.id)).toEqual(workspace);
   });
 
   it.each([undefined, 1])(
