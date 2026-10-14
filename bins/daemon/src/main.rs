@@ -5,6 +5,7 @@ mod device;
 mod diagnostics;
 mod host;
 mod instance;
+mod service_connection;
 
 use std::process::ExitCode;
 

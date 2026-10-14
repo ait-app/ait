@@ -338,6 +338,26 @@ describe("upsertDesktopDaemonConnection", () => {
     expect(fake.upserts).toEqual([]);
   });
 
+  it("refreshes an external service connection without claiming process ownership", async () => {
+    const fake = createFakeStore([makeRelayOnlyHost("srv_desktop")]);
+    await upsertDesktopDaemonConnection(
+      fake.store,
+      makeStatus({
+        ownedByDesktop: false,
+        managementMode: "external",
+        listen: "127.0.0.1:7316",
+      }),
+    );
+    expect(fake.upserts).toEqual([
+      {
+        listenAddress: "127.0.0.1:7316",
+        serverId: "srv_desktop",
+        hostname: "desktop",
+        desktopManaged: false,
+      },
+    ]);
+  });
+
   it("refreshes the owned server address after a restart", async () => {
     const fake = createFakeStore([makeRelayOnlyHost("srv_desktop")]);
     await upsertDesktopDaemonConnection(fake.store, makeStatus({ listen: "127.0.0.1:49123" }));

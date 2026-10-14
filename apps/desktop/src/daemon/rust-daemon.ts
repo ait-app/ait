@@ -21,6 +21,7 @@ import { createServer } from "node:net";
 import { hostname, homedir } from "node:os";
 import path from "node:path";
 import { WebSocket } from "ws";
+import { readServiceConnection, type DaemonMode } from "./service-connection.js";
 
 export function resolveDesktopDaemonHome(env: NodeJS.ProcessEnv): string {
   return path.resolve(env.AIT_SERVER_DATA_DIR || path.join(homedir(), ".ait-server-desktop"));
@@ -118,6 +119,7 @@ function readLogFrom(logPath: string, offset: number): { text: string; offset: n
 }
 
 export interface RustDaemonStatus {
+  managementMode?: "desktop" | "external";
   serverId: string;
   instanceId?: string;
   features?: string[];
@@ -148,6 +150,7 @@ export class RustDaemonManager {
   private configuredListen: string | null = null;
   private queue: Promise<unknown> = Promise.resolve();
   private state: RustDaemonStatus;
+  private externalService = false;
 
   constructor(
     private readonly options: {
@@ -155,10 +158,12 @@ export class RustDaemonManager {
       home: string;
       listen?: string;
       getListen?: () => Promise<string>;
+      getMode?: () => Promise<DaemonMode>;
       timeoutMs?: number;
     },
   ) {
     this.state = {
+      managementMode: "desktop",
       serverId: "",
       status: "stopped",
       listen: null,
@@ -283,6 +288,7 @@ export class RustDaemonManager {
    * Returns false, and changes nothing, when no healthy daemon is owned.
    */
   retainForNextSession(): Promise<boolean> {
+    if (this.externalService) return Promise.resolve(false);
     return this.serialize(async () => {
       const pid = this.child?.pid ?? this.retained?.pid;
       if (
@@ -322,12 +328,28 @@ export class RustDaemonManager {
   }
   restart(): Promise<RustDaemonStatus> {
     return this.serialize(async () => {
+      if (this.externalService) {
+        // Authenticated runtime restart retains the system service's process ownership.
+        try {
+          await this.connectService();
+          const previousInstance = this.state.instanceId;
+          await requestServiceRestart(this.state.connectAddress!, this.token!);
+          return await this.connectService(previousInstance);
+        } catch (error) {
+          this.state = { ...this.state, status: "errored", error: String(error) };
+          throw error;
+        }
+      }
       await this.terminate();
       return this.launch();
     });
   }
 
   private async terminate(): Promise<void> {
+    if (this.externalService) {
+      this.token = null;
+      return;
+    }
     const retained = this.retained;
     if (retained) {
       this.retained = null;
@@ -379,6 +401,16 @@ export class RustDaemonManager {
   private async launch(): Promise<RustDaemonStatus> {
     if ((this.child || this.retained) && this.state.status === "running") return this.status();
     try {
+      const mode = (await this.options.getMode?.()) ?? "auto";
+      const record = await readServiceConnection(this.options.home);
+      if (mode === "external" || this.externalService || record) {
+        if (mode === "desktop" && record)
+          throw new Error(
+            "This data directory belongs to an external service. Select external mode.",
+          );
+        this.externalService = true;
+        return await this.connectService();
+      }
       mkdirSync(this.options.home, { recursive: true, mode: 0o700 });
       const configuredListen = ServerListenSchema.parse(
         this.options.listen ?? (await this.options.getListen?.()) ?? DEFAULT_DESKTOP_SERVER_LISTEN,
@@ -539,6 +571,57 @@ export class RustDaemonManager {
     };
     return this.status();
   }
+  private async connectService(previousInstance?: string): Promise<RustDaemonStatus> {
+    this.state = {
+      ...this.state,
+      status: "starting",
+      desktopManaged: false,
+      ownedByDesktop: false,
+      managementMode: "external",
+      error: null,
+    };
+    const deadline = Date.now() + (this.options.timeoutMs ?? 30_000);
+    while (Date.now() < deadline) {
+      const record = await readServiceConnection(this.options.home);
+      if (record && (!previousInstance || record.instanceId !== previousInstance)) {
+        const connectAddress = serverConnectAddress(record.listen);
+        try {
+          const info = await probeService(
+            connectAddress,
+            record.token,
+            Math.min(2000, Math.max(1, deadline - Date.now())),
+          );
+          if (info.serverId !== record.serverId || info.instanceId !== record.instanceId)
+            throw new Error("The service identity does not match its connection record.");
+          if (this.state.serverId && this.state.serverId !== info.serverId)
+            throw new Error("The configured service identity has changed.");
+          this.token = record.token;
+          this.state = {
+            ...this.state,
+            ...info,
+            status: "running",
+            listen: record.listen,
+            connectAddress,
+            pid: record.pid,
+            startedAt: record.startedAt,
+            hostname: hostname(),
+          };
+          return this.status();
+        } catch {
+          // A service may be starting/rebinding. Keep the record and retry, never spawn.
+        }
+      }
+      await new Promise((resolve) => setTimeout(resolve, 100));
+    }
+    this.token = null;
+    this.state = {
+      ...this.state,
+      status: "errored",
+      error:
+        "The external daemon is unavailable. Check its system service and retry the connection.",
+    };
+    throw new Error(this.state.error!);
+  }
 }
 
 type DaemonProbe = Pick<RustDaemonStatus, "serverId" | "version" | "instanceId" | "features"> & {
@@ -665,6 +748,118 @@ async function resolveListen(listen: string): Promise<string> {
           reject(new Error("Could not allocate a server port."));
         else resolve(`${host.includes(":") ? `[${host}]` : host}:${address.port}`);
       });
+    });
+  });
+}
+
+function requestServiceRestart(listen: string, token: string): Promise<void> {
+  return new Promise((resolve, reject) => {
+    const ws = new WebSocket(`ws://${listen}/v1/ws`, {
+      headers: { Authorization: `Bearer ${token}` },
+    });
+    let acknowledged = false;
+    const timer = setTimeout(
+      () => finish(new Error("Service restart was not acknowledged.")),
+      5000,
+    );
+    let settled = false;
+    const finish = (error?: Error) => {
+      if (settled) return;
+      settled = true;
+      clearTimeout(timer);
+      ws.close();
+      if (error) reject(error);
+      else resolve();
+    };
+    ws.on("error", (error) => finish(error));
+    ws.on("close", () =>
+      finish(acknowledged ? undefined : new Error("Service restart connection lost.")),
+    );
+    ws.on("open", () =>
+      ws.send(
+        JSON.stringify({
+          type: "hello",
+          protocol: { major: 1, min_minor: 0, max_minor: 0 },
+          client_id: "desktop-service-restart",
+          capabilities: ["server.restart.request"],
+          required_capabilities: ["server.restart.request"],
+        }),
+      ),
+    );
+    ws.on("message", (data) => {
+      try {
+        const message = JSON.parse(data.toString());
+        if (message.type === "server_info") {
+          ws.send(
+            JSON.stringify({
+              type: "request",
+              request_id: "restart",
+              method: "server.restart.request",
+              params: {},
+            }),
+          );
+        } else if (message.type === "response" && message.request_id === "restart") {
+          acknowledged = message.result?.status === "restart_requested";
+          finish(acknowledged ? undefined : new Error("Service restart was rejected."));
+        } else if (message.type === "error") {
+          finish(new Error("Service restart was rejected."));
+        }
+      } catch {
+        finish(new Error("Invalid service restart response."));
+      }
+    });
+  });
+}
+
+function probeService(
+  listen: string,
+  token: string,
+  timeout: number,
+): Promise<Pick<RustDaemonStatus, "serverId" | "version" | "instanceId" | "features">> {
+  return new Promise((resolve, reject) => {
+    const ws = new WebSocket(`ws://${listen}/v1/ws`, {
+      headers: { Authorization: `Bearer ${token}` },
+    });
+    const timer = setTimeout(() => finish(new Error("Rust daemon handshake timed out.")), timeout);
+    let settled = false;
+    const finish = (
+      error?: Error,
+      info?: Pick<RustDaemonStatus, "serverId" | "version" | "instanceId" | "features">,
+    ) => {
+      if (settled) return;
+      settled = true;
+      clearTimeout(timer);
+      ws.close();
+      if (error) reject(error);
+      else resolve(info!);
+    };
+    ws.on("error", (error) => finish(error));
+    ws.on("close", () => finish(new Error("Rust daemon closed before readiness handshake.")));
+    ws.on("open", () =>
+      ws.send(
+        JSON.stringify({
+          type: "hello",
+          protocol: { major: 1, min_minor: 0, max_minor: 0 },
+          client_id: "desktop-readiness",
+          capabilities: [],
+          required_capabilities: [],
+        }),
+      ),
+    );
+    ws.on("message", (data) => {
+      try {
+        const message = JSON.parse(data.toString());
+        if (message.type === "server_info" && typeof message.info?.server_id === "string")
+          finish(undefined, {
+            serverId: message.info.server_id,
+            version: typeof message.info.version === "string" ? message.info.version : null,
+            instanceId: message.info.instance_id ?? "",
+            features: message.info.features ?? [],
+          });
+        else finish(new Error("Unexpected Rust daemon readiness response."));
+      } catch {
+        finish(new Error("Invalid Rust daemon readiness response."));
+      }
     });
   });
 }

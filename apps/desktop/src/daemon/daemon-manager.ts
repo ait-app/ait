@@ -60,6 +60,15 @@ function getRustDaemon(): RustDaemonManager {
     home: getDaemonHome(),
     listen: process.env.AIT_SERVER_LISTEN,
     getListen: async () => (await getDesktopSettingsStore().get()).daemon.listen,
+    getMode: async () => {
+      const mode =
+        process.env.AIT_DESKTOP_DAEMON_MODE ??
+        (await getDesktopSettingsStore().get()).daemon.mode ??
+        "auto";
+      if (mode !== "auto" && mode !== "desktop" && mode !== "external")
+        throw new Error("Invalid desktop daemon mode.");
+      return mode;
+    },
   });
   return manager;
 }

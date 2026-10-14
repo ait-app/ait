@@ -1330,6 +1330,12 @@ export const ja: TranslationResources = {
     daemon: {
       listen: en.desktop.daemon.listen,
       lifecycle: {
+        external: en.desktop.daemon.lifecycle.external,
+        disconnect: en.desktop.daemon.lifecycle.disconnect,
+        disconnectTitle: en.desktop.daemon.lifecycle.disconnectTitle,
+        disconnectMessage: en.desktop.daemon.lifecycle.disconnectMessage,
+        connectService: en.desktop.daemon.lifecycle.connectService,
+        connectServiceHint: en.desktop.daemon.lifecycle.connectServiceHint,
         owned: "このデスクトップセッションが起動",
         attached: "既存のデーモンに接続中",
         ownedMessage: "このデーモンは、このデスクトップセッションが起動しました。",

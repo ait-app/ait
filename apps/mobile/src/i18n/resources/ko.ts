@@ -1323,6 +1323,12 @@ export const ko: TranslationResources = {
     daemon: {
       listen: en.desktop.daemon.listen,
       lifecycle: {
+        external: en.desktop.daemon.lifecycle.external,
+        disconnect: en.desktop.daemon.lifecycle.disconnect,
+        disconnectTitle: en.desktop.daemon.lifecycle.disconnectTitle,
+        disconnectMessage: en.desktop.daemon.lifecycle.disconnectMessage,
+        connectService: en.desktop.daemon.lifecycle.connectService,
+        connectServiceHint: en.desktop.daemon.lifecycle.connectServiceHint,
         owned: "이 데스크톱 세션에서 시작됨",
         attached: "기존 데몬에 연결됨",
         ownedMessage: "이 데몬은 이 데스크톱 세션에서 시작되었습니다.",

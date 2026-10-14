@@ -1,0 +1,17 @@
+[Unit]
+Description=Ait daemon
+After=network-online.target
+
+[Service]
+Type=exec
+WorkingDirectory=%h
+Environment=PATH=%h/.local/bin:%h/.cargo/bin:/usr/local/bin:/usr/bin:/bin
+EnvironmentFile=%h/.config/ait/daemon.env
+ExecStart=/usr/lib/ait/resources/bin/daemon --service --data-dir %h/.ait-server-desktop --listen 127.0.0.1:7316
+Restart=on-failure
+RestartSec=3
+TimeoutStopSec=30
+UMask=0077
+
+[Install]
+WantedBy=default.target

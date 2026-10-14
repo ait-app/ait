@@ -40,6 +40,43 @@ web_origins = ["http://localhost:8081", "http://127.0.0.1:8081"]
 
 ## 身份、数据与关闭
 
+### Linux 开机服务与桌面连接
+
+使用仓库的 [systemd 用户服务 unit](../../assets/systemd/ait-daemon.service)。服务用
+`--service` 启动，在数据目录原生发布权限为 0600 的 `service-connection.json`；桌面主进程
+读取后进行认证，不删除它，也不接管服务 PID。服务停止、连接超时和记录陈旧时只重试，
+不会尝试启动第二个 daemon。该文件含本机连接凭据，不要上传或加入版本控制。
+
+daemon 和桌面必须使用同一 `AIT_SERVER_DATA_DIR`（示例为 `~/.ait-server-desktop`）。
+建议将桌面的 `settings.daemon.mode` 明确设为 `external`，或设置
+`AIT_DESKTOP_DAEMON_MODE=external`；这样首次服务启动尚未生成记录时也不会 spawn。
+默认 `auto` 会在发现服务记录时连接已有服务；`desktop` 用于桌面自己的子进程。
+`manageBuiltInDaemon` 仍控制桌面是否自动启动本机连接流程，服务模式下不会转化为进程管理。
+
+先在 `~/.config/ait/daemon.env` 保存已有的 `AIT_SERVER_TOKEN`，文件权限设为 0600。
+首次安装时可生成随机 token；已有配置不要覆盖。服务的 PATH 包含 `~/.local/bin` 和
+`~/.cargo/bin`，也可在这个私有环境文件中配置 `AIT_SERVER_CLAUDE_BIN`、
+`AIT_SERVER_CODEX_BIN`、`AIT_SERVER_OPENCODE_BIN` 等绝对路径。
+
+```sh
+install -d -m 700 ~/.config/ait ~/.config/systemd/user
+install -m 644 assets/systemd/ait-daemon.service ~/.config/systemd/user/ait-daemon.service
+loginctl enable-linger "$USER"
+systemctl --user daemon-reload
+systemctl --user enable --now ait-daemon.service
+```
+
+unit 的 daemon 路径适用于 `/usr/lib/ait` 安装；其他安装方式应修改 `ExecStart`。
+服务模式的“重启后台”调用认证 RPC，在同一服务 PID 中重建 runtime，再确认新的
+`instanceId` 并重新连接。升级可执行文件或改变启动环境应使用
+`systemctl --user restart ait-daemon.service`。关闭桌面或点击“断开连接”不会停止系统服务。
+旧 unit 中伪造 `desktop-daemon.json` 的 `ExecStartPost`、`ExecReload` 命令应删除。
+
+通过 SSH 可从其他设备连接该 loopback daemon；地址和 token 输入方式见
+[Desktop 说明](../../apps/desktop/README.md)。云端 Relay 的无人登录运行需要独立的 `daemon login` 授权及 `run --headless`，
+见 [无人值守 daemon](headless-daemon.md)。仅运行普通 daemon 不代表云端 Relay 在线。
+契约与兼容性见 [ADR-148](../decisions/clients/adr-148-service-owned-desktop-daemon.md)。
+
 同一数据目录由 `instance.lock` 的 OS 文件锁排他管理。`server-id` 是原子保存的稳定身份，
 `instance_id` 每次启动变化；身份损坏会拒绝启动。Unix 新建目录使用 0700 权限。
 

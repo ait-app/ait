@@ -24,7 +24,11 @@ export async function upsertDesktopDaemonConnection(
   if (!serverId) {
     return { ok: false, error: "Desktop daemon did not return a server id." };
   }
-  if (!daemon.ownedByDesktop && store.getHosts().some((host) => host.serverId === serverId)) {
+  if (
+    !daemon.ownedByDesktop &&
+    daemon.managementMode !== "external" &&
+    store.getHosts().some((host) => host.serverId === serverId)
+  ) {
     return { ok: true };
   }
 

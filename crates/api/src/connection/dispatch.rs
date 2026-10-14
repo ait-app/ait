@@ -144,9 +144,26 @@ async fn daemon_snapshot(
     let providers = match &state.provider.agent_execution {
         Some(execution) => {
             let value = execution
-                .execute("provider.available.list.request", serde_json::json!({}))
+                .execute("provider.snapshot.get.request", serde_json::json!({}))
                 .await?;
-            serde_json::from_value(value["providers"].clone()).map_err(|_| ErrorCode::AgentIo)?
+            let providers: Vec<_> = value["entries"]
+                .as_array()
+                .ok_or(ErrorCode::AgentIo)?
+                .iter()
+                .map(|entry| {
+                    serde_json::json!({
+                        "provider": entry["provider"],
+                        "available": entry["status"] == "ready",
+                        "error": if entry["status"] == "loading" {
+                            Some("Provider discovery in progress".to_owned())
+                        } else {
+                            entry["error"].as_str().map(str::to_owned)
+                        },
+                    })
+                })
+                .collect();
+            serde_json::from_value(serde_json::Value::Array(providers))
+                .map_err(|_| ErrorCode::AgentIo)?
         }
         None => Vec::new(),
     };

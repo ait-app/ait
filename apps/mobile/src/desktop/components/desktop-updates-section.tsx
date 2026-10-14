@@ -180,6 +180,7 @@ function DaemonCliStatusModal({
 }
 
 interface DaemonInfoCardProps {
+  externalService: boolean;
   daemonStatusStateText: string;
   daemonStatusDetailText: string;
   daemonListen: string | null;
@@ -206,6 +207,7 @@ function DaemonInfoCard(props: DaemonInfoCardProps) {
     daemonStatusStateText,
     daemonStatusDetailText,
     daemonListen,
+    externalService,
     children,
     isDaemonManagementPaused,
     copyIcon,
@@ -228,7 +230,13 @@ function DaemonInfoCard(props: DaemonInfoCardProps) {
       <View style={settingsStyles.row} testID="daemon-status-row">
         <View style={settingsStyles.rowContent}>
           <Text style={settingsStyles.rowTitle}>{t("desktop.daemon.status.title")}</Text>
-          <Text style={settingsStyles.rowHint}>{t("desktop.daemon.status.builtInOnly")}</Text>
+          <Text style={settingsStyles.rowHint}>
+            {t(
+              externalService
+                ? "desktop.daemon.lifecycle.external"
+                : "desktop.daemon.status.builtInOnly",
+            )}
+          </Text>
         </View>
         <View style={styles.statusValueGroup}>
           <Text style={styles.valueText}>{daemonStatusStateText}</Text>
@@ -243,8 +251,20 @@ function DaemonInfoCard(props: DaemonInfoCardProps) {
       {children}
       <View style={[settingsStyles.row, settingsStyles.rowBorder]}>
         <View style={settingsStyles.rowContent}>
-          <Text style={settingsStyles.rowTitle}>{t("desktop.daemon.management.title")}</Text>
-          <Text style={settingsStyles.rowHint}>{t("desktop.daemon.management.hint")}</Text>
+          <Text style={settingsStyles.rowTitle}>
+            {t(
+              externalService
+                ? "desktop.daemon.lifecycle.connectService"
+                : "desktop.daemon.management.title",
+            )}
+          </Text>
+          <Text style={settingsStyles.rowHint}>
+            {t(
+              externalService
+                ? "desktop.daemon.lifecycle.connectServiceHint"
+                : "desktop.daemon.management.hint",
+            )}
+          </Text>
         </View>
         <Switch
           value={!isDaemonManagementPaused}
@@ -410,6 +430,7 @@ export function LocalDaemonSection() {
       ) : (
         <>
           <DaemonInfoCard
+            externalService={daemonStatus?.managementMode === "external"}
             daemonStatusStateText={daemonStatusStateText}
             daemonStatusDetailText={daemonStatusDetailText}
             daemonListen={daemonStatus?.listen ?? null}
@@ -428,12 +449,16 @@ export function LocalDaemonSection() {
             handleRunCliStatus={handleRunCliStatus}
             isLoadingCliStatus={isLoadingCliStatus}
           >
-            <DaemonListenRows
-              listen={daemonSettings.listen}
-              override={daemonStatus?.listenOverride ?? null}
-              onChangeListen={updateListen}
-              disabled={Boolean(settingsError)}
-            />
+            {daemonStatus?.managementMode === "external" ? (
+              <></>
+            ) : (
+              <DaemonListenRows
+                listen={daemonSettings.listen}
+                override={daemonStatus?.listenOverride ?? null}
+                onChangeListen={updateListen}
+                disabled={Boolean(settingsError)}
+              />
+            )}
           </DaemonInfoCard>
 
           {daemonStatus?.pid ? (
@@ -441,16 +466,22 @@ export function LocalDaemonSection() {
               <View style={settingsStyles.row}>
                 <View style={settingsStyles.rowContent}>
                   <Text style={settingsStyles.rowTitle}>
-                    {daemonStatus.ownedByDesktop
-                      ? t("desktop.daemon.lifecycle.owned")
-                      : t("desktop.daemon.lifecycle.attached")}
+                    {daemonStatus.managementMode === "external"
+                      ? t("desktop.daemon.lifecycle.external")
+                      : daemonStatus.ownedByDesktop
+                        ? t("desktop.daemon.lifecycle.owned")
+                        : t("desktop.daemon.lifecycle.attached")}
                   </Text>
                   <Text style={settingsStyles.rowHint}>{daemonStatus.home}</Text>
                 </View>
                 <Button variant="outline" size="sm" onPress={handleStop} disabled={isStopping}>
                   {isStopping
                     ? t("desktop.daemon.lifecycle.stopping")
-                    : t("desktop.daemon.lifecycle.stop")}
+                    : t(
+                        daemonStatus.managementMode === "external"
+                          ? "desktop.daemon.lifecycle.disconnect"
+                          : "desktop.daemon.lifecycle.stop",
+                      )}
                 </Button>
               </View>
             </View>

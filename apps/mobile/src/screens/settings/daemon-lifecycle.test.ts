@@ -151,6 +151,19 @@ test("desktop restart relaunches with saved settings and reconnects at the new l
   expect(deps.restartServer).not.toHaveBeenCalled();
 });
 
+test("external service restart reconnects without requiring desktop process ownership", async () => {
+  const { deps, current } = desktopRestartFixture();
+  deps.desktop.getStatus.mockResolvedValue({
+    ...current,
+    ownedByDesktop: false,
+    managementMode: "external",
+  } as typeof current);
+  await restartDaemonFromSettings("local", "settings", deps);
+  expect(deps.desktop.restart).toHaveBeenCalledTimes(1);
+  expect(deps.desktop.reconnect).toHaveBeenCalledWith(current);
+  expect(deps.restartServer).not.toHaveBeenCalled();
+});
+
 test.each([{ serverId: "other" }, { ownedByDesktop: false }])(
   "desktop restart checks current ownership and identity: %j",
   async (changes) => {

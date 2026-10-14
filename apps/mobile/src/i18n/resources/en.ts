@@ -1435,6 +1435,13 @@ export const en = {
       },
       title: "Daemon",
       lifecycle: {
+        external: "Connected to a system service",
+        disconnect: "Disconnect",
+        disconnectTitle: "Disconnect from the daemon?",
+        disconnectMessage: "The system service, agents and terminals will keep running.",
+        connectService: "Automatically connect to the system service",
+        connectServiceHint:
+          "The system service starts and stops the daemon. Closing Ait keeps it running.",
         owned: "Launched by this Desktop session",
         attached: "Attached to an existing daemon",
         ownedMessage: "This daemon was launched by this Desktop session.",

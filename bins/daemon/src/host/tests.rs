@@ -22,6 +22,24 @@ fn config(directory: &std::path::Path) -> Config {
 }
 
 #[tokio::test]
+async fn service_binding_publishes_the_authenticated_identity_and_retains_discovery_on_exit() {
+    let root = tempfile::tempdir().unwrap();
+    let mut configuration = config(root.path());
+    configuration.service = true;
+    let server = Server::bind(configuration).await.unwrap();
+    let path = root.path().join("service-connection.json");
+    let record: serde_json::Value = serde_json::from_slice(&std::fs::read(&path).unwrap()).unwrap();
+    assert_eq!(record["listen"], server.address().to_string());
+    assert_eq!(record["serverId"], server.instance.server_id.to_string());
+    assert_eq!(
+        record["instanceId"],
+        server.instance.instance_id.to_string()
+    );
+    server.serve(async {}).await.unwrap();
+    assert!(path.exists());
+}
+
+#[tokio::test]
 async fn binding_failure_has_no_state_side_effects() {
     let root = tempfile::tempdir().unwrap();
     let directory = root.path().join("absent");

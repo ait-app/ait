@@ -1315,6 +1315,12 @@ export const ar: TranslationResources = {
     daemon: {
       listen: en.desktop.daemon.listen,
       lifecycle: {
+        external: en.desktop.daemon.lifecycle.external,
+        disconnect: en.desktop.daemon.lifecycle.disconnect,
+        disconnectTitle: en.desktop.daemon.lifecycle.disconnectTitle,
+        disconnectMessage: en.desktop.daemon.lifecycle.disconnectMessage,
+        connectService: en.desktop.daemon.lifecycle.connectService,
+        connectServiceHint: en.desktop.daemon.lifecycle.connectServiceHint,
         owned: "بدأته جلسة سطح المكتب هذه",
         attached: "متصل بخدمة خلفية موجودة",
         ownedMessage: "بدأت جلسة سطح المكتب هذه هذه الخدمة الخلفية.",

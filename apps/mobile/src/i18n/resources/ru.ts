@@ -1335,6 +1335,12 @@ export const ru: TranslationResources = {
     daemon: {
       listen: en.desktop.daemon.listen,
       lifecycle: {
+        external: en.desktop.daemon.lifecycle.external,
+        disconnect: en.desktop.daemon.lifecycle.disconnect,
+        disconnectTitle: en.desktop.daemon.lifecycle.disconnectTitle,
+        disconnectMessage: en.desktop.daemon.lifecycle.disconnectMessage,
+        connectService: en.desktop.daemon.lifecycle.connectService,
+        connectServiceHint: en.desktop.daemon.lifecycle.connectServiceHint,
         owned: "Запущен этим сеансом Desktop",
         attached: "Подключён к существующему демону",
         ownedMessage: "Этот демон запущен этим сеансом Desktop.",

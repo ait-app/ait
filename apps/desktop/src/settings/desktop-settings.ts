@@ -13,6 +13,7 @@ export interface DesktopSettings {
     playSound: boolean;
   };
   daemon: {
+    mode?: "auto" | "desktop" | "external";
     manageBuiltInDaemon: boolean;
     keepRunningAfterQuit: boolean;
     listen: string;
@@ -55,6 +56,7 @@ const NotificationsSchema = z
 
 const DaemonSchema = z
   .looseObject({
+    mode: z.enum(["auto", "desktop", "external"]).optional(),
     listen: ServerListenSchema.catch(DEFAULT_DESKTOP_SERVER_LISTEN),
     manageBuiltInDaemon: z.boolean().catch(DEFAULT_DESKTOP_SETTINGS.daemon.manageBuiltInDaemon),
     keepRunningAfterQuit: z.boolean().catch(DEFAULT_DESKTOP_SETTINGS.daemon.keepRunningAfterQuit),
@@ -131,6 +133,7 @@ function toDesktopSettings(stored: StoredDesktopSettings): DesktopSettings {
     releaseChannel: stored.releaseChannel,
     notifications: { playSound: stored.notifications.playSound },
     daemon: {
+      ...(stored.daemon.mode ? { mode: stored.daemon.mode } : {}),
       listen: stored.daemon.listen,
       manageBuiltInDaemon: stored.daemon.manageBuiltInDaemon,
       keepRunningAfterQuit: stored.daemon.keepRunningAfterQuit,
@@ -158,6 +161,9 @@ function coerceDesktopSettingsPatch(input: unknown): DesktopSettingsPatch {
 
   if (isRecord(input.daemon)) {
     const daemonPatch: Partial<DesktopSettings["daemon"]> = {};
+    if ("mode" in input.daemon) {
+      daemonPatch.mode = z.enum(["auto", "desktop", "external"]).parse(input.daemon.mode);
+    }
     if ("listen" in input.daemon) {
       daemonPatch.listen = ServerListenSchema.parse(input.daemon.listen);
     }

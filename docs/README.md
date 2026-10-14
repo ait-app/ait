@@ -22,6 +22,8 @@
 
 ## 架构决策
 
+- [ADR-148：桌面连接系统服务与后台进程所有权分离](decisions/clients/adr-148-service-owned-desktop-daemon.md)：私有连接记录、外部服务连接与重启，以及非阻塞基础状态。
+
 - [ADR-147：DSH 原生插件情景模式与权限分离](decisions/providers/adr-147-dsh-native-plugin-presets.md)：动态预设目录、用户插件、profile 隔离及会话专属控件。
 
 - [ADR-146：Workspace 重置清除变更请求关联](decisions/workspace/adr-146-reset-workspace-change-request-association.md)：本地分支重置标记、旧 PR/MR 过滤与远程跟踪清理。

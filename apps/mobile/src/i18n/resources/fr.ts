@@ -1352,6 +1352,12 @@ export const fr: TranslationResources = {
     daemon: {
       listen: en.desktop.daemon.listen,
       lifecycle: {
+        external: en.desktop.daemon.lifecycle.external,
+        disconnect: en.desktop.daemon.lifecycle.disconnect,
+        disconnectTitle: en.desktop.daemon.lifecycle.disconnectTitle,
+        disconnectMessage: en.desktop.daemon.lifecycle.disconnectMessage,
+        connectService: en.desktop.daemon.lifecycle.connectService,
+        connectServiceHint: en.desktop.daemon.lifecycle.connectServiceHint,
         owned: "Lancé par cette session de bureau",
         attached: "Connecté à un daemon existant",
         ownedMessage: "Ce daemon a été lancé par cette session de bureau.",

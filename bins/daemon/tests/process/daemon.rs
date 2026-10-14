@@ -135,6 +135,8 @@ async fn daemon_status_config_diagnostics_and_update_match_canonical_contract() 
         );
     }
 
+    let mut catalog = connect(&address, &["provider.available.list.request"]).await;
+    request(&mut catalog, "provider.available.list.request", json!({})).await;
     let status = request(&mut socket, "daemon.get_status.request", json!({})).await;
     assert_eq!(status["type"], "response");
     assert_eq!(status["result"]["listen"], address);
@@ -245,4 +247,65 @@ async fn websocket_restart_rebuilds_server_and_shutdown_exits_process() {
     let response = request(&mut socket, "server.shutdown.request", json!({})).await;
     assert_eq!(response["result"], json!({"status":"shutdown_requested"}));
     wait_for_exit(&mut process).await;
+}
+
+#[tokio::test]
+async fn daemon_status_and_metadata_respond_while_provider_discovery_is_blocked() {
+    let fixture = super::native::NativeFixture::new();
+    std::fs::write(fixture.root.path().join("behavior"), "delayed-discovery").unwrap();
+    let log = fixture.root.path().join("server.log");
+    let mut process = start_with_path(
+        &fixture.root.path().join("server"),
+        &log,
+        Some(&fixture.path),
+    );
+    let address = ready(&mut process, &log).await;
+    let mut socket = connect(
+        &address,
+        &["daemon.get_status.request", "daemon.config.get.request"],
+    )
+    .await;
+    let cold = tokio::time::timeout(
+        Duration::from_secs(2),
+        request(&mut socket, "daemon.get_status.request", json!({})),
+    )
+    .await
+    .unwrap();
+    assert_eq!(cold["type"], "response");
+    let started = Instant::now();
+    while !fixture.root.path().join("discovery-entered").exists() {
+        assert!(started.elapsed() < Duration::from_secs(3));
+        tokio::time::sleep(Duration::from_millis(10)).await;
+    }
+    let current = tokio::time::timeout(
+        Duration::from_secs(2),
+        request(&mut socket, "daemon.get_status.request", json!({})),
+    )
+    .await
+    .unwrap();
+    let providers = current["result"]["providers"].as_array().unwrap();
+    let codex = providers
+        .iter()
+        .find(|value| value["provider"] == "codex")
+        .unwrap();
+    assert_eq!(codex["error"], "Provider discovery in progress");
+    let config = tokio::time::timeout(
+        Duration::from_secs(2),
+        request(&mut socket, "daemon.config.get.request", json!({})),
+    )
+    .await
+    .unwrap();
+    assert_eq!(config["type"], "response");
+    std::fs::write(fixture.root.path().join("release-discovery"), "").unwrap();
+    let mut catalog = connect(&address, &["provider.available.list.request"]).await;
+    request(&mut catalog, "provider.available.list.request", json!({})).await;
+    let completed = request(&mut socket, "daemon.get_status.request", json!({})).await;
+    assert!(
+        completed["result"]["providers"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .any(|value| value["provider"] == "codex" && value["available"] == true)
+    );
+    terminate(&mut process).await;
 }

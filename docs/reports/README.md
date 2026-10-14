@@ -139,6 +139,8 @@
 
 ## 客户端、连接与品牌
 
+- [Linux 系统服务与桌面连接修复验证](clients/linux-service-daemon-2026-10-14.md)
+
 - [提问弹层响应超时与重试：验证](clients/question-response-timeout-2026-10-13.md)
 - [定时任务列表 Host 展示去重：验证](clients/schedule-host-filter-2026-10-12.md)
 - [Workspace 定时任务列表与统一创建流程：验证](clients/workspace-schedule-timeline-2026-10-12.md)

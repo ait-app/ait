@@ -91,6 +91,9 @@ impl Server {
             .await
             .context("bind server listener")?;
         let token = config.token.clone();
+        let service_connection = config
+            .service
+            .then(|| (config.data_dir.clone(), config.token.clone()));
         let web_origins = config.web_origins.clone();
         let address = listener
             .local_addr()
@@ -117,6 +120,9 @@ impl Server {
             services,
         )?
         .with_browser_origins(web_origins)?;
+        if let Some((directory, token)) = service_connection {
+            crate::service_connection::publish(&directory, address, &instance, &token)?;
+        }
         let managed = if headless {
             let store = crate::device::Store::open(&data_dir)?;
             let mut state = store

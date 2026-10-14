@@ -1411,6 +1411,12 @@ export const zhCN: TranslationResources = {
         invalid: "请输入 IPv4、IPv6 地址或 localhost，端口范围为 0–65535。",
       },
       lifecycle: {
+        external: "已连接到系统服务",
+        disconnect: "断开连接",
+        disconnectTitle: "断开与后台的连接？",
+        disconnectMessage: "系统服务、代理和终端会继续运行。",
+        connectService: "自动连接系统服务",
+        connectServiceHint: "后台由系统服务启动和停止；关闭 Ait 后仍继续运行。",
         owned: "由本次桌面会话启动",
         attached: "已连接到现有守护进程",
         ownedMessage: "此守护进程由本次桌面会话启动。",

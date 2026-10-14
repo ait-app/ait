@@ -111,6 +111,8 @@ ADR-074、082、083、084、122 在不同类别中各有两份，引用时以路
 
 ## 客户端、连接与品牌
 
+- [ADR-148：桌面连接系统服务与后台进程所有权分离](clients/adr-148-service-owned-desktop-daemon.md)：私有连接记录、外部服务连接与重启，以及非阻塞基础状态。
+
 - [ADR-137：清理已移除功能的共享协议与 SDK](clients/adr-137-remove-retired-feature-protocol.md)
 - [ADR-132：管理网站中的浏览器客户端](clients/adr-132-web-console-client.md)
 - [ADR-128：桌面内置 daemon 可在退出后继续运行](clients/adr-128-desktop-daemon-keep-running.md)

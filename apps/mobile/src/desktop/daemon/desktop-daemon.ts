@@ -15,6 +15,7 @@ export type DesktopDaemonStopReason =
   | "restart";
 
 export interface DesktopDaemonStatus {
+  managementMode?: "desktop" | "external";
   serverId: string;
   status: DesktopDaemonState;
   listen: string | null;
@@ -137,6 +138,9 @@ function parseDesktopDaemonStatus(raw: unknown): DesktopDaemonStatus {
   }
   return {
     serverId: toStringOrNull(raw.serverId) ?? "",
+    ...(raw.managementMode === "external" || raw.managementMode === "desktop"
+      ? { managementMode: raw.managementMode }
+      : {}),
     status: parseDesktopDaemonState(raw.status),
     listen: toStringOrNull(raw.listen),
     connectAddress: toStringOrNull(raw.connectAddress),
@@ -212,6 +216,15 @@ export async function stopDesktopDaemon(
 
 export async function confirmAndStopDesktopDaemon(): Promise<DesktopDaemonStatus | null> {
   const captured = await getDesktopDaemonStatus();
+  if (captured.managementMode === "external") {
+    const confirmed = await confirmDialog({
+      title: i18n.t("desktop.daemon.lifecycle.disconnectTitle"),
+      message: i18n.t("desktop.daemon.lifecycle.disconnectMessage"),
+      confirmLabel: i18n.t("desktop.daemon.lifecycle.disconnect"),
+      cancelLabel: i18n.t("common.actions.cancel"),
+    });
+    return confirmed ? stopDesktopDaemon() : null;
+  }
   if (!captured.pid || !captured.startedAt) return captured;
   const ownership = captured.ownedByDesktop
     ? i18n.t("desktop.daemon.lifecycle.ownedMessage")

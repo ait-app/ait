@@ -18,6 +18,7 @@ export interface DesktopSettings {
     playSound: boolean;
   };
   daemon: {
+    mode?: "auto" | "desktop" | "external";
     manageBuiltInDaemon: boolean;
     keepRunningAfterQuit: boolean;
     listen: string;
@@ -166,6 +167,9 @@ function parseDesktopSettings(raw: unknown): DesktopSettings {
           : DEFAULT_DESKTOP_SETTINGS.notifications.playSound,
     },
     daemon: {
+      ...(daemon.mode === "auto" || daemon.mode === "desktop" || daemon.mode === "external"
+        ? { mode: daemon.mode }
+        : {}),
       listen: ServerListenSchema.catch(DEFAULT_DESKTOP_SERVER_LISTEN).parse(daemon.listen),
       manageBuiltInDaemon:
         typeof daemon.manageBuiltInDaemon === "boolean"

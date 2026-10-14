@@ -27,7 +27,10 @@ export async function restartDaemonFromSettings(
 ): Promise<void> {
   if (deps.desktop) {
     const previous = await deps.desktop.getStatus();
-    if (previous.serverId !== hostServerId || !previous.ownedByDesktop) {
+    if (
+      previous.serverId !== hostServerId ||
+      (!previous.ownedByDesktop && previous.managementMode !== "external")
+    ) {
       throw new Error("The selected daemon is no longer managed by this desktop.");
     }
     const current = await deps.desktop.restart();

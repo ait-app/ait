@@ -20,6 +20,16 @@ function settingsFilePath(userDataPath: string): string {
 describe("desktop-settings", () => {
   const directories = new Set<string>();
 
+  it("persists external ownership mode and rejects unknown modes", async () => {
+    const userDataPath = await createTempUserDataDir();
+    directories.add(userDataPath);
+    const store = createDesktopSettingsStore({ userDataPath });
+    await store.patch({ daemon: { mode: "external" } });
+    await store.patch({ notifications: { playSound: false } });
+    expect((await createDesktopSettingsStore({ userDataPath }).get()).daemon.mode).toBe("external");
+    await expect(store.patch({ daemon: { mode: "unknown" } })).rejects.toThrow();
+  });
+
   afterEach(async () => {
     await Promise.all(
       [...directories].map(async (directory) => {

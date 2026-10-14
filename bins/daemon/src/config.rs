@@ -17,6 +17,9 @@ mod local_token;
 #[derive(Debug, Parser)]
 #[command(name = "daemon", version, about = "Ait local daemon")]
 pub(crate) struct Cli {
+    /// Publish private service connection information without transferring process ownership.
+    #[arg(long, global = true)]
+    service: bool,
     #[command(subcommand)]
     pub command: Option<Command>,
     /// Daemon data directory (default: `AIT_SERVER_DATA_DIR` or ~/.ait-server).
@@ -106,6 +109,8 @@ struct FileConfig {
 /// Resolved startup settings with a redacted credential and validated browser origins.
 #[derive(Debug, Clone)]
 pub(crate) struct Config {
+    /// Publish private local service discovery.
+    pub service: bool,
     /// Directory owned by the host's process lease.
     pub data_dir: PathBuf,
     /// Resolved socket address.
@@ -201,6 +206,7 @@ impl Config {
             token
         };
         Ok(Self {
+            service: cli.service,
             data_dir,
             listen,
             token,
