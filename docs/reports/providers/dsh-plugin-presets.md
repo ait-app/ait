@@ -16,17 +16,17 @@
 以下命令均设置 `CARGO_TARGET_DIR=/home/lonnet/Developers/ait/target` 复用构建缓存；
 没有降低测试并行度。nextest 在本机不可用，使用 Cargo 的定向测试。
 
-| 命令 | 结果 |
-| --- | --- |
-| `cargo test --locked -p provider local::deepseek_harness --lib` | 78 通过，6 个安装相关测试默认忽略 |
-| `cargo test --locked -p provider plugin_mode_keeps_native_balance_and_failure_diagnostics --lib` | 新增回归测试 1 通过 |
-| `cargo test --locked -p provider service::provider_catalog --lib` | 25 通过 |
-| `cargo test --locked -p provider service::agent_execution::tests::controls --lib` | 8 通过 |
-| `cargo test --locked -p provider composition::tests --lib` | 4 通过 |
-| `cargo clippy --locked -p provider --all-targets -- -D warnings` | 通过 |
-| `cargo build --locked --workspace` | 通过 |
-| `cargo fmt --all --check`、`npm run check:docs`、`git diff --check` | 通过 |
-| `sh -n crates/provider/tests/fixtures/deepseek_harness_native.sh` | 通过 |
+| 命令                                                                                             | 结果                              |
+| ------------------------------------------------------------------------------------------------ | --------------------------------- |
+| `cargo test --locked -p provider local::deepseek_harness --lib`                                  | 78 通过，6 个安装相关测试默认忽略 |
+| `cargo test --locked -p provider plugin_mode_keeps_native_balance_and_failure_diagnostics --lib` | 新增回归测试 1 通过               |
+| `cargo test --locked -p provider service::provider_catalog --lib`                                | 25 通过                           |
+| `cargo test --locked -p provider service::agent_execution::tests::controls --lib`                | 8 通过                            |
+| `cargo test --locked -p provider composition::tests --lib`                                       | 4 通过                            |
+| `cargo clippy --locked -p provider --all-targets -- -D warnings`                                 | 通过                              |
+| `cargo build --locked --workspace`                                                               | 通过                              |
+| `cargo fmt --all --check`、`npm run check:docs`、`git diff --check`                              | 通过                              |
+| `sh -n crates/provider/tests/fixtures/deepseek_harness_native.sh`                                | 通过                              |
 
 ### Test coverage
 
