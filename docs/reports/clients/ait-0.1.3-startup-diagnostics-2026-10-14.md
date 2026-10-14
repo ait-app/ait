@@ -48,6 +48,8 @@ PR 合入 `main` 的 `63ac7f7e` 后复核，验证包含本 PR 修改。
 - 前端：4 个相关测试文件、58 项测试通过，涵盖并发去重、排队、失败释放、连接隔离、
   缓存后校验、草稿索引与目录同步。
 - Rust：Provider 原生诊断、Codex 失败分类与相关 AgentManager 的 13 项定向测试通过。
+  PR 合入最新 main 后，在 `8934d211` 上复核本次诊断及同 PR computer use、
+  权限、transport 和配置回归，共 78 项通过；前端 58 项再次通过。
 - 移动端 TypeScript 类型检查、修改文件 ESLint / Oxfmt、Rust fmt、Provider 严格 Clippy
   与本地文档链接检查通过。
 - daemon 开发构建通过，没有编译警告。
