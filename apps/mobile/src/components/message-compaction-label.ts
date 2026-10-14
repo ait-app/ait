@@ -1,10 +1,10 @@
 import { i18n } from "@/i18n/i18next";
+import type { CompactionTimelineItem } from "@ait/protocol/agent-types";
 
-export interface CompactionMarkerLabelInput {
-  status: "loading" | "completed" | "failed";
-  trigger?: "auto" | "manual";
-  preTokens?: number;
-}
+export type CompactionMarkerLabelInput = Pick<
+  CompactionTimelineItem,
+  "status" | "trigger" | "preTokens"
+>;
 
 export function getCompactionMarkerLabel({
   status,

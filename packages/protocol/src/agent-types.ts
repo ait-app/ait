@@ -1,4 +1,4 @@
-import type { AgentAttachment } from "./messages.js";
+import type { AgentAttachment, CompactionTimelineItemPayload } from "./messages.js";
 
 export type AgentProvider = string;
 
@@ -347,13 +347,8 @@ export type ToolCallTimelineItem =
   | ToolCallFailedTimelineItem
   | ToolCallCanceledTimelineItem;
 
-export interface CompactionTimelineItem {
+export interface CompactionTimelineItem extends CompactionTimelineItemPayload {
   [key: string]: unknown;
-  type: "compaction";
-  status: "loading" | "completed" | "failed";
-  compactionId?: string;
-  trigger?: "auto" | "manual";
-  preTokens?: number;
 }
 
 export interface PluginTimelineItem {

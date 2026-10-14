@@ -2,6 +2,7 @@ import type { AttachmentMetadata } from "@/attachments/types";
 import type {
   AgentProvider,
   AgentTimelineItem,
+  CompactionTimelineItem,
   JsonValue,
   ToolCallDetail,
 } from "@ait/protocol/agent-types";
@@ -792,16 +793,15 @@ export interface NotificationItem {
   message: string;
 }
 
-export interface CompactionItem {
+export interface CompactionItem extends Pick<
+  CompactionTimelineItem,
+  "status" | "compactionId" | "trigger" | "preTokens"
+> {
   kind: "compaction";
   id: string;
   timelineCursor?: TimelinePosition;
   turnId?: string;
   timestamp: Date;
-  status: "loading" | "completed" | "failed";
-  compactionId?: string;
-  trigger?: "auto" | "manual";
-  preTokens?: number;
 }
 
 export interface PluginTimelineStreamItem {

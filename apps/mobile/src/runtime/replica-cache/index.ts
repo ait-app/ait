@@ -16,6 +16,7 @@ import type { JsonValue as PluginTimelineData } from "@ait/protocol/agent-types"
 import {
   AgentStatusSchema,
   AgentTimelineItemPayloadSchema,
+  CompactionTimelineItemPayloadSchema,
   WorkspaceGitHubRuntimePayloadSchema,
 } from "@ait/protocol/messages";
 import { AgentProviderSchema } from "@ait/protocol/provider-manifest";
@@ -149,8 +150,9 @@ const StoredTimelineItemSchema = z.discriminatedUnion("kind", [
   z.strictObject({
     ...TimelineItemBaseShape,
     kind: z.literal("compaction"),
-    status: z.enum(["loading", "completed"]),
-    trigger: z.enum(["auto", "manual"]).optional(),
+    status: CompactionTimelineItemPayloadSchema.shape.status,
+    compactionId: CompactionTimelineItemPayloadSchema.shape.compactionId,
+    trigger: CompactionTimelineItemPayloadSchema.shape.trigger,
     preTokens: z.number().nonnegative().optional(),
   }),
   z.strictObject({
@@ -478,6 +480,7 @@ function serializeTimelineItem(item: StreamItem): StoredTimelineItem | null {
         ...base,
         kind: item.kind,
         status: item.status,
+        ...(item.compactionId !== undefined ? { compactionId: item.compactionId } : {}),
         ...(item.trigger ? { trigger: item.trigger } : {}),
         ...(item.preTokens !== undefined ? { preTokens: item.preTokens } : {}),
       };
@@ -568,6 +571,7 @@ function deserializeBuiltinTimelineItem(
         ...base,
         kind: item.kind,
         status: item.status,
+        ...(item.compactionId !== undefined ? { compactionId: item.compactionId } : {}),
         ...(item.trigger ? { trigger: item.trigger } : {}),
         ...(item.preTokens !== undefined ? { preTokens: item.preTokens } : {}),
       };

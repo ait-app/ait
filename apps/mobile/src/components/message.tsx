@@ -91,7 +91,10 @@ import {
   useAssistantFileLinkActions,
   useAssistantLinkPress,
 } from "@/assistant-file-links";
-import { getCompactionMarkerLabel } from "./message-compaction-label";
+import {
+  getCompactionMarkerLabel,
+  type CompactionMarkerLabelInput,
+} from "./message-compaction-label";
 import { useAssistantImage } from "@/assistant-image/use-assistant-image";
 import {
   AttachmentFrame,
@@ -2177,11 +2180,7 @@ export const Notification = memo(function Notification({
   );
 });
 
-interface CompactionMarkerProps {
-  status: "loading" | "completed" | "failed";
-  trigger?: "auto" | "manual";
-  preTokens?: number;
-}
+type CompactionMarkerProps = CompactionMarkerLabelInput;
 
 const compactionStylesheet = StyleSheet.create((theme) => ({
   container: {

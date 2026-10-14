@@ -11,6 +11,7 @@ import {
   reduceStreamUpdate,
   streamTimelineItemIdentity,
   type AgentToolCallItem,
+  type CompactionItem,
   type StreamItem,
   isAgentToolCallItem,
   upsertUserMessage,
@@ -422,8 +423,8 @@ function todoTimeline(
 }
 
 function compactionTimeline(
-  status: "loading" | "completed" | "failed",
-  trigger?: "auto" | "manual",
+  status: CompactionItem["status"],
+  trigger?: CompactionItem["trigger"],
 ): AgentStreamEventPayload {
   return {
     type: "timeline",
