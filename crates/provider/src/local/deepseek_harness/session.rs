@@ -216,6 +216,10 @@ impl Session {
 }
 
 impl AgentSession for Session {
+    fn account_usage(&self) -> AgentSessionFuture<'_, Value> {
+        Box::pin(async { Ok(super::native::quota::acp_unavailable()) })
+    }
+
     fn failure_diagnostic(&self) -> Option<crate::ports::diagnostics::Diagnostic> {
         self.transport.diagnostics.failure()
     }

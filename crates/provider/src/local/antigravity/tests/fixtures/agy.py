@@ -22,7 +22,8 @@ def log(value):
         with open(path, 'a') as output:
             output.write(json.dumps(value) + '\n')
 
-log({'args': args, 'hasEnvironment': os.environ.get('AGY_TEST_ENV') == 'test-only-value'})
+log({'args': args, 'hasEnvironment': os.environ.get('AGY_TEST_ENV') == 'test-only-value',
+     'cwd': os.getcwd()})
 if scenario == 'hung':
     time.sleep(600)
 if scenario == 'malformed':
@@ -37,6 +38,31 @@ if args == ['models']:
     print('Fetching available models...')
     print('gemini-test-low\tGemini Test (Low)')
     print('claude-test-high\tClaude Test (High)')
+    sys.exit(0)
+
+if args == ['--print', '/usage', '--output-format', 'json']:
+    if scenario == 'quota-auth-error':
+        sys.stderr.write('authentication required; token=fixture-secret\n')
+        sys.exit(1)
+    if scenario == 'quota-error':
+        emit({'status': 'ERROR', 'error': 'fixture-secret'})
+        sys.exit(0)
+    if scenario == 'quota-empty':
+        emit({'status': 'SUCCESS', 'num_turns': 0,
+              'command': {'name': 'usage', 'data': {'groups': []}}})
+        sys.exit(0)
+    remaining = float(os.environ.get('AGY_FIXTURE_REMAINING', '0.75'))
+    emit({'status': 'SUCCESS', 'num_turns': 0, 'conversation_id': '',
+          'command': {'name': 'usage', 'data': {'groups': [
+              {'name': name, 'buckets': [
+                  {'id': prefix + '-weekly', 'name': 'Weekly Limit Remaining',
+                   'window': 'weekly', 'remaining_fraction': remaining,
+                   'reset_time': '2026-10-20T12:00:00Z'},
+                  {'id': prefix + '-5h', 'name': 'Five Hour Limit Remaining',
+                   'window': '5h', 'remaining_fraction': remaining / 2,
+                   'reset_time': '2026-10-14T12:00:00Z'}]}
+              for prefix, name in [('gemini', 'Gemini Models'), ('3p', 'Claude and GPT models')]
+          ]}}})
     sys.exit(0)
 
 init = {'cwd': os.getcwd(), 'permission_mode': 'request-review', 'tools': ['run_command']}

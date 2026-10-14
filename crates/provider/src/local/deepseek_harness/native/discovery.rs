@@ -1,7 +1,7 @@
 //! Model discovery must not depend on creating a usable default Agent.
 use serde_json::{Value, json};
 
-use super::{config::Selection, modes, runtime::Runtime};
+use super::{config::Selection, runtime::Runtime};
 use crate::{
     local::deepseek_harness::DeepSeekHarnessClient, ports::agent_session::AgentSessionError,
     protocol::provider::Details,
@@ -16,15 +16,20 @@ pub(in crate::local::deepseek_harness) async fn discover(
     let mut runtime = Runtime::open(client, cwd).await?;
     let result = async {
         let catalog = runtime.api.call("session/modelCatalog", json!({})).await?;
-        let mut details = Selection {
+        let mut permissions = runtime
+            .api
+            .call("permissionPresets/catalog", json!({}))
+            .await?;
+        // The default is informational; omitted draft values still inherit native configuration.
+        permissions["currentValue"] = permissions["defaultPreset"].clone();
+        let details = Selection {
+            presets: runtime.api.call("agentPresets/list", json!({})).await?,
+            preset: None,
             catalog,
-            permissions: json!({"options":[]}),
+            permissions,
             model: Value::Null,
         }
         .details()?;
-        details
-            .modes
-            .clone_from(modes().as_array().expect("built-in modes are an array"));
         Ok(details)
     }
     .await;

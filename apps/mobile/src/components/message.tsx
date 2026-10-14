@@ -3090,6 +3090,7 @@ export const ToolCall = memo(function ToolCall({
       }),
     [toolName, status, error, effectiveDetail, metadata, cwd],
   );
+  const isInlineExpanded = shouldRenderInline && presentation.canOpenDetails && isExpanded;
   const handleOpenFile = useMemo(() => {
     const openFilePath = presentation.openFilePath;
     if (!openFilePath || !onOpenFilePath) {
@@ -3125,22 +3126,18 @@ export const ToolCall = memo(function ToolCall({
   ]);
 
   useEffect(() => {
-    if (!onInlineDetailsHoverChange || !shouldRenderInline || isExpanded) {
+    if (!onInlineDetailsHoverChange || !shouldRenderInline || isInlineExpanded) {
       return;
     }
     onInlineDetailsHoverChange(false);
-  }, [isExpanded, shouldRenderInline, onInlineDetailsHoverChange]);
+  }, [isInlineExpanded, shouldRenderInline, onInlineDetailsHoverChange]);
 
   useEffect(() => {
     if (!onInlineDetailsExpandedChange) {
       return;
     }
-    if (!shouldRenderInline) {
-      onInlineDetailsExpandedChange(false);
-      return;
-    }
-    onInlineDetailsExpandedChange(isExpanded);
-  }, [isExpanded, shouldRenderInline, onInlineDetailsExpandedChange]);
+    onInlineDetailsExpandedChange(isInlineExpanded);
+  }, [isInlineExpanded, onInlineDetailsExpandedChange]);
 
   useEffect(() => {
     if (!onInlineDetailsExpandedChange) {
@@ -3189,7 +3186,7 @@ export const ToolCall = memo(function ToolCall({
       label={presentation.displayName}
       secondaryLabel={presentation.summary}
       icon={presentation.icon}
-      isExpanded={shouldRenderInline && isExpanded}
+      isExpanded={isInlineExpanded}
       onToggle={presentation.canOpenDetails ? handleToggle : undefined}
       onOpenFile={handleOpenFile}
       renderDetails={presentation.canOpenDetails && shouldRenderInline ? renderDetails : undefined}

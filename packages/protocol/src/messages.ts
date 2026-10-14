@@ -5913,7 +5913,7 @@ export const ProviderUsageBalanceSchema = z.object({
   used: z.number().nullable().optional(),
   remaining: z.number().nullable().optional(),
   limit: z.number().nullable().optional(),
-  unit: z.enum(["usd", "credits", "requests", "tokens"]),
+  unit: z.enum(["usd", "cny", "credits", "requests", "tokens"]),
   resetsAt: z.string().nullable().optional(),
   tone: ProviderUsageToneSchema.optional(),
 });

@@ -29,6 +29,10 @@ struct Host {
     records: Arc<Mutex<Vec<Value>>>,
     sessions: Arc<Mutex<Value>>,
     snapshot_fields: Arc<Mutex<Value>>,
+    presets: Arc<Mutex<Value>>,
+    balance: Arc<Mutex<Value>>,
+    replies: Arc<Mutex<BTreeMap<String, Value>>>,
+    failure: Arc<Mutex<Option<(String, String)>>>,
 }
 
 pub(super) struct Fixture {
@@ -45,6 +49,9 @@ impl Fixture {
         let cwd = directory.path().to_str().unwrap().to_owned();
         let host = Host {
             cwd: cwd.clone(),
+            presets: Arc::new(Mutex::new(
+                json!({"presets":[{"id":"team/review.v2","name":"Team review","isDefault":true},{"id":"broken","broken":"missing plugin","isDefault":false}]}),
+            )),
             requests: Arc::default(),
             records: Arc::new(Mutex::new(vec![
                 json!({"type":"event","event":{"seq":0,"type":"permission/preset","time":1_700_000_000_000_i64,"data":{"preset":"workspace-write"}}}),
@@ -52,6 +59,11 @@ impl Fixture {
             frames: broadcast::channel(128).0,
             sessions: Arc::new(Mutex::new(json!([]))),
             snapshot_fields: Arc::new(Mutex::new(json!({}))),
+            balance: Arc::new(Mutex::new(json!({"status":"ready",
+                "value":[{"currency":"CNY","balance":"12.34"}],
+                "bonusWallets":[{"currency":"USD","balance":"0.50"}]}))),
+            replies: Arc::default(),
+            failure: Arc::default(),
         };
         let app = Router::new()
             .route("/", get(auth))
@@ -66,9 +78,16 @@ impl Fixture {
         let program = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
             .join("tests/fixtures/deepseek_harness_native.sh");
         let mut client = DeepSeekHarnessClient::new(program);
-        client.environment = BTreeMap::from([("AIT_DSH_FIXTURE_PORT".into(), port.to_string())])
-            .try_into()
-            .unwrap();
+        client.environment = BTreeMap::from([
+            ("AIT_DSH_FIXTURE_PORT".into(), port.to_string()),
+            ("DSH_HOME".into(), cwd.clone()),
+            (
+                "AIT_DSH_FIXTURE_ARGS".into(),
+                directory.path().join("dsh.args").to_str().unwrap().into(),
+            ),
+        ])
+        .try_into()
+        .unwrap();
         Self {
             directory,
             server,
@@ -82,6 +101,9 @@ impl Fixture {
         }
     }
 
+    pub(super) fn set_presets(&self, roster: Value) {
+        *self.host.presets.lock().unwrap() = roster;
+    }
     pub(super) fn seed_records(&self, records: Vec<Value>) {
         *self.host.records.lock().unwrap() = records;
     }
@@ -90,6 +112,19 @@ impl Fixture {
     }
     pub(super) fn set_snapshot_fields(&self, fields: Value) {
         *self.host.snapshot_fields.lock().unwrap() = fields;
+    }
+    pub(super) fn set_balance(&self, balance: Value) {
+        *self.host.balance.lock().unwrap() = balance;
+    }
+    pub(super) fn reply(&self, method: &str, value: Value) {
+        self.host
+            .replies
+            .lock()
+            .unwrap()
+            .insert(method.into(), value);
+    }
+    pub(super) fn fail(&self, method: &str, scenario: &str) {
+        *self.host.failure.lock().unwrap() = Some((method.into(), scenario.into()));
     }
     pub(super) fn history(&self, seq: u64, kind: &str, data: Value) {
         let mut frame = json!({"type":"item","streamId":"history","value":{"type":"event","event":{"seq":seq,"type":kind,"time":1_700_000_000_000_u64+seq}}});
@@ -175,7 +210,41 @@ async fn rpc(State(host): State<Host>, headers: HeaderMap, Json(request): Json<V
         return StatusCode::UNAUTHORIZED.into_response();
     }
     host.requests.lock().unwrap().push(request.clone());
+    let failure = host.failure.lock().unwrap().clone();
+    if let Some((method, scenario)) = failure
+        && request["method"] == method
+    {
+        match scenario.as_str() {
+            "404" => return StatusCode::NOT_FOUND.into_response(),
+            "401" => return (StatusCode::UNAUTHORIZED, "fixture-secret").into_response(),
+            "500" => return (StatusCode::INTERNAL_SERVER_ERROR, "fixture-secret").into_response(),
+            "malformed" => return "fixture-secret".into_response(),
+            "missing" => return Json(json!({"type":"server-response","rpcId":request["rpcId"],"result":{"ok":true}})).into_response(),
+            "correlation" => return Json(json!({"type":"server-response","rpcId":"wrong","result":{"ok":true,"value":null}})).into_response(),
+            "rejected" => return Json(json!({"type":"server-response","rpcId":request["rpcId"],"result":{"ok":false,"error":{"message":"fixture-secret"}}})).into_response(),
+            "large" => return "x".repeat(2 * 1024 * 1024 + 1).into_response(),
+            "timeout" => tokio::time::sleep(std::time::Duration::from_secs(2)).await,
+            _ => panic!("unknown fixture scenario"),
+        }
+    }
+    let reply = host
+        .replies
+        .lock()
+        .unwrap()
+        .get(request["method"].as_str().unwrap())
+        .cloned();
+    if let Some(value) = reply {
+        return Json(json!({"type":"server-response","rpcId":request["rpcId"],"result":{"ok":true,"value":value}})).into_response();
+    }
     let value = match request["method"].as_str() {
+        Some("agentPresets/list") => host.presets.lock().unwrap().clone(),
+        Some("settings/describe") => {
+            json!({"namespaces":[{"ns":"llm-deepseek","value":{"apiKeyEnv":"DEEPSEEK_API_KEY"}}]})
+        }
+        Some("credentials/describe") => {
+            json!({"DEEPSEEK_API_KEY":{"configured":false,"writable":true}})
+        }
+        Some("account/getBalance") => host.balance.lock().unwrap().clone(),
         Some("permissionPresets/catalog") => {
             json!({"options":[{"value":"read-only","name":"Read only"},{"value":"workspace-write","name":"Workspace write"},{"value":"custom-policy","name":"Custom policy"}]})
         }
@@ -189,7 +258,15 @@ async fn rpc(State(host): State<Host>, headers: HeaderMap, Json(request): Json<V
                 .unwrap();
             page(&host, before)
         }
-        Some("session/create") => json!({"sessionId":"session"}),
+        Some("session/create") => {
+            let preset = &request["payload"]["args"]["request"]["agentPreset"];
+            if preset.is_string() {
+                host.snapshot_fields.lock().unwrap()["projections"] = json!({"values":{
+                    "agentPreset":preset,"permissions":{"currentValue":"workspace-write"},
+                    "modelSelection":{"next":null}}});
+            }
+            json!({"sessionId":"session","agentPreset":preset})
+        }
         Some("session/selectModel") => {
             let mut model = request["payload"]["args"]["request"].clone();
             model.as_object_mut().unwrap().remove("sessionId");

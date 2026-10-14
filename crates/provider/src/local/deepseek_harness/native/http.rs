@@ -86,6 +86,24 @@ impl Api {
         endpoint: &str,
         args: Value,
     ) -> Result<Value, AgentSessionError> {
+        self.optional_call(endpoint, args).await?.ok_or_else(|| {
+            let mut diagnostic = crate::ports::diagnostics::Diagnostic::new(
+                crate::ports::diagnostics::Category::Unknown,
+                "http",
+            );
+            diagnostic.http_status = Some(404);
+            self.diagnostics.observe(diagnostic, endpoint);
+            AgentSessionError::Failed
+        })
+    }
+
+    /// Query an optional native endpoint; only HTTP 404 means the Host lacks this capability.
+    /// All other transport, HTTP and envelope failures remain errors, with no raw response text.
+    pub(super) async fn optional_call(
+        &self,
+        endpoint: &str,
+        args: Value,
+    ) -> Result<Option<Value>, AgentSessionError> {
         let id = uuid::Uuid::new_v4().to_string();
         let body =
             json!({"type":"client-request","rpcId":id,"method":endpoint,"payload":{"args":args}});
@@ -115,6 +133,9 @@ impl Api {
                 );
                 AgentSessionError::Failed
             })?;
+        if response.status() == reqwest::StatusCode::NOT_FOUND {
+            return Ok(None);
+        }
         if !response.status().is_success() {
             let status = response.status().as_u16();
             let category = match status {
@@ -143,7 +164,11 @@ impl Api {
             return Err(AgentSessionError::Failed);
         }
         match response["result"]["ok"].as_bool() {
-            Some(true) => Ok(response["result"]["value"].clone()),
+            Some(true) => response["result"]
+                .get("value")
+                .cloned()
+                .map(Some)
+                .ok_or(AgentSessionError::Failed),
             Some(false) => {
                 self.diagnostics.observe(
                     crate::local::diagnostics::native(&response["result"]["error"], "rpc"),

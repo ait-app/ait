@@ -21,6 +21,11 @@ it("localizes remaining percentages, reset times and exhaustion times", async ()
 });
 
 describe("formatAmount", () => {
+  it("formats yuan with its actual currency, including zero and debt", () => {
+    expect(formatAmount(12.01, "cny", "en")).toBe("CN¥12.01");
+    expect(formatAmount(0, "cny", "zh-CN")).toBe("¥0.00");
+    expect(formatAmount(-0.01, "cny", "zh-CN")).toBe("-¥0.01");
+  });
   it("groups thousands in the app's language", () => {
     expect(formatAmount(12345, "credits", "en")).toBe("12,345");
     expect(formatAmount(12345, "requests", "en")).toBe("12,345");

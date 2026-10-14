@@ -22,7 +22,9 @@
 
 ## 架构决策
 
-- [ADR-147：所有 Provider 的上下文压缩生命周期提示](decisions/providers/adr-147-provider-compaction-lifecycle.md)：原生开始／结束映射、稳定身份配对、失败提示与历史回放。
+- [ADR-148：所有 Provider 的上下文压缩生命周期提示](decisions/providers/adr-148-provider-compaction-lifecycle.md)：原生开始／结束映射、稳定身份配对、失败提示与历史回放。
+- [ADR-147：DSH 原生插件情景模式与权限分离](decisions/providers/adr-147-dsh-native-plugin-presets.md)：动态预设目录、用户插件、profile 隔离及会话专属控件。
+
 - [ADR-146：Workspace 重置清除变更请求关联](decisions/workspace/adr-146-reset-workspace-change-request-association.md)：本地分支重置标记、旧 PR/MR 过滤与远程跟踪清理。
 
 - [ADR-145：Bot 执行期间自动拒绝权限请求](decisions/bot/adr-145-bot-permission-denial.md)：统一原生拒绝、禁止手动批准、关闭原生自动审核与移除 Bot 审批界面。
@@ -139,11 +141,15 @@
 - [Ait 0.0.14 发布说明](reports/releases/release-0.0.14.md)：Diff 语法高亮、侧边栏统计与 Codex 推理等级。
 - [Apple 本机构建](operations/apple-builds.md)：DMG、模拟器和 IPA。
 - [Claude Code](operations/claude-code.md)：认证、原生会话与审批。
-- [DeepSeek Harness](operations/deepseek-harness.md)：原生 Host、会话导入、权限模式、question 与 ACP 兼容配置。
-- [Antigravity CLI](operations/antigravity.md)：AGY 安装、登录、权限模式与会话恢复。
+- [DeepSeek Harness](operations/deepseek-harness.md)：原生 Host、DeepSeek 账号余额、会话导入、权限模式、question 与 ACP 兼容配置。
+- [Antigravity CLI](operations/antigravity.md)：AGY 安装、登录、权限模式、会话恢复与账号额度查询。
 - [语音与听写](operations/speech.md)：离线模型、后端配置和限制。
 
 ## 工程规范与验证
+
+- [DSH 插件情景模式验证](reports/providers/dsh-plugin-presets.md)：动态目录、独立权限、恢复、profile 和本机 Host 验证。
+- [Antigravity 账号额度接入](reports/providers/antigravity-account-quota-2026-10-14.md)：已登录仍不可用的复现、原生 `/usage` 接入、主机与会话账号隔离和失败回归。
+- [DSH DeepSeek 余额接入](reports/providers/dsh-deepseek-balance-2026-10-14.md)：API Key 与原生账号登录的区别、DeepSeek 官方余额查询、人民币展示及本机验证。
 
 - [提问弹层响应超时与重试](reports/clients/question-response-timeout-2026-10-13.md)：5 秒恢复按钮、保留填写内容、清理权限请求占用，以及真实丢包重试验证。
 - [定时任务列表 Host 展示去重](reports/clients/schedule-host-filter-2026-10-12.md)：按主机筛选后省略重复主机名，以及返回全部主机视图的浏览器回归。

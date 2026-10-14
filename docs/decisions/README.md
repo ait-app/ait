@@ -72,7 +72,9 @@ ADR-074、082、083、084、122 在不同类别中各有两份，引用时以路
 
 ## Provider、Agent 与会话
 
-- [ADR-147：所有 Provider 的上下文压缩生命周期提示](providers/adr-147-provider-compaction-lifecycle.md)
+- [ADR-148：所有 Provider 的上下文压缩生命周期提示](providers/adr-148-provider-compaction-lifecycle.md)
+- [ADR-147：DSH 原生插件情景模式与权限分离](providers/adr-147-dsh-native-plugin-presets.md)
+
 - [ADR-144：Provider 安全诊断与持久失败提示](providers/adr-144-provider-error-reporting.md)
 - [ADR-143：OpenCode 2.0.25 兼容与 ACP 审批边界](providers/adr-143-opencode-2-0-25-compatibility.md)
 - [ADR-140：Codex MCP 超大字段使用展示预览](providers/adr-140-codex-mcp-display-previews.md)

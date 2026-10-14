@@ -72,10 +72,27 @@ agy --conversation <conversation-id>
 Unix 取消等待原生中断确认；确认后下一轮重新连接同一 conversation。
 当前 Windows adapter 不支持取消。关闭仍会回收拥有的原生进程。
 
+## 账号额度
+
+Ait 使用同一个 AGY 安装的 `agy --print /usage --output-format json` 读取原生账号额度。
+主机用量使用 daemon 的登录环境；活动会话用量使用该会话的启动环境和工作目录，
+不会替换为主机账号。主机查询缓存五分钟，手动刷新会绕过缓存。
+
+用量卡片分别保留原生模型组的 5 小时和每周窗口、剩余百分比与重置时间。
+这些窗口是账号的共享配额，与对话的累计 token 计数不同；不会从 token 计数推算余额。
+原生响应没有账号名称或套餐时，Ait 不猜测这些信息。
+
+可在同一主机终端执行上面的命令检查原生返回。该内置命令不发起模型轮次，
+不创建 conversation；认证继续由 AGY 管理。没有额度窗口时显示不可用，
+查询超时或响应不符合原生命令结构时显示读取失败，不转发原始错误体。
+停止或尚未启动的会话仍需先启动或恢复，才能查询其当前账号。
+
+验证和兼容范围见 [账号额度接入报告](../reports/providers/antigravity-account-quota-2026-10-14.md)。
+
 ## 当前接口范围
 
 文本和文本附件支持；图片、单轮 JSON schema、system prompt、Ait 会话级 MCP 配置、
-运行中 steer、完整原生历史导入/列举、rewind 与 quota 查询尚未接入。
+运行中 steer、完整原生历史导入/列举与 rewind 尚未接入。
 不支持的输入与配置在发送前拒绝。AGY 自身已配置的工具与 MCP 仍由原生 CLI 加载。
 
 设计见 [ADR-087](../decisions/providers/adr-087-antigravity-cli-provider.md)，
