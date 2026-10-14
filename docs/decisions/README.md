@@ -11,6 +11,7 @@ ADR-074、082、083、084、122 在不同类别中各有两份，引用时以路
 
 ## Daemon 与协议
 
+- [ADR-148：daemon 的无状态 MCP 编排接口](daemon/adr-148-daemon-mcp.md)
 - [ADR-142：PTY 拥有基础终端设备属性回复](daemon/adr-142-terminal-primary-device-attributes.md)
 
 - [ADR-134：已接纳的普通 RPC 等待共享任务额度](daemon/adr-134-admitted-rpc-job-waiting.md)

@@ -3,6 +3,7 @@ use super::*;
 mod bot;
 mod browser_auth;
 mod chunks;
+mod mcp;
 mod paseo;
 mod relay_rpc;
 mod server_info;
