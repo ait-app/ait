@@ -154,10 +154,15 @@ async fn inspect_owned(
     let config = StoredAgentConfig {
         model: Some(json!([text(&model, "provider")?, text(&model, "model")?]).to_string()),
         thinking_option_id: model["reasoningEffort"].as_str().map(str::to_owned),
-        mode_id: journal.values["permissions"]["currentValue"]
+        mode_id: journal.values["agentPreset"]
             .as_str()
-            .filter(|mode| *mode != "custom")
-            .map(str::to_owned),
+            .map(|id| format!("{}{id}", super::presets::PREFIX))
+            .or_else(|| {
+                journal.values["permissions"]["currentValue"]
+                    .as_str()
+                    .filter(|mode| *mode != "custom")
+                    .map(str::to_owned)
+            }),
         ..Default::default()
     };
     super::config::validate(&config)?;

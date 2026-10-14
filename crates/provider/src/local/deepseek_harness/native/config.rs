@@ -2,6 +2,7 @@
 use super::{
     super::{PROVIDER, config::text},
     http::Api,
+    presets,
 };
 use crate::{ports::agent_session::AgentSessionError, protocol::provider::Details};
 use domain::agent_runtime::{StoredAgentConfig, StoredAgentRuntimeInfo};
@@ -13,12 +14,19 @@ pub(in crate::local::deepseek_harness) fn validate(
 ) -> Result<(), AgentSessionError> {
     let mut acp = config.clone();
     acp.mode_id = None;
+    acp.feature_values = None;
     super::super::config::validate(&acp)?;
     if config
         .mcp_servers
         .as_ref()
         .is_some_and(|servers| !servers.is_empty())
+        || config.feature_values.iter().flatten().any(|(key, value)| {
+            key != presets::PERMISSION || !value.as_str().is_some_and(permission_id)
+        })
         || config.mode_id.as_ref().is_some_and(|mode| {
+            if let Some(id) = mode.strip_prefix(presets::PREFIX) {
+                return id.is_empty() || id.len() > 1024 || id.chars().any(char::is_control);
+            }
             mode.is_empty()
                 || mode.len() > 128
                 || !mode
@@ -38,6 +46,9 @@ pub(super) async fn permission_selection(
     api: &Api,
     projection: &Value,
 ) -> Result<Value, AgentSessionError> {
+    if projection.is_null() {
+        return Ok(json!({"options":[]}));
+    }
     text(projection, "currentValue")?;
     let mut permissions = projection.clone();
     if permissions.get("options").is_none() {
@@ -50,8 +61,18 @@ pub(super) async fn permission_selection(
     Ok(permissions)
 }
 
+fn permission_id(id: &str) -> bool {
+    !id.is_empty()
+        && id.len() <= 128
+        && id
+            .bytes()
+            .all(|byte| byte.is_ascii_alphanumeric() || matches!(byte, b'-' | b'_'))
+}
+
 #[derive(Debug)]
 pub(super) struct Selection {
+    pub(super) presets: Value,
+    pub(super) preset: Option<String>,
     pub(super) catalog: Value,
     pub(super) permissions: Value,
     pub(super) model: Value,
@@ -92,21 +113,51 @@ impl Selection {
                 details.models.push(entry);
             }
         }
-        for option in self.permissions["options"]
-            .as_array()
-            .ok_or(AgentSessionError::Failed)?
-        {
-            let id = text(option, "value")?;
-            if id == "custom" {
-                continue;
-            }
-            let mut mode = json!({"id":id,"label":text(option,"name")?});
-            if let Some(description) = option["description"].as_str() {
-                mode["description"] = json!(description);
-            }
-            details.modes.push(mode);
+        details.modes = presets::modes(&self.presets)?;
+        if self.permissions.get("currentValue").is_some() {
+            details
+                .features
+                .push(presets::permission_feature(&self.permissions)?);
         }
         Ok(details)
+    }
+
+    pub(super) fn validate_controls<'a>(
+        &self,
+        config: &'a StoredAgentConfig,
+    ) -> Result<Option<&'a str>, AgentSessionError> {
+        if let Some(preset) = config
+            .mode_id
+            .as_deref()
+            .and_then(|id| id.strip_prefix(presets::PREFIX))
+            && self.preset.as_deref() != Some(preset)
+        {
+            // Plugin composition is fixed after the first turn. Never replace it on resume.
+            return Err(AgentSessionError::Rejected);
+        }
+        let permission = config
+            .feature_values
+            .as_ref()
+            .and_then(|values| values.get(presets::PERMISSION))
+            .and_then(Value::as_str)
+            .or_else(|| {
+                config
+                    .mode_id
+                    .as_deref()
+                    .filter(|id| !id.starts_with(presets::PREFIX))
+            });
+        if permission.is_some_and(|id| {
+            !self.permissions["options"]
+                .as_array()
+                .is_some_and(|options| {
+                    options
+                        .iter()
+                        .any(|option| option["value"] == id && id != "custom")
+                })
+        }) {
+            return Err(AgentSessionError::Rejected);
+        }
+        Ok(permission)
     }
 
     /// Apply only explicitly requested, advertised selections; permission scope stays native.
@@ -118,13 +169,7 @@ impl Selection {
     ) -> Result<(), AgentSessionError> {
         validate(config)?;
         let details = self.details()?;
-        if config
-            .mode_id
-            .as_ref()
-            .is_some_and(|mode| !details.modes.iter().any(|option| option["id"] == *mode))
-        {
-            return Err(AgentSessionError::Rejected);
-        }
+        let permission = self.validate_controls(config)?;
         let id = config
             .model
             .clone()
@@ -182,8 +227,8 @@ impl Selection {
             }
             self.model = acknowledged.clone();
         }
-        if let Some(mode) = &config.mode_id
-            && self.permissions["currentValue"] != *mode
+        if let Some(mode) = permission
+            && self.permissions["currentValue"] != mode
         {
             let result = api.call("commands/execute",json!({"agentId":session,"line":format!("/permission {mode}"),"submittedAttachments":[]})).await?;
             if result["result"]["kind"] != "success" {
@@ -201,7 +246,11 @@ impl Selection {
             session_id: Some(session.into()),
             model: Some(json!([self.model["provider"], self.model["model"]]).to_string()),
             thinking_option_id: self.model["reasoningEffort"].as_str().map(str::to_owned),
-            mode_id: self.permissions["currentValue"].as_str().map(str::to_owned),
+            mode_id: self
+                .preset
+                .as_ref()
+                .map(|id| format!("{}{id}", presets::PREFIX))
+                .or_else(|| self.permissions["currentValue"].as_str().map(str::to_owned)),
             extra: None,
         }
     }

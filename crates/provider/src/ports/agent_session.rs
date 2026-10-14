@@ -83,6 +83,20 @@ pub(crate) enum AgentTurnEvent {
 
 /// Live provider session. Closing releases resources without deleting native history.
 pub(crate) trait AgentSession: Debug + Send {
+    /// Return session-scoped controls when native composition owns the available choices.
+    /// `config` includes pending user selections; `None` retains client-level controls.
+    fn control_settings(&self, _config: &StoredAgentConfig) -> Option<serde_json::Value> {
+        None
+    }
+
+    /// Validate a proposed configuration against this session's native constraints.
+    /// `config` is the proposed configuration; success permits further catalog validation.
+    /// # Errors
+    /// Returns rejection before persisting a change that cannot apply to this session.
+    fn validate_config_update(&self, _config: &StoredAgentConfig) -> Result<(), AgentSessionError> {
+        Ok(())
+    }
+
     /// Return safe classified failure facts before the failed native connection is closed.
     fn failure_diagnostic(&self) -> Option<super::diagnostics::Diagnostic> {
         None

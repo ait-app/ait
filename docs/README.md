@@ -22,6 +22,8 @@
 
 ## 架构决策
 
+- [ADR-147：DSH 原生插件情景模式与权限分离](decisions/providers/adr-147-dsh-native-plugin-presets.md)：动态预设目录、用户插件、profile 隔离及会话专属控件。
+
 - [ADR-146：Workspace 重置清除变更请求关联](decisions/workspace/adr-146-reset-workspace-change-request-association.md)：本地分支重置标记、旧 PR/MR 过滤与远程跟踪清理。
 
 - [ADR-145：Bot 执行期间自动拒绝权限请求](decisions/bot/adr-145-bot-permission-denial.md)：统一原生拒绝、禁止手动批准、关闭原生自动审核与移除 Bot 审批界面。
@@ -144,6 +146,7 @@
 
 ## 工程规范与验证
 
+- [DSH 插件情景模式验证](reports/providers/dsh-plugin-presets.md)：动态目录、独立权限、恢复、profile 和本机 Host 验证。
 - [Antigravity 账号额度接入](reports/providers/antigravity-account-quota-2026-10-14.md)：已登录仍不可用的复现、原生 `/usage` 接入、主机与会话账号隔离和失败回归。
 - [DSH DeepSeek 余额接入](reports/providers/dsh-deepseek-balance-2026-10-14.md)：API Key 与原生账号登录的区别、DeepSeek 官方余额查询、人民币展示及本机验证。
 

@@ -1,6 +1,10 @@
 #!/bin/sh
 set -eu
 
+if [ -n "${AIT_DSH_FIXTURE_ARGS:-}" ]; then
+  printf '%s\n' "$@" > "$AIT_DSH_FIXTURE_ARGS"
+fi
+
 case "$*" in
   *--dump-config*)
     if [ -n "${AIT_DSH_FIXTURE_CONFIG:-}" ]; then
