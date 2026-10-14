@@ -5,6 +5,17 @@ fn config(value: Value) -> StoredAgentConfig {
 }
 
 #[test]
+fn executable_discovery_accepts_path_search_and_rejects_directories_or_missing_programs() {
+    assert!(executable(std::path::Path::new("cargo")));
+    assert!(!executable(std::path::Path::new(
+        "ait-fixture-program-that-does-not-exist"
+    )));
+    let root = tempfile::tempdir().unwrap();
+    assert!(!executable(root.path()));
+    assert!(!executable(&root.path().join("missing")));
+}
+
+#[test]
 fn codex_translates_transports_and_limits_preapprovals_to_named_tools() {
     let config = config(json!({"thinkingOptionId":"high", "providerOptions":{
         "sandbox_mode":"workspace-write", "web_search":"live",

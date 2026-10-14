@@ -22,6 +22,7 @@ pub(crate) struct Native {
     pub(crate) hold: AtomicBool,
     pub(crate) approval: AtomicBool,
     pub(crate) fail_denial: AtomicBool,
+    pub(crate) status: Mutex<Option<Value>>,
 }
 impl Executor for Native {
     fn execute(
@@ -48,6 +49,9 @@ impl Executor for Native {
                     json!({"resolved":true})
                 }
                 Action::Status { agent_id } => {
+                    if let Some(status) = self.status.lock().unwrap().as_ref() {
+                        return Ok(status.clone());
+                    }
                     if self.approval.load(Ordering::SeqCst) {
                         json!({"status":"permission","final":{"pendingPermissions":[{"id":"approval-1","options":["allow","deny"]}]}})
                     } else if self.hold.load(Ordering::SeqCst) {

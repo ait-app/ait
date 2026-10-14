@@ -76,6 +76,9 @@ mod transport;
 #[path = "agents.rs"]
 mod agents;
 
+#[path = "bots.rs"]
+mod bots;
+
 #[path = "agent_runtime.rs"]
 mod agent_runtime;
 

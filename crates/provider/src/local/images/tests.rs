@@ -107,6 +107,38 @@ fn damaged_existing_artifacts_are_never_overwritten() {
     assert_eq!(std::fs::read(path).unwrap(), b"other");
 }
 
+#[test]
+fn concurrent_image_publication_reuses_one_complete_content_addressed_artifact() {
+    let root = tempfile::tempdir().unwrap();
+    let directory = root.path().join("images");
+    let barrier = std::sync::Arc::new(std::sync::Barrier::new(24));
+    let threads: Vec<_> = (0..24)
+        .map(|_| {
+            let store = ImageStore::new(directory.clone());
+            let barrier = barrier.clone();
+            std::thread::spawn(move || {
+                barrier.wait();
+                store
+                    .render(&json!({"data":"aGVsbG8=","mimeType":"image/png"}))
+                    .unwrap()
+            })
+        })
+        .collect();
+
+    let paths: Vec<_> = threads
+        .into_iter()
+        .map(|thread| thread.join().unwrap())
+        .collect();
+
+    assert!(paths.iter().all(|path| path == &paths[0]));
+    let files: Vec<_> = std::fs::read_dir(directory)
+        .unwrap()
+        .map(|entry| entry.unwrap().path())
+        .collect();
+    assert_eq!(files.len(), 1);
+    assert_eq!(std::fs::read(&files[0]).unwrap(), b"hello");
+}
+
 #[cfg(unix)]
 #[test]
 fn symlink_and_public_artifact_directories_are_rejected() {

@@ -47,3 +47,6 @@ pub(super) fn compose<
     })
     .context("start Bot service")
 }
+
+#[cfg(test)]
+mod tests;

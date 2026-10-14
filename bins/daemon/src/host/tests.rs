@@ -163,6 +163,8 @@ async fn each_composite_service_installs_all_its_methods_without_other_component
     remaining.wait_closed().await;
 }
 
+#[cfg(any(target_os = "linux", target_os = "macos"))]
+mod headless;
 mod workspace_attention;
 
 #[cfg(any(target_os = "linux", target_os = "macos"))]

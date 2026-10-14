@@ -85,7 +85,6 @@ impl Server {
         config: Config,
         diagnostics: Option<Arc<dyn metadata::daemon::ports::DaemonDiagnostics>>,
     ) -> anyhow::Result<Self> {
-        let headless = config.headless;
         let data_dir = config.data_dir.clone();
         let listener = TcpListener::bind(config.listen)
             .await
@@ -95,8 +94,23 @@ impl Server {
         let address = listener
             .local_addr()
             .context("read server listener address")?;
-        let (instance, services) = tokio::task::spawn_blocking(move || {
+        let (instance, services, device) = tokio::task::spawn_blocking(move || {
             let instance = Arc::new(InstanceLease::acquire(&config.data_dir)?);
+            // Validate managed state before spawning services that retain the instance lease.
+            let device = if config.headless {
+                let store = crate::device::Store::open(&config.data_dir)?;
+                let mut state = store
+                    .load()?
+                    .context("run daemon login before starting headless mode")?;
+                if state.machine.server_id != instance.server_id {
+                    anyhow::bail!("device state belongs to another installation");
+                }
+                env!("CARGO_PKG_VERSION").clone_into(&mut state.machine.app_version);
+                crate::device::PLATFORM.clone_into(&mut state.machine.platform);
+                Some((store, state))
+            } else {
+                None
+            };
             let mut services = compose_services(&config, address, &instance)?;
             if let Some(diagnostics) = diagnostics {
                 services.metadata = services.metadata.map(|service| {
@@ -105,7 +119,7 @@ impl Server {
                     metadata::Service::new(dependencies)
                 });
             }
-            Ok::<_, anyhow::Error>((instance, services))
+            Ok::<_, anyhow::Error>((instance, services, device))
         })
         .await
         .context("join server initialization")??;
@@ -117,16 +131,7 @@ impl Server {
             services,
         )?
         .with_browser_origins(web_origins)?;
-        let managed = if headless {
-            let store = crate::device::Store::open(&data_dir)?;
-            let mut state = store
-                .load()?
-                .context("run daemon login before starting headless mode")?;
-            if state.machine.server_id != instance.server_id {
-                anyhow::bail!("device state belongs to another installation");
-            }
-            env!("CARGO_PKG_VERSION").clone_into(&mut state.machine.app_version);
-            crate::device::PLATFORM.clone_into(&mut state.machine.platform);
+        let managed = if let Some((store, state)) = device {
             let relay = crate::device::StatusRelay::new(
                 api.claim_managed_relay()?,
                 &data_dir,

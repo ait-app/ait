@@ -1,5 +1,6 @@
 use tokio::net::TcpListener;
 use tokio_tungstenite::accept_async;
+use tracing::instrument::WithSubscriber;
 
 use super::*;
 use crate::protocol::DownloadAck;
@@ -161,5 +162,72 @@ async fn upgrade_rejects_invalid_credentials_and_bounded_messages() {
         .await
         .unwrap();
     assert!(matches!(text(&mut socket).await, Err(Error::Transport)));
+    server.await.unwrap();
+}
+
+#[tokio::test]
+async fn stalled_upgrade_obeys_the_connection_deadline() {
+    let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
+    let address = listener.local_addr().unwrap();
+    let task = tokio::spawn(async move {
+        Dialer::default()
+            .connect(&format!("ws://{address}"), "fixture", 1024)
+            .await
+    });
+    let (_tcp, _) = listener.accept().await.unwrap();
+    tokio::time::pause();
+    tokio::time::advance(Duration::from_secs(6)).await;
+    assert!(matches!(task.await.unwrap(), Err(Error::Transport)));
+}
+
+#[tokio::test]
+async fn setup_close_frames_are_reported_without_the_peer_reason() {
+    let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
+    let address = listener.local_addr().unwrap();
+    let server =
+        tokio::spawn(async move {
+            let (tcp, _) = listener.accept().await.unwrap();
+            let mut socket = accept_async(tcp).await.unwrap();
+            socket.send(Message::Close(Some(tokio_tungstenite::tungstenite::protocol::CloseFrame {
+            code:tokio_tungstenite::tungstenite::protocol::frame::coding::CloseCode::Policy,
+            reason:"private-peer-reason".into(),
+        }))).await.unwrap();
+            let _ = socket.next().await;
+        });
+    let mut socket = Dialer::default()
+        .connect(&format!("ws://{address}"), "fixture", 1024)
+        .await
+        .unwrap();
+    let capture = diagnostics::tests::Capture::default();
+    assert!(matches!(
+        text(&mut socket)
+            .with_subscriber(capture.subscriber())
+            .await,
+        Err(Error::Transport)
+    ));
+    assert!(capture.text().contains("close_frame"));
+    assert!(!capture.text().contains("private-peer-reason"));
+    drop(socket);
+    server.await.unwrap();
+}
+
+#[tokio::test]
+async fn send_after_close_returns_a_sanitized_transport_error() {
+    let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
+    let address = listener.local_addr().unwrap();
+    let server = tokio::spawn(async move {
+        let (tcp, _) = listener.accept().await.unwrap();
+        let mut socket = accept_async(tcp).await.unwrap();
+        let _ = socket.next().await;
+    });
+    let mut socket = Dialer::default()
+        .connect(&format!("ws://{address}"), "fixture", 1024)
+        .await
+        .unwrap();
+    socket.close(None).await.unwrap();
+    let result = send(&mut socket, Message::Text("private-payload".into())).await;
+    assert!(matches!(result, Err(Error::Transport)));
+    assert!(!result.unwrap_err().to_string().contains("private-payload"));
+    drop(socket);
     server.await.unwrap();
 }

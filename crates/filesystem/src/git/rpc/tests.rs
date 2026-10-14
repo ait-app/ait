@@ -120,6 +120,18 @@ fn highlight_output_budget_keeps_large_file_diff_readable() {
 }
 
 #[test]
+fn binary_diff_status_survives_wire_projection() {
+    let mut file = highlighted_file(0);
+    file.status = Some(crate::git::ports::checkout::ParsedDiffStatus::Binary);
+    let projected = super::protocol_diff_file(file);
+    assert_eq!(
+        projected.status,
+        Some(crate::git::protocol::ParsedDiffStatus::Binary)
+    );
+    assert_eq!(projected.path, "source.rs");
+}
+
+#[test]
 fn highlight_output_budget_applies_to_the_entire_subscription_snapshot() {
     let file = highlighted_file(4000);
     assert!(
@@ -326,6 +338,29 @@ fn branch_queries_and_mutations_project_paseo_shapes() {
 }
 
 #[test]
+fn remote_branch_switch_and_squash_merge_preserve_requested_operations() {
+    let checkout = checkout();
+    let switched = execute(
+        &checkout,
+        "checkout.branch.switch.request",
+        json!({"cwd":"/repo","branch":"remote-only"}),
+    )
+    .unwrap();
+    assert_eq!(switched["source"], "remote");
+    assert_eq!(switched["branch"], "remote-only");
+    assert_eq!(switched["success"], true);
+
+    let merged = execute(
+        &checkout,
+        "checkout.merge.request",
+        json!({"cwd":"/repo","baseRef":"verify-squash","strategy":"squash"}),
+    )
+    .unwrap();
+    assert_eq!(merged["success"], true);
+    assert!(merged["error"].is_null());
+}
+
+#[test]
 fn mutation_defaults_and_inline_errors_match_paseo() {
     let checkout = checkout();
     for (method, params) in [
@@ -377,6 +412,103 @@ fn stash_list_defaults_to_paseo_only_and_preserves_entry_shape() {
     .unwrap();
     assert_eq!(result["entries"][0]["branch"], "feature");
     assert_eq!(result["entries"][0]["isPaseo"], true);
+}
+
+#[test]
+fn remote_and_absent_branches_keep_distinct_wire_results() {
+    let checkout = checkout();
+    for (branch, expected) in [
+        (
+            "remote-only",
+            json!({"exists":true,"resolvedRef":"remote-only","isRemote":true,"error":null}),
+        ),
+        (
+            "missing",
+            json!({"exists":false,"resolvedRef":null,"isRemote":false,"error":null}),
+        ),
+    ] {
+        assert_eq!(
+            execute(
+                &checkout,
+                "checkout.branch.validate.request",
+                json!({"cwd":"/repo","branchName":branch})
+            )
+            .unwrap(),
+            expected
+        );
+    }
+    for limit in [0, 201] {
+        assert_eq!(
+            execute(
+                &checkout,
+                "checkout.branch.suggestions.request",
+                json!({"cwd":"/repo","limit":limit})
+            ),
+            Err(crate::support::error::ErrorCode::InvalidMessage)
+        );
+    }
+}
+
+#[test]
+fn branch_status_preserves_its_own_ahead_and_behind_counts() {
+    let mut status = FakeCheckout.status("/repo").unwrap();
+    status.branch_status = Some(crate::git::ports::checkout::CheckoutBranchStatus {
+        head_sha: Some("fixture-sha".into()),
+        has_conflicts: false,
+        remote_ref: Some("origin/main".into()),
+        ahead_behind: Some(AheadBehind {
+            ahead: 3,
+            behind: 7,
+        }),
+    });
+    let value = serde_json::to_value(super::protocol_status("/repo", Ok(status))).unwrap();
+    assert_eq!(
+        value["branchStatus"]["aheadBehind"],
+        json!({"ahead":3,"behind":7})
+    );
+    assert_eq!(value["aheadBehind"], json!({"ahead":2,"behind":1}));
+}
+
+#[test]
+fn commit_file_deletions_renames_and_checkout_failures_preserve_wire_categories() {
+    let commit = CheckoutCommit {
+        sha: "sha".into(),
+        short_sha: "sha".into(),
+        subject: "change".into(),
+        author_name: "Fixture".into(),
+        author_date: "2026-10-14T00:00:00Z".into(),
+        is_on_remote: false,
+        is_on_base: false,
+        files: vec![
+            CheckoutCommitFile {
+                path: "removed.txt".into(),
+                additions: 0,
+                deletions: 2,
+                status: Some(CheckoutCommitFileStatus::Deleted),
+            },
+            CheckoutCommitFile {
+                path: "renamed.txt".into(),
+                additions: 0,
+                deletions: 0,
+                status: Some(CheckoutCommitFileStatus::Renamed),
+            },
+        ],
+    };
+    let value = serde_json::to_value(super::protocol_commit(commit)).unwrap();
+    assert_eq!(value["files"][0]["status"], "deleted");
+    assert_eq!(value["files"][1]["status"], "renamed");
+    for (kind, expected) in [
+        (CheckoutFailureKind::MergeConflict, "MERGE_CONFLICT"),
+        (CheckoutFailureKind::Unknown, "UNKNOWN"),
+    ] {
+        let value = serde_json::to_value(super::protocol_error(CheckoutRuntimeError {
+            kind,
+            message: "safe failure".into(),
+        }))
+        .unwrap();
+        assert_eq!(value["code"], expected);
+        assert_eq!(value["message"], "safe failure");
+    }
 }
 
 fn checkout() -> Checkout {
@@ -464,7 +596,14 @@ impl CheckoutRuntime for FakeCheckout {
         branch: &str,
     ) -> Result<CheckoutBranchResolution, CheckoutRuntimeError> {
         fail(cwd)?;
-        Ok(CheckoutBranchResolution::Local(branch.to_owned()))
+        Ok(match branch {
+            "remote-only" => CheckoutBranchResolution::RemoteOnly {
+                name: "remote-only".into(),
+                remote_ref: "origin/remote-only".into(),
+            },
+            "missing" => CheckoutBranchResolution::NotFound,
+            name => CheckoutBranchResolution::Local(name.to_owned()),
+        })
     }
 
     fn branch_suggestions(
@@ -487,10 +626,14 @@ impl CheckoutRuntime for FakeCheckout {
     fn switch_branch(
         &self,
         cwd: &str,
-        _branch: &str,
+        branch: &str,
     ) -> Result<CheckoutBranchSource, CheckoutRuntimeError> {
         fail(cwd)?;
-        Ok(CheckoutBranchSource::Local)
+        Ok(if branch == "remote-only" {
+            CheckoutBranchSource::Remote
+        } else {
+            CheckoutBranchSource::Local
+        })
     }
 
     fn rename_branch(&self, cwd: &str, branch: &str) -> Result<String, CheckoutRuntimeError> {
@@ -510,10 +653,13 @@ impl CheckoutRuntime for FakeCheckout {
     fn merge_to_base(
         &self,
         cwd: &str,
-        _base_ref: Option<&str>,
-        _strategy: CheckoutMergeStrategy,
+        base_ref: Option<&str>,
+        strategy: CheckoutMergeStrategy,
         _require_clean_target: bool,
     ) -> Result<(), CheckoutRuntimeError> {
+        if base_ref == Some("verify-squash") {
+            assert_eq!(strategy, CheckoutMergeStrategy::Squash);
+        }
         fail(cwd)
     }
 
