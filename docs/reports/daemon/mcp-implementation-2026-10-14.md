@@ -13,17 +13,19 @@
 
 ## 测试执行
 
-验证修订为基线 `9734c9099432a2b6f05f162376268e54725b7bff` 加本次未提交工作树变更。
+首次验证基于 `9734c9099432a2b6f05f162376268e54725b7bff`。
+PR 准备时同步 `main` 的 `1acb7f839fee856afaa7f9e95a5ea90dd56ad1ee`，
+在代码修订 `6840431ed867965465391f817315de7af3c9bd9b` 重新完成以下测试、编译和 lint 检查。
 仅执行受影响及直接相关测试，没有执行全 workspace 测试。
 
-- `cargo test --locked -p api mcp --lib`：12 项 MCP Schema、参数映射、协议、错误结果和 HTTP 鉴权测试。
-- `cargo test --locked -p daemon --test process unix::mcp`：3 组真实 daemon 测试，离线 Codex fixture，
+- `CARGO_INCREMENTAL=0 cargo test --locked -p api mcp --lib`：12 项 MCP Schema、参数映射、协议、错误结果和 HTTP 鉴权测试。
+- `CARGO_INCREMENTAL=0 cargo test --locked -p daemon --test process unix::mcp`：3 组真实 daemon 测试，离线 Codex fixture，
   验证 Workspace 生命周期与幂等性、开关、Agent 执行/父子关系、Prompt、等待/取消、配置/元数据、
   权限查询/应答、终端、脚本、Schedule 和 Heartbeat。
-- `cargo test --locked -p api http_authentication_origins_and_readiness --lib`：直接相关的既有 HTTP 鉴权回归测试。
+- `CARGO_INCREMENTAL=0 cargo test --locked -p api http_authentication_origins_and_readiness --lib`：直接相关的既有 HTTP 鉴权回归测试。
 - 测试结果：12 项 MCP API 测试、3 组 daemon 测试及 1 项 HTTP 回归测试全部通过。
-- `cargo check --locked --workspace`：根 Cargo workspace 编译检查通过。
-- `cargo clippy --locked -p api -p daemon --all-targets -- -D warnings`。
+- `CARGO_INCREMENTAL=0 cargo build --locked --workspace`：根 Cargo workspace 编译通过。
+- `CARGO_INCREMENTAL=0 cargo clippy --locked --workspace --all-targets -- -D warnings`：无警告。
 - `cargo fmt --all --check`，改动 JSON/Markdown 的 `oxfmt --check`，`git diff --check`。
 - 仓库现有官方 `@modelcontextprotocol/sdk` 1.29.0 的 `Client` 和 `StreamableHTTPClientTransport`
   连接临时 daemon：握手成功，发现 40 个工具，`list_workspaces` 返回结构化结果，关闭成功。
