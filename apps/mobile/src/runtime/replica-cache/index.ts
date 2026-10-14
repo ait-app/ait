@@ -297,7 +297,11 @@ const WorkspaceGitRuntimeSchema = z
   .nullable()
   .optional();
 
+// Older rows omitted initialBranch while retaining their directory cursor. Refetch those
+// workspaces once so reset can use the daemon's saved branch even without a new directory event.
+const WORKSPACE_PROJECTION_VERSION = 1;
 const StoredWorkspaceSchema = z.strictObject({
+  projectionVersion: z.literal(WORKSPACE_PROJECTION_VERSION),
   id: z.string(),
   projectId: z.string(),
   projectDisplayName: z.string(),
@@ -306,6 +310,7 @@ const StoredWorkspaceSchema = z.strictObject({
   projectRootPath: z.string(),
   workspaceDirectory: z.string(),
   worktreeSlug: z.string().optional(),
+  initialBranch: z.string().optional(),
   projectKind: z.enum(["git", "non_git", "directory"]),
   workspaceKind: z.enum(["directory", "local_checkout", "checkout", "worktree"]),
   name: z.string(),
@@ -695,6 +700,7 @@ function deserializeAgent(serverId: string, stored: StoredAgent): Agent {
 
 function serializeWorkspace(workspace: WorkspaceDescriptor): StoredWorkspace {
   return {
+    projectionVersion: WORKSPACE_PROJECTION_VERSION,
     id: workspace.id,
     projectId: workspace.projectId,
     projectDisplayName: workspace.projectDisplayName,
@@ -703,6 +709,7 @@ function serializeWorkspace(workspace: WorkspaceDescriptor): StoredWorkspace {
     projectRootPath: workspace.projectRootPath,
     workspaceDirectory: workspace.workspaceDirectory,
     worktreeSlug: workspace.worktreeSlug,
+    initialBranch: workspace.initialBranch,
     projectKind: workspace.projectKind,
     workspaceKind: workspace.workspaceKind,
     name: workspace.name,

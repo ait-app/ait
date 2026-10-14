@@ -117,17 +117,6 @@ export function WorkspaceNewTabMenuContent({
           {group.items.map((item) => (
             <WorkspaceNewTabMenuItem key={item.id} item={item} paneId={paneId} />
           ))}
-          {group.accessory ? (
-            <>
-              <DropdownMenuSeparator />
-              <DropdownMenuItem
-                testID={`workspace-new-tab-menu-${group.accessory.id}`}
-                onSelect={group.accessory.run}
-              >
-                {group.accessory.label}
-              </DropdownMenuItem>
-            </>
-          ) : null}
         </View>
       ))}
     </DropdownMenuContent>
