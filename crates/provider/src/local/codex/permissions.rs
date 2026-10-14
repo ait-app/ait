@@ -32,6 +32,35 @@ pub(super) fn supported(method: &str) -> bool {
 }
 
 impl CodexSession {
+    /// Queue approval of the captured CUA tool permission identified by `id`.
+    /// Returns false for other requests; errors if capture or native reply dispatch failed.
+    pub(super) fn approve_computer_use(&mut self, id: &str) -> Result<bool, AgentSessionError> {
+        let pending = self.permissions.get(id).ok_or(AgentSessionError::Failed)?;
+        let input = &pending.request["input"];
+        if !crate::local::configuration::codex_computer_use_auto_approval(&self.config)
+            || pending.kind != Kind::Mcp
+            || input["serverName"] != "cua_repl"
+            || input["_meta"]["codex_approval_kind"] != "mcp_tool_call"
+            || input["_meta"]["connector_id"] != "computer-use"
+            || !matches!(
+                input["mode"].as_str(),
+                Some("form" | "openai/form" | "openaiForm")
+            )
+            || !input["requestedSchema"]["properties"]
+                .as_object()
+                .is_some_and(serde_json::Map::is_empty)
+        {
+            return Ok(false);
+        }
+        let reply = resolution(pending, &json!({"behavior":"allow"}))?;
+        self.transport
+            .as_mut()
+            .ok_or(AgentSessionError::Failed)?
+            .queue_response(&pending.native_id, reply)?;
+        self.permissions.remove(id);
+        Ok(true)
+    }
+
     pub(super) fn resolve_native_permission(&mut self, native: &Value) -> Option<String> {
         let id = self
             .permissions

@@ -37,11 +37,33 @@ describe("useChatOutline", () => {
     runtime.subscribeAgentTimeline.mockClear();
   });
 
+  it("does not query a prompt index before a timeline epoch exists", async () => {
+    runtime.listAgentTimelinePrompts.mockResolvedValue({ epoch: "epoch-1", prompts: [] });
+    const { rerender } = renderHook(
+      ({ timelineEpoch }) =>
+        useChatOutline({
+          agentId: "tab-draft",
+          serverId: "server-1",
+          timelineEpoch,
+          tail: [],
+          head: [],
+          enabled: true,
+          viewportRef: createRef<StreamViewportHandle>(),
+          onJumpError: vi.fn(),
+        }),
+      { initialProps: { timelineEpoch: null as string | null } },
+    );
+    expect(runtime.listAgentTimelinePrompts).not.toHaveBeenCalled();
+
+    rerender({ timelineEpoch: "epoch-1" });
+    await waitFor(() => expect(runtime.listAgentTimelinePrompts).toHaveBeenCalledTimes(1));
+  });
+
   it("drops a late prompt index after the authoritative timeline epoch changes", async () => {
     const first = deferred<{ epoch: string; prompts: [] }>();
     const second = deferred<{
       epoch: string;
-      prompts: Array<{ seq: number; timestamp: string; preview: string }>;
+      prompts: { seq: number; timestamp: string; preview: string }[];
     }>();
     runtime.listAgentTimelinePrompts
       .mockReturnValueOnce(first.promise)
@@ -83,11 +105,11 @@ describe("useChatOutline", () => {
   it("refreshes from viewed user messages without another stream and keeps the newest index", async () => {
     const older = deferred<{
       epoch: string;
-      prompts: Array<{ seq: number; timestamp: string; preview: string }>;
+      prompts: { seq: number; timestamp: string; preview: string }[];
     }>();
     const newer = deferred<{
       epoch: string;
-      prompts: Array<{ seq: number; timestamp: string; preview: string }>;
+      prompts: { seq: number; timestamp: string; preview: string }[];
     }>();
     runtime.listAgentTimelinePrompts
       .mockResolvedValueOnce({ epoch: "epoch-1", prompts: [] })

@@ -78,7 +78,7 @@ export function useChatOutline({
   useEffect(() => setIndex(null), [agentId, enabled, serverId, timelineEpoch]);
 
   useEffect(() => {
-    if (!isWeb || !enabled) {
+    if (!isWeb || !enabled || !timelineEpoch) {
       setIndex(null);
       return;
     }

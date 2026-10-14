@@ -1,6 +1,146 @@
 use super::*;
 
 #[tokio::test]
+async fn computer_use_approval_is_automatic_in_auto_review_and_full_access() {
+    for mode in ["auto-review", "full-access"] {
+        let fixture = Fixture::new();
+        fixture.mode("workflows");
+        let client = fixture.client();
+        let mut spec = fixture.spec();
+        spec.config.mode_id = Some(mode.to_owned());
+        let mut session = client.create_session(&spec).await.unwrap();
+
+        session
+            .start_turn("permit-cua-app", &spec.config)
+            .await
+            .unwrap();
+        let outcome = terminal(session.as_mut()).await.unwrap();
+        assert!(
+            matches!(outcome, AgentTurnEvent::Completed(Some(ref text)) if text == "Echo: approved"),
+            "{mode} should approve computer use automatically, got {outcome:?}"
+        );
+        assert!(session.pending_permissions().is_empty());
+        let requests = fixture.requests();
+        let reply = requests
+            .iter()
+            .find(|request| request.get("method").is_none() && request["id"] == "approval-1")
+            .unwrap();
+        assert_eq!(
+            reply["result"],
+            json!({"action":"accept","content":{},"_meta":null})
+        );
+        session.start_turn("next", &spec.config).await.unwrap();
+        assert!(matches!(
+            terminal(session.as_mut()).await.unwrap(),
+            AgentTurnEvent::Completed(_)
+        ));
+        session.close().await.unwrap();
+    }
+}
+
+#[tokio::test]
+async fn computer_use_app_approval_remains_manual_for_lower_modes_and_explicit_prompts() {
+    for config in [
+        json!({"modeId":"auto"}),
+        json!({"modeId":"read-only"}),
+        json!({"modeId":"auto-review","providerOptions":{"plugins":{
+            "unified-computer-use@openai-bundled":{"mcp_servers":{"cua_repl":{
+                "tools":{"js":{"approval_mode":"prompt"}}}}}}}}),
+        json!({"modeId":"full-access","providerOptions":{"plugins":{
+            "unified-computer-use@openai-bundled":{"mcp_servers":{"cua_repl":{
+                "tools":{"js":{"approval_mode":"prompt"}}}}}}}}),
+    ] {
+        let fixture = Fixture::new();
+        fixture.mode("workflows");
+        let client = fixture.client();
+        let mut spec = fixture.spec();
+        spec.config = serde_json::from_value(config).unwrap();
+        let mut session = client.create_session(&spec).await.unwrap();
+        session
+            .start_turn("permit-cua-app", &spec.config)
+            .await
+            .unwrap();
+        let AgentTurnEvent::PermissionRequested(request) =
+            terminal(session.as_mut()).await.unwrap()
+        else {
+            panic!("expected manual approval");
+        };
+        assert_eq!(session.pending_permissions().len(), 1);
+        assert_eq!(request["input"]["_meta"]["connector_id"], "computer-use");
+        session
+            .respond_permission(request["id"].as_str().unwrap(), &json!({"behavior":"deny"}))
+            .await
+            .unwrap();
+        assert!(matches!(
+            terminal(session.as_mut()).await.unwrap(),
+            AgentTurnEvent::Completed(_)
+        ));
+        assert!(session.pending_permissions().is_empty());
+        let requests = fixture.requests();
+        let reply = requests
+            .iter()
+            .find(|request| request.get("method").is_none() && request["id"] == "approval-1")
+            .unwrap();
+        assert_eq!(
+            reply["result"],
+            json!({"action":"decline","content":null,"_meta":null})
+        );
+        session.close().await.unwrap();
+    }
+}
+
+#[tokio::test]
+async fn full_access_computer_use_approval_is_reloaded_and_cleared_on_the_same_thread() {
+    let fixture = Fixture::new();
+    fixture.mode("workflows");
+    let client = fixture.client();
+    let mut spec = fixture.spec();
+    spec.config.mode_id = Some("auto".to_owned());
+    let mut session = client.create_session(&spec).await.unwrap();
+    let handle = session.persistence();
+    for mode in ["full-access", "auto-review", "auto"] {
+        spec.config.mode_id = Some(mode.to_owned());
+        session
+            .start_turn("permit-cua-app", &spec.config)
+            .await
+            .unwrap();
+        let outcome = terminal(session.as_mut()).await.unwrap();
+        if mode == "auto" {
+            let AgentTurnEvent::PermissionRequested(request) = outcome else {
+                panic!("expected restored manual approval");
+            };
+            session
+                .respond_permission(request["id"].as_str().unwrap(), &json!({"behavior":"deny"}))
+                .await
+                .unwrap();
+            assert!(matches!(
+                terminal(session.as_mut()).await.unwrap(),
+                AgentTurnEvent::Completed(_)
+            ));
+        } else {
+            assert!(matches!(outcome, AgentTurnEvent::Completed(_)));
+        }
+    }
+    assert_eq!(session.persistence(), handle);
+    session.close().await.unwrap();
+    let requests = fixture.requests();
+    let resumed: Vec<_> = requests
+        .iter()
+        .filter(|request| request["method"] == "thread/resume")
+        .map(|request| &request["params"])
+        .collect();
+    assert_eq!(resumed.len(), 2);
+    assert_eq!(resumed[0]["approvalPolicy"], "never");
+    assert_eq!(resumed[0]["sandbox"], "danger-full-access");
+    assert_eq!(
+        resumed[0]["config"]["plugins"]["unified-computer-use@openai-bundled"]["mcp_servers"]["cua_repl"]
+            ["tools"]["js"]["approval_mode"],
+        "approve"
+    );
+    assert_eq!(resumed[1]["config"], json!({}));
+}
+
+#[tokio::test]
 async fn auto_review_cua_approval_is_native_and_is_cleared_on_the_same_thread() {
     let fixture = Fixture::new();
     fixture.mode("workflows");

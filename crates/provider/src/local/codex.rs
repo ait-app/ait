@@ -592,8 +592,8 @@ impl CodexSession {
             && self.config.mcp_servers == config.mcp_servers
             && self.config.tool_policy == config.tool_policy
             && self.config.system_prompt == config.system_prompt
-            && (self.config.mode_id.as_deref() == Some("auto-review"))
-                == (config.mode_id.as_deref() == Some("auto-review"))
+            && crate::local::configuration::codex_computer_use_auto_approval(&self.config)
+                == crate::local::configuration::codex_computer_use_auto_approval(config)
         {
             return Ok(());
         }
@@ -926,7 +926,15 @@ impl AgentSession for CodexSession {
                 return Err(AgentSessionError::Unavailable);
             }
             if message.get("id").is_some() {
-                return self.capture_permission(&message).map(Some);
+                let event = self.capture_permission(&message)?;
+                if let AgentTurnEvent::PermissionRequested(request) = &event
+                    && self.approve_computer_use(
+                        request["id"].as_str().ok_or(AgentSessionError::Failed)?,
+                    )?
+                {
+                    continue;
+                }
+                return Ok(Some(event));
             }
             let params = &message["params"];
             self.stream.events.extend(self.children.observe(

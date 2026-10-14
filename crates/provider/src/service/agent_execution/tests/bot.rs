@@ -10,6 +10,7 @@ async fn codex_bot_denies_commands_files_questions_and_computer_use() {
         "permit-file",
         "permit-question",
         "permit-cua",
+        "permit-cua-app",
     ] {
         let fixture = Fixture::new();
         let (execution, registry) = worker(&fixture);
