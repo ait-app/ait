@@ -123,6 +123,7 @@
 - [Android APK 发布](operations/android-releases.md)：独立手动构建测试或正式通用 APK。
 - [Google Play 内部测试](operations/google-play-internal-testing.md)：首次账号配置、测试者安装与手动 AAB 发布 CI。
 - [发布指南](operations/releasing.md)：桌面 Release、Android Internal Testing、iOS TestFlight。
+- [Ait 0.1.3 同版本重建 Draft 准备](reports/releases/release-0.1.3-rebuild-2026-10-15.md)：纳入 computer use 批准、启动历史加载与 headless 锁释放修复，保留原标签并等待 review。
 - [Ait 0.1.3 Draft 发布说明](reports/releases/release-0.1.3.md)：daemon MCP 编排、DeepSeek Harness 插件情景模式和原生配额／余额，完成 Draft 后停下等待 review。
 - [Ait 0.1.2 Draft 发布说明](reports/releases/release-0.1.2.md)：图片输入、OpenCode 2.0.25、连接和 Bot 权限修复，完成 Draft 后停下等待 review。
 - [Ait 0.1.1 Draft 发布说明](reports/releases/release-0.1.1.md)：Workspace 定时任务、实验性 Bot、无人值守 Host 和 Draft review 门禁。

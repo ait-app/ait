@@ -2,6 +2,9 @@
 
 ## 0.1.3 - 2026-10-14
 
+- Automatically approve Codex computer-use access requests in Auto-review and Full Access while preserving explicit tool overrides and Bot permission rules.
+- Limit concurrent startup Timeline reads and wait for a real session Timeline before querying the chat outline, avoiding busy queues and missing-agent errors for draft tabs.
+- Keep Codex model-catalog refresh timeouts separate from turn execution failures, and validate headless identity before starting background services so failed startup releases the instance lock.
 - Add a daemon MCP endpoint for external clients to manage Agents, Workspaces, terminals, scripts, schedules, heartbeats, and permissions through the existing authenticated API.
 - Discover DeepSeek Harness scenario modes from native plugin presets and keep permission presets independent from the selected scenario.
 - Restore Antigravity account quota windows and DeepSeek Harness balances, including official DeepSeek API-key balances with their native currency and availability.
