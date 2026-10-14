@@ -94,6 +94,9 @@ mod deepseek_harness;
 #[path = "native.rs"]
 mod native;
 
+#[path = "mcp.rs"]
+mod mcp;
+
 #[path = "session.rs"]
 mod session;
 

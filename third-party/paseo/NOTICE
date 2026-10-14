@@ -45,3 +45,12 @@ packages/server/src/terminal/terminal-session-controller.ts, terminal-manager.ts
 terminal-capture.ts, terminal-restore.ts, and terminal-size-ownership.ts.
 Rust changes use portable-pty, vt100, bounded screen/output retention and polling
 observers. Scope and differences: docs/decisions/daemon/adr-033-daemon-terminal.md.
+
+The MCP vocabulary and parameter adaptations in crates/api/src/mcp* reference
+getpaseo/paseo commit 9551b2cc11328170416b3d9753c7ec9a10ed35e7:
+packages/server/src/server/agent/mcp-server.ts
+packages/server/src/server/agent/tools/paseo-tools.ts
+packages/server/src/server/bootstrap.ts
+Modifications: Rust stateless HTTP reusing authenticated Ait RPC dispatch,
+bounded task/output resources, fixed Workspace schedules and persisted heartbeats.
+Scope and differences: docs/decisions/daemon/adr-148-daemon-mcp.md.

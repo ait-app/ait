@@ -1,0 +1,1020 @@
+[
+  {
+    "name": "create_agent",
+    "methods": ["agent.create.request"],
+    "description": "Create and start an agent using a provider/model pair. Supply cwd or workspaceId for an external caller. X-Ait-Agent-Id inherits the caller workspace and records parentage. Returns after initial prompt admission. Reuse idempotencyKey on retries.",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "provider": {
+          "type": "string",
+          "minLength": 1
+        },
+        "title": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 60
+        },
+        "initialPrompt": {
+          "type": "string",
+          "minLength": 1
+        },
+        "cwd": {
+          "type": "string",
+          "minLength": 1
+        },
+        "workspaceId": {
+          "type": "string",
+          "minLength": 1
+        },
+        "settings": {
+          "type": "object",
+          "properties": {
+            "modeId": {
+              "type": "string",
+              "minLength": 1
+            },
+            "thinkingOptionId": {
+              "type": ["string", "null"]
+            },
+            "features": {
+              "type": "object"
+            }
+          },
+          "required": [],
+          "additionalProperties": false
+        },
+        "labels": {
+          "type": "object",
+          "additionalProperties": {
+            "type": "string"
+          }
+        },
+        "idempotencyKey": {
+          "type": "string",
+          "minLength": 1
+        },
+        "autoArchive": {
+          "type": "boolean"
+        }
+      },
+      "required": ["provider", "title", "initialPrompt"],
+      "additionalProperties": false
+    },
+    "readOnly": false
+  },
+  {
+    "name": "send_agent_prompt",
+    "methods": ["agent.message.send.request"],
+    "description": "Admit a prompt for an agent; poll status or wait_for_agent for completion. activeTurnBehavior selects interrupt or steer.",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "agentId": {
+          "type": "string",
+          "minLength": 1
+        },
+        "prompt": {
+          "type": "string",
+          "minLength": 1
+        },
+        "activeTurnBehavior": {
+          "type": "string",
+          "enum": ["interrupt", "steer"]
+        },
+        "messageId": {
+          "type": "string",
+          "minLength": 1
+        }
+      },
+      "required": ["agentId", "prompt"],
+      "additionalProperties": false
+    },
+    "readOnly": false
+  },
+  {
+    "name": "get_agent_status",
+    "methods": ["agent.get.request"],
+    "description": "Read the latest agent snapshot, status and pending permissions.",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "agentId": {
+          "type": "string",
+          "minLength": 1
+        }
+      },
+      "required": ["agentId"],
+      "additionalProperties": false
+    },
+    "readOnly": true
+  },
+  {
+    "name": "list_agents",
+    "methods": ["agent.list.request"],
+    "description": "List compact agent snapshots, newest first. limit defaults to 50. nextCursor continues the directory. Internal Bot sessions remain private.",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "includeArchived": {
+          "type": "boolean"
+        },
+        "statuses": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "enum": ["initializing", "idle", "running", "error", "closed"]
+          }
+        },
+        "limit": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 200
+        },
+        "cursor": {
+          "type": "string",
+          "minLength": 1
+        }
+      },
+      "required": [],
+      "additionalProperties": false
+    },
+    "readOnly": true
+  },
+  {
+    "name": "cancel_agent",
+    "methods": ["agent.cancel.request"],
+    "description": "Cancel the active turn while keeping the agent.",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "agentId": {
+          "type": "string",
+          "minLength": 1
+        }
+      },
+      "required": ["agentId"],
+      "additionalProperties": false
+    },
+    "readOnly": false
+  },
+  {
+    "name": "archive_agent",
+    "methods": ["agent.archive.request"],
+    "description": "Archive an agent and close its native session.",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "agentId": {
+          "type": "string",
+          "minLength": 1
+        }
+      },
+      "required": ["agentId"],
+      "additionalProperties": false
+    },
+    "readOnly": false
+  },
+  {
+    "name": "kill_agent",
+    "methods": ["agent.items.close.request"],
+    "description": "Close and archive an agent permanently for execution; durable history is retained.",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "agentId": {
+          "type": "string",
+          "minLength": 1
+        }
+      },
+      "required": ["agentId"],
+      "additionalProperties": false
+    },
+    "readOnly": false
+  },
+  {
+    "name": "update_agent",
+    "methods": ["agent.update.request", "agent.config.apply.request"],
+    "description": "Update an agent name, labels and next-turn runtime settings.",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "agentId": {
+          "type": "string",
+          "minLength": 1
+        },
+        "name": {
+          "type": "string",
+          "minLength": 1
+        },
+        "labels": {
+          "type": "object",
+          "additionalProperties": {
+            "type": "string"
+          }
+        },
+        "settings": {
+          "type": "object",
+          "properties": {
+            "modeId": {
+              "type": "string",
+              "minLength": 1
+            },
+            "model": {
+              "type": ["string", "null"]
+            },
+            "thinkingOptionId": {
+              "type": ["string", "null"]
+            },
+            "features": {
+              "type": "object"
+            }
+          },
+          "required": [],
+          "additionalProperties": false
+        }
+      },
+      "required": ["agentId"],
+      "additionalProperties": false
+    },
+    "readOnly": false
+  },
+  {
+    "name": "get_agent_activity",
+    "methods": ["agent.timeline.get.request", "agent.get.request"],
+    "description": "Read a bounded recent timeline with text for model-visible results. limit defaults to 20.",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "agentId": {
+          "type": "string",
+          "minLength": 1
+        },
+        "limit": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 200
+        }
+      },
+      "required": ["agentId"],
+      "additionalProperties": false
+    },
+    "readOnly": true
+  },
+  {
+    "name": "set_agent_mode",
+    "methods": ["agent.mode.set.request"],
+    "description": "Select a provider mode for an existing agent.",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "agentId": {
+          "type": "string",
+          "minLength": 1
+        },
+        "modeId": {
+          "type": "string",
+          "minLength": 1
+        }
+      },
+      "required": ["agentId", "modeId"],
+      "additionalProperties": false
+    },
+    "readOnly": false
+  },
+  {
+    "name": "wait_for_agent",
+    "methods": ["agent.finish.wait.request"],
+    "description": "Wait up to timeoutMs (default 30000, maximum 45000) for an agent run to finish. A timeout does not cancel the run.",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "agentId": {
+          "type": "string",
+          "minLength": 1
+        },
+        "timeoutMs": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 45000
+        }
+      },
+      "required": ["agentId"],
+      "additionalProperties": false
+    },
+    "readOnly": true
+  },
+  {
+    "name": "create_workspace",
+    "methods": ["workspace.create.request"],
+    "description": "Create an Ait workspace from an existing directory or an isolated managed worktree. Select branch-off, checkout-branch or checkout-pr. Reuse idempotencyKey on retries.",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "isolation": {
+          "type": "string",
+          "enum": ["local", "worktree"]
+        },
+        "path": {
+          "type": "string",
+          "minLength": 1
+        },
+        "projectId": {
+          "type": "string",
+          "minLength": 1
+        },
+        "title": {
+          "type": "string",
+          "minLength": 1
+        },
+        "mode": {
+          "type": "string",
+          "enum": ["branch-off", "checkout-branch", "checkout-pr"]
+        },
+        "worktreeSlug": {
+          "type": "string",
+          "minLength": 1
+        },
+        "branchName": {
+          "type": "string",
+          "minLength": 1
+        },
+        "baseBranch": {
+          "type": "string",
+          "minLength": 1
+        },
+        "branch": {
+          "type": "string",
+          "minLength": 1
+        },
+        "prNumber": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "forge": {
+          "type": "string",
+          "minLength": 1
+        },
+        "idempotencyKey": {
+          "type": "string",
+          "minLength": 1
+        }
+      },
+      "required": ["isolation"],
+      "additionalProperties": false
+    },
+    "readOnly": false
+  },
+  {
+    "name": "list_workspaces",
+    "methods": ["workspace.list.request"],
+    "description": "List active Ait workspace descriptors and directories. nextCursor continues the directory.",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "limit": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 200
+        },
+        "cursor": {
+          "type": "string",
+          "minLength": 1
+        }
+      },
+      "required": [],
+      "additionalProperties": false
+    },
+    "readOnly": true
+  },
+  {
+    "name": "rename_workspace",
+    "methods": ["workspace.title.set.request"],
+    "description": "Rename a workspace. X-Ait-Agent-Id supplies the current workspace when workspaceId is omitted.",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "workspaceId": {
+          "type": "string",
+          "minLength": 1
+        },
+        "title": {
+          "type": "string",
+          "minLength": 1
+        }
+      },
+      "required": ["title"],
+      "additionalProperties": false
+    },
+    "readOnly": false
+  },
+  {
+    "name": "archive_workspace",
+    "methods": ["workspace.archive.request"],
+    "description": "Archive a workspace and retire its agents, scripts and terminals before removing an owned worktree.",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "workspaceId": {
+          "type": "string",
+          "minLength": 1
+        }
+      },
+      "required": ["workspaceId"],
+      "additionalProperties": false
+    },
+    "readOnly": false
+  },
+  {
+    "name": "list_workspace_scripts",
+    "methods": ["workspace.script.list.request"],
+    "description": "Read the workspace configured scripts and lifecycle metadata.",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "workspaceId": {
+          "type": "string",
+          "minLength": 1
+        }
+      },
+      "required": ["workspaceId"],
+      "additionalProperties": false
+    },
+    "readOnly": true
+  },
+  {
+    "name": "start_workspace_script",
+    "methods": ["workspace.script.start.request"],
+    "description": "Start a configured workspace script through the managed launcher.",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "workspaceId": {
+          "type": "string",
+          "minLength": 1
+        },
+        "scriptName": {
+          "type": "string",
+          "minLength": 1
+        }
+      },
+      "required": ["workspaceId", "scriptName"],
+      "additionalProperties": false
+    },
+    "readOnly": false
+  },
+  {
+    "name": "stop_workspace_script",
+    "methods": ["workspace.script.stop.request"],
+    "description": "Stop a configured workspace script and its supervised terminal.",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "workspaceId": {
+          "type": "string",
+          "minLength": 1
+        },
+        "scriptName": {
+          "type": "string",
+          "minLength": 1
+        }
+      },
+      "required": ["workspaceId", "scriptName"],
+      "additionalProperties": false
+    },
+    "readOnly": false
+  },
+  {
+    "name": "list_terminals",
+    "methods": ["terminal.list.request"],
+    "description": "List managed terminals, optionally by working directory or workspace.",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "cwd": {
+          "type": "string",
+          "minLength": 1
+        },
+        "workspaceId": {
+          "type": "string",
+          "minLength": 1
+        }
+      },
+      "required": [],
+      "additionalProperties": false
+    },
+    "readOnly": true
+  },
+  {
+    "name": "create_terminal",
+    "methods": ["terminal.create.request"],
+    "description": "Create a managed PTY in a workspace. Supply cwd or workspaceId; X-Ait-Agent-Id inherits the caller directory.",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "cwd": {
+          "type": "string",
+          "minLength": 1
+        },
+        "workspaceId": {
+          "type": "string",
+          "minLength": 1
+        },
+        "name": {
+          "type": "string",
+          "minLength": 1
+        },
+        "command": {
+          "type": "string",
+          "minLength": 1
+        },
+        "args": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        }
+      },
+      "required": [],
+      "additionalProperties": false
+    },
+    "readOnly": false
+  },
+  {
+    "name": "kill_terminal",
+    "methods": ["terminal.kill.request"],
+    "description": "Terminate a managed PTY.",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "terminalId": {
+          "type": "string",
+          "minLength": 1
+        }
+      },
+      "required": ["terminalId"],
+      "additionalProperties": false
+    },
+    "readOnly": false
+  },
+  {
+    "name": "capture_terminal",
+    "methods": ["terminal.capture.request"],
+    "description": "Capture rendered terminal lines. start/end are inclusive and allow negative offsets. Output has no ANSI escapes.",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "terminalId": {
+          "type": "string",
+          "minLength": 1
+        },
+        "start": {
+          "type": "integer"
+        },
+        "end": {
+          "type": "integer"
+        },
+        "stripAnsi": {
+          "type": "boolean"
+        },
+        "scrollback": {
+          "type": "boolean"
+        }
+      },
+      "required": ["terminalId"],
+      "additionalProperties": false
+    },
+    "readOnly": true
+  },
+  {
+    "name": "send_terminal_keys",
+    "methods": ["terminal.input"],
+    "description": "Send literal text or a key token: Enter, Tab, Escape, Space, BSpace, C-c, C-d, C-z, C-l, C-a, C-e. literal=true sends the text unchanged.",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "terminalId": {
+          "type": "string",
+          "minLength": 1
+        },
+        "keys": {
+          "type": "string"
+        },
+        "literal": {
+          "type": "boolean"
+        }
+      },
+      "required": ["terminalId", "keys"],
+      "additionalProperties": false
+    },
+    "readOnly": false
+  },
+  {
+    "name": "create_schedule",
+    "methods": ["schedule.create.request"],
+    "description": "Create a Workspace-owned cron schedule launching a new agent for each run. workspaceId defaults to the X-Ait-Agent-Id caller workspace. Timezone defaults to UTC.",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "workspaceId": {
+          "type": "string",
+          "minLength": 1
+        },
+        "provider": {
+          "type": "string",
+          "minLength": 1
+        },
+        "cwd": {
+          "type": "string",
+          "minLength": 1
+        },
+        "prompt": {
+          "type": "string",
+          "minLength": 1
+        },
+        "cron": {
+          "type": "string",
+          "minLength": 1
+        },
+        "timezone": {
+          "type": "string",
+          "minLength": 1
+        },
+        "name": {
+          "type": "string",
+          "minLength": 1
+        },
+        "maxRuns": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "expiresIn": {
+          "type": "string",
+          "minLength": 1
+        },
+        "runOnCreate": {
+          "type": "boolean"
+        }
+      },
+      "required": ["prompt", "cron"],
+      "additionalProperties": false
+    },
+    "readOnly": false
+  },
+  {
+    "name": "list_schedules",
+    "methods": ["schedule.list.request"],
+    "description": "List new-agent schedules, excluding heartbeats.",
+    "inputSchema": {
+      "type": "object",
+      "properties": {},
+      "required": [],
+      "additionalProperties": false
+    },
+    "readOnly": true
+  },
+  {
+    "name": "inspect_schedule",
+    "methods": ["schedule.inspect.request"],
+    "description": "Inspect a new-agent schedule and run history.",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string",
+          "minLength": 1
+        }
+      },
+      "required": ["id"],
+      "additionalProperties": false
+    },
+    "readOnly": true
+  },
+  {
+    "name": "pause_schedule",
+    "methods": ["schedule.pause.request"],
+    "description": "Pause a new-agent schedule.",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string",
+          "minLength": 1
+        }
+      },
+      "required": ["id"],
+      "additionalProperties": false
+    },
+    "readOnly": false
+  },
+  {
+    "name": "resume_schedule",
+    "methods": ["schedule.resume.request"],
+    "description": "Resume a paused new-agent schedule.",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string",
+          "minLength": 1
+        }
+      },
+      "required": ["id"],
+      "additionalProperties": false
+    },
+    "readOnly": false
+  },
+  {
+    "name": "delete_schedule",
+    "methods": ["schedule.delete.request"],
+    "description": "Delete a new-agent schedule.",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string",
+          "minLength": 1
+        }
+      },
+      "required": ["id"],
+      "additionalProperties": false
+    },
+    "readOnly": false
+  },
+  {
+    "name": "run_schedule_once",
+    "methods": ["schedule.run_once.request"],
+    "description": "Run a new-agent schedule once without changing its cadence.",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string",
+          "minLength": 1
+        }
+      },
+      "required": ["id"],
+      "additionalProperties": false
+    },
+    "readOnly": false
+  },
+  {
+    "name": "schedule_logs",
+    "methods": ["schedule.logs.request"],
+    "description": "Read recent runs and output for a new-agent schedule.",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string",
+          "minLength": 1
+        },
+        "limit": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 200
+        }
+      },
+      "required": ["id"],
+      "additionalProperties": false
+    },
+    "readOnly": true
+  },
+  {
+    "name": "update_schedule",
+    "methods": ["schedule.update.request"],
+    "description": "Change new-agent schedule settings. every/cron are mutually exclusive; expiresIn/clearExpires are mutually exclusive. Workspace ownership stays fixed.",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string",
+          "minLength": 1
+        },
+        "name": {
+          "type": ["string", "null"]
+        },
+        "prompt": {
+          "type": "string",
+          "minLength": 1
+        },
+        "cron": {
+          "type": "string",
+          "minLength": 1
+        },
+        "every": {
+          "type": "string",
+          "minLength": 1
+        },
+        "timezone": {
+          "type": "string",
+          "minLength": 1
+        },
+        "maxRuns": {
+          "type": ["integer", "null"],
+          "minimum": 1
+        },
+        "provider": {
+          "type": "string",
+          "minLength": 1
+        },
+        "model": {
+          "type": ["string", "null"]
+        },
+        "mode": {
+          "type": ["string", "null"]
+        },
+        "cwd": {
+          "type": "string",
+          "minLength": 1
+        },
+        "expiresIn": {
+          "type": "string",
+          "minLength": 1
+        },
+        "clearExpires": {
+          "type": "boolean"
+        }
+      },
+      "required": ["id"],
+      "additionalProperties": false
+    },
+    "readOnly": false
+  },
+  {
+    "name": "create_heartbeat",
+    "methods": ["schedule.create.request"],
+    "description": "Create a Workspace-owned recurring prompt targeting the X-Ait-Agent-Id caller. Ait persists heartbeats across daemon restarts. Delete it explicitly when finished.",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "prompt": {
+          "type": "string",
+          "minLength": 1
+        },
+        "cron": {
+          "type": "string",
+          "minLength": 1
+        },
+        "timezone": {
+          "type": "string",
+          "minLength": 1
+        },
+        "name": {
+          "type": "string",
+          "minLength": 1
+        },
+        "maxRuns": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "expiresIn": {
+          "type": "string",
+          "minLength": 1
+        }
+      },
+      "required": ["prompt", "cron"],
+      "additionalProperties": false
+    },
+    "readOnly": false
+  },
+  {
+    "name": "delete_heartbeat",
+    "methods": ["schedule.inspect.request", "schedule.delete.request"],
+    "description": "Delete a heartbeat belonging to the X-Ait-Agent-Id caller.",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string",
+          "minLength": 1
+        }
+      },
+      "required": ["id"],
+      "additionalProperties": false
+    },
+    "readOnly": false
+  },
+  {
+    "name": "list_profiles",
+    "methods": ["daemon.config.get.request"],
+    "description": "Read saved agent profiles, including notes and provider launch settings. Returns an empty list when none are configured.",
+    "inputSchema": {
+      "type": "object",
+      "properties": {},
+      "required": [],
+      "additionalProperties": false
+    },
+    "readOnly": true
+  },
+  {
+    "name": "list_providers",
+    "methods": ["provider.available.list.request"],
+    "description": "Discover installed provider availability and modes.",
+    "inputSchema": {
+      "type": "object",
+      "properties": {},
+      "required": [],
+      "additionalProperties": false
+    },
+    "readOnly": true
+  },
+  {
+    "name": "list_models",
+    "methods": ["provider.models.list.request"],
+    "description": "Discover models for one provider, optionally scoped to cwd.",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "provider": {
+          "type": "string",
+          "minLength": 1
+        },
+        "cwd": {
+          "type": "string",
+          "minLength": 1
+        }
+      },
+      "required": ["provider"],
+      "additionalProperties": false
+    },
+    "readOnly": true
+  },
+  {
+    "name": "inspect_provider",
+    "methods": ["provider.modes.list.request", "provider.features.list.request"],
+    "description": "Inspect provider modes and draft features. cwd defaults to the X-Ait-Agent-Id caller directory.",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "provider": {
+          "type": "string",
+          "minLength": 1
+        },
+        "cwd": {
+          "type": "string",
+          "minLength": 1
+        },
+        "settings": {
+          "type": "object",
+          "properties": {
+            "modeId": {
+              "type": "string",
+              "minLength": 1
+            },
+            "model": {
+              "type": ["string", "null"]
+            },
+            "thinkingOptionId": {
+              "type": ["string", "null"]
+            },
+            "features": {
+              "type": "object"
+            }
+          },
+          "required": [],
+          "additionalProperties": false
+        }
+      },
+      "required": ["provider"],
+      "additionalProperties": false
+    },
+    "readOnly": true
+  },
+  {
+    "name": "list_pending_permissions",
+    "methods": ["agent.list.request"],
+    "description": "List pending permission requests for active, non-internal agents.",
+    "inputSchema": {
+      "type": "object",
+      "properties": {},
+      "required": [],
+      "additionalProperties": false
+    },
+    "readOnly": true
+  },
+  {
+    "name": "respond_to_permission",
+    "methods": ["agent.permission.resolve.request"],
+    "description": "Resolve a pending agent permission with its native response payload.",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "agentId": {
+          "type": "string",
+          "minLength": 1
+        },
+        "requestId": {
+          "type": "string",
+          "minLength": 1
+        },
+        "response": {
+          "type": "object"
+        }
+      },
+      "required": ["agentId", "requestId", "response"],
+      "additionalProperties": false
+    },
+    "readOnly": false
+  }
+]
