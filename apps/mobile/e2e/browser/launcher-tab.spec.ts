@@ -236,18 +236,14 @@ test.describe("Tab creation", () => {
     }
   });
 
-  test("terminal profiles are grouped with a settings action", async ({ page }) => {
+  test("terminal profiles are grouped without a settings action", async ({ page }) => {
     await gotoWorkspace(page, workspace.workspaceId);
     await page.getByTestId("workspace-new-tab-button").filter({ visible: true }).click();
 
     const menu = page.getByTestId("workspace-new-tab-menu").filter({ visible: true });
     await expect(menu.getByText("Terminal profiles", { exact: true })).toBeVisible();
 
-    const editProfiles = menu.getByTestId("workspace-new-tab-menu-edit-terminal-profiles");
-    await expect(editProfiles).toHaveAccessibleName("Edit profiles");
-
-    await editProfiles.click();
-    await expect(page).toHaveURL(/\/settings\/hosts\/[^/]+\/terminals$/);
+    await expect(menu.getByRole("menuitem", { name: "Edit profiles" })).toHaveCount(0);
   });
 
   test("tab bar shows action buttons per pane", async ({ page }) => {
