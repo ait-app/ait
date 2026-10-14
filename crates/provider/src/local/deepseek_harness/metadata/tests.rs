@@ -1,6 +1,9 @@
 use super::*;
 use std::fmt::Write as _;
 
+#[cfg(unix)]
+mod process;
+
 #[test]
 fn rejects_unknown_compositions_without_starting_a_foreground_session() {
     assert_eq!(

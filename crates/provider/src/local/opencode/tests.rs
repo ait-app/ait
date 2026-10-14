@@ -15,6 +15,46 @@ mod ownership;
 
 #[cfg(unix)]
 #[tokio::test]
+async fn native_protocol_updates_options_resolves_cancelled_permissions_and_rejects_unknown_calls()
+{
+    let (root, client, spec) = fixture("protocol-controls");
+    let mut session = client.create_session(&spec).await.unwrap();
+    session.start_turn("fixture", &spec.config).await.unwrap();
+    let mut requested = None;
+    let mut resolved = None;
+    let mut updated = false;
+    loop {
+        match event(session.as_mut()).await {
+            AgentTurnEvent::PermissionRequested(request) => {
+                requested = Some(request["id"].as_str().unwrap().to_owned());
+            }
+            AgentTurnEvent::PermissionResolved(id) => resolved = Some(id),
+            AgentTurnEvent::RuntimeInfo(_) => updated = true,
+            AgentTurnEvent::Completed(text) => {
+                assert_eq!(text.as_deref(), Some("authoritative answer"));
+                break;
+            }
+            AgentTurnEvent::Failed | AgentTurnEvent::Cancelled => panic!("fixture turn failed"),
+            _ => {}
+        }
+    }
+    assert!(updated);
+    assert!(requested.is_some());
+    assert_eq!(requested, resolved);
+    let messages = requests(&root);
+    assert!(messages.iter().any(
+        |message| message["id"] == "unsupported-fixture" && message["error"]["code"] == -32601
+    ));
+    assert!(
+        !messages
+            .iter()
+            .any(|message| message["id"] == "permission" && message.get("result").is_some())
+    );
+    session.close().await.unwrap();
+}
+
+#[cfg(unix)]
+#[tokio::test]
 async fn bot_denies_acp_permissions_and_completes_without_interactive_approval() {
     use crate::service::agent_manager::{AgentManager, AgentRegistration};
     use domain::agent_runtime::registry::AgentRuntimeRegistry;

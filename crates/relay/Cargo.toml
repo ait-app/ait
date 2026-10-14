@@ -26,6 +26,9 @@ uuid.features = ["serde"]
 webpki-roots.workspace = true
 
 [dev-dependencies]
+# Advance relay deadlines deterministically in local transport fixtures.
+tokio.workspace = true
+tokio.features = ["test-util"]
 rcgen = { version = "0.14", default-features = false, features = ["crypto", "ring"] }
 tokio-rustls = { version = "0.26", default-features = false, features = ["ring", "tls12"] }
 tracing-subscriber.workspace = true

@@ -16,12 +16,22 @@ pub(super) async fn run(
     token: &SecretString,
     cancel: &CancellationToken,
 ) -> Result<(), ErrorCode> {
-    let me = call(client, token, "getMe", json!({})).await?;
+    run_at(bots, channel, (client, token, API), cancel).await
+}
+
+async fn run_at(
+    bots: &Bots,
+    channel: &Channel,
+    transport: (&reqwest::Client, &SecretString, &str),
+    cancel: &CancellationToken,
+) -> Result<(), ErrorCode> {
+    let (client, token, api) = transport;
+    let me = call_at(client, token, "getMe", json!({}), api).await?;
     let identity = me["id"].as_i64().ok_or(ErrorCode::BotIo)?;
     let username = me["username"].as_str().ok_or(ErrorCode::BotIo)?;
     bots.account(channel.id, format!("telegram:{identity}"))
         .await?;
-    let webhook = call(client, token, "getWebhookInfo", json!({})).await?;
+    let webhook = call_at(client, token, "getWebhookInfo", json!({}), api).await?;
     if webhook["url"].as_str().is_none_or(|url| !url.is_empty()) {
         bots.channel_status(channel.id, json!({"state":"conflict","error":"This Telegram account already has a webhook; remove it explicitly before enabling polling"})).await;
         cancel.cancelled().await;
@@ -39,7 +49,7 @@ pub(super) async fn run(
         token,
         identity,
         username,
-        api: API,
+        api,
     };
     let receiving = receiver.receive(cancel);
     let sending = deliver(bots, channel.id, cancel, |turn, conversation| async move {
@@ -54,7 +64,7 @@ pub(super) async fn run(
                 body["message_thread_id"] =
                     json!(thread.parse::<i64>().map_err(|_| ErrorCode::BotIo)?);
             }
-            call(client, token, "sendMessage", body).await?;
+            call_at(client, token, "sendMessage", body, api).await?;
         }
         Ok(())
     });
@@ -164,14 +174,6 @@ fn mentioned(text: &str, username: &str) -> bool {
     })
 }
 
-async fn call(
-    client: &reqwest::Client,
-    token: &SecretString,
-    method: &str,
-    body: Value,
-) -> Result<Value, ErrorCode> {
-    call_at(client, token, method, body, API).await
-}
 async fn call_at(
     client: &reqwest::Client,
     token: &SecretString,

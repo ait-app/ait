@@ -5,6 +5,7 @@ use persistence::storage::project_config::LocalProjectConfigStore;
 
 use super::*;
 
+mod coverage;
 #[cfg(unix)]
 mod paseo;
 

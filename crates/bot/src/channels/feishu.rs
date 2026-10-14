@@ -40,6 +40,21 @@ pub(super) async fn run(
     secret: &SecretString,
     cancel: &CancellationToken,
 ) -> Result<(), ErrorCode> {
+    run_at(bots, channel, (client, secret, API), cancel, connect).await
+}
+
+async fn run_at<F, Fut>(
+    bots: &Bots,
+    channel: &Channel,
+    transport: (&reqwest::Client, &SecretString, &str),
+    cancel: &CancellationToken,
+    dial: F,
+) -> Result<(), ErrorCode>
+where
+    F: FnOnce(String) -> Fut,
+    Fut: Future<Output = Result<Socket, ErrorCode>>,
+{
+    let (client, secret, api) = transport;
     let ChannelConfig::Feishu { app_id, .. } = &channel.config else {
         return Err(ErrorCode::InvalidMessage);
     };
@@ -49,7 +64,7 @@ pub(super) async fn run(
         app_id,
         secret,
         token: Mutex::new(None),
-        api: API,
+        api,
     });
     let bot_info = connection
         .call("GET", "/open-apis/bot/v3/info", None)
@@ -61,7 +76,7 @@ pub(super) async fn run(
     bots.account(channel.id, format!("feishu:{app_id}")).await?;
     let endpoint = json_response(
         client
-            .post(format!("{API}/callback/ws/endpoint"))
+            .post(format!("{api}/callback/ws/endpoint"))
             .json(&json!({"AppID":app_id,"AppSecret":expose(secret)}))
             .send()
             .await
@@ -97,17 +112,7 @@ pub(super) async fn run(
         .as_u64()
         .unwrap_or(120)
         .clamp(10, 300);
-    let (socket, _) = tokio_tungstenite::connect_async_with_config(
-        endpoint,
-        Some(
-            WebSocketConfig::default()
-                .max_message_size(Some(1024 * 1024))
-                .max_frame_size(Some(1024 * 1024)),
-        ),
-        false,
-    )
-    .await
-    .map_err(|_| ErrorCode::BotIo)?;
+    let socket = dial(endpoint.to_owned()).await?;
     bots.channel_status(channel.id, json!({"state":"connected","accountId":app_id}))
         .await;
     let receiving = receive(
@@ -130,6 +135,21 @@ pub(super) async fn run(
         result = receiving => result,
         result = sending => result,
     }
+}
+
+async fn connect(endpoint: String) -> Result<Socket, ErrorCode> {
+    tokio_tungstenite::connect_async_with_config(
+        endpoint,
+        Some(
+            WebSocketConfig::default()
+                .max_message_size(Some(1024 * 1024))
+                .max_frame_size(Some(1024 * 1024)),
+        ),
+        false,
+    )
+    .await
+    .map(|(socket, _)| socket)
+    .map_err(|_| ErrorCode::BotIo)
 }
 
 struct StreamOptions<'a> {

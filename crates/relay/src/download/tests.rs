@@ -118,3 +118,56 @@ async fn download_rejects_wrong_acknowledgement_and_http_failure() {
         .unwrap();
     assert!(matches!(result, Err(Error::Protocol)));
 }
+
+#[tokio::test]
+async fn download_ack_reader_answers_pings_and_rejects_a_closed_pong_queue_or_binary_frame() {
+    for case in ["complete", "closed-pong", "binary"] {
+        let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
+        let address = listener.local_addr().unwrap();
+        let server = tokio::spawn(async move {
+            let (tcp, _) = listener.accept().await.unwrap();
+            let mut socket = accept_async(tcp).await.unwrap();
+            if case == "binary" {
+                socket.send(Message::Binary(vec![1].into())).await.unwrap();
+            } else {
+                socket.send(Message::Ping(vec![1, 2].into())).await.unwrap();
+                socket.send(Message::Pong(vec![3].into())).await.unwrap();
+                socket
+                    .send(Message::Text(r#"{"type":"download.complete"}"#.into()))
+                    .await
+                    .unwrap();
+            }
+        });
+        let socket = crate::transport::Dialer::default()
+            .connect(&format!("ws://{address}"), "fixture", MAX_MESSAGE)
+            .await
+            .unwrap();
+        let (_sink, stream) = socket.split();
+        let (pong_tx, mut pong_rx) = mpsc::channel(1);
+        if case == "closed-pong" {
+            pong_rx.close();
+        }
+        let (complete_tx, complete_rx) = oneshot::channel();
+        let cancel = CancellationToken::new();
+
+        timeout(
+            Duration::from_secs(3),
+            read_ack(stream, pong_tx, complete_tx, &cancel),
+        )
+        .await
+        .unwrap();
+
+        if case == "complete" {
+            complete_rx.await.unwrap();
+            assert_eq!(
+                pong_rx.recv().await.unwrap(),
+                Message::Pong(vec![1, 2].into())
+            );
+            assert!(!cancel.is_cancelled());
+        } else {
+            assert!(complete_rx.await.is_err());
+            assert!(cancel.is_cancelled());
+        }
+        server.await.unwrap();
+    }
+}

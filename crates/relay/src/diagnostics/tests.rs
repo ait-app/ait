@@ -52,3 +52,55 @@ fn errors_log_categories_without_peer_payloads() {
     assert!(log.contains("stage=\"pairing\""));
     assert!(!log.contains("private-"));
 }
+
+#[test]
+fn socket_error_categories_never_include_sensitive_error_details() {
+    use tokio_tungstenite::tungstenite::{
+        error::{CapacityError, ProtocolError, TlsError, UrlError},
+        http,
+    };
+    let capture = Capture::default();
+    let cases = [
+        (SocketError::ConnectionClosed, "connection_closed"),
+        (SocketError::AlreadyClosed, "already_closed"),
+        (SocketError::Tls(TlsError::InvalidDnsName), "tls"),
+        (
+            SocketError::Capacity(CapacityError::TooManyHeaders),
+            "capacity",
+        ),
+        (
+            SocketError::Protocol(ProtocolError::ResetWithoutClosingHandshake),
+            "protocol",
+        ),
+        (SocketError::Utf8("private-detail".into()), "utf8"),
+        (SocketError::AttackAttempt, "attack_attempt"),
+        (SocketError::Url(UrlError::NoHostName), "url"),
+        (
+            SocketError::Http(Box::new(
+                http::Response::builder()
+                    .status(403)
+                    .body(Some(b"private-detail".to_vec()))
+                    .unwrap(),
+            )),
+            "http",
+        ),
+        (
+            SocketError::HttpFormat(
+                http::Request::builder()
+                    .uri("invalid\nuri")
+                    .body(())
+                    .unwrap_err(),
+            ),
+            "http_format",
+        ),
+    ];
+    for (error, expected) in cases {
+        tracing::subscriber::with_default(capture.subscriber(), || socket_error("fixture", &error));
+        assert!(
+            capture
+                .text()
+                .contains(&format!("error_kind=\"{expected}\""))
+        );
+    }
+    assert!(!capture.text().contains("private-detail"));
+}

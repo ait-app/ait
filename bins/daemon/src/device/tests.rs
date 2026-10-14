@@ -280,4 +280,5 @@ async fn rejects_competing_or_invalid_logins_and_clears_local_state_when_center_
     status(data.path(), false).unwrap();
 }
 
+mod polling;
 mod restoration;

@@ -55,6 +55,11 @@ impl ClaudeClient {
     }
 
     pub(super) async fn native_usage(&self) -> Result<Value, AgentSessionError> {
+        self.native_usage_at("https://api.anthropic.com/api/oauth/usage")
+            .await
+    }
+
+    async fn native_usage_at(&self, endpoint: &str) -> Result<Value, AgentSessionError> {
         let credentials = self.credentials().await?;
         let Some(credentials) = credentials else {
             return Ok(unavailable(
@@ -70,12 +75,7 @@ impl ClaudeClient {
                 &json!({"kind":"expired","expiresAt":expiry.to_rfc3339_opts(chrono::SecondsFormat::Millis, true),"refreshedBy":"claude /login"}),
             ));
         }
-        let response = fetch(
-            "https://api.anthropic.com/api/oauth/usage",
-            &credentials.token,
-            self.deadline,
-        )
-        .await?;
+        let response = fetch(endpoint, &credentials.token, self.deadline).await?;
         if let Some(status) = response["httpStatus"].as_u64() {
             if matches!(status, 401 | 403) {
                 return Ok(unavailable(
@@ -260,13 +260,18 @@ async fn output(
 #[cfg(target_os = "macos")]
 async fn keychain() -> Result<Option<Credentials>, AgentSessionError> {
     let user = std::env::var("USER").unwrap_or_default();
+    keychain_at(Path::new("/usr/bin/security"), &user).await
+}
+
+#[cfg(target_os = "macos")]
+async fn keychain_at(program: &Path, user: &str) -> Result<Option<Credentials>, AgentSessionError> {
     let account = if !user.is_empty()
         && user.len() <= 128
         && user
             .bytes()
             .all(|byte| byte.is_ascii_alphanumeric() || matches!(byte, b'.' | b'_' | b'-'))
     {
-        &user
+        user
     } else {
         "claude-code-user"
     };
@@ -286,7 +291,7 @@ async fn keychain() -> Result<Option<Credentials>, AgentSessionError> {
             "Claude Code-credentials",
         ],
     ] {
-        let mut command = tokio::process::Command::new("/usr/bin/security");
+        let mut command = tokio::process::Command::new(program);
         command.args(args);
         if let Ok(raw) = output(command, Duration::from_secs(2)).await
             && let Some(credentials) = decode(&raw)

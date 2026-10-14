@@ -1,5 +1,6 @@
 use super::*;
 use domain::{BotId, ChannelId};
+mod lifecycle;
 mod polling;
 
 fn channel() -> Channel {
