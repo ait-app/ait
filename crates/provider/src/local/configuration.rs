@@ -186,10 +186,29 @@ pub(super) fn codex(config: &StoredAgentConfig) -> Result<Value, AgentSessionErr
     Ok(Value::Object(result))
 }
 
-/// Preapprove the bundled CUA tool for Auto-review sessions.
+/// Whether a permission preset permits automatic computer use approval.
+/// Explicit per-tool settings override Auto-review and Full Access defaults.
+pub(super) fn codex_computer_use_auto_approval(config: &StoredAgentConfig) -> bool {
+    matches!(
+        config.mode_id.as_deref(),
+        Some("auto-review" | "full-access")
+    ) && config
+        .provider_options
+        .as_ref()
+        .and_then(|options| options.get("plugins"))
+        .and_then(|plugins| {
+            plugins.pointer(
+                "/unified-computer-use@openai-bundled/mcp_servers/cua_repl/tools/js/approval_mode",
+            )
+        })
+        .and_then(Value::as_str)
+        .is_none_or(|mode| mode == "approve")
+}
+
+/// Preapprove the bundled CUA tool for Auto-review and Full Access sessions.
 /// Explicit per-tool settings take precedence over the preset.
 fn codex_computer_use(config: &StoredAgentConfig, result: &mut Map<String, Value>) {
-    if config.mode_id.as_deref() != Some("auto-review") {
+    if !codex_computer_use_auto_approval(config) {
         return;
     }
     let mut parent = result.entry("plugins").or_insert_with(|| json!({}));

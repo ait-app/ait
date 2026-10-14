@@ -27,6 +27,80 @@ fn session() -> CodexSession {
 }
 
 #[test]
+fn computer_use_auto_approval_leaves_unrelated_requests_for_manual_resolution() {
+    let native = json!({"id":"cua","method":"mcpServer/elicitation/request","params":{
+        "threadId":"thread","turnId":"turn","serverName":"cua_repl","mode":"form",
+        "message":"Allow Computer Use?","requestedSchema":{"type":"object","properties":{}},
+        "_meta":{"codex_approval_kind":"mcp_tool_call","connector_id":"computer-use"}}});
+    for (path, replacement) in [
+        ("/params/serverName", json!("other")),
+        ("/params/_meta/connector_id", json!("other")),
+        ("/params/_meta/codex_approval_kind", Value::Null),
+        ("/params/mode", json!("url")),
+        (
+            "/params/requestedSchema/properties",
+            json!({"choice":{"type":"string"}}),
+        ),
+    ] {
+        for mode in ["auto-review", "full-access"] {
+            let mut session = session();
+            session.config.mode_id = Some(mode.to_owned());
+            let mut other = native.clone();
+            *other.pointer_mut(path).unwrap() = replacement.clone();
+            let AgentTurnEvent::PermissionRequested(public) =
+                session.capture_permission(&other).unwrap()
+            else {
+                panic!("expected captured request");
+            };
+            assert!(
+                !session
+                    .approve_computer_use(public["id"].as_str().unwrap())
+                    .unwrap()
+            );
+            assert_eq!(session.permissions.len(), 1);
+        }
+    }
+    for method in [
+        "item/commandExecution/requestApproval",
+        "item/fileChange/requestApproval",
+        "item/tool/requestUserInput",
+    ] {
+        let mut session = session();
+        session.config.mode_id = Some("auto-review".to_owned());
+        let AgentTurnEvent::PermissionRequested(public) = session
+            .capture_permission(&request(json!(method), method))
+            .unwrap()
+        else {
+            panic!("expected captured request");
+        };
+        assert!(
+            !session
+                .approve_computer_use(public["id"].as_str().unwrap())
+                .unwrap()
+        );
+        assert_eq!(session.permissions.len(), 1);
+    }
+}
+
+#[test]
+fn computer_use_auto_approval_preserves_thread_and_turn_validation() {
+    for (thread, turn) in [("foreign", "turn"), ("thread", "foreign")] {
+        let mut session = session();
+        session.config.mode_id = Some("auto-review".to_owned());
+        let native = json!({"id":"cua","method":"mcpServer/elicitation/request","params":{
+            "threadId":thread,"turnId":turn,"serverName":"cua_repl","mode":"form",
+            "message":"Allow Computer Use?","requestedSchema":{"type":"object","properties":{}},
+            "_meta":{"codex_approval_kind":"mcp_tool_call","connector_id":"computer-use"}}});
+        assert!(session.capture_permission(&native).is_err());
+        assert!(session.permissions.is_empty());
+    }
+    assert_eq!(
+        session().approve_computer_use("unknown"),
+        Err(AgentSessionError::Failed)
+    );
+}
+
+#[test]
 fn native_permission_resolution_retires_only_its_matching_public_request() {
     let mut session = session();
     let native = request(json!("scope"), "item/commandExecution/requestApproval");

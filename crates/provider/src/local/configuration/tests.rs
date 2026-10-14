@@ -56,32 +56,39 @@ fn codex_translates_transports_and_limits_preapprovals_to_named_tools() {
 }
 
 #[test]
-fn codex_auto_review_preapproves_only_the_bundled_cua_js_tool() {
-    let native = codex(&config(json!({"modeId":"auto-review"}))).unwrap();
-    assert_eq!(
-        native,
-        json!({"plugins":{"unified-computer-use@openai-bundled":{
-            "mcp_servers":{"cua_repl":{"tools":{"js":{"approval_mode":"approve"}}}}}}})
-    );
+fn codex_auto_review_and_full_access_preapprove_only_the_bundled_cua_js_tool() {
+    for mode in ["auto-review", "full-access"] {
+        let config = config(json!({"modeId":mode}));
+        let native = codex(&config).unwrap();
+        assert!(codex_computer_use_auto_approval(&config));
+        assert_eq!(
+            native,
+            json!({"plugins":{"unified-computer-use@openai-bundled":{
+                "mcp_servers":{"cua_repl":{"tools":{"js":{"approval_mode":"approve"}}}}}}})
+        );
+    }
     for value in [
+        json!({}),
         json!({"modeId":"auto"}),
-        json!({"modeId":"full-access"}),
         json!({"modeId":"read-only"}),
     ] {
-        assert!(codex(&config(value)).unwrap().get("plugins").is_none());
+        let config = config(value);
+        assert!(!codex_computer_use_auto_approval(&config));
+        assert!(codex(&config).unwrap().get("plugins").is_none());
     }
 }
 
 #[test]
-fn codex_explicit_plugin_tool_approval_overrides_the_auto_review_preset() {
+fn codex_explicit_plugin_tool_approval_overrides_computer_use_presets() {
     for mode in ["auto", "prompt", "writes", "approve"] {
         let plugins = json!({"unified-computer-use@openai-bundled":{
             "mcp_servers":{"cua_repl":{"tools":{"js":{"approval_mode":mode}}}}},
             "other@local":{"mcp_servers":{"docs":{"tools":{"search":{"approval_mode":"prompt"}}}}}});
         for mode_id in ["auto-review", "full-access"] {
-            let native = codex(&config(json!({"modeId":mode_id,
-                "providerOptions":{"plugins":plugins}})))
-            .unwrap();
+            let config = config(json!({"modeId":mode_id,
+                "providerOptions":{"plugins":plugins}}));
+            let native = codex(&config).unwrap();
+            assert_eq!(codex_computer_use_auto_approval(&config), mode == "approve");
             assert_eq!(native["plugins"], plugins);
             assert!(native.get("mcp_servers").is_none());
         }

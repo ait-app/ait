@@ -23,6 +23,8 @@
 
 ## 架构决策
 
+- [ADR-149：Codex 高权限档位自动批准 computer use 访问](decisions/providers/adr-149-codex-computer-use-access-auto-approval.md)：Auto-review / Full Access 的原生访问批准、显式覆盖与档位切换。
+
 - [ADR-148：daemon 的无状态 MCP 编排接口](decisions/daemon/adr-148-daemon-mcp.md)：Rust RPC 复用与 Paseo 适配；[验证报告](reports/daemon/mcp-implementation-2026-10-14.md)。
 - [ADR-147：DSH 原生插件情景模式与权限分离](decisions/providers/adr-147-dsh-native-plugin-presets.md)：动态预设目录、用户插件、profile 隔离及会话专属控件。
 
@@ -53,7 +55,7 @@
 - [ADR-125：持久化展示投影索引与按页读取 Timeline](decisions/providers/adr-125-durable-timeline-projection-pages.md)：事务内增量维护、重启复用、源覆盖游标与字节回退。
 - [ADR-124：登录后自动添加全部在线服务主机](decisions/clients/adr-124-automatic-online-host-import.md)：移除账户主机选择，统一浏览器登录后导入全部主机，并保留已有连接与持久主机记录。
 - [ADR-123：客户端仅保留浏览器统一登录](decisions/clients/adr-123-browser-only-account-login.md)：删除移动端与 Desktop 的原 AIT 密码表单、命令和共享登录方法，服务能力检查失败不再回退。
-- [ADR-122（Provider）：Codex Auto-review 的 computer use 工具批准](decisions/providers/adr-122-codex-computer-use-approval.md)：原生插件逐工具预批准、显式覆盖与档位切换重载。
+- [ADR-122（Provider）：Codex Auto-review 的 computer use 工具批准](decisions/providers/adr-122-codex-computer-use-approval.md)：原生插件逐工具预批准；档位范围与访问批准由 ADR-149 修订。
 - [ADR-122（客户端）：在线服务主机进入客户端持久注册表](decisions/clients/adr-122-persistent-online-service-hosts.md)：显式添加、多主机恢复、服务绑定及独立删除。
 - [ADR-121：ACP 轮次关联与原生历史结算](decisions/providers/adr-121-acp-turn-history-reconciliation.md)：实时与重放共享轮次身份，完整原生历史在终态前原子校正消息顺序。
 - [ADR-120：单连接启动请求的有界排队](decisions/daemon/adr-120-single-connection-startup-admission.md)：为正常启动突发保留 16 个组内槽位，维持超量拒绝、消息顺序和 Ping 可用性。
@@ -148,6 +150,8 @@
 - [语音与听写](operations/speech.md)：离线模型、后端配置和限制。
 
 ## 工程规范与验证
+
+- [Ait 0.1.3 启动与会话查询诊断](reports/clients/ait-0.1.3-startup-diagnostics-2026-10-14.md)：Timeline 读取排队、草稿提示词索引就绪与 Codex 模型目录告警归因。
 
 - [DSH 插件情景模式验证](reports/providers/dsh-plugin-presets.md)：动态目录、独立权限、恢复、profile 和本机 Host 验证。
 - [Antigravity 账号额度接入](reports/providers/antigravity-account-quota-2026-10-14.md)：已登录仍不可用的复现、原生 `/usage` 接入、主机与会话账号隔离和失败回归。
