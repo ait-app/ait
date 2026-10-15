@@ -1,6 +1,7 @@
 use super::*;
 use crate::test_support::Fixture;
 
+mod compaction;
 mod configuration;
 mod installed;
 mod persistence;

@@ -183,6 +183,10 @@ pub(super) fn codex(config: &StoredAgentConfig) -> Result<Value, AgentSessionErr
     if let Some(effort) = &config.thinking_option_id {
         result.insert("model_reasoning_effort".to_owned(), json!(effort));
     }
+    if let Some(enabled) = codex_async_compaction(config) {
+        let features = result.entry("features").or_insert_with(|| json!({}));
+        features["async_compaction"] = json!(enabled);
+    }
     Ok(Value::Object(result))
 }
 
@@ -230,6 +234,22 @@ fn codex_computer_use(config: &StoredAgentConfig, result: &mut Map<String, Value
         .expect("validated Codex tool settings are objects")
         .entry("approval_mode")
         .or_insert_with(|| json!("approve"));
+}
+
+/// Resolve the session toggle before an advanced Codex override; absence inherits native config.
+pub(super) fn codex_async_compaction(config: &StoredAgentConfig) -> Option<bool> {
+    config
+        .feature_values
+        .as_ref()
+        .and_then(|values| values.get("async_compaction"))
+        .or_else(|| {
+            config
+                .provider_options
+                .as_ref()?
+                .get("features")?
+                .get("async_compaction")
+        })
+        .and_then(Value::as_bool)
 }
 
 /// Native JSON-RPC requires all three granular switches, unlike the optional config schema.

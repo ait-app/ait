@@ -9,6 +9,8 @@ use crate::ports::agent_session::AgentSessionError;
 const PLAN: u8 = 1;
 const REVIEW: u8 = 2;
 const GOALS: u8 = 4;
+const ASYNC_COMPACTION: u8 = 8;
+const ASYNC_COMPACTION_ENABLED: u8 = 16;
 
 impl CodexClient {
     pub(super) fn goals(&self) -> bool {
@@ -39,6 +41,12 @@ impl CodexClient {
             Err(AgentSessionError::Rejected) => {}
             Err(error) => return Err(error),
         }
+        if let Some(enabled) = super::compaction::inspect(transport).await? {
+            capabilities |= ASYNC_COMPACTION;
+            if enabled {
+                capabilities |= ASYNC_COMPACTION_ENABLED;
+            }
+        }
         self.capabilities.store(capabilities, Ordering::Relaxed);
         Ok(())
     }
@@ -54,6 +62,8 @@ impl CodexClient {
                 .as_ref()
                 .is_some_and(|values| values.contains_key("plan_mode"))
                 && capabilities & PLAN == 0)
+            || (crate::local::configuration::codex_async_compaction(config).is_some()
+                && capabilities & ASYNC_COMPACTION == 0)
         {
             return Err(AgentSessionError::Rejected);
         }
@@ -92,6 +102,16 @@ impl CodexClient {
             features.push(json!({"id":"plan_mode","type":"toggle","label":"Plan",
                 "description":"Switch Codex into planning-only collaboration mode",
                 "tooltip":"Toggle plan mode","icon":"list-todo","value":plan(config)}));
+        }
+        let capabilities = self.capabilities.load(Ordering::Relaxed);
+        if capabilities & ASYNC_COMPACTION != 0 {
+            let enabled = crate::local::configuration::codex_async_compaction(config)
+                .unwrap_or(capabilities & ASYNC_COMPACTION_ENABLED != 0);
+            features.push(json!({"id":"async_compaction","type":"toggle",
+                "label":"Async compaction",
+                "description":"Compact context in the background while Codex continues working (experimental)",
+                "tooltip":"Toggle background context compaction (applies on the next turn)",
+                "value":enabled}));
         }
         features
     }

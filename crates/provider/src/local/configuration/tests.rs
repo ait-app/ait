@@ -16,6 +16,36 @@ fn executable_discovery_accepts_path_search_and_rejects_directories_or_missing_p
 }
 
 #[test]
+fn codex_async_compaction_preserves_native_inheritance_and_unrelated_features() {
+    let inherited = config(json!({}));
+    assert_eq!(codex_async_compaction(&inherited), None);
+    assert!(codex(&inherited).unwrap().get("features").is_none());
+    for enabled in [false, true] {
+        let advanced = config(json!({"providerOptions":{"features":{
+            "async_compaction":enabled,"multi_agent_v2":true}}}));
+        assert_eq!(codex_async_compaction(&advanced), Some(enabled));
+        assert_eq!(
+            codex(&advanced).unwrap()["features"]["async_compaction"],
+            enabled
+        );
+
+        let selected = config(json!({"featureValues":{"async_compaction":enabled},
+            "providerOptions":{"features":{"async_compaction":!enabled,"multi_agent_v2":true}}}));
+        assert_eq!(codex_async_compaction(&selected), Some(enabled));
+        assert_eq!(
+            codex(&selected).unwrap()["features"],
+            json!({"async_compaction":enabled,"multi_agent_v2":true})
+        );
+    }
+    assert!(
+        codex(&config(
+            json!({"providerOptions":{"features":{"async_compaction":"true"}}})
+        ))
+        .is_err()
+    );
+}
+
+#[test]
 fn codex_translates_transports_and_limits_preapprovals_to_named_tools() {
     let config = config(json!({"thinkingOptionId":"high", "providerOptions":{
         "sandbox_mode":"workspace-write", "web_search":"live",

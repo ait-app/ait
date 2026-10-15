@@ -146,6 +146,7 @@
 - [Ait 0.0.14 发布说明](reports/releases/release-0.0.14.md)：Diff 语法高亮、侧边栏统计与 Codex 推理等级。
 - [Apple 本机构建](operations/apple-builds.md)：DMG、模拟器和 IPA。
 - [Claude Code](operations/claude-code.md)：认证、原生会话与审批。
+- [Codex](operations/codex.md)：异步上下文压缩开关、原生能力探测和会话配置。
 - [DeepSeek Harness](operations/deepseek-harness.md)：原生 Host、DeepSeek 账号余额、会话导入、权限模式、question 与 ACP 兼容配置。
 - [Antigravity CLI](operations/antigravity.md)：AGY 安装、登录、权限模式、会话恢复与账号额度查询。
 - [语音与听写](operations/speech.md)：离线模型、后端配置和限制。

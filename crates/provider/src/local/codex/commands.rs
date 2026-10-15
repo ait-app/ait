@@ -113,14 +113,12 @@ impl CodexSession {
             self.last_message = None;
             return Ok(Some(AgentTurnEvent::Started(id.to_owned())));
         }
-        if method == "item/completed"
-            && params["item"]["type"] == "contextCompaction"
-            && self.manual_compactions > 0
-        {
+        if method == "item/completed" && params["item"]["type"] == "contextCompaction" {
             if !self.stream.complete(&params["item"])? {
                 return Ok(None);
             }
-            self.manual_compactions -= 1;
+            // Background compaction can finish after its foreground turn has ended.
+            self.manual_compactions = self.manual_compactions.saturating_sub(1);
             let turn = params["turnId"].as_str().ok_or(AgentSessionError::Failed)?;
             return discovery::timeline_item(&params["item"], turn, &discovery::timestamp())
                 .map(|entry| entry.map(AgentTurnEvent::Timeline));
