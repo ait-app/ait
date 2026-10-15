@@ -116,7 +116,7 @@ export default {
         foregroundImage: "./assets/images/android-icon-foreground.png",
       },
       edgeToEdgeEnabled: true,
-      predictiveBackGestureEnabled: false,
+      predictiveBackGestureEnabled: true,
       softwareKeyboardLayoutMode: "resize",
       // Allow HTTP connections for local network hosts (required for release builds)
       usesCleartextTraffic: true,

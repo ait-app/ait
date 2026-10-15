@@ -1,4 +1,4 @@
-import { useCallback, useMemo } from "react";
+import { useCallback, useEffect, useMemo } from "react";
 import { Gesture } from "react-native-gesture-handler";
 import { useSharedValue } from "react-native-reanimated";
 import { scheduleOnRN } from "react-native-worklets";
@@ -8,6 +8,7 @@ import { usePanelStore } from "@/stores/panel-store";
 import { canBeginMobilePanelGesture, isMobilePanelGestureCurrent } from "./model";
 import { useMobilePanelsRuntime } from "./provider";
 import { resolveMobilePanelGestureIntent } from "./gesture-intent";
+import { useSystemPanelBack } from "./system-back";
 
 const MOBILE_WEB_EDGE_SWIPE_WIDTH = 32;
 
@@ -38,6 +39,7 @@ export function useOpenAgentListGesture(enabled: boolean) {
   const {
     beginGesture,
     finishGesture,
+    fileExplorerOpener,
     leftOpenGestureRef,
     motionState,
     openGesturesBlocked,
@@ -49,6 +51,12 @@ export function useOpenAgentListGesture(enabled: boolean) {
   const { startedRevision, touchStartX, touchStartY } = useGestureState();
   const showMobileAgentList = usePanelStore((state) => state.showMobileAgentList);
   const commit = useRevisionCommit(showMobileAgentList);
+  useSystemPanelBack({
+    enabled,
+    fileExplorerOpener,
+    openGesturesBlocked,
+    scrolledRight: horizontalScroll?.isAnyScrolledRight,
+  });
 
   return useMemo(
     () =>
@@ -231,6 +239,7 @@ export function useOpenFileExplorerGesture({ enabled, onOpen }: OpenFileExplorer
   const {
     beginGesture,
     finishGesture,
+    fileExplorerOpener,
     leftOpenGestureRef,
     motionState,
     openGesturesBlocked,
@@ -241,6 +250,13 @@ export function useOpenFileExplorerGesture({ enabled, onOpen }: OpenFileExplorer
   } = useMobilePanelsRuntime();
   const { startedRevision, touchStartX, touchStartY } = useGestureState();
   const commit = useRevisionCommit(onOpen);
+  useEffect(() => {
+    if (!enabled) return;
+    fileExplorerOpener.current = onOpen;
+    return () => {
+      if (fileExplorerOpener.current === onOpen) fileExplorerOpener.current = null;
+    };
+  }, [enabled, fileExplorerOpener, onOpen]);
 
   return useMemo(
     () =>
