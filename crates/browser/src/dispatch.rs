@@ -27,6 +27,19 @@ pub fn dispatch(
     if context.is_none() {
         return Ok(());
     }
+    if let Some(context) = context.take_if(|context| {
+        crate::tunnel::METHODS
+            .iter()
+            .any(|method| method.name == context.request.method)
+    }) {
+        return if state.broker.is_some() {
+            connection.tunnels.dispatch(context)
+        } else {
+            context
+                .respond(Err(ErrorCode::UnsupportedCapability))
+                .map_err(Into::into)
+        };
+    }
     let Some(mut context) = context.take_if(|context| {
         matches!(
             context.request.method.as_str(),

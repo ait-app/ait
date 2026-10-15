@@ -351,11 +351,13 @@ dependencies = [
 name = "browser"
 version = "0.1.4"
 dependencies = [
+ "base64",
  "futures-util",
  "model",
  "serde",
  "serde_json",
  "tokio",
+ "tokio-util",
  "url",
  "uuid",
 ]

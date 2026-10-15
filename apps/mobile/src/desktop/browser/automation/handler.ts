@@ -1,6 +1,7 @@
 import { BROWSER_AUTOMATION_COMMAND_NAMES } from "@ait/protocol/browser-automation/rpc-schemas";
 import type { SessionInboundMessage, SessionOutboundMessage } from "@ait/protocol/messages";
 import { getDesktopHost, type DesktopHostBridge } from "@/desktop/host";
+import { resolveBrowserProfileHost } from "../remote-profile";
 import {
   ensureResidentBrowserWebview as ensureResidentBrowserWebviewDefault,
   removeResidentBrowserWebview,
@@ -364,7 +365,13 @@ async function openBrowserTabForRequest(params: {
   });
 
   if (browserHost?.executeAutomationCommand) {
-    ensureResidentBrowserWebview({ browserId, workspaceId, url: normalizedUrl });
+    const profileHost = await resolveBrowserProfileHost(serverId, browserHost);
+    ensureResidentBrowserWebview({
+      browserId,
+      workspaceId,
+      url: normalizedUrl,
+      ...(profileHost ? { profileHost } : {}),
+    });
     const registered = await waitForBrowserRegistration({
       request,
       browserId,

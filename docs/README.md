@@ -23,9 +23,12 @@
 
 ## 架构决策
 
+- [ADR-152：在线中继 Workspace 的浏览器回环转发](decisions/clients/adr-152-remote-workspace-browser-loopback.md)：按 Host 的浏览器 profile、认证 TCP 通道和导航前配置。
+
 - [ADR-151：Android 边缘手势进入移动面板导航](decisions/clients/adr-151-android-panel-edge-gestures.md)：左右方向、原生适配边界、面板展开时返回优先关闭与旧系统限制。
 
 - [ADR-150：所有 Provider 的上下文压缩生命周期提示](decisions/providers/adr-150-provider-compaction-lifecycle.md)：原生开始／结束映射、稳定身份配对、失败提示与历史回放。
+
 - [ADR-149：Codex 高权限档位自动批准 computer use 访问](decisions/providers/adr-149-codex-computer-use-access-auto-approval.md)：Auto-review / Full Access 的原生访问批准、显式覆盖与档位切换。
 
 - [ADR-148：daemon 的无状态 MCP 编排接口](decisions/daemon/adr-148-daemon-mcp.md)：Rust RPC 复用与 Paseo 适配；[验证报告](reports/daemon/mcp-implementation-2026-10-14.md)。

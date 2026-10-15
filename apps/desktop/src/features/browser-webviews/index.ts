@@ -39,9 +39,14 @@ interface RegisterAttachedBrowserInput extends AttachedBrowserRegistration {
   findWebContents(webContentsId: number): RegisteredBrowserWebContents | null;
 }
 
-export function isPaseoBrowserWebviewAttach(input: { src?: string; partition?: string }): boolean {
+export function isPaseoBrowserWebviewAttach(
+  input: { src?: string; partition?: string },
+  allowedPartitions: readonly string[] = [],
+): boolean {
   return (
-    isAllowedBrowserWebviewUrl(input.src) && input.partition === PASEO_BROWSER_PROFILE_PARTITION
+    isAllowedBrowserWebviewUrl(input.src) &&
+    (input.partition === PASEO_BROWSER_PROFILE_PARTITION ||
+      allowedPartitions.includes(input.partition ?? ""))
   );
 }
 

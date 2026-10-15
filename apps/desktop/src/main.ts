@@ -53,7 +53,6 @@ import { registerBrowserAutomationIpc } from "./features/browser-automation/ipc.
 import { createBrowserCaptureService } from "./features/browser-capture.js";
 import { BrowserKeyboard } from "./features/browser-keyboard/index.js";
 import {
-  PASEO_BROWSER_PROFILE_PARTITION,
   clearPaseoBrowserProfile,
   getLegacyPaseoBrowserProfileSession,
   getPaseoBrowserProfileSession,
@@ -61,6 +60,8 @@ import {
   listPaseoBrowserProfileGuests,
   readLegacyPaseoBrowserIds,
 } from "./features/browser-profile.js";
+import { accountBrowserPartitions } from "./daemon/account-ipc.js";
+import { remoteBrowserProfileSessions } from "./features/account-browser-profiles.js";
 import {
   BROWSER_NEW_TAB_REQUEST_EVENT,
   PendingBrowserWindowOpenRequests,
@@ -265,13 +266,14 @@ function showBrowserWebviewContextMenu(
 
 function getBrowserPopupWindowOptions(
   mainWindow: BrowserWindow,
+  profile: Electron.Session,
 ): Electron.BrowserWindowConstructorOptions {
   return {
     parent: mainWindow,
     show: true,
     autoHideMenuBar: true,
     webPreferences: {
-      partition: PASEO_BROWSER_PROFILE_PARTITION,
+      session: profile,
       nodeIntegration: false,
       nodeIntegrationInSubFrames: false,
       nodeIntegrationInWorker: false,
@@ -306,7 +308,7 @@ function installBrowserWindowOpenHandler(input: {
     if (decision.kind === "popup") {
       return {
         action: "allow",
-        overrideBrowserWindowOptions: getBrowserPopupWindowOptions(mainWindow),
+        overrideBrowserWindowOptions: getBrowserPopupWindowOptions(mainWindow, contents.session),
       };
     }
 
@@ -400,7 +402,12 @@ ipcMain.handle("paseo:browser:register-attached", (event, rawInput: unknown) => 
   const registered = registerAttachedPaseoBrowser({
     ...input,
     sender: event.sender,
-    profileSession: getPaseoBrowserProfileSession(session),
+    profileSession:
+      [
+        getPaseoBrowserProfileSession(session),
+        ...accountBrowserPartitions(event.sender.id).map((name) => session.fromPartition(name)),
+      ].find((profile) => profile === webContents.fromId(input.webContentsId)?.session) ??
+      getPaseoBrowserProfileSession(session),
     findWebContents: (webContentsId) => webContents.fromId(webContentsId) ?? null,
   });
   if (!registered) {
@@ -518,14 +525,16 @@ ipcMain.handle("paseo:browser:clear-profile", async (_event, rawLegacyBrowserIds
     session,
     readLegacyPaseoBrowserIds(rawLegacyBrowserIds),
   );
-  const profileSession = profileSessions[0];
+  profileSessions.push(...remoteBrowserProfileSessions());
   await clearPaseoBrowserProfile({
     profileSessions,
     listGuests: () =>
-      listPaseoBrowserProfileGuests({
-        profileSession,
-        webContents: webContents.getAllWebContents(),
-      }),
+      profileSessions.flatMap((profileSession) =>
+        listPaseoBrowserProfileGuests({
+          profileSession,
+          webContents: webContents.getAllWebContents(),
+        }),
+      ),
     logReloadError: (webContentsId, error) => {
       log.warn("[browser-profile] failed to reload guest", { webContentsId, error });
     },
@@ -774,7 +783,7 @@ async function createWindow(
     app.isPackaged ? `${APP_SCHEME}://app/` : DEV_SERVER_URL,
   );
   mainWindow.webContents.on("will-attach-webview", (event, webPreferences, params) => {
-    if (!isPaseoBrowserWebviewAttach(params)) {
+    if (!isPaseoBrowserWebviewAttach(params, accountBrowserPartitions(mainWindow.webContents.id))) {
       event.preventDefault();
       return;
     }
