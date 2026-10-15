@@ -1,5 +1,12 @@
 # Ait changelog
 
+## 0.1.4 - 2026-10-15
+
+- Show native context-compaction progress, completion, and failure across Codex, Claude, OpenCode, DeepSeek Harness, and Antigravity, keeping live updates and restored history consistent.
+- Refresh the selected usage Host when connections change instead of retaining the connection state from the initial render.
+- Match native mobile status-bar icons to the app theme.
+- Use the default HTTPS port for official services and migrate saved legacy official endpoints while preserving custom service addresses.
+
 ## 0.1.3 - 2026-10-14
 
 - Automatically approve Codex computer-use access requests in Auto-review and Full Access while preserving explicit tool overrides and Bot permission rules.
