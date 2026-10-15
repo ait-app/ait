@@ -16,7 +16,7 @@ relay 的连接。当前 Rust daemon 已有运行时和 relay 通道，但注册
 长期设备授权。
 
 本轮确定由中心管理设备，支持交互式 Web 授权和 CLI 自带 token 授权，由网页服务的后端
-签发 JWT 给 Rust daemon。中心固定为 `https://aitapp.cn:8443/api`，不允许用户修改。
+签发 JWT 给 Rust daemon。中心固定为 `https://aitapp.cn/api`，不允许用户修改。
 安装与服务管理由既有脚本负责；浏览器负责用户认证和授权确认，签名密钥只属于中心后端。
 
 ## 决策

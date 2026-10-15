@@ -9,6 +9,6 @@ pub use ports::{Center, CredentialStore, ManagedRelay};
 pub use types::{Binding, Credential, Error, Machine, Pending, Session, State, Tokens};
 
 /// The only production authority for unattended machines.
-pub const CENTER: &str = "https://aitapp.cn:8443/api";
+pub const CENTER: &str = "https://aitapp.cn/api";
 /// The browser destination for human approval; never supplied by a token.
-pub const VERIFICATION_URI: &str = "https://aitapp.cn:8443/auth/device";
+pub const VERIFICATION_URI: &str = "https://aitapp.cn/auth/device";

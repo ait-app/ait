@@ -33,7 +33,7 @@ vi.mock("@/runtime/account-state", async (original) => ({
   useAccountState: () => ({
     status: mocks.accountStatus,
     hosts: [{ host_id: "host", server_id: "server", name: "My computer", platform: "linux" }],
-    center: "https://aitapp.cn:8443/api",
+    center: "https://aitapp.cn/api",
     error: null,
   }),
   accountCommand: mocks.command,
@@ -126,7 +126,7 @@ describe("welcome account entry", () => {
       fireEvent.click(view.getByTestId("account-unified-login"));
       await waitFor(() =>
         expect(mocks.command).toHaveBeenCalledWith("account_login_hosted", {
-          center: "https://aitapp.cn:8443/api",
+          center: "https://aitapp.cn/api",
         }),
       );
       expect(mocks.push).not.toHaveBeenCalled();
@@ -166,7 +166,7 @@ describe("welcome account entry", () => {
     fireEvent.click(view.getByTestId("account-unified-login"));
     await waitFor(() =>
       expect(mocks.command).toHaveBeenCalledExactlyOnceWith("account_login_hosted", {
-        center: "https://aitapp.cn:8443/api",
+        center: "https://aitapp.cn/api",
       }),
     );
   });

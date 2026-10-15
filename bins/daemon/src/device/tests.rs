@@ -36,7 +36,8 @@ fn fixed_center_and_login_modes_are_unambiguous_and_redacted() {
         cli.command,
         Some(crate::config::Command::Login(Login { force: true, .. }))
     ));
-    assert_eq!(host_link::CENTER, "https://aitapp.cn:8443/api");
+    assert_eq!(host_link::CENTER, "https://aitapp.cn/api");
+    assert_eq!(VERIFICATION_URI, "https://aitapp.cn/auth/device");
     assert!(read_token(Some("".into()), false).is_err());
     assert!(read_token(Some("invalid token".into()), false).is_err());
     assert!(read_token(Some("x".repeat(8193).into()), false).is_err());

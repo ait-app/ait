@@ -27,8 +27,8 @@
 
 ## 授权与固定中心
 
-唯一生产中心为 `https://aitapp.cn:8443/api`，没有 CLI、环境变量或配置文件覆盖。
-HTTP 禁止重定向，Web 验证地址必须等于 `https://aitapp.cn:8443/auth/device`。
+唯一生产中心为 `https://aitapp.cn/api`，没有 CLI、环境变量或配置文件覆盖。
+HTTP 禁止重定向，Web 验证地址必须等于 `https://aitapp.cn/auth/device`。
 传输层不解码 token 中的地址，也不接受中心响应指定另一 authority。
 本地测试通过仅在测试构建中存在的 adapter 注入模拟中心。
 

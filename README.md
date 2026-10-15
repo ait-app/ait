@@ -35,12 +35,12 @@ Agent 在你连接的电脑上运行。使用本机 Agent 时无需登录 Ait �
 1. 在工作电脑的桌面应用中打开 **Online Service（在线服务）**，通过浏览器统一登录（邮箱、Google 或微信）。入口位于欢迎页、**Settings → App → Online Service** 或 **Add Host → Online Service**。
 2. 在另一台电脑、Android 或 iOS 应用中登录同一账户，选择在线主机，即可通过中央中继连接。
 
-应用默认使用 `https://aitapp.cn:8443/api` 作为在线服务地址。
+应用默认使用 `https://aitapp.cn/api` 作为在线服务地址。
 两端只需能访问在线服务，无需处于同一局域网，也无需开放工作电脑的入站端口。中继负责转发连接，Agent 和项目文件仍在工作电脑上。
 桌面登录后默认同步内置 daemon；如果之前手动停止了同步，可在主机连接设置中重新启用。远程访问时，工作电脑及其服务需要保持运行。
 
 Android 和 iOS 作为客户端连接电脑，不在手机上运行 daemon。
-也可以在 [网页客户端](https://aitapp.cn:8443/client/) 登录同一账户，通过中央中继连接在线主机。
+也可以在 [网页客户端](https://aitapp.cn/client/) 登录同一账户，通过中央中继连接在线主机。
 登录入口与连接细节见 [客户端开发指南](apps/mobile/README.md)。
 
 ### 在 Linux/macOS 上独立运行 daemon
