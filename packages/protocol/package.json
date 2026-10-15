@@ -1,6 +1,6 @@
 {
   "name": "@ait/protocol",
-  "version": "0.1.3",
+  "version": "0.1.4",
   "private": true,
   "description": "Ait repository-local schemas and compatibility wire types",
   "files": [

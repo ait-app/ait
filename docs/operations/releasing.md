@@ -126,6 +126,13 @@ AUR 使用独立 Git 仓库。首次发布需要维护者的 AUR 账户和 SSH �
 不要上传下载的归档、`src/`、`pkg/` 或生成的二进制包。仓库内提供配方不代表已发布到 AUR；
 发布后用户才能通过 `paru -S ait-bin` 安装。
 
+## 每日发布判断
+
+从上一正式版附件 `BUILD-INFO.json` 的实际 `sourceCommit` 比较 `main`：新增功能和修复
+都计入发布条件。已发布内容和未合并 PR 不重复纳入；只有版本、文档或构建记录变化时不自动
+创建新版本。同版本重建可能保留旧标签，不能仅用上一版本标签作为已交付源码的判断基线。
+有符合条件的变更时准备下一个补丁版本，并遵守下方 Draft review 边界。
+
 ## 准备版本
 
 同步根 `Cargo.toml` 的 `workspace.package.version`、Cargo.lock、根 package.json、
@@ -142,6 +149,23 @@ npm run typecheck --workspace=@ait/desktop --workspace=@ait/mobile
 
 更新根 CHANGELOG.md：该文件
 会打入应用，供“新功能”页面读取。把版本与发布变更经 PR 合并到 `main` 后，再创建标签。
+
+### 发布覆盖率与 Release Notes
+
+每次 release 在 Draft 交付前实际测量覆盖率，并写入 Release Notes。默认按本次变更涉及的
+Rust crate 和相关测试测量；只有用户明确要求整个 Rust workspace 时才运行全工作区覆盖率。
+Rust 测量使用 `cargo llvm-cov`，全工作区请求生成 HTML 报告：
+
+```bash
+cargo llvm-cov nextest --workspace --locked --html
+```
+
+Release Notes 的 `Test coverage` 一节记录测量源码提交、精确命令、范围与 features、
+覆盖行数／总行数及百分比，并链接可共享的报告或证据。报告必须对应本次发布源码；准备后
+若仅增加版本／文档，可用源码指纹说明等价关系。已有历史测量不能当作当前结果。
+同时列明忽略用例、未测平台和重要未覆盖行为；测试通过数量与覆盖率分别报告。
+若有可比基线，注明变化；没有则明确说明，不推算。JavaScript／TypeScript 与 Rust 的
+测量范围分别说明，不把某个语言或定向文件的结果称为整个产品覆盖率。
 
 ### Beta 版本
 
