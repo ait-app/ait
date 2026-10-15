@@ -44,6 +44,7 @@ const ANIMATION_EASING = Easing.bezier(0.25, 0.1, 0.25, 1);
 interface MobilePanelsRuntime {
   beginGesture: (input: BeginGestureInput) => number;
   finishGesture: (input: FinishGestureInput) => MobilePanelCommit | null;
+  fileExplorerOpener: RefObject<(() => void) | null>;
   leftCloseGestureRef: RefObject<GestureType | undefined>;
   leftOpenGestureRef: RefObject<GestureType | undefined>;
   motionState: SharedValue<MobilePanelMotionState>;
@@ -77,6 +78,7 @@ export function MobilePanelsProvider({ children }: { children: ReactNode }) {
   const openGesturesBlocked = useSharedValue(false);
   const openGestureBlockersRef = useRef(new Set<symbol>());
   const leftOpenGestureRef = useRef<GestureType | undefined>(undefined);
+  const fileExplorerOpener = useRef<(() => void) | null>(null);
   const leftCloseGestureRef = useRef<GestureType | undefined>(undefined);
   const rightOpenGestureRef = useRef<GestureType | undefined>(undefined);
   const rightCloseGestureRef = useRef<GestureType | undefined>(undefined);
@@ -217,6 +219,7 @@ export function MobilePanelsProvider({ children }: { children: ReactNode }) {
     () => ({
       beginGesture,
       finishGesture,
+      fileExplorerOpener,
       leftCloseGestureRef,
       leftOpenGestureRef,
       motionState,

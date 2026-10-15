@@ -23,6 +23,8 @@
 
 ## 架构决策
 
+- [ADR-150：Android 边缘手势进入移动面板导航](decisions/clients/adr-150-android-panel-edge-gestures.md)：左右方向、原生适配边界、统一返回与旧系统限制。
+
 - [ADR-149：Codex 高权限档位自动批准 computer use 访问](decisions/providers/adr-149-codex-computer-use-access-auto-approval.md)：Auto-review / Full Access 的原生访问批准、显式覆盖与档位切换。
 
 - [ADR-148：daemon 的无状态 MCP 编排接口](decisions/daemon/adr-148-daemon-mcp.md)：Rust RPC 复用与 Paseo 适配；[验证报告](reports/daemon/mcp-implementation-2026-10-14.md)。
