@@ -1,6 +1,28 @@
 use super::*;
 
 #[test]
+fn catalog_maps_lock_and_constraint_failures_without_database_details() {
+    let connection = Connection::open_in_memory().unwrap();
+    connection
+        .execute_batch(
+            "CREATE TABLE fixture(id INTEGER PRIMARY KEY); INSERT INTO fixture VALUES(1);",
+        )
+        .unwrap();
+    let constraint = connection
+        .execute("INSERT INTO fixture VALUES(1)", [])
+        .unwrap_err();
+    assert_eq!(sql(&constraint), AgentError::Invalid);
+    for code in [rusqlite::ffi::SQLITE_BUSY, rusqlite::ffi::SQLITE_LOCKED] {
+        let error = rusqlite::Error::SqliteFailure(
+            rusqlite::ffi::Error::new(code),
+            Some("private SQL".into()),
+        );
+        assert_eq!(sql(&error), AgentError::Busy);
+        assert!(!sql(&error).to_string().contains("private SQL"));
+    }
+}
+
+#[test]
 fn rejects_foreign_databases_without_rewriting_them() {
     for schema in [
         "CREATE TABLE legacy(data TEXT);",

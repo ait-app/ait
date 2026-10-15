@@ -139,6 +139,44 @@ async fn native_approval_before_response_survives_and_can_be_answered() {
 }
 
 #[tokio::test]
+async fn queued_approval_reply_is_written_before_polling_subsequent_events() {
+    let mut fixture = Fixture::new(
+        "answer = receive()\nsend({'method': 'item/completed', 'params': answer})\nreceive()",
+    );
+    fixture
+        .transport
+        .queue_response(&json!(7), json!({"action":"accept","content":{}}))
+        .unwrap();
+    assert_eq!(
+        fixture.transport.queue_response(&json!(8), json!({})),
+        Err(AgentSessionError::Failed)
+    );
+    assert_eq!(
+        fixture.event().await.unwrap()["params"],
+        json!({"id":7,"result":{"action":"accept","content":{}}})
+    );
+    fixture.transport.close().await.unwrap();
+    assert_eq!(
+        fixture.transport.queue_response(&json!(8), json!({})),
+        Err(AgentSessionError::Failed)
+    );
+}
+
+#[tokio::test]
+async fn queued_approval_write_failure_is_reported_by_poll() {
+    let mut fixture = Fixture::new("time.sleep(60)");
+    fixture.transport.child.kill().await.unwrap();
+    fixture
+        .transport
+        .queue_response(&json!(7), json!({"action":"accept","content":{}}))
+        .unwrap();
+    assert_eq!(fixture.event().await, Err(AgentSessionError::Failed));
+    assert!(fixture.transport.closed);
+    assert!(fixture.transport.diagnostics.failure().is_some());
+    fixture.transport.close().await.unwrap();
+}
+
+#[tokio::test]
 async fn rejection_keeps_transport_usable_and_increments_request_ids() {
     let mut fixture = Fixture::new(
         "first = receive()\nsend({'id': first['id'], 'error': {'code': -32602}})\n\

@@ -10,12 +10,17 @@ import { createHash } from "node:crypto";
 afterEach(() => vi.useRealTimers());
 
 describe("account center domain migration", () => {
-  it.each(["", "https://dash.ait-app.com:8443/api", " https://DASH.ait-app.com:8443/api/ "])(
-    "uses the new official endpoint for %j",
-    (center) => {
-      expect(normalizeCenter(center)).toBe("https://aitapp.cn:8443/api");
-    },
-  );
+  it.each([
+    "",
+    "https://dash.ait-app.com:8443/api",
+    " https://DASH.ait-app.com:8443/api/ ",
+    "https://aitapp.cn:8443/api",
+    " https://AITAPP.cn:8443/api/ ",
+    "https://aitapp.cn/api",
+    "https://aitapp.cn:443/api",
+  ])("uses the new official endpoint for %j", (center) => {
+    expect(normalizeCenter(center)).toBe("https://aitapp.cn/api");
+  });
 
   it.each([
     "https://custom.test:9443/ait/api",
@@ -23,11 +28,18 @@ describe("account center domain migration", () => {
     "https://dash.ait-app.com:8443/custom/api",
     "https://dash.ait-app.com.example.test:8443/api",
     "http://127.0.0.1:3000/api",
+    "https://aitapp.cn:9443/api",
+    "https://aitapp.cn:8443/custom/api",
+    "https://aitapp.cn.example.test:8443/api",
   ])("preserves a custom service endpoint: %s", (center) => {
     expect(normalizeCenter(center)).toBe(center);
   });
 
   it.each([
+    "http://aitapp.cn:8443/api",
+    "https://user:password@aitapp.cn:8443/api",
+    "https://aitapp.cn:8443/api?token=secret",
+    "https://aitapp.cn:8443/api#fragment",
     "http://dash.ait-app.com:8443/api",
     "https://user:password@dash.ait-app.com:8443/api",
     "https://dash.ait-app.com:8443/api?token=secret",
@@ -36,39 +48,42 @@ describe("account center domain migration", () => {
     expect(() => normalizeCenter(center)).toThrow();
   });
 
-  it("restores a legacy account and uses the new origin for API, saved state and relay", async () => {
-    const { manager, http, deps } = fixture();
-    const saved = {
-      center: "https://dash.ait-app.com:8443/api",
-      token: "saved-jwt",
-      expiresAt: Date.now() + 60_000,
-      name: "Me",
-      nodeSessionId: "old",
-    };
-    await manager.restore(saved);
-    expect(http.mock.calls[0]).toEqual([
-      "https://aitapp.cn:8443/api/v1/node-sessions/old",
-      expect.objectContaining({ method: "DELETE" }),
-    ]);
-    await vi.advanceTimersByTimeAsync(1);
-    expect(manager.snapshot()).toMatchObject({
-      status: "online",
-      center: "https://aitapp.cn:8443/api",
-    });
-    expect(deps.save).toHaveBeenCalledWith(
-      expect.objectContaining({
-        center: "https://aitapp.cn:8443/api",
-        token: saved.token,
-        expiresAt: saved.expiresAt,
-      }),
-    );
-    const visit = await manager.openVisit("remote", saved.center);
-    expect(visit.url).toBe("wss://aitapp.cn:8443/api/v1/relay/sessions/visit/client");
-    expect(
-      http.mock.calls.every(([url]) => String(url).startsWith("https://aitapp.cn:8443/api/")),
-    ).toBe(true);
-    await manager.logout();
-  });
+  it.each(["https://dash.ait-app.com:8443/api", "https://aitapp.cn:8443/api"])(
+    "restores %s and uses the new origin for API, saved state and relay",
+    async (center) => {
+      const { manager, http, deps } = fixture();
+      const saved = {
+        center,
+        token: "saved-jwt",
+        expiresAt: Date.now() + 60_000,
+        name: "Me",
+        nodeSessionId: "old",
+      };
+      await manager.restore(saved);
+      expect(http.mock.calls[0]).toEqual([
+        "https://aitapp.cn/api/v1/node-sessions/old",
+        expect.objectContaining({ method: "DELETE" }),
+      ]);
+      await vi.advanceTimersByTimeAsync(1);
+      expect(manager.snapshot()).toMatchObject({
+        status: "online",
+        center: "https://aitapp.cn/api",
+      });
+      expect(deps.save).toHaveBeenCalledWith(
+        expect.objectContaining({
+          center: "https://aitapp.cn/api",
+          token: saved.token,
+          expiresAt: saved.expiresAt,
+        }),
+      );
+      const visit = await manager.openVisit("remote", saved.center);
+      expect(visit.url).toBe("wss://aitapp.cn/api/v1/relay/sessions/visit/client");
+      expect(
+        http.mock.calls.every(([url]) => String(url).startsWith("https://aitapp.cn/api/")),
+      ).toBe(true);
+      await manager.logout();
+    },
+  );
 });
 
 function fixture() {
@@ -488,7 +503,7 @@ describe("client-only account lifecycle", () => {
     const { manager, deps, login } = fixture();
     await login();
     expect(await manager.openVisit("remote", manager.snapshot().center)).toMatchObject({
-      url: "wss://aitapp.cn:8443/api/v1/relay/sessions/visit/client",
+      url: "wss://aitapp.cn/api/v1/relay/sessions/visit/client",
     });
     await manager.logout();
     expect(deps.closeTransports).toHaveBeenCalled();
@@ -711,7 +726,7 @@ describe("explicit daemon publication", () => {
     expect(JSON.parse(String(registration[1]?.body)).runtime).toBeNull();
     const grant = await manager.publishHost(first);
     expect(grant).toEqual({
-      center_url: "https://aitapp.cn:8443/api",
+      center_url: "https://aitapp.cn/api",
       control_ticket: "a".repeat(64),
       node_session_id: "lease-first",
     });
@@ -822,11 +837,11 @@ describe("explicit daemon publication", () => {
     await manager.loginWithBrowser("https://other.test/api");
     await vi.advanceTimersByTimeAsync(22_000);
     expect(http.mock.calls).toContainEqual([
-      "https://aitapp.cn:8443/api/v1/node-sessions/lease-second/renew",
+      "https://aitapp.cn/api/v1/node-sessions/lease-second/renew",
       expect.objectContaining({ method: "POST" }),
     ]);
     expect(await manager.publishHost(second)).toMatchObject({
-      center_url: "https://aitapp.cn:8443/api",
+      center_url: "https://aitapp.cn/api",
     });
     await manager.unpublishHost("second");
     await manager.logout();

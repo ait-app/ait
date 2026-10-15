@@ -1,5 +1,17 @@
 # Ait changelog
 
+## 0.1.3 - 2026-10-14
+
+- Automatically approve Codex computer-use access requests in Auto-review and Full Access while preserving explicit tool overrides and Bot permission rules.
+- Limit concurrent startup Timeline reads and wait for a real session Timeline before querying the chat outline, avoiding busy queues and missing-agent errors for draft tabs.
+- Keep Codex model-catalog refresh timeouts separate from turn execution failures, and validate headless identity before starting background services so failed startup releases the instance lock.
+- Add a daemon MCP endpoint for external clients to manage Agents, Workspaces, terminals, scripts, schedules, heartbeats, and permissions through the existing authenticated API.
+- Discover DeepSeek Harness scenario modes from native plugin presets and keep permission presets independent from the selected scenario.
+- Restore Antigravity account quota windows and DeepSeek Harness balances, including official DeepSeek API-key balances with their native currency and availability.
+- Preserve the initial branch in cached Workspaces so reset remains available after reopening, and remove Edit Profiles from the new-tab menu.
+- Hide expansion controls for empty tool details while keeping real tool output expandable.
+- Update fork prompts to use Ait branding and remove obsolete help links.
+
 ## 0.1.2 - 2026-10-13
 
 - Accept valid large image prompts within the shared input budget; preserve original image bytes unless the request exceeds its size limits, then compress or split readable images without replacing the saved originals.

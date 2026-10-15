@@ -9,6 +9,43 @@ use crate::service::Bots;
 use crate::test_support::{Fixture, creation};
 
 #[tokio::test]
+async fn provider_failures_are_durable_and_ambiguous_statuses_require_explicit_recovery() {
+    for (status, expected) in [
+        (json!({"status":"error"}), "failed"),
+        (json!({"status":"unknown"}), "uncertain"),
+        (json!({"status":"idle"}), "uncertain"),
+    ] {
+        let fixture = Fixture::new();
+        *fixture.native.status.lock().unwrap() = Some(status);
+        let bots = fixture.bots();
+        let bot = BotId::generate();
+        let conversation = setup(&bots, bot).await;
+        let turn = bots
+            .execute(
+                "bot.message.send.request",
+                json!({"botId":bot,
+            "conversationId":conversation,"messageId":"failure","text":"fixture"}),
+            )
+            .await
+            .unwrap()["turn"]["id"]
+            .clone();
+
+        let settled = wait(&bots, bot, &turn, expected).await;
+
+        assert!(settled["turn"]["reply"].is_null());
+        assert!(settled["turn"]["error"].as_str().is_some());
+        bots.shutdown().await.unwrap();
+        let recovered = fixture.bots();
+        let persisted = recovered
+            .execute("bot.turn.get.request", json!({"botId":bot,"turnId":turn}))
+            .await
+            .unwrap();
+        assert_eq!(persisted["turn"]["status"], expected);
+        recovered.shutdown().await.unwrap();
+    }
+}
+
+#[tokio::test]
 async fn failed_permission_denial_cancels_native_execution_and_fails_the_turn() {
     let fixture = Fixture::new();
     fixture.native.approval.store(true, Ordering::SeqCst);

@@ -2601,6 +2601,9 @@ export function useHostRuntimeConnectionStatus(serverId: string): HostRuntimeCon
 export function useHostRuntimeConnectionStatuses(
   serverIds: readonly string[],
 ): ReadonlyMap<string, HostRuntimeConnectionStatus> {
+  "use no memo";
+  // Snapshot reads depend on the store version. React Compiler drops that dependency because
+  // `void version` does not affect the returned map, leaving connection statuses frozen at mount.
   const store = getHostRuntimeStore();
   const version = useSyncExternalStore(
     (onStoreChange) => store.subscribeAll(onStoreChange),

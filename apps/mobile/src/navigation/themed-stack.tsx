@@ -6,6 +6,7 @@ import { AppearanceStyleBoundary } from "@/components/appearance-style-boundary"
 
 interface ThemedStackBaseProps {
   backgroundColor: string;
+  colorScheme: "light" | "dark";
   children?: ReactNode;
   screenOptions?: NativeStackNavigationOptions;
   // Screens whose content is another navigator. That navigator owns its own screens' appearance
@@ -22,6 +23,7 @@ interface ScreenContent {
 
 function ThemedStackBase({
   backgroundColor,
+  colorScheme,
   children,
   screenOptions,
   nestedNavigatorScreens,
@@ -29,10 +31,11 @@ function ThemedStackBase({
 }: ThemedStackBaseProps) {
   const themedScreenOptions = useMemo<NativeStackNavigationOptions>(
     () => ({
+      statusBarStyle: colorScheme === "light" ? "dark" : "light",
       ...screenOptions,
       contentStyle: [{ backgroundColor }, screenOptions?.contentStyle],
     }),
-    [backgroundColor, screenOptions],
+    [backgroundColor, colorScheme, screenOptions],
   );
   // Appearance changes remount each screen's content below the native stack, so the navigator
   // and its screen containers keep their identity. See docs/unistyles.md.
@@ -57,4 +60,5 @@ function ThemedStackBase({
 
 export const ThemedStack = withUnistyles(ThemedStackBase, (theme) => ({
   backgroundColor: theme.colors.surface0,
+  colorScheme: theme.colorScheme,
 }));

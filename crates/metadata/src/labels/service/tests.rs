@@ -15,6 +15,55 @@ use super::{
 mod admission;
 
 #[test]
+fn subscription_diagnostics_are_bounded_and_handles_can_outlive_the_label_owner() {
+    let labels =
+        WorkspaceLabels::new(Box::new(MemoryStore::new(vec![workspace("wks_one")]))).unwrap();
+    labels
+        .set_assignment(
+            "wks_one",
+            &label("Private fixture wording", WorkspaceLabelColor::Red),
+            true,
+            "created",
+        )
+        .unwrap();
+    let (_, subscription) = labels.subscribe(None, Arc::new(|_| {})).unwrap();
+
+    let debug = format!("{:?}", labels.sequence.lock().unwrap());
+    assert!(debug.contains("journal_len: 1"));
+    assert!(debug.contains("listeners: 1"));
+    assert!(!debug.contains("Private fixture wording"));
+    assert!(!debug.contains("wks_one"));
+    assert!(format!("{subscription:?}").contains("listener_id"));
+    drop(labels);
+    drop(subscription);
+}
+
+#[test]
+fn blank_label_names_and_uncertain_storage_have_distinct_errors() {
+    let labels =
+        WorkspaceLabels::new(Box::new(MemoryStore::new(vec![workspace("wks_one")]))).unwrap();
+    assert_eq!(
+        labels
+            .set_assignment(
+                "wks_one",
+                &label("  ", WorkspaceLabelColor::Red),
+                true,
+                "created"
+            )
+            .unwrap_err(),
+        WorkspaceLabelError::NameEmpty
+    );
+    assert_eq!(
+        super::map_store_error(WorkspaceLabelStoreError::Uncertain),
+        WorkspaceLabelError::StorageUncertain
+    );
+    assert_eq!(
+        super::map_store_error(WorkspaceLabelStoreError::Io),
+        WorkspaceLabelError::Storage
+    );
+}
+
+#[test]
 fn expired_journal_cursors_receive_a_snapshot_and_recent_deletions_remain_incremental() {
     let labels =
         WorkspaceLabels::new(Box::new(MemoryStore::new(vec![workspace("wks_one")]))).unwrap();

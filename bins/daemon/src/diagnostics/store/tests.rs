@@ -50,3 +50,27 @@ fn oversized_incidents_are_rejected_without_creating_storage() {
     ));
     assert!(!path.exists());
 }
+
+#[test]
+fn recent_incidents_report_invalid_utf8_and_ignore_lookalike_files() {
+    let directory = tempfile::tempdir().unwrap();
+    let owned = directory
+        .path()
+        .join(format!("incident-{}.txt", uuid::Uuid::new_v4()));
+    std::fs::write(&owned, [0xff, 0xfe]).unwrap();
+    std::fs::write(directory.path().join("incident-invalid.txt"), "keep").unwrap();
+    std::fs::create_dir(
+        directory
+            .path()
+            .join(format!("incident-{}.txt", uuid::Uuid::new_v4())),
+    )
+    .unwrap();
+
+    let report = recent(directory.path());
+
+    assert!(report.contains("Saved incidents: 1"));
+    assert!(report.contains("Saved incident unreadable"));
+    prune(directory.path(), Utc::now() + chrono::Duration::days(8)).unwrap();
+    assert!(!owned.exists());
+    assert!(directory.path().join("incident-invalid.txt").exists());
+}

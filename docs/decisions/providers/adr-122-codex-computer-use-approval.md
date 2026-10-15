@@ -4,6 +4,8 @@
 
 日期：2026-10-10
 
+档位范围与访问批准由 [ADR-149](adr-149-codex-computer-use-access-auto-approval.md) 修订。
+
 ## 背景
 
 Codex 的 `approvalPolicy` 和 `approvalsReviewer` 管理会话的原生审批行为，

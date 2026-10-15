@@ -121,3 +121,67 @@ fn deferred_capture_checks_new_events_and_exposes_storage_failures() {
     worker.save(&runtime, now);
     assert_eq!(worker.storage_failures.load(Ordering::Relaxed), 1);
 }
+
+#[test]
+fn tracing_omits_oversized_fields_and_unapproved_payloads() {
+    let (sender, _receiver) = mpsc::sync_channel(4);
+    let diagnostics = Diagnostics {
+        sender,
+        recent: Arc::default(),
+        dropped: Arc::default(),
+        storage_failures: Arc::default(),
+    };
+    let subscriber = tracing_subscriber::registry().with(diagnostics.clone());
+    tracing::subscriber::with_default(subscriber, || {
+        tracing::error!(error = %"x".repeat(2049), payload = "private body", "failure");
+    });
+    let recent = diagnostics.recent.lock().unwrap();
+    assert_eq!(recent.events.len(), 1);
+    let event = &recent.events[0].text;
+    assert!(event.contains("failure"));
+    assert!(event.contains("[oversized field omitted]"));
+    assert!(!event.contains("private body"));
+    assert!(!event.contains(&"x".repeat(2049)));
+}
+
+struct OversizedSources;
+
+impl EvidenceSource for OversizedSources {
+    fn collect(
+        &self,
+        _start: DateTime<Utc>,
+        _end: DateTime<Utc>,
+    ) -> Pin<Box<dyn Future<Output = String> + '_>> {
+        Box::pin(async { "fixture evidence\n".repeat(REPORT_LIMIT) })
+    }
+}
+
+#[test]
+fn manual_report_bounds_large_provider_evidence_at_a_complete_line() {
+    let directory = tempfile::tempdir().unwrap();
+    let diagnostics =
+        Diagnostics::with_sources(directory.path().to_owned(), OversizedSources).unwrap();
+
+    let report = diagnostics.report();
+
+    let evidence = report.split("\nSaved incidents:").next().unwrap();
+    assert!(evidence.len() <= REPORT_LIMIT);
+    assert!(report.contains("fixture evidence"));
+    assert!(report.contains("[report truncated at 256 KiB]"));
+    assert!(!report.contains("timed out"));
+}
+
+#[test]
+fn manual_report_exposes_unavailable_incident_storage_and_reuses_cached_evidence() {
+    let directory = tempfile::tempdir().unwrap();
+    let invalid = directory.path().join("file");
+    std::fs::write(&invalid, "fixture").unwrap();
+    let diagnostics = Diagnostics::with_sources(invalid, FixtureSources).unwrap();
+
+    let first = diagnostics.report();
+    let second = diagnostics.report();
+
+    assert!(first.contains("Incident storage unavailable"));
+    assert!(first.contains("Harness: opencode"));
+    assert_eq!(first, second);
+}

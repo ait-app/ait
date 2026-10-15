@@ -7,6 +7,7 @@
 
 ## Daemon 与协议
 
+- [Rust workspace 每 crate 95% 覆盖率验证](daemon/crate-coverage-95-2026-10-14.md)
 - [Workspace 定时任务设计与验证](daemon/workspace-schedules-verification-2026-10-12.md)
 
 - [共享 model 与功能 crate 边界验证](daemon/model-capability-boundaries-2026-10-07.md)
@@ -139,6 +140,8 @@
 
 ## 客户端、连接与品牌
 
+- [Ait 0.1.3 启动拥堵与草稿会话查询诊断](clients/ait-0.1.3-startup-diagnostics-2026-10-14.md)
+
 - [提问弹层响应超时与重试：验证](clients/question-response-timeout-2026-10-13.md)
 - [定时任务列表 Host 展示去重：验证](clients/schedule-host-filter-2026-10-12.md)
 - [Workspace 定时任务列表与统一创建流程：验证](clients/workspace-schedule-timeline-2026-10-12.md)
@@ -180,6 +183,8 @@
 
 ## 发布验证
 
+- [Ait 0.1.3 同版本重建 Draft 准备](releases/release-0.1.3-rebuild-2026-10-15.md)
+- [Ait 0.1.3 Draft 发布说明](releases/release-0.1.3.md)
 - [Ait 0.1.2 Draft 发布说明](releases/release-0.1.2.md)
 - [Ait 0.1.1 Draft 发布说明](releases/release-0.1.1.md)
 - [Ait 0.1.0 发布说明](releases/release-0.1.0.md)

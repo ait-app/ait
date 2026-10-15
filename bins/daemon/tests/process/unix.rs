@@ -76,6 +76,9 @@ mod transport;
 #[path = "agents.rs"]
 mod agents;
 
+#[path = "bots.rs"]
+mod bots;
+
 #[path = "agent_runtime.rs"]
 mod agent_runtime;
 
@@ -93,6 +96,9 @@ mod deepseek_harness;
 
 #[path = "native.rs"]
 mod native;
+
+#[path = "mcp.rs"]
+mod mcp;
 
 #[path = "session.rs"]
 mod session;

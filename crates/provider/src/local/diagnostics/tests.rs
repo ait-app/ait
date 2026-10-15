@@ -75,6 +75,37 @@ fn specific_failure_survives_closure_and_retryable_errors_do_not_become_terminal
 }
 
 #[test]
+fn codex_model_catalog_timeout_is_logged_without_becoming_a_turn_failure() {
+    let diagnostics = Diagnostics::new("codex");
+    diagnostics.line(
+        b"2026-10-14T15:32:31Z ERROR codex_models_manager::manager: list_models{refresh_strategy=online}: failed to refresh available models: request timed out",
+    );
+
+    assert_eq!(diagnostics.failure(), None);
+    let logged = diagnostics.state.lock().unwrap().logged.unwrap().0;
+    assert_eq!(logged.category, Category::Timeout);
+    assert_eq!(logged.source, "model_catalog");
+    assert_eq!(logged.will_retry, None);
+
+    diagnostics.line(b"ERROR codex_core::stream_events_utils: request timed out");
+    assert_eq!(diagnostics.failure().unwrap().category, Category::Timeout);
+    assert_eq!(diagnostics.failure().unwrap().source, "stderr");
+}
+
+#[test]
+fn background_catalog_failure_does_not_overwrite_an_existing_execution_failure() {
+    let diagnostics = Diagnostics::new("codex");
+    let failure = Diagnostic::new(Category::Authentication, "rpc");
+    diagnostics.observe(failure, "turn/start");
+
+    diagnostics.line(
+        b"ERROR codex_models_manager::manager: failed to refresh available models: request timed out",
+    );
+
+    assert_eq!(diagnostics.failure(), Some(failure));
+}
+
+#[test]
 fn repeated_errors_are_counted_and_flushed_with_constant_memory() {
     let diagnostics = Diagnostics::new("claude");
     let failure = Diagnostic::new(Category::RateLimit, "notification");

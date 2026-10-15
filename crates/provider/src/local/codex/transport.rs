@@ -4,6 +4,7 @@ use std::process::Stdio;
 use std::sync::Arc;
 use std::time::Duration;
 
+use futures_util::FutureExt;
 use serde_json::{Value, json};
 use tokio::io::{AsyncBufReadExt, AsyncWriteExt, BufReader};
 use tokio::process::{Child, ChildStdin, Command};
@@ -26,6 +27,7 @@ pub(super) struct Transport {
     input: Arc<Mutex<ChildStdin>>,
     messages: mpsc::Receiver<Value>,
     reader: JoinHandle<()>,
+    pending_response: Option<AbortOnDropHandle<Result<(), AgentSessionError>>>,
     events: VecDeque<Value>,
     sequence: u64,
     deadline: Duration,
@@ -163,6 +165,7 @@ impl Transport {
             input,
             messages,
             reader,
+            pending_response: None,
             events: VecDeque::new(),
             sequence: 0,
             deadline,
@@ -281,14 +284,14 @@ impl Transport {
         if self.closed {
             return Err(AgentSessionError::Failed);
         }
-        if matches!(
-            tokio::time::timeout(
-                self.deadline,
-                write(&self.input, &json!({"id":id,"result":result}))
-            )
-            .await,
-            Ok(Ok(()))
-        ) {
+        if write_response(
+            &self.input,
+            &json!({"id":id,"result":result}),
+            self.deadline,
+        )
+        .await
+        .is_ok()
+        {
             Ok(())
         } else {
             let _ = self.close().await;
@@ -296,7 +299,39 @@ impl Transport {
         }
     }
 
+    /// Queue `result` for native request `id` from synchronous polling.
+    /// Rejects closed transports or an outstanding reply; `poll` observes write failures.
+    pub(super) fn queue_response(
+        &mut self,
+        id: &Value,
+        result: Value,
+    ) -> Result<(), AgentSessionError> {
+        if self.closed || self.pending_response.is_some() {
+            return Err(AgentSessionError::Failed);
+        }
+        let input = self.input.clone();
+        let mut frame = json!({"id":id});
+        frame["result"] = result;
+        let deadline = self.deadline;
+        self.pending_response = Some(AbortOnDropHandle::new(tokio::spawn(async move {
+            write_response(&input, &frame, deadline).await
+        })));
+        Ok(())
+    }
+
     pub(super) fn poll(&mut self) -> Result<Option<Value>, AgentSessionError> {
+        if let Some(response) = &mut self.pending_response {
+            let Some(result) = response.now_or_never() else {
+                return Ok(None);
+            };
+            self.pending_response = None;
+            if !matches!(result, Ok(Ok(()))) {
+                self.closed = true;
+                self.diagnostics
+                    .observe(Diagnostic::new(Category::Network, "transport"), "respond");
+                return Err(AgentSessionError::Failed);
+            }
+        }
         if let Some(event) = self.events.pop_front() {
             return Ok(Some(event));
         }
@@ -310,6 +345,7 @@ impl Transport {
     pub(super) async fn close(&mut self) -> Result<(), AgentSessionError> {
         self.diagnostics.flush();
         self.closed = true;
+        self.pending_response = None;
         self.reader.abort();
         #[cfg(unix)]
         if let Some(id) = self.child.id() {
@@ -329,6 +365,16 @@ impl Transport {
             .map_err(|_| AgentSessionError::Failed)?;
         Ok(())
     }
+}
+
+async fn write_response(
+    input: &Mutex<ChildStdin>,
+    frame: &Value,
+    deadline: Duration,
+) -> Result<(), AgentSessionError> {
+    tokio::time::timeout(deadline, write(input, frame))
+        .await
+        .map_err(|_| AgentSessionError::Failed)?
 }
 
 impl Drop for Transport {

@@ -164,3 +164,96 @@ fn receipt_write_failure_freezes_private_admission_and_cursor_updates() {
             .is_empty()
     );
 }
+
+#[test]
+fn permission_denial_keeps_session_ownership_and_completed_turns_reject_decisions() {
+    let fixture = Fixture::new();
+    let mut state = fixture.state();
+    let bot = BotId::generate();
+    state.execute("bot.create.request", creation(bot)).unwrap();
+    let turn = admit(&mut state, bot, "permission");
+    let run = state.ready().unwrap().remove(0);
+    state
+        .progress(turn.id, TurnStatus::NeedsApproval, None, None)
+        .unwrap();
+    let decision = json!({"botId":bot,"turnId":turn.id,"permissionId":"approval-1",
+        "response":{"behavior":"deny"}});
+
+    let (owner, action) = state
+        .permission(serde_json::from_value(decision.clone()).unwrap())
+        .unwrap();
+
+    assert_eq!(owner, run.owner);
+    assert!(
+        matches!(action, Action::Permission {agent_id, permission_id, response}
+        if agent_id == run.conversation.session_id && permission_id == "approval-1"
+            && response == json!({"behavior":"deny"}))
+    );
+    let cancelled = state
+        .cancel(serde_json::from_value(json!({"botId":bot,"turnId":turn.id})).unwrap())
+        .unwrap();
+    assert_eq!(cancelled["cancellationRequested"], true);
+    assert!(run.cancel.is_cancelled());
+    state.finished(turn.conversation_id);
+    state
+        .progress(
+            turn.id,
+            TurnStatus::Completed,
+            Some("completed reply".into()),
+            None,
+        )
+        .unwrap();
+    assert_eq!(
+        state
+            .permission(serde_json::from_value(decision).unwrap())
+            .unwrap_err(),
+        ErrorCode::BotConflict
+    );
+    let unchanged = state
+        .cancel(serde_json::from_value(json!({"botId":bot,"turnId":turn.id})).unwrap())
+        .unwrap();
+    assert_eq!(unchanged["turn"]["status"], "completed");
+    state
+        .progress(
+            turn.id,
+            TurnStatus::Failed,
+            None,
+            Some("late failure".into()),
+        )
+        .unwrap();
+    assert_eq!(
+        state.turn(turn.id).unwrap().reply.as_deref(),
+        Some("completed reply")
+    );
+}
+
+#[test]
+fn catalog_and_conversation_write_failures_freeze_admission_until_restart() {
+    for catalog_failure in [false, true] {
+        let fixture = Fixture::new();
+        let mut state = fixture.state();
+        let bot = BotId::generate();
+        state.execute("bot.create.request", creation(bot)).unwrap();
+        let result = if catalog_failure {
+            let path = fixture.root.path().join("bots/catalog.json");
+            std::fs::remove_file(&path).unwrap();
+            std::fs::create_dir(&path).unwrap();
+            state.execute("bot.update.request", json!({"botId":bot,"name":"renamed"}))
+        } else {
+            std::fs::write(
+                fixture.root.path().join("bots/conversations"),
+                "fixture blocker",
+            )
+            .unwrap();
+            state.execute("bot.conversation.open.request", json!({"botId":bot}))
+        };
+
+        assert_eq!(result, Err(ErrorCode::BotIo));
+        assert!(state.frozen);
+        assert_eq!(
+            state.execute("bot.get.request", json!({"botId":bot})),
+            Err(ErrorCode::BotIo)
+        );
+        assert!(state.ready().unwrap().is_empty());
+    }
+}

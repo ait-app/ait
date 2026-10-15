@@ -78,7 +78,10 @@ for line in sys.stdin:
     method = request.get("method")
     if method is None and "result" in request:
         if pending:
-            complete(pending, "approved" if request["result"].get("decision") == "accept" or request["result"].get("answers") else "denied")
+            approved = (request["result"].get("decision") == "accept"
+                        or request["result"].get("action") == "accept"
+                        or request["result"].get("answers"))
+            complete(pending, "approved" if approved else "denied")
         continue
     if method == "initialized" or method is None:
         continue
@@ -319,6 +322,20 @@ for line in sys.stdin:
             continue
         if text == "approval":
             emit({"id": "approval-1", "method": "item/commandExecution/requestApproval", "params": {}})
+        elif text == "permit-cua-app":
+            emit({"id": "approval-1", "method": "mcpServer/elicitation/request", "params": {
+                "threadId": thread_id, "turnId": pending, "serverName": "cua_repl",
+                "mode": "form", "message": 'Allow Computer Use to use "Ait"?',
+                "requestedSchema": {"type": "object", "properties": {}},
+                "_meta": {"callId": "cua-app-call", "codex_approval_kind": "mcp_tool_call",
+                    "connector_id": "computer-use", "connector_name": "Computer Use",
+                    "persist": ["session", "always"], "riskLevel": "low",
+                    "tool_name": "get_app_state", "tool_params": {"app": "dev.ait.desktop"},
+                    "tool_params_display": [{"display_name": "App", "name": "app", "value": "Ait"}],
+                    "x-codex-turn-metadata": {"auto_review_enabled": True,
+                        "codex_version": "0.162.1", "node_repl_auto_review_required": True,
+                        "sandbox_mode": "workspace-write", "thread_id": thread_id,
+                        "turn_id": pending}}}})
         elif text in ("permit-command", "permit-file", "permit-question", "permit-cua"):
             approval_method = {"permit-command": "item/commandExecution/requestApproval", "permit-file": "item/fileChange/requestApproval", "permit-question": "item/tool/requestUserInput", "permit-cua": "item/tool/requestUserInput"}[text]
             approval = {"threadId": thread_id, "turnId": pending, "itemId": "approval-item", "command": "offline command", "cwd": str(root)}

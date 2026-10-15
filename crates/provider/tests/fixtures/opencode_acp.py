@@ -137,7 +137,9 @@ for line in sys.stdin:
     identity = message.get("id")
     params = message.get("params", {})
     if method is None:
-        if message["id"] == "question":
+        if message["id"] == "unsupported-fixture":
+            assert message["error"]["code"] == -32601
+        elif message["id"] == "question":
             assert message["result"]["action"] in ["accept", "decline", "cancel"]
         elif message["id"] == "permission":
             assert message["result"]["outcome"]["outcome"] == "selected"
@@ -243,6 +245,14 @@ for line in sys.stdin:
                 "message": "OpenCode's free tier can only be used from within OpenCode",
                 "data": {"service": "session", "errorName": "APIError", "responseBody": "private diagnostic"}}})
             active = None
+        elif scenario == "protocol-controls":
+            update({"sessionUpdate": "config_option_update", "configOptions": options()})
+            send({"id": "permission", "method": "session/request_permission", "params": {
+                "sessionId": session_id,
+                "toolCall": {"toolCallId": "shell", "title": "shell", "rawInput": {"command": "pwd"}},
+                "options": [{"optionId": "reject", "kind": "reject_once", "name": "Reject"}]}})
+            send({"method": "$/cancel_request", "params": {"requestId": "permission"}})
+            send({"id": "unsupported-fixture", "method": "fixture/unsupported", "params": {}})
         elif scenario == "question":
             send({"id": "question", "method": "elicitation/create", "params": {"mode": "form", "sessionId": session_id, "toolCallId": "tool-question", "message": "Choose languages",
                 "requestedSchema": {"type": "object", "properties": {"language": {"type": "array", "uniqueItems": True, "items": {"anyOf": [{"const": "rust", "title": "Rust, stable"}, {"const": "go", "title": "Go"}]}},

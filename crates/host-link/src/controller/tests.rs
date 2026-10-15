@@ -453,3 +453,26 @@ async fn an_ambiguous_renewal_retries_the_existing_session_after_local_expiry() 
     assert!(seen.stops >= 2);
     assert!(seen.renewals >= 3);
 }
+
+#[tokio::test]
+async fn initial_terminal_failures_close_relay_and_report_the_recovery_action() {
+    for (error, phase) in [
+        (Error::Storage, "storage_error"),
+        (Error::Conflict, "runtime_conflict"),
+        (Error::Protocol, "protocol_error"),
+        (Error::Denied, "protocol_error"),
+    ] {
+        let (controller, mock) = fixture();
+        mock.0.lock().unwrap().refresh_error = Some(error);
+
+        assert_eq!(controller.run(CancellationToken::new()).await, Err(error));
+
+        let seen = mock.0.lock().unwrap();
+        assert_eq!(seen.reports, ["connecting", phase]);
+        assert_eq!(seen.stops, 1);
+        assert_eq!(seen.starts, 0);
+        assert!(seen.registrations.is_empty());
+        assert_eq!(seen.saved.len(), 1);
+        assert!(matches!(seen.saved[0].pending, Some(Pending::Refresh(_))));
+    }
+}

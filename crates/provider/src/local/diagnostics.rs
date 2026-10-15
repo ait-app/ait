@@ -199,10 +199,15 @@ impl Diagnostics {
 
     /// Record a safe error and aggregate repeats rather than logging native messages.
     pub(crate) fn observe(&self, diagnostic: Diagnostic, operation: &str) {
+        self.record(diagnostic, operation, true);
+    }
+
+    fn record(&self, diagnostic: Diagnostic, operation: &str, affects_turn: bool) {
         let Ok(mut state) = self.state.lock() else {
             return;
         };
-        if diagnostic.will_retry != Some(true)
+        if affects_turn
+            && diagnostic.will_retry != Some(true)
             && (state
                 .failure
                 .is_none_or(|previous| previous.category == Category::Unknown)
@@ -275,9 +280,19 @@ impl Diagnostics {
     }
 
     fn line(&self, line: &[u8]) {
-        let category = classify(&String::from_utf8_lossy(line));
+        let text = String::from_utf8_lossy(line);
+        let category = classify(&text);
         if category != Category::Unknown {
-            self.observe(Diagnostic::new(category, "stderr"), "stderr");
+            // Model catalog refresh failures belong to discovery, rather than turn execution.
+            let model_catalog = self.provider == "codex"
+                && text.contains("codex_models_manager::manager")
+                && text.contains("failed to refresh available models:");
+            let (source, operation) = if model_catalog {
+                ("model_catalog", "model/list")
+            } else {
+                ("stderr", "stderr")
+            };
+            self.record(Diagnostic::new(category, source), operation, !model_catalog);
         }
     }
 }

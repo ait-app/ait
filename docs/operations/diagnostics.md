@@ -28,6 +28,8 @@ Provider 的错误回报进入 daemon 日志。`Native provider diagnostic` 记�
 
 最终失败会在聊天中保留错误通知，与 `lastError` 和失败事件使用相同文案。
 原生正在重试的错误只记录诊断，不误报为最终失败；取消和正常操作拒绝不会生成失败通知。
+Codex 模型目录刷新失败标记 `source=model_catalog`、`operation=model/list`，
+保留告警但不作为会话执行失败原因；普通执行超时仍按原方式记录。
 错误通知在原生历史刷新和 daemon 重启后继续保留。未识别错误仍需结合原生日志排查。
 
 | Harness          | 默认来源                                                  | 覆盖变量                                   |

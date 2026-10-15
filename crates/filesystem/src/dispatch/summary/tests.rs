@@ -58,6 +58,81 @@ fn bounded_diff_preserves_file_names_changes_and_unicode() {
     assert!(text.len() <= 120_000);
 }
 
+#[test]
+fn diff_context_distinguishes_deletions_renames_and_modifications() {
+    let files = [
+        ("removed.txt", None, true),
+        ("renamed.txt", Some("original.txt"), false),
+        ("modified.txt", None, false),
+    ]
+    .into_iter()
+    .map(|(path, old_path, is_deleted)| ParsedDiffFile {
+        path: path.into(),
+        old_path: old_path.map(str::to_owned),
+        is_new: false,
+        is_deleted,
+        additions: 0,
+        deletions: 1,
+        status: None,
+        hunks: vec![DiffHunk {
+            old_start: 1,
+            old_count: 2,
+            new_start: 1,
+            new_count: 1,
+            lines: vec![
+                DiffLine {
+                    kind: DiffLineKind::Remove,
+                    content: "removed".into(),
+                    tokens: None,
+                },
+                DiffLine {
+                    kind: DiffLineKind::Context,
+                    content: "kept".into(),
+                    tokens: None,
+                },
+            ],
+        }],
+    })
+    .collect();
+    let context = source(
+        &CheckoutDiff {
+            files,
+            diff_too_large: false,
+        },
+        SummaryKind::PullRequest,
+    );
+    for expected in [
+        "D removed.txt (+0 -1)",
+        "R renamed.txt (+0 -1)",
+        "M modified.txt (+0 -1)",
+        "--- original.txt\n+++ renamed.txt",
+        "-removed\n kept\n",
+    ] {
+        assert!(context.contains(expected), "missing {expected}: {context}");
+    }
+}
+
+#[test]
+fn bounded_append_never_splits_a_multibyte_character_or_exceeds_capacity() {
+    let mut context = String::from("a");
+    append(&mut context, "界b", 3);
+    assert_eq!(context, "a");
+    append(&mut context, "界b", 4);
+    assert_eq!(context, "a界");
+    append(&mut context, "c", 2);
+    assert_eq!(context, "a界");
+}
+
+#[test]
+fn git_wording_does_not_apply_title_or_branch_summaries() {
+    for kind in [SummaryKind::Title, SummaryKind::BranchName] {
+        let mut params = json!({"title":"Explicit title","message":null});
+        let original = params.clone();
+        apply(&mut params, kind, Some(&json!({"message":"Unexpected"})));
+        assert_eq!(params, original);
+    }
+}
+
 #[derive(Debug)]
 struct Generator {
     runtime: std::sync::Arc<model::Runtime>,
@@ -192,4 +267,19 @@ async fn malformed_git_and_provider_failures_have_distinct_fallbacks() {
             .context
             .contains("new file")
     );
+}
+
+#[tokio::test]
+async fn missing_summary_provider_uses_local_commit_wording() {
+    let root = tempfile::tempdir().unwrap();
+    git(root.path(), &["init", "-b", "main"]);
+    std::fs::write(root.path().join("new.txt"), "new file\n").unwrap();
+    let (mut state, generator) = state(root.path(), false);
+    state.summary_source = None;
+    let mut params = json!({"cwd":root.path()});
+    fill(&state, "checkout.commit.request", &mut params)
+        .await
+        .unwrap();
+    assert_eq!(params["message"], "Update files");
+    assert!(generator.requests.lock().unwrap().is_empty());
 }

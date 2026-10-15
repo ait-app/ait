@@ -10,6 +10,7 @@
 
 ## 开始使用与开发
 
+- [daemon MCP 接口](operations/mcp.md)：Streamable HTTP、40 个编排工具、鉴权与 Workspace 上下文。
 - [项目说明](../README.md)：开发入口、workspace 和验证命令。
 - [桌面端](../apps/desktop/README.md)：Electron 启动、构建和打包。
 - [移动端与 Web](../apps/mobile/README.md)：Expo、浏览器连接与原生构建。
@@ -22,7 +23,10 @@
 
 ## 架构决策
 
-- [ADR-148：所有 Provider 的上下文压缩生命周期提示](decisions/providers/adr-148-provider-compaction-lifecycle.md)：原生开始／结束映射、稳定身份配对、失败提示与历史回放。
+- [ADR-150：所有 Provider 的上下文压缩生命周期提示](decisions/providers/adr-150-provider-compaction-lifecycle.md)：原生开始／结束映射、稳定身份配对、失败提示与历史回放。
+- [ADR-149：Codex 高权限档位自动批准 computer use 访问](decisions/providers/adr-149-codex-computer-use-access-auto-approval.md)：Auto-review / Full Access 的原生访问批准、显式覆盖与档位切换。
+
+- [ADR-148：daemon 的无状态 MCP 编排接口](decisions/daemon/adr-148-daemon-mcp.md)：Rust RPC 复用与 Paseo 适配；[验证报告](reports/daemon/mcp-implementation-2026-10-14.md)。
 - [ADR-147：DSH 原生插件情景模式与权限分离](decisions/providers/adr-147-dsh-native-plugin-presets.md)：动态预设目录、用户插件、profile 隔离及会话专属控件。
 
 - [ADR-146：Workspace 重置清除变更请求关联](decisions/workspace/adr-146-reset-workspace-change-request-association.md)：本地分支重置标记、旧 PR/MR 过滤与远程跟踪清理。
@@ -52,7 +56,7 @@
 - [ADR-125：持久化展示投影索引与按页读取 Timeline](decisions/providers/adr-125-durable-timeline-projection-pages.md)：事务内增量维护、重启复用、源覆盖游标与字节回退。
 - [ADR-124：登录后自动添加全部在线服务主机](decisions/clients/adr-124-automatic-online-host-import.md)：移除账户主机选择，统一浏览器登录后导入全部主机，并保留已有连接与持久主机记录。
 - [ADR-123：客户端仅保留浏览器统一登录](decisions/clients/adr-123-browser-only-account-login.md)：删除移动端与 Desktop 的原 AIT 密码表单、命令和共享登录方法，服务能力检查失败不再回退。
-- [ADR-122（Provider）：Codex Auto-review 的 computer use 工具批准](decisions/providers/adr-122-codex-computer-use-approval.md)：原生插件逐工具预批准、显式覆盖与档位切换重载。
+- [ADR-122（Provider）：Codex Auto-review 的 computer use 工具批准](decisions/providers/adr-122-codex-computer-use-approval.md)：原生插件逐工具预批准；档位范围与访问批准由 ADR-149 修订。
 - [ADR-122（客户端）：在线服务主机进入客户端持久注册表](decisions/clients/adr-122-persistent-online-service-hosts.md)：显式添加、多主机恢复、服务绑定及独立删除。
 - [ADR-121：ACP 轮次关联与原生历史结算](decisions/providers/adr-121-acp-turn-history-reconciliation.md)：实时与重放共享轮次身份，完整原生历史在终态前原子校正消息顺序。
 - [ADR-120：单连接启动请求的有界排队](decisions/daemon/adr-120-single-connection-startup-admission.md)：为正常启动突发保留 16 个组内槽位，维持超量拒绝、消息顺序和 Ping 可用性。
@@ -120,6 +124,8 @@
 - [Android APK 发布](operations/android-releases.md)：独立手动构建测试或正式通用 APK。
 - [Google Play 内部测试](operations/google-play-internal-testing.md)：首次账号配置、测试者安装与手动 AAB 发布 CI。
 - [发布指南](operations/releasing.md)：桌面 Release、Android Internal Testing、iOS TestFlight。
+- [Ait 0.1.3 同版本重建 Draft 准备](reports/releases/release-0.1.3-rebuild-2026-10-15.md)：纳入 computer use 批准、启动历史加载与 headless 锁释放修复，保留原标签并等待 review。
+- [Ait 0.1.3 Draft 发布说明](reports/releases/release-0.1.3.md)：daemon MCP 编排、DeepSeek Harness 插件情景模式和原生配额／余额，完成 Draft 后停下等待 review。
 - [Ait 0.1.2 Draft 发布说明](reports/releases/release-0.1.2.md)：图片输入、OpenCode 2.0.25、连接和 Bot 权限修复，完成 Draft 后停下等待 review。
 - [Ait 0.1.1 Draft 发布说明](reports/releases/release-0.1.1.md)：Workspace 定时任务、实验性 Bot、无人值守 Host 和 Draft review 门禁。
 - [Ait 0.1.0 发布说明](reports/releases/release-0.1.0.md)：沿用 0.0.29 功能的版本升级与正式安装包发布。
@@ -146,6 +152,8 @@
 - [语音与听写](operations/speech.md)：离线模型、后端配置和限制。
 
 ## 工程规范与验证
+
+- [Ait 0.1.3 启动与会话查询诊断](reports/clients/ait-0.1.3-startup-diagnostics-2026-10-14.md)：Timeline 读取排队、草稿提示词索引就绪与 Codex 模型目录告警归因。
 
 - [DSH 插件情景模式验证](reports/providers/dsh-plugin-presets.md)：动态目录、独立权限、恢复、profile 和本机 Host 验证。
 - [Antigravity 账号额度接入](reports/providers/antigravity-account-quota-2026-10-14.md)：已登录仍不可用的复现、原生 `/usage` 接入、主机与会话账号隔离和失败回归。
@@ -181,7 +189,8 @@
 - [附件分块传输验证](reports/clients/attachment-chunks.md)：原图消息、200 MiB 文件上传、背压及覆盖率。
 
 - [File、共享契约与 RPC 边界 PR 验证](reports/daemon/file-and-rpc-boundaries-pr-validation-2026-10-08.md)：14-crate workspace 测试、覆盖率与源码证据。
-- [Daemon 测试扩展与覆盖率验证](reports/daemon/crate-coverage-rebase.md)：最新 rebase 验证、逐 crate 证据与历史测量索引。
+- [Rust workspace 每 crate 95% 覆盖率验证](reports/daemon/crate-coverage-95-2026-10-14.md)：15 个 crate 的可比基线、最终计数与未覆盖行证据。
+- [Daemon 测试扩展与覆盖率验证（历史）](reports/daemon/crate-coverage-rebase.md)：rebase 验证、逐 crate 证据与历史测量索引。
 - [Provider 能力清单](plans/provider-parity.md)：当前能力与后续工作。
 - [Antigravity CLI 验证](reports/providers/antigravity-cli.md)：协议夹具、安装路径和真实 AGY 验证范围。
 - [Provider 装配边界验证](reports/providers/provider-composition.md)：内置注册、辅助生成、DSH 简称与覆盖率证据。
