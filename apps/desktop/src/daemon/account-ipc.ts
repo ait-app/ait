@@ -12,8 +12,14 @@ import { AccountTransportManager } from "./account-transport.js";
 import { AccountDownloadManager } from "./account-download.js";
 import type { RustDaemonManager } from "./rust-daemon.js";
 import { desktopBrowserLogin } from "./account-browser-login.js";
+import { AccountBrowserProfiles } from "../features/account-browser-profiles.js";
 
 let account: AccountSessionManager | null = null;
+let browserProfiles: AccountBrowserProfiles | null = null;
+
+export function accountBrowserPartitions(ownerId: number): string[] {
+  return browserProfiles?.partitions(ownerId) ?? [];
+}
 
 function canRemember(): boolean {
   return (
@@ -91,6 +97,7 @@ export function createAccountIpc(
     closeTransports: () => {
       transports?.closeAll();
       downloads?.closeAll();
+      browserProfiles?.closeConnections();
     },
     notify,
   });
@@ -109,6 +116,7 @@ export function createAccountIpc(
   };
   account = manager;
   transports = new AccountTransportManager(manager);
+  browserProfiles = new AccountBrowserProfiles(manager);
   downloads = new AccountDownloadManager(manager);
   const ready = saved ? manager.restore(saved).catch(() => save(null)) : save(null);
   let accountOperation = Promise.resolve<unknown>(undefined);
@@ -196,6 +204,18 @@ export function createAccountIpc(
         case "account_transport_close":
           transports.close(event.sender, id);
           return;
+        case "account_browser_profile":
+          if (
+            typeof args.hostId !== "string" ||
+            typeof args.center !== "string" ||
+            typeof args.serverId !== "string"
+          )
+            throw new Error("Invalid browser Host");
+          return browserProfiles?.prepare(event.sender, {
+            hostId: args.hostId,
+            center: args.center,
+            serverId: args.serverId,
+          });
         case "account_download_prepare": {
           if (
             typeof args.hostId !== "string" ||

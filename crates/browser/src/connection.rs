@@ -16,21 +16,23 @@ use std::collections::{BTreeMap, BTreeSet};
 #[derive(Debug, Default)]
 pub struct Connection {
     hosts: BTreeMap<String, Registration>,
+    pub(crate) tunnels: crate::tunnel::Tunnels,
 }
 impl Connection {
     /// Number of occupied connection subscription slots.
     #[must_use]
     pub fn len(&self) -> usize {
-        self.hosts.len()
+        self.hosts.len() + self.tunnels.len()
     }
     /// Whether this connection owns no browser registrations.
     #[must_use]
     pub fn is_empty(&self) -> bool {
-        self.hosts.is_empty()
+        self.len() == 0
     }
     /// Release only registrations owned by this connection.
     pub fn release(&mut self, id: &str) {
         self.hosts.remove(id);
+        self.tunnels.release(id);
     }
     /// Register a host and return its subscription identity.
     /// # Errors

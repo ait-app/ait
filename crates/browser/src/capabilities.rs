@@ -6,7 +6,10 @@ use model::methods::MethodSpec;
 /// # Returns
 /// Method names and message directions, including events, without selecting a request handler.
 pub fn implemented_methods() -> impl Iterator<Item = MethodSpec> {
-    crate::connection::METHODS.iter().copied()
+    crate::connection::METHODS
+        .iter()
+        .chain(crate::tunnel::METHODS)
+        .copied()
 }
 
 /// Return installed methods when this service is composed by the host.

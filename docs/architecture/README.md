@@ -18,7 +18,7 @@ Electron 位于 `apps/desktop`；`apps/mobile` 提供桌面、浏览器与移动
 | `voice`       | 语音、听写和离线推理                                 | `model`                                               |
 | `bot`         | Workspace Bot、独占 Channel、隐藏对话和消息协调      | `domain`、`model`、`provider`；测试使用 `persistence` |
 | `schedule`    | 定时任务服务与协议                                   | `domain`、`model`；测试使用 `persistence`             |
-| `browser`     | 浏览器自动化请求与回传                               | `model`                                               |
+| `browser`     | 浏览器自动化请求、回传与回环 TCP 流                  | `model`                                               |
 | `relay`       | 控制 RPC、主动连接与反向数据通道                     | `model`                                               |
 | `api`         | HTTP/WebSocket 鉴权、连接与跨能力协调                | 上述能力包、`domain`、`model`；测试使用 `persistence` |
 | `daemon`      | 启动配置、进程锁、server identity、服务组装和停机    | API、领域、`model`、`persistence` 及能力包            |
@@ -144,6 +144,9 @@ Project/Workspace 和 Agent runtime 目录、配置、时间线由当前文件�
 原生 Codex、Claude Code、Antigravity、OpenCode 与 DeepSeek Harness 的凭据和会话仍由对应程序持有。
 
 桌面进程只管理自己启动的 daemon 子进程，生成连接凭据并通过主进程 bridge 提供授权。
+在线中继 Workspace 的内置浏览器通过主进程按 Host 配置的 profile，把回环网页流量送到远程
+daemon 的连接所属 TCP 流；网页 URL 保持原样。详见
+[ADR-152](../decisions/clients/adr-152-remote-workspace-browser-loopback.md)。
 浏览器用一次性 WebSocket 票据连接；桌面、Web 和移动端使用同一个 Rust transport adapter。
 连接关闭释放所属订阅，daemon 负责已接纳任务与原生进程的生命周期。
 

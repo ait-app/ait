@@ -78,6 +78,7 @@ import {
   type BrowserElementSelection,
   type ElementSelectorOutcome,
 } from "./element-selector.electron";
+import { resolveBrowserProfileHost } from "../remote-profile";
 
 type ElectronWebview = HTMLElement & {
   canGoBack?: () => boolean;
@@ -730,184 +731,206 @@ export function BrowserPane({
       return;
     }
 
-    host.replaceChildren();
+    let cancelled = false;
+    let cleanup = () => {};
+    void resolveBrowserProfileHost(serverId)
+      .then((profileHost) => {
+        if (cancelled) return;
+        host.replaceChildren();
 
-    const initialUnsafeNavigationMessage = getUnsafeNavigationMessage(
-      initialUrlRef.current,
-      browserErrorLabelsRef.current,
-    );
-    const residentWebview = takeResidentBrowserWebview(browserId) as ElectronWebview | null;
-    const webview = residentWebview ?? (document.createElement("webview") as ElectronWebview);
-    webviewRef.current = webview;
-    if (!residentWebview) {
-      prepareBrowserWebview(webview, {
-        browserId,
-        workspaceId,
-        initialUrl: initialUnsafeNavigationMessage ? "about:blank" : initialUrlRef.current,
-      });
-    }
-    releaseResidentBrowserWebview(browserId, webview);
-    if (isPresentedRef.current) {
-      presentBrowserWebview(browserId, webview, host, clip, browserViewportRef.current);
-    } else {
-      applyInactiveBrowserWebviewViewport(browserId, webview, browserViewportRef.current);
-    }
-    const sizeObserver =
-      typeof ResizeObserver === "undefined"
-        ? null
-        : new ResizeObserver(() => {
-            if (!isPresentedRef.current) {
-              return;
-            }
-            presentBrowserWebview(
-              browserIdRef.current,
-              webview,
-              host,
-              clip,
-              browserViewportRef.current,
-            );
-            rememberResolvedBrowserWebviewSize(browserIdRef.current, webview);
+        const initialUnsafeNavigationMessage = getUnsafeNavigationMessage(
+          initialUrlRef.current,
+          browserErrorLabelsRef.current,
+        );
+        const residentWebview = takeResidentBrowserWebview(browserId) as ElectronWebview | null;
+        const webview = residentWebview ?? (document.createElement("webview") as ElectronWebview);
+        webviewRef.current = webview;
+        if (!residentWebview) {
+          prepareBrowserWebview(webview, {
+            browserId,
+            workspaceId,
+            initialUrl: initialUnsafeNavigationMessage ? "about:blank" : initialUrlRef.current,
+            ...(profileHost ? { profileHost } : {}),
           });
+        }
+        releaseResidentBrowserWebview(browserId, webview);
+        if (isPresentedRef.current) {
+          presentBrowserWebview(browserId, webview, host, clip, browserViewportRef.current);
+        } else {
+          applyInactiveBrowserWebviewViewport(browserId, webview, browserViewportRef.current);
+        }
+        const sizeObserver =
+          typeof ResizeObserver === "undefined"
+            ? null
+            : new ResizeObserver(() => {
+                if (!isPresentedRef.current) {
+                  return;
+                }
+                presentBrowserWebview(
+                  browserIdRef.current,
+                  webview,
+                  host,
+                  clip,
+                  browserViewportRef.current,
+                );
+                rememberResolvedBrowserWebviewSize(browserIdRef.current, webview);
+              });
 
-    const handleStartLoading = () => {
-      selectorControllerRef.current?.stopForWebview(webview);
-      updateBrowser(browserId, { isLoading: true, lastError: null });
-      syncNavigationState({ syncUrl: false });
-    };
-    const handleStopLoading = () => {
-      updateBrowser(browserId, { isLoading: false });
-      syncNavigationState();
-    };
-    const handleNavigate = (event: Event) => {
-      const nextUrl =
-        typeof (event as Event & { url?: unknown }).url === "string"
-          ? ((event as Event & { url?: string }).url ?? "")
-          : (webview.getURL?.() ?? webview.getAttribute("src") ?? "");
-      const normalized = normalizeWorkspaceBrowserUrl(nextUrl);
-      const previousUrl = browserRef.current?.url ?? initialUrlRef.current;
-      pendingNavigationUrlRef.current = null;
-      updateBrowser(browserIdRef.current, {
-        url: normalized,
-        ...(normalized !== previousUrl ? { faviconUrl: null } : {}),
-        lastError: null,
-      });
-      setDraftUrl((current) => {
-        return current === normalized ? current : normalized;
-      });
-      syncNavigationState();
-    };
-    const handleWillNavigate = (event: Event) => {
-      const nextUrl =
-        typeof (event as Event & { url?: unknown }).url === "string"
-          ? ((event as Event & { url?: string }).url ?? "")
-          : "";
-      if (!nextUrl) {
-        return;
-      }
-      const normalized = normalizeWorkspaceBrowserUrl(nextUrl);
-      pendingNavigationUrlRef.current = normalized;
-      updateBrowserRef.current(browserIdRef.current, {
-        url: normalized,
-        ...(normalized !== browserRef.current?.url ? { faviconUrl: null } : {}),
-        lastError: null,
-      });
-      setDraftUrl((current) => (current === normalized ? current : normalized));
-    };
-    const handleTitleUpdated = (event: Event) => {
-      const title =
-        typeof (event as Event & { title?: unknown }).title === "string"
-          ? ((event as Event & { title?: string }).title ?? "")
-          : "";
-      updateBrowserRef.current(browserIdRef.current, { title });
-    };
-    const handleFaviconUpdated = (event: Event) => {
-      const favicons = Array.isArray((event as Event & { favicons?: unknown[] }).favicons)
-        ? ((event as Event & { favicons?: string[] }).favicons ?? [])
-        : [];
-      updateBrowserRef.current(browserIdRef.current, { faviconUrl: favicons[0] ?? null });
-    };
-    const handleLoadFailed = (event: Event) => {
-      const message = getWebviewLoadErrorMessage(event, browserErrorLabelsRef.current.failedToLoad);
-      if (!message) {
-        return;
-      }
-      updateBrowserRef.current(browserIdRef.current, {
-        isLoading: false,
-        lastError: message,
-      });
-    };
-    const handleDomReady = () => {
-      syncNavigationState();
-      // The previous page's overlay is gone after a load; re-apply markers for
-      // the freshly loaded document.
-      const markers = annotationMarkersRef.current;
-      if (markers.length > 0) {
-        applyAnnotationMarkers(webview, markers);
-      }
-    };
-    const handleWebviewFocus = () => {
-      onFocusPane?.();
-      webview.focus?.();
-      const focusBrowser = getDesktopHost()?.browser?.focus;
-      if (typeof focusBrowser === "function") {
-        void focusBrowser(browserIdRef.current).catch((error) => {
-          console.error("[browser-webview] focus failed", error);
-        });
-      }
-    };
+        const handleStartLoading = () => {
+          selectorControllerRef.current?.stopForWebview(webview);
+          updateBrowser(browserId, { isLoading: true, lastError: null });
+          syncNavigationState({ syncUrl: false });
+        };
+        const handleStopLoading = () => {
+          updateBrowser(browserId, { isLoading: false });
+          syncNavigationState();
+        };
+        const handleNavigate = (event: Event) => {
+          const nextUrl =
+            typeof (event as Event & { url?: unknown }).url === "string"
+              ? ((event as Event & { url?: string }).url ?? "")
+              : (webview.getURL?.() ?? webview.getAttribute("src") ?? "");
+          const normalized = normalizeWorkspaceBrowserUrl(nextUrl);
+          const previousUrl = browserRef.current?.url ?? initialUrlRef.current;
+          pendingNavigationUrlRef.current = null;
+          updateBrowser(browserIdRef.current, {
+            url: normalized,
+            ...(normalized !== previousUrl ? { faviconUrl: null } : {}),
+            lastError: null,
+          });
+          setDraftUrl((current) => {
+            return current === normalized ? current : normalized;
+          });
+          syncNavigationState();
+        };
+        const handleWillNavigate = (event: Event) => {
+          const nextUrl =
+            typeof (event as Event & { url?: unknown }).url === "string"
+              ? ((event as Event & { url?: string }).url ?? "")
+              : "";
+          if (!nextUrl) {
+            return;
+          }
+          const normalized = normalizeWorkspaceBrowserUrl(nextUrl);
+          pendingNavigationUrlRef.current = normalized;
+          updateBrowserRef.current(browserIdRef.current, {
+            url: normalized,
+            ...(normalized !== browserRef.current?.url ? { faviconUrl: null } : {}),
+            lastError: null,
+          });
+          setDraftUrl((current) => (current === normalized ? current : normalized));
+        };
+        const handleTitleUpdated = (event: Event) => {
+          const title =
+            typeof (event as Event & { title?: unknown }).title === "string"
+              ? ((event as Event & { title?: string }).title ?? "")
+              : "";
+          updateBrowserRef.current(browserIdRef.current, { title });
+        };
+        const handleFaviconUpdated = (event: Event) => {
+          const favicons = Array.isArray((event as Event & { favicons?: unknown[] }).favicons)
+            ? ((event as Event & { favicons?: string[] }).favicons ?? [])
+            : [];
+          updateBrowserRef.current(browserIdRef.current, { faviconUrl: favicons[0] ?? null });
+        };
+        const handleLoadFailed = (event: Event) => {
+          const message = getWebviewLoadErrorMessage(
+            event,
+            browserErrorLabelsRef.current.failedToLoad,
+          );
+          if (!message) {
+            return;
+          }
+          updateBrowserRef.current(browserIdRef.current, {
+            isLoading: false,
+            lastError: message,
+          });
+        };
+        const handleDomReady = () => {
+          syncNavigationState();
+          // The previous page's overlay is gone after a load; re-apply markers for
+          // the freshly loaded document.
+          const markers = annotationMarkersRef.current;
+          if (markers.length > 0) {
+            applyAnnotationMarkers(webview, markers);
+          }
+        };
+        const handleWebviewFocus = () => {
+          onFocusPane?.();
+          webview.focus?.();
+          const focusBrowser = getDesktopHost()?.browser?.focus;
+          if (typeof focusBrowser === "function") {
+            void focusBrowser(browserIdRef.current).catch((error) => {
+              console.error("[browser-webview] focus failed", error);
+            });
+          }
+        };
 
-    webview.addEventListener("did-start-loading", handleStartLoading);
-    webview.addEventListener("did-stop-loading", handleStopLoading);
-    webview.addEventListener("will-navigate", handleWillNavigate);
-    webview.addEventListener("did-navigate", handleNavigate);
-    webview.addEventListener("did-navigate-in-page", handleNavigate);
-    webview.addEventListener("page-title-updated", handleTitleUpdated);
-    webview.addEventListener("page-favicon-updated", handleFaviconUpdated);
-    webview.addEventListener("did-fail-load", handleLoadFailed);
-    webview.addEventListener("dom-ready", handleDomReady);
-    webview.addEventListener("focus", handleWebviewFocus);
-    webview.addEventListener("mousedown", handleWebviewFocus);
+        webview.addEventListener("did-start-loading", handleStartLoading);
+        webview.addEventListener("did-stop-loading", handleStopLoading);
+        webview.addEventListener("will-navigate", handleWillNavigate);
+        webview.addEventListener("did-navigate", handleNavigate);
+        webview.addEventListener("did-navigate-in-page", handleNavigate);
+        webview.addEventListener("page-title-updated", handleTitleUpdated);
+        webview.addEventListener("page-favicon-updated", handleFaviconUpdated);
+        webview.addEventListener("did-fail-load", handleLoadFailed);
+        webview.addEventListener("dom-ready", handleDomReady);
+        webview.addEventListener("focus", handleWebviewFocus);
+        webview.addEventListener("mousedown", handleWebviewFocus);
 
-    if (isPresentedRef.current) {
-      rememberResolvedBrowserWebviewSize(browserId, webview);
-    }
-    sizeObserver?.observe(host);
-    sizeObserver?.observe(clip);
-    if (initialUnsafeNavigationMessage) {
-      updateBrowserRef.current(browserIdRef.current, {
-        isLoading: false,
-        lastError: initialUnsafeNavigationMessage,
+        if (isPresentedRef.current) {
+          rememberResolvedBrowserWebviewSize(browserId, webview);
+        }
+        sizeObserver?.observe(host);
+        sizeObserver?.observe(clip);
+        if (initialUnsafeNavigationMessage) {
+          updateBrowserRef.current(browserIdRef.current, {
+            isLoading: false,
+            lastError: initialUnsafeNavigationMessage,
+          });
+        }
+
+        cleanup = () => {
+          sizeObserver?.disconnect();
+          webview.removeEventListener("did-start-loading", handleStartLoading);
+          webview.removeEventListener("did-stop-loading", handleStopLoading);
+          webview.removeEventListener("will-navigate", handleWillNavigate);
+          webview.removeEventListener("did-navigate", handleNavigate);
+          webview.removeEventListener("did-navigate-in-page", handleNavigate);
+          webview.removeEventListener("page-title-updated", handleTitleUpdated);
+          webview.removeEventListener("page-favicon-updated", handleFaviconUpdated);
+          webview.removeEventListener("did-fail-load", handleLoadFailed);
+          webview.removeEventListener("dom-ready", handleDomReady);
+          webview.removeEventListener("focus", handleWebviewFocus);
+          webview.removeEventListener("mousedown", handleWebviewFocus);
+          const browserStillExists = Boolean(
+            useBrowserStore.getState().browsersById[browserIdRef.current],
+          );
+          if (browserStillExists) {
+            releaseResidentBrowserWebview(browserIdRef.current, webview);
+          } else {
+            removeResidentBrowserWebview(browserIdRef.current);
+          }
+          selectorControllerRef.current?.stopForWebview(webview);
+          if (webviewRef.current === webview) {
+            webviewRef.current = null;
+          }
+        };
+      })
+      .catch((error: unknown) => {
+        if (!cancelled)
+          updateBrowserRef.current(browserId, {
+            isLoading: false,
+            lastError:
+              error instanceof Error ? error.message : browserErrorLabelsRef.current.failedToLoad,
+          });
       });
-    }
-
     return () => {
-      sizeObserver?.disconnect();
-      webview.removeEventListener("did-start-loading", handleStartLoading);
-      webview.removeEventListener("did-stop-loading", handleStopLoading);
-      webview.removeEventListener("will-navigate", handleWillNavigate);
-      webview.removeEventListener("did-navigate", handleNavigate);
-      webview.removeEventListener("did-navigate-in-page", handleNavigate);
-      webview.removeEventListener("page-title-updated", handleTitleUpdated);
-      webview.removeEventListener("page-favicon-updated", handleFaviconUpdated);
-      webview.removeEventListener("did-fail-load", handleLoadFailed);
-      webview.removeEventListener("dom-ready", handleDomReady);
-      webview.removeEventListener("focus", handleWebviewFocus);
-      webview.removeEventListener("mousedown", handleWebviewFocus);
-      const browserStillExists = Boolean(
-        useBrowserStore.getState().browsersById[browserIdRef.current],
-      );
-      if (browserStillExists) {
-        releaseResidentBrowserWebview(browserIdRef.current, webview);
-      } else {
-        removeResidentBrowserWebview(browserIdRef.current);
-      }
-      selectorControllerRef.current?.stopForWebview(webview);
-      if (webviewRef.current === webview) {
-        webviewRef.current = null;
-      }
+      cancelled = true;
+      cleanup();
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [browserId, onFocusPane]);
+  }, [browserId, serverId, workspaceId, onFocusPane]);
 
   useEffect(() => {
     const webview = webviewRef.current;

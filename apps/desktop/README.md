@@ -43,6 +43,23 @@ With the development server running, `npm run test:e2e:server-listen --workspace
 checks the form, persisted configuration and connection recovery across three desktop launches.
 See [the implementation report](../../docs/reports/clients/desktop-server-listen.md) for validation.
 
+### Remote Workspace browser
+
+For Hosts connected through the online service relay, the built-in browser forwards
+`localhost`, `*.localhost`, IPv4 loopback and `::1` to the Workspace Host. Update both
+Electron and the remote daemon to enable this capability. Browser profiles are isolated
+by Host; non-loopback websites connect directly in these profiles, without system HTTP
+proxy rules. Direct TCP and SSH browser routing retain their existing behavior.
+
+After building `target/debug/daemon` and desktop main, run the focused network test:
+
+```sh
+env -u ELECTRON_RUN_AS_NODE npm exec --workspace=@ait/desktop -- electron e2e/browser-relay-network.e2e.mjs
+```
+
+It uses temporary profiles, a real daemon and a local relay fixture to verify Chromium
+proxy selection, a 200 KB response and reconnection. See [ADR-152](../../docs/decisions/clients/adr-152-remote-workspace-browser-loopback.md).
+
 ### Coexistence with Paseo
 
 Ait uses its own Electron profile and `ait://` links. Desktop overrides now use `AIT_*`

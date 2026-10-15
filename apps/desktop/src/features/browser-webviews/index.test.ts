@@ -44,6 +44,14 @@ class FakeBrowserGuest {
 }
 
 describe("browser webview attachment", () => {
+  test("accepts a remote profile only when it belongs to this host window", () => {
+    const input = { src: "http://127.0.0.1:4322/", partition: "persist:ait-browser-relay-host" };
+    expect(isPaseoBrowserWebviewAttach(input)).toBe(false);
+    expect(isPaseoBrowserWebviewAttach(input, [input.partition])).toBe(true);
+    expect(
+      isPaseoBrowserWebviewAttach({ ...input, src: "file:///tmp/page.html" }, [input.partition]),
+    ).toBe(false);
+  });
   test("accepts only allowed URLs on the shared profile partition", () => {
     expect(
       isPaseoBrowserWebviewAttach({

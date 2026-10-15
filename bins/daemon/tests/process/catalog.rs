@@ -25,8 +25,8 @@ async fn production_installs_every_in_scope_method_without_placeholders() {
         .implemented_capabilities
         .into_iter()
         .collect::<BTreeSet<_>>();
-    assert_eq!(published.len(), 201);
-    assert_eq!(implemented.len(), 200);
+    assert_eq!(published.len(), 204);
+    assert_eq!(implemented.len(), 203);
     assert!(implemented.contains("bot.message.send.request"));
     assert!(implemented.contains("workspace.get.request"));
     assert!(implemented.is_subset(&published));
@@ -54,7 +54,18 @@ async fn production_installs_every_in_scope_method_without_placeholders() {
         .chain(terminal::capabilities::implemented_methods())
         .map(|spec| (spec.name, spec.kind))
         .collect::<BTreeMap<_, _>>();
-    assert_eq!(catalog.len(), 188);
+    assert_eq!(catalog.len(), 191);
+    for name in [
+        "browser.tunnel.open.request",
+        "browser.tunnel.read.request",
+        "browser.tunnel.write.request",
+    ] {
+        assert!(implemented.contains(name));
+        assert_eq!(
+            catalog.get(name),
+            Some(&model::methods::InboundKind::Request)
+        );
+    }
     assert_eq!(
         catalog.get("workspace.get.request"),
         Some(&model::methods::InboundKind::Request)

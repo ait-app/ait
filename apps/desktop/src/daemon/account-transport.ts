@@ -1,9 +1,18 @@
-import type { WebContents } from "electron";
 import { WebSocket, type RawData } from "ws";
 import type { AccountSessionManager } from "./account-session.js";
 
+/** Renderer or main-process consumer of an authenticated relay connection. */
+export interface AccountTransportOwner {
+  isDestroyed(): boolean;
+  send(channel: string, payload: Record<string, unknown>): void;
+  once(event: "destroyed", listener: () => void): unknown;
+  on(event: "did-start-navigation", listener: Session["navigated"]): unknown;
+  removeListener(event: "destroyed", listener: () => void): unknown;
+  removeListener(event: "did-start-navigation", listener: Session["navigated"]): unknown;
+}
+
 interface Session {
-  owner: WebContents;
+  owner: AccountTransportOwner;
   destroyed: () => void;
   navigated: (_event: unknown, _url: string, sameDocument: boolean, mainFrame: boolean) => void;
   socket: WebSocket | null;
@@ -28,7 +37,12 @@ export class AccountTransportManager {
       session.owner.send("paseo:event:account-relay-transport", { sessionId: id, ...payload });
   }
 
-  async open(owner: WebContents, id: string, host: string, center: string): Promise<void> {
+  async open(
+    owner: AccountTransportOwner,
+    id: string,
+    host: string,
+    center: string,
+  ): Promise<void> {
     if (!/^account-[a-zA-Z0-9-]{1,80}$/.test(id) || !/^[0-9a-f-]{36}$/i.test(host))
       throw new Error("Invalid relay transport identity");
     if (this.sessions.has(id) || this.sessions.size >= 16)
@@ -144,7 +158,7 @@ export class AccountTransportManager {
     });
   }
 
-  acknowledge(owner: WebContents, id: string, sequence: number): void {
+  acknowledge(owner: AccountTransportOwner, id: string, sequence: number): void {
     const session = this.owned(owner, id);
     const pending = session.pending.get(sequence);
     if (!pending) return;
@@ -155,7 +169,7 @@ export class AccountTransportManager {
   }
 
   async send(
-    owner: WebContents,
+    owner: AccountTransportOwner,
     id: string,
     input: { text?: string; binaryBase64?: string },
   ): Promise<void> {
@@ -188,7 +202,7 @@ export class AccountTransportManager {
     });
   }
 
-  close(owner: WebContents, id: string): void {
+  close(owner: AccountTransportOwner, id: string): void {
     const session = this.sessions.get(id);
     if (!session) return;
     if (session.owner !== owner) throw new Error("Relay transport belongs to another window");
@@ -199,7 +213,7 @@ export class AccountTransportManager {
     for (const [id, session] of this.sessions) this.finish(id, session);
   }
 
-  private owned(owner: WebContents, id: string): Session {
+  private owned(owner: AccountTransportOwner, id: string): Session {
     const session = this.sessions.get(id);
     if (!session || session.owner !== owner || session.closed)
       throw new Error("Relay transport is closed");
