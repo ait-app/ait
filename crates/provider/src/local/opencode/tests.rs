@@ -346,6 +346,36 @@ async fn acp_live_and_replayed_turns_keep_each_prompt_before_its_reply_without_d
 
 #[cfg(unix)]
 #[tokio::test]
+async fn interrupted_compaction_fails_the_live_marker_before_cancelled_turn_settlement() {
+    let (_root, client, spec) = fixture("compaction-interrupted");
+    let mut session = client.create_session(&spec).await.unwrap();
+    session.start_turn("/compact", &spec.config).await.unwrap();
+    let mut statuses = Vec::new();
+    loop {
+        match event(session.as_mut()).await {
+            AgentTurnEvent::Timeline(entry) if entry.item["type"] == "compaction" => {
+                statuses.push(entry.item["status"].as_str().unwrap().to_owned());
+            }
+            AgentTurnEvent::History(entries) => {
+                assert_eq!(statuses, ["loading", "failed"]);
+                assert!(
+                    entries
+                        .iter()
+                        .any(|entry| entry.item["type"] == "compaction"
+                            && entry.item["status"] == "failed")
+                );
+            }
+            AgentTurnEvent::Cancelled => break,
+            AgentTurnEvent::RuntimeInfo(_) | AgentTurnEvent::Timeline(_) => {}
+            other => panic!("unexpected interrupted compaction event: {other:?}"),
+        }
+    }
+    assert_eq!(statuses, ["loading", "failed"]);
+    session.close().await.unwrap();
+}
+
+#[cfg(unix)]
+#[tokio::test]
 async fn acp_native_command_without_a_user_row_keeps_history_and_does_not_repeat_the_last_answer() {
     let (_root, client, spec) = fixture("normal");
     let mut session = client.create_session(&spec).await.unwrap();
@@ -353,18 +383,39 @@ async fn acp_native_command_without_a_user_row_keeps_history_and_does_not_repeat
     let previous = completed(session.as_mut()).await;
     session.start_turn("/compact", &spec.config).await.unwrap();
     let mut replayed = false;
+    let mut statuses = Vec::new();
     loop {
         match event(session.as_mut()).await {
             AgentTurnEvent::History(entries) => {
-                assert_replay(&previous, &entries);
+                let previous_entries: Vec<_> = entries
+                    .iter()
+                    .filter(|entry| entry.item["type"] != "compaction")
+                    .cloned()
+                    .collect();
+                assert_replay(&previous, &previous_entries);
+                assert!(
+                    entries
+                        .iter()
+                        .any(|entry| entry.item["type"] == "compaction"
+                            && entry.item["status"] == "completed")
+                );
                 replayed = true;
             }
             AgentTurnEvent::Completed(text) => {
                 assert!(replayed);
                 assert_eq!(text, None);
+                assert_eq!(statuses, ["loading", "completed"]);
                 break;
             }
             AgentTurnEvent::Timeline(entry) => {
+                if entry.item["type"] == "compaction" {
+                    assert!(
+                        !replayed,
+                        "compaction progress must arrive before history replay"
+                    );
+                    statuses.push(entry.item["status"].as_str().unwrap().to_owned());
+                    continue;
+                }
                 assert_eq!(entry.item["type"], "user_message");
                 assert_eq!(entry.item["text"], "/compact");
             }

@@ -471,7 +471,9 @@ impl Execution {
                         stream.update(update)?;
                         for event in stream.events.drain(..) {
                             // Completion is published only after native replay confirms the prompt.
-                            if !matches!(event, AgentTurnEvent::Timeline(_))
+                            if (!matches!(event, AgentTurnEvent::Timeline(_))
+                                || matches!(&event, AgentTurnEvent::Timeline(entry)
+                                    if entry.item["type"] == "compaction"))
                                 && !matches!(&event, AgentTurnEvent::Progress { entry, .. } if entry.item["type"] == "user_message")
                             {
                                 self.emit(event).await?;
@@ -504,6 +506,10 @@ impl Execution {
                 _ => {}
             }
         };
+        stream.finish_compactions();
+        for event in stream.events.drain(..) {
+            self.emit(event).await?;
+        }
         self.settle(connection, terminal, failure).await
     }
 

@@ -28,6 +28,9 @@ pub(super) struct Stream {
     observation: usize,
     pub(super) last_message: Option<String>,
     images: crate::local::images::ImageStore,
+    compactions: crate::local::compaction::Compactions,
+    /// Opening identity for older journals whose compaction end omits a native ID.
+    pub(super) native_compaction: Option<String>,
 }
 
 impl Stream {
@@ -46,6 +49,8 @@ impl Stream {
         self.current = None;
         self.tools.clear();
         self.completed_tools.clear();
+        self.compactions = crate::local::compaction::Compactions::default();
+        self.native_compaction = None;
     }
 
     pub(super) fn update(&mut self, update: &Value) -> Result<(), AgentSessionError> {
@@ -53,6 +58,15 @@ impl Stream {
             Some("agent_message_chunk") => self.chunk("assistant_message", update),
             Some("agent_thought_chunk") => self.chunk("reasoning", update),
             Some("tool_call" | "tool_call_update") => self.tool(update),
+            Some("compaction_update") => {
+                let status = match update["status"].as_str() {
+                    Some("in_progress") => "loading",
+                    Some("completed") => "completed",
+                    Some("failed" | "cancelled") => "failed",
+                    _ => return Ok(()),
+                };
+                self.compaction(text(update, "compactionId")?, status, None)
+            }
             Some("usage_update") => {
                 let usage = AgentUsage {
                     context_window_used_tokens: Some(
@@ -72,6 +86,36 @@ impl Stream {
             // Harness currently omits plans/commands/modes. Unknown extension notifications
             // have no authority over the host's lifecycle or execution policy.
             _ => Ok(()),
+        }
+    }
+
+    /// Publish one bounded, deduplicated native compaction lifecycle marker.
+    /// Invalid marker identities or metadata return a protocol error.
+    pub(super) fn compaction(
+        &mut self,
+        id: &str,
+        status: &'static str,
+        trigger: Option<&str>,
+    ) -> Result<(), AgentSessionError> {
+        self.flush();
+        if let Some(item) = self.compactions.marker(id, status, trigger)? {
+            let entry = self.entry(
+                format!("native:{}:compaction:{id}:{status}", self.turn),
+                item,
+            );
+            self.events.push_back(AgentTurnEvent::Timeline(entry));
+        }
+        Ok(())
+    }
+
+    /// Stop pending loading markers when native execution ends without closing them.
+    pub(super) fn finish_compactions(&mut self) {
+        for item in self.compactions.fail_pending() {
+            let id = item["compactionId"]
+                .as_str()
+                .expect("native compaction identity");
+            let entry = self.entry(format!("native:{}:compaction:{id}:failed", self.turn), item);
+            self.events.push_back(AgentTurnEvent::Timeline(entry));
         }
     }
 

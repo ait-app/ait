@@ -99,7 +99,10 @@ def options():
 
 
 def content(row):
-    if row["type"] == "user":
+    if row["type"] == "compaction":
+        update({"sessionUpdate":"session_info_update", "_meta":{"opencode/compaction": {
+            "messageId":row["id"], "status":row.get("status", "completed"), "reason":"manual"}}})
+    elif row["type"] == "user":
         update({"sessionUpdate": "user_message_chunk", "messageId": row["id"], "content": {"type": "text", "text": row["text"]}})
     else:
         for part in row["content"]:
@@ -218,7 +221,17 @@ for line in sys.stdin:
         assert active is None
         active = identity
         if params["prompt"] == [{"type": "text", "text": "/compact"}]:
-            reply(active, {"stopReason": "end_turn", "userMessageId": params["messageId"]})
+            value = state()
+            compact_id = "compact-" + str(value["seq"])
+            interrupted = scenario == "compaction-interrupted"
+            for status in (("started",) if interrupted else ("started", "completed")):
+                update({"sessionUpdate":"session_info_update", "_meta":{"opencode/compaction": {
+                    "messageId":compact_id, "status":status, "reason":"manual"}}})
+            value["history"].append({"id":compact_id, "type":"compaction",
+                                     "status":"failed" if interrupted else "completed"})
+            save(value)
+            reply(active, {"stopReason": "cancelled" if interrupted else "end_turn",
+                           "userMessageId": params["messageId"]})
             active = None
             continue
         value = state()

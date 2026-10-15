@@ -49,6 +49,7 @@ pub(super) fn steer_rejected(error: &Value) -> bool {
 pub(super) struct Stream {
     pub(super) events: std::collections::VecDeque<AgentTurnEvent>,
     completed: BTreeSet<String>,
+    compactions: BTreeSet<String>,
     text_bytes: BTreeMap<String, usize>,
     summary_indices: BTreeMap<String, u64>,
     tools: BTreeMap<String, Vec<(String, Value)>>,
@@ -69,6 +70,7 @@ impl Stream {
             return Err(AgentSessionError::Failed);
         }
         self.text_bytes.remove(id);
+        self.compactions.remove(id);
         self.summary_indices.remove(id);
         if let Some(items) = self.tools.remove(id) {
             self.tool_rows -= items.len();
@@ -84,6 +86,9 @@ impl Stream {
         let item = match method {
             "item/agentMessage/delta" | "item/reasoning/summaryTextDelta" => {
                 self.text_delta(method, params)?
+            }
+            "item/started" if params["item"]["type"] == "contextCompaction" => {
+                return self.compaction_started(params);
             }
             "item/started" => return self.tool_started(params),
             "item/commandExecution/outputDelta" | "item/fileChange/outputDelta" => {
@@ -104,6 +109,27 @@ impl Stream {
                 item,
             },
         }))
+    }
+
+    fn compaction_started(
+        &mut self,
+        params: &Value,
+    ) -> Result<Option<AgentTurnEvent>, AgentSessionError> {
+        let id = text(&params["item"], "id")?;
+        let turn = text(params, "turnId")?;
+        if self.completed.contains(id) || self.compactions.contains(id) {
+            return Ok(None);
+        }
+        if self.compactions.len() >= MAX_ITEMS {
+            return Err(AgentSessionError::Failed);
+        }
+        self.compactions.insert(id.to_owned());
+        Ok(Some(AgentTurnEvent::Timeline(NativeItem {
+            key: format!("native:{turn}:{id}:loading"),
+            turn_id: Some(turn.to_owned()),
+            timestamp: discovery::timestamp(),
+            item: json!({"type":"compaction","status":"loading"}),
+        })))
     }
 
     fn text_delta(

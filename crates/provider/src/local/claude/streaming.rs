@@ -23,6 +23,7 @@ pub(super) struct Stream {
     partial_bytes: BTreeMap<String, usize>,
     message_id: Option<String>,
     blocks: BTreeMap<u64, String>,
+    compacting: bool,
 }
 
 impl Stream {
@@ -93,8 +94,22 @@ impl Stream {
             Some("stream_event") => self.partial(&record["event"]),
             Some("assistant") => self.assistant(record),
             Some("user") => self.user(record),
+            Some("system") if record["subtype"] == "status" && record["status"] == "compacting" => {
+                if !self.compacting {
+                    let id = format!(
+                        "compaction-start:{}",
+                        record["uuid"]
+                            .as_str()
+                            .map_or_else(|| Uuid::new_v4().to_string(), str::to_owned)
+                    );
+                    self.complete(&id, json!({"type":"compaction","status":"loading"}), record)?;
+                    self.compacting = true;
+                }
+                Ok(())
+            }
             Some("system") if record["subtype"] == "compact_boundary" => {
                 let id = text(record, "uuid")?;
+                self.compacting = false;
                 self.complete(
                     id,
                     json!({"type":"compaction","status":"completed"}),

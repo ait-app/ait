@@ -244,7 +244,12 @@ impl Session {
                     return Err(AgentSessionError::Failed);
                 }
                 self.cursor = seq;
-                if self.active.is_some() || event["type"] == "user/message" {
+                if self.active.is_some()
+                    || matches!(
+                        event["type"].as_str(),
+                        Some("user/message" | "compaction/start" | "compaction/end")
+                    )
+                {
                     self.history(event)?;
                 }
                 Ok(())

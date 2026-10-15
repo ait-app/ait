@@ -38,9 +38,11 @@ pub(super) fn apply(
             stream.begin(format!("dsh:{session}:{turn}"));
             tools.clear();
         }
+        Some("turn/end") => stream.finish_compactions(),
         Some("user/message") if is_user_message(event) => stream
             .events
             .push_back(AgentTurnEvent::Timeline(user(event, session)?)),
+        Some("compaction/start" | "compaction/end") => compaction(stream, event, session)?,
         Some("assistant/message") => {
             let message = &data["message"];
             for block in message["content"]
@@ -124,6 +126,36 @@ pub(super) fn apply(
         entry.timestamp = timestamp(time)?;
     }
     Ok(())
+}
+
+fn compaction(stream: &mut Stream, event: &Value, session: &str) -> Result<(), AgentSessionError> {
+    let data = &event["data"];
+    let started = event["type"] == "compaction/start";
+    let id = match data.get("compactionId") {
+        Some(_) => text(data, "compactionId")?.to_owned(),
+        None if !started && stream.native_compaction.is_some() => stream
+            .native_compaction
+            .clone()
+            .expect("opening compaction identity"),
+        None => format!(
+            "dsh:{session}:{}",
+            event["seq"].as_u64().ok_or(AgentSessionError::Failed)?
+        ),
+    };
+    stream.native_compaction = started.then(|| id.clone());
+    let status = if event["type"] == "compaction/start" {
+        "loading"
+    } else if data.get("error").is_some_and(|error| !error.is_null()) {
+        "failed"
+    } else {
+        "completed"
+    };
+    let trigger = match data.get("turn") {
+        Some(Value::Null) => "manual",
+        Some(turn) if turn.as_u64().is_some() => "auto",
+        _ => return Err(AgentSessionError::Failed),
+    };
+    stream.compaction(&id, status, Some(trigger))
 }
 
 fn tool_result(

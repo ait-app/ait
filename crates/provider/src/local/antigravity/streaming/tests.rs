@@ -1,5 +1,49 @@
 use super::*;
 
+#[test]
+fn checkpoint_compaction_emits_loading_then_completion_and_deduplicates_updates() {
+    let mut stream = stream();
+    for state in ["ACTIVE", "ACTIVE", "DONE", "DONE", "ACTIVE"] {
+        stream.update(&step(4, state, "checkpoint")).unwrap();
+    }
+    let entries: Vec<_> = stream
+        .events
+        .into_iter()
+        .map(|event| {
+            let AgentTurnEvent::Timeline(entry) = event else {
+                panic!("compaction marker")
+            };
+            entry
+        })
+        .collect();
+    assert_eq!(entries.len(), 2);
+    assert_eq!(entries[0].item["status"], "loading");
+    assert_eq!(entries[1].item["status"], "completed");
+    assert_eq!(
+        entries[0].item["compactionId"],
+        entries[1].item["compactionId"]
+    );
+}
+
+#[test]
+fn compaction_without_start_replays_and_interrupted_checkpoint_stops_loading() {
+    let mut stream = stream();
+    stream.update(&step(3, "DONE", "checkpoint")).unwrap();
+    stream.update(&step(4, "ACTIVE", "checkpoint")).unwrap();
+    stream.abort(Failure::Exit);
+    let statuses: Vec<_> = stream
+        .events
+        .iter()
+        .filter_map(|event| match event {
+            AgentTurnEvent::Timeline(entry) if entry.item["type"] == "compaction" => {
+                entry.item["status"].as_str()
+            }
+            _ => None,
+        })
+        .collect();
+    assert_eq!(statuses, ["completed", "loading", "failed"]);
+}
+
 fn stream() -> Stream {
     let mut stream = Stream::default();
     stream.begin("turn".to_owned(), "conversation".to_owned());
@@ -118,9 +162,9 @@ fn rejects_foreign_duplicate_unfinished_and_oversized_events() {
 }
 
 #[test]
-fn ignores_native_user_checkpoint_and_future_categories() {
+fn ignores_native_user_and_future_categories() {
     let mut stream = stream();
-    for kind in ["user_input", "checkpoint", "future"] {
+    for kind in ["user_input", "future"] {
         stream.update(&step(1, "DONE", kind)).unwrap();
     }
     assert!(stream.events.is_empty());

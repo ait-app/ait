@@ -11,6 +11,7 @@ import {
   reduceStreamUpdate,
   streamTimelineItemIdentity,
   type AgentToolCallItem,
+  type CompactionItem,
   type StreamItem,
   isAgentToolCallItem,
   upsertUserMessage,
@@ -422,8 +423,8 @@ function todoTimeline(
 }
 
 function compactionTimeline(
-  status: "loading" | "completed",
-  trigger?: "auto" | "manual",
+  status: CompactionItem["status"],
+  trigger?: CompactionItem["trigger"],
 ): AgentStreamEventPayload {
   return {
     type: "timeline",
@@ -435,6 +436,98 @@ function compactionTimeline(
     },
   };
 }
+
+it.each(["codex", "claude", "opencode", "deepseek-harness", "antigravity"] as const)(
+  "%s compaction is visible immediately and updates to its terminal state",
+  (provider) => {
+    const timestamp = new Date("2026-10-13T12:00:00Z");
+    const loading = reduceStreamUpdate(
+      [],
+      {
+        type: "timeline",
+        provider,
+        item: { type: "compaction", status: "loading", compactionId: "compact" },
+      },
+      timestamp,
+    );
+    expect(loading).toEqual([expect.objectContaining({ kind: "compaction", status: "loading" })]);
+    for (const status of ["completed", "failed"] as const) {
+      const settled = reduceStreamUpdate(
+        loading,
+        {
+          type: "timeline",
+          provider,
+          item: { type: "compaction", status, compactionId: "compact" },
+        },
+        timestamp,
+      );
+      expect(settled).toEqual([expect.objectContaining({ kind: "compaction", status })]);
+      expect(settled[0].id).toBe(loading[0].id);
+      const replayed = reduceStreamUpdate(
+        settled,
+        {
+          type: "timeline",
+          provider,
+          item: { type: "compaction", status, compactionId: "compact" },
+        },
+        timestamp,
+      );
+      expect(replayed).toHaveLength(1);
+      expect(
+        reduceStreamUpdate(
+          replayed,
+          {
+            type: "timeline",
+            provider,
+            item: { type: "compaction", status: "loading", compactionId: "compact" },
+          },
+          timestamp,
+        ),
+      ).toBe(replayed);
+    }
+  },
+);
+
+it("pairs overlapping compactions by native identity and terminalizes interrupted loading", () => {
+  const timestamp = new Date("2026-10-13T12:00:00Z");
+  let state: StreamItem[] = [];
+  for (const [id, status] of [
+    ["a", "loading"],
+    ["b", "loading"],
+    ["b", "completed"],
+  ] as const) {
+    state = reduceStreamUpdate(
+      state,
+      {
+        type: "timeline",
+        provider: "opencode",
+        item: { type: "compaction", status, compactionId: id },
+      },
+      timestamp,
+    );
+  }
+  expect(
+    state.map((item) => item.kind === "compaction" && [item.compactionId, item.status]),
+  ).toEqual([
+    ["a", "loading"],
+    ["b", "completed"],
+  ]);
+  state = reduceStreamUpdate(
+    state,
+    {
+      type: "turn_failed",
+      provider: "opencode",
+      error: "Native turn failed",
+    },
+    timestamp,
+  );
+  expect(
+    state.map((item) => item.kind === "compaction" && [item.compactionId, item.status]),
+  ).toEqual([
+    ["a", "failed"],
+    ["b", "completed"],
+  ]);
+});
 
 function findToolByCallId(state: StreamItem[], callId: string): AgentToolCallItem | undefined {
   return state.find(

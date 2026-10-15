@@ -1,6 +1,66 @@
 use super::*;
 
 #[test]
+fn native_compaction_markers_are_visible_and_pair_by_identity() {
+    for terminal in ["completed", "failed"] {
+        let mut stream = Stream::default();
+        stream
+            .update(&json!({"sessionUpdate":"session_info_update",
+            "_meta":{"opencode/compaction":{"messageId":"future","status":"future"}}}))
+            .unwrap();
+        assert!(stream.events.is_empty());
+        for status in ["started", "started", terminal, terminal] {
+            stream
+                .update(&json!({"sessionUpdate":"session_info_update",
+                "_meta":{"opencode/compaction":{"messageId":"compact","status":status,
+                    "reason":"manual"}}}))
+                .unwrap();
+        }
+        let entries: Vec<_> = stream
+            .events
+            .into_iter()
+            .map(|event| {
+                let AgentTurnEvent::Timeline(entry) = event else {
+                    panic!("compaction marker")
+                };
+                entry
+            })
+            .collect();
+        assert_eq!(entries.len(), 2);
+        assert_eq!(entries[0].item["status"], "loading");
+        assert_eq!(entries[1].item["status"], terminal);
+        assert_eq!(entries[0].item["trigger"], "manual");
+        assert_eq!(
+            entries[0].item["compactionId"],
+            entries[1].item["compactionId"]
+        );
+        assert_ne!(entries[0].key, entries[1].key);
+    }
+}
+
+#[test]
+fn compaction_terminal_history_and_native_interruption_do_not_leave_loading_markers() {
+    let mut stream = Stream::default();
+    for (id, status) in [("history", "completed"), ("open", "started")] {
+        stream
+            .update(&json!({"sessionUpdate":"session_info_update",
+            "_meta":{"opencode/compaction":{"messageId":id,"status":status,
+                "reason":"auto"}}}))
+            .unwrap();
+    }
+    stream.finish_compactions();
+    let statuses: Vec<_> = stream
+        .events
+        .iter()
+        .filter_map(|event| match event {
+            AgentTurnEvent::Timeline(entry) => entry.item["status"].as_str(),
+            _ => None,
+        })
+        .collect();
+    assert_eq!(statuses, ["completed", "loading", "failed"]);
+}
+
+#[test]
 fn wrapped_native_output_is_unwrapped_before_utf8_bounding() {
     let output = "文".repeat(100_000);
     let mut stream = Stream::default();

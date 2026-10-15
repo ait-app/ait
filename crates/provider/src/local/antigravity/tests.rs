@@ -63,6 +63,30 @@ async fn completed(session: &mut dyn AgentSession) -> Vec<AgentTurnEvent> {
 }
 
 #[tokio::test]
+async fn headless_checkpoint_compaction_is_visible_before_turn_completion() {
+    let (_directory, mut client, spec) = fixture();
+    client.environment = AgentEnvironment::try_from(BTreeMap::from([(
+        "AGY_FIXTURE_SCENARIO".to_owned(),
+        "compaction".to_owned(),
+    )]))
+    .unwrap();
+    let mut session = client.create_session(&spec).await.unwrap();
+    session.start_turn("compress", &spec.config).await.unwrap();
+    let events = completed(session.as_mut()).await;
+    let statuses: Vec<_> = events
+        .iter()
+        .filter_map(|event| match event {
+            AgentTurnEvent::Timeline(entry) if entry.item["type"] == "compaction" => {
+                entry.item["status"].as_str()
+            }
+            _ => None,
+        })
+        .collect();
+    assert_eq!(statuses, ["loading", "completed"]);
+    session.close().await.unwrap();
+}
+
+#[tokio::test]
 async fn discovers_native_models_and_labels_without_a_prompt() {
     let (directory, client, spec) = fixture();
     assert!(client.is_available().await.unwrap());
@@ -122,7 +146,7 @@ async fn streams_multiple_turns_resumes_and_restarts_for_config_changes() {
             _ => None,
         })
         .collect();
-    assert_eq!(timeline.len(), 2);
+    assert_eq!(timeline.len(), 3);
     assert_eq!(timeline[0].item["type"], "tool_call");
     assert_eq!(timeline[1].item["text"], "Hello world");
     session.start_turn("second", &spec.config).await.unwrap();

@@ -3,6 +3,34 @@ use crate::ports::agent_session::{AgentClient, AgentResumePurpose, AgentTurnEven
 use serde_json::json;
 
 #[tokio::test]
+async fn idle_native_manual_compaction_emits_loading_and_completed_without_a_foreground_turn() {
+    let fixture = Fixture::new().await;
+    let mut session = fixture.client.create_session(&fixture.spec).await.unwrap();
+    fixture.history(
+        1,
+        "compaction/start",
+        json!({"turn":null,"compactionId":"manual"}),
+    );
+    fixture.history(
+        2,
+        "compaction/end",
+        json!({"turn":null,"compactionId":"manual"}),
+    );
+    let mut statuses = Vec::new();
+    while statuses.len() < 2 {
+        match next(session.as_mut()).await {
+            AgentTurnEvent::Timeline(entry) if entry.item["type"] == "compaction" => {
+                statuses.push(entry.item["status"].as_str().unwrap().to_owned());
+            }
+            AgentTurnEvent::RuntimeInfo(_) => {}
+            other => panic!("unexpected idle compaction event: {other:?}"),
+        }
+    }
+    assert_eq!(statuses, ["loading", "completed"]);
+    session.close().await.unwrap();
+}
+
+#[tokio::test]
 async fn failed_native_turns_preserve_safe_classified_reasons() {
     let fixture = Fixture::new().await;
     let mut session = fixture.client.create_session(&fixture.spec).await.unwrap();

@@ -386,6 +386,7 @@ export const ru: TranslationResources = {
       },
     },
     compaction: {
+      failed: "Не удалось сжать контекст",
       loading: "Сжатие контекста...",
       auto: "Контекст сжат автоматически",
       manual: "Контекст сжат вручную",

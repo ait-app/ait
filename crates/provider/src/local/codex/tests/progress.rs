@@ -3,6 +3,46 @@ use super::*;
 mod command_actions;
 
 #[tokio::test]
+async fn native_compaction_emits_loading_before_completion_for_auto_and_manual_requests() {
+    let fixture = Fixture::new();
+    fixture.mode("workflows");
+    let client = fixture.client();
+    for (manual, busy) in [(false, false), (true, false), (true, true)] {
+        let spec = fixture.spec();
+        let mut session = client.create_session(&spec).await.unwrap();
+        if busy {
+            session.start_turn("hang", &spec.config).await.unwrap();
+        }
+        if manual {
+            let mut prompt = crate::protocol::prompt::AgentPrompt::text("/compact");
+            prompt.client_message_id = Some(format!("compact-{busy}"));
+            session.out_of_band(&prompt).await.unwrap();
+        } else {
+            session
+                .start_turn("auto-compaction", &spec.config)
+                .await
+                .unwrap();
+        }
+        let mut statuses = Vec::new();
+        tokio::time::timeout(Duration::from_secs(3), async {
+            while statuses.len() < 2 {
+                match session.poll_turn().unwrap() {
+                    Some(AgentTurnEvent::Timeline(entry)) if entry.item["type"] == "compaction" => {
+                        statuses.push(entry.item["status"].as_str().unwrap().to_owned());
+                    }
+                    Some(AgentTurnEvent::Failed) => panic!("native compaction failed"),
+                    _ => tokio::time::sleep(Duration::from_millis(5)).await,
+                }
+            }
+        })
+        .await
+        .unwrap();
+        assert_eq!(statuses, ["loading", "completed"]);
+        session.close().await.unwrap();
+    }
+}
+
+#[tokio::test]
 async fn native_plan_progress_is_a_durable_todo_snapshot_or_a_reviewable_plan() {
     let fixture = Fixture::new();
     fixture.mode("workflows");

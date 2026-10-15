@@ -39,6 +39,7 @@ pub(super) struct Stream {
     foreground_turn: Option<String>,
     observation: u64,
     images: ImageStore,
+    compactions: crate::local::compaction::Compactions,
 }
 
 impl Stream {
@@ -104,6 +105,24 @@ impl Stream {
                 &update["content"],
             ),
             Some("tool_call" | "tool_call_update") => self.tool(update),
+            Some("session_info_update")
+                if update
+                    .pointer("/_meta/opencode~1compaction")
+                    .is_some_and(Value::is_object) =>
+            {
+                let marker = &update["_meta"]["opencode/compaction"];
+                let status = match marker["status"].as_str() {
+                    Some("started") => "loading",
+                    Some("completed") => "completed",
+                    Some("failed") => "failed",
+                    _ => return Ok(()),
+                };
+                self.compaction(
+                    super::config::text(marker, "messageId")?,
+                    status,
+                    marker["reason"].as_str(),
+                )
+            }
             Some("usage_update") => {
                 let usage = AgentUsage {
                     context_window_used_tokens: update["used"].as_u64(),
@@ -122,6 +141,31 @@ impl Stream {
                 Ok(())
             }
             _ => Ok(()),
+        }
+    }
+
+    fn compaction(
+        &mut self,
+        id: &str,
+        status: &'static str,
+        trigger: Option<&str>,
+    ) -> Result<(), AgentSessionError> {
+        self.flush();
+        if let Some(item) = self.compactions.marker(id, status, trigger)? {
+            let entry = self.entry(&format!("compaction:{id}:{status}"), item);
+            self.events.push_back(AgentTurnEvent::Timeline(entry));
+        }
+        Ok(())
+    }
+
+    /// Stop pending loading markers when native execution ends without closing them.
+    pub(super) fn finish_compactions(&mut self) {
+        for item in self.compactions.fail_pending() {
+            let id = item["compactionId"]
+                .as_str()
+                .expect("native compaction identity");
+            let entry = self.entry(&format!("compaction:{id}:failed"), item);
+            self.events.push_back(AgentTurnEvent::Timeline(entry));
         }
     }
 

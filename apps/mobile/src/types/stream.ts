@@ -2,6 +2,7 @@ import type { AttachmentMetadata } from "@/attachments/types";
 import type {
   AgentProvider,
   AgentTimelineItem,
+  CompactionTimelineItem,
   JsonValue,
   ToolCallDetail,
 } from "@ait/protocol/agent-types";
@@ -481,9 +482,13 @@ function mergeRetainedLifecycleItem(tail: StreamItem[], retained: StreamItem): S
     };
     return next;
   }
-  if (retained.kind === "compaction" && retained.status === "completed") {
+  if (retained.kind === "compaction" && retained.status !== "loading") {
     const tailIndex = tail.findIndex(
-      (item) => item.kind === "compaction" && item.status === "loading",
+      (item) =>
+        item.kind === "compaction" &&
+        (retained.compactionId
+          ? item.compactionId === retained.compactionId
+          : item.status === "loading"),
     );
     const existing = tail[tailIndex];
     if (tailIndex < 0 || !existing || existing.kind !== "compaction") {
@@ -493,7 +498,7 @@ function mergeRetainedLifecycleItem(tail: StreamItem[], retained: StreamItem): S
     next[tailIndex] = {
       ...existing,
       timelineCursor: retained.timelineCursor,
-      status: "completed",
+      status: retained.status,
       trigger: retained.trigger ?? existing.trigger,
       preTokens: retained.preTokens ?? existing.preTokens,
     };
@@ -788,15 +793,15 @@ export interface NotificationItem {
   message: string;
 }
 
-export interface CompactionItem {
+export interface CompactionItem extends Pick<
+  CompactionTimelineItem,
+  "status" | "compactionId" | "trigger" | "preTokens"
+> {
   kind: "compaction";
   id: string;
   timelineCursor?: TimelinePosition;
   turnId?: string;
   timestamp: Date;
-  status: "loading" | "completed";
-  trigger?: "auto" | "manual";
-  preTokens?: number;
 }
 
 export interface PluginTimelineStreamItem {
@@ -1471,14 +1476,19 @@ function reduceTimelineCompaction(
   timestamp: Date,
   timelineCursor?: TimelinePosition,
 ): StreamItem[] {
-  if (item.status === "completed") {
-    const loadingIdx = state.findIndex((s) => s.kind === "compaction" && s.status === "loading");
+  if (item.compactionId || item.status !== "loading") {
+    const loadingIdx = state.findIndex(
+      (s) =>
+        s.kind === "compaction" &&
+        (item.compactionId ? s.compactionId === item.compactionId : s.status === "loading"),
+    );
     const existing = loadingIdx >= 0 ? state[loadingIdx] : undefined;
     if (loadingIdx >= 0 && existing && existing.kind === "compaction") {
+      if (existing.status !== "loading" && item.status === "loading") return state;
       const updated: CompactionItem = {
         ...existing,
         ...(timelineCursor ? { timelineCursor } : {}),
-        status: "completed",
+        status: item.status,
         trigger: item.trigger ?? existing.trigger,
         preTokens: item.preTokens ?? existing.preTokens,
       };
@@ -1494,6 +1504,7 @@ function reduceTimelineCompaction(
     ...(timelineCursor ? { timelineCursor } : {}),
     timestamp,
     status: item.status,
+    compactionId: item.compactionId,
     trigger: item.trigger,
     preTokens: item.preTokens,
   };
@@ -1615,9 +1626,19 @@ export function reduceStreamUpdate(
       );
     case "thread_started":
     case "turn_started":
+      return finalizeActiveThoughts(state);
     case "turn_completed":
     case "turn_failed":
     case "turn_canceled":
+      return finalizeActiveThoughts(
+        state.some((item) => item.kind === "compaction" && item.status === "loading")
+          ? state.map((item) =>
+              item.kind === "compaction" && item.status === "loading"
+                ? { ...item, status: "failed" }
+                : item,
+            )
+          : state,
+      );
     case "permission_requested":
     case "permission_resolved":
     case "attention_required":

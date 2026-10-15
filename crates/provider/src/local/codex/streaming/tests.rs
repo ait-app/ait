@@ -4,6 +4,50 @@ mod command_actions;
 mod paseo;
 
 #[test]
+fn compaction_start_is_visible_once_and_stops_after_completion() {
+    let mut stream = Stream::default();
+    let native = json!({"type":"contextCompaction","id":"compact"});
+    let params = json!({"turnId":"turn","item":native});
+    let Some(AgentTurnEvent::Timeline(started)) = stream.progress("item/started", &params).unwrap()
+    else {
+        panic!("compaction must emit a durable loading marker");
+    };
+    assert_eq!(started.key, "native:turn:compact:loading");
+    assert_eq!(started.turn_id.as_deref(), Some("turn"));
+    assert_eq!(
+        started.item,
+        json!({"type":"compaction","status":"loading"})
+    );
+    assert!(stream.progress("item/started", &params).unwrap().is_none());
+
+    assert!(stream.complete(&native).unwrap());
+    let completed = discovery::timeline_item(&native, "turn", &started.timestamp)
+        .unwrap()
+        .unwrap();
+    assert_eq!(completed.item["status"], "completed");
+    let timeline = crate::storage::timeline::Timeline::memory().unwrap();
+    timeline.append("agent", "codex", &[started]).unwrap();
+    timeline.append("agent", "codex", &[completed]).unwrap();
+    assert_eq!(timeline.read("agent").unwrap().1.len(), 2);
+    assert!(stream.compactions.is_empty());
+    assert!(stream.progress("item/started", &params).unwrap().is_none());
+}
+
+#[test]
+fn compaction_start_rejects_missing_identity_and_excessive_items() {
+    let mut stream = Stream::default();
+    for params in [
+        json!({"turnId":"turn","item":{"type":"contextCompaction"}}),
+        json!({"item":{"type":"contextCompaction","id":"compact"}}),
+    ] {
+        assert!(stream.progress("item/started", &params).is_err());
+    }
+    stream.compactions = (0..MAX_ITEMS).map(|id| id.to_string()).collect();
+    let params = json!({"turnId":"turn","item":{"type":"contextCompaction","id":"extra"}});
+    assert!(stream.progress("item/started", &params).is_err());
+}
+
+#[test]
 fn only_known_steer_errors_prove_that_input_was_not_accepted() {
     for error in [
         json!({"code":-32601}),

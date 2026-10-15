@@ -11,6 +11,16 @@ import {
   AgentTimelineEntryPayloadSchema,
 } from "./messages.js";
 
+test("compaction markers accept optional native identity and failed terminal state", () => {
+  for (const status of ["loading", "completed", "failed"]) {
+    const item = { type: "compaction", status, compactionId: "native", trigger: "auto" };
+    expect(AgentTimelineItemPayloadSchema.parse(item)).toEqual(item);
+  }
+  expect(AgentTimelineItemPayloadSchema.parse({ type: "compaction", status: "completed" })).toEqual(
+    { type: "compaction", status: "completed" },
+  );
+});
+
 test("terminal listings accept older rows and retain new per-terminal directories", () => {
   const response = {
     type: "terminal.list.response",

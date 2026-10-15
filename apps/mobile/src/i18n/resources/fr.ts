@@ -388,6 +388,7 @@ export const fr: TranslationResources = {
       },
     },
     compaction: {
+      failed: "Échec de la compression du contexte",
       loading: "Compactage...",
       auto: "Contexte automatiquement compacté",
       manual: "Contexte compacté manuellement",

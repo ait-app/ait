@@ -5,7 +5,7 @@ import {
   normalizeWorkspaceDescriptor,
   type Agent,
 } from "@/stores/session-store";
-import type { StreamItem } from "@/types/stream";
+import type { CompactionItem, StreamItem } from "@/types/stream";
 import { normalizeAgentSnapshot } from "@/utils/agent-snapshots";
 import { ReplicaCache } from ".";
 import type { DirectoryCheckpoint } from "@/runtime/replica-cache";
@@ -331,6 +331,40 @@ describe("ReplicaCache", () => {
     expect(restoredDirectory.checkpoint).toEqual({ agents: { generation: "g", afterSeq: 12 } });
     expect(restoredTimeline).toEqual(timeline());
   });
+
+  it.each<CompactionItem["status"]>(["loading", "completed", "failed"])(
+    "round-trips %s compactions with native identity and legacy markers without it",
+    async (status) => {
+      const storage = new MemoryStorage();
+      const writer = createCache(storage);
+      const items: CompactionItem[] = [
+        {
+          kind: "compaction",
+          id: "native-compaction",
+          compactionId: "provider-compaction-1",
+          status,
+          trigger: "auto",
+          preTokens: 120_000,
+          timestamp: new Date("2026-07-18T08:02:00.000Z"),
+          timelineCursor: { epoch: "epoch-1", seq: 11 },
+          turnId: "turn-1",
+        },
+        {
+          kind: "compaction",
+          id: "legacy-compaction",
+          status,
+          timestamp: new Date("2026-07-18T08:03:00.000Z"),
+          timelineCursor: { epoch: "epoch-1", seq: 12 },
+        },
+      ];
+      const cachedTimeline = { ...timeline(), items };
+      writer.commitTimeline(SERVER_ID, "agent-1", cachedTimeline);
+      await writer.flush();
+
+      const reader = createCache(storage);
+      expect(await reader.readTimeline(SERVER_ID, "agent-1")).toEqual(cachedTimeline);
+    },
+  );
 
   it.each(["directory", "workspace"] as const)(
     "preserves the initial branch needed to reset a cached workspace through %s reads",

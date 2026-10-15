@@ -142,6 +142,8 @@ for line in sys.stdin:
     step('agent_response', 'ACTIVE', text_delta='Hello ')
     step('agent_response', 'DONE', text_delta='world')
     step_index += 1
+    if scenario == 'compaction':
+        step('checkpoint', 'ACTIVE')
     step('checkpoint', 'DONE')
     step_index += 1
     terminal('SUCCESS', 'Hello world')

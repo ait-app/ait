@@ -73,6 +73,7 @@ ADR-074、082、083、084、122 在不同类别中各有两份，引用时以路
 
 ## Provider、Agent 与会话
 
+- [ADR-150：所有 Provider 的上下文压缩生命周期提示](providers/adr-150-provider-compaction-lifecycle.md)
 - [ADR-149：Codex 高权限档位自动批准 computer use 访问](providers/adr-149-codex-computer-use-access-auto-approval.md)
 
 - [ADR-147：DSH 原生插件情景模式与权限分离](providers/adr-147-dsh-native-plugin-presets.md)

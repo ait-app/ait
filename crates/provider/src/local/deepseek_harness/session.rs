@@ -183,6 +183,7 @@ impl Session {
                     return Err(AgentSessionError::Failed);
                 }
                 self.stream.flush();
+                self.stream.finish_compactions();
                 if let Some(error) = message.get("error") {
                     self.transport.diagnostics.observe(
                         crate::local::diagnostics::native(error, "rpc"),

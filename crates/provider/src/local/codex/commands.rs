@@ -113,6 +113,12 @@ impl CodexSession {
             self.last_message = None;
             return Ok(Some(AgentTurnEvent::Started(id.to_owned())));
         }
+        if method == "item/started"
+            && params["item"]["type"] == "contextCompaction"
+            && self.manual_compactions > 0
+        {
+            return self.stream.progress(method, params);
+        }
         if method == "item/completed"
             && params["item"]["type"] == "contextCompaction"
             && self.manual_compactions > 0

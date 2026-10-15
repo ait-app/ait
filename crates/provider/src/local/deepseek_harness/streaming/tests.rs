@@ -3,6 +3,32 @@ use serde_json::json;
 use super::*;
 
 #[test]
+fn acp_compaction_updates_emit_start_and_failure_and_ignore_duplicate_states() {
+    let mut stream = Stream::default();
+    stream.begin("turn".to_owned());
+    stream
+        .update(&json!({"sessionUpdate":"compaction_update",
+        "compactionId":"future","status":"future"}))
+        .unwrap();
+    assert!(stream.events.is_empty());
+    for status in ["in_progress", "in_progress", "cancelled", "cancelled"] {
+        stream
+            .update(&json!({"sessionUpdate":"compaction_update",
+            "compactionId":"compact","status":status}))
+            .unwrap();
+    }
+    let statuses: Vec<_> = stream
+        .events
+        .iter()
+        .filter_map(|event| match event {
+            AgentTurnEvent::Timeline(entry) => entry.item["status"].as_str(),
+            _ => None,
+        })
+        .collect();
+    assert_eq!(statuses, ["loading", "failed"]);
+}
+
+#[test]
 fn image_output_is_materialized_and_large_tool_output_is_bounded() {
     let directory = tempfile::tempdir().unwrap();
     let mut stream = Stream::new(crate::local::images::ImageStore::new(

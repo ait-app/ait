@@ -205,6 +205,7 @@ for line in sys.stdin:
         if pending is None:
             emit({"method":"turn/started","params":{"threadId":thread_id,"turn":{"id":compact_turn}}})
         item = {"type":"contextCompaction","id":"compact-" + compact_turn}
+        emit({"method":"item/started","params":{"threadId":thread_id,"turnId":compact_turn,"item":item}})
         stream_items.append(item)
         emit({"method":"item/completed","params":{"threadId":thread_id,"turnId":compact_turn,"item":item}})
         if pending is None:
@@ -288,6 +289,13 @@ for line in sys.stdin:
             emit({"method":"turn/plan/updated","params":{"threadId":thread_id,"turnId":pending,
                 "plan":[{"step":"First step","status":"completed"},{"step":"Second step","status":"inProgress"}]}})
             complete(pending, "Progress reported")
+            continue
+        if text == "auto-compaction":
+            item = {"type":"contextCompaction","id":"compact-" + pending}
+            stream_items.append(item)
+            for method_name in ("item/started", "item/completed"):
+                emit({"method":method_name,"params":{"threadId":thread_id,"turnId":pending,"item":item}})
+            complete(pending, "Compaction finished")
             continue
         if text in ("async-question", "async-question-running"):
             question = {"type": "agentMessage", "id": pending + "-question", "delivery": "async",
