@@ -200,7 +200,7 @@ import {
   type ReactNode,
 } from "react";
 import { useTranslation } from "react-i18next";
-import { BackHandler, Keyboard, Pressable, Text, View } from "react-native";
+import { Keyboard, Pressable, Text, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { StyleSheet, withUnistyles } from "react-native-unistyles";
 import invariant from "tiny-invariant";
@@ -1844,22 +1844,6 @@ function WorkspaceScreenContent({
     () => ({ expanded: isExplorerSidebarShowing }),
     [isExplorerSidebarShowing],
   );
-
-  useEffect(() => {
-    // Back dismisses the compact overlay only. On a wide native layout the
-    // explorer is a tab, `showMobileAgent` has no rendered consumer, and
-    // returning true would swallow Back with nothing to show for it.
-    if (!isRouteFocused || isWeb || !isMobile || !isExplorerSidebarShowing) {
-      return;
-    }
-
-    const handler = BackHandler.addEventListener("hardwareBackPress", () => {
-      showMobileAgent();
-      return true;
-    });
-
-    return () => handler.remove();
-  }, [isExplorerSidebarShowing, isMobile, isRouteFocused, showMobileAgent]);
 
   const workspaceLayout = useWorkspaceLayoutStore((state) =>
     persistenceKey ? (state.layoutByWorkspace[persistenceKey] ?? null) : null,

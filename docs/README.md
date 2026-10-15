@@ -23,6 +23,8 @@
 
 ## 架构决策
 
+- [ADR-151：Android 边缘手势进入移动面板导航](decisions/clients/adr-151-android-panel-edge-gestures.md)：左右方向、原生适配边界、面板展开时返回优先关闭与旧系统限制。
+
 - [ADR-150：所有 Provider 的上下文压缩生命周期提示](decisions/providers/adr-150-provider-compaction-lifecycle.md)：原生开始／结束映射、稳定身份配对、失败提示与历史回放。
 - [ADR-149：Codex 高权限档位自动批准 computer use 访问](decisions/providers/adr-149-codex-computer-use-access-auto-approval.md)：Auto-review / Full Access 的原生访问批准、显式覆盖与档位切换。
 
