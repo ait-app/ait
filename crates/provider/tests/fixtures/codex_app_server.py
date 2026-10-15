@@ -110,6 +110,13 @@ for line in sys.stdin:
     elif method == "collaborationMode/list":
         result = {"data":[{"name":"Plan","mode":"plan","model":"offline-model","reasoning_effort":"high"},
             {"name":"Default","mode":"default","model":"offline-model"}]} if mode == "workflows" else {"data":[]}
+    elif method == "experimentalFeature/list":
+        features_path = root / "experimental-features.json"
+        if not features_path.exists():
+            emit({"id": request["id"], "error": {"code": -32601, "message": "Method not found"}})
+            continue
+        pages = json.loads(features_path.read_text())
+        result = pages.get(params.get("cursor") or "", {"data": []})
     elif method in ("thread/start", "thread/resume", "thread/read"):
         if method == "thread/start" and mode == "delayed-create":
             deadline = time.monotonic() + 10
@@ -231,6 +238,11 @@ for line in sys.stdin:
         if text == "usage":
             emit({"method":"thread/tokenUsage/updated", "params":{"threadId":thread_id,
                 "tokenUsage":{"last":{"inputTokens":100,"cachedInputTokens":30,"outputTokens":7,"totalTokens":107},"modelContextWindow":200000}}})
+        if text == "background-compaction":
+            item = {"type": "contextCompaction", "id": "background-compact-" + pending}
+            stream_items.append(item)
+            emit({"method": "item/started", "params": {"threadId": thread_id, "turnId": pending, "item": item}})
+            emit({"method": "item/completed", "params": {"threadId": thread_id, "turnId": pending, "item": item}})
         save_turn(pending, None, "inProgress")
         emit({"method": "item/completed", "params": {"threadId": thread_id, "turnId": pending,
             "item": {"type": "userMessage", "id": pending + "-user", "content": [{"type": "text", "text": text}]}}})
@@ -381,6 +393,15 @@ for line in sys.stdin:
             stream_items.append(tool)
             emit({"method": "item/completed", "params": {"threadId": thread_id, "turnId": pending, "item": tool}})
             complete(pending, text)
+        elif text == "background-compaction-after-turn":
+            compact_turn = pending
+            complete(compact_turn, text)
+            item = {"type": "contextCompaction", "id": "background-compact-" + compact_turn}
+            stream_items.append(item)
+            save_turn(compact_turn, text, "completed")
+            event = {"method": "item/completed", "params": {"threadId": thread_id, "turnId": compact_turn, "item": item}}
+            emit(event)
+            emit(event)
         elif text != "hang":
             timer = threading.Timer(0.05, complete, args=(pending, text))
             timer.daemon = True

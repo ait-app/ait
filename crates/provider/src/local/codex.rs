@@ -2,6 +2,7 @@
 
 mod async_questions;
 mod commands;
+mod compaction;
 pub(crate) mod controls;
 mod discovery;
 mod inspection;
@@ -589,6 +590,8 @@ impl CodexSession {
         config: &StoredAgentConfig,
     ) -> Result<(), AgentSessionError> {
         if self.config.provider_options == config.provider_options
+            && crate::local::configuration::codex_async_compaction(&self.config)
+                == crate::local::configuration::codex_async_compaction(config)
             && self.config.mcp_servers == config.mcp_servers
             && self.config.tool_policy == config.tool_policy
             && self.config.system_prompt == config.system_prompt
@@ -780,6 +783,7 @@ impl AgentSession for CodexSession {
     ) -> AgentSessionFuture<'a, String> {
         Box::pin(async move {
             validate_config(config)?;
+            self.client.validate_workflows(config)?;
             prompt.validate()?;
             if self.history || self.active_turn.is_some() {
                 return Err(AgentSessionError::Failed);
@@ -1060,7 +1064,7 @@ fn validate_config(config: &StoredAgentConfig) -> Result<(), AgentSessionError> 
                 "service_tier" => !value
                     .as_str()
                     .is_some_and(|tier| !tier.is_empty() && tier.len() <= 128),
-                "fast_mode" | "plan_mode" => !value.is_boolean(),
+                "fast_mode" | "plan_mode" | "async_compaction" => !value.is_boolean(),
                 _ => true,
             })
         })

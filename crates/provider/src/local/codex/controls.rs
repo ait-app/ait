@@ -35,6 +35,7 @@ impl CodexClient {
                 .feature_values
                 .as_ref()
                 .is_some_and(|values| values.contains_key("plan_mode"))
+            || crate::local::configuration::codex_async_compaction(&spec.config).is_some()
         {
             let mut transport = self.launch_transport(&spec.cwd, false)?;
             let result = async {

@@ -119,6 +119,7 @@ const CODEX: &[(&str, Rule)] = &[
     (
         "features",
         Rule::Object(&[
+            ("async_compaction", Rule::Boolean),
             ("multi_agent_v2", Rule::Boolean),
             (
                 "network_proxy",
