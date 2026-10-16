@@ -6,6 +6,7 @@
 use std::fmt::Debug;
 use std::future::Future;
 use std::pin::Pin;
+use std::time::Duration;
 
 use domain::agent_runtime::{AgentPersistenceHandle, StoredAgentConfig, StoredAgentRuntimeInfo};
 
@@ -277,6 +278,11 @@ pub(crate) trait AgentSession: Debug + Send {
 
 /// Factory and availability boundary for one independent provider adapter.
 pub(crate) trait AgentClient: Debug + Send + Sync {
+    /// Return the total catalog budget, including queueing and availability checks.
+    fn discovery_timeout(&self) -> Duration {
+        Duration::from_secs(30)
+    }
+
     /// Whether this adapter implements native session listing and import inspection.
     fn supports_session_import(&self) -> bool {
         false

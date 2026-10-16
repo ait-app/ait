@@ -107,6 +107,25 @@ impl Transport {
         self.deadline
     }
 
+    /// Set the deadline for subsequent control requests on this owned connection.
+    pub(crate) fn set_control_deadline(&mut self, deadline: Duration) {
+        self.deadline = deadline;
+    }
+
+    /// Allow one potentially slow native initialization request, then restore normal controls.
+    pub(crate) async fn startup_request(
+        &mut self,
+        method: &str,
+        params: Value,
+        timeout: Duration,
+    ) -> Result<Value, AgentSessionError> {
+        let ordinary_timeout = self.deadline;
+        self.deadline = timeout;
+        let result = self.request(method, params).await;
+        self.deadline = ordinary_timeout;
+        result
+    }
+
     /// Write and flush one bounded frame; closes uncertain transports on write failure.
     pub(crate) async fn send(&mut self, message: &Value) -> Result<(), AgentSessionError> {
         if self.closed {

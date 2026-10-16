@@ -1,6 +1,45 @@
 use super::*;
 
 #[cfg(unix)]
+async fn release_after_old_deadline(root: &TempDir, phase: &str) {
+    let entered = root.path().join(format!("{phase}.entered"));
+    let release = root.path().join(format!("{phase}.release"));
+    let wait_until = std::time::Instant::now() + Duration::from_secs(5);
+    while !entered.exists() {
+        assert!(
+            std::time::Instant::now() < wait_until,
+            "fixture did not reach {phase}"
+        );
+        tokio::task::yield_now().await;
+    }
+    tokio::time::advance(Duration::from_secs(31)).await;
+    tokio::time::resume();
+    std::fs::write(release, "ready").unwrap();
+}
+
+#[cfg(unix)]
+#[tokio::test(start_paused = true)]
+async fn native_initialize_can_complete_after_the_old_thirty_second_limit() {
+    let (root, client, spec) = fixture("slow-initialize");
+    let pending = tokio::spawn(async move { client.discover(&spec.cwd).await });
+    release_after_old_deadline(&root, "initialize").await;
+    let details = pending.await.unwrap().unwrap();
+    assert_eq!(details.models.len(), 2);
+    assert!(!root.path().join("native-fixture.json").exists());
+}
+
+#[cfg(unix)]
+#[tokio::test(start_paused = true)]
+async fn native_session_creation_can_complete_after_the_old_thirty_second_limit() {
+    let (root, client, spec) = fixture("slow-session");
+    let pending = tokio::spawn(async move { client.discover(&spec.cwd).await });
+    release_after_old_deadline(&root, "session").await;
+    let details = pending.await.unwrap().unwrap();
+    assert_eq!(details.models.len(), 2);
+    assert!(!root.path().join("native-fixture.json").exists());
+}
+
+#[cfg(unix)]
 #[tokio::test]
 async fn broken_v2_catalog_releases_report_an_upgrade_before_creating_native_sessions() {
     for version in ["2.0.20", "2.0.24"] {
@@ -181,7 +220,7 @@ async fn native_startup_is_coordinated_across_clones_without_locking_live_sessio
 #[tokio::test]
 async fn waiting_for_native_startup_is_bounded_and_rejects_before_spawning_acp() {
     let (root, mut client, spec) = fixture("normal");
-    client.deadline = Duration::from_millis(150);
+    client.startup_timeout = Duration::from_millis(150);
     let gate = client.startup.lock().await;
     assert!(matches!(
         launcher::spawn(&client, &spec.cwd, &StoredAgentConfig::default()).await,
@@ -192,6 +231,7 @@ async fn waiting_for_native_startup_is_bounded_and_rejects_before_spawning_acp()
     let (mut transport, _) = launcher::spawn(&client, &spec.cwd, &StoredAgentConfig::default())
         .await
         .unwrap();
+    assert_eq!(transport.control_deadline(), client.deadline);
     transport.close().await.unwrap();
 }
 

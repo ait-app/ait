@@ -34,6 +34,14 @@ struct ParallelClient {
 }
 
 impl AgentClient for ParallelClient {
+    fn discovery_timeout(&self) -> Duration {
+        if self.provider == "opencode" {
+            Duration::from_secs(300)
+        } else {
+            Duration::from_secs(30)
+        }
+    }
+
     fn provider(&self) -> &'static str {
         self.provider
     }
@@ -66,6 +74,52 @@ impl AgentClient for ParallelClient {
     ) -> AgentSessionFuture<'a, Box<dyn AgentSession>> {
         Box::pin(async { Err(AgentSessionError::Unavailable) })
     }
+}
+
+#[tokio::test]
+async fn provider_specific_budget_keeps_a_cold_catalog_loading() {
+    let root = tempfile::tempdir().unwrap();
+    let gate = Gate::new();
+    let clients = clients(&[("opencode", gate.clone())]);
+    let catalog = Catalog::default();
+    let events = SessionEvents::default();
+    catalog
+        .read(
+            &clients,
+            &events,
+            "provider.snapshot.get.request",
+            json!({"cwd":root.path()}),
+        )
+        .await
+        .unwrap();
+    gate.entered(1).await;
+
+    tokio::time::pause();
+    tokio::time::advance(Duration::from_secs(31)).await;
+    let snapshot = catalog
+        .read(
+            &clients,
+            &events,
+            "provider.snapshot.get.request",
+            json!({"cwd":root.path()}),
+        )
+        .await
+        .unwrap();
+    assert_eq!(snapshot["entries"][0]["status"], "loading");
+    tokio::time::resume();
+
+    gate.release.add_permits(1);
+    let ready = catalog
+        .execute(
+            &clients,
+            &events,
+            "provider.models.list.request",
+            json!({"provider":"opencode","cwd":root.path()}),
+        )
+        .await
+        .unwrap();
+    assert_eq!(ready["models"][0]["provider"], "opencode");
+    catalog.close().await;
 }
 
 fn clients(probes: &[(&'static str, Arc<Gate>)]) -> BTreeMap<String, Arc<dyn AgentClient>> {

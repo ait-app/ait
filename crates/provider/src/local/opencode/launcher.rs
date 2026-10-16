@@ -1,9 +1,9 @@
 //! ACP launch configuration only; no project files or shared native configuration are written.
-use std::{path::Path, process::Stdio, time::Duration};
+use std::{path::Path, process::Stdio};
 
 use domain::agent_runtime::StoredAgentConfig;
 use serde_json::{Value, json};
-use tokio::{io::AsyncReadExt, process::Command};
+use tokio::{io::AsyncReadExt, process::Command, time::Instant};
 
 use super::{OpenCodeClient, config};
 use crate::{local::acp_transport::Transport, ports::agent_session::AgentSessionError};
@@ -69,7 +69,10 @@ async fn launch(
     selected: &StoredAgentConfig,
     auxiliary: bool,
 ) -> Result<(Transport, Value), AgentSessionError> {
-    let version = version(client, cwd).await?;
+    let deadline = Instant::now() + client.startup_timeout;
+    let version = tokio::time::timeout_at(deadline, version(client, cwd))
+        .await
+        .map_err(|_| AgentSessionError::Failed)??;
     if !supported(&version) {
         tracing::warn!(version, "OpenCode 2.x ACP requires version 2.0.25 or newer");
         return Err(AgentSessionError::Unavailable);
@@ -106,20 +109,30 @@ async fn launch(
         None
     } else {
         Some(
-            tokio::time::timeout(client.deadline, client.startup.lock())
+            tokio::time::timeout_at(deadline, client.startup.lock())
                 .await
                 .map_err(|_| AgentSessionError::Failed)?,
         )
     };
-    let mut transport = Transport::spawn(command, cwd, client.deadline, "opencode")?;
-    let initialized = transport
-        .request(
+    let remaining = deadline.saturating_duration_since(Instant::now());
+    let mut transport = Transport::spawn(command, cwd, remaining, "opencode")?;
+    let initialized = if let Ok(result) = tokio::time::timeout_at(
+        deadline,
+        transport.request(
             "initialize",
             json!({"protocolVersion":1,
         "clientCapabilities":{"elicitation":{"form":{}}},
         "clientInfo":{"name":"ait","version":env!("CARGO_PKG_VERSION")}}),
-        )
-        .await?;
+        ),
+    )
+    .await
+    {
+        result?
+    } else {
+        let _ = transport.close().await;
+        return Err(AgentSessionError::Failed);
+    };
+    transport.set_control_deadline(client.deadline);
     if initialized["protocolVersion"] != 1 {
         return Err(AgentSessionError::Failed);
     }
@@ -231,7 +244,7 @@ pub(super) async fn read(
         .take()
         .ok_or(AgentSessionError::Failed)?
         .take(8 * 1024 * 1024 + 1);
-    tokio::time::timeout(Duration::from_secs(30), async {
+    tokio::time::timeout(client.startup_timeout, async {
         let mut bytes = Vec::new();
         stdout
             .read_to_end(&mut bytes)

@@ -146,6 +146,10 @@ for line in sys.stdin:
         complete()
     elif method == "initialize":
         assert params["clientCapabilities"]["elicitation"]["form"] == {}
+        if scenario == "slow-initialize":
+            (root / "initialize.entered").touch()
+            while not (root / "initialize.release").exists():
+                time.sleep(0.01)
         if scenario == "startup-overlap":
             # Reject concurrent schema bootstrap, but release before keeping ACP alive.
             try:
@@ -173,6 +177,10 @@ for line in sys.stdin:
     elif method in ["session/new", "session/resume", "session/load"]:
         assert pathlib.Path(params["cwd"]).is_absolute()
         assert params["mcpServers"] == []
+        if scenario == "slow-session" and method == "session/new":
+            (root / "session.entered").touch()
+            while not (root / "session.release").exists():
+                time.sleep(0.01)
         if method == "session/new":
             session_id = claim_session()
             state_path = session_path(session_id)

@@ -32,7 +32,11 @@ pub(super) async fn discover(
             .as_mut()
             .ok_or(AgentSessionError::Failed)?;
         let created = transport
-            .request("session/new", json!({"cwd":cwd,"mcpServers":[]}))
+            .startup_request(
+                "session/new",
+                json!({"cwd":cwd,"mcpServers":[]}),
+                client.startup_timeout,
+            )
             .await?;
         let id = config::text(&created, "sessionId")?.to_owned();
         temporary.id = Some(id.clone());

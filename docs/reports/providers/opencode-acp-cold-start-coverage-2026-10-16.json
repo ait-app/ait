@@ -1,0 +1,80 @@
+{
+  "source_base_revision": "4330039dd7225ad61260fe77a947385edb9b67cf",
+  "validated_source_tree": "afb095ce03c5335181b00cc75d362d6e311891c5",
+  "measurement_date": "2026-10-16",
+  "scope": "Rust workspace, default features, Linux x86_64, rustc 1.99.0, cargo-llvm-cov 0.9.1, LLVM 23.1.1. Tool default file filtering; no additional file exclusions. Doctests are not instrumented.",
+  "commands": {
+    "workspace_tests": "CARGO_TARGET_DIR=/home/KirisameLonnet/Developers/ait/target cargo test --workspace --locked --offline -- --test-threads=4",
+    "coverage": "LLVM_COV=/usr/bin/llvm-cov LLVM_PROFDATA=/usr/bin/llvm-profdata CARGO_TARGET_DIR=/home/KirisameLonnet/Developers/ait/target cargo llvm-cov --workspace --html --locked --offline -- --test-threads=4",
+    "summary_export": "LLVM_COV=/usr/bin/llvm-cov LLVM_PROFDATA=/usr/bin/llvm-profdata CARGO_TARGET_DIR=/home/KirisameLonnet/Developers/ait/target cargo llvm-cov report --json --summary-only --output-path /tmp/ait-opencode-acp-coverage-final.json",
+    "installed_opencode": "AIT_TEST_OPENCODE_BIN=/usr/local/bin/opencode CARGO_TARGET_DIR=/home/KirisameLonnet/Developers/ait/target cargo test -p provider installed_acp_multi_turn_native_history_resume_and_discovery --locked --offline -- --ignored --test-threads=1"
+  },
+  "workspace_lines": {
+    "count": 67994,
+    "covered": 64785,
+    "percent": 95.28046592346384
+  },
+  "provider_lines": {
+    "count": 32086,
+    "covered": 30519,
+    "percent": 95.1162500779156
+  },
+  "changed_source_lines": {
+    "crates/provider/src/local/acp_transport.rs": {
+      "count": 260,
+      "covered": 232,
+      "percent": 89.23076923076925
+    },
+    "crates/provider/src/local/opencode/client.rs": {
+      "count": 176,
+      "covered": 168,
+      "percent": 95.45454545454545
+    },
+    "crates/provider/src/local/opencode/discovery.rs": {
+      "count": 110,
+      "covered": 109,
+      "percent": 99.0909090909091
+    },
+    "crates/provider/src/local/opencode/launcher.rs": {
+      "count": 240,
+      "covered": 233,
+      "percent": 97.08333333333333
+    },
+    "crates/provider/src/local/opencode/session.rs": {
+      "count": 665,
+      "covered": 621,
+      "percent": 93.38345864661655
+    },
+    "crates/provider/src/ports/agent_session.rs": {
+      "count": 248,
+      "covered": 239,
+      "percent": 96.37096774193549
+    },
+    "crates/provider/src/service/provider_catalog/loading.rs": {
+      "count": 179,
+      "covered": 167,
+      "percent": 93.29608938547486
+    }
+  },
+  "coverage_test_execution": {
+    "passed": 2390,
+    "failed": 0,
+    "ignored": 32
+  },
+  "validation": {
+    "workspace_tests": "passed",
+    "installed_opencode_1_18_4": "1 passed",
+    "workspace_build": "passed with one pre-existing deprecated fetch_update warning in filesystem",
+    "provider_library_clippy_strict": "passed",
+    "workspace_all_targets_clippy_strict": "blocked by pre-existing Rust 1.99 assert_is_empty lint in host-link tests",
+    "workspace_all_targets_clippy_with_existing_lint_exceptions": "passed with -A clippy::assert_is_empty -A clippy::single_element_loop -A deprecated",
+    "rustfmt_and_document_links": "passed"
+  },
+  "baseline": "No same-platform, same-toolchain and same-scope baseline was available; no coverage delta is claimed.",
+  "artifact": "This checked-in JSON is the reviewable summary. The generated HTML report was reviewed locally at target/llvm-cov/html/index.html and is not committed.",
+  "important_uncovered_behavior": [
+    "A real OpenCode 2.0.25+ binary was not available; its startup and project database races were exercised only with offline ACP fixtures.",
+    "macOS and Windows process startup and cleanup were not exercised in this Linux run.",
+    "Some low-level pipe, process termination, malformed ACP frame and transport failure branches remain uncovered; follow up with targeted fault injection."
+  ]
+}

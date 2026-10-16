@@ -26,6 +26,7 @@ use crate::{
 pub(crate) struct OpenCodeClient {
     pub(super) program: PathBuf,
     pub(super) deadline: Duration,
+    pub(super) startup_timeout: Duration,
     pub(super) environment: BTreeMap<String, String>,
     pub(super) images: crate::local::images::ImageStore,
     pub(super) capabilities: Arc<RwLock<Option<Capabilities>>>,
@@ -42,12 +43,14 @@ pub(super) struct Capabilities {
 
 impl OpenCodeClient {
     /// Launch `program acp` directly, inheriting native configuration and credentials.
-    /// Control requests have a thirty-second deadline; model prompts have no duration limit.
+    /// Ordinary controls use thirty seconds; startup and session creation have separate budgets.
+    /// Model prompts have no duration limit.
     #[must_use]
     pub(crate) fn new(program: PathBuf) -> Self {
         Self {
             program,
             deadline: Duration::from_secs(30),
+            startup_timeout: Duration::from_secs(120),
             environment: BTreeMap::new(),
             images: crate::local::images::ImageStore::default(),
             capabilities: Arc::new(RwLock::new(None)),
@@ -146,6 +149,10 @@ impl AgentClient for OpenCodeClient {
     }
     fn provider(&self) -> &'static str {
         PROVIDER
+    }
+    fn discovery_timeout(&self) -> Duration {
+        // Availability and discovery each initialize ACP, then inspect the native catalog.
+        self.startup_timeout * 2 + Duration::from_secs(60)
     }
     fn supports_session_import(&self) -> bool {
         self.capabilities
