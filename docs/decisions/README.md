@@ -73,6 +73,7 @@ ADR-074、082、083、084、122 在不同类别中各有两份，引用时以路
 
 ## Provider、Agent 与会话
 
+- [ADR-153：OpenCode ACP 冷启动预算](providers/adr-153-opencode-acp-cold-start-budget.md)
 - [ADR-150：所有 Provider 的上下文压缩生命周期提示](providers/adr-150-provider-compaction-lifecycle.md)
 - [ADR-149：Codex 高权限档位自动批准 computer use 访问](providers/adr-149-codex-computer-use-access-auto-approval.md)
 

@@ -164,7 +164,11 @@ pub(super) async fn open(
         (handle.session_id.clone(), options, stream.users, clients)
     } else {
         let result = transport
-            .request("session/new", json!({"cwd":spec.cwd,"mcpServers":[]}))
+            .startup_request(
+                "session/new",
+                json!({"cwd":spec.cwd,"mcpServers":[]}),
+                client.startup_timeout,
+            )
             .await?;
         (
             config::text(&result, "sessionId")?.to_owned(),

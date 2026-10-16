@@ -42,6 +42,8 @@ workspace = true
 
 [dev-dependencies]
 persistence.workspace = true
+# Virtual clock checks for provider-specific cold-start deadlines.
+tokio = { workspace = true, features = ["test-util"] }
 # Offline native provider fixtures, without credentials or a model API.
 axum.workspace = true
 

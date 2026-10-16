@@ -23,6 +23,8 @@
 
 ## 架构决策
 
+- [ADR-153：OpenCode ACP 冷启动预算](decisions/providers/adr-153-opencode-acp-cold-start-budget.md)：启动、首次会话创建与 Provider 目录的分层期限。
+
 - [ADR-152：在线中继 Workspace 的浏览器回环转发](decisions/clients/adr-152-remote-workspace-browser-loopback.md)：按 Host 的浏览器 profile、认证 TCP 通道和导航前配置。
 
 - [ADR-151：Android 边缘手势进入移动面板导航](decisions/clients/adr-151-android-panel-edge-gestures.md)：左右方向、原生适配边界、面板展开时返回优先关闭与旧系统限制。

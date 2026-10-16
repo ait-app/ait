@@ -948,7 +948,7 @@ async fn acp_ambiguous_admission_is_never_resubmitted() {
 async fn acp_malformed_initialization_and_timeouts_fail_closed() {
     for scenario in ["malformed", "hung"] {
         let (_root, mut client, spec) = fixture(scenario);
-        client.deadline = Duration::from_millis(150);
+        client.startup_timeout = Duration::from_millis(150);
         assert!(client.create_session(&spec).await.is_err());
     }
 }

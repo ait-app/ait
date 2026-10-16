@@ -89,6 +89,7 @@
 
 ## Provider、Agent 与会话
 
+- [OpenCode ACP 冷启动预算：PR 覆盖率证据](providers/opencode-acp-cold-start-coverage-2026-10-16.json)
 - [图片输入自动压缩、分片与接纳预算修复](providers/image-input-admission-2026-10-13.md)
 - [Codex MCP 结构化大结果导致会话失败](providers/codex-mcp-large-structured-results-2026-10-12.md)
 - [OpenCode 模型目录与执行失败修复](providers/opencode-catalog-readiness-2026-10-10.md)

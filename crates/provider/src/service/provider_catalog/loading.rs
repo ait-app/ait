@@ -160,7 +160,7 @@ async fn run(catalog: Catalog, load: Load, events: SessionEvents) {
         };
         let result = tokio::select! {
             () = load.cancellation.cancelled() => break,
-            result = tokio::time::timeout(Duration::from_secs(30), probe) => result,
+            result = tokio::time::timeout(load.client.discovery_timeout(), probe) => result,
         };
         let result = result.unwrap_or_else(|_| failure(&load.provider));
         let Some((snapshot, again)) = commit(&catalog, &load, result) else {
