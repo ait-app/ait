@@ -184,6 +184,7 @@
 
 ## 发布验证
 
+- [Ait 0.1.5 Draft 发布说明](releases/release-0.1.5.md)
 - [Ait 0.1.4 Draft 发布说明](releases/release-0.1.4.md)
 - [Ait 0.1.3 同版本重建 Draft 准备](releases/release-0.1.3-rebuild-2026-10-15.md)
 - [Ait 0.1.3 Draft 发布说明](releases/release-0.1.3.md)
