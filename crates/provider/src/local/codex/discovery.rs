@@ -154,7 +154,10 @@ pub(super) fn timeline_items(
     timestamp: &str,
     images: &crate::local::images::ImageStore,
 ) -> Result<Vec<NativeItem>, AgentSessionError> {
-    if native["type"] == "commandExecution" {
+    if matches!(
+        native["type"].as_str(),
+        Some("commandExecution" | "fileChange")
+    ) {
         native["id"]
             .as_str()
             .filter(|id| !id.is_empty())

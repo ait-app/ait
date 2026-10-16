@@ -8,14 +8,18 @@ const PREVIEW_BYTES: usize = 128 * 1024;
 mod command_actions;
 mod mcp;
 
-/// Project a native tool into display rows, keeping parsed command actions in source order.
+/// Project a native tool into display rows, keeping command actions and file edits in source order.
 ///
 /// `native` is a Codex thread item with a validated ID; `status` is its canonical
 /// running, completed, or failed state. Returns stable call IDs paired with timeline
-/// items. Compound actions share one command result identified by an `:output` suffix;
-/// absent usable actions fall back to one generic detail row.
+/// items. Compound actions share one command result identified by an `:output` suffix.
+/// File edits retain the native ID for the first file and use `:file:N` for subsequent files,
+/// so an initial placeholder is replaced when paths arrive. Invalid metadata falls back to one row.
 pub(super) fn codex_tools(native: &Value, status: &str) -> Vec<(String, Value)> {
-    let details = command_actions::details(native).unwrap_or_else(|| vec![codex(native)]);
+    let details = file_changes(native)
+        .or_else(|| command_actions::details(native))
+        .unwrap_or_else(|| vec![codex(native)]);
+    let file_edits = native["type"] == "fileChange";
     let multiple = details.len() > 1;
     let output_index = details.len() - 1;
     let native_id = native["id"].as_str().unwrap_or_default();
@@ -24,7 +28,11 @@ pub(super) fn codex_tools(native: &Value, status: &str) -> Vec<(String, Value)> 
         .into_iter()
         .enumerate()
         .map(|(index, detail)| {
-            let id = if multiple && index == output_index {
+            let id = if file_edits && index > 0 {
+                format!("{native_id}:file:{index}")
+            } else if file_edits {
+                native_id.to_owned()
+            } else if multiple && index == output_index {
                 format!("{native_id}:output")
             } else if multiple {
                 format!("{native_id}:{index}")
@@ -140,7 +148,15 @@ pub(super) fn codex(native: &Value) -> Value {
         Some("commandExecution") => {
             command_actions::shell(native, native["command"].as_str().unwrap_or(""), true)
         }
-        Some("fileChange") => file_change(native).unwrap_or_else(|| unknown(native)),
+        Some("fileChange") => {
+            let detail = native["changes"].as_array().and_then(|changes| {
+                let [change] = changes.as_slice() else {
+                    return None;
+                };
+                file_change(change)
+            });
+            detail.unwrap_or_else(|| unknown(native))
+        }
         Some("webSearch") => {
             if let Some(url) = native["action"]["url"].as_str() {
                 json!({"type":"fetch","url":url})
@@ -168,27 +184,19 @@ pub(super) fn codex(native: &Value) -> Value {
     }
 }
 
-fn file_change(native: &Value) -> Option<Value> {
-    let changes = native["changes"].as_array()?;
-    let first = changes.first()?;
-    let path = if changes.len() == 1 {
-        first["path"].as_str()?
-    } else {
-        "Multiple files"
-    };
-    let mut diff = String::new();
-    for change in changes.iter().take(256) {
-        if diff.len() >= PREVIEW_BYTES {
-            break;
-        }
-        if let Some(text) = change["diff"].as_str() {
-            if !diff.is_empty() {
-                diff.push('\n');
-            }
-            diff.push_str(&preview(text));
-        }
+fn file_changes(native: &Value) -> Option<Vec<Value>> {
+    if native["type"] != "fileChange" {
+        return None;
     }
-    Some(json!({"type":"edit","filePath":path,"unifiedDiff":preview(&diff)}))
+    let changes = native["changes"].as_array()?;
+    changes.first()?;
+    changes.iter().map(file_change).collect()
+}
+
+fn file_change(change: &Value) -> Option<Value> {
+    let path = change["path"].as_str().filter(|path| !path.is_empty())?;
+    let diff = change["diff"].as_str().unwrap_or_default();
+    Some(json!({"type":"edit","filePath":path,"unifiedDiff":preview(diff)}))
 }
 
 fn unknown(native: &Value) -> Value {
