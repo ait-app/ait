@@ -10,6 +10,7 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
+import { LoadingSpinner } from "@/components/ui/loading-spinner";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { type RewindMode, useRewindCapabilities } from "./use-rewind-capabilities";
 import type { AgentCapabilityFlags } from "@ait/protocol/agent-types";
@@ -57,14 +58,6 @@ export const RewindMenu = memo(function RewindMenu({
   const [pendingMode, setPendingMode] = useState<RewindMode | null>(null);
   const isLocked = isPendingProp || pendingMode !== null;
 
-  const handleOpenChange = useCallback(
-    (next: boolean) => {
-      if (!next && pendingMode !== null) return;
-      setIsOpen(next);
-    },
-    [pendingMode],
-  );
-
   const handleSelect = useCallback(
     (mode: RewindMode) => async () => {
       if (isLocked) return;
@@ -75,7 +68,6 @@ export const RewindMenu = memo(function RewindMenu({
         // useRewindAgentMutation owns the toast; the menu only owns flow state.
       } finally {
         setPendingMode(null);
-        setIsOpen(false);
       }
     },
     [isLocked, onRewind, rewoundText],
@@ -100,7 +92,7 @@ export const RewindMenu = memo(function RewindMenu({
   }
 
   return (
-    <DropdownMenu open={isOpen} onOpenChange={handleOpenChange}>
+    <DropdownMenu open={isOpen} onOpenChange={setIsOpen}>
       <Tooltip delayDuration={250} enabledOnDesktop enabledOnMobile={false}>
         <TooltipTrigger asChild>
           <View style={styles.triggerSlot} collapsable={false}>
@@ -111,12 +103,16 @@ export const RewindMenu = memo(function RewindMenu({
               style={triggerStyle}
               testID={`${testID}-trigger`}
             >
-              {({ hovered, open }) => (
-                <Undo2
-                  size={16}
-                  color={hovered || open ? theme.colors.foreground : theme.colors.foregroundMuted}
-                />
-              )}
+              {({ hovered, open }) =>
+                isLocked ? (
+                  <LoadingSpinner color={theme.colors.foregroundMuted} size="small" />
+                ) : (
+                  <Undo2
+                    size={16}
+                    color={hovered || open ? theme.colors.foreground : theme.colors.foregroundMuted}
+                  />
+                )
+              }
             </DropdownMenuTrigger>
           </View>
         </TooltipTrigger>
@@ -130,7 +126,6 @@ export const RewindMenu = memo(function RewindMenu({
         {items.map((item) => (
           <DropdownMenuItem
             key={item.mode}
-            closeOnSelect={false}
             disabled={isLocked && pendingMode !== item.mode}
             leading={getIcon(item.mode, theme.colors.foreground)}
             onSelect={handleSelect(item.mode)}
