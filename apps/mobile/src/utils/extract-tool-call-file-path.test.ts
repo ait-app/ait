@@ -12,6 +12,19 @@ describe("extractToolCallFilePath", () => {
     expect(extractToolCallFilePath({ type: "read", filePath: "" })).toBeNull();
   });
 
+  it("does not open the synthetic path in legacy multi-file edit cards", () => {
+    expect(
+      extractToolCallFilePath({
+        type: "edit",
+        filePath: "Multiple files",
+        unifiedDiff: "@@ -1 +1 @@\n-old\n+new",
+      }),
+    ).toBeNull();
+    expect(extractToolCallFilePath({ type: "edit", filePath: "/repo/Multiple files" })).toBe(
+      "/repo/Multiple files",
+    );
+  });
+
   it.each([
     ["cat ~/file.md", "~/file.md"],
     [

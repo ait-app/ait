@@ -1,6 +1,7 @@
 use super::*;
 
 mod command_actions;
+mod file_changes;
 mod paseo;
 
 #[test]

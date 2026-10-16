@@ -58,8 +58,10 @@ export function extractToolCallFilePath(detail: ToolCallDetail | undefined): str
     return null;
   }
   switch (detail.type) {
-    case "read":
     case "edit":
+      // Older daemons stored this display label in place of the actual changed paths.
+      return detail.filePath === "Multiple files" ? null : detail.filePath || null;
+    case "read":
     case "write":
       return detail.filePath || null;
     case "shell":

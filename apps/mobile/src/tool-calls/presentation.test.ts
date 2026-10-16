@@ -26,6 +26,24 @@ function fakeResolveIcon(
 }
 
 describe("tool-call presentation", () => {
+  it("keeps legacy multi-file diffs inspectable without offering an invalid file target", () => {
+    const presentation = buildToolCallPresentation({
+      toolName: "fileChange",
+      status: "completed",
+      error: null,
+      detail: {
+        type: "edit",
+        filePath: "Multiple files",
+        unifiedDiff: "@@ -1 +1 @@\n-old\n+new",
+      },
+      resolveIcon: fakeResolveIcon,
+    });
+
+    expect(presentation.summary).toBe("Multiple files");
+    expect(presentation.canOpenDetails).toBe(true);
+    expect(presentation.openFilePath).toBeNull();
+  });
+
   const emptyDetails: { label: string; detail?: ToolCallDetail; toolName?: string }[] = [
     { label: "missing detail" },
     { label: "empty shell", detail: { type: "shell", command: "", output: "" } },
