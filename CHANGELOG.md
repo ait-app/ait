@@ -8,6 +8,7 @@
 - Preserve per-file paths and diffs in Codex multi-file edit cards, and hide invalid open-file targets on older cached cards.
 - Share one menu highlight between pointer and keyboard navigation, respecting pointer capabilities and disabled items.
 - Close open Android panels before system back navigation and route completed system edge gestures through panel navigation.
+- Preserve exact project configuration revision timestamps across JSON requests, avoiding false save conflicts when the file has not changed.
 
 ## 0.1.4 - 2026-10-15
 

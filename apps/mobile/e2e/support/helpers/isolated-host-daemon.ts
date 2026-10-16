@@ -73,6 +73,9 @@ export async function startIsolatedHostDaemon(
           // Never invoke an installed, authenticated model CLI by default.
           AIT_SERVER_CODEX_BIN: path.join(dataDir, "unconfigured-codex"),
           AIT_SERVER_CLAUDE_BIN: path.join(dataDir, "unconfigured-claude"),
+          AIT_SERVER_OPENCODE_BIN: path.join(dataDir, "unconfigured-opencode"),
+          AIT_SERVER_DEEPSEEK_HARNESS_BIN: path.join(dataDir, "unconfigured-deepseek-harness"),
+          AIT_SERVER_ANTIGRAVITY_BIN: path.join(dataDir, "unconfigured-antigravity"),
           ...options.environment,
           AIT_SERVER_TOKEN: token,
           AIT_SERVER_SKILLS_HOME: path.join(dataDir, "agent-home"),
