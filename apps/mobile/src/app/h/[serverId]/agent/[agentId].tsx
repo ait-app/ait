@@ -118,7 +118,7 @@ function HostAgentReadyRouteContent() {
       return;
     }
     if (serverId) {
-      void getHostRuntimeStore().runProbeCycleNow(serverId);
+      getHostRuntimeStore().retryConnection(serverId);
     }
   }, [lookupQuery, resolution.kind, serverId]);
   const handleManageHost = useCallback(() => {

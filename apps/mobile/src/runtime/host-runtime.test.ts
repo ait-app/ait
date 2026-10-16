@@ -554,6 +554,89 @@ class BrowserClientLifecycle {
 }
 
 describe("HostRuntimeController", () => {
+  it.each([
+    makeHost().connections[0]!,
+    createAccountRelayHostConnection({
+      hostId: "11111111-1111-4111-8111-111111111111",
+      center: "https://center.test/api",
+    }),
+  ])("leaves the startup spinner after the initial $type connection fails", async (connection) => {
+    useHostRuntimeClock();
+    const latencies: Record<string, number | Error> = {
+      [connection.id]: new Error("Connection timed out"),
+    };
+    const controller = new HostRuntimeController({
+      host: makeHost({ connections: [connection] }),
+      deps: makeDeps(latencies, []),
+    });
+    try {
+      await controller.start();
+      expect(controller.getSnapshot().probeByConnectionId.get(connection.id)?.status).toBe(
+        "unavailable",
+      );
+      expect(controller.getSnapshot()).toMatchObject({
+        connectionStatus: "error",
+        lastError: "Connection timed out",
+      });
+      latencies[connection.id] = 20;
+      await vi.advanceTimersByTimeAsync(2_000);
+      expect(controller.getSnapshot()).toMatchObject({
+        connectionStatus: "online",
+        lastError: null,
+      });
+    } finally {
+      await controller.stop();
+    }
+  });
+
+  it.each([true, false])(
+    "keeps a successful startup connection when another probe fails (failure first: %s)",
+    async (failureFirst) => {
+      const host = makeHost();
+      const successful =
+        createDeferred<Awaited<ReturnType<HostRuntimeControllerDeps["connectToDaemon"]>>>();
+      const failed =
+        createDeferred<Awaited<ReturnType<HostRuntimeControllerDeps["connectToDaemon"]>>>();
+      const controller = new HostRuntimeController({
+        host,
+        deps: {
+          ...makeDeps({}, []),
+          connectToDaemon: ({ connection }) =>
+            connection.id === host.connections[0]!.id ? failed.promise : successful.promise,
+        },
+      });
+      const starting = controller.start({ autoProbe: false });
+      try {
+        if (failureFirst) {
+          failed.reject(new Error("Connection timed out"));
+          await vi.waitFor(() =>
+            expect(
+              controller.getSnapshot().probeByConnectionId.get(host.connections[0]!.id)?.status,
+            ).toBe("unavailable"),
+          );
+          expect(controller.getSnapshot().connectionStatus).toBe("connecting");
+        }
+        successful.resolve({
+          client: makeConnectedProbeClient(20) as unknown as DaemonClient,
+          serverId: host.serverId,
+          hostname: null,
+        });
+        await vi.waitFor(() => expect(controller.getSnapshot().connectionStatus).toBe("online"));
+        if (!failureFirst) failed.reject(new Error("Connection timed out"));
+        await starting;
+        expect(controller.getSnapshot()).toMatchObject({
+          connectionStatus: "online",
+          lastError: null,
+        });
+      } finally {
+        failed.reject(new Error("test cleanup"));
+        successful.reject(new Error("test cleanup"));
+        await controller.stop();
+        await starting;
+      }
+    },
+  );
+
   it("replaces a rejected active client with a fresh probe on recovery", async () => {
     const connection = createAccountRelayHostConnection({
       hostId: "11111111-1111-4111-8111-111111111111",
@@ -1082,7 +1165,10 @@ describe("HostRuntimeController", () => {
 
     await controller.start({ autoProbe: false });
 
-    expect(controller.getSnapshot().connectionStatus).toBe("connecting");
+    expect(controller.getSnapshot().connectionStatus).toBe("error");
+    expect(controller.getSnapshot().lastError).toBe(
+      "Connection resolved to srv_current, expected srv_old.",
+    );
     expect(controller.getSnapshot().activeConnectionId).toBeNull();
     expect(controller.getSnapshot().probeByConnectionId.get("direct:localhost:6767")).toEqual({
       status: "unavailable",
@@ -1673,6 +1759,64 @@ describe("HostRuntimeController", () => {
 });
 
 describe("HostRuntimeStore", () => {
+  it("immediately retries a failed startup connection without waiting for the probe interval", async () => {
+    useHostRuntimeClock();
+    const connection = makeHost().connections[0]!;
+    const host = makeHost({ connections: [connection] });
+    const latencies: Record<string, number | Error> = {
+      [connection.id]: new Error("Connection timed out"),
+    };
+    const deps = makeDeps(latencies, []);
+    const connectToDaemon = vi.fn(deps.connectToDaemon);
+    const store = new HostRuntimeStore({
+      storage: createMemoryHostRuntimeStorage({
+        "@paseo:daemon-registry": JSON.stringify([host]),
+        "@paseo:e2e": "1",
+      }),
+      deps: { ...deps, connectToDaemon },
+    });
+    try {
+      await store.boot();
+      await store.runProbeCycleNow(host.serverId);
+      expect(connectToDaemon).toHaveBeenCalledTimes(1);
+      latencies[connection.id] = 20;
+      store.retryConnection(host.serverId);
+      store.retryConnection(host.serverId);
+      expect(connectToDaemon).toHaveBeenCalledTimes(2);
+      await store.runProbeCycleNow(host.serverId);
+      expect(store.getSnapshot(host.serverId)?.connectionStatus).toBe("online");
+    } finally {
+      store.syncHosts([]);
+    }
+  });
+
+  it("manual retry reconnects an existing disconnected client", async () => {
+    useHostRuntimeClock();
+    const connection = makeHost().connections[0]!;
+    const host = makeHost({ connections: [connection] });
+    const clients: FakeDaemonClient[] = [];
+    const store = new HostRuntimeStore({
+      storage: createMemoryHostRuntimeStorage({
+        "@paseo:daemon-registry": JSON.stringify([host]),
+        "@paseo:e2e": "1",
+      }),
+      deps: makeDeps({ [connection.id]: 20 }, clients),
+    });
+    try {
+      await store.boot();
+      await waitForHostOnline(store, host.serverId);
+      const client = clients[0]!;
+      client.setConnectionState({ status: "disconnected", reason: "network lost" });
+      store.retryConnection(host.serverId);
+      expect(client.ensureConnectedCalls).toBe(1);
+      expect(client.connectionVerifications).toBe(1);
+      expect(store.getSnapshot(host.serverId)?.connectionStatus).toBe("online");
+      expect(clients).toHaveLength(1);
+    } finally {
+      store.syncHosts([]);
+    }
+  });
+
   it("warms recovered account hosts once and retains their connection across presence refreshes", async () => {
     const center = "https://center.test/api";
     const host = makeHost({
@@ -3774,22 +3918,18 @@ describe("HostRuntimeStore", () => {
     });
 
     store.syncHosts([host]);
-    let snapshot = store.getSnapshot(host.serverId);
-    const timeoutAt = Date.now() + 100;
-    while (
-      snapshot?.probeByConnectionId.get("direct:lan:6767")?.status !== "unavailable" &&
-      Date.now() < timeoutAt
-    ) {
-      await new Promise((resolve) => setTimeout(resolve, 0));
-      snapshot = store.getSnapshot(host.serverId);
+    try {
+      await store.runProbeCycleNow(host.serverId);
+      const snapshot = store.getSnapshot(host.serverId);
+      expect(snapshot?.connectionStatus).toBe("error");
+      expect(snapshot?.lastError).toBe("probe unavailable");
+      expect(snapshot?.probeByConnectionId.get("direct:lan:6767")).toEqual({
+        status: "unavailable",
+        latencyMs: null,
+      });
+    } finally {
+      store.syncHosts([]);
     }
-
-    expect(snapshot?.connectionStatus).toBe("connecting");
-    expect(snapshot?.lastError).toBeNull();
-    expect(snapshot?.probeByConnectionId.get("direct:lan:6767")).toEqual({
-      status: "unavailable",
-      latencyMs: null,
-    });
   });
 
   it("renameHost updates label in memory", async () => {
