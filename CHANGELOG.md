@@ -1,5 +1,15 @@
 # Ait changelog
 
+## 0.1.5 - 2026-10-16
+
+- Forward loopback browser requests through the authenticated relay to the remote Workspace Host, preserving URLs, HTTP(S)/WebSocket traffic, and reconnect behavior.
+- Allow OpenCode ACP cold starts and initial catalog discovery to finish without the previous 30-second cutoff, while preserving normal control-request timeouts.
+- Keep the composer usable during conversation rewind by closing the menu immediately while the request completes.
+- Preserve per-file paths and diffs in Codex multi-file edit cards, and hide invalid open-file targets on older cached cards.
+- Share one menu highlight between pointer and keyboard navigation, respecting pointer capabilities and disabled items.
+- Close open Android panels before system back navigation and route completed system edge gestures through panel navigation.
+- Preserve exact project configuration revision timestamps across JSON requests, avoiding false save conflicts when the file has not changed.
+
 ## 0.1.4 - 2026-10-15
 
 - Show native context-compaction progress, completion, and failure across Codex, Claude, OpenCode, DeepSeek Harness, and Antigravity, keeping live updates and restored history consistent.

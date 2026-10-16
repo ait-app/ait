@@ -3,6 +3,24 @@ use serde_json::json;
 use super::*;
 
 #[test]
+fn project_config_revision_survives_the_json_request_boundary() {
+    let expected_revision = PaseoConfigRevision {
+        mtime_ms: 1_792_160_783_969.930_7,
+        size: 45.0,
+    };
+    let encoded_request = serde_json::to_string(&json!({
+        "repoRoot": "/repo",
+        "config": {"scripts": {}},
+        "expectedRevision": expected_revision,
+    }))
+    .unwrap();
+    let inbound: Value = serde_json::from_str(&encoded_request).unwrap();
+    let request: ProjectConfigWriteRequest = serde_json::from_value(inbound).unwrap();
+
+    assert_eq!(request.expected_revision, Some(expected_revision));
+}
+
+#[test]
 fn service_ports_reject_invalid_ranges_and_normalize_script_only_settings() {
     for invalid in [
         json!({"scripts":[]}),
