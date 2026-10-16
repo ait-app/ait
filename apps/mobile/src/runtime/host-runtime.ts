@@ -856,6 +856,7 @@ export class HostRuntimeController {
 
     let remaining = connectionsToProbe.length;
     let activationLock: Promise<void> | null = null;
+    let lastProbeError: string | null = null;
 
     const publishProbeState = (): void => {
       if (!this.isCurrentProbeRequest(requestVersion)) {
@@ -905,6 +906,10 @@ export class HostRuntimeController {
             connectionId: nextConnectionId,
             expectedProbeVersion: requestVersion,
           });
+        } else if (!this.activeClient) {
+          // Failed initial probes never select a client, so no client status
+          // event can move the host out of its startup connecting state.
+          this.markStartupError(lastProbeError ?? this.snapshot.lastError ?? "Unable to connect");
         }
         return;
       }
@@ -1042,8 +1047,9 @@ export class HostRuntimeController {
               latencyMs: rttMs,
             });
             publishProbeState();
-          } catch {
+          } catch (error) {
             if (this.isCurrentProbeRequest(requestVersion)) {
+              lastProbeError = toErrorMessage(error);
               probeByConnectionId.set(connection.id, {
                 status: "unavailable",
                 latencyMs: null,
@@ -2380,6 +2386,10 @@ export class HostRuntimeStore {
     for (const controller of this.controllers.values()) {
       controller.ensureConnected(options);
     }
+  }
+
+  retryConnection(serverId: string): void {
+    this.controllers.get(serverId)?.ensureConnected({ verify: true });
   }
 
   /** Warm existing relay hosts once as their account or remote presence recovers. */

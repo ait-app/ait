@@ -1237,7 +1237,7 @@ function useWorkspaceRouteActions(normalizedServerId: string): {
     if (!normalizedServerId) {
       return;
     }
-    void getHostRuntimeStore().runProbeCycleNow(normalizedServerId);
+    getHostRuntimeStore().retryConnection(normalizedServerId);
   }, [normalizedServerId]);
   const handleManageHost = useCallback(() => {
     if (!normalizedServerId) {
