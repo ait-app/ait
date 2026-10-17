@@ -1,5 +1,12 @@
 # Ait changelog
 
+## 0.1.6 - 2026-10-17
+
+- Show startup connection failures and retry immediately while preserving background recovery and shared reconnect attempts.
+- Toggle Codex between Normal and Fast directly on desktop and mobile, with one Fast option and compatibility for saved priority selections and older native catalogs.
+- Show bounded OpenCode ACP error explanations with sensitive-field redaction, and recover turns when a model no longer supports the saved thinking level.
+- Transfer large forked chat histories in bounded chunks and compact them on the first send with the selected model, keeping recent original messages and marking omitted context when compaction is unavailable.
+
 ## 0.1.5 - 2026-10-16
 
 - Forward loopback browser requests through the authenticated relay to the remote Workspace Host, preserving URLs, HTTP(S)/WebSocket traffic, and reconnect behavior.
