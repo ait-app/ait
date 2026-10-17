@@ -1,3 +1,7 @@
+import {
+  createWebSocketTransportFactory,
+  nativeWebSocketFactory,
+} from "@ait/client/internal/daemon-client-websocket-transport";
 import { AppState, Platform } from "react-native";
 import * as Crypto from "expo-crypto";
 import { fetch as nativeFetch } from "expo/fetch";
@@ -28,6 +32,8 @@ async function createAccount(): Promise<AccountSessionManager> {
   }
   const manager = new AccountSessionManager({
     installationId,
+    channelTransport: createWebSocketTransportFactory(nativeWebSocketFactory),
+    channelAuthentication: "bearer",
     deviceName: platform === "ios" ? "Ait iOS" : "Ait Android",
     platform,
     browserLogin: platform === "ios" ? iosBrowserLogin : androidBrowserLogin,

@@ -120,6 +120,8 @@ describe("native mobile account commands", () => {
       host_id: "remote",
       server_id: "server",
       name: "Computer",
+      online: true,
+      status: "offline",
       node_id: "node",
       instance_id: "instance",
       platform: "linux",
@@ -206,7 +208,12 @@ describe("native mobile account commands", () => {
       await expect(accountCommand("account_login_hosted", { center: 123 })).rejects.toThrow(
         "Invalid service URL",
       );
-      mocks.manager.snapshot.mockReturnValue({ status: "connecting", selected: null });
+      mocks.manager.snapshot.mockReturnValue({
+        status: "connecting",
+        hosts: [],
+        stale: true,
+        selected: null,
+      });
       await accountCommand("account_login_hosted");
       expect(mocks.manager.loginWithBrowser).toHaveBeenCalledExactlyOnceWith("");
       mocks.manager.snapshot.mockReturnValue({ status: "logged_out", selected: null });

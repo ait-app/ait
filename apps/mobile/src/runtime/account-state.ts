@@ -11,15 +11,9 @@ import {
 } from "./browser-account";
 import { DEFAULT_ACCOUNT_CENTER } from "@ait/client/internal/account-session";
 
-export interface AccountHost {
-  host_id: string;
-  node_id: string;
-  server_id: string;
-  instance_id: string;
-  name: string;
-  platform: string;
-  relay_modes: string[];
-}
+import type { AccountHost } from "@ait/client/internal/account-session";
+export type { AccountHost } from "@ait/client/internal/account-session";
+
 export interface AccountState {
   status: "logged_out" | "connecting" | "online" | "error";
   center: string;
@@ -27,6 +21,7 @@ export interface AccountState {
   hostOnline: boolean;
   hosts: AccountHost[];
   stale: boolean;
+  confirmedHostIds?: string[];
   error: string | null;
   selected: AccountHost | null;
   synchronizedHosts?: string[];
@@ -79,15 +74,33 @@ async function receiveAccountSnapshot(
   await store.boot();
   const current = () => sequence === snapshotSequence && (isActive?.() ?? true);
   if (!current()) return;
-  if (snapshot.status === "online") {
+  const active = snapshot.status === "online" || snapshot.status === "connecting";
+  const confirmed = new Set(snapshot.confirmedHostIds ?? []);
+  const freshHosts = active
+    ? snapshot.hosts.filter(
+        (host) => (snapshot.status === "online" && !snapshot.stale) || confirmed.has(host.host_id),
+      )
+    : [];
+  if (snapshot.status === "online" || (active && freshHosts.length > 0)) {
     store.setAccountRelayCenter(snapshot.center);
-    await store.addDiscoveredAccountRelayHosts(snapshot.hosts, snapshot.center, current);
+    await store.addDiscoveredAccountRelayHosts(
+      freshHosts.filter((host): host is AccountHost & { server_id: string } =>
+        Boolean(host.server_id),
+      ),
+      snapshot.center,
+      current,
+    );
   } else if (snapshot.status === "logged_out") store.setAccountRelayCenter(null);
   if (current()) {
     store.setAvailableAccountRelayHosts(
-      snapshot.status === "online" && !snapshot.stale
-        ? snapshot.hosts.map((host) => host.server_id)
-        : [],
+      freshHosts.flatMap((host) =>
+        host.online &&
+        host.server_id &&
+        host.instance_id &&
+        host.relay_modes.includes("ait-rust-single-v1")
+          ? [host.server_id]
+          : [],
+      ),
     );
   }
 }
@@ -101,8 +114,11 @@ async function persistAccountHostSelection(
   if (command !== "account_select") return;
   const store = getHostRuntimeStore();
   await store.boot();
-  if (typeof args?.hostId === "string" && snapshot.selected) {
-    await store.addAccountRelayHost(snapshot.selected, snapshot.center);
+  if (typeof args?.hostId === "string" && snapshot.selected?.server_id) {
+    await store.addAccountRelayHost(
+      { ...snapshot.selected, server_id: snapshot.selected.server_id },
+      snapshot.center,
+    );
   } else if (previousServerId) {
     const host = store.getHosts().find((host) => host.serverId === previousServerId);
     for (const connection of host?.connections ?? []) {
