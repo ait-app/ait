@@ -54,3 +54,22 @@ pub(crate) struct ForkRequest {
     /// Alternative inclusive assistant-message boundary.
     pub(crate) boundary_message_id: Option<String>,
 }
+
+/// Compress older imported chat context using the destination Agent's exact model selection.
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub(crate) struct ContextCompactRequest {
+    /// Destination working directory for provider session setup.
+    pub cwd: String,
+    /// Selected destination provider.
+    pub provider: String,
+    /// Selected destination model, or its configured default.
+    pub model: Option<String>,
+    /// Selected destination reasoning option, when available.
+    pub thinking_option_id: Option<String>,
+    /// One bounded segment of imported conversation context.
+    pub context: String,
+}
+
+#[cfg(test)]
+mod tests;

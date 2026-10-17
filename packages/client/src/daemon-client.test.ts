@@ -5574,6 +5574,47 @@ test("requests provider snapshots conditionally and expands the compact response
   );
 });
 
+test("compacts imported context with the destination model selection", async () => {
+  const mock = createMockTransport();
+  const client = new DaemonClient({
+    url: "ws://test",
+    clientId: "clsk_context_compact_test",
+    reconnect: { enabled: false },
+    transportFactory: () => mock.transport,
+  });
+  clients.push(client);
+
+  const connectPromise = client.connect();
+  mock.triggerOpen();
+  await connectPromise;
+
+  const promise = client.compactAgentContext({
+    cwd: "/repo",
+    provider: "claude",
+    model: "sonnet",
+    thinkingOptionId: "high",
+    context: "Older conversation segment",
+  });
+  const request = parseSentFrame(mock.sent[0]);
+  expect(request).toMatchObject({
+    type: "agent.context.compact.request",
+    cwd: "/repo",
+    provider: "claude",
+    model: "sonnet",
+    thinkingOptionId: "high",
+    context: "Older conversation segment",
+  });
+
+  mock.triggerMessage(
+    wrapSessionMessage({
+      type: "agent.context.compact.response",
+      payload: { requestId: request.requestId, summary: "Earlier decisions." },
+    }),
+  );
+
+  await expect(promise).resolves.toBe("Earlier decisions.");
+});
+
 test("lists commands with draft config via RPC", async () => {
   const logger = createMockLogger();
   const mock = createMockTransport();

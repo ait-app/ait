@@ -12,6 +12,7 @@ pub(crate) const METHODS: &[MethodSpec] = &[
     MethodSpec::request("agent.import.request"),
     MethodSpec::request("agent.refresh.request"),
     MethodSpec::request("agent.fork_context.request"),
+    MethodSpec::request("agent.context.compact.request"),
     MethodSpec::request("agent.rewind.request"),
     MethodSpec::request("agent.commands.list.request"),
     MethodSpec::request("agent.mode.set.request"),
@@ -91,6 +92,46 @@ pub(crate) async fn dispatch(
     params: Value,
     state: &Shared,
 ) -> Result<Value, ErrorCode> {
+    if method == "agent.context.compact.request" {
+        let tracking = {
+            let _admission = state.admission.lock().map_err(|_| ErrorCode::AgentIo)?;
+            if state.cancellation.is_cancelled() {
+                return Err(ErrorCode::ServerDraining);
+            }
+            state.tasks.token()
+        };
+        let request: crate::protocol::native_sessions::ContextCompactRequest =
+            serde_json::from_value(params).map_err(|_| ErrorCode::InvalidMessage)?;
+        if request.context.len() > 96 * 1024
+            || request.cwd.trim().is_empty()
+            || request.provider.trim().is_empty()
+            || request
+                .model
+                .as_deref()
+                .is_some_and(|model| model.trim().is_empty())
+        {
+            return Err(ErrorCode::InvalidMessage);
+        }
+        let source = state
+            .summary_source
+            .as_ref()
+            .ok_or(ErrorCode::UnsupportedCapability)?;
+        let summary = source
+            .generate(domain::summary::SummaryRequest {
+                kind: domain::summary::SummaryKind::ChatHistory,
+                cwd: request.cwd,
+                context: request.context,
+                selection: Some(domain::summary::SummarySelection {
+                    provider: request.provider,
+                    model: request.model,
+                    thinking_option_id: request.thinking_option_id,
+                }),
+            })
+            .await
+            .map_err(|_| ErrorCode::UnsupportedCapability)?;
+        drop(tracking);
+        return Ok(serde_json::json!({"summary":summary["summary"]}));
+    }
     let execution = state
         .agent_execution
         .as_ref()

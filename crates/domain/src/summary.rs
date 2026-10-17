@@ -2,11 +2,13 @@
 
 use serde::{Deserialize, Serialize};
 
-/// The four independently configurable Paseo summary styles.
+/// Summary kinds supported by metadata and conversation-context generation.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum SummaryKind {
     /// A conversation's display title.
     Title,
+    /// Continuity notes for imported chat history.
+    ChatHistory,
     /// A workspace title and independently generated Git branch.
     BranchName,
     /// A Git commit subject.

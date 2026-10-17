@@ -35,6 +35,7 @@ async fn directory_only_hosts_check_identity_and_retire_only_the_requested_works
         skills: None,
         agent_runtime: Some(Arc::new(Mutex::new(directory))),
         agent_execution: None,
+        summary_source: None,
         directory_changes: None,
         has_terminals: false,
     };

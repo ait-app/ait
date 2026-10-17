@@ -5,6 +5,10 @@ fn validates_each_schema_and_rejects_extra_fields_controls_and_invalid_branches(
     for (kind, value) in [
         (SummaryKind::Title, json!({"title":" 修复标题 "})),
         (
+            SummaryKind::ChatHistory,
+            json!({"summary":"User plans a Rust fix."}),
+        ),
+        (
             SummaryKind::BranchName,
             json!({"title":"Fix titles","branch":"fix/session-titles"}),
         ),
@@ -66,6 +70,15 @@ fn injected_styles_replace_defaults_and_keep_contract_and_bounds() {
     assert!(prompt.contains("Prefix fix/"));
     assert!(!prompt.contains(TITLE));
     assert!(prompt.contains(CONTRACT));
+    let history = build(
+        &SummaryRequest {
+            kind: SummaryKind::ChatHistory,
+            ..request.clone()
+        },
+        &config,
+    );
+    assert!(history.contains("continuity notes"));
+    assert!(history.contains("Return only JSON"));
     assert!(
         build(
             &SummaryRequest {

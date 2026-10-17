@@ -77,7 +77,7 @@ fn attachments_use_inclusive_boundaries_and_omit_private_payloads() {
 }
 
 #[test]
-fn empty_and_oversized_attachments_have_explicit_outcomes() {
+fn empty_context_is_explicit_and_large_context_keeps_its_recent_tail() {
     assert!(
         export(&request(), "epoch", &[], &json!({})).unwrap()["attachment"]["text"]
             .as_str()
@@ -86,10 +86,14 @@ fn empty_and_oversized_attachments_have_explicit_outcomes() {
     );
     let rows = [row(
         1,
-        json!({"type":"user_message","text":"x".repeat(512*1024)}),
+        json!({
+            "type":"user_message",
+            "text":format!("{}\nLATEST MESSAGE", "x".repeat(800 * 1024))
+        }),
     )];
-    assert_eq!(
-        export(&request(), "epoch", &rows, &json!({})),
-        Err(ErrorCode::ResourceExhausted)
-    );
+    let exported = export(&request(), "epoch", &rows, &json!({})).unwrap();
+    let text = exported["attachment"]["text"].as_str().unwrap();
+    assert!(text.len() <= 512 * 1024);
+    assert!(text.contains("Earlier conversation omitted"));
+    assert!(text.ends_with("LATEST MESSAGE\n</chat-history-summary>"));
 }

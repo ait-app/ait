@@ -1758,6 +1758,16 @@ export const AgentForkContextRequestMessageSchema = z.object({
   requestId: z.string(),
 });
 
+export const AgentContextCompactRequestMessageSchema = z.object({
+  type: z.literal("agent.context.compact.request"),
+  cwd: z.string(),
+  provider: z.string(),
+  model: z.string().nullable(),
+  thinkingOptionId: z.string().nullable(),
+  context: z.string(),
+  requestId: z.string(),
+});
+
 export const SetAgentModeRequestMessageSchema = z.object({
   type: z.literal("agent.mode.set.request"),
   agentId: z.string(),
@@ -3022,6 +3032,7 @@ export const SessionInboundMessageSchema = z.discriminatedUnion("type", [
   ProviderSubagentTimelineRequestMessageSchema,
   SetAgentTimelineSubscriptionRequestMessageSchema,
   AgentForkContextRequestMessageSchema,
+  AgentContextCompactRequestMessageSchema,
   SetAgentModeRequestMessageSchema,
   SetAgentModelRequestMessageSchema,
   SetAgentThinkingRequestMessageSchema,
@@ -4529,6 +4540,14 @@ export const AgentForkContextResponseMessageSchema = z.object({
     boundaryMessageId: z.string().nullable(),
     boundaryCursor: AgentTimelineCursorSchema.nullable().optional(),
     error: z.string().nullable(),
+  }),
+});
+
+export const AgentContextCompactResponseMessageSchema = z.object({
+  type: z.literal("agent.context.compact.response"),
+  payload: z.object({
+    requestId: z.string(),
+    summary: z.string(),
   }),
 });
 
@@ -6295,6 +6314,7 @@ export const SessionOutboundMessageSchema = z.discriminatedUnion("type", [
   SetAgentTimelineSubscriptionResponseMessageSchema,
   AgentAttentionRequiredMessageSchema,
   AgentForkContextResponseMessageSchema,
+  AgentContextCompactResponseMessageSchema,
   CancelAgentResponseMessageSchema,
   ClearAgentAttentionResponseMessageSchema,
   WorkspaceCreateResponseSchema,
@@ -6501,6 +6521,9 @@ export type AgentTimelineListPromptsResponseMessage = z.infer<
   typeof AgentTimelineListPromptsResponseMessageSchema
 >;
 export type AgentForkContextResponseMessage = z.infer<typeof AgentForkContextResponseMessageSchema>;
+export type AgentContextCompactResponseMessage = z.infer<
+  typeof AgentContextCompactResponseMessageSchema
+>;
 export type CancelAgentResponseMessage = z.infer<typeof CancelAgentResponseMessageSchema>;
 export type SendAgentMessageResponseMessage = z.infer<typeof SendAgentMessageResponseMessageSchema>;
 export type SetVoiceModeResponseMessage = z.infer<typeof SetVoiceModeResponseMessageSchema>;

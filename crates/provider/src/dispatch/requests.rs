@@ -144,6 +144,7 @@ pub(super) async fn execution(
                 | "agent.import.request"
                 | "agent.refresh.request"
                 | "agent.fork_context.request"
+                | "agent.context.compact.request"
                 | "agent.rewind.request"
                 | "agent.commands.list.request"
                 | "agent.mode.set.request"

@@ -1,5 +1,7 @@
 //! Text attachment curation from a validated inclusive display-history boundary.
 
+use std::collections::VecDeque;
+
 use model::ErrorCode;
 use serde_json::{Value, json};
 
@@ -9,6 +11,126 @@ use crate::storage::timeline::Row;
 use crate::timeline_projection::{Entry, project};
 
 mod tools;
+
+const MAX_TEXT_BYTES: usize = 512 * 1024;
+const OMITTED_MARKER: &str = "[Earlier conversation omitted to fit the transfer budget.]\n";
+const CLOSING_TAG: &str = "</chat-history-summary>";
+const MAX_RESPONSE_BYTES: usize = 850 * 1024;
+
+struct BoundedText {
+    prefix: String,
+    chunks: VecDeque<String>,
+    body_len: usize,
+    omitted: bool,
+}
+
+impl BoundedText {
+    fn new(prefix: String) -> Self {
+        Self {
+            prefix,
+            chunks: VecDeque::new(),
+            body_len: 0,
+            omitted: false,
+        }
+    }
+
+    fn append(&mut self, text: &str) {
+        if text.is_empty() {
+            return;
+        }
+        let content_budget = MAX_TEXT_BYTES
+            .saturating_sub(self.prefix.len())
+            .saturating_sub(CLOSING_TAG.len())
+            .saturating_sub(if self.omitted {
+                OMITTED_MARKER.len()
+            } else {
+                0
+            });
+        if self.body_len.saturating_add(text.len()) <= content_budget {
+            self.chunks.push_back(text.to_owned());
+            self.body_len += text.len();
+            return;
+        }
+
+        self.omitted = true;
+        let content_budget = MAX_TEXT_BYTES
+            .saturating_sub(self.prefix.len())
+            .saturating_sub(CLOSING_TAG.len())
+            .saturating_sub(OMITTED_MARKER.len());
+        if text.len() >= content_budget {
+            self.chunks.clear();
+            let suffix = utf8_suffix(text, content_budget);
+            self.chunks.push_back(suffix.to_owned());
+            self.body_len = suffix.len();
+            return;
+        }
+
+        self.chunks.push_back(text.to_owned());
+        self.body_len += text.len();
+        while self.body_len > content_budget {
+            let Some(first) = self.chunks.pop_front() else {
+                break;
+            };
+            let excess = self.body_len - content_budget;
+            if first.len() <= excess {
+                self.body_len -= first.len();
+                continue;
+            }
+            let suffix = utf8_suffix(&first, first.len() - excess);
+            self.body_len -= first.len() - suffix.len();
+            self.chunks.push_front(suffix.to_owned());
+            break;
+        }
+    }
+
+    fn append_message(&mut self, label: &str, message: &str) {
+        let content_len = label.len().saturating_add(message.len()).saturating_add(1);
+        let current_budget = self.content_budget(self.omitted);
+        if self.body_len.saturating_add(content_len) <= current_budget {
+            self.append(label);
+            self.append(message);
+            self.append("\n");
+            return;
+        }
+
+        self.omitted = true;
+        let budget = self
+            .content_budget(true)
+            .saturating_sub(label.len())
+            .saturating_sub(1);
+        let suffix = utf8_suffix(message, budget);
+        self.chunks.clear();
+        self.chunks.push_back(label.to_owned());
+        self.chunks.push_back(suffix.to_owned());
+        self.chunks.push_back("\n".to_owned());
+        self.body_len = label.len() + suffix.len() + 1;
+    }
+
+    fn content_budget(&self, omitted: bool) -> usize {
+        MAX_TEXT_BYTES
+            .saturating_sub(self.prefix.len())
+            .saturating_sub(CLOSING_TAG.len())
+            .saturating_sub(if omitted { OMITTED_MARKER.len() } else { 0 })
+    }
+
+    fn finish(self) -> String {
+        let mut output = String::with_capacity(
+            self.prefix.len()
+                + usize::from(self.omitted) * OMITTED_MARKER.len()
+                + self.body_len
+                + CLOSING_TAG.len(),
+        );
+        output.push_str(&self.prefix);
+        if self.omitted {
+            output.push_str(OMITTED_MARKER);
+        }
+        for chunk in self.chunks {
+            output.push_str(&chunk);
+        }
+        output.push_str(CLOSING_TAG);
+        output
+    }
+}
 
 pub(crate) fn export(
     request: &ForkRequest,
@@ -55,7 +177,7 @@ pub(crate) fn export(
         }
         selected.retain(|entry| entry.seq_end <= boundary);
     }
-    let mut text =
+    let mut prefix =
         String::from("<chat-history-summary>\nChat history from a previous Ait agent.\n");
     for (field, label) in [("title", "Source agent"), ("cwd", "Source directory")] {
         if let Some(value) = agent[field]
@@ -63,48 +185,51 @@ pub(crate) fn export(
             .map(str::trim)
             .filter(|value| !value.is_empty())
         {
-            append(&mut text, &format!("{label}: {value}\n"))?;
+            let value: String = value.chars().take(1024).collect();
+            prefix.push_str(label);
+            prefix.push_str(": ");
+            prefix.push_str(&value);
+            prefix.push('\n');
         }
     }
-    append(&mut text, "\n")?;
-    append_body(&mut text, &selected)?;
-    append(&mut text, "</chat-history-summary>")?;
-    super::timeline::bounded(json!({"agentId":request.agent_id,"attachment":{
-        "type":"text","mimeType":"text/plain","contextKind":"chat_history","title":"Chat history","text":text},
-        "itemCount":selected.len(),"boundaryCursor":request.boundary_cursor,"boundaryMessageId":message,"error":null}))
+    prefix.push('\n');
+    let mut text = BoundedText::new(prefix);
+    append_body(&mut text, &selected);
+    let response = json!({"agentId":request.agent_id,"attachment":{
+        "type":"text","mimeType":"text/plain","contextKind":"chat_history","title":"Chat history","text":text.finish()},
+        "itemCount":selected.len(),"boundaryCursor":request.boundary_cursor,"boundaryMessageId":message,"error":null});
+    bounded_response(response)
 }
 
-fn append_body(text: &mut String, selected: &[Entry]) -> Result<(), ErrorCode> {
+fn append_body(text: &mut BoundedText, selected: &[Entry]) {
     let mut message = String::new();
     let mut body = false;
     for row in selected {
         let item = &row.item;
         match item["type"].as_str() {
             Some("user_message") => {
-                flush_message(text, &mut message)?;
-                append(text, "[User] ")?;
-                append(text, item["text"].as_str().unwrap_or("").trim())?;
-                append(text, "\n")?;
+                flush_message(text, &mut message);
+                append_message(text, "[User] ", item["text"].as_str().unwrap_or("").trim());
                 body = true;
             }
             Some("assistant_message") => {
                 let incoming = item["text"].as_str().unwrap_or("").trim();
                 if !incoming.is_empty() {
                     if !message.is_empty() {
-                        append(&mut message, "\n")?;
+                        message.push('\n');
                     }
-                    append(&mut message, incoming)?;
+                    message.push_str(incoming);
                 }
             }
             Some("tool_call") => {
-                flush_message(text, &mut message)?;
-                append(text, &tools::summary(item))?;
-                append(text, "\n")?;
+                flush_message(text, &mut message);
+                text.append(&tools::summary(item));
+                text.append("\n");
                 if item["detail"]["type"] == "sub_agent" {
                     let log = item["detail"]["log"].as_str().unwrap_or("").trim();
                     if !log.is_empty() {
-                        append(text, log)?;
-                        append(text, "\n")?;
+                        text.append(log);
+                        text.append("\n");
                     }
                 }
                 body = true;
@@ -112,36 +237,54 @@ fn append_body(text: &mut String, selected: &[Entry]) -> Result<(), ErrorCode> {
             _ => {}
         }
     }
-    body |= flush_message(text, &mut message)?;
+    body |= flush_message(text, &mut message);
     if !body {
-        append(text, "No chat history to display.\n")?;
+        text.append("No chat history to display.\n");
     }
-    Ok(())
 }
 
-fn flush_message(text: &mut String, message: &mut String) -> Result<bool, ErrorCode> {
-    let appended = append_message(text, "[Assistant] ", message)?;
+fn flush_message(text: &mut BoundedText, message: &mut String) -> bool {
+    let appended = append_message(text, "[Assistant] ", message);
     message.clear();
-    Ok(appended)
+    appended
 }
 
-fn append_message(output: &mut String, label: &str, text: &str) -> Result<bool, ErrorCode> {
+fn append_message(output: &mut BoundedText, label: &str, text: &str) -> bool {
     let text = text.trim();
     if text.is_empty() {
-        return Ok(false);
+        return false;
     }
-    append(output, label)?;
-    append(output, text)?;
-    append(output, "\n")?;
-    Ok(true)
+    output.append_message(label, text);
+    true
 }
 
-fn append(output: &mut String, text: &str) -> Result<(), ErrorCode> {
-    if output.len().saturating_add(text.len()) > 512 * 1024 {
-        return Err(ErrorCode::ResourceExhausted);
+fn bounded_response(mut response: Value) -> Result<Value, ErrorCode> {
+    loop {
+        let encoded_size = serde_json::to_vec(&response)
+            .map_err(|_| ErrorCode::ResourceExhausted)?
+            .len();
+        if encoded_size <= MAX_RESPONSE_BYTES {
+            return super::timeline::bounded(response);
+        }
+        let current = response["attachment"]["text"]
+            .as_str()
+            .ok_or(ErrorCode::ResourceExhausted)?;
+        let (header, body) = current
+            .split_once("\n\n")
+            .ok_or(ErrorCode::ResourceExhausted)?;
+        let body = body.strip_suffix(CLOSING_TAG).unwrap_or(body);
+        let kept = utf8_suffix(body, body.len() / 2);
+        response["attachment"]["text"] =
+            json!(format!("{header}\n\n{OMITTED_MARKER}{kept}{CLOSING_TAG}"));
     }
-    output.push_str(text);
-    Ok(())
+}
+
+fn utf8_suffix(text: &str, max_bytes: usize) -> &str {
+    let mut start = text.len().saturating_sub(max_bytes);
+    while !text.is_char_boundary(start) {
+        start += 1;
+    }
+    &text[start..]
 }
 
 #[cfg(test)]

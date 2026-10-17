@@ -14,6 +14,10 @@ import { composerWorkspaceAttachment } from "@/composer/attachments/workspace";
 import { useAgentInputDraft } from "@/composer/draft/input-draft";
 import type { CreateAgentInitialValues } from "@/hooks/use-agent-form-state";
 import { useDraftAgentCreateFlow, type DraftCreateAttempt } from "@/composer/draft/create-flow";
+import {
+  clearCompactedChatHistory,
+  compactChatHistoryAttachments,
+} from "@/composer/draft/compact-chat-history";
 import { resolveTurnPresentation, TURN_LIVENESS_IDLE } from "@/timeline/turn-liveness";
 import { useHostRuntimeClient } from "@/runtime/host-runtime";
 import { buildWorkspaceDraftAgentConfig } from "@/screens/workspace/workspace-draft-agent-config";
@@ -196,14 +200,27 @@ async function submitDraftCreateRequest(input: {
     featureValues: autoSubmitConfig?.featureValues ?? composerState.featureValues,
   });
 
+  const compactedAttachments = await compactChatHistoryAttachments(
+    client,
+    input.draftId,
+    attachments,
+    {
+      cwd,
+      provider,
+      model: autoSubmitConfig?.model ?? composerState.effectiveModelId,
+      thinkingOptionId:
+        autoSubmitConfig?.thinkingOptionId ?? composerState.effectiveThinkingOptionId,
+    },
+  );
   const result = await requestWorkspaceDraftAgent(client, {
     config,
     workspaceId,
     text,
     clientMessageId: attempt.clientMessageId,
     images,
-    attachments,
+    attachments: compactedAttachments,
   });
+  clearCompactedChatHistory(input.draftId);
 
   return {
     agentId: result.id,

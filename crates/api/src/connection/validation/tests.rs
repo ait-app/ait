@@ -7,7 +7,7 @@ fn catalog_and_implemented_methods_keep_their_envelope_metadata() {
     let specs: Vec<_> = implemented_methods().collect();
     let names: BTreeSet<_> = specs.iter().map(|spec| spec.name).collect();
     assert_eq!(specs.len(), names.len());
-    assert_eq!(names.len(), 203);
+    assert_eq!(names.len(), 204);
     assert!(names.contains("workspace.get.request"));
     for spec in specs {
         let metadata = lookup(spec.name).expect("declared method must exist");
