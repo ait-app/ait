@@ -120,6 +120,8 @@ describe("native mobile account commands", () => {
       host_id: "remote",
       server_id: "server",
       name: "Computer",
+      online: true,
+      status: "offline",
       node_id: "node",
       instance_id: "instance",
       platform: "linux",

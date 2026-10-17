@@ -1,3 +1,9 @@
+import { AccountChannel, type ChannelHost } from "./account-channel.js";
+import type { DaemonTransportFactory } from "./daemon-client-transport-types.js";
+import {
+  createWebSocketTransportFactory,
+  defaultWebSocketFactory,
+} from "./daemon-client-websocket-transport.js";
 import {
   accountLoginError,
   parseAccountCallback,
@@ -7,15 +13,7 @@ import {
 /** API base includes the management gateway prefix; all relay URLs derive from it. */
 export const DEFAULT_ACCOUNT_CENTER = "https://aitapp.cn/api";
 
-export interface AccountHost {
-  host_id: string;
-  node_id: string;
-  server_id: string;
-  instance_id: string;
-  name: string;
-  platform: string;
-  relay_modes: string[];
-}
+export type AccountHost = ChannelHost;
 
 interface LoginUser {
   display_name?: string | null;
@@ -49,6 +47,8 @@ export interface AccountSnapshot {
   stale: boolean;
   error: string | null;
   selected: AccountHost | null;
+  /** Observed node presence; distinct from Host routability. Reset on reconnect. */
+  nodes?: Record<string, boolean>;
   /** Independently maintained daemon leases; contains no credentials. */
   synchronizedHosts?: string[];
   accountExpiresAt?: string | null;
@@ -67,6 +67,9 @@ export interface AccountDependencies {
   notify(snapshot: AccountSnapshot): void;
   closeTransports(): void;
   fetch?: typeof fetch;
+  channelTransport?: DaemonTransportFactory;
+  /** Browsers bind one-use tickets to their Origin via the WebSocket subprotocol. */
+  channelAuthentication?: "bearer" | "subprotocol";
   /** Desktop can keep login independent of explicitly publishing individual daemons. */
   publishRuntime?: boolean;
   browserLogin?: AccountBrowserLogin;
@@ -141,8 +144,9 @@ export class AccountSessionManager {
   private running: Promise<void> | null = null;
   private requests = new Set<AbortController>();
   private nextRenew = 0;
-  private nextDiscovery = 0;
-  private discoveryFailures = 0;
+  private channel: AccountChannel | null = null;
+  private nextChannel = 0;
+  private channelFailures = 0;
   private controlFailures = 0;
   private nextControl = 0;
   private nextRegistration = 0;
@@ -171,6 +175,7 @@ export class AccountSessionManager {
     });
     return {
       ...this.state,
+      nodes: { ...this.state.nodes },
       hosts: this.state.hosts.map(cloneHost),
       selected: this.state.selected ? cloneHost(this.state.selected) : null,
       synchronizedHosts: [...this.publications.keys()],
@@ -344,6 +349,7 @@ export class AccountSessionManager {
     if (this.timer) clearTimeout(this.timer);
     this.timer = null;
     for (const request of this.requests) request.abort();
+    this.closeChannel();
     this.deps.closeTransports();
     const account = this.account;
     const node = this.node;
@@ -352,8 +358,8 @@ export class AccountSessionManager {
     this.node = null;
     this.registrationId = this.deps.randomUUID();
     this.runtimeInstance = null;
-    this.nextControl = this.nextDiscovery = this.nextRenew = this.nextRegistration = 0;
-    this.controlFailures = this.discoveryFailures = this.registrationFailures = 0;
+    this.nextControl = this.nextChannel = this.nextRenew = this.nextRegistration = 0;
+    this.controlFailures = this.channelFailures = this.registrationFailures = 0;
     await this.running?.catch(() => undefined);
     await this.deps.local("DELETE").catch(() => undefined);
     if (account && node) {
@@ -378,6 +384,7 @@ export class AccountSessionManager {
       accountExpiresAt: null,
       hostOnline: false,
       hosts: [],
+      nodes: {},
       stale: true,
       error: null,
       selected: null,
@@ -403,7 +410,8 @@ export class AccountSessionManager {
     if (!this.account || !this.node)
       throw new Error("Sign in and wait for this device to register.");
     const host = this.state.hosts.find((host) => host.host_id === hostId);
-    if (!host) throw new Error("The target host is offline. Refresh the host list.");
+    if (!host || !host.online || !host.server_id || !host.instance_id)
+      throw new Error("The target host is offline. Refresh the host list.");
     if (this.state.selected?.host_id !== hostId) {
       this.update({ selected: host });
     }
@@ -411,7 +419,8 @@ export class AccountSessionManager {
   }
 
   refresh(): void {
-    this.nextDiscovery = 0;
+    this.channel?.refresh();
+    this.nextChannel = 0;
     this.schedule(0);
   }
 
@@ -607,6 +616,7 @@ export class AccountSessionManager {
     if (this.timer) clearTimeout(this.timer);
     this.timer = null;
     for (const request of this.requests) request.abort();
+    this.closeChannel();
     this.deps.closeTransports();
     this.update({ stale: true });
     this.schedule(0);
@@ -652,6 +662,7 @@ export class AccountSessionManager {
         runtime.features?.includes("ait-rust-single-v1");
       const instance = ready ? runtime.instanceId! : null;
       if (this.node && this.runtimeInstance && this.runtimeInstance !== instance) {
+        this.closeChannel();
         this.deps.closeTransports();
         await this.deps.local("DELETE").catch(() => undefined);
         await this.api(`/v1/node-sessions/${this.node.node_session_id}`, "DELETE");
@@ -676,6 +687,7 @@ export class AccountSessionManager {
             : null,
         });
         if (generation !== this.generation || !this.account) return;
+        this.closeChannel();
         this.node = node;
         this.registrationFailures = 0;
         this.nextRegistration = 0;
@@ -683,7 +695,7 @@ export class AccountSessionManager {
         this.account.nodeSessionId = node.node_session_id;
         await this.deps.save(this.account);
         this.nextRenew = Date.now() + 20_000;
-        this.nextDiscovery = 0;
+        this.nextChannel = 0;
         this.update({ status: "online", error: null });
       }
       if (generation !== this.generation || !this.node) return;
@@ -702,26 +714,11 @@ export class AccountSessionManager {
         });
       }
       if (generation !== this.generation) return;
-      if (Date.now() >= this.nextDiscovery) {
+      if (!this.channel && Date.now() >= this.nextChannel) {
         try {
-          const list = await this.api<{ hosts: AccountHost[] }>(
-            `/v1/hosts/online?exclude_node_id=${this.node.node_id}`,
-          );
-          if (generation !== this.generation) return;
-          this.discoveryFailures = 0;
-          this.nextDiscovery = Date.now() + 10_000;
-          this.update({
-            status: "online",
-            hosts: list.hosts.filter((h) => h.host_id !== this.node?.host_id),
-            stale: false,
-            error: null,
-          });
+          await this.connectChannel(generation);
         } catch (error) {
-          this.nextDiscovery =
-            Date.now() +
-            Math.min(60_000, 10_000 * 2 ** Math.min(this.discoveryFailures++, 3)) *
-              (0.8 + Math.random() * 0.4);
-          this.update({ stale: true });
+          this.nextChannel = Date.now() + retryDelay(this.channelFailures++);
           throw error;
         }
       }
@@ -731,6 +728,7 @@ export class AccountSessionManager {
         error instanceof AccountError &&
         ["node_session_expired", "registration_expired"].includes(error.code)
       ) {
+        this.closeChannel();
         this.deps.closeTransports();
         await this.deps.local("DELETE").catch(() => undefined);
         this.node = null;
@@ -752,6 +750,88 @@ export class AccountSessionManager {
         stale: true,
       });
     }
+  }
+
+  private closeChannel(): void {
+    const channel = this.channel;
+    this.channel = null;
+    channel?.close();
+  }
+
+  private async connectChannel(generation: number): Promise<void> {
+    if (!this.account || !this.node) return;
+    const account = this.account;
+    const node = this.node;
+    const grant = await this.api<{
+      channel_ticket: string;
+      channel_path: string;
+      protocol: string;
+    }>("/v1/relay/channel-tickets", "POST", { source_node_session_id: node.node_session_id });
+    if (generation !== this.generation || this.node !== node || this.suspended || this.closing)
+      return;
+    if (
+      grant.protocol !== "ait-channel-v1" ||
+      grant.channel_path !== "/v1/relay/channel" ||
+      typeof grant.channel_ticket !== "string" ||
+      !/^[A-Za-z0-9_-]{1,512}$/.test(grant.channel_ticket)
+    )
+      throw new Error("The service returned an invalid account channel ticket.");
+    const url = new URL(`${account.center}${grant.channel_path}`);
+    url.protocol = url.protocol === "https:" ? "wss:" : "ws:";
+    const create =
+      this.deps.channelTransport ?? createWebSocketTransportFactory(defaultWebSocketFactory);
+    const transport = create({
+      url: url.toString(),
+      ...(this.deps.channelAuthentication === "bearer"
+        ? { headers: { Authorization: `Bearer ${grant.channel_ticket}` } }
+        : { protocols: [`ait.ticket.${grant.channel_ticket}`] }),
+    });
+    const channel = new AccountChannel(transport, {
+      snapshot: (hosts) => {
+        if (this.channel !== channel) return;
+        this.channelFailures = 0;
+        const visible = hosts.filter(
+          (host) => host.host_id !== node.host_id && host.node_id !== node.node_id,
+        );
+        this.update({
+          status: "online",
+          hosts: visible,
+          selected: visible.find((host) => host.host_id === this.state.selected?.host_id) ?? null,
+          stale: false,
+          error: null,
+        });
+      },
+      node: (nodeId, online) => {
+        if (this.channel !== channel) return;
+        const hosts = online
+          ? this.state.hosts
+          : this.state.hosts.map((host) =>
+              host.node_id === nodeId
+                ? { ...host, online: false, instance_id: null, relay_modes: [] }
+                : host,
+            );
+        this.update({
+          nodes: { ...this.state.nodes, [nodeId]: online },
+          hosts,
+          selected: hosts.find((host) => host.host_id === this.state.selected?.host_id) ?? null,
+        });
+      },
+      failed: () => {
+        if (this.channel !== channel) return;
+        this.channel = null;
+        this.nextChannel = Date.now() + retryDelay(this.channelFailures++);
+        this.nextRenew = 0;
+        this.update({
+          status: "error",
+          stale: true,
+          error: "Account status connection lost. Reconnecting.",
+        });
+        this.schedule(0);
+      },
+    });
+    this.channel = channel;
+    this.update({ status: "connecting", nodes: {}, stale: true });
+    channel.start();
   }
 
   private async maintainControl(generation: number): Promise<void> {

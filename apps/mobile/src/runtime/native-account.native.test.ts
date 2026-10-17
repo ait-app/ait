@@ -1,3 +1,4 @@
+import { ChannelWebSocket } from "../../../../packages/client/test/account-channel";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 const mocks = vi.hoisted(() => ({
@@ -51,6 +52,8 @@ beforeEach(() => {
   vi.resetModules();
   vi.clearAllMocks();
   vi.useFakeTimers();
+  ChannelWebSocket.instances = [];
+  vi.stubGlobal("WebSocket", ChannelWebSocket);
   mocks.platform = "android";
   mocks.currentState = "active";
   mocks.get.mockResolvedValue(null);
@@ -83,7 +86,11 @@ describe("native mobile account storage and lifecycle", () => {
             host_id: null,
             control_required: false,
           });
-        return Response.json({ hosts: [], count: 0 });
+        return Response.json({
+          channel_ticket: "native-ticket",
+          channel_path: "/v1/relay/channel",
+          protocol: "ait-channel-v1",
+        });
       }),
     );
     const { getNativeAccount } = await import("./native-account.native");
@@ -148,7 +155,11 @@ describe("native mobile account storage and lifecycle", () => {
               host_id: null,
               control_required: false,
             });
-          return Response.json({ hosts: [], count: 0 });
+          return Response.json({
+            channel_ticket: "native-ticket",
+            channel_path: "/v1/relay/channel",
+            protocol: "ait-channel-v1",
+          });
         }),
       );
       const native = await import("./native-account.native");
@@ -182,6 +193,11 @@ describe("native mobile account storage and lifecycle", () => {
       await vi.advanceTimersByTimeAsync(119_999);
       expect(close).not.toHaveBeenCalled();
       expect(manager.snapshot().stale).toBe(false);
+      expect(ChannelWebSocket.instances[0]).toMatchObject({
+        url: "wss://center.test/api/v1/relay/channel",
+        options: { headers: { Authorization: "Bearer native-ticket" } },
+        protocols: undefined,
+      });
       await vi.advanceTimersByTimeAsync(1);
       expect(close).toHaveBeenCalledOnce();
       expect(manager.snapshot().stale).toBe(true);
@@ -292,7 +308,11 @@ describe("native mobile account storage and lifecycle", () => {
           Response.json(
             url.endsWith("/v1/nodes/register")
               ? { node_id: "node", node_session_id: "session", control_required: false }
-              : { hosts: [], count: 0 },
+              : {
+                  channel_ticket: "native-ticket",
+                  channel_path: "/v1/relay/channel",
+                  protocol: "ait-channel-v1",
+                },
           ),
         ),
       );
@@ -327,7 +347,11 @@ describe("native mobile account storage and lifecycle", () => {
             host_id: null,
             control_required: false,
           });
-        return Response.json({ hosts: [], count: 0 });
+        return Response.json({
+          channel_ticket: "native-ticket",
+          channel_path: "/v1/relay/channel",
+          protocol: "ait-channel-v1",
+        });
       });
       vi.stubGlobal("fetch", http);
       const { getNativeAccount } = await import("./native-account.native");

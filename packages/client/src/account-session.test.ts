@@ -1,3 +1,4 @@
+import { channelFixture } from "../test/account-channel.js";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import {
   AccountSessionManager,
@@ -89,6 +90,8 @@ describe("account center domain migration", () => {
 function fixture() {
   vi.useFakeTimers();
   const host = {
+    online: true,
+    status: "offline",
     host_id: "remote",
     node_id: "other",
     server_id: "server",
@@ -97,6 +100,7 @@ function fixture() {
     platform: "linux",
     relay_modes: ["ait-rust-single-v1"],
   };
+  const channel = channelFixture(() => [host]);
   let leaseExpired = false;
   const http = vi.fn(async (url: string | URL | Request, _options?: RequestInit) => {
     const path = String(url);
@@ -118,7 +122,12 @@ function fixture() {
       });
     }
     if (path.endsWith("/control-tickets")) return Response.json({ control_ticket: "a".repeat(64) });
-    if (path.includes("/hosts/online")) return Response.json({ hosts: [host] });
+    if (path.endsWith("/channel-tickets"))
+      return Response.json({
+        channel_ticket: "one-use-channel",
+        channel_path: "/v1/relay/channel",
+        protocol: "ait-channel-v1",
+      });
     if (path.endsWith("/renew") && leaseExpired) {
       leaseExpired = false;
       return Response.json({ error: { code: "node_session_expired" } }, { status: 401 });
@@ -142,6 +151,7 @@ function fixture() {
     runtime: () => ({ status: "stopped", serverId: "" }),
     local: vi.fn(async () => undefined),
     fetch: http,
+    channelTransport: channel.create,
     browserLogin: {
       randomSecret: () => "b".repeat(64),
       challenge: async (value) => createHash("sha256").update(value).digest("base64url"),
@@ -164,6 +174,7 @@ function fixture() {
     http,
     deps,
     host,
+    channel,
     login,
     expireLease: () => {
       leaseExpired = true;
@@ -438,14 +449,13 @@ describe("hosted account login", () => {
 
 describe("client-only account lifecycle", () => {
   it("keeps existing host visits available when another host is selected or deselected", async () => {
-    const { manager, deps, login, http, host } = fixture();
-    const original = http.getMockImplementation()!;
-    http.mockImplementation((url, options) =>
-      String(url).includes("/hosts/online")
-        ? Promise.resolve(Response.json({ hosts: [host, { ...host, host_id: "another" }] }))
-        : original(url, options),
-    );
+    const { manager, deps, login, channel, host } = fixture();
     await login();
+    channel.sockets[0]!.receive({
+      type: "hosts.snapshot",
+      hosts: [host, { ...host, host_id: "another" }],
+      observed_at: "old",
+    });
     vi.mocked(deps.closeTransports).mockClear();
     const center = manager.snapshot().center;
     await manager.select("remote");
@@ -936,5 +946,148 @@ describe("explicit daemon publication", () => {
       http.mock.calls.slice(before).some(([url]) => String(url).endsWith("/lease-second/renew")),
     ).toBe(true);
     await manager.unpublishHost("second");
+  });
+});
+
+describe("account status channel", () => {
+  it("uses a one-use ticket, retains the gateway and stops HTTP host polling", async () => {
+    const { manager, login, http, channel } = fixture();
+    await login();
+    expect(http).toHaveBeenCalledWith(
+      "https://aitapp.cn/api/v1/relay/channel-tickets",
+      expect.objectContaining({
+        headers: expect.objectContaining({ Authorization: "Bearer private-jwt" }),
+        body: JSON.stringify({ source_node_session_id: "lease" }),
+      }),
+    );
+    expect(channel.create).toHaveBeenCalledWith({
+      url: "wss://aitapp.cn/api/v1/relay/channel",
+      protocols: ["ait.ticket.one-use-channel"],
+    });
+    await vi.advanceTimersByTimeAsync(80_000);
+    expect(channel.create).toHaveBeenCalledTimes(1);
+    expect(channel.sockets[0]!.transport.send).toHaveBeenCalledWith(
+      JSON.stringify({ type: "channel.heartbeat" }),
+    );
+    expect(http.mock.calls.some(([url]) => String(url).includes("/hosts/online"))).toBe(false);
+    expect(manager.snapshot().stale).toBe(false);
+    await manager.logout();
+  });
+
+  it("replaces full snapshots including offline and unbound hosts and distinguishes node presence", async () => {
+    const { manager, login, channel, host } = fixture();
+    await login();
+    await manager.select("remote");
+    const socket = channel.sockets[0]!;
+    const offline = {
+      ...host,
+      online: false,
+      instance_id: null,
+      relay_modes: [],
+      offline_since: "2026-10-01T00:00:00Z",
+    };
+    const manual = { ...offline, host_id: "manual", node_id: null, server_id: null };
+    socket.receive({ type: "hosts.snapshot", hosts: [offline, manual], observed_at: "old" });
+    expect(manager.snapshot().hosts).toEqual([offline, manual]);
+    expect(manager.snapshot().selected).toEqual(offline);
+    await expect(manager.select("remote")).rejects.toThrow("offline");
+    socket.receive({
+      type: "node.online",
+      node_id: "other",
+      node_session_id: "s",
+      host_id: "remote",
+      observed_at: "old",
+    });
+    expect(manager.snapshot().nodes).toEqual({ other: true });
+    expect(manager.snapshot().hosts[0]?.online).toBe(false);
+    socket.snapshot();
+    socket.receive({
+      type: "node.offline",
+      node_id: "other",
+      node_session_id: "s",
+      host_id: "remote",
+      observed_at: "old",
+    });
+    expect(manager.snapshot().hosts[0]).toMatchObject({ online: false, instance_id: null });
+    socket.receive({ type: "hosts.snapshot", hosts: [], observed_at: "old" });
+    expect(manager.snapshot()).toMatchObject({ hosts: [], selected: null });
+    await manager.logout();
+  });
+
+  it("marks disconnection stale and obtains a fresh ticket before replacing the cache", async () => {
+    const { manager, login, channel, http, host } = fixture();
+    await login();
+    await manager.select("remote");
+    const socket = channel.sockets[0]!;
+    socket.disconnect();
+    expect(manager.snapshot()).toMatchObject({ stale: true, hosts: [host], selected: host });
+    socket.receive({ type: "hosts.snapshot", hosts: [], observed_at: "old" });
+    expect(manager.snapshot().hosts).toEqual([host]);
+    await vi.advanceTimersByTimeAsync(4000);
+    expect(channel.create).toHaveBeenCalledTimes(2);
+    expect(
+      http.mock.calls.filter(([url]) => String(url).endsWith("/channel-tickets")),
+    ).toHaveLength(2);
+    expect(manager.snapshot().stale).toBe(false);
+    await manager.logout();
+    channel.sockets[1]!.snapshot();
+    await vi.advanceTimersByTimeAsync(60_000);
+    expect(manager.snapshot()).toMatchObject({ status: "logged_out", hosts: [] });
+    expect(channel.create).toHaveBeenCalledTimes(2);
+  });
+
+  it("does not open a delayed ticket after suspension and reconnects after lease renewal", async () => {
+    const { manager, login, http, channel } = fixture();
+    const original = http.getMockImplementation()!;
+    let resolve!: (value: Response) => void;
+    http.mockImplementation((url, options) =>
+      String(url).endsWith("/channel-tickets")
+        ? new Promise((done) => {
+            resolve = done;
+          })
+        : original(url, options),
+    );
+    await login();
+    manager.suspend();
+    resolve(
+      Response.json({
+        channel_ticket: "late",
+        channel_path: "/v1/relay/channel",
+        protocol: "ait-channel-v1",
+      }),
+    );
+    await vi.advanceTimersByTimeAsync(1);
+    expect(channel.create).not.toHaveBeenCalled();
+    http.mockImplementation(original);
+    manager.resume();
+    await vi.advanceTimersByTimeAsync(1);
+    expect(channel.create).toHaveBeenCalledTimes(1);
+    expect(manager.snapshot().stale).toBe(false);
+    await manager.shutdown();
+  });
+
+  it.each([
+    "https://foreign.test/v1/relay/channel",
+    "//foreign.test/v1/relay/channel",
+    "/v1/relay/control",
+    "/v1/relay/channel?ticket=x",
+  ])("rejects unsafe or unsupported ticket path %s", async (path) => {
+    const { manager, login, http, channel } = fixture();
+    const original = http.getMockImplementation()!;
+    http.mockImplementation((url, options) =>
+      String(url).endsWith("/channel-tickets")
+        ? Promise.resolve(
+            Response.json({
+              channel_ticket: "ticket",
+              channel_path: path,
+              protocol: "ait-channel-v1",
+            }),
+          )
+        : original(url, options),
+    );
+    await login();
+    expect(channel.create).not.toHaveBeenCalled();
+    expect(manager.snapshot().stale).toBe(true);
+    await manager.logout();
   });
 });

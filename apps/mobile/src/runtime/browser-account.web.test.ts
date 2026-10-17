@@ -1,4 +1,5 @@
 // @vitest-environment jsdom
+import { ChannelWebSocket } from "../../../../packages/client/test/account-channel";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 vi.mock("@/utils/app-version", () => ({ resolveAppVersion: () => "test" }));
 const token = () =>
@@ -21,10 +22,17 @@ beforeEach(() => {
         host_id: null,
         control_required: false,
       });
-    if (url.includes("/v1/hosts/online")) return Response.json({ hosts: [], count: 0 });
+    if (url.endsWith("/channel-tickets"))
+      return Response.json({
+        channel_ticket: "browser-ticket",
+        channel_path: "/v1/relay/channel",
+        protocol: "ait-channel-v1",
+      });
     return new Response(null, { status: 204 });
   });
   vi.stubGlobal("fetch", request);
+  ChannelWebSocket.instances = [];
+  vi.stubGlobal("WebSocket", ChannelWebSocket);
 });
 afterEach(async () => {
   await manager?.shutdown();
@@ -51,6 +59,11 @@ describe("browser console account", () => {
     expect(JSON.parse(registration![1].body)).toMatchObject({ runtime: null, platform: "web" });
     expect(registration![1].headers.Authorization).toBe(`Bearer ${saved}`);
     expect(localStorage.getItem("ait.access-token")).toBe(saved);
+    expect(ChannelWebSocket.instances[0]).toMatchObject({
+      url: `${location.origin.replace(/^http/, "ws")}/api/v1/relay/channel`,
+      protocols: ["ait.ticket.browser-ticket"],
+      options: undefined,
+    });
   });
   it("does not register or discover before sign-in", async () => {
     manager = await (await import("./browser-account.web")).getBrowserAccount();

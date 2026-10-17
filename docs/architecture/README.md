@@ -180,11 +180,12 @@ relay 拥有控制方法声明和处理，API 的 HTTP 路由与 WebSocket RPC �
 客户端退出只释放自身节点及绑定 daemon，其他 daemon 保留各自原账户授权，由运行中的平台账户管理器继续续租；主动停止同步只撤销单台租约。
 本机、TCP 和 SSH 主机使用相同同步流程，详见 [ADR-083](../decisions/clients/adr-083-online-service-host-sync.md)。Desktop 登录后默认同步内置 daemon，手动停止的选择由桌面账户存储持久保存；其他主机仍需手动启用，详见 [ADR-096](../decisions/clients/adr-096-desktop-default-host-sync.md)。
 
-账户会话状态机位于 `packages/client`，通过依赖注入获取平台身份、存储、HTTP 和运行时操作。
+账户会话状态机位于 `packages/client`，通过依赖注入获取平台身份、存储、HTTP、WebSocket 和运行时操作。
+账号状态通过客户端节点的 `/v1/relay/channel`（`ait-channel-v1`）连接推送完整 Host 快照与节点事件，daemon 的 `/v1/relay/control` 独立维护 Host 控制，应用心跳和独立节点续租分别维护连接活跃及授权；重连、离线缓存和各端票据认证见 [ADR-154](../decisions/clients/adr-154-account-status-channel.md)。
 Electron 主进程提供桌面适配；Android 和 iOS 的原生适配使用 SecureStore 保存账户令牌，注册无本地
-运行时的客户端节点。移动端通过带认证头的原生 WebSocket 建立中继连接与下载。明确添加的
-在线服务主机进入客户端持久注册表，账户恢复后按服务地址独立连接；发现列表不自动导入。
-登出保留主机配置，显式删除移除记录，见 [ADR-122](../decisions/clients/adr-122-persistent-online-service-hosts.md)。浏览器未启用账户入口。
+运行时的客户端节点。移动端通过带认证头的原生 WebSocket 建立中继连接与下载。完整快照中已绑定 server ID 的
+在线服务主机进入客户端持久注册表，账户恢复后按服务地址独立连接；离线记录保留，未绑定 runtime 的记录不生成连接。
+登出保留主机配置，显式删除移除记录，见 [ADR-122](../decisions/clients/adr-122-persistent-online-service-hosts.md)。管理网站中的浏览器客户端复用同源登录，见 [ADR-132](../decisions/clients/adr-132-web-console-client.md)。
 前后台生命周期、配对校验与凭据边界见
 [ADR-076](../decisions/clients/adr-076-android-account-relay.md) 与
 [ADR-084](../decisions/clients/adr-084-ios-account-relay.md)。

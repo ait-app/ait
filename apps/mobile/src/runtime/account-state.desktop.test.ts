@@ -34,7 +34,16 @@ describe("desktop account host persistence", () => {
       center: "https://center.test/api",
       selected: null,
       stale: false,
-      hosts: [{ host_id: "remote", server_id: "server", name: "Remote" }],
+      hosts: [
+        {
+          host_id: "remote",
+          server_id: "server",
+          instance_id: "instance",
+          name: "Remote",
+          online: true,
+          relay_modes: ["ait-rust-single-v1"],
+        },
+      ],
     };
     mocks.invoke.mockResolvedValue(snapshot);
     await accountCommand("account_status");
@@ -156,4 +165,40 @@ describe("desktop account host persistence", () => {
     finish({ status: "logged_out", selected: null });
     await login;
   });
+});
+
+it("persists bound offline hosts but exposes only routable hosts as available", async () => {
+  const online = {
+    host_id: "online",
+    server_id: "online-server",
+    instance_id: "instance",
+    name: "Online",
+    online: true,
+    status: "offline",
+    relay_modes: ["ait-rust-single-v1"],
+  };
+  const offline = {
+    ...online,
+    host_id: "offline",
+    server_id: "offline-server",
+    online: false,
+    instance_id: null,
+    relay_modes: [],
+    offline_since: "2026-10-01T00:00:00Z",
+  };
+  const manual = { ...offline, host_id: "manual", server_id: null };
+  mocks.invoke.mockResolvedValueOnce({
+    status: "online",
+    stale: false,
+    center: "https://custom.test/api",
+    selected: null,
+    hosts: [online, offline, manual],
+  });
+  await accountCommand("account_status");
+  expect(mocks.discover).toHaveBeenLastCalledWith(
+    [online, offline],
+    "https://custom.test/api",
+    expect.any(Function),
+  );
+  expect(mocks.setAvailable).toHaveBeenLastCalledWith(["online-server"]);
 });
