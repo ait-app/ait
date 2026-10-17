@@ -543,6 +543,10 @@ export interface WorkspaceDesktopTabsRowProps {
   externalDndContext?: boolean;
   activeDragTabId?: string | null;
   tabDropPreviewIndex?: number | null;
+  onNativeTabDragStart?: (paneId: string, tabId: string, x: number, y: number) => void;
+  onNativeTabDragMove?: (paneId: string, tabId: string, x: number, y: number) => void;
+  onNativeTabDragEnd?: (paneId: string, tabId: string, x: number, y: number) => void;
+  onNativeTabDragCancel?: (paneId: string, tabId: string) => void;
   showPaneSplitActions?: boolean;
   showPaneMaximizeAction?: boolean;
   paneMaximized?: boolean;
@@ -802,6 +806,7 @@ function TabChip({
       isActiveFocused && styles.tabActive,
       isActive && !isFocused && styles.tabActiveUnfocused,
       !isActive && isHovered && styles.tabHovered,
+      isNative && isDragging && styles.tabDragging,
       isWeb && isDragging && ({ cursor: "grabbing" } as object),
       {
         minWidth: resolvedTabWidth,
@@ -1048,6 +1053,10 @@ function ResolvedWorkspaceDesktopTabsRow({
   externalDndContext = false,
   activeDragTabId = null,
   tabDropPreviewIndex = null,
+  onNativeTabDragStart,
+  onNativeTabDragMove,
+  onNativeTabDragEnd,
+  onNativeTabDragCancel,
   showPaneSplitActions = false,
   showPaneMaximizeAction = false,
   paneMaximized = false,
@@ -1234,12 +1243,56 @@ function ResolvedWorkspaceDesktopTabsRow({
 
   const getTabDragData = useMemo(() => {
     if (!paneId) return undefined;
-    return (tab: ResolvedWorkspaceDesktopTabRowItem) => ({
-      kind: "workspace-tab" as const,
-      paneId,
-      tabId: tab.tab.tabId,
-    });
-  }, [paneId]);
+    const dataByTabId = new Map(
+      displayedTabs.map((tab) => [
+        tab.tab.tabId,
+        {
+          kind: "workspace-tab" as const,
+          paneId,
+          tabId: tab.tab.tabId,
+        },
+      ]),
+    );
+    return (tab: ResolvedWorkspaceDesktopTabRowItem) =>
+      dataByTabId.get(tab.tab.tabId) ?? {
+        kind: "workspace-tab" as const,
+        paneId,
+        tabId: tab.tab.tabId,
+      };
+  }, [displayedTabs, paneId]);
+
+  const nativeDragStart = useCallback(
+    (itemData: Record<string, unknown>, x: number, y: number) => {
+      if (paneId && typeof itemData.tabId === "string") {
+        onNativeTabDragStart?.(paneId, itemData.tabId, x, y);
+      }
+    },
+    [onNativeTabDragStart, paneId],
+  );
+  const nativeDragMove = useCallback(
+    (itemData: Record<string, unknown>, x: number, y: number) => {
+      if (paneId && typeof itemData.tabId === "string") {
+        onNativeTabDragMove?.(paneId, itemData.tabId, x, y);
+      }
+    },
+    [onNativeTabDragMove, paneId],
+  );
+  const nativeDragEnd = useCallback(
+    (itemData: Record<string, unknown>, x: number, y: number) => {
+      if (paneId && typeof itemData.tabId === "string") {
+        onNativeTabDragEnd?.(paneId, itemData.tabId, x, y);
+      }
+    },
+    [onNativeTabDragEnd, paneId],
+  );
+  const nativeDragCancel = useCallback(
+    (itemData: Record<string, unknown>) => {
+      if (paneId && typeof itemData.tabId === "string") {
+        onNativeTabDragCancel?.(paneId, itemData.tabId);
+      }
+    },
+    [onNativeTabDragCancel, paneId],
+  );
 
   const createNewTab = useCallback(() => onCreateNewTab({ paneId }), [onCreateNewTab, paneId]);
 
@@ -1292,7 +1345,7 @@ function ResolvedWorkspaceDesktopTabsRow({
           serverId={normalizedServerId}
           item={item}
           isFocused={isFocused}
-          isDragging={isActive}
+          isDragging={isActive || activeDragTabId === item.tab.tabId}
           index={index}
           tabCount={displayedTabs.length}
           onCopyResumeCommand={onCopyResumeCommand}
@@ -1399,6 +1452,10 @@ function ResolvedWorkspaceDesktopTabsRow({
             externalDndContext={externalDndContext}
             activeId={activeDragTabId}
             getItemData={getTabDragData}
+            onNativeDragStart={onNativeTabDragStart ? nativeDragStart : undefined}
+            onNativeDragMove={onNativeTabDragMove ? nativeDragMove : undefined}
+            onNativeDragEnd={onNativeTabDragEnd ? nativeDragEnd : undefined}
+            onNativeDragCancel={onNativeTabDragCancel ? nativeDragCancel : undefined}
             renderItem={renderTab}
           />
           {!layout.requiresHorizontalScrollFallback ? (
@@ -1643,6 +1700,9 @@ const styles = StyleSheet.create((theme) => ({
   },
   tabActiveUnfocused: {
     backgroundColor: theme.colors.surface1,
+  },
+  tabDragging: {
+    opacity: 0.42,
   },
   tabHoverFrame: {
     position: "relative",

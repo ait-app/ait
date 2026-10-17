@@ -3,6 +3,7 @@ import {
   resolveStreamKeyboardInset,
   shouldReconcileHiddenKeyboardEnd,
   resolveKeyboardShift,
+  resolveVisualViewportKeyboardShift,
   reserveKeyboardLayoutShift,
   shouldUseCompactExplorerKeyboardPadding,
 } from "./policy";
@@ -85,6 +86,50 @@ describe("resolveKeyboardShift", () => {
         bottomInset: 0,
         isIos: true,
         iosMinHeight: 120,
+      }),
+    ).toBe(0);
+  });
+});
+
+describe("resolveVisualViewportKeyboardShift", () => {
+  it("reserves the obscured viewport while a text input has focus", () => {
+    expect(
+      resolveVisualViewportKeyboardShift({
+        layoutHeight: 844,
+        viewportHeight: 520,
+        viewportOffsetTop: 0,
+        hasFocusedTextInput: true,
+      }),
+    ).toBe(324);
+  });
+
+  it("keeps the safe-area inset separate from the keyboard obstruction", () => {
+    expect(
+      resolveVisualViewportKeyboardShift({
+        layoutHeight: 844,
+        viewportHeight: 520,
+        viewportOffsetTop: 0,
+        bottomInset: 34,
+        hasFocusedTextInput: true,
+      }),
+    ).toBe(290);
+  });
+
+  it("ignores browser chrome changes and viewport changes without text focus", () => {
+    expect(
+      resolveVisualViewportKeyboardShift({
+        layoutHeight: 844,
+        viewportHeight: 740,
+        viewportOffsetTop: 0,
+        hasFocusedTextInput: true,
+      }),
+    ).toBe(0);
+    expect(
+      resolveVisualViewportKeyboardShift({
+        layoutHeight: 844,
+        viewportHeight: 520,
+        viewportOffsetTop: 0,
+        hasFocusedTextInput: false,
       }),
     ).toBe(0);
   });

@@ -222,15 +222,16 @@ export function TerminalPane({
     return trimmed.length > 0 ? trimmed : undefined;
   }, [settings.monoFontFamily]);
   const isMobile = useIsCompactFormFactor();
+  const [keyboardInset, setKeyboardInset] = useState(0);
+  const [isKeyboardVisible, setIsKeyboardVisible] = useState(false);
+  const showTerminalKeyboardControls = isNative || isMobile || isKeyboardVisible;
   const mobileView = usePanelStore((state) => state.mobilePanel.target);
   const showMobileAgentList = usePanelStore((state) => state.showMobileAgentList);
   const swipeGesturesEnabled = isMobile;
   const { shift: keyboardShift, style: keyboardPaddingStyle } = useKeyboardShiftStyle({
     mode: "padding",
-    enabled: isMobile,
+    enabled: showTerminalKeyboardControls,
   });
-  const [keyboardInset, setKeyboardInset] = useState(0);
-  const [isKeyboardVisible, setIsKeyboardVisible] = useState(false);
 
   const client = useHostRuntimeClient(serverId);
   const isConnected = useHostRuntimeIsConnected(serverId);
@@ -449,11 +450,11 @@ export function TerminalPane({
 
   const handleKeyboardChange = useCallback(
     (nextShift: number) => {
-      setKeyboardInset(isMobile ? nextShift : 0);
+      setKeyboardInset(nextShift);
       setIsKeyboardVisible(nextShift > 0);
       pulseKeyboardRefits();
     },
-    [isMobile, pulseKeyboardRefits],
+    [pulseKeyboardRefits],
   );
 
   useEffect(() => {
@@ -1115,7 +1116,7 @@ export function TerminalPane({
         </View>
       ) : null}
 
-      {hostReady && isMobile ? (
+      {hostReady && showTerminalKeyboardControls ? (
         <View style={styles.keyboardContainer} testID="terminal-virtual-keyboard">
           <View style={styles.keyboardRows}>
             {TERMINAL_VIRTUAL_KEYBOARD_ROWS.map((row) => (
