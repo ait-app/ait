@@ -11,7 +11,10 @@ async fn failed_registration_and_failed_cleanup_retain_the_session_until_retry_s
         manager.restore_new(record.clone()).await,
         Err(AgentManagerError::Session)
     );
-    assert!(registry.list().unwrap().is_empty());
+    assert_eq!(
+        registry.list().unwrap(),
+        [] as [PersistedAgentRuntimeRecord; 0]
+    );
     assert_eq!(client.0.lock().unwrap().close_calls, 1);
     assert_eq!(
         manager.resume(&record.id).await,
@@ -40,7 +43,10 @@ async fn resume_rejects_a_handle_from_another_provider_without_native_io() {
         Err(AgentManagerError::InvalidRequest)
     );
     assert_eq!(registry.get(&record.id).unwrap(), Some(record));
-    assert!(client.0.lock().unwrap().resume_specs.is_empty());
+    assert_eq!(
+        client.0.lock().unwrap().resume_specs,
+        [] as [AgentSessionSpec; 0]
+    );
 }
 
 #[tokio::test]
@@ -52,7 +58,10 @@ async fn unknown_native_restore_registers_only_after_open_and_preserves_failure_
         manager.restore_new(record.clone()).await,
         Err(AgentManagerError::Registry)
     );
-    assert!(registry.list().unwrap().is_empty());
+    assert_eq!(
+        registry.list().unwrap(),
+        [] as [PersistedAgentRuntimeRecord; 0]
+    );
     assert!(manager.live.is_empty());
     assert_eq!(client.0.lock().unwrap().close_calls, 1);
     registry.0.lock().unwrap().fail_upsert = false;
@@ -168,5 +177,8 @@ async fn restore_rejects_missing_handles_and_mismatched_providers_before_native_
         manager.restore(&record.id, &Overrides::default()).await,
         Err(AgentManagerError::InvalidRequest)
     );
-    assert!(client.0.lock().unwrap().resume_specs.is_empty());
+    assert_eq!(
+        client.0.lock().unwrap().resume_specs,
+        [] as [AgentSessionSpec; 0]
+    );
 }

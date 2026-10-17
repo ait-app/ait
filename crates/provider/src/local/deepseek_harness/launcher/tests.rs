@@ -118,5 +118,5 @@ async fn installed_launcher_runs_native_cli_without_a_wrapper() {
     assert!(client.is_available().await.unwrap());
     let output = client.command().arg("--version").output().await.unwrap();
     assert!(output.status.success());
-    assert!(!output.stdout.is_empty());
+    assert_ne!(output.stdout, [] as [u8; 0]);
 }

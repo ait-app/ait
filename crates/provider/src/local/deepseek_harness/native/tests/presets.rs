@@ -18,7 +18,10 @@ async fn discovers_user_plugin_presets_and_separate_permissions_without_session_
             .iter()
             .any(|option| option["id"] == "custom-policy")
     );
-    assert!(fixture.requests("session/create").is_empty());
+    assert_eq!(
+        fixture.requests("session/create"),
+        [] as [serde_json::Value; 0]
+    );
     fixture.set_presets(json!({"presets":[{"id":"new-plugin","isDefault":true}]}));
     let refreshed = fixture.client.discover(&fixture.spec.cwd).await.unwrap();
     assert_eq!(refreshed.modes[0]["label"], "new-plugin");
@@ -36,7 +39,10 @@ async fn creates_and_restores_plugin_composition_without_overwriting_permissions
         fixture.requests("session/create")[0]["request"]["agentPreset"],
         "team/review.v2"
     );
-    assert!(fixture.requests("commands/execute").is_empty());
+    assert_eq!(
+        fixture.requests("commands/execute"),
+        [] as [serde_json::Value; 0]
+    );
     assert_eq!(
         session.runtime_info().await.unwrap().mode_id,
         fixture.spec.config.mode_id
@@ -66,7 +72,10 @@ async fn creates_and_restores_plugin_composition_without_overwriting_permissions
             .await
             .is_err()
     );
-    assert!(fixture.requests("session/prompt").is_empty());
+    assert_eq!(
+        fixture.requests("session/prompt"),
+        [] as [serde_json::Value; 0]
+    );
     changed = fixture.spec.config.clone();
     changed.feature_values = Some(std::collections::BTreeMap::from([(
         "permission_preset".into(),
@@ -91,7 +100,10 @@ async fn unknown_and_broken_presets_cannot_create_native_sessions() {
         fixture.spec.config.mode_id = Some(mode.into());
         assert!(fixture.client.create_session(&fixture.spec).await.is_err());
     }
-    assert!(fixture.requests("session/create").is_empty());
+    assert_eq!(
+        fixture.requests("session/create"),
+        [] as [serde_json::Value; 0]
+    );
     for value in [
         json!(true),
         json!("read-only\n/permission danger-full-access"),
@@ -120,8 +132,14 @@ async fn draft_permission_selection_is_read_only() {
     )]));
     let features = fixture.client.draft_features(&fixture.spec).await.unwrap();
     assert_eq!(features[0]["value"], "read-only");
-    assert!(fixture.requests("session/create").is_empty());
-    assert!(fixture.requests("commands/execute").is_empty());
+    assert_eq!(
+        fixture.requests("session/create"),
+        [] as [serde_json::Value; 0]
+    );
+    assert_eq!(
+        fixture.requests("commands/execute"),
+        [] as [serde_json::Value; 0]
+    );
 }
 
 #[tokio::test]
@@ -153,7 +171,10 @@ async fn composition_without_permissions_does_not_invent_a_selector() {
         json!("read-only"),
     )]));
     assert!(session.start_turn("no authority", &config).await.is_err());
-    assert!(fixture.requests("commands/execute").is_empty());
+    assert_eq!(
+        fixture.requests("commands/execute"),
+        [] as [serde_json::Value; 0]
+    );
     session.close().await.unwrap();
 }
 
@@ -207,8 +228,14 @@ async fn selection_validation_checks_catalogs_without_creating_probe_sessions() 
             .await
             .is_err()
     );
-    assert!(fixture.requests("session/create").is_empty());
-    assert!(fixture.requests("commands/execute").is_empty());
+    assert_eq!(
+        fixture.requests("session/create"),
+        [] as [serde_json::Value; 0]
+    );
+    assert_eq!(
+        fixture.requests("commands/execute"),
+        [] as [serde_json::Value; 0]
+    );
 }
 
 #[tokio::test]

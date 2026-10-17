@@ -29,11 +29,11 @@ fn workspace_batch_archives_all_owned_agents_and_detaches_cross_workspace_childr
             .as_deref(),
         Some("archived")
     );
-    assert!(
+    assert_eq!(
         service
             .archive_workspaces(&["missing".into()], "later")
-            .unwrap()
-            .is_empty()
+            .unwrap(),
+        [] as [String; 0]
     );
     service
         .archive_workspaces(&["wks-one".into(), "wks-two".into()], "later")

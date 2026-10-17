@@ -13,15 +13,15 @@ fn spawn(sender: &str, receiver: &str) -> Value {
 fn only_proven_descendants_can_stream_and_turns_do_not_end_their_parent() {
     let mut live = Live::default();
     let images = ImageStore::default();
-    assert!(
+    assert_eq!(
         live.observe(
             "item/completed",
             &spawn("foreign", "bad"),
             ("root", "/tmp"),
             &images
         )
-        .unwrap()
-        .is_empty()
+        .unwrap(),
+        [] as [AgentTurnEvent; 0]
     );
     live.observe(
         "item/completed",
@@ -43,10 +43,10 @@ fn only_proven_descendants_can_stream_and_turns_do_not_end_their_parent() {
         .observe("item/completed", &text, ("root", "/tmp"), &images)
         .unwrap();
     assert!(events.iter().any(|event| matches!(event, AgentTurnEvent::Subagent(SubagentEvent::Timeline {id,entry}) if id == "nested" && entry.item["text"] == "child response")));
-    assert!(
+    assert_eq!(
         live.observe("item/completed", &text, ("root", "/tmp"), &images)
-            .unwrap()
-            .is_empty()
+            .unwrap(),
+        [] as [AgentTurnEvent; 0]
     );
     live.observe(
         "turn/completed",
@@ -57,10 +57,10 @@ fn only_proven_descendants_can_stream_and_turns_do_not_end_their_parent() {
     .unwrap();
     assert_eq!(live.children()[1].descriptor["status"], "completed");
     assert_eq!(live.children()[0].descriptor["status"], "running");
-    assert!(
+    assert_eq!(
         live.observe("item/completed", &text, ("root", "/tmp"), &images)
-            .unwrap()
-            .is_empty()
+            .unwrap(),
+        [] as [AgentTurnEvent; 0]
     );
 }
 
@@ -73,10 +73,10 @@ fn early_child_output_waits_for_spawn_provenance_and_verified_children_resume() 
     live.observe("item/started", &started, ("root", "/tmp"), &images)
         .unwrap();
     let output = json!({"threadId":"child","turnId":"child-turn","item":{"type":"agentMessage","id":"answer","text":"Early result"}});
-    assert!(
+    assert_eq!(
         live.observe("item/completed", &output, ("root", "/tmp"), &images)
-            .unwrap()
-            .is_empty()
+            .unwrap(),
+        [] as [AgentTurnEvent; 0]
     );
     let events = live
         .observe(
@@ -96,10 +96,10 @@ fn early_child_output_waits_for_spawn_provenance_and_verified_children_resume() 
     assert_eq!(restored.children()[0].cwd, "/tmp/child-worktree");
     restored.stopped();
     assert_eq!(restored.children()[0].descriptor["status"], "canceled");
-    assert!(
+    assert_eq!(
         Live::restore(live.children(), "foreign")
             .unwrap()
-            .children()
-            .is_empty()
+            .children(),
+        [] as [NativeSubagent; 0]
     );
 }

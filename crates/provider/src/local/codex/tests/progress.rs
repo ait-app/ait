@@ -75,7 +75,7 @@ async fn native_plan_progress_is_a_durable_todo_snapshot_or_a_reviewable_plan() 
         .unwrap();
         let handle = session.persistence().unwrap();
         if planning {
-            assert!(todos.is_empty());
+            assert_eq!(todos, [] as [crate::protocol::timeline::NativeItem; 0]);
             assert!(
                 session.pending_permissions()[0]["input"]["plan"]
                     .as_str()

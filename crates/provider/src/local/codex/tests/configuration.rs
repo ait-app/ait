@@ -19,7 +19,7 @@ async fn computer_use_approval_is_automatic_in_auto_review_and_full_access() {
             matches!(outcome, AgentTurnEvent::Completed(Some(ref text)) if text == "Echo: approved"),
             "{mode} should approve computer use automatically, got {outcome:?}"
         );
-        assert!(session.pending_permissions().is_empty());
+        assert_eq!(session.pending_permissions(), [] as [Value; 0]);
         let requests = fixture.requests();
         let reply = requests
             .iter()
@@ -75,7 +75,7 @@ async fn computer_use_app_approval_remains_manual_for_lower_modes_and_explicit_p
             terminal(session.as_mut()).await.unwrap(),
             AgentTurnEvent::Completed(_)
         ));
-        assert!(session.pending_permissions().is_empty());
+        assert_eq!(session.pending_permissions(), [] as [Value; 0]);
         let requests = fixture.requests();
         let reply = requests
             .iter()
@@ -222,7 +222,7 @@ async fn computer_use_approval_choices_preserve_native_labels_in_auto_review() {
             )
             .await
             .unwrap();
-        assert!(session.pending_permissions().is_empty());
+        assert_eq!(session.pending_permissions(), [] as [Value; 0]);
         assert!(matches!(
             terminal(session.as_mut()).await.unwrap(),
             AgentTurnEvent::Completed(_)

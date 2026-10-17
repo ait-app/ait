@@ -50,8 +50,14 @@ async fn live_and_recovered_history_only_project_human_input() {
         .await
         .unwrap();
     assert_eq!(serde_json::to_value(&recovered).unwrap(), json!([user]));
-    assert!(fixture.requests("session/attachment").is_empty());
-    assert!(fixture.requests("session/prompt").is_empty());
+    assert_eq!(
+        fixture.requests("session/attachment"),
+        [] as [serde_json::Value; 0]
+    );
+    assert_eq!(
+        fixture.requests("session/prompt"),
+        [] as [serde_json::Value; 0]
+    );
 
     // Repair already persisted context rows, then keep the repaired epoch stable.
     let path = std::path::Path::new(&fixture.spec.cwd).join("timeline.sqlite3");

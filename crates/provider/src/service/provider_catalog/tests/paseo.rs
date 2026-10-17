@@ -162,7 +162,10 @@ async fn unavailable_provider_does_not_fetch_its_catalog() {
     .await;
     assert_eq!(value["entries"][0]["status"], "unavailable");
     assert_eq!(value["entries"][0]["models"], json!([]));
-    assert!(probe.state.lock().unwrap().discovery_cwds.is_empty());
+    assert_eq!(
+        probe.state.lock().unwrap().discovery_cwds,
+        [] as [String; 0]
+    );
 }
 
 #[tokio::test]
@@ -181,7 +184,10 @@ async fn failed_availability_probe_is_reported_without_attempting_discovery() {
         value["entries"][0]["error"],
         "Provider availability check failed"
     );
-    assert!(probe.state.lock().unwrap().discovery_cwds.is_empty());
+    assert_eq!(
+        probe.state.lock().unwrap().discovery_cwds,
+        [] as [String; 0]
+    );
 }
 
 #[tokio::test]

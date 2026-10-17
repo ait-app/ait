@@ -195,7 +195,10 @@ async fn deleting_an_armed_agent_removes_the_pending_action_without_resurrection
     registry.remove("agent-1").unwrap();
     manager.reconcile().await.unwrap();
     manager.poll().await.unwrap();
-    assert!(registry.list().unwrap().is_empty());
+    assert_eq!(
+        registry.list().unwrap(),
+        [] as [PersistedAgentRuntimeRecord; 0]
+    );
     assert!(manager.live.is_empty());
 }
 

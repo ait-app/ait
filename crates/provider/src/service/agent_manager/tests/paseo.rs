@@ -1,6 +1,7 @@
 //! Lifecycle/stream contracts adapted from Paseo's `AgentManager` regression suites.
 
 use crate::protocol::timeline::NativeItem;
+use crate::storage::timeline;
 use crate::storage::timeline::Timeline;
 
 use super::*;
@@ -132,7 +133,10 @@ async fn idle_steering_uses_normal_turn_admission() {
     manager.send_steering("agent-1", "first").await.unwrap();
     assert_eq!(manager.active_turn("agent-1"), Some("native-turn"));
     assert_eq!(client.0.lock().unwrap().start_calls, 1);
-    assert!(client.0.lock().unwrap().steer_calls.is_empty());
+    assert_eq!(
+        client.0.lock().unwrap().steer_calls,
+        [] as [(String, String); 0]
+    );
 }
 
 #[tokio::test]
@@ -149,7 +153,10 @@ async fn archived_agent_does_not_admit_steering_to_its_still_live_writer() {
         manager.send_steering("agent-1", "continue").await,
         Err(AgentManagerError::Busy)
     );
-    assert!(client.0.lock().unwrap().steer_calls.is_empty());
+    assert_eq!(
+        client.0.lock().unwrap().steer_calls,
+        [] as [(String, String); 0]
+    );
     manager.reconcile().await.unwrap();
     assert!(manager.live_snapshot("agent-1").is_none());
 }
@@ -162,7 +169,10 @@ async fn deleted_agent_cannot_be_recreated_by_a_late_steer() {
         manager.send_steering("agent-1", "continue").await,
         Err(AgentManagerError::NotFound("agent-1".to_owned()))
     );
-    assert!(client.0.lock().unwrap().steer_calls.is_empty());
+    assert_eq!(
+        client.0.lock().unwrap().steer_calls,
+        [] as [(String, String); 0]
+    );
     manager.reconcile().await.unwrap();
     assert!(registry.get("agent-1").unwrap().is_none());
     assert!(manager.live_snapshot("agent-1").is_none());
@@ -178,7 +188,10 @@ async fn invalid_steer_text_is_rejected_before_native_admission() {
             Err(AgentManagerError::InvalidRequest)
         );
     }
-    assert!(client.0.lock().unwrap().steer_calls.is_empty());
+    assert_eq!(
+        client.0.lock().unwrap().steer_calls,
+        [] as [(String, String); 0]
+    );
     assert_eq!(registry.get("agent-1").unwrap(), before);
 }
 
@@ -325,10 +338,12 @@ async fn oversized_progress_closes_the_turn_before_any_partial_publication() {
     let (mut manager, registry, client) = running().await;
     let timeline = Timeline::memory().unwrap();
     manager = manager.with_timeline(timeline.clone());
-    client.0.lock().unwrap().events.push_back(progress(
-        "large",
-        &"x".repeat(crate::storage::timeline::MAX_ENTRY_BYTES),
-    ));
+    client
+        .0
+        .lock()
+        .unwrap()
+        .events
+        .push_back(progress("large", &"x".repeat(timeline::MAX_ENTRY_BYTES)));
     manager.poll().await.unwrap();
     let rows = timeline.read("agent-1").unwrap().1;
     assert_eq!(rows.len(), 1);
@@ -484,7 +499,10 @@ async fn classified_failures_are_durable_visible_and_not_duplicated_on_cleanup_r
         state.fail_close = true;
     }
     assert_eq!(manager.poll().await, Err(AgentManagerError::Session));
-    assert!(timeline.read("agent-1").unwrap().1.is_empty());
+    assert_eq!(
+        timeline.read("agent-1").unwrap().1,
+        [] as [timeline::Row; 0]
+    );
     client.0.lock().unwrap().fail_close = false;
     manager.poll().await.unwrap();
     manager.poll().await.unwrap();
@@ -514,7 +532,10 @@ async fn successful_and_cancelled_turns_do_not_publish_failure_notices() {
         manager = manager.with_timeline(timeline.clone());
         client.0.lock().unwrap().events.push_back(terminal);
         manager.poll().await.unwrap();
-        assert!(timeline.read("agent-1").unwrap().1.is_empty());
+        assert_eq!(
+            timeline.read("agent-1").unwrap().1,
+            [] as [timeline::Row; 0]
+        );
         assert!(
             registry
                 .get("agent-1")

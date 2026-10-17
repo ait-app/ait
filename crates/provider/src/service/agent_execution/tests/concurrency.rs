@@ -559,7 +559,10 @@ async fn late_history_cannot_recreate_a_deleted_agent() {
         .unwrap();
     gate.release.add_permits(1);
     assert_eq!(history.await.unwrap(), Err(ErrorCode::AgentNotFound));
-    assert!(execution.0.registry.list().unwrap().is_empty());
+    assert_eq!(
+        execution.0.registry.list().unwrap(),
+        [] as [domain::agent_runtime::PersistedAgentRuntimeRecord; 0]
+    );
     execution.shutdown().await.unwrap();
 }
 
@@ -635,7 +638,7 @@ async fn committed_reader_does_not_start_native_hydration_after_its_cache_marker
     .await
     .unwrap()
     .unwrap();
-    assert!(!read["entries"].as_array().unwrap().is_empty());
+    assert_ne!(read["entries"], json!([]));
     assert_eq!(gate.calls.load(Ordering::SeqCst), 0);
     let cold = {
         let execution = execution.clone();

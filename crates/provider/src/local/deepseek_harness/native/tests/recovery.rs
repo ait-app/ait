@@ -161,7 +161,7 @@ async fn incomplete_native_history_cannot_replace_existing_display_history() {
             .await
             .is_err()
     );
-    assert!(fixture.requests("session/prompt").is_empty());
+    assert_eq!(fixture.requests("session/prompt"), [] as [Value; 0]);
 }
 
 #[tokio::test]
@@ -195,7 +195,7 @@ async fn queued_user_images_and_files_survive_recovery_without_resubmitting_inpu
         .unwrap();
     assert_eq!(serde_json::to_value(replay).unwrap(), json!([user]));
     assert_eq!(fixture.requests("session/attachment").len(), 2);
-    assert!(fixture.requests("session/prompt").is_empty());
+    assert_eq!(fixture.requests("session/prompt"), [] as [Value; 0]);
     let legacy = fixture.client.clone().with_acp_profile();
     assert!(!legacy.supports_history_replay());
     assert!(legacy.history(&handle, &fixture.spec.cwd).await.is_err());

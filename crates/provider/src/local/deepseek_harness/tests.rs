@@ -127,8 +127,8 @@ async fn discovers_opaque_grouped_models_and_actual_reasoning_choices() {
             .len(),
         4
     );
-    assert!(details.modes.is_empty());
-    assert!(details.features.is_empty());
+    assert_eq!(details.modes, [] as [serde_json::Value; 0]);
+    assert_eq!(details.features, [] as [serde_json::Value; 0]);
     assert!(
         requests(&directory)
             .iter()
@@ -180,7 +180,7 @@ async fn streams_tools_approvals_text_and_usage_then_resumes_and_cancels() {
                     .respond_permission(id, &json!({"behavior":"allow","selectedActionId":"once"}))
                     .await
                     .unwrap();
-                assert!(session.pending_permissions().is_empty());
+                assert_eq!(session.pending_permissions(), [] as [serde_json::Value; 0]);
                 assert_eq!(
                     session
                         .respond_permission(id, &json!({"behavior":"allow"}))

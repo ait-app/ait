@@ -19,7 +19,10 @@ fn native_task_state_survives_restart_without_reparenting_or_rewriting_its_histo
     drop(timeline);
     let timeline = Timeline::open(&path).unwrap();
     assert_eq!(timeline.subagents("host").unwrap(), vec![child.clone()]);
-    assert!(timeline.subagents("other").unwrap().is_empty());
+    assert_eq!(
+        timeline.subagents("other").unwrap(),
+        [] as [NativeSubagent; 0]
+    );
     child.parent_id = "foreign".into();
     assert_eq!(
         timeline.store_subagent("host", &child),

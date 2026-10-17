@@ -52,7 +52,7 @@ async fn cancelling_a_turn_resolves_its_async_questions_and_rejects_late_answers
         terminal(session.as_mut()).await.unwrap(),
         AgentTurnEvent::Cancelled
     );
-    assert!(session.pending_permissions().is_empty());
+    assert_eq!(session.pending_permissions(), [] as [Value; 0]);
     assert_eq!(
         session
             .respond_permission(

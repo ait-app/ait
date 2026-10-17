@@ -41,7 +41,7 @@ async fn auto_archive_request_waits_for_a_terminal_event_and_removes_the_active_
         .execute("agent.list.request", json!({}))
         .await
         .unwrap();
-    assert!(listed["entries"].as_array().unwrap().is_empty());
+    assert_eq!(listed["entries"], serde_json::json!([]));
     execution.shutdown().await.unwrap();
 }
 

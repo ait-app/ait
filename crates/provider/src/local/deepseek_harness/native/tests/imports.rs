@@ -73,7 +73,7 @@ async fn external_import_reads_full_history_without_writes_then_restores_the_nat
         Some("[\"local\",\"test\"]")
     );
     assert_eq!(imported.config.mode_id.as_deref(), Some("workspace-write"));
-    assert!(!fixture.requests("session/page").is_empty());
+    assert_ne!(fixture.requests("session/page"), [] as [Value; 0]);
     for method in [
         "session/create",
         "session/prompt",
@@ -128,7 +128,7 @@ async fn import_preserves_explicit_model_effort_and_custom_native_permissions() 
     assert_eq!(imported.config.thinking_option_id.as_deref(), Some("high"));
     assert_eq!(imported.config.mode_id, None);
     assert_eq!(imported.descriptor.title.as_deref(), Some("Imported title"));
-    assert!(fixture.requests("session/modelCatalog").is_empty());
+    assert_eq!(fixture.requests("session/modelCatalog"), [] as [Value; 0]);
 }
 
 #[tokio::test]
@@ -150,8 +150,8 @@ async fn concurrent_imports_share_immutable_launcher_and_keep_native_hosts_isola
         assert_eq!(imported.descriptor.title.as_deref(), Some(title.as_str()));
         assert_eq!(imported.config.thinking_option_id.as_deref(), Some("high"));
         assert_eq!(imported.config.mode_id, None);
-        assert!(fixture.requests("session/create").is_empty());
-        assert!(fixture.requests("session/prompt").is_empty());
+        assert_eq!(fixture.requests("session/create"), [] as [Value; 0]);
+        assert_eq!(fixture.requests("session/prompt"), [] as [Value; 0]);
         assert!(!std::path::Path::new(&fixture.spec.cwd).join("dsh").exists());
     }))
     .await;
@@ -194,7 +194,7 @@ async fn import_detects_active_turns_and_rejects_mismatched_or_incomplete_histor
                 .is_err()
         );
     }
-    assert!(fixture.requests("session/create").is_empty());
+    assert_eq!(fixture.requests("session/create"), [] as [Value; 0]);
 }
 
 #[tokio::test]
@@ -236,7 +236,7 @@ async fn acp_does_not_advertise_or_attempt_native_import_and_invalid_requests_do
             .await
             .is_err()
     );
-    assert!(fixture.requests("session/list").is_empty());
+    assert_eq!(fixture.requests("session/list"), [] as [Value; 0]);
 }
 
 fn manager(fixture: &Fixture) -> crate::service::agent_manager::AgentManager {
@@ -287,7 +287,7 @@ async fn application_import_persists_metadata_deduplicates_and_reopens_for_conti
         application.recent_sessions(request()).await.unwrap()["entries"],
         json!([])
     );
-    assert!(fixture.requests("session/create").is_empty());
+    assert_eq!(fixture.requests("session/create"), [] as [Value; 0]);
     drop(application);
     let mut reopened = manager(&fixture);
     reopened.load_timeline("imported-agent").await.unwrap();
@@ -329,7 +329,7 @@ async fn application_rejects_importing_an_unfinished_native_turn() {
             .unwrap_err(),
         model::ErrorCode::CatalogBusy
     );
-    assert!(fixture.requests("session/create").is_empty());
+    assert_eq!(fixture.requests("session/create"), [] as [Value; 0]);
 }
 
 #[tokio::test]
@@ -353,5 +353,5 @@ async fn missing_preview_history_does_not_hide_discovered_sessions() {
         entries[1].first_prompt_preview.as_deref(),
         Some("cached question")
     );
-    assert!(fixture.requests("session/create").is_empty());
+    assert_eq!(fixture.requests("session/create"), [] as [Value; 0]);
 }

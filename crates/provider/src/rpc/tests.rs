@@ -51,7 +51,7 @@ fn provider_failures_keep_public_codes_messages_and_retry_semantics() {
     ] {
         let error = ErrorCode::from(business);
         assert_eq!(serde_json::to_value(error).unwrap(), expected);
-        assert!(!error.message().is_empty());
+        assert_ne!(error.message(), "");
         assert_eq!(error.retryable(), retryable);
     }
 }

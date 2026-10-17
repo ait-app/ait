@@ -299,7 +299,7 @@ async fn recorded_turn(
             }
             AgentTurnEvent::Completed(text) => {
                 assert_eq!(text.as_deref(), Some("authoritative answer"));
-                assert!(!history.is_empty());
+                assert_ne!(history, [] as [crate::protocol::timeline::NativeItem; 0]);
                 return history;
             }
             AgentTurnEvent::RuntimeInfo(_) | AgentTurnEvent::Usage(_) => {}
@@ -653,7 +653,7 @@ async fn acp_forms_keep_multiselect_values_custom_fields_and_single_reply() {
         AgentSessionError::Rejected
     );
     session.respond_permission(id, &json!({"behavior":"allow","updatedInput":{"answers":{"language":["Rust, stable","Go"],"language_custom":"C++"}}})).await.unwrap();
-    assert!(session.pending_permissions().is_empty());
+    assert_eq!(session.pending_permissions(), [] as [Value; 0]);
     assert!(
         session
             .respond_permission(id, &json!({"behavior":"allow"}))
@@ -751,7 +751,7 @@ async fn acp_cancel_waits_for_settlement_and_clears_pending_questions() {
             break;
         }
     }
-    assert!(session.pending_permissions().is_empty());
+    assert_eq!(session.pending_permissions(), [] as [Value; 0]);
     assert!(
         session
             .respond_permission(request["id"].as_str().unwrap(), &json!({"behavior":"deny"}))
@@ -839,15 +839,15 @@ async fn acp_discovery_never_prompts_and_deletes_its_native_query_session() {
     let (root, client, spec) = fixture("normal");
     let details = client.discover(&spec.cwd).await.unwrap();
     assert_eq!(details.models[0]["id"], "local/model");
-    assert!(
+    assert_eq!(
         client
             .list_sessions(&crate::ports::native_history::ListOptions {
                 cwd: Some(spec.cwd),
                 scan_limit: 10
             })
             .await
-            .unwrap()
-            .is_empty()
+            .unwrap(),
+        [] as [crate::ports::native_history::SessionDescriptor; 0]
     );
     assert!(!root.path().join("native-fixture.json").exists());
     assert!(
@@ -922,11 +922,9 @@ async fn acp_exposes_native_session_capabilities_and_rejects_missing_model_befor
     let extra = info.extra.unwrap();
     assert_eq!(extra["availableModes"].as_array().unwrap().len(), 1);
     assert_eq!(extra["availableModes"][0]["id"], "review");
-    assert!(
-        client.settings(&spec.config)["availableModes"]
-            .as_array()
-            .unwrap()
-            .is_empty()
+    assert_eq!(
+        client.settings(&spec.config)["availableModes"],
+        serde_json::json!([])
     );
     session.close().await.unwrap();
 }
