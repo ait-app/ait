@@ -14,44 +14,13 @@ APK 的签名方式、安装要求与手动测试入口见 [Android APK 发布](
 [Apple TestFlight iOS 手动发布](#apple-testflight-ios-手动发布)一节，
 同样与桌面 GitHub Release 相互独立。见 [ADR-070](../decisions/clients/adr-070-ios-testflight-release.md)。
 
-## main CI Nightly
+## CI 构建
 
-每次推送 `main` 都会通过 [CI](../../.github/workflows/ci.yml) 构建 Linux x86_64
-和 Apple Silicon 安装包，适用的 CI 检查和两个平台构建全部成功后更新固定的 [nightly 预发布](https://github.com/ait-app/ait/releases/tag/nightly)。
-无需创建版本标签；不再使用独立的 dev nightly 工作流。
-
-nightly 的公开构建标识统一为 `<8位提交hash>-<提交UTC日期>`，例如 `38fb6054-2026-10-08`。
-Release 标题为 `Ait Nightly 38fb6054-2026-10-08`，安装包名例如
-`Ait-38fb6054-2026-10-08-macos-arm64.dmg`、`Ait-38fb6054-2026-10-08-linux-x86_64.AppImage`。
-ZIP、tar.gz、blockmap、CI 产物和 `BUILD-INFO.json` 使用同一标识；两平台及重跑均取同一提交日期。
-更新元数据沿用更新器识别的 `latest` / `beta` 入口文件名，内部引用对应的新安装包名。
-Electron、daemon 及更新协议内部仍保留必需的 SemVer 兼容字段，在构建信息中记作 `packagedVersion`。
-固定下载地址仍使用 `nightly` 标签；正式版本继续使用版本命名。
-
-最多保留最新两次 main CI 并行运行，以整个工作流为单位（每次包含检查及 Linux、macOS 构建）；
-取消旧构建也会取消该次旧 CI 中尚未完成的检查，PR 不参与这个调度窗口：
-
-- 提交 1、2 相继触发构建时，保留两次构建。
-- 1 先完成则先发布 1，2 完成后覆盖 1。
-- 2 先完成并发布成功，则取消仍在运行的 1；晚完成的 1 不得覆盖 2。
-- 提交 3 触发调度后取消 1，保留 2、3，依次沿用同一规则。
-
-调度和发布共用串行锁，发布上传期间不会被调度取消；实际取消受 GitHub 调度和 API 响应时间影响。
-构建本身不共用串行锁，两个平台全部成功后才能发布。发布队列使用 `queue: max`，避免默认的
-单个等待位置让调度任务挤掉待发布任务。每次运行只清理自身的临时产物，不删除其他构建的文件。
-
-以工作流首次运行的序号判断新旧，重跑不改变顺序。发布前同时校验最近两次运行和已发布序号，
-允许较旧构建在较新构建未发布时先上线，但禁止 nightly 回退。Release 说明内记录已发布序号；
-`BUILD-INFO.json` 记录源码提交、构建序号和构建链接，可用于确认安装包是否包含指定修复。
-新提交编译期间或编译失败时仍保留上一版。
-macOS nightly 使用 ad-hoc 签名，未公证。
+main 和 PR CI 运行适用的 Rust、UI、文档及格式检查，不打 Linux 或 macOS 桌面安装包，也不更新 [nightly 预发布](https://github.com/ait-app/ait/releases/tag/nightly)。现有 nightly 资产会保留，但不会随 main 提交更新；需要新版本时使用下方的正式 tag release 流程。
 
 ## PR CI
 
-创建或更新 PR 会运行适用的 Rust、UI、文档和格式检查。Linux x86_64 与 macOS Apple Silicon
-桌面打包，以及 nightly 的准入、发布和产物清理任务均跳过。
-
-合并到 `main` 后，由 main CI 构建并发布 nightly 安装包；合并前如需验证安装包，
+创建或更新 PR 会运行适用的 Rust、UI、文档和格式检查。CI 不构建桌面安装包；如需验证安装包，
 可按[桌面端构建说明](../../apps/desktop/README.md)在本地打包。
 
 Android APK、Google Play 和 iOS TestFlight 继续仅由各自的 `workflow_dispatch` 手动触发，
