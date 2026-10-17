@@ -1,6 +1,48 @@
 use super::*;
 
 #[test]
+fn speed_feature_keeps_fast_and_hides_the_priority_alias() {
+    let catalog = options(&json!({"serviceTiers":[{"id":"priority","name":"Fast"}],
+        "additionalSpeedTiers":["fast"]}));
+    let config: StoredAgentConfig =
+        serde_json::from_value(json!({"featureValues":{"service_tier":"priority"}})).unwrap();
+
+    let control = feature(&config, &catalog).unwrap();
+
+    assert_eq!(selected(&config), "fast");
+    assert_eq!(control["value"], "fast");
+    assert_eq!(
+        control["options"],
+        json!([
+            {"id":"default","label":"Normal","isDefault":true},
+            {"id":"fast","label":"Fast"}
+        ])
+    );
+}
+
+#[test]
+#[cfg(unix)]
+fn fast_control_retains_legacy_native_priority_transport_when_required() {
+    let fixture = crate::test_support::Fixture::new();
+    let client = fixture.client();
+    let config: StoredAgentConfig =
+        serde_json::from_value(json!({"featureValues":{"service_tier":"priority"}})).unwrap();
+    for (additional, expected_native) in [(json!([]), "priority"), (json!(["fast"]), "fast")] {
+        let catalog = options(&json!({"serviceTiers":[{"id":"priority","name":"Fast"}],
+            "additionalSpeedTiers":additional}));
+        *client.speed_catalog.write().unwrap() =
+            vec![json!({"isDefault":true,"speedOptions":catalog})];
+
+        let control = feature(&config, &catalog).unwrap();
+
+        assert_eq!(control["value"], "fast");
+        assert_eq!(control["options"][1]["id"], "fast");
+        assert_eq!(client.service_tier(&config), expected_native);
+        assert!(validate(&config, &catalog).is_ok());
+    }
+}
+
+#[test]
 fn catalog_speeds_deduplicate_and_accept_new_models_and_tiers() {
     let catalog = options(&json!({"serviceTiers":[
         {"id":"priority","name":"Fast"},{"id":"ultrafast","name":"Ultrafast"},
@@ -28,7 +70,7 @@ fn normal_overrides_thread_tier_and_legacy_fast_migrates_without_guessing_suppor
         serde_json::from_value(json!({"featureValues":{"fast_mode":true}})).unwrap();
     let catalog = options(&json!({"serviceTiers":[{"id":"priority","name":"Fast"}]}));
     assert!(validate(&legacy, &catalog).is_ok());
-    assert_eq!(feature(&legacy, &catalog).unwrap()["value"], "priority");
+    assert_eq!(feature(&legacy, &catalog).unwrap()["value"], "fast");
     let future_only = options(&json!({"additionalSpeedTiers":["future"]}));
     assert_eq!(
         validate(&legacy, &future_only),
