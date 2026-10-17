@@ -50,7 +50,7 @@ describe("desktop account host persistence", () => {
     expect(mocks.setAvailable).toHaveBeenLastCalledWith(["server"]);
     mocks.invoke.mockResolvedValue({ ...snapshot, stale: true });
     await accountCommand("account_status");
-    expect(mocks.setAvailable).toHaveBeenLastCalledWith([]);
+    expect(mocks.setAvailable).toHaveBeenLastCalledWith([], []);
     mocks.invoke.mockResolvedValue({ ...snapshot, status: "error" });
     await accountCommand("account_status");
     expect(mocks.setAvailable).toHaveBeenLastCalledWith([]);
@@ -61,8 +61,22 @@ describe("desktop account host persistence", () => {
 
   it("imports all discovered hosts after browser login without selecting a target", async () => {
     const hosts = [
-      { host_id: "first", server_id: "first-server", name: "First" },
-      { host_id: "second", server_id: "second-server", name: "Second" },
+      {
+        host_id: "first",
+        server_id: "first-server",
+        name: "First",
+        online: true,
+        instance_id: "first-instance",
+        relay_modes: ["ait-rust-single-v1"],
+      },
+      {
+        host_id: "second",
+        server_id: "second-server",
+        name: "Second",
+        online: true,
+        instance_id: "second-instance",
+        relay_modes: ["ait-rust-single-v1"],
+      },
     ];
     mocks.invoke.mockResolvedValueOnce({
       status: "online",
@@ -167,7 +181,7 @@ describe("desktop account host persistence", () => {
   });
 });
 
-it("persists bound offline hosts but exposes only routable hosts as available", async () => {
+it("imports only online routable hosts, excluding offline and unsupported records", async () => {
   const online = {
     host_id: "online",
     server_id: "online-server",
@@ -192,13 +206,33 @@ it("persists bound offline hosts but exposes only routable hosts as available", 
     stale: false,
     center: "https://custom.test/api",
     selected: null,
-    hosts: [online, offline, manual],
+    hosts: [
+      online,
+      offline,
+      manual,
+      { ...online, host_id: "unsupported", relay_modes: [] },
+      { ...online, host_id: "unbound", instance_id: null },
+    ],
   });
   await accountCommand("account_status");
   expect(mocks.discover).toHaveBeenLastCalledWith(
-    [online, offline],
+    [online],
     "https://custom.test/api",
     expect.any(Function),
   );
   expect(mocks.setAvailable).toHaveBeenLastCalledWith(["online-server"]);
+});
+
+it("passes offline events through while the account snapshot is still stale", async () => {
+  mocks.invoke.mockResolvedValueOnce({
+    status: "connecting",
+    stale: true,
+    center: "https://custom.test/api",
+    selected: null,
+    confirmedHostIds: [],
+    hosts: [{ host_id: "offline", server_id: "offline-server", online: false }],
+  });
+  await accountCommand("account_status");
+  expect(mocks.discover).not.toHaveBeenCalled();
+  expect(mocks.setAvailable).toHaveBeenCalledExactlyOnceWith([], ["offline-server"]);
 });

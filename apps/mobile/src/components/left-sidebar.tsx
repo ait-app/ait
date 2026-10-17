@@ -383,7 +383,7 @@ function SidebarHostPicker({
   onAddHost: () => void;
   onOpenHostSettings: (serverId: string) => void;
 }) {
-  const hosts = useHosts();
+  const hosts = useHosts({ availableOnly: true });
   const triggerRef = useRef<View | null>(null);
   const [isOpen, setIsOpen] = useState(false);
 

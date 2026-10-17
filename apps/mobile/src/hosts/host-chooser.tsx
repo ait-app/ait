@@ -70,7 +70,7 @@ function matchesHostQuery(host: HostProfile, query: string): boolean {
 }
 
 export function useHostChooser() {
-  const hosts = useHosts();
+  const hosts = useHosts({ availableOnly: true });
   const localServerId = useLocalDaemonServerId();
   const open = useHostChooserStore((state) => state.open);
 
@@ -145,7 +145,7 @@ function HostChooserRow({
 
 export function HostChooserModal() {
   const { theme } = useUnistyles();
-  const hosts = useHosts();
+  const hosts = useHosts({ availableOnly: true });
   const request = useHostChooserStore((state) => state.request);
   const close = useHostChooserStore((state) => state.close);
   const inputRef = useRef<EditingTextInputHandle>(null);
