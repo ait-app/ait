@@ -55,6 +55,7 @@ export class AccountChannel {
   private timeout = 60_000;
   private remove: (() => void)[] = [];
   private timer: ReturnType<typeof setInterval> | null = null;
+  private verification: ReturnType<typeof setTimeout> | null = null;
 
   constructor(
     private readonly transport: DaemonTransport,
@@ -62,7 +63,7 @@ export class AccountChannel {
       snapshot(hosts: ChannelHost[]): void;
       online(host: ChannelHost): void;
       offline(hostId: string, observedAt: string): void;
-      failed(): void;
+      failed(recoverImmediately: boolean): void;
     },
   ) {}
 
@@ -80,12 +81,20 @@ export class AccountChannel {
   }
 
   /** Heartbeats request a cached snapshot; observed_at is never a liveness clock. */
-  refresh(): void {
-    if (this.disposed || !this.welcomed) return;
+  refresh(options?: { verify?: boolean }): void {
+    if (this.disposed) return;
+    if (options?.verify) {
+      if (this.verification) return;
+      // Foreground recovery must not wait for the ordinary 60-second heartbeat
+      // timeout. Arm before sending: native adapters can reply synchronously.
+      this.verification = setTimeout(() => this.fail(), 3_000);
+      this.verification.unref?.();
+    }
     if (Date.now() >= this.deadline) {
       this.fail();
       return;
     }
+    if (!this.welcomed) return;
     try {
       this.transport.send(JSON.stringify({ type: "channel.heartbeat" }));
       this.heartbeatAt = Date.now() + this.interval;
@@ -98,6 +107,7 @@ export class AccountChannel {
     if (this.disposed) return;
     this.disposed = true;
     if (this.timer) clearInterval(this.timer);
+    this.clearVerification();
     for (const remove of this.remove) remove();
     this.remove = [];
     this.transport.close();
@@ -105,8 +115,14 @@ export class AccountChannel {
 
   private fail(): void {
     if (this.disposed) return;
+    const recoverImmediately = this.verification !== null;
     this.close();
-    this.handlers.failed();
+    this.handlers.failed(recoverImmediately);
+  }
+
+  private clearVerification(): void {
+    if (this.verification) clearTimeout(this.verification);
+    this.verification = null;
   }
 
   private receive(data: unknown, binary: boolean): void {
@@ -139,7 +155,10 @@ export class AccountChannel {
         this.handlers.offline(event.host_id, event.observed_at);
       }
       // Unknown server event types are deliberately ignored for forward compatibility.
-      if (this.welcomed) this.deadline = Date.now() + this.timeout;
+      if (this.welcomed) {
+        this.clearVerification();
+        this.deadline = Date.now() + this.timeout;
+      }
     } catch {
       this.fail();
     }

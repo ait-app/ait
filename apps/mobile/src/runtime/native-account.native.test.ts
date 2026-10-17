@@ -64,6 +64,50 @@ afterEach(() => {
 });
 
 describe("native mobile account storage and lifecycle", () => {
+  it.each(["android", "ios"])(
+    "replaces a silent %s status channel immediately after foreground verification",
+    async (platform) => {
+      mocks.platform = platform;
+      mocks.get.mockResolvedValue(
+        JSON.stringify({
+          center: "https://center.test/api",
+          token: "saved-jwt",
+          expiresAt: Date.now() + 3_600_000,
+          name: "Me",
+        }),
+      );
+      vi.stubGlobal(
+        "fetch",
+        vi.fn(async (url: string) =>
+          Response.json(
+            url.endsWith("/v1/nodes/register")
+              ? { node_id: "node", node_session_id: "session", control_required: false }
+              : {
+                  channel_ticket: "native-ticket",
+                  channel_path: "/v1/relay/channel",
+                  protocol: "ait-channel-v1",
+                },
+          ),
+        ),
+      );
+      const { getNativeAccount } = await import("./native-account.native");
+      const manager = await getNativeAccount();
+      await vi.advanceTimersByTimeAsync(10);
+      const old = ChannelWebSocket.instances[0]!;
+      old.send.mockImplementation(() => {});
+      const onState = mocks.appState.mock.calls[0]![1];
+      onState("background");
+      await vi.advanceTimersByTimeAsync(10_000);
+      onState("active");
+      await vi.advanceTimersByTimeAsync(3_010);
+      expect(old.close).toHaveBeenCalledOnce();
+      expect(ChannelWebSocket.instances).toHaveLength(2);
+      expect(manager.snapshot()).toMatchObject({ status: "online", stale: false });
+      expect(mocks.remove).not.toHaveBeenCalled();
+      await manager.shutdown();
+    },
+  );
+
   it("completes iOS hosted login after backgrounding and stores only the exchanged AIT session", async () => {
     mocks.platform = "ios";
     const code = "c".repeat(64);

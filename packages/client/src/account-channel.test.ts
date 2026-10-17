@@ -35,6 +35,54 @@ it("times out a silent server even while heartbeat writes succeed", async () => 
   channel.close();
 });
 
+it("verifies a silent foreground connection in three seconds without extending repeated checks", async () => {
+  const { channel, handlers, socket } = fixture();
+  await vi.advanceTimersByTimeAsync(0);
+  socket.reply = false;
+  channel.refresh({ verify: true });
+  await vi.advanceTimersByTimeAsync(2_000);
+  channel.refresh({ verify: true });
+  expect(socket.transport.send).toHaveBeenCalledOnce();
+  await vi.advanceTimersByTimeAsync(999);
+  expect(handlers.failed).not.toHaveBeenCalled();
+  await vi.advanceTimersByTimeAsync(1);
+  expect(handlers.failed).toHaveBeenCalledExactlyOnceWith(true);
+  await vi.advanceTimersByTimeAsync(60_000);
+  expect(socket.transport.close).toHaveBeenCalledOnce();
+});
+
+it("preserves a healthy channel when a cached snapshot answers foreground verification", async () => {
+  const { channel, handlers, socket } = fixture();
+  await vi.advanceTimersByTimeAsync(0);
+  channel.refresh({ verify: true });
+  // The fixture replies synchronously, using the same old observed_at.
+  socket.reply = false;
+  await vi.advanceTimersByTimeAsync(3_000);
+  expect(handlers.failed).not.toHaveBeenCalled();
+  await vi.advanceTimersByTimeAsync(57_000);
+  expect(handlers.failed).toHaveBeenCalledExactlyOnceWith(false);
+});
+
+it("bounds foreground recovery before welcome without sending a premature heartbeat", async () => {
+  const { channel, handlers, socket } = fixture(false);
+  channel.refresh({ verify: true });
+  socket.receive({ type: "future.event" });
+  await vi.advanceTimersByTimeAsync(3_000);
+  expect(socket.transport.send).not.toHaveBeenCalled();
+  expect(handlers.failed).toHaveBeenCalledExactlyOnceWith(true);
+});
+
+it("cancels pending foreground verification when the account closes the channel", async () => {
+  const { channel, handlers, socket } = fixture();
+  await vi.advanceTimersByTimeAsync(0);
+  socket.reply = false;
+  channel.refresh({ verify: true });
+  channel.close();
+  await vi.advanceTimersByTimeAsync(60_000);
+  expect(handlers.failed).not.toHaveBeenCalled();
+  expect(socket.transport.close).toHaveBeenCalledOnce();
+});
+
 it("ignores future server events and accepts node events before the first snapshot", () => {
   const { channel, handlers, socket } = fixture();
   socket.receive(welcome);

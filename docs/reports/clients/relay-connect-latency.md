@@ -43,3 +43,22 @@ Rust 网络用例在允许监听回环端口的环境运行；外部服务、客
 - `npm run build:sdk`、`npm run typecheck --workspace=@ait/client --workspace=@ait/mobile` 通过。
 - 修改的 12 个 TypeScript 文件通过 `npm exec -- oxlint <文件列表>`；修改的 TypeScript/Markdown 文件通过 `oxfmt --check`。
 - `npm run check:docs` 通过。
+
+## 2026-10-18：客户端恢复等待优化
+
+本轮基于 `3be1286f`，修改共享 TypeScript 客户端，覆盖 Android、iOS 与 desktop。
+
+- 显式恢复时，已等待至少 3 秒的业务握手立即重试；刚开始的尝试保留，旧 transport 的 open/error/close 回调不能干扰替换连接。普通 45 秒连接期限保持不变。
+- 状态 Channel 在前台恢复时使用原有心跳，3 秒无响应后立即重建；健康连接保留，重复检查不延长期限，退出会取消检查。正常状态心跳仍遵循服务端参数。
+- 账户维护期间收到的恢复信号合并到当前任务完成后执行，消除被普通 2 秒轮询覆盖的等待。
+- 已有租约过期后立即注册一次；注册失败或新租约持续被拒绝仍退避，避免连续快速注册。
+- 不增加协议字段、服务端能力或原生依赖，不依赖 Host 持久 WSS/Yamux PR。主分支已有的 `ait-channel-v1` 服务端要求保持不变；未增加对更旧中心的协议回退。
+
+定向测试共 **441 项通过**：共享 SDK 280 项、移动端及共享界面 152 项、desktop 9 项。
+用例覆盖旧 transport 回调、重复恢复、健康连接保留、租约失败退避、后台恢复与退出。
+Android/iOS 使用生命周期和网络测试替身；desktop 状态适配器使用本机真实 WebSocket 验证心跳认证和静默恢复。
+
+SDK 构建、client/mobile/desktop 类型检查、修改文件的 oxlint/oxfmt、文档检查和 diff 检查通过。
+本轮 **Test coverage：not measured**，未运行覆盖率测量；没有 Rust 修改，未运行 Rust 测试。
+3 秒为客户端存活检查期限，不是端到端重连承诺。未测线上 p50/p95 或真机网络切换；
+原生端前台期间的 OS 网络监听和首次探测仍沿用原有机制。

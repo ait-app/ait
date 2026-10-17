@@ -69,7 +69,25 @@ sockets alive while the account is suspended.
 
 Active relay clients retry after 500 ms, then 1, 2, 4, 8, 16 and at most 30 seconds
 on consecutive failures. One-shot host probes still disable automatic retries.
-The 45-second setup deadline and pairing/hello deadlines are unchanged.
+The ordinary 45-second setup deadline and pairing/hello deadlines are unchanged.
+On explicit foreground recovery, an active client whose handshake has already
+been pending for at least three seconds retries immediately. A fresh attempt is
+retained so simultaneous recovery signals do not repeatedly cancel it. Callbacks
+from a replaced transport cannot close or send a hello on its replacement.
+
+Account status channels also verify foreground recovery with the existing
+`channel.heartbeat` and a three-second reply deadline, independent of the normal
+heartbeat timeout. A healthy channel is retained; an unresponsive one obtains a
+new ticket immediately after verification fails. Repeated recovery signals do not
+extend that deadline. Status-channel recovery leaves business sockets and downloads
+alone. A refresh requested during an account maintenance tick runs once as soon as
+that tick finishes, without the extra two-second polling delay.
+
+If renewal reports an expired existing node lease, the client registers once
+immediately. Registration failures and repeated rejection of new leases retain
+backoff. These changes introduce no new protocol or center requirement; the
+existing minimum requirement for `ait-channel-v1` still applies. The deadlines
+bound client-side waiting, not total reconnect time or Host startup latency.
 
 The Rust relay connector shares one TLS configuration and bounded session cache
 across control, data, download and subsequent reconnect sockets. Certificate and
