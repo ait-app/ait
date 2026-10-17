@@ -35,7 +35,7 @@ macOS 需要 13 或更新版本；正式构建必须通过 Developer ID 签名�
 移动端状态栏修复需要另行分发 Android／iOS 应用；本次桌面标签不触发 Android APK、
 Google Play、TestFlight 或 AUR 发布。未合并的 #334、#331 等不纳入本版本。
 
-按[发布指南](../../operations/releasing.md#draft-后必须停下等待人工-review)，完成 CI、
+按[发布指南](https://github.com/ait-app/ait/blob/fe5d25fe6d0b320d77e9fe523be26c7f3ac4a5c5/docs/operations/releasing.md#draft-后必须停下等待人工-review)，完成 CI、
 安装包与元数据校验后保持 Draft，公开 Latest 继续为 `v0.1.3`，等待用户 review。
 最终源码、工作流提交与运行链接以该 Draft 附件 `BUILD-INFO.json` 为准。
 

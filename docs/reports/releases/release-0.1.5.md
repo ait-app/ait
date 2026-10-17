@@ -53,7 +53,7 @@ Android 10–13 的边缘方向为兼容来源；旧设备和工作区文件面�
 本次未新增 Kotlin、Android lint 或真机验证；PR 中的历史 Pixel 验收不作为本次发布验证。
 桌面标签不触发 Android APK、Google Play、TestFlight 或 AUR 发布。
 
-按[发布指南](../../operations/releasing.md#draft-后必须停下等待人工-review)完成 CI 和
+按[发布指南](https://github.com/ait-app/ait/blob/fe5d25fe6d0b320d77e9fe523be26c7f3ac4a5c5/docs/operations/releasing.md#draft-后必须停下等待人工-review)完成 CI 和
 附件校验后保持 Draft，公开 Latest 继续为 `v0.1.4`，等待用户 review。
 最终构建源码、工作流与运行链接以附件 `BUILD-INFO.json` 为准。
 

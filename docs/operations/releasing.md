@@ -131,7 +131,7 @@ AUR 使用独立 Git 仓库。首次发布需要维护者的 AUR 账户和 SSH �
 从上一正式版附件 `BUILD-INFO.json` 的实际 `sourceCommit` 比较 `main`：新增功能和修复
 都计入发布条件。已发布内容和未合并 PR 不重复纳入；只有版本、文档或构建记录变化时不自动
 创建新版本。同版本重建可能保留旧标签，不能仅用上一版本标签作为已交付源码的判断基线。
-有符合条件的变更时准备下一个补丁版本，并遵守下方 Draft review 边界。
+有符合条件的变更时准备下一个补丁版本，并按下方完整发布流程自动完成正式发布。
 
 ## 准备版本
 
@@ -152,7 +152,7 @@ npm run typecheck --workspace=@ait/desktop --workspace=@ait/mobile
 
 ### 发布覆盖率与 Release Notes
 
-每次 release 在 Draft 交付前实际测量覆盖率，并写入 Release Notes。默认按本次变更涉及的
+每次 release 在正式发布前实际测量覆盖率，并写入 Release Notes。默认按本次变更涉及的
 Rust crate 和相关测试测量；只有用户明确要求整个 Rust workspace 时才运行全工作区覆盖率。
 Rust 测量使用 `cargo llvm-cov`，全工作区请求生成 HTML 报告：
 
@@ -201,32 +201,32 @@ git push origin v0.0.20
 6. 桌面构建成功后汇总资产并生成 SHA256SUMS，再创建 Draft Release 或补齐既有 Release 的资产。
 
 新建 Release 使用 [`gh release create --draft`](https://cli.github.com/manual/gh_release_create)，
-上传安装包后仍保持草稿，停止等待 review；工作流不会将新草稿转为正式发布。
-推送标签不代表 Release 已公开，公开 Latest 和正式通道自动更新继续使用上一正式版。
+将安装包暂存为草稿，供代理继续校验资产、整理说明与覆盖率证据，然后自动完成正式发布。
+草稿生成期间，公开 Latest 和正式通道自动更新继续使用上一正式版。
 重跑可补齐既有草稿，包括首次上传失败后没有任何附件的空草稿；既有正式版的修复保持原发布状态。
 
-### Draft 后必须停下等待人工 review
+### 自动完成正式发布
 
-用户说“开始 release”“准备新版本”或“发布新版本”时，代理默认只执行到 Draft Release。
-即使没有再次强调 review，也必须先完成适用的 CI、资产校验与说明整理，再停下来等待用户 review，
-不能把最初的 release 请求、CI 通过或等待时间视为正式发布确认。这是代理与用户的协作规则，
-使用现有 Draft 工作流，不增加 CI 审批任务或 GitHub environment 审核要求。
+自 2026-10-17 起，用户说“开始 release”“准备新版本”或“发布新版本”，以及每日发布判断
+满足条件时，代理默认执行完整发布流程。完成检查后直接 finalize，无需人工 review、
+二次确认或再次要求用户发送“final release”。用户明确要求只准备 Draft 时，才保持草稿。
 
-1. Draft 准备完成后，向用户提供可访问的草稿链接、版本号、构建源码提交、CI 与资产校验结果，
-   并列出需要 review 的重要变更和限制。此时停止发布操作，公开 Latest 仍为上一正式版。
-2. 用户 review 变更说明、`BUILD-INFO.json` 的源码与工作流提交、`SHA256SUMS`、更新元数据，
-   以及两平台构建、macOS 签名、公证和成品生命周期门禁。
-3. 用户要求修改时，代理处理修改并保持 Draft，完成后再次停下等待 review。
-4. 用户随后明确说“最终发布 0.1.1”等、确认发布该草稿版本后，代理复核源码、CI 和资产完整性，
-   再正式发布；已有明确确认时不重复索要批准。确认仅适用于本次对应版本，不能沿用到下一个 release。
+1. 等待适用的 CI、两平台构建、macOS 签名、公证和成品生命周期门禁通过。
+2. 核对不可变标签、`BUILD-INFO.json` 的源码与工作流提交、完整附件、`SHA256SUMS` 和
+   更新元数据；整理变更说明、兼容性限制与本次实测覆盖率证据并写入 Release Notes。
+3. 检查通过后直接将草稿转为正式发布。任一检查失败或证据缺失时，先修复并重新验证，
+   通过前保持 Draft。
+4. 发布后重新确认非 Draft 状态、版本标签、附件与说明；稳定版确认 Latest 指向本次版本，
+   再向用户提供正式链接、构建源码、验证结果及覆盖率报告。
 
-收到上述明确发布确认后，稳定版使用：
+稳定版完成上述发布前检查后直接使用：
 
 ```bash
 gh release edit vX.Y.Z --repo OWNER/REPO --draft=false --latest
 ```
 
-Beta 仍需保持 `--prerelease --latest=false`。发布命令不属于创建 Draft Release 的工作流步骤。
+Beta 仍需保持 `--prerelease --latest=false`。现有工作流负责生成草稿和资产，代理自动衔接
+后续校验、说明整理与正式发布。
 
 macOS 需要 GitHub Secrets：`MAC_CSC_LINK`、`MAC_CSC_KEY_PASSWORD`、`APPLE_ID`、
 `APPLE_BUILD_APP_SECRET`、`APPLE_TEAM_ID`。缺失签名、公证凭据会阻止发布；不会降级为未签名包。

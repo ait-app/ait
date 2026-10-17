@@ -60,7 +60,7 @@ Rust workspace 与 15 个本地 Cargo 包、根 npm 包和 6 个 workspace、两
 `PKGBUILD` 同步为 `0.1.3`；第三方依赖保持准备基线的锁定记录。
 发布准备只修改版本与文档，不修改 Rust 源码、CI 工作流或 GitHub 审批环境。
 
-按[发布指南](../../operations/releasing.md#draft-后必须停下等待人工-review)完成锁定依赖、
+按[发布指南](https://github.com/ait-app/ait/blob/fe5d25fe6d0b320d77e9fe523be26c7f3ac4a5c5/docs/operations/releasing.md#draft-后必须停下等待人工-review)完成锁定依赖、
 版本一致性、发布脚本、桌面主进程、类型检查、格式和文档验证。PR／main 适用 CI 通过后
 创建不可变标签，发布构建完成两平台安装包、macOS 签名／公证及成品 daemon 生命周期门禁。
 

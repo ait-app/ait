@@ -41,7 +41,7 @@ DMG／ZIP、两份 blockmap、更新元数据、`BUILD-INFO.json` 和 `SHA256SUM
 GitHub 自动提供的 Source code 归档仍对应原标签，重建源码应使用 `BUILD-INFO.json` 中的
 `sourceCommit` 链接。
 
-按[发布协作规则](../../operations/releasing.md#draft-后必须停下等待人工-review)，
+按[发布协作规则](https://github.com/ait-app/ait/blob/fe5d25fe6d0b320d77e9fe523be26c7f3ac4a5c5/docs/operations/releasing.md#draft-后必须停下等待人工-review)，
 完成两平台构建和附件验证后保持 Draft，公开 Latest 继续为 `v0.1.2`，等待用户 review。
 最终构建链接、源码／工作流 SHA 与附件验证结果记录在
 [GitHub Draft](https://github.com/ait-app/ait/releases)说明和 `BUILD-INFO.json` 中。
