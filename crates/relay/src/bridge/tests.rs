@@ -120,6 +120,7 @@ async fn data_setup_times_out_pairing_and_client_hello_without_contacting_local_
         let address = listener.local_addr().unwrap();
         let session = Uuid::new_v4();
         let local = Arc::new(Local {
+            visits: Arc::new(tokio::sync::Semaphore::new(16)),
             dialer: crate::transport::Dialer::default(),
             url: "ws://127.0.0.1:1".into(),
             token: "local-fixture".into(),

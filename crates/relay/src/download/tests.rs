@@ -10,6 +10,7 @@ async fn transfer(status: u16, ack: &str) -> Result<(), Error> {
     let local = TcpListener::bind("127.0.0.1:0").await.unwrap();
     let session = Uuid::new_v4();
     let destination = Arc::new(Local {
+        visits: Arc::new(tokio::sync::Semaphore::new(16)),
         dialer: crate::transport::Dialer::default(),
         url: format!("ws://{}/v1/ws", local.local_addr().unwrap()),
         token: SecretString::from("local-bearer"),

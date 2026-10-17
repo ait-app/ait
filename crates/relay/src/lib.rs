@@ -5,6 +5,7 @@ mod download;
 mod protocol;
 pub mod rpc;
 mod transport;
+mod tunnel;
 
 use std::collections::HashMap;
 use std::net::SocketAddr;
@@ -13,7 +14,7 @@ use std::time::Duration;
 
 use futures_util::StreamExt;
 use secrecy::SecretString;
-use tokio::sync::Mutex;
+use tokio::sync::{Mutex, Semaphore, mpsc};
 use tokio::task::JoinSet;
 use tokio::time::timeout;
 use tokio_tungstenite::tungstenite::Message;
@@ -43,6 +44,7 @@ pub struct Connector {
 
 #[derive(Debug)]
 struct Local {
+    visits: Arc<Semaphore>,
     dialer: Dialer,
     url: String,
     token: SecretString,
@@ -95,6 +97,7 @@ impl Connector {
                 cancel: CancellationToken::new(),
             })),
             local: Arc::new(Local {
+                visits: Arc::new(Semaphore::new(16)),
                 dialer: Dialer::default(),
                 url: format!("ws://{address}/v1/ws"),
                 token,
@@ -203,10 +206,12 @@ impl Connector {
             ),
         )
         .await?;
-        let ControlWelcome::Welcome { epoch } =
-            timeout(Duration::from_secs(5), receive(&mut control))
-                .await
-                .map_err(|_| Error::Transport)??;
+        let ControlWelcome::Welcome {
+            epoch,
+            supported_tunnel_protocols,
+        } = timeout(Duration::from_secs(5), receive(&mut control))
+            .await
+            .map_err(|_| Error::Transport)??;
         {
             let mut state = self.state.lock().await;
             if state.generation != generation {
@@ -219,7 +224,11 @@ impl Connector {
                 error: None,
             };
         }
-        self.serve_commands(&mut control, &center, epoch).await
+        let multiplex = supported_tunnel_protocols
+            .iter()
+            .any(|name| name == tunnel::PROTOCOL);
+        self.serve_commands(&mut control, &center, epoch, multiplex)
+            .await
     }
 
     async fn serve_commands(
@@ -227,41 +236,43 @@ impl Connector {
         control: &mut Socket,
         center: &Url,
         epoch: Uuid,
+        multiplex: bool,
     ) -> Result<(), Error> {
         let mut tasks = JoinSet::new();
         let mut active = HashMap::new();
+        let (request_tx, mut request_rx) = mpsc::channel(1);
+        let (grant_tx, grant_rx) = mpsc::channel(1);
+        if multiplex {
+            let local = self.local.clone();
+            let center = center.clone();
+            tasks.spawn(async move {
+                tunnel::maintain(local, center, epoch, request_tx, grant_rx).await;
+                None
+            });
+        }
+        let idle = tokio::time::sleep(Duration::from_secs(65));
+        tokio::pin!(idle);
         loop {
             let message = tokio::select! {
+                Some(request) = request_rx.recv(), if multiplex => {
+                    send(control, Message::Text(protocol::encode(&request)?.into())).await?;
+                    continue;
+                },
                 result = tasks.join_next(), if !tasks.is_empty() => {
                     match result {
-                        Some(Ok(id)) => { active.remove(&id); },
+                        Some(Ok(Some(id))) => { active.remove(&id); },
                         Some(Err(error)) => tracing::warn!(panicked = error.is_panic(), "Relay data task did not complete"),
-                        None => {},
+                        Some(Ok(None)) | None => {},
                     }
                     continue;
                 },
-                message = timeout(Duration::from_secs(65), control.next()) => match message {
-                    Ok(Some(Ok(Message::Text(value)))) => protocol::decode::<ControlCommand>(&value)?,
-                    Ok(Some(Ok(Message::Ping(value)))) => { send(control, Message::Pong(value)).await?; continue; },
-                    Ok(Some(Ok(Message::Pong(_)))) => continue,
-                    Ok(Some(Ok(Message::Close(frame)))) => {
-                        tracing::info!(close_code = frame.as_ref().map(|f| u16::from(f.code)), reason = "close_frame", "Relay control closed");
-                        return Err(Error::Transport);
-                    },
-                    Ok(Some(Err(error))) => {
-                        diagnostics::socket_error("control_read", &error);
-                        return Err(Error::Transport);
-                    },
-                    other => {
-                        let reason = match other {
-                            Err(_) => "read_timeout",
-                            Ok(None) => "eof",
-                            _ => "unexpected_frame",
-                        };
-                        tracing::warn!(reason, "Relay control stopped");
-                        return Err(Error::Transport);
-                    },
-                },
+                () = &mut idle => return Err(Error::Transport),
+                message = control.next() => message,
+            };
+            idle.as_mut()
+                .reset(tokio::time::Instant::now() + Duration::from_secs(65));
+            let Some(message) = control_command(control, message).await? else {
+                continue;
             };
             match message {
                 ControlCommand::OpenData(grant) => {
@@ -281,6 +292,9 @@ impl Connector {
                                 tracing::info!(reason = "center_cancelled", "Relay session cancelled");
                             },
                             result = async {
+                                // Cancellation of a just-ended stream may still be releasing its permit.
+                                let _permit = timeout(Duration::from_secs(5), local.visits.clone().acquire_owned())
+                                    .await.map_err(|_| Error::Transport)?.map_err(|_| Error::Transport)?;
                                 match grant.mode {
                                     DataMode::Download { download_token } =>
                                         download::run(url, grant.daemon_ticket, download_token, local, id).await,
@@ -293,7 +307,7 @@ impl Connector {
                             },
                         }
                         tracing::info!(elapsed_ms = started.elapsed().as_millis(), "Relay session finished");
-                        id
+                        Some(id)
                     }.instrument(span));
                 }
                 ControlCommand::CancelSession {
@@ -303,8 +317,43 @@ impl Connector {
                         cancel.cancel();
                     }
                 }
+                ControlCommand::TunnelGrant(grant) if multiplex => {
+                    let _ = grant_tx.try_send((grant.request_id, Some(grant)));
+                }
+                ControlCommand::TunnelError { request_id } if multiplex => {
+                    let _ = grant_tx.try_send((request_id, None));
+                }
+                ControlCommand::TunnelGrant(_) | ControlCommand::TunnelError { .. } => {
+                    return Err(Error::Protocol);
+                }
             }
         }
+    }
+}
+
+async fn control_command(
+    control: &mut Socket,
+    message: Option<Result<Message, tokio_tungstenite::tungstenite::Error>>,
+) -> Result<Option<ControlCommand>, Error> {
+    match message {
+        Some(Ok(Message::Text(body))) => protocol::decode(&body).map(Some),
+        Some(Ok(Message::Ping(body))) => {
+            send(control, Message::Pong(body)).await?;
+            Ok(None)
+        }
+        Some(Ok(Message::Pong(_))) => Ok(None),
+        Some(Err(error)) => {
+            diagnostics::socket_error("control_read", &error);
+            Err(Error::Transport)
+        }
+        Some(Ok(Message::Close(frame))) => {
+            tracing::info!(
+                close_code = frame.as_ref().map(|f| u16::from(f.code)),
+                "Relay control closed"
+            );
+            Err(Error::Transport)
+        }
+        Some(Ok(Message::Binary(_) | Message::Frame(_))) | None => Err(Error::Transport),
     }
 }
 

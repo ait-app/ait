@@ -111,7 +111,7 @@ fn pairing_and_handshake_messages_reject_wrong_kinds_or_sessions() {
     let welcome = json!({"type":"control.welcome","epoch":id,"future":true});
     assert!(
         matches!(decode::<ControlWelcome>(&welcome.to_string()).unwrap(),
-        ControlWelcome::Welcome { epoch } if epoch == id)
+        ControlWelcome::Welcome { epoch, supported_tunnel_protocols } if epoch == id && supported_tunnel_protocols.is_empty())
     );
     assert!(decode::<ControlWelcome>(&ready.to_string()).is_err());
     assert!(decode::<ClientHello>(r#"{"type":"hello","future":{"extension":true}}"#).is_ok());

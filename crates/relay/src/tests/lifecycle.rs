@@ -69,9 +69,12 @@ async fn control_rejects_foreign_epochs_duplicate_sessions_and_session_overload(
         }
         let result = timeout(
             Duration::from_secs(3),
-            fixture
-                .connector
-                .serve_commands(&mut fixture.client, &fixture.center, fixture.epoch),
+            fixture.connector.serve_commands(
+                &mut fixture.client,
+                &fixture.center,
+                fixture.epoch,
+                false,
+            ),
         )
         .await
         .unwrap();
@@ -89,10 +92,12 @@ async fn control_answers_heartbeats_cancels_data_and_remains_available() {
         .send(ControlFixture::open(id, fixture.epoch))
         .await
         .unwrap();
-    let driver =
-        fixture
-            .connector
-            .serve_commands(&mut fixture.client, &fixture.center, fixture.epoch);
+    let driver = fixture.connector.serve_commands(
+        &mut fixture.client,
+        &fixture.center,
+        fixture.epoch,
+        false,
+    );
     let peer = async {
         fixture
             .server
@@ -138,7 +143,7 @@ async fn control_read_timeout_and_binary_frames_close_the_control_connection() {
             assert!(matches!(
                 fixture
                     .connector
-                    .serve_commands(&mut fixture.client, &fixture.center, fixture.epoch)
+                    .serve_commands(&mut fixture.client, &fixture.center, fixture.epoch, false)
                     .await,
                 Err(Error::Transport)
             ));
@@ -147,7 +152,7 @@ async fn control_read_timeout_and_binary_frames_close_the_control_connection() {
         let task = tokio::spawn(async move {
             fixture
                 .connector
-                .serve_commands(&mut fixture.client, &fixture.center, fixture.epoch)
+                .serve_commands(&mut fixture.client, &fixture.center, fixture.epoch, false)
                 .await
         });
         tokio::task::yield_now().await;
@@ -193,10 +198,12 @@ async fn failed_download_jobs_release_control_admission_and_do_not_drop_heartbea
         .unwrap();
     let capture = Capture::default();
     let _subscriber = tracing::subscriber::set_default(capture.subscriber());
-    let driver =
-        fixture
-            .connector
-            .serve_commands(&mut fixture.client, &fixture.center, fixture.epoch);
+    let driver = fixture.connector.serve_commands(
+        &mut fixture.client,
+        &fixture.center,
+        fixture.epoch,
+        false,
+    );
     let peer = async {
         loop {
             if capture.text().contains("Relay session finished") {
@@ -232,11 +239,36 @@ async fn abrupt_control_disconnect_is_a_transport_failure() {
     fixture.server.get_mut().shutdown().await.unwrap();
     let result = timeout(
         Duration::from_secs(3),
-        fixture
-            .connector
-            .serve_commands(&mut fixture.client, &fixture.center, fixture.epoch),
+        fixture.connector.serve_commands(
+            &mut fixture.client,
+            &fixture.center,
+            fixture.epoch,
+            false,
+        ),
     )
     .await
     .unwrap();
     assert!(matches!(result, Err(Error::Transport)));
+}
+
+#[tokio::test]
+async fn tunnel_retries_do_not_extend_the_control_read_deadline() {
+    let mut fixture = ControlFixture::new().await;
+    let task = tokio::spawn(async move {
+        fixture
+            .connector
+            .serve_commands(&mut fixture.client, &fixture.center, fixture.epoch, true)
+            .await
+    });
+    // Receive the first request so the control loop and its independent idle timer are running.
+    let request = fixture.server.next().await.unwrap().unwrap();
+    assert!(request.to_text().unwrap().contains("tunnel.request"));
+    tokio::time::pause();
+    for _ in 0..13 {
+        tokio::time::advance(Duration::from_secs(5)).await;
+        tokio::task::yield_now().await;
+    }
+    tokio::time::advance(Duration::from_secs(1)).await;
+    assert!(matches!(task.await.unwrap(), Err(Error::Transport)));
+    tokio::time::resume();
 }
