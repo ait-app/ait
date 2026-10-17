@@ -7,7 +7,7 @@ export const welcome = {
   connection_id: "connection",
   heartbeat_interval_seconds: 20,
   heartbeat_timeout_seconds: 60,
-  host_snapshot_interval_seconds: 5,
+  host_snapshot_interval_seconds: 10,
 };
 
 export function channelFixture(hosts: () => unknown[] = () => [], auto = true) {

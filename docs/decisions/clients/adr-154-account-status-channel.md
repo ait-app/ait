@@ -15,6 +15,7 @@ ait-server 提供 `ait-channel-v1` 推送完整 Host 快照和 Host 可连接状
 - 桌面 `ws` 与 React Native WebSocket 使用 Bearer 票据。浏览器使用 `ait.ticket.<ticket>` subprotocol，由浏览器在票据请求和升级时提供 Origin。JWT 不进入 WebSocket URL、subprotocol 或 daemon。
 - 每个完整快照替换账户 Host 缓存，保留 nullable 身份、离线主机及中心 `offline_since`。已绑定 server ID 的离线 Host 可进入持久注册表；只有 `online` 为真、具备 instance ID 且支持业务中继模式的 Host 标记为可连接。资源管理字段 `status` 不参与在线判定；手工创建且未绑定 runtime 的 Host 不生成无效连接。
 - `node.online` 表示 Host 已可连接，由 Host control ready 触发，并携带完整 `host`（含 server/instance 身份与中继能力）。客户端校验事件身份一致性后按 `host_id` 添加或替换主机，立即可供访问，包括此前未出现在快照里的新主机。`node.offline` 由 Host 路由清理触发，立即清除对应 Host 的可路由状态；channel 自身上线/下线不广播事件，不再维护独立的节点存在状态。完整快照用于初次与重连恢复以及资源变更对齐，事件不重放。
+- 首次连接/重连的上线事件可能先于完整快照到达。账户快照用 `confirmedHostIds` 暴露当前 channel 单独确认的 Host；UI 即使处于 connecting/stale，也立即导入并触发这些 Host 的连接，其余缓存继续保持 stale。完整快照到达后恢复全量有效性；下线移除对应确认，channel 断开、替换、暂停或退出时清空确认，旧连接事件不能恢复可用性。
 - Channel 断开保留最后的 Host 列表并标记 stale，采用带抖动的退避申请新票据重连。节点续租独立继续，重连前触发租约校验。手动刷新在健康连接上发送应用心跳；退出、关闭、后台暂停和节点更换释放 Channel，旧异步请求和事件不能覆盖新会话。
 - 状态连接故障不直接关闭独立业务连接或下载；账户撤销和原有退出流程仍执行其传输清理。应用前后台切换沿用现有移动端宽限期。
 - 生产客户端登录节点与各台已发布 daemon 是不同的节点会话。Channel 属于客户端登录节点，daemon 继续使用独立 Host control 和原有 Ping/Pong；状态 channel 与 control 使用不同 URL，服务端拒绝跨入口使用票据，并移除 control 上的 `channel.subscribe`。同一节点也可以建立两条独立连接；channel 故障不会清理 Host control 或已有数据会话。无需改变 Rust connector 或把用户 JWT 交给 daemon。

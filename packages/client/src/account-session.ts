@@ -45,6 +45,8 @@ export interface AccountSnapshot {
   hostOnline: boolean;
   hosts: AccountHost[];
   stale: boolean;
+  /** Hosts individually confirmed by online events on the current channel while the list is stale. */
+  confirmedHostIds?: string[];
   error: string | null;
   selected: AccountHost | null;
   /** Independently maintained daemon leases; contains no credentials. */
@@ -143,6 +145,7 @@ export class AccountSessionManager {
   private requests = new Set<AbortController>();
   private nextRenew = 0;
   private channel: AccountChannel | null = null;
+  private confirmedHosts = new Set<string>();
   private nextChannel = 0;
   private channelFailures = 0;
   private controlFailures = 0;
@@ -173,6 +176,7 @@ export class AccountSessionManager {
     });
     return {
       ...this.state,
+      confirmedHostIds: [...this.confirmedHosts],
       hosts: this.state.hosts.map(cloneHost),
       selected: this.state.selected ? cloneHost(this.state.selected) : null,
       synchronizedHosts: [...this.publications.keys()],
@@ -740,6 +744,7 @@ export class AccountSessionManager {
         });
       }
       if (!this.node) this.nextRegistration = Date.now() + retryDelay(this.registrationFailures++);
+      this.confirmedHosts.clear();
       this.update({
         status: "error",
         error: error instanceof Error ? error.message : "Failed to connect to the account service.",
@@ -749,6 +754,7 @@ export class AccountSessionManager {
   }
 
   private closeChannel(): void {
+    this.confirmedHosts.clear();
     const channel = this.channel;
     this.channel = null;
     channel?.close();
@@ -786,6 +792,7 @@ export class AccountSessionManager {
       snapshot: (hosts) => {
         if (this.channel !== channel) return;
         this.channelFailures = 0;
+        this.confirmedHosts.clear();
         const visible = hosts.filter(
           (host) => host.host_id !== node.host_id && host.node_id !== node.node_id,
         );
@@ -804,6 +811,7 @@ export class AccountSessionManager {
           host.node_id === node.node_id
         )
           return;
+        this.confirmedHosts.add(host.host_id);
         const hosts = this.state.hosts.filter((entry) => entry.host_id !== host.host_id);
         hosts.push(host);
         hosts.sort((left, right) => left.host_id.localeCompare(right.host_id));
@@ -814,6 +822,7 @@ export class AccountSessionManager {
       },
       offline: (hostId, observedAt) => {
         if (this.channel !== channel) return;
+        this.confirmedHosts.delete(hostId);
         const hosts = this.state.hosts.map((host) =>
           host.host_id === hostId
             ? {
@@ -832,7 +841,7 @@ export class AccountSessionManager {
       },
       failed: () => {
         if (this.channel !== channel) return;
-        this.channel = null;
+        this.closeChannel();
         this.nextChannel = Date.now() + retryDelay(this.channelFailures++);
         this.nextRenew = 0;
         this.update({
@@ -844,6 +853,7 @@ export class AccountSessionManager {
       },
     });
     this.channel = channel;
+    this.confirmedHosts.clear();
     this.update({ status: "connecting", stale: true });
     channel.start();
   }

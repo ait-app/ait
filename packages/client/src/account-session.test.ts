@@ -1,4 +1,4 @@
-import { channelFixture } from "../test/account-channel.js";
+import { channelFixture, welcome } from "../test/account-channel.js";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import {
   AccountSessionManager,
@@ -87,7 +87,7 @@ describe("account center domain migration", () => {
   );
 });
 
-function fixture() {
+function fixture(autoChannel = true) {
   vi.useFakeTimers();
   const host = {
     online: true,
@@ -100,7 +100,7 @@ function fixture() {
     platform: "linux",
     relay_modes: ["ait-rust-single-v1"],
   };
-  const channel = channelFixture(() => [host]);
+  const channel = channelFixture(() => [host], autoChannel);
   let leaseExpired = false;
   const http = vi.fn(async (url: string | URL | Request, _options?: RequestInit) => {
     const path = String(url);
@@ -1121,3 +1121,36 @@ describe("account status channel", () => {
     await manager.logout();
   });
 });
+
+it.each(["disconnect", "suspend", "logout"])(
+  "invalidates individually confirmed Hosts on %s before a full snapshot",
+  async (action) => {
+    const { manager, login, channel, host } = fixture(false);
+    await login();
+    const socket = channel.sockets[0]!;
+    socket.receive(welcome);
+    const online = {
+      type: "node.online",
+      node_id: host.node_id,
+      node_session_id: "s",
+      host_id: host.host_id,
+      host,
+      observed_at: "now",
+    };
+    socket.receive(online);
+    expect(manager.snapshot()).toMatchObject({
+      status: "connecting",
+      stale: true,
+      confirmedHostIds: [host.host_id],
+    });
+    manager.snapshot().confirmedHostIds!.push("untrusted");
+    expect(manager.snapshot().confirmedHostIds).toEqual([host.host_id]);
+    if (action === "disconnect") socket.disconnect();
+    else if (action === "suspend") manager.suspend();
+    else await manager.logout();
+    expect(manager.snapshot()).toMatchObject({ stale: true, confirmedHostIds: [] });
+    socket.receive(online);
+    expect(manager.snapshot().confirmedHostIds).toEqual([]);
+    await manager.logout();
+  },
+);

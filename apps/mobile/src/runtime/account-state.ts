@@ -21,6 +21,7 @@ export interface AccountState {
   hostOnline: boolean;
   hosts: AccountHost[];
   stale: boolean;
+  confirmedHostIds?: string[];
   error: string | null;
   selected: AccountHost | null;
   synchronizedHosts?: string[];
@@ -73,10 +74,17 @@ async function receiveAccountSnapshot(
   await store.boot();
   const current = () => sequence === snapshotSequence && (isActive?.() ?? true);
   if (!current()) return;
-  if (snapshot.status === "online") {
+  const active = snapshot.status === "online" || snapshot.status === "connecting";
+  const confirmed = new Set(snapshot.confirmedHostIds ?? []);
+  const freshHosts = active
+    ? snapshot.hosts.filter(
+        (host) => (snapshot.status === "online" && !snapshot.stale) || confirmed.has(host.host_id),
+      )
+    : [];
+  if (snapshot.status === "online" || (active && freshHosts.length > 0)) {
     store.setAccountRelayCenter(snapshot.center);
     await store.addDiscoveredAccountRelayHosts(
-      snapshot.hosts.filter((host): host is AccountHost & { server_id: string } =>
+      freshHosts.filter((host): host is AccountHost & { server_id: string } =>
         Boolean(host.server_id),
       ),
       snapshot.center,
@@ -85,16 +93,14 @@ async function receiveAccountSnapshot(
   } else if (snapshot.status === "logged_out") store.setAccountRelayCenter(null);
   if (current()) {
     store.setAvailableAccountRelayHosts(
-      snapshot.status === "online" && !snapshot.stale
-        ? snapshot.hosts.flatMap((host) =>
-            host.online &&
-            host.server_id &&
-            host.instance_id &&
-            host.relay_modes.includes("ait-rust-single-v1")
-              ? [host.server_id]
-              : [],
-          )
-        : [],
+      freshHosts.flatMap((host) =>
+        host.online &&
+        host.server_id &&
+        host.instance_id &&
+        host.relay_modes.includes("ait-rust-single-v1")
+          ? [host.server_id]
+          : [],
+      ),
     );
   }
 }
