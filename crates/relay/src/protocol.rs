@@ -67,7 +67,11 @@ impl<'a> ControlHello<'a> {
 pub(super) enum ControlWelcome {
     /// Accepted routing generation for subsequent commands.
     #[serde(rename = "control.welcome")]
-    Welcome { epoch: Uuid },
+    Welcome {
+        epoch: Uuid,
+        #[serde(default)]
+        supported_tunnel_protocols: Vec<String>,
+    },
 }
 
 /// Commands admitted after the control handshake.
@@ -80,6 +84,31 @@ pub(super) enum ControlCommand {
     /// Cancel an existing reverse data connection.
     #[serde(rename = "cancel_session")]
     CancelSession { relay_session_id: Uuid },
+    /// One-use ticket for the optional data tunnel requested by this Host.
+    #[serde(rename = "tunnel.grant")]
+    TunnelGrant(TunnelGrant),
+    /// Rejected tunnel request; does not invalidate the healthy control connection.
+    #[serde(rename = "tunnel.error")]
+    TunnelError { request_id: Uuid },
+}
+
+/// Center-issued ticket and generation, with the ticket redacted in diagnostics.
+#[derive(Debug, Deserialize)]
+pub(super) struct TunnelGrant {
+    pub(super) request_id: Uuid,
+    pub(super) protocol: String,
+    pub(super) epoch: Uuid,
+    pub(super) tunnel_id: Uuid,
+    pub(super) tunnel_ticket: SecretString,
+}
+
+/// Opt-in request sent only after the center advertises the exact supported protocol.
+#[derive(Debug, Serialize)]
+#[serde(tag = "type", rename = "tunnel.request")]
+pub(super) struct TunnelRequest {
+    pub(super) request_id: Uuid,
+    pub(super) protocol: &'static str,
+    pub(super) epoch: Uuid,
 }
 
 /// A data grant whose mode determines which additional credentials are required.
