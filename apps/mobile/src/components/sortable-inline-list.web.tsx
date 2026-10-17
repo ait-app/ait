@@ -3,7 +3,8 @@ import {
   DndContext,
   closestCenter,
   KeyboardSensor,
-  PointerSensor,
+  MouseSensor,
+  TouchSensor,
   type Modifier,
   useSensor,
   useSensors,
@@ -151,9 +152,15 @@ export function SortableInlineList<T>({
   const activeId = externalDndContext ? externalActiveId : internalActiveId;
 
   const sensors = useSensors(
-    useSensor(PointerSensor, {
+    useSensor(MouseSensor, {
       activationConstraint: {
         distance: activationDistance,
+      },
+    }),
+    useSensor(TouchSensor, {
+      activationConstraint: {
+        delay: 250,
+        tolerance: 8,
       },
     }),
     useSensor(KeyboardSensor, {
