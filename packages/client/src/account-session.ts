@@ -142,6 +142,7 @@ export class AccountSessionManager {
   private generation = 0;
   private timer: ReturnType<typeof setTimeout> | null = null;
   private running: Promise<void> | null = null;
+  private tickRequested = false;
   private requests = new Set<AbortController>();
   private nextRenew = 0;
   private channel: AccountChannel | null = null;
@@ -152,6 +153,7 @@ export class AccountSessionManager {
   private nextControl = 0;
   private nextRegistration = 0;
   private registrationFailures = 0;
+  private leaseRecoveryAttempted = false;
   private publications = new Map<string, HostPublication>();
   private closing = false;
   private state: AccountSnapshot = {
@@ -361,6 +363,7 @@ export class AccountSessionManager {
     this.runtimeInstance = null;
     this.nextControl = this.nextChannel = this.nextRenew = this.nextRegistration = 0;
     this.controlFailures = this.channelFailures = this.registrationFailures = 0;
+    this.leaseRecoveryAttempted = false;
     await this.running?.catch(() => undefined);
     await this.deps.local("DELETE").catch(() => undefined);
     if (account && node) {
@@ -419,8 +422,10 @@ export class AccountSessionManager {
   }
 
   refresh(): void {
-    this.channel?.refresh();
+    this.channel?.refresh({ verify: true });
     this.nextChannel = 0;
+    this.nextRegistration = 0;
+    this.nextRenew = 0;
     this.schedule(0);
   }
 
@@ -631,16 +636,18 @@ export class AccountSessionManager {
 
   private schedule(delay: number): void {
     if (this.closing || ((!this.account || this.suspended) && !this.publications.size)) return;
+    if (this.running) {
+      if (delay === 0) this.tickRequested = true;
+      return;
+    }
     if (this.timer) clearTimeout(this.timer);
     this.timer = setTimeout(() => {
       this.timer = null;
-      if (this.running) {
-        this.schedule(1000);
-        return;
-      }
       this.running = this.tick().finally(() => {
         this.running = null;
-        this.schedule(2000);
+        const delay = this.tickRequested ? 0 : 2000;
+        this.tickRequested = false;
+        this.schedule(delay);
       });
     }, delay);
     this.timer.unref?.();
@@ -701,6 +708,8 @@ export class AccountSessionManager {
       if (generation !== this.generation || !this.node) return;
       if (Date.now() >= this.nextRenew) {
         await this.api(`/v1/node-sessions/${this.node.node_session_id}/renew`, "POST");
+        if (generation !== this.generation) return;
+        this.leaseRecoveryAttempted = false;
         this.nextRenew = Date.now() + 20_000;
       }
       if (this.node.control_required && instance && Date.now() >= this.nextControl) {
@@ -724,13 +733,19 @@ export class AccountSessionManager {
       }
     } catch (error) {
       if (generation !== this.generation) return;
+      let registerImmediately = false;
       if (
         error instanceof AccountError &&
         ["node_session_expired", "registration_expired"].includes(error.code)
       ) {
+        // An expired existing lease is expected after suspension. Register once
+        // immediately; a failed registration still uses the normal backoff.
+        registerImmediately = this.node !== null && !this.leaseRecoveryAttempted;
+        this.leaseRecoveryAttempted = true;
         this.closeChannel();
         this.deps.closeTransports();
         await this.deps.local("DELETE").catch(() => undefined);
+        if (generation !== this.generation) return;
         this.node = null;
         this.runtimeInstance = null;
         this.registrationId = this.deps.randomUUID();
@@ -743,7 +758,13 @@ export class AccountSessionManager {
           });
         });
       }
-      if (!this.node) this.nextRegistration = Date.now() + retryDelay(this.registrationFailures++);
+      if (registerImmediately) {
+        this.nextRegistration = 0;
+        this.registrationFailures = 0;
+        this.schedule(0);
+      } else if (!this.node) {
+        this.nextRegistration = Date.now() + retryDelay(this.registrationFailures++);
+      }
       this.confirmedHosts.clear();
       this.update({
         status: "error",
@@ -791,6 +812,7 @@ export class AccountSessionManager {
     const channel = new AccountChannel(transport, {
       snapshot: (hosts) => {
         if (this.channel !== channel) return;
+        this.leaseRecoveryAttempted = false;
         this.channelFailures = 0;
         this.confirmedHosts.clear();
         const visible = hosts.filter(
@@ -839,10 +861,10 @@ export class AccountSessionManager {
           selected: hosts.find((host) => host.host_id === this.state.selected?.host_id) ?? null,
         });
       },
-      failed: () => {
+      failed: (recoverImmediately) => {
         if (this.channel !== channel) return;
         this.closeChannel();
-        this.nextChannel = Date.now() + retryDelay(this.channelFailures++);
+        this.nextChannel = recoverImmediately ? 0 : Date.now() + retryDelay(this.channelFailures++);
         this.nextRenew = 0;
         this.update({
           status: "error",

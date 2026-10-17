@@ -254,7 +254,7 @@ describe("account activation", () => {
   });
 });
 
-it("connects the desktop status adapter to a real ticket-authenticated control socket", async () => {
+it("verifies and recovers the desktop status adapter over a real ticket-authenticated socket", async () => {
   const { WebSocketServer } = await import("ws");
   const { once } = await import("node:events");
   const context = fixture();
@@ -268,6 +268,7 @@ it("connects the desktop status adapter to a real ticket-authenticated control s
   const center = `http://127.0.0.1:${address.port}/api`;
   const upgrade = vi.fn();
   const received = vi.fn();
+  let answerHeartbeats = true;
   server.on("connection", (socket, request) => {
     upgrade(request.url, request.headers.authorization, request.headers["sec-websocket-protocol"]);
     socket.send(
@@ -285,7 +286,7 @@ it("connects the desktop status adapter to a real ticket-authenticated control s
       );
     socket.on("message", (data) => {
       received(JSON.parse(data.toString()));
-      snapshot();
+      if (answerHeartbeats) snapshot();
     });
     snapshot();
   });
@@ -298,9 +299,17 @@ it("connects the desktop status adapter to a real ticket-authenticated control s
       undefined,
     );
     expect(manager.snapshot().hosts).toEqual([context.host]);
+    context.host.name = "Verified host";
     manager.refresh();
     await vi.waitFor(() => expect(received).toHaveBeenCalledWith({ type: "channel.heartbeat" }));
+    await vi.waitFor(() => expect(manager.snapshot().hosts[0]?.name).toBe("Verified host"));
     expect(received).not.toHaveBeenCalledWith(expect.objectContaining({ type: "control.hello" }));
+    expect(upgrade).toHaveBeenCalledOnce();
+    answerHeartbeats = false;
+    manager.refresh();
+    await vi.waitFor(() => expect(upgrade).toHaveBeenCalledTimes(2), { timeout: 4_000 });
+    await vi.waitFor(() => expect(manager.snapshot().stale).toBe(false));
+    expect(manager.snapshot().hosts).toEqual([context.host]);
   } finally {
     await manager.shutdown();
     await new Promise<void>((resolve, reject) =>

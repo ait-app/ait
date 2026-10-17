@@ -2091,6 +2091,66 @@ test("keeps default connect timeout shorter than session RPC waiters", async () 
   }
 });
 
+test.each([true, false])(
+  "foreground recovery replaces a stalled handshake (automatic reconnect=%s)",
+  async (enabled) => {
+    useHeartbeatClock();
+    const first = createMockTransport();
+    const second = createMockTransport();
+    const closed = vi.spyOn(first.transport, "close");
+    const factory = vi.fn().mockReturnValueOnce(first.transport).mockReturnValue(second.transport);
+    const client = new DaemonClient({
+      url: "ws://test",
+      clientId: "stalled-resume",
+      logger: noopLogger,
+      connectTimeoutMs: 45_000,
+      reconnect: { enabled },
+      transportFactory: factory,
+    });
+    clients.push(client);
+    const connection = client.connect();
+    await vi.advanceTimersByTimeAsync(10_000);
+    client.ensureConnected();
+    expect(factory).toHaveBeenCalledOnce();
+    client.ensureConnected({ verify: true });
+    client.ensureConnected({ verify: true });
+    expect(factory).toHaveBeenCalledTimes(2);
+    expect(closed).toHaveBeenCalledOnce();
+    // Adapters may already have queued callbacks even after listener removal.
+    first.triggerOpen();
+    first.triggerError(new Error("obsolete failure"));
+    first.triggerClose({ code: 1006 });
+    expect(second.sent).toEqual([]);
+    expect(client.getConnectionState().status).toBe("connecting");
+    second.triggerOpen();
+    await connection;
+    await vi.advanceTimersByTimeAsync(45_000);
+    expect(factory).toHaveBeenCalledTimes(2);
+    expect(client.getConnectionState().status).toBe("connected");
+  },
+);
+
+test("foreground recovery lets a fresh handshake finish normally", async () => {
+  useHeartbeatClock();
+  const socket = createMockTransport();
+  const factory = vi.fn(() => socket.transport);
+  const client = new DaemonClient({
+    url: "ws://test",
+    clientId: "fresh-resume",
+    logger: noopLogger,
+    transportFactory: factory,
+  });
+  clients.push(client);
+  const connection = client.connect();
+  await vi.advanceTimersByTimeAsync(2_999);
+  client.ensureConnected({ verify: true });
+  client.ensureConnected({ verify: true });
+  expect(factory).toHaveBeenCalledOnce();
+  socket.triggerOpen();
+  await connection;
+  expect(client.getConnectionState().status).toBe("connected");
+});
+
 test("foreground verification replaces a silently broken socket without waiting for heartbeats", async () => {
   useHeartbeatClock();
   const first = new FakeDaemon();

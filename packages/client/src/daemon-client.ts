@@ -1151,6 +1151,7 @@ export class DaemonClient {
   private connectionListeners: Set<(status: ConnectionState) => void> = new Set();
   private reconnectTimeout: ReturnType<typeof setTimeout> | null = null;
   private connectTimeout: ReturnType<typeof setTimeout> | null = null;
+  private connectStartedAt = 0;
   private pendingGenericTransportErrorTimeout: ReturnType<typeof setTimeout> | null = null;
   private reconnectAttempt = 0;
   private shouldReconnect = true;
@@ -1294,6 +1295,7 @@ export class DaemonClient {
         ...(protocols ? { protocols } : {}),
       });
       this.transport = transport;
+      this.connectStartedAt = Date.now();
       this.lastServerInfoMessage = null;
 
       this.updateConnectionState(
@@ -1306,7 +1308,7 @@ export class DaemonClient {
       this.resetConnectTimeout();
       const timeoutMs = Math.max(1, this.config.connectTimeoutMs ?? DEFAULT_CONNECT_TIMEOUT_MS);
       this.connectTimeout = setTimeout(() => {
-        if (this.connectionState.status !== "connecting") {
+        if (this.transport !== transport || this.connectionState.status !== "connecting") {
           return;
         }
         this.lastErrorValue = "Connection timed out";
@@ -1320,6 +1322,7 @@ export class DaemonClient {
 
       this.transportCleanup = [
         transport.onOpen(() => {
+          if (this.transport !== transport) return;
           if (this.pendingGenericTransportErrorTimeout) {
             clearTimeout(this.pendingGenericTransportErrorTimeout);
             this.pendingGenericTransportErrorTimeout = null;
@@ -1328,6 +1331,7 @@ export class DaemonClient {
           this.sendHelloMessage();
         }),
         transport.onClose((event) => {
+          if (this.transport !== transport) return;
           this.resetConnectTimeout();
           if (this.pendingGenericTransportErrorTimeout) {
             clearTimeout(this.pendingGenericTransportErrorTimeout);
@@ -1344,6 +1348,7 @@ export class DaemonClient {
           });
         }),
         transport.onError((event) => {
+          if (this.transport !== transport) return;
           this.resetConnectTimeout();
           const reason = describeTransportError(event);
           const isGeneric = reason === "Transport error";
@@ -1462,7 +1467,19 @@ export class DaemonClient {
       if (options?.verify) this.verifyConnection();
       return;
     }
-    if (this.connectionState.status === "connecting") return;
+    if (this.connectionState.status === "connecting") {
+      // A pre-suspension handshake can remain pending until the long relay timeout.
+      // Explicit recovery retries it immediately, but leaves a fresh attempt alone
+      // when focus, app-state and network events arrive together.
+      if (!options?.verify || Date.now() - this.connectStartedAt < 3_000) return;
+      this.disposeTransport(1001, "Retrying connection after resume");
+      this.emitDisconnectedStateForReconnect("Retrying connection after resume", {
+        event: "CONNECTION_RECOVERY",
+        reasonCode: "connect_timeout",
+      });
+      this.attemptConnect();
+      return;
+    }
     if (this.connectPromise) {
       this.attemptConnect();
       return;

@@ -535,7 +535,7 @@ describe("client-only account lifecycle", () => {
     expect(deps.closeTransports).toHaveBeenCalled();
     expireLease();
     manager.resume();
-    await vi.advanceTimersByTimeAsync(8000);
+    await vi.advanceTimersByTimeAsync(10);
     expect(http.mock.calls.filter(([url]) => String(url).endsWith("/nodes/register"))).toHaveLength(
       2,
     );
@@ -545,6 +545,94 @@ describe("client-only account lifecycle", () => {
       selected: { host_id: "remote" },
     });
     await manager.logout();
+  });
+
+  it("keeps registration backoff when recovery of an expired lease fails", async () => {
+    const { manager, http, login, expireLease } = fixture();
+    await login();
+    const original = http.getMockImplementation()!;
+    http.mockImplementation((url, options) =>
+      String(url).endsWith("/nodes/register")
+        ? Promise.resolve(
+            Response.json({ error: { code: "registration_expired" } }, { status: 409 }),
+          )
+        : original(url, options),
+    );
+    expireLease();
+    manager.resume();
+    await vi.advanceTimersByTimeAsync(10);
+    const registrations = () =>
+      http.mock.calls.filter(([url]) => String(url).endsWith("/nodes/register"));
+    expect(registrations()).toHaveLength(2);
+    await vi.advanceTimersByTimeAsync(500);
+    expect(registrations()).toHaveLength(2);
+    expect(manager.snapshot().status).toBe("error");
+    await manager.shutdown();
+  });
+
+  it("backs off when the service repeatedly rejects newly registered leases", async () => {
+    const { manager, http, login, channel } = fixture();
+    const original = http.getMockImplementation()!;
+    http.mockImplementation((url, options) =>
+      String(url).endsWith("/channel-tickets")
+        ? Promise.resolve(
+            Response.json({ error: { code: "node_session_expired" } }, { status: 401 }),
+          )
+        : original(url, options),
+    );
+    await login();
+    await vi.advanceTimersByTimeAsync(500);
+    expect(http.mock.calls.filter(([url]) => String(url).endsWith("/nodes/register"))).toHaveLength(
+      2,
+    );
+    expect(channel.create).not.toHaveBeenCalled();
+    expect(manager.snapshot().status).toBe("error");
+    await manager.shutdown();
+  });
+
+  it("coalesces recovery requested during an in-flight tick and runs it without the polling delay", async () => {
+    const { manager, http, login, channel } = fixture();
+    const original = http.getMockImplementation()!;
+    let resolve!: (value: Response) => void;
+    http.mockImplementation((url, options) =>
+      String(url).endsWith("/channel-tickets")
+        ? new Promise((done) => {
+            resolve = done;
+          })
+        : original(url, options),
+    );
+    await login();
+    manager.resume();
+    manager.refresh();
+    await vi.advanceTimersByTimeAsync(1);
+    expect(channel.create).not.toHaveBeenCalled();
+    resolve(
+      Response.json({
+        channel_ticket: "fresh",
+        channel_path: "/v1/relay/channel",
+        protocol: "ait-channel-v1",
+      }),
+    );
+    await vi.advanceTimersByTimeAsync(10);
+    expect(channel.create).toHaveBeenCalledOnce();
+    expect(http.mock.calls.filter(([url]) => String(url).endsWith("/renew"))).toHaveLength(1);
+    expect(manager.snapshot().stale).toBe(false);
+    await manager.shutdown();
+  });
+
+  it("replaces a silent foreground status channel without adding normal retry backoff", async () => {
+    const { manager, login, channel } = fixture();
+    await login();
+    const old = channel.sockets[0]!;
+    old.reply = false;
+    manager.resume();
+    await vi.advanceTimersByTimeAsync(2_000);
+    manager.refresh();
+    await vi.advanceTimersByTimeAsync(1_010);
+    expect(old.transport.close).toHaveBeenCalledOnce();
+    expect(channel.create).toHaveBeenCalledTimes(2);
+    expect(manager.snapshot()).toMatchObject({ status: "online", stale: false });
+    await manager.shutdown();
   });
 
   it("restores a valid saved account and releases the previous activation before registering", async () => {
