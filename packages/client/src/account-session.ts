@@ -47,8 +47,6 @@ export interface AccountSnapshot {
   stale: boolean;
   error: string | null;
   selected: AccountHost | null;
-  /** Observed node presence; distinct from Host routability. Reset on reconnect. */
-  nodes?: Record<string, boolean>;
   /** Independently maintained daemon leases; contains no credentials. */
   synchronizedHosts?: string[];
   accountExpiresAt?: string | null;
@@ -175,7 +173,6 @@ export class AccountSessionManager {
     });
     return {
       ...this.state,
-      nodes: { ...this.state.nodes },
       hosts: this.state.hosts.map(cloneHost),
       selected: this.state.selected ? cloneHost(this.state.selected) : null,
       synchronizedHosts: [...this.publications.keys()],
@@ -384,7 +381,6 @@ export class AccountSessionManager {
       accountExpiresAt: null,
       hostOnline: false,
       hosts: [],
-      nodes: {},
       stale: true,
       error: null,
       selected: null,
@@ -801,17 +797,35 @@ export class AccountSessionManager {
           error: null,
         });
       },
-      node: (nodeId, online) => {
-        if (this.channel !== channel) return;
-        const hosts = online
-          ? this.state.hosts
-          : this.state.hosts.map((host) =>
-              host.node_id === nodeId
-                ? { ...host, online: false, instance_id: null, relay_modes: [] }
-                : host,
-            );
+      online: (host) => {
+        if (
+          this.channel !== channel ||
+          host.host_id === node.host_id ||
+          host.node_id === node.node_id
+        )
+          return;
+        const hosts = this.state.hosts.filter((entry) => entry.host_id !== host.host_id);
+        hosts.push(host);
+        hosts.sort((left, right) => left.host_id.localeCompare(right.host_id));
         this.update({
-          nodes: { ...this.state.nodes, [nodeId]: online },
+          hosts,
+          selected: hosts.find((entry) => entry.host_id === this.state.selected?.host_id) ?? null,
+        });
+      },
+      offline: (hostId, observedAt) => {
+        if (this.channel !== channel) return;
+        const hosts = this.state.hosts.map((host) =>
+          host.host_id === hostId
+            ? {
+                ...host,
+                online: false,
+                instance_id: null,
+                relay_modes: [],
+                offline_since: host.offline_since ?? observedAt,
+              }
+            : host,
+        );
+        this.update({
           hosts,
           selected: hosts.find((host) => host.host_id === this.state.selected?.host_id) ?? null,
         });
@@ -830,7 +844,7 @@ export class AccountSessionManager {
       },
     });
     this.channel = channel;
-    this.update({ status: "connecting", nodes: {}, stale: true });
+    this.update({ status: "connecting", stale: true });
     channel.start();
   }
 

@@ -181,7 +181,7 @@ relay 拥有控制方法声明和处理，API 的 HTTP 路由与 WebSocket RPC �
 本机、TCP 和 SSH 主机使用相同同步流程，详见 [ADR-083](../decisions/clients/adr-083-online-service-host-sync.md)。Desktop 登录后默认同步内置 daemon，手动停止的选择由桌面账户存储持久保存；其他主机仍需手动启用，详见 [ADR-096](../decisions/clients/adr-096-desktop-default-host-sync.md)。
 
 账户会话状态机位于 `packages/client`，通过依赖注入获取平台身份、存储、HTTP、WebSocket 和运行时操作。
-账号状态通过客户端节点的 `/v1/relay/channel`（`ait-channel-v1`）连接推送完整 Host 快照与节点事件，daemon 的 `/v1/relay/control` 独立维护 Host 控制，应用心跳和独立节点续租分别维护连接活跃及授权；重连、离线缓存和各端票据认证见 [ADR-154](../decisions/clients/adr-154-account-status-channel.md)。
+账号状态通过客户端节点的 `/v1/relay/channel`（`ait-channel-v1`）连接推送完整 Host 快照与Host 可连接状态事件，daemon 的 `/v1/relay/control` 独立维护 Host 控制，应用心跳和独立节点续租分别维护连接活跃及授权；重连、离线缓存和各端票据认证见 [ADR-154](../decisions/clients/adr-154-account-status-channel.md)。
 Electron 主进程提供桌面适配；Android 和 iOS 的原生适配使用 SecureStore 保存账户令牌，注册无本地
 运行时的客户端节点。移动端通过带认证头的原生 WebSocket 建立中继连接与下载。完整快照中已绑定 server ID 的
 在线服务主机进入客户端持久注册表，账户恢复后按服务地址独立连接；离线记录保留，未绑定 runtime 的记录不生成连接。

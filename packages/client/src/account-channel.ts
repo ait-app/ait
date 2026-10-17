@@ -29,9 +29,21 @@ const snapshotSchema = z.object({ hosts: z.array(hostSchema), observed_at: z.str
 const nodeSchema = z.object({
   node_id: z.string(),
   node_session_id: z.string(),
-  host_id: z.string().nullable(),
+  host_id: z.string(),
   observed_at: z.string(),
 });
+
+const onlineSchema = nodeSchema
+  .extend({
+    host: hostSchema.extend({
+      online: z.literal(true),
+      node_id: z.string().min(1),
+      server_id: z.string().min(1),
+      instance_id: z.string().min(1),
+      relay_modes: z.array(z.string()).min(1),
+    }),
+  })
+  .refine((event) => event.host.host_id === event.host_id && event.host.node_id === event.node_id);
 
 /** One ticket-authenticated status connection; the account manager owns reconnects and leases. */
 export class AccountChannel {
@@ -48,7 +60,8 @@ export class AccountChannel {
     private readonly transport: DaemonTransport,
     private readonly handlers: {
       snapshot(hosts: ChannelHost[]): void;
-      node(nodeId: string, online: boolean): void;
+      online(host: ChannelHost): void;
+      offline(hostId: string, observedAt: string): void;
       failed(): void;
     },
   ) {}
@@ -117,9 +130,13 @@ export class AccountChannel {
       } else if (type === "hosts.snapshot") {
         if (!this.welcomed) throw new Error("Missing channel welcome");
         this.handlers.snapshot(snapshotSchema.parse(message).hosts);
-      } else if (type === "node.online" || type === "node.offline") {
+      } else if (type === "node.online") {
         if (!this.welcomed) throw new Error("Missing channel welcome");
-        this.handlers.node(nodeSchema.parse(message).node_id, type === "node.online");
+        this.handlers.online(onlineSchema.parse(message).host);
+      } else if (type === "node.offline") {
+        if (!this.welcomed) throw new Error("Missing channel welcome");
+        const event = nodeSchema.parse(message);
+        this.handlers.offline(event.host_id, event.observed_at);
       }
       // Unknown server event types are deliberately ignored for forward compatibility.
       if (this.welcomed) this.deadline = Date.now() + this.timeout;

@@ -8,7 +8,7 @@ function fixture(auto = true) {
   vi.useFakeTimers();
   const sockets = channelFixture(() => [], auto);
   const transport = sockets.create({ url: "wss://example.test/api/v1/relay/channel" });
-  const handlers = { snapshot: vi.fn(), node: vi.fn(), failed: vi.fn() };
+  const handlers = { snapshot: vi.fn(), online: vi.fn(), offline: vi.fn(), failed: vi.fn() };
   const channel = new AccountChannel(transport, handlers);
   channel.start();
   return { channel, handlers, socket: sockets.sockets[0]! };
@@ -43,11 +43,24 @@ it("ignores future server events and accepts node events before the first snapsh
     type: "node.online",
     node_id: "node",
     node_session_id: "session",
-    host_id: null,
+    host_id: "host",
+    host: {
+      host_id: "host",
+      node_id: "node",
+      server_id: "server",
+      instance_id: "instance",
+      name: "New host",
+      platform: "linux",
+      online: true,
+      status: "offline",
+      relay_modes: ["ait-rust-single-v1"],
+    },
     observed_at: "old",
   });
   expect(handlers.failed).not.toHaveBeenCalled();
-  expect(handlers.node).toHaveBeenCalledWith("node", true);
+  expect(handlers.online).toHaveBeenCalledWith(
+    expect.objectContaining({ host_id: "host", online: true, instance_id: "instance" }),
+  );
   expect(handlers.snapshot).not.toHaveBeenCalled();
   channel.close();
 });
@@ -80,5 +93,39 @@ it("times out a connection that never sends welcome, despite unknown messages", 
   socket.receive({ type: "future.event" });
   await vi.advanceTimersByTimeAsync(10_000);
   expect(handlers.failed).toHaveBeenCalledOnce();
+  channel.close();
+});
+
+it.each([
+  { online: false },
+  { instance_id: null },
+  { server_id: null },
+  { relay_modes: [] },
+  { host_id: "wrong" },
+  { node_id: "wrong" },
+])("rejects online events without a consistent usable route: %j", (invalid) => {
+  const { channel, handlers, socket } = fixture();
+  socket.receive(welcome);
+  socket.receive({
+    type: "node.online",
+    node_id: "node",
+    node_session_id: "session",
+    host_id: "host",
+    observed_at: "old",
+    host: {
+      host_id: "host",
+      node_id: "node",
+      server_id: "server",
+      instance_id: "instance",
+      name: "Host",
+      platform: "linux",
+      online: true,
+      status: "offline",
+      relay_modes: ["ait-rust-single-v1"],
+      ...invalid,
+    },
+  });
+  expect(handlers.failed).toHaveBeenCalledOnce();
+  expect(handlers.online).not.toHaveBeenCalled();
   channel.close();
 });

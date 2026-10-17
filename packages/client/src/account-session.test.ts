@@ -974,7 +974,7 @@ describe("account status channel", () => {
     await manager.logout();
   });
 
-  it("replaces full snapshots including offline and unbound hosts and distinguishes node presence", async () => {
+  it("applies route events immediately while retaining offline and unbound hosts", async () => {
     const { manager, login, channel, host } = fixture();
     await login();
     await manager.select("remote");
@@ -996,11 +996,12 @@ describe("account status channel", () => {
       node_id: "other",
       node_session_id: "s",
       host_id: "remote",
+      host,
       observed_at: "old",
     });
-    expect(manager.snapshot().nodes).toEqual({ other: true });
-    expect(manager.snapshot().hosts[0]?.online).toBe(false);
-    socket.snapshot();
+    expect(manager.snapshot().hosts.find((entry) => entry.host_id === "remote")).toEqual(host);
+    expect(manager.snapshot().selected).toEqual(host);
+    await expect(manager.select("remote")).resolves.toBeDefined();
     socket.receive({
       type: "node.offline",
       node_id: "other",
@@ -1008,7 +1009,36 @@ describe("account status channel", () => {
       host_id: "remote",
       observed_at: "old",
     });
-    expect(manager.snapshot().hosts[0]).toMatchObject({ online: false, instance_id: null });
+    expect(manager.snapshot().hosts.find((entry) => entry.host_id === "remote")).toMatchObject({
+      online: false,
+      instance_id: null,
+    });
+    await expect(manager.select("remote")).rejects.toThrow("offline");
+    // A previously unknown Host must also become selectable from the event alone.
+    const added = { ...host, host_id: "new-host", node_id: "new-node" };
+    socket.receive({
+      type: "node.online",
+      node_id: added.node_id,
+      node_session_id: "new-session",
+      host_id: added.host_id,
+      host: added,
+      observed_at: "new",
+    });
+    expect(manager.snapshot().hosts.find((entry) => entry.host_id === added.host_id)).toEqual(
+      added,
+    );
+    await expect(manager.select(added.host_id)).resolves.toBeDefined();
+    socket.receive({
+      type: "node.online",
+      node_id: added.node_id,
+      node_session_id: "new-session",
+      host_id: added.host_id,
+      host: added,
+      observed_at: "new",
+    });
+    expect(
+      manager.snapshot().hosts.filter((entry) => entry.host_id === added.host_id),
+    ).toHaveLength(1);
     socket.receive({ type: "hosts.snapshot", hosts: [], observed_at: "old" });
     expect(manager.snapshot()).toMatchObject({ hosts: [], selected: null });
     await manager.logout();
