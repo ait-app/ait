@@ -232,7 +232,7 @@ async fn native_discovery_and_read_only_history_use_real_stdio_without_model_cal
         ]
     );
     assert_eq!(details.features[0]["icon"], "zap");
-    assert_eq!(details.features[0]["tooltip"], "Select speed");
+    assert_eq!(details.features[0]["tooltip"], "Toggle fast mode");
     let mut session = client.create_session(&fixture.spec()).await.unwrap();
     let handle = session.persistence().unwrap();
     session

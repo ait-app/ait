@@ -90,6 +90,8 @@ import {
 import { ComposerControlLayoutProvider } from "@/composer/agent-controls/layout-context";
 import { ComposerToolbarGlyph } from "@/composer/agent-controls/glyph";
 import { AgentControlTrigger } from "@/composer/agent-controls/control";
+import { SpeedToggle } from "@/composer/agent-controls/speed-toggle";
+import { SPEED_FEATURE_ID } from "@/agent-controls/policy";
 import { CompactModelSheet } from "@/composer/agent-controls/model-sheet";
 import {
   useAgentProfileEditor,
@@ -1358,6 +1360,18 @@ function DesktopFeatureItem({
     [feature],
   );
 
+  if (feature.type === "select" && feature.id === SPEED_FEATURE_ID) {
+    return (
+      <SpeedToggle
+        feature={feature}
+        surface="toolbar"
+        disabled={disabled}
+        onSetFeature={onSetFeature}
+        onActionComplete={onActionComplete}
+      />
+    );
+  }
+
   if (feature.type === "toggle") {
     const FeatureIcon = getAgentFeatureIcon(feature.icon);
     return (
@@ -1481,6 +1495,17 @@ function SheetFeatureItem({
       { id: "false", label: t("agentControls.features.off") },
     ];
   }, [feature, t]);
+
+  if (feature.type === "select" && feature.id === SPEED_FEATURE_ID) {
+    return (
+      <SpeedToggle
+        feature={feature}
+        surface="sheet"
+        disabled={disabled}
+        onSetFeature={onSetFeature}
+      />
+    );
+  }
 
   if (feature.type === "toggle") {
     const FeatureIcon = getAgentFeatureIcon(feature.icon);

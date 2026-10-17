@@ -53,6 +53,37 @@ fn append(options: &mut Vec<Value>, id: &str, label: &str) {
     }
 }
 
+fn canonical_tier(tier: &str) -> &str {
+    match tier {
+        "priority" => "fast",
+        _ => tier,
+    }
+}
+
+fn display_options(options: &[Value]) -> Vec<Value> {
+    let mut display = Vec::with_capacity(options.len());
+    let mut fast_seen = false;
+    for option in options {
+        let Some(id) = option["id"].as_str() else {
+            continue;
+        };
+        let id = canonical_tier(id);
+        if id == "fast" {
+            if fast_seen {
+                continue;
+            }
+            fast_seen = true;
+        }
+        let mut option = option.clone();
+        option["id"] = json!(id);
+        if id == "fast" {
+            option["label"] = json!("Fast");
+        }
+        display.push(option);
+    }
+    display
+}
+
 /// Read the explicit speed first, retaining compatibility with persisted Fast toggles.
 pub(super) fn selected(config: &StoredAgentConfig) -> &str {
     config
@@ -60,13 +91,16 @@ pub(super) fn selected(config: &StoredAgentConfig) -> &str {
         .as_ref()
         .and_then(|values| values.get("service_tier"))
         .and_then(Value::as_str)
-        .unwrap_or_else(|| {
-            if super::controls::fast(config) {
-                "fast"
-            } else {
-                "default"
-            }
-        })
+        .map_or_else(
+            || {
+                if super::controls::fast(config) {
+                    "fast"
+                } else {
+                    "default"
+                }
+            },
+            canonical_tier,
+        )
 }
 
 /// Reject tiers absent from the selected model's native catalog.
@@ -86,30 +120,25 @@ pub(super) fn validate(
     }
 }
 
-/// Present a speed selector only when the native model advertises an additional tier.
+/// Present canonical speed values while retaining native tier IDs in the transport catalog.
 pub(super) fn feature(config: &StoredAgentConfig, options: &[Value]) -> Option<Value> {
     if options.len() <= 1 {
         return None;
     }
     let selected = selected(config);
-    let value = if selected == "fast"
-        && !options.iter().any(|option| option["id"] == "fast")
-        && options.iter().any(|option| option["id"] == "priority")
-    {
-        "priority"
-    } else if validate(config, options).is_ok() {
+    let value = if validate(config, options).is_ok() {
         selected
     } else {
         "default"
     };
     Some(json!({"id":"service_tier","type":"select","label":"Speed",
         "description":"Choose processing speed. Faster tiers increase usage.",
-        "tooltip":"Select speed","icon":"zap","desktopTrigger":"icon",
-        "value":value,"options":options}))
+        "tooltip":"Toggle fast mode","icon":"zap","desktopTrigger":"icon",
+        "value":value,"options":display_options(options)}))
 }
 
 impl super::CodexClient {
-    /// Resolve legacy Fast to the native priority ID without changing explicit selections.
+    /// Use native priority only when the model does not advertise the canonical Fast tier.
     pub(super) fn service_tier<'a>(&self, config: &'a StoredAgentConfig) -> &'a str {
         let selected = selected(config);
         if selected == "fast"
