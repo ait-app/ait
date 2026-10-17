@@ -146,6 +146,21 @@ fn requests(root: &TempDir) -> Vec<Value> {
         .collect()
 }
 
+#[cfg(unix)]
+async fn poll_until_idle(manager: &mut crate::service::agent_manager::AgentManager, id: &str) {
+    tokio::time::timeout(Duration::from_secs(10), async {
+        loop {
+            manager.poll().await.unwrap();
+            if manager.active_turn(id).is_none() {
+                break;
+            }
+            tokio::time::sleep(Duration::from_millis(10)).await;
+        }
+    })
+    .await
+    .unwrap();
+}
+
 async fn event(session: &mut dyn AgentSession) -> AgentTurnEvent {
     tokio::time::timeout(Duration::from_secs(10), async {
         loop {
@@ -1047,14 +1062,11 @@ async fn acp_rejected_configuration_keeps_the_session_available_for_a_valid_prom
     let mut session = client.create_session(&spec).await.unwrap();
     let mut invalid_model = spec.config.clone();
     invalid_model.model = Some("local/missing".into());
-    let mut invalid_effort = spec.config.clone();
-    invalid_effort.model = Some("local/second".into());
-    invalid_effort.thinking_option_id = Some("high".into());
     let mut invalid_replacement = spec.config.clone();
     invalid_replacement.mode_id = Some("missing".into());
     invalid_replacement.feature_values =
         Some(BTreeMap::from([("permission".into(), json!("deny"))]));
-    for selected in [invalid_model, invalid_effort, invalid_replacement] {
+    for selected in [invalid_model, invalid_replacement] {
         assert_eq!(
             session.start_turn("rejected", &selected).await.unwrap_err(),
             AgentSessionError::Rejected
@@ -1067,9 +1079,102 @@ async fn acp_rejected_configuration_keeps_the_session_available_for_a_valid_prom
             .iter()
             .filter(|request| request["method"] == "session/prompt")
             .count(),
-        3
+        2
     );
     session.close().await.unwrap();
+}
+
+#[cfg(unix)]
+#[tokio::test]
+async fn acp_ignores_a_thought_level_removed_by_the_selected_model() {
+    let (_root, client, mut spec) = fixture("no-thinking");
+    spec.config.thinking_option_id = Some("high".into());
+    let mut session = client.create_session(&spec).await.unwrap();
+    let mut selected = spec.config.clone();
+    selected.model = Some("local/second".into());
+
+    session
+        .start_turn("continue with this model", &selected)
+        .await
+        .unwrap();
+
+    let runtime = session.runtime_info().await.unwrap();
+    assert_eq!(runtime.model.as_deref(), Some("local/second"));
+    assert_eq!(runtime.thinking_option_id, None);
+    completed(session.as_mut()).await;
+    session.close().await.unwrap();
+}
+
+#[cfg(unix)]
+#[tokio::test]
+async fn acp_image_rejection_is_visible_and_text_retry_recovers_the_session() {
+    use crate::service::agent_manager::{AgentManager, AgentRegistration};
+    use domain::agent_runtime::registry::AgentRuntimeRegistry;
+    use persistence::storage::agent_runtime::FileBackedAgentRuntimeRegistry;
+
+    let (root, client, spec) = fixture("image-error");
+    let registry = FileBackedAgentRuntimeRegistry::new(root.path().join("agents.json"));
+    registry.initialize().unwrap();
+    let timeline = crate::storage::timeline::Timeline::memory().unwrap();
+    let mut manager = AgentManager::new(Box::new(registry.clone())).with_timeline(timeline.clone());
+    manager.register_client(Box::new(client)).unwrap();
+    manager
+        .create("image-agent", &spec, AgentRegistration::default())
+        .await
+        .unwrap();
+
+    manager
+        .send_input(
+            "image-agent",
+            &crate::protocol::prompt::AgentPrompt {
+                text: "inspect this".into(),
+                images: vec![crate::protocol::prompt::PromptImage {
+                    data: "aGVsbG8=".into(),
+                    mime_type: "image/png".into(),
+                }],
+                ..Default::default()
+            },
+        )
+        .await
+        .unwrap();
+    poll_until_idle(&mut manager, "image-agent").await;
+
+    let failure = "OpenCode: The selected model does not support image input (token=[redacted])";
+    let failed = registry.get("image-agent").unwrap().unwrap();
+    assert_eq!(failed.last_error.as_deref(), Some(failure));
+    assert_eq!(
+        failed.last_status,
+        domain::agent_runtime::AgentRuntimeStatus::Error
+    );
+    let (_, rows) = timeline.read("image-agent").unwrap();
+    assert!(rows.iter().any(|row| row.entry.item["message"] == failure));
+    assert!(!format!("{rows:?}").contains("private diagnostic"));
+    assert!(!format!("{rows:?}").contains("secret-token-value"));
+
+    manager
+        .send("image-agent", "continue without an image")
+        .await
+        .unwrap();
+    poll_until_idle(&mut manager, "image-agent").await;
+    let recovered = registry.get("image-agent").unwrap().unwrap();
+    assert_eq!(
+        recovered.last_status,
+        domain::agent_runtime::AgentRuntimeStatus::Idle
+    );
+    assert_eq!(recovered.last_error, None);
+    assert!(
+        requests(&root)
+            .iter()
+            .any(|request| request["method"] == "session/load")
+    );
+    assert_eq!(
+        requests(&root)
+            .iter()
+            .filter(|request| request["method"] == "session/prompt")
+            .count(),
+        2
+    );
+    manager.close_all().await.unwrap();
 }
 
 #[cfg(unix)]
