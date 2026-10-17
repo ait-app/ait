@@ -1838,21 +1838,89 @@ describe("HostRuntimeStore", () => {
     try {
       await store.boot();
       store.setAccountRelayCenter(center);
+      store.setAvailableAccountRelayHosts([host.serverId]);
       await waitForHostOnline(store, host.serverId);
       const client = clients[0]!;
+      store.setAvailableAccountRelayHosts([], []);
       store.setAvailableAccountRelayHosts([host.serverId]);
-      expect(client.ensureConnectedCalls).toBe(1);
+      expect(client.ensureConnectedCalls).toBe(0);
       store.setAvailableAccountRelayHosts([host.serverId]);
-      expect(client.ensureConnectedCalls).toBe(1);
-      store.setAvailableAccountRelayHosts([]);
+      expect(client.ensureConnectedCalls).toBe(0);
+      store.setAvailableAccountRelayHosts([], []);
       expect(client.isDisposed()).toBe(false);
       store.setAvailableAccountRelayHosts([host.serverId]);
-      expect(client.ensureConnectedCalls).toBe(2);
+      expect(client.ensureConnectedCalls).toBe(0);
       expect(store.getClient(host.serverId)).toBe(client);
       expect(clients).toHaveLength(1);
       store.setAccountRelayCenter(null);
       store.setAvailableAccountRelayHosts([host.serverId]);
-      expect(client.ensureConnectedCalls).toBe(2);
+      expect(client.ensureConnectedCalls).toBe(0);
+    } finally {
+      store.syncHosts([]);
+    }
+  });
+
+  it("filters cached offline relay hosts and stops probes until presence returns", async () => {
+    useHostRuntimeClock();
+    const center = "https://center.test/api";
+    const relay = createAccountRelayHostConnection({
+      hostId: "11111111-1111-4111-8111-111111111111",
+      center,
+    });
+    const remote = makeHost({ serverId: "remote", connections: [relay] });
+    const direct = makeHost({ serverId: "direct" });
+    const mixed = makeHost({ serverId: "mixed", connections: [...direct.connections, relay] });
+    const clients: FakeDaemonClient[] = [];
+    const deps = makeDeps(
+      { [relay.id]: 1, ...Object.fromEntries(direct.connections.map((c) => [c.id, 5])) },
+      clients,
+    );
+    const probe = vi.fn(deps.connectToDaemon);
+    const storage = createMemoryHostRuntimeStorage({
+      "@paseo:daemon-registry": JSON.stringify([remote, direct, mixed]),
+      "@paseo:e2e": "1",
+    });
+    const store = new HostRuntimeStore({ storage, deps: { ...deps, connectToDaemon: probe } });
+    const relayAttempts = () =>
+      probe.mock.calls.filter(([input]) => input.connection.type === "accountRelay");
+    try {
+      await store.boot();
+      store.setAccountRelayCenter(center);
+      store.setAvailableAccountRelayHosts([]);
+      store.ensureConnectedAll({ verify: true });
+      await vi.advanceTimersByTimeAsync(10_000);
+      expect(relayAttempts()).toHaveLength(0);
+      expect(store.getAvailableHosts().map((host) => host.serverId)).toEqual(["direct", "mixed"]);
+      expect(store.getHosts()).toHaveLength(3);
+      expect(JSON.parse((await storage.getItem("@paseo:daemon-registry"))!)).toHaveLength(3);
+
+      const listener = vi.fn();
+      const remove = store.subscribeHostList(listener);
+      store.setAvailableAccountRelayHosts([remote.serverId]);
+      await waitForHostOnline(store, remote.serverId);
+      expect(listener).toHaveBeenCalled();
+      expect(store.getAvailableHosts()).toEqual(store.getHosts());
+      const available = store.getAvailableHosts();
+      listener.mockClear();
+      store.setAvailableAccountRelayHosts([remote.serverId]);
+      expect(store.getAvailableHosts()).toBe(available);
+      expect(listener).not.toHaveBeenCalled();
+
+      const client = store.getClient(remote.serverId)!;
+      const close = vi.spyOn(client, "close");
+      store.setAvailableAccountRelayHosts([], [remote.serverId]);
+      await vi.waitFor(() => expect(store.getClient(remote.serverId)).toBeNull());
+      expect(close).toHaveBeenCalled();
+      const attempts = relayAttempts().length;
+      store.retryConnection(remote.serverId);
+      store.setAppVisible(true);
+      await vi.advanceTimersByTimeAsync(10_000);
+      expect(relayAttempts()).toHaveLength(attempts);
+      expect(store.getAvailableHosts().map((host) => host.serverId)).toEqual(["direct", "mixed"]);
+      store.setAvailableAccountRelayHosts([remote.serverId]);
+      await waitForHostOnline(store, remote.serverId);
+      expect(relayAttempts()).toHaveLength(attempts + 1);
+      remove();
     } finally {
       store.syncHosts([]);
     }
@@ -1884,6 +1952,7 @@ describe("HostRuntimeStore", () => {
     try {
       await store.boot();
       store.setAccountRelayCenter(center);
+      store.setAvailableAccountRelayHosts(discovered.map((host) => host.server_id));
       await store.addDiscoveredAccountRelayHosts(discovered, center);
       await Promise.all(discovered.map((host) => waitForHostOnline(store, host.server_id)));
       expect(store.getClient("first-server")).not.toBe(store.getClient("second-server"));
@@ -1996,6 +2065,7 @@ describe("HostRuntimeStore", () => {
       await vi.advanceTimersByTimeAsync(10_000);
       expect(probe).not.toHaveBeenCalled();
       store.setAccountRelayCenter(center);
+      store.setAvailableAccountRelayHosts([host.serverId]);
       await waitForHostOnline(store, host.serverId);
       expect(probe).toHaveBeenCalledWith(expect.objectContaining({ connection }));
       const client = store.getClient(host.serverId);
@@ -2007,6 +2077,7 @@ describe("HostRuntimeStore", () => {
       expect(store.getHosts()).toHaveLength(1);
       expect(JSON.parse((await storage.getItem("@paseo:daemon-registry"))!)).toHaveLength(1);
       store.setAccountRelayCenter(center);
+      store.setAvailableAccountRelayHosts([host.serverId]);
       await waitForHostOnline(store, host.serverId);
     } finally {
       store.syncHosts([]);

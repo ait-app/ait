@@ -25,7 +25,7 @@ import { buildSettingsHostSectionRoute } from "@/utils/host-routes";
 
 export function OpenProjectScreen() {
   const { t } = useTranslation();
-  const hosts = useHosts();
+  const hosts = useHosts({ availableOnly: true });
   const router = useRouter();
   const openDesktopAgentList = usePanelStore((s) => s.openDesktopAgentList);
   const openProjectPicker = useOpenAddProject();

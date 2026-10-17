@@ -56,8 +56,22 @@ describe("native mobile account commands", () => {
     async (platform) => {
       mocks.platform = platform;
       const hosts = [
-        { host_id: "first", server_id: "first-server", name: "First" },
-        { host_id: "second", server_id: "second-server", name: "Second" },
+        {
+          host_id: "first",
+          server_id: "first-server",
+          name: "First",
+          online: true,
+          instance_id: "first-instance",
+          relay_modes: ["ait-rust-single-v1"],
+        },
+        {
+          host_id: "second",
+          server_id: "second-server",
+          name: "Second",
+          online: true,
+          instance_id: "second-instance",
+          relay_modes: ["ait-rust-single-v1"],
+        },
       ];
       mocks.manager.snapshot.mockReturnValue({
         status: "online",

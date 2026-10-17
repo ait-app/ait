@@ -666,7 +666,7 @@ export function ImportSessionSheet({
   const handleShowAll = useCallback(() => setIsShowingAllDirectories(true), []);
   const handleLoadMore = useCallback(() => setPageLimit(nextPageLimit), []);
 
-  const hosts = useHosts();
+  const hosts = useHosts({ availableOnly: true });
   const hostLabel = useMemo(
     () => hosts.find((host) => host.serverId === serverId)?.label ?? serverId ?? "",
     [hosts, serverId],

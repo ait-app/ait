@@ -1405,6 +1405,7 @@ export class HostRuntimeStore {
   private hostListVersion = 0;
   private hostRegistryLoaded = false;
   private hosts: HostProfile[] = [];
+  private availableHosts: HostProfile[] = [];
   private pendingDesktopConnections = new Set<string>();
   private accountRelayCenter: string | null = null;
   private availableAccountRelayServers = new Set<string>();
@@ -1442,6 +1443,11 @@ export class HostRuntimeStore {
 
   getHosts(): HostProfile[] {
     return this.hosts;
+  }
+
+  /** Hosts suitable for normal pickers; saved relay records remain accessible in Settings. */
+  getAvailableHosts(): HostProfile[] {
+    return this.availableHosts;
   }
 
   getHostRegistryStatus(): HostRegistryStatus {
@@ -2060,16 +2066,30 @@ export class HostRuntimeStore {
     return update;
   }
 
-  /** Saved hosts remain visible while signed out or connected to another service. */
+  /** Saved hosts remain registered while signed out or connected to another service. */
   setAccountRelayCenter(center: string | null): void {
     if (center === this.accountRelayCenter) return;
     if (center === null) this.removedAccountRelayConnections.clear();
     this.accountRelayCenter = center;
     this.availableAccountRelayServers.clear();
     this.syncHosts(this.hosts);
+    this.emitHostList();
   }
 
   private emitHostList(): void {
+    const available = this.hosts.filter((host) =>
+      host.connections.some(
+        (connection) =>
+          connection.type !== "accountRelay" ||
+          (connection.center === this.accountRelayCenter &&
+            this.availableAccountRelayServers.has(host.serverId)),
+      ),
+    );
+    if (
+      available.length !== this.availableHosts.length ||
+      available.some((host, index) => host !== this.availableHosts[index])
+    )
+      this.availableHosts = available;
     this.hostListVersion += 1;
     for (const listener of this.hostListListeners) {
       listener();
@@ -2109,7 +2129,9 @@ export class HostRuntimeStore {
         connections: storedHost.connections.filter(
           (connection) =>
             !this.pendingDesktopConnections.has(connection.id) &&
-            (connection.type !== "accountRelay" || connection.center === this.accountRelayCenter),
+            (connection.type !== "accountRelay" ||
+              (connection.center === this.accountRelayCenter &&
+                this.availableAccountRelayServers.has(storedHost.serverId))),
         ),
       };
       const initialConnection = options?.initialConnectionByServerId?.get(host.serverId);
@@ -2392,11 +2414,24 @@ export class HostRuntimeStore {
     this.controllers.get(serverId)?.ensureConnected({ verify: true });
   }
 
-  /** Warm existing relay hosts once as their account or remote presence recovers. */
-  setAvailableAccountRelayHosts(serverIds: readonly string[]): void {
+  /** Gate relay probes on presence, retaining healthy data connections during stale snapshots. */
+  setAvailableAccountRelayHosts(
+    serverIds: readonly string[],
+    confirmedOfflineServerIds?: readonly string[],
+  ): void {
     const available = new Set(serverIds);
     const previous = this.availableAccountRelayServers;
+    if (confirmedOfflineServerIds) {
+      const offline = new Set(confirmedOfflineServerIds);
+      for (const serverId of previous) {
+        if (!offline.has(serverId) && isHostRuntimeConnected(this.getSnapshot(serverId)))
+          available.add(serverId);
+      }
+    }
+    if (available.size === previous.size && [...available].every((id) => previous.has(id))) return;
     this.availableAccountRelayServers = available;
+    this.syncHosts(this.hosts);
+    this.emitHostList();
     for (const host of this.hosts) {
       if (
         available.has(host.serverId) &&
@@ -2661,12 +2696,12 @@ export function useHostRuntimeIsDirectoryLoading(serverId: string): boolean {
   );
 }
 
-export function useHosts(): HostProfile[] {
+export function useHosts(options?: { availableOnly?: boolean }): HostProfile[] {
   const store = getHostRuntimeStore();
   return useSyncExternalStore(
     (onStoreChange) => store.subscribeHostList(onStoreChange),
-    () => store.getHosts(),
-    () => store.getHosts(),
+    () => (options?.availableOnly ? store.getAvailableHosts() : store.getHosts()),
+    () => (options?.availableOnly ? store.getAvailableHosts() : store.getHosts()),
   );
 }
 
