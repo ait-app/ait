@@ -2,7 +2,7 @@ use std::collections::{BTreeMap, BTreeSet};
 use std::sync::Arc;
 use std::time::Duration;
 
-use domain::summary::{SummaryRequest, SummarySelection};
+use domain::summary::{SummaryKind, SummaryRequest, SummarySelection};
 use serde_json::Value;
 
 use crate::ports::agent_session::AgentClient;
@@ -12,6 +12,13 @@ pub(super) async fn resolve(
     config: &Value,
     request: &SummaryRequest,
 ) -> Vec<SummarySelection> {
+    if request.kind == SummaryKind::ChatHistory {
+        return exact_selection(
+            clients.keys().map(String::as_str),
+            config,
+            request.selection.as_ref(),
+        );
+    }
     let mut automatic = BTreeMap::new();
     for (provider, client) in clients {
         if config["providers"][provider]["enabled"] == false {
@@ -30,6 +37,27 @@ pub(super) async fn resolve(
         request.selection.as_ref(),
         &automatic,
     )
+}
+
+fn exact_selection<'a>(
+    providers: impl Iterator<Item = &'a str>,
+    config: &Value,
+    selection: Option<&SummarySelection>,
+) -> Vec<SummarySelection> {
+    let Some(selection) = selection else {
+        return Vec::new();
+    };
+    let provider = selection.provider.trim();
+    if provider.is_empty()
+        || !providers.into_iter().any(|available| available == provider)
+        || config["providers"][provider]["enabled"] == false
+    {
+        return Vec::new();
+    }
+    vec![SummarySelection {
+        provider: provider.to_owned(),
+        ..selection.clone()
+    }]
 }
 
 fn ordered<'a>(

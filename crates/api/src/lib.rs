@@ -263,7 +263,7 @@ impl Api {
             has_git_fetch,
         });
         let filesystem = Arc::new(filesystem::dispatch::State {
-            summary_source: services.summary_source,
+            summary_source: services.summary_source.clone(),
             runtime: runtime.clone(),
             checkout: services.checkout.map(shared_service),
             forge: services.forge.map(shared_service),
@@ -275,6 +275,7 @@ impl Api {
             skills: services.skills.map(shared_service),
             agent_runtime: None,
             agent_execution: services.agent_execution,
+            summary_source: services.summary_source.clone(),
             directory_changes,
             has_terminals: services.terminals.is_some(),
         });

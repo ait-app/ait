@@ -655,6 +655,15 @@ export interface AgentForkContextOptions {
   requestId?: string;
 }
 
+export interface AgentContextCompactOptions {
+  cwd: string;
+  provider: string;
+  model?: string | null;
+  thinkingOptionId?: string | null;
+  context: string;
+  requestId?: string;
+}
+
 type AgentRefreshedStatusPayload = z.infer<typeof AgentRefreshedStatusPayloadSchema>;
 type RestartRequestedStatusPayload = z.infer<typeof RestartRequestedStatusPayloadSchema>;
 type ShutdownRequestedStatusPayload = z.infer<typeof ShutdownRequestedStatusPayloadSchema>;
@@ -3332,6 +3341,32 @@ export class DaemonClient {
     }
 
     return payload;
+  }
+
+  async compactAgentContext(input: AgentContextCompactOptions): Promise<string> {
+    const requestId = this.createRequestId(input.requestId);
+    const message = SessionInboundMessageSchema.parse({
+      type: "agent.context.compact.request",
+      requestId,
+      cwd: input.cwd,
+      provider: input.provider,
+      model: input.model ?? null,
+      thinkingOptionId: input.thinkingOptionId ?? null,
+      context: input.context,
+    });
+    const payload = await this.sendRequest({
+      requestId,
+      message,
+      timeout: 90_000,
+      options: { skipQueue: true },
+      select: (msg) => {
+        if (msg.type !== "agent.context.compact.response" || msg.payload.requestId !== requestId) {
+          return null;
+        }
+        return msg.payload;
+      },
+    });
+    return payload.summary;
   }
 
   // ============================================================================

@@ -54,3 +54,29 @@ fn unavailable_defaults_and_disabled_providers_never_become_candidates() {
         vec![selection("beta", "custom")]
     );
 }
+
+#[test]
+fn chat_history_uses_only_the_selected_provider_and_model() {
+    let current = selection("beta", "chosen-model");
+    let config = json!({"providers":{"beta":{"enabled":true}}});
+    assert_eq!(
+        exact_selection(["alpha", "beta"].into_iter(), &config, Some(&current)),
+        vec![current]
+    );
+    assert!(
+        exact_selection(
+            ["alpha"].into_iter(),
+            &config,
+            Some(&selection("beta", "other"))
+        )
+        .is_empty()
+    );
+    assert!(
+        exact_selection(
+            ["beta"].into_iter(),
+            &json!({"providers":{"beta":{"enabled":false}}}),
+            Some(&selection("beta", "other"))
+        )
+        .is_empty()
+    );
+}

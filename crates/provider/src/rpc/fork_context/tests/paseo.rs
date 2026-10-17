@@ -105,14 +105,14 @@ fn complete_attachment_at_the_byte_limit_is_accepted() {
 }
 
 #[test]
-fn complete_attachment_one_byte_over_the_limit_is_rejected() {
+fn attachment_over_the_limit_is_trimmed_and_marked() {
     let wrapper = "<chat-history-summary>\nChat history from a previous Ait agent.\n\n[User] \n</chat-history-summary>";
     let body = "x".repeat(512 * 1024 - wrapper.len() + 1);
     let rows = [row(1, json!({"type":"user_message","text":body}))];
-    assert_eq!(
-        export(&request(), "epoch", &rows, &json!({})),
-        Err(ErrorCode::ResourceExhausted)
-    );
+    let text = attachment(&rows);
+    assert!(text.len() <= 512 * 1024);
+    assert!(text.contains("Earlier conversation omitted"));
+    assert!(text.ends_with("</chat-history-summary>"));
 }
 
 #[test]
@@ -163,15 +163,17 @@ fn identical_native_item_ids_from_different_turns_do_not_merge() {
 }
 
 #[test]
-fn aggregate_fragment_content_is_bounded_before_exporting_a_large_attachment() {
+fn aggregate_fragment_content_is_bounded_and_keeps_the_recent_fragment() {
     let rows = [
         fragment(1, "a", &"x".repeat(300_000)),
         fragment(2, "a", &"y".repeat(300_000)),
     ];
-    assert_eq!(
-        export(&request(), "epoch", &rows, &json!({})),
-        Err(ErrorCode::ResourceExhausted)
-    );
+    let text = attachment(&rows);
+    assert!(text.contains("Earlier conversation omitted"));
+    assert!(text.contains("[Assistant]"));
+    assert!(text.contains("yyyyyyyyyyyy"));
+    assert!(text.len() <= 512 * 1024);
+    assert!(text.ends_with(&format!("{}\n</chat-history-summary>", "y".repeat(100))));
 }
 
 #[test]

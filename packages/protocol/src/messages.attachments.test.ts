@@ -1,6 +1,8 @@
 import { describe, expect, it } from "vitest";
 
 import {
+  AgentContextCompactRequestMessageSchema,
+  AgentContextCompactResponseMessageSchema,
   AgentForkContextRequestMessageSchema,
   AgentForkContextResponseMessageSchema,
   CreateAgentRequestMessageSchema,
@@ -9,6 +11,26 @@ import {
 } from "./messages.js";
 
 describe("shared messages attachments", () => {
+  it("correlates destination-model chat history compaction requests", () => {
+    const request = AgentContextCompactRequestMessageSchema.parse({
+      type: "agent.context.compact.request",
+      requestId: "compact-1",
+      cwd: "/repo",
+      provider: "claude",
+      model: "sonnet",
+      thinkingOptionId: null,
+      context: "Older conversation segment",
+    });
+    const response = AgentContextCompactResponseMessageSchema.parse({
+      type: "agent.context.compact.response",
+      payload: { requestId: "compact-1", summary: "User is implementing a Rust change." },
+    });
+
+    expect(request.provider).toBe("claude");
+    expect(request.model).toBe("sonnet");
+    expect(response.payload.requestId).toBe(request.requestId);
+  });
+
   it("preserves an optional timeline cursor on fork-context messages", () => {
     const boundaryCursor = { epoch: "timeline-1", seq: 42 };
     const request = AgentForkContextRequestMessageSchema.parse({
