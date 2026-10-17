@@ -103,7 +103,7 @@ fn first_party_fast_and_thinking_capabilities_do_not_leak_to_custom_aliases() {
             serde_json::from_value(json!({"model":model,"featureValues":{"fast_mode":true}}))
                 .unwrap();
         assert_eq!(config::validate(&config), Err(AgentSessionError::Rejected));
-        assert!(config::features(&config).is_empty());
+        assert_eq!(config::features(&config), [] as [Value; 0]);
     }
     let response = json!({"models":[{"value":"claude-opus-5","displayName":"Opus","supportedEffortLevels":["xhigh"]}]});
     let models = config::models(&response).unwrap();

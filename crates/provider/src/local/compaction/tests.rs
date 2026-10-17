@@ -9,7 +9,7 @@ fn compaction_interruption_fails_only_open_operations_once() {
         compactions.fail_pending(),
         [json!({"type":"compaction","compactionId":"open","status":"failed"})]
     );
-    assert!(compactions.fail_pending().is_empty());
+    assert_eq!(compactions.fail_pending(), [] as [Value; 0]);
 }
 
 #[test]

@@ -8,7 +8,7 @@ async fn authenticated_account_quota_without_model_execution() {
     let report = AntigravityClient::installed().usage().await.unwrap();
     assert_eq!(report["status"], "available");
     let windows = report["windows"].as_array().unwrap();
-    assert!(!windows.is_empty());
+    assert_ne!(windows.as_slice(), &[] as &[Value]);
     for window in windows {
         let remaining = window["remainingPct"].as_f64().unwrap();
         let used = window["usedPct"].as_f64().unwrap();

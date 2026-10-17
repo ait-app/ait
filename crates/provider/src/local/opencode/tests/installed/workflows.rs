@@ -308,7 +308,7 @@ async fn installed_acp_inflight_cancellation_settles_and_allows_followup() {
             _ => {}
         }
     }
-    assert!(session.pending_permissions().is_empty());
+    assert_eq!(session.pending_permissions(), [] as [Value; 0]);
     session
         .start_turn("continue after cancellation", &fixture.spec.config)
         .await
@@ -347,6 +347,6 @@ async fn installed_acp_model_authentication_error_settles_without_false_success(
     })
     .await
     .unwrap();
-    assert!(session.pending_permissions().is_empty());
+    assert_eq!(session.pending_permissions(), [] as [Value; 0]);
     let _ = session.close().await;
 }

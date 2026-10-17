@@ -102,7 +102,7 @@ fn partial_recovery_and_native_divergence_do_not_silently_duplicate_text() {
     );
     // A native history that omits an interrupted partial item retires the provisional rows.
     timeline.reconcile("a", "codex", &[]).unwrap();
-    assert!(timeline.read("a").unwrap().1.is_empty());
+    assert_eq!(timeline.read("a").unwrap().1, [] as [Row; 0]);
     timeline
         .progress("a", "codex", "next", &entry("partial"))
         .unwrap();
@@ -218,7 +218,7 @@ fn version_two_migration_preserves_data_and_progress_failure_is_atomic() {
         Err(ErrorCode::AgentIo)
     );
     assert!(receiver.try_recv().is_err());
-    assert!(timeline.read("b").unwrap().1.is_empty());
+    assert_eq!(timeline.read("b").unwrap().1, [] as [Row; 0]);
     timeline
         .database
         .lock()

@@ -31,7 +31,7 @@ async fn draft_features_use_the_proposed_settings_without_caching_or_creating_an
         state.draft_configs[0].thinking_option_id.as_deref(),
         Some("high")
     );
-    assert!(state.discovery_cwds.is_empty());
+    assert_eq!(state.discovery_cwds, [] as [String; 0]);
     assert!(catalog.cache.lock().unwrap().snapshots.is_empty());
 }
 
@@ -83,7 +83,10 @@ async fn draft_feature_failures_are_inline_and_do_not_fabricate_feature_values()
         assert_eq!(response["error"], message);
         assert!(response.get("features").is_none());
     }
-    assert!(probe.state.lock().unwrap().draft_configs.is_empty());
+    assert_eq!(
+        probe.state.lock().unwrap().draft_configs,
+        [] as [domain::agent_runtime::StoredAgentConfig; 0]
+    );
 }
 
 #[cfg(unix)]

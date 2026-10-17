@@ -157,14 +157,12 @@ async fn native_permissions_are_agent_scoped_ephemeral_and_support_questions() {
             .await
             .is_err()
     );
-    assert!(
+    assert_eq!(
         execution
             .execute("agent.get.request", json!({"agentId":id}))
             .await
-            .unwrap()["agent"]["pendingPermissions"]
-            .as_array()
-            .unwrap()
-            .is_empty()
+            .unwrap()["agent"]["pendingPermissions"],
+        json!([])
     );
     execution.shutdown().await.unwrap();
 }
@@ -325,7 +323,7 @@ async fn subagent_history_is_scoped_to_verified_descendants_and_does_not_registe
         )
         .await
         .unwrap();
-    assert!(empty["rows"].as_array().unwrap().is_empty());
+    assert_eq!(empty["rows"], json!([]));
     assert!(
         execution
             .execute(

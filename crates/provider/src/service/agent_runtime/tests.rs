@@ -35,6 +35,7 @@ async fn directory_only_hosts_check_identity_and_retire_only_the_requested_works
         skills: None,
         agent_runtime: Some(Arc::new(Mutex::new(directory))),
         agent_execution: None,
+        summary_source: None,
         directory_changes: None,
         has_terminals: false,
     };
@@ -77,11 +78,11 @@ async fn directory_only_hosts_check_identity_and_retire_only_the_requested_works
             .is_none()
     );
     state.agent_runtime = None;
-    assert!(
+    assert_eq!(
         crate::dispatch::retire_workspaces(&state, vec!["wks-two".to_owned()])
             .await
-            .unwrap()
-            .is_empty()
+            .unwrap(),
+        [] as [String; 0]
     );
     assert_eq!(
         crate::dispatch::contains_identity(&state, "independent".to_owned()).await,
@@ -614,15 +615,15 @@ fn target_workspace_agent_pages_preserve_exact_scope_and_continuation() {
     assert!(!next.has_more);
     for id in [None, Some("missing")] {
         let ids = id.map_or_else(BTreeSet::new, |id| BTreeSet::from([id.into()]));
-        assert!(
+        assert_eq!(
             service
                 .list(&AgentDirectoryQuery {
                     workspace_ids: Some(ids),
                     ..default_query()
                 })
                 .unwrap()
-                .entries
-                .is_empty()
+                .entries,
+            [] as [AgentDirectoryEntry; 0]
         );
     }
 }

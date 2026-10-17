@@ -42,6 +42,7 @@ async fn provider_handles_host_skills_without_filesystem_or_native_execution() {
         agents: None,
         agent_runtime: None,
         agent_execution: None,
+        summary_source: None,
         directory_changes: None,
         has_terminals: false,
     };

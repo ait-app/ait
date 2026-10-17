@@ -69,7 +69,10 @@ async fn creation_and_message_requests_deliver_rich_content_and_reject_bad_paylo
             .await
             .is_err()
     );
-    assert!(registry.list().unwrap().is_empty());
+    assert_eq!(
+        registry.list().unwrap(),
+        [] as [domain::agent_runtime::PersistedAgentRuntimeRecord; 0]
+    );
     assert!(!fixture.cwd.join("native-requests.jsonl").exists());
     let created = execution
         .execute(

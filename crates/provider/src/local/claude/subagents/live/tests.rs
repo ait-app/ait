@@ -14,10 +14,9 @@ fn only_workflows_read_native_output_and_duplicate_completion_is_idempotent() {
     let notification = json!({"type":"system","subtype":"task_notification","task_id":"wf_1","status":"completed","output_file":path});
     let events = live.observe(&notification, "root", "/tmp").unwrap();
     assert!(events.iter().any(|event|matches!(event,AgentTurnEvent::Subagent(SubagentEvent::Timeline {entry,..}) if entry.item["text"]=="Workflow report")));
-    assert!(
-        live.observe(&notification, "root", "/tmp")
-            .unwrap()
-            .is_empty()
+    assert_eq!(
+        live.observe(&notification, "root", "/tmp").unwrap(),
+        [] as [AgentTurnEvent; 0]
     );
     std::fs::write(&path, json!({"result":"Updated report"}).to_string()).unwrap();
     let updated = live.observe(&notification, "root", "/tmp").unwrap();
@@ -84,17 +83,20 @@ fn native_task_filters_prevent_ambient_shell_and_foreign_frames_from_becoming_ch
         } else {
             record["skip_transcript"] = json!(true);
         }
-        assert!(live.observe(&record, "root", "/tmp").unwrap().is_empty());
+        assert_eq!(
+            live.observe(&record, "root", "/tmp").unwrap(),
+            [] as [AgentTurnEvent; 0]
+        );
     }
-    assert!(
+    assert_eq!(
         live.observe(
             &json!({"type":"assistant","parent_tool_use_id":"shell-call"}),
             "root",
             "/tmp"
         )
-        .unwrap()
-        .is_empty()
+        .unwrap(),
+        [] as [AgentTurnEvent; 0]
     );
-    assert!(live.observe(&json!({"type":"system","subtype":"task_notification","task_id":"shell","status":"completed"}), "root", "/tmp").unwrap().is_empty());
-    assert!(live.children().is_empty());
+    assert_eq!(live.observe(&json!({"type":"system","subtype":"task_notification","task_id":"shell","status":"completed"}), "root", "/tmp").unwrap(), [] as [AgentTurnEvent; 0]);
+    assert_eq!(live.children(), [] as [NativeSubagent; 0]);
 }

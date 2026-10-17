@@ -23,10 +23,10 @@ fn child_restore_rejects_root_aliases_and_bounds_out_of_order_native_output() {
         .unwrap();
     let unknown = json!({"threadId":"unknown","turnId":"t","item":{"type":"agentMessage","id":"answer","text":"buffered"}});
     for _ in 0..256 {
-        assert!(
+        assert_eq!(
             live.observe("item/completed", &unknown, ("root", "/tmp"), &images)
-                .unwrap()
-                .is_empty()
+                .unwrap(),
+            [] as [AgentTurnEvent; 0]
         );
     }
     assert!(matches!(
@@ -71,15 +71,15 @@ fn child_turns_reject_overlap_and_map_interruption_or_failure_without_ending_the
         )
         .unwrap();
         assert_eq!(live.children()[0].descriptor["status"], expected);
-        assert!(
+        assert_eq!(
             live.observe(
                 "item/completed",
                 &json!({"threadId":"child"}),
                 ("root", "/tmp"),
                 &images
             )
-            .unwrap()
-            .is_empty()
+            .unwrap(),
+            [] as [AgentTurnEvent; 0]
         );
     }
 }

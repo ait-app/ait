@@ -47,12 +47,9 @@ fn explicit_empty_branch_can_be_recovered_without_claiming_another_missing_sessi
         native_handle: None,
         metadata: Some(branch.resume_metadata),
     };
-    assert!(
-        fresh_history(&handle, &spec.cwd)
-            .unwrap()
-            .unwrap()
-            .entries
-            .is_empty()
+    assert_eq!(
+        fresh_history(&handle, &spec.cwd).unwrap().unwrap().entries,
+        [] as [crate::protocol::timeline::NativeItem; 0]
     );
     assert!(fresh_history(&handle, "/different/missing").is_err());
     handle.metadata = None;

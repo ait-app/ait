@@ -174,7 +174,10 @@ fn invalid_domain_snapshot_does_not_publish_configuration_or_receipt() {
     let mut command = create("clock-boundary");
     command.recorded_at = u64::MAX;
     assert_eq!(catalog.configure(&command), Err(AgentError::Invalid));
-    assert!(catalog.list_agents(None, 50).unwrap().is_empty());
+    assert_eq!(
+        catalog.list_agents(None, 50).unwrap(),
+        [] as [AgentSnapshot; 0]
+    );
     command.recorded_at = 42;
     assert_eq!(catalog.configure(&command).unwrap().revision.value(), 1);
 }
@@ -188,7 +191,10 @@ fn receipt_failure_rolls_back_heads_revisions_and_default() {
         catalog.configure(&create("create")),
         Err(AgentError::UnsupportedFormat)
     );
-    assert!(catalog.list_agents(None, 50).unwrap().is_empty());
+    assert_eq!(
+        catalog.list_agents(None, 50).unwrap(),
+        [] as [AgentSnapshot; 0]
+    );
     catalog
         .0
         .execute_batch("DROP TRIGGER fail_receipt;")

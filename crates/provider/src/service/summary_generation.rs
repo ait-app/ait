@@ -88,7 +88,12 @@ impl Generation {
                 },
             };
             // Match Paseo's two repair attempts; transport failures move to the next candidate.
-            for attempt in 0..3 {
+            let attempts = if request.kind == domain::summary::SummaryKind::ChatHistory {
+                1
+            } else {
+                3
+            };
+            for attempt in 0..attempts {
                 let text = if attempt == 0 {
                     prompt.clone()
                 } else {

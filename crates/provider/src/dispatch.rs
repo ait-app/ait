@@ -19,6 +19,8 @@ pub struct State {
     pub agent_runtime: Option<Arc<Mutex<crate::service::agent_runtime::AgentRuntimeDirectory>>>,
     /// Installed native Agent executor.
     pub agent_execution: Option<crate::service::agent_execution::AgentExecution>,
+    /// Isolated generator used for explicit chat-history compaction requests.
+    pub summary_source: Option<Arc<dyn model::summary::SummarySource>>,
     /// Shared wakeup signal for committed Agent and placement changes.
     pub directory_changes: Option<model::changes::Changes>,
     /// Whether the host can finish a coordinated Terminal close.

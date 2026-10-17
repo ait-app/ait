@@ -280,8 +280,14 @@ async fn unknown_modes_and_invalid_prompt_do_not_admit_input() {
     let mut config = fixture.spec.config.clone();
     config.mode_id = Some("invented".into());
     assert!(session.start_turn("hello", &config).await.is_err());
-    assert!(fixture.requests("commands/execute").is_empty());
-    assert!(fixture.requests("session/prompt").is_empty());
+    assert_eq!(
+        fixture.requests("commands/execute"),
+        [] as [serde_json::Value; 0]
+    );
+    assert_eq!(
+        fixture.requests("session/prompt"),
+        [] as [serde_json::Value; 0]
+    );
     session.close().await.unwrap();
 }
 
@@ -399,7 +405,10 @@ async fn separate_permission_catalog_preserves_native_choices() {
 async fn embedded_permission_catalog_needs_no_new_endpoint() {
     let fixture = Fixture::new().await;
     let mut session = fixture.client.create_session(&fixture.spec).await.unwrap();
-    assert!(fixture.requests("permissionPresets/catalog").is_empty());
+    assert_eq!(
+        fixture.requests("permissionPresets/catalog"),
+        [] as [serde_json::Value; 0]
+    );
     session.close().await.unwrap();
 }
 
@@ -412,7 +421,13 @@ async fn malformed_permission_projection_is_not_replaced_with_defaults() {
         let fixture = Fixture::new().await;
         fixture.set_snapshot_fields(json!({"projections":{"values":{"permissions":permissions}}}));
         assert!(fixture.client.create_session(&fixture.spec).await.is_err());
-        assert!(fixture.requests("permissionPresets/catalog").is_empty());
-        assert!(fixture.requests("commands/execute").is_empty());
+        assert_eq!(
+            fixture.requests("permissionPresets/catalog"),
+            [] as [serde_json::Value; 0]
+        );
+        assert_eq!(
+            fixture.requests("commands/execute"),
+            [] as [serde_json::Value; 0]
+        );
     }
 }

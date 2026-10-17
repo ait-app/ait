@@ -89,9 +89,15 @@ async fn live_account_queries_keep_the_session_environment_and_do_not_fall_back_
         .await
         .unwrap();
     assert_eq!(report["providers"][0]["balances"][0]["remaining"], 9.25);
-    assert!(host.requests("account/getBalance").is_empty());
+    assert_eq!(
+        host.requests("account/getBalance"),
+        [] as [serde_json::Value; 0]
+    );
     assert_eq!(session.requests("session/create").len(), 1);
-    assert!(session.requests("session/prompt").is_empty());
+    assert_eq!(
+        session.requests("session/prompt"),
+        [] as [serde_json::Value; 0]
+    );
     manager.close_all().await.unwrap();
     let stopped = manager
         .usage(Some("quota-agent"), Some(PROVIDER), true)
@@ -99,7 +105,10 @@ async fn live_account_queries_keep_the_session_environment_and_do_not_fall_back_
         .unwrap();
     assert_eq!(stopped["providers"][0]["status"], "unavailable");
     assert_eq!(session.requests("account/getBalance").len(), 1);
-    assert!(host.requests("account/getBalance").is_empty());
+    assert_eq!(
+        host.requests("account/getBalance"),
+        [] as [serde_json::Value; 0]
+    );
 }
 
 #[tokio::test]
@@ -152,7 +161,10 @@ async fn native_failures_are_safe_and_only_missing_capabilities_are_unavailable(
             .unwrap()
             .contains("ACP")
     );
-    assert!(fixture.requests("account/getBalance").is_empty());
+    assert_eq!(
+        fixture.requests("account/getBalance"),
+        [] as [serde_json::Value; 0]
+    );
 }
 
 #[tokio::test]
@@ -231,8 +243,14 @@ async fn deepseek_key_resolution_follows_native_sources_custom_references_and_li
     );
     fixture.reply("settings/describe",json!({"namespaces":[{"ns":"llm-deepseek","value":{"apiKeyEnv":"CUSTOM_DSH_KEY","baseURL":"https://other.test"}}]}));
     assert!(context.resolve(&runtime.api).await.is_err());
-    assert!(fixture.requests("account/getBalance").is_empty());
-    assert!(fixture.requests("session/create").is_empty());
+    assert_eq!(
+        fixture.requests("account/getBalance"),
+        [] as [serde_json::Value; 0]
+    );
+    assert_eq!(
+        fixture.requests("session/create"),
+        [] as [serde_json::Value; 0]
+    );
     runtime.close().await.unwrap();
 }
 
@@ -250,8 +268,8 @@ async fn installed_deepseek_api_key_balance_without_model_execution() {
         "native balance unavailable; raw report withheld"
     );
     assert_eq!(report["sourceLabel"], "DSH DeepSeek API balance");
-    assert!(!report["balances"].as_array().unwrap().is_empty());
-    assert!(report["windows"].as_array().unwrap().is_empty());
+    assert_ne!(report["balances"], serde_json::json!([]));
+    assert_eq!(report["windows"], serde_json::json!([]));
 }
 
 #[tokio::test]

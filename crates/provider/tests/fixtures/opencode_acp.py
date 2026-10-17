@@ -248,7 +248,19 @@ for line in sys.stdin:
         save(value)
         if scenario == "echo-user-tool":
             content(value["history"][-1])
-        if scenario == "model-error" and value["seq"] == 1:
+        if scenario == "image-error" and any(
+            block["type"] == "image" for block in params["prompt"]
+        ):
+            send({
+                "id": active,
+                "error": {
+                    "code": -32603,
+                    "message": "The selected model does not support image input (token=secret-token-value)",
+                    "data": {"service": "session", "responseBody": "private diagnostic"},
+                },
+            })
+            active = None
+        elif scenario == "model-error" and value["seq"] == 1:
             send({"id": active, "error": {"code": -32603,
                 "message": "OpenCode's free tier can only be used from within OpenCode",
                 "data": {"service": "session", "errorName": "APIError", "responseBody": "private diagnostic"}}})

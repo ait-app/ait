@@ -96,7 +96,7 @@ pub(super) fn runtime(id: &str, options: &Value) -> StoredAgentRuntimeInfo {
     }
 }
 
-/// Apply explicit selected values to this session; reject unavailable choices or failed RPCs.
+/// Apply explicit selected values, ignoring a thought level the selected model no longer offers.
 pub(super) async fn apply(
     transport: &mut Transport,
     id: &str,
@@ -110,6 +110,9 @@ pub(super) async fn apply(
         ("mode", &config.mode_id),
     ] {
         let Some(value) = selected else { continue };
+        if category == "thought_level" && option(options, category).is_none() {
+            continue;
+        }
         select(transport, id, options, category, value).await?;
     }
     Ok(())
