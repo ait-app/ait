@@ -69,7 +69,10 @@ async fn invalid_environment_is_rejected_before_creation_receipts_or_native_laun
             Err(ErrorCode::InvalidMessage)
         );
     }
-    assert!(registry.list().unwrap().is_empty());
+    assert_eq!(
+        registry.list().unwrap(),
+        [] as [domain::agent_runtime::PersistedAgentRuntimeRecord; 0]
+    );
     assert_eq!(std::fs::read(receipts).ok(), initial);
     assert!(!fixture.cwd.join("native-requests.jsonl").exists());
     execution.shutdown().await.unwrap();

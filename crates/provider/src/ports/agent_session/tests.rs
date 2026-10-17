@@ -91,8 +91,11 @@ async fn optional_session_controls_fail_without_claiming_unsupported_authority()
     assert_eq!(session.failure_message(), None);
     assert!(!session.pending_foreground());
     assert_eq!(session.cancel_pending().await, Ok(()));
-    assert!(session.subagents().is_empty());
-    assert!(session.pending_permissions().is_empty());
+    assert_eq!(
+        session.subagents(),
+        [] as [crate::ports::controls::NativeSubagent; 0]
+    );
+    assert_eq!(session.pending_permissions(), [] as [serde_json::Value; 0]);
     assert_eq!(session.poll_turn().unwrap(), None);
     let response = json!({"approved":true});
     assert!(
@@ -189,12 +192,18 @@ async fn default_discovery_and_control_contracts_report_unavailable() {
     let handle = handle();
     assert!(client.supports_history_replay());
     assert!(!client.handles_out_of_band("/unknown"));
-    assert!(client.persisted_permissions(&handle).is_empty());
+    assert_eq!(
+        client.persisted_permissions(&handle),
+        [] as [serde_json::Value; 0]
+    );
     assert_eq!(
         client.settings(&spec.config),
         json!({"availableModes":[],"features":[],"capabilities":{}})
     );
-    assert!(client.draft_features(&spec).await.unwrap().is_empty());
+    assert_eq!(
+        client.draft_features(&spec).await.unwrap(),
+        [] as [serde_json::Value; 0]
+    );
     assert_eq!(
         client.validate_config(&spec.config),
         Err(AgentSessionError::Unavailable)

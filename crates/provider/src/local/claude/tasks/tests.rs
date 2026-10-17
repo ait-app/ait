@@ -39,10 +39,16 @@ fn task_snapshots_filter_malformed_rows_and_keep_earlier_snapshots_immutable() {
     ] {
         let id = format!("invalid-{index}");
         tasks.observe(&call(&id, name, input)).unwrap();
-        assert!(tasks.observe(&result(&id, output)).unwrap().is_empty());
+        assert_eq!(
+            tasks.observe(&result(&id, output)).unwrap(),
+            [] as [(String, Value); 0]
+        );
         assert_eq!(tasks.snapshot(), changed[0].1);
     }
-    assert!(tasks.observe(&result("", json!({}))).unwrap().is_empty());
+    assert_eq!(
+        tasks.observe(&result("", json!({}))).unwrap(),
+        [] as [(String, Value); 0]
+    );
     tasks
         .observe(&call(
             "error",
@@ -52,7 +58,7 @@ fn task_snapshots_filter_malformed_rows_and_keep_earlier_snapshots_immutable() {
         .unwrap();
     let mut failed = result("error", json!({}));
     failed["message"]["content"][0]["is_error"] = json!(true);
-    assert!(tasks.observe(&failed).unwrap().is_empty());
+    assert_eq!(tasks.observe(&failed).unwrap(), [] as [(String, Value); 0]);
     assert_eq!(tasks.snapshot(), changed[0].1);
 }
 
@@ -109,7 +115,7 @@ fn task_tools_preserve_ids_status_updates_deletion_and_do_not_apply_failed_or_du
     );
     let snapshot = tasks.observe(&legacy).unwrap();
     assert_eq!(snapshot[0].1["items"][0]["id"], "legacy:0");
-    assert!(tasks.observe(&legacy).unwrap().is_empty());
+    assert_eq!(tasks.observe(&legacy).unwrap(), [] as [(String, Value); 0]);
     tasks.observe(&call("list", "TaskList", json!({}))).unwrap();
     assert_eq!(
         tasks.observe(&result("list", json!({"tasks":[]}))).unwrap()[0].1["items"],
@@ -127,7 +133,7 @@ fn task_tools_preserve_ids_status_updates_deletion_and_do_not_apply_failed_or_du
         tasks.observe(&created).unwrap()[0].1["items"][0]["text"],
         "Build"
     );
-    assert!(tasks.observe(&created).unwrap().is_empty());
+    assert_eq!(tasks.observe(&created).unwrap(), [] as [(String, Value); 0]);
     tasks
         .observe(&call(
             "update",
@@ -149,11 +155,11 @@ fn task_tools_preserve_ids_status_updates_deletion_and_do_not_apply_failed_or_du
             json!({"taskId":"1","status":"deleted"}),
         ))
         .unwrap();
-    assert!(
+    assert_eq!(
         tasks
             .observe(&result("failed", json!({"success":false})))
-            .unwrap()
-            .is_empty()
+            .unwrap(),
+        [] as [(String, Value); 0]
     );
     assert_eq!(tasks.items.len(), 1);
     tasks

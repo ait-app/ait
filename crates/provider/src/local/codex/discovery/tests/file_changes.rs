@@ -69,7 +69,7 @@ fn file_changes_preserve_single_file_identity_and_failure_status() {
     }
     let mut native = file_change();
     native["status"] = json!("inProgress");
-    assert!(entries(&native).is_empty());
+    assert_eq!(entries(&native), [] as [NativeItem; 0]);
 }
 
 #[test]

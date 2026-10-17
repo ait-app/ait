@@ -27,7 +27,10 @@ fn live_actions_keep_the_same_keys_and_details_as_completed_history() {
             .iter()
             .all(|entry| entry.item["status"] == "running")
     );
-    assert!(progress(&mut stream, "item/started", &started).is_empty());
+    assert_eq!(
+        progress(&mut stream, "item/started", &started),
+        [] as [NativeItem; 0]
+    );
     for delta in ["hello", " world"] {
         let updates = progress(
             &mut stream,
@@ -62,13 +65,13 @@ fn live_actions_keep_the_same_keys_and_details_as_completed_history() {
     assert_eq!(completed[2].item["detail"]["output"], "");
     assert!(stream.complete(&native).unwrap());
     assert!(!stream.complete(&native).unwrap());
-    assert!(
+    assert_eq!(
         progress(
             &mut stream,
             "item/commandExecution/outputDelta",
             &params("tool", "late")
-        )
-        .is_empty()
+        ),
+        [] as [NativeItem; 0]
     );
 }
 

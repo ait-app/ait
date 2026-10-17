@@ -52,7 +52,7 @@ async fn withdrawn_native_permissions_disappear_once_and_reject_late_approval() 
     }
     assert_eq!(requested.len(), 1);
     assert_eq!(resolved, requested);
-    assert!(session.pending_permissions().is_empty());
+    assert_eq!(session.pending_permissions(), [] as [Value; 0]);
     assert_eq!(
         session
             .respond_permission(&requested[0], &json!({"behavior":"allow"}))
@@ -227,18 +227,15 @@ async fn conversation_and_file_rewinds_keep_original_history_and_resume_the_fork
     );
     assert_eq!(client.history(&handle, &spec.cwd).await.unwrap(), original);
     let fresh = client.rewind(&handle, &spec, &first).await.unwrap();
-    assert!(fresh.entries.is_empty());
+    assert_eq!(fresh.entries, [] as [NativeItem; 0]);
     let fresh_handle = AgentPersistenceHandle {
         session_id: fresh.descriptor.provider_handle_id,
         metadata: Some(fresh.resume_metadata),
         ..handle
     };
-    assert!(
-        client
-            .history(&fresh_handle, &spec.cwd)
-            .await
-            .unwrap()
-            .is_empty()
+    assert_eq!(
+        client.history(&fresh_handle, &spec.cwd).await.unwrap(),
+        [] as [NativeItem; 0]
     );
     let mut fresh = client
         .resume_session(&fresh_handle, &spec, AgentResumePurpose::Interactive)
@@ -369,7 +366,7 @@ async fn permission_and_question_roundtrips_are_scoped_and_stale_responses_rejec
                 .is_err()
         );
         session.respond_permission(id, &response).await.unwrap();
-        assert!(session.pending_permissions().is_empty());
+        assert_eq!(session.pending_permissions(), [] as [Value; 0]);
         assert!(session.respond_permission(id, &response).await.is_err());
         assert_eq!(finish(session.as_mut()).await, expected);
     }
@@ -471,7 +468,7 @@ async fn installed_claude_control_protocol_discovers_models_without_inference() 
         .discover(root.path().to_str().unwrap())
         .await
         .unwrap();
-    assert!(!models.models.is_empty());
+    assert_ne!(models.models, [] as [Value; 0]);
     assert!(
         models
             .models

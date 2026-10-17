@@ -67,13 +67,9 @@ async fn installed_acp_rejected_initial_model_cleans_only_the_new_session() {
         cwd: Some(fixture.spec.cwd.clone()),
         scan_limit: 100,
     };
-    assert!(
-        fixture
-            .client
-            .list_sessions(&list)
-            .await
-            .unwrap()
-            .is_empty()
+    assert_eq!(
+        fixture.client.list_sessions(&list).await.unwrap(),
+        [] as [crate::ports::native_history::SessionDescriptor; 0]
     );
     assert!(fixture.requests.try_recv().is_err());
     let mut session = fixture.client.create_session(&fixture.spec).await.unwrap();
@@ -286,7 +282,7 @@ async fn installed_acp_permission_once_and_always_keep_native_scope() {
                     _ => {}
                 }
             }
-            assert!(session.pending_permissions().is_empty());
+            assert_eq!(session.pending_permissions(), [] as [Value; 0]);
         }
         assert_eq!(approvals, if action == "once" { 2 } else { 1 });
         session.close().await.unwrap();
@@ -334,7 +330,7 @@ async fn installed_acp_multiline_shell_approval_preserves_input_and_continues() 
         tool.item["detail"]["output"].as_str().unwrap().trim(),
         fixture.spec.cwd
     );
-    assert!(session.pending_permissions().is_empty());
+    assert_eq!(session.pending_permissions(), [] as [Value; 0]);
     session
         .start_turn("after multiline approval", &config)
         .await

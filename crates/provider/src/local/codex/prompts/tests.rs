@@ -24,7 +24,10 @@ fn custom_prompts_keep_frontmatter_quoted_arguments_and_literal_dollars() {
     assert!(invoke(root.path(), "../outside", "").is_err());
     assert!(invoke(root.path(), "missing", "").is_err());
     assert!(expand(&"$1".repeat(32768), "long value").is_err());
-    assert!(list(&root.path().join("missing")).unwrap().is_empty());
+    assert_eq!(
+        list(&root.path().join("missing")).unwrap(),
+        [] as [Value; 0]
+    );
 }
 
 #[test]

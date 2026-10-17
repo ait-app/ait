@@ -72,7 +72,10 @@ async fn bot_rejects_manual_grants_before_calling_the_native_provider() {
             Err(ErrorCode::InvalidMessage)
         );
     }
-    assert!(client.0.lock().unwrap().permission_responses.is_empty());
+    assert_eq!(
+        client.0.lock().unwrap().permission_responses,
+        [] as [(String, Value); 0]
+    );
     manager.close_all().await.unwrap();
 }
 

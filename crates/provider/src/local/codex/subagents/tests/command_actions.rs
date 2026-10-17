@@ -67,9 +67,9 @@ fn child_command_actions_drain_all_progress_and_match_completed_history() {
         })
         .collect::<Vec<_>>();
     assert_eq!(final_keys, keys);
-    assert!(
+    assert_eq!(
         live.observe("item/completed", &native, ("root", "/tmp"), &images)
-            .unwrap()
-            .is_empty()
+            .unwrap(),
+        [] as [AgentTurnEvent; 0]
     );
 }

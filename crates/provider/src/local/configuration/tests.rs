@@ -210,7 +210,10 @@ fn rejects_unknown_invalid_or_overbroad_advanced_configuration() {
 
 #[test]
 fn empty_and_inherited_configuration_does_not_add_cli_arguments() {
-    assert!(claude(&StoredAgentConfig::default()).unwrap().is_empty());
+    assert_eq!(
+        claude(&StoredAgentConfig::default()).unwrap(),
+        [] as [String; 0]
+    );
     assert_eq!(codex(&StoredAgentConfig::default()).unwrap(), json!({}));
     assert!(
         grants(&config(json!({"toolPolicy":null})))

@@ -76,7 +76,7 @@ fn records_the_owning_provider_and_retains_no_elicitation_schema() {
     assert_eq!(pending.request["provider"], json!(PROVIDER));
     assert_eq!(pending.request["kind"], json!("tool"));
     assert!(pending.schema.is_none());
-    assert!(pending.unique_fields.is_empty());
+    assert_eq!(pending.unique_fields, [] as [String; 0]);
 }
 
 #[test]

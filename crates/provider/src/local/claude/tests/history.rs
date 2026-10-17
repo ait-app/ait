@@ -42,7 +42,7 @@ fn native_paths_and_handles_are_scoped_to_canonical_working_directory() {
         )
         .is_err()
     );
-    assert!(
+    assert_eq!(
         history::list(
             &client,
             &ListOptions {
@@ -50,8 +50,8 @@ fn native_paths_and_handles_are_scoped_to_canonical_working_directory() {
                 scan_limit: 10
             }
         )
-        .unwrap()
-        .is_empty()
+        .unwrap(),
+        [] as [SessionDescriptor; 0]
     );
 }
 
@@ -94,7 +94,7 @@ fn history_rejects_corruption_and_cwd_mismatch_without_importing_partial_records
     for invalid in ["{broken\n".to_owned(), record.to_string(), "{}\n".into()] {
         std::fs::write(&path, invalid).unwrap();
         assert!(history::read(&client, &handle, cwd).is_err());
-        assert!(
+        assert_eq!(
             history::list(
                 &client,
                 &ListOptions {
@@ -102,8 +102,8 @@ fn history_rejects_corruption_and_cwd_mismatch_without_importing_partial_records
                     scan_limit: 10
                 }
             )
-            .unwrap()
-            .is_empty()
+            .unwrap(),
+            [] as [SessionDescriptor; 0]
         );
     }
     record["cwd"] = json!("/not/the/workspace");

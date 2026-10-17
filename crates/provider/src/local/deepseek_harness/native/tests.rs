@@ -40,8 +40,8 @@ async fn installed_host_discovers_switches_permissions_and_adopts_legacy_session
         !directory.path().join("sessions").exists(),
         "discovery must not create native history"
     );
-    assert!(!details.models.is_empty());
-    assert!(!details.modes.is_empty());
+    assert_ne!(details.models, [] as [serde_json::Value; 0]);
+    assert_ne!(details.modes, [] as [serde_json::Value; 0]);
     assert!(
         details.features[0]["options"]
             .as_array()
@@ -63,7 +63,10 @@ async fn installed_host_discovers_switches_permissions_and_adopts_legacy_session
     );
     let handle = session.persistence().unwrap();
     session.close().await.unwrap();
-    assert!(client.history(&handle, &spec.cwd).await.unwrap().is_empty());
+    assert_eq!(
+        client.history(&handle, &spec.cwd).await.unwrap(),
+        [] as [crate::protocol::timeline::NativeItem; 0]
+    );
     let listed = client
         .list_sessions(&crate::ports::native_history::ListOptions {
             cwd: Some(spec.cwd.clone()),
@@ -79,7 +82,10 @@ async fn installed_host_discovers_switches_permissions_and_adopts_legacy_session
         .inspect_session(&imported_handle, &spec.cwd)
         .await
         .unwrap();
-    assert!(imported.entries.is_empty());
+    assert_eq!(
+        imported.entries,
+        [] as [crate::protocol::timeline::NativeItem; 0]
+    );
     assert!(!imported.active);
     assert_eq!(imported.config.mode_id, native_mode);
     imported_handle.metadata = Some(imported.resume_metadata);
@@ -106,12 +112,16 @@ async fn installed_host_discovers_switches_permissions_and_adopts_legacy_session
     assert_eq!(resumed.persistence().unwrap().session_id, handle.session_id);
     resumed.close().await.unwrap();
     spec.config.mode_id = None;
+    adopts_legacy_profile_session(&client, &spec).await;
+}
+
+async fn adopts_legacy_profile_session(client: &DeepSeekHarnessClient, spec: &AgentSessionSpec) {
     let legacy_client = client.clone().with_acp_profile();
-    let mut legacy = legacy_client.create_session(&spec).await.unwrap();
+    let mut legacy = legacy_client.create_session(spec).await.unwrap();
     let legacy_handle = legacy.persistence().unwrap();
     legacy.close().await.unwrap();
     let mut adopted = client
-        .resume_session(&legacy_handle, &spec, AgentResumePurpose::Interactive)
+        .resume_session(&legacy_handle, spec, AgentResumePurpose::Interactive)
         .await
         .unwrap();
     assert_eq!(
@@ -127,7 +137,7 @@ async fn discovery_does_not_require_session_permissions_or_create_native_history
     fixture.set_snapshot_fields(serde_json::json!({"projections":{"values":{}}}));
     let details = fixture.client.discover(&fixture.spec.cwd).await.unwrap();
     assert_eq!(details.models[0]["id"], "[\"local\",\"test\"]");
-    assert!(!details.modes.is_empty());
+    assert_ne!(details.modes, [] as [serde_json::Value; 0]);
     assert!(
         details.features[0]["options"]
             .as_array()

@@ -1,5 +1,4 @@
 use super::*;
-
 #[test]
 fn first_user_text_reads_only_current_history_without_creating_a_generation() {
     let timeline = Timeline::memory().unwrap();
@@ -133,7 +132,7 @@ fn committed_rows_and_epoch_survive_restart_and_replay_is_immutable() {
     assert_eq!(loaded, epoch);
     assert_eq!(rows.len(), 2);
     assert_eq!((rows[0].seq, rows[1].seq), (1, 2));
-    assert!(timeline.read("other").unwrap().1.is_empty());
+    assert_eq!(timeline.read("other").unwrap().1, [] as [Row; 0]);
 }
 
 #[test]
@@ -293,7 +292,7 @@ fn serialized_entry_at_768_kib_is_persisted_and_one_byte_more_is_rejected() {
         ),
         Err(ErrorCode::ResourceExhausted)
     );
-    assert!(timeline.read("other").unwrap().1.is_empty());
+    assert_eq!(timeline.read("other").unwrap().1, [] as [Row; 0]);
 }
 
 #[test]

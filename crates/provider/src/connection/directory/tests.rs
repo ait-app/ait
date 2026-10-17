@@ -22,11 +22,11 @@ fn observation(entries: Vec<Value>) -> Observation {
 #[test]
 fn pages_seed_the_entire_filter_without_emitting_unseen_page_rows() {
     let mut observation = observation(vec![entry("one", "One"), entry("two", "Two")]);
-    assert!(
+    assert_eq!(
         observation
             .update(prepared(vec![entry("one", "One"), entry("two", "Two")]))
-            .unwrap()
-            .is_empty()
+            .unwrap(),
+        [] as [ServerMessage; 0]
     );
     let events = observation
         .update(prepared(vec![

@@ -75,7 +75,7 @@ fn late_placement_stays_rejected_until_the_workspace_barrier_opens() {
     owner.place("workspace").unwrap();
     drop(barrier);
     assert!(startup[0].is_cancelled());
-    assert!(owners.startup(&lane).unwrap().is_empty());
+    assert_eq!(owners.startup(&lane).unwrap(), [] as [CancellationToken; 0]);
 }
 
 #[test]

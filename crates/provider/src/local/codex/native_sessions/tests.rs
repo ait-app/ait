@@ -37,7 +37,10 @@ fn native_history_validates_complete_identity_and_preserves_configuration() {
     partial["turns"][0]["status"] = json!("inProgress");
     let parsed = history(&partial).unwrap();
     assert!(parsed.active);
-    assert!(parsed.entries.is_empty());
+    assert_eq!(
+        parsed.entries,
+        [] as [crate::protocol::timeline::NativeItem; 0]
+    );
     let mut duplicate = thread();
     duplicate["turns"]
         .as_array_mut()

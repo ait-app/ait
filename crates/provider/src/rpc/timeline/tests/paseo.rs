@@ -189,11 +189,9 @@ fn search_does_not_join_same_message_deltas_across_interleaved_tools() {
     ];
     let found = search(&query("HELLO world"), "e", &rows).unwrap();
     assert_eq!(found["locations"], json!([]));
-    assert!(
-        search(&query("hello separate"), "e", &rows).unwrap()["locations"]
-            .as_array()
-            .unwrap()
-            .is_empty()
+    assert_eq!(
+        search(&query("hello separate"), "e", &rows).unwrap()["locations"],
+        json!([])
     );
 }
 

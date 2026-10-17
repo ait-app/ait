@@ -83,7 +83,7 @@ fn archived_internal_or_unowned_agents_and_broken_parent_chains_do_not_contribut
     let cycle_b = child("b", "wks-one", "a");
     let orphan = child("orphan", "wks-one", "missing");
     let archived_child = child("archived-child", "wks-one", "archived");
-    assert!(
+    assert_eq!(
         snapshot(vec![
             archived,
             internal,
@@ -92,8 +92,8 @@ fn archived_internal_or_unowned_agents_and_broken_parent_chains_do_not_contribut
             cycle_b,
             orphan,
             archived_child
-        ])
-        .is_empty()
+        ]),
+        [] as [WorkspaceActivity; 0]
     );
 }
 

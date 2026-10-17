@@ -15,6 +15,9 @@ async fn adapters_without_environment_support_reject_overrides_without_creating_
             .await,
         Err(AgentManagerError::SessionRejected)
     );
-    assert!(registry.list().unwrap().is_empty());
+    assert_eq!(
+        registry.list().unwrap(),
+        [] as [PersistedAgentRuntimeRecord; 0]
+    );
     assert_eq!(client.0.lock().unwrap().create_calls, 0);
 }

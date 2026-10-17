@@ -73,7 +73,10 @@ async fn missing_caller_is_rejected_before_any_native_session_is_created() {
             .await,
         Err(ErrorCode::AgentNotFound)
     );
-    assert!(registry.list().unwrap().is_empty());
+    assert_eq!(
+        registry.list().unwrap(),
+        [] as [domain::agent_runtime::PersistedAgentRuntimeRecord; 0]
+    );
     assert!(!fixture.cwd.join("native-requests.jsonl").exists());
     execution.shutdown().await.unwrap();
 }

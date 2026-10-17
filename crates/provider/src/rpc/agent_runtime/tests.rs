@@ -195,7 +195,7 @@ fn stored_projection_marks_provider_unavailable_and_hides_resume_handle() {
         crate::protocol::agent_lifecycle::AgentStatus::Closed
     );
     assert_eq!(projected.updated_at, "2026-09-20T12:00:00.000Z");
-    assert!(projected.features.is_empty());
+    assert_eq!(projected.features, [] as [serde_json::Value; 0]);
     assert!(projected.last_error.is_none());
 }
 

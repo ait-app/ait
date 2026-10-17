@@ -482,7 +482,10 @@ async fn request_validation_rejects_unimplemented_creation_and_message_semantics
                 .is_err()
         );
     }
-    assert!(registry.list().unwrap().is_empty());
+    assert_eq!(
+        registry.list().unwrap(),
+        [] as [domain::agent_runtime::PersistedAgentRuntimeRecord; 0]
+    );
     assert!(!fixture.cwd.join("native-requests.jsonl").exists());
     let created = create(&execution, &fixture).await;
     let id = created["agentId"].as_str().unwrap();

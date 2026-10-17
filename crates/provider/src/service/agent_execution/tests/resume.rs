@@ -79,7 +79,10 @@ async fn invalid_unknown_resume_does_not_create_agent_records_or_native_writers(
     }
     fixture.mode("missing-thread");
     assert!(execution.execute("agent.resume.request", json!({"handle":{"provider":"codex","sessionId":"external"},"overrides":{"cwd":fixture.cwd}})).await.is_err());
-    assert!(registry.list().unwrap().is_empty());
+    assert_eq!(
+        registry.list().unwrap(),
+        [] as [domain::agent_runtime::PersistedAgentRuntimeRecord; 0]
+    );
     assert!(!fixture.requests().iter().any(|request| matches!(
         request["method"].as_str(),
         Some("thread/start" | "thread/resume")

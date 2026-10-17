@@ -64,7 +64,7 @@ fn pending_survives_restart_and_answers_validate_before_completion() {
             .unwrap()
             .contains("No unsafe")
     );
-    assert!(restored.pending().is_empty());
+    assert_eq!(restored.pending(), [] as [Value; 0]);
     assert!(restored.prepare(id, &response).is_err());
     let restored = Questions::restore(restored.saved().as_ref()).unwrap();
     let mut history = vec![NativeItem {
@@ -90,11 +90,11 @@ fn dismissals_malformed_native_data_and_metadata_bounds_are_explicit() {
     questions
         .resolve("permission-question", &json!({"behavior":"deny"}))
         .unwrap();
-    assert!(
+    assert_eq!(
         Questions::restore(questions.saved().as_ref())
             .unwrap()
-            .pending()
-            .is_empty()
+            .pending(),
+        [] as [Value; 0]
     );
     let mut conflicting = item();
     conflicting["questions"][0]["title"] = json!("changed");

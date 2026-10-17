@@ -18,11 +18,11 @@ fn classifies_common_failures_without_retaining_native_text() {
         assert_eq!(classify(text), expected);
         assert!(!format!("{:?}", native(&json!({"message":text}), "test")).contains("secret"));
         assert!(!expected.message().contains("/private/path"));
-        assert!(!expected.code().is_empty());
+        assert_ne!(expected.code(), "");
     }
     for category in [Category::Closed, Category::Protocol, Category::Unavailable] {
-        assert!(!category.message().is_empty());
-        assert!(!category.code().is_empty());
+        assert_ne!(category.message(), "");
+        assert_ne!(category.code(), "");
     }
 }
 

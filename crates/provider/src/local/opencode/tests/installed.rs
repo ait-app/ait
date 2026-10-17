@@ -466,7 +466,7 @@ async fn installed_acp_native_question_form_reaches_user_and_model() {
         .await
         .unwrap();
     completed(session.as_mut()).await;
-    assert!(session.pending_permissions().is_empty());
+    assert_eq!(session.pending_permissions(), [] as [Value; 0]);
     session.close().await.unwrap();
 }
 
@@ -636,7 +636,10 @@ async fn installed_acp_auxiliary_model_has_no_tools_and_removes_native_history()
         cwd: Some(spec.cwd.clone()),
         scan_limit: 10,
     };
-    assert!(client.list_sessions(&options).await.unwrap().is_empty());
+    assert_eq!(
+        client.list_sessions(&options).await.unwrap(),
+        [] as [crate::ports::native_history::SessionDescriptor; 0]
+    );
     assert_eq!(
         client
             .generate_summary(&spec, "Summarize metadata", &json!({"type":"object"}))
@@ -644,7 +647,10 @@ async fn installed_acp_auxiliary_model_has_no_tools_and_removes_native_history()
             .unwrap(),
         "authoritative answer"
     );
-    assert!(client.list_sessions(&options).await.unwrap().is_empty());
+    assert_eq!(
+        client.list_sessions(&options).await.unwrap(),
+        [] as [crate::ports::native_history::SessionDescriptor; 0]
+    );
 }
 
 #[tokio::test]
