@@ -1,5 +1,13 @@
 # Ait changelog
 
+## 0.1.8 - 2026-10-18
+
+- Add Pi 1.2+ through its native RPC interface, including model discovery, native session resume, attachments, streamed responses and tool progress.
+- Keep each attached image whole, enforce exact image budgets, and restore Codex image previews across devices and session restarts.
+- Resume Claude sessions using their launch directory even after a shell command changes directory; identify the Codex app-server client as Ait.
+- Keep the centered composer usable with a tall keyboard and limit desktop drag exclusions to window chrome and overlays.
+- Publish standalone Linux x86_64 and macOS Apple Silicon daemon archives; sign and notarize the macOS binary and build Linux against glibc 2.28.
+
 ## 0.1.7 - 2026-10-18
 
 - Keep routable account Hosts up to date through a dedicated status channel, preserve unavailable Host records, and show only online Hosts when choosing a connection.

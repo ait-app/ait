@@ -185,6 +185,7 @@
 
 ## 发布验证
 
+- [Ait 0.1.8 发布说明与验证](releases/release-0.1.8.md)
 - [Ait 0.1.6 发布说明与验证](releases/release-0.1.6.md)
 - [Ait 0.1.5 Draft 发布说明](releases/release-0.1.5.md)
 - [Ait 0.1.4 Draft 发布说明](releases/release-0.1.4.md)
