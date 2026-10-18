@@ -65,13 +65,22 @@ main/PR CI 不调用 EAS 构建或提交，不消耗移动端发布配额。
 | Linux               | x86_64                  | `Ait-VERSION-linux-x64.tar.gz`                           |
 | macOS               | Apple Silicon arm64     | `Ait-VERSION-macos-arm64.dmg`                            |
 | macOS               | Apple Silicon arm64     | `Ait-VERSION-macos-arm64.zip`                            |
+| Linux 独立 daemon   | x86_64                  | `Ait-VERSION-daemon-linux-x64.tar.gz`                    |
+| macOS 独立 daemon   | Apple Silicon arm64     | `Ait-VERSION-daemon-macos-arm64.tar.gz`                  |
 | Android（独立发布） | 通用（含 ARM64、ARMv7） | `Ait-VERSION-android.apk`                                |
 | 自动更新            | 各平台                  | `latest-linux.yml`、`latest-mac.yml`、生成的 `.blockmap` |
 | 校验                | 全部资产                | `SHA256SUMS`                                             |
 
-AppImage 文件名保持稳定，版本体现在 Release 标签和应用内部。Windows、deb/rpm、其他架构
-和独立 CLI 不属于本次发布。安装包 `resources/bin/` 中只有 `daemon`；Electron 主程序与
+AppImage 文件名保持稳定，版本体现在 Release 标签和应用内部。Windows、deb/rpm 和其他架构
+不属于本次发布。安装包 `resources/bin/` 中只有 `daemon`；Electron 主程序与
 Helper 是必需运行时。GitHub 仍自动提供标签对应的源码归档。
+
+独立 daemon 归档供没有桌面环境的主机运行 [无人值守 daemon](headless-daemon.md)，与桌面包使用
+同一次构建的 Rust `daemon`。归档内为可执行文件 `ait-daemon` 和 `LICENSE`；文件改名是为了放入
+`PATH` 时不与系统同名程序冲突，`--help` 中的程序名仍为 `daemon`。macOS 版本单独用 Developer ID
+签名（hardened runtime）并公证；裸可执行文件无法 staple 公证票据，Gatekeeper 首次运行时在线核验。
+Linux daemon 在 `ubuntu-24.04` runner 上通过 [`build-linux-daemon.sh`](../../scripts/build-linux-daemon.sh) 于 `manylinux_2_28` 容器内编译，桌面包与独立归档共用；构建后检查不超过 `GLIBC_2.28` 与 `GLIBCXX_3.4.25`，支持 Ubuntu 20.04、Debian 10、RHEL 8 及更新版本。
+正式版和 beta 都包含这两个归档；nightly 不发布独立 daemon。
 
 ## Arch Linux 本地源码安装
 
@@ -194,11 +203,13 @@ git push origin v0.0.20
 `.github/workflows/release.yml` 在 Linux x86_64 和 macOS arm64 原生 runner 上构建桌面：
 
 1. 校验标签和全部活跃版本，安装根 npm workspace，验证发布脚本。
-2. 用锁定依赖只构建 `daemon` 的 `daemon`。
+2. 用锁定依赖只构建 `daemon` 的 `daemon`；Linux 在 `manylinux_2_28` 容器中编译并检查 glibc 基线。
 3. 导出界面、编译 Electron 主进程，验证 daemon 版本并暂存单个可执行文件。
 4. 检查打包内容；macOS 签名、公证；隔离启动成品应用并验证真实 daemon 生命周期。
 5. 收集桌面安装包和自动更新资产，核对更新摘要。
-6. 桌面构建成功后汇总资产并生成 SHA256SUMS，再创建 Draft Release 或补齐既有 Release 的资产。
+6. 将同一 daemon 打包为独立归档并核对其 `--version`；macOS 先单独签名、公证。
+7. 桌面构建成功后汇总资产（必须包含两个独立 daemon 归档）并生成 SHA256SUMS，再创建 Draft
+   Release 或补齐既有 Release 的资产。
 
 新建 Release 使用 [`gh release create --draft`](https://cli.github.com/manual/gh_release_create)，
 将安装包暂存为草稿，供代理继续校验资产、整理说明与覆盖率证据，然后自动完成正式发布。

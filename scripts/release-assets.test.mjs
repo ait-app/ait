@@ -22,7 +22,14 @@ import { getPublishConfigs } from "app-builder-lib/out/publish/PublishManager.js
 import { createUpdateInfoTasks } from "app-builder-lib/out/publish/updateInfoBuilder.js";
 import { expandMacro } from "app-builder-lib/out/util/macroExpander.js";
 import { stringify, parse } from "yaml";
-import { collectReleaseAssets, releaseAssetNames, verifyReleaseAssets } from "./release-assets.mjs";
+import {
+  collectReleaseAssets,
+  daemonAssetName,
+  daemonAssetNames,
+  packDaemonAsset,
+  releaseAssetNames,
+  verifyReleaseAssets,
+} from "./release-assets.mjs";
 import { releaseChannel } from "./release-version.mjs";
 import { nightlyBuildLabel, nightlyBuilderArgs } from "./nightly-build.mjs";
 
@@ -88,6 +95,19 @@ async function fixture(t, platform, version = "0.0.7", buildLabel) {
 
 async function addAndroidAssets(directory) {
   await writeFile(path.join(directory, "Ait-0.0.7-android.apk"), "universal APK");
+}
+
+async function addDaemonAssets(directory, version = "0.0.7") {
+  for (const name of daemonAssetNames(version))
+    await writeFile(path.join(directory, name), "daemon archive");
+}
+
+async function fakeDaemon(t, reported) {
+  const root = await mkdtemp(path.join(tmpdir(), "ait-daemon-binary-"));
+  t.after(() => rm(root, { recursive: true, force: true }));
+  const binary = path.join(root, "daemon");
+  await writeFile(binary, `#!/bin/sh\necho "${reported}"\n`, { mode: 0o700 });
+  return { root, binary };
 }
 
 test("release assets match electron-builder's target-specific architecture names", async () => {
@@ -221,7 +241,10 @@ test("builder generates beta updater files and collector rejects stable metadata
       [names[2]],
     );
     assert.equal(tasks[0].info.version, version);
-    await collectReleaseAssets({ ...input, destination: linux.destination });
+    await collectReleaseAssets({
+      ...input,
+      destination: linux.destination,
+    });
   }
   await verifyReleaseAssets({ version, directory: linux.destination });
   await writeFile(path.join(linux.destination, "latest-linux.yml"), "version: 0.0.7");
@@ -293,16 +316,104 @@ test("desktop-only verification is the default and Android requires an explicit 
   assert.notEqual(verify("--andriod").status, 0, "unknown options must fail closed");
 });
 
+test("standalone daemon archives package ait-daemon and the license per target", async (t) => {
+  assert.equal(daemonAssetName("linux", "0.0.7"), "Ait-0.0.7-daemon-linux-x64.tar.gz");
+  assert.equal(
+    daemonAssetName("mac", "0.0.8-beta.1"),
+    "Ait-0.0.8-beta.1-daemon-macos-arm64.tar.gz",
+  );
+  assert.throws(() => daemonAssetName("android", "0.0.7"), /Unsupported daemon platform/);
+  const { root, binary } = await fakeDaemon(t, "daemon 0.0.7");
+  const license = path.join(root, "LICENSE");
+  await writeFile(license, "license text");
+  const destination = path.join(root, "release-assets");
+  const name = await packDaemonAsset({
+    platform: "linux",
+    version: "0.0.7",
+    binary,
+    destination,
+    license,
+  });
+  assert.equal(name, "Ait-0.0.7-daemon-linux-x64.tar.gz");
+  const listing = spawnSync("tar", ["-tvzf", path.join(destination, name)], {
+    encoding: "utf8",
+  });
+  assert.equal(listing.status, 0, listing.stderr);
+  const entries = listing.stdout.trim().split("\n");
+  assert.deepEqual(
+    entries.map((line) => line.split(/\s+/).at(-1)),
+    ["ait-daemon", "LICENSE"],
+  );
+  assert.match(entries[0], /^-rwxr-xr-x/);
+  const stale = await fakeDaemon(t, "daemon 0.0.6");
+  await assert.rejects(
+    packDaemonAsset({
+      platform: "mac",
+      version: "0.0.7",
+      binary: stale.binary,
+      destination,
+    }),
+    /Daemon binary reports daemon 0\.0\.6/,
+  );
+  assert.deepEqual((await readdir(destination)).sort(), [name]);
+  const script = fileURLToPath(new URL("./release-assets.mjs", import.meta.url));
+  const nightly = spawnSync(
+    process.execPath,
+    [script, "daemon", "linux", "0.0.7", binary, destination, "--nightly", "abc"],
+    { encoding: "utf8" },
+  );
+  assert.notEqual(nightly.status, 0, "nightly builds must not package standalone daemons");
+});
+
+test("stable verification requires daemon archives only when requested", async (t) => {
+  const linux = await fixture(t, "linux");
+  const mac = await fixture(t, "mac");
+  await collectReleaseAssets(linux);
+  await collectReleaseAssets({ ...mac, destination: linux.destination });
+  const options = {
+    version: linux.version,
+    directory: linux.destination,
+    includeDaemon: true,
+  };
+  await assert.rejects(
+    verifyReleaseAssets(options),
+    /Missing release asset: Ait-0\.0\.7-daemon-linux-x64\.tar\.gz/,
+  );
+  await addDaemonAssets(linux.destination);
+  await verifyReleaseAssets(options);
+  const sums = await readFile(path.join(linux.destination, "SHA256SUMS"), "utf8");
+  assert.equal(sums.trim().split("\n").length, 8);
+  assert.match(sums, /  Ait-0\.0\.7-daemon-macos-arm64\.tar\.gz/);
+  // Android-only repairs re-verify a published release without rebuilding its daemons.
+  await addAndroidAssets(linux.destination);
+  await verifyReleaseAssets({
+    ...options,
+    includeDaemon: false,
+    includeAndroid: true,
+  });
+  await assert.rejects(
+    verifyReleaseAssets({ ...options, buildLabel: "38fb6054-2026-10-08" }),
+    /Nightly builds do not publish standalone daemons/,
+  );
+});
+
 test("rejects incomplete releases and unintended platform assets", async (t) => {
   const input = await fixture(t, "linux");
   await collectReleaseAssets(input);
   await assert.rejects(
-    verifyReleaseAssets({ version: input.version, directory: input.destination }),
+    verifyReleaseAssets({
+      version: input.version,
+      directory: input.destination,
+    }),
     /Missing release asset/,
   );
   const mac = await fixture(t, "mac");
   await collectReleaseAssets({ ...mac, destination: input.destination });
-  const options = { version: input.version, directory: input.destination, includeAndroid: true };
+  const options = {
+    version: input.version,
+    directory: input.destination,
+    includeAndroid: true,
+  };
   await assert.rejects(
     verifyReleaseAssets(options),
     /Missing release asset: Ait-0.0.7-android.apk/,
@@ -348,7 +459,13 @@ test("desktop release verifies published desktop assets and any retained Android
       env: { ...process.env, RELEASE_TAG: "v0.0.7" },
       encoding: "utf8",
     });
+  assert.notEqual(run().status, 0, "stable releases must carry standalone daemon archives");
+  await addDaemonAssets(assets);
   assert.equal(run().status, 0);
+  assert.match(
+    await readFile(path.join(assets, "SHA256SUMS"), "utf8"),
+    /Ait-0\.0\.7-daemon-linux-x64\.tar\.gz/,
+  );
   await addAndroidAssets(assets);
   assert.equal(run().status, 0);
   assert.match(await readFile(path.join(assets, "SHA256SUMS"), "utf8"), /Ait-0\.0\.7-android\.apk/);
@@ -415,12 +532,44 @@ test("release workflow builds only the daemon and packages the resolved desktop 
     ["linux", "mac"],
   );
   const build = workflow.jobs.build.steps.find((step) => step.name === "Build release daemon only");
+  assert.equal(build.if, "matrix.platform == 'mac'");
   assert.match(build.run, /--locked --release -p "\$\{\{ steps.layout.outputs.package \}\}"/);
   assert.match(build.run, /--bin "\$\{\{ steps.layout.outputs.binary \}\}" --target/);
+  const linux = workflow.jobs.build.steps.find(
+    (step) => step.name === "Build release daemon only (glibc 2.28 baseline)",
+  );
+  assert.equal(linux.if, "matrix.platform == 'linux'");
+  assert.match(linux.run, /\.tmp\/release-tools\/scripts\/build-linux-daemon\.sh/);
+  // The Linux container must use the same pinned toolchain as the macOS runner.
+  const toolchain = workflow.jobs.build.steps.find((step) =>
+    step.uses?.startsWith("dtolnay/rust-toolchain@"),
+  );
+  assert(linux.run.endsWith(` ${toolchain.uses.split("@")[1]}`));
+  const script = await readFile(new URL("./build-linux-daemon.sh", import.meta.url), "utf8");
+  assert.match(script, /--locked --release -p "\$PACKAGE" --bin "\$BINARY" --target "\$TARGET"/);
+  assert.match(script, /^max_glibc=2\.28$/m);
   const collect = workflow.jobs.build.steps.find(
     (step) => step.name === "Collect installers and updater assets",
   );
   assert.match(collect.run, /steps.layout.outputs.desktop/);
+  const names = workflow.jobs.build.steps.map((step) => step.name);
+  const sign = workflow.jobs.build.steps.find(
+    (step) => step.name === "Sign and notarize standalone macOS daemon",
+  );
+  assert.equal(sign.if, "matrix.platform == 'mac'");
+  assert.match(sign.run, /codesign --force --timestamp --options runtime/);
+  assert.match(sign.run, /notarytool submit/);
+  const pack = workflow.jobs.build.steps.find((step) => step.name === "Package standalone daemon");
+  assert.match(pack.run, /release-assets\.mjs daemon/);
+  assert(names.indexOf(sign.name) < names.indexOf(pack.name));
+  const upload = workflow.jobs.build.steps.findIndex((step) =>
+    step.uses?.startsWith("actions/upload-artifact@"),
+  );
+  assert(names.indexOf(pack.name) < upload);
+  const verify = workflow.jobs.release.steps.find(
+    (step) => step.name === "Verify assets and write checksums",
+  );
+  assert.match(verify.run, /args=\(--daemon\)/);
   const config = parse(
     await readFile(new URL("../apps/desktop/electron-builder.yml", import.meta.url), "utf8"),
   );
@@ -447,19 +596,28 @@ test("checksums build provenance and rejects a mismatched source version", async
   };
   const file = path.join(linux.destination, "BUILD-INFO.json");
   await writeFile(file, JSON.stringify(info));
-  await verifyReleaseAssets({ version: linux.version, directory: linux.destination });
+  await verifyReleaseAssets({
+    version: linux.version,
+    directory: linux.destination,
+  });
   assert.match(
     await readFile(path.join(linux.destination, "SHA256SUMS"), "utf8"),
     /  BUILD-INFO\.json/,
   );
   await writeFile(file, JSON.stringify({ ...info, version: "0.0.6" }));
   await assert.rejects(
-    verifyReleaseAssets({ version: linux.version, directory: linux.destination }),
+    verifyReleaseAssets({
+      version: linux.version,
+      directory: linux.destination,
+    }),
     /version differs/,
   );
   await writeFile(file, JSON.stringify({ ...info, sourceCommit: "main" }));
   await assert.rejects(
-    verifyReleaseAssets({ version: linux.version, directory: linux.destination }),
+    verifyReleaseAssets({
+      version: linux.version,
+      directory: linux.destination,
+    }),
     /full commit SHA/,
   );
 });
