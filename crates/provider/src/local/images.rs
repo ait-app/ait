@@ -1,5 +1,6 @@
 //! Private content-addressed provider image artifacts shared by live and history projections.
 
+use std::borrow::Cow;
 use std::fmt::Write as _;
 use std::io::Write;
 use std::path::{Path, PathBuf};
@@ -27,6 +28,13 @@ impl ImageStore {
     }
 
     pub(super) fn render(&self, image: &Value) -> Result<String, AgentSessionError> {
+        Ok(format!("![Image]({})", encode_source(&self.source(image)?)))
+    }
+
+    /// Resolve a native image to a URL or private artifact path without embedding its bytes.
+    /// # Errors
+    /// Returns unsupported content, invalid data or private artifact storage failures.
+    pub(super) fn source<'a>(&self, image: &'a Value) -> Result<Cow<'a, str>, AgentSessionError> {
         let source = image.as_str().or_else(|| {
             ["path", "savedPath", "saved_path", "url"]
                 .into_iter()
@@ -42,7 +50,7 @@ impl ImageStore {
             if source.chars().any(char::is_control) {
                 return Err(AgentSessionError::Failed);
             }
-            return Ok(format!("![Image]({})", encode_source(source)));
+            return Ok(Cow::Borrowed(source));
         }
         let data = image["data"]
             .as_str()
@@ -118,10 +126,10 @@ impl ImageStore {
             }
             Ok(_) | Err(_) => return Err(AgentSessionError::Failed),
         }
-        Ok(format!(
-            "![Image]({})",
-            encode_source(path.to_str().ok_or(AgentSessionError::Failed)?)
-        ))
+        path.into_os_string()
+            .into_string()
+            .map(Cow::Owned)
+            .map_err(|_| AgentSessionError::Failed)
     }
 
     fn prepare(&self) -> Result<(), AgentSessionError> {

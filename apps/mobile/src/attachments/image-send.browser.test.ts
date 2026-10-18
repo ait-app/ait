@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { prepareImageForSend, MAX_IMAGE_BASE64, type ImageRegion } from "./image-send";
+import { prepareImageForSend } from "./image-send";
 import { openSendImage } from "./image-send-codec.web";
 import { blobToBase64 } from "./utils";
 
@@ -28,34 +28,54 @@ describe("real browser image send", () => {
   it.each([
     [600, 9000],
     [9000, 600],
-  ])("keeps the far edge and pixel resolution of %ix%i", async (width, height) => {
+  ])("keeps all four corners of a %ix%i image in a single image", async (width, height) => {
     const input = canvas(width, height);
     const context = input.getContext("2d")!;
     context.fillStyle = "white";
     context.fillRect(0, 0, width, height);
-    context.fillStyle = "red";
-    context.fillRect(width - 30, height - 30, 30, 30);
     context.fillStyle = "black";
     context.font = "16px monospace";
     context.fillText("Readable screenshot text", 10, 25);
+    const corners = [
+      [0, 0, "red"],
+      [width - 40, 0, "lime"],
+      [0, height - 40, "blue"],
+      [width - 40, height - 40, "magenta"],
+    ] as const;
+    for (const [x, y, color] of corners) {
+      context.fillStyle = color;
+      context.fillRect(x, y, 40, 40);
+    }
     const raw = await original(input);
     // Production limits preserve even extreme aspect ratios byte-for-byte.
-    const unchanged = await prepareImageForSend(raw, 1);
-    expect(unchanged[0]).toBe(raw);
-    // Simulate a smaller transport budget to exercise the oversize-only crop path.
-    const result = await prepareImageForSend(raw, 50, undefined, raw.data.length - 1);
-    expect(result.length).toBeGreaterThan(2);
-    expect(result[0].description).toContain("overview");
-    const last = await decode(result.at(-1)!.data, result.at(-1)!.mimeType);
-    expect(Math.max(last.naturalWidth, last.naturalHeight)).toBeLessThanOrEqual(2048);
-    expect(Math.min(last.naturalWidth, last.naturalHeight)).toBe(600);
-    const output = canvas(last.naturalWidth, last.naturalHeight);
+    expect(await prepareImageForSend(raw)).toBe(raw);
+    const budget = Math.floor(raw.data.length / 2);
+    const result = await prepareImageForSend(raw, undefined, budget);
+    expect(Array.isArray(result)).toBe(false);
+    expect(result.data.length).toBeLessThanOrEqual(budget);
+    const image = await decode(result.data, result.mimeType);
+    expect(Math.abs(image.naturalWidth - (image.naturalHeight * width) / height)).toBeLessThan(2);
+    const output = canvas(image.naturalWidth, image.naturalHeight);
     const pixels = output.getContext("2d")!;
-    pixels.drawImage(last, 0, 0);
-    expect([...pixels.getImageData(output.width - 10, output.height - 10, 1, 1).data]).toEqual([
-      255, 0, 0, 255,
-    ]);
-    expect(result.every((image) => image.data.length <= MAX_IMAGE_BASE64)).toBe(true);
+    pixels.drawImage(image, 0, 0);
+    const expected = [
+      [255, 0, 0],
+      [0, 255, 0],
+      [0, 0, 255],
+      [255, 0, 255],
+    ];
+    for (const [index, [x, y]] of corners.entries()) {
+      const actual = pixels.getImageData(
+        Math.floor(((x + 20) * output.width) / width),
+        Math.floor(((y + 20) * output.height) / height),
+        1,
+        1,
+      ).data;
+      for (let channel = 0; channel < 3; channel++) {
+        expect(Math.abs(actual[channel] - expected[index][channel])).toBeLessThan(30);
+      }
+      expect(actual[3]).toBe(255);
+    }
     input.width = input.height = output.width = output.height = 0;
   });
 
@@ -74,11 +94,12 @@ describe("real browser image send", () => {
     context.putImageData(pixels, 0, 0);
     context.clearRect(0, 0, 20, 20);
     const raw = await original(input);
-    expect(raw.data.length).toBeGreaterThan(MAX_IMAGE_BASE64);
-    expect((await prepareImageForSend(raw, 50))[0]).toBe(raw);
-    const result = await prepareImageForSend(raw, 50, undefined, MAX_IMAGE_BASE64);
-    expect(result.reduce((sum, item) => sum + item.data.length, 0)).toBeLessThan(raw.data.length);
-    const image = await decode(result[0].data, result[0].mimeType);
+    const budget = 4 * Math.ceil((1024 * 1024) / 3);
+    expect(raw.data.length).toBeGreaterThan(budget);
+    expect(await prepareImageForSend(raw)).toBe(raw);
+    const result = await prepareImageForSend(raw, undefined, budget);
+    expect(result.data.length).toBeLessThanOrEqual(budget);
+    const image = await decode(result.data, result.mimeType);
     const output = canvas(image.naturalWidth, image.naturalHeight);
     const out = output.getContext("2d")!;
     out.drawImage(image, 0, 0);
@@ -86,21 +107,13 @@ describe("real browser image send", () => {
     input.width = input.height = output.width = output.height = 0;
   });
 
-  it("uses only bounded canvases for crops and the overview", async () => {
+  it("resizes a complete long image in the browser codec", async () => {
     const input = canvas(500, 12000);
     const image = await openSendImage(input.toDataURL());
     try {
-      const region: ImageRegion = {
-        x: 0,
-        y: 10000,
-        width: 500,
-        height: 2000,
-        outputWidth: 500,
-        outputHeight: 2000,
-      };
-      const encoded = await image.encode(region, "image/png", 1);
+      const encoded = await image.encode({ width: 250, height: 6000 }, "image/png", 1);
       const result = await decode(encoded.data, encoded.mimeType);
-      expect([result.naturalWidth, result.naturalHeight]).toEqual([500, 2000]);
+      expect([result.naturalWidth, result.naturalHeight]).toEqual([250, 6000]);
     } finally {
       image.release();
       input.width = input.height = 0;

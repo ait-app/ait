@@ -199,6 +199,18 @@ pub(super) fn timeline_items(
             .into_iter()
             .collect());
     }
+    if native["type"] == "userMessage" {
+        let id = native["id"]
+            .as_str()
+            .filter(|id| !id.is_empty())
+            .ok_or(AgentSessionError::Failed)?;
+        return Ok(vec![NativeItem {
+            key: format!("native:{turn}:{id}"),
+            turn_id: Some(turn.to_owned()),
+            timestamp: timestamp.to_owned(),
+            item: super::user_images::project(native, images)?,
+        }]);
+    }
     if native["type"] != "mcpToolCall" {
         return Ok(timeline_item(native, turn, timestamp)?
             .into_iter()

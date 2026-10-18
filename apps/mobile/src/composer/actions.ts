@@ -18,11 +18,7 @@ import { createUserMessage, generateMessageId, type UserMessageItem } from "@/ty
 import type { MessageSubmissionRejectionOutcome } from "@/composer/submission/model";
 import type { PickedImageAttachmentInput } from "@/hooks/image-attachment-picker";
 import { i18n } from "@/i18n/i18next";
-import {
-  imageSendPayload,
-  type EncodedSendImage,
-  type ImageSendContext,
-} from "@/attachments/image-send";
+import { type EncodedSendImage, type ImageSendContext } from "@/attachments/image-send";
 
 export interface QueuedComposerMessage {
   id: string;
@@ -228,12 +224,11 @@ export async function dispatchComposerAgentMessage(
       attachments: wirePayload.attachments,
       clientMessageId,
     });
-    const prepared = imageSendPayload(imagesData, wirePayload.attachments);
     await input.client.sendAgentMessage(input.agentId, input.text, {
       messageId: clientMessageId,
       ...(input.activeTurnBehavior ? { activeTurnBehavior: input.activeTurnBehavior } : {}),
-      images: prepared.images ?? [],
-      attachments: prepared.attachments ?? [],
+      images: imagesData ?? [],
+      attachments: wirePayload.attachments ?? [],
     });
     input.submission.accept(input.agentId, clientMessageId);
   } catch (error) {

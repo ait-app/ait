@@ -111,7 +111,7 @@ describe("attachment service", () => {
     ]);
   });
 
-  it("expands a long screenshot in order while preserving original storage metadata", async () => {
+  it("compresses a long screenshot into one image while preserving original storage metadata", async () => {
     const store = createRecordingStore();
     __setAttachmentStoreForTests(store);
     vi.spyOn(store, "encodeBase64").mockResolvedValue(
@@ -120,9 +120,7 @@ describe("attachment service", () => {
     const original = createAttachment({ id: "att_long", byteSize: 30000000 });
     const before = { ...original };
     const result = await encodeAttachmentsForSend([original]);
-    expect(result?.length).toBeGreaterThan(1);
-    expect(result?.[0].description).toContain("original image 1: overview");
-    expect(result?.[1].description).toContain("original image 1: detail crop");
+    expect(result).toEqual([{ data: "part", mimeType: "image/png" }]);
     expect(original).toEqual(before);
     expect(store.savedSources).toEqual([]);
   });
@@ -139,7 +137,7 @@ describe("attachment service", () => {
     ).rejects.toThrow("missing attachment");
   });
 
-  it("reserves space for every selected original when expanding images", async () => {
+  it("keeps fifty originals as fifty images even when the first needs compression", async () => {
     const store = createRecordingStore();
     __setAttachmentStoreForTests(store);
     const read = store.encodeBase64.bind(store);
@@ -151,7 +149,20 @@ describe("attachment service", () => {
     const attachments = Array.from({ length: 50 }, (_, index) =>
       createAttachment({ id: index === 0 ? "att_long" : `att_${index}` }),
     );
-    await expect(encodeAttachmentsForSend(attachments)).rejects.toThrow("too many readable parts");
+    const result = await encodeAttachmentsForSend(attachments);
+    expect(result).toHaveLength(50);
+    expect(result?.[0]).toEqual({ data: "part", mimeType: "image/png" });
+    expect(result?.[49].data).toBe("att_49:base64");
+  });
+
+  it("rejects more than fifty images before reading any bytes", async () => {
+    const store = createRecordingStore();
+    __setAttachmentStoreForTests(store);
+    const read = vi.spyOn(store, "encodeBase64");
+    await expect(
+      encodeAttachmentsForSend(Array.from({ length: 51 }, () => createAttachment())),
+    ).rejects.toThrow("at most 50 images");
+    expect(read).not.toHaveBeenCalled();
   });
 
   it("keeps all fifty under-budget images without geometry processing", async () => {

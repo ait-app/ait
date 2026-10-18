@@ -2,6 +2,69 @@ use super::*;
 use base64::Engine;
 
 #[tokio::test]
+async fn initial_user_image_preview_survives_native_delivery_refresh_and_restart() {
+    let fixture = Fixture::new();
+    fixture.mode("rich-user-images");
+    let (execution, _) = worker(&fixture);
+    let created = execution
+        .execute(
+            "agent.create.request",
+            json!({
+                "config":{"provider":"codex","cwd":fixture.cwd},
+                "initialPrompt":"这是什么植物？", "clientMessageId":"mobile-input",
+                "images":[{"data":"aGVsbG8=","mimeType":"image/png"}]
+            }),
+        )
+        .await
+        .unwrap();
+    let id = created["agentId"].as_str().unwrap();
+    execution
+        .execute("agent.finish.wait.request", json!({"agentId":id}))
+        .await
+        .unwrap();
+    let before = user_image_preview(&execution, id).await;
+    assert_eq!(
+        std::fs::read(before["imageSources"][0].as_str().unwrap()).unwrap(),
+        b"hello"
+    );
+    let requests = fixture.requests();
+    let input = &requests
+        .iter()
+        .find(|request| request["method"] == "turn/start")
+        .unwrap()["params"]["input"];
+    assert_eq!(input.as_array().unwrap().len(), 2);
+    assert_eq!(input[0]["text"], "这是什么植物？");
+    assert_eq!(input[1]["url"], "data:image/png;base64,aGVsbG8=");
+    execution
+        .execute("agent.refresh.request", json!({"agentId":id}))
+        .await
+        .unwrap();
+    assert_eq!(user_image_preview(&execution, id).await, before);
+    execution.shutdown().await.unwrap();
+
+    let (restarted, _) = worker(&fixture);
+    assert_eq!(user_image_preview(&restarted, id).await, before);
+    restarted.shutdown().await.unwrap();
+}
+
+async fn user_image_preview(execution: &AgentExecution, id: &str) -> Value {
+    let page = execution
+        .execute("agent.timeline.get.request", json!({"agentId":id}))
+        .await
+        .unwrap();
+    let item = page["entries"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .find(|entry| entry["item"]["type"] == "user_message")
+        .unwrap()["item"]
+        .clone();
+    assert_eq!(item["text"], "这是什么植物？");
+    assert_eq!(item["imageSources"].as_array().unwrap().len(), 1);
+    item
+}
+
+#[tokio::test]
 async fn screenshot_message_reaches_native_provider_once_for_interrupt_and_steer() {
     for behavior in ["interrupt", "steer"] {
         let fixture = Fixture::new();

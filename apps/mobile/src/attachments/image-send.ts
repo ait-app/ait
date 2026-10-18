@@ -6,15 +6,15 @@ export const MAX_SEND_IMAGES = 50;
 // Wire admission limits, measured after base64 encoding / JSON serialization.
 export const MAX_ORIGINAL_IMAGE_BASE64 = 32 * 1024 * 1024;
 export const MAX_IMAGE_PROMPT_BYTES = 63 * 1024 * 1024;
-// Encoding target only after the original exceeds a wire budget.
-export const MAX_IMAGE_BASE64 = 4 * Math.ceil((1024 * 1024) / 3);
-const TILE_EDGE = 2048;
-const OVERLAP = 128;
+const MAX_DECODE_PIXELS = 80 * 1024 * 1024;
+// Bound temporary output surfaces while retaining the entire image.
+const MAX_ENCODE_PIXELS = 16 * 1024 * 1024;
+const MAX_ENCODE_EDGE = 16384;
+const MAX_RESIZE_ATTEMPTS = 8;
 
 export interface EncodedSendImage {
   data: string;
   mimeType: string;
-  description?: string;
 }
 
 export interface ImageSendContext {
@@ -28,74 +28,16 @@ export function supportsSendImage(mimeType: string): boolean {
   return ["image/png", "image/jpeg", "image/gif", "image/webp"].includes(mimeType);
 }
 
-export interface ImageRegion {
-  x: number;
-  y: number;
+export interface ImageDimensions {
   width: number;
   height: number;
-  outputWidth: number;
-  outputHeight: number;
-  overview?: boolean;
 }
 
 export interface SendImageSource {
   width: number;
   height: number;
-  encode(region: ImageRegion, mimeType: string, quality: number): Promise<EncodedSendImage>;
+  encode(size: ImageDimensions, mimeType: string, quality: number): Promise<EncodedSendImage>;
   release(): void;
-}
-
-export function imagePartsError(): Error {
-  return new Error("These images need too many readable parts. Send fewer images or crop them.");
-}
-
-function axisRegions(length: number): Array<{ start: number; length: number }> {
-  const count = Math.max(1, Math.ceil((length - OVERLAP) / (TILE_EDGE - OVERLAP)));
-  if (count > MAX_SEND_IMAGES) throw imagePartsError();
-  if (count === 1) return [{ start: 0, length }];
-  const size = Math.ceil((length + (count - 1) * OVERLAP) / count);
-  return Array.from({ length: count }, (_, index) => ({
-    start: index * (size - OVERLAP),
-    length: Math.min(size, length - index * (size - OVERLAP)),
-  }));
-}
-
-/** Keep detail crops at original resolution; only the overview is downsampled. */
-export function planSendImage(width: number, height: number, maxParts: number): ImageRegion[] {
-  if (!Number.isSafeInteger(width) || !Number.isSafeInteger(height) || width < 1 || height < 1) {
-    throw new Error("The image dimensions could not be read.");
-  }
-  if (width <= TILE_EDGE && height <= TILE_EDGE) {
-    return [{ x: 0, y: 0, width, height, outputWidth: width, outputHeight: height }];
-  }
-  const columns = axisRegions(width);
-  const rows = axisRegions(height);
-  if (columns.length * rows.length + 1 > maxParts) throw imagePartsError();
-  const scale = Math.min(1, 1024 / Math.max(width, height));
-  const regions: ImageRegion[] = [
-    {
-      x: 0,
-      y: 0,
-      width,
-      height,
-      outputWidth: Math.max(1, Math.round(width * scale)),
-      outputHeight: Math.max(1, Math.round(height * scale)),
-      overview: true,
-    },
-  ];
-  for (const row of rows) {
-    for (const column of columns) {
-      regions.push({
-        x: column.start,
-        y: row.start,
-        width: column.length,
-        height: row.length,
-        outputWidth: column.length,
-        outputHeight: row.length,
-      });
-    }
-  }
-  return regions;
 }
 
 function base64Bytes(data: string, offset: number, length: number): Buffer {
@@ -183,134 +125,94 @@ export function isAnimatedSendImage(image: EncodedSendImage): boolean {
   return true;
 }
 
-async function encodeRegion(
+async function encodeWholeImage(
   source: SendImageSource,
-  region: ImageRegion,
+  size: ImageDimensions,
   originalMimeType: string,
   maxBase64Bytes: number,
 ): Promise<EncodedSendImage> {
   let best: EncodedSendImage | undefined;
   // PNG preserves screenshot text and alpha when its lossless encoding already fits.
   if (originalMimeType !== "image/jpeg") {
-    best = await source.encode(region, "image/png", 1);
+    best = await source.encode(size, "image/png", 1);
     if (best.data.length <= maxBase64Bytes) return best;
   }
   const mimeType = originalMimeType === "image/jpeg" ? "image/jpeg" : "image/webp";
   for (const quality of [0.94, 0.88, 0.82]) {
-    const candidate = await source.encode(region, mimeType, quality);
+    const candidate = await source.encode(size, mimeType, quality);
     if (!best || candidate.data.length < best.data.length) best = candidate;
     if (best.data.length <= maxBase64Bytes || candidate.mimeType !== mimeType) break;
   }
   return best!;
 }
 
-function splitRegion(region: ImageRegion): ImageRegion[] {
-  const horizontal = region.width >= region.height;
-  const length = horizontal ? region.width : region.height;
-  if (length < 2) throw new Error("The image could not be compressed safely.");
-  const middle = Math.floor(length / 2);
-  const overlap = Math.min(OVERLAP / 2, Math.floor(length / 4));
-  return [
-    { start: 0, length: middle + overlap },
-    {
-      start: middle - overlap,
-      length: length - middle + overlap,
-    },
-  ].map((part) => ({
-    ...region,
-    x: region.x + (horizontal ? part.start : 0),
-    y: region.y + (horizontal ? 0 : part.start),
-    width: horizontal ? part.length : region.width,
-    height: horizontal ? region.height : part.length,
-    outputWidth: horizontal ? part.length : region.width,
-    outputHeight: horizontal ? region.height : part.length,
-  }));
+function validateDimensions({ width, height }: ImageDimensions): void {
+  if (!Number.isSafeInteger(width) || !Number.isSafeInteger(height) || width < 1 || height < 1) {
+    throw new Error("The image dimensions could not be read.");
+  }
+  if (width * height > MAX_DECODE_PIXELS) {
+    throw new Error("This image is too large to process safely. Send a smaller image.");
+  }
 }
 
+/** One original always produces one complete image; only its encoding and size may change. */
 export async function prepareImageForSend(
   original: EncodedSendImage,
-  maxParts: number,
   open: (uri: string) => Promise<SendImageSource> = openSendImage,
   maxBase64Bytes: number = MAX_ORIGINAL_IMAGE_BASE64,
-): Promise<EncodedSendImage[]> {
-  if (maxParts < 1) throw imagePartsError();
+): Promise<EncodedSendImage> {
+  if (!Number.isSafeInteger(maxBase64Bytes) || maxBase64Bytes < 1) {
+    throw new Error("The image byte budget must be positive.");
+  }
   const oversized = original.data.length > maxBase64Bytes;
   // Geometry never starts compression. Supported files within their byte budget
   // bypass even header parsing and bitmap decoding, including very long images.
-  if (!oversized && supportsSendImage(original.mimeType)) return [original];
+  if (!oversized && supportsSendImage(original.mimeType)) return original;
   if (isAnimatedSendImage(original)) {
     if (oversized) {
       throw new Error("This animated image is too large. Send a smaller file.");
     }
-    return [original];
+    return original;
   }
   // Preflight headers before loading a huge bitmap. Decoded orientation can differ;
-  // the actual codec dimensions still own the final crop plan.
+  // the actual codec dimensions still own the final resize ratio.
   const dimensions = headerDimensions(original);
-  if (dimensions) {
-    if (oversized) planSendImage(dimensions.width, dimensions.height, maxParts);
-    if (dimensions.width * dimensions.height > 80 * 1024 * 1024) {
-      throw new Error("This image is too large to process safely. Crop it or send it in parts.");
-    }
-  }
+  if (dimensions) validateDimensions(dimensions);
   const source = await open(`data:${original.mimeType};base64,${original.data}`);
   try {
-    // Format conversion alone also keeps the full original dimensions.
-    const queue: ImageRegion[] = oversized
-      ? planSendImage(source.width, source.height, maxParts)
-      : [
-          {
-            x: 0,
-            y: 0,
-            width: source.width,
-            height: source.height,
-            outputWidth: source.width,
-            outputHeight: source.height,
-          },
-        ];
-    const result: EncodedSendImage[] = [];
-    const outputLimit = oversized ? MAX_IMAGE_BASE64 : maxBase64Bytes;
-    while (queue.length > 0) {
-      const region = queue.shift()!;
-      const encoded = await encodeRegion(source, region, original.mimeType, outputLimit);
-      if (encoded.data.length > outputLimit) {
-        if (region.overview) {
-          region.outputWidth = Math.max(1, Math.floor(region.outputWidth / 2));
-          region.outputHeight = Math.max(1, Math.floor(region.outputHeight / 2));
-          if (region.outputWidth === 1 && region.outputHeight === 1) {
-            throw new Error("The image could not be compressed safely.");
-          }
-          queue.unshift(region);
-        } else {
-          if (result.length + queue.length + 2 > maxParts) throw imagePartsError();
-          queue.unshift(...splitRegion(region));
-        }
-        continue;
-      }
-      result.push({
-        ...encoded,
-        description: region.overview
-          ? `overview of the full ${source.width}x${source.height} image`
-          : `detail crop x=${region.x}, y=${region.y}, width=${region.width}, height=${region.height}; original pixel resolution`,
-      });
+    validateDimensions(source);
+    let scale = Math.min(
+      1,
+      MAX_ENCODE_EDGE / Math.max(source.width, source.height),
+      Math.sqrt(MAX_ENCODE_PIXELS / (source.width * source.height)),
+    );
+    for (let attempt = 0; attempt <= MAX_RESIZE_ATTEMPTS; attempt++) {
+      const size = {
+        width: Math.max(1, Math.floor(source.width * scale)),
+        height: Math.max(1, Math.floor(source.height * scale)),
+      };
+      const encoded = await encodeWholeImage(source, size, original.mimeType, maxBase64Bytes);
+      if (encoded.data.length <= maxBase64Bytes) return encoded;
+      if (size.width === 1 && size.height === 1) break;
+      scale *= Math.min(0.75, Math.sqrt(maxBase64Bytes / encoded.data.length) * 0.9);
     }
-    if (result.length === 1) delete result[0].description;
-    return result;
+    throw new Error(
+      "This image cannot fit the message budget. Send a smaller image or fewer images.",
+    );
   } finally {
     source.release();
   }
 }
 
-/** Count the actual prompt JSON, including UTF-8 context and crop grouping notes.
+/** Count the actual prompt JSON, including UTF-8 text and user attachments.
  * Standard base64 needs no JSON escaping, so avoid duplicating large data strings.
  */
 export function imagePromptBytes(images: EncodedSendImage[], context: ImageSendContext): number {
-  const payload = imageSendPayload(images, context.attachments);
   const envelope = Buffer.byteLength(
     JSON.stringify({
       text: context.text ?? "",
       images: [],
-      attachments: payload.attachments ?? [],
+      attachments: context.attachments ?? [],
       clientMessageId: context.clientMessageId ?? null,
       outputSchema: context.outputSchema ?? null,
     }),
@@ -327,38 +229,4 @@ export function imagePromptBytes(images: EncodedSendImage[], context: ImageSendC
       0,
     )
   );
-}
-
-/** Strip client-only layout metadata and provide one model-facing grouping note. */
-export function imageSendPayload(
-  prepared: EncodedSendImage[] | undefined,
-  attachments: AgentAttachment[] | undefined,
-): {
-  images: Array<{ data: string; mimeType: string }> | undefined;
-  attachments: AgentAttachment[] | undefined;
-} {
-  const descriptions = prepared?.flatMap((image, index) =>
-    image.description ? [`Image ${index + 1}: ${image.description}`] : [],
-  );
-  if (!descriptions?.length)
-    return {
-      images: prepared?.map(({ data, mimeType }) => ({ data, mimeType })),
-      attachments,
-    };
-  if ((attachments?.length ?? 0) >= 32) {
-    throw new Error(
-      "There are too many attachments to describe the image parts. Send fewer attachments.",
-    );
-  }
-  return {
-    images: prepared?.map(({ data, mimeType }) => ({ data, mimeType })),
-    attachments: [
-      ...(attachments ?? []),
-      {
-        type: "text",
-        mimeType: "text/plain",
-        text: `Image layout: overviews show the full image; detail crops preserve readable pixels and overlap. Crop coordinates refer to the top-left of the original image.\n${descriptions.join("\n")}`,
-      },
-    ],
-  };
 }

@@ -100,6 +100,7 @@ export interface UserMessageItem {
   text: string;
   timestamp: Date;
   images?: UserMessageImageAttachment[];
+  imageSources?: string[];
   attachments?: AgentAttachment[];
 }
 
@@ -112,6 +113,7 @@ export interface UserMessageInput {
   text: string;
   timestamp: Date;
   images?: UserMessageImageAttachment[];
+  imageSources?: string[];
   attachments?: AgentAttachment[];
 }
 
@@ -130,6 +132,7 @@ export function createUserMessage(input: UserMessageInput): UserMessageItem {
     text: input.text,
     timestamp: input.timestamp,
     ...(input.images && input.images.length > 0 ? { images: input.images } : {}),
+    ...(input.imageSources?.length ? { imageSources: input.imageSources } : {}),
     ...(input.attachments && input.attachments.length > 0
       ? { attachments: input.attachments }
       : {}),
@@ -255,7 +258,12 @@ function produceUserMessage(
   if (!existing || existing.kind !== "user_message") {
     throw new Error("User message upsert matched a non-user row");
   }
-  const presentation = presentationPolicy === "incoming" ? incoming : existing;
+  const useIncoming =
+    presentationPolicy === "incoming" ||
+    (Boolean(incoming.imageSources?.length) &&
+      !existing.images?.length &&
+      !existing.attachments?.length);
+  const presentation = useIncoming ? incoming : existing;
   const merged = createUserMessage({
     ...presentation,
     clientMessageId: incoming.clientMessageId ?? existing.clientMessageId,
@@ -270,6 +278,7 @@ function produceUserMessage(
     existing.text === merged.text &&
     existing.timestamp === merged.timestamp &&
     existing.images === merged.images &&
+    existing.imageSources === merged.imageSources &&
     existing.attachments === merged.attachments
   ) {
     return { items, index, message: existing, matched: true };
@@ -895,9 +904,10 @@ function appendUserMessage(
   clientMessageId?: string,
   timelineCursor?: TimelinePosition,
   turnId?: string,
+  imageSources?: string[],
 ): StreamItem[] {
   const { chunk, hasContent } = normalizeChunk(text);
-  if (!hasContent) {
+  if (!hasContent && !imageSources?.length) {
     return state;
   }
 
@@ -909,6 +919,7 @@ function appendUserMessage(
     timelineCursor,
     turnId,
     text: chunk,
+    imageSources,
     timestamp,
   });
   return upsertUserMessage(state, nextItem);
@@ -1532,6 +1543,7 @@ function reduceTimelineEvent(
           item.clientMessageId,
           timelineCursor,
           event.turnId,
+          item.imageSources,
         ),
       );
     case "assistant_message":
@@ -1914,6 +1926,7 @@ function applyCanonicalUserMessageEvent(params: {
     turnId: event.turnId,
     timelineCursor,
     text: normalized.chunk,
+    imageSources: event.item.imageSources,
     timestamp,
   });
   if (unmatchedInsert === "head") {
@@ -1921,7 +1934,7 @@ function applyCanonicalUserMessageEvent(params: {
       tail,
       head,
       message: canonical,
-      insert: normalized.hasContent ? "head" : "none",
+      insert: normalized.hasContent || canonical.imageSources?.length ? "head" : "none",
       presentation: "existing",
     });
     const reconciledTail = canonical.clientMessageId
@@ -1949,7 +1962,11 @@ function applyCanonicalUserMessageEvent(params: {
           : [],
     };
   }
-  const reconciled = placeCanonicalUserMessageAtTail(flushedTail, canonical, normalized.hasContent);
+  const reconciled = placeCanonicalUserMessageAtTail(
+    flushedTail,
+    canonical,
+    normalized.hasContent || Boolean(canonical.imageSources?.length),
+  );
   const reconciledTail = canonical.clientMessageId
     ? reconcileCanonicalUserTurnMembership(
         reconciled.items,

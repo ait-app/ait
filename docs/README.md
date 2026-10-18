@@ -25,6 +25,8 @@
 
 ## 架构决策
 
+- [ADR-156：整图输入与 Codex 用户图片的跨设备展示](decisions/providers/adr-156-codex-user-image-projection.md)：传输分块与整图输入的边界、超预算整图压缩、旧会话兼容及跨设备预览。
+
 - [ADR-155：持久 Relay 数据隧道](decisions/daemon/adr-155-persistent-relay-data-tunnel.md)：单数据 WSS、Yamux、旧中心回退与 Android/iOS/desktop 协议兼容。
 
 - [ADR-153：OpenCode ACP 冷启动预算](decisions/providers/adr-153-opencode-acp-cold-start-budget.md)：启动、首次会话创建与 Provider 目录的分层期限。

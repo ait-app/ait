@@ -1,4 +1,4 @@
-import type { EncodedSendImage, ImageRegion, SendImageSource } from "./image-send";
+import type { EncodedSendImage, ImageDimensions, SendImageSource } from "./image-send";
 import { blobToBase64 } from "./utils";
 
 export async function openSendImage(uri: string): Promise<SendImageSource> {
@@ -14,30 +14,19 @@ export async function openSendImage(uri: string): Promise<SendImageSource> {
     width: image.naturalWidth,
     height: image.naturalHeight,
     async encode(
-      region: ImageRegion,
+      size: ImageDimensions,
       mimeType: string,
       quality: number,
     ): Promise<EncodedSendImage> {
-      // Never allocate a canvas with the dimensions of an entire long screenshot.
       const canvas = document.createElement("canvas");
-      canvas.width = region.outputWidth;
-      canvas.height = region.outputHeight;
+      canvas.width = size.width;
+      canvas.height = size.height;
       try {
         const context = canvas.getContext("2d");
         if (!context) throw new Error("Image processing is unavailable.");
         context.imageSmoothingEnabled = true;
         context.imageSmoothingQuality = "high";
-        context.drawImage(
-          image,
-          region.x,
-          region.y,
-          region.width,
-          region.height,
-          0,
-          0,
-          canvas.width,
-          canvas.height,
-        );
+        context.drawImage(image, 0, 0, canvas.width, canvas.height);
         const blob = await new Promise<Blob>((resolve, reject) => {
           canvas.toBlob(
             (value) => (value ? resolve(value) : reject(new Error("Image encoding failed."))),

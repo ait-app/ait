@@ -1,12 +1,9 @@
 import { describe, expect, it, vi } from "vitest";
 import { Buffer } from "buffer";
 import {
-  imageSendPayload,
   imagePromptBytes,
   isAnimatedSendImage,
-  MAX_IMAGE_BASE64,
   MAX_ORIGINAL_IMAGE_BASE64,
-  planSendImage,
   prepareImageForSend,
   type SendImageSource,
 } from "./image-send";
@@ -20,81 +17,63 @@ function source(width: number, height: number): SendImageSource {
   };
 }
 
-describe("image send preparation", () => {
-  it.each([
-    [800, 20000],
-    [20000, 800],
-    [6000, 5000],
-    [2049, 100],
-  ])("covers every pixel of %ix%i without shrinking the detail crops", (width, height) => {
-    const regions = planSendImage(width, height, 50);
-    expect(regions[0].overview).toBe(true);
-    expect(Math.max(regions[0].outputWidth, regions[0].outputHeight)).toBe(1024);
-    const crops = regions.slice(1);
-    for (const crop of crops) {
-      expect(crop.outputWidth).toBe(crop.width);
-      expect(crop.outputHeight).toBe(crop.height);
-      expect(crop.width).toBeLessThanOrEqual(2048);
-      expect(crop.height).toBeLessThanOrEqual(2048);
-      expect(crop.x + crop.width).toBeLessThanOrEqual(width);
-      expect(crop.y + crop.height).toBeLessThanOrEqual(height);
-    }
-    // Check the union on both axes, including the last pixel and every seam.
-    for (const [axis, size, end] of [
-      ["x", "width", width],
-      ["y", "height", height],
-    ] as const) {
-      const intervals = [...new Map(crops.map((crop) => [crop[axis], crop[size]])).entries()].sort(
-        ([a], [b]) => a - b,
-      );
-      let covered = 0;
-      for (const [start, length] of intervals) {
-        expect(start).toBeLessThanOrEqual(covered);
-        if (start > 0) expect(covered - start).toBeGreaterThanOrEqual(128);
-        covered = Math.max(covered, start + length);
-      }
-      expect(covered).toBe(end);
-    }
-  });
-
-  it("does not upscale or re-encode a small image", async () => {
-    const image = source(500, 200);
-    const original = { data: "original", mimeType: "image/png" };
-    expect(await prepareImageForSend(original, 50, async () => image)).toEqual([original]);
-    expect(image.encode).not.toHaveBeenCalled();
-    expect(image.release).not.toHaveBeenCalled();
+describe("whole image send preparation", () => {
+  it("sends one whole image after exceeding its byte budget without model-facing layout notes", async () => {
+    const image = source(4284, 5712);
+    image.encode = vi.fn(async (_size, mimeType) => ({ data: "ok", mimeType }));
+    const result = await prepareImageForSend(
+      { data: "oversized", mimeType: "image/png" },
+      async () => image,
+      4,
+    );
+    expect(result).toEqual({ data: "ok", mimeType: "image/png" });
+    expect(image.encode).toHaveBeenCalledOnce();
+    const size = vi.mocked(image.encode).mock.calls[0][0];
+    expect(Object.keys(size).sort()).toEqual(["height", "width"]);
+    expect(Math.abs(size.width - (size.height * 4284) / 5712)).toBeLessThan(1);
+    expect(image.release).toHaveBeenCalledOnce();
   });
 
   it.each([
+    [500, 200],
     [800, 1000000],
     [1000000, 800],
     [60000, 60000],
-  ])("preserves under-budget %ix%i files without opening a bitmap", async (width, height) => {
+  ])("preserves under-budget %ix%i files without bitmap decoding", async (width, height) => {
     const open = vi.fn(async () => source(width, height));
     const original = { data: "original", mimeType: "image/png" };
-    expect(await prepareImageForSend(original, 1, open)).toEqual([original]);
+    expect(await prepareImageForSend(original, open)).toBe(original);
     expect(open).not.toHaveBeenCalled();
   });
 
-  it("passes the exact per-image byte limit and processes only bytes above it", async () => {
+  it("processes only bytes above the exact per-image budget", async () => {
     const image = source(500, 200);
     const open = vi.fn(async () => image);
     const original = { data: "A".repeat(MAX_ORIGINAL_IMAGE_BASE64), mimeType: "image/png" };
-    const unchanged = await prepareImageForSend(original, 50, open);
-    expect(unchanged[0]).toBe(original);
+    expect(await prepareImageForSend(original, open)).toBe(original);
     expect(open).not.toHaveBeenCalled();
-    const result = await prepareImageForSend(
-      { ...original, data: original.data + "AAAA" },
-      50,
-      open,
-    );
-    expect(result[0].data).toBe("encoded");
+    expect(await prepareImageForSend({ ...original, data: original.data + "AAAA" }, open)).toEqual({
+      data: "encoded",
+      mimeType: "image/png",
+    });
     expect(open).toHaveBeenCalledOnce();
   });
 
-  it("counts the full serialized prompt including UTF-8 and image layout", () => {
+  it("uses the actual image budget instead of a smaller encoding target", async () => {
+    const image = source(500, 200);
+    const encoded = { data: "B".repeat(8 * 1024 * 1024), mimeType: "image/png" };
+    image.encode = vi.fn(async () => encoded);
+    const result = await prepareImageForSend(
+      { data: "A".repeat(MAX_ORIGINAL_IMAGE_BASE64 + 4), mimeType: "image/png" },
+      async () => image,
+    );
+    expect(result).toBe(encoded);
+    expect(image.encode).toHaveBeenCalledOnce();
+  });
+
+  it("counts full serialized prompt bytes including UTF-8 user context", () => {
     const images = [
-      { data: "AAAA", mimeType: "image/png", description: "original image 1: overview" },
+      { data: "AAAA", mimeType: "image/png" },
       { data: "BBBB", mimeType: "image/webp" },
     ];
     const context = {
@@ -103,136 +82,93 @@ describe("image send preparation", () => {
       attachments: [{ type: "text" as const, mimeType: "text/plain" as const, text: "上下文" }],
       outputSchema: { type: "object" },
     };
-    const payload = imageSendPayload(images, context.attachments);
-    const serialized = JSON.stringify({
-      text: context.text,
-      images: payload.images,
-      attachments: payload.attachments,
-      clientMessageId: context.clientMessageId,
-      outputSchema: context.outputSchema,
-    });
-    expect(imagePromptBytes(images, context)).toBe(Buffer.byteLength(serialized, "utf8"));
+    expect(imagePromptBytes(images, context)).toBe(
+      Buffer.byteLength(
+        JSON.stringify({
+          text: context.text,
+          images,
+          attachments: context.attachments,
+          clientMessageId: context.clientMessageId,
+          outputSchema: context.outputSchema,
+        }),
+        "utf8",
+      ),
+    );
   });
 
-  it("converts unsupported wire formats even when the original is small", async () => {
-    const image = source(500, 200);
-    const result = await prepareImageForSend(
-      { data: "original", mimeType: "image/avif" },
-      50,
-      async () => image,
-    );
-    expect(result).toEqual([{ data: "encoded", mimeType: "image/png" }]);
-    expect(image.encode).toHaveBeenCalledOnce();
+  it.each([
+    [500, 200],
+    [800, 6000],
+  ])("converts unsupported %ix%i images as a whole", async (width, height) => {
+    const image = source(width, height);
+    expect(
+      await prepareImageForSend({ data: "original", mimeType: "image/avif" }, async () => image),
+    ).toEqual({ data: "encoded", mimeType: "image/png" });
+    expect(image.encode).toHaveBeenCalledExactlyOnceWith({ width, height }, "image/png", 1);
     expect(image.release).toHaveBeenCalledOnce();
   });
 
-  it("normalizes an unsupported long image without size-based reduction below its budget", async () => {
-    const image = source(800, 6000);
-    image.encode = vi.fn(async () => ({
-      data: "A".repeat(MAX_IMAGE_BASE64 + 4),
-      mimeType: "image/png",
-    }));
-    const result = await prepareImageForSend(
-      { data: "original", mimeType: "image/avif" },
-      1,
-      async () => image,
-    );
-    expect(result).toHaveLength(1);
-    expect(result[0].data.length).toBe(MAX_IMAGE_BASE64 + 4);
-    expect(image.encode).toHaveBeenCalledExactlyOnceWith(
-      { x: 0, y: 0, width: 800, height: 6000, outputWidth: 800, outputHeight: 6000 },
-      "image/png",
-      1,
-    );
-  });
-
-  it("rejects oversized animations without converting them to a still image", async () => {
-    const open = vi.fn();
-    await expect(
-      prepareImageForSend(
-        { data: "A".repeat(MAX_ORIGINAL_IMAGE_BASE64 + 4), mimeType: "image/gif" },
-        50,
-        open,
-      ),
-    ).rejects.toThrow("animated image is too large");
-    expect(open).not.toHaveBeenCalled();
-  });
-
-  it("tries lossless output before high-quality compression and preserves MIME", async () => {
+  it("tries lossless output before high-quality compression and preserves the actual MIME", async () => {
     const image = source(1800, 1000);
-    image.encode = vi.fn(async (_region, mimeType) => ({
-      data: mimeType === "image/png" ? "A".repeat(MAX_IMAGE_BASE64 + 4) : "small-webp",
+    image.encode = vi.fn(async (_size, mimeType) => ({
+      data: mimeType === "image/png" ? "A".repeat(132) : "small-webp",
       mimeType,
     }));
     const result = await prepareImageForSend(
-      {
-        data: "A".repeat(MAX_IMAGE_BASE64 + 4),
-        mimeType: "image/png",
-      },
-      50,
+      { data: "A".repeat(132), mimeType: "image/png" },
       async () => image,
-      MAX_IMAGE_BASE64,
+      128,
     );
-    expect(result[0].data.length).toBeLessThanOrEqual(MAX_IMAGE_BASE64);
-    expect(result).toEqual([{ data: "small-webp", mimeType: "image/webp" }]);
+    expect(result).toEqual({ data: "small-webp", mimeType: "image/webp" });
     expect(vi.mocked(image.encode).mock.calls.map(([, mime, quality]) => [mime, quality])).toEqual([
       ["image/png", 1],
       ["image/webp", 0.94],
     ]);
   });
 
-  it("splits an incompressible region instead of reducing readability or quality indefinitely", async () => {
+  it("reduces the whole image proportionally when encoding alone cannot fit", async () => {
     const image = source(1800, 1000);
-    image.encode = vi.fn(async (region, mimeType) => ({
-      data: region.width > 1100 ? "A".repeat(MAX_IMAGE_BASE64 + 4) : "detail",
+    image.encode = vi.fn(async (size, mimeType) => ({
+      data: size.width > 1100 ? "A".repeat(256) : "whole-image",
       mimeType,
     }));
     const result = await prepareImageForSend(
-      {
-        data: "A".repeat(MAX_IMAGE_BASE64 + 4),
-        mimeType: "image/png",
-      },
-      50,
+      { data: "A".repeat(256), mimeType: "image/png" },
       async () => image,
-      MAX_IMAGE_BASE64,
+      128,
     );
-    expect(result).toHaveLength(2);
+    expect(result.data).toBe("whole-image");
     const calls = vi.mocked(image.encode).mock.calls;
+    expect(calls[0][0]).toEqual({ width: 1800, height: 1000 });
+    expect(calls.at(-1)![0].width).toBeLessThanOrEqual(1100);
     expect(Math.min(...calls.map(([, , quality]) => quality))).toBe(0.82);
-    for (const [region] of calls) {
-      expect(region.outputWidth).toBe(region.width);
-      expect(region.outputHeight).toBe(region.height);
+    for (const [size] of calls) {
+      expect(Math.abs(size.width - size.height * 1.8)).toBeLessThan(2);
+      expect(Object.keys(size).sort()).toEqual(["height", "width"]);
     }
-    expect(result[0].description).toContain("x=0");
-    expect(result[1].description).toContain("x=836");
   });
 
-  it("keeps the overview plus explicit coordinates for a long image", async () => {
-    const image = source(800, 6000);
-    const result = await prepareImageForSend(
-      { data: "original", mimeType: "image/png" },
-      50,
-      async () => image,
-      1,
-    );
-    expect(result[0].description).toContain("overview");
-    expect(
-      result.slice(1).every((item) => item.description?.includes("original pixel resolution")),
-    ).toBe(true);
-    expect(image.release).toHaveBeenCalledOnce();
+  it("bounds output surfaces while keeping extreme aspect ratios", async () => {
+    const image = source(800, 50000);
+    await prepareImageForSend({ data: "oversized", mimeType: "image/png" }, async () => image, 8);
+    const size = vi.mocked(image.encode).mock.calls[0][0];
+    expect(size.height).toBeLessThanOrEqual(16384);
+    expect(size.width * size.height).toBeLessThanOrEqual(16 * 1024 * 1024);
+    expect(Math.abs(size.width - (size.height * 800) / 50000)).toBeLessThan(1);
   });
 
-  it("fails before rendering when the image needs too many readable parts", async () => {
-    const image = source(800, 1000000);
+  it("fails explicitly and releases the bitmap when no complete image fits", async () => {
+    const image = source(1800, 1000);
+    image.encode = vi.fn(async (_size, mimeType) => ({ data: "A".repeat(256), mimeType }));
     await expect(
-      prepareImageForSend({ data: "original", mimeType: "image/png" }, 50, async () => image, 1),
-    ).rejects.toThrow("too many readable parts");
-    expect(image.encode).not.toHaveBeenCalled();
+      prepareImageForSend({ data: "A".repeat(256), mimeType: "image/png" }, async () => image, 128),
+    ).rejects.toThrow("cannot fit the message budget");
+    expect(vi.mocked(image.encode).mock.calls.length).toBeLessThanOrEqual(36);
     expect(image.release).toHaveBeenCalledOnce();
   });
 
   it.each(["image/png", "image/jpeg", "image/webp"])(
-    "checks oversized %s headers before bitmap decode",
+    "checks oversized %s headers before decode",
     async (mimeType) => {
       const header = Buffer.alloc(40);
       if (mimeType === "image/png") {
@@ -241,10 +177,7 @@ describe("image send preparation", () => {
         header.writeUInt32BE(60000, 20);
         header.write("IDAT", 12);
       } else if (mimeType === "image/jpeg") {
-        header[0] = 0xff;
-        header[1] = 0xd8;
-        header[2] = 0xff;
-        header[3] = 0xc0;
+        header.set([0xff, 0xd8, 0xff, 0xc0]);
         header.writeUInt16BE(17, 4);
         header[6] = 8;
         header.writeUInt16BE(60000, 7);
@@ -258,55 +191,67 @@ describe("image send preparation", () => {
       }
       const open = vi.fn();
       await expect(
-        prepareImageForSend({ data: header.toString("base64"), mimeType }, 50, open, 1),
-      ).rejects.toThrow("too many readable parts");
+        prepareImageForSend({ data: header.toString("base64"), mimeType }, open, 1),
+      ).rejects.toThrow("too large to process safely");
       expect(open).not.toHaveBeenCalled();
     },
   );
 
-  it("releases the source on encoding failure", async () => {
-    const image = source(800, 6000);
-    image.encode = vi.fn(async () => {
-      throw new Error("failed");
-    });
+  it.each([
+    [0, 1],
+    [1, -1],
+    [NaN, 1],
+    [60000, 60000],
+  ])("validates decoded dimensions %ix%i and releases the source", async (width, height) => {
+    const image = source(width, height);
     await expect(
-      prepareImageForSend({ data: "original", mimeType: "image/png" }, 50, async () => image, 1),
-    ).rejects.toThrow("failed");
+      prepareImageForSend({ data: "oversized", mimeType: "image/png" }, async () => image, 1),
+    ).rejects.toThrow();
+    expect(image.encode).not.toHaveBeenCalled();
     expect(image.release).toHaveBeenCalledOnce();
   });
 
-  it.each(["image/gif", "image/webp", "image/png"])("preserves animated %s", async (mimeType) => {
-    const bytes = Buffer.alloc(40);
-    if (mimeType === "image/webp") {
-      bytes.write("VP8X", 12);
-      bytes[20] = 2;
-    } else if (mimeType === "image/png") {
-      Buffer.from("89504e470d0a1a0a", "hex").copy(bytes);
-      bytes.write("acTL", 12);
-    }
-    const original = { data: bytes.toString("base64"), mimeType };
-    const open = vi.fn();
-    expect(isAnimatedSendImage(original)).toBe(true);
-    expect(await prepareImageForSend(original, 50, open)).toEqual([original]);
-    expect(open).not.toHaveBeenCalled();
+  it("releases the source on encoding failure", async () => {
+    const image = source(800, 6000);
+    image.encode = vi.fn(async () => {
+      throw new Error("encoder failed");
+    });
+    await expect(
+      prepareImageForSend({ data: "oversized", mimeType: "image/png" }, async () => image, 1),
+    ).rejects.toThrow("encoder failed");
+    expect(image.release).toHaveBeenCalledOnce();
   });
 
-  it("sends layout as text context without leaking client-only fields into image RPCs", () => {
-    const payload = imageSendPayload(
-      [
-        { data: "one", mimeType: "image/png", description: "original image 1: overview" },
-        { data: "two", mimeType: "image/webp", description: "original image 1: detail x=0" },
-      ],
-      [{ type: "text", mimeType: "text/plain", text: "user context" }],
-    );
-    expect(payload.images).toEqual([
-      { data: "one", mimeType: "image/png" },
-      { data: "two", mimeType: "image/webp" },
-    ]);
-    expect(payload.attachments).toHaveLength(2);
-    expect(payload.attachments?.[1]).toMatchObject({
-      type: "text",
-      text: expect.stringContaining("Image 2: original image 1: detail x=0"),
-    });
-  });
+  it.each(["image/gif", "image/webp", "image/png"])(
+    "preserves animated %s and rejects over-budget animation",
+    async (mimeType) => {
+      const bytes = Buffer.alloc(40);
+      if (mimeType === "image/webp") {
+        bytes.write("VP8X", 12);
+        bytes[20] = 2;
+      } else if (mimeType === "image/png") {
+        Buffer.from("89504e470d0a1a0a", "hex").copy(bytes);
+        bytes.write("acTL", 12);
+      }
+      const original = { data: bytes.toString("base64"), mimeType };
+      const open = vi.fn();
+      expect(isAnimatedSendImage(original)).toBe(true);
+      expect(await prepareImageForSend(original, open)).toBe(original);
+      await expect(prepareImageForSend(original, open, 1)).rejects.toThrow(
+        "animated image is too large",
+      );
+      expect(open).not.toHaveBeenCalled();
+    },
+  );
+
+  it.each([0, -1, NaN, Infinity])(
+    "rejects invalid byte budgets %s before opening an image",
+    async (budget) => {
+      const open = vi.fn();
+      await expect(
+        prepareImageForSend({ data: "original", mimeType: "image/png" }, open, budget),
+      ).rejects.toThrow("byte budget must be positive");
+      expect(open).not.toHaveBeenCalled();
+    },
+  );
 });
