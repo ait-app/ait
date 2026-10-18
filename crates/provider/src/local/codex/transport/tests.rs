@@ -58,7 +58,10 @@ async fn initialize_sends_experimental_capabilities_then_initialized_notificatio
     fixture.transport.initialize().await.unwrap();
     let observed = fixture.request().await.unwrap();
     assert_eq!(observed[0]["method"], "initialize");
-    assert_eq!(observed[0]["params"]["clientInfo"]["name"], "ait-server");
+    assert_eq!(
+        observed[0]["params"]["clientInfo"],
+        json!({"name":"ait","title":"Ait","version":env!("CARGO_PKG_VERSION")})
+    );
     assert_eq!(
         observed[0]["params"]["capabilities"]["experimentalApi"],
         true
