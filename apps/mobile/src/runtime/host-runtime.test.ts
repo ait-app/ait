@@ -1984,6 +1984,111 @@ describe("HostRuntimeStore", () => {
     }
   });
 
+  it("reconnects hosts from the last fresh host list before the account reports again", async () => {
+    useHostRuntimeClock();
+    const center = "https://center.test/api";
+    const relay = createAccountRelayHostConnection({
+      hostId: "11111111-1111-4111-8111-111111111111",
+      center,
+    });
+    const remote = makeHost({ serverId: "remote", connections: [relay] });
+    const clients: FakeDaemonClient[] = [];
+    const deps = makeDeps({ [relay.id]: 1 }, clients);
+    const probe = vi.fn(deps.connectToDaemon);
+    const store = new HostRuntimeStore({
+      storage: createMemoryHostRuntimeStorage({
+        "@paseo:daemon-registry": JSON.stringify([remote]),
+        "@paseo:e2e": "1",
+        "@ait:account-relay-last-available-v1": JSON.stringify({
+          center,
+          serverIds: ["remote", "removed-host"],
+        }),
+      }),
+      deps: { ...deps, connectToDaemon: probe },
+    });
+    try {
+      await store.boot();
+      await waitForHostOnline(store, remote.serverId);
+      expect(probe).toHaveBeenCalledWith(expect.objectContaining({ connection: relay }));
+      expect(store.getAvailableHosts().map((host) => host.serverId)).toEqual(["remote"]);
+      // Startup snapshots before the fresh list keep the attempt.
+      store.setAccountRelayCenter(center);
+      store.setAvailableAccountRelayHosts([], []);
+      expect(store.getAvailableHosts().map((host) => host.serverId)).toEqual(["remote"]);
+      // The fresh list is authoritative: a host that went offline is dropped.
+      const client = store.getClient(remote.serverId)!;
+      const close = vi.spyOn(client, "close");
+      store.setAvailableAccountRelayHosts([]);
+      await vi.waitFor(() => expect(close).toHaveBeenCalled());
+      expect(store.getAvailableHosts()).toEqual([]);
+    } finally {
+      store.syncHosts([]);
+    }
+  });
+
+  it("keeps a restored host listed through stale snapshots until the fresh list arrives", async () => {
+    useHostRuntimeClock();
+    const center = "https://center.test/api";
+    const relay = createAccountRelayHostConnection({
+      hostId: "11111111-1111-4111-8111-111111111111",
+      center,
+    });
+    const remote = makeHost({ serverId: "remote", connections: [relay] });
+    const pending = createDeferred<never>();
+    const store = new HostRuntimeStore({
+      storage: createMemoryHostRuntimeStorage({
+        "@paseo:daemon-registry": JSON.stringify([remote]),
+        "@paseo:e2e": "1",
+        "@ait:account-relay-last-available-v1": JSON.stringify({ center, serverIds: ["remote"] }),
+      }),
+      deps: { ...makeDeps({}, []), connectToDaemon: () => pending.promise },
+    });
+    try {
+      await store.boot();
+      store.setAccountRelayCenter(center);
+      store.setAvailableAccountRelayHosts([], []);
+      expect(store.getAvailableHosts().map((host) => host.serverId)).toEqual(["remote"]);
+      expect(store.getSnapshot(remote.serverId)?.connectionStatus).toBe("connecting");
+    } finally {
+      store.syncHosts([]);
+    }
+  });
+
+  it("saves each changed fresh host list and forgets it on sign-out", async () => {
+    const center = "https://center.test/api";
+    const relay = createAccountRelayHostConnection({
+      hostId: "11111111-1111-4111-8111-111111111111",
+      center,
+    });
+    const remote = makeHost({ serverId: "remote", connections: [relay] });
+    const storage = createMemoryHostRuntimeStorage({
+      "@paseo:daemon-registry": JSON.stringify([remote]),
+      "@paseo:e2e": "1",
+    });
+    const setItem = vi.spyOn(storage, "setItem");
+    const key = "@ait:account-relay-last-available-v1";
+    const store = new HostRuntimeStore({ storage, deps: makeDeps({ [relay.id]: 1 }, []) });
+    try {
+      await store.boot();
+      store.setAccountRelayCenter(center);
+      store.setAvailableAccountRelayHosts(["remote"]);
+      await vi.waitFor(async () =>
+        expect(JSON.parse((await storage.getItem(key))!)).toEqual({
+          center,
+          serverIds: ["remote"],
+        }),
+      );
+      const writes = setItem.mock.calls.filter(([written]) => written === key).length;
+      store.setAvailableAccountRelayHosts(["remote"]);
+      store.setAvailableAccountRelayHosts([], ["remote"]);
+      expect(setItem.mock.calls.filter(([written]) => written === key)).toHaveLength(writes);
+      store.setAccountRelayCenter(null);
+      await vi.waitFor(async () => expect(await storage.getItem(key)).toBeNull());
+    } finally {
+      store.syncHosts([]);
+    }
+  });
+
   it("loads the registry for account discovery without waiting for the localhost probe", async () => {
     const probe = createDeferred<never>();
     const store = new HostRuntimeStore({

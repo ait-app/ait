@@ -127,6 +127,9 @@ export function normalizeCenter(value: string): string {
     : center;
 }
 
+/** A relay visit started during startup may wait this long for this device's registration. */
+const NODE_READY_WAIT_MS = 10_000;
+
 function retryDelay(failures: number): number {
   return Math.min(30_000, 1000 * 2 ** Math.min(failures, 5)) * (0.8 + Math.random() * 0.4);
 }
@@ -144,6 +147,7 @@ export class AccountSessionManager {
   private running: Promise<void> | null = null;
   private tickRequested = false;
   private requests = new Set<AbortController>();
+  private nodeWaiters = new Set<() => void>();
   private nextRenew = 0;
   private channel: AccountChannel | null = null;
   private confirmedHosts = new Set<string>();
@@ -187,7 +191,24 @@ export class AccountSessionManager {
 
   private update(patch: Partial<AccountSnapshot>): void {
     this.state = { ...this.state, ...patch };
+    // Registration, sign-out and suspension all publish a snapshot; waiters re-check then.
+    if (this.node || !this.account || this.suspended) {
+      for (const release of this.nodeWaiters) release();
+    }
     this.deps.notify(this.snapshot());
+  }
+
+  /** Resolve once this device is registered, signed out or suspended, or after the timeout. */
+  private waitForNode(timeoutMs: number): Promise<void> {
+    return new Promise((resolve) => {
+      const release = () => {
+        clearTimeout(timer);
+        this.nodeWaiters.delete(release);
+        resolve();
+      };
+      const timer = setTimeout(release, timeoutMs);
+      this.nodeWaiters.add(release);
+    });
   }
 
   private async loginMethods(center: string): Promise<{ hosted: boolean }> {
@@ -578,6 +599,9 @@ export class AccountSessionManager {
     instance_id: string;
     url: string;
   }> {
+    // Cold starts restore saved hosts before this device has registered. Let their
+    // visits wait for the registration in flight instead of failing into backoff.
+    if (!this.suspended && this.account && !this.node) await this.waitForNode(NODE_READY_WAIT_MS);
     if (this.suspended || !this.account || !this.node) {
       throw new Error("Sign in and wait for this device to register.");
     }
