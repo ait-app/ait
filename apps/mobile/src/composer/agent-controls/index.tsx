@@ -2020,9 +2020,11 @@ const styles = StyleSheet.create((theme) => ({
     paddingHorizontal: theme.spacing[2],
     borderRadius: theme.borderRadius["2xl"],
   },
+  // The model name is the longest label in the row, so it absorbs the squeeze
+  // first; sibling labels like the mode only shrink once it hits its floor.
   modelControl: {
-    minWidth: 0,
-    flexShrink: 1,
+    minWidth: 64,
+    flexShrink: 100,
   },
   toolbarCaret: {
     width: 14,
