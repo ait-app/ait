@@ -110,6 +110,11 @@ fn history_rejects_corruption_and_cwd_mismatch_without_importing_partial_records
     std::fs::write(&path, format!("{record}\n")).unwrap();
     assert!(history::read(&client, &handle, cwd).is_err());
     record["cwd"] = json!(cwd);
+    let mut moved = record.clone();
+    moved["uuid"] = json!("moved");
+    moved["cwd"] = json!(root.path().join("nested"));
+    std::fs::write(&path, format!("{record}\n{moved}\n")).unwrap();
+    assert!(history::read(&client, &handle, cwd).is_ok());
     record["sessionId"] = json!(uuid::Uuid::new_v4().to_string());
     std::fs::write(&path, format!("{record}\n")).unwrap();
     assert!(history::read(&client, &handle, cwd).is_err());
