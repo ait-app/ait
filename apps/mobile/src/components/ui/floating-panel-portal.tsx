@@ -73,7 +73,13 @@ export function FloatingPanelPortalHost({
   }, [name]);
 
   return (
-    <View ref={hostRef} collapsable={false} pointerEvents="box-none" style={styles.host}>
+    <View
+      ref={hostRef}
+      collapsable={false}
+      pointerEvents="box-none"
+      dataSet={{ floatingPanelHost: "true" }}
+      style={styles.host}
+    >
       <PortalHost name={name} />
     </View>
   );
