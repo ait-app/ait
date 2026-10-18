@@ -4,6 +4,14 @@
 `DEVICE_AUTH_ENABLED` 并配置独立签名/回执密钥。生产中心固定为
 `https://aitapp.cn/api`，不能修改。Linux 的 systemd、macOS 的 launchd 安装与管理由外部脚本负责。
 
+## 获取 daemon
+
+从 0.1.8 起，每个正式版和 beta 的 GitHub Release 附带独立归档
+`Ait-VERSION-daemon-linux-x64.tar.gz` 与 `Ait-VERSION-daemon-macos-arm64.tar.gz`，正式版同步到
+国内 COS 镜像；内含可执行文件 `ait-daemon`。下载、校验、安装与 systemd/launchd 示例见官网
+[独立 daemon](https://ait-app.com/zh/docs/daemon/) 文档，发布方式见 [发布说明](releasing.md)。
+下文命令中的 `daemon` 对应归档中的 `ait-daemon` 或源码构建的 `target/release/daemon`。
+
 ## 登录与运行
 
 以运行服务的相同账号和数据目录完成一次授权。默认数据目录沿用 `~/.ait-server`，可通过

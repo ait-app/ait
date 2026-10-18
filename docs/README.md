@@ -25,6 +25,8 @@
 
 ## 架构决策
 
+- [ADR-158：Release 附带独立 daemon 归档](decisions/clients/adr-158-standalone-daemon-release.md)：`ait-daemon` 命名、macOS 单独签名公证、Release 校验与 COS 镜像。
+
 - [ADR-157：整图输入与 Codex 用户图片的跨设备展示](decisions/providers/adr-157-codex-user-image-projection.md)：传输分块与整图输入的边界、超预算整图压缩、旧会话兼容及跨设备预览。
 
 - [ADR-156：Pi 原生 RPC Provider](decisions/providers/adr-156-pi-native-rpc-provider.md)：`pi --mode rpc` JSONL 通道、Pi 1.2 起、采用 `provider/model` 格式的模型标识与原生会话恢复。

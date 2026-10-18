@@ -139,6 +139,59 @@ jobs:
       - name: Collect installers and updater assets
         run: node .tmp/release-tools/scripts/release-assets.mjs collect "${{ matrix.platform }}" "${RELEASE_TAG#v}" "${{ steps.layout.outputs.desktop }}/release" release-assets
 
+      # The desktop bundle signs its own copy; this signs the standalone headless daemon.
+      - name: Sign and notarize standalone macOS daemon
+        if: matrix.platform == 'mac'
+        env:
+          DAEMON_BIN: ${{ github.workspace }}/target/${{ matrix.rust_target }}/release/${{ steps.layout.outputs.binary }}
+          ENTITLEMENTS: ${{ steps.layout.outputs.desktop }}/build/entitlements.mac.inherit.plist
+          CSC_LINK: ${{ secrets.MAC_CSC_LINK }}
+          CSC_KEY_PASSWORD: ${{ secrets.MAC_CSC_KEY_PASSWORD }}
+          APPLE_ID: ${{ secrets.APPLE_ID }}
+          APPLE_APP_SPECIFIC_PASSWORD: ${{ secrets.APPLE_BUILD_APP_SECRET }}
+          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+        run: |
+          set -euo pipefail
+          work="$RUNNER_TEMP/standalone-daemon"
+          keychain="$RUNNER_TEMP/ait-daemon-signing.keychain-db"
+          keychain_password=$(openssl rand -hex 24)
+          mkdir -p "$work/bin"
+          trap 'security delete-keychain "$keychain" >/dev/null 2>&1 || true; rm -f "$work/certificate.p12"' EXIT
+          if [ -f "$CSC_LINK" ]; then
+            cp "$CSC_LINK" "$work/certificate.p12"
+          else
+            printf '%s' "$CSC_LINK" | base64 -d > "$work/certificate.p12"
+          fi
+          security create-keychain -p "$keychain_password" "$keychain"
+          security set-keychain-settings -lut 3600 "$keychain"
+          security unlock-keychain -p "$keychain_password" "$keychain"
+          security import "$work/certificate.p12" -k "$keychain" -P "$CSC_KEY_PASSWORD" -T /usr/bin/codesign
+          security set-key-partition-list -S apple-tool:,apple: -s -k "$keychain_password" "$keychain" >/dev/null
+          security list-keychains -d user -s "$keychain" $(security list-keychains -d user | tr -d '"')
+          identity=$(security find-identity -v -p codesigning "$keychain" | awk -F'"' '/Developer ID Application/ { print $2; exit }')
+          test -n "$identity"
+          cp "$DAEMON_BIN" "$work/bin/ait-daemon"
+          codesign --force --timestamp --options runtime --entitlements "$ENTITLEMENTS" \
+            --keychain "$keychain" --sign "$identity" "$work/bin/ait-daemon"
+          codesign --verify --strict --verbose=2 "$work/bin/ait-daemon"
+          ditto -c -k --keepParent "$work/bin/ait-daemon" "$work/ait-daemon.zip"
+          xcrun notarytool submit "$work/ait-daemon.zip" \
+            --apple-id "$APPLE_ID" --password "$APPLE_APP_SPECIFIC_PASSWORD" --team-id "$APPLE_TEAM_ID" \
+            --wait --timeout 30m --output-format json > "$work/notarization.json"
+          status=$(plutil -extract status raw -o - "$work/notarization.json")
+          if [ "$status" != "Accepted" ]; then
+            id=$(plutil -extract id raw -o - "$work/notarization.json")
+            xcrun notarytool log "$id" --apple-id "$APPLE_ID" --password "$APPLE_APP_SPECIFIC_PASSWORD" --team-id "$APPLE_TEAM_ID" || true
+            echo "Standalone daemon notarization status: $status" >&2
+            exit 1
+          fi
+          echo "STANDALONE_DAEMON_BIN=$work/bin/ait-daemon" >> "$GITHUB_ENV"
+
+      - name: Package standalone daemon
+        env:
+          DAEMON_BIN: ${{ env.STANDALONE_DAEMON_BIN || format('{0}/target/{1}/release/{2}', github.workspace, matrix.rust_target, steps.layout.outputs.binary) }}
+        run: node .tmp/release-tools/scripts/release-assets.mjs daemon "${{ matrix.platform }}" "${RELEASE_TAG#v}" "$DAEMON_BIN" release-assets
+
       - uses: actions/upload-artifact@v6
         with:
           name: ${{ matrix.artifact }}
@@ -207,7 +260,7 @@ jobs:
 
       - name: Verify assets and write checksums
         run: |
-          args=()
+          args=(--daemon)
           if test -f "release-assets/Ait-${RELEASE_TAG#v}-android.apk"; then
             args+=(--android)
           fi
