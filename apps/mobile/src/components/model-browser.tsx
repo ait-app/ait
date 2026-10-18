@@ -800,7 +800,8 @@ function ModelRow({
         <View style={styles.browserRowContent}>
           <View style={styles.browserRowLeading}>{leadingSlot}</View>
           <View style={[styles.browserRowText, description && styles.browserRowTextInline]}>
-            <Text numberOfLines={1} style={styles.browserRowLabel}>
+            {/* Gateway models share a long provider prefix; keep both ends visible. */}
+            <Text numberOfLines={1} ellipsizeMode="middle" style={styles.browserRowLabel}>
               {row.modelLabel}
             </Text>
             {description ? (

@@ -260,7 +260,7 @@ export function CombinedModelSelector({
               />
             </View>
           ) : null}
-          <Text style={styles.triggerText} numberOfLines={1} ellipsizeMode="tail">
+          <Text style={styles.triggerText} numberOfLines={1} ellipsizeMode="middle">
             {browser.triggerLabel}
           </Text>
         </ComboboxTrigger>
