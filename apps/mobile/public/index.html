@@ -51,22 +51,34 @@
       }
     </style>
     <style>
-      button,
-      a,
-      input,
-      textarea,
-      select,
-      [role="button"],
-      [role="link"],
-      [role="textbox"],
-      [role="combobox"],
-      [role="tab"],
-      [role="switch"],
-      [role="checkbox"],
-      [role="slider"],
-      [role="menuitem"],
-      [tabindex],
-      [contenteditable="true"] {
+      /* Electron can subtract no-drag bounds even when a scroll viewport clips
+         them. Keep chat/content controls out of this rule: scrolling them behind
+         a titlebar must not erase its drag region. Only chrome and floating
+         controls need exclusions. Do not mark full-viewport portal hosts no-drag. */
+      :where(
+          :has(> [data-titlebar-drag-region]),
+          [data-testid="desktop-window-controls"],
+          #overlay-root,
+          [data-floating-panel-host]
+        )
+        :is(
+          button,
+          a,
+          input,
+          textarea,
+          select,
+          [role="button"],
+          [role="link"],
+          [role="textbox"],
+          [role="combobox"],
+          [role="tab"],
+          [role="switch"],
+          [role="checkbox"],
+          [role="slider"],
+          [role="menuitem"],
+          [tabindex],
+          [contenteditable="true"]
+        ) {
         -webkit-app-region: no-drag !important;
       }
 
