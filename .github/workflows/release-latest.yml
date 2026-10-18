@@ -1,0 +1,89 @@
+name: Publish Latest Downloads
+
+# Runs when a reviewed draft becomes a published release, so an unreviewed draft never
+# becomes "latest". Versioned releases keep only versioned files; this workflow copies
+# them to the fixed-name COS objects and to the rolling `latest` GitHub release.
+# Publishing with GITHUB_TOKEN does not trigger it; use workflow_dispatch to publish
+# such a release or to retry a failed run.
+on:
+  release:
+    types: [published]
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: Published stable release tag (for example v0.1.8)
+        required: true
+        type: string
+
+permissions:
+  contents: read
+
+# Serialize runs so two releases cannot interleave their latest updates.
+concurrency:
+  group: release-latest
+  cancel-in-progress: false
+
+jobs:
+  publish:
+    name: Latest ${{ inputs.tag || github.event.release.tag_name }}
+    if: ${{ github.event_name == 'workflow_dispatch' || (!github.event.release.prerelease && startsWith(github.event.release.tag_name, 'v')) }}
+    runs-on: ubuntu-24.04
+    timeout-minutes: 60
+    permissions:
+      contents: write
+    defaults:
+      run:
+        shell: bash
+    env:
+      GH_TOKEN: ${{ github.token }}
+      RELEASE_TAG: ${{ inputs.tag || github.event.release.tag_name }}
+      COS_BUCKET: ait-release-1251719274
+      COS_REGION: ap-shanghai
+    steps:
+      - name: Check release state
+        id: release
+        run: |
+          [[ "$RELEASE_TAG" =~ ^v[0-9]+\.[0-9]+\.[0-9]+$ ]] || { echo "::error::Only stable vX.Y.Z releases publish latest downloads: $RELEASE_TAG"; exit 1; }
+          state=$(gh release view "$RELEASE_TAG" --repo "$GITHUB_REPOSITORY" --json isDraft,isPrerelease --jq '"\(.isDraft) \(.isPrerelease)"')
+          [ "$state" = "false false" ] || { echo "::error::$RELEASE_TAG is a draft or prerelease"; exit 1; }
+          latest=$(gh api "repos/$GITHUB_REPOSITORY/releases/latest" --jq .tag_name)
+          if [ "$latest" = "$RELEASE_TAG" ]; then
+            echo "latest=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "::notice::$latest is GitHub's latest release; only versioned COS objects of $RELEASE_TAG are mirrored"
+          fi
+
+      - uses: actions/checkout@v5
+        with:
+          sparse-checkout: scripts/release-latest
+
+      - name: Install and test latest tooling
+        run: |
+          python3 -m venv .venv
+          .venv/bin/python -m pip install --disable-pip-version-check -q -r scripts/release-latest/requirements.txt
+          .venv/bin/python -m unittest discover -s scripts/release-latest
+
+      - name: Download release assets
+        run: |
+          version="${RELEASE_TAG#v}"
+          gh release download "$RELEASE_TAG" --repo "$GITHUB_REPOSITORY" --dir release-assets \
+            --pattern "Ait-${version}-macos-arm64.dmg" \
+            --pattern "Ait-${version}-daemon-*.tar.gz" \
+            --pattern SHA256SUMS
+
+      - name: Mirror to COS
+        env:
+          COS_SECRET_ID: ${{ secrets.COS_SECRET_ID }}
+          COS_SECRET_KEY: ${{ secrets.COS_SECRET_KEY }}
+          LATEST: ${{ steps.release.outputs.latest }}
+        run: |
+          args=()
+          if [ "$LATEST" = "true" ]; then args+=(--latest); fi
+          .venv/bin/python scripts/release-latest/cos.py "${RELEASE_TAG#v}" release-assets "${args[@]}" | tee cos.json
+          { echo '### COS'; echo '```json'; cat cos.json; echo '```'; } >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Update latest GitHub release
+        if: steps.release.outputs.latest == 'true'
+        run: |
+          .venv/bin/python scripts/release-latest/github_latest.py "$GITHUB_REPOSITORY" "${RELEASE_TAG#v}" release-assets | tee github.json
+          { echo '### GitHub `latest` release'; echo '```json'; cat github.json; echo '```'; } >> "$GITHUB_STEP_SUMMARY"

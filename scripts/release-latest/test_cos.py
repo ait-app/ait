@@ -4,7 +4,8 @@ import tempfile
 import unittest
 from unittest import mock
 
-import mirror
+import common
+import cos as mirror
 
 BUCKET, REGION = "ait-release-1251719274", "ap-shanghai"
 BASE = f"https://{BUCKET}.cos.{REGION}.myqcloud.com/"
@@ -56,7 +57,7 @@ class MirrorTest(unittest.TestCase):
 
     def release(self, version, corrupt=None):
         lines = []
-        for source in mirror.latest_assets(version).values():
+        for source in common.latest_assets(version).values():
             content = f"{source} contents".encode()
             (self.directory / source).write_bytes(b"tampered" if source == corrupt else content)
             lines.append(f"{hashlib.sha256(content).hexdigest()}  {source}")
@@ -140,7 +141,7 @@ class MirrorTest(unittest.TestCase):
     def test_beta_and_malformed_versions_are_refused(self):
         for version in ("0.1.8-beta.1", "v0.1.8", "0.1"):
             with self.assertRaisesRegex(ValueError, "Only stable"):
-                mirror.latest_assets(version)
+                common.latest_assets(version)
 
 
 if __name__ == "__main__":

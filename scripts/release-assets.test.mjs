@@ -26,8 +26,6 @@ import {
   collectReleaseAssets,
   daemonAssetName,
   daemonAssetNames,
-  copyLatestAssets,
-  latestAssetNames,
   packDaemonAsset,
   releaseAssetNames,
   verifyReleaseAssets,
@@ -399,65 +397,6 @@ test("stable verification requires daemon archives only when requested", async (
   );
 });
 
-test("stable releases carry identical fixed-name copies for latest downloads", async (t) => {
-  const linux = await fixture(t, "linux");
-  const mac = await fixture(t, "mac");
-  await collectReleaseAssets(linux);
-  await collectReleaseAssets({ ...mac, destination: linux.destination });
-  const directory = linux.destination;
-  for (const name of daemonAssetNames("0.0.7")) await writeFile(path.join(directory, name), name);
-  const options = {
-    version: "0.0.7",
-    directory,
-    includeDaemon: true,
-    includeLatest: true,
-  };
-  await assert.rejects(verifyReleaseAssets(options), /Missing release asset: Ait-macos-arm64\.dmg/);
-  assert.deepEqual(await copyLatestAssets({ version: "0.0.7", directory }), [
-    "Ait-macos-arm64.dmg",
-    "Ait-daemon-linux-x64.tar.gz",
-    "Ait-daemon-macos-arm64.tar.gz",
-  ]);
-  await verifyReleaseAssets(options);
-  const sums = await readFile(path.join(directory, "SHA256SUMS"), "utf8");
-  const hashOf = (name) =>
-    sums.match(new RegExp(`^([0-9a-f]{64})  ${name.replace(/\./g, "\\.")}$`, "m"))[1];
-  for (const [name, source] of Object.entries(latestAssetNames("0.0.7")))
-    assert.equal(hashOf(name), hashOf(source));
-  // A copy that drifted from its versioned source must never be published as latest.
-  await copyFile(
-    path.join(directory, "Ait-0.0.7-daemon-macos-arm64.tar.gz"),
-    path.join(directory, "Ait-daemon-linux-x64.tar.gz"),
-  );
-  await assert.rejects(verifyReleaseAssets(options), /Latest copy differs/);
-  // Android repairs on older stable releases without copies stay valid.
-  await rm(path.join(directory, "Ait-daemon-linux-x64.tar.gz"));
-  await addAndroidAssets(directory);
-  await verifyReleaseAssets({
-    version: "0.0.7",
-    directory,
-    includeAndroid: true,
-  });
-  assert.throws(() => latestAssetNames("0.0.8-beta.1"), /Only stable releases/);
-  await assert.rejects(
-    verifyReleaseAssets({ ...options, buildLabel: "38fb6054-2026-10-08" }),
-    /Nightly builds do not publish/,
-  );
-});
-
-test("the COS mirror refreshes the same latest objects the release publishes", () => {
-  const code = [
-    "import json, sys",
-    "sys.path.insert(0, sys.argv[1])",
-    "import mirror",
-    "print(json.dumps(mirror.latest_assets(sys.argv[2])))",
-  ].join("; ");
-  const directory = fileURLToPath(new URL("./release-cos", import.meta.url));
-  const result = spawnSync("python3", ["-I", "-c", code, directory, "0.0.7"], { encoding: "utf8" });
-  assert.equal(result.status, 0, result.stderr);
-  assert.deepEqual(JSON.parse(result.stdout), latestAssetNames("0.0.7"));
-});
-
 test("rejects incomplete releases and unintended platform assets", async (t) => {
   const input = await fixture(t, "linux");
   await collectReleaseAssets(input);
@@ -511,22 +450,18 @@ test("desktop release verifies published desktop assets and any retained Android
   const workflow = parse(
     await readFile(new URL("../.github/workflows/release.yml", import.meta.url), "utf8"),
   );
-  const step = (name) => workflow.jobs.release.steps.find((item) => item.name === name);
-  const run = (name = "Verify assets and write checksums") =>
-    spawnSync("bash", ["-e", "-o", "pipefail", "-c", step(name).run], {
+  const step = workflow.jobs.release.steps.find(
+    (item) => item.name === "Verify assets and write checksums",
+  );
+  const run = () =>
+    spawnSync("bash", ["-e", "-o", "pipefail", "-c", step.run], {
       cwd: root,
       env: { ...process.env, RELEASE_TAG: "v0.0.7" },
       encoding: "utf8",
     });
   assert.notEqual(run().status, 0, "stable releases must carry standalone daemon archives");
   await addDaemonAssets(assets);
-  assert.notEqual(run().status, 0, "stable releases must carry latest download copies");
-  assert.equal(run("Add latest download copies").status, 0);
   assert.equal(run().status, 0);
-  assert.match(
-    await readFile(path.join(assets, "SHA256SUMS"), "utf8"),
-    /  Ait-daemon-linux-x64\.tar\.gz\n/,
-  );
   assert.match(
     await readFile(path.join(assets, "SHA256SUMS"), "utf8"),
     /Ait-0\.0\.7-daemon-linux-x64\.tar\.gz/,
@@ -635,9 +570,6 @@ test("release workflow builds only the daemon and packages the resolved desktop 
     (step) => step.name === "Verify assets and write checksums",
   );
   assert.match(verify.run, /args=\(--daemon\)/);
-  assert.match(verify.run, /args\+=\(--latest\)/);
-  const steps = workflow.jobs.release.steps.map((step) => step.name);
-  assert(steps.indexOf("Add latest download copies") < steps.indexOf(verify.name));
   const config = parse(
     await readFile(new URL("../apps/desktop/electron-builder.yml", import.meta.url), "utf8"),
   );

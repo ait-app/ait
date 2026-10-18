@@ -124,18 +124,24 @@ test("an empty draft can be retried without attempting to download missing asset
   assert(!calls.some((args) => args[1] === "download"));
 });
 
-test("COS mirror runs only for published stable releases and moves latest last", () => {
-  const mirror = parse(
-    readFileSync(new URL("../.github/workflows/release-mirror.yml", import.meta.url), "utf8"),
+test("latest downloads publish only from published stable releases", () => {
+  const latest = parse(
+    readFileSync(new URL("../.github/workflows/release-latest.yml", import.meta.url), "utf8"),
   );
-  assert.deepEqual(mirror.on.release.types, ["published"]);
-  assert.equal(mirror.concurrency["cancel-in-progress"], false);
-  const job = mirror.jobs.mirror;
+  assert.deepEqual(latest.on.release.types, ["published"]);
+  assert.equal(latest.concurrency["cancel-in-progress"], false);
+  const job = latest.jobs.publish;
   assert.match(job.if, /!github\.event\.release\.prerelease/);
+  assert.equal(job.permissions.contents, "write");
   const check = job.steps.find((step) => step.name === "Check release state");
   assert.match(check.run, /releases\/latest/);
-  assert.match(check.run, /args=--latest/);
-  const upload = job.steps.find((step) => step.name === "Mirror to COS");
-  assert.equal(upload.env.COS_SECRET_ID, "${{ secrets.COS_SECRET_ID }}");
-  assert.match(upload.run, /steps\.release\.outputs\.args/);
+  const cos = job.steps.find((step) => step.name === "Mirror to COS");
+  assert.equal(cos.env.COS_SECRET_ID, "${{ secrets.COS_SECRET_ID }}");
+  const github = job.steps.find((step) => step.name === "Update latest GitHub release");
+  assert.equal(github.if, "steps.release.outputs.latest == 'true'");
+  // The versioned release itself never carries fixed-name copies.
+  assert.doesNotMatch(
+    readFileSync(new URL("./release-assets.mjs", import.meta.url), "utf8"),
+    /Ait-macos-arm64\.dmg/,
+  );
 });
