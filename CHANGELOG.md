@@ -1,5 +1,12 @@
 # Ait changelog
 
+## 0.1.7 - 2026-10-18
+
+- Keep routable account Hosts up to date through a dedicated status channel, preserve unavailable Host records, and show only online Hosts when choosing a connection.
+- Reuse a negotiated persistent Relay data tunnel for Host visits when the server supports it, with independent streams and compatibility with older servers.
+- Recover stalled Relay connections when the app returns to the foreground, and avoid unnecessary fallback probes when a direct connection is available.
+- Pause or resume scheduled tasks directly from the global task list, including tasks attached to existing Agents, with duplicate-action protection while requests are pending.
+
 ## 0.1.6 - 2026-10-17
 
 - Show startup connection failures and retry immediately while preserving background recovery and shared reconnect attempts.
