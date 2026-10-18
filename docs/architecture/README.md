@@ -121,6 +121,10 @@ Agent 身份或原生会话。daemon 注入原有 bundle、三个目标目录和
 避免技能文件操作阻塞同连接上的原生 Agent 请求。见
 [ADR-129](../decisions/providers/adr-129-provider-owned-skills.md)。
 
+Pi 的原生 RPC adapter 归 `provider::local::pi`，使用现有 Agent ports，注册身份为 `pi`。
+会话、认证和工具由 Pi 持有，能力与限制见
+[ADR-156](../decisions/providers/adr-156-pi-native-rpc-provider.md)。
+
 内置 Provider 由 `provider::Providers` 组装。具体客户端列表、启动配置、安装发现与辅助
 元数据生成能力留在 provider crate 内部；daemon 提供数据目录并连接服务与进程生命周期。
 Codex、Claude、OpenCode 和 DSH 当前支持结构化辅助生成，各 adapter 自行选择辅助小模型。
@@ -141,7 +145,7 @@ metadata 的 `workspace.get.request` 按身份读取一个 Workspace 与所属 P
 daemon 持有数据目录的 OS 文件锁及稳定 `server-id`，同一目录只能有一个活动实例。
 Project/Workspace 和 Agent runtime 目录、配置、时间线由当前文件存储与 Provider adapter
 管理；Agent preset catalog 的 SQLite 存储位于 `provider`。这些职责不能合并成一个通用数据库入口。
-原生 Codex、Claude Code、Antigravity、OpenCode 与 DeepSeek Harness 的凭据和会话仍由对应程序持有。
+原生 Codex、Claude Code、Antigravity、OpenCode、DeepSeek Harness 与 Pi 的凭据和会话仍由对应程序持有。
 
 桌面进程只管理自己启动的 daemon 子进程，生成连接凭据并通过主进程 bridge 提供授权。
 在线中继 Workspace 的内置浏览器通过主进程按 Host 配置的 profile，把回环网页流量送到远程

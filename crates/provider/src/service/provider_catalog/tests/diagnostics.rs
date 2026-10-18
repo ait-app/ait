@@ -50,3 +50,34 @@ async fn unavailable_snapshot_exposes_bounded_native_guidance_and_falls_back_for
         assert_eq!(entry.value["models"], json!([]));
     }
 }
+
+#[cfg(unix)]
+#[tokio::test]
+async fn available_list_exposes_unsupported_pi_version_guidance() {
+    use std::os::unix::fs::PermissionsExt;
+
+    let directory = tempfile::tempdir().unwrap();
+    let program = directory.path().join("pi");
+    std::fs::write(&program, "#!/bin/sh\nprintf '0.73.1\\n'\n").unwrap();
+    std::fs::set_permissions(&program, std::fs::Permissions::from_mode(0o700)).unwrap();
+    let clients: BTreeMap<String, Arc<dyn AgentClient>> = BTreeMap::from([(
+        "pi".to_owned(),
+        Arc::new(crate::local::pi::PiClient::new(program)) as Arc<dyn AgentClient>,
+    )]);
+
+    let value = Catalog::default()
+        .execute(
+            &clients,
+            &SessionEvents::default(),
+            "provider.available.list.request",
+            json!({}),
+        )
+        .await
+        .unwrap();
+
+    assert_eq!(value["providers"][0]["available"], false);
+    assert_eq!(
+        value["providers"][0]["error"],
+        "Pi 0.73.1 is unsupported; requires a supported Pi version (1.2 or newer)."
+    );
+}

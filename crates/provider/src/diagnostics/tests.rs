@@ -4,11 +4,19 @@ use super::*;
 fn environment_overrides_program_and_log_roots() {
     let evidence = HarnessEvidence::configured(|key| match key {
         "HOME" => Some("/fixture".into()),
+        "AIT_SERVER_PI_BIN" => Some("/bin/custom-pi".into()),
         "AIT_SERVER_OPENCODE_BIN" => Some("/bin/custom-opencode".into()),
         "AIT_DIAGNOSTICS_OPENCODE_LOG_DIR" => Some("/logs/native".into()),
         _ => None,
     });
-    assert_eq!(evidence.sources.len(), 5);
+    assert_eq!(evidence.sources.len(), 6);
+    let pi = evidence
+        .sources
+        .iter()
+        .find(|source| source.name == "pi")
+        .unwrap();
+    assert_eq!(pi.program, Path::new("/bin/custom-pi"));
+    assert!(pi.logs.is_none());
     assert_eq!(
         evidence.sources[0].program,
         Path::new("/bin/custom-opencode")
