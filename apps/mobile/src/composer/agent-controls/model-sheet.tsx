@@ -283,7 +283,7 @@ export function CompactModelSheet({
           </ComposerToolbarGlyph>
         ) : null}
         <View style={styles.triggerLabels}>
-          <Text style={styles.triggerText} numberOfLines={1}>
+          <Text style={styles.triggerText} numberOfLines={1} ellipsizeMode="middle">
             {shortModelLabel(rootBrowser.triggerLabel)}
           </Text>
           {thinkingLabel ? (
