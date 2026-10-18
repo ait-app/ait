@@ -14,11 +14,13 @@ import {
   formatDiagnosticSection,
   formatHostRuntimeSection,
   formatServerInfoSection,
+  formatStartupTimelineSection,
   redactAppDiagnosticReport,
 } from "@/diagnostics/app-diagnostic-report";
 import { exportDiagnosticReport } from "@/diagnostics/export-diagnostic-report";
 import { collectDesktopDiagnosticSections } from "@/diagnostics/desktop-diagnostic-report";
 import { getHostRuntimeStore, useHosts, type HostRuntimeSnapshot } from "@/runtime/host-runtime";
+import { getStartupMarks } from "@/runtime/startup-timeline";
 import { ICON_SIZE, type Theme } from "@/styles/theme";
 import type { HostProfile } from "@/types/host-connection";
 
@@ -100,6 +102,7 @@ export function AppDiagnosticSheet({
           isDesktopApp,
           hostCount: hosts.length,
         }),
+        formatStartupTimelineSection(getStartupMarks()),
       );
       updateRunProgress("client", t("settings.diagnostics.app.progress.client"), "done");
 

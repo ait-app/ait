@@ -3,7 +3,7 @@ import { accountCommand, useAccountState } from "./account-state";
 
 const mocks = vi.hoisted(() => ({
   invoke: vi.fn(),
-  boot: vi.fn(async () => {}),
+  loadRegistry: vi.fn(async () => {}),
   add: vi.fn(async () => {}),
   discover: vi.fn(async () => {}),
   setCenter: vi.fn(),
@@ -14,7 +14,7 @@ vi.mock("@/desktop/host", () => ({ getDesktopHost: () => ({ invoke: mocks.invoke
 vi.mock("./native-account", () => ({ getNativeAccount: vi.fn(), subscribeNativeAccount: vi.fn() }));
 vi.mock("./host-runtime", () => ({
   getHostRuntimeStore: () => ({
-    boot: mocks.boot,
+    loadRegistry: mocks.loadRegistry,
     addAccountRelayHost: mocks.add,
     addDiscoveredAccountRelayHosts: mocks.discover,
     setAccountRelayCenter: mocks.setCenter,

@@ -11,7 +11,7 @@ const mocks = vi.hoisted(() => ({
     refresh: vi.fn(),
     snapshot: vi.fn(),
   },
-  boot: vi.fn(async () => {}),
+  loadRegistry: vi.fn(async () => {}),
   setHost: vi.fn(),
   discover: vi.fn(async () => {}),
   setCenter: vi.fn(),
@@ -34,7 +34,7 @@ vi.mock("./native-account", () => ({
 }));
 vi.mock("./host-runtime", () => ({
   getHostRuntimeStore: () => ({
-    boot: mocks.boot,
+    loadRegistry: mocks.loadRegistry,
     addAccountRelayHost: mocks.setHost,
     addDiscoveredAccountRelayHosts: mocks.discover,
     setAccountRelayCenter: mocks.setCenter,
@@ -187,7 +187,7 @@ describe("native mobile account commands", () => {
     },
   );
   it.each(["android", "ios"])(
-    "enables the %s account entry and awaits HostRuntime",
+    "enables the %s account entry and awaits the HostRuntime registry",
     async (platform) => {
       mocks.platform = platform;
       expect(supportsAccountRelay()).toBe(true);
@@ -198,16 +198,16 @@ describe("native mobile account commands", () => {
         selected: host,
         hosts: [],
       });
-      let finishBoot!: () => void;
-      mocks.boot.mockReturnValueOnce(
+      let finishRegistry!: () => void;
+      mocks.loadRegistry.mockReturnValueOnce(
         new Promise<void>((resolve) => {
-          finishBoot = resolve;
+          finishRegistry = resolve;
         }),
       );
       const command = accountCommand("account_select", { hostId: "remote" });
-      await vi.waitFor(() => expect(mocks.boot).toHaveBeenCalled());
+      await vi.waitFor(() => expect(mocks.loadRegistry).toHaveBeenCalled());
       expect(mocks.setHost).not.toHaveBeenCalled();
-      finishBoot();
+      finishRegistry();
       expect(await command).toMatchObject({ selected: host });
       expect(mocks.manager.select).toHaveBeenCalledWith("remote");
       expect(mocks.setHost).toHaveBeenCalledWith(host, "https://center.test/api");

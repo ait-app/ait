@@ -1,6 +1,7 @@
 import type { HostRuntimeSnapshot } from "@/runtime/host-runtime";
 import type { HostConnection, HostProfile } from "@/types/host-connection";
 import type { ServerInfoStatusPayload } from "@ait/protocol/messages";
+import type { StartupMark } from "@/runtime/startup-timeline";
 
 interface DiagnosticEntry {
   label: string;
@@ -29,6 +30,16 @@ export function formatAppDiagnosticHeader(input: {
     { label: "Desktop app", value: String(input.isDesktopApp) },
     { label: "Saved hosts", value: String(input.hostCount) },
   ]);
+}
+
+/** First occurrence of each cold-start phase; phases overlap, so read marks, not sums. */
+export function formatStartupTimelineSection(marks: readonly StartupMark[]): string {
+  return formatDiagnosticSection(
+    "Startup timeline (ms since JS start)",
+    marks.length === 0
+      ? [{ label: "Status", value: "not recorded" }]
+      : marks.map(({ phase, ms }) => ({ label: phase, value: `${ms}ms` })),
+  );
 }
 
 export function formatHostRuntimeSection(input: {

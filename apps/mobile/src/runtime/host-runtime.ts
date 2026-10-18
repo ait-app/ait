@@ -62,6 +62,7 @@ import {
 import { normalizeHostPort } from "@/utils/daemon-endpoints";
 import { encodeImages } from "@/utils/encode-images";
 import { connectToDaemon } from "@/utils/test-daemon-connection";
+import { markStartupPhase } from "./startup-timeline";
 import {
   DaemonClient,
   type ConnectionState,
@@ -592,6 +593,7 @@ export class HostRuntimeController {
   private switchRequestVersion = 0;
   private probeRequestVersion = 0;
   private probeCycleInFlight: Promise<void> | null = null;
+  private awaitingConnections = false;
 
   constructor(input: {
     host: HostProfile;
@@ -725,6 +727,11 @@ export class HostRuntimeController {
     await this.runProbeCycleNow();
   }
 
+  /** Routes withheld until the account reports availability keep a new host connecting. */
+  setAwaitingConnections(awaiting: boolean): void {
+    this.awaitingConnections = awaiting;
+  }
+
   ensureConnected(options?: { verify?: boolean }): void {
     if (!this.started) return;
     if (this.activeClient) {
@@ -804,6 +811,9 @@ export class HostRuntimeController {
     const requestVersion = ++this.probeRequestVersion;
     if (this.host.connections.length === 0) {
       if (!this.isCurrentProbeRequest(requestVersion)) {
+        return;
+      }
+      if (this.awaitingConnections && this.connectionMachineState.tag === "booting") {
         return;
       }
       this.applyConnectionEvent({ type: "no_connections" });
@@ -1337,6 +1347,8 @@ export class HostRuntimeController {
 const REGISTRY_STORAGE_KEY = "@paseo:daemon-registry";
 const LOCALHOST_FALLBACK_ENDPOINT = "localhost:6767";
 const DEFAULT_LOCALHOST_BOOTSTRAP_TIMEOUT_MS = 2500;
+/** Saved account hosts show as connecting, not offline, until the account reports or this passes. */
+const ACCOUNT_RELAY_AVAILABILITY_GRACE_MS = 15_000;
 const E2E_STORAGE_KEY = "@paseo:e2e";
 const INITIAL_DAEMON_CONNECTION_HINT_GLOBAL_KEY = "__PASEO_INITIAL_DAEMON_CONNECTION__";
 
@@ -1423,6 +1435,8 @@ export class HostRuntimeStore {
   private timelineReplicaByServer = new Map<string, TimelineReplica>();
   private configuredOverrideBootstrapInFlight: Promise<void> | null = null;
   private bootPromise: Promise<void> | null = null;
+  private registryLoad: Promise<void> | null = null;
+  private accountRelayAvailabilityKnown = false;
   private storage: HostRuntimeStorage;
   private replicaCache: ReplicaCache;
   private readonly revokePushNotifications: typeof revokePushNotifications;
@@ -1471,15 +1485,25 @@ export class HostRuntimeStore {
 
   boot(): Promise<void> {
     if (!this.bootPromise) {
-      this.bootPromise = this.runBoot();
+      this.bootPromise = this.runBoot().finally(() => markStartupPhase("boot_done"));
     }
     return this.bootPromise;
   }
 
+  /**
+   * Load saved hosts without the bootstrap probes that follow in boot(). Account
+   * discovery needs only the registry, and must not wait for a localhost probe.
+   */
+  loadRegistry(): Promise<void> {
+    if (!this.registryLoad) {
+      this.registryLoad = this.loadFromStorage().then(() => this.markHostRegistryLoaded());
+    }
+    return this.registryLoad;
+  }
+
   private async runBoot(): Promise<void> {
     const override = readConfiguredLocalDaemonOverride();
-    await this.loadFromStorage();
-    this.markHostRegistryLoaded();
+    await this.loadRegistry();
 
     let isE2E: string | null = null;
     try {
@@ -1575,7 +1599,21 @@ export class HostRuntimeStore {
       return;
     }
     this.hostRegistryLoaded = true;
+    markStartupPhase("registry_loaded");
+    // An account that never reports (restore failed, no account support) must not
+    // leave its saved hosts connecting forever.
+    const grace = setTimeout(
+      () => this.markAccountRelayAvailabilityKnown(),
+      ACCOUNT_RELAY_AVAILABILITY_GRACE_MS,
+    );
+    (grace as { unref?: () => void }).unref?.();
     this.emitHostList();
+  }
+
+  private markAccountRelayAvailabilityKnown(): void {
+    if (this.accountRelayAvailabilityKnown) return;
+    this.accountRelayAvailabilityKnown = true;
+    this.syncHosts(this.hosts);
   }
 
   private async bootstrapDefaultLocalhost(): Promise<void> {
@@ -2068,6 +2106,8 @@ export class HostRuntimeStore {
 
   /** Saved hosts remain registered while signed out or connected to another service. */
   setAccountRelayCenter(center: string | null): void {
+    // Signed out: no saved account host can become available.
+    if (center === null) this.markAccountRelayAvailabilityKnown();
     if (center === this.accountRelayCenter) return;
     if (center === null) this.removedAccountRelayConnections.clear();
     this.accountRelayCenter = center;
@@ -2134,9 +2174,13 @@ export class HostRuntimeStore {
                 this.availableAccountRelayServers.has(storedHost.serverId))),
         ),
       };
+      const awaitingAccountRelay =
+        !this.accountRelayAvailabilityKnown &&
+        storedHost.connections.some((connection) => connection.type === "accountRelay");
       const initialConnection = options?.initialConnectionByServerId?.get(host.serverId);
       const existing = this.controllers.get(host.serverId);
       if (existing) {
+        existing.setAwaitingConnections(awaitingAccountRelay);
         void existing.updateHost(host);
         if (initialConnection) {
           void existing.activateConnection(initialConnection).catch(() => {
@@ -2150,6 +2194,7 @@ export class HostRuntimeStore {
         deps: this.deps,
         onReconcileServerId: (oldId, newId) => this.reconcileServerId(oldId, newId),
       });
+      controller.setAwaitingConnections(awaitingAccountRelay);
       this.controllers.set(host.serverId, controller);
       useSessionStore.getState().initializeSession(host.serverId, null);
       const directory = new DirectorySync(
@@ -2237,9 +2282,14 @@ export class HostRuntimeStore {
       this.connectionStatusStartedAtByServer.set(serverId, Date.now());
     }
     this.lastConnectionStatusByServer.set(serverId, snapshot.connectionStatus);
+    if (snapshot.connectionStatus === "connecting" && snapshot.activeConnection) {
+      markStartupPhase("host_connecting");
+    }
+    if (snapshot.agentDirectoryStatus === "ready") markStartupPhase("directory_ready");
     const didTransitionOnline =
       snapshot.connectionStatus === "online" && previousStatus !== "online";
     if (didTransitionOnline) {
+      markStartupPhase("host_online");
       useSessionStore.getState().bumpHistorySyncGeneration(serverId);
       // Checkout git data is push-driven; pushes emitted while disconnected are gone for
       // good (the daemon dedupes by snapshot fingerprint). Mark the caches stale so active
@@ -2415,12 +2465,26 @@ export class HostRuntimeStore {
   }
 
   /** Gate relay probes on presence, retaining healthy data connections during stale snapshots. */
+  /**
+   * Without confirmedOfflineServerIds the list is authoritative (a fresh host list);
+   * with them it is a stale-channel update that keeps healthy connections.
+   */
   setAvailableAccountRelayHosts(
     serverIds: readonly string[],
     confirmedOfflineServerIds?: readonly string[],
   ): void {
     const available = new Set(serverIds);
     const previous = this.availableAccountRelayServers;
+    if (confirmedOfflineServerIds === undefined) {
+      if (available.size > 0) markStartupPhase("relay_available");
+      if (!this.accountRelayAvailabilityKnown) {
+        this.accountRelayAvailabilityKnown = true;
+        if (available.size === previous.size && [...available].every((id) => previous.has(id))) {
+          this.syncHosts(this.hosts);
+          return;
+        }
+      }
+    }
     if (confirmedOfflineServerIds) {
       const offline = new Set(confirmedOfflineServerIds);
       for (const serverId of previous) {

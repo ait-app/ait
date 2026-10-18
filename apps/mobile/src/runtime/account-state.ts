@@ -3,6 +3,7 @@ import { Platform } from "react-native";
 import { create } from "zustand";
 import { getDesktopHost } from "@/desktop/host";
 import { getHostRuntimeStore } from "./host-runtime";
+import { markStartupPhase } from "./startup-timeline";
 import { getNativeAccount, subscribeNativeAccount } from "./native-account";
 import {
   supportsBrowserAccount,
@@ -69,9 +70,14 @@ async function receiveAccountSnapshot(
   isActive?: () => boolean,
 ): Promise<void> {
   useAccountState.setState(snapshot);
+  if (snapshot.status === "online") {
+    markStartupPhase("node_registered");
+    if (!snapshot.stale) markStartupPhase("hosts_listed");
+  }
   const sequence = ++snapshotSequence;
   const store = getHostRuntimeStore();
-  await store.boot();
+  // Only the saved registry is needed here; boot() also waits for a localhost probe.
+  await store.loadRegistry();
   const current = () => sequence === snapshotSequence && (isActive?.() ?? true);
   if (!current()) return;
   const active = snapshot.status === "online" || snapshot.status === "connecting";
@@ -114,7 +120,7 @@ async function persistAccountHostSelection(
 ): Promise<void> {
   if (command !== "account_select") return;
   const store = getHostRuntimeStore();
-  await store.boot();
+  await store.loadRegistry();
   if (typeof args?.hostId === "string" && snapshot.selected?.server_id) {
     await store.addAccountRelayHost(
       { ...snapshot.selected, server_id: snapshot.selected.server_id },
@@ -201,7 +207,10 @@ export function AccountRelayLifecycle() {
         receive,
       );
       void (supportsBrowserAccount() ? getBrowserAccount() : getNativeAccount())
-        .then((manager) => receive(manager.snapshot()))
+        .then((manager) => {
+          markStartupPhase("account_restored");
+          receive(manager.snapshot());
+        })
         .catch(() => {
           if (!disposed)
             useAccountState.setState({

@@ -5,6 +5,7 @@ import { describe, expect, test } from "vitest";
 import {
   formatHostRuntimeSection,
   formatServerInfoSection,
+  formatStartupTimelineSection,
   redactAppDiagnosticReport,
 } from "./app-diagnostic-report";
 
@@ -53,6 +54,16 @@ function makeHost(): HostProfile {
 }
 
 describe("app diagnostics report", () => {
+  test("lists startup phases in the order they happened", () => {
+    expect(
+      formatStartupTimelineSection([
+        { phase: "registry_loaded", ms: 120 },
+        { phase: "host_online", ms: 2_310 },
+      ]),
+    ).toBe("Startup timeline (ms since JS start)\n  registry_loaded: 120ms\n  host_online: 2310ms");
+    expect(formatStartupTimelineSection([])).toContain("Status: not recorded");
+  });
+
   test("reports whether the connected daemon is managed by Paseo Desktop", () => {
     const report = formatServerInfoSection({
       status: "server_info",
