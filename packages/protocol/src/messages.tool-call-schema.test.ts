@@ -219,3 +219,15 @@ describe("shared messages tool_call schema", () => {
     expect(invalid.success).toBe(false);
   });
 });
+
+it("validates the Pi Rust adapter's tool projections with the strict item schema", () => {
+  const cases = JSON.parse(
+    readFileSync(
+      new URL("../../../crates/provider/tests/fixtures/pi_tool_cards.json", import.meta.url),
+      "utf8",
+    ),
+  ) as Array<{ name: string; item: unknown }>;
+  for (const fixture of cases) {
+    expect(AgentTimelineItemPayloadSchema.safeParse(fixture.item).success, fixture.name).toBe(true);
+  }
+});

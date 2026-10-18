@@ -56,7 +56,7 @@ node scripts/check-docs.mjs
 
 ## 客户端自动压缩与可读分片
 
-本节记录 2026-10-13 的实现。当前发送策略已由 [ADR-156](../../decisions/providers/adr-156-codex-user-image-projection.md) 修订为每张原图一个完整图片输入，取消自动裁剪与模型坐标说明；服务端接纳预算与传输分块继续保留。
+本节记录 2026-10-13 的实现。当前发送策略已由 [ADR-157](../../decisions/providers/adr-157-codex-user-image-projection.md) 修订为每张原图一个完整图片输入，取消自动裁剪与模型坐标说明；服务端接纳预算与传输分块继续保留。
 
 在服务端修复提交 `2c452656` 的基础上，发送前统一处理桌面、Web 和移动端图片，
 覆盖已有 Agent、新建 Agent、新建 Workspace 与 Workspace setup 的初始输入。

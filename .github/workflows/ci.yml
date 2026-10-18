@@ -177,6 +177,7 @@ jobs:
           src/i18n/resources.test.ts src/runtime/rust-daemon maestro/support native-release-version.test.ts
           src/timeline src/types/stream.test.ts src/runtime/replica-cache
           src/runtime/directory-sync src/screens/workspace/workspace-route-state.test.ts
+          src/utils/tool-call-parsers.test.ts src/utils/diff-highlight.test.ts
 
   nightly-prepare:
     if: github.event_name != 'pull_request' && github.ref == 'refs/heads/main'

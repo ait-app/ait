@@ -15,7 +15,7 @@ OpenCode、Antigravity 已有部分失败说明，但公共执行层只发送终
 1. `provider::ports::diagnostics` 声明公共分类和可复制的安全诊断，包含来源、原生数字错误码、
    HTTP 状态和可空的原生重试状态。诊断只保留固定分类，不持有原生文本、请求、URL、
    工具参数或凭据。分类与日志实现留在 `provider`，不向 `domain` 添加依赖。
-2. 各 adapter 提取原生错误；Codex、Claude、共享 ACP、DSH Web Host 的进程 stderr 持续
+2. 各 adapter 提取原生错误；Codex、Claude、共享 ACP、DSH Web Host、Pi 的进程 stderr 持续
    读取，单行检查内存上限 32 KiB。结构化错误分类优先于受限的文本匹配，无法识别的原因
    使用通用说明。AGY 保留既有原生权限建议，OpenCode 只保留明确允许的固定原生说明。
 3. 继续保留 `Unavailable`、`Failed`、`Rejected` 和正常取消语义。会话通过

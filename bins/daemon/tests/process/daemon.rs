@@ -37,7 +37,7 @@ async fn missing_provider_is_reported_and_editors_return_migration_responses() {
     .await;
     let status = request(&mut socket, "daemon.get_status.request", json!({})).await;
     let providers = status["result"]["providers"].as_array().unwrap();
-    assert_eq!(providers.len(), 5);
+    assert_eq!(providers.len(), 6);
     assert!(
         providers
             .iter()
@@ -45,11 +45,13 @@ async fn missing_provider_is_reported_and_editors_return_migration_responses() {
     );
     let diagnostic = request(&mut socket, "diagnostics.request", json!({})).await;
     let report = diagnostic["result"]["diagnostic"].as_str().unwrap();
-    assert!(report.contains("Total: 5"));
+    assert!(report.contains("Total: 6"));
     assert!(report.contains("Available: 0"));
     assert!(report.contains("codex: unavailable"));
+    assert!(report.contains("pi: unavailable"));
     assert!(report.contains("Ait incident evidence v1"));
     assert!(report.contains("Harness: opencode"));
+    assert!(report.contains("Harness: pi"));
     assert!(report.contains("UTC window:"));
     assert!(!report.contains(TOKEN));
     let editors = request(&mut socket, "editor.available.list.request", json!({})).await;
@@ -152,7 +154,9 @@ async fn daemon_status_config_diagnostics_and_update_match_canonical_contract() 
             { "provider":"deepseek-harness", "available":false,
                 "error":"DeepSeek Harness executable is unavailable" },
             { "provider":"opencode", "available":false,
-                "error":"OpenCode ACP requires an installed OpenCode 1.x or 2.x release." }
+                "error":"OpenCode ACP requires an installed OpenCode 1.x or 2.x release." },
+            { "provider":"pi", "available":false,
+                "error":"Pi executable is unavailable; check PATH or AIT_SERVER_PI_BIN." }
         ])
     );
 
@@ -198,7 +202,7 @@ async fn daemon_status_config_diagnostics_and_update_match_canonical_contract() 
     assert!(diagnostic.contains("Paseo diagnostics"));
     assert!(diagnostic.contains("daemon.get_status.request"));
     assert!(!diagnostic.contains(TOKEN));
-    assert!(diagnostic.contains("Total: 5"));
+    assert!(diagnostic.contains("Total: 6"));
     assert!(diagnostic.contains("codex: available"));
 
     let update = request(&mut socket, "daemon.update.request", json!({})).await;

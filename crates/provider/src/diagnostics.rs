@@ -63,6 +63,7 @@ impl HarnessEvidence {
             ),
             ("deepseek-harness", "DEEPSEEK_HARNESS", "dsh", None),
             ("antigravity", "ANTIGRAVITY", "agy", None),
+            ("pi", "PI", "pi", None),
         ]
         .into_iter()
         .map(|(name, key, fallback, logs)| Source {

@@ -25,7 +25,9 @@
 
 ## 架构决策
 
-- [ADR-156：整图输入与 Codex 用户图片的跨设备展示](decisions/providers/adr-156-codex-user-image-projection.md)：传输分块与整图输入的边界、超预算整图压缩、旧会话兼容及跨设备预览。
+- [ADR-157：整图输入与 Codex 用户图片的跨设备展示](decisions/providers/adr-157-codex-user-image-projection.md)：传输分块与整图输入的边界、超预算整图压缩、旧会话兼容及跨设备预览。
+
+- [ADR-156：Pi 原生 RPC Provider](decisions/providers/adr-156-pi-native-rpc-provider.md)：`pi --mode rpc` JSONL 通道、Pi 1.2 起、采用 `provider/model` 格式的模型标识与原生会话恢复。
 
 - [ADR-155：持久 Relay 数据隧道](decisions/daemon/adr-155-persistent-relay-data-tunnel.md)：单数据 WSS、Yamux、旧中心回退与 Android/iOS/desktop 协议兼容。
 
@@ -163,6 +165,7 @@
 - [Ait 0.0.15 发布说明](reports/releases/release-0.0.15.md)：OpenCode、账户主机中继、Android APK 与稳定性修复。
 - [Ait 0.0.14 发布说明](reports/releases/release-0.0.14.md)：Diff 语法高亮、侧边栏统计与 Codex 推理等级。
 - [Apple 本机构建](operations/apple-builds.md)：DMG、模拟器和 IPA。
+- [Pi](operations/pi.md)：原生 RPC、模型发现、会话恢复与能力限制；[ADR-156](decisions/providers/adr-156-pi-native-rpc-provider.md)。
 - [Claude Code](operations/claude-code.md)：认证、原生会话与审批。
 - [DeepSeek Harness](operations/deepseek-harness.md)：原生 Host、DeepSeek 账号余额、会话导入、权限模式、question 与 ACP 兼容配置。
 - [Antigravity CLI](operations/antigravity.md)：AGY 安装、登录、权限模式、会话恢复与账号额度查询。
