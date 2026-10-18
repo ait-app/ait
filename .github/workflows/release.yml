@@ -264,9 +264,19 @@ jobs:
             fi
           fi
 
+      # Fixed-name copies back releases/latest/download/<name>; betas never become latest.
+      - name: Add latest download copies
+        run: |
+          if [[ "$RELEASE_TAG" != *-beta.* ]]; then
+            node .tmp/release-tools/scripts/release-assets.mjs latest "${RELEASE_TAG#v}" release-assets
+          fi
+
       - name: Verify assets and write checksums
         run: |
           args=(--daemon)
+          if [[ "$RELEASE_TAG" != *-beta.* ]]; then
+            args+=(--latest)
+          fi
           if test -f "release-assets/Ait-${RELEASE_TAG#v}-android.apk"; then
             args+=(--android)
           fi

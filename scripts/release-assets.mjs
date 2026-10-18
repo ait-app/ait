@@ -48,6 +48,28 @@ export function daemonAssetName(platform, version) {
 export const daemonAssetNames = (version) =>
   Object.keys(daemonTargets).map((platform) => daemonAssetName(platform, version));
 
+// Stable releases also carry fixed-name copies so releases/latest/download/<name> and the
+// COS latest objects never need a version in the link. Maps each copy to its versioned source.
+export function latestAssetNames(version) {
+  assert.equal(releaseChannel(version), "latest", "Only stable releases publish latest copies");
+  return {
+    "Ait-macos-arm64.dmg": `Ait-${version}-macos-arm64.dmg`,
+    ...Object.fromEntries(
+      Object.entries(daemonTargets).map(([platform, target]) => [
+        `Ait-daemon-${target}.tar.gz`,
+        daemonAssetName(platform, version),
+      ]),
+    ),
+  };
+}
+
+export async function copyLatestAssets({ version, directory }) {
+  const copies = latestAssetNames(version);
+  for (const [name, source] of Object.entries(copies))
+    await copyFile(path.join(directory, source), path.join(directory, name));
+  return Object.keys(copies);
+}
+
 export async function packDaemonAsset({ platform, version, binary, destination, license }) {
   const name = daemonAssetName(platform, version);
   // Old immutable tags name the binary `server`; only the reported version must match.
@@ -129,10 +151,14 @@ export async function verifyReleaseAssets({
   directory,
   includeAndroid = false,
   includeDaemon = false,
+  includeLatest = false,
   buildLabel,
 }) {
   assert(!(includeAndroid && buildLabel), "Nightly builds support desktop platforms only");
   assert(!(includeDaemon && buildLabel), "Nightly builds do not publish standalone daemons");
+  assert(!(includeLatest && buildLabel), "Nightly builds do not publish latest copies");
+  const latest =
+    buildLabel || releaseChannel(version) !== "latest" ? {} : latestAssetNames(version);
   const desktop = [
     ...releaseAssetNames("linux", version, buildLabel),
     ...releaseAssetNames("mac", version, buildLabel),
@@ -141,11 +167,13 @@ export async function verifyReleaseAssets({
     ...desktop,
     ...(includeAndroid ? releaseAssetNames("android", version) : []),
     ...(includeDaemon ? daemonAssetNames(version) : []),
+    ...(includeLatest ? Object.keys(latest) : []),
   ];
   // Android repairs re-verify stable releases that may or may not carry daemon archives.
   const allowed = new Set([
     ...required,
     ...(buildLabel ? [] : daemonAssetNames(version)),
+    ...Object.keys(latest),
     "BUILD-INFO.json",
     ...desktop.filter((name) => !name.endsWith(".yml")).map((name) => `${name}.blockmap`),
   ]);
@@ -177,10 +205,16 @@ export async function verifyReleaseAssets({
     const info = await stat(path.join(directory, name));
     assert(info.isFile() && info.size > 0, `Empty or invalid release asset: ${name}`);
   }
-  const sums = [];
+  const sums = new Map();
   for (const name of names)
-    sums.push(`${await digest(path.join(directory, name), "sha256", "hex")}  ${name}`);
-  await writeFile(path.join(directory, "SHA256SUMS"), `${sums.join("\n")}\n`);
+    sums.set(name, await digest(path.join(directory, name), "sha256", "hex"));
+  for (const [name, source] of Object.entries(latest)) {
+    if (!sums.has(name)) continue;
+    assert(sums.has(source), `Missing release asset: ${source}`);
+    assert.equal(sums.get(name), sums.get(source), `Latest copy differs from ${source}: ${name}`);
+  }
+  const lines = [...sums].map(([name, hash]) => `${hash}  ${name}`);
+  await writeFile(path.join(directory, "SHA256SUMS"), `${lines.join("\n")}\n`);
   return names;
 }
 
@@ -214,10 +248,13 @@ async function main() {
         license: "LICENSE",
       }),
     );
+  } else if (command === "latest" && args.length === 2 && !buildLabel) {
+    const [version, directory] = args;
+    console.log(await copyLatestAssets({ version, directory }));
   } else if (
     command === "verify" &&
     args.length >= 2 &&
-    options.every((option) => ["--android", "--daemon"].includes(option)) &&
+    options.every((option) => ["--android", "--daemon", "--latest"].includes(option)) &&
     new Set(options).size === options.length
   ) {
     const [version, directory] = args;
@@ -227,12 +264,13 @@ async function main() {
         directory,
         includeAndroid: options.includes("--android"),
         includeDaemon: options.includes("--daemon"),
+        includeLatest: options.includes("--latest"),
         buildLabel,
       }),
     );
   } else {
     throw new Error(
-      "Usage: release-assets.mjs collect linux|mac VERSION SOURCE DEST [--nightly LABEL] | daemon linux|mac VERSION BINARY DEST | verify VERSION DIRECTORY [--android] [--daemon] | verify VERSION DIRECTORY --nightly LABEL",
+      "Usage: release-assets.mjs collect linux|mac VERSION SOURCE DEST [--nightly LABEL] | daemon linux|mac VERSION BINARY DEST | latest VERSION DIRECTORY | verify VERSION DIRECTORY [--android] [--daemon] [--latest] | verify VERSION DIRECTORY --nightly LABEL",
     );
   }
 }

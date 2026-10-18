@@ -69,6 +69,7 @@ main/PR CI 不调用 EAS 构建或提交，不消耗移动端发布配额。
 | macOS 独立 daemon   | Apple Silicon arm64     | `Ait-VERSION-daemon-macos-arm64.tar.gz`                  |
 | Android（独立发布） | 通用（含 ARM64、ARMv7） | `Ait-VERSION-android.apk`                                |
 | 自动更新            | 各平台                  | `latest-linux.yml`、`latest-mac.yml`、生成的 `.blockmap` |
+| 最新版固定链接      | 正式版                  | `Ait-macos-arm64.dmg`、`Ait-daemon-*.tar.gz`             |
 | 校验                | 全部资产                | `SHA256SUMS`                                             |
 
 AppImage 文件名保持稳定，版本体现在 Release 标签和应用内部。Windows、deb/rpm 和其他架构
@@ -81,6 +82,36 @@ Helper 是必需运行时。GitHub 仍自动提供标签对应的源码归档。
 签名（hardened runtime）并公证；裸可执行文件无法 staple 公证票据，Gatekeeper 首次运行时在线核验。
 Linux daemon 在 `ubuntu-24.04` runner 上通过 [`build-linux-daemon.sh`](../../scripts/build-linux-daemon.sh) 于 `manylinux_2_28` 容器内编译，桌面包与独立归档共用；构建后检查不超过 `GLIBC_2.28` 与 `GLIBCXX_3.4.25`，支持 Ubuntu 20.04、Debian 10、RHEL 8 及更新版本。
 正式版和 beta 都包含这两个归档；nightly 不发布独立 daemon。
+
+### 最新版固定链接与 COS 镜像
+
+正式版另带三个不含版本号的副本：`Ait-macos-arm64.dmg`、`Ait-daemon-linux-x64.tar.gz`、
+`Ait-daemon-macos-arm64.tar.gz`，内容与同一 Release 的带版本号文件逐字节相同，并写入
+`SHA256SUMS`。官网和服务端登录页因此可以固定使用
+`https://github.com/ait-app/ait/releases/latest/download/<文件名>`，发版后不用改链接。
+beta 和 nightly 不带这些副本。
+
+[`release-mirror.yml`](../../.github/workflows/release-mirror.yml) 在 Release 由草稿转为
+正式版（`release: published`）时运行，beta 跳过。它下载本次 DMG、两个独立 daemon 归档和
+`SHA256SUMS`，校验后上传到 COS 桶 `ait-release-1251719274`（`ap-shanghai`）根目录：
+
+- 带版本号的对象（如 `Ait-0.1.8-macos-arm64.dmg`）只写一次；同名同内容复用，内容不同则失败，
+  不覆盖已有对象。
+- 全部带版本号对象就绪后，才覆盖同名的最新版对象（如 `Ait-macos-arm64.dmg`），
+  设置 `Cache-Control: no-cache`，下载时文件名仍带版本号。只有 GitHub Latest 指向本次版本时才更新；
+  已持有更高版本的对象保持不变。
+
+最新版地址为 `https://ait-release-1251719274.cos.ap-shanghai.myqcloud.com/<文件名>`。
+每个对象上传后都用匿名 HEAD 核对大小和 SHA-256 元数据。COS 同步完成前的几分钟内，
+COS 最新版对象仍是上一版本，与 GitHub `SHA256SUMS` 不一致属正常现象。
+
+工作流需要仓库 Secrets `COS_SECRET_ID`、`COS_SECRET_KEY`，权限按 ait-realease 的
+`config/cos-upload-policy.json` 授予 `Ait-*` 对象的上传权限。用 `GITHUB_TOKEN` 发布 Release
+不会触发该工作流；此时或失败重试时，手动运行：
+
+```bash
+gh workflow run release-mirror.yml --repo ait-app/ait -f tag=vX.Y.Z
+```
 
 ## Arch Linux 本地源码安装
 
@@ -208,8 +239,8 @@ git push origin v0.0.20
 4. 检查打包内容；macOS 签名、公证；隔离启动成品应用并验证真实 daemon 生命周期。
 5. 收集桌面安装包和自动更新资产，核对更新摘要。
 6. 将同一 daemon 打包为独立归档并核对其 `--version`；macOS 先单独签名、公证。
-7. 桌面构建成功后汇总资产（必须包含两个独立 daemon 归档）并生成 SHA256SUMS，再创建 Draft
-   Release 或补齐既有 Release 的资产。
+7. 桌面构建成功后汇总资产（必须包含两个独立 daemon 归档，正式版另加最新版固定链接副本）
+   并生成 SHA256SUMS，再创建 Draft Release 或补齐既有 Release 的资产。
 
 新建 Release 使用 [`gh release create --draft`](https://cli.github.com/manual/gh_release_create)，
 将安装包暂存为草稿，供代理继续校验资产、整理说明与覆盖率证据，然后自动完成正式发布。
@@ -228,7 +259,7 @@ git push origin v0.0.20
 3. 检查通过后直接将草稿转为正式发布。任一检查失败或证据缺失时，先修复并重新验证，
    通过前保持 Draft。
 4. 发布后重新确认非 Draft 状态、版本标签、附件与说明；稳定版确认 Latest 指向本次版本，
-   再向用户提供正式链接、构建源码、验证结果及覆盖率报告。
+   并确认 Mirror Release to COS 工作流成功，再向用户提供正式链接、构建源码、验证结果及覆盖率报告。
 
 稳定版完成上述发布前检查后直接使用：
 
