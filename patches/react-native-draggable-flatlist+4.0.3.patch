@@ -58,7 +58,7 @@ index 2abb4a2..8ca967f 100644
      onAnimValInit?: (animVals: ReturnType<typeof useAnimatedValues>) => void;
      itemEnteringAnimation?: AnimateProps<Animated.View>["entering"];
 diff --git a/node_modules/react-native-draggable-flatlist/src/components/DraggableFlatList.tsx b/node_modules/react-native-draggable-flatlist/src/components/DraggableFlatList.tsx
-index 7c88afc..6d5719c 100644
+index 7c88afc..92b4428 100644
 --- a/node_modules/react-native-draggable-flatlist/src/components/DraggableFlatList.tsx
 +++ b/node_modules/react-native-draggable-flatlist/src/components/DraggableFlatList.tsx
 @@ -19,6 +19,7 @@ import {
@@ -285,7 +285,7 @@ index 7c88afc..6d5719c 100644
        disabled.value = true;
        runOnJS(onRelease)(activeIndexAnim.value);
        const springTo = placeholderOffset.value - activeCellOffset.value;
-@@ -309,14 +405,64 @@ function DraggableFlatListInner<T>(props: DraggableFlatListProps<T>) {
+@@ -309,14 +405,70 @@ function DraggableFlatListInner<T>(props: DraggableFlatListProps<T>) {
            runOnJS(onDragEnd)({
              from: activeIndexAnim.value,
              to: spacerIndexAnim.value,
@@ -317,8 +317,6 @@ index 7c88afc..6d5719c 100644
        runOnJS(onContainerTouchStart)();
      })
 +    .onTouchesMove((event, stateManager) => {
-+      if (!coordinatesDragWithExternalGesture) return;
-+
 +      // Manual activation arbitrates only while the pan is waiting. Failing or
 +      // reactivating an active recognizer can leave RNGH/Reanimated livelocked.
 +      if (manualPanActivated.value) return;
@@ -334,6 +332,8 @@ index 7c88afc..6d5719c 100644
 +      const absDeltaX = Math.abs(deltaX);
 +      const absDeltaY = Math.abs(deltaY);
 +
++      // Only an armed drag may claim the touch. An offset-activated pan could
++      // win a fast flick before the outer scroll view and cancel the scroll.
 +      if (activeIndexAnim.value < 0) {
 +        if (absDeltaX > 6 || absDeltaY > 6) {
 +          stateManager.fail();
@@ -341,9 +341,15 @@ index 7c88afc..6d5719c 100644
 +        return;
 +      }
 +
-+      if (absDeltaX > 10 && absDeltaX > absDeltaY) {
++      const mainDelta = horizontalAnim.value ? absDeltaX : absDeltaY;
++      const crossDelta = horizontalAnim.value ? absDeltaY : absDeltaX;
++      if (
++        coordinatesDragWithExternalGesture &&
++        crossDelta > 10 &&
++        crossDelta > mainDelta
++      ) {
 +        stateManager.fail();
-+      } else if (absDeltaY >= activationDistanceProp && absDeltaY > absDeltaX) {
++      } else if (mainDelta >= activationDistanceProp && mainDelta > crossDelta) {
 +        manualPanActivated.value = true;
 +        stateManager.activate();
 +      }
@@ -351,29 +357,26 @@ index 7c88afc..6d5719c 100644
      .onTouchesUp(() => {
        // Turning this into a worklet causes timing issues. We want it to run
        // just after the finger lifts.
-@@ -324,7 +470,9 @@ function DraggableFlatListInner<T>(props: DraggableFlatListProps<T>) {
+@@ -324,15 +476,23 @@ function DraggableFlatListInner<T>(props: DraggableFlatListProps<T>) {
      });
 
    if (dragHitSlop) panGesture.hitSlop(dragHitSlop);
 -  if (activationDistanceProp) {
-+  if (coordinatesDragWithExternalGesture) {
-+    panGesture = panGesture.manualActivation(true);
-+  } else if (activationDistanceProp) {
-     const activeOffset = [-activationDistanceProp, activationDistanceProp];
-     if (props.horizontal) {
-       panGesture.activeOffsetX(activeOffset);
-@@ -332,6 +480,21 @@ function DraggableFlatListInner<T>(props: DraggableFlatListProps<T>) {
-       panGesture.activeOffsetY(activeOffset);
-     }
-   }
+-    const activeOffset = [-activationDistanceProp, activationDistanceProp];
+-    if (props.horizontal) {
+-      panGesture.activeOffsetX(activeOffset);
+-    } else {
+-      panGesture.activeOffsetY(activeOffset);
+-    }
++  panGesture = panGesture.manualActivation(true);
 +  if (props.simultaneousHandlers) {
 +    panGesture.simultaneousWithExternalGesture(
 +      ...(Array.isArray(props.simultaneousHandlers)
 +        ? props.simultaneousHandlers
 +        : [props.simultaneousHandlers])
 +    );
-+  }
-+
+   }
+
 +  // GestureDetector only updates handler config when a retained host reappears
 +  // with the same native tag. Changing the gesture count forces a native
 +  // reattachment without remounting the list subtree.
@@ -381,10 +384,11 @@ index 7c88afc..6d5719c 100644
 +    props.dragGestureHostPresented === false
 +      ? Gesture.Simultaneous(panGesture, Gesture.Manual().enabled(false))
 +      : panGesture;
-
++
    const onScroll = useStableCallback((scrollOffset: number) => {
      props.onScrollOffsetChange?.(scrollOffset);
-@@ -373,8 +536,9 @@ function DraggableFlatListInner<T>(props: DraggableFlatListProps<T>) {
+   });
+@@ -373,8 +533,9 @@ function DraggableFlatListInner<T>(props: DraggableFlatListProps<T>) {
        horizontal={!!props.horizontal}
        layoutAnimationDisabled={layoutAnimationDisabled}
      >
