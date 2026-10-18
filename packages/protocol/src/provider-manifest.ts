@@ -142,6 +142,18 @@ const OPENCODE_MODES: AgentProviderModeDefinition[] = [
   },
 ];
 
+const PI_MODES: AgentProviderModeDefinition[] = [
+  {
+    id: "default",
+    label: "Native Tools",
+    description:
+      "Uses Pi's native tools and configuration. Pi has no built-in approval sandbox. Extension dialogs are cancelled.",
+    icon: "ShieldOff",
+    colorTier: "dangerous",
+    isUnattended: true,
+  },
+];
+
 export const OMP_MODES: AgentProviderModeDefinition[] = [
   {
     id: "full",
@@ -284,8 +296,8 @@ export const AGENT_PROVIDER_DEFINITIONS: AgentProviderDefinition[] = [
     id: "pi",
     label: "Pi",
     description: "Minimal terminal-based coding agent with multi-provider LLM support",
-    defaultModeId: null,
-    modes: [],
+    defaultModeId: "default",
+    modes: PI_MODES,
   },
   {
     id: "omp",

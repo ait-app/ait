@@ -74,6 +74,7 @@ export async function startIsolatedHostDaemon(
           AIT_SERVER_CODEX_BIN: path.join(dataDir, "unconfigured-codex"),
           AIT_SERVER_CLAUDE_BIN: path.join(dataDir, "unconfigured-claude"),
           AIT_SERVER_OPENCODE_BIN: path.join(dataDir, "unconfigured-opencode"),
+          AIT_SERVER_PI_BIN: path.join(dataDir, "unconfigured-pi"),
           AIT_SERVER_DEEPSEEK_HARNESS_BIN: path.join(dataDir, "unconfigured-deepseek-harness"),
           AIT_SERVER_ANTIGRAVITY_BIN: path.join(dataDir, "unconfigured-antigravity"),
           ...options.environment,

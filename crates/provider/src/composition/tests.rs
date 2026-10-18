@@ -29,6 +29,7 @@ fn registration_preserves_the_catalog_without_startup_writes_and_rejects_duplica
             "antigravity",
             "opencode",
             "deepseek-harness",
+            "pi",
         ]
     );
     providers.register(&mut manager).unwrap();
@@ -38,6 +39,7 @@ fn registration_preserves_the_catalog_without_startup_writes_and_rejects_duplica
         "antigravity",
         "opencode",
         "deepseek-harness",
+        "pi",
     ] {
         manager.validate_provider(provider).unwrap();
     }
