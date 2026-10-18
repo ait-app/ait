@@ -7,11 +7,23 @@ vi.mock("@/utils/encode-images", () => ({ encodeImages: vi.fn() }));
 
 beforeEach(() => vi.clearAllMocks());
 
-it("prepares image grouping for a new Agent as well as subsequent messages", async () => {
-  vi.mocked(encodeImages).mockResolvedValue([
-    { data: "overview", mimeType: "image/png", description: "original image 1: overview" },
-    { data: "detail", mimeType: "image/webp", description: "original image 1: detail crop" },
-  ]);
+it("keeps a failed image preparation from creating a partial initial session", async () => {
+  const failure = new Error("This image cannot fit the message budget");
+  vi.mocked(encodeImages).mockRejectedValue(failure);
+  const createAgent = vi.fn();
+  await expect(
+    requestWorkspaceDraftAgent({ createAgent } as unknown as DaemonClient, {
+      workspaceId: "workspace",
+      clientMessageId: "message",
+      config: { provider: "codex", cwd: "/repo" },
+      text: "Inspect",
+    }),
+  ).rejects.toBe(failure);
+  expect(createAgent).not.toHaveBeenCalled();
+});
+
+it("sends a whole image and only user attachments when creating an Agent", async () => {
+  vi.mocked(encodeImages).mockResolvedValue([{ data: "complete-image", mimeType: "image/webp" }]);
   const createAgent = vi.fn(async () => ({ id: "agent" }));
   await requestWorkspaceDraftAgent({ createAgent } as unknown as DaemonClient, {
     workspaceId: "workspace",
@@ -27,14 +39,8 @@ it("prepares image grouping for a new Agent as well as subsequent messages", asy
   });
   expect(createAgent).toHaveBeenCalledWith(
     expect.objectContaining({
-      images: [
-        { data: "overview", mimeType: "image/png" },
-        { data: "detail", mimeType: "image/webp" },
-      ],
-      attachments: [
-        { type: "text", mimeType: "text/plain", text: "Context" },
-        expect.objectContaining({ type: "text", text: expect.stringContaining("Image layout") }),
-      ],
+      images: [{ data: "complete-image", mimeType: "image/webp" }],
+      attachments: [{ type: "text", mimeType: "text/plain", text: "Context" }],
     }),
   );
 });

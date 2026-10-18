@@ -419,7 +419,29 @@ describe("pickAndPersistImages", () => {
 });
 
 describe("dispatchComposerAgentMessage", () => {
-  it("sends prepared crops with layout context while the optimistic preview keeps the original", async () => {
+  it("does not send or consume the original attachment when whole-image preparation fails", async () => {
+    const client = createFakeSendClient();
+    const stream = createFakeStream();
+    const attachments: ComposerAttachment[] = [{ kind: "image", metadata: imageMetadata }];
+    const failure = new Error("This image cannot fit the message budget");
+    await expect(
+      dispatchComposerAgentMessage({
+        client,
+        agentId: "agent",
+        text: "Inspect",
+        attachments,
+        submission: stream,
+        encodeImages: async () => {
+          throw failure;
+        },
+      }),
+    ).rejects.toBe(failure);
+    expect(client.calls).toEqual([]);
+    expect(stream.tail.get("agent") ?? []).toEqual([]);
+    expect(attachments).toEqual([{ kind: "image", metadata: imageMetadata }]);
+  });
+
+  it("sends one complete image without layout context while the preview keeps the original", async () => {
     const client = createFakeSendClient();
     const stream = createFakeStream();
     const metadata = {
@@ -435,25 +457,12 @@ describe("dispatchComposerAgentMessage", () => {
       text: "Read the whole screenshot",
       attachments: [{ kind: "image", metadata }],
       submission: stream,
-      encodeImages: async () => [
-        { data: "overview", mimeType: "image/png", description: "original image 1: overview" },
-        {
-          data: "crop",
-          mimeType: "image/webp",
-          description: "original image 1: detail crop x=0, y=1920",
-        },
-      ],
+      encodeImages: async () => [{ data: "complete-image", mimeType: "image/webp" }],
     });
     expect(client.calls[0].options.images).toEqual([
-      { data: "overview", mimeType: "image/png" },
-      { data: "crop", mimeType: "image/webp" },
+      { data: "complete-image", mimeType: "image/webp" },
     ]);
-    expect(client.calls[0].options.attachments).toEqual([
-      expect.objectContaining({
-        type: "text",
-        text: expect.stringContaining("Image 2: original image 1: detail crop"),
-      }),
-    ]);
+    expect(client.calls[0].options.attachments).toEqual([]);
     expect(stream.tail.get("agent")?.[0]).toMatchObject({ images: [metadata] });
   });
 

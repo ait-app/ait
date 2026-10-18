@@ -1,6 +1,6 @@
 import { ImageManipulator, SaveFormat } from "expo-image-manipulator";
 import { File } from "expo-file-system";
-import type { EncodedSendImage, ImageRegion, SendImageSource } from "./image-send";
+import type { EncodedSendImage, ImageDimensions, SendImageSource } from "./image-send";
 
 export async function openSendImage(uri: string): Promise<SendImageSource> {
   const loader = ImageManipulator.manipulate(uri);
@@ -14,7 +14,7 @@ export async function openSendImage(uri: string): Promise<SendImageSource> {
     width: original.width,
     height: original.height,
     async encode(
-      region: ImageRegion,
+      size: ImageDimensions,
       mimeType: string,
       quality: number,
     ): Promise<EncodedSendImage> {
@@ -22,21 +22,8 @@ export async function openSendImage(uri: string): Promise<SendImageSource> {
       let rendered: Awaited<ReturnType<typeof context.renderAsync>> | undefined;
       let savedUri: string | undefined;
       try {
-        if (
-          region.x !== 0 ||
-          region.y !== 0 ||
-          region.width !== original.width ||
-          region.height !== original.height
-        ) {
-          context.crop({
-            originX: region.x,
-            originY: region.y,
-            width: region.width,
-            height: region.height,
-          });
-        }
-        if (region.outputWidth !== region.width || region.outputHeight !== region.height) {
-          context.resize({ width: region.outputWidth, height: region.outputHeight });
+        if (size.width !== original.width || size.height !== original.height) {
+          context.resize(size);
         }
         rendered = await context.renderAsync();
         const format =

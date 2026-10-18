@@ -21,6 +21,7 @@ pending = None
 thread_id = None
 ephemeral = False
 turn_text = ""
+turn_content = []
 history_lock = threading.Lock()
 stream_items = []
 steered_inputs = []
@@ -51,7 +52,7 @@ def save_turn(turn_id, text, status):
         return
     with history_lock:
         turns = [turn for turn in load_history() if turn["id"] != turn_id]
-        items = [{"type": "userMessage", "id": turn_id + "-user", "content": [{"type": "text", "text": turn_text}]}]
+        items = [{"type": "userMessage", "id": turn_id + "-user", "content": turn_content if mode == "rich-user-images" else [{"type": "text", "text": turn_text}]}]
         items.extend(stream_items)
         items.extend(steered_inputs)
         if text is not None:
@@ -229,12 +230,13 @@ for line in sys.stdin:
     if method == "turn/start":
         text = next((item["text"] for item in params["input"] if item["type"] == "text"), "skill-only")
         turn_text = text
+        turn_content = params["input"]
         if text == "usage":
             emit({"method":"thread/tokenUsage/updated", "params":{"threadId":thread_id,
                 "tokenUsage":{"last":{"inputTokens":100,"cachedInputTokens":30,"outputTokens":7,"totalTokens":107},"modelContextWindow":200000}}})
         save_turn(pending, None, "inProgress")
         emit({"method": "item/completed", "params": {"threadId": thread_id, "turnId": pending,
-            "item": {"type": "userMessage", "id": pending + "-user", "content": [{"type": "text", "text": text}]}}})
+            "item": {"type": "userMessage", "id": pending + "-user", "content": turn_content if mode == "rich-user-images" else [{"type": "text", "text": text}]}}})
         if text in ("auth-error", "quota-error", "retry-success"):
             message = {"auth-error": "invalid_api_key token=secret", "quota-error": "insufficient_quota secret", "retry-success": "stream disconnected secret"}[text]
             emit({"method":"error","params":{"threadId":thread_id,"turnId":pending,

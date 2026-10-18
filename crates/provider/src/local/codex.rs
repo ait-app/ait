@@ -15,6 +15,7 @@ mod speed;
 mod streaming;
 mod subagents;
 mod transport;
+mod user_images;
 mod workflows;
 
 use std::path::{Path, PathBuf};

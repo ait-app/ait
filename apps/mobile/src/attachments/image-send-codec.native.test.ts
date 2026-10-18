@@ -56,21 +56,12 @@ describe("native image send codec", () => {
     });
   });
 
-  it("crops in source coordinates and releases native refs and transient cache files", async () => {
+  it("encodes the complete image and releases native refs and transient cache files", async () => {
     const source = await openSendImage("data:image/png;base64,original");
     expect([source.width, source.height]).toEqual([800, 12000]);
-    const result = await source.encode(
-      { x: 0, y: 10000, width: 800, height: 2000, outputWidth: 800, outputHeight: 2000 },
-      "image/webp",
-      0.94,
-    );
+    const result = await source.encode({ width: 800, height: 12000 }, "image/webp", 0.94);
     expect(result).toEqual({ data: "encoded", mimeType: "image/webp" });
-    expect(mocks.contexts[1].crop).toHaveBeenCalledWith({
-      originX: 0,
-      originY: 10000,
-      width: 800,
-      height: 2000,
-    });
+    expect(mocks.contexts[1].crop).not.toHaveBeenCalled();
     expect(mocks.contexts[1].resize).not.toHaveBeenCalled();
     expect(mocks.rendered.saveAsync).toHaveBeenCalledWith({
       format: "webp",
@@ -84,17 +75,12 @@ describe("native image send codec", () => {
     expect(mocks.original.release).toHaveBeenCalledOnce();
   });
 
-  it("resizes an overview without first copying a full-height crop", async () => {
+  it("resizes the entire original without cropping", async () => {
     const source = await openSendImage("original");
     await source.encode(
       {
-        x: 0,
-        y: 0,
-        width: 800,
-        height: 12000,
-        outputWidth: 68,
-        outputHeight: 1024,
-        overview: true,
+        width: 68,
+        height: 1024,
       },
       "image/png",
       1,
@@ -107,13 +93,9 @@ describe("native image send codec", () => {
   it("releases the transformation on encoding failure", async () => {
     const source = await openSendImage("original");
     mocks.rendered.saveAsync.mockRejectedValue(new Error("encoder failed"));
-    await expect(
-      source.encode(
-        { x: 0, y: 2000, width: 800, height: 2000, outputWidth: 800, outputHeight: 2000 },
-        "image/png",
-        1,
-      ),
-    ).rejects.toThrow("encoder failed");
+    await expect(source.encode({ width: 800, height: 12000 }, "image/png", 1)).rejects.toThrow(
+      "encoder failed",
+    );
     expect(mocks.rendered.release).toHaveBeenCalledOnce();
     expect(mocks.contexts[1].release).toHaveBeenCalledOnce();
     source.release();

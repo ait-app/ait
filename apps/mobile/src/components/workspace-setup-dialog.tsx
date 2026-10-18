@@ -24,7 +24,6 @@ import { useWorkspaceSetupStore } from "@/stores/workspace-setup-store";
 import { normalizeAgentSnapshot } from "@/utils/agent-snapshots";
 import { applyLegacyDaemonWorkspaceOwnership } from "@/workspace/legacy-daemon-workspaces";
 import { encodeImages } from "@/utils/encode-images";
-import { imageSendPayload } from "@/attachments/image-send";
 import { toErrorMessage } from "@/utils/error-messages";
 import {
   resolveComposerAttachmentSubmitFormat,
@@ -336,13 +335,12 @@ export function WorkspaceSetupDialog() {
           attachments: wirePayload.attachments,
           clientMessageId: `${pendingWorkspaceSetup.creationId}:initial-message`,
         });
-        const prepared = imageSendPayload(encodedImages, wirePayload.attachments);
         let createdAgent: AgentSnapshotPayload | undefined;
         const { workspaceId: _workspaceId, ...agentInput } = buildCreateAgentOptions({
           composerState,
           text,
-          attachments: prepared.attachments ?? [],
-          encodedImages: prepared.images ?? null,
+          attachments: wirePayload.attachments ?? [],
+          encodedImages: encodedImages ?? null,
           workspaceDirectory: cwd,
           workspaceId: "",
           provider: composerState.selectedProvider,

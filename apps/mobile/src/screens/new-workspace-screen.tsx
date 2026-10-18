@@ -1,7 +1,6 @@
 import type { CreateWorkspaceRequestOptions } from "@ait/client/internal/daemon-client";
 import type { AgentSnapshotPayload, CreationSnapshot } from "@ait/protocol/messages";
 import { encodeImages } from "@/utils/encode-images";
-import { imageSendPayload } from "@/attachments/image-send";
 import { getHostRuntimeStore } from "@/runtime/host-runtime";
 import { useCallback, useEffect, useMemo, useReducer, useRef, useState } from "react";
 import type { ReactElement, ReactNode, RefObject } from "react";
@@ -966,7 +965,6 @@ async function createWorkspaceChatAgent(input: CreateChatAgentInput): Promise<Su
     attachments: wirePayload.attachments,
     clientMessageId: `${input.draftId}:initial-message`,
   });
-  const prepared = imageSendPayload(images, wirePayload.attachments);
   let navigated = false;
   let outcome: SubmitOutcome = "background";
   const initialAgent: NonNullable<CreateWorkspaceRequestOptions["agent"]> = {
@@ -980,8 +978,8 @@ async function createWorkspaceChatAgent(input: CreateChatAgentInput): Promise<Su
     },
     initialPrompt: text,
     clientMessageId: `${input.draftId}:initial-message`,
-    images: prepared.images?.length ? prepared.images : undefined,
-    attachments: prepared.attachments?.length ? prepared.attachments : undefined,
+    images: images?.length ? images : undefined,
+    attachments: wirePayload.attachments?.length ? wirePayload.attachments : undefined,
   };
   const execute = async (): Promise<AgentSnapshotPayload> => {
     const { agent } = await ensureWorkspace({

@@ -2,6 +2,7 @@ use super::*;
 
 mod command_actions;
 mod file_changes;
+mod user_images;
 
 #[test]
 fn oversized_mcp_structured_result_has_a_durable_replayable_preview() {

@@ -102,6 +102,7 @@ import {
   AttachmentThumbnail,
 } from "@/components/attachment-pill";
 import { AttachmentLightbox, type ImageLightboxSource } from "@/components/attachment-lightbox";
+import { UserMessageRemoteImage } from "./user-message-remote-image";
 import type { DaemonClient } from "@ait/client/internal/daemon-client";
 import { isWeb, isNative } from "@/constants/platform";
 import type { AgentCapabilityFlags } from "@ait/protocol/agent-types";
@@ -126,6 +127,7 @@ interface UserMessageProps {
   messageId?: string;
   message: string;
   images?: UserMessageImageAttachment[];
+  imageSources?: string[];
   attachments?: AgentAttachment[];
   timestamp: number;
   capabilities?: AgentCapabilityFlags;
@@ -434,6 +436,7 @@ export const UserMessage = memo(function UserMessage({
   messageId,
   message,
   images = [],
+  imageSources = [],
   attachments = [],
   timestamp,
   capabilities,
@@ -454,7 +457,7 @@ export const UserMessage = memo(function UserMessage({
   );
   const resolvedDisableOuterSpacing = useDisableOuterSpacing(disableOuterSpacing);
   const hasText = message.trim().length > 0;
-  const hasImages = images.length > 0;
+  const hasImages = images.length > 0 || imageSources.length > 0;
   const hasAttachments = attachments.length > 0;
   const showTrailingRow = !isPending && hasText && (isCompact || isNative || isHovered);
   const formattedTimestamp = useMemo(
@@ -526,6 +529,17 @@ export const UserMessage = memo(function UserMessage({
                   accessibilityLabel={t("composer.attachments.openImage")}
                 />
               ))}
+              {images.length === 0
+                ? imageSources.map((source, index) => (
+                    <UserMessageRemoteImage
+                      key={`${source}:${index}`}
+                      source={source}
+                      occurrenceKey={`user:${messageId ?? "message"}:${index}`}
+                      serverId={serverId}
+                      client={client}
+                    />
+                  ))
+                : null}
             </View>
           ) : null}
           {hasAttachments ? (
