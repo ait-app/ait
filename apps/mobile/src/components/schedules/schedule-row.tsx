@@ -12,6 +12,7 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { StatusBadge } from "@/components/ui/status-badge";
+import { Button } from "@/components/ui/button";
 import { getProviderIcon } from "@/components/provider-icons";
 import { isNative } from "@/constants/platform";
 import { useIsCompactFormFactor } from "@/constants/layout";
@@ -150,11 +151,11 @@ function ProviderGlyph({
 
 /**
  * One schedule, rendered as a settings-style card row: provider glyph + title,
- * a muted secondary line (model · cadence · next run), a StatusBadge, and the
- * kebab menu that owns every row action. Tapping the row opens the editor.
+ * a muted secondary line (model · cadence · next run), a StatusBadge, a direct
+ * pause/resume button, and the kebab menu. Tapping the task opens the editor.
  *
  * Hover lives on the outer plain View (docs/hover.md): the inner Pressable owns
- * press, the nested kebab Pressable never fights it, and the row background
+ * press, the sibling actions never open the editor, and the row background
  * highlights without reflow.
  */
 export function ScheduleRow({
@@ -190,22 +191,25 @@ export function ScheduleRow({
     t,
     i18n.resolvedLanguage ?? i18n.language,
   );
-  const canRun = schedule.target.type === "new-agent" && (state === "active" || state === "paused");
+  const canChangeStatus = state === "active" || state === "paused";
+  const canRun = schedule.target.type === "new-agent" && canChangeStatus;
+  const isPaused = schedule.status === "paused";
+  const statusPending = Boolean(pending?.pause || pending?.resume);
 
   const rowStyle = useCallback(
-    ({ pressed }: PressableStateCallbackType) => [
-      settingsStyles.row,
-      styles.row,
-      !isFirst && settingsStyles.rowBorder,
-      isHovered && !isCompact && styles.rowHovered,
-      pressed && styles.rowPressed,
-    ],
-    [isFirst, isHovered, isCompact],
+    ({ pressed }: PressableStateCallbackType) => [styles.main, pressed && styles.rowPressed],
+    [],
   );
 
   return (
     <View
-      style={styles.rowContainer}
+      style={[
+        settingsStyles.row,
+        styles.row,
+        isCompact && styles.rowCompact,
+        !isFirst && settingsStyles.rowBorder,
+        isHovered && !isCompact && styles.rowHovered,
+      ]}
       onPointerEnter={handlePointerEnter}
       onPointerLeave={handlePointerLeave}
     >
@@ -216,37 +220,48 @@ export function ScheduleRow({
         accessibilityLabel={t("schedules.editNamed", { product: productName.toLowerCase(), title })}
         testID={`schedule-row-${schedule.id}`}
       >
-        <View style={styles.main}>
-          <View style={styles.leading}>
-            <ProviderGlyph provider={provider} serverId={serverId} />
-          </View>
-          <View style={styles.textGroup}>
-            <Text style={settingsStyles.rowTitle} numberOfLines={1}>
-              {title}
-            </Text>
-            <Text style={styles.target} numberOfLines={1}>
-              {targetLabel}
-            </Text>
-            <Text style={settingsStyles.rowHint} numberOfLines={1}>
-              {meta}
-            </Text>
-          </View>
+        <View style={styles.leading}>
+          <ProviderGlyph provider={provider} serverId={serverId} />
         </View>
-
-        <View style={styles.trailing}>
-          <StatusBadge label={badge.label} variant={badge.variant} />
-          <ScheduleKebabMenu
-            schedule={schedule}
-            canRun={canRun}
-            pending={pending}
-            onEdit={onEdit}
-            onPause={onPause}
-            onResume={onResume}
-            onRunNow={onRunNow}
-            onDelete={onDelete}
-          />
+        <View style={styles.textGroup}>
+          <Text style={settingsStyles.rowTitle} numberOfLines={1}>
+            {title}
+          </Text>
+          <Text style={styles.target} numberOfLines={1}>
+            {targetLabel}
+          </Text>
+          <Text style={settingsStyles.rowHint} numberOfLines={1}>
+            {meta}
+          </Text>
         </View>
       </Pressable>
+      <View style={styles.trailing}>
+        <StatusBadge label={badge.label} variant={badge.variant} />
+        {canChangeStatus ? (
+          <Button
+            size="xs"
+            variant="outline"
+            leftIcon={isPaused ? Play : Pause}
+            onPress={isPaused ? onResume : onPause}
+            disabled={Boolean(pending?.delete)}
+            loading={statusPending}
+            testID={`schedule-toggle-status-${schedule.id}`}
+          >
+            {t(isPaused ? "schedules.resume" : "schedules.pause")}
+          </Button>
+        ) : null}
+        <ScheduleKebabMenu
+          schedule={schedule}
+          canChangeStatus={canChangeStatus}
+          canRun={canRun}
+          pending={pending}
+          onEdit={onEdit}
+          onPause={onPause}
+          onResume={onResume}
+          onRunNow={onRunNow}
+          onDelete={onDelete}
+        />
+      </View>
     </View>
   );
 }
@@ -259,25 +274,26 @@ const deleteLeading = <ThemedTrash2 size={MENU_ICON_SIZE} uniProps={destructiveC
 
 function ScheduleExecutionMenuItems({
   schedule,
+  canChangeStatus,
   canRun,
   pending,
   onPause,
   onResume,
   onRunNow,
 }: Pick<ScheduleRowProps, "schedule" | "pending" | "onPause" | "onResume" | "onRunNow"> & {
+  canChangeStatus: boolean;
   canRun: boolean;
-}): ReactElement | null {
+}): ReactElement {
   const { t } = useTranslation();
-  if (schedule.target.type === "agent") {
-    return null;
-  }
+  const statusDisabled =
+    !canChangeStatus || Boolean(pending?.pause || pending?.resume || pending?.delete);
 
   let cadenceAction: ReactElement;
   if (schedule.status === "paused") {
     cadenceAction = (
       <DropdownMenuItem
         leading={resumeLeading}
-        disabled={!canRun}
+        disabled={statusDisabled}
         status={pending?.resume ? "pending" : "idle"}
         pendingLabel={t("schedules.resuming")}
         onSelect={onResume}
@@ -290,7 +306,7 @@ function ScheduleExecutionMenuItems({
     cadenceAction = (
       <DropdownMenuItem
         leading={pauseLeading}
-        disabled={schedule.status === "completed" || !canRun}
+        disabled={statusDisabled}
         status={pending?.pause ? "pending" : "idle"}
         pendingLabel={t("schedules.pausing")}
         onSelect={onPause}
@@ -304,16 +320,18 @@ function ScheduleExecutionMenuItems({
   return (
     <>
       {cadenceAction}
-      <DropdownMenuItem
-        leading={runLeading}
-        disabled={!canRun}
-        status={pending?.runNow ? "pending" : "idle"}
-        pendingLabel={t("common.states.starting")}
-        onSelect={onRunNow}
-        testID={`schedule-menu-run-${schedule.id}`}
-      >
-        {t("schedules.runNow")}
-      </DropdownMenuItem>
+      {schedule.target.type === "new-agent" ? (
+        <DropdownMenuItem
+          leading={runLeading}
+          disabled={!canRun || Boolean(pending?.pause || pending?.resume || pending?.delete)}
+          status={pending?.runNow ? "pending" : "idle"}
+          pendingLabel={t("common.states.starting")}
+          onSelect={onRunNow}
+          testID={`schedule-menu-run-${schedule.id}`}
+        >
+          {t("schedules.runNow")}
+        </DropdownMenuItem>
+      ) : null}
     </>
   );
 }
@@ -329,6 +347,7 @@ function renderKebabTriggerIcon({ hovered }: { hovered?: boolean }): ReactElemen
 
 function ScheduleKebabMenu({
   schedule,
+  canChangeStatus,
   canRun,
   pending,
   onEdit,
@@ -340,6 +359,7 @@ function ScheduleKebabMenu({
   ScheduleRowProps,
   "schedule" | "pending" | "onEdit" | "onPause" | "onResume" | "onRunNow" | "onDelete"
 > & {
+  canChangeStatus: boolean;
   canRun: boolean;
 }): ReactElement {
   const { t } = useTranslation();
@@ -366,6 +386,7 @@ function ScheduleKebabMenu({
         </DropdownMenuItem>
         <ScheduleExecutionMenuItems
           schedule={schedule}
+          canChangeStatus={canChangeStatus}
           canRun={canRun}
           pending={pending}
           onPause={onPause}
@@ -399,11 +420,12 @@ const styles = StyleSheet.create((theme) => ({
   providerIcon: {
     color: theme.colors.foregroundMuted,
   },
-  rowContainer: {
-    position: "relative",
-  },
   row: {
     gap: theme.spacing[3],
+  },
+  rowCompact: {
+    flexDirection: "column",
+    alignItems: "stretch",
   },
   rowHovered: {
     backgroundColor: theme.colors.surface2,
@@ -436,6 +458,7 @@ const styles = StyleSheet.create((theme) => ({
   trailing: {
     flexDirection: "row",
     alignItems: "center",
+    justifyContent: "flex-end",
     gap: theme.spacing[2],
   },
   kebabTrigger: {
