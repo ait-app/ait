@@ -135,6 +135,7 @@
 - [Android APK 发布](operations/android-releases.md)：独立手动构建测试或正式通用 APK。
 - [Google Play 内部测试](operations/google-play-internal-testing.md)：首次账号配置、测试者安装与手动 AAB 发布 CI。
 - [发布指南](operations/releasing.md)：桌面 Release、Android Internal Testing、iOS TestFlight。
+- [Ait 0.1.7 发布说明与验证](reports/releases/release-0.1.7.md)：实时 Host 状态、Relay 通道与前台恢复、任务暂停恢复，附 relay 实测覆盖率及兼容性说明。
 - [Ait 0.1.6 发布说明与验证](reports/releases/release-0.1.6.md)：启动连接恢复、Codex Fast 切换、OpenCode 错误与分叉上下文修复，附变更范围覆盖率，校验后自动正式发布。
 - [Ait 0.1.5 Draft 发布说明](reports/releases/release-0.1.5.md)：远程浏览器回环转发、OpenCode 冷启动、回退与多文件编辑修复，附变更范围覆盖率，停在 Draft review。
 - [Ait 0.1.4 Draft 发布说明](reports/releases/release-0.1.4.md)：Provider 压缩提示、连接刷新和 HTTPS 修复，附本次全 Rust workspace 覆盖率证据并停在 Draft review。
