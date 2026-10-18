@@ -179,7 +179,11 @@ impl Transport {
             .request(
                 "initialize",
                 json!({
-                    "clientInfo":{"name":"ait-server","version":env!("CARGO_PKG_VERSION")},
+                    "clientInfo":{
+                        "name":"ait",
+                        "title":"Ait",
+                        "version":env!("CARGO_PKG_VERSION")
+                    },
                     "capabilities":{"experimentalApi":true}
                 }),
             )
