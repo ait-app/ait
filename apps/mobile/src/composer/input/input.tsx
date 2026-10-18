@@ -1949,6 +1949,9 @@ const styles = StyleSheet.create((theme: Theme) => ({
   },
   textInputScrollWrapper: {
     flexShrink: 1,
+    // Yoga has no automatic minimum size, so a height-capped composer would
+    // shrink this wrapper to zero and the input would overflow onto the buttons.
+    minHeight: MIN_INPUT_HEIGHT,
     position: "relative",
   },
   focusHintText: {

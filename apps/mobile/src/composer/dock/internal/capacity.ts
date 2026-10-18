@@ -10,13 +10,21 @@ export interface ComposerCapacity {
   capacity: number;
 }
 
+// The empty composer at its tallest breakpoint: border, padding, one input line,
+// the gap and the button row. A tighter bound would clip the controls, and
+// Android drops touches outside a parent's bounds, so the send button stops working.
+export const MIN_COMPOSER_CAPACITY = 2 + 16 + 30 + 12 + 28 + 12;
+
 export function resolveComposerCapacity(input: ComposerGeometry): number {
   "worklet";
   // A centered form grows upward by half its height. Reserve both halves so
   // translating it still leaves five layout points below the header.
   const clearance = input.keyboardShift + 5;
   const reservedSpace = input.centered ? clearance * 2 : clearance;
-  return Math.max(0, input.height - input.bottomInset - reservedSpace);
+  // A tall keyboard on a short viewport (a foldable's square inner screen) leaves
+  // less than the composer itself. Keep the composer usable; the form may then
+  // overlap the header slightly while the keyboard is open.
+  return Math.max(MIN_COMPOSER_CAPACITY, input.height - input.bottomInset - reservedSpace);
 }
 
 export function updateComposerCapacity(
