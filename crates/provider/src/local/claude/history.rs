@@ -199,7 +199,10 @@ pub(super) fn parse(
         {
             return Err(AgentSessionError::Failed);
         }
-        if let Some(path) = record["cwd"].as_str() {
+        // Later records follow the native shell's `cd`; the session belongs to its launch cwd.
+        if cwd.is_none()
+            && let Some(path) = record["cwd"].as_str()
+        {
             cwd = Some(path.to_owned());
         }
         if let Some(timestamp) = record["timestamp"].as_str() {
