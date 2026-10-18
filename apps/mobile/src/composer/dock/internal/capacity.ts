@@ -1,6 +1,8 @@
 interface ComposerGeometry {
   height: number;
   bottomInset: number;
+  /** The keyboard also covers this space below its shift. */
+  safeAreaBottom: number;
   keyboardShift: number;
   centered: boolean;
 }
@@ -10,21 +12,27 @@ export interface ComposerCapacity {
   capacity: number;
 }
 
-// The empty composer at its tallest breakpoint: border, padding, one input line,
-// the gap and the button row. A tighter bound would clip the controls, and
-// Android drops touches outside a parent's bounds, so the send button stops working.
-export const MIN_COMPOSER_CAPACITY = 2 + 16 + 30 + 12 + 28 + 12;
-
 export function resolveComposerCapacity(input: ComposerGeometry): number {
   "worklet";
-  // A centered form grows upward by half its height. Reserve both halves so
-  // translating it still leaves five layout points below the header.
-  const clearance = input.keyboardShift + 5;
-  const reservedSpace = input.centered ? clearance * 2 : clearance;
-  // A tall keyboard on a short viewport (a foldable's square inner screen) leaves
-  // less than the composer itself. Keep the composer usable; the form may then
-  // overlap the header slightly while the keyboard is open.
-  return Math.max(MIN_COMPOSER_CAPACITY, input.height - input.bottomInset - reservedSpace);
+  // A centered form only translates by the keyboard overlap, so once the keyboard
+  // reaches it the form sits on the keyboard and fits above it, not twice over.
+  // A bottom-anchored composer pads the safe area inside its own capacity.
+  const available = input.centered
+    ? Math.min(
+        input.height - input.bottomInset,
+        input.height - input.safeAreaBottom - input.keyboardShift,
+      )
+    : input.height - input.bottomInset - input.keyboardShift;
+  return Math.max(0, available - 5);
+}
+
+/** Space below a centered form that the keyboard fills before the form moves. */
+export function resolveCenteredClearance(input: {
+  viewportHeight: number;
+  safeAreaBottom: number;
+  formBottom: number;
+}): number {
+  return Math.max(0, input.viewportHeight - input.safeAreaBottom - input.formBottom);
 }
 
 export function updateComposerCapacity(
