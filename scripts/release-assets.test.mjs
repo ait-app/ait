@@ -532,8 +532,22 @@ test("release workflow builds only the daemon and packages the resolved desktop 
     ["linux", "mac"],
   );
   const build = workflow.jobs.build.steps.find((step) => step.name === "Build release daemon only");
+  assert.equal(build.if, "matrix.platform == 'mac'");
   assert.match(build.run, /--locked --release -p "\$\{\{ steps.layout.outputs.package \}\}"/);
   assert.match(build.run, /--bin "\$\{\{ steps.layout.outputs.binary \}\}" --target/);
+  const linux = workflow.jobs.build.steps.find(
+    (step) => step.name === "Build release daemon only (glibc 2.28 baseline)",
+  );
+  assert.equal(linux.if, "matrix.platform == 'linux'");
+  assert.match(linux.run, /\.tmp\/release-tools\/scripts\/build-linux-daemon\.sh/);
+  // The Linux container must use the same pinned toolchain as the macOS runner.
+  const toolchain = workflow.jobs.build.steps.find((step) =>
+    step.uses?.startsWith("dtolnay/rust-toolchain@"),
+  );
+  assert(linux.run.endsWith(` ${toolchain.uses.split("@")[1]}`));
+  const script = await readFile(new URL("./build-linux-daemon.sh", import.meta.url), "utf8");
+  assert.match(script, /--locked --release -p "\$PACKAGE" --bin "\$BINARY" --target "\$TARGET"/);
+  assert.match(script, /^max_glibc=2\.28$/m);
   const collect = workflow.jobs.build.steps.find(
     (step) => step.name === "Collect installers and updater assets",
   );

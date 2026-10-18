@@ -102,7 +102,13 @@ jobs:
         run: node .tmp/release-tools/scripts/release-layout.mjs
 
       - name: Build release daemon only
+        if: matrix.platform == 'mac'
         run: cargo build --locked --release -p "${{ steps.layout.outputs.package }}" --bin "${{ steps.layout.outputs.binary }}" --target "${{ matrix.rust_target }}"
+
+      # Desktop and standalone archives share this daemon; manylinux_2_28 keeps it on glibc 2.28+.
+      - name: Build release daemon only (glibc 2.28 baseline)
+        if: matrix.platform == 'linux'
+        run: bash .tmp/release-tools/scripts/build-linux-daemon.sh "${{ steps.layout.outputs.package }}" "${{ steps.layout.outputs.binary }}" "${{ matrix.rust_target }}" 1.98.1
 
       - name: Package Linux desktop
         if: matrix.platform == 'linux'

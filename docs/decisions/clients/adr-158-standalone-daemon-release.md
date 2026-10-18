@@ -8,4 +8,4 @@
 
 正式版与 beta 的 Release 校验必须包含两个归档，并纳入 `SHA256SUMS`；nightly 不发布独立 daemon。Android 补发流程只复核已有附件，允许其中存在 daemon 归档。国内 COS 镜像由 ait-realease 的发布编排在 GitHub Release 发布后，与 DMG 一起按 `SHA256SUMS` 校验上传。
 
-不新增 runner，只覆盖桌面已发布的 Linux x86_64 与 macOS Apple Silicon。Linux 归档在 `ubuntu-24.04` 构建，依赖该版本及以上的 glibc 与 libstdc++；需要支持更旧发行版时，另行决定构建基线。
+不新增 runner，只覆盖桌面已发布的 Linux x86_64 与 macOS Apple Silicon。Linux daemon 仍在 `ubuntu-24.04` runner 上构建，但编译在 `manylinux_2_28` 容器（AlmaLinux 8，glibc 2.28）中进行，桌面包与独立归档共用该产物。容器的 gcc-toolset 将较新的 libstdc++ 符号静态链接，运行时只需 GCC 8 的 libstdc++。构建后检查动态符号，超出 `GLIBC_2.28` 或 `GLIBCXX_3.4.25` 即失败，因此可运行于 Ubuntu 20.04、Debian 10、RHEL/Rocky/Alma 8 及更新版本。
