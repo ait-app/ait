@@ -1926,6 +1926,90 @@ describe("HostRuntimeStore", () => {
     }
   });
 
+  it("shows a saved account host as connecting until the account reports its availability", async () => {
+    useHostRuntimeClock();
+    const center = "https://center.test/api";
+    const relay = createAccountRelayHostConnection({
+      hostId: "11111111-1111-4111-8111-111111111111",
+      center,
+    });
+    const remote = makeHost({ serverId: "remote", connections: [relay] });
+    const store = new HostRuntimeStore({
+      storage: createMemoryHostRuntimeStorage({
+        "@paseo:daemon-registry": JSON.stringify([remote]),
+        "@paseo:e2e": "1",
+      }),
+      deps: makeDeps({ [relay.id]: 1 }, []),
+    });
+    try {
+      await store.boot();
+      await store.runProbeCycleNow(remote.serverId);
+      expect(store.getSnapshot(remote.serverId)?.connectionStatus).toBe("connecting");
+      // A stale channel update is not an answer about this host.
+      store.setAccountRelayCenter(center);
+      store.setAvailableAccountRelayHosts([], []);
+      await store.runProbeCycleNow(remote.serverId);
+      expect(store.getSnapshot(remote.serverId)?.connectionStatus).toBe("connecting");
+      store.setAvailableAccountRelayHosts([]);
+      await vi.waitFor(() =>
+        expect(store.getSnapshot(remote.serverId)?.connectionStatus).toBe("offline"),
+      );
+    } finally {
+      store.syncHosts([]);
+    }
+  });
+
+  it("stops showing saved account hosts as connecting when the account never reports", async () => {
+    useHostRuntimeClock();
+    const relay = createAccountRelayHostConnection({
+      hostId: "11111111-1111-4111-8111-111111111111",
+      center: "https://center.test/api",
+    });
+    const remote = makeHost({ serverId: "remote", connections: [relay] });
+    const store = new HostRuntimeStore({
+      storage: createMemoryHostRuntimeStorage({
+        "@paseo:daemon-registry": JSON.stringify([remote]),
+        "@paseo:e2e": "1",
+      }),
+      deps: makeDeps({ [relay.id]: 1 }, []),
+    });
+    try {
+      await store.boot();
+      await vi.advanceTimersByTimeAsync(14_000);
+      expect(store.getSnapshot(remote.serverId)?.connectionStatus).toBe("connecting");
+      await vi.advanceTimersByTimeAsync(1_000);
+      expect(store.getSnapshot(remote.serverId)?.connectionStatus).toBe("offline");
+    } finally {
+      store.syncHosts([]);
+    }
+  });
+
+  it("loads the registry for account discovery without waiting for the localhost probe", async () => {
+    const probe = createDeferred<never>();
+    const store = new HostRuntimeStore({
+      deps: {
+        createClient: () => new FakeDaemonClient() as unknown as DaemonClient,
+        connectToDaemon: () => probe.promise,
+        getClientId: async () => "cid_test_runtime",
+        readInitialConnectionHint: () => null,
+      },
+      storage: createMemoryHostRuntimeStorage({
+        "@paseo:daemon-registry": JSON.stringify([makeHost()]),
+      }),
+    });
+    let booted = false;
+    void store.boot().then(() => {
+      booted = true;
+    });
+    await store.loadRegistry();
+    expect(store.isHostRegistryLoaded()).toBe(true);
+    expect(store.getHosts()).toHaveLength(1);
+    expect(booted).toBe(false);
+    probe.reject(new Error("connection refused"));
+    await vi.waitFor(() => expect(booted).toBe(true));
+    store.syncHosts([]);
+  });
+
   it("automatically connects and persists every discovered account host independently", async () => {
     useHostRuntimeClock();
     const center = "https://center.test/api";
