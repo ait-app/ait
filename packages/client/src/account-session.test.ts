@@ -521,6 +521,53 @@ describe("client-only account lifecycle", () => {
     await expect(manager.openVisit("remote", manager.snapshot().center)).rejects.toThrow();
   });
 
+  it("lets a visit opened during a cold restore wait for this device's registration", async () => {
+    const { manager, http } = fixture();
+    const saved = {
+      center: "https://aitapp.cn/api",
+      token: "saved-jwt",
+      expiresAt: Date.now() + 60_000,
+      name: "Me",
+    };
+    await manager.restore(saved);
+    // Saved hosts reconnect before the first registration tick has run.
+    const visit = manager.openVisit("remote", saved.center);
+    await vi.advanceTimersByTimeAsync(1);
+    await expect(visit).resolves.toMatchObject({ relay_session_id: "visit" });
+    const paths = http.mock.calls.map(([url]) => String(url));
+    expect(paths.findIndex((path) => path.endsWith("/nodes/register"))).toBeLessThan(
+      paths.findIndex((path) => path.endsWith("/relay-sessions")),
+    );
+    await manager.logout();
+  });
+
+  it("stops waiting for registration when the account signs out or the wait times out", async () => {
+    const { manager, http } = fixture();
+    const saved = {
+      center: "https://aitapp.cn/api",
+      token: "saved-jwt",
+      expiresAt: Date.now() + 60_000,
+      name: "Me",
+    };
+    const original = http.getMockImplementation()!;
+    http.mockImplementation((url, options) =>
+      String(url).endsWith("/nodes/register")
+        ? Promise.resolve(Response.json({ error: { code: "unavailable" } }, { status: 503 }))
+        : original(url, options),
+    );
+    await manager.restore(saved);
+    const timedOut = manager.openVisit("remote", saved.center);
+    const timedOutResult = expect(timedOut).rejects.toThrow("wait for this device to register");
+    await vi.advanceTimersByTimeAsync(10_000);
+    await timedOutResult;
+
+    const signedOut = manager.openVisit("remote", saved.center);
+    const signedOutResult = expect(signedOut).rejects.toThrow("wait for this device to register");
+    await manager.logout();
+    await signedOutResult;
+    expect(http.mock.calls.some(([url]) => String(url).endsWith("/relay-sessions"))).toBe(false);
+  });
+
   it("stops network activity in background and renews/re-registers an expired lease on resume", async () => {
     const { manager, http, deps, login, expireLease } = fixture();
     await login();

@@ -1349,6 +1349,12 @@ const LOCALHOST_FALLBACK_ENDPOINT = "localhost:6767";
 const DEFAULT_LOCALHOST_BOOTSTRAP_TIMEOUT_MS = 2500;
 /** Saved account hosts show as connecting, not offline, until the account reports or this passes. */
 const ACCOUNT_RELAY_AVAILABILITY_GRACE_MS = 15_000;
+/** Account hosts last reported online; a cold start reconnects them before discovery. */
+const LAST_AVAILABLE_ACCOUNT_RELAY_KEY = "@ait:account-relay-last-available-v1";
+const LastAvailableAccountRelaySchema = z.strictObject({
+  center: z.string(),
+  serverIds: z.array(z.string()),
+});
 const E2E_STORAGE_KEY = "@paseo:e2e";
 const INITIAL_DAEMON_CONNECTION_HINT_GLOBAL_KEY = "__PASEO_INITIAL_DAEMON_CONNECTION__";
 
@@ -1437,6 +1443,8 @@ export class HostRuntimeStore {
   private bootPromise: Promise<void> | null = null;
   private registryLoad: Promise<void> | null = null;
   private accountRelayAvailabilityKnown = false;
+  /** undefined until written once, so a stale saved list is cleared on the first answer. */
+  private persistedAccountRelayAvailability: string | null | undefined = undefined;
   private storage: HostRuntimeStorage;
   private replicaCache: ReplicaCache;
   private readonly revokePushNotifications: typeof revokePushNotifications;
@@ -1574,6 +1582,7 @@ export class HostRuntimeStore {
       this.replicaCache.setHosts(profiles.map((profile) => profile.serverId));
       projectIconCache.setHosts(profiles.map((profile) => profile.serverId));
       await projectIconCache.restore();
+      await this.restoreLastAvailableAccountRelayHosts(profiles);
       this.syncHosts(profiles);
       for (const profile of profiles) {
         void this.directorySyncByServer
@@ -1608,6 +1617,54 @@ export class HostRuntimeStore {
     );
     (grace as { unref?: () => void }).unref?.();
     this.emitHostList();
+  }
+
+  /**
+   * Treat hosts that were online at the last fresh host list as available until the
+   * account reports again. Their visits wait for this device's registration, so a
+   * cold start skips the account channel's host listing; an absent host is dropped
+   * when the fresh list arrives.
+   */
+  private async restoreLastAvailableAccountRelayHosts(profiles: HostProfile[]): Promise<void> {
+    if (this.accountRelayAvailabilityKnown || this.accountRelayCenter !== null) return;
+    const saved = await readValidatedJson(
+      this.storage,
+      LAST_AVAILABLE_ACCOUNT_RELAY_KEY,
+      LastAvailableAccountRelaySchema,
+    ).catch(() => null);
+    if (!saved || this.accountRelayAvailabilityKnown || this.accountRelayCenter !== null) return;
+    const serverIds = saved.serverIds.filter((serverId) =>
+      profiles.some(
+        (profile) =>
+          profile.serverId === serverId &&
+          profile.connections.some(
+            (connection) =>
+              connection.type === "accountRelay" && connection.center === saved.center,
+          ),
+      ),
+    );
+    if (serverIds.length === 0) return;
+    this.accountRelayCenter = saved.center;
+    this.availableAccountRelayServers = new Set(serverIds);
+    markStartupPhase("relay_tentative");
+  }
+
+  /** Presence snapshots repeat every few seconds; write only when the list changes. */
+  private persistLastAvailableAccountRelayHosts(): void {
+    const document =
+      this.accountRelayCenter === null
+        ? null
+        : JSON.stringify({
+            center: this.accountRelayCenter,
+            serverIds: [...this.availableAccountRelayServers].sort(),
+          });
+    if (document === this.persistedAccountRelayAvailability) return;
+    this.persistedAccountRelayAvailability = document;
+    const write =
+      document === null
+        ? this.storage.removeItem(LAST_AVAILABLE_ACCOUNT_RELAY_KEY)
+        : this.storage.setItem(LAST_AVAILABLE_ACCOUNT_RELAY_KEY, document);
+    void write.catch(() => undefined);
   }
 
   private markAccountRelayAvailabilityKnown(): void {
@@ -2108,10 +2165,14 @@ export class HostRuntimeStore {
   setAccountRelayCenter(center: string | null): void {
     // Signed out: no saved account host can become available.
     if (center === null) this.markAccountRelayAvailabilityKnown();
-    if (center === this.accountRelayCenter) return;
+    if (center === this.accountRelayCenter) {
+      if (center === null) this.persistLastAvailableAccountRelayHosts();
+      return;
+    }
     if (center === null) this.removedAccountRelayConnections.clear();
     this.accountRelayCenter = center;
     this.availableAccountRelayServers.clear();
+    if (center === null) this.persistLastAvailableAccountRelayHosts();
     this.syncHosts(this.hosts);
     this.emitHostList();
   }
@@ -2480,6 +2541,7 @@ export class HostRuntimeStore {
       if (!this.accountRelayAvailabilityKnown) {
         this.accountRelayAvailabilityKnown = true;
         if (available.size === previous.size && [...available].every((id) => previous.has(id))) {
+          this.persistLastAvailableAccountRelayHosts();
           this.syncHosts(this.hosts);
           return;
         }
@@ -2488,12 +2550,21 @@ export class HostRuntimeStore {
     if (confirmedOfflineServerIds) {
       const offline = new Set(confirmedOfflineServerIds);
       for (const serverId of previous) {
-        if (!offline.has(serverId) && isHostRuntimeConnected(this.getSnapshot(serverId)))
+        // Until a fresh list arrives, hosts restored from the last one are still attempts.
+        if (
+          !offline.has(serverId) &&
+          (!this.accountRelayAvailabilityKnown ||
+            isHostRuntimeConnected(this.getSnapshot(serverId)))
+        )
           available.add(serverId);
       }
     }
-    if (available.size === previous.size && [...available].every((id) => previous.has(id))) return;
+    if (available.size === previous.size && [...available].every((id) => previous.has(id))) {
+      if (confirmedOfflineServerIds === undefined) this.persistLastAvailableAccountRelayHosts();
+      return;
+    }
     this.availableAccountRelayServers = available;
+    if (confirmedOfflineServerIds === undefined) this.persistLastAvailableAccountRelayHosts();
     this.syncHosts(this.hosts);
     this.emitHostList();
     for (const host of this.hosts) {
