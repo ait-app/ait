@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { resolveComposerCapacity, updateComposerCapacity } from "./capacity";
+import { MIN_COMPOSER_CAPACITY, resolveComposerCapacity, updateComposerCapacity } from "./capacity";
 
 describe("composer viewport", () => {
   it("preserves the editing capacity when the keyboard closes", () => {
@@ -62,7 +62,29 @@ describe("composer viewport", () => {
       resolveComposerCapacity({ height: 582, bottomInset: 24, keyboardShift: 0, centered: false }),
     ).toBe(553);
     expect(
-      resolveComposerCapacity({ height: 300, bottomInset: 0, keyboardShift: 200, centered: false }),
-    ).toBe(95);
+      resolveComposerCapacity({ height: 400, bottomInset: 0, keyboardShift: 200, centered: false }),
+    ).toBe(195);
+  });
+
+  it("never caps the composer below its own controls", () => {
+    // A foldable's square inner screen: reserving the keyboard twice for the
+    // centered form leaves less room than the empty composer needs.
+    expect(
+      resolveComposerCapacity({ height: 760, bottomInset: 60, keyboardShift: 300, centered: true }),
+    ).toBe(MIN_COMPOSER_CAPACITY);
+    const open = updateComposerCapacity(undefined, {
+      height: 760,
+      bottomInset: 60,
+      centered: true,
+      keyboardShift: 300,
+    });
+    expect(
+      updateComposerCapacity(open, {
+        height: 760,
+        bottomInset: 60,
+        centered: true,
+        keyboardShift: 0,
+      }).capacity,
+    ).toBe(MIN_COMPOSER_CAPACITY);
   });
 });
