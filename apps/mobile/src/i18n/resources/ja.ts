@@ -152,6 +152,7 @@ export const ja: TranslationResources = {
     },
     attachments: {
       addImage: "画像を追加",
+      takePhoto: "写真を撮影",
       pasteImage: "画像を貼り付け",
       addFile: "ファイルをアップロード",
       addIssueOrPr: "イシューまたはPRを追加",
@@ -1571,6 +1572,9 @@ export const ja: TranslationResources = {
     failed: "古い履歴を読み込めませんでした",
   },
   imageAttachmentPicker: {
+    cameraPermissionMessage:
+      "写真を撮影して添付するには、システム設定でカメラへのアクセスを許可してください。",
+    failedToTakePhoto: "写真の撮影または添付に失敗しました",
     permissionTitle: "権限が必要です",
     permissionMessage: "画像を添付するにはフォトライブラリへのアクセスを許可してください。",
     errorTitle: "エラー",

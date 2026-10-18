@@ -248,6 +248,7 @@ export const zhCN: TranslationResources = {
     },
     attachments: {
       addImage: "添加图片",
+      takePhoto: "拍照",
       pasteImage: "粘贴图片",
       addFile: "Upload file",
       addIssueOrPr: "添加 issue 或 PR",
@@ -1970,6 +1971,8 @@ export const zhCN: TranslationResources = {
     failed: "无法加载更早历史",
   },
   imageAttachmentPicker: {
+    cameraPermissionMessage: "请在系统设置中允许访问相机，以拍照并添加附件。",
+    failedToTakePhoto: "拍照或添加照片失败",
     permissionTitle: "需要权限",
     permissionMessage: "请允许访问照片图库以附加图片。",
     errorTitle: "错误",

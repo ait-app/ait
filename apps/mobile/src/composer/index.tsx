@@ -109,6 +109,7 @@ import type { TFunction } from "i18next";
 import {
   ArrowUp,
   AudioLines,
+  Camera,
   CircleDot,
   ClipboardPaste,
   FileText,
@@ -1418,7 +1419,7 @@ function ComposerContentImpl({
     ],
   );
 
-  const { pickImages } = useImageAttachmentPicker();
+  const { pickImages, takePhoto } = useImageAttachmentPicker();
   const { pickFiles } = useFilePicker();
   const agentIdRef = useRef(agentId);
   const sendAgentMessageRef = useRef<
@@ -1703,6 +1704,20 @@ function ComposerContentImpl({
     if (newImages.length === 0) return;
     addImages(newImages);
   }, [addImages, pickImages]);
+
+  const handleTakePhoto = useCallback(async () => {
+    try {
+      const newImages = await pickAndPersistImages({
+        pickImages: takePhoto,
+        persister: composerImageAttachmentPersister,
+      });
+      if (newImages.length === 0) return;
+      addImages(newImages);
+    } catch (error) {
+      console.error("[Composer] Failed to attach camera photo:", error);
+      toastErrorRef.current(t("imageAttachmentPicker.failedToTakePhoto"));
+    }
+  }, [addImages, takePhoto, t]);
 
   const handlePasteImage = useCallback(async () => {
     try {
@@ -2112,6 +2127,14 @@ function ComposerContentImpl({
     ];
     if (isNative) {
       items.push({
+        id: "camera",
+        label: t("composer.attachments.takePhoto"),
+        icon: <ThemedCamera size={ICON_SIZE.md} uniProps={iconForegroundMutedMapping} />,
+        onSelect: () => {
+          void handleTakePhoto();
+        },
+      });
+      items.push({
         id: "paste-image",
         label: t("composer.attachments.pasteImage"),
         icon: <ThemedClipboardPaste size={ICON_SIZE.md} uniProps={iconForegroundMutedMapping} />,
@@ -2147,6 +2170,7 @@ function ComposerContentImpl({
     handlePasteImage,
     handlePickFile,
     handlePickImage,
+    handleTakePhoto,
 
     t,
   ]);
@@ -2603,6 +2627,7 @@ const ThemedCircleDot = withUnistyles(CircleDot);
 const ThemedAudioLines = withUnistyles(AudioLines);
 const ThemedPaperclip = withUnistyles(Paperclip);
 const ThemedImageIcon = withUnistyles(ImageIcon);
+const ThemedCamera = withUnistyles(Camera);
 const ThemedClipboardPaste = withUnistyles(ClipboardPaste);
 const ThemedFileText = withUnistyles(FileText);
 const iconForegroundMapping = (theme: Theme) => ({ color: theme.colors.foreground });
