@@ -33,6 +33,7 @@ running = False
 finish_after_state = False
 compacting = False
 invalid_settlement = False
+state_requests = 0
 model = {'provider': 'fixture', 'id': 'model', 'name': 'Fixture Model', 'input': ['text', 'image']}
 
 def emit(value):
@@ -51,6 +52,7 @@ for line in sys.stdin:
     if scenario == 'wrong-response':
         command['id'] = 'foreign'
     if kind == 'get_state':
+        state_requests += 1
         if invalid_settlement:
             invalid_settlement = False
             emit({'type': 'compaction_start', 'reason': 'unknown'})
@@ -60,7 +62,10 @@ for line in sys.stdin:
             emit({'type': 'compaction_start', 'reason': 'manual'})
             emit({'type': 'compaction_end', 'reason': 'manual', 'result': {}, 'aborted': False})
             emit({'type': 'agent_settled', 'aborted': False})
-        response(command, {'model': model, 'sessionId': identity, 'sessionFile': str(path),
+        swapped_at = {'session-swap-open': 1, 'session-swap-configure': 2,
+                      'session-swap-synchronize': 2}.get(scenario)
+        response_identity = 'foreign' if state_requests == swapped_at else identity
+        response(command, {'model': model, 'sessionId': response_identity, 'sessionFile': str(path),
                            'thinkingLevel': 'medium', 'isStreaming': running, 'isCompacting': compacting})
         if compacting and scenario != 'compaction-hang':
             compacting = False

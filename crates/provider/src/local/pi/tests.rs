@@ -14,6 +14,7 @@ mod review;
 mod text_storage;
 mod tool_schema;
 use crate::ports::agent_session::AgentTurnEvent;
+use crate::ports::diagnostics::Category;
 use crate::protocol::prompt::AgentPrompt;
 
 fn fixture(scenario: &str) -> (TempDir, PiClient, AgentSessionSpec) {
@@ -153,6 +154,63 @@ async fn resume_rejects_foreign_provider_and_mismatched_cwd() {
         client
             .resume_session(&mismatched_cwd, &spec, AgentResumePurpose::Interactive)
             .await,
+        Err(AgentSessionError::Rejected)
+    ));
+}
+
+#[tokio::test]
+async fn model_less_create_and_resume_each_fetch_state_once() {
+    let (directory, client, spec) = fixture("");
+    let mut session = client.create_session(&spec).await.unwrap();
+    let handle = session.persistence().unwrap();
+    session.close().await.unwrap();
+
+    let mut resumed = client
+        .resume_session(&handle, &spec, AgentResumePurpose::Interactive)
+        .await
+        .unwrap();
+    resumed.close().await.unwrap();
+
+    let requests = std::fs::read_to_string(directory.path().join("requests.jsonl")).unwrap();
+    let request_types: Vec<_> = requests
+        .lines()
+        .map(|line| serde_json::from_str::<Value>(line).unwrap()["type"].clone())
+        .collect();
+    assert_eq!(request_types, ["get_state", "get_state"]);
+}
+
+#[tokio::test]
+async fn session_identity_guard_rejects_swaps_at_every_state_boundary() {
+    let (_directory, client, spec) = fixture("session-swap-open");
+    assert!(matches!(
+        client.create_session(&spec).await,
+        Err(AgentSessionError::Failed)
+    ));
+
+    let (_directory, client, spec) = fixture("session-swap-configure");
+    let mut session = client.create_session(&spec).await.unwrap();
+    let mut changed_config = spec.config.clone();
+    changed_config.model = Some("fixture/model".into());
+    assert!(matches!(
+        session.start_turn("hello", &changed_config).await,
+        Err(AgentSessionError::Failed)
+    ));
+    assert!(matches!(
+        session.start_turn("retry", &changed_config).await,
+        Err(AgentSessionError::Rejected)
+    ));
+
+    let (_directory, client, spec) = fixture("session-swap-synchronize");
+    let mut session = client.create_session(&spec).await.unwrap();
+    assert!(matches!(
+        session.start_turn("hello", &spec.config).await,
+        Err(AgentSessionError::Failed)
+    ));
+    let diagnostic = session.failure_diagnostic().unwrap();
+    assert_eq!(diagnostic.category, Category::Protocol);
+    assert_eq!(diagnostic.source, "session_identity");
+    assert!(matches!(
+        session.start_turn("retry", &spec.config).await,
         Err(AgentSessionError::Rejected)
     ));
 }
