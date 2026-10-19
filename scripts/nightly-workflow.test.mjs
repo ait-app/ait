@@ -28,6 +28,24 @@ test("UI CI checks changed lint, delegates formatting and runs the shared client
   assert.match(workflow.jobs.format.steps.at(-1).run, /oxfmt@.*--check \./);
   assert.ok(steps.some((step) => step.run === "npm run test --workspace=@ait/client"));
 });
+
+test("nightly Linux desktop builds its daemon on the release glibc baseline", () => {
+  const steps = workflow.jobs.desktop.steps;
+  const mac = steps.find((step) => step.name === "Build daemon");
+  assert.equal(mac.if, "matrix.platform == 'mac'");
+  const linux = steps.find((step) => step.name === "Build daemon (glibc 2.28 baseline)");
+  assert.equal(linux.if, "matrix.platform == 'linux'");
+  assert.match(linux.run, /^bash scripts\/build-linux-daemon\.sh daemon daemon /);
+  // The container must use the same pinned toolchain as the macOS runner.
+  const toolchain = steps.find((step) => step.uses?.startsWith("dtolnay/rust-toolchain@"));
+  assert(linux.run.endsWith(` ${toolchain.uses.split("@")[1]}`));
+  const build = steps.find((step) => step.name === "Build desktop");
+  assert.match(
+    build.env.AIT_SERVER_BIN,
+    /target\/\$\{\{ matrix.rust_target \}\}\/release\/daemon$/,
+  );
+});
+
 const context = { repo: { owner: "ait-app", repo: "ait" }, sha: "current", runId: 42 };
 
 async function runScript(step, github, outputs = {}, controller = control) {
