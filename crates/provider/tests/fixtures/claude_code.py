@@ -156,6 +156,8 @@ for line in sys.stdin:
             continue
         finish("Claude: " + prompt, prompt == "usage")
     elif message["type"] == "control_response" and pending:
+        if "--replay-user-messages" in args:
+            emit(message)
         call, prompt = pending
         pending = None
         response = message["response"]["response"]
