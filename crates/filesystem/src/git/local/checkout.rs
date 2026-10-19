@@ -541,6 +541,8 @@ impl CheckoutRuntime for LocalCheckout {
             }
         }
         git_write(&cwd, &["reset", "--hard", &remote_ref])?;
+        // The second force flag includes untracked nested repositories; ignored files stay.
+        git_write(&cwd, &["clean", "-ffd", "--quiet"])?;
         if let Some(workspace_tip) = workspace_tip {
             let lease = format!("--force-with-lease={workspace_ref}:{workspace_tip}");
             let push_refspec = format!("HEAD:{workspace_ref}");

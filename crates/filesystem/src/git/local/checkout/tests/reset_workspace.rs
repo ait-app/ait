@@ -21,6 +21,72 @@ fn reset_workspace_updates_the_already_checked_out_initial_branch() {
     reset_workspace_from_default_branch("main", "initial-workspace", true);
 }
 
+#[test]
+fn reset_workspace_removes_untracked_files_directories_and_nested_repositories() {
+    let fixture = ResetFixture::new("main", "initial-workspace", true);
+    let scratch = fixture.linked.join("scratch");
+    std::fs::create_dir_all(scratch.join("nested")).expect("create untracked directories");
+    std::fs::write(scratch.join("nested/file.txt"), "discard\n")
+        .expect("write nested untracked file");
+    let nested_repository = fixture.linked.join("nested-repository");
+    git(
+        &fixture.linked,
+        &[
+            "init",
+            "-b",
+            "main",
+            nested_repository.to_str().expect("UTF-8 nested repo path"),
+        ],
+    );
+    std::fs::write(nested_repository.join("note.txt"), "discard\n")
+        .expect("write nested repository file");
+    std::fs::write(
+        fixture.repository.repo.join(".git/info/exclude"),
+        "ignored-cache/\n",
+    )
+    .expect("configure ignored cache directory");
+    let ignored_cache = fixture.linked.join("ignored-cache");
+    std::fs::create_dir(&ignored_cache).expect("create ignored cache directory");
+    std::fs::write(ignored_cache.join("cache.txt"), "keep\n").expect("write ignored cache file");
+    let outside = fixture.repository.repo.join("outside-reset.txt");
+    std::fs::write(&outside, "keep\n").expect("write file outside the reset worktree");
+    #[cfg(unix)]
+    std::os::unix::fs::symlink(&outside, fixture.linked.join("untracked-link"))
+        .expect("create untracked symlink");
+
+    fixture
+        .runtime
+        .reset_workspace(
+            fixture.linked.to_str().expect("UTF-8 worktree path"),
+            "initial-workspace",
+        )
+        .expect("reset managed workspace");
+
+    fixture.assert_reset();
+    assert!(!scratch.exists(), "untracked directories must be removed");
+    assert!(
+        !nested_repository.exists(),
+        "untracked repositories must be removed"
+    );
+    #[cfg(unix)]
+    assert!(!fixture.linked.join("untracked-link").exists());
+    assert_eq!(
+        std::fs::read_to_string(ignored_cache.join("cache.txt")).expect("read ignored cache"),
+        "keep\n"
+    );
+    assert_eq!(
+        std::fs::read_to_string(outside).expect("read outside file"),
+        "keep\n"
+    );
+    assert!(
+        git_output(
+            &fixture.linked,
+            &["status", "--porcelain", "--untracked-files=all"]
+        )
+        .is_empty()
+    );
+}
+
 fn reset_workspace_from_default_branch(
     default_branch: &str,
     workspace_branch: &str,
@@ -193,9 +259,9 @@ impl ResetFixture {
             std::fs::read_to_string(self.linked.join("tracked.txt")).unwrap(),
             "latest default\n"
         );
-        assert_eq!(
-            std::fs::read_to_string(self.linked.join("untracked.txt")).unwrap(),
-            "keep\n"
+        assert!(
+            !self.linked.join("untracked.txt").exists(),
+            "reset must remove untracked files"
         );
     }
 }
@@ -572,6 +638,8 @@ fn reset_workspace_preserves_both_worktrees_when_initial_branch_is_checked_out_e
 #[test]
 fn reset_workspace_rejects_unmanaged_checkout_without_moving_head() {
     let fixture = Fixture::new();
+    let untracked = fixture.repo.join("untracked.txt");
+    std::fs::write(&untracked, "keep\n").expect("write unmanaged untracked file");
     let before = git_output(&fixture.repo, &["rev-parse", "HEAD"]);
     let runtime = LocalCheckout::new(fixture.temp.path().join("managed"));
 
@@ -581,6 +649,10 @@ fn reset_workspace_rejects_unmanaged_checkout_without_moving_head() {
 
     assert_eq!(error.kind, CheckoutFailureKind::NotAllowed);
     assert_eq!(git_output(&fixture.repo, &["rev-parse", "HEAD"]), before);
+    assert_eq!(
+        std::fs::read_to_string(untracked).expect("read unmanaged file"),
+        "keep\n"
+    );
 }
 
 #[test]
@@ -606,6 +678,8 @@ fn reset_workspace_preserves_branch_and_head_when_remote_lookup_fails() {
         &["remote", "add", "origin", "/missing/repository.git"],
     );
     let before = git_output(&linked, &["rev-parse", "HEAD"]);
+    let untracked = linked.join("untracked.txt");
+    std::fs::write(&untracked, "keep\n").expect("write file before remote lookup failure");
 
     let runtime = LocalCheckout::new(managed);
     assert!(
@@ -619,4 +693,8 @@ fn reset_workspace_preserves_branch_and_head_when_remote_lookup_fails() {
         "renamed-workspace"
     );
     assert_eq!(git_output(&linked, &["rev-parse", "HEAD"]), before);
+    assert_eq!(
+        std::fs::read_to_string(untracked).expect("read file after failed reset"),
+        "keep\n"
+    );
 }
