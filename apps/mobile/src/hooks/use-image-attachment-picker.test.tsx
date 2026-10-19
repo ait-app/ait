@@ -7,7 +7,6 @@ import {
   type ImagePickerResult,
 } from "expo-image-picker";
 import { useImageAttachmentPicker } from "./use-image-attachment-picker";
-import { appErrorReporter } from "@/diagnostics/error-reporter";
 
 const mocks = vi.hoisted(() => ({
   native: true,
@@ -70,7 +69,6 @@ const photo: ImagePickerResult = {
 };
 
 beforeEach(() => {
-  appErrorReporter.takePending();
   vi.resetAllMocks();
   mocks.native = true;
   mocks.electron = false;
@@ -188,10 +186,10 @@ describe("camera attachments", () => {
     const { result } = renderHook(useImageAttachmentPicker);
     try {
       await expect(result.current.takePhoto()).resolves.toBeNull();
-      const [report] = appErrorReporter.takePending();
-      expect(report.message).toContain("imageAttachmentPicker.failedToTakePhoto");
-      expect(report.details).toContain("Camera unavailable");
-      expect(mocks.alert).not.toHaveBeenCalled();
+      expect(mocks.alert).toHaveBeenCalledWith(
+        "imageAttachmentPicker.errorTitle",
+        "imageAttachmentPicker.failedToTakePhoto",
+      );
       await expect(result.current.takePhoto()).resolves.toHaveLength(1);
     } finally {
       consoleError.mockRestore();

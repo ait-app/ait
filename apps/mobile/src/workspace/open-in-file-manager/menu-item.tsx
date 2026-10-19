@@ -44,7 +44,7 @@ export function OpenInFileManagerMenuItem({
       workspacePath,
     }).catch((error) => {
       console.warn("[open-in-file-manager] open failed", error);
-      toast.error(t("sidebar.project.actions.openFolderFailed"), error);
+      toast.error(t("sidebar.project.actions.openFolderFailed"));
     });
   }, [fileManagerTarget, t, toast, workspacePath]);
 

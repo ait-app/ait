@@ -55,7 +55,6 @@ export function useOpenDirectoryInEditor({
       void openDesktopTarget(target.openInput).catch((cause: unknown) => {
         toast.error(
           cause instanceof Error ? cause.message : t("sidebar.project.actions.openFolderFailed"),
-          cause,
         );
       });
     },

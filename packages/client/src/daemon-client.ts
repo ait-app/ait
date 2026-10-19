@@ -1830,44 +1830,16 @@ export class DaemonClient {
       const err = error instanceof Error ? error : new Error(String(error));
       cancel(err);
       void promise.catch(() => undefined);
-      this.logRequestFailure(err, params);
       throw err;
     }
 
     try {
       const result = await promise;
       if (result.kind === "error") throw result.error;
-      if (
-        result.value &&
-        typeof result.value === "object" &&
-        "error" in result.value &&
-        result.value.error
-      ) {
-        this.logRequestFailure(result.value.error, params);
-      }
       return result.value;
-    } catch (error) {
-      this.logRequestFailure(error, params);
-      throw error;
     } finally {
       await wire.finish();
     }
-  }
-
-  private logRequestFailure(
-    error: unknown,
-    request: { requestId: string; message: SessionInboundMessage },
-  ): void {
-    if (this.connectionState.status === "disposed" || !this.shouldReconnect) return;
-    this.logger.error(
-      {
-        err: error,
-        serverId: this.lastServerInfoMessage?.serverId ?? this.logServerId,
-        requestId: request.requestId,
-        requestType: request.message.type,
-      },
-      "Daemon request failed",
-    );
   }
 
   private async sendCorrelatedRequest<

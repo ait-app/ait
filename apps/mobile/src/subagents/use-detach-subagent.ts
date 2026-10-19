@@ -41,7 +41,7 @@ export function useDetachSubagent(input: UseDetachSubagentInput): (subagentId: s
             navigateToAgent({ serverId: targetServerId, agentId });
           },
           reportError: (error) => {
-            toast.error(toErrorMessage(error), error);
+            toast.error(toErrorMessage(error));
           },
         },
       );

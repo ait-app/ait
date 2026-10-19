@@ -1,5 +1,4 @@
 import { useStableEvent } from "@/hooks/use-stable-event";
-import { CopyErrorLogButton } from "@/components/copy-error-log-button";
 import { UserMessageRemoteImage } from "./user-message-remote-image";
 import type { CompactionMarkerLabelInput } from "./message-compaction-label";
 import { getAgentAttachmentPillContent } from "@/attachments/attachment-pill-content";
@@ -1286,9 +1285,6 @@ interface NotificationProps {
   level: "info" | "warning" | "error";
   message: string;
   disableOuterSpacing?: boolean;
-  serverId?: string;
-  agentId?: string;
-  timelineItemId?: string;
 }
 
 const notificationStylesheet = StyleSheet.create((theme) => ({
@@ -1336,15 +1332,8 @@ export const Notification = memo(function Notification({
   level,
   message,
   disableOuterSpacing,
-  serverId,
-  agentId,
-  timelineItemId,
 }: NotificationProps) {
   const resolvedDisableOuterSpacing = useDisableOuterSpacing(disableOuterSpacing);
-  const context = useMemo(
-    () => ({ serverId, agentId, timelineItemId }),
-    [serverId, agentId, timelineItemId],
-  );
 
   const typeConfig = {
     info: {
@@ -1386,9 +1375,6 @@ export const Notification = memo(function Notification({
             <Text style={notificationStylesheet.messageText} selectable>
               {message}
             </Text>
-            {level === "error" ? (
-              <CopyErrorLogButton error={message} source="provider timeline" context={context} />
-            ) : null}
           </View>
         </View>
       </View>

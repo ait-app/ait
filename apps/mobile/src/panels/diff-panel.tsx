@@ -1,4 +1,3 @@
-import { CopyErrorLogButton } from "@/components/copy-error-log-button";
 import { useCallback, useMemo, type ReactNode } from "react";
 import { Text, View } from "react-native";
 import { useTranslation } from "react-i18next";
@@ -73,7 +72,6 @@ function PanelState({
   return (
     <View style={styles.centerState} testID={testID}>
       <Text style={tone === "error" ? styles.errorText : styles.mutedText}>{message}</Text>
-      {tone === "error" ? <CopyErrorLogButton error={message} source="diff panel" /> : null}
     </View>
   );
 }

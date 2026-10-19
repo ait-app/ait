@@ -1,11 +1,13 @@
 use super::*;
 use projection::Projection;
 
-pub(super) fn catalog() -> Value {
+mod http;
+
+fn catalog() -> Value {
     json!({"providers":[{"id":"local","models":{"model":{"limit":{"context":1_000_000}}}}]})
 }
 
-pub(super) fn message(id: &str, created: u64, input: u64, cached: u64) -> Value {
+fn message(id: &str, created: u64, input: u64, cached: u64) -> Value {
     json!({"type":"message.updated","properties":{"info":{"id":id,"sessionID":"parent",
         "role":"assistant","time":{"created":created},"providerID":"local","modelID":"model",
         "tokens":{"input":input,"cache":{"read":cached}}}}})

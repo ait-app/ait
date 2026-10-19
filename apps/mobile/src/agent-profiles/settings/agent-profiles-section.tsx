@@ -1,6 +1,5 @@
-import { showErrorAlert } from "@/diagnostics/error-reporter";
 import { useCallback, useMemo, useState, type ReactElement } from "react";
-import { Text, View } from "react-native";
+import { Alert, Text, View } from "react-native";
 import { useTranslation } from "react-i18next";
 import { Plus } from "lucide-react-native";
 import { StyleSheet, withUnistyles } from "react-native-unistyles";
@@ -79,10 +78,9 @@ export function AgentProfilesSection({ serverId }: { serverId: string }): ReactE
       try {
         await saveProfiles(next);
       } catch (error) {
-        showErrorAlert(
+        Alert.alert(
           t("common.errors.unableToSave"),
           error instanceof Error ? error.message : String(error),
-          error,
         );
       }
     },
@@ -111,10 +109,9 @@ export function AgentProfilesSection({ serverId }: { serverId: string }): ReactE
         try {
           await saveProfiles(profiles.filter((entry) => entry.id !== id));
         } catch (error) {
-          showErrorAlert(
+          Alert.alert(
             t("common.errors.unableToSave"),
             error instanceof Error ? error.message : String(error),
-            error,
           );
         }
         return;

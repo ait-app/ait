@@ -23,7 +23,6 @@ const MAX_EVENTS: usize = 128;
 pub(super) struct Transport {
     child: Child,
     pub(super) diagnostics: Diagnostics,
-    pub(super) failure: super::failure::Failure,
     _stderr: AbortOnDropHandle<()>,
     input: Arc<Mutex<ChildStdin>>,
     messages: mpsc::Receiver<Value>,
@@ -90,6 +89,7 @@ impl Transport {
         ));
         let output = child.stdout.take().ok_or(AgentSessionError::Failed)?;
         let stderr = child.stderr.take().ok_or(AgentSessionError::Failed)?;
+        let stderr_task = AbortOnDropHandle::new(tokio::spawn(diagnostics.clone().drain(stderr)));
         let reader_diagnostics = diagnostics.clone();
         let (sender, messages) = mpsc::channel(MAX_EVENTS);
         let request_input = input.clone();
@@ -160,9 +160,8 @@ impl Transport {
         });
         Ok(Self {
             child,
-            diagnostics: diagnostics.clone(),
-            failure: super::failure::Failure::default(),
-            _stderr: AbortOnDropHandle::new(tokio::spawn(diagnostics.drain(stderr))),
+            diagnostics,
+            _stderr: stderr_task,
             input,
             messages,
             reader,
@@ -234,7 +233,8 @@ impl Transport {
                                 "Native provider rejected steering"
                             );
                         } else {
-                            self.observe_error(error, diagnostics::native(error, "rpc"), method);
+                            self.diagnostics
+                                .observe(diagnostics::native(error, "rpc"), method);
                         }
                         return Err(
                             if method != "turn/steer" || super::streaming::steer_rejected(error) {
@@ -277,15 +277,6 @@ impl Transport {
             }
             let _ = self.close().await;
             Err(AgentSessionError::Failed)
-        }
-    }
-
-    /// Record `diagnostic` for `operation` and retain a sanitized explanation from `error`.
-    /// Retrying errors do not create a final message or replace a more specific failure.
-    pub(super) fn observe_error(&mut self, error: &Value, diagnostic: Diagnostic, operation: &str) {
-        self.diagnostics.observe(diagnostic, operation);
-        if diagnostic.will_retry == Some(true) || self.diagnostics.failure() == Some(diagnostic) {
-            self.failure.observe(error, diagnostic);
         }
     }
 

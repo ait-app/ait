@@ -1,7 +1,6 @@
-import { showErrorAlert } from "@/diagnostics/error-reporter";
 import { useCallback, useMemo, useReducer, useState } from "react";
 import { useTranslation } from "react-i18next";
-import { Pressable, Text, View } from "react-native";
+import { Alert, Pressable, Text, View } from "react-native";
 import { StyleSheet, useUnistyles } from "react-native-unistyles";
 import { useIsCompactFormFactor } from "@/constants/layout";
 import { Check, ChevronDown, ChevronRight, Eye, EyeOff, Link2 } from "lucide-react-native";
@@ -417,7 +416,7 @@ export function AddHostModal({ visible, onClose, onCancel, onSaved }: AddHostMod
       }
       setErrorMessage(combined);
       if (!isMobile) {
-        showErrorAlert(t("pairing.direct.errors.failedTitle"), combined, error);
+        Alert.alert(t("pairing.direct.errors.failedTitle"), combined);
       }
     } finally {
       setIsSaving(false);

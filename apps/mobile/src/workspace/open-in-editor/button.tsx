@@ -172,7 +172,6 @@ export function WorkspaceOpenInEditorButton({
     onError: (error: unknown) => {
       toast.error(
         error instanceof Error ? error.message : t("workspace.git.openInEditor.failedOpen"),
-        error,
       );
     },
   });

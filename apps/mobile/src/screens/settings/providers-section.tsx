@@ -1,8 +1,8 @@
-import { showErrorAlert } from "@/diagnostics/error-reporter";
 import { useCallback, useMemo, useRef, useState } from "react";
 import type { TFunction } from "i18next";
 import { useTranslation } from "react-i18next";
 import {
+  Alert,
   Pressable,
   Text,
   View,
@@ -361,10 +361,9 @@ export function ProvidersSection({ serverId }: ProvidersSectionProps) {
       try {
         await patchConfig({ providers: { [providerId]: { enabled } } });
       } catch (error) {
-        showErrorAlert(
+        Alert.alert(
           t("settings.providers.updateErrorTitle"),
           error instanceof Error ? error.message : String(error),
-          error,
         );
       } finally {
         setPendingProviderId((current) => (current === providerId ? null : current));
@@ -391,10 +390,9 @@ export function ProvidersSection({ serverId }: ProvidersSectionProps) {
 
         await patchConfig({ removeProviders: [providerId] });
       } catch (error) {
-        showErrorAlert(
+        Alert.alert(
           t("settings.providers.remove.errorTitle"),
           error instanceof Error ? error.message : String(error),
-          error,
         );
       } finally {
         if (removingProviderIdRef.current === providerId) {
@@ -414,10 +412,9 @@ export function ProvidersSection({ serverId }: ProvidersSectionProps) {
         await patchConfig(buildAcpProviderConfigPatch(entry));
         await refresh([entry.id]);
       } catch (error) {
-        showErrorAlert(
+        Alert.alert(
           t("settings.providers.addErrorTitle"),
           error instanceof Error ? error.message : String(error),
-          error,
         );
       } finally {
         setInstallingProviderId((current) => (current === entry.id ? null : current));
