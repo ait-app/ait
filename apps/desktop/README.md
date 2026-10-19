@@ -11,6 +11,11 @@ Official releases build this app for Linux x64 and macOS arm64. The only bundled
 daemon resource is `resources/bin/daemon`; no legacy daemon, worker or CLI shim
 is shipped. See [release operations](../../docs/operations/releasing.md).
 
+macOS checks for updates through AIT Server at `https://aitapp.cn/api/v1/updates/macos/`.
+The server routes versioned downloads to COS or GitHub by region. Stable and beta retain
+their existing channels; Linux uses the GitHub provider. See
+[the update source decision](../../docs/decisions/clients/adr-165-macos-ait-server-updates.md).
+
 从仓库根目录运行 `npm run build:dmg` 生成包含 Rust daemon 的本地 macOS 安装包。
 正式签名、公证及产物路径见 [Apple 构建说明](../../docs/operations/apple-builds.md)。
 

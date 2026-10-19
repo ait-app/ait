@@ -14,6 +14,24 @@ APK 的签名方式、安装要求与手动测试入口见 [Android APK 发布](
 [Apple TestFlight iOS 手动发布](#apple-testflight-ios-手动发布)一节，
 同样与桌面 GitHub Release 相互独立。见 [ADR-070](../decisions/clients/adr-070-ios-testflight-release.md)。
 
+## macOS 自动更新来源
+
+新 macOS 安装包内嵌的更新源为 `https://aitapp.cn/api/v1/updates/macos/`，
+稳定版和 beta 分别读取 `latest-mac.yml`、`beta-mac.yml`。AIT Server 提供清单及按地区
+跳转的版本化文件入口；国内及未知地区下载 COS，其他已知地区下载 GitHub。
+Linux 继续使用 GitHub 更新源。见 [ADR-165](../decisions/clients/adr-165-macos-ait-server-updates.md)。
+
+GitHub Release 仍需上传 builder 生成的 DMG、ZIP、对应 blockmap 和更新 YAML；
+ait-realease 发布编排核对 `SHA256SUMS`，将相同文件上传至 COS 的 `v{version}/`，
+验证可读后最后更新 `latest-macos.json`。清单中保留完整 UpdateInfo 元数据，只在发布时
+把 `files[].url` 及兼容字段 `path` 转为 `files/v{version}/{filename}`。
+旧版本 ZIP 与 blockmap 也需保留，以支持差分更新。beta 清单需写入 `channels.beta`；
+未发布通道返回 404，客户端显示无可用更新，503 或网络故障仍显示检查错误。
+
+客户端设置 `useMultipleRangeRequest: false`，适配 COS 的单段 Range 支持。
+已安装的旧版本仍从 GitHub 获取首次升级，安装包含新配置的版本后才使用 AIT Server。
+本地开发不检查更新，正式交付时需验证公开清单、文件跳转和真实签名安装包升级。
+
 ## main CI Nightly
 
 每次推送 `main` 都会通过 [CI](../../.github/workflows/ci.yml) 构建 Linux x86_64
