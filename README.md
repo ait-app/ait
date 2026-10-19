@@ -30,6 +30,8 @@ Agent 在你连接的电脑上运行。使用本机 Agent 时无需登录 Ait �
 
 桌面安装包内置 daemon，由应用自动启动。
 
+Arch Linux 用户也可以从 AUR 安装：[`ait-bin`](https://aur.archlinux.org/packages/ait-bin) 为正式版预编译包，[`ait-git`](https://aur.archlinux.org/packages/ait-git) 在本机从 `main` 源码编译，两者任选其一（例如 `paru -S ait-bin`）。
+
 ### 从其他设备连接
 
 1. 在工作电脑的桌面应用中打开 **Online Service（在线服务）**，通过浏览器统一登录（邮箱、Google 或微信）。入口位于欢迎页、**Settings → App → Online Service** 或 **Add Host → Online Service**。
