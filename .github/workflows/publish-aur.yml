@@ -1,0 +1,87 @@
+name: Publish AUR packages
+
+# ait-bin follows each stable release; ait-git only needs updates when its recipe changes.
+# Pull requests build changed recipes without pushing.
+on:
+  release:
+    types: [published]
+  push:
+    branches: [main]
+    paths:
+      - packaging/aur/**
+      - scripts/aur-publish.sh
+      - .github/workflows/publish-aur.yml
+  pull_request:
+    paths:
+      - packaging/aur/**
+      - scripts/aur-publish.sh
+      - .github/workflows/publish-aur.yml
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: Stable release tag for ait-bin (default latest release)
+        required: false
+        type: string
+
+permissions:
+  contents: read
+
+jobs:
+  aur:
+    name: ${{ matrix.package }}
+    if: ${{ github.event_name != 'release' || (!github.event.release.prerelease && github.event.release.tag_name != 'nightly') }}
+    runs-on: ubuntu-24.04
+    container: archlinux:base-devel
+    timeout-minutes: 120
+    strategy:
+      fail-fast: false
+      matrix:
+        package: [ait-bin, ait-git]
+    concurrency:
+      group: aur-${{ matrix.package }}-${{ github.event_name == 'pull_request' && github.ref || 'publish' }}
+      cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+    env:
+      AIT_PACKAGE: ${{ matrix.package }}
+      AUR_PUSH: ${{ github.event_name == 'pull_request' && '0' || '1' }}
+      AUR_SSH_PRIVATE_KEY: ${{ secrets.AUR_SSH_PRIVATE_KEY }}
+      GH_TOKEN: ${{ github.token }}
+      RELEASE_TAG: ${{ github.event.release.tag_name || inputs.tag }}
+    steps:
+      # rustup satisfies ait-git's rust makedepend and follows rust-toolchain.toml.
+      - name: Install tools
+        run: pacman -Syu --noconfirm --needed git openssh github-cli namcap rustup
+
+      - uses: actions/checkout@v5
+
+      - name: Prepare build user
+        run: |
+          useradd --create-home builder
+          echo 'builder ALL=(ALL) NOPASSWD: ALL' > /etc/sudoers.d/builder
+          chown -R builder: "$GITHUB_WORKSPACE"
+
+      - name: Configure AUR SSH
+        if: env.AUR_PUSH == '1'
+        run: |
+          if [ -z "$AUR_SSH_PRIVATE_KEY" ]; then
+            echo "Set the AUR_SSH_PRIVATE_KEY repository secret." >&2
+            exit 1
+          fi
+          ssh=/home/builder/.ssh
+          install -d -m 700 -o builder -g builder "$ssh"
+          printf '%s\n' "$AUR_SSH_PRIVATE_KEY" > "$ssh/aur"
+          # Published on https://aur.archlinux.org (SHA256:RFzBCUItH9LZS0cKB5UE6ceAYhBD5C8GeOBip8Z11+4).
+          echo 'aur.archlinux.org ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIEuBKrPzbawxA/k2g6NcyV5jmqwJ2s+zpgZGZ7tpLIcN' > "$ssh/known_hosts"
+          printf '%s\n' 'Host aur.archlinux.org' '  User aur' '  IdentityFile ~/.ssh/aur' '  IdentitiesOnly yes' > "$ssh/config"
+          chown builder: "$ssh/aur" "$ssh/known_hosts" "$ssh/config"
+          chmod 600 "$ssh/aur" "$ssh/known_hosts" "$ssh/config"
+
+      - name: Resolve ait-bin release
+        if: matrix.package == 'ait-bin'
+        run: |
+          tag=${RELEASE_TAG:-$(gh release view --repo "$GITHUB_REPOSITORY" --json tagName --jq .tagName)}
+          echo "AIT_VERSION=${tag#v}" >> "$GITHUB_ENV"
+
+      - name: Build and publish ${{ matrix.package }}
+        run: |
+          sudo -u builder -H --preserve-env=AUR_PUSH,GITHUB_SHA \
+            bash scripts/aur-publish.sh "$AIT_PACKAGE" ${AIT_VERSION:+"$AIT_VERSION"}

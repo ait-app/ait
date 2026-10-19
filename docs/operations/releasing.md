@@ -131,34 +131,30 @@ Git 工作区，不用于 `makepkg --source` 或单独发布到 AUR；AUR 二进
 
 ## Arch Linux / AUR
 
-[`packaging/aur/ait-bin`](../../packaging/aur/ait-bin/PKGBUILD) 提供 Linux x86_64
-二进制包配方，使用对应 GitHub Release 的 tar.gz，包含 Electron、Web 界面和 Rust daemon。
-在仓库根目录运行：
+[`packaging/aur/`](../../packaging/aur/) 保存两个 AUR 包的配方，由
+[`publish-aur.yml`](../../.github/workflows/publish-aur.yml) 调用
+[`aur-publish.sh`](../../scripts/aur-publish.sh) 发布，不再手动推送 AUR：
+
+- `ait-bin`：使用对应 GitHub Release 的 `Ait-linux-x86_64.AppImage`。正式版 Release 发布（`release: published`，
+  跳过 beta 和 nightly）后自动把 `pkgver` 设为该版本、`pkgrel` 重置为 `1`，校验值取自 Release 的
+  `SHA256SUMS`，`ait.desktop` 的校验值按文件重新计算。仓库内 `pkgver`、`pkgrel` 和校验值以 AUR 为准，
+  无需手动修改。同版本修改配方合并到 `main` 后自动递增 `pkgrel`；不会发布比 AUR 更旧的版本。
+- `ait-git`：从 `main` 源码构建，版本号由 `pkgver()` 在用户构建时生成。只有配方变化合并到 `main`
+  时才更新 AUR。
+
+每次更新先在 `archlinux:base-devel` 容器中完整运行 `makepkg`，再生成 `.SRCINFO` 并推送；
+`.SRCINFO` 不提交到本仓库。修改 `packaging/aur/` 的 PR 只构建、不推送。也可手动运行工作流，
+`tag` 留空时 `ait-bin` 使用最新正式版。
+
+推送使用仓库 secret `AUR_SSH_PRIVATE_KEY`，对应公钥需加入 AUR 维护者账户（My Account → SSH Public Key）。
+本地验证：
 
 ```bash
-cd packaging/aur/ait-bin
-makepkg -si
+scripts/aur-publish.sh ait-bin 0.1.9   # AUR_PUSH=1 时才推送
 ```
 
 安装后可在应用菜单打开 Ait，或运行 `ait`；同时注册 `ait://` 链接。
 此安装方式由 pacman / AUR helper 管理升级，不使用 AppImage 自动更新。
-
-桌面 Release 发布成功后，更新 `PKGBUILD` 的 `pkgver` 并把 `pkgrel` 重置为 `1`，
-从该 Release 的 `SHA256SUMS` 更新归档校验值；同版本配方修复则递增 `pkgrel`。
-修改 `ait.desktop` 时也需更新其 SHA-256。提交前运行：
-
-```bash
-makepkg --verifysource
-makepkg --printsrcinfo > .SRCINFO
-makepkg
-namcap PKGBUILD ./*.pkg.tar.zst
-desktop-file-validate ait.desktop
-```
-
-AUR 使用独立 Git 仓库。首次发布需要维护者的 AUR 账户和 SSH 公钥，将此目录中的
-`PKGBUILD`、`.SRCINFO` 和 `ait.desktop` 提交到 `ssh://aur@aur.archlinux.org/ait-bin.git`。
-不要上传下载的归档、`src/`、`pkg/` 或生成的二进制包。仓库内提供配方不代表已发布到 AUR；
-发布后用户才能通过 `paru -S ait-bin` 安装。
 
 ## 每日发布判断
 
