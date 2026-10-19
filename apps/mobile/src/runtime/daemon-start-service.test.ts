@@ -326,7 +326,7 @@ describe("upsertDesktopDaemonConnection", () => {
     ]);
   });
 
-  it("does not add localhost when desktop bootstrap finds its server id already registered", async () => {
+  it("adds the local address when a relay already registered the attached daemon", async () => {
     const fake = createFakeStore([makeRelayOnlyHost("srv_desktop")]);
 
     const result = await upsertDesktopDaemonConnection(
@@ -335,7 +335,14 @@ describe("upsertDesktopDaemonConnection", () => {
     );
 
     expect(result).toEqual({ ok: true });
-    expect(fake.upserts).toEqual([]);
+    expect(fake.upserts).toEqual([
+      {
+        listenAddress: "127.0.0.1:6767",
+        serverId: "srv_desktop",
+        hostname: "desktop",
+        desktopManaged: false,
+      },
+    ]);
   });
 
   it("refreshes the owned server address after a restart", async () => {
