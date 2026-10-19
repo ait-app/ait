@@ -25,6 +25,8 @@
 
 ## 架构决策
 
+- [ADR-163：nightly 附带独立 daemon 归档](decisions/clients/adr-163-nightly-standalone-daemon.md)：沿用构建标识命名，Linux 使用 glibc 2.28 基线，macOS 仅 ad-hoc 签名、需手动移除 quarantine。
+
 - [ADR-162：Codex 失败展示原生原因与 HTTP 状态](decisions/providers/adr-162-codex-error-details.md)：有界脱敏的上游错误、原生重试结果与持久聊天提示。
 
 - [ADR-161：客户端统一错误提示与可复制诊断](decisions/clients/adr-161-copyable-error-diagnostics.md)：错误队列、异常原因链、请求关联、脱敏日志和复制／导出。

@@ -97,8 +97,8 @@ async function addAndroidAssets(directory) {
   await writeFile(path.join(directory, "Ait-0.0.7-android.apk"), "universal APK");
 }
 
-async function addDaemonAssets(directory, version = "0.0.7") {
-  for (const name of daemonAssetNames(version))
+async function addDaemonAssets(directory, version = "0.0.7", buildLabel) {
+  for (const name of daemonAssetNames(version, buildLabel))
     await writeFile(path.join(directory, name), "daemon archive");
 }
 
@@ -165,6 +165,11 @@ test("nightly builder names and update URLs use the build label on both platform
   const directory = inputs[0].destination;
   for (const name of await readdir(inputs[1].destination))
     await copyFile(path.join(inputs[1].destination, name), path.join(directory, name));
+  await assert.rejects(
+    verifyReleaseAssets({ version, buildLabel, directory }),
+    new RegExp(`Missing release asset: Ait-${buildLabel}-daemon-linux-x64\\.tar\\.gz`),
+  );
+  await addDaemonAssets(directory, version, buildLabel);
   const info = {
     version: buildLabel,
     packagedVersion: version,
@@ -357,12 +362,24 @@ test("standalone daemon archives package ait-daemon and the license per target",
   );
   assert.deepEqual((await readdir(destination)).sort(), [name]);
   const script = fileURLToPath(new URL("./release-assets.mjs", import.meta.url));
-  const nightly = spawnSync(
+  const invalid = spawnSync(
     process.execPath,
     [script, "daemon", "linux", "0.0.7", binary, destination, "--nightly", "abc"],
     { encoding: "utf8" },
   );
-  assert.notEqual(nightly.status, 0, "nightly builds must not package standalone daemons");
+  assert.notEqual(invalid.status, 0, "nightly daemons need a valid build label");
+  // Nightly archives are named by build label but still check the packaged SemVer.
+  const nightly = spawnSync(
+    process.execPath,
+    [script, "daemon", "mac", "0.0.7", binary, destination, "--nightly", "abcdef01-2026-10-08"],
+    { encoding: "utf8" },
+  );
+  assert.equal(nightly.status, 0, nightly.stderr);
+  assert.equal(nightly.stdout.trim(), "Ait-abcdef01-2026-10-08-daemon-macos-arm64.tar.gz");
+  assert.equal(
+    daemonAssetName("linux", "0.0.7", "abcdef01-2026-10-08"),
+    "Ait-abcdef01-2026-10-08-daemon-linux-x64.tar.gz",
+  );
 });
 
 test("stable verification requires daemon archives only when requested", async (t) => {
@@ -391,9 +408,10 @@ test("stable verification requires daemon archives only when requested", async (
     includeDaemon: false,
     includeAndroid: true,
   });
+  // Version-named daemon archives never belong in a nightly.
   await assert.rejects(
-    verifyReleaseAssets({ ...options, buildLabel: "38fb6054-2026-10-08" }),
-    /Nightly builds do not publish standalone daemons/,
+    verifyReleaseAssets({ ...options, includeAndroid: false, buildLabel: "38fb6054-2026-10-08" }),
+    /Missing release asset|Unexpected release asset/,
   );
 });
 

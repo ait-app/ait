@@ -46,6 +46,10 @@ Electron、daemon 及更新协议内部仍保留必需的 SemVer 兼容字段，
 新提交编译期间或编译失败时仍保留上一版。
 macOS nightly 使用 ad-hoc 签名，未公证。
 
+nightly 同样附带独立 daemon 归档，例如 `Ait-38fb6054-2026-10-08-daemon-linux-x64.tar.gz`，
+与桌面包共用同一次构建的 daemon。macOS 归档只有 ad-hoc 签名、未公证；用浏览器下载后若被拦截，
+在解压目录执行 `xattr -d com.apple.quarantine ait-daemon`。见 [ADR-163](../decisions/clients/adr-163-nightly-standalone-daemon.md)。
+
 ## PR CI
 
 创建或更新 PR 会运行适用的 Rust、UI、文档和格式检查。Linux x86_64 与 macOS Apple Silicon
@@ -63,6 +67,8 @@ main/PR CI 不调用 EAS 构建或提交，不消耗移动端发布配额。
 | ------------------- | ----------------------- | -------------------------------------------------------- |
 | Linux               | x86_64                  | `Ait-linux-x86_64.AppImage`                              |
 | Linux               | x86_64                  | `Ait-VERSION-linux-x64.tar.gz`                           |
+| Linux（deb）        | x86_64                  | `Ait-VERSION-linux-amd64.deb`                            |
+| Linux（rpm）        | x86_64                  | `Ait-VERSION-linux-x86_64.rpm`                           |
 | macOS               | Apple Silicon arm64     | `Ait-VERSION-macos-arm64.dmg`                            |
 | macOS               | Apple Silicon arm64     | `Ait-VERSION-macos-arm64.zip`                            |
 | Linux 独立 daemon   | x86_64                  | `Ait-VERSION-daemon-linux-x64.tar.gz`                    |
@@ -71,7 +77,8 @@ main/PR CI 不调用 EAS 构建或提交，不消耗移动端发布配额。
 | 自动更新            | 各平台                  | `latest-linux.yml`、`latest-mac.yml`、生成的 `.blockmap` |
 | 校验                | 全部资产                | `SHA256SUMS`                                             |
 
-AppImage 文件名保持稳定，版本体现在 Release 标签和应用内部。Windows、deb/rpm 和其他架构
+AppImage 文件名保持稳定，版本体现在 Release 标签和应用内部。deb 与 rpm 的包名为
+`ait-desktop`，安装到 `/opt/Ait`，并列入 `latest-linux.yml` 供原生更新器使用。Windows 和其他架构
 不属于本次发布。安装包 `resources/bin/` 中只有 `daemon`；Electron 主程序与
 Helper 是必需运行时。GitHub 仍自动提供标签对应的源码归档。
 
@@ -80,7 +87,7 @@ Helper 是必需运行时。GitHub 仍自动提供标签对应的源码归档。
 `PATH` 时不与系统同名程序冲突，`--help` 中的程序名仍为 `daemon`。macOS 版本单独用 Developer ID
 签名（hardened runtime）并公证；裸可执行文件无法 staple 公证票据，Gatekeeper 首次运行时在线核验。
 Linux daemon 在 `ubuntu-24.04` runner 上通过 [`build-linux-daemon.sh`](../../scripts/build-linux-daemon.sh) 于 `manylinux_2_28` 容器内编译，桌面包与独立归档共用；构建后检查不超过 `GLIBC_2.28` 与 `GLIBCXX_3.4.25`，支持 Ubuntu 20.04、Debian 10、RHEL 8 及更新版本。
-正式版和 beta 都包含这两个归档；nightly 不发布独立 daemon。
+正式版、beta 和 nightly 都包含这两个归档；nightly 版本见上文 [main CI Nightly](#main-ci-nightly)。
 
 ## Arch Linux 本地源码安装
 
