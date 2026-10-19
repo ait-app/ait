@@ -17,6 +17,7 @@ use tokio_util::task::AbortOnDropHandle;
 
 const MAX_FRAME: usize = 2 * 1024 * 1024;
 const MAX_EVENTS: usize = 128;
+const MAX_REPLIES: usize = 32;
 
 #[derive(Debug)]
 pub(super) struct Transport {
@@ -27,6 +28,8 @@ pub(super) struct Transport {
     messages: mpsc::Receiver<Value>,
     reader: JoinHandle<()>,
     events: VecDeque<Value>,
+    /// Request ids answered through `send`; `--replay-user-messages` echoes those replies.
+    replies: VecDeque<Value>,
     sequence: u64,
     deadline: Duration,
     closed: bool,
@@ -140,6 +143,7 @@ impl Transport {
             messages,
             reader,
             events: VecDeque::new(),
+            replies: VecDeque::new(),
             sequence: 0,
             deadline,
             closed: false,
@@ -169,6 +173,9 @@ impl Transport {
                     .recv()
                     .await
                     .ok_or(AgentSessionError::Failed)?;
+                if self.is_replayed_reply(&message) {
+                    continue;
+                }
                 if message["type"] == "control_response" {
                     let response = &message["response"];
                     if response["request_id"] != id {
@@ -222,6 +229,13 @@ impl Transport {
                 Ok(Ok(()))
             )
         {
+            if message["type"] == "control_response" {
+                if self.replies.len() == MAX_REPLIES {
+                    self.replies.pop_front();
+                }
+                self.replies
+                    .push_back(message["response"]["request_id"].clone());
+            }
             return Ok(());
         }
         let _ = self.close().await;
@@ -229,14 +243,32 @@ impl Transport {
     }
 
     pub(super) fn poll(&mut self) -> Result<Option<Value>, AgentSessionError> {
-        if let Some(message) = self.events.pop_front() {
-            return Ok(Some(message));
+        loop {
+            let message = match self.events.pop_front() {
+                Some(message) => message,
+                None => match self.messages.try_recv() {
+                    Ok(message) => message,
+                    Err(mpsc::error::TryRecvError::Empty) if !self.closed => return Ok(None),
+                    Err(_) => return Err(AgentSessionError::Failed),
+                },
+            };
+            if !self.is_replayed_reply(&message) {
+                return Ok(Some(message));
+            }
         }
-        match self.messages.try_recv() {
-            Ok(message) => Ok(Some(message)),
-            Err(mpsc::error::TryRecvError::Empty) if !self.closed => Ok(None),
-            Err(_) => Err(AgentSessionError::Failed),
+    }
+
+    /// Consume the native echo of a reply this transport wrote.
+    fn is_replayed_reply(&mut self, message: &Value) -> bool {
+        if message["type"] != "control_response" {
+            return false;
         }
+        let id = &message["response"]["request_id"];
+        let Some(index) = self.replies.iter().position(|reply| reply == id) else {
+            return false;
+        };
+        self.replies.remove(index);
+        true
     }
 
     pub(super) async fn close(&mut self) -> Result<(), AgentSessionError> {
