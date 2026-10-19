@@ -20,6 +20,10 @@ import {
   resolveSplitDropPosition,
   type SplitDropZoneHover,
 } from "@/components/split-drop-zone";
+import {
+  resolveNativePaneDropTarget,
+  type NativePaneFrame,
+} from "@/components/native-pane-drop-target";
 import { isNative } from "@/constants/platform";
 import { useStableEvent } from "@/hooks/use-stable-event";
 import { panelTargetSupportsHost } from "@/panels/target-host";
@@ -60,7 +64,8 @@ import {
   DndContext,
   DragOverlay,
   KeyboardSensor,
-  PointerSensor,
+  MouseSensor,
+  TouchSensor,
   closestCenter,
   pointerWithin,
   useSensor,
@@ -188,6 +193,11 @@ interface SplitNodeViewProps extends Omit<
   maximizedPaneId: string | null;
   workspaceHasMultiplePanes: boolean;
   onTogglePaneMaximized: (paneId: string) => void;
+  onRegisterPaneView: (paneId: string, node: View | null) => void;
+  onNativeTabDragStart: (paneId: string, tabId: string, x: number, y: number) => void;
+  onNativeTabDragMove: (paneId: string, tabId: string, x: number, y: number) => void;
+  onNativeTabDragEnd: (paneId: string, tabId: string, x: number, y: number) => void;
+  onNativeTabDragCancel: (paneId: string, tabId: string) => void;
 }
 
 interface SplitPaneViewProps extends Omit<
@@ -345,6 +355,15 @@ export function SplitContainer({
   const [activeDragTabId, setActiveDragTabId] = useState<string | null>(null);
   const [dropPreview, setDropPreview] = useState<SplitDropZoneHover | null>(null);
   const [tabDropPreview, setTabDropPreview] = useState<TabDropPreview | null>(null);
+  const nativeDropPreviewRef = useRef<SplitDropZoneHover | null>(null);
+  const paneViewsRef = useRef(new Map<string, View>());
+  const paneFramesRef = useRef(new Map<string, NativePaneFrame>());
+  const nativeTabDragRef = useRef<{
+    paneId: string;
+    tabId: string;
+    x: number;
+    y: number;
+  } | null>(null);
   const [maximizedPane, setMaximizedPane] = useState<{
     workspaceKey: string;
     paneId: string;
@@ -356,9 +375,15 @@ export function SplitContainer({
   );
 
   const sensors = useSensors(
-    useSensor(PointerSensor, {
+    useSensor(MouseSensor, {
       activationConstraint: {
         distance: 8,
+      },
+    }),
+    useSensor(TouchSensor, {
+      activationConstraint: {
+        delay: 250,
+        tolerance: 8,
       },
     }),
     useSensor(KeyboardSensor, {
@@ -367,6 +392,131 @@ export function SplitContainer({
   );
 
   const panesById = useMemo(() => collectPanesById(layout.root), [layout.root]);
+  const onRegisterPaneView = useCallback((paneId: string, node: View | null) => {
+    if (node) {
+      paneViewsRef.current.set(paneId, node);
+    } else {
+      paneViewsRef.current.delete(paneId);
+      paneFramesRef.current.delete(paneId);
+    }
+  }, []);
+
+  const updateNativePaneDropPreview = useCallback((x: number, y: number) => {
+    const preview = resolveNativePaneDropTarget({
+      x,
+      y,
+      panes: Array.from(paneFramesRef.current.values()),
+    });
+    if (
+      nativeDropPreviewRef.current?.paneId !== preview?.paneId ||
+      nativeDropPreviewRef.current?.position !== preview?.position
+    ) {
+      nativeDropPreviewRef.current = preview;
+      setDropPreview(preview);
+    }
+    setTabDropPreview(null);
+    return preview;
+  }, []);
+
+  const handleNativeTabDragStart = useCallback(
+    (paneId: string, tabId: string, x: number, y: number) => {
+      nativeTabDragRef.current = { paneId, tabId, x, y };
+      paneFramesRef.current.clear();
+      nativeDropPreviewRef.current = null;
+      setActiveDragTabId(tabId);
+      setDropPreview(null);
+      setTabDropPreview(null);
+
+      for (const [measuredPaneId, node] of paneViewsRef.current) {
+        node.measureInWindow((left, top, width, height) => {
+          const drag = nativeTabDragRef.current;
+          if (
+            !drag ||
+            drag.tabId !== tabId ||
+            drag.paneId !== paneId ||
+            width <= 0 ||
+            height <= 0
+          ) {
+            return;
+          }
+          paneFramesRef.current.set(measuredPaneId, {
+            paneId: measuredPaneId,
+            left,
+            top,
+            width,
+            height,
+          });
+          updateNativePaneDropPreview(drag.x, drag.y);
+        });
+      }
+      updateNativePaneDropPreview(x, y);
+    },
+    [updateNativePaneDropPreview],
+  );
+
+  const handleNativeTabDragMove = useCallback(
+    (paneId: string, tabId: string, x: number, y: number) => {
+      const drag = nativeTabDragRef.current;
+      if (!drag || drag.paneId !== paneId || drag.tabId !== tabId) {
+        return;
+      }
+      drag.x = x;
+      drag.y = y;
+      updateNativePaneDropPreview(x, y);
+    },
+    [updateNativePaneDropPreview],
+  );
+
+  const clearNativeTabDrag = useCallback(() => {
+    nativeTabDragRef.current = null;
+    paneFramesRef.current.clear();
+    nativeDropPreviewRef.current = null;
+    setActiveDragTabId(null);
+    setDropPreview(null);
+    setTabDropPreview(null);
+  }, []);
+
+  const handleNativeTabDragEnd = useCallback(
+    (paneId: string, tabId: string, x: number, y: number) => {
+      const drag = nativeTabDragRef.current;
+      if (!drag || drag.paneId !== paneId || drag.tabId !== tabId) {
+        return;
+      }
+      drag.x = x;
+      drag.y = y;
+      const target = resolveNativePaneDropTarget({
+        x,
+        y,
+        panes: Array.from(paneFramesRef.current.values()),
+      });
+      clearNativeTabDrag();
+      if (!target) {
+        return;
+      }
+      if (target.position === "center") {
+        if (paneId !== target.paneId) {
+          onMoveTabToPane(tabId, target.paneId);
+        }
+        return;
+      }
+      onSplitPane({
+        tabId,
+        targetPaneId: target.paneId,
+        position: target.position,
+      });
+    },
+    [clearNativeTabDrag, onMoveTabToPane, onSplitPane],
+  );
+
+  const handleNativeTabDragCancel = useCallback(
+    (paneId: string, tabId: string) => {
+      const drag = nativeTabDragRef.current;
+      if (drag?.paneId === paneId && drag.tabId === tabId) {
+        clearNativeTabDrag();
+      }
+    },
+    [clearNativeTabDrag],
+  );
   const explorerSidebarPane = useMemo(
     () => findPaneById(layout.root, explorerSidebarPaneId),
     [layout.root, explorerSidebarPaneId],
@@ -684,6 +834,11 @@ export function SplitContainer({
                   maximizedPaneId={maximizedPaneId}
                   workspaceHasMultiplePanes={workspaceHasMultiplePanes}
                   onTogglePaneMaximized={handleTogglePaneMaximized}
+                  onRegisterPaneView={onRegisterPaneView}
+                  onNativeTabDragStart={handleNativeTabDragStart}
+                  onNativeTabDragMove={handleNativeTabDragMove}
+                  onNativeTabDragEnd={handleNativeTabDragEnd}
+                  onNativeTabDragCancel={handleNativeTabDragCancel}
                   focusModeEnabled={focusModeEnabled}
                   onExitFocusMode={onExitFocusMode}
                 />
@@ -957,6 +1112,11 @@ function SplitNodeView({
   maximizedPaneId,
   workspaceHasMultiplePanes,
   onTogglePaneMaximized,
+  onRegisterPaneView,
+  onNativeTabDragStart,
+  onNativeTabDragMove,
+  onNativeTabDragEnd,
+  onNativeTabDragCancel,
   focusModeEnabled,
   onExitFocusMode,
 }: SplitNodeViewProps) {
@@ -1043,6 +1203,11 @@ function SplitNodeView({
             maximizedPaneId={maximizedPaneId}
             workspaceHasMultiplePanes={workspaceHasMultiplePanes}
             onTogglePaneMaximized={onTogglePaneMaximized}
+            onRegisterPaneView={onRegisterPaneView}
+            onNativeTabDragStart={onNativeTabDragStart}
+            onNativeTabDragMove={onNativeTabDragMove}
+            onNativeTabDragEnd={onNativeTabDragEnd}
+            onNativeTabDragCancel={onNativeTabDragCancel}
             focusModeEnabled={focusModeEnabled}
             onExitFocusMode={onExitFocusMode}
           />
@@ -1097,6 +1262,11 @@ function SplitNodeView({
               maximizedPaneId={maximizedPaneId}
               workspaceHasMultiplePanes={workspaceHasMultiplePanes}
               onTogglePaneMaximized={onTogglePaneMaximized}
+              onRegisterPaneView={onRegisterPaneView}
+              onNativeTabDragStart={onNativeTabDragStart}
+              onNativeTabDragMove={onNativeTabDragMove}
+              onNativeTabDragEnd={onNativeTabDragEnd}
+              onNativeTabDragCancel={onNativeTabDragCancel}
               focusModeEnabled={focusModeEnabled}
               onExitFocusMode={onExitFocusMode}
             />
@@ -1155,10 +1325,22 @@ function SplitPaneView({
   maximizedPaneId,
   workspaceHasMultiplePanes,
   onTogglePaneMaximized,
+  onRegisterPaneView,
+  onNativeTabDragStart,
+  onNativeTabDragMove,
+  onNativeTabDragEnd,
+  onNativeTabDragCancel,
   focusModeEnabled,
   onExitFocusMode,
 }: SplitPaneViewProps) {
   const paneRef = useRef<View | null>(null);
+  const setDropTargetRef = useCallback(
+    (node: View | null) => {
+      onRegisterPaneView(pane.id, node);
+    },
+    [onRegisterPaneView, pane.id],
+  );
+  useEffect(() => () => onRegisterPaneView(pane.id, null), [onRegisterPaneView, pane.id]);
   const stableOnFocusPane = useStableEvent(onFocusPane);
   const paneState = useMemo(
     () =>
@@ -1288,6 +1470,10 @@ function SplitPaneView({
             showPaneMaximizeAction={workspaceHasMultiplePanes && !focusModeEnabled}
             paneMaximized={paneId === maximizedPaneId}
             onTogglePaneMaximized={handleTogglePaneMaximized}
+            onNativeTabDragStart={onNativeTabDragStart}
+            onNativeTabDragMove={onNativeTabDragMove}
+            onNativeTabDragEnd={onNativeTabDragEnd}
+            onNativeTabDragCancel={onNativeTabDragCancel}
             onSplitRight={handleSplitRight}
             onSplitDown={handleSplitDown}
             focusModeEnabled={Boolean(focusModeEnabled)}
@@ -1295,7 +1481,7 @@ function SplitPaneView({
           />
         </WindowChromeSafeArea>
 
-        <View style={styles.paneContent}>
+        <View ref={setDropTargetRef} collapsable={false} style={styles.paneContent}>
           <WorkspacePanelHost
             paneId={pane.id}
             tabs={paneTabs}

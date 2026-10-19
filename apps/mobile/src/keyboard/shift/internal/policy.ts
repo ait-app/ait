@@ -1,5 +1,25 @@
 export const DEFAULT_IOS_KEYBOARD_INSET_MIN_HEIGHT = 120;
 
+export function resolveVisualViewportKeyboardShift(input: {
+  layoutHeight: number;
+  viewportHeight: number;
+  viewportOffsetTop: number;
+  bottomInset?: number;
+  hasFocusedTextInput: boolean;
+  minimumHeight?: number;
+}): number {
+  if (!input.hasFocusedTextInput) {
+    return 0;
+  }
+  const obscuredHeight = Math.max(
+    0,
+    input.layoutHeight - input.viewportHeight - input.viewportOffsetTop - (input.bottomInset ?? 0),
+  );
+  return obscuredHeight >= (input.minimumHeight ?? DEFAULT_IOS_KEYBOARD_INSET_MIN_HEIGHT)
+    ? obscuredHeight
+    : 0;
+}
+
 /** Reserve both endpoints during motion so content cannot grow into a closing IME. */
 export function reserveKeyboardLayoutShift(input: {
   current: number;
