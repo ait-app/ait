@@ -27,6 +27,8 @@ export function releaseAssetNames(platform, version, buildLabel) {
     return [
       buildLabel ? `Ait-${label}-linux-x86_64.AppImage` : `Ait-linux-x86_64.AppImage`,
       `Ait-${label}-linux-x64.tar.gz`,
+      `Ait-${label}-linux-amd64.deb`,
+      `Ait-${label}-linux-x86_64.rpm`,
       `${channel}-linux.yml`,
     ];
   if (platform === "mac")
@@ -80,10 +82,12 @@ async function digest(file, algorithm, encoding) {
 
 export async function collectReleaseAssets({ platform, version, source, destination, buildLabel }) {
   const names = releaseAssetNames(platform, version, buildLabel);
+  // Updater metadata is listed last; every installer before it may appear in its file list.
+  const installers = names.slice(0, -1);
   for (const name of names)
     assert((await stat(path.join(source, name))).size > 0, `Empty release asset: ${name}`);
   const { parse } = await import("yaml");
-  const metadata = parse(await readFile(path.join(source, names[2]), "utf8"));
+  const metadata = parse(await readFile(path.join(source, names.at(-1)), "utf8"));
   assert.equal(metadata.version, version, "Updater metadata version differs from release");
   assert(
     Array.isArray(metadata.files) && metadata.files.length > 0,
@@ -95,7 +99,7 @@ export async function collectReleaseAssets({ platform, version, source, destinat
     `Updater metadata must reference ${updateFile}`,
   );
   for (const file of metadata.files) {
-    assert(names.slice(0, 2).includes(file.url), `Unexpected updater asset: ${file.url}`);
+    assert(installers.includes(file.url), `Unexpected updater asset: ${file.url}`);
     const sourcePath = path.join(source, file.url);
     assert.equal(
       await digest(sourcePath, "sha512", "base64"),
@@ -106,7 +110,7 @@ export async function collectReleaseAssets({ platform, version, source, destinat
       assert.equal((await stat(sourcePath)).size, file.size, `Updater size mismatch: ${file.url}`);
   }
   if (metadata.path !== undefined) {
-    assert(names.slice(0, 2).includes(metadata.path), `Unexpected updater path: ${metadata.path}`);
+    assert(installers.includes(metadata.path), `Unexpected updater path: ${metadata.path}`);
     assert.equal(
       await digest(path.join(source, metadata.path), "sha512", "base64"),
       metadata.sha512,
@@ -114,8 +118,7 @@ export async function collectReleaseAssets({ platform, version, source, destinat
     );
   }
   const existing = new Set(await readdir(source));
-  const blockmaps = names
-    .slice(0, 2)
+  const blockmaps = installers
     .map((name) => `${name}.blockmap`)
     .filter((name) => existing.has(name));
   await mkdir(destination, { recursive: true });

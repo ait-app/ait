@@ -62,6 +62,38 @@ linux:
   target:
     - AppImage
     - tar.gz
+    - deb
+    - rpm
+# Native packages install a root-owned SUID chrome-sandbox and an AppArmor profile,
+# so the sandbox survives distributions that restrict unprivileged user namespaces.
+# Builder's default dependency lists omit ALSA, which Electron links at startup.
+deb:
+  packageName: ait-desktop
+  afterInstall: scripts/linux-sandbox/after-install.tpl
+  depends:
+    - libgtk-3-0
+    - libnotify4
+    - libnss3
+    - libxss1
+    - libxtst6
+    - xdg-utils
+    - libatspi2.0-0
+    - libuuid1
+    - libsecret-1-0
+    - libasound2
+rpm:
+  packageName: ait-desktop
+  afterInstall: scripts/linux-sandbox/after-install.tpl
+  depends:
+    - gtk3
+    - libnotify
+    - nss
+    - libXScrnSaver
+    - (libXtst or libXtst6)
+    - xdg-utils
+    - at-spi2-core
+    - (libuuid or libuuid1)
+    - (alsa-lib or libasound2)
 appImage:
   # A nonempty argument list replaces builder's hardcoded --no-sandbox default.
   executableArgs: ["--class=Ait"]

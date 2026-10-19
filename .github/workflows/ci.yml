@@ -261,7 +261,7 @@ jobs:
         if: matrix.platform == 'linux'
         run: |
           sudo apt-get update
-          sudo apt-get install -y --no-install-recommends libfuse2 xvfb libgtk-3-0 libnss3 libasound2t64
+          sudo apt-get install -y --no-install-recommends libfuse2 xvfb libgtk-3-0 libnss3 libasound2t64 rpm
           if [ -f /proc/sys/kernel/apparmor_restrict_unprivileged_userns ]; then
             sudo sysctl -w kernel.apparmor_restrict_unprivileged_userns=0
           fi
@@ -299,6 +299,18 @@ jobs:
           args=()
           if [ -n "$NIGHTLY_BUILD_LABEL" ]; then args+=(--nightly "$NIGHTLY_BUILD_LABEL"); fi
           node scripts/release-assets.mjs collect "$PLATFORM" "$version" apps/desktop/release release-assets "${args[@]}"
+      # Restrict user namespaces so the installed packages must fall back to their SUID helper.
+      - name: Smoke installed deb and rpm packages
+        if: matrix.platform == 'linux'
+        working-directory: apps/desktop
+        run: |
+          sudo sysctl -w kernel.apparmor_restrict_unprivileged_userns=1
+          sudo apt-get install -y ./release/*.deb
+          node e2e/linux-artifact-smoke.js
+          sudo dpkg --remove ait-desktop
+          # Ubuntu names runtime libraries the Debian way; rpm still installs the real payload and scriptlets.
+          sudo rpm --install --nodeps release/*.rpm
+          node e2e/linux-artifact-smoke.js
       - name: Record PR build source
         if: github.event_name == 'pull_request'
         env:

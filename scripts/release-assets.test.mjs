@@ -79,7 +79,7 @@ async function fixture(t, platform, version = "0.0.7", buildLabel) {
   // Generate fixtures from builder's naming rules, independently of the collector allowlist.
   const names = await builderAssetNames(platform, version, buildLabel);
   const files = [];
-  for (const name of names.slice(0, 2)) {
+  for (const name of names.slice(0, -1)) {
     const contents = Buffer.from(`packaged installer: ${name}`);
     await writeFile(path.join(source, name), contents);
     files.push({
@@ -88,7 +88,7 @@ async function fixture(t, platform, version = "0.0.7", buildLabel) {
       size: contents.length,
     });
   }
-  await writeFile(path.join(source, names[2]), stringify({ version, files }));
+  await writeFile(path.join(source, names.at(-1)), stringify({ version, files }));
   await writeFile(path.join(source, "old-server.exe"), "should never be collected");
   return { platform, version, source, destination, buildLabel };
 }
@@ -142,7 +142,7 @@ test("nightly builder names and update URLs use the build label on both platform
     const names = releaseAssetNames(platform, version, buildLabel);
     assert.deepEqual(names, await builderAssetNames(platform, version, buildLabel));
     assert.ok(
-      names.slice(0, 2).every((name) => name.includes(buildLabel) && !name.includes(version)),
+      names.slice(0, -1).every((name) => name.includes(buildLabel) && !name.includes(version)),
     );
     const tasks = await createUpdateInfoTasks(
       {
@@ -238,7 +238,7 @@ test("builder generates beta updater files and collector rejects stable metadata
     );
     assert.deepEqual(
       tasks.map((task) => path.basename(task.file)),
-      [names[2]],
+      [names.at(-1)],
     );
     assert.equal(tasks[0].info.version, version);
     await collectReleaseAssets({
@@ -267,7 +267,7 @@ test("checksums desktop and Android installers, updater metadata and blockmaps",
     directory: linux.destination,
     includeAndroid: true,
   });
-  assert.equal(names.length, 8);
+  assert.equal(names.length, 10);
   assert(names.includes(blockmap));
   const lines = (await readFile(path.join(linux.destination, "SHA256SUMS"), "utf8"))
     .trim()
@@ -303,7 +303,7 @@ test("desktop-only verification is the default and Android requires an explicit 
   assert.equal(verify().status, 0);
   assert.equal(
     (await readFile(path.join(linux.destination, "SHA256SUMS"), "utf8")).trim().split("\n").length,
-    6,
+    8,
   );
   assert.notEqual(verify("--android").status, 0);
   await addAndroidAssets(linux.destination);
@@ -311,7 +311,7 @@ test("desktop-only verification is the default and Android requires an explicit 
   assert.equal(verify("--android").status, 0);
   assert.equal(
     (await readFile(path.join(linux.destination, "SHA256SUMS"), "utf8")).trim().split("\n").length,
-    7,
+    9,
   );
   assert.notEqual(verify("--andriod").status, 0, "unknown options must fail closed");
 });
@@ -382,7 +382,7 @@ test("stable verification requires daemon archives only when requested", async (
   await addDaemonAssets(linux.destination);
   await verifyReleaseAssets(options);
   const sums = await readFile(path.join(linux.destination, "SHA256SUMS"), "utf8");
-  assert.equal(sums.trim().split("\n").length, 8);
+  assert.equal(sums.trim().split("\n").length, 10);
   assert.match(sums, /  Ait-0\.0\.7-daemon-macos-arm64\.tar\.gz/);
   // Android-only repairs re-verify a published release without rebuilding its daemons.
   await addAndroidAssets(linux.destination);
@@ -580,7 +580,12 @@ test("release workflow builds only the daemon and packages the resolved desktop 
   );
   assert.deepEqual(config.mac.binaries, ["Contents/Resources/bin/daemon"]);
   assert.equal(config.win, undefined);
-  assert.deepEqual(config.linux.target, ["AppImage", "tar.gz"]);
+  assert.deepEqual(config.linux.target, ["AppImage", "tar.gz", "deb", "rpm"]);
+  for (const format of ["deb", "rpm"]) {
+    assert.equal(config[format].packageName, "ait-desktop");
+    assert.equal(config[format].afterInstall, "scripts/linux-sandbox/after-install.tpl");
+    assert(config[format].depends.some((name) => name.includes("asound") || name.includes("alsa")));
+  }
 });
 
 test("checksums build provenance and rejects a mismatched source version", async (t) => {
