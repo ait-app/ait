@@ -4,8 +4,10 @@ use std::io::{self, Write};
 
 use serde::Serialize;
 
-// Leave room for the response/event envelope and other in-flight output.
-const OUTPUT_BUDGET: usize = model::server::MAX_QUEUE_BYTES - 64 * 1024;
+// Every lane of a connection shares one MAX_QUEUE_BYTES output budget, and a small response that
+// cannot reserve bytes fails the whole connection. A diff or directory listing may therefore take
+// at most a quarter of it, so the other lanes keep room for their own responses while it is written.
+pub(crate) const OUTPUT_BUDGET: usize = model::server::MAX_QUEUE_BYTES / 4 - 64 * 1024;
 
 pub(crate) fn fits(value: &impl Serialize) -> bool {
     serde_json::to_writer(&mut EncodedSize::default(), value).is_ok()
@@ -27,3 +29,6 @@ impl Write for EncodedSize {
         Ok(())
     }
 }
+
+#[cfg(test)]
+mod tests;
