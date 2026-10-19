@@ -1,0 +1,112 @@
+name: AUR package
+
+# The full build runs upstream npm/Cargo code, so it never sees the AUR key. Publishing runs on a
+# separate runner without building, and only the `aur` environment (main and v* tags) holds the key.
+on:
+  workflow_call:
+    inputs:
+      package:
+        required: true
+        type: string
+      tag:
+        required: false
+        type: string
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    name: Build ${{ inputs.package }}
+    runs-on: ubuntu-24.04
+    container: archlinux:base-devel
+    timeout-minutes: 120
+    concurrency:
+      group: aur-build-${{ inputs.package }}-${{ github.ref }}
+      cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+    steps:
+      # rustup satisfies ait-git's rust makedepend and follows rust-toolchain.toml.
+      - name: Install tools
+        run: pacman -Syu --noconfirm --needed git github-cli namcap rustup
+
+      - uses: actions/checkout@v5
+        with:
+          persist-credentials: false
+
+      - name: Prepare build user
+        run: |
+          useradd --create-home builder
+          echo 'builder ALL=(ALL) NOPASSWD: ALL' > /etc/sudoers.d/builder
+          chown -R builder: "$GITHUB_WORKSPACE"
+
+      - name: Resolve ait-bin release
+        if: inputs.package == 'ait-bin'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RELEASE_TAG: ${{ inputs.tag }}
+        run: |
+          tag=${RELEASE_TAG:-$(gh release view --repo "$GITHUB_REPOSITORY" --json tagName --jq .tagName)}
+          echo "AIT_VERSION=${tag#v}" >> "$GITHUB_ENV"
+
+      - name: Build ${{ inputs.package }}
+        env:
+          AIT_PACKAGE: ${{ inputs.package }}
+        run: sudo -u builder -H bash scripts/aur-publish.sh build "$AIT_PACKAGE" ${AIT_VERSION:+"$AIT_VERSION"}
+
+  publish:
+    name: Publish ${{ inputs.package }}
+    needs: build
+    if: github.event_name != 'pull_request'
+    runs-on: ubuntu-24.04
+    container: archlinux:base
+    timeout-minutes: 30
+    environment: aur
+    concurrency:
+      group: aur-publish-${{ inputs.package }}
+      cancel-in-progress: false
+    steps:
+      # nodejs only evaluates ait-git's pkgver(), which reads package.json.
+      - name: Install tools
+        run: pacman -Syu --noconfirm --needed base-devel git openssh github-cli nodejs
+
+      - uses: actions/checkout@v5
+        with:
+          persist-credentials: false
+
+      - name: Prepare publish user
+        run: |
+          useradd --create-home builder
+          chown -R builder: "$GITHUB_WORKSPACE"
+
+      - name: Configure AUR SSH
+        env:
+          AUR_SSH_PRIVATE_KEY: ${{ secrets.AUR_SSH_PRIVATE_KEY }}
+        run: |
+          if [ -z "$AUR_SSH_PRIVATE_KEY" ]; then
+            echo "Set AUR_SSH_PRIVATE_KEY in the aur environment." >&2
+            exit 1
+          fi
+          ssh=/home/builder/.ssh
+          install -d -m 700 -o builder -g builder "$ssh"
+          printf '%s\n' "$AUR_SSH_PRIVATE_KEY" > "$ssh/aur"
+          # Published on https://aur.archlinux.org (SHA256:RFzBCUItH9LZS0cKB5UE6ceAYhBD5C8GeOBip8Z11+4).
+          echo 'aur.archlinux.org ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIEuBKrPzbawxA/k2g6NcyV5jmqwJ2s+zpgZGZ7tpLIcN' > "$ssh/known_hosts"
+          printf '%s\n' 'Host aur.archlinux.org' '  User aur' '  IdentityFile ~/.ssh/aur' '  IdentitiesOnly yes' > "$ssh/config"
+          chown builder: "$ssh/aur" "$ssh/known_hosts" "$ssh/config"
+          chmod 600 "$ssh/aur" "$ssh/known_hosts" "$ssh/config"
+
+      - name: Resolve ait-bin release
+        if: inputs.package == 'ait-bin'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RELEASE_TAG: ${{ inputs.tag }}
+        run: |
+          tag=${RELEASE_TAG:-$(gh release view --repo "$GITHUB_REPOSITORY" --json tagName --jq .tagName)}
+          echo "AIT_VERSION=${tag#v}" >> "$GITHUB_ENV"
+
+      - name: Publish ${{ inputs.package }}
+        env:
+          AIT_PACKAGE: ${{ inputs.package }}
+        run: |
+          sudo -u builder -H env AUR_PUSH=1 GITHUB_SHA="$GITHUB_SHA" \
+            bash scripts/aur-publish.sh publish "$AIT_PACKAGE" ${AIT_VERSION:+"$AIT_VERSION"}

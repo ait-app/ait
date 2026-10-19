@@ -1,18 +1,25 @@
 #!/usr/bin/env bash
-# Sync an AUR package from packaging/aur/PACKAGE: build it with makepkg, regenerate .SRCINFO and
-# commit to the AUR checkout when the recipe changed. Pushes only with AUR_PUSH=1.
-# Usage: aur-publish.sh ait-bin VERSION | aur-publish.sh ait-git
-# Run as a non-root user that can install makedepends with sudo (makepkg --syncdeps).
+# Sync an AUR package from packaging/aur/PACKAGE when the recipe or release changed.
+# Usage: aur-publish.sh build|publish ait-bin VERSION | aur-publish.sh build|publish ait-git
+#   build:   full makepkg as a check; never touches AUR credentials.
+#   publish: no build, so no upstream npm/Cargo code runs next to the AUR key; regenerates
+#            .SRCINFO, commits and pushes to AUR.
+# Run as a non-root user; build needs sudo for makepkg --syncdeps.
 set -euo pipefail
 
-pkg=$1
-version=${2:-}
+stage=$1
+pkg=$2
+version=${3:-}
 repo_root=$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)
 recipe="$repo_root/packaging/aur/$pkg"
 work=${AUR_WORKDIR:-$(mktemp -d)}
 aur="$work/aur"
 candidate="$work/candidate"
 
+case "$stage" in
+  build|publish) ;;
+  *) echo "Unknown stage: $stage" >&2; exit 2 ;;
+esac
 case "$pkg" in
   ait-bin) [[ "$version" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]] || { echo "ait-bin needs a stable VERSION" >&2; exit 2; } ;;
   ait-git) ;;
@@ -81,20 +88,31 @@ else
 fi
 
 mkdir -p "$work/build" "$work/packages" "$work/sources"
-(
-  cd "$candidate"
-  BUILDDIR="$work/build" PKGDEST="$work/packages" SRCDEST="$work/sources" \
-    makepkg --syncdeps --noconfirm --cleanbuild
-)
+if [ "$stage" = build ]; then
+  (
+    cd "$candidate"
+    BUILDDIR="$work/build" PKGDEST="$work/packages" SRCDEST="$work/sources" \
+      makepkg --syncdeps --noconfirm --cleanbuild
+  )
+  if command -v namcap >/dev/null; then
+    namcap "$candidate/PKGBUILD" "$work/packages/"*.pkg.tar.* || true
+  fi
+  echo "Built $pkg; publish runs separately."
+  exit 0
+fi
+
 if [ "$pkg" = ait-git ]; then
+  # Only fetch the source and run pkgver(), which reads package.json; prepare() runs npm ci.
+  (
+    cd "$candidate"
+    BUILDDIR="$work/build" SRCDEST="$work/sources" \
+      makepkg --nobuild --noprepare --nodeps --cleanbuild
+  )
   # makepkg wrote the pkgver() result back and reset pkgrel to 1.
   new_ver=$(sed -n 's/^pkgver=//p' "$candidate/PKGBUILD")
   if [ "$new_ver" = "$aur_ver" ]; then
     set_field pkgrel "$((aur_rel + 1))"
   fi
-fi
-if command -v namcap >/dev/null; then
-  namcap "$candidate/PKGBUILD" "$work/packages/"*.pkg.tar.* || true
 fi
 (cd "$candidate" && makepkg --printsrcinfo > .SRCINFO)
 

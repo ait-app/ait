@@ -142,15 +142,24 @@ Git 工作区，不用于 `makepkg --source` 或单独发布到 AUR；AUR 二进
 - `ait-git`：从 `main` 源码构建，版本号由 `pkgver()` 在用户构建时生成。只有配方变化合并到 `main`
   时才更新 AUR。
 
-每次更新先在 `archlinux:base-devel` 容器中完整运行 `makepkg`，再生成 `.SRCINFO` 并推送；
-`.SRCINFO` 不提交到本仓库。修改 `packaging/aur/` 的 PR 只构建、不推送。也可手动运行工作流，
+每次更新分两个 job，由 [`aur-package.yml`](../../.github/workflows/aur-package.yml) 执行：
+
+1. 构建：在 `archlinux:base-devel` 容器中完整运行 `makepkg`。构建会执行上游 npm/Cargo 依赖的代码，
+   因此此 job 不接触 AUR 私钥。
+2. 发布：构建成功后在另一台 runner 上运行，不构建，只生成 `.SRCINFO`（`ait-git` 另外运行只读取
+   `package.json` 的 `pkgver()`），提交并推送到 AUR。
+
+`.SRCINFO` 不提交到本仓库。修改 `packaging/aur/` 的 PR 只构建、不发布。也可手动运行工作流，
 `tag` 留空时 `ait-bin` 使用最新正式版。
 
-推送使用仓库 secret `AUR_SSH_PRIVATE_KEY`，对应公钥需加入 AUR 维护者账户（My Account → SSH Public Key）。
-本地验证：
+AUR 私钥只保存在 GitHub environment `aur` 的 secret `AUR_SSH_PRIVATE_KEY` 中，不设仓库级 secret。
+该 environment 只允许 `main` 分支和 `v*` 标签部署，其他分支上修改过的工作流取不到私钥；
+fork PR 本就没有 secret。对应公钥需加入 AUR 维护者账户（My Account → SSH Public Key）。
+本地验证（`AUR_PUSH=1` 时才推送）：
 
 ```bash
-scripts/aur-publish.sh ait-bin 0.1.9   # AUR_PUSH=1 时才推送
+scripts/aur-publish.sh build ait-bin 0.1.9
+scripts/aur-publish.sh publish ait-bin 0.1.9
 ```
 
 安装后可在应用菜单打开 Ait，或运行 `ait`；同时注册 `ait://` 链接。
