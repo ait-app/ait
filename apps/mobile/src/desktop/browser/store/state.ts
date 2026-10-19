@@ -87,10 +87,12 @@ export function trimNonEmpty(value: string | null | undefined): string | null {
   return trimmed.length > 0 ? trimmed : null;
 }
 
+export const DEFAULT_BROWSER_URL = "https://ait-app.com";
+
 export function normalizeBrowserUrl(value: string | null | undefined): string {
   const trimmed = trimNonEmpty(value);
   if (!trimmed) {
-    return "https://example.com";
+    return DEFAULT_BROWSER_URL;
   }
   if (/^(localhost|\d{1,3}(?:\.\d{1,3}){3}|\[[\da-fA-F:.]+])(?::\d+)?(?:[/?#]|$)/.test(trimmed)) {
     return `http://${trimmed}`;
