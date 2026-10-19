@@ -38,8 +38,11 @@ export function installErrorHandlers(): () => void {
         exception ||
         /unhandled.*(?:rejection|promise)/i.test(String(args[0]))
       ) {
+        // Console records are background diagnostics: keep them for export, but only
+        // uncaught failures and explicit UI errors interrupt the user with a toast.
         appErrorReporter.report(exception ?? args, {
           source: `console.${level}`,
+          notify: false,
           message: exception ? errorMessage(exception) : args.map(errorMessage).join(" "),
           context: fields ?? { logLabel: typeof args[0] === "string" ? args[0] : undefined },
         });

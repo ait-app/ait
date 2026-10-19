@@ -1,6 +1,6 @@
 # ADR-161：客户端统一错误提示与可复制诊断
 
-- 状态：Accepted
+- 状态：Accepted；console 错误与 Query 失败的弹出规则经 [ADR-166](adr-166-background-errors-without-toasts.md) 修订
 - 日期：2026-10-19
 - 延续：ADR-144、ADR-049
 
