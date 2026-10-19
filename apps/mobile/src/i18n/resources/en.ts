@@ -1823,6 +1823,8 @@ export const en = {
       selectIsolation: "Select isolation",
       noIsolation: "No isolation options found",
       submitError: "Unable to save schedule: {{message}}",
+      runningError:
+        "This schedule is running. Wait for the current run to finish before editing it.",
     },
     cadence: {
       trigger: "Trigger type",

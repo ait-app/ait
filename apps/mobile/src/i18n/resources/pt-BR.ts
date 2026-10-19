@@ -1550,7 +1550,14 @@ export const ptBR: TranslationResources = {
     },
   },
   hostPicker: en.hostPicker,
-  schedules: en.schedules,
+  schedules: {
+    ...en.schedules,
+    form: {
+      ...en.schedules.form,
+      runningError:
+        "A tarefa está em execução. Aguarde a execução atual terminar antes de modificá-la.",
+    },
+  },
   addProjectFlow: en.addProjectFlow,
   projectPicker: {
     placeholder: "Digite para pesquisar...",

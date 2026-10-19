@@ -105,7 +105,7 @@ fn targets_can_be_changed_before_execution_but_not_during_it() {
                 now()
             )
             .unwrap_err(),
-        Error::Conflict
+        Error::Running
     );
     engine
         .finish(&id, &run, true, Outcome::default(), now())

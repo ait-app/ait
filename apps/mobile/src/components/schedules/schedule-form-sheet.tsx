@@ -634,7 +634,16 @@ function ScheduleFormContent({
         else onClose();
       }
     } catch (error) {
-      model.setSubmitError(t("schedules.form.submitError", { message: toErrorMessage(error) }));
+      const isRunning =
+        typeof error === "object" &&
+        error !== null &&
+        "code" in error &&
+        error.code === "schedule_running";
+      model.setSubmitError(
+        isRunning
+          ? t("schedules.form.runningError")
+          : t("schedules.form.submitError", { message: toErrorMessage(error) }),
+      );
     }
   }, [
     canSubmit,

@@ -1569,7 +1569,14 @@ export const fr: TranslationResources = {
     },
   },
   hostPicker: en.hostPicker,
-  schedules: en.schedules,
+  schedules: {
+    ...en.schedules,
+    form: {
+      ...en.schedules.form,
+      runningError:
+        "Cette tâche est en cours d’exécution. Attendez la fin de l’exécution actuelle avant de la modifier.",
+    },
+  },
   addProjectFlow: en.addProjectFlow,
   projectPicker: {
     placeholder: "Tapez pour rechercher...",

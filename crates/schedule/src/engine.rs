@@ -245,7 +245,7 @@ impl Engine {
                 .iter()
                 .any(|run| run.status == RunStatus::Running)
         {
-            return Err(Error::Conflict);
+            return Err(Error::Running);
         }
         if let Some(value) = params.get("workspaceId") {
             let id = value.as_str().ok_or(Error::Invalid)?;

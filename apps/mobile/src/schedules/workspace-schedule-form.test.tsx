@@ -3,12 +3,14 @@ import React, { useEffect } from "react";
 import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { create } from "zustand";
+import type { ScheduleSummary } from "@ait/protocol/schedule/types";
 import {
   ScheduleFormSheet,
   WorkspaceScheduleForm,
 } from "@/components/schedules/schedule-form-sheet";
 import type { ScheduleFormModel } from "./schedule-form-model";
 import type { ProjectSummary } from "@/utils/projects";
+import { i18n } from "@/i18n/i18next";
 
 const { createSchedule, updateSchedule, updatePreferences } = vi.hoisted(() => ({
   createSchedule: vi.fn(async () => ({ id: "schedule-created" })),
@@ -203,11 +205,12 @@ describe("workspace schedule form", () => {
     vi.stubGlobal("React", React);
   });
 
-  afterEach(() => {
+  afterEach(async () => {
     cleanup();
     vi.clearAllMocks();
     vi.unstubAllGlobals();
     projects.length = 0;
+    await i18n.changeLanguage("en");
   });
 
   it("submits from the inline workspace form using its directory without a project selection", async () => {
@@ -395,6 +398,62 @@ describe("workspace schedule form", () => {
       expect(createSchedule).toHaveBeenCalledWith(expect.objectContaining({ maxRuns: undefined })),
     );
   });
+  it.each([
+    {
+      language: "en",
+      code: "schedule_running",
+      expected: "This schedule is running. Wait for the current run to finish before editing it.",
+    },
+    {
+      language: "zh-CN",
+      code: "schedule_running",
+      expected: "任务正在运行，请等待本次运行结束后再修改。",
+    },
+    {
+      language: "en",
+      code: "schedule_request_failed",
+      expected: "Unable to save schedule: Storage unavailable",
+    },
+  ])("explains $code when saving in $language", async ({ language, code, expected }) => {
+    await i18n.changeLanguage(language);
+    const at = "2026-10-19T14:00:00Z";
+    const schedule: ScheduleSummary = {
+      id: "running-schedule",
+      workspaceId: "workspace-a",
+      name: "Daily release",
+      prompt: "Original instructions",
+      cadence: { type: "cron", expression: "0 22 * * *", timezone: "Asia/Shanghai" },
+      target: { type: "agent", agentId },
+      status: "active",
+      createdAt: at,
+      updatedAt: at,
+      nextRunAt: null,
+      lastRunAt: at,
+      pausedAt: null,
+      maxRuns: null,
+      expiresAt: null,
+    };
+    updateSchedule.mockRejectedValueOnce(Object.assign(new Error("Storage unavailable"), { code }));
+    const onClose = vi.fn();
+    render(
+      <WorkspaceScheduleForm
+        serverId="host-a"
+        workspace={{ id: "workspace-a", name: "Feature", cwd: "/worktrees/feature" }}
+        schedule={schedule}
+        onClose={onClose}
+      />,
+    );
+    fireEvent.change(screen.getByRole("textbox", { name: i18n.t("schedules.form.prompt") }), {
+      target: { value: "Updated instructions" },
+    });
+    fireEvent.click(screen.getByRole("button", { name: i18n.t("schedules.save") }));
+    await waitFor(() => expect(screen.getByText(expected)).toBeTruthy());
+    expect(updateSchedule).toHaveBeenCalledWith(
+      expect.objectContaining({ prompt: "Updated instructions", target: schedule.target }),
+    );
+    expect(onClose).not.toHaveBeenCalled();
+  });
+
   it("preserves the exact stored time when a legacy single trigger becomes recurring", async () => {
     const at = "2035-01-01T09:00:45.123Z";
     const schedule = {

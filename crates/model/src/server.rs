@@ -112,6 +112,8 @@ pub enum ErrorCode {
     RelayManaged,
     /// Schedule request validation, persistence or execution failed.
     ScheduleRequestFailed,
+    /// Schedule target changes are blocked until the current occurrence finishes.
+    ScheduleRunning,
     /// Speech backend configuration, processing or I/O failed.
     SpeechIo,
     /// Terminal native process or screen I/O failed.
@@ -185,6 +187,9 @@ impl ErrorCode {
             Self::BotConflict => "Bot resource conflicts with this operation",
             Self::BotIo => "Bot I/O failed; inspect its durable receipt before retrying",
             Self::ScheduleRequestFailed => "Schedule request failed",
+            Self::ScheduleRunning => {
+                "This schedule is running. Wait for the current run to finish before editing it."
+            }
             Self::SpeechIo => "Speech processing failed",
             Self::TerminalIo => "Terminal I/O failed",
             Self::TerminalNotFound => "Terminal not found",
