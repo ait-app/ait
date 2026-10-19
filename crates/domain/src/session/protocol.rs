@@ -14,6 +14,9 @@ pub enum SessionEventKind {
     /// Workspace setup started, advanced, or finished.
     #[serde(rename = "workspace_setup_progress")]
     WorkspaceSetupProgress,
+    /// Lightweight setup lifecycle, without transcripts.
+    #[serde(rename = "workspace_setup_status")]
+    WorkspaceSetupStatus,
     /// An operational activity or failure was reported to the client.
     #[serde(rename = "activity_log")]
     ActivityLog,
@@ -54,6 +57,7 @@ impl SessionEventKind {
             Self::ProjectUpdate => "project.update",
             Self::ScriptStatus => "script_status_update",
             Self::WorkspaceSetupProgress => "workspace_setup_progress",
+            Self::WorkspaceSetupStatus => "workspace_setup_status",
             Self::ActivityLog => "activity_log",
             Self::ProvidersSnapshot => "providers_snapshot_update",
             Self::AgentAttention => "agent_attention_required",

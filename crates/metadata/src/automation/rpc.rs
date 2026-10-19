@@ -5,6 +5,8 @@
 /// Client methods implemented by this component; consumed by capability discovery.
 pub const METHODS: &[MethodSpec] = &[
     MethodSpec::request("workspace.setup.status.request"),
+    MethodSpec::request("workspace.setup.summary.request"),
+    MethodSpec::request("workspace.setup.subscribe.request"),
     MethodSpec::request("workspace.setup.run.request"),
     MethodSpec::request("workspace.script.list.request"),
     MethodSpec::request("workspace.script.start.request"),
@@ -39,6 +41,13 @@ pub(crate) fn execute(
 ) -> Result<Value, ErrorCode> {
     match method {
         "workspace.setup.status.request" => setup_status(automation, decode(params)?),
+        "workspace.setup.summary.request" => {
+            let result = setup_status(automation, decode(params)?)?;
+            Ok(
+                serde_json::json!({"workspaceId":result["workspaceId"], "summary":
+                result["snapshot"].is_object().then(|| setup_summary(&result["snapshot"]))}),
+            )
+        }
         "workspace.setup.run.request" => setup_run(automation, decode(params)?),
         "workspace.script.list.request" => list_scripts(automation, decode(params)?),
         "workspace.script.start.request" => start_script(automation, &decode(params)?),
@@ -55,6 +64,7 @@ fn setup_status(
         Ok(SetupStatus::Absent) => None,
         Ok(SetupStatus::Snapshot(snapshot)) => Some(setup_snapshot(snapshot, None)),
         Ok(SetupStatus::Blocked { placement, source }) => Some(WorkspaceSetupSnapshot {
+            revision: 0,
             status: WorkspaceSetupStatus::Blocked,
             detail: WorkspaceSetupDetail {
                 kind: "worktree_setup".to_owned(),
@@ -72,6 +82,7 @@ fn setup_status(
                 WorkspaceSetupStatusResult {
                     workspace_id: request.workspace_id,
                     snapshot: Some(WorkspaceSetupSnapshot {
+                        revision: 0,
                         status: WorkspaceSetupStatus::Failed,
                         detail: WorkspaceSetupDetail {
                             kind: "worktree_setup".to_owned(),
@@ -96,6 +107,13 @@ fn setup_status(
         },
         ErrorCode::RegistryIo,
     )
+}
+
+/// Project setup status without command text or logs for global observers.
+#[must_use]
+pub fn setup_summary(snapshot: &Value) -> Value {
+    serde_json::json!({"status":snapshot["status"], "revision":snapshot["revision"],
+        "hasCommands":snapshot["detail"]["commands"].as_array().is_some_and(|commands| !commands.is_empty())})
 }
 
 fn setup_run(
@@ -182,6 +200,7 @@ pub fn setup_snapshot(
     blocked_source: Option<WorkspaceBlockedSource>,
 ) -> WorkspaceSetupSnapshot {
     WorkspaceSetupSnapshot {
+        revision: snapshot.revision,
         status: match snapshot.lifecycle {
             SetupLifecycle::Running => WorkspaceSetupStatus::Running,
             SetupLifecycle::Completed => WorkspaceSetupStatus::Completed,

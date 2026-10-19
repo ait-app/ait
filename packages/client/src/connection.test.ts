@@ -1117,3 +1117,86 @@ test("subscribeFile returns its initial version without calling the change callb
     await h.client.close();
   }
 });
+
+test("setup observations bootstrap before updates, restore on reconnect and release their new ID", async () => {
+  const h = connection();
+  const connected = h.client.connect();
+  h.open();
+  await connected;
+  const subscription = h.client.observeWorkspaceSetup("workspace-one");
+  const snapshots: unknown[] = [];
+  const updates: unknown[] = [];
+  subscription.subscribe({
+    snapshot: (value) => snapshots.push(value.snapshot),
+    update: (value) => updates.push(value),
+  });
+  const respond = (id: string, snapshot: unknown) =>
+    h.receive({
+      type: "workspace.setup.subscribe.response",
+      payload: {
+        requestId: h.sent.at(-1)!.message!.requestId,
+        subscriptionId: id,
+        workspaceId: "workspace-one",
+        snapshot,
+      },
+    });
+  respond("setup-first", null);
+  await subscription.ready;
+  expect(snapshots).toEqual([null]);
+  h.receive({
+    type: "workspace_setup_progress",
+    payload: {
+      subscriptionId: "other",
+      workspaceId: "workspace-two",
+      status: "running",
+      detail: {
+        type: "worktree_setup",
+        worktreePath: "/repo",
+        branchName: "main",
+        log: "",
+        commands: [],
+      },
+      error: null,
+    },
+  });
+  expect(updates).toEqual([]);
+  h.disconnect();
+  const reconnecting = h.client.connect();
+  h.open();
+  await reconnecting;
+  expect(h.sent.at(-1)?.message).toMatchObject({
+    type: "workspace.setup.subscribe.request",
+    workspaceId: "workspace-one",
+  });
+  respond("setup-restored", null);
+  await Promise.resolve();
+  expect(snapshots).toEqual([null, null]);
+  await subscription.release();
+  expect(h.sent.at(-1)?.message).toMatchObject({
+    type: "subscription.release.request",
+    subscriptionId: "setup-restored",
+  });
+  await h.client.close();
+});
+
+test("event selection is recalculated for each handshake without requiring a server catalog", async () => {
+  const h = connection();
+  const ready = h.client.connect();
+  h.open();
+  await ready;
+  let next: ("workspace_setup_progress" | "workspace_setup_status")[] = [
+    "workspace_setup_progress",
+  ];
+  const observation = h.client.observeEvents(() => next);
+  await observation.ready;
+  expect(h.sent.at(-1)?.message?.events).toEqual(["workspace_setup_progress"]);
+  h.disconnect();
+  next = ["workspace_setup_status"];
+  const reconnect = h.client.connect();
+  h.open();
+  await reconnect;
+  await Promise.resolve();
+  expect(h.sent.at(-1)?.message?.events).toEqual(["workspace_setup_status"]);
+  await observation.release();
+  await h.client.close();
+});

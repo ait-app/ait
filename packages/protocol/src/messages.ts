@@ -2408,6 +2408,17 @@ export const WorkspaceSetupStatusRequestSchema = z.object({
   requestId: z.string(),
 });
 
+export const WorkspaceSetupSubscribeRequestSchema = z.object({
+  type: z.literal("workspace.setup.subscribe.request"),
+  requestId: z.string(),
+  workspaceId: z.string(),
+});
+export const WorkspaceSetupSummaryRequestSchema = z.object({
+  type: z.literal("workspace.setup.summary.request"),
+  requestId: z.string(),
+  workspaceId: z.string(),
+});
+
 export const WorkspaceSetupRunRequestSchema = z.object({
   type: z.literal("workspace.setup.run.request"),
   workspaceId: z.string(),
@@ -2918,6 +2929,7 @@ export const SessionEventSubscriptionSchema = z.enum([
   "checkout.status.update",
   "script_status_update",
   "workspace_setup_progress",
+  "workspace_setup_status",
   "agent.provider_subagents.update",
   "terminal.attention.required",
   "status.server_info",
@@ -3078,6 +3090,8 @@ export const SessionInboundMessageSchema = z.discriminatedUnion("type", [
   PaseoWorktreeArchiveRequestSchema,
   CreatePaseoWorktreeRequestSchema,
   WorkspaceSetupStatusRequestSchema,
+  WorkspaceSetupSubscribeRequestSchema,
+  WorkspaceSetupSummaryRequestSchema,
   WorkspaceSetupRunRequestSchema,
   LegacyListAvailableEditorsRequestSchema,
   LegacyOpenInEditorRequestSchema,
@@ -3324,6 +3338,7 @@ export const ServerInfoStatusPayloadSchema = z
         workspaceLabels: z.boolean().optional(),
         // COMPAT(workspaceSetupRun): added in v0.8.0, remove gate after 2027-09-02.
         workspaceSetupRun: z.boolean().optional(),
+        workspaceSetupObservation: z.boolean().optional(),
         // COMPAT(workspaceTerminals): added in v0.8.0, remove gate after 2027-09-05.
         workspaceTerminals: z.boolean().optional(),
         // COMPAT(checkoutForgeSetAutoMerge): added in v0.2.0-beta.1. Remove the
@@ -4098,6 +4113,7 @@ export const WorkspaceSetupProgressMessageSchema = z.object({
   payload: z.object({
     subscriptionId: z.string().optional(),
     workspaceId: z.string(),
+    revision: z.number().int().nonnegative().optional(),
     status: z.enum(["running", "completed", "failed", "blocked"]),
     detail: WorktreeSetupDetailPayloadSchema,
     error: z.string().nullable(),
@@ -4113,6 +4129,7 @@ export const WorkspaceSetupProgressMessageSchema = z.object({
 });
 
 export const WorkspaceSetupSnapshotSchema = z.object({
+  revision: z.number().int().nonnegative().optional(),
   status: z.enum(["running", "completed", "failed", "blocked"]),
   detail: WorktreeSetupDetailPayloadSchema,
   error: z.string().nullable(),
@@ -4124,6 +4141,36 @@ export const WorkspaceSetupSnapshotSchema = z.object({
       headRepository: z.string(),
     })
     .optional(),
+});
+
+export const WorkspaceSetupSummarySchema = z.object({
+  status: z.enum(["running", "completed", "failed", "blocked"]),
+  hasCommands: z.boolean(),
+  revision: z.number().int().nonnegative().optional(),
+});
+export const WorkspaceSetupStatusMessageSchema = z.object({
+  type: z.literal("workspace_setup_status"),
+  payload: WorkspaceSetupSummarySchema.extend({
+    subscriptionId: z.string().optional(),
+    workspaceId: z.string(),
+  }),
+});
+export const WorkspaceSetupSummaryResponseSchema = z.object({
+  type: z.literal("workspace.setup.summary.response"),
+  payload: z.object({
+    requestId: z.string(),
+    workspaceId: z.string(),
+    summary: WorkspaceSetupSummarySchema.nullable(),
+  }),
+});
+export const WorkspaceSetupSubscribeResponseSchema = z.object({
+  type: z.literal("workspace.setup.subscribe.response"),
+  payload: z.object({
+    requestId: z.string(),
+    subscriptionId: z.string(),
+    workspaceId: z.string(),
+    snapshot: WorkspaceSetupSnapshotSchema.nullable(),
+  }),
 });
 
 export const WorkspaceSetupRunResponseMessageSchema = z.object({
@@ -5955,7 +6002,20 @@ export const UsageProblemSchema = z.discriminatedUnion("kind", [
   }),
   z.object({ kind: z.literal("no_quota"), detail: z.string() }),
 ]);
+const AvailableUsageReportSchema = z.object({
+  status: z.literal("available"),
+  planLabel: z.string().optional(),
+  windows: z.array(ProviderUsageWindowSchema),
+  balances: z.array(ProviderUsageBalanceSchema).optional(),
+  details: z.array(ProviderUsageDetailSchema).optional(),
+});
+const UsageSuccessfulSnapshotSchema = z.object({
+  fetchedAt: z.string(),
+  report: AvailableUsageReportSchema,
+});
 export const ProviderUsageSchema = z.object({
+  successfulAt: z.string().optional(),
+  lastSuccessful: UsageSuccessfulSnapshotSchema.optional(),
   accountLabel: z.string().optional(),
   problem: UsageProblemSchema.optional(),
   providerId: z.string(),
@@ -5983,6 +6043,8 @@ export const UsageReportSchema = z.discriminatedUnion("status", [
   z.object({ status: z.literal("error"), error: z.string() }),
 ]);
 export const UsageReportEntrySchema = z.object({
+  successfulAt: z.string().optional(),
+  lastSuccessful: UsageSuccessfulSnapshotSchema.optional(),
   id: z.string(),
   account: z.object({ label: z.string().optional() }),
   fetchedAt: z.string(),
@@ -6281,6 +6343,9 @@ export const SessionOutboundMessageSchema = z.discriminatedUnion("type", [
   ProjectListResponseMessageSchema,
   ScriptStatusUpdateMessageSchema,
   WorkspaceSetupProgressMessageSchema,
+  WorkspaceSetupStatusMessageSchema,
+  WorkspaceSetupSummaryResponseSchema,
+  WorkspaceSetupSubscribeResponseSchema,
   WorkspaceSetupStatusResponseMessageSchema,
   WorkspaceSetupRunResponseMessageSchema,
   AgentStreamMessageSchema,

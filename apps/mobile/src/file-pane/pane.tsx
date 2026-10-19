@@ -50,6 +50,9 @@ const foregroundMutedColorMapping = (theme: Theme) => ({
 });
 
 interface FilePreviewBodyProps {
+  client?: DaemonClient | null;
+  workspaceRoot?: string;
+  serverId?: string;
   preview: ExplorerFile | null;
   mode?: "preview" | "source";
   isLoading: boolean;
@@ -132,6 +135,9 @@ function TooLargeSource({ size }: { size?: number }) {
 }
 
 function FilePreviewBody({
+  client,
+  workspaceRoot,
+  serverId,
   preview,
   mode,
   isLoading,
@@ -187,7 +193,13 @@ function FilePreviewBody({
             style={styles.previewContent}
             showsVerticalScrollIndicator
           >
-            <FileMarkdownPreview source={preview.content ?? ""} />
+            <FileMarkdownPreview
+              source={preview.content ?? ""}
+              filePath={filePath}
+              client={client}
+              workspaceRoot={workspaceRoot}
+              serverId={serverId}
+            />
           </RNScrollView>
         </View>
       );
@@ -447,6 +459,9 @@ function FilePanePresentation({
         />
       ) : null}
       <FilePreviewBody
+        client={client}
+        serverId={serverId}
+        workspaceRoot={readTarget?.cwd}
         preview={preview}
         mode={previewMode}
         isLoading={isLoading}
@@ -621,6 +636,8 @@ function EditableFilePane({
         />
       ) : (
         <FilePreviewBody
+          client={client}
+          workspaceRoot={cwd}
           preview={renderedPreview}
           mode={mode}
           isLoading={isLoading}

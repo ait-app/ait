@@ -1,6 +1,11 @@
+import React from "react";
+import { lightTheme } from "../src/styles/theme";
+
 const testTheme = {
+  ...lightTheme,
   colorScheme: "light",
   colors: {
+    ...lightTheme.colors,
     foreground: "#111111",
     foregroundMuted: "#666666",
     statusSuccess: "#15803d",
@@ -22,6 +27,7 @@ const testTheme = {
     border: "#e4e4e7",
     borderAccent: "#a1a1aa",
     palette: {
+      ...lightTheme.colors.palette,
       amber: { 500: "#f59e0b" },
       blue: { 300: "#93c5fd" },
       green: { 500: "#22c55e" },
@@ -32,6 +38,7 @@ const testTheme = {
   borderWidth: { 1: 1 },
   spacing: [0, 4, 8, 12, 16, 20, 24, 28, 32],
   fontSize: {
+    ...lightTheme.fontSize,
     xs: 12,
     sm: 14,
     base: 16,
@@ -86,7 +93,25 @@ export const StyleSheet = {
     isStyleFactory(styles) ? styles(testTheme) : styles,
 };
 
-export const withUnistyles = <T>(Component: T): T => Component;
+export const withUnistyles = <T>(
+  Component: T,
+  mapping?: (theme: typeof testTheme) => object,
+): T => {
+  const Styled = React.forwardRef<unknown, Record<string, unknown>>(
+    ({ uniProps, ...props }, ref) => {
+      const mapped = mapping?.(testTheme) ?? {};
+      const resolved =
+        typeof uniProps === "function" ? uniProps(testTheme, { breakpoint: "md" }) : {};
+      return React.createElement(Component as React.ElementType, {
+        ...mapped,
+        ...resolved,
+        ...props,
+        ref,
+      });
+    },
+  );
+  return Styled as T;
+};
 
 export const useUnistyles = () => ({
   theme: testTheme,

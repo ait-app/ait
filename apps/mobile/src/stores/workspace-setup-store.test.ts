@@ -125,6 +125,8 @@ describe("workspace-setup-store", () => {
     useWorkspaceSetupStore.setState({
       pendingWorkspaceSetup: null,
       snapshots: {},
+      summaries: {},
+      serverGenerations: {},
       requestedKeys: new Set(),
       surfacedFailedSetupKeys: new Set(),
     });
@@ -370,5 +372,84 @@ describe("workspace-setup-store", () => {
     await flush();
 
     expect(calls).toEqual(["42", "42"]);
+  });
+});
+
+describe("scoped setup observation", () => {
+  beforeEach(() =>
+    useWorkspaceSetupStore.setState({
+      snapshots: {},
+      summaries: {},
+      requestedKeys: new Set(),
+      surfacedFailedSetupKeys: new Set(),
+      serverGenerations: {},
+    }),
+  );
+  it("rejects queued detail older than the bootstrap snapshot and clears an absent snapshot", () => {
+    const store = useWorkspaceSetupStore.getState();
+    store.upsertProgress({
+      serverId: "host",
+      payload: { ...makeSnapshot("completed"), revision: 5 },
+    });
+    store.upsertProgress({
+      serverId: "host",
+      payload: { ...makeSnapshot("running"), revision: 4 },
+    });
+    expect(Object.values(useWorkspaceSetupStore.getState().snapshots)[0]?.status).toBe("completed");
+    store.applySnapshot({ serverId: "host", workspaceId: "workspace-1", snapshot: null });
+    expect(Object.values(useWorkspaceSetupStore.getState().snapshots)).toEqual([]);
+  });
+  it("retains background failures from summaries without retaining logs", () => {
+    const store = useWorkspaceSetupStore.getState();
+    const summary = {
+      workspaceId: "workspace-1",
+      status: "failed" as const,
+      hasCommands: true,
+      revision: 2,
+    };
+    store.upsertSummary({ serverId: "host", payload: summary });
+    expect(Object.values(useWorkspaceSetupStore.getState().snapshots)).toEqual([]);
+    expect(
+      shouldSeedWorkspaceSetupTab(Object.values(useWorkspaceSetupStore.getState().summaries)[0]!),
+    ).toBe(true);
+    expect(store.claimFailedSetupSurface({ serverId: "host", workspaceId: "workspace-1" })).toBe(
+      true,
+    );
+    expect(store.claimFailedSetupSurface({ serverId: "other", workspaceId: "workspace-1" })).toBe(
+      false,
+    );
+  });
+  it("requests only summaries and ignores a fetch from a disconnected generation", async () => {
+    const deferred =
+      createDeferred<
+        Extract<
+          import("@ait/protocol/messages").SessionOutboundMessage,
+          { type: "workspace.setup.summary.response" }
+        >["payload"]
+      >();
+    let detailed = 0;
+    const client = {
+      fetchWorkspaceSetupStatus: async () => {
+        detailed++;
+        return setupResult("workspace-1");
+      },
+      fetchWorkspaceSetupSummary: () => deferred.promise,
+    };
+    const store = useWorkspaceSetupStore.getState();
+    store.ensureSetupStatus({
+      serverId: "host",
+      workspaceId: "workspace-1",
+      client,
+      summaryOnly: true,
+    });
+    store.clearServer("host");
+    deferred.resolve({
+      requestId: "old",
+      workspaceId: "workspace-1",
+      summary: { status: "failed", hasCommands: true, revision: 99 },
+    });
+    await flush();
+    expect(detailed).toBe(0);
+    expect(useWorkspaceSetupStore.getState().summaries).toEqual({});
   });
 });

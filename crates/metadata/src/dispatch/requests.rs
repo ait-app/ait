@@ -77,7 +77,7 @@ pub(super) async fn creation(
 /// Returns the branch's completion after execution or response admission.
 /// # Errors
 /// Returns `NotImplemented` without consuming the request, or propagates delivery failure.
-pub(super) fn session(
+pub(super) async fn session(
     pending: &mut Option<Context<'_>>,
     state: &State,
     connection: &mut Connection,
@@ -85,11 +85,16 @@ pub(super) fn session(
     let Some(context) = pending.take_if(|context| {
         matches!(
             context.request.method.as_str(),
-            "session.events.set_subscription.request"
+            "session.events.set_subscription.request" | "workspace.setup.subscribe.request"
         )
     }) else {
         return Err(DispatchError::NotImplemented);
     };
+    if context.request.method == "workspace.setup.subscribe.request" {
+        return crate::automation::connection::subscribe(context, state, connection)
+            .await
+            .map_err(Into::into);
+    }
     crate::server::connection::session::subscribe(context, state, connection).map_err(Into::into)
 }
 
@@ -209,6 +214,7 @@ pub(super) async fn automation(
         matches!(
             context.request.method.as_str(),
             "workspace.setup.status.request"
+                | "workspace.setup.summary.request"
                 | "workspace.setup.run.request"
                 | "workspace.script.list.request"
                 | "workspace.script.start.request"

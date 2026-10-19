@@ -1,3 +1,4 @@
+import { inlineUnistylesStyle } from "@/styles/unistyles-inline-style";
 import { TitlebarDragRegion } from "@/components/desktop/titlebar-drag-region";
 import {
   resolveExplorerSidebarDockSizes,
@@ -58,7 +59,7 @@ import {
   useWindowChromeCorners,
   type WindowChromeCorners,
 } from "@/utils/desktop-window";
-import { RenderProfile } from "@/utils/render-profiler";
+import { recordRenderProfileReasons, RenderProfile } from "@/utils/render-profiler";
 import type { WorkspaceTab } from "@/workspace-tabs/model";
 import {
   DndContext,
@@ -79,6 +80,7 @@ import {
 import { arrayMove, sortableKeyboardCoordinates } from "@dnd-kit/sortable";
 import {
   Fragment,
+  memo,
   useCallback,
   useEffect,
   useMemo,
@@ -585,7 +587,7 @@ export function SplitContainer({
     : inheritedWindowChromeCorners;
   const mainColumnStyle = styles.mainColumn;
   const explorerSidebarDockStyle = useMemo(
-    () => [styles.explorerSidebarDock, { width: explorerSidebarWidth }],
+    () => [styles.explorerSidebarDock, inlineUnistylesStyle({ width: explorerSidebarWidth })],
     [explorerSidebarWidth],
   );
   const handleWorkspaceShellLayout = useCallback((event: LayoutChangeEvent) => {
@@ -1291,7 +1293,7 @@ function SplitNodeView({
   );
 }
 
-function SplitPaneView({
+const SplitPaneView = memo(function SplitPaneView({
   pane,
   uiTabs,
   isFocused,
@@ -1333,6 +1335,7 @@ function SplitPaneView({
   focusModeEnabled,
   onExitFocusMode,
 }: SplitPaneViewProps) {
+  recordRenderProfileReasons(`SplitPaneView:${pane.id}`, ["render"]);
   const paneRef = useRef<View | null>(null);
   const setDropTargetRef = useCallback(
     (node: View | null) => {
@@ -1498,7 +1501,7 @@ function SplitPaneView({
       </View>
     </RenderProfile>
   );
-}
+});
 
 function collectPanesById(node: SplitNode): Map<string, SplitPane> {
   const next = new Map<string, SplitPane>();

@@ -1,4 +1,5 @@
 import { LucideProvider } from "lucide-react-native";
+import { ComposerEditingSessionsProvider } from "@/composer/editing-session";
 import { getNextThemePreference, ICON_STROKE_WIDTH } from "@/styles/theme";
 import { AccountRelayLifecycle } from "@/runtime/account-state";
 import { OnlineServiceHostSyncLifecycle } from "@/runtime/online-service-host-sync";
@@ -80,7 +81,6 @@ import {
 import { ThemedStack } from "@/navigation/themed-stack";
 import { registerWorkspaceRouteNavigationRef } from "@/navigation/workspace-route-navigation";
 import { polyfillCrypto } from "@/polyfills/crypto";
-import { polyfillNavigator } from "@/polyfills/navigator";
 import { getDaemonStartService } from "@/runtime/daemon-start-service";
 import {
   getHostRuntimeStore,
@@ -93,6 +93,7 @@ import {
 import { flushDraftPersistStorage } from "@/stores/draft-store";
 import { usePanelStore } from "@/stores/panel-store";
 import { useSessionStore } from "@/stores/session-store";
+import { WorkspaceLayoutModePublisher } from "@/workspace-tabs/layout-mode-publisher";
 import { installWebScrollbarStyles } from "@/styles/install-web-scrollbar-styles";
 import "@/styles/unistyles";
 import type { HostProfile } from "@/types/host-connection";
@@ -133,8 +134,6 @@ import { AppState, useWindowDimensions, View } from "react-native";
 import { GestureDetector, GestureHandlerRootView } from "react-native-gesture-handler";
 import { KeyboardProvider } from "react-native-keyboard-controller";
 import { StyleSheet, useUnistyles } from "react-native-unistyles";
-
-polyfillNavigator();
 polyfillCrypto();
 
 export interface HostRuntimeBootstrapState {
@@ -559,6 +558,7 @@ function AppContainer({ children, chromeEnabled: chromeEnabledOverride }: AppCon
   }
   const workspaceChrome = (
     <View style={rowStyle}>
+      <WorkspaceLayoutModePublisher />
       {!isCompactLayout ? (
         <WindowChromeRegion corners={appChromeLayout.sidebarCorners}>
           {themedSidebarChrome}
@@ -632,7 +632,11 @@ function AppContainer({ children, chromeEnabled: chromeEnabledOverride }: AppCon
     surface
   );
 
-  return <CommandCenterProvider>{content}</CommandCenterProvider>;
+  return (
+    <ComposerEditingSessionsProvider>
+      <CommandCenterProvider>{content}</CommandCenterProvider>
+    </ComposerEditingSessionsProvider>
+  );
 }
 
 function SidebarChrome({
@@ -667,7 +671,7 @@ function MobileGestureWrapper({
 
   return (
     <GestureDetector gesture={openGesture} touchAction={MOBILE_WEB_GESTURE_TOUCH_ACTION}>
-      <View collapsable={false} style={layoutStyles.surfaceFill}>
+      <View collapsable={false} style={layoutStyles.surfaceFill} testID="compact-shell">
         {children}
       </View>
     </GestureDetector>

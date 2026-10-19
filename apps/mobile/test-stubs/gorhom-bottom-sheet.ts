@@ -30,3 +30,12 @@ export const useBottomSheetModal = () => ({
   dismiss: () => undefined,
   dismissAll: () => undefined,
 });
+
+export const BottomSheetHandle = PassThrough;
+export const BottomSheetModalInternalProvider = PassThrough;
+export const INITIAL_CONTAINER_LAYOUT = {
+  height: 0,
+  offset: { top: 0, bottom: 0, left: 0, right: 0 },
+};
+export const useBottomSheetModalInternal = () => ({});
+export const useBottomSheet = () => ({ snapToIndex: () => {}, close: () => {} });

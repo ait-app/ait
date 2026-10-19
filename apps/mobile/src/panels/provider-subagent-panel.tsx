@@ -1,3 +1,5 @@
+import { buildWorkspaceTabPersistenceKey } from "@/workspace-tabs/model";
+import { useSubagentOpensInSheet } from "@/subagents";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { Text, View } from "react-native";
 import { StyleSheet } from "react-native-unistyles";
@@ -52,10 +54,14 @@ function ProviderSubagentChildTrack({
   rows: ReturnType<typeof useSubagentsForParent>;
   onOpenProviderSubagent: (parentAgentId: string, subagentId: string) => void;
 }) {
+  const { workspaceId } = usePaneContext();
+  const workspaceKey = buildWorkspaceTabPersistenceKey({ serverId, workspaceId });
+  const opensInSheet = useSubagentOpensInSheet(workspaceKey);
   if (rows.length === 0) return null;
   return (
     <ComposerTrackBar>
       <SubagentsTrack
+        opensInSheet={opensInSheet}
         serverId={serverId}
         rows={rows}
         onOpenSubagent={NOOP_SUBAGENT}

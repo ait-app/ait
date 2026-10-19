@@ -31,6 +31,7 @@ export const ja: TranslationResources = {
     back: "戻る",
     loading: "読み込み中...",
     actions: {
+      save: "保存",
       back: "戻る",
       cancel: "キャンセル",
       close: "閉じる",
@@ -76,6 +77,8 @@ export const ja: TranslationResources = {
       error: "エラー",
       idle: "アイドル",
     },
+
+    bottomSheetBackdrop: "ボトムシートの背景",
   },
   shell: {
     menu: {
@@ -124,6 +127,8 @@ export const ja: TranslationResources = {
     input: {
       accessibilityLabel: "エージェントにメッセージ...",
       terminalAccessibilityLabel: "Terminal prompt",
+      fullscreen: "全画面表示",
+      exitFullscreen: "全画面表示を終了",
       focusHint: "{{shortcut}}でフォーカス",
       addAttachment: "添付ファイルを追加",
       interruptAgent: "エージェントを中断",
@@ -396,6 +401,8 @@ export const ja: TranslationResources = {
       withTokens: "コンテキストを圧縮しました（{{tokens}}Kトークン）",
       completed: "コンテキストを圧縮しました",
     },
+
+    turnFooter: { workedFor: "作業時間 {{duration}}" },
   },
   importSession: {
     chooseHostTitle: en.importSession.chooseHostTitle,
@@ -650,6 +657,8 @@ export const ja: TranslationResources = {
         close: "閉じる",
         renameTerminal: "ターミナルの名前を変更",
         renameAgent: "エージェントの名前を変更",
+
+        copyFilePath: "ファイルパスをコピー",
       },
       actions: {
         newTab: "新しいタブ",
@@ -724,6 +733,7 @@ export const ja: TranslationResources = {
     header: {
       actions: {
         workspaceActions: "ワークスペースアクション",
+        workspaceActionsUnhealthy: "ワークスペースアクション、異常なサービスがあります",
         newAgent: "新しいエージェント",
         newTerminal: "新しいターミナル",
         newBrowser: "新しいブラウザタブ",
@@ -764,6 +774,8 @@ export const ja: TranslationResources = {
         exitCode: "終了コード: {{code}}",
         startFailed: "{{scriptName}}の起動に失敗しました",
         stopFailed: "{{scriptName}}の停止に失敗しました",
+        running: "実行中",
+        runningCount: "{{count}} 件実行中",
       },
     },
     tree: {
@@ -1052,6 +1064,8 @@ export const ja: TranslationResources = {
         generic: "このホストで {{brand}} をセットアップすると、その機能を使えます。",
       },
     },
+
+    sheet: { openAsTab: "タブで開く" },
   },
   workspaceLabels: {
     title: "ラベル",
@@ -1655,6 +1669,9 @@ export const ja: TranslationResources = {
     },
   },
   providerUsage: {
+    lastUpdated: "Last updated {{time}}",
+    noSuccessfulUpdate: "No successful update",
+    resetTimePassed: "Reset time passed",
     summaryUsed: "{{source}}：{{amount}} 使用済み",
     summaryRemaining: "{{source}}：残り {{amount}}",
     options: "設定",
@@ -2018,6 +2035,18 @@ export const ja: TranslationResources = {
     accessibility: "コンテキストウィンドウ{{percentage}}%使用",
   },
   review: {
+    feedback: {
+      send: "フィードバックを送信 ({{count}})",
+      sending: "フィードバックを送信中 ({{count}})",
+      chooseAgent: "エージェントを選択",
+      sent: "{{recipient}} にフィードバックを送信しました",
+      "no-agents":
+        "フィードバックを送信するには、このワークスペースでエージェントタブを開いてください。",
+      disconnected: "フィードバックを送信するにはホストに接続してください。",
+      "no-context": "保存したコメントはこの差分と一致しなくなりました。",
+      failed: "フィードバックを送信できませんでした。もう一度お試しください。",
+      prompt: "このコードレビューに対応してください。",
+    },
     comment: {
       add: "レビューコメントを追加",
       edit: "レビューコメントを編集",

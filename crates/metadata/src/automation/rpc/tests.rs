@@ -6,6 +6,7 @@ use super::*;
 fn setup_projection_matches_running_completed_and_failed_commands() {
     let projected = setup_snapshot(
         SetupSnapshot {
+            revision: 1,
             lifecycle: SetupLifecycle::Failed,
             worktree_path: "/tmp/worktree".to_owned(),
             branch_name: "feature/test".to_owned(),
@@ -91,5 +92,15 @@ fn untrusted_change_request_maps_without_losing_provenance() {
             number: 42,
             head_repository: "fork/repo".to_owned(),
         }
+    );
+}
+
+#[test]
+fn setup_summary_contains_lifecycle_but_no_transcript_or_commands() {
+    let summary = setup_summary(&serde_json::json!({"revision":7,"status":"failed",
+        "error":"command failed","detail":{"log":"large private transcript","commands":[{"command":"private"}]}}));
+    assert_eq!(
+        summary,
+        serde_json::json!({"revision":7,"status":"failed","hasCommands":true})
     );
 }

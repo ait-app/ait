@@ -37,21 +37,63 @@ impl CodexClient {
     /// # Errors
     /// Returns native transport failure or malformed quota facts.
     pub(super) async fn native_usage_in(&self, cwd: &str) -> Result<Value, AgentSessionError> {
-        let response = self
-            .query(cwd, "account/rateLimits/read", json!({}))
-            .await?;
-        let mut report = usage(&response)?;
-        if let Ok(account) = self
-            .query(cwd, "account/read", json!({"refreshToken":false}))
+        self.prepare_native_usage_in(cwd).await?.report.await
+    }
+
+    /// Bind identity inspection and the lazy quota poll to one native app-server process.
+    /// # Errors
+    /// Returns native launch or initialization failures.
+    pub(super) async fn prepare_native_usage_in<'a>(
+        &'a self,
+        cwd: &str,
+    ) -> Result<crate::ports::account_usage::PreparedUsage<'a>, AgentSessionError> {
+        use crate::ports::account_usage::{PreparedUsage, UsageIdentity};
+        let mut transport = self.launch_transport(cwd, false)?;
+        transport.initialize().await?;
+        let account = transport
+            .request("account/read", json!({"refreshToken":false}))
             .await
-            && let Some(email) = account
-                .pointer("/account/email")
-                .and_then(Value::as_str)
-                .filter(|email| email.len() <= 256 && !email.chars().any(char::is_control))
-        {
-            report["accountLabel"] = json!(email);
-        }
-        Ok(report)
+            .ok();
+        let email = account
+            .as_ref()
+            .and_then(|account| account.pointer("/account/email"))
+            .and_then(Value::as_str)
+            .filter(|email| {
+                !email.is_empty() && email.len() <= 256 && !email.chars().any(char::is_control)
+            })
+            .map(str::to_owned);
+        let identity = email
+            .as_ref()
+            .and_then(|_| account.as_ref()?.get("account"))
+            .and_then(|account| serde_json::to_vec(account).ok())
+            .map(|account| UsageIdentity::from_native("codex", &account));
+        Ok(PreparedUsage {
+            identity,
+            report: Box::pin(async move {
+                let result = async {
+                    let response = transport
+                        .request("account/rateLimits/read", json!({}))
+                        .await?;
+                    let mut report = usage(&response)?;
+                    if let Some(email) = email {
+                        report["accountLabel"] = json!(email);
+                    }
+                    Ok(report)
+                }
+                .await;
+                transport.close().await?;
+                result
+            }),
+        })
+    }
+
+    /// Prepare host usage using the current launch directory and native credentials.
+    /// # Errors
+    /// Returns directory, native launch or initialization failures.
+    pub(super) async fn prepare_native_usage(
+        &self,
+    ) -> Result<crate::ports::account_usage::PreparedUsage<'_>, AgentSessionError> {
+        self.prepare_native_usage_in(&current_dir()?).await
     }
 }
 

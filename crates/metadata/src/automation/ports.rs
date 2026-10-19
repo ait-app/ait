@@ -88,6 +88,8 @@ pub enum SetupLifecycle {
 /// Current setup snapshot retained in memory.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct SetupSnapshot {
+    /// Monotonic in-memory revision for bootstrap/event ordering.
+    pub revision: u64,
     /// Overall lifecycle.
     pub lifecycle: SetupLifecycle,
     /// Backing worktree or directory.

@@ -54,3 +54,13 @@ packages/server/src/server/bootstrap.ts
 Modifications: Rust stateless HTTP reusing authenticated Ait RPC dispatch,
 bounded task/output resources, fixed Workspace schedules and persisted heartbeats.
 Scope and differences: docs/decisions/daemon/adr-148-daemon-mcp.md.
+
+The incremental client, protocol and desktop adaptations in apps/mobile, apps/desktop,
+packages/protocol and packages/client also derive selectively from getpaseo/paseo
+commit 91154ba4e8ace3484595a05a4366279fb4818745 (0.12.0 plus subsequent fixes),
+relative to the previous a1da1b8f234afe7a75785022292cdf8a50ee11a5 port baseline.
+Modifications preserve Ait branding, Rust transports, Bot/Schedule behavior, remote
+image handling and direct/relay service links. Git rename/path handling, account-usage
+history and scoped Setup observation were reimplemented in Rust within Ait's ports.
+The enriched-markdown and bottom-sheet package patches are carried with their upstream
+attribution. Scope, decisions and validation: docs/reports/clients/paseo-0.12-port-2026-10-20.md.

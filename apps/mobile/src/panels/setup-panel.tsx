@@ -1,7 +1,9 @@
+import { useRetainedPanelActive } from "@/components/retained-panel";
+import { useAppActivelyVisible } from "@/hooks/use-app-visible";
 import { LoadingSpinner } from "@/components/ui/loading-spinner";
 import { Alert } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { CheckCircle2, ChevronRight, CircleAlert, SquareTerminal } from "lucide-react-native";
 import { useTranslation } from "react-i18next";
 import { Pressable, type PressableStateCallbackType, ScrollView, Text, View } from "react-native";
@@ -15,6 +17,7 @@ import type { Theme } from "@/styles/theme";
 import {
   useWorkspaceSetupStore,
   type WorkspaceSetupSnapshot,
+  type WorkspaceSetupStatusResult,
 } from "@/stores/workspace-setup-store";
 import { useHostRuntimeClient } from "@/runtime/host-runtime";
 import { useHostFeature } from "@/runtime/host-features";
@@ -219,27 +222,48 @@ function useWorkspaceSetupSnapshot(serverId: string, workspaceId: string) {
   const client = useHostRuntimeClient(serverId);
   const key = buildWorkspaceTabPersistenceKey({ serverId, workspaceId });
   const snapshot = useWorkspaceSetupStore((state) => (key ? (state.snapshots[key] ?? null) : null));
-  const upsertProgress = useWorkspaceSetupStore((state) => state.upsertProgress);
-  const requestedRef = useRef(false);
-
+  const active = useRetainedPanelActive();
+  const appVisible = useAppActivelyVisible();
+  const supportsObservation = useHostFeature(serverId, "workspaceSetupObservation");
   useEffect(() => {
-    if (snapshot || requestedRef.current || !client) return;
-    requestedRef.current = true;
-    client
-      .fetchWorkspaceSetupStatus(workspaceId)
-      .then((response) => {
-        if (response.snapshot) {
-          upsertProgress({
-            serverId,
-            payload: { workspaceId: response.workspaceId, ...response.snapshot },
-          });
+    if (!active || !appVisible || !client) return;
+    let disposed = false;
+    const apply = (value: WorkspaceSetupStatusResult["snapshot"]) => {
+      if (!disposed)
+        useWorkspaceSetupStore.getState().applySnapshot({ serverId, workspaceId, snapshot: value });
+    };
+    if (!supportsObservation) {
+      void client
+        .fetchWorkspaceSetupStatus(workspaceId)
+        .then((response) => {
+          if (response.workspaceId === workspaceId) apply(response.snapshot);
+        })
+        .catch(() => {});
+      return () => {
+        disposed = true;
+      };
+    }
+    const observation = client.observeWorkspaceSetup(workspaceId);
+    const unsubscribe = observation.subscribe({
+      snapshot: (response) => {
+        if (response.workspaceId === workspaceId) apply(response.snapshot);
+      },
+      update: (message) => {
+        if (
+          !disposed &&
+          message.type === "workspace_setup_progress" &&
+          message.payload.workspaceId === workspaceId
+        ) {
+          useWorkspaceSetupStore.getState().upsertProgress({ serverId, payload: message.payload });
         }
-        return;
-      })
-      .catch(() => {
-        // Server may not support this yet — ignore.
-      });
-  }, [client, snapshot, serverId, upsertProgress, workspaceId]);
+      },
+    });
+    return () => {
+      disposed = true;
+      unsubscribe();
+      void observation.release().catch(() => {});
+    };
+  }, [client, active, appVisible, serverId, workspaceId, supportsObservation]);
 
   return snapshot;
 }

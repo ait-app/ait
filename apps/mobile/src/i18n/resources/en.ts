@@ -127,6 +127,7 @@ export const en = {
     back: "Back",
     loading: "Loading...",
     actions: {
+      save: "Save",
       back: "Back",
       cancel: "Cancel",
       close: "Close",
@@ -172,6 +173,8 @@ export const en = {
       error: "Error",
       idle: "Idle",
     },
+
+    bottomSheetBackdrop: "Bottom sheet backdrop",
   },
   shell: {
     menu: {
@@ -220,6 +223,8 @@ export const en = {
     input: {
       accessibilityLabel: "Message agent...",
       terminalAccessibilityLabel: "Terminal prompt",
+      fullscreen: "Fullscreen",
+      exitFullscreen: "Exit fullscreen",
       focusHint: "{{shortcut}} to focus",
       addAttachment: "Add attachment",
       interruptAgent: "Interrupt agent",
@@ -489,6 +494,8 @@ export const en = {
       withTokens: "Context compacted ({{tokens}}K tokens)",
       completed: "Context compacted",
     },
+
+    turnFooter: { workedFor: "Worked for {{duration}}" },
   },
   importSession: {
     title: "Import session",
@@ -742,6 +749,8 @@ export const en = {
         close: "Close",
         renameTerminal: "Rename terminal",
         renameAgent: "Rename agent",
+
+        copyFilePath: "Copy file path",
       },
       actions: {
         newTab: "New tab",
@@ -817,6 +826,7 @@ export const en = {
     header: {
       actions: {
         workspaceActions: "Workspace actions",
+        workspaceActionsUnhealthy: "Workspace actions, a service is unhealthy",
         newAgent: "New agent",
         newTerminal: "New terminal",
         newBrowser: "New browser tab",
@@ -857,6 +867,8 @@ export const en = {
         exitCode: "exit {{code}}",
         startFailed: "Failed to start {{scriptName}}",
         stopFailed: "Failed to stop {{scriptName}}",
+        running: "Running",
+        runningCount: "{{count}} running",
       },
     },
     tree: {
@@ -1149,6 +1161,8 @@ export const en = {
         generic: "Set up {{brand}} on this host to use its features.",
       },
     },
+
+    sheet: { openAsTab: "Open as tab" },
   },
   workspaceLabels: {
     title: "Labels",
@@ -2100,6 +2114,9 @@ export const en = {
     },
   },
   providerUsage: {
+    lastUpdated: "Last updated {{time}}",
+    noSuccessfulUpdate: "No successful update",
+    resetTimePassed: "Reset time passed",
     summaryUsed: "{{source}} {{amount}} used",
     summaryRemaining: "{{source}} {{amount}} left",
     options: "Settings",
@@ -2459,6 +2476,17 @@ export const en = {
     accessibility: "Context window {{percentage}}% used",
   },
   review: {
+    feedback: {
+      send: "Send feedback ({{count}})",
+      sending: "Sending feedback ({{count}})",
+      chooseAgent: "Choose an agent",
+      sent: "Feedback sent to {{recipient}}",
+      "no-agents": "Open an agent tab in this workspace to send feedback.",
+      disconnected: "Connect to the host to send feedback.",
+      "no-context": "Saved comments no longer match this diff.",
+      failed: "Failed to send feedback. Try again.",
+      prompt: "Please address this code review.",
+    },
     comment: {
       add: "Add review comment",
       edit: "Edit review comment",

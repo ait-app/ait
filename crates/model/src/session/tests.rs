@@ -315,3 +315,48 @@ fn pending_count_and_byte_budgets_close_observers_and_sink_failure_does_not_fail
         assert_eq!(subscription.activate(), Err(SessionError::Closed));
     }
 }
+
+#[test]
+fn setup_detail_is_workspace_and_connection_scoped_and_released_on_drop() {
+    let events = SessionEvents::default();
+    let first = events.connect();
+    let other = events.connect();
+    let captured = Arc::new(Mutex::new(Vec::new()));
+    let output = captured.clone();
+    let subscription = first
+        .subscribe_workspace_setup(
+            "one".to_owned(),
+            Arc::new(move |_, payload| {
+                output.lock().unwrap().push(payload);
+                Ok(())
+            }),
+        )
+        .unwrap();
+    events.publish(
+        SessionEventKind::WorkspaceSetupProgress,
+        &json!({"workspaceId":"two","revision":1}),
+    );
+    events.publish(
+        SessionEventKind::WorkspaceSetupProgress,
+        &json!({"workspaceId":"one","revision":2}),
+    );
+    assert!(captured.lock().unwrap().is_empty());
+    subscription.activate().unwrap();
+    assert_eq!(captured.lock().unwrap().len(), 1);
+    assert_eq!(
+        captured.lock().unwrap()[0]["subscriptionId"],
+        subscription.id()
+    );
+    assert_eq!(other.events.0.lock().unwrap().listeners.len(), 1);
+    drop(subscription);
+    events.publish(
+        SessionEventKind::WorkspaceSetupProgress,
+        &json!({"workspaceId":"one","revision":3}),
+    );
+    assert_eq!(captured.lock().unwrap().len(), 1);
+    assert!(
+        first
+            .subscribe_workspace_setup(String::new(), Arc::new(|_, _| Ok(())))
+            .is_err()
+    );
+}

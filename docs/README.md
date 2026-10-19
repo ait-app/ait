@@ -25,6 +25,10 @@
 
 ## 架构决策
 
+- [ADR-168：Setup 全局摘要与面板日志订阅分离](decisions/workspace/adr-168-scoped-setup-observation.md)
+- [ADR-167：用量缓存按原生账号与成功快照隔离](decisions/providers/adr-167-account-scoped-successful-usage.md)
+- [ADR-166：统一 Markdown 渲染与移动面板编辑生命周期](decisions/clients/adr-166-shared-markdown-and-composer-lifetimes.md)
+
 - [ADR-165：macOS 通过 AIT Server 检查与下载更新](decisions/clients/adr-165-macos-ait-server-updates.md)：generic feed、stable/beta 清单、COS/GitHub 地域分流与单段 Range。
 
 - [ADR-164：移除 Workspace 服务代理 URL 字段](decisions/clients/adr-164-remove-workspace-service-proxy-urls.md)：删除三种旧代理 URL、路由选择和兼容回退，保留在线中继回环转发，并重建旧工作区缓存。
@@ -189,6 +193,8 @@
 - [语音与听写](operations/speech.md)：离线模型、后端配置和限制。
 
 ## 工程规范与验证
+
+- [Paseo 0.12.0 移植与验证](reports/clients/paseo-0.12-port-2026-10-20.md)：本轮范围、兼容性和定向验证。
 
 - [Ait 0.1.3 启动与会话查询诊断](reports/clients/ait-0.1.3-startup-diagnostics-2026-10-14.md)：Timeline 读取排队、草稿提示词索引就绪与 Codex 模型目录告警归因。
 

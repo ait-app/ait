@@ -2264,10 +2264,13 @@ export class DaemonClient {
 
   /**
    * supportedOnly filters against each handshake, including reconnects.
+   * A factory can choose streams from each fresh handshake before that filtering.
    * Hosts without an event catalog retain the requested set; filtering is opt-in.
    */
   observeEvents(
-    events: SessionEventSubscription[],
+    events:
+      | SessionEventSubscription[]
+      | ((info: ServerInfoStatusPayload | null) => SessionEventSubscription[]),
     options?: { signal?: AbortSignal; notifications?: boolean; supportedOnly?: boolean },
   ): OwnedSubscription<CorrelatedResponsePayload<"session.events.set_subscription.response">> {
     return this.observe(
@@ -2276,9 +2279,11 @@ export class DaemonClient {
         const supported = options?.supportedOnly
           ? this.lastServerInfoMessage?.sessionEventTypes
           : undefined;
+        const requested =
+          typeof events === "function" ? events(this.lastServerInfoMessage) : events;
         return {
           type: "session.events.set_subscription.request",
-          events: supported ? events.filter((event) => supported.includes(event)) : events,
+          events: supported ? requested.filter((event) => supported.includes(event)) : requested,
           notifications: options?.notifications,
         };
       },
@@ -2715,6 +2720,21 @@ export class DaemonClient {
         workspaceId,
       },
       responseType: "workspace.setup.status.response",
+    });
+  }
+
+  /** Own setup details only while the caller observes this Workspace. Re-established on reconnect. */
+  observeWorkspaceSetup(workspaceId: string, options?: { signal?: AbortSignal }) {
+    return this.observe(
+      "workspace.setup.subscribe.response",
+      { type: "workspace.setup.subscribe.request", workspaceId },
+      options,
+    );
+  }
+
+  async fetchWorkspaceSetupSummary(workspaceId: string) {
+    return this.sendNamespacedCorrelatedSessionRequest<"workspace.setup.summary.response">({
+      message: { type: "workspace.setup.summary.request", workspaceId },
     });
   }
 

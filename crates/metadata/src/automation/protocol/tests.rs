@@ -11,6 +11,8 @@ fn capabilities_merge_legacy_setup_and_script_names_into_canonical_methods() {
             .collect::<Vec<_>>(),
         [
             "workspace.setup.status.request",
+            "workspace.setup.summary.request",
+            "workspace.setup.subscribe.request",
             "workspace.setup.run.request",
             "workspace.script.list.request",
             "workspace.script.start.request",
@@ -40,6 +42,7 @@ fn requests_use_paseo_camel_case_fields_and_strip_unknown_fields() {
 #[test]
 fn setup_snapshot_matches_paseo_worktree_detail_shape() {
     let mut snapshot = WorkspaceSetupSnapshot {
+        revision: 1,
         status: WorkspaceSetupStatus::Completed,
         detail: WorkspaceSetupDetail {
             kind: "worktree_setup".to_owned(),

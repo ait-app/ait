@@ -183,6 +183,12 @@ impl AgentClient for ClaudeClient {
         Box::pin(self.native_diagnostic())
     }
 
+    fn prepare_usage(
+        &self,
+    ) -> AgentSessionFuture<'_, crate::ports::account_usage::PreparedUsage<'_>> {
+        Box::pin(self.prepare_native_usage())
+    }
+
     fn usage(&self) -> AgentSessionFuture<'_, Value> {
         Box::pin(self.native_usage())
     }

@@ -30,6 +30,7 @@ export const ar: TranslationResources = {
     back: "خلف",
     loading: "تحميل...",
     actions: {
+      save: "حفظ",
       back: "خلف",
       cancel: "يلغي",
       close: "يغلق",
@@ -75,6 +76,8 @@ export const ar: TranslationResources = {
       error: "خطأ",
       idle: "عاطل",
     },
+
+    bottomSheetBackdrop: "خلفية اللوحة السفلية",
   },
   shell: {
     menu: {
@@ -123,6 +126,8 @@ export const ar: TranslationResources = {
     input: {
       accessibilityLabel: "وكيل الرسائل...",
       terminalAccessibilityLabel: "Terminal prompt",
+      fullscreen: "ملء الشاشة",
+      exitFullscreen: "الخروج من ملء الشاشة",
       focusHint: "{{shortcut}}للتركيز",
       addAttachment: "إضافة مرفق",
       interruptAgent: "عامل المقاطعة",
@@ -391,6 +396,8 @@ export const ar: TranslationResources = {
       withTokens: "تم ضغط السياق (رموز{{tokens}}K)",
       completed: "تم ضغط السياق",
     },
+
+    turnFooter: { workedFor: "عمل لمدة {{duration}}" },
   },
   importSession: {
     chooseHostTitle: en.importSession.chooseHostTitle,
@@ -643,6 +650,8 @@ export const ar: TranslationResources = {
         close: "يغلق",
         renameTerminal: "إعادة تسمية المحطة",
         renameAgent: "إعادة تسمية الوكيل",
+
+        copyFilePath: "Copy file path",
       },
       actions: {
         newTab: "علامة تبويب جديدة",
@@ -720,6 +729,7 @@ export const ar: TranslationResources = {
     header: {
       actions: {
         workspaceActions: "إجراءات Workspace",
+        workspaceActionsUnhealthy: "إجراءات Workspace، توجد خدمة غير سليمة",
         newAgent: "وكيل جديد",
         newTerminal: "محطة جديدة",
         newBrowser: "علامة تبويب متصفح جديدة",
@@ -760,6 +770,8 @@ export const ar: TranslationResources = {
         exitCode: "الخروج من{{code}}",
         startFailed: "فشل بدء تشغيل{{scriptName}}",
         stopFailed: "فشل إيقاف{{scriptName}}",
+        running: "قيد التشغيل",
+        runningCount: "{{count}} قيد التشغيل",
       },
     },
     tree: {
@@ -1038,6 +1050,8 @@ export const ar: TranslationResources = {
         generic: "قم بإعداد {{brand}} على هذا المضيف لاستخدام ميزاته.",
       },
     },
+
+    sheet: { openAsTab: "فتح كعلامة تبويب" },
   },
   workspaceLabels: {
     title: "التسميات",
@@ -1638,6 +1652,9 @@ export const ar: TranslationResources = {
     },
   },
   providerUsage: {
+    lastUpdated: "Last updated {{time}}",
+    noSuccessfulUpdate: "No successful update",
+    resetTimePassed: "Reset time passed",
     summaryUsed: "{{source}}، المستخدم {{amount}}",
     summaryRemaining: "{{source}}، المتبقي {{amount}}",
     options: "الإعدادات",
@@ -1998,6 +2015,17 @@ export const ar: TranslationResources = {
     accessibility: "تم استخدام نافذة السياق{{percentage}}%",
   },
   review: {
+    feedback: {
+      send: "إرسال الملاحظات ({{count}})",
+      sending: "جارٍ إرسال الملاحظات ({{count}})",
+      chooseAgent: "اختر وكيلاً",
+      sent: "تم إرسال الملاحظات إلى {{recipient}}",
+      "no-agents": "افتح علامة تبويب وكيل في مساحة العمل هذه لإرسال الملاحظات.",
+      disconnected: "اتصل بالمضيف لإرسال الملاحظات.",
+      "no-context": "لم تعد التعليقات المحفوظة تتطابق مع هذا الفرق.",
+      failed: "تعذر إرسال الملاحظات. حاول مرة أخرى.",
+      prompt: "يرجى معالجة مراجعة الكود هذه.",
+    },
     comment: {
       add: "إضافة تعليق المراجعة",
       edit: "تحرير تعليق المراجعة",

@@ -77,7 +77,7 @@ pub(crate) fn subscribe(
                 || (event == "project.update" && state.directory.is_none())
                 || (matches!(
                     event.as_str(),
-                    "script_status_update" | "workspace_setup_progress"
+                    "script_status_update" | "workspace_setup_progress" | "workspace_setup_status"
                 ) && state.workspace_automation.is_none())
         }) {
             return Err(ErrorCode::UnsupportedCapability);

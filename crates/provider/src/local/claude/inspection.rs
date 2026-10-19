@@ -66,6 +66,42 @@ impl ClaudeClient {
                 &json!({"kind":"no_quota","detail":"This login does not report plan usage. Run claude /login to sign in."}),
             ));
         };
+        self.usage_with_credentials(endpoint, credentials).await
+    }
+
+    /// Capture the native OAuth credential once for cache identity and the later HTTPS poll.
+    /// # Errors
+    /// Returns safe credential-resolution failures.
+    pub(super) async fn prepare_native_usage(
+        &self,
+    ) -> Result<crate::ports::account_usage::PreparedUsage<'_>, AgentSessionError> {
+        use crate::ports::account_usage::{PreparedUsage, UsageIdentity};
+        let credentials = self.credentials().await?;
+        let identity = credentials.as_ref().map(|credentials| {
+            UsageIdentity::from_native("claude", credentials.token.expose_secret().as_bytes())
+        });
+        Ok(PreparedUsage {
+            identity,
+            report: Box::pin(async move {
+                let Some(credentials) = credentials else {
+                    return Ok(unavailable(
+                        &json!({"kind":"no_quota","detail":"Sign in with claude /login to read plan usage."}),
+                    ));
+                };
+                self.usage_with_credentials(
+                    "https://api.anthropic.com/api/oauth/usage",
+                    credentials,
+                )
+                .await
+            }),
+        })
+    }
+
+    async fn usage_with_credentials(
+        &self,
+        endpoint: &str,
+        credentials: Credentials,
+    ) -> Result<Value, AgentSessionError> {
         if let Some(expiry) = credentials
             .expires_at
             .and_then(chrono::DateTime::from_timestamp_millis)

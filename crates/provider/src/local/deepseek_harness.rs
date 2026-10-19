@@ -105,6 +105,21 @@ impl AgentClient for DeepSeekHarnessClient {
         })
     }
 
+    fn prepare_usage(
+        &self,
+    ) -> AgentSessionFuture<'_, crate::ports::account_usage::PreparedUsage<'_>> {
+        Box::pin(async move {
+            if !self.interactive {
+                return Ok(crate::ports::account_usage::PreparedUsage {
+                    identity: None,
+                    report: Box::pin(async { Ok(native::quota::acp_unavailable()) }),
+                });
+            }
+            let cwd = std::env::current_dir().map_err(|_| AgentSessionError::Failed)?;
+            native::quota::prepare_host(self, cwd.to_str().ok_or(AgentSessionError::Failed)?).await
+        })
+    }
+
     fn supports_summary_generation(&self) -> bool {
         true
     }

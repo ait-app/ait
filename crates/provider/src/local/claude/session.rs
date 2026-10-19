@@ -454,6 +454,12 @@ impl AgentSession for ClaudeSession {
             .and_then(|transport| transport.diagnostics.failure())
     }
 
+    fn prepare_account_usage(
+        &self,
+    ) -> AgentSessionFuture<'_, crate::ports::account_usage::PreparedUsage<'_>> {
+        Box::pin(self.client.prepare_native_usage())
+    }
+
     fn account_usage(&self) -> AgentSessionFuture<'_, Value> {
         Box::pin(self.client.native_usage())
     }

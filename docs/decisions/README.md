@@ -44,6 +44,8 @@ ADR-074、082、083、084、122 在不同类别中各有两份，引用时以路
 
 ## 工作区、文件与 Git
 
+- [ADR-168：Setup 全局摘要与面板日志订阅分离](workspace/adr-168-scoped-setup-observation.md)
+
 - [ADR-138：定时任务固定归属于 Workspace](workspace/adr-138-workspace-owned-schedules.md)
 
 - [ADR-132：Checkout 刷新独立准入与有界输出背压](workspace/adr-132-checkout-refresh-admission-and-backpressure.md)：隔离前台 Git 任务，diff 拥堵时等待输出额度并保持连接。
@@ -72,6 +74,8 @@ ADR-074、082、083、084、122 在不同类别中各有两份，引用时以路
 - [ADR-025：先移植 Paseo Project / Workspace 模型与 registry](workspace/adr-025-paseo-registry.md)
 
 ## Provider、Agent 与会话
+
+- [ADR-167：用量缓存按原生账号与成功快照隔离](providers/adr-167-account-scoped-successful-usage.md)
 
 - [ADR-162：Codex 失败展示原生原因与 HTTP 状态](providers/adr-162-codex-error-details.md)
 - [ADR-157：整图输入与 Codex 用户图片的跨设备展示](providers/adr-157-codex-user-image-projection.md)
@@ -118,6 +122,8 @@ ADR-074、082、083、084、122 在不同类别中各有两份，引用时以路
 - [ADR-027：独立 AgentSession 与 AgentManager 生命周期边界](providers/adr-027-independent-agent-session-manager.md)
 
 ## 客户端、连接与品牌
+
+- [ADR-166：统一 Markdown 渲染与移动面板编辑生命周期](clients/adr-166-shared-markdown-and-composer-lifetimes.md)
 
 - [ADR-165：macOS 通过 AIT Server 检查与下载更新](clients/adr-165-macos-ait-server-updates.md)
 - [ADR-164：移除 Workspace 服务代理 URL 字段](clients/adr-164-remove-workspace-service-proxy-urls.md)

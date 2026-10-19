@@ -1,12 +1,12 @@
-process.emitWarning = (() => {}) as typeof process.emitWarning;
+import { protectConsoleStreams } from "./diagnostics/console-streams.js";
+protectConsoleStreams();
 
+process.emitWarning = (() => {}) as typeof process.emitWarning;
 import log from "electron-log/main";
 log.transports.console.level = "info";
 log.initialize({ spyRendererConsole: true });
-
 import { configureDesktopProfile, desktopProfileOptions } from "./branding.js";
 import { inheritLoginShellEnv } from "./login-shell-env.js";
-
 import {
   APP_SCHEME,
   buildAgentDeepLinkRoute,
@@ -35,6 +35,7 @@ import { existsSync } from "node:fs";
 import path from "node:path";
 import { pathToFileURL } from "node:url";
 import { AgentNavigationInbox, parseAgentDeepLinkFromArgv } from "./agent-navigation.js";
+import { showWindowWhenReady } from "./window/show-when-ready.js";
 import {
   isDesktopManagedDaemonRunningSync,
   registerDaemonManager,
@@ -819,9 +820,7 @@ async function createWindow(
     registerBrowserWebviewNavigationGuards(contents);
   });
 
-  mainWindow.once("ready-to-show", () => {
-    mainWindow.show();
-  });
+  showWindowWhenReady(mainWindow, { showOnLoad: process.platform === "linux" });
 
   if (!app.isPackaged) {
     const { loadReactDevTools } = await import("./features/react-devtools.js");

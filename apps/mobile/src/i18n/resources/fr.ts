@@ -31,7 +31,8 @@ export const fr: TranslationResources = {
     back: "Dos",
     loading: "Chargement...",
     actions: {
-      back: "Dos",
+      save: "Enregistrer",
+      back: "Retour",
       cancel: "Annuler",
       close: "Fermer",
       copy: "Copie",
@@ -77,6 +78,8 @@ export const fr: TranslationResources = {
       error: "Erreur",
       idle: "Inactif",
     },
+
+    bottomSheetBackdrop: "Arrière-plan du panneau inférieur",
   },
   shell: {
     menu: {
@@ -124,9 +127,11 @@ export const fr: TranslationResources = {
       terminal: "Prompt",
     },
     input: {
-      accessibilityLabel: "Agent de messagerie...",
-      terminalAccessibilityLabel: "Terminal prompt",
-      focusHint: "{{shortcut}}pour se concentrer",
+      accessibilityLabel: "Écrire à l’agent…",
+      terminalAccessibilityLabel: "Prompt du terminal",
+      fullscreen: "Plein écran",
+      exitFullscreen: "Quitter le plein écran",
+      focusHint: "{{shortcut}} pour saisir",
       addAttachment: "Ajouter une pièce jointe",
       interruptAgent: "Agent d'interruption",
       queueMessage: "Message de file d'attente",
@@ -397,6 +402,8 @@ export const fr: TranslationResources = {
       withTokens: "Contexte compacté (jetons{{tokens}}K)",
       completed: "Contexte compacté",
     },
+
+    turnFooter: { workedFor: "A travaillé pendant {{duration}}" },
   },
   importSession: {
     chooseHostTitle: en.importSession.chooseHostTitle,
@@ -650,6 +657,8 @@ export const fr: TranslationResources = {
         close: "Fermer",
         renameTerminal: "Renommer le terminal",
         renameAgent: "Renommer l'agent",
+
+        copyFilePath: "Copier le chemin du fichier",
       },
       actions: {
         newTab: "Nouvel onglet",
@@ -726,7 +735,9 @@ export const fr: TranslationResources = {
     },
     header: {
       actions: {
-        workspaceActions: "ActionsWorkspace",
+        workspaceActions: "Actions de l’espace de travail",
+        workspaceActionsUnhealthy:
+          "Actions de l’espace de travail, un service est en mauvaise santé",
         newAgent: "Nouvel agent",
         newTerminal: "Nouvelle borne",
         newBrowser: "Nouvel onglet du navigateur",
@@ -765,9 +776,11 @@ export const fr: TranslationResources = {
         script: "Script{{scriptName}}",
       },
       states: {
-        exitCode: "quitter{{code}}",
-        startFailed: "Échec du démarrage de{{scriptName}}",
-        stopFailed: "Échec de l'arrêt de{{scriptName}}",
+        exitCode: "sortie {{code}}",
+        startFailed: "Impossible de démarrer {{scriptName}}",
+        stopFailed: "Impossible d’arrêter {{scriptName}}",
+        running: "En cours",
+        runningCount: "{{count}} en cours",
       },
     },
     tree: {
@@ -1071,6 +1084,8 @@ export const fr: TranslationResources = {
         generic: "Configurez {{brand}} sur cet hôte pour utiliser ses fonctionnalités.",
       },
     },
+
+    sheet: { openAsTab: "Ouvrir dans un onglet" },
   },
   workspaceLabels: {
     title: "Étiquettes",
@@ -1689,6 +1704,9 @@ export const fr: TranslationResources = {
     },
   },
   providerUsage: {
+    lastUpdated: "Last updated {{time}}",
+    noSuccessfulUpdate: "No successful update",
+    resetTimePassed: "Reset time passed",
     summaryUsed: "{{source}} {{amount}} utilisé",
     summaryRemaining: "{{source}} {{amount}} restant",
     options: "Paramètres",
@@ -2052,6 +2070,18 @@ export const fr: TranslationResources = {
     accessibility: "Fenêtre contextuelle{{percentage}}% utilisé",
   },
   review: {
+    feedback: {
+      send: "Envoyer les commentaires ({{count}})",
+      sending: "Envoi des commentaires ({{count}})",
+      chooseAgent: "Choisir un agent",
+      sent: "Commentaires envoyés à {{recipient}}",
+      "no-agents":
+        "Ouvrez un onglet d’agent dans cet espace de travail pour envoyer les commentaires.",
+      disconnected: "Connectez-vous à l’hôte pour envoyer les commentaires.",
+      "no-context": "Les commentaires enregistrés ne correspondent plus à ce diff.",
+      failed: "Échec de l’envoi des commentaires. Réessayez.",
+      prompt: "Veuillez traiter cette revue de code.",
+    },
     comment: {
       add: "Ajouter un commentaire",
       edit: "Modifier le commentaire de l'avis",

@@ -31,6 +31,7 @@ export const ptBR: TranslationResources = {
     back: "Voltar",
     loading: "Carregando...",
     actions: {
+      save: "Salvar",
       back: "Voltar",
       cancel: "Cancelar",
       close: "Fechar",
@@ -76,6 +77,8 @@ export const ptBR: TranslationResources = {
       error: "Erro",
       idle: "Ocioso",
     },
+
+    bottomSheetBackdrop: "Fundo do painel inferior",
   },
   shell: {
     menu: {
@@ -124,6 +127,8 @@ export const ptBR: TranslationResources = {
     input: {
       accessibilityLabel: "Enviar mensagem ao agente...",
       terminalAccessibilityLabel: "Terminal prompt",
+      fullscreen: "Tela cheia",
+      exitFullscreen: "Sair da tela cheia",
       focusHint: "{{shortcut}} para focar",
       addAttachment: "Adicionar anexo",
       interruptAgent: "Interromper agente",
@@ -395,6 +400,8 @@ export const ptBR: TranslationResources = {
       withTokens: "Contexto compactado ({{tokens}}K tokens)",
       completed: "Contexto compactado",
     },
+
+    turnFooter: { workedFor: "Trabalhou por {{duration}}" },
   },
   importSession: {
     chooseHostTitle: en.importSession.chooseHostTitle,
@@ -648,6 +655,8 @@ export const ptBR: TranslationResources = {
         close: "Fechar",
         renameTerminal: "Renomear terminal",
         renameAgent: "Renomear agente",
+
+        copyFilePath: "Copiar caminho do arquivo",
       },
       actions: {
         newTab: "Nova aba",
@@ -724,6 +733,7 @@ export const ptBR: TranslationResources = {
     header: {
       actions: {
         workspaceActions: "Ações do workspace",
+        workspaceActionsUnhealthy: "Ações do workspace, há um serviço com problema",
         newAgent: "Novo agente",
         newTerminal: "Novo terminal",
         newBrowser: "Nova aba de navegador",
@@ -764,6 +774,8 @@ export const ptBR: TranslationResources = {
         exitCode: "saída {{code}}",
         startFailed: "Falha ao iniciar {{scriptName}}",
         stopFailed: "Falha ao parar {{scriptName}}",
+        running: "Em execução",
+        runningCount: "{{count}} em execução",
       },
     },
     tree: {
@@ -1062,6 +1074,8 @@ export const ptBR: TranslationResources = {
         generic: "Configure o {{brand}} neste host para usar seus recursos.",
       },
     },
+
+    sheet: { openAsTab: "Abrir como aba" },
   },
   workspaceLabels: {
     title: "Etiquetas",
@@ -1670,6 +1684,9 @@ export const ptBR: TranslationResources = {
     },
   },
   providerUsage: {
+    lastUpdated: "Last updated {{time}}",
+    noSuccessfulUpdate: "No successful update",
+    resetTimePassed: "Reset time passed",
     summaryUsed: "{{source}} {{amount}} usado",
     summaryRemaining: "{{source}} {{amount}} restante",
     options: "Configurações",
@@ -2031,6 +2048,17 @@ export const ptBR: TranslationResources = {
     accessibility: "Janela de contexto {{percentage}}% usada",
   },
   review: {
+    feedback: {
+      send: "Enviar comentários ({{count}})",
+      sending: "Enviando comentários ({{count}})",
+      chooseAgent: "Escolher um agente",
+      sent: "Comentários enviados para {{recipient}}",
+      "no-agents": "Abra uma aba de agente neste espaço de trabalho para enviar comentários.",
+      disconnected: "Conecte-se ao host para enviar comentários.",
+      "no-context": "Os comentários salvos não correspondem mais a este diff.",
+      failed: "Falha ao enviar comentários. Tente novamente.",
+      prompt: "Por favor, atenda a esta revisão de código.",
+    },
     comment: {
       add: "Adicionar comentário de revisão",
       edit: "Editar comentário de revisão",

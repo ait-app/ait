@@ -39,6 +39,11 @@ export function serverInfo(info: Payload, implemented: Set<string>): Payload {
         ? ["project.update"]
         : []),
       ...(has("workspace.script.list.request") ? ["script_status_update"] : []),
+      ...(has("workspace.setup.subscribe.request")
+        ? ["workspace_setup_status"]
+        : has("workspace.setup.status.request")
+          ? ["workspace_setup_progress"]
+          : []),
       ...(features.has("checkout-git-events-v1") && has("checkout.status.get.request")
         ? ["checkout.status.update"]
         : []),
@@ -81,6 +86,8 @@ export function serverInfo(info: Payload, implemented: Set<string>): Payload {
       projectRemove: has("project.remove.request"),
       workspaceRecovery: has("workspace.recovery.inspect.request"),
       workspaceSetupRun: has("workspace.setup.run.request"),
+      workspaceSetupObservation:
+        has("workspace.setup.subscribe.request") && has("workspace.setup.summary.request"),
       workspaceTerminals: has("terminal.list.request"),
       "terminal-restore-modes": has("terminal.subscribe.request"),
       "terminal-input-mode-replay": has("terminal.subscribe.request"),

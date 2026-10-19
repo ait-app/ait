@@ -2,7 +2,10 @@
 
 use std::collections::BTreeSet;
 
+use secrecy::ExposeSecret;
 use serde_json::{Value, json};
+
+use crate::ports::account_usage::{PreparedUsage, UsageIdentity};
 
 use super::{http::Api, runtime::Runtime};
 use crate::{
@@ -19,30 +22,70 @@ pub(in crate::local::deepseek_harness) async fn read(
     client: &DeepSeekHarnessClient,
     cwd: &str,
 ) -> Result<Value, AgentSessionError> {
+    prepare_host(client, cwd).await?.report.await
+}
+
+/// Resolve a temporary Host's account before looking up cached quotas.
+/// The temporary process always closes before the lazy quota request is returned.
+/// # Errors
+/// Returns bounded native transport or credential-resolution errors.
+pub(in crate::local::deepseek_harness) async fn prepare_host(
+    client: &DeepSeekHarnessClient,
+    cwd: &str,
+) -> Result<PreparedUsage<'static>, AgentSessionError> {
     let context = credentials::Context::capture(client, cwd).await;
     let mut runtime = Runtime::open(client, cwd).await?;
-    let result = query(&runtime.api, &context).await;
+    let result = prepare(&runtime.api, &context).await;
     runtime.close().await?;
     result
 }
 
 /// Read only the `DeepSeek` account owned by this Host, independent of its selected model.
-/// Returns safe display fields or a transport/schema error, never native credentials/errors.
+/// # Errors
+/// Returns safe credential, transport or schema failures.
 pub(super) async fn query(
     api: &Api,
     context: &Result<credentials::Context, AgentSessionError>,
 ) -> Result<Value, AgentSessionError> {
+    prepare(api, context).await?.report.await
+}
+
+/// Resolve credentials once so cached and historical facts cannot cross account changes.
+/// # Errors
+/// Returns safe credential-resolution errors; credentials never enter the report.
+pub(super) async fn prepare(
+    api: &Api,
+    context: &Result<credentials::Context, AgentSessionError>,
+) -> Result<PreparedUsage<'static>, AgentSessionError> {
     let context = context.as_ref().map_err(Clone::clone)?;
     match context.resolve(api).await {
-        Ok(Some(key)) => return api_key::read(&key).await,
-        Ok(None) => {}
-        Err(AgentSessionError::Unavailable) => {
-            return Ok(unavailable(
-                "This DSH DeepSeek credential source or endpoint does not support account balance inspection.",
-            ));
+        Ok(Some(key)) => Ok(PreparedUsage {
+            identity: Some(UsageIdentity::from_native(
+                PROVIDER,
+                key.expose_secret().as_bytes(),
+            )),
+            report: Box::pin(async move { api_key::read(&key).await }),
+        }),
+        Ok(None) => {
+            let value = query_web(api).await;
+            Ok(PreparedUsage {
+                identity: None,
+                report: Box::pin(async move { value }),
+            })
         }
-        Err(error) => return Err(error),
+        Err(AgentSessionError::Unavailable) => Ok(PreparedUsage {
+            identity: None,
+            report: Box::pin(async {
+                Ok(unavailable(
+                    "This DSH DeepSeek credential source or endpoint does not support account balance inspection.",
+                ))
+            }),
+        }),
+        Err(error) => Err(error),
     }
+}
+
+async fn query_web(api: &Api) -> Result<Value, AgentSessionError> {
     let response = api
         .optional_call(
             "account/getBalance",

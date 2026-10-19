@@ -283,12 +283,14 @@ describe("Ait host capabilities", () => {
       importSessionWorkspaceTarget: true,
       importSessionSearch: true,
       directorySubscriptions: false,
+      workspaceSetupObservation: true,
       daemonPairing: false,
     });
     expect(value?.features).not.toHaveProperty("plugins");
     expect(value?.sessionEventTypes).toEqual([
       "status.server_info",
       "script_status_update",
+      "workspace_setup_status",
       "status.daemon_config_changed",
       "provider.snapshot.update",
       "agent.attention.required",

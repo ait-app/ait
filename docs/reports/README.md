@@ -1,5 +1,7 @@
 # 验证报告分类索引
 
+- [Paseo 0.12.0 选择性移植与验证](clients/paseo-0.12-port-2026-10-20.md)
+
 文档按当前能力归属分类。历史验证记录只对应各文件注明的源码提交与平台。
 
 - [Ait 0.0.28 客户端告警修复与诊断验证](clients/release-0.0.28-warning-fixes-2026-10-11.md)
@@ -146,6 +148,9 @@
 - [Server 会话空标题修复](providers/server-session-titles.md)
 
 ## 客户端、连接与品牌
+
+- [Paseo 0.12.0 增量借鉴清单](clients/paseo-upstream-opportunities-2026-10-19.md)
+- [Paseo 客户端候选改动源码研究](clients/paseo-client-candidates-2026-10-19.md)
 
 - [Ait 0.1.3 启动拥堵与草稿会话查询诊断](clients/ait-0.1.3-startup-diagnostics-2026-10-14.md)
 

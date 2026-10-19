@@ -1,3 +1,4 @@
+import { ComposerEditingScope } from "@/composer/editing-session";
 import React, { useMemo, type ComponentType } from "react";
 import invariant from "tiny-invariant";
 import {
@@ -165,7 +166,14 @@ export function WorkspacePaneContent({
       id={`WorkspacePaneContent:${paneContextValue.target.kind}:${paneContextValue.tabId}`}
     >
       <PaneProvider value={stablePaneContextValue}>
-        <PaneFocusProvider value={paneFocusValue}>{themedPanel}</PaneFocusProvider>
+        <PaneFocusProvider value={paneFocusValue}>
+          <ComposerEditingScope
+            tabId={paneContextValue.tabId}
+            targetKey={JSON.stringify(paneContextValue.target)}
+          >
+            {themedPanel}
+          </ComposerEditingScope>
+        </PaneFocusProvider>
       </PaneProvider>
     </RenderProfile>
   );
