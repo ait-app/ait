@@ -57,8 +57,10 @@ linux:
   category: Development
   icon: assets
   artifactName: "Ait-${version}-linux-${arch}.${ext}"
-  maintainer: "Necokeine"
+  # Debian requires a contact address; the name matches the macOS copyright holder.
+  maintainer: "Necokeine <necokeine@gmail.com>"
   vendor: "Ait"
+  synopsis: "Ait desktop app"
   target:
     - AppImage
     - tar.gz
