@@ -151,7 +151,7 @@ jobs:
       - name: Submit this verified build to Google Play
         if: inputs.action != 'build-only'
         working-directory: apps/mobile
-        timeout-minutes: 20
+        timeout-minutes: 60
         env:
           EXPO_TOKEN: ${{ secrets.EXPO_TOKEN }}
           EAS_BUILD_ID: ${{ steps.build.outputs.build_id }}
