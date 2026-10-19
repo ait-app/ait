@@ -1,23 +1,10 @@
 name: Publish AUR packages
 
-# ait-bin follows each stable release; ait-git only needs updates when its recipe changes.
-# Pull requests build changed recipes without publishing.
+# ait-bin runs only for a published stable release (or a manual run); a tag push alone is too early,
+# as the release is still a draft without public assets. ait-git is maintained by hand.
 on:
   release:
     types: [published]
-  push:
-    branches: [main]
-    paths:
-      - packaging/aur/**
-      - scripts/aur-publish.sh
-      - .github/workflows/publish-aur.yml
-      - .github/workflows/aur-package.yml
-  pull_request:
-    paths:
-      - packaging/aur/**
-      - scripts/aur-publish.sh
-      - .github/workflows/publish-aur.yml
-      - .github/workflows/aur-package.yml
   workflow_dispatch:
     inputs:
       tag:
@@ -30,17 +17,10 @@ permissions:
 
 jobs:
   ait-bin:
-    if: ${{ github.event_name != 'release' || (!github.event.release.prerelease && github.event.release.tag_name != 'nightly') }}
+    if: ${{ github.event_name == 'workflow_dispatch' || (!github.event.release.prerelease && github.event.release.tag_name != 'nightly') }}
     uses: ./.github/workflows/aur-package.yml
     # Called workflows see no secrets otherwise, including the `aur` environment's own.
     secrets: inherit
     with:
       package: ait-bin
       tag: ${{ github.event.release.tag_name || inputs.tag }}
-
-  ait-git:
-    if: ${{ github.event_name != 'release' }}
-    uses: ./.github/workflows/aur-package.yml
-    secrets: inherit
-    with:
-      package: ait-git

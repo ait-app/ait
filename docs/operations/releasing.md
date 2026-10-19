@@ -132,34 +132,37 @@ Git 工作区，不用于 `makepkg --source` 或单独发布到 AUR；AUR 二进
 ## Arch Linux / AUR
 
 [`packaging/aur/`](../../packaging/aur/) 保存两个 AUR 包的配方，由
-[`publish-aur.yml`](../../.github/workflows/publish-aur.yml) 调用
-[`aur-publish.sh`](../../scripts/aur-publish.sh) 发布，不再手动推送 AUR：
+[`aur-publish.sh`](../../scripts/aur-publish.sh) 发布。`ait-bin` 由
+[`publish-aur.yml`](../../.github/workflows/publish-aur.yml) 自动发布，`ait-git` 由维护者手动发布：
 
 - `ait-bin`：使用对应 GitHub Release 的 `Ait-linux-x86_64.AppImage`。正式版 Release 发布（`release: published`，
   跳过 beta 和 nightly）后自动把 `pkgver` 设为该版本、`pkgrel` 重置为 `1`，校验值取自 Release 的
   `SHA256SUMS`，`ait.desktop` 的校验值按文件重新计算。仓库内 `pkgver`、`pkgrel` 和校验值以 AUR 为准，
-  无需手动修改。同版本修改配方合并到 `main` 后自动递增 `pkgrel`；不会发布比 AUR 更旧的版本。
-- `ait-git`：从 `main` 源码构建，版本号由 `pkgver()` 在用户构建时生成。只有配方变化合并到 `main`
-  时才更新 AUR。
+  无需手动修改。只在正式版 Release 发布或手动运行时执行，推送 tag 时 Release 仍是草稿，不触发；
+  合并到 `main` 和 PR 都不运行。同版本修改配方后手动运行工作流，会先完整构建验证，再自动递增
+  `pkgrel` 推送；不会发布比 AUR 更旧的版本。
+- `ait-git`：从 `main` 源码构建，版本号由 `pkgver()` 在用户构建时生成，用户通过 AUR helper 的
+  `--devel` 获取新提交。AUR 规定不能提交只改 `pkgver` 的 VCS 包更新，因此只有配方本身变化时才更新，
+  由维护者在本机用自己的 AUR SSH key 运行 `build`（完整编译验证）后再 `publish`。
 
-每次更新分两个 job，由 [`aur-package.yml`](../../.github/workflows/aur-package.yml) 执行：
+`ait-bin` 每次更新分两个 job，由 [`aur-package.yml`](../../.github/workflows/aur-package.yml) 执行：
 
 1. 构建：在 `archlinux:base-devel` 容器中完整运行 `makepkg`。构建会执行上游 npm/Cargo 依赖的代码，
    因此此 job 不接触 AUR 私钥。
-2. 发布：构建成功后在另一台 runner 上运行，不构建，只生成 `.SRCINFO`（`ait-git` 另外运行只读取
-   `package.json` 的 `pkgver()`），提交并推送到 AUR。
+2. 发布：构建成功后在另一台 runner 上运行，不构建，只生成 `.SRCINFO`，提交并推送到 AUR。
 
-`.SRCINFO` 不提交到本仓库。修改 `packaging/aur/` 的 PR 只构建、不发布。也可手动运行工作流，
-`tag` 留空时 `ait-bin` 使用最新正式版。
+`.SRCINFO` 不提交到本仓库。也可手动运行工作流，`tag` 留空时使用最新正式版。
 
 AUR 私钥只保存在 GitHub environment `aur` 的 secret `AUR_SSH_PRIVATE_KEY` 中，不设仓库级 secret。
 该 environment 只允许 `main` 分支和 `v*` 标签部署，其他分支上修改过的工作流取不到私钥；
 fork PR 本就没有 secret。对应公钥需加入 AUR 维护者账户（My Account → SSH Public Key）。
-本地验证（`AUR_PUSH=1` 时才推送）：
+本地运行（`AUR_PUSH=1` 时才推送；`publish` 只在配方或版本有变化时提交）：
 
 ```bash
 scripts/aur-publish.sh build ait-bin 0.1.9
 scripts/aur-publish.sh publish ait-bin 0.1.9
+scripts/aur-publish.sh build ait-git
+AUR_PUSH=1 scripts/aur-publish.sh publish ait-git
 ```
 
 安装后可在应用菜单打开 Ait，或运行 `ait`；同时注册 `ait://` 链接。
