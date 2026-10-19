@@ -24,7 +24,7 @@ fn resumed_settlement_discards_prior_failure_and_text() {
             assert!(stream.running);
             assert!(!stream.settled);
             assert!(stream.failure.is_none());
-            assert!(stream.last_text.is_empty());
+            assert_eq!(stream.last_text, "");
             assert_eq!(stream.events.len(), 1);
             assert!(
                 matches!(stream.events.front(), Some(AgentTurnEvent::Timeline(entry))

@@ -11,7 +11,8 @@ fn write_configuration(directory: &std::path::Path, config: &Value) {
     std::fs::write(directory.join("opencode.json"), config.to_string()).unwrap();
 }
 
-async fn request(fixture: &mut Installed, text: &str) -> Value {
+/// Wait for the exact user input to reach the isolated native model.
+pub(super) async fn request(fixture: &mut Installed, text: &str) -> Value {
     tokio::time::timeout(Duration::from_secs(10), async {
         loop {
             let request = fixture.requests.recv().await.expect("native model request");

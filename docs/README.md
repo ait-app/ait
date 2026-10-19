@@ -25,6 +25,8 @@
 
 ## 架构决策
 
+- [ADR-159：OpenCode 优先使用 ACP，按缺失能力补充原生观测](decisions/providers/adr-159-opencode-acp-native-observation.md)：单一 ACP 写入、受管进程的只读元数据、实时用量与压缩回放。
+
 - [ADR-158：Release 附带独立 daemon 归档](decisions/clients/adr-158-standalone-daemon-release.md)：`ait-daemon` 命名、macOS 单独签名公证、Release 校验与 COS 镜像。
 
 - [ADR-157：整图输入与 Codex 用户图片的跨设备展示](decisions/providers/adr-157-codex-user-image-projection.md)：传输分块与整图输入的边界、超预算整图压缩、旧会话兼容及跨设备预览。
@@ -75,7 +77,7 @@
 - [ADR-123：客户端仅保留浏览器统一登录](decisions/clients/adr-123-browser-only-account-login.md)：删除移动端与 Desktop 的原 AIT 密码表单、命令和共享登录方法，服务能力检查失败不再回退。
 - [ADR-122（Provider）：Codex Auto-review 的 computer use 工具批准](decisions/providers/adr-122-codex-computer-use-approval.md)：原生插件逐工具预批准；档位范围与访问批准由 ADR-149 修订。
 - [ADR-122（客户端）：在线服务主机进入客户端持久注册表](decisions/clients/adr-122-persistent-online-service-hosts.md)：显式添加、多主机恢复、服务绑定及独立删除。
-- [ADR-121：ACP 轮次关联与原生历史结算](decisions/providers/adr-121-acp-turn-history-reconciliation.md)：实时与重放共享轮次身份，完整原生历史在终态前原子校正消息顺序。
+- [ADR-121：ACP 轮次关联与原生历史结算](decisions/providers/adr-121-acp-turn-history-reconciliation.md)：实时与重放共享轮次身份，压缩后的自动继续消息归入同一输入，完整原生历史在终态前原子校正消息顺序。
 - [ADR-120：单连接启动请求的有界排队](decisions/daemon/adr-120-single-connection-startup-admission.md)：为正常启动突发保留 16 个组内槽位，维持超量拒绝、消息顺序和 Ping 可用性。
 - [ADR-119：原生账号用量与 Codex 速度目录](decisions/providers/adr-119-native-account-usage-and-codex-speed.md)：会话实际账号、只读凭据边界、主机缓存、Fast 别名去重与 Speed 直接开关。
 - [ADR-118：摘要接口归 model，配置文件适配归 persistence](decisions/daemon/adr-118-summary-contracts-and-persistence-configuration.md)：`SummaryGenerator`/`SummaryConfiguration` 移入 `model::summary`，daemon 注入 persistence 的配置适配器并删除自有实现。
@@ -184,6 +186,8 @@
 
 - [提问弹层响应超时与重试](reports/clients/question-response-timeout-2026-10-13.md)：5 秒恢复按钮、保留填写内容、清理权限请求占用，以及真实丢包重试验证。
 - [定时任务列表 Host 展示去重](reports/clients/schedule-host-filter-2026-10-12.md)：按主机筛选后省略重复主机名，以及返回全部主机视图的浏览器回归。
+- [OpenCode 2.x ACP 复查](reports/providers/opencode-2x-acp-2026-10-19.md)：2.0.25 / 2.0.32 的隔离回归、独立压缩轮次修复和原生协议缺口。
+- [OpenCode 长会话、用量与压缩排查](reports/providers/opencode-auto-compaction-2026-10-19.md)：gpu-desktop 原生证据、零用量纠正、限制结束提示与自动压缩结算回归。
 - [OpenCode 模型目录与执行失败修复](reports/providers/opencode-catalog-readiness-2026-10-10.md)：2.0.20 复现、配置确认、数据库冷启动竞争修复与原生流程验证。
 - [Ait 0.0.28 客户端告警修复与诊断验证](reports/clients/release-0.0.28-warning-fixes-2026-10-11.md)：共享许可等待、事件协商、界面告警与错误上下文。
 - [本机 Changes 刷新断线：修复验证](reports/workspace/changes-refresh-transport-2026-10-11.md)：Git 任务额度隔离、有界 diff 输出等待与控制响应回归。

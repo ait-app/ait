@@ -60,14 +60,33 @@ pub(super) async fn replay(
     Ok((config::state(&result)?, stream))
 }
 
-/// Restore accepted input identity for every replayed item in its native user-message group.
+/// Collect native inputs and standalone compactions before replay entries are drained.
+pub(super) fn identities(stream: &Stream) -> BTreeSet<String> {
+    stream
+        .users
+        .iter()
+        .cloned()
+        .chain(stream.events.iter().filter_map(|event| {
+            let crate::ports::agent_session::AgentTurnEvent::Timeline(entry) = event else {
+                return None;
+            };
+            entry.item["compactionId"].as_str().map(str::to_owned)
+        }))
+        .collect()
+}
+
+/// Restore accepted input identity for each user group and standalone native compaction.
 pub(super) fn entries(stream: &mut Stream, clients: &BTreeMap<String, String>) -> Vec<NativeItem> {
     stream
         .events
         .drain(..)
         .filter_map(|event| {
             if let crate::ports::agent_session::AgentTurnEvent::Timeline(mut entry) = event {
-                if let Some(turn) = entry.turn_id.as_ref().and_then(|id| clients.get(id)) {
+                if let Some(turn) = entry.item["compactionId"]
+                    .as_str()
+                    .and_then(|id| clients.get(id))
+                    .or_else(|| entry.turn_id.as_ref().and_then(|id| clients.get(id)))
+                {
                     entry.turn_id = Some(turn.clone());
                 }
                 if entry.item["type"] == "user_message"
@@ -170,7 +189,7 @@ pub(super) async fn inspect(
         config: StoredAgentConfig::default(),
     };
     config::validate_spec(&spec)?;
-    let (mut transport, _) = launcher::spawn(client, cwd, &spec.config).await?;
+    let (mut transport, _, source) = launcher::observed(client, cwd, &spec.config).await?;
     let result = async {
         let descriptors = list(
             &mut transport,
@@ -192,17 +211,30 @@ pub(super) async fn inspect(
         )
         .await?;
         let clients = super::session::clients(handle)?;
-        let entries = entries(&mut stream, &clients);
+        let mut entries = entries(&mut stream, &clients);
+        let mut usage = None;
+        if let Some(source) = source {
+            if let Ok(observation) = source.bind(&handle.session_id, cwd).await {
+                observation.history(&mut entries, &clients);
+                usage = observation.usage();
+            } else {
+                tracing::warn!("OpenCode native history metadata unavailable");
+            }
+        }
         (
             descriptor.first_prompt_preview,
             descriptor.last_prompt_preview,
         ) = previews::from_entries(&entries);
         let config = config::stored(&options);
+        let mut resume_metadata = BTreeMap::from([(
+            "opencode".into(),
+            json!({"config":config,"model":config.model,"clients":clients}),
+        )]);
+        if let Some(usage) = usage {
+            resume_metadata.insert("lastUsage".into(), json!(usage));
+        }
         Ok(SessionHistory {
-            resume_metadata: BTreeMap::from([(
-                "opencode".into(),
-                json!({"config":config,"model":config.model,"clients":clients}),
-            )]),
+            resume_metadata,
             parent_id: None,
             created_at: chrono::Utc::now().to_rfc3339(),
             descriptor,

@@ -5,7 +5,7 @@ use domain::agent_runtime::StoredAgentConfig;
 use serde_json::{Value, json};
 use tokio::{io::AsyncReadExt, process::Command, time::Instant};
 
-use super::{OpenCodeClient, config};
+use super::{OpenCodeClient, config, observation::Source};
 use crate::{local::acp_transport::Transport, ports::agent_session::AgentSessionError};
 
 /// Read and validate the installed CLI version; unsupported releases return unavailable.
@@ -51,7 +51,17 @@ pub(super) async fn spawn(
     cwd: &str,
     selected: &StoredAgentConfig,
 ) -> Result<(Transport, Value), AgentSessionError> {
-    launch(client, cwd, selected, false).await
+    let (transport, capabilities, _) = launch(client, cwd, selected, false, false).await?;
+    Ok((transport, capabilities))
+}
+
+/// Initialize ACP with a read-only supplement only for its verified missing metadata profile.
+pub(super) async fn observed(
+    client: &OpenCodeClient,
+    cwd: &str,
+    selected: &StoredAgentConfig,
+) -> Result<(Transport, Value, Option<Source>), AgentSessionError> {
+    launch(client, cwd, selected, false, true).await
 }
 
 /// Initialize an owned tool-disabled ACP child; propagate configuration and launch failures.
@@ -60,7 +70,8 @@ pub(super) async fn auxiliary(
     cwd: &str,
     selected: &StoredAgentConfig,
 ) -> Result<(Transport, Value), AgentSessionError> {
-    launch(client, cwd, selected, true).await
+    let (transport, capabilities, _) = launch(client, cwd, selected, true, false).await?;
+    Ok((transport, capabilities))
 }
 
 async fn launch(
@@ -68,7 +79,8 @@ async fn launch(
     cwd: &str,
     selected: &StoredAgentConfig,
     auxiliary: bool,
-) -> Result<(Transport, Value), AgentSessionError> {
+    observe: bool,
+) -> Result<(Transport, Value, Option<Source>), AgentSessionError> {
     let deadline = Instant::now() + client.startup_timeout;
     let version = tokio::time::timeout_at(deadline, version(client, cwd))
         .await
@@ -80,6 +92,14 @@ async fn launch(
     let legacy = version.starts_with("1.");
     let mut command = Command::new(&client.program);
     command.arg("acp").envs(&client.environment);
+    let mut observation = if observe {
+        Source::prepare(&version, client.deadline)?
+    } else {
+        None
+    };
+    if let Some(source) = &observation {
+        source.configure(&mut command)?;
+    }
     if legacy {
         // Native 1.x excludes question in ACP. Do not enable an unanswerable native question.
         command.env("OPENCODE_ENABLE_QUESTION_TOOL", "false");
@@ -115,6 +135,9 @@ async fn launch(
         )
     };
     let remaining = deadline.saturating_duration_since(Instant::now());
+    if let Some(source) = &mut observation {
+        source.release();
+    }
     let mut transport = Transport::spawn(command, cwd, remaining, "opencode")?;
     let initialized = if let Ok(result) = tokio::time::timeout_at(
         deadline,
@@ -145,7 +168,11 @@ async fn launch(
         listing: capabilities["sessionCapabilities"]["list"].is_object(),
         deletion: capabilities["sessionCapabilities"]["delete"].is_object(),
     });
-    Ok((transport, initialized["agentCapabilities"].clone()))
+    Ok((
+        transport,
+        initialized["agentCapabilities"].clone(),
+        observation,
+    ))
 }
 
 fn overlay(

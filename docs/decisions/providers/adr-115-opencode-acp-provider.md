@@ -3,6 +3,7 @@
 - 状态：Accepted，2026-10-09。
 - 范围：`crates/provider` 的 OpenCode adapter；修订 [ADR-074](adr-074-opencode-native-provider.md) 和 [ADR-110](adr-110-opencode-private-protocol-boundary.md) 的传输与生命周期实现。
 - 后续修订：[ADR-135](adr-135-opencode-catalog-readiness.md) 更新目录就绪与异步配置确认规则；[ADR-143](adr-143-opencode-2-0-25-compatibility.md) 将已验证的 2.x 最低版本修正为 2.0.25。
+- 观测修订：[ADR-159](adr-159-opencode-acp-native-observation.md) 在已验证的 1.18 profile 中补充 ACP 缺失的原生只读事实。
 - 约束：Rust、现有 `AgentClient` / `AgentSession` ports、原生认证与原生历史所有权保持不变。
 
 ## 背景
@@ -21,7 +22,7 @@
    兼容 OpenCode 1.x / 2.x，按原生握手检查会话能力；不因缺少可选表单或删除能力拒绝普通会话。
    版本号只用于识别原生配置格式和已验证的表单实现，不按小版本号整体拒绝。
    模型、模式、会话加载、列表与删除按实际原生响应处理；界面仅显示当前安装的能力，不呈现与另一版的比较或兼容模式。
-   没有 HTTP/SSE 回退或自动重发。
+   执行没有 HTTP/SSE 回退或自动重发；缺失观测仅按 ADR-159 补充。
    OpenCode 自己拥有内部 server、模型调用、原生工具、认证和原生存储。
    Ait 不连接或修改用户正在运行的原生进程，不向项目写入工具、配置或脚本。
 2. 有界 stdio transport 与 DSH 的既有 ACP profile 共用，launcher 参数保持各 provider 自有。
@@ -34,6 +35,9 @@
    1.x 保留原生 ACP 不提供 question 工具的行为，并关闭强制启用该工具的环境开关。
    尚无表单回调的早期 2.0.x 在该子进程内拒绝 question，不替原生实现表单协议。
    拒绝审批与主动取消分别发送各自协议；终态以原生 prompt 的 `stopReason` 为准。
+   只有 `end_turn` 表示正常完成；`max_tokens`、`max_turn_requests` 和 `refusal`
+   结算历史后发布带固定原因的失败提示，保留用户下一次输入继续原会话的能力。
+   不将模型限额或拒绝当作成功，也不自动重发输入。
 4. `session/cancel` 的写入成功不等于任务已结束。等待原生 prompt 响应，并重放持久化历史后，才发布终态和释放下一个输入。
    未知接纳结果、协议错误或重放失败使该连接失效，不重发 prompt。
    关闭时排空事件背压、尝试原生取消并回收进程；无法确认结算时返回失败。
@@ -65,6 +69,10 @@
 - ACP 重放不提供每条消息的创建时间。展示条目使用收到通知的时间；timeline 对已有身份保留首次存储时间。
   原生会话活动时间来自 `session/list.updatedAt`。导入的 creation 时间在原生协议缺失时使用观察时间，不能当作原生历史创建时间。
 - ACP 不提供完整的外部 writer 状态查询。原生 prompt 拒绝或错误必须直接结算，不能通过重新提交来探测或补救。
+- OpenCode 1.18.4 的 ACP 只在整轮结束时发送用量，末尾中断占位消息还可能上报零计数。
+  ADR-159 的只读原生观测补充实时用量与压缩事实，并保留最近有效请求的计数。
+  仅有零计数且没有其他原生事实时映射为未知，不凭聊天长度估算 token。
+  其他版本继续消费实际提供的 ACP 用量和 marker，按能力与测试结果维护兼容边界。
 - 原生 MCP 配置继承 OpenCode 项目设置。Ait 仍不宣称支持每个会话动态注入 MCP server 或原生 rewind。
 - 原生存储兼容与升级属于 OpenCode；升级 CLI 前应遵循其官方说明，Ait 不替换本机安装。
 

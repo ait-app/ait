@@ -1,6 +1,23 @@
 use super::*;
 
 #[test]
+fn native_usage_keeps_positive_counts_and_compaction_reductions_without_claiming_zero() {
+    let mut stream = Stream::default();
+    for used in [629_883, 12_000, 0] {
+        stream
+            .update(&json!({"sessionUpdate":"usage_update", "used":used,
+                "size":1_000_000, "cost":{"currency":"USD", "amount":0.02}}))
+            .unwrap();
+        let Some(AgentTurnEvent::Usage(usage)) = stream.events.pop_front() else {
+            panic!("usage snapshot");
+        };
+        assert_eq!(usage.context_window_used_tokens, (used > 0).then_some(used));
+        assert_eq!(usage.context_window_max_tokens, Some(1_000_000));
+        assert_eq!(usage.total_cost_usd, Some(0.02));
+    }
+}
+
+#[test]
 fn native_compaction_markers_are_visible_and_pair_by_identity() {
     for terminal in ["completed", "failed"] {
         let mut stream = Stream::default();

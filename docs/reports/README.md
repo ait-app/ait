@@ -90,6 +90,8 @@
 ## Provider、Agent 与会话
 
 - [Pi 原生 RPC Provider 验证](providers/pi.md)
+- [OpenCode 2.x ACP 复查](providers/opencode-2x-acp-2026-10-19.md)
+- [OpenCode 长会话、用量与压缩排查](providers/opencode-auto-compaction-2026-10-19.md)
 - [OpenCode ACP 冷启动预算：PR 覆盖率证据](providers/opencode-acp-cold-start-coverage-2026-10-16.json)
 - [图片输入自动压缩、分片与接纳预算修复](providers/image-input-admission-2026-10-13.md)
 - [Codex MCP 结构化大结果导致会话失败](providers/codex-mcp-large-structured-results-2026-10-12.md)

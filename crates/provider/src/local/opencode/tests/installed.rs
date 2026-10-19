@@ -17,7 +17,10 @@ use tokio_util::task::AbortOnDropHandle;
 use super::*;
 use crate::service::agent_manager::ownership::Owners;
 
+mod compaction;
 mod robustness;
+mod usage;
+mod v2;
 mod workflows;
 
 #[derive(Debug)]
@@ -101,7 +104,7 @@ async fn installed(question: bool) -> Installed {
 
 async fn model(State(state): State<Arc<Model>>, Json(request): Json<Value>) -> Response {
     let _ = state.requests.send(request.clone());
-    if let Some(response) = controlled_response(&request).await {
+    if let Some(response) = workflow_response(&request, &state).await {
         return response;
     }
     let calls = &state.calls;
@@ -167,6 +170,7 @@ async fn model(State(state): State<Arc<Model>>, Json(request): Json<Value>) -> R
         calls.fetch_add(1, Ordering::SeqCst);
     }
     if tool_name == "question"
+        && is_question_prompt
         && !question
         && request["messages"]
             .as_array()
@@ -195,10 +199,24 @@ async fn model(State(state): State<Arc<Model>>, Json(request): Json<Value>) -> R
     streamed_response(&delta, question)
 }
 
+async fn workflow_response(request: &Value, state: &Model) -> Option<Response> {
+    if let Some(response) = compaction::model_response(request, state) {
+        return Some(response);
+    }
+    if let Some(response) = usage::model_response(request).await {
+        return Some(response);
+    }
+    controlled_response(request).await
+}
+
 fn streamed_response(delta: &Value, tool_call: bool) -> Response {
+    streamed_response_with_usage(delta, tool_call, 10)
+}
+
+fn streamed_response_with_usage(delta: &Value, tool_call: bool, input_tokens: u64) -> Response {
     let chunks = [
         json!({"choices":[{"index":0,"delta":delta,"finish_reason":null}]}),
-        json!({"choices":[{"index":0,"delta":{},"finish_reason":if tool_call {"tool_calls"} else {"stop"}}],"usage":{"prompt_tokens":10,"completion_tokens":5,"total_tokens":15}}),
+        json!({"choices":[{"index":0,"delta":{},"finish_reason":if tool_call {"tool_calls"} else {"stop"}}],"usage":{"prompt_tokens":input_tokens,"completion_tokens":5,"total_tokens":input_tokens + 5}}),
     ];
     (
         [("content-type", "text/event-stream")],
@@ -329,7 +347,7 @@ async fn installed_acp_five_sessions_and_native_model_error_preserve_history_and
     {
         "OpenCode's free tier can only be used from within OpenCode"
     } else {
-        "Authentication required: provider authentication required"
+        crate::ports::diagnostics::Category::Authentication.message()
     };
     assert!(
         session.failure_message().unwrap().contains(expected),
