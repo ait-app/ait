@@ -1,6 +1,6 @@
 # ADR-158：Release 附带独立 daemon 归档
 
-状态：已接受
+状态：已接受；nightly 规则经 [ADR-163](adr-163-nightly-standalone-daemon.md) 修订，下文保留原始决策记录。
 
 [ADR-053](adr-053-paseo-desktop-release.md) 只发布桌面安装包，daemon 仅位于安装包内部。[无人值守 daemon](../../operations/headless-daemon.md) 面向没有桌面环境的 Linux/macOS 主机，此前只能从源码构建。
 

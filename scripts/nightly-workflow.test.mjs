@@ -46,6 +46,26 @@ test("nightly Linux desktop builds its daemon on the release glibc baseline", ()
   );
 });
 
+test("nightly packages both standalone daemons and explains the macOS quarantine", () => {
+  const steps = workflow.jobs.desktop.steps;
+  const names = steps.map((step) => step.name);
+  const pack = steps.find((step) => step.name === "Package standalone daemon");
+  assert.equal(pack.if, "env.NIGHTLY_BUILD_LABEL != ''");
+  assert.match(pack.env.DAEMON_BIN, /target\/\$\{\{ matrix.rust_target \}\}\/release\/daemon$/);
+  assert.match(
+    pack.run,
+    /release-assets\.mjs daemon .* release-assets --nightly "\$NIGHTLY_BUILD_LABEL"/,
+  );
+  assert.match(pack.run, /codesign --verify/);
+  // The archive must be in release-assets before the artifact upload picks it up.
+  const upload = steps.findIndex((step) => step.uses?.startsWith("actions/upload-artifact@"));
+  assert(names.indexOf("Package standalone daemon") < upload);
+  const publish = workflow.jobs["nightly-publish"].steps.find(
+    (step) => step.name === "Publish latest nightly",
+  );
+  assert.match(publish.run, /xattr -d com\.apple\.quarantine ait-daemon/);
+});
+
 const context = { repo: { owner: "ait-app", repo: "ait" }, sha: "current", runId: 42 };
 
 async function runScript(step, github, outputs = {}, controller = control) {

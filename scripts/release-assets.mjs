@@ -41,17 +41,27 @@ export function releaseAssetNames(platform, version, buildLabel) {
 const daemonTargets = { linux: "linux-x64", mac: "macos-arm64" };
 export const daemonExecutable = "ait-daemon";
 
-export function daemonAssetName(platform, version) {
+// Nightly archives carry the build label, like the nightly desktop packages.
+export function daemonAssetName(platform, version, buildLabel) {
   releaseChannel(version);
+  if (buildLabel !== undefined)
+    assert.match(buildLabel, /^[0-9a-f]{8}-\d{4}-\d{2}-\d{2}$/, "Invalid nightly build label");
   assert(daemonTargets[platform], `Unsupported daemon platform: ${platform}`);
-  return `Ait-${version}-daemon-${daemonTargets[platform]}.tar.gz`;
+  return `Ait-${buildLabel ?? version}-daemon-${daemonTargets[platform]}.tar.gz`;
 }
 
-export const daemonAssetNames = (version) =>
-  Object.keys(daemonTargets).map((platform) => daemonAssetName(platform, version));
+export const daemonAssetNames = (version, buildLabel) =>
+  Object.keys(daemonTargets).map((platform) => daemonAssetName(platform, version, buildLabel));
 
-export async function packDaemonAsset({ platform, version, binary, destination, license }) {
-  const name = daemonAssetName(platform, version);
+export async function packDaemonAsset({
+  platform,
+  version,
+  binary,
+  destination,
+  license,
+  buildLabel,
+}) {
+  const name = daemonAssetName(platform, version, buildLabel);
   // Old immutable tags name the binary `server`; only the reported version must match.
   const reported = execFileSync(binary, ["--version"], {
     encoding: "utf8",
@@ -135,7 +145,6 @@ export async function verifyReleaseAssets({
   buildLabel,
 }) {
   assert(!(includeAndroid && buildLabel), "Nightly builds support desktop platforms only");
-  assert(!(includeDaemon && buildLabel), "Nightly builds do not publish standalone daemons");
   const desktop = [
     ...releaseAssetNames("linux", version, buildLabel),
     ...releaseAssetNames("mac", version, buildLabel),
@@ -143,7 +152,8 @@ export async function verifyReleaseAssets({
   const required = [
     ...desktop,
     ...(includeAndroid ? releaseAssetNames("android", version) : []),
-    ...(includeDaemon ? daemonAssetNames(version) : []),
+    // Nightly always carries both daemons; releases opt in, so Android repairs can skip them.
+    ...(includeDaemon || buildLabel ? daemonAssetNames(version, buildLabel) : []),
   ];
   // Android repairs re-verify stable releases that may or may not carry daemon archives.
   const allowed = new Set([
@@ -206,7 +216,7 @@ async function main() {
         buildLabel,
       }),
     );
-  } else if (command === "daemon" && args.length === 4 && !buildLabel) {
+  } else if (command === "daemon" && args.length === 4) {
     const [platform, version, binary, destination] = args;
     console.log(
       await packDaemonAsset({
@@ -215,6 +225,7 @@ async function main() {
         binary,
         destination,
         license: "LICENSE",
+        buildLabel,
       }),
     );
   } else if (
@@ -235,7 +246,7 @@ async function main() {
     );
   } else {
     throw new Error(
-      "Usage: release-assets.mjs collect linux|mac VERSION SOURCE DEST [--nightly LABEL] | daemon linux|mac VERSION BINARY DEST | verify VERSION DIRECTORY [--android] [--daemon] | verify VERSION DIRECTORY --nightly LABEL",
+      "Usage: release-assets.mjs collect linux|mac VERSION SOURCE DEST [--nightly LABEL] | daemon linux|mac VERSION BINARY DEST [--nightly LABEL] | verify VERSION DIRECTORY [--android] [--daemon] | verify VERSION DIRECTORY --nightly LABEL",
     );
   }
 }
