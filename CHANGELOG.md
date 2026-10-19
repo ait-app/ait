@@ -1,5 +1,11 @@
 # Ait changelog
 
+## 0.1.11 - 2026-10-20
+
+- Roll back the diagnostics and restart-recovery changes from PR #381 after an iOS startup regression. Restore the previous client error handling, SDK diagnostic logging, Codex failure classification and daemon session startup behavior.
+- Remove global startup error collection, unified diagnostic copying/export, native Codex error details and automatic interrupted-turn recovery. Preserve later independent Markdown, panel editing, usage and setup observation improvements.
+- This release distributes desktop clients and standalone daemons; the iOS startup fix requires a separately requested mobile build.
+
 ## 0.1.10 - 2026-10-20
 
 - Unify Markdown rendering across clients, improve image and file link handling, and preserve chat search, code highlighting, copying and Mermaid diagrams.
