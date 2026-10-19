@@ -87,21 +87,19 @@ async function receiveAccountSnapshot(
         (host) => (snapshot.status === "online" && !snapshot.stale) || confirmed.has(host.host_id),
       )
     : [];
-  const routableHosts = freshHosts.filter((host): host is AccountHost & { server_id: string } =>
-    Boolean(
-      host.online &&
-      host.server_id &&
-      host.instance_id &&
-      host.relay_modes.includes("ait-rust-single-v1"),
-    ),
+  const boundHosts = freshHosts.filter((host): host is AccountHost & { server_id: string } =>
+    Boolean(host.server_id),
+  );
+  const routableHosts = boundHosts.filter(
+    (host) => host.online && host.instance_id && host.relay_modes.includes("ait-rust-single-v1"),
   );
   if (snapshot.status === "online" || (active && freshHosts.length > 0)) {
     store.setAccountRelayCenter(snapshot.center);
-    await store.addDiscoveredAccountRelayHosts(routableHosts, snapshot.center, current);
+    await store.addDiscoveredAccountRelayHosts(boundHosts, snapshot.center, current);
   } else if (snapshot.status === "logged_out") store.setAccountRelayCenter(null);
   if (current()) {
     const available = routableHosts.map((host) => host.server_id);
-    if (active && snapshot.stale) {
+    if (snapshot.status !== "logged_out" && snapshot.stale) {
       // A status-channel reconnect does not invalidate healthy data connections.
       // Explicitly confirmed offline events still take effect immediately.
       store.setAvailableAccountRelayHosts(

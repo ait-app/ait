@@ -72,12 +72,20 @@ describe("native mobile account commands", () => {
           instance_id: "second-instance",
           relay_modes: ["ait-rust-single-v1"],
         },
+        {
+          host_id: "offline",
+          server_id: "offline-server",
+          name: "Offline",
+          online: false,
+          instance_id: null,
+          relay_modes: [],
+        },
       ];
       mocks.manager.snapshot.mockReturnValue({
         status: "online",
         center: "https://center.test/api",
         selected: null,
-        hosts,
+        hosts: [...hosts, { host_id: "unbound", server_id: null, name: "Unbound", online: false }],
       });
       await accountCommand("account_login_hosted");
       expect(mocks.discover).toHaveBeenCalledExactlyOnceWith(
@@ -85,6 +93,7 @@ describe("native mobile account commands", () => {
         "https://center.test/api",
         expect.any(Function),
       );
+      expect(mocks.setAvailable).toHaveBeenCalledExactlyOnceWith(["first-server", "second-server"]);
       expect(mocks.manager.select).not.toHaveBeenCalled();
     },
   );
