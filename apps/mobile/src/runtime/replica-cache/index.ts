@@ -275,9 +275,6 @@ const WorkspaceScriptSchema = z.strictObject({
   type: z.enum(["script", "service"]),
   hostname: z.string(),
   port: z.number().int().positive().nullable(),
-  localProxyUrl: z.string().nullable().optional(),
-  publicProxyUrl: z.string().nullable().optional(),
-  proxyUrl: z.string().nullable(),
   lifecycle: z.enum(["running", "stopped"]),
   health: z.enum(["healthy", "unhealthy"]).nullable(),
   exitCode: z.number().nullable(),
@@ -297,9 +294,9 @@ const WorkspaceGitRuntimeSchema = z
   .nullable()
   .optional();
 
-// Older rows omitted initialBranch while retaining their directory cursor. Refetch those
-// workspaces once so reset can use the daemon's saved branch even without a new directory event.
-const WORKSPACE_PROJECTION_VERSION = 1;
+// Refetch older workspace rows and their directory cursor after removing proxy URL fields.
+// Agent, project and timeline rows retain their current formats.
+const WORKSPACE_PROJECTION_VERSION = 2;
 const StoredWorkspaceSchema = z.strictObject({
   projectionVersion: z.literal(WORKSPACE_PROJECTION_VERSION),
   id: z.string(),
@@ -726,9 +723,6 @@ function serializeWorkspace(workspace: WorkspaceDescriptor): StoredWorkspace {
       type: script.type,
       hostname: script.hostname,
       port: script.port,
-      ...(script.localProxyUrl !== undefined ? { localProxyUrl: script.localProxyUrl } : {}),
-      ...(script.publicProxyUrl !== undefined ? { publicProxyUrl: script.publicProxyUrl } : {}),
-      proxyUrl: script.proxyUrl,
       lifecycle: script.lifecycle,
       health: script.health,
       exitCode: script.exitCode,

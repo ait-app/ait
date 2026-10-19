@@ -243,9 +243,6 @@ pub fn script(snapshot: ScriptSnapshot) -> WorkspaceScript {
         },
         hostname: snapshot.hostname,
         port: snapshot.port,
-        local_proxy_url: None,
-        public_proxy_url: None,
-        proxy_url: None,
         lifecycle: if snapshot.running {
             WorkspaceScriptLifecycle::Running
         } else {

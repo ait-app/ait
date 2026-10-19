@@ -10,7 +10,6 @@ function script(overrides: Partial<Script>): Script {
     type: "service",
     hostname: "localhost",
     port: null,
-    proxyUrl: null,
     lifecycle: "running",
     health: null,
     exitCode: null,

@@ -747,7 +747,6 @@ export const ru: TranslationResources = {
     scripts: {
       title: "Скрипты",
       actions: {
-        chooseUrl: "Выбрать URL",
         copyUrl: "Скопировать URL",
         openService: "Открыть сервис",
         restart: "Перезапустить",
@@ -763,13 +762,7 @@ export const ru: TranslationResources = {
         stopScript: "Остановить скрипт {{scriptName}}",
         restartScript: "Перезапустить скрипт {{scriptName}}",
         copyUrl: "Скопировать URL скрипта {{scriptName}}",
-        chooseUrl: "Выбрать URL для {{scriptName}}",
         script: "Скрипт {{scriptName}}",
-      },
-      routes: {
-        public: "Обратный прокси",
-        paseo: "Запоминающийся адрес",
-        direct: "Прямой адрес",
       },
       states: {
         exitCode: "Код выхода: {{code}}",

@@ -388,9 +388,14 @@ describe("ReplicaCache", () => {
     },
   );
 
-  it.each(["directory", "workspace"] as const)(
-    "refetches old workspace projections and their cursor through %s reads",
-    async (readMode) => {
+  it.each([
+    { readMode: "directory", projectionVersion: undefined },
+    { readMode: "workspace", projectionVersion: undefined },
+    { readMode: "directory", projectionVersion: 1 },
+    { readMode: "workspace", projectionVersion: 1 },
+  ] as const)(
+    "refetches workspace projection $projectionVersion and its cursor through $readMode reads",
+    async ({ readMode, projectionVersion }) => {
       const storage = new MemoryStorage();
       const writer = createCache(storage);
       const checkpoint = {
@@ -408,8 +413,8 @@ describe("ReplicaCache", () => {
       const key = `${SERVER_ID}:workspace:${workspace.id}`;
       const row = storage.rows.get(key)!;
       const payload = JSON.parse(row.payload);
-      delete payload.projectionVersion;
-      delete payload.initialBranch;
+      payload.projectionVersion = projectionVersion;
+      if (projectionVersion === undefined) delete payload.initialBranch;
       storage.rows.set(key, { ...row, payload: JSON.stringify(payload) });
 
       const reader = createCache(storage);

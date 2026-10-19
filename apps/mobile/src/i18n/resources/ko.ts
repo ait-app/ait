@@ -739,7 +739,6 @@ export const ko: TranslationResources = {
     scripts: {
       title: "스크립트",
       actions: {
-        chooseUrl: "URL를 선택하세요",
         copyUrl: "URL 복사",
         openService: "서비스 보기",
         restart: "다시 시작",
@@ -755,13 +754,7 @@ export const ko: TranslationResources = {
         stopScript: "{{scriptName}} 중지",
         restartScript: "{{scriptName}} 다시 시작",
         copyUrl: "{{scriptName}} URL 복사",
-        chooseUrl: "{{scriptName}}의 URL 선택",
         script: "{{scriptName}} 스크립트",
-      },
-      routes: {
-        public: "역방향 프록시",
-        paseo: "간편 주소",
-        direct: "직접",
       },
       states: {
         exitCode: "종료 {{code}}",

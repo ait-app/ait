@@ -71,15 +71,12 @@ fn setup_snapshot_matches_paseo_worktree_detail_shape() {
 }
 
 #[test]
-fn script_payload_materializes_paseo_defaults() {
+fn script_payload_omits_retired_proxy_fields() {
     let value = serde_json::to_value(WorkspaceScript {
         script_name: "dev".to_owned(),
         kind: WorkspaceScriptType::Service,
         hostname: "dev".to_owned(),
         port: Some(3000),
-        local_proxy_url: None,
-        public_proxy_url: None,
-        proxy_url: None,
         lifecycle: WorkspaceScriptLifecycle::Stopped,
         health: (),
         exit_code: None,
@@ -88,7 +85,8 @@ fn script_payload_materializes_paseo_defaults() {
     .expect("script");
     assert_eq!(value["type"], "service");
     assert_eq!(value["lifecycle"], "stopped");
-    assert!(value["proxyUrl"].is_null());
+    assert!(value.get("proxyUrl").is_none());
+    assert!(value.get("publicProxyUrl").is_none());
     assert!(value["exitCode"].is_null());
     assert!(value["terminalId"].is_null());
     assert!(value["health"].is_null());

@@ -197,7 +197,7 @@ pub struct ProjectPlacementPayload {
     pub checkout: ProjectCheckoutLitePayload,
 }
 
-/// Rust equivalent of Paseo `WorkspaceScriptPayload`, including its compatibility fields.
+/// Workspace script state retained by the current Ait wire protocol.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub(crate) struct WorkspaceScriptPayload {
@@ -211,13 +211,6 @@ pub(crate) struct WorkspaceScriptPayload {
     /// Paseo `port` field; see the pinned source schema.
     #[serde(deserialize_with = "serde_fields::nullable_positive_integer")]
     port: Option<u64>,
-    /// Paseo `localProxyUrl` field; see the pinned source schema.
-    local_proxy_url: Option<String>,
-    /// Paseo `publicProxyUrl` field; see the pinned source schema.
-    public_proxy_url: Option<String>,
-    /// Paseo `proxyUrl` field; see the pinned source schema.
-    #[serde(default)]
-    proxy_url: Option<String>,
     /// Paseo `lifecycle` field; see the pinned source schema.
     lifecycle: WorkspaceScriptLifecycle,
     /// Paseo `health` field; see the pinned source schema.

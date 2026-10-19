@@ -25,6 +25,8 @@
 
 ## 架构决策
 
+- [ADR-161：移除 Workspace 服务代理 URL 字段](decisions/clients/adr-161-remove-workspace-service-proxy-urls.md)：删除三种旧代理 URL、路由选择和兼容回退，保留在线中继回环转发，并重建旧工作区缓存。
+
 - [ADR-160：清理旧公钥中继协议与测试残留](decisions/clients/adr-160-remove-legacy-relay-protocol.md)：删除无生产调用的协议与废弃配对测试，记录保留原始测试夹具、旧连接拒绝和存储丢弃的依据。
 
 - [ADR-159：OpenCode 优先使用 ACP，按缺失能力补充原生观测](decisions/providers/adr-159-opencode-acp-native-observation.md)：单一 ACP 写入、受管进程的只读元数据、实时用量与压缩回放。

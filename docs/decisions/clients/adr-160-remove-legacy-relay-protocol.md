@@ -2,6 +2,7 @@
 
 - 状态：已实现
 - 日期：2026-10-19
+- 后续：[ADR-161](adr-161-remove-workspace-service-proxy-urls.md) 移除三种服务代理 URL 及对应的兼容测试，在线中继继续使用现有回环转发。
 - 关系：完成 [ADR-061](adr-061-app-ait-e2e-remove-relay-plugin.md) 暂留的旧协议清理，延续 [ADR-127](../daemon/adr-127-remove-daemon-pairing-offer.md) 的配对入口移除；[ADR-074](adr-074-account-host-relay.md) 的账户中继继续使用独立协议。
 
 ## 背景与决策
@@ -19,7 +20,6 @@ HostRuntime 测试在历史迁移时将旧连接改为 `directTcp`，却保留�
 | `host-runtime.test.ts` 的 `makeHost` 及各用例中的同一地址、延迟表和断言 | 验证首个成功探测、慢探测不阻塞、心跳延迟、探测退避、连续胜出后切换、瞬时延迟抑制、过期切换结果和目录状态等当前行为。连接类型早已是 `directTcp`，连接与 ping 由注入的假客户端完成；保留测试可防止这些通用行为回归，旧地址用于保留来源现场。 |
 | `host-runtime.test.ts` 的选中连接重连用例                               | 验证正在重连的客户端不会被额外探测客户端替换；客户端和探测均由测试注入。                                                                                                                                                                   |
 | `host-runtime.test.ts` 的双主机 AppState 用例                           | 验证 inactive/background 保持重连、回到 active 时恢复；两个客户端直接注入，任何新建连接尝试都会让测试失败。                                                                                                                                |
-| `workspace-script-links.test.ts` 的 `proxyUrl` 兼容用例                 | 仍需支持旧 daemon 的服务链接字段；函数只计算 URL，不访问这个旧 relay 地址。与旧公钥配对协议无关，兼容实现及其到期说明仍在 `workspace-script-links.ts`。                                                                                    |
 
 这些保留项不验证旧 relay service 可用，也不为旧协议提供连接入口。
 

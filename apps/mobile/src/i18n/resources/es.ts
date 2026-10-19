@@ -747,7 +747,6 @@ export const es: TranslationResources = {
     scripts: {
       title: "Scripts",
       actions: {
-        chooseUrl: "Elegir URL",
         copyUrl: "Copiar URL",
         openService: "Ver servicio",
         restart: "Reiniciar",
@@ -763,13 +762,7 @@ export const es: TranslationResources = {
         stopScript: "Detener{{scriptName}}",
         restartScript: "Reiniciar{{scriptName}}",
         copyUrl: "Copiar URL de{{scriptName}}",
-        chooseUrl: "Elegir URL para {{scriptName}}",
         script: "Guión{{scriptName}}",
-      },
-      routes: {
-        public: "Proxy inverso",
-        paseo: "Memorable",
-        direct: "Directa",
       },
       states: {
         exitCode: "salir de{{code}}",
