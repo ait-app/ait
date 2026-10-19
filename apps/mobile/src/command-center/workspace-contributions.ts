@@ -34,7 +34,8 @@ export interface WorkspaceCommandCenterLabels {
   copyResumeCommand: string;
   copyAgentId: string;
   copyTerminalId: string;
-  copyFilePath: string;
+  copyRelativePath: string;
+  copyAbsolutePath: string;
   closeTabsLeft: string;
   closeTabsRight: string;
   closeOtherTabs: string;
@@ -336,12 +337,20 @@ function buildActiveTabContributions(
   if (source.activeTabKind === "file") {
     contributions.push(
       buildQueryAction(source, {
-        id: "tab:copy-file-path",
+        id: "tab:copy-absolute-path",
         rank: 37,
-        title: source.labels.copyFilePath,
-        keywords: ["tab", "file", "copy", "path"],
+        title: source.labels.copyAbsolutePath,
+        keywords: ["tab", "file", "copy", "absolute", "path"],
         icon: source.icons.copy,
-        action: { id: "workspace.tab.copy-file-path", scope: "workspace" },
+        action: { id: "workspace.tab.copy-absolute-path", scope: "workspace" },
+      }),
+      buildQueryAction(source, {
+        id: "tab:copy-relative-path",
+        rank: 38,
+        title: source.labels.copyRelativePath,
+        keywords: ["tab", "file", "copy", "relative", "path"],
+        icon: source.icons.copy,
+        action: { id: "workspace.tab.copy-relative-path", scope: "workspace" },
       }),
     );
   }
@@ -349,7 +358,7 @@ function buildActiveTabContributions(
     contributions.push(
       buildQueryAction(source, {
         id: "tab:close-left",
-        rank: 38,
+        rank: 39,
         title: source.labels.closeTabsLeft,
         keywords: ["tab", "close", "left"],
         icon: source.icons.close,
@@ -361,7 +370,7 @@ function buildActiveTabContributions(
     contributions.push(
       buildQueryAction(source, {
         id: "tab:close-right",
-        rank: 39,
+        rank: 40,
         title: source.labels.closeTabsRight,
         keywords: ["tab", "close", "right"],
         icon: source.icons.close,
@@ -373,7 +382,7 @@ function buildActiveTabContributions(
     contributions.push(
       buildQueryAction(source, {
         id: "tab:close-others",
-        rank: 40,
+        rank: 41,
         title: source.labels.closeOtherTabs,
         keywords: ["tab", "close", "others"],
         icon: source.icons.close,

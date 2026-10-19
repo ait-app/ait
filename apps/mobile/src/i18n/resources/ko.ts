@@ -632,7 +632,6 @@ export const ko: TranslationResources = {
         copyResumeCommand: "재개 명령 복사",
         copyAgentId: "에이전트 ID 복사",
         copyTerminalId: "터미널 ID 복사",
-        copyFilePath: "파일 경로 복사",
         rename: "이름 변경",
         closeAbove: "위쪽 탭 닫기",
         closeBelow: "아래쪽 탭 닫기",

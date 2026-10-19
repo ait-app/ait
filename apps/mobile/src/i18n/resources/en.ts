@@ -730,7 +730,6 @@ export const en = {
         copyResumeCommand: "Copy resume command",
         copyAgentId: "Copy agent id",
         copyTerminalId: "Copy terminal id",
-        copyFilePath: "Copy file path",
         rename: "Rename",
         closeAbove: "Close tabs above",
         closeBelow: "Close tabs below",
