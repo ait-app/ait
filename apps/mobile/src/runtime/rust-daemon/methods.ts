@@ -374,7 +374,7 @@ export const METHODS: Readonly<Record<string, MethodSpec>> = {
     method: "agent.attention.clear.request",
     kind: "request",
     channel: 0,
-    response: null,
+    response: "clear_agent_attention_response",
   },
   "agent.items.close.request": {
     method: "agent.items.close.request",
