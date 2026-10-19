@@ -1535,7 +1535,13 @@ export const ja: TranslationResources = {
     },
   },
   hostPicker: en.hostPicker,
-  schedules: en.schedules,
+  schedules: {
+    ...en.schedules,
+    form: {
+      ...en.schedules.form,
+      runningError: "タスクは実行中です。今回の実行が終了してから変更してください。",
+    },
+  },
   addProjectFlow: en.addProjectFlow,
   projectPicker: {
     placeholder: "入力して検索...",

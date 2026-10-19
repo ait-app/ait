@@ -1519,7 +1519,13 @@ export const ar: TranslationResources = {
     },
   },
   hostPicker: en.hostPicker,
-  schedules: en.schedules,
+  schedules: {
+    ...en.schedules,
+    form: {
+      ...en.schedules.form,
+      runningError: "المهمة قيد التشغيل. انتظر انتهاء التشغيل الحالي قبل تعديلها.",
+    },
+  },
   addProjectFlow: en.addProjectFlow,
   projectPicker: {
     placeholder: "اكتب للبحث...",

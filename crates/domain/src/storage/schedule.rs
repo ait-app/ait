@@ -12,6 +12,9 @@ pub enum Error {
     /// Already running, completed or storage capacity reached.
     #[error("Schedule is busy, completed or capacity is exhausted")]
     Conflict,
+    /// Target changes are blocked while an occurrence is running.
+    #[error("The schedule is running")]
+    Running,
     /// Atomic persistence or recovery failed.
     #[error("Schedule storage failed")]
     Storage,

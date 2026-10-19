@@ -1790,6 +1790,7 @@ export const zhCN: TranslationResources = {
       selectIsolation: "选择隔离方式",
       noIsolation: "没有可用的隔离方式",
       submitError: "无法保存定时任务：{{message}}",
+      runningError: "任务正在运行，请等待本次运行结束后再修改。",
     },
     cadence: {
       trigger: "触发方式",

@@ -1547,7 +1547,14 @@ export const ru: TranslationResources = {
     },
   },
   hostPicker: en.hostPicker,
-  schedules: en.schedules,
+  schedules: {
+    ...en.schedules,
+    form: {
+      ...en.schedules.form,
+      runningError:
+        "Задача выполняется. Дождитесь завершения текущего запуска, прежде чем изменять её.",
+    },
+  },
   addProjectFlow: en.addProjectFlow,
   projectPicker: {
     placeholder: "Введите текст для поиска...",

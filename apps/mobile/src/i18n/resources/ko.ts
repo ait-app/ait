@@ -1528,7 +1528,13 @@ export const ko: TranslationResources = {
     },
   },
   hostPicker: en.hostPicker,
-  schedules: en.schedules,
+  schedules: {
+    ...en.schedules,
+    form: {
+      ...en.schedules.form,
+      runningError: "작업이 실행 중입니다. 현재 실행이 끝난 후 수정해 주세요.",
+    },
+  },
   addProjectFlow: en.addProjectFlow,
   projectPicker: {
     placeholder: "검색할 내용을 입력하세요...",

@@ -1,6 +1,8 @@
 //! Schedule request dispatch with bounded, connection-independent execution.
-use crate::service::Schedules;
+use domain::storage::schedule::Error;
 use model::{Context, DispatchError, ErrorCode};
+
+use crate::service::Schedules;
 
 /// Host-composed schedule service.
 #[derive(Debug)]
@@ -75,7 +77,7 @@ pub async fn dispatch(
                 () = cancel.cancelled() => {},
                 () = failure.cancelled() => {},
                 result = schedules.execute(&request.method, request.params) => {
-                    let _ = outbound.respond(request.id, result.map_err(|_| ErrorCode::ScheduleRequestFailed));
+                    let _ = outbound.respond(request.id, result.map_err(error_code));
                 }
             }
         });
@@ -87,6 +89,18 @@ pub async fn dispatch(
     let method = context.request.method.clone();
     let result = schedules.execute(&method, params).await;
     context
-        .respond(result.map_err(|_| ErrorCode::ScheduleRequestFailed))
+        .respond(result.map_err(error_code))
         .map_err(Into::into)
 }
+
+fn error_code(error: Error) -> ErrorCode {
+    match error {
+        Error::Running => ErrorCode::ScheduleRunning,
+        Error::Invalid | Error::NotFound | Error::Conflict | Error::Storage => {
+            ErrorCode::ScheduleRequestFailed
+        }
+    }
+}
+
+#[cfg(test)]
+mod tests;
