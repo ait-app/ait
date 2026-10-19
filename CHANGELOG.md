@@ -1,5 +1,14 @@
 # Ait changelog
 
+## 0.1.9 - 2026-10-19
+
+- Recover interrupted agent sessions, preserve OpenCode history and compaction across ACP versions, and provide copyable error diagnostics with original Codex failure details.
+- Improve mobile keyboard, sidebar drag, terminal and split touch handling; add camera image attachments and reconnect known hosts earlier during startup.
+- Preserve host and offline records across account channel failures, fix local daemon startup races, and keep long model names and toolbar modes readable.
+- Remove legacy relay and workspace service proxy URLs, align file tab path actions, fully clean untracked files on workspace reset, and keep budgeted filesystem replies below transport limits.
+- Add Linux deb and rpm installers, repair native package dependencies and removal hooks, and include standalone daemon archives in nightly builds.
+- Route macOS automatic updates through aitapp.cn with single-range COS downloads; existing GitHub-fed clients migrate after installing this release.
+
 ## 0.1.8 - 2026-10-18
 
 - Add Pi 1.2+ through its native RPC interface, including model discovery, native session resume, attachments, streamed responses and tool progress.
