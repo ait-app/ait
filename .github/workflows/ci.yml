@@ -304,6 +304,16 @@ jobs:
           args=()
           if [ -n "$NIGHTLY_BUILD_LABEL" ]; then args+=(--nightly "$NIGHTLY_BUILD_LABEL"); fi
           node scripts/release-assets.mjs collect "$PLATFORM" "$version" apps/desktop/release release-assets "${args[@]}"
+      # Same binary as the desktop bundle. macOS keeps the linker's ad-hoc signature and is not notarized.
+      - name: Package standalone daemon
+        if: env.NIGHTLY_BUILD_LABEL != ''
+        env:
+          PLATFORM: ${{ matrix.platform }}
+          DAEMON_BIN: ${{ github.workspace }}/target/${{ matrix.rust_target }}/release/daemon
+        run: |
+          if [ "$PLATFORM" = mac ]; then codesign --verify --verbose "$DAEMON_BIN"; fi
+          version=$(node -p 'require("./package.json").version')
+          node scripts/release-assets.mjs daemon "$PLATFORM" "$version" "$DAEMON_BIN" release-assets --nightly "$NIGHTLY_BUILD_LABEL"
       # Restrict user namespaces so the installed packages must fall back to their SUID helper.
       - name: Smoke installed deb and rpm packages
         if: matrix.platform == 'linux'
@@ -429,7 +439,7 @@ jobs:
         run: |
           gh release create nightly release-assets/* --verify-tag --target "$GITHUB_SHA" \
             --title "Ait Nightly $NIGHTLY_BUILD_LABEL" --prerelease --latest=false \
-            --notes "Development build from $GITHUB_SHA. Replaced on the next successful main build. macOS is ad-hoc signed and not notarized. <!-- ait-nightly-run: $GITHUB_RUN_NUMBER --> <!-- ait-nightly-workflow: ci.yml -->" \
+            --notes "Development build from $GITHUB_SHA. Replaced on the next successful main build. macOS is ad-hoc signed and not notarized. If macOS blocks the standalone ait-daemon after a browser download, run \`xattr -d com.apple.quarantine ait-daemon\` in the extracted folder. <!-- ait-nightly-run: $GITHUB_RUN_NUMBER --> <!-- ait-nightly-workflow: ci.yml -->" \
             --repo "$GITHUB_REPOSITORY"
           echo "$GITHUB_SERVER_URL/$GITHUB_REPOSITORY/releases/tag/nightly" >> "$GITHUB_STEP_SUMMARY"
 
