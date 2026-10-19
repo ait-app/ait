@@ -377,6 +377,10 @@ function makeHost(input?: Partial<HostProfile>): HostProfile {
     type: "directTcp",
     endpoint: "lan:6767",
   };
+  // Retain this historical relay-shaped fixture for generic connection scheduling tests.
+  // Its original address and labels record its source. Injected FakeDaemonClient and
+  // connectToDaemon implementations exercise probes, switching and directory state;
+  // they do not connect to this endpoint or implement the retired relay protocol.
   const relay: HostConnection = {
     id: "relay:relay.paseo.sh:443",
     type: "directTcp",
@@ -820,54 +824,6 @@ describe("HostRuntimeController", () => {
     await controller.stop();
   });
 
-  it("replaces the active relay client when re-pairing changes the daemon public key", async () => {
-    const oldRelay: HostConnection = {
-      id: "relay:wss:relay.paseo.sh:443",
-      type: "directTcp",
-      endpoint: "relay.paseo.sh:443",
-      useTls: true,
-      password: "pk_old",
-    };
-    const newRelay: HostConnection = {
-      ...oldRelay,
-      password: "pk_new",
-    };
-    const createdClients: Array<{ client: FakeDaemonClient; connection: HostConnection }> = [];
-    const controller = new HostRuntimeController({
-      host: makeHost({
-        connections: [oldRelay],
-        preferredConnectionId: oldRelay.id,
-      }),
-      deps: {
-        createClient: ({ connection }) => {
-          const client = new FakeDaemonClient();
-          createdClients.push({ client, connection });
-          return client as unknown as DaemonClient;
-        },
-        connectToDaemon: async ({ host, connection }) => ({
-          client: makeConnectedProbeClient(5) as unknown as DaemonClient,
-          serverId: host.serverId,
-          hostname: connection.id,
-        }),
-        getClientId: async () => "cid_test_runtime",
-      },
-    });
-
-    await controller.activateConnection({ connectionId: oldRelay.id });
-    expect(controller.getSnapshot().client).toBe(createdClients[0]?.client);
-
-    await controller.updateHost(
-      makeHost({
-        connections: [newRelay],
-        preferredConnectionId: newRelay.id,
-      }),
-    );
-
-    expect(createdClients.map((entry) => entry.connection)).toEqual([oldRelay, newRelay]);
-    expect(createdClients[0]?.client.isDisposed()).toBe(true);
-    expect(controller.getSnapshot().client).toBe(createdClients[1]?.client);
-  });
-
   it("keeps known hosts in connecting when a created client reports idle during connect", async () => {
     const host = makeHost({
       connections: [
@@ -1094,6 +1050,7 @@ describe("HostRuntimeController", () => {
 
   it("does not create a probe client for the selected connection while it reconnects", async () => {
     useHostRuntimeClock();
+    // Preserve the original fixture: this tests reuse of an injected reconnecting client.
     const relay: HostConnection = {
       id: "relay:relay.paseo.sh:443",
       type: "directTcp",
@@ -2574,6 +2531,8 @@ describe("HostRuntimeStore", () => {
   it.each(["active", "inactive", "background"] as const)(
     "keeps reconnect enabled through inactive/background and resumes immediately (mounted %s)",
     async (currentState) => {
+      // Preserve the original fixtures for AppState reconnect coverage across two hosts.
+      // Both clients are supplied below; attempting to create a connection fails the test.
       const relay = (suffix: string): HostConnection => ({
         id: `relay:relay-${suffix}.paseo.sh:443`,
         type: "directTcp",

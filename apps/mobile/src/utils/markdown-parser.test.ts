@@ -61,11 +61,11 @@ describe("createMarkdownParser", () => {
   });
 
   it("linkifies bare URLs only when asked", () => {
-    expect(createMarkdownParser({ linkify: true }).render("see https://paseo.sh now")).toContain(
-      'href="https://paseo.sh"',
+    expect(createMarkdownParser({ linkify: true }).render("see https://ait-app.com now")).toContain(
+      'href="https://ait-app.com"',
     );
     expect(
-      createMarkdownParser({ linkify: false }).render("see https://paseo.sh now"),
+      createMarkdownParser({ linkify: false }).render("see https://ait-app.com now"),
     ).not.toContain("href");
   });
 });

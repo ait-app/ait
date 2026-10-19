@@ -119,6 +119,8 @@ ADR-074、082、083、084、122 在不同类别中各有两份，引用时以路
 
 ## 客户端、连接与品牌
 
+- [ADR-161：客户端统一错误提示与可复制诊断](clients/adr-161-copyable-error-diagnostics.md)
+- [ADR-160：清理旧公钥中继协议与测试残留](clients/adr-160-remove-legacy-relay-protocol.md)
 - [ADR-154：账号状态通过共享客户端 Channel 推送](clients/adr-154-account-status-channel.md)
 - [ADR-152：在线中继 Workspace 的浏览器回环转发](clients/adr-152-remote-workspace-browser-loopback.md)
 - [ADR-151：Android 边缘手势进入移动面板导航](clients/adr-151-android-panel-edge-gestures.md)

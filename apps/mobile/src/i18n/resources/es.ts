@@ -832,7 +832,7 @@ export const es: TranslationResources = {
           success: "Espacio de trabajo restablecido",
           confirmTitle: "¿Restablecer el espacio de trabajo?",
           confirmMessage:
-            "Obtener la última versión de la rama predeterminada de origin, restaurar la rama {{branch}} y descartar los cambios rastreados y los commits locales. Si origin tiene una rama con el mismo nombre, se restablecerá al mismo commit mediante un push forzado.",
+            "Obtener la última versión de la rama predeterminada de origin, restaurar la rama {{branch}} y descartar los cambios rastreados y los commits locales. Eliminar también todos los archivos y directorios sin seguimiento, incluidos los repositorios anidados; se conservan los archivos ignorados por Git. Si origin tiene una rama con el mismo nombre, se restablecerá al mismo commit mediante un push forzado.",
           confirm: "Restablecer",
         },
         archive: {

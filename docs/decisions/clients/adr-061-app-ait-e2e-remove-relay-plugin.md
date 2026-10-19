@@ -4,6 +4,7 @@
 - 日期：2026-09-28
 - 延续：ADR-044、ADR-047、ADR-049
 - 用户要求：E2E 针对 Ait server，同时移除 relay、插件功能。
+- 后续：[ADR-160](adr-160-remove-legacy-relay-protocol.md) 删除暂留的旧中继协议与废弃配对测试，并记录仍保留原始测试夹具的理由。
 
 ## 决策
 
@@ -16,7 +17,7 @@
 
 ## 范围
 
-本次不改变 Rust crate 边界、协议或生产 Provider。仓库共享 SDK 的旧 wire 类型与兼容包暂留，App 不再加载插件或建立 relay 连接。
+本次不改变 Rust crate 边界、协议或生产 Provider。当时暂留仓库共享 SDK 的旧 wire 类型与兼容包；旧中继地址、URL 构造与配对 offer 后续由 ADR-160 清理。App 不再加载插件或建立旧公钥 relay 连接。
 继承的 UI 用例中仍有旧 mock-provider、创建回执与协议拦截断言；迁移服务目标不等于这些旧能力已实现。定向回归与运行说明见 [App E2E](../../../apps/mobile/e2e/README.md)。
 
 运行路径、项目配置和旧桌面 CLI 的后续清理见 [ADR-062](adr-062-ait-runtime-paths.md)。

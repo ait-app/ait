@@ -411,6 +411,7 @@ pub trait CheckoutRuntime: std::fmt::Debug + Send + Sync {
     ) -> Result<(), CheckoutRuntimeError>;
 
     /// Fetch origin's default branch, restore the workspace's initial branch name, and reset HEAD.
+    /// Remove untracked files and directories, including nested repositories, respecting Git ignores.
     /// Force-push the reset HEAD if origin has a branch with that initial name.
     ///
     /// # Arguments

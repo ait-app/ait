@@ -828,7 +828,7 @@ export const ptBR: TranslationResources = {
           success: "Workspace redefinido",
           confirmTitle: "Redefinir workspace?",
           confirmMessage:
-            "Buscar a versão mais recente da branch padrão de origin, restaurar a branch {{branch}} e descartar alterações rastreadas e commits locais. Se origin tiver uma branch com o mesmo nome, ela será redefinida para o mesmo commit por um push forçado.",
+            "Buscar a versão mais recente da branch padrão de origin, restaurar a branch {{branch}} e descartar alterações rastreadas e commits locais. Excluir também todos os arquivos e diretórios não rastreados, incluindo repositórios aninhados; os arquivos ignorados pelo Git são preservados. Se origin tiver uma branch com o mesmo nome, ela será redefinida para o mesmo commit por um push forçado.",
           confirm: "Redefinir",
         },
         archive: {

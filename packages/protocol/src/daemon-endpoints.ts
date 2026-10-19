@@ -12,35 +12,6 @@ export interface ParsedConnectionUri extends ConnectionUriParts {
   password?: string;
 }
 
-export type RelayRole = "server" | "client";
-export type RelayProtocolVersion = "1" | "2";
-
-export const CURRENT_RELAY_PROTOCOL_VERSION: RelayProtocolVersion = "2";
-export const DEFAULT_RELAY_ENDPOINT = "relay.paseo.sh:443";
-
-export function normalizeRelayProtocolVersion(
-  value: unknown,
-  fallback: RelayProtocolVersion = CURRENT_RELAY_PROTOCOL_VERSION,
-): RelayProtocolVersion {
-  if (value == null) {
-    return fallback;
-  }
-
-  let normalized = "";
-  if (typeof value === "string") {
-    normalized = value.trim();
-  } else if (typeof value === "number") {
-    normalized = String(value);
-  }
-  if (!normalized) {
-    return fallback;
-  }
-  if (normalized === "1" || normalized === "2") {
-    return normalized;
-  }
-  throw new Error('Relay version must be "1" or "2"');
-}
-
 function parsePort(portStr: string, context: string): number {
   const port = Number(portStr);
   if (!Number.isInteger(port) || port < 1 || port > 65535) {
@@ -173,44 +144,6 @@ export function buildDaemonWebSocketUrl(endpoint: string, opts: WebSocketUrlOpti
   return new URL(`${protocol}://${hostPart}:${port}/ws`).toString();
 }
 
-export function buildRelayWebSocketUrl(params: {
-  endpoint: string;
-  useTls: boolean;
-  serverId: string;
-  role: RelayRole;
-  /**
-   * Per-connection routing identifier used by the daemon to open server data sockets.
-   * Clients should NOT provide this — the relay assigns a routing ID on connect.
-   */
-  connectionId?: string;
-  version?: RelayProtocolVersion | 1 | 2;
-}): string {
-  const { host, port, isIpv6 } = parseHostPort(params.endpoint);
-  const protocol = params.useTls ? "wss" : "ws";
-  const hostPart = isIpv6 ? `[${host}]` : host;
-  const url = new URL(`${protocol}://${hostPart}:${port}/ws`);
-  url.searchParams.set("serverId", params.serverId);
-  url.searchParams.set("role", params.role);
-  url.searchParams.set("v", normalizeRelayProtocolVersion(params.version));
-  if (params.connectionId) {
-    url.searchParams.set("connectionId", params.connectionId);
-  }
-  return url.toString();
-}
-
-/**
- * @deprecated Migration fallback for stored relay connections/offers that predate
- * explicit relay useTls. Delete after two release cycles.
- */
-export function shouldUseTlsForDefaultHostedRelay(endpoint: string): boolean {
-  try {
-    const { port } = parseHostPort(endpoint);
-    return port === 443;
-  } catch {
-    return false;
-  }
-}
-
 export function extractHostPortFromWebSocketUrl(wsUrl: string): string {
   const parsed = new URL(wsUrl);
   if (parsed.protocol !== "ws:" && parsed.protocol !== "wss:") {
@@ -240,6 +173,7 @@ export function extractHostPortFromWebSocketUrl(wsUrl: string): string {
   return isIpv6 ? `[${host}]:${port}` : `${host}:${port}`;
 }
 
+/** Recognize retired public-key relay URLs so clients can reject them before connecting. */
 export function isRelayClientWebSocketUrl(url: string): boolean {
   try {
     const parsed = new URL(url);

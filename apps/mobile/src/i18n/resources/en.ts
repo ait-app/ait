@@ -922,7 +922,7 @@ export const en = {
           success: "Workspace reset",
           confirmTitle: "Reset workspace?",
           confirmMessage:
-            "Fetch the latest default branch from origin, restore branch {{branch}}, and discard tracked changes and local commits in this workspace. If origin has a branch with the same name, force-push it to the same commit.",
+            "Fetch the latest default branch from origin, restore branch {{branch}}, and discard tracked changes and local commits in this workspace. Delete all untracked files and directories, including nested repositories; Git-ignored files are kept. If origin has a branch with the same name, force-push it to the same commit.",
           confirm: "Reset workspace",
         },
         archive: {

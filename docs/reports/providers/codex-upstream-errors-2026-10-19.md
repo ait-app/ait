@@ -6,6 +6,9 @@
 - 决策：[ADR-144](../../decisions/providers/adr-144-provider-error-reporting.md)、
   [ADR-162](../../decisions/providers/adr-162-codex-error-details.md)。
 
+与另外两个 session 汇总并合入最新 main 后的验证见
+[PR 整合报告](../daemon/error-diagnostics-and-recovery-pr-2026-10-19.md)。
+
 ## 已确认的失败来源
 
 用户无法回忆截图的准确会话与时间，授权按 gpu-desktop 上相同提示的失败记录排查。

@@ -917,7 +917,7 @@ export const zhCN: TranslationResources = {
           success: "工作区已重置",
           confirmTitle: "重置工作区？",
           confirmMessage:
-            "将获取 origin 的最新默认分支，把分支恢复为 {{branch}}，并丢弃此工作区的已跟踪文件改动和本地提交。如果 origin 上存在同名分支，也会通过强制推送将其重置到同一提交。",
+            "将获取 origin 的最新默认分支，把分支恢复为 {{branch}}，并丢弃此工作区的已跟踪文件改动和本地提交，同时删除所有未跟踪文件和目录（包括嵌套仓库，保留 Git 忽略的文件）。如果 origin 上存在同名分支，也会通过强制推送将其重置到同一提交。",
           confirm: "重置工作区",
         },
         archive: {

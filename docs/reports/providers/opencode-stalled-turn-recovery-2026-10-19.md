@@ -6,6 +6,9 @@
 - 决策：[ADR-032](../../decisions/providers/adr-032-daemon-native-provider-execution.md)、
   [ADR-144](../../decisions/providers/adr-144-provider-error-reporting.md)。
 
+本报告记录恢复子集；合并 Codex 和客户端错误诊断后的最新验证见
+[PR 整合报告](../daemon/error-diagnostics-and-recovery-pr-2026-10-19.md)。
+
 ## 截图会话的根因
 
 只读核对 gpu-desktop 的 systemd journal、daemon 进程启动时间和原生会话记录。

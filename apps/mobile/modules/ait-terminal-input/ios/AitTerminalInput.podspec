@@ -5,7 +5,7 @@ Pod::Spec.new do |s|
   s.description = 'UIKit owns terminal composition and emits only committed text.'
   s.license = 'Apache-2.0'
   s.author = 'Ait'
-  s.homepage = 'https://github.com/ait-app/ait'
+  s.homepage = 'https://ait-app.com'
   s.platforms = { :ios => '15.1' }
   s.swift_version = '5.4'
   s.source = { :path => '.' }
