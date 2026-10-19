@@ -75,16 +75,11 @@ pub(super) async fn open(
         }
     }
     transport::version(client).await?;
-    let mut transport = Transport::spawn(client, &spec.cwd, &args)?;
-    let state = transport.request(json!({"type":"get_state"})).await?;
-    if state["sessionId"] != id || state["isStreaming"] != false || state["isCompacting"] != false {
-        return Err(AgentSessionError::Failed);
-    }
     let mut session = Session {
-        transport,
+        transport: Transport::spawn(client, &spec.cwd, &args)?,
         id,
         cwd: spec.cwd.clone(),
-        state,
+        state: Value::Null,
         config: spec.config.clone(),
         images: client.images.clone(),
         active: None,
@@ -92,26 +87,46 @@ pub(super) async fn open(
         has_input,
         closed: false,
     };
+    let state = session
+        .transport
+        .request(json!({"type":"get_state"}))
+        .await?;
+    session.verify_session_identity(&state).await?;
+    if state["isStreaming"] != false || state["isCompacting"] != false {
+        return Err(AgentSessionError::Failed);
+    }
+    session.state = state;
     session.configure(&spec.config).await?;
     Ok(session)
 }
 
 impl Session {
+    async fn verify_session_identity(&mut self, state: &Value) -> Result<(), AgentSessionError> {
+        if state["sessionId"] == self.id {
+            return Ok(());
+        }
+        self.transport.diagnostics.observe(
+            Diagnostic::new(Category::Protocol, "session_identity"),
+            "get_state",
+        );
+        self.closed = true;
+        self.transport.close().await?;
+        Err(AgentSessionError::Failed)
+    }
+
     async fn configure(&mut self, config: &StoredAgentConfig) -> Result<(), AgentSessionError> {
         config::validate(config)?;
-        if let Some(model) = &config.model {
-            let (provider, model_id) =
-                config::split_model(model).ok_or(AgentSessionError::Rejected)?;
-            self.transport
-                .request(json!({"type":"set_model","provider":provider,"modelId":model_id}))
-                .await?;
-        }
-        self.state = self.transport.request(json!({"type":"get_state"})).await?;
-        if self.state["sessionId"] != self.id {
-            self.closed = true;
-            self.transport.close().await?;
-            return Err(AgentSessionError::Failed);
-        }
+        let Some(model) = &config.model else {
+            self.config.clone_from(config);
+            return Ok(());
+        };
+        let (provider, model_id) = config::split_model(model).ok_or(AgentSessionError::Rejected)?;
+        self.transport
+            .request(json!({"type":"set_model","provider":provider,"modelId":model_id}))
+            .await?;
+        let state = self.transport.request(json!({"type":"get_state"})).await?;
+        self.verify_session_identity(&state).await?;
+        self.state = state;
         self.config.clone_from(config);
         Ok(())
     }
@@ -246,15 +261,7 @@ impl Session {
 
     async fn synchronize(&mut self, admission: bool) -> Result<bool, AgentSessionError> {
         let state = self.transport.request(json!({"type":"get_state"})).await?;
-        if state["sessionId"] != self.id {
-            self.transport.diagnostics.observe(
-                Diagnostic::new(Category::Protocol, "session_identity"),
-                "get_state",
-            );
-            self.closed = true;
-            self.transport.close().await?;
-            return Err(AgentSessionError::Failed);
-        }
+        self.verify_session_identity(&state).await?;
         let busy = state["isStreaming"]
             .as_bool()
             .ok_or(AgentSessionError::Failed)?
