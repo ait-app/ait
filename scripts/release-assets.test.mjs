@@ -18,9 +18,14 @@ import { fileURLToPath } from "node:url";
 import { Arch, getArtifactArchName } from "builder-util";
 import { AppInfo } from "app-builder-lib/out/appInfo.js";
 import { Platform } from "app-builder-lib/out/core.js";
-import { getPublishConfigs } from "app-builder-lib/out/publish/PublishManager.js";
+import {
+  getAppUpdatePublishConfiguration,
+  getPublishConfigs,
+} from "app-builder-lib/out/publish/PublishManager.js";
 import { createUpdateInfoTasks } from "app-builder-lib/out/publish/updateInfoBuilder.js";
 import { expandMacro } from "app-builder-lib/out/util/macroExpander.js";
+import { HttpError } from "builder-util-runtime";
+import { createClient } from "electron-updater/out/providerFactory.js";
 import { stringify, parse } from "yaml";
 import {
   collectReleaseAssets,
@@ -118,6 +123,110 @@ test("release assets match electron-builder's target-specific architecture names
         await builderAssetNames(platform, version),
       );
     }
+  }
+});
+
+test("macOS embeds the AIT Server feed for stable and beta releases", async () => {
+  for (const version of ["0.0.7", "0.0.8-beta.1"]) {
+    const mac = await getAppUpdatePublishConfiguration(
+      await builderPackager("mac", version),
+      null,
+      Arch.arm64,
+      true,
+    );
+    assert.equal(mac.provider, "generic");
+    assert.equal(mac.url, "https://aitapp.cn/api/v1/updates/macos/");
+    assert.equal(mac.channel, releaseChannel(version));
+    assert.equal(mac.useMultipleRangeRequest, false);
+
+    const linux = await getAppUpdatePublishConfiguration(
+      await builderPackager("linux", version),
+      null,
+      Arch.x64,
+      true,
+    );
+    assert.equal(linux.provider, "github");
+    assert.equal(linux.owner, "ait-app");
+    assert.equal(linux.repo, "ait");
+    assert.equal(linux.channel, releaseChannel(version));
+  }
+});
+
+test("macOS updater reads server JSON and resolves versioned files and blockmaps", async () => {
+  const config = await getAppUpdatePublishConfiguration(
+    await builderPackager("mac", "0.0.7"),
+    null,
+    Arch.arm64,
+    true,
+  );
+  // Match the runtime's stable/latest and beta mapping, including changing channels.
+  const updater = { channel: "latest", isAddNoCacheQuery: true };
+  let manifest;
+  let requested;
+  const provider = createClient(config, updater, {
+    platform: "darwin",
+    executor: {
+      request: async (options) => {
+        requested = new URL(`${options.protocol}//${options.hostname}${options.path}`);
+        return JSON.stringify(manifest);
+      },
+    },
+  });
+  assert.equal(provider.isUseMultipleRangeRequest, false);
+  for (const version of ["0.0.8", "0.0.9-beta.1", "0.0.8"]) {
+    updater.channel = releaseChannel(version);
+    const name = `Ait-${version}-macos-arm64.zip`;
+    manifest = {
+      version,
+      files: [{ url: `files/v${version}/${name}`, sha512: "a".repeat(86) + "==", size: 1234 }],
+      path: `files/v${version}/${name}`,
+      releaseDate: "2026-10-18T00:00:00.000Z",
+      releaseNotes: "Release notes from AIT Server",
+      rolloutHours: 24,
+    };
+
+    const info = await provider.getLatestVersion();
+
+    assert.equal(requested.origin, "https://aitapp.cn");
+    assert.equal(requested.pathname, `/api/v1/updates/macos/${updater.channel}-mac.yml`);
+    assert(requested.searchParams.has("noCache"));
+    assert.deepEqual(info, manifest);
+    const [file] = provider.resolveFiles(info);
+    assert.equal(file.url.href, `${config.url}files/v${version}/${name}`);
+    assert.deepEqual(file.info, manifest.files[0]);
+    const [oldBlockmap, newBlockmap] = provider.getBlockMapFiles(file.url, "0.0.7", version);
+    assert.equal(newBlockmap.href, `${file.url.href}.blockmap`);
+    assert.equal(oldBlockmap.href, `${config.url}files/v0.0.7/Ait-0.0.7-macos-arm64.zip.blockmap`);
+  }
+});
+
+test("macOS server feed distinguishes unpublished channels from service failures", async () => {
+  const config = await getAppUpdatePublishConfiguration(
+    await builderPackager("mac", "0.0.8-beta.1"),
+    null,
+    Arch.arm64,
+    true,
+  );
+  for (const status of [404, 503]) {
+    const error = new HttpError(status, "server response");
+    const provider = createClient(
+      config,
+      { channel: "beta" },
+      {
+        platform: "darwin",
+        executor: {
+          request: async () => {
+            throw error;
+          },
+        },
+      },
+    );
+
+    await assert.rejects(provider.getLatestVersion(), (result) => {
+      if (status === 404) assert.equal(result.code, "ERR_UPDATER_CHANNEL_FILE_NOT_FOUND");
+      else assert.equal(result, error);
+      return true;
+    });
   }
 });
 

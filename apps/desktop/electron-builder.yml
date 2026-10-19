@@ -40,6 +40,12 @@ publish:
   repo: ait
   channel: "${channel}"
 mac:
+  publish:
+    provider: generic
+    url: https://aitapp.cn/api/v1/updates/macos/
+    channel: "${channel}"
+    # COS supports single-range requests; differential downloads use repeated requests.
+    useMultipleRangeRequest: false
   artifactName: "Ait-${version}-macos-${arch}.${ext}"
   minimumSystemVersion: "13.0.0"
   category: public.app-category.developer-tools
