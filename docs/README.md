@@ -25,6 +25,10 @@
 
 ## 架构决策
 
+- [ADR-162：Codex 失败展示原生原因与 HTTP 状态](decisions/providers/adr-162-codex-error-details.md)：有界脱敏的上游错误、原生重试结果与持久聊天提示。
+
+- [ADR-161：客户端统一错误提示与可复制诊断](decisions/clients/adr-161-copyable-error-diagnostics.md)：错误队列、异常原因链、请求关联、脱敏日志和复制／导出。
+
 - [ADR-159：OpenCode 优先使用 ACP，按缺失能力补充原生观测](decisions/providers/adr-159-opencode-acp-native-observation.md)：单一 ACP 写入、受管进程的只读元数据、实时用量与压缩回放。
 
 - [ADR-158：Release 附带独立 daemon 归档](decisions/clients/adr-158-standalone-daemon-release.md)：`ait-daemon` 命名、macOS 单独签名公证、Release 校验与 COS 镜像。
@@ -188,6 +192,7 @@
 - [定时任务列表 Host 展示去重](reports/clients/schedule-host-filter-2026-10-12.md)：按主机筛选后省略重复主机名，以及返回全部主机视图的浏览器回归。
 - [OpenCode 2.x ACP 复查](reports/providers/opencode-2x-acp-2026-10-19.md)：2.0.25 / 2.0.32 的隔离回归、独立压缩轮次修复和原生协议缺口。
 - [OpenCode 输出停滞与宿主重启恢复](reports/providers/opencode-stalled-turn-recovery-2026-10-19.md)：OOM kill 的直接证据、遗留 running 收尾和显式继续回归。
+- [Codex 长输入与连接失败排查](reports/providers/codex-upstream-errors-2026-10-19.md)：gpu-desktop 原生失败证据、上游余额／断流归因与安全诊断修复。
 - [OpenCode 长会话、用量与压缩排查](reports/providers/opencode-auto-compaction-2026-10-19.md)：gpu-desktop 原生证据、零用量纠正、限制结束提示与自动压缩结算回归。
 - [OpenCode 模型目录与执行失败修复](reports/providers/opencode-catalog-readiness-2026-10-10.md)：2.0.20 复现、配置确认、数据库冷启动竞争修复与原生流程验证。
 - [Ait 0.0.28 客户端告警修复与诊断验证](reports/clients/release-0.0.28-warning-fixes-2026-10-11.md)：共享许可等待、事件协商、界面告警与错误上下文。

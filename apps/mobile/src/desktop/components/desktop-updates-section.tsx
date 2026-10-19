@@ -1,3 +1,4 @@
+import { showErrorAlert } from "@/diagnostics/error-reporter";
 import { LoadingSpinner } from "@/components/ui/loading-spinner";
 import React, { type ReactElement, useCallback, useMemo, useState } from "react";
 import { Alert, Text, View } from "react-native";
@@ -89,7 +90,7 @@ function useDaemonLogsModal(daemonLogs: { logPath?: string } | null) {
       })
       .catch((error) => {
         console.error("[Settings] Failed to copy log path", error);
-        Alert.alert(t("common.errors.error"), t("desktop.daemon.logs.copyFailed"));
+        showErrorAlert(t("common.errors.error"), t("desktop.daemon.logs.copyFailed"), error);
       });
   }, [daemonLogs?.logPath, t]);
 
@@ -345,7 +346,9 @@ export function LocalDaemonSection() {
         if (status) setStatus(status);
         return undefined;
       })
-      .catch((error) => Alert.alert(t("desktop.daemon.lifecycle.stopFailed"), String(error)))
+      .catch((error) =>
+        showErrorAlert(t("desktop.daemon.lifecycle.stopFailed"), String(error), error),
+      )
       .finally(() => setIsStopping(false));
   }, [setStatus, t]);
 

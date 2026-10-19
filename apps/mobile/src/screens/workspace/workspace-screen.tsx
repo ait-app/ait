@@ -2626,7 +2626,7 @@ function WorkspaceScreenContent({
             closePolicy = resolveCloseAgentTabPolicy(latestAgent);
           } catch (error) {
             console.error("[WorkspaceScreen] Failed to close subagent tab", { error, agentId });
-            toast.error(t("workspace.tabs.toasts.failedToCloseAgent"));
+            toast.error(t("workspace.tabs.toasts.failedToCloseAgent"), error);
             return;
           }
         }
@@ -2816,6 +2816,7 @@ function WorkspaceScreenContent({
       } catch (error) {
         toast.error(
           error instanceof Error ? error.message : t("workspace.tabs.toasts.failedToReloadAgent"),
+          error,
         );
       }
     },

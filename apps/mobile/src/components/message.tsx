@@ -1,5 +1,6 @@
 import { ASSISTANT_IMAGE_DEFAULT_ASPECT_RATIO } from "@/utils/assistant-image-metadata";
 import { LoadingSpinner } from "@/components/ui/loading-spinner";
+import { CopyErrorLogButton } from "@/components/copy-error-log-button";
 import { TaskListRow } from "@/components/task-list-row";
 import {
   View,
@@ -2097,6 +2098,9 @@ interface NotificationProps {
   level: "info" | "warning" | "error";
   message: string;
   disableOuterSpacing?: boolean;
+  serverId?: string;
+  agentId?: string;
+  timelineItemId?: string;
 }
 
 const notificationStylesheet = StyleSheet.create((theme) => ({
@@ -2144,8 +2148,15 @@ export const Notification = memo(function Notification({
   level,
   message,
   disableOuterSpacing,
+  serverId,
+  agentId,
+  timelineItemId,
 }: NotificationProps) {
   const resolvedDisableOuterSpacing = useDisableOuterSpacing(disableOuterSpacing);
+  const context = useMemo(
+    () => ({ serverId, agentId, timelineItemId }),
+    [serverId, agentId, timelineItemId],
+  );
 
   const typeConfig = {
     info: {
@@ -2187,6 +2198,9 @@ export const Notification = memo(function Notification({
             <Text style={notificationStylesheet.messageText} selectable>
               {message}
             </Text>
+            {level === "error" ? (
+              <CopyErrorLogButton error={message} source="provider timeline" context={context} />
+            ) : null}
           </View>
         </View>
       </View>

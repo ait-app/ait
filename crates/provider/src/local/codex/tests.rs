@@ -2,6 +2,7 @@ use super::*;
 use crate::test_support::Fixture;
 
 mod configuration;
+mod diagnostics;
 mod installed;
 mod persistence;
 mod progress;

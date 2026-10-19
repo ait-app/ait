@@ -160,6 +160,7 @@ function useDiscardChangesAction({
       } catch (cause) {
         toast.error(
           cause instanceof Error ? cause.message : t("workspace.fileActions.confirmRevert.failed"),
+          cause,
         );
       }
     },
@@ -1527,7 +1528,10 @@ export function ChangesSurface({
       return;
     }
     void runRefresh({ serverId, cwd }).catch((error) => {
-      toast.error(error instanceof Error ? error.message : t("workspace.git.diff.failedRefresh"));
+      toast.error(
+        error instanceof Error ? error.message : t("workspace.git.diff.failedRefresh"),
+        error,
+      );
     });
   }, [cwd, isRefreshing, runRefresh, serverId, t, toast]);
 
@@ -1637,6 +1641,7 @@ export function ChangesSurface({
       } catch (cause) {
         toast.error(
           cause instanceof Error ? cause.message : t("workspace.fileExplorer.errors.revealFailed"),
+          cause,
         );
       }
     },
@@ -1656,10 +1661,13 @@ export function ChangesSurface({
       try {
         const payload = await client.duplicateFileEntry({ cwd, path });
         if (!payload.success) {
-          toast.error(payload.error ?? t("workspace.fileExplorer.errors.duplicateFailed"));
+          toast.error(
+            payload.error ?? t("workspace.fileExplorer.errors.duplicateFailed"),
+            payload.error,
+          );
         }
       } catch (cause) {
-        toast.error(cause instanceof Error ? cause.message : String(cause));
+        toast.error(cause instanceof Error ? cause.message : String(cause), cause);
       }
     },
     [client, cwd, t, toast],
