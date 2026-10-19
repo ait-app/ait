@@ -22,12 +22,11 @@ jobs:
     container: archlinux:base-devel
     timeout-minutes: 120
     concurrency:
-      group: aur-build-${{ inputs.package }}-${{ github.ref }}
-      cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+      group: aur-build-${{ inputs.package }}
+      cancel-in-progress: false
     steps:
-      # rustup satisfies ait-git's rust makedepend and follows rust-toolchain.toml.
       - name: Install tools
-        run: pacman -Syu --noconfirm --needed git github-cli namcap rustup
+        run: pacman -Syu --noconfirm --needed git github-cli namcap
 
       - uses: actions/checkout@v5
         with:
@@ -56,7 +55,6 @@ jobs:
   publish:
     name: Publish ${{ inputs.package }}
     needs: build
-    if: github.event_name != 'pull_request'
     runs-on: ubuntu-24.04
     container: archlinux:base
     timeout-minutes: 30
@@ -65,9 +63,8 @@ jobs:
       group: aur-publish-${{ inputs.package }}
       cancel-in-progress: false
     steps:
-      # nodejs only evaluates ait-git's pkgver(), which reads package.json.
       - name: Install tools
-        run: pacman -Syu --noconfirm --needed base-devel git openssh github-cli nodejs
+        run: pacman -Syu --noconfirm --needed base-devel git openssh github-cli
 
       - uses: actions/checkout@v5
         with:
