@@ -631,7 +631,6 @@ export const ar: TranslationResources = {
         copyResumeCommand: "نسخ أمر السيرة الذاتية",
         copyAgentId: "نسخ معرف الوكيل",
         copyTerminalId: "نسخ معرف المحطة",
-        copyFilePath: "Copy file path",
         rename: "إعادة تسمية",
         closeAbove: "إغلاق علامات التبويب أعلاه",
         closeBelow: "إغلاق علامات التبويب أدناه",

@@ -637,7 +637,6 @@ export const ja: TranslationResources = {
         copyResumeCommand: "再開コマンドをコピー",
         copyAgentId: "エージェントIDをコピー",
         copyTerminalId: "ターミナルIDをコピー",
-        copyFilePath: "ファイルパスをコピー",
         rename: "名前を変更",
         closeAbove: "上のタブを閉じる",
         closeBelow: "下のタブを閉じる",

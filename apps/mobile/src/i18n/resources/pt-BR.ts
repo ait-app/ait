@@ -636,7 +636,6 @@ export const ptBR: TranslationResources = {
         copyResumeCommand: "Copiar comando de retomada",
         copyAgentId: "Copiar ID do agente",
         copyTerminalId: "Copiar ID do terminal",
-        copyFilePath: "Copiar caminho do arquivo",
         rename: "Renomear",
         closeAbove: "Fechar abas acima",
         closeBelow: "Fechar abas abaixo",

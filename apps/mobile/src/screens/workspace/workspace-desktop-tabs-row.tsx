@@ -1067,6 +1067,10 @@ function ResolvedWorkspaceDesktopTabsRow({
   onExitFocusMode,
 }: ResolvedWorkspaceDesktopTabsRowProps) {
   const { t } = useTranslation();
+  const workspaceRoot = useSessionStore(
+    (state) =>
+      state.sessions[normalizedServerId]?.workspaces.get(normalizedWorkspaceId)?.workspaceDirectory,
+  );
   const newTabKeys = useShortcutKeys("workspace-tab-new");
   const [tabsContainerWidth, setTabsContainerWidth] = useState<number>(0);
   const [exitFocusModeWidth, setExitFocusModeWidth] = useState<number>(0);
@@ -1128,7 +1132,8 @@ function ResolvedWorkspaceDesktopTabsRow({
       copyResumeCommand: t("workspace.tabs.menu.copyResumeCommand"),
       copyAgentId: t("workspace.tabs.menu.copyAgentId"),
       copyTerminalId: t("workspace.tabs.menu.copyTerminalId"),
-      copyFilePath: t("workspace.tabs.menu.copyFilePath"),
+      copyRelativePath: t("workspace.fileActions.copyRelativePath"),
+      copyAbsolutePath: t("workspace.fileActions.copyPath"),
       rename: t("workspace.tabs.menu.rename"),
       closeAbove: t("workspace.tabs.menu.closeAbove"),
       closeBelow: t("workspace.tabs.menu.closeBelow"),
@@ -1343,6 +1348,7 @@ function ResolvedWorkspaceDesktopTabsRow({
         <ResolvedDesktopTabChip
           key={`${item.tab.key}:${item.tab.kind}`}
           serverId={normalizedServerId}
+          workspaceRoot={workspaceRoot}
           item={item}
           isFocused={isFocused}
           isDragging={isActive || activeDragTabId === item.tab.tabId}
@@ -1376,6 +1382,7 @@ function ResolvedWorkspaceDesktopTabsRow({
       layout.closeButtonPolicy,
       layout.items,
       normalizedServerId,
+      workspaceRoot,
       onCloseOtherTabs,
       onCloseTab,
       onCloseTabsToLeft,
@@ -1500,6 +1507,7 @@ function ResolvedWorkspaceDesktopTabsRow({
 }
 function ResolvedDesktopTabChip({
   serverId,
+  workspaceRoot,
   item,
   isFocused,
   isDragging,
@@ -1526,6 +1534,7 @@ function ResolvedDesktopTabChip({
   showDropIndicatorAfter,
 }: {
   serverId: string;
+  workspaceRoot: string | undefined;
   item: ResolvedWorkspaceDesktopTabRowItem;
   isFocused: boolean;
   isDragging: boolean;
@@ -1557,6 +1566,7 @@ function ResolvedDesktopTabChip({
     () =>
       buildWorkspaceDesktopTabActions({
         tab: item.tab,
+        workspaceRoot,
         index,
         tabCount,
         onCopyResumeCommand,
@@ -1574,6 +1584,7 @@ function ResolvedDesktopTabChip({
     [
       index,
       item.tab,
+      workspaceRoot,
       onCloseOtherTabs,
       onCloseTab,
       onCloseTabsToLeft,

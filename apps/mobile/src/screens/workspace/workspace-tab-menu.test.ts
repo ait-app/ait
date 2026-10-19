@@ -211,7 +211,8 @@ describe("buildWorkspaceTabMenuEntries", () => {
     expect(labels[1]).toBe("Rename");
     expect(labels).not.toContain("Copy resume command");
     expect(labels).not.toContain("Copy agent id");
-    expect(labels).not.toContain("Copy file path");
+    expect(labels).not.toContain("Copy relative path");
+    expect(labels).not.toContain("Copy path");
     expect(labels).not.toContain("Reload agent");
 
     const copyTerminalIdEntry = entries.find(
@@ -231,20 +232,80 @@ describe("buildWorkspaceTabMenuEntries", () => {
     expect(onRenameTab).toHaveBeenCalledWith(terminalTab);
   });
 
-  it("includes copy file path for file tabs", () => {
+  it.each([
+    { surface: "desktop", path: "src/path.ts" },
+    { surface: "mobile", path: "/workspace/src/path.ts" },
+    { surface: "desktop", path: "/workspace/src/path.ts" },
+    { surface: "mobile", path: "src/path.ts" },
+  ] as const)(
+    "copies relative and absolute file paths on $surface for $path",
+    ({ surface, path }) => {
+      const onCopyFilePath = vi.fn();
+      const fileTab: WorkspaceTabDescriptor = {
+        key: "file_abc",
+        tabId: "file_abc",
+        kind: "file",
+        target: { kind: "file", path, lineStart: 1, lineEnd: 10 },
+      };
+      const entries = buildWorkspaceTabMenuEntries({
+        surface,
+        tab: fileTab,
+        workspaceRoot: "/workspace",
+        index: 0,
+        tabCount: 1,
+        menuTestIDBase: "workspace-tab-context-file_abc",
+        onCopyResumeCommand: vi.fn(),
+        onCopyAgentId: vi.fn(),
+        onCopyTerminalId: vi.fn(),
+        onCopyFilePath,
+        onReloadAgent: vi.fn(),
+        onRenameTab: vi.fn(),
+        onCloseTab: vi.fn(),
+        onCloseTabsBefore: vi.fn(),
+        onCloseTabsAfter: vi.fn(),
+        onCloseOtherTabs: vi.fn(),
+      });
+
+      const labels = entries.filter((entry) => entry.kind === "item").map((entry) => entry.label);
+      expect(labels.slice(0, 2)).toEqual(["Copy path", "Copy relative path"]);
+      expect(labels).not.toContain("Copy file path");
+      expect(labels).not.toContain("Copy resume command");
+      expect(labels).not.toContain("Copy agent id");
+      expect(labels).not.toContain("Rename");
+      expect(labels).not.toContain("Reload agent");
+
+      const copyRelativePathEntry = entries.find(
+        (entry) => entry.kind === "item" && entry.key === "copy-relative-path",
+      );
+      const copyAbsolutePathEntry = entries.find(
+        (entry) => entry.kind === "item" && entry.key === "copy-absolute-path",
+      );
+      if (!copyRelativePathEntry || copyRelativePathEntry.kind !== "item") {
+        throw new Error("Copy relative path entry missing");
+      }
+      if (!copyAbsolutePathEntry || copyAbsolutePathEntry.kind !== "item") {
+        throw new Error("Copy absolute path entry missing");
+      }
+      expect(copyRelativePathEntry.disabled).toBe(false);
+      expect(copyAbsolutePathEntry.disabled).toBe(false);
+      copyRelativePathEntry.onSelect();
+      copyAbsolutePathEntry.onSelect();
+      expect(onCopyFilePath.mock.calls).toEqual([["src/path.ts"], ["/workspace/src/path.ts"]]);
+    },
+  );
+
+  it("only copies the absolute path for a file outside the workspace", () => {
     const onCopyFilePath = vi.fn();
-    const fileTab: WorkspaceTabDescriptor = {
-      key: "file_abc",
-      tabId: "file_abc",
-      kind: "file",
-      target: { kind: "file", path: "/some/path.ts", lineStart: 1, lineEnd: 10 },
-    };
-    const entries = buildWorkspaceTabMenuEntries({
-      surface: "desktop",
-      tab: fileTab,
+    const actions = buildWorkspaceDesktopTabActions({
+      tab: {
+        key: "external_file",
+        tabId: "external_file",
+        kind: "file",
+        target: { kind: "file", path: "/workspace-other/path.ts" },
+      },
+      workspaceRoot: "/workspace",
       index: 0,
       tabCount: 1,
-      menuTestIDBase: "workspace-tab-context-file_abc",
       onCopyResumeCommand: vi.fn(),
       onCopyAgentId: vi.fn(),
       onCopyTerminalId: vi.fn(),
@@ -252,26 +313,21 @@ describe("buildWorkspaceTabMenuEntries", () => {
       onReloadAgent: vi.fn(),
       onRenameTab: vi.fn(),
       onCloseTab: vi.fn(),
-      onCloseTabsBefore: vi.fn(),
-      onCloseTabsAfter: vi.fn(),
+      onCloseTabsToLeft: vi.fn(),
+      onCloseTabsToRight: vi.fn(),
       onCloseOtherTabs: vi.fn(),
     });
-
-    const labels = entries.filter((entry) => entry.kind === "item").map((entry) => entry.label);
-    expect(labels[0]).toBe("Copy file path");
-    expect(labels).not.toContain("Copy resume command");
-    expect(labels).not.toContain("Copy agent id");
-    expect(labels).not.toContain("Rename");
-    expect(labels).not.toContain("Reload agent");
-
-    const copyFilePathEntry = entries.find(
-      (entry) => entry.kind === "item" && entry.key === "copy-file-path",
+    const copyEntries = actions.menuEntries.filter(
+      (entry) => entry.kind === "item" && entry.key.startsWith("copy-"),
     );
-    if (!copyFilePathEntry || copyFilePathEntry.kind !== "item") {
-      throw new Error("Copy file path entry missing");
+    expect(copyEntries.map((entry) => entry.kind === "item" && entry.disabled)).toEqual([
+      false,
+      true,
+    ]);
+    for (const entry of copyEntries) {
+      if (entry.kind === "item") entry.onSelect();
     }
-    copyFilePathEntry.onSelect();
-    expect(onCopyFilePath).toHaveBeenCalledWith("/some/path.ts");
+    expect(onCopyFilePath.mock.calls).toEqual([["/workspace-other/path.ts"]]);
   });
 
   it("uses a Changes close id for the working diff tab", () => {
@@ -302,7 +358,10 @@ describe("buildWorkspaceTabMenuEntries", () => {
 
     expect(actions.closeButtonTestId).toMatch(/^workspace-working-diff-close-/);
     expect(actions.menuEntries).not.toContainEqual(
-      expect.objectContaining({ kind: "item", key: "copy-file-path" }),
+      expect.objectContaining({ kind: "item", key: "copy-relative-path" }),
+    );
+    expect(actions.menuEntries).not.toContainEqual(
+      expect.objectContaining({ kind: "item", key: "copy-absolute-path" }),
     );
   });
 

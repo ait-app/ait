@@ -2,6 +2,8 @@ import type { WorkspaceTabDescriptor } from "@/screens/workspace/workspace-tabs-
 import { i18n } from "@/i18n/i18next";
 import { encodeFilePathForPathSegment, encodeWorkspaceIdForPathSegment } from "@/utils/host-routes";
 import { buildDeterministicWorkspaceTabId } from "@/workspace-tabs/identity";
+import { resolveWorkspaceFilePaths } from "@/workspace/file-open";
+import { isAbsolutePath } from "@/utils/path";
 
 export type WorkspaceTabMenuSurface = "desktop" | "mobile";
 
@@ -9,7 +11,8 @@ export interface WorkspaceTabMenuLabels {
   copyResumeCommand: string;
   copyAgentId: string;
   copyTerminalId: string;
-  copyFilePath: string;
+  copyRelativePath: string;
+  copyAbsolutePath: string;
   rename: string;
   closeAbove: string;
   closeBelow: string;
@@ -25,7 +28,8 @@ export const DEFAULT_WORKSPACE_TAB_MENU_LABELS: WorkspaceTabMenuLabels = {
   copyResumeCommand: i18n.t("workspace.tabs.menu.copyResumeCommand"),
   copyAgentId: i18n.t("workspace.tabs.menu.copyAgentId"),
   copyTerminalId: i18n.t("workspace.tabs.menu.copyTerminalId"),
-  copyFilePath: i18n.t("workspace.tabs.menu.copyFilePath"),
+  copyRelativePath: i18n.t("workspace.fileActions.copyRelativePath"),
+  copyAbsolutePath: i18n.t("workspace.fileActions.copyPath"),
   rename: i18n.t("workspace.tabs.menu.rename"),
   closeAbove: i18n.t("workspace.tabs.menu.closeAbove"),
   closeBelow: i18n.t("workspace.tabs.menu.closeBelow"),
@@ -65,6 +69,7 @@ export type WorkspaceTabMenuEntry =
 interface BuildWorkspaceTabMenuEntriesInput {
   surface: WorkspaceTabMenuSurface;
   tab: WorkspaceTabDescriptor;
+  workspaceRoot?: string | null;
   index: number;
   tabCount: number;
   menuTestIDBase: string;
@@ -83,6 +88,7 @@ interface BuildWorkspaceTabMenuEntriesInput {
 
 interface BuildWorkspaceDesktopTabActionsInput {
   tab: WorkspaceTabDescriptor;
+  workspaceRoot?: string | null;
   index: number;
   tabCount: number;
   onCopyResumeCommand: (agentId: string) => Promise<void> | void;
@@ -235,14 +241,32 @@ export function buildWorkspaceTabMenuEntries(
 
   if (tab.target.kind === "file") {
     const filePath = tab.target.path;
+    const paths = resolveWorkspaceFilePaths({
+      path: filePath,
+      workspaceRoot: input.workspaceRoot ?? "",
+    });
+    const relativePath = paths?.relativePath;
+    const absolutePath = paths?.absolutePath ?? (isAbsolutePath(filePath) ? filePath : null);
     entries.push({
       kind: "item",
-      key: "copy-file-path",
-      label: labels.copyFilePath,
+      key: "copy-absolute-path",
+      label: labels.copyAbsolutePath,
       icon: "copy",
-      testID: `${menuTestIDBase}-copy-file-path`,
+      disabled: !absolutePath,
+      testID: `${menuTestIDBase}-copy-absolute-path`,
       onSelect: () => {
-        void onCopyFilePath(filePath);
+        if (absolutePath) void onCopyFilePath(absolutePath);
+      },
+    });
+    entries.push({
+      kind: "item",
+      key: "copy-relative-path",
+      label: labels.copyRelativePath,
+      icon: "copy",
+      disabled: !relativePath,
+      testID: `${menuTestIDBase}-copy-relative-path`,
+      onSelect: () => {
+        if (relativePath) void onCopyFilePath(relativePath);
       },
     });
   }
@@ -334,6 +358,7 @@ export function buildWorkspaceDesktopTabActions(
     menuEntries: buildWorkspaceTabMenuEntries({
       surface: "desktop",
       tab: input.tab,
+      workspaceRoot: input.workspaceRoot,
       index: input.index,
       tabCount: input.tabCount,
       menuTestIDBase: contextMenuTestId,
