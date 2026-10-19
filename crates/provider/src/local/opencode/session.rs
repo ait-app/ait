@@ -59,7 +59,7 @@ struct Connection {
     options: Value,
     capabilities: Value,
     clients: BTreeMap<String, String>,
-    users: BTreeSet<String>,
+    identities: BTreeSet<String>,
     observation: Option<Observation>,
     reported_usage: bool,
 }
@@ -180,8 +180,7 @@ pub(super) async fn open(
         },
     )
     .await?;
-    let (id, options, users, clients) = if let Some((handle, _)) = binding {
-        validate_handle(handle)?;
+    let (id, options, mut identities, clients) = if let Some((handle, _)) = binding {
         if capabilities["loadSession"] != true {
             return Err(AgentSessionError::Unavailable);
         }
@@ -193,7 +192,12 @@ pub(super) async fn open(
         )
         .await?;
         let clients = clients(handle)?;
-        (handle.session_id.clone(), options, stream.users, clients)
+        (
+            handle.session_id.clone(),
+            options,
+            history::identities(&stream),
+            clients,
+        )
     } else {
         let result = transport
             .startup_request(
@@ -205,7 +209,7 @@ pub(super) async fn open(
         (
             config::text(&result, "sessionId")?.to_owned(),
             config::state(&result)?,
-            Vec::new(),
+            BTreeSet::new(),
             BTreeMap::new(),
         )
     };
@@ -225,9 +229,8 @@ pub(super) async fn open(
     let info = config::runtime(&id, &options);
     let mut observation = observe(source, &id, &spec.cwd).await;
     let initial = initial_usage(client, &mut observation)?;
-    let mut users: BTreeSet<_> = users.into_iter().collect();
     if let Some(observation) = &observation {
-        users.extend(observation.users().iter().cloned());
+        identities.extend(observation.users().iter().cloned());
     }
     let (_, events) = mpsc::channel(1);
     let diagnostics = transport.diagnostics.clone();
@@ -243,7 +246,7 @@ pub(super) async fn open(
             options,
             capabilities,
             clients,
-            users,
+            identities,
             observation,
             reported_usage: false,
         }),
@@ -425,7 +428,9 @@ impl Session {
             connection.transport = transport;
             connection.observation = observe(source, &self.id, &self.spec.cwd).await;
             if let Some(observation) = &connection.observation {
-                connection.users.extend(observation.users().iter().cloned());
+                connection
+                    .identities
+                    .extend(observation.users().iter().cloned());
             }
             return Ok(());
         }
@@ -732,28 +737,33 @@ impl Execution {
             self.client.images.clone(),
         )
         .await?;
-        let mut users: BTreeSet<_> = replay.users.iter().cloned().collect();
+        let has_input = replay
+            .users
+            .iter()
+            .any(|id| !connection.identities.contains(id));
+        let mut identities = history::identities(&replay);
         if let Some(observation) = &connection.observation {
-            users.extend(observation.users().iter().cloned());
+            identities.extend(observation.users().iter().cloned());
         }
-        let new = users.difference(&connection.users).collect::<Vec<_>>();
+        let new = identities
+            .difference(&connection.identities)
+            .collect::<Vec<_>>();
         if connection.clients.len() + new.len() > 4096 {
             return Err(AgentSessionError::Failed);
         }
         // Native commands such as /compact may complete without inserting a user message.
-        // Automatic compaction can insert several native continuation or replayed inputs.
-        // They belong to this accepted prompt and must retain its turn through later replay.
+        // Compactions and synthetic continuation inputs retain this accepted prompt's identity.
         for user in &new {
             connection
                 .clients
                 .insert((*user).clone(), self.turn.clone());
         }
-        let last_message = if new.is_empty() {
-            None
-        } else {
+        let last_message = if has_input {
             replay.last_message.clone()
+        } else {
+            None
         };
-        connection.users = users;
+        connection.identities = identities;
         let mut entries = history::entries(&mut replay, &connection.clients);
         if let Some(observation) = &connection.observation {
             observation.history(&mut entries, &connection.clients);

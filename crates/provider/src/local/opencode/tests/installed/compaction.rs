@@ -5,15 +5,13 @@ const SEED: &str = "Automatic compaction seed";
 const SUMMARY: &str = "Automatic compaction summary sentinel";
 
 #[tokio::test]
-#[ignore = "requires OpenCode 1.x in AIT_TEST_OPENCODE_BIN; isolated XDG and loopback model"]
+#[ignore = "requires OpenCode 1.18.4 or 2.0.25+; isolated XDG and loopback model"]
 async fn installed_acp_automatic_compaction_keeps_the_session_usable() {
     let mut fixture = installed(false).await;
-    assert!(
-        launcher::version(&fixture.client, &fixture.spec.cwd)
-            .await
-            .unwrap()
-            .starts_with("1.")
-    );
+    let legacy = launcher::version(&fixture.client, &fixture.spec.cwd)
+        .await
+        .unwrap()
+        .starts_with("1.");
     let mut session = fixture.client.create_session(&fixture.spec).await.unwrap();
     let mut history = Vec::new();
     for prompt in [SEED, "Continue after automatic compaction"] {
@@ -35,25 +33,28 @@ async fn installed_acp_automatic_compaction_keeps_the_session_usable() {
                 _ => {}
             }
         }
-        if prompt == SEED {
+        if (prompt == SEED) == legacy {
             assert_eq!(states, ["loading", "completed"]);
-            assert!(
-                history
-                    .iter()
-                    .any(|entry| entry.item["type"] == "compaction"
-                        && entry.item["status"] == "completed")
-            );
-            assert!(
-                history
-                    .iter()
-                    .filter(|entry| entry.item["type"] == "user_message")
-                    .count()
-                    > 1
-            );
+            let marker = history
+                .iter()
+                .find(|entry| entry.item["type"] == "compaction")
+                .unwrap();
+            assert_eq!(marker.item["status"], "completed");
+            assert_eq!(marker.turn_id.as_deref(), Some(turn.as_str()));
+        }
+        if prompt == SEED {
             assert!(
                 history
                     .iter()
                     .all(|entry| entry.turn_id.as_deref() == Some(&turn))
+            );
+            assert!(
+                !legacy
+                    || history
+                        .iter()
+                        .filter(|entry| entry.item["type"] == "user_message")
+                        .count()
+                        > 1
             );
         }
     }
@@ -91,7 +92,7 @@ async fn installed_acp_automatic_compaction_keeps_the_session_usable() {
 }
 
 #[tokio::test]
-#[ignore = "requires OpenCode 1.18.4; native compaction-only input identity and ACP history replay"]
+#[ignore = "requires OpenCode 1.18.4 or 2.0.25+; native manual compaction and ACP history replay"]
 async fn installed_acp_manual_compaction_keeps_its_accepted_turn_after_replay() {
     let fixture = installed(false).await;
     let mut session = fixture.client.create_session(&fixture.spec).await.unwrap();
@@ -131,10 +132,33 @@ async fn installed_acp_manual_compaction_keeps_its_accepted_turn_after_replay() 
             .await
             .unwrap(),
     );
+    let mut resumed = fixture
+        .client
+        .resume_session(&handle, &fixture.spec, AgentResumePurpose::Interactive)
+        .await
+        .unwrap();
+    resumed
+        .start_turn("Continue after manual compaction", &fixture.spec.config)
+        .await
+        .unwrap();
+    let continued = completed(resumed.as_mut()).await;
+    assert!(
+        continued
+            .iter()
+            .any(|entry| entry.item["type"] == "compaction"
+                && entry.turn_id.as_deref() == Some(turn.as_str()))
+    );
+    resumed.close().await.unwrap();
 }
 
 /// Force native overflow once; subsequent requests receive ordinary small usage.
 pub(super) fn model_response(request: &Value, state: &Model) -> Option<Response> {
+    if request["messages"].to_string().contains("<template>") {
+        return Some(streamed_response(
+            &json!({"role":"assistant","content":format!("## Objective\n- {SUMMARY}")}),
+            false,
+        ));
+    }
     if !request["messages"].to_string().contains(SEED) {
         return None;
     }

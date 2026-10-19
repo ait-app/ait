@@ -60,14 +60,33 @@ pub(super) async fn replay(
     Ok((config::state(&result)?, stream))
 }
 
-/// Restore accepted input identity for every replayed item in its native user-message group.
+/// Collect native inputs and standalone compactions before replay entries are drained.
+pub(super) fn identities(stream: &Stream) -> BTreeSet<String> {
+    stream
+        .users
+        .iter()
+        .cloned()
+        .chain(stream.events.iter().filter_map(|event| {
+            let crate::ports::agent_session::AgentTurnEvent::Timeline(entry) = event else {
+                return None;
+            };
+            entry.item["compactionId"].as_str().map(str::to_owned)
+        }))
+        .collect()
+}
+
+/// Restore accepted input identity for each user group and standalone native compaction.
 pub(super) fn entries(stream: &mut Stream, clients: &BTreeMap<String, String>) -> Vec<NativeItem> {
     stream
         .events
         .drain(..)
         .filter_map(|event| {
             if let crate::ports::agent_session::AgentTurnEvent::Timeline(mut entry) = event {
-                if let Some(turn) = entry.turn_id.as_ref().and_then(|id| clients.get(id)) {
+                if let Some(turn) = entry.item["compactionId"]
+                    .as_str()
+                    .and_then(|id| clients.get(id))
+                    .or_else(|| entry.turn_id.as_ref().and_then(|id| clients.get(id)))
+                {
                     entry.turn_id = Some(turn.clone());
                 }
                 if entry.item["type"] == "user_message"

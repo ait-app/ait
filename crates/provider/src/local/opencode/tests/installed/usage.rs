@@ -132,10 +132,17 @@ async fn installed_legacy_acp_exposes_unknown_model_finish_and_preserves_user_co
 
 /// Delay the next native model step after one real tool result, without imposing a host timeout.
 pub(super) async fn model_response(request: &Value) -> Option<Response> {
-    if is_user_message(request, "Unknown native finish") {
+    if let Some(finish) = [
+        ("Unknown native finish", "unknown"),
+        ("Native output limit", "length"),
+        ("Native refusal", "content_filter"),
+    ]
+    .into_iter()
+    .find_map(|(prompt, finish)| is_user_message(request, prompt).then_some(finish))
+    {
         let chunks = [
             json!({"choices":[{"index":0,"delta":{"role":"assistant","content":"partial answer"},"finish_reason":null}]}),
-            json!({"choices":[{"index":0,"delta":{},"finish_reason":"unknown"}],"usage":{"prompt_tokens":20,"completion_tokens":5,"total_tokens":25}}),
+            json!({"choices":[{"index":0,"delta":{},"finish_reason":finish}],"usage":{"prompt_tokens":20,"completion_tokens":5,"total_tokens":25}}),
         ];
         let body = format!("data: {}\n\ndata: {}\n\n", chunks[0], chunks[1]);
         return Some(

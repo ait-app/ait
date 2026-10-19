@@ -93,7 +93,7 @@ OpenCode 1.18.4 的 ACP 在整轮 prompt 结束时发送 `usage_update`，
 验证范围为 provider crate 的 OpenCode 代码及其直接相关行为，默认 features。
 没有运行全 workspace 测试。截图所用主机只读排查；真实模型服务未重新请求，远端未部署，其他平台未验证。
 
-- OpenCode 离线相关测试：82 passed、25 ignored；真实 1.18.4 用量／停止原因：3 passed。
+- 初次修复的 OpenCode 离线相关测试：82 passed、25 ignored；真实 1.18.4 用量／停止原因：3 passed。
 - 真实手动／自动压缩：2 passed，并保持原测试并行度复核。首次执行的自动压缩在关闭后
   读取历史处返回过一次 `Failed`，随后重复验证未复现；该次失败原因尚未确认，不能声称已消除。
 - provider 全 targets 的严格 Clippy、Rust 格式、7 个 Markdown 格式及 388 个文档链接检查通过。
@@ -129,6 +129,9 @@ node scripts/check-docs.mjs
 用量回归覆盖非零计数、下降的计数、零计数，以及真实 CLI 在取消占位消息后的零用量。
 认证只读 HTTP/SSE 回归覆盖实际缓存 token、分页、循环游标、会话隔离、重复 marker 和历史边界。
 真实 CLI 回归还要求在模型第二步仍等待时看到第一步用量，并要求原生 unknown finish 显示错误后可继续。
+
+2.x 后续复查发现独立 compaction 的轮次映射问题，已沿 ACP 身份修复；
+追加测试与最终结果见 [2.x ACP 复查](opencode-2x-acp-2026-10-19.md)。
 
 ## Test coverage
 

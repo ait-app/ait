@@ -20,6 +20,7 @@ use crate::service::agent_manager::ownership::Owners;
 mod compaction;
 mod robustness;
 mod usage;
+mod v2;
 mod workflows;
 
 #[derive(Debug)]
@@ -346,7 +347,7 @@ async fn installed_acp_five_sessions_and_native_model_error_preserve_history_and
     {
         "OpenCode's free tier can only be used from within OpenCode"
     } else {
-        "Authentication required: provider authentication required"
+        crate::ports::diagnostics::Category::Authentication.message()
     };
     assert!(
         session.failure_message().unwrap().contains(expected),

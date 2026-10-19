@@ -113,3 +113,58 @@ async fn automatic_compaction_continuations_respect_the_persisted_identity_budge
         }
     }
 }
+
+#[tokio::test]
+async fn standalone_acp_compactions_keep_distinct_turns_through_replay_and_resume() {
+    let (_root, client, spec) = fixture("normal");
+    let mut session = client.create_session(&spec).await.unwrap();
+    let mut compactions = BTreeMap::new();
+    let mut history = Vec::new();
+    for prompt in ["seed", "/compact", "next input", "/compact"] {
+        let turn = session.start_turn(prompt, &spec.config).await.unwrap();
+        let answer = loop {
+            match event(session.as_mut()).await {
+                AgentTurnEvent::History(entries) => history = entries,
+                AgentTurnEvent::Completed(text) => break text,
+                AgentTurnEvent::Failed | AgentTurnEvent::Cancelled => panic!("fixture failed"),
+                _ => {}
+            }
+        };
+        if prompt == "/compact" {
+            assert_eq!(answer, None);
+            let marker = history
+                .iter()
+                .rev()
+                .find(|entry| entry.item["type"] == "compaction")
+                .unwrap();
+            assert_eq!(marker.turn_id.as_deref(), Some(turn.as_str()));
+            compactions.insert(
+                marker.item["compactionId"].as_str().unwrap().to_owned(),
+                turn,
+            );
+        }
+    }
+    let handle = session.persistence().unwrap();
+    session.close().await.unwrap();
+    assert_eq!(compactions.len(), 2);
+    assert_replay(&history, &client.history(&handle, &spec.cwd).await.unwrap());
+    let mut resumed = client
+        .resume_session(&handle, &spec, AgentResumePurpose::Interactive)
+        .await
+        .unwrap();
+    resumed
+        .start_turn("after resume", &spec.config)
+        .await
+        .unwrap();
+    let history = completed(resumed.as_mut()).await;
+    for marker in history
+        .iter()
+        .filter(|entry| entry.item["type"] == "compaction")
+    {
+        assert_eq!(
+            marker.turn_id.as_ref(),
+            compactions.get(marker.item["compactionId"].as_str().unwrap())
+        );
+    }
+    resumed.close().await.unwrap();
+}
