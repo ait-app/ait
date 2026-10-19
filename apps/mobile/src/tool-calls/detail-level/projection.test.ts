@@ -321,8 +321,8 @@ describe("tool call detail-level projection", () => {
         { type: "unknown", input: null, output: null },
         { name: "mcp__paseo__list_worktrees" },
       ),
-      toolCall("3", { type: "fetch", url: "https://paseo.sh" }),
-      toolCall("4", { type: "fetch", url: "https://github.com/getpaseo" }),
+      toolCall("3", { type: "fetch", url: "https://ait-app.com" }),
+      toolCall("4", { type: "fetch", url: "https://github.com/ait-app" }),
     ];
 
     const result = project({ level: "overview", head: calls });

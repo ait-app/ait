@@ -3,7 +3,7 @@
   "version": "0.1.8",
   "private": true,
   "description": "Ait desktop app (Electron wrapper)",
-  "homepage": "https://github.com/ait-app/ait",
+  "homepage": "https://ait-app.com",
   "license": "Apache-2.0",
   "author": {
     "name": "Necokeine"

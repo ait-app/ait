@@ -494,7 +494,7 @@ async function checkTerminals(client, cwd) {
 }
 
 function runUnitTests() {
-  const aliases = ["daemon-endpoints", "connection-offer", "ssh-transport"].map((name) => ({
+  const aliases = ["daemon-endpoints", "ssh-transport"].map((name) => ({
     find: "@ait/protocol/" + name,
     replacement: path.join(upstream, "packages/protocol/src", name + ".ts"),
   }));

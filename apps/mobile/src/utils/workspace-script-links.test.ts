@@ -172,6 +172,8 @@ describe("resolveWorkspaceScriptLink", () => {
   });
 
   it("classifies proxyUrl from older daemons", () => {
+    // Retain the original endpoint as input to the supported proxyUrl compatibility case.
+    // The resolver only computes service links; it never opens a relay connection.
     const { localProxyUrl: _local, publicProxyUrl: _public, ...legacyLocal } = runningService;
     expect(resolveLink(null, legacyLocal).targets.map((target) => target.kind)).toEqual([
       "paseo",
