@@ -875,11 +875,18 @@ export class HostRuntimeController {
       this.updateSnapshot({ probeByConnectionId: new Map(probeByConnectionId) });
     };
 
-    const maybeActivateFirstAvailable = async (
+    const desktopManagedConnectionId = `desktop-managed-${this.host.serverId}`;
+    const maybeActivateProbedConnection = async (
       connectionId: string,
       client: DaemonClient,
     ): Promise<boolean> => {
-      while (!this.activeClient) {
+      // The managed endpoint is admitted only after desktop readiness. Once its
+      // connection succeeds, take over even if relay won the startup race.
+      while (
+        !this.activeClient ||
+        (connectionId === desktopManagedConnectionId &&
+          this.snapshot.activeConnectionId !== desktopManagedConnectionId)
+      ) {
         if (!activationLock) {
           activationLock = this.switchToConnection({
             connectionId,
@@ -941,6 +948,12 @@ export class HostRuntimeController {
       }
 
       if (!activeProbe || activeProbe.status !== "available") {
+        return;
+      }
+
+      if (currentActiveConnectionId === desktopManagedConnectionId) {
+        this.switchCandidateConnectionId = null;
+        this.switchCandidateHitCount = 0;
         return;
       }
 
@@ -1029,7 +1042,7 @@ export class HostRuntimeController {
               return;
             }
 
-            const activated = await maybeActivateFirstAvailable(connection.id, connectedClient);
+            const activated = await maybeActivateProbedConnection(connection.id, connectedClient);
             shouldCloseClient = shouldCloseClient && !activated;
 
             if (activeClient) {

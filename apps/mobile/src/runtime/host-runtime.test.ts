@@ -2,6 +2,7 @@ import { queryClient } from "@/data/query-client";
 import { isAgentArchiving, setAgentArchiving } from "@/hooks/use-archive-agent";
 import { defaultHostAppearance } from "@/hosts/appearance";
 import { bindHostRuntimeAppState } from "@/navigation/host-runtime-bootstrap";
+import type { DesktopDaemonStatus } from "@/desktop/daemon/desktop-daemon";
 import { useSessionStore, type Agent } from "@/stores/session-store";
 import {
   createAccountRelayHostConnection,
@@ -29,6 +30,7 @@ import {
 import type { ReplicaRow, ReplicaRowStore } from "./replica-cache/row-store";
 
 import { subscriptionFixture } from "./subscription-fixture";
+import { DaemonStartService } from "./daemon-start-service";
 
 class FakeDaemonClient {
   private state: ConnectionState = { status: "idle" };
@@ -1245,6 +1247,43 @@ describe("HostRuntimeController", () => {
     });
   });
 
+  it("keeps relay available until the managed local endpoint can connect", async () => {
+    useHostRuntimeClock();
+    const relay = createAccountRelayHostConnection({
+      hostId: "11111111-1111-4111-8111-111111111111",
+      center: "https://center.test/api",
+    });
+    const managed: HostConnection = {
+      id: "desktop-managed-srv_test",
+      type: "directTcp",
+      endpoint: "localhost:6767",
+    };
+    const host = makeHost({ connections: [relay], preferredConnectionId: relay.id });
+    const latencies: Record<string, number | Error> = {
+      [relay.id]: 25,
+      [managed.id]: new Error("Local daemon is not reachable"),
+    };
+    const controller = new HostRuntimeController({ host, deps: makeDeps(latencies, []) });
+    try {
+      await controller.start({ autoProbe: false });
+      const relayClient = controller.getSnapshot().client;
+      await controller.updateHost({ ...host, connections: [relay, managed] });
+      expect(controller.getSnapshot().activeConnectionId).toBe(relay.id);
+      expect(controller.getSnapshot().client).toBe(relayClient);
+      expect(controller.getSnapshot().probeByConnectionId.get(managed.id)?.status).toBe(
+        "unavailable",
+      );
+
+      latencies[managed.id] = 1;
+      await vi.advanceTimersByTimeAsync(120_000);
+      await controller.runProbeCycleNow();
+      expect(controller.getSnapshot().activeConnectionId).toBe(managed.id);
+      expect(controller.getSnapshot().connectionStatus).toBe("online");
+    } finally {
+      await controller.stop();
+    }
+  });
+
   it("backs off inactive connection probes while a host is online", async () => {
     useHostRuntimeClock();
     const host = makeHost({ preferredConnectionId: "direct:lan:6767" });
@@ -1759,6 +1798,86 @@ describe("HostRuntimeController", () => {
 });
 
 describe("HostRuntimeStore", () => {
+  it.each(["relay-first", "local-first"])(
+    "uses the managed local connection regardless of discovery order: %s",
+    async (order) => {
+      useHostRuntimeClock();
+      const center = "https://center.test/api";
+      const discovered = {
+        host_id: "11111111-1111-4111-8111-111111111111",
+        server_id: "srv_test",
+        name: "Local workstation",
+      };
+      const relay = createAccountRelayHostConnection({ hostId: discovered.host_id, center });
+      const managedId = "desktop-managed-srv_test";
+      const latencies = { [relay.id]: 25, [managedId]: 1 };
+      const deps = makeDeps(latencies, []);
+      const connect = deps.connectToDaemon;
+      deps.connectToDaemon = async (input) => {
+        const result = await connect(input);
+        (result.client as unknown as FakeDaemonClient).heartbeatReportsRtt(
+          latencies[input.connection.id]!,
+        );
+        return result;
+      };
+      const store = new HostRuntimeStore({
+        storage: createMemoryHostRuntimeStorage({ "@paseo:e2e": "1" }),
+        deps,
+        revokePushNotifications: vi.fn(async () => {}),
+      });
+      const readiness = new Deferred<DesktopDaemonStatus>();
+      const startDesktopDaemon = vi.fn(() => readiness.promise);
+      const service = new DaemonStartService({ store, startDesktopDaemon });
+      try {
+        await store.boot();
+        store.setAccountRelayCenter(center);
+        store.setAvailableAccountRelayHosts([discovered.server_id]);
+        const starting = service.start();
+        if (order === "relay-first") {
+          await store.addDiscoveredAccountRelayHosts([discovered], center);
+          await waitForHostOnline(store, discovered.server_id);
+          expect(store.getSnapshot(discovered.server_id)?.activeConnectionId).toBe(relay.id);
+          expect(service.isRunning()).toBe(true);
+        }
+        readiness.resolve({
+          serverId: discovered.server_id,
+          status: "running",
+          listen: "127.0.0.1:6767",
+          hostname: "Local workstation",
+          pid: 1234,
+          home: "/test",
+          version: "0.0.0",
+          desktopManaged: true,
+          ownedByDesktop: true,
+          startedAt: "2026-10-19T00:00:00.000Z",
+          error: null,
+        });
+        expect(await starting).toEqual({ ok: true });
+        if (order === "local-first") {
+          await waitForHostOnline(store, discovered.server_id);
+          await store.addDiscoveredAccountRelayHosts([discovered], center);
+        }
+        await vi.advanceTimersByTimeAsync(0);
+        expect(startDesktopDaemon).toHaveBeenCalledOnce();
+        expect(store.getHosts()).toHaveLength(1);
+        expect(store.getHosts()[0]?.connections.map((connection) => connection.id)).toEqual(
+          expect.arrayContaining([relay.id, managedId]),
+        );
+        expect(store.getSnapshot(discovered.server_id)?.activeConnectionId).toBe(managedId);
+
+        // A later latency spike must not send the local daemon back through relay.
+        latencies[managedId] = 100;
+        (store.getClient(discovered.server_id) as unknown as FakeDaemonClient).heartbeatReportsRtt(
+          100,
+        );
+        await vi.advanceTimersByTimeAsync(360_000);
+        expect(store.getSnapshot(discovered.server_id)?.activeConnectionId).toBe(managedId);
+      } finally {
+        store.syncHosts([]);
+      }
+    },
+  );
+
   it("immediately retries a failed startup connection without waiting for the probe interval", async () => {
     useHostRuntimeClock();
     const connection = makeHost().connections[0]!;
