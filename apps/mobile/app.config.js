@@ -155,6 +155,14 @@ export default {
         },
       ],
       ...buildProfile.notificationPlugins,
+      [
+        "expo-image-picker",
+        {
+          cameraPermission: "Allow $(PRODUCT_NAME) to take photos to attach to your messages.",
+          photosPermission:
+            "Allow $(PRODUCT_NAME) to access your photos to attach to your messages.",
+        },
+      ],
       "expo-audio",
       [
         "expo-gradle-jvmargs",
