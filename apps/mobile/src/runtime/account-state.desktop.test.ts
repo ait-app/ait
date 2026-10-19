@@ -181,7 +181,7 @@ describe("desktop account host persistence", () => {
   });
 });
 
-it("imports only online routable hosts, excluding offline and unsupported records", async () => {
+it("persists bound host records while only making online routable hosts available", async () => {
   const online = {
     host_id: "online",
     server_id: "online-server",
@@ -201,22 +201,23 @@ it("imports only online routable hosts, excluding offline and unsupported record
     offline_since: "2026-10-01T00:00:00Z",
   };
   const manual = { ...offline, host_id: "manual", server_id: null };
+  const unsupported = {
+    ...online,
+    host_id: "unsupported",
+    server_id: "unsupported-server",
+    relay_modes: [],
+  };
+  const unbound = { ...online, host_id: "unbound", server_id: "unbound-server", instance_id: null };
   mocks.invoke.mockResolvedValueOnce({
     status: "online",
     stale: false,
     center: "https://custom.test/api",
     selected: null,
-    hosts: [
-      online,
-      offline,
-      manual,
-      { ...online, host_id: "unsupported", relay_modes: [] },
-      { ...online, host_id: "unbound", instance_id: null },
-    ],
+    hosts: [online, offline, manual, unsupported, unbound],
   });
   await accountCommand("account_status");
   expect(mocks.discover).toHaveBeenLastCalledWith(
-    [online],
+    [online, offline, unsupported, unbound],
     "https://custom.test/api",
     expect.any(Function),
   );
