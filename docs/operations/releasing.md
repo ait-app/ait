@@ -138,7 +138,9 @@ Git 工作区，不用于 `makepkg --source` 或单独发布到 AUR；AUR 二进
 - `ait-bin`：使用对应 GitHub Release 的 `Ait-linux-x86_64.AppImage`。正式版 Release 发布（`release: published`，
   跳过 beta 和 nightly）后自动把 `pkgver` 设为该版本、`pkgrel` 重置为 `1`，校验值取自 Release 的
   `SHA256SUMS`，`ait.desktop` 的校验值按文件重新计算。仓库内 `pkgver`、`pkgrel` 和校验值以 AUR 为准，
-  无需手动修改。同版本修改配方合并到 `main` 后自动递增 `pkgrel`；不会发布比 AUR 更旧的版本。
+  无需手动修改。只在正式版 Release 发布或手动运行时执行，推送 tag 时 Release 仍是草稿，不触发；
+  合并到 `main` 和 PR 都不运行 `ait-bin`。同版本修改配方后手动运行工作流，会先完整构建验证，再自动递增
+  `pkgrel` 推送；不会发布比 AUR 更旧的版本。
 - `ait-git`：从 `main` 源码构建，版本号由 `pkgver()` 在用户构建时生成。只有配方变化合并到 `main`
   时才更新 AUR。
 
@@ -149,7 +151,7 @@ Git 工作区，不用于 `makepkg --source` 或单独发布到 AUR；AUR 二进
 2. 发布：构建成功后在另一台 runner 上运行，不构建，只生成 `.SRCINFO`（`ait-git` 另外运行只读取
    `package.json` 的 `pkgver()`），提交并推送到 AUR。
 
-`.SRCINFO` 不提交到本仓库。修改 `packaging/aur/` 的 PR 只构建、不发布。也可手动运行工作流，
+`.SRCINFO` 不提交到本仓库。修改 `packaging/aur/` 的 PR 只构建 `ait-git`、不发布。也可手动运行工作流，
 `tag` 留空时 `ait-bin` 使用最新正式版。
 
 AUR 私钥只保存在 GitHub environment `aur` 的 secret `AUR_SSH_PRIVATE_KEY` 中，不设仓库级 secret。
