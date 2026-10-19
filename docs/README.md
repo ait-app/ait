@@ -118,7 +118,7 @@
 - [ADR-084（客户端）：iOS 在线服务账户与主机中继](decisions/clients/adr-084-ios-account-relay.md)：iOS 安全存储、原生账户会话、票据中继与下载。
 - [ADR-084（工作区）：工作区主按钮按提交与 PR 生命周期推进](decisions/workspace/adr-084-workspace-primary-git-action.md)：同名远端分支比较、PR 重用和归档推荐条件。
 - [ADR-083（客户端）：在线服务登录与逐主机同步分离](decisions/clients/adr-083-online-service-host-sync.md)：二级登录入口、应用账户设置及每台 daemon 的独立同步与租约。
-- [ADR-083（工作区）：工作区重置到 origin 的最新默认分支](decisions/workspace/adr-083-reset-workspace-to-origin-default.md)：重置按钮、初始分支名、已有同名分支的检出和 Git 执行顺序。
+- [ADR-083（工作区）：工作区重置到 origin 的最新默认分支](decisions/workspace/adr-083-reset-workspace-to-origin-default.md)：重置按钮、初始分支恢复、未跟踪文件与目录清理和 Git 执行顺序。
 - [ADR-082（工作区）：Workspace 可空字段使用单级 Option](decisions/workspace/adr-082-canonical-nullable-workspace-fields.md)：缺失字段规范化为 `null` 的 wire 行为。
 - [ADR-082（Provider）：DeepSeek Harness 原生交互 Host](decisions/providers/adr-082-deepseek-harness-native-host.md)：权限切换、结构化问题、用户消息持久化与原生历史恢复。
 - [ADR-081：Workspace 与 Agent 目录主动推送](decisions/workspace/adr-081-directory-change-push.md)：变更唤醒和事件推送。

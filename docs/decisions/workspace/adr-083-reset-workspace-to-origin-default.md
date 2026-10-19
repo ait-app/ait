@@ -3,6 +3,7 @@
 - 状态：Accepted
 - 日期：2026-10-05
 - 关联：ADR-069、ADR-072
+- 修订：2026-10-19，重置同时清理未跟踪文件和目录。
 
 ## 背景
 
@@ -11,10 +12,10 @@
 ## 决策
 
 1. 工作区描述符提供创建时保存的分支名 `initialBranch`。它来自持久化记录的 `display_name`，不受之后的自动分支改名或标题变更影响。只有托管 worktree 提供此字段。
-2. Git 菜单用“重置工作区”代替“从 main 更新”。托管工作区只要有 `origin` 和创建时分支名就可执行；操作前显示会丢弃已跟踪文件改动和本地提交的确认提示。重置不作为默认主按钮。
-3. 新的 `checkout.reset_workspace.request` 在服务端核对工作区 ID、目录和创建时分支名，校验托管 worktree，读取 `origin` 的默认分支并 fetch 到对应的远端跟踪引用，再恢复到 `initialBranch`，执行 `git reset --hard` 到该引用，最后把持久化工作区记录的分支名同步为 `initialBranch`。若同名本地分支已存在，强制检出该分支以丢弃已确认放弃的改动，并保留原工作分支的引用；若不存在，则将当前分支改名。远端查询或 fetch 失败不会改动本地分支或 HEAD。同名分支被其他 worktree 检出时中止重置，不改动该 worktree。
-4. 与目标提交路径不冲突的未跟踪文件保留；Git 可能清除阻碍检出的未跟踪路径。旧的 `checkout.merge_from_base.request` 继续保持原有合并语义，供兼容调用方使用。
+2. Git 菜单用“重置工作区”代替“从 main 更新”。托管工作区只要有 `origin` 和创建时分支名就可执行；操作前显示会丢弃已跟踪文件改动、本地提交以及所有未跟踪文件和目录（包括嵌套仓库）的确认提示，并说明保留 Git 忽略的文件。重置不作为默认主按钮。
+3. 新的 `checkout.reset_workspace.request` 在服务端核对工作区 ID、目录和创建时分支名，校验托管 worktree，读取 `origin` 的默认分支并 fetch 到对应的远端跟踪引用，再恢复到 `initialBranch`，执行 `git reset --hard` 到该引用，随后清理未跟踪文件，最后把持久化工作区记录的分支名同步为 `initialBranch`。若同名本地分支已存在，强制检出该分支以丢弃已确认放弃的改动，并保留原工作分支的引用；若不存在，则将当前分支改名。远端查询或 fetch 失败不会改动本地分支或 HEAD，也不会清理文件。同名分支被其他 worktree 检出时中止重置，不改动该 worktree。
+4. 本地 hard reset 成功后，仅在目标 worktree 内执行 `git clean -ffd`，删除所有未跟踪文件、目录、符号链接及嵌套 Git 仓库。第二个 force 参数用于清理未跟踪的嵌套仓库；不启用 `-x`，保留 Git 忽略的文件。清理成功后才继续同名远端分支同步和本地重置标记更新。旧的 `checkout.merge_from_base.request` 继续保持原有合并语义，供兼容调用方使用。
 
 ## 验证与边界
 
-本地 Git 测试覆盖远端默认分支（main 或 master）在点击前推进、工作区分支自动改名、同名分支已存在或已检出、本地提交和脏文件、未跟踪文件保留、分支被其他 worktree 占用，以及非托管 checkout 被拒绝。远端分支行为由 [ADR-092](adr-092-reset-same-named-remote-branch.md) 修订：origin 存在初始分支同名引用时，本地重置后通过一次带明确 lease 的强制推送同步到同一提交。
+本地 Git 测试覆盖远端默认分支（main 或 master）在点击前推进、工作区分支自动改名、同名分支已存在或已检出、本地提交和脏文件、未跟踪文件及目录清理、嵌套仓库清理、Git 忽略文件和工作区外文件保留、预检失败不清理文件、分支被其他 worktree 占用，以及非托管 checkout 被拒绝。远端分支行为由 [ADR-092](adr-092-reset-same-named-remote-branch.md) 修订：origin 存在初始分支同名引用时，本地重置后通过一次带明确 lease 的强制推送同步到同一提交。
