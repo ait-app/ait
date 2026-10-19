@@ -2,6 +2,7 @@ import { en, type TranslationResources } from "./en";
 import { pluginSettings } from "./plugin-settings";
 
 export const ar: TranslationResources = {
+  errorLog: en.errorLog,
   onlineService: en.onlineService,
   bots: en.bots,
   paneFind: {
@@ -630,7 +631,6 @@ export const ar: TranslationResources = {
         copyResumeCommand: "نسخ أمر السيرة الذاتية",
         copyAgentId: "نسخ معرف الوكيل",
         copyTerminalId: "نسخ معرف المحطة",
-        copyFilePath: "Copy file path",
         rename: "إعادة تسمية",
         closeAbove: "إغلاق علامات التبويب أعلاه",
         closeBelow: "إغلاق علامات التبويب أدناه",

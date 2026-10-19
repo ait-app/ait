@@ -29,6 +29,7 @@ import type { DaemonClient } from "@ait/client/internal/daemon-client";
 import { useSessionStore } from "@/stores/session-store";
 import { useVoiceOptional } from "@/contexts/voice-context";
 import { useToast } from "@/contexts/toast-context";
+import type { ToastApi } from "@/components/toast-host";
 import { resolveVoiceUnavailableMessage } from "@/utils/server-info-capabilities";
 import {
   collectImageFilesFromClipboardData,
@@ -841,7 +842,7 @@ interface ToggleRealtimeVoiceContext {
   disabled: boolean;
   isAgentRunning: boolean;
   handleStopRealtimeVoice: () => Promise<unknown> | void;
-  toast: { error: (msg: string) => void };
+  toast: Pick<ToastApi, "error">;
   interruptBeforeVoiceMessage: string;
 }
 
@@ -862,7 +863,7 @@ function toggleRealtimeVoiceImpl(ctx: ToggleRealtimeVoiceContext): void {
     console.error("[MessageInput] Failed to start realtime voice", error);
     const message = extractErrorMessage(error);
     if (message && message.trim().length > 0) {
-      ctx.toast.error(message);
+      ctx.toast.error(message, error);
     }
   });
 }
@@ -870,7 +871,7 @@ function toggleRealtimeVoiceImpl(ctx: ToggleRealtimeVoiceContext): void {
 interface StartDictationContext {
   dictationUnavailableMessage: string | null | undefined;
   canStartDictation: () => boolean;
-  toast: { error: (msg: string) => void };
+  toast: Pick<ToastApi, "error">;
   startDictation: () => Promise<void>;
 }
 
@@ -1332,7 +1333,7 @@ export const MessageInput = forwardRef<MessageInputRef, MessageInputProps>(
     const handleDictationError = useCallback(
       (error: Error) => {
         console.error("[MessageInput] Dictation error:", error);
-        toast.error(error.message);
+        toast.error(error.message, error);
       },
       [toast],
     );
@@ -1469,7 +1470,7 @@ export const MessageInput = forwardRef<MessageInputRef, MessageInputProps>(
         console.error("[MessageInput] Failed to stop realtime voice", error);
         const message = extractErrorMessage(error);
         if (message && message.trim().length > 0) {
-          toast.error(message);
+          toast.error(message, error);
         }
       }
     }, [client, isAgentRunning, isRealtimeVoiceForCurrentAgent, toast, voice, voiceAgentId]);

@@ -1,3 +1,4 @@
+import { CopyErrorLogButton } from "@/components/copy-error-log-button";
 import { AgentStreamView, type AgentStreamViewHandle } from "@/agent-stream/view";
 import type { WorkspaceComposerAttachment } from "@/attachments/types";
 import { useWorkspaceAttachmentScopeKey } from "@/attachments/workspace-attachments-store";
@@ -1693,7 +1694,12 @@ function AgentSessionUnavailableState({
             <Text style={styles.offlineDescription}>
               {t("agentPanel.unavailable.showAgainWhenReachable")}
             </Text>
-            {lastError ? <Text style={styles.offlineDetails}>{lastError}</Text> : null}
+            {lastError ? (
+              <View>
+                <Text style={styles.offlineDetails}>{lastError}</Text>
+                <CopyErrorLogButton error={lastError} source="agent host connection" />
+              </View>
+            ) : null}
           </>
         )}
       </View>

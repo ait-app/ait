@@ -2,6 +2,7 @@ import { en, type TranslationResources } from "./en";
 import { pluginSettings } from "./plugin-settings";
 
 export const fr: TranslationResources = {
+  errorLog: en.errorLog,
   onlineService: en.onlineService,
   bots: en.bots,
   paneFind: {
@@ -636,7 +637,6 @@ export const fr: TranslationResources = {
         copyResumeCommand: "Copier la commande de reprise",
         copyAgentId: "Copier l'identifiant de l'agent",
         copyTerminalId: "Copier l'identifiant du terminal",
-        copyFilePath: "Copy file path",
         rename: "Rebaptiser",
         closeAbove: "Fermer les onglets ci-dessus",
         closeBelow: "Fermer les onglets ci-dessous",

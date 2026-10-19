@@ -1,4 +1,4 @@
-# ADR-161：移除 Workspace 服务代理 URL 字段
+# ADR-163：移除 Workspace 服务代理 URL 字段
 
 - 状态：已实现
 - 日期：2026-10-19

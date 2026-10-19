@@ -175,6 +175,7 @@ import { openWorkspacePullRequest } from "@/workspace-tabs/open-supporting-view"
 import {
   createWorkspaceFileTabTarget,
   normalizeWorkspaceFileLocation,
+  resolveWorkspaceFilePaths,
   type WorkspaceFileLocation,
   type WorkspaceFileOpenRequest,
 } from "@/workspace/file-open";
@@ -564,7 +565,8 @@ function MobileWorkspaceTabOption({
       copyResumeCommand: t("workspace.tabs.menu.copyResumeCommand"),
       copyAgentId: t("workspace.tabs.menu.copyAgentId"),
       copyTerminalId: t("workspace.tabs.menu.copyTerminalId"),
-      copyFilePath: t("workspace.tabs.menu.copyFilePath"),
+      copyRelativePath: t("workspace.fileActions.copyRelativePath"),
+      copyAbsolutePath: t("workspace.fileActions.copyPath"),
       rename: t("workspace.tabs.menu.rename"),
       closeAbove: t("workspace.tabs.menu.closeAbove"),
       closeBelow: t("workspace.tabs.menu.closeBelow"),
@@ -577,10 +579,15 @@ function MobileWorkspaceTabOption({
     }),
     [t],
   );
+  const workspaceRoot = useSessionStore(
+    (state) =>
+      state.sessions[normalizedServerId]?.workspaces.get(normalizedWorkspaceId)?.workspaceDirectory,
+  );
   const menuTestIDBase = `workspace-tab-menu-${tab.tabId}`;
   const menuEntries = buildWorkspaceTabMenuEntries({
     surface: "mobile",
     tab,
+    workspaceRoot,
     index: tabIndex,
     tabCount,
     menuTestIDBase,
@@ -2626,7 +2633,7 @@ function WorkspaceScreenContent({
             closePolicy = resolveCloseAgentTabPolicy(latestAgent);
           } catch (error) {
             console.error("[WorkspaceScreen] Failed to close subagent tab", { error, agentId });
-            toast.error(t("workspace.tabs.toasts.failedToCloseAgent"));
+            toast.error(t("workspace.tabs.toasts.failedToCloseAgent"), error);
             return;
           }
         }
@@ -2816,6 +2823,7 @@ function WorkspaceScreenContent({
       } catch (error) {
         toast.error(
           error instanceof Error ? error.message : t("workspace.tabs.toasts.failedToReloadAgent"),
+          error,
         );
       }
     },
@@ -3125,9 +3133,21 @@ function WorkspaceScreenContent({
             void handleCopyTerminalId(descriptor.target.terminalId);
           }
           return true;
-        case "workspace.tab.copy-file-path":
-          if (descriptor?.target.kind === "file") void handleCopyFilePath(descriptor.target.path);
+        case "workspace.tab.copy-relative-path":
+        case "workspace.tab.copy-absolute-path": {
+          if (descriptor?.target.kind === "file") {
+            const paths = resolveWorkspaceFilePaths({
+              path: descriptor.target.path,
+              workspaceRoot: workspaceDirectory ?? "",
+            });
+            const path =
+              action.id === "workspace.tab.copy-relative-path"
+                ? paths?.relativePath
+                : paths?.absolutePath;
+            if (path) void handleCopyFilePath(path);
+          }
           return true;
+        }
         default:
           return false;
       }
@@ -3140,6 +3160,7 @@ function WorkspaceScreenContent({
       handleCopyTerminalId,
       handleReloadAgent,
       handleRenameTab,
+      workspaceDirectory,
     ],
   );
 
@@ -3438,7 +3459,8 @@ function WorkspaceScreenContent({
       "workspace.tab.reload-current",
       "workspace.tab.copy-resume-command",
       "workspace.tab.copy-id",
-      "workspace.tab.copy-file-path",
+      "workspace.tab.copy-relative-path",
+      "workspace.tab.copy-absolute-path",
     ] as const,
     enabled: workspaceActionsEnabled,
     priority: 100,

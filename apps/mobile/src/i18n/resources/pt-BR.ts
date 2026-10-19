@@ -2,6 +2,7 @@ import { en, type TranslationResources } from "./en";
 import { pluginSettings } from "./plugin-settings";
 
 export const ptBR: TranslationResources = {
+  errorLog: en.errorLog,
   onlineService: en.onlineService,
   bots: en.bots,
   paneFind: {
@@ -635,7 +636,6 @@ export const ptBR: TranslationResources = {
         copyResumeCommand: "Copiar comando de retomada",
         copyAgentId: "Copiar ID do agente",
         copyTerminalId: "Copiar ID do terminal",
-        copyFilePath: "Copiar caminho do arquivo",
         rename: "Renomear",
         closeAbove: "Fechar abas acima",
         closeBelow: "Fechar abas abaixo",

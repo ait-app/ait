@@ -17,6 +17,7 @@ fn session() -> CodexSession {
         info: serde_json::from_value(json!({"provider":"codex","sessionId":"thread"})).unwrap(),
         active_turn: Some("turn".to_owned()),
         last_message: None,
+        last_failure: None,
         history: false,
         cwd: "/offline-fixture".to_owned(),
         permissions: std::collections::BTreeMap::new(),

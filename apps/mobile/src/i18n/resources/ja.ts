@@ -2,6 +2,7 @@ import { en, type TranslationResources } from "./en";
 import { pluginSettings } from "./plugin-settings";
 
 export const ja: TranslationResources = {
+  errorLog: en.errorLog,
   onlineService: en.onlineService,
   bots: en.bots,
   paneFind: {
@@ -636,7 +637,6 @@ export const ja: TranslationResources = {
         copyResumeCommand: "再開コマンドをコピー",
         copyAgentId: "エージェントIDをコピー",
         copyTerminalId: "ターミナルIDをコピー",
-        copyFilePath: "ファイルパスをコピー",
         rename: "名前を変更",
         closeAbove: "上のタブを閉じる",
         closeBelow: "下のタブを閉じる",

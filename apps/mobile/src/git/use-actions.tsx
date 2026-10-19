@@ -346,7 +346,7 @@ export function useGitActions({ serverId, cwd, icons }: UseGitActionsInput): Use
   const toastActionError = useCallback(
     (error: unknown, fallback: string) => {
       const message = error instanceof Error ? error.message : fallback;
-      toast.error(message);
+      toast.error(message, error);
     },
     [toast],
   );

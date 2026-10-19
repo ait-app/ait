@@ -154,7 +154,7 @@ export function useAgentProfilePicker(
         .then((notice) => showProviderNoticeToast(toast, notice))
         .catch((error) => {
           console.warn("[useAgentProfilePicker] applyAgentConfig failed", error);
-          toast.error(toErrorMessage(error));
+          toast.error(toErrorMessage(error), error);
         });
     },
     [applicableProfiles, client, persistSelection, target, toast],

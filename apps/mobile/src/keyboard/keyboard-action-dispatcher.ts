@@ -27,7 +27,8 @@ export type KeyboardActionId =
   | "workspace.tab.reload-current"
   | "workspace.tab.copy-resume-command"
   | "workspace.tab.copy-id"
-  | "workspace.tab.copy-file-path"
+  | "workspace.tab.copy-relative-path"
+  | "workspace.tab.copy-absolute-path"
   | "workspace.tab.close-left"
   | "workspace.tab.close-right"
   | "workspace.tab.close-others"
@@ -85,7 +86,8 @@ export type KeyboardActionDefinition =
   | { id: "workspace.tab.reload-current"; scope: KeyboardActionScope }
   | { id: "workspace.tab.copy-resume-command"; scope: KeyboardActionScope }
   | { id: "workspace.tab.copy-id"; scope: KeyboardActionScope }
-  | { id: "workspace.tab.copy-file-path"; scope: KeyboardActionScope }
+  | { id: "workspace.tab.copy-relative-path"; scope: KeyboardActionScope }
+  | { id: "workspace.tab.copy-absolute-path"; scope: KeyboardActionScope }
   | { id: "workspace.tab.close-left"; scope: KeyboardActionScope }
   | { id: "workspace.tab.close-right"; scope: KeyboardActionScope }
   | { id: "workspace.tab.close-others"; scope: KeyboardActionScope }

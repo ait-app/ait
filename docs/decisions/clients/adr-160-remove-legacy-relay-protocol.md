@@ -2,7 +2,7 @@
 
 - 状态：已实现
 - 日期：2026-10-19
-- 后续：[ADR-161](adr-161-remove-workspace-service-proxy-urls.md) 移除三种服务代理 URL 及对应的兼容测试，在线中继继续使用现有回环转发。
+- 后续：[ADR-163](adr-163-remove-workspace-service-proxy-urls.md) 移除三种服务代理 URL 及对应的兼容测试，在线中继继续使用现有回环转发。
 - 关系：完成 [ADR-061](adr-061-app-ait-e2e-remove-relay-plugin.md) 暂留的旧协议清理，延续 [ADR-127](../daemon/adr-127-remove-daemon-pairing-offer.md) 的配对入口移除；[ADR-074](adr-074-account-host-relay.md) 的账户中继继续使用独立协议。
 
 ## 背景与决策

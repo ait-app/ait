@@ -730,7 +730,6 @@ export const en = {
         copyResumeCommand: "Copy resume command",
         copyAgentId: "Copy agent id",
         copyTerminalId: "Copy terminal id",
-        copyFilePath: "Copy file path",
         rename: "Rename",
         closeAbove: "Close tabs above",
         closeBelow: "Close tabs below",
@@ -1586,6 +1585,13 @@ export const en = {
         installFailed: "Unable to install the Ait CLI.",
       },
     },
+  },
+  errorLog: {
+    copy: "Copy error log",
+    copied: "Error log copied",
+    export: "Export log",
+    copyFailed: "Unable to copy. Export the log as a file.",
+    exportFailed: "Unable to export. You can still copy the error log.",
   },
   rootError: {
     title: "Ait ran into a problem.",

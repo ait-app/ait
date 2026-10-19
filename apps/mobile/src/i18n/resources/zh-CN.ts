@@ -728,7 +728,6 @@ export const zhCN: TranslationResources = {
         copyResumeCommand: "复制恢复命令",
         copyAgentId: "复制 Agent ID",
         copyTerminalId: "复制 Terminal ID",
-        copyFilePath: "Copy file path",
         rename: "重命名",
         closeAbove: "关闭上方标签",
         closeBelow: "关闭下方标签",
@@ -1557,6 +1556,13 @@ export const zhCN: TranslationResources = {
         installFailed: "无法安装 Ait CLI。",
       },
     },
+  },
+  errorLog: {
+    copy: "复制错误日志",
+    copied: "错误日志已复制",
+    export: "导出日志",
+    copyFailed: "复制失败，请尝试导出日志文件。",
+    exportFailed: "导出失败，仍可尝试复制错误日志。",
   },
   rootError: {
     title: "Ait 遇到了问题。",

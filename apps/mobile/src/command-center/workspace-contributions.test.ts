@@ -53,7 +53,8 @@ function source(gitActions: GitActions): {
         copyResumeCommand: "Copy resume command",
         copyAgentId: "Copy agent id",
         copyTerminalId: "Copy terminal id",
-        copyFilePath: "Copy file path",
+        copyRelativePath: "Copy relative path",
+        copyAbsolutePath: "Copy path",
         closeTabsLeft: "Close tabs left",
         closeTabsRight: "Close tabs right",
         closeOtherTabs: "Close other tabs",
@@ -198,22 +199,38 @@ describe("workspace command center contributions", () => {
     expect(contributions.some((item) => item.id === "workspace:copy-path")).toBe(true);
   });
 
-  it("dispatches every tab and pane command to the workspace scope", () => {
-    const fixture = source({ primary: null, secondary: [], menu: [] });
-    const contributions = buildWorkspaceCommandCenterContributions(fixture.value);
+  it.each([null, "file"] as const)(
+    "dispatches tab and pane commands with active tab %s",
+    (kind) => {
+      const fixture = source({ primary: null, secondary: [], menu: [] });
+      fixture.value.activeTabKind = kind;
+      fixture.value.activeTabIndex = kind === "file" ? 0 : -1;
+      fixture.value.activeTabCount = kind === "file" ? 1 : 0;
+      const contributions = buildWorkspaceCommandCenterContributions(fixture.value);
 
-    for (const contribution of contributions) contribution.run();
+      for (const contribution of contributions) contribution.run();
 
-    expect(fixture.dispatched.length).toBeGreaterThan(5);
-    // workspace:rename dispatches to workspace scope
-    expect(
-      fixture.dispatched.some((a) => a.id === "workspace.rename" && a.scope === "workspace"),
-    ).toBe(true);
-    // workspace:toggle-explorer-sidebar intentionally dispatches to sidebar scope
-    expect(
-      fixture.dispatched.some((a) => a.id === "sidebar.toggle.right" && a.scope === "sidebar"),
-    ).toBe(true);
-  });
+      expect(fixture.dispatched.length).toBeGreaterThan(5);
+      expect(
+        fixture.dispatched.filter((action) => action.id.startsWith("workspace.tab.copy-")),
+      ).toEqual(
+        kind === "file"
+          ? [
+              { id: "workspace.tab.copy-absolute-path", scope: "workspace" },
+              { id: "workspace.tab.copy-relative-path", scope: "workspace" },
+            ]
+          : [],
+      );
+      // workspace:rename dispatches to workspace scope
+      expect(
+        fixture.dispatched.some((a) => a.id === "workspace.rename" && a.scope === "workspace"),
+      ).toBe(true);
+      // workspace:toggle-explorer-sidebar intentionally dispatches to sidebar scope
+      expect(
+        fixture.dispatched.some((a) => a.id === "sidebar.toggle.right" && a.scope === "sidebar"),
+      ).toBe(true);
+    },
+  );
 
   it("keeps workspace creation commands available outside Git", () => {
     const fixture = source({ primary: null, secondary: [], menu: [] });

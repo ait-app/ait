@@ -153,7 +153,7 @@ function useWorkspaceLabelCatalog(
           assigned,
         });
       } catch (cause) {
-        toast.error(workspaceLabelErrorMessage(cause));
+        toast.error(workspaceLabelErrorMessage(cause), cause);
       }
     },
     [fields, labelDefinitions, serverId, toast],
@@ -254,7 +254,8 @@ export function useWorkspaceCommandCenterActions(): void {
           copyResumeCommand: t("workspace.tabs.menu.copyResumeCommand"),
           copyAgentId: t("workspace.tabs.menu.copyAgentId"),
           copyTerminalId: t("workspace.tabs.menu.copyTerminalId"),
-          copyFilePath: t("workspace.tabs.menu.copyFilePath"),
+          copyRelativePath: t("workspace.fileActions.copyRelativePath"),
+          copyAbsolutePath: t("workspace.fileActions.copyPath"),
           closeTabsLeft: t("workspace.tabs.menu.closeLeft"),
           closeTabsRight: t("workspace.tabs.menu.closeRight"),
           closeOtherTabs: t("workspace.tabs.menu.closeOthers"),
