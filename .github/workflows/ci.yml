@@ -58,7 +58,6 @@ jobs:
               - '.github/workflows/cancel-merged-pr-ci.yml'
               - '.github/workflows/release.yml'
               - '.github/workflows/release-ios-testflight.yml'
-              - '.github/workflows/release-android.yml'
               - '.github/workflows/release-android-play.yml'
 
   docs:

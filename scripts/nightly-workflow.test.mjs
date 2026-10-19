@@ -343,7 +343,7 @@ test("main publishing requires desktop and applicable CI checks to pass", () => 
 });
 
 test("mobile publishing remains manual only", async () => {
-  for (const name of ["release-android", "release-android-play", "release-ios-testflight"]) {
+  for (const name of ["release-android-play", "release-ios-testflight"]) {
     const mobile = yaml.parse(
       await readFile(new URL(`../.github/workflows/${name}.yml`, import.meta.url), "utf8"),
     );

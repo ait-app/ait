@@ -1,5 +1,4 @@
 import assert from "node:assert/strict";
-import { spawnSync } from "node:child_process";
 import { mkdtemp, readFile, readdir, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
@@ -23,9 +22,6 @@ const badging = `package: name='dev.ait.mobile' versionCode='1002003' versionNam
 sdkVersion:'29'
 native-code: 'arm64-v8a' 'armeabi-v7a' 'x86' 'x86_64'
 `;
-const workflow = yaml.parse(
-  await readFile(new URL("../.github/workflows/release-android.yml", import.meta.url), "utf8"),
-);
 test("plans APK names using the shared release naming rules", () => {
   assert.equal(plan.versionCode, 1002003);
   assert.equal(plan.apkName, "Ait-1.2.3-android.apk");
@@ -114,30 +110,7 @@ test("collects the EAS universal APK without modifying its signed bytes", async 
   );
 });
 
-test("manual modes reject invalid requests before checking out source", () => {
-  const guard = workflow.jobs.prepare.steps.find(
-    (step) => step.name === "Validate release request",
-  ).run;
-  for (const [mode, tag, ref, accepted] of [
-    ["test", "", "refs/heads/feature", true],
-    ["test", "v1.2.3", "refs/heads/feature", false],
-    ["release", "v1.2.3", "refs/heads/main", true],
-    ["release", "v1.2.3", "refs/heads/feature", false],
-    ["release", "", "refs/heads/main", false],
-    ["release", "v01.2.3", "refs/heads/main", false],
-    ["release", "v1.2.3; exit 0", "refs/heads/main", false],
-    ["other", "", "refs/heads/main", false],
-  ]) {
-    const result = spawnSync(
-      "bash",
-      ["--noprofile", "--norc", "-e", "-o", "pipefail", "-c", guard],
-      { env: { ...process.env, MODE: mode, TAG: tag, GITHUB_REF: ref } },
-    );
-    assert.equal(result.status === 0, accepted, JSON.stringify({ mode, tag, ref }));
-  }
-});
-
-test("desktop and Android releases have independent manual entry points", async () => {
+test("desktop releases depend on desktop builds and preserve existing APK assets", async () => {
   const release = yaml.parse(
     await readFile(new URL("../.github/workflows/release.yml", import.meta.url), "utf8"),
   );
@@ -158,16 +131,6 @@ test("desktop and Android releases have independent manual entry points", async 
     });
     assert.equal(publish, expected, `${desktop}, cancelled=${cancelled}`);
   }
-  assert.deepEqual(Object.keys(workflow.on), ["workflow_dispatch"]);
-  assert.equal(workflow.on.workflow_dispatch.inputs.mode.default, "test");
-  assert.deepEqual(workflow.on.workflow_dispatch.inputs.mode.options, ["test", "release"]);
-  assert.equal(workflow.permissions.contents, "read");
-  assert.deepEqual(workflow.jobs.publish.needs, ["prepare", "build"]);
-  assert.equal(workflow.jobs.publish.permissions.contents, "write");
-  const upload = workflow.jobs.build.steps.find((step) =>
-    step.uses?.startsWith("actions/upload-artifact@"),
-  );
-  assert.equal(upload.with.name, "ait-android-apk");
   const download = release.jobs.release.steps.find((step) =>
     step.uses?.startsWith("actions/download-artifact@"),
   );
@@ -178,27 +141,6 @@ test("desktop and Android releases have independent manual entry points", async 
   ).run;
   assert.match(verify, /if test -f "release-assets\/Ait-\$\{RELEASE_TAG#v\}-android\.apk"/);
   assert.match(verify, /args\+=\(--android\)/);
-  for (const step of workflow.jobs.build.steps) {
-    if (!step.run) continue;
-    assert.doesNotMatch(step.run, /\$\{\{\s*(?:inputs|secrets)\./);
-    assert.doesNotMatch(step.run, /gh release|apksigner sign|ANDROID_KEYSTORE/);
-    const result = spawnSync("bash", ["-n", "-c", step.run], { encoding: "utf8" });
-    assert.equal(result.status, 0, `${step.name}: ${result.stderr}`);
-  }
-});
-
-test("EAS builds the release source before checking out release tooling", () => {
-  const steps = workflow.jobs.build.steps;
-  const build = steps.findIndex((step) => step.name === "Build APK with EAS");
-  const tooling = steps.findIndex((step) => step.name === "Check out release tooling");
-  const collection = steps.findIndex((step) => step.name === "Verify and collect APK");
-  assert(build >= 0 && tooling > build && collection > tooling);
-  assert.equal(steps[tooling].with.ref, "${{ github.workflow_sha }}");
-  assert.equal(workflow.jobs.build["runs-on"], "ubuntu-24.04");
-  assert.match(steps[build].run, /eas build --platform android --profile production-apk/);
-  assert.match(steps[build].run, /--non-interactive --freeze-credentials --wait --json/);
-  assert.equal(steps[build].env.EXPO_TOKEN, "${{ secrets.EXPO_TOKEN }}");
-  assert.doesNotMatch(JSON.stringify(steps), /setup-gradle|expo prebuild|\.\/gradlew|ndk;|cmake;/);
 });
 
 test("only a finished EAS APK build matching the release can supply artifacts", () => {

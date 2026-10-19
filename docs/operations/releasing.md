@@ -4,9 +4,9 @@
 Rust `daemon`。发布边界见 [ADR-053](../decisions/clients/adr-053-paseo-desktop-release.md)，
 旧桌面源码的移除见 [当前架构](../architecture/README.md)。
 
-推送标签只自动构建桌面。Android APK 通过独立的手动工作流使用 EAS 构建，
-可在桌面 Release 完成后加入同一版本，也可从当前分支创建测试预发布版本。
-APK 的签名方式、安装要求与手动测试入口见 [Android APK 发布](android-releases.md)。
+推送标签只自动构建桌面。Android APK 的独立构建与发布流水线已移除；Android 商店
+构建使用下方的 Google Play AAB 工作流。保留的 APK 配置与已有附件处理见
+[Android APK 构建与已有产物](android-releases.md)。
 
 `apps/mobile` 的 Google Play Android Internal Testing 发布流程见下方
 [Google Play Android Internal Testing](#google-play-android-internal-testing) 一节，
@@ -76,24 +76,23 @@ nightly 同样附带独立 daemon 归档，例如 `Ait-38fb6054-2026-10-08-daemo
 合并到 `main` 后，由 main CI 构建并发布 nightly 安装包；合并前如需验证安装包，
 可按[桌面端构建说明](../../apps/desktop/README.md)在本地打包。
 
-Android APK、Google Play 和 iOS TestFlight 继续仅由各自的 `workflow_dispatch` 手动触发，
+Google Play 和 iOS TestFlight 继续仅由各自的 `workflow_dispatch` 手动触发，
 main/PR CI 不调用 EAS 构建或提交，不消耗移动端发布配额。
 
 ## 发布产物
 
-| 平台                | 架构                    | 文件                                                     |
-| ------------------- | ----------------------- | -------------------------------------------------------- |
-| Linux               | x86_64                  | `Ait-linux-x86_64.AppImage`                              |
-| Linux               | x86_64                  | `Ait-VERSION-linux-x64.tar.gz`                           |
-| Linux（deb）        | x86_64                  | `Ait-VERSION-linux-amd64.deb`                            |
-| Linux（rpm）        | x86_64                  | `Ait-VERSION-linux-x86_64.rpm`                           |
-| macOS               | Apple Silicon arm64     | `Ait-VERSION-macos-arm64.dmg`                            |
-| macOS               | Apple Silicon arm64     | `Ait-VERSION-macos-arm64.zip`                            |
-| Linux 独立 daemon   | x86_64                  | `Ait-VERSION-daemon-linux-x64.tar.gz`                    |
-| macOS 独立 daemon   | Apple Silicon arm64     | `Ait-VERSION-daemon-macos-arm64.tar.gz`                  |
-| Android（独立发布） | 通用（含 ARM64、ARMv7） | `Ait-VERSION-android.apk`                                |
-| 自动更新            | 各平台                  | `latest-linux.yml`、`latest-mac.yml`、生成的 `.blockmap` |
-| 校验                | 全部资产                | `SHA256SUMS`                                             |
+| 平台              | 架构                | 文件                                                     |
+| ----------------- | ------------------- | -------------------------------------------------------- |
+| Linux             | x86_64              | `Ait-linux-x86_64.AppImage`                              |
+| Linux             | x86_64              | `Ait-VERSION-linux-x64.tar.gz`                           |
+| Linux（deb）      | x86_64              | `Ait-VERSION-linux-amd64.deb`                            |
+| Linux（rpm）      | x86_64              | `Ait-VERSION-linux-x86_64.rpm`                           |
+| macOS             | Apple Silicon arm64 | `Ait-VERSION-macos-arm64.dmg`                            |
+| macOS             | Apple Silicon arm64 | `Ait-VERSION-macos-arm64.zip`                            |
+| Linux 独立 daemon | x86_64              | `Ait-VERSION-daemon-linux-x64.tar.gz`                    |
+| macOS 独立 daemon | Apple Silicon arm64 | `Ait-VERSION-daemon-macos-arm64.tar.gz`                  |
+| 自动更新          | 各平台              | `latest-linux.yml`、`latest-mac.yml`、生成的 `.blockmap` |
+| 校验              | 全部资产            | `SHA256SUMS`                                             |
 
 AppImage 文件名保持稳定，版本体现在 Release 标签和应用内部。deb 与 rpm 的包名为
 `ait-desktop`，安装到 `/opt/Ait`，并列入 `latest-linux.yml` 供原生更新器使用。Windows 和其他架构
@@ -221,7 +220,7 @@ GitHub Release 创建和修复均使用 `--prerelease --latest=false`，保留�
 
 根 `PKGBUILD` 的 Arch 版本使用 `0.0.23beta1`，`_ait_version` 保留完整 SemVer 用于
 源码校验；正式版准备时也要同步这两个字段。AUR 二进制配方继续引用已验证的正式版。
-Android APK、Google Play、iOS TestFlight 仍通过各自的手动入口发布，不随 beta 标签触发。
+Google Play、iOS TestFlight 仍通过各自的手动入口发布，不随 beta 标签触发。
 
 ## 创建 Release
 
@@ -277,7 +276,7 @@ macOS 需要 GitHub Secrets：`MAC_CSC_LINK`、`MAC_CSC_KEY_PASSWORD`、`APPLE_I
 Release Note 由 `.github/release.yml` 根据合并 PR 分组生成。
 
 手动重跑：Actions → Release Ait → Run workflow，输入已存在的标签。工作流不会创建标签。
-Android APK 的正式和测试发布由独立的 [Android APK 发布](android-releases.md)流程处理。
+重跑会验证并保留此前已发布的 Android APK；不再触发新的 APK 构建。
 已有 Release 保留说明，覆盖同名资产；不要移动已经公开使用的标签。
 
 默认应用源码从输入的发布标签检出；资产收集、校验和相关测试从工作流自身的提交检出到
@@ -351,8 +350,7 @@ Android Play 内部测试使用独立手动工作流
 首次服务账号配置、Play App Signing、测试者名单、安装链接和重试步骤统一见
 [Google Play 内部测试与 CI 发布](google-play-internal-testing.md)。
 请使用其中的 `play-internal` / `play-internal-draft` 提交 profile 和确定的 build ID。
-GitHub APK 使用[另一个入口](android-releases.md)，遗留 EAS production workflow
-不用于本流程。发布边界见
+独立的 GitHub APK 工作流已移除，遗留 EAS production workflow 不用于本流程。发布边界见
 [ADR-097](../decisions/clients/adr-097-google-play-internal-release.md)。
 
 ## Apple TestFlight iOS 手动发布
