@@ -40,9 +40,7 @@ it("records console errors and SDK request diagnostics without a toast", () => {
   console.error("Save failed", failure);
   expect(appErrorReporter.takePending()).toEqual([]);
   appErrorReporter.report(failure, { source: "dialog" });
-  expect(appErrorReporter.takePending().map((pending) => pending.message)).toEqual([
-    "Save failed",
-  ]);
+  expect(appErrorReporter.takePending().map((pending) => pending.message)).toEqual(["Save failed"]);
   cleanup();
   expect(console.error).toBe(original);
 });
