@@ -192,8 +192,64 @@ it.each(["initial connection", "reconnection"])(
       confirmedHostIds: [],
     });
     expect(attempts).toEqual([first.server_id, first.server_id, second.server_id]);
+    // The network boundary reports established business connections independently of the channel.
+    const readSnapshot = store.getSnapshot.bind(store);
+    vi.spyOn(store, "getSnapshot").mockImplementation((serverId) => {
+      const snapshot = readSnapshot(serverId);
+      return snapshot ? { ...snapshot, connectionStatus: "online" } : null;
+    });
+    const available = store.getAvailableHosts();
+    expect(available).toHaveLength(2);
     socket.disconnect();
     await accountCommand("account_status");
-    expect(manager.snapshot()).toMatchObject({ stale: true, confirmedHostIds: [] });
+    expect(manager.snapshot()).toMatchObject({
+      status: "error",
+      stale: true,
+      confirmedHostIds: [],
+    });
+    expect(store.getAvailableHosts()).toEqual(available);
+
+    await vi.advanceTimersByTimeAsync(4000);
+    socket = channel.sockets.at(-1)!;
+    socket.receive(welcome);
+    socket.receive({
+      type: "node.offline",
+      node_id: first.node_id,
+      node_session_id: "host-session",
+      host_id: first.host_id,
+      observed_at: "disconnected",
+    });
+    await accountCommand("account_status");
+    expect(store.getAvailableHosts().map((host) => host.serverId)).toEqual([second.server_id]);
+    expect(store.getHosts()).toHaveLength(2);
+
+    const offline = {
+      ...first,
+      host_id: "33333333-3333-4333-8333-333333333333",
+      server_id: "offline-server",
+      online: false,
+      instance_id: null,
+      relay_modes: [],
+    };
+    socket.receive({
+      type: "hosts.snapshot",
+      hosts: [
+        ...manager.snapshot().hosts,
+        offline,
+        { ...offline, host_id: "44444444-4444-4444-8444-444444444444", server_id: null },
+      ],
+      observed_at: "refreshed",
+    });
+    await accountCommand("account_status");
+    expect(store.getHosts().map((host) => host.serverId)).toEqual([
+      first.server_id,
+      second.server_id,
+      offline.server_id,
+    ]);
+    expect(store.getAvailableHosts().map((host) => host.serverId)).toEqual([second.server_id]);
+    expect(attempts).not.toContain(offline.server_id);
+    expect(JSON.parse(storage.get("@paseo:daemon-registry")!)).toEqual(
+      expect.arrayContaining([expect.objectContaining({ serverId: offline.server_id })]),
+    );
   },
 );
