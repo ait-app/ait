@@ -584,7 +584,9 @@ test("release workflow builds only the daemon and packages the resolved desktop 
   for (const format of ["deb", "rpm"]) {
     assert.equal(config[format].packageName, "ait-desktop");
     assert.equal(config[format].afterInstall, "scripts/linux-sandbox/after-install.tpl");
-    assert(config[format].depends.some((name) => name.includes("asound") || name.includes("alsa")));
+    assert.equal(config[format].afterRemove, "scripts/linux-sandbox/after-remove.tpl");
+    for (const library of [/asound|alsa/, /gbm/])
+      assert(config[format].depends.some((name) => library.test(name)));
   }
 });
 
