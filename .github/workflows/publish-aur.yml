@@ -32,6 +32,8 @@ jobs:
   ait-bin:
     if: ${{ github.event_name != 'release' || (!github.event.release.prerelease && github.event.release.tag_name != 'nightly') }}
     uses: ./.github/workflows/aur-package.yml
+    # Called workflows see no secrets otherwise, including the `aur` environment's own.
+    secrets: inherit
     with:
       package: ait-bin
       tag: ${{ github.event.release.tag_name || inputs.tag }}
@@ -39,5 +41,6 @@ jobs:
   ait-git:
     if: ${{ github.event_name != 'release' }}
     uses: ./.github/workflows/aur-package.yml
+    secrets: inherit
     with:
       package: ait-git
