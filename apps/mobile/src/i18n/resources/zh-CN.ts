@@ -832,7 +832,6 @@ export const zhCN: TranslationResources = {
     scripts: {
       title: "Scripts",
       actions: {
-        chooseUrl: "选择 URL",
         copyUrl: "复制 URL",
         openService: "查看服务",
         restart: "重启",
@@ -848,13 +847,7 @@ export const zhCN: TranslationResources = {
         stopScript: "停止 {{scriptName}}",
         restartScript: "重启 {{scriptName}}",
         copyUrl: "复制 {{scriptName}} 的 URL",
-        chooseUrl: "选择 {{scriptName}} 的 URL",
         script: "{{scriptName}} script",
-      },
-      routes: {
-        public: "反向代理",
-        paseo: "Memorable",
-        direct: "直接地址",
       },
       states: {
         exitCode: "exit {{code}}",

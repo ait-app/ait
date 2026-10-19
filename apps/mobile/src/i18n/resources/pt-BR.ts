@@ -743,7 +743,6 @@ export const ptBR: TranslationResources = {
     scripts: {
       title: "Scripts",
       actions: {
-        chooseUrl: "Escolher URL",
         copyUrl: "Copiar URL",
         openService: "Ver serviço",
         restart: "Reiniciar",
@@ -759,13 +758,7 @@ export const ptBR: TranslationResources = {
         stopScript: "Parar {{scriptName}}",
         restartScript: "Reiniciar {{scriptName}}",
         copyUrl: "Copiar URL de {{scriptName}}",
-        chooseUrl: "Escolher URL para {{scriptName}}",
         script: "script {{scriptName}}",
-      },
-      routes: {
-        public: "Proxy reverso",
-        paseo: "Memorable",
-        direct: "Direta",
       },
       states: {
         exitCode: "saída {{code}}",

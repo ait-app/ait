@@ -12,57 +12,39 @@ import { WorkspaceScriptsButton } from "@/screens/workspace/workspace-scripts-bu
 
 void testI18n;
 
-const {
-  theme,
-  startWorkspaceScriptMock,
-  killTerminalMock,
-  setStringAsyncMock,
-  copiedToastMock,
-  routePreferenceByServerIdMock,
-  routePreferenceListenersMock,
-  setPreferredRouteMock,
-} = vi.hoisted(() => {
-  const hoistedTheme = {
-    spacing: { 1: 4, 1.5: 6, 2: 8, 3: 12 },
-    borderWidth: { 1: 1 },
-    borderRadius: { md: 6, lg: 8 },
-    fontSize: { xs: 11, sm: 13 },
-    fontWeight: { normal: "400", medium: "500" },
-    colors: {
-      foreground: "#fff",
-      foregroundMuted: "#aaa",
-      surface2: "#222",
-      borderAccent: "#444",
-      palette: {
-        blue: { 500: "#0a84ff" },
-        green: { 500: "#30d158" },
-        red: { 300: "#ff9f99", 500: "#ff453a" },
+const { theme, startWorkspaceScriptMock, killTerminalMock, setStringAsyncMock, copiedToastMock } =
+  vi.hoisted(() => {
+    const hoistedTheme = {
+      spacing: { 1: 4, 1.5: 6, 2: 8, 3: 12 },
+      borderWidth: { 1: 1 },
+      borderRadius: { md: 6, lg: 8 },
+      fontSize: { xs: 11, sm: 13 },
+      fontWeight: { normal: "400", medium: "500" },
+      colors: {
+        foreground: "#fff",
+        foregroundMuted: "#aaa",
+        surface2: "#222",
+        borderAccent: "#444",
+        palette: {
+          blue: { 500: "#0a84ff" },
+          green: { 500: "#30d158" },
+          red: { 300: "#ff9f99", 500: "#ff453a" },
+        },
       },
-    },
-  };
+    };
 
-  const routePreferenceByServerId: Record<string, "public" | "paseo" | "direct"> = {};
-  const routePreferenceListeners = new Set<() => void>();
-  const setPreferredRoute = vi.fn((serverId: string, kind: "public" | "paseo" | "direct") => {
-    routePreferenceByServerId[serverId] = kind;
-    for (const listener of routePreferenceListeners) listener();
+    return {
+      theme: hoistedTheme,
+      startWorkspaceScriptMock: vi.fn(async () => ({ terminalId: "terminal-script-1" })),
+      killTerminalMock: vi.fn(async () => ({
+        terminalId: "terminal-script-1",
+        success: true,
+        requestId: "request-1",
+      })),
+      setStringAsyncMock: vi.fn(async () => true),
+      copiedToastMock: vi.fn(),
+    };
   });
-
-  return {
-    theme: hoistedTheme,
-    startWorkspaceScriptMock: vi.fn(async () => ({ terminalId: "terminal-script-1" })),
-    killTerminalMock: vi.fn(async () => ({
-      terminalId: "terminal-script-1",
-      success: true,
-      requestId: "request-1",
-    })),
-    setStringAsyncMock: vi.fn(async () => true),
-    copiedToastMock: vi.fn(),
-    routePreferenceByServerIdMock: routePreferenceByServerId,
-    routePreferenceListenersMock: routePreferenceListeners,
-    setPreferredRouteMock: setPreferredRoute,
-  };
-});
 
 vi.hoisted(() => {
   (globalThis as unknown as { __DEV__: boolean }).__DEV__ = false;
@@ -91,27 +73,10 @@ vi.mock("@/constants/platform", () => ({
 }));
 
 vi.mock("@/runtime/host-runtime", () => ({
-  useHostRuntimeSnapshot: () => ({ activeConnection: null }),
+  useHostRuntimeSnapshot: () => ({
+    activeConnection: { type: "accountRelay", endpoint: "remote-host", display: "Online relay" },
+  }),
 }));
-
-vi.mock("@/workspace-service-routes/store", async () => {
-  const ReactModule = await vi.importActual<typeof import("react")>("react");
-  const state = {
-    byServerId: routePreferenceByServerIdMock,
-    setPreferredRoute: setPreferredRouteMock,
-  };
-  return {
-    useWorkspaceServiceRoutePreferencesStore: <T,>(selector: (value: typeof state) => T) =>
-      ReactModule.useSyncExternalStore(
-        (listener) => {
-          routePreferenceListenersMock.add(listener);
-          return () => routePreferenceListenersMock.delete(listener);
-        },
-        () => selector(state),
-        () => selector(state),
-      ),
-  };
-});
 
 vi.mock("@/stores/session-store", () => ({
   useSessionStore: (selector: (state: unknown) => unknown) =>
@@ -221,9 +186,6 @@ function script(
     type: input.type ?? "script",
     hostname: input.hostname ?? input.scriptName,
     port: input.port ?? null,
-    localProxyUrl: input.localProxyUrl,
-    publicProxyUrl: input.publicProxyUrl,
-    proxyUrl: input.proxyUrl ?? null,
     lifecycle: input.lifecycle ?? "stopped",
     health: input.health ?? null,
     exitCode: input.exitCode ?? null,
@@ -324,10 +286,6 @@ describe("WorkspaceScriptsButton", () => {
     killTerminalMock.mockClear();
     setStringAsyncMock.mockClear();
     copiedToastMock.mockClear();
-    setPreferredRouteMock.mockClear();
-    for (const serverId of Object.keys(routePreferenceByServerIdMock)) {
-      delete routePreferenceByServerIdMock[serverId];
-    }
   });
 
   afterEach(() => {
@@ -449,57 +407,25 @@ describe("WorkspaceScriptsButton", () => {
     expect(trigger?.querySelector('[data-icon="ChevronDown"]')).not.toBeNull();
   });
 
-  it("persists the selected route for the host", () => {
-    const scripts = [
-      script({
-        scriptName: "dev",
-        type: "service",
-        hostname: "dev--proj--repo.localhost",
-        lifecycle: "running",
-        port: 57483,
-        proxyUrl: "http://dev--proj--repo.localhost:6767",
-        terminalId: "terminal-script-1",
-      }),
-    ];
-    current = renderScripts(scripts);
-
-    const row = requireRow("dev");
-    expect(row.textContent).toContain("dev--proj--repo.localhost:6767");
-
-    const routeButton = row.querySelector('[data-testid="workspace-scripts-route-dev"]');
-    expect(routeButton).not.toBeNull();
-    fireEvent.click(
-      row.querySelector('[data-testid="workspace-scripts-route-dev-direct"]') as HTMLElement,
-    );
-    expect(setPreferredRouteMock).toHaveBeenCalledWith("test-server", "direct");
-    expect(row.textContent).toContain("localhost:57483");
-
-    const copyButton = row.querySelector('[data-testid="workspace-scripts-copy-dev"]');
-    expect(copyButton).not.toBeNull();
-    fireEvent.click(copyButton as HTMLElement);
-    expect(setStringAsyncMock).toHaveBeenCalledWith("http://localhost:57483");
-    expect(copiedToastMock).toHaveBeenCalledWith("localhost:57483");
-
-    current.unmount();
-    current = renderScripts(scripts);
-    expect(requireRow("dev").textContent).toContain("localhost:57483");
-  });
-
-  it("defaults to a configured reverse proxy URL", () => {
+  it("copies the service loopback URL while connected through online relay", () => {
     current = renderScripts([
       script({
         scriptName: "dev",
         type: "service",
         lifecycle: "running",
         port: 57483,
-        localProxyUrl: "http://dev--proj--repo.localhost:6767",
-        publicProxyUrl: "https://dev--proj--repo.services.example.com",
-        proxyUrl: "https://dev--proj--repo.services.example.com",
         terminalId: "terminal-script-1",
       }),
     ]);
 
-    expect(requireRow("dev").textContent).toContain("dev--proj--repo.services.example.com");
+    const row = requireRow("dev");
+    expect(row.textContent).toContain("localhost:57483");
+    expect(row.querySelector('[data-testid="workspace-scripts-route-dev"]')).toBeNull();
+    const copyButton = row.querySelector('[data-testid="workspace-scripts-copy-dev"]');
+    expect(copyButton).not.toBeNull();
+    fireEvent.click(copyButton as HTMLElement);
+    expect(setStringAsyncMock).toHaveBeenCalledWith("http://localhost:57483");
+    expect(copiedToastMock).toHaveBeenCalledWith("localhost:57483");
   });
 
   it("stops a running script through its terminal", async () => {
@@ -564,7 +490,6 @@ describe("WorkspaceScriptsButton", () => {
         type: "service",
         lifecycle: "running",
         port: 3000,
-        proxyUrl: "http://dev--project.localhost:6767",
         terminalId: "terminal-script-1",
       }),
     ]);
@@ -581,9 +506,6 @@ describe("WorkspaceScriptsButton", () => {
     expect(
       document.querySelector('[data-testid="workspace-scripts-copy-dev-tooltip"]')?.textContent,
     ).toBe("Copy URL");
-    expect(
-      document.querySelector('[data-testid="workspace-scripts-route-dev-tooltip"]')?.textContent,
-    ).toBe("Choose URL");
   });
 
   it("restarts a script once its stopped lifecycle arrives", async () => {

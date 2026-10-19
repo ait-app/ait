@@ -61,7 +61,7 @@ fn setup_projection_matches_running_completed_and_failed_commands() {
 }
 
 #[test]
-fn script_projection_keeps_runtime_identity_and_omits_unimplemented_proxy_state() {
+fn script_projection_keeps_runtime_identity() {
     let projected = script(ScriptSnapshot {
         name: "web".to_owned(),
         kind: ScriptType::Service,
@@ -75,8 +75,6 @@ fn script_projection_keeps_runtime_identity_and_omits_unimplemented_proxy_state(
     assert_eq!(projected.lifecycle, WorkspaceScriptLifecycle::Running);
     assert_eq!(projected.port, Some(4321));
     assert_eq!(projected.terminal_id.as_deref(), Some("terminal-1"));
-    assert!(projected.local_proxy_url.is_none());
-    assert!(projected.proxy_url.is_none());
 }
 
 #[test]

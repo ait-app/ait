@@ -739,7 +739,6 @@ export const ar: TranslationResources = {
     scripts: {
       title: "البرامج النصية",
       actions: {
-        chooseUrl: "اختيار الرابط",
         copyUrl: "نسخ الرابط",
         openService: "عرض الخدمة",
         restart: "إعادة التشغيل",
@@ -755,13 +754,7 @@ export const ar: TranslationResources = {
         stopScript: "إيقاف{{scriptName}}",
         restartScript: "إعادة تشغيل{{scriptName}}",
         copyUrl: "نسخ عنوان URL لـ{{scriptName}}",
-        chooseUrl: "اختيار رابط {{scriptName}}",
         script: "البرنامج النصي{{scriptName}}",
-      },
-      routes: {
-        public: "الوكيل العكسي",
-        paseo: "Memorable",
-        direct: "مباشر",
       },
       states: {
         exitCode: "الخروج من{{code}}",

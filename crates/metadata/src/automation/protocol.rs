@@ -165,7 +165,7 @@ pub(crate) enum WorkspaceScriptLifecycle {
     Stopped,
 }
 
-/// Public script state copied from Paseo's `WorkspaceScriptPayloadSchema`.
+/// Public script state used by Workspace RPCs and directory events.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct WorkspaceScript {
@@ -178,14 +178,6 @@ pub struct WorkspaceScript {
     pub(crate) hostname: String,
     /// Configured or allocated service port.
     pub(crate) port: Option<u16>,
-    /// Loopback proxy URL when a proxy is installed.
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub(crate) local_proxy_url: Option<String>,
-    /// Public proxy URL when configured.
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub(crate) public_proxy_url: Option<String>,
-    /// Backward-compatible preferred proxy URL.
-    pub(crate) proxy_url: Option<String>,
     /// Current process lifecycle.
     pub(crate) lifecycle: WorkspaceScriptLifecycle,
     /// Service health; always null because services are not health-probed.

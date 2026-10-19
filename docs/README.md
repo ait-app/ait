@@ -25,6 +25,8 @@
 
 ## 架构决策
 
+- [ADR-164：移除 Workspace 服务代理 URL 字段](decisions/clients/adr-164-remove-workspace-service-proxy-urls.md)：删除三种旧代理 URL、路由选择和兼容回退，保留在线中继回环转发，并重建旧工作区缓存。
+
 - [ADR-163：nightly 附带独立 daemon 归档](decisions/clients/adr-163-nightly-standalone-daemon.md)：沿用构建标识命名，Linux 使用 glibc 2.28 基线，macOS 仅 ad-hoc 签名、需手动移除 quarantine。
 
 - [ADR-162：Codex 失败展示原生原因与 HTTP 状态](decisions/providers/adr-162-codex-error-details.md)：有界脱敏的上游错误、原生重试结果与持久聊天提示。

@@ -7,8 +7,6 @@ const CANONICAL_NULL_FIELDS: &[&str] = &[
     "projectCustomName",
     "projectCustomIconRevision",
     "workspaceName",
-    "localProxyUrl",
-    "publicProxyUrl",
     "currentBranch",
     "remoteUrl",
     "isDirty",
@@ -25,6 +23,25 @@ const CANONICAL_NULL_FIELDS: &[&str] = &[
     "gitRuntime",
     "githubRuntime",
 ];
+
+const RETIRED_PROXY_FIELDS: &[&str] = &["proxyUrl", "localProxyUrl", "publicProxyUrl"];
+
+fn omit_retired_proxy_fields(value: &mut Value) {
+    match value {
+        Value::Object(fields) => {
+            fields.retain(|name, _| !RETIRED_PROXY_FIELDS.contains(&name.as_str()));
+            for value in fields.values_mut() {
+                omit_retired_proxy_fields(value);
+            }
+        }
+        Value::Array(values) => {
+            for value in values {
+                omit_retired_proxy_fields(value);
+            }
+        }
+        _ => {}
+    }
+}
 
 fn parse<T: DeserializeOwned + Serialize>(input: &Value) -> serde_json::Result<Value> {
     serde_json::from_value::<T>(input.clone()).and_then(serde_json::to_value)
@@ -57,12 +74,24 @@ fn omit_added_nulls(output: &mut Value, source_output: &Value) {
 }
 
 #[test]
-fn workspace_wire_shapes_match_pinned_paseo_zod() {
+fn retained_workspace_wire_shapes_match_pinned_paseo_zod() {
     let fixtures: Value = serde_json::from_str(include_str!(
         "../../../../tests/fixtures/paseo-workspace.json"
     ))
     .unwrap();
     for case in fixtures["cases"].as_array().unwrap() {
+        // Keep the pinned upstream evidence unchanged; its retired field validation
+        // cases no longer describe Ait's script protocol.
+        if case["schema"] == "WorkspaceScriptPayload"
+            && case["name"]
+                .as_str()
+                .expect("fixture case name")
+                .rsplit('_')
+                .next()
+                .is_some_and(|field| RETIRED_PROXY_FIELDS.contains(&field))
+        {
+            continue;
+        }
         let result = match case["schema"].as_str().unwrap() {
             "ProjectCheckoutLitePayload" => parse::<ProjectCheckoutLitePayload>(&case["input"]),
             "ProjectPlacementPayload" => parse::<ProjectPlacementPayload>(&case["input"]),
@@ -89,12 +118,31 @@ fn workspace_wire_shapes_match_pinned_paseo_zod() {
             {
                 assert!(output["workspaceName"].is_null());
             }
-            omit_added_nulls(&mut output, &case["output"]);
-            assert_eq!(
-                output, case["output"],
-                "{} {}",
-                case["schema"], case["name"]
-            );
+            let mut expected = case["output"].clone();
+            omit_retired_proxy_fields(&mut expected);
+            omit_added_nulls(&mut output, &expected);
+            assert_eq!(output, expected, "{} {}", case["schema"], case["name"]);
         }
+    }
+}
+
+#[test]
+fn script_payload_does_not_expose_retired_proxy_fields() {
+    let output = parse::<WorkspaceScriptPayload>(&serde_json::json!({
+        "scriptName": "web",
+        "type": "service",
+        "hostname": "web",
+        "port": 3000,
+        "lifecycle": "running",
+        "health": null,
+        "proxyUrl": "retired",
+        "localProxyUrl": "retired",
+        "publicProxyUrl": "retired"
+    }))
+    .expect("current script payload");
+
+    assert_eq!(output["port"], 3000);
+    for field in RETIRED_PROXY_FIELDS {
+        assert!(output.get(field).is_none(), "retired field {field}");
     }
 }

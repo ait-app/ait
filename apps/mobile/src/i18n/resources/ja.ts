@@ -743,7 +743,6 @@ export const ja: TranslationResources = {
     scripts: {
       title: "スクリプト",
       actions: {
-        chooseUrl: "URLを選択",
         copyUrl: "URLをコピー",
         openService: "サービスを表示",
         restart: "再起動",
@@ -759,13 +758,7 @@ export const ja: TranslationResources = {
         stopScript: "{{scriptName}}を停止",
         restartScript: "{{scriptName}}を再起動",
         copyUrl: "{{scriptName}}のURLをコピー",
-        chooseUrl: "{{scriptName}}のURLを選択",
         script: "{{scriptName}}スクリプト",
-      },
-      routes: {
-        public: "リバースプロキシ",
-        paseo: "Memorable",
-        direct: "直接接続",
       },
       states: {
         exitCode: "終了コード: {{code}}",
