@@ -1,5 +1,15 @@
 # Ait changelog
 
+## 0.1.10 - 2026-10-20
+
+- Unify Markdown rendering across clients, improve image and file link handling, and preserve chat search, code highlighting, copying and Mermaid diagrams.
+- Improve long prompt editing, draft retention, review comments, mobile panels, workspace Scripts and Command Center ranking.
+- Preserve complete chat history during catch-up, avoid unrelated cache invalidation, and improve wide-character terminal selection and scroll behavior.
+- Keep account-scoped last successful usage values when refresh fails, and subscribe to detailed setup logs only while their workspace panel is visible.
+- Fix Git diffs and discard for quoted paths and renamed files; explain schedule edits blocked by running tasks.
+- Record background errors without disruptive toasts, open the Ait website by default in the browser pane, and add Linux window and closed-console fallbacks.
+- Publish ait-bin automatically after stable desktop releases and allow longer Google Play submission queues.
+
 ## 0.1.9 - 2026-10-19
 
 - Recover interrupted agent sessions, preserve OpenCode history and compaction across ACP versions, and provide copyable error diagnostics with original Codex failure details.
