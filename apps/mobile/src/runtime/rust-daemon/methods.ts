@@ -250,6 +250,18 @@ export const METHODS: Readonly<Record<string, MethodSpec>> = {
     channel: 1,
     response: "workspace.worktree.archive.response",
   },
+  "workspace.setup.subscribe.request": {
+    method: "workspace.setup.subscribe.request",
+    kind: "request",
+    channel: 1,
+    response: "workspace.setup.subscribe.response",
+  },
+  "workspace.setup.summary.request": {
+    method: "workspace.setup.summary.request",
+    kind: "request",
+    channel: 1,
+    response: "workspace.setup.summary.response",
+  },
   "workspace.setup.status.request": {
     method: "workspace.setup.status.request",
     kind: "request",

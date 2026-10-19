@@ -5,3 +5,5 @@ pub mod ports;
 pub(crate) mod protocol;
 pub mod rpc;
 pub mod service;
+
+pub(crate) mod connection;

@@ -3,6 +3,8 @@
 mod branch_status;
 mod highlight;
 mod naming;
+mod paths;
+mod renames;
 pub(crate) mod summary;
 
 use std::collections::{BTreeMap, BTreeSet};
@@ -41,6 +43,7 @@ struct GitRunOptions {
 pub struct LocalCheckout {
     managed_worktrees_root: PathBuf,
     highlighter: Arc<highlight::DiffHighlighter>,
+    renames: Arc<renames::RenameCache>,
 }
 
 impl LocalCheckout {
@@ -50,6 +53,7 @@ impl LocalCheckout {
         Self {
             managed_worktrees_root,
             highlighter: Arc::new(highlight::DiffHighlighter::default()),
+            renames: Arc::new(renames::RenameCache::default()),
         }
     }
 
@@ -153,7 +157,7 @@ impl CheckoutRuntime for LocalCheckout {
         cwd: &str,
         compare: &CheckoutDiffCompare,
     ) -> Result<CheckoutDiff, CheckoutRuntimeError> {
-        let cwd = require_git_directory(cwd)?;
+        let cwd = require_git_root(cwd)?;
         let mut arguments = vec![
             "diff".to_owned(),
             "--no-ext-diff".to_owned(),
@@ -329,31 +333,35 @@ impl CheckoutRuntime for LocalCheckout {
         sha: &str,
         path: &str,
     ) -> Result<Option<ParsedDiffFile>, CheckoutRuntimeError> {
-        let cwd = require_git_directory(cwd)?;
+        let cwd = require_git_root(cwd)?;
         validate_commit(sha)?;
         validate_relative_path(path)?;
         verify_commit(&cwd, sha)?;
-        let output = run_git(
-            &cwd,
-            &[
-                "--literal-pathspecs",
-                "show",
-                sha,
-                "--format=",
-                "--diff-merges=first-parent",
-                "--",
-                path,
-            ],
-            &[0],
-            DIFF_OUTPUT_LIMIT,
-        )?
-        .stdout;
+        let renames = self.renames.read(&cwd, sha)?;
+        let mut arguments = vec![
+            "--literal-pathspecs",
+            "show",
+            sha,
+            "--format=",
+            "--diff-merges=first-parent",
+            "--no-ext-diff",
+            "--no-color",
+            "--src-prefix=a/",
+            "--dst-prefix=b/",
+            "-M",
+            "--",
+        ];
+        if let Some(old_path) = renames.get(path) {
+            arguments.push(old_path);
+        }
+        arguments.push(path);
+        let output = run_git(&cwd, &arguments, &[0], DIFF_OUTPUT_LIMIT)?.stdout;
         if output.trim().is_empty() {
             return Ok(None);
         }
         let mut file = parse_diff(&output)
             .into_iter()
-            .find(|file| file.path == path && !file.hunks.is_empty());
+            .find(|file| file.path == path);
         if let Some(file) = &mut file {
             self.highlighter
                 .highlight(file, &cwd, &format!("{sha}^"), Some(sha));
@@ -628,7 +636,7 @@ impl CheckoutRuntime for LocalCheckout {
     }
 
     fn discard_changes(&self, cwd: &str, paths: &[String]) -> Result<(), CheckoutRuntimeError> {
-        let cwd = require_git_directory(cwd)?;
+        let cwd = require_git_root(cwd)?;
         if paths.is_empty() {
             return Err(checkout_error(
                 CheckoutFailureKind::NotAllowed,
@@ -743,13 +751,22 @@ fn expanded_directory(value: &str) -> Result<PathBuf, CheckoutRuntimeError> {
 
 fn require_git_directory(value: &str) -> Result<PathBuf, CheckoutRuntimeError> {
     let cwd = expanded_directory(value)?;
-    if git_optional(&cwd, &["rev-parse", "--show-toplevel"])?.is_none() {
-        return Err(checkout_error(
+    git_root_at(&cwd)?;
+    Ok(cwd)
+}
+
+fn require_git_root(value: &str) -> Result<PathBuf, CheckoutRuntimeError> {
+    let cwd = expanded_directory(value)?;
+    canonical_git_path(&git_root_at(&cwd)?)
+}
+
+fn git_root_at(cwd: &Path) -> Result<String, CheckoutRuntimeError> {
+    git_optional(cwd, &["rev-parse", "--show-toplevel"])?.ok_or_else(|| {
+        checkout_error(
             CheckoutFailureKind::NotGitRepository,
             "Not a git repository",
-        ));
-    }
-    Ok(cwd)
+        )
+    })
 }
 
 fn canonical_git_path(value: &str) -> Result<PathBuf, CheckoutRuntimeError> {
@@ -1649,7 +1666,7 @@ fn parse_diff_section(section: &str) -> Option<ParsedDiffFile> {
     let old_path = lines
         .iter()
         .find_map(|line| line.strip_prefix("rename from "))
-        .map(str::to_owned);
+        .map(|path| paths::decode(path).into_owned());
     let renamed_path = lines
         .iter()
         .find_map(|line| line.strip_prefix("rename to "));
@@ -1666,9 +1683,15 @@ fn parse_diff_section(section: &str) -> Option<ParsedDiffFile> {
     let path = renamed_path
         .or(metadata_path)
         .map(|path| path.strip_suffix('\t').unwrap_or(path))
-        .map(strip_diff_prefix)
-        .or_else(|| header.split_once(" b/").map(|(_, path)| path))?
-        .to_owned();
+        .map(|path| strip_diff_prefix(&paths::decode(path)).to_owned())
+        .or_else(|| header.split_once(" b/").map(|(_, path)| path.to_owned()))
+        .or_else(|| {
+            header.rsplit_once(" \"b/").map(|(_, path)| {
+                paths::decode(&format!("\"b/{path}"))
+                    .trim_start_matches("b/")
+                    .to_owned()
+            })
+        })?;
     let binary = section
         .lines()
         .any(|line| line.starts_with("Binary files ") || line.starts_with("GIT binary patch"));
@@ -1839,7 +1862,7 @@ fn parse_raw_status(line: &str, statuses: &mut BTreeMap<String, CheckoutCommitFi
         parts.get(1)
     };
     if let Some(path) = path.filter(|path| !path.is_empty()) {
-        statuses.insert((*path).to_owned(), status);
+        statuses.insert(paths::decode(path).into_owned(), status);
     }
 }
 
@@ -1860,6 +1883,9 @@ fn parse_numstat(line: &str, stats: &mut BTreeMap<String, (u64, u64)>) {
 }
 
 fn normalize_numstat_path(path: &str) -> String {
+    if path.starts_with('"') {
+        return paths::decode(path).into_owned();
+    }
     let Some((left, right)) = path.rsplit_once(" => ") else {
         return path.to_owned();
     };

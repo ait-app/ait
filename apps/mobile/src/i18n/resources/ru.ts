@@ -31,6 +31,7 @@ export const ru: TranslationResources = {
     back: "Назад",
     loading: "Загрузка...",
     actions: {
+      save: "Сохранить",
       back: "Назад",
       cancel: "Отмена",
       close: "Закрыть",
@@ -76,6 +77,8 @@ export const ru: TranslationResources = {
       error: "Ошибка",
       idle: "Ожидание",
     },
+
+    bottomSheetBackdrop: "Фон нижней панели",
   },
   shell: {
     menu: {
@@ -124,6 +127,8 @@ export const ru: TranslationResources = {
     input: {
       accessibilityLabel: "Написать агенту...",
       terminalAccessibilityLabel: "Terminal prompt",
+      fullscreen: "Полный экран",
+      exitFullscreen: "Выйти из полноэкранного режима",
       focusHint: "{{shortcut}}, для фокуса",
       addAttachment: "Добавить вложение",
       interruptAgent: "Прервать агента",
@@ -395,6 +400,8 @@ export const ru: TranslationResources = {
       withTokens: "Контекст сжат ({{tokens}} тыс. токенов)",
       completed: "Контекст сжат",
     },
+
+    turnFooter: { workedFor: "Время работы: {{duration}}" },
   },
   importSession: {
     chooseHostTitle: en.importSession.chooseHostTitle,
@@ -650,6 +657,8 @@ export const ru: TranslationResources = {
         close: "Закрыть",
         renameTerminal: "Переименовать терминал",
         renameAgent: "Переименовать агента",
+
+        copyFilePath: "Скопировать путь к файлу",
       },
       actions: {
         newTab: "Новая вкладка",
@@ -727,6 +736,7 @@ export const ru: TranslationResources = {
     header: {
       actions: {
         workspaceActions: "Действия с рабочим пространством",
+        workspaceActionsUnhealthy: "Действия с рабочим пространством, есть неисправный сервис",
         newAgent: "Новый агент",
         newTerminal: "Новый терминал",
         newBrowser: "Новая вкладка браузера",
@@ -768,6 +778,8 @@ export const ru: TranslationResources = {
         exitCode: "Код выхода: {{code}}",
         startFailed: "Не удалось запустить скрипт {{scriptName}}",
         stopFailed: "Не удалось остановить скрипт {{scriptName}}",
+        running: "Запущен",
+        runningCount: "Запущено: {{count}}",
       },
     },
     tree: {
@@ -1056,6 +1068,8 @@ export const ru: TranslationResources = {
         generic: "Настройте {{brand}} на этом хосте, чтобы использовать его функции.",
       },
     },
+
+    sheet: { openAsTab: "Открыть во вкладке" },
   },
   workspaceLabels: {
     title: "Метки",
@@ -1668,6 +1682,9 @@ export const ru: TranslationResources = {
     },
   },
   providerUsage: {
+    lastUpdated: "Last updated {{time}}",
+    noSuccessfulUpdate: "No successful update",
+    resetTimePassed: "Reset time passed",
     summaryUsed: "{{source}}: использовано {{amount}}",
     summaryRemaining: "{{source}}: осталось {{amount}}",
     options: "Настройки",
@@ -2032,6 +2049,17 @@ export const ru: TranslationResources = {
     accessibility: "Использовано {{percentage}}% контекстного окна",
   },
   review: {
+    feedback: {
+      send: "Отправить отзыв ({{count}})",
+      sending: "Отправка отзыва ({{count}})",
+      chooseAgent: "Выберите агента",
+      sent: "Отзыв отправлен: {{recipient}}",
+      "no-agents": "Откройте вкладку агента в этой рабочей области, чтобы отправить отзыв.",
+      disconnected: "Подключитесь к хосту, чтобы отправить отзыв.",
+      "no-context": "Сохранённые комментарии больше не соответствуют этому diff.",
+      failed: "Не удалось отправить отзыв. Повторите попытку.",
+      prompt: "Пожалуйста, учтите эту проверку кода.",
+    },
     comment: {
       add: "Добавить комментарий к ревью",
       edit: "Изменить комментарий к ревью",

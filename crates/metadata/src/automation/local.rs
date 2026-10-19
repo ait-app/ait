@@ -83,10 +83,19 @@ impl std::fmt::Debug for Inner {
 struct State {
     scripts: HashMap<(String, String), ScriptProcess>,
     setups: HashMap<String, SetupSnapshot>,
+    setup_revision: u64,
     setup_running: HashSet<String>,
     setup_cancelled: HashSet<String>,
     setup_cleanup: HashMap<String, Child>,
     workspace_ports: HashMap<String, u16>,
+}
+
+impl State {
+    fn store_setup(&mut self, workspace_id: String, mut snapshot: SetupSnapshot) {
+        self.setup_revision = self.setup_revision.saturating_add(1);
+        snapshot.revision = self.setup_revision;
+        self.setups.insert(workspace_id, snapshot);
+    }
 }
 
 #[derive(Debug)]
@@ -269,7 +278,7 @@ impl WorkspaceAutomationRuntime for LocalWorkspaceAutomation {
         let config = match self.read_config(workspace) {
             Ok(config) => config,
             Err(error) => {
-                lock(&self.inner.state).setups.insert(
+                lock(&self.inner.state).store_setup(
                     workspace.workspace_id.clone(),
                     failed_setup(workspace, error.to_string()),
                 );
@@ -291,7 +300,7 @@ impl WorkspaceAutomationRuntime for LocalWorkspaceAutomation {
             Ok(port) => port,
             Err(error) => {
                 state.setup_running.remove(&workspace.workspace_id);
-                state.setups.insert(
+                state.store_setup(
                     workspace.workspace_id.clone(),
                     failed_setup(workspace, error.to_string()),
                 );
@@ -300,7 +309,7 @@ impl WorkspaceAutomationRuntime for LocalWorkspaceAutomation {
                 return Err(error);
             }
         };
-        state.setups.insert(
+        state.store_setup(
             workspace.workspace_id.clone(),
             setup_snapshot(workspace, SetupLifecycle::Running),
         );
@@ -316,7 +325,7 @@ impl WorkspaceAutomationRuntime for LocalWorkspaceAutomation {
             let message = format!("Failed to start workspace setup: {error}");
             let mut state = lock(&self.inner.state);
             state.setup_running.remove(&workspace.workspace_id);
-            state.setups.insert(
+            state.store_setup(
                 workspace.workspace_id.clone(),
                 failed_setup(workspace, message.clone()),
             );
@@ -588,6 +597,7 @@ fn configure_process_group(command: &mut Command) {
 
 fn setup_snapshot(workspace: &WorkspacePlacement, lifecycle: SetupLifecycle) -> SetupSnapshot {
     SetupSnapshot {
+        revision: 0,
         lifecycle,
         worktree_path: workspace.worktree_path.clone(),
         branch_name: workspace.branch_name.clone(),
@@ -710,9 +720,10 @@ fn publish_setup(inner: &Weak<Inner>, workspace: &WorkspacePlacement, progress: 
     let Some(inner) = inner.upgrade() else {
         return;
     };
-    lock(&inner.state).setups.insert(
+    lock(&inner.state).store_setup(
         workspace.workspace_id.clone(),
         SetupSnapshot {
+            revision: 0,
             lifecycle: progress.lifecycle,
             worktree_path: workspace.worktree_path.clone(),
             branch_name: workspace.branch_name.clone(),

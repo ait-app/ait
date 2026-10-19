@@ -126,6 +126,7 @@ export const zhCN: TranslationResources = {
     back: "返回",
     loading: "加载中...",
     actions: {
+      save: "保存",
       back: "返回",
       cancel: "取消",
       close: "关闭",
@@ -171,6 +172,8 @@ export const zhCN: TranslationResources = {
       error: "错误",
       idle: "空闲",
     },
+
+    bottomSheetBackdrop: "底部面板背景",
   },
   shell: {
     menu: {
@@ -219,6 +222,8 @@ export const zhCN: TranslationResources = {
     input: {
       accessibilityLabel: "给 Agent 发消息...",
       terminalAccessibilityLabel: "Terminal prompt",
+      fullscreen: "全屏",
+      exitFullscreen: "退出全屏",
       focusHint: "{{shortcut}} 聚焦",
       addAttachment: "添加附件",
       interruptAgent: "中断 Agent",
@@ -487,6 +492,8 @@ export const zhCN: TranslationResources = {
       withTokens: "上下文已压缩（{{tokens}}K tokens）",
       completed: "上下文已压缩",
     },
+
+    turnFooter: { workedFor: "工作了 {{duration}}" },
   },
   importSession: {
     chooseHostTitle: en.importSession.chooseHostTitle,
@@ -740,6 +747,8 @@ export const zhCN: TranslationResources = {
         close: "关闭",
         renameTerminal: "重命名 Terminal",
         renameAgent: "重命名 Agent",
+
+        copyFilePath: "Copy file path",
       },
       actions: {
         newTab: "新建标签页",
@@ -813,6 +822,7 @@ export const zhCN: TranslationResources = {
     header: {
       actions: {
         workspaceActions: "Workspace 操作",
+        workspaceActionsUnhealthy: "Workspace 操作，有服务异常",
         newAgent: "新建 Agent",
         newTerminal: "新建 Terminal",
         newBrowser: "新建浏览器标签",
@@ -853,6 +863,8 @@ export const zhCN: TranslationResources = {
         exitCode: "exit {{code}}",
         startFailed: "启动 {{scriptName}} 失败",
         stopFailed: "停止 {{scriptName}} 失败",
+        running: "运行中",
+        runningCount: "{{count}} 个运行中",
       },
     },
     tree: {
@@ -1128,6 +1140,8 @@ export const zhCN: TranslationResources = {
         generic: "在此主机上设置 {{brand}} 以使用其功能。",
       },
     },
+
+    sheet: { openAsTab: "作为标签页打开" },
   },
   workspaceLabels: {
     title: "标签",
@@ -2059,6 +2073,9 @@ export const zhCN: TranslationResources = {
     },
   },
   providerUsage: {
+    lastUpdated: "上次更新 {{time}}",
+    noSuccessfulUpdate: "尚无成功更新",
+    resetTimePassed: "重置时间已过",
     summaryUsed: "{{source}} 已使用 {{amount}}",
     summaryRemaining: "{{source}} 剩余 {{amount}}",
     options: "设置",
@@ -2414,6 +2431,17 @@ export const zhCN: TranslationResources = {
     accessibility: "上下文窗口已使用 {{percentage}}%",
   },
   review: {
+    feedback: {
+      send: "发送反馈 ({{count}})",
+      sending: "正在发送反馈 ({{count}})",
+      chooseAgent: "选择智能体",
+      sent: "已向 {{recipient}} 发送反馈",
+      "no-agents": "请在此工作区打开智能体标签页以发送反馈。",
+      disconnected: "请连接到主机以发送反馈。",
+      "no-context": "保存的评论不再匹配此差异。",
+      failed: "发送反馈失败。请重试。",
+      prompt: "请处理此代码审查。",
+    },
     comment: {
       add: "添加 review 评论",
       edit: "编辑 review 评论",

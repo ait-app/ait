@@ -422,6 +422,17 @@ impl AgentSession for Session {
         })
     }
 
+    fn prepare_account_usage(
+        &self,
+    ) -> AgentSessionFuture<'_, crate::ports::account_usage::PreparedUsage<'_>> {
+        Box::pin(async move {
+            if self.closed {
+                return Err(AgentSessionError::Unavailable);
+            }
+            super::quota::prepare(&self.runtime.api, &self.account).await
+        })
+    }
+
     fn failure_diagnostic(&self) -> Option<crate::ports::diagnostics::Diagnostic> {
         self.runtime.diagnostics.failure()
     }

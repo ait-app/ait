@@ -29,8 +29,12 @@ export function formatDisplayPct(
 
 export function formatResetLabel(
   iso: string | null | undefined,
-  t: TFunction = i18n.t.bind(i18n),
+  translator: TFunction | boolean = i18n.t.bind(i18n),
+  retained = false,
 ): string | null {
+  const t = typeof translator === "function" ? translator : i18n.t.bind(i18n);
+  const isRetained = typeof translator === "boolean" ? translator : retained;
+  if (isRetained && iso && Date.parse(iso) <= Date.now()) return t("providerUsage.resetTimePassed");
   return localizedResetLabel(iso, t);
 }
 

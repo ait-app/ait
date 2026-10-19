@@ -12,12 +12,25 @@ use super::AgentManager;
 use crate::ports::agent_session::AgentSessionError;
 use crate::support::time::now_timestamp;
 
-/// Bounded, ephemeral host quota snapshots shared by independent execution lanes.
+/// Bounded ephemeral facts, always scoped to one Host or one live session generation.
 #[derive(Debug, Clone, Default)]
-pub(super) struct UsageCache(Arc<Mutex<BTreeMap<String, (Instant, Value)>>>);
+pub(super) struct UsageCache(Arc<Mutex<BTreeMap<String, CachedUsage>>>);
+
+#[derive(Debug)]
+struct CachedUsage {
+    fetched: Instant,
+    identity: crate::ports::account_usage::UsageIdentity,
+    value: Value,
+    successful: Option<Value>,
+}
 
 impl UsageCache {
-    fn get(&self, provider: &str, force: bool) -> Option<Value> {
+    fn get(
+        &self,
+        provider: &str,
+        identity: &crate::ports::account_usage::UsageIdentity,
+        force: bool,
+    ) -> Option<Value> {
         if force {
             return None;
         }
@@ -25,17 +38,91 @@ impl UsageCache {
             .lock()
             .ok()?
             .get(provider)
-            .filter(|(fetched, _)| fetched.elapsed() < Duration::from_secs(300))
-            .map(|(_, value)| value.clone())
+            .filter(|cached| {
+                &cached.identity == identity && cached.fetched.elapsed() < Duration::from_secs(300)
+            })
+            .map(|cached| cached.value.clone())
     }
 
-    fn put(&self, provider: &str, value: &Value) {
-        if let Ok(mut cache) = self.0.lock() {
-            if cache.len() >= 64 {
-                cache.clear();
+    fn put(
+        &self,
+        provider: &str,
+        identity: Option<crate::ports::account_usage::UsageIdentity>,
+        mut value: Value,
+        attempted_at: &str,
+    ) -> Value {
+        value["fetchedAt"] = json!(attempted_at);
+        let Ok(mut cache) = self.0.lock() else {
+            return value;
+        };
+        let previous = cache
+            .remove(provider)
+            .filter(|cached| Some(&cached.identity) == identity.as_ref());
+        let available = value["status"] == "available";
+        let successful = if available {
+            let successful_at = now_timestamp();
+            value["successfulAt"] = json!(successful_at);
+            let mut report = json!({"status":"available","windows":value["windows"]});
+            for key in ["planLabel", "balances", "details"] {
+                if !value[key].is_null() {
+                    report[key] = value[key].clone();
+                }
             }
-            cache.insert(provider.to_owned(), (Instant::now(), value.clone()));
+            Some(json!({"fetchedAt":successful_at,"report":report}))
+        } else {
+            previous
+                .as_ref()
+                .and_then(|cached| cached.successful.clone())
+        };
+        if !available && let Some(snapshot) = &successful {
+            value["lastSuccessful"] = snapshot.clone();
+            if value["accountLabel"].is_null()
+                && let Some(previous) = &previous
+                && let Some(label) = previous.value["accountLabel"].as_str()
+            {
+                value["accountLabel"] = json!(label);
+            }
         }
+        if let Some(identity) = identity {
+            if cache.len() >= 64 {
+                cache.pop_first();
+            }
+            cache.insert(
+                provider.to_owned(),
+                CachedUsage {
+                    fetched: Instant::now(),
+                    identity,
+                    value: value.clone(),
+                    successful,
+                },
+            );
+        }
+        value
+    }
+
+    async fn read(
+        &self,
+        provider: &str,
+        prepared: Result<crate::ports::account_usage::PreparedUsage<'_>, AgentSessionError>,
+        force: bool,
+    ) -> Value {
+        let prepared = match prepared {
+            Ok(prepared) => prepared,
+            Err(error) => {
+                return self.put(provider, None, failure(provider, error), &now_timestamp());
+            }
+        };
+        if let Some(identity) = &prepared.identity
+            && let Some(value) = self.get(provider, identity, force)
+        {
+            return value;
+        }
+        let attempted_at = now_timestamp();
+        let value = prepared
+            .report
+            .await
+            .unwrap_or_else(|error| failure(provider, error));
+        self.put(provider, prepared.identity, value, &attempted_at)
     }
 }
 
@@ -65,10 +152,13 @@ impl AgentManager {
             // daemon's login for a session created under an ephemeral environment.
             let value = if let Some(agent) = self.live.get(id) {
                 agent
-                    .session
-                    .account_usage()
+                    .usage_cache
+                    .read(
+                        &record.provider,
+                        agent.session.prepare_account_usage().await,
+                        force,
+                    )
                     .await
-                    .unwrap_or_else(|error| failure(&record.provider, error))
             } else {
                 unavailable(
                     &record.provider,
@@ -82,15 +172,9 @@ impl AgentManager {
                     .iter()
                     .filter(|(id, _)| provider_id.is_none_or(|provider| provider == id.as_str()))
                     .map(|(id, client)| async move {
-                        if let Some(value) = self.usage_cache.get(id, force) {
-                            return value;
-                        }
-                        let value = client
-                            .usage()
+                        self.usage_cache
+                            .read(id, client.prepare_usage().await, force)
                             .await
-                            .unwrap_or_else(|error| failure(id, error));
-                        self.usage_cache.put(id, &value);
-                        value
                     }),
             )
             .buffer_unordered(4)

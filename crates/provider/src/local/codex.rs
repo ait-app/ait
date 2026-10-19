@@ -287,6 +287,12 @@ impl AgentClient for CodexClient {
         Box::pin(self.native_diagnostic())
     }
 
+    fn prepare_usage(
+        &self,
+    ) -> AgentSessionFuture<'_, crate::ports::account_usage::PreparedUsage<'_>> {
+        Box::pin(self.prepare_native_usage())
+    }
+
     fn usage(&self) -> AgentSessionFuture<'_, Value> {
         Box::pin(self.native_usage())
     }
@@ -650,6 +656,12 @@ impl AgentSession for CodexSession {
         self.transport
             .as_ref()
             .and_then(|transport| transport.diagnostics.failure())
+    }
+
+    fn prepare_account_usage(
+        &self,
+    ) -> AgentSessionFuture<'_, crate::ports::account_usage::PreparedUsage<'_>> {
+        Box::pin(self.client.prepare_native_usage_in(&self.cwd))
     }
 
     fn account_usage(&self) -> AgentSessionFuture<'_, Value> {

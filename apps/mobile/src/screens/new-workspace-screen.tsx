@@ -14,6 +14,7 @@ import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { ChevronDown, Folder, FolderPlus, GitBranch, GitPullRequest } from "lucide-react-native";
 import { Composer } from "@/composer";
 import { ComposerDock } from "@/composer/dock";
+import { useComposerEditingSession, useComposerFullscreen } from "@/composer/editing-session";
 import { FileDropZone } from "@/components/file-drop/file-drop-zone";
 import {
   resolveComposerAttachmentSubmitFormat,
@@ -1628,6 +1629,8 @@ export function NewWorkspaceScreen({
   const { t } = useTranslation();
   const isCompact = useIsCompactFormFactor();
   const toast = useToast();
+  const composerEditing = useNewWorkspaceComposerEditing();
+  const { leaveFullscreen } = composerEditing;
   const mergeWorkspaces = useCallback(
     (targetServerId: string, workspaces: Iterable<WorkspaceDescriptor>) => {
       getHostRuntimeStore().acceptWorkspaceSnapshots(targetServerId, Array.from(workspaces));
@@ -1715,7 +1718,7 @@ export function NewWorkspaceScreen({
     [terminalComposerValue],
   );
   const terminalTextReplacement = useMemo(
-    () => ({ key: launchFocusKey, text: terminalComposerValue }),
+    () => ({ kind: "replace" as const, key: launchFocusKey, text: terminalComposerValue }),
     [launchFocusKey, terminalComposerValue],
   );
 
@@ -2113,6 +2116,7 @@ export function NewWorkspaceScreen({
                 return;
               }
               outcome = "navigated";
+              leaveFullscreen();
               navigateToWorkspace({ serverId: targetServerId, workspaceId });
             },
           });
@@ -2163,6 +2167,7 @@ export function NewWorkspaceScreen({
       forkDraftSetup,
       isStillOnCreateScreen,
       launchTarget,
+      leaveFullscreen,
       selectedServerId,
       supportsForgeSearch,
       t,
@@ -2219,6 +2224,7 @@ export function NewWorkspaceScreen({
             return;
           }
           outcome = "navigated";
+          leaveFullscreen();
           navigateToWorkspace({ serverId: targetServerId, workspaceId, target });
         },
       });
@@ -2242,6 +2248,7 @@ export function NewWorkspaceScreen({
     t,
     terminalPromptText,
     toast,
+    leaveFullscreen,
     updateFormPreferences,
     withConnectedClient,
   ]);
@@ -2361,10 +2368,12 @@ export function NewWorkspaceScreen({
 
   const screenHeaderLeft = useMemo(() => <SidebarMenuToggle />, []);
 
+  const isComposerFullscreen = composerEditing.isFullscreen(isTerminalLaunch);
   const composer = isTerminalLaunch ? (
     <Composer
       key="terminal"
       inputMode="terminal"
+      editingSession={composerEditing.terminal}
       readOnly={!terminalTakesPrompt}
       placeholder={terminalPlaceholder}
       submitLabel={terminalSubmitLabel}
@@ -2391,6 +2400,7 @@ export function NewWorkspaceScreen({
   ) : (
     <Composer
       key="chat"
+      editingSession={composerEditing.chat}
       agentId={draftKey}
       serverId={selectedServerId}
       isPaneFocused={true}
@@ -2421,10 +2431,11 @@ export function NewWorkspaceScreen({
   );
   return (
     <FileDropZone style={styles.container}>
-      <ScreenHeader left={screenHeaderLeft} borderless />
+      {isComposerFullscreen ? null : <ScreenHeader left={screenHeaderLeft} borderless />}
       <View style={styles.content}>
         <TitlebarDragRegion />
         <NewWorkspaceLayout
+          fullscreen={isComposerFullscreen}
           isCompact={isCompact}
           title={t("newWorkspace.title")}
           formStack={formStack}
@@ -2437,13 +2448,37 @@ export function NewWorkspaceScreen({
   );
 }
 
+/** Terminal and chat launches edit in separate sessions; the screen follows the mounted one. */
+function useNewWorkspaceComposerEditing() {
+  const terminal = useComposerEditingSession("terminal");
+  const chat = useComposerEditingSession("chat");
+  const isTerminalFullscreen = useComposerFullscreen(terminal);
+  const isChatFullscreen = useComposerFullscreen(chat);
+  // The sessions outlive the screen (its draft keeps them), so a launch that leaves
+  // the screen also leaves fullscreen; the next draft starts inline.
+  const leaveFullscreen = useCallback(() => {
+    terminal.setFullscreen(false);
+    chat.setFullscreen(false);
+  }, [chat, terminal]);
+  return {
+    terminal,
+    chat,
+    leaveFullscreen,
+    isFullscreen: (isTerminalLaunch: boolean) =>
+      isTerminalLaunch ? isTerminalFullscreen : isChatFullscreen,
+  };
+}
+
 function NewWorkspaceLayout({
   isCompact,
+  fullscreen,
   title,
   formStack,
   children,
 }: {
   isCompact: boolean;
+  /** The composer covers the screen; the header leaves and the dock fills the content. */
+  fullscreen: boolean;
   title: string;
   formStack: ReactNode;
   children: ReactNode;
@@ -2457,7 +2492,7 @@ function NewWorkspaceLayout({
     </>
   );
   return (
-    <ComposerDock centered={!isCompact}>
+    <ComposerDock centered={!isCompact} fullscreen={fullscreen}>
       {setupFields}
       {children}
     </ComposerDock>

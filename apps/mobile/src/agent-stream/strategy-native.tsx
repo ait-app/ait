@@ -1,3 +1,4 @@
+import { shouldAnimateNativeScrollToBottom } from "./native-scroll-animation";
 import {
   Fragment,
   type ReactElement,
@@ -237,7 +238,13 @@ function NativeStreamViewport(props: StreamRenderInput & { strategy: StreamStrat
       programmaticScrollEventBudgetRef.current = 3;
       flatListRef.current?.scrollToOffset({
         offset: 0,
-        animated,
+        animated:
+          animated &&
+          shouldAnimateNativeScrollToBottom({
+            offsetY: scrollOffsetYRef.current,
+            viewportHeight: streamViewportMetricsRef.current.viewportHeight,
+            windowSize: 10,
+          }),
       });
       scrollOffsetYRef.current = 0;
       streamViewportMetricsRef.current = {

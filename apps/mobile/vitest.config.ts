@@ -13,6 +13,20 @@ const resolvePackageEntry = (packageName: string) => {
 };
 
 export default defineConfig({
+  esbuild: { jsx: "automatic" },
+  plugins: [
+    {
+      name: "markdown-wasm-commonjs",
+      enforce: "pre",
+      transform(code, id) {
+        // Metro consumes this generated CJS file; Vite serves relative .js imports as ESM.
+        if (
+          id.replaceAll("\\", "/").includes("react-native-enriched-markdown/src/web/wasm/md4c.js")
+        )
+          return `${code}\nexport default createMd4cModule;`;
+      },
+    },
+  ],
   test: {
     environment: "node",
     exclude: [...configDefaults.exclude, "e2e/**"],
@@ -75,9 +89,15 @@ export default defineConfig({
   // so it scans the native files and dies on imports react-native-web has no answer for.
   // Unbundled, the same imports go through the resolver below and land on the web files.
   optimizeDeps: {
+    esbuildOptions: { loader: { ".js": "jsx" } },
     // Bundle the CJS dependencies of the excluded gesture-handler package for the browser.
     include: [
+      "react",
+      "react-dom/client",
+      "react-native",
+      "react/jsx-dev-runtime",
       "react/jsx-runtime",
+      "react-native-enriched-markdown/src/web/wasm/md4c.js",
       "react-native-gesture-handler > hoist-non-react-statics",
       "react-native-gesture-handler > invariant",
     ],
@@ -112,6 +132,17 @@ export default defineConfig({
       ".json",
     ],
     alias: [
+      {
+        find: /^react-native-enriched-markdown$/,
+        replacement: path.resolve(
+          rootNodeModules,
+          "react-native-enriched-markdown/src/index.web.tsx",
+        ),
+      },
+      {
+        find: /^expo-clipboard$/,
+        replacement: path.resolve(__dirname, "test-stubs/expo-clipboard.ts"),
+      },
       { find: "@", replacement: path.resolve(__dirname, "src") },
       // Keep keyboard-controller's imports in Vite so native aliases and platform extensions apply.
       {

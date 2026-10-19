@@ -170,7 +170,6 @@ vi.mock("@/hooks/use-projects", () => ({
 vi.mock("@/projects/icons", () => ({
   useProjectIcons: () => new Map(),
 }));
-
 import { i18n } from "@/i18n/i18next";
 import ProjectsScreen from "./projects-screen";
 
@@ -182,6 +181,7 @@ function workspaceSummary(overrides: Partial<WorkspaceSummary> = {}): WorkspaceS
     status: "done",
     currentBranch: "main",
     changeRequestNumber: null,
+    statusEnteredAt: null,
     ...overrides,
   };
 }

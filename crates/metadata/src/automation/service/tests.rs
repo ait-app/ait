@@ -136,6 +136,7 @@ impl WorkspaceAutomationRuntime for Runtime {
     }
     fn setup_snapshot(&self, workspace_id: &str) -> Option<SetupSnapshot> {
         (workspace_id == "snapshot").then(|| SetupSnapshot {
+            revision: 1,
             lifecycle: SetupLifecycle::Completed,
             worktree_path: "/repo".to_owned(),
             branch_name: "main".to_owned(),
@@ -350,3 +351,24 @@ fn setup_status_reports_registry_failure_as_a_failed_snapshot_and_recovers_on_re
 }
 
 mod collaboration;
+
+#[test]
+fn setup_summary_bootstrap_keeps_absent_blocked_and_finished_workspaces_distinct() {
+    let (service, _, _) = service();
+    for (workspace, expected) in [
+        ("trusted", None),
+        ("blocked", Some("blocked")),
+        ("snapshot", Some("completed")),
+    ] {
+        let result = crate::automation::rpc::execute(
+            &service,
+            "workspace.setup.summary.request",
+            serde_json::json!({"workspaceId":workspace}),
+        )
+        .unwrap();
+        assert_eq!(result["summary"]["status"].as_str(), expected);
+        assert!(result["summary"].get("detail").is_none());
+    }
+}
+
+mod observation;

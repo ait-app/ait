@@ -25,6 +25,7 @@ interface QuestionFormCardProps {
   permission: PendingPermission;
   onRespond: (response: AgentPermissionResponse) => void;
   isResponding: boolean;
+  responseError?: string | null;
 }
 
 const IS_WEB = isWeb;
@@ -317,7 +318,12 @@ function QuestionOtherInput({
   );
 }
 
-export function QuestionFormCard({ permission, onRespond, isResponding }: QuestionFormCardProps) {
+export function QuestionFormCard({
+  permission,
+  onRespond,
+  isResponding,
+  responseError,
+}: QuestionFormCardProps) {
   const { theme } = useUnistyles();
   const { t } = useTranslation();
   const isMobile = useIsCompactFormFactor();
@@ -525,6 +531,15 @@ export function QuestionFormCard({ permission, onRespond, isResponding }: Questi
 
   return (
     <View style={containerStyle} testID="question-form-card">
+      {responseError ? (
+        <Text
+          accessibilityRole="alert"
+          style={styles.responseError}
+          testID="question-response-error"
+        >
+          {responseError}
+        </Text>
+      ) : null}
       <QuestionNav
         questions={questions}
         activeIndex={resolvedActiveQuestionIndex}
@@ -616,6 +631,7 @@ export function QuestionFormCard({ permission, onRespond, isResponding }: Questi
 }
 
 const styles = StyleSheet.create((theme) => ({
+  responseError: { color: theme.colors.destructive, fontSize: theme.fontSize.base },
   container: {
     padding: theme.spacing[3],
     borderRadius: theme.spacing[2],

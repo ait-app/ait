@@ -30,7 +30,7 @@ async fn deepseek_balance_is_read_without_creating_or_prompting_a_session() {
 }
 
 #[tokio::test]
-async fn balance_refresh_uses_the_host_cache_and_handles_signed_out_accounts() {
+async fn unknown_account_identity_bypasses_the_host_cache_and_handles_sign_out() {
     let fixture = Fixture::new().await;
     let directory = tempfile::tempdir().unwrap();
     let mut manager = AgentManager::new(Box::new(
@@ -44,9 +44,11 @@ async fn balance_refresh_uses_the_host_cache_and_handles_signed_out_accounts() {
     let first = manager.usage(None, Some(PROVIDER), true).await.unwrap();
     assert_eq!(first["providers"][0]["status"], "available");
     fixture.set_balance(json!(null));
-    let cached = manager.usage(None, Some(PROVIDER), false).await.unwrap();
-    assert_eq!(first["providers"], cached["providers"]);
-    assert_eq!(fixture.requests("account/getBalance").len(), 1);
+    let current = manager.usage(None, Some(PROVIDER), false).await.unwrap();
+    assert_eq!(current["providers"][0]["status"], "unavailable");
+    assert_eq!(current["providers"][0]["balances"], json!([]));
+    assert!(current["providers"][0].get("lastSuccessful").is_none());
+    assert_eq!(fixture.requests("account/getBalance").len(), 2);
     let refreshed = manager.usage(None, Some(PROVIDER), true).await.unwrap();
     assert_eq!(refreshed["providers"][0]["status"], "unavailable");
     assert!(
@@ -55,7 +57,7 @@ async fn balance_refresh_uses_the_host_cache_and_handles_signed_out_accounts() {
             .unwrap()
             .contains("DeepSeek")
     );
-    assert_eq!(fixture.requests("account/getBalance").len(), 2);
+    assert_eq!(fixture.requests("account/getBalance").len(), 3);
 }
 
 #[tokio::test]

@@ -38,6 +38,7 @@ packages/*/dist/
 packages/expo-two-way-audio/build/
 *.tsbuildinfo
 .tmp/
+**/.vitest-attachments/
 apps/desktop/release-resources/
 packages/protocol/src/generated/validation/*.ts
 

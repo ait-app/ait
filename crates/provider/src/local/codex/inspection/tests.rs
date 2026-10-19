@@ -51,3 +51,36 @@ async fn diagnostics_do_not_expose_private_account_fields() {
     );
     assert!(client.usage().await.is_err());
 }
+
+#[cfg(unix)]
+#[tokio::test]
+async fn prepared_usage_resolves_identity_before_polling_and_reuses_one_native_process() {
+    let fixture = crate::test_support::Fixture::new();
+    std::fs::write(
+        fixture.program.with_extension("cwd"),
+        fixture.cwd.to_str().unwrap(),
+    )
+    .unwrap();
+    let client = fixture.client();
+    let prepared = client
+        .prepare_native_usage_in(fixture.cwd.to_str().unwrap())
+        .await
+        .unwrap();
+    assert!(prepared.identity.is_some());
+    assert!(
+        !fixture
+            .requests()
+            .iter()
+            .any(|request| request["method"] == "account/rateLimits/read")
+    );
+    let report = prepared.report.await.unwrap();
+    assert_eq!(report["status"], "available");
+    assert_eq!(
+        fixture
+            .requests()
+            .iter()
+            .filter(|request| request["method"] == "initialize")
+            .count(),
+        1
+    );
+}

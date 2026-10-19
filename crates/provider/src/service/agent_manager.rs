@@ -86,6 +86,7 @@ pub(crate) struct AgentRegistration {
 
 #[derive(Debug)]
 struct LiveAgent {
+    usage_cache: usage::UsageCache,
     session: Box<dyn AgentSession>,
     _permit: tokio::sync::OwnedSemaphorePermit,
     record: PersistedAgentRuntimeRecord,
@@ -101,6 +102,34 @@ struct LiveAgent {
     failure_entry: Option<crate::protocol::timeline::NativeItem>,
     exclusive: bool,
     interruption_requested: bool,
+}
+
+impl LiveAgent {
+    fn new(
+        session: Box<dyn AgentSession>,
+        permit: tokio::sync::OwnedSemaphorePermit,
+        record: PersistedAgentRuntimeRecord,
+        registered: bool,
+    ) -> Self {
+        Self {
+            usage_cache: usage::UsageCache::default(),
+            session,
+            _permit: permit,
+            record,
+            registered,
+            turn: None,
+            last_message: None,
+            last_message_observer: None,
+            latest_turn: None,
+            pending: None,
+            pending_runtime: None,
+            pending_input_at: None,
+            failure_diagnostic: None,
+            failure_entry: None,
+            exclusive: false,
+            interruption_requested: false,
+        }
+    }
 }
 
 /// Owns live provider sessions and their durable Paseo-compatible snapshots.
@@ -1003,23 +1032,7 @@ impl AgentManager {
             if close_result.is_err() {
                 self.live.insert(
                     agent_id.to_owned(),
-                    LiveAgent {
-                        session,
-                        _permit: permit,
-                        record,
-                        registered: false,
-                        turn: None,
-                        last_message: None,
-                        last_message_observer: None,
-                        latest_turn: None,
-                        pending: None,
-                        pending_runtime: None,
-                        pending_input_at: None,
-                        failure_diagnostic: None,
-                        failure_entry: None,
-                        exclusive: false,
-                        interruption_requested: false,
-                    },
+                    LiveAgent::new(session, permit, record, false),
                 );
                 return Err(AgentManagerError::Session);
             }
@@ -1027,23 +1040,7 @@ impl AgentManager {
         }
         self.live.insert(
             agent_id.to_owned(),
-            LiveAgent {
-                session,
-                _permit: permit,
-                record: record.clone(),
-                registered: true,
-                turn: None,
-                last_message: None,
-                last_message_observer: None,
-                latest_turn: None,
-                pending: None,
-                pending_runtime: None,
-                pending_input_at: None,
-                failure_diagnostic: None,
-                failure_entry: None,
-                exclusive: false,
-                interruption_requested: false,
-            },
+            LiveAgent::new(session, permit, record.clone(), true),
         );
         Ok(record)
     }
@@ -1058,23 +1055,7 @@ impl AgentManager {
         if session.close().await.is_err() {
             self.live.insert(
                 agent_id.to_owned(),
-                LiveAgent {
-                    session,
-                    _permit: permit,
-                    record,
-                    registered: false,
-                    turn: None,
-                    last_message: None,
-                    last_message_observer: None,
-                    latest_turn: None,
-                    pending: None,
-                    pending_runtime: None,
-                    pending_input_at: None,
-                    failure_diagnostic: None,
-                    failure_entry: None,
-                    exclusive: false,
-                    interruption_requested: false,
-                },
+                LiveAgent::new(session, permit, record, false),
             );
         }
         AgentManagerError::Session

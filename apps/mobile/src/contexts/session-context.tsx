@@ -541,14 +541,21 @@ function SessionProviderInternal({ children, serverId, client }: SessionProvider
       "agent.permission.resolved",
       "agent.provider_subagents.update",
       "checkout.status.update",
-      "workspace_setup_progress",
       "activity_log",
       "status.server_info",
     ];
-    const feeds = client.observeEvents(requestedEvents, {
-      notifications: true,
-      supportedOnly: true,
-    });
+    const feeds = client.observeEvents(
+      (info) => [
+        ...requestedEvents,
+        info?.features?.workspaceSetupObservation
+          ? "workspace_setup_status"
+          : "workspace_setup_progress",
+      ],
+      {
+        notifications: true,
+        supportedOnly: true,
+      },
+    );
     const onFeed = (
       type: SessionOutboundMessage["type"],
       handler: (message: SessionOutboundMessage) => void,
@@ -583,6 +590,14 @@ function SessionProviderInternal({ children, serverId, client }: SessionProvider
       applyCheckoutStatusUpdateFromEvent({ queryClient, serverId, message });
     });
 
+    const unsubSetupBootstrap = feeds.subscribe({
+      snapshot: () => useWorkspaceSetupStore.getState().clearServer(serverId),
+      update: () => {},
+    });
+    const unsubSetupSummary = onFeed("workspace_setup_status", (message) => {
+      if (message.type === "workspace_setup_status")
+        useWorkspaceSetupStore.getState().upsertSummary({ serverId, payload: message.payload });
+    });
     const unsubWorkspaceSetupProgress = onFeed("workspace_setup_progress", (message) => {
       if (message.type !== "workspace_setup_progress") return;
       applyWorkspaceSetupProgress(message.payload);
@@ -756,6 +771,8 @@ function SessionProviderInternal({ children, serverId, client }: SessionProvider
       unsubAgentAttention();
       unsubCheckoutStatusUpdate();
       unsubWorkspaceSetupProgress();
+      unsubSetupSummary();
+      unsubSetupBootstrap();
       unsubStatus();
       unsubPermissionRequest();
       unsubPermissionResolved();

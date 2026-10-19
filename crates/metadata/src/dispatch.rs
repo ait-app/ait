@@ -160,7 +160,7 @@ pub async fn dispatch(
         }
         Err(error) => return Err(error),
     }
-    match requests::session(context, state, connection) {
+    match requests::session(context, state, connection).await {
         Ok(()) => return Ok(None),
         Err(DispatchError::NotImplemented) => {
             Context::assert_unhandled(context, "metadata::session");

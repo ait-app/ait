@@ -27,6 +27,8 @@ export function toUsageReport(provider: ProviderUsage, fetchedAt: string): Usage
     sourceLabel: provider.displayName,
     account: provider.accountLabel ? { label: provider.accountLabel } : {},
     fetchedAt: provider.fetchedAt ?? fetchedAt,
+    ...(provider.successfulAt ? { successfulAt: provider.successfulAt } : {}),
+    ...(provider.lastSuccessful ? { lastSuccessful: provider.lastSuccessful } : {}),
     report,
   };
 }

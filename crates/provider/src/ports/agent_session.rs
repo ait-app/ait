@@ -84,6 +84,20 @@ pub(crate) enum AgentTurnEvent {
 
 /// Live provider session. Closing releases resources without deleting native history.
 pub(crate) trait AgentSession: Debug + Send {
+    /// Resolve the session's account before deciding whether a quota read can reuse history.
+    /// # Errors
+    /// Returns native authentication inspection failures, without exposing credentials.
+    fn prepare_account_usage(
+        &self,
+    ) -> AgentSessionFuture<'_, super::account_usage::PreparedUsage<'_>> {
+        let report = self.account_usage();
+        Box::pin(async move {
+            Ok(super::account_usage::PreparedUsage {
+                identity: None,
+                report,
+            })
+        })
+    }
     /// Return session-scoped controls when native composition owns the available choices.
     /// `config` includes pending user selections; `None` retains client-level controls.
     fn control_settings(&self, _config: &StoredAgentConfig) -> Option<serde_json::Value> {
@@ -394,6 +408,19 @@ pub(crate) trait AgentClient: Debug + Send + Sync {
     /// Returns unsupported accounting or a native query failure.
     fn usage(&self) -> AgentSessionFuture<'_, serde_json::Value> {
         Box::pin(async { Err(AgentSessionError::Unavailable) })
+    }
+
+    /// Resolve the host's account before deciding whether its quota read can reuse history.
+    /// # Errors
+    /// Returns native authentication inspection failures, without exposing credentials.
+    fn prepare_usage(&self) -> AgentSessionFuture<'_, super::account_usage::PreparedUsage<'_>> {
+        let report = self.usage();
+        Box::pin(async move {
+            Ok(super::account_usage::PreparedUsage {
+                identity: None,
+                report,
+            })
+        })
     }
 
     /// List commands and skills available in a validated working directory.

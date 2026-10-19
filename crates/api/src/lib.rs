@@ -662,6 +662,9 @@ fn compose_directory(
                         "blockedSource": source,
                     }),
                 );
+                setup_events.publish(SessionEventKind::WorkspaceSetupStatus, &serde_json::json!({
+                    "workspaceId":workspace.workspace_id,"status":"blocked","hasCommands":false,
+                }));
             }))
         } else {
             directory
@@ -691,6 +694,7 @@ fn compose_automation_events(
         return Ok(());
     };
     let events = events.clone();
+    let summaries = Mutex::new(std::collections::BTreeMap::new());
     automation
         .lock()
         .map_err(|_| ConfigError::ServiceInitialization)?
@@ -721,6 +725,29 @@ fn compose_automation_events(
                     (SessionEventKind::WorkspaceSetupProgress, payload)
                 }
             };
+            if kind == SessionEventKind::WorkspaceSetupProgress {
+                let mut summary = metadata::automation::rpc::setup_summary(&payload);
+                summary["workspaceId"] = payload["workspaceId"].clone();
+                let key = payload["workspaceId"]
+                    .as_str()
+                    .unwrap_or_default()
+                    .to_owned();
+                let state = (summary["status"].clone(), summary["hasCommands"].clone());
+                let changed = {
+                    let mut summaries = summaries
+                        .lock()
+                        .unwrap_or_else(std::sync::PoisonError::into_inner);
+                    let changed = summaries.get(&key) != Some(&state);
+                    if summaries.len() >= 4096 {
+                        summaries.pop_first();
+                    }
+                    summaries.insert(key, state);
+                    changed
+                };
+                if changed {
+                    events.publish(SessionEventKind::WorkspaceSetupStatus, &summary);
+                }
+            }
             events.publish(kind, &payload);
         }));
     Ok(())

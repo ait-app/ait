@@ -2,7 +2,7 @@ import { WorkspaceDiffStatPill } from "@/composer/diff-stat-pill";
 import { AgentTaskList } from "@/composer/task-list";
 import { ComposerTrackBar } from "@/composer/tracks";
 import { useWorkspaceHasDiffStat } from "@/composer/workspace-diff-stat";
-import { supportsDesktopPaneSplits, useIsCompactFormFactor } from "@/constants/layout";
+import { useIsCompactFormFactor } from "@/constants/layout";
 import { useSettings } from "@/hooks/use-settings";
 import { usePaneContext } from "@/panels/pane-context";
 import { useSessionStore } from "@/stores/session-store";
@@ -15,11 +15,11 @@ import {
 import { SubagentsTrack } from "@/subagents/track";
 import type { TodoEntry } from "@/types/stream";
 import { navigateToAgent } from "@/utils/navigate-to-agent";
-import { buildWorkspaceTabPersistenceKey } from "@/workspace-tabs/model";
+import { buildWorkspaceTabPersistenceKey, type WorkspaceTabTarget } from "@/workspace-tabs/model";
 import { openPreferredWorkspaceTarget } from "@/workspace-tabs/open-beside";
 import { openComposerChanges } from "@/workspace-tabs/open-supporting-view";
 import { memo, useCallback, type ReactElement } from "react";
-
+import { useSubagentOpensInSheet } from "@/subagents";
 /**
  * The pane's ambient context — workspace changes, subagents, and tasks — as a row of pills above
  * the composer.
@@ -45,10 +45,9 @@ export const AgentTracks = memo(function AgentTracks({
   archiveFinishedStatus: ArchiveFinishedStatus;
   onArchiveFinished: () => void;
 }): ReactElement | null {
-  const { tabId, openTab } = usePaneContext();
+  const { tabId } = usePaneContext();
   const hasWorkspaceDiffStat = useWorkspaceHasDiffStat(serverId, workspaceId);
   const isCompact = useIsCompactFormFactor();
-  const canSplit = supportsDesktopPaneSplits() && !isCompact;
   const openInSidePane = useSettings((settings) => settings.openInSidePane);
   const workspaceKey = buildWorkspaceTabPersistenceKey({ serverId, workspaceId });
   const canDetachSubagents = useSessionStore(
@@ -56,46 +55,38 @@ export const AgentTracks = memo(function AgentTracks({
   );
   const archiveSubagent = useArchiveSubagent({ serverId });
   const detachSubagent = useDetachSubagent({ serverId });
+  const openSubagentTarget = useCallback(
+    (target: WorkspaceTabTarget) => {
+      openPreferredWorkspaceTarget({
+        workspaceKey,
+        target,
+        source: "subagents",
+        preferences: openInSidePane,
+        parentTabId: tabId,
+      });
+    },
+    [openInSidePane, tabId, workspaceKey],
+  );
   const handleOpenSubagent = useCallback(
     (subagentId: string) => {
       const session = useSessionStore.getState().sessions[serverId];
       const agent = session?.agents.get(subagentId) ?? session?.agentDetails.get(subagentId);
+      // A subagent in another workspace lives in that workspace's tabs.
       if (agent?.workspaceId && agent.workspaceId !== workspaceId) {
         navigateToAgent({ serverId, agentId: subagentId });
         return;
       }
-      if (canSplit && workspaceKey) {
-        openPreferredWorkspaceTarget({
-          isCompact,
-          workspaceKey,
-          target: { kind: "agent", agentId: subagentId },
-          source: "subagents",
-          preferences: openInSidePane,
-          parentTabId: tabId,
-        });
-        return;
-      }
-      navigateToAgent({ serverId, agentId: subagentId });
+      openSubagentTarget({ kind: "agent", agentId: subagentId });
     },
-    [canSplit, isCompact, openInSidePane, serverId, tabId, workspaceId, workspaceKey],
+    [openSubagentTarget, serverId, workspaceId],
   );
   const handleOpenProviderSubagent = useCallback(
     (parentAgentId: string, subagentId: string) => {
-      if (canSplit && workspaceKey) {
-        openPreferredWorkspaceTarget({
-          isCompact,
-          workspaceKey,
-          target: { kind: "provider_subagent", parentAgentId, subagentId },
-          source: "subagents",
-          preferences: openInSidePane,
-          parentTabId: tabId,
-        });
-        return;
-      }
-      openTab({ kind: "provider_subagent", parentAgentId, subagentId });
+      openSubagentTarget({ kind: "provider_subagent", parentAgentId, subagentId });
     },
-    [canSplit, isCompact, openInSidePane, openTab, tabId, workspaceKey],
+    [openSubagentTarget],
   );
+  const opensInSheet = useSubagentOpensInSheet(workspaceKey);
   const handleOpenChanges = useCallback(() => {
     if (!workspaceKey) {
       return;
@@ -127,6 +118,7 @@ export const AgentTracks = memo(function AgentTracks({
         rows={subagentRows}
         onOpenSubagent={handleOpenSubagent}
         onOpenProviderSubagent={handleOpenProviderSubagent}
+        opensInSheet={opensInSheet}
         onArchiveSubagent={archiveSubagent}
         onArchiveFinished={onArchiveFinished}
         archiveFinishedStatus={archiveFinishedStatus}

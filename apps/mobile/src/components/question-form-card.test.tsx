@@ -102,4 +102,27 @@ describe("question response recovery", () => {
     fireEvent.click(screen.getByTestId("question-form-dismiss"));
     expect(onRespond).not.toHaveBeenCalled();
   });
+  it("shows the failed request inline while preserving answers for retry", () => {
+    const onRespond = vi.fn();
+    const { rerender } = render(
+      <QuestionFormCard permission={permission} onRespond={onRespond} isResponding={false} />,
+    );
+    fireEvent.change(screen.getByRole("textbox", { name: "Choose a runtime" }), {
+      target: { value: "Keep my answer" },
+    });
+    rerender(
+      <QuestionFormCard
+        permission={permission}
+        onRespond={onRespond}
+        isResponding={false}
+        responseError="Host disconnected"
+      />,
+    );
+    expect(screen.getByRole("alert").textContent).toBe("Host disconnected");
+    fireEvent.click(screen.getByTestId("question-form-primary-action"));
+    expect(onRespond).toHaveBeenCalledOnce();
+    expect(
+      (screen.getByRole("textbox", { name: "Choose a runtime" }) as HTMLInputElement).value,
+    ).toBe("Keep my answer");
+  });
 });

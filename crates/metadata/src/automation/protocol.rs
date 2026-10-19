@@ -112,6 +112,8 @@ pub enum WorkspaceBlockedSource {
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct WorkspaceSetupSnapshot {
+    /// Monotonic in-memory revision within this daemon process.
+    pub(crate) revision: u64,
     /// Overall setup lifecycle.
     pub(crate) status: WorkspaceSetupStatus,
     /// Worktree setup transcript.

@@ -37,9 +37,10 @@ export function formatUsageFreshness(
   compactTimeAgo: string,
   fetchedAt?: string,
   t: TFunction = i18n.t.bind(i18n),
+  retained = false,
 ): string {
   const time = formatUsageTimeAgo(compactTimeAgo, fetchedAt ? new Date(fetchedAt) : undefined, t);
-  return t("providerUsage.updated", { time });
+  return t(retained ? "providerUsage.lastUpdated" : "providerUsage.updated", { time });
 }
 
 /** A user-requested refresh of one report. The previous report stays on screen throughout. */
@@ -88,17 +89,24 @@ export function upsertReport(
 }
 
 /**
- * The list a finished request leaves: its reports, dropping any the host no longer has, except
- * that a copy on screen fetched after the request's copy stays.
+ * Keep displayed reports in place: the finished list is in fetch-completion order, which can
+ * change on every refresh. Drop missing reports, append new ones, and keep newer fetched copies.
  */
 export function settleReports(
   shown: readonly UsageReportEntry[] | undefined,
   finished: readonly UsageReportEntry[],
 ): UsageReportEntry[] {
-  return finished.map((report) => {
-    const copy = shown?.find((entry) => entry.id === report.id);
-    return copy ? laterFetched(copy, report) : report;
-  });
+  const remaining = new Map(finished.map((report) => [report.id, report]));
+  const settled: UsageReportEntry[] = [];
+  for (const report of shown ?? []) {
+    const arriving = remaining.get(report.id);
+    if (!arriving) {
+      continue;
+    }
+    settled.push(laterFetched(report, arriving));
+    remaining.delete(report.id);
+  }
+  return [...settled, ...remaining.values()];
 }
 
 export interface UsageQueryState {
@@ -196,4 +204,43 @@ export function resolveUsageModalHostId(choice: UsageHostChoice): string | null 
   const connected = choice.hosts.filter((host) => host.isConnected);
   const picked = connected.find((host) => host.serverId === choice.pickedServerId);
   return picked?.serverId ?? resolveUsageHostId(choice) ?? connected[0]?.serverId ?? null;
+}
+
+/** Current outcome owns messages; only a successful poll owns values and freshness. */
+export function resolveUsageReport(entry: UsageReportEntry, copy: UsageCopy = usageCopy) {
+  const available = entry.report.status === "available";
+  // COMPAT(usageLastSuccessful): added in v0.12.0, remove after 2027-04-17 once daemon floor >= v0.12.0.
+  // Older daemons cannot provide history; a failed attempt is never a successful update.
+  const snapshot = available ? null : (entry.lastSuccessful ?? null);
+  const content = entry.report.status === "available" ? entry.report : (snapshot?.report ?? null);
+  const messages: string[] = [];
+  if (!available) {
+    if (entry.loginErrors)
+      messages.push(
+        ...entry.loginErrors.map(
+          (login) => `${login.harness}: ${usageProblemText(login.report, copy)}`,
+        ),
+      );
+    // COMPAT(usageLoginErrors): added in v0.11.0, remove after 2027-04-05 once daemon floor >= v0.11.0.
+    else messages.push(usageProblemText(entry.report, copy));
+  }
+  return {
+    windows: content?.windows ?? [],
+    balances: content?.balances ?? [],
+    details: content?.details ?? [],
+    planLabel: content?.planLabel ?? null,
+    // COMPAT(usageSuccessfulAt): added in v0.12.0, remove after 2027-04-17 once daemon floor >= v0.12.0.
+    // Old daemons expose only attempt time for available reports, never for failures.
+    successfulAt: available
+      ? (entry.successfulAt ?? entry.fetchedAt)
+      : (snapshot?.fetchedAt ?? null),
+    retained: snapshot !== null,
+    messages,
+  };
+}
+
+function usageProblemText(report: UsageReportEntry["report"], copy: UsageCopy): string {
+  if (report.status === "error") return report.error;
+  if (report.status === "unavailable") return copy.problem(report.problem);
+  return "";
 }

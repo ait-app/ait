@@ -55,6 +55,7 @@ struct Listener {
     presence: Weak<Mutex<Presence>>,
     kinds: BTreeSet<SessionEventKind>,
     notifications: bool,
+    workspace_id: Option<String>,
     sink: EventSink,
     delivery: Mutex<Delivery>,
 }
@@ -132,7 +133,12 @@ impl SessionEvents {
                 .iter()
                 .filter_map(Weak::upgrade)
                 .filter(|listener| {
-                    listener.kinds.contains(&kind) && listener.presence.strong_count() != 0
+                    listener.kinds.contains(&kind)
+                        && listener.presence.strong_count() != 0
+                        && listener
+                            .workspace_id
+                            .as_deref()
+                            .is_none_or(|id| payload["workspaceId"].as_str() == Some(id))
                 })
                 .collect();
             let presence: Vec<_> = state
@@ -234,6 +240,39 @@ impl SessionConnection {
         request: EventsRequest,
         sink: EventSink,
     ) -> Result<SessionSubscription, SessionError> {
+        self.subscribe_filtered(request, None, sink)
+    }
+
+    /// Observe setup detail for exactly one Workspace on this physical connection.
+    /// # Errors
+    /// Rejects empty or oversized identities and unavailable observer state.
+    pub fn subscribe_workspace_setup(
+        &self,
+        workspace_id: String,
+        sink: EventSink,
+    ) -> Result<SessionSubscription, SessionError> {
+        if workspace_id.is_empty()
+            || workspace_id.len() > 256
+            || workspace_id.chars().any(char::is_control)
+        {
+            return Err(SessionError::Invalid);
+        }
+        self.subscribe_filtered(
+            EventsRequest {
+                events: vec!["workspace_setup_progress".to_owned()],
+                notifications: false,
+            },
+            Some(workspace_id),
+            sink,
+        )
+    }
+
+    fn subscribe_filtered(
+        &self,
+        request: EventsRequest,
+        workspace_id: Option<String>,
+        sink: EventSink,
+    ) -> Result<SessionSubscription, SessionError> {
         if request.events.len() > 32 {
             return Err(SessionError::Invalid);
         }
@@ -250,6 +289,7 @@ impl SessionConnection {
             presence: Arc::downgrade(&self.presence),
             kinds,
             notifications: request.notifications,
+            workspace_id,
             sink,
             delivery: Mutex::new(Delivery::default()),
         });
