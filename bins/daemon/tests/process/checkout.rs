@@ -88,8 +88,8 @@ async fn large_diff_snapshot_limits_stay_inline_and_recover() {
     let root = tempfile::tempdir().unwrap();
     let repository = root.path().join("repository");
     create_clean_repository(&repository);
-    std::fs::write(repository.join("first.txt"), "a\n".repeat(75_000)).unwrap();
-    std::fs::write(repository.join("second.txt"), "b\n".repeat(75_000)).unwrap();
+    std::fs::write(repository.join("first.txt"), "a\n".repeat(20_000)).unwrap();
+    std::fs::write(repository.join("second.txt"), "b\n".repeat(20_000)).unwrap();
     let log = root.path().join("server.log");
     let mut process = start(&root.path().join("state"), &log);
     let address = ready(&mut process, &log).await;

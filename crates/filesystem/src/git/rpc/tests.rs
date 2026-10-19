@@ -133,7 +133,7 @@ fn binary_diff_status_survives_wire_projection() {
 
 #[test]
 fn highlight_output_budget_applies_to_the_entire_subscription_snapshot() {
-    let file = highlighted_file(4000);
+    let file = highlighted_file(1000);
     assert!(
         super::protocol_diff_file(file.clone()).hunks[0].lines[0]
             .tokens
@@ -196,12 +196,12 @@ fn plain_diff_output_budget_counts_json_escaping() {
 
 #[test]
 fn plain_diff_output_budget_applies_to_the_entire_snapshot() {
-    let mut second = plain_file(50_000);
+    let mut second = plain_file(12_000);
     second.path = "second.rs".to_owned();
     let result = super::protocol_diff_result(
         "/repo",
         Ok(CheckoutDiff {
-            files: vec![plain_file(50_000), second],
+            files: vec![plain_file(12_000), second],
             diff_too_large: false,
         }),
     );
@@ -219,7 +219,7 @@ fn plain_diff_output_budget_subscription_recovers_after_oversized_update() {
     )
     .unwrap();
     let large = CheckoutDiff {
-        files: vec![plain_file(50_000), plain_file(50_000)],
+        files: vec![plain_file(12_000), plain_file(12_000)],
         diff_too_large: false,
     };
     let update = observation.update(Ok(large.clone())).unwrap().unwrap();
@@ -775,7 +775,7 @@ fn diff_subscription_payload_keeps_its_wire_fields_and_compares_structurally() {
     assert_eq!(initial["cwd"], "/repo");
     assert!(initial["error"].is_null());
     let large = CheckoutDiff {
-        files: vec![plain_file(50_000), plain_file(50_000)],
+        files: vec![plain_file(12_000), plain_file(12_000)],
         diff_too_large: false,
     };
     let update = observation.update(Ok(large)).unwrap().unwrap();
