@@ -7,6 +7,7 @@
 
 ## Daemon 与协议
 
+- [OpenCode 输出停滞与宿主重启恢复](providers/opencode-stalled-turn-recovery-2026-10-19.md)
 - [Rust workspace 每 crate 95% 覆盖率验证](daemon/crate-coverage-95-2026-10-14.md)
 - [Workspace 定时任务设计与验证](daemon/workspace-schedules-verification-2026-10-12.md)
 
