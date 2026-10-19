@@ -67,6 +67,26 @@ Rust 命令使用 `RUSTC_WRAPPER=` 避开沙箱不可用的本机 sccache。需�
 - `INIT_CWD="$PWD" node node_modules/react-native-enriched-markdown/postinstall.mjs` 完成固定语言资源准备，数学资源按配置跳过。
 - `npm exec --workspace=@ait/mobile -- expo export --platform all --output-dir /private/tmp/ait-paseo-export-final` 通过，包含 Web 产物和 iOS／Android Hermes 包；本地产物是验证输出，不纳入 Git。
 
+## PR CI 修复
+
+PR #394 首次 CI（[run 39287465659](https://github.com/ait-app/ait/actions/runs/39287465659)）出现三类遗漏：
+
+- 非英语资源的 `plugin-settings.shared` 误含四个已经位于根层的通用翻译键，导致与英语键集不一致。删除误嵌套副本，保留各语言正确位置的翻译；`vitest run --project unit src/i18n/resources.test.ts` 从 35 通过、1 失败变为 36 项通过。
+- 新增两个 Setup 请求后，API／metadata／daemon 的目录数量断言未同步。更新为 207 个发布能力、206 个实现方法、194 个业务目录方法及 47 个 metadata 方法；继续检查唯一性、占位方法错误和安装边界，并显式确认两个新请求由 metadata 声明且出现在生产 daemon 中。
+- Antigravity 和 DSH 原生网页登录的旧配额测试仍要求跨读取复用缓存，与 ADR-167 的未知账号身份规则冲突。改为检查非强制读取仍查询原生配额、退出登录立即返回不可用且不携带旧成功值，保留 host／live session 隔离检查。
+
+Rust 定向回归只选择 API capabilities／connection validation／HTTP readiness／placeholders、metadata capabilities、Antigravity／DSH native quota、daemon composite installation 与 production catalog：28 项通过。其余 1582 项由过滤器排除，并非本次执行或验证范围；没有运行完整 Rust workspace 测试。
+
+```sh
+cargo nextest run --locked -p api -p metadata -p provider -p daemon -E '
+(package(api) & (test(capabilities::tests::) | test(connection::validation::tests::) | test(=tests::http_authentication_origins_and_readiness) | test(tests::placeholders::))) |
+(package(metadata) & test(capabilities::tests::)) |
+(package(provider) & (test(local::antigravity::tests::quota::) | test(local::deepseek_harness::native::tests::quota::))) |
+(package(daemon) & (test(=host::tests::each_composite_service_installs_all_its_methods_without_other_components) | test(=unix::catalog::production_installs_every_in_scope_method_without_placeholders)))'
+```
+
+`cargo clippy --locked -p api -p metadata -p provider -p daemon --all-targets -- -D warnings`、Rust／UI 格式与 lint、文档链接和 diff 空白检查通过。客户端与 Rust 方法声明一致性、声明解析及 crate coverage 配置脚本也通过；其中 coverage 配置脚本是静态配置检查，不是覆盖率测量。
+
 ## Test coverage
 
 **Not measured。** 用户没有请求覆盖率测量；按仓库规范只运行修改代码及直接相关行为的定向测试，不扩展为完整 Rust workspace 测试或 coverage。当前没有可报告的行覆盖率、覆盖／总行数、可比较基线或覆盖率产物。若后续需要测量，应对 filesystem Git、provider 用量／会话注册、metadata automation 和 model session 的相关测试使用 `cargo llvm-cov`，单独保存可共享报告；全 workspace 测量仍需明确请求。

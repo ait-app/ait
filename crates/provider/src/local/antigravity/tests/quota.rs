@@ -20,11 +20,15 @@ async fn logged_in_antigravity_host_and_session_quotas_use_native_command() {
     assert_eq!(host["windows"][0]["label"], "Gemini Models · Weekly");
     assert_eq!(host["windows"][1]["shortLabel"], "5h");
     let query_count = logs(&directory).len();
-    let cached = manager.usage(None, Some(PROVIDER), false).await.unwrap();
-    assert_eq!(cached["providers"][0], *host);
-    assert_eq!(logs(&directory).len(), query_count);
-    manager.usage(None, Some(PROVIDER), true).await.unwrap();
+    let refreshed = manager.usage(None, Some(PROVIDER), false).await.unwrap();
+    let current = &refreshed["providers"][0];
+    assert_eq!(current["status"], "available");
+    assert_eq!(current["windows"], host["windows"]);
+    assert!(current["successfulAt"].is_string());
+    assert!(current.get("lastSuccessful").is_none());
     assert_eq!(logs(&directory).len(), query_count + 1);
+    manager.usage(None, Some(PROVIDER), true).await.unwrap();
+    assert_eq!(logs(&directory).len(), query_count + 2);
 
     let environment = AgentEnvironment::try_from(BTreeMap::from([
         ("AGY_FIXTURE_REMAINING".into(), "0.25".into()),
@@ -71,8 +75,8 @@ async fn logged_in_antigravity_host_and_session_quotas_use_native_command() {
         .iter()
         .filter(|call| call["args"][0] == "--print")
         .collect();
-    assert_eq!(quota_calls.len(), 4);
-    assert_eq!(quota_calls[2]["cwd"], spec.cwd);
+    assert_eq!(quota_calls.len(), 5);
+    assert_eq!(quota_calls[3]["cwd"], spec.cwd);
     for call in quota_calls {
         assert_eq!(
             call["args"],

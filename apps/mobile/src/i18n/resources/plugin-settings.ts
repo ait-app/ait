@@ -8,15 +8,6 @@ const shared = {
     errorTitle: "Unable to load plugin logs",
     empty: "No plugin output yet",
   },
-
-  common: { bottomSheetBackdrop: "Bottom sheet backdrop" },
-
-  message: { turnFooter: { workedFor: "Worked for {{duration}}" } },
-
-  workspace: {
-    tabs: { menu: { copyFilePath: "Copy file path" } },
-    sheet: { openAsTab: "Open as tab" },
-  },
 } as const;
 
 export const pluginSettings = {
