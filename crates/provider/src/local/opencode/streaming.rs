@@ -125,7 +125,9 @@ impl Stream {
             }
             Some("usage_update") => {
                 let usage = AgentUsage {
-                    context_window_used_tokens: update["used"].as_u64(),
+                    // Native ACP can report an aborted placeholder's zero counters instead of
+                    // the preceding model request. Zero does not establish an empty context.
+                    context_window_used_tokens: update["used"].as_u64().filter(|used| *used > 0),
                     context_window_max_tokens: update["size"].as_u64(),
                     total_cost_usd: if update["cost"]["currency"] == "USD" {
                         update["cost"]["amount"].as_f64()

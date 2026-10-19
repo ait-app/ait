@@ -6,6 +6,7 @@ mod discovery;
 mod history;
 mod interactions;
 mod launcher;
+mod observation;
 mod session;
 mod streaming;
 mod summary;

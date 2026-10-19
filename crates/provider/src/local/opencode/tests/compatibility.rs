@@ -220,6 +220,7 @@ async fn native_startup_is_coordinated_across_clones_without_locking_live_sessio
 #[tokio::test]
 async fn waiting_for_native_startup_is_bounded_and_rejects_before_spawning_acp() {
     let (root, mut client, spec) = fixture("normal");
+    let startup_timeout = client.startup_timeout;
     client.startup_timeout = Duration::from_millis(150);
     let gate = client.startup.lock().await;
     assert!(matches!(
@@ -228,6 +229,8 @@ async fn waiting_for_native_startup_is_bounded_and_rejects_before_spawning_acp()
     ));
     assert!(!root.path().join("launch.jsonl").exists());
     drop(gate);
+    // Only the blocked gate has a short budget; recovery must allow ordinary process startup.
+    client.startup_timeout = startup_timeout;
     let (mut transport, _) = launcher::spawn(&client, &spec.cwd, &StoredAgentConfig::default())
         .await
         .unwrap();

@@ -10,7 +10,11 @@ use serde_json::{Value, json};
 use tokio::sync::{mpsc, oneshot};
 use tokio_util::task::AbortOnDropHandle;
 
-use super::{OpenCodeClient, PROVIDER, config, history, interactions, launcher, streaming::Stream};
+use super::{
+    OpenCodeClient, PROVIDER, config, history, interactions, launcher,
+    observation::{Observation, Source},
+    streaming::Stream,
+};
 use crate::{
     local::{
         acp_permissions,
@@ -56,6 +60,8 @@ struct Connection {
     capabilities: Value,
     clients: BTreeMap<String, String>,
     users: BTreeSet<String>,
+    observation: Option<Observation>,
+    reported_usage: bool,
 }
 
 #[derive(Debug)]
@@ -90,6 +96,7 @@ pub(super) struct Session {
     finished: Option<oneshot::Receiver<Result<Finished, AgentSessionError>>>,
     task: Option<AbortOnDropHandle<()>>,
     queued: VecDeque<AgentTurnEvent>,
+    initial: VecDeque<AgentTurnEvent>,
     turn: Option<String>,
     history_only: bool,
     closed: bool,
@@ -163,7 +170,7 @@ pub(super) async fn open(
     }
     let history_only = binding.is_some_and(|(_, purpose)| purpose == AgentResumePurpose::History);
     let inherited = StoredAgentConfig::default();
-    let (mut transport, capabilities) = launcher::spawn(
+    let (mut transport, capabilities, source) = launcher::observed(
         client,
         &spec.cwd,
         if history_only {
@@ -216,6 +223,12 @@ pub(super) async fn open(
         return Err(error);
     }
     let info = config::runtime(&id, &options);
+    let mut observation = observe(source, &id, &spec.cwd).await;
+    let initial = initial_usage(client, &mut observation)?;
+    let mut users: BTreeSet<_> = users.into_iter().collect();
+    if let Some(observation) = &observation {
+        users.extend(observation.users().iter().cloned());
+    }
     let (_, events) = mpsc::channel(1);
     let diagnostics = transport.diagnostics.clone();
     Ok(Session {
@@ -230,7 +243,9 @@ pub(super) async fn open(
             options,
             capabilities,
             clients,
-            users: users.into_iter().collect(),
+            users,
+            observation,
+            reported_usage: false,
         }),
         pending: Arc::default(),
         commands: None,
@@ -238,12 +253,42 @@ pub(super) async fn open(
         finished: None,
         task: None,
         queued: VecDeque::new(),
+        initial,
         turn: None,
         history_only,
         closed: false,
         failed: false,
         failure: None,
     })
+}
+
+fn initial_usage(
+    client: &OpenCodeClient,
+    observation: &mut Option<Observation>,
+) -> Result<VecDeque<AgentTurnEvent>, AgentSessionError> {
+    let mut stream = Stream::new(client.images.clone());
+    if let Some(observation) = observation {
+        for update in observation.initial.drain(..) {
+            stream.update(&update)?;
+        }
+    }
+    Ok(stream.events)
+}
+
+async fn observe(source: Option<Source>, id: &str, cwd: &str) -> Option<Observation> {
+    match source {
+        Some(source) => {
+            if let Ok(observation) = source.bind(id, cwd).await {
+                Some(observation)
+            } else {
+                tracing::warn!(
+                    "OpenCode native observation unavailable; ACP execution is unchanged"
+                );
+                None
+            }
+        }
+        None => None,
+    }
 }
 
 impl Session {
@@ -282,6 +327,9 @@ impl Session {
         }
         self.diagnostics = connection.transport.diagnostics.clone();
         self.diagnostics.clear();
+        if let Some(observation) = &mut connection.observation {
+            observation.begin();
+        }
         let rpc_id = match connection
             .transport
             .begin(
@@ -348,8 +396,8 @@ impl Session {
             || selected.system_prompt != self.spec.config.system_prompt
             || (selected.system_prompt.is_some() && selected.mode_id != self.spec.config.mode_id)
         {
-            let (mut transport, capabilities) =
-                launcher::spawn(&self.client, &self.spec.cwd, selected).await?;
+            let (mut transport, capabilities, source) =
+                launcher::observed(&self.client, &self.spec.cwd, selected).await?;
             let mut options = if capabilities["sessionCapabilities"]["resume"].is_object() {
                 let result = transport
                     .request(
@@ -375,6 +423,10 @@ impl Session {
             connection.options = options;
             connection.capabilities = capabilities;
             connection.transport = transport;
+            connection.observation = observe(source, &self.id, &self.spec.cwd).await;
+            if let Some(observation) = &connection.observation {
+                connection.users.extend(observation.users().iter().cloned());
+            }
             return Ok(());
         }
         config::apply(
@@ -425,6 +477,112 @@ impl Execution {
             .map_err(|_| AgentSessionError::Failed)
     }
 
+    async fn observed(
+        &self,
+        stream: &mut Stream,
+        updates: Vec<Value>,
+    ) -> Result<(), AgentSessionError> {
+        for update in updates {
+            stream.update(&update)?;
+        }
+        self.publish(stream).await
+    }
+
+    async fn publish(&self, stream: &mut Stream) -> Result<(), AgentSessionError> {
+        for event in stream.events.drain(..) {
+            // Completion is published only after native replay confirms the prompt.
+            if (!matches!(event, AgentTurnEvent::Timeline(_))
+                || matches!(&event, AgentTurnEvent::Timeline(entry)
+                    if entry.item["type"] == "compaction"))
+                && !matches!(&event, AgentTurnEvent::Progress { entry, .. }
+                    if entry.item["type"] == "user_message")
+            {
+                self.emit(event).await?;
+            }
+        }
+        Ok(())
+    }
+
+    async fn update(
+        &self,
+        connection: &mut Connection,
+        stream: &mut Stream,
+        message: &Value,
+    ) -> Result<(), AgentSessionError> {
+        if message["params"]["sessionId"] != self.id {
+            return Err(AgentSessionError::Failed);
+        }
+        let update = &message["params"]["update"];
+        if update["sessionUpdate"] == "usage_update" {
+            if update["used"] == 0
+                && (connection.reported_usage
+                    || connection
+                        .observation
+                        .as_ref()
+                        .is_some_and(Observation::has_usage))
+            {
+                return Ok(());
+            }
+            connection.reported_usage |= update["used"].as_u64().is_some_and(|used| used > 0);
+        }
+        if update["sessionUpdate"] == "config_option_update" {
+            connection.options = config::state(update)?;
+            self.emit(AgentTurnEvent::RuntimeInfo(config::runtime(
+                &self.id,
+                &connection.options,
+            )))
+            .await?;
+        } else {
+            stream.update(update)?;
+            self.publish(stream).await?;
+        }
+        Ok(())
+    }
+
+    async fn receive(
+        &mut self,
+        connection: &mut Connection,
+        stream: &mut Stream,
+    ) -> Result<Value, AgentSessionError> {
+        loop {
+            tokio::select! {
+                command = self.commands.recv() => {
+                    let command = command.ok_or(AgentSessionError::Failed)?;
+                    self.respond(&mut connection.transport, command).await;
+                }
+                updates = async {
+                    match &mut connection.observation {
+                        Some(observation) => observation.next().await,
+                        None => std::future::pending().await,
+                    }
+                } => {
+                    if let Ok(updates) = updates {
+                        self.observed(stream, updates).await?;
+                    } else {
+                        tracing::warn!("OpenCode observation refresh failed; ACP remains active");
+                    }
+                },
+                message = connection.transport.receive() => return message,
+            }
+        }
+    }
+
+    async fn refresh(
+        &self,
+        connection: &mut Connection,
+        stream: &mut Stream,
+    ) -> Result<(), AgentSessionError> {
+        if let Some(observation) = &mut connection.observation {
+            if let Ok(updates) = observation.refresh(false).await {
+                self.observed(stream, updates).await?;
+            } else {
+                tracing::warn!("OpenCode final observation refresh failed");
+            }
+            self.observed(stream, observation.finish()?).await?;
+        }
+        Ok(())
+    }
+
     fn failure(connection: &Connection, error: &Value) -> String {
         let diagnostic = crate::local::diagnostics::native(error, "rpc");
         connection
@@ -457,6 +615,26 @@ impl Execution {
         (!message.is_empty()).then(|| format!("OpenCode: {message}"))
     }
 
+    fn terminal(result: &Value) -> Result<(AgentTurnEvent, Option<String>), AgentSessionError> {
+        Ok(match result["stopReason"].as_str() {
+            Some("cancelled") => (AgentTurnEvent::Cancelled, None),
+            Some("end_turn") => (AgentTurnEvent::Completed(None), None),
+            Some("max_tokens") => (
+                AgentTurnEvent::Failed,
+                Some("OpenCode reached the model output limit. Send Continue to resume.".into()),
+            ),
+            Some("max_turn_requests") => (
+                AgentTurnEvent::Failed,
+                Some("OpenCode reached its turn request limit. Send Continue to resume.".into()),
+            ),
+            Some("refusal") => (
+                AgentTurnEvent::Failed,
+                Some("OpenCode refused this request. Revise it before continuing.".into()),
+            ),
+            _ => return Err(AgentSessionError::Failed),
+        })
+    }
+
     async fn run(mut self, mut connection: Connection) -> Result<Finished, AgentSessionError> {
         let mut stream = Stream::for_turn(self.client.images.clone(), self.turn.clone());
         self.emit(AgentTurnEvent::RuntimeInfo(config::runtime(
@@ -467,30 +645,18 @@ impl Execution {
         for entry in std::mem::take(&mut self.submitted) {
             self.emit(AgentTurnEvent::Timeline(entry)).await?;
         }
-        let (terminal, failure) = loop {
-            let message = tokio::select! {
-                command = self.commands.recv() => {
-                    let command = command.ok_or(AgentSessionError::Failed)?;
-                    self.respond(&mut connection.transport, command).await;
-                    continue;
-                }
-                message = connection.transport.receive() => message?,
-            };
+        if let Some(observation) = &mut connection.observation {
+            let updates = std::mem::take(&mut observation.initial);
+            self.observed(&mut stream, updates).await?;
+        }
+        let (mut terminal, mut failure) = loop {
+            let message = self.receive(&mut connection, &mut stream).await?;
             if message.get("method").is_none() {
                 if message["id"] != self.rpc_id {
                     return Err(AgentSessionError::Failed);
                 }
                 break match acp_transport::response(&message) {
-                    Ok(result) => (
-                        match result["stopReason"].as_str() {
-                            Some("cancelled") => AgentTurnEvent::Cancelled,
-                            Some("end_turn" | "max_tokens" | "max_turn_requests" | "refusal") => {
-                                AgentTurnEvent::Completed(None)
-                            }
-                            _ => return Err(AgentSessionError::Failed),
-                        },
-                        None,
-                    ),
+                    Ok(result) => Self::terminal(&result)?,
                     Err(AgentSessionError::Rejected) => (
                         AgentTurnEvent::Failed,
                         // Native error payloads may include prompts, HTTP bodies and headers.
@@ -502,30 +668,7 @@ impl Execution {
             }
             match message["method"].as_str() {
                 Some("session/update") => {
-                    if message["params"]["sessionId"] != self.id {
-                        return Err(AgentSessionError::Failed);
-                    }
-                    let update = &message["params"]["update"];
-                    if update["sessionUpdate"] == "config_option_update" {
-                        connection.options = config::state(update)?;
-                        self.emit(AgentTurnEvent::RuntimeInfo(config::runtime(
-                            &self.id,
-                            &connection.options,
-                        )))
-                        .await?;
-                    } else {
-                        stream.update(update)?;
-                        for event in stream.events.drain(..) {
-                            // Completion is published only after native replay confirms the prompt.
-                            if (!matches!(event, AgentTurnEvent::Timeline(_))
-                                || matches!(&event, AgentTurnEvent::Timeline(entry)
-                                    if entry.item["type"] == "compaction"))
-                                && !matches!(&event, AgentTurnEvent::Progress { entry, .. } if entry.item["type"] == "user_message")
-                            {
-                                self.emit(event).await?;
-                            }
-                        }
-                    }
+                    self.update(&mut connection, &mut stream, &message).await?;
                 }
                 Some("session/request_permission" | "elicitation/create") => {
                     self.capture(&mut connection.transport, &message).await?;
@@ -552,6 +695,18 @@ impl Execution {
                 _ => {}
             }
         };
+        self.refresh(&mut connection, &mut stream).await?;
+        if matches!(terminal, AgentTurnEvent::Completed(_))
+            && connection
+                .observation
+                .as_ref()
+                .is_some_and(Observation::unknown_finish)
+        {
+            terminal = AgentTurnEvent::Failed;
+            failure = Some(
+                "OpenCode ended without a valid finish reason. Send Continue to resume.".into(),
+            );
+        }
         stream.finish_compactions();
         for event in stream.events.drain(..) {
             self.emit(event).await?;
@@ -577,31 +732,33 @@ impl Execution {
             self.client.images.clone(),
         )
         .await?;
-        let new = replay
-            .users
-            .iter()
-            .filter(|id| !connection.users.contains(id.as_str()))
-            .collect::<Vec<_>>();
-        if new.len() > 1 {
+        let mut users: BTreeSet<_> = replay.users.iter().cloned().collect();
+        if let Some(observation) = &connection.observation {
+            users.extend(observation.users().iter().cloned());
+        }
+        let new = users.difference(&connection.users).collect::<Vec<_>>();
+        if connection.clients.len() + new.len() > 4096 {
             return Err(AgentSessionError::Failed);
         }
         // Native commands such as /compact may complete without inserting a user message.
-        if let Some(user) = new.first() {
+        // Automatic compaction can insert several native continuation or replayed inputs.
+        // They belong to this accepted prompt and must retain its turn through later replay.
+        for user in &new {
             connection
                 .clients
                 .insert((*user).clone(), self.turn.clone());
         }
-        connection.users = replay.users.iter().cloned().collect();
         let last_message = if new.is_empty() {
             None
         } else {
             replay.last_message.clone()
         };
-        self.emit(AgentTurnEvent::History(history::entries(
-            &mut replay,
-            &connection.clients,
-        )))
-        .await?;
+        connection.users = users;
+        let mut entries = history::entries(&mut replay, &connection.clients);
+        if let Some(observation) = &connection.observation {
+            observation.history(&mut entries, &connection.clients);
+        }
+        self.emit(AgentTurnEvent::History(entries)).await?;
         connection.options = options;
         if matches!(event, AgentTurnEvent::Completed(_)) {
             event = AgentTurnEvent::Completed(last_message);
@@ -752,6 +909,9 @@ impl AgentSession for Session {
         })
     }
     fn poll_turn(&mut self) -> Result<Option<AgentTurnEvent>, AgentSessionError> {
+        if let Some(event) = self.initial.pop_front() {
+            return Ok(Some(event));
+        }
         if let Ok(event) = self.events.try_recv() {
             return Ok(Some(event));
         }

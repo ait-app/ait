@@ -6,6 +6,8 @@ import pathlib
 import sys
 import time
 
+sys.dont_write_bytecode = True
+
 root = pathlib.Path(os.environ.get("AIT_ACP_FIXTURE_ROOT", pathlib.Path(sys.argv[0]).parent))
 state_path = root / "native-fixture.json"
 log_path = root / "requests.jsonl"
@@ -27,7 +29,8 @@ if sys.argv[1:] == ["agent", "list"]:
 if sys.argv[1:3] == ["debug", "agent"]:
     print(json.dumps({"name": sys.argv[-1], "hidden": sys.argv[-1] == "summary", "description": "Native agent"}))
     sys.exit(0)
-assert sys.argv[1:] == ["acp"], sys.argv
+assert sys.argv[1:2] == ["acp"], sys.argv
+assert len(sys.argv) == 2 or sys.argv[2:4] == ["--hostname", "127.0.0.1"], sys.argv
 with (root / "launch.jsonl").open("a") as output:
     output.write(json.dumps({"config": json.loads(os.environ.get("OPENCODE_CONFIG_CONTENT", "{}")),
                              "question": os.environ.get("OPENCODE_ENABLE_QUESTION_TOOL")}) + "\n")
@@ -116,6 +119,14 @@ def content(row):
 def complete(stop="end_turn"):
     global active
     value = state()
+    if scenario.startswith("stop-") and value["seq"] == 1:
+        stop = scenario.removeprefix("stop-")
+    if scenario == "auto-compaction" and value["seq"] == 1:
+        for index in range(2):
+            value["history"].append({"id": "summary" + str(index), "type": "assistant",
+                                     "content": [{"type": "text", "text": "Native summary"}]})
+            value["history"].append({"id": "continue" + str(index), "type": "user",
+                                     "text": "Continue after native automatic compaction"})
     row = {"id": "answer" + str(value["seq"]), "type": "assistant", "content": [{"type": "text", "text": "authoritative answer"}]}
     if scenario == "large-tool":
         row["content"].insert(0, {"type": "tool", "id": "tool" + str(value["seq"]), "output": "x" * 1048576})
@@ -124,10 +135,16 @@ def complete(stop="end_turn"):
     value["history"].append(row)
     save(value)
     content(row)
-    update({"sessionUpdate": "usage_update", "used": 100, "size": 32000, "cost": {"amount": 0.02, "currency": "USD"}})
+    update({"sessionUpdate": "usage_update", "used": 0 if scenario == "zero-usage" or (
+        scenario == "zero-after-usage" and value["seq"] > 1) else 100,
+            "size": 32000, "cost": {"amount": 0.02, "currency": "USD"}})
     reply(active, {"stopReason": stop})
     active = None
 
+
+if "--port" in sys.argv:
+    from opencode_observation import serve
+    serve(root, int(sys.argv[sys.argv.index("--port") + 1]), lambda: state_path, lambda: session_id)
 
 for line in sys.stdin:
     message = json.loads(line)

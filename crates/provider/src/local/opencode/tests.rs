@@ -14,6 +14,12 @@ use crate::ports::agent_session::{
 mod ownership;
 
 #[cfg(unix)]
+mod compaction;
+
+#[cfg(unix)]
+mod termination;
+
+#[cfg(unix)]
 #[tokio::test]
 async fn native_protocol_updates_options_resolves_cancelled_permissions_and_rejects_unknown_calls()
 {
