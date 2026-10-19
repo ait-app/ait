@@ -39,6 +39,7 @@ export function useSidebarWorkspacePinController(): ToggleSidebarWorkspacePin {
     onError: (error) => {
       toast.error(
         error instanceof Error ? error.message : t("sidebar.workspace.toasts.hostDisconnected"),
+        error,
       );
     },
     onSettled: (_data, _error, { workspace }) => {

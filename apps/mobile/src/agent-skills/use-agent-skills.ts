@@ -23,7 +23,7 @@ export function useAgentSkills(serverId: string) {
   const report = useCallback(
     (message: string, error: Error) => {
       console.error(`[Agent skills: ${serverId}]`, error);
-      toast.error(message);
+      toast.error(message, error);
     },
     [serverId, toast],
   );

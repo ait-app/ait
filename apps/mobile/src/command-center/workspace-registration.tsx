@@ -153,7 +153,7 @@ function useWorkspaceLabelCatalog(
           assigned,
         });
       } catch (cause) {
-        toast.error(workspaceLabelErrorMessage(cause));
+        toast.error(workspaceLabelErrorMessage(cause), cause);
       }
     },
     [fields, labelDefinitions, serverId, toast],

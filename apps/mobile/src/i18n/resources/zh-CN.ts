@@ -1565,6 +1565,13 @@ export const zhCN: TranslationResources = {
       },
     },
   },
+  errorLog: {
+    copy: "复制错误日志",
+    copied: "错误日志已复制",
+    export: "导出日志",
+    copyFailed: "复制失败，请尝试导出日志文件。",
+    exportFailed: "导出失败，仍可尝试复制错误日志。",
+  },
   rootError: {
     title: "Ait 遇到了问题。",
     body: "请重试以重新加载应用。如果问题持续发生，请在报告时附上下面的详细信息。",

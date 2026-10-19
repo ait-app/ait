@@ -14,6 +14,7 @@ mod bot_permissions;
 mod environment;
 mod generated_titles;
 mod paseo;
+mod recovery;
 mod resume;
 mod titles;
 mod usage;

@@ -1697,7 +1697,7 @@ export const AgentControls = memo(function AgentControls({
         );
       } catch (error) {
         console.warn("[AgentControls] setAgentModel or persist preference failed", error);
-        toast.error(toErrorMessage(error));
+        toast.error(toErrorMessage(error), error);
       }
     },
     [agentId, agentProvider, client, toast, updatePreferences],
@@ -1753,7 +1753,7 @@ export const AgentControls = memo(function AgentControls({
         .then((notice) => showProviderNoticeToast(toast, notice))
         .catch((error) => {
           console.warn("[AgentControls] setAgentThinkingOption failed", error);
-          toast.error(toErrorMessage(error));
+          toast.error(toErrorMessage(error), error);
         });
     },
     [activeModelId, agentId, agentProvider, client, toast, updatePreferences],
@@ -1779,7 +1779,7 @@ export const AgentControls = memo(function AgentControls({
       });
       void client.setAgentFeature(agentId, featureId, value).catch((error) => {
         console.warn("[AgentControls] setAgentFeature failed", error);
-        toast.error(toErrorMessage(error));
+        toast.error(toErrorMessage(error), error);
       });
     },
     [agentId, agentProvider, client, toast, updatePreferences],
