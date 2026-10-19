@@ -25,9 +25,10 @@
 
 ## 架构决策
 
+- [ADR-169：统一 Markdown 渲染与移动面板编辑生命周期](decisions/clients/adr-169-shared-markdown-and-composer-lifetimes.md)
 - [ADR-168：Setup 全局摘要与面板日志订阅分离](decisions/workspace/adr-168-scoped-setup-observation.md)
 - [ADR-167：用量缓存按原生账号与成功快照隔离](decisions/providers/adr-167-account-scoped-successful-usage.md)
-- [ADR-166：统一 Markdown 渲染与移动面板编辑生命周期](decisions/clients/adr-166-shared-markdown-and-composer-lifetimes.md)
+- [ADR-166：后台错误只记录、不弹错误提示](decisions/clients/adr-166-background-errors-without-toasts.md)
 
 - [ADR-165：macOS 通过 AIT Server 检查与下载更新](decisions/clients/adr-165-macos-ait-server-updates.md)：generic feed、stable/beta 清单、COS/GitHub 地域分流与单段 Range。
 

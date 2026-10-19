@@ -28,7 +28,7 @@
 | Setup           | 全局只观察轻量状态；活动且应用可见的面板拥有详细日志订阅。订阅按物理连接和 Workspace 隔离，重连重建，revision 拒绝旧排队事件，空快照清除旧日志，后台失败提示继续有效。                                             |
 | 桌面与问答      | Linux 在页面加载完成后补窗口显示兜底；主入口保护关闭 console 管道的 EPIPE。问题提交失败在对应表单内显示，保留答案和原有超时／重试能力。                                                                            |
 
-耐久边界记录在 [ADR-166](../../decisions/clients/adr-166-shared-markdown-and-composer-lifetimes.md)、[ADR-167](../../decisions/providers/adr-167-account-scoped-successful-usage.md) 和 [ADR-168](../../decisions/workspace/adr-168-scoped-setup-observation.md)。来源说明更新在 [Paseo NOTICE](../../../third-party/paseo/NOTICE)。
+耐久边界记录在 [ADR-169](../../decisions/clients/adr-169-shared-markdown-and-composer-lifetimes.md)、[ADR-167](../../decisions/providers/adr-167-account-scoped-successful-usage.md) 和 [ADR-168](../../decisions/workspace/adr-168-scoped-setup-observation.md)。来源说明更新在 [Paseo NOTICE](../../../third-party/paseo/NOTICE)。
 
 ## 兼容性与平台范围
 
@@ -68,6 +68,8 @@ Rust 命令使用 `RUSTC_WRAPPER=` 避开沙箱不可用的本机 sccache。需�
 - `npm exec --workspace=@ait/mobile -- expo export --platform all --output-dir /private/tmp/ait-paseo-export-final` 通过，包含 Web 产物和 iOS／Android Hermes 包；本地产物是验证输出，不纳入 Git。
 
 ## PR CI 修复
+
+修复推送时 `main` 新增后台错误策略与 ADR-166，造成决策索引冲突并阻止新 CI 运行。已合入 `cbd62e46`，保留主线后台错误策略，将本次 Markdown 决策改为 ADR-169 并同步索引与引用。合并后 query-client-errors 与 install-error-handlers 两文件的 5 项直接相关回归通过，407 篇 Markdown 的本地链接检查通过。
 
 PR #394 首次 CI（[run 39287465659](https://github.com/ait-app/ait/actions/runs/39287465659)）出现三类遗漏：
 

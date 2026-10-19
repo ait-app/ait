@@ -17,7 +17,7 @@ afterEach(() => {
   vi.unstubAllGlobals();
 });
 
-it("captures console errors and SDK request diagnostics while preserving original handlers", () => {
+it("records console errors and SDK request diagnostics without a toast", () => {
   const original = console.error;
   cleanup = installErrorHandlers();
   console.warn("ordinary warning");
@@ -30,11 +30,17 @@ it("captures console errors and SDK request diagnostics while preserving origina
       requestType: "workspace.get.request",
     }),
   );
-  const [report] = appErrorReporter.takePending();
+  expect(appErrorReporter.takePending()).toEqual([]);
+  const report = appErrorReporter.getReports().at(-1)!;
   expect(report.message).toBe("RPC denied");
   expect(report.context).toContain("rpc-1");
   expect(report.details).toContain("at request");
   expect(original).toHaveBeenCalledTimes(1);
+  const failure = new Error("Save failed");
+  console.error("Save failed", failure);
+  expect(appErrorReporter.takePending()).toEqual([]);
+  appErrorReporter.report(failure, { source: "dialog" });
+  expect(appErrorReporter.takePending().map((pending) => pending.message)).toEqual(["Save failed"]);
   cleanup();
   expect(console.error).toBe(original);
 });

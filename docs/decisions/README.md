@@ -123,8 +123,8 @@ ADR-074、082、083、084、122 在不同类别中各有两份，引用时以路
 
 ## 客户端、连接与品牌
 
-- [ADR-166：统一 Markdown 渲染与移动面板编辑生命周期](clients/adr-166-shared-markdown-and-composer-lifetimes.md)
-
+- [ADR-169：统一 Markdown 渲染与移动面板编辑生命周期](clients/adr-169-shared-markdown-and-composer-lifetimes.md)
+- [ADR-166：后台错误只记录、不弹错误提示](clients/adr-166-background-errors-without-toasts.md)
 - [ADR-165：macOS 通过 AIT Server 检查与下载更新](clients/adr-165-macos-ait-server-updates.md)
 - [ADR-164：移除 Workspace 服务代理 URL 字段](clients/adr-164-remove-workspace-service-proxy-urls.md)
 - [ADR-163：nightly 附带独立 daemon 归档](clients/adr-163-nightly-standalone-daemon.md)

@@ -7,7 +7,7 @@ afterEach(() => {
   appErrorReporter.takePending();
 });
 
-it("reports query failures with their key and the original exception", async () => {
+it("records query failures with their key and the original exception without a toast", async () => {
   appErrorReporter.takePending();
   const error = new Error("Query diagnostics fixture", { cause: new Error("Host unavailable") });
   await expect(
@@ -19,7 +19,8 @@ it("reports query failures with their key and the original exception", async () 
       retry: false,
     }),
   ).rejects.toBe(error);
-  const [report] = appErrorReporter.takePending();
+  expect(appErrorReporter.takePending()).toEqual([]);
+  const report = appErrorReporter.getReports().at(-1)!;
   expect(report.source).toBe("query");
   expect(report.context).toContain("workspace-1");
   expect(report.details).toContain("Host unavailable");
