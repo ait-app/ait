@@ -145,6 +145,16 @@ gh workflow run release-android-play.yml --repo ait-app/ait --ref main -f action
   再构建；不要降低计数器。
 - GitHub 超时或取消：查看 EAS 控制台的构建/提交任务；它们可能仍在运行，先核对状态。
 
+提交步骤最多等待 **60 分钟**，包含 EAS 排队时间；整个 job 的 150 分钟上限保持不变。
+普通优先级的提交可能排队超过 20 分钟，GitHub 的等待结束不能作为商店拒绝提交的依据。
+
+在 EAS 项目的 Submissions 中，按本次已验证的 build ID 核对原提交：
+
+- `IN_QUEUE` 或 `IN_PROGRESS`：继续跟踪这个提交。
+- `FINISHED`：记录提交回执、版本和目标轨道，本次无需重新构建或再次上传。
+- `ERRORED` 或 `CANCELED`：先查看原提交日志，确认 Play 未接收后，才复用原已验证的
+  build ID 按上述手动提交方式重试；不要为等待超时直接增加一次构建和 versionCode。
+
 ## 个人账号后续正式发布
 
 新个人开发者账号可以先开展 Internal testing。申请 production 权限前，需要完成应用
