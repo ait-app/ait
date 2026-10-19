@@ -283,6 +283,35 @@ describe("Rust protocol adapter", () => {
     }
   });
 
+  it("completes an SDK agent attention clear from the Rust result", async () => {
+    const h = harness();
+    h.stopHello();
+    const client = new DaemonClient({
+      url: "ws://127.0.0.1:7316/v1/ws",
+      clientId: "attention-clear-test",
+      transportFactory: () => h.transport,
+      reconnect: { enabled: false },
+    });
+    try {
+      const connected = client.connect();
+      h.ready();
+      await connected;
+      const cleared = client.clearAgentAttention("agent-1");
+      const request = h.last(0);
+      expect(request.method).toBe("agent.attention.clear.request");
+      expect(request.params).toEqual({ agentId: "agent-1" });
+      h.sockets[0].message({
+        type: "response",
+        request_id: request.request_id,
+        method: request.method,
+        result: { agentId: "agent-1", agents: [] },
+      });
+      await expect(cleared).resolves.toBeUndefined();
+    } finally {
+      await client.close();
+    }
+  });
+
   it("carries typed online service control through the SDK without replaying a grant", async () => {
     const h = harness();
     h.stopHello();
