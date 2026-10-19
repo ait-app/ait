@@ -34,7 +34,6 @@ export function useWorkspaceClipboardActions(): WorkspaceClipboardActions {
           error instanceof Error
             ? error.message
             : t("sidebar.workspace.toasts.workspacePathUnavailable"),
-          error,
         );
         return;
       }

@@ -1,4 +1,3 @@
-import { showErrorAlert } from "@/diagnostics/error-reporter";
 import { supportsBrowserAccount } from "@/runtime/browser-account";
 import { AgentProfilesSection } from "@/agent-profiles";
 import { AgentSkillsSection } from "@/agent-skills";
@@ -68,7 +67,7 @@ import {
 } from "lucide-react-native";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
-import { Text, View } from "react-native";
+import { Alert, Text, View } from "react-native";
 import { StyleSheet, useUnistyles, withUnistyles } from "react-native-unistyles";
 import { BrowserToolsOptInCard } from "./browser-tools-card";
 import { restartDaemonFromSettings, updateDaemonFromSettings } from "./daemon-lifecycle";
@@ -434,10 +433,9 @@ function ConnectionsSection({ host }: { host: HostProfile }) {
       .then(() => setPendingRemoveConnection(null))
       .catch((error) => {
         console.error("[HostPage] Failed to remove connection", error);
-        showErrorAlert(
+        Alert.alert(
           t("settings.host.connections.removeErrorTitle"),
           t("settings.host.connections.removeErrorMessage"),
-          error,
         );
       })
       .finally(() => setIsRemovingConnection(false));
@@ -591,10 +589,9 @@ function RestartDaemonCard({ host }: { host: HostProfile }) {
       try {
         await request;
       } catch (error) {
-        showErrorAlert(
+        Alert.alert(
           t("settings.host.daemon.restart.requestFailedTitle"),
           error instanceof Error ? error.message : String(error),
-          error,
         );
       } finally {
         if (isMountedRef.current) setIsRestarting(false);
@@ -605,14 +602,14 @@ function RestartDaemonCard({ host }: { host: HostProfile }) {
 
   const handleRestart = useCallback(() => {
     if (!daemonClient) {
-      showErrorAlert(
+      Alert.alert(
         t("settings.host.daemon.restart.unavailableTitle"),
         t("settings.host.daemon.restart.unavailableMessage"),
       );
       return;
     }
     if (!isHostConnected()) {
-      showErrorAlert(
+      Alert.alert(
         t("settings.host.daemon.restart.offlineTitle"),
         t("settings.host.daemon.restart.offlineMessage"),
       );
@@ -670,10 +667,9 @@ function RestartDaemonCard({ host }: { host: HostProfile }) {
       })
       .catch((error) => {
         console.error(`[HostPage] Failed to open restart confirmation for ${host.label}`, error);
-        showErrorAlert(
+        Alert.alert(
           t("settings.host.daemon.restart.requestFailedTitle"),
           t("settings.host.daemon.restart.dialogFailedMessage"),
-          error,
         );
       });
   }, [
@@ -953,10 +949,9 @@ function AutoArchiveMergedWorkspacesCard({ serverId }: { serverId: string }) {
     (next: boolean) => {
       void patchConfig({ autoArchiveAfterMerge: next }).catch((error) => {
         console.error("[HostPage] Failed to update auto-archive after merge", error);
-        showErrorAlert(
+        Alert.alert(
           t("settings.host.workspaces.archiveMergedPr.updateFailed"),
           error instanceof Error ? error.message : String(error),
-          error,
         );
       });
     },
@@ -996,10 +991,9 @@ function EnableTerminalAgentHooksCard({ serverId }: { serverId: string }) {
     (next: boolean) => {
       void patchConfig({ enableTerminalAgentHooks: next }).catch((error) => {
         console.error("[HostPage] Failed to update terminal agent hooks", error);
-        showErrorAlert(
+        Alert.alert(
           t("settings.host.terminalAgentHooks.updateFailed"),
           error instanceof Error ? error.message : String(error),
-          error,
         );
       });
     },
@@ -1225,12 +1219,11 @@ function RemoveHostSection({
       })
       .catch((error) => {
         console.error("[HostPage] Failed to remove host", error);
-        showErrorAlert(
+        Alert.alert(
           t("settings.host.daemon.remove.errorTitle"),
           isLocalDaemon
             ? t("settings.host.daemon.remove.localErrorMessage")
             : t("settings.host.daemon.remove.errorMessage"),
-          error,
         );
       })
       .finally(() => setIsRemoving(false));
@@ -1542,10 +1535,9 @@ function TerminalProfilesSection({ serverId }: { serverId: string }) {
         try {
           await saveProfiles(profiles.filter((p) => p.id !== id));
         } catch (error) {
-          showErrorAlert(
+          Alert.alert(
             t("common.errors.unableToSave"),
             error instanceof Error ? error.message : String(error),
-            error,
           );
         }
         return;
@@ -1565,10 +1557,9 @@ function TerminalProfilesSection({ serverId }: { serverId: string }) {
       try {
         await saveProfiles(next);
       } catch (error) {
-        showErrorAlert(
+        Alert.alert(
           t("common.errors.unableToSave"),
           error instanceof Error ? error.message : String(error),
-          error,
         );
       }
     },
@@ -1586,10 +1577,9 @@ function TerminalProfilesSection({ serverId }: { serverId: string }) {
       try {
         await saveProfiles(next);
       } catch (error) {
-        showErrorAlert(
+        Alert.alert(
           t("common.errors.unableToSave"),
           error instanceof Error ? error.message : String(error),
-          error,
         );
       }
     },

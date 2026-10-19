@@ -19,7 +19,6 @@ pub(crate) fn classify(text: &str) -> Category {
         || text.contains("quota exhausted")
         || text.contains("quota exceeded")
         || text.contains("insufficient credits")
-        || text.contains("insufficient balance")
         || text.contains("credit balance")
         || text.contains("billing hard limit")
     {
@@ -64,10 +63,6 @@ pub(crate) fn classify(text: &str) -> Category {
         Category::Permission
     } else if text.contains("timed out") || text.contains("timeout") {
         Category::Timeout
-    } else if text.contains("stream closed before response.completed")
-        || text.contains("stream disconnected before completion")
-    {
-        Category::IncompleteResponse
     } else if text.contains("connection refused")
         || text.contains("connection reset")
         || text.contains("network error")
@@ -101,8 +96,11 @@ pub(crate) fn native(error: &Value, source: &'static str) -> Diagnostic {
             Category::ContextLimit
         }
         Some("usageLimitExceeded" | "insufficient_quota") => Category::Quota,
-        Some("httpConnectionFailed" | "responseStreamConnectionFailed") => Category::Network,
-        Some("responseStreamDisconnected") => Category::IncompleteResponse,
+        Some(
+            "httpConnectionFailed"
+            | "responseStreamConnectionFailed"
+            | "responseStreamDisconnected",
+        ) => Category::Network,
         Some("authentication_error") => Category::Authentication,
         Some("rate_limit_error") => Category::RateLimit,
         Some("overloaded_error") => Category::Capacity,
@@ -124,27 +122,17 @@ pub(crate) fn native(error: &Value, source: &'static str) -> Diagnostic {
         .or_else(|| error.pointer("/error/message").and_then(Value::as_str))
         .or_else(|| error["error"].as_str())
         .unwrap_or_default();
-    // Codex wraps upstream 4xx/5xx responses as connection failures. These broad
-    // transport classes must not hide a recognized cause such as insufficient balance.
-    let category = if matches!(category, Category::Unknown | Category::Network) {
+    let category = if category == Category::Unknown {
         let structured = class.map_or(Category::Unknown, classify);
-        let inferred = if structured == Category::Unknown {
+        if structured == Category::Unknown {
             classify(text)
         } else {
             structured
-        };
-        if inferred == Category::Unknown {
-            category
-        } else {
-            inferred
         }
     } else {
         category
     };
-    let category = if matches!(
-        category,
-        Category::Unknown | Category::Network | Category::IncompleteResponse
-    ) {
+    let category = if category == Category::Unknown {
         match status {
             Some(401) => Category::Authentication,
             Some(403) => Category::Permission,

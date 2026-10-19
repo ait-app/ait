@@ -872,15 +872,7 @@ const AgentStreamViewComponent = forwardRef<AgentStreamViewHandle, AgentStreamVi
             return renderToolCallItem(layoutItem, item);
 
           case "notification":
-            return (
-              <Notification
-                level={item.level}
-                message={item.message}
-                serverId={resolvedServerId}
-                agentId={agentId}
-                timelineItemId={item.id}
-              />
-            );
+            return <Notification level={item.level} message={item.message} />;
 
           case "todo_list":
             return <TodoListCard items={item.items} activity={item.activity} />;

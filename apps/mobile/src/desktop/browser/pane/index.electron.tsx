@@ -1,4 +1,3 @@
-import { CopyErrorLogButton } from "@/components/copy-error-log-button";
 import {
   useCallback,
   useEffect,
@@ -1175,7 +1174,7 @@ export function BrowserPane({
         });
       } catch (error) {
         console.warn("[browser-pane] clipboard fallback failed", error);
-        toastRef.current?.error(t("workspace.browser.controls.screenshotFailed"), error);
+        toastRef.current?.error(t("workspace.browser.controls.screenshotFailed"));
       }
     },
     [t],
@@ -1558,7 +1557,6 @@ export function BrowserPane({
           <Text numberOfLines={1} style={errorTextStyle}>
             {browser.lastError}
           </Text>
-          <CopyErrorLogButton error={browser.lastError} source="workspace browser" />
         </View>
       ) : null}
       <View

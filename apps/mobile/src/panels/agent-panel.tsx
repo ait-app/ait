@@ -4,7 +4,6 @@ import {
   type ComposerEditingSession,
 } from "@/composer/editing-session";
 import { useWorkspaceHasDiffStat } from "@/composer/workspace-diff-stat";
-import { CopyErrorLogButton } from "@/components/copy-error-log-button";
 import { AgentStreamView, type AgentStreamViewHandle } from "@/agent-stream/view";
 import type { WorkspaceComposerAttachment } from "@/attachments/types";
 import { useWorkspaceAttachmentScopeKey } from "@/attachments/workspace-attachments-store";
@@ -1724,12 +1723,7 @@ function AgentSessionUnavailableState({
             <Text style={styles.offlineDescription}>
               {t("agentPanel.unavailable.showAgainWhenReachable")}
             </Text>
-            {lastError ? (
-              <View>
-                <Text style={styles.offlineDetails}>{lastError}</Text>
-                <CopyErrorLogButton error={lastError} source="agent host connection" />
-              </View>
-            ) : null}
+            {lastError ? <Text style={styles.offlineDetails}>{lastError}</Text> : null}
           </>
         )}
       </View>

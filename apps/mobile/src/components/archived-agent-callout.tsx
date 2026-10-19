@@ -1,4 +1,3 @@
-import { CopyErrorLogButton } from "@/components/copy-error-log-button";
 import { useCallback, useState } from "react";
 import { View, Text } from "react-native";
 import { useTranslation } from "react-i18next";
@@ -51,12 +50,9 @@ export function ArchivedAgentCallout({ serverId, agentId }: ArchivedAgentCallout
               </Button>
             </View>
             {unarchiveError ? (
-              <View>
-                <Text style={styles.errorText} testID="agent-unarchive-error">
-                  {unarchiveError}
-                </Text>
-                <CopyErrorLogButton error={unarchiveError} source="unarchive agent" />
-              </View>
+              <Text style={styles.errorText} testID="agent-unarchive-error">
+                {unarchiveError}
+              </Text>
             ) : null}
           </View>
         </View>

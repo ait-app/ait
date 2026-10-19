@@ -7,7 +7,6 @@ mod execution;
 mod generated_titles;
 pub(crate) mod native_sessions;
 pub(crate) mod ownership;
-mod recovery;
 mod resume;
 mod streaming;
 mod titles;

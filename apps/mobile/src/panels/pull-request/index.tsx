@@ -62,10 +62,7 @@ export function PullRequestContent(input: {
   const refresh = useCheckoutGitActionsStore((state) => state.refresh);
   const onRetry = useCallback(() => {
     void refresh({ serverId: input.serverId, cwd: input.cwd }).catch((error) => {
-      toast.error(
-        error instanceof Error ? error.message : t("workspace.git.diff.failedRefresh"),
-        error,
-      );
+      toast.error(error instanceof Error ? error.message : t("workspace.git.diff.failedRefresh"));
     });
   }, [input.cwd, input.serverId, refresh, t, toast]);
 

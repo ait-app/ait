@@ -1,9 +1,9 @@
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { ScrollView, Text, View } from "react-native";
+import * as Clipboard from "expo-clipboard";
 import { useTranslation } from "react-i18next";
 import { openExternalUrl } from "@/utils/open-external-url";
-import { BookOpen, RotateCw, TriangleAlert } from "lucide-react-native";
-import { CopyErrorLogButton } from "@/components/copy-error-log-button";
+import { BookOpen, Copy, RotateCw, TriangleAlert } from "lucide-react-native";
 import { StyleSheet, useUnistyles } from "react-native-unistyles";
 import { AitLogo } from "@/components/icons/ait-logo";
 import { Button } from "@/components/ui/button";
@@ -189,6 +189,17 @@ export function StartupSplashScreen({ bootstrapState }: StartupSplashScreenProps
     return t("startup.logs.unavailable");
   }, [daemonLogs?.contents, isLoadingLogs, logsError, t]);
 
+  const handleCopyLogs = useCallback(() => {
+    const payload = daemonLogs?.logPath
+      ? `${daemonLogs.logPath}\n\n${daemonLogs.contents}`
+      : logsText;
+    void Clipboard.setStringAsync(payload);
+  }, [daemonLogs?.logPath, daemonLogs?.contents, logsText]);
+
+  const copyIcon = useMemo(
+    () => <Copy size={16} color={theme.colors.foreground} />,
+    [theme.colors.foreground],
+  );
   const warningIcon = useMemo(
     () => <TriangleAlert size={16} color={theme.colors.foreground} />,
     [theme.colors.foreground],
@@ -246,7 +257,9 @@ export function StartupSplashScreen({ bootstrapState }: StartupSplashScreenProps
           </View>
 
           <View style={styles.actionRow}>
-            <CopyErrorLogButton error={bootstrapState.splashError} source="daemon startup" />
+            <Button variant="secondary" leftIcon={copyIcon} onPress={handleCopyLogs}>
+              Copy logs
+            </Button>
             <Button variant="outline" leftIcon={warningIcon} onPress={openGithubIssue}>
               Open GitHub issue
             </Button>

@@ -7,9 +7,6 @@ import { Button } from "@/components/ui/button";
 import { ScrollableCodeSurface } from "@/components/ui/scrollable-code-surface";
 import { useIsCompactFormFactor } from "@/constants/layout";
 import { formatCaughtValue } from "./root-error-details";
-import { CopyErrorLogButton } from "./copy-error-log-button";
-import { appErrorReporter, type AppErrorReport } from "@/diagnostics/error-reporter";
-import { redactAppDiagnosticReport } from "@/diagnostics/app-diagnostic-report";
 
 interface RootErrorBoundaryProps {
   children: ReactNode;
@@ -18,7 +15,6 @@ interface RootErrorBoundaryProps {
 
 interface RootErrorBoundaryState {
   error: string | null;
-  report?: AppErrorReport;
 }
 
 export class RootErrorBoundary extends Component<RootErrorBoundaryProps, RootErrorBoundaryState> {
@@ -27,34 +23,20 @@ export class RootErrorBoundary extends Component<RootErrorBoundaryProps, RootErr
   };
 
   static getDerivedStateFromError(error: unknown): Partial<RootErrorBoundaryState> {
-    return { error: redactAppDiagnosticReport(formatCaughtValue(error), []) };
+    return { error: formatCaughtValue(error) };
   }
 
   componentDidCatch(error: unknown, errorInfo: ErrorInfo) {
-    const report = appErrorReporter.report(error, {
-      source: "React render",
-      context: { componentStack: errorInfo.componentStack },
-      notify: false,
+    console.error("[RootErrorBoundary] Unhandled render error", {
+      error: formatCaughtValue(error),
+      componentStack: errorInfo.componentStack,
     });
-    this.setState({ report });
-    appErrorReporter.presented(report);
-    appErrorReporter.log("error", [
-      "[RootErrorBoundary] Unhandled render error",
-      report.details,
-      report.context,
-    ]);
   }
 
   render() {
     const { error } = this.state;
     if (error !== null) {
-      return (
-        <RootErrorFallback
-          error={error}
-          report={this.state.report}
-          onReload={this.props.onReload}
-        />
-      );
+      return <RootErrorFallback error={error} onReload={this.props.onReload} />;
     }
 
     return this.props.children;
@@ -67,22 +49,18 @@ const DETAILS_MAX_HEIGHT = 300;
 
 interface RootErrorFallbackProps {
   error: string;
-  report?: AppErrorReport;
   onReload: () => void;
 }
 
-export function RootErrorFallback({ error, report, onReload }: RootErrorFallbackProps) {
+export function RootErrorFallback({ error, onReload }: RootErrorFallbackProps) {
   const { t } = useTranslation();
   const insets = useSafeAreaInsets();
   const isCompact = useIsCompactFormFactor();
 
   const reload = (
-    <View style={styles.actions}>
-      <CopyErrorLogButton report={report} error={error} source="React render" />
-      <Button variant="default" onPress={onReload} testID="root-error-boundary-reload">
-        {t("common.actions.reload")}
-      </Button>
-    </View>
+    <Button variant="default" onPress={onReload} testID="root-error-boundary-reload">
+      {t("common.actions.reload")}
+    </Button>
   );
 
   return (
@@ -122,7 +100,6 @@ export function RootErrorFallback({ error, report, onReload }: RootErrorFallback
 }
 
 const styles = StyleSheet.create((theme) => ({
-  actions: { gap: theme.spacing[3] },
   container: {
     flex: 1,
     backgroundColor: theme.colors.surface0,

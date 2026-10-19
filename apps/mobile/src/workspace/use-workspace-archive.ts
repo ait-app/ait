@@ -72,7 +72,6 @@ export function useWorkspaceArchive(input: ArchiveWorkspaceInput): WorkspaceArch
     } catch (error) {
       toast.error(
         error instanceof Error ? error.message : t("sidebar.workspace.toasts.archiveFailed"),
-        error,
       );
     } finally {
       onSetHiding?.(false);

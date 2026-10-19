@@ -1,4 +1,3 @@
-import { showErrorAlert } from "@/diagnostics/error-reporter";
 import { useCallback, useRef } from "react";
 import { Alert } from "react-native";
 import * as ImagePicker from "expo-image-picker";
@@ -101,14 +100,13 @@ export function useImageAttachmentPicker(): UseImageAttachmentPickerResult {
         return await normalizePickedImageAssets(result.assets);
       } catch (error) {
         console.error(`[ImageAttachmentPicker] Failed to pick image from ${source}:`, error);
-        showErrorAlert(
+        Alert.alert(
           t("imageAttachmentPicker.errorTitle"),
           t(
             source === "camera"
               ? "imageAttachmentPicker.failedToTakePhoto"
               : "imageAttachmentPicker.failedToSelect",
           ),
-          error,
         );
         return null;
       } finally {

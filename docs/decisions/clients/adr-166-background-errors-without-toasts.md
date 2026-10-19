@@ -1,12 +1,12 @@
 # ADR-166：后台错误只记录、不弹错误提示
 
-- 状态：Accepted
+- 状态：Superseded by [ADR-170](adr-170-revert-error-diagnostics-and-recovery.md)
 - 日期：2026-10-20
 - 修订：ADR-161（原规定 console 错误与 Query 失败都弹出错误 Toast）
 
 ## 背景
 
-[ADR-161](adr-161-copyable-error-diagnostics.md) 让 `console.error`、Query/Mutation 失败、
+[ADR-161](https://github.com/ait-app/ait/blob/4347b217f2e4b29a2f466bc5e7ce4906c19875dc/docs/decisions/clients/adr-161-copyable-error-diagnostics.md) 让 `console.error`、Query/Mutation 失败、
 未捕获异常和 Provider `turn_failed` 都进入同一个错误记录，并且每一条都弹出错误 Toast。
 0.1.9 发布后，后台错误同样会弹出 Toast，而且会连续弹出很多个：
 

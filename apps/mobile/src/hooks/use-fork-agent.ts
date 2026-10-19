@@ -198,7 +198,7 @@ export function useForkAgent(
         }),
       );
     } catch (error) {
-      toast?.error(toErrorMessage(error) || t("message.actions.forkFailed"), error);
+      toast?.error(toErrorMessage(error) || t("message.actions.forkFailed"));
     }
   });
 }

@@ -192,24 +192,6 @@ async fn rejection_keeps_transport_usable_and_increments_request_ids() {
 }
 
 #[tokio::test]
-async fn rejected_request_preserves_native_reason_and_http_status_for_display() {
-    let mut fixture = Fixture::new(
-        "request = receive()\nsend({'id': request['id'], 'error': {\n\
-         'code': -32000, 'message': 'request body too large token=private-value',\n\
-         'data': {'codexErrorInfo': {'httpConnectionFailed': {'httpStatusCode': 413}}}}})\nreceive()",
-    );
-
-    assert_eq!(fixture.request().await, Err(AgentSessionError::Rejected));
-
-    let message = fixture.transport.failure.message().unwrap();
-    assert!(message.contains("HTTP 413"));
-    assert!(message.contains("RPC -32000"));
-    assert!(message.contains("request body too large"));
-    assert!(!message.contains("private-value"));
-    fixture.transport.close().await.unwrap();
-}
-
-#[tokio::test]
 async fn definite_steer_rejection_preserves_queued_completion_and_transport() {
     let mut fixture = Fixture::new(
         "request = receive()\n\

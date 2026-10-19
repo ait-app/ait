@@ -19,8 +19,6 @@ pub(crate) enum Category {
     ContextLimit,
     /// The native service connection could not be established or maintained.
     Network,
-    /// The upstream response stream ended without a completion event.
-    IncompleteResponse,
     /// A bounded operation exceeded its response deadline.
     Timeout,
     /// The native process or stream ended unexpectedly.
@@ -49,9 +47,6 @@ impl Category {
                 "The conversation exceeds the model's context limit. Compact it or start a new conversation."
             }
             Self::Network => "The provider connection failed. Check your network before retrying.",
-            Self::IncompleteResponse => {
-                "The provider response stream ended before completion. Retry or check the provider service."
-            }
             Self::Timeout => "The provider did not respond before the operation timed out.",
             Self::Closed => {
                 "The provider process or connection closed before the operation completed."
@@ -75,7 +70,6 @@ impl Category {
             Self::Model => "model_unavailable",
             Self::ContextLimit => "context_limit",
             Self::Network => "network",
-            Self::IncompleteResponse => "incomplete_response",
             Self::Timeout => "timeout",
             Self::Closed => "connection_closed",
             Self::Protocol => "protocol",

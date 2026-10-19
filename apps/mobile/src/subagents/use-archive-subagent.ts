@@ -32,7 +32,7 @@ export function useArchiveSubagent(input: UseArchiveSubagentInput): (subagentId:
           confirm: confirmDialog,
           archiveAgent,
           reportError: (error) => {
-            toast.error(toErrorMessage(error), error);
+            toast.error(toErrorMessage(error));
           },
         },
       );

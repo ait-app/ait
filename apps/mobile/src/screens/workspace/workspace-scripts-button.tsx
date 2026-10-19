@@ -413,7 +413,9 @@ export function WorkspaceScriptsButton({
         error instanceof Error
           ? error.message
           : t("workspace.scripts.states.startFailed", { scriptName }),
-        { error: error, variant: "error" },
+        {
+          variant: "error",
+        },
       );
     },
     onSuccess: (result) => {
@@ -444,7 +446,9 @@ export function WorkspaceScriptsButton({
         error instanceof Error
           ? error.message
           : t("workspace.scripts.states.stopFailed", { scriptName }),
-        { error: error, variant: "error" },
+        {
+          variant: "error",
+        },
       );
     },
   });

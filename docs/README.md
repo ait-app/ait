@@ -25,6 +25,8 @@
 
 ## 架构决策
 
+- [ADR-170：完整回滚 PR #381](decisions/clients/adr-170-revert-error-diagnostics-and-recovery.md)：恢复此前客户端诊断、Codex 失败分类和会话启动行为。
+
 - [ADR-169：统一 Markdown 渲染与移动面板编辑生命周期](decisions/clients/adr-169-shared-markdown-and-composer-lifetimes.md)
 - [ADR-168：Setup 全局摘要与面板日志订阅分离](decisions/workspace/adr-168-scoped-setup-observation.md)
 - [ADR-167：用量缓存按原生账号与成功快照隔离](decisions/providers/adr-167-account-scoped-successful-usage.md)
@@ -35,10 +37,6 @@
 - [ADR-164：移除 Workspace 服务代理 URL 字段](decisions/clients/adr-164-remove-workspace-service-proxy-urls.md)：删除三种旧代理 URL、路由选择和兼容回退，保留在线中继回环转发，并重建旧工作区缓存。
 
 - [ADR-163：nightly 附带独立 daemon 归档](decisions/clients/adr-163-nightly-standalone-daemon.md)：沿用构建标识命名，Linux 使用 glibc 2.28 基线，macOS 仅 ad-hoc 签名、需手动移除 quarantine。
-
-- [ADR-162：Codex 失败展示原生原因与 HTTP 状态](decisions/providers/adr-162-codex-error-details.md)：有界脱敏的上游错误、原生重试结果与持久聊天提示。
-
-- [ADR-161：客户端统一错误提示与可复制诊断](decisions/clients/adr-161-copyable-error-diagnostics.md)：错误队列、异常原因链、请求关联、脱敏日志和复制／导出。
 
 - [ADR-160：清理旧公钥中继协议与测试残留](decisions/clients/adr-160-remove-legacy-relay-protocol.md)：删除无生产调用的协议与废弃配对测试，记录保留原始测试夹具、旧连接拒绝和存储丢弃的依据。
 
@@ -206,9 +204,6 @@
 - [提问弹层响应超时与重试](reports/clients/question-response-timeout-2026-10-13.md)：5 秒恢复按钮、保留填写内容、清理权限请求占用，以及真实丢包重试验证。
 - [定时任务列表 Host 展示去重](reports/clients/schedule-host-filter-2026-10-12.md)：按主机筛选后省略重复主机名，以及返回全部主机视图的浏览器回归。
 - [OpenCode 2.x ACP 复查](reports/providers/opencode-2x-acp-2026-10-19.md)：2.0.25 / 2.0.32 的隔离回归、独立压缩轮次修复和原生协议缺口。
-- [OpenCode 输出停滞与宿主重启恢复](reports/providers/opencode-stalled-turn-recovery-2026-10-19.md)：OOM kill 的直接证据、遗留 running 收尾和显式继续回归。
-- [Codex 长输入与连接失败排查](reports/providers/codex-upstream-errors-2026-10-19.md)：gpu-desktop 原生失败证据、上游余额／断流归因与安全诊断修复。
-- [错误诊断与会话恢复 PR 整合验证](reports/daemon/error-diagnostics-and-recovery-pr-2026-10-19.md)：三个 session 汇总、最新 main 整合、定向回归及本机工具链限制。
 - [OpenCode 长会话、用量与压缩排查](reports/providers/opencode-auto-compaction-2026-10-19.md)：gpu-desktop 原生证据、零用量纠正、限制结束提示与自动压缩结算回归。
 - [OpenCode 模型目录与执行失败修复](reports/providers/opencode-catalog-readiness-2026-10-10.md)：2.0.20 复现、配置确认、数据库冷启动竞争修复与原生流程验证。
 - [Ait 0.0.28 客户端告警修复与诊断验证](reports/clients/release-0.0.28-warning-fixes-2026-10-11.md)：共享许可等待、事件协商、界面告警与错误上下文。

@@ -4,7 +4,6 @@ mod async_questions;
 mod commands;
 pub(crate) mod controls;
 mod discovery;
-mod failure;
 mod inspection;
 mod metadata;
 mod native_sessions;
@@ -164,7 +163,6 @@ impl CodexClient {
                     info,
                     active_turn: None,
                     last_message: None,
-                    last_failure: None,
                     history,
                     cwd: spec.cwd.clone(),
                     permissions: std::collections::BTreeMap::new(),
@@ -500,7 +498,6 @@ struct CodexSession {
     info: StoredAgentRuntimeInfo,
     active_turn: Option<String>,
     last_message: Option<String>,
-    last_failure: Option<String>,
     history: bool,
     cwd: String,
     permissions: std::collections::BTreeMap<String, permissions::Pending>,
@@ -521,10 +518,9 @@ impl CodexSession {
     fn finish_turn(&mut self, params: &Value) -> Result<Option<AgentTurnEvent>, AgentSessionError> {
         if params["turn"]["status"] == "failed"
             && !params["turn"]["error"].is_null()
-            && let Some(transport) = &mut self.transport
+            && let Some(transport) = &self.transport
         {
-            transport.observe_error(
-                &params["turn"]["error"],
+            transport.diagnostics.observe(
                 crate::local::diagnostics::native(&params["turn"]["error"], "result"),
                 "turn",
             );
@@ -645,13 +641,6 @@ impl CodexSession {
 }
 
 impl AgentSession for CodexSession {
-    fn failure_message(&self) -> Option<&str> {
-        self.transport
-            .as_ref()
-            .and_then(|transport| transport.failure.message())
-            .or(self.last_failure.as_deref())
-    }
-
     fn failure_diagnostic(&self) -> Option<crate::ports::diagnostics::Diagnostic> {
         self.transport
             .as_ref()
@@ -809,10 +798,8 @@ impl AgentSession for CodexSession {
                 return Err(AgentSessionError::Failed);
             }
             self.preflight_plan(prompt)?;
-            self.last_failure = None;
-            if let Some(transport) = &mut self.transport {
+            if let Some(transport) = &self.transport {
                 transport.diagnostics.clear();
-                transport.failure.clear();
             }
 
             self.apply_configuration(config).await?;
@@ -996,8 +983,8 @@ impl AgentSession for CodexSession {
                 let mut diagnostic =
                     crate::local::diagnostics::native(&params["error"], "notification");
                 diagnostic.will_retry = params["willRetry"].as_bool();
-                if let Some(transport) = &mut self.transport {
-                    transport.observe_error(&params["error"], diagnostic, "turn");
+                if let Some(transport) = &self.transport {
+                    transport.diagnostics.observe(diagnostic, "turn");
                 }
                 continue;
             }
@@ -1027,9 +1014,6 @@ impl AgentSession for CodexSession {
     fn close(&mut self) -> AgentSessionFuture<'_, ()> {
         Box::pin(async {
             if let Some(transport) = &mut self.transport {
-                if let Some(message) = transport.failure.take_message() {
-                    self.last_failure = Some(message);
-                }
                 transport.close().await?;
             }
             self.transport = None;

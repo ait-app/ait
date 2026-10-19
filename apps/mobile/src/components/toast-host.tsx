@@ -15,9 +15,7 @@ import type { Theme } from "@/styles/theme";
 import { useTranslation } from "react-i18next";
 import { useIsCompactFormFactor } from "@/constants/layout";
 import { isWeb } from "@/constants/platform";
-import { AlertTriangle, CheckCircle2, Info, X } from "lucide-react-native";
-import { CopyErrorLogButton } from "@/components/copy-error-log-button";
-import { appErrorReporter, type AppErrorReport } from "@/diagnostics/error-reporter";
+import { AlertTriangle, CheckCircle2, Info } from "lucide-react-native";
 import { getOverlayRoot, OVERLAY_Z } from "@/lib/overlay-root";
 import {
   HEADER_INNER_HEIGHT,
@@ -33,8 +31,6 @@ export interface ToastShowOptions {
   durationMs?: number | null;
   nativeAndroid?: boolean;
   testID?: string;
-  error?: unknown;
-  errorReport?: AppErrorReport;
 }
 
 export interface ToastState {
@@ -45,13 +41,12 @@ export interface ToastState {
   variant: ToastVariant;
   durationMs: number | null;
   testID?: string;
-  errorReport?: AppErrorReport;
 }
 
 export interface ToastApi {
   show: (content: ReactNode, options?: ToastShowOptions) => void;
   copied: (label?: string) => void;
-  error: (message: string, error?: unknown) => void;
+  error: (message: string) => void;
 }
 
 type ToastViewportPlacement = "app-shell" | "panel";
@@ -63,7 +58,6 @@ const toastExiting = FadeOut.duration(140);
 const ThemedCheckCircle = withUnistyles(CheckCircle2);
 const ThemedInfo = withUnistyles(Info);
 const ThemedWarning = withUnistyles(AlertTriangle);
-const ThemedClose = withUnistyles(X);
 const foregroundIcon = (theme: Theme) => ({ color: theme.colors.foreground });
 const infoIcon = (theme: Theme) => ({ color: theme.colors.palette.blue[300] });
 const successIcon = (theme: Theme) => ({ color: theme.colors.primary });
@@ -76,8 +70,7 @@ export function useToastHost(): {
   dismiss: () => void;
 } {
   const { t } = useTranslation();
-  const [queue, setQueue] = useState<ToastState[]>([]);
-  const toast = queue[0] ?? null;
+  const [toast, setToast] = useState<ToastState | null>(null);
   const idRef = useRef(0);
 
   const show = useCallback((content: ReactNode, options?: ToastShowOptions) => {
@@ -87,25 +80,10 @@ export function useToastHost(): {
     }
 
     const variant = options?.variant ?? "default";
-    const errorReport =
-      variant === "error"
-        ? (options?.errorReport ??
-          appErrorReporter.report(options?.error ?? nativeMessage ?? "Application error", {
-            source: "toast",
-            message: nativeMessage ?? undefined,
-            notify: false,
-          }))
-        : undefined;
-    const durationMs =
-      variant === "error"
-        ? null
-        : options?.durationMs === undefined
-          ? DEFAULT_DURATION_MS
-          : options.durationMs;
+    const durationMs = options?.durationMs === undefined ? DEFAULT_DURATION_MS : options.durationMs;
     const nativeAndroid = options?.nativeAndroid ?? false;
-    if (errorReport) appErrorReporter.presented(errorReport);
 
-    if (Platform.OS === "android" && nativeAndroid && nativeMessage && variant !== "error") {
+    if (Platform.OS === "android" && nativeAndroid && nativeMessage) {
       const duration =
         durationMs !== null && durationMs <= 2500 ? ToastAndroid.SHORT : ToastAndroid.LONG;
       ToastAndroid.showWithGravity(nativeMessage, duration, ToastAndroid.TOP);
@@ -113,7 +91,7 @@ export function useToastHost(): {
     }
 
     idRef.current += 1;
-    const next: ToastState = {
+    setToast({
       id: idRef.current,
       content,
       nativeMessage,
@@ -121,14 +99,6 @@ export function useToastHost(): {
       variant,
       durationMs,
       testID: options?.testID,
-      errorReport,
-    };
-    setQueue((current) => {
-      if (errorReport && current.some((item) => item.errorReport?.id === errorReport.id))
-        return current;
-      const errors = current.filter((item) => item.variant === "error");
-      if (errors.length > 0 || variant === "error") return [...errors, next].slice(-50);
-      return [next];
     });
   }, []);
 
@@ -140,14 +110,13 @@ export function useToastHost(): {
           variant: "success",
           icon: <ThemedCheckCircle size={18} uniProps={foregroundIcon} />,
         }),
-      error: (message: string, error?: unknown) =>
-        show(message.trim() ? message : t("common.errors.error"), { variant: "error", error }),
+      error: (message: string) => show(message, { variant: "error", durationMs: 3200 }),
     }),
     [show, t],
   );
 
   const dismiss = useCallback(() => {
-    setQueue((current) => current.slice(1));
+    setToast(null);
   }, []);
 
   return { api, toast, dismiss };
@@ -234,12 +203,7 @@ export function ToastViewport({
             testID={toast.testID ?? "app-toast"}
             accessibilityRole="alert"
           >
-            <ToastCard
-              toast={toast}
-              onDismiss={onDismiss}
-              onHoverIn={pauseDismiss}
-              onHoverOut={resumeDismiss}
-            />
+            <ToastCard toast={toast} onHoverIn={pauseDismiss} onHoverOut={resumeDismiss} />
           </Animated.View>
         ) : null}
       </View>
@@ -255,16 +219,13 @@ export function ToastViewport({
 
 function ToastCard({
   toast,
-  onDismiss,
   onHoverIn,
   onHoverOut,
 }: {
   toast: ToastState;
-  onDismiss: () => void;
   onHoverIn: () => void;
   onHoverOut: () => void;
 }) {
-  const { t } = useTranslation();
   let defaultIcon: ReactNode = null;
   if (toast.variant === "info") {
     defaultIcon = <ThemedInfo size={18} uniProps={infoIcon} />;
@@ -290,33 +251,15 @@ function ToastCard({
       ]}
     >
       {icon ? <View style={styles.iconSlot}>{icon}</View> : null}
-      <View style={styles.bodySlot}>
-        {typeof toast.content === "string" ? (
-          <Text
-            testID="app-toast-message"
-            style={styles.message}
-            numberOfLines={toast.variant === "error" ? 4 : undefined}
-          >
-            {toast.content}
-          </Text>
-        ) : (
-          <View testID="app-toast-message" style={styles.contentSlot}>
-            {toast.content}
-          </View>
-        )}
-        {toast.errorReport ? <CopyErrorLogButton report={toast.errorReport} /> : null}
-      </View>
-      {toast.variant === "error" ? (
-        <Pressable
-          onPress={onDismiss}
-          accessibilityRole="button"
-          accessibilityLabel={t("common.actions.close")}
-          testID="dismiss-error-toast"
-          hitSlop={8}
-        >
-          <ThemedClose size={18} uniProps={foregroundIcon} />
-        </Pressable>
-      ) : null}
+      {typeof toast.content === "string" ? (
+        <Text testID="app-toast-message" style={styles.message}>
+          {toast.content}
+        </Text>
+      ) : (
+        <View testID="app-toast-message" style={styles.contentSlot}>
+          {toast.content}
+        </View>
+      )}
     </Pressable>
   );
 }
@@ -326,7 +269,6 @@ const animatedStyles = NativeStyleSheet.create({
 });
 
 const styles = StyleSheet.create((theme) => ({
-  bodySlot: { flexShrink: 1, minWidth: 0, gap: theme.spacing[2] },
   container: (placement: ToastViewportPlacement, topOffset: number) => ({
     position: "absolute",
     left: theme.spacing[4],

@@ -23,7 +23,7 @@ interface DesktopIpcErrorReporterInput {
 
 export function reportDesktopIpcError(input: DesktopIpcErrorReport): void {
   console.error(input.logLabel, input.error);
-  input.toast.error(input.message, input.error);
+  input.toast.error(input.message);
 }
 
 export function useDesktopIpcErrorReporter(): (input: DesktopIpcErrorReporterInput) => void {
