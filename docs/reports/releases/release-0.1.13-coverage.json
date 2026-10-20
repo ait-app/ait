@@ -1,0 +1,115 @@
+{
+  "sourceCommit": "effd79553a97fd3c2b173a91191a5b54767e88c9",
+  "date": "2026-10-20",
+  "nodeVersion": "v22.23.3",
+  "measurement": {
+    "language": "JavaScript",
+    "scope": [
+      "scripts/release-version.mjs",
+      "scripts/release-assets.mjs",
+      "scripts/release-layout.mjs"
+    ],
+    "command": [
+      "node",
+      "--experimental-test-coverage",
+      "--test-coverage-include=scripts/release-version.mjs",
+      "--test-coverage-include=scripts/release-assets.mjs",
+      "--test-coverage-include=scripts/release-layout.mjs",
+      "--test",
+      "scripts/nightly-workflow.test.mjs",
+      "scripts/release-assets.test.mjs",
+      "scripts/release-layout.test.mjs",
+      "scripts/release-workflow.test.mjs",
+      "scripts/prepare-desktop-daemon.test.mjs",
+      "scripts/verify-packaged-resources.test.cjs"
+    ],
+    "cwd": "repository root",
+    "totals": {
+      "totalLineCount": 292,
+      "totalBranchCount": 80,
+      "totalFunctionCount": 19,
+      "coveredLineCount": 265,
+      "coveredBranchCount": 75,
+      "coveredFunctionCount": 18,
+      "coveredLinePercent": 90.75342465753424,
+      "coveredBranchPercent": 93.75,
+      "coveredFunctionPercent": 94.73684210526315
+    },
+    "files": [
+      {
+        "totalLineCount": 254,
+        "totalBranchCount": 68,
+        "totalFunctionCount": 16,
+        "coveredLineCount": 236,
+        "coveredBranchCount": 64,
+        "coveredFunctionCount": 16,
+        "coveredLinePercent": 92.91338582677166,
+        "coveredBranchPercent": 94.11764705882352,
+        "coveredFunctionPercent": 100,
+        "path": "scripts/release-assets.mjs"
+      },
+      {
+        "totalLineCount": 28,
+        "totalBranchCount": 5,
+        "totalFunctionCount": 2,
+        "coveredLineCount": 19,
+        "coveredBranchCount": 4,
+        "coveredFunctionCount": 1,
+        "coveredLinePercent": 67.85714285714286,
+        "coveredBranchPercent": 80,
+        "coveredFunctionPercent": 50,
+        "path": "scripts/release-layout.mjs"
+      },
+      {
+        "totalLineCount": 10,
+        "totalBranchCount": 7,
+        "totalFunctionCount": 1,
+        "coveredLineCount": 10,
+        "coveredBranchCount": 7,
+        "coveredFunctionCount": 1,
+        "coveredLinePercent": 100,
+        "coveredBranchPercent": 100,
+        "coveredFunctionPercent": 100,
+        "path": "scripts/release-version.mjs"
+      }
+    ],
+    "tests": {
+      "passed": 61,
+      "failed": 0,
+      "skipped": 0
+    }
+  },
+  "sourceSha256": {
+    "scripts/release-version.mjs": "bf16c70eadcdbc78febba671be55d6edc504fe538e4ba83c8a72c09ca2a9108a",
+    "scripts/release-assets.mjs": "9995dfb56ab4e473fa5b47bfcbdadea1c259f1d91b7c4c225301347cab157d06",
+    "scripts/release-layout.mjs": "803edb71f1c64537d5d70dda41fe37094319bc1c778764879581231f5079afff",
+    "scripts/nightly-workflow.test.mjs": "913c5eccb2cf60095f74ad9f7c12bf23c4cf53e2500b2753bfc7907acfabf6c7",
+    "scripts/release-assets.test.mjs": "11d8ae741b451aa4373f468828b669d8edd8b5dc635a483dddda7f5870604b16",
+    "scripts/release-layout.test.mjs": "783aec3a404134d2ee3b6274a26962310887201908336bccc76a44e3f6071091",
+    "scripts/release-workflow.test.mjs": "388326b91212666f73ad0714219a19ab78695819f1789ec76c504ab3291ab58e",
+    "scripts/prepare-desktop-daemon.test.mjs": "eaa0728945ec40e346611d493946883bdadfc5e8f8b74bd1d520fb2cd01a405c",
+    "scripts/verify-packaged-resources.test.cjs": "9af25bedd38d421dd344669bac6a335f281883af48793d482b489ec6925a8f7f",
+    "scripts/android-release.test.mjs": "4eb9f4f021ab9b69113b38b1469d9bbcaf220e7bd3c6fa59aef5dc3b974d862c",
+    ".github/workflows/release.yml": "a764321091c04e03e736688ac0848f6e04120c0bcbd950e763aca14292498a0a",
+    "package-lock.json": "6ece34dd2e2be2dfd0777819053f65786fbde629c1ab229696b03563658fe31c",
+    "apps/desktop/src/daemon/account-transport.ts": "f1640797a78d9faae58fc4d356572b84c18c790c8e12bce29547cd1d7d972cf1",
+    "apps/desktop/src/daemon/account-transport.test.ts": "0310e32b4df6d9123e477c782d7eda0238d7c8448e83e9224f12905477978516",
+    "apps/mobile/src/components/desktop/titlebar-drag-region.browser.test.tsx": "5b4c1ae4af57e9f6abfa41c0946cf5f5eda27499f6488944732af3bcee2f87fb"
+  },
+  "additionalChecks": {
+    "mobileReleaseContractsPassed": 41,
+    "relayBurstTestsPassed": 7,
+    "buildDesktopMain": "passed",
+    "desktopAndMobileTypecheck": "passed",
+    "docsLinks": 413,
+    "format": "passed",
+    "targetedLint": "passed"
+  },
+  "limits": [
+    "Coverage is limited to three JavaScript release tools, not product or Rust/TypeScript coverage.",
+    "Preparation changes no bins/crates Rust implementation; local Rust tests and coverage skipped per AGENTS.md. Existing main CI and release build gates remain required.",
+    "No iOS/Android binary built or submitted; shared source changes are included only in the desktop renderer.",
+    "No directly comparable same-scope baseline; no historical delta calculated."
+  ],
+  "measuredAt": "2026-10-20T12:15:59.972792+00:00"
+}
