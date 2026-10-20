@@ -25,6 +25,10 @@
 
 ## 架构决策
 
+- [ADR-175：独立恢复 Provider 错误详情与重启收尾](decisions/providers/adr-175-restore-provider-recovery.md)：仅恢复 daemon／Provider 行为，客户端诊断另行保留为 Draft。
+
+- [ADR-162：Codex 失败展示原生原因与 HTTP 状态](decisions/providers/adr-162-codex-error-details.md)：有界脱敏的原生原因、HTTP 状态和既有消息字段。
+
 - [ADR-174：Pi 原生会话导入](decisions/providers/adr-174-pi-session-import.md)：不改写 Pi 存储且有候选数、字节、时间、投影条目数与共享准入预算的项目目录发现、无主机 HOME 时写入回退原生解析、持久化原生目录拼写、文件重命名后的身份恢复、跨符号链接拼写与存储配置变更的定点刷新、当前分支与模型上下文投影、导入与原生身份恢复。
 
 - [ADR-173：移动端终端输入复用 React Native](decisions/clients/adr-173-shared-native-terminal-input.md)：iOS 与 Android 采用 Paseo 的共享输入设计，移除自定义 iOS 输入桥；取代 ADR-114。
@@ -200,6 +204,8 @@
 - [语音与听写](operations/speech.md)：离线模型、后端配置和限制。
 
 ## 工程规范与验证
+
+- [Provider 错误与重启恢复拆分验证](reports/daemon/provider-recovery-split-2026-10-20.md)：后端独立分支、主线兼容和定向回归。
 
 - [Paseo 0.12.0 移植与验证](reports/clients/paseo-0.12-port-2026-10-20.md)：本轮范围、兼容性和定向验证。
 

@@ -81,3 +81,14 @@ wait 回收直接子进程；异常析构保留兜底终止。Windows 仅直接�
 
 后续 [ADR-034](adr-034-agent-config-session-events.md) 已接通模型/推理配置和 Session 事件/心跳；
 本文 107 个已实现 capability 及不支持动态配置的描述是原生文本执行首片的历史状态。
+
+## 2026-10-19 修订：异常重启后的轮次收尾
+
+启动执行 worker 前，协调层将没有本进程 live writer 的持久 `running` 记录收尾为 `error`。
+先提交 ADR-144 的固定宿主中断提示，再合并更新状态与 attention；任一步失败则拒绝启动，
+重试不会重复提示。原生句柄、配置、用量、归档状态和其他入口更新的 metadata 保留。
+这条恢复路径不启动 Provider、不重发已接纳输入，也不推断模型仍在执行或已经成功。
+用户可以显式 Continue；尚未执行的持久输入仍遵循既有 receipt 与排队策略。
+
+本修订只保证重启后的宿主状态可收敛，不保证外部 OOM kill 后继续原生工作，也不改变 ACP
+控制及历史所有权。复现与验证见 [异常重启报告](../../reports/providers/opencode-stalled-turn-recovery-2026-10-19.md)。

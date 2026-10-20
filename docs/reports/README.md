@@ -9,6 +9,8 @@
 
 ## Daemon 与协议
 
+- [Provider 错误与重启恢复拆分验证](daemon/provider-recovery-split-2026-10-20.md)
+
 - [Rust workspace 每 crate 95% 覆盖率验证](daemon/crate-coverage-95-2026-10-14.md)
 - [Workspace 定时任务设计与验证](daemon/workspace-schedules-verification-2026-10-12.md)
 
