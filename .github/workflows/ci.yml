@@ -17,6 +17,7 @@ jobs:
     outputs:
       rust: ${{ steps.filter.outputs.rust }}
       ui: ${{ steps.filter.outputs.ui }}
+      native_terminal: ${{ steps.filter.outputs.native_terminal }}
     steps:
       - uses: actions/checkout@v5
         if: github.event_name == 'push'
@@ -59,6 +60,10 @@ jobs:
               - '.github/workflows/release.yml'
               - '.github/workflows/release-ios-testflight.yml'
               - '.github/workflows/release-android-play.yml'
+            native_terminal:
+              - 'apps/mobile/modules/ait-terminal-input/**'
+              - 'apps/mobile/src/terminal/native-renderer/terminal-input.ios*'
+              - '.github/workflows/ci.yml'
 
   docs:
     runs-on: ubuntu-latest
@@ -163,6 +168,20 @@ jobs:
       - run: npm run test:release
       - run: npm run test:mobile-release
       - run: npm run build:desktop-main
+      - name: Check diagnostics and native runtime startup regressions
+        run: >-
+          npm run test --workspace=@ait/mobile -- --project unit
+          src/diagnostics src/data/query-client-errors.test.ts
+          src/components/error-notifications.test.tsx src/components/root-error-boundary.test.tsx
+          src/polyfills src/terminal/native-renderer/headless-terminal-startup.test.ts
+          src/terminal/native-renderer/terminal-input.ios.test.tsx
+          src/terminal/native-renderer/terminal-input.native.test.ts
+          src/terminal/native-renderer/terminal-input-platform.test.ts
+          src/terminal/native-renderer/headless-terminal-output-drain.test.ts
+          src/terminal/runtime/terminal-callback.test.ts
+          src/composer/agent-controls/model-sheet.test.tsx
+          src/composer/agent-controls/model-sheet-flow.test.ts
+          src/screens/workspace/workspace-header-menu.test.tsx
       - run: npm run test --workspace=@ait/mobile -- src/components/question-form-card-core.test.ts
       - run: npm run test --workspace=@ait/protocol
       - run: npm run test --workspace=@ait/client
@@ -177,6 +196,32 @@ jobs:
           src/timeline src/types/stream.test.ts src/runtime/replica-cache
           src/runtime/directory-sync src/screens/workspace/workspace-route-state.test.ts
           src/utils/tool-call-parsers.test.ts src/utils/diff-highlight.test.ts
+
+  native_terminal_input:
+    name: iOS terminal keyboard regressions
+    needs: changes
+    if: needs.changes.outputs.native_terminal == 'true'
+    runs-on: macos-15
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v5
+      - name: Install isolated UIKit test tooling
+        run: gem install --user-install xcodeproj --no-document
+      - name: Boot an available iPhone simulator
+        id: simulator
+        run: |
+          device_id=$(xcrun simctl list devices available --json | ruby -rjson -e '
+            devices = JSON.parse(STDIN.read).fetch("devices").values.flatten
+            device = devices.find { |item| item.fetch("name").start_with?("iPhone") }
+            abort "No available iPhone simulator" unless device
+            puts device.fetch("udid")
+          ')
+          xcrun simctl bootstatus "$device_id" -b
+          echo "device_id=$device_id" >> "$GITHUB_OUTPUT"
+      - name: Run native composition and keyboard regressions
+        env:
+          SIMULATOR_ID: ${{ steps.simulator.outputs.device_id }}
+        run: ruby apps/mobile/modules/ait-terminal-input/tests/run-ios-tests.rb "$SIMULATOR_ID"
 
   nightly-prepare:
     if: github.event_name != 'pull_request' && github.ref == 'refs/heads/main'
@@ -359,8 +404,9 @@ jobs:
           && needs.format.result == 'success'
           && needs.changes.result == 'success'
           && contains(fromJSON('["success","skipped"]'), needs.rust.result)
-          && contains(fromJSON('["success","skipped"]'), needs.ui.result) }}
-    needs: [nightly-prepare, changes, desktop, rust, ui, docs, format]
+          && contains(fromJSON('["success","skipped"]'), needs.ui.result)
+          && contains(fromJSON('["success","skipped"]'), needs.native_terminal_input.result) }}
+    needs: [nightly-prepare, changes, desktop, rust, ui, native_terminal_input, docs, format]
     env:
       NIGHTLY_BUILD_LABEL: ${{ needs.nightly-prepare.outputs.label }}
     runs-on: ubuntu-24.04

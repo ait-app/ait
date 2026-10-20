@@ -322,6 +322,7 @@ async function dispatchFileTarget(input: {
       if (await openDirectory({ path: input.target.path, cwd: current.workspaceRoot })) return;
     } catch (error) {
       current.toast?.show(error instanceof Error ? error.message : String(error), {
+        error: error,
         variant: "error",
       });
       return;
@@ -367,6 +368,7 @@ async function dispatchUnresolvedError(input: {
   }
   current.toast?.show(input.noFileFoundMessage, {
     variant: "error",
+    error: input.error,
     testID: "assistant-file-link-not-found-toast",
   });
 }

@@ -48,6 +48,7 @@ import { derivePendingPermissionKey } from "@/utils/agent-snapshots";
 import { useToast } from "@/contexts/toast-context";
 import { toErrorMessage } from "@/utils/error-messages";
 import { showProviderNoticeToast } from "@/utils/provider-notice-toast";
+import { appErrorReporter } from "@/diagnostics/error-reporter";
 import { applyCheckoutStatusUpdateFromEvent } from "@/git/checkout-status-cache";
 import { resyncProviderSubagents, useProviderSubagentStore } from "@/subagents/provider-store";
 
@@ -399,6 +400,13 @@ function SessionProviderInternal({ children, serverId, client }: SessionProvider
       const { agentId, event, timestamp, seq, epoch } = message.payload;
       const parsedTimestamp = new Date(timestamp);
       const streamEvent = event;
+      if (event.type === "turn_failed") {
+        appErrorReporter.report(event.error, {
+          source: "provider turn",
+          notify: false,
+          context: { serverId, agentId, timestamp, seq, epoch },
+        });
+      }
       if (
         event.type === "turn_started" ||
         event.type === "turn_completed" ||
@@ -857,7 +865,7 @@ function SessionProviderInternal({ children, serverId, client }: SessionProvider
         .then((notice) => showProviderNoticeToast(toast, notice))
         .catch((error) => {
           console.error("[Session] Failed to set agent mode:", error);
-          toast.error(toErrorMessage(error));
+          toast.error(toErrorMessage(error), error);
         });
     },
     [client, toast],
@@ -871,7 +879,7 @@ function SessionProviderInternal({ children, serverId, client }: SessionProvider
       }
       void client.setAgentModel(agentId, modelId).catch((error) => {
         console.error("[Session] Failed to set agent model:", error);
-        toast.error(toErrorMessage(error));
+        toast.error(toErrorMessage(error), error);
       });
     },
     [client, toast],
@@ -888,7 +896,7 @@ function SessionProviderInternal({ children, serverId, client }: SessionProvider
         .then((notice) => showProviderNoticeToast(toast, notice))
         .catch((error) => {
           console.error("[Session] Failed to set agent thinking option:", error);
-          toast.error(toErrorMessage(error));
+          toast.error(toErrorMessage(error), error);
         });
     },
     [client, toast],

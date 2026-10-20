@@ -1,4 +1,7 @@
 //! Read-only access to the HTTP endpoint belonging to our ACP child.
+#[cfg(test)]
+mod tests;
+
 use std::{net::TcpListener, time::Duration};
 
 use base64::Engine;

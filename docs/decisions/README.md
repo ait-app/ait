@@ -77,6 +77,7 @@ ADR-074、082、083、084、122 在不同类别中各有两份，引用时以路
 
 - [ADR-167：用量缓存按原生账号与成功快照隔离](providers/adr-167-account-scoped-successful-usage.md)
 
+- [ADR-162：Codex 失败展示原生原因与 HTTP 状态](providers/adr-162-codex-error-details.md)
 - [ADR-157：整图输入与 Codex 用户图片的跨设备展示](providers/adr-157-codex-user-image-projection.md)
 - [ADR-156：Pi 原生 RPC Provider](providers/adr-156-pi-native-rpc-provider.md)
 - [ADR-153：OpenCode ACP 冷启动预算](providers/adr-153-opencode-acp-cold-start-budget.md)
@@ -122,12 +123,12 @@ ADR-074、082、083、084、122 在不同类别中各有两份，引用时以路
 
 ## 客户端、连接与品牌
 
-- [ADR-170：完整回滚 PR #381](clients/adr-170-revert-error-diagnostics-and-recovery.md)
 - [ADR-169：统一 Markdown 渲染与移动面板编辑生命周期](clients/adr-169-shared-markdown-and-composer-lifetimes.md)
 - [ADR-166：后台错误只记录、不弹错误提示](clients/adr-166-background-errors-without-toasts.md)
 - [ADR-165：macOS 通过 AIT Server 检查与下载更新](clients/adr-165-macos-ait-server-updates.md)
 - [ADR-164：移除 Workspace 服务代理 URL 字段](clients/adr-164-remove-workspace-service-proxy-urls.md)
 - [ADR-163：nightly 附带独立 daemon 归档](clients/adr-163-nightly-standalone-daemon.md)
+- [ADR-161：客户端统一错误提示与可复制诊断](clients/adr-161-copyable-error-diagnostics.md)
 - [ADR-160：清理旧公钥中继协议与测试残留](clients/adr-160-remove-legacy-relay-protocol.md)
 - [ADR-154：账号状态通过共享客户端 Channel 推送](clients/adr-154-account-status-channel.md)
 - [ADR-152：在线中继 Workspace 的浏览器回环转发](clients/adr-152-remote-workspace-browser-loopback.md)
@@ -173,3 +174,6 @@ ADR-074、082、083、084、122 在不同类别中各有两份，引用时以路
 ## 品牌与视觉
 
 - [ADR-051：AIT 品牌识别与日间视觉系统](branding/adr-051-ait-brand-identity.md)
+
+- [ADR-170：完整回滚 PR #381](clients/adr-170-revert-error-diagnostics-and-recovery.md)（历史记录）
+- [ADR-172：安全恢复客户端诊断与会话恢复](clients/adr-172-safe-client-diagnostics-and-recovery.md)

@@ -1,6 +1,6 @@
 # ADR-170：完整回滚 PR #381
 
-- 状态：Accepted
+- 状态：历史记录；后续恢复与修订见 [ADR-172](adr-172-safe-client-diagnostics-and-recovery.md)
 - 日期：2026-10-20
 - 取代：ADR-161、ADR-162；ADR-166 随其依赖的诊断链路撤销。
 

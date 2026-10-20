@@ -2,6 +2,7 @@ import { AlertTriangle, CheckCircle2, Info, XCircle, type LucideIcon } from "luc
 import { type ReactNode, useMemo } from "react";
 import { Text, View } from "react-native";
 import { StyleSheet, useUnistyles } from "react-native-unistyles";
+import { CopyErrorLogButton } from "@/components/copy-error-log-button";
 
 export type AlertVariant = "default" | "info" | "success" | "warning" | "error";
 
@@ -12,6 +13,7 @@ export interface AlertProps {
   icon?: ReactNode;
   children?: ReactNode;
   testID?: string;
+  error?: unknown;
 }
 
 const VARIANT_ICON: Record<Exclude<AlertVariant, "default">, LucideIcon> = {
@@ -28,6 +30,7 @@ export function Alert({
   icon,
   children,
   testID,
+  error,
 }: AlertProps) {
   const { theme } = useUnistyles();
   const accentColor = resolveAccentColor(variant, theme);
@@ -64,6 +67,14 @@ export function Alert({
           <View style={styles.descriptionSlot}>{description}</View>
         ) : null}
         {children ? <View style={styles.actions}>{children}</View> : null}
+        {variant === "error" ? (
+          <CopyErrorLogButton
+            error={
+              error ??
+              (typeof description === "string" ? description : (title ?? "Application error"))
+            }
+          />
+        ) : null}
       </View>
     </View>
   );

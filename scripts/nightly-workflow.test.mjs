@@ -120,6 +120,7 @@ test("main builds run independently while admission and publication share a queu
     "desktop",
     "rust",
     "ui",
+    "native_terminal_input",
     "docs",
     "format",
   ]);
@@ -315,9 +316,18 @@ test("main publishing requires desktop and applicable CI checks to pass", () => 
     format: { result: "success" },
     rust: { result: "skipped" },
     ui: { result: "success" },
+    native_terminal_input: { result: "success" },
   };
   assert.equal(condition(workflow.jobs["nightly-publish"].if, github, needs), true);
-  for (const job of ["changes", "desktop", "docs", "format", "rust", "ui"]) {
+  for (const job of [
+    "changes",
+    "desktop",
+    "docs",
+    "format",
+    "rust",
+    "ui",
+    "native_terminal_input",
+  ]) {
     assert.equal(
       condition(workflow.jobs["nightly-publish"].if, github, {
         ...needs,

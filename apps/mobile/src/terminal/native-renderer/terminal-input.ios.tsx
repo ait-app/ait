@@ -3,6 +3,7 @@ import { StyleSheet, type NativeSyntheticEvent, type ViewProps } from "react-nat
 import { requireNativeViewManager } from "expo-modules-core";
 import type { TerminalInputHandle, TerminalInputProps } from "./terminal-input.native";
 import { resolveNativeTerminalKey } from "./terminal-key-events";
+import { runTerminalCallback } from "../runtime/terminal-callback";
 
 interface NativeInputHandle {
   showKeyboard(isKeyboardVisible: boolean): Promise<void>;
@@ -28,13 +29,13 @@ export const TerminalInput = forwardRef<TerminalInputHandle, TerminalInputProps>
       ref,
       () => ({
         focus: () => {
-          void inputRef.current?.showKeyboard(isKeyboardVisible);
+          runTerminalCallback(() => inputRef.current?.showKeyboard(isKeyboardVisible));
         },
         showKeyboard: () => {
-          void inputRef.current?.showKeyboard(isKeyboardVisible);
+          runTerminalCallback(() => inputRef.current?.showKeyboard(isKeyboardVisible));
         },
         blur: () => {
-          void inputRef.current?.blur();
+          runTerminalCallback(() => inputRef.current?.blur());
         },
       }),
       [isKeyboardVisible],

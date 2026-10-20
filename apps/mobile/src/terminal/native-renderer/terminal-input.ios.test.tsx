@@ -95,4 +95,22 @@ describe("iOS terminal input bridge", () => {
       expect(onTerminalKey.mock.calls).toEqual([["ArrowUp"]]);
     });
   });
+
+  it("handles rejected native focus and blur requests after the view is detached", async () => {
+    const log = vi.spyOn(console, "warn").mockImplementation(() => {});
+    const error = new Error("Native input view is detached");
+    native.showKeyboard.mockRejectedValueOnce(error);
+    native.blur.mockRejectedValueOnce(error);
+    try {
+      withInput({ isKeyboardVisible: false }, (handle) => {
+        handle.focus();
+        handle.blur();
+      });
+      await Promise.resolve();
+      expect(log).toHaveBeenCalledTimes(2);
+      expect(log).toHaveBeenLastCalledWith("Terminal callback failed", error);
+    } finally {
+      log.mockRestore();
+    }
+  });
 });

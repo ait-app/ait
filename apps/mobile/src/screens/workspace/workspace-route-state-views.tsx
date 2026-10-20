@@ -3,6 +3,7 @@ import { ArrowLeftToLine, RotateCw, Settings } from "lucide-react-native";
 import { useTranslation } from "react-i18next";
 import { StyleSheet, withUnistyles } from "react-native-unistyles";
 import { Button } from "@/components/ui/button";
+import { CopyErrorLogButton } from "@/components/copy-error-log-button";
 import { LoadingSpinner } from "@/components/ui/loading-spinner";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { formatConnectionStatus } from "@/utils/daemons";
@@ -155,9 +156,12 @@ function ArchivedWorkspaceRecovery({
         </Text>
         <Text style={styles.description}>{description}</Text>
         {recovery.error ? (
-          <Text style={styles.error} testID="workspace-recovery-error">
-            {recovery.error}
-          </Text>
+          <View>
+            <Text style={styles.error} testID="workspace-recovery-error">
+              {recovery.error}
+            </Text>
+            <CopyErrorLogButton error={recovery.error} source="workspace recovery" />
+          </View>
         ) : null}
       </View>
       <View style={styles.actions}>
@@ -191,6 +195,7 @@ function WorkspaceRecoveryInspectionFailed({
       <View style={styles.textStack}>
         <Text style={styles.title}>{t("workspace.route.recovery.checkFailedTitle")}</Text>
         <Text style={styles.error}>{state.error}</Text>
+        <CopyErrorLogButton error={state.error} source="workspace load" />
       </View>
       <View style={styles.actions}>
         <Button size="sm" variant="default" leftIcon={RotateCw} onPress={onRetry}>
@@ -241,6 +246,9 @@ function WorkspaceUnreachable({
               <Text style={styles.errorTooltip}>{state.lastError}</Text>
             </TooltipContent>
           </Tooltip>
+        ) : null}
+        {state.lastError ? (
+          <CopyErrorLogButton error={state.lastError} source="host connection" />
         ) : null}
       </View>
       {canRetry ? (

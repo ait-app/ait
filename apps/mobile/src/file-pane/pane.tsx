@@ -1,3 +1,4 @@
+import { CopyErrorLogButton } from "@/components/copy-error-log-button";
 import { Button } from "@/components/ui/button";
 import { LoadingSpinner } from "@/components/ui/loading-spinner";
 import React, {
@@ -398,6 +399,7 @@ function FilePanePresentation({
       <View style={styles.container} testID="workspace-file-pane">
         <View style={styles.centerState}>
           <Text style={styles.errorText}>{disconnectedMessage}</Text>
+          <CopyErrorLogButton error={disconnectedMessage} source="file preview" />
         </View>
       </View>
     );
@@ -437,6 +439,7 @@ function FilePanePresentation({
       <View style={styles.container} testID="workspace-file-pane">
         <View style={styles.centerState}>
           <Text style={styles.errorText}>{errorMessage}</Text>
+          <CopyErrorLogButton error={errorMessage} source="file preview" />
           <Button variant="outline" size="sm" onPress={onRetryRead} loading={retryingRead}>
             {retryLabel}
           </Button>
