@@ -1,5 +1,11 @@
 # Ait changelog
 
+## 0.1.12 - 2026-10-20
+
+- Prevent native startup crashes by guarding xterm browser detection and installing navigator, crypto and screen orientation polyfills before other application modules load.
+- Adopt the iOS Scene lifecycle for Xcode 27 builds, preserving app links, foreground recovery and paste input initialization.
+- Remove the standalone GitHub Actions APK workflow; Google Play AAB and iOS TestFlight releases remain separate from desktop publishing.
+
 ## 0.1.11 - 2026-10-20
 
 - Roll back the diagnostics and restart-recovery changes from PR #381 after an iOS startup regression. Restore the previous client error handling, SDK diagnostic logging, Codex failure classification and daemon session startup behavior.

@@ -1,0 +1,100 @@
+{
+  "sourceCommit": "c939e377d9b618bd067b32743e48cb23b91c7340",
+  "date": "2026-10-20",
+  "nodeVersion": "v22.23.3",
+  "measurement": {
+    "language": "JavaScript",
+    "scope": [
+      "apps/mobile/plugins/with-ios-scene-lifecycle.js"
+    ],
+    "lineCoverage": {
+      "covered": 84,
+      "total": 97,
+      "percent": 86.6,
+      "uncoveredLines": [
+        81,
+        82,
+        83,
+        84,
+        85,
+        86,
+        87,
+        88,
+        89,
+        90,
+        91,
+        92,
+        93
+      ]
+    },
+    "branchPercent": 93.33,
+    "functionPercent": 75.0,
+    "command": [
+      "node",
+      "--experimental-test-coverage",
+      "--test-coverage-include=apps/mobile/plugins/with-ios-scene-lifecycle.js",
+      "--test",
+      "apps/mobile/plugins/with-ios-scene-lifecycle.test.cjs",
+      "apps/mobile/scripts/app-identity.test.cjs",
+      "apps/mobile/scripts/eas-submit-tracks.test.cjs",
+      "apps/mobile/scripts/ios-testflight-workflow.test.cjs",
+      "scripts/ios-testflight-release.test.mjs",
+      "scripts/android-release.test.mjs",
+      "scripts/android-play-release.test.mjs"
+    ],
+    "cwd": "repository root",
+    "tests": {
+      "passed": 40,
+      "failed": 0,
+      "skipped": 0
+    }
+  },
+  "startupTests": {
+    "command": [
+      "npm",
+      "exec",
+      "--",
+      "vitest",
+      "run",
+      "--project",
+      "unit",
+      "src/polyfills/navigator-startup.test.ts",
+      "src/terminal/native-renderer/headless-terminal-startup.test.ts"
+    ],
+    "cwd": "apps/mobile",
+    "env": {
+      "NODE_OPTIONS": "--no-experimental-webstorage"
+    },
+    "before": {
+      "passed": 11,
+      "failed": 1,
+      "reason": "stale expectation that patched xterm must throw"
+    },
+    "after": {
+      "passed": 12,
+      "failed": 0
+    },
+    "negativeControl": "A temporary no-op navigator polyfill fails the explicit ReactNative assertion; original source restored."
+  },
+  "limits": [
+    "Coverage is limited to the Scene configuration plugin; its Expo plugin wrapper (lines 81-93) is not executed by these tests.",
+    "Swift and TypeScript startup runtime coverage were not measured.",
+    "No Rust implementation changed; Rust tests and coverage were skipped per AGENTS.md.",
+    "Native simulator validation of aa79a999 covers iOS 26.5/27.0 cold start, warm links and background return; the new 0.1.12 store binary and physical devices still require validation."
+  ],
+  "sourceSha256": {
+    "apps/mobile/plugins/with-ios-scene-lifecycle.js": "428e726c3cbf3daf1704b2115bef3eb61aa525f420ee8f6793488187d4020e3c",
+    "apps/mobile/plugins/with-ios-scene-lifecycle.test.cjs": "56b76bf9da4b02ee583623e70fc758fc942df5d026fc836d888b72353468cfc7",
+    "apps/mobile/plugins/ios/AitSceneDelegate.swift": "45cd7f188fab365c21263a0dbedfe1c980637d163a3d83d66b350c082f121bf4",
+    "apps/mobile/src/polyfills/navigator.ts": "0ce1eeaa180e85fabbe22906820d70cf88e1e78248e0d96b35ad21cacabc0f7f",
+    "apps/mobile/src/polyfills/navigator-startup.test.ts": "b9f374b670d4513479b692b1107a080b95eec02d4388159587b0e67c9b5a6846",
+    "apps/mobile/src/polyfills/install-early.ts": "48ecfedde0bd1878833d8f179fdb946bb8e75866fed0ef9181408e0cc66e62a1",
+    "apps/mobile/src/terminal/native-renderer/headless-terminal-state.ts": "13128eb2906239c9ba6ae5c6ebcf39586be11d79e24e55eb695b793ddcc8752d",
+    "apps/mobile/src/terminal/native-renderer/headless-terminal-startup.test.ts": "4bafaa902ec0e8cddf126c77cdf6b95925cf588ceaa576bfa0f285be9a669b4f",
+    "apps/mobile/index.ts": "6e436a44b4eea4ec2a599a5cf99f816ed1044dd46065579c7a9b6f508c223014",
+    "apps/mobile/app.config.js": "99b93abfffface27114d3ae2f38ade5a735a629072dcd4fffa13e45b8fe4daa2",
+    "patches/@xterm+headless+6.1.0-beta.213.patch": "2bf4d1e056549d7deccc98f290cdcc3e60896ae778abc14dc7f12a10204137d5",
+    "scripts/postinstall-patches.mjs": "c5785bc1c90171111f61b5df3db72ada1b3df61ec25b716ca8e38f3780cbe052",
+    "package-lock.json": "170ff8621d3b7a3801e7ec5d5b54cd3ac693c411ce38fcfa6e65cae53d8659e0"
+  }
+}
