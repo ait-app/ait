@@ -1,6 +1,6 @@
 # ADR-166：后台错误只记录、不弹错误提示
 
-- 状态：经 [ADR-170](adr-170-revert-error-diagnostics-and-recovery.md) 撤回，后由 [ADR-172](adr-172-safe-client-diagnostics-and-recovery.md) 扩展恢复
+- 状态：经 [ADR-170](adr-170-revert-error-diagnostics-and-recovery.md) 撤回，后由 [ADR-173](adr-173-safe-client-diagnostics-and-recovery.md) 扩展恢复
 - 日期：2026-10-20
 - 修订：ADR-161（原规定 console 错误与 Query 失败都弹出错误 Toast）
 

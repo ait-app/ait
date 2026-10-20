@@ -1,6 +1,6 @@
 # ADR-161：客户端统一错误提示与可复制诊断
 
-- 状态：恢复并修订；当前启动和自动采集规则以 [ADR-172](adr-172-safe-client-diagnostics-and-recovery.md) 为准
+- 状态：恢复并修订；当前启动和自动采集规则以 [ADR-173](adr-173-safe-client-diagnostics-and-recovery.md) 为准
 - 日期：2026-10-19
 - 延续：ADR-144、ADR-049
 

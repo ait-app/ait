@@ -176,4 +176,4 @@ ADR-074、082、083、084、122 在不同类别中各有两份，引用时以路
 - [ADR-051：AIT 品牌识别与日间视觉系统](branding/adr-051-ait-brand-identity.md)
 
 - [ADR-170：完整回滚 PR #381](clients/adr-170-revert-error-diagnostics-and-recovery.md)（历史记录）
-- [ADR-172：安全恢复客户端诊断与会话恢复](clients/adr-172-safe-client-diagnostics-and-recovery.md)
+- [ADR-173：安全恢复客户端诊断与会话恢复](clients/adr-173-safe-client-diagnostics-and-recovery.md)

@@ -646,6 +646,7 @@ if (args[0] === 'release' && args[1] === 'download') {
     });
   assert.equal(run().status, 0);
   assert.equal(await readFile(path.join(root, "release-assets", apk), "utf8"), original);
+  await rm(path.join(root, "release-assets", apk));
   await writeFile(path.join(root, "published", apk), "tampered");
   assert.notEqual(run().status, 0);
 });

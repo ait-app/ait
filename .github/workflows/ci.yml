@@ -60,6 +60,7 @@ jobs:
               - '.github/workflows/release.yml'
               - '.github/workflows/release-ios-testflight.yml'
               - '.github/workflows/release-android-play.yml'
+              - '.github/workflows/build-android.yml'
             native_terminal:
               - 'apps/mobile/modules/ait-terminal-input/**'
               - 'apps/mobile/src/terminal/native-renderer/terminal-input.ios*'
