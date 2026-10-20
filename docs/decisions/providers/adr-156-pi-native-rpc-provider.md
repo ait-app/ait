@@ -23,9 +23,12 @@ run from automatic retries and compaction recovery.
   Expose qualified `provider/model` IDs to avoid collisions between Pi's model backends.
   Registration itself does not start processes or create storage.
 - Create stable UUID sessions with `--session-id`; retain native session file handles for
-  subsequent interactive resume. Validate provider, identity and working directory and
-  reject missing history after input was accepted. Pi owns credentials, tools, settings,
-  extensions and native session files. Ait does not rewrite those files.
+  subsequent interactive resume. Resolve the host-owned session directory and pass it with
+  `--session-dir` as specified by [ADR-174](adr-174-pi-session-import.md), keeping writers and
+  discovery aligned even when a per-Agent child environment overrides `HOME`. Validate provider,
+  identity and working directory and reject missing history after input was accepted. Pi owns
+  credentials, tools, other settings, extensions and native session files. Ait does not rewrite
+  those files.
 - Correlate command responses by ID. Prompt acceptance and `agent_end` are not completion;
   wait for `agent_settled`. A `handled` acknowledgement is followed by a `get_state`
   ordering barrier: consume already-emitted run events, retain ownership while a run is
@@ -43,8 +46,9 @@ run from automatic retries and compaction recovery.
 - Apply [ADR-144](adr-144-provider-error-reporting.md): bounded stderr classification,
   safe structured diagnostics for spawn/version/write/response/frame failures, and fixed
   public failure messages. Native error text and credentials are not logged or persisted.
-- Preserve the host's persisted timeline across resume; do not advertise native history
-  replay, session import, rewind, steering, auxiliary generation or dynamic thinking controls.
+- Preserve the host's persisted timeline across resume; do not advertise automatic native history
+  replay, rewind, steering, auxiliary generation or dynamic thinking controls. Native session
+  import and explicit refresh are added by [ADR-174](adr-174-pi-session-import.md).
 - Expose a single native-tools mode that accurately describes Pi's absence of a built-in
   permission sandbox. Preserve native configuration. Cancel extension dialogs explicitly; unknown UI methods fail immediately with an
   `extension_method` protocol diagnostic;
@@ -105,7 +109,7 @@ run from automatic retries and compaction recovery.
 
 Pi can be selected and used through the existing Agent workflow without adding a new service
 boundary. Unsupported host configuration and structured output are rejected before prompt
-submission. Full native history import, richer extension dialogs, thinking controls, and
+submission. Richer extension dialogs, thinking controls, and
 additional provider-specific slash-command controls need separate implementations.
 
 Operations and current limitations: [Pi](../../operations/pi.md).

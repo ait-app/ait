@@ -1,4 +1,5 @@
 use std::collections::VecDeque;
+use std::ffi::OsString;
 use std::process::Stdio;
 use std::sync::Arc;
 use std::time::{Duration, Instant};
@@ -152,7 +153,7 @@ impl Transport {
     pub(super) fn spawn(
         client: &PiClient,
         cwd: &str,
-        args: &[String],
+        args: &[OsString],
     ) -> Result<Self, AgentSessionError> {
         let diagnostics = Diagnostics::new(PROVIDER);
         let mut command = Command::new(&client.program);

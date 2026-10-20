@@ -72,6 +72,7 @@ impl ExecutionState {
         let request: ImportRequest = decode(params)?;
         let handle = import_handle(&request)?;
         let cwd = canonical(&request.cwd)?;
+        let lookup_cwd = inspection_cwd(&handle.provider, &request.cwd, &cwd);
         let matching: Vec<_> = self
             .registry
             .list()
@@ -103,7 +104,7 @@ impl ExecutionState {
                 .await
                 .map_err(|_| ErrorCode::AgentIo)?;
         }
-        let history = self.manager.inspect_native(&handle, &cwd).await?;
+        let history = self.manager.inspect_native(&handle, lookup_cwd).await?;
         // Validate native identity and cwd before metadata is allowed to create placement records.
         let workspace = if request.workspace_id.is_none() {
             if let Some(directory) = &self.import_directory {
@@ -129,6 +130,19 @@ impl ExecutionState {
         Ok(
             json!({"status":"agent_resumed","agentId":record.id,"agent":self.snapshot(&record.id)?,"timelineSize":history.entries.len()}),
         )
+    }
+}
+
+/// Select the validated lookup spelling without changing canonical Agent placement.
+pub(super) fn inspection_cwd<'a>(
+    provider: &str,
+    requested_cwd: &'a str,
+    canonical_cwd: &'a str,
+) -> &'a str {
+    if provider == crate::local::pi::PROVIDER {
+        requested_cwd
+    } else {
+        canonical_cwd
     }
 }
 

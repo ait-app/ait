@@ -33,6 +33,7 @@ async fn installed_pi_streams_and_resumes_with_loopback_model() {
         ("HOME".into(), root.to_str().unwrap().into()),
     ]))
     .unwrap();
+    client.session_environment = history::SessionEnvironment::isolated(&root, &native);
     let spec = AgentSessionSpec {
         provider: PROVIDER.into(),
         cwd: root.to_str().unwrap().into(),
@@ -69,6 +70,7 @@ async fn installed_pi_streams_and_resumes_with_loopback_model() {
         std::path::Path::new(handle.native_handle.as_ref().unwrap().as_str().unwrap()).is_file()
     );
     session.close().await.unwrap();
+    let handle = import_handle(&client, &handle, &spec.cwd).await;
     let mut resumed = client
         .resume_session(&handle, &spec, AgentResumePurpose::Interactive)
         .await
@@ -100,6 +102,50 @@ async fn installed_pi_streams_and_resumes_with_loopback_model() {
         rich.contains("data:image/png;base64,"),
         "Model request omitted the valid PNG image"
     );
+}
+
+async fn import_handle(
+    client: &PiClient,
+    handle: &AgentPersistenceHandle,
+    cwd: &str,
+) -> AgentPersistenceHandle {
+    let sessions = client
+        .list_sessions(&crate::ports::native_history::ListOptions {
+            cwd: Some(cwd.into()),
+            scan_limit: 20,
+        })
+        .await
+        .unwrap();
+    assert_eq!(sessions.len(), 1);
+    assert_eq!(sessions[0].provider_handle_id, handle.session_id);
+    let mut imported = AgentPersistenceHandle {
+        provider: PROVIDER.into(),
+        session_id: handle.session_id.clone(),
+        native_handle: None,
+        metadata: None,
+    };
+    let history = client.inspect_session(&imported, cwd).await.unwrap();
+    assert!(!history.active);
+    assert_eq!(
+        history.descriptor.first_prompt_preview.as_deref(),
+        Some("Exercise the tool cards")
+    );
+    assert_eq!(
+        history
+            .entries
+            .iter()
+            .filter(|entry| entry.item["type"] == "tool_call")
+            .count(),
+        4
+    );
+    assert!(
+        history
+            .entries
+            .iter()
+            .any(|entry| entry.item["text"] == "Hello from real Pi")
+    );
+    imported.metadata = Some(history.resume_metadata);
+    imported
 }
 
 async fn loopback_model() -> (
