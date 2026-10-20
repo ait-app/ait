@@ -1,0 +1,156 @@
+name: Build Android APK
+
+on:
+  workflow_dispatch:
+  workflow_call:
+    inputs:
+      ref:
+        description: Commit, tag, or branch to build
+        required: true
+        type: string
+      tag:
+        description: Stable release tag (vX.Y.Z) the APK must match
+        required: true
+        type: string
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    name: Build Android APK with Gradle
+    runs-on: ubuntu-24.04
+    timeout-minutes: 120
+    env:
+      # Release-tag builds must carry the release key; manual builds fall back to the debug key.
+      REQUIRE_RELEASE_SIGNING: ${{ inputs.tag && 'true' || 'false' }}
+      APP_VARIANT: production
+      AIT_ANDROID_HERMES_O0: "1"
+      ANDROID_BUILD_TOOLS_VERSION: 36.0.0
+      EXPO_NO_TELEMETRY: "1"
+      CI: "1"
+    steps:
+      - name: Check out source
+        uses: actions/checkout@v5
+        with:
+          ref: ${{ inputs.ref || github.sha }}
+          persist-credentials: false
+
+      # React Native native builds for four ABIs outgrow the default runner disk.
+      - name: Free runner disk space
+        run: sudo rm -rf /usr/share/dotnet /usr/local/.ghcup /opt/ghc /usr/share/swift
+
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 24
+          cache: npm
+          cache-dependency-path: package-lock.json
+
+      - uses: actions/setup-java@v5
+        with:
+          distribution: temurin
+          java-version: "17"
+
+      - uses: gradle/actions/setup-gradle@v6
+
+      - name: Resolve APK version
+        env:
+          TAG: ${{ inputs.tag }}
+        run: |
+          if [ -z "$TAG" ]; then
+            TAG="v$(node -p "require('./apps/mobile/package.json').version")"
+          fi
+          node scripts/verify-release-version.mjs "$TAG"
+          echo "RELEASE_TAG=$TAG" >> "$GITHUB_ENV"
+
+      - name: Install workspace dependencies
+        run: npm ci
+
+      - name: Build shared UI dependencies
+        run: npm run build:ui-deps
+
+      - name: Generate Android project
+        working-directory: apps/mobile
+        run: npx --no-install expo prebuild --platform android --clean --non-interactive
+
+      - name: Configure APK signing
+        env:
+          KEYSTORE_BASE64: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
+          KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
+          KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
+          KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
+        run: |
+          if [ -n "$KEYSTORE_BASE64" ] && [ -n "$KEYSTORE_PASSWORD" ] && [ -n "$KEY_ALIAS" ] && [ -n "$KEY_PASSWORD" ]; then
+            printf '%s' "$KEYSTORE_BASE64" | base64 -d > "$RUNNER_TEMP/release.keystore"
+            echo "APK_SIGNING=release" >> "$GITHUB_ENV"
+          elif [ "$REQUIRE_RELEASE_SIGNING" = true ]; then
+            echo "::error::Release APKs need ANDROID_KEYSTORE_BASE64, ANDROID_KEYSTORE_PASSWORD, ANDROID_KEY_ALIAS and ANDROID_KEY_PASSWORD"
+            exit 1
+          else
+            echo "::warning::Android signing secrets are not configured; this APK uses the debug keystore"
+            echo "APK_SIGNING=debug" >> "$GITHUB_ENV"
+          fi
+
+      - name: Build APK with Gradle
+        working-directory: apps/mobile/android
+        env:
+          KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
+          KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
+          KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
+        run: |
+          signing=()
+          if [ "$APK_SIGNING" = release ]; then
+            # AGP's injected signing overrides the debug signingConfig that prebuild generates.
+            signing=(
+              "-Pandroid.injected.signing.store.file=$RUNNER_TEMP/release.keystore"
+              "-Pandroid.injected.signing.store.password=$KEYSTORE_PASSWORD"
+              "-Pandroid.injected.signing.key.alias=$KEY_ALIAS"
+              "-Pandroid.injected.signing.key.password=$KEY_PASSWORD"
+            )
+          fi
+          ./gradlew :app:assembleRelease \
+            -x lint -x lintVitalAnalyzeRelease -x lintVitalRelease \
+            -x generateReleaseLintModel -x generateReleaseLintVitalModel \
+            "${signing[@]}"
+
+      # Checked out after the build so Metro never sees a second copy of the workspace.
+      - name: Check out release tooling
+        uses: actions/checkout@v5
+        with:
+          ref: ${{ github.workflow_sha }}
+          path: .tmp/release-tools
+          persist-credentials: false
+
+      - name: Install APK verification tools
+        run: |
+          "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" "build-tools;$ANDROID_BUILD_TOOLS_VERSION"
+
+      - name: Verify and collect APK
+        run: |
+          node .tmp/release-tools/scripts/android-release.mjs \
+            --tag "$RELEASE_TAG" --package-json apps/mobile/package.json \
+            --source-dir apps/mobile/android/app/build/outputs/apk/release \
+            --build-tools "$ANDROID_HOME/build-tools/$ANDROID_BUILD_TOOLS_VERSION" \
+            --output-dir release-assets | tee "$RUNNER_TEMP/android-apk.json"
+
+      - uses: actions/upload-artifact@v6
+        with:
+          name: ait-android-apk
+          path: release-assets/*
+          if-no-files-found: error
+          retention-days: 14
+
+      - name: Write build summary
+        if: always()
+        run: |
+          {
+            echo "## Ait Android APK"
+            echo "- Version: ${RELEASE_TAG:-unknown}"
+            echo "- Source: $(git rev-parse HEAD)"
+            echo "- Signing: ${APK_SIGNING:-not configured}"
+            if [ -f "$RUNNER_TEMP/android-apk.json" ]; then
+              node -e 'const [apk] = require(process.argv[1]); console.log(`- APK: ${apk.name}\n- Certificate SHA-256: ${apk.certificateSha256}`)' \
+                "$RUNNER_TEMP/android-apk.json"
+            fi
+            echo "- Artifact: ait-android-apk"
+          } >> "$GITHUB_STEP_SUMMARY"

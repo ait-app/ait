@@ -25,6 +25,8 @@
 
 ## 架构决策
 
+- [ADR-172：Android APK 在 GitHub runner 上用 Gradle 构建](decisions/clients/adr-172-android-gradle-ci-build.md)：可复用工作流、手动与稳定标签触发、仓库 Secrets 签名。
+
 - [ADR-171：iOS 窗口由 UIScene 管理](decisions/clients/adr-171-ios-scene-lifecycle.md)：通过 Expo 配置插件迁移窗口、链接与前后台回调，修复 iOS 27 启动崩溃。
 
 - [ADR-170：完整回滚 PR #381](decisions/clients/adr-170-revert-error-diagnostics-and-recovery.md)：恢复此前客户端诊断、Codex 失败分类和会话启动行为。
@@ -139,7 +141,7 @@
 - [ADR-082（工作区）：Workspace 可空字段使用单级 Option](decisions/workspace/adr-082-canonical-nullable-workspace-fields.md)：缺失字段规范化为 `null` 的 wire 行为。
 - [ADR-082（Provider）：DeepSeek Harness 原生交互 Host](decisions/providers/adr-082-deepseek-harness-native-host.md)：权限切换、结构化问题、用户消息持久化与原生历史恢复。
 - [ADR-081：Workspace 与 Agent 目录主动推送](decisions/workspace/adr-081-directory-change-push.md)：变更唤醒和事件推送。
-- [ADR-080：Android APK 独立手动发布](decisions/clients/adr-080-standalone-android-release.md)：记录原独立入口设计；该 APK 流水线现已移除，当前流程见运维说明。
+- [ADR-080：Android APK 独立手动发布](decisions/clients/adr-080-standalone-android-release.md)：记录原 EAS 独立入口设计；已由 ADR-172 的 Gradle 构建取代。
 - [ADR-079：移动端统一使用 Expo EAS 构建](decisions/clients/adr-079-mobile-eas-builds.md)：沿用原有 profile，Android 发布通用 APK，iOS 提交 TestFlight。
 - [ADR-078：Android 发布改为手动可选](decisions/clients/adr-078-optional-android-release.md)：标签发布只构建桌面，Android 默认关闭。
 - [ADR-077：Android APK 的 GitHub Release 发布](decisions/clients/adr-077-android-apk-release.md)：APK 构建、安装包命名与附件职责。
@@ -157,7 +159,7 @@
 - [故障诊断与证据导出](operations/diagnostics.md)：日志来源、保留策略和附件分享。
 - [Relay 重连诊断](operations/relay-diagnostics.md)：会话关联、断连方向、错误分类及排查证据；[连接加速验证](reports/clients/relay-connect-latency.md)记录复用、TLS 缓存、NODELAY 与恢复退避。
 
-- [Android APK 构建与已有产物](operations/android-releases.md)：独立流水线已移除，保留按需构建配置与历史附件校验。
+- [Android APK 构建](operations/android-releases.md)：GitHub runner 上的 Gradle 构建、手动与稳定标签触发、签名 Secrets 和附件校验。
 - [Google Play 内部测试](operations/google-play-internal-testing.md)：首次账号配置、测试者安装与手动 AAB 发布 CI。
 - [发布指南](operations/releasing.md)：桌面 Release、Android Internal Testing、iOS TestFlight。
 - [Ait 0.1.8 发布说明与验证](reports/releases/release-0.1.8.md)：Pi 原生 RPC、整图与跨设备图片、Claude 恢复、键盘与拖动修复、独立 daemon，附 provider 实测覆盖率。
