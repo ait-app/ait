@@ -14,11 +14,6 @@ on:
         description: Optional full commit SHA for an explicitly requested same-version rebuild
         required: false
         type: string
-      build_android:
-        description: Explicitly include an Android APK in this stable release
-        required: false
-        default: false
-        type: boolean
 
 permissions:
   contents: read
@@ -223,20 +218,9 @@ jobs:
           if-no-files-found: error
           retention-days: 7
 
-  android:
-    name: Android APK
-    # Mobile builds require an explicit request; tag pushes remain desktop only.
-    if: ${{ github.event_name == 'workflow_dispatch' && inputs.build_android == true && !contains(inputs.tag || github.ref_name, '-') }}
-    uses: ./.github/workflows/build-android.yml
-    with:
-      ref: ${{ inputs.source_commit || inputs.tag || github.ref }}
-      tag: ${{ inputs.tag || github.ref_name }}
-    secrets: inherit
-
   release:
     name: Prepare GitHub Release
-    # A failed Android build keeps any previously published APK instead of blocking desktop.
-    needs: [build, android]
+    needs: [build]
     if: ${{ !cancelled() && needs.build.result == 'success' }}
     runs-on: ubuntu-24.04
     timeout-minutes: 30
@@ -280,14 +264,9 @@ jobs:
           NODE
 
       - name: Preserve previously published Android APK
-        env:
-          ANDROID_RESULT: ${{ needs.android.result }}
         run: |
           if test -f "release-assets/Ait-${RELEASE_TAG#v}-android.apk"; then
             exit 0
-          fi
-          if [ "$ANDROID_RESULT" = failure ]; then
-            echo "::warning::Android APK build failed; keeping any previously published APK"
           fi
           if gh release view "$RELEASE_TAG" --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
             asset_count=$(gh release view "$RELEASE_TAG" --repo "$GITHUB_REPOSITORY" --json assets --jq '.assets | length')

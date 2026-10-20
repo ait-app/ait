@@ -3,6 +3,8 @@
 - 状态：Accepted
 - 日期：2026-10-20
 
+构建与发布机制已由 [ADR-175](adr-175-android-play-gradle-release.md) 取代。
+
 ## 背景
 
 [ADR-080](adr-080-standalone-android-release.md) 的 EAS APK 工作流已移除，之后 APK 只能在
