@@ -1,6 +1,10 @@
 import { WebSocket, type RawData } from "ws";
 import type { AccountSessionManager } from "./account-session.js";
 
+const MAX_PENDING_MESSAGES = 16;
+const MAX_BUFFERED_MESSAGES = 65_536;
+const MAX_BUFFERED_BYTES = 4 * 1024 * 1024;
+
 /** Renderer or main-process consumer of an authenticated relay connection. */
 export interface AccountTransportOwner {
   isDestroyed(): boolean;
@@ -23,7 +27,9 @@ interface Session {
   expected: { serverId: string; instanceId: string } | null;
   deadline: ReturnType<typeof setTimeout>;
   pending: Map<number, { bytes: number; timer: ReturnType<typeof setTimeout> }>;
-  pendingBytes: number;
+  queued: Map<number, { bytes: Buffer; binary: boolean }>;
+  bufferedBytes: number;
+  flushing: boolean;
   sequence: number;
 }
 
@@ -61,7 +67,9 @@ export class AccountTransportManager {
       expected: null,
       deadline: setTimeout(() => this.finish(id, session, "Relay setup timed out"), 45_000),
       pending: new Map(),
-      pendingBytes: 0,
+      queued: new Map(),
+      bufferedBytes: 0,
+      flushing: false,
       sequence: 0,
     };
     this.sessions.set(id, session);
@@ -141,21 +149,41 @@ export class AccountTransportManager {
       session.verified = true;
       clearTimeout(session.deadline);
     }
-    // Bound both IPC delivery and time spent waiting for a paused renderer.
-    if (session.pending.size >= 16 || session.pendingBytes + bytes.length > 4 * 1024 * 1024) {
+    // pause() stops further socket reads, but ws can still dispatch frames from
+    // its current read. Queue those frames separately from the IPC delivery window.
+    if (
+      session.pending.size + session.queued.size >= MAX_BUFFERED_MESSAGES ||
+      session.bufferedBytes + bytes.length > MAX_BUFFERED_BYTES
+    ) {
       this.finish(id, session, "Relay renderer backlog exceeded");
       return;
     }
     const sequence = ++session.sequence;
-    const timer = setTimeout(() => this.finish(id, session, "Relay renderer stalled"), 5000);
-    session.pending.set(sequence, { bytes: bytes.length, timer });
-    session.pendingBytes += bytes.length;
+    session.queued.set(sequence, { bytes, binary });
+    session.bufferedBytes += bytes.length;
     session.socket?.pause();
-    this.emit(id, session, {
-      kind: "message",
-      sequence,
-      ...(binary ? { binaryBase64: bytes.toString("base64") } : { text: bytes.toString() }),
-    });
+    this.flush(id, session);
+  }
+
+  private flush(id: string, session: Session): void {
+    if (session.flushing || session.closed) return;
+    session.flushing = true;
+    try {
+      for (const [sequence, { bytes, binary }] of session.queued) {
+        if (session.closed || session.pending.size >= MAX_PENDING_MESSAGES) break;
+        session.queued.delete(sequence);
+        const timer = setTimeout(() => this.finish(id, session, "Relay renderer stalled"), 5000);
+        session.pending.set(sequence, { bytes: bytes.length, timer });
+        this.emit(id, session, {
+          kind: "message",
+          sequence,
+          ...(binary ? { binaryBase64: bytes.toString("base64") } : { text: bytes.toString() }),
+        });
+      }
+    } finally {
+      session.flushing = false;
+    }
+    if (!session.closed && !session.pending.size && !session.queued.size) session.socket?.resume();
   }
 
   acknowledge(owner: AccountTransportOwner, id: string, sequence: number): void {
@@ -164,8 +192,8 @@ export class AccountTransportManager {
     if (!pending) return;
     clearTimeout(pending.timer);
     session.pending.delete(sequence);
-    session.pendingBytes -= pending.bytes;
-    if (!session.pending.size) session.socket?.resume();
+    session.bufferedBytes -= pending.bytes;
+    this.flush(id, session);
   }
 
   async send(
@@ -228,6 +256,8 @@ export class AccountTransportManager {
     clearTimeout(session.deadline);
     for (const pending of session.pending.values()) clearTimeout(pending.timer);
     session.pending.clear();
+    session.queued.clear();
+    session.bufferedBytes = 0;
     session.socket?.terminate();
     this.sessions.delete(id);
     if (session.visit) void this.account.closeVisit(session.visit);
