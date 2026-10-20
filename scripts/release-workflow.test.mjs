@@ -10,7 +10,7 @@ const workflow = parse(
   readFileSync(new URL("../.github/workflows/release.yml", import.meta.url), "utf8"),
 );
 
-function runStep(t, name, state, tag = "v0.1.1") {
+function runStep(t, name, state, tag = "v0.1.1", builtAssets = []) {
   const step = workflow.jobs.release.steps.find((candidate) => candidate.name === name);
   assert(step, `Missing release step: ${name}`);
   const directory = mkdtempSync(path.join(tmpdir(), "ait-release-workflow-"));
@@ -21,6 +21,8 @@ function runStep(t, name, state, tag = "v0.1.1") {
   writeFileSync(logFile, "");
   mkdirSync(path.join(directory, "release-assets"));
   writeFileSync(path.join(directory, "release-assets", "artifact.bin"), "installer");
+  for (const name of builtAssets)
+    writeFileSync(path.join(directory, "release-assets", name), "apk");
   const executable = path.join(directory, "gh");
   writeFileSync(
     executable,
@@ -120,6 +122,19 @@ test("an empty draft can be retried without attempting to download missing asset
   const { result, calls } = runStep(t, "Preserve previously published Android APK", {
     release: { draft: true },
   });
+  assert.equal(result.status, 0, result.stderr);
+  assert(!calls.some((args) => args[1] === "download"));
+});
+
+test("a freshly built APK is published instead of the previous one", (t) => {
+  const apk = "Ait-0.1.1-android.apk";
+  const { result, calls } = runStep(
+    t,
+    "Preserve previously published Android APK",
+    { release: { draft: false }, assets: [apk, "SHA256SUMS"] },
+    "v0.1.1",
+    [apk],
+  );
   assert.equal(result.status, 0, result.stderr);
   assert(!calls.some((args) => args[1] === "download"));
 });
