@@ -8,6 +8,17 @@ import { join, relative } from "node:path";
 // workspace root live in their workspace's own node_modules, and patch-package resolves
 // the patch's node_modules/... paths relative to its working directory.
 const patchedPackages = [
+  // React Native exposes navigator.product, but no userAgent or platform.
+  // xterm's eager browser detection otherwise crashes before the first screen.
+  {
+    nodeModulesPath: "node_modules/@xterm/headless",
+    patchPrefix: "@xterm+headless+",
+  },
+  {
+    nodeModulesPath: "apps/mobile/node_modules/@xterm/headless",
+    patchPrefix: "@xterm+headless+",
+    cwd: "apps/mobile",
+  },
   {
     nodeModulesPath: "node_modules/react-native-enriched-markdown",
     patchPrefix: "react-native-enriched-markdown+",
