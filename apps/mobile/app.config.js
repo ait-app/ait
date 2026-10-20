@@ -9,6 +9,7 @@ const withAndroidProfileable = require("./plugins/with-android-profileable");
 const withAccountRelayWebSocket = require("./plugins/with-account-relay-websocket");
 const withFdroidAutolinking = require("./plugins/with-fdroid-autolinking");
 const withPasteInput = require("./plugins/with-paste-input");
+const withIosSceneLifecycle = require("./plugins/with-ios-scene-lifecycle");
 const withAndroidScroll = require("./modules/paseo-scroll/app.plugin");
 const { getNativeReleaseVersion } = require("./native-release-version");
 const appVariant = process.env.APP_VARIANT ?? "production";
@@ -135,6 +136,7 @@ export default {
     plugins: [
       "expo-router",
       withPasteInput,
+      withIosSceneLifecycle,
       withAndroidScroll,
       withAccountRelayWebSocket,
       "expo-secure-store",

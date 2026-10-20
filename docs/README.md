@@ -25,6 +25,8 @@
 
 ## 架构决策
 
+- [ADR-171：iOS 窗口由 UIScene 管理](decisions/clients/adr-171-ios-scene-lifecycle.md)：通过 Expo 配置插件迁移窗口、链接与前后台回调，修复 iOS 27 启动崩溃。
+
 - [ADR-170：完整回滚 PR #381](decisions/clients/adr-170-revert-error-diagnostics-and-recovery.md)：恢复此前客户端诊断、Codex 失败分类和会话启动行为。
 
 - [ADR-169：统一 Markdown 渲染与移动面板编辑生命周期](decisions/clients/adr-169-shared-markdown-and-composer-lifetimes.md)
