@@ -82,6 +82,13 @@
         -webkit-app-region: no-drag !important;
       }
 
+      /* React Native Web Modal portals live outside #overlay-root. Exclude the
+         temporary modal surface so workspace drag regions cannot swallow its
+         pointer events, including the backdrop and controls. */
+      [aria-modal="true"] {
+        -webkit-app-region: no-drag !important;
+      }
+
       /* Suppress the browser's default focus outline — it appears on mouse
          clicks and looks out of place against our themed surfaces. Keep a
          themed ring for keyboard users via :focus-visible. */
