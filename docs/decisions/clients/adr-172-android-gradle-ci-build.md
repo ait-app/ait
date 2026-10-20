@@ -17,8 +17,9 @@
   跳过 lint 的 Gradle 参数。产物经 `scripts/android-release.mjs` 验证签名、16 KB 对齐、
   包名、版本与 ARM 架构后，以 `ait-android-apk` artifact 保存 14 天。
 - 手动运行（`workflow_dispatch`）构建所选分支，版本取 `apps/mobile/package.json`。
-- `release.yml` 在稳定标签上调用该工作流，APK 随桌面附件进入同一 Release 和
-  `SHA256SUMS`。beta 标签不构建 APK。Android 失败不阻止桌面发布，此时保留 Release
+- `release.yml` 默认只构建桌面；明确要求 Android 时，通过手动入口开启 `build_android`
+  并指定稳定标签，APK 随桌面附件进入同一 Release 和 `SHA256SUMS`。beta 标签不构建 APK。
+  Android 失败不阻止桌面发布，此时保留 Release
   中已有的 APK。
 - 签名使用仓库 Secrets 中的 keystore，通过 AGP 的 `android.injected.signing.*`
   属性覆盖 prebuild 生成的 debug 签名配置。标签构建缺少 Secrets 时失败；

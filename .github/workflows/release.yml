@@ -14,6 +14,11 @@ on:
         description: Optional full commit SHA for an explicitly requested same-version rebuild
         required: false
         type: string
+      build_android:
+        description: Explicitly include an Android APK in this stable release
+        required: false
+        default: false
+        type: boolean
 
 permissions:
   contents: read
@@ -220,8 +225,8 @@ jobs:
 
   android:
     name: Android APK
-    # Betas ship desktop only; the APK follows stable tags.
-    if: ${{ !contains(inputs.tag || github.ref_name, '-') }}
+    # Mobile builds require an explicit request; tag pushes remain desktop only.
+    if: ${{ github.event_name == 'workflow_dispatch' && inputs.build_android == true && !contains(inputs.tag || github.ref_name, '-') }}
     uses: ./.github/workflows/build-android.yml
     with:
       ref: ${{ inputs.source_commit || inputs.tag || github.ref }}

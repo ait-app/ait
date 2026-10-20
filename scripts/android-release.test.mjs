@@ -111,26 +111,31 @@ test("collects the EAS universal APK without modifying its signed bytes", async 
   );
 });
 
-test("stable releases build the APK alongside desktop without blocking on it", async () => {
+test("desktop releases require an explicit Android request without blocking on APK results", async () => {
   const release = yaml.parse(
     await readFile(new URL("../.github/workflows/release.yml", import.meta.url), "utf8"),
   );
   assert.deepEqual(release.on.push.tags, ["v*"]);
   assert(release.on.workflow_dispatch);
-  assert.equal(release.on.workflow_dispatch.inputs.build_android, undefined);
+  assert.equal(release.on.workflow_dispatch.inputs.build_android.type, "boolean");
+  assert.equal(release.on.workflow_dispatch.inputs.build_android.default, false);
   const android = release.jobs.android;
   assert.equal(android.uses, "./.github/workflows/build-android.yml");
   assert.equal(android.secrets, "inherit");
-  for (const [tag, expected] of [
-    ["v1.2.3", true],
-    ["v1.2.3-beta.1", false],
+  for (const [event, tag, inputs, expected] of [
+    ["push", "v1.2.3", {}, false],
+    ["push", "v1.2.3", { build_android: true }, false],
+    ["workflow_dispatch", "main", { tag: "v1.2.3" }, false],
+    ["workflow_dispatch", "main", { tag: "v1.2.3", build_android: false }, false],
+    ["workflow_dispatch", "main", { tag: "v1.2.3", build_android: true }, true],
+    ["workflow_dispatch", "main", { tag: "v1.2.3-beta.1", build_android: true }, false],
   ]) {
     const build = runInNewContext(android.if.slice(3, -2), {
-      inputs: {},
-      github: { ref_name: tag },
+      inputs,
+      github: { ref_name: tag, event_name: event },
       contains: (value, part) => value.includes(part),
     });
-    assert.equal(build, expected, tag);
+    assert.equal(build, expected, `${event}, tag=${tag}, inputs=${JSON.stringify(inputs)}`);
   }
   assert.deepEqual(release.jobs.release.needs, ["build", "android"]);
   for (const [desktop, cancelled, expected] of [

@@ -4,8 +4,9 @@
 Rust `daemon`。发布边界见 [ADR-053](../decisions/clients/adr-053-paseo-desktop-release.md)，
 旧桌面源码的移除见 [当前架构](../architecture/README.md)。
 
-推送稳定标签会自动构建桌面和 Android APK；APK 在 GitHub runner 上用 Gradle 构建，
-也可手动运行生成测试包。签名 Secrets 与操作步骤见 [Android APK 构建](android-releases.md)。
+推送稳定标签默认只构建桌面；明确要求 Android APK 时，手动运行 Release Ait 并开启
+`build_android`，在 GitHub runner 上用 Gradle 构建，也可独立生成测试包。
+签名 Secrets 与操作步骤见 [Android APK 构建](android-releases.md)。
 Android 商店构建使用下方的 Google Play AAB 工作流。
 
 `apps/mobile` 的 Google Play Android Internal Testing 发布流程见下方
@@ -278,7 +279,8 @@ macOS 需要 GitHub Secrets：`MAC_CSC_LINK`、`MAC_CSC_KEY_PASSWORD`、`APPLE_I
 Release Note 由 `.github/release.yml` 根据合并 PR 分组生成。
 
 手动重跑：Actions → Release Ait → Run workflow，输入已存在的标签。工作流不会创建标签。
-重跑会同时重新构建 Android APK；APK 构建失败时验证并保留此前已发布的 APK。
+重跑默认只构建桌面；显式开启 `build_android` 才重新构建 Android APK。
+APK 构建失败时验证并保留此前已发布的 APK。
 已有 Release 保留说明，覆盖同名资产；不要移动已经公开使用的标签。
 
 默认应用源码从输入的发布标签检出；资产收集、校验和相关测试从工作流自身的提交检出到
