@@ -2,6 +2,8 @@
 
 use super::*;
 
+mod metadata;
+
 #[tokio::test]
 async fn unknown_native_handle_uses_metadata_and_overrides_without_creating_provider_history() {
     let fixture = Fixture::new();

@@ -20,6 +20,9 @@ mod compaction;
 mod termination;
 
 #[cfg(unix)]
+mod resume;
+
+#[cfg(unix)]
 #[tokio::test]
 async fn native_protocol_updates_options_resolves_cancelled_permissions_and_rejects_unknown_calls()
 {

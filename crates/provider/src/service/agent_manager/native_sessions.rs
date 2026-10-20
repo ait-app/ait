@@ -34,7 +34,8 @@ impl AgentManager {
         if query.len() > 4096 {
             return Err(ErrorCode::InvalidMessage);
         }
-        let cwd = request.cwd.map(|cwd| canonical(&cwd)).transpose()?;
+        let lookup_cwd = request.cwd;
+        let cwd = lookup_cwd.as_deref().map(canonical).transpose()?;
         let imported = self.imported_handles()?;
         let options = ListOptions {
             cwd,
@@ -55,7 +56,11 @@ impl AgentManager {
             {
                 continue;
             }
-            let sessions = match list_importable_sessions(client.as_ref(), &options).await {
+            let provider_options = listing_options(provider, &options, lookup_cwd.as_deref());
+            let sessions = self
+                .list_importable_sessions(client.as_ref(), &provider_options)
+                .await;
+            let sessions = match sessions {
                 Ok(sessions) => sessions,
                 Err(error) => {
                     errors.push(json!({"provider":provider,"message":error.to_string()}));
@@ -107,6 +112,25 @@ impl AgentManager {
         crate::rpc::timeline::bounded(
             json!({"entries":entries,"filteredAlreadyImportedCount":filtered,"providerErrors":errors}),
         )
+    }
+
+    async fn list_importable_sessions(
+        &self,
+        client: &dyn AgentClient,
+        options: &ListOptions,
+    ) -> Result<Vec<SessionDescriptor>, AgentSessionError> {
+        if !client.supports_session_import() {
+            return Ok(Vec::new());
+        }
+        let _history = self
+            .history_budget
+            .acquire()
+            .await
+            .map_err(|_| AgentSessionError::Failed)?;
+        if !client.is_available().await? {
+            return Ok(Vec::new());
+        }
+        client.list_sessions(options).await
     }
 
     fn imported_handles(&self) -> Result<BTreeSet<(String, String)>, ErrorCode> {
@@ -337,14 +361,12 @@ fn matches_query(session: &SessionDescriptor, query: &str) -> bool {
         .any(|text| text.to_lowercase().contains(query))
 }
 
-async fn list_importable_sessions(
-    client: &dyn AgentClient,
-    options: &ListOptions,
-) -> Result<Vec<SessionDescriptor>, AgentSessionError> {
-    if !client.supports_session_import() || !client.is_available().await? {
-        return Ok(Vec::new());
+fn listing_options(provider: &str, options: &ListOptions, lookup_cwd: Option<&str>) -> ListOptions {
+    let mut provider_options = options.clone();
+    if provider == crate::local::pi::PROVIDER {
+        provider_options.cwd = lookup_cwd.map(str::to_owned);
     }
-    client.list_sessions(options).await
+    provider_options
 }
 
 #[cfg(test)]

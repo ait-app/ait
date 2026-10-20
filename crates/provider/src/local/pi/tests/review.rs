@@ -195,7 +195,7 @@ async fn catalog_controls_and_runtime_do_not_advertise_unsupported_thinking() {
     let settings = client.settings(&spec.config);
     assert_eq!(settings["availableModes"][0]["id"], "default");
     assert_eq!(settings["capabilities"]["supportsReasoningStream"], true);
-    assert_eq!(settings["capabilities"]["supportsSessionListing"], false);
+    assert_eq!(settings["capabilities"]["supportsSessionListing"], true);
     let details = client.discover(&spec.cwd).await.unwrap();
     assert_eq!(details.models[0]["thinkingOptions"], json!([]));
     let mut session = client.create_session(&spec).await.unwrap();

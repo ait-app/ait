@@ -28,3 +28,23 @@ fn import_accepts_legacy_aliases_but_rejects_conflicting_or_unbounded_identity()
         .is_err()
     );
 }
+
+#[test]
+fn import_inspection_keeps_existing_provider_directories_canonical() {
+    assert_eq!(
+        inspection_cwd("opencode", "/tmp/linked/../project/", "/tmp/project"),
+        "/tmp/project"
+    );
+}
+
+#[test]
+fn import_inspection_preserves_pi_directory_spelling() {
+    assert_eq!(
+        inspection_cwd(
+            crate::local::pi::PROVIDER,
+            "/tmp/linked/../project/",
+            "/tmp/project",
+        ),
+        "/tmp/linked/../project/"
+    );
+}

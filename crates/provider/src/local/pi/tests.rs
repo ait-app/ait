@@ -8,6 +8,7 @@ use tempfile::TempDir;
 use super::*;
 
 mod admission;
+mod diagnostics;
 mod installed;
 mod preview;
 mod review;
@@ -24,6 +25,7 @@ fn fixture(scenario: &str) -> (TempDir, PiClient, AgentSessionSpec) {
     std::fs::write(&program, include_str!("tests/fixtures/pi.py")).unwrap();
     std::fs::set_permissions(&program, std::fs::Permissions::from_mode(0o700)).unwrap();
     let mut client = PiClient::new(program);
+    client.session_environment = history::SessionEnvironment::isolated(&cwd, &cwd);
     client.environment = AgentEnvironment::try_from(BTreeMap::from([(
         "PI_FIXTURE_SCENARIO".into(),
         scenario.into(),
@@ -68,7 +70,7 @@ async fn discovers_without_persistence_and_rejects_old_protocol() {
     assert_eq!(details.models[0]["id"], "fixture/model");
     assert!(!directory.path().join("session.jsonl").exists());
     assert!(!client.supports_history_replay());
-    assert!(!client.supports_session_import());
+    assert!(client.supports_session_import());
     assert!(client.diagnostic().await.unwrap().contains("Pi RPC"));
     let (_directory, client, spec) = fixture("old");
     assert!(matches!(
@@ -79,10 +81,23 @@ async fn discovers_without_persistence_and_rejects_old_protocol() {
 
 #[tokio::test]
 async fn streams_tools_usage_and_resumes_same_native_identity() {
-    let (_directory, client, mut spec) = fixture("");
+    let (directory, client, mut spec) = fixture("");
     spec.config.model = Some("fixture/model".into());
     client.validate_selection(&spec).await.unwrap();
     let mut session = client.create_session(&spec).await.unwrap();
+    let arguments: Vec<String> = serde_json::from_str(
+        &std::fs::read_to_string(directory.path().join("arguments.json")).unwrap(),
+    )
+    .unwrap();
+    let session_directory =
+        history::session_directory(&client, std::path::Path::new(&spec.cwd)).unwrap();
+    assert_eq!(
+        arguments
+            .windows(2)
+            .find(|arguments| arguments[0] == "--session-dir")
+            .map(|arguments| arguments[1].as_str()),
+        session_directory.to_str()
+    );
     let initial = session.persistence().unwrap();
     assert_eq!(
         session.runtime_info().await.unwrap().model.as_deref(),
@@ -126,6 +141,27 @@ async fn streams_tools_usage_and_resumes_same_native_identity() {
             .await
             .is_err()
     );
+}
+
+#[tokio::test]
+async fn creates_and_resumes_without_a_host_home() {
+    let (directory, mut client, spec) = fixture("");
+    client.session_environment = history::SessionEnvironment::without_home(directory.path());
+
+    let mut session = client.create_session(&spec).await.unwrap();
+    let handle = session.persistence().unwrap();
+    session.close().await.unwrap();
+    let mut resumed = client
+        .resume_session(&handle, &spec, AgentResumePurpose::Interactive)
+        .await
+        .unwrap();
+    resumed.close().await.unwrap();
+
+    let arguments: Vec<String> = serde_json::from_str(
+        &std::fs::read_to_string(directory.path().join("arguments.json")).unwrap(),
+    )
+    .unwrap();
+    assert!(!arguments.iter().any(|argument| argument == "--session-dir"));
 }
 
 #[tokio::test]

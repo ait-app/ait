@@ -1,10 +1,12 @@
 //! Pi's native JSONL RPC adapter. Authentication and sessions remain owned by Pi.
 
 mod config;
+mod history;
 mod session;
 mod streaming;
 mod transport;
 
+use std::borrow::Cow;
 use std::path::PathBuf;
 use std::sync::Arc;
 use std::time::Duration;
@@ -20,7 +22,7 @@ use crate::ports::agent_session::{
 use crate::ports::environment::AgentEnvironment;
 use crate::protocol::provider::Details;
 
-const PROVIDER: &str = "pi";
+pub(crate) const PROVIDER: &str = "pi";
 
 /// Native Pi executable and ephemeral environment; constructing it performs no I/O.
 #[derive(Debug, Clone)]
@@ -30,6 +32,7 @@ pub(crate) struct PiClient {
     admission_deadline: Duration,
     version: Arc<OnceCell<transport::Version>>,
     environment: AgentEnvironment,
+    session_environment: history::SessionEnvironment,
     images: super::images::ImageStore,
 }
 
@@ -45,6 +48,7 @@ impl PiClient {
             admission_deadline: Duration::from_secs(120),
             version: Arc::default(),
             environment: AgentEnvironment::default(),
+            session_environment: history::SessionEnvironment::default(),
             images: super::images::ImageStore::default(),
         }
     }
@@ -58,6 +62,38 @@ impl PiClient {
 }
 
 impl AgentClient for PiClient {
+    fn supports_session_import(&self) -> bool {
+        true
+    }
+
+    fn list_sessions<'a>(
+        &'a self,
+        options: &'a crate::ports::native_history::ListOptions,
+    ) -> AgentSessionFuture<'a, Vec<crate::ports::native_history::SessionDescriptor>> {
+        let client = self.clone();
+        let options = options.clone();
+        Box::pin(async move {
+            tokio::task::spawn_blocking(move || history::list(&client, &options))
+                .await
+                .map_err(|error| history_task_failed("list_sessions", &error))?
+        })
+    }
+
+    fn inspect_session<'a>(
+        &'a self,
+        handle: &'a AgentPersistenceHandle,
+        cwd: &'a str,
+    ) -> AgentSessionFuture<'a, crate::ports::native_history::SessionHistory> {
+        let client = self.clone();
+        let handle = handle.clone();
+        let cwd = cwd.to_owned();
+        Box::pin(async move {
+            tokio::task::spawn_blocking(move || history::inspect(&client, &handle, &cwd))
+                .await
+                .map_err(|error| history_task_failed("inspect_session", &error))?
+        })
+    }
+
     fn provider(&self) -> &'static str {
         PROVIDER
     }
@@ -74,7 +110,7 @@ impl AgentClient for PiClient {
         json!({"availableModes":config::modes(),"features":[],"capabilities":{
             "supportsStreaming":true,"supportsReasoningStream":true,
             "supportsMcpServers":false,"supportsDynamicModes":false,
-            "supportsSessionListing":false,"supportsRewindConversation":false,
+            "supportsSessionListing":true,"supportsRewindConversation":false,
             "supportsRewindFiles":false,"supportsRewindBoth":false}})
     }
 
@@ -172,9 +208,41 @@ impl AgentClient for PiClient {
             if purpose == AgentResumePurpose::History {
                 return Err(AgentSessionError::Unavailable);
             }
-            Ok(Box::new(session::open(self, spec, Some(handle)).await?) as Box<dyn AgentSession>)
+            let needs_lookup = handle.metadata.as_ref().is_some_and(|metadata| {
+                metadata.get("hasInput") == Some(&Value::Bool(true))
+                    && handle
+                        .native_handle
+                        .as_ref()
+                        .and_then(Value::as_str)
+                        .or_else(|| metadata.get("sessionFile")?.as_str())
+                        .is_none_or(|path| !std::path::Path::new(path).is_file())
+            });
+            let resolved = if needs_lookup {
+                let history = self.inspect_session(handle, &spec.cwd).await?;
+                let mut resolved = handle.clone();
+                resolved.native_handle = None;
+                resolved.metadata = Some(history.resume_metadata);
+                Cow::Owned(resolved)
+            } else {
+                Cow::Borrowed(handle)
+            };
+            Ok(Box::new(session::open(self, spec, Some(&resolved)).await?)
+                as Box<dyn AgentSession>)
         })
     }
+}
+
+fn history_task_failed(
+    operation: &'static str,
+    error: &tokio::task::JoinError,
+) -> AgentSessionError {
+    tracing::error!(
+        provider = PROVIDER,
+        operation,
+        error = %error,
+        "Pi history task failed"
+    );
+    AgentSessionError::Failed
 }
 
 #[cfg(all(test, unix))]
