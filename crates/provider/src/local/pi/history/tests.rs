@@ -73,6 +73,53 @@ fn handle() -> AgentPersistenceHandle {
 }
 
 #[test]
+fn listing_preserves_distinct_projects_with_colliding_session_directories() {
+    let (directory, client, _, _) = fixture();
+    let root = directory.path().canonicalize().unwrap();
+    let projects = [root.join("foo-bar"), root.join("foo/bar")];
+    let sessions_root = directory.path().join("sessions");
+    let session_directory = project_directory(&sessions_root, &projects[0]).unwrap();
+    assert_eq!(
+        session_directory,
+        project_directory(&sessions_root, &projects[1]).unwrap()
+    );
+    std::fs::create_dir_all(&session_directory).unwrap();
+    let session_ids = [SESSION, "019a0000-0000-7000-8000-000000000002"];
+    for (project, session_id) in projects.iter().zip(session_ids) {
+        std::fs::create_dir_all(project).unwrap();
+        let file = session_directory.join(format!("2026-10-18_{session_id}.jsonl"));
+        write(
+            &file,
+            project.to_str().unwrap(),
+            vec![user("u1", Value::Null, "hello")],
+        );
+        let history = std::fs::read_to_string(&file).unwrap();
+        std::fs::write(&file, history.replace(SESSION, session_id)).unwrap();
+    }
+
+    let sessions = list(
+        &client,
+        &ListOptions {
+            cwd: None,
+            scan_limit: 10,
+        },
+    )
+    .unwrap();
+
+    assert_eq!(sessions.len(), 2);
+    for (project, session_id) in projects.iter().zip(session_ids) {
+        let session = sessions
+            .iter()
+            .find(|session| session.provider_handle_id == session_id)
+            .unwrap();
+        assert_eq!(Path::new(&session.cwd), project);
+        let mut handle = handle();
+        handle.session_id = session_id.into();
+        assert!(inspect(&client, &handle, &session.cwd).is_ok());
+    }
+}
+
+#[test]
 fn expands_bare_tilde_to_the_home_directory() {
     let home = Path::new("/home/pi-user");
 
