@@ -713,7 +713,7 @@ fn list_before(
             candidate.cwd = cwd.to_string_lossy().into_owned();
         } else if let (Some(root), Some(directory)) = (default_root.as_deref(), path.parent()) {
             let recovered = project_cwds
-                .entry(directory.to_owned())
+                .entry((directory.to_owned(), candidate.cwd.clone()))
                 .or_insert_with(|| discovered_project_cwd(root, &path, &candidate.cwd, deadline));
             if let Some(recovered) = recovered {
                 candidate.cwd.clone_from(recovered);
