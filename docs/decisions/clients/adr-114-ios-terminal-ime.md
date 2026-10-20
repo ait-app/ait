@@ -1,7 +1,10 @@
 # ADR-114：iOS 终端组合输入归 UIKit
 
-- 状态：已实现
+- 状态：已被 [ADR-173](adr-173-shared-native-terminal-input.md) 取代
 - 日期：2026-10-09
+
+以下保留历史决策。2026-10-20 起，iOS 与 Android 统一复用 React Native 终端输入，
+移除本文的自定义 Expo 模块及其专用测试。当前决策和组合输入约束见 ADR-173。
 
 ## 背景
 

@@ -50,6 +50,7 @@ import type { ComboboxOptionModel } from "./combobox-options";
 import { isWeb } from "@/constants/platform";
 import {
   IsolatedBottomSheetModal,
+  SheetVisibleFrame,
   useIsolatedBottomSheetVisibility,
 } from "./isolated-bottom-sheet-modal";
 import {
@@ -983,46 +984,48 @@ function MobileComboboxBody(props: MobileBodyProps): ReactElement {
       keyboardBlurBehavior="none"
       presentation={props.presentation}
     >
-      <View style={frameStyle}>
-        {props.header ? (
-          <SheetHeaderView header={props.header} onClose={props.onClose} />
-        ) : (
-          <>
-            <View style={styles.bottomSheetHeader}>
-              <Text key={props.titleColor} style={comboboxTitleStyle}>
-                {props.title}
-              </Text>
-            </View>
-            {props.stickyHeader}
-            {!props.hasChildren && props.searchable ? (
-              <SearchInput
-                placeholder={props.searchPlaceholder}
-                onChangeText={props.setSearchQueryWithCallback}
-                onSubmitEditing={props.handleSubmitSearch}
-                autoFocus={false}
-                useBottomSheetInput
-                resetKey={props.searchResetKey}
-              />
-            ) : null}
-          </>
-        )}
-        {props.hasChildren && !props.mobileChildrenScrollEnabled ? (
-          body
-        ) : (
-          <BottomSheetScrollView
-            style={styles.mobileSheetBody}
-            contentContainerStyle={[
-              styles.comboboxScrollContent,
-              props.mobileChildrenContentContainerStyle,
-            ]}
-            keyboardShouldPersistTaps="handled"
-            showsVerticalScrollIndicator={false}
-          >
-            {body}
-          </BottomSheetScrollView>
-        )}
-        {props.footer ? <View style={styles.footer}>{props.footer}</View> : null}
-      </View>
+      <SheetVisibleFrame>
+        <View style={frameStyle}>
+          {props.header ? (
+            <SheetHeaderView header={props.header} onClose={props.onClose} />
+          ) : (
+            <>
+              <View style={styles.bottomSheetHeader}>
+                <Text key={props.titleColor} style={comboboxTitleStyle}>
+                  {props.title}
+                </Text>
+              </View>
+              {props.stickyHeader}
+              {!props.hasChildren && props.searchable ? (
+                <SearchInput
+                  placeholder={props.searchPlaceholder}
+                  onChangeText={props.setSearchQueryWithCallback}
+                  onSubmitEditing={props.handleSubmitSearch}
+                  autoFocus={false}
+                  useBottomSheetInput
+                  resetKey={props.searchResetKey}
+                />
+              ) : null}
+            </>
+          )}
+          {props.hasChildren && !props.mobileChildrenScrollEnabled ? (
+            body
+          ) : (
+            <BottomSheetScrollView
+              style={styles.mobileSheetBody}
+              contentContainerStyle={[
+                styles.comboboxScrollContent,
+                props.mobileChildrenContentContainerStyle,
+              ]}
+              keyboardShouldPersistTaps="handled"
+              showsVerticalScrollIndicator={false}
+            >
+              {body}
+            </BottomSheetScrollView>
+          )}
+          {props.footer ? <View style={styles.footer}>{props.footer}</View> : null}
+        </View>
+      </SheetVisibleFrame>
     </IsolatedBottomSheetModal>
   );
 }

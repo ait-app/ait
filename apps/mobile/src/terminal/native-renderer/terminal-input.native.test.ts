@@ -105,7 +105,7 @@ describe("native terminal typed input", () => {
     expect(input.receiveTextChange("y")).toEqual({ data: "y", shouldClear: false });
   });
 
-  it("ignores late newline text change after Return keypress submits", () => {
+  it("clears the late native newline after Return so the next line keeps its first character", () => {
     const input = createTerminalTextInputState();
 
     for (const key of "echo hello") {
@@ -115,7 +115,9 @@ describe("native terminal typed input", () => {
 
     input.reset();
 
-    expect(input.receiveTextChange("echo hello\n")).toEqual({ data: "", shouldClear: false });
+    expect(input.receiveTextChange("echo hello\n")).toEqual({ data: "", shouldClear: true });
+    expect(input.receiveKeyPress("n")).toEqual({ data: "n", shouldClear: false });
+    expect(input.receiveTextChange("n")).toEqual({ data: "", shouldClear: false });
   });
 
   it("accepts the same long keyboard clipboard item twice", () => {
@@ -275,6 +277,35 @@ describe("native terminal typed input", () => {
       data: "\x7f\x7f拟好",
       shouldClear: false,
     });
+  });
+
+  it("keeps Chinese candidate conversion aligned when iOS segments the pinyin reading", () => {
+    const input = createTerminalTextInputState();
+    const sent: string[] = [];
+    // Captured from the iOS software keyboard: the separator arrives in the
+    // text change after the printable key has already been sent to the PTY.
+    for (const [key, text] of [
+      ["n", "n"],
+      ["i", "ni"],
+      ["h", "ni\u2006h"],
+      ["a", "ni\u2006ha"],
+      ["o", "ni\u2006hao"],
+    ]) {
+      sent.push(input.receiveKeyPress(key).data, input.receiveTextChange(text).data);
+    }
+    expect(sent.join("")).toBe("nihao");
+    expect(input.receiveTextChange("你好")).toEqual({
+      data: `${"\x7f".repeat(5)}你好`,
+      shouldClear: false,
+    });
+    expect(input.receiveKeyPress(" ").data).toBe(" ");
+    expect(input.receiveTextChange("你好 ").data).toBe("");
+  });
+
+  it("preserves six-per-em spaces in inserted text rather than normalizing clipboard contents", () => {
+    const input = createTerminalTextInputState();
+    const text = "echo ni\u2006hao";
+    expect(input.receiveTextChange(text)).toEqual({ data: text, shouldClear: false });
   });
 
   it("commits and converts a Japanese reading", () => {

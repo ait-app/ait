@@ -76,6 +76,12 @@ async function openTabSwitcher(page: Page) {
   const trigger = page.getByRole("button", { name: /Switch tabs/ });
   await trigger.click();
   await expectBottomSheetOpen(page);
+  // A fixed-detent sheet lays out its content at the largest snap point. Both
+  // actions must still fit inside the viewport at the initial, smaller snap.
+  await expect(page.getByTestId("workspace-tab-switcher-new-agent")).toBeInViewport({ ratio: 1 });
+  await expect(page.getByTestId("workspace-tab-switcher-new-terminal")).toBeInViewport({
+    ratio: 1,
+  });
 }
 
 async function openModelSelector(page: Page) {

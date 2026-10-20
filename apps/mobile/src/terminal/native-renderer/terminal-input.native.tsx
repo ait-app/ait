@@ -35,7 +35,7 @@ export interface TerminalInputHandle {
   blur: () => void;
 }
 
-export interface TerminalInputProps {
+interface TerminalInputProps {
   isKeyboardVisible: boolean;
   onFocus?: () => void;
   onInput?: (data: string) => void;
@@ -141,7 +141,10 @@ export function createTerminalTextInputState(): TerminalTextInputState {
         if (text === lateSubmitText) {
           previousText = "";
           replacementDesynced = false;
-          return { data: "", shouldClear: false };
+          // UIKit can deliver this after the keypress already cleared the
+          // input. Clear the native buffer again so its late newline cannot
+          // swallow the first character typed on the next terminal line.
+          return { data: "", shouldClear: true };
         }
       }
 
@@ -154,6 +157,17 @@ export function createTerminalTextInputState(): TerminalTextInputState {
         previousText = "";
         replacementDesynced = false;
         return { data: "", shouldClear: true };
+      }
+
+      // iOS inserts six-per-em spaces between pinyin syllables after the
+      // printable keys have already reached the terminal. Keep that predicted
+      // buffer when only those separators differ, so candidate conversion can
+      // still rub out the reading. Inserted clipboard text remains unchanged.
+      if (
+        text.includes("\u2006") &&
+        text.replace(/([a-z])\u2006(?=[a-z])/gi, "$1") === previousText
+      ) {
+        return { data: "", shouldClear: false };
       }
 
       if (!text.startsWith(previousText)) {
