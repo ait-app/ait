@@ -1,7 +1,22 @@
-import { describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
+import { supportsDesktopPaneSplits } from "@/constants/layout";
 import type { WorkspaceDescriptor } from "@/stores/session-store";
 import type { WorkspaceRecoveryModel } from "@/workspace-recovery/model";
 import { resolveWorkspaceRouteState } from "./workspace-route-state";
+
+const runtime = vi.hoisted((): { platform: "ios" | "android" | "web" } => ({
+  platform: "web",
+}));
+
+vi.mock("@/constants/platform", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("@/constants/platform")>()),
+  get isWeb() {
+    return runtime.platform === "web";
+  },
+  get isNative() {
+    return runtime.platform !== "web";
+  },
+}));
 
 function createWorkspaceDescriptor(): WorkspaceDescriptor {
   return {
@@ -186,5 +201,24 @@ describe("resolveWorkspaceRouteState", () => {
         recovery: recoverable,
       }),
     ).toEqual({ kind: "ready" });
+  });
+});
+
+describe("workspace pane split capability", () => {
+  afterEach(() => {
+    runtime.platform = "web";
+  });
+
+  it.each(["ios", "android"] as const)(
+    "keeps DOM-backed split containers out of %s workspaces",
+    (platform) => {
+      runtime.platform = platform;
+
+      expect(supportsDesktopPaneSplits()).toBe(false);
+    },
+  );
+
+  it("preserves pane splits for browser and Electron renderers", () => {
+    expect(supportsDesktopPaneSplits()).toBe(true);
   });
 });

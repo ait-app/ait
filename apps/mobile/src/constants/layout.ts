@@ -1,5 +1,5 @@
 import { useUnistyles } from "react-native-unistyles";
-import { isNative, isWeb } from "@/constants/platform";
+import { isWeb } from "@/constants/platform";
 
 export const FOOTER_HEIGHT = 75;
 
@@ -47,7 +47,9 @@ export function useIsCompactFormFactor(): boolean {
   return isCompactBreakpoint(rt.breakpoint);
 }
 
-// Large native screens use the same pane layout with native gesture handling.
+// SplitContainer relies on dnd-kit and DOM-backed accessibility helpers.
+// Keep that capability distinct from desktop-width layout so touch tablets
+// can use the desktop shell without entering web-only code paths.
 export function supportsDesktopPaneSplits(): boolean {
-  return isWeb || isNative;
+  return isWeb;
 }
