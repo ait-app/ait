@@ -25,11 +25,13 @@
 
 ## 架构决策
 
+- [ADR-175：Google Play AAB 在 GitHub runner 上构建和提交](decisions/clients/adr-175-android-play-gradle-release.md)：Gradle 签名构建、GitHub 凭据与版本计数、直接上传 Play，移除独立 APK 工作流。
+
 - [ADR-174：Pi 原生会话导入](decisions/providers/adr-174-pi-session-import.md)：不改写 Pi 存储且有候选数、字节、时间、投影条目数与共享准入预算的项目目录发现、无主机 HOME 时写入回退原生解析、持久化原生目录拼写、文件重命名后的身份恢复、跨符号链接拼写与存储配置变更的定点刷新、当前分支与模型上下文投影、导入与原生身份恢复。
 
 - [ADR-173：移动端终端输入复用 React Native](decisions/clients/adr-173-shared-native-terminal-input.md)：iOS 与 Android 采用 Paseo 的共享输入设计，移除自定义 iOS 输入桥；取代 ADR-114。
 
-- [ADR-172：Android APK 在 GitHub runner 上用 Gradle 构建](decisions/clients/adr-172-android-gradle-ci-build.md)：可复用工作流、手动与稳定标签触发、仓库 Secrets 签名。
+- [ADR-172：Android APK 在 GitHub runner 上用 Gradle 构建](decisions/clients/adr-172-android-gradle-ci-build.md)：历史独立 APK 构建方案，已由 ADR-175 取代。
 
 - [ADR-171：iOS 窗口由 UIScene 管理](decisions/clients/adr-171-ios-scene-lifecycle.md)：通过 Expo 配置插件迁移窗口、链接与前后台回调，修复 iOS 27 启动崩溃。
 
@@ -124,7 +126,7 @@
 - [ADR-100：功能 crate 作为完整服务安装](decisions/daemon/adr-100-crate-level-service-installation.md)：各功能 crate 通过具体服务类型按 crate 整体安装；基础连接声明归属由 ADR-108 修订。
 - [ADR-099：Provider 自选辅助小模型](decisions/providers/adr-099-provider-owned-auxiliary-models.md)：能力声明、原生认证与用户覆盖。
 - [ADR-098：客户端消息分块与文件上传背压](decisions/clients/adr-098-acknowledged-client-chunks.md)：原图消息有界重组、文件逐块确认与兼容性。
-- [ADR-097：Google Play 内部测试手动发布](decisions/clients/adr-097-google-play-internal-release.md)：签名 AAB、远端版本计数与内部测试草稿或发布。
+- [ADR-097：Google Play 内部测试手动发布](decisions/clients/adr-097-google-play-internal-release.md)：原 EAS 内测方案；构建、版本与提交机制已由 ADR-175 取代。
 - [ADR-096：Desktop 内置 daemon 默认同步与手动下线](decisions/clients/adr-096-desktop-default-host-sync.md)：登录后默认注册本机，持久保留手动下线选择，并统一在线服务添加主机表单风格。
 - [ADR-095：组件自行声明方法元数据](decisions/daemon/adr-095-component-method-declarations.md)：移除中心目录和 `MethodGroup`，功能 crate 仅提供两种方法元数据接口，API 聚合名称并校验。
 - [ADR-094：客户端统一使用 Ait 标准方法名](decisions/clients/adr-094-canonical-ait-client-methods.md)：应用、SDK、消息校验和方法目录使用标准名称，事件订阅参数转换集中在共享协议层。
@@ -163,7 +165,7 @@
 - [故障诊断与证据导出](operations/diagnostics.md)：日志来源、保留策略和附件分享。
 - [Relay 重连诊断](operations/relay-diagnostics.md)：会话关联、断连方向、错误分类及排查证据；[连接加速验证](reports/clients/relay-connect-latency.md)记录复用、TLS 缓存、NODELAY 与恢复退避。
 
-- [Android APK 构建](operations/android-releases.md)：GitHub runner 上的 Gradle 构建、手动与稳定标签触发、签名 Secrets 和附件校验。
+- [Android 发布入口](operations/android-releases.md)：统一 Play AAB 构建、旧 APK 入口移除与附件兼容。
 - [Google Play 内部测试](operations/google-play-internal-testing.md)：首次账号配置、测试者安装与手动 AAB 发布 CI。
 - [发布指南](operations/releasing.md)：桌面 Release、Android Internal Testing、iOS TestFlight。
 - [Ait 0.1.8 发布说明与验证](reports/releases/release-0.1.8.md)：Pi 原生 RPC、整图与跨设备图片、Claude 恢复、键盘与拖动修复、独立 daemon，附 provider 实测覆盖率。
