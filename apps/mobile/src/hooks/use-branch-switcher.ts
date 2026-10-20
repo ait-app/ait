@@ -106,7 +106,7 @@ export function useBranchSwitcher({
         if (!shouldRestore) return;
         const popPayload = await operations.popStash(targetStash.index);
         if (popPayload.error) {
-          toast.error(popPayload.error.message);
+          toast.error(popPayload.error.message, popPayload.error);
         } else {
           toast.show(t("branchSwitcher.stashRestored"));
         }
@@ -132,18 +132,18 @@ export function useBranchSwitcher({
       try {
         const stashPayload = await operations.saveStash(currentBranchName ?? undefined);
         if (stashPayload.error) {
-          toast.error(stashPayload.error.message);
+          toast.error(stashPayload.error.message, stashPayload.error);
           return;
         }
         await invalidateStashAndCheckout();
         const switchPayload = await operations.switchBranch(branchId);
         if (switchPayload.error) {
-          toast.error(switchPayload.error.message);
+          toast.error(switchPayload.error.message, switchPayload.error);
           return;
         }
         await invalidateStashAndCheckout();
       } catch (err) {
-        toast.error(err instanceof Error ? err.message : t("branchSwitcher.failedToStash"));
+        toast.error(err instanceof Error ? err.message : t("branchSwitcher.failedToStash"), err);
       }
     },
     [operations, currentBranchName, invalidateStashAndCheckout, toast, t],
@@ -163,14 +163,14 @@ export function useBranchSwitcher({
               await stashAndSwitch(branchId);
               return;
             }
-            toast.error(payload.error.message);
+            toast.error(payload.error.message, payload.error);
             return;
           }
           // Success — refresh and check for stashes on the target branch
           await invalidateStashAndCheckout();
           await maybeRestoreStashForBranch(branchId);
         } catch (err) {
-          toast.error(err instanceof Error ? err.message : t("branchSwitcher.failedToSwitch"));
+          toast.error(err instanceof Error ? err.message : t("branchSwitcher.failedToSwitch"), err);
         }
       })();
     },

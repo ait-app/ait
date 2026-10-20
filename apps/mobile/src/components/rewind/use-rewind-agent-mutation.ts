@@ -55,7 +55,7 @@ export function useRewindAgentMutation(input: UseRewindAgentMutationInput): {
       composerRestore?.completeRewind(variables.rewoundText);
     },
     onError: (error) => {
-      toast.error(error instanceof Error ? error.message : t("rewind.errors.failed"));
+      toast.error(error instanceof Error ? error.message : t("rewind.errors.failed"), error);
     },
   });
 

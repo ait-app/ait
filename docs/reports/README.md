@@ -1,5 +1,7 @@
 # 验证报告分类索引
 
+- [客户端诊断与移动交互 Draft 拆分](clients/mobile-diagnostics-draft-2026-10-20.md)
+
 - [Paseo 0.12.0 选择性移植与验证](clients/paseo-0.12-port-2026-10-20.md)
 
 文档按当前能力归属分类。历史验证记录只对应各文件注明的源码提交与平台。

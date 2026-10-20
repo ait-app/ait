@@ -1,5 +1,6 @@
+import { showErrorAlert } from "@/diagnostics/error-reporter";
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { Alert, Text, View } from "react-native";
+import { Text, View } from "react-native";
 import { useTranslation } from "react-i18next";
 import { StyleSheet } from "react-native-unistyles";
 import type { AgentProvider } from "@ait/protocol/agent-types";
@@ -55,9 +56,10 @@ export function MetadataGenerationPage({ serverId }: { serverId: string }) {
         await patchConfig({ metadataGeneration: { providers: providersPatch } });
       } catch (error) {
         setDraftMode(null);
-        Alert.alert(
+        showErrorAlert(
           t("settings.metadataGeneration.saveError"),
           error instanceof Error ? error.message : String(error),
+          error,
         );
       } finally {
         setIsSaving(false);

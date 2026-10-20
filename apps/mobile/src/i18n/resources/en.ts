@@ -1600,6 +1600,13 @@ export const en = {
       },
     },
   },
+  errorLog: {
+    copy: "Copy error log",
+    copied: "Error log copied",
+    export: "Export log",
+    copyFailed: "Unable to copy. Export the log as a file.",
+    exportFailed: "Unable to export. You can still copy the error log.",
+  },
   rootError: {
     title: "Ait ran into a problem.",
     body: "Try again to reload the app. If this keeps happening, include the details below when you report it.",

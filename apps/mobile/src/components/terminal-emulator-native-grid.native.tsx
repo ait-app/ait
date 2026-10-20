@@ -69,6 +69,7 @@ import {
   type NativeTerminalSizeClaimAction,
 } from "../terminal/native-renderer/terminal-input-resize-policy";
 import { encodeTerminalPaste } from "../terminal/runtime/terminal-paste";
+import { runTerminalCallback } from "../terminal/runtime/terminal-callback";
 import type { TerminalOutputData } from "../terminal/runtime/terminal-emulator-runtime";
 import {
   createTerminalResizePolicy,
@@ -258,7 +259,7 @@ function NativeTerminalEmulator({
       return;
     }
     lastInputModeStateRef.current = state;
-    callbacksRef.current.onInputModeChange?.(state);
+    runTerminalCallback(() => callbacksRef.current.onInputModeChange?.(state));
   }, [getInputModeState]);
 
   const resetInputModeTracker = useCallback(() => {
@@ -421,12 +422,14 @@ function NativeTerminalEmulator({
         terminalRef.current?.resize(policyResult.measuredSize);
         schedulePaint();
       }
-      callbacksRef.current.onResize?.({
-        rows: policyResult.measuredSize.rows,
-        cols: policyResult.measuredSize.cols,
-        shouldClaim: policyResult.resizeClaim !== null,
-        forceClaim: policyResult.resizeClaim?.force,
-      });
+      runTerminalCallback(() =>
+        callbacksRef.current.onResize?.({
+          rows: policyResult.measuredSize.rows,
+          cols: policyResult.measuredSize.cols,
+          shouldClaim: policyResult.resizeClaim !== null,
+          forceClaim: policyResult.resizeClaim?.force,
+        }),
+      );
     },
     [schedulePaint],
   );
@@ -538,11 +541,13 @@ function NativeTerminalEmulator({
           return;
         }
         claimActiveTerminalSizeForAction("paste");
-        callbacksRef.current.onInput?.(
-          encodeTerminalPaste({
-            text,
-            bracketedPaste: inputModeTrackerRef.current.getState().bracketedPaste ?? false,
-          }),
+        runTerminalCallback(() =>
+          callbacksRef.current.onInput?.(
+            encodeTerminalPaste({
+              text,
+              bracketedPaste: inputModeTrackerRef.current.getState().bracketedPaste ?? false,
+            }),
+          ),
         );
       },
       copySelection: async (clipboard: TerminalClipboardWriter): Promise<string> => {
@@ -612,14 +617,14 @@ function NativeTerminalEmulator({
   }, [focusRequestToken]);
 
   const handleTerminalFocus = useCallback(() => {
-    callbacksRef.current.onFocus?.();
+    runTerminalCallback(() => callbacksRef.current.onFocus?.());
     claimActiveTerminalSizeForAction("focus");
   }, [claimActiveTerminalSizeForAction]);
 
   const handleTerminalInput = useCallback(
     (data: string) => {
       claimActiveTerminalSizeForAction("text");
-      callbacksRef.current.onInput?.(data);
+      runTerminalCallback(() => callbacksRef.current.onInput?.(data));
     },
     [claimActiveTerminalSizeForAction],
   );

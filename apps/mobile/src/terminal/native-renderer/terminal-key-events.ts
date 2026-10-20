@@ -1,3 +1,5 @@
+import { runTerminalCallback } from "../runtime/terminal-callback";
+
 export type NativeTerminalKey = "ArrowUp" | "ArrowDown" | "ArrowLeft" | "ArrowRight";
 
 export interface NativeTerminalKeyEvent {
@@ -36,5 +38,5 @@ export function forwardNativeTerminalKey(input: {
   key: NativeTerminalKey;
   onTerminalKey?: NativeTerminalKeyHandler;
 }): void {
-  input.onTerminalKey?.(createNativeTerminalKeyEvent(input.key));
+  runTerminalCallback(() => input.onTerminalKey?.(createNativeTerminalKeyEvent(input.key)));
 }

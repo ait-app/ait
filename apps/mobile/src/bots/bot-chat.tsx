@@ -1,3 +1,4 @@
+import { CopyErrorLogButton } from "@/components/copy-error-log-button";
 import React, { useRef, useState } from "react";
 import { FlatList, Text, View } from "react-native";
 import { randomUUID } from "expo-crypto";
@@ -44,9 +45,12 @@ function BotMessage({
         <Text style={styles.hint}>{t(`bots.status.${turn.status}`)}</Text>
       ) : null}
       {turn.error ? (
-        <Text selectable style={styles.error}>
-          {turn.error}
-        </Text>
+        <View>
+          <Text selectable style={styles.error}>
+            {turn.error}
+          </Text>
+          <CopyErrorLogButton error={turn.error} source="bot turn" />
+        </View>
       ) : null}
       {isBotTurnPending(turn) ? (
         <Button
@@ -58,7 +62,12 @@ function BotMessage({
           {t("bots.cancel")}
         </Button>
       ) : null}
-      {cancel.error ? <Text style={styles.error}>{cancel.error.message}</Text> : null}
+      {cancel.error ? (
+        <View>
+          <Text style={styles.error}>{cancel.error.message}</Text>
+          <CopyErrorLogButton error={cancel.error} source="bot cancellation" />
+        </View>
+      ) : null}
     </View>
   );
 }
@@ -201,9 +210,12 @@ export function BotChat({
         {[conversation.error, history.error, send.error, reset.error]
           .filter(Boolean)
           .map((error, index) => (
-            <Text key={index} style={styles.error} accessibilityRole="alert">
-              {error?.message}
-            </Text>
+            <View key={index}>
+              <Text style={styles.error} accessibilityRole="alert">
+                {error?.message}
+              </Text>
+              <CopyErrorLogButton error={error} source="bot operation" />
+            </View>
           ))}
         <FormTextInput
           initialValue=""

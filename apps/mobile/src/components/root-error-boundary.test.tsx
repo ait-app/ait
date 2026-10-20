@@ -30,6 +30,11 @@ const { runtime, theme } = vi.hoisted(() => ({
   },
 }));
 
+vi.mock("expo-clipboard", () => ({ setStringAsync: vi.fn().mockResolvedValue(undefined) }));
+vi.mock("@/diagnostics/collect-error-report", () => ({
+  collectErrorReport: vi.fn().mockResolvedValue("Error report"),
+}));
+
 vi.mock("react-native-unistyles", () => ({
   StyleSheet: {
     create: (factory: unknown) => (typeof factory === "function" ? factory(theme) : factory),

@@ -2154,7 +2154,7 @@ export function NewWorkspaceScreen({
         const message = toErrorMessage(error);
         setPendingAction(null);
         setErrorMessage(message);
-        toast.error(message);
+        toast.error(message, error);
       }
     },
     [
@@ -2235,7 +2235,7 @@ export function NewWorkspaceScreen({
       const message = toErrorMessage(error);
       setPendingAction(null);
       setErrorMessage(message);
-      toast.error(message);
+      toast.error(message, error);
     }
   }, [
     ensureWorkspace,
