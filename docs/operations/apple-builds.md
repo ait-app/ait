@@ -2,7 +2,8 @@
 
 在仓库根目录执行命令。需要 macOS、完整 Xcode（含 iOS SDK）、CocoaPods、Node/npm 和
 Rust stable；先运行 `npm ci`。首次构建会下载 Electron、Pods 和 React Native 预编译依赖。
-原生工程、签名文件和产物不提交到 Git。建议预留至少 20 GB 磁盘空间。
+iOS 原生工程、`Podfile.lock` 和 Ruby 依赖锁文件提交到 Git，供 Xcode Cloud 使用；
+签名文件、Pods 和构建产物不提交。建议预留至少 20 GB 磁盘空间。
 iOS 最低版本为 16.0，与当前 Skia 二进制依赖一致。
 
 ## macOS DMG
@@ -104,6 +105,27 @@ npm run build:ios:ipa
 如选择 EAS，先设置自己的 `EXPO_OWNER`、`EAS_PROJECT_ID` 和 `IOS_BUNDLE_IDENTIFIER`，
 再从 `apps/mobile` 运行 `eas build --platform ios --profile simulator|preview|production`。
 项目不再默认绑定上游 Expo project 或 App Store app。EAS 会使用账号服务及对应签名流程。
+
+## Xcode Cloud 依赖安装
+
+`apps/mobile/ios/ci_scripts/ci_post_clone.sh` 安装 Node 22 和 Ruby 3.4，并使用
+`apps/mobile/ios/Gemfile.lock` 固定 Bundler、CocoaPods 及其 Ruby 依赖版本。
+CocoaPods 当前固定为 1.16.2，与 `Podfile.lock` 的 `COCOAPODS` 字段一致。
+Cloud 使用冻结的 Ruby 依赖和 `bundle exec pod install --deployment`，不采用 runner
+预装或 Homebrew 最新版 CocoaPods。
+
+修改 `Podfile`、Expo 配置插件或原生依赖后，在本地更新锁文件并一起提交：
+
+```sh
+cd apps/mobile/ios
+bundle install
+bundle exec pod install
+```
+
+本地更新后可运行 `bundle exec pod install --deployment` 验证 Cloud 使用的严格模式。
+`PODFILE CHECKSUM` 必须与已提交的 `Podfile` 对应；不要手工改 checksum 或删除锁文件。
+`node --test scripts/xcode-cloud.test.mjs` 从仓库根目录检查 checksum 和工具版本是否一致，
+该检查也包含在 `npm run test:mobile-release` 中。
 
 ## daemon 连接范围
 

@@ -13,6 +13,8 @@ ios_dir="$repo_root/apps/mobile/ios"
 
 for file in \
   "$repo_root/package-lock.json" \
+  "$ios_dir/Gemfile" \
+  "$ios_dir/Gemfile.lock" \
   "$ios_dir/Podfile.lock" \
   "$ios_dir/Ait.xcodeproj/project.pbxproj" \
   "$ios_dir/Ait.xcworkspace/contents.xcworkspacedata" \
@@ -35,17 +37,39 @@ export APPLE_TEAM_ID="${APPLE_TEAM_ID:-SVS7GV79T9}"
 export EXTRA_PACKAGER_ARGS="${EXTRA_PACKAGER_ARGS:---max-workers 2}"
 unset AIT_WEB_PLATFORM
 
-echo "[Ait] Preparing Node.js 22 and CocoaPods"
+echo "[Ait] Preparing Node.js 22 and Ruby 3.4"
 if ! brew list --versions node@22 >/dev/null 2>&1; then
   brew install node@22
 fi
-export PATH="$(brew --prefix node@22)/bin:$(brew --prefix)/bin:$PATH"
-if ! command -v pod >/dev/null 2>&1; then
-  brew install cocoapods
+if ! brew list --versions ruby@3.4 >/dev/null 2>&1; then
+  brew install ruby@3.4
 fi
+export PATH="$(brew --prefix node@22)/bin:$(brew --prefix ruby@3.4)/bin:$(brew --prefix)/bin:$PATH"
+
+# The runner's Homebrew CocoaPods version may differ from Podfile.lock.
+# Keep Ruby gems inside the checkout and invoke the locked bundle explicitly.
+export GEM_HOME="$repo_root/.tmp/xcode-cloud-bootstrap"
+unset GEM_PATH
+export PATH="$GEM_HOME/bin:$PATH"
+export BUNDLE_GEMFILE="$ios_dir/Gemfile"
+export BUNDLE_PATH="$repo_root/.tmp/xcode-cloud-gems"
+export BUNDLE_USER_HOME="$repo_root/.tmp/xcode-cloud-bundler"
+export BUNDLE_FROZEN=true
+export BUNDLE_JOBS=4
+export BUNDLE_RETRY=3
+bundler_version="$(sed -n '/^BUNDLED WITH$/{n;s/^[[:space:]]*//;p;}' "$ios_dir/Gemfile.lock")"
+if [ -z "$bundler_version" ]; then
+  echo "error: Gemfile.lock must specify its Bundler version." >&2
+  exit 1
+fi
+if ! gem list --installed --exact bundler --version "$bundler_version" >/dev/null 2>&1; then
+  gem install bundler --version "$bundler_version" --no-document
+fi
+bundle "_${bundler_version}_" check || bundle "_${bundler_version}_" install
 node --version
 npm --version
-pod --version
+ruby --version
+bundle "_${bundler_version}_" exec pod --version
 
 echo "[Ait] Installing locked workspace dependencies"
 npm ci --include=dev --no-audit --no-fund
@@ -69,7 +93,7 @@ npm run build:terminal-webview --workspace=@ait/mobile
 
 echo "[Ait] Installing locked CocoaPods dependencies"
 cd "$ios_dir"
-pod install --deployment
+bundle "_${bundler_version}_" exec pod install --deployment
 
 # Hooks and Xcode build phases run in separate shells. Persist the Node path
 # and app configuration for React Native's build scripts on this build machine.
