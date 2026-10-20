@@ -52,6 +52,8 @@ npm run build:ios:simulator
 
 流程：共享包 → Terminal WebView bundle → Expo prebuild → CocoaPods → Xcode Release build。
 不依赖 EAS 云构建，也不需要 Apple 账号或 Metro 开发服务。
+本地脚本将 Expo 生成的 `ios.deploymentTarget` 同时传给 Xcode，使第三方资源 Pod 使用应用的
+最低系统版本，避免 Xcode 27 拒绝 Podspec 中遗留的 iOS 9.0、12.4 或 13.4 目标。
 默认产物：`apps/mobile/release/ios/simulator/DerivedData/Build/Products/Release-iphonesimulator/Ait.app`（scheme 取自 prebuild 生成的 `.xcworkspace` 名称，脚本结束时会打印实际路径）。
 
 ```sh

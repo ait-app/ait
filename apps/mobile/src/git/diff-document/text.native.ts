@@ -20,7 +20,8 @@ const PARAGRAPH_WIDTH = 100_000;
 
 export interface NativeTextLayout {
   font: SkFont;
-  paragraphs: Array<Array<Array<SkParagraph | null>>>;
+  paragraphs: (SkParagraph | null)[][][];
+  statusParagraphs: Record<number, SkParagraph | undefined>;
 }
 
 export interface NativeHeaderTextLayout {
@@ -86,7 +87,8 @@ export function shapeNativeHeaderText(input: {
 export interface NativeTextLayoutStore {
   font: SkFont;
   asciiMetrics: CachedAsciiTextMetrics;
-  paragraphsByCell: Map<DiffCell, Array<SkParagraph | null>>;
+  paragraphsByCell: Map<DiffCell, (SkParagraph | null)[]>;
+  statusParagraphsByLabel: Map<string, SkParagraph>;
   textStyles: Map<string, ReturnType<typeof textStyle>>;
   ownedParagraphs: Set<SkParagraph>;
   families: string[];
@@ -99,6 +101,7 @@ export function disposeNativeTextLayout(layout: NativeTextLayoutStore): void {
   for (const paragraph of layout.ownedParagraphs) paragraph.dispose();
   layout.ownedParagraphs.clear();
   layout.paragraphsByCell.clear();
+  layout.statusParagraphsByLabel.clear();
   layout.textStyles.clear();
   layout.font.dispose();
 }
@@ -118,6 +121,7 @@ export function createNativeTextLayoutStore(input: {
       measure: (text) => font.getTextWidth(text),
     }),
     paragraphsByCell: new Map(),
+    statusParagraphsByLabel: new Map(),
     textStyles: new Map(),
     ownedParagraphs: new Set(),
     families,
@@ -137,10 +141,29 @@ export function prepareNativeTextLayout(
     : { start: 0, end: model.rows.length };
   const retainedCells = new Set<DiffCell>();
   const retainedParagraphs = new Set<SkParagraph>();
+  const retainedStatusLabels = new Set<string>();
   const paragraphs: NativeTextLayout["paragraphs"] = [];
+  const statusParagraphs: NativeTextLayout["statusParagraphs"] = {};
   paragraphs.length = model.rows.length;
   for (let index = range.start; index < range.end; index++) {
     const row = model.rows[index]!;
+    if (row.kind === "status") {
+      const paragraph =
+        store.statusParagraphsByLabel.get(row.label) ??
+        createParagraph({
+          text: row.label,
+          families: store.families,
+          fontSize: store.fontSize,
+          lineHeight: store.lineHeight,
+          color: Skia.Color(store.palette.foregroundMuted),
+        });
+      store.statusParagraphsByLabel.set(row.label, paragraph);
+      store.ownedParagraphs.add(paragraph);
+      retainedParagraphs.add(paragraph);
+      retainedStatusLabels.add(row.label);
+      statusParagraphs[index] = paragraph;
+      continue;
+    }
     if (row.kind !== "line") continue;
     paragraphs[index] = row.cells.map((cell) => {
       if (!cell) return [];
@@ -153,7 +176,7 @@ export function prepareNativeTextLayout(
             Math.ceil((window.top + window.height - row.top) / model.lineHeight),
           )
         : cell.fragments.length;
-      const cellParagraphs: Array<SkParagraph | null> = [];
+      const cellParagraphs: (SkParagraph | null)[] = [];
       cellParagraphs.length = cell.fragments.length;
       for (let fragmentIndex = start; fragmentIndex < end; fragmentIndex++) {
         const fragment = cell.fragments[fragmentIndex]!;
@@ -188,7 +211,10 @@ export function prepareNativeTextLayout(
   for (const cell of store.paragraphsByCell.keys()) {
     if (!retainedCells.has(cell)) store.paragraphsByCell.delete(cell);
   }
-  return { font: store.font, paragraphs };
+  for (const label of store.statusParagraphsByLabel.keys()) {
+    if (!retainedStatusLabels.has(label)) store.statusParagraphsByLabel.delete(label);
+  }
+  return { font: store.font, paragraphs, statusParagraphs };
 }
 
 export function createNativeTextMeasurer(input: {
