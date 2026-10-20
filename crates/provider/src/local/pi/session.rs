@@ -1,4 +1,5 @@
 use std::collections::BTreeMap;
+use std::ffi::OsString;
 use std::path::Path;
 use std::time::Duration;
 
@@ -25,6 +26,7 @@ pub(super) struct Session {
     transport: Transport,
     id: String,
     cwd: String,
+    native_cwd: String,
     state: Value,
     config: StoredAgentConfig,
     images: crate::local::images::ImageStore,
@@ -49,7 +51,12 @@ pub(super) async fn open(
     let has_input = handle
         .and_then(|handle| handle.metadata.as_ref())
         .is_some_and(|data| data.get("hasInput") == Some(&Value::Bool(true)));
-    let mut args = vec!["--session-id".to_owned(), id.clone()];
+    let session_directory = match super::history::session_directory(client, Path::new(&spec.cwd)) {
+        Ok(directory) => Some(directory),
+        Err(AgentSessionError::Unavailable) => None,
+        Err(error) => return Err(error),
+    };
+    let mut args = vec![OsString::from("--session-id"), OsString::from(&id)];
     if let Some(handle) = handle {
         if handle.provider != PROVIDER
             || Uuid::parse_str(&id).is_err()
@@ -67,18 +74,27 @@ pub(super) async fn open(
                 .native_handle
                 .as_ref()
                 .and_then(Value::as_str)
+                .or_else(|| handle.metadata.as_ref()?.get("sessionFile")?.as_str())
                 .ok_or(AgentSessionError::Rejected)?;
             if !Path::new(path).is_absolute() || !Path::new(path).is_file() {
                 return Err(AgentSessionError::Rejected);
             }
-            args = vec!["--session".into(), path.to_owned()];
+            args = vec![OsString::from("--session"), OsString::from(path)];
         }
+    }
+    if let Some(session_directory) = session_directory {
+        args.push("--session-dir".into());
+        args.push(session_directory.into_os_string());
     }
     transport::version(client).await?;
     let mut session = Session {
         transport: Transport::spawn(client, &spec.cwd, &args)?,
         id,
         cwd: spec.cwd.clone(),
+        native_cwd: handle
+            .and_then(|handle| handle.metadata.as_ref()?.get("nativeCwd")?.as_str())
+            .unwrap_or(&spec.cwd)
+            .to_owned(),
         state: Value::Null,
         config: spec.config.clone(),
         images: client.images.clone(),
@@ -354,6 +370,7 @@ impl AgentSession for Session {
             native_handle: self.state.get("sessionFile").cloned(),
             metadata: Some(BTreeMap::from([
                 ("cwd".into(), json!(self.cwd)),
+                ("nativeCwd".into(), json!(self.native_cwd)),
                 ("hasInput".into(), json!(self.has_input)),
             ])),
         })

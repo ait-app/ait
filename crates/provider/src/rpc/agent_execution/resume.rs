@@ -23,9 +23,6 @@ impl ExecutionState {
             )?;
         }
         let mut request: ResumeRequest = decode(params)?;
-        if let Some(cwd) = &request.overrides.cwd {
-            request.overrides.cwd = Some(super::placement::directory(cwd)?);
-        }
         let records = self.registry.list().map_err(|_| ErrorCode::AgentIo)?;
         let mut matching = records.iter().filter(|record| {
             record.persistence.as_ref().is_some_and(|handle| {
@@ -38,6 +35,9 @@ impl ExecutionState {
             return Err(ErrorCode::InvalidMessage);
         }
         let id = if let Some(record) = record {
+            if let Some(cwd) = &request.overrides.cwd {
+                request.overrides.cwd = Some(super::placement::directory(cwd)?);
+            }
             if record.archived_at.is_none() {
                 self.workspace(record.workspace_id.as_deref(), &record.cwd)?;
             }
@@ -62,7 +62,7 @@ impl ExecutionState {
         )
     }
 
-    async fn resume_unknown(&mut self, request: ResumeRequest) -> Result<String, ErrorCode> {
+    async fn resume_unknown(&mut self, mut request: ResumeRequest) -> Result<String, ErrorCode> {
         let metadata: crate::protocol::resume::Overrides =
             decode(json!(request.handle.metadata.clone().unwrap_or_default()))?;
         if request
@@ -79,12 +79,23 @@ impl ExecutionState {
             .as_deref()
             .or(metadata.cwd.as_deref())
             .ok_or(ErrorCode::InvalidMessage)?;
-        let cwd = super::placement::directory(cwd)?;
-        let history = self.manager.inspect_native(&request.handle, &cwd).await?;
+        let canonical_cwd = super::placement::directory(cwd)?;
+        let lookup_cwd =
+            super::native_sessions::inspection_cwd(&request.handle.provider, cwd, &canonical_cwd);
+        let history = self
+            .manager
+            .inspect_native(&request.handle, lookup_cwd)
+            .await?;
+        // Inspection supplies the verified filename and provider-specific lookup identity.
+        request
+            .handle
+            .metadata
+            .get_or_insert_with(Default::default)
+            .extend(history.resume_metadata.clone());
         let mut record = super::native_sessions::new_record(&history, request.handle);
         metadata.apply(&mut record);
         request.overrides.apply(&mut record);
-        record.cwd = cwd;
+        record.cwd = canonical_cwd;
         let workspace = if let Some(directory) = &self.import_directory {
             Some(
                 directory

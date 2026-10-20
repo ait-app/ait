@@ -1,6 +1,9 @@
+use std::path::PathBuf;
+
+use domain::agent_runtime::registry::AgentRuntimeRegistry;
+
 use super::*;
 use crate::ports::native_history::SessionDescriptor;
-use domain::agent_runtime::registry::AgentRuntimeRegistry;
 
 #[test]
 fn recent_query_matches_all_display_fields_and_paths_are_canonical_directories() {
@@ -75,6 +78,8 @@ async fn archived_internal_sessions_stay_hidden_from_native_rediscovery() {
             supported: true,
             available: Ok(true),
             sessions: Ok(sessions),
+            expected_cwd: None,
+            remove_cwd: None,
         }))
         .unwrap();
     let result = manager
@@ -89,12 +94,43 @@ async fn archived_internal_sessions_stay_hidden_from_native_rediscovery() {
     );
 }
 
+#[tokio::test]
+async fn recent_sessions_wait_for_the_shared_history_budget() {
+    use std::task::Poll;
+
+    let mut manager = AgentManager::new(Box::new(super::super::tests::MemoryRegistry::default()));
+    manager
+        .register_client(Box::new(ImportClient {
+            provider: "working",
+            supported: true,
+            available: Ok(true),
+            sessions: Ok(Vec::new()),
+            expected_cwd: None,
+            remove_cwd: None,
+        }))
+        .unwrap();
+    let held = manager
+        .history_budget
+        .clone()
+        .acquire_many_owned(8)
+        .await
+        .unwrap();
+    let listing = manager.recent_sessions(serde_json::from_value(json!({})).unwrap());
+    tokio::pin!(listing);
+
+    assert!(matches!(futures_util::poll!(&mut listing), Poll::Pending));
+    drop(held);
+    assert!(listing.await.is_ok());
+}
+
 #[derive(Debug)]
 struct ImportClient {
     provider: &'static str,
     supported: bool,
     available: Result<bool, AgentSessionError>,
     sessions: Result<Vec<SessionDescriptor>, AgentSessionError>,
+    expected_cwd: Option<String>,
+    remove_cwd: Option<PathBuf>,
 }
 
 impl AgentClient for ImportClient {
@@ -113,9 +149,15 @@ impl AgentClient for ImportClient {
 
     fn list_sessions<'a>(
         &'a self,
-        _options: &'a ListOptions,
+        options: &'a ListOptions,
     ) -> crate::ports::agent_session::AgentSessionFuture<'a, Vec<SessionDescriptor>> {
         assert_eq!(self.available, Ok(true));
+        if let Some(expected) = &self.expected_cwd {
+            assert_eq!(options.cwd.as_ref(), Some(expected));
+        }
+        if let Some(cwd) = &self.remove_cwd {
+            std::fs::remove_dir(cwd).expect("requested cwd should exist until provider listing");
+        }
         Box::pin(async { self.sessions.clone() })
     }
 
@@ -193,6 +235,8 @@ async fn recent_sessions_skip_absent_and_unsupported_but_preserve_real_errors_an
                 supported,
                 available,
                 sessions,
+                expected_cwd: None,
+                remove_cwd: None,
             }))
             .unwrap();
     }
@@ -206,4 +250,126 @@ async fn recent_sessions_skip_absent_and_unsupported_but_preserve_real_errors_an
     assert_eq!(errors.len(), 2);
     assert_eq!(errors[0]["provider"], "probe-failed");
     assert_eq!(errors[1]["provider"], "read-failed");
+}
+
+#[cfg(unix)]
+#[tokio::test]
+async fn recent_sessions_keep_non_pi_provider_filters_canonical() {
+    use std::os::unix::fs::symlink;
+
+    let directory = tempfile::tempdir().unwrap();
+    let project = directory.path().join("project");
+    let linked_project = directory.path().join("linked-project");
+    std::fs::create_dir(&project).unwrap();
+    symlink(&project, &linked_project).unwrap();
+    let lookup_cwd = linked_project.to_str().unwrap().to_owned();
+    let mut manager = AgentManager::new(Box::new(super::super::tests::MemoryRegistry::default()));
+    manager
+        .register_client(Box::new(ImportClient {
+            provider: "working",
+            supported: true,
+            available: Ok(true),
+            sessions: Ok(vec![SessionDescriptor {
+                provider_id: "working".to_owned(),
+                provider_label: "Working".to_owned(),
+                provider_handle_id: "session".to_owned(),
+                cwd: lookup_cwd.clone(),
+                title: None,
+                first_prompt_preview: None,
+                last_prompt_preview: None,
+                last_activity_at: "2026-10-07T00:00:00Z".to_owned(),
+            }]),
+            expected_cwd: Some(project.to_str().unwrap().to_owned()),
+            remove_cwd: None,
+        }))
+        .unwrap();
+
+    let result = manager
+        .recent_sessions(
+            serde_json::from_value(json!({"cwd":lookup_cwd})).expect("valid recent request"),
+        )
+        .await
+        .unwrap();
+
+    assert_eq!(result["entries"].as_array().unwrap().len(), 1);
+}
+
+#[tokio::test]
+async fn recent_sessions_reject_candidates_if_the_requested_cwd_vanishes_during_listing() {
+    let directory = tempfile::tempdir().unwrap();
+    let project = directory.path().join("project");
+    let missing_session_cwd = directory.path().join("missing-session-cwd");
+    std::fs::create_dir(&project).unwrap();
+    let lookup_cwd = project.to_str().unwrap().to_owned();
+    let mut manager = AgentManager::new(Box::new(super::super::tests::MemoryRegistry::default()));
+    manager
+        .register_client(Box::new(ImportClient {
+            provider: "working",
+            supported: true,
+            available: Ok(true),
+            sessions: Ok(vec![SessionDescriptor {
+                provider_id: "working".to_owned(),
+                provider_label: "Working".to_owned(),
+                provider_handle_id: "session".to_owned(),
+                cwd: missing_session_cwd.to_str().unwrap().to_owned(),
+                title: None,
+                first_prompt_preview: None,
+                last_prompt_preview: None,
+                last_activity_at: "2026-10-07T00:00:00Z".to_owned(),
+            }]),
+            expected_cwd: Some(lookup_cwd.clone()),
+            remove_cwd: Some(project),
+        }))
+        .unwrap();
+
+    let result = manager
+        .recent_sessions(
+            serde_json::from_value(json!({"cwd":lookup_cwd})).expect("valid recent request"),
+        )
+        .await
+        .unwrap();
+
+    assert!(result["entries"].as_array().unwrap().is_empty());
+}
+
+#[cfg(unix)]
+#[tokio::test]
+async fn recent_sessions_preserve_the_requested_directory_spelling_for_pi() {
+    use std::os::unix::fs::symlink;
+
+    let directory = tempfile::tempdir().unwrap();
+    let project = directory.path().join("project");
+    let linked_project = directory.path().join("linked-project");
+    std::fs::create_dir(&project).unwrap();
+    symlink(&project, &linked_project).unwrap();
+    let lookup_cwd = linked_project.to_str().unwrap().to_owned();
+    let mut manager = AgentManager::new(Box::new(super::super::tests::MemoryRegistry::default()));
+    manager
+        .register_client(Box::new(ImportClient {
+            provider: crate::local::pi::PROVIDER,
+            supported: true,
+            available: Ok(true),
+            sessions: Ok(vec![SessionDescriptor {
+                provider_id: crate::local::pi::PROVIDER.to_owned(),
+                provider_label: "Pi".to_owned(),
+                provider_handle_id: "session".to_owned(),
+                cwd: lookup_cwd.clone(),
+                title: None,
+                first_prompt_preview: None,
+                last_prompt_preview: None,
+                last_activity_at: "2026-10-07T00:00:00Z".to_owned(),
+            }]),
+            expected_cwd: Some(lookup_cwd.clone()),
+            remove_cwd: None,
+        }))
+        .unwrap();
+
+    let result = manager
+        .recent_sessions(
+            serde_json::from_value(json!({"cwd":lookup_cwd})).expect("valid recent request"),
+        )
+        .await
+        .unwrap();
+
+    assert_eq!(result["entries"].as_array().unwrap().len(), 1);
 }

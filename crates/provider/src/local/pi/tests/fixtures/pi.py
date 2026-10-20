@@ -22,9 +22,10 @@ if '--version' in sys.argv:
 root = Path.cwd()
 path = root / 'session.jsonl'
 args = sys.argv[1:]
+(root / 'arguments.json').write_text(json.dumps(args))
 if '--session' in args:
     path = Path(args[args.index('--session') + 1])
-    identity = json.loads(path.read_text())['id']
+    identity = json.loads(path.read_text().splitlines()[0])['id']
 elif '--session-id' in args:
     identity = args[args.index('--session-id') + 1]
 else:

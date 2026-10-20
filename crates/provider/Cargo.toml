@@ -32,6 +32,8 @@ tracing.workspace = true
 tokio.workspace = true
 tokio-util.workspace = true
 uuid.workspace = true
+# Decode Pi-supported file URLs in host session configuration.
+url.workspace = true
 # Estimate chat search hits from rendered Markdown blocks without an HTML renderer.
 pulldown-cmark.workspace = true
 # Match literal queries with Unicode case folding and flexible whitespace.
@@ -46,6 +48,7 @@ persistence.workspace = true
 tokio = { workspace = true, features = ["test-util"] }
 # Offline native provider fixtures, without credentials or a model API.
 axum.workspace = true
+tracing-subscriber.workspace = true
 
 [target.'cfg(target_os = "macos")'.dependencies]
 # Match Claude Agent SDK's NFC normalization of native session directory names.

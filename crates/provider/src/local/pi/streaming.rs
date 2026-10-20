@@ -118,6 +118,53 @@ impl Stream {
         Ok(events)
     }
 
+    /// Project a completed historical assistant message without live-turn display budgets.
+    pub(super) fn historical_message(
+        &mut self,
+        message: &Value,
+    ) -> Result<Vec<(usize, NativeItem)>, AgentSessionError> {
+        self.message += 1;
+        if self.message > MAX_ITEMS {
+            return Err(AgentSessionError::Failed);
+        }
+        let blocks = message["content"]
+            .as_array()
+            .filter(|blocks| blocks.len() <= MAX_ITEMS)
+            .ok_or(AgentSessionError::Failed)?;
+        let mut entries = Vec::with_capacity(blocks.len());
+        for (block_index, block) in blocks.iter().enumerate() {
+            let (kind, field) = match block["type"].as_str() {
+                Some("text") => ("assistant_message", "text"),
+                Some("thinking") => ("reasoning", "thinking"),
+                _ => continue,
+            };
+            let mut remaining = block[field].as_str().ok_or(AgentSessionError::Failed)?;
+            let mut chunk_index = 0;
+            loop {
+                let end = remaining.floor_char_boundary(MAX_TEXT.min(remaining.len()));
+                let suffix = if chunk_index == 0 {
+                    format!("message:{}:{block_index}", self.message)
+                } else {
+                    format!("message:{}:{block_index}:{chunk_index}", self.message)
+                };
+                let key = format!("native:pi:{}:{suffix}", self.turn);
+                entries.push((
+                    block_index,
+                    self.entry(
+                        &suffix,
+                        json!({"type":kind,"messageId":key,"text":&remaining[..end]}),
+                    ),
+                ));
+                if end == remaining.len() {
+                    break;
+                }
+                remaining = &remaining[end..];
+                chunk_index += 1;
+            }
+        }
+        Ok(entries)
+    }
+
     /// Reset turn projection while retaining session-level compaction state.
     pub(super) fn begin(&mut self, turn: String) {
         let compactions = std::mem::take(&mut self.compactions);
