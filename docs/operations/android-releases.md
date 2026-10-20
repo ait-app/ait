@@ -20,10 +20,16 @@ gh workflow run build-android.yml --repo OWNER/REPO --ref BRANCH
 
 ## 随稳定版发布
 
-推送稳定标签 `vX.Y.Z` 后，[Release Ait](../../.github/workflows/release.yml) 与桌面并行调用同一
-工作流，把 `Ait-VERSION-android.apk` 加入草稿 Release 并写入 `SHA256SUMS`。beta 标签不构建
-APK。Android 构建失败不阻止桌面发布：Release 若已有 APK 则校验后保留，并在运行日志中给出警告。
-修复后手动重跑 Release Ait 即可重新构建全部附件。
+推送稳定标签 `vX.Y.Z` 默认只构建桌面。明确要求本次包含 Android APK 时，手动运行
+[Release Ait](../../.github/workflows/release.yml)，指定标签并开启 `build_android`；工作流与桌面
+并行构建 `Ait-VERSION-android.apk`，加入草稿 Release 并写入 `SHA256SUMS`。例如：
+
+```bash
+gh workflow run release.yml --repo OWNER/REPO --ref main -f tag=vX.Y.Z -F build_android=true
+```
+
+beta 标签始终不构建 APK。Android 构建失败不阻止桌面发布：Release 若已有 APK 则校验后保留，
+并在运行日志中给出警告。修复后需显式开启同一选项重跑；Google Play 与 iOS 仍使用独立发布入口。
 
 ## 构建步骤
 
