@@ -1,5 +1,5 @@
 import { execFileSync } from "node:child_process";
-import { existsSync, mkdirSync, readdirSync } from "node:fs";
+import { existsSync, mkdirSync, readdirSync, readFileSync } from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 
@@ -59,6 +59,12 @@ run("npm", ["--prefix", "../..", "run", "build:ui-deps"]);
 run("npm", ["run", "build:terminal-webview"]);
 run("npm", ["exec", "--", "expo", "prebuild", "--platform", "ios", "--no-install"]);
 run("pod", ["install"], path.join(app, "ios"));
+const deploymentTarget = JSON.parse(
+  readFileSync(path.join(app, "ios/Podfile.properties.json"), "utf8"),
+)["ios.deploymentTarget"];
+if (typeof deploymentTarget !== "string") {
+  throw new Error("Expo prebuild must configure ios.deploymentTarget before building iOS.");
+}
 const workspaces = readdirSync(path.join(app, "ios")).filter((name) =>
   name.endsWith(".xcworkspace"),
 );
@@ -82,6 +88,8 @@ run("xcodebuild", [
   path.join(output, "DerivedData"),
   "-jobs",
   process.env.IOS_BUILD_JOBS ?? "4",
+  // Resource bundles may retain older Podspec minimums that newer Xcode rejects.
+  `IPHONEOS_DEPLOYMENT_TARGET=${deploymentTarget}`,
   ...(simulator
     ? ["build", `ARCHS=${process.arch === "arm64" ? "arm64" : "x86_64"}`, "ONLY_ACTIVE_ARCH=YES"]
     : ["archive", "-archivePath", archive]),

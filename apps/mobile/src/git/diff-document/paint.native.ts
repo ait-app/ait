@@ -400,13 +400,8 @@ function paintNativeRange(input: PaintNativeRangeInput): void {
     const y = row.top - input.scrollTop;
     if (row.kind === "status") {
       if (paintsFixedContent) {
-        input.canvas.drawText(
-          row.label,
-          12,
-          y + input.model.lineHeight,
-          input.paints.foregroundMuted,
-          input.textLayout.font,
-        );
+        const paragraph = input.textLayout.statusParagraphs[index];
+        paragraph?.paint(input.canvas, 12, y + (row.height - paragraph.getHeight()) / 2);
       }
       continue;
     }
