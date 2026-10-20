@@ -122,6 +122,8 @@ ADR-074、082、083、084、122 在不同类别中各有两份，引用时以路
 
 ## 客户端、连接与品牌
 
+- [ADR-173：移动端终端输入复用 React Native](clients/adr-173-shared-native-terminal-input.md)
+
 - [ADR-170：完整回滚 PR #381](clients/adr-170-revert-error-diagnostics-and-recovery.md)
 - [ADR-169：统一 Markdown 渲染与移动面板编辑生命周期](clients/adr-169-shared-markdown-and-composer-lifetimes.md)
 - [ADR-166：后台错误只记录、不弹错误提示](clients/adr-166-background-errors-without-toasts.md)
@@ -140,7 +142,7 @@ ADR-074、082、083、084、122 在不同类别中各有两份，引用时以路
 - [ADR-123：客户端仅保留浏览器统一登录](clients/adr-123-browser-only-account-login.md)
 - [ADR-122：在线服务主机进入客户端持久注册表](clients/adr-122-persistent-online-service-hosts.md)
 - [ADR-117：终端配色查询与外观更新生命周期](clients/adr-117-terminal-palette-and-appearance-lifetime.md)
-- [ADR-114：iOS 终端组合输入归 UIKit](clients/adr-114-ios-terminal-ime.md)
+- [ADR-114：iOS 终端组合输入归 UIKit](clients/adr-114-ios-terminal-ime.md)（已由 ADR-173 取代）
 - [ADR-098：客户端消息分块与文件上传背压](clients/adr-098-acknowledged-client-chunks.md)
 - [ADR-097：Google Play 内部测试手动发布](clients/adr-097-google-play-internal-release.md)
 - [ADR-096：Desktop 内置 daemon 默认同步与手动下线](clients/adr-096-desktop-default-host-sync.md)

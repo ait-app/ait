@@ -25,6 +25,8 @@
 
 ## 架构决策
 
+- [ADR-173：移动端终端输入复用 React Native](decisions/clients/adr-173-shared-native-terminal-input.md)：iOS 与 Android 采用 Paseo 的共享输入设计，移除自定义 iOS 输入桥；取代 ADR-114。
+
 - [ADR-172：Android APK 在 GitHub runner 上用 Gradle 构建](decisions/clients/adr-172-android-gradle-ci-build.md)：可复用工作流、手动与稳定标签触发、仓库 Secrets 签名。
 
 - [ADR-171：iOS 窗口由 UIScene 管理](decisions/clients/adr-171-ios-scene-lifecycle.md)：通过 Expo 配置插件迁移窗口、链接与前后台回调，修复 iOS 27 启动崩溃。
@@ -103,7 +105,7 @@
 - [ADR-117：终端配色查询与外观更新生命周期](decisions/clients/adr-117-terminal-palette-and-appearance-lifetime.md)：显示端回答配色查询，workspace 和终端实例在外观变化时保持存活。
 - [ADR-116：库 crate 只公开被其他 crate 使用的项](decisions/daemon/adr-116-crate-visibility.md)：默认私有，启用 `unreachable_pub`，删除收缩后暴露的未使用代码与转发 `pub use`。
 - [ADR-115：OpenCode 官方 ACP Provider](decisions/providers/adr-115-opencode-acp-provider.md)：1.x / 2.x 官方 stdio 协议、原生会话身份与结构化元数据、按原生能力处理问答和辅助会话、审批、取消和历史重放，取代私有 HTTP/SSE adapter。
-- [ADR-114：iOS 终端组合输入归 UIKit](decisions/clients/adr-114-ios-terminal-ime.md)：原生组合范围识别、确认文字提交与终端控制键分离。
+- [ADR-114：iOS 终端组合输入归 UIKit](decisions/clients/adr-114-ios-terminal-ime.md)：历史方案，已由 ADR-173 取代。
 - [ADR-113：filesystem 按能力组组织模块](decisions/workspace/adr-113-filesystem-capability-groups.md)：能力组沿用原分层，组间仅经 ports/protocol 协作，并由模块边界测试约束；skills 与 worktrees 归属由 ADR-129、ADR-130 修订。
 - [ADR-112：file 瘦身为 persistence，宿主专用文件归 daemon](decisions/daemon/adr-112-persistence-crate.md)：启动配置、故障证据与 server identity 迁回 daemon，metadata 经端口定位项目配置，仅 daemon 在生产代码中依赖 persistence。
 - [ADR-111：纯业务数据归 domain，连接协议并入 model::server](decisions/daemon/adr-111-domain-values-and-server-protocol.md)：移除 protocol crate，数据值与运行资源分离，消费者直接依赖类型所属 crate。
