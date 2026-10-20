@@ -1,6 +1,7 @@
 import React from "react";
 import { flushSync } from "react-dom";
 import { createRoot, type Root } from "react-dom/client";
+import { Modal, Pressable, Text, View } from "react-native";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { TitlebarDragRegion } from "./titlebar-drag-region";
 
@@ -87,5 +88,43 @@ describe("desktop titlebar drag exclusions", () => {
     }
     // The empty full-viewport portal host must not disable titlebar dragging.
     expect(appRegion(container.firstElementChild!)).not.toBe("no-drag");
+  });
+
+  it("excludes body-portaled modals from workspace drag regions only while mounted", async () => {
+    flushSync(() => {
+      root.render(
+        <>
+          <div style={{ position: "fixed", inset: 0 }}>
+            <TitlebarDragRegion />
+          </div>
+          <Modal visible transparent animationType="none">
+            <View>
+              <Pressable accessibilityRole="button">
+                <Text>Back</Text>
+              </Pressable>
+              <Pressable accessibilityRole="button">
+                <Text>Choose host</Text>
+              </Pressable>
+            </View>
+          </Modal>
+        </>,
+      );
+    });
+    await vi.waitFor(() => {
+      const dialog = document.querySelector('[role="dialog"][aria-modal="true"]');
+      expect(dialog).not.toBeNull();
+      expect(dialog!.closest("#overlay-root")).toBeNull();
+      expect(appRegion(dialog!)).toBe("no-drag");
+    });
+
+    flushSync(() => {
+      root.render(
+        <div style={{ position: "fixed", inset: 0 }}>
+          <TitlebarDragRegion />
+        </div>,
+      );
+    });
+    expect(document.querySelector('[aria-modal="true"]')).toBeNull();
+    expect(appRegion(container.querySelector("[data-titlebar-drag-region]")!)).toBe("drag");
   });
 });
