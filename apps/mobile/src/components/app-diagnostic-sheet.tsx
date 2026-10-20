@@ -23,6 +23,7 @@ import { getHostRuntimeStore, useHosts, type HostRuntimeSnapshot } from "@/runti
 import { getStartupMarks } from "@/runtime/startup-timeline";
 import { ICON_SIZE, type Theme } from "@/styles/theme";
 import type { HostProfile } from "@/types/host-connection";
+import { appErrorReporter, formatErrorReport } from "@/diagnostics/error-reporter";
 
 interface AppDiagnosticSheetProps {
   visible: boolean;
@@ -103,6 +104,7 @@ export function AppDiagnosticSheet({
           hostCount: hosts.length,
         }),
         formatStartupTimelineSection(getStartupMarks()),
+        ...appErrorReporter.getReports().map(formatErrorReport),
       );
       updateRunProgress("client", t("settings.diagnostics.app.progress.client"), "done");
 

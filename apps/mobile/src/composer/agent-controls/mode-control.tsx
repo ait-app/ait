@@ -290,7 +290,7 @@ export function useLiveAgentModeControl(
         .then((notice) => showProviderNoticeToast(toast, notice))
         .catch((error) => {
           console.warn("[AgentModeControl] setAgentMode failed", error);
-          toast.error(toErrorMessage(error));
+          toast.error(toErrorMessage(error), error);
         });
     },
     [agentId, client, slice?.provider, toast, updatePreferences],

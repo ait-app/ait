@@ -244,7 +244,10 @@ export function PullRequestPane({
       return;
     }
     void runRefresh({ serverId, cwd }).catch((error) => {
-      toast.error(error instanceof Error ? error.message : t("workspace.git.diff.failedRefresh"));
+      toast.error(
+        error instanceof Error ? error.message : t("workspace.git.diff.failedRefresh"),
+        error,
+      );
     });
   }, [cwd, isRefreshing, runRefresh, serverId, t, toast]);
 

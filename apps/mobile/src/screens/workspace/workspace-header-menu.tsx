@@ -8,6 +8,7 @@ import {
   Ellipsis,
   Globe,
   Import as ImportIcon,
+  MessageSquarePlus,
   Settings,
 } from "lucide-react-native";
 import { StyleSheet, withUnistyles } from "react-native-unistyles";
@@ -42,6 +43,7 @@ const ThemedCalendarClock = withUnistyles(CalendarClock);
 const ThemedGlobe = withUnistyles(Globe);
 const ThemedImport = withUnistyles(ImportIcon);
 const ThemedSettings = withUnistyles(Settings);
+const ThemedMessageSquarePlus = withUnistyles(MessageSquarePlus);
 
 const mutedColorMapping = (theme: Theme) => ({ color: theme.colors.foregroundMuted });
 
@@ -50,6 +52,7 @@ const MENU_NEW_SCHEDULE_ICON = <ThemedCalendarClock size={16} uniProps={mutedCol
 const MENU_IMPORT_ICON = <ThemedImport size={16} uniProps={mutedColorMapping} />;
 const MENU_COPY_ICON = <ThemedCopy size={16} uniProps={mutedColorMapping} />;
 const MENU_SETTINGS_ICON = <ThemedSettings size={16} uniProps={mutedColorMapping} />;
+const MENU_NEW_SESSION_ICON = <ThemedMessageSquarePlus size={16} uniProps={mutedColorMapping} />;
 function WorkspaceHeaderMenuTriggerIcon() {
   return (
     <ThemedEllipsis
@@ -218,11 +221,11 @@ export interface WorkspaceHeaderMenuMobileProps extends WorkspaceHeaderWorkspace
   onCreateTerminalWithProfile: (profile: TerminalProfile) => void;
   onCreateBrowser: () => void;
   onCreateSchedule: () => void;
+  onCreateDraftTab: () => void;
 }
 
 /**
- * Compact layouts have no tab strip. New agent and New terminal sit in the tab switcher's footer;
- * the rarer launches stay here alongside the workspace actions.
+ * Compact layouts expose session creation here and in the tab switcher's footer.
  *
  * The header has no room for a scripts button either, so scripts are a page of this menu, and the
  * ⋯ carries a dot while a running service is unhealthy.
@@ -235,6 +238,7 @@ export function WorkspaceHeaderMenuMobile({
   onCreateTerminalWithProfile,
   onCreateBrowser,
   onCreateSchedule,
+  onCreateDraftTab,
   ...workspaceActions
 }: WorkspaceHeaderMenuMobileProps) {
   const { t } = useTranslation();
@@ -277,6 +281,13 @@ export function WorkspaceHeaderMenuMobile({
         pages={scriptsMenu.pages}
         sheetTitle={t("workspace.header.actions.workspaceActions")}
       >
+        <DropdownMenuItem
+          testID="workspace-header-new-session"
+          leading={MENU_NEW_SESSION_ICON}
+          onSelect={onCreateDraftTab}
+        >
+          {t("workspace.header.actions.newAgent")}
+        </DropdownMenuItem>
         {scriptsMenu.trigger}
         {showCreateBrowserTab ? (
           <DropdownMenuItem

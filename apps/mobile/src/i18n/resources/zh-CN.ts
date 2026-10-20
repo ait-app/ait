@@ -823,7 +823,7 @@ export const zhCN: TranslationResources = {
       actions: {
         workspaceActions: "Workspace 操作",
         workspaceActionsUnhealthy: "Workspace 操作，有服务异常",
-        newAgent: "新建 Agent",
+        newAgent: "新建会话",
         newTerminal: "新建 Terminal",
         newBrowser: "新建浏览器标签",
         importSession: "导入会话",
@@ -1570,6 +1570,13 @@ export const zhCN: TranslationResources = {
         installFailed: "无法安装 Ait CLI。",
       },
     },
+  },
+  errorLog: {
+    copy: "复制错误日志",
+    copied: "错误日志已复制",
+    export: "导出日志",
+    copyFailed: "复制失败，请尝试导出日志文件。",
+    exportFailed: "导出失败，仍可尝试复制错误日志。",
   },
   rootError: {
     title: "Ait 遇到了问题。",

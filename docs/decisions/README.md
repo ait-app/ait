@@ -124,6 +124,9 @@ ADR-074、082、083、084、122 在不同类别中各有两份，引用时以路
 
 ## 客户端、连接与品牌
 
+- [ADR-176：暂缓恢复客户端诊断与移动交互](clients/adr-176-deferred-client-diagnostics.md)（Draft）
+- [ADR-161：客户端诊断原始方案](clients/adr-161-copyable-error-diagnostics.md)
+
 - [ADR-173：移动端终端输入复用 React Native](clients/adr-173-shared-native-terminal-input.md)
 
 - [ADR-170：完整回滚 PR #381](clients/adr-170-revert-error-diagnostics-and-recovery.md)

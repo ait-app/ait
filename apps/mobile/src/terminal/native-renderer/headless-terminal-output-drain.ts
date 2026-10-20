@@ -161,6 +161,15 @@ export function createNativeTerminalOutputDrain(
         requestPaint();
         parsedChunks += 1;
       }
+    } catch (error) {
+      if (!disposed && activeGeneration === generation) {
+        // A rejected parser write must not escape the scheduled native callback.
+        // Drop this burst: replaying partially parsed terminal output is unsafe.
+        pendingText = "";
+        resetBeforeNextWrite = true;
+        cancelPendingPaint();
+        console.warn("Native terminal output failed", error);
+      }
     } finally {
       draining = false;
       if (!disposed && pendingText.length > 0) {
@@ -202,7 +211,7 @@ export function createNativeTerminalOutputDrain(
     },
 
     flush(): Promise<void> {
-      if (!drainScheduled && !draining && pendingText.length === 0) {
+      if (disposed || (!drainScheduled && !draining && pendingText.length === 0)) {
         return Promise.resolve();
       }
       scheduleDrain();

@@ -617,6 +617,7 @@ export function FileExplorerPane({
       } catch (cause) {
         toast.error(
           cause instanceof Error ? cause.message : t("workspace.fileExplorer.errors.revealFailed"),
+          cause,
         );
       }
     },
@@ -688,7 +689,10 @@ export function FileExplorerPane({
           return;
         }
         if (!payload.success) {
-          toast.error(payload.error ?? t("workspace.fileExplorer.errors.createFailed"));
+          toast.error(
+            payload.error ?? t("workspace.fileExplorer.errors.createFailed"),
+            payload.error,
+          );
           return;
         }
         if (edit.kind === "file" && payload.path) {
@@ -696,7 +700,7 @@ export function FileExplorerPane({
           onOpenFile?.(payload.path);
         }
       } catch (cause) {
-        toast.error(cause instanceof Error ? cause.message : String(cause));
+        toast.error(cause instanceof Error ? cause.message : String(cause), cause);
       }
     },
     [createEntry, onOpenFile, pendingEdit, selectExplorerEntry, t, toast],
@@ -719,7 +723,10 @@ export function FileExplorerPane({
           return;
         }
         if (!payload.success || !payload.renamedPath) {
-          toast.error(payload.error ?? t("workspace.fileExplorer.errors.renameFailed"));
+          toast.error(
+            payload.error ?? t("workspace.fileExplorer.errors.renameFailed"),
+            payload.error,
+          );
           return;
         }
 
@@ -758,7 +765,7 @@ export function FileExplorerPane({
           }
         }
       } catch (cause) {
-        toast.error(cause instanceof Error ? cause.message : String(cause));
+        toast.error(cause instanceof Error ? cause.message : String(cause), cause);
       }
     },
     [
@@ -784,12 +791,15 @@ export function FileExplorerPane({
           return;
         }
         if (!payload.success || !payload.duplicatedPath) {
-          toast.error(payload.error ?? t("workspace.fileExplorer.errors.duplicateFailed"));
+          toast.error(
+            payload.error ?? t("workspace.fileExplorer.errors.duplicateFailed"),
+            payload.error,
+          );
           return;
         }
         selectExplorerEntry(payload.duplicatedPath);
       } catch (cause) {
-        toast.error(cause instanceof Error ? cause.message : String(cause));
+        toast.error(cause instanceof Error ? cause.message : String(cause), cause);
       }
     },
     [duplicateEntry, selectExplorerEntry, t, toast],
@@ -816,14 +826,17 @@ export function FileExplorerPane({
           return;
         }
         if (!payload.success) {
-          toast.error(payload.error ?? t("workspace.fileExplorer.errors.deleteFailed"));
+          toast.error(
+            payload.error ?? t("workspace.fileExplorer.errors.deleteFailed"),
+            payload.error,
+          );
           return;
         }
         if (selectedEntryPath === entry.path) {
           selectExplorerEntry(null);
         }
       } catch (cause) {
-        toast.error(cause instanceof Error ? cause.message : String(cause));
+        toast.error(cause instanceof Error ? cause.message : String(cause), cause);
       }
     },
     [deleteEntry, selectExplorerEntry, selectedEntryPath, t, toast],

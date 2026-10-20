@@ -23,6 +23,8 @@ test("retains RPC identities and non-enumerable Error details in desktop log tex
 test("redacts authentication fields and credentials in nested error strings", () => {
   const result = formatDiagnosticFields({
     token: "private-token",
+    cookie: "private-cookie",
+    ticket: "private-ticket",
     context: { apiKey: "private-key", password: "private-password" },
     err: new Error(
       "Bearer private-auth https://user:pass@example.com/?token=private-query api_key=private-inline",
@@ -31,6 +33,8 @@ test("redacts authentication fields and credentials in nested error strings", ()
 
   for (const secret of [
     "private-token",
+    "private-cookie",
+    "private-ticket",
     "private-key",
     "private-password",
     "private-auth",
@@ -74,4 +78,16 @@ test("validation diagnostics bound the number of retained issue paths", () => {
   const parsed = z.array(z.number()).safeParse(Array(500).fill("private-content"));
   if (parsed.success) throw new Error("fixture unexpectedly valid");
   expect(describeValidationIssues(parsed.error)).toHaveLength(16);
+});
+
+test("preserves non-enumerable causes and aggregate errors with redaction and cycle protection", () => {
+  const cause = new Error("Disk full token=private-token");
+  const failure = new AggregateError([cause], "Save failed", { cause });
+  Object.defineProperty(cause, "cause", { value: failure });
+  const text = formatDiagnosticFields({ err: failure, requestId: "rpc-1" });
+  const fields = JSON.parse(text);
+  expect(fields.err.cause.message).toBe("Disk full token=[redacted]");
+  expect(fields.err.cause.cause).toBe("[Circular]");
+  expect(fields.err.errors).toEqual(["[Circular]"]);
+  expect(text).not.toContain("private-token");
 });

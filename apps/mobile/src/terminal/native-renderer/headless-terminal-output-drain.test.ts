@@ -1,4 +1,4 @@
-import { describe, expect, test } from "vitest";
+import { describe, expect, test, vi } from "vitest";
 
 import {
   createNativeHeadlessTerminal,
@@ -116,6 +116,86 @@ function createScreenRestorer(
 }
 
 describe("native terminal output drain", () => {
+  test("flush completes after disposal even when scheduled parsing has not started", async () => {
+    const work: Array<() => void> = [];
+    const write = vi.fn(async (_chunk: string) => {});
+    const drain = createNativeTerminalOutputDrain({
+      write,
+      reset: vi.fn(),
+      getViewportState: () => null,
+      onPaint: vi.fn(),
+      scheduleWork: (callback) => work.push(callback),
+    });
+    drain.enqueueText("queued");
+    const pendingFlush = drain.flush();
+    drain.dispose();
+    await pendingFlush;
+    await drain.flush();
+    work.forEach((callback) => callback());
+    expect(write).not.toHaveBeenCalled();
+  });
+
+  test("a stale rejected write does not discard a newer snapshot restore", async () => {
+    let rejectWrite: ((reason: unknown) => void) | undefined;
+    const work: Array<() => void> = [];
+    const write = vi.fn(async (_chunk: string) => {});
+    write.mockImplementationOnce(
+      () =>
+        new Promise((_resolve, reject) => {
+          rejectWrite = reject;
+        }),
+    );
+    const reset = vi.fn();
+    const drain = createNativeTerminalOutputDrain({
+      write,
+      reset,
+      getViewportState: () => null,
+      onPaint: vi.fn(),
+      scheduleWork: (callback) => work.push(callback),
+    });
+    try {
+      drain.enqueueText("stale");
+      work.shift()!();
+      drain.restoreText("restored");
+      rejectWrite!(new Error("Old writer rejected"));
+      await Promise.resolve();
+      await runScheduledWork({ callbacks: work, flush: drain.flush() });
+      expect(write.mock.calls).toEqual([["stale"], ["restored"]]);
+      expect(reset).toHaveBeenCalledOnce();
+    } finally {
+      drain.dispose();
+    }
+  });
+
+  test("contains parser failures, discards the partial burst and resets before new output", async () => {
+    const error = new Error("Parser write failed");
+    const log = vi.spyOn(console, "warn").mockImplementation(() => {});
+    const write = vi.fn(async (_chunk: string) => {});
+    write.mockRejectedValueOnce(error);
+    const reset = vi.fn();
+    const drain = createNativeTerminalOutputDrain({
+      write,
+      reset,
+      getViewportState: () => null,
+      onPaint: vi.fn(),
+      chunkChars: 3,
+    });
+    try {
+      drain.enqueueText("old output must not replay");
+      await drain.flush();
+      expect(write.mock.calls).toEqual([["old"]]);
+      expect(drain.getQueuedChars()).toBe(0);
+      expect(log).toHaveBeenCalledWith("Native terminal output failed", error);
+      drain.enqueueText("new");
+      await drain.flush();
+      expect(reset).toHaveBeenCalledOnce();
+      expect(write.mock.calls).toEqual([["old"], ["new"]]);
+    } finally {
+      drain.dispose();
+      log.mockRestore();
+    }
+  });
+
   test("drains large bursts without waiting one frame per 2KB parse slice", async () => {
     const writes: string[] = [];
     const parseSamples: Array<{ parsedChars: number; queuedChars: number }> = [];
