@@ -1,6 +1,6 @@
 {
   "name": "@ait/expo-two-way-audio",
-  "version": "0.1.11",
+  "version": "0.1.12",
   "private": true,
   "description": "Ait local Expo module for two-way audio streaming",
   "keywords": [

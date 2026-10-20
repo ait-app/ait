@@ -36,14 +36,6 @@ it("initializes the native navigator before evaluating the real terminal depende
   ).outputText;
   // Each VM owns its globals, so the native navigator shape never replaces
   // globals in the test runner or needs a native-module mock.
-  const uninitialized = createContext({
-    navigator: {},
-    window: {},
-    module: { exports: {} },
-    exports: {},
-  });
-  expect(() => runInContext(terminalSource, uninitialized)).toThrow(/includes/);
-
   const initialized = createContext({
     navigator: {},
     window: {},
@@ -52,5 +44,9 @@ it("initializes the native navigator before evaluating the real terminal depende
   });
   runInContext(navigatorSource, initialized);
   runInContext("exports.polyfillNavigator()", initialized);
+  // The dependency also guards missing browser fields. Assert the polyfill's
+  // contract directly so that protection cannot hide a broken early installer.
+  expect(runInContext("navigator.userAgent", initialized)).toBe("ReactNative");
+  expect(runInContext("navigator.platform", initialized)).toBe("");
   expect(() => runInContext(terminalSource, initialized)).not.toThrow();
 });
