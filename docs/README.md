@@ -25,6 +25,8 @@
 
 ## 架构决策
 
+- [ADR-174：Pi 原生会话导入](decisions/providers/adr-174-pi-session-import.md)：不改写 Pi 存储且有候选数、字节、时间、投影条目数与共享准入预算的项目目录发现、无主机 HOME 时写入回退原生解析、持久化原生目录拼写、文件重命名后的身份恢复、跨符号链接拼写与存储配置变更的定点刷新、当前分支与模型上下文投影、导入与原生身份恢复。
+
 - [ADR-173：移动端终端输入复用 React Native](decisions/clients/adr-173-shared-native-terminal-input.md)：iOS 与 Android 采用 Paseo 的共享输入设计，移除自定义 iOS 输入桥；取代 ADR-114。
 
 - [ADR-172：Android APK 在 GitHub runner 上用 Gradle 构建](decisions/clients/adr-172-android-gradle-ci-build.md)：可复用工作流、手动与稳定标签触发、仓库 Secrets 签名。

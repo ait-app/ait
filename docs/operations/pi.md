@@ -22,6 +22,7 @@ not fall back to PATH. No provider process is launched merely by registering the
 
 - Model discovery without creating persistent sessions or submitting prompts.
 - Native session creation and resume with stable IDs.
+- Native session discovery, import, and explicit history refresh from Pi's JSONL storage.
 - Text and attachment input, inline images accepted by the native model, streaming text
   and reasoning, tool progress/results, and native usage snapshots.
 - Cancellation and process cleanup, including failure and uncertain submission paths.
@@ -35,10 +36,67 @@ input and editor dialogs are explicitly cancelled. Notification-only extension U
 (`notify`, `setStatus`, `setWidget`, `setTitle`, `set_editor_text`) are ignored. Unknown
 UI methods fail immediately with a protocol diagnostic (`extension_method`). This can cause extensions requiring interaction to decline their operation.
 
-Native history import/refresh, rewind, live steering, host-provided MCP/tool policies,
+Rewind, live steering, host-provided MCP/tool policies,
 custom system prompts, thinking-level selection, structured output and auxiliary summaries
 are not exposed by this adapter. Unsupported settings are rejected instead of ignored.
-Existing native history changed outside Ait is not re-imported into the Ait display timeline.
+Existing native history changed outside Ait is not automatically re-imported into the Ait
+display timeline; use explicit history refresh.
+
+## Import an existing session
+
+Open the existing session import flow and select a Pi conversation. Ait resolves the daemon host's
+session location using Pi's normal precedence: `PI_CODING_AGENT_SESSION_DIR`, global/project
+`settings.sessionDir`, then `sessions` under `PI_CODING_AGENT_DIR` or `~/.pi/agent`. It reads that
+location without launching a Pi writer or modifying Pi's session file, settings, or credentials.
+This is read-only only with respect to Pi-owned state: listing does not materialize images, but
+inspection, import, and refresh decode embedded image data into private content-addressed files
+under Ait's daemon data directory at `agents/provider-images`. Existing absolute-path and HTTP(S)
+image references remain references. Invalid or unsupported embedded images, or failure to write
+the private artifact, fail inspection.
+
+Cwd-filtered discovery honors project settings; an unfiltered cross-project search cannot locate
+directories configured only inside unknown projects or relative to their working directories. A
+cwd-filtered request resolves storage from the cwd spelling supplied by the caller, including
+encoding that spelling for the default project directory. Canonicalization is used only to compare
+the session header's directory identity. The request does not scan other project directories when
+the resolved directory is absent. Listings include the title, working directory, and first/last
+prompt previews.
+
+Import follows the current branch, but it imports Pi's current model-context projection rather
+than a verbatim copy of the transcript shown by Pi. The latest retained `context_edit` for an
+editable message or visible custom message replaces or omits that content. When the branch has
+been compacted, the latest compaction determines the projection: Ait places its summary first,
+drops entries before `firstKeptEntryId`, excludes system messages from the retained pre-compaction
+range, and then includes later entries. Consequently, an edited or compacted session can display
+different content in Ait than in Pi. Within that projection Ait preserves text, reasoning, images,
+tools, shell results, compaction markers, branch summaries, and visible extension messages.
+Continuing uses the original native session UUID and file.
+
+Stop any external Pi writer before importing. Incomplete turns, malformed or changing files,
+unsupported message roles or file versions, and histories above 32 MiB, 100,000 records, or a
+4,096-entry timeline projection are rejected. Version-three session files are supported. Custom
+session files outside the configured session directory are not discovered. Automatic replay remains
+disabled so ordinary restart retains Ait's persisted timeline. See
+[ADR-174](../decisions/providers/adr-174-pi-session-import.md).
+
+After Ait resumes a session, Pi's reported native session file becomes that Agent's pinned refresh
+source. Refresh therefore continues to use the same verified UUID and canonical working directory
+when the project was opened through a symlink or when the configured session directory later
+changes. If that file disappears or becomes unusable, refresh falls back to identity lookup in the
+currently configured project store; it does not scan unrelated project directories.
+
+Ait passes the resolved host directory to its Pi writers with `--session-dir`. Environment values
+on an individual Agent still configure that child process, but `HOME`, `USERPROFILE`,
+`PI_CODING_AGENT_DIR`, and `PI_CODING_AGENT_SESSION_DIR` in `CreateRequest.env` do not relocate
+session storage when host resolution succeeds. This keeps the ephemeral per-Agent environment out
+of host-wide discovery. The default `~/.pi/agent` layout and any `~`-prefixed configured path
+require `HOME` (or `USERPROFILE`) in the daemon's host environment for discovery and inspection.
+If neither is available, those read paths remain unavailable unless the daemon itself has a
+non-tilde `PI_CODING_AGENT_DIR` or `PI_CODING_AGENT_SESSION_DIR`. Creation and resume instead omit
+`--session-dir` and let Pi resolve its own storage, including through the system account database;
+in that fallback only, the child environment can affect Pi's native storage resolution.
+
+## Session lifecycle and limits
 
 Do not run another writer against the same native session while it is active in Ait.
 A missing native file for a previously used session fails resume instead of creating a new
