@@ -1,166 +1,147 @@
 # Google Play 内部测试与 CI 发布
 
-[Release Android to Google Play](../../.github/workflows/release-android-play.yml) 手动构建签名
-AAB，并按选择提交到 Internal testing。包名固定为 `dev.ait.mobile`，使用现有
-`sd542927172s-team/ait` EAS 项目。发布设计见
-[ADR-097](../decisions/clients/adr-097-google-play-internal-release.md)。
+[Release Android to Google Play](../../.github/workflows/release-android-play.yml) 在 GitHub
+托管的 Ubuntu runner 上构建签名 AAB，并按选择上传到 Google Play 的内部测试轨道。
+包名固定为 `dev.ait.mobile`。构建和提交不调用 EAS，也不需要 `EXPO_TOKEN`。
+移动端仍使用 Expo SDK；`expo prebuild` 只在 runner 本地生成 Android 工程。
+设计见 [ADR-175](../decisions/clients/adr-175-android-play-gradle-release.md)。
 
-## 首次配置
+## 从 EAS 迁移
 
-### 1. 创建应用和测试者名单
+已有 Play 应用、测试者名单和服务账号可继续使用。迁移需要把原有上传 keystore 和
+Play 服务账号 JSON 配置到 GitHub Secrets，并设置版本号基数。不要生成新的上传 key
+来代替已经在 Play 登记的 key。iOS TestFlight 继续使用 EAS，因此不要删除共享的
+`EXPO_TOKEN` 或 EAS 项目凭据。
 
-在 Play Console 创建 Ait 应用，然后打开「测试和发布 → 测试 → 内部测试 → 测试者」。
-创建 `ait-internal` 邮箱名单，加入测试手机使用的 Google 账号邮箱，勾选该名单并保存。
-首轮可以只加入维护者自己；Internal testing 最多支持 100 名测试者。
-
-应用的包名由首个上传的 AAB 确定。首次上传前确认它是 `dev.ait.mobile`，后续不能更换。
-内部测试可以在完成全部商店资料前开始；参见
-[Google 内部测试说明](https://support.google.com/googleplay/android-developer/answer/9845334)。
-
-### 2. 配置 Google Cloud 发布身份
-
-在 [Google Cloud Console](https://console.cloud.google.com/) 选择现有项目，或创建
-`ait-play-store` 项目。在「API 和服务 → 库」启用 **Google Play Android Developer API**。
-然后在「IAM 和管理 → 服务账号」创建 `ait-play-publisher`。仅为 Play 发布使用时，
-创建向导中的 Google Cloud 项目角色和其他用户访问项可以留空；实际发布权限在 Play
-Console 中授予。记录生成的服务账号邮箱。
-
-在该服务账号「密钥 → 添加密钥 → 创建新密钥」下载 JSON 密钥。不要将其放入仓库，
-也不要粘贴到聊天、日志或 issue。Google 已不再要求将开发者账号与 Cloud 项目关联；
-具体步骤见 [Google Play Developer API 入门](https://developers.google.com/android-publisher/getting_started)。
-
-### 3. 授予 Ait 的内部测试权限
-
-回到 Play Console 的开发者账号层级，打开「用户和权限 → 邀请新用户」，填写服务账号邮箱。
-在应用权限中仅添加 Ait，并授予：
-
-- 查看应用信息（只读）。
-- 将应用发布到测试轨道（Release apps to testing tracks）。
-
-本 CI 不维护测试者名单，无需授予「管理测试轨道和修改测试者名单」，也无需账号管理员、
-财务或正式版发布权限。权限名称和作用见
-[Play Console 权限说明](https://support.google.com/googleplay/android-developer/answer/10019561?hl=en)。
-
-### 4. 将提交密钥交给 EAS
-
-打开 [Ait EAS 项目](https://expo.dev/accounts/sd542927172s-team/projects/ait)，进入
-「Credentials → Android → dev.ait.mobile → Service Credentials」，选择
-「Add / Change Google Service Account Key」并上传刚下载的 JSON。已有服务账号密钥时，
-先确认其 Play 权限，再决定是否替换。上传步骤见
-[Expo Android 提交说明](https://docs.expo.dev/submit/android/)。
-
-JSON 由 EAS 保存；GitHub Actions 只需要现有仓库 Secret `EXPO_TOKEN`，对应的 Expo 账号
-须有该项目的构建和提交权限。不要另建存放 JSON 的 GitHub Secret，也不要提交密钥文件。
-
-Android keystore 是另一种凭据：它签署上传包，服务账号密钥用于调用 Play API。
-沿用既有 `dev.ait.mobile` EAS keystore。CI 使用 `--freeze-credentials`，不会创建或更换
-签名密钥。如果新 profile 尚未关联签名凭据，可在已登录 Expo 的终端配置一次：
+若原上传 keystore 只保存在 EAS，可在已登录 Expo 的终端一次性导出：
 
 ```bash
 cd apps/mobile
-npx --no-install eas credentials:configure-build --platform android --profile production-play
+npx --no-install eas credentials --platform android
 ```
 
-选择复用既有 production 应用的 keystore。不要为同一应用另换上传密钥。
+选择 `dev.ait.mobile` 的现有 production / production-play 凭据，下载 keystore 并记录
+alias 和密码。这只是凭据迁移；新 CI 无需登录 Expo。
 
-## 首个版本
+## GitHub 配置
 
-### 5. 先构建并查看 AAB
+在仓库 Settings → Secrets and variables → Actions 添加以下 Secrets：
 
-工作流合并到默认分支后，打开 GitHub Actions → **Release Android to Google Play** →
-**Run workflow**。选源码分支，保留默认 `action=build-only` 和空 `tag`。
-这会构建所选分支触发时的 commit。也可指定稳定标签 `vX.Y.Z`，使用该标签源码；
-Play 内测不要求先发布桌面 GitHub Release。
+| Secret                             | 内容                                                        |
+| ---------------------------------- | ----------------------------------------------------------- |
+| `ANDROID_KEYSTORE_BASE64`          | Play 已登记的上传 keystore 文件的 base64                    |
+| `ANDROID_KEYSTORE_PASSWORD`        | keystore 密码                                               |
+| `ANDROID_KEY_ALIAS`                | 上传 key 的别名                                             |
+| `ANDROID_KEY_PASSWORD`             | key 密码；PKCS12 通常与 keystore 密码相同                   |
+| `GOOGLE_PLAY_SERVICE_ACCOUNT_JSON` | 有 Ait 测试轨道发布权限的服务账号完整 JSON，原文而非 base64 |
 
-构建成功后，run summary 给出 EAS build ID、源码 commit、版本和实际 `versionCode`。
-下载 artifact `ait-android-play-aab`，包含 `.aab`、`BUILD-INFO.json` 和 `SHA256SUMS`。
-CI 检查构建来源、包名、版本、非 debug 属性、bundle 结构和上传签名，并保留已签名字节。
+例如，在 macOS 上直接把文件传给 GitHub CLI，不将内容写入仓库或终端输出：
+
+```bash
+base64 < /absolute/path/upload.keystore | tr -d '\n' | gh secret set ANDROID_KEYSTORE_BASE64 --repo ait-app/ait
+gh secret set GOOGLE_PLAY_SERVICE_ACCOUNT_JSON --repo ait-app/ait < /absolute/path/play-service-account.json
+```
+
+其余三个 Secrets 可在 GitHub 页面填写，或使用 `gh secret set NAME --repo ait-app/ait`
+交互输入。keystore、密码与服务账号 JSON 不进入 Git、日志、聊天或 issue。
+只构建 AAB 也必须配置四个签名 Secrets；缺失时失败，不回退 debug 签名。
+`GOOGLE_PLAY_SERVICE_ACCOUNT_JSON` 仅上传时需要。
+
+在 **Variables** 中配置 `ANDROID_PLAY_VERSION_CODE_BASE`：迁移时将它设置为
+Play 历史最大 `versionCode`，后续保持不变。新应用可以不设置，默认为 `0`。
+例如 Play 中已有最大值 `47`：
+
+```bash
+gh variable set ANDROID_PLAY_VERSION_CODE_BASE --repo ait-app/ait --body 47
+```
+
+版本号计算为：
+
+```text
+versionCode = ANDROID_PLAY_VERSION_CODE_BASE + GITHUB_RUN_NUMBER × 100 + GITHUB_RUN_ATTEMPT
+```
+
+每次新运行及重跑均分配不同版本号，每个 run 最多支持 99 次 attempt，结果不得超过
+Play 的 `2100000000` 上限。`versionName` 保持仓库版本不变。计数只写入 runner 生成的
+`android/app/build.gradle`，不修改仓库、iOS 版本或 EAS 远端计数器。
+
+## 首次配置 Play
+
+1. 在 Play Console 创建 Ait 应用，并在内部测试的测试者页面配置名单。首个上传包的包名
+   必须为 `dev.ait.mobile`。参见 [内部测试说明](https://support.google.com/googleplay/android-developer/answer/9845334)。
+2. 在 Google Cloud 项目启用 **Google Play Android Developer API**，创建或复用发布服务
+   账号，并取得 JSON 密钥。无需为此授予 Cloud 项目管理员权限，也无需关联 Play 开发者
+   账号与 Cloud 项目。参见 [API 入门](https://developers.google.com/android-publisher/getting_started)。
+3. 在 Play Console「用户和权限」邀请服务账号邮箱，只添加 Ait 应用，授予「查看应用信息」
+   和「将应用发布到测试轨道」。CI 不维护测试者名单，无需管理员、财务或正式版发布权限。
+4. 将服务账号 JSON 配置为上述 GitHub Secret。若旧 JSON 仅保存在 EAS 且无法取回，
+   为同一服务账号创建新 JSON key；旧 EAS/iOS 凭据无需变更。
+5. 对尚未通过 Console 初始化的应用，先运行 `build-only`，下载 AAB，手动上传至内部测试
+   草稿，按提示配置 Play App Signing 和首轮发布。上传 action 要求包名已存在于 Play。
+   已有 Play 版本的应用跳过此步。
+
+CI 使用 [upload-google-play](https://github.com/r0adkll/upload-google-play) 直接调用 Play
+Developer API，上传轨道固定为 `internal`，没有 production 或 internal sharing 入口。
+
+## 手动运行
+
+打开 Actions → **Release Android to Google Play** → **Run workflow**，选择源码分支：
+
+| action               | 行为                                         |
+| -------------------- | -------------------------------------------- |
+| `build-only`（默认） | 构建、签名并校验 AAB，只上传 GitHub artifact |
+| `internal-draft`     | 构建并上传到 Play，保留内部测试草稿          |
+| `internal`           | 构建并以 `completed` 状态提交给内部测试者    |
+
+空 `tag` 使用本次触发时的分支 commit；填写稳定标签 `vX.Y.Z` 时使用该标签源码，并检查
+标签版本与 `apps/mobile/package.json` 一致。不会因推送标签、PR 或合并分支自动上传。
 
 ```bash
 gh workflow run release-android-play.yml --repo ait-app/ait --ref main -f action=build-only
-```
-
-### 6. 上传内部测试草稿
-
-服务账号配置好后，手动运行同一工作流，选择 `action=internal-draft`。它构建并上传新的
-AAB，将 release 保留为草稿，方便在 Play Console 检查首轮设置。
-Expo 当前支持直接通过 EAS Submit 上传首个版本，不要求先手动上传，见
-[首次提交说明](https://docs.expo.dev/submit/android/#first-time-submission)。
-
-若步骤 5 的构建已经通过验证，也可以直接提交这个 build ID，避免重复构建：
-
-```bash
-cd apps/mobile
-npx --no-install eas submit --platform android --profile play-internal-draft --id BUILD_ID --wait
-```
-
-这里的 `BUILD_ID` 必须来自上述通过验证的 Play AAB run；不要用 `--latest` 猜测构建。
-若希望手动完成首轮，也可以在 Play Console「内部测试 → 创建新版本」上传步骤 5 的
-AAB；两种方式二选一，同一个 `versionCode` 不应重复上传。
-
-首次上传时，按 Play Console 提示检查 Play App Signing。通常可使用 Google 生成的
-应用签名密钥，EAS keystore 继续作为上传密钥。两者用途见
-[Play App Signing 说明](https://support.google.com/googleplay/android-developer/answer/9842756)。
-Google 签名的 Play 安装包可能无法覆盖已有的 GitHub APK，因为应用签名证书不同。
-可使用没有安装 APK 的测试设备；若选择卸载旧 APK，先处理需要保留的本地数据。
-
-### 7. 发布并安装
-
-在 Play Console 检查内部测试草稿的包名、版本、签名和错误提示，填写简短的版本说明，
-保存并发布到内部测试。回到「测试者」，复制参与测试的 opt-in 链接。
-使用名单中的 Google 账号在 Android 手机上打开链接，加入测试，再从 Google Play 安装。
-新应用或链接可能需要等待处理后才可访问，以 Console 状态为准。
-
-确认首次安装成功后，后续 CI 可以直接选择 `action=internal`：
-
-```bash
-gh workflow run release-android-play.yml --repo ait-app/ait --ref main -f action=internal
+gh workflow run release-android-play.yml --repo ait-app/ait --ref main -f action=internal-draft
 gh workflow run release-android-play.yml --repo ait-app/ait --ref main -f action=internal -f tag=vX.Y.Z
 ```
 
-`internal` 使用 `releaseStatus=completed`，将本次通过验证的 build ID 提交给内部测试者。
-三个 action 均为手动触发；推送标签和合并分支不会自动提交，工作流没有 production 选项。
+运行摘要记录源码 commit、版本、实际 `versionCode` 和构建结果。
+`ait-android-play-aab` artifact 保留 14 天，包含签名 `.aab`、`BUILD-INFO.json` 和
+`SHA256SUMS`。下载解压后验证：
 
-### 8. 真机验收
+```bash
+sha256sum --check SHA256SUMS
+```
 
-从 Play 安装后检查冷启动、Authing 浏览器登录与返回应用、主机列表、连接 daemon、
-收发一轮消息和会话恢复。使用可访问的主机或现有中继配置，并验证需要的原生权限。
-记录机型、Android 版本、`versionCode` 和结果，不能仅用构建或提交成功代替真机验收。
+## 构建与签名
 
-## 版本号和重试
+runner 执行 `npm ci` → `npm run build:ui-deps` → `expo prebuild --platform android --clean`
+→ `gradlew :app:bundleRelease`。使用 Java 17、Node 24、`APP_VARIANT=production` 和
+`AIT_ANDROID_HERMES_O0=1`。AGP 的 `android.injected.signing.*` 属性将 release 签名覆盖为
+上传 keystore；构建结束始终清理临时 keystore。
 
-`versionName` 仍取自仓库版本。Play CI 在临时 runner 配置中启用 EAS remote
-`appVersionSource`，并使用 `production-play.autoIncrement=true`，使相同源码重复构建也
-获得新的 Android `versionCode`。仓库配置保留 local 版本来源，APK 与 TestFlight 的
-发布流程继续使用原有规则。远端计数器属于 EAS 项目和 Android 应用，会跨 Play 构建复用。
-参考 [Expo 构建版本说明](https://docs.expo.dev/build-reference/app-versions/)。
+提交前使用固定版本及 SHA-256 的 bundletool 检查结构与 manifest，使用 jarsigner 验证
+上传签名，核对包名、版本、实际 `versionCode` 和非 debug 属性。校验通过后保留原始 AAB
+字节并生成校验和，上传 action 只提交本次通过校验的那一个 AAB。
 
-- 构建或本地验证失败：本次不会提交到 Play；修复后重跑会创建新构建。
-- 上传失败：先看 EAS Submit 日志。确认权限、API 或应用设置后，可按步骤 6 提交同一个
-  尚未被 Play 接收的 build ID，无需重新构建。
-- 草稿应用提示只能上传 draft：选择 `internal-draft`，在 Console 完成首轮发布。
-- `versionCode` 已使用：核对 Play 中历史最大值和 EAS 远端计数器。若此前通过别的流程
-  上传过更高版本，在使用 remote 配置的临时 checkout 中运行
-  `eas build:version:set --platform android --profile production-play` 设置已有最大值，
-  再构建；不要降低计数器。
-- GitHub 超时或取消：查看 EAS 控制台的构建/提交任务；它们可能仍在运行，先核对状态。
+AAB 使用 **上传密钥** 签名。Google Play 安装包由 **Play App Signing 的应用签名密钥**
+签名，两种凭据不同。需要站外分发相同应用签名的 APK 时，在 Play Console 的应用版本
+下载页面取得 Google 签名的 universal APK；本 workflow 当前只交付 AAB。
+见 [Play App Signing](https://support.google.com/googleplay/android-developer/answer/9842756)。
 
-提交步骤最多等待 **60 分钟**，包含 EAS 排队时间；整个 job 的 150 分钟上限保持不变。
-普通优先级的提交可能排队超过 20 分钟，GitHub 的等待结束不能作为商店拒绝提交的依据。
+## 重试与验收
 
-在 EAS 项目的 Submissions 中，按本次已验证的 build ID 核对原提交：
+- 构建或校验失败：不会上传到 Play，修复后重跑。
+- 上传权限或签名错误：检查服务账号的 Play 应用权限，以及 keystore 是否匹配 Play 登记的
+  upload certificate。服务账号 JSON 用于 API 身份认证，不能替代签名 keystore。
+- 应用仅允许草稿：选择 `internal-draft`，在 Console 完成首次发布。
+- 版本号已使用或低于已发布版本：检查迁移基数；不要降低它。较旧 run 在新 run 上传后
+  重跑可能仍然版本过低，此时使用新的 Run workflow。
+- 超时、取消或上传结果不明：先在 Play Console 按实际 `versionCode` 查明是否已接收，
+  再决定是否重跑。重跑会重新构建并分配新版本号，不会自动复用旧 AAB。
 
-- `IN_QUEUE` 或 `IN_PROGRESS`：继续跟踪这个提交。
-- `FINISHED`：记录提交回执、版本和目标轨道，本次无需重新构建或再次上传。
-- `ERRORED` 或 `CANCELED`：先查看原提交日志，确认 Play 未接收后，才复用原已验证的
-  build ID 按上述手动提交方式重试；不要为等待超时直接增加一次构建和 versionCode。
+Gradle 构建最多 120 分钟，上传最多 30 分钟，整个 job 最多 150 分钟；Play 各次提交串行。
+在 Console 发布内部测试后，用测试者账号打开 opt-in 链接并从 Google Play 安装。
+检查冷启动、浏览器登录返回、主机连接、消息收发和会话恢复，记录设备、Android 版本及
+`versionCode`。Google 签名版本可能无法覆盖既有 GitHub APK，应先处理需要保留的本地数据。
 
-## 个人账号后续正式发布
-
-新个人开发者账号可以先开展 Internal testing。申请 production 权限前，需要完成应用
-设置并进行至少 12 名测试者连续参与 14 天的 **Closed testing**，之后向 Google 申请。
-内部测试不计入这项封闭测试要求，见
-[个人账号测试要求](https://support.google.com/googleplay/android-developer/answer/14151465)。
-正式商店发布与封闭测试配置留待完成首轮内部测试后处理。
-
-以上外部流程于 2026-10-07 对照 Google 与 Expo 官方文档核实。
+个人账号后续申请正式发布的测试要求见
+[Google 官方说明](https://support.google.com/googleplay/android-developer/answer/14151465)。
+本流程只覆盖内部测试；Android SDK 构建和 Play 真机验收需在配置凭据后实际运行。

@@ -3,6 +3,35 @@ use serde_json::json;
 
 type Captured = Arc<Mutex<Vec<(SessionEventKind, Value)>>>;
 
+#[test]
+fn push_attention_survives_disconnect_but_respects_focus_and_foreground_tokens() {
+    let events = SessionEvents::default();
+    let mut push = events.subscribe_attention();
+    let connection = events.connect();
+    connection.set_push_token(Some("test-device".to_owned()));
+    let now = Utc::now().timestamp_millis();
+    heartbeat(&connection, Some("agent"), true, now);
+    let payload = json!({"agentId":"agent","reason":"finished"});
+    events.publish_at(SessionEventKind::AgentAttention, &payload, now);
+    assert!(push.try_recv().is_err());
+    assert!(events.foreground_push_tokens().contains("test-device"));
+    heartbeat(&connection, Some("agent"), false, now);
+    events.publish_at(SessionEventKind::AgentAttention, &payload, now);
+    assert_eq!(
+        push.try_recv().unwrap(),
+        (SessionEventKind::AgentAttention, payload.clone())
+    );
+    assert!(events.foreground_push_tokens().is_empty());
+    assert!(connection.owns_push_token("test-device"));
+    events.clear_push_token("test-device");
+    assert!(!connection.owns_push_token("test-device"));
+    drop(connection);
+    events.publish_at(SessionEventKind::AgentAttention, &payload, now);
+    assert_eq!(push.try_recv().unwrap().1, payload);
+    events.publish_at(SessionEventKind::ServerInfo, &json!({}), now);
+    assert!(push.try_recv().is_err());
+}
+
 fn capture(connection: &SessionConnection, notifications: bool) -> (SessionSubscription, Captured) {
     let events = Arc::new(Mutex::new(Vec::new()));
     let captured = events.clone();
@@ -23,6 +52,32 @@ fn capture(connection: &SessionConnection, notifications: bool) -> (SessionSubsc
         )
         .unwrap();
     (subscription, events)
+}
+
+#[test]
+fn fresh_foreground_heartbeat_keeps_idle_viewed_agents_suppressed() {
+    let events = SessionEvents::default();
+    let mut push = events.subscribe_attention();
+    let connection = events.connect();
+    connection.set_push_token(Some("device".to_owned()));
+    let (subscription, received) = capture(&connection, true);
+    subscription.activate().unwrap();
+    let now = Utc::now().timestamp_millis();
+    heartbeat(&connection, Some("agent"), true, now - PRESENCE_MS * 2);
+    events.publish_at(
+        SessionEventKind::AgentAttention,
+        &json!({"agentId":"agent"}),
+        now,
+    );
+    assert!(push.try_recv().is_err());
+    assert!(events.foreground_push_tokens().contains("device"));
+    heartbeat(&connection, None, true, now - PRESENCE_MS * 2);
+    events.publish_at(
+        SessionEventKind::AgentAttention,
+        &json!({"agentId":"agent"}),
+        now,
+    );
+    assert_eq!(received.lock().unwrap()[1].1["shouldNotify"], true);
 }
 
 #[test]
@@ -189,10 +244,11 @@ fn notifications_select_one_present_client_and_one_subscription_without_hiding_s
     );
     assert_eq!(second_events.lock().unwrap()[2].1["shouldNotify"], true);
     assert_eq!(first_events.lock().unwrap().len(), 2);
+    let last_heartbeat = second.presence.lock().unwrap().heartbeat_ms.unwrap();
     service.publish_at(
         SessionEventKind::AgentAttention,
         &json!({"agentId":"a"}),
-        now + PRESENCE_MS + 1,
+        last_heartbeat + PRESENCE_MS + 1,
     );
     assert_eq!(second_events.lock().unwrap()[3].1["shouldNotify"], false);
 }
@@ -210,10 +266,11 @@ fn absent_heartbeat_and_disabled_notifications_never_notify_and_future_activity_
     assert!(
         connection.presence.lock().unwrap().activity_ms.unwrap() <= Utc::now().timestamp_millis()
     );
+    let last_heartbeat = connection.presence.lock().unwrap().heartbeat_ms.unwrap();
     service.publish_at(
         SessionEventKind::AgentAttention,
         &json!({"agentId":"a"}),
-        now + PRESENCE_MS + 100,
+        last_heartbeat + PRESENCE_MS + 1,
     );
     assert_eq!(events.lock().unwrap()[1].1["shouldNotify"], false);
     drop(subscription);

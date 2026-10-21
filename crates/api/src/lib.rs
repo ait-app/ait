@@ -68,6 +68,7 @@ pub enum ConfigError {
 
 #[derive(Debug)]
 struct Shared {
+    _push_delivery: Option<metadata::push::delivery::Worker>,
     relay: relay::Connector,
     managed_relay: bool,
     managed_status: Arc<Mutex<serde_json::Value>>,
@@ -285,8 +286,10 @@ impl Api {
             address,
             &metadata.session_events,
         );
+        let push_delivery = metadata::push::delivery::start(&metadata);
         let api = Self {
             shared: Arc::new(Shared {
+                _push_delivery: push_delivery,
                 relay,
                 managed_relay: false,
                 managed_status: Arc::new(Mutex::new(serde_json::json!({"mode":"external"}))),

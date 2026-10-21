@@ -2571,6 +2571,8 @@ export const en = {
     notifications: {
       title: "Notifications",
       permission: "Notification permission",
+      openSettings: "Open Settings",
+      permissionUnavailable: "Unable to read notification permission.",
       refreshAccessibility: "Refresh notification permission",
       playSound: "Play sound",
       playSoundHint: "Play a sound when a desktop notification arrives",

@@ -95,7 +95,7 @@ checksum = "330a5ed07fa54e4702c9d6c4174f74427fc0ef6e214bbd677ae50a5099946470"
 
 [[package]]
 name = "api"
-version = "0.1.12"
+version = "0.1.13"
 dependencies = [
  "async-trait",
  "axum",
@@ -323,7 +323,7 @@ dependencies = [
 
 [[package]]
 name = "bot"
-version = "0.1.12"
+version = "0.1.13"
 dependencies = [
  "axum",
  "chrono",
@@ -349,7 +349,7 @@ dependencies = [
 
 [[package]]
 name = "browser"
-version = "0.1.12"
+version = "0.1.13"
 dependencies = [
  "base64",
  "futures-util",
@@ -611,7 +611,7 @@ dependencies = [
 
 [[package]]
 name = "daemon"
-version = "0.1.12"
+version = "0.1.13"
 dependencies = [
  "anyhow",
  "api",
@@ -626,12 +626,14 @@ dependencies = [
  "filesystem",
  "futures-util",
  "host-link",
+ "jsonwebtoken",
  "libc",
  "metadata",
  "model",
  "persistence",
  "provider",
  "reqwest",
+ "ring",
  "rustix",
  "schedule",
  "secrecy",
@@ -717,7 +719,7 @@ dependencies = [
 
 [[package]]
 name = "domain"
-version = "0.1.12"
+version = "0.1.13"
 dependencies = [
  "chrono",
  "getrandom 0.4.3",
@@ -797,7 +799,7 @@ dependencies = [
 
 [[package]]
 name = "filesystem"
-version = "0.1.12"
+version = "0.1.13"
 dependencies = [
  "base64",
  "chrono",
@@ -1006,6 +1008,25 @@ dependencies = [
 ]
 
 [[package]]
+name = "h2"
+version = "0.4.19"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "ef8e5e5a340588f4452631496976cf8636d4a7ecf600239fdc27615d2530bc16"
+dependencies = [
+ "atomic-waker",
+ "bytes",
+ "fnv",
+ "futures-core",
+ "futures-sink",
+ "http",
+ "indexmap",
+ "slab",
+ "tokio",
+ "tokio-util",
+ "tracing",
+]
+
+[[package]]
 name = "hashbrown"
 version = "0.15.5"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1046,7 +1067,7 @@ dependencies = [
 
 [[package]]
 name = "host-link"
-version = "0.1.12"
+version = "0.1.13"
 dependencies = [
  "async-trait",
  "chrono",
@@ -1113,6 +1134,7 @@ dependencies = [
  "bytes",
  "futures-channel",
  "futures-core",
+ "h2",
  "http",
  "http-body",
  "httparse",
@@ -1410,6 +1432,21 @@ dependencies = [
 ]
 
 [[package]]
+name = "jsonwebtoken"
+version = "9.3.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "5a87cc7a48537badeae96744432de36f4be2b4a34a05a5ef32e9dd8a1c169dde"
+dependencies = [
+ "base64",
+ "js-sys",
+ "pem",
+ "ring",
+ "serde",
+ "serde_json",
+ "simple_asn1",
+]
+
+[[package]]
 name = "lazy_static"
 version = "1.5.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1506,11 +1543,12 @@ checksum = "cf8baf1c55e62ffcace7a9f06f4bd9cd3f0c4beb022d3b367256b91b87513d98"
 
 [[package]]
 name = "metadata"
-version = "0.1.12"
+version = "0.1.13"
 dependencies = [
  "base64",
  "chrono",
  "domain",
+ "futures-util",
  "getrandom 0.4.3",
  "model",
  "persistence",
@@ -1569,7 +1607,7 @@ dependencies = [
 
 [[package]]
 name = "model"
-version = "0.1.12"
+version = "0.1.13"
 dependencies = [
  "base64",
  "chrono",
@@ -1746,6 +1784,16 @@ dependencies = [
 ]
 
 [[package]]
+name = "pem"
+version = "3.0.6"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "1d30c53c26bc5b31a98cd02d20f25a7c8567146caf63ed593a9d87b2775291be"
+dependencies = [
+ "base64",
+ "serde_core",
+]
+
+[[package]]
 name = "percent-encoding"
 version = "2.3.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1753,7 +1801,7 @@ checksum = "9b4f627cb1b25917193a259e49bdad08f671f8d9708acfd5fe0a8c1455d87220"
 
 [[package]]
 name = "persistence"
-version = "0.1.12"
+version = "0.1.13"
 dependencies = [
  "chrono",
  "domain",
@@ -1899,7 +1947,7 @@ dependencies = [
 
 [[package]]
 name = "provider"
-version = "0.1.12"
+version = "0.1.13"
 dependencies = [
  "axum",
  "base64",
@@ -2125,7 +2173,7 @@ checksum = "d6f6ff9a378485b298a5286656da665ba74413d36db0979633275d2e708145d4"
 
 [[package]]
 name = "relay"
-version = "0.1.12"
+version = "0.1.13"
 dependencies = [
  "futures-util",
  "model",
@@ -2158,6 +2206,7 @@ dependencies = [
  "bytes",
  "futures-core",
  "futures-util",
+ "h2",
  "http",
  "http-body",
  "http-body-util",
@@ -2305,7 +2354,7 @@ dependencies = [
 
 [[package]]
 name = "schedule"
-version = "0.1.12"
+version = "0.1.13"
 dependencies = [
  "chrono",
  "chrono-tz",
@@ -2528,6 +2577,18 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "3a219298ac11a56ea9a6d2120044824d6f01aeb034955e7af7bc16858527deea"
 
 [[package]]
+name = "simple_asn1"
+version = "0.6.4"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "0d585997b0ac10be3c5ee635f1bab02d512760d14b7c468801ac8a01d9ae5f1d"
+dependencies = [
+ "num-bigint",
+ "num-traits",
+ "thiserror 2.0.20",
+ "time",
+]
+
+[[package]]
 name = "siphasher"
 version = "1.0.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -2666,7 +2727,7 @@ dependencies = [
 
 [[package]]
 name = "terminal"
-version = "0.1.12"
+version = "0.1.13"
 dependencies = [
  "chrono",
  "domain",
@@ -2854,6 +2915,7 @@ dependencies = [
  "futures-io",
  "futures-sink",
  "futures-util",
+ "libc",
  "pin-project-lite",
  "tokio",
 ]
@@ -3161,7 +3223,7 @@ checksum = "0b928f33d975fc6ad9f86c8f283853ad26bdd5b10b7f1542aa2fa15e2289105a"
 
 [[package]]
 name = "voice"
-version = "0.1.12"
+version = "0.1.13"
 dependencies = [
  "axum",
  "base64",

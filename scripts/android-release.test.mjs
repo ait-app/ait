@@ -1,10 +1,8 @@
 import assert from "node:assert/strict";
-import { spawnSync } from "node:child_process";
 import { mkdtemp, readFile, readdir, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import test from "node:test";
-import { runInNewContext } from "node:vm";
 import yaml from "yaml";
 import {
   androidBuildArtifact,
@@ -111,87 +109,20 @@ test("collects the EAS universal APK without modifying its signed bytes", async 
   );
 });
 
-test("stable releases build the APK alongside desktop without blocking on it", async () => {
+test("desktop releases no longer invoke the retired Android APK workflow", async () => {
   const release = yaml.parse(
     await readFile(new URL("../.github/workflows/release.yml", import.meta.url), "utf8"),
   );
   assert.deepEqual(release.on.push.tags, ["v*"]);
-  assert(release.on.workflow_dispatch);
   assert.equal(release.on.workflow_dispatch.inputs.build_android, undefined);
-  const android = release.jobs.android;
-  assert.equal(android.uses, "./.github/workflows/build-android.yml");
-  assert.equal(android.secrets, "inherit");
-  for (const [tag, expected] of [
-    ["v1.2.3", true],
-    ["v1.2.3-beta.1", false],
-  ]) {
-    const build = runInNewContext(android.if.slice(3, -2), {
-      inputs: {},
-      github: { ref_name: tag },
-      contains: (value, part) => value.includes(part),
-    });
-    assert.equal(build, expected, tag);
-  }
-  assert.deepEqual(release.jobs.release.needs, ["build", "android"]);
-  for (const [desktop, cancelled, expected] of [
-    ["success", false, true],
-    ["failure", false, false],
-    ["skipped", false, false],
-    ["success", true, false],
-  ]) {
-    for (const apk of ["success", "failure", "skipped"]) {
-      const publish = runInNewContext(release.jobs.release.if.slice(3, -2), {
-        needs: { build: { result: desktop }, android: { result: apk } },
-        cancelled: () => cancelled,
-      });
-      assert.equal(publish, expected, `${desktop}, android=${apk}, cancelled=${cancelled}`);
-    }
-  }
-  const download = release.jobs.release.steps.find((step) =>
-    step.uses?.startsWith("actions/download-artifact@"),
-  );
-  assert.equal(download.with.pattern, "ait-*");
-  assert.equal(download.with["merge-multiple"], true);
+  assert.equal(release.jobs.android, undefined);
+  assert.deepEqual(release.jobs.release.needs, ["build"]);
+  assert.doesNotMatch(JSON.stringify(release), /build-android\.yml|needs\.android/);
+  // Rerunning desktop releases still retains and checksums existing APK attachments.
   const verify = release.jobs.release.steps.find(
     (step) => step.name === "Verify assets and write checksums",
   ).run;
-  assert.match(verify, /if test -f "release-assets\/Ait-\$\{RELEASE_TAG#v\}-android\.apk"/);
   assert.match(verify, /args\+=\(--android\)/);
-});
-
-test("tag builds require release signing while manual builds fall back to debug", async (t) => {
-  const workflow = yaml.parse(
-    await readFile(new URL("../.github/workflows/build-android.yml", import.meta.url), "utf8"),
-  );
-  assert.deepEqual(Object.keys(workflow.on.workflow_call.inputs).sort(), ["ref", "tag"]);
-  const step = workflow.jobs.build.steps.find((item) => item.name === "Configure APK signing");
-  const directory = await mkdtemp(path.join(tmpdir(), "ait-android-signing-"));
-  t.after(() => rm(directory, { recursive: true, force: true }));
-  const secrets = {
-    KEYSTORE_BASE64: Buffer.from("keystore").toString("base64"),
-    KEYSTORE_PASSWORD: "store",
-    KEY_ALIAS: "ait",
-    KEY_PASSWORD: "key",
-  };
-  const run = async (require, env) => {
-    const githubEnv = path.join(directory, "github-env");
-    await writeFile(githubEnv, "");
-    const result = spawnSync("bash", ["-e", "-o", "pipefail", "-c", step.run], {
-      env: {
-        PATH: process.env.PATH,
-        RUNNER_TEMP: directory,
-        GITHUB_ENV: githubEnv,
-        REQUIRE_RELEASE_SIGNING: require,
-        ...env,
-      },
-      encoding: "utf8",
-    });
-    return { status: result.status, env: await readFile(githubEnv, "utf8") };
-  };
-  assert.notEqual((await run("true", {})).status, 0);
-  assert.deepEqual(await run("false", {}), { status: 0, env: "APK_SIGNING=debug\n" });
-  assert.deepEqual(await run("true", secrets), { status: 0, env: "APK_SIGNING=release\n" });
-  assert.equal(await readFile(path.join(directory, "release.keystore"), "utf8"), "keystore");
 });
 
 test("only a finished EAS APK build matching the release can supply artifacts", () => {

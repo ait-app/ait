@@ -1,5 +1,14 @@
 # Ait changelog
 
+## 0.1.13 - 2026-10-20
+
+- Keep dialogs, popovers and menus outside desktop window drag regions so their controls remain clickable.
+- Queue relay event bursts behind renderer acknowledgements to preserve ordering and avoid flooding the desktop renderer.
+- Import Pi native sessions and preserve compatible session history when resuming agent conversations.
+- Align workspace splits with supported platforms, share native terminal input and keep bottom sheet actions visible.
+- Correct native diff status labels and iOS build configuration; mobile store releases remain separate.
+- Require an explicit workflow option to include Android APK builds in a desktop release.
+
 ## 0.1.12 - 2026-10-20
 
 - Prevent native startup crashes by guarding xterm browser detection and installing navigator, crypto and screen orientation polyfills before other application modules load.

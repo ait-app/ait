@@ -68,6 +68,9 @@ not start a native writer or submit input.
   files under `agents/provider-images`; absolute-path and HTTP(S) sources remain references.
   Reject invalid or unsupported embedded images and safe-storage failures rather than embedding
   base64 in the timeline or silently omitting the image.
+  [ADR-176](adr-176-pi-user-image-projection.md) specifies user-image projection through the
+  existing `imageSources` field, shared with live Pi input; assistant and tool-result images
+  retain their Markdown projection.
 - Treat a final unanswered user message, unresolved tool call, or tool result awaiting an
   assistant continuation as incomplete. The existing import service rejects incomplete
   histories. File inspection cannot prove another Pi process is idle; users must stop

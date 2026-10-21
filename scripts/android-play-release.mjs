@@ -8,70 +8,48 @@ import { parseArgs } from "node:util";
 import { pathToFileURL } from "node:url";
 import { planAndroidRelease } from "./android-release.mjs";
 
-const uuidPattern = /^[a-f0-9]{8}(?:-[a-f0-9]{4}){3}-[a-f0-9]{12}$/i;
-
-export function planAndroidPlayRelease({ tag, version, sourceCommit, action }) {
+export function planAndroidPlayRelease({
+  tag,
+  version,
+  sourceCommit,
+  action,
+  runNumber,
+  runAttempt,
+  versionCodeBase = "0",
+}) {
   assert.match(sourceCommit, /^[a-f0-9]{40}$/i, "Invalid Android source commit");
   assert(["build-only", "internal-draft", "internal"].includes(action), "Invalid Play action");
   const release = planAndroidRelease(tag || `v${version}`, version);
+  for (const [name, value] of Object.entries({ runNumber, runAttempt, versionCodeBase })) {
+    assert.match(String(value), /^(0|[1-9]\d*)$/, `Invalid ${name}`);
+    assert(Number.isSafeInteger(Number(value)), `Invalid ${name}`);
+  }
+  assert(Number(runNumber) > 0, "runNumber must be positive");
+  assert(Number(runAttempt) > 0 && Number(runAttempt) < 100, "runAttempt must be 1 through 99");
+  // Reserve 100 slots per run so retries never reuse an uploaded versionCode.
+  const versionCode = Number(versionCodeBase) + Number(runNumber) * 100 + Number(runAttempt);
+  assert(
+    Number.isSafeInteger(versionCode) && versionCode <= 2_100_000_000,
+    "Android versionCode exceeds the Play limit",
+  );
   return {
     version: release.version,
+    versionCode,
     packageId: release.packageId,
     sourceCommit,
-    buildProfile: "production-play",
-    submitProfile:
-      action === "build-only"
-        ? null
-        : action === "internal"
-          ? "play-internal"
-          : "play-internal-draft",
+    releaseStatus: action === "build-only" ? null : action === "internal" ? "completed" : "draft",
+    bundleName: `Ait-${release.version}-${versionCode}-android.aab`,
   };
 }
 
-// Only the Play runner uses remote build versions; APK and TestFlight keep local versions.
-export function configureAndroidPlayBuild(sourceConfig, releaseConfig) {
-  const identity = sourceConfig.build?.ait?.env;
-  for (const key of ["EXPO_OWNER", "EXPO_SLUG", "EAS_PROJECT_ID"]) {
-    assert.match(identity?.[key] ?? "", /^[A-Za-z0-9._-]+$/, `Invalid EAS identity: ${key}`);
-    assert.equal(
-      identity[key],
-      releaseConfig.build.ait.env[key],
-      `Unexpected EAS identity: ${key}`,
-    );
-  }
-  const config = structuredClone(sourceConfig);
-  config.cli = { ...config.cli, appVersionSource: "remote" };
-  config.build["production-play"] = structuredClone(releaseConfig.build["production-play"]);
-  config.submit ??= {};
-  for (const profile of ["play-internal", "play-internal-draft"]) {
-    config.submit[profile] = structuredClone(releaseConfig.submit[profile]);
-  }
-  return config;
-}
-
-export function androidPlayBuildArtifact(builds, plan, projectId) {
-  assert(Array.isArray(builds) && builds.length === 1, "Expected exactly one EAS build");
-  const build = builds[0];
-  assert.equal(build.status, "FINISHED", "EAS Android build did not finish successfully");
-  assert.equal(build.platform, "ANDROID", "Expected an Android EAS build");
-  assert.equal(build.distribution, "STORE", "Expected a store build");
-  assert.equal(build.buildProfile, plan.buildProfile, "Unexpected EAS build profile");
-  assert.equal(build.appVersion, plan.version, "EAS app version differs from release");
-  assert.equal(build.gitCommitHash, plan.sourceCommit, "EAS source commit differs from release");
-  assert.equal(build.project?.id, projectId, "EAS project differs from Ait");
-  assert.match(build.id ?? "", uuidPattern, "Invalid EAS build ID");
-  assert.match(String(build.appBuildVersion), /^[1-9]\d*$/, "Invalid Android versionCode");
-  const versionCode = Number(build.appBuildVersion);
-  assert(versionCode <= 2_100_000_000, "Android versionCode exceeds the Play limit");
-  const url = new URL(build.artifacts?.buildUrl);
-  assert.equal(url.protocol, "https:", "EAS artifact must use HTTPS");
-  assert(url.pathname.endsWith(".aab"), "Expected an Android App Bundle");
-  return {
-    id: build.id,
-    url: url.href,
-    versionCode,
-    name: `Ait-${plan.version}-${versionCode}-android.aab`,
-  };
+export function configureAndroidPlayGradle(gradle, versionCode) {
+  assert(
+    Number.isSafeInteger(versionCode) && versionCode > 0 && versionCode <= 2_100_000_000,
+    "Invalid Android versionCode",
+  );
+  const pattern = /^(\s*versionCode\s+)\d+(\s*)$/gm;
+  assert.equal([...gradle.matchAll(pattern)].length, 1, "Expected one Gradle versionCode");
+  return gradle.replace(pattern, (_, prefix, suffix) => `${prefix}${versionCode}${suffix}`);
 }
 
 export function validateAndroidPlayManifest(xml, plan, versionCode) {
@@ -90,7 +68,7 @@ export function validateAndroidPlayManifest(xml, plan, versionCode) {
   assert.equal(
     attributes["android:versionCode"],
     String(versionCode),
-    "AAB versionCode differs from EAS build",
+    "AAB versionCode differs from build plan",
   );
   const debuggable = application[1].match(/\bandroid:debuggable="([^"]*)"/)?.[1] ?? "false";
   assert.equal(debuggable, "false", "Debuggable AAB cannot be released");
@@ -106,7 +84,6 @@ export async function collectAndroidPlayRelease({
   bundle,
   bundletool,
   plan,
-  artifact,
   outputDir,
   run = execFileSync,
 }) {
@@ -124,22 +101,21 @@ export async function collectAndroidPlayRelease({
   assert(signature.includes("jar verified."), "AAB upload signature is missing or invalid");
   assert.doesNotMatch(signature, /jar contains unsigned entries/i, "AAB contains unsigned entries");
   const manifest = execute("java", ["-jar", bundletool, "dump", "manifest", `--bundle=${bundle}`]);
-  validateAndroidPlayManifest(manifest, plan, artifact.versionCode);
+  validateAndroidPlayManifest(manifest, plan, plan.versionCode);
   await mkdir(outputDir, { recursive: true });
-  await copyFile(bundle, path.join(outputDir, artifact.name));
+  await copyFile(bundle, path.join(outputDir, plan.bundleName));
   const info = {
     version: plan.version,
-    versionCode: artifact.versionCode,
+    versionCode: plan.versionCode,
     packageId: plan.packageId,
     sourceCommit: plan.sourceCommit,
-    easBuildId: artifact.id,
-    buildProfile: plan.buildProfile,
-    submitProfile: plan.submitProfile,
-    signing: "eas-managed-upload-key",
+    buildSystem: "github-actions-gradle",
+    releaseStatus: plan.releaseStatus,
+    signing: "github-actions-upload-key",
   };
   await writeFile(path.join(outputDir, "BUILD-INFO.json"), JSON.stringify(info, null, 2) + "\n");
   const sums = await Promise.all(
-    [artifact.name, "BUILD-INFO.json"].map(
+    [plan.bundleName, "BUILD-INFO.json"].map(
       async (name) => `${await sha256(path.join(outputDir, name))}  ${name}`,
     ),
   );
@@ -150,19 +126,15 @@ export async function collectAndroidPlayRelease({
 async function main() {
   const { values } = parseArgs({
     options: Object.fromEntries(
-      ["bundle", "bundletool", "plan", "artifact", "output-dir"].map((key) => [
-        key,
-        { type: "string" },
-      ]),
+      ["bundle", "bundletool", "plan", "output-dir"].map((key) => [key, { type: "string" }]),
     ),
   });
-  for (const key of ["bundle", "bundletool", "plan", "artifact", "output-dir"])
+  for (const key of ["bundle", "bundletool", "plan", "output-dir"])
     assert(values[key], `Missing --${key}`);
   const info = await collectAndroidPlayRelease({
     bundle: values.bundle,
     bundletool: values.bundletool,
     plan: JSON.parse(await readFile(values.plan, "utf8")),
-    artifact: JSON.parse(await readFile(values.artifact, "utf8")),
     outputDir: values["output-dir"],
   });
   console.log(JSON.stringify(info, null, 2));

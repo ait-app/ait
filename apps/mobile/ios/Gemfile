@@ -1,0 +1,4 @@
+source "https://rubygems.org"
+
+# Match the tool version that generated Podfile.lock, including in Xcode Cloud.
+gem "cocoapods", "= 1.16.2"

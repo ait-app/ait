@@ -2085,6 +2085,8 @@ export const ar: TranslationResources = {
     notifications: {
       title: "الإشعارات",
       permission: "إذن الإشعارات",
+      openSettings: "فتح الإعدادات",
+      permissionUnavailable: "تعذر قراءة إذن الإشعارات.",
       refreshAccessibility: "تحديث إذن الإشعارات",
       playSound: "تشغيل صوت",
       playSoundHint: "تشغيل صوت عند وصول إشعار سطح مكتب",

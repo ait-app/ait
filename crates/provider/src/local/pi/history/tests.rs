@@ -73,6 +73,53 @@ fn handle() -> AgentPersistenceHandle {
 }
 
 #[test]
+fn listing_preserves_distinct_projects_with_colliding_session_directories() {
+    let (directory, client, _, _) = fixture();
+    let root = directory.path().canonicalize().unwrap();
+    let projects = [root.join("foo-bar"), root.join("foo/bar")];
+    let sessions_root = directory.path().join("sessions");
+    let session_directory = project_directory(&sessions_root, &projects[0]).unwrap();
+    assert_eq!(
+        session_directory,
+        project_directory(&sessions_root, &projects[1]).unwrap()
+    );
+    std::fs::create_dir_all(&session_directory).unwrap();
+    let session_ids = [SESSION, "019a0000-0000-7000-8000-000000000002"];
+    for (project, session_id) in projects.iter().zip(session_ids) {
+        std::fs::create_dir_all(project).unwrap();
+        let file = session_directory.join(format!("2026-10-18_{session_id}.jsonl"));
+        write(
+            &file,
+            project.to_str().unwrap(),
+            vec![user("u1", Value::Null, "hello")],
+        );
+        let history = std::fs::read_to_string(&file).unwrap();
+        std::fs::write(&file, history.replace(SESSION, session_id)).unwrap();
+    }
+
+    let sessions = list(
+        &client,
+        &ListOptions {
+            cwd: None,
+            scan_limit: 10,
+        },
+    )
+    .unwrap();
+
+    assert_eq!(sessions.len(), 2);
+    for (project, session_id) in projects.iter().zip(session_ids) {
+        let session = sessions
+            .iter()
+            .find(|session| session.provider_handle_id == session_id)
+            .unwrap();
+        assert_eq!(Path::new(&session.cwd), project);
+        let mut handle = handle();
+        handle.session_id = session_id.into();
+        assert!(inspect(&client, &handle, &session.cwd).is_ok());
+    }
+}
+
+#[test]
 fn expands_bare_tilde_to_the_home_directory() {
     let home = Path::new("/home/pi-user");
 
@@ -1222,6 +1269,87 @@ fn tool_result_images_reconcile_without_conflicts_or_loss() {
 }
 
 #[test]
+fn empty_user_text_blocks_with_images_allow_inspection_and_refresh() {
+    for edited in [false, true] {
+        let (directory, mut client, file, cwd) = fixture();
+        client.images = crate::local::images::ImageStore::new(directory.path().join("images"));
+        let content = json!([
+            {"type":"text","text":""},
+            {"type":"image","mimeType":"image/png","data":"aGVsbG8="}
+        ]);
+        let mut input = user("u", Value::Null, "original user");
+        if !edited {
+            input["message"]["content"] = content.clone();
+        }
+        let mut entries = vec![
+            input,
+            assistant("a", "u", json!([{"type":"text","text":"done"}])),
+        ];
+        if edited {
+            entries.push(json!({"type":"context_edit","id":"edit","parentId":"a",
+                "targetId":"u","replacement":{"content":content}}));
+        }
+        write(&file, &cwd, entries);
+        let original = std::fs::read(&file).unwrap();
+
+        let history = inspect(&client, &handle(), &cwd).unwrap();
+
+        assert!(!history.active);
+        assert_eq!(history.entries.len(), 2);
+        let input = &history.entries[0].item;
+        assert_eq!(input["type"], "user_message");
+        assert_eq!(input["text"], "");
+        let sources = input["imageSources"].as_array().unwrap();
+        assert_eq!(sources.len(), 1);
+        assert_eq!(
+            std::fs::read(sources[0].as_str().unwrap()).unwrap(),
+            b"hello"
+        );
+        assert_eq!(history.entries[1].item["text"], "done");
+        assert_eq!(
+            history.entries,
+            inspect(&client, &handle(), &cwd).unwrap().entries
+        );
+        assert_eq!(std::fs::read(&file).unwrap(), original);
+    }
+}
+
+#[test]
+fn image_only_user_context_edit_projects_a_preview_without_markdown_text() {
+    let (directory, mut client, file, cwd) = fixture();
+    client.images = crate::local::images::ImageStore::new(directory.path().join("images"));
+    write(
+        &file,
+        &cwd,
+        vec![
+            user("u", Value::Null, "stale user"),
+            assistant("a", "u", json!([{"type":"text","text":"done"}])),
+            json!({"type":"context_edit","id":"edit","parentId":"a","targetId":"u",
+                "replacement":{"content":[{"type":"image","mimeType":"image/png",
+                    "data":"aGVsbG8="}]}}),
+        ],
+    );
+
+    let history = inspect(&client, &handle(), &cwd).unwrap();
+
+    assert!(!history.active);
+    let input = &history.entries[0].item;
+    assert_eq!(input["type"], "user_message");
+    assert_eq!(input["text"], "");
+    let sources = input["imageSources"].as_array().unwrap();
+    assert_eq!(sources.len(), 1);
+    assert_eq!(
+        std::fs::read(sources[0].as_str().unwrap()).unwrap(),
+        b"hello"
+    );
+    assert_eq!(history.entries[1].item["text"], "done");
+    assert_eq!(
+        history.entries,
+        inspect(&client, &handle(), &cwd).unwrap().entries
+    );
+}
+
+#[test]
 fn projects_images_compaction_extension_messages_and_manual_shell_commands() {
     let (directory, mut client, file, cwd) = fixture();
     client.images = crate::local::images::ImageStore::new(directory.path().join("images"));
@@ -1247,11 +1375,18 @@ fn projects_images_compaction_extension_messages_and_manual_shell_commands() {
     );
     let history = inspect(&client, &handle(), &cwd).unwrap();
     assert!(!history.active);
-    assert!(history.entries.iter().any(|entry| {
-        entry.item["text"]
-            .as_str()
-            .is_some_and(|text| text.contains("![Image]("))
-    }));
+    let input = history
+        .entries
+        .iter()
+        .find(|entry| entry.item["type"] == "user_message")
+        .unwrap();
+    assert_eq!(input.item["text"], "image");
+    let sources = input.item["imageSources"].as_array().unwrap();
+    assert_eq!(sources.len(), 1);
+    assert_eq!(
+        std::fs::read(sources[0].as_str().unwrap()).unwrap(),
+        b"hello"
+    );
     assert!(
         history
             .entries

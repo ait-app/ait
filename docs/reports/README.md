@@ -95,6 +95,7 @@
 
 ## Provider、Agent 与会话
 
+- [Pi 用户图片共享时间线投影验证](providers/pi-user-image-projection-2026-10-21.md)
 - [Pi 原生会话导入与完整 Rust workspace 验证](providers/pi-session-import-2026-10-20.md)
 - [Pi 原生 RPC Provider 验证](providers/pi.md)
 - [OpenCode 2.x ACP 复查](providers/opencode-2x-acp-2026-10-19.md)
@@ -198,6 +199,7 @@
 
 ## 发布验证
 
+- [Ait 0.1.13 发布说明与验证](releases/release-0.1.13.md)
 - [Ait 0.1.11 发布说明与验证](releases/release-0.1.11.md)
 - [Ait 0.1.10 发布说明与验证](releases/release-0.1.10.md)
 

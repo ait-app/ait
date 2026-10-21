@@ -2,6 +2,8 @@
 
 状态：Accepted（2026-10-07）
 
+构建与发布机制已由 [ADR-175](adr-175-android-play-gradle-release.md) 取代。
+
 ## 背景
 
 [ADR-080](adr-080-standalone-android-release.md) 的 Android 入口提供 GitHub APK 下载。

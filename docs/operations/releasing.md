@@ -4,9 +4,9 @@
 Rust `daemon`。发布边界见 [ADR-053](../decisions/clients/adr-053-paseo-desktop-release.md)，
 旧桌面源码的移除见 [当前架构](../architecture/README.md)。
 
-推送稳定标签会自动构建桌面和 Android APK；APK 在 GitHub runner 上用 Gradle 构建，
-也可手动运行生成测试包。签名 Secrets 与操作步骤见 [Android APK 构建](android-releases.md)。
-Android 商店构建使用下方的 Google Play AAB 工作流。
+推送标签和手动运行 Release Ait 只构建桌面；Android 使用独立的 Google Play AAB
+工作流，在 GitHub runner 上用 Gradle 构建并直接上传 Play。签名 Secrets 与操作步骤见
+[Google Play 内部测试与 CI 发布](google-play-internal-testing.md)。
 
 `apps/mobile` 的 Google Play Android Internal Testing 发布流程见下方
 [Google Play Android Internal Testing](#google-play-android-internal-testing) 一节，
@@ -76,9 +76,8 @@ nightly 同样附带独立 daemon 归档，例如 `Ait-38fb6054-2026-10-08-daemo
 合并到 `main` 后，由 main CI 构建并发布 nightly 安装包；合并前如需验证安装包，
 可按[桌面端构建说明](../../apps/desktop/README.md)在本地打包。
 
-Android APK、Google Play 和 iOS TestFlight 不随 PR 或 main CI 构建；APK 可手动运行
-[Build Android APK](android-releases.md#手动构建)。main/PR CI 不调用 EAS 构建或提交，
-不消耗移动端发布配额。
+Google Play 和 iOS TestFlight 不随 PR 或 main CI 构建，均使用各自的手动发布入口。
+独立 APK 构建入口已移除。main/PR CI 不调用 EAS 构建或提交。
 
 ## 发布产物
 
@@ -278,7 +277,7 @@ macOS 需要 GitHub Secrets：`MAC_CSC_LINK`、`MAC_CSC_KEY_PASSWORD`、`APPLE_I
 Release Note 由 `.github/release.yml` 根据合并 PR 分组生成。
 
 手动重跑：Actions → Release Ait → Run workflow，输入已存在的标签。工作流不会创建标签。
-重跑会同时重新构建 Android APK；APK 构建失败时验证并保留此前已发布的 APK。
+重跑只构建桌面；如 Release 已有 Android APK，则验证并保留该附件。
 已有 Release 保留说明，覆盖同名资产；不要移动已经公开使用的标签。
 
 默认应用源码从输入的发布标签检出；资产收集、校验和相关测试从工作流自身的提交检出到
@@ -346,14 +345,14 @@ AIT_DESKTOP_SMOKE=1 npm run package:mac
 
 Android Play 内部测试使用独立手动工作流
 [Release Android to Google Play](../../.github/workflows/release-android-play.yml)，
-支持只构建 AAB、上传内部测试草稿或发布给内部测试者。它使用 EAS 托管上传签名，
-在 Play runner 中启用远端递增 `versionCode`，并在提交前验证构建来源及 AAB。
+支持只构建 AAB、上传内部测试草稿或发布给内部测试者。在 GitHub runner 上使用 Gradle
+和 Secrets 中的上传 keystore 构建签名 AAB，通过校验后直接调用 Play API 上传。
+`versionCode` 使用迁移基数、Actions 运行编号与重试次数计算，不依赖 EAS。
 
 首次服务账号配置、Play App Signing、测试者名单、安装链接和重试步骤统一见
 [Google Play 内部测试与 CI 发布](google-play-internal-testing.md)。
-请使用其中的 `play-internal` / `play-internal-draft` 提交 profile 和确定的 build ID。
-独立的 GitHub APK 工作流已移除，遗留 EAS production workflow 不用于本流程。发布边界见
-[ADR-097](../decisions/clients/adr-097-google-play-internal-release.md)。
+独立的 GitHub APK 工作流已移除，桌面 Release 不再调用 Android 构建。发布边界见
+[ADR-175](../decisions/clients/adr-175-android-play-gradle-release.md)。
 
 ## Apple TestFlight iOS 手动发布
 

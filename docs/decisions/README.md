@@ -80,6 +80,7 @@ ADR-074、082、083、084、122 在不同类别中各有两份，引用时以路
 - [ADR-175：独立恢复 Provider 错误详情与重启收尾](providers/adr-175-restore-provider-recovery.md)
 - [ADR-162：Codex 失败展示原生原因与 HTTP 状态](providers/adr-162-codex-error-details.md)
 
+- [ADR-176：Pi 用户图片的共享时间线投影](providers/adr-176-pi-user-image-projection.md)
 - [ADR-174：Pi 原生会话导入](providers/adr-174-pi-session-import.md)
 
 - [ADR-167：用量缓存按原生账号与成功快照隔离](providers/adr-167-account-scoped-successful-usage.md)
@@ -128,6 +129,10 @@ ADR-074、082、083、084、122 在不同类别中各有两份，引用时以路
 - [ADR-027：独立 AgentSession 与 AgentManager 生命周期边界](providers/adr-027-independent-agent-session-manager.md)
 
 ## 客户端、连接与品牌
+
+- [ADR-177：移动端本地通知与 APNs／FCM 直连](clients/adr-177-native-local-and-remote-notifications.md)
+
+- [ADR-175：Google Play AAB 在 GitHub runner 上构建和提交](clients/adr-175-android-play-gradle-release.md)
 
 - [ADR-173：移动端终端输入复用 React Native](clients/adr-173-shared-native-terminal-input.md)
 

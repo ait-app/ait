@@ -4,6 +4,7 @@
 
 use std::collections::BTreeMap;
 use std::fmt;
+use std::sync::Arc;
 
 use chrono::DateTime;
 use domain::storage::push::PushError;
@@ -18,6 +19,8 @@ const MAX_TOKENS: usize = 4096;
 pub struct PushTokens {
     store: Box<dyn TokenStore>,
     subscriptions: BTreeMap<String, i64>,
+    invalidated: BTreeMap<String, i64>,
+    pub(super) delivery: Option<super::delivery::Dependencies>,
 }
 
 impl fmt::Debug for PushTokens {
@@ -67,11 +70,42 @@ impl PushTokens {
         let result = Self {
             store,
             subscriptions,
+            invalidated: BTreeMap::new(),
+            delivery: None,
         };
         if migrated {
             result.store.save(&document(&result.subscriptions)?)?;
         }
         Ok(result)
+    }
+
+    /// Install direct native push delivery and the durable Agent source before API composition.
+    #[must_use]
+    pub fn with_delivery(
+        mut self,
+        transport: Arc<dyn super::ports::PushTransport>,
+        agents: Arc<dyn domain::agent_runtime::registry::AgentRuntimeRegistry>,
+    ) -> Self {
+        self.delivery = Some(super::delivery::Dependencies { transport, agents });
+        self
+    }
+
+    pub(super) fn register(&mut self, token: &str, now_ms: i64) -> Result<(), PushError> {
+        let invalidated = self.invalidated.remove(token.trim());
+        let result = self.renew(token, now_ms);
+        if result.is_err()
+            && let Some(expiry) = invalidated
+        {
+            self.invalidated.insert(token.trim().to_owned(), expiry);
+        }
+        result
+    }
+
+    pub(super) fn invalidate(&mut self, token: &str) -> Result<(), PushError> {
+        if let Some(expiry) = self.subscriptions.get(token) {
+            self.invalidated.insert(token.to_owned(), *expiry);
+        }
+        self.revoke(token)
     }
 
     /// Renew a nonblank token; avoid writes while more than half of its lease remains.
@@ -80,6 +114,13 @@ impl PushTokens {
     pub(crate) fn renew(&mut self, token: &str, now_ms: i64) -> Result<(), PushError> {
         let token = token.trim();
         if token.is_empty() {
+            return Ok(());
+        }
+        if self
+            .invalidated
+            .get(token)
+            .is_some_and(|expiry| *expiry > now_ms)
+        {
             return Ok(());
         }
         if !valid_token(token) {
@@ -92,9 +133,12 @@ impl PushTokens {
         {
             return Ok(());
         }
+        self.invalidated.retain(|_, expiry| *expiry > now_ms);
         let mut next = self.subscriptions.clone();
         next.retain(|_, expiry| *expiry > now_ms);
-        if next.len() >= MAX_TOKENS && !next.contains_key(token) {
+        if next.len().saturating_add(self.invalidated.len()) >= MAX_TOKENS
+            && !next.contains_key(token)
+        {
             return Err(PushError::Capacity);
         }
         next.insert(token.to_owned(), now_ms.saturating_add(LEASE_MS));
@@ -115,16 +159,19 @@ impl PushTokens {
     }
 
     /// Return unexpired delivery targets; failed pruning never makes expired leases active.
-    #[cfg(test)]
     #[must_use]
-    fn active(&mut self, now_ms: i64) -> Vec<String> {
+    pub(super) fn active(&mut self, now_ms: i64) -> Vec<String> {
         let active: BTreeMap<_, _> = self
             .subscriptions
             .iter()
             .filter(|(_, expiry)| **expiry > now_ms)
             .map(|(token, expiry)| (token.clone(), *expiry))
             .collect();
-        let tokens = active.keys().cloned().collect();
+        let tokens = active
+            .keys()
+            .filter(|token| !self.invalidated.contains_key(*token))
+            .cloned()
+            .collect();
         if active.len() != self.subscriptions.len() {
             let _ = self.commit(active);
         }
