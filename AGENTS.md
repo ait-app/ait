@@ -8,5 +8,6 @@ Before changing domain boundaries, read `docs/README.md`.
 - Never commit credentials, provider tokens, local SQLite databases, or runtime artifacts.
 - Run format and lint checks appropriate to the changed files before handing off changes.
 - Run only tests for the changed code and directly related behavior, including when preparing commits or updating PRs. Run full Rust workspace tests only when explicitly requested by the user; workspace-wide coverage counts as a full test run and requires the same explicit request. A request to commit changes or update a PR does not imply a request for full tests or coverage.
+- Keep provider behavior tests in `crates/provider`, next to the owning adapter or service. Daemon tests cover host lifecycle, transport, and cross-capability integration; see [ADR-179](docs/decisions/providers/adr-179-provider-owned-tests.md).
 - If the current task changes no Rust code in `bins/` or `crates/`, skip Rust tests unless the user explicitly requests them.
 - Record durable boundary changes as an ADR and update `docs/README.md`.

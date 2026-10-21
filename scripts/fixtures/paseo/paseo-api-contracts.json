@@ -142,6 +142,7 @@
         }
       ],
       "tests": [
+        "crates/provider/src/local/deepseek_harness/tests/execution.rs",
         "crates/provider/src/service/agent_execution/tests/async_questions.rs",
         "crates/provider/src/service/agent_execution/tests/async_questions/plans.rs",
         "crates/provider/src/service/agent_execution/tests/controls.rs",
@@ -354,6 +355,10 @@
       "tests": [
         "crates/protocol/src/methods/tests.rs",
         "crates/provider/src/capabilities/tests.rs",
+        "crates/provider/src/local/claude/tests/execution.rs",
+        "crates/provider/src/local/claude/tests/execution/rewind.rs",
+        "crates/provider/src/local/deepseek_harness/tests/execution.rs",
+        "crates/provider/src/local/opencode/tests/execution.rs",
         "crates/provider/src/service/agent_execution/tests.rs",
         "crates/provider/src/service/agent_execution/tests/auto_archive.rs",
         "crates/provider/src/service/agent_execution/tests/environment.rs",
@@ -374,11 +379,10 @@
         "bins/daemon/tests/process/agent_execution/worktrees/pr_checkout.rs",
         "bins/daemon/tests/process/agent_history.rs",
         "bins/daemon/tests/process/agent_history/paseo.rs",
-        "bins/daemon/tests/process/claude.rs",
-        "bins/daemon/tests/process/claude/rewind.rs",
         "bins/daemon/tests/process/codex_streaming.rs",
         "bins/daemon/tests/process/directory/conversation.rs",
         "bins/daemon/tests/process/metadata_generation.rs",
+        "bins/daemon/tests/process/opencode.rs",
         "bins/daemon/tests/process/session.rs",
         "bins/daemon/tests/process/voice.rs"
       ],
@@ -1625,10 +1629,9 @@
         }
       ],
       "tests": [
+        "crates/provider/src/local/claude/tests/execution/rewind.rs",
         "crates/provider/src/service/agent_execution/tests/controls.rs",
-        "bins/daemon/tests/process/agent_controls.rs",
-        "bins/daemon/tests/process/claude.rs",
-        "bins/daemon/tests/process/claude/rewind.rs"
+        "bins/daemon/tests/process/agent_controls.rs"
       ],
       "assessment": "名称、输入字段与实现入口已核对；语义证据见关联测试及主报告",
       "schemaSha256": "81d1388d1bcbdd9b65b336d8deab271e3e6a5562dab7aa81a9cbf61d2364f582",
@@ -3454,6 +3457,7 @@
         }
       ],
       "tests": [
+        "crates/provider/src/local/deepseek_harness/tests/execution.rs",
         "crates/provider/src/service/agent_execution/tests.rs",
         "crates/provider/src/service/agent_execution/tests/auto_archive.rs",
         "crates/provider/src/service/agent_execution/tests/controls.rs",
@@ -5258,6 +5262,10 @@
       "tests": [
         "crates/protocol/src/methods/tests.rs",
         "crates/provider/src/capabilities/tests.rs",
+        "crates/provider/src/local/claude/tests/execution.rs",
+        "crates/provider/src/local/claude/tests/execution/rewind.rs",
+        "crates/provider/src/local/deepseek_harness/tests/execution.rs",
+        "crates/provider/src/local/opencode/tests/execution.rs",
         "crates/provider/src/service/agent_execution/tests.rs",
         "crates/provider/src/service/agent_execution/tests/auto_archive.rs",
         "crates/provider/src/service/agent_execution/tests/environment.rs",
@@ -5278,11 +5286,10 @@
         "bins/daemon/tests/process/agent_execution/worktrees/pr_checkout.rs",
         "bins/daemon/tests/process/agent_history.rs",
         "bins/daemon/tests/process/agent_history/paseo.rs",
-        "bins/daemon/tests/process/claude.rs",
-        "bins/daemon/tests/process/claude/rewind.rs",
         "bins/daemon/tests/process/codex_streaming.rs",
         "bins/daemon/tests/process/directory/conversation.rs",
         "bins/daemon/tests/process/metadata_generation.rs",
+        "bins/daemon/tests/process/opencode.rs",
         "bins/daemon/tests/process/session.rs",
         "bins/daemon/tests/process/voice.rs"
       ],
@@ -6741,6 +6748,9 @@
         }
       ],
       "tests": [
+        "crates/provider/src/local/claude/tests/execution/rewind.rs",
+        "crates/provider/src/local/deepseek_harness/tests/execution.rs",
+        "crates/provider/src/local/opencode/tests/execution.rs",
         "crates/provider/src/protocol/agent_lifecycle/tests.rs",
         "crates/provider/src/service/agent_execution/tests.rs",
         "crates/provider/src/service/agent_execution/tests/async_questions.rs",
@@ -6753,10 +6763,9 @@
         "bins/daemon/tests/process/agent_execution/worktrees.rs",
         "bins/daemon/tests/process/agent_history.rs",
         "bins/daemon/tests/process/agent_runtime.rs",
-        "bins/daemon/tests/process/claude.rs",
-        "bins/daemon/tests/process/claude/rewind.rs",
         "bins/daemon/tests/process/metadata_generation.rs",
         "bins/daemon/tests/process/native_sessions.rs",
+        "bins/daemon/tests/process/opencode.rs",
         "bins/daemon/tests/process/schedule.rs",
         "bins/daemon/tests/process/session.rs",
         "bins/daemon/tests/process/voice.rs"
@@ -6808,6 +6817,10 @@
         }
       ],
       "tests": [
+        "crates/provider/src/local/claude/tests/execution.rs",
+        "crates/provider/src/local/claude/tests/execution/rewind.rs",
+        "crates/provider/src/local/deepseek_harness/tests/execution.rs",
+        "crates/provider/src/local/opencode/tests/execution.rs",
         "crates/provider/src/service/agent_execution/tests/controls.rs",
         "crates/provider/src/service/agent_execution/tests/delivery.rs",
         "crates/provider/src/service/agent_execution/tests/fork_context.rs",
@@ -6817,11 +6830,10 @@
         "bins/daemon/tests/process/agent_execution/paseo_api.rs",
         "bins/daemon/tests/process/agent_history.rs",
         "bins/daemon/tests/process/agent_history/paseo.rs",
-        "bins/daemon/tests/process/claude.rs",
-        "bins/daemon/tests/process/claude/rewind.rs",
         "bins/daemon/tests/process/codex_streaming.rs",
         "bins/daemon/tests/process/directory/conversation.rs",
-        "bins/daemon/tests/process/native_sessions.rs"
+        "bins/daemon/tests/process/native_sessions.rs",
+        "bins/daemon/tests/process/opencode.rs"
       ],
       "assessment": "修复完整时间线投影、分页和连续确认游标",
       "schemaSha256": "523f7dc2038144d701b6018446826c2886fd52e74e952a5e9c6e958e4d82fbf2",
@@ -7100,6 +7112,7 @@
         }
       ],
       "tests": [
+        "crates/provider/src/local/opencode/tests/execution.rs",
         "bins/daemon/tests/process/native_sessions.rs"
       ],
       "assessment": "核对输入与路由；仅安装 Codex/Claude，外部账号服务未做真实调用",
@@ -8035,11 +8048,13 @@
         }
       ],
       "tests": [
+        "crates/provider/src/local/claude/tests/execution.rs",
+        "crates/provider/src/local/deepseek_harness/tests/execution.rs",
+        "crates/provider/src/local/opencode/tests/execution.rs",
         "crates/provider/src/service/provider_catalog/tests.rs",
         "crates/provider/src/service/provider_catalog/tests/paseo.rs",
         "crates/provider/src/service/provider_catalog/tests/paseo/current.rs",
-        "bins/daemon/tests/process/agent_history.rs",
-        "bins/daemon/tests/process/claude.rs"
+        "bins/daemon/tests/process/agent_history.rs"
       ],
       "assessment": "修复全局目录作用域及 cwd 规范化",
       "schemaSha256": "97e6a5cc11dbdc710b98766441745c12c3e3af897df4306791ca0e4ca6834841",
@@ -8815,6 +8830,7 @@
         }
       ],
       "tests": [
+        "crates/provider/src/local/opencode/tests/execution.rs",
         "crates/provider/src/service/agent_execution/tests/titles.rs",
         "bins/daemon/tests/process/native_sessions.rs"
       ],
@@ -8991,6 +9007,7 @@
         }
       ],
       "tests": [
+        "crates/provider/src/local/opencode/tests/execution.rs",
         "crates/provider/src/service/provider_catalog/tests.rs",
         "bins/daemon/tests/process/agent_history.rs"
       ],
@@ -9210,10 +9227,12 @@
         }
       ],
       "tests": [
+        "crates/provider/src/local/claude/tests/execution.rs",
+        "crates/provider/src/local/deepseek_harness/tests/execution.rs",
+        "crates/provider/src/local/opencode/tests/execution.rs",
         "crates/provider/src/service/provider_catalog/tests.rs",
         "crates/provider/src/service/provider_catalog/tests/paseo/current.rs",
-        "bins/daemon/tests/process/agent_history.rs",
-        "bins/daemon/tests/process/claude.rs"
+        "bins/daemon/tests/process/agent_history.rs"
       ],
       "assessment": "修复隐藏模型过滤与全局目录作用域",
       "schemaSha256": "52c492f5044bd2c6c2a8e9cda468e22f816a8f57602aa4e492e2ac0c20f19589",
@@ -9699,10 +9718,9 @@
         "bins/daemon/tests/process/agent_execution/paseo_api.rs",
         "bins/daemon/tests/process/agent_history.rs",
         "bins/daemon/tests/process/agent_history/paseo.rs",
-        "bins/daemon/tests/process/claude.rs",
-        "bins/daemon/tests/process/claude/rewind.rs",
         "bins/daemon/tests/process/codex_streaming.rs",
         "bins/daemon/tests/process/directory.rs",
+        "bins/daemon/tests/process/opencode.rs",
         "bins/daemon/tests/process/session.rs",
         "bins/daemon/tests/process/terminal.rs",
         "bins/daemon/tests/process/terminal/activity.rs",
@@ -11690,11 +11708,13 @@
         }
       ],
       "tests": [
+        "crates/provider/src/local/claude/tests/execution.rs",
+        "crates/provider/src/local/deepseek_harness/tests/execution.rs",
+        "crates/provider/src/local/opencode/tests/execution.rs",
         "crates/provider/src/service/agent_execution/tests.rs",
         "crates/provider/src/service/agent_execution/tests/controls.rs",
         "crates/provider/src/service/agent_execution/tests/resume.rs",
-        "bins/daemon/tests/process/agent_execution.rs",
-        "bins/daemon/tests/process/claude.rs"
+        "bins/daemon/tests/process/agent_execution.rs"
       ],
       "assessment": "修复 overrides、显式归档恢复、未知原生 handle 直接恢复及 cwd 覆盖后继续输入",
       "schemaSha256": "4f3020e43f689f7bffda501be0bde08213f2546808d81099cda0d9cc30fa8d42",
@@ -12789,6 +12809,10 @@
         }
       ],
       "tests": [
+        "crates/provider/src/local/claude/tests/execution.rs",
+        "crates/provider/src/local/claude/tests/execution/rewind.rs",
+        "crates/provider/src/local/deepseek_harness/tests/execution.rs",
+        "crates/provider/src/local/opencode/tests/execution.rs",
         "crates/provider/src/service/agent_execution/tests.rs",
         "crates/provider/src/service/agent_execution/tests/async_questions.rs",
         "crates/provider/src/service/agent_execution/tests/async_questions/plans.rs",
@@ -12809,11 +12833,10 @@
         "bins/daemon/tests/process/agent_execution/paseo_api.rs",
         "bins/daemon/tests/process/agent_execution/worktrees.rs",
         "bins/daemon/tests/process/agent_history.rs",
-        "bins/daemon/tests/process/claude.rs",
-        "bins/daemon/tests/process/claude/rewind.rs",
         "bins/daemon/tests/process/codex_streaming.rs",
         "bins/daemon/tests/process/metadata_generation.rs",
         "bins/daemon/tests/process/native_sessions.rs",
+        "bins/daemon/tests/process/opencode.rs",
         "bins/daemon/tests/process/session.rs"
       ],
       "assessment": "名称、输入字段与实现入口已核对；语义证据见关联测试及主报告",
@@ -14643,6 +14666,10 @@
       ],
       "tests": [
         "crates/provider/src/capabilities/tests.rs",
+        "crates/provider/src/local/claude/tests/execution.rs",
+        "crates/provider/src/local/claude/tests/execution/rewind.rs",
+        "crates/provider/src/local/deepseek_harness/tests/execution.rs",
+        "crates/provider/src/local/opencode/tests/execution.rs",
         "crates/provider/src/service/agent_execution/tests.rs",
         "crates/provider/src/service/agent_execution/tests/async_questions.rs",
         "crates/provider/src/service/agent_execution/tests/async_questions/plans.rs",
@@ -14663,14 +14690,14 @@
         "bins/daemon/tests/process/agent_execution/paseo_api.rs",
         "bins/daemon/tests/process/agent_execution/workspace_creation.rs",
         "bins/daemon/tests/process/agent_execution/workspace_creation/concurrency.rs",
+        "bins/daemon/tests/process/agent_execution/workspace_creation/opencode.rs",
         "bins/daemon/tests/process/agent_history.rs",
         "bins/daemon/tests/process/agent_history/paseo.rs",
-        "bins/daemon/tests/process/claude.rs",
-        "bins/daemon/tests/process/claude/rewind.rs",
         "bins/daemon/tests/process/codex_streaming.rs",
         "bins/daemon/tests/process/directory/conversation.rs",
         "bins/daemon/tests/process/metadata_generation.rs",
         "bins/daemon/tests/process/native_sessions.rs",
+        "bins/daemon/tests/process/opencode.rs",
         "bins/daemon/tests/process/session.rs",
         "bins/daemon/tests/process/voice.rs"
       ],
@@ -14723,8 +14750,8 @@
         }
       ],
       "tests": [
-        "crates/metadata/src/capabilities/tests.rs",
         "crates/metadata/src/automation/protocol/workspace_automation/tests.rs",
+        "crates/metadata/src/capabilities/tests.rs",
         "bins/daemon/tests/process/agent_execution/worktrees/pr_checkout.rs",
         "bins/daemon/tests/process/workspace_automation.rs",
         "bins/daemon/tests/process/worktrees/creation.rs"
@@ -14849,6 +14876,7 @@
         "bins/daemon/tests/process/agent_execution/workspace_creation.rs",
         "bins/daemon/tests/process/agent_execution/workspace_creation/concurrency.rs",
         "bins/daemon/tests/process/agent_execution/workspace_creation/identity.rs",
+        "bins/daemon/tests/process/agent_execution/workspace_creation/opencode.rs",
         "bins/daemon/tests/process/agent_execution/worktrees/pr_checkout.rs",
         "bins/daemon/tests/process/agent_history.rs",
         "bins/daemon/tests/process/directory.rs",
