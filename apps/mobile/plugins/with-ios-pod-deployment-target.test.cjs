@@ -9,9 +9,10 @@ const read = (file) => readFileSync(join(__dirname, "../ios", file), "utf8");
 
 test("Pods post-install raises resource targets to the app minimum without lowering newer targets", () => {
   const podfile = read("Podfile");
-  const start = podfile.indexOf("  post_install do |installer|");
-  assert.notEqual(start, -1);
-  const hook = podfile.slice(start, podfile.lastIndexOf("\nend"));
+  const hook = podfile.match(
+    /# @generated begin ait-ios-pod-deployment-target[^\n]*\n([\s\S]*?)# @generated end ait-ios-pod-deployment-target/,
+  )?.[1];
+  assert.ok(hook);
   const properties = read("Podfile.properties.json");
   const minimum = JSON.parse(properties)["ios.deploymentTarget"];
   const result = spawnSync(
@@ -28,15 +29,9 @@ versions = ['9.0', '12.4', '13.4', nil, '${minimum}', '99.0']
 targets = versions.map do |version|
   Target.new(2.times.map { Configuration.new({'IPHONEOS_DEPLOYMENT_TARGET' => version}) })
 end
-$installer = Installer.new(Project.new(targets))
-def post_install
-  yield $installer
-end
-def react_native_post_install(*args, **options); end
-def ccache_enabled?(*args); false; end
+installer = Installer.new(Project.new(targets))
 def min_ios_version_supported; '15.1'; end
 podfile_properties = JSON.parse(${JSON.stringify(properties)})
-config = {reactNativePath: 'unused'}
 ${hook}
 puts JSON.generate(targets.map { |target| target.build_configurations.map { |build| build.build_settings['IPHONEOS_DEPLOYMENT_TARGET'] } })
 `,
@@ -65,9 +60,8 @@ test("Expo prebuild preserves the Pod deployment target hook without duplicating
   assert.equal(configurePodfile(configured), configured);
   assert.equal(configurePodfile(read("Podfile")), read("Podfile"));
   const hook = (contents) =>
-    contents.slice(
-      contents.indexOf("  post_install do |installer|"),
-      contents.lastIndexOf("\nend"),
-    );
+    contents.match(
+      /# @generated begin ait-ios-pod-deployment-target[^\n]*\n([\s\S]*?)# @generated end ait-ios-pod-deployment-target/,
+    )?.[1];
   assert.equal(hook(configured), hook(read("Podfile")));
 });

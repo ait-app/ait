@@ -372,7 +372,7 @@
 					"-ObjC",
 					"-lc++",
 				);
-				OTHER_SWIFT_FLAGS = "$(inherited) -D EXPO_CONFIGURATION_DEBUG";
+				OTHER_SWIFT_FLAGS = "$(inherited) -D EXPO_CONFIGURATION_DEBUG -Xcc -Wno-incomplete-umbrella -Xcc -Wno-nullability-completeness";
 				PRODUCT_BUNDLE_IDENTIFIER = com.necokeine.ait;
 				PRODUCT_NAME = Ait;
 				SWIFT_OBJC_BRIDGING_HEADER = "Ait/Ait-Bridging-Header.h";
@@ -404,7 +404,7 @@
 					"-ObjC",
 					"-lc++",
 				);
-				OTHER_SWIFT_FLAGS = "$(inherited) -D EXPO_CONFIGURATION_RELEASE";
+				OTHER_SWIFT_FLAGS = "$(inherited) -D EXPO_CONFIGURATION_RELEASE -Xcc -Wno-incomplete-umbrella -Xcc -Wno-nullability-completeness";
 				PRODUCT_BUNDLE_IDENTIFIER = com.necokeine.ait;
 				PRODUCT_NAME = Ait;
 				SWIFT_OBJC_BRIDGING_HEADER = "Ait/Ait-Bridging-Header.h";

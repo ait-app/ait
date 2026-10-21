@@ -22,6 +22,10 @@ platform :ios, podfile_properties['ios.deploymentTarget'] || '15.1'
 prepare_react_native_project!
 
 target 'Ait' do
+# @generated begin ait-ios-dependency-diagnostics - expo prebuild (DO NOT MODIFY) sync-5135aea8a586ca31fd90d11dfbd0960a05554839
+  require_relative '../plugins/ios/build_diagnostics'
+  AitBuildDiagnostics.configure(current_target_definition)
+# @generated end ait-ios-dependency-diagnostics
   use_expo_modules!
 
   if ENV['EXPO_USE_COMMUNITY_AUTOLINKING'] == '1'
@@ -54,6 +58,9 @@ target 'Ait' do
   )
 
   post_install do |installer|
+# @generated begin ait-ios-build-diagnostics - expo prebuild (DO NOT MODIFY) sync-2cb9b6358757f12119556c04ee149492709cf50e
+    AitBuildDiagnostics.post_install(installer)
+# @generated end ait-ios-build-diagnostics
 # @generated begin ait-ios-pod-deployment-target - expo prebuild (DO NOT MODIFY) sync-37c54a8f86ac080dd244c403d8077ffb2ce7ab88
     # Resource bundles can retain older Podspec minimums after React Native's post-install.
     minimum_target = Gem::Version.new(podfile_properties['ios.deploymentTarget'] || min_ios_version_supported)

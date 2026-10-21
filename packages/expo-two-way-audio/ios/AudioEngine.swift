@@ -98,7 +98,7 @@ class AudioEngine {
         let session = AVAudioSession.sharedInstance()
 
         do {
-            try session.setCategory(.playAndRecord, mode: .voiceChat, options: [.defaultToSpeaker, .allowBluetooth, .allowBluetoothA2DP])
+            try session.setCategory(.playAndRecord, mode: .voiceChat, options: [.defaultToSpeaker, .allowBluetoothHFP, .allowBluetoothA2DP])
         } catch {
             print("Could not set the audio category: \(error.localizedDescription)")
         }
@@ -323,7 +323,7 @@ class AudioEngine {
     }
     
     func stopRecordingAndPlayer(){
-        toggleRecording(false)
+        _ = toggleRecording(false)
         speechPlayer.stop()
         resetPendingPlayback()
         updateOutputVolume()

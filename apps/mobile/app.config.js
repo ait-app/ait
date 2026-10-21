@@ -11,6 +11,7 @@ const withFdroidAutolinking = require("./plugins/with-fdroid-autolinking");
 const withPasteInput = require("./plugins/with-paste-input");
 const withIosSceneLifecycle = require("./plugins/with-ios-scene-lifecycle");
 const withIosPodDeploymentTarget = require("./plugins/with-ios-pod-deployment-target");
+const withIosBuildDiagnostics = require("./plugins/with-ios-build-diagnostics");
 const withAndroidScroll = require("./modules/paseo-scroll/app.plugin");
 const { getNativeReleaseVersion } = require("./native-release-version");
 const appVariant = process.env.APP_VARIANT ?? "production";
@@ -139,6 +140,7 @@ export default {
       withPasteInput,
       withIosSceneLifecycle,
       withIosPodDeploymentTarget,
+      withIosBuildDiagnostics,
       withAndroidScroll,
       withAccountRelayWebSocket,
       "expo-secure-store",

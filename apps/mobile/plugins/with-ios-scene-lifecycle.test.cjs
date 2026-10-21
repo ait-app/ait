@@ -89,3 +89,11 @@ test("an unsupported template fails prebuild instead of generating an applicatio
     /Unsupported Expo AppDelegate/,
   );
 });
+
+test("scene cold links omit the launch annotation key deprecated since the app minimum iOS", () => {
+  const result = configureSceneAppDelegate(template);
+  assert.doesNotMatch(result, /launchOptions\[\.annotation\]/);
+  assert.match(result, /launchOptions\[\.url\] = context.url/);
+  assert.match(result, /launchOptions\[\.sourceApplication\] = context.options.sourceApplication/);
+  assert.match(result, /options\[\.annotation\] = context.options.annotation/);
+});

@@ -118,7 +118,6 @@ final class AitSceneDelegate: UIResponder, UIWindowSceneDelegate {
     if let context = connectionOptions.urlContexts.first {
       launchOptions[.url] = context.url
       launchOptions[.sourceApplication] = context.options.sourceApplication
-      launchOptions[.annotation] = context.options.annotation
     }
     if let activity = connectionOptions.userActivities.first(where: {
       $0.activityType == NSUserActivityTypeBrowsingWeb

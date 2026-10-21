@@ -109,6 +109,31 @@ npm run build:ios:ipa
 再从 `apps/mobile` 运行 `eas build --platform ios --profile simulator|preview|production`。
 项目不再默认绑定上游 Expo project 或 App Store app。EAS 会使用账号服务及对应签名流程。
 
+## iOS 构建诊断
+
+`with-ios-build-diagnostics` Expo 插件在 Podfile 中加载
+`apps/mobile/plugins/ios/build_diagnostics.rb`，本地 Xcode 与 Xcode Cloud 使用同一配置。
+固定版本的第三方 Pods 通过 CocoaPods 的依赖警告设置静音；第三方静态库额外使用 libtool
+的 `-no_warning_for_no_symbols` 选项，避免为按平台排除或代码生成的空目标文件报警。
+Ait 应用与自有的
+`ExpoTwoWayAudio`、`PaseoHardwareKeyboard` 保持诊断开启。新增自有原生 Pod 时应同步
+`OWNED_PODS`，回归测试会检查它与仓库内的 Podspec 名称是否一致。
+
+Expo 54 / React Native 0.81 的预编译头文件在 Swift 导入时会产生不完整 umbrella header
+和缺失 nullability 标注的警告。仅向应用的 Swift Clang importer 传入这两类诊断的关闭
+选项，保留其他诊断、继承的编译参数与 Swift 自身警告。第三方源代码问题仍需随上游升级
+修复；升级 Expo / React Native 后应重新评估这些兼容设置。
+
+Hermes 版本选择脚本设为每次执行，使配置切换时仍能选择正确二进制，同时消除缺少输出
+文件的脚本阶段警告。CocoaPods 生成的 Swift 库搜索路径使用 `SDKROOT`，避免 Xcode Cloud
+选中 Metal toolchain 后去不存在的目录查找 Swift 库。
+
+针对性检查：
+
+```sh
+node --test apps/mobile/plugins/with-ios-build-diagnostics.test.cjs apps/mobile/plugins/with-ios-pod-deployment-target.test.cjs apps/mobile/plugins/with-ios-scene-lifecycle.test.cjs scripts/xcode-cloud.test.mjs
+```
+
 ## Xcode Cloud 依赖安装
 
 `apps/mobile/ios/ci_scripts/ci_post_clone.sh` 安装 Node 22 和 Ruby 3.4，并使用
