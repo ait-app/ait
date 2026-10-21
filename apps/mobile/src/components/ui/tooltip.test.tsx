@@ -2,9 +2,14 @@ import React from "react";
 import { act } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { JSDOM } from "jsdom";
-import { Pressable, Text } from "react-native";
+import { Dimensions, Pressable, Text, type LayoutChangeEvent } from "react-native";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { Tooltip, TooltipTrigger } from "./tooltip";
+import { Tooltip, TooltipContent, TooltipTrigger } from "./tooltip";
+import { FloatingSurface } from "./floating";
+
+vi.mock("./floating", () => ({
+  FloatingSurface: vi.fn(({ children }: { children?: React.ReactNode }) => <div>{children}</div>),
+}));
 
 vi.mock("@/constants/platform", () => ({
   isWeb: true,
@@ -27,8 +32,8 @@ vi.mock("react-native-reanimated", () => ({
   default: {
     View: "div",
   },
-  FadeIn: {},
-  FadeOut: {},
+  FadeIn: { duration: vi.fn() },
+  FadeOut: { duration: vi.fn() },
 }));
 
 vi.mock("react-native-unistyles", () => ({
@@ -53,6 +58,7 @@ beforeEach(() => {
   container = document.createElement("div");
   document.body.appendChild(container);
   root = createRoot(container);
+  vi.mocked(FloatingSurface).mockClear();
 });
 
 afterEach(() => {
@@ -63,6 +69,7 @@ afterEach(() => {
   }
   root = null;
   container = null;
+  vi.restoreAllMocks();
   vi.unstubAllGlobals();
 });
 
@@ -113,4 +120,76 @@ describe("TooltipTrigger", () => {
 
     expect(onPress).toHaveBeenCalledTimes(1);
   });
+});
+
+// Markdown file links use an inline DOM span rather than a React Native View.
+const InlineTrigger = React.forwardRef<HTMLSpanElement, React.ComponentProps<"span">>(
+  function InlineTrigger({ children }, ref) {
+    return <span ref={ref}>{children}</span>;
+  },
+);
+
+describe("TooltipContent measurement", () => {
+  for (const kind of ["DOM", "React Native"] as const) {
+    it(`positions content using a ${kind} trigger`, async () => {
+      vi.spyOn(Dimensions, "get").mockReturnValue({
+        width: 1024,
+        height: 768,
+        scale: 1,
+        fontScale: 1,
+      });
+      const measure = vi.fn();
+      if (kind === "DOM") {
+        measure.mockReturnValue({ left: 100, top: 80, width: 60, height: 20 });
+      } else {
+        measure.mockImplementation((callback) => callback(100, 80, 60, 20));
+      }
+      const setRef = (node: unknown) => {
+        if (node) {
+          Object.defineProperty(
+            node,
+            kind === "DOM" ? "getBoundingClientRect" : "measureInWindow",
+            {
+              configurable: true,
+              writable: true,
+              value: measure,
+            },
+          );
+        }
+      };
+      const render = (open: boolean) => (
+        <Tooltip open={open}>
+          <TooltipTrigger asChild>
+            {kind === "DOM" ? (
+              <InlineTrigger ref={setRef}>File link</InlineTrigger>
+            ) : (
+              <Pressable ref={setRef}>
+                <Text>File link</Text>
+              </Pressable>
+            )}
+          </TooltipTrigger>
+          <TooltipContent side="bottom" align="start">
+            File path
+          </TooltipContent>
+        </Tooltip>
+      );
+      await act(async () => root?.render(render(false)));
+
+      await act(async () => root?.render(render(true)));
+      expect(measure).toHaveBeenCalledOnce();
+
+      const onLayout = vi.mocked(FloatingSurface).mock.lastCall![0].onLayout;
+      expect(onLayout).toBeTypeOf("function");
+      await act(async () => {
+        if (typeof onLayout === "function") {
+          onLayout({
+            nativeEvent: { layout: { x: 0, y: 0, width: 80, height: 30 } },
+          } as LayoutChangeEvent);
+        }
+      });
+      expect(vi.mocked(FloatingSurface).mock.lastCall![0].frameStyle).toEqual([
+        { position: "absolute", left: 100, top: 106, maxWidth: 280 },
+      ]);
+    });
+  }
 });
