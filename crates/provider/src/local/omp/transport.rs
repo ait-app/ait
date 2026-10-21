@@ -1,0 +1,253 @@
+use std::collections::VecDeque;
+use std::process::Stdio;
+use std::time::Duration;
+
+use serde_json::{Value, json};
+use tokio::io::{AsyncBufReadExt, AsyncReadExt, AsyncWriteExt, BufReader};
+use tokio::process::{Child, ChildStdin, Command};
+use tokio::sync::mpsc;
+use tokio::task::JoinHandle;
+
+use super::OmpClient;
+use crate::ports::agent_session::AgentSessionError;
+
+const MAX_FRAME: usize = 1024 * 1024;
+const MAX_BUFFER: usize = 64 * 1024 * 1024;
+
+#[derive(Debug)]
+pub(super) struct Transport {
+    child: Child,
+    group: Option<u32>,
+    input: Option<ChildStdin>,
+    messages: mpsc::Receiver<Value>,
+    reader: JoinHandle<()>,
+    events: VecDeque<Value>,
+    buffered_bytes: usize,
+    sequence: u64,
+    deadline: Duration,
+    closed: bool,
+}
+
+impl Transport {
+    pub(super) fn spawn(
+        client: &OmpClient,
+        cwd: &str,
+        args: &[String],
+    ) -> Result<Self, AgentSessionError> {
+        let mut command = Command::new(&client.program);
+        command
+            .args(args)
+            .current_dir(cwd)
+            .envs(client.environment.entries())
+            .stdin(Stdio::piped())
+            .stdout(Stdio::piped())
+            .stderr(Stdio::null())
+            .kill_on_drop(true);
+        #[cfg(unix)]
+        command.process_group(0);
+        let mut child = command.spawn().map_err(|error| {
+            tracing::warn!(error_kind=?error.kind(),os_error=error.raw_os_error(),"failed to spawn OMP RPC");
+            AgentSessionError::Unavailable
+        })?;
+        let input = child.stdin.take().ok_or(AgentSessionError::Failed)?;
+        let output = child.stdout.take().ok_or(AgentSessionError::Failed)?;
+        let (sender, messages) = mpsc::channel(2);
+        let reader = tokio::spawn(async move {
+            let mut output = BufReader::new(output);
+            let mut decoder = super::framing::Decoder::default();
+            loop {
+                let mut bytes = Vec::new();
+                let read = (&mut output)
+                    .take((MAX_FRAME + 1) as u64)
+                    .read_until(b'\n', &mut bytes)
+                    .await;
+                if !matches!(read, Ok(1..))
+                    || bytes.last() != Some(&b'\n')
+                    || bytes.len() > MAX_FRAME
+                {
+                    break;
+                }
+                if bytes.iter().all(u8::is_ascii_whitespace) {
+                    continue;
+                }
+                let Ok(value) = serde_json::from_slice::<Value>(&bytes) else {
+                    break;
+                };
+                if !value["type"].is_string() {
+                    break;
+                }
+                match decoder.push(value) {
+                    Ok(Some(value)) => {
+                        if sender.send(value).await.is_err() {
+                            break;
+                        }
+                    }
+                    Ok(None) => {}
+                    Err(_) => break,
+                }
+            }
+        });
+        Ok(Self {
+            group: child.id(),
+            child,
+            input: Some(input),
+            messages,
+            reader,
+            events: VecDeque::new(),
+            buffered_bytes: 0,
+            sequence: 0,
+            deadline: client.deadline,
+            closed: false,
+        })
+    }
+
+    pub(super) async fn initialize(&mut self) -> Result<(), AgentSessionError> {
+        let ready = tokio::time::timeout(self.deadline, self.messages.recv())
+            .await
+            .map_err(|_| AgentSessionError::Failed)?
+            .ok_or(AgentSessionError::Failed)?;
+        if ready["type"] != "ready"
+            || !ready["supportedProtocolVersions"]
+                .as_array()
+                .is_some_and(|versions| versions.contains(&json!(2)))
+        {
+            return Err(AgentSessionError::Rejected);
+        }
+        let selected = self
+            .request("negotiate_protocol", json!({"protocolVersion":2}))
+            .await?;
+        if selected["protocolVersion"] != 2 {
+            return Err(AgentSessionError::Failed);
+        }
+        Ok(())
+    }
+
+    pub(super) fn last_request_id(&self) -> String {
+        format!("ait-omp-{}", self.sequence)
+    }
+
+    pub(super) async fn send(&mut self, message: &Value) -> Result<(), AgentSessionError> {
+        let mut bytes = serde_json::to_vec(message).map_err(|_| AgentSessionError::Rejected)?;
+        if bytes.len() >= MAX_FRAME {
+            return Err(AgentSessionError::Rejected);
+        }
+        bytes.push(b'\n');
+        let input = self.input.as_mut().ok_or(AgentSessionError::Failed)?;
+        if matches!(
+            tokio::time::timeout(self.deadline, async {
+                input.write_all(&bytes).await?;
+                input.flush().await
+            })
+            .await,
+            Ok(Ok(()))
+        ) {
+            return Ok(());
+        }
+        let _ = self.close().await;
+        Err(AgentSessionError::Failed)
+    }
+
+    pub(super) async fn request(
+        &mut self,
+        kind: &str,
+        mut fields: Value,
+    ) -> Result<Value, AgentSessionError> {
+        self.sequence += 1;
+        let id = format!("ait-omp-{}", self.sequence);
+        fields["id"] = json!(id);
+        fields["type"] = json!(kind);
+        self.send(&fields).await?;
+        let response = tokio::time::timeout(self.deadline, async {
+            loop {
+                let value = self
+                    .messages
+                    .recv()
+                    .await
+                    .ok_or(AgentSessionError::Failed)?;
+                if value["type"] == "response" && value["id"] == id {
+                    if value["command"] != kind {
+                        return Err(AgentSessionError::Failed);
+                    }
+                    return match value["success"].as_bool() {
+                        Some(true) => Ok(value.get("data").cloned().unwrap_or(Value::Null)),
+                        Some(false) => Err(AgentSessionError::Rejected),
+                        None => Err(AgentSessionError::Failed),
+                    };
+                }
+                self.buffered_bytes += value.to_string().len();
+                if self.events.len() >= 4096 || self.buffered_bytes > MAX_BUFFER {
+                    return Err(AgentSessionError::Failed);
+                }
+                self.events.push_back(value);
+            }
+        })
+        .await;
+        match response {
+            Ok(Ok(data)) => Ok(data),
+            Ok(Err(AgentSessionError::Rejected)) => Err(AgentSessionError::Rejected),
+            _ => {
+                let _ = self.close().await;
+                Err(AgentSessionError::Failed)
+            }
+        }
+    }
+
+    pub(super) fn poll(&mut self) -> Result<Option<Value>, AgentSessionError> {
+        if let Some(value) = self.events.pop_front() {
+            self.buffered_bytes = self.buffered_bytes.saturating_sub(value.to_string().len());
+            return Ok(Some(value));
+        }
+        match self.messages.try_recv() {
+            Ok(value) => Ok(Some(value)),
+            Err(mpsc::error::TryRecvError::Empty) if !self.closed => Ok(None),
+            Err(_) => Err(AgentSessionError::Failed),
+        }
+    }
+
+    pub(super) async fn close(&mut self) -> Result<(), AgentSessionError> {
+        if self.closed {
+            return Ok(());
+        }
+        self.closed = true;
+        self.input.take();
+        let drained = tokio::time::timeout(Duration::from_secs(2), async {
+            loop {
+                tokio::select! {
+                    result = self.child.wait() => return result,
+                    Some(_) = self.messages.recv() => {}
+                }
+            }
+        })
+        .await;
+        self.reader.abort();
+        self.kill_group();
+        self.group = None;
+        if matches!(drained, Ok(Ok(_))) {
+            return Ok(());
+        }
+        let _ = self.child.start_kill();
+        tokio::time::timeout(Duration::from_secs(2), self.child.wait())
+            .await
+            .map_err(|_| AgentSessionError::Failed)?
+            .map_err(|_| AgentSessionError::Failed)?;
+        Ok(())
+    }
+
+    fn kill_group(&self) {
+        #[cfg(unix)]
+        if let Some(group) = self.group {
+            let _ = std::process::Command::new("/bin/kill")
+                .args(["-KILL", "--", &format!("-{group}")])
+                .stdout(Stdio::null())
+                .stderr(Stdio::null())
+                .status();
+        }
+    }
+}
+
+impl Drop for Transport {
+    fn drop(&mut self) {
+        self.reader.abort();
+        self.kill_group();
+    }
+}

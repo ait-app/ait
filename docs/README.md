@@ -27,6 +27,7 @@
 
 ## 架构决策
 
+- [ADR-180：Oh My Pi 原生 RPC Provider](decisions/providers/adr-180-omp-native-rpc-provider.md)：独立 `omp` 适配器、v2 分块传输、审批模式映射、结构化 ask、子 Agent 与回合级 settled 关联；Pi 是另一个独立 Provider（ADR-156）。
 - [ADR-179：Provider 自身行为的测试归 provider crate](decisions/providers/adr-179-provider-owned-tests.md)：原生 adapter 与执行器场景在 provider 内验证，daemon 保留宿主、传输和跨能力组合测试。
 
 - [ADR-178：OpenCode 轻量可用性探测与冷恢复预算](decisions/providers/adr-178-opencode-startup-probe-and-restoration.md)：避免重复 ACP 冷启动，并统一恢复与辅助会话的启动预算。
@@ -212,6 +213,7 @@
 - [Ait 0.0.14 发布说明](reports/releases/release-0.0.14.md)：Diff 语法高亮、侧边栏统计与 Codex 推理等级。
 - [Apple 本机构建](operations/apple-builds.md)：DMG、模拟器和 IPA。
 - [Pi](operations/pi.md)：原生 RPC、模型发现、会话恢复与能力限制；[ADR-156](decisions/providers/adr-156-pi-native-rpc-provider.md)。
+- [Oh My Pi](operations/oh-my-pi.md)：独立 OMP 权限、结构化问答、子 Agent 与 v2 传输；[ADR-180](decisions/providers/adr-180-omp-native-rpc-provider.md)。
 - [Claude Code](operations/claude-code.md)：认证、原生会话与审批。
 - [DeepSeek Harness](operations/deepseek-harness.md)：原生 Host、DeepSeek 账号余额、会话导入、权限模式、question 与 ACP 兼容配置。
 - [Antigravity CLI](operations/antigravity.md)：AGY 安装、登录、权限模式、会话恢复与账号额度查询。
