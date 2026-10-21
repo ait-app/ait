@@ -155,6 +155,7 @@
 
 ## 客户端、连接与品牌
 
+- [Web tooltip DOM 触发元素定位验证](clients/web-tooltip-dom-triggers-2026-10-21.md)
 - [iPhone / iPad 原生功能验收（0.1.12）](clients/ios-iphone-ipad-functional-2026-10-20.md)
 - [Paseo 0.12.0 增量借鉴清单](clients/paseo-upstream-opportunities-2026-10-19.md)
 - [Paseo 客户端候选改动源码研究](clients/paseo-client-candidates-2026-10-19.md)
