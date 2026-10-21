@@ -440,3 +440,97 @@ describe("native mobile account storage and lifecycle", () => {
     expect(fetch).not.toHaveBeenCalled();
   });
 });
+
+describe("native mobile hub link", () => {
+  it("runs one hub link while signed in and active, and stops it on suspension and sign-out", async () => {
+    interface HubSocket {
+      url: string;
+      options?: { headers?: Record<string, string> };
+      close: () => void;
+      onopen?: (event: unknown) => void;
+      onmessage?: (event: unknown) => void;
+    }
+    const hubSockets: HubSocket[] = [];
+    const welcome = (socket: HubSocket) => {
+      const header = new TextEncoder().encode(
+        JSON.stringify({
+          t: "welcome",
+          v: 1,
+          link: "link",
+          resumed: false,
+          recv: 0,
+          resume_token: "e".repeat(64),
+          node_id: "node",
+          grace_seconds: 120,
+        }),
+      );
+      const frame = new Uint8Array(2 + header.byteLength);
+      frame.set([header.byteLength >> 8, header.byteLength & 0xff]);
+      frame.set(header, 2);
+      socket.onopen?.({});
+      socket.onmessage?.({ data: frame.buffer });
+    };
+    vi.stubGlobal(
+      "WebSocket",
+      function (url: string, protocols?: string[], options?: { headers?: Record<string, string> }) {
+        if (!url.endsWith("/v1/hub")) return new ChannelWebSocket(url, protocols, options);
+        const socket: HubSocket = { url, options, close: vi.fn() };
+        Object.assign(socket, { readyState: 1, send: vi.fn() });
+        hubSockets.push(socket);
+        return socket;
+      },
+    );
+    mocks.get.mockResolvedValue(
+      JSON.stringify({
+        center: "https://center.test/api",
+        token: "saved-jwt",
+        expiresAt: Date.now() + 3_600_000,
+        name: "Me",
+      }),
+    );
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async (url: string) =>
+        Response.json(
+          url.endsWith("/v1/nodes/register")
+            ? { node_id: "node", node_session_id: "session", control_required: false }
+            : url.endsWith("/hub-tickets")
+              ? { hub_ticket: "d".repeat(64), hub_path: "/v1/hub", protocol: "ait-hub-v1" }
+              : {
+                  channel_ticket: "native-ticket",
+                  channel_path: "/v1/relay/channel",
+                  protocol: "ait-channel-v1",
+                },
+        ),
+      ),
+    );
+    const { getNativeAccount, getNativeHubLink } = await import("./native-account.native");
+    const pending = getNativeHubLink();
+    const manager = await getNativeAccount();
+    const link = await pending;
+    expect(link).toBe(getNativeHubLink());
+    await vi.advanceTimersByTimeAsync(10);
+    expect(hubSockets).toHaveLength(1);
+    expect(hubSockets[0]).toMatchObject({
+      url: "wss://center.test/api/v1/hub",
+      options: { headers: { Authorization: `Bearer ${"d".repeat(64)}` } },
+    });
+    welcome(hubSockets[0]!);
+    expect((link as { state: string }).state).toBe("online");
+
+    const onState = mocks.appState.mock.calls[0]![1];
+    onState("background");
+    await vi.advanceTimersByTimeAsync(60_000);
+    expect(hubSockets[0]!.close).not.toHaveBeenCalled();
+    await vi.advanceTimersByTimeAsync(60_000);
+    expect(hubSockets[0]!.close).toHaveBeenCalled();
+    expect((link as { state: string }).state).toBe("stopped");
+
+    onState("active");
+    await vi.advanceTimersByTimeAsync(10);
+    expect(hubSockets).toHaveLength(2);
+    await manager.logout();
+    expect(hubSockets[1]!.close).toHaveBeenCalled();
+    expect((link as { state: string }).state).toBe("stopped");
+  });
+});

@@ -2,14 +2,14 @@ import { supportsBrowserAccount } from "../browser-account";
 import { createBrowserAccountRelayTransportFactory } from "./browser-account-relay";
 import { getDesktopHost } from "@/desktop/host";
 import { Platform } from "react-native";
-import { createNativeAccountRelayTransportFactory } from "./native-account-transport";
+import { createHubAccountRelayTransportFactory } from "./hub-account-transport";
 import type { TransportFactory } from "./types";
 import { parseAccountRelayTarget } from "./account-relay-target";
 
 /** Each platform owns its account authority and one-use relay tickets. */
 export const createAccountRelayTransportFactory: TransportFactory = ({ url }) => {
   if (Platform.OS === "android" || Platform.OS === "ios")
-    return createNativeAccountRelayTransportFactory()({ url });
+    return createHubAccountRelayTransportFactory()({ url });
   const desktop = getDesktopHost();
   if (!desktop?.invoke && supportsBrowserAccount())
     return createBrowserAccountRelayTransportFactory({ url });
