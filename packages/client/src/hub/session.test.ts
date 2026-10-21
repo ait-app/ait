@@ -96,4 +96,37 @@ describe("hub session transport", () => {
     expect(events.close).toHaveBeenCalledOnce();
     expect(socket.frames("msg")).toEqual([]);
   });
+
+  it("aborts on an accept it never asked for and tells the peer", async () => {
+    const { h, socket, transport, events } = await session();
+    await h.flush();
+    transport.send('{"type":"hello"}');
+    socket.receive({ t: "accept", seq: 2, s: transport.id });
+    socket.receive({ t: "accept", seq: 3, s: transport.id });
+    expect(events.error).toHaveBeenCalledWith(new Error("Unexpected hub session accept."));
+    expect(socket.frames("close")).toEqual([
+      { t: "close", seq: 2, s: transport.id, code: "failed" },
+    ]);
+    expect(transport.closed).toBe(true);
+    expect(() => transport.send("late")).toThrow("Hub session is closed.");
+  });
+
+  it("stops delivering events to handlers that unsubscribed", async () => {
+    const h = hubFixture();
+    const socket = await h.online();
+    const transport = h.link.openSession(HOST.node_id);
+    const handlers = { open: vi.fn(), close: vi.fn(), error: vi.fn(), message: vi.fn() };
+    const removers = [
+      transport.onOpen(handlers.open),
+      transport.onClose(handlers.close),
+      transport.onError(handlers.error),
+      transport.onMessage(handlers.message),
+    ];
+    for (const remove of removers) remove();
+    await h.flush();
+    transport.send('{"type":"hello"}');
+    socket.receive({ t: "accept", seq: 2, s: transport.id }, "info");
+    socket.receive({ t: "close", seq: 3, s: transport.id, code: "done" });
+    for (const handler of Object.values(handlers)) expect(handler).not.toHaveBeenCalled();
+  });
 });

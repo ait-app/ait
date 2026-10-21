@@ -270,3 +270,102 @@ describe("native account relay path selection", () => {
     expect(slow.legacyTransport.close).toHaveBeenCalledOnce();
   });
 });
+
+describe("deferred account relay transport", () => {
+  /** A legacy transport whose events the test fires. */
+  function scriptedLegacy() {
+    const handlers = {
+      open: new Set<() => void>(),
+      close: new Set<(event?: unknown) => void>(),
+      error: new Set<(event?: unknown) => void>(),
+      message: new Set<(data: unknown, binary: boolean) => void>(),
+    };
+    const transport: Transport = {
+      send: vi.fn(),
+      close: vi.fn(),
+      onOpen: (handler) => (handlers.open.add(handler), () => handlers.open.delete(handler)),
+      onClose: (handler) => (handlers.close.add(handler), () => handlers.close.delete(handler)),
+      onError: (handler) => (handlers.error.add(handler), () => handlers.error.delete(handler)),
+      onMessage: (handler) => (
+        handlers.message.add(handler), () => handlers.message.delete(handler)
+      ),
+    };
+    return { transport, handlers };
+  }
+
+  it("reports a failed account restore as an error and close", async () => {
+    const h = harness();
+    h.deps.hub.mockReturnValue(Promise.reject(new Error("restore failed")));
+    const transport = createHubAccountRelayTransportFactory(h.deps)({ url });
+    const error = vi.fn();
+    const close = vi.fn();
+    transport.onError(error);
+    transport.onClose(close);
+    expect(() => transport.send("early")).toThrow("Relay is not ready.");
+    await vi.advanceTimersByTimeAsync(0);
+    expect(error).toHaveBeenCalledWith(new Error("restore failed"));
+    expect(close).toHaveBeenCalledWith({ code: 1006, reason: "restore failed" });
+    transport.close();
+    expect(h.deps.legacy).not.toHaveBeenCalled();
+  });
+
+  it("never creates a transport once closed while the choice is pending", async () => {
+    const h = harness();
+    let resolve!: (link: HubLink | null) => void;
+    h.deps.hub.mockReturnValue(new Promise((done) => (resolve = done)));
+    const transport = createHubAccountRelayTransportFactory(h.deps)({ url });
+    transport.close();
+    resolve(null);
+    await vi.advanceTimersByTimeAsync(0);
+    expect(h.deps.legacy).not.toHaveBeenCalled();
+    expect(() => transport.send("late")).toThrow("Relay is not ready.");
+  });
+
+  it("forwards the chosen transport's events only to subscribed handlers", async () => {
+    const h = harness();
+    const legacy = scriptedLegacy();
+    h.deps.legacy.mockReturnValue(legacy.transport);
+    h.deps.hub.mockReturnValue(Promise.resolve(null));
+    const transport = createHubAccountRelayTransportFactory(h.deps)({ url });
+    const kept = { open: vi.fn(), close: vi.fn(), error: vi.fn(), message: vi.fn() };
+    const removed = { open: vi.fn(), close: vi.fn(), error: vi.fn(), message: vi.fn() };
+    for (const events of [kept, removed]) {
+      const removers = [
+        transport.onOpen(events.open),
+        transport.onClose(events.close),
+        transport.onError(events.error),
+        transport.onMessage(events.message),
+      ];
+      if (events === removed) for (const remove of removers) remove();
+    }
+    await vi.advanceTimersByTimeAsync(0);
+    for (const handler of legacy.handlers.open) handler();
+    for (const handler of legacy.handlers.message) handler("data", false);
+    for (const handler of legacy.handlers.error) handler("failure");
+    for (const handler of legacy.handlers.close) handler({ code: 1000 });
+    transport.send("payload");
+    expect(legacy.transport.send).toHaveBeenCalledWith("payload");
+    expect(kept.open).toHaveBeenCalledOnce();
+    expect(kept.message).toHaveBeenCalledWith("data", false);
+    expect(kept.error).toHaveBeenCalledWith("failure");
+    expect(kept.close).toHaveBeenCalledWith({ code: 1000 });
+    for (const handler of Object.values(removed)) expect(handler).not.toHaveBeenCalled();
+    transport.close(4000, "done");
+    expect(legacy.transport.close).toHaveBeenCalledWith(4000, "done");
+  });
+
+  it("reports a hub session the account cannot track as a failed transport", async () => {
+    const h = harness();
+    await h.connect();
+    h.deps.register.mockImplementation(() => {
+      throw new Error("Account is signing out.");
+    });
+    const transport = createHubAccountRelayTransportFactory(h.deps)({ url });
+    const error = vi.fn();
+    transport.onError(error);
+    await vi.advanceTimersByTimeAsync(0);
+    expect(error).toHaveBeenCalledWith(new Error("Account is signing out."));
+    expect(h.deps.log).toHaveBeenCalledWith("hub", expect.anything());
+    expect(h.sockets.at(-1)!.sent.filter((frame) => frame.header.t === "open")).toEqual([]);
+  });
+});

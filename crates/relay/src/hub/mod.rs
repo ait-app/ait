@@ -251,6 +251,7 @@ impl Connector {
         let mut grace = Duration::MAX;
         let mut lost: Option<Instant> = None;
         let mut failures = 0_usize;
+        let mut last_failure = Failure::Relay(Error::Transport);
         loop {
             let joined = tokio::select! {
                 () = cancel.cancelled() => return Ok(()),
@@ -293,6 +294,7 @@ impl Connector {
                 }
                 Err(error) => {
                     tracing::info!(%error, failures, "Hub link connect failed");
+                    last_failure = error;
                 }
             }
             let since = *lost.get_or_insert_with(Instant::now);
@@ -300,7 +302,11 @@ impl Connector {
                 return Err(Error::Transport.into());
             }
             // The one-use ticket is spent after the first attempt.
-            credential = link.token().cloned().ok_or(Error::Transport)?;
+            // Without a welcome there is nothing to resume; report why.
+            let Some(token) = link.token().cloned() else {
+                return Err(last_failure);
+            };
+            credential = token;
             let delay = BACKOFF_MS[failures.min(BACKOFF_MS.len() - 1)];
             failures += 1;
             tokio::select! {

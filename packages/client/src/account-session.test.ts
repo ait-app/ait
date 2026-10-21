@@ -1432,6 +1432,29 @@ describe("hub tickets", () => {
     await manager.logout();
   });
 
+  it("retries with backoff when the center fails to issue a hub ticket", async () => {
+    const localHub = vi.fn(async () => ({ online: false, connecting: false }));
+    const { manager, http, login } = desktopHub(localHub);
+    const original = http.getMockImplementation()!;
+    http.mockImplementation((url, options) =>
+      String(url).endsWith("/hub-tickets")
+        ? Promise.resolve(Response.json({ error: { code: "internal" } }, { status: 500 }))
+        : original(url, options),
+    );
+    await login();
+    await manager.publishHost(builtIn);
+    await vi.advanceTimersByTimeAsync(1);
+    expect(hubCalls(http)).toHaveLength(1);
+    await vi.advanceTimersByTimeAsync(30_000);
+    const retries = hubCalls(http).length;
+    expect(retries).toBeGreaterThan(1);
+    expect(retries).toBeLessThan(15);
+    expect(localHub).not.toHaveBeenCalledWith("PUT", expect.anything());
+    expect(manager.snapshot().error).toBeNull();
+    await manager.unpublishHost("first");
+    await manager.logout();
+  });
+
   it("backs off when the center has no hub", async () => {
     const localHub = vi.fn(async () => ({ online: false, connecting: false }));
     const { manager, http, login } = desktopHub(localHub);

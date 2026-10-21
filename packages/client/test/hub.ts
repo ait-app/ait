@@ -15,6 +15,8 @@ export class FakeHubSocket implements WebSocketLike {
   readyState = 0;
   binaryType = "blob";
   readonly sent: Sent[] = [];
+  /** Make the next sends throw, as a socket whose buffer is gone would. */
+  failSends = false;
   readonly close = vi.fn(() => {
     this.readyState = 3;
   });
@@ -35,6 +37,7 @@ export class FakeHubSocket implements WebSocketLike {
   }
 
   send(data: string | Uint8Array | ArrayBuffer): void {
+    if (this.failSends) throw new Error("Socket is closed");
     if (typeof data === "string") throw new Error("Hub frames must be binary");
     const bytes = data instanceof Uint8Array ? data : new Uint8Array(data);
     const length = (bytes[0] << 8) | bytes[1];
@@ -87,6 +90,16 @@ export class FakeHubSocket implements WebSocketLike {
   drop(): void {
     this.readyState = 3;
     this.emit("close", { code: 1006 });
+  }
+
+  /** A transport error, as a failed upgrade or reset connection reports it. */
+  fail(): void {
+    this.emit("error", new Error("socket error"));
+  }
+
+  /** A text message, which the hub protocol never sends. */
+  receiveText(text: string): void {
+    this.emit("message", { data: text });
   }
 
   private emit(event: string, value: unknown): void {

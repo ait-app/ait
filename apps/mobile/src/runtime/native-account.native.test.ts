@@ -534,3 +534,13 @@ describe("native mobile hub link", () => {
     expect((link as { state: string }).state).toBe("stopped");
   });
 });
+
+describe("native mobile hub link without an account", () => {
+  it("reports no hub link when the account cannot be restored", async () => {
+    mocks.getInstallation.mockRejectedValueOnce(new Error("storage unavailable"));
+    const { getNativeAccount, getNativeHubLink } = await import("./native-account.native");
+    await expect(getNativeHubLink()).resolves.toBeNull();
+    // A later call retries the restore instead of caching the failure.
+    await expect(getNativeAccount()).resolves.toBeDefined();
+  });
+});

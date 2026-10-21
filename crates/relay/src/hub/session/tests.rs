@@ -136,3 +136,135 @@ fn payload_kinds_map_to_business_messages() {
         Err("invalid_message")
     );
 }
+
+#[tokio::test]
+async fn forwards_later_daemon_traffic_and_closes_when_the_link_drops_the_session() {
+    let listener = TcpListener::bind("127.0.0.1:0").await.expect("bind");
+    let local = local(listener.local_addr().expect("address"));
+    let daemon = tokio::spawn(async move {
+        let (tcp, _) = listener.accept().await.expect("accept");
+        let mut socket = accept_async(tcp).await.expect("upgrade");
+        socket.next().await.expect("hello").expect("hello frame");
+        socket
+            .send(Message::Pong(Bytes::from_static(b"early")))
+            .await
+            .expect("pong");
+        socket
+            .send(Message::Text("server info".into()))
+            .await
+            .expect("info");
+        socket
+            .send(Message::Ping(Bytes::from_static(b"p")))
+            .await
+            .expect("ping");
+        socket
+            .send(Message::Pong(Bytes::from_static(b"q")))
+            .await
+            .expect("pong");
+        socket
+            .send(Message::Text("event".into()))
+            .await
+            .expect("event");
+        // The session closes this socket once the link drops it.
+        loop {
+            match socket.next().await {
+                Some(Ok(Message::Close(_))) | None => return true,
+                Some(Ok(_)) => {}
+                Some(Err(_)) => return false,
+            }
+        }
+    });
+    let (inbound_tx, inbound_rx) = mpsc::channel(4);
+    let (output_tx, mut output_rx) = mpsc::channel(4);
+    tokio::spawn(run(
+        local,
+        Uuid::new_v4(),
+        Bytes::from_static(HELLO.as_bytes()),
+        inbound_rx,
+        output_tx,
+    ));
+
+    assert!(matches!(next(&mut output_rx).await, Output::Accept(_)));
+    assert_eq!(
+        next(&mut output_rx).await,
+        Output::Message(PayloadKind::Text, Bytes::from_static(b"event"))
+    );
+    drop(inbound_tx);
+
+    assert_eq!(next(&mut output_rx).await, Output::Closed("closed"));
+    assert!(daemon.await.expect("daemon"), "daemon saw a clean close");
+}
+
+#[tokio::test]
+async fn daemon_failures_close_the_session_as_unavailable() {
+    for abrupt_after_reply in [false, true] {
+        let listener = TcpListener::bind("127.0.0.1:0").await.expect("bind");
+        let local = local(listener.local_addr().expect("address"));
+        tokio::spawn(async move {
+            let (tcp, _) = listener.accept().await.expect("accept");
+            let mut socket = accept_async(tcp).await.expect("upgrade");
+            socket.next().await.expect("hello").expect("hello frame");
+            if abrupt_after_reply {
+                socket
+                    .send(Message::Text("server info".into()))
+                    .await
+                    .expect("info");
+            }
+            // Drop the TCP connection without a WebSocket close.
+            drop(socket);
+        });
+        let (_inbound_tx, inbound_rx) = mpsc::channel(4);
+        let (output_tx, mut output_rx) = mpsc::channel(4);
+        tokio::spawn(run(
+            local,
+            Uuid::new_v4(),
+            Bytes::from_static(HELLO.as_bytes()),
+            inbound_rx,
+            output_tx,
+        ));
+        if abrupt_after_reply {
+            assert!(matches!(next(&mut output_rx).await, Output::Accept(_)));
+        }
+        assert_eq!(next(&mut output_rx).await, Output::Closed("unavailable"));
+    }
+}
+
+#[tokio::test]
+async fn a_session_whose_link_is_gone_stops_after_the_handshake() {
+    let listener = TcpListener::bind("127.0.0.1:0").await.expect("bind");
+    let local = local(listener.local_addr().expect("address"));
+    let daemon = tokio::spawn(async move {
+        let (tcp, _) = listener.accept().await.expect("accept");
+        let mut socket = accept_async(tcp).await.expect("upgrade");
+        socket.next().await.expect("hello").expect("hello frame");
+        socket
+            .send(Message::Text("server info".into()))
+            .await
+            .expect("info");
+        while let Some(Ok(message)) = socket.next().await {
+            if matches!(message, Message::Close(_)) {
+                break;
+            }
+        }
+    });
+    let (_inbound_tx, inbound_rx) = mpsc::channel(4);
+    let (output_tx, output_rx) = mpsc::channel(4);
+    drop(output_rx);
+
+    timeout(
+        Duration::from_secs(3),
+        run(
+            local,
+            Uuid::new_v4(),
+            Bytes::from_static(HELLO.as_bytes()),
+            inbound_rx,
+            output_tx,
+        ),
+    )
+    .await
+    .expect("the bridge returns once nobody reads its output");
+    timeout(Duration::from_secs(3), daemon)
+        .await
+        .expect("daemon socket released")
+        .expect("daemon");
+}

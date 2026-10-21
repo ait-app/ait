@@ -329,3 +329,197 @@ async fn rejections_before_welcome_end_the_link_without_yielding() {
     assert!(!status.online);
     assert!(!hub.yielding().await);
 }
+
+/// A local daemon that accepts sessions and reads their hello but never answers.
+fn silent_daemon(listener: TcpListener) {
+    tokio::spawn(async move {
+        let mut held = Vec::new();
+        while let Ok((tcp, _)) = listener.accept().await {
+            if let Ok(mut socket) = accept_async(tcp).await {
+                let _ = socket.next().await;
+                held.push(socket);
+            }
+        }
+    });
+}
+
+/// Accept the first connection and complete a fresh welcome with `grace_seconds`.
+async fn online(hub: &Connector, center: &TcpListener, grace_seconds: u64) -> Center {
+    let (mut socket, _) = accept(center).await;
+    next(&mut socket).await;
+    let mut welcome = welcome(Uuid::new_v4(), false, 0);
+    welcome["grace_seconds"] = json!(grace_seconds);
+    socket.send(frame(&welcome, b"")).await.expect("welcome");
+    next_status(hub, |status| status.online).await;
+    socket
+}
+
+fn open(seq: u64, s: Uuid, hello: &[u8]) -> Message {
+    frame(
+        &json!({"t":"open","seq":seq,"s":s,"from":Uuid::new_v4()}),
+        hello,
+    )
+}
+
+#[tokio::test]
+async fn center_frames_drive_session_refusals_and_link_control() {
+    let (_relay, hub, center, local) = connector().await;
+    silent_daemon(local);
+    let mut socket = online(&hub, &center, 120).await;
+
+    socket
+        .send(Message::Ping(Bytes::from_static(b"center")))
+        .await
+        .expect("ping");
+    let pong = timeout(Duration::from_secs(3), async {
+        loop {
+            if let Some(Ok(Message::Pong(body))) = socket.next().await {
+                return body;
+            }
+        }
+    })
+    .await
+    .expect("pong");
+    assert_eq!(pong.as_ref(), b"center");
+    socket
+        .send(frame(&json!({"t":"ack","a":0}), b""))
+        .await
+        .expect("ack");
+
+    let invalid = Uuid::new_v4();
+    socket.send(open(1, invalid, b"{}")).await.expect("open");
+    assert_eq!(
+        next(&mut socket).await.0,
+        json!({"t":"close","seq":1,"s":invalid,"code":"invalid_hello"})
+    );
+
+    // Sixteen sessions wait for the silent daemon; the next one is refused.
+    let pending: Vec<Uuid> = (0..16).map(|_| Uuid::new_v4()).collect();
+    for (seq, s) in (2..).zip(&pending) {
+        socket
+            .send(open(seq, *s, HELLO.as_bytes()))
+            .await
+            .expect("open");
+    }
+    // Replayed opens of a live session are ignored.
+    socket
+        .send(open(18, pending[0], HELLO.as_bytes()))
+        .await
+        .expect("duplicate");
+    let refused = Uuid::new_v4();
+    socket
+        .send(open(19, refused, HELLO.as_bytes()))
+        .await
+        .expect("open");
+    let (closed, _) = next(&mut socket).await;
+    assert_eq!(closed["s"], json!(refused));
+    assert_eq!(closed["code"], "capacity");
+
+    let text = |seq: u64, s: Uuid| frame(&json!({"t":"msg","seq":seq,"s":s,"pt":"text"}), &[0xff]);
+    socket
+        .send(text(20, Uuid::new_v4()))
+        .await
+        .expect("unknown session");
+    socket
+        .send(text(21, pending[1]))
+        .await
+        .expect("invalid text");
+    let (closed, _) = next(&mut socket).await;
+    assert_eq!(closed["s"], json!(pending[1]));
+    assert_eq!(closed["code"], "invalid_message");
+    socket
+        .send(frame(
+            &json!({"t":"close","seq":22,"s":pending[2],"code":"done"}),
+            b"",
+        ))
+        .await
+        .expect("close");
+
+    // A second welcome on a live link is a protocol violation.
+    socket
+        .send(frame(&welcome(Uuid::new_v4(), false, 0), b""))
+        .await
+        .expect("welcome");
+    let status = next_status(&hub, |status| !status.online && !status.connecting).await;
+    assert_eq!(status.error.as_deref(), Some("relay protocol rejected"));
+}
+
+#[tokio::test]
+async fn text_frames_from_the_center_end_the_link() {
+    let (_relay, hub, center, _local) = connector().await;
+    let mut socket = online(&hub, &center, 120).await;
+    socket
+        .send(Message::Text("not a hub frame".into()))
+        .await
+        .expect("text");
+    let status = next_status(&hub, |status| !status.online && !status.connecting).await;
+    assert_eq!(status.error.as_deref(), Some("relay protocol rejected"));
+}
+
+#[tokio::test]
+async fn a_link_without_grace_left_ends_after_a_clean_close() {
+    let (_relay, hub, center, _local) = connector().await;
+    // The grace period equals the safety margin, so no resume is attempted.
+    let mut socket = online(&hub, &center, 5).await;
+    socket.close(None).await.expect("close");
+    let status = next_status(&hub, |status| !status.online && !status.connecting).await;
+    assert_eq!(status.error.as_deref(), Some("relay transport unavailable"));
+    assert_eq!(status.link, None);
+}
+
+#[tokio::test]
+async fn an_unreachable_center_ends_the_first_attempt() {
+    let (_relay, hub, center, _local) = connector().await;
+    drop(center);
+    let status = next_status(&hub, |status| !status.connecting).await;
+    assert_eq!(status.error.as_deref(), Some("relay transport unavailable"));
+    assert!(!status.online);
+}
+
+#[tokio::test]
+async fn frames_before_the_welcome_are_rejected() {
+    let (_relay, hub, center, _local) = connector().await;
+    let (mut socket, _) = accept(&center).await;
+    next(&mut socket).await;
+    socket
+        .send(frame(&json!({"t":"ack","a":0}), b""))
+        .await
+        .expect("ack");
+    let status = next_status(&hub, |status| !status.connecting).await;
+    assert_eq!(status.error.as_deref(), Some("relay protocol rejected"));
+}
+
+#[tokio::test]
+async fn stop_ends_an_online_link_and_its_late_result_is_ignored() {
+    let (_relay, hub, center, _local) = connector().await;
+    let (mut socket, _) = accept(&center).await;
+    next(&mut socket).await;
+    // Hop-local pings before the welcome are answered or ignored.
+    socket
+        .send(Message::Ping(Bytes::from_static(b"early")))
+        .await
+        .expect("ping");
+    socket
+        .send(Message::Pong(Bytes::from_static(b"stray")))
+        .await
+        .expect("pong");
+    socket
+        .send(frame(&welcome(Uuid::new_v4(), false, 0), b""))
+        .await
+        .expect("welcome");
+    next_status(&hub, |status| status.online).await;
+
+    hub.stop().await;
+    let closed = timeout(Duration::from_secs(3), async {
+        loop {
+            match socket.next().await {
+                Some(Ok(Message::Close(_)) | Err(_)) | None => return,
+                Some(Ok(_)) => {}
+            }
+        }
+    })
+    .await;
+    assert!(closed.is_ok(), "the center connection is closed");
+    sleep(Duration::from_millis(100)).await;
+    assert_eq!(hub.status().await, Status::default());
+}
