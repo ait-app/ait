@@ -1,7 +1,7 @@
 use super::*;
 
 #[cfg(unix)]
-async fn release_after_old_deadline(root: &TempDir, phase: &str) {
+pub(super) async fn release_after_old_deadline(root: &TempDir, phase: &str) {
     let entered = root.path().join(format!("{phase}.entered"));
     let release = root.path().join(format!("{phase}.release"));
     let wait_until = std::time::Instant::now() + Duration::from_secs(5);

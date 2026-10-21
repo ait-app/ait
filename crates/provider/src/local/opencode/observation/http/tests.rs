@@ -17,7 +17,8 @@ use axum::{
 use futures_util::stream;
 use tokio::sync::broadcast;
 
-use super::*;
+use super::super::tests::{catalog, message};
+use super::super::*;
 
 #[derive(Debug)]
 struct Native {
@@ -27,7 +28,7 @@ struct Native {
     cycle: AtomicBool,
 }
 
-async fn fixture() -> (Source, Arc<Native>, AbortOnDropHandle<()>) {
+fn fixture() -> (Source, Arc<Native>, AbortOnDropHandle<()>) {
     use base64::Engine;
     let mut source = Source::prepare("1.18.4", Duration::from_secs(5))
         .unwrap()
@@ -39,7 +40,9 @@ async fn fixture() -> (Source, Arc<Native>, AbortOnDropHandle<()>) {
         .get_args()
         .map(|arg| arg.to_str().unwrap())
         .collect();
-    let port = arguments[arguments.iter().position(|arg| *arg == "--port").unwrap() + 1];
+    let port: u16 = arguments[arguments.iter().position(|arg| *arg == "--port").unwrap() + 1]
+        .parse()
+        .unwrap();
     let password = command
         .as_std()
         .get_envs()
@@ -54,10 +57,11 @@ async fn fixture() -> (Source, Arc<Native>, AbortOnDropHandle<()>) {
         base64::engine::general_purpose::STANDARD.encode(format!("opencode:{password}"))
     );
     assert!(!format!("{source:?}").contains(password));
-    source.release();
-    let listener = tokio::net::TcpListener::bind(format!("127.0.0.1:{port}"))
-        .await
-        .unwrap();
+    // Transfer the reserved socket without a close/rebind gap under parallel process startup.
+    let listener = source.prepared.take().unwrap().listener;
+    assert_eq!(listener.local_addr().unwrap().port(), port);
+    listener.set_nonblocking(true).unwrap();
+    let listener = tokio::net::TcpListener::from_std(listener).unwrap();
     let native = Arc::new(Native {
         authorization,
         events: broadcast::channel(32).0,
@@ -109,6 +113,7 @@ async fn serve(
                 .into_response()
         }
         "/config/providers" => axum::Json(catalog()).into_response(),
+        "/agent" => axum::Json(json!([{"name":"build","mode":"primary"}])).into_response(),
         "/session/parent" => axum::Json(json!({"id":"parent","cost":0.02})).into_response(),
         "/session/parent/message" => {
             let mut response = if query.contains_key("before") {
@@ -140,7 +145,7 @@ async fn serve(
 
 #[tokio::test]
 async fn owned_native_observation_restores_cached_usage_and_compaction_then_streams_new_usage() {
-    let (source, native, _server) = fixture().await;
+    let (source, native, _server) = fixture();
     let mut observation = source.bind("parent", "/workspace").await.unwrap();
     assert_eq!(
         observation.usage().unwrap().context_window_used_tokens,
@@ -171,7 +176,7 @@ async fn owned_native_observation_restores_cached_usage_and_compaction_then_stre
 
 #[tokio::test]
 async fn repeated_native_history_cursors_fail_boundedly_without_following_server_urls() {
-    let (source, native, _server) = fixture().await;
+    let (source, native, _server) = fixture();
     native.cycle.store(true, Ordering::SeqCst);
     assert!(matches!(
         source.bind("parent", "/workspace").await,
@@ -186,5 +191,22 @@ async fn repeated_native_history_cursors_fail_boundedly_without_following_server
             .filter(|path| path.as_str() == "/session/parent/message")
             .count(),
         2
+    );
+}
+
+#[tokio::test]
+async fn native_catalog_uses_only_authenticated_read_only_requests_without_a_session() {
+    let (source, native, _server) = fixture();
+
+    let (providers, agents) = source
+        .catalog("/workspace", Duration::from_secs(5))
+        .await
+        .unwrap();
+
+    assert_eq!(providers, catalog());
+    assert_eq!(agents, vec![json!({"name":"build","mode":"primary"})]);
+    assert_eq!(
+        *native.requests.lock().unwrap(),
+        ["/config/providers", "/agent"]
     );
 }

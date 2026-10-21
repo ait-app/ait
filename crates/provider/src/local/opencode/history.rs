@@ -18,15 +18,20 @@ use crate::{
     protocol::timeline::NativeItem,
 };
 
-/// Incrementally load this native transcript; fail on RPC, identity or projection errors.
+/// Incrementally load this native transcript within `timeout`, restoring ordinary controls after.
+/// Cold restoration uses the startup budget; settlement retains the ordinary control budget.
+/// Fail on RPC, identity or projection errors.
 pub(super) async fn replay(
     transport: &mut Transport,
     id: &str,
     cwd: &str,
     images: crate::local::images::ImageStore,
+    timeout: std::time::Duration,
 ) -> Result<(Value, Stream), AgentSessionError> {
     let mut stream = Stream::new(images);
     let mut completed = VecDeque::new();
+    let ordinary_timeout = transport.control_deadline();
+    transport.set_control_deadline(timeout);
     let result = transport
         .request_with_updates(
             "session/load",
@@ -48,7 +53,9 @@ pub(super) async fn replay(
                 Ok(())
             },
         )
-        .await?;
+        .await;
+    transport.set_control_deadline(ordinary_timeout);
+    let result = result?;
     stream.flush();
     completed.extend(stream.events.drain(..).filter(|event| {
         matches!(
@@ -208,6 +215,7 @@ pub(super) async fn inspect(
             &handle.session_id,
             cwd,
             client.images.clone(),
+            client.startup_timeout,
         )
         .await?;
         let clients = super::session::clients(handle)?;

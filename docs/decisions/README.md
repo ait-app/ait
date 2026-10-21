@@ -75,6 +75,8 @@ ADR-074、082、083、084、122 在不同类别中各有两份，引用时以路
 
 ## Provider、Agent 与会话
 
+- [ADR-178：OpenCode 轻量可用性探测与冷恢复预算](providers/adr-178-opencode-startup-probe-and-restoration.md)
+
 - [ADR-176：Pi 用户图片的共享时间线投影](providers/adr-176-pi-user-image-projection.md)
 - [ADR-174：Pi 原生会话导入](providers/adr-174-pi-session-import.md)
 

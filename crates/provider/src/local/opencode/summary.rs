@@ -115,7 +115,7 @@ pub(super) async fn generate(
     let mut temporary = Temporary::new(client, &spec.cwd, transport);
     let result = async {
         let transport = temporary.transport.as_mut().ok_or(AgentSessionError::Failed)?;
-        let result = transport.request("session/new", json!({"cwd":spec.cwd,"mcpServers":[]})).await?;
+        let result = transport.startup_request("session/new", json!({"cwd":spec.cwd,"mcpServers":[]}), client.startup_timeout).await?;
         let id = config::text(&result, "sessionId")?.to_owned();
         temporary.id = Some(id.clone());
         let mut options = config::state(&result)?;

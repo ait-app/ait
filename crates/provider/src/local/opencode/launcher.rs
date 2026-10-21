@@ -81,7 +81,8 @@ async fn launch(
     auxiliary: bool,
     observe: bool,
 ) -> Result<(Transport, Value, Option<Source>), AgentSessionError> {
-    let deadline = Instant::now() + client.startup_timeout;
+    let started = Instant::now();
+    let deadline = started + client.startup_timeout;
     let version = tokio::time::timeout_at(deadline, version(client, cwd))
         .await
         .map_err(|_| AgentSessionError::Failed)??;
@@ -89,6 +90,10 @@ async fn launch(
         tracing::warn!(version, "OpenCode 2.x ACP requires version 2.0.25 or newer");
         return Err(AgentSessionError::Unavailable);
     }
+    tracing::debug!(
+        elapsed_ms = started.elapsed().as_millis(),
+        "opencode.startup.version"
+    );
     let legacy = version.starts_with("1.");
     let mut command = Command::new(&client.program);
     command.arg("acp").envs(&client.environment);
@@ -104,6 +109,76 @@ async fn launch(
         // Native 1.x excludes question in ACP. Do not enable an unanswerable native question.
         command.env("OPENCODE_ENABLE_QUESTION_TOOL", "false");
     }
+    configure_overlay(&mut command, client, selected, auxiliary, legacy)?;
+    // Native 2.x standalone processes can race the shared SQLite schema bootstrap.
+    // Hold the clone-shared gate only through initialization, never through a session or prompt.
+    let queued = Instant::now();
+    let _startup = if legacy {
+        None
+    } else {
+        Some(
+            tokio::time::timeout_at(deadline, client.startup.lock())
+                .await
+                .map_err(|_| AgentSessionError::Failed)?,
+        )
+    };
+    tracing::debug!(
+        elapsed_ms = queued.elapsed().as_millis(),
+        "opencode.startup.queue"
+    );
+    let remaining = deadline.saturating_duration_since(Instant::now());
+    if let Some(source) = &mut observation {
+        source.release();
+    }
+    let mut transport = Transport::spawn(command, cwd, remaining, "opencode")?;
+    let initialized_at = Instant::now();
+    let initialized = if let Ok(result) = tokio::time::timeout_at(
+        deadline,
+        transport.request(
+            "initialize",
+            json!({"protocolVersion":1,
+        "clientCapabilities":{"elicitation":{"form":{}}},
+        "clientInfo":{"name":"ait","version":env!("CARGO_PKG_VERSION")}}),
+        ),
+    )
+    .await
+    {
+        result?
+    } else {
+        let _ = transport.close().await;
+        return Err(AgentSessionError::Failed);
+    };
+    tracing::debug!(
+        elapsed_ms = initialized_at.elapsed().as_millis(),
+        "opencode.startup.initialize"
+    );
+    transport.set_control_deadline(client.deadline);
+    if initialized["protocolVersion"] != 1 {
+        return Err(AgentSessionError::Failed);
+    }
+    let capabilities = &initialized["agentCapabilities"];
+    *client
+        .capabilities
+        .write()
+        .map_err(|_| AgentSessionError::Failed)? = Some(super::client::Capabilities {
+        history: capabilities["loadSession"] == true,
+        listing: capabilities["sessionCapabilities"]["list"].is_object(),
+        deletion: capabilities["sessionCapabilities"]["delete"].is_object(),
+    });
+    Ok((
+        transport,
+        initialized["agentCapabilities"].clone(),
+        observation,
+    ))
+}
+
+fn configure_overlay(
+    command: &mut Command,
+    client: &OpenCodeClient,
+    selected: &StoredAgentConfig,
+    auxiliary: bool,
+    legacy: bool,
+) -> Result<(), AgentSessionError> {
     if auxiliary || config::permission(selected).is_some() || selected.system_prompt.is_some() {
         let mut overlay: Value = serde_json::from_str(&overlay(client, selected, legacy)?)
             .map_err(|_| AgentSessionError::Rejected)?;
@@ -123,56 +198,7 @@ async fn launch(
         }
         command.env("OPENCODE_CONFIG_CONTENT", overlay.to_string());
     }
-    // Native 2.x standalone processes can race the shared SQLite schema bootstrap.
-    // Hold the clone-shared gate only through initialization, never through a session or prompt.
-    let _startup = if legacy {
-        None
-    } else {
-        Some(
-            tokio::time::timeout_at(deadline, client.startup.lock())
-                .await
-                .map_err(|_| AgentSessionError::Failed)?,
-        )
-    };
-    let remaining = deadline.saturating_duration_since(Instant::now());
-    if let Some(source) = &mut observation {
-        source.release();
-    }
-    let mut transport = Transport::spawn(command, cwd, remaining, "opencode")?;
-    let initialized = if let Ok(result) = tokio::time::timeout_at(
-        deadline,
-        transport.request(
-            "initialize",
-            json!({"protocolVersion":1,
-        "clientCapabilities":{"elicitation":{"form":{}}},
-        "clientInfo":{"name":"ait","version":env!("CARGO_PKG_VERSION")}}),
-        ),
-    )
-    .await
-    {
-        result?
-    } else {
-        let _ = transport.close().await;
-        return Err(AgentSessionError::Failed);
-    };
-    transport.set_control_deadline(client.deadline);
-    if initialized["protocolVersion"] != 1 {
-        return Err(AgentSessionError::Failed);
-    }
-    let capabilities = &initialized["agentCapabilities"];
-    *client
-        .capabilities
-        .write()
-        .map_err(|_| AgentSessionError::Failed)? = Some(super::client::Capabilities {
-        history: capabilities["loadSession"] == true,
-        listing: capabilities["sessionCapabilities"]["list"].is_object(),
-        deletion: capabilities["sessionCapabilities"]["delete"].is_object(),
-    });
-    Ok((
-        transport,
-        initialized["agentCapabilities"].clone(),
-        observation,
-    ))
+    Ok(())
 }
 
 fn overlay(

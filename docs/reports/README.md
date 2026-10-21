@@ -91,6 +91,8 @@
 
 ## Provider、Agent 与会话
 
+- [OpenCode 加载速度验证](providers/opencode-startup-real-usage-2026-10-21.md)
+
 - [Pi 用户图片共享时间线投影验证](providers/pi-user-image-projection-2026-10-21.md)
 - [Pi 原生会话导入与完整 Rust workspace 验证](providers/pi-session-import-2026-10-20.md)
 - [Pi 原生 RPC Provider 验证](providers/pi.md)

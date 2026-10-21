@@ -151,7 +151,7 @@ impl AgentClient for OpenCodeClient {
         PROVIDER
     }
     fn discovery_timeout(&self) -> Duration {
-        // Availability and discovery each initialize ACP, then inspect the native catalog.
+        // Include the executable probe, native initialization and session catalog inspection.
         self.startup_timeout * 2 + Duration::from_secs(60)
     }
     fn supports_session_import(&self) -> bool {
@@ -167,14 +167,11 @@ impl AgentClient for OpenCodeClient {
     fn is_available(&self) -> AgentSessionFuture<'_, bool> {
         Box::pin(async {
             let cwd = std::env::current_dir().map_err(|_| AgentSessionError::Unavailable)?;
-            match launcher::spawn(self, &cwd.to_string_lossy(), &StoredAgentConfig::default()).await
-            {
-                Ok((mut transport, _)) => {
-                    transport.close().await?;
-                    Ok(true)
-                }
-                Err(_) => Ok(false),
-            }
+            // Discovery validates ACP and records capabilities in the requested directory.
+            // Probing it here would cold-start plugins twice, first in the daemon's directory.
+            Ok(launcher::version(self, &cwd.to_string_lossy())
+                .await
+                .is_ok_and(|version| launcher::supported(&version)))
         })
     }
     fn settings(&self, selected: &StoredAgentConfig) -> Value {

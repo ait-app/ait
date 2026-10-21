@@ -27,6 +27,8 @@
 
 ## 架构决策
 
+- [ADR-178：OpenCode 轻量可用性探测与冷恢复预算](decisions/providers/adr-178-opencode-startup-probe-and-restoration.md)：避免重复 ACP 冷启动，并统一恢复与辅助会话的启动预算。
+
 - [ADR-177：移动端本地通知与 APNs／FCM 直连](decisions/clients/adr-177-native-local-and-remote-notifications.md)：连接外 attention 通道、直接投递、权限恢复及去重。
 
 - [ADR-176：Pi 用户图片的共享时间线投影](decisions/providers/adr-176-pi-user-image-projection.md)：实时输入、导入与刷新共用 `imageSources`，保留纯图片消息和跨设备预览。
@@ -208,6 +210,8 @@
 - [语音与听写](operations/speech.md)：离线模型、后端配置和限制。
 
 ## 工程规范与验证
+
+- [OpenCode 加载速度验证](reports/providers/opencode-startup-real-usage-2026-10-21.md)：真实原生配置、分阶段加载耗时、重复冷启动消除与定向回归。
 
 - [Paseo 0.12.0 移植与验证](reports/clients/paseo-0.12-port-2026-10-20.md)：本轮范围、兼容性和定向验证。
 

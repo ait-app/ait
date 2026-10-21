@@ -36,11 +36,20 @@ def serve(root, port, state_path, session_id):
                 except (BrokenPipeError, ConnectionResetError):
                     pass
                 return
+            if path == "/config/providers" and os.environ.get("AIT_ACP_SCENARIO") == "catalog-http-failed":
+                self.send_error(503)
+                return
             if path == "/config/providers":
                 value = {"providers": [{"id": "local", "models": {
-                    "model": {"limit": {"context": 32000}},
-                    "second": {"limit": {"context": 64000}},
+                    "model": {"name": "Local model", "limit": {"context": 32000}, "variants": {"high": {}}},
+                    "second": {"name": "Second model", "limit": {"context": 64000}},
                 }}]}
+            elif path == "/agent":
+                value = [{"name": "build", "mode": "primary", "description": "Native build"},
+                         {"name": "plan", "mode": "primary"},
+                         {"name": "custom", "mode": "all"},
+                         {"name": "summary", "mode": "primary", "hidden": True},
+                         {"name": "explore", "mode": "subagent"}]
             elif path == "/session/" + session_id():
                 value = {"id": session_id(), "cost": 0.02}
             elif path == "/session/" + session_id() + "/message":
