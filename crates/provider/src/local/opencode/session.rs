@@ -56,6 +56,8 @@ static FAILURE_SECRETS: LazyLock<[(Regex, &str); 3]> = LazyLock::new(|| {
 #[derive(Debug)]
 struct Connection {
     transport: Transport,
+    /// Directory the native session is filed under; `session_move` can change it.
+    location: String,
     options: Value,
     capabilities: Value,
     clients: BTreeMap<String, String>,
@@ -177,24 +179,19 @@ pub(super) async fn open(
     };
     let (mut transport, capabilities, source) =
         launcher::observed(client, &spec.cwd, selected).await?;
-    let (id, options, mut identities, clients) = if let Some((handle, _)) = binding {
+    let (id, mut options, mut identities, clients, location) = if let Some((handle, _)) = binding {
         if capabilities["loadSession"] != true {
             return Err(AgentSessionError::Unavailable);
         }
-        let (options, stream) = history::replay(
-            &mut transport,
-            &handle.session_id,
-            &spec.cwd,
-            client.images.clone(),
-            client.startup_timeout,
-        )
-        .await?;
+        let (options, identities, location) =
+            reload(client, &mut transport, handle, &spec.cwd).await?;
         let clients = clients(handle)?;
         (
             handle.session_id.clone(),
             options,
-            history::identities(&stream),
+            identities,
             clients,
+            location,
         )
     } else {
         let result = transport
@@ -209,9 +206,9 @@ pub(super) async fn open(
             config::state(&result)?,
             BTreeSet::new(),
             BTreeMap::new(),
+            spec.cwd.clone(),
         )
     };
-    let mut options = options;
     if !history_only
         && let Err(error) = config::apply(&mut transport, &id, &mut options, &spec.config).await
     {
@@ -225,7 +222,7 @@ pub(super) async fn open(
         return Err(error);
     }
     let info = config::runtime(&id, &options);
-    let mut observation = observe(source, &id, &spec.cwd).await;
+    let mut observation = observe(source, &id, &location).await;
     let initial = initial_usage(client, &mut observation)?;
     if let Some(observation) = &observation {
         identities.extend(observation.users().iter().cloned());
@@ -241,6 +238,7 @@ pub(super) async fn open(
         clients: clients.clone(),
         connection: Some(Connection {
             transport,
+            location,
             options,
             capabilities,
             clients,
@@ -261,6 +259,24 @@ pub(super) async fn open(
         failed: false,
         failure: None,
     })
+}
+
+/// Replay a bound native session; returns its options, accepted inputs and current location.
+async fn reload(
+    client: &OpenCodeClient,
+    transport: &mut Transport,
+    handle: &AgentPersistenceHandle,
+    cwd: &str,
+) -> Result<(Value, BTreeSet<String>, String), AgentSessionError> {
+    let (options, stream, location) = history::replay(
+        transport,
+        &handle.session_id,
+        cwd,
+        client.images.clone(),
+        client.startup_timeout,
+    )
+    .await?;
+    Ok((options, history::identities(&stream), location))
 }
 
 fn initial_usage(
@@ -357,7 +373,6 @@ impl Session {
         let execution = Execution {
             client: self.client.clone(),
             id: self.id.clone(),
-            cwd: self.spec.cwd.clone(),
             rpc_id,
             turn: turn.clone(),
             submitted,
@@ -399,11 +414,12 @@ impl Session {
         {
             let (mut transport, capabilities, source) =
                 launcher::observed(&self.client, &self.spec.cwd, selected).await?;
+            let location = &connection.location;
             let mut options = if capabilities["sessionCapabilities"]["resume"].is_object() {
                 let result = transport
                     .startup_request(
                         "session/resume",
-                        json!({"sessionId":self.id,"cwd":self.spec.cwd,"mcpServers":[]}),
+                        json!({"sessionId":self.id,"cwd":location,"mcpServers":[]}),
                         self.client.startup_timeout,
                     )
                     .await?;
@@ -412,7 +428,7 @@ impl Session {
                 history::replay(
                     &mut transport,
                     &self.id,
-                    &self.spec.cwd,
+                    location,
                     self.client.images.clone(),
                     self.client.startup_timeout,
                 )
@@ -426,7 +442,7 @@ impl Session {
             connection.options = options;
             connection.capabilities = capabilities;
             connection.transport = transport;
-            connection.observation = observe(source, &self.id, &self.spec.cwd).await;
+            connection.observation = observe(source, &self.id, &connection.location).await;
             if let Some(observation) = &connection.observation {
                 connection
                     .identities
@@ -465,7 +481,6 @@ impl Session {
 struct Execution {
     client: OpenCodeClient,
     id: String,
-    cwd: String,
     rpc_id: String,
     turn: String,
     submitted: Vec<crate::protocol::timeline::NativeItem>,
@@ -730,14 +745,15 @@ impl Execution {
         for id in pending.into_keys() {
             self.emit(AgentTurnEvent::PermissionResolved(id)).await?;
         }
-        let (options, mut replay) = history::replay(
+        let (options, mut replay, location) = history::replay(
             &mut connection.transport,
             &self.id,
-            &self.cwd,
+            &connection.location,
             self.client.images.clone(),
             self.client.deadline,
         )
         .await?;
+        connection.location = location;
         let has_input = replay
             .users
             .iter()

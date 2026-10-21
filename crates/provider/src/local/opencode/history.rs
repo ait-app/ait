@@ -18,10 +18,54 @@ use crate::{
     protocol::timeline::NativeItem,
 };
 
+/// Load this native transcript within `timeout` and return the directory it was loaded from.
+///
+/// The native `session_move` tool relocates a session to another directory of its project,
+/// after which loading by the previous cwd is rejected; follow the session to where it lives.
+pub(super) async fn replay(
+    transport: &mut Transport,
+    id: &str,
+    cwd: &str,
+    images: crate::local::images::ImageStore,
+    timeout: std::time::Duration,
+) -> Result<(Value, Stream, String), AgentSessionError> {
+    let previous = transport.diagnostics.failure();
+    match load(transport, id, cwd, images.clone(), timeout).await {
+        Err(AgentSessionError::Rejected) => {
+            let Some(location) = locate(transport, id)
+                .await?
+                .filter(|location| location != cwd)
+            else {
+                return Err(AgentSessionError::Rejected);
+            };
+            let (options, stream) = load(transport, id, &location, images, timeout).await?;
+            transport.diagnostics.restore(previous);
+            Ok((options, stream, location))
+        }
+        result => result.map(|(options, stream)| (options, stream, cwd.to_owned())),
+    }
+}
+
+/// Find the directory the native CLI currently files this session under, if it still exists.
+async fn locate(transport: &mut Transport, id: &str) -> Result<Option<String>, AgentSessionError> {
+    let sessions = list(
+        transport,
+        &ListOptions {
+            cwd: None,
+            scan_limit: 4096,
+        },
+    )
+    .await?;
+    Ok(sessions
+        .into_iter()
+        .find(|session| session.provider_handle_id == id)
+        .map(|session| session.cwd))
+}
+
 /// Incrementally load this native transcript within `timeout`, restoring ordinary controls after.
 /// Cold restoration uses the startup budget; settlement retains the ordinary control budget.
 /// Fail on RPC, identity or projection errors.
-pub(super) async fn replay(
+async fn load(
     transport: &mut Transport,
     id: &str,
     cwd: &str,
@@ -198,10 +242,18 @@ pub(super) async fn inspect(
     config::validate_spec(&spec)?;
     let (mut transport, _, source) = launcher::observed(client, cwd, &spec.config).await?;
     let result = async {
+        let (options, mut stream, location) = replay(
+            &mut transport,
+            &handle.session_id,
+            cwd,
+            client.images.clone(),
+            client.startup_timeout,
+        )
+        .await?;
         let descriptors = list(
             &mut transport,
             &ListOptions {
-                cwd: Some(cwd.into()),
+                cwd: Some(location.clone()),
                 scan_limit: 4096,
             },
         )
@@ -210,19 +262,11 @@ pub(super) async fn inspect(
             .into_iter()
             .find(|entry| entry.provider_handle_id == handle.session_id)
             .ok_or(AgentSessionError::Rejected)?;
-        let (options, mut stream) = replay(
-            &mut transport,
-            &handle.session_id,
-            cwd,
-            client.images.clone(),
-            client.startup_timeout,
-        )
-        .await?;
         let clients = super::session::clients(handle)?;
         let mut entries = entries(&mut stream, &clients);
         let mut usage = None;
         if let Some(source) = source {
-            if let Ok(observation) = source.bind(&handle.session_id, cwd).await {
+            if let Ok(observation) = source.bind(&handle.session_id, &location).await {
                 observation.history(&mut entries, &clients);
                 usage = observation.usage();
             } else {
