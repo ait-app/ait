@@ -32,7 +32,6 @@ import { TitlebarDragRegion } from "@/components/desktop/titlebar-drag-region";
 import { SidebarMenuToggle } from "@/components/headers/menu-header";
 import { ScreenHeader } from "@/components/headers/screen-header";
 import { useIsCompactFormFactor } from "@/constants/layout";
-import { useToast } from "@/contexts/toast-context";
 import { useAgentInputDraft } from "@/composer/draft/input-draft";
 import { useForgeSearchQuery } from "@/git/use-forge-search-query";
 import { useCheckoutStatusQuery } from "@/git/use-status-query";
@@ -1628,7 +1627,6 @@ export function NewWorkspaceScreen({
   const { theme } = useUnistyles();
   const { t } = useTranslation();
   const isCompact = useIsCompactFormFactor();
-  const toast = useToast();
   const composerEditing = useNewWorkspaceComposerEditing();
   const { leaveFullscreen } = composerEditing;
   const mergeWorkspaces = useCallback(
@@ -1884,6 +1882,7 @@ export function NewWorkspaceScreen({
       });
 
       dispatchPickerSelection({ type: "picker-selected", item });
+      setErrorMessage(null);
       chatDraft.setAttachments(nextAttachments);
       setPickerOpen(false);
     },
@@ -1919,6 +1918,7 @@ export function NewWorkspaceScreen({
       // multiplicity is off, any project when it's on); don't re-gate here on
       // canCreateWorktree or non-git projects become unselectable.
       selectProjectOption(id);
+      setErrorMessage(null);
       setProjectPickerOpen(false);
       clearPickerSelectionForTargetChange(selectedProjectOptionId, id);
     },
@@ -1928,6 +1928,7 @@ export function NewWorkspaceScreen({
   const handleSelectWorkspaceHost = useCallback(
     (id: string) => {
       handleSelectHost(id);
+      setErrorMessage(null);
       clearPickerSelectionForTargetChange(selectedServerId, id);
     },
     [clearPickerSelectionForTargetChange, handleSelectHost, selectedServerId],
@@ -1981,6 +1982,7 @@ export function NewWorkspaceScreen({
   const handleSelectIsolationOption = useCallback(
     (id: string) => {
       setIsolation(id === "worktree" ? "worktree" : "local");
+      setErrorMessage(null);
       setIsolationPickerOpen(false);
     },
     [setIsolation],
@@ -2154,7 +2156,6 @@ export function NewWorkspaceScreen({
         const message = toErrorMessage(error);
         setPendingAction(null);
         setErrorMessage(message);
-        toast.error(message);
       }
     },
     [
@@ -2171,7 +2172,6 @@ export function NewWorkspaceScreen({
       selectedServerId,
       supportsForgeSearch,
       t,
-      toast,
       updateFormPreferences,
       withConnectedClient,
     ],
@@ -2235,7 +2235,6 @@ export function NewWorkspaceScreen({
       const message = toErrorMessage(error);
       setPendingAction(null);
       setErrorMessage(message);
-      toast.error(message);
     }
   }, [
     ensureWorkspace,
@@ -2247,7 +2246,6 @@ export function NewWorkspaceScreen({
     selectedTerminalProfile,
     t,
     terminalPromptText,
-    toast,
     leaveFullscreen,
     updateFormPreferences,
     withConnectedClient,
@@ -2441,7 +2439,11 @@ export function NewWorkspaceScreen({
           formStack={formStack}
         >
           {composer}
-          {errorMessage ? <Text style={styles.errorText}>{errorMessage}</Text> : null}
+          {errorMessage ? (
+            <Text accessibilityRole="alert" style={styles.errorText}>
+              {errorMessage}
+            </Text>
+          ) : null}
         </NewWorkspaceLayout>
       </View>
     </FileDropZone>

@@ -1,3 +1,4 @@
+import { execFileSync } from "node:child_process";
 import { existsSync } from "node:fs";
 import path from "node:path";
 import { buildHostWorkspaceRoute } from "@/utils/host-routes";
@@ -794,6 +795,67 @@ test.describe("New workspace flow", () => {
         }),
       };
     }
+
+    test("falls back to the local branch when the configured upstream has been pruned", async ({
+      page,
+    }) => {
+      const tempRepo = await createTempGitRepo("ref-default-pruned-", { withRemote: true });
+
+      try {
+        const localHead = commitLocalOnly(tempRepo.path, "after upstream was removed");
+        execFileSync("git", ["update-ref", "-d", "refs/heads/main"], {
+          cwd: path.join(tempRepo.path, "remote.git"),
+        });
+        execFileSync("git", ["update-ref", "-d", "refs/remotes/origin/main"], {
+          cwd: tempRepo.path,
+        });
+
+        const openedProject = await openWorktreeComposerForRepo(page, tempRepo.path);
+        await openStartingRefPicker(page);
+        await expectStartingRefRows(page, ["main, local branch"]);
+        await expectPickerSelected(page, "main");
+        await closeBranchPicker(page);
+
+        const created = await createWorktreeAndRead(page, openedProject);
+
+        expect(readRepoRef(created.workspaceDirectory, "HEAD")).toBe(localHead);
+      } finally {
+        await tempRepo.cleanup();
+      }
+    });
+
+    test("shows one inline error and preserves the draft when the selected branch disappears", async ({
+      page,
+    }) => {
+      const tempRepo = await createTempGitRepo("ref-deleted-after-selection-", {
+        branches: ["main", "dev"],
+      });
+      const prompt = "Keep this prompt while I choose another branch";
+
+      try {
+        await openWorktreeComposerForRepo(page, tempRepo.path);
+        await openStartingRefPicker(page);
+        await selectBranchInPicker(page, "dev");
+        execFileSync("git", ["branch", "-D", "dev"], { cwd: tempRepo.path });
+        await fillNewWorkspaceDraft(page, prompt);
+        await page.getByTestId("workspace-create-submit").click();
+
+        const error = page.getByRole("alert");
+        await expect(error).toContainText("Base branch not found:");
+        await expect(page.getByText(await error.innerText(), { exact: true })).toHaveCount(1);
+        const composer = page.getByRole("textbox", { name: "Message agent..." });
+        await expect(composer).toBeEditable();
+        await expect(composer).toHaveValue(prompt);
+
+        await openStartingRefPicker(page);
+        await selectBranchInPicker(page, "main");
+
+        await expect(error).toHaveCount(0);
+        await expect(composer).toHaveValue(prompt);
+      } finally {
+        await tempRepo.cleanup();
+      }
+    });
 
     test("branches off the upstream when the local branch is ahead and the picker is untouched", async ({
       page,

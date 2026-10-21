@@ -336,6 +336,30 @@ describe("defaultBasePickerItem", () => {
     });
   });
 
+  it.each([null, "", "@{upstream}"])(
+    "falls back to the current local branch for an unavailable upstream (%s)",
+    (upstreamRef) => {
+      const item = defaultBasePickerItem({ currentBranch: "feature/work", upstreamRef });
+
+      expect(item).toEqual({
+        kind: "branch",
+        name: "feature/work",
+        refName: "refs/heads/feature/work",
+        accessibilityLabel: "feature/work, local branch",
+      });
+      const data = buildPickerOptionData({ branchDetails: [], prItems: [], baseItem: item });
+      expect(data.options).toEqual([
+        { id: branchPickerOptionId("refs/heads/feature/work"), label: "feature/work" },
+      ]);
+      expect(pickerItemToCheckoutRequest(data.itemById.get(data.selectedOptionId) ?? null)).toEqual(
+        {
+          action: "branch-off",
+          refName: "refs/heads/feature/work",
+        },
+      );
+    },
+  );
+
   it("has no default for detached HEAD", () => {
     expect(defaultBasePickerItem({ currentBranch: null })).toBeNull();
   });

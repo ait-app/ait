@@ -12,6 +12,7 @@ mod paseo;
 
 mod remote_base;
 mod reset_workspace;
+mod upstream;
 
 use super::{LocalCheckout, is_below};
 use crate::git::ports::checkout::{

@@ -166,7 +166,9 @@ export function defaultBasePickerItem(status: BaseRefCheckoutStatus): PickerItem
   // COMPAT(checkoutUpstreamRef): added in v0.2.6, remove after 2027-02-01 once the daemon
   // floor sends upstreamRef. Daemons that predate it omit the field, which lands on the
   // local ref — the base those daemons always used.
-  const refName = status.upstreamRef ?? `refs/heads/${currentBranch}`;
+  // Older daemons can echo an unresolved revision (e.g. "@{upstream}") when its ref is gone.
+  const upstreamRef = status.upstreamRef?.startsWith("refs/") ? status.upstreamRef : null;
+  const refName = upstreamRef ?? `refs/heads/${currentBranch}`;
   // The upstream branch can be named differently from the local one, so the row reads the
   // ref rather than the branch the user happens to be on.
   const name = branchNameFromRef(refName);
@@ -174,7 +176,7 @@ export function defaultBasePickerItem(status: BaseRefCheckoutStatus): PickerItem
     kind: "branch",
     name,
     refName,
-    accessibilityLabel: status.upstreamRef ? `${name}, upstream branch` : `${name}, local branch`,
+    accessibilityLabel: upstreamRef ? `${name}, upstream branch` : `${name}, local branch`,
   };
 }
 
