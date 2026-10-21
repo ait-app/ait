@@ -54,6 +54,18 @@ target 'Ait' do
   )
 
   post_install do |installer|
+# @generated begin ait-ios-pod-deployment-target - expo prebuild (DO NOT MODIFY) sync-37c54a8f86ac080dd244c403d8077ffb2ce7ab88
+    # Resource bundles can retain older Podspec minimums after React Native's post-install.
+    minimum_target = Gem::Version.new(podfile_properties['ios.deploymentTarget'] || min_ios_version_supported)
+    installer.pods_project.targets.each do |pod_target|
+      pod_target.build_configurations.each do |build_config|
+        current_target = build_config.build_settings['IPHONEOS_DEPLOYMENT_TARGET']
+        if current_target.nil? || Gem::Version.new(current_target) < minimum_target
+          build_config.build_settings['IPHONEOS_DEPLOYMENT_TARGET'] = minimum_target.to_s
+        end
+      end
+    end
+# @generated end ait-ios-pod-deployment-target
     react_native_post_install(
       installer,
       config[:reactNativePath],
