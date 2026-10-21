@@ -1397,6 +1397,23 @@ describe("hub tickets", () => {
     await manager.logout();
   });
 
+  it("never delays lease renewal while the local hub API hangs", async () => {
+    const localHub = vi.fn((method: string) =>
+      method === "GET" ? new Promise<never>(() => undefined) : Promise.resolve(null),
+    );
+    const { manager, http, login } = desktopHub(localHub);
+    await login();
+    await manager.publishHost(builtIn);
+    const renewals = () => http.mock.calls.filter(([url]) => String(url).endsWith("/renew")).length;
+    const before = renewals();
+    await vi.advanceTimersByTimeAsync(45_000);
+    expect(renewals()).toBeGreaterThan(before);
+    expect(localHub).toHaveBeenCalledOnce();
+    expect(localHub).toHaveBeenCalledWith("GET");
+    await manager.unpublishHost("first");
+    await manager.logout();
+  });
+
   it("backs off when the center has no hub", async () => {
     const localHub = vi.fn(async () => ({ online: false, connecting: false }));
     const { manager, http, login } = desktopHub(localHub);

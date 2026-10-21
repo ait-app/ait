@@ -177,6 +177,7 @@ export class AccountSessionManager {
   private channelFailures = 0;
   private controlFailures = 0;
   private nextControl = 0;
+  private hubMaintenance: Promise<void> | null = null;
   private nextRegistration = 0;
   private registrationFailures = 0;
   private leaseRecoveryAttempted = false;
@@ -722,7 +723,10 @@ export class AccountSessionManager {
   private async tick(): Promise<void> {
     // Host lease authority survives client sign-out and client-node failures.
     await this.renewPublications();
-    await this.maintainHub();
+    // The optional hub runs beside, never ahead of, lease renewal and the legacy relay.
+    this.hubMaintenance ??= this.maintainHub().finally(() => {
+      this.hubMaintenance = null;
+    });
     if (!this.account || this.suspended || this.closing) return;
     const generation = this.generation;
     try {
