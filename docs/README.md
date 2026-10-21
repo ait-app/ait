@@ -25,6 +25,8 @@
 
 ## 架构决策
 
+- [ADR-176：iOS 构建诊断按依赖与自有代码分层](decisions/clients/adr-176-ios-build-diagnostics.md)：第三方 Pod 警告静音、自有模块保留诊断、Swift importer 两个例外与 `SDKROOT` 搜索路径，提交的工程与 AppDelegate 由回归测试钉住。
+
 - [ADR-175：Google Play AAB 在 GitHub runner 上构建和提交](decisions/clients/adr-175-android-play-gradle-release.md)：Gradle 签名构建、GitHub 凭据与版本计数、直接上传 Play，移除独立 APK 工作流。
 
 - [ADR-174：Pi 原生会话导入](decisions/providers/adr-174-pi-session-import.md)：不改写 Pi 存储且有候选数、字节、时间、投影条目数与共享准入预算的项目目录发现、无主机 HOME 时写入回退原生解析、持久化原生目录拼写、文件重命名后的身份恢复、跨符号链接拼写与存储配置变更的定点刷新、当前分支与模型上下文投影、导入与原生身份恢复。

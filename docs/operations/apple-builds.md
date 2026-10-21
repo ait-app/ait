@@ -128,11 +128,20 @@ Hermes 版本选择脚本设为每次执行，使配置切换时仍能选择正�
 文件的脚本阶段警告。CocoaPods 生成的 Swift 库搜索路径使用 `SDKROOT`，避免 Xcode Cloud
 选中 Metal toolchain 后去不存在的目录查找 Swift 库。
 
-针对性检查：
+搜索路径改写只覆盖聚合 xcconfig，也就是当前静态链接配置的链接入口；`Podfile` 仍支持
+`ios.useFrameworks` / `USE_FRAMEWORKS`，启用前需要同时处理 Pod targets 与 CocoaPods 的
+embed frameworks 脚本，它们仍直接引用 `TOOLCHAIN_DIR`。改写命中 0 次时 `post_install`
+会打印 `Pod::UI` 警告，避免 CocoaPods 升级后这条修复静默失效。
+
+针对性检查（这些插件测试属于移动端发布回归套件）：
 
 ```sh
-node --test apps/mobile/plugins/with-ios-build-diagnostics.test.cjs apps/mobile/plugins/with-ios-pod-deployment-target.test.cjs apps/mobile/plugins/with-ios-scene-lifecycle.test.cjs scripts/xcode-cloud.test.mjs
+npm run test:mobile-release
 ```
+
+回归同时校验提交的生成物：`Ait.xcodeproj/project.pbxproj` 的 `OTHER_SWIFT_FLAGS` 必须与
+`IMPORT_DIAGNOSTICS` 一致，`Ait/AppDelegate.swift` 必须已包含冷启动链接修复。Xcode Cloud
+不运行 prebuild，只有这两处提交件正确，云构建才会应用同样配置。
 
 ## Xcode Cloud 依赖安装
 

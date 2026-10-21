@@ -9,6 +9,9 @@ const read = (file) => readFileSync(join(__dirname, "../ios", file), "utf8");
 
 test("Pods post-install raises resource targets to the app minimum without lowering newer targets", () => {
   const podfile = read("Podfile");
+  // Slice this plugin's generated block only: the surrounding post_install body now calls
+  // AitBuildDiagnostics, which this Ruby harness does not stub. Whole-hook composition and
+  // idempotency are covered by with-ios-build-diagnostics.test.cjs.
   const hook = podfile.match(
     /# @generated begin ait-ios-pod-deployment-target[^\n]*\n([\s\S]*?)# @generated end ait-ios-pod-deployment-target/,
   )?.[1];

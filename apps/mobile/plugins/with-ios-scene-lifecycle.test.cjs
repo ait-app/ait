@@ -1,5 +1,6 @@
 const assert = require("node:assert/strict");
 const { execFileSync } = require("node:child_process");
+const { readFileSync } = require("node:fs");
 const path = require("node:path");
 const { test } = require("node:test");
 const { configureSceneAppDelegate, configureSceneManifest } = require("./with-ios-scene-lifecycle");
@@ -96,4 +97,16 @@ test("scene cold links omit the launch annotation key deprecated since the app m
   assert.match(result, /launchOptions\[\.url\] = context.url/);
   assert.match(result, /launchOptions\[\.sourceApplication\] = context.options.sourceApplication/);
   assert.match(result, /options\[\.annotation\] = context.options.annotation/);
+});
+
+// Xcode Cloud builds the committed project without running prebuild, so the generated file
+// must carry the fix itself instead of relying on the plugin template.
+test("the committed AppDelegate carries the same cold-link fix", () => {
+  const committed = readFileSync(path.join(__dirname, "../ios/Ait/AppDelegate.swift"), "utf8");
+  assert.doesNotMatch(committed, /launchOptions\[\.annotation\]/);
+  assert.match(committed, /launchOptions\[\.url\] = context\.url/);
+  assert.match(
+    committed,
+    /launchOptions\[\.sourceApplication\] = context\.options\.sourceApplication/,
+  );
 });

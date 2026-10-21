@@ -7,6 +7,8 @@ const { configurePodfile } = require("./with-ios-build-diagnostics");
 const { configurePodfile: configureMinimum } = require("./with-ios-pod-deployment-target");
 
 const readPodfile = () => readFileSync(join(__dirname, "../ios/Podfile"), "utf8");
+const readProject = () =>
+  readFileSync(join(__dirname, "../ios/Ait.xcodeproj/project.pbxproj"), "utf8");
 
 test("diagnostics survive Expo prebuild and compose with the deployment minimum plugin", () => {
   const template = spawnSync(
@@ -25,12 +27,37 @@ test("diagnostics survive Expo prebuild and compose with the deployment minimum 
     assert.equal(configureMinimum(configureMinimum(configured)), configureMinimum(configured));
     assert.match(configured, /require_relative '\.\.\/plugins\/ios\/build_diagnostics'/);
     assert.equal(
-      configured.match(/AitBuildDiagnostics.configure\(current_target_definition\)/g).length,
+      configured.match(/AitBuildDiagnostics\.configure\(current_target_definition\)/g)?.length ?? 0,
       1,
     );
-    assert.equal(configured.match(/AitBuildDiagnostics.post_install\(installer\)/g).length, 1);
+    assert.equal(
+      configured.match(/AitBuildDiagnostics\.post_install\(installer\)/g)?.length ?? 0,
+      1,
+    );
   }
   assert.equal(configurePodfile(readPodfile()), readPodfile());
+});
+
+test("the committed app target matches the Swift importer diagnostics list", () => {
+  const result = spawnSync(
+    "ruby",
+    [
+      "-e",
+      "require ARGV.fetch(0); puts AitBuildDiagnostics::IMPORT_DIAGNOSTICS.map { |flag| ['-Xcc', flag] }.flatten.join(' ')",
+      join(__dirname, "ios/build_diagnostics.rb"),
+    ],
+    { encoding: "utf8" },
+  );
+  assert.equal(result.status, 0, result.stderr);
+  const expected = result.stdout.trim();
+  assert.match(expected, /^-Xcc /);
+  const swiftFlags = [...readProject().matchAll(/OTHER_SWIFT_FLAGS = "([^"]*)";/g)].map(
+    (match) => match[1],
+  );
+  assert.equal(swiftFlags.length, 2);
+  for (const value of swiftFlags) {
+    assert.ok(value.endsWith(expected), value);
+  }
 });
 
 test("Ruby policy preserves owned diagnostics, custom flags, paths and unrelated build phases", () => {
@@ -74,8 +101,9 @@ hermes_phase = Phase.new('[CP-User] [Hermes] Replace Hermes for the right config
 other_phase = Phase.new('Unrelated build phase', nil)
 vendor = PodTarget.new('VendorSDK', [], 'com.apple.product-type.library.static', [Configuration.new({})])
 owned = PodTarget.new('ExpoTwoWayAudio', [], 'com.apple.product-type.library.static', [Configuration.new({})])
+owned_subspec = PodTarget.new('PaseoHardwareKeyboard-Legacy', [], 'com.apple.product-type.library.static', [Configuration.new({})])
 resource = PodTarget.new('Vendor-Resources', [], 'com.apple.product-type.bundle', [Configuration.new({})])
-installer = Installer.new([aggregate], PodProject.new([PodTarget.new('hermes-engine', [hermes_phase, other_phase]), vendor, owned, resource]))
+installer = Installer.new([aggregate], PodProject.new([PodTarget.new('hermes-engine', [hermes_phase, other_phase]), vendor, owned, owned_subspec, resource]))
 2.times { AitBuildDiagnostics.post_install(installer) }
 puts JSON.generate({
   owned: AitBuildDiagnostics::OWNED_PODS,
@@ -85,14 +113,18 @@ puts JSON.generate({
   saved: xcconfig.saved_paths,
   hermes: hermes_phase.always_out_of_date,
   other: other_phase.always_out_of_date,
-  archives: [vendor, owned, resource].map { |target| target.build_configurations.first.build_settings }
+  archives: [vendor, owned, owned_subspec, resource].map { |target| target.build_configurations.first.build_settings }
 })
 `,
       join(__dirname, "ios/build_diagnostics.rb"),
     ],
     {
       input: JSON.stringify({
-        flags: ['$(inherited) -D "KEEP ME"', ["$(inherited)", "-Xcc", "-Wno-incomplete-umbrella"]],
+        flags: [
+          '$(inherited) -D "KEEP ME"',
+          ["$(inherited)", "-Xcc", "-Wno-incomplete-umbrella"],
+          "$(inherited) -Wno-incomplete-umbrella",
+        ],
         paths:
           '$(inherited) "${TOOLCHAIN_DIR}/usr/lib/swift/${PLATFORM_NAME}" "custom library path" /usr/lib/swift',
       }),
@@ -120,38 +152,46 @@ puts JSON.generate({
       "-Wno-nullability-completeness",
     ],
   });
+  // A flag that appears without its `-Xcc` prefix must not suppress the whole pair.
+  assert.deepEqual(observed.configs[2], {
+    OTHER_SWIFT_FLAGS:
+      "$(inherited) -Wno-incomplete-umbrella -Xcc -Wno-incomplete-umbrella -Xcc -Wno-nullability-completeness",
+  });
   assert.equal(
     observed.paths,
     '$(inherited) "${SDKROOT}/usr/lib/swift" "custom library path" /usr/lib/swift',
   );
-  assert.deepEqual(observed.saved, ["generated/Debug.xcconfig", "generated/Debug.xcconfig"]);
+  // The second install finds nothing left to rewrite instead of writing the xcconfig again.
+  assert.deepEqual(observed.saved, ["generated/Debug.xcconfig"]);
+  assert.match(result.stderr, /No aggregate xcconfig referenced/);
   assert.equal(observed.hermes, "1");
   assert.equal(observed.other, null);
   assert.deepEqual(observed.archives, [
     { OTHER_LIBTOOLFLAGS: "$(inherited) -no_warning_for_no_symbols" },
     {},
     {},
+    {},
   ]);
 
-  // New Ait-owned native modules must opt back into diagnostics as well.
+  // New Ait-owned native modules must opt back into diagnostics as well. Walking the whole
+  // package and module trees keeps the check independent of where a podspec is anchored.
   const owned = [];
-  for (const root of [join(__dirname, "../../../packages"), join(__dirname, "../modules")]) {
+  const collectPodspecs = (root) => {
     for (const entry of readdirSync(root, { withFileTypes: true })) {
-      if (!entry.isDirectory()) continue;
-      const ios = join(root, entry.name, "ios");
-      let files;
-      try {
-        files = readdirSync(ios);
-      } catch (error) {
-        if (error.code === "ENOENT") continue;
-        throw error;
+      if (entry.name === "node_modules") continue;
+      const path = join(root, entry.name);
+      if (entry.isDirectory()) {
+        collectPodspecs(path);
+        continue;
       }
-      for (const file of files.filter((name) => name.endsWith(".podspec"))) {
-        const name = readFileSync(join(ios, file), "utf8").match(/\.name\s*=\s*["']([^"']+)/)?.[1];
-        assert.ok(name, file);
-        owned.push(name);
-      }
+      if (!entry.name.endsWith(".podspec")) continue;
+      const name = readFileSync(path, "utf8").match(/\.name\s*=\s*["']([^"']+)/)?.[1];
+      assert.ok(name, path);
+      owned.push(name);
     }
+  };
+  for (const root of [join(__dirname, "../../../packages"), join(__dirname, "../modules")]) {
+    collectPodspecs(root);
   }
   assert.deepEqual(observed.owned.sort(), owned.sort());
 });
