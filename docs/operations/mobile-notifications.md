@@ -42,4 +42,4 @@ export AIT_FCM_SERVICE_ACCOUNT_FILE=/private/path/firebase-service-account.json
 
 服务端只记录安全错误类别和丢弃计数，不记录设备 token、JWT、OAuth token 或 provider 原始错误正文。客户端 `[PushNotifications]`／`[Notifications]` 日志可区分权限、设备 token 与本地显示故障。
 
-接口依据：[Apple APNs](https://developer.apple.com/library/archive/documentation/NetworkingInternet/Conceptual/RemoteNotificationsPG/CommunicatingwithAPNs.html)、[FCM HTTP v1](https://firebase.google.com/docs/cloud-messaging/send/v1-api)、[Google 服务账户 OAuth](https://developers.google.com/identity/protocols/oauth2/service-account)。实现决策见 [ADR-176](../decisions/clients/adr-176-native-local-and-remote-notifications.md)。
+接口依据：[Apple APNs](https://developer.apple.com/library/archive/documentation/NetworkingInternet/Conceptual/RemoteNotificationsPG/CommunicatingwithAPNs.html)、[FCM HTTP v1](https://firebase.google.com/docs/cloud-messaging/send/v1-api)、[Google 服务账户 OAuth](https://developers.google.com/identity/protocols/oauth2/service-account)。实现决策见 [ADR-177](../decisions/clients/adr-177-native-local-and-remote-notifications.md)。

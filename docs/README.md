@@ -27,7 +27,9 @@
 
 ## 架构决策
 
-- [ADR-176：移动端本地通知与 APNs／FCM 直连](decisions/clients/adr-176-native-local-and-remote-notifications.md)：连接外 attention 通道、直接投递、权限恢复及去重。
+- [ADR-177：移动端本地通知与 APNs／FCM 直连](decisions/clients/adr-177-native-local-and-remote-notifications.md)：连接外 attention 通道、直接投递、权限恢复及去重。
+
+- [ADR-176：Pi 用户图片的共享时间线投影](decisions/providers/adr-176-pi-user-image-projection.md)：实时输入、导入与刷新共用 `imageSources`，保留纯图片消息和跨设备预览。
 
 - [ADR-175：Google Play AAB 在 GitHub runner 上构建和提交](decisions/clients/adr-175-android-play-gradle-release.md)：Gradle 签名构建、GitHub 凭据与版本计数、直接上传 Play，移除独立 APK 工作流。
 
@@ -58,7 +60,7 @@
 
 - [ADR-158：Release 附带独立 daemon 归档](decisions/clients/adr-158-standalone-daemon-release.md)：`ait-daemon` 命名、macOS 单独签名公证、Release 校验与 COS 镜像。
 
-- [ADR-157：整图输入与 Codex 用户图片的跨设备展示](decisions/providers/adr-157-codex-user-image-projection.md)：传输分块与整图输入的边界、超预算整图压缩、旧会话兼容及跨设备预览。
+- [ADR-157：整图输入与 Codex 用户图片的跨设备展示](decisions/providers/adr-157-codex-user-image-projection.md)：传输分块与整图输入的边界、超预算整图压缩、旧会话兼容及跨设备预览；Pi 用户图片投影扩展见 [ADR-176](decisions/providers/adr-176-pi-user-image-projection.md)。
 
 - [ADR-156：Pi 原生 RPC Provider](decisions/providers/adr-156-pi-native-rpc-provider.md)：`pi --mode rpc` JSONL 通道、Pi 1.2 起、采用 `provider/model` 格式的模型标识与原生会话恢复。
 

@@ -1,6 +1,6 @@
 # Push Token 管理
 
-后续已补齐本地通知及 APNs／FCM 直连，见 [ADR-176](../../decisions/clients/adr-176-native-local-and-remote-notifications.md) 和[移动端通知](../../operations/mobile-notifications.md)。以下保留当时仅实现 Token 管理的范围和验证记录。
+后续已补齐本地通知及 APNs／FCM 直连，见 [ADR-177](../../decisions/clients/adr-177-native-local-and-remote-notifications.md) 和[移动端通知](../../operations/mobile-notifications.md)。以下保留当时仅实现 Token 管理的范围和验证记录。
 
 ## 实现范围
 

@@ -16,7 +16,6 @@ use uuid::Uuid;
 use super::{PROVIDER, PiClient, config, streaming::Stream};
 use crate::ports::agent_session::{AgentSessionError, AgentTurnEvent};
 use crate::ports::native_history::{ListOptions, SessionDescriptor, SessionHistory};
-use crate::protocol::prompt::AgentPrompt;
 use crate::protocol::timeline::NativeItem;
 
 const MAX_HISTORY: u64 = 32 * 1024 * 1024;
@@ -1063,13 +1062,10 @@ fn project_message(
                 return Err(AgentSessionError::Rejected);
             }
             stream.begin(id.into());
-            let text = content(client, &message["content"])?;
-            stream.events.extend(Stream::submitted(
-                &client.images,
-                id,
-                &AgentPrompt::text(&text),
-                &text,
-            )?);
+            let (text, sources) = user_content(client, &message["content"])?;
+            stream
+                .events
+                .extend(Stream::user_entries(id, None, &text, &sources));
             history.active = true;
         }
         "assistant" => {
@@ -1202,6 +1198,26 @@ fn append_entry(history: &mut SessionHistory, entry: NativeItem) -> Result<(), A
     }
     history.entries.push(entry);
     Ok(())
+}
+
+fn user_content(
+    client: &PiClient,
+    value: &Value,
+) -> Result<(String, Vec<String>), AgentSessionError> {
+    if let Some(text) = value.as_str() {
+        return Ok((text.into(), Vec::new()));
+    }
+    let blocks = value.as_array().ok_or(AgentSessionError::Failed)?;
+    let mut text = Vec::new();
+    let mut sources = Vec::new();
+    for block in blocks {
+        match field(block, "type")? {
+            "text" => text.push(block["text"].as_str().ok_or(AgentSessionError::Failed)?),
+            "image" => sources.push(client.images.source(block)?.into_owned()),
+            _ => return Err(AgentSessionError::Rejected),
+        }
+    }
+    Ok((text.join("\n"), sources))
 }
 
 fn content(client: &PiClient, value: &Value) -> Result<String, AgentSessionError> {

@@ -135,8 +135,15 @@ fn submitted_rich_input_keeps_identity_and_fits_storage_entries() {
         if restored.is_empty() {
             assert_eq!(entry.item["clientMessageId"], "client");
             assert_eq!(entry.item["messageId"], "native:pi:turn:user");
+            let sources = entry.item["imageSources"].as_array().unwrap();
+            assert_eq!(sources.len(), 1);
+            assert_eq!(
+                std::fs::read(sources[0].as_str().unwrap()).unwrap(),
+                b"hello"
+            );
         } else {
             assert!(entry.item.get("clientMessageId").is_none());
+            assert!(entry.item.get("imageSources").is_none());
         }
         assert!(message_ids.insert(entry.item["messageId"].as_str().unwrap().to_owned()));
         assert_eq!(entry.turn_id.as_deref(), Some("turn"));
@@ -144,9 +151,8 @@ fn submitted_rich_input_keeps_identity_and_fits_storage_entries() {
         restored.push_str(entry.item["text"].as_str().unwrap());
         timeline.append("agent", "pi", &[entry]).unwrap();
     }
-    assert!(restored.starts_with(&format!("{text}\n![Image](")));
-    assert!(!restored.contains("[Image attachment]"));
-    assert_eq!(timeline.read("agent").unwrap().1.len(), 3);
+    assert_eq!(restored, text);
+    assert_eq!(timeline.read("agent").unwrap().1.len(), 2);
     let files: Vec<_> = std::fs::read_dir(directory).unwrap().collect();
     assert_eq!(files.len(), 1);
     assert_eq!(
@@ -199,9 +205,10 @@ async fn submitted_image_only_session_is_materialized_for_timeline_display() {
     assert!(events.iter().any(|event| matches!(event,
         AgentTurnEvent::Timeline(entry)
             if entry.item["type"] == "user_message"
-                && entry.item["text"].as_str().is_some_and(|text|
-                    text.starts_with("![Image](")
-                        && !text.contains("[Image attachment]"))
+                && entry.item["text"] == ""
+                && entry.item["imageSources"].as_array().is_some_and(|sources|
+                    sources.len() == 1
+                        && std::fs::read(sources[0].as_str().unwrap()).unwrap() == b"hello")
     )));
     let files: Vec<_> = std::fs::read_dir(image_directory).unwrap().collect();
     assert_eq!(files.len(), 1);

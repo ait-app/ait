@@ -1,4 +1,4 @@
-# ADR-176：移动端本地通知与 APNs／FCM 直连
+# ADR-177：移动端本地通知与 APNs／FCM 直连
 
 状态：Accepted（2026-10-21）。
 
