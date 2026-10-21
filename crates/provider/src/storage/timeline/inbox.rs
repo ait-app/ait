@@ -250,6 +250,23 @@ impl Timeline {
             .map_err(io)
     }
 
+    /// Whether queued work or a foreground write awaiting native admission still owns completion.
+    /// Immediate answers have no stored prompt; uncertain writes are fenced by startup recovery.
+    /// # Errors
+    /// Returns storage failures when the receipt state cannot be read.
+    pub(crate) fn has_pending_admission(&self, agent: &str) -> Result<bool, ErrorCode> {
+        self.database
+            .lock()
+            .map_err(io)?
+            .query_row(
+                "SELECT EXISTS(SELECT 1 FROM input_receipts WHERE agent=?
+             AND prompt IS NOT NULL AND state IN ('queued','claimed'))",
+                [agent],
+                |row| row.get(0),
+            )
+            .map_err(io)
+    }
+
     /// Commit the no-replay fence before writing to a native provider.
     pub(crate) fn claim_input(&self, agent: &str, message: &str) -> Result<(), ErrorCode> {
         let changed = self.database.lock().map_err(io)?.execute(

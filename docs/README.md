@@ -25,6 +25,8 @@
 
 ## 架构决策
 
+- [ADR-177：Codex 宿主异常重启后的继续执行与失败上报](decisions/providers/adr-177-codex-restart-continuation.md)：在原会话中继续，恢复失败保留具体错误并结束运行状态。
+
 - [ADR-175：独立恢复 Provider 错误详情与重启收尾](decisions/providers/adr-175-restore-provider-recovery.md)：仅恢复 daemon／Provider 行为，客户端诊断另行保留为 Draft。
 
 - [ADR-162：Codex 失败展示原生原因与 HTTP 状态](decisions/providers/adr-162-codex-error-details.md)：有界脱敏的原生原因、HTTP 状态和既有消息字段。

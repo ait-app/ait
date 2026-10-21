@@ -34,6 +34,7 @@ use crate::support::time::now_timestamp;
 enum Registration<'a> {
     Create,
     Read,
+    Recovery,
     Restore(&'a crate::protocol::resume::Overrides),
 }
 
@@ -553,6 +554,14 @@ impl AgentManager {
         &mut self,
         agent_id: &str,
     ) -> Result<PersistedAgentRuntimeRecord, AgentManagerError> {
+        self.resume_with_recovery(agent_id, false).await
+    }
+
+    async fn resume_with_recovery(
+        &mut self,
+        agent_id: &str,
+        recovering: bool,
+    ) -> Result<PersistedAgentRuntimeRecord, AgentManagerError> {
         if let Some(agent) = self.live.get(agent_id) {
             return if agent.registered {
                 self.registry
@@ -614,7 +623,12 @@ impl AgentManager {
         )
         .await
         .map_err(map_session)?;
-        self.register_session(agent_id, session, record, Registration::Read, permit)
+        let registration = if recovering {
+            Registration::Recovery
+        } else {
+            Registration::Read
+        };
+        self.register_session(agent_id, session, record, registration, permit)
             .await
     }
 
@@ -709,12 +723,18 @@ impl AgentManager {
             return Err(AgentManagerError::Busy);
         }
         let now = now_timestamp();
+        let restarting = prompt
+            .client_message_id
+            .as_deref()
+            .is_some_and(|message| message.starts_with(recovery::RESTART_INPUT_PREFIX));
         self.registry
             .update(agent_id, &|current| {
                 let mut next = current.clone();
                 next.last_status = AgentRuntimeStatus::Running;
                 next.updated_at.clone_from(&now);
-                next.last_user_message_at = Some(now.clone());
+                if !restarting {
+                    next.last_user_message_at = Some(now.clone());
+                }
                 next.last_activity_at = Some(now.clone());
                 next.last_error = None;
                 next.requires_attention = false;
@@ -998,7 +1018,11 @@ impl AgentManager {
         record.last_mode_id.clone_from(&runtime_info.mode_id);
         record.runtime_info = Some(runtime_info);
         record.persistence = persistence;
-        record.last_status = AgentRuntimeStatus::Idle;
+        record.last_status = if matches!(registration, Registration::Recovery) {
+            AgentRuntimeStatus::Running
+        } else {
+            AgentRuntimeStatus::Idle
+        };
         record.last_error = None;
         if self.owner.as_ref().is_some_and(|owner| {
             owner
@@ -1020,7 +1044,7 @@ impl AgentManager {
                 next.runtime_info.clone_from(&record.runtime_info);
                 next.last_mode_id.clone_from(&record.last_mode_id);
                 next.persistence.clone_from(&record.persistence);
-                next.last_status = AgentRuntimeStatus::Idle;
+                next.last_status = record.last_status;
                 next.last_error = None;
                 next
             })

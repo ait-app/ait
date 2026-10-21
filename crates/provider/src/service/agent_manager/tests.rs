@@ -279,6 +279,23 @@ impl AgentSession for FakeSession {
         })
     }
 
+    fn start_input<'a>(
+        &'a mut self,
+        prompt: &'a crate::protocol::prompt::AgentPrompt,
+        config: &'a StoredAgentConfig,
+    ) -> AgentSessionFuture<'a, String> {
+        Box::pin(async move {
+            prompt.validate()?;
+            if !prompt.images.is_empty()
+                || !prompt.attachments.is_empty()
+                || prompt.output_schema.is_some()
+            {
+                return Err(AgentSessionError::Rejected);
+            }
+            self.start_turn(&prompt.text, config).await
+        })
+    }
+
     fn steer_turn<'a>(&'a mut self, turn_id: &'a str, text: &'a str) -> AgentSessionFuture<'a, ()> {
         Box::pin(async move {
             let mut state = self.0.lock().unwrap();

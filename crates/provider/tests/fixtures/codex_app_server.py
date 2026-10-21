@@ -112,6 +112,10 @@ for line in sys.stdin:
         result = {"data":[{"name":"Plan","mode":"plan","model":"offline-model","reasoning_effort":"high"},
             {"name":"Default","mode":"default","model":"offline-model"}]} if mode == "workflows" else {"data":[]}
     elif method in ("thread/start", "thread/resume", "thread/read"):
+        if method == "thread/resume" and mode == "delayed-resume":
+            (root / "resume-started").write_text("ready")
+            while not (root / "release-resume").exists():
+                time.sleep(0.01)
         if method == "thread/start" and mode == "delayed-create":
             deadline = time.monotonic() + 10
             while not (root / "release-create").exists() and time.monotonic() < deadline:

@@ -92,6 +92,9 @@ mod claude;
 #[path = "opencode.rs"]
 mod opencode;
 
+#[path = "codex_recovery.rs"]
+mod codex_recovery;
+
 #[path = "deepseek_harness.rs"]
 mod deepseek_harness;
 
