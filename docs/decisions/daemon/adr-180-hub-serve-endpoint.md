@@ -1,6 +1,6 @@
 # ADR-180：消息 Hub 服务端点（ait-hub-v1）
 
-状态：采用（原型）。中心协议见中心仓库 `docs/hub-protocol.md`；本 ADR 只记录 Host 侧边界。
+状态：采用（原型）。中心协议见中心仓库 `docs/hub-protocol.md`；本 ADR 记录 Host 与客户端侧边界。
 
 ## 背景
 
@@ -26,9 +26,16 @@
 
 托管（headless）模式下，本地接口对 `PUT`/`DELETE` 返回 409，状态查询可用。`ManagedRelay` 与 `Center` 端口新增的 Hub 方法均有默认实现：不支持 Hub 的实现视为“无需 Hub”。
 
+## 访问端（客户端）
+
+- `@ait/client/internal/hub`（`packages/client/src/hub/`）提供 `HubLink`（每个已登录账号一条，序号、确认、续传、`verify()` 探活）和实现 `DaemonTransport` 的 `HubSession`；业务 DaemonClient 不变。
+- Android/iOS 在 `account-transport.ts` 的原生分支选择路径：链路就绪且 presence 中有目标 `host_id` 的 serve 节点时走 Hub，否则使用未改动的旧原生传输；每次选择记录 `hub`、`legacy:no_serve` 或 `legacy:hub_down`。会话建立后不切换路径。
+- 桌面账户会话通过 `localHub` 依赖维护内置 daemon 的 serve 链路；Electron 与 Web 的访问端暂时只走旧路径。
+
 ## 验证
 
 - `relay` crate：帧编解码、链路序号与重放、会话桥接、模拟中心下的断线续传和拒绝。
 - `api`：本地 Hub 控制接口的鉴权、启动、停止和托管冲突。
 - `host-link`：Hub 与 relay 并行启动、失败退避。
 - 中心仓库 `tests/api/hub_e2e.rs`：真实 daemon 经 Hub 提供会话，访问端断线重连后同一会话继续 RPC，无需新 hello；旧 relay 端到端同时通过。
+- 跨实现检查：TS `HubLink`/`HubSession` 连接真实中心与真实 daemon，连续三次强制断开 TCP，断线期间发出的请求在续传后得到回答，会话未关闭、未重复 hello。
