@@ -1,5 +1,14 @@
 # Ait changelog
 
+## 0.1.14 - 2026-10-21
+
+- Restore interrupted Codex turns after out-of-memory restarts and preserve concrete upstream failure details in diagnostics.
+- Reduce OpenCode model-catalog cold starts, probe readiness before starting turns, and restore stalled sessions without duplicating work.
+- Preserve Pi project identity and user-image history when discovering, importing and resuming native sessions.
+- Accept void DeepSeek Harness event acknowledgements and keep completion delivery consistent.
+- Add daemon-backed native push delivery and local notification settings; iOS and Android store builds remain separate from this desktop release.
+- Move provider behavior scenarios into their owning crate and keep daemon tests focused on host integration.
+
 ## 0.1.13 - 2026-10-20
 
 - Keep dialogs, popovers and menus outside desktop window drag regions so their controls remain clickable.
