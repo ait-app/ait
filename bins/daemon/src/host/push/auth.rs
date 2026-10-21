@@ -50,7 +50,7 @@ impl Apple {
         let key = EncodingKey::from_ec_pem(pem.expose_secret().as_bytes())
             .map_err(|_| anyhow::anyhow!("invalid APNs P-256 signing key"))?;
         let bundles = environment("AIT_APNS_BUNDLE_IDS")
-            .unwrap_or_else(|| "dev.ait.mobile,dev.ait.mobile.debug".to_owned())
+            .unwrap_or_else(|| "com.necokeine.ait,dev.ait.mobile,dev.ait.mobile.debug".to_owned())
             .split(',')
             .map(str::trim)
             .filter(|bundle| !bundle.is_empty())

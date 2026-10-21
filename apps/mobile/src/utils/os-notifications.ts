@@ -175,7 +175,12 @@ export async function sendOsNotification(payload: OsNotificationPayload): Promis
       if (AppState.currentState !== "active") return false;
       const notifications = await import("expo-notifications");
       await notifications.scheduleNotificationAsync({
-        content: { title: payload.title, body: payload.body, data: payload.data, sound: "default" },
+        content: {
+          title: payload.title,
+          ...(payload.body === undefined ? {} : { body: payload.body }),
+          data: payload.data ?? {},
+          sound: "default",
+        },
         trigger: null,
       });
       return true;

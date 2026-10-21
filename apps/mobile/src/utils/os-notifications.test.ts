@@ -29,7 +29,7 @@ const originalGlobals: GlobalSnapshot = {
   focus: (globalThis as { focus?: unknown }).focus,
   location: (globalThis as { location?: unknown }).location,
 };
-const scheduleNativeNotification = vi.fn(async () => "notification-id");
+const scheduleNativeNotification = vi.fn(async (_request: unknown) => "notification-id");
 
 async function loadModuleForPlatform(
   platform: "web" | "ios" | "android",
@@ -133,6 +133,15 @@ describe("sendOsNotification", () => {
     const denied = await loadModuleForPlatform("ios", { nativePermission: false });
     expect(await denied.sendOsNotification({ title: "Done" })).toBe(false);
     expect(scheduleNativeNotification).not.toHaveBeenCalled();
+  });
+
+  it("schedules a native test without undefined optional content fields", async () => {
+    const { sendOsNotification } = await loadModuleForPlatform("ios");
+    expect(await sendOsNotification({ title: "Test notification" })).toBe(true);
+    expect(scheduleNativeNotification.mock.calls[0]?.[0]).toStrictEqual({
+      content: { title: "Test notification", data: {}, sound: "default" },
+      trigger: null,
+    });
   });
 
   it("dispatches a click event that the app can handle", async () => {

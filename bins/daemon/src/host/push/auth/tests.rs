@@ -176,3 +176,43 @@ fn credential_configuration_errors_are_safe_and_optional_providers_do_not_read_f
             .contains("cannot read FCM service account")
     );
 }
+
+#[test]
+fn default_apple_allowlist_accepts_the_committed_ios_app_and_honors_overrides() {
+    let directory = tempfile::tempdir().unwrap();
+    let path = directory.path().join("test-key.p8");
+    let key = ring::signature::EcdsaKeyPair::generate_pkcs8(
+        &ring::signature::ECDSA_P256_SHA256_FIXED_SIGNING,
+        &ring::rand::SystemRandom::new(),
+    )
+    .unwrap();
+    let encoded = base64::engine::general_purpose::STANDARD.encode(key.as_ref());
+    std::fs::write(
+        &path,
+        format!("-----BEGIN PRIVATE KEY-----\n{encoded}\n-----END PRIVATE KEY-----\n"),
+    )
+    .unwrap();
+    let configuration = |bundles: Option<&str>| {
+        Apple::from_environment(&|name| match name {
+            "AIT_APNS_KEY_FILE" => Some(path.to_string_lossy().into_owned()),
+            "AIT_APNS_KEY_ID" => Some("test-key".to_owned()),
+            "AIT_APNS_TEAM_ID" => Some("test-team".to_owned()),
+            "AIT_APNS_BUNDLE_IDS" => bundles.map(str::to_owned),
+            _ => None,
+        })
+        .unwrap()
+        .unwrap()
+    };
+    let apple = configuration(None);
+    for bundle in [
+        "com.necokeine.ait",
+        "dev.ait.mobile",
+        "dev.ait.mobile.debug",
+    ] {
+        assert!(apple.allows(bundle), "default allowlist rejected {bundle}");
+    }
+    assert!(!apple.allows("other.application"));
+    let custom = configuration(Some("custom.application"));
+    assert!(custom.allows("custom.application"));
+    assert!(!custom.allows("com.necokeine.ait"));
+}

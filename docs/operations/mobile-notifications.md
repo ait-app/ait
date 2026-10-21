@@ -14,10 +14,10 @@ App 的 **Settings → App → Notifications（设置 → 应用 → 通知）**
 export AIT_APNS_KEY_FILE=/private/path/AuthKey.p8
 export AIT_APNS_KEY_ID=YOUR_KEY_ID
 export AIT_APNS_TEAM_ID=YOUR_TEAM_ID
-export AIT_APNS_BUNDLE_IDS=dev.ait.mobile,dev.ait.mobile.debug
+export AIT_APNS_BUNDLE_IDS=com.necokeine.ait,dev.ait.mobile,dev.ait.mobile.debug
 ```
 
-密钥须允许目标 Bundle ID 的推送。Bundle allowlist 默认为上述两个应用；自定义构建须显式设置。daemon 缓存 ES256 provider token，50 分钟更新，并使用 HTTP/2。凭据文件不能提交到仓库或放进公开安装包。
+密钥须允许目标 Bundle ID 的推送。Bundle allowlist 默认为上述三个应用：已提交原生工程的 `com.necokeine.ait`，以及 Expo 配置默认的 production／development ID。自定义构建须显式设置；设置后覆盖默认列表。daemon 缓存 ES256 provider token，50 分钟更新，并使用 HTTP/2。凭据文件不能提交到仓库或放进公开安装包。
 
 ## Android：Google FCM
 
