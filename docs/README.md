@@ -12,6 +12,8 @@
 
 ## 开始使用与开发
 
+- [移动端通知](operations/mobile-notifications.md)：本地提醒、Apple APNs／Google FCM 配置和真机验收。
+
 - [daemon MCP 接口](operations/mcp.md)：Streamable HTTP、40 个编排工具、鉴权与 Workspace 上下文。
 - [项目说明](../README.md)：开发入口、workspace 和验证命令。
 - [桌面端](../apps/desktop/README.md)：Electron 启动、构建和打包。
@@ -24,6 +26,8 @@
 - [Bot 后端设计](plans/bot-backend.md)：Workspace Bot、独占 Channel、隐藏 session、内置 tab 对话与 Telegram、飞书、Email 接入方案。
 
 ## 架构决策
+
+- [ADR-177：移动端本地通知与 APNs／FCM 直连](decisions/clients/adr-177-native-local-and-remote-notifications.md)：连接外 attention 通道、直接投递、权限恢复及去重。
 
 - [ADR-176：Pi 用户图片的共享时间线投影](decisions/providers/adr-176-pi-user-image-projection.md)：实时输入、导入与刷新共用 `imageSources`，保留纯图片消息和跨设备预览。
 

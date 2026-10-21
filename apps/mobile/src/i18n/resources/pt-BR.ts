@@ -2119,6 +2119,8 @@ export const ptBR: TranslationResources = {
     notifications: {
       title: "Notificações",
       permission: "Permissão de notificações",
+      openSettings: "Abrir configurações",
+      permissionUnavailable: "Não foi possível consultar a permissão de notificações.",
       refreshAccessibility: "Atualizar permissão de notificações",
       playSound: "Reproduzir som",
       playSoundHint: "Reproduz um som quando chega uma notificação da área de trabalho",

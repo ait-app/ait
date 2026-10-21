@@ -225,14 +225,23 @@ function PushNotificationRouter() {
       .then((notifications) => {
         if (cancelled) return;
         notifications.setNotificationHandler({
-          handleNotification: async () => ({
-            // When the app is open, don't show OS banners.
-            shouldShowAlert: false,
-            shouldShowBanner: false,
-            shouldShowList: false,
-            shouldPlaySound: false,
-            shouldSetBadge: false,
-          }),
+          handleNotification: async (notification) => {
+            const target = resolveNotificationTarget(notification.request.content.data);
+            const session = target.serverId
+              ? useSessionStore.getState().sessions[target.serverId]
+              : null;
+            const focused = Boolean(
+              session &&
+              ((target.agentId && session.focusedAgentId === target.agentId) ||
+                (target.terminalId && session.focusedTerminalId === target.terminalId)),
+            );
+            return {
+              shouldShowBanner: !focused,
+              shouldShowList: !focused,
+              shouldPlaySound: !focused,
+              shouldSetBadge: false,
+            };
+          },
         });
 
         const openFromResponse = (response: Notifications.NotificationResponse) => {

@@ -17,6 +17,7 @@ use domain as _;
 use filesystem as _;
 use futures_util as _;
 use host_link as _;
+use jsonwebtoken as _;
 #[cfg(unix)]
 use libc as _;
 use metadata as _;
@@ -24,6 +25,7 @@ use model as _;
 use persistence as _;
 use provider as _;
 use reqwest as _;
+use ring as _;
 #[cfg(unix)]
 use rustix as _;
 use schedule as _;

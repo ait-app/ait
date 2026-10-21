@@ -6,7 +6,7 @@ export function startPushNotifications(input: StartPushNotificationsInput): () =
 }
 
 export function revokePushNotifications(input: RevokePushNotificationsInput): Promise<void> {
-  return revokeSubscription(input).catch((error) => {
-    console.warn("[PushNotifications] Failed to remove local push subscription", error);
+  return revokeSubscription(input).catch(() => {
+    console.warn("[PushNotifications] Failed to remove local push subscription");
   });
 }

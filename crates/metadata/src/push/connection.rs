@@ -29,8 +29,22 @@ pub async fn register(
     let request: TokenRequest =
         serde_json::from_value(params).map_err(|_| ErrorCode::InvalidMessage)?;
     let token = request.token.trim().to_owned();
-    renew(state, token.clone()).await?;
+    let registration = token.clone();
+    state
+        .run(
+            state.push_tokens.clone(),
+            ErrorCode::RegistryIo,
+            move |service| {
+                service
+                    .register(&registration, chrono::Utc::now().timestamp_millis())
+                    .map_err(error)
+            },
+        )
+        .await?;
     connection.push_token = if token.is_empty() { None } else { Some(token) };
+    if let Some(session) = &connection.session {
+        session.set_push_token(connection.push_token.clone());
+    }
     Ok(())
 }
 
@@ -38,7 +52,12 @@ pub async fn register(
 /// # Errors
 /// Returns admission or storage errors; a failed write can be retried by a later heartbeat.
 pub async fn heartbeat(state: &State, connection: &Connection) -> Result<(), ErrorCode> {
-    if let Some(token) = &connection.push_token {
+    if let Some(token) = &connection.push_token
+        && connection
+            .session
+            .as_ref()
+            .is_none_or(|session| session.owns_push_token(token))
+    {
         renew(state, token.clone()).await?;
     }
     Ok(())
@@ -77,6 +96,9 @@ pub(crate) async fn unregister(
             .await?;
         if connection.push_token.as_deref() == Some(token.as_str()) {
             connection.push_token = None;
+            if let Some(session) = &connection.session {
+                session.set_push_token(None);
+            }
         }
         Ok(json!({}))
     }

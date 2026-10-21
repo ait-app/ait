@@ -1,5 +1,7 @@
 # Push Token 管理
 
+后续已补齐本地通知及 APNs／FCM 直连，见 [ADR-177](../../decisions/clients/adr-177-native-local-and-remote-notifications.md) 和[移动端通知](../../operations/mobile-notifications.md)。以下保留当时仅实现 Token 管理的范围和验证记录。
+
 ## 实现范围
 
 基于固定 Paseo `2c8e8a826810337492cc5a38bb0bbd705b6fb632`，实现 `push.register` 客户端事件与 `push.unregister.request` 请求。规范接口总数仍为 202，有处理器的接口从 150 增至 152，占位从 52 降至 50；加上自定义接口，生产处理器为 159/209。

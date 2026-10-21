@@ -8,6 +8,7 @@ use chrono::{DateTime, Utc};
 use domain::session::SessionError;
 use domain::session::protocol::{EventsRequest, Heartbeat, SessionEventKind};
 use serde_json::Value;
+use tokio::sync::broadcast;
 use uuid::Uuid;
 
 const PRESENCE_MS: i64 = 180_000;
@@ -17,18 +18,29 @@ const MAX_PENDING_BYTES: usize = 1024 * 1024;
 /// Transport-owned bounded delivery callback. Payload includes its subscription identity.
 type EventSink = Arc<dyn Fn(SessionEventKind, Value) -> Result<(), SessionError> + Send + Sync>;
 
-#[derive(Debug, Default)]
+#[derive(Default)]
 struct Presence {
     activity_ms: Option<i64>,
+    heartbeat_ms: Option<i64>,
     visible: bool,
     focused_agent: Option<String>,
     focused_terminal: Option<String>,
+    push_token: Option<String>,
+}
+
+impl fmt::Debug for Presence {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.debug_struct("Presence")
+            .field("visible", &self.visible)
+            .finish_non_exhaustive()
+    }
 }
 
 #[derive(Default)]
 struct State {
     connections: BTreeMap<String, Weak<Mutex<Presence>>>,
     listeners: Vec<Weak<Listener>>,
+    attention: Option<broadcast::Sender<(SessionEventKind, Value)>>,
 }
 
 /// Shared in-memory events and presence. Durable business state stays with its owning capability.
@@ -80,6 +92,66 @@ impl fmt::Debug for SessionSubscription {
 }
 
 impl SessionEvents {
+    /// Remove an invalid provider token from live connection owners before further heartbeats.
+    pub fn clear_push_token(&self, token: &str) {
+        let state = self
+            .0
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
+        for presence in state.connections.values().filter_map(Weak::upgrade) {
+            let mut presence = presence
+                .lock()
+                .unwrap_or_else(std::sync::PoisonError::into_inner);
+            if presence.push_token.as_deref() == Some(token) {
+                presence.push_token = None;
+            }
+        }
+    }
+
+    /// Observe unfocused attention independently of client connections, including after disconnect.
+    /// The bounded channel retains at most 64 events; lagging consumers must report lost events.
+    #[must_use]
+    pub fn subscribe_attention(&self) -> broadcast::Receiver<(SessionEventKind, Value)> {
+        let mut state = self
+            .0
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
+        state
+            .attention
+            .get_or_insert_with(|| broadcast::channel(64).0)
+            .subscribe()
+    }
+
+    /// Return tokens whose fresh visible connections handle notifications locally.
+    /// Tokens are opaque secrets and must never be logged.
+    #[must_use]
+    pub fn foreground_push_tokens(&self) -> BTreeSet<String> {
+        let now = Utc::now().timestamp_millis();
+        let state = self
+            .0
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
+        state
+            .connections
+            .values()
+            .filter_map(Weak::upgrade)
+            .filter_map(|presence| {
+                let presence = presence
+                    .lock()
+                    .unwrap_or_else(std::sync::PoisonError::into_inner);
+                if presence.visible
+                    && presence
+                        .heartbeat_ms
+                        .is_some_and(|heartbeat| now.saturating_sub(heartbeat) <= PRESENCE_MS)
+                {
+                    presence.push_token.clone()
+                } else {
+                    None
+                }
+            })
+            .collect()
+    }
+
     /// Register presence for a new connection. Dropping it releases focus suppression.
     #[must_use]
     pub fn connect(&self) -> SessionConnection {
@@ -117,7 +189,7 @@ impl SessionEvents {
             kind,
             SessionEventKind::AgentAttention | SessionEventKind::TerminalAttention
         );
-        let (listeners, presence) = {
+        let (listeners, presence, push) = {
             let mut state = self
                 .0
                 .lock()
@@ -147,7 +219,7 @@ impl SessionEvents {
                 .filter(|_| attention)
                 .filter_map(|(id, value)| value.upgrade().map(|value| (id.clone(), value)))
                 .collect();
-            (listeners, presence)
+            (listeners, presence, state.attention.clone())
         };
         let mut recipient = None;
         let mut latest = i64::MIN;
@@ -165,7 +237,10 @@ impl SessionEvents {
                 let Some(activity) = presence.activity_ms else {
                     continue;
                 };
-                if now.saturating_sub(activity) > PRESENCE_MS {
+                if presence
+                    .heartbeat_ms
+                    .is_none_or(|heartbeat| now.saturating_sub(heartbeat) > PRESENCE_MS)
+                {
                     continue;
                 }
                 let (focus, target) = if kind == SessionEventKind::TerminalAttention {
@@ -179,6 +254,12 @@ impl SessionEvents {
                     recipient = Some(id);
                 }
             }
+        }
+        if attention
+            && !focused
+            && let Some(push) = push
+        {
+            let _ = push.send((kind, payload.clone()));
         }
         let mut notified = false;
         for listener in listeners {
@@ -200,6 +281,25 @@ impl SessionEvents {
 }
 
 impl SessionConnection {
+    /// Whether this connection still owns `token`; invalidation prevents heartbeat resurrection.
+    #[must_use]
+    pub fn owns_push_token(&self, token: &str) -> bool {
+        self.presence
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
+            .push_token
+            .as_deref()
+            == Some(token)
+    }
+
+    /// Associate a durably registered token with this physical connection for local/push deduplication.
+    pub fn set_push_token(&self, token: Option<String>) {
+        self.presence
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
+            .push_token = token;
+    }
+
     /// Return this connection's opaque identity.
     #[must_use]
     pub fn id(&self) -> &str {
@@ -225,6 +325,7 @@ impl SessionConnection {
         }
         let mut presence = self.presence.lock().map_err(|_| SessionError::Closed)?;
         presence.activity_ms = Some(activity.min(Utc::now().timestamp_millis()));
+        presence.heartbeat_ms = Some(Utc::now().timestamp_millis());
         presence.visible = heartbeat.app_visible;
         presence.focused_agent = heartbeat.focused_agent_id.filter(|id| !id.is_empty());
         presence.focused_terminal = heartbeat.focused_terminal_id.filter(|id| !id.is_empty());

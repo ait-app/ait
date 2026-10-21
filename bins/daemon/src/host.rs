@@ -5,6 +5,7 @@ use std::time::Duration;
 use anyhow::Context;
 mod bot;
 mod catalog;
+mod push;
 mod schedule;
 mod voice;
 
@@ -288,7 +289,7 @@ fn compose_services(
     ))
     .with_activity_source(Arc::new(terminals.activity_source()));
     let agent_execution = compose_provider(
-        (agent_runtime_registry, timeline),
+        (agent_runtime_registry.clone(), timeline),
         (&workspace_registry, &project_registry),
         instance,
         providers,
@@ -308,7 +309,7 @@ fn compose_services(
     )?;
     let metadata = metadata::Service::new(metadata::Dependencies {
         workspace_names,
-        push_tokens: compose_push(&config.data_dir)?,
+        push_tokens: compose_push(&config.data_dir, Arc::new(agent_runtime_registry))?,
         daemon,
         github_projects: GithubProjects::new(
             directory.clone(),
@@ -625,14 +626,21 @@ fn compose_provider(
 #[cfg(test)]
 mod tests;
 
-fn compose_push(data_dir: &std::path::Path) -> anyhow::Result<metadata::push::service::PushTokens> {
-    metadata::push::service::PushTokens::open(
+fn compose_push(
+    data_dir: &std::path::Path,
+    agents: Arc<dyn AgentRuntimeRegistry>,
+) -> anyhow::Result<metadata::push::service::PushTokens> {
+    let tokens = metadata::push::service::PushTokens::open(
         Box::new(persistence::storage::push::FileTokenStore::new(
             data_dir.join("push-tokens.json"),
         )),
         Utc::now().timestamp_millis(),
     )
-    .map_err(|_| anyhow::anyhow!("initialize push token leases"))
+    .map_err(|_| anyhow::anyhow!("initialize push token leases"))?;
+    Ok(tokens.with_delivery(
+        push::NativePush::from_environment(|name| std::env::var(name).ok())?,
+        agents,
+    ))
 }
 
 fn compose_skills(data: &std::path::Path) -> anyhow::Result<provider::skills::service::Skills> {

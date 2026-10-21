@@ -2525,6 +2525,8 @@ export const zhCN: TranslationResources = {
     notifications: {
       title: "通知",
       permission: "通知权限",
+      openSettings: "打开系统设置",
+      permissionUnavailable: "无法读取通知权限。",
       refreshAccessibility: "刷新通知权限",
       playSound: "播放声音",
       playSoundHint: "收到桌面通知时播放声音",
