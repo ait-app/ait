@@ -274,7 +274,13 @@ async fn rpc(State(host): State<Host>, headers: HeaderMap, Json(request): Json<V
         }
         Some("commands/execute") => json!({"result":{"kind":"success"}}),
         Some("session/prompt" | "session/cancel") => json!({"accepted":true}),
-        Some("$events/result") => json!(null),
+        // DSH returns JavaScript undefined, so JSON serialization omits `value`.
+        Some("$events/result") => {
+            return Json(
+                json!({"type":"server-response","rpcId":request["rpcId"],"result":{"ok":true}}),
+            )
+            .into_response();
+        }
         Some("session/attachment") => {
             json!({"attachment":{"attachmentId":"image","mediaType":"image/png"},"data":"aGVsbG8="})
         }
