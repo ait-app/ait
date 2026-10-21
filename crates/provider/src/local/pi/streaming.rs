@@ -71,22 +71,35 @@ impl Stream {
         prompt: &crate::protocol::prompt::AgentPrompt,
         text: &str,
     ) -> Result<Vec<AgentTurnEvent>, AgentSessionError> {
-        let mut text = Cow::Borrowed(text);
-        for image in &prompt.images {
-            let rendered = images.render(&json!({
-                "data": &image.data,
-                "mimeType": &image.mime_type,
-            }))?;
-            let text = text.to_mut();
-            if !text.is_empty() {
-                text.push('\n');
-            }
-            text.push_str(&rendered);
-        }
-        let mut remaining = text.as_ref();
+        let sources = prompt
+            .images
+            .iter()
+            .map(|image| {
+                images
+                    .source(&json!({"data": &image.data, "mimeType": &image.mime_type}))
+                    .map(Cow::into_owned)
+            })
+            .collect::<Result<Vec<_>, _>>()?;
+        Ok(Self::user_entries(
+            turn,
+            prompt.client_message_id.as_deref(),
+            text,
+            &sources,
+        ))
+    }
+
+    /// Project user text and image references, attaching images only to the first chunk.
+    /// Returns timeline rows with stable native keys and the first row's client identity.
+    pub(super) fn user_entries(
+        turn: &str,
+        client_message_id: Option<&str>,
+        text: &str,
+        sources: &[String],
+    ) -> Vec<AgentTurnEvent> {
+        let mut remaining = text;
         let mut index = 0;
         let mut events = Vec::new();
-        while !remaining.is_empty() {
+        while !remaining.is_empty() || (index == 0 && !sources.is_empty()) {
             let end = remaining.floor_char_boundary(MAX_TEXT.min(remaining.len()));
             let suffix = format!("user:{index}");
             let message_id = if index == 0 {
@@ -106,16 +119,19 @@ impl Stream {
             };
             // Only the first row reconciles the local submission. Continuations must
             // have independent identities or the client collapses them into that row.
-            if index == 0
-                && let Some(id) = &prompt.client_message_id
-            {
-                entry.item["clientMessageId"] = json!(id);
+            if index == 0 {
+                if let Some(id) = client_message_id {
+                    entry.item["clientMessageId"] = json!(id);
+                }
+                if !sources.is_empty() {
+                    entry.item["imageSources"] = json!(sources);
+                }
             }
             events.push(AgentTurnEvent::Timeline(entry));
             remaining = &remaining[end..];
             index += 1;
         }
-        Ok(events)
+        events
     }
 
     /// Project a completed historical assistant message without live-turn display budgets.

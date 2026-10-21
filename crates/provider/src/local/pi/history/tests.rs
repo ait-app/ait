@@ -1269,6 +1269,87 @@ fn tool_result_images_reconcile_without_conflicts_or_loss() {
 }
 
 #[test]
+fn empty_user_text_blocks_with_images_allow_inspection_and_refresh() {
+    for edited in [false, true] {
+        let (directory, mut client, file, cwd) = fixture();
+        client.images = crate::local::images::ImageStore::new(directory.path().join("images"));
+        let content = json!([
+            {"type":"text","text":""},
+            {"type":"image","mimeType":"image/png","data":"aGVsbG8="}
+        ]);
+        let mut input = user("u", Value::Null, "original user");
+        if !edited {
+            input["message"]["content"] = content.clone();
+        }
+        let mut entries = vec![
+            input,
+            assistant("a", "u", json!([{"type":"text","text":"done"}])),
+        ];
+        if edited {
+            entries.push(json!({"type":"context_edit","id":"edit","parentId":"a",
+                "targetId":"u","replacement":{"content":content}}));
+        }
+        write(&file, &cwd, entries);
+        let original = std::fs::read(&file).unwrap();
+
+        let history = inspect(&client, &handle(), &cwd).unwrap();
+
+        assert!(!history.active);
+        assert_eq!(history.entries.len(), 2);
+        let input = &history.entries[0].item;
+        assert_eq!(input["type"], "user_message");
+        assert_eq!(input["text"], "");
+        let sources = input["imageSources"].as_array().unwrap();
+        assert_eq!(sources.len(), 1);
+        assert_eq!(
+            std::fs::read(sources[0].as_str().unwrap()).unwrap(),
+            b"hello"
+        );
+        assert_eq!(history.entries[1].item["text"], "done");
+        assert_eq!(
+            history.entries,
+            inspect(&client, &handle(), &cwd).unwrap().entries
+        );
+        assert_eq!(std::fs::read(&file).unwrap(), original);
+    }
+}
+
+#[test]
+fn image_only_user_context_edit_projects_a_preview_without_markdown_text() {
+    let (directory, mut client, file, cwd) = fixture();
+    client.images = crate::local::images::ImageStore::new(directory.path().join("images"));
+    write(
+        &file,
+        &cwd,
+        vec![
+            user("u", Value::Null, "stale user"),
+            assistant("a", "u", json!([{"type":"text","text":"done"}])),
+            json!({"type":"context_edit","id":"edit","parentId":"a","targetId":"u",
+                "replacement":{"content":[{"type":"image","mimeType":"image/png",
+                    "data":"aGVsbG8="}]}}),
+        ],
+    );
+
+    let history = inspect(&client, &handle(), &cwd).unwrap();
+
+    assert!(!history.active);
+    let input = &history.entries[0].item;
+    assert_eq!(input["type"], "user_message");
+    assert_eq!(input["text"], "");
+    let sources = input["imageSources"].as_array().unwrap();
+    assert_eq!(sources.len(), 1);
+    assert_eq!(
+        std::fs::read(sources[0].as_str().unwrap()).unwrap(),
+        b"hello"
+    );
+    assert_eq!(history.entries[1].item["text"], "done");
+    assert_eq!(
+        history.entries,
+        inspect(&client, &handle(), &cwd).unwrap().entries
+    );
+}
+
+#[test]
 fn projects_images_compaction_extension_messages_and_manual_shell_commands() {
     let (directory, mut client, file, cwd) = fixture();
     client.images = crate::local::images::ImageStore::new(directory.path().join("images"));
@@ -1294,11 +1375,18 @@ fn projects_images_compaction_extension_messages_and_manual_shell_commands() {
     );
     let history = inspect(&client, &handle(), &cwd).unwrap();
     assert!(!history.active);
-    assert!(history.entries.iter().any(|entry| {
-        entry.item["text"]
-            .as_str()
-            .is_some_and(|text| text.contains("![Image]("))
-    }));
+    let input = history
+        .entries
+        .iter()
+        .find(|entry| entry.item["type"] == "user_message")
+        .unwrap();
+    assert_eq!(input.item["text"], "image");
+    let sources = input.item["imageSources"].as_array().unwrap();
+    assert_eq!(sources.len(), 1);
+    assert_eq!(
+        std::fs::read(sources[0].as_str().unwrap()).unwrap(),
+        b"hello"
+    );
     assert!(
         history
             .entries

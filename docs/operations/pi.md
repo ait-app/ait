@@ -54,6 +54,17 @@ under Ait's daemon data directory at `agents/provider-images`. Existing absolute
 image references remain references. Invalid or unsupported embedded images, or failure to write
 the private artifact, fail inspection.
 
+User images display as thumbnails with full-image viewing on other devices through Ait's
+authenticated file access. Live input, import, and refresh put image references in the existing
+`imageSources` timeline field, with user text kept separately. Image-only messages are retained,
+including native content with an empty text block alongside an image. Missing or non-string text
+in a text block remains invalid. Assistant and tool-result images keep their Markdown rendering.
+The sending client continues to prefer its original local attachments, which already displayed
+before this projection change. The image payload sent to Pi is unchanged.
+Existing Agents whose saved user images appear as Markdown text need explicit history refresh;
+daemon restart preserves their saved timeline. See
+[ADR-176](../decisions/providers/adr-176-pi-user-image-projection.md).
+
 Cwd-filtered discovery honors project settings; an unfiltered cross-project search cannot locate
 directories configured only inside unknown projects or relative to their working directories. A
 cwd-filtered request resolves storage from the cwd spelling supplied by the caller, including
@@ -166,3 +177,5 @@ cargo test -p provider local::pi::tests::installed --lib -- --ignored
 ```
 
 Implementation decision: [ADR-156](../decisions/providers/adr-156-pi-native-rpc-provider.md).
+Focused user-image projection results and validation limits:
+[2026-10-21 report](../reports/providers/pi-user-image-projection-2026-10-21.md).
