@@ -51,7 +51,8 @@ impl ManagedRelay for ManagedRelayHandle {
 
     async fn hub_active(&self) -> bool {
         let status = self.hub.status().await;
-        status.online || status.connecting
+        // A link another process took over is left to it for a while.
+        status.online || status.connecting || self.hub.yielding().await
     }
 
     fn report(&self, phase: &'static str, binding: Option<&Binding>) {

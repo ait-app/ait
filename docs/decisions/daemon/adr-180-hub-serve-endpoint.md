@@ -16,6 +16,7 @@
 - **会话生命周期与物理连接解耦**：Hub 链路断线重连期间，本地 WebSocket 和其上的订阅保持；只有收到 `close`、链路失效或连接器停止时才关闭。访问端在宽限期内重连，可直接收到断线期间的增量。
 - 链路状态（`hub/link.rs`）维护双向序号、累积确认和最多 8 MiB 的未确认重放缓冲；缓冲满时暂停读取本地会话，形成背压。
 - 断线后用首次 welcome 返回的 `resume_token` 重连，无需新票据；中心以 401/403 拒绝或返回 `resume_expired` 时停止，等待新的授权。
+- 中心以 `error{code}` 结束链路时（如 `replaced`、`unauthorized`），状态的 `rejected` 字段记录该错误码。收到 `replaced` 说明另一个进程接管了本节点的 serve 链路：headless 的 `hub_active()` 与桌面端 `maintainHub` 都会让出 5 分钟再尝试，避免两个进程互相替换。
 
 ## 授权入口
 

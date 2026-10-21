@@ -39,6 +39,9 @@ const ACK_INTERVAL: Duration = Duration::from_millis(50);
 /// Stop resuming slightly before the center discards the link.
 const GRACE_MARGIN: Duration = Duration::from_secs(5);
 const BACKOFF_MS: [u64; 6] = [250, 500, 1000, 2000, 4000, 8000];
+/// After another process took over this node's serve link, wait this long before
+/// taking it back, so two processes serving one node never flap.
+const REPLACED_BACKOFF: Duration = Duration::from_secs(300);
 
 /// One-use grant for a new hub link, obtained by the Host's account owner.
 #[derive(Debug, Deserialize)]
@@ -63,6 +66,8 @@ pub struct Status {
     pub link: Option<Uuid>,
     /// Last failure, without URLs or credentials.
     pub error: Option<String>,
+    /// Center error code that ended the last link, e.g. `replaced`.
+    pub rejected: Option<String>,
 }
 
 #[derive(Debug)]
@@ -70,6 +75,7 @@ struct State {
     status: Status,
     generation: Uuid,
     cancel: CancellationToken,
+    replaced_at: Option<Instant>,
 }
 
 /// Owns at most one hub link and the local sessions it carries.
@@ -87,6 +93,7 @@ impl Connector {
                 status: Status::default(),
                 generation: Uuid::new_v4(),
                 cancel: CancellationToken::new(),
+                replaced_at: None,
             })),
             local,
             shutdown,
@@ -99,6 +106,30 @@ enum Ended {
     Lost,
     /// The connector was stopped or replaced.
     Stopped,
+}
+
+/// Why a link ended for good.
+#[derive(Debug)]
+enum Failure {
+    /// Transport, credential or protocol failure.
+    Relay(Error),
+    /// The center ended the link with `error{code}`.
+    Rejected(String),
+}
+
+impl From<Error> for Failure {
+    fn from(error: Error) -> Self {
+        Self::Relay(error)
+    }
+}
+
+impl std::fmt::Display for Failure {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Self::Relay(error) => error.fmt(f),
+            Self::Rejected(code) => write!(f, "hub rejected the link: {code}"),
+        }
+    }
 }
 
 impl Connector {
@@ -122,6 +153,7 @@ impl Connector {
             state.cancel.cancel();
             state.cancel = cancel.clone();
             state.generation = generation;
+            state.replaced_at = None;
             state.status = Status {
                 connecting: true,
                 ..Status::default()
@@ -144,14 +176,7 @@ impl Connector {
                     tracing::warn!(%error, "Hub link ended; a new grant is required");
                 }
                 cancel.cancel();
-                connector
-                    .update(generation, |status| {
-                        *status = Status {
-                            error: result.err().map(|error| error.to_string()),
-                            ..Status::default()
-                        };
-                    })
-                    .await;
+                connector.finish(generation, result.err()).await;
             }
             .instrument(span),
         );
@@ -171,6 +196,35 @@ impl Connector {
         self.state.lock().await.status.clone()
     }
 
+    /// Whether another process recently took over this node's serve link; the
+    /// owner should not start a new link until this turns false.
+    pub async fn yielding(&self) -> bool {
+        self.state
+            .lock()
+            .await
+            .replaced_at
+            .is_some_and(|at| at.elapsed() < REPLACED_BACKOFF)
+    }
+
+    async fn finish(&self, generation: Uuid, failure: Option<Failure>) {
+        let mut state = self.state.lock().await;
+        if state.generation != generation {
+            return;
+        }
+        let rejected = match &failure {
+            Some(Failure::Rejected(code)) => Some(code.clone()),
+            Some(Failure::Relay(_)) | None => None,
+        };
+        if rejected.as_deref() == Some("replaced") {
+            state.replaced_at = Some(Instant::now());
+        }
+        state.status = Status {
+            error: failure.map(|failure| failure.to_string()),
+            rejected,
+            ..Status::default()
+        };
+    }
+
     async fn update(&self, generation: Uuid, change: impl FnOnce(&mut Status)) {
         let mut state = self.state.lock().await;
         if state.generation == generation {
@@ -185,7 +239,7 @@ impl Connector {
         ticket: SecretString,
         generation: Uuid,
         cancel: &CancellationToken,
-    ) -> Result<(), Error> {
+    ) -> Result<(), Failure> {
         let mut link = Link::default();
         let (output_tx, mut output_rx) = mpsc::channel(MAX_SESSIONS);
         let mut sessions = Sessions {
@@ -234,14 +288,16 @@ impl Connector {
                     })
                     .await;
                 }
-                Err(Error::InvalidGrant) => return Err(Error::InvalidGrant),
+                Err(failure @ (Failure::Rejected(_) | Failure::Relay(Error::InvalidGrant))) => {
+                    return Err(failure);
+                }
                 Err(error) => {
                     tracing::info!(%error, failures, "Hub link connect failed");
                 }
             }
             let since = *lost.get_or_insert_with(Instant::now);
             if since.elapsed() + GRACE_MARGIN >= grace {
-                return Err(Error::Transport);
+                return Err(Error::Transport.into());
             }
             // The one-use ticket is spent after the first attempt.
             credential = link.token().cloned().ok_or(Error::Transport)?;
@@ -258,14 +314,14 @@ impl Connector {
 /// Dial, say hello and apply the welcome. Replays unacknowledged frames on resume.
 ///
 /// Returns whether the link is new, and its grace period. Returns `InvalidGrant`
-/// when the center rejects the credential or no longer knows the link, so the
-/// caller stops and waits for a fresh grant.
+/// when the center refuses the credential, or `Rejected` when it answers with an
+/// error frame, so the caller stops and waits for a fresh grant.
 async fn join(
     local: &Local,
     url: &str,
     credential: &SecretString,
     link: &mut Link,
-) -> Result<(Socket, bool, Duration), Error> {
+) -> Result<(Socket, bool, Duration), Failure> {
     let mut socket = local
         .dialer
         .connect_authorized(url, credential.expose_secret(), wire::MAX_FRAME)
@@ -304,12 +360,12 @@ async fn join(
         }
         Inbound::Error { code } => {
             tracing::warn!(code = code.as_str(), "Hub rejected the link");
-            Err(Error::InvalidGrant)
+            Err(Failure::Rejected(code))
         }
         Inbound::Ack { .. }
         | Inbound::Open { .. }
         | Inbound::Msg { .. }
-        | Inbound::Close { .. } => Err(Error::Protocol),
+        | Inbound::Close { .. } => Err(Error::Protocol.into()),
     }
 }
 
@@ -386,7 +442,7 @@ struct Pump<'a> {
 }
 
 impl Pump<'_> {
-    async fn run(&mut self, socket: Socket, cancel: &CancellationToken) -> Result<Ended, Error> {
+    async fn run(&mut self, socket: Socket, cancel: &CancellationToken) -> Result<Ended, Failure> {
         let (mut sink, mut stream) = socket.split();
         let mut acks = tokio::time::interval(ACK_INTERVAL);
         acks.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Delay);
@@ -404,7 +460,9 @@ impl Pump<'_> {
                         Some(Ok(Message::Binary(frame))) => self.inbound(&frame)?,
                         Some(Ok(Message::Ping(body))) => Some(Message::Pong(body)),
                         Some(Ok(Message::Pong(_))) => None,
-                        Some(Ok(Message::Text(_) | Message::Frame(_))) => return Err(Error::Protocol),
+                        Some(Ok(Message::Text(_) | Message::Frame(_))) => {
+                            return Err(Error::Protocol.into());
+                        }
                         Some(Err(error)) => {
                             diagnostics::socket_error("hub_read", &error);
                             return Ok(Ended::Lost);
@@ -425,7 +483,7 @@ impl Pump<'_> {
     }
 
     /// Apply one center frame; returns a frame to send in reply, if any.
-    fn inbound(&mut self, frame: &Bytes) -> Result<Option<Message>, Error> {
+    fn inbound(&mut self, frame: &Bytes) -> Result<Option<Message>, Failure> {
         let (header, payload) = wire::decode(frame)?;
         if let Some(seq) = header.seq()
             && !self.link.received(seq)
@@ -449,9 +507,9 @@ impl Pump<'_> {
             }
             Inbound::Error { code } => {
                 tracing::warn!(code = code.as_str(), "Hub closed the link");
-                return Err(Error::Protocol);
+                return Err(Failure::Rejected(code));
             }
-            Inbound::Welcome { .. } => return Err(Error::Protocol),
+            Inbound::Welcome { .. } => return Err(Error::Protocol.into()),
         };
         let Some((s, code)) = refused else {
             return Ok(None);

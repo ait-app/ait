@@ -1414,6 +1414,24 @@ describe("hub tickets", () => {
     await manager.logout();
   });
 
+  it("leaves a serve link another process took over for five minutes", async () => {
+    const localHub = vi.fn(async (method: string) =>
+      method === "GET"
+        ? { online: false, connecting: false, link: null, error: null, rejected: "replaced" }
+        : null,
+    );
+    const { manager, http, login } = desktopHub(localHub);
+    await login();
+    await manager.publishHost(builtIn);
+    await vi.advanceTimersByTimeAsync(4 * 60_000);
+    expect(hubCalls(http)).toHaveLength(0);
+    expect(localHub).toHaveBeenCalledOnce();
+    await vi.advanceTimersByTimeAsync(2 * 60_000);
+    expect(localHub.mock.calls.filter(([method]) => method === "GET")).toHaveLength(2);
+    await manager.unpublishHost("first");
+    await manager.logout();
+  });
+
   it("backs off when the center has no hub", async () => {
     const localHub = vi.fn(async () => ({ online: false, connecting: false }));
     const { manager, http, login } = desktopHub(localHub);

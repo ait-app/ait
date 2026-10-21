@@ -279,3 +279,53 @@ async fn next_status(hub: &Connector, ready: impl Fn(&Status) -> bool) -> Status
     .await
     .expect("status in time")
 }
+
+#[tokio::test]
+async fn a_replaced_link_reports_why_and_yields_until_restarted() {
+    let (_relay, hub, center, _local) = connector().await;
+    let (mut socket, _) = accept(&center).await;
+    next(&mut socket).await;
+    socket
+        .send(frame(&welcome(Uuid::new_v4(), false, 0), b""))
+        .await
+        .expect("welcome");
+    next_status(&hub, |status| status.online).await;
+    assert!(!hub.yielding().await);
+
+    socket
+        .send(frame(&json!({"t":"error","code":"replaced"}), b""))
+        .await
+        .expect("error");
+
+    let status = next_status(&hub, |status| !status.online && !status.connecting).await;
+    assert_eq!(status.rejected.as_deref(), Some("replaced"));
+    assert_eq!(
+        status.error.as_deref(),
+        Some("hub rejected the link: replaced")
+    );
+    assert!(hub.yielding().await, "another process now serves this node");
+    hub.start(Grant {
+        center_url: format!("http://{}", center.local_addr().expect("center address")),
+        hub_ticket: SecretString::from(TICKET),
+        node_session_id: Uuid::new_v4(),
+    })
+    .await
+    .expect("an explicit grant takes the link back");
+    assert!(!hub.yielding().await);
+}
+
+#[tokio::test]
+async fn rejections_before_welcome_end_the_link_without_yielding() {
+    let (_relay, hub, center, _local) = connector().await;
+    let (mut socket, _) = accept(&center).await;
+    next(&mut socket).await;
+    socket
+        .send(frame(&json!({"t":"error","code":"unauthorized"}), b""))
+        .await
+        .expect("error");
+
+    let status = next_status(&hub, |status| !status.connecting).await;
+    assert_eq!(status.rejected.as_deref(), Some("unauthorized"));
+    assert!(!status.online);
+    assert!(!hub.yielding().await);
+}

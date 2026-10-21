@@ -140,6 +140,8 @@ export function normalizeCenter(value: string): string {
 const NODE_READY_WAIT_MS = 10_000;
 /** A center without the hub answers 404; ask again only occasionally. */
 const HUB_UNAVAILABLE_RETRY_MS = 5 * 60_000;
+/** Another process took over this node's serve link; leave it there for a while. */
+const HUB_REPLACED_RETRY_MS = 5 * 60_000;
 
 function hubTicket(grant: { hub_ticket?: unknown; hub_path?: unknown; protocol?: unknown }) {
   if (
@@ -1000,7 +1002,7 @@ export class AccountSessionManager {
     };
     try {
       const status = (await local("GET").catch(stop)) as
-        | { online?: boolean; connecting?: boolean }
+        | { online?: boolean; connecting?: boolean; rejected?: string | null }
         | undefined;
       if (!status || !current()) return;
       if (status.online) {
@@ -1008,6 +1010,11 @@ export class AccountSessionManager {
         return;
       }
       if (status.connecting) return;
+      // Taking the link straight back would make two serve processes flap.
+      if (status.rejected === "replaced") {
+        entry.hub.next = Date.now() + HUB_REPLACED_RETRY_MS;
+        return;
+      }
       let grant: { hub_ticket: string; hub_path: string; protocol: string };
       try {
         grant = await this.publicationApi(
