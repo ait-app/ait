@@ -167,6 +167,8 @@ impl Api {
             Some(true) => response["result"]
                 .get("value")
                 .cloned()
+                // DSH's event-result acknowledgement is void; JSON omits its undefined value.
+                .or_else(|| (endpoint == "$events/result").then_some(Value::Null))
                 .map(Some)
                 .ok_or(AgentSessionError::Failed),
             Some(false) => {

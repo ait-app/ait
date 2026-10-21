@@ -19,7 +19,7 @@ async fn response(Path(mode): Path<String>, Json(body): Json<Value>) -> axum::re
         "large" => "x".repeat(MAX_FRAME+1).into_response(),
         "mismatch" => Json(json!({"type":"server-response","rpcId":"other","result":{"ok":true,"value":{}}})).into_response(),
         "rejected" => Json(json!({"type":"server-response","rpcId":body["rpcId"],"result":{"ok":false,"error":{"message":"private detail"}}})).into_response(),
-        "no-value" => Json(json!({"type":"server-response","rpcId":body["rpcId"],"result":{"ok":true}})).into_response(),
+        "no-value" | "$events/result" => Json(json!({"type":"server-response","rpcId":body["rpcId"],"result":{"ok":true}})).into_response(),
         "no-outcome" => Json(json!({"type":"server-response","rpcId":body["rpcId"],"result":{}})).into_response(),
         _ => Json(json!({"type":"server-response","rpcId":body["rpcId"],"result":{"ok":true,"value":{"fixture":true}}})).into_response(),
     }
@@ -37,7 +37,7 @@ async fn native_http_distinguishes_absent_capabilities_rejections_and_invalid_en
                 )
             }),
         )
-        .route("/api/{mode}", post(response));
+        .route("/api/{*mode}", post(response));
     let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
     let address = listener.local_addr().unwrap();
     let task = tokio::spawn(async move {
@@ -56,6 +56,13 @@ async fn native_http_distinguishes_absent_capabilities_rejections_and_invalid_en
         json!({"fixture":true})
     );
     assert_eq!(api.optional_call("missing", json!({})).await.unwrap(), None);
+    assert_eq!(
+        api.optional_call("$events/result", json!({}))
+            .await
+            .unwrap(),
+        Some(Value::Null),
+        "a void acknowledgement is a successful response, not a missing capability"
+    );
     assert_eq!(
         api.call("missing", json!({})).await,
         Err(AgentSessionError::Failed)
