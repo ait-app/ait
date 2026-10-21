@@ -11,6 +11,9 @@ use crate::ports::agent_session::{
 };
 
 #[cfg(unix)]
+mod execution;
+
+#[cfg(unix)]
 mod ownership;
 
 #[cfg(unix)]

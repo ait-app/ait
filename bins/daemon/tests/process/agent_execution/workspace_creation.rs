@@ -10,6 +10,8 @@ use super::*;
 mod concurrency;
 #[path = "workspace_creation/identity.rs"]
 mod identity;
+#[path = "workspace_creation/opencode.rs"]
+mod opencode;
 
 fn methods() -> Vec<&'static str> {
     let mut methods = METHODS.to_vec();

@@ -1,3 +1,6 @@
+#[cfg(unix)]
+mod execution;
+
 use std::collections::BTreeMap;
 use std::time::Duration;
 

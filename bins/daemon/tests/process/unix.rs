@@ -86,17 +86,11 @@ mod agent_runtime;
 #[path = "agent_execution.rs"]
 mod agent_execution;
 
-#[path = "claude.rs"]
-mod claude;
-
 #[path = "opencode.rs"]
 mod opencode;
 
 #[path = "codex_recovery.rs"]
 mod codex_recovery;
-
-#[path = "deepseek_harness.rs"]
-mod deepseek_harness;
 
 #[path = "native.rs"]
 mod native;

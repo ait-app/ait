@@ -75,6 +75,8 @@ ADR-074、082、083、084、122 在不同类别中各有两份，引用时以路
 
 ## Provider、Agent 与会话
 
+- [ADR-179：Provider 自身行为的测试归 provider crate](providers/adr-179-provider-owned-tests.md)
+
 - [ADR-178：OpenCode 轻量可用性探测与冷恢复预算](providers/adr-178-opencode-startup-probe-and-restoration.md)
 
 - [ADR-177：Codex 宿主异常重启后的继续执行与失败上报](providers/adr-177-codex-restart-continuation.md)
