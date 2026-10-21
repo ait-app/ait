@@ -33,6 +33,10 @@
     "./internal/account-session": {
       "types": "./dist/account-session.d.ts",
       "default": "./dist/account-session.js"
+    },
+    "./internal/hub": {
+      "types": "./dist/hub/index.d.ts",
+      "default": "./dist/hub/index.js"
     }
   },
   "scripts": {
