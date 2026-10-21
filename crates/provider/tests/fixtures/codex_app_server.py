@@ -165,6 +165,11 @@ for line in sys.stdin:
             {"name": "disabled", "description": "Disabled", "enabled": False, "path": str(root / "disabled" / "SKILL.md")}
         ]}]}
     elif method == "thread/list":
+        if mode == "delayed-listing":
+            (root / "listing-entered").write_text("")
+            deadline = time.monotonic() + 8
+            while not (root / "release-listing").exists() and time.monotonic() < deadline:
+                time.sleep(0.01)
         pages = root / "session-pages.json"
         if pages.exists():
             result = json.loads(pages.read_text())[params.get("cursor") or "first"]

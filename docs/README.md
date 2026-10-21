@@ -27,6 +27,8 @@
 
 ## 架构决策
 
+- [ADR-180：原生会话列表独立响应接纳](decisions/providers/adr-180-native-session-list-response-admission.md)：复用有界目录响应任务，避免慢 Provider 列表阻塞同连接中的其他列表。
+
 - [ADR-179：Provider 自身行为的测试归 provider crate](decisions/providers/adr-179-provider-owned-tests.md)：原生 adapter 与执行器场景在 provider 内验证，daemon 保留宿主、传输和跨能力组合测试。
 
 - [ADR-178：OpenCode 轻量可用性探测与冷恢复预算](decisions/providers/adr-178-opencode-startup-probe-and-restoration.md)：避免重复 ACP 冷启动，并统一恢复与辅助会话的启动预算。

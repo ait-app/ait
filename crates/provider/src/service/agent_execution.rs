@@ -80,7 +80,7 @@ struct OwnedRuntime {
 #[derive(Clone)]
 pub struct AgentExecution(Arc<Worker>);
 
-/// Owns one discovery response slot through transport delivery, including after worker completion.
+/// Owns one discovery or session-list response slot through transport delivery.
 pub(crate) struct CatalogResponse {
     receiver: oneshot::Receiver<Result<Value, ErrorCode>>,
     _permit: OwnedSemaphorePermit,
@@ -255,7 +255,7 @@ impl AgentExecution {
         self.admit_catalog(method, params)?.receive().await
     }
 
-    /// Synchronously reserve bounded discovery work before a transport spawns its response task.
+    /// Reserve bounded discovery or session-list work before spawning its transport response task.
     /// The returned owner retains its slot until delivery or caller cancellation.
     /// # Errors
     /// Rejects non-catalog methods, shutdown, a closed worker or exhausted request/response slots.

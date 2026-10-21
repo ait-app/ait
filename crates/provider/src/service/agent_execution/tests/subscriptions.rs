@@ -11,6 +11,7 @@ use super::*;
 
 mod catalog;
 mod creation;
+mod native_sessions;
 
 struct Peer {
     connection: Connection,

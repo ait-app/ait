@@ -95,6 +95,8 @@
 
 ## Provider、Agent 与会话
 
+- [Pi 会话列表延迟与共享连接阻塞排查](providers/pi-session-list-performance-2026-10-21.md)
+
 - [OpenCode 加载速度验证](providers/opencode-startup-real-usage-2026-10-21.md)
 
 - [DSH 提问回答后的空确认响应修复](providers/dsh-event-result-acknowledgement-2026-10-21.md)

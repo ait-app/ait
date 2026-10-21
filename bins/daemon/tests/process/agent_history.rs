@@ -4,6 +4,8 @@ use serde_json::json;
 
 #[path = "agent_history/catalog.rs"]
 mod catalog;
+#[path = "agent_history/native_sessions.rs"]
+mod native_sessions;
 #[path = "agent_history/paseo.rs"]
 mod paseo;
 
