@@ -38,6 +38,13 @@ pub trait Center: Send + Sync {
     /// # Errors
     /// Rejects expired or unauthorized sessions.
     async fn ticket(&self, tokens: &Tokens, session: Uuid) -> Result<SecretString, Error>;
+    /// Obtain a one-use hub serve ticket for this runtime. The hub is optional;
+    /// centers without it report `Unavailable`.
+    /// # Errors
+    /// Rejects expired or unauthorized sessions, and centers without a hub.
+    async fn hub_ticket(&self, _tokens: &Tokens, _session: Uuid) -> Result<SecretString, Error> {
+        Err(Error::Unavailable)
+    }
     /// Release a runtime without revoking its machine grant.
     /// # Errors
     /// May fail during center outages; leases still expire remotely.
@@ -55,6 +62,16 @@ pub trait ManagedRelay: Send + Sync {
     async fn active(&self) -> bool;
     /// Close control and all reverse data channels immediately.
     async fn stop(&self);
+    /// Begin the optional hub serve link with an ephemeral ticket.
+    /// # Errors
+    /// Rejects invalid tickets or unavailable local transport.
+    async fn start_hub(&self, _session: Uuid, _ticket: SecretString) -> Result<(), Error> {
+        Err(Error::Unavailable)
+    }
+    /// Return whether the hub link exists; Hosts without a hub report `true`.
+    async fn hub_active(&self) -> bool {
+        true
+    }
     /// Publish a sanitized manager state for local status queries.
     fn report(&self, phase: &'static str, binding: Option<&Binding>);
 }
