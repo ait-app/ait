@@ -80,8 +80,23 @@ daemon 严格 Clippy 受到未修改的 `schedule::engine` 的 `single_element_l
 cargo clippy --locked -p daemon --test process --no-deps -- -D warnings -A clippy::assert_is_empty
 ```
 
+## PR 更新复查
+
+恢复改动提交为 `19a829a4`；与主线 `a73c16ba` 合并后的代码版本为 `5e05fb43`。
+合并冲突仅涉及两处文档索引，双方条目均保留，本次 Rust 恢复实现没有变化。
+在该版本上重新验证了 **95 项 provider 测试和 2 项 daemon 强杀重启测试，全部通过**：
+
+```sh
+CARGO_TARGET_DIR=/home/KirisameLonnet/Developers/ait/target cargo test --locked -p provider --lib service::agent_manager::tests
+/home/KirisameLonnet/Developers/ait/target/debug/deps/provider-e83349c4251c8663 --quiet service::agent_execution::tests::recovery service::agent_execution::tests::delivery service::agent_execution::tests::waits claimed_foreground_input_keeps_completion_pending_until_admission_or_recovery
+CARGO_TARGET_DIR=/home/KirisameLonnet/Developers/ait/target cargo test --locked -p daemon --test process codex_oom_restart
+```
+
+`cargo fmt --all --check` 通过，文档本地链接检查通过（426 个 Markdown 文件），Codex
+Python 测试进程的语法检查通过。未部署或重启正在服务用户任务的 daemon。
+
 ## Test coverage
 
 **not measured**：用户未请求覆盖率测量；测试通过数量不是行覆盖率。没有覆盖率产物。
 后续若请求测量，使用 cargo llvm-cov 限定上述 provider 模块及 daemon Codex 进程用例。
-本次未运行完整 Rust workspace 测试；macOS、Windows 的重启恢复未实测。
+本次未手动运行完整 Rust workspace 测试；macOS、Windows 的重启恢复未实测。
