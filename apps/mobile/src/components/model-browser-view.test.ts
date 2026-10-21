@@ -4,6 +4,7 @@ import type {
   ProviderSelectorProvider,
 } from "@/provider-selection/provider-selection";
 import {
+  resolveDesktopFixedHeight,
   resolveInitialModelBrowserView,
   resolveModelBrowserAllView,
   groupProfilesByProviderModel,
@@ -232,5 +233,79 @@ describe("model browser all view", () => {
         isSearchFocused: true,
       }),
     ).toEqual({ kind: "noSearchMatches" });
+  });
+});
+
+describe("model browser desktop height", () => {
+  function manyModels(providerId: string, count: number): ProviderSelectionModelRow[] {
+    return Array.from({ length: count }, (_, index) =>
+      modelRow(providerId, providerId, `model-${index}`, `Model ${index}`),
+    );
+  }
+
+  const providers = [
+    provider("claude", "Claude", manyModels("claude", 4)),
+    provider("codex", "Codex", manyModels("codex", 7)),
+    provider("opencode", "OpenCode", manyModels("opencode", 28)),
+  ];
+
+  it("sizes the browse view to its provider rows, not the total model count", () => {
+    expect(
+      resolveDesktopFixedHeight({
+        view: { kind: "all" },
+        providers,
+        profileRowCount: 0,
+        isSearching: false,
+      }),
+    ).toBe(280);
+    expect(
+      resolveDesktopFixedHeight({
+        view: { kind: "all" },
+        providers,
+        profileRowCount: null,
+        isSearching: false,
+      }),
+    ).toBe(220);
+  });
+
+  it("grows the browse view with saved profiles up to the cap", () => {
+    expect(
+      resolveDesktopFixedHeight({
+        view: { kind: "all" },
+        providers,
+        profileRowCount: 2,
+        isSearching: false,
+      }),
+    ).toBe(360);
+    expect(
+      resolveDesktopFixedHeight({
+        view: { kind: "all" },
+        providers,
+        profileRowCount: 10,
+        isSearching: false,
+      }),
+    ).toBe(400);
+  });
+
+  it("keeps the full-height frame while searching all models", () => {
+    expect(
+      resolveDesktopFixedHeight({
+        view: { kind: "all" },
+        providers,
+        profileRowCount: 0,
+        isSearching: true,
+      }),
+    ).toBe(400);
+  });
+
+  it("sizes a provider view to its model rows", () => {
+    expect(
+      resolveDesktopFixedHeight({
+        view: { kind: "provider", providerId: "claude", providerLabel: "Claude" },
+        providers,
+        profileRowCount: 0,
+        isSearching: false,
+      }),
+    ).toBe(240);
   });
 });
