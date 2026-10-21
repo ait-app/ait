@@ -46,6 +46,25 @@ impl Source {
         self.prepared = None;
     }
 
+    /// Read the owned legacy server's model and agent catalogs without creating a session.
+    /// Both bounded GET requests share `timeout`; authentication and native failures propagate.
+    pub(super) async fn catalog(
+        &self,
+        cwd: &str,
+        timeout: Duration,
+    ) -> Result<(Value, Vec<Value>), AgentSessionError> {
+        let mut client = self.client.clone();
+        client.deadline = timeout;
+        tokio::time::timeout(timeout, async {
+            let (providers, _): (Value, _) =
+                client.json(client.get("/config/providers", cwd)).await?;
+            let (agents, _): (Vec<Value>, _) = client.json(client.get("/agent", cwd)).await?;
+            Ok((providers, agents))
+        })
+        .await
+        .map_err(|_| AgentSessionError::Failed)?
+    }
+
     /// Subscribe before reading a snapshot so updates during restoration cannot be lost.
     pub(super) async fn bind(self, id: &str, cwd: &str) -> Result<Observation, AgentSessionError> {
         if id.is_empty()

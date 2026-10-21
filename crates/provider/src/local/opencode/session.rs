@@ -170,16 +170,13 @@ pub(super) async fn open(
     }
     let history_only = binding.is_some_and(|(_, purpose)| purpose == AgentResumePurpose::History);
     let inherited = StoredAgentConfig::default();
-    let (mut transport, capabilities, source) = launcher::observed(
-        client,
-        &spec.cwd,
-        if history_only {
-            &inherited
-        } else {
-            &spec.config
-        },
-    )
-    .await?;
+    let selected = if history_only {
+        &inherited
+    } else {
+        &spec.config
+    };
+    let (mut transport, capabilities, source) =
+        launcher::observed(client, &spec.cwd, selected).await?;
     let (id, options, mut identities, clients) = if let Some((handle, _)) = binding {
         if capabilities["loadSession"] != true {
             return Err(AgentSessionError::Unavailable);
@@ -189,6 +186,7 @@ pub(super) async fn open(
             &handle.session_id,
             &spec.cwd,
             client.images.clone(),
+            client.startup_timeout,
         )
         .await?;
         let clients = clients(handle)?;
@@ -403,9 +401,10 @@ impl Session {
                 launcher::observed(&self.client, &self.spec.cwd, selected).await?;
             let mut options = if capabilities["sessionCapabilities"]["resume"].is_object() {
                 let result = transport
-                    .request(
+                    .startup_request(
                         "session/resume",
                         json!({"sessionId":self.id,"cwd":self.spec.cwd,"mcpServers":[]}),
+                        self.client.startup_timeout,
                     )
                     .await?;
                 config::state(&result)?
@@ -415,6 +414,7 @@ impl Session {
                     &self.id,
                     &self.spec.cwd,
                     self.client.images.clone(),
+                    self.client.startup_timeout,
                 )
                 .await?
                 .0
@@ -735,6 +735,7 @@ impl Execution {
             &self.id,
             &self.cwd,
             self.client.images.clone(),
+            self.client.deadline,
         )
         .await?;
         let has_input = replay

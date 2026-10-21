@@ -113,6 +113,7 @@ async fn serve(
                 .into_response()
         }
         "/config/providers" => axum::Json(catalog()).into_response(),
+        "/agent" => axum::Json(json!([{"name":"build","mode":"primary"}])).into_response(),
         "/session/parent" => axum::Json(json!({"id":"parent","cost":0.02})).into_response(),
         "/session/parent/message" => {
             let mut response = if query.contains_key("before") {
@@ -190,5 +191,22 @@ async fn repeated_native_history_cursors_fail_boundedly_without_following_server
             .filter(|path| path.as_str() == "/session/parent/message")
             .count(),
         2
+    );
+}
+
+#[tokio::test]
+async fn native_catalog_uses_only_authenticated_read_only_requests_without_a_session() {
+    let (source, native, _server) = fixture();
+
+    let (providers, agents) = source
+        .catalog("/workspace", Duration::from_secs(5))
+        .await
+        .unwrap();
+
+    assert_eq!(providers, catalog());
+    assert_eq!(agents, vec![json!({"name":"build","mode":"primary"})]);
+    assert_eq!(
+        *native.requests.lock().unwrap(),
+        ["/config/providers", "/agent"]
     );
 }

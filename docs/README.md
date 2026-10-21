@@ -27,6 +27,8 @@
 
 ## 架构决策
 
+- [ADR-178：OpenCode 轻量可用性探测与冷恢复预算](decisions/providers/adr-178-opencode-startup-probe-and-restoration.md)：避免重复 ACP 冷启动，并统一恢复与辅助会话的启动预算。
+
 - [ADR-177：Codex 宿主异常重启后的继续执行与失败上报](decisions/providers/adr-177-codex-restart-continuation.md)：在原会话中继续，恢复失败保留具体错误并结束运行状态。
 
 - [ADR-175：独立恢复 Provider 错误详情与重启收尾](decisions/providers/adr-175-restore-provider-recovery.md)：仅恢复 daemon／Provider 行为，客户端诊断另行保留为 Draft。
@@ -214,6 +216,8 @@
 - [语音与听写](operations/speech.md)：离线模型、后端配置和限制。
 
 ## 工程规范与验证
+
+- [OpenCode 加载速度验证](reports/providers/opencode-startup-real-usage-2026-10-21.md)：真实原生配置、分阶段加载耗时、重复冷启动消除与定向回归。
 
 - [Provider 错误与重启恢复拆分验证](reports/daemon/provider-recovery-split-2026-10-20.md)：后端独立分支、主线兼容和定向回归。
 

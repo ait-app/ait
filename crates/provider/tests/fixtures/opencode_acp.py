@@ -16,6 +16,14 @@ with (root / "pids.txt").open("a") as output:
 if sys.argv[1:] == ["--version"]:
     print(os.environ.get("AIT_ACP_VERSION", "2.0.25"))
     sys.exit(0)
+if sys.argv[1:2] in (["models"], ["agent"]) and os.environ.get("AIT_ACP_SCENARIO") == "catalog-parallel":
+    phase, other = ("models", "agents") if sys.argv[1] == "models" else ("agents", "models")
+    (root / (phase + ".entered")).touch()
+    deadline = time.monotonic() + 5
+    while not (root / (other + ".entered")).exists():
+        if time.monotonic() >= deadline:
+            sys.exit(1)
+        time.sleep(0.01)
 if sys.argv[1:2] == ["models"]:
     print("local/model")
     if "--verbose" in sys.argv:
@@ -184,7 +192,7 @@ for line in sys.stdin:
             print("not json", flush=True)
             continue
         capabilities = {"list": {}, "resume": {}, "close": {}}
-        if scenario == "load-only":
+        if scenario in ["load-only", "slow-load-only"]:
             capabilities.pop("resume")
         if scenario == "no-history":
             capabilities.pop("list")
@@ -198,6 +206,13 @@ for line in sys.stdin:
         if scenario == "slow-session" and method == "session/new":
             (root / "session.entered").touch()
             while not (root / "session.release").exists():
+                time.sleep(0.01)
+        if (scenario == "slow-load" and method == "session/load") or (
+            scenario in ["slow-resume", "slow-load-only"] and method in ["session/resume", "session/load"]
+        ):
+            phase = "load" if scenario == "slow-load" else "reconnect"
+            (root / (phase + ".entered")).touch()
+            while not (root / (phase + ".release")).exists():
                 time.sleep(0.01)
         if method == "session/new":
             session_id = claim_session()
