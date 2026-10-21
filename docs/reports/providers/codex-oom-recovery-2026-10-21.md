@@ -95,6 +95,10 @@ CARGO_TARGET_DIR=/home/KirisameLonnet/Developers/ait/target cargo test --locked 
 `cargo fmt --all --check` 通过，文档本地链接检查通过（426 个 Markdown 文件），Codex
 Python 测试进程的语法检查通过。未部署或重启正在服务用户任务的 daemon。
 
+CI 的 Rust 1.98.1 检出了两处测试入口持有 17,080 字节异步状态的 `large_futures` 问题。
+测试入口改用 `Box::pin` 承载该状态，恢复实现与测试步骤不变；两项强杀重启测试、上述
+daemon 定向 Clippy 和 `cargo fmt --all --check` 再次通过。
+
 ## Test coverage
 
 **not measured**：用户未请求覆盖率测量；测试通过数量不是行覆盖率。没有覆盖率产物。

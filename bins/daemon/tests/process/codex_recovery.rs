@@ -18,12 +18,12 @@ const METHODS: &[&str] = &[
 
 #[tokio::test]
 async fn codex_oom_restart_continues_the_saved_task_without_replaying_the_original_prompt() {
-    restart_case("normal").await;
+    Box::pin(restart_case("normal")).await;
 }
 
 #[tokio::test]
 async fn codex_oom_restart_reports_rejected_recovery_and_can_continue_after_a_retry() {
-    restart_case("reject-first-input").await;
+    Box::pin(restart_case("reject-first-input")).await;
 }
 
 async fn restart_case(mode: &str) {
