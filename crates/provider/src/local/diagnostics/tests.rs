@@ -60,6 +60,89 @@ fn structured_codes_take_precedence_and_status_does_not_misclassify_quota() {
 }
 
 #[test]
+fn codex_http_wrapper_preserves_specific_upstream_failures() {
+    for (status, message, expected) in [
+        (
+            403,
+            "unexpected status 403 Forbidden: insufficient balance",
+            Category::Quota,
+        ),
+        (403, "Access blocked by Cloudflare", Category::Permission),
+        (401, "upstream request failed", Category::Authentication),
+        (429, "upstream request failed", Category::RateLimit),
+        (504, "upstream request failed", Category::Timeout),
+        (503, "upstream request failed", Category::Network),
+    ] {
+        for nested in [false, true] {
+            let info = json!({"httpConnectionFailed":{"httpStatusCode":status}});
+            let mut error = json!({"message":format!("{message} token=secret")});
+            if nested {
+                error["data"] = json!({"codexErrorInfo":info});
+            } else {
+                error["codexErrorInfo"] = info;
+            }
+            let diagnostic = native(&error, "result");
+
+            assert_eq!(diagnostic.category, expected, "{status}: {message}");
+            assert_eq!(diagnostic.http_status, Some(status));
+            assert!(!format!("{diagnostic:?}").contains("secret"));
+        }
+    }
+}
+
+#[test]
+fn incomplete_upstream_responses_are_distinct_from_connection_failures() {
+    for info in [
+        json!("other"),
+        json!({"responseStreamDisconnected":{"httpStatusCode":null}}),
+    ] {
+        let diagnostic = native(
+            &json!({
+                "message":"stream disconnected before completion: stream closed before response.completed secret",
+                "codexErrorInfo":info
+            }),
+            "result",
+        );
+
+        assert_eq!(diagnostic.category, Category::IncompleteResponse);
+        assert_eq!(diagnostic.category.code(), "incomplete_response");
+        assert!(!diagnostic.category.message().contains("secret"));
+        assert!(!diagnostic.category.message().contains("Check your network"));
+    }
+    assert_eq!(
+        native(
+            &json!({
+                "codexErrorInfo":"contextWindowExceeded", "message":"stream disconnected"
+            }),
+            "result"
+        )
+        .category,
+        Category::ContextLimit
+    );
+    assert_eq!(
+        native(
+            &json!({
+                "codexErrorInfo":"usageLimitExceeded", "message":"stream disconnected"
+            }),
+            "result"
+        )
+        .category,
+        Category::Quota
+    );
+    assert_eq!(
+        native(
+            &json!({
+                "codexErrorInfo":{"httpConnectionFailed":{"httpStatusCode":400}},
+                "message":"context_length_exceeded"
+            }),
+            "result"
+        )
+        .category,
+        Category::ContextLimit
+    );
+}
+
+#[test]
 fn specific_failure_survives_closure_and_retryable_errors_do_not_become_terminal() {
     let diagnostics = Diagnostics::new("codex");
     let mut retrying = Diagnostic::new(Category::Network, "notification");

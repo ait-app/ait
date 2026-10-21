@@ -42,7 +42,8 @@ assert len(sys.argv) == 2 or sys.argv[2:4] == ["--hostname", "127.0.0.1"], sys.a
 with (root / "launch.jsonl").open("a") as output:
     output.write(json.dumps({"config": json.loads(os.environ.get("OPENCODE_CONFIG_CONTENT", "{}")),
                              "question": os.environ.get("OPENCODE_ENABLE_QUESTION_TOOL")}) + "\n")
-scenario = os.environ.get("AIT_ACP_SCENARIO", "normal")
+scenario_file = root / "scenario"
+scenario = os.environ.get("AIT_ACP_SCENARIO", scenario_file.read_text().strip() if scenario_file.exists() else "normal")
 session_id = "ses_one"
 model = "local/model"
 effort = "default"
@@ -314,6 +315,7 @@ for line in sys.stdin:
                 "toolCall": {"toolCallId": "shell", "title": "shell", "rawInput": {"command": "pwd"}},
                 "options": [{"optionId": "once", "kind": "allow_once", "name": "Allow once"}, {"optionId": "always", "kind": "allow_always", "name": "Always allow"}, {"optionId": "reject", "kind": "reject_once", "name": "Reject"}]}})
         elif scenario == "waiting":
+            (root / "waiting-pid").write_text(str(os.getpid()))
             update({"sessionUpdate": "agent_message_chunk", "messageId": "answer-live", "content": {"type": "text", "text": "Working"}})
         elif scenario == "ambiguous":
             sys.exit(0)

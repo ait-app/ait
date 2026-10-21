@@ -14,6 +14,7 @@ mod bot_permissions;
 mod environment;
 mod generated_titles;
 mod paseo;
+mod recovery;
 mod resume;
 mod titles;
 mod usage;
@@ -275,6 +276,23 @@ impl AgentSession for FakeSession {
             state.start_calls += 1;
             state.start_result?;
             Ok("native-turn".to_owned())
+        })
+    }
+
+    fn start_input<'a>(
+        &'a mut self,
+        prompt: &'a crate::protocol::prompt::AgentPrompt,
+        config: &'a StoredAgentConfig,
+    ) -> AgentSessionFuture<'a, String> {
+        Box::pin(async move {
+            prompt.validate()?;
+            if !prompt.images.is_empty()
+                || !prompt.attachments.is_empty()
+                || prompt.output_schema.is_some()
+            {
+                return Err(AgentSessionError::Rejected);
+            }
+            self.start_turn(&prompt.text, config).await
         })
     }
 

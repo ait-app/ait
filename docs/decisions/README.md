@@ -77,6 +77,11 @@ ADR-074、082、083、084、122 在不同类别中各有两份，引用时以路
 
 - [ADR-178：OpenCode 轻量可用性探测与冷恢复预算](providers/adr-178-opencode-startup-probe-and-restoration.md)
 
+- [ADR-177：Codex 宿主异常重启后的继续执行与失败上报](providers/adr-177-codex-restart-continuation.md)
+
+- [ADR-175：独立恢复 Provider 错误详情与重启收尾](providers/adr-175-restore-provider-recovery.md)
+- [ADR-162：Codex 失败展示原生原因与 HTTP 状态](providers/adr-162-codex-error-details.md)
+
 - [ADR-176：Pi 用户图片的共享时间线投影](providers/adr-176-pi-user-image-projection.md)
 - [ADR-174：Pi 原生会话导入](providers/adr-174-pi-session-import.md)
 
