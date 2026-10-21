@@ -1,5 +1,14 @@
-import type { CreateWorkspaceRequestOptions } from "@ait/client/internal/daemon-client";
-import type { AgentSnapshotPayload, CreationSnapshot } from "@ait/protocol/messages";
+import type {
+  CreateWorkspaceRequestOptions,
+  DaemonClient,
+} from "@ait/client/internal/daemon-client";
+import type {
+  AgentAttachment,
+  AgentSnapshotPayload,
+  CreationSnapshot,
+  ForgeSearchItem,
+  TerminalProfile,
+} from "@ait/protocol/messages";
 import { encodeImages } from "@/utils/encode-images";
 import { getHostRuntimeStore } from "@/runtime/host-runtime";
 import { useCallback, useEffect, useMemo, useReducer, useRef, useState } from "react";
@@ -9,7 +18,6 @@ import type { TFunction } from "i18next";
 import { Pressable, Text, View } from "react-native";
 import type { PressableStateCallbackType } from "react-native";
 import { StyleSheet, useUnistyles, withUnistyles } from "react-native-unistyles";
-import { createNameId } from "mnemonic-id";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { ChevronDown, Folder, FolderPlus, GitBranch, GitPullRequest } from "lucide-react-native";
 import { Composer } from "@/composer";
@@ -39,7 +47,6 @@ import { useCheckoutStatusQuery } from "@/git/use-status-query";
 import { ensureCheckoutStatus } from "@/git/checkout-status-cache";
 import { useDaemonConfig } from "@/hooks/use-daemon-config";
 import { resolveTerminalProfiles } from "@ait/protocol/terminal-profiles";
-import type { TerminalProfile } from "@ait/protocol/messages";
 import { LaunchControl } from "@/new-workspace-launch/launch-control";
 import { resolveLaunchTarget, type LaunchTarget } from "@/new-workspace-launch/target";
 import { useTerminalComposerState } from "@/new-workspace-launch/composer-state";
@@ -85,12 +92,9 @@ import {
 } from "@/projects/host-projects";
 import { useProjectIcons } from "@/projects/icons";
 import { ICON_SIZE, type Theme } from "@/styles/theme";
-import type { ComposerAttachment } from "@/attachments/types";
+import type { ComposerAttachment, UserComposerAttachment } from "@/attachments/types";
 import { useDraftWorkspaceAttachmentScopeKey } from "@/attachments/workspace-attachments-store";
 import type { MessagePayload } from "@/composer/types";
-import type { UserComposerAttachment } from "@/attachments/types";
-import type { AgentAttachment, ForgeSearchItem } from "@ait/protocol/messages";
-import type { DaemonClient } from "@ait/client/internal/daemon-client";
 import type { AgentProvider } from "@ait/protocol/agent-types";
 import type { WorkspaceDraftTabSetup, WorkspaceTabTarget } from "@/workspace-tabs/model";
 import { isEmptyWorkspaceSubmission, runCreateEmptyWorkspace } from "./new-workspace-empty";
@@ -798,8 +802,7 @@ interface WorkspaceCreationResult {
 }
 
 async function createMultiplicityWorkspace(input: {
-  idempotencyKey: string;
-  worktreeSlug: string;
+  draftId: string;
   client: NonNullable<ReturnType<typeof useHostRuntimeClient>>;
   isolation: "local" | "worktree";
   project: HostProjectListItem;
@@ -824,16 +827,13 @@ async function createMultiplicityWorkspace(input: {
     prompt: input.prompt,
     attachments: input.attachments,
   });
-  const payload = await input.client.createWorkspace({
-    idempotencyKey: input.idempotencyKey,
+  const request: CreateWorkspaceRequestOptions = {
     agent: input.agent,
-    onEvent: input.onEvent,
     source: isWorktree
       ? {
           kind: "worktree",
           cwd: input.sourceDirectory,
           projectId,
-          worktreeSlug: input.worktreeSlug,
           ...input.checkoutRequest,
         }
       : {
@@ -842,6 +842,20 @@ async function createMultiplicityWorkspace(input: {
           projectId,
         },
     ...(firstAgentContext ? { firstAgentContext } : {}),
+  };
+  const attempt = useWorkspaceDraftSubmissionStore.getState().prepareWorkspaceCreation({
+    draftId: input.draftId,
+    serverId: input.serverId,
+    intent: request,
+  });
+  const payload = await input.client.createWorkspace({
+    ...request,
+    idempotencyKey: attempt.idempotencyKey,
+    source:
+      request.source.kind === "worktree"
+        ? { ...request.source, worktreeSlug: attempt.worktreeSlug }
+        : request.source,
+    onEvent: input.onEvent,
   });
   if (payload.error || !payload.workspace) {
     throw new Error(payload.error ?? input.createFailedMessage);
@@ -1657,10 +1671,7 @@ export function NewWorkspaceScreen({
   // COMPAT(workspaceMultiplicity): added in v0.1.97, drop the gate when floor >= v0.1.97
   const supportsWorkspaceMultiplicity = useHostFeature(selectedServerId, "workspaceMultiplicity");
   const supportsForgeSearch = useHostFeature(selectedServerId, "forgeSearch");
-  const [creationIdentity] = useState(() => ({
-    draftId: draftId ?? generateDraftId(),
-    worktreeSlug: createNameId(),
-  }));
+  const [creationDraftId] = useState(() => draftId?.trim() || generateDraftId());
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [creationResult, setCreationResult] = useState<
     WorkspaceCreationResult | { workspace: null }
@@ -2063,8 +2074,7 @@ export function NewWorkspaceScreen({
           )
         : undefined;
       const normalizedWorkspace = await createMultiplicityWorkspace({
-        idempotencyKey: creationIdentity.draftId,
-        worktreeSlug: creationIdentity.worktreeSlug,
+        draftId: creationDraftId,
         client: connectedClient,
         isolation: createsWorktree ? "worktree" : "local",
         project: selectedProject,
@@ -2083,7 +2093,7 @@ export function NewWorkspaceScreen({
       return normalizedWorkspace;
     },
     [
-      creationIdentity,
+      creationDraftId,
       creationResult,
       effectiveIsolation,
       mergeWorkspaces,
@@ -2137,7 +2147,7 @@ export function NewWorkspaceScreen({
           serverId: selectedServerId,
           clearDraft: chatDraft.clear,
           draftKey,
-          draftId: creationIdentity.draftId,
+          draftId: creationDraftId,
           draftContextScopeKey,
           supportsForgeSearch,
           resolveClient: withConnectedClient,
@@ -2160,7 +2170,7 @@ export function NewWorkspaceScreen({
     [
       composerState,
       draftContextScopeKey,
-      creationIdentity,
+      creationDraftId,
       chatDraft.clear,
       draftKey,
       ensureWorkspace,
