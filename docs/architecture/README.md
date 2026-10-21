@@ -136,6 +136,8 @@ workspace 包与普通、开发、构建、optional 和平台条件依赖，拒�
 
 ## 数据与进程所有权
 
+移动端前台通过本地通知显示 attention；后台推送由 `metadata::push` 协调，`daemon::host::push` 实现 Apple APNs 和 Google FCM adapter。`model::session` 提供不依赖连接的有界 attention 通道以及设备前台去重；Provider 和 Terminal 仍只发布已提交事件，见 [ADR-176](../decisions/clients/adr-176-native-local-and-remote-notifications.md)。
+
 metadata 的 `workspace.get.request` 按身份读取一个 Workspace 与所属 Project；客户端目标缓存和
 定向读取独立于完整侧栏快照，不标记全局 hydrated 或完整 checkpoint，见
 [ADR-126](../decisions/workspace/adr-126-workspace-target-read.md)。provider 在 Timeline SQLite 内维护

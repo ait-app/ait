@@ -29,10 +29,13 @@ const originalGlobals: GlobalSnapshot = {
   focus: (globalThis as { focus?: unknown }).focus,
   location: (globalThis as { location?: unknown }).location,
 };
+const scheduleNativeNotification = vi.fn(async () => "notification-id");
 
 async function loadModuleForPlatform(
   platform: "web" | "ios" | "android",
   options?: {
+    appState?: "active" | "background";
+    nativePermission?: boolean;
     desktopHost?: {
       notification?: {
         sendNotification?: (payload: {
@@ -45,7 +48,16 @@ async function loadModuleForPlatform(
   },
 ) {
   vi.resetModules();
-  vi.doMock("react-native", () => ({ Platform: { OS: platform } }));
+  vi.doMock("react-native", () => ({
+    Platform: { OS: platform },
+    AppState: { currentState: options?.appState ?? "active" },
+  }));
+  vi.doMock("expo-notifications", () => ({
+    scheduleNotificationAsync: scheduleNativeNotification,
+  }));
+  vi.doMock("@/push-notifications/internal/permissions", () => ({
+    ensureNativeNotificationPermission: async () => options?.nativePermission ?? true,
+  }));
   vi.doMock("@/desktop/host", () => ({
     getDesktopHost: () => options?.desktopHost ?? null,
   }));
@@ -69,6 +81,7 @@ function restoreGlobals(): void {
 
 describe("sendOsNotification", () => {
   beforeEach(() => {
+    scheduleNativeNotification.mockClear();
     class MockCustomEvent<T = unknown> {
       type: string;
       detail: T;
@@ -94,9 +107,32 @@ describe("sendOsNotification", () => {
 
   afterEach(() => {
     vi.doUnmock("react-native");
+    vi.doUnmock("expo-notifications");
+    vi.doUnmock("@/push-notifications/internal/permissions");
     vi.restoreAllMocks();
     vi.resetModules();
     restoreGlobals();
+  });
+
+  it.each(["ios", "android"] as const)(
+    "presents an active %s completion as a local notification",
+    async (platform) => {
+      const { sendOsNotification } = await loadModuleForPlatform(platform);
+      const data = { serverId: "host", workspaceId: "workspace", agentId: "agent" };
+      expect(await sendOsNotification({ title: "Agent finished", body: "Done", data })).toBe(true);
+      expect(scheduleNativeNotification).toHaveBeenCalledWith({
+        content: { title: "Agent finished", body: "Done", data, sound: "default" },
+        trigger: null,
+      });
+    },
+  );
+
+  it("leaves background delivery to APNs/FCM and honors denied permission", async () => {
+    const background = await loadModuleForPlatform("ios", { appState: "background" });
+    expect(await background.sendOsNotification({ title: "Done" })).toBe(false);
+    const denied = await loadModuleForPlatform("ios", { nativePermission: false });
+    expect(await denied.sendOsNotification({ title: "Done" })).toBe(false);
+    expect(scheduleNativeNotification).not.toHaveBeenCalled();
   });
 
   it("dispatches a click event that the app can handle", async () => {

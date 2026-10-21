@@ -2120,6 +2120,8 @@ export const ru: TranslationResources = {
     notifications: {
       title: "Уведомления",
       permission: "Разрешение на уведомления",
+      openSettings: "Открыть настройки",
+      permissionUnavailable: "Не удалось проверить разрешение на уведомления.",
       refreshAccessibility: "Обновить разрешение на уведомления",
       playSound: "Воспроизводить звук",
       playSoundHint: "Воспроизводит звук при получении уведомления на компьютере",

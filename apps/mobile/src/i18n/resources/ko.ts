@@ -2095,6 +2095,8 @@ export const ko: TranslationResources = {
     notifications: {
       title: "알림",
       permission: "알림 권한",
+      openSettings: "설정 열기",
+      permissionUnavailable: "알림 권한을 확인할 수 없습니다.",
       refreshAccessibility: "알림 권한 새로 고침",
       playSound: "소리 재생",
       playSoundHint: "데스크톱 알림이 도착하면 소리를 재생합니다",

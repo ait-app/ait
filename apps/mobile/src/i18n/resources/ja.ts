@@ -2106,6 +2106,8 @@ export const ja: TranslationResources = {
     notifications: {
       title: "通知",
       permission: "通知の権限",
+      openSettings: "設定を開く",
+      permissionUnavailable: "通知の権限を確認できません。",
       refreshAccessibility: "通知の権限を更新",
       playSound: "サウンドを再生",
       playSoundHint: "デスクトップ通知が届いたときにサウンドを再生します",

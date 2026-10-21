@@ -1,4 +1,5 @@
 import { Asset } from "expo-asset";
+import { AppState } from "react-native";
 import { getDesktopHost } from "@/desktop/host";
 import { buildNotificationRoute, resolveNotificationTarget } from "./notification-routing";
 import { isNative } from "@/constants/platform";
@@ -92,7 +93,9 @@ async function ensureNotificationPermission(): Promise<boolean> {
 
 export async function ensureOsNotificationPermission(): Promise<boolean> {
   if (isNative) {
-    return false;
+    const { ensureNativeNotificationPermission } =
+      await import("@/push-notifications/internal/permissions");
+    return ensureNativeNotificationPermission();
   }
   return await ensureNotificationPermission();
 }
@@ -164,9 +167,22 @@ function attachWebClickHandler(
 }
 
 export async function sendOsNotification(payload: OsNotificationPayload): Promise<boolean> {
-  // Mobile/native notifications should be remote push only.
   if (isNative) {
-    return false;
+    // APNs/FCM owns background delivery; local delivery only handles active sessions.
+    if (AppState.currentState !== "active") return false;
+    try {
+      if (!(await ensureOsNotificationPermission())) return false;
+      if (AppState.currentState !== "active") return false;
+      const notifications = await import("expo-notifications");
+      await notifications.scheduleNotificationAsync({
+        content: { title: payload.title, body: payload.body, data: payload.data, sound: "default" },
+        trigger: null,
+      });
+      return true;
+    } catch {
+      console.warn("[Notifications] Local notification failed");
+      return false;
+    }
   }
 
   const desktopNotificationSender = getDesktopNotificationSender();

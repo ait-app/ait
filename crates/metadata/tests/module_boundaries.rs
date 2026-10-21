@@ -6,6 +6,7 @@ use std::path::{Path, PathBuf};
 use base64 as _;
 use chrono as _;
 use domain as _;
+use futures_util as _;
 use getrandom as _;
 use metadata as _;
 use model as _;

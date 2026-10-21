@@ -25,6 +25,7 @@ import { isNative, isWeb } from "@/constants/platform";
 import { useVoiceAudioEngineOptional } from "@/contexts/voice-context";
 import { BrowserDataSection } from "@/desktop/browser/settings/browser-data-section";
 import { DesktopNotificationsSection } from "@/desktop/components/desktop-notifications-section";
+import { NativeNotificationsSection } from "@/screens/settings/native-notifications-section";
 import { DesktopPermissionsSection } from "@/desktop/components/desktop-permissions-section";
 import {
   useEnableBuiltInDaemonOption,
@@ -1110,7 +1111,7 @@ function SettingsSidebar({
   const isDesktopApp = isElectronRuntime();
   const items = SIDEBAR_SECTION_ITEMS.filter(
     (item) =>
-      (!item.desktopOnly || isDesktopApp) &&
+      (!item.desktopOnly || isDesktopApp || (item.id === "notifications" && isNative)) &&
       (!item.webOnly || isWeb) &&
       (!item.accountOnly || supportsAccountRelay()) &&
       (!item.consoleOnly || supportsBrowserAccount()),
@@ -1540,7 +1541,11 @@ export default function SettingsScreen({ view, openAddHostIntent = null }: Setti
           case "shortcuts":
             return isDesktopApp ? <KeyboardShortcutsSection /> : null;
           case "notifications":
-            return isDesktopApp ? <DesktopNotificationsSection /> : null;
+            return isNative ? (
+              <NativeNotificationsSection />
+            ) : isDesktopApp ? (
+              <DesktopNotificationsSection />
+            ) : null;
           case "permissions":
             return isDesktopApp ? <DesktopPermissionsSection /> : null;
           case "diagnostics":

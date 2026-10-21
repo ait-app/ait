@@ -276,9 +276,6 @@ function SessionProviderInternal({ children, serverId, client }: SessionProvider
       const appState = appStateRef.current;
       const session = useSessionStore.getState().sessions[serverId];
       const attentionFocusedAgentId = session?.focusedAgentId ?? null;
-      if (params.reason === "error") {
-        return;
-      }
       const isActivelyVisible = getIsAppActivelyVisible(appState);
       const isAwayFromAgent = !isActivelyVisible || attentionFocusedAgentId !== params.agentId;
       if (!isAwayFromAgent) {

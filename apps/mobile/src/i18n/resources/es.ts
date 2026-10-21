@@ -2136,6 +2136,8 @@ export const es: TranslationResources = {
     notifications: {
       title: "Notificaciones",
       permission: "Permiso de notificaciones",
+      openSettings: "Abrir ajustes",
+      permissionUnavailable: "No se pudo consultar el permiso de notificaciones.",
       refreshAccessibility: "Actualizar permiso de notificaciones",
       playSound: "Reproducir sonido",
       playSoundHint: "Reproduce un sonido cuando llega una notificación de escritorio",

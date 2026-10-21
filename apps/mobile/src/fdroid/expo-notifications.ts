@@ -12,6 +12,7 @@ export const PermissionStatus = {
 } as const;
 
 export const AndroidImportance = { DEFAULT: 3 } as const;
+export const IosAuthorizationStatus = { PROVISIONAL: 3, EPHEMERAL: 4 } as const;
 
 export async function getPermissionsAsync() {
   return DENIED_NOTIFICATION_PERMISSION;
@@ -21,8 +22,15 @@ export async function requestPermissionsAsync() {
   return DENIED_NOTIFICATION_PERMISSION;
 }
 
-export async function getExpoPushTokenAsync() {
+export async function getDevicePushTokenAsync() {
   return { data: "" };
+}
+
+export function addPushTokenListener() {
+  return { remove() {} };
+}
+export async function scheduleNotificationAsync() {
+  return "";
 }
 
 export async function setNotificationChannelAsync() {
