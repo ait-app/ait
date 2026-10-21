@@ -73,6 +73,12 @@ def state():
     return {"seq": 0, "history": []}
 
 
+def location(identity):
+    # Native `session_move` refiles a session under another directory of its project.
+    path = session_path(identity)
+    return json.loads(path.read_text()).get("directory") if path.exists() else None
+
+
 def save(value):
     state_path.write_text(json.dumps(value))
 
@@ -221,6 +227,10 @@ for line in sys.stdin:
         if method in ["session/load", "session/resume"]:
             session_id = params["sessionId"]
             state_path = session_path(session_id)
+            if location(session_id) not in [None, params["cwd"]]:
+                send({"id": identity, "error": {"code": -32602, "message":
+                    "Invalid params: session %s does not belong to cwd: %s" % (session_id, params["cwd"])}})
+                continue
         if method == "session/load":
             if scenario == "preview-failed":
                 send({"id": identity, "error": {"code": -32000, "message": "Fixture replay unavailable"}})
@@ -229,9 +239,10 @@ for line in sys.stdin:
                 content(row)
         reply(identity, {"sessionId": session_id, "configOptions": options()})
     elif method == "session/list":
-        value = state()
-        rows = [] if not (root / "native-fixture.json").exists() else [{"sessionId": "ses_one",
-            "cwd": params.get("cwd", str(pathlib.Path.cwd())), "title": "External session", "updatedAt": "2026-10-09T06:00:00Z"}]
+        moved = location("ses_one")
+        rows = [] if not (root / "native-fixture.json").exists() or moved not in [None, params.get("cwd", moved)] else [{
+            "sessionId": "ses_one", "cwd": moved or params.get("cwd", str(pathlib.Path.cwd())),
+            "title": "External session", "updatedAt": "2026-10-09T06:00:00Z"}]
         reply(identity, {"sessions": rows})
     elif method == "session/set_config_option":
         previous = options()
@@ -278,6 +289,8 @@ for line in sys.stdin:
         value = state()
         value["seq"] += 1
         value["history"].append({"id": "user" + str(value["seq"]), "type": "user", "text": "\n".join(block.get("text", "image") for block in params["prompt"])})
+        if params["prompt"] == [{"type": "text", "text": "Move this session"}]:
+            value["directory"] = str(root / "worktree")
         save(value)
         if scenario == "echo-user-tool":
             content(value["history"][-1])
