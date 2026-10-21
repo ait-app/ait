@@ -69,7 +69,7 @@ impl AgentManager {
         }
         self.timeline
             .as_ref()
-            .map_or(Ok(false), |timeline| timeline.has_queued_input(agent))
+            .map_or(Ok(false), |timeline| timeline.has_pending_admission(agent))
     }
 
     pub(crate) async fn deliver(
@@ -261,55 +261,136 @@ impl AgentManager {
                 continue;
             }
             timeline.claim_input(&input.agent, &input.message)?;
-            match self.send_input(&input.agent, &input.prompt).await {
+            let admitted = async {
+                if input
+                    .message
+                    .starts_with(super::recovery::RESTART_INPUT_PREFIX)
+                {
+                    self.resume_with_recovery(&input.agent, true).await?;
+                    self.poll().await?;
+                    if self
+                        .registry
+                        .get(&input.agent)
+                        .map_err(|_| AgentManagerError::Registry)?
+                        .is_some_and(|record| {
+                            record.last_status == domain::agent_runtime::AgentRuntimeStatus::Error
+                        })
+                    {
+                        return Err(AgentManagerError::Session);
+                    }
+                    if self.active_turn(&input.agent).is_some()
+                        || self
+                            .live
+                            .get(&input.agent)
+                            .is_some_and(|live| live.last_message.is_some())
+                    {
+                        return Ok(());
+                    }
+                }
+                self.send_input(&input.agent, &input.prompt).await
+            }
+            .await;
+            match admitted {
                 Ok(()) => timeline.finish_input(&input.agent, &input.message, Receipt::Accepted)?,
                 Err(error) => {
-                    let state = if matches!(
-                        error,
-                        AgentManagerError::InvalidRequest
-                            | AgentManagerError::Busy
-                            | AgentManagerError::NotFound(_)
-                    ) {
-                        Receipt::Rejected
-                    } else {
-                        Receipt::Uncertain
-                    };
-                    timeline.finish_input(&input.agent, &input.message, state)?;
-                    let queued = timeline.has_queued_input(&input.agent)?;
-                    let now = now_timestamp();
-                    let committed = self
-                        .registry
-                        .update(&input.agent, &|current| {
-                            let mut next = current.clone();
-                            next.last_status = if queued {
-                                domain::agent_runtime::AgentRuntimeStatus::Running
-                            } else {
-                                domain::agent_runtime::AgentRuntimeStatus::Error
-                            };
-                            next.last_error = Some("Queued input could not be admitted".to_owned());
-                            next.requires_attention = !queued;
-                            next.attention_reason = (!queued)
-                                .then_some(domain::agent_runtime::AgentAttentionReason::Error);
-                            next.attention_timestamp = (!queued).then(|| now.clone());
-                            next.updated_at.clone_from(&now);
-                            next
-                        })
-                        .map_err(|_| ErrorCode::AgentIo)?;
-                    if let Some(committed) = committed {
-                        if !queued && !committed.internal {
-                            self.events.publish(domain::session::protocol::SessionEventKind::AgentAttention,
-                                &serde_json::json!({"agentId":input.agent,"reason":"error","timestamp":now}));
-                            timeline.events().publish(&input.agent,"agent_stream",&serde_json::json!({"agentId":input.agent,
-                                "event":{"type":"turn_failed","provider":committed.provider,"error":"Queued input could not be admitted"},"timestamp":now}));
-                        }
-                        if let Some(live) = self.live.get_mut(&input.agent) {
-                            live.record = committed;
-                        }
-                    }
+                    self.fail_queued_input(&timeline, &input, &error)?;
                     if selected.is_some() {
                         return Err(ErrorCode::AgentIo);
                     }
                 }
+            }
+        }
+        Ok(())
+    }
+
+    fn fail_queued_input(
+        &mut self,
+        timeline: &Timeline,
+        input: &QueuedInput,
+        error: &AgentManagerError,
+    ) -> Result<(), ErrorCode> {
+        let state = if matches!(
+            error,
+            AgentManagerError::InvalidRequest
+                | AgentManagerError::Busy
+                | AgentManagerError::NotFound(_)
+        ) {
+            Receipt::Rejected
+        } else {
+            Receipt::Uncertain
+        };
+        timeline.finish_input(&input.agent, &input.message, state)?;
+        let queued = timeline.has_queued_input(&input.agent)?;
+        let previous = self
+            .registry
+            .get(&input.agent)
+            .map_err(|_| ErrorCode::AgentIo)?;
+        let reported = previous.as_ref().is_some_and(|record| {
+            record.last_status == domain::agent_runtime::AgentRuntimeStatus::Error
+                && record.last_error.is_some()
+        });
+        let message = previous
+            .as_ref()
+            .filter(|record| record.last_status == domain::agent_runtime::AgentRuntimeStatus::Error)
+            .and_then(|record| record.last_error.clone())
+            .unwrap_or_else(|| {
+                if input
+                    .message
+                    .starts_with(super::recovery::RESTART_INPUT_PREFIX)
+                {
+                    format!("Execution could not resume after the host restarted: {error}")
+                } else {
+                    format!("Queued input could not be admitted: {error}")
+                }
+            });
+        let now = now_timestamp();
+        if !queued
+            && previous
+                .as_ref()
+                .is_none_or(|record| record.last_error.as_deref() != Some(&message))
+        {
+            timeline.append(
+                &input.agent,
+                previous
+                    .as_ref()
+                    .map_or("unknown", |record| record.provider.as_str()),
+                &[crate::protocol::timeline::NativeItem {
+                    key: format!("host:provider-failure:input:{}", input.message),
+                    turn_id: None,
+                    timestamp: now.clone(),
+                    item: serde_json::json!({"type":"error","message":message}),
+                }],
+            )?;
+        }
+        let committed = self
+            .registry
+            .update(&input.agent, &|current| {
+                let mut next = current.clone();
+                next.last_status = if queued {
+                    domain::agent_runtime::AgentRuntimeStatus::Running
+                } else {
+                    domain::agent_runtime::AgentRuntimeStatus::Error
+                };
+                next.last_error = Some(message.clone());
+                next.requires_attention = !queued;
+                next.attention_reason =
+                    (!queued).then_some(domain::agent_runtime::AgentAttentionReason::Error);
+                next.attention_timestamp = (!queued).then(|| now.clone());
+                next.updated_at.clone_from(&now);
+                next
+            })
+            .map_err(|_| ErrorCode::AgentIo)?;
+        if let Some(committed) = committed {
+            if !queued && !committed.internal && !reported {
+                self.events.publish(
+                    domain::session::protocol::SessionEventKind::AgentAttention,
+                    &serde_json::json!({"agentId":input.agent,"reason":"error","timestamp":now}),
+                );
+                timeline.events().publish(&input.agent,"agent_stream",&serde_json::json!({"agentId":input.agent,
+                    "event":{"type":"turn_failed","provider":committed.provider,"error":message},"timestamp":now}));
+            }
+            if let Some(live) = self.live.get_mut(&input.agent) {
+                live.record = committed;
             }
         }
         Ok(())

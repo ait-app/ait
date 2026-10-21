@@ -27,6 +27,12 @@
 
 ## 架构决策
 
+- [ADR-177：Codex 宿主异常重启后的继续执行与失败上报](decisions/providers/adr-177-codex-restart-continuation.md)：在原会话中继续，恢复失败保留具体错误并结束运行状态。
+
+- [ADR-175：独立恢复 Provider 错误详情与重启收尾](decisions/providers/adr-175-restore-provider-recovery.md)：仅恢复 daemon／Provider 行为，客户端诊断另行保留为 Draft。
+
+- [ADR-162：Codex 失败展示原生原因与 HTTP 状态](decisions/providers/adr-162-codex-error-details.md)：有界脱敏的原生原因、HTTP 状态和既有消息字段。
+
 - [ADR-177：移动端本地通知与 APNs／FCM 直连](decisions/clients/adr-177-native-local-and-remote-notifications.md)：连接外 attention 通道、直接投递、权限恢复及去重。
 
 - [ADR-176：Pi 用户图片的共享时间线投影](decisions/providers/adr-176-pi-user-image-projection.md)：实时输入、导入与刷新共用 `imageSources`，保留纯图片消息和跨设备预览。
@@ -208,6 +214,8 @@
 - [语音与听写](operations/speech.md)：离线模型、后端配置和限制。
 
 ## 工程规范与验证
+
+- [Provider 错误与重启恢复拆分验证](reports/daemon/provider-recovery-split-2026-10-20.md)：后端独立分支、主线兼容和定向回归。
 
 - [Paseo 0.12.0 移植与验证](reports/clients/paseo-0.12-port-2026-10-20.md)：本轮范围、兼容性和定向验证。
 

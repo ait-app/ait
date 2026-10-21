@@ -73,8 +73,14 @@ impl ExecutionState {
         } else {
             "idle"
         };
+        let error = (status == "error").then(|| {
+            snapshot["lastError"]
+                .as_str()
+                .filter(|message| !message.trim().is_empty())
+                .unwrap_or("Provider execution failed")
+        });
         Ok(json!({"status":status,"final":snapshot,
-            "error":if status == "error" { Some("Provider execution failed") } else { None },
+            "error":error,
             "lastMessage":self.manager.last_message(id)}))
     }
 }

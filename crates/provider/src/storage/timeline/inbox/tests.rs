@@ -2,6 +2,32 @@ use super::*;
 use base64::Engine;
 
 #[test]
+fn claimed_foreground_input_keeps_completion_pending_until_admission_or_recovery() {
+    let timeline = Timeline::memory().unwrap();
+    let prompt = AgentPrompt::text("continue work");
+    assert!(!timeline.has_pending_admission("agent").unwrap());
+    timeline
+        .reserve_input("agent", "first", &prompt, "interrupt")
+        .unwrap();
+    assert!(timeline.has_pending_admission("agent").unwrap());
+    timeline.claim_input("agent", "first").unwrap();
+    assert!(!timeline.has_queued_input("agent").unwrap());
+    assert!(timeline.has_pending_admission("agent").unwrap());
+    timeline
+        .finish_input("agent", "first", Receipt::Accepted)
+        .unwrap();
+    assert!(!timeline.has_pending_admission("agent").unwrap());
+    timeline
+        .reserve_input("agent", "uncertain", &prompt, "interrupt")
+        .unwrap();
+    timeline.claim_input("agent", "uncertain").unwrap();
+    timeline.recover_inputs().unwrap();
+    assert!(!timeline.has_pending_admission("agent").unwrap());
+    timeline.claim_answer("agent", "answer", &prompt).unwrap();
+    assert!(!timeline.has_pending_admission("agent").unwrap());
+}
+
+#[test]
 fn screenshot_input_survives_restart_and_retries_without_duplicate_delivery() {
     let root = tempfile::tempdir().unwrap();
     let path = root.path().join("timeline.sqlite3");
