@@ -161,10 +161,17 @@ fn history_input_limits_reject_large_files_and_record_counts_but_allow_blank_lin
     assert!(history::read_records(root.path()).is_err());
     let path = root.path().join("bounded.jsonl");
     let file = std::fs::File::create(&path).unwrap();
-    file.set_len(64 * 1024 * 1024 + 1).unwrap();
+    file.set_len(128 * 1024 * 1024 + 1).unwrap();
     assert!(history::read_records(&path).is_err());
-    std::fs::write(&path, "{}\n".repeat(16385)).unwrap();
+    std::fs::write(&path, "{}\n".repeat(65537)).unwrap();
     assert!(history::read_records(&path).is_err());
+    std::fs::write(&path, "{}\n".repeat(65536)).unwrap();
+    assert_eq!(history::read_records(&path).unwrap().len(), 65536);
+    // Long 1M-context sessions grow past the former 32 MiB cap and must still resume.
+    let record = format!("{}\n", json!({"pad": "x".repeat(2 * 1024 * 1024 - 16)}));
+    std::fs::write(&path, record.repeat(17)).unwrap();
+    assert!(std::fs::metadata(&path).unwrap().len() > 32 * 1024 * 1024);
+    assert_eq!(history::read_records(&path).unwrap().len(), 17);
     std::fs::write(&path, " \t\n{}\n\n").unwrap();
     assert_eq!(history::read_records(&path).unwrap(), [json!({})]);
 }
