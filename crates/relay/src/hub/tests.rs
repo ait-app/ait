@@ -8,6 +8,8 @@ use tokio_tungstenite::{WebSocketStream, accept_async, accept_hdr_async};
 
 use super::*;
 
+mod center_calls;
+
 const HELLO: &str = r#"{"type":"hello","client_id":"hub-test"}"#;
 const TICKET: &str = "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa";
 const RESUME: &str = "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb";

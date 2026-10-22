@@ -41,6 +41,7 @@ struct State {
     connections: BTreeMap<String, Weak<Mutex<Presence>>>,
     listeners: Vec<Weak<Listener>>,
     attention: Option<broadcast::Sender<(SessionEventKind, Value)>>,
+    publisher: Option<Arc<dyn crate::hub::EventPublisher>>,
 }
 
 /// Shared in-memory events and presence. Durable business state stays with its owning capability.
@@ -92,6 +93,15 @@ impl fmt::Debug for SessionSubscription {
 }
 
 impl SessionEvents {
+    /// Install the Host's independent post-commit publisher before accepting client connections.
+    /// Its native notification decision is made before any connection focus filtering.
+    pub fn set_publisher(&self, publisher: Arc<dyn crate::hub::EventPublisher>) {
+        self.0
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
+            .publisher = Some(publisher);
+    }
+
     /// Remove an invalid provider token from live connection owners before further heartbeats.
     pub fn clear_push_token(&self, token: &str) {
         let state = self
@@ -181,6 +191,16 @@ impl SessionEvents {
         self.publish_at(kind, payload, Utc::now().timestamp_millis());
     }
 
+    fn publish_to_center(&self, kind: SessionEventKind, payload: &Value) -> bool {
+        let publisher = self
+            .0
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
+            .publisher
+            .clone();
+        publisher.is_some_and(|publisher| publisher.publish(kind.method(), payload))
+    }
+
     fn publish_at(&self, kind: SessionEventKind, payload: &Value, now: i64) {
         if !payload.is_object() {
             return;
@@ -189,6 +209,7 @@ impl SessionEvents {
             kind,
             SessionEventKind::AgentAttention | SessionEventKind::TerminalAttention
         );
+        let center_notification = self.publish_to_center(kind, payload);
         let (listeners, presence, push) = {
             let mut state = self
                 .0
@@ -257,6 +278,7 @@ impl SessionEvents {
         }
         if attention
             && !focused
+            && !center_notification
             && let Some(push) = push
         {
             let _ = push.send((kind, payload.clone()));

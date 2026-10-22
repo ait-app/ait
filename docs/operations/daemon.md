@@ -39,6 +39,18 @@ web_origins = ["http://localhost:8081", "http://127.0.0.1:8081"]
 开发桌面默认使用 `.tmp/ait/server`，开发 Web 默认使用 `.tmp/app/server`。
 `AIT_SERVER_BIN` 可指定已构建的 daemon；新默认构建产物为 `target/debug/daemon`。
 
+### Hub 事件与中心原生通知
+
+发布 Hub serve 后，daemon 根据 `welcome.center_methods` 自动上报已提交事件及
+project / workspace / agent 轻量目录。重试记录保存在数据目录的 `hub/publications.json`，
+与认证的中心地址及 node session 隔离。详细边界见
+[ADR-181](../decisions/daemon/adr-181-hub-host-publication.md)。
+
+客户端完成 Hub access 的设备注册、前台心跳和事件订阅，且中心已配置 APNs / FCM 后，
+设置 `AIT_SERVER_HUB_NOTIFICATIONS=true`（或 `1`）并重启 daemon，将新事件的原生通知
+交给中心。默认值为 false，继续使用旧客户端在 daemon 上注册的 token；`false` / `0`
+显式关闭，其他值拒绝启动。已有 journal 事件保留入队时的投递决策。
+
 ## 身份、数据与关闭
 
 同一数据目录由 `instance.lock` 的 OS 文件锁排他管理。`server-id` 是原子保存的稳定身份，

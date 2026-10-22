@@ -2,6 +2,7 @@ import { LucideProvider } from "lucide-react-native";
 import { ComposerEditingSessionsProvider } from "@/composer/editing-session";
 import { getNextThemePreference, ICON_STROKE_WIDTH } from "@/styles/theme";
 import { AccountRelayLifecycle } from "@/runtime/account-state";
+import { AccountHubLifecycle } from "@/runtime/account-hub-state";
 import { OnlineServiceHostSyncLifecycle } from "@/runtime/online-service-host-sync";
 import { legacyFavoriteProfileMigration } from "@/agent-profiles/migration";
 import { LegacyAgentSkillsMigration } from "@/agent-skills/legacy-migration";
@@ -154,6 +155,9 @@ const HostRuntimeBootstrapContext = createContext<HostRuntimeBootstrapState>({
 
 function PushNotificationRouter() {
   const router = useRouter();
+  const pathname = usePathname();
+  const activeServerRef = useRef(parseServerIdFromPathname(pathname));
+  activeServerRef.current = parseServerIdFromPathname(pathname);
   const lastHandledIdRef = useRef<string | null>(null);
   const openNotification = useStableEvent((data: Record<string, unknown> | undefined) => {
     const target = resolveNotificationTarget(data);
@@ -231,6 +235,7 @@ function PushNotificationRouter() {
               ? useSessionStore.getState().sessions[target.serverId]
               : null;
             const focused = Boolean(
+              activeServerRef.current === target.serverId &&
               session &&
               ((target.agentId && session.focusedAgentId === target.agentId) ||
                 (target.terminalId && session.focusedTerminalId === target.terminalId)),
@@ -920,6 +925,7 @@ function RuntimeProviders({ children }: { children: ReactNode }) {
   return (
     <HostRuntimeBootstrapProvider>
       <AccountRelayLifecycle />
+      <AccountHubLifecycle />
       <OnlineServiceHostSyncLifecycle />
       <PushNotificationRouter />
       <SidebarCalloutProvider>

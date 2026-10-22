@@ -11,6 +11,8 @@ import {
   type HubWelcome,
 } from "./frame.js";
 import { HubSession, type HubSessionHeader, type HubSessionLink } from "./session.js";
+import { HubCalls, HubCallError } from "./calls.js";
+import type { HubAccountConnection, HubAccountSnapshot, HubAccountEvent } from "./account.js";
 
 /** A one-use credential for `/v1/hub`, bound to the center that issued it. */
 export interface HubTicket {
@@ -59,6 +61,7 @@ interface LinkIdentity {
   nodeId: string;
   graceMs: number;
   lostAt: number | null;
+  methods: readonly string[];
 }
 
 const RECONNECT_BASE_MS = 300;
@@ -102,7 +105,7 @@ function presenceNodes(payload: Uint8Array): HubPresenceNode[] {
  * until acknowledged; a dropped connection resumes the same link within the center's grace period
  * so open sessions continue without a new business hello or subscriptions.
  */
-export class HubLink {
+export class HubLink implements HubAccountConnection {
   private current: HubLinkState = "stopped";
   private socket: WebSocketLike | null = null;
   private detach: (() => void)[] = [];
@@ -123,6 +126,8 @@ export class HubLink {
   private verification: Promise<boolean> | null = null;
   private readonly sessions = new Map<string, HubSession>();
   private readonly listeners = new Set<() => void>();
+  private readonly events = new Set<(event: HubAccountEvent) => void>();
+  private readonly calls = new HubCalls();
   private retryTimer: ReturnType<typeof setTimeout> | null = null;
   private handshakeTimer: ReturnType<typeof setTimeout> | null = null;
   private ackTimer: ReturnType<typeof setTimeout> | null = null;
@@ -148,6 +153,39 @@ export class HubLink {
   /** Center of the current link, or null before the first welcome. */
   get centerUrl(): string | null {
     return this.link?.centerUrl ?? null;
+  }
+
+  snapshot(): HubAccountSnapshot {
+    return {
+      state: this.current,
+      linkId: this.link?.id ?? null,
+      centerUrl: this.centerUrl,
+      methods: this.link?.methods ?? [],
+    };
+  }
+
+  call<T = unknown>(method: string, params: unknown): Promise<T> {
+    if (this.current !== "online")
+      return Promise.reject(new HubCallError("offline", "Center is not connected."));
+    if (!this.link?.methods.includes(method))
+      return Promise.reject(new HubCallError("unsupported", "Center method is unavailable."));
+    const id = this.options.randomUUID?.() ?? globalThis.crypto.randomUUID();
+    let payload: Uint8Array;
+    try {
+      payload = new TextEncoder().encode(JSON.stringify(params));
+    } catch {
+      return Promise.reject(new HubCallError("invalid_params", "Invalid center parameters."));
+    }
+    return this.calls.request(id, payload, () =>
+      this.sendSequenced({ t: "call", id, method }, payload),
+    ) as Promise<T>;
+  }
+
+  onEvent(listener: (event: HubAccountEvent) => void): () => void {
+    this.events.add(listener);
+    return () => {
+      this.events.delete(listener);
+    };
   }
 
   /** Latest presence snapshot of the current link, or null before the first one. */
@@ -441,6 +479,8 @@ export class HubLink {
       case "msg":
       case "close":
       case "presence":
+      case "reply":
+      case "event":
         break;
       default:
         return;
@@ -449,6 +489,28 @@ export class HubLink {
     // Duplicates can follow a resume; frames already delivered are dropped.
     if (header.seq <= this.recv) return;
     this.recv = header.seq;
+    if (header.t === "reply") {
+      this.calls.reply(header.id, payload);
+      return;
+    }
+    if (header.t === "event") {
+      try {
+        const event: HubAccountEvent = {
+          subscriptionId: header.sub,
+          cursor: header.cursor,
+          hostId: header.host_id,
+          eventId: header.event_id,
+          resourceId: header.resource_id,
+          method: header.method,
+          params: JSON.parse(new TextDecoder().decode(payload)),
+        };
+        for (const listener of this.events) listener(event);
+      } catch {
+        // A malformed or unconsumed event must be recovered using the business cursor.
+        this.drop(generation, "invalid_event");
+      }
+      return;
+    }
     if (header.t === "presence") {
       try {
         this.nodes = presenceNodes(payload);
@@ -481,12 +543,14 @@ export class HubLink {
         nodeId: welcome.node_id,
         graceMs: welcome.grace_seconds * 1000,
         lostAt: null,
+        methods: welcome.center_methods ?? [],
       };
     } else if (!this.link || this.link.id !== welcome.link || welcome.recv > this.sent) {
       this.serverError("invalid_resume");
       return;
     } else {
       this.link.lostAt = null;
+      this.link.methods = welcome.center_methods ?? [];
     }
     this.welcomed = true;
     this.failures = 0;
@@ -529,12 +593,17 @@ export class HubLink {
     this.write(generation, encodeHubFrame({ t: "ack", a: this.recv }));
   }
 
-  private sendSequenced(header: HubSessionHeader, payload?: Uint8Array): void {
+  private sendSequenced(
+    header: HubSessionHeader | { t: "call"; id: string; method: string },
+    payload?: Uint8Array,
+  ): void {
     if (this.current === "stopped") throw new Error("Hub link is stopped.");
     const length = payload?.byteLength ?? 0;
     if (this.unackedBytes + length > MAX_UNACKED_BYTES) throw new Error("Hub send buffer is full.");
     const seq = this.sent + 1;
     const frame = encodeHubFrame({ ...header, seq } as HubOutboundHeader, payload);
+    if (this.unackedBytes + frame.byteLength > MAX_UNACKED_BYTES)
+      throw new Error("Hub send buffer is full.");
     this.sent = seq;
     this.unacked.push({ seq, frame });
     this.unackedBytes += frame.byteLength;
@@ -634,6 +703,7 @@ export class HubLink {
     this.tokenFailures = 0;
     this.clearTimer("grace");
     const error = new Error(`Hub link reset (${reason}).`);
+    this.calls.reset(reason);
     for (const session of sessions) session.fail(error);
     if (notify) this.emit();
   }

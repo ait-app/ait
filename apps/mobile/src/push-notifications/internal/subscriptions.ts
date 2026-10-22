@@ -4,12 +4,19 @@ import * as Notifications from "expo-notifications";
 import { AppState, Platform } from "react-native";
 import { z } from "zod";
 import { readValidatedString } from "@/storage/validated-storage";
-import type { RevokePushNotificationsInput, StartPushNotificationsInput } from "./types";
+import type { RevokePushNotificationsInput } from "./types";
 import { ensureNativeNotificationPermission } from "./permissions";
 
 const STORAGE_PREFIX = "@ait:native-push-token:";
 const PushTokenSchema = z.string().trim().min(1).max(4096);
 const refreshListeners = new Set<() => void>();
+
+interface PushClient {
+  readonly isConnected: boolean;
+  registerPushToken(token: string): void | Promise<void>;
+  unregisterPushToken(token: string): Promise<void>;
+  subscribeConnectionStatus(listener: (state: { status: string }) => void): () => void;
+}
 
 export function refreshPushRegistrations(): void {
   for (const refresh of refreshListeners) refresh();
@@ -61,7 +68,7 @@ async function resolveToken(
   }
 }
 
-export function startSubscription(input: StartPushNotificationsInput): () => void {
+export function startSubscription(input: { client: PushClient; serverId: string }): () => void {
   let stopped = false;
   let token: string | null = null;
   let pending = false;
@@ -69,7 +76,9 @@ export function startSubscription(input: StartPushNotificationsInput): () => voi
   let retry: ReturnType<typeof setTimeout> | undefined;
   const register = () => {
     if (!stopped && token && input.client.isConnected) {
-      input.client.registerPushToken(token);
+      void Promise.resolve(input.client.registerPushToken(token)).catch(() => {
+        if (!stopped) retry = setTimeout(refresh, 30_000);
+      });
     }
   };
 

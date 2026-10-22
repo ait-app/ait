@@ -11,6 +11,7 @@ ADR-074、082、083、084、122 在不同类别中各有两份，引用时以路
 
 ## Daemon 与协议
 
+- [ADR-181：Host 向 Hub 发布事件与目录摘要](daemon/adr-181-hub-host-publication.md)
 - [ADR-148：daemon 的无状态 MCP 编排接口](daemon/adr-148-daemon-mcp.md)
 - [ADR-142：PTY 拥有基础终端设备属性回复](daemon/adr-142-terminal-primary-device-attributes.md)
 
@@ -135,6 +136,8 @@ ADR-074、082、083、084、122 在不同类别中各有两份，引用时以路
 - [ADR-027：独立 AgentSession 与 AgentManager 生命周期边界](providers/adr-027-independent-agent-session-manager.md)
 
 ## 客户端、连接与品牌
+
+- [ADR-182：客户端接入 Hub 账号服务](clients/adr-182-hub-account-client.md)
 
 - [ADR-177：移动端本地通知与 APNs／FCM 直连](clients/adr-177-native-local-and-remote-notifications.md)
 

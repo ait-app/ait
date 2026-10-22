@@ -37,6 +37,7 @@ vi.mock("./account-session.js", () => ({
     snapshot() {
       return { status: this.status, synchronizedHosts: [] };
     }
+    attachHub() {}
     async restore() {
       this.status = "online";
     }

@@ -1,4 +1,8 @@
-import { supportsBrowserAccount } from "../browser-account";
+import {
+  supportsBrowserAccount,
+  getBrowserHubLink,
+  registerBrowserAccountTransport,
+} from "../browser-account";
 import { createBrowserAccountRelayTransportFactory } from "./browser-account-relay";
 import { getDesktopHost } from "@/desktop/host";
 import { Platform } from "react-native";
@@ -12,7 +16,12 @@ export const createAccountRelayTransportFactory: TransportFactory = ({ url }) =>
     return createHubAccountRelayTransportFactory()({ url });
   const desktop = getDesktopHost();
   if (!desktop?.invoke && supportsBrowserAccount())
-    return createBrowserAccountRelayTransportFactory({ url });
+    return createHubAccountRelayTransportFactory({
+      hub: getBrowserHubLink,
+      legacy: createBrowserAccountRelayTransportFactory,
+      register: registerBrowserAccountTransport,
+      log: (path, fields) => console.info("[AccountRelay] transport path", { path, ...fields }),
+    })({ url });
   if (!desktop?.invoke || !desktop.events?.on)
     throw new Error("Online relay requires the native mobile or desktop app.");
   const target = parseAccountRelayTarget(url);
@@ -67,6 +76,7 @@ export const createAccountRelayTransportFactory: TransportFactory = ({ url }) =>
     await invoke("account_transport_open", { sessionId, ...target });
   })().catch(fail);
   return {
+    recoverLiveness: () => invoke("account_transport_recover", { sessionId }).then(Boolean),
     send(data) {
       if (disposed) throw new Error("Relay connection closed");
       if (typeof data === "string")

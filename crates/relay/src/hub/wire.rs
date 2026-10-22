@@ -35,6 +35,12 @@ pub(super) enum Outbound {
     Hello { v: u32, resume: Option<Resume> },
     #[serde(rename = "ack")]
     Ack { a: u64 },
+    #[serde(rename = "call")]
+    Call {
+        seq: u64,
+        id: Uuid,
+        method: &'static str,
+    },
     #[serde(rename = "accept")]
     Accept { seq: u64, s: Uuid },
     #[serde(rename = "msg")]
@@ -59,9 +65,13 @@ pub(super) enum Inbound {
         recv: u64,
         resume_token: Option<String>,
         grace_seconds: u64,
+        #[serde(default)]
+        center_methods: Vec<String>,
     },
     #[serde(rename = "ack")]
     Ack { a: u64 },
+    #[serde(rename = "reply")]
+    Reply { seq: u64, id: Uuid },
     #[serde(rename = "error")]
     Error { code: String },
     #[serde(rename = "open")]
@@ -76,7 +86,10 @@ impl Inbound {
     /// Sequence number of a sequenced frame.
     pub(super) const fn seq(&self) -> Option<u64> {
         match self {
-            Self::Open { seq, .. } | Self::Msg { seq, .. } | Self::Close { seq, .. } => Some(*seq),
+            Self::Open { seq, .. }
+            | Self::Msg { seq, .. }
+            | Self::Close { seq, .. }
+            | Self::Reply { seq, .. } => Some(*seq),
             Self::Welcome { .. } | Self::Ack { .. } | Self::Error { .. } => None,
         }
     }

@@ -210,6 +210,11 @@ impl AgentExecution {
         self.0.events.clone()
     }
 
+    /// Observe committed timeline changes independently of client history subscriptions.
+    pub fn set_timeline_publisher(&self, publisher: Arc<dyn model::hub::EventPublisher>) {
+        self.0.timeline.events().set_publisher(publisher);
+    }
+
     /// Execute a canonical execution or Agent metadata request.
     ///
     /// Wait requests observe committed snapshots without holding a command lane; cancellation does not

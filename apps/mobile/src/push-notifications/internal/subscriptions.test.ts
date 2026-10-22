@@ -168,3 +168,49 @@ describe("native push registration", () => {
     expect(JSON.parse(host.registerPushToken.mock.calls[1][0]).token).toBe("rotated-native-token");
   });
 });
+
+// Account registration uses the same native token/permission lifecycle, once for all Hosts.
+import { startAccountPushNotifications, revokeAccountPushNotifications } from "./account";
+import type { HubAccountConnection } from "@ait/client/internal/hub";
+
+describe("account push registration", () => {
+  it("registers without a daemon connection and revokes before account logout", async () => {
+    vi.clearAllMocks();
+    mocks.platform.OS = "android";
+    mocks.appState.currentState = "active";
+    mocks.appState.addEventListener.mockReturnValue({ remove: vi.fn() });
+    mocks.tokenListener.mockReturnValue({ remove: vi.fn() });
+    mocks.getItem.mockResolvedValue(null);
+    mocks.setItem.mockResolvedValue(undefined);
+    mocks.removeItem.mockResolvedValue(undefined);
+    mocks.permissions.mockResolvedValue(granted);
+    mocks.deviceToken.mockResolvedValue({ type: "android", data: "account-device" });
+    mocks.channel.mockResolvedValue(null);
+    const call = vi.fn(async () => ({}));
+    const connection = {
+      call,
+      subscribe: () => () => {},
+      snapshot: () => ({ state: "online", methods: ["push.register", "push.unregister.request"] }),
+    };
+    const stop = startAccountPushNotifications({
+      connection: connection as unknown as HubAccountConnection,
+      key: "https://center",
+    });
+    try {
+      await vi.waitFor(() =>
+        expect(call).toHaveBeenCalledWith("push.register", {
+          token: JSON.stringify({ provider: "fcm", token: "account-device" }),
+        }),
+      );
+      await revokeAccountPushNotifications();
+      expect(call).toHaveBeenLastCalledWith("push.unregister.request", {
+        token: JSON.stringify({ provider: "fcm", token: "account-device" }),
+      });
+      expect(mocks.removeItem).toHaveBeenCalledWith(
+        "@ait:native-push-token:account:https://center",
+      );
+    } finally {
+      stop();
+    }
+  });
+});

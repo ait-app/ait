@@ -28,6 +28,28 @@ beforeEach(() => {
 });
 
 describe("desktop account host persistence", () => {
+  it("announces a Hub-only host without requiring legacy Relay metadata", async () => {
+    mocks.invoke.mockResolvedValue({
+      status: "online",
+      center: "https://center.test/api",
+      selected: null,
+      stale: false,
+      hosts: [
+        {
+          host_id: "remote",
+          server_id: "server",
+          instance_id: null,
+          name: "Remote",
+          online: true,
+          hub_online: true,
+          relay_modes: [],
+        },
+      ],
+    });
+    await accountCommand("account_status");
+    expect(mocks.setAvailable).toHaveBeenLastCalledWith(["server"]);
+  });
+
   it("announces usable hosts after discovery and clears availability when the account is stale", async () => {
     const snapshot = {
       status: "online",

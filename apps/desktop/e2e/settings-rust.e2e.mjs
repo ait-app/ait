@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { expect } from "@playwright/test";
-import { mkdtempSync, mkdirSync, rmSync } from "node:fs";
+import { mkdtempSync, mkdirSync, readFileSync, rmSync } from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import { createRequire } from "node:module";
@@ -80,11 +80,11 @@ try {
   const sidebar = page.getByTestId("settings-sidebar").filter({ visible: true });
   const destinations = [
     "General",
+    "Online Service",
     "Appearance",
     "Layout",
     "Editor",
     "Shortcuts",
-    "Integrations",
     "Notifications",
     "Permissions",
     "Diagnostics",
@@ -92,7 +92,6 @@ try {
     "Overview",
     "Projects",
     "Connections",
-    "Pair device",
     "Agents",
     "Metadata",
     "Workspaces",
@@ -112,6 +111,7 @@ try {
     await open(title);
     await expect(page.getByTestId("settings-detail-pane").filter({ visible: true })).not.toHaveText(
       title,
+      { timeout: 30000 },
     );
   }
 
@@ -123,7 +123,13 @@ try {
   assert.equal((await unavailableChangelog).status(), 404);
   const changelog = page.getByTestId("changelog-sheet");
   await expect(changelog).toBeVisible();
-  await expect(changelog.getByTestId("changelog-release-0.0.6")).toContainText("orange swift logo");
+  const bundledRelease = readFileSync(path.join(root, "CHANGELOG.md"), "utf8").match(
+    /^## (\S+)[^\n]*\n+\s*- ([^\n]+)/m,
+  );
+  assert(bundledRelease, "The bundled changelog must contain a release and its notes");
+  await expect(changelog.getByTestId(`changelog-release-${bundledRelease[1]}`)).toContainText(
+    bundledRelease[2].replace(/`/g, ""),
+  );
   await expect(changelog.getByTestId("changelog-error")).toHaveCount(0);
   await page.keyboard.press("Escape");
   await expect(changelog).not.toBeVisible();
@@ -146,11 +152,6 @@ try {
   });
   await page.getByTestId("projects-list").getByRole("button").first().click();
   await expect(page.getByTestId("project-edit-button")).toBeVisible();
-
-  await open("Pair device");
-  await page.getByTestId("host-page-pair-device-row").click();
-  await expect(page.getByTestId("pair-device-direct-connection")).toContainText("connect directly");
-  await page.keyboard.press("Escape");
 
   await open("Agents");
   await expect(page.getByTestId("agent-profiles-card")).toBeVisible();
@@ -218,7 +219,6 @@ try {
         "no plugins",
         "bundled changelog on HTTP 404",
         "project polling and details",
-        "direct pairing guidance",
         "agent profile editor",
         "skills selection",
         "system prompt saved",
