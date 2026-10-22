@@ -68,6 +68,7 @@ import {
   getFeatureTooltip,
   getAgentControlHintKey,
   resolveAgentModelSelection,
+  resolveThinkingDisplay,
 } from "@/composer/agent-controls/utils";
 import { useIsCompactFormFactor } from "@/constants/layout";
 import { readMeasuredWidth } from "@/hooks/use-container-width";
@@ -124,6 +125,7 @@ interface ControlledAgentControlsProps {
   onSelectProviderAndModel?: (provider: string, modelId: string) => void;
   thinkingOptions?: AgentControlOption[];
   selectedThinkingOptionId?: string;
+  displayThinking: string;
   onSelectThinkingOption?: (thinkingOptionId: string) => void;
   disabled?: boolean;
   isModelLoading?: boolean;
@@ -493,6 +495,7 @@ function ControlledAgentControls({
   onSelectProviderAndModel,
   thinkingOptions,
   selectedThinkingOptionId,
+  displayThinking,
   onSelectThinkingOption,
   disabled = false,
   isModelLoading = false,
@@ -544,11 +547,6 @@ function ControlledAgentControls({
   const formattedThinkingOptions = useMemo(
     () => toThinkingControlOptions(thinkingOptions),
     [thinkingOptions],
-  );
-  const displayThinking = findOptionLabel(
-    formattedThinkingOptions,
-    selectedThinkingOptionId,
-    formattedThinkingOptions[0]?.label ?? t("agentControls.thinking.unknown"),
   );
 
   const hasAnyControl = resolveHasAnyControl({
@@ -1865,6 +1863,7 @@ export const AgentControls = memo(function AgentControls({
         onEditAgentProfile={profileActions.edit}
         thinkingOptions={thinkingOptions.length > 0 ? thinkingOptions : undefined}
         selectedThinkingOptionId={modelSelection.selectedThinkingId ?? undefined}
+        displayThinking={modelSelection.displayThinking}
         onSelectThinkingOption={handleSelectThinkingOption}
         features={agent.features}
         onSetFeature={handleSetFeature}
@@ -1912,9 +1911,6 @@ export function DraftAgentControls({
   const mappedThinkingOptions = useMemo<AgentControlOption[]>(() => {
     return toThinkingControlOptions(thinkingOptions);
   }, [thinkingOptions]);
-
-  const effectiveSelectedThinkingOption =
-    selectedThinkingOptionId || mappedThinkingOptions[0]?.id || undefined;
 
   const modelOptions = useMemo<AgentControlOption[]>(
     () =>
@@ -1984,7 +1980,8 @@ export function DraftAgentControls({
         onCreateAgentProfile={profileActions.create}
         onEditAgentProfile={profileActions.edit}
         thinkingOptions={mappedThinkingOptions.length > 0 ? mappedThinkingOptions : undefined}
-        selectedThinkingOptionId={effectiveSelectedThinkingOption}
+        selectedThinkingOptionId={selectedThinkingOptionId || undefined}
+        displayThinking={resolveThinkingDisplay(mappedThinkingOptions, selectedThinkingOptionId)}
         onSelectThinkingOption={onSelectThinkingOption}
         features={features}
         onSetFeature={onSetFeature}

@@ -303,8 +303,9 @@ export const zhCN: TranslationResources = {
       select: "选择 Agent Provider",
     },
     thinking: {
-      title: "Thinking",
       unknown: "未知",
+      providerDefault: "默认",
+      title: "Thinking",
       extraHigh: "Extra high",
       select: "选择 thinking 选项",
       selectWithValue: "选择 thinking 选项（{{value}}）",
