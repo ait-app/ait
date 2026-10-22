@@ -18,10 +18,17 @@ const customWebPlatform = (process.env.AIT_WEB_PLATFORM ?? "")
   .toLowerCase();
 
 const config = getDefaultConfig(projectRoot);
+// Shared brand geometry lives outside the workspace packages watched by Expo.
+config.watchFolders = [...(config.watchFolders ?? []), path.resolve(projectRoot, "../../assets")];
 // Expo inlines its public manifest into expo-constants. Those dependency files
 // do not change when release metadata does, so invalidate their cached transform.
 const manifestHash = createHash("sha256");
-for (const file of ["app.config.js", "package.json", "../../CHANGELOG.md"]) {
+for (const file of [
+  "app.config.js",
+  "package.json",
+  "../../CHANGELOG.md",
+  "../../assets/brand/ait-mark.json",
+]) {
   manifestHash.update(fs.readFileSync(path.resolve(projectRoot, file)));
 }
 config.cacheVersion = `${config.cacheVersion ?? ""}:${manifestHash.digest("hex")}`;

@@ -1,5 +1,6 @@
 import Svg, { G, Path } from "react-native-svg";
-import brand from "@/branding/ait-mark.json";
+import { useUnistyles } from "react-native-unistyles";
+import brand from "../../../../../assets/brand/ait-mark.json";
 
 interface AitLogoProps {
   size?: number;
@@ -10,6 +11,8 @@ interface AitLogoProps {
 
 // The asset generator consumes this same geometry; never duplicate paths in a screen.
 export function AitLogo({ size = 64, color, variant = "mark", wordmarkColor }: AitLogoProps) {
+  const { theme } = useUnistyles();
+  const colors = theme.colorScheme === "dark" ? brand.darkColors : brand.colors;
   const stacked = variant === "stacked";
   return (
     <Svg width={size} height={size} viewBox="0 0 1024 1024" fill="none" accessibilityLabel="AIT">
@@ -25,12 +28,12 @@ export function AitLogo({ size = 64, color, variant = "mark", wordmarkColor }: A
         {color !== undefined || size < 32 ? (
           <Path
             d={size < 32 ? brand.smallSilhouette : brand.silhouette}
-            fill={color ?? brand.colors.primary}
+            fill={color ?? colors.primary}
           />
         ) : (
           <>
-            <Path d={brand.faces[0]} fill={brand.colors.primary} />
-            <Path d={brand.faces[1]} fill={brand.colors.secondary} />
+            <Path d={brand.faces[0]} fill={colors.primary} />
+            <Path d={brand.faces[1]} fill={colors.secondary} />
           </>
         )}
       </G>
@@ -38,7 +41,7 @@ export function AitLogo({ size = 64, color, variant = "mark", wordmarkColor }: A
         <Path
           d={brand.wordmark}
           transform={brand.placements.stackedWordmark}
-          fill={wordmarkColor ?? color ?? brand.colors.ink}
+          fill={wordmarkColor ?? color ?? colors.ink}
         />
       )}
     </Svg>

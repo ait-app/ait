@@ -1,6 +1,9 @@
 # Ait
 
-<img src="logo.svg" alt="Ait logo" width="96" height="96" />
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="assets/brand/logo-dark.svg" />
+  <img src="assets/brand/logo.svg" alt="Ait logo" width="96" height="96" />
+</picture>
 
 **在一个界面里管理多个编程 Agent。**
 

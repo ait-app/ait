@@ -7,7 +7,7 @@
 
 ## 实现范围
 
-唯一可编辑源为 [`ait-mark.json`](../../../apps/mobile/src/branding/ait-mark.json)，包括两折面飞鸟、
+唯一可编辑源为 [`ait-mark.json`](../../../assets/brand/ait-mark.json)，包括两折面飞鸟、
 路径化 AIT 字标、单色轮廓、16–32 px 光学校正轮廓、品牌色和容器位置。
 [`AitLogo`](../../../apps/mobile/src/components/icons/ait-logo.tsx) 与
 [`generate-brand-assets.mjs`](../../../scripts/generate-brand-assets.mjs) 直接读取相同数据，
