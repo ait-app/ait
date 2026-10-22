@@ -306,6 +306,7 @@ export const en = {
     thinking: {
       title: "Thinking",
       unknown: "Unknown",
+      providerDefault: "Default",
       extraHigh: "Extra high",
       select: "Select thinking option",
       selectWithValue: "Select thinking option ({{value}})",

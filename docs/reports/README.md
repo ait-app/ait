@@ -98,6 +98,8 @@
 
 ## Provider、Agent 与会话
 
+- [Pi 原生推理控制与运行时事实验证](providers/pi-reasoning-controls-2026-10-23.md)
+
 - [Oh My Pi 原生 Provider 验证](providers/omp-native-provider.md)
 
 - [OpenCode 加载速度验证](providers/opencode-startup-real-usage-2026-10-21.md)
@@ -159,6 +161,8 @@
 - [Server 会话空标题修复](providers/server-session-titles.md)
 
 ## 客户端、连接与品牌
+
+- [共享推理控件选择一致性验证](clients/shared-reasoning-controls-2026-10-22.md)
 
 - [Web tooltip DOM 触发元素定位验证](clients/web-tooltip-dom-triggers-2026-10-21.md)
 - [iPhone / iPad 原生功能验收（0.1.12）](clients/ios-iphone-ipad-functional-2026-10-20.md)

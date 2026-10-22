@@ -3,6 +3,8 @@
 - Status: Proposed (implementation under review).
 - Date: 2026-10-17.
 - Scope: `crates/provider`, `packages/protocol`; follows [ADR-089](adr-089-provider-owned-composition.md).
+- Updated: 2026-10-23. [ADR-184](adr-184-pi-reasoning-controls.md) adds native reasoning
+  controls, catalog defaults, and effective runtime metadata, replacing the original thinking limitation.
 
 ## Context
 
@@ -47,7 +49,7 @@ run from automatic retries and compaction recovery.
   safe structured diagnostics for spawn/version/write/response/frame failures, and fixed
   public failure messages. Native error text and credentials are not logged or persisted.
 - Preserve the host's persisted timeline across resume; do not advertise automatic native history
-  replay, rewind, steering, auxiliary generation or dynamic thinking controls. Native session
+  replay, rewind, steering or auxiliary generation. Native session
   import and explicit refresh are added by [ADR-174](adr-174-pi-session-import.md).
 - Expose a single native-tools mode that accurately describes Pi's absence of a built-in
   permission sandbox. Preserve native configuration. Cancel extension dialogs explicitly; unknown UI methods fail immediately with an
@@ -109,7 +111,7 @@ run from automatic retries and compaction recovery.
 
 Pi can be selected and used through the existing Agent workflow without adding a new service
 boundary. Unsupported host configuration and structured output are rejected before prompt
-submission. Richer extension dialogs, thinking controls, and
+submission. Richer extension dialogs and
 additional provider-specific slash-command controls need separate implementations.
 
 Operations and current limitations: [Pi](../../operations/pi.md).

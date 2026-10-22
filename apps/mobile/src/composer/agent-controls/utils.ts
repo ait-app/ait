@@ -1,4 +1,9 @@
-import type { AgentFeature, AgentModelDefinition } from "@ait/protocol/agent-types";
+import type {
+  AgentFeature,
+  AgentModelDefinition,
+  AgentRuntimeInfo,
+} from "@ait/protocol/agent-types";
+import { normalizeAgentModelDefinition } from "@ait/protocol/agent-types";
 import { i18n } from "@/i18n/i18next";
 import { formatThinkingOptionLabel } from "@/agent-controls/labels";
 import {
@@ -100,22 +105,15 @@ function resolveThinkingId(
   explicitThinkingOptionId: string | null | undefined,
   selectedModel: AgentModelDefinition | null,
 ): string | null {
-  if (explicitThinkingOptionId && explicitThinkingOptionId !== "default") {
+  if (explicitThinkingOptionId) {
     return explicitThinkingOptionId;
   }
-  return selectedModel?.defaultThinkingOptionId ?? null;
+  return selectedModel
+    ? (normalizeAgentModelDefinition(selectedModel).defaultThinkingOptionId ?? null)
+    : null;
 }
 
 type ThinkingOption = NonNullable<AgentModelDefinition["thinkingOptions"]>[number];
-
-function resolveEffectiveThinking(
-  thinkingOptions: ThinkingOption[] | null,
-  resolvedThinkingId: string | null,
-): ThinkingOption | null {
-  const selectedThinking =
-    thinkingOptions?.find((option) => option.id === resolvedThinkingId) ?? null;
-  return selectedThinking ?? thinkingOptions?.[0] ?? null;
-}
 
 function resolveModelDisplay(
   selectedModel: AgentModelDefinition | null,
@@ -130,20 +128,34 @@ function resolveModelDisplay(
   };
 }
 
-function resolveThinkingDisplay(
-  effectiveThinking: ThinkingOption | null,
-  selectedThinkingId: string | null,
-  unknownThinkingLabel: string,
+export function resolveThinkingDisplay(
+  thinkingOptions: readonly Pick<ThinkingOption, "id" | "label">[] | null | undefined,
+  selectedThinkingId: string | null | undefined,
 ): string {
-  if (effectiveThinking) {
-    return formatThinkingOptionLabel(effectiveThinking);
+  const thinkingId = selectedThinkingId?.trim();
+  if (thinkingId) {
+    const selected = thinkingOptions?.find((option) => option.id === thinkingId);
+    return formatThinkingOptionLabel(selected ?? { id: thinkingId });
   }
 
-  if (selectedThinkingId) {
-    return formatThinkingOptionLabel({ id: selectedThinkingId });
-  }
+  return i18n.t("agentControls.thinking.providerDefault");
+}
 
-  return unknownThinkingLabel;
+export type RuntimeThinkingState =
+  | { status: "unreported" }
+  | { status: "reported"; optionId: string }
+  | { status: "malformed" };
+
+/** Pi's native level is a runtime fact, independent of the requested selection. */
+export function getRuntimeThinkingState(
+  info: AgentRuntimeInfo | null | undefined,
+): RuntimeThinkingState {
+  const level = info?.provider === "pi" ? info.extra?.thinkingLevel : undefined;
+  if (level === undefined) return { status: "unreported" };
+  if (typeof level !== "string" || level.trim().length === 0) {
+    return { status: "malformed" };
+  }
+  return { status: "reported", optionId: level };
 }
 
 export function resolveAgentModelSelection(input: {
@@ -151,6 +163,7 @@ export function resolveAgentModelSelection(input: {
   runtimeModelId: string | null | undefined;
   configuredModelId: string | null | undefined;
   explicitThinkingOptionId: string | null | undefined;
+  runtimeThinkingState?: RuntimeThinkingState;
 }) {
   const { models, runtimeModelId, configuredModelId, explicitThinkingOptionId } = input;
   const normalizedRuntimeModelId = normalizeModelId(runtimeModelId);
@@ -173,14 +186,17 @@ export function resolveAgentModelSelection(input: {
   );
 
   const thinkingOptions = selectedModel?.thinkingOptions ?? null;
-  const resolvedThinkingId = resolveThinkingId(explicitThinkingOptionId, selectedModel);
-  const effectiveThinking = resolveEffectiveThinking(thinkingOptions, resolvedThinkingId);
-  const selectedThinkingId = effectiveThinking?.id ?? null;
-  const displayThinking = resolveThinkingDisplay(
-    effectiveThinking,
-    selectedThinkingId,
-    i18n.t("agentControls.thinking.unknown"),
-  );
+  const selectedThinkingId = resolveThinkingId(explicitThinkingOptionId, selectedModel);
+  const runtimeThinkingState = input.runtimeThinkingState;
+  const isThinkingUnknown = runtimeThinkingState?.status === "malformed";
+  const displayThinkingId = isThinkingUnknown
+    ? null
+    : runtimeThinkingState?.status === "reported"
+      ? runtimeThinkingState.optionId
+      : selectedThinkingId;
+  const displayThinking = isThinkingUnknown
+    ? i18n.t("agentControls.thinking.unknown")
+    : resolveThinkingDisplay(thinkingOptions, displayThinkingId);
 
   return {
     selectedModel,
@@ -188,6 +204,8 @@ export function resolveAgentModelSelection(input: {
     displayModel,
     thinkingOptions,
     selectedThinkingId,
+    displayThinkingId,
     displayThinking,
+    isThinkingUnknown,
   };
 }

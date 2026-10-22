@@ -4,6 +4,7 @@ import type {
   AgentProvider,
   ProviderSnapshotEntry,
 } from "@ait/protocol/agent-types";
+import { normalizeAgentModelDefinition } from "@ait/protocol/agent-types";
 import {
   mergeProviderPreferences,
   type FormPreferences,
@@ -174,7 +175,7 @@ export function resolveThinkingOptionId(args: {
 }): string {
   const effectiveModel = resolveEffectiveModel(args.availableModels, args.modelId);
   const thinkingOptions = effectiveModel?.thinkingOptions ?? [];
-  if (thinkingOptions.length === 0) return "";
+  if (!effectiveModel || thinkingOptions.length === 0) return "";
 
   const normalizedThinkingOptionId = args.requestedThinkingOptionId.trim();
   if (
@@ -184,7 +185,11 @@ export function resolveThinkingOptionId(args: {
     return normalizedThinkingOptionId;
   }
 
-  return effectiveModel?.defaultThinkingOptionId ?? thinkingOptions[0]?.id ?? "";
+  // Only Pi leaves unknown defaults to its native settings (ADR-156).
+  return (
+    normalizeAgentModelDefinition(effectiveModel).defaultThinkingOptionId ??
+    (effectiveModel.provider === "pi" ? "" : (thinkingOptions[0]?.id ?? ""))
+  );
 }
 
 const normalizeSelectedModeId = normalizeSelectedModelId;

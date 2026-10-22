@@ -28,6 +28,7 @@ pub(super) struct Session {
     cwd: String,
     native_cwd: String,
     state: Value,
+    runtime_changed: bool,
     config: StoredAgentConfig,
     images: crate::local::images::ImageStore,
     active: Option<String>,
@@ -96,7 +97,8 @@ pub(super) async fn open(
             .unwrap_or(&spec.cwd)
             .to_owned(),
         state: Value::Null,
-        config: spec.config.clone(),
+        runtime_changed: false,
+        config: StoredAgentConfig::default(),
         images: client.images.clone(),
         active: None,
         stream: Stream::default(),
@@ -112,7 +114,7 @@ pub(super) async fn open(
         return Err(AgentSessionError::Failed);
     }
     session.state = state;
-    session.configure(&spec.config).await?;
+    session.configure(&spec.config, false).await?;
     Ok(session)
 }
 
@@ -130,19 +132,44 @@ impl Session {
         Err(AgentSessionError::Failed)
     }
 
-    async fn configure(&mut self, config: &StoredAgentConfig) -> Result<(), AgentSessionError> {
+    async fn configure(
+        &mut self,
+        config: &StoredAgentConfig,
+        preserve_thinking: bool,
+    ) -> Result<(), AgentSessionError> {
         config::validate(config)?;
-        let Some(model) = &config.model else {
-            self.config.clone_from(config);
-            return Ok(());
+        let model_changed = self.config.model != config.model && config.model.is_some();
+        let thinking_changed = self.config.thinking_option_id != config.thinking_option_id;
+        // set_model resets Pi's thinking to the destination model's saved default.
+        // Read current native state so extension changes survive a model-only update.
+        let effective_thinking = if preserve_thinking && model_changed && !thinking_changed {
+            self.synchronize(false).await?;
+            self.state["thinkingLevel"].as_str().map(str::to_owned)
+        } else {
+            None
         };
-        let (provider, model_id) = config::split_model(model).ok_or(AgentSessionError::Rejected)?;
-        self.transport
-            .request(json!({"type":"set_model","provider":provider,"modelId":model_id}))
-            .await?;
-        let state = self.transport.request(json!({"type":"get_state"})).await?;
-        self.verify_session_identity(&state).await?;
-        self.state = state;
+        if model_changed && let Some(model) = &config.model {
+            let (provider, model_id) =
+                config::split_model(model).ok_or(AgentSessionError::Rejected)?;
+            self.transport
+                .request(json!({"type":"set_model","provider":provider,"modelId":model_id}))
+                .await?;
+        }
+        // Pi has no unset RPC. Clearing a prior explicit selection requests its baseline
+        // medium level; an unspecified startup/resume must preserve native settings (ADR-156).
+        let thinking = if thinking_changed {
+            Some(config.thinking_option_id.as_deref().unwrap_or("medium"))
+        } else {
+            effective_thinking.as_deref()
+        };
+        if let Some(level) = thinking {
+            self.transport
+                .request(json!({"type":"set_thinking_level","level":level}))
+                .await?;
+        }
+        if model_changed || thinking.is_some() {
+            self.synchronize(false).await?;
+        }
         self.config.clone_from(config);
         Ok(())
     }
@@ -168,7 +195,7 @@ impl Session {
             .filter(|block| block["type"] == "image")
             .collect();
         if self.config != *config {
-            self.configure(config).await?;
+            self.configure(config, true).await?;
         }
         if !images.is_empty()
             && !self.state["model"]["input"]
@@ -193,6 +220,7 @@ impl Session {
             .prompt(
                 json!({"type":"prompt","message":text,"images":images}),
                 |event| {
+                    self.runtime_changed |= observe_thinking(&mut self.state, event);
                     self.stream.consume(event).map(|_| ()).map_err(|_| {
                         let diagnostic = self
                             .stream
@@ -246,6 +274,7 @@ impl Session {
             let mut busy = self.synchronize(true).await?;
             while busy && !self.stream.running {
                 let event = self.transport.receive().await?;
+                self.runtime_changed |= observe_thinking(&mut self.state, &event);
                 self.stream.consume(&event)?;
                 if event["type"] == "compaction_end" || self.stream.settled {
                     busy = self.synchronize(true).await?;
@@ -288,11 +317,14 @@ impl Session {
         let pending: Vec<_> = self.transport.drain_pending().collect();
         for event in pending {
             if admission {
+                self.runtime_changed |= observe_thinking(&mut self.state, &event);
                 self.stream.consume(&event)?;
             } else {
                 self.consume(&event)?;
             }
         }
+        self.runtime_changed |= self.state["thinkingLevel"] != state["thinkingLevel"]
+            || self.state["model"] != state["model"];
         self.state = state;
         Ok(busy)
     }
@@ -306,6 +338,7 @@ impl Session {
     }
 
     fn consume(&mut self, event: &Value) -> Result<(), AgentSessionError> {
+        self.runtime_changed |= observe_thinking(&mut self.state, event);
         if self.active.is_none() {
             if matches!(
                 event["type"].as_str(),
@@ -321,6 +354,39 @@ impl Session {
         self.report_failure();
         Ok(())
     }
+
+    fn info(&self) -> StoredAgentRuntimeInfo {
+        let model = &self.state["model"];
+        StoredAgentRuntimeInfo {
+            provider: PROVIDER.to_owned(),
+            session_id: Some(self.id.clone()),
+            model: model["provider"]
+                .as_str()
+                .zip(model["id"].as_str())
+                .map(|(provider, id)| format!("{provider}/{id}")),
+            // Let directory identity resolve the latest stored request, including pending changes.
+            thinking_option_id: None,
+            mode_id: Some("default".into()),
+            extra: self.state["thinkingLevel"]
+                .as_str()
+                .map(|level| BTreeMap::from([("thinkingLevel".into(), json!(level))])),
+        }
+    }
+}
+
+fn observe_thinking(state: &mut Value, event: &Value) -> bool {
+    if event["type"] != "thinking_level_changed" {
+        return false;
+    }
+    // Native metadata may evolve independently of the host's selectable controls.
+    let Some(level) = event["level"].as_str() else {
+        return false;
+    };
+    if state["thinkingLevel"] == level {
+        return false;
+    }
+    state["thinkingLevel"] = json!(level);
+    true
 }
 
 impl AgentSession for Session {
@@ -347,20 +413,7 @@ impl AgentSession for Session {
     }
 
     fn runtime_info(&mut self) -> AgentSessionFuture<'_, StoredAgentRuntimeInfo> {
-        Box::pin(async {
-            let model = &self.state["model"];
-            Ok(StoredAgentRuntimeInfo {
-                provider: PROVIDER.to_owned(),
-                session_id: Some(self.id.clone()),
-                model: model["provider"]
-                    .as_str()
-                    .zip(model["id"].as_str())
-                    .map(|(provider, id)| format!("{provider}/{id}")),
-                thinking_option_id: None,
-                mode_id: Some("default".into()),
-                extra: None,
-            })
-        })
+        Box::pin(async { Ok(self.info()) })
     }
 
     fn persistence(&self) -> Option<AgentPersistenceHandle> {
@@ -393,6 +446,9 @@ impl AgentSession for Session {
     }
 
     fn poll_turn(&mut self) -> Result<Option<AgentTurnEvent>, AgentSessionError> {
+        if std::mem::take(&mut self.runtime_changed) {
+            return Ok(Some(AgentTurnEvent::RuntimeInfo(self.info())));
+        }
         if let Some(event) = self.stream.pop() {
             return Ok(Some(event));
         }
@@ -412,6 +468,9 @@ impl AgentSession for Session {
             self.closed = true;
             self.active = None;
             self.stream.fail();
+        }
+        if std::mem::take(&mut self.runtime_changed) {
+            return Ok(Some(AgentTurnEvent::RuntimeInfo(self.info())));
         }
         Ok(self.stream.pop())
     }

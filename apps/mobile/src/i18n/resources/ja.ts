@@ -210,6 +210,7 @@ export const ja: TranslationResources = {
     thinking: {
       title: "思考",
       unknown: "不明",
+      providerDefault: "デフォルト",
       extraHigh: "非常に高い",
       select: "思考オプションを選択",
       selectWithValue: "思考オプションを選択（{{value}}）",

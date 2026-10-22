@@ -76,6 +76,8 @@ ADR-074、082、083、084、122 在不同类别中各有两份，引用时以路
 
 ## Provider、Agent 与会话
 
+- [ADR-184：Pi 原生推理控制与默认值](providers/adr-184-pi-reasoning-controls.md)
+
 - [ADR-180：Oh My Pi 原生 RPC Provider](providers/adr-180-omp-native-rpc-provider.md)
 
 - [ADR-179：Provider 自身行为的测试归 provider crate](providers/adr-179-provider-owned-tests.md)
@@ -136,6 +138,8 @@ ADR-074、082、083、084、122 在不同类别中各有两份，引用时以路
 - [ADR-027：独立 AgentSession 与 AgentManager 生命周期边界](providers/adr-027-independent-agent-session-manager.md)
 
 ## 客户端、连接与品牌
+
+- [ADR-183：共享推理控件保留已选身份，未指定时显示“默认”](clients/adr-183-shared-reasoning-control-selection.md)
 
 - [ADR-182：客户端接入 Hub 账号服务](clients/adr-182-hub-account-client.md)
 

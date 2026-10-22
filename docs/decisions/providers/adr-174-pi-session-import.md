@@ -89,7 +89,8 @@ not start a native writer or submit input.
   both its filename and original spelling must be resumed with that spelling or re-imported.
 - Keep automatic history replay disabled: live Pi events and saved entries use different
   identities. Explicit import/refresh reconciles native history; ordinary restart preserves
-  Ait's durable timeline. Thinking controls and rewind remain unsupported.
+  Ait's durable timeline. Thinking controls are defined by
+  [ADR-184](adr-184-pi-reasoning-controls.md); rewind remains unsupported.
 
 ## Consequences
 
