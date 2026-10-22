@@ -62,6 +62,8 @@ function deferred(choose: () => Promise<() => Transport>): Transport {
       for (const handler of closes) handler({ code: 1006, reason: failure.message });
     });
   return {
+    recoverLiveness: () =>
+      !closed && inner?.recoverLiveness ? inner.recoverLiveness() : Promise.resolve(false),
     send(data) {
       if (closed || !inner) throw new Error("Relay is not ready.");
       inner.send(data);
@@ -110,6 +112,7 @@ function hubTransport(link: HubLink, nodeId: string, deps: Dependencies): Transp
   }
   session.onClose(() => unregister());
   return {
+    recoverLiveness: () => session.recoverLiveness(),
     send: (data) => session.send(data),
     close() {
       unregister();

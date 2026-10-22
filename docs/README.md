@@ -28,7 +28,7 @@
 ## 架构决策
 
 - [ADR-180：Oh My Pi 原生 RPC Provider](decisions/providers/adr-180-omp-native-rpc-provider.md)：独立 `omp` 适配器、v2 分块传输、审批模式映射、结构化 ask、子 Agent 与回合级 settled 关联；Pi 是另一个独立 Provider（ADR-156）。
-- [ADR-180：消息 Hub 服务端点](decisions/daemon/adr-180-hub-serve-endpoint.md)：`ait-hub-v1` 常驻链路、会话与物理连接解耦、断线续传；与旧 relay 并存，桌面与 headless 共用。
+- [ADR-180：消息 Hub 服务端点](decisions/daemon/adr-180-hub-serve-endpoint.md)：`ait-hub-v1` 常驻链路、会话与物理连接解耦、断线续传与探活恢复协作；与旧 relay 并存，桌面与 headless 共用。
 
 - [ADR-179：Provider 自身行为的测试归 provider crate](decisions/providers/adr-179-provider-owned-tests.md)：原生 adapter 与执行器场景在 provider 内验证，daemon 保留宿主、传输和跨能力组合测试。
 

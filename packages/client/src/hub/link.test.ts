@@ -214,6 +214,57 @@ describe("hub link sequencing", () => {
 });
 
 describe("hub link liveness", () => {
+  it("periodically probes idle links, shares foreground probes and resumes silent sockets", async () => {
+    const h = hubFixture();
+    const socket = await h.online();
+    await vi.advanceTimersByTimeAsync(20_000);
+    expect(socket.frames("ping")).toEqual([{ t: "ping", n: 1 }]);
+    const first = h.link.verify();
+    const second = h.link.verify();
+    expect(first).toBe(second);
+    expect(socket.frames("ping")).toHaveLength(1);
+    socket.receive({ t: "pong", n: 1 });
+    await expect(first).resolves.toBe(true);
+    await vi.advanceTimersByTimeAsync(20_000);
+    expect(socket.frames("ping")).toHaveLength(2);
+    await vi.advanceTimersByTimeAsync(3001);
+    expect(socket.close).toHaveBeenCalledOnce();
+    expect(h.link.state).toBe("reconnecting");
+    expect(h.ticket).toHaveBeenCalledOnce();
+    const resumed = h.socket();
+    resumed.open();
+    resumed.welcome({ resumed: true, resume_token: undefined });
+    await vi.advanceTimersByTimeAsync(20_000);
+    expect(resumed.frames("ping")).toHaveLength(1);
+    h.link.stop();
+    const sent = resumed.sent.length;
+    await vi.advanceTimersByTimeAsync(60_000);
+    expect(resumed.sent).toHaveLength(sent);
+    expect(h.link.state).toBe("stopped");
+  });
+
+  it.each(["stop", "expired", "rejected"])(
+    "settles recovery when the original link is %s",
+    async (end) => {
+      const h = hubFixture();
+      const socket = await h.online();
+      const { session } = await acceptedSession(h);
+      socket.drop();
+      const recovered = session.recoverLiveness();
+      await h.flush();
+      if (end === "stop") h.link.stop();
+      else if (end === "rejected") {
+        h.socket().open();
+        h.socket().receive({ t: "error", code: "resume_expired" });
+      } else {
+        await vi.advanceTimersByTimeAsync(120_000);
+      }
+      await expect(recovered).resolves.toBe(false);
+      expect(session.closed).toBe(true);
+      h.link.stop();
+    },
+  );
+
   it("verifies with ping/pong and reconnects when no pong arrives", async () => {
     const h = hubFixture();
     const socket = await h.online();

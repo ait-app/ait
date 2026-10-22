@@ -1427,7 +1427,17 @@ describe("hub tickets", () => {
     expect(hubCalls(http)).toHaveLength(0);
     expect(localHub).toHaveBeenCalledOnce();
     await vi.advanceTimersByTimeAsync(2 * 60_000);
-    expect(localHub.mock.calls.filter(([method]) => method === "GET")).toHaveLength(2);
+    expect(localHub.mock.calls.filter(([method]) => method === "GET")).toHaveLength(3);
+    expect(hubCalls(http)).toHaveLength(1);
+    expect(localHub).toHaveBeenCalledWith(
+      "PUT",
+      expect.objectContaining({ hub_ticket: "c".repeat(64) }),
+    );
+    // A second takeover after that successful PUT gets its own bounded wait.
+    await vi.advanceTimersByTimeAsync(4 * 60_000);
+    expect(hubCalls(http)).toHaveLength(1);
+    await vi.advanceTimersByTimeAsync(2 * 60_000);
+    expect(hubCalls(http)).toHaveLength(2);
     await manager.unpublishHost("first");
     await manager.logout();
   });

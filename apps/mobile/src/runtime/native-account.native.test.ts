@@ -475,7 +475,19 @@ describe("native mobile hub link", () => {
       function (url: string, protocols?: string[], options?: { headers?: Record<string, string> }) {
         if (!url.endsWith("/v1/hub")) return new ChannelWebSocket(url, protocols, options);
         const socket: HubSocket = { url, options, close: vi.fn() };
-        Object.assign(socket, { readyState: 1, send: vi.fn() });
+        Object.assign(socket, {
+          readyState: 1,
+          send: vi.fn((frame: Uint8Array) => {
+            const length = (frame[0] << 8) | frame[1];
+            const header = JSON.parse(new TextDecoder().decode(frame.subarray(2, 2 + length)));
+            if (header.t !== "ping") return;
+            const pong = new TextEncoder().encode(JSON.stringify({ t: "pong", n: header.n }));
+            const reply = new Uint8Array(2 + pong.byteLength);
+            reply.set([pong.byteLength >> 8, pong.byteLength & 0xff]);
+            reply.set(pong, 2);
+            socket.onmessage?.({ data: reply.buffer });
+          }),
+        });
         hubSockets.push(socket);
         return socket;
       },

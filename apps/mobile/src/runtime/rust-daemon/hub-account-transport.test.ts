@@ -1,3 +1,4 @@
+import { DaemonClient } from "@ait/client/internal/daemon-client";
 import { HubLink } from "@ait/client/internal/hub";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { createHubAccountRelayTransportFactory } from "./hub-account-transport";
@@ -367,5 +368,101 @@ describe("deferred account relay transport", () => {
     expect(error).toHaveBeenCalledWith(new Error("Account is signing out."));
     expect(h.deps.log).toHaveBeenCalledWith("hub", expect.anything());
     expect(h.sockets.at(-1)!.sent.filter((frame) => frame.header.t === "open")).toEqual([]);
+  });
+});
+
+describe("Hub recovery with business liveness", () => {
+  it.each([false, true])(
+    "preserves the session on foreground recovery (deferred=%s)",
+    async (defer) => {
+      const h = harness();
+      const socket = await h.connect();
+      if (defer) h.deps.hub.mockReturnValue(Promise.resolve(h.link));
+      const client = new DaemonClient({
+        url,
+        clientId: "foreground",
+        reconnect: { enabled: false },
+        transportFactory: createRustDaemonTransportFactory(
+          createHubAccountRelayTransportFactory(h.deps),
+        ),
+      });
+      try {
+        const connected = client.connect();
+        await vi.advanceTimersByTimeAsync(0);
+        socket.receive({ t: "accept", seq: 2, s: "session-1" }, JSON.stringify(SERVER_INFO));
+        await connected;
+        // Both foreground listeners run against a silently lost physical connection.
+        const verified = h.link.verify();
+        client.ensureConnected({ verify: true });
+        await vi.advanceTimersByTimeAsync(3001);
+        await expect(verified).resolves.toBe(false);
+        expect(h.link.state).toBe("reconnecting");
+        expect(client.isConnected).toBe(true);
+        expect(h.closes.size).toBe(1);
+        // Leave recovery pending long enough to also cross a normal heartbeat deadline.
+        await vi.advanceTimersByTimeAsync(30_000);
+        const resumed = h.sockets.at(-1)!;
+        resumed.open();
+        resumed.receive({
+          t: "welcome",
+          v: 1,
+          link: "link-1",
+          resumed: true,
+          recv: 1,
+          node_id: "phone",
+          grace_seconds: 120,
+        });
+        await vi.advanceTimersByTimeAsync(0);
+        const ping = resumed.sent.filter((frame) => frame.header.t === "msg").at(-1)!;
+        const request = JSON.parse(ping.payload);
+        resumed.receive(
+          { t: "msg", seq: 3, s: "session-1", pt: "text" },
+          JSON.stringify({
+            type: "response",
+            request_id: request.request_id,
+            result: { nonce: request.params.nonce },
+          }),
+        );
+        await vi.advanceTimersByTimeAsync(3001);
+        expect(client.isConnected).toBe(true);
+        expect(h.closes.size).toBe(1);
+        expect(socket.sent.filter((frame) => frame.header.t === "open")).toHaveLength(1);
+        expect(
+          resumed.sent.some((frame) => frame.header.t === "open" || frame.header.t === "close"),
+        ).toBe(false);
+      } finally {
+        await client.close();
+        h.link.stop();
+      }
+    },
+  );
+
+  it("still closes an unresponsive daemon when the hub itself answers", async () => {
+    const h = harness();
+    const socket = await h.connect();
+    const client = new DaemonClient({
+      url,
+      clientId: "silent-daemon",
+      reconnect: { enabled: false },
+      transportFactory: createRustDaemonTransportFactory(
+        createHubAccountRelayTransportFactory(h.deps),
+      ),
+    });
+    try {
+      const connected = client.connect();
+      await vi.advanceTimersByTimeAsync(0);
+      socket.receive({ t: "accept", seq: 2, s: "session-1" }, JSON.stringify(SERVER_INFO));
+      await connected;
+      client.ensureConnected({ verify: true });
+      await vi.advanceTimersByTimeAsync(3000);
+      const ping = socket.sent.find((frame) => frame.header.t === "ping")!;
+      socket.receive({ t: "pong", n: ping.header.n });
+      await vi.advanceTimersByTimeAsync(0);
+      expect(socket.sent.some((frame) => frame.header.t === "close")).toBe(true);
+      expect(h.link.state).toBe("online");
+    } finally {
+      await client.close();
+      h.link.stop();
+    }
   });
 });

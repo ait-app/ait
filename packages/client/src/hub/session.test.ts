@@ -78,7 +78,9 @@ describe("hub session transport", () => {
     const { h, socket, transport, events } = await session();
     await h.flush();
     transport.send('{"type":"hello"}');
-    await vi.advanceTimersByTimeAsync(30_000);
+    await vi.advanceTimersByTimeAsync(20_000);
+    socket.receive({ t: "pong", n: socket.frames("ping")[0].n });
+    await vi.advanceTimersByTimeAsync(10_000);
     expect(events.error).toHaveBeenCalledWith(new Error("Hub session was not accepted in time."));
     expect(events.close).toHaveBeenCalledOnce();
     expect(socket.frames("close")).toEqual([

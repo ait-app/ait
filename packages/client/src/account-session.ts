@@ -104,7 +104,7 @@ interface HostPublication {
   node: NodeSession | null;
   nextRenew: number;
   /** Hub serve link of this runtime instance, maintained only for the built-in daemon. */
-  hub: { next: number; failures: number; unsupported: boolean };
+  hub: { next: number; failures: number; unsupported: boolean; yielded: boolean };
 }
 
 export class AccountError extends Error {
@@ -558,7 +558,7 @@ export class AccountSessionManager {
       installationId: runtime.serverId,
       node: null,
       nextRenew: 0,
-      hub: { next: 0, failures: 0, unsupported: false },
+      hub: { next: 0, failures: 0, unsupported: false, yielded: false },
     };
     this.publications.set(runtime.serverId, entry);
     return entry;
@@ -1005,13 +1005,15 @@ export class AccountSessionManager {
         | { online?: boolean; connecting?: boolean; rejected?: string | null }
         | undefined;
       if (!status || !current()) return;
+      if (status.rejected !== "replaced") entry.hub.yielded = false;
       if (status.online) {
         entry.hub.failures = 0;
         return;
       }
       if (status.connecting) return;
       // Taking the link straight back would make two serve processes flap.
-      if (status.rejected === "replaced") {
+      if (status.rejected === "replaced" && !entry.hub.yielded) {
+        entry.hub.yielded = true;
         entry.hub.next = Date.now() + HUB_REPLACED_RETRY_MS;
         return;
       }
@@ -1036,6 +1038,7 @@ export class AccountSessionManager {
         hub_ticket: hubTicket(grant),
         node_session_id: node.node_session_id,
       }).catch(stop);
+      entry.hub.yielded = false;
       entry.hub.next = Date.now() + retryDelay(entry.hub.failures++);
     } catch {
       if (current()) entry.hub.next = Date.now() + retryDelay(entry.hub.failures++);

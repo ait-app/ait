@@ -8,6 +8,7 @@ export type HubSessionHeader =
 
 /** Link operations a session needs; implemented by `HubLink`. */
 export interface HubSessionLink {
+  recoverLiveness(): Promise<boolean>;
   send(header: HubSessionHeader, payload?: Uint8Array): void;
   release(session: string): void;
 }
@@ -48,6 +49,13 @@ export class HubSession implements DaemonTransport {
 
   get closed(): boolean {
     return this.stage === "closed";
+  }
+
+  /** Keep this session while the link resumes, then retry the daemon probe. */
+  async recoverLiveness(): Promise<boolean> {
+    if (this.closed) return false;
+    const recovered = await this.link.recoverLiveness();
+    return !this.closed && recovered;
   }
 
   /** The open frame was sent, so the peer may hold resources for this session. */

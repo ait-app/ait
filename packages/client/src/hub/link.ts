@@ -72,6 +72,7 @@ const MAX_UNACKED_BYTES = 8 * 1024 * 1024;
 /** Resume with a fresh ticket after this many failed resume-token connections. */
 const TOKEN_ATTEMPTS = 2;
 const DEFAULT_VERIFY_MS = 3000;
+const HEARTBEAT_INTERVAL_MS = 20_000;
 
 const consoleLogger: HubLinkLogger = {
   info: (fields, message) => console.info(message, formatDiagnosticFields(fields)),
@@ -119,14 +120,17 @@ export class HubLink {
   private nodes: HubPresenceNode[] | null = null;
   private nextPing = 0;
   private readonly pings = new Map<number, (ok: boolean) => void>();
+  private verification: Promise<boolean> | null = null;
   private readonly sessions = new Map<string, HubSession>();
   private readonly listeners = new Set<() => void>();
   private retryTimer: ReturnType<typeof setTimeout> | null = null;
   private handshakeTimer: ReturnType<typeof setTimeout> | null = null;
   private ackTimer: ReturnType<typeof setTimeout> | null = null;
   private graceTimer: ReturnType<typeof setTimeout> | null = null;
+  private heartbeatTimer: ReturnType<typeof setTimeout> | null = null;
   private readonly logger: HubLinkLogger;
   private readonly sessionLink: HubSessionLink = {
+    recoverLiveness: () => this.recoverLiveness(),
     send: (header, payload) => this.sendSequenced(header, payload),
     release: (id) => {
       this.sessions.delete(id);
@@ -229,6 +233,7 @@ export class HubLink {
    */
   verify(timeoutMs = DEFAULT_VERIFY_MS): Promise<boolean> {
     if (this.current === "stopped") return Promise.resolve(false);
+    if (this.verification) return this.verification;
     if (!this.welcomed || !this.socket) {
       if (this.retryTimer) {
         this.clearTimer("retry");
@@ -239,7 +244,8 @@ export class HubLink {
     const socket = this.socket;
     const generation = this.generation;
     const n = ++this.nextPing;
-    return new Promise((resolve) => {
+    this.clearTimer("heartbeat");
+    const verification = new Promise<boolean>((resolve) => {
       const timer = setTimeout(() => {
         this.pings.delete(n);
         resolve(false);
@@ -256,6 +262,38 @@ export class HubLink {
         this.drop(generation, "send_failed");
       }
     });
+    this.verification = verification;
+    void verification.then((ok) => {
+      if (this.verification === verification) this.verification = null;
+      if (ok && generation === this.generation) this.scheduleHeartbeat();
+    });
+    return verification;
+  }
+
+  /** Recover only the current link; a new link cannot preserve its sessions. */
+  private async recoverLiveness(): Promise<boolean> {
+    const link = this.link;
+    if (!link || (await this.verify()) || this.link !== link) return false;
+    if (this.welcomed) return true;
+    // drop() has armed the grace timer. Its expiry, stop(), or a rejection resets
+    // the identity and notifies this waiter, so recovery cannot wait indefinitely.
+    return new Promise((resolve) => {
+      const remove = this.subscribe(() => {
+        if (this.link !== link || this.welcomed) {
+          remove();
+          resolve(this.link === link && this.welcomed);
+        }
+      });
+    });
+  }
+
+  private scheduleHeartbeat(): void {
+    this.clearTimer("heartbeat");
+    if (!this.welcomed) return;
+    this.heartbeatTimer = setTimeout(() => {
+      this.heartbeatTimer = null;
+      void this.verify();
+    }, HEARTBEAT_INTERVAL_MS);
   }
 
   /** Create a session to `nodeId`'s serve endpoint; its first send opens it. */
@@ -278,7 +316,7 @@ export class HubLink {
     for (const listener of this.listeners) listener();
   }
 
-  private clearTimer(name: "retry" | "handshake" | "ack" | "grace"): void {
+  private clearTimer(name: "retry" | "handshake" | "ack" | "grace" | "heartbeat"): void {
     const key = `${name}Timer` as const;
     const timer = this[key];
     if (timer) clearTimeout(timer);
@@ -463,6 +501,7 @@ export class HubLink {
       "[Hub] link online",
     );
     this.setState("online");
+    this.scheduleHeartbeat();
   }
 
   /** Drop frames the center has acknowledged. */
@@ -511,6 +550,8 @@ export class HubLink {
     this.detach = [];
     this.clearTimer("handshake");
     this.clearTimer("ack");
+    this.clearTimer("heartbeat");
+    this.verification = null;
     for (const resolve of this.pings.values()) resolve(false);
     try {
       socket?.close();

@@ -7344,3 +7344,56 @@ test("Bot requests validate params, correlate results and release errors", async
   );
   await rejection;
 });
+
+test.each(["retry", "close", "reject"])(
+  "bounds liveness recovery and ignores stale completion (%s)",
+  async (action) => {
+    useHeartbeatClock();
+    const daemon = new FakeDaemon();
+    daemon.daemonGoesSilent();
+    let finish!: (recovered: boolean) => void;
+    const recovery = vi.fn(() =>
+      action === "reject"
+        ? Promise.reject(new Error("recovery failed"))
+        : new Promise<boolean>((resolve) => {
+            finish = resolve;
+          }),
+    );
+    daemon.transport.recoverLiveness = recovery;
+    const client = new DaemonClient({
+      url: "ws://test",
+      clientId: "recovery",
+      logger: noopLogger,
+      reconnect: { enabled: false },
+      transportFactory: () => daemon.transport,
+    });
+    clients.push(client);
+    const connected = client.connect();
+    daemon.openConnection();
+    await connected;
+    client.ensureConnected({ verify: true });
+    await vi.advanceTimersByTimeAsync(3000);
+    expect(recovery).toHaveBeenCalledOnce();
+    if (action === "reject") {
+      expect(daemon.closesFromClient()).toEqual([
+        { code: 1001, reason: "Connection verification failed" },
+      ]);
+      return;
+    }
+    expect(daemon.closesFromClient()).toEqual([]);
+    if (action === "close") await client.close();
+    finish(true);
+    await vi.advanceTimersByTimeAsync(0);
+    if (action === "close") {
+      expect(daemon.pingTimestamps()).toHaveLength(1);
+      expect(client.getConnectionState().status).toBe("disposed");
+    } else {
+      expect(daemon.pingTimestamps()).toHaveLength(2);
+      await vi.advanceTimersByTimeAsync(3000);
+      expect(recovery).toHaveBeenCalledOnce();
+      expect(daemon.closesFromClient()).toEqual([
+        { code: 1001, reason: "Connection verification failed" },
+      ]);
+    }
+  },
+);

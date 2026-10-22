@@ -451,6 +451,11 @@ export function createRustDaemonTransportFactory(baseFactory: TransportFactory):
         else throw new Error(`Unsupported client envelope: ${String(message.type)}`);
       },
       close: dispose,
+      // Business pings travel on channel zero, including the single Hub session.
+      recoverLiveness: () =>
+        !disposed && channels[0]?.recoverLiveness
+          ? channels[0].recoverLiveness()
+          : Promise.resolve(false),
       drain: () => uploads.drain(),
       onOpen: (handler) => {
         openHandlers.add(handler);
