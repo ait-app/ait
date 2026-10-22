@@ -27,7 +27,7 @@ With the desktop development server running, run:
 EXPO_DEV_URL=http://localhost:8082 npm run test:e2e:settings-rust --workspace=@ait/desktop
 ```
 
-The test launches a separate Electron profile and Rust data directory, visits all 20 settings pages,
+The test launches a separate Electron profile and Rust data directory, visits all 19 settings pages,
 checks project details, Skills and Agent profile editors, saves host and terminal configuration,
 and opens the native Provider settings. It removes its temporary data when finished.
 The daemon binary defaults to `target/debug/daemon`; set `AIT_SERVER_BIN` to use another build.

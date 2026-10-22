@@ -16,6 +16,10 @@
 - 原生移动端、Electron main、托管浏览器各自拥有账号的 access 链路。桌面和托管浏览器
   会话按 presence 优先连接 Hub，初始等待有界；目标缺少 serve 或中心不可用时使用现有 Relay。
   已建立的会话在逻辑链路内续传，普通详情、写入、终端和文件仍发送给对应 Host。
+- 既有账号主机列表合并同一服务的 Hub presence；Hub-only Host 的连接资格不依赖旧 Relay
+  的 `instance_id` 或 `relay_modes`。presence 消失后回到旧 Channel 状态，不改写旧 Relay 元数据。
+  Hub 按已认证 serve node 路由，accept 仍校验账号所记录的 `server_id`、有效实例与 Ait 协议；
+  旧 Relay 继续校验 visit 票据绑定的实例。
 - Electron renderer 通过 `account_hub_status`、`account_hub_call` 与账号事件 IPC 使用服务。
   主进程只允许 access 方法，保留错误 code；订阅归创建窗口，销毁或主文档导航释放兴趣。
   同一 access 链路汇总窗口心跳，可见窗口优先，隐藏窗口不会覆盖另一窗口的前台状态。

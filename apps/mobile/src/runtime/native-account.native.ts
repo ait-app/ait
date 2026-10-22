@@ -70,6 +70,7 @@ async function createAccount(): Promise<AccountSessionManager> {
       for (const close of [...transports]) close();
     },
   });
+  manager.attachHub(link);
   // A cold background launch has no live connection to retain.
   if (AppState.currentState === "background") manager.suspend();
   const saved = await SecureStore.getItemAsync(CREDENTIAL_KEY);

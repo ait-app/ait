@@ -7,8 +7,64 @@ import {
   type SavedAccount,
 } from "./account-session.js";
 import { createHash } from "node:crypto";
+import { hubFixture } from "../test/hub.js";
 
 afterEach(() => vi.useRealTimers());
+
+it("discovers a Hub-only Host independently of its offline Relay route", async () => {
+  const f = fixture();
+  Object.assign(f.host, { online: false, instance_id: null, relay_modes: [] });
+  const h = hubFixture({
+    ticket: async () => ({ centerUrl: "https://aitapp.cn/api", ticket: "a".repeat(64) }),
+  });
+  f.manager.attachHub(h.link);
+  await f.login();
+  const socket = await h.online([
+    {
+      node_id: "other",
+      host_id: "remote",
+      name: "Remote",
+      platform: "linux",
+      app_version: "test",
+      state: "online",
+    },
+  ]);
+  expect(f.manager.snapshot().hosts[0]).toMatchObject({
+    online: true,
+    hub_online: true,
+    instance_id: null,
+    relay_modes: [],
+  });
+  expect(f.deps.notify).toHaveBeenLastCalledWith(f.manager.snapshot());
+  // An old Relay snapshot must not override current Hub availability.
+  f.channel.sockets[0]!.receive({ type: "hosts.snapshot", hosts: [f.host], observed_at: "now" });
+  expect(f.manager.snapshot().hosts[0]?.online).toBe(true);
+  socket.presence(2, []);
+  expect(f.manager.snapshot().hosts[0]).toMatchObject({ online: false });
+  h.link.stop();
+  await f.manager.logout();
+});
+
+it("does not import presence from a different account center", async () => {
+  const f = fixture();
+  f.host.online = false;
+  const h = hubFixture();
+  f.manager.attachHub(h.link);
+  await f.login();
+  await h.online([
+    {
+      node_id: "other",
+      host_id: "remote",
+      name: "Remote",
+      platform: "linux",
+      app_version: "test",
+      state: "online",
+    },
+  ]);
+  expect(f.manager.snapshot().hosts[0]?.online).toBe(false);
+  h.link.stop();
+  await f.manager.logout();
+});
 
 describe("account center domain migration", () => {
   it.each([

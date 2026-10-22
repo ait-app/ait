@@ -26,7 +26,7 @@ interface Session {
   ready: boolean;
   verified: boolean;
   closed: boolean;
-  expected: { serverId: string; instanceId: string } | null;
+  expected: { serverId: string; instanceId: string | null } | null;
   deadline: ReturnType<typeof setTimeout>;
   pending: Map<number, { bytes: number; timer: ReturnType<typeof setTimeout> }>;
   queued: Map<number, { bytes: Buffer; binary: boolean }>;
@@ -89,8 +89,10 @@ export class AccountTransportManager {
       if (session.closed) return;
       if (node && this.link) {
         const target = this.account.snapshot().hosts.find((value) => value.host_id === host);
-        if (!target?.server_id || !target.instance_id) throw new Error("Host identity unavailable");
-        session.expected = { serverId: target.server_id, instanceId: target.instance_id };
+        if (!target?.server_id) throw new Error("Host identity unavailable");
+        // Hub authenticates the selected serve node. Its current instance comes from
+        // accept/server_info; a legacy route may be absent or belong to an older instance.
+        session.expected = { serverId: target.server_id, instanceId: null };
         const transport = this.link.openSession(node.node_id);
         session.hub = transport;
         // Hub accept contains server_info; there is no legacy relay.ready handshake.
@@ -173,8 +175,12 @@ export class AccountTransportManager {
       if (
         message.type !== "server_info" ||
         message.info?.server_id !== session.expected?.serverId ||
-        message.info?.instance_id !== session.expected?.instanceId ||
-        !message.info?.features?.includes("ait-rust-single-v1")
+        typeof message.info?.instance_id !== "string" ||
+        !message.info.instance_id ||
+        (session.expected?.instanceId !== null &&
+          message.info?.instance_id !== session.expected?.instanceId) ||
+        !Array.isArray(message.info?.features) ||
+        !message.info.features.includes("ait-rust-single-v1")
       ) {
         this.finish(id, session, "Target Host identity or protocol changed");
         return;

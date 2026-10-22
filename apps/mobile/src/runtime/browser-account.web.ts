@@ -91,6 +91,7 @@ async function createAccount(): Promise<AccountSessionManager> {
       webSocketFactory: defaultWebSocketFactory,
       authentication: "subprotocol",
     });
+    manager.attachHub(hub);
     if (token) {
       const response = await fetch(`${center}/v1/me`, {
         headers: { Authorization: `Bearer ${token}` },

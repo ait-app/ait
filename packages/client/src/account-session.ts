@@ -1,7 +1,7 @@
 import { AccountChannel, type ChannelHost } from "./account-channel.js";
 import type { DaemonTransportFactory } from "./daemon-client-transport-types.js";
 import { HUB_PATH, HUB_PROTOCOL } from "./hub/frame.js";
-import type { HubTicket } from "./hub/link.js";
+import type { HubLink, HubTicket } from "./hub/link.js";
 import {
   createWebSocketTransportFactory,
   defaultWebSocketFactory,
@@ -15,7 +15,10 @@ import {
 /** API base includes the management gateway prefix; all relay URLs derive from it. */
 export const DEFAULT_ACCOUNT_CENTER = "https://aitapp.cn/api";
 
-export type AccountHost = ChannelHost;
+export interface AccountHost extends ChannelHost {
+  /** Current access-link presence; independent of the legacy Relay route. */
+  hub_online?: boolean;
+}
 
 interface LoginUser {
   display_name?: string | null;
@@ -185,6 +188,8 @@ export class AccountSessionManager {
   private leaseRecoveryAttempted = false;
   private publications = new Map<string, HostPublication>();
   private closing = false;
+  private hub: HubLink | null = null;
+  private unsubscribeHub: (() => void) | null = null;
   private state: AccountSnapshot = {
     status: "logged_out",
     center: DEFAULT_ACCOUNT_CENTER,
@@ -200,15 +205,31 @@ export class AccountSessionManager {
     this.registrationId = deps.randomUUID();
   }
 
+  /** Share access presence with the existing account/Host list on every platform. */
+  attachHub(hub: HubLink): void {
+    this.unsubscribeHub?.();
+    this.hub = hub;
+    this.unsubscribeHub = hub.subscribe(() => this.update({}));
+  }
+
   snapshot(): AccountSnapshot {
+    const hub = this.hub;
+    const ready = Boolean(
+      this.account && !this.suspended && hub?.ready && hub.centerUrl === this.state.center,
+    );
+    const confirmed = new Set(this.confirmedHosts);
     const cloneHost = (host: AccountHost): AccountHost => ({
       ...host,
       relay_modes: [...host.relay_modes],
+      ...(ready && hub?.serveFor(host.host_id) ? { online: true, hub_online: true } : {}),
     });
+    const hosts = this.state.hosts.map(cloneHost);
+    for (const host of hosts) if (host.hub_online) confirmed.add(host.host_id);
     return {
       ...this.state,
-      confirmedHostIds: [...this.confirmedHosts],
-      hosts: this.state.hosts.map(cloneHost),
+      ...(ready ? { status: "online" as const, error: null } : {}),
+      confirmedHostIds: [...confirmed],
+      hosts,
       selected: this.state.selected ? cloneHost(this.state.selected) : null,
       synchronizedHosts: [...this.publications.keys()],
     };

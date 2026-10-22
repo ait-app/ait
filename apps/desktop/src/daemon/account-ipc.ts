@@ -137,6 +137,7 @@ export function createAccountIpc(
     randomUUID,
   });
   accountHub = hub;
+  manager.attachHub(hub);
   const broadcast = (channel: string, payload: unknown) => {
     for (const window of BrowserWindow.getAllWindows())
       if (isAppWindow(window.webContents)) window.webContents.send(channel, payload);
