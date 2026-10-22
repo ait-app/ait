@@ -6,6 +6,7 @@ const { colors: brandColors } = require("./src/branding/ait-mark.json");
 const withAndroidAsyncStorageSize = require("./plugins/with-android-async-storage-size");
 const withAndroidHermesO0 = require("./plugins/with-android-hermes-o0");
 const withAndroidProfileable = require("./plugins/with-android-profileable");
+const withAndroidReleaseOptimization = require("./plugins/with-android-release-optimization");
 const withAccountRelayWebSocket = require("./plugins/with-account-relay-websocket");
 const withFdroidAutolinking = require("./plugins/with-fdroid-autolinking");
 const withPasteInput = require("./plugins/with-paste-input");
@@ -136,6 +137,7 @@ export default {
     },
     plugins: [
       "expo-router",
+      withAndroidReleaseOptimization,
       withPasteInput,
       withIosSceneLifecycle,
       withIosPodDeploymentTarget,
@@ -185,6 +187,8 @@ export default {
           android: {
             minSdkVersion: 29,
             kotlinVersion: "2.1.20",
+            enableMinifyInReleaseBuilds: true,
+            enableShrinkResourcesInReleaseBuilds: true,
             // Allow HTTP connections for local network hosts in release builds
             usesCleartextTraffic: true,
           },

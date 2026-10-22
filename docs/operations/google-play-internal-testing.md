@@ -103,8 +103,10 @@ gh workflow run release-android-play.yml --repo ait-app/ait --ref main -f action
 ```
 
 运行摘要记录源码 commit、版本、实际 `versionCode` 和构建结果。
-`ait-android-play-aab` artifact 保留 14 天，包含签名 `.aab`、`BUILD-INFO.json` 和
-`SHA256SUMS`。下载解压后验证：
+`ait-android-play-aab` artifact 保留 14 天，包含签名 `.aab`、`BUILD-INFO.json`、
+从该 AAB 提取的 `mapping.txt` 和 `SHA256SUMS`。若 AGP 在 AAB 中提供 `r8.json`，也会
+提取并纳入校验和；较旧 AGP 缺少此文件时，Play 使用映射文件或 DEX 特征评估优化情况。
+下载解压后验证：
 
 ```bash
 sha256sum --check SHA256SUMS
@@ -120,6 +122,31 @@ runner 执行 `npm ci` → `npm run build:ui-deps` → `expo prebuild --platform
 提交前使用固定版本及 SHA-256 的 bundletool 检查结构与 manifest，使用 jarsigner 验证
 上传签名，核对包名、版本、实际 `versionCode` 和非 debug 属性。校验通过后保留原始 AAB
 字节并生成校验和，上传 action 只提交本次通过校验的那一个 AAB。
+
+AAB 使用 **上传密钥** 签名。Google Play 安装包由 **Play App Signing 的应用签名密钥**
+签名，两种凭据不同。需要站外分发相同应用签名的 APK 时，在 Play Console 的应用版本
+下载页面取得 Google 签名的 universal APK；本 workflow 当前只交付 AAB。
+
+### R8 与 DEX 优化
+
+`apps/mobile/app.config.js` 的 `expo-build-properties.android` 启用
+`enableMinifyInReleaseBuilds` 和 `enableShrinkResourcesInReleaseBuilds`。
+`with-android-release-optimization` 插件将生成工程的默认规则切换为
+`proguard-android-optimize.txt`，保留应用和依赖自身的规则。不要手改生成的 Android 工程，
+下次 `expo prebuild --clean` 会重新生成它。
+
+Play CI 在 Gradle 构建前检查这两个开关、R8 full mode 和默认规则。缺少配置的旧标签会
+在构建前失败，应使用包含这些配置的源码发布。构建后要求 AAB 自身包含有效的 R8
+`BUNDLE-METADATA/com.android.tools.build.obfuscation/proguard.map`；缺失或空映射会阻止
+产物收集和 Play 上传。映射随原始 AAB 上传，并在 artifact 中另存，供崩溃还原使用。
+
+PR CI 的 `test:mobile-release` 对安装的 Expo 模板实际运行配置插件，并验证 Play 产物
+检查会拒绝缺失或损坏的映射。此检查不能代替 Release 真机验收：首次开启 R8 后，应先
+运行 `build-only` 或内部测试，验证冷启动、登录、主机连接、Agent 会话、通知和原生模块。
+如需修复反射或 JNI 兼容性，只添加必要的保留规则，避免整包 `-keep` 或全局关闭优化。
+实际 DEX 指标以新 AAB 的 Play Console 结果为准，不承诺固定混淆百分比。
+参见 [DEX 指标](https://developer.android.com/google/play/vitals/code-optimization)和
+[R8 配置](https://developer.android.com/topic/performance/app-optimization/enable-app-optimization)。
 
 AAB 使用 **上传密钥** 签名。Google Play 安装包由 **Play App Signing 的应用签名密钥**
 签名，两种凭据不同。需要站外分发相同应用签名的 APK 时，在 Play Console 的应用版本
