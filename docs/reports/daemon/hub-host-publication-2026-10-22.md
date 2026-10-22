@@ -19,24 +19,24 @@ daemon 使用已有 Hub serve 连接主动调用中心的 `hub.events.publish` �
 以下全部通过。`RUSTC_WRAPPER=` 用于绕开当前环境的 sccache 沙箱限制；网络夹具只绑定临时
 loopback 端口，文件夹具只使用隔离临时目录，未调用真实 APNs / FCM。
 
-| 范围 | 命令（共同前缀 `env RUSTC_WRAPPER= cargo test --offline --locked`） | 通过 |
-| --- | --- | ---: |
-| daemon Hub，最终轮 | `-p daemon host::hub --bin daemon` | 20 |
-| Hub 协议、桥接及续传，最终轮 | `-p relay hub:: --lib` | 31 |
-| Host 生命周期及原生推送相关回归，较早轮 | `-p daemon host:: --bin daemon` | 48 |
-| 启动配置 | `-p daemon config:: --bin daemon` | 13 |
-| model 中心契约 | `-p model hub:: --lib` | 1 |
-| 通用事件观察者 | `-p model events:: --lib` | 4 |
-| 会话、焦点与通知路由 | `-p model session:: --lib` | 11 |
-| 创建回执发布 | `-p model creation:: --lib` | 2 |
-| 原子 journal adapter | `-p persistence storage::hub:: --lib` | 2 |
-| 原生通知准备及旧投递 | `-p metadata push::delivery:: --lib` | 7 |
-| Provider 自有订阅及发布观察 | `-p provider service::agent_execution::tests::subscriptions --lib` | 21 |
-| Provider 持久 Timeline | `-p provider storage::timeline::tests --lib` | 9 |
-| API Hub 控制及发布接线 | `-p api tests::hub_ --lib` | 3 |
-| API 直接相关会话回归 | `-p api tests::paseo --lib` | 23 |
-| 依赖边界 | `-p daemon --test dependencies` | 16 |
-| metadata 模块边界 | `-p metadata --test module_boundaries` | 2 |
+| 范围                                    | 命令（共同前缀 `env RUSTC_WRAPPER= cargo test --offline --locked`） | 通过 |
+| --------------------------------------- | ------------------------------------------------------------------- | ---: |
+| daemon Hub，最终轮                      | `-p daemon host::hub --bin daemon`                                  |   20 |
+| Hub 协议、桥接及续传，最终轮            | `-p relay hub:: --lib`                                              |   31 |
+| Host 生命周期及原生推送相关回归，较早轮 | `-p daemon host:: --bin daemon`                                     |   48 |
+| 启动配置                                | `-p daemon config:: --bin daemon`                                   |   13 |
+| model 中心契约                          | `-p model hub:: --lib`                                              |    1 |
+| 通用事件观察者                          | `-p model events:: --lib`                                           |    4 |
+| 会话、焦点与通知路由                    | `-p model session:: --lib`                                          |   11 |
+| 创建回执发布                            | `-p model creation:: --lib`                                         |    2 |
+| 原子 journal adapter                    | `-p persistence storage::hub:: --lib`                               |    2 |
+| 原生通知准备及旧投递                    | `-p metadata push::delivery:: --lib`                                |    7 |
+| Provider 自有订阅及发布观察             | `-p provider service::agent_execution::tests::subscriptions --lib`  |   21 |
+| Provider 持久 Timeline                  | `-p provider storage::timeline::tests --lib`                        |    9 |
+| API Hub 控制及发布接线                  | `-p api tests::hub_ --lib`                                          |    3 |
+| API 直接相关会话回归                    | `-p api tests::paseo --lib`                                         |   23 |
+| 依赖边界                                | `-p daemon --test dependencies`                                     |   16 |
+| metadata 模块边界                       | `-p metadata --test module_boundaries`                              |    2 |
 
 表中范围有重叠，通过数量不能直接相加。最终新增 Host 端到端夹具验证完整生产组装：
 预置一个有效 attention，启动 daemon、下发 serve grant，模拟中心收到原生通知事件和三类
@@ -52,6 +52,7 @@ loopback 端口，文件夹具只使用隔离临时目录，未调用真实 APNs
 env RUSTC_WRAPPER= cargo build --offline --locked --workspace
 env RUSTC_WRAPPER= cargo clippy --offline --locked --workspace --all-targets -- -D warnings
 cargo fmt --all --check
+node_modules/.bin/oxfmt --check .
 git diff --check
 ```
 
@@ -62,6 +63,9 @@ git diff --check
 **not measured**：本次未请求覆盖率测量。上述通过数量是测试执行结果，不代表行覆盖率。
 未生成或复用覆盖率百分比、基线差值和覆盖率制品。如后续请求测量，应使用
 `cargo llvm-cov`，限制在本 PR 的相关 crate 和上述测试筛选范围，并提供可共享报告。
+
+本轮 CI 修复仅对齐两份 Markdown 表格的 oxfmt 格式，没有 Rust 行为变化，未重复运行
+Rust 测试；验证使用仓库固定的 oxfmt 0.46.0 全仓检查及文档链接检查。
 
 ## 尚未验证及交付边界
 

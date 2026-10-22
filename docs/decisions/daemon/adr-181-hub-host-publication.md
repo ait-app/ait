@@ -23,13 +23,13 @@ Host 必须主动发布已经提交的变化，中心才能进行分发。Host �
 
 ## 发布内容
 
-| 来源 | 中心事件 |
-| --- | --- |
-| Agent / terminal attention | 原事件名称；可附原生通知 |
-| 原生审批请求与撤销 | `agent_permission_request` / `agent_permission_resolved` |
-| Agent / Workspace 创建回执 | `creation.update`，不附完整 Agent / Workspace 对象 |
-| 已提交 Timeline append / replacement | `agent.timeline.update`，只含 Agent、epoch、seq / reset |
-| Workspace setup 摘要、server metadata | `workspace_setup_status`、`status.server_info` |
+| 来源                                  | 中心事件                                                 |
+| ------------------------------------- | -------------------------------------------------------- |
+| Agent / terminal attention            | 原事件名称；可附原生通知                                 |
+| 原生审批请求与撤销                    | `agent_permission_request` / `agent_permission_resolved` |
+| Agent / Workspace 创建回执            | `creation.update`，不附完整 Agent / Workspace 对象       |
+| 已提交 Timeline append / replacement  | `agent.timeline.update`，只含 Agent、epoch、seq / reset  |
+| Workspace setup 摘要、server metadata | `workspace_setup_status`、`status.server_info`           |
 
 观察发生在连接订阅及本机焦点筛选之前。中心模式接管 native push 后，本机原生投递不再
 接收同一 attention；本机业务订阅仍按现有规则获得状态和应用内提醒。
