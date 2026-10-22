@@ -1,4 +1,5 @@
 import { UploadAcknowledgements } from "./upload-acks";
+import { parseRustDaemonTransportUrl } from "./transport-url";
 import { ClientMessageChunks } from "./chunks";
 import { METHODS, type MethodSpec } from "./methods";
 import { sessionEventKind } from "@ait/protocol/session-event-kinds";
@@ -44,7 +45,7 @@ interface Pending {
 /** Adapt the existing UI SDK to Rust v1.0, preserving physical subscription ownership. */
 export function createRustDaemonTransportFactory(baseFactory: TransportFactory): TransportFactory {
   return ({ url, headers }) => {
-    const parsed = new URL(url);
+    const parsed = parseRustDaemonTransportUrl(url);
     const single = parsed.protocol === "ait+desktop:" && parsed.hostname === "account-relay";
     const capabilityGroups = single
       ? [[...new Set(CHANNEL_CAPABILITIES.flat())]]
