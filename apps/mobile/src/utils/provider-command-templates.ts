@@ -27,7 +27,7 @@ export const PROVIDER_COMMAND_TEMPLATES: Record<
     resume: "pi --session {sessionId}",
   },
   omp: {
-    resume: "omp --session {sessionId}",
+    resume: "omp --resume {sessionId}",
   },
   opencode: {
     resume: "opencode --session {sessionId}",

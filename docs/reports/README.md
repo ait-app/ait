@@ -95,6 +95,8 @@
 
 ## Provider、Agent 与会话
 
+- [Oh My Pi 原生 Provider 验证](providers/omp-native-provider.md)
+
 - [OpenCode 加载速度验证](providers/opencode-startup-real-usage-2026-10-21.md)
 
 - [DSH 提问回答后的空确认响应修复](providers/dsh-event-result-acknowledgement-2026-10-21.md)
