@@ -1,28 +1,27 @@
-//! WebSocket framing, authorization and bounded I/O for the relay adapter.
+//! WebSocket framing, authorization and bounded I/O for the hub adapter.
 
 use std::sync::Arc;
 use std::time::Duration;
 
 use futures_util::{SinkExt, StreamExt};
 use rustls::{ClientConfig, RootCertStore};
-use serde::de::DeserializeOwned;
 use tokio::net::TcpStream;
 use tokio::time::timeout;
 use tokio_tungstenite::tungstenite::{
-    Message, Utf8Bytes, client::IntoClientRequest, protocol::WebSocketConfig,
+    Error as SocketError, Message, Utf8Bytes, client::IntoClientRequest, protocol::WebSocketConfig,
 };
 use tokio_tungstenite::{
     Connector, MaybeTlsStream, WebSocketStream, connect_async_tls_with_config,
 };
 
-use crate::{Error, diagnostics, protocol};
+use crate::{Error, diagnostics};
 
-/// Connected relay or fixed local daemon WebSocket.
+/// Connected hub or fixed local daemon WebSocket.
 pub(super) type Socket = WebSocketStream<MaybeTlsStream<TcpStream>>;
 /// Maximum size of one application frame on a data connection.
 pub(super) const MAX_MESSAGE: usize = 1024 * 1024;
 
-/// Shares trust configuration and the bounded TLS session cache across relay sockets.
+/// Shares trust configuration and the bounded TLS session cache across hub sockets.
 #[derive(Clone, Debug)]
 pub(super) struct Dialer {
     tls: Arc<ClientConfig>,
@@ -79,14 +78,19 @@ impl Dialer {
                 operation = "connect",
                 reason = "timeout",
                 timeout_ms = 5000,
-                "Relay socket failed"
+                "Hub socket failed"
             );
             Error::Transport
         })?
         .map(|(socket, _)| socket)
         .map_err(|error| {
             diagnostics::socket_error("connect", &error);
-            Error::Transport
+            match error {
+                SocketError::Http(response) if matches!(response.status().as_u16(), 401 | 403) => {
+                    Error::Unauthorized
+                }
+                _ => Error::Transport,
+            }
         })
     }
 }
@@ -103,7 +107,7 @@ pub(super) async fn send(socket: &mut Socket, message: Message) -> Result<(), Er
                 operation = "send",
                 reason = "timeout",
                 timeout_ms = 5000,
-                "Relay socket failed"
+                "Hub socket failed"
             );
             Error::Transport
         })?
@@ -131,7 +135,7 @@ pub(super) async fn text(socket: &mut Socket) -> Result<Utf8Bytes, Error> {
                 tracing::info!(
                     close_code = frame.as_ref().map(|f| u16::from(f.code)),
                     reason = "close_frame",
-                    "Relay setup read stopped"
+                    "Hub setup read stopped"
                 );
                 return Err(Error::Transport);
             }
@@ -141,20 +145,9 @@ pub(super) async fn text(socket: &mut Socket) -> Result<Utf8Bytes, Error> {
                 } else {
                     "unexpected_frame"
                 };
-                tracing::warn!(reason, "Relay setup read stopped");
+                tracing::warn!(reason, "Hub setup read stopped");
                 return Err(Error::Transport);
             }
         }
     }
 }
-
-/// Read and decode one typed protocol message, preserving the text reader's ping handling.
-///
-/// # Errors
-/// Returns transport errors or a protocol error for invalid message fields.
-pub(super) async fn receive<T: DeserializeOwned>(socket: &mut Socket) -> Result<T, Error> {
-    protocol::decode(&text(socket).await?)
-}
-
-#[cfg(test)]
-mod tests;

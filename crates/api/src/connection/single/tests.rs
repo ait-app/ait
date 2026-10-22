@@ -28,7 +28,7 @@ fn worker_lanes_keep_streams_and_subscriptions_with_their_connection_owner() {
         ("project.add.request", 0),
         ("schedule.list.request", 0),
         ("browser.host.register.request", 0),
-        ("relay.status.request", 0),
+        ("hub.status.request", 0),
         ("unknown.request", 0),
         ("agent.skills.unknown.request", 0),
         ("workspace.worktree.unknown.request", 0),

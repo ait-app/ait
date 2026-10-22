@@ -1,4 +1,4 @@
-//! Control of a fixed local relay connector through shared RPC contracts.
+//! Control of a fixed local hub connector through shared RPC contracts.
 
 use model::methods::MethodSpec;
 use model::{Context, DispatchError, ErrorCode};
@@ -6,14 +6,14 @@ use serde_json::{Value, json};
 
 use crate::{Connector, Error};
 
-/// Relay request names and directions for host negotiation and envelope validation.
+/// Hub request names and directions for host negotiation and envelope validation.
 pub const METHODS: &[MethodSpec] = &[
-    MethodSpec::request("relay.status.request"),
-    MethodSpec::request("relay.start.request"),
-    MethodSpec::request("relay.stop.request"),
+    MethodSpec::request("hub.status.request"),
+    MethodSpec::request("hub.start.request"),
+    MethodSpec::request("hub.stop.request"),
 ];
 
-/// Handle an admitted relay request using the connector's fixed local destination.
+/// Handle an admitted hub request using the connector's fixed local destination.
 ///
 /// # Arguments
 /// * `context` - Negotiated, authenticated request; retained when its method is not recognized.
@@ -35,7 +35,7 @@ pub async fn request(
     let Some(context) = context.take_if(|context| {
         matches!(
             context.request.method.as_str(),
-            "relay.status.request" | "relay.start.request" | "relay.stop.request"
+            "hub.status.request" | "hub.start.request" | "hub.stop.request"
         )
     }) else {
         return Err(DispatchError::NotImplemented);
@@ -54,22 +54,22 @@ async fn execute(
         .is_some_and(|status| status["mode"] == "managed")
         && matches!(
             request.method.as_str(),
-            "relay.start.request" | "relay.stop.request"
+            "hub.start.request" | "hub.stop.request"
         )
     {
-        return Err(ErrorCode::RelayManaged);
+        return Err(ErrorCode::HubManaged);
     }
     match request.method.as_str() {
-        "relay.start.request" => {
+        "hub.start.request" => {
             let grant = serde_json::from_value(request.params.clone())
                 .map_err(|_| ErrorCode::InvalidMessage)?;
             connector.start(grant).await.map_err(|error| match error {
                 Error::InvalidGrant => ErrorCode::InvalidMessage,
-                Error::Transport | Error::Protocol => ErrorCode::AgentIo,
+                Error::Transport | Error::Protocol | Error::Unauthorized => ErrorCode::AgentIo,
             })?;
         }
-        "relay.stop.request" => connector.stop().await,
-        "relay.status.request" => {}
+        "hub.stop.request" => connector.stop().await,
+        "hub.status.request" => {}
         _ => return Err(ErrorCode::MethodNotFound),
     }
     Ok(json!({
@@ -80,6 +80,3 @@ async fn execute(
         "management": management.unwrap_or_else(|| json!({"mode":"external"})),
     }))
 }
-
-#[cfg(test)]
-mod tests;

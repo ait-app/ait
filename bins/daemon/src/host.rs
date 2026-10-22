@@ -56,7 +56,7 @@ use crate::instance::InstanceLease;
 type HostLink = host_link::Controller<
     crate::device::HttpCenter,
     crate::device::Store,
-    crate::device::StatusRelay,
+    crate::device::StatusHub,
 >;
 
 pub(super) struct Server {
@@ -133,15 +133,15 @@ impl Server {
         )?
         .with_browser_origins(web_origins)?;
         let managed = if let Some((store, state)) = device {
-            let relay = crate::device::StatusRelay::new(
-                api.claim_managed_relay()?,
+            let hub = crate::device::StatusHub::new(
+                api.claim_managed_hub()?,
                 &data_dir,
                 instance.instance_id,
             );
             Some(host_link::Controller::new(
                 crate::device::HttpCenter::new()?,
                 store,
-                relay,
+                hub,
                 state,
                 instance.instance_id,
             ))

@@ -30,11 +30,7 @@ async fn production_installs_every_in_scope_method_without_placeholders() {
     assert!(implemented.contains("bot.message.send.request"));
     assert!(implemented.contains("workspace.get.request"));
     assert!(implemented.is_subset(&published));
-    assert!(!published.iter().any(|name| {
-        ["hub.", "chat.", "loop.", "plugin."]
-            .iter()
-            .any(|prefix| name.starts_with(prefix))
-    }));
+    assert!(!published.iter().map(String::as_str).any(retired_method));
     for retired in [
         "project.open",
         "project.list",
@@ -98,4 +94,17 @@ async fn production_installs_every_in_scope_method_without_placeholders() {
             .collect::<Vec<_>>(),
         ["connection.single.v1"]
     );
+}
+
+fn retired_method(name: &str) -> bool {
+    [
+        "hub.execution.",
+        "hub.management.",
+        "chat.",
+        "loop.",
+        "plugin.",
+        "relay.",
+    ]
+    .iter()
+    .any(|prefix| name.starts_with(prefix))
 }

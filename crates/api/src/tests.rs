@@ -3,9 +3,9 @@ use super::*;
 mod bot;
 mod browser_auth;
 mod chunks;
+mod hub_rpc;
 mod mcp;
 mod paseo;
-mod relay_rpc;
 mod server_info;
 mod session;
 mod single;
@@ -54,7 +54,7 @@ impl Fixture {
         .unwrap();
         let mut api = api.with_browser_origins(origins).unwrap();
         if managed {
-            api.claim_managed_relay().unwrap();
+            api.claim_managed_hub().unwrap();
         }
         let shutdown = api.clone();
         let router = api.router();
@@ -186,7 +186,7 @@ fn assert_default_capabilities(info: &ServerInfo) {
             "session.events.set_subscription.request",
             "creation.subscribe.request",
         ])
-        .chain(relay::rpc::METHODS.iter().map(|method| method.name))
+        .chain(hub::rpc::METHODS.iter().map(|method| method.name))
         .collect();
     assert_eq!(info.implemented_capabilities, expected);
     assert_eq!(info.capabilities.len(), 207);

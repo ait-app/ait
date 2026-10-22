@@ -183,8 +183,8 @@ export class RustDaemonManager {
     return path.join(this.options.home, DAEMON_LOG_FILENAME);
   }
 
-  /** Restricted local relay API; the renderer never receives the local Bearer token. */
-  async relayRequest(method: "GET" | "PUT" | "DELETE", body?: unknown): Promise<unknown> {
+  /** Restricted local Hub API; the renderer never receives the local Bearer token. */
+  async hubRequest(method: "GET" | "PUT" | "DELETE", body?: unknown): Promise<unknown> {
     if (this.state.status !== "running" || !this.state.connectAddress || !this.token)
       throw new Error("The local runtime is not ready.");
     if (method === "GET") {
@@ -210,7 +210,7 @@ export class RustDaemonManager {
         throw new Error("The local runtime has restarted. Registering it again.");
       }
     }
-    const response = await fetch(`http://${this.state.connectAddress}/api/relay/control`, {
+    const response = await fetch(`http://${this.state.connectAddress}/api/hub/control`, {
       method,
       redirect: "error",
       signal: AbortSignal.timeout(5000),
@@ -218,7 +218,7 @@ export class RustDaemonManager {
       ...(body === undefined ? {} : { body: JSON.stringify(body) }),
     });
     if (!response.ok)
-      throw new Error("The local relay API is unavailable. Check the runtime version.");
+      throw new Error("The local Hub API is unavailable. Check the runtime version.");
     return response.status === 204 || response.status === 202 ? null : response.json();
   }
 

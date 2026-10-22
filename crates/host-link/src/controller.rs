@@ -4,13 +4,13 @@ use chrono::Utc;
 use tokio_util::sync::CancellationToken;
 use uuid::Uuid;
 
-use crate::{Center, CredentialStore, Error, ManagedRelay, Session, State, Tokens};
+use crate::{Center, CredentialStore, Error, ManagedHub, Session, State, Tokens};
 
 /// Serializes refresh rotation and maintains runtime leases independently of a GUI.
 pub struct Controller<C, S, R> {
     center: C,
     store: S,
-    relay: R,
+    hub: R,
     state: State,
     instance: Uuid,
     active_session: Option<(Tokens, Uuid)>,
@@ -27,14 +27,14 @@ struct Publication {
     lease_until: Option<tokio::time::Instant>,
 }
 
-impl<C: Center, S: CredentialStore, R: ManagedRelay> Controller<C, S, R> {
-    /// Assemble a manager with an exclusively locked private store and claimed Relay handle.
+impl<C: Center, S: CredentialStore, R: ManagedHub> Controller<C, S, R> {
+    /// Assemble a manager with an exclusively locked private store and claimed Hub handle.
     #[must_use]
-    pub fn new(center: C, store: S, relay: R, state: State, instance: Uuid) -> Self {
+    pub fn new(center: C, store: S, hub: R, state: State, instance: Uuid) -> Self {
         Self {
             center,
             store,
-            relay,
+            hub,
             state,
             instance,
             active_session: None,
@@ -48,7 +48,7 @@ impl<C: Center, S: CredentialStore, R: ManagedRelay> Controller<C, S, R> {
     /// # Errors
     /// Requires login for revoked/expired credentials; storage failures pause rotation.
     pub async fn run(mut self, cancel: CancellationToken) -> Result<(), Error> {
-        self.relay.report(
+        self.hub.report(
             "connecting",
             self.state.credential.as_ref().map(|c| &c.binding),
         );
@@ -56,11 +56,11 @@ impl<C: Center, S: CredentialStore, R: ManagedRelay> Controller<C, S, R> {
             () = cancel.cancelled() => Ok(()),
             result = self.maintain(&cancel) => result,
         };
-        self.relay.stop().await;
+        self.hub.stop().await;
         if let Some((tokens, session)) = &self.active_session {
             let _ = self.center.close(tokens, *session).await;
         }
-        self.relay.report(
+        self.hub.report(
             match result {
                 Ok(()) => "stopped",
                 Err(Error::Storage) => "storage_error",
@@ -83,7 +83,7 @@ impl<C: Center, S: CredentialStore, R: ManagedRelay> Controller<C, S, R> {
             match self.refresh().await {
                 Ok(tokens) => return Ok(tokens),
                 Err(Error::Unavailable) => {
-                    self.relay.report(
+                    self.hub.report(
                         "retrying",
                         self.state.credential.as_ref().map(|c| &c.binding),
                     );
@@ -120,7 +120,7 @@ impl<C: Center, S: CredentialStore, R: ManagedRelay> Controller<C, S, R> {
                     lease.min(publication.access_until)
                 });
             if expires <= now {
-                self.relay.stop().await;
+                self.hub.stop().await;
             }
             if tokio::time::Instant::now() < retry_at {
                 pause(cancel, 1).await;
@@ -142,7 +142,7 @@ impl<C: Center, S: CredentialStore, R: ManagedRelay> Controller<C, S, R> {
                     pause(cancel, 1).await;
                 }
                 Err(Error::SessionExpired) => {
-                    self.relay.stop().await;
+                    self.hub.stop().await;
                     publication.session = None;
                     publication.lease_until = None;
                     self.active_session = None;
@@ -151,8 +151,8 @@ impl<C: Center, S: CredentialStore, R: ManagedRelay> Controller<C, S, R> {
                 Err(Error::Conflict) => {
                     // A crashed predecessor can retain its lease after a service restart.
                     // Wait for the center to release it; never steal or replace its authority.
-                    self.relay.stop().await;
-                    self.relay.report(
+                    self.hub.stop().await;
+                    self.hub.report(
                         "runtime_conflict",
                         Some(&publication.tokens.credential.binding),
                     );
@@ -160,9 +160,9 @@ impl<C: Center, S: CredentialStore, R: ManagedRelay> Controller<C, S, R> {
                 }
                 Err(Error::Unavailable) => {
                     if expires <= tokio::time::Instant::now() {
-                        self.relay.stop().await;
+                        self.hub.stop().await;
                     }
-                    self.relay
+                    self.hub
                         .report("retrying", Some(&publication.tokens.credential.binding));
                     retry_at = tokio::time::Instant::now() + Duration::from_secs(delay);
                     delay = (delay * 2).min(30);
@@ -218,11 +218,11 @@ impl<C: Center, S: CredentialStore, R: ManagedRelay> Controller<C, S, R> {
             publication.next_renew =
                 tokio::time::Instant::now() + Duration::from_secs(active.renew_after_seconds);
         }
-        if !self.relay.active().await {
+        if !self.hub.active().await {
             let ticket = self.center.ticket(&publication.tokens, active.id).await?;
-            self.relay.start(active.id, ticket).await?;
+            self.hub.start(active.id, ticket).await?;
         }
-        self.relay
+        self.hub
             .report("running", Some(&publication.tokens.credential.binding));
         Ok(())
     }

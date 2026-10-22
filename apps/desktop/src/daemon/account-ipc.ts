@@ -92,7 +92,7 @@ export function createAccountIpc(
     publishRuntime: false,
     browserLogin: desktopBrowserLogin((url) => shell.openExternal(url)),
     runtime: () => getRuntime().status(),
-    local: (method, body) => getRuntime().relayRequest(method, body),
+    local: (method, body) => getRuntime().hubRequest(method, body),
     save,
     closeTransports: () => {
       transports?.closeAll();

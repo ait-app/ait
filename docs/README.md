@@ -1,5 +1,7 @@
 # Ait 文档
 
+- [ADR-180：daemon 仅通过消息 Hub 接入](decisions/daemon/adr-180-hub-serve-transport.md)：移除旧 Relay，Host serve 会话复用与断线恢复。
+
 - [ADR-154：账号状态通过共享客户端 Channel 推送](decisions/clients/adr-154-account-status-channel.md)：完整 Host 快照、Host 可连接状态事件、应用心跳与各端票据认证。
 
 - [ADR-142：PTY 拥有基础终端设备属性回复](decisions/daemon/adr-142-terminal-primary-device-attributes.md)：节点直接完成 DA1 握手，避免 fish 启动等待客户端订阅。

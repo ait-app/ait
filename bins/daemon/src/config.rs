@@ -44,7 +44,7 @@ pub(super) enum Command {
     Logout,
     /// Run the existing daemon, optionally with independent center-managed Host publication.
     Run {
-        /// Own authorization, lease renewal and Relay without a desktop client.
+        /// Own authorization, lease renewal and Hub without a desktop client.
         #[arg(long)]
         headless: bool,
     },

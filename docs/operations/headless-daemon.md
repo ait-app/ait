@@ -69,7 +69,7 @@ daemon status --json
 
 status 不要求本地 API token，不创建文件，不争用运行中服务的凭据锁。输出稳定 ID、是否存在
 凭据以及带时间戳的非秘密 runtime 缓存快照。缓存不是即时在线证明；鉴权后的本地
-`GET /api/relay/control` 和网页 Host 在线状态可查询实际 Relay 状态。
+`GET /api/hub/control` 和网页 Host 在线状态可查询实际 Hub serve 状态。
 
 授权成功后保存 `<data-dir>/device/.env`，权限 `0600`，目录 `0700`。文件是私有凭据 snapshot，
 不要编辑、共享、复制到另一安装或提交到 Git。access JWT 只存内存，刷新 token 自动轮换。
@@ -87,7 +87,7 @@ daemon logout
 ```
 
 logout 尝试中心撤销并清除本地凭据。中心不可达、或初次领取结果未知时，CLI 提示在网页 Host
-详情补做撤销。网页撤销会关闭现有 Relay 控制和数据连接；普通网页登录退出不撤销机器授权。
+详情补做撤销。网页撤销会关闭现有 Hub 链路和业务会话；普通网页登录退出不撤销机器授权。
 桌面/手机连接到这种 Host 时只读取同步状态，不能用客户端的“停止同步”覆盖其授权。
 
 协议、数据库差异与部署验收见 [设计与实施记录](../plans/linux-headless-device-auth.md)。

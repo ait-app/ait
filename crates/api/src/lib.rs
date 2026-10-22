@@ -8,7 +8,7 @@ pub use composition::summary_source;
 mod connection;
 mod files;
 mod listener;
-pub mod managed_relay;
+pub mod managed_hub;
 mod mcp;
 mod terminal_activity;
 mod workspace_cleanup;
@@ -69,8 +69,8 @@ pub enum ConfigError {
 #[derive(Debug)]
 struct Shared {
     _push_delivery: Option<metadata::push::delivery::Worker>,
-    relay: relay::Connector,
-    managed_relay: bool,
+    hub: hub::Connector,
+    managed_hub: bool,
     managed_status: Arc<Mutex<serde_json::Value>>,
     runtime: Arc<Runtime>,
     token: SecretString,
@@ -120,7 +120,7 @@ pub struct Services {
 }
 
 impl Shared {
-    fn relay_management(&self) -> serde_json::Value {
+    fn hub_management(&self) -> serde_json::Value {
         self.managed_status
             .lock()
             .map_or(serde_json::Value::Null, |status| status.clone())
@@ -130,7 +130,7 @@ impl Shared {
         if let Some(bots) = &self.bot.bots {
             bots.stop();
         }
-        self.relay.begin_shutdown();
+        self.hub.begin_shutdown();
         if let Some(schedules) = &self.schedule.schedules {
             schedules.stop();
         }
@@ -181,26 +181,24 @@ fn validate_listener(address: SocketAddr, token: &SecretString) -> Result<(), Co
 }
 
 impl Api {
-    /// Claim exclusive Relay control before sharing or serving the API.
+    /// Claim exclusive Hub control before sharing or serving the API.
     ///
     /// External HTTP/RPC start and stop operations then return conflict errors.
     /// # Errors
     /// Rejects an already shared API or a duplicate claim.
-    pub fn claim_managed_relay(
-        &mut self,
-    ) -> Result<managed_relay::ManagedRelayHandle, ConfigError> {
+    pub fn claim_managed_hub(&mut self) -> Result<managed_hub::ManagedHubHandle, ConfigError> {
         let shared = Arc::get_mut(&mut self.shared).ok_or(ConfigError::SharedConfiguration)?;
-        if shared.managed_relay {
+        if shared.managed_hub {
             return Err(ConfigError::SharedConfiguration);
         }
-        shared.managed_relay = true;
+        shared.managed_hub = true;
         *shared
             .managed_status
             .lock()
             .map_err(|_| ConfigError::SharedConfiguration)? =
             serde_json::json!({"mode":"managed", "phase":"starting"});
-        Ok(managed_relay::ManagedRelayHandle {
-            relay: shared.relay.clone(),
+        Ok(managed_hub::ManagedHubHandle {
+            hub: shared.hub.clone(),
             status: shared.managed_status.clone(),
         })
     }
@@ -221,7 +219,7 @@ impl Api {
         services: Services,
     ) -> Result<Self, ConfigError> {
         validate_listener(address, &token)?;
-        let relay = relay::Connector::new(
+        let hub = hub::Connector::new(
             address,
             token.clone(),
             server_id.clone(),
@@ -290,8 +288,8 @@ impl Api {
         let api = Self {
             shared: Arc::new(Shared {
                 _push_delivery: push_delivery,
-                relay,
-                managed_relay: false,
+                hub,
+                managed_hub: false,
                 managed_status: Arc::new(Mutex::new(serde_json::json!({"mode":"external"}))),
                 schedule: schedule::dispatch::State {
                     schedules: services.schedules,
@@ -343,8 +341,8 @@ impl Api {
             .route("/v1/server/info", get(info))
             .route("/v1/ws", get(upgrade))
             .route(
-                "/api/relay/control",
-                get(relay_status).put(relay_start).delete(relay_stop),
+                "/api/hub/control",
+                get(hub_status).put(hub_start).delete(hub_stop),
             )
             .route(browser_auth::TICKET_PATH, post(browser_ticket))
             .route("/api/files/download", get(files::download))
@@ -385,7 +383,7 @@ impl Api {
     /// Wait for all admitted upgrades and connections after calling `begin_shutdown`.
     /// The process host must bound this wait with its shutdown deadline.
     pub async fn wait_closed(&self) {
-        self.shared.relay.stop().await;
+        self.shared.hub.stop().await;
         self.shared.tasks.wait().await;
         if let Some(names) = &self.shared.workspace_names {
             names.wait_closed().await;
@@ -517,8 +515,8 @@ async fn health() -> Result<Response, ApiError> {
     Ok(Json(serde_json::json!({"status":"alive"})).into_response())
 }
 
-async fn relay_status(State(state): State<Arc<Shared>>) -> Json<serde_json::Value> {
-    let status = state.relay.status().await;
+async fn hub_status(State(state): State<Arc<Shared>>) -> Json<serde_json::Value> {
+    let status = state.hub.status().await;
     let mut value = serde_json::to_value(status).unwrap_or_default();
     value["management"] = state
         .managed_status
@@ -527,29 +525,29 @@ async fn relay_status(State(state): State<Arc<Shared>>) -> Json<serde_json::Valu
     Json(value)
 }
 
-async fn relay_start(
+async fn hub_start(
     State(state): State<Arc<Shared>>,
-    Json(grant): Json<relay::ControlGrant>,
+    Json(grant): Json<hub::ControlGrant>,
 ) -> Result<StatusCode, ApiError> {
     if state.cancellation.is_cancelled() {
         return Err(ApiError(StatusCode::SERVICE_UNAVAILABLE));
     }
-    if state.managed_relay {
+    if state.managed_hub {
         return Err(ApiError(StatusCode::CONFLICT));
     }
     state
-        .relay
+        .hub
         .start(grant)
         .await
         .map_err(|_| ApiError(StatusCode::BAD_REQUEST))?;
     Ok(StatusCode::ACCEPTED)
 }
 
-async fn relay_stop(State(state): State<Arc<Shared>>) -> Result<StatusCode, ApiError> {
-    if state.managed_relay {
+async fn hub_stop(State(state): State<Arc<Shared>>) -> Result<StatusCode, ApiError> {
+    if state.managed_hub {
         return Err(ApiError(StatusCode::CONFLICT));
     }
-    state.relay.stop().await;
+    state.hub.stop().await;
     Ok(StatusCode::NO_CONTENT)
 }
 

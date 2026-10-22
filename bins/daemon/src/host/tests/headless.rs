@@ -1,4 +1,4 @@
-use host_link::{CredentialStore, ManagedRelay, State};
+use host_link::{CredentialStore, ManagedHub, State};
 use serde_json::Value;
 
 use super::*;
@@ -93,7 +93,7 @@ async fn publication_failure_preserves_local_http_and_shutdown_releases_device_s
 }
 
 #[tokio::test]
-async fn status_relay_rejects_invalid_tickets_and_cleans_failed_snapshot_publication() {
+async fn status_hub_rejects_invalid_tickets_and_cleans_failed_snapshot_publication() {
     let root = tempfile::tempdir().unwrap();
     let mut api = Api::new(
         "127.0.0.1:7316".parse().unwrap(),
@@ -103,23 +103,22 @@ async fn status_relay_rejects_invalid_tickets_and_cleans_failed_snapshot_publica
         Services::default(),
     )
     .unwrap();
-    let relay = crate::device::StatusRelay::new(
-        api.claim_managed_relay().unwrap(),
+    let hub = crate::device::StatusHub::new(
+        api.claim_managed_hub().unwrap(),
         root.path(),
         uuid::Uuid::new_v4(),
     );
-    assert!(!relay.active().await);
+    assert!(!hub.active().await);
     assert_eq!(
-        relay
-            .start(uuid::Uuid::new_v4(), "invalid-fixture-ticket".into())
+        hub.start(uuid::Uuid::new_v4(), "invalid-fixture-ticket".into())
             .await
             .unwrap_err(),
         host_link::Error::Unavailable
     );
-    relay.stop().await;
+    hub.stop().await;
     std::fs::create_dir_all(root.path().join("device/status.json")).unwrap();
 
-    relay.report("running", None);
+    hub.report("running", None);
 
     let entries: Vec<_> = std::fs::read_dir(root.path().join("device"))
         .unwrap()

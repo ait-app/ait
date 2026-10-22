@@ -365,15 +365,15 @@ mod tests;
 
 /// Daemon-owned adapter writes a non-secret snapshot for CLI status without taking the credential lock.
 #[derive(Debug)]
-pub(super) struct StatusRelay {
-    inner: api::managed_relay::ManagedRelayHandle,
+pub(super) struct StatusHub {
+    inner: api::managed_hub::ManagedHubHandle,
     directory: std::path::PathBuf,
     instance: Uuid,
 }
 
-impl StatusRelay {
+impl StatusHub {
     pub(crate) fn new(
-        inner: api::managed_relay::ManagedRelayHandle,
+        inner: api::managed_hub::ManagedHubHandle,
         data: &Path,
         instance: Uuid,
     ) -> Self {
@@ -386,7 +386,7 @@ impl StatusRelay {
 }
 
 #[async_trait::async_trait]
-impl host_link::ManagedRelay for StatusRelay {
+impl host_link::ManagedHub for StatusHub {
     async fn start(&self, session: Uuid, ticket: SecretString) -> Result<(), Error> {
         self.inner.start(session, ticket).await
     }

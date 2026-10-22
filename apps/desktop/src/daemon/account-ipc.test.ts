@@ -77,7 +77,7 @@ const stored = () =>
 beforeEach(() => {
   vi.clearAllMocks();
   mocks.userDataPath = mkdtempSync(path.join(tmpdir(), "ait-account-sync-"));
-  mocks.publish.mockResolvedValue({ control_ticket: "one-use" });
+  mocks.publish.mockResolvedValue({ hub_ticket: "one-use" });
   mocks.unpublish.mockResolvedValue(undefined);
 });
 afterEach(() => rmSync(mocks.userDataPath, { recursive: true, force: true }));
@@ -123,7 +123,7 @@ describe("desktop built-in daemon synchronization preference", () => {
     await expect(
       command(event, "account_host_sync", { ...host, enableBuiltInDaemon: true }),
     ).resolves.toEqual({
-      control_ticket: "one-use",
+      hub_ticket: "one-use",
     });
     expect(mocks.publish).toHaveBeenCalledExactlyOnceWith(host, true);
     expect(stored()).toMatchObject({ syncBuiltInDaemon: true });

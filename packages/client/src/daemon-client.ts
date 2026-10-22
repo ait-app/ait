@@ -5157,20 +5157,20 @@ export class DaemonClient {
   }
 
   async getOnlineServiceStatus() {
-    return this.sendNamespacedCorrelatedSessionRequest<"relay.status.response">({
-      message: { type: "relay.status.request" },
+    return this.sendNamespacedCorrelatedSessionRequest<"hub.status.response">({
+      message: { type: "hub.status.request" },
     });
   }
 
-  async connectOnlineService(grant: import("@ait/protocol/relay").RelayControlGrant) {
-    return this.sendNamespacedCorrelatedSessionRequest<"relay.start.response">({
-      message: { type: "relay.start.request", ...grant },
+  async connectOnlineService(grant: import("@ait/protocol/hub").HubControlGrant) {
+    return this.sendNamespacedCorrelatedSessionRequest<"hub.start.response">({
+      message: { type: "hub.start.request", ...grant },
     });
   }
 
   async disconnectOnlineService() {
-    return this.sendNamespacedCorrelatedSessionRequest<"relay.stop.response">({
-      message: { type: "relay.stop.request" },
+    return this.sendNamespacedCorrelatedSessionRequest<"hub.stop.response">({
+      message: { type: "hub.stop.request" },
     });
   }
 

@@ -23,9 +23,9 @@ fn empty_host_keeps_only_builtin_api_methods() {
             "session.heartbeat",
             "session.events.set_subscription.request",
             "creation.subscribe.request",
-            "relay.status.request",
-            "relay.start.request",
-            "relay.stop.request",
+            "hub.status.request",
+            "hub.start.request",
+            "hub.stop.request",
         ]
     );
     let registered = crate::registered_capabilities();
@@ -152,9 +152,16 @@ fn component_methods_are_well_formed_and_exclude_retired_groups() {
             "{spec:?}"
         );
         assert!(
-            !["hub.", "chat.", "loop.", "plugin."]
-                .iter()
-                .any(|prefix| spec.name.starts_with(prefix)),
+            ![
+                "hub.execution.",
+                "hub.management.",
+                "chat.",
+                "loop.",
+                "plugin.",
+                "relay."
+            ]
+            .iter()
+            .any(|prefix| spec.name.starts_with(prefix)),
             "{spec:?}"
         );
         match spec.kind {

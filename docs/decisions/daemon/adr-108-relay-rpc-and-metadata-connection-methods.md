@@ -1,5 +1,7 @@
 # ADR-108：Relay RPC 与基础连接方法归所属 crate
 
+> daemon 传输已由 [ADR-180](adr-180-hub-serve-transport.md) 替代；以下记录保留当时的决策。
+
 - 状态：接受
 - 日期：2026-10-08
 - 修订：[ADR-100](adr-100-crate-level-service-installation.md) 中由 API 声明基础连接方法的归属，

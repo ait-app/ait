@@ -41,8 +41,8 @@ function fixture() {
         node_session_id: "activation",
         control_required: true,
       });
-    if (path.endsWith("/control-tickets"))
-      return Response.json({ control_ticket: "short-lived-control-ticket" });
+    if (path.endsWith("/hub-tickets"))
+      return Response.json({ hub_ticket: "short-lived-control-ticket" });
     if (path.endsWith("/channel-tickets"))
       return discoveryFails
         ? Response.json({ error: { message: "Offline" } }, { status: 503 })
@@ -123,7 +123,7 @@ describe("account activation", () => {
     expect(http.mock.calls.some(([url]) => String(url).endsWith("/relay-sessions"))).toBe(false);
     expect(deps.local).toHaveBeenCalledWith("PUT", {
       center_url: "https://aitapp.cn/api",
-      control_ticket: "short-lived-control-ticket",
+      hub_ticket: "short-lived-control-ticket",
       node_session_id: "activation",
     });
     expect(deps.save).toHaveBeenCalledWith(
@@ -166,7 +166,7 @@ describe("account activation", () => {
     ).toBe(true);
     expect(deps.local).toHaveBeenCalledWith("PUT", {
       center_url: "https://private.example:9443/ait/api",
-      control_ticket: "short-lived-control-ticket",
+      hub_ticket: "short-lived-control-ticket",
       node_session_id: "activation",
     });
     await manager.logout();
@@ -182,7 +182,7 @@ describe("account activation", () => {
     expect(http.mock.calls.some(([url]) => String(url).includes("/credentials"))).toBe(false);
     expect(deps.local).toHaveBeenCalledWith("PUT", {
       center_url: "http://127.0.0.1:3000",
-      control_ticket: "short-lived-control-ticket",
+      hub_ticket: "short-lived-control-ticket",
       node_session_id: "activation",
     });
     expect(JSON.stringify(manager.snapshot())).not.toContain("private-user-token");

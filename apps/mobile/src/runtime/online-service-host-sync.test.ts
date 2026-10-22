@@ -75,11 +75,11 @@ const status = (serverId = "first", online = false, instanceId = "instance-1") =
   serverId,
   instanceId,
   platform: "linux",
-  status: { online, connecting: false, epoch: null, error: null },
+  status: { online, connecting: false, link: null, error: null },
 });
 const grant = {
   center_url: "https://example.test/api",
-  control_ticket: "a".repeat(64),
+  hub_ticket: "a".repeat(64),
   node_session_id: "00000000-0000-4000-8000-000000000001",
 };
 

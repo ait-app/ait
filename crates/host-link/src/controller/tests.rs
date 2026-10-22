@@ -149,7 +149,7 @@ impl Center for Mock {
 }
 
 #[async_trait]
-impl ManagedRelay for Mock {
+impl ManagedHub for Mock {
     async fn start(&self, _: Uuid, _: SecretString) -> Result<(), Error> {
         let mut seen = self.0.lock().unwrap();
         seen.starts += 1;
@@ -455,7 +455,7 @@ async fn an_ambiguous_renewal_retries_the_existing_session_after_local_expiry() 
 }
 
 #[tokio::test]
-async fn initial_terminal_failures_close_relay_and_report_the_recovery_action() {
+async fn initial_terminal_failures_close_hub_and_report_the_recovery_action() {
     for (error, phase) in [
         (Error::Storage, "storage_error"),
         (Error::Conflict, "runtime_conflict"),

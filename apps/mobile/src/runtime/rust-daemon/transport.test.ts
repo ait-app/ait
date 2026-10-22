@@ -269,7 +269,7 @@ describe("Rust protocol adapter", () => {
           serverId: "stable",
           instanceId: "instance",
           platform: "linux",
-          status: { online: true, connecting: false, epoch: null, error: null },
+          status: { online: true, connecting: false, link: null, error: null },
           management: { mode: "managed", phase: "running", binding: null },
         },
       });
@@ -325,7 +325,7 @@ describe("Rust protocol adapter", () => {
       serverId: "server",
       instanceId: "instance",
       platform: "linux",
-      status: { online: false, connecting: false, epoch: null, error: null },
+      status: { online: false, connecting: false, link: null, error: null },
     };
     try {
       const connected = client.connect();
@@ -334,7 +334,7 @@ describe("Rust protocol adapter", () => {
       expect(client.getLastServerInfoMessage()?.features?.onlineServiceSync).toBe(true);
       const status = client.getOnlineServiceStatus();
       const statusRequest = h.last(1);
-      expect(statusRequest.method).toBe("relay.status.request");
+      expect(statusRequest.method).toBe("hub.status.request");
       h.sockets[1].message({
         type: "response",
         request_id: statusRequest.request_id,
@@ -344,12 +344,12 @@ describe("Rust protocol adapter", () => {
       expect(await status).toMatchObject(result);
       const grant = {
         center_url: "https://example.test/api",
-        control_ticket: "a".repeat(64),
+        hub_ticket: "a".repeat(64),
         node_session_id: "00000000-0000-4000-8000-000000000001",
       };
       const start = client.connectOnlineService(grant);
       const startRequest = h.last(1);
-      expect(startRequest).toMatchObject({ method: "relay.start.request", params: grant });
+      expect(startRequest).toMatchObject({ method: "hub.start.request", params: grant });
       h.sockets[1].message({
         type: "response",
         request_id: startRequest.request_id,
@@ -359,7 +359,7 @@ describe("Rust protocol adapter", () => {
       expect((await start).status.connecting).toBe(true);
       const stop = client.disconnectOnlineService();
       const stopRequest = h.last(1);
-      expect(stopRequest.method).toBe("relay.stop.request");
+      expect(stopRequest.method).toBe("hub.stop.request");
       h.sockets[1].message({
         type: "response",
         request_id: stopRequest.request_id,
@@ -371,7 +371,7 @@ describe("Rust protocol adapter", () => {
       await expect(client.connectOnlineService(grant)).rejects.toThrow();
       expect(
         h.sockets[1].send.mock.calls.filter(
-          ([message]) => JSON.parse(message).method === "relay.start.request",
+          ([message]) => JSON.parse(message).method === "hub.start.request",
         ),
       ).toHaveLength(1);
     } finally {
@@ -631,11 +631,17 @@ describe("Rust protocol adapter", () => {
     expect(new Set(Object.values(METHODS).map((spec) => spec.method)).size).toBe(195);
     for (const capabilities of CHANNEL_CAPABILITIES) {
       expect(capabilities.length).toBeLessThanOrEqual(64);
-      expect(capabilities.some((name) => /^(hub|chat|loop|plugin)[./]/.test(name))).toBe(false);
+      expect(
+        capabilities.some((name) =>
+          /^(chat|loop|plugin)[./]|^hub[./](?!(status|start|stop)\.request$)/.test(name),
+        ),
+      ).toBe(false);
     }
-    expect(Object.keys(METHODS).some((name) => /^(hub|chat|loop|plugin)[./]/.test(name))).toBe(
-      false,
-    );
+    expect(
+      Object.keys(METHODS).some((name) =>
+        /^(chat|loop|plugin)[./]|^hub[./](?!(status|start|stop)\.request$)/.test(name),
+      ),
+    ).toBe(false);
   });
 
   it("rejects the retired pairing offer even when an older host implements it", () => {

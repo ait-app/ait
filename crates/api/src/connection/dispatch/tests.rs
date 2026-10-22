@@ -10,7 +10,7 @@ use crate::{Api, Services};
 mod subscription_admission;
 
 const OWNED_METHODS: &[&str] = &[
-    "relay.status.request",
+    "hub.status.request",
     "schedule.list.request",
     "browser.host.register.request",
     "voice.abort.request",
@@ -135,9 +135,9 @@ async fn try_handlers(
         }
         Err(DispatchError::Delivery(error)) => return Err(error),
     }
-    match relay::rpc::request(context, &state.relay, Some(state.relay_management())).await {
+    match hub::rpc::request(context, &state.hub, Some(state.hub_management())).await {
         Ok(()) => {}
-        Err(DispatchError::NotImplemented) => Context::assert_unhandled(context, "relay"),
+        Err(DispatchError::NotImplemented) => Context::assert_unhandled(context, "hub"),
         Err(DispatchError::Delivery(error)) => return Err(error),
     }
     match schedule::dispatch::dispatch(context, &state.schedule).await {
@@ -235,7 +235,7 @@ async fn each_owner_consumes_once_and_later_handlers_leave_the_response_alone() 
         assert!(pending.is_none(), "{method}");
         let response = decode(receiver.try_recv().unwrap().message);
         assert_eq!(response["request_id"], "request-1", "{method}");
-        if ["connection.ping", "relay.status.request"].contains(&method) {
+        if ["connection.ping", "hub.status.request"].contains(&method) {
             assert_eq!(response["type"], "response", "{method}");
         } else if method == "terminal.list.request" {
             assert_eq!(response["code"], "not_implemented", "{method}");
@@ -301,7 +301,7 @@ async fn request_chain_handles_late_owners_and_replies_once_when_nobody_handles_
         assert_eq!(response["request_id"], "request-1", "{method}");
         if ["unknown.request", "terminal.list.request"].contains(&method) {
             assert_eq!(response["code"], "not_implemented");
-        } else if ["connection.ping", "relay.status.request"].contains(&method) {
+        } else if ["connection.ping", "hub.status.request"].contains(&method) {
             assert_eq!(response["type"], "response", "{method}");
         } else {
             assert_eq!(response["code"], "unsupported_capability", "{method}");
@@ -430,10 +430,10 @@ async fn unmatched_owners_return_not_implemented_without_consuming_or_delivering
         let results = [
             super::super::workspace_creation::request(&mut pending, &api.shared).await,
             super::super::workspace_archive::request(&mut pending, &api.shared).await,
-            relay::rpc::request(
+            hub::rpc::request(
                 &mut pending,
-                &api.shared.relay,
-                Some(api.shared.relay_management()),
+                &api.shared.hub,
+                Some(api.shared.hub_management()),
             )
             .await,
             schedule::dispatch::dispatch(&mut pending, &api.shared.schedule).await,
@@ -512,7 +512,7 @@ async fn every_declared_request_reaches_its_owners_consuming_branch() {
         terminal::capabilities::implemented_methods()
             .map(|spec| spec.name)
             .collect(),
-        relay::rpc::METHODS.iter().map(|spec| spec.name).collect(),
+        hub::rpc::METHODS.iter().map(|spec| spec.name).collect(),
     ];
     for (owner, methods) in owners.into_iter().enumerate() {
         for method in methods {
@@ -570,10 +570,10 @@ async fn every_declared_request_reaches_its_owners_consuming_branch() {
                     .await
                 }
                 7 => {
-                    relay::rpc::request(
+                    hub::rpc::request(
                         &mut pending,
-                        &api.shared.relay,
-                        Some(api.shared.relay_management()),
+                        &api.shared.hub,
+                        Some(api.shared.hub_management()),
                     )
                     .await
                 }

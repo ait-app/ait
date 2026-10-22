@@ -84,7 +84,7 @@ export interface AccountRuntime {
 
 export interface HostControlGrant {
   center_url: string;
-  control_ticket: string;
+  hub_ticket: string;
   node_session_id: string;
 }
 
@@ -495,10 +495,11 @@ export class AccountSessionManager {
     }
     if (!needsGrant) return null;
     const nodeSessionId = entry.node.node_session_id;
-    const grant = await this.publicationApi<{ control_ticket: string }>(
+    const grant = await this.publicationApi<{ hub_ticket: string }>(
       entry,
-      `/v1/node-sessions/${nodeSessionId}/control-tickets`,
+      `/v1/node-sessions/${nodeSessionId}/hub-tickets`,
       "POST",
+      { ep: "serve" },
     );
     if (
       this.publications.get(runtime.serverId) !== entry ||
@@ -507,7 +508,7 @@ export class AccountSessionManager {
       throw new Error("Host synchronization cancelled.");
     return {
       center_url: entry.authority.center,
-      control_ticket: grant.control_ticket,
+      hub_ticket: grant.hub_ticket,
       node_session_id: nodeSessionId,
     };
   }
@@ -905,22 +906,27 @@ export class AccountSessionManager {
   }
 
   private async maintainControl(generation: number): Promise<void> {
-    const status = (await this.deps.local("GET")) as { online: boolean; connecting: boolean };
+    const status = (await this.deps.local("GET")) as {
+      online: boolean;
+      connecting: boolean;
+      error?: string | null;
+    };
     if (generation !== this.generation || !this.node || !this.account) return;
     this.update({ hostOnline: status.online });
     if (status.online) {
       this.controlFailures = 0;
       return;
     }
-    if (status.connecting) return;
-    const grant = await this.api<{ control_ticket: string }>(
-      `/v1/node-sessions/${this.node.node_session_id}/control-tickets`,
+    if (status.connecting || status.error === "replaced") return;
+    const grant = await this.api<{ hub_ticket: string }>(
+      `/v1/node-sessions/${this.node.node_session_id}/hub-tickets`,
       "POST",
+      { ep: "serve" },
     );
     if (generation !== this.generation || !this.node || !this.account) return;
     await this.deps.local("PUT", {
       center_url: this.account.center,
-      control_ticket: grant.control_ticket,
+      hub_ticket: grant.hub_ticket,
       node_session_id: this.node.node_session_id,
     });
     this.nextControl = Date.now() + retryDelay(this.controlFailures++);

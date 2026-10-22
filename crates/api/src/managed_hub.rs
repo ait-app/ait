@@ -2,25 +2,25 @@
 use std::sync::{Arc, Mutex};
 
 use async_trait::async_trait;
-use host_link::{Binding, CENTER, Error, ManagedRelay};
-use secrecy::{ExposeSecret, SecretString};
+use host_link::{Binding, CENTER, Error, ManagedHub};
+use secrecy::SecretString;
 use serde_json::{Value, json};
 use uuid::Uuid;
 
-/// Internal exclusive Relay capability issued before the API is shared.
+/// Internal exclusive Hub capability issued before the API is shared.
 #[derive(Debug)]
-pub struct ManagedRelayHandle {
-    pub(super) relay: relay::Connector,
+pub struct ManagedHubHandle {
+    pub(super) hub: hub::Connector,
     pub(super) status: Arc<Mutex<Value>>,
 }
 
 #[async_trait]
-impl ManagedRelay for ManagedRelayHandle {
+impl ManagedHub for ManagedHubHandle {
     async fn start(&self, session: Uuid, ticket: SecretString) -> Result<(), Error> {
-        self.relay
-            .start(relay::ControlGrant {
+        self.hub
+            .start(hub::ControlGrant {
                 center_url: CENTER.to_owned(),
-                control_ticket: ticket.expose_secret().to_owned(),
+                hub_ticket: ticket,
                 node_session_id: session,
             })
             .await
@@ -28,12 +28,14 @@ impl ManagedRelay for ManagedRelayHandle {
     }
 
     async fn active(&self) -> bool {
-        let status = self.relay.status().await;
-        status.online || status.connecting
+        let status = self.hub.status().await;
+        status.online
+            || status.connecting
+            || matches!(status.error, Some("replaced" | "unauthorized"))
     }
 
     async fn stop(&self) {
-        self.relay.stop().await;
+        self.hub.stop().await;
     }
 
     fn report(&self, phase: &'static str, binding: Option<&Binding>) {

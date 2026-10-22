@@ -298,13 +298,17 @@ impl Center for HttpCenter {
         let value = self
             .request(
                 reqwest::Method::POST,
-                &format!("/v1/node-sessions/{session}/control-tickets"),
+                &format!("/v1/node-sessions/{session}/hub-tickets"),
                 Some(&tokens.access_token),
-                json!({}),
+                json!({"ep":"serve"}),
             )
             .await?;
-        let ticket = value["control_ticket"].as_str().ok_or(Error::Protocol)?;
-        if ticket.len() != 64 || !ticket.bytes().all(|b| b.is_ascii_hexdigit()) {
+        let ticket = value["hub_ticket"].as_str().ok_or(Error::Protocol)?;
+        if value["protocol"] != "ait-hub-v1"
+            || value["hub_path"] != "/v1/hub"
+            || ticket.len() != 64
+            || !ticket.bytes().all(|b| b.is_ascii_hexdigit())
+        {
             return Err(Error::Protocol);
         }
         Ok(ticket.to_owned().into())

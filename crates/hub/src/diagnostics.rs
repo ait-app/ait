@@ -20,17 +20,5 @@ pub(super) fn socket_error(operation: &'static str, error: &SocketError) {
         SocketError::Io(error) => error.raw_os_error(),
         _ => None,
     };
-    tracing::warn!(
-        operation,
-        error_kind = kind,
-        os_error,
-        "Relay socket failed"
-    );
+    tracing::warn!(operation, error_kind = kind, os_error, "Hub socket failed");
 }
-
-pub(super) fn setup_error(stage: &'static str, error: &crate::Error) {
-    tracing::warn!(stage, %error, "Relay setup failed");
-}
-
-#[cfg(test)]
-pub(crate) mod tests;

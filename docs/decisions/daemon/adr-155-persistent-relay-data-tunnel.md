@@ -1,5 +1,7 @@
 # ADR-155：可协商的持久 Relay 数据隧道
 
+> daemon 传输已由 [ADR-180](adr-180-hub-serve-transport.md) 替代；以下记录保留当时的决策。
+
 状态：采用。中心仓库为 `cnb.cool/ait-app/ait-server`；中心默认关闭，双方协商后启用。
 
 ## 连接与兼容边界

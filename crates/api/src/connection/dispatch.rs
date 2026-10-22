@@ -30,9 +30,9 @@ pub(super) async fn request(
         }
         Err(DispatchError::Delivery(error)) => return Err(error),
     }
-    match relay::rpc::request(&mut context, &state.relay, Some(state.relay_management())).await {
+    match hub::rpc::request(&mut context, &state.hub, Some(state.hub_management())).await {
         Ok(()) => return Ok(()),
-        Err(DispatchError::NotImplemented) => Context::assert_unhandled(&context, "relay"),
+        Err(DispatchError::NotImplemented) => Context::assert_unhandled(&context, "hub"),
         Err(DispatchError::Delivery(error)) => return Err(error),
     }
     match schedule::dispatch::dispatch(&mut context, &state.schedule).await {

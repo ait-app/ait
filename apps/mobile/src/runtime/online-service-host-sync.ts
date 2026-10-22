@@ -1,7 +1,7 @@
 import { useEffect } from "react";
 import { Platform } from "react-native";
 import { create } from "zustand";
-import type { RelayControlGrant, RelayStatus } from "@ait/protocol/relay";
+import type { HubControlGrant, HubStatus } from "@ait/protocol/hub";
 import { getDesktopHost } from "@/desktop/host";
 import { getDesktopDaemonStatus } from "@/desktop/daemon/desktop-daemon";
 import { getNativeAccount } from "./native-account";
@@ -11,7 +11,7 @@ import { serializeNativeAccountCommand, useAccountState } from "./account-state"
 interface HostSyncState {
   enabled: boolean;
   busy: boolean;
-  status: RelayStatus | null;
+  status: HubStatus | null;
   error: string | null;
 }
 const EMPTY_STATE: HostSyncState = { enabled: false, busy: false, status: null, error: null };
@@ -29,9 +29,9 @@ function update(serverId: string, patch: Partial<HostSyncState>) {
 async function hostCommand(
   command: "account_host_sync" | "account_host_disconnect",
   args: Record<string, unknown>,
-): Promise<RelayControlGrant | null> {
+): Promise<HubControlGrant | null> {
   const desktop = getDesktopHost();
-  if (desktop?.invoke) return desktop.invoke(command, args) as Promise<RelayControlGrant | null>;
+  if (desktop?.invoke) return desktop.invoke(command, args) as Promise<HubControlGrant | null>;
   if (Platform.OS !== "android" && Platform.OS !== "ios")
     throw new Error("Online service synchronization requires the desktop or native mobile app.");
   return serializeNativeAccountCommand(async () => {
@@ -82,7 +82,8 @@ export async function synchronizeOnlineServiceHost(
         instanceId: status.instanceId,
         platform: status.platform,
         name,
-        needsGrant: !status.status.online && !status.status.connecting,
+        needsGrant:
+          !status.status.online && !status.status.connecting && status.status.error !== "replaced",
         ...(enable && !options?.automatic ? { enableBuiltInDaemon: true } : {}),
       });
       if (current !== generation) return;

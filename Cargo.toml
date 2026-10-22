@@ -19,7 +19,7 @@ metadata = { path = "crates/metadata" }
 model = { path = "crates/model" }
 persistence = { path = "crates/persistence" }
 provider = { path = "crates/provider" }
-relay = { path = "crates/relay" }
+hub = { path = "crates/hub" }
 schedule = { path = "crates/schedule" }
 terminal = { path = "crates/terminal" }
 voice = { path = "crates/voice" }

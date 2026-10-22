@@ -73,11 +73,7 @@ export function serverInfo(info: Payload, implemented: Set<string>): Payload {
       agentConfigApply: has("agent.config.apply.request"),
       daemonConfigReload: has("daemon.config.reload.request"),
       daemonStatusRpc: has("daemon.get_status.request"),
-      onlineServiceSync: [
-        "relay.status.request",
-        "relay.start.request",
-        "relay.stop.request",
-      ].every(has),
+      onlineServiceSync: ["hub.status.request", "hub.start.request", "hub.stop.request"].every(has),
       daemonDiagnostics: has("diagnostics.request"),
       skillManagement: has("agent.skills.get_status.request"),
       pushTokenRevocation: has("push.unregister.request"),

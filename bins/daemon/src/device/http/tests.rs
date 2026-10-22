@@ -51,7 +51,7 @@ async fn validates_runtime_binding_and_uses_latest_access_token_for_lease_and_ti
         (StatusCode::OK, json!({"node_id":wire["node_id"],"host_id":wire["host_id"],"server_id":machine.server_id,"node_session_id":session,
             "lease_duration_seconds":60,"renew_after_seconds":20,"control_required":true})),
         (StatusCode::OK, json!({"lease_until":Utc::now()+chrono::Duration::seconds(60),"renew_after_seconds":20})),
-        (StatusCode::OK, json!({"control_ticket":"c".repeat(64),"expires_in_seconds":30})),
+        (StatusCode::OK, json!({"hub_ticket":"c".repeat(64),"protocol":"ait-hub-v1","hub_path":"/v1/hub","expires_in_seconds":30})),
         (StatusCode::NO_CONTENT, Value::Null),
     ]).await;
     let instance = Uuid::new_v4();
@@ -84,6 +84,7 @@ async fn validates_runtime_binding_and_uses_latest_access_token_for_lease_and_ti
     );
     assert_eq!(seen.calls[0].1["hostname"], json!(fixture.center.hostname));
     assert_eq!(tokens.credential.binding, binding(&wire));
+    assert_eq!(seen.calls[2].1, json!({"ep":"serve"}));
 }
 
 #[tokio::test]
@@ -173,7 +174,7 @@ async fn rejects_untrusted_verification_uri_bindings_tickets_and_redirects() {
     let fixture = Fixture::new(vec![
         (StatusCode::OK, json!({"device_code":"b".repeat(64),"user_code":"ABCD-1234-EF56","verification_uri":"https://evil.test","expires_in":600,"interval":5})),
         (StatusCode::OK, json!({"node_id":Uuid::new_v4(),"host_id":Uuid::new_v4(),"server_id":machine.server_id,"control_required":true})),
-        (StatusCode::OK, json!({"control_ticket":"bad"})),
+        (StatusCode::OK, json!({"hub_ticket":"bad"})),
         (StatusCode::OK, json!({"lease_until":Utc::now()-chrono::Duration::seconds(1)})),
         (StatusCode::FOUND, json!({"secret":"never echoed"})),
         (StatusCode::OK, json!({"oversized":"x".repeat(65537)})),

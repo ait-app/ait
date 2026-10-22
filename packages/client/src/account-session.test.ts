@@ -121,7 +121,7 @@ function fixture(autoChannel = true) {
         control_required: Boolean(runtime),
       });
     }
-    if (path.endsWith("/control-tickets")) return Response.json({ control_ticket: "a".repeat(64) });
+    if (path.endsWith("/hub-tickets")) return Response.json({ hub_ticket: "a".repeat(64) });
     if (path.endsWith("/channel-tickets"))
       return Response.json({
         channel_ticket: "one-use-channel",
@@ -872,9 +872,13 @@ describe("explicit daemon publication", () => {
     const grant = await manager.publishHost(first);
     expect(grant).toEqual({
       center_url: "https://aitapp.cn/api",
-      control_ticket: "a".repeat(64),
+      hub_ticket: "a".repeat(64),
       node_session_id: "lease-first",
     });
+    const hubTicket = http.mock.calls.find(([url]) =>
+      String(url).endsWith("/lease-first/hub-tickets"),
+    )!;
+    expect(JSON.parse(String(hubTicket[1]?.body))).toEqual({ ep: "serve" });
     await manager.publishHost(second);
     await manager.publishHost(first, false);
     const registrations = http.mock.calls.filter(([url]) =>

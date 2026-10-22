@@ -90,7 +90,7 @@ Web 轮询错误是原有 envelope `{"error":{"code":"…","message":"…"}}`。
 
 - `/v1/nodes/register`：有 runtime，发送同一安装 ID、当前 instance UUID 和 `ait-rust-single-v1`。
 - `/v1/node-sessions/{id}/renew`：约 20 秒续租一次，租约约 60 秒；用新 JWT 推进授权截止。
-- `/v1/node-sessions/{id}/control-tickets`：取得 30 秒一次性控制票据。
+- `/v1/node-sessions/{id}/hub-tickets`：使用 serve 端点角色取得 30 秒一次性 Hub 票据。
 - `DELETE /v1/node-sessions/{id}`：停止当前运行，保留 grant。
 
 中心新增的表只承载授权：`node_grants`、`device_authorizations`、`device_enrollments`、

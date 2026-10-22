@@ -1,11 +1,11 @@
-//! Center-managed Host publication. Adapters own HTTP, private storage and Relay transport.
+//! Center-managed Host publication. Adapters own HTTP, private storage and Hub transport.
 pub mod authorization;
 mod controller;
 mod ports;
 mod types;
 
 pub use controller::Controller;
-pub use ports::{Center, CredentialStore, ManagedRelay};
+pub use ports::{Center, CredentialStore, ManagedHub};
 pub use types::{Binding, Credential, Error, Machine, Pending, Session, State, Tokens};
 
 /// The only production authority for unattended machines.

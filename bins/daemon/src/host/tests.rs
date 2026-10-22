@@ -209,7 +209,7 @@ async fn headless_host_composes_exclusive_internal_control_without_contacting_ce
     configuration.headless = true;
     let mut server = Server::bind(configuration).await.unwrap();
     assert!(server.managed.is_some());
-    assert!(server.api.claim_managed_relay().is_err());
+    assert!(server.api.claim_managed_hub().is_err());
     assert!(crate::device::Store::open(root.path()).is_err());
     server.api.begin_shutdown();
     server.api.wait_closed().await;

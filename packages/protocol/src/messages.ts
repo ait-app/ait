@@ -10,13 +10,13 @@ import { TerminalProfileSchema } from "./terminal-profile.js";
 export { TerminalProfileSchema, type TerminalProfile } from "./terminal-profile.js";
 import { z } from "zod";
 import {
-  RelayStatusRequestSchema,
-  RelayStartRequestSchema,
-  RelayStopRequestSchema,
-  RelayStatusResponseSchema,
-  RelayStartResponseSchema,
-  RelayStopResponseSchema,
-} from "./relay.js";
+  HubStatusRequestSchema,
+  HubStartRequestSchema,
+  HubStopRequestSchema,
+  HubStatusResponseSchema,
+  HubStartResponseSchema,
+  HubStopResponseSchema,
+} from "./hub.js";
 import { TerminalActivitySchema } from "./terminal-activity.js";
 import { CLIENT_CAPS } from "./client-capabilities.js";
 import { AGENT_LIFECYCLE_STATUSES } from "./agent-lifecycle.js";
@@ -3004,9 +3004,9 @@ export const SessionInboundMessageSchema = z.discriminatedUnion("type", [
   SendAgentMessageRequestSchema,
   WaitForFinishRequestSchema,
   DaemonGetStatusRequestSchema,
-  RelayStatusRequestSchema,
-  RelayStartRequestSchema,
-  RelayStopRequestSchema,
+  HubStatusRequestSchema,
+  HubStartRequestSchema,
+  HubStopRequestSchema,
   DaemonConfigReloadRequestSchema,
   DiagnosticsRequestSchema,
   AgentTimelineAppendRequestSchema,
@@ -6390,9 +6390,9 @@ export const SessionOutboundMessageSchema = z.discriminatedUnion("type", [
   SendAgentMessageResponseMessageSchema,
   SetVoiceModeResponseMessageSchema,
   DaemonGetStatusResponseSchema,
-  RelayStatusResponseSchema,
-  RelayStartResponseSchema,
-  RelayStopResponseSchema,
+  HubStatusResponseSchema,
+  HubStartResponseSchema,
+  HubStopResponseSchema,
   DaemonConfigReloadResponseSchema,
   DiagnosticsResponseSchema,
   GetDaemonConfigResponseMessageSchema,

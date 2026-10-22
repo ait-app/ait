@@ -72,7 +72,7 @@ fn violations(packages: &[Value]) -> Vec<String> {
                 "bot",
                 "persistence",
                 "host-link",
-                "relay",
+                "hub",
                 "voice",
                 "schedule",
                 "browser",
@@ -89,7 +89,7 @@ fn violations(packages: &[Value]) -> Vec<String> {
                 &["domain", "model", "persistence"]
             }
             "terminal" => &["domain", "model"],
-            "voice" | "browser" | "relay" => &["model"],
+            "voice" | "browser" | "hub" => &["model"],
             "model" => &["domain"],
             "domain" | "host-link" => &[],
             _ => {
@@ -478,10 +478,10 @@ fn voice_keeps_speech_io_but_cannot_depend_on_transport_or_agent_implementation(
 }
 
 #[test]
-fn relay_owns_rpc_using_model_contracts_without_host_or_business_dependencies() {
+fn hub_owns_rpc_using_model_contracts_without_host_or_business_dependencies() {
     let packages = [
-        json!({"id":"api", "name":"api", "dependencies":[{"name":"relay", "path":"../relay"}]}),
-        json!({"id":"relay", "name":"relay", "dependencies":[{"name":"model", "path":"../model"}, {"name":"tokio"}, {"name":"reqwest"}]}),
+        json!({"id":"api", "name":"api", "dependencies":[{"name":"hub", "path":"../hub"}]}),
+        json!({"id":"hub", "name":"hub", "dependencies":[{"name":"model", "path":"../model"}, {"name":"tokio"}, {"name":"reqwest"}]}),
     ];
     assert!(violations(&packages).is_empty());
     for dependency in [
@@ -493,9 +493,9 @@ fn relay_owns_rpc_using_model_contracts_without_host_or_business_dependencies() 
         "persistence",
     ] {
         let packages = [
-            json!({"id":"relay", "name":"relay", "dependencies":[{"name":dependency, "path":"../dependency"}]}),
+            json!({"id":"hub", "name":"hub", "dependencies":[{"name":dependency, "path":"../dependency"}]}),
         ];
-        assert_eq!(violations(&packages), [format!("relay -> {dependency}")]);
+        assert_eq!(violations(&packages), [format!("hub -> {dependency}")]);
     }
 }
 
