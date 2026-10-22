@@ -5,50 +5,38 @@ import type {
   HubDirectoryPage,
 } from "@ait/client/internal/hub";
 
-export type HubDirectoryKind = "project" | "workspace" | "agent";
-export type HubDirectory = Record<HubDirectoryKind, HubDirectoryItem[]>;
-export const emptyHubDirectory = (): HubDirectory => ({ project: [], workspace: [], agent: [] });
-
-/** Lists are summaries. Keep Host identity, revisions and stale flags separate from daemon models. */
-export async function loadHubDirectory(
+/** Internal notification metadata; preserve Host identity when summaries share an Agent ID. */
+export async function loadHubAgentSummaries(
   connection: HubAccountConnection,
-  kinds: readonly HubDirectoryKind[] = ["project", "workspace", "agent"],
-): Promise<HubDirectory> {
-  const entries = await Promise.all(
-    kinds.map(async (kind) => {
-      const items: HubDirectoryItem[] = [];
-      let after: HubDirectoryPage["nextCursor"] = null;
-      const seen = new Set<string>();
-      do {
-        const page: HubDirectoryPage = await connection.call(`${kind}.list.request`, {
-          after,
-          limit: 100,
-        });
-        items.push(...page.items);
-        after = page.nextCursor;
-        if (after) {
-          const key = JSON.stringify(after);
-          if (seen.has(key)) throw new Error("Directory pagination did not advance.");
-          seen.add(key);
-        }
-      } while (after);
-      return [kind, items] as const;
-    }),
-  );
-  return { ...emptyHubDirectory(), ...Object.fromEntries(entries) };
+): Promise<HubDirectoryItem[]> {
+  const items: HubDirectoryItem[] = [];
+  let after: HubDirectoryPage["nextCursor"] = null;
+  const seen = new Set<string>();
+  do {
+    const page: HubDirectoryPage = await connection.call("agent.list.request", {
+      after,
+      limit: 100,
+    });
+    items.push(...page.items);
+    after = page.nextCursor;
+    if (after) {
+      const key = JSON.stringify(after);
+      if (seen.has(key)) throw new Error("Agent summary pagination did not advance.");
+      seen.add(key);
+    }
+  } while (after);
+  return items;
 }
 
 export function hubAttentionNotification(
   event: HubAccountEvent,
   serverId: string,
-  directory: HubDirectory,
+  agents: readonly HubDirectoryItem[],
 ) {
   if (!event.params || typeof event.params !== "object" || Array.isArray(event.params)) return null;
   const params = event.params as Record<string, unknown>;
   if (event.method === "agent_attention_required") {
-    const agent = directory.agent.find(
-      (item) => item.hostId === event.hostId && item.id === params.agentId,
-    );
+    const agent = agents.find((item) => item.hostId === event.hostId && item.id === params.agentId);
     const workspaceId = typeof agent?.data.workspaceId === "string" ? agent.data.workspaceId : null;
     if (typeof params.agentId !== "string" || typeof params.timestamp !== "string") return null;
     // An older directory snapshot may still say false when a new attention arrives first.

@@ -1,22 +1,19 @@
 import { create } from "zustand";
-import type { HubAccountConnection, HubAccountSnapshot } from "@ait/client/internal/hub";
-import { emptyHubDirectory, type HubDirectory } from "./hub-services";
+import type {
+  HubAccountConnection,
+  HubAccountSnapshot,
+  HubDirectoryItem,
+} from "@ait/client/internal/hub";
 
 interface HubServicesState {
   connection: HubAccountConnection | null;
   snapshot: HubAccountSnapshot | null;
-  directory: HubDirectory;
-  loading: boolean;
+  agents: HubDirectoryItem[];
   eventsActive: boolean;
-  error: boolean;
-  refresh(): Promise<void>;
 }
 export const useHubServices = create<HubServicesState>(() => ({
   connection: null,
   snapshot: null,
-  directory: emptyHubDirectory(),
-  loading: false,
+  agents: [],
   eventsActive: false,
-  error: false,
-  refresh: async () => {},
 }));

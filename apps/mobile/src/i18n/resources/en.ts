@@ -53,25 +53,6 @@ export const en = {
     },
   },
   onlineService: {
-    directoryTitle: "Account directory",
-    directoryHint:
-      "Browse projects, workspaces and sessions across your account. Open a resource to connect to its host and load details.",
-    directorySearch: "Search account resources",
-    directoryUnavailable:
-      "Account directory is unavailable on this service. Your saved hosts remain available.",
-    directoryError: "Could not refresh the directory. Showing the last received summaries.",
-    directoryEmpty:
-      "No resources match. A host must publish its directory before resources appear.",
-    directoryOffline: "Offline · connect the host to view details",
-    directoryStale: "Summary may be out of date",
-    directoryOnline: "Online",
-    accountServicesConnected: "Account notifications and directory connected",
-    accountServicesConnecting:
-      "Account services connecting or unavailable; host connections remain available",
-    accountPushHint:
-      "This device registers with your account for notifications from all synchronized hosts. Background delivery requires notifications enabled on the host.",
-    directoryKinds: { project: "Projects", workspace: "Workspaces", agent: "Sessions" },
-
     title: "Online Service",
     connectionDescription: "Sign in and connect to your online hosts.",
     loginDescription: "Sign in to access computers connected to your online service.",

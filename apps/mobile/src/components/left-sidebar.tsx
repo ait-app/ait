@@ -1,14 +1,6 @@
 import { UsageSidebarRoot, UsageSidebarItem } from "@/usage/sidebar-item";
-import { router, type Href } from "expo-router";
-import {
-  FolderPlus,
-  FolderTree,
-  GitBranch,
-  Import,
-  Server,
-  Settings,
-  X,
-} from "lucide-react-native";
+import { router } from "expo-router";
+import { FolderPlus, GitBranch, Import, Server, Settings, X } from "lucide-react-native";
 import { useTranslation } from "react-i18next";
 import { memo, useCallback, useEffect, useMemo, useRef, useState, type RefObject } from "react";
 import {
@@ -52,7 +44,6 @@ import type { SidebarWorkspaceGroup } from "@/components/sidebar/sidebar-labels"
 import type { SidebarProjectIconTarget } from "@/utils/sidebar-project-row-model";
 import { type SidebarGroupMode, useSidebarViewStore } from "@/stores/sidebar-view-store";
 import { useHosts } from "@/runtime/host-runtime";
-import { useAccountState } from "@/runtime/account-state";
 import { usePanelStore } from "@/stores/panel-store";
 import { useOwnsWindowChromeCorner, WindowChromeSafeArea } from "@/utils/desktop-window";
 import { useCloseAgentListGesture } from "@/mobile-panels/gestures";
@@ -492,7 +483,6 @@ function SidebarFooter({
           onAddHost={handleAddHost}
           onOpenHostSettings={handleOpenHostSettings}
         />
-        <SidebarAccountDirectory theme={theme} />
         <FooterIconButton
           onPress={handleImportSession}
           testID="sidebar-import-session"
@@ -511,21 +501,6 @@ function SidebarFooter({
         />
       </View>
     </View>
-  );
-}
-
-function SidebarAccountDirectory({ theme }: { theme: SidebarTheme }) {
-  const { t } = useTranslation();
-  const signedIn = useAccountState((state) => state.status !== "logged_out");
-  if (!signedIn) return null;
-  return (
-    <FooterIconButton
-      onPress={() => router.navigate("/directory" as Href)}
-      testID="sidebar-account-directory"
-      label={t("onlineService.directoryTitle")}
-      icon={FolderTree}
-      theme={theme}
-    />
   );
 }
 

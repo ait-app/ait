@@ -220,5 +220,5 @@ daemon 连接 metadata/provider，在已有 Workspace 内选择或创建 Agent�
 明确选择 Workspace 后绑定。见 [ADR-138](../decisions/workspace/adr-138-workspace-owned-schedules.md)。
 
 客户端的 Hub access 链路由各平台账号权限层持有，SDK 实现中心调用和游标订阅，
-共享界面读取跨 Host 摘要与账号 attention。Electron 将凭据、窗口兴趣和多窗口前台汇总
+客户端内部读取通知所需的 Agent 摘要与账号 attention，沿用现有账号和主机列表。Electron 将凭据、窗口兴趣和多窗口前台汇总
 保留在主进程。普通资源详情与操作继续连接对应 Host。见 [ADR-182](../decisions/clients/adr-182-hub-account-client.md)。

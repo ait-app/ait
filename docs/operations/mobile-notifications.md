@@ -8,7 +8,7 @@ App 的 **Settings → App → Notifications（设置 → 应用 → 通知）**
 
 支持账号方法的中心部署后，App 登录即向 Hub 登记本设备，覆盖账号下所有同步主机。
 App 在完成账号 attention 订阅后报告前台状态；退出登录时先撤销设备登记。
-「在线服务」和侧栏中的「账号目录」可查看跨主机摘要，Host 离线时保留摘要并禁用详情操作。
+沿用现有账号和主机列表，Hub 的接入在客户端内部完成。
 
 启用中心后台推送需在 Host 设置 `AIT_SERVER_HUB_NOTIFICATIONS=true`，
 并把下文 APNs/FCM 提供方凭据配置在 ait-server 中。此时 Host 发布带通知的 attention，

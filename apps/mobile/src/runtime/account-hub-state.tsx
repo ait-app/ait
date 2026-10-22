@@ -4,12 +4,7 @@ import { usePathname } from "expo-router";
 import { observeHubEvents } from "@ait/client/internal/hub";
 import { useAccountState } from "./account-state";
 import { connectAccountHub } from "./account-hub";
-import {
-  emptyHubDirectory,
-  loadHubDirectory,
-  hubAttentionNotification,
-  type HubDirectoryKind,
-} from "./hub-services";
+import { loadHubAgentSummaries, hubAttentionNotification } from "./hub-services";
 import { useAppVisible } from "@/hooks/use-app-visible";
 import { useSessionStore } from "@/stores/session-store";
 import { parseServerIdFromPathname } from "@/utils/host-routes";
@@ -56,55 +51,36 @@ export function AccountHubLifecycle() {
         }
         const { connection: hub } = handle;
         let busy: Promise<void> | undefined;
-        const pendingKinds = new Set<HubDirectoryKind>();
-        const refresh = (
-          kinds: readonly HubDirectoryKind[] = ["project", "workspace", "agent"],
-        ): Promise<void> => {
+        let refreshAgain = false;
+        const refresh = (): Promise<void> => {
           if (disposed) return Promise.resolve();
-          for (const kind of kinds) pendingKinds.add(kind);
-          if (busy) return busy;
-          useHubServices.setState({ loading: true });
+          if (busy) {
+            refreshAgain = true;
+            return busy;
+          }
           busy = (async () => {
-            while (pendingKinds.size && !disposed) {
-              const next = Array.from(pendingKinds);
-              pendingKinds.clear();
+            do {
+              refreshAgain = false;
               const identity = hub.snapshot().linkId;
-              const directory = await loadHubDirectory(hub, next);
+              const agents = await loadHubAgentSummaries(hub);
               if (!disposed && hub.snapshot().linkId === identity)
-                useHubServices.setState((state) => ({
-                  directory: {
-                    ...state.directory,
-                    ...Object.fromEntries(next.map((kind) => [kind, directory[kind]])),
-                  },
-                  error: false,
-                }));
-            }
-          })()
-            .catch((error: unknown) => {
-              if (!disposed) useHubServices.setState({ error: true });
-              throw error;
-            })
-            .finally(() => {
-              busy = undefined;
-              if (!disposed) useHubServices.setState({ loading: false });
-            });
+                useHubServices.setState({ agents });
+            } while (refreshAgain && !disposed);
+          })().finally(() => {
+            busy = undefined;
+          });
           return busy;
         };
-        useHubServices.setState({ connection: hub, snapshot: hub.snapshot(), refresh });
+        useHubServices.setState({ connection: hub, snapshot: hub.snapshot() });
         const removeState = hub.subscribe(() =>
           useHubServices.setState({ snapshot: hub.snapshot() }),
         );
-        const changedKinds = new Set<HubDirectoryKind>();
         let refreshTimer: ReturnType<typeof setTimeout> | undefined;
         const removeEvents = observeHubEvents(hub, {
           randomUUID: Crypto.randomUUID,
           events: [
             "agent_attention_required",
             "terminal_attention_required",
-            "agent_permission_request",
-            "agent_permission_resolved",
-            "project.update",
-            "workspace.update",
             "agent.update",
             "server.status",
             "status.server_info",
@@ -119,7 +95,7 @@ export function AccountHubLifecycle() {
             const account = useAccountState.getState();
             const host = account.hosts.find((value) => value.host_id === event.hostId);
             const notification = host?.server_id
-              ? hubAttentionNotification(event, host.server_id, useHubServices.getState().directory)
+              ? hubAttentionNotification(event, host.server_id, useHubServices.getState().agents)
               : null;
             if (notification) {
               const current = focus.current;
@@ -139,30 +115,18 @@ export function AccountHubLifecycle() {
               )
                 await sendOsNotification(notification);
             }
-            const kind =
-              event.method === "project.update"
-                ? "project"
-                : event.method === "workspace.update"
-                  ? "workspace"
-                  : event.method === "agent.update"
-                    ? "agent"
-                    : null;
-            if (kind) changedKinds.add(kind);
-            else if (
-              ["server.status", "status.server_info", "creation.update"].includes(event.method)
+            if (
+              ["agent.update", "server.status", "status.server_info", "creation.update"].includes(
+                event.method,
+              )
             )
-              for (const value of ["project", "workspace", "agent"] as const)
-                changedKinds.add(value);
-            if (changedKinds.size)
               refreshTimer ??= setTimeout(() => {
                 refreshTimer = undefined;
-                const kinds = Array.from(changedKinds);
-                changedKinds.clear();
-                void refresh(kinds).catch(() => {});
+                void refresh().catch(() => {});
               }, 750);
           },
           error: () => {
-            if (!disposed) useHubServices.setState({ error: true });
+            if (!disposed) console.warn("[Hub] Account event subscription unavailable; retrying");
           },
         });
         const stopPush = startAccountPushNotifications({ connection: hub, key: center });
@@ -175,7 +139,7 @@ export function AccountHubLifecycle() {
         };
       })
       .catch(() => {
-        if (!disposed) useHubServices.setState({ error: true });
+        if (!disposed) console.warn("[Hub] Account event connection unavailable");
       });
     return () => {
       disposed = true;
@@ -183,11 +147,8 @@ export function AccountHubLifecycle() {
       useHubServices.setState({
         connection: null,
         snapshot: null,
-        directory: emptyHubDirectory(),
-        loading: false,
+        agents: [],
         eventsActive: false,
-        error: false,
-        refresh: async () => {},
       });
     };
   }, [signedIn, center]);
