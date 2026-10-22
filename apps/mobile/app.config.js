@@ -189,6 +189,9 @@ export default {
             kotlinVersion: "2.1.20",
             enableMinifyInReleaseBuilds: true,
             enableShrinkResourcesInReleaseBuilds: true,
+            // SDK 54 needs this upstream fix for reflected options (SecureStore, FileSystem, etc.).
+            // https://github.com/expo/expo/pull/51206
+            extraProguardRules: "-keep @interface expo.modules.kotlin.records.Field { *; }",
             // Allow HTTP connections for local network hosts in release builds
             usesCleartextTraffic: true,
           },
