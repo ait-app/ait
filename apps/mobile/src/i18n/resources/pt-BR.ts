@@ -209,6 +209,7 @@ export const ptBR: TranslationResources = {
     thinking: {
       title: "Raciocínio",
       unknown: "Desconhecido",
+      providerDefault: "Padrão",
       extraHigh: "Extra alto",
       select: "Selecionar opção de raciocínio",
       selectWithValue: "Selecionar opção de raciocínio ({{value}})",

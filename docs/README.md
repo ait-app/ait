@@ -27,6 +27,8 @@
 
 ## 架构决策
 
+- [ADR-183：共享推理控件保留已选身份，未指定时显示“默认”](decisions/clients/adr-183-shared-reasoning-control-selection.md)：显式 ID、目录默认标记、默认标签与下拉勾选及草稿提交的一致性；[验证报告](reports/clients/shared-reasoning-controls-2026-10-22.md)。
+
 - [ADR-182：客户端接入 Hub 账号服务](decisions/clients/adr-182-hub-account-client.md)：桌面与浏览器 Hub 优先、账号设备注册与心跳、游标订阅和内部通知摘要；[客户端验证](reports/clients/hub-account-client-2026-10-22.md)、[daemon/desktop 运行与真实 Hub 联调](reports/clients/daemon-desktop-runtime-2026-10-22.md)。
 
 - [ADR-180：Oh My Pi 原生 RPC Provider](decisions/providers/adr-180-omp-native-rpc-provider.md)：独立 `omp` 适配器、v2 分块传输、审批模式映射、结构化 ask、子 Agent 与回合级 settled 关联；Pi 是另一个独立 Provider（ADR-156）。
