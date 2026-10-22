@@ -208,8 +208,8 @@ export const ru: TranslationResources = {
       select: "Выбрать провайдера агента",
     },
     thinking: {
+      providerDefault: "По умолчанию",
       title: "Рассуждения",
-      unknown: "Неизвестно",
       extraHigh: "Очень высокий",
       select: "Выбрать уровень рассуждений",
       selectWithValue: "Выбрать уровень рассуждений ({{value}})",

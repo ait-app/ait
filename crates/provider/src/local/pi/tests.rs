@@ -9,8 +9,10 @@ use super::*;
 
 mod admission;
 mod diagnostics;
+mod discovery;
 mod installed;
 mod preview;
+mod reasoning;
 mod review;
 mod text_storage;
 mod tool_schema;
@@ -37,6 +39,10 @@ fn fixture(scenario: &str) -> (TempDir, PiClient, AgentSessionSpec) {
         config: StoredAgentConfig::default(),
     };
     (directory, client, spec)
+}
+
+fn native_thinking(info: &domain::agent_runtime::StoredAgentRuntimeInfo) -> Option<&str> {
+    info.extra.as_ref()?.get("thinkingLevel")?.as_str()
 }
 
 async fn terminal(session: &mut dyn AgentSession) -> Vec<AgentTurnEvent> {
@@ -302,7 +308,7 @@ async fn unsupported_configuration_and_structured_output_are_rejected_before_sub
     config.model = Some("unqualified".into());
     assert!(client.validate_config(&config).is_err());
     config = spec.config.clone();
-    config.thinking_option_id = Some("high".into());
+    config.thinking_option_id = Some("bad\nlevel".into());
     assert!(client.validate_config(&config).is_err());
     let mut session = client
         .create_session_with_environment(&spec, &client.environment)
@@ -334,8 +340,11 @@ fn stream_does_not_finish_at_agent_end_and_bounds_display_output() {
             .is_err()
     );
     assert!(
-        config::models(&json!({"models":[{"provider":"a","id":"b"},{"provider":"a","id":"b"}]}))
-            .is_err()
+        config::models(
+            &json!({"models":[{"provider":"a","id":"b"},{"provider":"a","id":"b"}]}),
+            &Value::Null
+        )
+        .is_err()
     );
 }
 

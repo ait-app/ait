@@ -1,9 +1,11 @@
 import { describe, expect, it } from "vitest";
 import { hasDraftContent, resolveDraftKey } from "./input-draft-core";
+import { resolveAgentModelSelection, resolveThinkingDisplay } from "../agent-controls/utils";
 import {
   buildDraftCommandConfig,
   resolveEffectiveComposerModelId,
   resolveEffectiveComposerThinkingOptionId,
+  type ProviderSelectionState,
 } from "@/provider-selection/provider-selection";
 
 describe("resolveDraftKey", () => {
@@ -125,6 +127,51 @@ describe("resolveEffectiveComposerThinkingOptionId", () => {
 });
 
 describe("buildDraftComposerCommandConfig", () => {
+  it.each([
+    ["claude", "low"],
+    ["pi", "off"],
+  ])(
+    "keeps an unknown %s thinking default unspecified in labels and commands",
+    (provider, firstId) => {
+      const model = {
+        provider,
+        id: "reasoner",
+        label: "Reasoner",
+        thinkingOptions: [
+          { id: firstId, label: firstId },
+          { id: "high", label: "High" },
+        ],
+      };
+      const selection: ProviderSelectionState = {
+        provider,
+        modelId: model.id,
+        modeId: "",
+        thinkingOptionId: "",
+        availableModels: [model],
+        modeOptions: [],
+      };
+      const thinkingId = resolveEffectiveComposerThinkingOptionId(selection, model.id);
+      expect(thinkingId).toBe("");
+      expect(resolveThinkingDisplay(model.thinkingOptions, thinkingId)).toBe("Default");
+      const facts = resolveAgentModelSelection({
+        models: [model],
+        configuredModelId: model.id,
+        runtimeModelId: null,
+        explicitThinkingOptionId: thinkingId,
+      });
+      expect(facts.selectedThinkingId).toBeNull();
+      expect(facts.displayThinking).toBe("Default");
+      expect(
+        buildDraftCommandConfig({
+          selection,
+          cwd: "/repo",
+          effectiveModelId: model.id,
+          effectiveThinkingOptionId: thinkingId,
+        }),
+      ).not.toHaveProperty("thinkingOptionId");
+    },
+  );
+
   it("returns undefined when cwd is empty", () => {
     expect(
       buildDraftCommandConfig({

@@ -1,11 +1,13 @@
 import { describe, expect, it } from "vitest";
 import {
+  getRuntimeThinkingOptionId,
   getFeatureHighlightColor,
   getFeatureTooltip,
   getAgentControlHintKey,
   isFeatureActive,
   normalizeModelId,
   resolveAgentModelSelection,
+  resolveThinkingDisplay,
 } from "./utils";
 
 describe("getAgentControlHintKey", () => {
@@ -214,7 +216,121 @@ describe("resolveAgentModelSelection", () => {
 
     expect(selection.activeModelId).toBe("default");
     expect(selection.displayModel).toBe("Default (Sonnet 4.6)");
+    expect(selection.selectedThinkingId).toBeNull();
+    expect(selection.displayThinking).toBe("Default");
+  });
+
+  it("uses an option marked as the provider default", () => {
+    const selection = resolveAgentModelSelection({
+      models: [
+        {
+          id: "a",
+          provider: "pi",
+          label: "Model A",
+          thinkingOptions: [
+            { id: "off", label: "Off" },
+            { id: "low", label: "Low", isDefault: true },
+          ],
+        },
+      ],
+      runtimeModelId: "a",
+      configuredModelId: null,
+      explicitThinkingOptionId: null,
+    });
+
     expect(selection.selectedThinkingId).toBe("low");
     expect(selection.displayThinking).toBe("Low");
+  });
+
+  it("preserves native thinking levels absent from the catalog", () => {
+    const selection = resolveAgentModelSelection({
+      models: [
+        {
+          id: "a",
+          provider: "pi",
+          label: "Model A",
+          thinkingOptions: [{ id: "off", label: "Off" }],
+        },
+      ],
+      runtimeModelId: "a",
+      configuredModelId: null,
+      explicitThinkingOptionId: "future",
+    });
+
+    expect(selection.selectedThinkingId).toBe("future");
+    expect(selection.displayThinking).toBe("Future");
+  });
+});
+
+describe("resolveThinkingDisplay", () => {
+  it.each([undefined, null, "", "default"])(
+    "shows provider inheritance for an unspecified selection (%s)",
+    (id) => {
+      expect(resolveThinkingDisplay([{ id: "off", label: "Off" }], id)).toBe("Default");
+    },
+  );
+
+  it("formats an explicit selection", () => {
+    expect(resolveThinkingDisplay([{ id: "xhigh", label: "xhigh" }], "xhigh")).toBe("Extra high");
+  });
+});
+
+describe("native thinking readback", () => {
+  it.each(["high", "low", "future"])(
+    "displays effective %s while preserving the requested selection",
+    (level) => {
+      const info = {
+        provider: "pi",
+        sessionId: "session",
+        thinkingOptionId: "max",
+        extra: { thinkingLevel: level },
+      };
+      const selection = resolveAgentModelSelection({
+        models: [{ id: "a", provider: "pi", label: "Model A" }],
+        runtimeModelId: "a",
+        configuredModelId: null,
+        explicitThinkingOptionId: "max",
+        runtimeThinkingOptionId: getRuntimeThinkingOptionId(info),
+      });
+      expect(selection.selectedThinkingId).toBe("max");
+      expect(selection.displayThinkingId).toBe(level);
+      expect(selection.displayThinking).toBe(level[0].toUpperCase() + level.slice(1));
+    },
+  );
+
+  it("shows the native default even when no level was selected or advertised", () => {
+    const selection = resolveAgentModelSelection({
+      models: null,
+      runtimeModelId: "a",
+      configuredModelId: null,
+      explicitThinkingOptionId: null,
+      runtimeThinkingOptionId: "medium",
+    });
+    expect(selection.selectedThinkingId).toBeNull();
+    expect(selection.displayThinkingId).toBe("medium");
+    expect(selection.displayThinking).toBe("Medium");
+  });
+
+  it.each([undefined, null, "", 42])("ignores missing or malformed native state (%s)", (level) => {
+    expect(
+      getRuntimeThinkingOptionId({
+        provider: "pi",
+        sessionId: "session",
+        thinkingOptionId: "max",
+        extra: { thinkingLevel: level },
+      }),
+    ).toBeNull();
+  });
+
+  it("does not interpret another provider's metadata as Pi state", () => {
+    expect(
+      getRuntimeThinkingOptionId({
+        provider: "claude",
+        sessionId: "session",
+        thinkingOptionId: "max",
+        extra: { thinkingLevel: "high" },
+      }),
+    ).toBeNull();
+    expect(getRuntimeThinkingOptionId(null)).toBeNull();
   });
 });

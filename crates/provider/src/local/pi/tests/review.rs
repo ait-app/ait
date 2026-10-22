@@ -190,18 +190,25 @@ async fn version_errors_are_bounded_and_old_installations_are_actionable() {
 }
 
 #[tokio::test]
-async fn catalog_controls_and_runtime_do_not_advertise_unsupported_thinking() {
+async fn catalog_controls_and_runtime_report_native_thinking() {
     let (_directory, client, mut spec) = fixture("");
     let settings = client.settings(&spec.config);
     assert_eq!(settings["availableModes"][0]["id"], "default");
     assert_eq!(settings["capabilities"]["supportsReasoningStream"], true);
     assert_eq!(settings["capabilities"]["supportsSessionListing"], true);
     let details = client.discover(&spec.cwd).await.unwrap();
-    assert_eq!(details.models[0]["thinkingOptions"], json!([]));
+    assert_eq!(
+        details.models[0]["thinkingOptions"]
+            .as_array()
+            .unwrap()
+            .len(),
+        5
+    );
+    assert_eq!(details.models[0]["isDefault"], true);
     let mut session = client.create_session(&spec).await.unwrap();
     assert_eq!(
-        session.runtime_info().await.unwrap().thinking_option_id,
-        None
+        native_thinking(&session.runtime_info().await.unwrap()),
+        Some("medium")
     );
     session.close().await.unwrap();
     spec.config.model = Some("fixture/missing".into());
@@ -235,7 +242,7 @@ fn malformed_model_definitions_and_directories_are_rejected() {
         json!([{"provider":"a","id":"b","name":"bad\nlabel"}]),
         json!(vec![json!({"provider":"a","id":"b"}); 4097]),
     ] {
-        assert!(config::models(&json!({"models":models})).is_err());
+        assert!(config::models(&json!({"models":models}), &Value::Null).is_err());
     }
 }
 

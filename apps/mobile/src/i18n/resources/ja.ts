@@ -208,8 +208,8 @@ export const ja: TranslationResources = {
       select: "エージェントプロバイダーを選択",
     },
     thinking: {
+      providerDefault: "デフォルト",
       title: "思考",
-      unknown: "不明",
       extraHigh: "非常に高い",
       select: "思考オプションを選択",
       selectWithValue: "思考オプションを選択（{{value}}）",

@@ -206,8 +206,8 @@ export const ar: TranslationResources = {
       select: "حدد مزود الوكيل",
     },
     thinking: {
+      providerDefault: "الافتراضي",
       title: "التفكير",
-      unknown: "مجهول",
       extraHigh: "ارتفاع إضافي",
       select: "حدد خيار التفكير",
       selectWithValue: "حدد خيار التفكير ({{value}})",

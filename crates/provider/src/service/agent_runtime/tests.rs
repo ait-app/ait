@@ -353,6 +353,57 @@ fn thinking_filter_distinguishes_provider_default_from_selected_option() {
 }
 
 #[test]
+fn thinking_filters_ignore_native_levels_in_provider_runtime_metadata() {
+    let (service, agents) = service();
+    for (id, selection, native) in [
+        ("agent-a", Some("max"), "high"),
+        ("agent-b", None, "medium"),
+    ] {
+        let mut record = agents.get(id).unwrap().unwrap();
+        record.provider = "pi".into();
+        record.config = Some(domain::agent_runtime::StoredAgentConfig {
+            thinking_option_id: selection.map(str::to_owned),
+            ..Default::default()
+        });
+        record.runtime_info = Some(domain::agent_runtime::StoredAgentRuntimeInfo {
+            provider: "pi".into(),
+            session_id: Some(id.into()),
+            model: None,
+            thinking_option_id: None,
+            mode_id: None,
+            extra: Some(BTreeMap::from([(
+                "thinkingLevel".into(),
+                serde_json::json!(native),
+            )])),
+        });
+        agents.upsert(&record).unwrap();
+    }
+    for (filter, expected) in [
+        (ThinkingOptionFilter::ProviderDefault, vec!["agent-b"]),
+        (
+            ThinkingOptionFilter::Selected("max".into()),
+            vec!["agent-a"],
+        ),
+        (ThinkingOptionFilter::Selected("high".into()), vec![]),
+        (ThinkingOptionFilter::Selected("medium".into()), vec![]),
+    ] {
+        let page = service
+            .list(&AgentDirectoryQuery {
+                thinking_option_id: Some(filter),
+                ..default_query()
+            })
+            .unwrap();
+        assert_eq!(
+            page.entries
+                .iter()
+                .map(|entry| entry.agent.id.as_str())
+                .collect::<Vec<_>>(),
+            expected
+        );
+    }
+}
+
+#[test]
 fn history_searches_placement_and_includes_archived_by_request() {
     let (service, agents) = service();
     agents

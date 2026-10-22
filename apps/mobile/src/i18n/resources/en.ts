@@ -304,8 +304,8 @@ export const en = {
       select: "Select agent provider",
     },
     thinking: {
+      providerDefault: "Default",
       title: "Thinking",
-      unknown: "Unknown",
       extraHigh: "Extra high",
       select: "Select thinking option",
       selectWithValue: "Select thinking option ({{value}})",

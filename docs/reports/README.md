@@ -97,6 +97,8 @@
 
 ## Provider、Agent 与会话
 
+- [Pi 推理控件与原生默认值验证](providers/pi-reasoning-controls-2026-10-22.md)
+
 - [Oh My Pi 原生 Provider 验证](providers/omp-native-provider.md)
 
 - [OpenCode 加载速度验证](providers/opencode-startup-real-usage-2026-10-21.md)

@@ -75,7 +75,7 @@
 
 - [ADR-157：整图输入与 Codex 用户图片的跨设备展示](decisions/providers/adr-157-codex-user-image-projection.md)：传输分块与整图输入的边界、超预算整图压缩、旧会话兼容及跨设备预览；Pi 用户图片投影扩展见 [ADR-176](decisions/providers/adr-176-pi-user-image-projection.md)。
 
-- [ADR-156：Pi 原生 RPC Provider](decisions/providers/adr-156-pi-native-rpc-provider.md)：`pi --mode rpc` JSONL 通道、Pi 1.2 起、采用 `provider/model` 格式的模型标识与原生会话恢复。
+- [ADR-156：Pi 原生 RPC Provider](decisions/providers/adr-156-pi-native-rpc-provider.md)：Pi 1.2 起的 JSONL RPC、原生会话恢复、动态模型与推理默认值、按字段应用配置、未来级别兼容，以及请求选项与有效原生推理级别的独立展示。
 
 - [ADR-155：持久 Relay 数据隧道](decisions/daemon/adr-155-persistent-relay-data-tunnel.md)：单数据 WSS、Yamux、旧中心回退与 Android/iOS/desktop 协议兼容。
 

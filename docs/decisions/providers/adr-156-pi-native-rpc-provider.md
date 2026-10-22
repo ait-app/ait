@@ -2,7 +2,9 @@
 
 - Status: Proposed (implementation under review).
 - Date: 2026-10-17.
-- Scope: `crates/provider`, `packages/protocol`; follows [ADR-089](adr-089-provider-owned-composition.md).
+- Scope: `crates/provider`, `packages/protocol`, `apps/mobile`; follows [ADR-089](adr-089-provider-owned-composition.md).
+- Updated: 2026-10-22. Reasoning controls replace the original unsupported-thinking limitation,
+  including the limitation recorded in [ADR-174](adr-174-pi-session-import.md).
 
 ## Context
 
@@ -21,7 +23,47 @@ run from automatic retries and compaction recovery.
   older completion semantics or replay uncertain prompt submissions.
 - Query models through `get_available_models` in an ephemeral `--no-session` process.
   Expose qualified `provider/model` IDs to avoid collisions between Pi's model backends.
+  Require `get_state` in the same process under the ordinary control deadline to mark Pi's
+  configured default model. State-read errors fail discovery instead of silently changing the
+  defaults persisted by profile forms. Selection validation reads only `get_available_models`,
+  without requesting state. Derive reasoning choices from `reasoning` and `thinkingLevelMap`:
+  null mappings disable levels, and `xhigh` /
+  `max` require explicit non-null mappings. Include additional non-null map keys as opaque
+  level IDs, using the ID as their fallback label. Only the current model's supported native
+  `thinkingLevel` is advertised as its default; unknown defaults remain unspecified so Pi
+  retains control of its saved settings and per-model defaults.
+  In shared profile and agent forms, omitting the first-thinking-option fallback applies only
+  to Pi. Other providers retain the existing first-option fallback when no default is advertised.
   Registration itself does not start processes or create storage.
+- Apply explicit thinking selections through `set_thinking_level` after model selection and
+  read back effective native state. Unspecified startup/resume thinking preserves Pi's settings;
+  clearing an explicit selection requests `medium`, Pi's baseline because its RPC has no unset
+  operation. This is the Pi adapter's native resolution of the cleared host override from
+  [ADR-034](adr-034-agent-config-session-events.md); it does not change saved global settings.
+  Publish effective `thinking_level_changed`
+  notifications through the existing runtime-info event, including idle and admission-time
+  extension changes. Apply host selections on startup/resume and subsequently only when the
+  corresponding requested field changes. An unchanged host thinking selection does not overwrite
+  an extension's change on the next prompt, including after a model-only or mode-only update.
+  Leave `runtimeInfo.thinkingOptionId` unset so directory filters use the latest stored
+  request, including pending changes and unspecified/default selections. Native clamping
+  and defaults must not change directory filter identity.
+  Report Pi's effective native level separately as `runtimeInfo.extra.thinkingLevel`.
+  The existing facts line uses this native fact for its displayed thinking label in
+  Ait-managed child-agent rows and their compact-layout sheets. Regular agent tabs show
+  the composer controls and do not render this separate facts line. The composer trigger
+  and dropdown checkmark both use the requested selection/catalog default, so a pending or
+  clamped selection remains consistent within that control. Missing native state in the facts
+  line falls back to the requested selection/catalog default. Runtime-info snapshot updates carry extension changes;
+  no separate `thinking_option_changed` timeline event is required.
+  Validate thinking IDs only as nonempty, control-free strings of at most 512 bytes, and let Pi
+  validate or clamp them for the selected model consistently on creation, updates and restore.
+  Do not reject future IDs merely because the adapter does not recognize them. Catalog options guide
+  selection but must not make a stale or imported profile unresumable.
+- Ait-managed child agents and Pi-native extension subagents are separate integrations.
+  This adapter does not enumerate or project extension-created Pi subagents into Ait's
+  subagent list. Installing a Pi subagent extension alone does not enable that list or
+  its sheet navigation. The reasoning facts-line change adds no native subagent support.
 - Create stable UUID sessions with `--session-id`; retain native session file handles for
   subsequent interactive resume. Resolve the host-owned session directory and pass it with
   `--session-dir` as specified by [ADR-174](adr-174-pi-session-import.md), keeping writers and
@@ -47,7 +89,7 @@ run from automatic retries and compaction recovery.
   safe structured diagnostics for spawn/version/write/response/frame failures, and fixed
   public failure messages. Native error text and credentials are not logged or persisted.
 - Preserve the host's persisted timeline across resume; do not advertise automatic native history
-  replay, rewind, steering, auxiliary generation or dynamic thinking controls. Native session
+  replay, rewind, steering or auxiliary generation. Native session
   import and explicit refresh are added by [ADR-174](adr-174-pi-session-import.md).
 - Expose a single native-tools mode that accurately describes Pi's absence of a built-in
   permission sandbox. Preserve native configuration. Cancel extension dialogs explicitly; unknown UI methods fail immediately with an
@@ -109,7 +151,7 @@ run from automatic retries and compaction recovery.
 
 Pi can be selected and used through the existing Agent workflow without adding a new service
 boundary. Unsupported host configuration and structured output are rejected before prompt
-submission. Richer extension dialogs, thinking controls, and
+submission. Richer extension dialogs and
 additional provider-specific slash-command controls need separate implementations.
 
 Operations and current limitations: [Pi](../../operations/pi.md).

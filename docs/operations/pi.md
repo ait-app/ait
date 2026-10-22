@@ -21,6 +21,9 @@ not fall back to PATH. No provider process is launched merely by registering the
 ## Supported behavior
 
 - Model discovery without creating persistent sessions or submitting prompts.
+- Model-specific reasoning controls derived from Pi's `reasoning` and `thinkingLevelMap`
+  metadata, with the native configured default model marked when the required state read
+  identifies a catalog model.
 - Native session creation and resume with stable IDs.
 - Native session discovery, import, and explicit history refresh from Pi's JSONL storage.
 - Text and attachment input, inline images accepted by the native model, streaming text
@@ -37,10 +40,61 @@ input and editor dialogs are explicitly cancelled. Notification-only extension U
 UI methods fail immediately with a protocol diagnostic (`extension_method`). This can cause extensions requiring interaction to decline their operation.
 
 Rewind, live steering, host-provided MCP/tool policies,
-custom system prompts, thinking-level selection, structured output and auxiliary summaries
+custom system prompts, structured output and auxiliary summaries
 are not exposed by this adapter. Unsupported settings are rejected instead of ignored.
 Existing native history changed outside Ait is not automatically re-imported into the Ait
 display timeline; use explicit history refresh.
+
+## Reasoning controls and defaults
+
+Discovery requires `get_available_models` and `get_state`, each under the normal 10-second
+control deadline. If Pi rejects, times out, or fails the state read, discovery fails instead of
+silently dropping defaults that profile forms persist. A slower successful read returns the same defaults.
+A successful state response without model information also leaves the default unmarked.
+Validation accepts nonempty, control-free thinking-level IDs of at most 512 bytes and lets Pi
+validate or resolve the effective level,
+including clamping choices from stale catalogs or imported profiles. Creation, configuration
+updates, and restore use the same rule, so a stored level that is no longer offered does not
+prevent resume. Explicit model selections still require a model in the current catalog;
+selection validation requests only `get_available_models`, without reading native state.
+
+Reasoning models expose `off`, `minimal`, `low`, `medium`, and `high` unless Pi explicitly
+disables a level with a null mapping. `xhigh` and `max` appear only when Pi supplies a non-null
+mapping. Additional non-null map keys are exposed with the ID as their fallback label, so new
+Pi levels remain selectable without an adapter update. Models without reasoning expose no
+thinking choices. The catalog reports the current
+model's effective `thinkingLevel` from Pi's state as its default only when that level is offered.
+Other models and missing or unsupported levels leave the thinking default
+unset; the composer preserves an unspecified selection so Pi can apply its saved settings and
+per-model defaults. The composer labels this unspecified choice "Default".
+Discovery does not guess a level or override Pi's saved settings on startup.
+Leaving an unknown thinking default unspecified in profile and agent forms is specific to Pi;
+other providers still seed their first offered thinking option when no default is advertised.
+
+Without an explicit thinking selection, creation and resume retain Pi's effective native level.
+An explicit selection uses `set_thinking_level`, followed by `get_state` readback so runtime
+information reflects native clamping. `runtimeInfo.thinkingOptionId` stays unset so directory
+filtering follows the latest stored selection, including pending configuration changes;
+`runtimeInfo.extra.thinkingLevel` carries the effective
+native level shown by the facts line in Ait-managed child-agent rows and their compact-layout
+sheets. Regular agent tabs show the composer controls without this separate facts line.
+The composer trigger and dropdown checkmark both show the
+requested selection/catalog default, including while Pi has yet to apply it or has clamped it.
+Clearing a previous explicit selection requests `medium`
+and reads back Pi's effective level. Model selection is applied before thinking selection.
+Extension `thinking_level_changed` events update runtime information while idle, during prompt
+admission, and during a turn. Startup and resume apply explicit host selections; later updates
+apply only changed model/thinking fields. An unchanged host thinking selection does not overwrite
+an extension's change on the next prompt, including after a model-only or mode-only update.
+These controls do not rewrite Pi's global defaults or credentials.
+Native thinking metadata is optional: unknown string levels are reported as received, and missing
+or non-string state values leave the runtime level unset. Change events without a string level
+are ignored. These variations do not prevent sessions or turns from running; explicit host
+selections still require a supported control and a successful native response.
+
+Pi-native subagents created by extensions are not integrated into Ait's subagent list or
+sheet navigation. Installing a Pi subagent extension alone does not enable those views.
+The facts line applies to child agents whose parent relationship is managed by Ait.
 
 ## Import an existing session
 

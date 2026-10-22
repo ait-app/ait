@@ -207,8 +207,8 @@ export const ptBR: TranslationResources = {
       select: "Selecionar provedor do agente",
     },
     thinking: {
+      providerDefault: "Padrão",
       title: "Raciocínio",
-      unknown: "Desconhecido",
       extraHigh: "Extra alto",
       select: "Selecionar opção de raciocínio",
       selectWithValue: "Selecionar opção de raciocínio ({{value}})",

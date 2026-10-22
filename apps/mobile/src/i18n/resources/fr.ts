@@ -210,8 +210,8 @@ export const fr: TranslationResources = {
       select: "Sélectionnez le fournisseur d'agent",
     },
     thinking: {
+      providerDefault: "Par défaut",
       title: "Pensée",
-      unknown: "Inconnu",
       extraHigh: "Très haut",
       select: "Sélectionnez l'option de réflexion",
       selectWithValue: "Sélectionnez l'option de réflexion ({{value}})",
