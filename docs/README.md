@@ -16,6 +16,7 @@
 
 - [daemon MCP 接口](operations/mcp.md)：Streamable HTTP、40 个编排工具、鉴权与 Workspace 上下文。
 - [项目说明](../README.md)：开发入口、workspace 和验证命令。
+- [品牌资源](../assets/brand/README.md)：深浅色 Logo、共用矢量源与生成命令；配色规范见 [ADR-051](decisions/branding/adr-051-ait-brand-identity.md)。
 - [桌面端](../apps/desktop/README.md)：Electron 启动、构建和打包。
 - [移动端与 Web](../apps/mobile/README.md)：Expo、浏览器连接与原生构建。
 - [Relay 客户端登录保持](plans/relay-client-session-persistence.md)：14 天登录、退出凭据保护、网页重开恢复与待实施的自动续期方案。

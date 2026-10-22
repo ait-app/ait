@@ -1,5 +1,5 @@
 {
-  "version": "swift-v1",
+  "version": "swift-v2",
   "viewBox": "0 0 660 464",
   "colors": {
     "primary": "#EF4B2C",
@@ -8,6 +8,14 @@
     "canvas": "#FAFAF8",
     "surface": "#FFFFFF",
     "border": "#D8DADD"
+  },
+  "darkColors": {
+    "primary": "#FF704D",
+    "secondary": "#FFA184",
+    "ink": "#F4F4F5",
+    "canvas": "#18181B",
+    "surface": "#27272A",
+    "border": "#3F3F46"
   },
   "faces": [
     "M0 0 332 111 477 238 317 460 302 404 226 427 333 313 192 225Z",
