@@ -178,7 +178,9 @@ AUR_PUSH=1 scripts/aur-publish.sh publish ait-git
 ## 准备版本
 
 同步根 `Cargo.toml` 的 `workspace.package.version`、Cargo.lock、根 package.json、
-所有活跃 npm workspace 及其 lockfile。然后运行：
+所有活跃 npm workspace 及其 lockfile，并完成下方的 [iOS 原生版本同步](#ios-原生版本同步)。
+即使本次只发布桌面，也必须在打标签前同步已提交的 iOS 工程，保证该标签可用于后续移动端构建。
+然后运行：
 
 ```bash
 npm ci
@@ -191,6 +193,41 @@ npm run typecheck --workspace=@ait/desktop --workspace=@ait/mobile
 
 更新根 CHANGELOG.md：该文件
 会打入应用，供“新功能”页面读取。把版本与发布变更经 PR 合并到 `main` 后，再创建标签。
+
+### iOS 原生版本同步
+
+更新 `apps/mobile/package.json` 不会自动更新已提交的 iOS 工程。每次准备版本时，必须同步：
+
+- `apps/mobile/ios/Ait/Info.plist` 的 `CFBundleShortVersionString` 和 `CFBundleVersion`，
+  分别使用 `getNativeReleaseVersion(package.version)` 返回的 `appVersion` 和 `iosBuildNumber`
+  （定义见 [`native-release-version.js`](../../apps/mobile/native-release-version.js)）。
+  例如 `0.1.15` 对应应用版本 `0.1.15`、build number `1015999`；beta 也按该函数推导。
+- `apps/mobile/ios/Podfile.lock` 中本地模块 `ExpoTwoWayAudio` 的版本与 podspec checksum。
+  使用锁定的 CocoaPods 重新生成锁文件，不手工修改 checksum。
+
+在 macOS 上安装根 npm 依赖后，以 `apps/mobile/eas.json` 的 `build.ait.env` 发布身份运行
+Expo prebuild，再更新并验证 CocoaPods 锁文件。下列公开身份须与该 profile 保持一致；
+Ruby、Bundler 和 CocoaPods 环境见 [Xcode Cloud 依赖安装](apple-builds.md#xcode-cloud-依赖安装)。
+
+```bash
+(
+  set -eu
+  cd apps/mobile
+  APP_VARIANT=production IOS_BUNDLE_IDENTIFIER=com.necokeine.ait \
+    APPLE_TEAM_ID=SVS7GV79T9 CI=1 EXPO_NO_TELEMETRY=1 \
+    env -u AIT_WEB_PLATFORM npm exec -- expo prebuild --platform ios --no-install
+  cd ios
+  bundle install
+  bundle exec pod install
+  bundle exec pod install --deployment
+)
+node --test scripts/xcode-cloud.test.mjs
+```
+
+核对生成的 plist 版本与上述推导值一致，将原生工程和锁文件随版本 PR 一起合并，再创建标签。
+`verify:release` 当前只检查 Cargo/npm 版本，不覆盖这些 iOS 字段；Xcode Cloud 的
+`ci_post_clone.sh` 会拒绝应用版本不一致的工程，后续 `pod install --deployment` 也要求锁文件一致。
+旧标签不会包含后补的版本修复，重试同一提交无法消除这类错误，必须从包含修复的提交重新构建。
 
 ### 发布覆盖率与 Release Notes
 
@@ -224,6 +261,8 @@ GitHub Release 创建和修复均使用 `--prerelease --latest=false`，保留�
 beta 标签不构建 Android APK；Google Play、iOS TestFlight 仍通过各自的手动入口发布，不随 beta 标签触发。
 
 ## 创建 Release
+
+确认版本 PR 已包含 [iOS 原生版本同步](#ios-原生版本同步)的工程与锁文件变更，并通过验证后再打标签。
 
 ```bash
 git switch main
