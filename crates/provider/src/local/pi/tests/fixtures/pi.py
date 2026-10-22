@@ -35,7 +35,23 @@ finish_after_state = False
 compacting = False
 invalid_settlement = False
 state_requests = 0
-model = {'provider': 'fixture', 'id': 'model', 'name': 'Fixture Model', 'input': ['text', 'image']}
+model = {'provider': 'fixture', 'id': 'model', 'name': 'Fixture Model', 'input': ['text', 'image'],
+         'reasoning': scenario != 'no-reasoning'}
+thinking = 'medium'
+native_thinking = {
+    'bad-thinking-state': 'future',
+    'none-thinking-state': 'none',
+    'ultra-thinking-state': 'ultra',
+    'null-thinking-state': None,
+    'malformed-thinking-state': 42,
+}
+if scenario == 'mapped-thinking':
+    model['thinkingLevelMap'] = {'medium': None, 'high': 'high', 'xhigh': 'xhigh', 'max': None}
+    thinking = 'high'
+available_models = [model]
+if scenario == 'multiple-models':
+    available_models.append(dict(model, id='other', name='Other Model'))
+    available_models.append(dict(model, id='clamped', name='Clamped Model'))
 
 def emit(value):
     print(json.dumps(value), flush=True)
@@ -53,21 +69,50 @@ for line in sys.stdin:
     if scenario == 'wrong-response':
         command['id'] = 'foreign'
     if kind == 'get_state':
+        if '--no-session' in args:
+            if scenario == 'discovery-state-slow':
+                time.sleep(0.4)
+            if scenario == 'discovery-state-rejected':
+                response(command, success=False)
+                continue
+            if scenario == 'discovery-state-timeout':
+                continue
+            if scenario == 'discovery-state-exit':
+                sys.exit(2)
+            if scenario == 'discovery-state-malformed':
+                print('not json', flush=True)
+                continue
+            if scenario == 'discovery-state-missing-model':
+                response(command, {})
+                continue
         state_requests += 1
         if invalid_settlement:
             invalid_settlement = False
             emit({'type': 'compaction_start', 'reason': 'unknown'})
         if scenario == 'idle':
-            for event in ['entry_appended', 'session_info_changed', 'thinking_level_changed', 'queue_update', 'extension_error']:
+            for event in ['entry_appended', 'session_info_changed', 'queue_update', 'extension_error']:
                 emit({'type': event})
+            emit({'type': 'thinking_level_changed', 'level': thinking})
             emit({'type': 'compaction_start', 'reason': 'manual'})
             emit({'type': 'compaction_end', 'reason': 'manual', 'result': {}, 'aborted': False})
             emit({'type': 'agent_settled', 'aborted': False})
         swapped_at = {'session-swap-open': 1, 'session-swap-configure': 2,
                       'session-swap-synchronize': 2}.get(scenario)
         response_identity = 'foreign' if state_requests == swapped_at else identity
-        response(command, {'model': model, 'sessionId': response_identity, 'sessionFile': str(path),
-                           'thinkingLevel': 'medium', 'isStreaming': running, 'isCompacting': compacting})
+        state = {'model': model, 'sessionId': response_identity, 'sessionFile': str(path),
+                 'thinkingLevel': native_thinking.get(scenario, thinking),
+                 'isStreaming': running, 'isCompacting': compacting}
+        if scenario == 'missing-thinking-state' or (scenario == 'thinking-state-disappears' and state_requests > 1):
+            del state['thinkingLevel']
+        if scenario.startswith('idle-thinking-') and state_requests == 1:
+            thinking = 'future' if scenario == 'idle-thinking-future' else 'low'
+            event = {'type': 'thinking_level_changed', 'level': thinking}
+            if scenario == 'idle-thinking-missing':
+                del event['level']
+            elif scenario == 'idle-thinking-malformed':
+                event['level'] = 42
+            emit(event)
+        response(command, state)
         if compacting and scenario != 'compaction-hang':
             compacting = False
             emit({'type': 'compaction_end', 'reason': 'manual', 'result': {}})
@@ -78,12 +123,45 @@ for line in sys.stdin:
             emit({'type': 'message_end', 'message': {'role': 'assistant', 'content': [{'type': 'text', 'text': 'Extension'}], 'stopReason': 'stop'}})
             emit({'type': 'agent_settled', 'aborted': False})
     elif kind == 'get_available_models':
-        models = {'bad-models': None, 'bad-model-label': [dict(model, name='bad\nlabel')]}.get(scenario, [model])
+        if scenario == 'discovery-models-rejected':
+            response(command, success=False)
+            continue
+        models = {'bad-models': None, 'bad-model-label': [dict(model, name='bad\nlabel')]}.get(scenario, available_models)
         response(command, {'models': models})
     elif kind == 'set_model':
-        response(command, model, command['provider'] == 'fixture' and command['modelId'] == 'model')
+        selected = next((candidate for candidate in available_models
+                         if candidate['provider'] == command['provider'] and candidate['id'] == command['modelId']), None)
+        if selected is not None:
+            model = selected
+            thinking = 'low' if model['id'] == 'other' else ('high' if scenario == 'mapped-thinking' else 'medium')
+        response(command, model, selected is not None)
+    elif kind == 'set_thinking_level':
+        if scenario == 'reject-thinking':
+            response(command, success=False)
+            continue
+        thinking = 'high' if scenario == 'clamp-thinking' else ('low' if model['id'] == 'clamped' else command['level'])
+        emit({'type': 'thinking_level_changed', 'level': thinking})
+        response(command)
     elif kind == 'prompt':
         text = command['message']
+        if text in ['thinking-before', 'thinking-after', 'thinking-handled', 'thinking-invalid']:
+            if text == 'thinking-after':
+                response(command, {'disposition': 'started'})
+            level = {'thinking-event-future': 'future', 'thinking-event-none': 'none',
+                     'thinking-event-ultra': 'ultra', 'thinking-event-null': None,
+                     'thinking-event-malformed': 42}.get(scenario, 'low')
+            if text == 'thinking-invalid':
+                level = 'future'
+            event = {'type': 'thinking_level_changed', 'level': level}
+            if scenario == 'thinking-event-missing':
+                del event['level']
+            elif isinstance(level, str):
+                thinking = level
+            emit(event)
+            if text != 'thinking-after':
+                response(command, {'disposition': 'handled' if text == 'thinking-handled' else 'started'})
+            emit({'type': 'agent_settled', 'aborted': False})
+            continue
         if text == 'reject':
             response(command, success=False)
             continue

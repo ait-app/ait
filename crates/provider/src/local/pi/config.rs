@@ -7,6 +7,21 @@ use serde_json::{Value, json};
 use super::PROVIDER;
 use crate::ports::agent_session::{AgentSessionError, AgentSessionSpec};
 
+const KNOWN_THINKING_OPTIONS: [(&str, &str, &str); 7] = [
+    ("off", "Off", "No extra reasoning"),
+    ("minimal", "Minimal", "Light reasoning"),
+    ("low", "Low", "Faster reasoning"),
+    ("medium", "Medium", "Balanced reasoning"),
+    ("high", "High", "Deeper reasoning"),
+    ("xhigh", "XHigh", "Very deep reasoning"),
+    ("max", "Max", "Extreme reasoning"),
+];
+
+// IDs are opaque to Ait: Pi validates or clamps them, including future and imported levels.
+fn valid_thinking_level_id(level: &str) -> bool {
+    !level.is_empty() && level.len() <= 512 && !level.chars().any(char::is_control)
+}
+
 /// Validate host settings, rejecting unsupported selections before native admission.
 /// Returns `Rejected` for settings this adapter cannot represent.
 pub(super) fn validate(config: &StoredAgentConfig) -> Result<(), AgentSessionError> {
@@ -18,7 +33,10 @@ pub(super) fn validate(config: &StoredAgentConfig) -> Result<(), AgentSessionErr
             .model
             .as_deref()
             .is_some_and(|model| split_model(model).is_none())
-        || config.thinking_option_id.is_some()
+        || config
+            .thinking_option_id
+            .as_deref()
+            .is_some_and(|level| !valid_thinking_level_id(level))
         || config.system_prompt.is_some()
         || config
             .tool_policy
@@ -81,7 +99,7 @@ pub(super) fn modes() -> Vec<Value> {
 
 /// Project native model facts into the catalog, omitting endpoints and credentials.
 /// Returns `Failed` for malformed, duplicate or oversized model identities.
-pub(super) fn models(data: &Value) -> Result<Vec<Value>, AgentSessionError> {
+pub(super) fn models(data: &Value, state: &Value) -> Result<Vec<Value>, AgentSessionError> {
     let models = data["models"]
         .as_array()
         .filter(|models| models.len() <= 4096)
@@ -105,8 +123,59 @@ pub(super) fn models(data: &Value) -> Result<Vec<Value>, AgentSessionError> {
                     !name.is_empty() && name.len() <= 1024 && !name.chars().any(char::is_control)
                 })
                 .ok_or(AgentSessionError::Failed)?;
-            Ok(json!({"provider":PROVIDER,"id":qualified,"label":label,
-            "isSelectable":true,"thinkingOptions":[]}))
+            let options = thinking_options(model);
+            let is_default = state["model"]["provider"] == provider && state["model"]["id"] == id;
+            // Native state only establishes the current model's effective default.
+            let default = state["thinkingLevel"]
+                .as_str()
+                .filter(|level| is_default && options.iter().any(|option| option["id"] == *level));
+            let mut projected = json!({"provider":PROVIDER,"id":qualified,"label":label,
+                "isSelectable":true,
+                "isDefault":is_default,
+                "thinkingOptions":options});
+            if let Some(default) = default {
+                for option in projected["thinkingOptions"]
+                    .as_array_mut()
+                    .into_iter()
+                    .flatten()
+                {
+                    if option["id"] == default {
+                        option["isDefault"] = json!(true);
+                    }
+                }
+                projected["defaultThinkingOptionId"] = json!(default);
+            }
+            Ok(projected)
         })
         .collect()
+}
+
+fn thinking_options(model: &Value) -> Vec<Value> {
+    if model["reasoning"] != true {
+        return Vec::new();
+    }
+    let mut options: Vec<Value> = KNOWN_THINKING_OPTIONS
+        .iter()
+        .filter(|(id, _, _)| match model["thinkingLevelMap"].get(*id) {
+            Some(Value::Null) => false,
+            None => !matches!(*id, "xhigh" | "max"),
+            Some(_) => true,
+        })
+        .map(|(id, label, description)| json!({"id":id,"label":label,"description":description}))
+        .collect();
+    if let Some(mapping) = model["thinkingLevelMap"].as_object() {
+        options.extend(
+            mapping
+                .iter()
+                .filter(|(id, value)| {
+                    !value.is_null()
+                        && valid_thinking_level_id(id)
+                        && !KNOWN_THINKING_OPTIONS
+                            .iter()
+                            .any(|(known, _, _)| known == id)
+                })
+                .map(|(id, _)| json!({"id":id,"label":id})),
+        );
+    }
+    options
 }

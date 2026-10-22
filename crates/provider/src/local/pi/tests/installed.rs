@@ -6,6 +6,128 @@ use axum::{Json, Router, routing::post};
 use std::sync::{Arc, Mutex};
 use tokio_util::task::AbortOnDropHandle;
 
+mod reasoning;
+
+#[tokio::test]
+#[ignore = "requires Pi >= 1.2 on PATH; isolated native controls without model requests"]
+async fn installed_pi_reasoning_controls_follow_settings_clamping_and_extensions() {
+    let directory = tempfile::tempdir().unwrap();
+    let root = directory.path().canonicalize().unwrap();
+    let native = root.join("native");
+    let client = reasoning_client(&root, "http://127.0.0.1:1/v1");
+    let mut spec = AgentSessionSpec {
+        provider: PROVIDER.into(),
+        cwd: root.to_str().unwrap().into(),
+        config: StoredAgentConfig::default(),
+    };
+    let details = client.discover(&spec.cwd).await.unwrap();
+    let model = details
+        .models
+        .iter()
+        .find(|model| model["id"] == "ait-fixture/reasoner")
+        .unwrap();
+    assert_eq!(model["isDefault"], true);
+    assert_eq!(model["defaultThinkingOptionId"], "low");
+    assert_eq!(
+        model["thinkingOptions"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .map(|option| option["id"].as_str().unwrap())
+            .collect::<Vec<_>>(),
+        ["off", "minimal", "low", "high", "xhigh"]
+    );
+    assert!(!native.join("sessions").exists());
+
+    // Mirror the composer: creation submits the catalog's advertised default.
+    spec.config.thinking_option_id = model["defaultThinkingOptionId"].as_str().map(str::to_owned);
+    let mut session = client.create_session(&spec).await.unwrap();
+    assert_eq!(
+        native_thinking(&session.runtime_info().await.unwrap()),
+        Some("low")
+    );
+    // Pi clamps medium upward to high; readback must retain that effective value.
+    spec.config.thinking_option_id = Some("medium".into());
+    session
+        .start_turn("/ait_think", &spec.config)
+        .await
+        .unwrap();
+    let events = terminal(session.as_mut()).await;
+    assert!(events.iter().any(|event| matches!(event, AgentTurnEvent::RuntimeInfo(info) if native_thinking(info) == Some("minimal"))));
+    assert_eq!(
+        native_thinking(&session.runtime_info().await.unwrap()),
+        Some("minimal")
+    );
+    let handle = session.persistence().unwrap();
+    session.close().await.unwrap();
+
+    spec.config.thinking_option_id = Some("medium".into());
+    let mut resumed = client
+        .resume_session(&handle, &spec, AgentResumePurpose::Interactive)
+        .await
+        .unwrap();
+    assert_eq!(
+        native_thinking(&resumed.runtime_info().await.unwrap()),
+        Some("high")
+    );
+    resumed.close().await.unwrap();
+
+    // A stale profile's disabled max level remains admissible and resumable.
+    spec.config.thinking_option_id = Some("max".into());
+    client.validate_selection(&spec).await.unwrap();
+    let mut resumed = client
+        .resume_session(&handle, &spec, AgentResumePurpose::Interactive)
+        .await
+        .unwrap();
+    assert_eq!(
+        native_thinking(&resumed.runtime_info().await.unwrap()),
+        Some("xhigh")
+    );
+    resumed.close().await.unwrap();
+    let settings: Value =
+        serde_json::from_slice(&std::fs::read(native.join("settings.json")).unwrap()).unwrap();
+    assert_eq!(settings["defaultThinkingLevel"], "low");
+}
+
+fn reasoning_client(root: &std::path::Path, base_url: &str) -> PiClient {
+    let native = root.join("native");
+    let extensions = native.join("extensions");
+    std::fs::create_dir_all(&extensions).unwrap();
+    std::fs::write(
+        native.join("models.json"),
+        json!({"providers":{"ait-fixture":{
+            "baseUrl":base_url,"api":"openai-completions","apiKey":"fixture-only",
+            "models":[{"id":"reasoner","name":"Reasoner","reasoning":true,
+                "thinkingLevelMap":{"medium":null,"xhigh":"high","max":null},
+                "input":["text"],"cost":{"input":0,"output":0,"cacheRead":0,"cacheWrite":0},
+                "contextWindow":8192,"maxTokens":128}]
+        }}})
+        .to_string(),
+    )
+    .unwrap();
+    std::fs::write(
+        native.join("settings.json"),
+        json!({
+            "defaultProvider":"ait-fixture","defaultModel":"reasoner","defaultThinkingLevel":"low"
+        })
+        .to_string(),
+    )
+    .unwrap();
+    std::fs::write(extensions.join("thinking.js"),
+        "export default function(pi) { pi.registerCommand('ait_think', { handler: async () => { pi.setThinkingLevel('minimal'); } }); }").unwrap();
+    let mut client = PiClient::new("pi".into());
+    client.environment = AgentEnvironment::try_from(BTreeMap::from([
+        (
+            "PI_CODING_AGENT_DIR".into(),
+            native.to_str().unwrap().into(),
+        ),
+        ("HOME".into(), root.to_str().unwrap().into()),
+    ]))
+    .unwrap();
+    client.session_environment = history::SessionEnvironment::isolated(root, &native);
+    client
+}
+
 #[tokio::test]
 #[ignore = "requires Pi >= 1.2 on PATH; uses only an isolated loopback model"]
 async fn installed_pi_streams_and_resumes_with_loopback_model() {

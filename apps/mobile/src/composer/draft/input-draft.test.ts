@@ -173,7 +173,10 @@ describe("buildDraftComposerCommandConfig", () => {
     },
   );
 
-  it.each([["claude", "low"]])(
+  it.each([
+    ["claude", "low"],
+    ["pi", "off"],
+  ])(
     "keeps an unknown %s thinking default unspecified in labels and commands",
     (provider, firstId) => {
       const model = {

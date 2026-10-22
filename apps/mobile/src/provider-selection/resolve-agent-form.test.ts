@@ -246,10 +246,16 @@ describe("resolveThinkingOptionId", () => {
     ).toBe("xhigh");
   });
 
-  it("falls back to first option when no default and requested is invalid", () => {
+  it.each([
+    ["claude", "low"],
+    ["codex", "low"],
+    ["opencode", "low"],
+    ["deepseek-harness", "low"],
+    ["pi", ""],
+  ] as const)("resolves %s thinking without an advertised default as %j", (provider, expected) => {
     const modelsNoDefault: AgentModelDefinition[] = [
       {
-        provider: "codex",
+        provider,
         id: "m",
         label: "M",
         isDefault: true,
@@ -259,10 +265,32 @@ describe("resolveThinkingOptionId", () => {
         ],
       },
     ];
+    for (const requestedThinkingOptionId of ["", "invalid", "high"]) {
+      expect(
+        resolveThinkingOptionId({
+          availableModels: modelsNoDefault,
+          modelId: "m",
+          requestedThinkingOptionId,
+        }),
+      ).toBe(requestedThinkingOptionId === "high" ? "high" : expected);
+    }
+  });
+
+  it("uses an explicitly marked default option", () => {
     expect(
       resolveThinkingOptionId({
-        availableModels: modelsNoDefault,
-        modelId: "m",
+        availableModels: [
+          {
+            provider: "pi",
+            id: "backend/model",
+            label: "Model",
+            thinkingOptions: [
+              { id: "off", label: "Off" },
+              { id: "low", label: "Low", isDefault: true },
+            ],
+          },
+        ],
+        modelId: "backend/model",
         requestedThinkingOptionId: "",
       }),
     ).toBe("low");
@@ -544,7 +572,7 @@ describe("resolveFormState", () => {
     expect(resolved.thinkingOptionId).toBe("low");
   });
 
-  it("falls back to the first thinking option when model exposes options without a provider default", () => {
+  it("seeds Claude's first thinking option when no default is advertised", () => {
     const claudeWithThinking: AgentModelDefinition[] = [
       {
         provider: "claude",

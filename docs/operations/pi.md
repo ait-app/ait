@@ -21,6 +21,7 @@ not fall back to PATH. No provider process is launched merely by registering the
 ## Supported behavior
 
 - Model discovery without creating persistent sessions or submitting prompts.
+- Model-specific reasoning choices, native catalog defaults, and thinking-level selection.
 - Native session creation and resume with stable IDs.
 - Native session discovery, import, and explicit history refresh from Pi's JSONL storage.
 - Text and attachment input, inline images accepted by the native model, streaming text
@@ -37,10 +38,59 @@ input and editor dialogs are explicitly cancelled. Notification-only extension U
 UI methods fail immediately with a protocol diagnostic (`extension_method`). This can cause extensions requiring interaction to decline their operation.
 
 Rewind, live steering, host-provided MCP/tool policies,
-custom system prompts, thinking-level selection, structured output and auxiliary summaries
+custom system prompts, structured output and auxiliary summaries
 are not exposed by this adapter. Unsupported settings are rejected instead of ignored.
 Existing native history changed outside Ait is not automatically re-imported into the Ait
 display timeline; use explicit history refresh.
+
+## Reasoning controls and defaults
+
+Discovery reads `get_available_models` and `get_state` in the same ephemeral process,
+each under the normal 10-second control deadline. A failed state read fails discovery,
+so a temporary error cannot silently change defaults persisted by forms. A successful
+response without a catalog model leaves the default model unmarked.
+
+Reasoning models offer `off`, `minimal`, `low`, `medium`, and `high` unless a null
+`thinkingLevelMap` entry disables a level. `xhigh` and `max` require non-null mappings.
+Additional non-null keys are exposed with the ID as their fallback label. Models without
+reasoning have no thinking choices. Only the current native model's offered thinking
+level is advertised as a default; missing, unsupported, and other-model defaults remain unset.
+
+Pi profile and agent forms leave unknown thinking defaults unspecified. Other providers
+retain their existing first-option fallback. Shared controls show "Default" when no
+concrete selection is resolved, following [ADR-183](../decisions/clients/adr-183-shared-reasoning-control-selection.md).
+
+Creation and resume preserve native thinking unless explicitly selected. Explicit model
+selection is applied before `set_thinking_level`, followed by `get_state` readback.
+Thinking IDs are nonempty, control-free strings of at most 512 UTF-8 bytes; Pi resolves
+or clamps stale and future levels. Explicit models must still exist in the current catalog.
+Selection validation reads the model catalog without requesting native state.
+
+Later updates apply only changed model/thinking fields. Unchanged host thinking does not
+overwrite extension changes. Model-only updates capture the current native thinking,
+switch models, restore that level, and read back native clamping. If thinking is absent
+or not a string, Pi's destination model default is retained. When thinking and model both
+change, the new thinking request takes precedence. Clearing an explicit selection requests
+`medium`, Pi's baseline because there is no unset RPC; Pi may clamp it.
+
+`runtimeInfo.extra.thinkingLevel` carries effective native state.
+`runtimeInfo.thinkingOptionId` remains unset so directory filters use the latest saved
+request, including pending changes. Extension `thinking_level_changed` events update runtime
+information while idle, during admission, and during turns. Missing/non-string state leaves
+the runtime level unset, unknown strings are preserved, and events without a string level
+are ignored. The controls display the requested selection/catalog default; native clamping
+does not rewrite the host request or Pi's global settings and credentials.
+
+The facts line in Ait-managed child-agent rows and their compact-layout sheets displays
+Pi's effective native level, which can differ from the requested composer selection after
+clamping or an extension change. Missing metadata falls back to the requested selection or
+catalog default; present malformed metadata displays "Unknown". Regular agent tabs use the
+composer controls without this separate facts line.
+
+Pi-native subagents created by extensions are not enumerated in Ait's child-agent list.
+Installing a Pi subagent extension alone does not enable those views.
+
+The adapter and display contract is recorded in [ADR-184](../decisions/providers/adr-184-pi-reasoning-controls.md).
 
 ## Import an existing session
 

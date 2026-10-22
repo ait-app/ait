@@ -59,6 +59,34 @@ impl PiClient {
         self.images = super::images::ImageStore::new(directory);
         self
     }
+
+    /// Read the native catalog, optionally including defaults from the same process.
+    /// Returns validation, process or protocol errors rather than publishing partial defaults.
+    async fn discover_models(
+        &self,
+        cwd: &str,
+        include_defaults: bool,
+    ) -> Result<Vec<Value>, AgentSessionError> {
+        config::directory(cwd)?;
+        transport::version(self).await?;
+        let mut transport = transport::Transport::spawn(self, cwd, &["--no-session".into()])?;
+        let result = async {
+            let models = transport
+                .request(json!({"type":"get_available_models"}))
+                .await?;
+            // Defaults seed persisted profiles, so a slow state read must not silently
+            // turn a concrete selection into an unspecified native preference.
+            let state = if include_defaults {
+                transport.request(json!({"type":"get_state"})).await?
+            } else {
+                Value::Null
+            };
+            config::models(&models, &state)
+        }
+        .await;
+        transport.close().await?;
+        result
+    }
 }
 
 impl AgentClient for PiClient {
@@ -146,15 +174,8 @@ impl AgentClient for PiClient {
 
     fn discover<'a>(&'a self, cwd: &'a str) -> AgentSessionFuture<'a, Details> {
         Box::pin(async move {
-            config::directory(cwd)?;
-            transport::version(self).await?;
-            let mut transport = transport::Transport::spawn(self, cwd, &["--no-session".into()])?;
-            let result = transport
-                .request(json!({"type":"get_available_models"}))
-                .await;
-            transport.close().await?;
             Ok(Details {
-                models: config::models(&result?)?,
+                models: self.discover_models(cwd, true).await?,
                 modes: config::modes(),
                 features: Vec::new(),
             })
@@ -164,11 +185,12 @@ impl AgentClient for PiClient {
     fn validate_selection<'a>(&'a self, spec: &'a AgentSessionSpec) -> AgentSessionFuture<'a, ()> {
         Box::pin(async move {
             config::spec(spec)?;
+            // Pi validates or clamps opaque levels against the selected model on creation,
+            // configuration and resume. A stale catalog/profile must not prevent resume.
             if let Some(model) = &spec.config.model
                 && !self
-                    .discover(&spec.cwd)
+                    .discover_models(&spec.cwd, false)
                     .await?
-                    .models
                     .iter()
                     .any(|item| item["id"] == *model)
             {

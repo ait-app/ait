@@ -5,6 +5,7 @@ import type {
   AgentSelectOption,
   ProviderSnapshotEntry,
 } from "@ait/protocol/agent-types";
+import { normalizeAgentModelDefinition } from "@ait/protocol/agent-types";
 import type { AgentProfile } from "@ait/protocol/messages";
 import { formatAgentModeLabel, formatThinkingOptionLabel } from "@/agent-controls/labels";
 import { applyFeatureValues, pruneFeatureValues } from "@/hooks/feature-preferences";
@@ -243,14 +244,8 @@ function buildThinkingOptions(options: readonly AgentSelectOption[]): AgentProfi
 }
 
 /**
- * Every selection resolves to a concrete id.
- *
- * Each list used to carry a synthetic "Provider default" row. It read as a value
- * you could choose but stored an absent one, so a profile that looked fully
- * specified would apply whatever the host preferred at the time — and two hosts
- * would materialize the same profile differently. The schedule form never
- * offered that row; this form now matches it and seeds the catalog's own default
- * instead, so what the form shows is what the profile stores.
+ * Seed concrete catalog defaults, falling back to the first offered choice.
+ * Pi alone preserves native settings when its thinking default is unknown.
  */
 function defaultModelId(models: readonly AgentModelDefinition[]): string {
   return models.find((model) => model.isDefault)?.id ?? models[0]?.id ?? "";
@@ -261,12 +256,10 @@ function defaultModeId(entry: ProviderSnapshotEntry | null, modes: readonly Agen
 }
 
 function defaultThinkingOptionId(model: AgentModelDefinition | null): string {
-  const options = model?.thinkingOptions ?? [];
+  if (!model) return "";
   return (
-    model?.defaultThinkingOptionId ??
-    options.find((option) => option.isDefault)?.id ??
-    options[0]?.id ??
-    ""
+    normalizeAgentModelDefinition(model).defaultThinkingOptionId ??
+    (model.provider === "pi" ? "" : (model.thinkingOptions?.[0]?.id ?? ""))
   );
 }
 

@@ -71,6 +71,82 @@ function optionValues(options: readonly { value: string }[]): string[] {
 }
 
 describe("openAgentProfileForm", () => {
+  it.each([
+    ["claude", "model"],
+    ["claude", "option"],
+    ["pi", "model"],
+    ["pi", "option"],
+  ] as const)(
+    "seeds %s's advertised %s thinking default before its first option",
+    (provider, source) => {
+      const model = openAgentProfileForm({ mode: "create" });
+      model.applyProviderCatalog([
+        {
+          ...CLAUDE,
+          provider,
+          models: [
+            {
+              provider,
+              id: "native",
+              label: "Native",
+              isDefault: true,
+              defaultThinkingOptionId: source === "model" ? "high" : undefined,
+              thinkingOptions: [
+                { id: "low", label: "Low" },
+                { id: "high", label: "High", isDefault: source === "option" },
+              ],
+            },
+          ],
+        },
+      ]);
+      model.setName("Advertised default");
+      model.setProvider(provider, { label: provider });
+
+      expect(model.getState().thinkingOptionId).toBe("high");
+      expect(model.getState().submitValue).toMatchObject({ thinkingOptionId: "high" });
+    },
+  );
+
+  it.each([
+    ["claude", "low"],
+    ["codex", "low"],
+    ["opencode", "low"],
+    ["deepseek-harness", "low"],
+    ["pi", ""],
+  ] as const)("seeds %s thinking without an advertised default as %j", (provider, expected) => {
+    const model = openAgentProfileForm({ mode: "create" });
+    model.applyProviderCatalog([
+      {
+        ...CLAUDE,
+        provider,
+        models: [
+          {
+            provider,
+            id: "native",
+            label: "Native",
+            isDefault: true,
+            thinkingOptions: [
+              { id: "low", label: "Low" },
+              { id: "high", label: "High" },
+            ],
+          },
+        ],
+      },
+    ]);
+    model.setName("Native settings");
+    model.setProvider(provider, { label: provider });
+
+    expect(model.getState().thinkingOptionId).toBe(expected);
+    expect(model.getState().canSubmit).toBe(true);
+    if (expected) {
+      expect(model.getState().submitValue).toMatchObject({ thinkingOptionId: expected });
+    } else {
+      expect(model.getState().submitValue).not.toHaveProperty("thinkingOptionId");
+    }
+    model.setThinking("high", { label: "High" });
+    expect(model.getState().submitValue).toMatchObject({ thinkingOptionId: "high" });
+  });
+
   it("starts a create form empty and cannot submit", () => {
     const model = openWithCatalog({ mode: "create" });
     const state = model.getState();

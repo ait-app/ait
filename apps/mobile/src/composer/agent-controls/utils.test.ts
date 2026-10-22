@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import {
+  getRuntimeThinkingState,
   getFeatureHighlightColor,
   getFeatureTooltip,
   getAgentControlHintKey,
@@ -281,4 +282,106 @@ describe("resolveThinkingDisplay", () => {
       );
     },
   );
+});
+
+describe("native thinking readback", () => {
+  it.each(["high", "low", "future"])(
+    "displays effective %s while preserving the requested selection",
+    (level) => {
+      const info = {
+        provider: "pi",
+        sessionId: "session",
+        thinkingOptionId: "max",
+        extra: { thinkingLevel: level },
+      };
+      const selection = resolveAgentModelSelection({
+        models: [{ id: "a", provider: "pi", label: "Model A" }],
+        runtimeModelId: "a",
+        configuredModelId: null,
+        explicitThinkingOptionId: "max",
+        runtimeThinkingState: getRuntimeThinkingState(info),
+      });
+      expect(selection.selectedThinkingId).toBe("max");
+      expect(selection.displayThinkingId).toBe(level);
+      expect(selection.displayThinking).toBe(level[0].toUpperCase() + level.slice(1));
+    },
+  );
+
+  it("shows the native default even when no level was selected or advertised", () => {
+    const selection = resolveAgentModelSelection({
+      models: null,
+      runtimeModelId: "a",
+      configuredModelId: null,
+      explicitThinkingOptionId: null,
+      runtimeThinkingState: { status: "reported", optionId: "medium" },
+    });
+    expect(selection.selectedThinkingId).toBeNull();
+    expect(selection.displayThinkingId).toBe("medium");
+    expect(selection.displayThinking).toBe("Medium");
+  });
+
+  it("distinguishes missing native state from a reported value", () => {
+    for (const extra of [undefined, {}, { thinkingLevel: undefined }]) {
+      expect(getRuntimeThinkingState({ provider: "pi", sessionId: "session", extra })).toEqual({
+        status: "unreported",
+      });
+    }
+  });
+
+  it.each([null, "", "   ", 42, false, [], {}])(
+    "preserves malformed native state (%j)",
+    (level) => {
+      const runtimeThinkingState = getRuntimeThinkingState({
+        provider: "pi",
+        sessionId: "session",
+        extra: { thinkingLevel: level },
+      });
+      expect(runtimeThinkingState).toEqual({ status: "malformed" });
+
+      for (const explicitThinkingOptionId of [null, "max"]) {
+        for (const defaultThinkingOptionId of [undefined, "low"]) {
+          const selection = resolveAgentModelSelection({
+            models: [{ id: "a", provider: "pi", label: "Model A", defaultThinkingOptionId }],
+            runtimeModelId: "a",
+            configuredModelId: null,
+            explicitThinkingOptionId,
+            runtimeThinkingState,
+          });
+          expect(selection.selectedThinkingId).toBe(
+            explicitThinkingOptionId ?? defaultThinkingOptionId ?? null,
+          );
+          expect(selection.displayThinkingId).toBeNull();
+          expect(selection.isThinkingUnknown).toBe(true);
+          expect(selection.displayThinking).toBe("Unknown");
+        }
+      }
+    },
+  );
+
+  it("uses the requested selection or default only when native state is unreported", () => {
+    for (const explicitThinkingOptionId of [null, "max"]) {
+      const selection = resolveAgentModelSelection({
+        models: null,
+        runtimeModelId: "a",
+        configuredModelId: null,
+        explicitThinkingOptionId,
+        runtimeThinkingState: { status: "unreported" },
+      });
+      expect(selection.isThinkingUnknown).toBe(false);
+      expect(selection.displayThinking).toBe(explicitThinkingOptionId ? "Max" : "Default");
+    }
+  });
+
+  it("does not interpret another provider's metadata as Pi state", () => {
+    expect(
+      getRuntimeThinkingState({
+        provider: "claude",
+        sessionId: "session",
+        thinkingOptionId: "max",
+        extra: { thinkingLevel: "high" },
+      }),
+    ).toEqual({ status: "unreported" });
+    expect(getRuntimeThinkingState(null)).toEqual({ status: "unreported" });
+    expect(getRuntimeThinkingState(undefined)).toEqual({ status: "unreported" });
+  });
 });
