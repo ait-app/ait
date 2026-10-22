@@ -208,6 +208,7 @@ export const ko: TranslationResources = {
     thinking: {
       title: "사고",
       unknown: "알 수 없음",
+      providerDefault: "기본값",
       extraHigh: "매우 높음",
       select: "사고 옵션 선택",
       selectWithValue: "사고 옵션 선택 ({{value}})",
