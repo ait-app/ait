@@ -81,9 +81,9 @@ npm run build:ios
 导出可安装或可提交的 IPA，需要自己的 Bundle ID、Apple Team、签名证书和匹配的
 provisioning profile。在 Xcode 的 Signing & Capabilities 配置自己的 Team，按用途导出一次
 ExportOptions.plist（development / ad-hoc / App Store Connect），保存在 Git 之外。
-Ait 正式 TestFlight 发布不走这条本地签名路径，而是经由托管在 EAS 的签名凭据和手动 GitHub
-Actions 工作流完成，见[发布操作指南的 Apple TestFlight iOS 手动发布一节](releasing.md#apple-testflight-ios-手动发布)
-和 [ADR-070](../decisions/clients/adr-070-ios-testflight-release.md)。
+Ait 的 TestFlight 内部测试使用 Xcode Cloud 完成归档、签名、上传和测试组分发，
+见[发布操作指南的 Apple TestFlight iOS 手动发布一节](releasing.md#apple-testflight-ios-手动发布)
+和 [ADR-183](../decisions/clients/adr-183-ios-xcode-cloud-release.md)。
 本地未签名归档流程仍可用于验证原生编译，然后运行：
 
 ```sh
@@ -105,7 +105,8 @@ npm run build:ios:ipa
 脚本每次重新应用 Expo 配置，不使用 `prebuild --clean`。原生目录是生成物，请把持久配置
 放在 `app.config.js` 或 Expo config plugin 中。
 
-如选择 EAS，先设置自己的 `EXPO_OWNER`、`EAS_PROJECT_ID` 和 `IOS_BUNDLE_IDENTIFIER`，
+`eas.json` 仅保留历史手动配置，Ait 的 iOS CI 不再使用 EAS。如需自行使用 EAS，
+先设置自己的 `EXPO_OWNER`、`EAS_PROJECT_ID` 和 `IOS_BUNDLE_IDENTIFIER`，
 再从 `apps/mobile` 运行 `eas build --platform ios --profile simulator|preview|production`。
 项目不再默认绑定上游 Expo project 或 App Store app。EAS 会使用账号服务及对应签名流程。
 

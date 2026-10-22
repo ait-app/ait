@@ -342,13 +342,14 @@ test("main publishing requires desktop and applicable CI checks to pass", () => 
   );
 });
 
-test("mobile publishing remains manual only", async () => {
-  for (const name of ["release-android-play", "release-ios-testflight"]) {
-    const mobile = yaml.parse(
-      await readFile(new URL(`../.github/workflows/${name}.yml`, import.meta.url), "utf8"),
-    );
-    assert.deepEqual(Object.keys(mobile.on), ["workflow_dispatch"]);
-  }
+test("Google Play publishing remains manual only", async () => {
+  const mobile = yaml.parse(
+    await readFile(
+      new URL("../.github/workflows/release-android-play.yml", import.meta.url),
+      "utf8",
+    ),
+  );
+  assert.deepEqual(Object.keys(mobile.on), ["workflow_dispatch"]);
 });
 
 test("packaging shell passes nightly names literally and keeps default names without a label", async (t) => {
