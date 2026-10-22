@@ -47,6 +47,11 @@ pub struct Creations {
 }
 
 impl Creations {
+    /// Observe committed creation receipts independently of client subscriptions.
+    pub fn set_publisher(&self, publisher: Arc<dyn crate::hub::EventPublisher>) {
+        self.events.set_publisher(publisher);
+    }
+
     /// Load receipts from `store` without retrying interrupted work; return a shared coordinator.
     /// # Errors
     /// Returns the store's load error before accepting any new creation side effects.

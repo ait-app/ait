@@ -4,6 +4,7 @@ pub mod agent_runtime;
 pub mod bot;
 pub mod creation;
 pub mod daemon_config;
+pub mod hub;
 pub mod project_config;
 pub mod project_icon;
 pub mod push;

@@ -3,6 +3,61 @@ use serde_json::json;
 
 type Captured = Arc<Mutex<Vec<(SessionEventKind, Value)>>>;
 
+#[derive(Debug)]
+struct Publisher {
+    received: Mutex<Vec<(String, Value)>>,
+    owns_notification: bool,
+}
+
+impl crate::hub::EventPublisher for Publisher {
+    fn publish(&self, method: &str, payload: &Value) -> bool {
+        self.received
+            .lock()
+            .unwrap()
+            .push((method.to_owned(), payload.clone()));
+        self.owns_notification
+    }
+}
+
+#[test]
+fn center_observes_before_focus_filter_and_claims_only_native_push() {
+    let events = SessionEvents::default();
+    let publisher = Arc::new(Publisher {
+        received: Mutex::new(Vec::new()),
+        owns_notification: true,
+    });
+    events.set_publisher(publisher.clone());
+    let mut push = events.subscribe_attention();
+    let connection = events.connect();
+    let (subscription, local) = capture(&connection, true);
+    subscription.activate().unwrap();
+    let now = Utc::now().timestamp_millis();
+    heartbeat(&connection, Some("agent"), true, now);
+    let payload = json!({"agentId":"agent","reason":"finished","timestamp":"now"});
+    events.publish_at(SessionEventKind::AgentAttention, &payload, now);
+    assert_eq!(publisher.received.lock().unwrap()[0].1, payload);
+    assert_eq!(local.lock().unwrap()[0].1["shouldNotify"], false);
+    assert!(
+        publisher.received.lock().unwrap()[0]
+            .1
+            .get("subscriptionId")
+            .is_none()
+    );
+    drop(connection);
+    events.publish_at(SessionEventKind::AgentAttention, &payload, now);
+    assert_eq!(publisher.received.lock().unwrap().len(), 2);
+    assert!(
+        push.try_recv().is_err(),
+        "center-owned native push never also uses legacy delivery"
+    );
+    events.set_publisher(Arc::new(Publisher {
+        received: Mutex::new(Vec::new()),
+        owns_notification: false,
+    }));
+    events.publish_at(SessionEventKind::AgentAttention, &payload, now);
+    assert_eq!(push.try_recv().unwrap().1, payload);
+}
+
 #[test]
 fn push_attention_survives_disconnect_but_respects_focus_and_foreground_tokens() {
     let events = SessionEvents::default();

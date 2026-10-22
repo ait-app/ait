@@ -2,6 +2,41 @@ use super::*;
 use crate::outbound::Frame;
 use serde_json::json;
 
+#[derive(Debug, Default)]
+struct Publisher(Mutex<Vec<(String, Value)>>);
+
+impl crate::hub::EventPublisher for Publisher {
+    fn publish(&self, method: &str, params: &Value) -> bool {
+        self.0
+            .lock()
+            .unwrap()
+            .push((method.to_owned(), params.clone()));
+        false
+    }
+}
+
+#[test]
+fn publisher_gets_one_unfiltered_commit_independently_of_client_observers() {
+    let hub = EventHub::default();
+    let publisher = Arc::new(Publisher::default());
+    hub.set_publisher(publisher.clone());
+    let (outbound, mut receiver) = Outbound::new();
+    let subscription = hub.subscribe(
+        "sub".to_owned(),
+        BTreeSet::from(["other".to_owned()]),
+        outbound,
+    );
+    subscription.activate().unwrap();
+    hub.publish("agent", "agent_stream", &json!({"seq":1}));
+    assert!(receiver.try_recv().is_err());
+    assert_eq!(
+        publisher.0.lock().unwrap().as_slice(),
+        &[("agent_stream".to_owned(), json!({"seq":1}))]
+    );
+    hub.publish("agent", "agent_stream", &Value::Null);
+    assert_eq!(publisher.0.lock().unwrap().len(), 1);
+}
+
 #[test]
 fn operation_observers_emit_progress_without_connection_subscription_identity() {
     let hub = EventHub::default();

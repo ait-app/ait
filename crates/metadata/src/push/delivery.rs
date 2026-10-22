@@ -87,7 +87,7 @@ async fn deliver(
             let server = state.info().server_id;
             let agents = dependencies.agents.clone();
             move |tokens| {
-                let notification = notification(agents.as_ref(), kind, &payload, &server)?;
+                let notification = prepare_notification(agents.as_ref(), kind, &payload, &server)?;
                 let targets = if notification.is_some() {
                     tokens.active(chrono::Utc::now().timestamp_millis())
                 } else {
@@ -158,7 +158,12 @@ async fn send_with_retry(
     Err(DeliveryError::Retryable(0))
 }
 
-fn notification(
+/// Prepare notification content from current Host state, without device or foreground filtering.
+/// `agents` is blocking storage; callers must run this outside an async reactor.
+/// Returns none for stale, cleared, internal, archived or unsupported attention.
+/// # Errors
+/// Returns `RegistryIo` when Agent state cannot be read.
+pub fn prepare_notification(
     agents: &dyn AgentRuntimeRegistry,
     kind: SessionEventKind,
     payload: &Value,

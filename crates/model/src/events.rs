@@ -10,7 +10,13 @@ use crate::outbound::{Outbound, QueueError};
 
 /// An ephemeral fan-out hub. Business owners serialize snapshot reads with registration.
 #[derive(Debug, Clone, Default)]
-pub struct EventHub(Arc<Mutex<Vec<Weak<Listener>>>>);
+pub struct EventHub(Arc<Mutex<State>>);
+
+#[derive(Debug, Default)]
+struct State {
+    listeners: Vec<Weak<Listener>>,
+    publisher: Option<Arc<dyn crate::hub::EventPublisher>>,
+}
 
 #[derive(Debug)]
 struct Listener {
@@ -34,6 +40,14 @@ struct Delivery {
 pub struct Subscription(Arc<Listener>);
 
 impl EventHub {
+    /// Install a Host publisher for committed events, independent of per-resource subscriptions.
+    pub fn set_publisher(&self, publisher: Arc<dyn crate::hub::EventPublisher>) {
+        self.0
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
+            .publisher = Some(publisher);
+    }
+
     /// Register a paused observer for exact business keys with a host-generated release ID.
     #[must_use]
     pub fn subscribe(
@@ -66,12 +80,14 @@ impl EventHub {
             outbound,
             delivery: Mutex::new(Delivery::default()),
         });
-        let mut listeners = self
+        let mut state = self
             .0
             .lock()
             .unwrap_or_else(std::sync::PoisonError::into_inner);
-        listeners.retain(|listener| listener.strong_count() != 0);
-        listeners.push(Arc::downgrade(&listener));
+        state
+            .listeners
+            .retain(|listener| listener.strong_count() != 0);
+        state.listeners.push(Arc::downgrade(&listener));
         Subscription(listener)
     }
 
@@ -80,18 +96,25 @@ impl EventHub {
         if !params.is_object() {
             return;
         }
-        let listeners: Vec<_> = {
-            let mut listeners = self
+        let (listeners, publisher): (Vec<_>, _) = {
+            let mut state = self
                 .0
                 .lock()
                 .unwrap_or_else(std::sync::PoisonError::into_inner);
-            listeners.retain(|listener| listener.strong_count() != 0);
-            listeners
+            state
+                .listeners
+                .retain(|listener| listener.strong_count() != 0);
+            let listeners = state
+                .listeners
                 .iter()
                 .filter_map(Weak::upgrade)
                 .filter(|listener| listener.keys.contains(key))
-                .collect()
+                .collect();
+            (listeners, state.publisher.clone())
         };
+        if let Some(publisher) = publisher {
+            publisher.publish(method, params);
+        }
         for listener in listeners {
             let mut params = params.clone();
             if listener.include_id {

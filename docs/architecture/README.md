@@ -138,6 +138,12 @@ workspace 包与普通、开发、构建、optional 和平台条件依赖，拒�
 
 移动端前台通过本地通知显示 attention；后台推送由 `metadata::push` 协调，`daemon::host::push` 实现 Apple APNs 和 Google FCM adapter。`model::session` 提供不依赖连接的有界 attention 通道以及设备前台去重；Provider 和 Terminal 仍只发布已提交事件，见 [ADR-177](../decisions/clients/adr-177-native-local-and-remote-notifications.md)。
 
+Host 通过 `model::hub` 的端口向中心发布事件和目录摘要。`relay::hub` 实现现有 serve 链路
+上的中心调用，`persistence::storage::hub` 实现原子 journal，`daemon::host::hub` 协调队列、
+重试与投影。发布观察在本机焦点筛选之前；Timeline 仅发布更新标记，实际历史仍由 Provider
+持有。中心原生通知通过 `AIT_SERVER_HUB_NOTIFICATIONS=true` 显式开启，等待客户端完成
+账号级设备注册后切换；默认继续旧原生推送。详见 [ADR-181](../decisions/daemon/adr-181-hub-host-publication.md)。
+
 metadata 的 `workspace.get.request` 按身份读取一个 Workspace 与所属 Project；客户端目标缓存和
 定向读取独立于完整侧栏快照，不标记全局 hydrated 或完整 checkpoint，见
 [ADR-126](../decisions/workspace/adr-126-workspace-target-read.md)。provider 在 Timeline SQLite 内维护

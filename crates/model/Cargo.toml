@@ -10,6 +10,7 @@ domain.workspace = true
 chrono.workspace = true
 sha2.workspace = true
 uuid.workspace = true
+uuid.features = ["serde"]
 base64.workspace = true
 # Match Paseo's ICU-backed localeCompare for directory ordering and continuation cursors.
 icu_collator.workspace = true

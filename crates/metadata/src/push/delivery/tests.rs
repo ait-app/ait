@@ -207,7 +207,7 @@ fn content_rejects_stale_deleted_archived_internal_and_unknown_attention() {
     let (_, _, registry) = fixture();
     let payload = json!({"agentId":"agent","reason":"permission","timestamp":"now"});
     assert_eq!(
-        notification(
+        prepare_notification(
             registry.as_ref(),
             SessionEventKind::AgentAttention,
             &payload,
@@ -232,7 +232,7 @@ fn content_rejects_stale_deleted_archived_internal_and_unknown_attention() {
             }
         }
         assert!(
-            notification(
+            prepare_notification(
                 registry.as_ref(),
                 SessionEventKind::AgentAttention,
                 &payload,
@@ -242,10 +242,10 @@ fn content_rejects_stale_deleted_archived_internal_and_unknown_attention() {
             .is_none()
         );
     }
-    let terminal = notification(registry.as_ref(), SessionEventKind::TerminalAttention, &json!({"terminalId":"terminal","workspaceId":"workspace","title":"Done","body":"Completed"}), "host").unwrap().unwrap();
+    let terminal = prepare_notification(registry.as_ref(), SessionEventKind::TerminalAttention, &json!({"terminalId":"terminal","workspaceId":"workspace","title":"Done","body":"Completed"}), "host").unwrap().unwrap();
     assert_eq!(terminal.data["terminalId"], "terminal");
     assert!(
-        notification(
+        prepare_notification(
             registry.as_ref(),
             SessionEventKind::ServerInfo,
             &payload,

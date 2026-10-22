@@ -4,6 +4,7 @@ mod bot;
 mod browser_auth;
 mod chunks;
 mod hub_control;
+mod hub_publication;
 mod mcp;
 mod paseo;
 mod relay_rpc;

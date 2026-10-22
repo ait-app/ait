@@ -9,6 +9,7 @@
 
 ## Daemon 与协议
 
+- [Host Hub 发布接入验证](daemon/hub-host-publication-2026-10-22.md)
 - [Hub 真机互通与端点续传验证](daemon/hub-device-resume-2026-10-22.md)
 
 - [Codex OOM 后恢复与错误上报](providers/codex-oom-recovery-2026-10-21.md)

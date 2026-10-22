@@ -117,6 +117,8 @@ pub(crate) struct Config {
     /// Browser origins accepted by the injected host policy.
     pub web_origins: Vec<String>,
     pub headless: bool,
+    /// Opt in after clients register native push targets on the account Hub access link.
+    pub hub_notifications: bool,
 }
 
 impl Config {
@@ -192,6 +194,8 @@ impl Config {
         for origin in &web_origins {
             validate_origin(origin)?;
         }
+        let hub_notifications =
+            parse_hub_notifications(env("AIT_SERVER_HUB_NOTIFICATIONS").as_deref())?;
         // Persist credentials only after all non-secret startup settings have been validated.
         let token = if let Some(token) = explicit_token {
             token
@@ -207,7 +211,17 @@ impl Config {
             log_level,
             web_origins,
             headless,
+            hub_notifications,
         })
+    }
+}
+
+fn parse_hub_notifications(value: Option<&std::ffi::OsStr>) -> anyhow::Result<bool> {
+    match value.and_then(std::ffi::OsStr::to_str) {
+        Some("true" | "1") => Ok(true),
+        Some("false" | "0") => Ok(false),
+        None if value.is_none() => Ok(false),
+        Some(_) | None => bail!("AIT_SERVER_HUB_NOTIFICATIONS must be true, false, 1 or 0"),
     }
 }
 

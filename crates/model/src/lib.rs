@@ -6,6 +6,7 @@ mod context;
 pub mod creation;
 pub mod directory_sync;
 pub mod events;
+pub mod hub;
 pub mod methods;
 pub mod outbound;
 pub mod pagination;

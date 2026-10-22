@@ -3,6 +3,7 @@
 //! session; each session gets its own WebSocket on the fixed local daemon.
 //! The link resumes after network loss without closing those sessions.
 
+mod calls;
 mod link;
 mod session;
 mod wire;
@@ -12,9 +13,10 @@ use std::sync::Arc;
 use std::time::Duration;
 
 use futures_util::{SinkExt, StreamExt};
+use model::hub::{CallFuture, Center, LinkState, Scope};
 use secrecy::{ExposeSecret, SecretString};
 use serde::{Deserialize, Serialize};
-use tokio::sync::{Mutex, mpsc};
+use tokio::sync::{Mutex, mpsc, watch};
 use tokio::time::{Instant, sleep, sleep_until, timeout};
 use tokio_tungstenite::tungstenite::{Bytes, Message};
 use tokio_util::sync::CancellationToken;
@@ -76,6 +78,7 @@ struct State {
     generation: Uuid,
     cancel: CancellationToken,
     replaced_at: Option<Instant>,
+    calls: Option<calls::Sender>,
 }
 
 /// Owns at most one hub link and the local sessions it carries.
@@ -84,6 +87,7 @@ pub struct Connector {
     state: Arc<Mutex<State>>,
     local: Arc<Local>,
     shutdown: CancellationToken,
+    publication: watch::Sender<LinkState>,
 }
 
 impl Connector {
@@ -94,9 +98,11 @@ impl Connector {
                 generation: Uuid::new_v4(),
                 cancel: CancellationToken::new(),
                 replaced_at: None,
+                calls: None,
             })),
             local,
             shutdown,
+            publication: watch::channel(LinkState::default()).0,
         }
     }
 }
@@ -148,12 +154,25 @@ impl Connector {
         }
         let generation = Uuid::new_v4();
         let cancel = self.shutdown.child_token();
+        let scope = Scope {
+            center: center.to_string(),
+            node_session_id: grant.node_session_id,
+        };
+        let (sender, mut calls) = calls::Calls::channel();
         {
             let mut state = self.state.lock().await;
             state.cancel.cancel();
             state.cancel = cancel.clone();
             state.generation = generation;
             state.replaced_at = None;
+            state.calls = Some(sender);
+            self.publication.send_modify(|publication| {
+                if publication.scope.as_ref() != Some(&scope) {
+                    publication.methods.clear();
+                }
+                publication.scope = Some(scope);
+                publication.online = false;
+            });
             state.status = Status {
                 connecting: true,
                 ..Status::default()
@@ -170,6 +189,7 @@ impl Connector {
                         grant.hub_ticket,
                         generation,
                         &cancel,
+                        &mut calls,
                     )
                     .await;
                 if let Err(error) = &result {
@@ -189,6 +209,8 @@ impl Connector {
         state.cancel.cancel();
         state.generation = Uuid::new_v4();
         state.status = Status::default();
+        state.calls = None;
+        self.publication.send_replace(LinkState::default());
     }
 
     /// Current link state without credentials.
@@ -223,6 +245,13 @@ impl Connector {
             rejected,
             ..Status::default()
         };
+        state.calls = None;
+        self.publication.send_modify(|publication| {
+            publication.online = false;
+            if state.status.rejected.is_some() {
+                *publication = LinkState::default();
+            }
+        });
     }
 
     async fn update(&self, generation: Uuid, change: impl FnOnce(&mut Status)) {
@@ -239,6 +268,7 @@ impl Connector {
         ticket: SecretString,
         generation: Uuid,
         cancel: &CancellationToken,
+        calls: &mut calls::Calls,
     ) -> Result<(), Failure> {
         let mut link = Link::default();
         let (output_tx, mut output_rx) = mpsc::channel(MAX_SESSIONS);
@@ -258,9 +288,10 @@ impl Connector {
                 joined = join(&self.local, url, &credential, &mut link) => joined,
             };
             match joined {
-                Ok((socket, fresh, link_grace)) => {
+                Ok((socket, fresh, link_grace, methods)) => {
                     if fresh {
                         sessions.routes.clear();
+                        calls.fresh();
                     }
                     grace = link_grace;
                     lost = None;
@@ -274,10 +305,21 @@ impl Connector {
                         };
                     })
                     .await;
+                    let state = self.state.lock().await;
+                    if state.generation != generation {
+                        return Ok(());
+                    }
+                    self.publication.send_modify(|publication| {
+                        publication.online = true;
+                        publication.link = id;
+                        publication.methods = methods;
+                    });
+                    drop(state);
                     let mut pump = Pump {
                         link: &mut link,
                         sessions: &mut sessions,
                         outputs: &mut output_rx,
+                        calls,
                     };
                     match pump.run(socket, cancel).await? {
                         Ended::Stopped => return Ok(()),
@@ -288,6 +330,11 @@ impl Connector {
                         status.connecting = true;
                     })
                     .await;
+                    let state = self.state.lock().await;
+                    if state.generation == generation {
+                        self.publication
+                            .send_modify(|publication| publication.online = false);
+                    }
                 }
                 Err(failure @ (Failure::Rejected(_) | Failure::Relay(Error::InvalidGrant))) => {
                     return Err(failure);
@@ -327,7 +374,7 @@ async fn join(
     url: &str,
     credential: &SecretString,
     link: &mut Link,
-) -> Result<(Socket, bool, Duration), Failure> {
+) -> Result<(Socket, bool, Duration, Vec<String>), Failure> {
     let mut socket = local
         .dialer
         .connect_authorized(url, credential.expose_secret(), wire::MAX_FRAME)
@@ -352,6 +399,7 @@ async fn join(
             recv,
             resume_token,
             grace_seconds,
+            center_methods,
         } => {
             let fresh = match link.join(id, resumed, recv, resume_token)? {
                 Joined::Fresh => true,
@@ -362,7 +410,12 @@ async fn join(
                     false
                 }
             };
-            Ok((socket, fresh, Duration::from_secs(grace_seconds)))
+            Ok((
+                socket,
+                fresh,
+                Duration::from_secs(grace_seconds),
+                center_methods,
+            ))
         }
         Inbound::Error { code } => {
             tracing::warn!(code = code.as_str(), "Hub rejected the link");
@@ -371,6 +424,7 @@ async fn join(
         Inbound::Ack { .. }
         | Inbound::Open { .. }
         | Inbound::Msg { .. }
+        | Inbound::Reply { .. }
         | Inbound::Close { .. } => Err(Error::Protocol.into()),
     }
 }
@@ -445,6 +499,7 @@ struct Pump<'a> {
     link: &'a mut Link,
     sessions: &'a mut Sessions,
     outputs: &'a mut mpsc::Receiver<(Uuid, Output)>,
+    calls: &'a mut calls::Calls,
 }
 
 impl Pump<'_> {
@@ -455,7 +510,6 @@ impl Pump<'_> {
         let mut idle = Instant::now() + IDLE_TIMEOUT;
         loop {
             let outgoing = tokio::select! {
-                biased;
                 () = cancel.cancelled() => {
                     let _ = timeout(Duration::from_secs(1), sink.close()).await;
                     return Ok(Ended::Stopped);
@@ -477,11 +531,17 @@ impl Pump<'_> {
                     }
                 }
                 Some((id, output)) = self.outputs.recv(), if self.link.has_room() => self.output(id, output)?,
-                _ = acks.tick() => self.link.take_ack()?.map(Message::Binary),
+                Some(request) = self.calls.queue.recv(), if self.link.has_room() => {
+                    self.calls.output(request, self.link)?.map(Message::Binary)
+                }
+                _ = acks.tick() => {
+                    self.calls.prune();
+                    self.link.take_ack()?.map(Message::Binary)
+                },
                 () = sleep_until(idle) => return Ok(Ended::Lost),
             };
             if let Some(message) = outgoing
-                && timeout(WRITE_TIMEOUT, sink.send(message)).await.is_err()
+                && !matches!(timeout(WRITE_TIMEOUT, sink.send(message)).await, Ok(Ok(())))
             {
                 return Ok(Ended::Lost);
             }
@@ -499,6 +559,10 @@ impl Pump<'_> {
         let refused = match header {
             Inbound::Ack { a } => {
                 self.link.acked(a)?;
+                return Ok(None);
+            }
+            Inbound::Reply { id, .. } => {
+                self.calls.reply(id, &payload)?;
                 return Ok(None);
             }
             Inbound::Open { s, .. } => self.sessions.open(s, payload).err().map(|code| (s, code)),
@@ -545,6 +609,21 @@ impl Pump<'_> {
                 .push(|seq| Outbound::Msg { seq, s: id, pt }, &body)?,
         };
         Ok(Some(Message::Binary(frame)))
+    }
+}
+
+impl Center for Connector {
+    fn state(&self) -> watch::Receiver<LinkState> {
+        self.publication.subscribe()
+    }
+
+    fn call(
+        &self,
+        scope: Scope,
+        method: &'static str,
+        params: serde_json::Value,
+    ) -> CallFuture<'_> {
+        Box::pin(self.call_center(scope, method, params))
     }
 }
 

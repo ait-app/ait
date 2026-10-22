@@ -181,6 +181,27 @@ fn validate_listener(address: SocketAddr, token: &SecretString) -> Result<(), Co
 }
 
 impl Api {
+    /// Return the existing serve link as a center call port; no new network connection is opened.
+    #[must_use]
+    pub fn hub_center(&self) -> Arc<dyn model::hub::Center> {
+        Arc::new(self.shared.relay.hub().clone())
+    }
+
+    /// Attach the daemon-owned publisher to committed session, creation and timeline events.
+    pub fn set_event_publisher(&self, publisher: Arc<dyn model::hub::EventPublisher>) {
+        self.shared
+            .metadata
+            .session_events
+            .set_publisher(publisher.clone());
+        self.shared
+            .metadata
+            .creations
+            .set_publisher(publisher.clone());
+        if let Some(execution) = &self.shared.provider.agent_execution {
+            execution.set_timeline_publisher(publisher);
+        }
+    }
+
     /// Claim exclusive Relay control before sharing or serving the API.
     ///
     /// External HTTP/RPC start and stop operations then return conflict errors.
