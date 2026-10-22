@@ -184,6 +184,54 @@ index 76eb808..7c40526 100644
      }
      this.markAsOutOfBounds(adaptedEvent.pointerId);
      this.trackedPointers.delete(adaptedEvent.pointerId);
+diff --git a/node_modules/react-native-gesture-handler/lib/commonjs/handlers/gestures/GestureDetector/useMountReactions.js b/node_modules/react-native-gesture-handler/lib/commonjs/handlers/gestures/GestureDetector/useMountReactions.js
+--- a/node_modules/react-native-gesture-handler/lib/commonjs/handlers/gestures/GestureDetector/useMountReactions.js
++++ b/node_modules/react-native-gesture-handler/lib/commonjs/handlers/gestures/GestureDetector/useMountReactions.js
+@@ -21,6 +21,12 @@ function shouldUpdateDetector(relation, gesture) {
+ function useMountReactions(updateDetector, state) {
+   (0, _react.useEffect)(() => {
+     return _mountRegistry.MountRegistry.addMountListener(gesture => {
++      // A related gesture can mount after layout cleanup detaches this view,
++      // but before passive cleanup removes this listener.
++      if (!state.isMounted) {
++        return;
++      }
++
+       // At this point the ref in the gesture config should be updated, so we can check if one of the gestures
+       // set in a relation with the gesture got mounted. If so, we need to update the detector to propagate
+       // the changes to the native side.
+diff --git a/node_modules/react-native-gesture-handler/lib/module/handlers/gestures/GestureDetector/useMountReactions.js b/node_modules/react-native-gesture-handler/lib/module/handlers/gestures/GestureDetector/useMountReactions.js
+--- a/node_modules/react-native-gesture-handler/lib/module/handlers/gestures/GestureDetector/useMountReactions.js
++++ b/node_modules/react-native-gesture-handler/lib/module/handlers/gestures/GestureDetector/useMountReactions.js
+@@ -18,6 +18,12 @@ function shouldUpdateDetector(relation, gesture) {
+ export function useMountReactions(updateDetector, state) {
+   useEffect(() => {
+     return MountRegistry.addMountListener(gesture => {
++      // A related gesture can mount after layout cleanup detaches this view,
++      // but before passive cleanup removes this listener.
++      if (!state.isMounted) {
++        return;
++      }
++
+       // At this point the ref in the gesture config should be updated, so we can check if one of the gestures
+       // set in a relation with the gesture got mounted. If so, we need to update the detector to propagate
+       // the changes to the native side.
+diff --git a/node_modules/react-native-gesture-handler/src/handlers/gestures/GestureDetector/useMountReactions.ts b/node_modules/react-native-gesture-handler/src/handlers/gestures/GestureDetector/useMountReactions.ts
+--- a/node_modules/react-native-gesture-handler/src/handlers/gestures/GestureDetector/useMountReactions.ts
++++ b/node_modules/react-native-gesture-handler/src/handlers/gestures/GestureDetector/useMountReactions.ts
+@@ -27,6 +27,12 @@ export function useMountReactions(
+ ) {
+   useEffect(() => {
+     return MountRegistry.addMountListener((gesture) => {
++      // A related gesture can mount after layout cleanup detaches this view,
++      // but before passive cleanup removes this listener.
++      if (!state.isMounted) {
++        return;
++      }
++
+       // At this point the ref in the gesture config should be updated, so we can check if one of the gestures
+       // set in a relation with the gesture got mounted. If so, we need to update the detector to propagate
+       // the changes to the native side.
 diff --git a/node_modules/react-native-gesture-handler/lib/module/web/tools/PointerEventManager.js b/node_modules/react-native-gesture-handler/lib/module/web/tools/PointerEventManager.js
 index 6ce3b8f..8fe28bc 100644
 --- a/node_modules/react-native-gesture-handler/lib/module/web/tools/PointerEventManager.js
