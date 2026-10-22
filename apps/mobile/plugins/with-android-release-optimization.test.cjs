@@ -55,6 +55,12 @@ test("the app's Expo options generate optimized release properties accepted by P
   await compileModsAsync(config, { projectRoot, platforms: ["android"] });
   const gradle = await readFile(path.join(projectRoot, "android/app/build.gradle"), "utf8");
   const properties = await readFile(path.join(projectRoot, "android/gradle.properties"), "utf8");
+  const proguard = await readFile(path.join(projectRoot, "android/app/proguard-rules.pro"), "utf8");
+  assert.match(
+    proguard,
+    /-keep\s+@interface\s+expo\.modules\.kotlin\.records\.Field\s*\{\s*\*;\s*\}/,
+    "Expo's reflected @Field annotation must survive R8 without renaming",
+  );
   const { validateAndroidPlayOptimization } =
     await import("../../../scripts/android-play-release.mjs");
   validateAndroidPlayOptimization(gradle, properties);
