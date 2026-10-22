@@ -134,6 +134,25 @@ describe.skipIf(!process.env.AIT_SERVER_BIN)("real Rust child lifecycle", () => 
     expect(manager.authorization(`ws://${restarted.listen}/v1/ws`)).toBeUndefined();
   }, 40000);
 
+  it("controls the local hub serve link and reports refusals with their status", async () => {
+    const manager = create(process.env.AIT_SERVER_BIN!);
+    await expect(manager.hubRequest("GET")).rejects.toThrow("The local runtime is not ready.");
+    await manager.start();
+    await expect(manager.hubRequest("GET")).resolves.toMatchObject({
+      online: false,
+      connecting: false,
+      management: { mode: "external" },
+    });
+    await expect(
+      manager.hubRequest("PUT", {
+        center_url: "http://example.com",
+        hub_ticket: "a".repeat(64),
+        node_session_id: "00000000-0000-4000-8000-000000000001",
+      }),
+    ).rejects.toMatchObject({ status: 400 });
+    await expect(manager.hubRequest("DELETE")).resolves.toBeNull();
+  }, 40000);
+
   it("does not adopt or stop another process using the same data directory", async () => {
     const first = create(process.env.AIT_SERVER_BIN!);
     const running = await first.start();

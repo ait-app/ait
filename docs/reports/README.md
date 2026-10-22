@@ -9,6 +9,8 @@
 
 ## Daemon 与协议
 
+- [Hub 真机互通与端点续传验证](daemon/hub-device-resume-2026-10-22.md)
+
 - [Codex OOM 后恢复与错误上报](providers/codex-oom-recovery-2026-10-21.md)
 
 - [Provider 错误与重启恢复拆分验证](daemon/provider-recovery-split-2026-10-20.md)

@@ -1,5 +1,7 @@
 import { AccountChannel, type ChannelHost } from "./account-channel.js";
 import type { DaemonTransportFactory } from "./daemon-client-transport-types.js";
+import { HUB_PATH, HUB_PROTOCOL } from "./hub/frame.js";
+import type { HubTicket } from "./hub/link.js";
 import {
   createWebSocketTransportFactory,
   defaultWebSocketFactory,
@@ -63,6 +65,11 @@ export interface AccountDependencies {
   appVersion: string;
   runtime(): { status: string; serverId: string; instanceId?: string; features?: string[] };
   local(method: "GET" | "PUT" | "DELETE", body?: unknown): Promise<unknown>;
+  /**
+   * The built-in daemon's hub serve control (`/api/hub/control`). Rejections carry the HTTP
+   * `status`; 404 (older daemon) and 409 (center-managed daemon) stop hub maintenance.
+   */
+  localHub?(method: "GET" | "PUT" | "DELETE", body?: unknown): Promise<unknown>;
   save(account: SavedAccount | null): Promise<void>;
   notify(snapshot: AccountSnapshot): void;
   closeTransports(): void;
@@ -96,6 +103,8 @@ interface HostPublication {
   installationId: string;
   node: NodeSession | null;
   nextRenew: number;
+  /** Hub serve link of this runtime instance, maintained only for the built-in daemon. */
+  hub: { next: number; failures: number; unsupported: boolean; yielded: boolean };
 }
 
 export class AccountError extends Error {
@@ -129,6 +138,21 @@ export function normalizeCenter(value: string): string {
 
 /** A relay visit started during startup may wait this long for this device's registration. */
 const NODE_READY_WAIT_MS = 10_000;
+/** A center without the hub answers 404; ask again only occasionally. */
+const HUB_UNAVAILABLE_RETRY_MS = 5 * 60_000;
+/** Another process took over this node's serve link; leave it there for a while. */
+const HUB_REPLACED_RETRY_MS = 5 * 60_000;
+
+function hubTicket(grant: { hub_ticket?: unknown; hub_path?: unknown; protocol?: unknown }) {
+  if (
+    grant.protocol !== HUB_PROTOCOL ||
+    grant.hub_path !== HUB_PATH ||
+    typeof grant.hub_ticket !== "string" ||
+    !/^[0-9a-f]{64}$/i.test(grant.hub_ticket)
+  )
+    throw new Error("The service returned an invalid hub ticket.");
+  return grant.hub_ticket;
+}
 
 function retryDelay(failures: number): number {
   return Math.min(30_000, 1000 * 2 ** Math.min(failures, 5)) * (0.8 + Math.random() * 0.4);
@@ -155,6 +179,7 @@ export class AccountSessionManager {
   private channelFailures = 0;
   private controlFailures = 0;
   private nextControl = 0;
+  private hubMaintenance: Promise<void> | null = null;
   private nextRegistration = 0;
   private registrationFailures = 0;
   private leaseRecoveryAttempted = false;
@@ -515,6 +540,8 @@ export class AccountSessionManager {
   /** Release one daemon's lease without signing out or affecting other hosts. */
   async unpublishHost(serverId: string): Promise<void> {
     const entry = this.publications.get(serverId);
+    if (entry && serverId === this.deps.runtime().serverId)
+      await this.deps.localHub?.("DELETE").catch(() => undefined);
     if (entry?.node)
       await this.publicationApi(entry, `/v1/node-sessions/${entry.node.node_session_id}`, "DELETE");
     if (this.publications.get(serverId) === entry) this.publications.delete(serverId);
@@ -531,6 +558,7 @@ export class AccountSessionManager {
       installationId: runtime.serverId,
       node: null,
       nextRenew: 0,
+      hub: { next: 0, failures: 0, unsupported: false, yielded: false },
     };
     this.publications.set(runtime.serverId, entry);
     return entry;
@@ -634,6 +662,23 @@ export class AccountSessionManager {
     return { ...result, url: url.toString() };
   }
 
+  /** One-use access ticket for this device's hub link; waits briefly for registration. */
+  async openHubTicket(): Promise<HubTicket> {
+    if (!this.suspended && this.account && !this.node) await this.waitForNode(NODE_READY_WAIT_MS);
+    if (this.suspended || !this.account || !this.node) {
+      throw new Error("Sign in and wait for this device to register.");
+    }
+    const generation = this.generation;
+    const center = this.account.center;
+    const grant = await this.api<{ hub_ticket: string; hub_path: string; protocol: string }>(
+      `/v1/node-sessions/${this.node.node_session_id}/hub-tickets`,
+      "POST",
+      { ep: "access" },
+    );
+    if (generation !== this.generation) throw new Error("Connection cancelled.");
+    return { centerUrl: center, ticket: hubTicket(grant) };
+  }
+
   async closeVisit(id: string): Promise<void> {
     if (this.account) await this.api(`/v1/relay/sessions/${id}`, "DELETE").catch(() => undefined);
   }
@@ -680,6 +725,10 @@ export class AccountSessionManager {
   private async tick(): Promise<void> {
     // Host lease authority survives client sign-out and client-node failures.
     await this.renewPublications();
+    // The optional hub runs beside, never ahead of, lease renewal and the legacy relay.
+    this.hubMaintenance ??= this.maintainHub().finally(() => {
+      this.hubMaintenance = null;
+    });
     if (!this.account || this.suspended || this.closing) return;
     const generation = this.generation;
     try {
@@ -924,6 +973,76 @@ export class AccountSessionManager {
       node_session_id: this.node.node_session_id,
     });
     this.nextControl = Date.now() + retryDelay(this.controlFailures++);
+  }
+
+  /** Bring the built-in daemon's hub serve link online; independent of the relay control. */
+  private async maintainHub(): Promise<void> {
+    const local = this.deps.localHub;
+    const runtime = this.deps.runtime();
+    const entry = this.publications.get(runtime.serverId);
+    const node = entry?.node;
+    if (
+      !local ||
+      !entry ||
+      !node?.host_id ||
+      this.closing ||
+      entry.hub.unsupported ||
+      runtime.status !== "running" ||
+      (runtime.instanceId && runtime.instanceId !== entry.runtime.instanceId) ||
+      Date.now() < entry.hub.next
+    )
+      return;
+    const current = () =>
+      this.publications.get(runtime.serverId) === entry && entry.node === node && !this.closing;
+    const stop = (error: unknown) => {
+      const status = (error as { status?: unknown } | null)?.status;
+      // An older daemon has no hub API, and a center-managed one runs its own link.
+      if (status !== 404 && status !== 409) throw error;
+      entry.hub.unsupported = true;
+    };
+    try {
+      const status = (await local("GET").catch(stop)) as
+        | { online?: boolean; connecting?: boolean; rejected?: string | null }
+        | undefined;
+      if (!status || !current()) return;
+      if (status.rejected !== "replaced") entry.hub.yielded = false;
+      if (status.online) {
+        entry.hub.failures = 0;
+        return;
+      }
+      if (status.connecting) return;
+      // Taking the link straight back would make two serve processes flap.
+      if (status.rejected === "replaced" && !entry.hub.yielded) {
+        entry.hub.yielded = true;
+        entry.hub.next = Date.now() + HUB_REPLACED_RETRY_MS;
+        return;
+      }
+      let grant: { hub_ticket: string; hub_path: string; protocol: string };
+      try {
+        grant = await this.publicationApi(
+          entry,
+          `/v1/node-sessions/${node.node_session_id}/hub-tickets`,
+          "POST",
+          { ep: "serve" },
+        );
+      } catch (error) {
+        if (error instanceof AccountError && error.status === 404) {
+          entry.hub.next = Date.now() + HUB_UNAVAILABLE_RETRY_MS;
+          return;
+        }
+        throw error;
+      }
+      if (!current()) return;
+      await local("PUT", {
+        center_url: entry.authority.center,
+        hub_ticket: hubTicket(grant),
+        node_session_id: node.node_session_id,
+      }).catch(stop);
+      entry.hub.yielded = false;
+      entry.hub.next = Date.now() + retryDelay(entry.hub.failures++);
+    } catch {
+      if (current()) entry.hub.next = Date.now() + retryDelay(entry.hub.failures++);
+    }
   }
 
   private api<T = unknown>(path: string, method = "GET", body?: unknown): Promise<T> {

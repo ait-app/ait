@@ -11,6 +11,7 @@ use uuid::Uuid;
 #[derive(Debug)]
 pub struct ManagedRelayHandle {
     pub(super) relay: relay::Connector,
+    pub(super) hub: relay::hub::Connector,
     pub(super) status: Arc<Mutex<Value>>,
 }
 
@@ -34,6 +35,24 @@ impl ManagedRelay for ManagedRelayHandle {
 
     async fn stop(&self) {
         self.relay.stop().await;
+        self.hub.stop().await;
+    }
+
+    async fn start_hub(&self, session: Uuid, ticket: SecretString) -> Result<(), Error> {
+        self.hub
+            .start(relay::hub::Grant {
+                center_url: CENTER.to_owned(),
+                hub_ticket: ticket,
+                node_session_id: session,
+            })
+            .await
+            .map_err(|_| Error::Unavailable)
+    }
+
+    async fn hub_active(&self) -> bool {
+        let status = self.hub.status().await;
+        // A link another process took over is left to it for a while.
+        status.online || status.connecting || self.hub.yielding().await
     }
 
     fn report(&self, phase: &'static str, binding: Option<&Binding>) {

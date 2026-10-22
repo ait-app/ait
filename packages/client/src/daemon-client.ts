@@ -2100,27 +2100,57 @@ export class DaemonClient {
 
     const startedAt = perfNow();
     const timeoutMs = params.timeoutMs;
+    const transport = this.transport;
+    let recoveryAttempted = false;
     let resolveProbe: ((value: number) => void) | null = null;
     let rejectProbe: ((error: Error) => void) | null = null;
     const promise = new Promise<number>((resolve, reject) => {
       resolveProbe = resolve;
       rejectProbe = reject;
     });
+    const fail = (error: Error) => {
+      if (this.pingProbes.get(kind) !== probe) return;
+      this.pingProbes.delete(kind);
+      clearTimeout(probe.timeoutHandle);
+      probe.reject(error);
+      if (probe.drivesLivenessFailure) {
+        this.recordLivenessFailure(toTimeoutError(error, "Liveness check", timeoutMs));
+      }
+    };
+    const expire = async () => {
+      if (this.pingProbes.get(kind) !== probe) return;
+      if (
+        !recoveryAttempted &&
+        (probe.drivesLivenessFailure || kind === "verification") &&
+        transport.recoverLiveness
+      ) {
+        recoveryAttempted = true;
+        let recovered = false;
+        try {
+          recovered = await transport.recoverLiveness();
+        } catch {
+          // Recovery failures retain the original probe timeout semantics.
+        }
+        // A replayed pong or a closed/replaced transport may already have settled it.
+        if (this.pingProbes.get(kind) !== probe) return;
+        if (recovered) {
+          probe.startedAt = perfNow();
+          probe.timeoutHandle = setTimeout(() => void expire(), timeoutMs);
+          try {
+            this.sendJsonMessage("connection.ping", "connection.ping", { type: "connection.ping" });
+          } catch (error) {
+            fail(error instanceof Error ? error : new Error(String(error)));
+          }
+          return;
+        }
+      }
+      fail(new PingTimeoutError(timeoutMs));
+    };
     const probe: PingProbe = {
       promise,
       resolve: (value) => resolveProbe?.(value),
       reject: (error) => rejectProbe?.(error),
-      timeoutHandle: setTimeout(() => {
-        if (this.pingProbes.get(kind) !== probe) {
-          return;
-        }
-        this.pingProbes.delete(kind);
-        const error = new PingTimeoutError(timeoutMs);
-        probe.reject(error);
-        if (probe.drivesLivenessFailure) {
-          this.recordLivenessFailure(toTimeoutError(error, "Liveness check", timeoutMs));
-        }
-      }, timeoutMs),
+      timeoutHandle: setTimeout(() => void expire(), timeoutMs),
       startedAt,
       drivesLivenessFailure: params.drivesLivenessFailure,
     };
@@ -2129,13 +2159,7 @@ export class DaemonClient {
     try {
       this.sendJsonMessage("connection.ping", "connection.ping", { type: "connection.ping" });
     } catch (error) {
-      this.pingProbes.delete(kind);
-      clearTimeout(probe.timeoutHandle);
-      const sendError = error instanceof Error ? error : new Error(String(error));
-      if (probe.drivesLivenessFailure) {
-        this.recordLivenessFailure(sendError);
-      }
-      return Promise.reject(sendError);
+      fail(error instanceof Error ? error : new Error(String(error)));
     }
 
     return promise;

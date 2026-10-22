@@ -96,6 +96,17 @@ describe("desktop built-in daemon synchronization preference", () => {
     expect(mocks.deps?.publishRuntime).toBe(false);
   });
 
+  it("routes hub serve control to the built-in daemon's local hub API", async () => {
+    const hubRequest = vi.fn(async () => null);
+    const command = createAccountIpc(
+      () => ({ ...runtime, hubRequest }) as unknown as RustDaemonManager,
+      () => true,
+    );
+    await command(event, "account_status");
+    await mocks.deps!.localHub!("PUT", { hub_ticket: "ticket" });
+    expect(hubRequest).toHaveBeenCalledWith("PUT", { hub_ticket: "ticket" });
+  });
+
   it("retains a manual stop across logout, browser login and desktop restart", async () => {
     const command = invoke();
     await command(event, "account_login_hosted");
