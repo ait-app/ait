@@ -71,6 +71,7 @@ export function NativeNotificationsSection() {
   return (
     <SettingsSection title={t("settings.notifications.title")}>
       <View style={settingsStyles.card}>
+        <Text style={settingsStyles.rowHint}>{t("onlineService.accountPushHint")}</Text>
         <View style={settingsStyles.row}>
           <View style={settingsStyles.rowContent}>
             <Text style={settingsStyles.rowTitle}>{t("settings.notifications.permission")}</Text>

@@ -5,11 +5,14 @@ import {
 } from "@ait/client/internal/account-session";
 import { acquireBrowserInstallation } from "./browser-installation";
 import appPackage from "../../package.json";
+import { HubLink } from "@ait/client/internal/hub";
+import { defaultWebSocketFactory } from "@ait/client/internal/daemon-client-websocket-transport";
 
 const TOKEN_KEY = "ait.access-token";
 const listeners = new Set<(state: AccountSnapshot) => void>();
 const transports = new Set<() => void>();
 let ready: Promise<AccountSessionManager> | undefined;
+let hub: HubLink | null = null;
 
 export function supportsBrowserAccount(): boolean {
   return process.env.EXPO_PUBLIC_AIT_CONSOLE === "1";
@@ -43,6 +46,7 @@ async function createAccount(): Promise<AccountSessionManager> {
       }
       override async logout(): Promise<void> {
         await super.logout();
+        hub?.stop();
         if (token) {
           await fetch(`${center}/v1/auth/logout`, {
             method: "POST",
@@ -74,11 +78,18 @@ async function createAccount(): Promise<AccountSessionManager> {
         }
       },
       notify: () => {
+        if (manager.snapshot().status === "logged_out") hub?.stop();
+        else hub?.start();
         for (const listener of listeners) listener(manager.snapshot());
       },
       closeTransports: () => {
         for (const close of Array.from(transports)) close();
       },
+    });
+    hub = new HubLink({
+      ticket: () => manager.openHubTicket(),
+      webSocketFactory: defaultWebSocketFactory,
+      authentication: "subprotocol",
     });
     if (token) {
       const response = await fetch(`${center}/v1/me`, {
@@ -132,12 +143,14 @@ async function createAccount(): Promise<AccountSessionManager> {
         read(localStorage, TOKEN_KEY) !== token
       ) {
         manager.suspend();
+        hub?.stop();
         void manager.shutdown().finally(() => window.location.reload());
       }
     });
     window.addEventListener("online", () => manager.refresh());
     window.addEventListener("focus", () => manager.refresh());
     window.addEventListener("pagehide", () => {
+      hub?.stop();
       void manager.shutdown();
       lease.release();
     });
@@ -146,9 +159,21 @@ async function createAccount(): Promise<AccountSessionManager> {
     });
     return manager;
   } catch (error) {
+    hub?.stop();
+    hub = null;
     lease.release();
     throw error;
   }
+}
+
+export function getBrowserHubLink(): HubLink | Promise<HubLink | null> {
+  return (
+    hub ??
+    getBrowserAccount().then(
+      () => hub,
+      () => null,
+    )
+  );
 }
 
 export function getBrowserAccount(): Promise<AccountSessionManager> {

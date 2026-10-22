@@ -11,6 +11,7 @@ import {
   subscribeBrowserAccount,
 } from "./browser-account";
 import { DEFAULT_ACCOUNT_CENTER } from "@ait/client/internal/account-session";
+import { revokeAccountPushNotifications } from "@/push-notifications";
 
 import type { AccountHost } from "@ait/client/internal/account-session";
 export type { AccountHost } from "@ait/client/internal/account-session";
@@ -156,6 +157,7 @@ export async function accountCommand(
           await manager.loginWithBrowser((args?.center as string) ?? "");
           break;
         case "account_logout":
+          await revokeAccountPushNotifications();
           await manager.logout();
           break;
         case "account_select":

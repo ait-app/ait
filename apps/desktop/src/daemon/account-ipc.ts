@@ -1,5 +1,8 @@
 import { app, BrowserWindow, safeStorage, shell, type IpcMainInvokeEvent } from "electron";
 import { randomUUID } from "node:crypto";
+import { WebSocket } from "ws";
+import { HubLink } from "@ait/client/internal/hub";
+import type { WebSocketLike } from "@ait/client/internal/daemon-client-transport-types";
 import { readFileSync } from "node:fs";
 import { mkdir, rename, writeFile } from "node:fs/promises";
 import path from "node:path";
@@ -9,6 +12,7 @@ import {
   type SavedAccount,
 } from "./account-session.js";
 import { AccountTransportManager } from "./account-transport.js";
+import { AccountHubBridge } from "./account-hub.js";
 import { AccountDownloadManager } from "./account-download.js";
 import type { RustDaemonManager } from "./rust-daemon.js";
 import { desktopBrowserLogin } from "./account-browser-login.js";
@@ -16,6 +20,7 @@ import { AccountBrowserProfiles } from "../features/account-browser-profiles.js"
 
 let account: AccountSessionManager | null = null;
 let browserProfiles: AccountBrowserProfiles | null = null;
+let accountHub: HubLink | null = null;
 
 export function accountBrowserPartitions(ownerId: number): string[] {
   return browserProfiles?.partitions(ownerId) ?? [];
@@ -29,6 +34,7 @@ function canRemember(): boolean {
 }
 
 export async function stopAccountForExit(): Promise<void> {
+  accountHub?.stop();
   await account?.shutdown();
 }
 
@@ -81,7 +87,10 @@ export function createAccountIpc(
   };
   let transports: AccountTransportManager;
   let downloads: AccountDownloadManager;
+  let hub: HubLink;
   const notify = (snapshot: AccountSnapshot) => {
+    if (snapshot.status === "logged_out") hub?.stop();
+    else hub?.start();
     for (const window of BrowserWindow.getAllWindows())
       if (isAppWindow(window.webContents))
         window.webContents.send("paseo:event:account-state", { ...snapshot, syncBuiltInDaemon });
@@ -116,7 +125,25 @@ export function createAccountIpc(
     notify(manager.snapshot());
   };
   account = manager;
-  transports = new AccountTransportManager(manager);
+  hub = new HubLink({
+    ticket: () => manager.openHubTicket(),
+    webSocketFactory: (url, options) =>
+      new WebSocket(url, options?.protocols, {
+        headers: options?.headers,
+        maxPayload: 1024 * 1024 + 4098,
+        perMessageDeflate: false,
+      }) as unknown as WebSocketLike,
+    authentication: "bearer",
+    randomUUID,
+  });
+  accountHub = hub;
+  const broadcast = (channel: string, payload: unknown) => {
+    for (const window of BrowserWindow.getAllWindows())
+      if (isAppWindow(window.webContents)) window.webContents.send(channel, payload);
+  };
+  hub.subscribe(() => broadcast("paseo:event:account-hub-state", hub.snapshot()));
+  const hubBridge = new AccountHubBridge(hub);
+  transports = new AccountTransportManager(manager, hub);
   browserProfiles = new AccountBrowserProfiles(manager);
   downloads = new AccountDownloadManager(manager);
   const ready = saved ? manager.restore(saved).catch(() => save(null)) : save(null);
@@ -135,6 +162,11 @@ export function createAccountIpc(
       switch (command) {
         case "account_status":
           return snapshot();
+        case "account_hub_status":
+          return hub.snapshot();
+        case "account_hub_call": {
+          return hubBridge.call(event.sender, args.method, args.params);
+        }
         case "account_login_hosted": {
           if (args.center !== undefined && typeof args.center !== "string")
             throw new Error("Invalid service URL");
@@ -152,6 +184,7 @@ export function createAccountIpc(
           return snapshot();
         case "account_logout":
           await manager.logout();
+          hub.stop();
           return snapshot();
         case "account_refresh":
           manager.refresh();
@@ -205,6 +238,8 @@ export function createAccountIpc(
         case "account_transport_close":
           transports.close(event.sender, id);
           return;
+        case "account_transport_recover":
+          return transports.recover(event.sender, id);
         case "account_browser_profile":
           if (
             typeof args.hostId !== "string" ||

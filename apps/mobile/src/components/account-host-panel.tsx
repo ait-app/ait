@@ -7,6 +7,8 @@ import { useTranslation } from "react-i18next";
 import { Button } from "./ui/button";
 import { AdaptiveTextInput } from "./adaptive-text-input";
 import { accountCommand, useAccountState } from "@/runtime/account-state";
+import { useHubServices } from "@/runtime/hub-service-store";
+import { router, type Href } from "expo-router";
 
 export function AccountHostPanel({
   onSignedIn,
@@ -18,6 +20,7 @@ export function AccountHostPanel({
   const { t } = useTranslation();
   const { theme } = useUnistyles();
   const account = useAccountState();
+  const hub = useHubServices((state) => state.snapshot);
   // Follow the account snapshot until the user edits the optional override.
   const [centerOverride, setCenterOverride] = useState<string | null>(null);
   const center = centerOverride ?? account.center;
@@ -152,6 +155,16 @@ export function AccountHostPanel({
             </Button>
           </View>
           {!supportsBrowserAccount() ? <Text style={styles.hint}>{account.center}</Text> : null}
+          <Text style={styles.hint} accessibilityLiveRegion="polite">
+            {t(
+              hub?.state === "online" && hub.methods.includes("agent.list.request")
+                ? "onlineService.accountServicesConnected"
+                : "onlineService.accountServicesConnecting",
+            )}
+          </Text>
+          <Button variant="outline" onPress={() => router.navigate("/directory" as Href)}>
+            {t("onlineService.directoryTitle")}
+          </Button>
           {account.accountExpiresAt ? (
             <Text style={styles.hint}>
               {t("onlineService.expiresAt", {

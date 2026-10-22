@@ -1,4 +1,9 @@
 import type { AccountSessionManager, AccountSnapshot } from "@ait/client/internal/account-session";
+import type { HubLink } from "@ait/client/internal/hub";
+
+export function getBrowserHubLink(): HubLink | null {
+  return null;
+}
 
 export function supportsBrowserAccount(): boolean {
   return false;

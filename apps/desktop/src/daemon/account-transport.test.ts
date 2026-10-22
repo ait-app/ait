@@ -202,3 +202,61 @@ describe("desktop relay terminal delivery", () => {
     expect(vi.getTimerCount()).toBe(0);
   });
 });
+
+// Reuse the wire-level center double so the renderer hello/Host accept path is exercised too.
+import { hubFixture, HOST } from "../../../../packages/client/test/hub.js";
+import type { HubLink } from "@ait/client/internal/hub";
+
+describe("desktop Hub data connections", () => {
+  it("opens through presence, validates Host identity and preserves the logical session during resume", async () => {
+    const h = hubFixture();
+    const socket = await h.online();
+    const account = {
+      openVisit: vi.fn(),
+      closeVisit: vi.fn(),
+      snapshot: () => ({
+        hosts: [{ host_id: HOST.host_id, server_id: "server", instance_id: "instance" }],
+      }),
+    };
+    const manager = new AccountTransportManager(
+      account as unknown as AccountSessionManager,
+      h.link as unknown as HubLink,
+    );
+    const events: Record<string, unknown>[] = [];
+    const owner = Object.assign(new EventEmitter(), {
+      isDestroyed: () => false,
+      send: (_channel: string, event: Record<string, unknown>) => {
+        events.push(event);
+        if (event.kind === "open")
+          void manager.send(owner, "account-hub", { text: JSON.stringify({ type: "hello" }) });
+      },
+    });
+    await manager.open(owner, "account-hub", HOST.host_id, h.link.centerUrl!);
+    await h.flush();
+    expect(account.openVisit).not.toHaveBeenCalled();
+    const open = socket.frames("open")[0];
+    socket.receive(
+      { t: "accept", seq: 2, s: open.s },
+      JSON.stringify({
+        type: "server_info",
+        info: {
+          server_id: "server",
+          instance_id: "instance",
+          features: ["ait-rust-single-v1"],
+        },
+      }),
+    );
+    expect(events.some((event) => typeof event.text === "string")).toBe(true);
+    socket.drop();
+    await h.flush();
+    const resumed = h.sockets.at(-1)!;
+    resumed.open();
+    resumed.welcome({ resumed: true, recv: open.seq });
+    expect(events.some((event) => event.kind === "close")).toBe(false);
+    await manager.send(owner, "account-hub", { text: "request" });
+    expect(resumed.frames("msg")[0]).toMatchObject({ s: open.s });
+    owner.emit("destroyed");
+    expect(resumed.frames("close")[0]).toMatchObject({ s: open.s });
+    h.link.stop();
+  });
+});

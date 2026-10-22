@@ -12,6 +12,7 @@ export type HubOutboundHeader =
   | { t: "hello"; v: 1; resume: { link: string; recv: number } | null }
   | { t: "ack"; a: number }
   | { t: "ping"; n: number }
+  | { t: "call"; seq: number; id: string; method: string }
   | { t: "open"; seq: number; s: string; to: { node: string } }
   | { t: "msg"; seq: number; s: string; pt: HubPayloadType }
   | { t: "close"; seq: number; s: string; code: string };
@@ -27,6 +28,7 @@ export interface HubWelcome {
   grace_seconds: number;
   ping_seconds: number;
   max_payload: number;
+  center_methods?: string[];
 }
 
 /** Frames the center sends. Unknown kinds are ignored for forward compatibility. */
@@ -39,7 +41,18 @@ export type HubInboundHeader =
   | { t: "accept"; seq: number; s: string }
   | { t: "msg"; seq: number; s?: string; from?: string; pt: HubPayloadType; ck?: string }
   | { t: "close"; seq: number; s: string; code: string }
-  | { t: "presence"; seq: number };
+  | { t: "presence"; seq: number }
+  | { t: "reply"; seq: number; id: string }
+  | {
+      t: "event";
+      seq: number;
+      sub: string;
+      cursor: number;
+      host_id: string;
+      event_id: string;
+      resource_id?: string;
+      method: string;
+    };
 
 export interface HubFrame {
   header: HubInboundHeader;
@@ -78,7 +91,9 @@ function valid(header: Record<string, unknown>): boolean {
         count(header.recv) &&
         (header.resume_token === undefined || text(header.resume_token)) &&
         text(header.node_id) &&
-        count(header.grace_seconds)
+        count(header.grace_seconds) &&
+        (header.center_methods === undefined ||
+          (Array.isArray(header.center_methods) && header.center_methods.every(text)))
       );
     case "ack":
       return count(header.a);
@@ -98,6 +113,20 @@ function valid(header: Record<string, unknown>): boolean {
       );
     case "presence":
       return count(header.seq);
+    case "reply":
+      return count(header.seq) && text(header.id);
+    case "event":
+      return (
+        count(header.seq) &&
+        text(header.sub) &&
+        count(header.cursor) &&
+        text(header.host_id) &&
+        text(header.event_id) &&
+        text(header.method) &&
+        (header.resource_id === undefined ||
+          header.resource_id === null ||
+          text(header.resource_id))
+      );
     default:
       return typeof header.t === "string";
   }

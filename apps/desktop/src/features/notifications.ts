@@ -2,6 +2,7 @@ import path from "node:path";
 import { existsSync } from "node:fs";
 import { app, BrowserWindow, Notification, ipcMain, nativeImage } from "electron";
 import { getDesktopSettingsStore } from "../settings/desktop-settings-electron.js";
+import { claimDesktopNotification } from "./notification-dedup.js";
 
 interface NotificationInput {
   title?: unknown;
@@ -99,6 +100,7 @@ export function registerNotificationHandlers(): void {
     const data = toRecord(rawInput?.data);
     const icon = getNotificationIcon();
     const settings = await getDesktopSettingsStore().get();
+    if (!claimDesktopNotification(data)) return true;
     const notification = new Notification({
       title,
       ...(body ? { body } : {}),

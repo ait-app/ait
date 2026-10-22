@@ -37,6 +37,7 @@ import {
 } from "@/stores/session-store";
 import { useWorkspaceSetupStore } from "@/stores/workspace-setup-store";
 import { sendOsNotification } from "@/utils/os-notifications";
+import { claimAttentionNotification } from "@/utils/attention-notification-dedup";
 import { getIsAppActivelyVisible, getIsAppVisible } from "@/utils/app-visibility";
 import {
   getInitKey,
@@ -308,11 +309,20 @@ function SessionProviderInternal({ children, serverId, client }: SessionProvider
       if (!notification) {
         return;
       }
+      if (
+        !claimAttentionNotification(
+          JSON.stringify([serverId, "agent", params.agentId, params.timestamp]),
+        )
+      )
+        return;
 
       void sendOsNotification({
         title: notification.title,
         body: notification.body,
-        data: notification.data,
+        data: {
+          ...notification.data,
+          attentionKey: JSON.stringify([serverId, "agent", params.agentId, params.timestamp]),
+        },
       });
     },
     [serverId],
@@ -739,6 +749,19 @@ function SessionProviderInternal({ children, serverId, client }: SessionProvider
       if (!message.payload.shouldNotify) {
         return;
       }
+      if (
+        !claimAttentionNotification(
+          JSON.stringify([
+            serverId,
+            "terminal",
+            message.payload.terminalId,
+            message.payload.title,
+            message.payload.body,
+          ]),
+          5000,
+        )
+      )
+        return;
       void sendOsNotification({
         title: message.payload.title,
         body: message.payload.body,
@@ -746,6 +769,13 @@ function SessionProviderInternal({ children, serverId, client }: SessionProvider
         // carried as a fallback identifier when the daemon resolved no workspace.
         data: {
           serverId: message.payload.serverId ?? serverId,
+          attentionKey: JSON.stringify([
+            serverId,
+            "terminal",
+            message.payload.terminalId,
+            message.payload.title,
+            message.payload.body,
+          ]),
           terminalId: message.payload.terminalId,
           cwd: message.payload.cwd,
           ...(message.payload.workspaceId ? { workspaceId: message.payload.workspaceId } : {}),

@@ -19,3 +19,13 @@ export {
   type HubTicket,
 } from "./link.js";
 export { HubSession, type HubSessionHeader, type HubSessionLink } from "./session.js";
+export { HubCallError } from "./calls.js";
+export {
+  HUB_ACCESS_METHODS,
+  type HubAccountConnection,
+  type HubAccountSnapshot,
+  type HubAccountEvent,
+  type HubDirectoryItem,
+  type HubDirectoryPage,
+} from "./account.js";
+export { observeHubEvents } from "./subscription.js";
