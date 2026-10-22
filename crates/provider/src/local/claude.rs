@@ -10,6 +10,7 @@ mod rewind;
 mod session;
 mod streaming;
 mod subagents;
+mod synthetic;
 mod tasks;
 mod transport;
 

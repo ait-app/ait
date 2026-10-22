@@ -24,6 +24,8 @@ pub(super) struct Stream {
     message_id: Option<String>,
     blocks: BTreeMap<u64, String>,
     compacting: bool,
+    /// Subagent launches; their completion notices belong to the child, not the parent timeline.
+    agent_calls: BTreeSet<String>,
 }
 
 impl Stream {
@@ -210,6 +212,9 @@ impl Stream {
                     let call = text(block, "id")?;
                     let item = json!({"type":"tool_call","callId":call,"name":text(block,"name")?,
                         "status":"running","error":null,"detail":crate::local::tool_detail::claude(text(block,"name")?, &block["input"])});
+                    if matches!(text(block, "name")?, "Agent" | "Task") {
+                        self.agent_calls.insert(call.to_owned());
+                    }
                     if self.tools.insert(call.to_owned(), item.clone()).is_some() {
                         return Err(AgentSessionError::Failed);
                     }
@@ -263,8 +268,27 @@ impl Stream {
                 }
             }
         }
+        if messages.is_empty() {
+            return Ok(());
+        }
+        let id = text(record, "uuid")?;
+        let joined = messages.join("\n");
+        if let Some(notification) = super::synthetic::TaskNotification::parse(&joined) {
+            if notification
+                .tool_use_id
+                .as_ref()
+                .is_some_and(|call| self.agent_calls.contains(call))
+            {
+                return Ok(());
+            }
+            let call = format!("task_notification_{id}");
+            return self.complete(&call, notification.tool_call(&call), record);
+        }
+        let messages: Vec<_> = messages
+            .into_iter()
+            .filter_map(super::synthetic::user_text)
+            .collect();
         if !messages.is_empty() {
-            let id = text(record, "uuid")?;
             self.complete(
                 id,
                 json!({"type":"user_message","messageId":id,"text":messages.join("\n")}),
