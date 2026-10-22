@@ -87,7 +87,7 @@ fn sanitize(value: &str) -> String {
     let name: String = value
         .chars()
         .map(|c| {
-            if c.is_ascii_alphanumeric() || matches!(c, '.' | '_' | ' ' | '-') {
+            if c.is_alphanumeric() || matches!(c, '.' | '_' | ' ' | '-') {
                 c
             } else {
                 '_'
