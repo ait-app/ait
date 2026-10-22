@@ -10,6 +10,7 @@ use crate::local::antigravity::AntigravityClient;
 use crate::local::claude::ClaudeClient;
 use crate::local::codex::CodexClient;
 use crate::local::deepseek_harness::DeepSeekHarnessClient;
+use crate::local::omp::OmpClient;
 use crate::local::opencode::OpenCodeClient;
 use crate::local::pi::PiClient;
 use crate::ports::agent_session::AgentClient;
@@ -78,7 +79,9 @@ impl Providers {
                 DeepSeekHarnessClient::new(program.into())
             })
             .with_image_directory(images.clone());
-        let pi = PiClient::new(program("AIT_SERVER_PI_BIN", "pi")).with_image_directory(images);
+        let pi =
+            PiClient::new(program("AIT_SERVER_PI_BIN", "pi")).with_image_directory(images.clone());
+        let omp = OmpClient::new(program("AIT_SERVER_OMP_BIN", "omp")).with_image_directory(images);
         if let Some(profile) = environment("AIT_SERVER_DEEPSEEK_HARNESS_PROFILE") {
             dsh = dsh.with_native_profile(profile);
         }
@@ -95,6 +98,7 @@ impl Providers {
         providers.add(opencode);
         providers.add(dsh);
         providers.add(pi);
+        providers.add(omp);
         providers
     }
 

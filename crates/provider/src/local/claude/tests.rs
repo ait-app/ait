@@ -1,3 +1,6 @@
+#[cfg(unix)]
+mod execution;
+
 use super::*;
 
 mod config;

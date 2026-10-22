@@ -27,6 +27,17 @@
 
 ## 架构决策
 
+- [ADR-180：Oh My Pi 原生 RPC Provider](decisions/providers/adr-180-omp-native-rpc-provider.md)：独立 `omp` 适配器、v2 分块传输、审批模式映射、结构化 ask、子 Agent 与回合级 settled 关联；Pi 是另一个独立 Provider（ADR-156）。
+- [ADR-179：Provider 自身行为的测试归 provider crate](decisions/providers/adr-179-provider-owned-tests.md)：原生 adapter 与执行器场景在 provider 内验证，daemon 保留宿主、传输和跨能力组合测试。
+
+- [ADR-178：OpenCode 轻量可用性探测与冷恢复预算](decisions/providers/adr-178-opencode-startup-probe-and-restoration.md)：避免重复 ACP 冷启动，并统一恢复与辅助会话的启动预算。
+
+- [ADR-177：Codex 宿主异常重启后的继续执行与失败上报](decisions/providers/adr-177-codex-restart-continuation.md)：在原会话中继续，恢复失败保留具体错误并结束运行状态。
+
+- [ADR-175：独立恢复 Provider 错误详情与重启收尾](decisions/providers/adr-175-restore-provider-recovery.md)：仅恢复 daemon／Provider 行为，客户端诊断另行保留为 Draft。
+
+- [ADR-162：Codex 失败展示原生原因与 HTTP 状态](decisions/providers/adr-162-codex-error-details.md)：有界脱敏的原生原因、HTTP 状态和既有消息字段。
+
 - [ADR-177：移动端本地通知与 APNs／FCM 直连](decisions/clients/adr-177-native-local-and-remote-notifications.md)：连接外 attention 通道、直接投递、权限恢复及去重。
 
 - [ADR-176：Pi 用户图片的共享时间线投影](decisions/providers/adr-176-pi-user-image-projection.md)：实时输入、导入与刷新共用 `imageSources`，保留纯图片消息和跨设备预览。
@@ -202,12 +213,17 @@
 - [Ait 0.0.14 发布说明](reports/releases/release-0.0.14.md)：Diff 语法高亮、侧边栏统计与 Codex 推理等级。
 - [Apple 本机构建](operations/apple-builds.md)：DMG、模拟器和 IPA。
 - [Pi](operations/pi.md)：原生 RPC、模型发现、会话恢复与能力限制；[ADR-156](decisions/providers/adr-156-pi-native-rpc-provider.md)。
+- [Oh My Pi](operations/oh-my-pi.md)：独立 OMP 权限、结构化问答、子 Agent 与 v2 传输；[ADR-180](decisions/providers/adr-180-omp-native-rpc-provider.md)。
 - [Claude Code](operations/claude-code.md)：认证、原生会话与审批。
 - [DeepSeek Harness](operations/deepseek-harness.md)：原生 Host、DeepSeek 账号余额、会话导入、权限模式、question 与 ACP 兼容配置。
 - [Antigravity CLI](operations/antigravity.md)：AGY 安装、登录、权限模式、会话恢复与账号额度查询。
 - [语音与听写](operations/speech.md)：离线模型、后端配置和限制。
 
 ## 工程规范与验证
+
+- [OpenCode 加载速度验证](reports/providers/opencode-startup-real-usage-2026-10-21.md)：真实原生配置、分阶段加载耗时、重复冷启动消除与定向回归。
+
+- [Provider 错误与重启恢复拆分验证](reports/daemon/provider-recovery-split-2026-10-20.md)：后端独立分支、主线兼容和定向回归。
 
 - [Paseo 0.12.0 移植与验证](reports/clients/paseo-0.12-port-2026-10-20.md)：本轮范围、兼容性和定向验证。
 

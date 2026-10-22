@@ -11,6 +11,9 @@ use crate::ports::agent_session::{
 };
 
 #[cfg(unix)]
+mod execution;
+
+#[cfg(unix)]
 mod ownership;
 
 #[cfg(unix)]
@@ -888,6 +891,7 @@ async fn acp_discovery_omits_unavailable_default_thinking_options() {
 async fn acp_exposes_native_session_capabilities_and_rejects_missing_model_before_prompting() {
     let (_root, client, spec) = fixture("no-history");
     assert!(client.is_available().await.unwrap());
+    client.discover(&spec.cwd).await.unwrap();
     assert!(!client.supports_session_import());
     assert_eq!(
         client.settings(&spec.config)["capabilities"]["supportsSessionListing"],
@@ -1435,3 +1439,7 @@ async fn acp_without_delete_discovers_without_creating_native_sessions() {
 }
 
 mod compatibility;
+
+mod live;
+
+mod startup;

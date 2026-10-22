@@ -10,11 +10,9 @@ mod resume;
 mod usage;
 mod waits;
 use domain::agent_runtime::registry::AgentRuntimeRegistry;
-use model::workspace::registry::{ProjectRegistry, WorkspaceRegistry};
 use persistence::storage::agent_runtime::FileBackedAgentRuntimeRegistry;
-use persistence::storage::registry::{FileBackedProjectRegistry, FileBackedWorkspaceRegistry};
 
-use crate::test_support::Fixture;
+use crate::test_support::{Fixture, worker_with_client};
 
 #[tokio::test]
 async fn configuration_commits_atomically_applies_next_turn_and_survives_restart() {
@@ -201,57 +199,6 @@ fn worker_with_creations(
     creations: model::creation::Creations,
 ) -> (AgentExecution, FileBackedAgentRuntimeRegistry) {
     worker_with_client(fixture, creations, Box::new(fixture.client()))
-}
-
-fn worker_with_client(
-    fixture: &Fixture,
-    creations: model::creation::Creations,
-    client: Box<dyn crate::ports::agent_session::AgentClient>,
-) -> (AgentExecution, FileBackedAgentRuntimeRegistry) {
-    let registry = FileBackedAgentRuntimeRegistry::new(fixture.root.path().join("agents.json"));
-    registry.initialize().unwrap();
-    let projects = FileBackedProjectRegistry::new(fixture.root.path().join("projects.json"));
-    projects.initialize().unwrap();
-    let workspaces = FileBackedWorkspaceRegistry::new(fixture.root.path().join("workspaces.json"));
-    workspaces.initialize().unwrap();
-    projects.upsert(&serde_json::from_value(json!({
-        "projectId":"project-1","rootPath":fixture.cwd,"kind":"non_git","displayName":"project",
-        "createdAt":"2026-09-24T00:00:00Z","updatedAt":"2026-09-24T00:00:00Z","archivedAt":null
-    })).unwrap()).unwrap();
-    workspaces
-        .upsert(
-            &serde_json::from_value(json!({
-                "workspaceId":"wks_0123456789abcdef","projectId":"project-1","cwd":fixture.cwd,
-                "kind":"local_checkout","displayName":"main","createdAt":"2026-09-24T00:00:00Z",
-                "updatedAt":"2026-09-24T00:00:00Z","archivedAt":null
-            }))
-            .unwrap(),
-            domain::workspace::registry::WorkspaceMutationContext::default(),
-        )
-        .unwrap();
-    let mut manager = AgentManager::new(Box::new(registry.clone()))
-        .with_creations(creations)
-        .with_timeline(
-            crate::storage::timeline::Timeline::open(&fixture.root.path().join("timeline.sqlite"))
-                .unwrap(),
-        );
-    manager.register_client(client).unwrap();
-    let worker = AgentExecution::spawn(ExecutionDependencies {
-        workspace_automation: None,
-        manager,
-        directory: AgentRuntimeDirectory::new(
-            Box::new(registry.clone()),
-            Box::new(workspaces.clone()),
-            Box::new(projects.clone()),
-        ),
-        registry: Box::new(registry.clone()),
-        workspaces: Box::new(workspaces),
-        lifetime: Arc::new(()),
-        import_directory: None,
-        projects: Box::new(projects),
-    })
-    .unwrap();
-    (worker, registry)
 }
 
 async fn create(worker: &AgentExecution, fixture: &Fixture) -> Value {
@@ -565,6 +512,7 @@ mod async_questions;
 mod controls;
 mod delivery;
 mod fork_context;
+mod recovery;
 mod streaming;
 mod subscriptions;
 mod titles;

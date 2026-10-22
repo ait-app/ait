@@ -9,6 +9,10 @@
 
 ## Daemon 与协议
 
+- [Codex OOM 后恢复与错误上报](providers/codex-oom-recovery-2026-10-21.md)
+
+- [Provider 错误与重启恢复拆分验证](daemon/provider-recovery-split-2026-10-20.md)
+
 - [Rust workspace 每 crate 95% 覆盖率验证](daemon/crate-coverage-95-2026-10-14.md)
 - [Workspace 定时任务设计与验证](daemon/workspace-schedules-verification-2026-10-12.md)
 
@@ -91,6 +95,11 @@
 
 ## Provider、Agent 与会话
 
+- [Oh My Pi 原生 Provider 验证](providers/omp-native-provider.md)
+
+- [OpenCode 加载速度验证](providers/opencode-startup-real-usage-2026-10-21.md)
+
+- [DSH 提问回答后的空确认响应修复](providers/dsh-event-result-acknowledgement-2026-10-21.md)
 - [Pi 用户图片共享时间线投影验证](providers/pi-user-image-projection-2026-10-21.md)
 - [Pi 原生会话导入与完整 Rust workspace 验证](providers/pi-session-import-2026-10-20.md)
 - [Pi 原生 RPC Provider 验证](providers/pi.md)
@@ -149,6 +158,7 @@
 ## 客户端、连接与品牌
 
 - [Pi 导入与图片附件浏览器验收](clients/pi-import-image-e2e-2026-10-21.md)
+- [Web tooltip DOM 触发元素定位验证](clients/web-tooltip-dom-triggers-2026-10-21.md)
 - [iPhone / iPad 原生功能验收（0.1.12）](clients/ios-iphone-ipad-functional-2026-10-20.md)
 - [Paseo 0.12.0 增量借鉴清单](clients/paseo-upstream-opportunities-2026-10-19.md)
 - [Paseo 客户端候选改动源码研究](clients/paseo-client-candidates-2026-10-19.md)
@@ -196,6 +206,7 @@
 
 ## 发布验证
 
+- [Ait 0.1.14 发布说明与验证](releases/release-0.1.14.md)
 - [Ait 0.1.13 发布说明与验证](releases/release-0.1.13.md)
 - [Ait 0.1.11 发布说明与验证](releases/release-0.1.11.md)
 - [Ait 0.1.10 发布说明与验证](releases/release-0.1.10.md)

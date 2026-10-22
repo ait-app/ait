@@ -1,4 +1,4 @@
-//! ACP owns model names, mode choices and model-specific effort values.
+//! Native catalogs own model names, modes and model-specific effort values.
 use std::collections::BTreeMap;
 
 use serde_json::{Value, json};
@@ -12,13 +12,25 @@ pub(super) async fn discover(
     client: &OpenCodeClient,
     cwd: &str,
 ) -> Result<Details, AgentSessionError> {
-    let (mut transport, capabilities) = launcher::spawn(
+    let (mut transport, capabilities, source) = launcher::observed(
         client,
         cwd,
         &domain::agent_runtime::StoredAgentConfig::default(),
     )
     .await?;
     if !capabilities["sessionCapabilities"]["delete"].is_object() {
+        if let Some(source) = source {
+            let result = async {
+                let (providers, agents) = source.catalog(cwd, client.startup_timeout).await?;
+                catalog::native(&providers, &agents)
+            }
+            .await;
+            if let Ok(details) = result {
+                transport.close().await?;
+                return Ok(details);
+            }
+            tracing::debug!("OpenCode owned catalog unavailable; using read-only CLI queries");
+        }
         transport.close().await?;
         if !launcher::version(client, cwd).await?.starts_with("1.") {
             return Err(AgentSessionError::Unavailable);

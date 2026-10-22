@@ -37,7 +37,7 @@ async fn missing_provider_is_reported_and_editors_return_migration_responses() {
     .await;
     let status = request(&mut socket, "daemon.get_status.request", json!({})).await;
     let providers = status["result"]["providers"].as_array().unwrap();
-    assert_eq!(providers.len(), 6);
+    assert_eq!(providers.len(), 7);
     assert!(
         providers
             .iter()
@@ -45,7 +45,7 @@ async fn missing_provider_is_reported_and_editors_return_migration_responses() {
     );
     let diagnostic = request(&mut socket, "diagnostics.request", json!({})).await;
     let report = diagnostic["result"]["diagnostic"].as_str().unwrap();
-    assert!(report.contains("Total: 6"));
+    assert!(report.contains("Total: 7"));
     assert!(report.contains("Available: 0"));
     assert!(report.contains("codex: unavailable"));
     assert!(report.contains("pi: unavailable"));
@@ -153,6 +153,8 @@ async fn daemon_status_config_diagnostics_and_update_match_canonical_contract() 
             { "provider":"codex", "available":true, "error":null },
             { "provider":"deepseek-harness", "available":false,
                 "error":"DeepSeek Harness executable is unavailable" },
+            { "provider":"omp", "available":false,
+                "error":"Oh My Pi executable is unavailable; check PATH or AIT_SERVER_OMP_BIN." },
             { "provider":"opencode", "available":false,
                 "error":"OpenCode ACP requires an installed OpenCode 1.x or 2.x release." },
             { "provider":"pi", "available":false,
@@ -202,7 +204,7 @@ async fn daemon_status_config_diagnostics_and_update_match_canonical_contract() 
     assert!(diagnostic.contains("Paseo diagnostics"));
     assert!(diagnostic.contains("daemon.get_status.request"));
     assert!(!diagnostic.contains(TOKEN));
-    assert!(diagnostic.contains("Total: 6"));
+    assert!(diagnostic.contains("Total: 7"));
     assert!(diagnostic.contains("codex: available"));
 
     let update = request(&mut socket, "daemon.update.request", json!({})).await;

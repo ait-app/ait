@@ -47,3 +47,46 @@ async fn inspected_resume_metadata_preserves_client_correlations() {
             .all(|request| request["method"] != "session/prompt")
     );
 }
+
+#[tokio::test]
+async fn moved_native_session_settles_resumes_and_inspects_at_its_new_directory() {
+    let (root, client, spec) = fixture("normal");
+    let moved = root.path().join("worktree").to_string_lossy().into_owned();
+    let mut session = client.create_session(&spec).await.unwrap();
+    session
+        .start_turn("Move this session", &spec.config)
+        .await
+        .unwrap();
+    completed(session.as_mut()).await;
+    session
+        .start_turn("after move", &spec.config)
+        .await
+        .unwrap();
+    completed(session.as_mut()).await;
+    let handle = session.persistence().unwrap();
+    session.close().await.unwrap();
+
+    let mut session = client
+        .resume_session(&handle, &spec, AgentResumePurpose::Interactive)
+        .await
+        .unwrap();
+    session
+        .start_turn("after resume", &spec.config)
+        .await
+        .unwrap();
+    completed(session.as_mut()).await;
+    assert!(session.failure_diagnostic().is_none());
+    session.close().await.unwrap();
+
+    let history = client.inspect_session(&handle, &spec.cwd).await.unwrap();
+    assert_eq!(history.descriptor.cwd, moved);
+    assert!(
+        history
+            .entries
+            .iter()
+            .any(|entry| entry.item["text"] == "after resume")
+    );
+    assert!(requests(&root).iter().any(|request| {
+        request["method"] == "session/load" && request["params"]["cwd"] == moved
+    }));
+}

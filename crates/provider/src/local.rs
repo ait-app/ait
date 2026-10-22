@@ -14,6 +14,7 @@ mod elicitation;
 mod images;
 mod metadata_process;
 mod notes;
+pub(crate) mod omp;
 pub(crate) mod opencode;
 pub(crate) mod pi;
 mod summary_model;

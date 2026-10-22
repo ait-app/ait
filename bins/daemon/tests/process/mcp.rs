@@ -148,7 +148,7 @@ async fn mcp_native_agent_calls_preserve_parentage_and_input_admission() {
             .as_array()
             .unwrap()
             .len(),
-        6
+        7
     );
     assert!(
         !client

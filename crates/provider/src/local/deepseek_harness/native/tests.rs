@@ -13,6 +13,7 @@ mod imports;
 mod installed_history;
 mod interactions;
 mod presets;
+mod questions;
 mod quota;
 mod recovery;
 mod session;

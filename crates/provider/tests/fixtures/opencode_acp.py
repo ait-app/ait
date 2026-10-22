@@ -16,6 +16,14 @@ with (root / "pids.txt").open("a") as output:
 if sys.argv[1:] == ["--version"]:
     print(os.environ.get("AIT_ACP_VERSION", "2.0.25"))
     sys.exit(0)
+if sys.argv[1:2] in (["models"], ["agent"]) and os.environ.get("AIT_ACP_SCENARIO") == "catalog-parallel":
+    phase, other = ("models", "agents") if sys.argv[1] == "models" else ("agents", "models")
+    (root / (phase + ".entered")).touch()
+    deadline = time.monotonic() + 5
+    while not (root / (other + ".entered")).exists():
+        if time.monotonic() >= deadline:
+            sys.exit(1)
+        time.sleep(0.01)
 if sys.argv[1:2] == ["models"]:
     print("local/model")
     if "--verbose" in sys.argv:
@@ -34,7 +42,8 @@ assert len(sys.argv) == 2 or sys.argv[2:4] == ["--hostname", "127.0.0.1"], sys.a
 with (root / "launch.jsonl").open("a") as output:
     output.write(json.dumps({"config": json.loads(os.environ.get("OPENCODE_CONFIG_CONTENT", "{}")),
                              "question": os.environ.get("OPENCODE_ENABLE_QUESTION_TOOL")}) + "\n")
-scenario = os.environ.get("AIT_ACP_SCENARIO", "normal")
+scenario_file = root / "scenario"
+scenario = os.environ.get("AIT_ACP_SCENARIO", scenario_file.read_text().strip() if scenario_file.exists() else "normal")
 session_id = "ses_one"
 model = "local/model"
 effort = "default"
@@ -62,6 +71,12 @@ def state():
     if state_path.exists():
         return json.loads(state_path.read_text())
     return {"seq": 0, "history": []}
+
+
+def location(identity):
+    # Native `session_move` refiles a session under another directory of its project.
+    path = session_path(identity)
+    return json.loads(path.read_text()).get("directory") if path.exists() else None
 
 
 def save(value):
@@ -183,7 +198,7 @@ for line in sys.stdin:
             print("not json", flush=True)
             continue
         capabilities = {"list": {}, "resume": {}, "close": {}}
-        if scenario == "load-only":
+        if scenario in ["load-only", "slow-load-only"]:
             capabilities.pop("resume")
         if scenario == "no-history":
             capabilities.pop("list")
@@ -198,6 +213,13 @@ for line in sys.stdin:
             (root / "session.entered").touch()
             while not (root / "session.release").exists():
                 time.sleep(0.01)
+        if (scenario == "slow-load" and method == "session/load") or (
+            scenario in ["slow-resume", "slow-load-only"] and method in ["session/resume", "session/load"]
+        ):
+            phase = "load" if scenario == "slow-load" else "reconnect"
+            (root / (phase + ".entered")).touch()
+            while not (root / (phase + ".release")).exists():
+                time.sleep(0.01)
         if method == "session/new":
             session_id = claim_session()
             state_path = session_path(session_id)
@@ -205,6 +227,10 @@ for line in sys.stdin:
         if method in ["session/load", "session/resume"]:
             session_id = params["sessionId"]
             state_path = session_path(session_id)
+            if location(session_id) not in [None, params["cwd"]]:
+                send({"id": identity, "error": {"code": -32602, "message":
+                    "Invalid params: session %s does not belong to cwd: %s" % (session_id, params["cwd"])}})
+                continue
         if method == "session/load":
             if scenario == "preview-failed":
                 send({"id": identity, "error": {"code": -32000, "message": "Fixture replay unavailable"}})
@@ -213,9 +239,10 @@ for line in sys.stdin:
                 content(row)
         reply(identity, {"sessionId": session_id, "configOptions": options()})
     elif method == "session/list":
-        value = state()
-        rows = [] if not (root / "native-fixture.json").exists() else [{"sessionId": "ses_one",
-            "cwd": params.get("cwd", str(pathlib.Path.cwd())), "title": "External session", "updatedAt": "2026-10-09T06:00:00Z"}]
+        moved = location("ses_one")
+        rows = [] if not (root / "native-fixture.json").exists() or moved not in [None, params.get("cwd", moved)] else [{
+            "sessionId": "ses_one", "cwd": moved or params.get("cwd", str(pathlib.Path.cwd())),
+            "title": "External session", "updatedAt": "2026-10-09T06:00:00Z"}]
         reply(identity, {"sessions": rows})
     elif method == "session/set_config_option":
         previous = options()
@@ -262,6 +289,8 @@ for line in sys.stdin:
         value = state()
         value["seq"] += 1
         value["history"].append({"id": "user" + str(value["seq"]), "type": "user", "text": "\n".join(block.get("text", "image") for block in params["prompt"])})
+        if params["prompt"] == [{"type": "text", "text": "Move this session"}]:
+            value["directory"] = str(root / "worktree")
         save(value)
         if scenario == "echo-user-tool":
             content(value["history"][-1])
@@ -299,6 +328,7 @@ for line in sys.stdin:
                 "toolCall": {"toolCallId": "shell", "title": "shell", "rawInput": {"command": "pwd"}},
                 "options": [{"optionId": "once", "kind": "allow_once", "name": "Allow once"}, {"optionId": "always", "kind": "allow_always", "name": "Always allow"}, {"optionId": "reject", "kind": "reject_once", "name": "Reject"}]}})
         elif scenario == "waiting":
+            (root / "waiting-pid").write_text(str(os.getpid()))
             update({"sessionUpdate": "agent_message_chunk", "messageId": "answer-live", "content": {"type": "text", "text": "Working"}})
         elif scenario == "ambiguous":
             sys.exit(0)

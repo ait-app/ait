@@ -112,6 +112,10 @@ for line in sys.stdin:
         result = {"data":[{"name":"Plan","mode":"plan","model":"offline-model","reasoning_effort":"high"},
             {"name":"Default","mode":"default","model":"offline-model"}]} if mode == "workflows" else {"data":[]}
     elif method in ("thread/start", "thread/resume", "thread/read"):
+        if method == "thread/resume" and mode == "delayed-resume":
+            (root / "resume-started").write_text("ready")
+            while not (root / "release-resume").exists():
+                time.sleep(0.01)
         if method == "thread/start" and mode == "delayed-create":
             deadline = time.monotonic() + 10
             while not (root / "release-create").exists() and time.monotonic() < deadline:
@@ -237,6 +241,17 @@ for line in sys.stdin:
         save_turn(pending, None, "inProgress")
         emit({"method": "item/completed", "params": {"threadId": thread_id, "turnId": pending,
             "item": {"type": "userMessage", "id": pending + "-user", "content": turn_content if mode == "rich-user-images" else [{"type": "text", "text": text}]}}})
+        if text in ("upstream-error", "upstream-error-result"):
+            error = json.loads((root / "native-error.json").read_text())
+            if text == "upstream-error":
+                for retry in (True, False):
+                    emit({"method":"error","params":{"threadId":thread_id,"turnId":pending,
+                        "error":error,"willRetry":retry}})
+            save_turn(pending, None, "failed")
+            emit({"method":"turn/completed","params":{"threadId":thread_id,
+                "turn":{"id":pending,"status":"failed","error":error}}})
+            pending = None
+            continue
         if text in ("auth-error", "quota-error", "retry-success"):
             message = {"auth-error": "invalid_api_key token=secret", "quota-error": "insufficient_quota secret", "retry-success": "stream disconnected secret"}[text]
             emit({"method":"error","params":{"threadId":thread_id,"turnId":pending,

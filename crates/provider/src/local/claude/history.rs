@@ -10,7 +10,9 @@ use super::{ClaudeClient, streaming::Stream};
 use crate::ports::agent_session::{AgentSessionError, AgentTurnEvent};
 use crate::ports::native_history::{ListOptions, SessionDescriptor, SessionHistory};
 
-const MAX_HISTORY: u64 = 32 * 1024 * 1024;
+// Long 1M-context sessions pass 32 MiB. Parsing costs about ten times the file size in memory.
+const MAX_HISTORY: u64 = 128 * 1024 * 1024;
+const MAX_RECORDS: usize = 65536;
 
 pub(super) fn validate_handle(handle: &AgentPersistenceHandle) -> Result<(), AgentSessionError> {
     if handle.provider != "claude" || Uuid::parse_str(&handle.session_id).is_err() {
@@ -167,7 +169,7 @@ fn read_records_mode(path: &Path, allow_partial_tail: bool) -> std::io::Result<V
             continue;
         }
         records.push(serde_json::from_slice(&bytes)?);
-        if records.len() > 16384 {
+        if records.len() > MAX_RECORDS {
             return Err(std::io::Error::other("Claude history exceeds limit"));
         }
     }
