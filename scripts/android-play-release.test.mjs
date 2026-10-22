@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import { spawnSync } from "node:child_process";
+import { execFileSync, spawnSync } from "node:child_process";
 import { createHash } from "node:crypto";
 import { access, mkdir, mkdtemp, readFile, rm, stat, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
@@ -11,6 +11,7 @@ import {
   configureAndroidPlayGradle,
   planAndroidPlayRelease,
   validateAndroidPlayManifest,
+  validateAndroidPlayOptimization,
 } from "./android-play-release.mjs";
 
 const sourceCommit = "0123456789abcdef".repeat(2) + "01234567";
@@ -32,7 +33,18 @@ const gradle = `android {
         versionCode 22
         versionName "0.0.22"
     }
+    buildTypes {
+        release {
+            proguardFiles getDefaultProguardFile("proguard-android-optimize.txt"), "proguard-rules.pro"
+        }
+    }
 }`;
+const properties = `android.enableMinifyInReleaseBuilds=true
+android.enableShrinkResourcesInReleaseBuilds=true
+`;
+const mappingEntry = "BUNDLE-METADATA/com.android.tools.build.obfuscation/proguard.map";
+const r8Entry = "BUNDLE-METADATA/com.android.tools/r8.json";
+const mapping = "# compiler: R8\ncom.example.Session -> a.b:\n    void start() -> a";
 const workflow = yaml.parse(
   await readFile(new URL("../.github/workflows/release-android-play.yml", import.meta.url), "utf8"),
 );
@@ -112,6 +124,26 @@ test("AAB metadata must match the planned build and must not be debuggable", () 
     assert.throws(() => validateAndroidPlayManifest(xml, plan, plan.versionCode));
 });
 
+test("Play rejects disabled optimization before invoking Gradle", () => {
+  validateAndroidPlayOptimization(gradle, properties);
+  for (const input of [
+    "",
+    properties.replace("MinifyInReleaseBuilds=true", "MinifyInReleaseBuilds=false"),
+    properties.replace(
+      "ShrinkResourcesInReleaseBuilds=true",
+      "ShrinkResourcesInReleaseBuilds=false",
+    ),
+    properties + "android.enableMinifyInReleaseBuilds=false\n",
+    properties + "android.enableR8.fullMode=false\n",
+  ]) {
+    assert.throws(() => validateAndroidPlayOptimization(gradle, input), /requires|disabled/);
+  }
+  assert.throws(
+    () => validateAndroidPlayOptimization(gradle.replace("-optimize.txt", ".txt"), properties),
+    /optimized ProGuard/,
+  );
+});
+
 test("bundle collection verifies structure and signature and preserves signed bytes and checksums", async (t) => {
   const root = await mkdtemp(path.join(tmpdir(), "ait-play-release-"));
   t.after(() => rm(root, { recursive: true, force: true }));
@@ -120,6 +152,10 @@ test("bundle collection verifies structure and signature and preserves signed by
   const calls = [];
   const run = (command, args) => {
     calls.push([command, ...args]);
+    if (command === "unzip") {
+      if (args[0] === "-Z1") return `${mappingEntry}\n${r8Entry}\n`;
+      return args.at(-1) === mappingEntry ? mapping : '{"version":"test"}';
+    }
     return command === "jarsigner"
       ? "jar verified.\n"
       : args.includes("dump")
@@ -136,7 +172,7 @@ test("bundle collection verifies structure and signature and preserves signed by
   });
   assert.deepEqual(
     calls.map((call) => call[0]),
-    ["java", "jarsigner", "java"],
+    ["java", "jarsigner", "java", "unzip", "unzip", "unzip"],
   );
   assert(calls[0].includes("validate"));
   assert(calls[2].includes("manifest"));
@@ -144,6 +180,11 @@ test("bundle collection verifies structure and signature and preserves signed by
   assert.equal(info.versionCode, 14701);
   assert.equal(info.buildSystem, "github-actions-gradle");
   assert.equal(info.signing, "github-actions-upload-key");
+  assert.deepEqual(info.optimization, { mapping: "mapping.txt", r8Metadata: "r8.json" });
+  assert.equal(await readFile(path.join(outputDir, "mapping.txt"), "utf8"), mapping + "\n");
+  assert.deepEqual(JSON.parse(await readFile(path.join(outputDir, "r8.json"), "utf8")), {
+    version: "test",
+  });
   assert.equal(await readFile(path.join(outputDir, plan.bundleName), "utf8"), "signed app bundle");
   for (const row of (await readFile(path.join(outputDir, "SHA256SUMS"), "utf8"))
     .trim()
@@ -200,8 +241,8 @@ test("Play workflow builds locally and submits only the verified AAB to internal
   const position = (name) => steps.findIndex((step) => step.name === name);
   for (const [before, after] of [
     ["Move tooling outside the Metro source tree", "Generate Android project"],
-    ["Generate Android project", "Set generated Gradle versionCode"],
-    ["Set generated Gradle versionCode", "Build signed AAB with Gradle"],
+    ["Generate Android project", "Verify R8 configuration and set Gradle versionCode"],
+    ["Verify R8 configuration and set Gradle versionCode", "Build signed AAB with Gradle"],
     ["Build signed AAB with Gradle", "Verify and collect signed AAB"],
     ["Verify and collect signed AAB", "Submit this verified AAB to Google Play"],
   ]) {
@@ -232,6 +273,64 @@ test("Play workflow builds locally and submits only the verified AAB to internal
     assert.doesNotMatch(step.run, /\$\{\{\s*(?:inputs|secrets)\./);
     const result = spawnSync("bash", ["-n", "-c", step.run], { encoding: "utf8" });
     assert.equal(result.status, 0, `${step.name}: ${result.stderr}`);
+  }
+});
+
+test("collection reads the bundle's own mapping and rejects missing or corrupt R8 metadata", async (t) => {
+  const root = await mkdtemp(path.join(tmpdir(), "ait-play-r8-bundle-"));
+  t.after(() => rm(root, { recursive: true, force: true }));
+  const scenarios = [
+    { name: "old-agp", mapping },
+    { name: "no-mapping", error: /missing its embedded R8 mapping/ },
+    { name: "empty-mapping", mapping: "", error: /not generated by R8/ },
+    {
+      name: "other-compiler",
+      mapping: mapping.replace("R8", "other"),
+      error: /not generated by R8/,
+    },
+    { name: "no-classes", mapping: "# compiler: R8\n", error: /contains no classes/ },
+    { name: "invalid-json", mapping, metadata: "invalid JSON", error: /JSON/ },
+  ];
+  for (const scenario of scenarios) {
+    const dir = path.join(root, scenario.name);
+    await mkdir(dir);
+    // A ZIP fixture exercises the actual metadata extraction; signature/manifest checks are stubbed.
+    await writeFile(path.join(dir, "BundleConfig.pb"), "fixture");
+    for (const [entry, content] of [
+      [mappingEntry, scenario.mapping],
+      [r8Entry, scenario.metadata],
+    ]) {
+      if (content === undefined) continue;
+      await mkdir(path.dirname(path.join(dir, entry)), { recursive: true });
+      await writeFile(path.join(dir, entry), content);
+    }
+    const bundle = path.join(root, `${scenario.name}.aab`);
+    execFileSync("zip", ["-qr", bundle, "."], { cwd: dir });
+    const outputDir = path.join(root, `${scenario.name}-output`);
+    const collect = () =>
+      collectAndroidPlayRelease({
+        bundle,
+        bundletool: "bundletool.jar",
+        plan,
+        outputDir,
+        run: (command, args, options) =>
+          command === "unzip"
+            ? execFileSync(command, args, options)
+            : command === "jarsigner"
+              ? "jar verified."
+              : args.includes("dump")
+                ? manifest
+                : "valid",
+      });
+    if (scenario.error) {
+      await assert.rejects(collect(), scenario.error);
+      await assert.rejects(access(outputDir));
+    } else {
+      const info = await collect();
+      assert.equal(info.optimization.r8Metadata, null);
+      assert.equal(await readFile(path.join(outputDir, "mapping.txt"), "utf8"), mapping + "\n");
+      await assert.rejects(access(path.join(outputDir, "r8.json")));
+    }
   }
 });
 
@@ -284,6 +383,7 @@ test("workflow passes the exact source, unique version and signing arguments int
     JSON.stringify({ version: plan.version }),
   );
   await writeFile(path.join(root, "apps/mobile/android/app/build.gradle"), gradle);
+  await writeFile(path.join(root, "apps/mobile/android/gradle.properties"), properties);
   await mkdir(path.join(root, "android-play-release-tools/scripts"), { recursive: true });
   const helper = new URL("./android-play-release.mjs", import.meta.url).href;
   await writeFile(
@@ -314,7 +414,7 @@ test("workflow passes the exact source, unique version and signing arguments int
     assert.equal(result.status, 0, result.stderr);
   };
   executeInlineNode("Plan Play build and versionCode");
-  executeInlineNode("Set generated Gradle versionCode");
+  executeInlineNode("Verify R8 configuration and set Gradle versionCode");
   const actual = JSON.parse(await readFile(path.join(root, "android-play-plan.json"), "utf8"));
   assert.equal(actual.sourceCommit, sourceCommit);
   assert.equal(actual.versionCode, 14702);
