@@ -469,6 +469,23 @@ fn upload_persists_only_complete_files_and_sanitizes_names() {
 }
 
 #[test]
+fn upload_keeps_unicode_letters_and_numbers_but_replaces_unsafe_characters() {
+    let (_temp, files, _cwd) = fixture();
+    let metadata = UploadedFile {
+        id: "upload_test".to_owned(),
+        file_name: "报告/最终版 1？.txt".to_owned(),
+        mime_type: "text/plain".to_owned(),
+        size: 3,
+        path: String::new(),
+    };
+    let mut upload = files.upload(metadata).unwrap();
+    upload.write_all(b"abc").unwrap();
+    let result = upload.finish().unwrap();
+    assert_eq!(result.file_name, "最终版 1_.txt");
+    assert_eq!(fs::read(&result.path).unwrap(), b"abc");
+}
+
+#[test]
 fn tilde_and_absolute_paths_are_checked_against_the_root() {
     let (_temp, files, cwd) = fixture();
     fs::write(Path::new(&cwd).join("inside"), "inside").unwrap();
