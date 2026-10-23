@@ -29,6 +29,23 @@ describe("desktop-settings", () => {
     directories.clear();
   });
 
+  it("keeps the Windows built-in daemon disabled across defaults, migration and writes", async () => {
+    const userDataPath = await createTempUserDataDir();
+    directories.add(userDataPath);
+    const store = createDesktopSettingsStore({ userDataPath, platform: "win32" });
+    const disabled = { manageBuiltInDaemon: false, keepRunningAfterQuit: false };
+    expect((await store.get()).daemon).toMatchObject(disabled);
+    expect(
+      (await store.migrateLegacyRendererSettings({ manageBuiltInDaemon: true })).daemon,
+    ).toMatchObject(disabled);
+    expect(
+      (await store.patch({ daemon: { manageBuiltInDaemon: true, keepRunningAfterQuit: true } }))
+        .daemon,
+    ).toMatchObject(disabled);
+    const reopened = createDesktopSettingsStore({ userDataPath, platform: "win32" });
+    expect((await reopened.get()).daemon).toMatchObject(disabled);
+  });
+
   it("persists listener changes across launches and preserves them during other settings writes", async () => {
     const userDataPath = await createTempUserDataDir();
     directories.add(userDataPath);

@@ -23,6 +23,13 @@ concurrency:
   cancel-in-progress: false
 
 jobs:
+  windows:
+    name: Build Windows x64
+    uses: ./.github/workflows/windows-desktop.yml
+    with:
+      source_ref: ${{ inputs.source_commit || inputs.tag || github.ref }}
+      release_tag: ${{ inputs.tag || github.ref_name }}
+
   build:
     name: Build ${{ matrix.label }}
     runs-on: ${{ matrix.runner }}
@@ -220,8 +227,8 @@ jobs:
 
   release:
     name: Prepare GitHub Release
-    needs: [build]
-    if: ${{ !cancelled() && needs.build.result == 'success' }}
+    needs: [build, windows]
+    if: ${{ !cancelled() && needs.build.result == 'success' && needs.windows.result == 'success' }}
     runs-on: ubuntu-24.04
     timeout-minutes: 30
     permissions:
@@ -282,7 +289,7 @@ jobs:
 
       - name: Verify assets and write checksums
         run: |
-          args=(--daemon)
+          args=(--daemon --windows)
           if test -f "release-assets/Ait-${RELEASE_TAG#v}-android.apk"; then
             args+=(--android)
           fi

@@ -117,6 +117,7 @@ describe("daemon-manager commands", () => {
   });
 
   afterEach(() => {
+    vi.unstubAllGlobals();
     rmSync(fixtureRoot, { recursive: true, force: true });
   });
 
@@ -165,6 +166,17 @@ describe("daemon-manager commands", () => {
       daemon: { manageBuiltInDaemon: false, keepRunningAfterQuit: false },
     };
     await expect(createDaemonCommandHandlers().start_desktop_daemon()).rejects.toThrow("disabled");
+  });
+
+  it("rejects starting or restarting a built-in daemon on Windows even with old settings", async () => {
+    vi.stubGlobal("process", { ...process, platform: "win32" });
+    mocks.start.mockClear();
+    mocks.restart.mockClear();
+    const handlers = createDaemonCommandHandlers();
+    await expect(handlers.start_desktop_daemon()).rejects.toThrow("does not include");
+    await expect(handlers.restart_desktop_daemon()).rejects.toThrow("does not include");
+    expect(mocks.start).not.toHaveBeenCalled();
+    expect(mocks.restart).not.toHaveBeenCalled();
   });
 
   it("returns the Electron main-process log tail from electron-log", () => {

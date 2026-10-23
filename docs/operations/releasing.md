@@ -4,7 +4,7 @@
 Rust `daemon`。发布边界见 [ADR-053](../decisions/clients/adr-053-paseo-desktop-release.md)，
 旧桌面源码的移除见 [当前架构](../architecture/README.md)。
 
-推送标签和手动运行 Release Ait 只构建桌面；Android 使用独立的 Google Play AAB
+推送标签和手动运行 Release Ait 构建 Linux、macOS 和 Windows 桌面；Android 使用独立的 Google Play AAB
 工作流，在 GitHub runner 上用 Gradle 构建并直接上传 Play。签名 Secrets 与操作步骤见
 [Google Play 内部测试与 CI 发布](google-play-internal-testing.md)。
 
@@ -19,7 +19,8 @@ Rust `daemon`。发布边界见 [ADR-053](../decisions/clients/adr-053-paseo-des
 新 macOS 安装包内嵌的更新源为 `https://aitapp.cn/api/v1/updates/macos/`，
 稳定版和 beta 分别读取 `latest-mac.yml`、`beta-mac.yml`。AIT Server 提供清单及按地区
 跳转的版本化文件入口；国内及未知地区下载 COS，其他已知地区下载 GitHub。
-Linux 继续使用 GitHub 更新源。见 [ADR-165](../decisions/clients/adr-165-macos-ait-server-updates.md)。
+Linux 和 Windows 使用 GitHub 更新源；Windows 对应 `latest.yml` / `beta.yml`。
+见 [ADR-165](../decisions/clients/adr-165-macos-ait-server-updates.md)。
 
 GitHub Release 仍需上传 builder 生成的 DMG、ZIP、对应 blockmap 和更新 YAML；
 ait-realease 发布编排核对 `SHA256SUMS`，将相同文件上传至 COS 的 `v{version}/`，
@@ -72,6 +73,10 @@ nightly 同样附带独立 daemon 归档，例如 `Ait-38fb6054-2026-10-08-daemo
 
 创建或更新 PR 会运行适用的 Rust、UI、文档和格式检查。Linux x86_64 与 macOS Apple Silicon
 桌面打包，以及 nightly 的准入、发布和产物清理任务均跳过。
+影响桌面、共享界面、依赖或 Windows/Release 工作流的 PR 会运行
+[Windows desktop](../../.github/workflows/windows-desktop.yml)：构建未签名 x64 NSIS 安装包和 ZIP，
+实际启动打包客户端验证欢迎页及无内置 daemon，并保留 `ait-windows-x64` CI 产物 7 天。
+该任务只有读取仓库的权限，不上传 GitHub Release。
 
 合并到 `main` 后，由 main CI 构建并发布 nightly 安装包；合并前如需验证安装包，
 可按[桌面端构建说明](../../apps/desktop/README.md)在本地打包。
@@ -81,24 +86,34 @@ Google Play 和 iOS TestFlight 不随 PR 或 main CI 构建，均使用各自的
 
 ## 发布产物
 
-| 平台              | 架构                | 文件                                                     |
-| ----------------- | ------------------- | -------------------------------------------------------- |
-| Linux             | x86_64              | `Ait-linux-x86_64.AppImage`                              |
-| Linux             | x86_64              | `Ait-VERSION-linux-x64.tar.gz`                           |
-| Linux（deb）      | x86_64              | `Ait-VERSION-linux-amd64.deb`                            |
-| Linux（rpm）      | x86_64              | `Ait-VERSION-linux-x86_64.rpm`                           |
-| macOS             | Apple Silicon arm64 | `Ait-VERSION-macos-arm64.dmg`                            |
-| macOS             | Apple Silicon arm64 | `Ait-VERSION-macos-arm64.zip`                            |
-| Linux 独立 daemon | x86_64              | `Ait-VERSION-daemon-linux-x64.tar.gz`                    |
-| macOS 独立 daemon | Apple Silicon arm64 | `Ait-VERSION-daemon-macos-arm64.tar.gz`                  |
-| Android           | 通用                | `Ait-VERSION-android.apk`                                |
-| 自动更新          | 各平台              | `latest-linux.yml`、`latest-mac.yml`、生成的 `.blockmap` |
-| 校验              | 全部资产            | `SHA256SUMS`                                             |
+| 平台              | 架构                | 文件                                                                   |
+| ----------------- | ------------------- | ---------------------------------------------------------------------- |
+| Linux             | x86_64              | `Ait-linux-x86_64.AppImage`                                            |
+| Linux             | x86_64              | `Ait-VERSION-linux-x64.tar.gz`                                         |
+| Linux（deb）      | x86_64              | `Ait-VERSION-linux-amd64.deb`                                          |
+| Linux（rpm）      | x86_64              | `Ait-VERSION-linux-x86_64.rpm`                                         |
+| macOS             | Apple Silicon arm64 | `Ait-VERSION-macos-arm64.dmg`                                          |
+| macOS             | Apple Silicon arm64 | `Ait-VERSION-macos-arm64.zip`                                          |
+| Windows           | x64                 | `Ait-VERSION-windows-x64-setup.exe`                                    |
+| Windows           | x64                 | `Ait-VERSION-windows-x64.zip`                                          |
+| Linux 独立 daemon | x86_64              | `Ait-VERSION-daemon-linux-x64.tar.gz`                                  |
+| macOS 独立 daemon | Apple Silicon arm64 | `Ait-VERSION-daemon-macos-arm64.tar.gz`                                |
+| Android           | 通用                | `Ait-VERSION-android.apk`                                              |
+| 自动更新          | 各平台              | `latest-linux.yml`、`latest-mac.yml`、`latest.yml`、生成的 `.blockmap` |
+| 构建来源          | Windows             | `BUILD-INFO-windows.json`                                              |
+| 校验              | 全部资产            | `SHA256SUMS`                                                           |
 
 AppImage 文件名保持稳定，版本体现在 Release 标签和应用内部。deb 与 rpm 的包名为
-`ait-desktop`，安装到 `/opt/Ait`，并列入 `latest-linux.yml` 供原生更新器使用。Windows 和其他架构
-不属于本次发布。安装包 `resources/bin/` 中只有 `daemon`；Electron 主程序与
-Helper 是必需运行时。GitHub 仍自动提供标签对应的源码归档。
+`ait-desktop`，安装到 `/opt/Ait`，并列入 `latest-linux.yml` 供原生更新器使用。Linux/macOS
+安装包 `resources/bin/` 中只有 `daemon`；Windows 不附带 daemon，仅连接远程主机。
+Windows Release 构建运行在 `windows-2025`，不安装 Rust 工具链、不构建独立 daemon。
+未配置 Windows 代码签名证书时产物未签名。Electron 主程序与 Helper 是必需运行时。
+GitHub 仍自动提供标签对应的源码归档。
+
+向已发布版本追加 Windows 产物时，保持原标签和 Linux/macOS 文件不变；上传 EXE、ZIP、
+更新 YAML、blockmap 与 `BUILD-INFO-windows.json`，在原 `SHA256SUMS` 中追加这些文件的校验和。
+Windows 构建来源单独记录，原 `BUILD-INFO.json` 继续描述既有平台。Release CI 使用
+`--windows` 强制要求完整 Windows 产物集；历史版本校验仍允许不含 Windows 的旧版本。
 
 独立 daemon 归档供没有桌面环境的主机运行 [无人值守 daemon](headless-daemon.md)，与桌面包使用
 同一次构建的 Rust `daemon`。归档内为可执行文件 `ait-daemon` 和 `LICENSE`；文件改名是为了放入

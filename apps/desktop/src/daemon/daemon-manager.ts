@@ -178,6 +178,11 @@ export async function resolveDesktopDaemonStatus(): Promise<DesktopDaemonStatus>
 }
 
 function assertBuiltInDaemonManagementEnabled(settings: DesktopSettings): void {
+  if (process.platform === "win32") {
+    throw new Error(
+      "The Windows desktop app does not include a built-in daemon. Connect to a remote host.",
+    );
+  }
   if (!settings.daemon.manageBuiltInDaemon) {
     throw new Error("Built-in daemon management is disabled.");
   }

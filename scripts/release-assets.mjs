@@ -33,6 +33,12 @@ export function releaseAssetNames(platform, version, buildLabel) {
     ];
   if (platform === "mac")
     return [`Ait-${label}-macos-arm64.dmg`, `Ait-${label}-macos-arm64.zip`, `${channel}-mac.yml`];
+  if (platform === "win" && !buildLabel)
+    return [
+      `Ait-${version}-windows-x64-setup.exe`,
+      `Ait-${version}-windows-x64.zip`,
+      `${channel}.yml`,
+    ];
   if (platform === "android" && !buildLabel) return [`Ait-${version}-android.apk`];
   throw new Error(`Unsupported release platform: ${platform}`);
 }
@@ -142,12 +148,23 @@ export async function verifyReleaseAssets({
   directory,
   includeAndroid = false,
   includeDaemon = false,
+  includeWindows = false,
   buildLabel,
 }) {
   assert(!(includeAndroid && buildLabel), "Nightly builds support desktop platforms only");
+  assert(!(includeWindows && buildLabel), "Windows nightly builds are not configured");
+  const names = (await readdir(directory)).filter((name) => name !== "SHA256SUMS").sort();
+  const windows = buildLabel ? [] : releaseAssetNames("win", version);
+  const windowsBlockmaps = windows
+    .filter((name) => !name.endsWith(".yml"))
+    .map((name) => `${name}.blockmap`);
+  const windowsPresent = names.some((name) =>
+    [...windows, ...windowsBlockmaps, "BUILD-INFO-windows.json"].includes(name),
+  );
   const desktop = [
     ...releaseAssetNames("linux", version, buildLabel),
     ...releaseAssetNames("mac", version, buildLabel),
+    ...(includeWindows || windowsPresent ? windows : []),
   ];
   const required = [
     ...desktop,
@@ -160,11 +177,13 @@ export async function verifyReleaseAssets({
     ...required,
     ...(buildLabel ? [] : daemonAssetNames(version)),
     "BUILD-INFO.json",
+    ...(buildLabel ? [] : ["BUILD-INFO-windows.json"]),
     ...desktop.filter((name) => !name.endsWith(".yml")).map((name) => `${name}.blockmap`),
   ]);
-  const names = (await readdir(directory)).filter((name) => name !== "SHA256SUMS").sort();
-  if (names.includes("BUILD-INFO.json")) {
-    const info = JSON.parse(await readFile(path.join(directory, "BUILD-INFO.json"), "utf8"));
+  for (const infoFile of ["BUILD-INFO.json", "BUILD-INFO-windows.json"].filter((name) =>
+    names.includes(name),
+  )) {
+    const info = JSON.parse(await readFile(path.join(directory, infoFile), "utf8"));
     assert.equal(
       info.version,
       buildLabel ?? version,
@@ -231,7 +250,7 @@ async function main() {
   } else if (
     command === "verify" &&
     args.length >= 2 &&
-    options.every((option) => ["--android", "--daemon"].includes(option)) &&
+    options.every((option) => ["--android", "--daemon", "--windows"].includes(option)) &&
     new Set(options).size === options.length
   ) {
     const [version, directory] = args;
@@ -241,12 +260,13 @@ async function main() {
         directory,
         includeAndroid: options.includes("--android"),
         includeDaemon: options.includes("--daemon"),
+        includeWindows: options.includes("--windows"),
         buildLabel,
       }),
     );
   } else {
     throw new Error(
-      "Usage: release-assets.mjs collect linux|mac VERSION SOURCE DEST [--nightly LABEL] | daemon linux|mac VERSION BINARY DEST [--nightly LABEL] | verify VERSION DIRECTORY [--android] [--daemon] | verify VERSION DIRECTORY --nightly LABEL",
+      "Usage: release-assets.mjs collect linux|mac|win VERSION SOURCE DEST [--nightly LABEL] | daemon linux|mac VERSION BINARY DEST [--nightly LABEL] | verify VERSION DIRECTORY [--android] [--daemon] [--windows] | verify VERSION DIRECTORY --nightly LABEL",
     );
   }
 }

@@ -10,6 +10,41 @@ const workflow = parse(
   readFileSync(new URL("../.github/workflows/release.yml", import.meta.url), "utf8"),
 );
 
+test("release publication waits for the reusable Windows build and requires its assets", () => {
+  assert.equal(workflow.jobs.windows.uses, "./.github/workflows/windows-desktop.yml");
+  assert.equal(
+    workflow.jobs.windows.with.source_ref,
+    "${{ inputs.source_commit || inputs.tag || github.ref }}",
+  );
+  assert.deepEqual(workflow.jobs.release.needs, ["build", "windows"]);
+  assert.match(workflow.jobs.release.if, /needs\.windows\.result == 'success'/);
+  const verify = workflow.jobs.release.steps.find(
+    (step) => step.name === "Verify assets and write checksums",
+  );
+  assert.match(verify.run, /--windows/);
+});
+
+test("Windows CI packages and smokes the native client without building Rust or publishing", () => {
+  const windows = parse(
+    readFileSync(new URL("../.github/workflows/windows-desktop.yml", import.meta.url), "utf8"),
+  );
+  assert(windows.on.workflow_call);
+  assert(windows.on.pull_request.paths.includes("apps/**"));
+  assert.equal(windows.permissions.contents, "read");
+  const job = windows.jobs.build;
+  assert.equal(job["runs-on"], "windows-2025");
+  const commands = job.steps.map((step) => step.run ?? "").join("\n");
+  assert.match(commands, /npm run build:windows/);
+  assert.match(commands, /windows-startup\.e2e\.mjs/);
+  assert.match(commands, /release-assets\.mjs collect win/);
+  assert.doesNotMatch(commands, /cargo|prepare-daemon|gh release/);
+  assert(!job.steps.some((step) => step.uses?.includes("rust-toolchain")));
+  assert.equal(
+    job.steps.find((step) => step.uses?.startsWith("actions/upload-artifact")).with.name,
+    "ait-windows-x64",
+  );
+});
+
 function runStep(t, name, state, tag = "v0.1.1", builtAssets = []) {
   const step = workflow.jobs.release.steps.find((candidate) => candidate.name === name);
   assert(step, `Missing release step: ${name}`);

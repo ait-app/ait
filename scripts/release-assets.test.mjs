@@ -57,7 +57,7 @@ async function builderPackager(platform, version, buildLabel) {
     info,
     appInfo,
     platformSpecificBuildOptions: config[platform],
-    platform: platform === "linux" ? Platform.LINUX : Platform.MAC,
+    platform: { linux: Platform.LINUX, mac: Platform.MAC, win: Platform.WINDOWS }[platform],
     expandMacro: (value, arch) => expandMacro(value, arch, appInfo),
     getResource: async () => null,
   };
@@ -66,13 +66,15 @@ async function builderPackager(platform, version, buildLabel) {
 async function builderAssetNames(platform, version, buildLabel) {
   const packager = await builderPackager(platform, version, buildLabel);
   const { config } = packager;
-  const arch = platform === "linux" ? Arch.x64 : Arch.arm64;
-  const installers = config[platform].target.map((ext) => {
-    const options = ext === "AppImage" ? config.appImage : config[platform];
+  const arch = platform === "mac" ? Arch.arm64 : Arch.x64;
+  const installers = config[platform].target.map((target) => {
+    const ext = target === "nsis" ? "exe" : target;
+    const options =
+      target === "nsis" ? config.nsis : ext === "AppImage" ? config.appImage : config[platform];
     return expandMacro(options.artifactName, getArtifactArchName(arch, ext), { version }, { ext });
   });
   const [publish] = await getPublishConfigs(packager, null, arch, true);
-  return [...installers, `${publish.channel}-${platform}.yml`];
+  return [...installers, `${publish.channel}${platform === "win" ? "" : `-${platform}`}.yml`];
 }
 
 async function fixture(t, platform, version = "0.0.7", buildLabel) {
@@ -117,7 +119,7 @@ async function fakeDaemon(t, reported) {
 
 test("release assets match electron-builder's target-specific architecture names", async () => {
   for (const version of ["0.0.7", "0.0.8-beta.1"]) {
-    for (const platform of ["linux", "mac"]) {
+    for (const platform of ["linux", "mac", "win"]) {
       assert.deepEqual(
         releaseAssetNames(platform, version),
         await builderAssetNames(platform, version),
@@ -404,6 +406,62 @@ test("rejects stale updater checksums and missing installers", async (t) => {
   await assert.rejects(collectReleaseAssets(input), /ENOENT/);
 });
 
+test("Windows collection validates the EXE update hash and retains its blockmap", async (t) => {
+  for (const version of ["0.1.15", "0.1.16-beta.1"]) {
+    const input = await fixture(t, "win", version);
+    const [installer, , metadata] = releaseAssetNames("win", version);
+    const packager = await builderPackager("win", version);
+    const tasks = await createUpdateInfoTasks(
+      {
+        packager,
+        arch: Arch.x64,
+        file: path.join(input.source, installer),
+        target: { outDir: input.source },
+      },
+      await getPublishConfigs(packager, null, Arch.x64, true),
+    );
+    assert.equal(path.basename(tasks[0].file), metadata);
+    await writeFile(path.join(input.source, `${installer}.blockmap`), "blockmap");
+    const collected = await collectReleaseAssets(input);
+    assert(collected.includes(`${installer}.blockmap`));
+    assert(!collected.includes("old-server.exe"));
+    await writeFile(path.join(input.source, installer), "tampered EXE");
+    await assert.rejects(collectReleaseAssets(input), /checksum mismatch/);
+  }
+});
+
+test("release CI requires Windows assets while historical releases and repairs stay valid", async (t) => {
+  const linux = await fixture(t, "linux");
+  const mac = await fixture(t, "mac");
+  await collectReleaseAssets(linux);
+  await collectReleaseAssets({ ...mac, destination: linux.destination });
+  const options = { version: linux.version, directory: linux.destination };
+  await verifyReleaseAssets(options);
+  await assert.rejects(
+    verifyReleaseAssets({ ...options, includeWindows: true }),
+    /Missing release asset: .*windows/,
+  );
+  const windows = await fixture(t, "win");
+  await collectReleaseAssets({ ...windows, destination: linux.destination });
+  await writeFile(
+    path.join(linux.destination, "BUILD-INFO-windows.json"),
+    JSON.stringify({
+      version: linux.version,
+      releaseTag: `v${linux.version}`,
+      sourceCommit: "a".repeat(40),
+      workflowCommit: "b".repeat(40),
+    }),
+  );
+  await verifyReleaseAssets({ ...options, includeWindows: true });
+  // A repair detects and preserves a complete Windows asset set without new flags.
+  await verifyReleaseAssets(options);
+  const sums = await readFile(path.join(linux.destination, "SHA256SUMS"), "utf8");
+  assert.match(sums, /Ait-0\.0\.7-windows-x64-setup\.exe/);
+  assert.match(sums, /BUILD-INFO-windows\.json/);
+  await rm(path.join(linux.destination, "Ait-0.0.7-windows-x64.zip"));
+  await assert.rejects(verifyReleaseAssets(options), /Missing release asset: .*windows.*zip/);
+});
+
 test("desktop-only verification is the default and Android requires an explicit option", async (t) => {
   const linux = await fixture(t, "linux");
   const mac = await fixture(t, "mac");
@@ -588,6 +646,9 @@ test("desktop release verifies published desktop assets and any retained Android
     });
   assert.notEqual(run().status, 0, "stable releases must carry standalone daemon archives");
   await addDaemonAssets(assets);
+  assert.notEqual(run().status, 0, "release CI must require Windows installers");
+  const windows = await fixture(t, "win");
+  await collectReleaseAssets({ ...windows, destination: assets });
   assert.equal(run().status, 0);
   assert.match(
     await readFile(path.join(assets, "SHA256SUMS"), "utf8"),
@@ -697,17 +758,23 @@ test("release workflow builds only the daemon and packages the resolved desktop 
   const verify = workflow.jobs.release.steps.find(
     (step) => step.name === "Verify assets and write checksums",
   );
-  assert.match(verify.run, /args=\(--daemon\)/);
+  assert.match(verify.run, /args=\(--daemon --windows\)/);
   const config = parse(
     await readFile(new URL("../apps/desktop/electron-builder.yml", import.meta.url), "utf8"),
   );
   assert.equal(config.appId, "dev.ait.desktop");
   assert.deepEqual(
     config.extraResources.filter((entry) => entry.to.startsWith("bin")),
-    [{ from: "release-resources/daemon/daemon", to: "bin/daemon" }],
+    [],
   );
+  for (const platform of ["mac", "linux"]) {
+    assert.deepEqual(config[platform].extraResources, [
+      { from: "release-resources/daemon/daemon", to: "bin/daemon" },
+    ]);
+  }
   assert.deepEqual(config.mac.binaries, ["Contents/Resources/bin/daemon"]);
-  assert.equal(config.win, undefined);
+  assert.deepEqual(config.win.target, ["nsis", "zip"]);
+  assert.equal(config.win.extraResources, undefined);
   assert.deepEqual(config.linux.target, ["AppImage", "tar.gz", "deb", "rpm"]);
   for (const format of ["deb", "rpm"]) {
     assert.equal(config[format].packageName, "ait-desktop");
