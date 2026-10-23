@@ -60,12 +60,12 @@ impl CodexClient {
         )
     }
 
-    /// Use `program` directly without invoking a shell. Requests have a ten-second deadline.
+    /// Use `program` directly without invoking a shell. Requests have a twenty-second deadline.
     #[must_use]
     pub(crate) fn new(program: PathBuf) -> Self {
         Self {
             program,
-            deadline: Duration::from_secs(10),
+            deadline: Duration::from_secs(20),
             capabilities: std::sync::Arc::default(),
             images: super::images::ImageStore::default(),
             environment: crate::ports::environment::AgentEnvironment::default(),
