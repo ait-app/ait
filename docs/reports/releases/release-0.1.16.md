@@ -24,13 +24,12 @@
 
 - `npm ci`、`npm run verify:release -- v0.1.16`、发布工具 67 项测试通过。
 - 源码版本元数据相关 35 项测试、桌面主进程构建、桌面与共享 UI 类型检查通过；这些检查不构建或提交移动端。
-- 本地 Rust 测试与覆盖率依据 AGENTS.md 跳过；[基线 main CI](https://github.com/ait-app/ait/actions/runs/40033697291)在准备时仍在运行，不提前声称通过。
+- 本地 Rust 测试与覆盖率依据 AGENTS.md 跳过；[基线 main CI](https://github.com/ait-app/ait/actions/runs/40033697291)通过。
 - 正式公开前必须确认准备 PR、最终 main CI、三平台发布构建、macOS 签名公证、Linux 安装与生命周期、Windows 打包客户端启动门禁成功。
 - 发布产物逐项核对附件、SHA256SUMS、GitHub digest、更新 SHA-512、两个 BUILD-INFO 来源。
 
-**打标签前待完成：** 仓库发布规范要求同步 `Info.plist` 为 0.1.16 / 1016999，并以锁定 CocoaPods 重新生成本地 ExpoTwoWayAudio 0.1.16 的 Podfile.lock。
-自动审批拒绝 Expo prebuild 后暂停该步骤，等待仅同步原生元数据的明确授权；未通过其他方式修改原生工程。
-当前原生版本仍为 0.1.15，此准备状态不满足创建 v0.1.16 标签的条件。
+iOS 原生版本元数据已同步：`Info.plist` 为 0.1.16 / 1016999，锁定 CocoaPods 1.16.2 重新生成本地 ExpoTwoWayAudio 0.1.16 的 `Podfile.lock` 并通过 `pod install --deployment`。
+该同步仅更新两个原生版本文件；预生成产生的图标变化已清理，未构建或提交移动端。
 
 Windows 仅支持远程 Host，无内置 daemon，安装包未签名。未验证真实外部 Provider、生产 Hub/APNs/FCM 投递或移动端真机安装。
 

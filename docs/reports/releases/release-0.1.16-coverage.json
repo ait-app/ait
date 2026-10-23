@@ -94,7 +94,9 @@
     "scripts/edit-windows-executable.test.cjs": "0df1f39990f1fc5e6999545f68b18062b67b65d6a53c2728340b9dda6abdf84d",
     ".github/workflows/release.yml": "a8766c4ef1616635d99ec3fa490b4806aa2107543176e14d97d8040a17b39615",
     ".github/workflows/windows-desktop.yml": "6c719bb57eb300e3b7036484c1c5e93e944f8262797fd45b65375b809519d3cb",
-    "package-lock.json": "a795090a3c9a25d4563121991ac65bd39166743486505451ff5efd0ecae07ac3"
+    "package-lock.json": "a795090a3c9a25d4563121991ac65bd39166743486505451ff5efd0ecae07ac3",
+    "apps/mobile/ios/Ait/Info.plist": "195b9a371612772906221007a25b454c86a7467a30c65f2e54e8bc09e28311bd",
+    "apps/mobile/ios/Podfile.lock": "26ab0fe135162e835a6f2215b6a07d45360d7f024bb2cd1628023f90c3e48cf6"
   },
   "comparison": {
     "version": "0.1.15",
@@ -111,14 +113,15 @@
       "passed": 35,
       "failed": 0
     },
-    "nativeVersionSync": "pending explicit approval after automatic review rejection"
+    "nativeVersionSync": "passed: Expo prebuild, locked CocoaPods install and deployment mode",
+    "format": "passed",
+    "docs": "passed"
   },
   "limits": [
     "Coverage measures only three JavaScript release tools, not Rust/TypeScript or the entire product.",
     "No bins/crates Rust implementation changes in this preparation; local Rust tests and coverage skipped per AGENTS.md.",
     "No iOS or Android binary builds, submissions, device tests or real external-provider acceptance test performed.",
-    "Windows has no bundled daemon and requires a remote host; packages are unsigned.",
-    "Native metadata synchronization is required before tagging and currently pending approval."
+    "Windows has no bundled daemon and requires a remote host; packages are unsigned."
   ],
   "measuredAt": "2026-10-23T22:34:45.641959+00:00"
 }
