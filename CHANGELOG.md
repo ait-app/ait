@@ -1,5 +1,14 @@
 # Ait changelog
 
+## 0.1.16 - 2026-10-24
+
+- Add Windows x64 installers and ZIP packages for connecting to remote hosts, without a bundled daemon.
+- Route workspace browser traffic through the selected workspace daemon and improve remote browser profile handling.
+- Show the account login name and expiry date, and keep saved hosts scoped to the signed-in account.
+- Handle missing upstream branches when creating workspaces and preserve actionable creation errors.
+- Preserve native provider failure details and guard Antigravity background calls with cached authentication.
+- Render Claude background task notifications as tool rows, improve Chinese translations, and adapt branding to light and dark themes.
+
 ## 0.1.15 - 2026-10-22
 
 - Add the Oh My Pi native RPC provider, including session history, approvals, streaming and subagent events.
