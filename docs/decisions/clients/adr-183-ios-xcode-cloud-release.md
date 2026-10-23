@@ -3,6 +3,10 @@
 状态：Accepted（2026-10-23），取代 [ADR-070](adr-070-ios-testflight-release.md) 和
 [ADR-079](adr-079-mobile-eas-builds.md) 的 iOS 发布路径。
 
+后续：[ADR-187](adr-187-ios-app-store-cloud-trigger.md) 新增 GitHub 手动入口和 App Store /
+外部 TestFlight Cloud 工作流，扩展本文关于“不通过 GitHub 转发”和发布范围的决策。
+下述 `Default` 内部测试流程继续保留。
+
 ## 背景
 
 仓库已提交 iOS 原生工程和锁文件，Xcode Cloud 的 `ci_post_clone.sh` 能安装依赖并校验
