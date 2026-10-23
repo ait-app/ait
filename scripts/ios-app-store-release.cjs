@@ -57,7 +57,7 @@ function buildUrl(check) {
   );
 }
 
-function archiveState(checks, previousBuilds, sha) {
+function startedBuild(checks, previousBuilds, sha) {
   const current = checks.filter(
     (check) => check.head_sha === sha && buildUrl(check) && !previousBuilds.has(buildUrl(check)),
   );
@@ -67,46 +67,18 @@ function archiveState(checks, previousBuilds, sha) {
       "Multiple new Cloud builds found for this commit. Check Cloud before retrying.",
     );
   }
-  const url = [...builds][0];
-  if (!url) return { status: "waiting" };
-  const latest = actionNames.map(
-    (name) => current.filter((check) => check.name === name).sort((a, b) => b.id - a.id)[0],
-  );
-  const failed = latest.find(
-    (check) => check?.status === "completed" && check.conclusion !== "success",
-  );
-  if (failed) return { status: "failed", url, message: `${failed.name}: ${failed.conclusion}` };
-  return {
-    status: latest.every((check) => check?.status === "completed") ? "success" : "running",
-    url,
-  };
+  return [...builds][0] ?? null;
 }
 
-async function waitForArchive({
-  listChecks,
-  previousBuilds,
-  sha,
-  report,
-  pause = sleep,
-  now = Date.now,
-}) {
+async function waitForStart({ listChecks, previousBuilds, sha, pause = sleep, now = Date.now }) {
   const started = now();
-  let found = false;
-  while (now() - started < 90 * 60_000) {
-    const state = archiveState(await listChecks(), previousBuilds, sha);
-    await report(state);
-    if (state.status === "success") return state;
-    if (state.status === "failed") throw new Error(`${state.message}: ${state.url}`);
-    found ||= state.status === "running";
-    if (!found && now() - started >= 15 * 60_000) {
-      throw new Error(
-        "No new Xcode Cloud build appeared within 15 minutes. Check the tag start condition and GitHub integration; the tag is retained. Do not blindly rerun.",
-      );
-    }
-    await pause(30_000);
+  while (now() - started < 15 * 60_000) {
+    const url = startedBuild(await listChecks(), previousBuilds, sha);
+    if (url) return url;
+    await pause(15_000);
   }
   throw new Error(
-    "Timed out waiting for the Cloud archive. The Cloud build may still be running; inspect it before retrying.",
+    "No new Xcode Cloud build appeared within 15 minutes. Check the tag start condition and GitHub integration; the tag is retained. Do not blindly rerun.",
   );
 }
 
@@ -133,42 +105,29 @@ async function release({ github, context, core, source }) {
       `Source: \`${sha}\` · version \`${version}\`\n\nTrigger tag: \`${tag}\`\n\n` +
         `[Xcode Cloud](${cloudUrl}/groups) · [Ait External](${testFlightUrl})\n\n` +
         "Cloud uploads the archive and submits it to Ait External. Beta review may still be required. Formal App Store review and release remain manual.\n\n" +
-        "GitHub observes Build/Archive checks only; a green run does not confirm upload, Beta approval or tester availability. Cancelling this GitHub run does not cancel Cloud.\n\n",
+        "GitHub only confirms that Cloud started. A green run does not confirm a successful archive, upload, Beta approval or tester availability. Cloud continues independently after this run ends.\n\n",
     )
     .write();
   // A single immutable ref. Never force-update a release tag or reuse a previous attempt's ref.
   git("push", "origin", `${sha}:refs/tags/${tag}`);
   await core.summary.addRaw("Trigger tag pushed. Waiting for new Xcode Cloud checks.\n\n").write();
-  let lastStatus;
-  let reportedUrl;
   try {
-    await waitForArchive({
-      listChecks,
-      previousBuilds,
-      sha,
-      report: async (state) => {
-        if (state.status !== lastStatus) core.info(`Xcode Cloud: ${state.status}`);
-        lastStatus = state.status;
-        if (state.url && state.url !== reportedUrl) {
-          reportedUrl = state.url;
-          core.setOutput("cloud_build_url", state.url);
-          await core.summary.addRaw(`[Cloud build](${state.url})\n\n`).write();
-        }
-      },
-    });
+    const url = await waitForStart({ listChecks, previousBuilds, sha });
+    core.setOutput("cloud_build_url", url);
+    core.info(`Xcode Cloud started: ${url}`);
     await core.summary
       .addRaw(
-        "Build and Archive succeeded. Open the Cloud build to verify upload and the Ait External post-action; check TestFlight for processing/Beta review status.\n",
+        `[Cloud build started](${url}). GitHub is finished; follow this link for the archive, upload and Ait External post-action, then check TestFlight for Beta review status.\n`,
       )
       .write();
   } catch (error) {
     await core.summary
       .addRaw(
-        "GitHub could not confirm a successful archive. Inspect Cloud before retrying: the trigger tag is retained and a remote build is not cancelled automatically.\n",
+        "GitHub could not confirm that Cloud started. Inspect Cloud before retrying: the trigger tag is retained and a remote build is not cancelled automatically.\n",
       )
       .write();
     throw error;
   }
 }
 
-module.exports = { validateSource, triggerTag, archiveState, waitForArchive, release };
+module.exports = { validateSource, triggerTag, startedBuild, waitForStart, release };

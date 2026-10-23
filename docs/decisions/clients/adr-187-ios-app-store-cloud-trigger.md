@@ -14,8 +14,9 @@ post-action 上传和分发。正式 App Store 审核提交和审核通过后的
 创建专用标签和读取 checks；归档、签名、上传及递增构建号仍由 Apple 完成。Cloud 的手动
 入口保留，常规分支推送、PR、桌面 `vX.Y.Z` 标签不会自动触发这条发布工作流。
 
-GitHub 等待同一源码的新 Cloud Build/Archive checks，忽略历史构建，并在失败或超时时报错。
-这些 checks 不证明上传、Beta 审核或测试组已可用，后置步骤以 Cloud 和 TestFlight 为准。
+GitHub 只等待同一源码的新 Cloud check，忽略历史构建；确认 Cloud 启动并拿到构建链接后
+立即结束，不占用 runner 等待编译。未发现新构建或关联不唯一时才报错；GitHub 成功只表示
+触发成功，归档、上传、Beta 审核和测试组可用状态以 Cloud 和 TestFlight 为准。
 每次运行和重试使用新标签，不移动既有标签；取消 GitHub 运行不会取消已启动的 Cloud 构建。
 不确定远端状态时先检查 Cloud，避免重复归档。操作和云端配置见
 [App Store iOS 手动发布](../../operations/releasing.md#app-store-ios-手动发布)。
