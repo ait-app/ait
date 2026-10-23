@@ -21,6 +21,10 @@ curl https://aitapp.cn/api/v1/auth/providers
 
 Desktop 登录后默认将内置 daemon 注册到在线服务。若在该主机的「连接」设置中停止同步，重启或重新登录后仍保持下线，直到手动重新开启同步。其他主机继续手动启用同步，详见 [ADR-096](../decisions/clients/adr-096-desktop-default-host-sync.md)。
 
+「应用 → 在线服务」下方的「账号信息」显示登录名（邮箱优先，其次手机号）、账号到期时间、在线客户端数及在线节点数。无到期限制时显示「永不过期」；此时间来自账号资料，不是登录会话的过期时间。
+
+页面可见时每 15 秒读取 `/v1/me` 与 `/v1/me/online`，也可使用页面上的「刷新」。统计接口按 node ID 分别对客户端（Hub access / Relay channel）与主机（Hub serve / Relay control）去重；离线、过期租约及 Hub 断线续传宽限期中的连接不计入。旧服务端未提供统计接口时显示「暂不可用」，请求失败时清除旧统计并提示重试。请求由各平台已有账号管理器执行，不向界面传递登录令牌。
+
 同邮箱已有旧账号时，先使用原密码登录 Web 控制台，在设置里绑定统一登录；绑定保留原 Host、角色和有效期。移动端与 Desktop 仅保留浏览器统一登录，已删除「使用原 AIT 密码登录」入口及邮箱密码表单。服务不支持统一登录时提示升级服务或更换服务地址，网络错误允许重试，不回退到旧方式，见 [ADR-123](../decisions/clients/adr-123-browser-only-account-login.md)。
 
 客户端退出保持已有逐主机同步语义，不等同于中心的全会话注销。详情见 [ADR-086](../decisions/clients/adr-086-authing-native-login.md)。

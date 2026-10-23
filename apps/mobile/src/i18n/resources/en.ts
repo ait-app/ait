@@ -57,6 +57,16 @@ export const en = {
     connectionDescription: "Sign in and connect to your online hosts.",
     loginDescription: "Sign in to access computers connected to your online service.",
     accountTitle: "Account",
+    accountInfo: "Account information",
+    accountInfoHint:
+      "Account details refresh every 15 seconds while this page is visible. Online nodes are the hosts currently connected to this account.",
+    loginName: "Login name",
+    accountExpiry: "Account expires at",
+    neverExpires: "Never expires",
+    onlineClients: "Online clients",
+    onlineNodes: "Online nodes",
+    unavailable: "Unavailable",
+    accountInfoFailed: "Could not load account information. Use Refresh to try again.",
     signIn: "Sign in",
     unifiedLogin: "Sign in / Register",
     unifiedHint:

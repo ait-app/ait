@@ -27,6 +27,15 @@ interface LoginUser {
   expires_at?: string | null;
 }
 
+/** Account details safe to display outside the platform credential owner. */
+export interface AccountInfo {
+  loginName: string;
+  expiresAt: string | null;
+  /** Older services do not report access-client presence. */
+  onlineClients: number | null;
+  onlineNodes: number | null;
+}
+
 interface NodeSession {
   node_id: string;
   node_session_id: string;
@@ -510,6 +519,42 @@ export class AccountSessionManager {
     this.nextRegistration = 0;
     this.nextRenew = 0;
     this.schedule(0);
+  }
+
+  async getAccountInfo(): Promise<AccountInfo> {
+    const account = this.account;
+    const generation = this.generation;
+    if (!account || this.suspended || this.closing) throw new Error("Sign in first.");
+    const [user, online] = await Promise.all([
+      this.api<LoginUser>("/v1/me"),
+      this.api<{ online_clients: number; online_nodes: number }>("/v1/me/online").catch(
+        (error: unknown) => {
+          if (error instanceof AccountError && error.status === 404) return null;
+          throw error;
+        },
+      ),
+    ]);
+    if (this.account !== account || this.generation !== generation)
+      throw new Error("The account changed. Refresh and try again.");
+    const loginName = [user.email, user.phone_number, user.display_name].find(
+      (value): value is string => typeof value === "string" && value.trim().length > 0,
+    );
+    if (
+      !loginName ||
+      (user.expires_at !== null && !Number.isFinite(Date.parse(user.expires_at ?? ""))) ||
+      (online !== null &&
+        (!Number.isSafeInteger(online.online_clients) ||
+          online.online_clients < 0 ||
+          !Number.isSafeInteger(online.online_nodes) ||
+          online.online_nodes < 0))
+    )
+      throw new Error("The service returned invalid account information.");
+    return {
+      loginName: loginName.trim(),
+      expiresAt: user.expires_at ?? null,
+      onlineClients: online?.online_clients ?? null,
+      onlineNodes: online?.online_nodes ?? null,
+    };
   }
 
   /** Register an explicitly chosen daemon; return only its one-use control grant. */

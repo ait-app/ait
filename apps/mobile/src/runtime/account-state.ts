@@ -13,7 +13,7 @@ import {
 import { DEFAULT_ACCOUNT_CENTER } from "@ait/client/internal/account-session";
 import { revokeAccountPushNotifications } from "@/push-notifications";
 
-import type { AccountHost } from "@ait/client/internal/account-session";
+import type { AccountHost, AccountInfo } from "@ait/client/internal/account-session";
 export type { AccountHost } from "@ait/client/internal/account-session";
 
 export interface AccountState {
@@ -58,6 +58,14 @@ export function supportsAccountRelay(): boolean {
     Boolean(getDesktopHost()?.invoke) ||
     supportsBrowserAccount()
   );
+}
+
+/** Read account details through the platform that owns the signed-in credentials. */
+export async function loadAccountInfo(): Promise<AccountInfo> {
+  const invoke = getDesktopHost()?.invoke;
+  if (invoke) return (await invoke("account_info")) as AccountInfo;
+  const manager = await (supportsBrowserAccount() ? getBrowserAccount() : getNativeAccount());
+  return manager.getAccountInfo();
 }
 
 let commandTail = Promise.resolve<unknown>(undefined);

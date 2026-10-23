@@ -12,6 +12,97 @@ import { hubFixture } from "../test/hub.js";
 
 afterEach(() => vi.useRealTimers());
 
+describe("account information", () => {
+  it("reads the login identity, account expiry and authoritative counts without exposing credentials", async () => {
+    const f = fixture();
+    await f.login();
+    f.http.mockResolvedValueOnce(
+      Response.json({
+        email: "me@example.test",
+        display_name: "Nickname",
+        expires_at: "2027-01-01T00:00:00Z",
+        auth_subject: "private-subject",
+      }),
+    );
+    f.http.mockResolvedValueOnce(Response.json({ online_clients: 2, online_nodes: 3 }));
+    expect(await f.manager.getAccountInfo()).toEqual({
+      loginName: "me@example.test",
+      expiresAt: "2027-01-01T00:00:00Z",
+      onlineClients: 2,
+      onlineNodes: 3,
+    });
+    expect(f.http).toHaveBeenCalledWith(
+      "https://aitapp.cn/api/v1/me/online",
+      expect.objectContaining({
+        headers: expect.objectContaining({ Authorization: "Bearer private-jwt" }),
+      }),
+    );
+    await f.manager.logout();
+  });
+
+  it("supports phone-only accounts and distinguishes unlimited access and zero online devices", async () => {
+    const f = fixture();
+    await f.login();
+    f.http.mockResolvedValueOnce(
+      Response.json({ phone_number: "+8613800000000", expires_at: null }),
+    );
+    f.http.mockResolvedValueOnce(Response.json({ online_clients: 0, online_nodes: 0 }));
+    expect(await f.manager.getAccountInfo()).toEqual({
+      loginName: "+8613800000000",
+      expiresAt: null,
+      onlineClients: 0,
+      onlineNodes: 0,
+    });
+    await f.manager.logout();
+  });
+
+  it("keeps profile information available on centers without the statistics endpoint", async () => {
+    const f = fixture();
+    await f.login();
+    f.http.mockResolvedValueOnce(Response.json({ email: "me@example.test", expires_at: null }));
+    f.http.mockResolvedValueOnce(new Response(null, { status: 404 }));
+    expect(await f.manager.getAccountInfo()).toEqual({
+      loginName: "me@example.test",
+      expiresAt: null,
+      onlineClients: null,
+      onlineNodes: null,
+    });
+    await f.manager.logout();
+  });
+
+  it("rejects information from a previous account after logout", async () => {
+    const f = fixture();
+    await f.login();
+    let finish!: (value: Response) => void;
+    f.http.mockImplementationOnce(
+      () =>
+        new Promise((resolve) => {
+          finish = resolve;
+        }),
+    );
+    f.http.mockResolvedValueOnce(Response.json({ online_clients: 0, online_nodes: 0 }));
+    const pending = f.manager.getAccountInfo();
+    await f.manager.logout();
+    const rejected = expect(pending).rejects.toThrow("The account changed");
+    finish(Response.json({ email: "old@example.test", expires_at: null }));
+    await rejected;
+    await expect(f.manager.getAccountInfo()).rejects.toThrow("Sign in first");
+  });
+
+  it.each([
+    { expires_at: "invalid", online_clients: 0, online_nodes: 0 },
+    { expires_at: null, online_clients: -1, online_nodes: 0 },
+    { expires_at: null, online_clients: 1, online_nodes: 0.5 },
+  ])("rejects malformed account details: %j", async ({ expires_at, ...counts }) => {
+    const f = fixture();
+    await f.login();
+    f.http.mockResolvedValueOnce(Response.json({ email: "me@example.test", expires_at }));
+    f.http.mockResolvedValueOnce(Response.json(counts));
+    await expect(f.manager.getAccountInfo()).rejects.toThrow("invalid account information");
+    await f.manager.logout();
+  });
+});
+
 it("discovers a Hub-only Host independently of its offline Relay route", async () => {
   const f = fixture();
   Object.assign(f.host, { online: false, instance_id: null, relay_modes: [] });
