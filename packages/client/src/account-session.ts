@@ -31,9 +31,6 @@ interface LoginUser {
 export interface AccountInfo {
   loginName: string;
   expiresAt: string | null;
-  /** Older services do not report access-client presence. */
-  onlineClients: number | null;
-  onlineNodes: number | null;
 }
 
 interface NodeSession {
@@ -525,9 +522,7 @@ export class AccountSessionManager {
     const account = this.account;
     const generation = this.generation;
     if (!account || this.suspended || this.closing) throw new Error("Sign in first.");
-    const user = await this.api<LoginUser & { online_clients?: number; online_nodes?: number }>(
-      "/v1/me",
-    );
+    const user = await this.api<LoginUser>("/v1/me");
     if (this.account !== account || this.generation !== generation)
       throw new Error("The account changed. Refresh and try again.");
     const loginName = [user.email, user.phone_number, user.display_name].find(
@@ -535,17 +530,12 @@ export class AccountSessionManager {
     );
     if (
       !loginName ||
-      (user.expires_at !== null && !Number.isFinite(Date.parse(user.expires_at ?? ""))) ||
-      [user.online_clients, user.online_nodes].some(
-        (count) => count !== undefined && (!Number.isSafeInteger(count) || count < 0),
-      )
+      (user.expires_at !== null && !Number.isFinite(Date.parse(user.expires_at ?? "")))
     )
       throw new Error("The service returned invalid account information.");
     return {
       loginName: loginName.trim(),
       expiresAt: user.expires_at ?? null,
-      onlineClients: user.online_clients ?? null,
-      onlineNodes: user.online_nodes ?? null,
     };
   }
 

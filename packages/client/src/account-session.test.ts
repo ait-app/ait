@@ -13,7 +13,7 @@ import { hubFixture } from "../test/hub.js";
 afterEach(() => vi.useRealTimers());
 
 describe("account information", () => {
-  it("reads the login identity, account expiry and authoritative counts without exposing credentials", async () => {
+  it("reads the login identity and account expiry without exposing credentials", async () => {
     const f = fixture();
     await f.login();
     f.http.mockClear();
@@ -23,15 +23,11 @@ describe("account information", () => {
         display_name: "Nickname",
         expires_at: "2027-01-01T00:00:00Z",
         auth_subject: "private-subject",
-        online_clients: 2,
-        online_nodes: 3,
       }),
     );
     expect(await f.manager.getAccountInfo()).toEqual({
       loginName: "me@example.test",
       expiresAt: "2027-01-01T00:00:00Z",
-      onlineClients: 2,
-      onlineNodes: 3,
     });
     expect(f.http).toHaveBeenCalledExactlyOnceWith(
       "https://aitapp.cn/api/v1/me",
@@ -42,35 +38,18 @@ describe("account information", () => {
     await f.manager.logout();
   });
 
-  it("supports phone-only accounts and distinguishes unlimited access and zero online devices", async () => {
+  it("supports phone-only accounts with unlimited access", async () => {
     const f = fixture();
     await f.login();
     f.http.mockResolvedValueOnce(
       Response.json({
         phone_number: "+8613800000000",
         expires_at: null,
-        online_clients: 0,
-        online_nodes: 0,
       }),
     );
     expect(await f.manager.getAccountInfo()).toEqual({
       loginName: "+8613800000000",
       expiresAt: null,
-      onlineClients: 0,
-      onlineNodes: 0,
-    });
-    await f.manager.logout();
-  });
-
-  it("keeps profile information available on centers without presence fields", async () => {
-    const f = fixture();
-    await f.login();
-    f.http.mockResolvedValueOnce(Response.json({ email: "me@example.test", expires_at: null }));
-    expect(await f.manager.getAccountInfo()).toEqual({
-      loginName: "me@example.test",
-      expiresAt: null,
-      onlineClients: null,
-      onlineNodes: null,
     });
     await f.manager.logout();
   });
@@ -93,16 +72,12 @@ describe("account information", () => {
     await expect(f.manager.getAccountInfo()).rejects.toThrow("Sign in first");
   });
 
-  it.each([
-    { expires_at: "invalid", online_clients: 0, online_nodes: 0 },
-    { expires_at: null, online_clients: -1, online_nodes: 0 },
-    { expires_at: null, online_clients: 1, online_nodes: 0.5 },
-    { expires_at: null, online_clients: "1", online_nodes: 0 },
-    { expires_at: null, online_clients: 1, online_nodes: null },
-  ])("rejects malformed account details: %j", async (details) => {
+  it("rejects an invalid account expiry", async () => {
     const f = fixture();
     await f.login();
-    f.http.mockResolvedValueOnce(Response.json({ email: "me@example.test", ...details }));
+    f.http.mockResolvedValueOnce(
+      Response.json({ email: "me@example.test", expires_at: "invalid" }),
+    );
     await expect(f.manager.getAccountInfo()).rejects.toThrow("invalid account information");
     await f.manager.logout();
   });

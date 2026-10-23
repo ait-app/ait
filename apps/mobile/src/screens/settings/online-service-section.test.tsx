@@ -35,8 +35,6 @@ beforeEach(async () => {
   mocks.load.mockResolvedValue({
     loginName: "me@example.test",
     expiresAt: null,
-    onlineClients: 2,
-    onlineNodes: 3,
   });
   await i18n.changeLanguage("en");
 });
@@ -45,14 +43,12 @@ afterEach(() => {
   vi.useRealTimers();
 });
 
-it("shows the login name, unlimited account access and authoritative online counts below sign-in", async () => {
+it("shows the login name and unlimited account access below sign-in", async () => {
   const view = render(<OnlineServiceSection />);
   await waitFor(() =>
     expect(view.getByTestId("account-info-login-name").textContent).toContain("me@example.test"),
   );
   expect(view.getByTestId("account-info-expiry").textContent).toContain("Never expires");
-  expect(view.getByTestId("account-info-clients").textContent).toBe("Online clients2");
-  expect(view.getByTestId("account-info-nodes").textContent).toBe("Online nodes3");
   expect(
     view
       .getByTestId("settings-online-service")
@@ -61,36 +57,26 @@ it("shows the login name, unlimited account access and authoritative online coun
   ).toBeTruthy();
 });
 
-it("refreshes expiry and counts from the existing Refresh action, including zero", async () => {
+it("refreshes account expiry from the existing Refresh action", async () => {
   const view = render(<OnlineServiceSection />);
   await waitFor(() => expect(mocks.load).toHaveBeenCalledOnce());
   const expiresAt = "2027-03-04T05:06:07Z";
   mocks.load.mockResolvedValue({
     loginName: "me@example.test",
     expiresAt,
-    onlineClients: 0,
-    onlineNodes: 0,
   });
   fireEvent.click(view.getByText("Refresh"));
   await waitFor(() =>
-    expect(view.getByTestId("account-info-clients").textContent).toBe("Online clients0"),
-  );
-  expect(view.getByTestId("account-info-nodes").textContent).toBe("Online nodes0");
-  expect(view.getByTestId("account-info-expiry").textContent).toContain(
-    new Date(expiresAt).toLocaleString("en"),
+    expect(view.getByTestId("account-info-expiry").textContent).toContain(
+      new Date(expiresAt).toLocaleString("en"),
+    ),
   );
 });
 
-it("distinguishes unsupported statistics from zero and reports failures without stale counts", async () => {
-  mocks.load.mockResolvedValue({
-    loginName: "me@example.test",
-    expiresAt: null,
-    onlineClients: null,
-    onlineNodes: null,
-  });
+it("reports failures and clears stale account information", async () => {
   const view = render(<OnlineServiceSection />);
   await waitFor(() =>
-    expect(view.getByTestId("account-info-clients").textContent).toContain("Unavailable"),
+    expect(view.getByTestId("account-info-login-name").textContent).toContain("me@example.test"),
   );
   mocks.load.mockRejectedValue(new Error("offline"));
   fireEvent.click(view.getByText("Refresh"));
@@ -98,7 +84,7 @@ it("distinguishes unsupported statistics from zero and reports failures without 
     expect(view.getByRole("alert").textContent).toContain("Could not load account information"),
   );
   expect(view.getByTestId("account-info-expiry").textContent).toBe("Account expires at—");
-  expect(view.getByTestId("account-info-clients").textContent).toBe("Online clients—");
+  expect(view.getByTestId("account-info-login-name").textContent).toBe("Login name—");
 });
 
 it("discards delayed results after an account switch and hides the section on logout", async () => {
@@ -114,16 +100,12 @@ it("discards delayed results after an account switch and hides the section on lo
   mocks.load.mockResolvedValue({
     loginName: "new@example.test",
     expiresAt: null,
-    onlineClients: 1,
-    onlineNodes: 0,
   });
   view.rerender(<OnlineServiceSection />);
   await waitFor(() =>
     expect(view.getByTestId("account-info-login-name").textContent).toContain("new@example.test"),
   );
-  await act(async () =>
-    finish({ loginName: "old@example.test", expiresAt: null, onlineClients: 9, onlineNodes: 9 }),
-  );
+  await act(async () => finish({ loginName: "old@example.test", expiresAt: null }));
   expect(view.queryByText("old@example.test")).toBeNull();
   mocks.account.status = "logged_out";
   view.rerender(<OnlineServiceSection />);

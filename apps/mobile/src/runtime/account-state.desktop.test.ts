@@ -37,8 +37,6 @@ describe("desktop account host persistence", () => {
     const info = {
       loginName: "me@example.test",
       expiresAt: null,
-      onlineClients: 1,
-      onlineNodes: 0,
     };
     mocks.invoke.mockResolvedValue(info);
     await expect(loadAccountInfo()).resolves.toEqual(info);

@@ -41,14 +41,11 @@ function AccountInformation({ refreshKey }: { refreshKey: number }) {
     };
   }, [visible, refreshKey]);
 
-  const unavailable = t("onlineService.unavailable");
   const expiresAt = info
     ? info.expiresAt === null
       ? t("onlineService.neverExpires")
       : new Date(info.expiresAt).toLocaleString(i18n.language)
     : "—";
-  const onlineClients = info ? (info.onlineClients ?? unavailable) : "—";
-  const onlineNodes = info ? (info.onlineNodes ?? unavailable) : "—";
 
   return (
     <SettingsSection
@@ -66,12 +63,6 @@ function AccountInformation({ refreshKey }: { refreshKey: number }) {
           <Text selectable style={settingsStyles.rowTitle}>
             {expiresAt}
           </Text>
-        </SettingsRow>
-        <SettingsRow label={t("onlineService.onlineClients")} testID="account-info-clients">
-          <Text style={settingsStyles.rowTitle}>{onlineClients}</Text>
-        </SettingsRow>
-        <SettingsRow label={t("onlineService.onlineNodes")} testID="account-info-nodes">
-          <Text style={settingsStyles.rowTitle}>{onlineNodes}</Text>
         </SettingsRow>
       </SettingsCard>
       {failed ? (

@@ -61,8 +61,6 @@ describe("native mobile account commands", () => {
     const info = {
       loginName: "me@example.test",
       expiresAt: null,
-      onlineClients: 1,
-      onlineNodes: 0,
     };
     mocks.manager.getAccountInfo.mockResolvedValue(info);
     await expect(loadAccountInfo()).resolves.toEqual(info);

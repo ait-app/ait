@@ -90,8 +90,6 @@ describe("desktop built-in daemon synchronization preference", () => {
     const info = {
       loginName: "me@example.test",
       expiresAt: null,
-      onlineClients: 2,
-      onlineNodes: 3,
     };
     mocks.info.mockResolvedValue(info);
     await expect(invoke()(event, "account_info")).resolves.toEqual(info);
