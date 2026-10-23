@@ -4,7 +4,6 @@ mod async_questions;
 mod commands;
 pub(crate) mod controls;
 mod discovery;
-mod failure;
 mod inspection;
 mod metadata;
 mod native_sessions;
@@ -19,6 +18,7 @@ mod transport;
 mod user_images;
 mod workflows;
 
+use std::borrow::Cow;
 use std::path::{Path, PathBuf};
 use std::time::Duration;
 
@@ -645,11 +645,12 @@ impl CodexSession {
 }
 
 impl AgentSession for CodexSession {
-    fn failure_message(&self) -> Option<&str> {
+    fn failure_message(&self) -> Option<Cow<'_, str>> {
         self.transport
             .as_ref()
             .and_then(|transport| transport.failure.message())
             .or(self.last_failure.as_deref())
+            .map(Cow::Borrowed)
     }
 
     fn failure_diagnostic(&self) -> Option<crate::ports::diagnostics::Diagnostic> {

@@ -6,6 +6,7 @@ use super::super::ClaudeClient;
 use crate::service::agent_execution::AgentExecution;
 use crate::test_support::{Fixture, request, worker_with_client};
 
+mod diagnostics;
 mod rewind;
 
 fn worker(fixture: &Fixture) -> AgentExecution {

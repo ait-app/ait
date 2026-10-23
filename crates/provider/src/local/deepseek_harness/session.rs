@@ -1,3 +1,4 @@
+use std::borrow::Cow;
 use std::collections::BTreeMap;
 
 use domain::agent_runtime::{AgentPersistenceHandle, StoredAgentConfig, StoredAgentRuntimeInfo};
@@ -185,10 +186,9 @@ impl Session {
                 self.stream.flush();
                 self.stream.finish_compactions();
                 if let Some(error) = message.get("error") {
-                    self.transport.diagnostics.observe(
-                        crate::local::diagnostics::native(error, "rpc"),
-                        "session/prompt",
-                    );
+                    self.transport
+                        .diagnostics
+                        .observe_native(error, "rpc", "session/prompt");
                 }
                 let event = match transport::response(message) {
                     Ok(result) => match result["stopReason"].as_str() {
@@ -222,6 +222,10 @@ impl AgentSession for Session {
 
     fn failure_diagnostic(&self) -> Option<crate::ports::diagnostics::Diagnostic> {
         self.transport.diagnostics.failure()
+    }
+
+    fn failure_message(&self) -> Option<Cow<'_, str>> {
+        self.transport.diagnostics.message().map(Cow::Owned)
     }
 
     fn provider(&self) -> &'static str {

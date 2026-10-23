@@ -10,6 +10,7 @@ use super::*;
 
 async fn response(Path(mode): Path<String>, Json(body): Json<Value>) -> axum::response::Response {
     match mode.as_str() {
+        "quota-json" => (StatusCode::TOO_MANY_REQUESTS, Json(json!({"error":{"type":"insufficient_quota","message":"insufficient balance token=private-key"},"request":{"prompt":"private prompt"}}))).into_response(),
         "missing" => StatusCode::NOT_FOUND.into_response(),
         "unauthorized" => StatusCode::UNAUTHORIZED.into_response(),
         "forbidden" => StatusCode::FORBIDDEN.into_response(),
@@ -70,6 +71,20 @@ async fn native_http_distinguishes_absent_capabilities_rejections_and_invalid_en
     assert_eq!(
         api.call("rejected", json!({})).await,
         Err(AgentSessionError::Rejected)
+    );
+    api.diagnostics.clear();
+    assert_eq!(
+        api.call("quota-json", json!({})).await,
+        Err(AgentSessionError::Failed)
+    );
+    let message = api.diagnostics.message().unwrap();
+    assert!(message.contains("HTTP 429"));
+    assert!(message.contains("insufficient balance"));
+    assert!(!message.contains("private-key"));
+    assert!(!message.contains("private prompt"));
+    assert_eq!(
+        api.diagnostics.failure().unwrap().category,
+        crate::ports::diagnostics::Category::Quota
     );
     for mode in [
         "unauthorized",

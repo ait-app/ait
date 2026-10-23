@@ -138,15 +138,25 @@ impl Api {
         }
         if !response.status().is_success() {
             let status = response.status().as_u16();
-            let category = match status {
-                401 => crate::ports::diagnostics::Category::Authentication,
-                403 => crate::ports::diagnostics::Category::Permission,
-                429 => crate::ports::diagnostics::Category::RateLimit,
-                _ => crate::ports::diagnostics::Category::Unknown,
-            };
-            let mut diagnostic = crate::ports::diagnostics::Diagnostic::new(category, "http");
-            diagnostic.http_status = Some(status);
-            self.diagnostics.observe(diagnostic, endpoint);
+            let mut error = json!({"statusCode":status});
+            self.diagnostics.observe_native(&error, "http", endpoint);
+            // Inspect only a bounded JSON error message; never surface a raw response body.
+            let mut chunks = response.bytes_stream();
+            let mut bytes = Vec::new();
+            while let Some(Ok(chunk)) = chunks.next().await {
+                if bytes.len().saturating_add(chunk.len()) > 32 * 1024 {
+                    break;
+                }
+                bytes.extend_from_slice(&chunk);
+            }
+            if let Ok(body) = serde_json::from_slice::<Value>(&bytes) {
+                let reason = body.get("error").unwrap_or(&body);
+                error["message"] = reason
+                    .as_str()
+                    .map_or_else(|| reason["message"].clone(), |message| json!(message));
+                error["type"] = reason["type"].clone();
+                self.diagnostics.observe_native(&error, "http", endpoint);
+            }
             return Err(AgentSessionError::Failed);
         }
         let mut chunks = response.bytes_stream();
@@ -172,10 +182,8 @@ impl Api {
                 .map(Some)
                 .ok_or(AgentSessionError::Failed),
             Some(false) => {
-                self.diagnostics.observe(
-                    crate::local::diagnostics::native(&response["result"]["error"], "rpc"),
-                    endpoint,
-                );
+                self.diagnostics
+                    .observe_native(&response["result"]["error"], "rpc", endpoint);
                 Err(AgentSessionError::Rejected)
             }
             None => Err(AgentSessionError::Failed),

@@ -1,5 +1,4 @@
 use std::collections::BTreeMap;
-use std::os::unix::fs::PermissionsExt;
 use std::time::Duration;
 
 use serde_json::{Value, json};
@@ -12,9 +11,9 @@ use crate::protocol::prompt::{AgentPrompt, PromptImage};
 fn fixture() -> (TempDir, AntigravityClient, AgentSessionSpec) {
     let directory = tempfile::tempdir().unwrap();
     let cwd = directory.path().canonicalize().unwrap();
-    let program = cwd.join("agy");
-    std::fs::write(&program, include_str!("tests/fixtures/agy.py")).unwrap();
-    std::fs::set_permissions(&program, std::fs::Permissions::from_mode(0o700)).unwrap();
+    // An immutable executable avoids ETXTBSY when concurrent forks inherit writable handles.
+    let program = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
+        .join("src/local/antigravity/tests/fixtures/agy.py");
     let mut client = AntigravityClient::new(program);
     client.environment = AgentEnvironment::try_from(BTreeMap::from([(
         "AGY_FIXTURE_LOG".to_owned(),

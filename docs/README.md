@@ -28,6 +28,8 @@
 
 ## 架构决策
 
+- [ADR-185：各 Provider 保留原生失败原因](decisions/providers/adr-185-native-provider-failure-details.md)：共享有界脱敏、原生错误字段、恢复建议和持久聊天失败说明。
+
 - [ADR-184：Windows Desktop 不附带内置 daemon](decisions/clients/adr-184-windows-desktop-without-daemon.md)：Windows x64 安装包与 ZIP、Release CI 和原生启动验证、远程主机连接、禁用内置 daemon 及默认 localhost 探测。
 
 - [ADR-183：iOS CI 使用 Xcode Cloud 归档与内部分发](decisions/clients/adr-183-ios-xcode-cloud-release.md)：手动 Cloud 构建、Apple 签名与构建号、TestFlight 内部测试，取代 EAS 发布入口。

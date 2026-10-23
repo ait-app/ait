@@ -61,6 +61,7 @@ pub(super) struct Stream {
     pub(super) settled: bool,
     /// Safe final native error facts, cleared when a retry succeeds.
     pub(super) failure: Option<Diagnostic>,
+    pub(super) explanation: crate::local::diagnostics::failure::Failure,
 }
 
 impl Stream {
@@ -204,6 +205,7 @@ impl Stream {
         if self.settled {
             // Admission also resumes already-running work; preserve that run's result.
             self.failure = None;
+            self.explanation.clear();
             self.last_text.clear();
         }
         self.events.retain(|event| {
@@ -567,6 +569,11 @@ impl Stream {
                 "message_end",
             )
         });
+        self.explanation.clear();
+        if let Some(diagnostic) = self.failure {
+            self.explanation
+                .observe("Pi", &message["errorMessage"], diagnostic);
+        }
         self.last_text.clear();
         for (index, block) in blocks.iter().enumerate() {
             let (kind, field) = match block["type"].as_str() {

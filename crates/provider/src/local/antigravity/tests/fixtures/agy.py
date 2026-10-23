@@ -106,6 +106,9 @@ for line in sys.stdin:
         emit({'event': 'step_update', 'step_update': {'conversation_id': 'foreign',
             'state': 'DONE', 'step_type': 'agent_response', 'step_index': step_index}})
         continue
+    if scenario == 'native-error':
+        terminal('ERROR', '', error='Model gateway refused the request token=fixture-secret')
+        continue
     if scenario == 'failure':
         terminal('ERROR', '')
         continue

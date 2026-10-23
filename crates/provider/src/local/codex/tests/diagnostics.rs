@@ -79,7 +79,7 @@ async fn upstream_failures_keep_their_cause_without_resending_input() {
                 AgentTurnEvent::Completed(_)
             ));
             assert_eq!(session.failure_diagnostic(), None);
-            assert_eq!(session.failure_message(), None);
+            assert_eq!(session.failure_message().as_deref(), None);
             session.close().await.unwrap();
         }
     }
@@ -107,12 +107,12 @@ async fn native_failure_explanation_survives_closing_its_transport() {
         terminal(session.as_mut()).await.unwrap(),
         AgentTurnEvent::Failed
     );
-    let message = session.failure_message().unwrap().to_owned();
+    let message = session.failure_message().unwrap().into_owned();
 
     session.close().await.unwrap();
     session.close().await.unwrap();
 
-    assert_eq!(session.failure_message(), Some(message.as_str()));
+    assert_eq!(session.failure_message().as_deref(), Some(message.as_str()));
     assert!(message.contains("stream closed before response.completed"));
     assert!(!message.contains("private-value"));
 }

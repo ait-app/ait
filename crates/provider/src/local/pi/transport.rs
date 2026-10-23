@@ -304,7 +304,11 @@ impl Transport {
                     }
                     return match response["success"].as_bool() {
                         Some(true) => Ok(response["data"].clone()),
-                        Some(false) => Err(AgentSessionError::Rejected),
+                        Some(false) => {
+                            self.diagnostics
+                                .observe_native(&response["error"], "rpc", "request");
+                            Err(AgentSessionError::Rejected)
+                        }
                         None => Err(AgentSessionError::Failed),
                     };
                 }

@@ -45,7 +45,7 @@ async fn native_stop_reasons_settle_history_and_preserve_the_next_turn() {
             "refusal" => Some("OpenCode refused this request. Revise it before continuing."),
             _ => None,
         };
-        assert_eq!(session.failure_message(), expected);
+        assert_eq!(session.failure_message().as_deref(), expected);
         assert_eq!(history.len(), 2);
         assert!(
             history

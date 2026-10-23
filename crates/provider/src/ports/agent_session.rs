@@ -3,6 +3,7 @@
 //! These contracts mirror the create/resume, runtime inspection, persistence and close portion
 //! of Paseo's `AgentClient` and `AgentSession`. A concrete provider adapter owns native execution.
 
+use std::borrow::Cow;
 use std::fmt::Debug;
 use std::future::Future;
 use std::pin::Pin;
@@ -129,7 +130,7 @@ pub(crate) trait AgentSession: Debug + Send {
     ///
     /// Adapters must exclude credentials and private diagnostics, and keep the message at most
     /// 4096 bytes. The explanation remains available after closing a failed session.
-    fn failure_message(&self) -> Option<&str> {
+    fn failure_message(&self) -> Option<Cow<'_, str>> {
         None
     }
 

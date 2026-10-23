@@ -428,3 +428,21 @@ async fn assert_resume_and_cancel(
             .any(|request| request["method"] == "session/load")
     );
 }
+
+#[cfg(unix)]
+#[tokio::test]
+async fn acp_failures_preserve_the_native_message_after_close() {
+    let (_directory, client, spec) = fixture();
+    let mut session = client.create_session(&spec).await.unwrap();
+    session
+        .start_turn("native-error", &spec.config)
+        .await
+        .unwrap();
+    while event(session.as_mut()).await != AgentTurnEvent::Failed {}
+    let message = session.failure_message().unwrap().into_owned();
+    assert!(message.contains("OAuth session expired"));
+    assert!(message.contains("RPC -32000"));
+    assert!(!message.contains("fixture-secret"));
+    session.close().await.unwrap();
+    assert_eq!(session.failure_message().as_deref(), Some(message.as_str()));
+}
