@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import { existsSync, mkdtempSync, rmSync } from "node:fs";
+import { existsSync, mkdtempSync, readdirSync, rmSync } from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
@@ -49,7 +49,13 @@ try {
     page.evaluate(() => window.paseoDesktop.invoke("start_desktop_daemon")),
     /does not include a built-in daemon/,
   );
-  assert(!existsSync(daemonHome), "Windows startup must not create daemon runtime data");
+  // Desktop attachment cleanup shares this directory even when no daemon is used.
+  const runtimeFiles = existsSync(daemonHome) ? readdirSync(daemonHome) : [];
+  assert.deepEqual(
+    runtimeFiles.filter((name) => name !== "desktop-attachments"),
+    [],
+    "Windows startup must not create daemon runtime data",
+  );
   assert.deepEqual(errors, [], "Packaged renderer must start without JavaScript errors");
   console.log(
     "Windows packaged startup passed: welcome screen, account bridge, no default host or daemon.",
