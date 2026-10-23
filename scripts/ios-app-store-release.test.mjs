@@ -5,10 +5,10 @@ import { dirname, join } from "node:path";
 import test from "node:test";
 import yaml from "yaml";
 import {
-  archiveState,
+  startedBuild,
   triggerTag,
   validateSource,
-  waitForArchive,
+  waitForStart,
 } from "./ios-app-store-release.cjs";
 
 const sha = "a".repeat(40);
@@ -91,30 +91,24 @@ test("old builds, unrelated apps and other source commits cannot satisfy the rel
     check("Archive", 101, { app: { slug: "other-app" } }),
     check("Archive", 102, { name: "Ait | Public TestFlight | Archive - iOS" }),
   ];
-  assert.equal(archiveState(checks, new Set([oldUrl]), sha).status, "waiting");
+  assert.equal(startedBuild(checks, new Set([oldUrl]), sha), null);
 });
 
-test("replacement completed checks supersede running checks for the same Cloud action", () => {
-  const checks = [
-    check("Build", 1, { status: "in_progress", conclusion: null }),
-    check("Archive", 2, { status: "in_progress", conclusion: null }),
-    check("Build", 3),
-    check("Archive", 4),
-  ];
-  assert.deepEqual(archiveState(checks, new Set(), sha), { status: "success", url: newUrl });
-  assert.equal(archiveState(checks.slice(0, 3), new Set(), sha).status, "running");
+test("one running action confirms the Cloud build without waiting for completion", () => {
+  const checks = [check("Build", 1, { status: "in_progress", conclusion: null })];
+  assert.equal(startedBuild(checks, new Set(), sha), newUrl);
+  // A second action or a replacement completed check belongs to the same remote build.
+  checks.push(check("Archive", 2), check("Build", 3));
+  assert.equal(startedBuild(checks, new Set(), sha), newUrl);
 });
 
-test("failed, cancelled or skipped actions fail the workflow and ambiguous builds are rejected", () => {
-  for (const conclusion of ["failure", "cancelled", "skipped", "neutral", "timed_out"]) {
-    assert.equal(
-      archiveState([check("Archive", 4, { conclusion })], new Set(), sha).status,
-      "failed",
-    );
+test("the trigger result is independent of build outcome and rejects ambiguous builds", () => {
+  for (const conclusion of ["success", "failure", "cancelled", "skipped"]) {
+    assert.equal(startedBuild([check("Build", 1, { conclusion })], new Set(), sha), newUrl);
   }
   assert.throws(
     () =>
-      archiveState(
+      startedBuild(
         [check("Build", 1), check("Archive", 2, { details_url: `${oldUrl}/action/abcd` })],
         new Set(),
         sha,
@@ -123,7 +117,7 @@ test("failed, cancelled or skipped actions fail the workflow and ambiguous build
   );
 });
 
-test("waits for both actions, propagates failure, and bounds missing webhook/build waits", async () => {
+test("returns as soon as Cloud starts and bounds missing webhook waits", async () => {
   let time = 0;
   let reads = 0;
   const params = {
@@ -133,31 +127,18 @@ test("waits for both actions, propagates failure, and bounds missing webhook/bui
     pause: async (ms) => {
       time += ms;
     },
-    report: async () => {},
   };
-  const success = await waitForArchive({
+  const url = await waitForStart({
     ...params,
     listChecks: async () => {
       reads += 1;
-      return reads === 1 ? [] : [check("Build", 1), check("Archive", 2)];
+      if (reads > 2) throw new Error("Must not keep polling after Cloud starts");
+      return reads === 1 ? [] : [check("Build", 1, { status: "in_progress", conclusion: null })];
     },
   });
-  assert.equal(success.status, "success");
-  await assert.rejects(
-    waitForArchive({
-      ...params,
-      listChecks: async () => [check("Build", 3, { conclusion: "failure" })],
-    }),
-    /failure/,
-  );
-  await assert.rejects(waitForArchive({ ...params, listChecks: async () => [] }), /15 minutes/);
-  await assert.rejects(
-    waitForArchive({
-      ...params,
-      listChecks: async () => [check("Archive", 4, { status: "in_progress", conclusion: null })],
-    }),
-    /Timed out/,
-  );
+  assert.equal(url, newUrl);
+  assert.equal(reads, 2);
+  await assert.rejects(waitForStart({ ...params, listChecks: async () => [] }), /15 minutes/);
 });
 
 test("release entry is manual and runs tooling from the workflow commit", () => {

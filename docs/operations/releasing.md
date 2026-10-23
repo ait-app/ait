@@ -429,10 +429,10 @@ Apple 可能要求 Beta App Review；通过后才可向外部测试者分发。*
    固定的源码 commit；填写 `vX.Y.Z` 时使用该稳定标签的 commit，不是之后变化的分支 HEAD。
 3. 入口校验 Cargo/npm/workspace 锁文件及 `Info.plist` 版本一致；旧 `v0.1.15` 标签的原生
    版本不一致会在触发 Cloud 前失败。发布辅助代码取自运行工作流的 commit，不执行源码标签内的脚本。
-4. GitHub 只推送一个 `ios-app-store/vX.Y.Z/<run-id>-<attempt>` 标签，然后等待 Cloud
-   新 Build/Archive checks。运行摘要记录源码 SHA、触发标签、Cloud 构建链接和外部测试组链接。
+4. GitHub 只推送一个 `ios-app-store/vX.Y.Z/<run-id>-<attempt>` 标签，然后确认 Cloud
+   出现新构建，拿到链接后立即结束。运行摘要记录源码 SHA、触发标签、Cloud 构建链接和外部测试组链接。
 5. 到 Cloud 确认上传和外部 TestFlight post-action，再到 TestFlight 确认处理、审核及组内
-   可用状态。GitHub 绿色只确认 Build/Archive 成功，不能当作外部测试或正式审核已通过。
+   可用状态。GitHub 绿色只表示触发成功，归档、上传和审核的最终结果均在 Apple 平台查看。
 6. 正式上架时，在 App Store 版本页面选择已处理完成的同一构建，补齐资料后手动提交审核。
 
 此入口不依赖桌面 GitHub Release 已完成。它只支持 `workflow_dispatch`，不会因普通 push、
@@ -461,8 +461,9 @@ Actions 的权限；使用临时 `GITHUB_TOKEN` 的 `contents: write` 推送标�
 `Default` 继续用于仅内部测试，`Public TestFlight` 的既有手动入口也保留。
 
 触发标签保留用于追溯，不要移动或强制覆盖。GitHub 重跑会创建新标签和新 Cloud 构建，
-因此上传/外部审核仍在处理时应先检查远端状态。GitHub 最多等待 15 分钟发现新 Cloud 构建、
-90 分钟等待归档；超时或取消 GitHub 运行**不会取消 Cloud**。若从未出现 Cloud checks，
+因此上传/外部审核仍在处理时应先检查远端状态。GitHub 最多等待 15 分钟发现新 Cloud 构建，
+确认启动后立即结束；超时或取消 GitHub 运行**不会取消 Cloud**。Cloud 编译及后置步骤独立
+继续执行，GitHub 的并发锁只覆盖触发阶段，不会等待上一构建完成。若从未出现 Cloud checks，
 检查标签前缀、工作流启用状态及 Xcode Cloud GitHub App 连接；若归档失败，先看 Cloud 日志。
 避免在同一提交上同时手动运行这条 Cloud 工作流，否则多个新构建会导致结果关联报错。
 

@@ -18,9 +18,9 @@ concurrency:
 
 jobs:
   release:
-    name: Trigger Xcode Cloud and wait for archive
+    name: Trigger Xcode Cloud and confirm start
     runs-on: ubuntu-24.04
-    timeout-minutes: 100
+    timeout-minutes: 20
     permissions:
       contents: write
       checks: read
@@ -46,7 +46,7 @@ jobs:
           path: source
           # Used only to push the trigger tag; no source scripts or dependencies run here.
           persist-credentials: true
-      - name: Trigger Xcode Cloud and wait for archive
+      - name: Trigger Xcode Cloud and confirm start
         uses: actions/github-script@v8
         env:
           RELEASE_TAG: ${{ inputs.tag }}
