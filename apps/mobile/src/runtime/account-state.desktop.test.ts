@@ -1,5 +1,9 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import { accountCommand, useAccountState } from "./account-state";
+import {
+  ACCOUNT_HOST_OFFLINE_RETENTION_MS,
+  accountCommand,
+  useAccountState,
+} from "./account-state";
 
 const mocks = vi.hoisted(() => ({
   invoke: vi.fn(),
@@ -111,6 +115,7 @@ describe("desktop account host persistence", () => {
       hosts,
       "https://custom.test/api",
       expect.any(Function),
+      expect.any(Object),
     );
     expect(mocks.add).not.toHaveBeenCalled();
   });
@@ -203,7 +208,7 @@ describe("desktop account host persistence", () => {
   });
 });
 
-it("persists bound host records while only making online routable hosts available", async () => {
+it("persists recent bound host records while only making online routable hosts available", async () => {
   const online = {
     host_id: "online",
     server_id: "online-server",
@@ -220,7 +225,13 @@ it("persists bound host records while only making online routable hosts availabl
     online: false,
     instance_id: null,
     relay_modes: [],
-    offline_since: "2026-10-01T00:00:00Z",
+    offline_since: new Date(Date.now() - 60_000).toISOString(),
+  };
+  const expired = {
+    ...offline,
+    host_id: "expired",
+    server_id: "expired-server",
+    offline_since: new Date(Date.now() - ACCOUNT_HOST_OFFLINE_RETENTION_MS).toISOString(),
   };
   const manual = { ...offline, host_id: "manual", server_id: null };
   const unsupported = {
@@ -235,13 +246,14 @@ it("persists bound host records while only making online routable hosts availabl
     stale: false,
     center: "https://custom.test/api",
     selected: null,
-    hosts: [online, offline, manual, unsupported, unbound],
+    hosts: [online, offline, expired, manual, unsupported, unbound],
   });
   await accountCommand("account_status");
   expect(mocks.discover).toHaveBeenLastCalledWith(
     [online, offline, unsupported, unbound],
     "https://custom.test/api",
     expect.any(Function),
+    { retainedHostIds: new Set(["online", "offline", "unsupported", "unbound"]) },
   );
   expect(mocks.setAvailable).toHaveBeenLastCalledWith(["online-server"]);
 });

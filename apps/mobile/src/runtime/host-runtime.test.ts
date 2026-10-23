@@ -2231,6 +2231,50 @@ describe("HostRuntimeStore", () => {
     }
   });
 
+  it("drops another account's saved hosts and hosts missing from a fresh list", async () => {
+    useHostRuntimeClock();
+    const center = "https://center.test/api";
+    const first = {
+      host_id: "11111111-1111-4111-8111-111111111111",
+      server_id: "first-server",
+      name: "First",
+    };
+    const second = {
+      host_id: "22222222-2222-4222-8222-222222222222",
+      server_id: "second-server",
+      name: "Second",
+    };
+    const storage = createMemoryHostRuntimeStorage({ "@paseo:e2e": "1" });
+    const store = new HostRuntimeStore({ storage, deps: makeDeps({}, []) });
+    const serverIds = () => store.getHosts().map((host) => host.serverId);
+    try {
+      await store.boot();
+      await store.addDiscoveredAccountRelayHosts([first, second], center, undefined, {
+        accountId: "alice",
+      });
+      expect(serverIds()).toEqual(["first-server", "second-server"]);
+      // The same account keeps its hosts until a complete list omits one.
+      await store.addDiscoveredAccountRelayHosts([], center, undefined, { accountId: "alice" });
+      expect(serverIds()).toEqual(["first-server", "second-server"]);
+      await store.addDiscoveredAccountRelayHosts([first], center, undefined, {
+        accountId: "alice",
+        retainedHostIds: new Set([first.host_id]),
+      });
+      expect(serverIds()).toEqual(["first-server"]);
+      // A different account never inherits the previous account's hosts.
+      await store.addDiscoveredAccountRelayHosts([second], center, undefined, {
+        accountId: "bob",
+      });
+      expect(serverIds()).toEqual(["second-server"]);
+      expect(JSON.parse((await storage.getItem("@paseo:daemon-registry"))!)).toHaveLength(1);
+      expect(JSON.parse((await storage.getItem("@ait:account-relay-owners-v1"))!)).toEqual({
+        [center]: "bob",
+      });
+    } finally {
+      store.syncHosts([]);
+    }
+  });
+
   it("retains valid saved hosts when one online-service record is corrupt", async () => {
     useHostRuntimeClock();
     const host = makeHost({

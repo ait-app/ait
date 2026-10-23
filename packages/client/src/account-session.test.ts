@@ -2,6 +2,7 @@ import { channelFixture, welcome } from "../test/account-channel.js";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import {
   AccountSessionManager,
+  accountSubject,
   normalizeCenter,
   type AccountDependencies,
   type SavedAccount,
@@ -1537,5 +1538,17 @@ describe("hub tickets", () => {
     expect(localHub).not.toHaveBeenCalledWith("PUT", expect.anything());
     await manager.unpublishHost("first");
     await manager.logout();
+  });
+});
+
+describe("accountSubject", () => {
+  it("reads the token subject and ignores malformed tokens", () => {
+    const payload = btoa(JSON.stringify({ sub: "user-1", exp: 1 }))
+      .replace(/\+/g, "-")
+      .replace(/\//g, "_")
+      .replace(/=+$/, "");
+    expect(accountSubject(`header.${payload}.signature`)).toBe("user-1");
+    expect(accountSubject("not-a-jwt")).toBeUndefined();
+    expect(accountSubject("a.!!!.c")).toBeUndefined();
   });
 });

@@ -92,6 +92,7 @@ describe("native mobile account commands", () => {
         hosts,
         "https://center.test/api",
         expect.any(Function),
+        expect.any(Object),
       );
       expect(mocks.setAvailable).toHaveBeenCalledExactlyOnceWith(["first-server", "second-server"]);
       expect(mocks.manager.select).not.toHaveBeenCalled();

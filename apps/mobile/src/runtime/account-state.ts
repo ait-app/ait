@@ -31,7 +31,11 @@ export interface AccountState {
   syncBuiltInDaemon?: boolean;
   accountExpiresAt?: string | null;
   loginPending?: boolean;
+  accountId?: string;
 }
+
+/** Account hosts offline longer than this leave the host list until they report again. */
+export const ACCOUNT_HOST_OFFLINE_RETENTION_MS = 24 * 60 * 60 * 1000;
 
 export const useAccountState = create<AccountState>(() => ({
   status: "logged_out",
@@ -98,7 +102,23 @@ async function receiveAccountSnapshot(
   );
   if (snapshot.status === "online" || (active && freshHosts.length > 0)) {
     store.setAccountRelayCenter(snapshot.center);
-    await store.addDiscoveredAccountRelayHosts(boundHosts, snapshot.center, current);
+    // Only a complete host list may prune saved hosts; stale lists may omit live ones.
+    const complete = snapshot.status === "online" && !snapshot.stale;
+    const now = Date.now();
+    const retainedHosts = complete
+      ? boundHosts.filter((host) => {
+          const offlineSince = host.offline_since ? Date.parse(host.offline_since) : NaN;
+          return (
+            host.online ||
+            !Number.isFinite(offlineSince) ||
+            now - offlineSince < ACCOUNT_HOST_OFFLINE_RETENTION_MS
+          );
+        })
+      : boundHosts;
+    await store.addDiscoveredAccountRelayHosts(retainedHosts, snapshot.center, current, {
+      ...(snapshot.accountId ? { accountId: snapshot.accountId } : {}),
+      ...(complete ? { retainedHostIds: new Set(retainedHosts.map((host) => host.host_id)) } : {}),
+    });
   } else if (snapshot.status === "logged_out") store.setAccountRelayCenter(null);
   if (current()) {
     const available = routableHosts.map((host) => host.server_id);
