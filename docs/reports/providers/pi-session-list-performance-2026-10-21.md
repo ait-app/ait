@@ -148,7 +148,7 @@ connection delay intact.
 ## Implemented first fix
 
 Native session listing now uses the existing bounded catalog response-admission path, as
-specified by [ADR-180](../../decisions/providers/adr-180-native-session-list-response-admission.md).
+specified by [ADR-184](../../decisions/providers/adr-184-native-session-list-response-admission.md).
 The connection dispatcher returns after synchronous admission and registers a tracked response
 task. Command capacity, response capacity, history admission, request correlation, and native
 session lifecycle ordering retain their existing bounds and semantics.
@@ -217,7 +217,7 @@ Additional checks passed during this rerun:
 - `npm run typecheck --workspace=@ait/mobile`, without diagnostics.
 - `node_modules/.bin/oxlint --deny-warnings` for the four changed import-sheet source/test
   files, with zero warnings or errors.
-- `node_modules/.bin/oxfmt --check` for the four changed import-sheet files, ADR-180,
+- `node_modules/.bin/oxfmt --check` for the four changed import-sheet files, ADR-184,
   this report, and the three changed documentation indexes.
 - Python syntax parsing of `crates/provider/tests/fixtures/codex_app_server.py`.
 - `npm run check:docs`: documentation checker tests passed and local links verified in

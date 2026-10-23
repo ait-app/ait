@@ -1,4 +1,4 @@
-# ADR-180: Independent native session-list response admission
+# ADR-184: Independent native session-list response admission
 
 - Status: Accepted.
 - Date: 2026-10-21.
