@@ -600,16 +600,23 @@ export function createLocalTransportManager(
   return { open, send, close, closeAll };
 }
 
-const localTransportManager = createLocalTransportManager({
-  resolveEndpoint: resolveTransportEndpoint,
-  createWebSocket: (url, options) => new WebSocket(url, options),
-  scheduleTimeout: (callback, delayMs) => {
-    const timeout = setTimeout(callback, delayMs);
-    timeout.unref();
-    return () => clearTimeout(timeout);
-  },
-  emitEvent: emitTransportEvent,
-});
+/** Create an isolated main-process transport whose events stay with its consumer. */
+export function createMainProcessTransportManager(
+  emitEvent: LocalTransportManagerDependencies["emitEvent"],
+): LocalTransportManager {
+  return createLocalTransportManager({
+    resolveEndpoint: resolveTransportEndpoint,
+    createWebSocket: (url, options) => new WebSocket(url, options),
+    scheduleTimeout: (callback, delayMs) => {
+      const timeout = setTimeout(callback, delayMs);
+      timeout.unref();
+      return () => clearTimeout(timeout);
+    },
+    emitEvent,
+  });
+}
+
+const localTransportManager = createMainProcessTransportManager(emitTransportEvent);
 
 export function openLocalTransportSession(rawInput: unknown): void {
   localTransportManager.open(rawInput);

@@ -28,6 +28,8 @@
 
 ## 架构决策
 
+- [ADR-185：内置浏览器按 Workspace daemon 选择出站位置](decisions/clients/adr-185-workspace-browser-egress.md)：本地直连，远端所有目标统一经对应 daemon 出站，涵盖 Hub/relay、TCP 和 SSH。
+
 - [ADR-184：Windows Desktop 不附带内置 daemon](decisions/clients/adr-184-windows-desktop-without-daemon.md)：Windows x64 安装包与 ZIP、Release CI 和原生启动验证、远程主机连接、禁用内置 daemon 及默认 localhost 探测。
 
 - [ADR-183：iOS CI 使用 Xcode Cloud 归档与内部分发](decisions/clients/adr-183-ios-xcode-cloud-release.md)：手动 Cloud 构建、Apple 签名与构建号、TestFlight 内部测试，取代 EAS 发布入口。

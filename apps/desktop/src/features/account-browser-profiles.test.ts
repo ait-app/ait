@@ -9,6 +9,7 @@ const mocks = vi.hoisted(() => ({
   close: vi.fn(),
   closeAll: vi.fn(),
   listen: vi.fn(),
+  daemonTransport: vi.fn(),
 }));
 vi.mock("electron", () => ({
   app: { getPath: () => "/not-a-browser-profile-directory" },
@@ -26,6 +27,13 @@ vi.mock("electron", () => ({
 vi.mock("../daemon/account-transport.js", () => ({
   AccountTransportManager: class {
     closeAll = mocks.closeAll;
+  },
+}));
+vi.mock("./browser-daemon-transport.js", () => ({
+  BrowserDaemonTransport: class {
+    constructor(input: unknown) {
+      mocks.daemonTransport(input);
+    }
   },
 }));
 vi.mock("./browser-network.js", () => ({
@@ -99,5 +107,45 @@ test("rejects invalid Host identities before allocating a listener", async () =>
   await expect(profiles.prepare(owner(1), { ...input, hostId: "invalid" })).rejects.toThrow(
     "identity",
   );
+  expect(mocks.listen).not.toHaveBeenCalled();
+});
+
+test("uses direct networking for the local daemon even when its connection is a relay", async () => {
+  const profiles = new AccountBrowserProfiles(account, () => input.serverId);
+  const profile = await profiles.prepare(owner(1), input);
+  expect(profile.profilePartition).toBe("persist:ait-browser");
+  expect(mocks.sessions.get(profile.profilePartition)?.setProxy).toHaveBeenCalledWith({
+    mode: "direct",
+  });
+  expect(mocks.listen).not.toHaveBeenCalled();
+});
+
+test.each([
+  { transportType: "rustTcp", url: "ws://192.168.1.2:7316/v1/ws" },
+  { transportType: "ssh", host: "user@host", sshPort: 22, daemonPort: 7316 },
+])("uses the authenticated daemon transport for $transportType workspaces", async (target) => {
+  const profiles = new AccountBrowserProfiles(account, () => "local-daemon");
+  const bearerToken = "test-token".repeat(4);
+  const profile = await profiles.prepare(owner(1), {
+    serverId: input.serverId,
+    target,
+    bearerToken,
+  });
+  expect(mocks.daemonTransport).toHaveBeenCalledWith({ target, bearerToken });
+  expect(mocks.listen).toHaveBeenCalledWith("", "", input.serverId);
+  expect(mocks.sessions.get(profile.profilePartition)?.setProxy).toHaveBeenCalledWith({
+    proxyRules: "socks5://127.0.0.1:12345",
+  });
+});
+
+test("rejects missing remote credentials without configuring a direct route", async () => {
+  const profiles = new AccountBrowserProfiles(account);
+  await expect(
+    profiles.prepare(owner(1), {
+      serverId: input.serverId,
+      target: { transportType: "rustTcp", url: "ws://192.168.1.2:7316/v1/ws" },
+    }),
+  ).rejects.toThrow("Bearer token");
+  expect(mocks.sessions.size).toBe(0);
   expect(mocks.listen).not.toHaveBeenCalled();
 });

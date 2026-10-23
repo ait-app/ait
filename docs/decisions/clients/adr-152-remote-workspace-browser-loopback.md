@@ -2,6 +2,9 @@
 
 状态：已实现。日期：2026-10-16。
 
+目标地址限制及连接范围已由 [ADR-185](adr-185-workspace-browser-egress.md) 修订：本地
+Workspace 直连，远端 Workspace 的所有目标统一经对应 daemon 出站，含 TCP/SSH 连接。
+
 ## 背景
 
 Workspace 所在 Host 可以通过在线服务中继连接，但内置浏览器的 WebContents 始终在
