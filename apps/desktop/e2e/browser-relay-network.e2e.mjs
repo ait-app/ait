@@ -13,6 +13,7 @@ import { app, session } from "electron";
 import { WebSocket, WebSocketServer } from "ws";
 import { AccountTransportManager } from "../dist/daemon/account-transport.js";
 import { BrowserRelayNetwork, browserProxyConfig } from "../dist/features/browser-network.js";
+import { BrowserDaemonTransport } from "../dist/features/browser-daemon-transport.js";
 
 const temporary = mkdtempSync(path.join(tmpdir(), "ait-browser-relay-"));
 app.setPath("userData", path.join(temporary, "electron"));
@@ -20,6 +21,7 @@ const root = fileURLToPath(new URL("../../../", import.meta.url));
 const token = randomBytes(32).toString("hex");
 let daemon;
 let network;
+let directNetwork;
 let relay;
 let webpage;
 const sockets = new Set();
@@ -102,27 +104,35 @@ app.whenReady().then(async () => {
     const profile = session.fromPartition("browser-relay-test");
     await profile.setProxy(browserProxyConfig(port));
     const url = `http://127.0.0.1:${webpage.address().port}/`;
+    const localProfile = session.fromPartition("browser-local-test");
+    await localProfile.setProxy({ mode: "direct" });
     for (const scheme of ["http", "https", "ws", "wss"]) {
-      assert.equal(
-        await profile.resolveProxy(url.replace("http", scheme)),
-        `SOCKS5 127.0.0.1:${port}`,
-      );
-    }
-    for (const host of ["localhost", "app.localhost", "127.2.3.4", "[::1]"]) {
-      assert.equal(await profile.resolveProxy(`http://${host}:4322/`), `SOCKS5 127.0.0.1:${port}`);
-    }
-    for (const host of [
-      "example.com",
-      "localhost.example.com",
-      "192.168.1.1",
-      "169.254.1.1",
-      "[fe80::1]",
-    ]) {
-      assert.equal(await profile.resolveProxy(`http://${host}/`), "DIRECT", host);
+      for (const host of [
+        "localhost",
+        "app.localhost",
+        "127.2.3.4",
+        "[::1]",
+        "example.com",
+        "localhost.example.com",
+        "203.0.113.1",
+        "192.168.1.1",
+        "169.254.1.1",
+        "[fe80::1]",
+        "[2001:db8::1]",
+      ]) {
+        const destination = `${scheme}://${host}:4322/`;
+        assert.equal(
+          await profile.resolveProxy(destination),
+          `SOCKS5 127.0.0.1:${port}`,
+          destination,
+        );
+        assert.equal(await localProfile.resolveProxy(destination), "DIRECT", destination);
+      }
     }
     const response = await profile.fetch(url);
     assert.equal(response.status, 200);
     assert.deepEqual(Buffer.from(await response.arrayBuffer()), payload);
+    assert.equal((await profile.fetch(url.replace("127.0.0.1", "app.localhost"))).status, 200);
     assert.equal(visits, 1, "Chromium must use the authenticated relay, not client loopback");
     // Losing the visit closes active streams; refreshing establishes another authenticated visit.
     for (const socket of sockets) socket.terminate();
@@ -130,8 +140,22 @@ app.whenReady().then(async () => {
     await profile.closeAllConnections();
     assert.equal((await profile.fetch(url)).status, 200);
     assert.equal(visits, 2);
+    directNetwork = new BrowserRelayNetwork(
+      new BrowserDaemonTransport({
+        target: { transportType: "rustTcp", url: `ws://${address}/v1/ws` },
+        bearerToken: token,
+      }),
+    );
+    const directPort = await directNetwork.listen("", "", info.server_id);
+    const directProfile = session.fromPartition("browser-direct-daemon-test");
+    await directProfile.setProxy(browserProxyConfig(directPort));
+    const directResponse = await directProfile.fetch(url.replace("127.0.0.1", "app.localhost"));
+    assert.equal(directResponse.status, 200);
+    assert.deepEqual(Buffer.from(await directResponse.arrayBuffer()), payload);
+    await directProfile.closeAllConnections();
+    await profile.closeAllConnections();
     console.log(
-      "PASS: Electron loopback HTTP and 200 KB body through authenticated Rust relay; reconnect; HTTP(S)/WebSocket proxy selection",
+      "PASS: all-destination HTTP(S)/WebSocket proxy selection; local direct routing; authenticated relay and TCP daemon HTTP with 200 KB bodies; reconnect",
     );
   } catch (error) {
     console.error(error);
@@ -139,6 +163,7 @@ app.whenReady().then(async () => {
   } finally {
     clearTimeout(deadline);
     network?.close();
+    directNetwork?.close();
     for (const socket of sockets) socket.terminate();
     relay?.close();
     webpage?.closeAllConnections();

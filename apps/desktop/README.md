@@ -63,11 +63,12 @@ See [the implementation report](../../docs/reports/clients/desktop-server-listen
 
 ### Remote Workspace browser
 
-For Hosts connected through the online service relay, the built-in browser forwards
-`localhost`, `*.localhost`, IPv4 loopback and `::1` to the Workspace Host. Update both
-Electron and the remote daemon to enable this capability. Browser profiles are isolated
-by Host; non-loopback websites connect directly in these profiles, without system HTTP
-proxy rules. Direct TCP and SSH browser routing retain their existing behavior.
+The built-in browser connects directly for the local daemon's Workspaces. For all other
+Workspaces, every destination goes through the corresponding daemon, including public,
+LAN, link-local and loopback addresses. DNS resolution also happens on that daemon.
+Online Hub/relay, direct TCP and SSH connections use authenticated daemon transports;
+remote profiles never fall back to client networking. Update both Electron and the remote
+daemon. Browser profiles are isolated by Host and connection target.
 
 After building `target/debug/daemon` and desktop main, run the focused network test:
 
@@ -76,7 +77,8 @@ env -u ELECTRON_RUN_AS_NODE npm exec --workspace=@ait/desktop -- electron e2e/br
 ```
 
 It uses temporary profiles, a real daemon and a local relay fixture to verify Chromium
-proxy selection, a 200 KB response and reconnection. See [ADR-152](../../docs/decisions/clients/adr-152-remote-workspace-browser-loopback.md).
+proxy selection, authenticated relay and TCP forwarding, a 200 KB response and reconnection.
+See [ADR-186](../../docs/decisions/clients/adr-186-workspace-browser-egress.md).
 
 ### Coexistence with Paseo
 

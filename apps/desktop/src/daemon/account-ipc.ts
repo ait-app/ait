@@ -145,7 +145,7 @@ export function createAccountIpc(
   hub.subscribe(() => broadcast("paseo:event:account-hub-state", hub.snapshot()));
   const hubBridge = new AccountHubBridge(hub);
   transports = new AccountTransportManager(manager, hub);
-  browserProfiles = new AccountBrowserProfiles(manager);
+  browserProfiles = new AccountBrowserProfiles(manager, () => getRuntime().status().serverId, hub);
   downloads = new AccountDownloadManager(manager);
   const ready = saved ? manager.restore(saved).catch(() => save(null)) : save(null);
   let accountOperation = Promise.resolve<unknown>(undefined);
@@ -242,16 +242,13 @@ export function createAccountIpc(
         case "account_transport_recover":
           return transports.recover(event.sender, id);
         case "account_browser_profile":
-          if (
-            typeof args.hostId !== "string" ||
-            typeof args.center !== "string" ||
-            typeof args.serverId !== "string"
-          )
-            throw new Error("Invalid browser Host");
+          if (typeof args.serverId !== "string") throw new Error("Invalid browser Host");
           return browserProfiles?.prepare(event.sender, {
-            hostId: args.hostId,
-            center: args.center,
             serverId: args.serverId,
+            hostId: typeof args.hostId === "string" ? args.hostId : undefined,
+            center: typeof args.center === "string" ? args.center : undefined,
+            target: args.target,
+            bearerToken: typeof args.bearerToken === "string" ? args.bearerToken : undefined,
           });
         case "account_download_prepare": {
           if (

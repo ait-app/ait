@@ -147,10 +147,12 @@ export interface DesktopAttachedBrowserRegistration {
 }
 
 export interface DesktopBrowserBridge {
-  prepareAccountProfile?: (input: {
+  prepareWorkspaceProfile?: (input: {
     serverId: string;
-    hostId: string;
-    center: string;
+    hostId?: string;
+    center?: string;
+    target?: import("./daemon/desktop-daemon").DesktopDaemonTransportTarget;
+    bearerToken?: string;
   }) => Promise<{ profilePartition: string }>;
   setShortcutPolicy?: (input: BrowserKeyboardPolicy) => Promise<void>;
   readonly profilePartition?: string;

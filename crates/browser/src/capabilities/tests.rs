@@ -11,7 +11,7 @@ fn metadata_follows_service_installation() {
 }
 
 #[test]
-fn remote_workspace_browser_can_negotiate_loopback_forwarding() {
+fn remote_workspace_browser_can_negotiate_network_forwarding() {
     let methods: Vec<_> = implemented_methods().map(|spec| spec.name).collect();
     for name in [
         "browser.tunnel.open.request",

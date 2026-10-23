@@ -15,25 +15,13 @@ const METHODS = [
 const MAX_CHUNK = 64 * 1024;
 const MAX_CONNECTIONS = 16;
 
-export function isBrowserLoopbackHost(host: string): boolean {
-  const normalized = host.toLowerCase().replace(/^\[|\]$/g, "");
-  return (
-    normalized === "localhost" ||
-    normalized.endsWith(".localhost") ||
-    normalized === "::1" ||
-    /^127(?:\.\d{1,3}){3}$/.test(normalized)
-  );
-}
-
-/** Only loopback requests use the Workspace's relay; public websites keep their normal route. */
+/** Every destination uses the Workspace daemon, including DNS resolution. */
 export function browserProxyConfig(port: number) {
   return {
     mode: "fixed_servers" as const,
     proxyRules: `socks5://127.0.0.1:${port}`,
-    // Last matching rule wins: bypass everything, then subtract the implicit
-    // loopback bypass. Re-add link-local addresses, which <-loopback> also covers.
-    // PAC cannot override Chromium's implicit loopback bypass.
-    proxyBypassRules: "*;<-loopback>;169.254.0.0/16;fe80::/10",
+    // Remove Chromium's implicit bypass for loopback and link-local addresses.
+    proxyBypassRules: "<-loopback>",
   };
 }
 
@@ -70,7 +58,7 @@ export class BrowserRelayNetwork extends EventEmitter implements AccountTranspor
 
   send(_channel: string, payload: Record<string, unknown>): void {
     if (this.closed) return;
-    if (payload.kind === "close") {
+    if (payload.kind === "close" || payload.kind === "error") {
       this.disconnect(
         new Error(typeof payload.error === "string" ? payload.error : "Browser relay closed"),
       );
@@ -161,13 +149,15 @@ export class BrowserRelayNetwork extends EventEmitter implements AccountTranspor
   private connect(): Promise<void> {
     if (!this.ready) {
       if (this.closed || !this.target) return Promise.reject(new Error("Browser network closed"));
-      this.ready = new Promise((resolve, reject) => {
+      const ready = new Promise<void>((resolve, reject) => {
         this.readyResolve = resolve;
         this.readyReject = reject;
       });
+      this.ready = ready;
       void this.transports
         .open(this, this.id, this.target.hostId, this.target.center)
         .catch((error: Error) => this.disconnect(error));
+      return ready;
     }
     return this.ready;
   }
@@ -230,13 +220,12 @@ export class BrowserRelayNetwork extends EventEmitter implements AccountTranspor
     else if (request[3] === 3) host = (await take((await take(1))[0]!)).toString();
     else if (request[3] === 4) {
       const address = await take(16);
-      if (!address.subarray(0, 15).equals(Buffer.alloc(15)) || address[15] !== 1)
-        throw new Error("Only loopback targets are supported");
-      host = "::1";
+      host = Array.from({ length: 8 }, (_, index) =>
+        address.readUInt16BE(index * 2).toString(16),
+      ).join(":");
     } else throw new Error("Unsupported SOCKS address");
     const port = (await take(2)).readUInt16BE();
-    if (!isBrowserLoopbackHost(host) || port === 0)
-      throw new Error("Only loopback targets are supported");
+    if (!host || port === 0) throw new Error("Invalid browser destination");
     await this.connect();
     if (socket.destroyed) return;
     const opened = await this.rpc("browser.tunnel.open.request", { host, port });

@@ -1,7 +1,7 @@
-//! Connection-owned, bounded byte streams to the Workspace host's loopback services.
+//! Connection-owned, bounded byte streams originating from the Workspace host.
 
 use std::collections::BTreeMap;
-use std::net::{IpAddr, Ipv4Addr};
+use std::net::IpAddr;
 use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::time::Duration;
@@ -140,7 +140,7 @@ impl Tunnels {
             "browser.tunnel.open.request" => {
                 let input: Open =
                     serde_json::from_value(params).map_err(|_| ErrorCode::InvalidMessage)?;
-                let host = loopback_host(&input.host)?;
+                let host = tunnel_host(&input.host)?;
                 if input.port == 0 {
                     return Err(ErrorCode::InvalidMessage);
                 }
@@ -194,20 +194,30 @@ impl Tunnels {
     }
 }
 
-fn loopback_host(host: &str) -> Result<IpAddr, ErrorCode> {
-    if host.eq_ignore_ascii_case("localhost") || host.ends_with(".localhost") {
-        return Ok(Ipv4Addr::LOCALHOST.into());
+fn tunnel_host(host: &str) -> Result<String, ErrorCode> {
+    if let Ok(address) = host.parse::<IpAddr>() {
+        return Ok(address.to_string());
     }
-    host.trim_matches(['[', ']'])
-        .parse::<IpAddr>()
-        .ok()
-        .filter(IpAddr::is_loopback)
-        .ok_or(ErrorCode::InvalidMessage)
+    match url::Host::parse(host).map_err(|_| ErrorCode::InvalidMessage)? {
+        url::Host::Domain(name) => {
+            let hostname = name.trim_end_matches('.');
+            if hostname.is_empty() || name.len() > 253 {
+                return Err(ErrorCode::InvalidMessage);
+            }
+            if hostname == "localhost" || hostname.ends_with(".localhost") {
+                Ok("127.0.0.1".into())
+            } else {
+                Ok(name)
+            }
+        }
+        url::Host::Ipv4(address) => Ok(address.to_string()),
+        url::Host::Ipv6(address) => Ok(address.to_string()),
+    }
 }
 
 #[derive(Debug)]
 enum Operation {
-    Open(IpAddr, u16),
+    Open(String, u16),
     Read,
     Write(Vec<u8>, bool),
 }
@@ -215,7 +225,8 @@ enum Operation {
 async fn execute(stream: &Stream, id: &str, operation: Operation) -> Result<Value, ErrorCode> {
     match operation {
         Operation::Open(host, port) => {
-            let socket = timeout(IO_TIMEOUT, TcpStream::connect((host, port)))
+            // Resolve names on the daemon, within the same deadline as the TCP connection.
+            let socket = timeout(IO_TIMEOUT, TcpStream::connect((host.as_str(), port)))
                 .await
                 .map_err(|_| ErrorCode::DaemonIo)?
                 .map_err(|_| ErrorCode::DaemonIo)?;
