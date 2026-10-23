@@ -525,15 +525,9 @@ export class AccountSessionManager {
     const account = this.account;
     const generation = this.generation;
     if (!account || this.suspended || this.closing) throw new Error("Sign in first.");
-    const [user, online] = await Promise.all([
-      this.api<LoginUser>("/v1/me"),
-      this.api<{ online_clients: number; online_nodes: number }>("/v1/me/online").catch(
-        (error: unknown) => {
-          if (error instanceof AccountError && error.status === 404) return null;
-          throw error;
-        },
-      ),
-    ]);
+    const user = await this.api<LoginUser & { online_clients?: number; online_nodes?: number }>(
+      "/v1/me",
+    );
     if (this.account !== account || this.generation !== generation)
       throw new Error("The account changed. Refresh and try again.");
     const loginName = [user.email, user.phone_number, user.display_name].find(
@@ -542,18 +536,16 @@ export class AccountSessionManager {
     if (
       !loginName ||
       (user.expires_at !== null && !Number.isFinite(Date.parse(user.expires_at ?? ""))) ||
-      (online !== null &&
-        (!Number.isSafeInteger(online.online_clients) ||
-          online.online_clients < 0 ||
-          !Number.isSafeInteger(online.online_nodes) ||
-          online.online_nodes < 0))
+      [user.online_clients, user.online_nodes].some(
+        (count) => count !== undefined && (!Number.isSafeInteger(count) || count < 0),
+      )
     )
       throw new Error("The service returned invalid account information.");
     return {
       loginName: loginName.trim(),
       expiresAt: user.expires_at ?? null,
-      onlineClients: online?.online_clients ?? null,
-      onlineNodes: online?.online_nodes ?? null,
+      onlineClients: user.online_clients ?? null,
+      onlineNodes: user.online_nodes ?? null,
     };
   }
 

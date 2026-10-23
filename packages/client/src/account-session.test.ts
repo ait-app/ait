@@ -16,23 +16,25 @@ describe("account information", () => {
   it("reads the login identity, account expiry and authoritative counts without exposing credentials", async () => {
     const f = fixture();
     await f.login();
+    f.http.mockClear();
     f.http.mockResolvedValueOnce(
       Response.json({
         email: "me@example.test",
         display_name: "Nickname",
         expires_at: "2027-01-01T00:00:00Z",
         auth_subject: "private-subject",
+        online_clients: 2,
+        online_nodes: 3,
       }),
     );
-    f.http.mockResolvedValueOnce(Response.json({ online_clients: 2, online_nodes: 3 }));
     expect(await f.manager.getAccountInfo()).toEqual({
       loginName: "me@example.test",
       expiresAt: "2027-01-01T00:00:00Z",
       onlineClients: 2,
       onlineNodes: 3,
     });
-    expect(f.http).toHaveBeenCalledWith(
-      "https://aitapp.cn/api/v1/me/online",
+    expect(f.http).toHaveBeenCalledExactlyOnceWith(
+      "https://aitapp.cn/api/v1/me",
       expect.objectContaining({
         headers: expect.objectContaining({ Authorization: "Bearer private-jwt" }),
       }),
@@ -44,9 +46,13 @@ describe("account information", () => {
     const f = fixture();
     await f.login();
     f.http.mockResolvedValueOnce(
-      Response.json({ phone_number: "+8613800000000", expires_at: null }),
+      Response.json({
+        phone_number: "+8613800000000",
+        expires_at: null,
+        online_clients: 0,
+        online_nodes: 0,
+      }),
     );
-    f.http.mockResolvedValueOnce(Response.json({ online_clients: 0, online_nodes: 0 }));
     expect(await f.manager.getAccountInfo()).toEqual({
       loginName: "+8613800000000",
       expiresAt: null,
@@ -56,11 +62,10 @@ describe("account information", () => {
     await f.manager.logout();
   });
 
-  it("keeps profile information available on centers without the statistics endpoint", async () => {
+  it("keeps profile information available on centers without presence fields", async () => {
     const f = fixture();
     await f.login();
     f.http.mockResolvedValueOnce(Response.json({ email: "me@example.test", expires_at: null }));
-    f.http.mockResolvedValueOnce(new Response(null, { status: 404 }));
     expect(await f.manager.getAccountInfo()).toEqual({
       loginName: "me@example.test",
       expiresAt: null,
@@ -80,7 +85,6 @@ describe("account information", () => {
           finish = resolve;
         }),
     );
-    f.http.mockResolvedValueOnce(Response.json({ online_clients: 0, online_nodes: 0 }));
     const pending = f.manager.getAccountInfo();
     await f.manager.logout();
     const rejected = expect(pending).rejects.toThrow("The account changed");
@@ -93,11 +97,12 @@ describe("account information", () => {
     { expires_at: "invalid", online_clients: 0, online_nodes: 0 },
     { expires_at: null, online_clients: -1, online_nodes: 0 },
     { expires_at: null, online_clients: 1, online_nodes: 0.5 },
-  ])("rejects malformed account details: %j", async ({ expires_at, ...counts }) => {
+    { expires_at: null, online_clients: "1", online_nodes: 0 },
+    { expires_at: null, online_clients: 1, online_nodes: null },
+  ])("rejects malformed account details: %j", async (details) => {
     const f = fixture();
     await f.login();
-    f.http.mockResolvedValueOnce(Response.json({ email: "me@example.test", expires_at }));
-    f.http.mockResolvedValueOnce(Response.json(counts));
+    f.http.mockResolvedValueOnce(Response.json({ email: "me@example.test", ...details }));
     await expect(f.manager.getAccountInfo()).rejects.toThrow("invalid account information");
     await f.manager.logout();
   });
