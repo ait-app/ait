@@ -105,8 +105,16 @@ impl LocalCheckout {
             (Some(base), Some(_)) => compare_refs(&cwd, &comparison_base(&cwd, base)?, "HEAD")?,
             _ => None,
         };
-        let upstream_ref =
-            git_optional(&cwd, &["rev-parse", "--symbolic-full-name", "@{upstream}"])?;
+        let upstream_ref = git_optional(
+            &cwd,
+            &[
+                "rev-parse",
+                "--verify",
+                "--quiet",
+                "--symbolic-full-name",
+                "@{upstream}",
+            ],
+        )?;
         let upstream_counts = match &upstream_ref {
             Some(upstream) if branch_status.remote_ref.as_ref() == Some(upstream) => {
                 branch_status.ahead_behind
@@ -814,7 +822,7 @@ fn lines(value: &str) -> Vec<String> {
 
 fn git_optional(cwd: &Path, arguments: &[&str]) -> Result<Option<String>, CheckoutRuntimeError> {
     match run_git(cwd, arguments, &[0, 1, 128], SMALL_OUTPUT_LIMIT) {
-        Ok(output) if output.stdout.trim().is_empty() => Ok(None),
+        Ok(output) if output.exit_code != 0 || output.stdout.trim().is_empty() => Ok(None),
         Ok(output) => Ok(Some(output.stdout.trim().to_owned())),
         Err(error) => Err(error),
     }
