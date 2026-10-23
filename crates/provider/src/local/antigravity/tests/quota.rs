@@ -26,9 +26,9 @@ async fn logged_in_antigravity_host_and_session_quotas_use_native_command() {
     assert_eq!(current["windows"], host["windows"]);
     assert!(current["successfulAt"].is_string());
     assert!(current.get("lastSuccessful").is_none());
-    assert_eq!(logs(&directory).len(), query_count + 1);
-    manager.usage(None, Some(PROVIDER), true).await.unwrap();
     assert_eq!(logs(&directory).len(), query_count + 2);
+    manager.usage(None, Some(PROVIDER), true).await.unwrap();
+    assert_eq!(logs(&directory).len(), query_count + 4);
 
     let environment = AgentEnvironment::try_from(BTreeMap::from([
         ("AGY_FIXTURE_REMAINING".into(), "0.25".into()),

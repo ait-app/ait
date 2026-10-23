@@ -438,3 +438,5 @@ mod installed;
 mod diagnostics;
 
 mod quota;
+
+mod authentication;

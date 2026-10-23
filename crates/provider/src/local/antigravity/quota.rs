@@ -6,7 +6,7 @@ use std::path::Path;
 
 use serde_json::{Value, json};
 
-use super::{AntigravityClient, PROVIDER, transport};
+use super::{AntigravityClient, PROVIDER, discovery, transport};
 use crate::ports::agent_session::AgentSessionError;
 
 /// Read quotas with the client's native launch environment and the supplied working directory.
@@ -17,6 +17,9 @@ pub(super) async fn read(
     client: &AntigravityClient,
     cwd: &Path,
 ) -> Result<Value, AgentSessionError> {
+    // Native model listing only uses cached authentication. Print mode can launch OAuth even
+    // with stdin closed, so refuse signed-out background refreshes before invoking /usage.
+    discovery::models(client, cwd.to_str().ok_or(AgentSessionError::Failed)?).await?;
     // This built-in command returns quota JSON with zero turns and no conversation. Keep it
     // separate from the session stream, where slash expansion is intentionally disabled.
     let bytes = transport::query(
