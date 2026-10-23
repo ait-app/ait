@@ -58,6 +58,8 @@ export interface AccountSnapshot {
   synchronizedHosts?: string[];
   accountExpiresAt?: string | null;
   loginPending?: boolean;
+  /** Stable subject of the signed-in account; scopes hosts persisted from this account. */
+  accountId?: string;
 }
 
 export interface AccountDependencies {
@@ -157,6 +159,19 @@ function hubTicket(grant: { hub_ticket?: unknown; hub_path?: unknown; protocol?:
   return grant.hub_ticket;
 }
 
+/** Read the unverified `sub` claim; the service validates the token on every request. */
+export function accountSubject(token: string): string | undefined {
+  try {
+    const payload = token.split(".")[1];
+    if (!payload) return undefined;
+    const padded = payload.replace(/-/g, "+").replace(/_/g, "/");
+    const sub = JSON.parse(atob(padded.padEnd(Math.ceil(padded.length / 4) * 4, "="))).sub;
+    return typeof sub === "string" && sub ? sub : undefined;
+  } catch {
+    return undefined;
+  }
+}
+
 function retryDelay(failures: number): number {
   return Math.min(30_000, 1000 * 2 ** Math.min(failures, 5)) * (0.8 + Math.random() * 0.4);
 }
@@ -232,6 +247,7 @@ export class AccountSessionManager {
       hosts,
       selected: this.state.selected ? cloneHost(this.state.selected) : null,
       synchronizedHosts: [...this.publications.keys()],
+      ...(this.account ? { accountId: accountSubject(this.account.token) } : {}),
     };
   }
 

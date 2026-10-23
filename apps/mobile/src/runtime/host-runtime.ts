@@ -49,6 +49,7 @@ import {
   registryHasConnection,
   StoredHostRegistrySchema,
   upsertHostConnectionInProfiles,
+  type AccountRelayHostConnection,
   type HostConnection,
   type HostProfile,
 } from "@/types/host-connection";
@@ -1368,6 +1369,32 @@ const LastAvailableAccountRelaySchema = z.strictObject({
   center: z.string(),
   serverIds: z.array(z.string()),
 });
+/** Drop matching account connections; hosts left without a connection are removed. */
+function withoutAccountRelayConnections(
+  hosts: HostProfile[],
+  matches: (connection: AccountRelayHostConnection) => boolean,
+): HostProfile[] {
+  let changed = false;
+  const next = hosts.flatMap((host) => {
+    const connections = host.connections.filter(
+      (connection) => connection.type !== "accountRelay" || !matches(connection),
+    );
+    if (connections.length === host.connections.length) return [host];
+    changed = true;
+    if (connections.length === 0) return [];
+    const preferredConnectionId = connections.some(
+      (connection) => connection.id === host.preferredConnectionId,
+    )
+      ? host.preferredConnectionId
+      : (connections[0]?.id ?? null);
+    return [{ ...host, connections, preferredConnectionId, updatedAt: new Date().toISOString() }];
+  });
+  return changed ? next : hosts;
+}
+
+/** Account subject that owns the saved account hosts of each service. */
+const ACCOUNT_RELAY_OWNERS_KEY = "@ait:account-relay-owners-v1";
+const AccountRelayOwnersSchema = z.record(z.string(), z.string());
 const E2E_STORAGE_KEY = "@paseo:e2e";
 const INITIAL_DAEMON_CONNECTION_HINT_GLOBAL_KEY = "__PASEO_INITIAL_DAEMON_CONNECTION__";
 
@@ -1442,6 +1469,7 @@ export class HostRuntimeStore {
   private availableAccountRelayServers = new Set<string>();
   private removedAccountRelayConnections = new Set<string>();
   private accountDiscoveryTail: Promise<void> = Promise.resolve();
+  private accountRelayOwners: Record<string, string> | null = null;
   private hostPersistenceTail: Promise<void> = Promise.resolve();
   private hostAppearanceMutationTail: Promise<void> = Promise.resolve();
   private hostRegistryStatus: HostRegistryStatus = "loading";
@@ -2141,16 +2169,41 @@ export class HostRuntimeStore {
     this.setHostsAndSync(next);
   }
 
-  /** Import all discovered hosts, preserving connections deleted during this login. */
+  /**
+   * Import all discovered hosts, preserving connections deleted during this login.
+   * Another account's saved hosts are dropped, and a fresh host list (`retainedHostIds`)
+   * drops hosts the account no longer reports.
+   */
   addDiscoveredAccountRelayHosts(
     discovered: readonly { host_id: string; server_id: string; name: string }[],
     center: string,
     isCurrent: () => boolean = () => true,
+    options?: { accountId?: string; retainedHostIds?: ReadonlySet<string> },
   ): Promise<void> {
     const update = this.accountDiscoveryTail.then(async () => {
       while (isCurrent()) {
         const previous = this.hosts;
         let next = previous;
+        let owners: Record<string, string> | null = null;
+        if (options?.accountId) {
+          const saved = await this.readAccountRelayOwners();
+          if (!isCurrent()) return;
+          if (this.hosts !== previous) continue;
+          // Hosts saved before ownership was recorded are adopted; the fresh list prunes them.
+          if (saved[center] !== options.accountId) {
+            if (saved[center] !== undefined) {
+              next = withoutAccountRelayConnections(next, (c) => c.center === center);
+              this.removedAccountRelayConnections.clear();
+            }
+            owners = { ...saved, [center]: options.accountId };
+          }
+        }
+        const retained = options?.retainedHostIds;
+        if (retained)
+          next = withoutAccountRelayConnections(
+            next,
+            (c) => c.center === center && !retained.has(c.hostId),
+          );
         for (const host of discovered) {
           const connection = createAccountRelayHostConnection({ hostId: host.host_id, center });
           if (this.removedAccountRelayConnections.has(connection.id)) continue;
@@ -2161,17 +2214,34 @@ export class HostRuntimeStore {
             connection,
           });
         }
-        if (next === previous) return;
-        await this.persistHosts(next);
-        if (!isCurrent()) return;
-        // A rename or removal may have completed while storage was pending.
-        if (this.hosts !== previous) continue;
-        this.setHostsAndSync(next);
+        if (next !== previous) {
+          await this.persistHosts(next);
+          if (!isCurrent()) return;
+          // A rename or removal may have completed while storage was pending.
+          if (this.hosts !== previous) continue;
+          this.setHostsAndSync(next);
+        }
+        if (owners) {
+          this.accountRelayOwners = owners;
+          await this.storage
+            .setItem(ACCOUNT_RELAY_OWNERS_KEY, JSON.stringify(owners))
+            .catch(() => undefined);
+        }
         return;
       }
     });
     this.accountDiscoveryTail = update.catch(() => undefined);
     return update;
+  }
+
+  private async readAccountRelayOwners(): Promise<Record<string, string>> {
+    this.accountRelayOwners ??=
+      (await readValidatedJson(
+        this.storage,
+        ACCOUNT_RELAY_OWNERS_KEY,
+        AccountRelayOwnersSchema,
+      ).catch(() => null)) ?? {};
+    return this.accountRelayOwners;
   }
 
   /** Saved hosts remain registered while signed out or connected to another service. */
