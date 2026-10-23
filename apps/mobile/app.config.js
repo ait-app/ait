@@ -2,10 +2,11 @@ const fs = require("node:fs");
 const path = require("node:path");
 const pkg = require("./package.json");
 const easProjectIdentity = require("./eas.json").build.ait.env;
-const { colors: brandColors } = require("./src/branding/ait-mark.json");
+const { colors: brandColors } = require("../../assets/brand/ait-mark.json");
 const withAndroidAsyncStorageSize = require("./plugins/with-android-async-storage-size");
 const withAndroidHermesO0 = require("./plugins/with-android-hermes-o0");
 const withAndroidProfileable = require("./plugins/with-android-profileable");
+const withAndroidReleaseOptimization = require("./plugins/with-android-release-optimization");
 const withAccountRelayWebSocket = require("./plugins/with-account-relay-websocket");
 const withFdroidAutolinking = require("./plugins/with-fdroid-autolinking");
 const withPasteInput = require("./plugins/with-paste-input");
@@ -136,6 +137,7 @@ export default {
     },
     plugins: [
       "expo-router",
+      withAndroidReleaseOptimization,
       withPasteInput,
       withIosSceneLifecycle,
       withIosPodDeploymentTarget,
@@ -185,6 +187,11 @@ export default {
           android: {
             minSdkVersion: 29,
             kotlinVersion: "2.1.20",
+            enableMinifyInReleaseBuilds: true,
+            enableShrinkResourcesInReleaseBuilds: true,
+            // SDK 54 needs this upstream fix for reflected options (SecureStore, FileSystem, etc.).
+            // https://github.com/expo/expo/pull/51206
+            extraProguardRules: "-keep @interface expo.modules.kotlin.records.Field { *; }",
             // Allow HTTP connections for local network hosts in release builds
             usesCleartextTraffic: true,
           },

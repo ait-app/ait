@@ -222,6 +222,24 @@ export class RustDaemonManager {
     return response.status === 204 || response.status === 202 ? null : response.json();
   }
 
+  /** Restricted local hub serve control; rejections carry the HTTP status (404: older daemon). */
+  async hubRequest(method: "GET" | "PUT" | "DELETE", body?: unknown): Promise<unknown> {
+    if (this.state.status !== "running" || !this.state.connectAddress || !this.token)
+      throw new Error("The local runtime is not ready.");
+    const response = await fetch(`http://${this.state.connectAddress}/api/hub/control`, {
+      method,
+      redirect: "error",
+      signal: AbortSignal.timeout(5000),
+      headers: { Authorization: `Bearer ${this.token}`, "Content-Type": "application/json" },
+      ...(body === undefined ? {} : { body: JSON.stringify(body) }),
+    });
+    if (!response.ok)
+      throw Object.assign(new Error("The local hub API is unavailable."), {
+        status: response.status,
+      });
+    return response.status === 204 || response.status === 202 ? null : response.json();
+  }
+
   authorization(url: string): string | undefined {
     if (this.state.status !== "running" || !this.state.listen) return undefined;
     try {

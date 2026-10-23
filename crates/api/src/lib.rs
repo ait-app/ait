@@ -181,6 +181,27 @@ fn validate_listener(address: SocketAddr, token: &SecretString) -> Result<(), Co
 }
 
 impl Api {
+    /// Return the existing serve link as a center call port; no new network connection is opened.
+    #[must_use]
+    pub fn hub_center(&self) -> Arc<dyn model::hub::Center> {
+        Arc::new(self.shared.relay.hub().clone())
+    }
+
+    /// Attach the daemon-owned publisher to committed session, creation and timeline events.
+    pub fn set_event_publisher(&self, publisher: Arc<dyn model::hub::EventPublisher>) {
+        self.shared
+            .metadata
+            .session_events
+            .set_publisher(publisher.clone());
+        self.shared
+            .metadata
+            .creations
+            .set_publisher(publisher.clone());
+        if let Some(execution) = &self.shared.provider.agent_execution {
+            execution.set_timeline_publisher(publisher);
+        }
+    }
+
     /// Claim exclusive Relay control before sharing or serving the API.
     ///
     /// External HTTP/RPC start and stop operations then return conflict errors.
@@ -201,6 +222,7 @@ impl Api {
             serde_json::json!({"mode":"managed", "phase":"starting"});
         Ok(managed_relay::ManagedRelayHandle {
             relay: shared.relay.clone(),
+            hub: shared.relay.hub().clone(),
             status: shared.managed_status.clone(),
         })
     }
@@ -346,6 +368,10 @@ impl Api {
                 "/api/relay/control",
                 get(relay_status).put(relay_start).delete(relay_stop),
             )
+            .route(
+                "/api/hub/control",
+                get(hub_status).put(hub_start).delete(hub_stop),
+            )
             .route(browser_auth::TICKET_PATH, post(browser_ticket))
             .route("/api/files/download", get(files::download))
             .route(terminal_activity::PATH, post(terminal_activity::report))
@@ -386,6 +412,7 @@ impl Api {
     /// The process host must bound this wait with its shutdown deadline.
     pub async fn wait_closed(&self) {
         self.shared.relay.stop().await;
+        self.shared.relay.hub().stop().await;
         self.shared.tasks.wait().await;
         if let Some(names) = &self.shared.workspace_names {
             names.wait_closed().await;
@@ -550,6 +577,40 @@ async fn relay_stop(State(state): State<Arc<Shared>>) -> Result<StatusCode, ApiE
         return Err(ApiError(StatusCode::CONFLICT));
     }
     state.relay.stop().await;
+    Ok(StatusCode::NO_CONTENT)
+}
+
+async fn hub_status(State(state): State<Arc<Shared>>) -> Json<serde_json::Value> {
+    let mut value = serde_json::to_value(state.relay.hub().status().await).unwrap_or_default();
+    value["management"] = state.relay_management();
+    Json(value)
+}
+
+/// Start a hub serve link with an account-owned grant; managed Hosts own their link.
+async fn hub_start(
+    State(state): State<Arc<Shared>>,
+    Json(grant): Json<relay::hub::Grant>,
+) -> Result<StatusCode, ApiError> {
+    if state.cancellation.is_cancelled() {
+        return Err(ApiError(StatusCode::SERVICE_UNAVAILABLE));
+    }
+    if state.managed_relay {
+        return Err(ApiError(StatusCode::CONFLICT));
+    }
+    state
+        .relay
+        .hub()
+        .start(grant)
+        .await
+        .map_err(|_| ApiError(StatusCode::BAD_REQUEST))?;
+    Ok(StatusCode::ACCEPTED)
+}
+
+async fn hub_stop(State(state): State<Arc<Shared>>) -> Result<StatusCode, ApiError> {
+    if state.managed_relay {
+        return Err(ApiError(StatusCode::CONFLICT));
+    }
+    state.relay.hub().stop().await;
     Ok(StatusCode::NO_CONTENT)
 }
 

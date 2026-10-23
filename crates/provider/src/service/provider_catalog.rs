@@ -263,6 +263,11 @@ async fn discover(client: &dyn AgentClient, cwd: &str) -> Entry {
         value["description"] = json!("Google Antigravity via the official AGY CLI");
         value["defaultModeId"] = json!("default");
     }
+    if client.provider() == "omp" {
+        value["label"] = json!("Oh My Pi");
+        value["description"] = json!("Oh My Pi native approvals, questions and subagents");
+        value["defaultModeId"] = json!("full");
+    }
     if let Some(error) = error {
         value["error"] = json!(error);
     }

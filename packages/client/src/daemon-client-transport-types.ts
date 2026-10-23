@@ -1,4 +1,7 @@
 export interface DaemonTransport {
+  /** After a probe times out, recover the same session within a bounded grace period.
+   * Return true to retry the business probe; false if no recovery is possible or needed. */
+  recoverLiveness?: () => Promise<boolean>;
   /** Wait for acknowledged upload writes when the transport supports backpressure. */
   drain?: () => Promise<void>;
   send: (data: string | Uint8Array | ArrayBuffer) => void;

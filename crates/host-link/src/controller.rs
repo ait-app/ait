@@ -6,6 +6,9 @@ use uuid::Uuid;
 
 use crate::{Center, CredentialStore, Error, ManagedRelay, Session, State, Tokens};
 
+/// Wait between attempts to open the optional hub link, e.g. on centers without one.
+const HUB_RETRY: Duration = Duration::from_secs(60);
+
 /// Serializes refresh rotation and maintains runtime leases independently of a GUI.
 pub struct Controller<C, S, R> {
     center: C,
@@ -25,6 +28,7 @@ struct Publication {
     access_until: tokio::time::Instant,
     refresh_at: tokio::time::Instant,
     lease_until: Option<tokio::time::Instant>,
+    hub_retry_at: tokio::time::Instant,
 }
 
 impl<C: Center, S: CredentialStore, R: ManagedRelay> Controller<C, S, R> {
@@ -106,6 +110,7 @@ impl<C: Center, S: CredentialStore, R: ManagedRelay> Controller<C, S, R> {
             access_until,
             refresh_at,
             lease_until: None,
+            hub_retry_at: tokio::time::Instant::now(),
         };
         let mut retry_at = tokio::time::Instant::now();
         let mut delay = 1;
@@ -221,6 +226,17 @@ impl<C: Center, S: CredentialStore, R: ManagedRelay> Controller<C, S, R> {
         if !self.relay.active().await {
             let ticket = self.center.ticket(&publication.tokens, active.id).await?;
             self.relay.start(active.id, ticket).await?;
+        }
+        // The hub is optional: its failures never affect the relay publication.
+        if tokio::time::Instant::now() >= publication.hub_retry_at && !self.relay.hub_active().await
+        {
+            let started = match self.center.hub_ticket(&publication.tokens, active.id).await {
+                Ok(ticket) => self.relay.start_hub(active.id, ticket).await,
+                Err(error) => Err(error),
+            };
+            if started.is_err() {
+                publication.hub_retry_at = tokio::time::Instant::now() + HUB_RETRY;
+            }
         }
         self.relay
             .report("running", Some(&publication.tokens.credential.binding));

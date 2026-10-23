@@ -10,3 +10,4 @@ export function revokePushNotifications(input: RevokePushNotificationsInput): Pr
     console.warn("[PushNotifications] Failed to remove local push subscription");
   });
 }
+export { startAccountPushNotifications, revokeAccountPushNotifications } from "./internal/account";

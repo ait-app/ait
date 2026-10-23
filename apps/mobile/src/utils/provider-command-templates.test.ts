@@ -27,4 +27,14 @@ describe("buildProviderCommand", () => {
       }),
     ).toBe("opencode --session ses_abc123");
   });
+
+  test("builds Oh My Pi resume commands from native session ids", () => {
+    expect(
+      buildProviderCommand({
+        provider: "omp",
+        id: "resume",
+        sessionId: "native-id",
+      }),
+    ).toBe("omp --resume native-id");
+  });
 });

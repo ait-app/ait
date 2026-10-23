@@ -1,5 +1,7 @@
 /** Structural subset of the Paseo transport API; no SDK runtime dependency. */
 export interface Transport {
+  /** Recover the same session after a probe timeout; true requests one fresh business probe. */
+  recoverLiveness?: () => Promise<boolean>;
   /** Wait for acknowledged upload writes when the transport supports backpressure. */
   drain?: () => Promise<void>;
   send(data: string | Uint8Array | ArrayBuffer): void;

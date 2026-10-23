@@ -8,6 +8,33 @@ struct Store {
     fail: AtomicBool,
 }
 
+#[derive(Debug, Default)]
+struct Publisher(Mutex<Vec<String>>);
+
+impl crate::hub::EventPublisher for Publisher {
+    fn publish(&self, method: &str, _: &Value) -> bool {
+        self.0.lock().unwrap().push(method.to_owned());
+        false
+    }
+}
+
+#[test]
+fn host_publisher_observes_only_committed_creation_receipts() {
+    let store = Arc::new(Store::default());
+    let creations = Creations::with_store(store.clone()).unwrap();
+    let publisher = Arc::new(Publisher::default());
+    creations.set_publisher(publisher.clone());
+    store.fail.store(true, Ordering::Relaxed);
+    assert!(creations.begin(Kind::Agent, "failed", json!({})).is_err());
+    assert!(publisher.0.lock().unwrap().is_empty());
+    store.fail.store(false, Ordering::Relaxed);
+    creations.begin(Kind::Agent, "accepted", json!({})).unwrap();
+    assert_eq!(
+        publisher.0.lock().unwrap().as_slice(),
+        &["agent.create.update"]
+    );
+}
+
 impl ReceiptStore for Store {
     fn list(&self) -> Result<Vec<Receipt>, ErrorCode> {
         Ok(self.receipts.lock().unwrap().values().cloned().collect())

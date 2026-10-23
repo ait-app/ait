@@ -16,6 +16,7 @@
 
 - [daemon MCP 接口](operations/mcp.md)：Streamable HTTP、40 个编排工具、鉴权与 Workspace 上下文。
 - [项目说明](../README.md)：开发入口、workspace 和验证命令。
+- [品牌资源](../assets/brand/README.md)：深浅色 Logo、共用矢量源与生成命令；配色规范见 [ADR-051](decisions/branding/adr-051-ait-brand-identity.md)。
 - [桌面端](../apps/desktop/README.md)：Electron 启动、构建和打包。
 - [移动端与 Web](../apps/mobile/README.md)：Expo、浏览器连接与原生构建。
 - [Relay 客户端登录保持](plans/relay-client-session-persistence.md)：14 天登录、退出凭据保护、网页重开恢复与待实施的自动续期方案。
@@ -28,6 +29,13 @@
 ## 架构决策
 
 - [ADR-180：原生会话列表独立响应接纳](decisions/providers/adr-180-native-session-list-response-admission.md)：复用有界目录响应任务，避免慢 Provider 列表阻塞同连接中的其他列表。
+- [ADR-183：iOS CI 使用 Xcode Cloud 归档与内部分发](decisions/clients/adr-183-ios-xcode-cloud-release.md)：手动 Cloud 构建、Apple 签名与构建号、TestFlight 内部测试，取代 EAS 发布入口。
+
+- [ADR-182：客户端接入 Hub 账号服务](decisions/clients/adr-182-hub-account-client.md)：桌面与浏览器 Hub 优先、账号设备注册与心跳、游标订阅和内部通知摘要；[客户端验证](reports/clients/hub-account-client-2026-10-22.md)、[daemon/desktop 运行与真实 Hub 联调](reports/clients/daemon-desktop-runtime-2026-10-22.md)。
+
+- [ADR-180：Oh My Pi 原生 RPC Provider](decisions/providers/adr-180-omp-native-rpc-provider.md)：独立 `omp` 适配器、v2 分块传输、审批模式映射、结构化 ask、子 Agent 与回合级 settled 关联；Pi 是另一个独立 Provider（ADR-156）。
+- [ADR-181：Host 向 Hub 发布事件与目录摘要](decisions/daemon/adr-181-hub-host-publication.md)：中心调用、持久化发布队列、通知路由、轻量 Timeline / creation 更新和目录快照；[验证报告](reports/daemon/hub-host-publication-2026-10-22.md)。
+- [ADR-180：消息 Hub 服务端点](decisions/daemon/adr-180-hub-serve-endpoint.md)：`ait-hub-v1` 常驻链路、会话与物理连接解耦、断线续传与探活恢复协作；与旧 relay 并存，桌面与 headless 共用。[真机与端点续传验证](reports/daemon/hub-device-resume-2026-10-22.md)。
 
 - [ADR-179：Provider 自身行为的测试归 provider crate](decisions/providers/adr-179-provider-owned-tests.md)：原生 adapter 与执行器场景在 provider 内验证，daemon 保留宿主、传输和跨能力组合测试。
 
@@ -166,7 +174,7 @@
 - [ADR-082（Provider）：DeepSeek Harness 原生交互 Host](decisions/providers/adr-082-deepseek-harness-native-host.md)：权限切换、结构化问题、用户消息持久化与原生历史恢复。
 - [ADR-081：Workspace 与 Agent 目录主动推送](decisions/workspace/adr-081-directory-change-push.md)：变更唤醒和事件推送。
 - [ADR-080：Android APK 独立手动发布](decisions/clients/adr-080-standalone-android-release.md)：记录原 EAS 独立入口设计；已由 ADR-172 的 Gradle 构建取代。
-- [ADR-079：移动端统一使用 Expo EAS 构建](decisions/clients/adr-079-mobile-eas-builds.md)：沿用原有 profile，Android 发布通用 APK，iOS 提交 TestFlight。
+- [ADR-079：移动端统一使用 Expo EAS 构建](decisions/clients/adr-079-mobile-eas-builds.md)：历史方案；Android 已迁至 Gradle，iOS 已由 ADR-183 迁至 Xcode Cloud。
 - [ADR-078：Android 发布改为手动可选](decisions/clients/adr-078-optional-android-release.md)：标签发布只构建桌面，Android 默认关闭。
 - [ADR-077：Android APK 的 GitHub Release 发布](decisions/clients/adr-077-android-apk-release.md)：APK 构建、安装包命名与附件职责。
 - [ADR-076：Android 账户与中继客户端](decisions/clients/adr-076-android-account-relay.md)：共享账户会话、Android 安全存储、原生认证连接与下载。
@@ -214,6 +222,7 @@
 - [Ait 0.0.14 发布说明](reports/releases/release-0.0.14.md)：Diff 语法高亮、侧边栏统计与 Codex 推理等级。
 - [Apple 本机构建](operations/apple-builds.md)：DMG、模拟器和 IPA。
 - [Pi](operations/pi.md)：原生 RPC、模型发现、会话恢复与能力限制；[ADR-156](decisions/providers/adr-156-pi-native-rpc-provider.md)。
+- [Oh My Pi](operations/oh-my-pi.md)：独立 OMP 权限、结构化问答、子 Agent 与 v2 传输；[ADR-180](decisions/providers/adr-180-omp-native-rpc-provider.md)。
 - [Claude Code](operations/claude-code.md)：认证、原生会话与审批。
 - [DeepSeek Harness](operations/deepseek-harness.md)：原生 Host、DeepSeek 账号余额、会话导入、权限模式、question 与 ACP 兼容配置。
 - [Antigravity CLI](operations/antigravity.md)：AGY 安装、登录、权限模式、会话恢复与账号额度查询。

@@ -138,6 +138,12 @@ workspace 包与普通、开发、构建、optional 和平台条件依赖，拒�
 
 移动端前台通过本地通知显示 attention；后台推送由 `metadata::push` 协调，`daemon::host::push` 实现 Apple APNs 和 Google FCM adapter。`model::session` 提供不依赖连接的有界 attention 通道以及设备前台去重；Provider 和 Terminal 仍只发布已提交事件，见 [ADR-177](../decisions/clients/adr-177-native-local-and-remote-notifications.md)。
 
+Host 通过 `model::hub` 的端口向中心发布事件和目录摘要。`relay::hub` 实现现有 serve 链路
+上的中心调用，`persistence::storage::hub` 实现原子 journal，`daemon::host::hub` 协调队列、
+重试与投影。发布观察在本机焦点筛选之前；Timeline 仅发布更新标记，实际历史仍由 Provider
+持有。中心原生通知通过 `AIT_SERVER_HUB_NOTIFICATIONS=true` 显式开启，需客户端完成
+账号级设备注册并配置中心提供方凭据后切换；默认继续旧原生推送。详见 [ADR-181](../decisions/daemon/adr-181-hub-host-publication.md)。
+
 metadata 的 `workspace.get.request` 按身份读取一个 Workspace 与所属 Project；客户端目标缓存和
 定向读取独立于完整侧栏快照，不标记全局 hydrated 或完整 checkpoint，见
 [ADR-126](../decisions/workspace/adr-126-workspace-target-read.md)。provider 在 Timeline SQLite 内维护
@@ -212,3 +218,7 @@ Linux headless 的 `daemon` 组装 `host-link` 的 HTTP/凭据 adapter，`api` �
 daemon 连接 metadata/provider，在已有 Workspace 内选择或创建 Agent。新 Agent 的结束
 清理只归档 Agent，不归档所属 Workspace。版本 1 的未绑定任务保留旧执行分支，编辑时
 明确选择 Workspace 后绑定。见 [ADR-138](../decisions/workspace/adr-138-workspace-owned-schedules.md)。
+
+客户端的 Hub access 链路由各平台账号权限层持有，SDK 实现中心调用和游标订阅，
+客户端内部读取通知所需的 Agent 摘要与账号 attention，沿用现有账号和主机列表。Electron 将凭据、窗口兴趣和多窗口前台汇总
+保留在主进程。普通资源详情与操作继续连接对应 Host。见 [ADR-182](../decisions/clients/adr-182-hub-account-client.md)。

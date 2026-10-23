@@ -46,7 +46,6 @@ import {
   buildProviderQualifiedDescription,
   buildSelectedTriggerLabel,
   filterAndRankModelRows,
-  getAllProviderModelRows,
   getProviderModelRows,
   resolveSelectedModelLabel,
   type ProviderSelectionModelRow,
@@ -58,14 +57,10 @@ import { ICON_SIZE, type Theme } from "@/styles/theme";
 import {
   groupProfilesByProviderModel,
   resolveInitialModelBrowserView,
+  resolveDesktopFixedHeight,
   resolveModelBrowserAllView,
   type ModelBrowserView,
 } from "@/components/model-browser-view";
-
-const DESKTOP_PROVIDER_VIEW_MIN_HEIGHT = 220;
-const DESKTOP_PROVIDER_VIEW_MAX_HEIGHT = 400;
-const DESKTOP_PROVIDER_VIEW_BASE_HEIGHT = 80;
-const DESKTOP_MODEL_ROW_HEIGHT = 40;
 
 const ThemedAlertTriangle = withUnistyles(AlertTriangle);
 const ThemedCheck = withUnistyles(Check);
@@ -242,28 +237,6 @@ function iconButtonStyle({ hovered, pressed }: PressableStateCallbackType & { ho
   ];
 }
 
-function countModelsInView(view: ModelBrowserView, providers: ProviderSelectorProvider[]): number {
-  if (view.kind === "all") {
-    return getAllProviderModelRows(providers).length;
-  }
-  const provider = providers.find((entry) => entry.id === view.providerId);
-  return provider?.modelSelection.kind === "models" ? getProviderModelRows(provider).length : 0;
-}
-
-function resolveDesktopFixedHeight(
-  view: ModelBrowserView,
-  providers: ProviderSelectorProvider[],
-): number {
-  const modelCount = countModelsInView(view, providers);
-  return Math.min(
-    Math.max(
-      DESKTOP_PROVIDER_VIEW_MIN_HEIGHT,
-      DESKTOP_PROVIDER_VIEW_BASE_HEIGHT + modelCount * DESKTOP_MODEL_ROW_HEIGHT,
-    ),
-    DESKTOP_PROVIDER_VIEW_MAX_HEIGHT,
-  );
-}
-
 export function useModelBrowser({
   providers,
   selectedProvider,
@@ -395,9 +368,11 @@ export function useModelBrowser({
     return isPlaceholder ? selectedModelLabel : buildSelectedTriggerLabel(selectedModelLabel);
   }, [selectedModelLabel, t]);
 
+  const isSearching = normalizeSearchQuery(searchQuery).length > 0;
+  const profileRowCount = profiles ? profiles.rows.length : null;
   const desktopFixedHeight = useMemo(
-    () => resolveDesktopFixedHeight(view, providers),
-    [providers, view],
+    () => resolveDesktopFixedHeight({ view, providers, profileRowCount, isSearching }),
+    [isSearching, profileRowCount, providers, view],
   );
 
   return {

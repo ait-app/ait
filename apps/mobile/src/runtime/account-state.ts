@@ -11,6 +11,7 @@ import {
   subscribeBrowserAccount,
 } from "./browser-account";
 import { DEFAULT_ACCOUNT_CENTER } from "@ait/client/internal/account-session";
+import { revokeAccountPushNotifications } from "@/push-notifications";
 
 import type { AccountHost } from "@ait/client/internal/account-session";
 export type { AccountHost } from "@ait/client/internal/account-session";
@@ -91,7 +92,9 @@ async function receiveAccountSnapshot(
     Boolean(host.server_id),
   );
   const routableHosts = boundHosts.filter(
-    (host) => host.online && host.instance_id && host.relay_modes.includes("ait-rust-single-v1"),
+    (host) =>
+      host.online &&
+      (host.hub_online || (host.instance_id && host.relay_modes.includes("ait-rust-single-v1"))),
   );
   if (snapshot.status === "online" || (active && freshHosts.length > 0)) {
     store.setAccountRelayCenter(snapshot.center);
@@ -156,6 +159,7 @@ export async function accountCommand(
           await manager.loginWithBrowser((args?.center as string) ?? "");
           break;
         case "account_logout":
+          await revokeAccountPushNotifications();
           await manager.logout();
           break;
         case "account_select":

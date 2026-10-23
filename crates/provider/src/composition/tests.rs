@@ -30,6 +30,7 @@ fn registration_preserves_the_catalog_without_startup_writes_and_rejects_duplica
             "opencode",
             "deepseek-harness",
             "pi",
+            "omp",
         ]
     );
     providers.register(&mut manager).unwrap();
@@ -40,6 +41,7 @@ fn registration_preserves_the_catalog_without_startup_writes_and_rejects_duplica
         "opencode",
         "deepseek-harness",
         "pi",
+        "omp",
     ] {
         manager.validate_provider(provider).unwrap();
     }

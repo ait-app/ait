@@ -1,8 +1,20 @@
 # 移动端通知
 
-Android 与 iOS 在 App 前台、连接仍能收到事件时，直接发起本地完成、失败和权限提醒；正在查看对应 Agent 时不提醒。后台或锁屏后的提醒由连接的 daemon 直连 Apple APNs／Google FCM。终端 hook 的 attention 使用相同链路，点击通知打开对应 Host／Workspace／Agent 或终端。
+Android 与 iOS 在 App 前台、连接仍能收到事件时，直接发起本地完成、失败和权限提醒；正在查看对应 Agent 时不提醒。后台或锁屏后的提醒由 Host 配置选择中心或 daemon 直连 Apple APNs／Google FCM。终端 hook 的 attention 使用相同链路，点击通知打开对应 Host／Workspace／Agent 或终端。
 
-App 的 **Settings → App → Notifications（设置 → 应用 → 通知）** 显示系统权限，可以请求授权、打开系统设置或发送本地测试。测试只验证系统显示，不验证远程 provider。首次连接主机后自动请求权限；此前拒绝过的权限须在系统设置修改，回前台重新登记。
+App 的 **Settings → App → Notifications（设置 → 应用 → 通知）** 显示系统权限，可以请求授权、打开系统设置或发送本地测试。测试只验证系统显示，不验证远程 provider。登录账号或首次连接主机后自动请求权限；此前拒绝过的权限须在系统设置修改，回前台重新登记。
+
+## Hub 账号通知
+
+支持账号方法的中心部署后，App 登录即向 Hub 登记本设备，覆盖账号下所有同步主机。
+App 在完成账号 attention 订阅后报告前台状态；退出登录时先撤销设备登记。
+沿用现有账号和主机列表，Hub 的接入在客户端内部完成。
+
+启用中心后台推送需在 Host 设置 `AIT_SERVER_HUB_NOTIFICATIONS=true`，
+并把下文 APNs/FCM 提供方凭据配置在 ait-server 中。此时 Host 发布带通知的 attention，
+中心持久化并负责设备筛选、投递和重试。只升级 App 或中心不会改变 Host 的默认通知路径。
+未启用此选项的 Host、旧中心及直连主机继续使用 daemon 登记和下文的主机凭据。
+接入边界见 [ADR-182](../decisions/clients/adr-182-hub-account-client.md)。
 
 ## iOS：Apple APNs
 
@@ -38,7 +50,7 @@ export AIT_FCM_SERVICE_ACCOUNT_FILE=/private/path/firebase-service-account.json
 5. 点击通知，确认打开对应对话；终端提醒应打开对应终端标签页。
 6. 在系统设置关闭／重新允许通知，再回 App，确认权限状态及设备登记恢复。
 
-没有 APNs／FCM 凭据时，本地测试和前台提醒可用，后台远程提醒不可用。队列有界且不跨 daemon 重启持久化，provider 接纳不代表设备已展示。网络故障最多尝试 3 次；明确失效的设备 token 会持久删除，认证和项目配置错误不会删除有效设备。
+没有 APNs／FCM 凭据时，本地测试和前台提醒可用，后台远程提醒不可用。旧 daemon 的队列有界且不跨 daemon 重启持久化；Hub 路径持久化并在 24 小时内重试。provider 接纳不代表设备已展示。网络故障最多尝试 3 次；明确失效的设备 token 会持久删除，认证和项目配置错误不会删除有效设备。
 
 服务端只记录安全错误类别和丢弃计数，不记录设备 token、JWT、OAuth token 或 provider 原始错误正文。客户端 `[PushNotifications]`／`[Notifications]` 日志可区分权限、设备 token 与本地显示故障。
 

@@ -22,6 +22,27 @@ fn load(cli: Cli, env: impl Fn(&str) -> Option<OsString>) -> anyhow::Result<Conf
 
 const TOKEN: &str = "offline-config-test-token-longer-than-32";
 
+#[test]
+fn central_native_notifications_are_an_explicit_validated_migration_setting() {
+    assert!(
+        !load(Cli::parse_from(["server"]), environment)
+            .unwrap()
+            .hub_notifications
+    );
+    for (value, expected) in [("true", true), ("1", true), ("false", false), ("0", false)] {
+        let config = load(Cli::parse_from(["server"]), |name| {
+            if name == "AIT_SERVER_HUB_NOTIFICATIONS" {
+                Some(value.into())
+            } else {
+                environment(name)
+            }
+        })
+        .unwrap();
+        assert_eq!(config.hub_notifications, expected);
+    }
+    assert!(parse_hub_notifications(Some(std::ffi::OsStr::new("invalid"))).is_err());
+}
+
 fn environment(name: &str) -> Option<OsString> {
     match name {
         "AIT_SERVER_TOKEN" => Some(TOKEN.into()),

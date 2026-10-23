@@ -2,6 +2,7 @@ import {
   createWebSocketTransportFactory,
   nativeWebSocketFactory,
 } from "@ait/client/internal/daemon-client-websocket-transport";
+import { HubLink } from "@ait/client/internal/hub";
 import { AppState, Platform } from "react-native";
 import * as Crypto from "expo-crypto";
 import { fetch as nativeFetch } from "expo/fetch";
@@ -22,6 +23,7 @@ const BACKGROUND_CONNECTION_GRACE_MS = 2 * 60 * 1000;
 const listeners = new Set<(state: AccountSnapshot) => void>();
 const transports = new Set<() => void>();
 let ready: Promise<AccountSessionManager> | undefined;
+let hub: HubLink | null = null;
 
 async function createAccount(): Promise<AccountSessionManager> {
   const platform = Platform.OS === "ios" ? "ios" : "android";
@@ -30,6 +32,18 @@ async function createAccount(): Promise<AccountSessionManager> {
     installationId = Crypto.randomUUID();
     await AsyncStorage.setItem(INSTALLATION_KEY, installationId);
   }
+  // One access link per signed-in account; it pauses with the account while backgrounded.
+  let hubPaused = AppState.currentState === "background";
+  const link = new HubLink({
+    ticket: () => manager.openHubTicket(),
+    webSocketFactory: nativeWebSocketFactory,
+    authentication: "bearer",
+    randomUUID: Crypto.randomUUID,
+  });
+  const syncHub = (status: AccountSnapshot["status"]) => {
+    if (status === "logged_out" || hubPaused) link.stop();
+    else link.start();
+  };
   const manager = new AccountSessionManager({
     installationId,
     channelTransport: createWebSocketTransportFactory(nativeWebSocketFactory),
@@ -47,6 +61,7 @@ async function createAccount(): Promise<AccountSessionManager> {
       else await SecureStore.deleteItemAsync(CREDENTIAL_KEY);
     },
     notify: (state) => {
+      syncHub(state.status);
       for (const listener of listeners) listener(state);
     },
     closeTransports: () => {
@@ -55,6 +70,7 @@ async function createAccount(): Promise<AccountSessionManager> {
       for (const close of [...transports]) close();
     },
   });
+  manager.attachHub(link);
   // A cold background launch has no live connection to retain.
   if (AppState.currentState === "background") manager.suspend();
   const saved = await SecureStore.getItemAsync(CREDENTIAL_KEY);
@@ -90,13 +106,18 @@ async function createAccount(): Promise<AccountSessionManager> {
     if (state === "active") {
       clearTimeout(backgroundTimer);
       backgroundTimer = undefined;
+      hubPaused = false;
       manager.resume();
+      syncHub(manager.snapshot().status);
+      // The OS may have silently dropped the socket while backgrounded.
+      void link.verify();
     } else if (state === "background" && backgroundTimer === undefined) {
       // Brief app switches retain relay sockets and in-progress downloads. An
       // inactive transition alone (e.g. a system dialog) must not disconnect them.
       backgroundTimer = setTimeout(() => {
         // Keep the timer marker until foregrounding so repeated background
         // events cannot restart the grace period or suspend the account twice.
+        hubPaused = true;
         manager.suspend();
       }, BACKGROUND_CONNECTION_GRACE_MS);
     }
@@ -104,6 +125,7 @@ async function createAccount(): Promise<AccountSessionManager> {
   AppState.addEventListener("change", onAppState);
   // Reconcile transitions that happened while restoring saved credentials.
   onAppState(AppState.currentState);
+  hub = link;
   return manager;
 }
 
@@ -113,6 +135,17 @@ export function getNativeAccount(): Promise<AccountSessionManager> {
     throw error;
   });
   return ready;
+}
+
+/** The signed-in account's hub link; pending while the account is still being restored. */
+export function getNativeHubLink(): HubLink | Promise<HubLink | null> {
+  return (
+    hub ??
+    getNativeAccount().then(
+      () => hub,
+      () => null,
+    )
+  );
 }
 
 export function subscribeNativeAccount(listener: (state: AccountSnapshot) => void): () => void {

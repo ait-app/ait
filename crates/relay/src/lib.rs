@@ -2,6 +2,7 @@
 mod bridge;
 mod diagnostics;
 mod download;
+pub mod hub;
 mod protocol;
 pub mod rpc;
 mod transport;
@@ -40,6 +41,7 @@ pub struct Connector {
     state: Arc<Mutex<State>>,
     local: Arc<Local>,
     shutdown: CancellationToken,
+    hub: hub::Connector,
 }
 
 #[derive(Debug)]
@@ -89,22 +91,31 @@ impl Connector {
                 SocketAddr::V6(address)
             }
         };
+        let shutdown = CancellationToken::new();
+        let local = Arc::new(Local {
+            visits: Arc::new(Semaphore::new(16)),
+            dialer: Dialer::default(),
+            url: format!("ws://{address}/v1/ws"),
+            token,
+            server_id,
+            instance_id,
+        });
         Self {
-            shutdown: CancellationToken::new(),
+            hub: hub::Connector::new(local.clone(), shutdown.clone()),
+            shutdown,
             state: Arc::new(Mutex::new(State {
                 status: Status::default(),
                 generation: Uuid::new_v4(),
                 cancel: CancellationToken::new(),
             })),
-            local: Arc::new(Local {
-                visits: Arc::new(Semaphore::new(16)),
-                dialer: Dialer::default(),
-                url: format!("ws://{address}/v1/ws"),
-                token,
-                server_id,
-                instance_id,
-            }),
+            local,
         }
+    }
+
+    /// The optional hub serve link sharing this connector's local destination and shutdown.
+    #[must_use]
+    pub fn hub(&self) -> &hub::Connector {
+        &self.hub
     }
 
     /// Start a new control attempt, cancelling all data work from the previous attempt.

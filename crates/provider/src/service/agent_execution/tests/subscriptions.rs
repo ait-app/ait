@@ -13,6 +13,45 @@ mod catalog;
 mod creation;
 mod native_sessions;
 
+#[derive(Debug, Default)]
+struct HostPublisher(Mutex<Vec<(String, Value)>>);
+
+impl model::hub::EventPublisher for HostPublisher {
+    fn publish(&self, method: &str, params: &Value) -> bool {
+        self.0
+            .lock()
+            .unwrap()
+            .push((method.to_owned(), params.clone()));
+        false
+    }
+}
+
+#[tokio::test]
+async fn host_publisher_observes_committed_timeline_without_a_client_subscription() {
+    let fixture = Fixture::new();
+    let (execution, _) = worker(&fixture);
+    let publisher = Arc::new(HostPublisher::default());
+    execution.set_timeline_publisher(publisher.clone());
+    let item = crate::protocol::timeline::NativeItem {
+        key: "host-publication".to_owned(),
+        turn_id: Some("turn".to_owned()),
+        timestamp: "2026-10-22T00:00:00Z".to_owned(),
+        item: json!({"type":"assistant_message","text":"Completed"}),
+    };
+    execution
+        .timeline()
+        .append("agent", "test", &[item])
+        .unwrap();
+    {
+        let observed = publisher.0.lock().unwrap();
+        assert_eq!(observed.len(), 1);
+        assert_eq!(observed[0].0, "agent_stream");
+        assert_eq!(observed[0].1["agentId"], "agent");
+        assert!(observed[0].1["seq"].is_u64());
+    }
+    execution.shutdown().await.unwrap();
+}
+
 struct Peer {
     connection: Connection,
     outbound: Outbound,

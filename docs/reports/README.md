@@ -9,6 +9,9 @@
 
 ## Daemon 与协议
 
+- [Host Hub 发布接入验证](daemon/hub-host-publication-2026-10-22.md)
+- [Hub 真机互通与端点续传验证](daemon/hub-device-resume-2026-10-22.md)
+
 - [Codex OOM 后恢复与错误上报](providers/codex-oom-recovery-2026-10-21.md)
 
 - [Provider 错误与重启恢复拆分验证](daemon/provider-recovery-split-2026-10-20.md)
@@ -96,6 +99,7 @@
 ## Provider、Agent 与会话
 
 - [Pi 会话列表延迟与共享连接阻塞排查](providers/pi-session-list-performance-2026-10-21.md)
+- [Oh My Pi 原生 Provider 验证](providers/omp-native-provider.md)
 
 - [OpenCode 加载速度验证](providers/opencode-startup-real-usage-2026-10-21.md)
 
@@ -205,6 +209,7 @@
 
 ## 发布验证
 
+- [Ait 0.1.15 发布说明与验证](releases/release-0.1.15.md)
 - [Ait 0.1.14 发布说明与验证](releases/release-0.1.14.md)
 - [Ait 0.1.13 发布说明与验证](releases/release-0.1.13.md)
 - [Ait 0.1.11 发布说明与验证](releases/release-0.1.11.md)

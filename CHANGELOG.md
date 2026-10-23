@@ -1,5 +1,13 @@
 # Ait changelog
 
+## 0.1.15 - 2026-10-22
+
+- Add the Oh My Pi native RPC provider, including session history, approvals, streaming and subagent events.
+- Add resumable account Hub connections, Host event publication and desktop account access, with legacy relay fallback when the service lacks Hub support.
+- Keep uploaded filenames in Chinese and other Unicode scripts intact.
+- Follow OpenCode sessions after session_move and support Claude native history files up to 128 MiB.
+- Size the desktop model picker to its provider rows, fix web tooltip trigger measurement and keep the first message below the floating header.
+
 ## 0.1.14 - 2026-10-21
 
 - Restore interrupted Codex turns after out-of-memory restarts and preserve concrete upstream failure details in diagnostics.

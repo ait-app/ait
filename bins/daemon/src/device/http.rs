@@ -309,6 +309,21 @@ impl Center for HttpCenter {
         }
         Ok(ticket.to_owned().into())
     }
+    async fn hub_ticket(&self, tokens: &Tokens, session: Uuid) -> Result<SecretString, Error> {
+        let value = self
+            .request(
+                reqwest::Method::POST,
+                &format!("/v1/node-sessions/{session}/hub-tickets"),
+                Some(&tokens.access_token),
+                json!({"ep":"serve"}),
+            )
+            .await?;
+        let ticket = value["hub_ticket"].as_str().ok_or(Error::Protocol)?;
+        if ticket.len() != 64 || !ticket.bytes().all(|b| b.is_ascii_hexdigit()) {
+            return Err(Error::Protocol);
+        }
+        Ok(ticket.to_owned().into())
+    }
     async fn close(&self, tokens: &Tokens, session: Uuid) -> Result<(), Error> {
         self.request(
             reqwest::Method::DELETE,

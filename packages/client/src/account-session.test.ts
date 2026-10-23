@@ -7,8 +7,64 @@ import {
   type SavedAccount,
 } from "./account-session.js";
 import { createHash } from "node:crypto";
+import { hubFixture } from "../test/hub.js";
 
 afterEach(() => vi.useRealTimers());
+
+it("discovers a Hub-only Host independently of its offline Relay route", async () => {
+  const f = fixture();
+  Object.assign(f.host, { online: false, instance_id: null, relay_modes: [] });
+  const h = hubFixture({
+    ticket: async () => ({ centerUrl: "https://aitapp.cn/api", ticket: "a".repeat(64) }),
+  });
+  f.manager.attachHub(h.link);
+  await f.login();
+  const socket = await h.online([
+    {
+      node_id: "other",
+      host_id: "remote",
+      name: "Remote",
+      platform: "linux",
+      app_version: "test",
+      state: "online",
+    },
+  ]);
+  expect(f.manager.snapshot().hosts[0]).toMatchObject({
+    online: true,
+    hub_online: true,
+    instance_id: null,
+    relay_modes: [],
+  });
+  expect(f.deps.notify).toHaveBeenLastCalledWith(f.manager.snapshot());
+  // An old Relay snapshot must not override current Hub availability.
+  f.channel.sockets[0]!.receive({ type: "hosts.snapshot", hosts: [f.host], observed_at: "now" });
+  expect(f.manager.snapshot().hosts[0]?.online).toBe(true);
+  socket.presence(2, []);
+  expect(f.manager.snapshot().hosts[0]).toMatchObject({ online: false });
+  h.link.stop();
+  await f.manager.logout();
+});
+
+it("does not import presence from a different account center", async () => {
+  const f = fixture();
+  f.host.online = false;
+  const h = hubFixture();
+  f.manager.attachHub(h.link);
+  await f.login();
+  await h.online([
+    {
+      node_id: "other",
+      host_id: "remote",
+      name: "Remote",
+      platform: "linux",
+      app_version: "test",
+      state: "online",
+    },
+  ]);
+  expect(f.manager.snapshot().hosts[0]?.online).toBe(false);
+  h.link.stop();
+  await f.manager.logout();
+});
 
 describe("account center domain migration", () => {
   it.each([
@@ -1289,3 +1345,197 @@ it.each(["disconnect", "suspend", "logout"])(
     await manager.logout();
   },
 );
+
+describe("hub tickets", () => {
+  const hubGrant = { hub_ticket: "c".repeat(64), hub_path: "/v1/hub", protocol: "ait-hub-v1" };
+  const builtIn = {
+    serverId: "first",
+    instanceId: "instance-1",
+    name: "Desktop",
+    platform: "linux",
+  };
+
+  function hubFixture(grant: object = hubGrant) {
+    const context = fixture();
+    const original = context.http.getMockImplementation()!;
+    context.http.mockImplementation((url, options) =>
+      String(url).endsWith("/hub-tickets")
+        ? Promise.resolve(Response.json(grant))
+        : original(url, options),
+    );
+    return context;
+  }
+
+  const hubCalls = (http: ReturnType<typeof fixture>["http"]) =>
+    http.mock.calls.filter(([url]) => String(url).endsWith("/hub-tickets"));
+
+  it("issues an access ticket for this device's node session", async () => {
+    const { manager, http, login } = hubFixture();
+    await expect(manager.openHubTicket()).rejects.toThrow("Sign in");
+    await login();
+    await expect(manager.openHubTicket()).resolves.toEqual({
+      centerUrl: "https://aitapp.cn/api",
+      ticket: "c".repeat(64),
+    });
+    const [url, options] = hubCalls(http)[0]!;
+    expect(url).toBe("https://aitapp.cn/api/v1/node-sessions/lease/hub-tickets");
+    expect(options).toMatchObject({
+      method: "POST",
+      body: JSON.stringify({ ep: "access" }),
+      headers: { Authorization: "Bearer private-jwt" },
+    });
+    await manager.logout();
+  });
+
+  it("rejects a grant for another protocol", async () => {
+    const { manager, login } = hubFixture({ ...hubGrant, protocol: "ait-hub-v2" });
+    await login();
+    await expect(manager.openHubTicket()).rejects.toThrow("invalid hub ticket");
+    await manager.logout();
+  });
+
+  function desktopHub(localHub: AccountDependencies["localHub"]) {
+    const context = hubFixture();
+    context.deps.publishRuntime = false;
+    context.deps.runtime = () => ({
+      status: "running",
+      serverId: "first",
+      instanceId: "instance-1",
+    });
+    context.deps.localHub = localHub;
+    return context;
+  }
+
+  it("brings the built-in daemon's serve link online alongside the relay control", async () => {
+    let online = false;
+    const localHub = vi.fn(async (method: string) =>
+      method === "GET" ? { online, connecting: false, link: null, error: null } : null,
+    );
+    const { manager, http, deps, login } = desktopHub(localHub);
+    await login();
+    await manager.publishHost(builtIn);
+    await vi.advanceTimersByTimeAsync(1);
+    const [url, options] = hubCalls(http)[0]!;
+    expect(url).toBe("https://aitapp.cn/api/v1/node-sessions/lease-first/hub-tickets");
+    expect(options).toMatchObject({ body: JSON.stringify({ ep: "serve" }) });
+    expect(localHub).toHaveBeenCalledWith("PUT", {
+      center_url: "https://aitapp.cn/api",
+      hub_ticket: "c".repeat(64),
+      node_session_id: "lease-first",
+    });
+    online = true;
+    await vi.advanceTimersByTimeAsync(40_000);
+    expect(hubCalls(http)).toHaveLength(1);
+    // The legacy relay control path is untouched.
+    expect(deps.local).not.toHaveBeenCalledWith("PUT", expect.anything());
+    await manager.unpublishHost("first");
+    expect(localHub).toHaveBeenLastCalledWith("DELETE");
+    await manager.logout();
+  });
+
+  it.each([404, 409])("stops quietly when the local hub API answers %i", async (status) => {
+    const localHub = vi.fn(async (_method: string) => {
+      throw Object.assign(new Error("unavailable"), { status });
+    });
+    const { manager, http, deps, login } = desktopHub(localHub);
+    await login();
+    await manager.publishHost(builtIn);
+    await vi.advanceTimersByTimeAsync(40_000);
+    expect(localHub).toHaveBeenCalledOnce();
+    expect(hubCalls(http)).toHaveLength(0);
+    expect(manager.snapshot().error).toBeNull();
+    // A restarted runtime instance is a new publication and is asked again.
+    deps.runtime = () => ({ status: "running", serverId: "first", instanceId: "instance-2" });
+    await manager.publishHost({ ...builtIn, instanceId: "instance-2" });
+    await vi.advanceTimersByTimeAsync(40_000);
+    expect(localHub.mock.calls.filter(([method]) => method === "GET")).toHaveLength(2);
+    await manager.unpublishHost("first");
+    await manager.logout();
+  });
+
+  it("never delays lease renewal while the local hub API hangs", async () => {
+    const localHub = vi.fn((method: string) =>
+      method === "GET" ? new Promise<never>(() => undefined) : Promise.resolve(null),
+    );
+    const { manager, http, login } = desktopHub(localHub);
+    await login();
+    await manager.publishHost(builtIn);
+    const renewals = () => http.mock.calls.filter(([url]) => String(url).endsWith("/renew")).length;
+    const before = renewals();
+    await vi.advanceTimersByTimeAsync(45_000);
+    expect(renewals()).toBeGreaterThan(before);
+    expect(localHub).toHaveBeenCalledOnce();
+    expect(localHub).toHaveBeenCalledWith("GET");
+    await manager.unpublishHost("first");
+    await manager.logout();
+  });
+
+  it("leaves a serve link another process took over for five minutes", async () => {
+    const localHub = vi.fn(async (method: string) =>
+      method === "GET"
+        ? { online: false, connecting: false, link: null, error: null, rejected: "replaced" }
+        : null,
+    );
+    const { manager, http, login } = desktopHub(localHub);
+    await login();
+    await manager.publishHost(builtIn);
+    await vi.advanceTimersByTimeAsync(4 * 60_000);
+    expect(hubCalls(http)).toHaveLength(0);
+    expect(localHub).toHaveBeenCalledOnce();
+    await vi.advanceTimersByTimeAsync(2 * 60_000);
+    expect(localHub.mock.calls.filter(([method]) => method === "GET")).toHaveLength(3);
+    expect(hubCalls(http)).toHaveLength(1);
+    expect(localHub).toHaveBeenCalledWith(
+      "PUT",
+      expect.objectContaining({ hub_ticket: "c".repeat(64) }),
+    );
+    // A second takeover after that successful PUT gets its own bounded wait.
+    await vi.advanceTimersByTimeAsync(4 * 60_000);
+    expect(hubCalls(http)).toHaveLength(1);
+    await vi.advanceTimersByTimeAsync(2 * 60_000);
+    expect(hubCalls(http)).toHaveLength(2);
+    await manager.unpublishHost("first");
+    await manager.logout();
+  });
+
+  it("retries with backoff when the center fails to issue a hub ticket", async () => {
+    const localHub = vi.fn(async () => ({ online: false, connecting: false }));
+    const { manager, http, login } = desktopHub(localHub);
+    const original = http.getMockImplementation()!;
+    http.mockImplementation((url, options) =>
+      String(url).endsWith("/hub-tickets")
+        ? Promise.resolve(Response.json({ error: { code: "internal" } }, { status: 500 }))
+        : original(url, options),
+    );
+    await login();
+    await manager.publishHost(builtIn);
+    await vi.advanceTimersByTimeAsync(1);
+    expect(hubCalls(http)).toHaveLength(1);
+    await vi.advanceTimersByTimeAsync(30_000);
+    const retries = hubCalls(http).length;
+    expect(retries).toBeGreaterThan(1);
+    expect(retries).toBeLessThan(15);
+    expect(localHub).not.toHaveBeenCalledWith("PUT", expect.anything());
+    expect(manager.snapshot().error).toBeNull();
+    await manager.unpublishHost("first");
+    await manager.logout();
+  });
+
+  it("backs off when the center has no hub", async () => {
+    const localHub = vi.fn(async () => ({ online: false, connecting: false }));
+    const { manager, http, login } = desktopHub(localHub);
+    const original = http.getMockImplementation()!;
+    http.mockImplementation((url, options) =>
+      String(url).endsWith("/hub-tickets")
+        ? Promise.resolve(Response.json({ error: { code: "not_found" } }, { status: 404 }))
+        : original(url, options),
+    );
+    await login();
+    await manager.publishHost(builtIn);
+    await vi.advanceTimersByTimeAsync(60_000);
+    expect(hubCalls(http)).toHaveLength(1);
+    expect(localHub).not.toHaveBeenCalledWith("PUT", expect.anything());
+    await manager.unpublishHost("first");
+    await manager.logout();
+  });
+});

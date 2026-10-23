@@ -25,6 +25,7 @@ import type { Theme } from "@/styles/theme";
 import { useStableEvent } from "@/hooks/use-stable-event";
 import { useKeyboardStreamInset } from "@/keyboard/shift";
 import { useRevisedHistoryRows } from "./history-row-revision";
+import { useStreamTopOverlayInset } from "./top-overlay";
 import { useBottomAnchorController } from "./bottom-anchor-controller";
 import { useScrollKeyboardDismiss } from "./scroll-keyboard-dismiss/use-scroll-keyboard-dismiss";
 import type { StreamRenderInput, StreamStrategy, StreamViewportHandle } from "./strategy";
@@ -106,6 +107,7 @@ function NativeStreamViewport(props: StreamRenderInput & { strategy: StreamStrat
   const isUserScrollActiveRef = useRef(false);
   const scrollKeyboardDismiss = useScrollKeyboardDismiss();
   const streamKeyboardInset = useKeyboardStreamInset();
+  const topOverlayInset = useStreamTopOverlayInset();
   const userScrollEndFrameIdRef = useRef<number | null>(null);
   const programmaticScrollEventBudgetRef = useRef(0);
   const isNativeViewportSettlingRef = useRef(false);
@@ -554,15 +556,19 @@ function NativeStreamViewport(props: StreamRenderInput & { strategy: StreamStrat
   const historyFooterContent = useMemo(() => {
     const isLoadingOperation = isHistoryStartLoadingOperation(historyStartPaginationState);
     return (
-      <View style={historyStartSlotStyle} testID="older-history-slot">
-        {isLoadingOperation ? (
-          <View testID="load-older-history-spinner">
-            <ThemedLoadingSpinner size="small" uniProps={foregroundMutedColorMapping} />
-          </View>
-        ) : null}
+      // The footer is the visual top of the inverted list. Reserve the floating
+      // header here so the oldest message and loading spinner can rest below it.
+      <View style={{ paddingTop: topOverlayInset }}>
+        <View style={historyStartSlotStyle} testID="older-history-slot">
+          {isLoadingOperation ? (
+            <View testID="load-older-history-spinner">
+              <ThemedLoadingSpinner size="small" uniProps={foregroundMutedColorMapping} />
+            </View>
+          ) : null}
+        </View>
       </View>
     );
-  }, [historyStartPaginationState]);
+  }, [historyStartPaginationState, topOverlayInset]);
 
   // RN's FlatList strictMode keeps its internal renderItem wrapper stable when
   // data or the live header changes, preserving the row identities above.

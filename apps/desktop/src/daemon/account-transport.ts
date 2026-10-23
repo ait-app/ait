@@ -1,5 +1,6 @@
 import { WebSocket, type RawData } from "ws";
 import type { AccountSessionManager } from "./account-session.js";
+import type { HubLink, HubSession } from "@ait/client/internal/hub";
 
 const MAX_PENDING_MESSAGES = 16;
 const MAX_BUFFERED_MESSAGES = 65_536;
@@ -20,11 +21,12 @@ interface Session {
   destroyed: () => void;
   navigated: (_event: unknown, _url: string, sameDocument: boolean, mainFrame: boolean) => void;
   socket: WebSocket | null;
+  hub: HubSession | null;
   visit: string | null;
   ready: boolean;
   verified: boolean;
   closed: boolean;
-  expected: { serverId: string; instanceId: string } | null;
+  expected: { serverId: string; instanceId: string | null } | null;
   deadline: ReturnType<typeof setTimeout>;
   pending: Map<number, { bytes: number; timer: ReturnType<typeof setTimeout> }>;
   queued: Map<number, { bytes: Buffer; binary: boolean }>;
@@ -36,7 +38,10 @@ interface Session {
 /** Owns renderer transport sessions without exposing account or relay credentials. */
 export class AccountTransportManager {
   private sessions = new Map<string, Session>();
-  constructor(private readonly account: AccountSessionManager) {}
+  constructor(
+    private readonly account: AccountSessionManager,
+    private readonly link?: HubLink,
+  ) {}
 
   private emit(id: string, session: Session, payload: Record<string, unknown>): void {
     if (!session.owner.isDestroyed())
@@ -60,6 +65,7 @@ export class AccountTransportManager {
         if (mainFrame && !sameDocument) this.finish(id, session);
       },
       socket: null,
+      hub: null,
       visit: null,
       ready: false,
       verified: false,
@@ -77,6 +83,35 @@ export class AccountTransportManager {
     owner.once("destroyed", destroyed);
     owner.on("did-start-navigation", session.navigated);
     try {
+      if (this.link?.pending) await this.link.whenReady(5000);
+      const node =
+        this.link?.ready && this.link.centerUrl === center ? this.link.serveFor(host) : undefined;
+      if (session.closed) return;
+      if (node && this.link) {
+        const target = this.account.snapshot().hosts.find((value) => value.host_id === host);
+        if (!target?.server_id) throw new Error("Host identity unavailable");
+        // Hub authenticates the selected serve node. Its current instance comes from
+        // accept/server_info; a legacy route may be absent or belong to an older instance.
+        session.expected = { serverId: target.server_id, instanceId: null };
+        const transport = this.link.openSession(node.node_id);
+        session.hub = transport;
+        // Hub accept contains server_info; there is no legacy relay.ready handshake.
+        session.ready = true;
+        transport.onOpen(() => {
+          if (!session.closed) this.emit(id, session, { kind: "open" });
+        });
+        transport.onMessage((data, binary) =>
+          this.message(
+            id,
+            session,
+            typeof data === "string" ? Buffer.from(data) : Buffer.from(data as Uint8Array),
+            binary,
+          ),
+        );
+        transport.onError(() => this.finish(id, session, "Hub session failed"));
+        transport.onClose(() => this.finish(id, session));
+        return;
+      }
       const grant = await this.account.openVisit(host, center);
       if (session.closed) {
         await this.account.closeVisit(grant.relay_session_id);
@@ -140,8 +175,12 @@ export class AccountTransportManager {
       if (
         message.type !== "server_info" ||
         message.info?.server_id !== session.expected?.serverId ||
-        message.info?.instance_id !== session.expected?.instanceId ||
-        !message.info?.features?.includes("ait-rust-single-v1")
+        typeof message.info?.instance_id !== "string" ||
+        !message.info.instance_id ||
+        (session.expected?.instanceId !== null &&
+          message.info?.instance_id !== session.expected?.instanceId) ||
+        !Array.isArray(message.info?.features) ||
+        !message.info.features.includes("ait-rust-single-v1")
       ) {
         this.finish(id, session, "Target Host identity or protocol changed");
         return;
@@ -202,6 +241,14 @@ export class AccountTransportManager {
     input: { text?: string; binaryBase64?: string },
   ): Promise<void> {
     const session = this.owned(owner, id);
+    if (session.hub) {
+      if ((input.text === undefined) === (input.binaryBase64 === undefined))
+        throw new Error("Invalid Hub frame");
+      if ((input.text?.length ?? input.binaryBase64?.length ?? 0) > 2 * 1024 * 1024)
+        throw new Error("Hub frame too large");
+      session.hub.send(input.text ?? Buffer.from(input.binaryBase64!, "base64"));
+      return;
+    }
     const socket = session.socket;
     if (!session.ready || !socket || socket.readyState !== WebSocket.OPEN)
       throw new Error("Relay is not ready");
@@ -241,6 +288,10 @@ export class AccountTransportManager {
     for (const [id, session] of this.sessions) this.finish(id, session);
   }
 
+  recover(owner: AccountTransportOwner, id: string): Promise<boolean> {
+    return this.owned(owner, id).hub?.recoverLiveness() ?? Promise.resolve(false);
+  }
+
   private owned(owner: AccountTransportOwner, id: string): Session {
     const session = this.sessions.get(id);
     if (!session || session.owner !== owner || session.closed)
@@ -259,6 +310,7 @@ export class AccountTransportManager {
     session.queued.clear();
     session.bufferedBytes = 0;
     session.socket?.terminate();
+    session.hub?.close();
     this.sessions.delete(id);
     if (session.visit) void this.account.closeVisit(session.visit);
     this.emit(id, session, { kind: "close", ...(error ? { error } : {}) });

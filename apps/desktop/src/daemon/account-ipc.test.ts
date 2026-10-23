@@ -37,6 +37,7 @@ vi.mock("./account-session.js", () => ({
     snapshot() {
       return { status: this.status, synchronizedHosts: [] };
     }
+    attachHub() {}
     async restore() {
       this.status = "online";
     }
@@ -94,6 +95,17 @@ describe("desktop built-in daemon synchronization preference", () => {
     });
     expect(stored()).toMatchObject({ syncBuiltInDaemon: true });
     expect(mocks.deps?.publishRuntime).toBe(false);
+  });
+
+  it("routes hub serve control to the built-in daemon's local hub API", async () => {
+    const hubRequest = vi.fn(async () => null);
+    const command = createAccountIpc(
+      () => ({ ...runtime, hubRequest }) as unknown as RustDaemonManager,
+      () => true,
+    );
+    await command(event, "account_status");
+    await mocks.deps!.localHub!("PUT", { hub_ticket: "ticket" });
+    expect(hubRequest).toHaveBeenCalledWith("PUT", { hub_ticket: "ticket" });
   });
 
   it("retains a manual stop across logout, browser login and desktop restart", async () => {

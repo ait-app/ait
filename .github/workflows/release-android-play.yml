@@ -134,16 +134,18 @@ jobs:
         working-directory: apps/mobile
         run: npx --no-install expo prebuild --platform android --clean --non-interactive
 
-      - name: Set generated Gradle versionCode
+      - name: Verify R8 configuration and set Gradle versionCode
         run: |
           node --input-type=module <<'NODE'
           import { readFileSync, writeFileSync } from 'node:fs';
           import { pathToFileURL } from 'node:url';
-          const { configureAndroidPlayGradle } = await import(pathToFileURL(
+          const { configureAndroidPlayGradle, validateAndroidPlayOptimization } = await import(pathToFileURL(
             `${process.env.RUNNER_TEMP}/android-play-release-tools/scripts/android-play-release.mjs`));
           const plan = JSON.parse(readFileSync(`${process.env.RUNNER_TEMP}/android-play-plan.json`, 'utf8'));
           const file = 'apps/mobile/android/app/build.gradle';
-          writeFileSync(file, configureAndroidPlayGradle(readFileSync(file, 'utf8'), plan.versionCode));
+          const gradle = readFileSync(file, 'utf8');
+          validateAndroidPlayOptimization(gradle, readFileSync('apps/mobile/android/gradle.properties', 'utf8'));
+          writeFileSync(file, configureAndroidPlayGradle(gradle, plan.versionCode));
           NODE
 
       - name: Build signed AAB with Gradle

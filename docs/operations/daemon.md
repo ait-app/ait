@@ -39,6 +39,18 @@ web_origins = ["http://localhost:8081", "http://127.0.0.1:8081"]
 开发桌面默认使用 `.tmp/ait/server`，开发 Web 默认使用 `.tmp/app/server`。
 `AIT_SERVER_BIN` 可指定已构建的 daemon；新默认构建产物为 `target/debug/daemon`。
 
+### Hub 事件与中心原生通知
+
+发布 Hub serve 后，daemon 根据 `welcome.center_methods` 自动上报已提交事件及
+project / workspace / agent 轻量目录。重试记录保存在数据目录的 `hub/publications.json`，
+与认证的中心地址及 node session 隔离。详细边界见
+[ADR-181](../decisions/daemon/adr-181-hub-host-publication.md)。
+
+客户端完成 Hub access 的设备注册、前台心跳和事件订阅，且中心已配置 APNs / FCM 后，
+设置 `AIT_SERVER_HUB_NOTIFICATIONS=true`（或 `1`）并重启 daemon，将新事件的原生通知
+交给中心。默认值为 false，继续使用旧客户端在 daemon 上注册的 token；`false` / `0`
+显式关闭，其他值拒绝启动。已有 journal 事件保留入队时的投递决策。
+
 ## 身份、数据与关闭
 
 同一数据目录由 `instance.lock` 的 OS 文件锁排他管理。`server-id` 是原子保存的稳定身份，
@@ -133,6 +145,7 @@ npm run dev:mobile
   [ADR-115](../decisions/providers/adr-115-opencode-acp-provider.md)。
 - [Antigravity CLI](antigravity.md)使用官方或 Homebrew 安装的 AGY；`AIT_SERVER_ANTIGRAVITY_BIN` 覆盖路径。
 - [Pi](pi.md)使用本机 `pi --mode rpc`；`AIT_SERVER_PI_BIN` 覆盖程序路径。
+- [Oh My Pi](oh-my-pi.md)使用独立 RPC UI 和 v2 传输；`AIT_SERVER_OMP_BIN` 覆盖程序路径。
 - [语音与听写](speech.md)默认使用离线模型，也支持文档列出的远端后端。
 - GitHub/Forge 操作使用当前机器上的 Git、`gh` 或 `glab`。
 

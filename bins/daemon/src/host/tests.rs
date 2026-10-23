@@ -2,7 +2,7 @@ use super::*;
 use crate::config::Cli;
 use clap::Parser;
 
-fn config(directory: &std::path::Path) -> Config {
+pub(super) fn config(directory: &std::path::Path) -> Config {
     Config::load(
         Cli::parse_from([
             "server",
@@ -72,45 +72,9 @@ async fn each_composite_service_installs_all_its_methods_without_other_component
     let root = tempfile::tempdir().unwrap();
     let configuration = config(root.path());
     let instance = Arc::new(InstanceLease::acquire(root.path()).unwrap());
-    let mut services =
+    let (mut services, sources) =
         compose_services(&configuration, "127.0.0.1:7316".parse().unwrap(), &instance).unwrap();
-    let cases = [
-        (
-            Services {
-                browser: services.browser.take(),
-                ..Services::default()
-            },
-            ::browser::capabilities::implemented_methods().collect::<Vec<_>>(),
-        ),
-        (
-            Services {
-                metadata: services.metadata.take(),
-                ..Services::default()
-            },
-            metadata::capabilities::implemented_methods().collect::<Vec<_>>(),
-        ),
-        (
-            Services {
-                filesystem: services.filesystem.take(),
-                ..Services::default()
-            },
-            filesystem::capabilities::implemented_methods().collect::<Vec<_>>(),
-        ),
-        (
-            Services {
-                bot: services.bot.take(),
-                ..Services::default()
-            },
-            ::bot::capabilities::implemented_methods().collect::<Vec<_>>(),
-        ),
-        (
-            Services {
-                provider: services.provider.take(),
-                ..Services::default()
-            },
-            provider::capabilities::implemented_methods().collect::<Vec<_>>(),
-        ),
-    ];
+    let cases = installation_cases(&mut services);
     for (installed, methods) in cases {
         let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
         let address = listener.local_addr().unwrap();
@@ -123,11 +87,15 @@ async fn each_composite_service_installs_all_its_methods_without_other_component
         )
         .unwrap();
         let (stop, signal) = tokio::sync::oneshot::channel();
+        let publication = hub::start(&api, sources.clone(), root.path(), instance.clone(), false)
+            .await
+            .unwrap();
         let server = Server {
             listener,
             api,
             instance: instance.clone(),
             managed: None,
+            publication,
         };
         let task = tokio::spawn(server.serve(async move {
             let _ = signal.await;
@@ -215,4 +183,44 @@ async fn headless_host_composes_exclusive_internal_control_without_contacting_ce
     server.api.wait_closed().await;
     drop(server);
     assert!(crate::device::Store::open(root.path()).is_ok());
+}
+
+fn installation_cases(services: &mut Services) -> [(Services, Vec<model::methods::MethodSpec>); 5] {
+    [
+        (
+            Services {
+                browser: services.browser.take(),
+                ..Services::default()
+            },
+            ::browser::capabilities::implemented_methods().collect::<Vec<_>>(),
+        ),
+        (
+            Services {
+                metadata: services.metadata.take(),
+                ..Services::default()
+            },
+            metadata::capabilities::implemented_methods().collect::<Vec<_>>(),
+        ),
+        (
+            Services {
+                filesystem: services.filesystem.take(),
+                ..Services::default()
+            },
+            filesystem::capabilities::implemented_methods().collect::<Vec<_>>(),
+        ),
+        (
+            Services {
+                bot: services.bot.take(),
+                ..Services::default()
+            },
+            ::bot::capabilities::implemented_methods().collect::<Vec<_>>(),
+        ),
+        (
+            Services {
+                provider: services.provider.take(),
+                ..Services::default()
+            },
+            provider::capabilities::implemented_methods().collect::<Vec<_>>(),
+        ),
+    ]
 }

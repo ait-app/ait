@@ -5,6 +5,7 @@ use std::time::Duration;
 use anyhow::Context;
 mod bot;
 mod catalog;
+mod hub;
 mod push;
 mod schedule;
 mod voice;
@@ -65,6 +66,7 @@ pub(super) struct Server {
     // Own the directory lock until all accepted connections have stopped.
     instance: Arc<InstanceLease>,
     managed: Option<HostLink>,
+    publication: hub::Worker,
 }
 
 impl Server {
@@ -92,10 +94,11 @@ impl Server {
             .context("bind server listener")?;
         let token = config.token.clone();
         let web_origins = config.web_origins.clone();
+        let hub_notifications = config.hub_notifications;
         let address = listener
             .local_addr()
             .context("read server listener address")?;
-        let (instance, services, device) = tokio::task::spawn_blocking(move || {
+        let (instance, services, sources, device) = tokio::task::spawn_blocking(move || {
             let instance = Arc::new(InstanceLease::acquire(&config.data_dir)?);
             // Validate managed state before spawning services that retain the instance lease.
             let device = if config.headless {
@@ -112,7 +115,7 @@ impl Server {
             } else {
                 None
             };
-            let mut services = compose_services(&config, address, &instance)?;
+            let (mut services, sources) = compose_services(&config, address, &instance)?;
             if let Some(diagnostics) = diagnostics {
                 services.metadata = services.metadata.map(|service| {
                     let mut dependencies = service.into_dependencies();
@@ -120,7 +123,7 @@ impl Server {
                     metadata::Service::new(dependencies)
                 });
             }
-            Ok::<_, anyhow::Error>((instance, services, device))
+            Ok::<_, anyhow::Error>((instance, services, sources, device))
         })
         .await
         .context("join server initialization")??;
@@ -132,6 +135,14 @@ impl Server {
             services,
         )?
         .with_browser_origins(web_origins)?;
+        let publication = hub::start(
+            &api,
+            sources,
+            &data_dir,
+            instance.clone(),
+            hub_notifications,
+        )
+        .await?;
         let managed = if let Some((store, state)) = device {
             let relay = crate::device::StatusRelay::new(
                 api.claim_managed_relay()?,
@@ -153,6 +164,7 @@ impl Server {
             api,
             instance,
             managed,
+            publication,
         })
     }
 
@@ -171,6 +183,7 @@ impl Server {
             api,
             instance,
             managed,
+            publication,
         } = self;
         let cancel = tokio_util::sync::CancellationToken::new();
         let manager_cancel = cancel.clone();
@@ -225,6 +238,7 @@ impl Server {
                 .context("join headless manager")?;
         }
         let lifecycle_intent = api.lifecycle_intent();
+        publication.shutdown().await;
         // Drop routers and application storage before the data-directory instance lease.
         drop(api);
         drop(instance);
@@ -237,14 +251,10 @@ fn compose_services(
     config: &Config,
     address: SocketAddr,
     instance: &Arc<InstanceLease>,
-) -> anyhow::Result<Services> {
-    let (project_registry, workspace_registry) = open_directory_registries(config)?;
-    let changes = model::changes::Changes::default();
-    let agent_runtime_registry =
-        FileBackedAgentRuntimeRegistry::new(config.data_dir.join("agents/agents.json"))
-            .with_changes(changes.clone());
-    agent_runtime_registry.initialize()?;
-    let workspace_labels = compose_workspace_labels(config, &workspace_registry)?;
+) -> anyhow::Result<(Services, hub::sources::Sources)> {
+    let storage = open_directory_registries(config)?;
+    let publication_sources = storage.publication_sources();
+    let workspace_labels = compose_workspace_labels(config, &storage.workspaces)?;
     let agents = Agents::new(Box::new(catalog::OwnedCatalog {
         catalog: SqliteCatalog::open(&config.data_dir)?,
         _instance: instance.clone(),
@@ -255,9 +265,9 @@ fn compose_services(
         config: config_store,
         generator: summary_generator,
         names: workspace_names,
-    } = compose_metadata(&config.data_dir, &workspace_registry, &providers);
+    } = compose_metadata(&config.data_dir, &storage.workspaces, &providers);
     let worktrees = Arc::new(Mutex::new(
-        compose_worktrees(config, &project_registry, &workspace_registry, &server_id)
+        compose_worktrees(config, &storage.projects, &storage.workspaces, &server_id)
             .with_workspace_names(Arc::new(workspace_names.clone())),
     ));
     let WorkspaceServices {
@@ -266,31 +276,31 @@ fn compose_services(
         recovery: workspace_recovery,
     } = compose_workspace_services(
         config,
-        &workspace_registry,
-        &project_registry,
-        &agent_runtime_registry,
+        &storage.workspaces,
+        &storage.projects,
+        &storage.agents,
     );
     let daemon = compose_daemon(config_store, address, &server_id)?;
     let workspace_automation = Arc::new(Mutex::new(workspace_automation));
     let timeline = open_timeline(&config.data_dir)?;
-    let terminals = compose_terminals(&workspace_registry, &project_registry, &changes);
+    let terminals = compose_terminals(&storage.workspaces, &storage.projects, &storage.changes);
     let directory = compose_directory(
         config,
-        &project_registry,
-        &workspace_registry,
+        &storage.projects,
+        &storage.workspaces,
         server_id,
-        changes,
+        storage.changes,
     )?
     .with_worktrees(Arc::new(WorkspaceWorktrees::new(worktrees.clone())))
     .with_workspace_names(workspace_names.clone())
     .with_activity_source(Arc::new(
-        AgentWorkspaceAttention::new(Box::new(agent_runtime_registry.clone()))
+        AgentWorkspaceAttention::new(Box::new(storage.agents.clone()))
             .with_timeline(timeline.clone()),
     ))
     .with_activity_source(Arc::new(terminals.activity_source()));
     let agent_execution = compose_provider(
-        (agent_runtime_registry.clone(), timeline),
-        (&workspace_registry, &project_registry),
+        (storage.agents.clone(), timeline),
+        (&storage.workspaces, &storage.projects),
         instance,
         providers,
         (
@@ -303,13 +313,13 @@ fn compose_services(
     let (schedules, bots) = compose_background(
         config,
         &agent_execution,
-        (&workspace_registry, &project_registry),
+        (&storage.workspaces, &storage.projects),
         &directory,
         &worktrees,
     )?;
     let metadata = metadata::Service::new(metadata::Dependencies {
         workspace_names,
-        push_tokens: compose_push(&config.data_dir, Arc::new(agent_runtime_registry))?,
+        push_tokens: compose_push(&config.data_dir, Arc::new(storage.agents))?,
         daemon,
         github_projects: GithubProjects::new(
             directory.clone(),
@@ -322,21 +332,24 @@ fn compose_services(
         worktrees,
         workspace_recovery,
     });
-    Ok(Services {
-        bot: Some(bots),
-        metadata: Some(metadata),
-        filesystem: Some(compose_filesystem(config, &workspace_registry)),
-        provider: Some(compose_provider_service(
-            agent_execution.clone(),
-            summary_generator,
-            agents,
-            &config.data_dir,
-        )?),
-        schedule: Some(schedules),
-        browser: Some(Broker::default()),
-        voice: Some(voice::compose(agent_execution, &config.data_dir)?),
-        terminal: Some(terminals),
-    })
+    Ok((
+        Services {
+            bot: Some(bots),
+            metadata: Some(metadata),
+            filesystem: Some(compose_filesystem(config, &storage.workspaces)),
+            provider: Some(compose_provider_service(
+                agent_execution.clone(),
+                summary_generator,
+                agents,
+                &config.data_dir,
+            )?),
+            schedule: Some(schedules),
+            browser: Some(Broker::default()),
+            voice: Some(voice::compose(agent_execution, &config.data_dir)?),
+            terminal: Some(terminals),
+        },
+        publication_sources,
+    ))
 }
 
 fn compose_workspace_labels(
@@ -397,15 +410,40 @@ fn compose_filesystem(
     })
 }
 
-fn open_directory_registries(
-    config: &Config,
-) -> anyhow::Result<(FileBackedProjectRegistry, FileBackedWorkspaceRegistry)> {
+fn open_directory_registries(config: &Config) -> anyhow::Result<Registries> {
     let projects = FileBackedProjectRegistry::new(config.data_dir.join("projects/projects.json"));
     let workspaces =
         FileBackedWorkspaceRegistry::new(config.data_dir.join("projects/workspaces.json"));
     projects.initialize()?;
     workspaces.initialize()?;
-    Ok((projects, workspaces))
+    let changes = model::changes::Changes::default();
+    let agents = FileBackedAgentRuntimeRegistry::new(config.data_dir.join("agents/agents.json"))
+        .with_changes(changes.clone());
+    agents.initialize()?;
+    Ok(Registries {
+        projects,
+        workspaces,
+        agents,
+        changes,
+    })
+}
+
+struct Registries {
+    projects: FileBackedProjectRegistry,
+    workspaces: FileBackedWorkspaceRegistry,
+    agents: FileBackedAgentRuntimeRegistry,
+    changes: model::changes::Changes,
+}
+
+impl Registries {
+    fn publication_sources(&self) -> hub::sources::Sources {
+        hub::sources::Sources {
+            projects: Arc::new(self.projects.clone()),
+            workspaces: Arc::new(self.workspaces.clone()),
+            agents: Arc::new(self.agents.clone()),
+            changes: self.changes.clone(),
+        }
+    }
 }
 
 fn compose_terminals(

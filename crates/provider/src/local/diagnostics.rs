@@ -209,6 +209,13 @@ impl Diagnostics {
         }
     }
 
+    /// Restore the failure fact captured before a request whose rejection was recovered.
+    pub(crate) fn restore(&self, failure: Option<Diagnostic>) {
+        if let Ok(mut state) = self.state.lock() {
+            state.failure = failure;
+        }
+    }
+
     /// Record a safe error and aggregate repeats rather than logging native messages.
     pub(crate) fn observe(&self, diagnostic: Diagnostic, operation: &str) {
         self.record(diagnostic, operation, true);
