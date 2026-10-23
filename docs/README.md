@@ -28,7 +28,9 @@
 
 ## 架构决策
 
-- [ADR-185：内置浏览器按 Workspace daemon 选择出站位置](decisions/clients/adr-185-workspace-browser-egress.md)：本地直连，远端所有目标统一经对应 daemon 出站，涵盖 Hub/relay、TCP 和 SSH。
+- [ADR-186：内置浏览器按 Workspace daemon 选择出站位置](decisions/clients/adr-186-workspace-browser-egress.md)：本地直连，远端所有目标统一经对应 daemon 出站，涵盖 Hub/relay、TCP 和 SSH。
+
+- [ADR-185：各 Provider 保留原生失败原因](decisions/providers/adr-185-native-provider-failure-details.md)：共享有界脱敏、原生错误字段、恢复建议和持久聊天失败说明。
 
 - [ADR-184：Windows Desktop 不附带内置 daemon](decisions/clients/adr-184-windows-desktop-without-daemon.md)：Windows x64 安装包与 ZIP、Release CI 和原生启动验证、远程主机连接、禁用内置 daemon 及默认 localhost 探测。
 

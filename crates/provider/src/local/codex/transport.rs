@@ -23,7 +23,7 @@ const MAX_EVENTS: usize = 128;
 pub(super) struct Transport {
     child: Child,
     pub(super) diagnostics: Diagnostics,
-    pub(super) failure: super::failure::Failure,
+    pub(super) failure: diagnostics::failure::Failure,
     _stderr: AbortOnDropHandle<()>,
     input: Arc<Mutex<ChildStdin>>,
     messages: mpsc::Receiver<Value>,
@@ -161,7 +161,7 @@ impl Transport {
         Ok(Self {
             child,
             diagnostics: diagnostics.clone(),
-            failure: super::failure::Failure::default(),
+            failure: diagnostics::failure::Failure::default(),
             _stderr: AbortOnDropHandle::new(tokio::spawn(diagnostics.drain(stderr))),
             input,
             messages,
@@ -285,7 +285,7 @@ impl Transport {
     pub(super) fn observe_error(&mut self, error: &Value, diagnostic: Diagnostic, operation: &str) {
         self.diagnostics.observe(diagnostic, operation);
         if diagnostic.will_retry == Some(true) || self.diagnostics.failure() == Some(diagnostic) {
-            self.failure.observe(error, diagnostic);
+            self.failure.observe("Codex", error, diagnostic);
         }
     }
 

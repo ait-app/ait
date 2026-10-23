@@ -76,6 +76,8 @@ ADR-074、082、083、084、122 在不同类别中各有两份，引用时以路
 
 ## Provider、Agent 与会话
 
+- [ADR-185：各 Provider 保留原生失败原因](providers/adr-185-native-provider-failure-details.md)
+
 - [ADR-180：Oh My Pi 原生 RPC Provider](providers/adr-180-omp-native-rpc-provider.md)
 
 - [ADR-179：Provider 自身行为的测试归 provider crate](providers/adr-179-provider-owned-tests.md)
@@ -137,7 +139,7 @@ ADR-074、082、083、084、122 在不同类别中各有两份，引用时以路
 
 ## 客户端、连接与品牌
 
-- [ADR-185：内置浏览器按 Workspace daemon 选择出站位置](clients/adr-185-workspace-browser-egress.md)
+- [ADR-186：内置浏览器按 Workspace daemon 选择出站位置](clients/adr-186-workspace-browser-egress.md)
 
 - [ADR-182：客户端接入 Hub 账号服务](clients/adr-182-hub-account-client.md)
 

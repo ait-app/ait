@@ -154,3 +154,21 @@ async fn preserves_successful_responses_and_does_not_fail_empty_successful_tools
         assert_eq!(session.failure_message(), None);
     }
 }
+
+#[tokio::test]
+async fn native_result_error_preserves_sanitized_explanation() {
+    let (_directory, mut client, spec) = fixture();
+    client.environment = AgentEnvironment::try_from(BTreeMap::from([(
+        "AGY_FIXTURE_SCENARIO".to_owned(),
+        "native-error".to_owned(),
+    )]))
+    .unwrap();
+    let mut session = client.create_session(&spec).await.unwrap();
+    session.start_turn("test", &spec.config).await.unwrap();
+    while event(session.as_mut()).await.unwrap() != AgentTurnEvent::Failed {}
+    let message = session.failure_message().unwrap().into_owned();
+    assert!(message.contains("Antigravity: Model gateway refused the request"));
+    assert!(!message.contains("fixture-secret"));
+    session.close().await.unwrap();
+    assert_eq!(session.failure_message().as_deref(), Some(message.as_str()));
+}

@@ -11,17 +11,17 @@ fn native_explanation_preserves_reason_status_and_retry_outcome() {
     diagnostic.native_code = Some(-32000);
     diagnostic.will_retry = Some(true);
 
-    failure.observe(&error, diagnostic);
+    failure.observe("Codex", &error, diagnostic);
     assert_eq!(failure.message(), None);
     diagnostic.will_retry = Some(false);
-    failure.observe(&error, diagnostic);
+    failure.observe("Codex", &error, diagnostic);
     let expected = "Codex (HTTP 403) (RPC -32000): unexpected status 403 Forbidden: insufficient balance\nCodex retries did not recover the request.";
     assert_eq!(failure.message(), Some(expected));
     assert_eq!(failure.take_message().as_deref(), Some(expected));
     assert_eq!(failure.message(), None);
 
     failure.clear();
-    failure.observe(&error, diagnostic);
+    failure.observe("Codex", &error, diagnostic);
     assert!(
         failure
             .message()
@@ -29,7 +29,7 @@ fn native_explanation_preserves_reason_status_and_retry_outcome() {
             .ends_with("Codex will not retry automatically.")
     );
     diagnostic.will_retry = None;
-    failure.observe(&error, diagnostic);
+    failure.observe("Codex", &error, diagnostic);
     assert!(
         failure
             .message()
@@ -48,16 +48,17 @@ fn missing_or_blank_message_uses_classification_without_erasing_a_previous_reaso
         let mut failure = Failure::default();
         let diagnostic = Diagnostic::new(Category::ContextLimit, "result");
 
-        failure.observe(&error, diagnostic);
+        failure.observe("Codex", &error, diagnostic);
         assert_eq!(
             failure.message(),
             Some(format!("Codex: {}", Category::ContextLimit.message()).as_str())
         );
         failure.observe(
+            "Codex",
             &json!({"message":"specific upstream explanation"}),
             diagnostic,
         );
-        failure.observe(&error, diagnostic);
+        failure.observe("Codex", &error, diagnostic);
         assert_eq!(
             failure.message(),
             Some("Codex: specific upstream explanation")
@@ -110,6 +111,7 @@ fn serialized_api_errors_show_only_the_inner_explanation() {
     let nested = json!({"error":{"message":"Encrypted reasoning content could not be verified", "code":"invalid_encrypted_content"}, "request":{"prompt":"private prompt"}});
 
     failure.observe(
+        "Codex",
         &json!({"message":nested.to_string(), "additionalDetails":"private diagnostics"}),
         Diagnostic::new(Category::Unknown, "result"),
     );
@@ -139,7 +141,7 @@ fn oversized_multibyte_errors_are_bounded_and_truncation_is_explicit() {
     );
     let diagnostic = Diagnostic::new(Category::Unknown, "result");
 
-    failure.observe(&json!({"message":message}), diagnostic);
+    failure.observe("Codex", &json!({"message":message}), diagnostic);
     let sanitized = failure.message().unwrap();
     assert!(sanitized.len() <= 4096);
     assert!(sanitized.ends_with("[truncated]"));
@@ -147,10 +149,45 @@ fn oversized_multibyte_errors_are_bounded_and_truncation_is_explicit() {
 
     failure.clear();
     failure.observe(
+        "Codex",
         &json!({"message":"界".repeat(MAX_NATIVE_BYTES)}),
         diagnostic,
     );
     let sanitized = failure.message().unwrap();
     assert!(sanitized.len() <= 4096);
     assert!(sanitized.ends_with("[truncated]"));
+}
+
+#[test]
+fn serialized_payloads_without_an_error_message_do_not_expose_other_fields() {
+    let error = json!({"message":json!({"request":{"prompt":"private prompt"},"headers":{"authorization":"secret"}}).to_string()});
+    let mut failure = Failure::default();
+    failure.observe(
+        "Test provider",
+        &error,
+        Diagnostic::new(Category::Unknown, "rpc"),
+    );
+    assert_eq!(
+        failure.message(),
+        Some("Test provider: Provider execution failed")
+    );
+}
+
+#[test]
+fn oversized_or_malformed_json_messages_never_fall_back_to_a_raw_payload() {
+    for message in [
+        format!(
+            "{{\"request\":\"{}\"}}",
+            "private prompt".repeat(MAX_NATIVE_BYTES)
+        ),
+        "{\"request\":\"private prompt".to_owned(),
+    ] {
+        let mut failure = Failure::default();
+        failure.observe(
+            "Test",
+            &json!({"message":message}),
+            Diagnostic::new(Category::Unknown, "rpc"),
+        );
+        assert_eq!(failure.message(), Some("Test: Provider execution failed"));
+    }
 }

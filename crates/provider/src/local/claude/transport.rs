@@ -8,12 +8,12 @@ use tokio::io::{AsyncBufReadExt, AsyncReadExt, AsyncWriteExt, BufReader};
 use tokio::process::{Child, ChildStdin, Command};
 use tokio::sync::{Mutex, mpsc};
 use tokio::task::JoinHandle;
+use tokio_util::task::AbortOnDropHandle;
 
 use super::ClaudeClient;
-use crate::local::diagnostics::{self, Diagnostics};
+use crate::local::diagnostics::Diagnostics;
 use crate::ports::agent_session::{AgentSessionError, AgentSessionSpec};
 use crate::ports::diagnostics::{Category, Diagnostic};
-use tokio_util::task::AbortOnDropHandle;
 
 const MAX_FRAME: usize = 2 * 1024 * 1024;
 const MAX_EVENTS: usize = 128;
@@ -187,8 +187,9 @@ impl Transport {
                             .cloned()
                             .unwrap_or_else(|| json!({}))),
                         Some("error") => {
-                            self.diagnostics.observe(
-                                diagnostics::native(&message["response"]["error"], "rpc"),
+                            self.diagnostics.observe_native(
+                                &message["response"]["error"],
+                                "rpc",
                                 "control",
                             );
                             Err(AgentSessionError::Rejected)

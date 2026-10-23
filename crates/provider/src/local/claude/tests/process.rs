@@ -5,7 +5,7 @@ mod environment;
 mod parity;
 
 #[tokio::test]
-async fn native_authentication_failures_expose_only_classified_diagnostics() {
+async fn native_authentication_failures_expose_sanitized_reasons_and_classified_diagnostics() {
     let (_root, client, spec) = fixture();
     let mut session = client.create_session(&spec).await.unwrap();
     session
@@ -23,7 +23,11 @@ async fn native_authentication_failures_expose_only_classified_diagnostics() {
         crate::ports::diagnostics::Category::Authentication
     );
     assert!(!format!("{diagnostic:?}").contains("secret"));
+    let message = session.failure_message().unwrap().into_owned();
+    assert!(message.contains("authentication failed"));
+    assert!(!message.contains("secret"));
     session.close().await.unwrap();
+    assert_eq!(session.failure_message().as_deref(), Some(message.as_str()));
 }
 
 #[tokio::test]
@@ -666,4 +670,64 @@ async fn rewind_slash_command_uses_native_file_checkpoints_without_adding_an_inf
             .any(|entry| entry.item["text"]
                 == format!("Rewound tracked files to message {message}."))
     );
+}
+
+#[tokio::test]
+async fn native_error_shapes_preserve_the_reason_and_reset_on_a_new_turn() {
+    use crate::ports::diagnostics::Category;
+    for (shape, category, expected) in [
+        (
+            "assistant",
+            Category::Authentication,
+            "OAuth session expired",
+        ),
+        ("result", Category::Authentication, "OAuth session expired"),
+        ("stream", Category::Authentication, "OAuth session expired"),
+        ("quota", Category::Quota, "insufficient balance"),
+        ("rate", Category::RateLimit, "too many requests"),
+        ("network", Category::Network, "connection reset by peer"),
+        ("context", Category::ContextLimit, "prompt is too long"),
+        (
+            "unknown",
+            Category::Unknown,
+            "Tenant policy requires administrator approval",
+        ),
+    ] {
+        let (_root, client, spec) = fixture();
+        let mut session = client.create_session(&spec).await.unwrap();
+        session
+            .start_turn(&format!("provider-error:{shape}"), &spec.config)
+            .await
+            .unwrap();
+        loop {
+            if next(session.as_mut()).await.unwrap() == AgentTurnEvent::Failed {
+                break;
+            }
+        }
+        let message = session.failure_message().unwrap().into_owned();
+        assert!(message.contains(expected), "{shape}: {message}");
+        assert!(!message.contains("fixture-secret"));
+        assert_eq!(session.failure_diagnostic().unwrap().category, category);
+        session.start_turn("recovered", &spec.config).await.unwrap();
+        assert_eq!(finish(session.as_mut()).await, "Claude: recovered");
+        assert_eq!(session.failure_message(), None);
+        session.close().await.unwrap();
+    }
+}
+
+#[tokio::test]
+async fn a_successful_native_retry_clears_its_intermediate_failure() {
+    let (_root, client, spec) = fixture();
+    let mut session = client.create_session(&spec).await.unwrap();
+    session
+        .start_turn("provider-error:assistant-recovered", &spec.config)
+        .await
+        .unwrap();
+    assert_eq!(
+        finish(session.as_mut()).await,
+        "Recovered after native retry"
+    );
+    assert_eq!(session.failure_message(), None);
+    assert_eq!(session.failure_diagnostic(), None);
+    session.close().await.unwrap();
 }

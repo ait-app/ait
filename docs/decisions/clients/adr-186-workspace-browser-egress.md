@@ -1,4 +1,4 @@
-# ADR-185：内置浏览器按 Workspace daemon 选择出站位置
+# ADR-186：内置浏览器按 Workspace daemon 选择出站位置
 
 - 状态：已实现
 - 日期：2026-10-23

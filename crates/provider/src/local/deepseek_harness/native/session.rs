@@ -1,4 +1,11 @@
 //! Coordinate one native interactive session through existing Ait session ports.
+use std::borrow::Cow;
+use std::collections::BTreeMap;
+
+use domain::agent_runtime::{AgentPersistenceHandle, StoredAgentConfig, StoredAgentRuntimeInfo};
+use serde_json::{Value, json};
+use tokio::task::JoinSet;
+
 use super::super::{DeepSeekHarnessClient, PROVIDER, config::text, streaming::Stream};
 use super::{
     config::{self, Selection},
@@ -12,10 +19,6 @@ use crate::{
     },
     protocol::{prompt::AgentPrompt, provider::Details},
 };
-use domain::agent_runtime::{AgentPersistenceHandle, StoredAgentConfig, StoredAgentRuntimeInfo};
-use serde_json::{Value, json};
-use std::collections::BTreeMap;
-use tokio::task::JoinSet;
 
 #[derive(Debug)]
 pub(in crate::local::deepseek_harness) struct Session {
@@ -366,10 +369,9 @@ impl Session {
                     data["reason"]["kind"].as_str(),
                     Some("completed" | "max-tokens" | "aborted" | "interrupted")
                 ) {
-                    self.runtime.diagnostics.observe(
-                        crate::local::diagnostics::native(&data["reason"], "result"),
-                        "turn",
-                    );
+                    self.runtime
+                        .diagnostics
+                        .observe_native(&data["reason"], "result", "turn");
                 }
                 self.stream
                     .events
@@ -435,6 +437,10 @@ impl AgentSession for Session {
 
     fn failure_diagnostic(&self) -> Option<crate::ports::diagnostics::Diagnostic> {
         self.runtime.diagnostics.failure()
+    }
+
+    fn failure_message(&self) -> Option<Cow<'_, str>> {
+        self.runtime.diagnostics.message().map(Cow::Owned)
     }
 
     fn provider(&self) -> &'static str {

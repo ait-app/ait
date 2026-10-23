@@ -1,3 +1,4 @@
+use std::borrow::Cow;
 use std::collections::BTreeMap;
 use std::sync::{Arc, Mutex};
 
@@ -262,8 +263,8 @@ impl AgentSession for FakeSession {
         })
     }
 
-    fn failure_message(&self) -> Option<&str> {
-        self.0.lock().unwrap().failure_message
+    fn failure_message(&self) -> Option<Cow<'_, str>> {
+        self.0.lock().unwrap().failure_message.map(Cow::Borrowed)
     }
 
     fn start_turn<'a>(

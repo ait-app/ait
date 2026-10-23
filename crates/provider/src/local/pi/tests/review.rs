@@ -124,8 +124,13 @@ async fn native_stderr_and_frame_limits_have_safe_distinct_diagnostics() {
         if command == "oversized" {
             assert_eq!(diagnostic.source, "frame_limit");
         }
-        assert!(!session.failure_message().unwrap().contains("secret-value"));
+        let message = session.failure_message().unwrap().into_owned();
+        assert!(!message.contains("secret-value"));
+        if command == "fail" {
+            assert!(message.contains("quota exhausted"));
+        }
         session.close().await.unwrap();
+        assert_eq!(session.failure_message().as_deref(), Some(message.as_str()));
     }
 }
 
@@ -409,7 +414,7 @@ async fn malformed_admission_events_are_not_reported_as_display_limits() {
         assert_eq!(diagnostic.category, Category::Protocol, "{shape}");
         assert_eq!(diagnostic.source, "prompt_event", "{shape}");
         assert_eq!(
-            session.failure_message(),
+            session.failure_message().as_deref(),
             Some(Category::Protocol.message())
         );
         session.close().await.unwrap();
@@ -458,7 +463,7 @@ async fn admission_display_limit_retains_specific_failure() {
         "display_limit"
     );
     assert_eq!(
-        session.failure_message(),
+        session.failure_message().as_deref(),
         Some("The provider output exceeded the display limit.")
     );
     session.close().await.unwrap();

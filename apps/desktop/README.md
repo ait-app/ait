@@ -78,7 +78,7 @@ env -u ELECTRON_RUN_AS_NODE npm exec --workspace=@ait/desktop -- electron e2e/br
 
 It uses temporary profiles, a real daemon and a local relay fixture to verify Chromium
 proxy selection, authenticated relay and TCP forwarding, a 200 KB response and reconnection.
-See [ADR-185](../../docs/decisions/clients/adr-185-workspace-browser-egress.md).
+See [ADR-186](../../docs/decisions/clients/adr-186-workspace-browser-egress.md).
 
 ### Coexistence with Paseo
 

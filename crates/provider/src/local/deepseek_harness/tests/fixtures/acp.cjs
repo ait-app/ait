@@ -140,6 +140,14 @@ readline.createInterface({ input: process.stdin }).on("line", (line) => {
     case "session/prompt":
       assert.equal(params.sessionId, "native-one");
       active = id;
+      if (params.prompt.some((block) => block.text === "native-error")) {
+        send({
+          id,
+          error: { code: -32000, message: "OAuth session expired token=fixture-secret" },
+        });
+        active = null;
+        break;
+      }
       if (params.prompt.some((block) => block.text === "wait")) break;
       update({
         sessionUpdate: "agent_thought_chunk",

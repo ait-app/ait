@@ -31,6 +31,7 @@ pub(super) struct Stream {
     assistant_seen: bool,
     compactions: crate::local::compaction::Compactions,
     pub(super) failure: Option<Failure>,
+    pub(super) explanation: crate::local::diagnostics::failure::Failure,
 }
 
 impl Stream {
@@ -43,6 +44,7 @@ impl Stream {
         self.assistant_seen = false;
         self.compactions = crate::local::compaction::Compactions::default();
         self.failure = None;
+        self.explanation.clear();
     }
 
     pub(super) fn update(&mut self, update: &Value) -> Result<(), AgentSessionError> {
@@ -193,6 +195,13 @@ impl Stream {
         let failed = !matches!(status, "SUCCESS" | "CANCELED" | "INTERRUPTED")
             || (denied && response.trim().is_empty());
         if failed {
+            if !denied && !result["error"].is_null() {
+                self.explanation.observe(
+                    "Antigravity",
+                    &result["error"],
+                    crate::local::diagnostics::native(&result["error"], "result"),
+                );
+            }
             self.failure = Some(if denied {
                 Failure::Permission
             } else {

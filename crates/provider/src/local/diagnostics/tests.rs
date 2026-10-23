@@ -216,3 +216,89 @@ async fn stderr_draining_is_bounded_and_does_not_retain_credentials() {
     assert!(!format!("{diagnostics:?}").contains("secret"));
     assert_eq!(classify(&"界".repeat(MAX_TEXT)), Category::Unknown);
 }
+
+#[test]
+fn native_details_survive_closure_and_stay_out_of_debug_output() {
+    let diagnostics = Diagnostics::new("claude");
+    diagnostics.observe_native(&json!({"message":"Failed to authenticate: OAuth session expired and could not be refreshed", "status":401}), "result", "turn");
+    diagnostics.observe(Diagnostic::new(Category::Closed, "stdout"), "read");
+    diagnostics.observe(Diagnostic::new(Category::Timeout, "transport"), "close");
+    let message = diagnostics.message().unwrap();
+    assert!(
+        message
+            .starts_with("Claude Code (HTTP 401): Failed to authenticate: OAuth session expired")
+    );
+    assert!(message.contains("Sign in again"));
+    assert_eq!(
+        diagnostics.failure().unwrap().category,
+        Category::Authentication
+    );
+    assert!(!format!("{diagnostics:?}").contains("OAuth"));
+    diagnostics.clear();
+    assert_eq!(diagnostics.message(), None);
+    assert_eq!(diagnostics.failure(), None);
+}
+
+#[test]
+fn structured_error_envelopes_preserve_specific_causes_and_sanitize_details() {
+    for (error, category, detail) in [
+        (
+            json!({"code":-32000,"data":{"message":"account locked api_key=private-key"}}),
+            Category::Unknown,
+            "account locked",
+        ),
+        (
+            json!({"status":429,"message":json!({"error":{"message":"insufficient balance token=private-key"},"request":{"prompt":"private prompt"}}).to_string()}),
+            Category::Quota,
+            "insufficient balance",
+        ),
+        (
+            json!({"type":"authentication_failed", "message":"OAuth session expired"}),
+            Category::Authentication,
+            "OAuth session expired",
+        ),
+        (
+            json!({"status":402, "message":"Payment required"}),
+            Category::Quota,
+            "Payment required",
+        ),
+        (
+            json!({"message":"model gateway unavailable token=private-key"}),
+            Category::Unknown,
+            "model gateway unavailable",
+        ),
+    ] {
+        let diagnostics = Diagnostics::new("opencode");
+        diagnostics.observe_native(&error, "rpc", "session/prompt");
+        assert_eq!(diagnostics.failure().unwrap().category, category);
+        let message = diagnostics.message().unwrap();
+        assert!(message.contains(detail), "{message}");
+        assert!(!message.contains("private-key"), "{message}");
+        assert!(!message.contains("private prompt"), "{message}");
+    }
+}
+
+#[test]
+fn retrying_errors_do_not_create_final_explanations_and_restored_controls_clear_text() {
+    let diagnostics = Diagnostics::new("deepseek-harness");
+    diagnostics.observe_native(
+        &json!({"message":"rate limit", "willRetry":true}),
+        "result",
+        "turn",
+    );
+    assert_eq!(diagnostics.failure(), None);
+    assert_eq!(diagnostics.message(), None);
+    diagnostics.observe_native(
+        &json!({"message":"rate limit", "willRetry":false}),
+        "result",
+        "turn",
+    );
+    assert!(
+        diagnostics
+            .message()
+            .unwrap()
+            .contains("retries did not recover")
+    );
+    diagnostics.restore(None);
+    assert_eq!(diagnostics.message(), None);
+}

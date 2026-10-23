@@ -1,3 +1,4 @@
+use std::borrow::Cow;
 use std::collections::BTreeMap;
 use std::time::Duration;
 
@@ -125,6 +126,7 @@ impl Session {
         }
         let blocks = prompt.blocks()?;
         self.stream.failure = None;
+        self.stream.explanation.clear();
         if self.transport.is_none() || self.config != *config {
             if let Some(mut transport) = self.transport.take() {
                 transport.close().await?;
@@ -213,13 +215,18 @@ impl AgentSession for Session {
         Some(Diagnostic::new(category, "result"))
     }
 
-    fn failure_message(&self) -> Option<&str> {
+    fn failure_message(&self) -> Option<Cow<'_, str>> {
+        if self.stream.failure != Some(Failure::Permission)
+            && let Some(message) = self.stream.explanation.message()
+        {
+            return Some(Cow::Borrowed(message));
+        }
         self.stream
             .failure
             .into_iter()
             .chain(self.transport.as_ref().and_then(Transport::failure))
             .max()
-            .map(Failure::message)
+            .map(|failure| Cow::Borrowed(failure.message()))
     }
 
     fn provider(&self) -> &'static str {
