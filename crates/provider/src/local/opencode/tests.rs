@@ -264,10 +264,10 @@ async fn acp_model_error_preserves_native_reason_input_history_and_resume_identi
     assert_eq!(history[0].turn_id.as_deref(), Some("failed-input"));
     let handle = session.persistence().unwrap();
     session.close().await.unwrap();
-    assert_eq!(
-        session.failure_message(),
-        Some("OpenCode's free tier can only be used from within OpenCode")
-    );
+    let message = session.failure_message().unwrap();
+    assert!(message.contains("OpenCode's free tier can only be used from within OpenCode"));
+    assert!(message.contains("RPC -32603"));
+    assert!(message.contains("Check your account or permissions"));
     assert_replay(&history, &client.history(&handle, &spec.cwd).await.unwrap());
     let mut resumed = client
         .resume_session(&handle, &spec, AgentResumePurpose::Interactive)
@@ -1150,7 +1150,8 @@ async fn acp_image_rejection_is_visible_and_text_retry_recovers_the_session() {
         .unwrap();
     poll_until_idle(&mut manager, "image-agent").await;
 
-    let failure = "OpenCode: The selected model does not support image input (token=[redacted])";
+    let failure =
+        "OpenCode (RPC -32603): The selected model does not support image input (token=[redacted])";
     let failed = registry.get("image-agent").unwrap().unwrap();
     assert_eq!(failed.last_error.as_deref(), Some(failure));
     assert_eq!(

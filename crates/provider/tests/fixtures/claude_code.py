@@ -102,6 +102,28 @@ for line in sys.stdin:
         if prompt == "wrong-session":
             emit({"type":"result", "session_id":"wrong", "subtype":"success"})
             continue
+        if prompt.startswith("provider-error:"):
+            shape = prompt.split(":", 1)[1]
+            reason = "Failed to authenticate: OAuth session expired and could not be refreshed"
+            if shape == "stream":
+                emit({"type":"stream_event","session_id":session,"event":{"type":"error",
+                    "error":{"type":"authentication_error","message":reason}}})
+                emit({"type":"result","session_id":session,"subtype":"error_during_execution","is_error":True,"errors":[]})
+            elif shape in ("assistant", "assistant-recovered"):
+                emit({"type":"assistant", "uuid":str(uuid.uuid4()), "session_id":session,
+                    "error":"authentication_failed", "message":{"role":"assistant", "id":"auth-error",
+                    "content":[{"type":"text","text":reason}]}})
+                if shape == "assistant-recovered":
+                    finish("Recovered after native retry")
+                    continue
+                emit({"type":"result", "session_id":session, "subtype":"error_during_execution", "is_error":True, "errors":[]})
+            else:
+                reasons = {"quota":"insufficient balance token=fixture-secret", "rate":"too many requests",
+                    "network":"connection reset by peer", "context":"prompt is too long",
+                    "unknown":"Tenant policy requires administrator approval token=fixture-secret"}
+                reason = reasons.get(shape, reason)
+                emit({"type":"result", "session_id":session, "subtype":"error_during_execution", "is_error":True, "result":reason})
+            continue
         if prompt == "auth-error":
             emit({"type":"result", "session_id":session, "subtype":"error_during_execution", "is_error":True,
                 "errors":["authentication failed token=secret"]})

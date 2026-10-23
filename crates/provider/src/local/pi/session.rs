@@ -1,3 +1,4 @@
+use std::borrow::Cow;
 use std::collections::BTreeMap;
 use std::ffi::OsString;
 use std::path::Path;
@@ -332,13 +333,24 @@ impl AgentSession for Session {
             .or(self.stream.failure)
     }
 
-    fn failure_message(&self) -> Option<&str> {
+    fn failure_message(&self) -> Option<Cow<'_, str>> {
+        if self
+            .failure_diagnostic()
+            .is_some_and(|diagnostic| diagnostic.source != "display_limit")
+        {
+            if let Some(message) = self.stream.explanation.message() {
+                return Some(Cow::Borrowed(message));
+            }
+            if let Some(message) = self.transport.diagnostics.message() {
+                return Some(Cow::Owned(message));
+            }
+        }
         self.failure_diagnostic().map(|diagnostic| {
-            if diagnostic.source == "display_limit" {
+            Cow::Borrowed(if diagnostic.source == "display_limit" {
                 "The provider output exceeded the display limit."
             } else {
                 diagnostic.category.message()
-            }
+            })
         })
     }
 

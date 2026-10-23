@@ -200,7 +200,7 @@ for line in sys.stdin:
         emit({'type': 'message_start', 'message': {'role': 'assistant'}})
         emit({'type': 'message_update', 'assistantMessageEvent': {'type': 'text_delta', 'contentIndex': 0, 'delta': 'Hello'}})
         emit({'type': 'message_end', 'message': {'role': 'assistant', 'content': [{'type': 'text', 'text': 'Hello'}],
-             'stopReason': 'error' if text == 'fail' else 'stop', 'errorMessage': 'quota exhausted: secret-value' if text == 'fail' else '', 'usage': {'input': 12, 'output': 3, 'cacheRead': 2, 'cost': {'total': 0}}}})
+             'stopReason': 'error' if text == 'fail' else 'stop', 'errorMessage': 'quota exhausted: token=secret-value' if text == 'fail' else '', 'usage': {'input': 12, 'output': 3, 'cacheRead': 2, 'cost': {'total': 0}}}})
         emit({'type': 'agent_end', 'messages': []})
         emit({'type': 'agent_settled', 'aborted': False})
     elif kind == 'abort':

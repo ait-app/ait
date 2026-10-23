@@ -1,3 +1,4 @@
+use std::borrow::Cow;
 use std::collections::BTreeMap;
 
 use domain::agent_runtime::{AgentPersistenceHandle, StoredAgentConfig, StoredAgentRuntimeInfo};
@@ -20,6 +21,7 @@ struct ClaudeSession {
     history_only: bool,
     closed: bool,
     transport: Option<Transport>,
+    diagnostics: crate::local::diagnostics::Diagnostics,
     active: Option<String>,
     info: StoredAgentRuntimeInfo,
     permissions: BTreeMap<String, permissions::Pending>,
@@ -61,6 +63,7 @@ pub(super) async fn open(
         history_only,
         closed: false,
         transport: None,
+        diagnostics: crate::local::diagnostics::Diagnostics::new("claude"),
         active: None,
         permissions: BTreeMap::new(),
         stream: streaming::Stream::new(client.images.clone()),
@@ -157,6 +160,7 @@ impl ClaudeSession {
             Some((&self.id, existing)),
             self.output_schema.as_ref(),
         )?;
+        self.diagnostics = transport.diagnostics.clone();
         let initialized = match transport.initialize().await {
             Ok(initialized) => initialized,
             Err(error) => {
@@ -197,18 +201,54 @@ impl ClaudeSession {
 
     fn observe_failure(&self, message: &Value) {
         if let Some(transport) = &self.transport {
+            // Claude emits API failures as assistant.error plus text blocks, even when
+            // the later result contains only an empty errors array.
+            if message["type"] == "assistant" {
+                transport.diagnostics.observe_native(
+                    &json!({"type":message["error"]}),
+                    "assistant",
+                    "turn",
+                );
+                if let Some(blocks) = message["message"]["content"].as_array() {
+                    for block in blocks
+                        .iter()
+                        .take(32)
+                        .filter(|block| block["type"] == "text")
+                    {
+                        transport.diagnostics.observe_native(
+                            &json!({"type":message["error"],"message":block["text"]}),
+                            "assistant",
+                            "turn",
+                        );
+                    }
+                }
+                return;
+            }
             if let Some(errors) = message["errors"].as_array() {
                 for error in errors.iter().take(32) {
                     transport
                         .diagnostics
-                        .observe(crate::local::diagnostics::native(error, "result"), "turn");
+                        .observe_native(error, "result", "turn");
                 }
-            } else {
-                transport.diagnostics.observe(
-                    crate::local::diagnostics::native(&message["error"], "result"),
-                    "turn",
-                );
             }
+            transport
+                .diagnostics
+                .observe_native(&message["error"], "result", "turn");
+            if let Some(result) = message.get("result").filter(|result| result.is_string()) {
+                transport
+                    .diagnostics
+                    .observe_native(result, "result", "turn");
+            }
+        }
+    }
+
+    fn observe_error(&self, message: &Value) {
+        if message["type"] == "assistant" && message["error"].is_string() {
+            self.observe_failure(message);
+        }
+        if message["type"] == "stream_event" && message["event"]["type"] == "error" {
+            self.diagnostics
+                .observe_native(&message["event"]["error"], "stream", "turn");
         }
     }
 
@@ -226,6 +266,7 @@ impl ClaudeSession {
             return Ok(());
         }
         self.adopt_autonomous(message);
+        self.observe_error(message);
         if let Some(usage) = self.usage.observe(message) {
             self.stream.events.push_back(AgentTurnEvent::Usage(usage));
         }
@@ -277,6 +318,7 @@ impl ClaudeSession {
                         .all(|pending| pending.agent_id.is_some())
                     && self.stream.tools.is_empty();
                 let result = if success {
+                    self.diagnostics.clear();
                     // A previous result may already be in flight when a steer enters stdin.
                     // Its native echo/lifecycle must be observed before this turn can finish.
                     if !self.unread_steers.is_empty() {
@@ -449,9 +491,11 @@ impl ClaudeSession {
 
 impl AgentSession for ClaudeSession {
     fn failure_diagnostic(&self) -> Option<crate::ports::diagnostics::Diagnostic> {
-        self.transport
-            .as_ref()
-            .and_then(|transport| transport.diagnostics.failure())
+        self.diagnostics.failure()
+    }
+
+    fn failure_message(&self) -> Option<Cow<'_, str>> {
+        self.diagnostics.message().map(Cow::Owned)
     }
 
     fn prepare_account_usage(

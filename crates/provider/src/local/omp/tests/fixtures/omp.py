@@ -124,6 +124,14 @@ for line in sys.stdin:
         active = True
         emit({'type': 'agent_start'})
         message('user', [{'type': 'text', 'text': text}, *command.get('images', [])])
+        if text in ('native-error', 'native-error-recovered'):
+            message('assistant', [], provider='test', model='model', stopReason='error',
+                    errorMessage='Payment required: insufficient balance api_key=fixture-secret')
+            if text == 'native-error':
+                active = False
+                emit({'type':'prompt_result','id':prompt_id,'status':'error','sessionSettled':True,
+                      'error':'Payment required: insufficient balance api_key=fixture-secret'})
+                continue
         if text == 'malformed':
             print('{broken', flush=True)
             break

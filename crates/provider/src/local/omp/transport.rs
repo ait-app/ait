@@ -7,9 +7,12 @@ use tokio::io::{AsyncBufReadExt, AsyncReadExt, AsyncWriteExt, BufReader};
 use tokio::process::{Child, ChildStdin, Command};
 use tokio::sync::mpsc;
 use tokio::task::JoinHandle;
+use tokio_util::task::AbortOnDropHandle;
 
 use super::OmpClient;
+use crate::local::diagnostics::Diagnostics;
 use crate::ports::agent_session::AgentSessionError;
+use crate::ports::diagnostics::{Category, Diagnostic};
 
 const MAX_FRAME: usize = 1024 * 1024;
 const MAX_BUFFER: usize = 64 * 1024 * 1024;
@@ -17,6 +20,8 @@ const MAX_BUFFER: usize = 64 * 1024 * 1024;
 #[derive(Debug)]
 pub(super) struct Transport {
     child: Child,
+    pub(super) diagnostics: Diagnostics,
+    _stderr: AbortOnDropHandle<()>,
     group: Option<u32>,
     input: Option<ChildStdin>,
     messages: mpsc::Receiver<Value>,
@@ -34,6 +39,7 @@ impl Transport {
         cwd: &str,
         args: &[String],
     ) -> Result<Self, AgentSessionError> {
+        let diagnostics = Diagnostics::new("Oh My Pi");
         let mut command = Command::new(&client.program);
         command
             .args(args)
@@ -41,16 +47,18 @@ impl Transport {
             .envs(client.environment.entries())
             .stdin(Stdio::piped())
             .stdout(Stdio::piped())
-            .stderr(Stdio::null())
+            .stderr(Stdio::piped())
             .kill_on_drop(true);
         #[cfg(unix)]
         command.process_group(0);
-        let mut child = command.spawn().map_err(|error| {
-            tracing::warn!(error_kind=?error.kind(),os_error=error.raw_os_error(),"failed to spawn OMP RPC");
-            AgentSessionError::Unavailable
-        })?;
+        let mut child = command
+            .spawn()
+            .map_err(|error| diagnostics.spawn_error(&error))?;
         let input = child.stdin.take().ok_or(AgentSessionError::Failed)?;
         let output = child.stdout.take().ok_or(AgentSessionError::Failed)?;
+        let stderr = child.stderr.take().ok_or(AgentSessionError::Failed)?;
+        let stderr_task = AbortOnDropHandle::new(tokio::spawn(diagnostics.clone().drain(stderr)));
+        let reader_diagnostics = diagnostics.clone();
         let (sender, messages) = mpsc::channel(2);
         let reader = tokio::spawn(async move {
             let mut output = BufReader::new(output);
@@ -86,10 +94,13 @@ impl Transport {
                     Err(_) => break,
                 }
             }
+            reader_diagnostics.observe(Diagnostic::new(Category::Closed, "stdout"), "read");
         });
         Ok(Self {
             group: child.id(),
             child,
+            diagnostics,
+            _stderr: stderr_task,
             input: Some(input),
             messages,
             reader,
@@ -170,7 +181,11 @@ impl Transport {
                     }
                     return match value["success"].as_bool() {
                         Some(true) => Ok(value.get("data").cloned().unwrap_or(Value::Null)),
-                        Some(false) => Err(AgentSessionError::Rejected),
+                        Some(false) => {
+                            self.diagnostics
+                                .observe_native(&value["error"], "rpc", kind);
+                            Err(AgentSessionError::Rejected)
+                        }
                         None => Err(AgentSessionError::Failed),
                     };
                 }
@@ -185,7 +200,16 @@ impl Transport {
         match response {
             Ok(Ok(data)) => Ok(data),
             Ok(Err(AgentSessionError::Rejected)) => Err(AgentSessionError::Rejected),
-            _ => {
+            result => {
+                if self.diagnostics.failure().is_none() {
+                    let category = if result.is_err() {
+                        Category::Timeout
+                    } else {
+                        Category::Closed
+                    };
+                    self.diagnostics
+                        .observe(Diagnostic::new(category, "transport"), kind);
+                }
                 let _ = self.close().await;
                 Err(AgentSessionError::Failed)
             }
@@ -209,6 +233,7 @@ impl Transport {
             return Ok(());
         }
         self.closed = true;
+        self.diagnostics.flush();
         self.input.take();
         let drained = tokio::time::timeout(Duration::from_secs(2), async {
             loop {

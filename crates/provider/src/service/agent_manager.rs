@@ -884,7 +884,8 @@ impl AgentManager {
                     } else {
                         AgentRuntimeStatus::Idle
                     };
-                    next.last_error = failed.then(|| streaming::failure_message(agent).to_owned());
+                    next.last_error =
+                        failed.then(|| streaming::failure_message(agent).into_owned());
                     next.updated_at.clone_from(&now);
                     next.last_activity_at = Some(now.clone());
                     next.requires_attention = permission || (!cancelled && !queued);

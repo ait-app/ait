@@ -1,3 +1,4 @@
+use std::borrow::Cow;
 use std::collections::BTreeMap;
 
 use domain::agent_runtime::{AgentPersistenceHandle, StoredAgentConfig, StoredAgentRuntimeInfo};
@@ -176,6 +177,7 @@ impl Session {
             .into_iter()
             .filter(|block| block["type"] == "image")
             .collect();
+        self.transport.diagnostics.clear();
         self.stream
             .pending_inputs
             .push_back(prompt.client_message_id.clone());
@@ -208,6 +210,17 @@ impl Session {
     }
 
     fn consume(&mut self, event: &Value) -> Result<(), AgentSessionError> {
+        if event["type"] == "message_end" && event["message"]["role"] == "assistant" {
+            if event["message"]["stopReason"] == "error" {
+                self.transport.diagnostics.observe_native(
+                    &event["message"]["errorMessage"],
+                    "message_end",
+                    "turn",
+                );
+            } else {
+                self.transport.diagnostics.clear();
+            }
+        }
         match event["type"].as_str() {
             Some("extension_ui_request") => self.stream.events.extend(self.dialogs.capture(event)?),
             Some("agent_start") if self.active.is_none() => {
@@ -227,6 +240,11 @@ impl Session {
             }
             Some("prompt_result") if self.prompt_id.as_deref() == event["id"].as_str() => {
                 self.stream.failed = event["status"] == "error";
+                if self.stream.failed {
+                    self.transport
+                        .diagnostics
+                        .observe_native(&event["error"], "result", "turn");
+                }
                 self.stream.aborted = event["status"] == "aborted";
                 self.awaiting_settlement = true;
                 if event["sessionSettled"] == true {
@@ -237,7 +255,12 @@ impl Session {
             Some("rpc_frame_error" | "host_tool_call" | "host_uri_request") => {
                 return Err(AgentSessionError::Failed);
             }
-            Some("response") if event["success"] == false => return Err(AgentSessionError::Failed),
+            Some("response") if event["success"] == false => {
+                self.transport
+                    .diagnostics
+                    .observe_native(&event["error"], "rpc", "turn");
+                return Err(AgentSessionError::Failed);
+            }
             _ => self.stream.consume(event)?,
         }
         Ok(())
@@ -260,6 +283,14 @@ impl Session {
 }
 
 impl AgentSession for Session {
+    fn failure_diagnostic(&self) -> Option<crate::ports::diagnostics::Diagnostic> {
+        self.transport.diagnostics.failure()
+    }
+
+    fn failure_message(&self) -> Option<Cow<'_, str>> {
+        self.transport.diagnostics.message().map(Cow::Owned)
+    }
+
     fn provider(&self) -> &'static str {
         "omp"
     }

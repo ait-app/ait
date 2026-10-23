@@ -7,11 +7,11 @@ use tokio::io::{AsyncBufReadExt, AsyncReadExt, AsyncWriteExt, BufReader};
 use tokio::process::{Child, ChildStdin};
 use tokio::sync::mpsc;
 use tokio::task::JoinHandle;
+use tokio_util::task::AbortOnDropHandle;
 
-use crate::local::diagnostics::{self, Diagnostics};
+use crate::local::diagnostics::Diagnostics;
 use crate::ports::agent_session::AgentSessionError;
 use crate::ports::diagnostics::{Category, Diagnostic};
-use tokio_util::task::AbortOnDropHandle;
 
 const MAX_FRAME: usize = 8 * 1024 * 1024;
 const MAX_EVENTS: usize = 128;
@@ -177,8 +177,7 @@ impl Transport {
                     .ok_or(AgentSessionError::Failed)?;
                 if message.get("method").is_none() && message["id"] == id {
                     if let Some(error) = message.get("error") {
-                        self.diagnostics
-                            .observe(diagnostics::native(error, "rpc"), method);
+                        self.diagnostics.observe_native(error, "rpc", method);
                     }
                     return response(&message);
                 }
@@ -234,8 +233,7 @@ impl Transport {
                     .ok_or(AgentSessionError::Failed)?;
                 if message.get("method").is_none() && message["id"] == id {
                     if let Some(error) = message.get("error") {
-                        self.diagnostics
-                            .observe(diagnostics::native(error, "rpc"), method);
+                        self.diagnostics.observe_native(error, "rpc", method);
                     }
                     return response(&message);
                 }

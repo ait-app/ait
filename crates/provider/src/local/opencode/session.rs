@@ -1,11 +1,11 @@
 //! One prompt request, bidirectional ACP callbacks and native replay before writer release.
+use std::borrow::Cow;
 use std::{
     collections::{BTreeMap, BTreeSet, VecDeque},
-    sync::{Arc, LazyLock, Mutex},
+    sync::{Arc, Mutex},
 };
 
 use domain::agent_runtime::{AgentPersistenceHandle, StoredAgentConfig, StoredAgentRuntimeInfo};
-use regex::Regex;
 use serde_json::{Value, json};
 use tokio::sync::{mpsc, oneshot};
 use tokio_util::task::AbortOnDropHandle;
@@ -28,30 +28,6 @@ use crate::{
 };
 
 type Pending = Arc<Mutex<BTreeMap<String, acp_permissions::Pending>>>;
-
-static FAILURE_SECRETS: LazyLock<[(Regex, &str); 3]> = LazyLock::new(|| {
-    [
-        (
-            Regex::new(concat!(
-                r"(?i)\b(authorization|api[_ -]?key|access[_ -]?token|",
-                r"refresh[_ -]?token|token|secret|password)\s*[:=]\s*",
-                r"(?:bearer\s+)?[^\s,;\)\]\}>]+",
-            ))
-            .expect("valid native error redaction pattern"),
-            "$1=[redacted]",
-        ),
-        (
-            Regex::new(r"(?i)\bbearer\s+[a-z0-9._~+/-]+=*")
-                .expect("valid bearer redaction pattern"),
-            "Bearer [redacted]",
-        ),
-        (
-            Regex::new(r"\b(?:sk|pk|ghp|github_pat|xox[baprs])-[A-Za-z0-9_-]{8,}\b")
-                .expect("valid token redaction pattern"),
-            "[redacted]",
-        ),
-    ]
-});
 
 #[derive(Debug)]
 struct Connection {
@@ -608,31 +584,12 @@ impl Execution {
         connection
             .transport
             .diagnostics
-            .observe(diagnostic, "session/prompt");
-        match error["message"].as_str() {
-            Some("OpenCode's free tier can only be used from within OpenCode") => {
-                "OpenCode's free tier can only be used from within OpenCode".to_owned()
-            }
-            _ if diagnostic.category != crate::ports::diagnostics::Category::Unknown => {
-                diagnostic.category.message().to_owned()
-            }
-            _ => error["message"]
-                .as_str()
-                .and_then(Self::safe_failure_message)
-                .unwrap_or_else(|| diagnostic.category.message().to_owned()),
-        }
-    }
-
-    fn safe_failure_message(message: &str) -> Option<String> {
-        let line = message.lines().next()?;
-        let end = line.floor_char_boundary(line.len().min(2048));
-        let mut message = line[..end].split_whitespace().collect::<Vec<_>>().join(" ");
-        for (pattern, replacement) in FAILURE_SECRETS.iter() {
-            message = pattern.replace_all(&message, *replacement).into_owned();
-        }
-        let end = message.floor_char_boundary(message.len().min(512));
-        let message = message[..end].trim();
-        (!message.is_empty()).then(|| format!("OpenCode: {message}"))
+            .observe_native(error, "rpc", "session/prompt");
+        connection
+            .transport
+            .diagnostics
+            .message()
+            .unwrap_or_else(|| diagnostic.category.message().to_owned())
     }
 
     fn terminal(result: &Value) -> Result<(AgentTurnEvent, Option<String>), AgentSessionError> {
@@ -871,8 +828,8 @@ impl AgentSession for Session {
         self.diagnostics.failure()
     }
 
-    fn failure_message(&self) -> Option<&str> {
-        self.failure.as_deref()
+    fn failure_message(&self) -> Option<Cow<'_, str>> {
+        self.failure.as_deref().map(Cow::Borrowed)
     }
     fn provider(&self) -> &'static str {
         PROVIDER

@@ -42,7 +42,7 @@ async fn failed_native_turns_preserve_safe_classified_reasons() {
     fixture.history(
         2,
         "turn/end",
-        json!({"turn":1,"reason":{"kind":"error","message":"insufficient_quota secret"}}),
+        json!({"turn":1,"reason":{"kind":"error","message":"insufficient_quota token=secret"}}),
     );
     loop {
         if next(session.as_mut()).await == AgentTurnEvent::Failed {
@@ -53,7 +53,11 @@ async fn failed_native_turns_preserve_safe_classified_reasons() {
         session.failure_diagnostic().unwrap().category,
         crate::ports::diagnostics::Category::Quota
     );
+    let message = session.failure_message().unwrap().into_owned();
+    assert!(message.contains("insufficient_quota"));
+    assert!(!message.contains("secret"));
     session.close().await.unwrap();
+    assert_eq!(session.failure_message().as_deref(), Some(message.as_str()));
 }
 
 #[tokio::test]

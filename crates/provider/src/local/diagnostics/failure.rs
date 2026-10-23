@@ -51,26 +51,37 @@ static SECRETS: LazyLock<[(Regex, &str); 4]> = LazyLock::new(|| {
 });
 
 /// User-facing failure state, separate from text-free diagnostic logs.
-#[derive(Debug, Default)]
-pub(super) struct Failure {
+#[derive(Default)]
+pub(crate) struct Failure {
     message: Option<String>,
     retried: bool,
     stopped_retrying: bool,
 }
 
+impl std::fmt::Debug for Failure {
+    fn fmt(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        formatter
+            .debug_struct("Failure")
+            .field("has_message", &self.message.is_some())
+            .field("retried", &self.retried)
+            .field("stopped_retrying", &self.stopped_retrying)
+            .finish()
+    }
+}
+
 impl Failure {
     /// Read the sanitized final explanation, without treating retrying errors as failures.
-    pub(super) fn message(&self) -> Option<&str> {
+    pub(crate) fn message(&self) -> Option<&str> {
         self.message.as_deref()
     }
 
     /// Transfer the explanation to its session before the native transport is discarded.
-    pub(super) fn take_message(&mut self) -> Option<String> {
+    pub(crate) fn take_message(&mut self) -> Option<String> {
         self.message.take()
     }
 
     /// Forget the previous turn's explanation and native retry observations.
-    pub(super) fn clear(&mut self) {
+    pub(crate) fn clear(&mut self) {
         self.message = None;
         self.retried = false;
         self.stopped_retrying = false;
@@ -78,7 +89,7 @@ impl Failure {
 
     /// Retain only a bounded, sanitized native message and numeric failure facts.
     /// Retrying notifications record retry state without creating a final explanation.
-    pub(super) fn observe(&mut self, error: &Value, diagnostic: Diagnostic) {
+    pub(crate) fn observe(&mut self, provider: &str, error: &Value, diagnostic: Diagnostic) {
         if diagnostic.will_retry == Some(true) {
             self.retried = true;
             return;
@@ -88,7 +99,7 @@ impl Failure {
         if reason.is_none() && self.message.is_some() {
             return;
         }
-        let mut message = String::from("Codex");
+        let mut message = String::from(provider);
         if let Some(status) = diagnostic.http_status {
             let _ = write!(message, " (HTTP {status})");
         }
@@ -98,27 +109,34 @@ impl Failure {
         message.push_str(": ");
         message.push_str(reason.as_deref().unwrap_or(diagnostic.category.message()));
         if self.retried {
-            message.push_str("\nCodex retries did not recover the request.");
+            let _ = write!(message, "\n{provider} retries did not recover the request.");
         } else if self.stopped_retrying {
-            message.push_str("\nCodex will not retry automatically.");
+            let _ = write!(message, "\n{provider} will not retry automatically.");
         }
         self.message = Some(message);
     }
 }
 
-fn native_message(error: &Value) -> Option<Cow<'_, str>> {
+pub(super) fn native_message(error: &Value) -> Option<Cow<'_, str>> {
     let message = error
         .as_str()
+        .or_else(|| error.pointer("/data/error/message").and_then(Value::as_str))
+        .or_else(|| error.pointer("/data/message").and_then(Value::as_str))
+        .or_else(|| error.pointer("/error/message").and_then(Value::as_str))
         .or_else(|| error["message"].as_str())
-        .or_else(|| error.pointer("/error/message").and_then(Value::as_str))?;
+        .or_else(|| error["error"].as_str())?;
     // Some Codex failures carry a serialized API error in their message. Select its
     // explanation rather than exposing the surrounding response or extra diagnostics.
-    if message.len() <= MAX_NATIVE_BYTES
-        && message.trim_start().starts_with('{')
-        && let Ok(nested) = serde_json::from_str::<Value>(message)
-        && let Some(reason) = nested.pointer("/error/message").and_then(Value::as_str)
-    {
-        return Some(Cow::Owned(reason.to_owned()));
+    if message.trim_start().starts_with(['{', '[']) {
+        if message.len() > MAX_NATIVE_BYTES {
+            return None;
+        }
+        let nested = serde_json::from_str::<Value>(message).ok()?;
+        return nested
+            .pointer("/error/message")
+            .and_then(Value::as_str)
+            .or_else(|| nested["message"].as_str())
+            .map(|reason| Cow::Owned(reason.to_owned()));
     }
     Some(Cow::Borrowed(message))
 }

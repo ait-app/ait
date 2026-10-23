@@ -1,12 +1,15 @@
+use std::borrow::Cow;
+
 use super::{AgentManager, AgentManagerError, AgentTurnEvent};
 use crate::ports::agent_session::AgentSessionError;
 use crate::support::time::now_timestamp;
 
-pub(super) fn failure_message(agent: &super::LiveAgent) -> &str {
+pub(super) fn failure_message(agent: &super::LiveAgent) -> Cow<'_, str> {
     agent
         .failure_entry
         .as_ref()
         .and_then(|entry| entry.item["message"].as_str())
+        .map(Cow::Borrowed)
         .or_else(|| agent.session.failure_message())
         .filter(|message| {
             !message.trim().is_empty()
@@ -16,11 +19,13 @@ pub(super) fn failure_message(agent: &super::LiveAgent) -> &str {
                     .any(|character| character.is_control() && !matches!(character, '\n' | '\t'))
         })
         .unwrap_or_else(|| {
-            agent
-                .failure_diagnostic
-                .map_or("Provider execution failed", |diagnostic| {
-                    diagnostic.category.message()
-                })
+            Cow::Borrowed(
+                agent
+                    .failure_diagnostic
+                    .map_or("Provider execution failed", |diagnostic| {
+                        diagnostic.category.message()
+                    }),
+            )
         })
 }
 
@@ -35,7 +40,7 @@ pub(super) fn prepare_failure(agent: &mut super::LiveAgent) {
             .failure_diagnostic()
             .filter(|diagnostic| diagnostic.will_retry != Some(true));
     }
-    let message = failure_message(agent).to_owned();
+    let message = failure_message(agent).into_owned();
     agent.failure_entry = Some(crate::protocol::timeline::NativeItem {
         key: format!("host:provider-failure:{}", uuid::Uuid::new_v4()),
         turn_id: agent.turn.clone(),
@@ -339,7 +344,7 @@ pub(super) fn publish_terminal(
         event["error"] = json!(
             committed
                 .and_then(|record| record.last_error.as_deref())
-                .unwrap_or_else(|| failure_message(agent))
+                .map_or_else(|| failure_message(agent), Cow::Borrowed)
         );
     }
     let Some(timeline) = timeline else {

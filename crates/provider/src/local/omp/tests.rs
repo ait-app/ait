@@ -6,6 +6,7 @@ use super::*;
 use crate::ports::agent_session::AgentTurnEvent;
 use crate::protocol::prompt::{AgentPrompt, PromptImage};
 
+mod diagnostics;
 mod installed;
 mod real;
 
