@@ -24,12 +24,11 @@ test("release publication waits for the reusable Windows build and requires its 
   assert.match(verify.run, /--windows/);
 });
 
-test("Windows CI packages and smokes the native client without building Rust or publishing", () => {
+test("Windows packaging only runs as a reusable release workflow and smokes the native client", () => {
   const windows = parse(
     readFileSync(new URL("../.github/workflows/windows-desktop.yml", import.meta.url), "utf8"),
   );
-  assert(windows.on.workflow_call);
-  assert(windows.on.pull_request.paths.includes("apps/**"));
+  assert.deepEqual(Object.keys(windows.on), ["workflow_call"]);
   assert.equal(windows.permissions.contents, "read");
   const job = windows.jobs.build;
   assert.equal(job["runs-on"], "windows-2025");

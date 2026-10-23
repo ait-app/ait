@@ -1,28 +1,6 @@
 name: Windows desktop
 
 on:
-  pull_request:
-    paths:
-      - "apps/**"
-      - "packages/**"
-      - "patches/**"
-      - "scripts/**"
-      - "package.json"
-      - "package-lock.json"
-      - "tsconfig.base.json"
-      - ".npmrc"
-      - ".github/workflows/windows-desktop.yml"
-      - ".github/workflows/release.yml"
-  workflow_dispatch:
-    inputs:
-      source_ref:
-        description: Optional source commit or tag to build
-        type: string
-        required: false
-      release_tag:
-        description: Optional release tag to verify (for example v0.1.15)
-        type: string
-        required: false
   workflow_call:
     inputs:
       source_ref:
@@ -50,7 +28,7 @@ jobs:
     steps:
       - uses: actions/checkout@v5
         with:
-          ref: ${{ inputs.source_ref || github.event.pull_request.head.sha || github.sha }}
+          ref: ${{ inputs.source_ref }}
       - uses: actions/setup-node@v5
         with:
           node-version: 24
