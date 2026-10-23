@@ -22,6 +22,11 @@ Windows 的官方安装和企业认证配置见
 安装后先在终端运行 `agy`，完成原生登录，再在 Ait 选择 Antigravity。
 Ait 使用 CLI 的缓存认证；登录信息不进入 Ait Provider snapshot 或 persistence handle。
 
+额度刷新、创建/恢复会话和配置变更后的重连，会先用只读的 `agy models` 检查缓存认证。
+检查失败时直接返回错误，避免启动可能打开浏览器的 `/usage` 或会话进程。
+未登录或登录失效时，请手动在终端运行 `agy` 完成登录，再回到 Ait 重试。
+该检查使用本次调用的原生环境和工作目录，不保存认证状态；重新登录后可直接重试。
+
 daemon 默认检查 PATH，其次检查官方 `~/.local/bin/agy`、Windows 的
 `%LOCALAPPDATA%\agy\bin\agy.exe`、`HOMEBREW_PREFIX/bin/agy`、
 `/opt/homebrew/bin/agy`、`/usr/local/bin/agy` 与 Linux Homebrew 目录。

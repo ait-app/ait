@@ -6,7 +6,7 @@ use serde_json::{Value, json};
 use uuid::Uuid;
 
 use super::{
-    AntigravityClient, PROVIDER, config, diagnostics::Failure, streaming::Stream,
+    AntigravityClient, PROVIDER, config, diagnostics::Failure, discovery, streaming::Stream,
     transport::Transport,
 };
 use crate::ports::agent_session::{
@@ -65,6 +65,9 @@ async fn connect(
     spec: &AgentSessionSpec,
     conversation: Option<&str>,
 ) -> Result<(Transport, String, Value), AgentSessionError> {
+    // Session startup can launch OAuth. Check cached authentication through the read-only model
+    // command first, including automatic restore and configuration-triggered reconnects.
+    discovery::models(client, &spec.cwd).await?;
     let mut transport = Transport::spawn(
         client,
         &spec.cwd,

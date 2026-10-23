@@ -24,6 +24,12 @@ def log(value):
 
 log({'args': args, 'hasEnvironment': os.environ.get('AGY_TEST_ENV') == 'test-only-value',
      'cwd': os.getcwd()})
+if scenario == 'signed-out':
+    # Native model listing fails silently; print/stream startup would launch OAuth.
+    if args != ['models']:
+        log({'loginAttempt': True})
+    sys.stderr.write('authentication required\n')
+    sys.exit(1)
 if scenario == 'hung':
     time.sleep(600)
 if scenario == 'malformed':
