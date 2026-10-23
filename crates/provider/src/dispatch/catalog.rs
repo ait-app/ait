@@ -1,4 +1,4 @@
-//! Discovery replies are tracked independently of the physical WebSocket reader.
+//! Discovery and native session-list replies do not hold the physical WebSocket reader.
 
 /// Client methods implemented by this component; consumed by capability discovery.
 pub(crate) const METHODS: &[MethodSpec] = &[
@@ -8,6 +8,7 @@ pub(crate) const METHODS: &[MethodSpec] = &[
     MethodSpec::request("provider.features.list.request"),
     MethodSpec::request("provider.snapshot.get.request"),
     MethodSpec::request("provider.snapshot.refresh.request"),
+    MethodSpec::request("provider.sessions.recent.list.request"),
 ];
 
 use model::methods::MethodSpec;
@@ -39,7 +40,7 @@ pub(super) fn request(context: Context<'_>, state: &State) -> Result<(), QueueEr
     let outbound = context.outbound.clone();
     let request_id = context.request.id;
     // Admission happens before spawn, and the response owner retains its permit until
-    // outbound delivery. Dropping the socket cannot cancel an accepted cache/refresh update.
+    // outbound delivery. Accepted discovery and history work remain tracked after disconnect.
     state.tasks.spawn(async move {
         let result = response.receive().await.map_err(Into::into);
         let _ = outbound.respond(request_id, result);

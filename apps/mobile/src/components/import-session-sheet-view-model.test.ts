@@ -15,6 +15,7 @@ import {
   hasMoreSessions,
   nextPageLimit,
   PER_PROVIDER_LIMIT,
+  preserveSessionOrder,
   resolveDirectoryLabel,
   resolveImportTarget,
   resolveProvidersToFetch,
@@ -208,6 +209,34 @@ describe("aggregateSessionEntries", () => {
       }),
     ]);
     expect(result.map((e) => e.providerHandleId)).toEqual(["new", "old"]);
+  });
+});
+
+describe("preserveSessionOrder", () => {
+  it("starts with the incoming activity order and appends late providers", () => {
+    const first = entry({ providerHandleId: "first" });
+    const later = entry({ providerId: "codex", providerHandleId: "later" });
+    const initial = [first];
+    expect(preserveSessionOrder([], initial)).toBe(initial);
+    expect(preserveSessionOrder(initial, [later, first])).toEqual([first, later]);
+  });
+
+  it("updates existing descriptors and removes rows missing from the current results", () => {
+    const removed = entry({ providerHandleId: "removed" });
+    const retained = entry({ providerHandleId: "retained" });
+    const updated = { ...retained, title: "Updated title" };
+    const added = entry({ providerHandleId: "added" });
+    expect(preserveSessionOrder([removed, retained], [added, updated])).toEqual([updated, added]);
+    expect(preserveSessionOrder([removed], [])).toEqual([]);
+  });
+
+  it("retains its array identity when incoming rows only change order", () => {
+    const empty: FetchRecentProviderSessionEntry[] = [];
+    expect(preserveSessionOrder(empty, [])).toBe(empty);
+    const first = entry({ providerHandleId: "first" });
+    const second = entry({ providerHandleId: "second" });
+    const previous = [first, second];
+    expect(preserveSessionOrder(previous, [second, first])).toBe(previous);
   });
 });
 

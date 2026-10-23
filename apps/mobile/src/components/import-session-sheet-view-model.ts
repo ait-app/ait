@@ -102,6 +102,30 @@ export function aggregateSessionEntries(
   return collected;
 }
 
+/** Keep displayed rows in place while appending results from slower providers. */
+export function preserveSessionOrder(
+  previous: FetchRecentProviderSessionEntry[],
+  incoming: FetchRecentProviderSessionEntry[],
+): FetchRecentProviderSessionEntry[] {
+  if (previous.length === 0) return incoming.length === 0 ? previous : incoming;
+  const remaining = new Map(
+    incoming.map((entry) => [`${entry.providerId}:${entry.providerHandleId}`, entry]),
+  );
+  const ordered: FetchRecentProviderSessionEntry[] = [];
+  for (const entry of previous) {
+    const key = `${entry.providerId}:${entry.providerHandleId}`;
+    const updated = remaining.get(key);
+    if (!updated) continue;
+    ordered.push(updated);
+    remaining.delete(key);
+  }
+  ordered.push(...remaining.values());
+  return ordered.length === previous.length &&
+    ordered.every((entry, index) => entry === previous[index])
+    ? previous
+    : ordered;
+}
+
 export function sumFilteredAlreadyImportedCount(
   queries: ReadonlyArray<SessionsQueryResult>,
 ): number {

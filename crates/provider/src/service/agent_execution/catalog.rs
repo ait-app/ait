@@ -1,6 +1,6 @@
-//! Catalog methods share bounded transport admission and independent request execution.
+//! Catalog and native session-list reads share bounded transport response admission.
 
-/// Select catalog methods without routing Agent or native-session lifecycle commands here.
+/// Select discovery and session enumeration without admitting session lifecycle mutations here.
 pub(super) fn handles(method: &str) -> bool {
     matches!(
         method,
@@ -10,5 +10,6 @@ pub(super) fn handles(method: &str) -> bool {
             | "provider.features.list.request"
             | "provider.snapshot.get.request"
             | "provider.snapshot.refresh.request"
+            | "provider.sessions.recent.list.request"
     )
 }

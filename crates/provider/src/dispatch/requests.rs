@@ -140,7 +140,6 @@ pub(super) async fn execution(
                 | "agent.model.set.request"
                 | "agent.thinking.set.request"
                 | "agent.config.apply.request"
-                | "provider.sessions.recent.list.request"
                 | "agent.import.request"
                 | "agent.refresh.request"
                 | "agent.fork_context.request"
@@ -239,6 +238,7 @@ pub(super) fn catalog(
                 | "provider.features.list.request"
                 | "provider.snapshot.get.request"
                 | "provider.snapshot.refresh.request"
+                | "provider.sessions.recent.list.request"
         )
     }) else {
         return Err(DispatchError::NotImplemented);

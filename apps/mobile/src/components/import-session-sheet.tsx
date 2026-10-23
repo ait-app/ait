@@ -35,6 +35,7 @@ import {
   resolveDirectoryLabel,
   nextPageLimit,
   PER_PROVIDER_LIMIT,
+  preserveSessionOrder,
   type ProviderErrorRow,
   resolveImportTarget,
   resolveProvidersToFetch,
@@ -74,6 +75,7 @@ type RecentSessionsResponse = Awaited<
 type SessionsQueryKey = ReadonlyArray<string | number | null>;
 
 function buildSessionsQueryKey(input: {
+  serverId: string | null;
   cwd: string | null;
   query: string;
   limit: number;
@@ -81,6 +83,7 @@ function buildSessionsQueryKey(input: {
 }): SessionsQueryKey {
   return [
     "recent-provider-sessions",
+    input.serverId,
     input.cwd,
     input.query,
     input.limit,
@@ -100,6 +103,7 @@ interface SessionsQueryConfig {
 }
 
 function buildSessionsQueriesConfig(args: {
+  serverId: string | null;
   providersToFetch: AgentProvider[] | null;
   visible: boolean;
   client: RecentProviderSessionsClient | null;
@@ -108,11 +112,20 @@ function buildSessionsQueriesConfig(args: {
   limit: number;
   hostDisconnectedMessage?: string;
 }): SessionsQueryConfig[] {
-  const { providersToFetch, visible, client, cwd, query, limit, hostDisconnectedMessage } = args;
+  const {
+    serverId,
+    providersToFetch,
+    visible,
+    client,
+    cwd,
+    query,
+    limit,
+    hostDisconnectedMessage,
+  } = args;
   if (providersToFetch === null) return [];
-  const enabled = visible && Boolean(client);
+  const enabled = visible && Boolean(client) && Boolean(serverId);
   return providersToFetch.map((provider) => ({
-    queryKey: buildSessionsQueryKey({ cwd, query, limit, provider }),
+    queryKey: buildSessionsQueryKey({ serverId, cwd, query, limit, provider }),
     enabled,
     retry: false as const,
     placeholderData: keepPreviousData,
@@ -128,6 +141,17 @@ function buildSessionsQueriesConfig(args: {
       });
     },
   }));
+}
+
+function useStableSessionEntries(entries: FetchRecentProviderSessionEntry[], scope: string) {
+  const [display, setDisplay] = useState({ scope, entries });
+  const ordered =
+    display.scope === scope ? preserveSessionOrder(display.entries, entries) : entries;
+  // Adjust during render so a new scope never paints the previous scope's ordering.
+  if (display.scope !== scope || display.entries !== ordered) {
+    setDisplay({ scope, entries: ordered });
+  }
+  return ordered;
 }
 
 interface SheetStatusMessagesProps {
@@ -464,11 +488,15 @@ export function ImportSessionSheet({
     [snapshotEntries],
   );
 
-  const sessionsQueryRoot = useMemo(() => ["recent-provider-sessions", scopeCwd], [scopeCwd]);
+  const sessionsQueryRoot = useMemo(
+    () => ["recent-provider-sessions", serverId, scopeCwd],
+    [serverId, scopeCwd],
+  );
 
   const queriesConfig = useMemo(
     () =>
       buildSessionsQueriesConfig({
+        serverId,
         providersToFetch,
         visible,
         client,
@@ -477,12 +505,16 @@ export function ImportSessionSheet({
         limit: pageLimit,
         hostDisconnectedMessage: t("workspace.terminal.hostDisconnected"),
       }),
-    [providersToFetch, visible, client, scopeCwd, query, pageLimit, t],
+    [serverId, providersToFetch, visible, client, scopeCwd, query, pageLimit, t],
   );
 
   const queries = useQueries({ queries: queriesConfig });
 
-  const aggregatedEntries = useMemo(() => aggregateSessionEntries(queries), [queries]);
+  const incomingEntries = useMemo(() => aggregateSessionEntries(queries), [queries]);
+  const aggregatedEntries = useStableSessionEntries(
+    incomingEntries,
+    JSON.stringify([serverId, scopeCwd, query, visible]),
+  );
   const totalAlreadyImportedCount = useMemo(
     () => sumFilteredAlreadyImportedCount(queries),
     [queries],
@@ -657,10 +689,16 @@ export function ImportSessionSheet({
   const handleRetryProvider = useCallback(
     (provider: string) => {
       void queryClient.refetchQueries({
-        queryKey: buildSessionsQueryKey({ cwd: scopeCwd, query, limit: pageLimit, provider }),
+        queryKey: buildSessionsQueryKey({
+          serverId,
+          cwd: scopeCwd,
+          query,
+          limit: pageLimit,
+          provider,
+        }),
       });
     },
-    [pageLimit, query, queryClient, scopeCwd],
+    [serverId, pageLimit, query, queryClient, scopeCwd],
   );
 
   const handleShowAll = useCallback(() => setIsShowingAllDirectories(true), []);

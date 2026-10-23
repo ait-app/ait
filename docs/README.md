@@ -28,6 +28,7 @@
 
 ## 架构决策
 
+- [ADR-184：原生会话列表独立响应接纳](decisions/providers/adr-184-native-session-list-response-admission.md)：复用有界目录响应任务，避免慢 Provider 列表阻塞同连接中的其他列表。
 - [ADR-183：iOS CI 使用 Xcode Cloud 归档与内部分发](decisions/clients/adr-183-ios-xcode-cloud-release.md)：手动 Cloud 构建、Apple 签名与构建号、TestFlight 内部测试，取代 EAS 发布入口。
 
 - [ADR-182：客户端接入 Hub 账号服务](decisions/clients/adr-182-hub-account-client.md)：桌面与浏览器 Hub 优先、账号设备注册与心跳、游标订阅和内部通知摘要；[客户端验证](reports/clients/hub-account-client-2026-10-22.md)、[daemon/desktop 运行与真实 Hub 联调](reports/clients/daemon-desktop-runtime-2026-10-22.md)。

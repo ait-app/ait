@@ -2,7 +2,7 @@
  * @vitest-environment jsdom
  */
 import React, { type ReactNode } from "react";
-import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { act, cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import type {
   DaemonClient,
@@ -755,6 +755,107 @@ describe("ImportSessionSheet", () => {
 
     await screen.findByText("Session codex");
     await screen.findByText("Could not load Claude Code sessions");
+  });
+
+  it("keeps visible rows in place when another provider finishes with newer sessions", async () => {
+    const delayed =
+      Promise.withResolvers<Awaited<ReturnType<DaemonClient["fetchRecentProviderSessions"]>>>();
+    const fetchRecentProviderSessions = vi.fn(
+      async (options: { providers?: string[] } | undefined) =>
+        options?.providers?.[0] === "codex"
+          ? delayed.promise
+          : {
+              requestId: "recent-claude",
+              entries: [
+                createProviderSessionEntry({
+                  providerId: "claude",
+                  providerHandleId: "first",
+                  title: "Already visible",
+                  lastActivityAt: "2026-04-30T09:00:00.000Z",
+                }),
+              ],
+            },
+    );
+    renderSheet(
+      { fetchRecentProviderSessions, importAgent: vi.fn() },
+      {
+        snapshot: {
+          supportsSnapshot: true,
+          entries: [createSnapshotEntry("claude"), createSnapshotEntry("codex")],
+        },
+      },
+    );
+
+    await screen.findByText("Already visible");
+    await act(async () => {
+      delayed.resolve({
+        requestId: "recent-codex",
+        entries: [
+          createProviderSessionEntry({
+            providerId: "codex",
+            providerHandleId: "later",
+            title: "Arrived later",
+            lastActivityAt: "2026-04-30T12:00:00.000Z",
+          }),
+        ],
+      });
+    });
+    await screen.findByText("Arrived later");
+    expect(
+      screen.getAllByTestId(/^import-session-session-/).map((row) => row.dataset.testid),
+    ).toEqual(["import-session-session-claude-first", "import-session-session-codex-later"]);
+  });
+
+  it("isolates cached rows and refreshes by host even for the same provider and directory", async () => {
+    const nextHost =
+      Promise.withResolvers<Awaited<ReturnType<DaemonClient["fetchRecentProviderSessions"]>>>();
+    const firstFetch = vi.fn(async () => ({
+      requestId: "first-host",
+      entries: [createProviderSessionEntry({ providerId: "claude", title: "First host session" })],
+    }));
+    const secondFetch = vi.fn(() => nextHost.promise);
+    const firstClient = createRecentSessionsClient(firstFetch, vi.fn());
+    const secondClient = createRecentSessionsClient(secondFetch, vi.fn());
+    const queryClient = new QueryClient({
+      defaultOptions: { queries: { retry: false, staleTime: Infinity, refetchOnMount: false } },
+    });
+    applyHostMocks({
+      snapshot: { supportsSnapshot: true, entries: [createSnapshotEntry("claude")] },
+    });
+    function TestSheet({ serverId }: { serverId: string }) {
+      return (
+        <QueryClientProvider client={queryClient}>
+          <ImportSessionSheet
+            visible
+            client={serverId === "server-1" ? firstClient : secondClient}
+            serverId={serverId}
+            cwd="/repo/paseo"
+            onClose={vi.fn()}
+          />
+        </QueryClientProvider>
+      );
+    }
+
+    const { rerender } = render(<TestSheet serverId="server-1" />);
+    await screen.findByText("First host session");
+    rerender(<TestSheet serverId="server-2" />);
+    expect(screen.queryByText("First host session")).toBeNull();
+    await waitFor(() => expect(secondFetch).toHaveBeenCalledTimes(1));
+    await act(async () => {
+      nextHost.resolve({
+        requestId: "second-host",
+        entries: [
+          createProviderSessionEntry({ providerId: "claude", title: "Second host session" }),
+        ],
+      });
+    });
+    await screen.findByText("Second host session");
+    fireEvent.click(screen.getByTestId("import-session-refresh"));
+    await waitFor(() => expect(secondFetch).toHaveBeenCalledTimes(2));
+    rerender(<TestSheet serverId="server-1" />);
+    await screen.findByText("First host session");
+    expect(screen.queryByText("Second host session")).toBeNull();
+    expect(firstFetch).toHaveBeenCalledTimes(1);
   });
 
   it("filters the merged list when a provider badge is selected and restores it on All", async () => {
