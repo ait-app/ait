@@ -12,6 +12,77 @@ import { hubFixture } from "../test/hub.js";
 
 afterEach(() => vi.useRealTimers());
 
+describe("account information", () => {
+  it("reads the login identity and account expiry without exposing credentials", async () => {
+    const f = fixture();
+    await f.login();
+    f.http.mockClear();
+    f.http.mockResolvedValueOnce(
+      Response.json({
+        email: "me@example.test",
+        display_name: "Nickname",
+        expires_at: "2027-01-01T00:00:00Z",
+        auth_subject: "private-subject",
+      }),
+    );
+    expect(await f.manager.getAccountInfo()).toEqual({
+      loginName: "me@example.test",
+      expiresAt: "2027-01-01T00:00:00Z",
+    });
+    expect(f.http).toHaveBeenCalledExactlyOnceWith(
+      "https://aitapp.cn/api/v1/me",
+      expect.objectContaining({
+        headers: expect.objectContaining({ Authorization: "Bearer private-jwt" }),
+      }),
+    );
+    await f.manager.logout();
+  });
+
+  it("supports phone-only accounts with unlimited access", async () => {
+    const f = fixture();
+    await f.login();
+    f.http.mockResolvedValueOnce(
+      Response.json({
+        phone_number: "+8613800000000",
+        expires_at: null,
+      }),
+    );
+    expect(await f.manager.getAccountInfo()).toEqual({
+      loginName: "+8613800000000",
+      expiresAt: null,
+    });
+    await f.manager.logout();
+  });
+
+  it("rejects information from a previous account after logout", async () => {
+    const f = fixture();
+    await f.login();
+    let finish!: (value: Response) => void;
+    f.http.mockImplementationOnce(
+      () =>
+        new Promise((resolve) => {
+          finish = resolve;
+        }),
+    );
+    const pending = f.manager.getAccountInfo();
+    await f.manager.logout();
+    const rejected = expect(pending).rejects.toThrow("The account changed");
+    finish(Response.json({ email: "old@example.test", expires_at: null }));
+    await rejected;
+    await expect(f.manager.getAccountInfo()).rejects.toThrow("Sign in first");
+  });
+
+  it("rejects an invalid account expiry", async () => {
+    const f = fixture();
+    await f.login();
+    f.http.mockResolvedValueOnce(
+      Response.json({ email: "me@example.test", expires_at: "invalid" }),
+    );
+    await expect(f.manager.getAccountInfo()).rejects.toThrow("invalid account information");
+    await f.manager.logout();
+  });
+});
+
 it("discovers a Hub-only Host independently of its offline Relay route", async () => {
   const f = fixture();
   Object.assign(f.host, { online: false, instance_id: null, relay_modes: [] });

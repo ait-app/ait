@@ -11,9 +11,11 @@ import { accountCommand, useAccountState } from "@/runtime/account-state";
 export function AccountHostPanel({
   onSignedIn,
   onCancel,
+  onRefresh,
 }: {
   onSignedIn?: () => void;
   onCancel?: () => void;
+  onRefresh?: () => void;
 }) {
   const { t } = useTranslation();
   const { theme } = useUnistyles();
@@ -163,7 +165,12 @@ export function AccountHostPanel({
             variant="outline"
             leftIcon={RefreshCw}
             disabled={busy}
-            onPress={() => void runAccountAction(() => accountCommand("account_refresh"))}
+            onPress={() =>
+              void runAccountAction(async () => {
+                await accountCommand("account_refresh");
+                onRefresh?.();
+              })
+            }
           >
             {t("onlineService.refresh")}
           </Button>

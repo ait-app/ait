@@ -11,6 +11,7 @@ const mocks = vi.hoisted(() => ({
   send: vi.fn(),
   publish: vi.fn(),
   unpublish: vi.fn(),
+  info: vi.fn(),
   deps: null as AccountDependencies | null,
 }));
 
@@ -57,6 +58,7 @@ vi.mock("./account-session.js", () => ({
     }
     publishHost = mocks.publish;
     unpublishHost = mocks.unpublish;
+    getAccountInfo = mocks.info;
   },
 }));
 vi.mock("./account-transport.js", () => ({ AccountTransportManager: class {} }));
@@ -84,6 +86,15 @@ beforeEach(() => {
 afterEach(() => rmSync(mocks.userDataPath, { recursive: true, force: true }));
 
 describe("desktop built-in daemon synchronization preference", () => {
+  it("reads account information through the credential-owning manager", async () => {
+    const info = {
+      loginName: "me@example.test",
+      expiresAt: null,
+    };
+    mocks.info.mockResolvedValue(info);
+    await expect(invoke()(event, "account_info")).resolves.toEqual(info);
+    expect(mocks.info).toHaveBeenCalledExactlyOnceWith();
+  });
   it("defaults to automatic synchronization for new and existing desktop profiles", async () => {
     writeFileSync(
       path.join(mocks.userDataPath, "account-node.json"),

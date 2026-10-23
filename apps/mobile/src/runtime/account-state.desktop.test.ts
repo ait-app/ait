@@ -2,6 +2,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import {
   ACCOUNT_HOST_OFFLINE_RETENTION_MS,
   accountCommand,
+  loadAccountInfo,
   useAccountState,
 } from "./account-state";
 
@@ -32,6 +33,16 @@ beforeEach(() => {
 });
 
 describe("desktop account host persistence", () => {
+  it("loads account information through desktop IPC without modifying host state", async () => {
+    const info = {
+      loginName: "me@example.test",
+      expiresAt: null,
+    };
+    mocks.invoke.mockResolvedValue(info);
+    await expect(loadAccountInfo()).resolves.toEqual(info);
+    expect(mocks.invoke).toHaveBeenCalledExactlyOnceWith("account_info");
+    expect(mocks.discover).not.toHaveBeenCalled();
+  });
   it("announces a Hub-only host without requiring legacy Relay metadata", async () => {
     mocks.invoke.mockResolvedValue({
       status: "online",

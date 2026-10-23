@@ -1,6 +1,11 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import type { HostProfile } from "@/types/host-connection";
-import { accountCommand, supportsAccountRelay, useAccountState } from "./account-state";
+import {
+  accountCommand,
+  loadAccountInfo,
+  supportsAccountRelay,
+  useAccountState,
+} from "./account-state";
 
 const mocks = vi.hoisted(() => ({
   manager: {
@@ -9,6 +14,7 @@ const mocks = vi.hoisted(() => ({
     logout: vi.fn(),
     select: vi.fn(),
     refresh: vi.fn(),
+    getAccountInfo: vi.fn(),
     snapshot: vi.fn(),
   },
   loadRegistry: vi.fn(async () => {}),
@@ -51,6 +57,16 @@ beforeEach(() => {
 });
 
 describe("native mobile account commands", () => {
+  it("reads account information without triggering host synchronization", async () => {
+    const info = {
+      loginName: "me@example.test",
+      expiresAt: null,
+    };
+    mocks.manager.getAccountInfo.mockResolvedValue(info);
+    await expect(loadAccountInfo()).resolves.toEqual(info);
+    expect(mocks.manager.getAccountInfo).toHaveBeenCalledExactlyOnceWith();
+    expect(mocks.discover).not.toHaveBeenCalled();
+  });
   it.each(["android", "ios"])(
     "imports all discovered %s hosts after browser login",
     async (platform) => {
