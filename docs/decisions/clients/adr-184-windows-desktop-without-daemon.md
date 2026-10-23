@@ -23,5 +23,5 @@ Release 发布等待 Windows 与原有平台全部成功，收集安装包、ZIP
 统一写入 `SHA256SUMS`。`BUILD-INFO-windows.json` 记录该平台的源码和构建来源，便于
 向旧版本追加 Windows 产物时保留原有平台的来源记录。
 
-相关 PR 自动运行同一 Windows 工作流并保留构建产物，但不发布 Release。
+Windows 工作流仅由 `Release Ait` 调用，不在 PR CI 中运行，也不提供独立手动触发入口。
 main nightly 仍只构建 Linux/macOS。`npm run build:windows` 仅生成本地构建产物。
