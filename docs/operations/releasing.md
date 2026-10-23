@@ -12,7 +12,10 @@ Rust `daemon`。发布边界见 [ADR-053](../decisions/clients/adr-053-paseo-des
 [Google Play Android Internal Testing](#google-play-android-internal-testing) 一节，
 与桌面 GitHub Release 相互独立。`apps/mobile` 的 Apple TestFlight 发布流程见下方
 [Apple TestFlight iOS 手动发布](#apple-testflight-ios-手动发布)一节，
-同样与桌面 GitHub Release 相互独立。见 [ADR-183](../decisions/clients/adr-183-ios-xcode-cloud-release.md)。
+同样与桌面 GitHub Release 相互独立。可用于正式上架并自动提交外部测试的构建使用
+[App Store iOS 手动发布](#app-store-ios-手动发布)。见
+[ADR-183](../decisions/clients/adr-183-ios-xcode-cloud-release.md) 和
+[ADR-187](../decisions/clients/adr-187-ios-app-store-cloud-trigger.md)。
 
 ## macOS 自动更新来源
 
@@ -409,6 +412,60 @@ Android Play 内部测试使用独立手动工作流
 独立的 GitHub APK 工作流已移除，桌面 Release 不再调用 Android 构建。发布边界见
 [ADR-175](../decisions/clients/adr-175-android-play-gradle-release.md)。
 
+## App Store iOS 手动发布
+
+GitHub Actions → **Release iOS to App Store** → **Run workflow** 会触发 Xcode Cloud
+归档、上传 App Store Connect，并自动提交到 `Ait External` 外部 TestFlight 测试组。
+Apple 可能要求 Beta App Review；通过后才可向外部测试者分发。**正式 App Store 审核仍手动
+提交，审核通过后的发布也保留手动。** 同一份 App Store Connect 构建可用于外部测试和正式
+审核，不必为了正式上架再次编译。
+
+### GitHub 入口
+
+工作流文件为 [release-ios-app-store.yml](../../.github/workflows/release-ios-app-store.yml)。
+
+1. 按[准备版本](#准备版本)同步稳定版本及 [iOS 原生版本](#ios-原生版本同步)，提交工程和锁文件。
+2. 在 Run workflow 选择包含入口的分支（通常为 `main`）。`tag` 留空时使用该次 dispatch
+   固定的源码 commit；填写 `vX.Y.Z` 时使用该稳定标签的 commit，不是之后变化的分支 HEAD。
+3. 入口校验 Cargo/npm/workspace 锁文件及 `Info.plist` 版本一致；旧 `v0.1.15` 标签的原生
+   版本不一致会在触发 Cloud 前失败。发布辅助代码取自运行工作流的 commit，不执行源码标签内的脚本。
+4. GitHub 只推送一个 `ios-app-store/vX.Y.Z/<run-id>-<attempt>` 标签，然后等待 Cloud
+   新 Build/Archive checks。运行摘要记录源码 SHA、触发标签、Cloud 构建链接和外部测试组链接。
+5. 到 Cloud 确认上传和外部 TestFlight post-action，再到 TestFlight 确认处理、审核及组内
+   可用状态。GitHub 绿色只确认 Build/Archive 成功，不能当作外部测试或正式审核已通过。
+6. 正式上架时，在 App Store 版本页面选择已处理完成的同一构建，补齐资料后手动提交审核。
+
+此入口不依赖桌面 GitHub Release 已完成。它只支持 `workflow_dispatch`，不会因普通 push、
+PR、桌面 release 或 `vX.Y.Z` 标签自动启动，也不创建桌面 Release。需要 GitHub 仓库运行
+Actions 的权限；使用临时 `GITHUB_TOKEN` 的 `contents: write` 推送标签和 `checks: read`
+读取结果，无需额外 Apple secret。
+
+### App Store Cloud 配置
+
+以下配置已保存在 Apple 服务中；GitHub YAML 不会自动创建或修复它。
+
+| 设置                            | 值                                                                               |
+| ------------------------------- | -------------------------------------------------------------------------------- |
+| Product / Workflow              | `Ait` / `Release iOS to App Store`                                               |
+| Workflow ID                     | `d1dfac80-341e-4726-81e8-89202ac76a06`                                           |
+| Repository / Workspace / Scheme | `ait-app/ait` / `apps/mobile/ios/Ait.xcworkspace` / `Ait`                        |
+| 自动 Start Condition            | Tag Changes → Custom Tags → **Tags beginning with `ios-app-store/`**             |
+| 手动 Start Condition            | 保留 `main` 分支和 Tag 的手动启动入口                                            |
+| Actions                         | `Build - iOS`；`Archive - iOS`，Distribution Preparation = **App Store Connect** |
+| Post-Actions                    | Archive → `Ait Internal`；Archive → `Ait External`                               |
+| Editing                         | Account Holder / Admin / App Manager（Apple 对外部测试的要求）                   |
+
+[Cloud 工作流](https://appstoreconnect.apple.com/teams/3e9381fe-a5bd-4fda-bc82-4f218c20480b/xcode-cloud/products/9153f73a-c52d-458b-ab3c-762228945ce5/workflows/d1dfac80-341e-4726-81e8-89202ac76a06)
+复用现有原生工程和 `ci_post_clone.sh`。Tag Changes 只匹配专用前缀；
+参见 [Apple 的标签发布工作流示例](https://developer.apple.com/videos/play/wwdc2023/10278/)。
+`Default` 继续用于仅内部测试，`Public TestFlight` 的既有手动入口也保留。
+
+触发标签保留用于追溯，不要移动或强制覆盖。GitHub 重跑会创建新标签和新 Cloud 构建，
+因此上传/外部审核仍在处理时应先检查远端状态。GitHub 最多等待 15 分钟发现新 Cloud 构建、
+90 分钟等待归档；超时或取消 GitHub 运行**不会取消 Cloud**。若从未出现 Cloud checks，
+检查标签前缀、工作流启用状态及 Xcode Cloud GitHub App 连接；若归档失败，先看 Cloud 日志。
+避免在同一提交上同时手动运行这条 Cloud 工作流，否则多个新构建会导致结果关联报错。
+
 ## Apple TestFlight iOS 手动发布
 
 `apps/mobile` 的 iOS CI 统一使用 **Xcode Cloud**：直接在 Xcode 或
@@ -435,8 +492,8 @@ GitHub YAML 无法替代这些设置。维护时核对：
 
 仅 `Build - iOS` 成功不会上传 TestFlight。必须完成 Archive，并由 TestFlight post-action
 分发；这是 [Apple 官方分发工作流](https://developer.apple.com/documentation/xcode/creating-a-workflow-that-builds-your-app-for-distribution)
-要求的配置。内部测试构建不能直接转为正式 App Store 发布产物；正式上架需要另行准备符合
-App Store 分发要求的归档和审核流程。
+要求的配置。内部测试构建不能直接转为正式 App Store 发布产物；正式上架使用上方
+[App Store iOS 手动发布](#app-store-ios-手动发布)准备符合分发要求的归档。
 
 仓库负责提交原生工程、共享 scheme、workspace、Ruby/Pod/npm 锁文件，以及
 [`ci_post_clone.sh`](../../apps/mobile/ios/ci_scripts/ci_post_clone.sh)。该 hook 安装锁定依赖、
