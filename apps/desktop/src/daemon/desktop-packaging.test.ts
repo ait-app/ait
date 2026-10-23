@@ -2,6 +2,7 @@ import { readFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { describe, expect, it } from "vitest";
+import { parse } from "yaml";
 
 const packageRoot = join(dirname(fileURLToPath(import.meta.url)), "..", "..");
 
@@ -31,11 +32,14 @@ describe("desktop packaging", () => {
     expect(config).toContain("!node_modules/@ait/**/*.spec.*");
   });
 
-  it("bundles the native Rust daemon as an external resource", () => {
-    const config = readFileSync(join(packageRoot, "electron-builder.yml"), "utf8");
-    expect(config).toContain("from: release-resources/daemon/daemon");
-    expect(config).toContain("to: bin/daemon");
-    expect(config).not.toContain("from: bin/paseo");
+  it("bundles the native daemon only on macOS and Linux", () => {
+    const config = parse(readFileSync(join(packageRoot, "electron-builder.yml"), "utf8"));
+    const daemon = { from: "release-resources/daemon/daemon", to: "bin/daemon" };
+    expect(config.mac.extraResources).toContainEqual(daemon);
+    expect(config.linux.extraResources).toContainEqual(daemon);
+    expect(config.extraResources).not.toContainEqual(daemon);
+    expect(config.win.extraResources).toBeUndefined();
+    expect(config.win.target).toEqual(["nsis", "zip"]);
   });
 
   it("registers Ait agent links with the operating system", () => {

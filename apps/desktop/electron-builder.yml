@@ -28,8 +28,6 @@ files:
 extraResources:
   - from: assets/icon.png
     to: icon.png
-  - from: release-resources/daemon/daemon
-    to: bin/daemon
   - from: ../mobile/dist
     to: app-dist
   - from: assets/editor-targets
@@ -40,6 +38,9 @@ publish:
   repo: ait
   channel: "${channel}"
 mac:
+  extraResources:
+    - from: release-resources/daemon/daemon
+      to: bin/daemon
   publish:
     provider: generic
     url: https://aitapp.cn/api/v1/updates/macos/
@@ -60,6 +61,9 @@ mac:
     - dmg
     - zip
 linux:
+  extraResources:
+    - from: release-resources/daemon/daemon
+      to: bin/daemon
   category: Development
   icon: assets
   artifactName: "Ait-${version}-linux-${arch}.${ext}"
@@ -72,6 +76,14 @@ linux:
     - tar.gz
     - deb
     - rpm
+win:
+  icon: assets/icon.ico
+  artifactName: "Ait-${version}-windows-${arch}.${ext}"
+  target:
+    - nsis
+    - zip
+nsis:
+  artifactName: "Ait-${version}-windows-${arch}-setup.${ext}"
 # Native packages install a root-owned SUID chrome-sandbox and an AppArmor profile,
 # so the sandbox survives distributions that restrict unprivileged user namespaces.
 # Builder's default dependency lists omit ALSA and GBM, which Electron links at startup.

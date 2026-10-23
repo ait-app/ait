@@ -16,12 +16,19 @@ function verifyDaemonDirectory(resources) {
 }
 
 function verifyPackagedResources({ appOutDir, platform, version }) {
-  assert(["darwin", "linux"].includes(platform), `Unsupported release platform: ${platform}`);
+  assert(
+    ["darwin", "linux", "win32"].includes(platform),
+    `Unsupported release platform: ${platform}`,
+  );
   const resources =
     platform === "darwin"
       ? path.join(appOutDir, "Ait.app", "Contents", "Resources")
       : path.join(appOutDir, "resources");
-  verifyDaemonDirectory(resources);
+  if (platform === "win32") {
+    assert(!fs.existsSync(path.join(resources, "bin")), "Windows must not bundle a daemon");
+  } else {
+    verifyDaemonDirectory(resources);
+  }
   assert(
     fs.existsSync(path.join(resources, "app-dist", "index.html")),
     "Exported apps/mobile UI is missing",
@@ -36,7 +43,9 @@ function verifyPackagedResources({ appOutDir, platform, version }) {
     ),
     "Legacy Node server/CLI must not be bundled",
   );
-  console.log(`Verified Ait ${version}: apps/desktop, exported UI, resources/bin/daemon only.`);
+  console.log(
+    `Verified Ait ${version}: apps/desktop, exported UI, ${platform === "win32" ? "no bundled daemon" : "resources/bin/daemon only"}.`,
+  );
 }
 
 module.exports = { verifyPackagedResources, verifyDaemonDirectory };

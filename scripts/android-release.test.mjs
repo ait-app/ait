@@ -116,7 +116,7 @@ test("desktop releases no longer invoke the retired Android APK workflow", async
   assert.deepEqual(release.on.push.tags, ["v*"]);
   assert.equal(release.on.workflow_dispatch.inputs.build_android, undefined);
   assert.equal(release.jobs.android, undefined);
-  assert.deepEqual(release.jobs.release.needs, ["build"]);
+  assert(!release.jobs.release.needs.includes("android"));
   assert.doesNotMatch(JSON.stringify(release), /build-android\.yml|needs\.android/);
   // Rerunning desktop releases still retains and checksums existing APK attachments.
   const verify = release.jobs.release.steps.find(

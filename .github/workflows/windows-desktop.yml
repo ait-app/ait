@@ -1,0 +1,99 @@
+name: Windows desktop
+
+on:
+  pull_request:
+    paths:
+      - "apps/**"
+      - "packages/**"
+      - "patches/**"
+      - "scripts/**"
+      - "package.json"
+      - "package-lock.json"
+      - "tsconfig.base.json"
+      - ".npmrc"
+      - ".github/workflows/windows-desktop.yml"
+      - ".github/workflows/release.yml"
+  workflow_dispatch:
+    inputs:
+      source_ref:
+        description: Optional source commit or tag to build
+        type: string
+        required: false
+      release_tag:
+        description: Optional release tag to verify (for example v0.1.15)
+        type: string
+        required: false
+  workflow_call:
+    inputs:
+      source_ref:
+        type: string
+        required: true
+      release_tag:
+        type: string
+        required: true
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    name: Build and smoke Windows x64
+    runs-on: windows-2025
+    timeout-minutes: 45
+    defaults:
+      run:
+        shell: bash
+    env:
+      CI: "1"
+      EXPO_NO_TELEMETRY: "1"
+      RELEASE_TAG: ${{ inputs.release_tag }}
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          ref: ${{ inputs.source_ref || github.event.pull_request.head.sha || github.sha }}
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 24
+          cache: npm
+          cache-dependency-path: package-lock.json
+      - name: Verify release version
+        run: |
+          if [ -n "$RELEASE_TAG" ]; then
+            node scripts/verify-release-version.mjs "$RELEASE_TAG"
+          else
+            node scripts/verify-release-version.mjs
+          fi
+      - name: Install workspace dependencies
+        run: npm ci
+      - name: Build Windows desktop without daemon
+        run: npm run build:windows
+      - name: Smoke packaged Windows desktop
+        run: node apps/desktop/e2e/windows-startup.e2e.mjs
+      - name: Collect installers and updater assets
+        run: |
+          version=$(node -p 'require("./apps/desktop/package.json").version')
+          node scripts/release-assets.mjs collect win "$version" apps/desktop/release release-assets
+      - name: Record Windows build source
+        run: |
+          node <<'NODE'
+          const { execFileSync } = require('node:child_process');
+          const { writeFileSync } = require('node:fs');
+          const { version } = require('./apps/desktop/package.json');
+          const info = {
+            version,
+            releaseTag: process.env.RELEASE_TAG || `v${version}`,
+            sourceCommit: execFileSync('git', ['rev-parse', 'HEAD'], { encoding: 'utf8' }).trim(),
+            workflowCommit: process.env.GITHUB_WORKFLOW_SHA,
+            workflowRunUrl: `${process.env.GITHUB_SERVER_URL}/${process.env.GITHUB_REPOSITORY}/actions/runs/${process.env.GITHUB_RUN_ID}`,
+            platform: 'win32',
+            arch: 'x64',
+            bundledDaemon: false,
+          };
+          writeFileSync('release-assets/BUILD-INFO-windows.json', JSON.stringify(info, null, 2) + '\n');
+          NODE
+      - uses: actions/upload-artifact@v6
+        with:
+          name: ait-windows-x64
+          path: release-assets/*
+          if-no-files-found: error
+          retention-days: 7

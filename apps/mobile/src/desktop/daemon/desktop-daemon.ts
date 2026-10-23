@@ -193,7 +193,7 @@ function parseDesktopUpdaterDiagnostics(raw: unknown): DesktopUpdaterDiagnostics
 }
 
 export function shouldUseDesktopDaemon(): boolean {
-  return isElectronRuntime();
+  return isElectronRuntime() && getDesktopHost()?.platform !== "win32";
 }
 
 export async function getDesktopDaemonStatus(): Promise<DesktopDaemonStatus> {

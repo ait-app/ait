@@ -126,14 +126,17 @@ function buildDefaultDocument(): PersistedDesktopSettingsDocument {
   };
 }
 
-function toDesktopSettings(stored: StoredDesktopSettings): DesktopSettings {
+function toDesktopSettings(
+  stored: StoredDesktopSettings,
+  platform: NodeJS.Platform,
+): DesktopSettings {
   return {
     releaseChannel: stored.releaseChannel,
     notifications: { playSound: stored.notifications.playSound },
     daemon: {
       listen: stored.daemon.listen,
-      manageBuiltInDaemon: stored.daemon.manageBuiltInDaemon,
-      keepRunningAfterQuit: stored.daemon.keepRunningAfterQuit,
+      manageBuiltInDaemon: platform !== "win32" && stored.daemon.manageBuiltInDaemon,
+      keepRunningAfterQuit: platform !== "win32" && stored.daemon.keepRunningAfterQuit,
     },
   };
 }
@@ -235,8 +238,10 @@ function coerceDocument(input: unknown): PersistedDesktopSettingsDocument {
 
 export function createDesktopSettingsStore({
   userDataPath,
+  platform = process.platform,
 }: {
   userDataPath: string;
+  platform?: NodeJS.Platform;
 }): DesktopSettingsStore {
   const filePath = path.join(userDataPath, DESKTOP_SETTINGS_FILENAME);
   let cachedDocument: PersistedDesktopSettingsDocument | null = null;
@@ -290,7 +295,7 @@ export function createDesktopSettingsStore({
     get: () =>
       serialize(async () => {
         const document = await loadDocument();
-        return toDesktopSettings(document.settings);
+        return toDesktopSettings(document.settings, platform);
       }),
 
     patch: (patch: unknown) =>
@@ -308,14 +313,14 @@ export function createDesktopSettingsStore({
               hasLegacyRendererOwnedPatch(coercedPatch),
           },
         });
-        return toDesktopSettings(next);
+        return toDesktopSettings(next, platform);
       }),
 
     migrateLegacyRendererSettings: (legacySettings: unknown) =>
       serialize(async () => {
         const current = await initializeLegacyRendererMigration();
         if (current.migrations.legacyRendererSettingsImported) {
-          return toDesktopSettings(current.settings);
+          return toDesktopSettings(current.settings, platform);
         }
 
         const next = mergeDesktopSettings(
@@ -330,7 +335,7 @@ export function createDesktopSettingsStore({
             legacyRendererSettingsImported: true,
           },
         });
-        return toDesktopSettings(next);
+        return toDesktopSettings(next, platform);
       }),
   };
 }

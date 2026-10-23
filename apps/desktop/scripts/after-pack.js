@@ -3,6 +3,7 @@ const path = require("path");
 
 const { execFileSync } = require("node:child_process");
 const { verifyPackagedResources } = require("./verify-packaged-resources.cjs");
+const { editWindowsExecutable } = require("./edit-windows-executable.cjs");
 
 const { installLinuxLauncher } = require("./linux-sandbox");
 
@@ -115,6 +116,19 @@ function fmtMB(bytes) {
 exports.default = async function afterPack(context) {
   const platform = context.electronPlatformName;
   const arch = ARCH_MAP[context.arch] || process.arch;
+
+  // Cross builds cannot rely on Wine. Keep the application identity and icon
+  // even when electron-builder's native resource editor is disabled.
+  if (
+    platform === "win32" &&
+    context.packager.platformSpecificBuildOptions.signAndEditExecutable === false
+  ) {
+    editWindowsExecutable({
+      executablePath: path.join(context.appOutDir, `${EXECUTABLE_NAME}.exe`),
+      iconPath: path.join(__dirname, "../assets/icon.ico"),
+      version: context.packager.appInfo.version,
+    });
+  }
 
   verifyPackagedResources({
     appOutDir: context.appOutDir,

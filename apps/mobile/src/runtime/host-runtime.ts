@@ -1564,7 +1564,7 @@ export class HostRuntimeStore {
       return;
     }
 
-    if (shouldUseDesktopDaemon()) {
+    if (getDesktopHost()) {
       return;
     }
 

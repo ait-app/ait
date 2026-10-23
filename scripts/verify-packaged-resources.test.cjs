@@ -64,3 +64,30 @@ test("packaging requires Ait's independent identity instead of the Paseo workspa
     else assert.throws(verify, /independent package identity/);
   }
 });
+
+test("Windows packages require the renderer and app archive but reject a bundled daemon", (t) => {
+  const root = resources(t);
+  const appOutDir = path.join(root, "windows");
+  const destination = path.join(appOutDir, "resources");
+  fs.mkdirSync(path.join(destination, "app-dist"), { recursive: true });
+  fs.writeFileSync(path.join(destination, "app-dist", "index.html"), "<!doctype html>");
+  const source = path.join(root, "source");
+  fs.mkdirSync(source);
+  fs.writeFileSync(
+    path.join(source, "package.json"),
+    JSON.stringify({ name: "@ait/desktop", version: "0.1.15" }),
+  );
+  execFileSync(process.execPath, [
+    require.resolve("@electron/asar/bin/asar.js"),
+    "pack",
+    source,
+    path.join(destination, "app.asar"),
+  ]);
+  const verify = () => verifyPackagedResources({ appOutDir, platform: "win32", version: "0.1.15" });
+  assert.doesNotThrow(verify);
+  fs.cpSync(path.join(root, "bin"), path.join(destination, "bin"), { recursive: true });
+  assert.throws(verify, /must not bundle a daemon/);
+  fs.rmSync(path.join(destination, "bin"), { recursive: true });
+  fs.unlinkSync(path.join(destination, "app-dist", "index.html"));
+  assert.throws(verify, /UI is missing/);
+});

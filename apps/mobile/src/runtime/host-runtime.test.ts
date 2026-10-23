@@ -4534,6 +4534,28 @@ describe("readInitialDaemonConnectionHint", () => {
 });
 
 describe("HostRuntimeStore initial connection hint bootstrap", () => {
+  it("does not probe localhost or add a default host on Windows desktop", async () => {
+    vi.stubGlobal("window", { paseoDesktop: { platform: "win32" } });
+    const connectToDaemon = vi.fn();
+    const store = new HostRuntimeStore({
+      deps: {
+        createClient: () => new FakeDaemonClient() as unknown as DaemonClient,
+        connectToDaemon,
+        getClientId: async () => "cid_windows",
+      },
+      storage: createMemoryHostRuntimeStorage(),
+    });
+    try {
+      await store.boot();
+      expect(connectToDaemon).not.toHaveBeenCalled();
+      expect(store.getHosts()).toEqual([]);
+      expect(store.getHostRegistryStatus()).toBe("ready");
+    } finally {
+      store.syncHosts([]);
+      vi.unstubAllGlobals();
+    }
+  });
+
   it("attempts the explicit initial connection hint before default localhost bootstrap", async () => {
     const seenProbes: { endpoint: string; useTls?: boolean }[] = [];
     const store = new HostRuntimeStore({
