@@ -848,6 +848,12 @@ test.describe("New workspace flow", () => {
         await expect(composer).toHaveValue(prompt);
 
         await openStartingRefPicker(page);
+        await expect(error).toContainText("Base branch not found:");
+        await selectBranchInPicker(page, "dev");
+        await expect(error).toContainText("Base branch not found:");
+        await expect(composer).toHaveValue(prompt);
+
+        await openStartingRefPicker(page);
         await selectBranchInPicker(page, "main");
 
         await expect(error).toHaveCount(0);

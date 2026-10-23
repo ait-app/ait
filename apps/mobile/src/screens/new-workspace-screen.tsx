@@ -102,6 +102,7 @@ import {
   defaultBasePickerItem,
   pickerItemLabel,
   pickerItemToCheckoutRequest,
+  pickerOptionId,
   type BranchPickerDetail,
   type PickerCheckoutRequest,
   type PickerItem,
@@ -1882,11 +1883,15 @@ export function NewWorkspaceScreen({
       });
 
       dispatchPickerSelection({ type: "picker-selected", item });
-      setErrorMessage(null);
+      // The inline failure describes the last submitted base ref. Clear that stale message
+      // only when the user changes the ref; submit failures are still shown below the composer.
+      if (pickerOptionId(item) !== selectedOptionId) {
+        setErrorMessage(null);
+      }
       chatDraft.setAttachments(nextAttachments);
       setPickerOpen(false);
     },
-    [chatDraft],
+    [chatDraft, selectedOptionId],
   );
 
   const handleSelectOption = useCallback(
@@ -1918,7 +1923,9 @@ export function NewWorkspaceScreen({
       // multiplicity is off, any project when it's on); don't re-gate here on
       // canCreateWorktree or non-git projects become unselectable.
       selectProjectOption(id);
-      setErrorMessage(null);
+      if (id !== selectedProjectOptionId) {
+        setErrorMessage(null);
+      }
       setProjectPickerOpen(false);
       clearPickerSelectionForTargetChange(selectedProjectOptionId, id);
     },
@@ -1928,7 +1935,9 @@ export function NewWorkspaceScreen({
   const handleSelectWorkspaceHost = useCallback(
     (id: string) => {
       handleSelectHost(id);
-      setErrorMessage(null);
+      if (id !== selectedServerId) {
+        setErrorMessage(null);
+      }
       clearPickerSelectionForTargetChange(selectedServerId, id);
     },
     [clearPickerSelectionForTargetChange, handleSelectHost, selectedServerId],
@@ -1981,11 +1990,14 @@ export function NewWorkspaceScreen({
 
   const handleSelectIsolationOption = useCallback(
     (id: string) => {
-      setIsolation(id === "worktree" ? "worktree" : "local");
-      setErrorMessage(null);
+      const nextIsolation = id === "worktree" ? "worktree" : "local";
+      setIsolation(nextIsolation);
+      if (nextIsolation !== effectiveIsolation) {
+        setErrorMessage(null);
+      }
       setIsolationPickerOpen(false);
     },
-    [setIsolation],
+    [effectiveIsolation, setIsolation],
   );
 
   const renderIsolationOption = useCallback(
