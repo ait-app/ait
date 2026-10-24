@@ -3,7 +3,21 @@ import { useMemo } from "react";
 import type { TFunction } from "i18next";
 import { useTranslation } from "react-i18next";
 import { i18n } from "@/i18n/i18next";
+import { en } from "@/i18n/resources/en";
 import { formatCompactTimeAgo } from "@/utils/time";
+
+const nativeUsageTextKeys = new Map<string, string>(
+  Object.entries(en.providerUsage.nativeText).map(([key, text]) => [
+    text,
+    `providerUsage.nativeText.${key}`,
+  ]),
+);
+
+/** Translate Ait's built-in messages at render time; preserve custom provider text. */
+export function formatNativeUsageText(text: string, t: TFunction): string {
+  const key = nativeUsageTextKeys.get(text);
+  return key ? t(key) : text;
+}
 
 export function formatUsageTimeAgo(
   label: string,
@@ -22,9 +36,14 @@ export function formatUsageTimeAgo(
 
 function createUsageCopy(t: TFunction) {
   return {
+    nativeText: (text: string) => formatNativeUsageText(text, t),
     problem: (problem: UsageProblem, now: Date = new Date()): string => {
-      if (problem.kind === "no_quota")
-        return problem.detail || t("providerUsage.nativePlanUnavailable");
+      if (problem.kind === "no_quota") {
+        // Localize the daemon's built-in fallback without hiding provider-specific details.
+        return !problem.detail || problem.detail === en.providerUsage.nativePlanUnavailable
+          ? t("providerUsage.nativePlanUnavailable")
+          : formatNativeUsageText(problem.detail, t);
+      }
       const remedy = problem.refreshedBy
         ? t("providerUsage.loginRefreshCommand", { command: problem.refreshedBy })
         : t("providerUsage.loginSignInAgain");

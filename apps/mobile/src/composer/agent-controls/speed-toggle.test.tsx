@@ -1,8 +1,9 @@
 /** @vitest-environment jsdom */
 import React from "react";
-import { cleanup, fireEvent, render } from "@testing-library/react";
+import { act, cleanup, fireEvent, render } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { AgentFeature } from "@ait/protocol/agent-types";
+import { i18n } from "@/i18n/i18next";
 import { SpeedToggle } from "./speed-toggle";
 
 vi.mock("react-native-unistyles", async (importOriginal) => {
@@ -25,8 +26,14 @@ vi.mock("react-native-unistyles", async (importOriginal) => {
   };
 });
 
-beforeEach(() => vi.stubGlobal("React", React));
-afterEach(cleanup);
+beforeEach(async () => {
+  vi.stubGlobal("React", React);
+  await i18n.changeLanguage("en");
+});
+afterEach(async () => {
+  cleanup();
+  await i18n.changeLanguage("en");
+});
 
 function speed(value: string): Extract<AgentFeature, { type: "select" }> {
   return {
@@ -43,9 +50,15 @@ function speed(value: string): Extract<AgentFeature, { type: "select" }> {
 }
 
 describe("SpeedToggle", () => {
-  it.each(["toolbar", "sheet"] as const)(
-    "switches Normal and Fast directly on the %s without opening a list",
-    (surface) => {
+  it.each([
+    ["toolbar", "en", "Speed: Normal", "Speed: Fast"],
+    ["sheet", "en", "Speed: Normal", "Speed: Fast"],
+    ["toolbar", "zh-CN", "速度：标准", "速度：快速"],
+    ["sheet", "zh-CN", "速度：标准", "速度：快速"],
+  ] as const)(
+    "switches Normal and Fast directly on the %s in %s without opening a list",
+    async (surface, language, normalLabel, fastLabel) => {
+      await i18n.changeLanguage(language);
       const onSetFeature = vi.fn();
       const onActionComplete = vi.fn();
       const view = render(
@@ -58,7 +71,7 @@ describe("SpeedToggle", () => {
         />,
       );
 
-      fireEvent.click(view.getByRole("button", { name: "Speed: Normal" }));
+      fireEvent.click(view.getByRole("button", { name: normalLabel }));
 
       expect(onSetFeature).toHaveBeenLastCalledWith("service_tier", "fast");
       expect(onActionComplete).toHaveBeenCalledTimes(1);
@@ -73,10 +86,16 @@ describe("SpeedToggle", () => {
         />,
       );
 
-      fireEvent.click(view.getByRole("button", { name: "Speed: Fast" }));
+      fireEvent.click(view.getByRole("button", { name: fastLabel }));
 
       expect(onSetFeature).toHaveBeenLastCalledWith("service_tier", "default");
       expect(view.queryByRole("listbox")).toBeNull();
+      await act(async () => {
+        await i18n.changeLanguage(language === "en" ? "zh-CN" : "en");
+      });
+      expect(
+        view.getByRole("button", { name: language === "en" ? "速度：快速" : "Speed: Fast" }),
+      ).toBeTruthy();
     },
   );
 

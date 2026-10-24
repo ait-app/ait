@@ -4,6 +4,7 @@ import type { TFunction } from "i18next";
 import { Text, View, type StyleProp, type ViewStyle } from "react-native";
 import { StyleSheet } from "react-native-unistyles";
 import { clampPct, formatAmount, formatResetLabel } from "./format";
+import { formatNativeUsageText } from "./copy";
 import type { UsageBalance, UsageTone } from "./types";
 
 interface ResolvedBalance {
@@ -66,7 +67,7 @@ export function UsageBalanceBar({
     <View style={styles.container}>
       <View style={styles.labelRow}>
         <Text style={styles.label} numberOfLines={1}>
-          {balance.label}
+          {formatNativeUsageText(balance.label, t)}
         </Text>
         <Text style={styles.value}>
           {amountText}

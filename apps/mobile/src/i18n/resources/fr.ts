@@ -216,6 +216,12 @@ export const fr: TranslationResources = {
       select: "Sélectionnez l'option de réflexion",
       selectWithValue: "Sélectionnez l'option de réflexion ({{value}})",
     },
+    speed: {
+      title: "Vitesse",
+      normal: "Normale",
+      fast: "Rapide",
+      withValue: "Vitesse : {{value}}",
+    },
     model: {
       unknown: "Modèle inconnu",
     },
@@ -1744,6 +1750,18 @@ export const fr: TranslationResources = {
     nativeReadFailed: "Impossible de lire l’utilisation du compte natif",
     nativePlanUnavailable:
       "Cette connexion ne fournit pas l’utilisation du forfait. Connectez-vous avec la CLI du fournisseur.",
+    nativeText: {
+      claudePlanSignIn:
+        "Connectez-vous avec claude /login pour consulter l’utilisation du forfait.",
+      claudePlanUnavailable:
+        "Ce mode de connexion ne fournit pas l’utilisation du forfait. Exécutez claude /login pour vous connecter.",
+      deepseekTotalBalance: "Solde total DeepSeek",
+      deepseekRechargeBalance: "Solde rechargé DeepSeek",
+      deepseekBonusBalance: "Solde bonus DeepSeek",
+      deepseekApiCalls: "Appels API DeepSeek",
+      balanceAvailable: "Solde disponible",
+      insufficientBalance: "Solde insuffisant",
+    },
     error: "Erreur",
     unavailable: "Indisponible",
     updated: "Mis à jour {{time}}",

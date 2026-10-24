@@ -7,6 +7,10 @@ afterEach(async () => {
 });
 
 test("resolves labels and login remedies in the current language", async () => {
+  const nativePlanUnavailable = {
+    kind: "no_quota",
+    detail: "This login does not report plan usage. Sign in with the provider CLI.",
+  } as const;
   expect(usageCopy.refreshAll).toBe("Refresh all");
   await i18n.changeLanguage("zh-CN");
   expect(usageCopy.refreshAll).toBe("全部刷新");
@@ -24,8 +28,27 @@ test("resolves labels and login remedies in the current language", async () => {
   expect(usageCopy.problem({ kind: "no_quota", detail: "" })).toBe(
     "此登录方式不提供套餐用量。请通过提供方 CLI 登录。",
   );
+  expect(usageCopy.problem(nativePlanUnavailable)).toBe(
+    "此登录方式不提供套餐用量。请通过提供方 CLI 登录。",
+  );
+  expect(
+    usageCopy.problem({
+      kind: "no_quota",
+      detail: "Sign in with claude /login to read plan usage.",
+    }),
+  ).toBe("请运行 claude /login 登录以查看套餐用量。");
+  expect(
+    usageCopy.problem({
+      kind: "no_quota",
+      detail: "This login does not report plan usage. Run claude /login to sign in.",
+    }),
+  ).toBe("此登录方式不提供套餐用量。请运行 claude /login 登录。");
+  expect(usageCopy.problem({ kind: "no_quota", detail: "No active coding plan" })).toBe(
+    "No active coding plan",
+  );
   await i18n.changeLanguage("en");
   expect(usageCopy.refreshAll).toBe("Refresh all");
+  expect(usageCopy.problem(nativePlanUnavailable)).toBe(nativePlanUnavailable.detail);
 });
 
 test.each([

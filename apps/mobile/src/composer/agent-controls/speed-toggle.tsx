@@ -1,8 +1,10 @@
 import { useCallback } from "react";
 import { Text } from "react-native";
+import { useTranslation } from "react-i18next";
 import { StyleSheet, useUnistyles } from "react-native-unistyles";
 import type { AgentFeature } from "@ait/protocol/agent-types";
 import { getAgentFeatureIcon } from "@/agent-controls/icons";
+import { formatAgentFeatureLabel } from "@/agent-controls/labels";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { AgentControlTrigger } from "@/composer/agent-controls/control";
 
@@ -20,14 +22,14 @@ export function SpeedToggle({
   onActionComplete?: () => void;
 }) {
   const { theme } = useUnistyles();
+  const { t } = useTranslation();
   const enabled = feature.value !== null && feature.value !== "default";
   const fastOption = feature.options.find(
     (option) => option.id === "fast" || option.id === "priority",
   );
-  const value = enabled
-    ? (fastOption?.label ?? "Fast")
-    : (feature.options.find((option) => option.id === "default")?.label ?? "Normal");
-  const tooltip = `${feature.label}: ${value}`;
+  const label = formatAgentFeatureLabel(feature, t);
+  const value = t(enabled ? "agentControls.speed.fast" : "agentControls.speed.normal");
+  const tooltip = t("agentControls.speed.withValue", { value });
   const Icon = getAgentFeatureIcon(feature.icon, feature.id);
   const handlePress = useCallback(() => {
     onSetFeature?.(feature.id, enabled ? "default" : "fast");
@@ -41,7 +43,7 @@ export function SpeedToggle({
       icon={Icon}
       iconColor={enabled ? theme.colors.palette.yellow[400] : theme.colors.foregroundMuted}
       surface={surface}
-      label={feature.label}
+      label={label}
       value={value}
       showToolbarLabel={false}
       disabled={disabled}
