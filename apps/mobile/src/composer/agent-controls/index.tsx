@@ -9,6 +9,7 @@ import {
   type RefObject,
 } from "react";
 import { useTranslation } from "react-i18next";
+import type { TFunction } from "i18next";
 import { router } from "expo-router";
 import {
   View,
@@ -29,7 +30,7 @@ import {
   getAgentFeatureValueIcon,
   ThinkingIcon,
 } from "@/agent-controls/icons";
-import { formatThinkingOptionLabel } from "@/agent-controls/labels";
+import { formatAgentFeatureLabel, formatThinkingOptionLabel } from "@/agent-controls/labels";
 import { ComboboxTrigger } from "@/components/ui/combobox-trigger";
 import { CombinedModelSelector } from "@/components/combined-model-selector";
 import {
@@ -275,10 +276,13 @@ function toComboboxOptions(options: AgentControlOption[] | undefined): ComboboxO
   return (options ?? []).map((o) => ({ id: o.id, label: o.label }));
 }
 
-function toThinkingControlOptions(options: AgentControlOption[] | undefined): AgentControlOption[] {
+function toThinkingControlOptions(
+  options: AgentControlOption[] | undefined,
+  t: TFunction,
+): AgentControlOption[] {
   return (options ?? []).map((option) => ({
     id: option.id,
-    label: formatThinkingOptionLabel(option),
+    label: formatThinkingOptionLabel(option, t),
   }));
 }
 
@@ -502,7 +506,7 @@ function ControlledAgentControls({
   onEditAgentProfiles,
   onCreateAgentProfile,
   onEditAgentProfile,
-  features,
+  features: nativeFeatures,
   onSetFeature,
   onDropdownClose,
   onModelSelectorOpen,
@@ -514,6 +518,14 @@ function ControlledAgentControls({
 }: ControlledAgentControlsProps) {
   const { theme } = useUnistyles();
   const { t } = useTranslation();
+  const features = useMemo(
+    () =>
+      nativeFeatures?.map((feature) => {
+        const label = formatAgentFeatureLabel(feature, t);
+        return label === feature.label ? feature : { ...feature, label };
+      }),
+    [nativeFeatures, t],
+  );
   const isCompactFormFactor = useIsCompactFormFactor();
   const isCompact = isCompactLayout ?? isCompactFormFactor;
   const { fontScale } = useWindowDimensions();
@@ -542,8 +554,8 @@ function ControlledAgentControls({
     t("agentControls.provider.fallback"),
   );
   const formattedThinkingOptions = useMemo(
-    () => toThinkingControlOptions(thinkingOptions),
-    [thinkingOptions],
+    () => toThinkingControlOptions(thinkingOptions, t),
+    [thinkingOptions, t],
   );
   const displayThinking = findOptionLabel(
     formattedThinkingOptions,
@@ -1373,7 +1385,7 @@ function DesktopFeatureItem({
   }
 
   if (feature.type === "toggle") {
-    const FeatureIcon = getAgentFeatureIcon(feature.icon);
+    const FeatureIcon = getAgentFeatureIcon(feature.icon, feature.id);
     return (
       <Tooltip delayDuration={0} enabledOnDesktop enabledOnMobile={false}>
         <TooltipTrigger asChild triggerRefProp="ref">
@@ -1508,7 +1520,7 @@ function SheetFeatureItem({
   }
 
   if (feature.type === "toggle") {
-    const FeatureIcon = getAgentFeatureIcon(feature.icon);
+    const FeatureIcon = getAgentFeatureIcon(feature.icon, feature.id);
     return (
       <>
         <AgentControlTrigger
@@ -1614,6 +1626,7 @@ export const AgentControls = memo(function AgentControls({
   onDropdownClose,
   isCompactLayout,
 }: AgentControlsProps) {
+  const { t } = useTranslation();
   const { updatePreferences } = useFormPreferences();
   const agent = useSessionStore(
     useShallow((state) => selectAgentControlsSlice(state, serverId, agentId)),
@@ -1673,9 +1686,9 @@ export const AgentControls = memo(function AgentControls({
   const thinkingOptions = useMemo<AgentControlOption[]>(() => {
     return (modelSelection.thinkingOptions ?? []).map((option) => ({
       id: option.id,
-      label: formatThinkingOptionLabel(option),
+      label: formatThinkingOptionLabel(option, t),
     }));
-  }, [modelSelection.thinkingOptions]);
+  }, [modelSelection.thinkingOptions, t]);
 
   const agentProvider = agent?.provider;
   const activeModelId = modelSelection.activeModelId;
@@ -1909,9 +1922,10 @@ export function DraftAgentControls({
   modelSelectorServerId = null,
   isCompactLayout,
 }: DraftAgentControlsProps) {
+  const { t } = useTranslation();
   const mappedThinkingOptions = useMemo<AgentControlOption[]>(() => {
-    return toThinkingControlOptions(thinkingOptions);
-  }, [thinkingOptions]);
+    return toThinkingControlOptions(thinkingOptions, t);
+  }, [thinkingOptions, t]);
 
   const effectiveSelectedThinkingOption =
     selectedThinkingOptionId || mappedThinkingOptions[0]?.id || undefined;

@@ -216,12 +216,18 @@ export const ko: TranslationResources = {
       unknown: "알 수 없는 모델",
     },
     features: {
+      autoCompaction: "컨텍스트 자동 압축",
+      autoRetry: "자동 재시도",
+      fastMode: "빠른 서비스 등급",
+      slowMode: "느린 서비스 등급",
       title: "기능",
       open: "에이전트 기능 열기",
       on: "켜짐",
       off: "꺼짐",
     },
     mode: {
+      allowFileWrites: "파일 쓰기 허용",
+      askAndRemember: "확인 후 기억",
       title: "모드",
       searchPlaceholder: "모드 검색...",
       selectWithValue: "에이전트 모드 선택 ({{value}})",

@@ -29,7 +29,7 @@ export function scheduleModeLabel(option: ControlOption, t: TFunction): string {
 }
 
 export function scheduleThinkingLabel(option: ControlOption, t: TFunction): string {
-  const label = formatThinkingOptionLabel(option);
+  const label = formatThinkingOptionLabel(option, t);
   switch (label.toLowerCase()) {
     case "none":
       return t("schedules.thinking.none");
