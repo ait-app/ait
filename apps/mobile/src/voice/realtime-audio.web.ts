@@ -24,6 +24,12 @@ export function createRealtimeAudio(callbacks: AudioEngineCallbacks) {
     callbacks.onVolumeLevel(0);
   }
 
+  function interrupt(connection: RTCPeerConnection) {
+    if (peer !== connection) return;
+    stop();
+    callbacks.onInterruption?.();
+  }
+
   return {
     isActive: () => peer !== null,
     isMuted: () => muted,
@@ -59,24 +65,25 @@ export function createRealtimeAudio(callbacks: AudioEngineCallbacks) {
         speaker = output;
         connection.ontrack = (event) => {
           if (peer !== connection) return;
+          event.track.onended = () => interrupt(connection);
           output.srcObject = event.streams[0] ?? new MediaStream([event.track]);
           void output.play().catch((error: unknown) => {
+            if (peer !== connection) return;
             callbacks.onError?.(error instanceof Error ? error : new Error(String(error)));
-            callbacks.onInterruption?.();
+            interrupt(connection);
           });
         };
         connection.onconnectionstatechange = () => {
-          if (peer === connection && connection.connectionState === "failed") {
-            callbacks.onInterruption?.();
+          if (connection.connectionState === "failed" || connection.connectionState === "closed") {
+            interrupt(connection);
           }
         };
         microphone.getAudioTracks().forEach((track) => {
-          track.onended = () => {
-            if (peer === connection) callbacks.onInterruption?.();
-          };
+          track.onended = () => interrupt(connection);
           connection.addTrack(track, microphone);
         });
-        connection.createDataChannel("oai-events");
+        const channel = connection.createDataChannel("oai-events");
+        channel.onclose = () => interrupt(connection);
         await connection.setLocalDescription(await connection.createOffer());
         if (peer !== connection) throw new Error("Voice startup cancelled");
         const sdp = connection.localDescription?.sdp;

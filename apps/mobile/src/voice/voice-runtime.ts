@@ -565,12 +565,13 @@ export function createVoiceRuntime(deps: VoiceRuntimeDeps): VoiceRuntime {
     patchSnapshot((prev) => ({ ...prev, isVoiceSwitching: true, phase: "stopping" }));
     stopCue();
     uploader.reset();
+    state.transportReady = false;
     resetPlaybackState();
     deps.engine.stop();
     deps.engine.clearQueue();
+    getActiveSession()?.adapter.setAssistantAudioPlaying(false);
     await deps.engine.stopCapture().catch(() => undefined);
     await deps.deactivateKeepAwake(KEEP_AWAKE_TAG).catch(() => undefined);
-    getActiveSession()?.adapter.setAssistantAudioPlaying(false);
     if (state.generation === generation) resetToDisabledState();
   }
 
@@ -830,31 +831,15 @@ export function createVoiceRuntime(deps: VoiceRuntimeDeps): VoiceRuntime {
 
     async stopVoice() {
       const activeSession = getActiveSession();
-      const generation = state.generation + 1;
-      state.generation = generation;
-      patchSnapshot((prev) => ({
-        ...prev,
-        isVoiceSwitching: true,
-        phase: "stopping",
-      }));
-
+      state.generation += 1;
+      // Release local audio even when the host cannot acknowledge the stop request.
+      const localStop = performLocalStop();
       try {
-        stopCue();
-        uploader.reset();
-        state.transportReady = false;
-        resetPlaybackState();
-        deps.engine.stop();
-        deps.engine.clearQueue();
-        activeSession?.adapter.setAssistantAudioPlaying(false);
         if (activeSession) {
           await activeSession.adapter.setVoiceMode(false);
         }
-        await deps.engine.stopCapture();
-        await deps.deactivateKeepAwake(KEEP_AWAKE_TAG).catch(() => undefined);
       } finally {
-        if (state.generation === generation) {
-          resetToDisabledState();
-        }
+        await localStop;
       }
     },
 

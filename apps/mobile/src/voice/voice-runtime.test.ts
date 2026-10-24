@@ -441,6 +441,32 @@ describe("voice runtime", () => {
     expect(runtime.getSnapshot().phase).toBe("disabled");
   });
 
+  it("releases audio and exits voice mode while the host stop request is pending", async () => {
+    const adapter = createSessionAdapter();
+    const { runtime, engine } = createRuntime({ supportsRealtimeVoice: () => true });
+    runtime.registerSession(adapter);
+    await runtime.startVoice("server-1", "agent-1");
+    let rejectStop!: (error: Error) => void;
+    vi.mocked(adapter.setVoiceMode).mockReturnValue(
+      new Promise((_, reject) => {
+        rejectStop = reject;
+      }),
+    );
+
+    const stopping = runtime.stopVoice();
+    try {
+      expect(engine.stopCapture).toHaveBeenCalledOnce();
+      await vi.waitFor(() => {
+        expect(runtime.getSnapshot().isVoiceMode).toBe(false);
+        expect(runtime.getSnapshot().phase).toBe("disabled");
+      });
+    } finally {
+      rejectStop(new Error("Host disconnected"));
+      await expect(stopping).rejects.toThrow("Host disconnected");
+    }
+    expect(engine.stopCapture).toHaveBeenCalledOnce();
+  });
+
   it("returns an explicit not-ready error when the adapter is missing", async () => {
     const { runtime } = createRuntime();
     await expect(runtime.startVoice("server-1", "agent-1")).rejects.toThrow(
@@ -541,4 +567,29 @@ it("releases a native peer before switching to generic speech", async () => {
   expect(engine.startCapture).toHaveBeenCalledTimes(2);
   expect(adapter.setVoiceMode).toHaveBeenLastCalledWith(true, "other");
   await runtime.stopVoice();
+});
+
+it("does not resume capture when Codex closes during WebRTC startup", async () => {
+  const engine = createAudioEngineMock();
+  engine.createRealtimeOffer = vi.fn().mockResolvedValue("offer");
+  let finishAnswer!: () => void;
+  engine.acceptRealtimeAnswer = vi.fn().mockReturnValue(
+    new Promise<void>((resolve) => {
+      finishAnswer = resolve;
+    }),
+  );
+  const { runtime } = createRuntime({ engine, supportsRealtimeVoice: () => true });
+  const adapter = createSessionAdapter();
+  vi.mocked(adapter.setVoiceMode).mockResolvedValue({ sdp: "answer" });
+  runtime.registerSession(adapter);
+  const starting = runtime.startVoice("server-1", "agent-1");
+  await vi.waitFor(() => expect(engine.acceptRealtimeAnswer).toHaveBeenCalled());
+
+  runtime.onSessionClosed("server-1");
+  expect(engine.stopCapture).toHaveBeenCalledOnce();
+  finishAnswer();
+  await starting;
+  await vi.waitFor(() => expect(runtime.getSnapshot().phase).toBe("disabled"));
+  expect(engine.startCapture).not.toHaveBeenCalled();
+  expect(runtime.getSnapshot().isVoiceMode).toBe(false);
 });
