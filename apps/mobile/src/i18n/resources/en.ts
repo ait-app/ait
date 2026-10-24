@@ -316,6 +316,12 @@ export const en = {
       select: "Select thinking option",
       selectWithValue: "Select thinking option ({{value}})",
     },
+    speed: {
+      title: "Speed",
+      normal: "Normal",
+      fast: "Fast",
+      withValue: "Speed: {{value}}",
+    },
     model: {
       unknown: "Unknown model",
     },

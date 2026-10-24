@@ -214,6 +214,12 @@ export const ru: TranslationResources = {
       select: "Выбрать уровень рассуждений",
       selectWithValue: "Выбрать уровень рассуждений ({{value}})",
     },
+    speed: {
+      title: "Скорость",
+      normal: "Обычная",
+      fast: "Быстрая",
+      withValue: "Скорость: {{value}}",
+    },
     model: {
       unknown: "Неизвестная модель",
     },

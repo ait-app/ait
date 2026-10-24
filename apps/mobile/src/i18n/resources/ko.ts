@@ -212,6 +212,12 @@ export const ko: TranslationResources = {
       select: "사고 옵션 선택",
       selectWithValue: "사고 옵션 선택 ({{value}})",
     },
+    speed: {
+      title: "속도",
+      normal: "일반",
+      fast: "빠름",
+      withValue: "속도: {{value}}",
+    },
     model: {
       unknown: "알 수 없는 모델",
     },

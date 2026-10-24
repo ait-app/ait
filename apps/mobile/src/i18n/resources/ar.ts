@@ -212,6 +212,12 @@ export const ar: TranslationResources = {
       select: "حدد خيار التفكير",
       selectWithValue: "حدد خيار التفكير ({{value}})",
     },
+    speed: {
+      title: "السرعة",
+      normal: "عادية",
+      fast: "سريعة",
+      withValue: "السرعة: {{value}}",
+    },
     model: {
       unknown: "نموذج غير معروف",
     },

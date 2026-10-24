@@ -213,6 +213,12 @@ export const ptBR: TranslationResources = {
       select: "Selecionar opção de raciocínio",
       selectWithValue: "Selecionar opção de raciocínio ({{value}})",
     },
+    speed: {
+      title: "Velocidade",
+      normal: "Normal",
+      fast: "Rápida",
+      withValue: "Velocidade: {{value}}",
+    },
     model: {
       unknown: "Modelo desconhecido",
     },

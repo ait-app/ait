@@ -315,6 +315,12 @@ export const zhCN: TranslationResources = {
       select: "选择推理强度",
       selectWithValue: "选择推理强度（{{value}}）",
     },
+    speed: {
+      title: "速度",
+      normal: "标准",
+      fast: "快速",
+      withValue: "速度：{{value}}",
+    },
     model: {
       unknown: "未知模型",
     },
@@ -1256,14 +1262,14 @@ export const zhCN: TranslationResources = {
       title: "已置顶",
     },
     host: {
-      noHost: "没有 Host",
-      switchTitle: "切换 Host",
-      searchPlaceholder: "搜索 Hosts...",
+      noHost: "没有主机",
+      switchTitle: "切换主机",
+      searchPlaceholder: "搜索主机...",
     },
     actions: {
       addProject: "添加项目",
       newWorkspace: "新建工作区",
-      hosts: "Hosts",
+      hosts: "主机",
       settings: "设置",
       closeSidebar: "关闭侧边栏",
     },

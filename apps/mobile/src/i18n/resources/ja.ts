@@ -214,6 +214,12 @@ export const ja: TranslationResources = {
       select: "思考オプションを選択",
       selectWithValue: "思考オプションを選択（{{value}}）",
     },
+    speed: {
+      title: "速度",
+      normal: "標準",
+      fast: "高速",
+      withValue: "速度：{{value}}",
+    },
     model: {
       unknown: "不明なモデル",
     },

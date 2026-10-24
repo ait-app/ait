@@ -216,6 +216,12 @@ export const fr: TranslationResources = {
       select: "Sélectionnez l'option de réflexion",
       selectWithValue: "Sélectionnez l'option de réflexion ({{value}})",
     },
+    speed: {
+      title: "Vitesse",
+      normal: "Normale",
+      fast: "Rapide",
+      withValue: "Vitesse : {{value}}",
+    },
     model: {
       unknown: "Modèle inconnu",
     },

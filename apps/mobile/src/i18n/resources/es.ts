@@ -214,6 +214,12 @@ export const es: TranslationResources = {
       select: "Seleccione la opción de pensamiento",
       selectWithValue: "Seleccione la opción de pensamiento ({{value}})",
     },
+    speed: {
+      title: "Velocidad",
+      normal: "Normal",
+      fast: "Rápida",
+      withValue: "Velocidad: {{value}}",
+    },
     model: {
       unknown: "Modelo desconocido",
     },
