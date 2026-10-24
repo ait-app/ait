@@ -19,6 +19,7 @@ import {
   CompactionTimelineItemPayloadSchema,
   WorkspaceGitHubRuntimePayloadSchema,
   VoiceTranscriptSchema,
+  VoiceTimelineItemSchema,
 } from "@ait/protocol/messages";
 import { AgentProviderSchema } from "@ait/protocol/provider-manifest";
 import { z } from "zod";
@@ -114,6 +115,11 @@ const TaskActivitySchema = z.discriminatedUnion("type", [
 ]);
 
 const StoredTimelineItemSchema = z.discriminatedUnion("kind", [
+  z.strictObject({
+    ...TimelineItemBaseShape,
+    kind: z.literal("voice"),
+    payload: VoiceTimelineItemSchema,
+  }),
   z.strictObject({
     ...TimelineItemBaseShape,
     kind: z.literal("user_message"),
@@ -447,6 +453,8 @@ function serializeAgentToolCall(data: AgentToolCallData): StoredToolCall {
 function serializeTimelineItem(item: StreamItem): StoredTimelineItem | null {
   const base = timelineBase(item);
   switch (item.kind) {
+    case "voice":
+      return { ...base, kind: item.kind, payload: item.payload };
     case "user_message":
       return {
         ...base,
@@ -539,6 +547,8 @@ function deserializeBuiltinTimelineItem(
     timestamp: new Date(item.timestamp),
   };
   switch (item.kind) {
+    case "voice":
+      return { ...base, kind: item.kind, payload: item.payload };
     case "user_message":
       return {
         ...base,

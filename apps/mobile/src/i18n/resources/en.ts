@@ -1,4 +1,9 @@
 export const en = {
+  voiceTimeline: {
+    started: "Voice conversation started",
+    ended: "Voice conversation ended",
+    failed: "Voice conversation interrupted",
+  },
   bots: {
     title: "Bot",
     browse: "Workspace Bots",

@@ -11,6 +11,8 @@ mod permissions;
 mod plans;
 mod prompts;
 mod realtime;
+mod realtime_history;
+mod realtime_timeline;
 mod rewind;
 mod speed;
 mod streaming;
@@ -165,6 +167,7 @@ impl CodexClient {
                     id: id.clone(),
                     info,
                     realtime: None,
+                    voice_timeline: realtime_timeline::Timeline::default(),
                     active_turn: None,
                     last_message: None,
                     last_failure: None,
@@ -502,6 +505,7 @@ struct CodexSession {
     id: String,
     info: StoredAgentRuntimeInfo,
     realtime: Option<realtime::Realtime>,
+    voice_timeline: realtime_timeline::Timeline,
     active_turn: Option<String>,
     last_message: Option<String>,
     last_failure: Option<String>,
@@ -588,6 +592,9 @@ impl CodexSession {
             self.last_message = item["text"].as_str().map(str::to_owned);
         }
         self.observe_interaction(item, turn)?;
+        if self.realtime.is_some() || !self.voice_timeline.promoted.is_empty() {
+            self.voice_timeline.ordinary(turn, item)?;
+        }
         let entries =
             discovery::timeline_items(item, turn, &discovery::timestamp(), &self.client.images)?;
         if let Some(entry) = entries.last() {
@@ -595,7 +602,11 @@ impl CodexSession {
         }
         self.stream
             .events
-            .extend(entries.into_iter().map(AgentTurnEvent::Timeline));
+            .extend(entries.into_iter().filter_map(|mut entry| {
+                self.voice_timeline
+                    .retain_handoff(&mut entry)
+                    .then_some(AgentTurnEvent::Timeline(entry))
+            }));
         Ok(())
     }
 
@@ -1006,7 +1017,7 @@ impl AgentSession for CodexSession {
                 continue;
             }
             if method.starts_with("thread/realtime/") {
-                self.observe_realtime(method, params);
+                self.observe_realtime(method, params)?;
                 continue;
             }
             if let Some(event) = self.control_event(method, params)? {

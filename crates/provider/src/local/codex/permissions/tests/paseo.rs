@@ -5,6 +5,7 @@ use super::*;
 fn session() -> CodexSession {
     CodexSession {
         realtime: None,
+        voice_timeline: crate::local::codex::realtime_timeline::Timeline::default(),
         pending_plan: None,
         latest_plan: None,
         pending_goal_start: false,

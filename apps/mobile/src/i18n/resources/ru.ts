@@ -2,6 +2,11 @@ import { en, type TranslationResources } from "./en";
 import { pluginSettings } from "./plugin-settings";
 
 export const ru: TranslationResources = {
+  voiceTimeline: {
+    started: "Голосовой разговор начат",
+    ended: "Голосовой разговор завершён",
+    failed: "Голосовой разговор прерван",
+  },
   onlineService: en.onlineService,
   bots: en.bots,
   paneFind: {

@@ -26,6 +26,88 @@ async fn stopped(fixture: &Fixture) {
 }
 
 #[tokio::test]
+async fn realtime_canonical_transcripts_promotions_and_final_stop_items_survive_refresh() {
+    let fixture = Fixture::new();
+    fixture.mode("realtime-canonical");
+    let (execution, _) = worker(&fixture);
+    let created = create(&execution, &fixture).await;
+    let id = created["agentId"].as_str().unwrap();
+    let mut session = execution
+        .start_realtime(id, CancellationToken::new(), None)
+        .await
+        .unwrap()
+        .unwrap();
+    assert!(matches!(event(&mut session).await, Event::Interrupted));
+    assert!(matches!(event(&mut session).await, Event::Transcript(text) if text == "Hello!"));
+    tokio::time::timeout(Duration::from_secs(3), async {
+        while !fixture
+            .requests()
+            .iter()
+            .any(|request| request["method"] == "thread/items/read")
+        {
+            tokio::task::yield_now().await;
+        }
+    })
+    .await
+    .unwrap();
+    drop(session);
+    stopped(&fixture).await;
+    let timeline =
+        crate::storage::timeline::Timeline::open(&fixture.root.path().join("timeline.sqlite"))
+            .unwrap();
+    let before = tokio::time::timeout(Duration::from_secs(3), async {
+        loop {
+            let (_, rows) = timeline.read(id).unwrap();
+            let entries = crate::timeline_projection::project(&rows);
+            if entries.iter().any(|entry| entry.item["status"] == "ended") {
+                break entries;
+            }
+            tokio::time::sleep(Duration::from_millis(5)).await;
+        }
+    })
+    .await
+    .unwrap();
+    assert_eq!(
+        before
+            .iter()
+            .filter(|entry| entry.item["type"] == "voice")
+            .count(),
+        4
+    );
+    assert!(
+        before
+            .iter()
+            .any(|entry| entry.item["text"] == "I can hear you.")
+    );
+    assert_eq!(
+        before
+            .iter()
+            .filter(|entry| entry.item["type"] == "assistant_message")
+            .count(),
+        1
+    );
+    execution
+        .execute("agent.refresh.request", json!({"agentId":id}))
+        .await
+        .unwrap();
+    let (_, rows) = timeline.read(id).unwrap();
+    let after = crate::timeline_projection::project(&rows);
+    assert_eq!(after.len(), before.len());
+    assert!(
+        after
+            .iter()
+            .any(|entry| entry.item["text"] == "I can hear you.")
+    );
+    assert!(
+        !fixture
+            .requests()
+            .iter()
+            .any(|request| request["method"] == "turn/start")
+    );
+    execution.shutdown().await.unwrap();
+}
+
+#[tokio::test]
 async fn realtime_on_an_empty_agent_streams_audio_without_a_text_turn_and_stops_on_drop() {
     let fixture = Fixture::new();
     let (execution, _) = worker(&fixture);

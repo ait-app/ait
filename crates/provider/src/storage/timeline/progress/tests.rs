@@ -4,6 +4,35 @@ use std::collections::BTreeSet;
 
 mod paseo;
 
+#[test]
+fn realtime_snapshots_replace_partial_text_and_survive_reopen_and_reconcile() {
+    let root = tempfile::tempdir().unwrap();
+    let path = root.path().join("timeline.sqlite");
+    let timeline = Timeline::open(&path).unwrap();
+    let mut item = NativeItem {
+        key: "native:voice:call:u".into(),
+        turn_id: None,
+        timestamp: "2026-10-25T00:00:00Z".into(),
+        item: json!({"type":"voice","kind":"transcript","id":"u","sessionId":"call","role":"user","text":"hel","status":"streaming"}),
+    };
+    timeline.progress("agent", "codex", "one", &item).unwrap();
+    item.item["text"] = json!("hello");
+    timeline.progress("agent", "codex", "two", &item).unwrap();
+    item.item["text"] = json!("Hello!");
+    item.item["status"] = json!("completed");
+    let (epoch, _) = timeline.append("agent", "codex", &[item.clone()]).unwrap();
+    drop(timeline);
+    let timeline = Timeline::open(&path).unwrap();
+    let (_, rows) = timeline.read("agent").unwrap();
+    let projected = crate::timeline_projection::project(&rows);
+    assert_eq!(projected.len(), 1);
+    assert_eq!(projected[0].item, item.item);
+    assert_eq!(
+        timeline.reconcile("agent", "codex", &[item]).unwrap(),
+        epoch
+    );
+}
+
 fn entry(text: &str) -> NativeItem {
     NativeItem {
         key: "native:t:a".into(),

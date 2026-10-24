@@ -11,6 +11,7 @@ pub(super) struct Realtime {
     endpoint: Endpoint,
     user_speaking: bool,
     resampler: Resampler,
+    session_id: Option<String>,
 }
 
 impl CodexSession {
@@ -47,11 +48,13 @@ impl CodexSession {
             endpoint,
             user_speaking: false,
             resampler: Resampler::default(),
+            session_id: None,
         });
         self.drive_realtime().await
     }
 
     pub(super) async fn drive_realtime(&mut self) -> Result<(), AgentSessionError> {
+        self.resolve_voice_items().await?;
         let Some(realtime) = &mut self.realtime else {
             return Ok(());
         };
@@ -104,11 +107,27 @@ impl CodexSession {
         Ok(())
     }
 
-    pub(super) fn observe_realtime(&mut self, method: &str, params: &Value) {
+    pub(super) fn observe_realtime(
+        &mut self,
+        method: &str,
+        params: &Value,
+    ) -> Result<(), AgentSessionError> {
+        if let Some(event) = self.voice_timeline.observe(method, params)? {
+            self.stream.events.push_back(event);
+        }
         let Some(realtime) = &mut self.realtime else {
-            return;
+            return Ok(());
         };
+        if let Some(session) = params["item"]["realtimeSessionId"].as_str()
+            && realtime.session_id.as_deref() != Some(session)
+        {
+            return Ok(());
+        }
         let event = match method {
+            "thread/realtime/started" => {
+                realtime.session_id = params["realtimeSessionId"].as_str().map(str::to_owned);
+                return Ok(());
+            }
             "thread/realtime/item/started"
                 if params["item"]["type"] == "transcriptSegment"
                     && params["item"]["role"] == "user" =>
@@ -125,7 +144,7 @@ impl CodexSession {
                     .as_str()
                     .filter(|text| text.len() <= 64 * 1024)
                 else {
-                    return;
+                    return Ok(());
                 };
                 Event::Transcript(text.to_owned())
             }
@@ -135,7 +154,7 @@ impl CodexSession {
                     .filter(|sdp| !sdp.is_empty() && sdp.len() <= 128 * 1024)
                 else {
                     realtime.endpoint.cancel.cancel();
-                    return;
+                    return Ok(());
                 };
                 Event::Sdp(sdp.to_owned())
             }
@@ -144,7 +163,7 @@ impl CodexSession {
             }
             "thread/realtime/transcript/delta" if params["role"] == "user" => {
                 if realtime.user_speaking || params["delta"].as_str().is_none_or(str::is_empty) {
-                    return;
+                    return Ok(());
                 }
                 realtime.user_speaking = true;
                 Event::Interrupted
@@ -155,7 +174,7 @@ impl CodexSession {
                     .as_str()
                     .filter(|text| text.len() <= 64 * 1024)
                 else {
-                    return;
+                    return Ok(());
                 };
                 Event::Transcript(text.to_owned())
             }
@@ -163,14 +182,61 @@ impl CodexSession {
             "thread/realtime/closed" => {
                 let _ = realtime.endpoint.output.try_send(Event::Closed);
                 self.realtime = None;
-                return;
+                return Ok(());
             }
-            _ => return,
+            _ => return Ok(()),
         };
         let failed = matches!(event, Event::Failed);
         if realtime.endpoint.output.try_send(event).is_err() || failed {
             realtime.endpoint.cancel.cancel();
         }
+        Ok(())
+    }
+
+    async fn resolve_voice_items(&mut self) -> Result<(), AgentSessionError> {
+        // Promotions reference ordinary persisted items; reuse their native identities/renderers.
+        for _ in 0..4 {
+            let Some((turn, id)) = self.voice_timeline.promoted.pop_first() else {
+                break;
+            };
+            if self
+                .voice_timeline
+                .ordinary
+                .contains(&(turn.clone(), id.clone()))
+            {
+                continue;
+            }
+            let response = self
+                .transport
+                .as_mut()
+                .ok_or(AgentSessionError::Failed)?
+                .request(
+                    "thread/items/read",
+                    json!({"threadId":self.id,"turnId":turn,"itemIds":[id]}),
+                )
+                .await?;
+            let entries = response["data"]
+                .as_array()
+                .ok_or(AgentSessionError::Failed)?;
+            let item = entries
+                .iter()
+                .find(|entry| entry["turnId"] == turn && entry["item"]["id"] == id)
+                .ok_or(AgentSessionError::Failed)?;
+            self.voice_timeline.ordinary(&turn, &item["item"])?;
+            let entries = super::discovery::timeline_items(
+                &item["item"],
+                &turn,
+                &super::discovery::timestamp(),
+                &self.client.images,
+            )?;
+            // Hydration is display-only: do not replay approvals or mutate active-turn state.
+            self.stream.events.extend(
+                entries
+                    .into_iter()
+                    .map(crate::ports::agent_session::AgentTurnEvent::Timeline),
+            );
+        }
+        Ok(())
     }
 }
 

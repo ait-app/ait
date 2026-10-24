@@ -42,7 +42,13 @@ impl CodexClient {
             let response = transport
                 .request("thread/read", json!({"threadId":id,"includeTurns":true}))
                 .await?;
-            let history = history_with_images(&response["thread"], &self.images)?;
+            let mut history = history_with_images(&response["thread"], &self.images)?;
+            if let Some(entries) =
+                super::realtime_history::read(&mut transport, &response["thread"], &self.images)
+                    .await?
+            {
+                history.entries = entries;
+            }
             if history.descriptor.provider_handle_id != id
                 || Path::new(&history.descriptor.cwd).canonicalize().ok()
                     != Some(

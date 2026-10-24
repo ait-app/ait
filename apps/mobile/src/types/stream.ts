@@ -6,6 +6,7 @@ import type {
   JsonValue,
   ToolCallDetail,
   VoiceTranscriptEntry,
+  VoiceTimelineItem,
 } from "@ait/protocol/agent-types";
 import type { AgentAttachment, AgentStreamEventPayload } from "@ait/protocol/messages";
 import { timelineItemIdentity } from "@ait/protocol/timeline-identity";
@@ -80,6 +81,7 @@ function createAssistantItemId(
 }
 
 export type StreamItem =
+  | VoiceItem
   | UserMessageItem
   | AssistantMessageItem
   | ThoughtItem
@@ -88,6 +90,15 @@ export type StreamItem =
   | NotificationItem
   | CompactionItem
   | PluginTimelineStreamItem;
+
+export interface VoiceItem {
+  kind: "voice";
+  id: string;
+  timestamp: Date;
+  timelineCursor?: TimelinePosition;
+  turnId?: string;
+  payload: VoiceTimelineItem;
+}
 
 export type UserMessageImageAttachment = AttachmentMetadata;
 
@@ -457,7 +468,7 @@ function removeUserMessageAt(items: UserMessageItem[], index: number): UserMessa
 }
 
 function mergeRetainedLifecycleItem(tail: StreamItem[], retained: StreamItem): StreamItem[] | null {
-  if (retained.kind === "plugin") {
+  if (retained.kind === "plugin" || retained.kind === "voice") {
     return replaceTimelineIdentityItem(tail, retained);
   }
   if (!retained.timelineCursor) {
@@ -524,13 +535,13 @@ function mergeRetainedLifecycleItem(tail: StreamItem[], retained: StreamItem): S
 
 function replaceTimelineIdentityItem(
   items: StreamItem[],
-  retained: PluginTimelineStreamItem,
+  retained: PluginTimelineStreamItem | VoiceItem,
 ): StreamItem[] | null {
   const identity = streamTimelineItemIdentity(retained);
   if (identity === null) return null;
   const index = findExistingTimelineIdentityIndex(items, identity);
   const existing = items[index];
-  if (index < 0 || !existing || existing.kind !== "plugin") return null;
+  if (index < 0 || !existing || existing.kind !== retained.kind) return null;
   const next = [...items];
   next[index] = retained;
   return next;
@@ -707,7 +718,15 @@ export function replaceWithCanonicalStream(
       retainedTailMessages.push(local);
     }
   }
-  nextHead = [...retainedTailMessages, ...nextHead];
+  const retainedVoice = input.preserveContinuity
+    ? input.previousTail.filter(
+        (item) =>
+          item.kind === "voice" &&
+          item.timelineCursor &&
+          isAfterCanonicalCoverage(item.timelineCursor, input.canonicalCoverage),
+      )
+    : [];
+  nextHead = [...retainedTailMessages, ...retainedVoice, ...nextHead];
 
   const replacement = preserveReplacementHead(
     nextTail,
@@ -1050,6 +1069,7 @@ function finalizeActiveThoughts(state: StreamItem[]): StreamItem[] {
 }
 
 export function streamTimelineItemIdentity(item: StreamItem): string | null {
+  if (item.kind === "voice") return timelineItemIdentity(item.payload);
   if (item.kind === "plugin") {
     return timelineItemIdentity({
       type: "plugin",
@@ -1540,6 +1560,30 @@ function reduceTimelineEvent(
 ): StreamItem[] {
   const item = event.item;
   switch (item.type) {
+    case "voice": {
+      const id = timelineItemIdentity(item)!;
+      const index = state.findIndex((entry) => entry.kind === "voice" && entry.id === id);
+      const previous = index >= 0 ? state[index] : undefined;
+      if (
+        previous?.kind === "voice" &&
+        previous.payload.kind === "transcript" &&
+        previous.payload.status === "completed" &&
+        item.kind === "transcript" &&
+        item.status === "streaming"
+      )
+        return state;
+      const next: VoiceItem = {
+        kind: "voice",
+        id,
+        payload: item,
+        timestamp: previous?.timestamp ?? timestamp,
+        timelineCursor,
+      };
+      if (index < 0) return [...state, next];
+      const result = [...state];
+      result[index] = next;
+      return result;
+    }
     case "user_message":
       return finalizeActiveThoughts(
         appendUserMessage(
@@ -1768,6 +1812,8 @@ function getEventItemKind(event: AgentStreamEventPayload): StreamItem["kind"] | 
     return null;
   }
   switch (event.item.type) {
+    case "voice":
+      return "voice";
     case "user_message":
       return "user_message";
     case "assistant_message":

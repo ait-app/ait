@@ -94,7 +94,7 @@ async fn rewind(
             .request("thread/read", json!({"threadId":fork,"includeTurns":true}))
             .await?;
     }
-    let result = native_sessions::history_with_images(&response["thread"], images)?;
+    let mut result = native_sessions::history_with_images(&response["thread"], images)?;
     if result.active
         || result.descriptor.provider_handle_id != fork
         || !same_directory(&result.descriptor.cwd, &spec.cwd).await
@@ -112,6 +112,13 @@ async fn rewind(
         })
     {
         return Err(AgentSessionError::Failed);
+    }
+    // Validate the ordinary turn prefix above, then restore any canonical speech retained by
+    // the fork. Speech has no text-turn identity and must not enter the rewind target check.
+    if let Some(entries) =
+        super::realtime_history::read(transport, &response["thread"], images).await?
+    {
+        result.entries = entries;
     }
     Ok(result)
 }

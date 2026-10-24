@@ -227,6 +227,14 @@ impl Transport {
                         return Err(AgentSessionError::Failed);
                     }
                     if let Some(error) = message.get("error") {
+                        if method == "thread/timeline/list"
+                            && (error["code"] == -32601 || (error["code"] == -32600
+                                && error["message"].as_str().is_some_and(|message| message.starts_with(
+                                    "Invalid request: unknown variant `thread/timeline/list`, expected "
+                                ))))
+                        {
+                            return Err(AgentSessionError::Unavailable);
+                        }
                         if method == "turn/steer" && super::streaming::steer_rejected(error) {
                             tracing::debug!(
                                 provider = "codex",
@@ -265,6 +273,8 @@ impl Transport {
             Ok(value)
         } else if matches!(result, Ok(Err(AgentSessionError::Rejected))) {
             Err(AgentSessionError::Rejected)
+        } else if matches!(result, Ok(Err(AgentSessionError::Unavailable))) {
+            Err(AgentSessionError::Unavailable)
         } else {
             let category = if result.is_err() {
                 Category::Timeout
@@ -356,7 +366,8 @@ impl Transport {
     }
 
     /// Drain the old audio generation before the same thread can start another one.
-    /// Preserve text and approval notifications in their original order.
+    /// Preserve ordinary text, approvals and canonical speech records in their original order.
+    /// Only media/transport notifications are discarded; they must not reach the next call.
     pub(super) async fn wait_realtime_closed(
         &mut self,
         thread: &str,
@@ -379,6 +390,19 @@ impl Transport {
                 {
                     if message["method"] == "thread/realtime/closed" {
                         return Ok(());
+                    }
+                    if matches!(
+                        message["method"].as_str(),
+                        Some(
+                            "thread/realtime/item/started"
+                                | "thread/realtime/item/transcript/delta"
+                                | "thread/realtime/item/completed"
+                        )
+                    ) {
+                        if retained.len() >= MAX_EVENTS {
+                            return Err(AgentSessionError::Failed);
+                        }
+                        retained.push_back(message);
                     }
                 } else {
                     if retained.len() >= MAX_EVENTS {

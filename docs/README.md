@@ -1,6 +1,6 @@
 # Ait 文档
 
-- [ADR-190：Codex Provider 拥有原生实时语音](decisions/providers/adr-190-codex-native-realtime-voice.md)：Provider 能力驱动入口、空会话创建、WebRTC 协商、原生 PCM、语音交接记录展示、认证与连接清理边界。
+- [ADR-190：Codex Provider 拥有原生实时语音](decisions/providers/adr-190-codex-native-realtime-voice.md)：Provider 能力驱动入口、空会话创建、WebRTC/PCM、双方实时转写、统一语音历史、结构化消息关联与连接清理边界。
 
 - [ADR-154：账号状态通过共享客户端 Channel 推送](decisions/clients/adr-154-account-status-channel.md)：完整 Host 快照、Host 可连接状态事件、应用心跳与各端票据认证。
 

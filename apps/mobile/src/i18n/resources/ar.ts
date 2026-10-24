@@ -2,6 +2,11 @@ import { en, type TranslationResources } from "./en";
 import { pluginSettings } from "./plugin-settings";
 
 export const ar: TranslationResources = {
+  voiceTimeline: {
+    started: "بدأت المحادثة الصوتية",
+    ended: "انتهت المحادثة الصوتية",
+    failed: "انقطعت المحادثة الصوتية",
+  },
   onlineService: en.onlineService,
   bots: en.bots,
   paneFind: {

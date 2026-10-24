@@ -6,6 +6,7 @@ import type { StreamItem } from "@/types/stream";
  */
 export function continuesTurn(previous: StreamItem | null, next: StreamItem | null): boolean {
   if (!previous || !next) return false;
+  if (previous.kind === "voice" || next.kind === "voice") return false;
   if (previous.turnId !== undefined && next.turnId !== undefined) {
     return previous.turnId === next.turnId;
   }
@@ -18,6 +19,7 @@ export function continuesTurn(previous: StreamItem | null, next: StreamItem | nu
  */
 export function continuesResponse(previous: StreamItem | null, next: StreamItem | null): boolean {
   if (!previous || !next) return false;
+  if (previous.kind === "voice" || next.kind === "voice") return false;
   return continuesTurn(previous, next) || next.kind !== "user_message";
 }
 

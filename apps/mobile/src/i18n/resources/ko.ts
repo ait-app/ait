@@ -2,6 +2,11 @@ import { en, type TranslationResources } from "./en";
 import { pluginSettings } from "./plugin-settings";
 
 export const ko: TranslationResources = {
+  voiceTimeline: {
+    started: "음성 대화가 시작되었습니다",
+    ended: "음성 대화가 종료되었습니다",
+    failed: "음성 대화가 중단되었습니다",
+  },
   onlineService: en.onlineService,
   bots: en.bots,
   paneFind: {

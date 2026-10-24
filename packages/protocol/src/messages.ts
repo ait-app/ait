@@ -647,9 +647,23 @@ export const VoiceTranscriptSchema = z
   .array(z.object({ role: z.enum(["user", "assistant", "unknown"]), text: z.string() }))
   .max(256);
 
+export const VoiceTimelineItemSchema = z.intersection(
+  z.object({ type: z.literal("voice"), id: z.string(), sessionId: z.string() }),
+  z.discriminatedUnion("kind", [
+    z.object({
+      kind: z.literal("transcript"),
+      role: z.enum(["user", "assistant"]),
+      text: z.string(),
+      status: z.enum(["streaming", "completed"]),
+    }),
+    z.object({ kind: z.literal("session"), status: z.enum(["started", "ended", "failed"]) }),
+  ]),
+);
+
 // zod-aot 0.20.4 miscompiles this as a nested discriminated union by omitting
 // the inner tool_call branch from the generated outer dispatch.
 export const AgentTimelineItemPayloadSchema: z.ZodType<AgentTimelineItem, unknown> = z.union([
+  VoiceTimelineItemSchema,
   z.object({
     type: z.literal("user_message"),
     text: z.string(),

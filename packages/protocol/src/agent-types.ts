@@ -377,7 +377,19 @@ export interface VoiceTranscriptEntry {
   text: string;
 }
 
+/** Provider-owned speech snapshots and session boundaries, independent of editable text turns. */
+export type VoiceTimelineItem = { type: "voice"; id: string; sessionId: string } & (
+  | {
+      kind: "transcript";
+      role: "user" | "assistant";
+      text: string;
+      status: "streaming" | "completed";
+    }
+  | { kind: "session"; status: "started" | "ended" | "failed" }
+);
+
 export type AgentTimelineItem =
+  | VoiceTimelineItem
   | {
       type: "user_message";
       text: string;
