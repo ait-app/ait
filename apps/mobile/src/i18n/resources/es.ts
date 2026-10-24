@@ -1745,6 +1745,17 @@ export const es: TranslationResources = {
     nativeReadFailed: "No se pudo leer el uso de la cuenta nativa",
     nativePlanUnavailable:
       "Este inicio de sesión no informa del uso del plan. Inicia sesión con la CLI del proveedor.",
+    nativeText: {
+      claudePlanSignIn: "Inicia sesión con claude /login para consultar el uso del plan.",
+      claudePlanUnavailable:
+        "Este método de inicio de sesión no informa del uso del plan. Ejecuta claude /login para iniciar sesión.",
+      deepseekTotalBalance: "Saldo total de DeepSeek",
+      deepseekRechargeBalance: "Saldo recargado de DeepSeek",
+      deepseekBonusBalance: "Saldo de bonificación de DeepSeek",
+      deepseekApiCalls: "Llamadas a la API de DeepSeek",
+      balanceAvailable: "Saldo disponible",
+      insufficientBalance: "Saldo insuficiente",
+    },
     error: "Error",
     unavailable: "No disponible",
     updated: "Actualizado {{time}}",

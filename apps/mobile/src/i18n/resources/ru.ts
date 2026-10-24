@@ -1728,6 +1728,17 @@ export const ru: TranslationResources = {
     nativeReadFailed: "Не удалось прочитать использование исходной учётной записи",
     nativePlanUnavailable:
       "Этот способ входа не предоставляет использование плана. Войдите через CLI провайдера.",
+    nativeText: {
+      claudePlanSignIn: "Войдите с помощью claude /login, чтобы посмотреть использование тарифа.",
+      claudePlanUnavailable:
+        "Этот способ входа не предоставляет данные об использовании тарифа. Выполните claude /login для входа.",
+      deepseekTotalBalance: "Общий баланс DeepSeek",
+      deepseekRechargeBalance: "Пополненный баланс DeepSeek",
+      deepseekBonusBalance: "Бонусный баланс DeepSeek",
+      deepseekApiCalls: "Вызовы API DeepSeek",
+      balanceAvailable: "Средства доступны",
+      insufficientBalance: "Недостаточно средств",
+    },
     error: "Ошибка",
     unavailable: "Недоступно",
     updated: "Обновлено {{time}}",

@@ -31,6 +31,18 @@ test("resolves labels and login remedies in the current language", async () => {
   expect(usageCopy.problem(nativePlanUnavailable)).toBe(
     "此登录方式不提供套餐用量。请通过提供方 CLI 登录。",
   );
+  expect(
+    usageCopy.problem({
+      kind: "no_quota",
+      detail: "Sign in with claude /login to read plan usage.",
+    }),
+  ).toBe("请运行 claude /login 登录以查看套餐用量。");
+  expect(
+    usageCopy.problem({
+      kind: "no_quota",
+      detail: "This login does not report plan usage. Run claude /login to sign in.",
+    }),
+  ).toBe("此登录方式不提供套餐用量。请运行 claude /login 登录。");
   expect(usageCopy.problem({ kind: "no_quota", detail: "No active coding plan" })).toBe(
     "No active coding plan",
   );

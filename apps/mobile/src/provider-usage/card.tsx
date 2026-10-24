@@ -10,6 +10,7 @@ import { ProviderUsageBalanceBar } from "./balance-bar";
 import { formatAgo } from "./format";
 import type { ProviderUsage } from "./types";
 import { ProviderUsageWindowBar } from "./window-bar";
+import { formatNativeUsageText } from "@/usage/copy";
 
 interface ProviderUsageIconProps {
   iconKey: string;
@@ -105,10 +106,10 @@ export function ProviderUsageCard({
           {details.map((detail) => (
             <View key={detail.id} style={styles.detailRow}>
               <Text style={styles.detailLabel} numberOfLines={1}>
-                {detail.label}
+                {formatNativeUsageText(detail.label, t)}
               </Text>
               <Text style={styles.detailValue} numberOfLines={1}>
-                {detail.value}
+                {formatNativeUsageText(detail.value, t)}
               </Text>
             </View>
           ))}

@@ -130,10 +130,10 @@ export function UsageCard({
           {details.map((detail) => (
             <View key={detail.id} style={styles.detailRow}>
               <Text style={styles.detailLabel} numberOfLines={1}>
-                {detail.label}
+                {usageCopy.nativeText(detail.label)}
               </Text>
               <Text style={styles.detailValue} numberOfLines={1}>
-                {detail.value}
+                {usageCopy.nativeText(detail.value)}
               </Text>
             </View>
           ))}

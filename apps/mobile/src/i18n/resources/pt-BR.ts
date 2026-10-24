@@ -1729,6 +1729,17 @@ export const ptBR: TranslationResources = {
     loginSignInAgain: "Entre novamente.",
     nativeReadFailed: "Não foi possível ler o uso da conta nativa",
     nativePlanUnavailable: "Este login não informa o uso do plano. Entre pela CLI do provedor.",
+    nativeText: {
+      claudePlanSignIn: "Entre com claude /login para consultar o uso do plano.",
+      claudePlanUnavailable:
+        "Este método de login não informa o uso do plano. Execute claude /login para entrar.",
+      deepseekTotalBalance: "Saldo total do DeepSeek",
+      deepseekRechargeBalance: "Saldo recarregado do DeepSeek",
+      deepseekBonusBalance: "Saldo de bônus do DeepSeek",
+      deepseekApiCalls: "Chamadas à API do DeepSeek",
+      balanceAvailable: "Saldo disponível",
+      insufficientBalance: "Saldo insuficiente",
+    },
     error: "Erro",
     unavailable: "Indisponível",
     updated: "Atualizado {{time}}",

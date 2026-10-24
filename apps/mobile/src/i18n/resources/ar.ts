@@ -1697,6 +1697,17 @@ export const ar: TranslationResources = {
     nativeReadFailed: "تعذر قراءة استخدام الحساب الأصلي",
     nativePlanUnavailable:
       "طريقة تسجيل الدخول هذه لا تعرض استخدام الخطة. سجّل الدخول باستخدام واجهة سطر أوامر المزوّد.",
+    nativeText: {
+      claudePlanSignIn: "سجّل الدخول باستخدام claude /login للاطلاع على استخدام الخطة.",
+      claudePlanUnavailable:
+        "طريقة تسجيل الدخول هذه لا توفر بيانات استخدام الخطة. شغّل claude /login لتسجيل الدخول.",
+      deepseekTotalBalance: "إجمالي رصيد DeepSeek",
+      deepseekRechargeBalance: "رصيد الشحن في DeepSeek",
+      deepseekBonusBalance: "الرصيد الإضافي في DeepSeek",
+      deepseekApiCalls: "استدعاءات واجهة API في DeepSeek",
+      balanceAvailable: "الرصيد متاح",
+      insufficientBalance: "الرصيد غير كافٍ",
+    },
     error: "خطأ",
     unavailable: "غير متاح",
     updated: "تم التحديث {{time}}",
