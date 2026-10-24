@@ -1,5 +1,6 @@
 import { useStableEvent } from "@/hooks/use-stable-event";
 import { UserMessageRemoteImage } from "./user-message-remote-image";
+import { VoiceTranscript } from "./voice-transcript";
 import type { CompactionMarkerLabelInput } from "./message-compaction-label";
 import { getAgentAttachmentPillContent } from "@/attachments/attachment-pill-content";
 import { AssistantForkMenu, type AssistantForkTarget } from "@/components/assistant-fork-menu";
@@ -31,7 +32,11 @@ import { resolveToolCallIcon } from "@/utils/tool-call-icon";
 import { useTargetAgentTitle } from "@/tool-calls/use-target-agent-title";
 import type { DaemonClient } from "@ait/client/internal/daemon-client";
 import type { AgentMessage } from "@ait/protocol/agent-message";
-import type { AgentCapabilityFlags, ToolCallDetail } from "@ait/protocol/agent-types";
+import type {
+  AgentCapabilityFlags,
+  ToolCallDetail,
+  VoiceTranscriptEntry,
+} from "@ait/protocol/agent-types";
 import type { AgentAttachment } from "@ait/protocol/messages";
 import MaskedView from "@react-native-masked-view/masked-view";
 import {
@@ -96,6 +101,7 @@ interface UserMessageProps {
   message: string;
   images?: UserMessageImageAttachment[];
   imageSources?: string[];
+  voiceTranscript?: VoiceTranscriptEntry[];
   attachments?: AgentAttachment[];
   timestamp: number;
   capabilities?: AgentCapabilityFlags;
@@ -395,6 +401,7 @@ export const UserMessage = memo(function UserMessage({
   message,
   images = [],
   imageSources = [],
+  voiceTranscript,
   attachments = [],
   timestamp,
   capabilities,
@@ -468,6 +475,15 @@ export const UserMessage = memo(function UserMessage({
     ],
     [showTrailingRow],
   );
+
+  if (voiceTranscript?.length) {
+    return (
+      <VoiceTranscript
+        entries={voiceTranscript}
+        disableOuterSpacing={resolvedDisableOuterSpacing}
+      />
+    );
+  }
 
   return (
     <View style={containerStyle} testID="user-message" aria-busy={isPending}>

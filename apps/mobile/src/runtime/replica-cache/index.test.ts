@@ -314,6 +314,27 @@ describe("ReplicaCache", () => {
     expect(storage.rows.size).toBe(0);
   });
 
+  it("retains speech roles and text across a cache restart", async () => {
+    const storage = new MemoryStorage();
+    const writer = createCache(storage);
+    const item: StreamItem = {
+      kind: "user_message",
+      id: "voice",
+      messageId: "voice",
+      text: "test",
+      timestamp: new Date(1),
+      timelineCursor: { epoch: "epoch-1", seq: 12 },
+      voiceTranscript: [
+        { role: "user", text: "hello" },
+        { role: "assistant", text: "hi" },
+      ],
+    };
+    const value = { ...timeline(), items: [item] };
+    writer.commitTimeline(SERVER_ID, "agent-1", value);
+    await writer.flush();
+    expect(await createCache(storage).readTimeline(SERVER_ID, "agent-1")).toEqual(value);
+  });
+
   it("round-trips explicit directory and timeline commits", async () => {
     const storage = new MemoryStorage();
     const writer = createCache(storage);

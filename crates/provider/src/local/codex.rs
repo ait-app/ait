@@ -17,6 +17,7 @@ mod streaming;
 mod subagents;
 mod transport;
 mod user_images;
+mod voice_transcript;
 mod workflows;
 
 use std::borrow::Cow;

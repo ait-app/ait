@@ -643,6 +643,10 @@ export const CompactionTimelineItemPayloadSchema = z.object({
 
 export type CompactionTimelineItemPayload = z.infer<typeof CompactionTimelineItemPayloadSchema>;
 
+export const VoiceTranscriptSchema = z
+  .array(z.object({ role: z.enum(["user", "assistant", "unknown"]), text: z.string() }))
+  .max(256);
+
 // zod-aot 0.20.4 miscompiles this as a nested discriminated union by omitting
 // the inner tool_call branch from the generated outer dispatch.
 export const AgentTimelineItemPayloadSchema: z.ZodType<AgentTimelineItem, unknown> = z.union([
@@ -652,6 +656,7 @@ export const AgentTimelineItemPayloadSchema: z.ZodType<AgentTimelineItem, unknow
     messageId: z.string().optional(),
     clientMessageId: z.string().optional(),
     imageSources: z.array(z.string()).optional(),
+    voiceTranscript: VoiceTranscriptSchema.optional(),
   }),
   z.object({
     type: z.literal("assistant_message"),

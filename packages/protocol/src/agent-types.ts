@@ -371,6 +371,12 @@ export interface AgentTaskItem {
   activeForm?: string;
 }
 
+/** Ordered speech within a single provider handoff, separate from text turns. */
+export interface VoiceTranscriptEntry {
+  role: "user" | "assistant" | "unknown";
+  text: string;
+}
+
 export type AgentTimelineItem =
   | {
       type: "user_message";
@@ -379,6 +385,7 @@ export type AgentTimelineItem =
       clientMessageId?: string;
       /** Provider image URLs or host paths, resolved through the connected daemon. */
       imageSources?: string[];
+      voiceTranscript?: VoiceTranscriptEntry[];
     }
   | { type: "assistant_message"; text: string; messageId?: string }
   | { type: "reasoning"; text: string }

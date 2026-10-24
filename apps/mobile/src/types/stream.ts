@@ -5,6 +5,7 @@ import type {
   CompactionTimelineItem,
   JsonValue,
   ToolCallDetail,
+  VoiceTranscriptEntry,
 } from "@ait/protocol/agent-types";
 import type { AgentAttachment, AgentStreamEventPayload } from "@ait/protocol/messages";
 import { timelineItemIdentity } from "@ait/protocol/timeline-identity";
@@ -101,6 +102,7 @@ export interface UserMessageItem {
   timestamp: Date;
   images?: UserMessageImageAttachment[];
   imageSources?: string[];
+  voiceTranscript?: VoiceTranscriptEntry[];
   attachments?: AgentAttachment[];
 }
 
@@ -114,6 +116,7 @@ export interface UserMessageInput {
   timestamp: Date;
   images?: UserMessageImageAttachment[];
   imageSources?: string[];
+  voiceTranscript?: VoiceTranscriptEntry[];
   attachments?: AgentAttachment[];
 }
 
@@ -133,6 +136,7 @@ export function createUserMessage(input: UserMessageInput): UserMessageItem {
     timestamp: input.timestamp,
     ...(input.images && input.images.length > 0 ? { images: input.images } : {}),
     ...(input.imageSources?.length ? { imageSources: input.imageSources } : {}),
+    ...(input.voiceTranscript?.length ? { voiceTranscript: input.voiceTranscript } : {}),
     ...(input.attachments && input.attachments.length > 0
       ? { attachments: input.attachments }
       : {}),
@@ -260,6 +264,7 @@ function produceUserMessage(
   }
   const useIncoming =
     presentationPolicy === "incoming" ||
+    Boolean(incoming.voiceTranscript?.length) ||
     (Boolean(incoming.imageSources?.length) &&
       !existing.images?.length &&
       !existing.attachments?.length);
@@ -279,6 +284,7 @@ function produceUserMessage(
     existing.timestamp === merged.timestamp &&
     existing.images === merged.images &&
     existing.imageSources === merged.imageSources &&
+    existing.voiceTranscript === merged.voiceTranscript &&
     existing.attachments === merged.attachments
   ) {
     return { items, index, message: existing, matched: true };
@@ -905,9 +911,10 @@ function appendUserMessage(
   timelineCursor?: TimelinePosition,
   turnId?: string,
   imageSources?: string[],
+  voiceTranscript?: VoiceTranscriptEntry[],
 ): StreamItem[] {
   const { chunk, hasContent } = normalizeChunk(text);
-  if (!hasContent && !imageSources?.length) {
+  if (!hasContent && !imageSources?.length && !voiceTranscript?.length) {
     return state;
   }
 
@@ -920,6 +927,7 @@ function appendUserMessage(
     turnId,
     text: chunk,
     imageSources,
+    voiceTranscript,
     timestamp,
   });
   return upsertUserMessage(state, nextItem);
@@ -1544,6 +1552,7 @@ function reduceTimelineEvent(
           timelineCursor,
           event.turnId,
           item.imageSources,
+          item.voiceTranscript,
         ),
       );
     case "assistant_message":
@@ -1927,6 +1936,7 @@ function applyCanonicalUserMessageEvent(params: {
     timelineCursor,
     text: normalized.chunk,
     imageSources: event.item.imageSources,
+    voiceTranscript: event.item.voiceTranscript,
     timestamp,
   });
   if (unmatchedInsert === "head") {
@@ -1934,7 +1944,10 @@ function applyCanonicalUserMessageEvent(params: {
       tail,
       head,
       message: canonical,
-      insert: normalized.hasContent || canonical.imageSources?.length ? "head" : "none",
+      insert:
+        normalized.hasContent || canonical.imageSources?.length || canonical.voiceTranscript?.length
+          ? "head"
+          : "none",
       presentation: "existing",
     });
     const reconciledTail = canonical.clientMessageId
@@ -1965,7 +1978,8 @@ function applyCanonicalUserMessageEvent(params: {
   const reconciled = placeCanonicalUserMessageAtTail(
     flushedTail,
     canonical,
-    normalized.hasContent || Boolean(canonical.imageSources?.length),
+    normalized.hasContent ||
+      Boolean(canonical.imageSources?.length || canonical.voiceTranscript?.length),
   );
   const reconciledTail = canonical.clientMessageId
     ? reconcileCanonicalUserTurnMembership(
