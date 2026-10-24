@@ -242,6 +242,7 @@ async fn discover(client: &dyn AgentClient, cwd: &str) -> Entry {
     };
     let mut value = json!({"provider":client.provider(),"status":status,"enabled":true,"source":"builtin",
         "supportsSessionImport":client.supports_session_import(),
+        "supportsRealtimeVoice":client.settings(&domain::agent_runtime::StoredAgentConfig::default())["capabilities"]["supportsRealtimeVoice"] == true,
         "models":details.models,"modes":details.modes,"fetchedAt":Utc::now().to_rfc3339()});
     if client.provider() == "deepseek-harness" {
         value["label"] = json!("DeepSeek Harness");

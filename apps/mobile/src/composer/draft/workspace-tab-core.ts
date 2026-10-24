@@ -1,20 +1,11 @@
-import { resolveSubmissionReadiness } from "@/provider-selection/provider-selection";
+import { resolveAgentCreationReadiness } from "@/provider-selection/provider-selection";
 
 export interface WorkspaceDraftAutoSubmitConfig {
   provider: string;
   model: string | null;
 }
 
-export function shouldAllowEmptyDraftText(input: {
-  allowsEmptyAutoSubmit: boolean;
-  attachments: readonly unknown[];
-}): boolean {
-  return input.allowsEmptyAutoSubmit || input.attachments.length > 0;
-}
-
-export function validateDraftSubmission(input: {
-  text: string;
-  allowsEmptyAutoSubmit: boolean;
+export function validateDraftCreation(input: {
   composerState: {
     providerDefinitions: unknown[];
     selectedProvider: string | null;
@@ -26,17 +17,8 @@ export function validateDraftSubmission(input: {
   workspaceDirectory: string | null;
   hasClient: boolean;
 }): string | null {
-  const {
-    text,
-    allowsEmptyAutoSubmit,
-    composerState,
-    autoSubmitConfig,
-    workspaceDirectory,
-    hasClient,
-  } = input;
-  const readiness = resolveSubmissionReadiness({
-    text,
-    allowsEmptyAutoSubmit,
+  const { composerState, autoSubmitConfig, workspaceDirectory, hasClient } = input;
+  const readiness = resolveAgentCreationReadiness({
     providerCount: composerState.providerDefinitions.length,
     selection: {
       provider: composerState.selectedProvider,

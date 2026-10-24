@@ -29,6 +29,9 @@ export function buildProviderDefinitions(
 
   return snapshotEntries.map((entry) => ({
     id: entry.provider,
+    ...(entry.supportsRealtimeVoice !== undefined
+      ? { supportsRealtimeVoice: entry.supportsRealtimeVoice }
+      : {}),
     label: entry.label ?? entry.provider,
     description: entry.description ?? "",
     defaultModeId: entry.defaultModeId ?? null,

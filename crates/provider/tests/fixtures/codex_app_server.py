@@ -105,6 +105,13 @@ for line in sys.stdin:
     if mode == "error" or (mode == "reject-first-input" and method == "turn/start"):
         emit({"id": request["id"], "error": {"message": "sensitive native error"}})
         continue
+    if method == "thread/realtime/start" and mode == "realtime-rejected":
+        emit({"id":request["id"],"error":{"code":-32600,"message":"native realtime requires authentication"}})
+        continue
+    if method == "thread/realtime/start" and mode == "realtime-delayed":
+        (root / "realtime-started").write_text("ready")
+        while not (root / "release-realtime").exists():
+            time.sleep(0.01)
     result = {}
     if method == "initialize":
         result = {"userAgent":"codex_cli_rs/0.153.4"} if mode == "workflows" else {}
@@ -205,6 +212,22 @@ for line in sys.stdin:
             sys.exit(0)
         result = {"turnId": "wrong-turn" if mode == "steer-wrong-id" else pending}
     emit({"id": request["id"], "result": result})
+    if method == "thread/realtime/start" and params.get("transport", {}).get("type") == "webrtc":
+        emit({"method":"thread/realtime/sdp","params":{"threadId":thread_id,"sdp":"fixture-answer"}})
+    if method == "thread/realtime/start":
+        emit({"method":"thread/realtime/started","params":{"threadId":thread_id,"realtimeSessionId":"realtime-fixture","version":"v2"}})
+    if method == "thread/realtime/appendAudio":
+        # A different thread's audio must never reach this connection.
+        emit({"method":"thread/realtime/outputAudio/delta","params":{"threadId":"unrelated","audio":params["audio"]}})
+        emit({"method":"thread/realtime/transcript/delta","params":{"threadId":thread_id,"role":"user","delta":"hello"}})
+        emit({"method":"thread/realtime/transcript/done","params":{"threadId":thread_id,"role":"user","text":"hello"}})
+        emit({"method":"thread/realtime/outputAudio/delta","params":{"threadId":thread_id,"audio":params["audio"]}})
+        if mode == "realtime-closed":
+            emit({"method":"thread/realtime/closed","params":{"threadId":thread_id,"reason":"finished"}})
+        if mode == "realtime-error":
+            emit({"method":"thread/realtime/error","params":{"threadId":thread_id,"message":"private upstream diagnostic"}})
+    if method == "thread/realtime/stop":
+        emit({"method":"thread/realtime/closed","params":{"threadId":thread_id,"reason":"stopped"}})
     if method == "thread/compact/start":
         compact_turn = pending or str(uuid.uuid4())
         if pending is None:

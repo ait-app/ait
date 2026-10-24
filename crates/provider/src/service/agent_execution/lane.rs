@@ -119,6 +119,7 @@ pub(super) async fn request(
                 params,
                 reply,
                 cancel,
+                realtime,
                 permit,
                 queued,
             } = command
@@ -140,7 +141,7 @@ pub(super) async fn request(
                         return state;
                     }
                 }
-                voice::dispatch(&mut state, &method, params, (reply, cancel)).await;
+                voice::dispatch(&mut state, &method, params, (reply, cancel, realtime)).await;
                 tracing::debug!(
                     method,
                     class = class(&method, owned),

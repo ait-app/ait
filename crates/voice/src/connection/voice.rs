@@ -1,4 +1,8 @@
-use std::{collections::BTreeMap, sync::Arc, time::Duration};
+use std::{
+    collections::{BTreeMap, VecDeque},
+    sync::Arc,
+    time::Duration,
+};
 
 use base64::{Engine, engine::general_purpose::STANDARD};
 use model::{
@@ -21,7 +25,10 @@ use super::{Connection, emit, jobs, voice_error};
 
 #[derive(Default)]
 pub(super) struct Voice {
-    target: Option<Arc<Target>>,
+    pub(super) target: Option<Arc<Target>>,
+    pub(super) native: Option<model::realtime::Session>,
+    native_only: bool,
+    sdp: Option<String>,
     bytes: Vec<u8>,
     format: Option<Format>,
     speaking: bool,
@@ -30,11 +37,11 @@ pub(super) struct Voice {
     pub(crate) generation: String,
     pub(crate) running: bool,
     cancel: CancellationToken,
-    playback: Option<Playback>,
+    pub(super) playback: VecDeque<Playback>,
     pub(super) acknowledgments: BTreeMap<String, Instant>,
 }
 
-struct Playback {
+pub(super) struct Playback {
     audio: Audio,
     group: String,
     index: usize,
@@ -43,10 +50,12 @@ struct Playback {
 
 impl Voice {
     pub(super) fn is_empty(&self) -> bool {
-        self.target.is_none() && self.bytes.is_empty() && !self.running && self.playback.is_none()
+        self.target.is_none() && self.bytes.is_empty() && !self.running && self.playback.is_empty()
     }
 
-    fn abort(&mut self) {
+    pub(super) fn abort(&mut self) {
+        self.native = None;
+        self.sdp = None;
         self.cancel.cancel();
         self.generation = Uuid::new_v4().to_string();
         self.running = false;
@@ -55,7 +64,7 @@ impl Voice {
         self.speaking = false;
         self.silent_samples = 0;
         self.updated = None;
-        self.playback = None;
+        self.playback.clear();
         self.acknowledgments.clear();
     }
 
@@ -64,7 +73,7 @@ impl Voice {
     }
 
     pub(super) fn output(&mut self, audio: Audio) {
-        self.playback = Some(Playback {
+        self.playback.push_back(Playback {
             audio,
             group: Uuid::new_v4().to_string(),
             index: 0,
@@ -81,11 +90,24 @@ impl Voice {
                 .values()
                 .any(|time| time.elapsed() > Duration::from_secs(30))
         {
+            if self.native_only {
+                self.target = None;
+                emit(outbound, "voice.session.closed", json!({}))?;
+            }
             self.abort();
             emit(outbound, "voice.input.state", json!({"isSpeaking":false}))?;
             return voice_error(outbound, Error::Timeout);
         }
-        let Some(playback) = &mut self.playback else {
+        self.poll_native(outbound)?;
+        let budget = if self.native_only { 4 } else { 1 };
+        for _ in 0..budget {
+            self.poll_playback(outbound)?;
+        }
+        Ok(())
+    }
+
+    fn poll_playback(&mut self, outbound: &Outbound) -> Result<(), QueueError> {
+        let Some(playback) = self.playback.front_mut() else {
             return Ok(());
         };
         if self.acknowledgments.len() >= 4 {
@@ -106,7 +128,7 @@ impl Voice {
         playback.offset = end;
         playback.index += 1;
         if last {
-            self.playback = None;
+            self.playback.pop_front();
         }
         Ok(())
     }
@@ -124,30 +146,30 @@ impl Connection {
                 if params != json!({}) {
                     return Err(Error::Invalid);
                 }
+                if self.voice.native.is_some() {
+                    self.voice.target = None;
+                }
                 self.voice.abort();
                 Ok(json!({"accepted":true}))
             }
             "voice.mode.set.request" => {
                 let request: protocol::Mode = protocol::decode(params)?;
+                if request
+                    .sdp
+                    .as_ref()
+                    .is_some_and(|sdp| sdp.is_empty() || sdp.len() > 128 * 1024 || !request.enabled)
+                {
+                    return Err(Error::Invalid);
+                }
                 if request.enabled {
-                    if !service.availability().1 {
-                        return Ok(mode_result(&self.voice, Some(Error::Unavailable)));
-                    }
-                    let ready = service
-                        .stt
-                        .as_ref()
-                        .ok_or(Error::Unavailable)?
-                        .readiness()
-                        .and_then(|()| service.tts.as_ref().ok_or(Error::Unavailable)?.readiness());
-                    if let Err(error) = ready {
-                        return Ok(mode_result(&self.voice, Some(error)));
-                    }
                     let id = request
                         .agent_id
                         .as_deref()
                         .filter(|id| model::valid_id(id))
                         .ok_or(Error::Invalid)?;
-                    let agents = service.agents.as_ref().ok_or(Error::Unavailable)?;
+                    let Some(agents) = service.agents.as_ref() else {
+                        return Ok(mode_result(&self.voice, Some(Error::Unavailable)));
+                    };
                     let target =
                         match tokio::time::timeout(Duration::from_secs(10), agents.resolve(id))
                             .await
@@ -166,7 +188,33 @@ impl Connection {
                             Ok(target) => target,
                             Err(error) => return Ok(mode_result(&self.voice, Some(error))),
                         };
+                        let (native, sdp) = match self
+                            .prepare_native(agents.as_ref(), &target.id, request.sdp)
+                            .await
+                        {
+                            Ok(prepared) => prepared,
+                            Err(error) => return Ok(mode_result(&self.voice, Some(error))),
+                        };
+                        if native.is_none() {
+                            if !service.availability().1 {
+                                return Ok(mode_result(&self.voice, Some(Error::Unavailable)));
+                            }
+                            let ready = service
+                                .stt
+                                .as_ref()
+                                .ok_or(Error::Unavailable)
+                                .and_then(|stt| stt.readiness())
+                                .and_then(|()| {
+                                    service.tts.as_ref().ok_or(Error::Unavailable)?.readiness()
+                                });
+                            if let Err(error) = ready {
+                                return Ok(mode_result(&self.voice, Some(error)));
+                            }
+                        }
                         self.voice.abort();
+                        self.voice.native_only = native.is_some();
+                        self.voice.native = native;
+                        self.voice.sdp = sdp;
                         self.voice.target = Some(target);
                     }
                 } else {
@@ -186,6 +234,9 @@ impl Connection {
         runtime: &Arc<Runtime>,
         outbound: &Outbound,
     ) -> Result<(), Error> {
+        if self.voice.native_only {
+            return self.voice.native_chunk(request);
+        }
         if service.stt.is_none() {
             return Err(Error::Unavailable);
         }
@@ -273,6 +324,9 @@ impl Connection {
 
 fn mode_result(voice: &Voice, error: Option<Error>) -> Value {
     let mut result = json!({"enabled":voice.target.is_some(),"agentId":voice.target.as_ref().map(|target| &target.id),"accepted":error.is_none(),"error":error.map(|error| error.to_string())});
+    if let Some(sdp) = &voice.sdp {
+        result["sdp"] = json!(sdp);
+    }
     if let Some(error) = error {
         result["reasonCode"] = json!(error.reason());
         result["retryable"] = json!(error.retryable());

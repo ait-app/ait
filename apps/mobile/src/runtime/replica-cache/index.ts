@@ -173,6 +173,7 @@ const StoredTimelineItemSchema = z.discriminatedUnion("kind", [
 ]);
 
 const AgentCapabilitiesSchema = z.strictObject({
+  supportsRealtimeVoice: z.boolean().optional(),
   supportsStreaming: z.boolean(),
   supportsSessionPersistence: z.boolean(),
   supportsSessionListing: z.boolean().optional(),
@@ -636,6 +637,9 @@ function serializeAgent(agent: Agent): StoredAgent {
         }
       : {}),
     capabilities: {
+      ...(agent.capabilities.supportsRealtimeVoice !== undefined
+        ? { supportsRealtimeVoice: agent.capabilities.supportsRealtimeVoice }
+        : {}),
       supportsStreaming: agent.capabilities.supportsStreaming,
       supportsSessionPersistence: agent.capabilities.supportsSessionPersistence,
       ...(agent.capabilities.supportsSessionListing !== undefined

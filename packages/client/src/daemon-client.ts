@@ -3776,11 +3776,16 @@ export class DaemonClient {
   // Audio / Voice
   // ============================================================================
 
-  async setVoiceMode(enabled: boolean, agentId?: string): Promise<SetVoiceModePayload> {
+  async setVoiceMode(
+    enabled: boolean,
+    agentId?: string,
+    sdp?: string,
+  ): Promise<SetVoiceModePayload> {
     const requestId = this.createRequestId();
     const message = SessionInboundMessageSchema.parse({
       type: "voice.mode.set.request",
       enabled,
+      ...(sdp ? { sdp } : {}),
       ...(agentId ? { agentId } : {}),
       requestId,
     });

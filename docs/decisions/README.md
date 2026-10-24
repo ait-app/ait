@@ -76,6 +76,8 @@ ADR-074、082、083、084、122 在不同类别中各有两份，引用时以路
 
 ## Provider、Agent 与会话
 
+- [ADR-190：Codex Provider 拥有原生实时语音](providers/adr-190-codex-native-realtime-voice.md)
+
 - [ADR-185：各 Provider 保留原生失败原因](providers/adr-185-native-provider-failure-details.md)
 
 - [ADR-180：Oh My Pi 原生 RPC Provider](providers/adr-180-omp-native-rpc-provider.md)

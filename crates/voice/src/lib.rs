@@ -38,6 +38,11 @@ pub enum Error {
     /// A request was cancelled by its owning connection.
     #[error("Speech operation cancelled")]
     Cancelled,
+    /// The selected provider's native realtime session could not be used.
+    #[error(
+        "Native realtime voice failed. Check the selected provider version and its voice authentication support"
+    )]
+    Realtime,
     /// Native Agent operation failed.
     #[error("Voice Agent operation failed")]
     Agent,
@@ -57,6 +62,7 @@ impl Error {
             Self::Provider => "speech_provider_failed",
             Self::Cancelled => "speech_cancelled",
             Self::Agent => "voice_agent_failed",
+            Self::Realtime => "native_realtime_failed",
         }
     }
 
@@ -75,7 +81,7 @@ impl From<Error> for model::ErrorCode {
         match error {
             Error::Invalid => Self::InvalidMessage,
             Error::Capacity => Self::ResourceExhausted,
-            Error::Agent => Self::AgentIo,
+            Error::Agent | Error::Realtime => Self::AgentIo,
             Error::Unavailable
             | Error::Timeout
             | Error::Provider

@@ -1,8 +1,18 @@
 # 独立 daemon 的语音与听写
 
-八个方法均为实际实现；默认使用自动下载模型的离线 Sherpa ONNX 后端。首次启动后台准备模型，
+听写及旧客户端的通用语音协议默认使用自动下载模型的离线 Sherpa ONNX 后端。首次启动后台准备模型，
 不阻塞 Host 连接。准备期间点击语音会返回可重试的 `speech_models_preparing`；下载失败返回
 `speech_model_download_failed`，稍后再次点击会重试。显式禁用时返回 `speech_backend_unavailable`。
+
+## Codex 原生实时语音
+
+实时语音入口和快捷键统一由 Provider 的 `supportsRealtimeVoice` 能力声明控制，草稿和已有 Agent 都遵循此规则；未声明时不显示。当前由 Codex 声明该能力，选择后可从空对话直接开始语音。服务端创建空 Agent，再通过同一个 Codex thread 启动原生 realtime；不提交空消息，也不调用 Ait 的 STT/TTS。
+
+桌面和 Web 使用 WebRTC。客户端生成 offer，通过 `voice.mode.set.request` 的可选 `sdp` 字段交给 Codex provider；成功响应包含 `sdp` answer。Codex 使用 realtime v3 完成认证、会话协商和原生工具轮次，音频直接通过 WebRTC 传输。浏览器需要允许麦克风访问，Web 需要 HTTPS 或 localhost。
+
+没有 WebRTC 引擎的客户端使用原生 WebSocket PCM。Codex 0.163.0 要求该通道使用 API key 认证；ChatGPT 登录在桌面/Web 通过 WebRTC 使用。原生版本或认证不支持时返回 `native_realtime_failed`，不会改用通用语音后端。离线模型是否下载完成不影响 Codex 原生语音。
+
+关闭语音、断线或原生会话结束会释放媒体设备和连接。`voice.session.closed` 通知客户端停止录音和播放；native 转写只是显示事件，不再转成 Ait 文本消息。
 
 ## 后端配置
 
@@ -91,7 +101,7 @@ finalSeq 为最后一片的序号，不是分片数量。finish 之后可补发�
 上面的短音频仅演示编码，识别结果由后端决定。
 
 语音先以 request 启用目标 Agent。response.result 含 accepted、enabled、agentId、error，
-失败时可带 reasonCode/retryable。上传音频触发转写，成功后调用现有 Agent 文本执行，
+失败时可带 reasonCode/retryable。以下为通用后端路径：上传音频触发转写，成功后调用现有 Agent 文本执行，
 等待最终回复并合成语音。未启用模式时只发转写结果。不要把听写结果自动当成已提交的消息。
 
 ```json
@@ -108,6 +118,7 @@ finalSeq 为最后一片的序号，不是分片数量。finish 之后可补发�
 | voice.input.state                | isSpeaking                                                       |
 | voice.transcription.result       | requestId、text、可选 language                                   |
 | voice.audio.output               | audio、format、id、isVoiceMode、groupId、chunkIndex、isLastChunk |
+| voice.session.closed             | 空对象；停止本地录音和播放                                       |
 | voice.error                      | error、reasonCode、retryable                                     |
 | dictation.stream.ack             | dictationId、ackSeq                                              |
 | dictation.stream.finish.accepted | dictationId、timeoutMs                                           |
@@ -123,6 +134,6 @@ abort/关闭模式也应立即停止客户端播放。生成的语音应在客�
 新连接的接收进度。partial 每至少2秒对累计 PCM 重识别，可能被后续文本修正；WAV 只发
 最终结果。客户端应保存录音直到 final，并按 reasonCode/retryable 显示可恢复错误。
 
-VAD 是简单振幅门限和600ms静音判断。识别质量、延迟和语言覆盖取决于实际模型；
+通用后端的 VAD 是简单振幅门限和600ms静音判断；Codex 原生语音使用自己的检测与打断。识别质量、延迟和语言覆盖取决于实际模型；
 中英文混说可能产生识别误差。离线模型参考 [SenseVoice](https://k2-fsa.github.io/sherpa/onnx/sense-voice/pretrained.html)
 和 [Kokoro](https://k2-fsa.github.io/sherpa/onnx/tts/pretrained_models/kokoro.html)。

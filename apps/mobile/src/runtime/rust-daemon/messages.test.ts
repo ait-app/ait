@@ -394,3 +394,23 @@ describe("Rust provider snapshots", () => {
     });
   });
 });
+
+it("preserves native voice SDP and recognizes terminal realtime events", () => {
+  const response = responseMessage(
+    "voice.mode.set.response",
+    "voice",
+    { accepted: true, enabled: true, agentId: "agent", error: null, sdp: "native-answer" },
+    {},
+  );
+  expect(validateWSOutboundMessage(response).success).toBe(true);
+  expect(object(object(response.message).payload).sdp).toBe("native-answer");
+  for (const [method, params] of [
+    ["voice.session.closed", {}],
+    [
+      "voice.error",
+      { error: "native voice unavailable", reasonCode: "native_realtime_failed", retryable: false },
+    ],
+  ] as const) {
+    expect(validateWSOutboundMessage(eventMessage(method, params)).success).toBe(true);
+  }
+});

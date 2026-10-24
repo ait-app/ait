@@ -1,5 +1,6 @@
 mod dictation;
 mod dictation_lifecycle;
+mod realtime;
 mod voice;
 mod voice_lifecycle;
 

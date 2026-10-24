@@ -297,6 +297,7 @@ const AgentModelDefinitionSchema = z.object({
 }) satisfies z.ZodType<AgentModelDefinition>;
 
 export const ProviderSnapshotEntrySchema = z.object({
+  supportsRealtimeVoice: z.boolean().optional(),
   supportsSessionImport: z.boolean().optional(),
   provider: AgentProviderSchema,
   status: ProviderStatusSchema,
@@ -340,6 +341,7 @@ const AgentCapabilityFlagsSchema: z.ZodType<AgentCapabilityFlags> = z
     supportsStreaming: z.boolean(),
     supportsSessionPersistence: z.boolean(),
     supportsSessionListing: z.boolean().optional(),
+    supportsRealtimeVoice: z.boolean().optional(),
     supportsDynamicModes: z.boolean(),
     supportsMcpServers: z.boolean(),
     supportsReasoningStream: z.boolean(),
@@ -1045,6 +1047,10 @@ export const WorkspaceRecoveryRestoreRequestSchema = z.object({
 
 export const SetVoiceModeMessageSchema = z.object({
   type: z.literal("voice.mode.set.request"),
+  sdp: z
+    .string()
+    .max(128 * 1024)
+    .optional(),
   enabled: z.boolean(),
   agentId: z.string().optional(),
   requestId: z.string().optional(),
@@ -1993,6 +1999,7 @@ export const WorkspaceRecoveryRestoreResponseSchema = z.object({
 export const SetVoiceModeResponseMessageSchema = z.object({
   type: z.literal("voice.mode.set.response"),
   payload: z.object({
+    sdp: z.string().optional(),
     requestId: z.string(),
     enabled: z.boolean(),
     agentId: z.string().nullable(),
@@ -3201,6 +3208,16 @@ export const TranscriptionResultMessageSchema = z.object({
     format: z.string().optional(),
     debugRecordingPath: z.string().optional(),
   }),
+});
+
+export const VoiceSessionClosedMessageSchema = z.object({
+  type: z.literal("voice.session.closed"),
+  payload: z.object({}),
+});
+
+export const VoiceErrorMessageSchema = z.object({
+  type: z.literal("voice.error"),
+  payload: z.object({ error: z.string(), reasonCode: z.string(), retryable: z.boolean() }),
 });
 
 export const VoiceInputStateMessageSchema = z.object({
@@ -6321,6 +6338,8 @@ export const SessionOutboundMessageSchema = z.discriminatedUnion("type", [
   AudioOutputMessageSchema,
   TranscriptionResultMessageSchema,
   VoiceInputStateMessageSchema,
+  VoiceSessionClosedMessageSchema,
+  VoiceErrorMessageSchema,
   DictationStreamAckMessageSchema,
   DictationStreamFinishAcceptedMessageSchema,
   DictationStreamPartialMessageSchema,

@@ -50,6 +50,7 @@ enum Command {
         params: Value,
         reply: oneshot::Sender<Result<Value, ErrorCode>>,
         cancel: Option<CancellationToken>,
+        realtime: Option<model::realtime::Endpoint>,
         permit: OwnedSemaphorePermit,
         queued: std::time::Instant,
     },
@@ -295,6 +296,7 @@ impl AgentExecution {
                 params,
                 reply,
                 cancel: None,
+                realtime: None,
                 permit: command_permit,
                 queued: std::time::Instant::now(),
             })
@@ -315,8 +317,18 @@ impl AgentExecution {
     async fn call_cancellable(
         &self,
         method: &str,
+        params: Value,
+        cancel: Option<CancellationToken>,
+    ) -> Result<Value, ErrorCode> {
+        self.call_with_realtime(method, params, cancel, None).await
+    }
+
+    async fn call_with_realtime(
+        &self,
+        method: &str,
         mut params: Value,
         cancel: Option<CancellationToken>,
+        realtime: Option<model::realtime::Endpoint>,
     ) -> Result<Value, ErrorCode> {
         if self.0.cancellation.is_cancelled() {
             return Err(ErrorCode::AgentIo);
@@ -341,6 +353,7 @@ impl AgentExecution {
                 params,
                 reply,
                 cancel,
+                realtime,
                 permit,
                 queued: std::time::Instant::now(),
             })

@@ -114,6 +114,8 @@ export function normalizeAgentModelCatalog(models: AgentModelDefinition[]): Agen
 }
 
 export interface ProviderSnapshotEntry {
+  /** Provider-native realtime audio, independent of host speech engines. */
+  supportsRealtimeVoice?: boolean;
   /** Whether the host adapter supports listing and importing native sessions. */
   supportsSessionImport?: boolean;
   provider: AgentProvider;
@@ -156,6 +158,7 @@ export interface AgentFeatureSelect {
 export type AgentFeature = AgentFeatureToggle | AgentFeatureSelect;
 
 export interface AgentCapabilityFlags {
+  supportsRealtimeVoice?: boolean;
   [capability: string]: boolean | undefined;
   supportsStreaming: boolean;
   supportsSessionPersistence: boolean;

@@ -4,6 +4,27 @@ use super::{ErrorCode, ExecutionState, map_manager, only};
 use crate::support::rpc::decode;
 
 impl ExecutionState {
+    pub(crate) async fn start_realtime(
+        &mut self,
+        params: Value,
+        endpoint: model::realtime::Endpoint,
+    ) -> Result<Value, ErrorCode> {
+        only(&params, &["agentId"])?;
+        let id = self.resolve(
+            params["agentId"]
+                .as_str()
+                .ok_or(ErrorCode::InvalidMessage)?,
+        )?;
+        let record = self
+            .registry
+            .get(&id)
+            .map_err(|_| ErrorCode::AgentIo)?
+            .ok_or(ErrorCode::AgentNotFound)?;
+        self.workspace(record.workspace_id.as_deref(), &record.cwd)?;
+        let supported = self.manager.start_realtime(&id, endpoint).await?;
+        Ok(json!({"supported":supported}))
+    }
+
     pub(super) async fn voice(&mut self, method: &str, params: Value) -> Result<Value, ErrorCode> {
         if method == "internal.voice.send" {
             only(&params, &["agentId", "text"])?;

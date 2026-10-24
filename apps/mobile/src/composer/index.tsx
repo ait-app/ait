@@ -159,6 +159,7 @@ import {
   type MessageInputRef,
 } from "./input/input";
 import { resolveActiveSendBehavior } from "./input/state";
+import { useComposerVoiceStart } from "./voice-start";
 import { normalizeNativePastedImages, type NativePastedFile } from "./native-pasted-image";
 import type { ComposerTextSource } from "./text-source";
 import type { ImageAttachment, MessagePayload, TextReplacement } from "./types";
@@ -275,6 +276,7 @@ function buildAgentStateSelector(serverId: string, agentId: string) {
       totalCostUsd: agent?.lastUsage?.totalCostUsd ?? null,
       model: agent?.model ?? null,
       provider: agent?.provider ?? null,
+      supportsRealtimeVoice: agent?.capabilities?.supportsRealtimeVoice === true,
     };
   };
 }
@@ -497,29 +499,6 @@ function resolveErrorMessage(error: unknown): string | null {
   if (error instanceof Error) return error.message;
   if (typeof error === "string") return error;
   return null;
-}
-
-interface AttemptStartRealtimeVoiceArgs {
-  voice: ReturnType<typeof useVoiceOptional>;
-  isConnected: boolean;
-  hasAgent: boolean;
-  serverId: string;
-  agentId: string;
-  toastErrorRef: { current: (message: string) => void };
-}
-
-function attemptStartRealtimeVoice(args: AttemptStartRealtimeVoiceArgs): void {
-  const { voice, isConnected, hasAgent, serverId, agentId, toastErrorRef } = args;
-  if (!voice || !isConnected || !hasAgent) return;
-  if (voice.isVoiceSwitching) return;
-  if (voice.isVoiceModeForAgent(serverId, agentId)) return;
-  void voice.startVoice(serverId, agentId).catch((error) => {
-    console.error("[Composer] Failed to start voice mode", error);
-    const message = resolveErrorMessage(error);
-    if (message && message.trim().length > 0) {
-      toastErrorRef.current(message);
-    }
-  });
 }
 
 function focusMessageInputWithPlatformStrategy(messageInputRef: {
@@ -928,6 +907,8 @@ interface ComposerProps {
   workspaceId?: string | null;
   isPaneFocused: boolean;
   onSubmitMessage?: (payload: MessagePayload) => Promise<void>;
+  /** Create and open an empty draft session, returning its real Agent ID for voice. */
+  onCreateVoiceAgent?: () => Promise<string | null>;
   onClientSlashCommand?: (command: ClientSlashCommand) => Promise<void>;
   /** When true, the submit button is enabled even without text or images (e.g. external attachment selected). */
   hasExternalContent?: boolean;
@@ -1149,7 +1130,7 @@ interface ComposerVoiceModeButtonProps {
 
 interface ComposerRightControlsSlotProps extends ComposerVoiceModeButtonProps {
   isVoiceModeForAgent: boolean;
-  hasAgent: boolean;
+  isVoiceAvailable: boolean;
   isAgentRunning: boolean;
   hasSendableContent: boolean;
   isCompact: boolean;
@@ -1158,7 +1139,7 @@ interface ComposerRightControlsSlotProps extends ComposerVoiceModeButtonProps {
 
 function ComposerRightControlsSlot({
   isVoiceModeForAgent,
-  hasAgent,
+  isVoiceAvailable,
   isAgentRunning,
   hasSendableContent,
   isCompact,
@@ -1167,7 +1148,11 @@ function ComposerRightControlsSlot({
 }: ComposerRightControlsSlotProps) {
   const hideVoiceForCompactInput = isCompact && hasSendableContent;
   const showVoiceModeButton =
-    showVoice && !isVoiceModeForAgent && hasAgent && !isAgentRunning && !hideVoiceForCompactInput;
+    showVoice &&
+    !isVoiceModeForAgent &&
+    isVoiceAvailable &&
+    !isAgentRunning &&
+    !hideVoiceForCompactInput;
   if (!showVoiceModeButton) return null;
   return (
     <View style={styles.rightControls}>
@@ -1248,6 +1233,7 @@ function ComposerContentImpl({
   serverId,
   workspaceId,
   onSubmitMessage,
+  onCreateVoiceAgent,
   onClientSlashCommand,
   hasExternalContent = false,
   allowEmptySubmit = false,
@@ -1913,16 +1899,31 @@ function ComposerContentImpl({
 
   const isVoiceModeForAgent = resolveIsVoiceModeForAgent(voice, serverId, agentId);
 
+  const hasSendableContent = hasText || selectedAttachments.length > 0 || hasExternalContent;
+  const canCreateVoiceAgent = Boolean(onCreateVoiceAgent) && !hasSendableContent;
+  const supportsRealtimeVoice = hasAgent
+    ? agentState.supportsRealtimeVoice
+    : agentControls?.providerDefinitions.find(
+        (entry) => entry.id === agentControls.selectedProvider,
+      )?.supportsRealtimeVoice === true;
+  const reportVoiceError = useCallback((message: string) => toastErrorRef.current(message), []);
+  const {
+    startVoice,
+    isStarting: isStartingVoice,
+    isAvailable: isVoiceAvailable,
+  } = useComposerVoiceStart({
+    voice,
+    serverId,
+    agentId,
+    hasAgent,
+    supportsRealtimeVoice,
+    disabled: !isConnected || isAgentRunning || isSubmitLoading || !mode.showVoice,
+    createVoiceAgent: canCreateVoiceAgent ? onCreateVoiceAgent : undefined,
+    onError: reportVoiceError,
+  });
   const handleToggleRealtimeVoice = useCallback(() => {
-    attemptStartRealtimeVoice({
-      voice,
-      isConnected,
-      hasAgent,
-      serverId,
-      agentId,
-      toastErrorRef,
-    });
-  }, [agentId, hasAgent, isConnected, serverId, voice]);
+    void startVoice();
+  }, [startVoice]);
 
   const handleEditQueuedMessage = useCallback(
     (id: string) => {
@@ -1978,8 +1979,6 @@ function ComposerContentImpl({
     ],
   );
 
-  const hasSendableContent = hasText || selectedAttachments.length > 0;
-
   // Handle keyboard navigation for command autocomplete.
   const handleCommandKeyPress = useCallback(
     (event: ComposerKeyPressEvent) => autocompleteRef.current?.onKeyPress(event) ?? false,
@@ -1991,7 +1990,7 @@ function ComposerContentImpl({
     [isConnected, isCancellingAgent],
   );
 
-  const isVoiceSwitching = voice?.isVoiceSwitching ?? false;
+  const isVoiceSwitching = isStartingVoice || isSubmitLoading || (voice?.isVoiceSwitching ?? false);
   const voiceButtonDisabled = !isConnected || isVoiceSwitching;
   const realtimeVoiceButtonStyle = useCallback(
     (state: PressableStateCallbackType & { hovered?: boolean }) =>
@@ -2026,7 +2025,7 @@ function ComposerContentImpl({
     () => (
       <ComposerRightControlsSlot
         isVoiceModeForAgent={isVoiceModeForAgent}
-        hasAgent={hasAgent}
+        isVoiceAvailable={isVoiceAvailable}
         isAgentRunning={isAgentRunning}
         hasSendableContent={hasSendableContent}
         isCompact={isCompactLayout}
@@ -2043,7 +2042,7 @@ function ComposerContentImpl({
     [
       buttonIconSize,
       handleToggleRealtimeVoice,
-      hasAgent,
+      isVoiceAvailable,
       hasSendableContent,
       isAgentRunning,
       isConnected,
@@ -2376,7 +2375,11 @@ function ComposerContentImpl({
   const messageInputContainerRef = useRef<View>(null);
 
   const isSubmitLoadingVisible =
-    isProcessing || isSubmitLoading || isUploadingFile || pendingNativeImagePastes > 0;
+    isProcessing ||
+    isSubmitLoading ||
+    isStartingVoice ||
+    isUploadingFile ||
+    pendingNativeImagePastes > 0;
   const isSubmitDisabled =
     isSubmitLoadingVisible || (waitForForgeAutoAttachOnSubmit && isForgeResolving);
 
@@ -2477,13 +2480,14 @@ function ComposerContentImpl({
                   placeholder={messagePlaceholder}
                   autoFocus={messageInputAutoFocus}
                   autoFocusKey={`${serverId}:${agentId}:${autoFocusKey ?? ""}`}
-                  disabled={isSubmitLoading}
+                  disabled={isSubmitLoading || isStartingVoice}
                   leftContent={leftContent}
                   beforeVoiceContent={beforeVoiceContent}
                   rightContent={rightContent}
                   activeActionContent={activeActionContent}
                   voiceServerId={serverId}
                   voiceAgentId={agentId}
+                  onStartRealtimeVoice={handleToggleRealtimeVoice}
                   isAgentRunning={isAgentRunning}
                   defaultSendBehavior={activeSendBehavior}
                   onQueue={handleQueue}

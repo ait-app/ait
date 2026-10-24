@@ -46,6 +46,17 @@ pub trait Synthesizer: Send + Sync + std::fmt::Debug {
 
 /// Native Agent coordination supplied by the composition root.
 pub trait Agents: Send + Sync + std::fmt::Debug {
+    /// Open provider-native audio when supported; errors must never trigger text fallback.
+    /// Dropping the returned session cancels provider work, including abandoned startup.
+    fn realtime<'a>(
+        &'a self,
+        _agent: &'a str,
+        _cancel: CancellationToken,
+        _offer: Option<String>,
+    ) -> Operation<'a, Option<model::realtime::Session>> {
+        Box::pin(async { Ok(None) })
+    }
+
     /// Resolve and validate an enabled voice target, returning its canonical identity.
     fn resolve<'a>(&'a self, identifier: &'a str) -> Operation<'a, String>;
     /// Execute a text turn and return its final response. Cancellation must interrupt owned work
