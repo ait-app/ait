@@ -334,6 +334,7 @@ async fn lists_and_imports_only_current_branch_without_launching_pi() {
     assert_eq!(history.entries[2].item["text"], "current");
     assert_eq!(history.entries[0].timestamp, "2026-10-18T01:00:00Z");
     assert_eq!(history.config.model.as_deref(), Some("fixture/model"));
+    assert_eq!(history.config.mode_id, None);
     assert_eq!(history.resume_metadata["sessionFile"], json!(file));
     assert_eq!(std::fs::read(&file).unwrap(), before);
     assert!(!client.program.exists());

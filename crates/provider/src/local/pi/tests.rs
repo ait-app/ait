@@ -68,6 +68,8 @@ async fn discovers_without_persistence_and_rejects_old_protocol() {
     assert!(client.is_available().await.unwrap());
     let details = client.discover(&spec.cwd).await.unwrap();
     assert_eq!(details.models[0]["id"], "fixture/model");
+    assert!(details.modes.is_empty());
+    assert_eq!(client.settings(&spec.config)["availableModes"], json!([]));
     assert!(!directory.path().join("session.jsonl").exists());
     assert!(!client.supports_history_replay());
     assert!(client.supports_session_import());
@@ -99,10 +101,9 @@ async fn streams_tools_usage_and_resumes_same_native_identity() {
         session_directory.to_str()
     );
     let initial = session.persistence().unwrap();
-    assert_eq!(
-        session.runtime_info().await.unwrap().model.as_deref(),
-        Some("fixture/model")
-    );
+    let runtime_info = session.runtime_info().await.unwrap();
+    assert_eq!(runtime_info.model.as_deref(), Some("fixture/model"));
+    assert_eq!(runtime_info.mode_id, None);
     session.start_turn("hello", &spec.config).await.unwrap();
     let events = terminal(session.as_mut()).await;
     assert!(
@@ -296,6 +297,9 @@ async fn rejection_errors_handled_commands_and_extension_dialogs_do_not_hang() {
 async fn unsupported_configuration_and_structured_output_are_rejected_before_submission() {
     let (directory, client, spec) = fixture("");
     let mut config = spec.config.clone();
+    config.mode_id = Some("default".into());
+    client.validate_config(&config).unwrap();
+    config = spec.config.clone();
     config.mode_id = Some("plan".into());
     assert!(client.validate_config(&config).is_err());
     config = spec.config.clone();

@@ -947,10 +947,7 @@ fn project(
         parent_id: None,
         created_at: field(&records[0], "timestamp")?.into(),
         descriptor,
-        config: StoredAgentConfig {
-            mode_id: Some("default".into()),
-            ..StoredAgentConfig::default()
-        },
+        config: StoredAgentConfig::default(),
         active: false,
         entries: Vec::new(),
     };

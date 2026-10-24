@@ -195,10 +195,10 @@ async fn version_errors_are_bounded_and_old_installations_are_actionable() {
 }
 
 #[tokio::test]
-async fn catalog_controls_and_runtime_do_not_advertise_unsupported_thinking() {
+async fn catalog_controls_and_runtime_do_not_advertise_unsupported_controls() {
     let (_directory, client, mut spec) = fixture("");
     let settings = client.settings(&spec.config);
-    assert_eq!(settings["availableModes"][0]["id"], "default");
+    assert_eq!(settings["availableModes"], json!([]));
     assert_eq!(settings["capabilities"]["supportsReasoningStream"], true);
     assert_eq!(settings["capabilities"]["supportsSessionListing"], true);
     let details = client.discover(&spec.cwd).await.unwrap();

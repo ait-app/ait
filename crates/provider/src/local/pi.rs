@@ -107,7 +107,7 @@ impl AgentClient for PiClient {
     }
 
     fn settings(&self, _config: &StoredAgentConfig) -> Value {
-        json!({"availableModes":config::modes(),"features":[],"capabilities":{
+        json!({"availableModes":[],"features":[],"capabilities":{
             "supportsStreaming":true,"supportsReasoningStream":true,
             "supportsMcpServers":false,"supportsDynamicModes":false,
             "supportsSessionListing":true,"supportsRewindConversation":false,
@@ -155,7 +155,7 @@ impl AgentClient for PiClient {
             transport.close().await?;
             Ok(Details {
                 models: config::models(&result?)?,
-                modes: config::modes(),
+                modes: Vec::new(),
                 features: Vec::new(),
             })
         })

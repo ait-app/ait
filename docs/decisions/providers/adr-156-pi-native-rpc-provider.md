@@ -1,8 +1,9 @@
 # ADR-156: Pi native RPC provider
 
-- Status: Proposed (implementation under review).
+- Status: Accepted (implemented).
 - Date: 2026-10-17.
 - Scope: `crates/provider`, `packages/protocol`; follows [ADR-089](adr-089-provider-owned-composition.md).
+- Amended by: [ADR-189](adr-189-pi-without-host-mode.md) for host modes.
 
 ## Context
 
@@ -15,7 +16,7 @@ run from automatic retries and compaction recovery.
 
 - Implement `AgentClient` and `AgentSession` in `provider::local::pi`. Register through
   `Providers`, using `pi` on PATH or the exact `AIT_SERVER_PI_BIN` override. No RPC/wire
-  protocol changes; the shared Provider display manifest adds Pi's Native Tools mode.
+  protocol changes.
 - Require Pi 1.2 or newer and use `pi --mode rpc`. Pi 1.2.0 is the verified baseline;
   accepting newer versions is not a claim of testing every release. Do not fall back to
   older completion semantics or replay uncertain prompt submissions.
@@ -49,8 +50,9 @@ run from automatic retries and compaction recovery.
 - Preserve the host's persisted timeline across resume; do not advertise automatic native history
   replay, rewind, steering, auxiliary generation or dynamic thinking controls. Native session
   import and explicit refresh are added by [ADR-174](adr-174-pi-session-import.md).
-- Expose a single native-tools mode that accurately describes Pi's absence of a built-in
-  permission sandbox. Preserve native configuration. Cancel extension dialogs explicitly; unknown UI methods fail immediately with an
+- Preserve native configuration. Do not expose host modes, as specified by
+  [ADR-189](adr-189-pi-without-host-mode.md). Cancel
+  extension dialogs explicitly; unknown UI methods fail immediately with an
   `extension_method` protocol diagnostic;
   never implicitly approve them or leave Pi blocked waiting for an unsupported UI.
 - Cache a successfully parsed version for each configured client and its clones; failures
