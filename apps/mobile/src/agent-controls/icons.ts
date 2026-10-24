@@ -5,6 +5,8 @@ import {
   Brain,
   Hammer,
   ListTodo,
+  Minimize2,
+  RotateCcw,
   Settings2,
   Shield,
   ShieldAlert,
@@ -13,6 +15,7 @@ import {
   ShieldOff,
   ShieldPlus,
   ShieldQuestionMark,
+  Turtle,
   Zap,
 } from "lucide-react-native";
 import { getModeVisuals, type AgentProviderDefinition } from "@ait/protocol/provider-manifest";
@@ -43,6 +46,16 @@ const FEATURE_ICONS: Record<string, AgentControlIcon> = {
   "list-todo": ListTodo,
   "shield-check": ShieldCheck,
   zap: Zap,
+  "minimize-2": Minimize2,
+  "rotate-ccw": RotateCcw,
+  turtle: Turtle,
+};
+
+const FEATURE_ID_ICONS: Record<string, AgentControlIcon> = {
+  autoCompaction: Minimize2,
+  autoRetry: RotateCcw,
+  fastMode: Zap,
+  slowMode: Turtle,
 };
 
 const PERMISSION_ICONS: Record<string, AgentControlIcon> = {
@@ -60,8 +73,12 @@ export function getAgentModeIcon(
   return (icon ? MODE_ICONS[icon] : undefined) ?? Bot;
 }
 
-export function getAgentFeatureIcon(icon?: string): AgentControlIcon {
-  return (icon ? FEATURE_ICONS[icon] : undefined) ?? Settings2;
+export function getAgentFeatureIcon(icon?: string, featureId?: string): AgentControlIcon {
+  return (
+    (icon ? FEATURE_ICONS[icon] : undefined) ??
+    (featureId ? FEATURE_ID_ICONS[featureId] : undefined) ??
+    Settings2
+  );
 }
 
 export function getAgentFeatureValueIcon(
@@ -71,5 +88,5 @@ export function getAgentFeatureValueIcon(
   if (feature.id === "permission") {
     return (typeof value === "string" ? PERMISSION_ICONS[value] : undefined) ?? Shield;
   }
-  return getAgentFeatureIcon(feature.icon);
+  return getAgentFeatureIcon(feature.icon, feature.id);
 }

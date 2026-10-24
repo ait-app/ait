@@ -218,12 +218,18 @@ export const es: TranslationResources = {
       unknown: "Modelo desconocido",
     },
     features: {
+      autoCompaction: "Compactación automática",
+      autoRetry: "Reintentos automáticos",
+      fastMode: "Servicio rápido",
+      slowMode: "Servicio lento",
       title: "Características",
       open: "Funciones de agente abierto",
       on: "En",
       off: "Apagado",
     },
     mode: {
+      allowFileWrites: "Permitir escritura de archivos",
+      askAndRemember: "Preguntar y recordar",
       title: "Modo",
       searchPlaceholder: "Modos de búsqueda...",
       selectWithValue: "Seleccione el modo de agente ({{value}})",

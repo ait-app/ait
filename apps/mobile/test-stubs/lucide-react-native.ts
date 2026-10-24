@@ -120,6 +120,14 @@ export const XCircle = StubIcon;
 export const Code = StubIcon;
 
 export const Maximize2 = StubIcon;
+export const Minimize2 = StubIcon;
+export const Turtle = StubIcon;
+export const Hammer = StubIcon;
+export const ListTodo = StubIcon;
+export const Shield = StubIcon;
+export const ShieldEllipsis = StubIcon;
+export const ShieldPlus = StubIcon;
+export const Zap = StubIcon;
 
 export const Workflow = StubIcon;
 

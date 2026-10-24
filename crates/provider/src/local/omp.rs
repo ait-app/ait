@@ -50,6 +50,19 @@ impl OmpClient {
         self.images = super::images::ImageStore::new(directory);
         self
     }
+
+    async fn service_tiers(
+        &self,
+        cwd: &str,
+        model: Option<&str>,
+    ) -> Result<config::ServiceTiers, AgentSessionError> {
+        let mut probe = session::probe(self, cwd, model).await?;
+        let result = config::service_tiers(&mut probe).await;
+        let closed = probe.close().await;
+        let tiers = result?;
+        closed?;
+        Ok(tiers)
+    }
 }
 
 impl AgentClient for OmpClient {
@@ -66,7 +79,7 @@ impl AgentClient for OmpClient {
     }
 
     fn settings(&self, config: &StoredAgentConfig) -> Value {
-        json!({"availableModes":config::modes(),"features":config::features(config),"capabilities":{
+        json!({"availableModes":config::modes(),"features":config::features(config, config::ServiceTiers::default()),"capabilities":{
             "supportsStreaming":true,"supportsReasoningStream":true,
             "supportsSessionPersistence":true,"supportsSessionListing":true,
             "supportsToolInvocations":true,"supportsMcpServers":false,
@@ -80,7 +93,7 @@ impl AgentClient for OmpClient {
 
     fn discover<'a>(&'a self, cwd: &'a str) -> AgentSessionFuture<'a, Details> {
         Box::pin(async move {
-            let mut probe = session::probe(self, cwd).await?;
+            let mut probe = session::probe(self, cwd, None).await?;
             let result = config::discover(&mut probe).await;
             let closed = probe.close().await;
             let details = result?;
@@ -89,10 +102,23 @@ impl AgentClient for OmpClient {
         })
     }
 
+    fn draft_features<'a>(
+        &'a self,
+        spec: &'a AgentSessionSpec,
+    ) -> AgentSessionFuture<'a, Vec<Value>> {
+        Box::pin(async move {
+            config::validate_spec(spec)?;
+            let tiers = self
+                .service_tiers(&spec.cwd, spec.config.model.as_deref())
+                .await?;
+            Ok(config::features(&spec.config, tiers))
+        })
+    }
+
     fn commands<'a>(&'a self, spec: &'a AgentSessionSpec) -> AgentSessionFuture<'a, Vec<Value>> {
         Box::pin(async move {
             config::validate_spec(spec)?;
-            let mut probe = session::probe(self, &spec.cwd).await?;
+            let mut probe = session::probe(self, &spec.cwd, None).await?;
             let result = probe.request("get_available_commands", json!({})).await;
             let closed = probe.close().await;
             let result = result?;

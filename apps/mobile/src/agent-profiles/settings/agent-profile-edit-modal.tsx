@@ -4,6 +4,7 @@ import { useTranslation } from "react-i18next";
 import { StyleSheet } from "react-native-unistyles";
 import type { AgentFeature } from "@ait/protocol/agent-types";
 import type { AgentProfile } from "@ait/protocol/messages";
+import { formatAgentFeatureLabel } from "@/agent-controls/labels";
 import { AdaptiveModalSheet, type SheetHeader } from "@/components/adaptive-modal-sheet";
 import { Button } from "@/components/ui/button";
 import { type FieldControlSize } from "@/components/ui/control-geometry";
@@ -413,6 +414,8 @@ function AgentProfileFeatureRow({
   size: FieldControlSize;
   model: AgentProfileFormModel;
 }): ReactElement {
+  const { t } = useTranslation();
+  const featureLabel = formatAgentFeatureLabel(feature, t);
   const rowStyle = useMemo(
     () => [styles.featureRow, isFirst ? null : styles.featureRowBorder],
     [isFirst],
@@ -450,16 +453,16 @@ function AgentProfileFeatureRow({
     return (
       <View style={rowStyle} testID={`agent-profile-feature-row-${feature.id}`}>
         <SelectField
-          label={feature.label}
+          label={featureLabel}
           value={feature.value}
           selectedDisplay={selectedDisplay}
           options={selectOptions}
           onChange={handleSelect}
-          placeholder={feature.label}
-          emptyText={feature.label}
+          placeholder={featureLabel}
+          emptyText={featureLabel}
           disabled={disabled}
           {...(feature.description ? { hint: feature.description } : {})}
-          title={feature.label}
+          title={featureLabel}
           size={size}
           testID={`agent-profile-feature-field-${feature.id}`}
           triggerTestID={`agent-profile-feature-trigger-${feature.id}`}
@@ -472,7 +475,7 @@ function AgentProfileFeatureRow({
     <View style={rowStyle} testID={`agent-profile-feature-row-${feature.id}`}>
       <View style={styles.featureMeta}>
         <Text style={styles.featureLabel} numberOfLines={1}>
-          {feature.label}
+          {featureLabel}
         </Text>
         {feature.description ? (
           <Text style={styles.featureDescription} numberOfLines={2}>
@@ -484,7 +487,7 @@ function AgentProfileFeatureRow({
         value={feature.value === true}
         onValueChange={handleToggle}
         disabled={disabled}
-        accessibilityLabel={feature.label}
+        accessibilityLabel={featureLabel}
         testID={`agent-profile-feature-switch-${feature.id}`}
       />
     </View>

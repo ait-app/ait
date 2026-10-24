@@ -26,7 +26,17 @@ else:
                 'timestamp': '2026-10-21T00:00:00Z'}]
 clock = 1792540800000 + len(records) * 10
 leaf = records[-1].get('id') if len(records) > 1 else None
-model = {'provider': 'test', 'id': 'model', 'name': 'Fixture model', 'reasoning': True, 'contextWindow': 32768}
+models = [
+    {'provider': 'test', 'id': 'model', 'name': 'Fixture model', 'reasoning': True,
+     'thinking': {'mode': 'effort', 'efforts': ['low', 'high']}, 'contextWindow': 32768},
+    {'provider': 'other', 'id': 'model', 'name': 'Other', 'reasoning': True,
+     'thinking': {'mode': 'effort', 'efforts': ['low', 'high', 'max']}, 'contextWindow': 32768},
+]
+model = models[0]
+if '--provider' in args and '--model' in args:
+    provider = args[args.index('--provider') + 1]
+    model_id = args[args.index('--model') + 1]
+    model = next((item for item in models if item['provider'] == provider and item['id'] == model_id), model)
 level = 'off'
 active = False
 prompt_id = None
@@ -92,20 +102,25 @@ for line in sys.stdin:
         response(command, {'protocolVersion':2})
     elif kind == 'get_state':
         response(command, {'sessionId': session_id, 'sessionFile': str(file), 'model': model,
-                          'thinkingLevel': level, 'isStreaming': active, 'isCompacting': False})
+                          'thinkingLevel': level, 'isStreaming': active, 'isCompacting': False,
+                          'slowModeSupported': model['provider'] == 'test'})
     elif kind == 'get_available_models':
-        response(command, {'models': [model, {'provider': 'other', 'id': 'model', 'name': 'Other', 'reasoning': False}]})
+        response(command, {'models': models})
     elif kind == 'get_available_thinking_levels':
-        response(command, {'levels': ['off', 'low', 'high']})
+        response(command, {'levels': ['off', *model['thinking']['efforts']]})
     elif kind == 'set_model':
-        if command['provider'] == 'test' and command['modelId'] == 'model':
+        selected = next((item for item in models if item['provider'] == command['provider'] and item['id'] == command['modelId']), None)
+        if selected:
+            model = selected
             response(command, model)
         else:
             response(command, success=False)
     elif kind == 'set_thinking_level':
         level = command['level']
         response(command)
-    elif kind in ('set_auto_compaction', 'set_auto_retry', 'set_fast_mode', 'set_slow_mode', 'set_ask_dialog', 'set_subagent_subscription'):
+    elif kind in ('set_fast_mode', 'set_slow_mode'):
+        response(command, success=not command['enabled'] or model['provider'] == 'test')
+    elif kind in ('set_auto_compaction', 'set_auto_retry', 'set_ask_dialog', 'set_subagent_subscription'):
         response(command)
     elif kind == 'get_subagents':
         response(command, {'subagents': []})

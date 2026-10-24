@@ -217,12 +217,18 @@ export const ptBR: TranslationResources = {
       unknown: "Modelo desconhecido",
     },
     features: {
+      autoCompaction: "Compactação automática",
+      autoRetry: "Novas tentativas automáticas",
+      fastMode: "Nível de serviço rápido",
+      slowMode: "Nível de serviço lento",
       title: "Recursos",
       open: "Abrir recursos do agente",
       on: "Ativado",
       off: "Desativado",
     },
     mode: {
+      allowFileWrites: "Permitir gravação de arquivos",
+      askAndRemember: "Perguntar e lembrar",
       title: "Modo",
       searchPlaceholder: "Buscar modos...",
       selectWithValue: "Selecionar modo do agente ({{value}})",

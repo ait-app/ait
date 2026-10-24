@@ -104,7 +104,7 @@ export function useAgentControlCommandCenterActions(input: {
             getCommandCenterIcon(
               getAgentModeIcon(controls.provider ?? "", modeId, controls.providerDefinitions),
             ),
-          feature: (feature) => getCommandCenterIcon(getAgentFeatureIcon(feature.icon)),
+          feature: (feature) => getCommandCenterIcon(getAgentFeatureIcon(feature.icon, feature.id)),
         },
         models: {
           providers: models.providers,

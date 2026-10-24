@@ -59,5 +59,67 @@ fn runtime_and_commands_validate_native_facts() {
         "review"
     );
     assert!(commands(&json!({"commands":[{"name":""}]})).is_err());
-    assert_eq!(features(&StoredAgentConfig::default()).len(), 4);
+    assert_eq!(
+        features(&StoredAgentConfig::default(), ServiceTiers::default()).len(),
+        2
+    );
+}
+
+#[test]
+fn model_metadata_does_not_invent_or_accept_invalid_thinking_levels() {
+    for model in [
+        json!({}),
+        json!({"reasoning":false,"thinking":{"efforts":["max"]}}),
+        json!({"reasoning":true}),
+    ] {
+        assert_eq!(
+            model_thinking_options(&model).unwrap(),
+            json!([{"id":"off","label":"off"}])
+                .as_array()
+                .unwrap()
+                .clone()
+        );
+    }
+    for efforts in [
+        json!(["off"]),
+        json!(["max", "max"]),
+        json!([null]),
+        json!("high"),
+    ] {
+        assert!(
+            model_thinking_options(&json!({"reasoning":true,"thinking":{"efforts":efforts}}))
+                .is_err()
+        );
+    }
+}
+
+#[test]
+fn tier_toggles_require_each_native_capability_and_preserve_selected_values() {
+    let config = StoredAgentConfig {
+        feature_values: Some(BTreeMap::from([
+            ("autoRetry".to_owned(), json!(false)),
+            ("fastMode".to_owned(), json!(true)),
+            ("slowMode".to_owned(), json!(true)),
+        ])),
+        ..StoredAgentConfig::default()
+    };
+    for tiers in [
+        ServiceTiers {
+            fast: true,
+            slow: false,
+        },
+        ServiceTiers {
+            fast: false,
+            slow: true,
+        },
+    ] {
+        let toggles = features(&config, tiers);
+        assert_eq!(toggles.len(), 3);
+        assert_eq!(toggles[1]["value"], false);
+        assert_eq!(
+            toggles[2]["id"],
+            if tiers.fast { "fastMode" } else { "slowMode" }
+        );
+        assert_eq!(toggles[2]["value"], true);
+    }
 }
