@@ -20,6 +20,7 @@ pub(super) struct Session {
     cwd: String,
     state: Value,
     config: StoredAgentConfig,
+    service_tiers: config::ServiceTiers,
     stream: Stream,
     dialogs: Dialogs,
     active: Option<String>,
@@ -32,23 +33,40 @@ pub(super) struct Session {
     created_at: String,
 }
 
-pub(super) async fn probe(client: &OmpClient, cwd: &str) -> Result<Transport, AgentSessionError> {
+/// Start a disposable native capability reader for `model` in `cwd`.
+/// Returns invalid configuration, startup failures, or a mismatched native model selection.
+pub(super) async fn probe(
+    client: &OmpClient,
+    cwd: &str,
+    model: Option<&str>,
+) -> Result<Transport, AgentSessionError> {
     config::validate_spec(&AgentSessionSpec {
         provider: "omp".to_owned(),
         cwd: cwd.to_owned(),
         config: StoredAgentConfig::default(),
     })?;
-    let mut transport = Transport::spawn(
-        client,
-        cwd,
-        &[
-            "--mode".to_owned(),
-            "rpc-ui".to_owned(),
-            "--no-session".to_owned(),
-        ],
-    )?;
+    let mut args = vec![
+        "--mode".to_owned(),
+        "rpc-ui".to_owned(),
+        "--no-session".to_owned(),
+    ];
+    let route = model.map(config::model_route).transpose()?;
+    if let Some([provider, model]) = &route {
+        args.extend([
+            "--provider".to_owned(),
+            provider.clone(),
+            "--model".to_owned(),
+            model.clone(),
+        ]);
+    }
+    let mut transport = Transport::spawn(client, cwd, &args)?;
     transport.initialize().await?;
-    transport.request("get_state", json!({})).await?;
+    let state = transport.request("get_state", json!({})).await?;
+    if route.is_some_and(|[provider, model]| {
+        state["model"]["provider"] != provider || state["model"]["id"] != model
+    }) {
+        return Err(AgentSessionError::Rejected);
+    }
     Ok(transport)
 }
 
@@ -56,7 +74,7 @@ async fn connect(
     client: &OmpClient,
     spec: &AgentSessionSpec,
     path: Option<&str>,
-) -> Result<(Transport, Value), AgentSessionError> {
+) -> Result<(Transport, Value, config::ServiceTiers), AgentSessionError> {
     let mut args = vec!["--mode".to_owned(), "rpc-ui".to_owned()];
     if let Some(path) = path {
         args.extend(["--resume".to_owned(), path.to_owned()]);
@@ -79,8 +97,11 @@ async fn connect(
     transport
         .request("set_subagent_subscription", json!({"level":"events"}))
         .await?;
-    config::runtime(&state)?;
-    Ok((transport, state))
+    let runtime = config::runtime(&state)?;
+    let tiers = client
+        .service_tiers(&spec.cwd, runtime.model.as_deref())
+        .await?;
+    Ok((transport, state, tiers))
 }
 
 pub(super) async fn open(
@@ -103,7 +124,8 @@ pub(super) async fn open(
         .as_ref()
         .and_then(|journal| journal.header["timestamp"].as_str())
         .map_or_else(|| chrono::Utc::now().to_rfc3339(), str::to_owned);
-    let (transport, state) = connect(client, spec, path.filter(|_| persisted)).await?;
+    let (transport, state, service_tiers) =
+        connect(client, spec, path.filter(|_| persisted)).await?;
     let id = config::text(&state, "sessionId")?;
     if persisted && handle.is_some_and(|handle| handle.session_id != id) {
         return Err(AgentSessionError::Failed);
@@ -119,6 +141,7 @@ pub(super) async fn open(
         cwd: spec.cwd.clone(),
         state,
         config: spec.config.clone(),
+        service_tiers,
         stream,
         dialogs: Dialogs::default(),
         active: None,
@@ -151,7 +174,7 @@ impl Session {
                 config: config.clone(),
             };
             let persisted = std::path::Path::new(&path).is_file();
-            let (transport, state) =
+            let (transport, state, service_tiers) =
                 connect(&self.client, &spec, persisted.then_some(path.as_str())).await?;
             if persisted && state["sessionId"] != self.state["sessionId"] {
                 return Err(AgentSessionError::Failed);
@@ -164,6 +187,7 @@ impl Session {
             }
             self.transport = transport;
             self.state = state;
+            self.service_tiers = service_tiers;
             self.stream.set_context(&self.state);
             self.config.clone_from(config);
         }
@@ -283,6 +307,15 @@ impl Session {
 }
 
 impl AgentSession for Session {
+    fn control_settings(&self, config: &StoredAgentConfig) -> Option<Value> {
+        let tiers = if config.model == self.config.model {
+            self.service_tiers
+        } else {
+            config::ServiceTiers::default()
+        };
+        Some(json!({"availableModes":config::modes(),"features":config::features(config, tiers)}))
+    }
+
     fn failure_diagnostic(&self) -> Option<crate::ports::diagnostics::Diagnostic> {
         self.transport.diagnostics.failure()
     }

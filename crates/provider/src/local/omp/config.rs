@@ -70,7 +70,15 @@ pub(super) fn model_route(id: &str) -> Result<[String; 2], AgentSessionError> {
     Ok(route)
 }
 
-pub(super) fn features(config: &StoredAgentConfig) -> Vec<Value> {
+/// Native service-tier support for one selected model, discovered in a disposable session.
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
+pub(super) struct ServiceTiers {
+    fast: bool,
+    slow: bool,
+}
+
+/// Return toggles for `config`, exposing only tiers confirmed by native `tiers` discovery.
+pub(super) fn features(config: &StoredAgentConfig, tiers: ServiceTiers) -> Vec<Value> {
     [
         ("autoCompaction", "Automatic compaction"),
         ("autoRetry", "Automatic retry"),
@@ -78,12 +86,39 @@ pub(super) fn features(config: &StoredAgentConfig) -> Vec<Value> {
         ("slowMode", "Slow service tier"),
     ]
     .into_iter()
+    .filter(|(id, _)| match *id {
+        "fastMode" => tiers.fast,
+        "slowMode" => tiers.slow,
+        _ => true,
+    })
     .map(|(id, label)| {
         json!({"type":"toggle","id":id,"label":label,
             "value":config.feature_values.as_ref().and_then(|values|values.get(id))
                 .and_then(Value::as_bool).unwrap_or(matches!(id,"autoCompaction"|"autoRetry"))})
     })
     .collect()
+}
+
+/// Inspect service tiers using a no-session transport that will be discarded afterward.
+/// Returns transport failures; a native rejection means Fast is unsupported.
+pub(super) async fn service_tiers(
+    transport: &mut Transport,
+) -> Result<ServiceTiers, AgentSessionError> {
+    let state = transport.request("get_state", json!({})).await?;
+    // OMP exposes slowModeSupported, but Fast has no equivalent read-only RPC fact.
+    // Fast changes only this disposable session's tier map; Slow can persist global settings.
+    let fast = match transport
+        .request("set_fast_mode", json!({"enabled":true}))
+        .await
+    {
+        Ok(_) => true,
+        Err(AgentSessionError::Rejected) => false,
+        Err(error) => return Err(error),
+    };
+    Ok(ServiceTiers {
+        fast,
+        slow: state["slowModeSupported"] == true,
+    })
 }
 
 pub(super) async fn apply(
@@ -148,7 +183,7 @@ pub(super) async fn discover(transport: &mut Transport) -> Result<Details, Agent
                     .map(|level| json!({"id":level,"label":level}))
                     .collect()
             } else {
-                Vec::new()
+                model_thinking_options(model)?
             };
         entries.push(
             json!({"provider":"omp","id":json!([provider,id]).to_string(),
@@ -160,8 +195,38 @@ pub(super) async fn discover(transport: &mut Transport) -> Result<Details, Agent
     Ok(Details {
         models: entries,
         modes: modes(),
-        features: features(&StoredAgentConfig::default()),
+        features: features(
+            &StoredAgentConfig::default(),
+            service_tiers(transport).await?,
+        ),
     })
+}
+
+fn model_thinking_options(model: &Value) -> Result<Vec<Value>, AgentSessionError> {
+    let mut options = vec![json!({"id":"off","label":"off"})];
+    if model["reasoning"] != true {
+        return Ok(options);
+    }
+    let Some(efforts) = model["thinking"].get("efforts") else {
+        return Ok(options);
+    };
+    let efforts = efforts
+        .as_array()
+        .filter(|efforts| efforts.len() <= 6)
+        .ok_or(AgentSessionError::Failed)?;
+    for effort in efforts {
+        if !effort.as_str().is_some_and(|effort| {
+            matches!(
+                effort,
+                "minimal" | "low" | "medium" | "high" | "xhigh" | "max"
+            )
+        }) || options.iter().any(|option| option["id"] == *effort)
+        {
+            return Err(AgentSessionError::Failed);
+        }
+        options.push(json!({"id":effort,"label":effort}));
+    }
+    Ok(options)
 }
 
 pub(super) fn runtime(state: &Value) -> Result<StoredAgentRuntimeInfo, AgentSessionError> {
