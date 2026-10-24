@@ -1,12 +1,12 @@
 # 独立 daemon 的语音与听写
 
-听写和非 Codex Provider 的语音对话默认使用自动下载模型的离线 Sherpa ONNX 后端。首次启动后台准备模型，
+听写及旧客户端的通用语音协议默认使用自动下载模型的离线 Sherpa ONNX 后端。首次启动后台准备模型，
 不阻塞 Host 连接。准备期间点击语音会返回可重试的 `speech_models_preparing`；下载失败返回
 `speech_model_download_failed`，稍后再次点击会重试。显式禁用时返回 `speech_backend_unavailable`。
 
 ## Codex 原生实时语音
 
-选择 Codex 时可从空对话直接开始语音。服务端创建空 Agent，再通过同一个 Codex thread 启动原生 realtime；不提交空消息，也不调用 Ait 的 STT/TTS。
+实时语音入口和快捷键统一由 Provider 的 `supportsRealtimeVoice` 能力声明控制，草稿和已有 Agent 都遵循此规则；未声明时不显示。当前由 Codex 声明该能力，选择后可从空对话直接开始语音。服务端创建空 Agent，再通过同一个 Codex thread 启动原生 realtime；不提交空消息，也不调用 Ait 的 STT/TTS。
 
 桌面和 Web 使用 WebRTC。客户端生成 offer，通过 `voice.mode.set.request` 的可选 `sdp` 字段交给 Codex provider；成功响应包含 `sdp` answer。Codex 使用 realtime v3 完成认证、会话协商和原生工具轮次，音频直接通过 WebRTC 传输。浏览器需要允许麦克风访问，Web 需要 HTTPS 或 localhost。
 

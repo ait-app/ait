@@ -31,10 +31,7 @@ import { useAgentControlCommandCenterActions } from "@/command-center/agent-cont
 import { requestWorkspaceDraftAgent } from "@/composer/draft/create-agent-request";
 import type { WorkspaceFileOpenRequest } from "@/workspace/file-open";
 import { shouldAutoFocusWorkspaceDraftComposer } from "@/screens/workspace/workspace-draft-pane-focus";
-import {
-  shouldAllowEmptyDraftText,
-  validateDraftSubmission,
-} from "@/composer/draft/workspace-tab-core";
+import { validateDraftCreation } from "@/composer/draft/workspace-tab-core";
 import type { AgentCapabilityFlags } from "@ait/protocol/agent-types";
 import type { AgentAttachment, AgentSnapshotPayload } from "@ait/protocol/messages";
 import type { DaemonClient } from "@ait/client/internal/daemon-client";
@@ -422,7 +419,6 @@ export function WorkspaceDraftAgentTab({
         : {}),
     };
   }, [pendingCreateAttempt]);
-  const allowsEmptyAutoSubmit = pendingAutoSubmit?.allowEmptyText === true;
   const isCompactFormFactor = useIsCompactFormFactor();
   const editingSession = useComposerEditingSession("chat");
   const isComposerFullscreen = useComposerFullscreen(editingSession);
@@ -472,21 +468,13 @@ export function WorkspaceDraftAgentTab({
     draftId,
     getPendingServerId: () => serverId,
     initialAttempt: initialCreateAttempt,
-    allowEmptyText: allowsEmptyAutoSubmit,
-    validateBeforeSubmit: ({ text, attachments, allowEmptyText }) => {
-      const allowsEmptyDraftText = shouldAllowEmptyDraftText({
-        allowsEmptyAutoSubmit: allowsEmptyAutoSubmit || allowEmptyText === true,
-        attachments,
-      });
-      return validateDraftSubmission({
-        text,
-        allowsEmptyAutoSubmit: allowsEmptyDraftText,
+    validateBeforeCreate: () =>
+      validateDraftCreation({
         composerState,
         autoSubmitConfig,
         workspaceDirectory: draftWorkingDirectory,
         hasClient: Boolean(client),
-      });
-    },
+      }),
     onBeforeSubmit: async () => {
       await composerState.persistFormPreferences();
       if (isWeb) {
@@ -602,11 +590,13 @@ export function WorkspaceDraftAgentTab({
           attempt: preparedAttempt,
           cwd: submission.cwd,
         })
-      : handleCreateFromInput({
-          text: submission.text,
-          attachments: submission.attachments,
-          cwd: submission.cwd,
-        });
+      : !submission.text.trim() && submission.attachments.length === 0
+        ? createEmptyAgent(submission.cwd)
+        : handleCreateFromInput({
+            text: submission.text,
+            attachments: submission.attachments,
+            cwd: submission.cwd,
+          });
     void createPromise.catch(() => {
       replaceDraftText(submission.text);
       setDraftAttachments(composerWorkspaceAttachment.userAttachmentsOnly(submission.attachments));
@@ -614,6 +604,7 @@ export function WorkspaceDraftAgentTab({
     });
   }, [
     continueCreateFromAttempt,
+    createEmptyAgent,
     consumePendingAutoSubmit,
     draftId,
     handleCreateFromInput,
@@ -690,12 +681,7 @@ export function WorkspaceDraftAgentTab({
             workspaceId={workspaceId}
             isPaneFocused={isPaneFocused}
             onSubmitMessage={handleCreateFromInput}
-            onCreateVoiceAgent={
-              draftProviderDefinitions.find((entry) => entry.id === draftProvider)
-                ?.supportsRealtimeVoice
-                ? handleCreateVoiceAgent
-                : undefined
-            }
+            onCreateVoiceAgent={handleCreateVoiceAgent}
             isSubmitLoading={isSubmitting}
             blurOnSubmit={true}
             textSource={draftInput.textSource}

@@ -7,6 +7,7 @@ export function useComposerVoiceStart({
   serverId,
   agentId,
   hasAgent,
+  supportsRealtimeVoice,
   disabled,
   createVoiceAgent,
   onError,
@@ -15,14 +16,16 @@ export function useComposerVoiceStart({
   serverId: string;
   agentId: string;
   hasAgent: boolean;
+  supportsRealtimeVoice: boolean;
   disabled: boolean;
   createVoiceAgent?: () => Promise<string | null>;
   onError: (message: string) => void;
 }) {
+  const isAvailable = supportsRealtimeVoice && (hasAgent || Boolean(createVoiceAgent));
   const pending = useRef(false);
   const [isStarting, setIsStarting] = useState(false);
   const startVoice = useCallback(async () => {
-    if (!voice || disabled || pending.current || voice.isVoiceSwitching) return;
+    if (!isAvailable || !voice || disabled || pending.current || voice.isVoiceSwitching) return;
     if (hasAgent && voice.isVoiceModeForAgent(serverId, agentId)) return;
     if (!hasAgent && !createVoiceAgent) return;
     pending.current = true;
@@ -37,6 +40,6 @@ export function useComposerVoiceStart({
       pending.current = false;
       setIsStarting(false);
     }
-  }, [voice, serverId, agentId, hasAgent, disabled, createVoiceAgent, onError]);
-  return { startVoice, isStarting };
+  }, [isAvailable, voice, serverId, agentId, hasAgent, disabled, createVoiceAgent, onError]);
+  return { startVoice, isStarting, isAvailable };
 }

@@ -10,7 +10,7 @@ import type { DaemonClient } from "@ait/client/internal/daemon-client";
 import { useDraftAgentCreateFlow, type DraftCreateAttempt } from "./create-flow";
 import { requestWorkspaceDraftAgent } from "./create-agent-request";
 import { useSessionStore } from "@/stores/session-store";
-import { validateDraftSubmission } from "./workspace-tab-core";
+import { validateDraftCreation } from "./workspace-tab-core";
 
 vi.mock("@/utils/encode-images", () => ({ encodeImages: vi.fn(async () => undefined) }));
 
@@ -35,10 +35,8 @@ describe("useDraftAgentCreateFlow", () => {
         draftId: "voice-draft",
         getPendingServerId: () => "host",
         buildDraftAgent: () => ({}),
-        validateBeforeSubmit: ({ text, allowEmptyText }) =>
-          validateDraftSubmission({
-            text,
-            allowsEmptyAutoSubmit: allowEmptyText === true,
+        validateBeforeCreate: () =>
+          validateDraftCreation({
             composerState: {
               selectedProvider: "codex",
               providerDefinitions: [{ id: "codex" }],
@@ -92,6 +90,44 @@ describe("useDraftAgentCreateFlow", () => {
     expect(handoff).not.toHaveBeenCalled();
     handoff.mockRestore();
   });
+
+  it.each(["empty session", "message"])(
+    "validates configuration before creating an Agent for %s and permits retry",
+    async (intent) => {
+      const createRequest = vi.fn(async () => ({
+        agentId: "created-agent",
+        result: { id: "created-agent" },
+      }));
+      const validateBeforeCreate = vi.fn<() => string | null>(
+        () => "Model defaults are still loading",
+      );
+      const { result } = renderHook(() =>
+        useDraftAgentCreateFlow({
+          draftId: "draft",
+          getPendingServerId: () => "host",
+          buildDraftAgent: () => ({}),
+          validateBeforeCreate,
+          createRequest,
+          onCreateSuccess: vi.fn(),
+        }),
+      );
+      const create = () =>
+        intent === "empty session"
+          ? result.current.createEmptyAgent("/repo")
+          : result.current.handleCreateFromInput({ text: "hello", attachments: [], cwd: "/repo" });
+      await act(async () => {
+        await expect(create()).rejects.toThrow("Model defaults are still loading");
+      });
+      expect(createRequest).not.toHaveBeenCalled();
+      expect(result.current.isSubmitting).toBe(false);
+      expect(result.current.formErrorMessage).toBe("Model defaults are still loading");
+      validateBeforeCreate.mockReturnValue(null);
+      await act(async () => {
+        await create();
+      });
+      expect(createRequest).toHaveBeenCalledTimes(1);
+    },
+  );
 
   it("renders a prepared new-workspace submission before continuing it", async () => {
     const image: UserMessageImageAttachment = {
@@ -353,7 +389,7 @@ describe("useDraftAgentCreateFlow", () => {
       result: { id: "agent-1" },
     }));
     const onCreateSuccess = vi.fn();
-    const validateBeforeSubmit = vi.fn(() => null);
+    const validateBeforeCreate = vi.fn(() => null);
 
     const { result } = renderHook(() =>
       useDraftAgentCreateFlow({
@@ -362,7 +398,7 @@ describe("useDraftAgentCreateFlow", () => {
         buildDraftAgent: (currentAttempt) => ({ currentAttempt }),
         createRequest,
         onCreateSuccess,
-        validateBeforeSubmit,
+        validateBeforeCreate,
       }),
     );
 
@@ -374,11 +410,7 @@ describe("useDraftAgentCreateFlow", () => {
       });
     });
 
-    expect(validateBeforeSubmit).toHaveBeenCalledWith({
-      text: "",
-      attachments: [attachment],
-      cwd: "/repo",
-    });
+    expect(validateBeforeCreate).toHaveBeenCalledWith({ cwd: "/repo" });
     expect(createRequest).toHaveBeenCalledWith({
       attempt: expect.objectContaining({
         text: "",

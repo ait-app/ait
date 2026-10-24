@@ -309,9 +309,7 @@ export function buildDraftCommandConfig(input: {
   };
 }
 
-export function resolveSubmissionReadiness(input: {
-  text: string;
-  allowsEmptyAutoSubmit: boolean;
+export function resolveAgentCreationReadiness(input: {
   providerCount: number;
   selection: {
     provider: AgentProvider | string | null;
@@ -323,9 +321,6 @@ export function resolveSubmissionReadiness(input: {
   workspaceDirectory: string | null;
   hasClient: boolean;
 }): ProviderSelectionReadiness {
-  if (!input.allowsEmptyAutoSubmit && !input.text.trim()) {
-    return { ok: false, reason: i18n.t("providerSelection.readiness.initialPromptRequired") };
-  }
   if (input.providerCount === 0) {
     return { ok: false, reason: i18n.t("providerSelection.readiness.noProviders") };
   }

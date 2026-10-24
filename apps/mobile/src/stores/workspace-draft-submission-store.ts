@@ -26,7 +26,6 @@ export interface PendingWorkspaceDraftSubmission {
   model?: string;
   thinkingOptionId?: string;
   featureValues?: Record<string, unknown>;
-  allowEmptyText?: boolean;
 }
 
 export interface PendingWorkspaceDraftSetup {

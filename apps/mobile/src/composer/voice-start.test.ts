@@ -18,22 +18,63 @@ function setup(createVoiceAgent = vi.fn(async (): Promise<string | null> => "cre
   };
   const onError = vi.fn();
   const hook = renderHook(
-    ({ hasAgent, agentId, disabled }) =>
+    ({ hasAgent, agentId, disabled, supportsRealtimeVoice }) =>
       useComposerVoiceStart({
         voice,
         serverId: "host",
         agentId,
         hasAgent,
+        supportsRealtimeVoice,
         disabled,
         createVoiceAgent,
         onError,
       }),
-    { initialProps: { hasAgent: false, agentId: "draft", disabled: false } },
+    {
+      initialProps: {
+        hasAgent: false,
+        agentId: "draft",
+        disabled: false,
+        supportsRealtimeVoice: true,
+      },
+    },
   );
   return { ...hook, voice, onError, createVoiceAgent };
 }
 
 describe("starting voice from a composer", () => {
+  it.each([false, true])(
+    "uses provider capability for both visibility and activation (existing Agent: %s)",
+    async (hasAgent) => {
+      const { result, rerender, voice, createVoiceAgent } = setup();
+      const target = { hasAgent, agentId: "target", disabled: false };
+      rerender({ ...target, supportsRealtimeVoice: false });
+      expect(result.current.isAvailable).toBe(false);
+      await act(async () => {
+        await result.current.startVoice();
+      });
+      expect(createVoiceAgent).not.toHaveBeenCalled();
+      expect(voice.startVoice).not.toHaveBeenCalled();
+
+      rerender({ ...target, supportsRealtimeVoice: true });
+      expect(result.current.isAvailable).toBe(true);
+      await act(async () => {
+        await result.current.startVoice();
+      });
+      expect(voice.startVoice).toHaveBeenCalledExactlyOnceWith(
+        "host",
+        hasAgent ? "target" : "created-agent",
+      );
+      expect(createVoiceAgent).toHaveBeenCalledTimes(hasAgent ? 0 : 1);
+
+      rerender({ ...target, supportsRealtimeVoice: false });
+      expect(result.current.isAvailable).toBe(false);
+      await act(async () => {
+        await result.current.startVoice();
+      });
+      expect(voice.startVoice).toHaveBeenCalledTimes(1);
+    },
+  );
+
   it("waits for one empty Agent creation before starting capture, including repeated clicks", async () => {
     let complete!: (id: string) => void;
     const creation = new Promise<string>((resolve) => {
@@ -48,7 +89,7 @@ describe("starting voice from a composer", () => {
     });
     expect(result.current.isStarting).toBe(true);
     expect(voice.startVoice).not.toHaveBeenCalled();
-    rerender({ hasAgent: false, agentId: "draft", disabled: false });
+    rerender({ hasAgent: false, agentId: "draft", disabled: false, supportsRealtimeVoice: true });
     await act(async () => {
       await result.current.startVoice();
     });
@@ -85,7 +126,12 @@ describe("starting voice from a composer", () => {
       await result.current.startVoice();
     });
     expect(onError).toHaveBeenCalledWith("Microphone denied");
-    rerender({ hasAgent: true, agentId: "created-agent", disabled: false });
+    rerender({
+      hasAgent: true,
+      agentId: "created-agent",
+      disabled: false,
+      supportsRealtimeVoice: true,
+    });
     await act(async () => {
       await result.current.startVoice();
     });
@@ -103,7 +149,7 @@ describe("starting voice from a composer", () => {
 
   it("blocks creation while disconnected or submitting", async () => {
     const { result, rerender, createVoiceAgent, voice } = setup();
-    rerender({ hasAgent: false, agentId: "draft", disabled: true });
+    rerender({ hasAgent: false, agentId: "draft", disabled: true, supportsRealtimeVoice: true });
     await act(async () => {
       await result.current.startVoice();
     });

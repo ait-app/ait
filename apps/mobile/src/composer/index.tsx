@@ -276,6 +276,7 @@ function buildAgentStateSelector(serverId: string, agentId: string) {
       totalCostUsd: agent?.lastUsage?.totalCostUsd ?? null,
       model: agent?.model ?? null,
       provider: agent?.provider ?? null,
+      supportsRealtimeVoice: agent?.capabilities?.supportsRealtimeVoice === true,
     };
   };
 }
@@ -1129,7 +1130,7 @@ interface ComposerVoiceModeButtonProps {
 
 interface ComposerRightControlsSlotProps extends ComposerVoiceModeButtonProps {
   isVoiceModeForAgent: boolean;
-  hasVoiceTarget: boolean;
+  isVoiceAvailable: boolean;
   isAgentRunning: boolean;
   hasSendableContent: boolean;
   isCompact: boolean;
@@ -1138,7 +1139,7 @@ interface ComposerRightControlsSlotProps extends ComposerVoiceModeButtonProps {
 
 function ComposerRightControlsSlot({
   isVoiceModeForAgent,
-  hasVoiceTarget,
+  isVoiceAvailable,
   isAgentRunning,
   hasSendableContent,
   isCompact,
@@ -1149,7 +1150,7 @@ function ComposerRightControlsSlot({
   const showVoiceModeButton =
     showVoice &&
     !isVoiceModeForAgent &&
-    hasVoiceTarget &&
+    isVoiceAvailable &&
     !isAgentRunning &&
     !hideVoiceForCompactInput;
   if (!showVoiceModeButton) return null;
@@ -1900,13 +1901,22 @@ function ComposerContentImpl({
 
   const hasSendableContent = hasText || selectedAttachments.length > 0 || hasExternalContent;
   const canCreateVoiceAgent = Boolean(onCreateVoiceAgent) && !hasSendableContent;
-  const hasVoiceTarget = hasAgent || canCreateVoiceAgent;
+  const supportsRealtimeVoice = hasAgent
+    ? agentState.supportsRealtimeVoice
+    : agentControls?.providerDefinitions.find(
+        (entry) => entry.id === agentControls.selectedProvider,
+      )?.supportsRealtimeVoice === true;
   const reportVoiceError = useCallback((message: string) => toastErrorRef.current(message), []);
-  const { startVoice, isStarting: isStartingVoice } = useComposerVoiceStart({
+  const {
+    startVoice,
+    isStarting: isStartingVoice,
+    isAvailable: isVoiceAvailable,
+  } = useComposerVoiceStart({
     voice,
     serverId,
     agentId,
     hasAgent,
+    supportsRealtimeVoice,
     disabled: !isConnected || isAgentRunning || isSubmitLoading || !mode.showVoice,
     createVoiceAgent: canCreateVoiceAgent ? onCreateVoiceAgent : undefined,
     onError: reportVoiceError,
@@ -2015,7 +2025,7 @@ function ComposerContentImpl({
     () => (
       <ComposerRightControlsSlot
         isVoiceModeForAgent={isVoiceModeForAgent}
-        hasVoiceTarget={hasVoiceTarget}
+        isVoiceAvailable={isVoiceAvailable}
         isAgentRunning={isAgentRunning}
         hasSendableContent={hasSendableContent}
         isCompact={isCompactLayout}
@@ -2032,7 +2042,7 @@ function ComposerContentImpl({
     [
       buttonIconSize,
       handleToggleRealtimeVoice,
-      hasVoiceTarget,
+      isVoiceAvailable,
       hasSendableContent,
       isAgentRunning,
       isConnected,

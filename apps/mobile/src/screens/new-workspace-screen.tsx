@@ -1171,7 +1171,6 @@ function submitWorkspaceDraft(input: SubmitDraftInput): SubmitOutcome {
     ...(submission.model ? { model: submission.model } : {}),
     ...(submission.thinkingOptionId ? { thinkingOptionId: submission.thinkingOptionId } : {}),
     ...(submission.featureValues ? { featureValues: submission.featureValues } : {}),
-    allowEmptyText: true,
     agentCreation: input.agentCreation,
   });
   clearDraft("sent");
@@ -2495,13 +2494,7 @@ export function NewWorkspaceScreen({
       serverId={selectedServerId}
       isPaneFocused={true}
       onSubmitMessage={handleSubmitNewWorkspace}
-      onCreateVoiceAgent={
-        composerState?.providerDefinitions.find(
-          (entry) => entry.id === composerState.selectedProvider,
-        )?.supportsRealtimeVoice
-          ? handleCreateVoiceAgent
-          : undefined
-      }
+      onCreateVoiceAgent={handleCreateVoiceAgent}
       allowEmptySubmit={true}
       submitButtonAccessibilityLabel={t("newWorkspace.create")}
       submitButtonTestID="workspace-create-submit"
