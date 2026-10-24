@@ -11,7 +11,6 @@ import type {
   UserMessageItem,
 } from "@/types/stream";
 import { splitMarkdownBlocks } from "@/utils/split-markdown-blocks";
-import { continuesTurn } from "./turn-membership";
 
 interface PresentationInput {
   tail: StreamItem[];
@@ -55,10 +54,11 @@ function createThoughtProjection() {
     const rows: StreamItem[] = [];
     for (const item of items) {
       const previous = rows.at(-1);
+      // Missing turn IDs only match other missing IDs; legacy rows cannot bridge canonical turns.
       if (
         previous?.kind === "thought" &&
         item.kind === "thought" &&
-        continuesTurn(previous, item)
+        previous.turnId === item.turnId
       ) {
         rows[rows.length - 1] = merge(previous, item);
       } else {
@@ -75,7 +75,11 @@ function createThoughtProjection() {
     const live = coalesce(head);
     const previous = history.at(-1);
     const next = live[0];
-    if (previous?.kind === "thought" && next?.kind === "thought" && continuesTurn(previous, next)) {
+    if (
+      previous?.kind === "thought" &&
+      next?.kind === "thought" &&
+      previous.turnId === next.turnId
+    ) {
       return {
         tail: [...history.slice(0, -1), merge(previous, next)],
         head: live.slice(1),

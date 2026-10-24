@@ -146,6 +146,54 @@ describe.each(["overview", "detailed"] as const)(
       );
     });
 
+    it.each([0, 1, 2, 3, 4])(
+      "keeps legacy history and canonical turns separate with %i history rows",
+      (historyLength) => {
+        const legacy = Object.freeze(thought("legacy", "Legacy history"));
+        const first = Object.freeze({ ...thought("a1", "Turn A starts"), turnId: "turn-a" });
+        const second = Object.freeze({ ...thought("a2", "Turn A ends"), turnId: "turn-a" });
+        const last = Object.freeze({
+          ...thought("b", "Turn B thought", "loading"),
+          turnId: "turn-b",
+        });
+        const items = [legacy, first, second, last];
+        const present = createStreamPresentation();
+        const projected = present({
+          ...options,
+          tail: items.slice(0, historyLength),
+          head: items.slice(historyLength),
+        });
+
+        expect(rows(projected)).toEqual([
+          legacy,
+          { ...first, text: "Turn A starts\n\nTurn A ends" },
+          last,
+        ]);
+        expect(rows(projected)[0]).toBe(legacy);
+        expect(rows(projected)[2]).toBe(last);
+        const committed = present({ ...options, tail: items, head: [], isTurnActive: false });
+        expect(rows(committed)).toEqual(rows(projected));
+      },
+    );
+
+    it.each([0, 1, 2, 3])(
+      "keeps untagged thoughts between different turns separate with %i history rows",
+      (historyLength) => {
+        const items = [
+          { ...thought("a", "Turn A"), turnId: "turn-a" },
+          thought("legacy", "Untagged thought"),
+          { ...thought("b", "Turn B", "loading"), turnId: "turn-b" },
+        ];
+        const projected = createStreamPresentation()({
+          ...options,
+          tail: items.slice(0, historyLength),
+          head: items.slice(historyLength),
+        });
+
+        expect(rows(projected)).toEqual(items);
+      },
+    );
+
     it("reuses merged history while unrelated live content changes", () => {
       const tail = [thought("first", "First"), thought("second", "Second")];
       const present = createStreamPresentation();
