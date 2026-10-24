@@ -98,6 +98,8 @@
 
 ## Provider、Agent 与会话
 
+- [OMP 本机六模型实测与兼容修补](providers/omp-local-model-audit-2026-10-24.md)
+
 - [Oh My Pi 原生 Provider 验证](providers/omp-native-provider.md)
 
 - [OpenCode 加载速度验证](providers/opencode-startup-real-usage-2026-10-21.md)
