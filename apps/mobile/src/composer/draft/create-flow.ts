@@ -82,6 +82,7 @@ interface CreateRequestResult<TCreateResult> {
 }
 
 interface SubmitContext {
+  allowEmptyText?: boolean;
   text: string;
   attachments: ComposerAttachment[];
   cwd: string;
@@ -178,13 +179,13 @@ export function useDraftAgentCreateFlow<TDraftAgent, TCreateResult>({
     ];
   }, [machine]);
   const pendingMessageSubmissions = useMemo<readonly PendingMessageSubmission[]>(() => {
-    if (machine.tag !== "creating") return [];
+    if (machine.tag !== "creating" || submittedStreamItems.length === 0) return [];
     return [
       {
         clientMessageId: machine.attempt.clientMessageId,
       },
     ];
-  }, [machine]);
+  }, [machine, submittedStreamItems]);
 
   const draftAgent = machine.tag === "creating" ? machine.draftAgent : null;
   const startCreateAttempt = useCallback(
@@ -226,21 +227,24 @@ export function useDraftAgentCreateFlow<TDraftAgent, TCreateResult>({
 
         if (createResult.agentId) {
           updatePendingAgentId({ draftId, agentId: createResult.agentId });
-          handoffCreatedAgentMessageSubmission(
-            pendingServerId,
-            createResult.agentId,
-            createUserMessage({
-              clientMessageId: attempt.clientMessageId,
-              text: attempt.text,
-              timestamp: attempt.timestamp,
-              images: attempt.images,
-              attachments: attempt.attachments,
-            }),
-          );
+          if (attempt.text || attempt.images?.length || attempt.attachments?.length) {
+            handoffCreatedAgentMessageSubmission(
+              pendingServerId,
+              createResult.agentId,
+              createUserMessage({
+                clientMessageId: attempt.clientMessageId,
+                text: attempt.text,
+                timestamp: attempt.timestamp,
+                images: attempt.images,
+                attachments: attempt.attachments,
+              }),
+            );
+          }
           markPendingCreateLifecycle({ draftId, lifecycle: "sent" });
         }
 
         await onCreateSuccess({ result: createResult.result, attempt });
+        return createResult.result;
       } catch (error) {
         const resolved =
           error instanceof Error ? error : new Error(t("composer.errors.failedToCreateAgent"));
@@ -267,8 +271,8 @@ export function useDraftAgentCreateFlow<TDraftAgent, TCreateResult>({
     ],
   );
 
-  const handleCreateFromInput = useCallback(
-    async ({ text, attachments, cwd }: SubmitContext) => {
+  const submit = useCallback(
+    async ({ text, attachments, cwd, allowEmptyText: emptySession }: SubmitContext) => {
       const existing = useCreateFlowStore.getState().pendingByDraftId[draftId];
       if (
         isSubmitting ||
@@ -296,13 +300,14 @@ export function useDraftAgentCreateFlow<TDraftAgent, TCreateResult>({
       const images = wirePayload.images;
 
       const hasAttachmentContent = images.length > 0 || wirePayload.attachments.length > 0;
-      if (!trimmedPrompt && !hasAttachmentContent && !allowEmptyText) {
+      if (!trimmedPrompt && !hasAttachmentContent && !allowEmptyText && !emptySession) {
         const error = new Error(t("composer.errors.initialPromptRequired"));
         dispatch({ type: "DRAFT_SET_ERROR", message: error.message });
         throw error;
       }
 
       const validationError = validateBeforeSubmit?.({
+        ...(emptySession ? { allowEmptyText: true } : {}),
         text: trimmedPrompt,
         attachments,
         cwd,
@@ -336,7 +341,7 @@ export function useDraftAgentCreateFlow<TDraftAgent, TCreateResult>({
       });
 
       onCreateStart?.();
-      await runCreateAttempt({ attempt, cwd });
+      return await runCreateAttempt({ attempt, cwd });
     },
     [
       allowEmptyText,
@@ -350,6 +355,18 @@ export function useDraftAgentCreateFlow<TDraftAgent, TCreateResult>({
       t,
       validateBeforeSubmit,
     ],
+  );
+
+  const handleCreateFromInput = useCallback(
+    async (context: SubmitContext) => {
+      await submit(context);
+    },
+    [submit],
+  );
+
+  const createEmptyAgent = useCallback(
+    (cwd: string) => submit({ text: "", attachments: [], cwd, allowEmptyText: true }),
+    [submit],
   );
 
   const continueCreateFromAttempt = useCallback(
@@ -370,6 +387,7 @@ export function useDraftAgentCreateFlow<TDraftAgent, TCreateResult>({
     pendingMessageSubmissions,
     draftAgent,
     handleCreateFromInput,
+    createEmptyAgent,
     continueCreateFromAttempt,
   };
 }

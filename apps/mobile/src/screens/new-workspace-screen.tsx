@@ -50,6 +50,8 @@ import { LaunchControl } from "@/new-workspace-launch/launch-control";
 import { resolveLaunchTarget, type LaunchTarget } from "@/new-workspace-launch/target";
 import { useTerminalComposerState } from "@/new-workspace-launch/composer-state";
 import { runCreateTerminalWorkspace } from "./new-workspace-terminal";
+import { createWorkspaceVoiceAgent } from "./new-workspace-voice";
+import { normalizeAgentSnapshot } from "@/utils/agent-snapshots";
 import {
   useHostRuntimeClient,
   useHostRuntimeConnectionStatuses,
@@ -163,7 +165,7 @@ function resolveVisibleDraftContextScopeKeys(input: {
 }
 
 function isNewWorkspacePending(input: {
-  pendingAction: "chat" | "empty" | "terminal" | null;
+  pendingAction: "chat" | "empty" | "terminal" | "voice" | null;
   isDraftHandoffActive: boolean;
 }): boolean {
   return input.pendingAction !== null || input.isDraftHandoffActive;
@@ -861,9 +863,15 @@ async function createMultiplicityWorkspace(input: {
     throw new Error(payload.error ?? input.createFailedMessage);
   }
   const normalizedWorkspace = normalizeWorkspaceDescriptor(payload.workspace);
-  const workspaceForInitialMerge = input.withInitialAgent
-    ? { ...normalizedWorkspace, status: "running" as const, statusEnteredAt: new Date() }
-    : normalizedWorkspace;
+  const startsAgentTurn = Boolean(
+    input.agent?.initialPrompt?.trim() ||
+    input.agent?.images?.length ||
+    input.agent?.attachments?.length,
+  );
+  const workspaceForInitialMerge =
+    input.withInitialAgent && startsAgentTurn
+      ? { ...normalizedWorkspace, status: "running" as const, statusEnteredAt: new Date() }
+      : normalizedWorkspace;
   input.mergeWorkspaces(input.serverId, [workspaceForInitialMerge]);
   return { workspace: normalizedWorkspace, agent: payload.agent };
 }
@@ -1675,7 +1683,9 @@ export function NewWorkspaceScreen({
   const [creationResult, setCreationResult] = useState<
     WorkspaceCreationResult | { workspace: null }
   >({ workspace: null });
-  const [pendingAction, setPendingAction] = useState<"chat" | "empty" | "terminal" | null>(null);
+  const [pendingAction, setPendingAction] = useState<
+    "chat" | "empty" | "terminal" | "voice" | null
+  >(null);
   const [pickerOpen, setPickerOpen] = useState(false);
   const [projectPickerOpen, setProjectPickerOpen] = useState(false);
   const openAddProjectPicker = useOpenAddProject();
@@ -2122,6 +2132,66 @@ export function NewWorkspaceScreen({
     ],
   );
 
+  const handleCreateVoiceAgent = useCallback(async () => {
+    if (isPending) return null;
+    if (!composerState?.selectedProvider) {
+      throw new Error(t("newWorkspace.errors.selectModel"));
+    }
+    setPendingAction("voice");
+    setErrorMessage(null);
+    const clearConsumedDraft = captureWorkspaceDraftCleanup({
+      draftId,
+      draftKey,
+      draftContextScopeKey,
+      clearDraft: chatDraft.clear,
+    });
+    try {
+      await composerState.persistFormPreferences();
+      await updateFormPreferences({ launchTarget });
+      return await createWorkspaceVoiceAgent({
+        config: {
+          provider: composerState.selectedProvider,
+          cwd: composerState.workingDir,
+          modeId: composerState.selectedMode || undefined,
+          model: composerState.effectiveModelId || undefined,
+          thinkingOptionId: composerState.effectiveThinkingOptionId || undefined,
+          featureValues: composerState.featureValues,
+        },
+        ensureWorkspace,
+        clearConsumedDraft,
+        isCurrent: isStillOnCreateScreen,
+        onCreated: (workspace, agent) => {
+          getHostRuntimeStore().acceptAgentSnapshot(
+            selectedServerId,
+            normalizeAgentSnapshot(agent, selectedServerId),
+          );
+          leaveFullscreen();
+          navigateToWorkspace({
+            serverId: selectedServerId,
+            workspaceId: workspace.id,
+            target: { kind: "agent", agentId: agent.id },
+          });
+        },
+      });
+    } finally {
+      setPendingAction(null);
+    }
+  }, [
+    isPending,
+    composerState,
+    t,
+    draftId,
+    draftKey,
+    draftContextScopeKey,
+    chatDraft.clear,
+    updateFormPreferences,
+    launchTarget,
+    ensureWorkspace,
+    isStillOnCreateScreen,
+    selectedServerId,
+    leaveFullscreen,
+  ]);
+
   const handleSubmitNewWorkspace = useCallback(
     async (payload: MessagePayload) => {
       try {
@@ -2425,6 +2495,7 @@ export function NewWorkspaceScreen({
       serverId={selectedServerId}
       isPaneFocused={true}
       onSubmitMessage={handleSubmitNewWorkspace}
+      onCreateVoiceAgent={handleCreateVoiceAgent}
       allowEmptySubmit={true}
       submitButtonAccessibilityLabel={t("newWorkspace.create")}
       submitButtonTestID="workspace-create-submit"

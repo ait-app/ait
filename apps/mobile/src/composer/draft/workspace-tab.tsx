@@ -466,15 +466,16 @@ export function WorkspaceDraftAgentTab({
     pendingMessageSubmissions,
     draftAgent,
     handleCreateFromInput,
+    createEmptyAgent,
     continueCreateFromAttempt,
   } = useDraftAgentCreateFlow<Agent, AgentSnapshotPayload>({
     draftId,
     getPendingServerId: () => serverId,
     initialAttempt: initialCreateAttempt,
     allowEmptyText: allowsEmptyAutoSubmit,
-    validateBeforeSubmit: ({ text, attachments }) => {
+    validateBeforeSubmit: ({ text, attachments, allowEmptyText }) => {
       const allowsEmptyDraftText = shouldAllowEmptyDraftText({
-        allowsEmptyAutoSubmit,
+        allowsEmptyAutoSubmit: allowsEmptyAutoSubmit || allowEmptyText === true,
         attachments,
       });
       return validateDraftSubmission({
@@ -531,6 +532,10 @@ export function WorkspaceDraftAgentTab({
       onCreated(result);
     },
   });
+  const handleCreateVoiceAgent = useCallback(async () => {
+    const agent = await createEmptyAgent(composerState.workingDir);
+    return agent.id;
+  }, [composerState.workingDir, createEmptyAgent]);
   const turnPresentation = useMemo(
     () => resolveTurnPresentation(TURN_LIVENESS_IDLE, pendingMessageSubmissions.length > 0),
     [pendingMessageSubmissions],
@@ -685,6 +690,7 @@ export function WorkspaceDraftAgentTab({
             workspaceId={workspaceId}
             isPaneFocused={isPaneFocused}
             onSubmitMessage={handleCreateFromInput}
+            onCreateVoiceAgent={handleCreateVoiceAgent}
             isSubmitLoading={isSubmitting}
             blurOnSubmit={true}
             textSource={draftInput.textSource}

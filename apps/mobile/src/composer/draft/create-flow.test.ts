@@ -9,12 +9,88 @@ import type { AgentAttachment } from "@ait/protocol/messages";
 import type { DaemonClient } from "@ait/client/internal/daemon-client";
 import { useDraftAgentCreateFlow, type DraftCreateAttempt } from "./create-flow";
 import { requestWorkspaceDraftAgent } from "./create-agent-request";
+import { useSessionStore } from "@/stores/session-store";
+import { validateDraftSubmission } from "./workspace-tab-core";
 
 vi.mock("@/utils/encode-images", () => ({ encodeImages: vi.fn(async () => undefined) }));
 
 describe("useDraftAgentCreateFlow", () => {
   beforeEach(() => {
     useCreateFlowStore.setState({ pendingByDraftId: {} });
+  });
+
+  it("creates a voice session without sending or handing off an empty first message", async () => {
+    const handoff = vi.spyOn(useSessionStore.getState(), "handoffCreatedAgentUserMessage");
+    let complete!: () => void;
+    const creation = new Promise<void>((resolve) => {
+      complete = resolve;
+    });
+    const createAgent = vi.fn(async () => {
+      await creation;
+      return { id: "voice-agent" };
+    });
+    const onCreateSuccess = vi.fn();
+    const { result } = renderHook(() =>
+      useDraftAgentCreateFlow({
+        draftId: "voice-draft",
+        getPendingServerId: () => "host",
+        buildDraftAgent: () => ({}),
+        validateBeforeSubmit: ({ text, allowEmptyText }) =>
+          validateDraftSubmission({
+            text,
+            allowsEmptyAutoSubmit: allowEmptyText === true,
+            composerState: {
+              selectedProvider: "codex",
+              providerDefinitions: [{ id: "codex" }],
+              availableModels: [],
+              effectiveModelId: "",
+              isModelLoading: false,
+            },
+            autoSubmitConfig: null,
+            workspaceDirectory: "/repo",
+            hasClient: true,
+          }),
+        createRequest: async ({ attempt, text, cwd }) => {
+          const agent = await requestWorkspaceDraftAgent(
+            { createAgent } as unknown as DaemonClient,
+            {
+              workspaceId: "workspace",
+              config: { provider: "codex", cwd },
+              clientMessageId: attempt.clientMessageId,
+              text,
+            },
+          );
+          return { agentId: agent.id, result: agent };
+        },
+        onCreateSuccess,
+      }),
+    );
+    await act(async () => {
+      await expect(
+        result.current.handleCreateFromInput({ text: "", attachments: [], cwd: "/repo" }),
+      ).rejects.toThrow();
+    });
+    expect(createAgent).not.toHaveBeenCalled();
+    let started!: ReturnType<typeof result.current.createEmptyAgent>;
+    await act(async () => {
+      started = result.current.createEmptyAgent("/repo");
+    });
+    expect(result.current.isSubmitting).toBe(true);
+    expect(result.current.submittedStreamItems).toEqual([]);
+    expect(result.current.pendingMessageSubmissions).toEqual([]);
+    expect(createAgent).toHaveBeenCalledExactlyOnceWith({
+      idempotencyKey: expect.any(String),
+      clientMessageId: expect.any(String),
+      config: { provider: "codex", cwd: "/repo" },
+      workspaceId: "workspace",
+    });
+    await act(async () => {
+      complete();
+      await expect(started).resolves.toEqual({ id: "voice-agent" });
+    });
+    expect(onCreateSuccess).toHaveBeenCalledTimes(1);
+    expect(handoff).not.toHaveBeenCalled();
+    handoff.mockRestore();
   });
 
   it("renders a prepared new-workspace submission before continuing it", async () => {
