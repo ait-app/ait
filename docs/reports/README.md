@@ -99,6 +99,7 @@
 ## Provider、Agent 与会话
 
 - [Pi Full Access 模式标签验证](providers/pi-full-access-label-2026-10-24.md)
+- [OMP 本机六模型实测与兼容修补](providers/omp-local-model-audit-2026-10-24.md)
 
 - [Oh My Pi 原生 Provider 验证](providers/omp-native-provider.md)
 

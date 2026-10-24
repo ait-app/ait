@@ -1,5 +1,6 @@
 import type { ProviderSnapshotEntry } from "@ait/protocol/agent-types";
 import {
+  AGENT_PROVIDER_DEFINITIONS,
   type AgentModeColorTier,
   type AgentModeIcon,
   type AgentProviderDefinition,
@@ -8,13 +9,15 @@ import {
 
 function buildProviderModes(entry: ProviderSnapshotEntry): AgentProviderModeDefinition[] {
   const entryModes = entry.modes ?? [];
+  const builtin = AGENT_PROVIDER_DEFINITIONS.find((definition) => definition.id === entry.provider);
 
-  return entryModes.map((mode) =>
-    Object.assign({}, mode, {
-      icon: (mode.icon ?? "ShieldCheck") as AgentModeIcon,
-      colorTier: (mode.colorTier ?? "moderate") as AgentModeColorTier,
-    }),
-  );
+  return entryModes.map((mode) => {
+    const knownMode = builtin?.modes.find((candidate) => candidate.id === mode.id);
+    return Object.assign({}, mode, {
+      icon: (mode.icon ?? knownMode?.icon ?? "ShieldCheck") as AgentModeIcon,
+      colorTier: (mode.colorTier ?? knownMode?.colorTier ?? "moderate") as AgentModeColorTier,
+    });
+  });
 }
 
 export function buildProviderDefinitions(

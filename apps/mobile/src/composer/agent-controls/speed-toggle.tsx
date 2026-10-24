@@ -28,7 +28,7 @@ export function SpeedToggle({
     ? (fastOption?.label ?? "Fast")
     : (feature.options.find((option) => option.id === "default")?.label ?? "Normal");
   const tooltip = `${feature.label}: ${value}`;
-  const Icon = getAgentFeatureIcon(feature.icon);
+  const Icon = getAgentFeatureIcon(feature.icon, feature.id);
   const handlePress = useCallback(() => {
     onSetFeature?.(feature.id, enabled ? "default" : "fast");
     onActionComplete?.();
