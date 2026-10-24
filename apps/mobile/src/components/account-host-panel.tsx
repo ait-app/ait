@@ -1,21 +1,25 @@
 import { supportsBrowserAccount } from "@/runtime/browser-account";
-import React, { useRef, useState } from "react";
+import React, { useRef, useState, type ReactNode } from "react";
 import { Keyboard, Pressable, Text, View } from "react-native";
 import { StyleSheet, useUnistyles } from "react-native-unistyles";
 import { ChevronDown, ChevronRight, ExternalLink, RefreshCw } from "lucide-react-native";
 import { useTranslation } from "react-i18next";
 import { Button } from "./ui/button";
+import { StatusBadge } from "./ui/status-badge";
 import { AdaptiveTextInput } from "./adaptive-text-input";
 import { accountCommand, useAccountState } from "@/runtime/account-state";
+import { SettingsCard, SettingsRow, SettingsSection } from "./settings";
 
 export function AccountHostPanel({
   onSignedIn,
   onCancel,
   onRefresh,
+  children,
 }: {
   onSignedIn?: () => void;
   onCancel?: () => void;
   onRefresh?: () => void;
+  children?: ReactNode;
 }) {
   const { t } = useTranslation();
   const { theme } = useUnistyles();
@@ -55,97 +59,138 @@ export function AccountHostPanel({
     <View style={styles.panel} testID="account-host-panel">
       {account.status === "logged_out" ? (
         <>
-          <Text style={styles.hint}>{t("onlineService.loginDescription")}</Text>
-          <Text style={styles.hint}>{t("onlineService.unifiedHint")}</Text>
-          {!supportsBrowserAccount() ? (
-            <View style={styles.field}>
-              <Pressable
-                accessibilityRole="button"
-                accessibilityState={{ expanded: showServiceSettings }}
-                style={styles.disclosure}
-                disabled={busy}
-                onPress={() => setShowServiceSettings((shown) => !shown)}
-                testID="account-service-settings"
+          <SettingsSection title={t("onlineService.accountTitle")} flush>
+            <SettingsCard>
+              <SettingsRow
+                label={t("onlineService.signIn")}
+                hint={t("onlineService.loginDescription")}
               >
-                <ServiceSettingsIcon size={16} color={theme.colors.foregroundMuted} />
-                <Text style={styles.disclosureText}>{t("onlineService.serviceSettings")}</Text>
-              </Pressable>
-              {showServiceSettings ? (
-                <View style={styles.field}>
-                  <Text style={styles.label}>{t("onlineService.serviceUrl")}</Text>
+                <View style={styles.actions}>
+                  {account.loginPending ? (
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      onPress={() => void accountCommand("account_cancel_login")}
+                      testID="account-cancel-login"
+                    >
+                      {t("common.actions.cancel")}
+                    </Button>
+                  ) : onCancel ? (
+                    <Button variant="ghost" size="sm" onPress={onCancel} disabled={busy}>
+                      {t("common.actions.cancel")}
+                    </Button>
+                  ) : null}
+                  <Button
+                    variant="default"
+                    size="sm"
+                    leftIcon={ExternalLink}
+                    disabled={busy}
+                    loading={busy}
+                    testID="account-unified-login"
+                    onPress={() => void runAccountAction(signIn)}
+                  >
+                    {t(
+                      account.loginPending
+                        ? "onlineService.browserWaiting"
+                        : "onlineService.unifiedLogin",
+                    )}
+                  </Button>
+                </View>
+              </SettingsRow>
+              {!supportsBrowserAccount() ? (
+                <Pressable
+                  accessibilityRole="button"
+                  accessibilityState={{ expanded: showServiceSettings, disabled: busy }}
+                  style={styles.disclosure}
+                  disabled={busy}
+                  onPress={() => setShowServiceSettings((shown) => !shown)}
+                  testID="account-service-settings"
+                >
+                  <Text style={styles.disclosureText}>{t("onlineService.serviceSettings")}</Text>
+                  <ServiceSettingsIcon size={16} color={theme.colors.foregroundMuted} />
+                </Pressable>
+              ) : null}
+              {!supportsBrowserAccount() && showServiceSettings ? (
+                <SettingsRow label={t("onlineService.serviceUrl")}>
                   <AdaptiveTextInput
                     style={styles.input}
                     initialValue={center}
                     resetKey={account.center}
                     onChangeText={setCenterOverride}
-                    placeholder="https://your-server.example/api"
+                    placeholder={t("onlineService.serviceUrlHint")}
                     accessibilityLabel={t("onlineService.serviceUrl")}
                     autoCapitalize="none"
                     autoCorrect={false}
                     editable={!busy}
                     testID="account-center"
                   />
-                  <Text style={styles.hint}>{t("onlineService.serviceUrlHint")}</Text>
-                </View>
+                </SettingsRow>
               ) : null}
-            </View>
-          ) : null}
+            </SettingsCard>
+          </SettingsSection>
           {error || account.error ? (
             <Text style={styles.error} accessibilityRole="alert">
               {error ?? account.error}
             </Text>
           ) : null}
-          <View style={styles.actions}>
-            {account.loginPending ? (
-              <Button
-                style={styles.action}
-                onPress={() => void accountCommand("account_cancel_login")}
-                testID="account-cancel-login"
-              >
-                {t("common.actions.cancel")}
-              </Button>
-            ) : onCancel ? (
-              <Button style={styles.action} onPress={onCancel} disabled={busy}>
-                {t("common.actions.cancel")}
-              </Button>
-            ) : null}
-            <Button
-              style={styles.action}
-              variant="default"
-              leftIcon={ExternalLink}
-              disabled={busy}
-              loading={busy}
-              testID="account-unified-login"
-              onPress={() => void runAccountAction(signIn)}
-            >
-              {t(
-                account.loginPending
-                  ? "onlineService.browserWaiting"
-                  : "onlineService.unifiedLogin",
-              )}
-            </Button>
-          </View>
         </>
       ) : (
         <>
           <View style={styles.accountSummary}>
-            <View style={styles.hostBody}>
-              <Text style={styles.title}>{account.name}</Text>
-              <View style={styles.connectionStatus}>
+            <Text selectable style={styles.title}>
+              {account.name}
+            </Text>
+            <StatusBadge
+              label={t(
+                account.status === "online"
+                  ? "common.connectionStatus.online"
+                  : "common.connectionStatus.connecting",
+              )}
+              variant={account.status === "online" ? "success" : "muted"}
+              leading={
                 <View
                   style={[styles.statusDot, account.status === "online" ? styles.onlineDot : null]}
                 />
-                <Text style={styles.hint}>
-                  {t(
-                    account.status === "online"
-                      ? "onlineService.connected"
-                      : "onlineService.connecting",
-                  )}
-                </Text>
-              </View>
-            </View>
+              }
+            />
+          </View>
+          {children ?? (
+            <SettingsSection title={t("onlineService.accountInfo")} flush>
+              <SettingsCard>
+                {!supportsBrowserAccount() ? (
+                  <SettingsRow label={t("onlineService.serviceUrl")}>
+                    <Text selectable style={styles.value}>
+                      {account.center}
+                    </Text>
+                  </SettingsRow>
+                ) : null}
+                <SettingsRow label={t("onlineService.accountExpiry")}>
+                  <Text selectable style={styles.value}>
+                    {account.accountExpiresAt
+                      ? new Date(account.accountExpiresAt).toLocaleString()
+                      : "—"}
+                  </Text>
+                </SettingsRow>
+              </SettingsCard>
+            </SettingsSection>
+          )}
+          <View style={styles.actions}>
             <Button
-              variant="ghost"
+              variant="outline"
+              size="sm"
+              leftIcon={RefreshCw}
+              disabled={busy}
+              onPress={() =>
+                void runAccountAction(async () => {
+                  await accountCommand("account_refresh");
+                  onRefresh?.();
+                })
+              }
+            >
+              {t("onlineService.refresh")}
+            </Button>
+            <Button
+              variant="outline"
               size="sm"
               disabled={busy}
               onPress={() => void runAccountAction(() => accountCommand("account_logout"))}
@@ -153,30 +198,6 @@ export function AccountHostPanel({
               {t("onlineService.signOut")}
             </Button>
           </View>
-          {!supportsBrowserAccount() ? <Text style={styles.hint}>{account.center}</Text> : null}
-          {account.accountExpiresAt ? (
-            <Text style={styles.hint}>
-              {t("onlineService.expiresAt", {
-                date: new Date(account.accountExpiresAt).toLocaleString(),
-              })}
-            </Text>
-          ) : null}
-          <Button
-            variant="outline"
-            leftIcon={RefreshCw}
-            disabled={busy}
-            onPress={() =>
-              void runAccountAction(async () => {
-                await accountCommand("account_refresh");
-                onRefresh?.();
-              })
-            }
-          >
-            {t("onlineService.refresh")}
-          </Button>
-          <Text style={styles.hint}>{t("onlineService.hostListHint")}</Text>
-          <Text style={styles.hint}>{t("onlineService.hostSettingsHint")}</Text>
-          <Text style={styles.hint}>{t("onlineService.signOutHint")}</Text>
           {error || account.error ? (
             <Text style={styles.error} accessibilityRole="alert">
               {error ?? account.error}
@@ -190,21 +211,16 @@ export function AccountHostPanel({
 
 const styles = StyleSheet.create((theme) => ({
   panel: {
-    gap: theme.spacing[4],
-  },
-  field: { gap: theme.spacing[2] },
-  label: {
-    fontSize: theme.fontSize.base,
-    fontWeight: theme.fontWeight.medium,
-    color: theme.colors.foregroundMuted,
+    gap: theme.spacing[6],
   },
   title: {
     fontSize: theme.fontSize.base,
     fontWeight: theme.fontWeight.medium,
     color: theme.colors.foreground,
   },
-  hint: { fontSize: theme.fontSize.base, lineHeight: 22, color: theme.colors.foregroundMuted },
+  value: { fontSize: theme.fontSize.base, color: theme.colors.foregroundMuted, flexShrink: 1 },
   input: {
+    minWidth: 180,
     backgroundColor: theme.colors.surface2,
     paddingHorizontal: theme.spacing[4],
     paddingVertical: theme.spacing[3],
@@ -213,29 +229,31 @@ const styles = StyleSheet.create((theme) => ({
     borderRadius: theme.borderRadius.lg,
     color: theme.colors.foreground,
   },
-  actions: { flexDirection: "row", gap: theme.spacing[3], marginTop: theme.spacing[2] },
-  action: { flex: 1 },
+  actions: {
+    flexDirection: "row",
+    flexWrap: "wrap",
+    justifyContent: "flex-end",
+    gap: theme.spacing[2],
+  },
   disclosure: {
     flexDirection: "row",
     alignItems: "center",
     gap: theme.spacing[2],
-    alignSelf: "flex-start",
-    paddingVertical: theme.spacing[1],
+    justifyContent: "space-between",
+    padding: theme.spacing[4],
   },
   disclosureText: {
     fontSize: theme.fontSize.base,
-    fontWeight: theme.fontWeight.medium,
+    flexShrink: 1,
     color: theme.colors.foreground,
   },
-  accountSummary: { flexDirection: "row", alignItems: "center", gap: theme.spacing[3] },
-  connectionStatus: { flexDirection: "row", alignItems: "center", gap: theme.spacing[2] },
+  accountSummary: { alignItems: "flex-start", gap: theme.spacing[4] },
   statusDot: {
     width: 6,
     height: 6,
     borderRadius: 3,
     backgroundColor: theme.colors.foregroundMuted,
   },
-  onlineDot: { backgroundColor: theme.colors.accent },
-  hostBody: { flex: 1, minWidth: 0, gap: theme.spacing[1] },
+  onlineDot: { backgroundColor: theme.colors.statusDotSuccess },
   error: { color: theme.colors.destructive, fontSize: theme.fontSize.base },
 }));

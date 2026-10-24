@@ -22,8 +22,17 @@ vi.mock("@/runtime/account-state", () => ({
 }));
 vi.mock("@/hooks/use-app-visible", () => ({ useAppVisible: () => mocks.visible }));
 vi.mock("@/components/account-host-panel", () => ({
-  AccountHostPanel: ({ onRefresh }: { onRefresh: () => void }) => (
-    <button onClick={onRefresh}>Refresh</button>
+  AccountHostPanel: ({
+    onRefresh,
+    children,
+  }: {
+    onRefresh: () => void;
+    children: React.ReactNode;
+  }) => (
+    <>
+      {children}
+      <button onClick={onRefresh}>Refresh</button>
+    </>
   ),
 }));
 
@@ -43,18 +52,16 @@ afterEach(() => {
   vi.useRealTimers();
 });
 
-it("shows the login name and unlimited account access below sign-in", async () => {
+it("groups the login name, account expiry and service address in the account card", async () => {
   const view = render(<OnlineServiceSection />);
   await waitFor(() =>
     expect(view.getByTestId("account-info-login-name").textContent).toContain("me@example.test"),
   );
   expect(view.getByTestId("account-info-expiry").textContent).toContain("Never expires");
   expect(
-    view
-      .getByTestId("settings-online-service")
-      .compareDocumentPosition(view.getByTestId("settings-account-info")) &
-      Node.DOCUMENT_POSITION_FOLLOWING,
+    view.getByTestId("settings-online-service").contains(view.getByTestId("settings-account-info")),
   ).toBeTruthy();
+  expect(view.getByTestId("settings-account-info").textContent).toContain(mocks.account.center);
 });
 
 it("refreshes account expiry from the existing Refresh action", async () => {
