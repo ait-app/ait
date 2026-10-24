@@ -289,7 +289,7 @@ describe("combined model selector data", () => {
     ).toBe("Default");
   });
 
-  it("distinguishes a loading selection from a resolved empty selection", () => {
+  it("offers model selection before the provider catalog has loaded", () => {
     expect(
       resolveSelectedModelLabel({
         providers: [],
@@ -297,7 +297,7 @@ describe("combined model selector data", () => {
         selectedModel: "",
         isLoading: true,
       }),
-    ).toBe("Loading...");
+    ).toBe("Select model");
     expect(
       resolveSelectedModelLabel({
         providers: [],
@@ -306,6 +306,31 @@ describe("combined model selector data", () => {
         isLoading: false,
       }),
     ).toBe("Select model");
+  });
+
+  it("keeps a loading remembered provider from taking over the model picker label", () => {
+    const providers = buildSelectableProviderSelectorProviders([
+      snapshotEntry({ provider: "omp", status: "loading", models: [] }),
+      snapshotEntry({ provider: "codex", models: [codexModel] }),
+    ]);
+
+    expect(providers[0].modelSelection).toEqual({ kind: "loading" });
+    expect(
+      resolveSelectedModelLabel({
+        providers,
+        selectedProvider: "omp",
+        selectedModel: "remembered-model",
+        isLoading: true,
+      }),
+    ).toBe("Select model");
+    expect(
+      resolveSelectedModelLabel({
+        providers,
+        selectedProvider: "codex",
+        selectedModel: codexModel.id,
+        isLoading: true,
+      }),
+    ).toBe(codexModel.label);
   });
 
   it("keeps a stored selected model visible when current snapshot rows no longer offer it", () => {
@@ -423,7 +448,7 @@ describe("combined model selector data", () => {
           workspaceDirectory: "/repo",
           hasClient: true,
         }),
-      ).toEqual({ ok: false, reason: "初始 prompt 必填" });
+      ).toEqual({ ok: false, reason: "初始提示词必填" });
     } finally {
       await i18n.changeLanguage("en");
     }

@@ -103,7 +103,7 @@ export function resolveInitialModelBrowserView({
 
   if (selectedProvider.length > 0 && selectedModel.length > 0) {
     const provider = providers.find((entry) => entry.id === selectedProvider);
-    if (provider) {
+    if (provider?.modelSelection.kind === "models") {
       return { kind: "provider", providerId: provider.id, providerLabel: provider.label };
     }
   }

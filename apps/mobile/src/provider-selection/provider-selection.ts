@@ -175,19 +175,16 @@ export function resolveSelectedModelLabel(input: {
 }): string {
   const selectedProvider = input.selectedProvider.trim();
   if (!selectedProvider) {
-    return input.isLoading
-      ? i18n.t("providerSelection.loading")
-      : i18n.t("providerSelection.selectModel");
+    return i18n.t("providerSelection.selectModel");
   }
 
   const provider = input.providers.find((entry) => entry.id === selectedProvider);
   if (!provider) {
-    return input.isLoading
-      ? i18n.t("providerSelection.loading")
-      : i18n.t("providerSelection.selectModel");
+    return i18n.t("providerSelection.selectModel");
   }
   if (provider.modelSelection.kind === "loading") {
-    return i18n.t("providerSelection.loading");
+    // Loading belongs to the provider row; the entry point remains a model picker.
+    return i18n.t("providerSelection.selectModel");
   }
   if (provider.modelSelection.kind === "error") {
     return i18n.t("providerSelection.error");

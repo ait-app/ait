@@ -79,6 +79,20 @@ describe("model browser initial view", () => {
     ).toEqual({ kind: "provider", providerId: "pi", providerLabel: "Pi" });
   });
 
+  it.each([{ kind: "loading" } as const, { kind: "error", message: "Discovery failed" } as const])(
+    "opens the provider list when the remembered provider is $kind",
+    (modelSelection) => {
+      expect(
+        resolveInitialModelBrowserView({
+          providers: [codex, { id: "omp", label: "OMP", modelSelection }],
+          selectedProvider: "omp",
+          selectedModel: "remembered-model",
+          hasProfiles: false,
+        }),
+      ).toEqual({ kind: "all" });
+    },
+  );
+
   it("opens the root so pinned profiles are reachable", () => {
     expect(
       resolveInitialModelBrowserView({
