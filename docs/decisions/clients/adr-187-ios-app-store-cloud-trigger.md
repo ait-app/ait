@@ -1,7 +1,18 @@
 # ADR-187：GitHub 手动入口用专用标签触发 iOS App Store 构建
 
-状态：Accepted（2026-10-24），扩展 [ADR-183](adr-183-ios-xcode-cloud-release.md) 的发布入口；
-原有 `Default` 内部测试工作流保留。
+状态：GitHub 触发入口已撤销（2026-10-24）；App Store / 外部 TestFlight 的 Cloud
+分发配置和 [ADR-183](adr-183-ios-xcode-cloud-release.md) 的 `Default` 内部测试工作流保留。
+
+## 撤销 GitHub 触发入口
+
+发布 `v0.1.16` 时，GitHub 拒绝使用默认 `GITHUB_TOKEN` 推送触发标签，报告缺少
+`workflows` 权限。撤销 GitHub Actions 发布入口及专用脚本、测试，改为在 Xcode Cloud
+手动选择分支或稳定标签启动构建，不为此引入额外 GitHub 写权限凭据或 Apple API 私钥。
+Cloud 继续负责归档、上传和 TestFlight 分发；正式 App Store 审核与发布保持手动。
+仓库删除入口不会删除 Apple 服务中的工作流、标签触发条件或已有 Git 标签。
+当前步骤见[App Store iOS 手动发布](../../operations/releasing.md#app-store-ios-手动发布)。
+
+## 原始决策（历史记录）
 
 维护者需要从 GitHub Actions 启动可用于 App Store 的 iOS 构建，并自动提交外部 TestFlight。
 新增 `Release iOS to App Store` 手动工作流，校验选定源码的稳定版本、Cargo/npm 锁文件版本
