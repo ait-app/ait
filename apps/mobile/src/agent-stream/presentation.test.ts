@@ -2,6 +2,7 @@ import {
   applyStreamEvent,
   hydrateStreamState,
   type StreamItem,
+  type ThoughtItem,
   type UserMessageItem,
 } from "@/types/stream";
 import type { AgentStreamEventPayload } from "@ait/protocol/messages";
@@ -37,6 +38,176 @@ function assistant(text: string, messageId = "message-1"): AgentStreamEventPaylo
 function rows(result: { tail: StreamItem[]; head: StreamItem[] }): StreamItem[] {
   return [...result.tail, ...result.head];
 }
+
+function thought(id: string, text: string, status: ThoughtItem["status"] = "ready"): ThoughtItem {
+  return { kind: "thought", id, text, status, timestamp: new Date(1000) };
+}
+
+describe.each(["overview", "detailed"] as const)(
+  "consecutive thoughts in %s presentation",
+  (level) => {
+    const options = { ...presentationOptions, level };
+
+    it.each(["history", "live", "boundary"] as const)(
+      "merges a %s run into its first entry without changing the source",
+      (location) => {
+        const first = Object.freeze({
+          ...thought("first", "First thought"),
+          timelineCursor: { epoch: "epoch", seq: 1 },
+        });
+        const second = Object.freeze(thought("second", "Second thought"));
+        const last = Object.freeze({
+          ...thought("last", "Latest thought", "loading"),
+          timestamp: new Date(3000),
+        });
+        const tail =
+          location === "history" ? [first, second, last] : location === "boundary" ? [first] : [];
+        const head =
+          location === "history"
+            ? []
+            : location === "boundary"
+              ? [second, last]
+              : [first, second, last];
+        const present = createStreamPresentation();
+        const projected = present({ ...options, tail, head });
+
+        expect(rows(projected)).toEqual([
+          {
+            ...first,
+            text: "First thought\n\nSecond thought\n\nLatest thought",
+            status: "loading",
+            timestamp: last.timestamp,
+          },
+        ]);
+        expect(first.text).toBe("First thought");
+        expect(rows(present({ ...options, tail, head }))[0]).toBe(rows(projected)[0]);
+        for (const platform of ["web", "native"] as const) {
+          const model = buildAgentStreamRenderModel({
+            ...projected,
+            isTurnActive: true,
+            activeTurnStartedAt: first.timestamp,
+            platform,
+            isMobileBreakpoint: true,
+          });
+          expect([...model.history, ...model.segments.liveHead]).toEqual(rows(projected));
+        }
+      },
+    );
+
+    it("keeps one entry as a boundary run grows and is committed", () => {
+      const first = thought("first", "First thought");
+      const tail = [first];
+      const present = createStreamPresentation();
+      const live = thought("live", "Partial", "loading");
+      const initial = present({ ...options, tail, head: [live] });
+      const finished = { ...live, text: "Complete", status: "ready" as const };
+      const growing = present({ ...options, tail, head: [finished] });
+      const completed = present({
+        ...options,
+        tail: [first, finished],
+        head: [],
+        isTurnActive: false,
+      });
+
+      expect(initial.head).toEqual([]);
+      expect(initial.tail).toMatchObject([
+        { id: "first", text: "First thought\n\nPartial", status: "loading" },
+      ]);
+      expect(growing.tail).toMatchObject([
+        { id: "first", text: "First thought\n\nComplete", status: "ready" },
+      ]);
+      expect(completed.tail).toEqual(growing.tail);
+      expect(completed.tail[0]).toBe(growing.tail[0]);
+      expect(completed.head).toEqual([]);
+    });
+
+    it("keeps thoughts separated by visible content or different turns", () => {
+      const items: StreamItem[] = [
+        thought("first", "First"),
+        assistantMessage("answer", 2),
+        thought("second", "Second"),
+        {
+          kind: "tool_call",
+          id: "tool",
+          timestamp: new Date(2000),
+          payload: {
+            source: "orchestrator",
+            data: { toolCallId: "tool", toolName: "Shell", arguments: "pwd", status: "completed" },
+          },
+        },
+        { ...thought("third", "Third"), turnId: "turn-1" },
+        { ...thought("fourth", "Fourth"), turnId: "turn-2" },
+        userMessage("user", 3),
+        thought("fifth", "Fifth"),
+      ];
+      const projected = createStreamPresentation()({ ...options, tail: items, head: [] });
+      expect(rows(projected).filter((item) => item.kind === "thought")).toEqual(
+        items.filter((item) => item.kind === "thought"),
+      );
+    });
+
+    it.each([0, 1, 2, 3, 4])(
+      "keeps legacy history and canonical turns separate with %i history rows",
+      (historyLength) => {
+        const legacy = Object.freeze(thought("legacy", "Legacy history"));
+        const first = Object.freeze({ ...thought("a1", "Turn A starts"), turnId: "turn-a" });
+        const second = Object.freeze({ ...thought("a2", "Turn A ends"), turnId: "turn-a" });
+        const last = Object.freeze({
+          ...thought("b", "Turn B thought", "loading"),
+          turnId: "turn-b",
+        });
+        const items = [legacy, first, second, last];
+        const present = createStreamPresentation();
+        const projected = present({
+          ...options,
+          tail: items.slice(0, historyLength),
+          head: items.slice(historyLength),
+        });
+
+        expect(rows(projected)).toEqual([
+          legacy,
+          { ...first, text: "Turn A starts\n\nTurn A ends" },
+          last,
+        ]);
+        expect(rows(projected)[0]).toBe(legacy);
+        expect(rows(projected)[2]).toBe(last);
+        const committed = present({ ...options, tail: items, head: [], isTurnActive: false });
+        expect(rows(committed)).toEqual(rows(projected));
+      },
+    );
+
+    it.each([0, 1, 2, 3])(
+      "keeps untagged thoughts between different turns separate with %i history rows",
+      (historyLength) => {
+        const items = [
+          { ...thought("a", "Turn A"), turnId: "turn-a" },
+          thought("legacy", "Untagged thought"),
+          { ...thought("b", "Turn B", "loading"), turnId: "turn-b" },
+        ];
+        const projected = createStreamPresentation()({
+          ...options,
+          tail: items.slice(0, historyLength),
+          head: items.slice(historyLength),
+        });
+
+        expect(rows(projected)).toEqual(items);
+      },
+    );
+
+    it("reuses merged history while unrelated live content changes", () => {
+      const tail = [thought("first", "First"), thought("second", "Second")];
+      const present = createStreamPresentation();
+      const first = present({ ...options, tail, head: [assistantMessage("answer", 2)] });
+      const next = present({
+        ...options,
+        tail,
+        head: [{ ...assistantMessage("answer", 3), text: "Growing answer" }],
+      });
+      expect(next.tail).toBe(first.tail);
+      expect(next.tail[0]).toBe(first.tail[0]);
+    });
+  },
+);
 
 describe("native stream presentation", () => {
   it("keeps completed native blocks stable while the last block grows and finishes", () => {
