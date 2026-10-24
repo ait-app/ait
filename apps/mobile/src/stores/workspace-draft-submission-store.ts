@@ -1,5 +1,8 @@
 import type { AgentSnapshotPayload } from "@ait/protocol/messages";
+import type { CreateWorkspaceRequestOptions } from "@ait/client/internal/daemon-client";
+import { createNameId } from "mnemonic-id";
 import { create } from "zustand";
+import { generateDraftId } from "@/stores/draft-keys";
 import type { ComposerAttachment } from "@/attachments/types";
 import type { AgentProvider } from "@ait/protocol/agent-types";
 import type { WorkspaceDraftTabSetup } from "@/workspace-tabs/model";
@@ -31,10 +34,23 @@ export interface PendingWorkspaceDraftSetup {
   sourceDirectory?: string | null;
 }
 
+interface WorkspaceCreationAttempt {
+  serverId: string;
+  intent: string;
+  idempotencyKey: string;
+  worktreeSlug: string;
+}
+
 interface WorkspaceDraftSubmissionState {
   pendingByDraftId: Record<string, PendingWorkspaceDraftSubmission>;
   setupByDraftId: Record<string, PendingWorkspaceDraftSetup>;
   creationByDraftId: Record<string, NonNullable<PendingWorkspaceDraftSubmission["agentCreation"]>>;
+  workspaceCreationByDraftId: Record<string, WorkspaceCreationAttempt>;
+  prepareWorkspaceCreation: (input: {
+    draftId: string;
+    serverId: string;
+    intent: Omit<CreateWorkspaceRequestOptions, "idempotencyKey" | "requestId" | "onEvent">;
+  }) => WorkspaceCreationAttempt;
   setPending: (submission: PendingWorkspaceDraftSubmission) => void;
   setDraftSetup: (input: {
     draftId: string;
@@ -69,6 +85,34 @@ export const useWorkspaceDraftSubmissionStore = create<WorkspaceDraftSubmissionS
     pendingByDraftId: {},
     setupByDraftId: {},
     creationByDraftId: {},
+    workspaceCreationByDraftId: {},
+    prepareWorkspaceCreation: ({ draftId, serverId, intent }) => {
+      const normalizedDraftId = normalizeDraftId(draftId);
+      // Compare the complete request before adding generated IDs. Object key order and
+      // undefined fields do not change the intent transmitted as JSON.
+      const serializedIntent = JSON.stringify(intent, (_key, value: unknown) =>
+        value && typeof value === "object" && !Array.isArray(value)
+          ? Object.fromEntries(
+              Object.entries(value).sort(([left], [right]) => left.localeCompare(right)),
+            )
+          : value,
+      );
+      const previous = get().workspaceCreationByDraftId[normalizedDraftId];
+      if (previous?.serverId === serverId && previous.intent === serializedIntent) return previous;
+      const attempt = {
+        serverId,
+        intent: serializedIntent,
+        idempotencyKey: generateDraftId(),
+        worktreeSlug: createNameId(),
+      };
+      set((state) => ({
+        workspaceCreationByDraftId: {
+          ...state.workspaceCreationByDraftId,
+          [normalizedDraftId]: attempt,
+        },
+      }));
+      return attempt;
+    },
     setPending: (submission) =>
       set((state) => ({
         creationByDraftId: submission.agentCreation
@@ -95,8 +139,10 @@ export const useWorkspaceDraftSubmissionStore = create<WorkspaceDraftSubmissionS
       set((state) => {
         const creationByDraftId = { ...state.creationByDraftId };
         delete creationByDraftId[normalizedDraftId];
+        const workspaceCreationByDraftId = { ...state.workspaceCreationByDraftId };
+        delete workspaceCreationByDraftId[normalizedDraftId];
         const { [normalizedDraftId]: _removed, ...setupByDraftId } = state.setupByDraftId;
-        return { setupByDraftId, creationByDraftId };
+        return { setupByDraftId, creationByDraftId, workspaceCreationByDraftId };
       });
     },
     consumePending: (input) => {

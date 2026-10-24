@@ -1,0 +1,54 @@
+{
+  "scope": [
+    "apps/mobile/src/stores/workspace-draft-submission-store.ts"
+  ],
+  "tool": "Vitest 4.1.7 with V8 coverage",
+  "baseRevision": "1c0fddc32ae58f4f6f2e3adf74395de8258f7c16",
+  "sourceSha256": "389f24e52c34a2cb0ec043a4d1e16145cd965b1c1c8cdfdcd5021bfa353a58ba",
+  "command": "npm exec --workspace=@ait/mobile -- vitest run src/stores/workspace-draft-submission-store.test.ts src/screens/new-workspace/background-handoff.test.ts --coverage --coverage.provider=v8 --coverage.include=src/stores/workspace-draft-submission-store.ts --coverage.reporter=json-summary --coverage.reporter=html --coverage.reportsDirectory=/tmp/ait-workspace-idempotency-coverage/report",
+  "coverage": {
+    "lines": {
+      "total": 36,
+      "covered": 35,
+      "skipped": 0,
+      "pct": 97.22
+    },
+    "statements": {
+      "total": 42,
+      "covered": 39,
+      "skipped": 0,
+      "pct": 92.85
+    },
+    "functions": {
+      "total": 15,
+      "covered": 15,
+      "skipped": 0,
+      "pct": 100
+    },
+    "branches": {
+      "total": 24,
+      "covered": 21,
+      "skipped": 0,
+      "pct": 87.5
+    },
+    "branchesTrue": {
+      "total": 0,
+      "covered": 0,
+      "skipped": 0,
+      "pct": "Unknown"
+    }
+  },
+  "testExecution": {
+    "filesPassed": 2,
+    "testsPassed": 30,
+    "testsSkipped": 0
+  },
+  "baseline": "No comparable baseline was measured.",
+  "limitations": [
+    "Coverage is limited to the draft submission store, not the entire screen or workspace.",
+    "Production Expo tests execute Babel-generated code separately; direct TypeScript tests supply source coverage.",
+    "Uncovered behavior: existing blank draft ID guards and the defensive recheck inside consumePending.",
+    "Browser end-to-end behavior and live native providers were not exercised.",
+    "No Rust code changed; Rust tests and Rust coverage were skipped."
+  ]
+}
