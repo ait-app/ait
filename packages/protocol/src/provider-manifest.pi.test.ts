@@ -14,7 +14,7 @@ describe("Pi provider", () => {
       modes: [
         {
           id: "default",
-          label: "Native Tools",
+          label: "Full Access",
           icon: "ShieldOff",
           colorTier: "dangerous",
           isUnattended: true,

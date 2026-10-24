@@ -98,6 +98,8 @@
 
 ## Provider、Agent 与会话
 
+- [Pi Full Access 模式标签验证](providers/pi-full-access-label-2026-10-24.md)
+
 - [Oh My Pi 原生 Provider 验证](providers/omp-native-provider.md)
 
 - [OpenCode 加载速度验证](providers/opencode-startup-real-usage-2026-10-21.md)

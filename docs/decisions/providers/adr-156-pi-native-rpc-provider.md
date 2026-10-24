@@ -15,7 +15,8 @@ run from automatic retries and compaction recovery.
 
 - Implement `AgentClient` and `AgentSession` in `provider::local::pi`. Register through
   `Providers`, using `pi` on PATH or the exact `AIT_SERVER_PI_BIN` override. No RPC/wire
-  protocol changes; the shared Provider display manifest adds Pi's Native Tools mode.
+  protocol changes; the shared Provider display manifest exposes Pi's **Full Access** mode
+  with the stable `default` ID.
 - Require Pi 1.2 or newer and use `pi --mode rpc`. Pi 1.2.0 is the verified baseline;
   accepting newer versions is not a claim of testing every release. Do not fall back to
   older completion semantics or replay uncertain prompt submissions.
@@ -49,8 +50,10 @@ run from automatic retries and compaction recovery.
 - Preserve the host's persisted timeline across resume; do not advertise automatic native history
   replay, rewind, steering, auxiliary generation or dynamic thinking controls. Native session
   import and explicit refresh are added by [ADR-174](adr-174-pi-session-import.md).
-- Expose a single native-tools mode that accurately describes Pi's absence of a built-in
-  permission sandbox. Preserve native configuration. Cancel extension dialogs explicitly; unknown UI methods fail immediately with an
+- Expose a single **Full Access** mode that describes Pi's tools and settings without Ait
+  approval prompts or an added permission sandbox. Preserve native configuration. Cancel
+  interactive extension dialogs explicitly, so extensions requiring input may not run;
+  unknown UI methods fail immediately with an
   `extension_method` protocol diagnostic;
   never implicitly approve them or leave Pi blocked waiting for an unsupported UI.
 - Cache a successfully parsed version for each configured client and its clones; failures

@@ -145,9 +145,9 @@ const OPENCODE_MODES: AgentProviderModeDefinition[] = [
 const PI_MODES: AgentProviderModeDefinition[] = [
   {
     id: "default",
-    label: "Native Tools",
+    label: "Full Access",
     description:
-      "Uses Pi's native tools and configuration. Pi has no built-in approval sandbox. Extension dialogs are cancelled.",
+      "Uses Pi's tools and settings without Ait approval prompts or an added sandbox. Interactive extension dialogs are cancelled, so extensions that require input may not run.",
     icon: "ShieldOff",
     colorTier: "dangerous",
     isUnattended: true,

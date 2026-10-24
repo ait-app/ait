@@ -73,9 +73,9 @@ pub(super) fn spec(spec: &AgentSessionSpec) -> Result<(), AgentSessionError> {
 /// Describe the native execution policy without claiming a host permission sandbox.
 pub(super) fn modes() -> Vec<Value> {
     vec![
-        json!({"id":"default","label":"Native Tools","icon":"ShieldOff",
+        json!({"id":"default","label":"Full Access","icon":"ShieldOff",
         "colorTier":"dangerous","isUnattended":true,
-        "description":"Uses Pi's native tools and configuration. Pi has no built-in approval sandbox. Extension dialogs are cancelled."}),
+        "description":"Uses Pi's tools and settings without Ait approval prompts or an added sandbox. Interactive extension dialogs are cancelled, so extensions that require input may not run."}),
     ]
 }
 
