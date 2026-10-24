@@ -8,6 +8,7 @@ use super::PROVIDER;
 use crate::ports::agent_session::{AgentSessionError, AgentSessionSpec};
 
 /// Validate host settings, rejecting unsupported selections before native admission.
+/// The retired `default` mode remains accepted only for persisted Agent compatibility.
 /// Returns `Rejected` for settings this adapter cannot represent.
 pub(super) fn validate(config: &StoredAgentConfig) -> Result<(), AgentSessionError> {
     if config
@@ -68,15 +69,6 @@ pub(super) fn spec(spec: &AgentSessionSpec) -> Result<(), AgentSessionError> {
     }
     directory(&spec.cwd)?;
     validate(&spec.config)
-}
-
-/// Describe the native execution policy without claiming a host permission sandbox.
-pub(super) fn modes() -> Vec<Value> {
-    vec![
-        json!({"id":"default","label":"Native Tools","icon":"ShieldOff",
-        "colorTier":"dangerous","isUnattended":true,
-        "description":"Uses Pi's native tools and configuration. Pi has no built-in approval sandbox. Extension dialogs are cancelled."}),
-    ]
 }
 
 /// Project native model facts into the catalog, omitting endpoints and credentials.

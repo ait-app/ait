@@ -6,21 +6,13 @@ import {
 } from "./provider-manifest.js";
 
 describe("Pi provider", () => {
-  it("mirrors the native provider's default mode", () => {
+  it("does not expose a host mode for native Pi tools", () => {
     expect(BUILTIN_PROVIDER_IDS).toContain("pi");
     expect(getAgentProviderDefinition("pi")).toMatchObject({
       label: "Pi",
-      defaultModeId: "default",
-      modes: [
-        {
-          id: "default",
-          label: "Native Tools",
-          icon: "ShieldOff",
-          colorTier: "dangerous",
-          isUnattended: true,
-        },
-      ],
+      defaultModeId: null,
+      modes: [],
     });
-    expect(getUnattendedModeId("pi")).toBe("default");
+    expect(getUnattendedModeId("pi")).toBeUndefined();
   });
 });

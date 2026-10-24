@@ -28,6 +28,8 @@
 
 ## 架构决策
 
+- [ADR-189：Pi 不暴露 Host 模式](decisions/providers/adr-189-pi-without-host-mode.md)：移除合成的 Native Tools／`default` 模式；Pi 继续直接拥有工具与设置，旧记录仅保留输入兼容；[验证报告](reports/providers/pi-mode-removal-2026-10-24.md)。
+
 - [ADR-188：网页客户端以独立镜像部署在网站根路径](decisions/clients/adr-188-standalone-web-client-image.md)：根路径单页导出、静态 Nginx 镜像与 GHCR 发布，移除内嵌「管理」tab；修订 ADR-132。
 
 - [ADR-187：GitHub 手动入口用专用标签触发 iOS App Store 构建](decisions/clients/adr-187-ios-app-store-cloud-trigger.md)：GitHub 触发入口已撤销；App Store 和外部 TestFlight 构建改为在 Xcode Cloud 手动启动。

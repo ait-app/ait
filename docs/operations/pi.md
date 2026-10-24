@@ -30,9 +30,9 @@ not fall back to PATH. No provider process is launched merely by registering the
 - Compaction start/completion/failure markers, including manual compaction while idle.
 - Safe failure classification and fixed user-facing explanations, without retaining raw errors.
 
-Pi owns its credentials, session files, tools, extensions and settings. The **Native Tools**
-mode uses those settings; it does not add a permission sandbox. Extension select, confirm,
-input and editor dialogs are explicitly cancelled. Notification-only extension UI records
+Pi owns its credentials, session files, tools, extensions and settings. Ait does not expose a
+Pi mode or add a permission sandbox. Extension select, confirm, input and editor dialogs are
+explicitly cancelled. Notification-only extension UI records
 (`notify`, `setStatus`, `setWidget`, `setTitle`, `set_editor_text`) are ignored. Unknown
 UI methods fail immediately with a protocol diagnostic (`extension_method`). This can cause extensions requiring interaction to decline their operation.
 

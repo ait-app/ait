@@ -369,7 +369,7 @@ impl AgentSession for Session {
                     .zip(model["id"].as_str())
                     .map(|(provider, id)| format!("{provider}/{id}")),
                 thinking_option_id: None,
-                mode_id: Some("default".into()),
+                mode_id: None,
                 extra: None,
             })
         })
