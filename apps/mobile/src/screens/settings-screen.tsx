@@ -55,8 +55,6 @@ import {
 import { returnFromSettings, type SettingsView } from "@/navigation/settings-navigation";
 import { useHostRuntimeIsConnected, useHosts } from "@/runtime/host-runtime";
 import { supportsAccountRelay } from "@/runtime/account-state";
-import { supportsBrowserAccount } from "@/runtime/browser-account";
-import { ManagementSection } from "@/screens/settings/management-section";
 import { OnlineServiceSection } from "@/screens/settings/online-service-section";
 import ProjectSettingsScreen from "@/screens/project-settings-screen";
 import ProjectsScreen from "@/screens/projects-screen";
@@ -144,13 +142,11 @@ interface SidebarSectionItem {
   desktopOnly?: boolean;
   webOnly?: boolean;
   accountOnly?: boolean;
-  consoleOnly?: boolean;
 }
 
 const SIDEBAR_SECTION_ITEMS: SidebarSectionItem[] = [
   { id: "general", labelKey: "settings.sections.general", icon: Settings },
   { id: "online-service", labelKey: "onlineService.title", icon: Globe, accountOnly: true },
-  { id: "management", labelKey: "settings.sections.management", icon: Shield, consoleOnly: true },
   { id: "appearance", labelKey: "settings.sections.appearance", icon: Palette },
   {
     id: "layout",
@@ -1113,8 +1109,7 @@ function SettingsSidebar({
     (item) =>
       (!item.desktopOnly || isDesktopApp || (item.id === "notifications" && isNative)) &&
       (!item.webOnly || isWeb) &&
-      (!item.accountOnly || supportsAccountRelay()) &&
-      (!item.consoleOnly || supportsBrowserAccount()),
+      (!item.accountOnly || supportsAccountRelay()),
   );
   const insets = useSafeAreaInsets();
   const isDesktop = layout === "desktop";
@@ -1494,8 +1489,6 @@ export default function SettingsScreen({ view, openAddHostIntent = null }: Setti
     return null;
   })();
 
-  const isManagement =
-    view.kind === "section" && view.section === "management" && supportsBrowserAccount();
   let content: ReactNode;
   if (view.kind === "section" && view.section === "layout") {
     content = isDesktopApp ? <LayoutSection /> : null;
@@ -1534,8 +1527,6 @@ export default function SettingsScreen({ view, openAddHostIntent = null }: Setti
             return <AppearanceSection />;
           case "online-service":
             return supportsAccountRelay() ? <OnlineServiceSection /> : null;
-          case "management":
-            return isManagement ? <ManagementSection /> : null;
           case "editor":
             return isWeb ? <EditorSection /> : null;
           case "shortcuts":
@@ -1644,13 +1635,9 @@ export default function SettingsScreen({ view, openAddHostIntent = null }: Setti
           titleAccessory={detailHeader?.titleAccessory}
           onBack={handleBackFromDetail}
         />
-        {isManagement ? (
-          content
-        ) : (
-          <ScrollView style={styles.scrollView} contentContainerStyle={insetBottomStyle}>
-            <View style={styles.content}>{content}</View>
-          </ScrollView>
-        )}
+        <ScrollView style={styles.scrollView} contentContainerStyle={insetBottomStyle}>
+          <View style={styles.content}>{content}</View>
+        </ScrollView>
         {addHostModals}
       </View>
     );
@@ -1681,13 +1668,9 @@ export default function SettingsScreen({ view, openAddHostIntent = null }: Setti
               left={desktopDetailHeaderLeft}
               leftStyle={desktopStyles.detailLeft}
             />
-            {isManagement ? (
-              content
-            ) : (
-              <ScrollView style={styles.scrollView} contentContainerStyle={insetBottomStyle}>
-                <View style={styles.content}>{content}</View>
-              </ScrollView>
-            )}
+            <ScrollView style={styles.scrollView} contentContainerStyle={insetBottomStyle}>
+              <View style={styles.content}>{content}</View>
+            </ScrollView>
           </View>
         </WindowChromeRegion>
       </View>

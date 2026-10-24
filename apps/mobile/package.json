@@ -27,6 +27,7 @@
     "test:e2e:ui": "playwright test --ui",
     "build": "npm run build:web",
     "build:web": "npm --prefix ../.. run build:ui-deps && expo export --platform web",
+    "build:web-console": "node ./scripts/export-web-console.mjs",
     "profile:composer-typing": "node ./scripts/profile-composer-typing.mjs",
     "profile:explorer-toggle": "node ./scripts/profile-explorer-toggle.mjs",
     "profile:side-pane": "playwright test --config playwright.profile.config.ts side-pane-performance.spec.ts",

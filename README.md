@@ -45,7 +45,7 @@ Arch Linux 用户也可以从 AUR 安装：[`ait-bin`](https://aur.archlinux.org
 桌面登录后默认同步内置 daemon；如果之前手动停止了同步，可在主机连接设置中重新启用。远程访问时，工作电脑及其服务需要保持运行。
 
 Android 和 iOS 作为客户端连接电脑，不在手机上运行 daemon。
-也可以在 [网页客户端](https://aitapp.cn/client/) 登录同一账户，通过中央中继连接在线主机。
+也可以在 [网页客户端](https://aitapp.cn/) 登录同一账户，通过中央中继连接在线主机。
 登录入口与连接细节见 [客户端开发指南](apps/mobile/README.md)。
 
 ### 在 Linux/macOS 上独立运行 daemon

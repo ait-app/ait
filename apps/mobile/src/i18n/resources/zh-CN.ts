@@ -2480,7 +2480,6 @@ export const zhCN: TranslationResources = {
     },
     groupInfo: "关于 {{title}}",
     sections: {
-      management: "管理",
       general: "通用",
       appearance: "外观",
       layout: "布局",

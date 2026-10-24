@@ -30,6 +30,68 @@ jobs:
       source_ref: ${{ inputs.source_commit || inputs.tag || github.ref }}
       release_tag: ${{ inputs.tag || github.ref_name }}
 
+  # ADR-188: the hosted browser client image is deployed at the site root by ait-server.
+  web-client:
+    name: Publish web client image
+    runs-on: ubuntu-24.04
+    timeout-minutes: 45
+    permissions:
+      contents: read
+      packages: write
+    env:
+      RELEASE_TAG: ${{ inputs.tag || github.ref_name }}
+      IMAGE: ghcr.io/ait-app/ait-web-client
+    steps:
+      - name: Validate rebuild source
+        env:
+          SOURCE_COMMIT: ${{ inputs.source_commit }}
+        run: |
+          if [ -n "$SOURCE_COMMIT" ]; then
+            [[ "$SOURCE_COMMIT" =~ ^[0-9a-f]{40}$ ]] || exit 1
+          fi
+
+      - name: Check out release source
+        uses: actions/checkout@v5
+        with:
+          ref: ${{ inputs.source_commit || inputs.tag || github.ref }}
+
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 24
+          cache: npm
+          cache-dependency-path: package-lock.json
+
+      - name: Verify release version
+        run: node scripts/verify-release-version.mjs "$RELEASE_TAG"
+
+      - name: Install workspace dependencies
+        run: npm ci
+
+      - name: Export web client
+        run: npm run build:web-console --workspace=@ait/mobile
+
+      - name: Build and check image
+        run: |
+          source_commit=$(git rev-parse HEAD)
+          docker build \
+            --label "org.opencontainers.image.source=$GITHUB_SERVER_URL/$GITHUB_REPOSITORY" \
+            --label "org.opencontainers.image.revision=$source_commit" \
+            --label "org.opencontainers.image.version=${RELEASE_TAG#v}" \
+            --tag "$IMAGE:$RELEASE_TAG" \
+            --tag "$IMAGE:sha-$source_commit" \
+            apps/mobile/web-console
+          docker run --rm --detach --publish 127.0.0.1:8080:80 "$IMAGE:$RELEASE_TAG"
+          bash apps/mobile/web-console/check-routes.sh http://127.0.0.1:8080
+
+      - name: Publish image
+        env:
+          GHCR_TOKEN: ${{ github.token }}
+        run: |
+          source_commit=$(git rev-parse HEAD)
+          echo "$GHCR_TOKEN" | docker login ghcr.io --username "$GITHUB_ACTOR" --password-stdin
+          docker push "$IMAGE:$RELEASE_TAG"
+          docker push "$IMAGE:sha-$source_commit"
+
   build:
     name: Build ${{ matrix.label }}
     runs-on: ${{ matrix.runner }}

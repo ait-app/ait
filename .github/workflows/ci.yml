@@ -17,6 +17,7 @@ jobs:
     outputs:
       rust: ${{ steps.filter.outputs.rust }}
       ui: ${{ steps.filter.outputs.ui }}
+      web_client: ${{ steps.filter.outputs.web_client }}
     steps:
       - uses: actions/checkout@v5
         if: github.event_name == 'push'
@@ -58,6 +59,17 @@ jobs:
               - '.github/workflows/cancel-merged-pr-ci.yml'
               - '.github/workflows/release.yml'
               - '.github/workflows/release-android-play.yml'
+            web_client:
+              - 'apps/mobile/**'
+              - 'packages/**'
+              - 'patches/**'
+              - 'assets/**'
+              - 'package.json'
+              - 'package-lock.json'
+              - '.npmrc'
+              - 'tsconfig.base.json'
+              - '.github/workflows/ci.yml'
+              - '.github/workflows/release.yml'
 
   docs:
     runs-on: ubuntu-latest
@@ -176,6 +188,27 @@ jobs:
           src/timeline src/types/stream.test.ts src/runtime/replica-cache
           src/runtime/directory-sync src/screens/workspace/workspace-route-state.test.ts
           src/utils/tool-call-parsers.test.ts src/utils/diff-highlight.test.ts
+
+  # ADR-188: the hosted browser client ships as a static image at the site root.
+  web-client:
+    needs: changes
+    if: needs.changes.outputs.web_client == 'true'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 24
+          cache: npm
+          cache-dependency-path: package-lock.json
+      - run: npm ci
+      - run: npm run build:web-console --workspace=@ait/mobile
+      - run: docker build --tag ait-web-client:ci apps/mobile/web-console
+      - name: Check image routes
+        run: |
+          docker run --rm --detach --name ait-web-client --publish 127.0.0.1:8080:80 ait-web-client:ci
+          bash apps/mobile/web-console/check-routes.sh http://127.0.0.1:8080
 
   nightly-prepare:
     if: github.event_name != 'pull_request' && github.ref == 'refs/heads/main'
