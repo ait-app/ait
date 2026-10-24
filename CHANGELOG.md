@@ -1,5 +1,15 @@
 # Ait changelog
 
+## 0.1.17 - 2026-10-24
+
+- Merge consecutive Thinking blocks into a single presentation group.
+- Scope workspace creation keys to the submitted intent, keeping retries stable without conflating different requests.
+- Isolate model-selector provider loading state from unrelated provider queries.
+- Discover Oh My Pi model capabilities and improve agent control icons, labels and localization.
+- Extend Codex provider requests to a 20-second timeout.
+- Remove Pi's ineffective synthetic permission mode while preserving compatibility with saved defaults.
+- Package the hosted browser client as a standalone image served at the site root, and remove its management tab.
+
 ## 0.1.16 - 2026-10-24
 
 - Add Windows x64 installers and ZIP packages for connecting to remote hosts, without a bundled daemon.
