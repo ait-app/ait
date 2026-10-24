@@ -28,7 +28,7 @@
 
 ## 架构决策
 
-- [ADR-187：GitHub 手动入口用专用标签触发 iOS App Store 构建](decisions/clients/adr-187-ios-app-store-cloud-trigger.md)：Xcode Cloud 归档上传、自动提交外部 TestFlight、正式审核和发布保留手动。
+- [ADR-187：GitHub 手动入口用专用标签触发 iOS App Store 构建](decisions/clients/adr-187-ios-app-store-cloud-trigger.md)：GitHub 触发入口已撤销；App Store 和外部 TestFlight 构建改为在 Xcode Cloud 手动启动。
 
 - [ADR-186：内置浏览器按 Workspace daemon 选择出站位置](decisions/clients/adr-186-workspace-browser-egress.md)：本地直连，远端所有目标统一经对应 daemon 出站，涵盖 Hub/relay、TCP 和 SSH。
 
