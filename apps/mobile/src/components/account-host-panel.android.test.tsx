@@ -34,12 +34,12 @@ afterEach(() => {
 describe("Android account panel", () => {
   it("shows account controls without a separate online host picker", async () => {
     const view = render(<AccountHostPanel />);
-    expect(view.getByText(/Connected to account/)).toBeTruthy();
+    expect(view.getByText("Online")).toBeTruthy();
     expect(view.queryByText(/Waiting for this host/)).toBeNull();
     expect(view.queryByTestId("account-host-host")).toBeNull();
     expect(view.queryByText("My computer")).toBeNull();
     expect(view.queryByText("Disconnect remote host")).toBeNull();
-    expect(view.getByText("Online hosts are automatically added to the host list.")).toBeTruthy();
+    expect(view.queryByText("Online hosts are automatically added to the host list.")).toBeNull();
     fireEvent.click(view.getByRole("button", { name: "Refresh" }));
     await waitFor(() => expect(state.command).toHaveBeenCalledExactlyOnceWith("account_refresh"));
   });
