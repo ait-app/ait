@@ -2085,7 +2085,6 @@ export const ja: TranslationResources = {
     },
     groupInfo: "{{title}}について",
     sections: {
-      management: "管理",
       general: "一般",
       appearance: "外観",
       layout: en.settings.sections.layout,

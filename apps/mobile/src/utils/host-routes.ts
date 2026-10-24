@@ -492,7 +492,6 @@ export function resolveKnownHostRoute(input: {
 export const SETTINGS_SECTION_SLUGS = [
   "general",
   "online-service",
-  "management",
   "appearance",
   "layout",
   "editor",

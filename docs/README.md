@@ -5,7 +5,7 @@
 - [ADR-142：PTY 拥有基础终端设备属性回复](decisions/daemon/adr-142-terminal-primary-device-attributes.md)：节点直接完成 DA1 握手，避免 fish 启动等待客户端订阅。
 
 - [ADR-140：Headless 本地 API 凭据](decisions/daemon/adr-140-headless-local-api-token.md)：启动自动生成、持久化与环境覆盖。
-- [ADR-132：管理网站中的浏览器客户端](decisions/clients/adr-132-web-console-client.md)：同源会话、浏览器中继、Web 导出与客户端入口。
+- [ADR-132：管理网站中的浏览器客户端](decisions/clients/adr-132-web-console-client.md)：同源会话、浏览器中继、Web 导出与客户端入口；部署方式与「管理」tab 由 ADR-188 修订。
 
 本文档索引只覆盖当前 Ait：Rust daemon、Electron desktop、共享 Web/移动界面和仓库内 SDK。
 当前源码布局与依赖见[当前架构](architecture/README.md)，目录命名规则见 [ADR-072](decisions/daemon/adr-072-workspace-names-and-documentation.md)。
@@ -27,6 +27,8 @@
 - [Bot 后端设计](plans/bot-backend.md)：Workspace Bot、独占 Channel、隐藏 session、内置 tab 对话与 Telegram、飞书、Email 接入方案。
 
 ## 架构决策
+
+- [ADR-188：网页客户端以独立镜像部署在网站根路径](decisions/clients/adr-188-standalone-web-client-image.md)：根路径单页导出、静态 Nginx 镜像与 GHCR 发布，移除内嵌「管理」tab；修订 ADR-132。
 
 - [ADR-187：GitHub 手动入口用专用标签触发 iOS App Store 构建](decisions/clients/adr-187-ios-app-store-cloud-trigger.md)：GitHub 触发入口已撤销；App Store 和外部 TestFlight 构建改为在 Xcode Cloud 手动启动。
 

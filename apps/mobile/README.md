@@ -103,7 +103,22 @@ APP_BROWSER_UI=1 node scripts/validate-app-rust-browser.mjs
 
 ## 管理网站的客户端入口
 
-由相邻 ait-server 执行 `npm --prefix web run build:client`，将本界面导出至网站 `/client/`。
-构建使用 `AIT_WEB_BASE_PATH=/client EXPO_PUBLIC_AIT_CONSOLE=1`，共享网站登录和同源 `/api`，
-网页仅提供在线服务连接。刷新与浏览器重启保留有效登录，退出或会话失效时清理。
-完整边界见 [ADR-132](../../docs/decisions/clients/adr-132-web-console-client.md)。
+网页客户端以独立静态镜像部署在网站根路径 `/`，与 ait-server 同源：网关保留 `/api`、
+管理控制台 `/dash` 及登录授权页，其余路径交给本镜像。客户端共享网站登录和同源 `/api`，
+网页仅提供在线服务连接；未登录时跳转 `/login?client=1`，登录后回到 `/`。
+刷新与浏览器重启保留有效登录，退出或会话失效时清理。管理功能只在 `/dash`，客户端不内嵌。
+
+```sh
+npm ci
+npm run build:web-console --workspace=@ait/mobile   # 导出至 apps/mobile/web-console/dist/
+docker build --tag ait-web-client apps/mobile/web-console
+docker run --rm -d --name ait-web-client -p 127.0.0.1:8080:80 ait-web-client
+bash apps/mobile/web-console/check-routes.sh http://127.0.0.1:8080
+```
+
+导出使用 `EXPO_PUBLIC_AIT_CONSOLE=1`、不设 `AIT_WEB_BASE_PATH`，并写入 `client-build.json`
+记录版本与提交。镜像只托管静态文件：深链回退 `index.html`，`/_expo/static/` 等带哈希资源长期缓存，
+`/healthz` 用于健康检查。发布标签会推送 `ghcr.io/ait-app/ait-web-client:<tag>` 和 `sha-<commit>`。
+本地单独运行镜像时没有 `/api` 与登录页，只用于检查静态路由。
+边界见 [ADR-132](../../docs/decisions/clients/adr-132-web-console-client.md) 和
+[ADR-188](../../docs/decisions/clients/adr-188-standalone-web-client-image.md)。

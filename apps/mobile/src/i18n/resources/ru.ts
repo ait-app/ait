@@ -2099,7 +2099,6 @@ export const ru: TranslationResources = {
     },
     groupInfo: "О разделе «{{title}}»",
     sections: {
-      management: "Управление",
       general: "Основные",
       appearance: "Оформление",
       layout: en.settings.sections.layout,

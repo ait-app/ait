@@ -2064,7 +2064,6 @@ export const ar: TranslationResources = {
     },
     groupInfo: "حول{{title}}",
     sections: {
-      management: "الإدارة",
       general: "عام",
       appearance: "مظهر",
       layout: en.settings.sections.layout,

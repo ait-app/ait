@@ -2098,7 +2098,6 @@ export const ptBR: TranslationResources = {
     },
     groupInfo: "Sobre {{title}}",
     sections: {
-      management: "Gerenciamento",
       general: "Geral",
       appearance: "Aparência",
       layout: en.settings.sections.layout,

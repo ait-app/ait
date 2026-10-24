@@ -2121,7 +2121,6 @@ export const fr: TranslationResources = {
     },
     groupInfo: "À propos de{{title}}",
     sections: {
-      management: "Gestion",
       general: "Général",
       appearance: "Apparence",
       layout: en.settings.sections.layout,
