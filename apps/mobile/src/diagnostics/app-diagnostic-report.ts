@@ -111,6 +111,8 @@ export function describeConnectionKind(type: HostConnection["type"] | string): s
       return "local pipe";
     case "relay":
       return "relay";
+    case "accountRelay":
+      return "account relay";
     case "remoteSsh":
       return "remote SSH";
     default:

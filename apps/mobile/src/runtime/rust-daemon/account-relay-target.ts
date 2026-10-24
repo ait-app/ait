@@ -1,8 +1,9 @@
 import { normalizeCenter } from "@ait/client/internal/account-session";
+import { parseRustDaemonTransportUrl } from "./transport-url";
 
 /** Resolve a saved host's non-secret service binding before requesting a relay ticket. */
 export function parseAccountRelayTarget(url: string): { hostId: string; center: string } {
-  const target = new URL(url);
+  const target = parseRustDaemonTransportUrl(url);
   const centers = target.searchParams.getAll("center");
   if (
     target.protocol !== "ait+desktop:" ||

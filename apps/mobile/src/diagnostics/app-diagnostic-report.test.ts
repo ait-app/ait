@@ -3,6 +3,7 @@ import type { HostRuntimeSnapshot } from "@/runtime/host-runtime";
 import type { HostProfile } from "@/types/host-connection";
 import { describe, expect, test } from "vitest";
 import {
+  describeConnectionKind,
   formatHostRuntimeSection,
   formatServerInfoSection,
   formatStartupTimelineSection,
@@ -54,6 +55,10 @@ function makeHost(): HostProfile {
 }
 
 describe("app diagnostics report", () => {
+  test("identifies account relay connections", () => {
+    expect(describeConnectionKind("accountRelay")).toBe("account relay");
+  });
+
   test("lists startup phases in the order they happened", () => {
     expect(
       formatStartupTimelineSection([
