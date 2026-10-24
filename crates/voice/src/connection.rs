@@ -14,6 +14,7 @@ pub const METHODS: &[MethodSpec] = &[
 
 mod dictation;
 mod jobs;
+mod realtime;
 mod voice;
 
 use std::{collections::BTreeMap, sync::Arc};
@@ -82,6 +83,10 @@ enum Completion {
 }
 
 impl Connection {
+    pub(crate) fn has_native_voice(&self) -> bool {
+        self.voice.native.is_some()
+    }
+
     /// Whether this connection owns any state that requires expiry or completion polling.
     #[must_use]
     pub fn is_empty(&self) -> bool {

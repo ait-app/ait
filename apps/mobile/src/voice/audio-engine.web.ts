@@ -1,3 +1,4 @@
+import { createRealtimeAudio } from "./realtime-audio.web";
 import { isElectronRuntime } from "@/desktop/host";
 import type {
   AudioEngine,
@@ -89,6 +90,7 @@ export function createAudioEngine(
   callbacks: AudioEngineCallbacks,
   _options?: { traceLabel?: string },
 ): AudioEngine {
+  const realtime = createRealtimeAudio(callbacks);
   const refs: {
     playbackContext: AudioContext | null;
     captureContext: AudioContext | null;
@@ -223,6 +225,7 @@ export function createAudioEngine(
   }
 
   async function stopCapture(): Promise<void> {
+    realtime.stop();
     refs.started = false;
 
     try {
@@ -274,7 +277,11 @@ export function createAudioEngine(
       }
     },
 
+    createRealtimeOffer: () => realtime.offer(),
+    acceptRealtimeAnswer: (sdp) => realtime.answer(sdp),
+
     async startCapture() {
+      if (realtime.isActive()) return;
       if (refs.started) {
         return;
       }
@@ -359,6 +366,7 @@ export function createAudioEngine(
     },
 
     toggleMute() {
+      if (realtime.isActive()) return realtime.toggleMute();
       refs.muted = !refs.muted;
       if (refs.muted) {
         callbacks.onVolumeLevel(0);
@@ -367,6 +375,7 @@ export function createAudioEngine(
     },
 
     isMuted() {
+      if (realtime.isActive()) return realtime.isMuted();
       return refs.muted;
     },
 

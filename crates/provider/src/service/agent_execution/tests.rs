@@ -5,6 +5,7 @@ mod bot;
 mod concurrency;
 mod environment;
 mod placement;
+mod realtime;
 mod reasoning;
 mod resume;
 mod usage;

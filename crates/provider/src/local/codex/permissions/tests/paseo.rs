@@ -4,6 +4,7 @@ use super::*;
 
 fn session() -> CodexSession {
     CodexSession {
+        realtime: None,
         pending_plan: None,
         latest_plan: None,
         pending_goal_start: false,

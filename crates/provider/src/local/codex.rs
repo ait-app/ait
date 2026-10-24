@@ -10,6 +10,7 @@ mod native_sessions;
 mod permissions;
 mod plans;
 mod prompts;
+mod realtime;
 mod rewind;
 mod speed;
 mod streaming;
@@ -162,6 +163,7 @@ impl CodexClient {
                     transport: (!history).then_some(transport),
                     id: id.clone(),
                     info,
+                    realtime: None,
                     active_turn: None,
                     last_message: None,
                     last_failure: None,
@@ -259,7 +261,7 @@ impl AgentClient for CodexClient {
     fn settings(&self, config: &StoredAgentConfig) -> Value {
         json!({"availableModes":self.modes(),"features":self.features(config),
             "capabilities":{"supportsDynamicModes":true,"supportsRewindConversation":true,"supportsMcpServers":true,
-                "supportsStreaming":true,"supportsReasoningStream":true,"supportsSessionListing":true}})
+                "supportsRealtimeVoice":true,"supportsStreaming":true,"supportsReasoningStream":true,"supportsSessionListing":true}})
     }
 
     fn draft_features<'a>(
@@ -498,6 +500,7 @@ struct CodexSession {
     transport: Option<Transport>,
     id: String,
     info: StoredAgentRuntimeInfo,
+    realtime: Option<realtime::Realtime>,
     active_turn: Option<String>,
     last_message: Option<String>,
     last_failure: Option<String>,
@@ -608,6 +611,9 @@ impl CodexSession {
         {
             return Ok(());
         }
+        if self.realtime.is_some() {
+            return Err(AgentSessionError::Rejected);
+        }
         if let Some(mut transport) = self.transport.take() {
             transport.close().await?;
         }
@@ -645,6 +651,21 @@ impl CodexSession {
 }
 
 impl AgentSession for CodexSession {
+    fn start_realtime(
+        &mut self,
+        endpoint: model::realtime::Endpoint,
+    ) -> AgentSessionFuture<'_, ()> {
+        Box::pin(self.open_realtime(endpoint))
+    }
+
+    fn realtime_active(&self) -> bool {
+        self.realtime.is_some()
+    }
+
+    fn service_realtime(&mut self) -> AgentSessionFuture<'_, ()> {
+        Box::pin(self.drive_realtime())
+    }
+
     fn failure_message(&self) -> Option<Cow<'_, str>> {
         self.transport
             .as_ref()
@@ -983,6 +1004,10 @@ impl AgentSession for CodexSession {
             if params.get("threadId").and_then(Value::as_str) != Some(&self.id) {
                 continue;
             }
+            if method.starts_with("thread/realtime/") {
+                self.observe_realtime(method, params);
+                continue;
+            }
             if let Some(event) = self.control_event(method, params)? {
                 return Ok(Some(event));
             }
@@ -1034,6 +1059,7 @@ impl AgentSession for CodexSession {
                 transport.close().await?;
             }
             self.transport = None;
+            self.realtime = None;
             self.active_turn = None;
             self.permissions.clear();
             self.children.stopped();

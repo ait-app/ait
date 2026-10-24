@@ -89,6 +89,11 @@ pub(super) async fn drain(
     id: &str,
     agent: &mut super::LiveAgent,
 ) -> Result<(), AgentManagerError> {
+    agent
+        .session
+        .service_realtime()
+        .await
+        .map_err(super::map_session)?;
     persist_handle(registry, id, agent)?;
     persist_input(registry, id, agent)?;
     for _ in 0..128 {

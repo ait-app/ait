@@ -15,6 +15,9 @@ export interface AudioEngine {
   initialize(): Promise<void>;
   destroy(): Promise<void>;
 
+  /** Optional native WebRTC audio; provider authentication stays on the host. */
+  createRealtimeOffer?(): Promise<string>;
+  acceptRealtimeAnswer?(sdp: string): Promise<void>;
   startCapture(): Promise<void>;
   stopCapture(): Promise<void>;
   toggleMute(): boolean;

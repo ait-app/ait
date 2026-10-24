@@ -65,11 +65,13 @@ function createServerInfo(): DaemonServerInfo {
 function createRuntime(options?: {
   engine?: AudioEngine;
   getServerInfo?: (serverId: string) => DaemonServerInfo | null;
+  supportsRealtimeVoice?: (serverId: string, agentId: string) => boolean;
 }) {
   const engine = options?.engine ?? createAudioEngineMock();
   const runtime = createVoiceRuntime({
     engine,
     getServerInfo: options?.getServerInfo ?? (() => createServerInfo()),
+    supportsRealtimeVoice: options?.supportsRealtimeVoice,
     activateKeepAwake: vi.fn().mockResolvedValue(undefined),
     deactivateKeepAwake: vi.fn().mockResolvedValue(undefined),
   });
@@ -476,4 +478,67 @@ describe("voice runtime", () => {
     expect(listener).not.toHaveBeenCalled();
     unsubscribe();
   });
+});
+
+describe("provider-native voice", () => {
+  it("starts without generic speech readiness only for a capable Agent", async () => {
+    const info = createServerInfo();
+    info.capabilities!.voice!.voice = { enabled: false, reason: "Offline speech unavailable" };
+    const { runtime, engine } = createRuntime({
+      getServerInfo: () => info,
+      supportsRealtimeVoice: (_, id) => id === "codex-agent",
+    });
+    const adapter = createSessionAdapter();
+    runtime.registerSession(adapter);
+    await expect(runtime.startVoice("server-1", "other-agent")).rejects.toThrow(
+      "Offline speech unavailable",
+    );
+    await runtime.startVoice("server-1", "codex-agent");
+    expect(engine.startCapture).toHaveBeenCalledTimes(1);
+    runtime.onTranscriptionResult("server-1", "native transcript");
+    expect(runtime.getSnapshot().phase).toBe("listening");
+    expect(engine.play).not.toHaveBeenCalled();
+    runtime.onSessionClosed("other-server");
+    expect(runtime.getSnapshot().isVoiceMode).toBe(true);
+    runtime.onSessionClosed("server-1");
+    await new Promise<void>((resolve) => setTimeout(resolve, 0));
+    expect(engine.stopCapture).toHaveBeenCalled();
+    expect(runtime.getSnapshot().isVoiceMode).toBe(false);
+    expect(adapter.setVoiceMode).toHaveBeenCalledTimes(1);
+  });
+});
+
+it("negotiates browser audio with the provider and closes it on disconnect", async () => {
+  const engine = createAudioEngineMock();
+  engine.createRealtimeOffer = vi.fn().mockResolvedValue("browser-offer");
+  engine.acceptRealtimeAnswer = vi.fn().mockResolvedValue(undefined);
+  const { runtime } = createRuntime({ engine, supportsRealtimeVoice: () => true });
+  const adapter = createSessionAdapter();
+  vi.mocked(adapter.setVoiceMode).mockResolvedValue({ sdp: "provider-answer" });
+  runtime.registerSession(adapter);
+  await runtime.startVoice("server-1", "agent-1");
+  expect(adapter.setVoiceMode).toHaveBeenCalledWith(true, "agent-1", "browser-offer");
+  expect(engine.acceptRealtimeAnswer).toHaveBeenCalledWith("provider-answer");
+  runtime.updateSessionConnection("server-1", false);
+  await new Promise<void>((resolve) => setTimeout(resolve, 0));
+  expect(engine.stopCapture).toHaveBeenCalled();
+  expect(runtime.getSnapshot().isVoiceMode).toBe(false);
+});
+
+it("releases a native peer before switching to generic speech", async () => {
+  const engine = createAudioEngineMock();
+  engine.createRealtimeOffer = vi.fn().mockResolvedValue("offer");
+  engine.acceptRealtimeAnswer = vi.fn().mockResolvedValue(undefined);
+  const { runtime } = createRuntime({ engine, supportsRealtimeVoice: (_, id) => id === "codex" });
+  const adapter = createSessionAdapter();
+  vi.mocked(adapter.setVoiceMode).mockResolvedValue({ sdp: "answer" });
+  runtime.registerSession(adapter);
+  await runtime.startVoice("server-1", "codex");
+  await runtime.startVoice("server-1", "codex");
+  expect(engine.createRealtimeOffer).toHaveBeenCalledTimes(1);
+  await runtime.startVoice("server-1", "other");
+  expect(engine.stopCapture).toHaveBeenCalledTimes(1);
+  expect(engine.startCapture).toHaveBeenCalledTimes(2);
+  expect(adapter.setVoiceMode).toHaveBeenLastCalledWith(true, "other");
+  await runtime.stopVoice();
 });

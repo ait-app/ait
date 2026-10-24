@@ -355,6 +355,50 @@ impl Transport {
         }
     }
 
+    /// Drain the old audio generation before the same thread can start another one.
+    /// Preserve text and approval notifications in their original order.
+    pub(super) async fn wait_realtime_closed(
+        &mut self,
+        thread: &str,
+    ) -> Result<(), AgentSessionError> {
+        let mut retained = VecDeque::new();
+        let result = tokio::time::timeout(self.deadline, async {
+            loop {
+                let message = match self.events.pop_front() {
+                    Some(message) => message,
+                    None => self
+                        .messages
+                        .recv()
+                        .await
+                        .ok_or(AgentSessionError::Failed)?,
+                };
+                if message["params"]["threadId"] == thread
+                    && message["method"]
+                        .as_str()
+                        .is_some_and(|method| method.starts_with("thread/realtime/"))
+                {
+                    if message["method"] == "thread/realtime/closed" {
+                        return Ok(());
+                    }
+                } else {
+                    if retained.len() >= MAX_EVENTS {
+                        return Err(AgentSessionError::Failed);
+                    }
+                    retained.push_back(message);
+                }
+            }
+        })
+        .await;
+        retained.append(&mut self.events);
+        self.events = retained;
+        if matches!(result, Ok(Ok(()))) {
+            Ok(())
+        } else {
+            let _ = self.close().await;
+            Err(AgentSessionError::Failed)
+        }
+    }
+
     pub(super) async fn close(&mut self) -> Result<(), AgentSessionError> {
         self.diagnostics.flush();
         self.closed = true;
@@ -428,24 +472,25 @@ async fn write(input: &Mutex<ChildStdin>, value: &Value) -> Result<(), AgentSess
 mod tests;
 
 fn retained(method: Option<&str>) -> bool {
-    matches!(
-        method,
-        Some(
-            "error"
-                | "turn/completed"
-                | "thread/started"
-                | "turn/plan/updated"
-                | "thread/goal/updated"
-                | "thread/goal/cleared"
-                | "turn/started"
-                | "thread/tokenUsage/updated"
-                | "serverRequest/resolved"
-                | "item/completed"
-                | "item/started"
-                | "item/agentMessage/delta"
-                | "item/reasoning/summaryTextDelta"
-                | "item/commandExecution/outputDelta"
-                | "item/fileChange/outputDelta"
+    method.is_some_and(|method| method.starts_with("thread/realtime/"))
+        || matches!(
+            method,
+            Some(
+                "error"
+                    | "turn/completed"
+                    | "thread/started"
+                    | "turn/plan/updated"
+                    | "thread/goal/updated"
+                    | "thread/goal/cleared"
+                    | "turn/started"
+                    | "thread/tokenUsage/updated"
+                    | "serverRequest/resolved"
+                    | "item/completed"
+                    | "item/started"
+                    | "item/agentMessage/delta"
+                    | "item/reasoning/summaryTextDelta"
+                    | "item/commandExecution/outputDelta"
+                    | "item/fileChange/outputDelta"
+            )
         )
-    )
 }

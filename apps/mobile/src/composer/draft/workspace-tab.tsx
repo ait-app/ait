@@ -690,7 +690,12 @@ export function WorkspaceDraftAgentTab({
             workspaceId={workspaceId}
             isPaneFocused={isPaneFocused}
             onSubmitMessage={handleCreateFromInput}
-            onCreateVoiceAgent={handleCreateVoiceAgent}
+            onCreateVoiceAgent={
+              draftProviderDefinitions.find((entry) => entry.id === draftProvider)
+                ?.supportsRealtimeVoice
+                ? handleCreateVoiceAgent
+                : undefined
+            }
             isSubmitLoading={isSubmitting}
             blurOnSubmit={true}
             textSource={draftInput.textSource}

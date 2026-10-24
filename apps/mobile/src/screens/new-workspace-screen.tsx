@@ -2495,7 +2495,13 @@ export function NewWorkspaceScreen({
       serverId={selectedServerId}
       isPaneFocused={true}
       onSubmitMessage={handleSubmitNewWorkspace}
-      onCreateVoiceAgent={handleCreateVoiceAgent}
+      onCreateVoiceAgent={
+        composerState?.providerDefinitions.find(
+          (entry) => entry.id === composerState.selectedProvider,
+        )?.supportsRealtimeVoice
+          ? handleCreateVoiceAgent
+          : undefined
+      }
       allowEmptySubmit={true}
       submitButtonAccessibilityLabel={t("newWorkspace.create")}
       submitButtonTestID="workspace-create-submit"

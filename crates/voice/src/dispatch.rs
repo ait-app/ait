@@ -51,6 +51,8 @@ pub async fn dispatch(
     let stopped = context.request.method == "voice.abort.request"
         || context.request.method == "voice.mode.set.request"
             && context.request.params["enabled"] == false;
+    let native_stopped =
+        context.request.method == "voice.abort.request" && connection.has_native_voice();
     let result = match &state.speech {
         Some(speech) if !state.runtime.cancellation.is_cancelled() => connection
             .request(
@@ -66,6 +68,12 @@ pub async fn dispatch(
     let notify = stopped && result.is_ok();
     let outbound = context.outbound;
     context.respond(result)?;
+    if notify && native_stopped {
+        outbound.send(&model::ServerMessage::Event {
+            method: "voice.session.closed".to_owned(),
+            params: serde_json::json!({}),
+        })?;
+    }
     if notify {
         outbound.send(&model::ServerMessage::Event {
             method: "voice.input.state".to_owned(),

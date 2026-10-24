@@ -1,5 +1,7 @@
 # Ait 文档
 
+- [ADR-190：Codex Provider 拥有原生实时语音](decisions/providers/adr-190-codex-native-realtime-voice.md)：空会话、WebRTC 协商、原生 PCM、认证与连接清理边界。
+
 - [ADR-154：账号状态通过共享客户端 Channel 推送](decisions/clients/adr-154-account-status-channel.md)：完整 Host 快照、Host 可连接状态事件、应用心跳与各端票据认证。
 
 - [ADR-142：PTY 拥有基础终端设备属性回复](decisions/daemon/adr-142-terminal-primary-device-attributes.md)：节点直接完成 DA1 握手，避免 fish 启动等待客户端订阅。

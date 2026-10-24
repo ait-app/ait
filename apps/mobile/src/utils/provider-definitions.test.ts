@@ -42,3 +42,11 @@ describe("native provider mode visuals", () => {
     expect(buildProviderDefinitions(undefined)).toEqual([]);
   });
 });
+
+it("preserves provider-owned native voice capability and does not infer it from the name", () => {
+  expect(buildProviderDefinitions([snapshot("codex")])[0].supportsRealtimeVoice).toBeUndefined();
+  expect(
+    buildProviderDefinitions([{ ...snapshot("codex"), supportsRealtimeVoice: true }])[0]
+      .supportsRealtimeVoice,
+  ).toBe(true);
+});
