@@ -40,6 +40,8 @@ if '--provider' in args and '--model' in args:
 level = 'off'
 active = False
 prompt_id = None
+pending_plugin = None
+pending_control = None
 
 def emit(value):
     data = json.dumps(value, ensure_ascii=False).encode()
@@ -104,6 +106,11 @@ for line in sys.stdin:
         response(command, {'sessionId': session_id, 'sessionFile': str(file), 'model': model,
                           'thinkingLevel': level, 'isStreaming': active, 'isCompacting': False,
                           'slowModeSupported': model['provider'] == 'test'})
+    elif kind == 'fixture_new_context':
+        session_id=str(uuid.uuid4())
+        file=root/'sessions'/'workspace'/('2026-10-25_'+session_id+'.jsonl')
+        records=[{'type':'session','version':3,'id':session_id,'cwd':cwd,'timestamp':'2026-10-25T00:00:00Z'}]
+        response(command, {'sessionId':session_id})
     elif kind == 'get_available_models':
         response(command, {'models': models})
     elif kind == 'get_available_thinking_levels':
@@ -125,12 +132,31 @@ for line in sys.stdin:
     elif kind == 'get_subagents':
         response(command, {'subagents': []})
     elif kind == 'get_available_commands':
-        response(command, {'commands': [{'name': 'review', 'description': 'Review', 'source': 'skill'}]})
+        response(command, {'commands': [{'name': 'review', 'description': 'Review', 'source': 'skill'}, *json.loads((root/'plugins.json').read_text())] if (root/'plugins.json').exists() else [{'name': 'review', 'description': 'Review', 'source': 'skill'}]})
+    elif kind == 'interactive_control':
+        pending_control=command
+        emit({'type':'extension_ui_request','id':'control-question','method':'input','title':'Native control input'})
+    elif kind == 'host_tool_update':
+        pass
+    elif kind == 'host_tool_result':
+        finish()
     elif kind == 'prompt':
         text = command['message']
         prompt_id = command.get('id')
+        plugins = json.loads((root/'plugins.json').read_text()) if (root/'plugins.json').exists() else []
+        plugin = next((entry for entry in plugins if text == '/'+entry['name']), None)
+        if plugin:
+            pending_plugin = (command, plugin)
+            emit({'type':'extension_ui_request','id':'plugin-question','method':'select',
+                  'title':plugin['description'],'options':['A, B','C']})
+            continue
         if text == 'reject':
             response(command, success=False)
+            continue
+        if text == '/notify-only':
+            emit({'type':'extension_ui_request','method':'notify','message':'Notify only output','notifyType':'info'})
+            response(command)
+            emit({'type':'prompt_result','id':prompt_id,'agentInvoked':False,'status':'completed','sessionSettled':True})
             continue
         if text == '/local':
             response(command, {'agentInvoked': False})
@@ -139,6 +165,43 @@ for line in sys.stdin:
         active = True
         emit({'type': 'agent_start'})
         message('user', [{'type': 'text', 'text': text}, *command.get('images', [])])
+        if text == 'native-host':
+            emit({'type':'future_native_event','opaque':{'unmodified':[1,2,3]}})
+            emit({'type':'host_tool_call','id':'host-task','toolCallId':'external-tool','toolName':'unknown-vendor-tool','arguments':{'value':42}})
+            continue
+        if text == 'frame-error':
+            emit({'type': 'rpc_frame_error', 'error': {
+                'message': 'Upstream shard unavailable api_key=fixture-secret', 'statusCode': 503}})
+            continue
+        if text == 'unknown-native-error':
+            error = 'Upstream shard unavailable api_key=fixture-secret'
+            message('assistant', [], stopReason='error', errorMessage=error)
+            emit({'type': 'prompt_result', 'id': prompt_id, 'status': 'error',
+                  'sessionSettled': True, 'error': error})
+            continue
+        if text == 'invalid-timestamp':
+            emit({'type': 'message_start', 'message': {'role': 'assistant', 'content': []}})
+            continue
+        if text == 'unknown-tool-result':
+            message('toolResult', [{'type': 'text', 'text': 'api_key=fixture-secret'}],
+                    toolCallId='unknown', toolName='bash', isError=True)
+            continue
+        if text == 'invalid-usage':
+            message('assistant', [], usage={'input': -1, 'output': 0})
+            continue
+        if text == 'closed':
+            break
+        if text == 'incomplete-frame':
+            sys.stdout.write('{"type":')
+            sys.stdout.flush()
+            break
+        if text == 'invalid-chunks':
+            emit({'type': 'rpc_chunk', 'chunkId': 'bad', 'index': 1,
+                  'count': 2, 'byteLength': 4, 'data': 'e30='})
+            break
+        if text == 'missing-frame-type':
+            emit({'content': 'api_key=fixture-secret'})
+            break
         if text in ('native-error', 'native-error-recovered'):
             message('assistant', [], provider='test', model='model', stopReason='error',
                     errorMessage='Payment required: insufficient balance api_key=fixture-secret')
@@ -175,6 +238,27 @@ for line in sys.stdin:
         call = records[-1]['message']['content'][-1]['id']
         emit({'type': 'tool_execution_start', 'toolCallId': call, 'toolName': 'read', 'args': {'path': 'file.rs'}})
         message('toolResult', [{'type': 'text', 'text': 'contents'}], toolCallId=call, toolName='read', isError=False)
+        if text in ('background-tool-error', 'background-busy'):
+            if text == 'background-busy':
+                message('assistant', [{'type': 'toolCall', 'id': 'foreground', 'name': 'bash',
+                                       'arguments': {'command': 'offline fixture'}}], stopReason='toolUse')
+                emit({'type': 'tool_execution_start', 'toolCallId': 'foreground',
+                      'toolName': 'bash', 'args': {'command': 'offline fixture'}})
+            else:
+                emit({'type': 'agent_end', 'messages': []})
+                emit({'type': 'prompt_result', 'id': prompt_id, 'status': 'completed',
+                      'sessionSettled': False})
+            emit({'type': 'tool_execution_update', 'toolCallId': call, 'toolName': 'read',
+                  'args': {'path': 'file.rs'}, 'partialResult': {
+                      'content': [{'type': 'text', 'text': 'curl: (28) Connection timed out'}],
+                      'details': {'async': {'state': 'completed', 'jobId': 'bg_15'}}}})
+            message('custom', 'Background job bg_15 completed: curl: (28) Connection timed out',
+                    customType='async-result', display=True, attribution='agent')
+            if text == 'background-busy':
+                message('toolResult', [{'type': 'text', 'text': 'Foreground finished'}],
+                        toolCallId='foreground', toolName='bash', isError=False)
+            else:
+                emit({'type': 'agent_start'})
         finish(settled=text != 'background')
     elif kind == 'steer':
         response(command, {'disposition': 'queued'})
@@ -184,6 +268,19 @@ for line in sys.stdin:
         finish(aborted=True)
         response(command)
     elif kind == 'extension_ui_response':
+        if pending_control:
+            response(pending_control,{'value':command.get('value')})
+            pending_control=None
+            continue
+        if pending_plugin:
+            pending_command, plugin = pending_plugin
+            pending_plugin = None
+            emit({'type':'extension_ui_request','id':'plugin-note','method':'notify',
+                  'message':'Plugin selected: '+str(command.get('value')), 'opaque':{'vendor':plugin['name']}})
+            message('custom', [{'type':'text','text':plugin['name']+': '+str(command.get('value'))}],
+                    customType=plugin['name'],display=True)
+            response(pending_command, {'agentInvoked':False})
+            continue
         finish()
     else:
         response(command, success=False)

@@ -3,6 +3,9 @@
 - 状态：Accepted
 - 日期：2026-10-21
 
+[ADR-190](adr-190-omp-acp-settlement.md) 将宿主入口固定为 Ait ACP 桥接层，
+底层继续使用官方 RPC；本文的原生所有权和功能基线保留。
+
 ## 背景
 
 客户端已有 Oh My Pi 的图标、模式与恢复命令模板，但 Rust daemon 没有对应适配器，

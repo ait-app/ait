@@ -30,6 +30,7 @@ tempfile.workspace = true
 thiserror.workspace = true
 tracing.workspace = true
 tokio.workspace = true
+tokio.features = ["io-std"]
 tokio-util.workspace = true
 uuid.workspace = true
 # Decode Pi-supported file URLs in host session configuration.

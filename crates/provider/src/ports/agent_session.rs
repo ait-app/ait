@@ -50,7 +50,7 @@ pub(crate) enum AgentResumePurpose {
 }
 
 /// Native foreground-turn progress or result. This is not a host Run or Message tree.
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq, serde::Serialize, serde::Deserialize)]
 pub(crate) enum AgentTurnEvent {
     /// A native autonomous foreground turn started, for example while pursuing a Codex goal.
     Started(String),

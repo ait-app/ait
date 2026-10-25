@@ -1,5 +1,4 @@
 use std::collections::BTreeMap;
-use std::os::unix::fs::PermissionsExt;
 use std::time::Duration;
 
 use super::*;
@@ -143,11 +142,11 @@ async fn native_modes_questions_children_and_chunked_frames() {
     assert!(calls.contains("negotiate_protocol"));
 }
 
-fn fixture() -> (tempfile::TempDir, OmpClient, AgentSessionSpec) {
+/// Create an isolated offline native peer, client and default session specification.
+pub(super) fn fixture() -> (tempfile::TempDir, OmpClient, AgentSessionSpec) {
     let root = tempfile::tempdir().unwrap();
-    let program = root.path().join("omp");
-    std::fs::write(&program, include_str!("tests/fixtures/omp.py")).unwrap();
-    std::fs::set_permissions(&program, std::fs::Permissions::from_mode(0o700)).unwrap();
+    let program = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
+        .join("src/local/omp/tests/fixtures/omp.py");
     let client = OmpClient {
         environment: AgentEnvironment::try_from(BTreeMap::from([(
             "PI_CODING_AGENT_DIR".to_owned(),
@@ -164,7 +163,9 @@ fn fixture() -> (tempfile::TempDir, OmpClient, AgentSessionSpec) {
     (root, client, spec)
 }
 
-async fn next(session: &mut dyn AgentSession) -> Result<AgentTurnEvent, AgentSessionError> {
+pub(super) async fn next(
+    session: &mut dyn AgentSession,
+) -> Result<AgentTurnEvent, AgentSessionError> {
     tokio::time::timeout(Duration::from_secs(5), async {
         loop {
             if let Some(event) = session.poll_turn()? {
@@ -177,7 +178,7 @@ async fn next(session: &mut dyn AgentSession) -> Result<AgentTurnEvent, AgentSes
     .unwrap()
 }
 
-async fn complete(session: &mut dyn AgentSession) -> Vec<AgentTurnEvent> {
+pub(super) async fn complete(session: &mut dyn AgentSession) -> Vec<AgentTurnEvent> {
     let mut events = Vec::new();
     loop {
         let event = next(session).await.unwrap();
@@ -333,9 +334,10 @@ async fn questions_require_exact_answers_and_unsupported_input_never_reaches_nat
         session.start_input(&invalid, &spec.config).await,
         Err(AgentSessionError::Rejected)
     );
+    session.start_turn("reject", &spec.config).await.unwrap();
     assert_eq!(
-        session.start_turn("reject", &spec.config).await,
-        Err(AgentSessionError::Rejected)
+        complete(session.as_mut()).await.last(),
+        Some(&AgentTurnEvent::Failed)
     );
     session.start_turn("question", &spec.config).await.unwrap();
     let request = loop {
@@ -396,4 +398,27 @@ async fn malformed_output_fails_without_resending_input() {
             .count(),
         1
     );
+}
+
+#[tokio::test]
+async fn local_command_admission_does_not_pretend_native_history_was_persisted() {
+    let (_root, client, spec) = fixture();
+    let mut session = client.create_session(&spec).await.unwrap();
+    session
+        .start_turn("/notify-only", &spec.config)
+        .await
+        .unwrap();
+    let events = complete(session.as_mut()).await;
+    assert!(
+        matches!(events.last(), Some(AgentTurnEvent::Completed(Some(text))) if text == "Notify only output")
+    );
+    let handle = session.persistence().unwrap();
+    assert_eq!(handle.metadata.as_ref().unwrap()["empty"], true);
+    session.close().await.unwrap();
+    assert!(client.history(&handle, &spec.cwd).await.unwrap().is_empty());
+    let mut reopened = client
+        .resume_session(&handle, &spec, AgentResumePurpose::Interactive)
+        .await
+        .unwrap();
+    reopened.close().await.unwrap();
 }

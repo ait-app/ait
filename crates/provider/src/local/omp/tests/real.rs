@@ -92,47 +92,108 @@ async fn installed_omp_real_inference_tools_questions_and_resume() {
     eprintln!("real OMP: native history, session listing and resumed model context passed");
 }
 
-fn real_fixture() -> (tempfile::TempDir, OmpClient, AgentSessionSpec) {
-    let root = tempfile::tempdir().unwrap();
-    let agent = root.path().join("agent");
-    let work = root.path().join("work");
-    std::fs::create_dir_all(&agent).unwrap();
-    std::fs::create_dir_all(&work).unwrap();
-    let model = std::env::var("AIT_TEST_OMP_REAL_MODEL").expect("set AIT_TEST_OMP_REAL_MODEL");
-    let base_url = std::env::var("AIT_TEST_OMP_REAL_BASE_URL").expect("set real endpoint");
-    assert!(std::env::var("AIT_TEST_OMP_REAL_API_KEY").is_ok());
-    std::fs::write(
-        agent.join("models.yml"),
-        json!({"providers":{"ait-integration":{
-            "baseUrl":base_url,"api":"openai-completions",
-            "apiKey":"AIT_TEST_OMP_REAL_API_KEY",
-            "compat":{"supportsStore":false,"supportsDeveloperRole":false,
-                "maxTokensField":"max_tokens","supportsStrictMode":false},
-            "models":[{"id":model,"name":model,"reasoning":false,"input":["text"],
-                "contextWindow":128_000,"maxTokens":4096,
-                "cost":{"input":0,"output":0,"cacheRead":0,"cacheWrite":0}}]}}})
-        .to_string(),
+#[tokio::test]
+#[ignore = "requires native model configuration and the generic fixture extension; performs paid inference"]
+async fn installed_omp_real_plugins_share_native_commands_tools_and_history() {
+    let (_root, client, spec) = real_fixture();
+    let commands = client.commands(&spec).await.unwrap();
+    for name in [
+        "compat-vendor-alpha",
+        "compat-other-command",
+        "compat-notify-only",
+    ] {
+        assert!(
+            commands.iter().any(|command| command["name"] == name),
+            "load generic-extension.ts with the official --extension flag"
+        );
+    }
+    let mut session = client.create_session(&spec).await.unwrap();
+    session
+        .start_turn("/compat-notify-only", &spec.config)
+        .await
+        .unwrap();
+    let notice = drain_real(session.as_mut()).await;
+    assert_completed_with(&notice, "OMP_NOTIFY_ONLY_OK");
+    assert_eq!(
+        session.persistence().unwrap().metadata.unwrap()["empty"],
+        true
+    );
+    for name in ["compat-vendor-alpha", "compat-other-command"] {
+        session
+            .start_turn(&format!("/{name}"), &spec.config)
+            .await
+            .unwrap();
+        session.runtime_info().await.unwrap();
+        let events = drain_real(session.as_mut()).await;
+        assert_completed_with(&events, &format!("{name}: A, B"));
+    }
+    session.start_turn("Call compat_dynamic_tool with text OMP_PLUGIN_TOOL_OK. Do not call any other tools. Then reply with exactly OMP_PLUGIN_TOOL_OK.", &spec.config).await.unwrap();
+    let events = drain_real(session.as_mut()).await;
+    assert_completed_with(&events, "OMP_PLUGIN_TOOL_OK");
+    assert!(
+        events
+            .iter()
+            .any(|event| matches!(event,AgentTurnEvent::Timeline(entry)
+        if entry.item["type"]=="tool_call" && entry.item["status"]=="completed"
+            && entry.item["detail"].to_string().contains("OMP_PLUGIN_TOOL_OK")))
+    );
+    let handle = session.persistence().unwrap();
+    session.close().await.unwrap();
+    let journal = std::fs::read_to_string(
+        handle.metadata.as_ref().unwrap()["sessionFile"]
+            .as_str()
+            .unwrap(),
     )
     .unwrap();
-    let client = OmpClient {
-        environment: AgentEnvironment::try_from(BTreeMap::from([
-            ("HOME".to_owned(), root.path().to_str().unwrap().to_owned()),
-            (
-                "PI_CODING_AGENT_DIR".to_owned(),
-                agent.to_str().unwrap().to_owned(),
-            ),
-            ("OMP_PROFILE".to_owned(), String::new()),
-            ("PI_PROFILE".to_owned(), String::new()),
-        ]))
-        .unwrap(),
-        ..OmpClient::new(std::env::var_os("AIT_TEST_OMP_BIN").unwrap().into())
-            .with_image_directory(root.path().join("images"))
-    };
+    assert!(
+        journal
+            .lines()
+            .map(|line| serde_json::from_str::<Value>(line).unwrap())
+            .any(|record| {
+                let message = &record["message"];
+                message["role"] == "toolResult"
+                    && message["isError"] == false
+                    && (message["toolName"] == "compat_dynamic_tool"
+                        || message["details"]["xdev"]["tool"] == "compat_dynamic_tool")
+                    && message["content"]
+                        .to_string()
+                        .contains("OMP_PLUGIN_TOOL_OK")
+            }),
+        "the official runtime must execute the registered extension tool, including deferred dispatch"
+    );
+    let history = client.history(&handle, &spec.cwd).await.unwrap();
+    for name in ["compat-vendor-alpha", "compat-other-command"] {
+        assert!(
+            history
+                .iter()
+                .any(|entry| entry.item["text"] == format!("{name}: A, B"))
+        );
+    }
+    let mut resumed = client
+        .resume_session(&handle, &spec, AgentResumePurpose::Interactive)
+        .await
+        .unwrap();
+    assert_eq!(resumed.persistence().unwrap().session_id, handle.session_id);
+    resumed.close().await.unwrap();
+    eprintln!(
+        "real OMP: notify-only, two arbitrary plugin commands, dynamic tool, native history and resume passed"
+    );
+}
+
+fn real_fixture() -> (tempfile::TempDir, OmpClient, AgentSessionSpec) {
+    let root = tempfile::tempdir().unwrap();
+    let work = root.path().join("work");
+    std::fs::create_dir_all(&work).unwrap();
+    let model = std::env::var("AIT_TEST_OMP_REAL_MODEL")
+        .expect("set AIT_TEST_OMP_REAL_MODEL to the native [provider, model] JSON route");
+    let client = OmpClient::new(std::env::var_os("AIT_TEST_OMP_BIN").unwrap().into())
+        .with_image_directory(root.path().join("images"));
     let spec = AgentSessionSpec {
         provider: "omp".to_owned(),
         cwd: work.to_str().unwrap().to_owned(),
         config: StoredAgentConfig {
-            model: Some(json!(["ait-integration", model]).to_string()),
+            model: Some(model),
+            thinking_option_id: Some("low".to_owned()),
             mode_id: Some("ask".to_owned()),
             feature_values: Some(BTreeMap::from([("autoRetry".to_owned(), json!(false))])),
             ..StoredAgentConfig::default()
@@ -156,7 +217,7 @@ async fn drain_real(session: &mut dyn AgentSession) -> Vec<AgentTurnEvent> {
                     let label = options
                         .iter()
                         .filter_map(|option| option["label"].as_str())
-                        .find(|label| matches!(*label, "Approve" | "Alpha"))
+                        .find(|label| matches!(*label, "Approve" | "Alpha" | "A, B"))
                         .expect("only approve the test tool or choose Alpha");
                     answers.insert(
                         question["answerKey"].as_str().unwrap().to_owned(),
@@ -200,21 +261,5 @@ fn assert_completed_with(events: &[AgentTurnEvent], expected: &str) {
 }
 
 fn report_native_failure(session: &dyn AgentSession) {
-    let handle = session.persistence().unwrap();
-    let path = handle.metadata.as_ref().unwrap()["sessionFile"]
-        .as_str()
-        .unwrap();
-    let text = std::fs::read_to_string(path).unwrap();
-    let secret = std::env::var("AIT_TEST_OMP_REAL_API_KEY").unwrap();
-    for line in text.lines() {
-        let record: Value = serde_json::from_str(line).unwrap();
-        if let Some(error) = record["message"]["errorMessage"].as_str() {
-            let safe = if secret.is_empty() {
-                error.to_owned()
-            } else {
-                error.replace(&secret, "[REDACTED]")
-            };
-            eprintln!("real OMP native failure: {safe}");
-        }
-    }
+    eprintln!("real OMP native failure: {:?}", session.failure_message());
 }

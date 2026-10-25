@@ -1,5 +1,6 @@
 //! Oh My Pi's native JSONL RPC adapter. OMP owns credentials, extensions, tools and session files.
 
+mod bridge;
 mod config;
 mod framing;
 mod history;
@@ -63,6 +64,16 @@ impl OmpClient {
         closed?;
         Ok(tiers)
     }
+}
+
+/// Serve the OMP bridge on a caller-owned JSONL stream without altering native installation.
+/// Returns bounded protocol, process startup, or I/O errors; EOF closes the native runtime.
+pub(crate) async fn serve_acp<R, W>(program: PathBuf, input: R, output: W) -> std::io::Result<()>
+where
+    R: tokio::io::AsyncRead + Unpin,
+    W: tokio::io::AsyncWrite + Unpin,
+{
+    bridge::serve(OmpClient::new(program), input, output).await
 }
 
 impl AgentClient for OmpClient {
@@ -174,7 +185,7 @@ impl AgentClient for OmpClient {
         spec: &'a AgentSessionSpec,
     ) -> AgentSessionFuture<'a, Box<dyn AgentSession>> {
         Box::pin(async move {
-            Ok(Box::new(session::open(self, spec, None).await?) as Box<dyn AgentSession>)
+            Ok(Box::new(bridge::Session::open(self, spec, None).await?) as Box<dyn AgentSession>)
         })
     }
 
@@ -210,7 +221,10 @@ impl AgentClient for OmpClient {
             if purpose == AgentResumePurpose::History {
                 return Err(AgentSessionError::Unavailable);
             }
-            Ok(Box::new(session::open(self, spec, Some(handle)).await?) as Box<dyn AgentSession>)
+            Ok(
+                Box::new(bridge::Session::open(self, spec, Some(handle)).await?)
+                    as Box<dyn AgentSession>,
+            )
         })
     }
 }

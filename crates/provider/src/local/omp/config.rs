@@ -29,12 +29,12 @@ pub(super) fn validate(config: &StoredAgentConfig) -> Result<(), AgentSessionErr
             .as_ref()
             .is_some_and(|value| value.len() > 65536 || value.contains('\0'))
         || config.thinking_option_id.as_deref().is_some_and(|value| {
-            !matches!(
-                value,
-                "off" | "minimal" | "low" | "medium" | "high" | "xhigh" | "max"
-            )
+            value.is_empty() || value.len() > 128 || value.chars().any(char::is_control)
         })
         || config.feature_values.iter().flatten().any(|(key, value)| {
+            if key == "transport" {
+                return !matches!(value.as_str(), Some("acp" | "rpc"));
+            }
             !matches!(
                 key.as_str(),
                 "autoCompaction" | "autoRetry" | "fastMode" | "slowMode"
@@ -148,6 +148,7 @@ pub(super) async fn apply(
     }
     for (id, value) in config.feature_values.iter().flatten() {
         let kind = match id.as_str() {
+            "transport" => continue,
             "autoCompaction" => "set_auto_compaction",
             "autoRetry" => "set_auto_retry",
             "fastMode" => "set_fast_mode",
@@ -212,14 +213,11 @@ fn model_thinking_options(model: &Value) -> Result<Vec<Value>, AgentSessionError
     };
     let efforts = efforts
         .as_array()
-        .filter(|efforts| efforts.len() <= 6)
+        .filter(|efforts| efforts.len() <= 64)
         .ok_or(AgentSessionError::Failed)?;
     for effort in efforts {
         if !effort.as_str().is_some_and(|effort| {
-            matches!(
-                effort,
-                "minimal" | "low" | "medium" | "high" | "xhigh" | "max"
-            )
+            !effort.is_empty() && effort.len() <= 128 && !effort.chars().any(char::is_control)
         }) || options.iter().any(|option| option["id"] == *effort)
         {
             return Err(AgentSessionError::Failed);

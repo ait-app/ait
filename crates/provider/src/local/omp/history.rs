@@ -212,6 +212,22 @@ pub(super) async fn load(
     .map_err(|_| AgentSessionError::Failed)?
 }
 
+fn record_message(record: &Value) -> Result<std::borrow::Cow<'_, Value>, AgentSessionError> {
+    if record["type"] != "custom_message" {
+        return Ok(std::borrow::Cow::Borrowed(&record["message"]));
+    }
+    let timestamp = record["timestamp"]
+        .as_str()
+        .and_then(|value| chrono::DateTime::parse_from_rfc3339(value).ok())
+        .ok_or(AgentSessionError::Failed)?
+        .timestamp_millis();
+    Ok(std::borrow::Cow::Owned(
+        json!({"role":"custom","timestamp":timestamp,
+        "customType":record["customType"],"content":record["content"],
+        "display":record["display"],"details":record["details"]}),
+    ))
+}
+
 impl Journal {
     fn branch(&self) -> Result<Vec<&Value>, AgentSessionError> {
         let mut index = BTreeMap::new();
@@ -265,7 +281,8 @@ impl Journal {
             return Err(AgentSessionError::Rejected);
         }
         let id = config::text(&self.header, "id")?;
-        let mut stream = Stream::new(id.to_owned(), client.images.clone());
+        let mut stream = Stream::new(id.to_owned(), client.images.clone())
+            .with_blobs(root(client)?.with_file_name("blobs"));
         restore_input_ids(&mut stream, handle)?;
         let mut config = StoredAgentConfig::default();
         let mut title = self.header["title"].as_str().map(str::to_owned);
@@ -280,8 +297,8 @@ impl Journal {
                 timestamp.clone_into(&mut updated);
             }
             match record["type"].as_str() {
-                Some("message") => {
-                    let message = &record["message"];
+                Some("message" | "custom_message") => {
+                    let message = record_message(record)?;
                     if message["role"] == "user" {
                         active = true;
                     }
@@ -293,7 +310,9 @@ impl Journal {
                             config.model = Some(json!([provider, model]).to_string());
                         }
                     }
-                    stream.message(message)?;
+                    stream
+                        .message(&message)
+                        .map_err(|_| AgentSessionError::Failed)?;
                     messages.extend(stream.events.drain(..).filter_map(|event| match event {
                         AgentTurnEvent::Timeline(entry) => Some(entry),
                         _ => None,

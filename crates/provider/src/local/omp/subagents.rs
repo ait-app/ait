@@ -1,4 +1,5 @@
 use std::collections::BTreeMap;
+use std::path::PathBuf;
 
 use chrono::Utc;
 use serde_json::{Value, json};
@@ -15,11 +16,20 @@ struct Child {
 }
 
 #[derive(Debug, Default)]
-pub(super) struct Children(BTreeMap<String, Child>);
+pub(super) struct Children {
+    children: BTreeMap<String, Child>,
+    blobs: Option<PathBuf>,
+}
 
 impl Children {
+    /// Use the parent session's native blob directory for child image projection.
+    pub(super) fn with_blobs(mut self, directory: PathBuf) -> Self {
+        self.blobs = Some(directory);
+        self
+    }
+
     pub(super) fn list(&self) -> Vec<NativeSubagent> {
-        self.0
+        self.children
             .values()
             .map(|child| child.descriptor.clone())
             .collect()
@@ -35,10 +45,13 @@ impl Children {
         let payload = &frame["payload"];
         if frame["type"] == "subagent_event" {
             let id = config::text(payload, "id")?;
-            let Some(child) = self.0.get_mut(id) else {
+            let Some(child) = self.children.get_mut(id) else {
                 return Ok(Vec::new());
             };
-            child.stream.consume(&payload["event"])?;
+            child
+                .stream
+                .consume(&payload["event"])
+                .map_err(|_| AgentSessionError::Failed)?;
             return Ok(child
                 .stream
                 .events
@@ -68,7 +81,7 @@ impl Children {
             payload
         };
         let id = config::text(source, "id")?;
-        if id == parent || (self.0.len() >= 256 && !self.0.contains_key(id)) {
+        if id == parent || (self.children.len() >= 256 && !self.children.contains_key(id)) {
             return Err(AgentSessionError::Failed);
         }
         let status = match source["status"].as_str() {
@@ -79,7 +92,8 @@ impl Children {
             _ => return Err(AgentSessionError::Failed),
         };
         let now = Utc::now().to_rfc3339();
-        let child = self.0.entry(id.to_owned()).or_insert_with(|| Child {
+        let blobs = &self.blobs;
+        let child = self.children.entry(id.to_owned()).or_insert_with(|| Child {
             descriptor: NativeSubagent {
                 persistence: None,
                 id: id.to_owned(),
@@ -89,7 +103,13 @@ impl Children {
                     "description":payload["description"],"createdAt":now,"updatedAt":now,
                     "toolCallId":payload["parentToolCallId"],"status":status}),
             },
-            stream: Stream::new(id.to_owned(), images.clone()),
+            stream: {
+                let stream = Stream::new(id.to_owned(), images.clone());
+                match blobs {
+                    Some(directory) => stream.with_blobs(directory.clone()),
+                    None => stream,
+                }
+            },
         });
         child.descriptor.descriptor["status"] = json!(status);
         child.descriptor.descriptor["updatedAt"] = json!(now);

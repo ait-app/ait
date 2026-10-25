@@ -1,11 +1,34 @@
+use std::borrow::Cow;
 use std::collections::{BTreeMap, VecDeque};
+use std::io::Read;
+use std::path::PathBuf;
+
+use base64::Engine;
+use sha2::{Digest, Sha256};
 
 use chrono::{TimeZone, Utc};
 use serde_json::{Value, json};
 
 use crate::local::images::ImageStore;
-use crate::ports::agent_session::{AgentSessionError, AgentTurnEvent};
+use crate::ports::agent_session::AgentTurnEvent;
 use crate::protocol::{timeline::NativeItem, usage::AgentUsage};
+
+const MAX_IMAGE_BYTES: u64 = 32 * 1024 * 1024;
+
+/// Payload-free reasons why a native event cannot be projected.
+#[derive(Debug, thiserror::Error)]
+pub(super) enum Error {
+    #[error("Invalid or missing OMP field: {0}.")]
+    Field(&'static str),
+    #[error("OMP returned a tool result without a matching tool call.")]
+    UnknownTool,
+    #[error("OMP exceeded the limit of 4096 pending tool calls.")]
+    ToolLimit,
+    #[error("OMP returned invalid token usage or cost.")]
+    Usage,
+    #[error("Ait could not render an OMP image.")]
+    Image,
+}
 
 #[derive(Debug)]
 pub(super) struct Stream {
@@ -23,6 +46,7 @@ pub(super) struct Stream {
     observation: u64,
     usage: AgentUsage,
     images: ImageStore,
+    blobs: Option<PathBuf>,
 }
 
 impl Stream {
@@ -34,10 +58,6 @@ impl Stream {
             self.usage.context_window_used_tokens = Some(tokens);
         }
     }
-    pub(super) fn is_empty(&self) -> bool {
-        self.counts.is_empty()
-    }
-
     pub(super) fn new(session: String, images: ImageStore) -> Self {
         Self {
             events: VecDeque::new(),
@@ -54,7 +74,47 @@ impl Stream {
             observation: 0,
             usage: AgentUsage::default(),
             images,
+            blobs: None,
         }
+    }
+
+    /// Resolve native content-addressed images from `directory`, without changing OMP files.
+    pub(super) fn with_blobs(mut self, directory: PathBuf) -> Self {
+        self.blobs = Some(directory);
+        self
+    }
+
+    fn image(&self, image: &Value) -> Result<String, Error> {
+        let Some(hash) = image["data"]
+            .as_str()
+            .and_then(|data| data.strip_prefix("blob:sha256:"))
+        else {
+            return self.images.render(image).map_err(|_| Error::Image);
+        };
+        if hash.len() != 64
+            || !hash
+                .bytes()
+                .all(|byte| byte.is_ascii_digit() || (b'a'..=b'f').contains(&byte))
+        {
+            return Err(Error::Image);
+        }
+        let path = self.blobs.as_ref().ok_or(Error::Image)?.join(hash);
+        let metadata = path.symlink_metadata().map_err(|_| Error::Image)?;
+        if !metadata.is_file() || metadata.len() == 0 || metadata.len() > MAX_IMAGE_BYTES {
+            return Err(Error::Image);
+        }
+        let mut bytes = Vec::new();
+        std::fs::File::open(path)
+            .map_err(|_| Error::Image)?
+            .take(MAX_IMAGE_BYTES + 1)
+            .read_to_end(&mut bytes)
+            .map_err(|_| Error::Image)?;
+        if bytes.len() as u64 > MAX_IMAGE_BYTES || format!("{:x}", Sha256::digest(&bytes)) != hash {
+            return Err(Error::Image);
+        }
+        let mut resolved = Cow::Borrowed(image);
+        resolved.to_mut()["data"] = json!(base64::engine::general_purpose::STANDARD.encode(bytes));
+        self.images.render(&resolved).map_err(|_| Error::Image)
     }
 
     pub(super) fn begin(&mut self, turn: String) {
@@ -64,15 +124,16 @@ impl Stream {
         self.last_text = None;
     }
 
-    fn anchor(&self, message: &Value) -> Result<String, AgentSessionError> {
-        let role = super::config::text(message, "role")?;
+    fn anchor(&self, message: &Value) -> Result<String, Error> {
+        let role =
+            super::config::text(message, "role").map_err(|_| Error::Field("message.role"))?;
         let timestamp = message["timestamp"]
             .as_i64()
-            .ok_or(AgentSessionError::Failed)?;
+            .ok_or(Error::Field("message.timestamp"))?;
         Ok(format!("native:omp:{}:{role}:{timestamp}", self.session))
     }
 
-    fn start(&mut self, message: &Value) -> Result<String, AgentSessionError> {
+    fn start(&mut self, message: &Value) -> Result<String, Error> {
         let anchor = self.anchor(message)?;
         let count = self.counts.entry(anchor.clone()).or_default();
         let key = format!("{anchor}:{}", *count);
@@ -81,7 +142,7 @@ impl Stream {
         Ok(key)
     }
 
-    fn message_key(&mut self, message: &Value) -> Result<String, AgentSessionError> {
+    fn message_key(&mut self, message: &Value) -> Result<String, Error> {
         let anchor = self.anchor(message)?;
         if let Some((current, key)) = &self.current
             && current == &anchor
@@ -91,11 +152,11 @@ impl Stream {
         self.start(message)
     }
 
-    fn item(key: String, message: &Value, item: Value) -> Result<NativeItem, AgentSessionError> {
+    fn item(key: String, message: &Value, item: Value) -> Result<NativeItem, Error> {
         let timestamp = message["timestamp"]
             .as_i64()
             .and_then(|time| Utc.timestamp_millis_opt(time).single())
-            .ok_or(AgentSessionError::Failed)?
+            .ok_or(Error::Field("message.timestamp"))?
             .to_rfc3339();
         Ok(NativeItem {
             key,
@@ -105,30 +166,41 @@ impl Stream {
         })
     }
 
-    pub(super) fn text(&self, content: &Value) -> Result<String, AgentSessionError> {
+    pub(super) fn text(&self, content: &Value) -> Result<String, Error> {
         if let Some(text) = content.as_str() {
             return Ok(preview(text));
         }
         let mut parts = Vec::new();
-        for block in content.as_array().ok_or(AgentSessionError::Failed)? {
+        for block in content.as_array().ok_or(Error::Field("content"))? {
             match block["type"].as_str() {
                 Some("text") => parts.push(preview(
-                    block["text"].as_str().ok_or(AgentSessionError::Failed)?,
+                    block["text"].as_str().ok_or(Error::Field("content.text"))?,
                 )),
-                Some("image") => parts.push(self.images.render(block)?),
+                Some("image") => parts.push(self.image(block)?),
                 _ => {}
             }
         }
         Ok(preview(&parts.join("\n")))
     }
 
-    pub(super) fn message(&mut self, message: &Value) -> Result<(), AgentSessionError> {
-        let role = message["role"].as_str().ok_or(AgentSessionError::Failed)?;
-        if !matches!(role, "user" | "assistant" | "toolResult") {
+    pub(super) fn message(&mut self, message: &Value) -> Result<(), Error> {
+        let role = message["role"]
+            .as_str()
+            .ok_or(Error::Field("message.role"))?;
+        if !matches!(role, "user" | "assistant" | "toolResult" | "custom") {
+            return Ok(());
+        }
+        if role == "custom" && message["display"] == false {
             return Ok(());
         }
         let key = self.message_key(message)?;
-        if role == "user" {
+        if role == "custom" {
+            let item = json!({"type":"assistant_message","messageId":key,
+                "text":self.text(&message["content"])?,
+                "metadata":{"nativeRole":"custom","customType":message["customType"]}});
+            self.events
+                .push_back(AgentTurnEvent::Timeline(Self::item(key, message, item)?));
+        } else if role == "user" {
             let mut item = json!({"type":"user_message","messageId":key,"text":self.text(&message["content"])?});
             if let Some(Some(id)) = self.pending_inputs.pop_front() {
                 self.input_ids.insert(key.clone(), json!(id));
@@ -141,7 +213,7 @@ impl Stream {
         } else if role == "assistant" {
             for (index, block) in message["content"]
                 .as_array()
-                .ok_or(AgentSessionError::Failed)?
+                .ok_or(Error::Field("message.content"))?
                 .iter()
                 .enumerate()
             {
@@ -150,7 +222,7 @@ impl Stream {
                         let thinking = block["type"] == "thinking";
                         let text = block[if thinking { "thinking" } else { "text" }]
                             .as_str()
-                            .ok_or(AgentSessionError::Failed)?;
+                            .ok_or(Error::Field("message.content.text/thinking"))?;
                         if text.is_empty() {
                             continue;
                         }
@@ -163,15 +235,18 @@ impl Stream {
                             .push_back(AgentTurnEvent::Timeline(Self::item(key, message, item)?));
                     }
                     Some("toolCall") => {
-                        let id = super::config::text(block, "id")?.to_owned();
+                        let id = super::config::text(block, "id")
+                            .map_err(|_| Error::Field("toolCall.id"))?
+                            .to_owned();
                         if self.tools.len() >= 4096 {
-                            return Err(AgentSessionError::Failed);
+                            return Err(Error::ToolLimit);
                         }
                         self.tools.insert(id, block.clone());
                     }
                     Some("image") => {
                         let key = format!("{key}:{index}");
-                        let item = json!({"type":"assistant_message","messageId":key,"text":self.images.render(block)?});
+                        let image = self.image(block)?;
+                        let item = json!({"type":"assistant_message","messageId":key,"text":image});
                         self.events
                             .push_back(AgentTurnEvent::Timeline(Self::item(key, message, item)?));
                     }
@@ -184,8 +259,9 @@ impl Stream {
                 self.add_usage(usage)?;
             }
         } else {
-            let id = super::config::text(message, "toolCallId")?;
-            let tool = self.tools.remove(id).ok_or(AgentSessionError::Failed)?;
+            let id = super::config::text(message, "toolCallId")
+                .map_err(|_| Error::Field("message.toolCallId"))?;
+            let tool = self.tools.remove(id).ok_or(Error::UnknownTool)?;
             let item = tool_item(
                 &tool,
                 Some(self.text(&message["content"])?),
@@ -202,12 +278,16 @@ impl Stream {
         Ok(())
     }
 
-    pub(super) fn consume(&mut self, event: &Value) -> Result<(), AgentSessionError> {
+    pub(super) fn consume(&mut self, event: &Value) -> Result<(), Error> {
         match event["type"].as_str() {
+            Some("command_output") => self.notice(event, "text")?,
+            Some("extension_ui_request") if event["method"] == "notify" => {
+                self.notice(event, "message")?;
+            }
             Some("message_start")
                 if matches!(
                     event["message"]["role"].as_str(),
-                    Some("user" | "assistant" | "toolResult")
+                    Some("user" | "assistant" | "toolResult" | "custom")
                 ) =>
             {
                 self.start(&event["message"])?;
@@ -223,16 +303,22 @@ impl Stream {
                     let base = self.message_key(message)?;
                     let index = update["contentIndex"]
                         .as_u64()
-                        .ok_or(AgentSessionError::Failed)?;
+                        .ok_or(Error::Field("assistantMessageEvent.contentIndex"))?;
                     let key = format!("{base}:{index}");
                     let item = json!({"type":if update["type"]=="thinking_delta"{"reasoning"}else{"assistant_message"},
-                        "messageId":key,"text":preview(update["delta"].as_str().ok_or(AgentSessionError::Failed)?)});
+                        "messageId":key,"text":preview(update["delta"].as_str().ok_or(Error::Field("assistantMessageEvent.delta"))?)});
                     let entry = Self::item(key, message, item)?;
                     self.progress(entry);
                 }
             }
             Some("tool_execution_start" | "tool_execution_update") => {
-                let id = super::config::text(event, "toolCallId")?;
+                let id = super::config::text(event, "toolCallId")
+                    .map_err(|_| Error::Field("toolCallId"))?;
+                // OMP keeps reporting detached job output after its toolResult ("Backgrounded").
+                // That result already finalized the timeline item; it cannot accept more progress.
+                if event["type"] == "tool_execution_update" && !self.tools.contains_key(id) {
+                    return Ok(());
+                }
                 let tool = self.tools.get(id).cloned().unwrap_or_else(
                     || json!({"id":id,"name":event["toolName"],"arguments":event["args"]}),
                 );
@@ -255,6 +341,29 @@ impl Stream {
         Ok(())
     }
 
+    fn notice(&mut self, event: &Value, field: &'static str) -> Result<(), Error> {
+        let text = event[field].as_str().ok_or(Error::Field(field))?;
+        if text.is_empty() {
+            return Ok(());
+        }
+        let text = preview(text);
+        self.last_text = Some(text.clone());
+        let key = format!(
+            "native:omp:{}:notice:{}",
+            self.session,
+            uuid::Uuid::new_v4()
+        );
+        let item = json!({"type":"assistant_message","messageId":key,"text":text,
+            "metadata":{"nativeType":event["type"],"notificationType":event["notifyType"],"transient":true}});
+        self.events.push_back(AgentTurnEvent::Timeline(NativeItem {
+            key,
+            turn_id: self.turn.clone(),
+            timestamp: Utc::now().to_rfc3339(),
+            item,
+        }));
+        Ok(())
+    }
+
     fn progress(&mut self, entry: NativeItem) {
         self.observation += 1;
         self.events.push_back(AgentTurnEvent::Progress {
@@ -268,9 +377,11 @@ impl Stream {
         });
     }
 
-    fn add_usage(&mut self, usage: &Value) -> Result<(), AgentSessionError> {
-        let input = usage["input"].as_u64().ok_or(AgentSessionError::Failed)?;
-        let output = usage["output"].as_u64().ok_or(AgentSessionError::Failed)?;
+    fn add_usage(&mut self, usage: &Value) -> Result<(), Error> {
+        let input = usage["input"].as_u64().ok_or(Error::Field("usage.input"))?;
+        let output = usage["output"]
+            .as_u64()
+            .ok_or(Error::Field("usage.output"))?;
         let cached = usage["cacheRead"].as_u64().unwrap_or_default();
         self.usage.input_tokens = Some(
             self.usage
@@ -295,7 +406,7 @@ impl Stream {
             self.usage.total_cost_usd = Some(self.usage.total_cost_usd.unwrap_or_default() + cost);
         }
         if !self.usage.is_valid() {
-            return Err(AgentSessionError::Failed);
+            return Err(Error::Usage);
         }
         self.events
             .push_back(AgentTurnEvent::Usage(self.usage.clone()));
