@@ -60,24 +60,47 @@ async fn reads_all_pages_and_only_falls_back_on_method_not_found() {
         Err(AgentSessionError::Rejected)
     );
     std::fs::remove_file(error_path).unwrap();
-    let pages = json!({"first":{"data":[{"type":"realtime","position":1,"item":{"type":"transcriptSegment","id":"u","realtimeSessionId":"call","role":"user","text":"persisted"}}],"nextCursor":"second","activeRealtimeSessionAtPageStart":null},
-        "second":{"data":[{"type":"realtime","position":2,"item":{"type":"transcriptSegment","id":"a","realtimeSessionId":"call","role":"assistant","text":"reply"}}],"nextCursor":null,"activeRealtimeSessionAtPageStart":"call"}});
+    let pages = json!({
+        "first": {
+            "data": [
+                {"type":"realtime","position":3,"item":{"type":"transcriptSegment",
+                    "id":"a","realtimeSessionId":"call","role":"assistant","text":"reply"}},
+                {"type":"realtime","position":4,"item":{"type":"realtimeSessionClosed",
+                    "id":"end","realtimeSessionId":"call","outcome":"ended"}}
+            ],
+            "nextCursor":"second","activeRealtimeSessionAtPageStart":"call"
+        },
+        "second": {
+            "data": [
+                {"type":"realtime","position":1,"item":{"type":"realtimeSessionStarted",
+                    "id":"start","realtimeSessionId":"call"}},
+                {"type":"realtime","position":2,"item":{"type":"transcriptSegment",
+                    "id":"u","realtimeSessionId":"call","role":"user","text":"persisted"}}
+            ],
+            "nextCursor":null,"activeRealtimeSessionAtPageStart":null
+        }
+    });
     std::fs::write(fixture.cwd.join("timeline-pages.json"), pages.to_string()).unwrap();
     let entries = read(&mut transport, &thread, &images)
         .await
         .unwrap()
         .unwrap();
-    assert_eq!(entries.len(), 2);
-    assert_eq!(entries[1].item["text"], "reply");
-    let mut malformed = pages.clone();
-    malformed["second"]["data"][0]["position"] = json!(1);
-    std::fs::write(
-        fixture.cwd.join("timeline-pages.json"),
-        malformed.to_string(),
-    )
-    .unwrap();
-    assert!(read(&mut transport, &thread, &images).await.is_err());
-    malformed = pages;
+    assert_eq!(entries.len(), 4);
+    assert_eq!(entries[0].item["status"], "started");
+    assert_eq!(entries[1].item["text"], "persisted");
+    assert_eq!(entries[2].item["text"], "reply");
+    assert_eq!(entries[3].item["status"], "ended");
+    for (page, index, position) in [("first", 1, 3), ("first", 0, 5), ("second", 1, 3)] {
+        let mut malformed = pages.clone();
+        malformed[page]["data"][index]["position"] = json!(position);
+        std::fs::write(
+            fixture.cwd.join("timeline-pages.json"),
+            malformed.to_string(),
+        )
+        .unwrap();
+        assert!(read(&mut transport, &thread, &images).await.is_err());
+    }
+    let mut malformed = pages;
     malformed["second"]["nextCursor"] = json!("second");
     std::fs::write(
         fixture.cwd.join("timeline-pages.json"),

@@ -1,6 +1,56 @@
 use super::*;
 
 #[tokio::test]
+async fn queued_admission_loads_canonical_history_from_newest_to_oldest_pages() {
+    let fixture = Fixture::new();
+    let (execution, _) = worker(&fixture);
+    let created = create(&execution, &fixture).await;
+    let id = created["agentId"].as_str().unwrap();
+    execution.shutdown().await.unwrap();
+    let pages = json!({
+        "first": {
+            "data": [{"type":"item","position":2,"turnId":"previous-turn",
+                "item":{"type":"agentMessage","id":"newer","text":"Newer reply"}}],
+            "nextCursor":"older"
+        },
+        "older": {
+            "data": [{"type":"item","position":1,"turnId":"previous-turn",
+                "item":{"type":"agentMessage","id":"older","text":"Older reply"}}],
+            "nextCursor":null
+        }
+    });
+    std::fs::write(fixture.cwd.join("timeline-pages.json"), pages.to_string()).unwrap();
+    let (restarted, registry) = worker(&fixture);
+    let sent = restarted
+        .execute(
+            "agent.message.send.request",
+            json!({"agentId":id,"text":"after history","messageId":"after-history"}),
+        )
+        .await
+        .unwrap();
+    let finished = restarted
+        .execute(
+            "agent.finish.wait.request",
+            json!({"agentId":id,"timeoutMs":5000}),
+        )
+        .await
+        .unwrap();
+    let error = registry.get(id).unwrap().unwrap().last_error;
+    restarted.shutdown().await.unwrap();
+    assert_eq!(sent["accepted"], true, "{error:?}");
+    assert_eq!(finished["lastMessage"], "Echo: after history", "{error:?}");
+    assert_eq!(error, None);
+    assert_eq!(
+        fixture
+            .requests()
+            .iter()
+            .filter(|request| request["method"] == "turn/start")
+            .count(),
+        1
+    );
+}
+
+#[tokio::test]
 async fn interrupt_delivery_drains_new_work_and_retries_are_durable_and_payload_bound() {
     let fixture = Fixture::new();
     let (execution, _) = worker(&fixture);
