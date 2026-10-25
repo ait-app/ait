@@ -136,7 +136,7 @@ fn machine_for(data: &Path) -> Machine {
         server_id: lease.server_id,
         display_name: "build-linux".into(),
         platform: "linux".into(),
-        app_version: env!("CARGO_PKG_VERSION").into(),
+        app_version: model::BUILD_VERSION.into(),
     }
 }
 

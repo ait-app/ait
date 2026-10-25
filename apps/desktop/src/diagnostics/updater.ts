@@ -1,3 +1,4 @@
+import { displayAppVersion } from "../app-version.js";
 import { execFileSync } from "node:child_process";
 import { readFileSync, statSync } from "node:fs";
 import path from "node:path";
@@ -73,7 +74,7 @@ export function collectDesktopUpdaterDiagnostics(
 export function getDesktopUpdaterDiagnostics(): DesktopUpdaterDiagnostics {
   return collectDesktopUpdaterDiagnostics({
     platform: process.platform,
-    currentVersion: app.getVersion(),
+    currentVersion: displayAppVersion(),
     cachePath: path.join(app.getPath("home"), "Library", "Caches"),
   });
 }

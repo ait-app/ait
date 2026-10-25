@@ -49,7 +49,7 @@ fn help_and_missing_credentials_do_not_create_state() {
     assert!(version.status.success());
     assert_eq!(
         String::from_utf8_lossy(&version.stdout).trim(),
-        concat!("daemon ", env!("CARGO_PKG_VERSION"))
+        format!("daemon {}", model::BUILD_VERSION)
     );
     let failure = Command::new(env!("CARGO_BIN_EXE_daemon"))
         .args(["--data-dir", state.to_str().unwrap()])

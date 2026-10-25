@@ -1,3 +1,4 @@
+extends: ./scripts/build-version.cjs
 npmRebuild: false
 appId: dev.ait.desktop
 productName: Ait

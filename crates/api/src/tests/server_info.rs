@@ -13,7 +13,7 @@ async fn software_version_is_present_in_http_handshake_rpc_and_lifecycle_events(
         .json()
         .await
         .unwrap();
-    assert_eq!(http_info["version"], env!("CARGO_PKG_VERSION"));
+    assert_eq!(http_info["version"], model::BUILD_VERSION);
 
     let mut socket = fixture.socket().await;
     let mut offer = hello();

@@ -7,7 +7,7 @@ fn server_info_preserves_software_and_protocol_versions() {
     let serialized = serde_json::to_value(&info).unwrap();
     let restored: ServerInfo = serde_json::from_value(serialized.clone()).unwrap();
 
-    assert_eq!(serialized["version"], env!("CARGO_PKG_VERSION"));
+    assert_eq!(serialized["version"], crate::BUILD_VERSION);
     assert_eq!(restored, info);
     assert_eq!(restored.protocol, VERSION);
 }

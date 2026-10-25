@@ -1,3 +1,4 @@
+import { displayAppVersion } from "../app-version.js";
 import { app, BrowserWindow, safeStorage, shell, type IpcMainInvokeEvent } from "electron";
 import { randomUUID } from "node:crypto";
 import { WebSocket } from "ws";
@@ -97,7 +98,7 @@ export function createAccountIpc(
   };
   const manager = new AccountSessionManager({
     installationId,
-    appVersion: app.getVersion(),
+    appVersion: displayAppVersion(),
     publishRuntime: false,
     browserLogin: desktopBrowserLogin((url) => shell.openExternal(url)),
     runtime: () => getRuntime().status(),

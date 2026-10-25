@@ -15,6 +15,11 @@ function toVersionOrNull(value: unknown): string | null {
 }
 
 export function resolveAppVersion(): string | null {
+  const buildVersion =
+    toVersionOrNull(process.env.EXPO_PUBLIC_AIT_BUILD_VERSION) ??
+    toVersionOrNull(Constants.expoConfig?.extra?.buildVersion);
+  if (buildVersion) return buildVersion;
+
   const packageVersion = toVersionOrNull(appPackage?.version);
   if (packageVersion) {
     return packageVersion;
