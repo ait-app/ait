@@ -42,11 +42,13 @@ pub(super) async fn read(
         if bytes > MAX_BYTES || entries.len() + data.len() > MAX_ENTRIES {
             return Err(AgentSessionError::Failed);
         }
-        for entry in data {
+        // Pages arrive newest first, but rows within each page are chronological.
+        // Accumulate in reverse rollout order so boundaries share the same position check.
+        for entry in data.iter().rev() {
             let next = entry["position"]
                 .as_u64()
                 .ok_or(AgentSessionError::Failed)?;
-            if position.is_some_and(|position| next <= position) {
+            if position.is_some_and(|position| next >= position) {
                 return Err(AgentSessionError::Failed);
             }
             position = Some(next);
@@ -61,6 +63,7 @@ pub(super) async fn read(
             return Err(AgentSessionError::Failed);
         }
     }
+    entries.reverse();
     project(&entries, thread, images).map(Some)
 }
 
