@@ -1,6 +1,7 @@
 const fs = require("node:fs");
 const path = require("node:path");
 const pkg = require("./package.json");
+const { sourceVersion } = require("../../scripts/source-version.cjs");
 const easProjectIdentity = require("./eas.json").build.ait.env;
 const { colors: brandColors } = require("../../assets/brand/ait-mark.json");
 const withAndroidAsyncStorageSize = require("./plugins/with-android-async-storage-size");
@@ -207,6 +208,10 @@ export default {
       autolinkingModuleResolution: true,
     },
     extra: {
+      buildVersion:
+        process.env.AIT_WEB_PLATFORM === "electron" || process.env.AIT_BUILD_VERSION
+          ? sourceVersion(pkg.version, __dirname)
+          : undefined,
       changelog: fs.readFileSync(path.resolve(__dirname, "../../CHANGELOG.md"), "utf8"),
       fdroidBuild: isFdroidBuild,
       profileBuild: isProfileBuild,

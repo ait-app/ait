@@ -185,7 +185,7 @@ fn initialize(params: &Value) -> Result<Value, (i32, &'static str)> {
     Ok(json!({
         "protocolVersion":if VERSIONS.contains(&version) { version } else { "2025-11-25" },
         "capabilities":{"tools":{}},
-        "serverInfo":{"name":"ait-daemon","version":env!("CARGO_PKG_VERSION")},
+        "serverInfo":{"name":"ait-daemon","version":model::BUILD_VERSION},
         "instructions":"Use list_providers/list_models to select a provider/model. Create an isolated workspace when needed. Agent creation and prompts return after admission; poll get_agent_status/get_agent_activity or use wait_for_agent. Pass X-Ait-Agent-Id for caller workspace and parentage inheritance."
     }))
 }

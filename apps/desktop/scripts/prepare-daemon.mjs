@@ -1,3 +1,4 @@
+import { sourceVersion } from "../../../scripts/source-version.cjs";
 import { chmodSync, copyFileSync, mkdirSync, readFileSync, rmSync } from "node:fs";
 import { fileURLToPath, pathToFileURL } from "node:url";
 import path from "node:path";
@@ -42,7 +43,8 @@ function main() {
       { cwd: root, stdio: "inherit" },
     );
   }
-  const { version } = JSON.parse(readFileSync(path.join(desktop, "package.json"), "utf8"));
+  const pkg = JSON.parse(readFileSync(path.join(desktop, "package.json"), "utf8"));
+  const version = sourceVersion(pkg.version, root);
   const staged = stageDaemon({
     binary: path.resolve(binary),
     directory: path.join(desktop, "release-resources/daemon"),

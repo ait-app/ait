@@ -1,3 +1,4 @@
+import { displayAppVersion } from "../app-version.js";
 import { app, ipcMain, powerMonitor } from "electron";
 import { readFileSync } from "node:fs";
 import path from "node:path";
@@ -151,7 +152,7 @@ export async function retainDesktopDaemonForNextSession(): Promise<boolean> {
 
 function resolveDesktopAppVersion(): string {
   if (app.isPackaged) {
-    return app.getVersion();
+    return displayAppVersion();
   }
 
   try {

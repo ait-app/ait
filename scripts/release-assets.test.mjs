@@ -36,7 +36,12 @@ import {
   verifyReleaseAssets,
 } from "./release-assets.mjs";
 import { releaseChannel } from "./release-version.mjs";
-import { nightlyBuildLabel, nightlyBuilderArgs } from "./nightly-build.mjs";
+import {
+  nightlyBuildLabel,
+  nightlyBuilderArgs,
+  nightlyDisplayVersion,
+  nightlyPackagedVersion,
+} from "./nightly-build.mjs";
 
 async function builderPackager(platform, version, buildLabel) {
   const config = parse(
@@ -45,11 +50,13 @@ async function builderPackager(platform, version, buildLabel) {
   if (buildLabel) {
     for (const arg of nightlyBuilderArgs(buildLabel)) {
       const [, key, value] = arg.match(/^-c\.([^=]+)=(.*)$/);
-      const [section, property] = key.split(".");
-      config[section][property] = value;
+      const parts = key.split(".");
+      const property = parts.pop();
+      const section = parts.reduce((current, name) => (current[name] ??= {}), config);
+      section[property] = value;
     }
   }
-  const info = { config, metadata: { name: "ait", version } };
+  const info = { config, metadata: { name: "ait", version, ...config.extraMetadata } };
   const appInfo = new AppInfo(info);
   info.appInfo = appInfo;
   return {
@@ -95,7 +102,10 @@ async function fixture(t, platform, version = "0.0.7", buildLabel) {
       size: contents.length,
     });
   }
-  await writeFile(path.join(source, names.at(-1)), stringify({ version, files }));
+  await writeFile(
+    path.join(source, names.at(-1)),
+    stringify({ version: buildLabel ? nightlyPackagedVersion(buildLabel) : version, files }),
+  );
   await writeFile(path.join(source, "old-server.exe"), "should never be collected");
   return { platform, version, source, destination, buildLabel };
 }
@@ -232,10 +242,12 @@ test("macOS server feed distinguishes unpublished channels from service failures
   }
 });
 
-test("nightly identity uses eight hash characters and a deterministic UTC commit date", () => {
+test("nightly identity uses eight hash characters and a UTC build date", () => {
   const sha = "abcdef01".repeat(5);
   const timestamp = Date.parse("2026-10-08T00:15:00+02:00") / 1000;
   assert.equal(nightlyBuildLabel(sha, timestamp), "abcdef01-2026-10-07");
+  assert.equal(nightlyDisplayVersion("abcdef01-2026-10-07"), "2026-10-07-abcdef01");
+  assert.equal(nightlyPackagedVersion("01234567-2026-01-02"), "2026.1.2-g01234567");
   assert.throws(() => nightlyBuildLabel("bad", timestamp));
   assert.throws(() => nightlyBuildLabel(sha, NaN));
   assert.throws(() => nightlyBuilderArgs("../../invalid"));
@@ -265,8 +277,8 @@ test("nightly builder names and update URLs use the build label on both platform
       await getPublishConfigs(packager, null, arch, true),
     );
     assert.equal(tasks.length, 1);
-    assert.equal(path.basename(tasks[0].file), `${releaseChannel(version)}-${platform}.yml`);
-    assert.equal(tasks[0].info.version, version); // Required by the updater's SemVer parser.
+    assert.equal(path.basename(tasks[0].file), `latest-${platform}.yml`);
+    assert.equal(tasks[0].info.version, nightlyPackagedVersion(buildLabel));
     assert.ok(tasks[0].info.files.every((file) => file.url.includes(buildLabel)));
     await writeFile(path.join(input.source, names[0] + ".blockmap"), "block map");
     await collectReleaseAssets(input);
@@ -283,13 +295,22 @@ test("nightly builder names and update URLs use the build label on both platform
   await addDaemonAssets(directory, version, buildLabel);
   const info = {
     version: buildLabel,
-    packagedVersion: version,
+    packagedVersion: nightlyPackagedVersion(buildLabel),
     releaseTag: "nightly",
     sourceCommit: "abcdef01".repeat(5),
     workflowCommit: "abcdef01".repeat(5),
   };
   await writeFile(path.join(directory, "BUILD-INFO.json"), JSON.stringify(info));
   await verifyReleaseAssets({ version, buildLabel, directory });
+  await writeFile(
+    path.join(directory, "BUILD-INFO.json"),
+    JSON.stringify({ ...info, packagedVersion: version }),
+  );
+  await assert.rejects(
+    verifyReleaseAssets({ version, buildLabel, directory }),
+    /Packaged version differs from release/,
+  );
+  await writeFile(path.join(directory, "BUILD-INFO.json"), JSON.stringify(info));
   const cli = spawnSync(
     process.execPath,
     [
@@ -535,10 +556,20 @@ test("standalone daemon archives package ait-daemon and the license per target",
     { encoding: "utf8" },
   );
   assert.notEqual(invalid.status, 0, "nightly daemons need a valid build label");
-  // Nightly archives are named by build label but still check the packaged SemVer.
+  // Nightly archives require the daemon to report the build identity.
+  const nightlyBinary = (await fakeDaemon(t, "daemon 2026-10-08-abcdef01")).binary;
   const nightly = spawnSync(
     process.execPath,
-    [script, "daemon", "mac", "0.0.7", binary, destination, "--nightly", "abcdef01-2026-10-08"],
+    [
+      script,
+      "daemon",
+      "mac",
+      "0.0.7",
+      nightlyBinary,
+      destination,
+      "--nightly",
+      "abcdef01-2026-10-08",
+    ],
     { encoding: "utf8" },
   );
   assert.equal(nightly.status, 0, nightly.stderr);
@@ -631,6 +662,14 @@ test("desktop release verifies published desktop assets and any retained Android
   await copyFile(
     new URL("./release-version.mjs", import.meta.url),
     path.join(tooling, "release-version.mjs"),
+  );
+  await copyFile(
+    new URL("./nightly-build.mjs", import.meta.url),
+    path.join(tooling, "nightly-build.mjs"),
+  );
+  await copyFile(
+    new URL("./source-version.cjs", import.meta.url),
+    path.join(tooling, "source-version.cjs"),
   );
   const workflow = parse(
     await readFile(new URL("../.github/workflows/release.yml", import.meta.url), "utf8"),

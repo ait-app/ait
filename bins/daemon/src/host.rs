@@ -109,7 +109,7 @@ impl Server {
                 if state.machine.server_id != instance.server_id {
                     anyhow::bail!("device state belongs to another installation");
                 }
-                env!("CARGO_PKG_VERSION").clone_into(&mut state.machine.app_version);
+                model::BUILD_VERSION.clone_into(&mut state.machine.app_version);
                 crate::device::PLATFORM.clone_into(&mut state.machine.platform);
                 Some((store, state))
             } else {
@@ -595,7 +595,7 @@ fn compose_daemon(
     let daemon = Daemon::new(
         DaemonRuntime {
             server_id: server_id.to_owned(),
-            version: Some(env!("CARGO_PKG_VERSION").to_owned()),
+            version: Some(model::BUILD_VERSION.to_owned()),
             pid: std::process::id(),
             executable: std::env::current_exe()
                 .context("resolve server executable")?

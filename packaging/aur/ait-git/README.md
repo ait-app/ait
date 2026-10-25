@@ -20,7 +20,7 @@ dependencies. Rustup users automatically use upstream's `rust-toolchain.toml`;
 users of Arch's `rust` package need a sufficiently recent compiler. Use the
 system Node.js or another current version that meets the build dependencies.
 
-The package version is `<upstream version>.r<commit count>.g<commit hash>`.
+The package version is `YYYYMMDD.g<short hash>`; the app and daemon display `git-YYYY-MM-DD-<short hash>`.
 Run `makepkg -si` again, or enable development-package updates in your AUR
 helper, to fetch and build later commits. AUR itself stores the build recipe;
 each installation compiles on the user's machine.

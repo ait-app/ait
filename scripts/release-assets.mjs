@@ -16,10 +16,11 @@ import {
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { pathToFileURL } from "node:url";
+import { nightlyDisplayVersion, nightlyPackagedVersion } from "./nightly-build.mjs";
 import { releaseChannel } from "./release-version.mjs";
 
 export function releaseAssetNames(platform, version, buildLabel) {
-  const channel = releaseChannel(version);
+  const channel = buildLabel ? "latest" : releaseChannel(version);
   if (buildLabel !== undefined)
     assert.match(buildLabel, /^[0-9a-f]{8}-\d{4}-\d{2}-\d{2}$/, "Invalid nightly build label");
   const label = buildLabel ?? version;
@@ -72,7 +73,11 @@ export async function packDaemonAsset({
   const reported = execFileSync(binary, ["--version"], {
     encoding: "utf8",
   }).trim();
-  assert.equal(reported.split(/\s+/).at(-1), version, `Daemon binary reports ${reported}`);
+  assert.equal(
+    reported.split(/\s+/).at(-1),
+    buildLabel ? nightlyDisplayVersion(buildLabel) : version,
+    `Daemon binary reports ${reported}`,
+  );
   const staging = await mkdtemp(path.join(tmpdir(), "ait-daemon-"));
   try {
     await copyFile(binary, path.join(staging, daemonExecutable));
@@ -104,7 +109,11 @@ export async function collectReleaseAssets({ platform, version, source, destinat
     assert((await stat(path.join(source, name))).size > 0, `Empty release asset: ${name}`);
   const { parse } = await import("yaml");
   const metadata = parse(await readFile(path.join(source, names.at(-1)), "utf8"));
-  assert.equal(metadata.version, version, "Updater metadata version differs from release");
+  assert.equal(
+    metadata.version,
+    buildLabel ? nightlyPackagedVersion(buildLabel) : version,
+    "Updater metadata version differs from release",
+  );
   assert(
     Array.isArray(metadata.files) && metadata.files.length > 0,
     "Updater file list is missing",
@@ -195,7 +204,11 @@ export async function verifyReleaseAssets({
       "Build information tag differs from release",
     );
     if (buildLabel)
-      assert.equal(info.packagedVersion, version, "Packaged version differs from release");
+      assert.equal(
+        info.packagedVersion,
+        nightlyPackagedVersion(buildLabel),
+        "Packaged version differs from release",
+      );
     assert.match(info.sourceCommit, /^[0-9a-f]{40}$/, "Build source must be a full commit SHA");
     assert.match(
       info.workflowCommit,

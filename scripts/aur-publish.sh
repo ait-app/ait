@@ -102,7 +102,7 @@ if [ "$stage" = build ]; then
 fi
 
 if [ "$pkg" = ait-git ]; then
-  # Only fetch the source and run pkgver(), which reads package.json; prepare() runs npm ci.
+  # Only fetch the source and run pkgver(), which reads the source date and hash; prepare() runs npm ci.
   (
     cd "$candidate"
     BUILDDIR="$work/build" SRCDEST="$work/sources" \

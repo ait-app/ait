@@ -34,6 +34,8 @@ describe("desktop-updates helpers", () => {
 
     expect(formatVersionWithPrefix("0.2.0")).toBe("v0.2.0");
     expect(formatVersionWithPrefix("v0.2.0")).toBe("v0.2.0");
+    expect(formatVersionWithPrefix("2026-10-25-abcdef01")).toBe("2026-10-25-abcdef01");
+    expect(formatVersionWithPrefix("git-2026-10-25-abcdef01")).toBe("git-2026-10-25-abcdef01");
     expect(formatVersionWithPrefix(null)).toBe("\u2014");
   });
 

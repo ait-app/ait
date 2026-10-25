@@ -1,7 +1,6 @@
 # Maintainer: Ait contributors <https://github.com/ait-app/ait>
 # Local working-tree build. Run makepkg -si from this repository's root.
 pkgname=ait
-pkgver=0.1.17
 _ait_version=0.1.17
 pkgrel=1
 pkgdesc='Local-first multi-agent manager, built from the local source tree'
@@ -28,6 +27,7 @@ options=('!strip' '!debug' '!lto')
 # Separate checkouts have separate build trees. Never use pkgver(): makepkg writes
 # the resulting version back into the original PKGBUILD.
 _ait_checkout="$(dirname "$(realpath "${BASH_SOURCE[0]}")")"
+pkgver="$(git -C "$_ait_checkout" show -s --format=%cs HEAD | tr -d -).g$(git -C "$_ait_checkout" rev-parse --short=8 HEAD)"
 _ait_checkout_key="$(printf '%s' "$_ait_checkout" | sha256sum)"
 _ait_cache="$(realpath -m "${AIT_MAKEPKG_DIR:-${XDG_CACHE_HOME:-$HOME/.cache}/ait/makepkg/${_ait_checkout_key:0:16}}")"
 case "$_ait_cache/" in
@@ -62,6 +62,8 @@ build() {
   local -x TMPDIR="$_ait_cache/tmp"
   local -x CARGO_TARGET_DIR="$_ait_cache/cargo-target"
   local -x AIT_SERVER_BIN="$CARGO_TARGET_DIR/release/daemon"
+  local -x AIT_BUILD_VERSION="git-$(git -C "$_ait_checkout" show -s --format=%cs HEAD)-$(git -C "$_ait_checkout" rev-parse --short=8 HEAD)"
+  local -x EXPO_PUBLIC_AIT_BUILD_VERSION="$AIT_BUILD_VERSION"
   local -x CI=1 EXPO_NO_TELEMETRY=1
   mkdir -p "$TMPDIR"
 

@@ -15,7 +15,7 @@ mod local_token;
 
 /// Daemon startup arguments; CLI values override environment and TOML settings.
 #[derive(Debug, Parser)]
-#[command(name = "daemon", version, about = "Ait local daemon")]
+#[command(name = "daemon", version = model::BUILD_VERSION, about = "Ait local daemon")]
 pub(crate) struct Cli {
     #[command(subcommand)]
     pub command: Option<Command>,

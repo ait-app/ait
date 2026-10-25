@@ -160,7 +160,7 @@ fn runtime_info(
     let capabilities = registered_capabilities();
     Arc::new(Runtime::new(ServerInfo {
         server_id,
-        version: Some(env!("CARGO_PKG_VERSION").to_owned()),
+        version: Some(model::BUILD_VERSION.to_owned()),
         instance_id,
         listen: address.to_string(),
         lifecycle: Lifecycle::Ready,
