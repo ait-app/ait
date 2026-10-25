@@ -1,53 +1,56 @@
-# ADR-190：OMP 必须使用 ACP 并承接原有 RPC 功能
+# ADR-190：Ait ACP 桥接官方 OMP 与通用插件接口
 
 - 状态：Accepted
 - 日期：2026-10-25
 
 ## 背景
 
-OMP 原生 RPC 使用 `session_settled` 区分暂时 yield 和整轮空闲。18.12.6 的原生 ACP
-缺少等价的后台结算、特性配置和子 Agent 观测，且默认不加载本机 MCP。
-将 ACP 作为可选协议、保留 RPC 默认值不能满足迁移要求。
-本决策取代 [ADR-180](adr-180-omp-native-rpc-provider.md) 的执行协议部分；
-`omp` 仍是独立 Provider，权限、工具、认证、扩展和历史归 OMP 原生实现所有。
+ACP 是固定入口，原有 RPC 功能必须保留，适配责任归 Ait。不能要求 OMP 修改源码、
+安装专用构建或宣告 Ait 自定义扩展。官方 OMP 18.12.6 的 ACP 与 RPC 是独立启动模式，
+另一个 RPC 进程无法观察 ACP 进程的内存任务；直接双进程不能补齐后台结算及子 Agent。
+
+因此采用 Ait 自己的 Rust ACP→官方 RPC 适配层。用户输入最终也转译成原生 RPC，
+不能将它描述为直连 OMP 自带的 ACP。此前附带 OMP 源码补丁的方案撤回。
+本 ADR 修订 [ADR-180](adr-180-omp-native-rpc-provider.md) 的宿主入口，保留其原生所有权。
 
 ## 决策
 
-1. 新建、发现、草稿探测、命令与会话恢复全部使用 `omp --mode acp --no-pty`。
-   删除 Protocol 控件和 RPC 执行适配器，不在能力不足时回退 RPC。
-   旧 `featureValues.transport: rpc` 仅作为兼容输入接受，不能选择 RPC。
-   旧 RPC 会话通过同一份原生历史恢复为 ACP，保留 session ID、模型、配置和消息回执；
-   导入历史和后续持久句柄统一记录 ACP，不重发输入或新建替代会话。
-2. 模型与推理、原有四个权限档位、自动压缩/重试和 fast/slow 开关通过 ACP
-   `session/set_config_option` 配置。模型 ID 保持 `[provider, modelId]` JSON 标识。
-   服务档位由当前原生模型的只读能力决定，切换模型后刷新；未支持的显式覆盖拒绝执行。
-   系统提示变更时重新打开原生 ACP 会话，继续同一份历史。
-3. ACP 原生扩展协商 `clientCapabilities._meta.omp: 1`，服务端宣告 `_meta.omp.version: 1`。
-   `_omp/event` 携带原生消息/工具事件及当前会话拥有的子 Agent 事件；
-   复用 OMP 原有的实时/历史投影，保留文本、推理、工具、图片、token/cost 与子 Agent 时间线。
-   模型选项 metadata 保留每个模型的原生能力，命令 metadata 保留 skill 来源。
-   公共 domain、ports、客户端 wire 与持久配置格式不增加新边界。
-4. 正式会话显式协商 `_meta.ompNativeMcp: true`，由 OMP SDK 加载本机 MCP，
-   空 ACP `mcpServers` 不再清空原生工具。普通 ACP 客户端继续隔离本机 MCP，
-   不允许混合客户端 servers 与原生所有权。Ait 仍不提供每会话 MCP/工具策略覆盖。
-   一次性探测使用 `--no-session`，不加载本机 MCP、不写特性设置或会话 JSONL。
-5. 共享 ACP stdio、审批和 form 问答归通用 adapter 辅助模块。
-   OMP 保留原有 8192 模型与 64 MiB 逻辑输出上限，不扩大其他 ACP Provider 的预算。
-   历史和实时图片中的原生 `blob:sha256` 引用按严格 hash、文件类型和 32 MiB 上限读取，
-   复制为 Ait 图片工件，不修改 OMP 文件。迟到工具进度不能重新打开已完成项。
-6. 原生补丁通过 `_meta.sessionSettled` 协商版本 1，每次 prompt 携带 `_meta.turnId`。
-   OMP 等待 streaming、已接纳输入、队列及能唤醒本 agent 的后台工作排空，
-   在同一 ACP prompt 中转发后台续跑，持久化后发送匹配 session/turn 的 `_session/settled`。
-   Ait 同时收到本轮成功响应和 settled 才结束运行状态，不以超时或没有输出合成完成。
-   取消及原生错误具有独立终态；失败文本经有界脱敏，不能作为普通回复泄露凭据。
-7. Host 终态前只读原生 JSONL，原子校正 Timeline 和用户回执。
-   已提交历史丢失时明确失败；空会话可重新建立且不制造输入。
-   OMP 原生配套补丁和测试归 [third-party/oh-my-pi](../../../third-party/oh-my-pi/README.md)。
-   缺少必需扩展时在提交输入前拒绝，不降低功能、不回退 RPC、不自动替换系统 CLI。
+1. OMP Provider 新建和恢复固定经过 Ait ACP 协议引擎，没有 Protocol 选择或直连 RPC 回退。
+   旧 `transport: rpc/acp` 输入仅做兼容，句柄记录 `transport: acp`、`nativeTransport: rpc`。
+   宿主内嵌调用与 `daemon omp-acp` JSONL stdio 使用相同的请求和事件引擎。
+2. 每个正式会话由一个未修改的 `omp --mode rpc-ui` 进程持有对话、配置、审批、工具、
+   MCP、插件、子 Agent、后台任务及历史。能力目录的无会话探测是独立临时实例，
+   不将它的状态冒充正式会话状态，不并行双写原生历史。
+3. ACP `initialize`、new/load/resume、prompt、cancel、steering、模式和 config options
+   在 Ait 侧转换。prompt 响应必须等到原生关联结果及 settled，不在中间 agent_end 完成。
+   输入不因超时或断开自动重发；原生拒绝和执行失败保留具体原因。
+4. 以官方 ExtensionAPI 和 RPC 数据结构处理插件，不匹配插件名称、安装路径或特定命令。
+   插件命令与模型动态发现，模型/推理选项取自原生事实；工具名称和参数不依赖白名单。
+   `select/confirm/input/editor/ask` 通用映射审批或 form；可见 custom messages 在实时与
+   JSONL 历史中共用投影，`display: false` 不进入展示。
+5. 标准 ACP 无法表达的原生能力由桥接层协商 `clientCapabilities._meta.ompNative: true`：
+   `_omp/rpc` 关联原生控制，`_omp/event` 保留事件字段，`_omp/respond` 回答属于该实例的回调。
+   未知插件字段不丢弃，不为单个插件添加新分支。会改变对话所有权的原生生命周期命令
+   保留给 ACP 路由；错误字段有界脱敏，回调验证身份及种类，取消或过期后不得复用。
+6. Ait 内嵌客户端另协商 `_meta.ait: 1`，保留现有稳定 Timeline key、回执、用量、子 Agent
+   和终态事件。仅为桥接序列化 provider 私有事件，不改变 domain 或公共客户端 wire。
+   这些扩展由 Ait 提供，官方 OMP 不需要实现或声明它们。
+7. 插件命令和原生控制可能先交互、后确认。输入写入后按请求 ID 异步接收原生确认，
+   期间继续处理回调；本地命令的输出不能被吞掉，也不能等待确认而阻塞提问。
+8. 原生支持的模型、推理和特性开关原地更新。CLI 绑定的模式/系统提示仍需重开时，
+   未落盘空会话的 native ID 可以变化，ACP ID 保持不变。仅独立 ACP 连接需要时，
+   Ait 在原生 sessions 同级 `ait-acp-aliases/` 原子保存自己的句柄与配置映射；恢复检查 cwd、
+   大小和文件类型，不改写原生 JSONL，不保存认证信息。宿主连接仍使用原有持久句柄。
+9. 官方安装、认证、MCP 与扩展配置继续归 OMP。Ait 不改写原生 JSONL、不复制用户登录秘密，
+   不关闭本机插件、不复刻插件业务逻辑。原生图片 blob 按 hash、文件类型和大小校验后只读转换。
 
-## 验证
+## 后果与限制
 
-Provider 离线协议测试覆盖默认/旧配置强制 ACP、旧句柄恢复、原生特性、模型切换、
-审批/问答、控制响应竞争、取消、追加输入、子 Agent、图片、用量、大输出、错误脱敏、
-历史回执与后台结算。原生测试另验证普通 ACP 客户端兼容和本机 MCP 显式所有权。
-实际命令、结果与未验证范围见 [报告](../../reports/providers/omp-acp-settlement-2026-10-25.md)。
+Ait 的 ACP 入口明确标识自身及 RPC 后端，不宣称使用 OMP 自带 ACP。
+原生工具和插件只需安装在 OMP 中。桥接层提供协议能力，不能将 OMP RPC 本身未导出的
+任意 TUI 组件工厂、主题或编辑器组件宣称为可远程渲染；具体通道、预算和限制见
+[架构与兼容表](../../architecture/omp-acp-bridge.md)。
+
+测试必须以未修改的官方 CLI 为基线，并使用不同插件名称验证共用路径。
+定制版 OMP 的旧测试结果不能作为官方兼容证明；当前证据见
+[验证报告](../../reports/providers/omp-acp-settlement-2026-10-25.md)。

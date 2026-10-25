@@ -353,3 +353,16 @@ fn invalid_headless_configuration_does_not_create_credentials() {
     assert!(load(Cli::parse_from(args), |_| None).is_err());
     assert!(!data.join("local-api.token").exists());
 }
+
+#[test]
+fn omp_acp_arguments_preserve_executable_paths_without_daemon_configuration() {
+    let cli = Cli::try_parse_from(["daemon", "omp-acp", "--omp-bin", "/tmp/official omp"]).unwrap();
+    assert!(
+        matches!(cli.command,Some(Command::OmpAcp{omp_bin:Some(path)}) if path==std::path::Path::new("/tmp/official omp"))
+    );
+    let cli = Cli::try_parse_from(["daemon", "omp-acp"]).unwrap();
+    assert!(matches!(
+        cli.command,
+        Some(Command::OmpAcp { omp_bin: None })
+    ));
+}

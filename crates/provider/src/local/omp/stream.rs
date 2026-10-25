@@ -58,10 +58,6 @@ impl Stream {
             self.usage.context_window_used_tokens = Some(tokens);
         }
     }
-    pub(super) fn is_empty(&self) -> bool {
-        self.counts.is_empty()
-    }
-
     pub(super) fn new(session: String, images: ImageStore) -> Self {
         Self {
             events: VecDeque::new(),
@@ -191,11 +187,20 @@ impl Stream {
         let role = message["role"]
             .as_str()
             .ok_or(Error::Field("message.role"))?;
-        if !matches!(role, "user" | "assistant" | "toolResult") {
+        if !matches!(role, "user" | "assistant" | "toolResult" | "custom") {
+            return Ok(());
+        }
+        if role == "custom" && message["display"] == false {
             return Ok(());
         }
         let key = self.message_key(message)?;
-        if role == "user" {
+        if role == "custom" {
+            let item = json!({"type":"assistant_message","messageId":key,
+                "text":self.text(&message["content"])?,
+                "metadata":{"nativeRole":"custom","customType":message["customType"]}});
+            self.events
+                .push_back(AgentTurnEvent::Timeline(Self::item(key, message, item)?));
+        } else if role == "user" {
             let mut item = json!({"type":"user_message","messageId":key,"text":self.text(&message["content"])?});
             if let Some(Some(id)) = self.pending_inputs.pop_front() {
                 self.input_ids.insert(key.clone(), json!(id));
@@ -275,10 +280,14 @@ impl Stream {
 
     pub(super) fn consume(&mut self, event: &Value) -> Result<(), Error> {
         match event["type"].as_str() {
+            Some("command_output") => self.notice(event, "text")?,
+            Some("extension_ui_request") if event["method"] == "notify" => {
+                self.notice(event, "message")?;
+            }
             Some("message_start")
                 if matches!(
                     event["message"]["role"].as_str(),
-                    Some("user" | "assistant" | "toolResult")
+                    Some("user" | "assistant" | "toolResult" | "custom")
                 ) =>
             {
                 self.start(&event["message"])?;
@@ -329,6 +338,29 @@ impl Stream {
             // AgentSession owns the settled/abort lifecycle; an agent_end may precede retry.
             _ => {}
         }
+        Ok(())
+    }
+
+    fn notice(&mut self, event: &Value, field: &'static str) -> Result<(), Error> {
+        let text = event[field].as_str().ok_or(Error::Field(field))?;
+        if text.is_empty() {
+            return Ok(());
+        }
+        let text = preview(text);
+        self.last_text = Some(text.clone());
+        let key = format!(
+            "native:omp:{}:notice:{}",
+            self.session,
+            uuid::Uuid::new_v4()
+        );
+        let item = json!({"type":"assistant_message","messageId":key,"text":text,
+            "metadata":{"nativeType":event["type"],"notificationType":event["notifyType"],"transient":true}});
+        self.events.push_back(AgentTurnEvent::Timeline(NativeItem {
+            key,
+            turn_id: self.turn.clone(),
+            timestamp: Utc::now().to_rfc3339(),
+            item,
+        }));
         Ok(())
     }
 

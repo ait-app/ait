@@ -4,6 +4,7 @@ mod client;
 mod config;
 mod discovery;
 mod history;
+mod interactions;
 mod launcher;
 mod observation;
 mod session;

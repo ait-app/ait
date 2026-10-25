@@ -1,7 +1,6 @@
 //! Read a fixed native journal cut without creating a session or sending a prompt.
-use super::super::{DeepSeekHarnessClient, PROVIDER};
+use super::super::{DeepSeekHarnessClient, PROVIDER, streaming::Stream};
 use super::{content, projection, runtime::Runtime};
-use crate::local::acp_stream::Stream;
 use crate::{
     ports::agent_session::{AgentSessionError, AgentTurnEvent},
     protocol::timeline::NativeItem,

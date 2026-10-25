@@ -11,13 +11,13 @@ use tokio::sync::{mpsc, oneshot};
 use tokio_util::task::AbortOnDropHandle;
 
 use super::{
-    OpenCodeClient, PROVIDER, config, history, launcher,
+    OpenCodeClient, PROVIDER, config, history, interactions, launcher,
     observation::{Observation, Source},
     streaming::Stream,
 };
 use crate::{
     local::{
-        acp_interactions, acp_permissions,
+        acp_permissions,
         acp_transport::{self, Transport},
     },
     ports::agent_session::{
@@ -763,7 +763,7 @@ impl Execution {
             return Err(AgentSessionError::Failed);
         }
         let pending = if message["method"] == "elicitation/create" {
-            match acp_interactions::form(message, PROVIDER) {
+            match interactions::form(message) {
                 Ok(pending) => pending,
                 Err(AgentSessionError::Rejected) => {
                     transport.send(&json!({"jsonrpc":"2.0","id":message["id"],"result":{"action":"cancel"}})).await?;
@@ -803,7 +803,7 @@ impl Execution {
                     .lock()
                     .map_err(|_| AgentSessionError::Failed)
                     .and_then(|requests| {
-                        acp_interactions::resolve(
+                        interactions::resolve(
                             requests.get(&id).ok_or(AgentSessionError::Rejected)?,
                             &response,
                         )

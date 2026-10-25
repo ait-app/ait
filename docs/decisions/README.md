@@ -76,7 +76,7 @@ ADR-074、082、083、084、122 在不同类别中各有两份，引用时以路
 
 ## Provider、Agent 与会话
 
-- [ADR-190：OMP 必须使用 ACP 并承接原有 RPC 功能](providers/adr-190-omp-acp-settlement.md)
+- [ADR-190：Ait ACP 桥接官方 OMP 与通用插件接口](providers/adr-190-omp-acp-settlement.md)
 
 - [ADR-185：各 Provider 保留原生失败原因](providers/adr-185-native-provider-failure-details.md)
 

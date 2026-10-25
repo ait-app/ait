@@ -28,7 +28,7 @@
 
 ## 架构决策
 
-- [ADR-190：OMP 必须使用 ACP 并承接原有 RPC 功能](decisions/providers/adr-190-omp-acp-settlement.md)：统一 ACP、原有功能迁移、原生 MCP 与 settled 扩展、后台续跑；[验证报告](reports/providers/omp-acp-settlement-2026-10-25.md)。
+- [ADR-190：Ait ACP 桥接官方 OMP 与通用插件接口](decisions/providers/adr-190-omp-acp-settlement.md)：单一官方 RPC 所有者、通用插件与原生事件透传；[架构与兼容表](architecture/omp-acp-bridge.md)、[验证报告](reports/providers/omp-acp-settlement-2026-10-25.md)。
 
 - [ADR-189：Pi 不暴露 Host 模式](decisions/providers/adr-189-pi-without-host-mode.md)：移除合成的 Native Tools／`default` 模式；Pi 继续直接拥有工具与设置，旧记录仅保留输入兼容；[验证报告](reports/providers/pi-mode-removal-2026-10-24.md)。
 
@@ -235,7 +235,7 @@
 - [Ait 0.0.14 发布说明](reports/releases/release-0.0.14.md)：Diff 语法高亮、侧边栏统计与 Codex 推理等级。
 - [Apple 本机构建](operations/apple-builds.md)：DMG、模拟器和 IPA。
 - [Pi](operations/pi.md)：原生 RPC、模型发现、会话恢复与能力限制；[ADR-156](decisions/providers/adr-156-pi-native-rpc-provider.md)。
-- [Oh My Pi](operations/oh-my-pi.md)：独立 OMP 权限、结构化问答、子 Agent 与必需 ACP 传输；[ADR-190](decisions/providers/adr-190-omp-acp-settlement.md)。
+- [Oh My Pi](operations/oh-my-pi.md)：独立 OMP 权限、结构化问答、子 Agent、ACP 桥接与通用插件接口；[ADR-190](decisions/providers/adr-190-omp-acp-settlement.md)。
 - [Claude Code](operations/claude-code.md)：认证、原生会话与审批。
 - [DeepSeek Harness](operations/deepseek-harness.md)：原生 Host、DeepSeek 账号余额、会话导入、权限模式、question 与 ACP 兼容配置。
 - [Antigravity CLI](operations/antigravity.md)：AGY 安装、登录、权限模式、会话恢复与账号额度查询。

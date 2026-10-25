@@ -194,7 +194,6 @@ pub(super) async fn load(
                         .and_then(|name| name.to_str())
                         .is_some_and(|name| name.ends_with(&format!("_{id}.jsonl")))
                 })
-                .or_else(|| empty.as_ref().map(|_| root.join(format!("ait-empty_{id}.jsonl"))))
                 .ok_or(AgentSessionError::Unavailable)?,
         };
         if let Some(created) = empty
@@ -211,6 +210,22 @@ pub(super) async fn load(
     })
     .await
     .map_err(|_| AgentSessionError::Failed)?
+}
+
+fn record_message(record: &Value) -> Result<std::borrow::Cow<'_, Value>, AgentSessionError> {
+    if record["type"] != "custom_message" {
+        return Ok(std::borrow::Cow::Borrowed(&record["message"]));
+    }
+    let timestamp = record["timestamp"]
+        .as_str()
+        .and_then(|value| chrono::DateTime::parse_from_rfc3339(value).ok())
+        .ok_or(AgentSessionError::Failed)?
+        .timestamp_millis();
+    Ok(std::borrow::Cow::Owned(
+        json!({"role":"custom","timestamp":timestamp,
+        "customType":record["customType"],"content":record["content"],
+        "display":record["display"],"details":record["details"]}),
+    ))
 }
 
 impl Journal {
@@ -253,21 +268,6 @@ impl Journal {
         Ok(path)
     }
 
-    fn resume_metadata(
-        &self,
-        stream: &Stream,
-        config: &mut StoredAgentConfig,
-    ) -> BTreeMap<String, Value> {
-        let mut metadata = BTreeMap::from([
-            ("cwd".to_owned(), self.header["cwd"].clone()),
-            ("sessionFile".to_owned(), json!(self.path)),
-            ("inputIds".to_owned(), json!(stream.input_ids)),
-        ]);
-        config.feature_values = Some(BTreeMap::from([("transport".to_owned(), json!("acp"))]));
-        metadata.insert("transport".to_owned(), json!("acp"));
-        metadata
-    }
-
     pub(super) fn project(
         &self,
         client: &OmpClient,
@@ -297,8 +297,8 @@ impl Journal {
                 timestamp.clone_into(&mut updated);
             }
             match record["type"].as_str() {
-                Some("message") => {
-                    let message = &record["message"];
+                Some("message" | "custom_message") => {
+                    let message = record_message(record)?;
                     if message["role"] == "user" {
                         active = true;
                     }
@@ -311,7 +311,7 @@ impl Journal {
                         }
                     }
                     stream
-                        .message(message)
+                        .message(&message)
                         .map_err(|_| AgentSessionError::Failed)?;
                     messages.extend(stream.events.drain(..).filter_map(|event| match event {
                         AgentTurnEvent::Timeline(entry) => Some(entry),
@@ -352,7 +352,11 @@ impl Journal {
             last_prompt_preview: users.last().and_then(preview),
             last_activity_at: updated,
         };
-        let resume_metadata = self.resume_metadata(&stream, &mut config);
+        let resume_metadata = BTreeMap::from([
+            ("cwd".to_owned(), self.header["cwd"].clone()),
+            ("sessionFile".to_owned(), json!(self.path)),
+            ("inputIds".to_owned(), json!(stream.input_ids)),
+        ]);
         let created_at = self.header["timestamp"]
             .as_str()
             .ok_or(AgentSessionError::Failed)?

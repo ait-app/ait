@@ -3,7 +3,7 @@ use std::collections::{BTreeMap, BTreeSet, VecDeque};
 use chrono::Utc;
 use serde_json::{Value, json};
 
-use super::acp_config::text;
+use super::config::text;
 use crate::ports::agent_session::{AgentSessionError, AgentTurnEvent};
 use crate::protocol::{timeline::NativeItem, usage::AgentUsage};
 

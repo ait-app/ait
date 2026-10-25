@@ -18,7 +18,7 @@ pub(crate) struct NativeSubagent {
 }
 
 /// Provider-owned child updates, isolated from the root timeline and foreground turn.
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq, serde::Serialize, serde::Deserialize)]
 pub(crate) enum SubagentEvent {
     /// Complete descriptor with a verified immediate-parent link.
     Upsert(NativeSubagent),

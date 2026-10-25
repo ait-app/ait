@@ -38,6 +38,12 @@ pub(crate) struct Cli {
 
 #[derive(Debug, Subcommand)]
 pub(super) enum Command {
+    /// Serve ACP over stdio using one official OMP RPC runtime and its native plugins.
+    OmpAcp {
+        /// Installed OMP executable; defaults to `AIT_SERVER_OMP_BIN` or PATH.
+        #[arg(long)]
+        omp_bin: Option<PathBuf>,
+    },
     /// Authorize this Linux or macOS daemon through Web approval or a single-use enrollment token.
     Login(Login),
     /// Revoke the machine grant and clear private local credentials (stop the service first).

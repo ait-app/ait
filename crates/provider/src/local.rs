@@ -1,9 +1,7 @@
 //! Native Provider adapters owned by the independent server.
 
 mod acp_config;
-mod acp_interactions;
 mod acp_permissions;
-mod acp_stream;
 mod acp_transport;
 pub(crate) mod antigravity;
 pub(crate) mod claude;

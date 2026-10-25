@@ -1,10 +1,14 @@
-//! Oh My Pi's ACP adapter. OMP owns credentials, extensions, tools and session files.
+//! Oh My Pi's native JSONL RPC adapter. OMP owns credentials, extensions, tools and session files.
 
-mod acp;
+mod bridge;
 mod config;
+mod framing;
 mod history;
+mod interactions;
+mod session;
 mod stream;
 mod subagents;
+mod transport;
 
 use std::path::PathBuf;
 use std::time::Duration;
@@ -20,7 +24,7 @@ use crate::ports::environment::AgentEnvironment;
 use crate::ports::native_history::{ListOptions, SessionDescriptor, SessionHistory};
 use crate::protocol::provider::Details;
 
-/// Installed OMP executable with bounded ACP startup and discovery.
+/// Installed OMP executable with bounded RPC startup and discovery.
 #[derive(Debug, Clone)]
 pub(crate) struct OmpClient {
     program: PathBuf,
@@ -47,6 +51,29 @@ impl OmpClient {
         self.images = super::images::ImageStore::new(directory);
         self
     }
+
+    async fn service_tiers(
+        &self,
+        cwd: &str,
+        model: Option<&str>,
+    ) -> Result<config::ServiceTiers, AgentSessionError> {
+        let mut probe = session::probe(self, cwd, model).await?;
+        let result = config::service_tiers(&mut probe).await;
+        let closed = probe.close().await;
+        let tiers = result?;
+        closed?;
+        Ok(tiers)
+    }
+}
+
+/// Serve the OMP bridge on a caller-owned JSONL stream without altering native installation.
+/// Returns bounded protocol, process startup, or I/O errors; EOF closes the native runtime.
+pub(crate) async fn serve_acp<R, W>(program: PathBuf, input: R, output: W) -> std::io::Result<()>
+where
+    R: tokio::io::AsyncRead + Unpin,
+    W: tokio::io::AsyncWrite + Unpin,
+{
+    bridge::serve(OmpClient::new(program), input, output).await
 }
 
 impl AgentClient for OmpClient {
@@ -67,7 +94,7 @@ impl AgentClient for OmpClient {
             "supportsStreaming":true,"supportsReasoningStream":true,
             "supportsSessionPersistence":true,"supportsSessionListing":true,
             "supportsToolInvocations":true,"supportsMcpServers":false,
-            "supportsDynamicModes":true,"supportsRewindConversation":false,
+            "supportsDynamicModes":false,"supportsRewindConversation":false,
             "supportsRewindFiles":false,"supportsRewindBoth":false}})
     }
 
@@ -77,13 +104,8 @@ impl AgentClient for OmpClient {
 
     fn discover<'a>(&'a self, cwd: &'a str) -> AgentSessionFuture<'a, Details> {
         Box::pin(async move {
-            let spec = AgentSessionSpec {
-                provider: "omp".to_owned(),
-                cwd: cwd.to_owned(),
-                config: StoredAgentConfig::default(),
-            };
-            let mut probe = acp::open(self, &spec, None, true).await?;
-            let result = probe.details();
+            let mut probe = session::probe(self, cwd, None).await?;
+            let result = config::discover(&mut probe).await;
             let closed = probe.close().await;
             let details = result?;
             closed?;
@@ -96,21 +118,23 @@ impl AgentClient for OmpClient {
         spec: &'a AgentSessionSpec,
     ) -> AgentSessionFuture<'a, Vec<Value>> {
         Box::pin(async move {
-            let mut probe = acp::open(self, spec, None, true).await?;
-            let features = probe.draft_features(&spec.config);
-            probe.close().await?;
-            Ok(features)
+            config::validate_spec(spec)?;
+            let tiers = self
+                .service_tiers(&spec.cwd, spec.config.model.as_deref())
+                .await?;
+            Ok(config::features(&spec.config, tiers))
         })
     }
 
     fn commands<'a>(&'a self, spec: &'a AgentSessionSpec) -> AgentSessionFuture<'a, Vec<Value>> {
         Box::pin(async move {
-            let mut probe = acp::open(self, spec, None, true).await?;
-            let result = probe.commands().await;
+            config::validate_spec(spec)?;
+            let mut probe = session::probe(self, &spec.cwd, None).await?;
+            let result = probe.request("get_available_commands", json!({})).await;
             let closed = probe.close().await;
-            let commands = result?;
+            let result = result?;
             closed?;
-            Ok(commands)
+            config::commands(&result)
         })
     }
 
@@ -127,7 +151,7 @@ impl AgentClient for OmpClient {
                 .discover(cwd.to_str().ok_or(AgentSessionError::Failed)?)
                 .await?;
             Ok(format!(
-                "Oh My Pi ACP ready; {} available models",
+                "Oh My Pi RPC ready; {} available models",
                 details.models.len()
             ))
         })
@@ -161,7 +185,7 @@ impl AgentClient for OmpClient {
         spec: &'a AgentSessionSpec,
     ) -> AgentSessionFuture<'a, Box<dyn AgentSession>> {
         Box::pin(async move {
-            Ok(Box::new(acp::open(self, spec, None, false).await?) as Box<dyn AgentSession>)
+            Ok(Box::new(bridge::Session::open(self, spec, None).await?) as Box<dyn AgentSession>)
         })
     }
 
@@ -197,10 +221,10 @@ impl AgentClient for OmpClient {
             if purpose == AgentResumePurpose::History {
                 return Err(AgentSessionError::Unavailable);
             }
-            // Native history is shared by both protocols. Old RPC handles are
-            // resumed through ACP without replaying an input or creating a new identity.
-            Ok(Box::new(acp::open(self, spec, Some(handle), false).await?)
-                as Box<dyn AgentSession>)
+            Ok(
+                Box::new(bridge::Session::open(self, spec, Some(handle)).await?)
+                    as Box<dyn AgentSession>,
+            )
         })
     }
 }

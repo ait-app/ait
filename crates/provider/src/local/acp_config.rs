@@ -33,15 +33,6 @@ pub(crate) fn option<'a>(options: &'a Value, category: &str) -> Option<&'a Value
 ///
 /// Returns `AgentSessionError::Failed` for a missing, oversized or malformed choice list.
 pub(crate) fn choices(option: &Value) -> Result<Vec<&Value>, AgentSessionError> {
-    choices_with_limit(option, 4096)
-}
-
-/// Flatten native choices with a provider-specific bound, rejecting malformed or oversized lists.
-/// `limit` applies across all select groups and does not change other ACP adapters' budgets.
-pub(crate) fn choices_with_limit(
-    option: &Value,
-    limit: usize,
-) -> Result<Vec<&Value>, AgentSessionError> {
     let options = option["options"]
         .as_array()
         .ok_or(AgentSessionError::Failed)?;
@@ -52,7 +43,7 @@ pub(crate) fn choices_with_limit(
         } else {
             choices.push(entry);
         }
-        if choices.len() > limit {
+        if choices.len() > 4096 {
             return Err(AgentSessionError::Failed);
         }
     }
@@ -79,12 +70,6 @@ pub(crate) fn choices_with_limit(
 ///
 /// Returns `AgentSessionError::Failed` for a missing, oversized or malformed option list.
 pub(crate) fn state(response: &Value) -> Result<Value, AgentSessionError> {
-    state_with_limit(response, 4096)
-}
-
-/// Validate a native option snapshot using the provider's maximum select-choice count.
-/// Missing, malformed, or oversized native options return a protocol failure.
-pub(crate) fn state_with_limit(response: &Value, limit: usize) -> Result<Value, AgentSessionError> {
     let options = response["configOptions"]
         .as_array()
         .filter(|options| options.len() <= 128)
@@ -92,7 +77,7 @@ pub(crate) fn state_with_limit(response: &Value, limit: usize) -> Result<Value, 
     for option in options {
         text(option, "id")?;
         if option["type"] == "select" {
-            choices_with_limit(option, limit)?;
+            choices(option)?;
             option["currentValue"]
                 .as_str()
                 .ok_or(AgentSessionError::Failed)?;

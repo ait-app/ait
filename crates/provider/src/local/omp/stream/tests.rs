@@ -121,3 +121,65 @@ fn persisted_blob_images_match_inline_rendering_and_reject_corrupt_references() 
         Err(Error::Image)
     ));
 }
+
+#[test]
+fn arbitrary_extension_messages_share_projection_without_plugin_name_rules() {
+    let mut stream = Stream::new("plugins".to_owned(), ImageStore::default());
+    for (index, custom_type) in ["example.extension.alpha", "another-vendor-output"]
+        .iter()
+        .enumerate()
+    {
+        let message = json!({"role":"custom","customType":custom_type,"display":true,
+            "content":[{"type":"text","text":format!("output {index}")}],"timestamp":1000+index});
+        stream
+            .consume(&json!({"type":"message_start","message":message}))
+            .unwrap();
+        stream
+            .consume(&json!({"type":"message_end","message":message}))
+            .unwrap();
+    }
+    let events = stream.events.drain(..).collect::<Vec<_>>();
+    assert_eq!(events.len(), 2);
+    for (index, event) in events.iter().enumerate() {
+        let AgentTurnEvent::Timeline(entry) = event else {
+            panic!("expected custom timeline")
+        };
+        assert_eq!(entry.item["text"], format!("output {index}"));
+        assert_eq!(entry.item["metadata"]["nativeRole"], "custom");
+    }
+    stream.message(&json!({"role":"custom","display":false,"content":"hidden private context","timestamp":2000})).unwrap();
+    assert!(stream.events.is_empty());
+}
+
+#[test]
+fn native_command_output_and_plugin_notifications_are_visible_without_history_messages() {
+    let mut stream = Stream::new("session".to_owned(), ImageStore::default());
+    stream.begin("turn".to_owned());
+    for frame in [
+        json!({"type":"command_output","text":"Native command result"}),
+        json!({"type":"extension_ui_request","method":"notify","message":"Plugin notification","notifyType":"warning"}),
+    ] {
+        stream.consume(&frame).unwrap();
+        let AgentTurnEvent::Timeline(entry) = stream.events.pop_back().unwrap() else {
+            panic!("expected visible native output");
+        };
+        assert_eq!(entry.turn_id.as_deref(), Some("turn"));
+        assert_eq!(entry.item["metadata"]["transient"], true);
+        assert_eq!(entry.item["metadata"]["nativeType"], frame["type"]);
+        assert_eq!(
+            entry.item["text"],
+            frame.get("text").unwrap_or(&frame["message"]).clone()
+        );
+    }
+    assert_eq!(stream.last_text.as_deref(), Some("Plugin notification"));
+    assert!(
+        stream
+            .consume(&json!({"type":"command_output","text":null}))
+            .is_err()
+    );
+    let count = stream.events.len();
+    stream
+        .consume(&json!({"type":"command_output","text":""}))
+        .unwrap();
+    assert_eq!(stream.events.len(), count);
+}

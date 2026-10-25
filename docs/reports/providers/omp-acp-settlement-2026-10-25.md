@@ -1,88 +1,92 @@
-# OMP 必需 ACP 与原有功能迁移验证（2026-10-25）
+# OMP 官方兼容、ACP 桥接与通用插件验证（2026-10-25）
 
-## 改动与边界
+## 实现与范围
 
-基于 Ait `bd5e5aa571227a9004844743225a89befe324ea0` 的本次修订，OMP 的发现、
-新建、草稿探测、命令和恢复统一使用 ACP。删除 Protocol 控件及 RPC 执行实现；
-旧 `transport: rpc` 配置只能兼容迁移，不能选择 RPC。旧句柄继续同一份原生历史和 session ID，
-保留用户消息回执，不通过重发输入完成迁移。
+本报告对应所在提交的最终桥接实现，基线为 Ait `7c824d0a`，Linux x86_64、Rust 1.98.1。
+OMP Provider 的新建和恢复固定经过 Ait Rust ACP 引擎，底层由一个官方 OMP RPC 实例持有
+对话、控制、MCP、插件、子 Agent、后台任务和原生历史。额外的能力探测为无会话临时实例。
 
-OMP 原生实现基于 `18.12.6` / `45c35e40c46166dc726ccc52f5d27f40f2449f99`，
-完整补丁和测试归 [third-party/oh-my-pi](../../../third-party/oh-my-pi/README.md)。
-Ait 本身仍使用 Rust，没有增加 domain、公共 ports 或客户端 wire 边界。
-决策见 [ADR-190](../../decisions/providers/adr-190-omp-acp-settlement.md)。
+相同引擎提供 `daemon omp-acp` JSONL stdio，明确标识 Ait 桥接层和 RPC 后端。
+这不是直连 OMP 自带 ACP，不再附带或要求安装 OMP 源码补丁。
+旧 `transport: rpc/acp` 设置仅作输入兼容，新句柄同时记录 ACP 入口与 RPC 原生后端。
 
-## 功能核对
+决策见 [ADR-190](../../decisions/providers/adr-190-omp-acp-settlement.md)，
+[架构与兼容表](../../architecture/omp-acp-bridge.md)记录接口及真实限制。
 
-| 既有能力                     | ACP 路径与验证                                                                                              |
-| ---------------------------- | ----------------------------------------------------------------------------------------------------------- |
-| 模型、推理和目录发现         | ACP config options 保留原生模型 metadata；保持原有 opaque ID 和每个模型的推理选项，最多 8192 模型           |
-| 四个权限档位                 | 原生 Full / Write / Ask / Ask and Remember 映射保留，ACP 动态配置与 unattended 语义一致                     |
-| 系统提示                     | ACP 重开原会话，保留历史与身份；不制造额外输入                                                              |
-| 自动压缩/重试、fast/slow     | 标准 ACP boolean options；只读确认当前模型支持，原生选择被应用和回读，不隐藏已有覆盖值                      |
-| 本机 MCP 与扩展              | 正式会话显式协商 native ownership，SDK 加载本机配置；空 ACP server 列表不清空工具，普通客户端仍隔离本机 MCP |
-| 文本、推理、工具、用量和费用 | `_omp/event` 复用既有 OMP 投影，原生 assistant usage 保留 input/output/cache/cost 和 context window         |
-| 原生子 Agent                 | 会话专属 EventBus 转发生命周期、进度及消息；关闭后取消订阅，保留各自 Timeline                               |
-| 图片和富输入                 | ACP prompt blocks 与既有投影；原生 blob 引用按严格 hash、文件类型与 32 MiB 上限读取为 Ait 图片工件          |
-| 审批与问答                   | 原生 ACP permission options 和 form elicitation，保留长期授权选项、含逗号的多选、拒绝与取消校验             |
-| 取消、追加输入和后台工作     | ACP cancel / steering 与版本化 settled；审批 callback 不被控制响应吞掉，迟到工具进度不修改已完成项          |
-| 持久历史、列表、导入、恢复   | 只读原生 JSONL；默认、显式旧 RPC 配置与旧句柄均通过 ACP，回执和原生身份保持                                 |
-| 有界大输出                   | OMP 输出帧上限 64 MiB；其他 ACP Provider 保留原预算，9 MiB 夹具验证不会被共享的 8 MiB 默认值截断            |
+## 官方接口核对
 
-RPC 原先未提供的会话/文件回退、单独控制子 Agent、每会话 MCP/工具策略覆盖与输出 schema
-仍不宣称支持。所有输入在提交前验证，缺少必需 ACP 扩展时拒绝，不回退 RPC。
+实测使用未修改的 `/usr/bin/omp` **18.12.6**，对应
+[官方 revision](https://github.com/can1357/oh-my-pi/tree/45c35e40c46166dc726ccc52f5d27f40f2449f99)。
+其 [ACP 实现](https://github.com/can1357/oh-my-pi/blob/45c35e40c46166dc726ccc52f5d27f40f2449f99/packages/coding-agent/src/modes/acp/acp-agent.ts)
+没有此前定制方案的 native-feature/session-settled 版本标志；config options 为 mode/model/thinking，
+boolean autoRetry 请求被拒绝。官方 ACP 和 RPC 运行实例独立，不能靠第二个 RPC 进程
+观察第一个 ACP 进程的后台任务或子 Agent。
 
-## 结算与错误语义
+因此将转换放到 Ait，直接使用官方已有 RPC 契约。此前定制 OMP 的测试结果不作为本报告证据。
+标准 ACP 请求、原生额外控制和事件由同一个桥接引擎处理，不对插件名称写分支。
 
-- 同时收到本轮 prompt 成功响应及匹配 session/turn 的 `_session/settled` 才完成。
-  原生端等待 owner jobs/deliveries，并在同一 ACP 订阅中处理后台续跑；最终续跑决定结果。
-- 过期 settled 不释放新回合；不以延时、安静窗口或超时合成成功，不自动重发已提交输入。
-- 原生 `_meta.error` 与消息错误进入有界脱敏的失败路径，失败原因在关闭后仍可读取和持久化。
-- Host 终态前只读原生历史，原子校正 Timeline 与用户回执。已提交历史丢失时明确失败；
-  未提交空会话允许重建，草稿探测不写会话、不加载本机 MCP、不修改原生服务档位设置。
+## 回归与实际插件
 
-## 验证
+| 范围          | 证据                                                                                                              |
+| ------------- | ----------------------------------------------------------------------------------------------------------------- |
+| 既有 OMP 行为 | 新建/恢复、当前分支、用户回执、模型与服务档位、审批/问答、steering/取消、图片、用量、子 Agent、大输出与错误持久化 |
+| 后台工作      | 原生关联 prompt_result + session_settled，前后台并行与迟到工具进度，不在中间 agent_end 结束或关闭连接             |
+| 标准 ACP      | JSONL initialize/new/load/prompt/config/close，历史回放、断帧读写、请求关联、未知方法及错误响应                   |
+| 通用插件      | 两个不同名称的插件命令共用提问/回答/自定义消息路径；命令可先交互后确认，避免等待确认造成死锁                      |
+| 原生扩展      | 控制也异步关联；原生 UI、host tool callback 和未知事件字段通过协商通道保留，回调校验 owner/id/type                |
+| 错误透传      | 原生原因与 HTTP 状态进入 ACP 失败响应；错误字段有界脱敏，关闭后原因仍保留，不把工具超时误判成 Provider 失败       |
+| 旧配置        | 旧 RPC 选择与没有 transport metadata 的句柄仍进入桥接层，保留 native session ID                                   |
 
-最终 Rust 验证使用仓库固定的 Rust **1.98.1**。仅运行受影响模块及共享辅助模块消费者：
+用户已明确授权调用其 OMP Provider 中的实际模型。实测继承本机 OMP 原生模型、认证、
+插件和权限配置，不复制登录凭据、不改写用户配置；测试工具只操作临时工作目录。
+
+- `tai/deepseek-v4.1-flash`：真实流式推理及 token usage；写入测试文件、原生审批、
+  结构化 ask 选项；原生 JSONL 历史和会话列表；关闭后恢复同一个原生会话，模型正确记起首轮随机标识。
+- 同一实际模型配合官方 `--extension` 临时加载通用 ExtensionAPI 测试扩展：
+  notify-only 输出、两个不同命令名称的 select/custom messages、动态注册工具、历史和恢复。
+  工具可能经 OMP 自身 deferred dispatch 执行；同时核对原生成功 toolResult，
+  不假设外层工具名称必须等于插件工具名称。生产适配器没有该测试插件的名称分支。
+- `futureppo/deepseek-v4.1-flash`：上游返回真实 HTTP 503（模型无可用渠道）；
+  Ait 保留原生解释和更换模型建议。该次不计为成功推理，也不重发用户输入。
+
+真实测试发现并修正：notify/command_output 被吞掉，以及官方 RPC prompt 确认的 `data`
+为空时被误认为原生历史已落盘。独立 stdio 测试还发现模型/推理/开关更新会重启进程，
+现改用官方 RPC 原地更新，并断言正式进程只有一个，保留插件状态和原生会话身份。新增回归验证只有通知的命令仍显示输出，未落盘会话可按空会话重开。
+
+另保留可离线重复的本地 SSE 模型测试作为回归用例；它不作为本次真实模型兼容的主要证据。
+测试扩展只由测试启动参数加载，不安装到用户 OMP，不是使用 Ait 的前提。
+仅插件本地输出时 OMP 可能延迟落盘；任意 TUI 组件工厂等官方 RPC 未导出的能力不宣称已支持。
+
+## 检查命令与结果
+
+使用仓库固定的 Rust 1.98.1，仅运行修改及直接相关代码：
 
 ```sh
-cargo test --locked -p provider local::omp --lib
-cargo test --locked -p provider local::acp_stream --lib
-cargo test --locked -p provider local::opencode --lib
-cargo test --locked -p provider local::deepseek_harness --lib
-cargo test --locked -p provider local::diagnostics --lib
+cargo test --locked -p provider --lib local::omp
+cargo test --locked -p provider --lib local::diagnostics
+AIT_TEST_OMP_BIN=/usr/bin/omp cargo test --locked -p provider --lib local::omp::tests::installed -- --ignored
+AIT_TEST_OMP_BIN=/tmp/ait-omp-official-extension-test AIT_TEST_OMP_REAL_MODEL='["tai","deepseek-v4.1-flash"]' cargo test --locked -p provider --lib local::omp::tests::real -- --ignored --nocapture
+cargo test --locked -p daemon --bin daemon config::tests::omp_acp_arguments_preserve_executable_paths_without_daemon_configuration
+cargo clippy --locked -p provider -p daemon --all-targets -- -D warnings
+cargo build --locked -p daemon
 cargo fmt --all --check
-cargo clippy --locked -p provider --all-targets -- -D warnings
-cargo build --locked -p provider
 npm run check:docs
 ```
 
-OMP 28 passed / 3 ignored；共享 ACP stream 4 passed；OpenCode 99 passed / 28 ignored；
-DSH 87 passed / 7 ignored；诊断 20 passed。合计 **238 passed、38 ignored、0 failed**。
-忽略项需要显式 CLI、外部环境或付费推理；没有执行完整 Rust workspace 测试。
+`/tmp/ait-omp-official-extension-test` 为测试 shell 入口，仅执行
+`/usr/bin/omp --extension <仓库测试 fixtures/generic-extension.ts> "$@"`，没有修改 OMP。
+实际模型路由由 `AIT_TEST_OMP_REAL_MODEL` 指定，认证仍由原生配置读取。
 
-在隔离配置下，额外指定打补丁的真实 OMP 源码 launcher 执行两项已忽略的无推理测试，
-**2 passed、0 failed**。覆盖实际 ACP 初始化、新建、关闭、空会话恢复、动态模型/推理和服务档位发现，
-并检查原生配置不被探测修改、无会话 JSONL。没有替换系统 CLI 或重启 daemon。
-
-```sh
-AIT_TEST_OMP_BIN=/path/to/patched-omp cargo test --locked -p provider local::omp::tests::installed --lib -- --ignored
-```
-
-原生 OMP 定向测试使用 mock 模型或本地协议服务器，不调用付费模型：
-
-```sh
-bun test packages/coding-agent/test/acp-agent.test.ts packages/coding-agent/test/acp-initialize-conformance.test.ts packages/coding-agent/test/acp-mcp-isolation.test.ts packages/coding-agent/test/agent-session-async-delivery.test.ts
-bun run --cwd packages/coding-agent check:types
-```
-
-结果 **135 passed、0 failed**；修改的原生源码和测试通过 oxfmt/oxlint。
-补丁通过目标 revision 的 `git apply --check --cached`。
-原生 MCP 的验证范围为 factory 显式所有权、工具不被空列表清除、拒绝混合所有权及普通客户端隔离；
-没有连接用户的真实远程 MCP 服务。付费模型与用户实际账号的端到端推理未运行。
+结果：OMP 定向回归 **53 passed / 6 ignored**；共享诊断 **20 passed**；
+未修改官方 CLI 检查 **4 passed**；真实模型/插件 **2 passed**；daemon CLI 参数 **1 passed**。
+独立 `daemon omp-acp` 使用实际模型的标准 JSONL 联调通过：初始化、设置、原生控制、流式推理、
+load 历史与恢复上下文、EOF 正常退出；不初始化 HTTP daemon、Host 登录或本地 API token。
+模式变更前的 ACP ID 在空原生会话重开后仍可用于重新连接和恢复。
+格式、严格 Clippy、daemon 构建和文档链接检查通过。不沿用已撤回的定制 OMP 结果。
+未运行完整 Rust workspace 测试或真实远程 MCP。
 
 ## Test coverage
 
-**Not measured**：用户未要求行覆盖率；通过项数不代表覆盖率百分比。
-本次未生成覆盖率工件。若后续要求测量，使用 `cargo llvm-cov` 限定上述受影响模块并提供报告，
-明确排除真实账号、付费模型和不可用平台，不扩大到完整 workspace。
+**Not measured**：用户未要求行覆盖率，本次没有生成覆盖率工件。
+通过项数不代表覆盖率百分比。若后续要求，使用 `cargo llvm-cov` 限定 OMP、共享诊断和
+新增 CLI 代码，并提供可评审报告；不自动扩大为完整 workspace 测试。

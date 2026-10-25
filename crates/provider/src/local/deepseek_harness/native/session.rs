@@ -6,14 +6,13 @@ use domain::agent_runtime::{AgentPersistenceHandle, StoredAgentConfig, StoredAge
 use serde_json::{Value, json};
 use tokio::task::JoinSet;
 
-use super::super::{DeepSeekHarnessClient, PROVIDER, config::text};
+use super::super::{DeepSeekHarnessClient, PROVIDER, config::text, streaming::Stream};
 use super::{
     config::{self, Selection},
     interactions::Pending,
     presets,
     runtime::Runtime,
 };
-use crate::local::acp_stream::Stream;
 use crate::{
     ports::agent_session::{
         AgentSession, AgentSessionError, AgentSessionFuture, AgentSessionSpec, AgentTurnEvent,

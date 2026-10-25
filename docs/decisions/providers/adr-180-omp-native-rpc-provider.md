@@ -3,7 +3,8 @@
 - 状态：Accepted
 - 日期：2026-10-21
 
-执行协议已由 [ADR-190](adr-190-omp-acp-settlement.md) 取代；新建和恢复均使用 ACP。
+[ADR-190](adr-190-omp-acp-settlement.md) 将宿主入口固定为 Ait ACP 桥接层，
+底层继续使用官方 RPC；本文的原生所有权和功能基线保留。
 
 ## 背景
 
