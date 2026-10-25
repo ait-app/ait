@@ -354,7 +354,11 @@ async fn receive_audio(
             },
             _ = clock.tick() => {
                 if let Some(audio) = decoder.flush()? {
-                    output.try_send(Event::Audio(audio)).map_err(|_| AgentSessionError::Failed)?;
+                    output.try_send(Event::Audio(audio)).map_err(|error| {
+                        tracing::warn!(queue_full = matches!(error, mpsc::error::TrySendError::Full(_)),
+                            "Codex realtime audio delivery failed at the downstream playback queue");
+                        AgentSessionError::Failed
+                    })?;
                 }
             }
         }

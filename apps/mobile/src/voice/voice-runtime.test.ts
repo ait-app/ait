@@ -106,6 +106,46 @@ describe("voice runtime", () => {
     });
   });
 
+  it("preserves the first native audio while microphone permission is slow", async () => {
+    const adapter = createSessionAdapter();
+    const engine = createAudioEngineMock();
+    let finishCapture!: () => void;
+    vi.mocked(engine.startCapture).mockReturnValue(
+      new Promise<void>((resolve) => {
+        finishCapture = resolve;
+      }),
+    );
+    const { runtime } = createRuntime({ engine, supportsRealtimeVoice: () => true });
+    runtime.registerSession(adapter);
+    vi.mocked(adapter.setVoiceMode).mockImplementation(async (enabled) => {
+      if (enabled)
+        setTimeout(
+          () =>
+            runtime.handleAudioOutput(
+              "server-1",
+              createAudioPayload({
+                id: "first-native-audio",
+                groupId: "native",
+                chunkIndex: 0,
+                isLastChunk: true,
+              }),
+            ),
+          0,
+        );
+    });
+
+    const starting = runtime.startVoice("server-1", "agent-1");
+    await vi.waitFor(() => expect(engine.startCapture).toHaveBeenCalledOnce());
+    await vi.advanceTimersByTimeAsync(6500);
+    finishCapture();
+    await starting;
+    await vi.advanceTimersByTimeAsync(0);
+
+    expect(adapter.audioPlayed).toHaveBeenCalledWith("first-native-audio");
+    expect(engine.play).toHaveBeenCalledOnce();
+    await runtime.destroy();
+  });
+
   it("streams continuous PCM chunks and waits after receiving a transcript", async () => {
     const adapter = createSessionAdapter();
     const { runtime } = createRuntime();
@@ -126,7 +166,7 @@ describe("voice runtime", () => {
 
   it("moves from listening to playing on the first assistant audio", async () => {
     const adapter = createSessionAdapter();
-    const { runtime, engine: _engine } = createRuntime();
+    const { runtime } = createRuntime();
     runtime.registerSession(adapter);
 
     await runtime.startVoice("server-1", "agent-1");
@@ -190,7 +230,7 @@ describe("voice runtime", () => {
 
   it("acknowledges chunks only after they are consumed and finishes after the final chunk", async () => {
     const adapter = createSessionAdapter();
-    const playResolvers: Array<(duration: number) => void> = [];
+    const playResolvers: ((duration: number) => void)[] = [];
     const engine = createAudioEngineMock();
     vi.mocked(engine.play).mockImplementation(
       () =>
@@ -507,6 +547,39 @@ describe("voice runtime", () => {
 });
 
 describe("provider-native voice", () => {
+  it("does not open the provider when microphone permission fails", async () => {
+    const engine = createAudioEngineMock();
+    vi.mocked(engine.startCapture).mockRejectedValue(new Error("microphone denied"));
+    const { runtime } = createRuntime({ engine, supportsRealtimeVoice: () => true });
+    const adapter = createSessionAdapter();
+    runtime.registerSession(adapter);
+    await expect(runtime.startVoice("server-1", "agent-1")).rejects.toThrow("microphone denied");
+    expect(adapter.setVoiceMode).not.toHaveBeenCalled();
+    expect(engine.stopCapture).toHaveBeenCalledOnce();
+    await vi.waitFor(() => expect(runtime.getSnapshot().phase).toBe("disabled"));
+  });
+
+  it("cancels a pending microphone start when the daemon disconnects", async () => {
+    const engine = createAudioEngineMock();
+    let finishCapture!: () => void;
+    vi.mocked(engine.startCapture).mockReturnValue(
+      new Promise<void>((resolve) => {
+        finishCapture = resolve;
+      }),
+    );
+    const { runtime } = createRuntime({ engine, supportsRealtimeVoice: () => true });
+    const adapter = createSessionAdapter();
+    runtime.registerSession(adapter);
+    const starting = runtime.startVoice("server-1", "agent-1");
+    await vi.waitFor(() => expect(engine.startCapture).toHaveBeenCalledOnce());
+    runtime.updateSessionConnection("server-1", false);
+    finishCapture();
+    await starting;
+    expect(adapter.setVoiceMode).not.toHaveBeenCalled();
+    expect(engine.stopCapture).toHaveBeenCalledOnce();
+    await vi.waitFor(() => expect(runtime.getSnapshot().phase).toBe("disabled"));
+  });
+
   it("starts without generic speech readiness only for a capable Agent", async () => {
     const info = createServerInfo();
     info.capabilities!.voice!.voice = { enabled: false, reason: "Offline speech unavailable" };
@@ -584,6 +657,6 @@ it("does not resume capture when Codex closes during daemon startup", async () =
   finishAnswer();
   await starting;
   await vi.waitFor(() => expect(runtime.getSnapshot().phase).toBe("disabled"));
-  expect(engine.startCapture).not.toHaveBeenCalled();
+  expect(engine.startCapture).toHaveBeenCalledOnce();
   expect(runtime.getSnapshot().isVoiceMode).toBe(false);
 });

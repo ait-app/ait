@@ -15,6 +15,7 @@ Codex app-server 已提供 `thread/realtime/*`，其音频、认证、原生工�
 - 音频会话和文本复用同一个 Codex thread，信令及工具事件复用 app-server transport。实时会话事件在前台 turn 过滤前处理；原生产生的工具轮次与审批继续使用既有 provider 管线。
 - `model::realtime` 定义有界 PCM 音频队列、媒体就绪信号与生命周期事件。`provider` 拥有 native endpoint；`voice` 拥有连接侧 session；daemon 仅桥接端口，两项能力互不依赖。
 - 所有客户端只与 daemon 交互：麦克风通过 `voice.audio.chunk` 上传单声道 PCM16，播放通过 `voice.audio.output` 与确认窗口下发。直连与 online relay 使用相同协议；客户端不持有 OpenAI SDP、地址或认证，也不创建上游 WebRTC peer。
+- 客户端先完成原生语音所需的麦克风授权与采集初始化，再请求 daemon 启动媒体会话。等待授权期间不启动上游音频，避免尚未进入语音状态时忽略首批 PCM 和播放确认而填满队列；daemon 就绪前不上传采集数据。授权失败或启动期间断线均释放本地设备。
 - daemon 内的 Codex adapter 拥有 WebRTC peer、ICE/DTLS/SRTP、Opus 编解码与连续 24 kHz 重采样。offer 经已有 Codex app-server 的 `thread/realtime/start` 发送，`thread/realtime/sdp` 的 answer 仅在 provider 内使用。显式使用 realtime v3，保留 Codex 登录认证，不改走要求 API key 的原生 WebSocket 音频入口。
 - 只有上游媒体连接就绪后才接受语音启动；连接超时、启动被放弃、媒体错误与原生关闭均取消 peer 和对应会话。输入按 20 ms 编码，输出按约 80 ms 合并 PCM，乱序、丢包补偿与所有音频缓存均有界。
 - 转写完成不是音频播放边界：助手 RTP 可以先于用户 `transcript/done` 到达。插话只一次性清理已缓冲的旧播放，保留连续 Opus 解码状态；后续 RTP 正常解码下发，不等待转写完成、不用转写状态持续静音。转写完成也不重置解码器。

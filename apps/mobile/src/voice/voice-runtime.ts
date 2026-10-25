@@ -791,11 +791,17 @@ export function createVoiceRuntime(deps: VoiceRuntimeDeps): VoiceRuntime {
         await deps.engine.initialize();
         if (state.generation !== generation) return;
         const native = deps.supportsRealtimeVoice?.(serverId, agentId) === true;
+        state.nativeRealtime = native;
+        // Native media starts as soon as the daemon accepts. Resolve microphone permission
+        // first so incoming PCM cannot fill its acknowledgment window while capture is pending.
+        if (native) {
+          await deps.engine.startCapture();
+          if (state.generation !== generation) return;
+        }
         await session.adapter.setVoiceMode(true, agentId);
         if (state.generation !== generation) return;
-        state.nativeRealtime = native;
         enabledCurrentVoiceMode = true;
-        await deps.engine.startCapture();
+        if (!native) await deps.engine.startCapture();
         if (state.generation !== generation) {
           return;
         }
