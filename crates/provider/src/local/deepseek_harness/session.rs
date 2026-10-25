@@ -7,10 +7,10 @@ use uuid::Uuid;
 
 use super::{
     DeepSeekHarnessClient, PROVIDER, config,
-    streaming::Stream,
     transport::{self, Transport},
 };
 use crate::local::acp_permissions;
+use crate::local::acp_stream::Stream;
 use crate::ports::agent_session::{
     AgentSession, AgentSessionError, AgentSessionFuture, AgentSessionSpec, AgentTurnEvent,
 };

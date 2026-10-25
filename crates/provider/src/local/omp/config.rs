@@ -8,14 +8,14 @@ use crate::ports::agent_session::{AgentSessionError, AgentSessionSpec};
 use crate::protocol::provider::Details;
 
 pub(super) fn validate(config: &StoredAgentConfig) -> Result<(), AgentSessionError> {
-    if config
-        .mode_id
-        .as_deref()
-        .is_some_and(|mode| !matches!(mode, "full" | "write" | "ask" | "ask-cached"))
-        || config
-            .provider_options
-            .as_ref()
-            .is_some_and(|values| !values.is_empty())
+    let acp = is_acp(config)?;
+    if config.mode_id.as_deref().is_some_and(|mode| {
+        !(matches!(mode, "full" | "write" | "ask" | "ask-cached")
+            || acp && matches!(mode, "default" | "plan"))
+    }) || config
+        .provider_options
+        .as_ref()
+        .is_some_and(|values| !values.is_empty())
         || config
             .mcp_servers
             .as_ref()
@@ -35,10 +35,12 @@ pub(super) fn validate(config: &StoredAgentConfig) -> Result<(), AgentSessionErr
             )
         })
         || config.feature_values.iter().flatten().any(|(key, value)| {
-            !matches!(
-                key.as_str(),
-                "autoCompaction" | "autoRetry" | "fastMode" | "slowMode"
-            ) || !value.is_boolean()
+            key != "transport"
+                && (!matches!(
+                    key.as_str(),
+                    "autoCompaction" | "autoRetry" | "fastMode" | "slowMode"
+                ) || !value.is_boolean()
+                    || acp)
         })
     {
         return Err(AgentSessionError::Rejected);
@@ -47,6 +49,29 @@ pub(super) fn validate(config: &StoredAgentConfig) -> Result<(), AgentSessionErr
         model_route(model)?;
     }
     Ok(())
+}
+
+/// Read the explicitly selected protocol; absent selections retain native RPC.
+/// Returns rejection for malformed or unknown protocol values.
+pub(super) fn is_acp(config: &StoredAgentConfig) -> Result<bool, AgentSessionError> {
+    match config
+        .feature_values
+        .as_ref()
+        .and_then(|values| values.get("transport"))
+    {
+        None => Ok(false),
+        Some(Value::String(value)) if value == "rpc" => Ok(false),
+        Some(Value::String(value)) if value == "acp" => Ok(true),
+        Some(_) => Err(AgentSessionError::Rejected),
+    }
+}
+
+/// Describe the protocol choice for a new OMP session.
+pub(super) fn transport_feature(config: &StoredAgentConfig) -> Value {
+    json!({"id":"transport","type":"select","label":"Protocol","icon":"plug",
+        "value":if is_acp(config).unwrap_or(false) {"acp"} else {"rpc"},
+        "description":"Choose the protocol for a new OMP session.",
+        "options":[{"id":"rpc","label":"Native RPC"},{"id":"acp","label":"ACP"}]})
 }
 
 pub(super) fn validate_spec(spec: &AgentSessionSpec) -> Result<(), AgentSessionError> {
@@ -148,6 +173,7 @@ pub(super) async fn apply(
     }
     for (id, value) in config.feature_values.iter().flatten() {
         let kind = match id.as_str() {
+            "transport" => continue,
             "autoCompaction" => "set_auto_compaction",
             "autoRetry" => "set_auto_retry",
             "fastMode" => "set_fast_mode",

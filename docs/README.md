@@ -28,6 +28,8 @@
 
 ## 架构决策
 
+- [ADR-190：OMP 可选 ACP 与原生后台结算信号](decisions/providers/adr-190-omp-acp-settlement.md)：可选协议、共享 ACP adapter 辅助模块、原生 settled 扩展与后台续跑；[验证报告](reports/providers/omp-acp-settlement-2026-10-25.md)。
+
 - [ADR-189：Pi 不暴露 Host 模式](decisions/providers/adr-189-pi-without-host-mode.md)：移除合成的 Native Tools／`default` 模式；Pi 继续直接拥有工具与设置，旧记录仅保留输入兼容；[验证报告](reports/providers/pi-mode-removal-2026-10-24.md)。
 
 - [ADR-188：网页客户端以独立镜像部署在网站根路径](decisions/clients/adr-188-standalone-web-client-image.md)：根路径单页导出、静态 Nginx 镜像与 GHCR 发布，移除内嵌「管理」tab；修订 ADR-132。
@@ -36,7 +38,7 @@
 
 - [ADR-186：内置浏览器按 Workspace daemon 选择出站位置](decisions/clients/adr-186-workspace-browser-egress.md)：本地直连，远端所有目标统一经对应 daemon 出站，涵盖 Hub/relay、TCP 和 SSH。
 
-- [ADR-185：各 Provider 保留原生失败原因](decisions/providers/adr-185-native-provider-failure-details.md)：共享有界脱敏、原生错误字段、恢复建议和持久聊天失败说明。
+- [ADR-185：各 Provider 保留原生失败原因](decisions/providers/adr-185-native-provider-failure-details.md)：共享有界脱敏、原生错误字段、OMP 协议失败来源、恢复建议和持久聊天失败说明。
 
 - [ADR-184：Windows Desktop 不附带内置 daemon](decisions/clients/adr-184-windows-desktop-without-daemon.md)：Windows x64 安装包与 ZIP、Release CI 和原生启动验证、远程主机连接、禁用内置 daemon 及默认 localhost 探测。
 
@@ -240,6 +242,8 @@
 - [语音与听写](operations/speech.md)：离线模型、后端配置和限制。
 
 ## 工程规范与验证
+
+- [OMP 后台任务与错误透传排查](reports/providers/omp-background-errors-2026-10-25.md)：后台工具迟到进度的时间线冲突、agent loop 继续执行和持久错误详情。
 
 - [OpenCode 加载速度验证](reports/providers/opencode-startup-real-usage-2026-10-21.md)：真实原生配置、分阶段加载耗时、重复冷启动消除与定向回归。
 

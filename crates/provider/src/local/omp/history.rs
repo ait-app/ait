@@ -194,6 +194,7 @@ pub(super) async fn load(
                         .and_then(|name| name.to_str())
                         .is_some_and(|name| name.ends_with(&format!("_{id}.jsonl")))
                 })
+                .or_else(|| empty.as_ref().map(|_| root.join(format!("ait-empty_{id}.jsonl"))))
                 .ok_or(AgentSessionError::Unavailable)?,
         };
         if let Some(created) = empty
@@ -252,6 +253,30 @@ impl Journal {
         Ok(path)
     }
 
+    fn resume_metadata(
+        &self,
+        handle: &AgentPersistenceHandle,
+        stream: &Stream,
+        config: &mut StoredAgentConfig,
+    ) -> BTreeMap<String, Value> {
+        let mut metadata = BTreeMap::from([
+            ("cwd".to_owned(), self.header["cwd"].clone()),
+            ("sessionFile".to_owned(), json!(self.path)),
+            ("inputIds".to_owned(), json!(stream.input_ids)),
+        ]);
+        if handle
+            .metadata
+            .as_ref()
+            .and_then(|metadata| metadata.get("transport"))
+            .and_then(Value::as_str)
+            == Some("acp")
+        {
+            config.feature_values = Some(BTreeMap::from([("transport".to_owned(), json!("acp"))]));
+            metadata.insert("transport".to_owned(), json!("acp"));
+        }
+        metadata
+    }
+
     pub(super) fn project(
         &self,
         client: &OmpClient,
@@ -293,7 +318,9 @@ impl Journal {
                             config.model = Some(json!([provider, model]).to_string());
                         }
                     }
-                    stream.message(message)?;
+                    stream
+                        .message(message)
+                        .map_err(|_| AgentSessionError::Failed)?;
                     messages.extend(stream.events.drain(..).filter_map(|event| match event {
                         AgentTurnEvent::Timeline(entry) => Some(entry),
                         _ => None,
@@ -333,11 +360,7 @@ impl Journal {
             last_prompt_preview: users.last().and_then(preview),
             last_activity_at: updated,
         };
-        let resume_metadata = BTreeMap::from([
-            ("cwd".to_owned(), self.header["cwd"].clone()),
-            ("sessionFile".to_owned(), json!(self.path)),
-            ("inputIds".to_owned(), json!(stream.input_ids)),
-        ]);
+        let resume_metadata = self.resume_metadata(handle, &stream, &mut config);
         let created_at = self.header["timestamp"]
             .as_str()
             .ok_or(AgentSessionError::Failed)?

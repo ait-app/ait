@@ -11,6 +11,7 @@ use super::{
 use crate::ports::agent_session::{
     AgentSession, AgentSessionError, AgentSessionFuture, AgentSessionSpec, AgentTurnEvent,
 };
+use crate::ports::diagnostics::{Category, Diagnostic};
 use crate::protocol::prompt::AgentPrompt;
 
 #[derive(Debug)]
@@ -162,7 +163,11 @@ impl Session {
     ) -> Result<String, AgentSessionError> {
         prompt.validate()?;
         config::validate(config)?;
-        if self.closed || self.active.is_some() || prompt.output_schema.is_some() {
+        if self.closed
+            || self.active.is_some()
+            || prompt.output_schema.is_some()
+            || config::is_acp(config)?
+        {
             return Err(AgentSessionError::Rejected);
         }
         if self.config != *config {
@@ -276,7 +281,23 @@ impl Session {
                 }
             }
             Some("session_settled") if self.awaiting_settlement => self.finish(),
-            Some("rpc_frame_error" | "host_tool_call" | "host_uri_request") => {
+            Some("rpc_frame_error") => {
+                let error = if event["error"].is_object() {
+                    &event["error"]
+                } else {
+                    event
+                };
+                self.transport
+                    .diagnostics
+                    .observe_native(error, "rpc_frame_error", "turn");
+                return Err(AgentSessionError::Failed);
+            }
+            Some("host_tool_call" | "host_uri_request") => {
+                self.transport.diagnostics.observe_failure(
+                    Diagnostic::new(Category::Protocol, "host_request"),
+                    "OMP requested a host tool or URI handler that Ait did not register.",
+                    "turn",
+                );
                 return Err(AgentSessionError::Failed);
             }
             Some("response") if event["success"] == false => {
@@ -285,7 +306,14 @@ impl Session {
                     .observe_native(&event["error"], "rpc", "turn");
                 return Err(AgentSessionError::Failed);
             }
-            _ => self.stream.consume(event)?,
+            _ => self.stream.consume(event).map_err(|error| {
+                self.transport.diagnostics.observe_failure(
+                    Diagnostic::new(Category::Protocol, "event"),
+                    &error.to_string(),
+                    "project",
+                );
+                AgentSessionError::Failed
+            })?,
         }
         Ok(())
     }
@@ -307,6 +335,13 @@ impl Session {
 }
 
 impl AgentSession for Session {
+    fn validate_config_update(&self, config: &StoredAgentConfig) -> Result<(), AgentSessionError> {
+        config::validate(config)?;
+        if config::is_acp(config)? {
+            return Err(AgentSessionError::Rejected);
+        }
+        Ok(())
+    }
     fn control_settings(&self, config: &StoredAgentConfig) -> Option<Value> {
         let tiers = if config.model == self.config.model {
             self.service_tiers
@@ -316,12 +351,25 @@ impl AgentSession for Session {
         Some(json!({"availableModes":config::modes(),"features":config::features(config, tiers)}))
     }
 
-    fn failure_diagnostic(&self) -> Option<crate::ports::diagnostics::Diagnostic> {
+    fn failure_diagnostic(&self) -> Option<Diagnostic> {
         self.transport.diagnostics.failure()
     }
 
     fn failure_message(&self) -> Option<Cow<'_, str>> {
-        self.transport.diagnostics.message().map(Cow::Owned)
+        if let Some(message) = self.transport.diagnostics.message() {
+            return Some(Cow::Owned(message));
+        }
+        let diagnostic = self.transport.diagnostics.failure()?;
+        let reason = match diagnostic.source {
+            "frame_limit" => "OMP stdout exceeded the 1 MiB frame limit.",
+            "incomplete_frame" => "OMP stdout ended in an incomplete JSON frame.",
+            "invalid_json" => "OMP stdout contained invalid JSON.",
+            "missing_frame_type" => "OMP stdout contained a frame without a string type.",
+            "invalid_chunks" => "OMP returned invalid or out-of-order RPC chunks.",
+            "stdout_read" => "Ait could not read OMP stdout.",
+            _ => diagnostic.category.message(),
+        };
+        Some(Cow::Owned(format!("Oh My Pi: {reason}")))
     }
 
     fn provider(&self) -> &'static str {
@@ -447,7 +495,22 @@ impl AgentSession for Session {
             let Some(event) = self.transport.poll()? else {
                 return Ok(None);
             };
-            self.consume(&event)?;
+            self.consume(&event).inspect_err(|_| {
+                if self.transport.diagnostics.failure().is_none() {
+                    let message = match event["type"].as_str() {
+                        Some("extension_ui_request") => "Ait could not process an OMP question.",
+                        Some("subagent_lifecycle" | "subagent_progress" | "subagent_event") => {
+                            "Ait could not process an OMP subagent event."
+                        }
+                        _ => "Ait could not process an OMP session event.",
+                    };
+                    self.transport.diagnostics.observe_failure(
+                        Diagnostic::new(Category::Protocol, "event"),
+                        message,
+                        "consume",
+                    );
+                }
+            })?;
             if let Some(event) = self.stream.events.pop_front() {
                 return Ok(Some(event));
             }

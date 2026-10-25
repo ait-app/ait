@@ -2,6 +2,35 @@ use super::*;
 use std::collections::BTreeMap;
 
 #[test]
+fn protocols_validate_native_controls_without_implicitly_switching_existing_sessions() {
+    assert_eq!(is_acp(&StoredAgentConfig::default()), Ok(false));
+    for (selection, valid) in [
+        (json!("rpc"), true),
+        (json!("acp"), true),
+        (json!("unknown"), false),
+        (json!(true), false),
+    ] {
+        let mut config = StoredAgentConfig {
+            feature_values: Some(BTreeMap::from([("transport".to_owned(), selection)])),
+            ..StoredAgentConfig::default()
+        };
+        assert_eq!(validate(&config).is_ok(), valid);
+        if valid {
+            config.mode_id = Some("plan".to_owned());
+            assert_eq!(validate(&config).is_ok(), is_acp(&config).unwrap());
+        }
+    }
+    let config = StoredAgentConfig {
+        feature_values: Some(BTreeMap::from([
+            ("transport".to_owned(), json!("acp")),
+            ("fastMode".to_owned(), json!(true)),
+        ])),
+        ..StoredAgentConfig::default()
+    };
+    assert_eq!(validate(&config), Err(AgentSessionError::Rejected));
+}
+
+#[test]
 fn validates_opaque_model_routes_and_rejects_unsupported_controls() {
     assert_eq!(
         model_route(r#"["provider","model/variant"]"#).unwrap(),

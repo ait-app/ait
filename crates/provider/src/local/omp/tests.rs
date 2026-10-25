@@ -1,5 +1,4 @@
 use std::collections::BTreeMap;
-use std::os::unix::fs::PermissionsExt;
 use std::time::Duration;
 
 use super::*;
@@ -145,9 +144,8 @@ async fn native_modes_questions_children_and_chunked_frames() {
 
 fn fixture() -> (tempfile::TempDir, OmpClient, AgentSessionSpec) {
     let root = tempfile::tempdir().unwrap();
-    let program = root.path().join("omp");
-    std::fs::write(&program, include_str!("tests/fixtures/omp.py")).unwrap();
-    std::fs::set_permissions(&program, std::fs::Permissions::from_mode(0o700)).unwrap();
+    let program = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
+        .join("src/local/omp/tests/fixtures/omp.py");
     let client = OmpClient {
         environment: AgentEnvironment::try_from(BTreeMap::from([(
             "PI_CODING_AGENT_DIR".to_owned(),
@@ -164,7 +162,9 @@ fn fixture() -> (tempfile::TempDir, OmpClient, AgentSessionSpec) {
     (root, client, spec)
 }
 
-async fn next(session: &mut dyn AgentSession) -> Result<AgentTurnEvent, AgentSessionError> {
+pub(super) async fn next(
+    session: &mut dyn AgentSession,
+) -> Result<AgentTurnEvent, AgentSessionError> {
     tokio::time::timeout(Duration::from_secs(5), async {
         loop {
             if let Some(event) = session.poll_turn()? {
@@ -177,7 +177,7 @@ async fn next(session: &mut dyn AgentSession) -> Result<AgentTurnEvent, AgentSes
     .unwrap()
 }
 
-async fn complete(session: &mut dyn AgentSession) -> Vec<AgentTurnEvent> {
+pub(super) async fn complete(session: &mut dyn AgentSession) -> Vec<AgentTurnEvent> {
     let mut events = Vec::new();
     loop {
         let event = next(session).await.unwrap();

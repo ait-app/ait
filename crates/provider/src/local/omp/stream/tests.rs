@@ -1,6 +1,45 @@
 use super::*;
 
 #[test]
+fn projection_errors_describe_the_cause_without_native_payloads() {
+    let mut stream = Stream::new("session".to_owned(), ImageStore::default());
+    for (message, expected) in [
+        (
+            json!({"role":"assistant","content":[]}),
+            "message.timestamp",
+        ),
+        (
+            json!({"role":"assistant","timestamp":1000,"content":[{"type":"toolCall","id":""}]}),
+            "toolCall.id",
+        ),
+        (
+            json!({"role":"assistant","timestamp":1000,"content":[{"type":"text","text":null}]}),
+            "message.content.text/thinking",
+        ),
+        (
+            json!({"role":"toolResult","timestamp":1000,"toolCallId":"unknown","content":"api_key=fixture-secret"}),
+            "without a matching tool call",
+        ),
+        (
+            json!({"role":"assistant","timestamp":1000,"content":[],"usage":{"input":1,"output":1,"cost":{"total":-1}}}),
+            "invalid token usage or cost",
+        ),
+    ] {
+        let error = stream.message(&message).unwrap_err().to_string();
+        assert!(error.contains(expected), "{error}");
+        assert!(!error.contains("fixture-secret"));
+    }
+    assert!(matches!(
+        stream.text(&json!([{"type":"image","data":"invalid"}])),
+        Err(Error::Image)
+    ));
+    stream.tools = (0..4096)
+        .map(|index| (index.to_string(), json!({})))
+        .collect();
+    assert!(matches!(stream.message(&json!({"role":"assistant","timestamp":1000,"content":[{"type":"toolCall","id":"overflow"}]})), Err(Error::ToolLimit)));
+}
+
+#[test]
 fn streaming_and_replay_use_the_same_keys_and_preserve_equal_timestamps() {
     let mut stream = Stream::new("session".to_owned(), ImageStore::default());
     let message = json!({"role":"assistant","timestamp":1000,"content":[{"type":"thinking","thinking":"Plan"},{"type":"text","text":"Hello"}],"stopReason":"stop"});

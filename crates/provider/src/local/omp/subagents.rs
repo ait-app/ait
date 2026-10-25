@@ -38,7 +38,10 @@ impl Children {
             let Some(child) = self.0.get_mut(id) else {
                 return Ok(Vec::new());
             };
-            child.stream.consume(&payload["event"])?;
+            child
+                .stream
+                .consume(&payload["event"])
+                .map_err(|_| AgentSessionError::Failed)?;
             return Ok(child
                 .stream
                 .events

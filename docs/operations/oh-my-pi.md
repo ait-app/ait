@@ -1,6 +1,6 @@
 # Oh My Pi
 
-Oh My Pi 是独立 Provider `omp`，由独立的 Rust 适配器运行 `omp --mode rpc-ui`。
+Oh My Pi 是独立 Provider `omp`，由独立的 Rust 适配器运行默认 `omp --mode rpc-ui`，也可为新会话选择 `omp --mode acp`。
 它的安装、配置、权限、工具和会话均由 OMP 管理，不依赖 Ait 的 Pi 适配器。
 
 ## 安装与配置
@@ -50,3 +50,20 @@ ready 后协商 v2，校验并重组 stdout 分块，支持大于 1 MiB 的原�
 
 决策见 [ADR-180](../decisions/providers/adr-180-omp-native-rpc-provider.md)，
 验证结果见 [报告](../reports/providers/omp-native-provider.md)。
+
+## 选择 ACP
+
+新建 Agent 的 Protocol 控件可选择 Native RPC 或 ACP；已有会话沿用创建时的协议。
+API 配置为 `featureValues: {"transport": "acp"}`，恢复 metadata 同时保存 `transport`。
+ACP 使用原生 default / plan 模式、模型/推理配置、审批、form 问答、steering 与取消。
+审批底层策略沿用 OMP 本机配置；创建时也可用原有权限 ID 覆盖启动参数。
+ACP 不展示 RPC 专用的自动压缩、重试和服务档位开关，相关配置仍由 OMP 本机维护。
+OMP 原生 ACP 要求客户端提供 MCP servers；当前 ACP 适配发送空列表，不加载本机 MCP 配置。
+
+ACP 整轮完成需要原生 `_session/settled` 扩展版本 1。补丁、协商字段、安装与验证步骤见
+[OMP 原生补丁说明](../../third-party/oh-my-pi/README.md)。
+它会等待能唤醒 agent loop 的后台工作，并在同一轮里继续处理结果；Ait 同时核对
+prompt 响应和当前 turn 的 settled，再读取原生历史并结束运行状态。
+本机旧版 18.12.6 可继续使用默认 RPC；启用 ACP 前需使用包含该补丁的原生 OMP。
+Ait 不以延时模拟信号，也不自动替换系统安装。详见
+[ADR-190](../decisions/providers/adr-190-omp-acp-settlement.md)。

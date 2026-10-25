@@ -5,7 +5,7 @@ use std::time::Duration;
 use serde_json::{Value, json};
 use tokio::io::{AsyncBufReadExt, AsyncReadExt, AsyncWriteExt, BufReader};
 use tokio::process::{Child, ChildStdin, Command};
-use tokio::sync::mpsc;
+use tokio::sync::{mpsc, oneshot};
 use tokio::task::JoinHandle;
 use tokio_util::task::AbortOnDropHandle;
 
@@ -57,44 +57,55 @@ impl Transport {
         let input = child.stdin.take().ok_or(AgentSessionError::Failed)?;
         let output = child.stdout.take().ok_or(AgentSessionError::Failed)?;
         let stderr = child.stderr.take().ok_or(AgentSessionError::Failed)?;
-        let stderr_task = AbortOnDropHandle::new(tokio::spawn(diagnostics.clone().drain(stderr)));
+        let stderr_diagnostics = diagnostics.clone();
+        let (stderr_done, stderr_finished) = oneshot::channel();
+        let stderr_task = AbortOnDropHandle::new(tokio::spawn(async move {
+            stderr_diagnostics.drain(stderr).await;
+            let _ = stderr_done.send(());
+        }));
         let reader_diagnostics = diagnostics.clone();
         let (sender, messages) = mpsc::channel(2);
         let reader = tokio::spawn(async move {
             let mut output = BufReader::new(output);
             let mut decoder = super::framing::Decoder::default();
-            loop {
+            let failure = loop {
                 let mut bytes = Vec::new();
                 let read = (&mut output)
                     .take((MAX_FRAME + 1) as u64)
                     .read_until(b'\n', &mut bytes)
                     .await;
-                if !matches!(read, Ok(1..))
-                    || bytes.last() != Some(&b'\n')
-                    || bytes.len() > MAX_FRAME
-                {
-                    break;
+                if bytes.len() > MAX_FRAME {
+                    break Diagnostic::new(Category::Protocol, "frame_limit");
+                }
+                match read {
+                    Ok(0) => break Diagnostic::new(Category::Closed, "stdout"),
+                    Err(_) => break Diagnostic::new(Category::Closed, "stdout_read"),
+                    Ok(_) if bytes.last() != Some(&b'\n') => {
+                        break Diagnostic::new(Category::Protocol, "incomplete_frame");
+                    }
+                    Ok(_) => {}
                 }
                 if bytes.iter().all(u8::is_ascii_whitespace) {
                     continue;
                 }
                 let Ok(value) = serde_json::from_slice::<Value>(&bytes) else {
-                    break;
+                    break Diagnostic::new(Category::Protocol, "invalid_json");
                 };
                 if !value["type"].is_string() {
-                    break;
+                    break Diagnostic::new(Category::Protocol, "missing_frame_type");
                 }
                 match decoder.push(value) {
                     Ok(Some(value)) => {
                         if sender.send(value).await.is_err() {
-                            break;
+                            return;
                         }
                     }
                     Ok(None) => {}
-                    Err(_) => break,
+                    Err(_) => break Diagnostic::new(Category::Protocol, "invalid_chunks"),
                 }
-            }
-            reader_diagnostics.observe(Diagnostic::new(Category::Closed, "stdout"), "read");
+            };
+            let _ = tokio::time::timeout(Duration::from_millis(100), stderr_finished).await;
+            reader_diagnostics.observe(failure, "read");
         });
         Ok(Self {
             group: child.id(),

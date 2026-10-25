@@ -1,7 +1,6 @@
 use serde_json::{Value, json};
 use uuid::Uuid;
 
-use super::PROVIDER;
 use crate::local::acp_permissions::{Pending, resolve_tool};
 use crate::ports::agent_session::AgentSessionError;
 
@@ -36,7 +35,7 @@ pub(super) fn resolve(pending: &Pending, response: &Value) -> Result<Value, Agen
 }
 
 /// Project a supported native form; unsupported schemas reject without an implicit answer.
-pub(super) fn form(message: &Value) -> Result<Pending, AgentSessionError> {
+pub(super) fn form(message: &Value, provider: &str) -> Result<Pending, AgentSessionError> {
     let params = &message["params"];
     if params["mode"] != "form" {
         return Err(AgentSessionError::Rejected);
@@ -88,7 +87,7 @@ pub(super) fn form(message: &Value) -> Result<Pending, AgentSessionError> {
         options: Vec::new(),
         schema: Some(schema),
         unique_fields,
-        request: json!({"id":Uuid::new_v4().to_string(),"provider":PROVIDER,
+        request: json!({"id":Uuid::new_v4().to_string(),"provider":provider,
             "kind":"question","name":"question","title":params["message"],
             "input":{"questions":questions},"metadata":{"toolCallId":params["toolCallId"]}}),
     })

@@ -139,6 +139,39 @@ for line in sys.stdin:
         active = True
         emit({'type': 'agent_start'})
         message('user', [{'type': 'text', 'text': text}, *command.get('images', [])])
+        if text == 'frame-error':
+            emit({'type': 'rpc_frame_error', 'error': {
+                'message': 'Upstream shard unavailable api_key=fixture-secret', 'statusCode': 503}})
+            continue
+        if text == 'unknown-native-error':
+            error = 'Upstream shard unavailable api_key=fixture-secret'
+            message('assistant', [], stopReason='error', errorMessage=error)
+            emit({'type': 'prompt_result', 'id': prompt_id, 'status': 'error',
+                  'sessionSettled': True, 'error': error})
+            continue
+        if text == 'invalid-timestamp':
+            emit({'type': 'message_start', 'message': {'role': 'assistant', 'content': []}})
+            continue
+        if text == 'unknown-tool-result':
+            message('toolResult', [{'type': 'text', 'text': 'api_key=fixture-secret'}],
+                    toolCallId='unknown', toolName='bash', isError=True)
+            continue
+        if text == 'invalid-usage':
+            message('assistant', [], usage={'input': -1, 'output': 0})
+            continue
+        if text == 'closed':
+            break
+        if text == 'incomplete-frame':
+            sys.stdout.write('{"type":')
+            sys.stdout.flush()
+            break
+        if text == 'invalid-chunks':
+            emit({'type': 'rpc_chunk', 'chunkId': 'bad', 'index': 1,
+                  'count': 2, 'byteLength': 4, 'data': 'e30='})
+            break
+        if text == 'missing-frame-type':
+            emit({'content': 'api_key=fixture-secret'})
+            break
         if text in ('native-error', 'native-error-recovered'):
             message('assistant', [], provider='test', model='model', stopReason='error',
                     errorMessage='Payment required: insufficient balance api_key=fixture-secret')
@@ -175,6 +208,27 @@ for line in sys.stdin:
         call = records[-1]['message']['content'][-1]['id']
         emit({'type': 'tool_execution_start', 'toolCallId': call, 'toolName': 'read', 'args': {'path': 'file.rs'}})
         message('toolResult', [{'type': 'text', 'text': 'contents'}], toolCallId=call, toolName='read', isError=False)
+        if text in ('background-tool-error', 'background-busy'):
+            if text == 'background-busy':
+                message('assistant', [{'type': 'toolCall', 'id': 'foreground', 'name': 'bash',
+                                       'arguments': {'command': 'offline fixture'}}], stopReason='toolUse')
+                emit({'type': 'tool_execution_start', 'toolCallId': 'foreground',
+                      'toolName': 'bash', 'args': {'command': 'offline fixture'}})
+            else:
+                emit({'type': 'agent_end', 'messages': []})
+                emit({'type': 'prompt_result', 'id': prompt_id, 'status': 'completed',
+                      'sessionSettled': False})
+            emit({'type': 'tool_execution_update', 'toolCallId': call, 'toolName': 'read',
+                  'args': {'path': 'file.rs'}, 'partialResult': {
+                      'content': [{'type': 'text', 'text': 'curl: (28) Connection timed out'}],
+                      'details': {'async': {'state': 'completed', 'jobId': 'bg_15'}}}})
+            message('custom', 'Background job bg_15 completed: curl: (28) Connection timed out',
+                    customType='async-result', display=True, attribution='agent')
+            if text == 'background-busy':
+                message('toolResult', [{'type': 'text', 'text': 'Foreground finished'}],
+                        toolCallId='foreground', toolName='bash', isError=False)
+            else:
+                emit({'type': 'agent_start'})
         finish(settled=text != 'background')
     elif kind == 'steer':
         response(command, {'disposition': 'queued'})

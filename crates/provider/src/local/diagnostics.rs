@@ -232,6 +232,17 @@ impl Diagnostics {
         self.record(native(error, source), operation, true, Some(error));
     }
 
+    /// Retain an adapter-owned explanation with its known failure class.
+    /// `message` must describe the protocol failure without copying payloads or tool inputs.
+    pub(crate) fn observe_failure(&self, diagnostic: Diagnostic, message: &str, operation: &str) {
+        self.record(
+            diagnostic,
+            operation,
+            true,
+            Some(&Value::String(message.to_owned())),
+        );
+    }
+
     /// Clear failure facts before a new turn; repeated log aggregation remains bounded.
     pub(crate) fn clear(&self) {
         if let Ok(mut state) = self.state.lock() {
@@ -277,9 +288,16 @@ impl Diagnostics {
         }
         if affects_turn
             && diagnostic.will_retry != Some(true)
-            && (state
-                .failure
-                .is_none_or(|previous| previous.category == Category::Unknown)
+            && ((error.is_some() && state.explanation.message().is_none())
+                || state.failure.is_none_or(|previous| {
+                    previous.category == Category::Unknown
+                        && (state.explanation.message().is_none()
+                            || (error.is_some()
+                                && !matches!(
+                                    diagnostic.category,
+                                    Category::Protocol | Category::Closed
+                                )))
+                })
                 || (!matches!(
                     diagnostic.category,
                     Category::Unknown | Category::Closed | Category::Protocol

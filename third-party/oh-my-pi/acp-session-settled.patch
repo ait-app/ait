@@ -1,0 +1,536 @@
+diff --git a/packages/coding-agent/CHANGELOG.md b/packages/coding-agent/CHANGELOG.md
+index 91190dc..0a49aa8 100644
+--- a/packages/coding-agent/CHANGELOG.md
++++ b/packages/coding-agent/CHANGELOG.md
+@@ -2,6 +2,14 @@
+ 
+ ## [Unreleased]
+ 
++### Added
++
++- ACP clients can negotiate versioned `_session/settled` notifications to wait for background result turns, correlate completion to their prompt, and receive native terminal error details.
++
++### Fixed
++
++- ACP `--no-session` discovery no longer writes a native conversation.
++
+ ## [18.12.6] - 2026-10-21
+ 
+ ### Added
+diff --git a/packages/coding-agent/src/main.ts b/packages/coding-agent/src/main.ts
+index 5128aa2..84204fa 100644
+--- a/packages/coding-agent/src/main.ts
++++ b/packages/coding-agent/src/main.ts
+@@ -504,7 +504,7 @@ export interface AcpSessionFactoryOptions {
+ 	sessionDir?: string;
+ 	authStorage: AuthStorage;
+ 	modelRegistry: ModelRegistry;
+-	parsedArgs: Pick<Args, "apiKey" | "trustedExtensions" | "tools" | "invalidFlagValues">;
++	parsedArgs: Pick<Args, "apiKey" | "trustedExtensions" | "tools" | "invalidFlagValues" | "noSession">;
+ 	rawArgs: string[];
+ 	createSession: (options: CreateAgentSessionOptions) => Promise<CreateAgentSessionResult>;
+ }
+@@ -542,7 +542,9 @@ async function loadTrustedSessionExtensions(
+ export function createAcpSessionFactory(args: AcpSessionFactoryOptions): AcpSessionFactory {
+ 	return async (cwd, factoryOptions) => {
+ 		const nextSettings = await args.settings.cloneForCwd(cwd);
+-		const nextSessionManager = SessionManager.create(cwd, args.sessionDir);
++		const nextSessionManager = args.parsedArgs.noSession
++			? SessionManager.inMemory(cwd)
++			: SessionManager.create(cwd, args.sessionDir);
+ 		const agentId = `acp:${nextSessionManager.getSessionId()}`;
+ 		// `baseOptions.titleSystemPrompt` is resolved from the launch cwd; an ACP
+ 		// host can open `session/new` for any client-supplied workspace, so
+diff --git a/packages/coding-agent/src/modes/acp/acp-agent.ts b/packages/coding-agent/src/modes/acp/acp-agent.ts
+index 834930b..68942f5 100644
+--- a/packages/coding-agent/src/modes/acp/acp-agent.ts
++++ b/packages/coding-agent/src/modes/acp/acp-agent.ts
+@@ -159,6 +159,9 @@ type PromptTurnState = {
+ 	abortController: AbortController;
+ 	cancelRequested: boolean;
+ 	settled: boolean;
++	/** Only one terminal handler owns the background-work barrier. */
++	finishing?: boolean;
++	lastEndEvent?: Extract<AgentSessionEvent, { type: "agent_end" }>;
+ 	/**
+ 	 * Delivery of streamed assistant `error` chunks this turn (the mapper
+ 	 * surfaces them as `agent_message_chunk`s). Resolves `true` once at least
+@@ -854,6 +857,7 @@ export class AcpAgent implements Agent {
+ 			// agent-shell gate `_session/steering` on it.
+ 			_meta: {
+ 				steering: { supported: true },
++				sessionSettled: { version: 1 },
+ 			},
+ 		};
+ 	}
+@@ -1001,6 +1005,20 @@ export class AcpAgent implements Agent {
+ 	}
+ 
+ 	async prompt(params: PromptRequest): Promise<PromptResponse> {
++		if (this.#clientCapabilities?._meta?.sessionSettled === true) {
++			const turnId = params._meta?.turnId;
++			if (
++				typeof turnId !== "string" ||
++				turnId.length === 0 ||
++				turnId.length > 128 ||
++				/[\x00-\x1f\x7f]/.test(turnId)
++			) {
++				throw RequestError.invalidParams(
++					{ field: "_meta.turnId" },
++					"sessionSettled requires a bounded _meta.turnId",
++				);
++			}
++		}
+ 		const record = this.#getSessionRecord(params.sessionId);
+ 		const activeTurn = record.promptTurn;
+ 		// A `_session/steering` refusal (`promptRequired`) now only ever
+@@ -1036,7 +1054,7 @@ export class AcpAgent implements Agent {
+ 		const cancellation: PromptDispatchCancellation = { cancelled: false };
+ 		record.pendingPromptDispatches.push(cancellation);
+ 		try {
+-			return await this.#queuePrompt(record, async () => {
++			const response = await this.#queuePrompt(record, async () => {
+ 				const previousTurn = record.promptTurn;
+ 				if (previousTurn) {
+ 					// Wait for any prompt that's still settling or whose cancel cleanup is
+@@ -1108,6 +1126,15 @@ export class AcpAgent implements Agent {
+ 
+ 				return await pendingPrompt.promise;
+ 			});
++			if (this.#clientCapabilities?._meta?.sessionSettled === true && response.stopReason !== "cancelled") {
++				await this.#waitForPromptEventHandlers(record);
++				await record.session.sessionManager.flush();
++				await this.#connection.extNotification("_session/settled", {
++					sessionId: params.sessionId,
++					turnId: params._meta?.turnId,
++				});
++			}
++			return response;
+ 		} finally {
+ 			const index = record.pendingPromptDispatches.indexOf(cancellation);
+ 			if (index >= 0) {
+@@ -1147,8 +1174,12 @@ export class AcpAgent implements Agent {
+ 	}
+ 
+ 	#trackPromptEvent(record: ManagedSessionRecord, event: AgentSessionEvent): void {
++		const owner = record.promptTurn;
+ 		const handling = this.#handlePromptEvent(record, event).catch((error: unknown) => {
+ 			logger.warn("ACP prompt event handler failed", { error });
++			if (this.#clientCapabilities?._meta?.sessionSettled === true && record.promptTurn === owner) {
++				this.#finishPrompt(record, undefined, error);
++			}
+ 		});
+ 		record.promptEventHandlers.add(handling);
+ 		void handling.finally(() => {
+@@ -1821,6 +1852,9 @@ export class AcpAgent implements Agent {
+ 			cwd: record.session.sessionManager.getCwd(),
+ 			resolveImageData: resolveImageDataForAcp,
+ 		})) {
++			if (streamedAssistantError) {
++				notification.update._meta = { ...notification.update._meta, providerError: true };
++			}
+ 			const delivery = this.#connection.sessionUpdate(notification);
+ 			if (streamedAssistantError) {
+ 				// Resolves true only once the error chunk actually reached the
+@@ -1840,14 +1874,21 @@ export class AcpAgent implements Agent {
+ 		this.#clearLiveAssistantMessageAfterEvent(record, event);
+ 
+ 		if (event.type === "agent_end") {
++			if (event.isTerminal === false) return;
++			promptTurn.lastEndEvent = event;
+ 			await this.#flushMissedFinalAssistantText(record, event);
+ 			await this.#flushUnreportedTurnError(record, event);
+ 			await this.#emitEndOfTurnUpdates(record);
++			if (promptTurn.finishing) return;
++			promptTurn.finishing = true;
+ 			await this.#waitForAcpPromptIdle(record);
+ 			record.liveMessageId = undefined;
+ 			record.liveMessageProgress = undefined;
++			const finalEvent = promptTurn.lastEndEvent ?? event;
++			const lastAssistant = [...finalEvent.messages].reverse().find(message => message.role === "assistant");
+ 			this.#finishPrompt(record, {
+-				stopReason: this.#resolveStopReason(event, promptTurn.cancelRequested),
++				_meta: lastAssistant?.stopReason === "error" ? { error: lastAssistant.errorMessage } : undefined,
++				stopReason: this.#resolveStopReason(finalEvent, promptTurn.cancelRequested),
+ 				usage: this.#buildTurnUsage(promptTurn.usageBaseline, record.session.sessionManager.getUsageStatistics()),
+ 			});
+ 		}
+@@ -1931,12 +1972,31 @@ export class AcpAgent implements Agent {
+ 			update: {
+ 				sessionUpdate: "agent_message_chunk",
+ 				content: { type: "text", text: errorMessage },
++				_meta: { providerError: true },
+ 				messageId: record.liveMessageId ?? crypto.randomUUID(),
+ 			},
+ 		});
+ 	}
+ 
+ 	async #waitForAcpPromptIdle(record: ManagedSessionRecord): Promise<void> {
++		if (this.#clientCapabilities?._meta?.sessionSettled === true) {
++			const turn = record.promptTurn;
++			while (record.promptTurn === turn && !turn?.cancelRequested) {
++				await record.session.waitForIdle();
++				await record.session.drainAsyncJobDeliveriesForAcp({ settle: true });
++				// Let admitted submissions and yield-queue drains become visible before
++				// declaring quiescence; there is no timeout-based completion fallback.
++				await Bun.sleep(0);
++				if (
++					!record.session.isStreaming &&
++					!record.session.hasAdmittedSubmission &&
++					record.session.queuedMessageCount === 0 &&
++					!record.session.hasPendingAsyncWork()
++				)
++					return;
++			}
++			return;
++		}
+ 		for (let pass = 0; pass < ACP_ASYNC_DELIVERY_DRAIN_MAX_PASSES; pass++) {
+ 			await record.session.waitForIdle();
+ 			const delivered = await record.session.drainAsyncJobDeliveriesForAcp({
+diff --git a/packages/coding-agent/src/session/agent-session.ts b/packages/coding-agent/src/session/agent-session.ts
+index cb90096..a86d9ce 100644
+--- a/packages/coding-agent/src/session/agent-session.ts
++++ b/packages/coding-agent/src/session/agent-session.ts
+@@ -954,7 +954,7 @@ export class AgentSession implements SettingsScope {
+ 	#planReferenceSent = false;
+ 	#planReferencePath = "local://PLAN.md";
+ 	#clientBridge: ClientBridge | undefined;
+-	#allowAcpAgentInitiatedTurns = false;
++	#acpAgentInitiatedTurnScopes = 0;
+ 	/** Session file created by this session's `/move`; removed on dispose if it stayed empty. */
+ 	#movedFromEmptySessionFile?: string;
+ 
+@@ -2422,7 +2422,7 @@ export class AgentSession implements SettingsScope {
+ 			onSseEvent: this.#onSseEvent,
+ 			isDisposed: () => this.#isDisposed,
+ 			abortInProgress: () => this.#abortInProgress,
+-			allowAgentInitiatedTurns: () => this.#allowAcpAgentInitiatedTurns,
++			allowAgentInitiatedTurns: () => this.#acpAgentInitiatedTurnScopes > 0,
+ 			planModeState: () => this.#planModeState,
+ 			clientBridge: () => this.#clientBridge,
+ 			emitSessionEvent: event => this.#emitSessionEvent(event),
+@@ -6585,20 +6585,24 @@ export class AgentSession implements SettingsScope {
+ 		return this.#advisors.waitForAdvisorCatchup(timeoutMs, options);
+ 	}
+ 
+-	async drainAsyncJobDeliveriesForAcp(options?: { timeoutMs?: number }): Promise<boolean> {
++	async drainAsyncJobDeliveriesForAcp(options?: { timeoutMs?: number; settle?: boolean }): Promise<boolean> {
+ 		const manager = this.#asyncJobManager;
+ 		if (!manager) return false;
+ 		const ownerFilter = this.#agentId ? { ownerId: this.#agentId } : undefined;
+ 		const before = manager.getDeliveryState(ownerFilter);
+-		if (before.queued === 0 && !before.delivering) return false;
+-		const previousAllowAcpAgentInitiatedTurns = this.#allowAcpAgentInitiatedTurns;
+-		this.#allowAcpAgentInitiatedTurns = true;
++		if (!options?.settle && before.queued === 0 && !before.delivering) return false;
++		this.#acpAgentInitiatedTurnScopes++;
+ 		try {
++			if (options?.settle) {
++				const pending = this.hasPendingAsyncWork();
++				await this.settleAsyncWork();
++				return pending;
++			}
+ 			const drained = await manager.drainDeliveries({ timeoutMs: options?.timeoutMs, filter: ownerFilter });
+ 			const after = manager.getDeliveryState(ownerFilter);
+ 			return drained && (before.queued !== after.queued || before.delivering !== after.delivering);
+ 		} finally {
+-			this.#allowAcpAgentInitiatedTurns = previousAllowAcpAgentInitiatedTurns;
++			this.#acpAgentInitiatedTurnScopes--;
+ 		}
+ 	}
+ 
+@@ -9348,12 +9352,12 @@ export class AgentSession implements SettingsScope {
+ 		// scheduler continuations) do not count: a drain there would be an
+ 		// autonomous run the client can neither see nor cancel. Explicit
+ 		// agent-initiated deliveries re-enable the drain via
+-		// #allowAcpAgentInitiatedTurns. Inside a client bracket the ordinary
++		// #acpAgentInitiatedTurnScopes. Inside a client bracket the ordinary
+ 		// gates below still apply (not streaming, user-interrupt suppression,
+ 		// provider-valid tail for follow-up-only resumes).
+ 		if (
+ 			this.#clientBridge?.deferAgentInitiatedTurns === true &&
+-			!this.#allowAcpAgentInitiatedTurns &&
++			this.#acpAgentInitiatedTurnScopes === 0 &&
+ 			this.#clientPromptInFlightCount === 0
+ 		) {
+ 			return false;
+@@ -9705,7 +9709,7 @@ export class AgentSession implements SettingsScope {
+ 
+ 		if (options?.deliverAs === "nextTurn") {
+ 			if (options?.triggerTurn) {
+-				if (this.#clientBridge?.deferAgentInitiatedTurns && !this.#allowAcpAgentInitiatedTurns) {
++				if (this.#clientBridge?.deferAgentInitiatedTurns && this.#acpAgentInitiatedTurnScopes === 0) {
+ 					this.#queueHiddenNextTurnMessage(normalizedAppMessage, false);
+ 					return false;
+ 				}
+@@ -9745,7 +9749,7 @@ export class AgentSession implements SettingsScope {
+ 				this.#foldStrandedIrcAsidesIntoContext([normalizedAppMessage]);
+ 				return false;
+ 			}
+-			if (this.#clientBridge?.deferAgentInitiatedTurns && !this.#allowAcpAgentInitiatedTurns) {
++			if (this.#clientBridge?.deferAgentInitiatedTurns && this.#acpAgentInitiatedTurnScopes === 0) {
+ 				this.#queueHiddenNextTurnMessage(normalizedAppMessage, false);
+ 				return false;
+ 			}
+@@ -9765,7 +9769,7 @@ export class AgentSession implements SettingsScope {
+ 		}
+ 
+ 		if (options?.triggerTurn) {
+-			if (this.#clientBridge?.deferAgentInitiatedTurns && !this.#allowAcpAgentInitiatedTurns) {
++			if (this.#clientBridge?.deferAgentInitiatedTurns && this.#acpAgentInitiatedTurnScopes === 0) {
+ 				this.#queueHiddenNextTurnMessage(normalizedAppMessage, false);
+ 				return false;
+ 			}
+diff --git a/packages/coding-agent/test/acp-agent.test.ts b/packages/coding-agent/test/acp-agent.test.ts
+index 2aa8cee..4f61bde 100644
+--- a/packages/coding-agent/test/acp-agent.test.ts
++++ b/packages/coding-agent/test/acp-agent.test.ts
+@@ -130,6 +130,11 @@ class FakeAgentSession {
+ 	customCommands: [] = [];
+ 	extensionRunner: ExtensionRunner | undefined = undefined;
+ 	isStreaming = false;
++	hasAdmittedSubmission = false;
++	pendingAsyncWork = false;
++	hasPendingAsyncWork(): boolean {
++		return this.pendingAsyncWork;
++	}
+ 	queuedMessageCount = 0;
+ 	systemPrompt = "system";
+ 	disposed = false;
+@@ -483,6 +488,7 @@ type SetToolUIContextSpy = (uiContext: ExtensionUIContext, hasUI: boolean) => vo
+ interface AgentHarness {
+ 	agent: AcpAgent;
+ 	updates: SessionNotification[];
++	settled: Array<Record<string, unknown>>;
+ 	abortController: AbortController;
+ 	sessions: FakeAgentSession[];
+ 	setToolUIContextSpies: SetToolUIContextSpy[];
+@@ -548,11 +554,15 @@ async function createHarness(
+ 	await Settings.init({ agentDir, inMemory: true });
+ 
+ 	const updates: SessionNotification[] = [];
++	const settled: Array<Record<string, unknown>> = [];
+ 	const abortController = new AbortController();
+ 	const sessions: FakeAgentSession[] = [];
+ 	const setToolUIContextSpies: SetToolUIContextSpy[] = [];
+ 	const sessionFactoryOptions: Array<{ interactivePrompts?: boolean } | undefined> = [];
+ 	const connection = {
++		extNotification: async (method: string, params: Record<string, unknown>) => {
++			if (method === "_session/settled") settled.push(params);
++		},
+ 		sessionUpdate: async (notification: SessionNotification) => {
+ 			// Only await when a hook is configured: `await undefined` would insert a
+ 			// microtask before the push and perturb ordering-sensitive tests.
+@@ -600,6 +610,7 @@ async function createHarness(
+ 	return {
+ 		agent,
+ 		updates,
++		settled,
+ 		abortController,
+ 		sessions,
+ 		setToolUIContextSpies,
+@@ -2866,6 +2877,87 @@ describe("ACP agent", () => {
+ 		}
+ 	});
+ 
++	it("rejects uncorrelated settlement requests and returns native terminal error details", async () => {
++		const harness = await createHarness({ clientCapabilities: { _meta: { sessionSettled: true } } });
++		const created = await harness.agent.newSession({ cwd: harness.cwdA, mcpServers: [] });
++		const session = harness.findSession(created.sessionId)!;
++		try {
++			await expect(
++				harness.agent.prompt({ sessionId: created.sessionId, prompt: [{ type: "text", text: "uncorrelated" }] }),
++			).rejects.toMatchObject({ code: -32602 });
++			expect(session.promptCalls).toEqual([]);
++			spyOn(session, "prompt").mockImplementation(async () => {
++				const assistant = {
++					...makeAssistantMessage(""),
++					stopReason: "error" as const,
++					errorMessage: "upstream shard unavailable",
++				};
++				for (const listener of session.listeners())
++					listener({ type: "agent_end", messages: [assistant] } as AgentSessionEvent);
++				return true;
++			});
++			const response = await harness.agent.prompt({
++				sessionId: created.sessionId,
++				prompt: [{ type: "text", text: "fail" }],
++				_meta: { turnId: "failed-turn" },
++			});
++			expect(response._meta?.error).toBe("upstream shard unavailable");
++			expect(harness.settled).toEqual([{ sessionId: created.sessionId, turnId: "failed-turn" }]);
++		} finally {
++			harness.abortController.abort();
++			await Bun.sleep(0);
++		}
++	});
++
++	it("holds negotiated settlement across background wakes and correlates each prompt", async () => {
++		const harness = await createHarness({ clientCapabilities: { _meta: { sessionSettled: true } } });
++		const created = await harness.agent.newSession({ cwd: harness.cwdA, mcpServers: [] });
++		const session = harness.findSession(created.sessionId)!;
++		const blocked = Promise.withResolvers<void>();
++		const release = Promise.withResolvers<void>();
++		session.pendingAsyncWork = true;
++		session.asyncJobDrain = async () => {
++			if (!session.pendingAsyncWork) return false;
++			blocked.resolve();
++			await release.promise;
++			const assistant = makeAssistantMessage("background continued");
++			for (const listener of session.listeners()) {
++				listener({
++					type: "message_update",
++					message: assistant,
++					assistantMessageEvent: { type: "text_delta", delta: "background continued" },
++				} as AgentSessionEvent);
++				listener({ type: "agent_end", messages: [assistant] } as AgentSessionEvent);
++			}
++			session.pendingAsyncWork = false;
++			return true;
++		};
++		const prompt = harness.agent.prompt({
++			sessionId: created.sessionId,
++			prompt: [{ type: "text", text: "background" }],
++			_meta: { turnId: "first" },
++		});
++		try {
++			await blocked.promise;
++			expect(harness.settled).toEqual([]);
++			expect(await Promise.race([prompt.then(() => true), Bun.sleep(0).then(() => false)])).toBe(false);
++			release.resolve();
++			await prompt;
++			expect(harness.updates.some(update => JSON.stringify(update).includes("background continued"))).toBe(true);
++			expect(harness.settled).toEqual([{ sessionId: created.sessionId, turnId: "first" }]);
++			await harness.agent.prompt({
++				sessionId: created.sessionId,
++				prompt: [{ type: "text", text: "next" }],
++				_meta: { turnId: "second" },
++			});
++			expect(harness.settled.map(value => value.turnId)).toEqual(["first", "second"]);
++		} finally {
++			release.resolve();
++			harness.abortController.abort();
++			await Bun.sleep(0);
++		}
++	});
++
+ 	it("drains async job deliveries before completing the ACP prompt", async () => {
+ 		const harness = await createHarness();
+ 		const created = await harness.agent.newSession({ cwd: harness.cwdA, mcpServers: [] });
+diff --git a/packages/coding-agent/test/acp-initialize-conformance.test.ts b/packages/coding-agent/test/acp-initialize-conformance.test.ts
+index 1877323..7e276b0 100644
+--- a/packages/coding-agent/test/acp-initialize-conformance.test.ts
++++ b/packages/coding-agent/test/acp-initialize-conformance.test.ts
+@@ -258,13 +258,13 @@ describe("ACP initialize conformance", () => {
+ 		);
+ 	});
+ 
+-	it("advertises the steering extension via top-level _meta", async () => {
++	it("advertises steering and versioned settlement via top-level _meta", async () => {
+ 		const agent = await createAgent();
+ 		const response = await agent.initialize(buildInitializeRequest());
+ 		expectAcpStructure(arkInitializeResponse, response);
+ 		// Top-level `_meta` (sibling of `agentCapabilities`) is the
+ 		// claude-agent-acp / codex-acp advertisement that gates clients'
+ 		// `_session/steering` calls (agent-shell, spec proposal `session/inject`).
+-		expect(response._meta).toEqual({ steering: { supported: true } });
++		expect(response._meta).toEqual({ steering: { supported: true }, sessionSettled: { version: 1 } });
+ 	});
+ });
+diff --git a/packages/coding-agent/test/acp-mcp-isolation.test.ts b/packages/coding-agent/test/acp-mcp-isolation.test.ts
+index 2c805ca..aacd47d 100644
+--- a/packages/coding-agent/test/acp-mcp-isolation.test.ts
++++ b/packages/coding-agent/test/acp-mcp-isolation.test.ts
+@@ -29,6 +29,33 @@ afterAll(() => {
+ });
+ 
+ describe("createAcpSessionFactory MCP isolation (issue #1234)", () => {
++	it("honors --no-session without writing native history during ACP discovery", async () => {
++		const tempDir = TempDir.createSync("@pi-acp-no-session-");
++		try {
++			for (const noSession of [true, false]) {
++				const factory = createAcpSessionFactory({
++					baseOptions: {},
++					settings: Settings.isolated({}),
++					sessionDir: tempDir.join("sessions"),
++					authStorage,
++					modelRegistry,
++					parsedArgs: { noSession, invalidFlagValues: [] },
++					rawArgs: [],
++					createSession: async options =>
++						({ session: { sessionManager: options.sessionManager } }) as CreateAgentSessionResult,
++				});
++				const { session } = await factory(tempDir.path());
++				await session.sessionManager.ensureOnDisk();
++				const file = session.sessionManager.getSessionFile();
++				if (noSession) expect(file).toBeUndefined();
++				else expect(await Bun.file(file!).exists()).toBe(true);
++				await session.sessionManager.close();
++			}
++		} finally {
++			await tempDir.remove();
++		}
++	});
++
+ 	it("forces enableMCP=false even when baseOptions opts in", async () => {
+ 		const tempDir = TempDir.createSync("@pi-acp-mcp-isolation-");
+ 		try {
+diff --git a/packages/coding-agent/test/agent-session-async-delivery.test.ts b/packages/coding-agent/test/agent-session-async-delivery.test.ts
+index dc0b127..e503e32 100644
+--- a/packages/coding-agent/test/agent-session-async-delivery.test.ts
++++ b/packages/coding-agent/test/agent-session-async-delivery.test.ts
+@@ -131,6 +131,54 @@ describe("AgentSession owner-routed async delivery", () => {
+ 		expect(deliveredImages).toEqual([image]);
+ 	});
+ 
++	it("keeps an ACP bracket alive for a running owned job and executes its result turn", async () => {
++		const model = getBundledModel("anthropic", "claude-sonnet-4-5")!;
++		const mock = createMockModel({ handler: () => ({ content: ["continued"] }) });
++		const agent = new Agent({
++			getApiKey: () => "test-key",
++			initialState: { model, systemPrompt: ["Test"], tools: [] },
++			convertToLlm,
++			streamFn: mock.stream,
++		});
++		const auth = await AuthStorage.create(":memory:");
++		authStorages.push(auth);
++		auth.keys.setRuntime("anthropic", "test-key");
++		const manager = new AsyncJobManager({});
++		AsyncJobManager.setInstance(manager);
++		session = new AgentSession({
++			agent,
++			sessionManager: SessionManager.inMemory(),
++			settings: Settings.isolated(),
++			modelRegistry: new ModelRegistry(auth),
++			agentId: "AcpOwner",
++			asyncJobManager: manager,
++		});
++		session.setClientBridge({
++			deferAgentInitiatedTurns: true,
++			capabilities: {
++				readTextFile: false,
++				writeTextFile: false,
++				terminal: false,
++				requestPermission: false,
++			},
++		});
++		const gate = Promise.withResolvers<string>();
++		manager.register("bash", "ACP background job", () => gate.promise, { id: "acp-job", ownerId: "AcpOwner" });
++		const draining = session.drainAsyncJobDeliveriesForAcp({ settle: true });
++		try {
++			expect(await Promise.race([draining.then(() => true), Bun.sleep(0).then(() => false)])).toBe(false);
++			gate.resolve("ACP job completed");
++			await draining;
++			expect(session.hasPendingAsyncWork()).toBe(false);
++			expect(mock.calls.some(call => JSON.stringify(call.context.messages).includes("ACP job completed"))).toBe(
++				true,
++			);
++		} finally {
++			gate.resolve("cleanup");
++			await draining;
++		}
++	});
++
+ 	it("exposes a process job's full command in the async job snapshot", async () => {
+ 		const model = getBundledModel("anthropic", "claude-sonnet-4-5")!;
+ 		const mock = createMockModel({ handler: () => ({ content: ["Done"] }) });

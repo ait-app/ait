@@ -3,7 +3,7 @@ use std::collections::{BTreeMap, BTreeSet, VecDeque};
 use chrono::Utc;
 use serde_json::{Value, json};
 
-use super::config::text;
+use super::acp_config::text;
 use crate::ports::agent_session::{AgentSessionError, AgentTurnEvent};
 use crate::protocol::{timeline::NativeItem, usage::AgentUsage};
 
@@ -23,6 +23,7 @@ pub(super) struct Stream {
     current: Option<Text>,
     tools: BTreeMap<String, Value>,
     completed_tools: BTreeSet<String>,
+    ignore_late_tools: bool,
     turn: String,
     sequence: usize,
     observation: usize,
@@ -39,6 +40,13 @@ impl Stream {
             images,
             ..Self::default()
         }
+    }
+
+    /// Permit native background jobs to update tool calls whose display result was finalized.
+    /// Such updates are ignored; current tool calls retain normal progress and completion.
+    pub(super) fn with_background_tools(mut self) -> Self {
+        self.ignore_late_tools = true;
+        self
     }
 
     pub(super) fn begin(&mut self, turn: String) {
@@ -181,13 +189,23 @@ impl Stream {
     fn tool(&mut self, update: &Value) -> Result<(), AgentSessionError> {
         self.flush();
         let id = text(update, "toolCallId")?;
+        if self.ignore_late_tools
+            && update["sessionUpdate"] == "tool_call_update"
+            && !self.tools.contains_key(id)
+        {
+            return Ok(());
+        }
+        if self.completed_tools.contains(id) {
+            return if self.ignore_late_tools {
+                Ok(())
+            } else {
+                Err(AgentSessionError::Failed)
+            };
+        }
         if !self.tools.contains_key(id)
             && (self.tools.len() >= 128
                 || self.tools.len() + self.completed_tools.len() >= MAX_ITEMS)
         {
-            return Err(AgentSessionError::Failed);
-        }
-        if self.completed_tools.contains(id) {
             return Err(AgentSessionError::Failed);
         }
         let snapshot = self

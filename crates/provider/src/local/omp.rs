@@ -1,5 +1,6 @@
-//! Oh My Pi's native JSONL RPC adapter. OMP owns credentials, extensions, tools and session files.
+//! Oh My Pi's RPC and ACP adapter. OMP owns credentials, extensions, tools and session files.
 
+mod acp;
 mod config;
 mod framing;
 mod history;
@@ -79,7 +80,17 @@ impl AgentClient for OmpClient {
     }
 
     fn settings(&self, config: &StoredAgentConfig) -> Value {
-        json!({"availableModes":config::modes(),"features":config::features(config, config::ServiceTiers::default()),"capabilities":{
+        if config::is_acp(config).unwrap_or(false) {
+            return json!({"availableModes":[{"id":"default","label":"Default"},{"id":"plan","label":"Plan"}],
+                "features":[config::transport_feature(config)],"capabilities":{
+                "supportsStreaming":true,"supportsReasoningStream":true,"supportsSessionPersistence":true,
+                "supportsSessionListing":true,"supportsToolInvocations":true,"supportsMcpServers":false,
+                "supportsDynamicModes":true,"supportsRewindConversation":false,
+                "supportsRewindFiles":false,"supportsRewindBoth":false}});
+        }
+        let mut features = config::features(config, config::ServiceTiers::default());
+        features.push(config::transport_feature(config));
+        json!({"availableModes":config::modes(),"features":features,"capabilities":{
             "supportsStreaming":true,"supportsReasoningStream":true,
             "supportsSessionPersistence":true,"supportsSessionListing":true,
             "supportsToolInvocations":true,"supportsMcpServers":false,
@@ -107,17 +118,45 @@ impl AgentClient for OmpClient {
         spec: &'a AgentSessionSpec,
     ) -> AgentSessionFuture<'a, Vec<Value>> {
         Box::pin(async move {
+            if config::is_acp(&spec.config)? {
+                // A protocol change first discovers its controls, allowing the shared
+                // draft UI to prune overrides belonging to the previous protocol.
+                // Execution still rejects unsupported overrides instead of ignoring them.
+                let mut draft = spec.clone();
+                if let Some(values) = &mut draft.config.feature_values {
+                    values.retain(|key, value| {
+                        !matches!(
+                            key.as_str(),
+                            "autoCompaction" | "autoRetry" | "fastMode" | "slowMode"
+                        ) || !value.is_boolean()
+                    });
+                }
+                let mut probe = acp::open(self, &draft, None, true).await?;
+                let features = probe.draft_features();
+                probe.close().await?;
+                return Ok(features);
+            }
             config::validate_spec(spec)?;
             let tiers = self
                 .service_tiers(&spec.cwd, spec.config.model.as_deref())
                 .await?;
-            Ok(config::features(&spec.config, tiers))
+            let mut features = config::features(&spec.config, tiers);
+            features.push(config::transport_feature(&spec.config));
+            Ok(features)
         })
     }
 
     fn commands<'a>(&'a self, spec: &'a AgentSessionSpec) -> AgentSessionFuture<'a, Vec<Value>> {
         Box::pin(async move {
             config::validate_spec(spec)?;
+            if config::is_acp(&spec.config)? {
+                let mut probe = acp::open(self, spec, None, true).await?;
+                let result = probe.commands().await;
+                let closed = probe.close().await;
+                let commands = result?;
+                closed?;
+                return Ok(commands);
+            }
             let mut probe = session::probe(self, &spec.cwd, None).await?;
             let result = probe.request("get_available_commands", json!({})).await;
             let closed = probe.close().await;
@@ -174,6 +213,11 @@ impl AgentClient for OmpClient {
         spec: &'a AgentSessionSpec,
     ) -> AgentSessionFuture<'a, Box<dyn AgentSession>> {
         Box::pin(async move {
+            if config::is_acp(&spec.config)? {
+                return Ok(
+                    Box::new(acp::open(self, spec, None, false).await?) as Box<dyn AgentSession>
+                );
+            }
             Ok(Box::new(session::open(self, spec, None).await?) as Box<dyn AgentSession>)
         })
     }
@@ -209,6 +253,19 @@ impl AgentClient for OmpClient {
         Box::pin(async move {
             if purpose == AgentResumePurpose::History {
                 return Err(AgentSessionError::Unavailable);
+            }
+            let acp = handle
+                .metadata
+                .as_ref()
+                .and_then(|metadata| metadata.get("transport"))
+                .and_then(Value::as_str)
+                == Some("acp");
+            if acp != config::is_acp(&spec.config)? {
+                return Err(AgentSessionError::Rejected);
+            }
+            if acp {
+                return Ok(Box::new(acp::open(self, spec, Some(handle), false).await?)
+                    as Box<dyn AgentSession>);
             }
             Ok(Box::new(session::open(self, spec, Some(handle)).await?) as Box<dyn AgentSession>)
         })

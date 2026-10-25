@@ -23,7 +23,8 @@ async fn draft_tiers_follow_the_exact_model_without_persisting_native_settings()
         spec.config.model = Some(json!([provider, "model"]).to_string());
         spec.config.feature_values = Some(BTreeMap::from([("fastMode".to_owned(), json!(true))]));
         let features = client.draft_features(&spec).await.unwrap();
-        assert_eq!(features.len(), expected);
+        assert_eq!(features.len(), expected + 1);
+        assert_eq!(features.last().unwrap()["id"], "transport");
         assert_eq!(features[0]["id"], "autoCompaction");
         assert_eq!(features[1]["id"], "autoRetry");
         if provider == "test" {
