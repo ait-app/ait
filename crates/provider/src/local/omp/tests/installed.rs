@@ -2,7 +2,7 @@ use super::*;
 
 #[tokio::test]
 #[ignore = "requires AIT_TEST_OMP_BIN; uses isolated configuration without model inference"]
-async fn installed_omp_discovers_and_opens_native_rpc_without_inference() {
+async fn installed_omp_discovers_and_opens_native_acp_without_inference() {
     let root = tempfile::tempdir().unwrap();
     let program = std::env::var_os("AIT_TEST_OMP_BIN").expect("set AIT_TEST_OMP_BIN");
     let agent = root.path().join("agent");
@@ -39,7 +39,7 @@ async fn installed_omp_discovers_and_opens_native_rpc_without_inference() {
     };
     assert!(client.is_available().await.unwrap());
     let details = client.discover(&spec.cwd).await.unwrap();
-    assert_eq!(details.modes.len(), 4);
+    assert!(details.modes.iter().any(|mode| mode["id"] == "ask"));
     client.commands(&spec).await.unwrap();
     let mut session = client.create_session(&spec).await.unwrap();
     let info = session.runtime_info().await.unwrap();

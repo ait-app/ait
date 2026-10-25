@@ -97,3 +97,27 @@ fn tool_failures_usage_images_and_invalid_native_messages_are_bounded() {
             .contains("Image")
     );
 }
+
+#[test]
+fn persisted_blob_images_match_inline_rendering_and_reject_corrupt_references() {
+    let root = tempfile::tempdir().unwrap();
+    let blobs = root.path().join("blobs");
+    std::fs::create_dir(&blobs).unwrap();
+    let bytes = b"fixture-image";
+    let hash = format!("{:x}", Sha256::digest(bytes));
+    std::fs::write(blobs.join(&hash), bytes).unwrap();
+    let stream = Stream::new(
+        "session".to_owned(),
+        ImageStore::new(root.path().join("images")),
+    )
+    .with_blobs(blobs.clone());
+    let inline = json!({"type":"image","mimeType":"image/png","data":base64::engine::general_purpose::STANDARD.encode(bytes)});
+    let blob = json!({"type":"image","mimeType":"image/png","data":format!("blob:sha256:{hash}")});
+    assert_eq!(stream.image(&blob).unwrap(), stream.image(&inline).unwrap());
+    std::fs::write(blobs.join(hash), b"tampered").unwrap();
+    assert!(matches!(stream.image(&blob), Err(Error::Image)));
+    assert!(matches!(
+        stream.image(&json!({"data":"blob:sha256:../outside"})),
+        Err(Error::Image)
+    ));
+}

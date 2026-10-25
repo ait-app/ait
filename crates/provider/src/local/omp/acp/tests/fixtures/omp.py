@@ -1,6 +1,8 @@
 #!/usr/bin/env python3
 """Isolated ACP peer with OMP native journals and explicit turn settlement."""
 import json
+import base64
+import hashlib
 import os
 from pathlib import Path
 import sys
@@ -20,10 +22,20 @@ options = [
     {'id':'model','category':'model','type':'select','name':'Model','currentValue':'test/model',
      'options':[{'value':'test/model','name':'Test'},{'value':'other/model','name':'Other'}]},
     {'id':'thinking','category':'thought_level','type':'select','name':'Thinking','currentValue':'off',
-     'options':[{'value':'off','name':'Off'},{'value':'high','name':'High'}]},
+     'options':[{'value':level,'name':level} for level in ['off','low','high','max']]},
     {'id':'mode','category':'mode','type':'select','name':'Mode','currentValue':'default',
-     'options':[{'value':'default','name':'Default'},{'value':'plan','name':'Plan'}]},
+     'options':[{'value':mode,'name':mode} for mode in ['default','plan','full','write','ask','ask-cached']]},
 ]
+
+for choice in options[0]['options']:
+    choice['_meta']={'model':{'id':'model','provider':choice['value'].split('/')[0], 'reasoning':True,
+                             'contextWindow':64000, 'thinking':{'efforts':['low','high','max']}}}
+for key in ('autoCompaction','autoRetry','fastMode','slowMode'):
+    options.append({'id':key,'type':'boolean','name':key,'currentValue':key in ('autoCompaction','autoRetry')})
+if '--provider' in args:
+    options[0]['currentValue']=args[args.index('--provider')+1]+'/'+args[args.index('--model')+1]
+if options[0]['currentValue']=='other/model':
+    options[:]=[item for item in options if item['id'] not in ('fastMode','slowMode')]
 
 def emit(value):
     print(json.dumps({'jsonrpc':'2.0', **value}), flush=True)
@@ -34,15 +46,30 @@ def response(command, result):
 def update(value):
     emit({'method':'session/update','params':{'sessionId':session_id,'update':value}})
 
+def native(event):
+    emit({'method':'_omp/event','params':{'sessionId':session_id,'event':event}})
+
 def text(value, identity='answer'):
+    message={'role':'assistant','timestamp':1792886400000+len(records)*10,'content':[]}
+    native({'type':'message_update','message':message,'assistantMessageEvent':{'type':'text_delta','contentIndex':0,'delta':value}})
     update({'sessionUpdate':'agent_message_chunk','messageId':identity,
             'content':{'type':'text','text':value}})
 
 def record(role, content, **fields):
+    if role == 'user' and isinstance(content, list):
+        content=json.loads(json.dumps(content))
+        for block in content:
+            if block.get('type')=='image':
+                data=base64.b64decode(block['data'])
+                digest=hashlib.sha256(data).hexdigest()
+                (root/'blobs').mkdir(exist_ok=True)
+                (root/'blobs'/digest).write_bytes(data)
+                block['data']='blob:sha256:'+digest
     entry_id = str(uuid.uuid4())
     records.append({'type':'message','id':entry_id,'parentId':records[-1]['id'] if len(records)>1 else None,
                     'timestamp':'2026-10-25T00:00:01Z','message':{
                         'role':role,'content':content,'timestamp':1792886400000+len(records)*10, **fields}})
+    native({'type':'message_end','message':records[-1]['message']})
     if '--no-session' not in args:
         file.parent.mkdir(parents=True,exist_ok=True)
         file.write_text(''.join(json.dumps(row)+'\n' for row in records))
@@ -77,7 +104,7 @@ for line in sys.stdin:
     if method=='initialize':
         response(command,{'protocolVersion':1,'agentCapabilities':{
             'promptCapabilities':{'image':True},'sessionCapabilities':{'resume':{},'close':{}}},
-            '_meta':{'steering':{'supported':True},'sessionSettled':{'version':0 if (root/'old-acp').exists() else 1}}})
+            '_meta':{'omp':{'version':0 if (root/'missing-features').exists() else 1},'steering':{'supported':True},'sessionSettled':{'version':0 if (root/'old-acp').exists() else 1}}})
     elif method in ('session/new','session/resume'):
         session_id=command['params'].get('sessionId',str(uuid.uuid4()))
         file=root/'sessions'/'workspace'/('2026-10-25_'+session_id+'.jsonl')
@@ -88,16 +115,40 @@ for line in sys.stdin:
     elif method=='session/set_config_option':
         option=next(item for item in options if item['id']==command['params']['configId'])
         option['currentValue']=command['params']['value']
+        if option['id']=='model':
+            options[:]=[item for item in options if item['id'] not in ('fastMode','slowMode')]
+            if option['currentValue']=='test/model':
+                for key in ('fastMode','slowMode'):
+                    options.append({'id':key,'type':'boolean','name':key,'currentValue':False})
         update({'sessionUpdate':'config_option_update','configOptions':options})
         response(command,{'configOptions':options})
     elif method=='session/prompt':
         active=command
         value=''.join(block.get('text','') for block in command['params']['prompt'])
-        record('user',command['params']['prompt'])
-        if value=='malformed':
+        if value != '/local':
+            record('user',command['params']['prompt'])
+        if value=='/local':
+            settle()
+            response(command,{'stopReason':'end_turn'})
+            active=None
+        elif value=='large':
+            emit({'method':'_omp/event','params':{'sessionId':session_id,'event':{'type':'notice','text':'x'*(9*1024*1024)}}})
+            finish()
+        elif value=='subagents':
+            native({'type':'subagent_lifecycle','payload':{'id':'child','status':'started','agent':'worker','description':'Task'}})
+            native({'type':'subagent_event','payload':{'id':'child','event':{'type':'message_end','message':{'role':'assistant','timestamp':1792886400123,'content':[{'type':'text','text':'Child answer'}]}}}})
+            native({'type':'subagent_lifecycle','payload':{'id':'child','status':'completed'}})
+            finish()
+        elif value=='usage':
+            text('Usage answer')
+            record('assistant',[{'type':'text','text':'Usage answer'}],provider='test',model='model',stopReason='stop',usage={'input':10,'output':4,'cacheRead':2,'totalTokens':16,'cost':{'total':0.25}})
+            settle()
+            response(command,{'stopReason':'end_turn'})
+            active=None
+        elif value=='malformed':
             print('{broken',flush=True)
             break
-        if value=='error':
+        elif value=='error':
             error='Upstream shard unavailable api_key=fixture-secret'
             update({'sessionUpdate':'agent_message_chunk','_meta':{'providerError':True},'content':{'type':'text','text':error}})
             record('assistant',[],provider='test',model='model',stopReason='error',errorMessage=error)
@@ -115,6 +166,7 @@ for line in sys.stdin:
             response(command,{'stopReason':'end_turn'})
             settle('previous-turn')
             text('Waiting for background result','initial')
+            record('assistant',[{'type':'text','text':'Waiting for background result'}],provider='test',model='model',stopReason='stop')
             def wake(command=command):
                 trigger=root/('wake-'+command['params']['_meta']['turnId'])
                 while not trigger.exists():

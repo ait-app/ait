@@ -255,7 +255,6 @@ impl Journal {
 
     fn resume_metadata(
         &self,
-        handle: &AgentPersistenceHandle,
         stream: &Stream,
         config: &mut StoredAgentConfig,
     ) -> BTreeMap<String, Value> {
@@ -264,16 +263,8 @@ impl Journal {
             ("sessionFile".to_owned(), json!(self.path)),
             ("inputIds".to_owned(), json!(stream.input_ids)),
         ]);
-        if handle
-            .metadata
-            .as_ref()
-            .and_then(|metadata| metadata.get("transport"))
-            .and_then(Value::as_str)
-            == Some("acp")
-        {
-            config.feature_values = Some(BTreeMap::from([("transport".to_owned(), json!("acp"))]));
-            metadata.insert("transport".to_owned(), json!("acp"));
-        }
+        config.feature_values = Some(BTreeMap::from([("transport".to_owned(), json!("acp"))]));
+        metadata.insert("transport".to_owned(), json!("acp"));
         metadata
     }
 
@@ -290,7 +281,8 @@ impl Journal {
             return Err(AgentSessionError::Rejected);
         }
         let id = config::text(&self.header, "id")?;
-        let mut stream = Stream::new(id.to_owned(), client.images.clone());
+        let mut stream = Stream::new(id.to_owned(), client.images.clone())
+            .with_blobs(root(client)?.with_file_name("blobs"));
         restore_input_ids(&mut stream, handle)?;
         let mut config = StoredAgentConfig::default();
         let mut title = self.header["title"].as_str().map(str::to_owned);
@@ -360,7 +352,7 @@ impl Journal {
             last_prompt_preview: users.last().and_then(preview),
             last_activity_at: updated,
         };
-        let resume_metadata = self.resume_metadata(handle, &stream, &mut config);
+        let resume_metadata = self.resume_metadata(&stream, &mut config);
         let created_at = self.header["timestamp"]
             .as_str()
             .ok_or(AgentSessionError::Failed)?

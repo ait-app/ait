@@ -2,32 +2,26 @@ use super::*;
 use std::collections::BTreeMap;
 
 #[test]
-fn protocols_validate_native_controls_without_implicitly_switching_existing_sessions() {
-    assert_eq!(is_acp(&StoredAgentConfig::default()), Ok(false));
-    for (selection, valid) in [
-        (json!("rpc"), true),
-        (json!("acp"), true),
-        (json!("unknown"), false),
-        (json!(true), false),
-    ] {
-        let mut config = StoredAgentConfig {
+fn legacy_protocol_values_migrate_without_rejecting_native_feature_overrides() {
+    for selection in [None, Some(json!("rpc")), Some(json!("acp"))] {
+        let mut values = BTreeMap::from([("fastMode".to_owned(), json!(true))]);
+        if let Some(selection) = selection {
+            values.insert("transport".to_owned(), selection);
+        }
+        let config = StoredAgentConfig {
+            mode_id: Some("ask".to_owned()),
+            feature_values: Some(values),
+            ..StoredAgentConfig::default()
+        };
+        assert_eq!(validate(&config), Ok(()));
+    }
+    for selection in [json!("unknown"), json!(true)] {
+        let config = StoredAgentConfig {
             feature_values: Some(BTreeMap::from([("transport".to_owned(), selection)])),
             ..StoredAgentConfig::default()
         };
-        assert_eq!(validate(&config).is_ok(), valid);
-        if valid {
-            config.mode_id = Some("plan".to_owned());
-            assert_eq!(validate(&config).is_ok(), is_acp(&config).unwrap());
-        }
+        assert_eq!(validate(&config), Err(AgentSessionError::Rejected));
     }
-    let config = StoredAgentConfig {
-        feature_values: Some(BTreeMap::from([
-            ("transport".to_owned(), json!("acp")),
-            ("fastMode".to_owned(), json!(true)),
-        ])),
-        ..StoredAgentConfig::default()
-    };
-    assert_eq!(validate(&config), Err(AgentSessionError::Rejected));
 }
 
 #[test]
@@ -76,13 +70,7 @@ fn validates_opaque_model_routes_and_rejects_unsupported_controls() {
 }
 
 #[test]
-fn runtime_and_commands_validate_native_facts() {
-    let state = json!({"sessionId":"id","model":{"provider":"p","id":"m"},"thinkingLevel":"high"});
-    assert_eq!(
-        runtime(&state).unwrap().model,
-        Some(r#"["p","m"]"#.to_owned())
-    );
-    assert!(runtime(&json!({})).is_err());
+fn commands_validate_native_facts() {
     assert_eq!(
         commands(&json!({"commands":[{"name":"review","source":"skill"}]})).unwrap()[0]["name"],
         "review"
@@ -151,4 +139,24 @@ fn tier_toggles_require_each_native_capability_and_preserve_selected_values() {
         );
         assert_eq!(toggles[2]["value"], true);
     }
+}
+
+#[test]
+fn acp_model_catalog_preserves_the_rpc_limit_without_expanding_other_adapters() {
+    let option = json!({"id":"model","type":"select","currentValue":"0","options":(0..8192).map(|id| json!({"value":id.to_string(),"name":"Model"})).collect::<Vec<_>>()});
+    let snapshot = json!({"configOptions":[option]});
+    assert!(crate::local::acp_config::state(&snapshot).is_err());
+    assert_eq!(
+        crate::local::acp_config::state_with_limit(&snapshot, 8192).unwrap()[0]["options"]
+            .as_array()
+            .unwrap()
+            .len(),
+        8192
+    );
+    let mut too_many = snapshot;
+    too_many["configOptions"][0]["options"]
+        .as_array_mut()
+        .unwrap()
+        .push(json!({"value":"overflow","name":"Overflow"}));
+    assert!(crate::local::acp_config::state_with_limit(&too_many, 8192).is_err());
 }

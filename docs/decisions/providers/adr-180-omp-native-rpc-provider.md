@@ -3,6 +3,8 @@
 - 状态：Accepted
 - 日期：2026-10-21
 
+执行协议已由 [ADR-190](adr-190-omp-acp-settlement.md) 取代；新建和恢复均使用 ACP。
+
 ## 背景
 
 客户端已有 Oh My Pi 的图标、模式与恢复命令模板，但 Rust daemon 没有对应适配器，

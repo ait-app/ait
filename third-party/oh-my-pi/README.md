@@ -1,4 +1,4 @@
-# OMP ACP settlement extension
+# OMP ACP feature parity and settlement extensions
 
 This directory contains a source patch for Oh My Pi 18.12.6, revision
 `45c35e40c46166dc726ccc52f5d27f40f2449f99` from
@@ -31,6 +31,26 @@ does not create native history.
 - Ordinary ACP clients that do not opt in retain bounded prompt-drain behavior and receive
   no settled notifications. Their standard ACP schema remains unchanged.
 
+## Required OMP features
+
+Ait uses ACP for discovery, creation and restoration. It also sends
+`initialize.clientCapabilities._meta.omp: 1`; the runtime must advertise
+`initialize._meta.omp.version: 1` alongside settlement version 1. Missing extensions
+reject before input submission; there is no selectable RPC path or fallback.
+
+- Standard ACP config options expose the four original approval modes, compaction,
+  retry and the current model's supported fast/slow toggles. Model choice metadata
+  includes native model facts; command metadata retains the skill source.
+- `_omp/event` carries native message/tool events and session-owned subagent events.
+  Ait's existing OMP projection preserves images, reasoning, token/cost, tool results
+  and child timelines. Standard ACP text/tool chunks are not duplicated for opted-in clients.
+- `_meta.ompNativeMcp: true` explicitly requests native MCP ownership for real sessions.
+  The SDK loads local MCP configuration; an empty ACP server list must not remove it.
+  Client-declared servers cannot be mixed with native ownership. Ordinary clients
+  keep their original MCP isolation, and Ait's disposable probes do not enable native MCP.
+- Existing RPC histories resume via ACP without resubmitting a prompt or changing identity.
+  System-prompt changes reopen the same native session over ACP.
+
 ## Apply and verify
 
 In a clean checkout of the revision above, apply the absolute path to this patch:
@@ -53,4 +73,4 @@ at the resulting launcher before starting Ait. For a source launcher, invoke Bun
 absolute `packages/coding-agent/src/cli.ts` path and forward all arguments. No root access is
 needed for a launcher in the user's home directory. Ait requires the advertised versioned
 extension before creating an ACP session; it never replaces it with a timer or silently
-falls back to RPC. Existing RPC sessions continue using their original protocol.
+falls back to RPC. Existing RPC sessions resume through ACP using the same native history and session identity.

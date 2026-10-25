@@ -17,10 +17,7 @@ fn fixture() -> (tempfile::TempDir, OmpClient, AgentSessionSpec) {
     let spec = AgentSessionSpec {
         provider: "omp".to_owned(),
         cwd: root.path().to_str().unwrap().to_owned(),
-        config: StoredAgentConfig {
-            feature_values: Some(BTreeMap::from([("transport".to_owned(), json!("acp"))])),
-            ..StoredAgentConfig::default()
-        },
+        config: StoredAgentConfig::default(),
     };
     (root, client, spec)
 }
@@ -97,7 +94,14 @@ async fn prompt_response_and_previous_settlement_cannot_drop_background_continua
         }
         assert!(session.start_turn("too early", &spec.config).await.is_err());
         for _ in 0..8 {
-            assert!(session.poll_turn().unwrap().is_none());
+            assert!(!matches!(
+                session.poll_turn().unwrap(),
+                Some(
+                    AgentTurnEvent::Completed(_)
+                        | AgentTurnEvent::Cancelled
+                        | AgentTurnEvent::Failed
+                )
+            ));
         }
         std::fs::write(root.path().join("agent").join(format!("wake-{turn}")), "").unwrap();
         let events = complete(session.as_mut()).await;
@@ -217,32 +221,15 @@ async fn native_failure_details_survive_close_and_protocol_failures_never_replay
 #[tokio::test]
 async fn draft_discovery_is_ephemeral_and_empty_handles_never_manufacture_input() {
     let (root, client, spec) = fixture();
-    assert_eq!(
-        client.draft_features(&spec).await.unwrap()[0]["value"],
-        "acp"
-    );
+    let features = client.draft_features(&spec).await.unwrap();
+    assert!(features.iter().any(|feature| feature["id"] == "autoRetry"));
+    assert!(!features.iter().any(|feature| feature["id"] == "transport"));
     assert_eq!(client.commands(&spec).await.unwrap()[0]["name"], "review");
-    let mut changing_protocol = spec.clone();
-    changing_protocol
-        .config
-        .feature_values
-        .as_mut()
-        .unwrap()
-        .insert("autoRetry".to_owned(), json!(true));
-    assert_eq!(
-        client
-            .draft_features(&changing_protocol)
-            .await
-            .unwrap()
-            .len(),
-        1
-    );
-    assert!(client.create_session(&changing_protocol).await.is_err());
     assert!(!root.path().join("agent/sessions").exists());
     let mut session = client.create_session(&spec).await.unwrap();
     let handle = session.persistence().unwrap();
     session.close().await.unwrap();
-    assert!(client.history(&handle, &spec.cwd).await.unwrap().is_empty());
+    assert_eq!(client.history(&handle, &spec.cwd).await.unwrap().len(), 0);
     let mut session = client
         .resume_session(&handle, &spec, AgentResumePurpose::Interactive)
         .await
@@ -338,4 +325,254 @@ async fn manager_keeps_background_work_live_and_persists_native_failure_detail()
                 .is_some_and(|text| text.contains("Upstream shard unavailable"))
     }));
     manager.close_all().await.unwrap();
+}
+
+#[tokio::test]
+async fn default_and_legacy_settings_always_launch_acp_and_resume_native_identity() {
+    let (root, client, mut spec) = fixture();
+    for transport in [None, Some("rpc"), Some("acp")] {
+        spec.config.feature_values = transport.map(|transport| {
+            BTreeMap::from([
+                ("transport".to_owned(), json!(transport)),
+                ("autoRetry".to_owned(), json!(false)),
+            ])
+        });
+        let mut session = client.create_session(&spec).await.unwrap();
+        let prompt = AgentPrompt {
+            client_message_id: Some("legacy-receipt".to_owned()),
+            ..AgentPrompt::text("hello")
+        };
+        session.start_input(&prompt, &spec.config).await.unwrap();
+        complete(session.as_mut()).await;
+        let mut handle = session.persistence().unwrap();
+        session.close().await.unwrap();
+        handle.metadata.as_mut().unwrap().remove("transport");
+        let mut resumed = client
+            .resume_session(&handle, &spec, AgentResumePurpose::Interactive)
+            .await
+            .unwrap();
+        assert_eq!(resumed.persistence().unwrap().session_id, handle.session_id);
+        resumed.start_turn("again", &spec.config).await.unwrap();
+        complete(resumed.as_mut()).await;
+        resumed.close().await.unwrap();
+        let history = client.inspect_session(&handle, &spec.cwd).await.unwrap();
+        assert_eq!(history.config.feature_values.unwrap()["transport"], "acp");
+        assert_eq!(history.entries[0].item["clientMessageId"], "legacy-receipt");
+    }
+    let calls = std::fs::read_to_string(root.path().join("agent/calls.jsonl")).unwrap();
+    let launches: Vec<Value> = calls
+        .lines()
+        .map(|line| serde_json::from_str::<Value>(line).unwrap())
+        .filter(|call| call.get("args").is_some())
+        .collect();
+    assert!(
+        launches
+            .iter()
+            .all(|call| call["args"][0] == "--mode" && call["args"][1] == "acp")
+    );
+}
+
+#[tokio::test]
+async fn native_controls_keep_overrides_and_probes_do_not_apply_them() {
+    let (root, client, mut spec) = fixture();
+    spec.config.feature_values = Some(BTreeMap::from([
+        ("autoRetry".to_owned(), json!(false)),
+        ("autoCompaction".to_owned(), json!(false)),
+        ("fastMode".to_owned(), json!(true)),
+        ("slowMode".to_owned(), json!(true)),
+    ]));
+    let features = client.draft_features(&spec).await.unwrap();
+    assert_eq!(features.len(), 4);
+    let calls = std::fs::read_to_string(root.path().join("agent/calls.jsonl")).unwrap();
+    assert!(!calls.contains("session/set_config_option"));
+    assert!(!root.path().join("agent/sessions").exists());
+    let mut session = client.create_session(&spec).await.unwrap();
+    let controls = session.control_settings(&spec.config).unwrap();
+    assert_eq!(controls["features"][0]["value"], false);
+    assert!(
+        controls["availableModes"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .any(|mode| mode["id"] == "full" && mode["isUnattended"] == true)
+    );
+    spec.config.mode_id = Some("ask-cached".to_owned());
+    session.start_turn("hello", &spec.config).await.unwrap();
+    complete(session.as_mut()).await;
+    assert_eq!(
+        session.runtime_info().await.unwrap().mode_id,
+        spec.config.mode_id
+    );
+    session.close().await.unwrap();
+    let calls: Vec<Value> = std::fs::read_to_string(root.path().join("agent/calls.jsonl"))
+        .unwrap()
+        .lines()
+        .map(|line| serde_json::from_str(line).unwrap())
+        .collect();
+    for (key, value) in spec.config.feature_values.as_ref().unwrap() {
+        assert!(
+            calls
+                .iter()
+                .any(|call| call["method"] == "session/set_config_option"
+                    && call["params"]["configId"] == *key
+                    && call["params"]["value"] == *value)
+        );
+    }
+    spec.config.model = Some(json!(["other", "model"]).to_string());
+    assert_eq!(client.draft_features(&spec).await.unwrap().len(), 2);
+    assert!(client.create_session(&spec).await.is_err());
+}
+
+#[tokio::test]
+async fn acp_discovery_and_live_tiers_follow_each_model_without_rpc() {
+    let (_root, client, mut spec) = fixture();
+    let details = client.discover(&spec.cwd).await.unwrap();
+    assert!(details.models.iter().all(|model| {
+        model["thinkingOptions"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .any(|option| option["id"] == "max")
+    }));
+    let mut session = client.create_session(&spec).await.unwrap();
+    for (provider, expected) in [("other", 2), ("test", 4)] {
+        spec.config.model = Some(json!([provider, "model"]).to_string());
+        assert_eq!(
+            session.control_settings(&spec.config).unwrap()["features"]
+                .as_array()
+                .unwrap()
+                .len(),
+            2
+        );
+        session.start_turn("hello", &spec.config).await.unwrap();
+        complete(session.as_mut()).await;
+        assert_eq!(
+            session.control_settings(&spec.config).unwrap()["features"]
+                .as_array()
+                .unwrap()
+                .len(),
+            expected
+        );
+    }
+    session.close().await.unwrap();
+}
+
+#[tokio::test]
+async fn acp_preserves_native_usage_children_and_large_output() {
+    let (_root, client, spec) = fixture();
+    let mut session = client.create_session(&spec).await.unwrap();
+    session.start_turn("usage", &spec.config).await.unwrap();
+    let events = complete(session.as_mut()).await;
+    assert!(events.iter().any(|event| matches!(event, AgentTurnEvent::Usage(usage) if usage.input_tokens == Some(10) && usage.output_tokens == Some(4) && usage.cached_input_tokens == Some(2) && usage.total_cost_usd == Some(0.25) && usage.context_window_max_tokens == Some(64000))));
+    session.start_turn("subagents", &spec.config).await.unwrap();
+    let events = complete(session.as_mut()).await;
+    assert!(events.iter().any(|event| matches!(event, AgentTurnEvent::Subagent(crate::ports::controls::SubagentEvent::Timeline { entry, .. }) if entry.item["text"] == "Child answer")));
+    assert_eq!(session.subagents()[0].descriptor["status"], "completed");
+    session.start_turn("large", &spec.config).await.unwrap();
+    assert!(matches!(
+        complete(session.as_mut()).await.last(),
+        Some(AgentTurnEvent::Completed(_))
+    ));
+    session.close().await.unwrap();
+}
+
+#[tokio::test]
+async fn system_prompt_changes_reopen_acp_without_changing_native_history() {
+    let (root, client, mut spec) = fixture();
+    let mut session = client.create_session(&spec).await.unwrap();
+    session.start_turn("hello", &spec.config).await.unwrap();
+    complete(session.as_mut()).await;
+    let handle = session.persistence().unwrap();
+    spec.config.system_prompt = Some("Updated instructions".to_owned());
+    session.validate_config_update(&spec.config).unwrap();
+    session.start_turn("again", &spec.config).await.unwrap();
+    complete(session.as_mut()).await;
+    assert_eq!(session.persistence().unwrap().session_id, handle.session_id);
+    session.close().await.unwrap();
+    let calls: Vec<Value> = std::fs::read_to_string(root.path().join("agent/calls.jsonl"))
+        .unwrap()
+        .lines()
+        .map(|line| serde_json::from_str(line).unwrap())
+        .collect();
+    assert!(calls.iter().any(|call| {
+        call["args"]
+            .as_array()
+            .is_some_and(|args| args.iter().any(|arg| arg == "Updated instructions"))
+    }));
+    assert_eq!(
+        client
+            .history(&handle, &spec.cwd)
+            .await
+            .unwrap()
+            .iter()
+            .filter(|entry| entry.item["type"] == "user_message")
+            .count(),
+        2
+    );
+}
+
+#[tokio::test]
+async fn missing_required_acp_features_fail_before_input_without_rpc_fallback() {
+    let (root, client, spec) = fixture();
+    std::fs::create_dir_all(root.path().join("agent")).unwrap();
+    std::fs::write(root.path().join("agent/missing-features"), "").unwrap();
+    assert!(client.create_session(&spec).await.is_err());
+    let calls = std::fs::read_to_string(root.path().join("agent/calls.jsonl")).unwrap();
+    assert!(!calls.contains("session/prompt"));
+    assert!(!calls.contains("rpc-ui"));
+}
+
+#[tokio::test]
+async fn acp_rich_input_and_blob_history_preserve_images_and_reject_unsupported_schema() {
+    use crate::protocol::prompt::PromptImage;
+    let (root, client, spec) = fixture();
+    let mut session = client.create_session(&spec).await.unwrap();
+    let invalid = AgentPrompt {
+        output_schema: Some(json!({"type":"object"})),
+        ..AgentPrompt::text("invalid")
+    };
+    assert_eq!(
+        session.start_input(&invalid, &spec.config).await,
+        Err(AgentSessionError::Rejected)
+    );
+    let prompt = AgentPrompt {
+        images: vec![PromptImage {
+            data: "aW1hZ2U=".to_owned(),
+            mime_type: "image/png".to_owned(),
+        }],
+        client_message_id: Some("image-receipt".to_owned()),
+        ..AgentPrompt::text("describe")
+    };
+    session.start_input(&prompt, &spec.config).await.unwrap();
+    let events = complete(session.as_mut()).await;
+    assert!(matches!(events.last(), Some(AgentTurnEvent::Completed(_))));
+    let handle = session.persistence().unwrap();
+    session.close().await.unwrap();
+    let history = client.history(&handle, &spec.cwd).await.unwrap();
+    assert!(
+        history[0].item["text"]
+            .as_str()
+            .unwrap()
+            .contains("![Image]")
+    );
+    assert_eq!(history[0].item["clientMessageId"], "image-receipt");
+    let calls: Vec<Value> = std::fs::read_to_string(root.path().join("agent/calls.jsonl"))
+        .unwrap()
+        .lines()
+        .map(|line| serde_json::from_str(line).unwrap())
+        .collect();
+    let prompts: Vec<&Value> = calls
+        .iter()
+        .filter(|call| call["method"] == "session/prompt")
+        .collect();
+    assert_eq!(prompts.len(), 1);
+    assert_eq!(prompts[0]["params"]["prompt"][1]["data"], "aW1hZ2U=");
+    let initializes: Vec<&Value> = calls
+        .iter()
+        .filter(|call| call["method"] == "initialize")
+        .collect();
+    assert_eq!(
+        initializes[0]["params"]["clientCapabilities"]["_meta"]["ompNativeMcp"],
+        true
+    );
 }

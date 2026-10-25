@@ -1,9 +1,9 @@
-//! OMP's optional ACP execution channel; native RPC remains the default.
+//! OMP's required ACP execution channel, including native feature and event extensions.
 
 mod config;
 
 use std::borrow::Cow;
-use std::collections::{BTreeMap, BTreeSet, VecDeque};
+use std::collections::BTreeMap;
 
 use domain::agent_runtime::{AgentPersistenceHandle, StoredAgentConfig, StoredAgentRuntimeInfo};
 use serde_json::{Value, json};
@@ -14,7 +14,7 @@ use uuid::Uuid;
 use super::{OmpClient, config as native_config};
 use crate::local::{
     acp_interactions, acp_permissions,
-    acp_stream::Stream,
+    acp_stream::Stream as StandardStream,
     acp_transport::{self, Transport},
 };
 use crate::ports::agent_session::{
@@ -35,14 +35,13 @@ pub(super) struct Session {
     extensions: Value,
     settled: bool,
     active: Option<(String, String)>,
-    stream: Stream,
+    stream: super::stream::Stream,
+    standard: StandardStream,
+    children: super::subagents::Children,
     pending: BTreeMap<String, acp_permissions::Pending>,
     closed: bool,
     submitted: bool,
     created_at: String,
-    input_ids: BTreeMap<String, Value>,
-    known_inputs: BTreeSet<String>,
-    pending_inputs: VecDeque<Option<String>>,
     terminal: Option<AgentTurnEvent>,
     history: Option<
         oneshot::Receiver<Result<crate::ports::native_history::SessionHistory, AgentSessionError>>,
@@ -59,18 +58,6 @@ pub(super) async fn open(
     ephemeral: bool,
 ) -> Result<Session, AgentSessionError> {
     native_config::validate_spec(spec)?;
-    if let Some(handle) = handle
-        && (handle.provider != "omp"
-            || handle.session_id.is_empty()
-            || handle
-                .metadata
-                .as_ref()
-                .and_then(|values| values.get("cwd"))
-                .and_then(Value::as_str)
-                != Some(spec.cwd.as_str()))
-    {
-        return Err(AgentSessionError::Rejected);
-    }
     let previous = if let Some(handle) = handle {
         Some(super::history::load(client, handle, &spec.cwd).await?)
     } else {
@@ -84,21 +71,6 @@ pub(super) async fn open(
         .zip(handle)
         .map(|(journal, handle)| journal.project(client, handle))
         .transpose()?;
-    let known_inputs = previous_history
-        .as_ref()
-        .map(|(history, _)| {
-            history
-                .entries
-                .iter()
-                .filter(|entry| entry.item["type"] == "user_message")
-                .map(|entry| entry.key.clone())
-                .collect()
-        })
-        .unwrap_or_default();
-    let input_ids = previous_history
-        .as_ref()
-        .map(|(_, stream)| stream.input_ids.clone())
-        .unwrap_or_default();
     let (mut transport, initialized) = connect(client, spec, ephemeral).await?;
     let capabilities = initialized["agentCapabilities"].clone();
     let mut params = json!({"cwd":spec.cwd,"mcpServers":[]});
@@ -120,8 +92,14 @@ pub(super) async fn open(
     } else {
         native_config::text(&result, "sessionId")?.to_owned()
     };
-    let mut options = crate::local::acp_config::state(&result)?;
-    config::apply(&mut transport, &id, &mut options, &spec.config).await?;
+    let mut options = crate::local::acp_config::state_with_limit(&result, 8192)?;
+    config::apply(&mut transport, &id, &mut options, &spec.config, ephemeral).await?;
+    let mut stream = previous_history.map_or_else(
+        || super::stream::Stream::new(id.clone(), client.images.clone()),
+        |(_, stream)| stream,
+    );
+    stream = stream.with_blobs(super::history::root(client)?.with_file_name("blobs"));
+    stream.set_context(&config::context(&options));
     Ok(Session {
         client: client.clone(),
         transport,
@@ -133,7 +111,10 @@ pub(super) async fn open(
         extensions: initialized["_meta"].clone(),
         settled: false,
         active: None,
-        stream: Stream::new(client.images.clone()).with_background_tools(),
+        stream,
+        standard: StandardStream::new(client.images.clone()),
+        children: super::subagents::Children::default()
+            .with_blobs(super::history::root(client)?.with_file_name("blobs")),
         pending: BTreeMap::new(),
         closed: false,
         submitted: resuming,
@@ -141,9 +122,6 @@ pub(super) async fn open(
             .as_ref()
             .and_then(|journal| journal.header["timestamp"].as_str())
             .map_or_else(|| chrono::Utc::now().to_rfc3339(), str::to_owned),
-        input_ids,
-        known_inputs,
-        pending_inputs: VecDeque::new(),
         terminal: None,
         history: None,
         history_task: None,
@@ -157,7 +135,7 @@ async fn connect(
 ) -> Result<(Transport, Value), AgentSessionError> {
     let mut command = tokio::process::Command::new(&client.program);
     command
-        .args(["--mode", "acp"])
+        .args(["--mode", "acp", "--no-pty"])
         .envs(client.environment.entries());
     if ephemeral {
         command.arg("--no-session");
@@ -165,25 +143,32 @@ async fn connect(
     if let Some(prompt) = &spec.config.system_prompt {
         command.args(["--append-system-prompt", prompt]);
     }
-    if let Some(mode) = spec
-        .config
-        .mode_id
-        .as_deref()
-        .filter(|mode| !matches!(*mode, "default" | "plan"))
-    {
-        command.args(["--approval-mode", native_config::approval_mode(mode)]);
+    if let Some(model) = &spec.config.model {
+        let [provider, model] = native_config::model_route(model)?;
+        command.args(["--provider", &provider, "--model", &model]);
     }
-    let mut transport = Transport::spawn(command, &spec.cwd, client.deadline, "Oh My Pi")?;
+    let mut transport = Transport::spawn_with_output_limit(
+        command,
+        &spec.cwd,
+        client.deadline,
+        "Oh My Pi",
+        64 * 1024 * 1024,
+    )?;
     let initialized = transport
         .request(
             "initialize",
             json!({"protocolVersion":1,
-        "clientCapabilities":{"elicitation":{"form":{}},"_meta":{"sessionSettled":true}},
+        "clientCapabilities":{"elicitation":{"form":{}},"_meta":{"sessionSettled":true,"omp":1,"ompNativeMcp":!ephemeral}},
         "clientInfo":{"name":"ait","version":env!("CARGO_PKG_VERSION")}}),
         )
         .await?;
-    if initialized["protocolVersion"] != 1 || initialized["_meta"]["sessionSettled"]["version"] != 1
+    if initialized["protocolVersion"] != 1
+        || initialized["_meta"]["sessionSettled"]["version"] != 1
+        || initialized["_meta"]["omp"]["version"] != 1
     {
+        transport.diagnostics.observe_failure(
+            Diagnostic::new(Category::Protocol, "omp_acp_capabilities"),
+            "OMP ACP requires the session-settled and native-feature extensions (version 1). Install the supported OMP build described in docs/operations/oh-my-pi.md.", "initialize");
         return Err(AgentSessionError::Rejected);
     }
     Ok((transport, initialized))
@@ -213,8 +198,13 @@ impl Session {
     }
 
     /// Describe the selected model's ACP-advertised controls for a draft session.
-    pub(super) fn draft_features(&self) -> Vec<Value> {
-        vec![native_config::transport_feature(&self.initial)]
+    pub(super) fn draft_features(&self, requested: &StoredAgentConfig) -> Vec<Value> {
+        config::features(&self.options, requested)
+    }
+
+    /// Read ACP model, mode and feature metadata without running inference.
+    pub(super) fn details(&self) -> Result<crate::protocol::provider::Details, AgentSessionError> {
+        config::details(&self.options)
     }
 
     async fn start(
@@ -233,20 +223,28 @@ impl Session {
         {
             return Err(AgentSessionError::Rejected);
         }
+        if self.initial.system_prompt != config.system_prompt {
+            let handle = self.persistence().ok_or(AgentSessionError::Failed)?;
+            let client = self.client.clone();
+            let spec = AgentSessionSpec {
+                provider: "omp".to_owned(),
+                cwd: self.cwd.clone(),
+                config: config.clone(),
+            };
+            self.close().await?;
+            *self = open(&client, &spec, Some(&handle), false).await?;
+        }
         self.transport.diagnostics.clear();
-        config::apply(&mut self.transport, &self.id, &mut self.options, config).await?;
+        config::apply(
+            &mut self.transport,
+            &self.id,
+            &mut self.options,
+            config,
+            false,
+        )
+        .await?;
+        self.stream.set_context(&config::context(&self.options));
         let blocks = prompt.blocks()?;
-        let text = blocks
-            .iter()
-            .map(|block| {
-                if block["type"] == "image" {
-                    self.client.images.render(block)
-                } else {
-                    Ok(block["text"].as_str().unwrap_or_default().to_owned())
-                }
-            })
-            .collect::<Result<Vec<_>, AgentSessionError>>()?
-            .join("\n\n");
         let turn = Uuid::new_v4().to_string();
         let rpc = self
             .transport
@@ -256,30 +254,19 @@ impl Session {
             )
             .await?;
         self.stream.begin(turn.clone());
+        self.standard.begin(turn.clone());
         self.settled = false;
-        let key = format!("native:omp:acp:{}:user:{turn}", self.id);
-        let mut item = json!({"type":"user_message","messageId":key,"text":text});
-        if let Some(id) = &prompt.client_message_id {
-            item["clientMessageId"] = json!(id);
-        }
-        self.stream.events.push_back(AgentTurnEvent::Timeline(
-            crate::protocol::timeline::NativeItem {
-                key,
-                turn_id: Some(turn.clone()),
-                timestamp: chrono::Utc::now().to_rfc3339(),
-                item,
-            },
-        ));
-        self.pending_inputs
+        self.stream
+            .pending_inputs
             .push_back(prompt.client_message_id.clone());
         self.active = Some((turn.clone(), rpc));
-        self.submitted = true;
         self.initial.clone_from(config);
         Ok(turn)
     }
 
     fn consume(&mut self, message: &Value) -> Result<(), AgentSessionError> {
         match message["method"].as_str() {
+            Some("_omp/event") => self.consume_native(message)?,
             Some("_session/settled") => {
                 if message["params"]["sessionId"] != self.id {
                     return Err(AgentSessionError::Failed);
@@ -298,7 +285,8 @@ impl Session {
                 }
                 let update = &message["params"]["update"];
                 if update["sessionUpdate"] == "config_option_update" {
-                    self.options = crate::local::acp_config::state(update)?;
+                    self.options = crate::local::acp_config::state_with_limit(update, 8192)?;
+                    self.stream.set_context(&config::context(&self.options));
                     self.stream
                         .events
                         .push_back(AgentTurnEvent::RuntimeInfo(config::runtime(
@@ -308,7 +296,15 @@ impl Session {
                 } else if self.active.is_some() && update["_meta"]["providerError"] != true {
                     // The final response carries typed native errors; project those only
                     // through the bounded, redacted failure path rather than answer text.
-                    self.stream.update(update)?;
+                    // Message/tool updates are already projected from lossless native events.
+                    // Standard compaction/context notifications retain their ACP semantics.
+                    if matches!(
+                        update["sessionUpdate"].as_str(),
+                        Some("compaction_update" | "usage_update")
+                    ) {
+                        self.standard.update(update)?;
+                        self.stream.events.extend(self.standard.events.drain(..));
+                    }
                 }
             }
             Some("session/request_permission" | "elicitation/create") => {
@@ -336,45 +332,88 @@ impl Session {
             }
             Some(_) if message.get("id").is_some() => return Err(AgentSessionError::Failed),
             Some(_) => {}
-            None => {
-                let (_, rpc) = self.active.as_ref().ok_or(AgentSessionError::Failed)?;
-                if message["id"] != *rpc {
-                    return Err(AgentSessionError::Failed);
-                }
-                if self.terminal.is_some() {
-                    return Err(AgentSessionError::Failed);
-                }
-                let terminal = if let Some(error) = message.get("error") {
-                    self.transport
-                        .diagnostics
-                        .observe_native(error, "rpc", "session/prompt");
-                    AgentTurnEvent::Failed
-                } else if let Some(error) = message["result"]["_meta"]
-                    .get("error")
-                    .filter(|error| !error.is_null())
-                {
-                    self.transport
-                        .diagnostics
-                        .observe_native(error, "rpc", "session/prompt");
-                    AgentTurnEvent::Failed
-                } else {
-                    match acp_transport::response(message)?["stopReason"].as_str() {
-                        Some("cancelled") => AgentTurnEvent::Cancelled,
-                        Some("end_turn" | "max_tokens" | "max_turn_requests" | "refusal") => {
-                            AgentTurnEvent::Completed(self.stream.last_message.clone())
-                        }
-                        _ => AgentTurnEvent::Failed,
-                    }
-                };
-                for id in std::mem::take(&mut self.pending).into_keys() {
-                    self.stream
-                        .events
-                        .push_back(AgentTurnEvent::PermissionResolved(id));
-                }
-                self.terminal = Some(terminal);
-            }
+            None => self.consume_response(message)?,
         }
         self.reconcile_if_settled();
+        Ok(())
+    }
+
+    fn consume_native(&mut self, message: &Value) -> Result<(), AgentSessionError> {
+        if message["params"]["sessionId"] != self.id {
+            return Err(AgentSessionError::Failed);
+        }
+        let event = &message["params"]["event"];
+        self.submitted |= event["type"] == "message_end" && event["message"]["role"] == "user";
+        if event["type"] == "message_end" && event["message"]["role"] == "assistant" {
+            if event["message"]["stopReason"] == "error" {
+                self.transport.diagnostics.observe_native(
+                    &event["message"]["errorMessage"],
+                    "message_end",
+                    "turn",
+                );
+            } else {
+                self.transport.diagnostics.clear();
+            }
+        }
+        if matches!(
+            event["type"].as_str(),
+            Some("subagent_lifecycle" | "subagent_progress" | "subagent_event")
+        ) {
+            self.stream.events.extend(self.children.consume(
+                event,
+                &self.id,
+                &self.cwd,
+                &self.client.images,
+            )?);
+        } else if self.active.is_some() {
+            self.stream.consume(event).map_err(|error| {
+                self.transport.diagnostics.observe_failure(
+                    Diagnostic::new(Category::Protocol, "omp_event"),
+                    &error.to_string(),
+                    "project",
+                );
+                AgentSessionError::Failed
+            })?;
+        }
+        Ok(())
+    }
+
+    fn consume_response(&mut self, message: &Value) -> Result<(), AgentSessionError> {
+        let (_, rpc) = self.active.as_ref().ok_or(AgentSessionError::Failed)?;
+        if message["id"] != *rpc {
+            return Err(AgentSessionError::Failed);
+        }
+        if self.terminal.is_some() {
+            return Err(AgentSessionError::Failed);
+        }
+        let terminal = if let Some(error) = message.get("error") {
+            self.transport
+                .diagnostics
+                .observe_native(error, "rpc", "session/prompt");
+            AgentTurnEvent::Failed
+        } else if let Some(error) = message["result"]["_meta"]
+            .get("error")
+            .filter(|error| !error.is_null())
+        {
+            self.transport
+                .diagnostics
+                .observe_native(error, "rpc", "session/prompt");
+            AgentTurnEvent::Failed
+        } else {
+            match acp_transport::response(message)?["stopReason"].as_str() {
+                Some("cancelled") => AgentTurnEvent::Cancelled,
+                Some("end_turn" | "max_tokens" | "max_turn_requests" | "refusal") => {
+                    AgentTurnEvent::Completed(self.stream.last_text.clone())
+                }
+                _ => AgentTurnEvent::Failed,
+            }
+        };
+        for id in std::mem::take(&mut self.pending).into_keys() {
+            self.stream
+                .events
+                .push_back(AgentTurnEvent::PermissionResolved(id));
+        }
+        self.terminal = Some(terminal);
         Ok(())
     }
 
@@ -385,10 +424,11 @@ impl Session {
         {
             return;
         }
-        self.stream.flush();
-        self.stream.finish_compactions();
+        self.standard.flush();
+        self.standard.finish_compactions();
+        self.stream.events.extend(self.standard.events.drain(..));
         if let Some(AgentTurnEvent::Completed(message)) = &mut self.terminal {
-            message.clone_from(&self.stream.last_message);
+            message.clone_from(&self.stream.last_text);
         }
         let client = self.client.clone();
         let handle = self
@@ -407,21 +447,15 @@ impl AgentSession for Session {
     fn provider(&self) -> &'static str {
         "omp"
     }
-    fn control_settings(&self, _config: &StoredAgentConfig) -> Option<Value> {
-        Some(json!({"availableModes":config::modes(&self.options),"features":[]}))
+    fn control_settings(&self, requested: &StoredAgentConfig) -> Option<Value> {
+        let mut features = config::features(&self.options, requested);
+        if requested.model != self.initial.model {
+            features.retain(|feature| feature["id"] != "fastMode" && feature["id"] != "slowMode");
+        }
+        Some(json!({"availableModes":config::modes(&self.options),"features":features}))
     }
     fn validate_config_update(&self, config: &StoredAgentConfig) -> Result<(), AgentSessionError> {
         native_config::validate(config)?;
-        if !native_config::is_acp(config)?
-            || self.initial.system_prompt != config.system_prompt
-            || (config
-                .mode_id
-                .as_deref()
-                .is_some_and(|mode| !matches!(mode, "default" | "plan"))
-                && self.initial.mode_id != config.mode_id)
-        {
-            return Err(AgentSessionError::Rejected);
-        }
         Ok(())
     }
     fn failure_diagnostic(&self) -> Option<Diagnostic> {
@@ -433,6 +467,9 @@ impl AgentSession for Session {
     fn runtime_info(&mut self) -> AgentSessionFuture<'_, StoredAgentRuntimeInfo> {
         Box::pin(async { Ok(config::runtime(&self.id, &self.options)) })
     }
+    fn subagents(&self) -> Vec<crate::ports::controls::NativeSubagent> {
+        self.children.list()
+    }
     fn persistence(&self) -> Option<AgentPersistenceHandle> {
         Some(AgentPersistenceHandle {
             provider: "omp".to_owned(),
@@ -441,9 +478,12 @@ impl AgentSession for Session {
             metadata: Some(BTreeMap::from([
                 ("cwd".to_owned(), json!(self.cwd)),
                 ("transport".to_owned(), json!("acp")),
-                ("empty".to_owned(), json!(!self.submitted)),
+                (
+                    "empty".to_owned(),
+                    json!(!self.submitted && self.stream.is_empty()),
+                ),
                 ("createdAt".to_owned(), json!(self.created_at)),
-                ("inputIds".to_owned(), json!(self.input_ids)),
+                ("inputIds".to_owned(), json!(self.stream.input_ids)),
             ])),
         })
     }
@@ -490,7 +530,8 @@ impl AgentSession for Session {
                 )
                 .await?;
             if result["outcome"] == "injected" {
-                self.pending_inputs
+                self.stream
+                    .pending_inputs
                     .push_back(prompt.client_message_id.clone());
                 Ok(())
             } else {
@@ -546,28 +587,14 @@ impl AgentSession for Session {
             };
             self.history = None;
             self.history_task = None;
-            let mut history = result.inspect_err(|_| {
+            let history = result.inspect_err(|_| {
                 self.transport.diagnostics.observe_failure(
                     Diagnostic::new(Category::Protocol, "acp_history"),
                     "Ait could not read OMP native history after the ACP turn.",
                     "settle",
                 );
             })?;
-            for entry in &mut history.entries {
-                if entry.item["type"] == "user_message"
-                    && self.known_inputs.insert(entry.key.clone())
-                {
-                    if self.known_inputs.len() > 4096 {
-                        return Err(AgentSessionError::Failed);
-                    }
-                    if let Some(Some(id)) = self.pending_inputs.pop_front() {
-                        self.input_ids.insert(entry.key.clone(), json!(id));
-                    }
-                }
-                if let Some(id) = self.input_ids.get(&entry.key) {
-                    entry.item["clientMessageId"] = id.clone();
-                }
-            }
+            self.stream.pending_inputs.clear();
             self.stream
                 .events
                 .push_back(AgentTurnEvent::History(history.entries));

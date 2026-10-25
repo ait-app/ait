@@ -1,4 +1,10 @@
+use std::borrow::Cow;
 use std::collections::{BTreeMap, VecDeque};
+use std::io::Read;
+use std::path::PathBuf;
+
+use base64::Engine;
+use sha2::{Digest, Sha256};
 
 use chrono::{TimeZone, Utc};
 use serde_json::{Value, json};
@@ -6,6 +12,8 @@ use serde_json::{Value, json};
 use crate::local::images::ImageStore;
 use crate::ports::agent_session::AgentTurnEvent;
 use crate::protocol::{timeline::NativeItem, usage::AgentUsage};
+
+const MAX_IMAGE_BYTES: u64 = 32 * 1024 * 1024;
 
 /// Payload-free reasons why a native event cannot be projected.
 #[derive(Debug, thiserror::Error)]
@@ -38,6 +46,7 @@ pub(super) struct Stream {
     observation: u64,
     usage: AgentUsage,
     images: ImageStore,
+    blobs: Option<PathBuf>,
 }
 
 impl Stream {
@@ -69,7 +78,47 @@ impl Stream {
             observation: 0,
             usage: AgentUsage::default(),
             images,
+            blobs: None,
         }
+    }
+
+    /// Resolve native content-addressed images from `directory`, without changing OMP files.
+    pub(super) fn with_blobs(mut self, directory: PathBuf) -> Self {
+        self.blobs = Some(directory);
+        self
+    }
+
+    fn image(&self, image: &Value) -> Result<String, Error> {
+        let Some(hash) = image["data"]
+            .as_str()
+            .and_then(|data| data.strip_prefix("blob:sha256:"))
+        else {
+            return self.images.render(image).map_err(|_| Error::Image);
+        };
+        if hash.len() != 64
+            || !hash
+                .bytes()
+                .all(|byte| byte.is_ascii_digit() || (b'a'..=b'f').contains(&byte))
+        {
+            return Err(Error::Image);
+        }
+        let path = self.blobs.as_ref().ok_or(Error::Image)?.join(hash);
+        let metadata = path.symlink_metadata().map_err(|_| Error::Image)?;
+        if !metadata.is_file() || metadata.len() == 0 || metadata.len() > MAX_IMAGE_BYTES {
+            return Err(Error::Image);
+        }
+        let mut bytes = Vec::new();
+        std::fs::File::open(path)
+            .map_err(|_| Error::Image)?
+            .take(MAX_IMAGE_BYTES + 1)
+            .read_to_end(&mut bytes)
+            .map_err(|_| Error::Image)?;
+        if bytes.len() as u64 > MAX_IMAGE_BYTES || format!("{:x}", Sha256::digest(&bytes)) != hash {
+            return Err(Error::Image);
+        }
+        let mut resolved = Cow::Borrowed(image);
+        resolved.to_mut()["data"] = json!(base64::engine::general_purpose::STANDARD.encode(bytes));
+        self.images.render(&resolved).map_err(|_| Error::Image)
     }
 
     pub(super) fn begin(&mut self, turn: String) {
@@ -131,7 +180,7 @@ impl Stream {
                 Some("text") => parts.push(preview(
                     block["text"].as_str().ok_or(Error::Field("content.text"))?,
                 )),
-                Some("image") => parts.push(self.images.render(block).map_err(|_| Error::Image)?),
+                Some("image") => parts.push(self.image(block)?),
                 _ => {}
             }
         }
@@ -191,7 +240,7 @@ impl Stream {
                     }
                     Some("image") => {
                         let key = format!("{key}:{index}");
-                        let image = self.images.render(block).map_err(|_| Error::Image)?;
+                        let image = self.image(block)?;
                         let item = json!({"type":"assistant_message","messageId":key,"text":image});
                         self.events
                             .push_back(AgentTurnEvent::Timeline(Self::item(key, message, item)?));

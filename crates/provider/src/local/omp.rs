@@ -1,14 +1,10 @@
-//! Oh My Pi's RPC and ACP adapter. OMP owns credentials, extensions, tools and session files.
+//! Oh My Pi's ACP adapter. OMP owns credentials, extensions, tools and session files.
 
 mod acp;
 mod config;
-mod framing;
 mod history;
-mod interactions;
-mod session;
 mod stream;
 mod subagents;
-mod transport;
 
 use std::path::PathBuf;
 use std::time::Duration;
@@ -24,7 +20,7 @@ use crate::ports::environment::AgentEnvironment;
 use crate::ports::native_history::{ListOptions, SessionDescriptor, SessionHistory};
 use crate::protocol::provider::Details;
 
-/// Installed OMP executable with bounded RPC startup and discovery.
+/// Installed OMP executable with bounded ACP startup and discovery.
 #[derive(Debug, Clone)]
 pub(crate) struct OmpClient {
     program: PathBuf,
@@ -51,19 +47,6 @@ impl OmpClient {
         self.images = super::images::ImageStore::new(directory);
         self
     }
-
-    async fn service_tiers(
-        &self,
-        cwd: &str,
-        model: Option<&str>,
-    ) -> Result<config::ServiceTiers, AgentSessionError> {
-        let mut probe = session::probe(self, cwd, model).await?;
-        let result = config::service_tiers(&mut probe).await;
-        let closed = probe.close().await;
-        let tiers = result?;
-        closed?;
-        Ok(tiers)
-    }
 }
 
 impl AgentClient for OmpClient {
@@ -80,21 +63,11 @@ impl AgentClient for OmpClient {
     }
 
     fn settings(&self, config: &StoredAgentConfig) -> Value {
-        if config::is_acp(config).unwrap_or(false) {
-            return json!({"availableModes":[{"id":"default","label":"Default"},{"id":"plan","label":"Plan"}],
-                "features":[config::transport_feature(config)],"capabilities":{
-                "supportsStreaming":true,"supportsReasoningStream":true,"supportsSessionPersistence":true,
-                "supportsSessionListing":true,"supportsToolInvocations":true,"supportsMcpServers":false,
-                "supportsDynamicModes":true,"supportsRewindConversation":false,
-                "supportsRewindFiles":false,"supportsRewindBoth":false}});
-        }
-        let mut features = config::features(config, config::ServiceTiers::default());
-        features.push(config::transport_feature(config));
-        json!({"availableModes":config::modes(),"features":features,"capabilities":{
+        json!({"availableModes":config::modes(),"features":config::features(config, config::ServiceTiers::default()),"capabilities":{
             "supportsStreaming":true,"supportsReasoningStream":true,
             "supportsSessionPersistence":true,"supportsSessionListing":true,
             "supportsToolInvocations":true,"supportsMcpServers":false,
-            "supportsDynamicModes":false,"supportsRewindConversation":false,
+            "supportsDynamicModes":true,"supportsRewindConversation":false,
             "supportsRewindFiles":false,"supportsRewindBoth":false}})
     }
 
@@ -104,8 +77,13 @@ impl AgentClient for OmpClient {
 
     fn discover<'a>(&'a self, cwd: &'a str) -> AgentSessionFuture<'a, Details> {
         Box::pin(async move {
-            let mut probe = session::probe(self, cwd, None).await?;
-            let result = config::discover(&mut probe).await;
+            let spec = AgentSessionSpec {
+                provider: "omp".to_owned(),
+                cwd: cwd.to_owned(),
+                config: StoredAgentConfig::default(),
+            };
+            let mut probe = acp::open(self, &spec, None, true).await?;
+            let result = probe.details();
             let closed = probe.close().await;
             let details = result?;
             closed?;
@@ -118,51 +96,21 @@ impl AgentClient for OmpClient {
         spec: &'a AgentSessionSpec,
     ) -> AgentSessionFuture<'a, Vec<Value>> {
         Box::pin(async move {
-            if config::is_acp(&spec.config)? {
-                // A protocol change first discovers its controls, allowing the shared
-                // draft UI to prune overrides belonging to the previous protocol.
-                // Execution still rejects unsupported overrides instead of ignoring them.
-                let mut draft = spec.clone();
-                if let Some(values) = &mut draft.config.feature_values {
-                    values.retain(|key, value| {
-                        !matches!(
-                            key.as_str(),
-                            "autoCompaction" | "autoRetry" | "fastMode" | "slowMode"
-                        ) || !value.is_boolean()
-                    });
-                }
-                let mut probe = acp::open(self, &draft, None, true).await?;
-                let features = probe.draft_features();
-                probe.close().await?;
-                return Ok(features);
-            }
-            config::validate_spec(spec)?;
-            let tiers = self
-                .service_tiers(&spec.cwd, spec.config.model.as_deref())
-                .await?;
-            let mut features = config::features(&spec.config, tiers);
-            features.push(config::transport_feature(&spec.config));
+            let mut probe = acp::open(self, spec, None, true).await?;
+            let features = probe.draft_features(&spec.config);
+            probe.close().await?;
             Ok(features)
         })
     }
 
     fn commands<'a>(&'a self, spec: &'a AgentSessionSpec) -> AgentSessionFuture<'a, Vec<Value>> {
         Box::pin(async move {
-            config::validate_spec(spec)?;
-            if config::is_acp(&spec.config)? {
-                let mut probe = acp::open(self, spec, None, true).await?;
-                let result = probe.commands().await;
-                let closed = probe.close().await;
-                let commands = result?;
-                closed?;
-                return Ok(commands);
-            }
-            let mut probe = session::probe(self, &spec.cwd, None).await?;
-            let result = probe.request("get_available_commands", json!({})).await;
+            let mut probe = acp::open(self, spec, None, true).await?;
+            let result = probe.commands().await;
             let closed = probe.close().await;
-            let result = result?;
+            let commands = result?;
             closed?;
-            config::commands(&result)
+            Ok(commands)
         })
     }
 
@@ -179,7 +127,7 @@ impl AgentClient for OmpClient {
                 .discover(cwd.to_str().ok_or(AgentSessionError::Failed)?)
                 .await?;
             Ok(format!(
-                "Oh My Pi RPC ready; {} available models",
+                "Oh My Pi ACP ready; {} available models",
                 details.models.len()
             ))
         })
@@ -213,12 +161,7 @@ impl AgentClient for OmpClient {
         spec: &'a AgentSessionSpec,
     ) -> AgentSessionFuture<'a, Box<dyn AgentSession>> {
         Box::pin(async move {
-            if config::is_acp(&spec.config)? {
-                return Ok(
-                    Box::new(acp::open(self, spec, None, false).await?) as Box<dyn AgentSession>
-                );
-            }
-            Ok(Box::new(session::open(self, spec, None).await?) as Box<dyn AgentSession>)
+            Ok(Box::new(acp::open(self, spec, None, false).await?) as Box<dyn AgentSession>)
         })
     }
 
@@ -254,20 +197,10 @@ impl AgentClient for OmpClient {
             if purpose == AgentResumePurpose::History {
                 return Err(AgentSessionError::Unavailable);
             }
-            let acp = handle
-                .metadata
-                .as_ref()
-                .and_then(|metadata| metadata.get("transport"))
-                .and_then(Value::as_str)
-                == Some("acp");
-            if acp != config::is_acp(&spec.config)? {
-                return Err(AgentSessionError::Rejected);
-            }
-            if acp {
-                return Ok(Box::new(acp::open(self, spec, Some(handle), false).await?)
-                    as Box<dyn AgentSession>);
-            }
-            Ok(Box::new(session::open(self, spec, Some(handle)).await?) as Box<dyn AgentSession>)
+            // Native history is shared by both protocols. Old RPC handles are
+            // resumed through ACP without replaying an input or creating a new identity.
+            Ok(Box::new(acp::open(self, spec, Some(handle), false).await?)
+                as Box<dyn AgentSession>)
         })
     }
 }

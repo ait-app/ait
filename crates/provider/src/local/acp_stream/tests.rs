@@ -3,42 +3,6 @@ use serde_json::json;
 use super::*;
 
 #[test]
-fn background_progress_leaves_completed_tools_final_and_current_tools_live() {
-    for background in [false, true] {
-        let mut stream = if background {
-            Stream::default().with_background_tools()
-        } else {
-            Stream::default()
-        };
-        stream.begin("turn".to_owned());
-        for (id, status) in [
-            ("bg", "in_progress"),
-            ("bg", "completed"),
-            ("current", "in_progress"),
-        ] {
-            stream.update(&json!({"sessionUpdate":if status=="in_progress" {"tool_call"} else {"tool_call_update"},"toolCallId":id,"status":status})).unwrap();
-        }
-        stream.events.clear();
-        let result = stream.update(
-            &json!({"sessionUpdate":"tool_call_update","toolCallId":"bg","status":"in_progress"}),
-        );
-        assert_eq!(
-            result,
-            if background {
-                Ok(())
-            } else {
-                Err(AgentSessionError::Failed)
-            }
-        );
-        assert!(stream.events.is_empty());
-        stream.update(&json!({"sessionUpdate":"tool_call_update","toolCallId":"current","status":"completed"})).unwrap();
-        assert!(
-            matches!(stream.events.pop_back(),Some(AgentTurnEvent::Timeline(entry)) if entry.item["callId"]=="current" && entry.item["status"]=="completed")
-        );
-    }
-}
-
-#[test]
 fn acp_compaction_updates_emit_start_and_failure_and_ignore_duplicate_states() {
     let mut stream = Stream::default();
     stream.begin("turn".to_owned());

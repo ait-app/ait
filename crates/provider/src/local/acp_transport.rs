@@ -34,10 +34,22 @@ pub(crate) struct Transport {
 impl Transport {
     /// Launch a configured command in an owned process group; returns child or pipe failures.
     pub(crate) fn spawn(
+        command: tokio::process::Command,
+        cwd: &str,
+        deadline: Duration,
+        provider: &'static str,
+    ) -> Result<Self, AgentSessionError> {
+        Self::spawn_with_output_limit(command, cwd, deadline, provider, MAX_FRAME)
+    }
+
+    /// Launch ACP with a provider-specific bounded output frame size.
+    /// Inputs retain the shared limit; process and pipe errors are returned without retries.
+    pub(crate) fn spawn_with_output_limit(
         mut command: tokio::process::Command,
         cwd: &str,
         deadline: Duration,
         provider: &'static str,
+        max_output: usize,
     ) -> Result<Self, AgentSessionError> {
         let diagnostics = Diagnostics::new(provider);
         command
@@ -62,7 +74,7 @@ impl Transport {
             loop {
                 let mut bytes = Vec::new();
                 let read = (&mut output)
-                    .take(MAX_FRAME as u64)
+                    .take(max_output as u64)
                     .read_until(b'\n', &mut bytes)
                     .await;
                 if !matches!(read, Ok(1..)) || bytes.last() != Some(&b'\n') {
